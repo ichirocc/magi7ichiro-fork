@@ -335,6 +335,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
                     StaffCalendarCard(gridUi, onCellClick = onCell)
+                    if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
                     if (effectiveEditing) {
                         OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
                             Text("希望シフトの一括操作（曜日／全体）")

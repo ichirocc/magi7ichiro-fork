@@ -235,6 +235,17 @@ internal fun ShiftPickerSheet(
                         val ng = mode == 1 && k !in allowed
                         val bg = if (sel) cs.primary else hexToColor(ui.shiftColorHex.getOrNull(k) ?: "")
                         val fg = if (sel) cs.onPrimary else hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")
+                        // [結果プレビュー] 割当モードのみ: 現在/希望/不足解消/超過 を注記（needViolations から確実に判定）。
+                        val noteParts = ArrayList<String>()
+                        var noteWarn = false
+                        if (mode == 0) {
+                            if (k == current) noteParts.add("現在") else if (k == wish) noteParts.add("希望")
+                            when (ui.needViolations["$k,$j"]) {
+                                "vio-covU" -> noteParts.add("不足解消")
+                                "vio-covO" -> { noteParts.add("超過"); noteWarn = true }
+                            }
+                        }
+                        val note = noteParts.joinToString("・")
                         Box(
                             Modifier
                                 .weight(1f)
@@ -243,9 +254,18 @@ internal fun ShiftPickerSheet(
                                 .then(if (ng) Modifier.border(2.dp, cs.error, RoundedCornerShape(16.dp)) else Modifier)
                                 .clickable {
                                     if (mode == 0) onPick(k) else { vm.setWish(i, j, k); onDismiss() }
-                                },
+                                }
+                                .padding(4.dp),
                             contentAlignment = Alignment.Center,
-                        ) { Text(symbol + (if (ng) " 外" else ""), color = if (ng) cs.error else fg, fontWeight = FontWeight.Bold) }
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(symbol + (if (ng) " 外" else ""), color = if (ng) cs.error else fg, fontWeight = FontWeight.Bold)
+                                if (note.isNotEmpty()) {
+                                    Text(note, style = MaterialTheme.typography.labelSmall,
+                                        color = if (noteWarn) MagiAccent.orange else if (sel) cs.onPrimary else MagiAccent.green)
+                                }
+                            }
+                        }
                     }
                     repeat(4 - rowKeys.size) { Spacer(Modifier.weight(1f)) }
                 }
@@ -1007,6 +1027,59 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
             title = { Text("すべての希望を削除") },
             text = { Text("登録済みの希望をすべて削除します。割当には影響しません。元に戻すで復元できます。") },
         )
+    }
+}
+
+/** 期間開始日 + j(0始まり) → "M/D"。解析失敗時は "(j+1)日"。 */
+internal fun dayMD(startDate: String, j: Int): String = try {
+    val d = LocalDate.parse(startDate).plusDays(j.toLong())
+    "${d.monthValue}/${d.dayOfMonth}"
+} catch (e: Exception) { "${j + 1}日" }
+
+/** [不一致だけ抽出] 違反・希望未反映だけを凝縮表示。希望未反映行はタップで該当セル編集へ直行。 */
+@Composable
+internal fun MismatchExtractCard(ui: UiState, onOpenCell: (Int, Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val coverage = ui.needViolations.entries.mapNotNull { (key, cls) ->
+        val pp = key.split(","); val k = pp.getOrNull(0)?.toIntOrNull(); val j = pp.getOrNull(1)?.toIntOrNull()
+        if (k == null || j == null) return@mapNotNull null
+        val tag = when (cls) { "vio-covU" -> "不足"; "vio-covO" -> "超過"; else -> return@mapNotNull null }
+        "${dayMD(ui.startDate, j)} ${ui.shiftSymbols.getOrNull(k) ?: k} $tag"
+    }
+    val counts = ui.countViolations.entries.mapNotNull { (key, cls) ->
+        val pp = key.split(","); val i = pp.getOrNull(0)?.toIntOrNull(); val k = pp.getOrNull(1)?.toIntOrNull()
+        if (i == null || k == null) return@mapNotNull null
+        val tag = when (cls) { "vio-low" -> "少"; "vio-high" -> "多"; else -> return@mapNotNull null }
+        "${ui.staffNames.getOrNull(i) ?: i} ${ui.shiftSymbols.getOrNull(k) ?: k}$tag"
+    }
+    val unmet = ui.wishes.entries.mapNotNull { (key, w) ->
+        val pp = key.split(","); val i = pp.getOrNull(0)?.toIntOrNull(); val j = pp.getOrNull(1)?.toIntOrNull()
+        if (i == null || j == null) return@mapNotNull null
+        val cur = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
+        if (cur == w) return@mapNotNull null
+        Triple(i, j, "${ui.staffNames.getOrNull(i) ?: i} ${dayMD(ui.startDate, j)} 希望${ui.shiftSymbols.getOrNull(w) ?: w}→${ui.shiftSymbols.getOrNull(cur) ?: "—"}")
+    }
+    if (coverage.isEmpty() && counts.isEmpty() && unmet.isEmpty()) return
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("不一致だけ抽出", style = MaterialTheme.typography.titleMedium)
+            if (coverage.isNotEmpty()) {
+                Text("人数の過不足（${coverage.size}）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(coverage.joinToString(" ・ "), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            }
+            if (counts.isNotEmpty()) {
+                Text("適切回数の範囲外（${counts.size}）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(counts.joinToString(" ・ "), style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            }
+            if (unmet.isNotEmpty()) {
+                Text("希望シフト未反映（${unmet.size}）— タップで修正", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MagiAccent.pink)
+                unmet.forEach { (i, j, txt) ->
+                    Box(Modifier.fillMaxWidth().heightIn(min = 36.dp).clickable { onOpenCell(i, j) }, contentAlignment = Alignment.CenterStart) {
+                        Text(txt, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
     }
 }
 
