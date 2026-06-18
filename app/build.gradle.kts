@@ -12,7 +12,7 @@ android {
         minSdk = 35
         targetSdk = 36
         versionCode = 37
-        versionName = "2.28.0-objective-unify"
+        versionName = "2.29.0-optimizer-guards"
     }
 
     buildTypes {

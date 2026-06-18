@@ -157,6 +157,10 @@ object V6FinalPort {
         val seconds = secondsRaw.coerceIn(1, MAX_OPTIMIZE_SEC)
         val gate = confirmDespiteImpossibleWishes(state, allowImpossible)
         if (!gate.allowed) error(gate.message)
+        // [最終番兵用] 入力の評価を保持。万一パイプラインが入力より悪い結果を出した場合に復帰する（多重防御）。
+        val baseProblem = cachedProblem(state)
+        val normInput = normalizeSchedule(schedule, baseProblem)
+        val inputReport = UnifiedViolationChecker.check(state, normInput)
         val label = getAlgorithmLabel(seconds)
         val plan = optimizationPlan(seconds)
         val busy = buildBusyDetail(state, label.name, mapOf(
@@ -200,16 +204,19 @@ object V6FinalPort {
         val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
         val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)   // 並列ワーカーから読むため atomic
         var bTotal = Int.MAX_VALUE; var bWeighted = Double.MAX_VALUE; var lastPhase = ""
+        val progressLock = Any()   // [競合解消] 並列ワーカーから呼ばれる best 追跡の read-modify-write を直列化
         val progressWatch: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
-            val base = phase.substringAfter("/ ").trim().ifEmpty { phase }   // 「仮説N本探索中 / 」接頭辞を除去
-            if (base != lastPhase) { lastPhase = base; lastImproveMs.set(System.currentTimeMillis()) }
-            if (report != null) {
-                val h = report.hard; val t = report.total; val wgt = report.weightedScore
-                val bh = bestHard.get()
-                val improved = h < bh || (h == bh && t < bTotal) || (h == bh && t == bTotal && wgt < bWeighted - 1e-6)
-                if (improved) { bestHard.set(h); bTotal = t; bWeighted = wgt; lastImproveMs.set(System.currentTimeMillis()) }
+            synchronized(progressLock) {
+                val base = phase.substringAfter("/ ").trim().ifEmpty { phase }   // 「仮説N本探索中 / 」接頭辞を除去
+                if (base != lastPhase) { lastPhase = base; lastImproveMs.set(System.currentTimeMillis()) }
+                if (report != null) {
+                    val h = report.hard; val t = report.total; val wgt = report.weightedScore
+                    val bh = bestHard.get()
+                    val improved = h < bh || (h == bh && t < bTotal) || (h == bh && t == bTotal && wgt < bWeighted - 1e-6)
+                    if (improved) { bestHard.set(h); bTotal = t; bWeighted = wgt; lastImproveMs.set(System.currentTimeMillis()) }
+                }
             }
-            onProgress(phase, report, iters, elapsed)
+            onProgress(phase, report, iters, elapsed)   // ユーザーコールバックはロック外で呼ぶ
         }
         val shouldStop = {
             val now = System.currentTimeMillis()
@@ -283,10 +290,19 @@ object V6FinalPort {
             level = "I", tag = "EarlyStop",
             message = "停滞検知: 約${stallMs / 1000}秒間 改善が無いため早期終了（予算${seconds}s中 ${(tPost1 - startMs) / 1000}sで停止・解は最良を維持）",
         )) else emptyList()
+        // [最終番兵/多重防御] 全段 keep-best のため通常は発火しないが、万一パイプラインが入力より
+        // 悪い結果を返した場合は入力を採用し退化を防ぐ（checkResultWorse をここで配線）。
+        val regression = checkResultWorse(inputReport, post.report)
+        val finalSched = if (regression != null) normInput else post.schedule
+        val finalReport = if (regression != null) inputReport else post.report
+        val sentinelLog = if (regression != null) listOf(MirrorLog(
+            level = "W", tag = "Sentinel",
+            message = "後処理結果が入力より悪化を検知したため入力を採用しました（多重防御）: $regression",
+        )) else emptyList()
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog) + relinkLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
-        ActionResult(post.schedule, post.report.copy(logs = logs), "optimize:${label.tech}", busy, logs, post)
+        val logs = listOf(timingLog) + sentinelLog + relinkLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, post)
     }
 
     fun checkResultWorse(before: ViolationReport?, after: ViolationReport): String? {
