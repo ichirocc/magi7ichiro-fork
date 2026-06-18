@@ -332,6 +332,7 @@ object V6HotfixPasses {
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
+        var skipped = 0     // [#5] 前フィルタでフル評価を省いた手数
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
         val windows = intArrayOf(2, 3)   // 連続2日・3日（c3は最大5連日だが2-3日窓でほぼ捕捉）
         var pass = 0
@@ -361,7 +362,14 @@ object V6HotfixPasses {
                                 if (work[i][j + t] != work[i2][j + t]) same = false
                             }
                             if (!feasible || same) continue
+                            // [#5 差分前フィルタ] 同群の2者ブロック交換は関与2職員の per-staff 違反量で事前判定。
+                            val sameGroup = p.sgrp[i] == p.sgrp[i2]
+                            val preW = if (sameGroup) staffSoftWeighted(p, work, i) + staffSoftWeighted(p, work, i2) else 0L
                             for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }
+                            if (sameGroup) {
+                                val postW = staffSoftWeighted(p, work, i) + staffSoftWeighted(p, work, i2)
+                                if (postW >= preW) { for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }; skipped++; continue }
+                            }
                             val rep = UnifiedViolationChecker.check(state, work)
                             if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true }
                             else for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }   // 巻き戻し
@@ -376,7 +384,7 @@ object V6HotfixPasses {
             message = "連続規則c3系研磨(2者ブロック): c3 ${before.breakdown["c3"] ?: 0}->${bestRep.breakdown["c3"] ?: 0}" +
                 " / c3m ${before.breakdown["c3m"] ?: 0}->${bestRep.breakdown["c3m"] ?: 0}" +
                 " / c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0}" +
-                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回"))
+                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回 (差分前フィルタで省略${skipped}手)"))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -400,6 +408,7 @@ object V6HotfixPasses {
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
+        var skipped = 0     // [#5] 前フィルタでフル評価を省いた手数(有効性ログ用)
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0     // 希望固定セルは動かさない
         val windows = intArrayOf(2, 3)
         var pass = 0
@@ -435,7 +444,15 @@ object V6HotfixPasses {
                                 val sa = IntArray(w) { work[ai][j + it] }
                                 val sb = IntArray(w) { work[bi][j + it] }
                                 val sc = IntArray(w) { work[ci][j + it] }
+                                // [#5 差分前フィルタ] 同群の3者回転は関与職員の per-staff 違反量で事前判定し、
+                                //   改善見込みの無い手はフル評価をスキップ(採用判定は従来どおりフル評価が担う=安全)。
+                                val sameGroup = p.sgrp[ai] == p.sgrp[bi] && p.sgrp[bi] == p.sgrp[ci]
+                                val preW = if (sameGroup) staffSoftWeighted(p, work, ai) + staffSoftWeighted(p, work, bi) + staffSoftWeighted(p, work, ci) else 0L
                                 for (t in 0 until w) { work[ai][j + t] = sb[t]; work[bi][j + t] = sc[t]; work[ci][j + t] = sa[t] }
+                                if (sameGroup) {
+                                    val postW = staffSoftWeighted(p, work, ai) + staffSoftWeighted(p, work, bi) + staffSoftWeighted(p, work, ci)
+                                    if (postW >= preW) { for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }; skipped++; continue }
+                                }
                                 val rep = UnifiedViolationChecker.check(state, work)
                                 if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true }
                                 else for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }   // 巻き戻し
@@ -452,7 +469,7 @@ object V6HotfixPasses {
                 " / c3 ${before.breakdown["c3"] ?: 0}->${bestRep.breakdown["c3"] ?: 0}" +
                 " / c3m ${before.breakdown["c3m"] ?: 0}->${bestRep.breakdown["c3m"] ?: 0}" +
                 " / c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0}" +
-                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回"))
+                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回 (差分前フィルタで省略${skipped}手)"))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -967,5 +984,51 @@ object V6HotfixPasses {
         if (a.hard != b.hard) return a.hard < b.hard
         if (a.total != b.total) return a.total < b.total
         return a.weightedScore < b.weightedScore
+    }
+
+    // ============================================================================
+    // [#5 差分前フィルタ] 職員 i の「研磨手で動きうる families」の重み付き違反量を checker と同一ロジックで
+    // 厳密計算する。c1(4) + c3(3) + c3m(2) + c3mn(12) + c3n(HARD=7000)。研磨手は被覆保存の置換なので、
+    // 関与職員が全員同一グループなら、群(c41/c42/groupViol)・被覆(covU/covO)・pref(希望固定セルは不動)は不変。
+    // よって「関与職員のこの値が改善しない同群の手」は全体目的(hard/total/weighted)も改善しえない。
+    // ⇒ そういう手では高コストの UnifiedViolationChecker.check をスキップできる(前フィルタ)。
+    // 安全性: 採用判定は従来どおりフル評価 isBetter が担う。前フィルタに誤りがあっても「改善手を取り
+    //         こぼす(=研磨が弱まるだけ)」方向にしか働かず、誤採用や研磨前からの悪化は起こらない。
+    private fun staffSoftWeighted(p: Problem, sched: Array<IntArray>, i: Int): Long {
+        var w = 0L
+        for (c in p.cons1) {                                   // c1: d日窓で shiftIdx が day2 回未満 → 違反
+            if (!p.canDo(i, c.shiftIdx)) continue
+            var j = 0
+            while (j <= p.T - c.day1) {
+                var z = 0
+                for (l in 0 until c.day1) if (sched[i][j + l] == c.shiftIdx) z++
+                if (z < c.day2) w += 4L
+                j++
+            }
+        }
+        w += c3FamilyWeighted(p, sched, i, p.cons3, false, 3L)   // c3  (required系: z<d-1 で発火)
+        w += c3FamilyWeighted(p, sched, i, p.cons3m, false, 2L)  // c3m
+        w += c3FamilyWeighted(p, sched, i, p.cons3mn, true, 12L) // c3mn(forbidden系: z==d-1 で発火)
+        w += c3FamilyWeighted(p, sched, i, p.cons3n, true, 7000L)// c3n (HARD)
+        return w
+    }
+
+    private fun c3FamilyWeighted(p: Problem, sched: Array<IntArray>, i: Int, list: List<C3>, forbidden: Boolean, weight: Long): Long {
+        var w = 0L
+        for (c in list) {
+            val seq = c.seq; val d = seq.size
+            if (d == 0 || d > p.T) continue
+            var j = 0
+            while (j <= p.T - d) {
+                if (sched[i][j] == seq[0]) {
+                    var z = 0
+                    for (l in 1 until d) if (sched[i][j + l] == seq[l]) z++
+                    val fire = if (forbidden) z == d - 1 else z < d - 1
+                    if (fire) w += weight
+                }
+                j++
+            }
+        }
+        return w
     }
 }

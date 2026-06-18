@@ -238,11 +238,24 @@ object V6FinalPort {
         val relinkBudgetMs = (budgetMs * 15 / 100).coerceIn(15_000L, 60_000L)
         val relinkDeadline = minOf(hardDeadlineMs, System.currentTimeMillis() + relinkBudgetMs)
         val relinkStop = { System.currentTimeMillis() >= relinkDeadline || !isActive }
+        // [#3 並列の論理改善: 反復パスリンク] 精鋭解を一度再結合して終わりにせず、改善が出る限り
+        //   「再結合結果を新たな起点」にして残り精鋭解と再結合し直す(島モデルの再結合を逐次で深掘り)。
+        //   elitePathRelink は常に起点(best)から評価＝各回退化しない(best-of-best)。最大3巡＋relinkStopで停止。
         val alts = V6NativeOptimizer.lastAlternatives
-        val (relinkSched, relinkRep) =
-            if (alts.isNotEmpty() && !relinkStop())
-                V6NativeOptimizer.elitePathRelink(state, chained.schedule, alts, relinkStop)
-            else chained.schedule to chained.report
+        var relinkSched = chained.schedule
+        var relinkRep = chained.report
+        if (alts.isNotEmpty() && !relinkStop()) {
+            var rl = 0
+            while (rl < 3 && !relinkStop()) {
+                val (s, r) = V6NativeOptimizer.elitePathRelink(state, relinkSched, alts, relinkStop)
+                val improved = r.hard < relinkRep.hard ||
+                    (r.hard == relinkRep.hard && r.total < relinkRep.total) ||
+                    (r.hard == relinkRep.hard && r.total == relinkRep.total && r.weightedScore < relinkRep.weightedScore - 1e-6)
+                relinkSched = s; relinkRep = r
+                rl++
+                if (!improved) break   // この巡で改善なし＝再結合の不動点に到達
+            }
+        }
         val relinkImproved = relinkRep.hard < chained.report.hard ||
             (relinkRep.hard == chained.report.hard && relinkRep.total < chained.report.total) ||
             (relinkRep.hard == chained.report.hard && relinkRep.total == chained.report.total && relinkRep.weightedScore < chained.report.weightedScore - 1e-6)

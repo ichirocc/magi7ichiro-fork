@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "2.14.0-polish-fixpoint"
+        versionCode = 23
+        versionName = "2.15.0-delta-prefilter-relink"
     }
 
     buildTypes {
