@@ -28,6 +28,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private var sc41s = 0L; private var sc42s = 0L   // [スキルグループ] c41s/c42s（ssk ベース、soft）
     private var sc3 = 0L; private var hc3n = 0L; private var sc3m = 0L; private var sc3mn = 0L
     private var hpref = 0L; private var hct = 0L
+    private var scovO = 0L                            // [統一a] 過剰被覆(covO)の running total（SOFT）
     private var covP1 = 0L; private var covP2 = 0L
 
     // stashed deltas from the last preview (applied by commit())
@@ -35,7 +36,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private var dC1 = 0L; private var dC2 = 0L; private var dC41 = 0L; private var dC42 = 0L
     private var dC41s = 0L; private var dC42s = 0L
     private var dC3 = 0L; private var dC3n = 0L; private var dC3m = 0L; private var dC3mn = 0L
-    private var dPref = 0L; private var dCt = 0L; private var nCovP1 = 0L; private var nCovP2 = 0L
+    private var dPref = 0L; private var dCt = 0L; private var dCovO = 0L; private var nCovP1 = 0L; private var nCovP2 = 0L
 
     init {
         a = p.initialAssignment()
@@ -76,9 +77,9 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun scoreFrom(p1: Long, p2: Long): Long {
         val cov = if (p.use2) minOf(p1, if (p2 != 0L) p2 else p1) else p1
         val h1 = hc3n + cov + hpref
-        val h2 = hct
-        val soft = sc1 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 + sc3m + sc3mn
-        return (h1 + h2) * 1_000_000L + soft
+        // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
+        val soft = sc1 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 + sc3m + sc3mn + hct + scovO
+        return h1 * 1_000_000L + soft
     }
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
@@ -87,7 +88,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         lI = i; lJ = j; lOld = old; lNw = nw
         if (nw == old) {
             dC1 = 0; dC2 = 0; dC41 = 0; dC42 = 0; dC41s = 0; dC42s = 0; dC3 = 0; dC3n = 0; dC3m = 0; dC3mn = 0
-            dPref = 0; dCt = 0; nCovP1 = covP1; nCovP2 = covP2
+            dPref = 0; dCt = 0; dCovO = 0; nCovP1 = covP1; nCovP2 = covP2
             return score()
         }
 
@@ -188,8 +189,13 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         if (p.use2 && p.need2[nw][j] >= 0) p2 += short0(p.need2[nw][j], cn + 1) - short0(p.need2[nw][j], cn)
         nCovP1 = p1; nCovP2 = p2
 
-        val dHard = dC3n + (covUOf(p1, p2) - covUOf(covP1, covP2)) + dPref + dCt
-        val dSoft = dC1 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 + dC3m + dC3mn
+        // [統一a] covO 差分：影響する2セル(old,j)/(nw,j) の過剰被覆量の差（cntDay は commit 前なので co/cn が現値）
+        dCovO = (covOCell(old, j, co - 1) - covOCell(old, j, co)) +
+                (covOCell(nw, j, cn + 1) - covOCell(nw, j, cn))
+
+        // [統一b] dCt(range) は SOFT へ移動（hard から除外）。
+        val dHard = dC3n + (covUOf(p1, p2) - covUOf(covP1, covP2)) + dPref
+        val dSoft = dC1 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 + dC3m + dC3mn + dCt + dCovO
         return score() + dHard * 1_000_000L + dSoft
     }
 
@@ -205,7 +211,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
             cntDay[old][j]--; cntDay[nw][j]++
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
-            hpref += dPref; hct += dCt
+            hpref += dPref; hct += dCt; scovO += dCovO
             covP1 = nCovP1; covP2 = nCovP2
         } finally {
             // invalidate the stash so a stray double-commit cannot corrupt aggregates
@@ -223,7 +229,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         sc1 = c1All(); sc2 = c2All(); sc41 = c41All(); sc42 = c42All(); sc41s = c41sAll(); sc42s = c42sAll()
         sc3 = c3All(p.cons3, false); hc3n = c3All(p.cons3n, true)
         sc3m = c3All(p.cons3m, false); sc3mn = c3All(p.cons3mn, true)
-        hpref = prefAll(); hct = ctAll()
+        hpref = prefAll(); hct = ctAll(); scovO = covOAll()
         val cov = covAll(); covP1 = cov[0]; covP2 = cov[1]
     }
 
@@ -235,14 +241,25 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         if (p.use2) minOf(p1, if (p2 != 0L) p2 else p1) else p1
 
     private fun rangeViol(i: Int, k: Int, n: Int): Long {
+        // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×90 / high=amount×45。
         val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
-        val hl = lo != Int.MIN_VALUE; val hh = hi != Int.MAX_VALUE
-        return when {
-            hl && !hh -> if (n < lo) 1L else 0L
-            !hl && hh -> if (n > hi) 1L else 0L
-            hl && hh -> if (n < lo || n > hi) 1L else 0L
-            else -> 0L
-        }
+        var v = 0L
+        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) v += (lo - n).toLong() * 90L
+        if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * 45L
+        return v
+    }
+
+    /** [統一a] 1セル(shift k, 日 j)の過剰被覆量。上限 hi=(use2&&need2>=0?need2:need1)。checker covO と同一。 */
+    private fun covOCell(k: Int, j: Int, got: Int): Long {
+        val n1 = p.need1[k][j]
+        if (n1 < 0) return 0L
+        val hi = if (p.use2 && p.need2[k][j] >= 0) p.need2[k][j] else n1
+        return if (got > hi) (got - hi).toLong() else 0L
+    }
+    private fun covOAll(): Long {
+        var s = 0L
+        for (k in 0 until K) for (j in 0 until T) s += covOCell(k, j, cntDay[k][j])
+        return s
     }
 
     private fun c1Local(i: Int, j: Int): Long {

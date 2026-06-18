@@ -3,11 +3,13 @@ package com.magi.app.v6
 /**
  * Faithful port of the Web worker's `fullEval`.
  *
- * Lexicographic objective:  score = (hard1 + hard2) * 1_000_000 + soft
+ * Lexicographic objective:  score = hard1 * 1_000_000 + soft
  *   hard1 = c3n (forbidden seq) + covU (per-day need shortfall, MIN=OR over P1/P2) + pref
- *   hard2 = ct  (LimMin / LimMax range violations)
  *   soft  = c1 (window) + c2 (per-staff total) + c41 (group/day range)
  *           + c42 (group pair conflict) + c41s/c42s (skill-group変種) + c3 (want seq) + c3m + c3mn
+ *           + [統一a/b] low/high (range, amount×90/45) + covO (over-coverage, amount)
+ *   ※ range と covO は UnifiedViolationChecker と同分類(SOFT)・同重み。Web betterVec の lim 層は
+ *     soft 内の高重み(90/45)として表現（hard1 は *1_000_000 で常に優先）。
  *
  * The solution `a[i][j]` is the assigned shift index (exactly one shift per cell),
  * the equivalent of the Web's one-hot `x[i][j][k] === 1`.
@@ -20,7 +22,6 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
     fun fullEval(a: Array<IntArray>): Long {
         val S = p.S; val T = p.T; val K = p.K
         var hard1 = 0L
-        var hard2 = 0L
         var soft = 0L
 
         // c1: every window of length day1 must contain >= day2 of shiftIdx
@@ -99,16 +100,15 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
             if (w >= 0 && a[i][j] != w) hard1 += 1
         }
 
-        // ct: per-staff per-shift count range (LimMin / LimMax)
+        // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low=90/high=45)・
+        // 同じガード(lo!=0, low は canDo 必須)。旧実装は hard2(=表示HARD) として +1 計上していた。
         val ssn = Array(S) { IntArray(K) }
         for (i in 0 until S) for (j in 0 until T) ssn[i][a[i][j]]++
         for (i in 0 until S) for (k in 0 until K) {
             val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
             val n = ssn[i][k]
-            val hasLo = lo != Int.MIN_VALUE; val hasHi = hi != Int.MAX_VALUE
-            if (hasLo && !hasHi) { if (n < lo) hard2 += 1 }
-            else if (!hasLo && hasHi) { if (n > hi) hard2 += 1 }
-            else if (hasLo && hasHi) { if (n < lo || n > hi) hard2 += 1 }
+            if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) soft += (lo - n).toLong() * 90L
+            if (hi != Int.MAX_VALUE && n > hi) soft += (n - hi).toLong() * 45L
         }
 
         // covU: per-day need shortfall. MIN=OR two-generation design (P1 vs P2).
@@ -120,6 +120,10 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
                     var dsn = 0
                     for (i in 0 until S) if (a[i][j] == k) dsn++
                     if (dsn < n) c2v1 += (n - dsn)
+                    // [統一a] covO(過剰被覆) を SOFT 追加。UnifiedViolationChecker と同じ上限 hi=(use2&&need2>=0?need2:need1)。
+                    // checker の covO 重み 0.5 を整数化(=1)。最適化器も過剰配置を減らすようになる。
+                    val hi = if (p.use2 && p.need2[k][j] >= 0) p.need2[k][j] else n
+                    if (dsn > hi) soft += (dsn - hi).toLong()
                 }
                 if (p.use2) {
                     val n2 = p.need2[k][j]
@@ -133,7 +137,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
         }
         hard1 += if (p.use2) minOf(c2v1, if (c2v2 != 0L) c2v2 else c2v1) else c2v1
 
-        return (hard1 + hard2) * 1_000_000L + soft
+        return hard1 * 1_000_000L + soft
     }
 
     /** Returns the hard / soft split for display (運用違反 vs SOFT). */
