@@ -315,8 +315,10 @@ fun Problem.canDo(staffI: Int, shiftK: Int): Boolean {
 }
 
 fun Problem.allowedShiftsForStaff(staffI: Int): IntArray {
-    val b = bucket.getOrNull(sgrp.getOrNull(staffI) ?: -1) ?: IntArray(0)
-    return if (b.isNotEmpty()) b else IntArray(K) { it }
+    // canDo と整合: 群bucketをそのまま返す（空＝担当可能シフトなし）。全呼び出し側は空配列を
+    // ガード済み。旧実装は空bucketで全Kにフォールバックし canDo(=false) と矛盾していた（潜在バグ）。
+    // 実データ（各群に担当シフト定義あり=非空）では挙動不変。
+    return bucket.getOrNull(sgrp.getOrNull(staffI) ?: -1) ?: IntArray(0)
 }
 
 fun normalizeSchedule(schedule: Array<IntArray>, p: Problem): Array<IntArray> = Array(p.S) { i ->

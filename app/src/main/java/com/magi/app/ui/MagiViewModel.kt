@@ -75,6 +75,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var resultSchedule: Array<IntArray>? = null
     private var job: Job? = null
     private var checkJob: Job? = null
+    private var fixJob: Job? = null   // [競合解消] 改善提案探索。連続タップ時に前探索をキャンセルし古い結果で上書きしない
     private var checkSeq = 0L
 
     // ===== [v2.22] 自動保存・復元（端末内）と「元に戻す」 =====
@@ -651,7 +652,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun stop() { job?.cancel(); checkJob?.cancel(); clearRunMarker() }
+    fun stop() { job?.cancel(); checkJob?.cancel(); fixJob?.cancel(); clearRunMarker() }
 
     /** Shift indices a staff member may take (for the cell-edit bottom sheet). */
     fun allowedShiftsFor(i: Int): IntArray {
@@ -1223,8 +1224,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
         val snap = sched.copy2D()
+        fixJob?.cancel()   // 連続タップ時の前探索を破棄（古い結果で UI を上書きしない）
         _ui.value = _ui.value.copy(fixSearching = true, fixFocusName = focusName)
-        viewModelScope.launch {
+        fixJob = viewModelScope.launch {
             val list = withContext(Dispatchers.Default) {
                 FixSuggester.suggest(st, snap, focusStaff = focusStaff, maxResults = 8)
             }

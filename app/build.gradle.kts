@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 37
-        versionName = "2.29.0-optimizer-guards"
+        versionCode = 38
+        versionName = "2.30.0-consistency-fixes"
     }
 
     buildTypes {
