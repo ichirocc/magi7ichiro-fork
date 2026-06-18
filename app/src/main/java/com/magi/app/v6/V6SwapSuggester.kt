@@ -96,7 +96,7 @@ object FixSuggester {
         }
         val hotCells = ArrayList<Int>()                // pack i*1000+j（セル違反）
         val hotDays = HashSet<Int>()
-        for (key in base.violationCells.keys) {
+        for (key in base.violations.keys) {
             val pp = key.split(","); val i = pp.getOrNull(0)?.toIntOrNull() ?: continue; val j = pp.getOrNull(1)?.toIntOrNull() ?: continue
             hotCells.add(i * 1000 + j); hotDays.add(j)
         }
@@ -164,7 +164,7 @@ object FixSuggester {
                 if (timeUp()) break
                 for (a in 0 until p.S) {
                     if (timeUp()) break
-                    if (p.wish[a][j] >= 0 || (focus != null && a != focus && false)) continue
+                    if (p.wish[a][j] >= 0) continue
                     for (b in 0 until p.S) {
                         if (b == a || p.wish[b][j] >= 0) continue
                         for (c in 0 until p.S) {
