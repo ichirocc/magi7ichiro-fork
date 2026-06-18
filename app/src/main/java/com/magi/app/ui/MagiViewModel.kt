@@ -15,6 +15,8 @@ import com.magi.app.v6.ViolationReport
 import com.magi.app.v6.V6PortAnalyzer
 import com.magi.app.v6.SettingIssue
 import com.magi.app.v6.SettingFixAction
+import com.magi.app.v6.SwapSuggester
+import com.magi.app.v6.SwapSuggestion
 import com.magi.app.v6.V6PortReport
 import com.magi.app.v6.CoverageDiagnosis
 import com.magi.app.v6.V6Algorithm
@@ -1208,6 +1210,46 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             SettingFixAction.NONE -> null
         }
         if (ns != null) applyStructure(ns)
+    }
+
+    /**
+     * [改善提案] 違反を減らす「同日ペア交換」を探索して UI に提示する。
+     * focusStaff != null のときはそのスタッフが関わる交換だけに絞る（違反タップ起点）。重い処理のため非同期。
+     */
+    fun findSwapSuggestions(focusStaff: Int? = null) {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
+        val snap = sched.copy2D()
+        _ui.value = _ui.value.copy(swapSearching = true, swapFocusName = focusName)
+        viewModelScope.launch {
+            val list = withContext(Dispatchers.Default) {
+                SwapSuggester.suggest(st, snap, focusStaff = focusStaff, maxResults = 8)
+            }
+            _ui.value = _ui.value.copy(swapSuggestions = list, swapSearching = false, swapFocusName = focusName)
+        }
+    }
+
+    /** [改善提案] 交換候補を1タップで適用（同日2マスを入れ替え）。Undo 可・自動再診断・自動保存。 */
+    fun applySwapSuggestion(s: SwapSuggestion) {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        val a = s.staffA; val b = s.staffB; val j = s.day
+        if (a !in sched.indices || b !in sched.indices) return
+        if (j !in sched[a].indices || j !in sched[b].indices) return
+        pushUndo()
+        val va = sched[a][j]; val vb = sched[b][j]
+        sched[a][j] = vb; sched[b][j] = va
+        currentSchedule = sched
+        state = st.withSchedule(sched)
+        autoSave()
+        _ui.value = _ui.value.copy(
+            hasResult = true,
+            schedule = sched.map { it.toList() },
+            swapSuggestions = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
+            message = "${s.nameA}と${s.nameB}の${dayMD(st.startDate, j)}を交換しました",
+        )
+        refreshCheck()
     }
 
     private fun applyStructure(r: Ws1Result) {

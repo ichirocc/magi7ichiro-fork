@@ -483,43 +483,47 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
 }
 
 
+/** 内訳の家族キー → 日本語ラベル（BreakdownCard と SwapSuggestionCard で共用）。 */
+internal val breakdownLabels: Map<String, String> = mapOf(
+    "groupViol" to "グループ不整合", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
+    "low" to "下限割れ", "high" to "上限超過",
+    "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
+    "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア", "covO" to "過剰な配置",
+)
+
 /**
- * [分析→場所] 内訳の家族キー(low/covO/c42 等)から、その違反の「場所」をUI上で展開するために解決する。
- *  - count系(low/high/c2)   : スタッフ名「シフト」      (countViolations: i,k)
- *  - 被覆系(covU/covO/c41/c41s): 日付「シフト」           (needViolations: k,j)
- *  - セル系(c1/c3/c3n/c3m/c3mn/c42/c42s/pref/groupViol): スタッフ名 日付=実シフト (violationCells: i,j)
+ * [分析→場所] 内訳の家族キー(low/covO/c42 等)から、その違反の「場所」と関係スタッフindexを返す。
+ *  - count系(low/high/c2)   : スタッフ名「シフト」 / staff=i        (countViolations: i,k)
+ *  - 被覆系(covU/covO/c41/c41s): 日付「シフト」 / staff=null         (needViolations: k,j)
+ *  - セル系(c1/c3/c3n/c3m/c3mn/c42/c42s/pref/groupViol): スタッフ名 日付=実シフト / staff=i (violationCells: i,j)
+ * staff!=null の項目はタップで「そのスタッフが関わる交換」を探せる。
  */
-internal fun breakdownLocations(famKey: String, ui: UiState): List<String> {
+internal fun breakdownLocations(famKey: String, ui: UiState): List<Pair<String, Int?>> {
     fun nm(i: Int) = ui.staffNames.getOrNull(i) ?: "#$i"
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
     val want = "vio-$famKey"
     return when (famKey) {
         "low", "high", "c2" -> ui.countViolations.entries.filter { it.value == want }.mapNotNull {
             val p = it.key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
-            if (i == null || k == null) null else "${nm(i)} 「${sym(k)}」"
+            if (i == null || k == null) null else ("${nm(i)} 「${sym(k)}」" to i)
         }
         "covU", "covO", "c41", "c41s" -> ui.needViolations.entries.filter { it.value == want }.mapNotNull {
             val p = it.key.split(","); val k = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
-            if (k == null || j == null) null else "${dayMD(ui.startDate, j)} 「${sym(k)}」"
+            if (k == null || j == null) null else ("${dayMD(ui.startDate, j)} 「${sym(k)}」" to null)
         }
         else -> ui.violationCells.entries.filter { it.value == want }.mapNotNull {
             val p = it.key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
             if (i == null || j == null) null else {
                 val cell = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
-                "${nm(i)} ${dayMD(ui.startDate, j)}=${if (cell >= 0) sym(cell) else "—"}"
+                ("${nm(i)} ${dayMD(ui.startDate, j)}=${if (cell >= 0) sym(cell) else "—"}" to i)
             }
         }
     }
 }
 
 @Composable
-internal fun BreakdownCard(ui: UiState) {
-    val labels = mapOf(
-        "groupViol" to "グループ不整合", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
-        "low" to "下限割れ", "high" to "上限超過",
-        "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
-        "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア", "covO" to "過剰な配置",
-    )
+internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}) {
+    val labels = breakdownLabels
     var criticalOnly by rememberSaveable { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     val onTapChip: (String) -> Unit = { k -> expanded = if (expanded == k) null else k }
@@ -539,19 +543,25 @@ internal fun BreakdownCard(ui: UiState) {
             expanded?.let { key ->
                 val cs = MaterialTheme.colorScheme
                 val locs = breakdownLocations(key, ui)
-                val cnt = ui.breakdown[key] ?: 0
                 val name = labels[key] ?: key
                 Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("$name の場所（${cnt}件）", style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
+                            Text("$name の場所（${locs.size}箇所）", style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
                             TextButton(onClick = { expanded = null }) { Text("閉じる") }
                         }
                         when {
                             locs.isEmpty() && ui.running -> Text("実行中です。確定後にここへ場所が表示されます。", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             locs.isEmpty() -> Text("場所情報がありません。", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             else -> {
-                                Text(locs.joinToString(" ・ "), style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                                locs.forEach { (txt, staff) ->
+                                    if (staff != null) {
+                                        Text("$txt　→交換を探す", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer,
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).clickable { onFocusStaff(staff) })
+                                    } else {
+                                        Text(txt, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                                    }
+                                }
                                 if (ui.running) Text("※ 実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSecondaryContainer)
                             }
                         }
@@ -625,6 +635,48 @@ internal fun BigStat(label: String, value: String, modifier: Modifier = Modifier
     }
 }
 
+
+@Composable
+internal fun SwapSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.magi.app.v6.SwapSuggestion) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val title = "改善の提案（交換）" + if (ui.swapFocusName.isNotBlank()) "：${ui.swapFocusName} 関連" else ""
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                if (ui.swapSearching) {
+                    Text("探索中…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                } else {
+                    TextButton(onClick = onSearch) { Text(if (ui.swapSuggestions.isEmpty()) "探す" else "全体で再探索") }
+                }
+            }
+            Text("同じ日のシフトを入れ替えて違反を減らす案です。人員（被覆）は変わりません。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            when {
+                ui.swapSearching -> Text("候補を探しています。少しお待ちください。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                ui.swapSuggestions.isEmpty() -> Text("候補がありません。「探す」を押すか、上の違反の場所をタップしてください。\n※同日交換は2人の勤務を入れ替えるため、下限割れ・上限超過は「余裕のある相手」がいないと減らせない場合があります。",
+                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                else -> ui.swapSuggestions.forEach { s ->
+                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${s.nameA} 「${s.shiftA}」 ↔ ${s.nameB} 「${s.shiftB}」（${dayMD(ui.startDate, s.day)}）",
+                                style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer)
+                            val diffTxt = s.diff.joinToString("・") { (k, d) ->
+                                "${breakdownLabels[k] ?: k} ${if (d < 0) "−${-d}" else "+$d"}"
+                            }
+                            val totalTxt = if (s.deltaTotal <= 0) "−${-s.deltaTotal}" else "+${s.deltaTotal}"
+                            Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
+                                style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                            Button(onClick = { onApply(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 44.dp)) {
+                                Text("この交換を適用")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {

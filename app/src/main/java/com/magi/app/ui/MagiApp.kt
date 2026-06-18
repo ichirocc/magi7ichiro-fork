@@ -384,7 +384,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     if (proMode) V6DashboardCard(ui.v6)
                     OverviewDashboard(ui)
                     CheckSummaryView(ui)
-                    BreakdownCard(ui)
+                    BreakdownCard(ui, onFocusStaff = { vm.findSwapSuggestions(it) })
+                    SwapSuggestionCard(ui, onSearch = { vm.findSwapSuggestions(null) }, onApply = { vm.applySwapSuggestion(it) })
                     // [校正] 開発用の ColorSettingsView（英語名・生の制約コード/WARN/CRITICAL露出）と
                     // FlagsView（実験フラグ）は一般ユーザー画面から除外。詳細設定は上級者向けに別途。
                 }

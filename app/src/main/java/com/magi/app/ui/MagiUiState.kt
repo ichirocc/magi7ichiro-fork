@@ -29,6 +29,9 @@ data class UiState(
     val violationCells: Map<String, String> = emptyMap(),
     val needViolations: Map<String, String> = emptyMap(),
     val countViolations: Map<String, String> = emptyMap(),
+    val swapSuggestions: List<com.magi.app.v6.SwapSuggestion> = emptyList(),  // [改善提案] 違反を減らす交換候補
+    val swapSearching: Boolean = false,                                       // 交換候補を探索中
+    val swapFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）
     val logs: List<String> = emptyList(),
     val iters: Long = 0,
     val itersPerSec: Long = 0,
