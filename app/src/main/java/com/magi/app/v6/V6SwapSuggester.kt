@@ -16,6 +16,8 @@ data class FixCell(val staff: Int, val day: Int, val toShift: Int)
  *  - SWAP         : 同日2人を入れ替え（被覆不変）
  *  - SWAP_XDAY    : 別日どうしを入れ替え（被覆が両日で変化）
  *  - SWAP_MULTI   : 同日3人を巡回交換（2人交換が担当可否で塞がる時の打開）
+ *  - CHAIN        : 不足シフトを貪欲に最大3コマ補充（エジェクションチェーン／玉突き）
+ *  - WINDOW       : 1日×最大4名を総当たりで最適割当（ミニ・マスヒューリスティクス）
  */
 data class FixSuggestion(
     val kind: FixKind,
@@ -29,7 +31,7 @@ data class FixSuggestion(
 /**
  * 違反を減らす「1手」を列挙する。最適化エンジンと同じ評価（canDo 可否・希望ロック保護・
  * UnifiedViolationChecker による被覆込み (hard,total,weighted) 辞書式改善）。CHANGE / CHANGE_MULTI /
- * SWAP / SWAP_XDAY / SWAP_MULTI を統合し、効果順・同型重複排除で返す。読取専用。
+ * SWAP / SWAP_XDAY / SWAP_MULTI / CHAIN / WINDOW を統合し、効果順・同型重複排除で返す。読取専用。
  * 高コストな手（複数マス・別日・3人）は違反箇所にターゲットし、締切（deadlineMs）で打ち切る賢い探索。
  */
 object FixSuggester {
@@ -169,9 +171,10 @@ object FixSuggester {
                     val applied = ArrayList<Pair<Int, Int>>()   // (day, savedShift) 復元用
                     var rounds = 0
                     while (rounds < 3 && !timeUp()) {
-                        // 現在の積み上げ盤面から、x へ変えて base を最も下回る可動コマを1つ選ぶ
+                        // 現在の積み上げ盤面のスコアを基準に、x へ変えて更に改善する可動コマを1つ選ぶ（単調改善を保証）
+                        val curRep = UnifiedViolationChecker.check(state, s); evals++
                         var bestJ = -1; var bestSaved = -1
-                        var bestHard = base.hard; var bestTotal = base.total; var bestW = base.weightedScore
+                        var bestHard = curRep.hard; var bestTotal = curRep.total; var bestW = curRep.weightedScore
                         var improved = false
                         for (j in 0 until p.T) {
                             if (p.wish[i][j] >= 0) continue
@@ -237,7 +240,9 @@ object FixSuggester {
                         (rep.hard == base.hard && rep.total < base.total) ||
                         (rep.hard == base.hard && rep.total == base.total && rep.weightedScore < base.weightedScore)
                     if (better) {
-                        val take = !haveBest || rep.total < bTotal || (rep.total == bTotal && rep.weightedScore < bW)
+                        val take = !haveBest || rep.hard < bHard ||
+                            (rep.hard == bHard && rep.total < bTotal) ||
+                            (rep.hard == bHard && rep.total == bTotal && rep.weightedScore < bW)
                         if (take) { haveBest = true; bHard = rep.hard; bTotal = rep.total; bW = rep.weightedScore; bestCombo = IntArray(n) { cellOpts[it][idx[it]] } }
                     }
                     var c = 0
