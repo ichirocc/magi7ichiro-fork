@@ -12,7 +12,7 @@ android {
         minSdk = 35
         targetSdk = 36
         versionCode = 41
-        versionName = "2.33.0-shift-tally"
+        versionName = "2.34.0-tally-violations"
     }
 
     buildTypes {
