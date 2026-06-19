@@ -289,6 +289,39 @@ object V6SanityPort {
             }
         }
 
+        // 0) 需給サマリ: シフトごとに「日次需要」と「個人下限/上限・適切回数(クランプ後)の供給圧力・現状配置」を
+        //    対比し、過剰(covO=日数オーバー)/不足(covU)の構造的要因を一目で示す。読み取り専用（重み・データ不変）。
+        //    例: Dﾃ 需要31 < 適切回数計35 → 各人をその回数へ近づける圧力が需要を超え、過剰配置(1日2人)が出る。
+        run {
+            val cnt = countMatrix(p, s)
+            for (k in 0 until p.K) {
+                var demand = 0
+                for (j in 0 until p.T) { val n = p.need1[k][j]; if (n > 0) demand += n }
+                var doable = 0; var loSum = 0; var hiSum = 0; var aptSum = 0
+                var hasRange = false; var hasApt = false; var cur = 0
+                for (i in 0 until p.S) {
+                    cur += cnt[i][k]
+                    if (!p.canDo(i, k)) continue
+                    doable++
+                    val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; val t = p.apt[i][k]
+                    if (lo != Int.MIN_VALUE) { loSum += lo; hasRange = true }
+                    if (hi != Int.MAX_VALUE) { hiSum += hi; hasRange = true }
+                    if (t >= 0) { aptSum += t; hasApt = true }
+                }
+                if (demand == 0 && !hasRange && !hasApt) continue   // 需給の概念が薄いシフトは省略
+                val pull = maxOf(loSum, aptSum)                     // 各人は下限と適切回数の高い方まで埋まりやすい
+                val pullSrc = if (aptSum >= loSum) "適切回数" else "下限"
+                val notes = ArrayList<String>()
+                if (demand > 0 && pull > demand) notes.add("供給圧力${pull}(${pullSrc})>需要${demand}→過剰見込+${pull - demand}")
+                if (demand > 0 && hiSum in 1 until demand) notes.add("需要${demand}>上限計${hiSum}→不足見込${demand - hiSum}")
+                val tag = if (notes.isEmpty()) "需給" else "需給注意"
+                val rangeStr = if (hasRange) " 下限計$loSum 上限計$hiSum" else ""
+                val aptStr = if (hasApt) " 適切回数計$aptSum" else ""
+                out.add("[D] $tag ${sym(k)}: 需要$demand 担当${doable}名$rangeStr$aptStr 現状$cur" +
+                    (if (notes.isNotEmpty()) " → ${notes.joinToString(" / ")}" else ""))
+            }
+        }
+
         // 1) 被覆: 必要数/現状数の実値（needViolations は k,j キー）
         if (report.needViolations.isNotEmpty()) {
             val cov = coverage(p, s)
