@@ -58,4 +58,20 @@ class GlsPenalty(
         kicks++
         return true
     }
+
+    /**
+     * [GLS aging] 全 penalty を keepPercent%（整数床）へ減衰する。長期停滞で penalty が肥大化し、受理バイアスが
+     * 過度に固着して脱出が逆に難しくなるのを防ぐ（Voudouris & Tsang の penalty aging 相当）。0 になった項目は除去。
+     * グローバル最良は生スコア管理のため、減衰は探索の受理動学のみに作用し解の質を退化させない。
+     * @return 減衰後に残った非ゼロ項目数。
+     */
+    fun decay(keepPercent: Int = 80): Int {
+        val it = pen.entries.iterator()
+        while (it.hasNext()) {
+            val e = it.next()
+            val nv = e.value * keepPercent / 100
+            if (nv <= 0) it.remove() else e.setValue(nv)
+        }
+        return pen.size
+    }
 }

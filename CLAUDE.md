@@ -159,6 +159,17 @@ read-only・ダッシュボードの SettingIssuesCard に常時=実行前に表
   「未設定者は無制限なので誤判定しない」設計と一致（Dﾃ=上限計10だが現状33＝未設定者ありでは発火しない）。
 未着手の発展: ②ボトルネック可視化の集約(セル着色は TallyCard に既存), ③hard→soft の What-if 提案(checkResultWorse で部分的に既存)。
 
+## 停滞脱出の改善（進行中）
+探索本体が過拘束データで空転しがちな問題（停滞脱出の質向上）。
+- (2.49.0): コードレビューで判明した冗長な後処理パス(applyGroupRangePairPolish)を revert。同日2者スワップ族
+  (c41/c42/c41s/c42s/c2)は既存 CyclicSwap が isBetter で total 最小化の過程で研磨済＝専用パスは冗長だった。
+  探索 focus 登録(2.46)は真の取りこぼし対策なので維持。
+- (2.50.0, 完了): **GLS penalty aging（減衰）**を新設（`GlsPenalty.decay(keepPercent=80)`）。GLS penalty は従来
+  増える一方で長期停滞時に肥大化し（観測 36k→64k）受理バイアスが固着していた。一定 kick(`GLS_DECAY_EVERY=256`)
+  ごとに penalty を 80% へ減衰し curAug を `augment(cur)` で再同期。**globalBest は生スコア管理のため解の質は退化しない**
+  （探索の受理動学のみに作用）。ユニットテスト(GlsPenaltyTest: decayShrinks/decayRemoves)で減衰算術を検証。
+- (未): restart摂動の非線形スケジュール、戦略的振動(λ係数オシレーション版, 要Python検証＋Δ×フル整合)。
+
 ## バックログ / 未対応
 1. TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）。
 2. 未レビュー領域の精読: `V6LateOperators`/`V6SearchOperators`/`V6HotfixPasses` 各パス内部, `V6WebCompat`,

@@ -59,6 +59,7 @@ data class V6OptimizerResult(
 object V6NativeOptimizer {
     /** [GLS移植] 最良未更新がこの反復数を超えたら GLS penalty を強化（Web版 glsTrigger 既定200）。 */
     private const val GLS_TRIGGER = 200L
+    private const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
 
     /** [HF290 役割分担移植] 並列仮説の探索/精製プロファイル（温度・摂動の倍率）。
      *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。 */
@@ -454,7 +455,12 @@ object V6NativeOptimizer {
                         val cj = parts.getOrNull(1)?.toIntOrNull()
                         if (ci != null && cj != null) cells.add(ci to cj)
                     }
-                    if (gls.penalizeWorst(cur, cells)) curAug += gls.lambda   // penalized a current cell -> augment(cur) += lambda
+                    if (gls.penalizeWorst(cur, cells)) {
+                        curAug += gls.lambda   // penalized a current cell -> augment(cur) += lambda
+                        // [GLS aging] 一定 kick ごとに penalty を減衰し肥大化を防ぐ。penalty集合が変わるので
+                        //   curAug を augment(cur) で再同期（globalBest は生スコア管理＝解の質は退化しない）。
+                        if (gls.kickCount() % GLS_DECAY_EVERY == 0) { gls.decay(); curAug = gls.augment(cur) }
+                    }
                 }
                 // destroyRepairViolations 用に curReport を周期更新（hint の鮮度確保）。
                 if (iter % 200L == 0L) curReport = UnifiedViolationChecker.check(state, cur)
