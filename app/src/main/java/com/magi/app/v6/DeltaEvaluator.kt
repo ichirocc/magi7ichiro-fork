@@ -78,7 +78,8 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         val cov = if (p.use2) minOf(p1, if (p2 != 0L) p2 else p1) else p1
         val h1 = hc3n + cov + hpref
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
-        val soft = sc1 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 + sc3m + sc3mn + hct + scovO
+        // [統一c] c3/c3m/c3mn に checker 重み(3/2/12)を適用（sc3等は #fire/run-deficit の生カウント）。
+        val soft = sc1 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 12 + hct + scovO
         return h1 * 1_000_000L + soft
     }
 
@@ -195,7 +196,8 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
 
         // [統一b] dCt(range) は SOFT へ移動（hard から除外）。
         val dHard = dC3n + (covUOf(p1, p2) - covUOf(covP1, covP2)) + dPref
-        val dSoft = dC1 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 + dC3m + dC3mn + dCt + dCovO
+        // [統一c] c3/c3m/c3mn の delta にも checker 重み(3/2/12)を適用（full soft と同一係数）。
+        val dSoft = dC1 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 12 + dCt + dCovO
         return score() + dHard * 1_000_000L + dSoft
     }
 
@@ -296,7 +298,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
                     var z = 0; var l = 1
                     while (l < D) { if (a[i][js + l] == seq[l]) z++; l++ }
                     val fire = if (fbd) (z == D - 1) else (z < D - 1)
-                    if (fire) sub += D
+                    if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
                 }
                 js++
             }
@@ -387,7 +389,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
                         var z = 0; var l = 1
                         while (l < D) { if (a[i][j + l] == seq[l]) z++; l++ }
                         val fire = if (fbd) (z == D - 1) else (z < D - 1)
-                        if (fire) sub += D
+                        if (fire) sub += 1   // [統一] #fire 計上。重みは soft 集約で適用
                     }
                     j++
                 }

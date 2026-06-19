@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 39
-        versionName = "2.31.0-c3run-unify"
+        versionCode = 40
+        versionName = "2.32.0-c3weight-unify"
     }
 
     buildTypes {

@@ -88,11 +88,12 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
             }
         }
 
-        // c3 family
-        soft += c3check(a, p.cons3, false)
-        hard1 += c3check(a, p.cons3n, true)    // forbidden -> display HARD
-        soft += c3check(a, p.cons3m, false)
-        soft += c3check(a, p.cons3mn, true)
+        // c3 family — [統一] UnifiedViolationChecker と同じ重み(c3=3/c3m=2/c3mn=12)を soft に適用。
+        // c3n は forbidden=HARD として hard1(count, ×1e6) のまま。窓マッチは #fire 計上(後述の sub += 1)。
+        soft += c3check(a, p.cons3, false) * 3L
+        hard1 += c3check(a, p.cons3n, true)    // forbidden -> display HARD (count)
+        soft += c3check(a, p.cons3m, false) * 2L
+        soft += c3check(a, p.cons3mn, true) * 12L
 
         // pref: wished cell not honored -> display HARD
         for (i in 0 until S) for (j in 0 until T) {
@@ -164,7 +165,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
                         var l = 1
                         while (l < D) { if (a[i][j + l] == seq[l]) z++; l++ }
                         val fire = if (forbidden) (z == D - 1) else (z < D - 1)
-                        if (fire) sub += D
+                        if (fire) sub += 1   // [統一] #fire 計上(チェッカー inc(key,1) と一致)。重みは呼び出し側で適用
                     }
                     j++
                 }
