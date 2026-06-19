@@ -28,6 +28,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private var sc41s = 0L; private var sc42s = 0L   // [スキルグループ] c41s/c42s（ssk ベース、soft）
     private var sc3 = 0L; private var hc3n = 0L; private var sc3m = 0L; private var sc3mn = 0L
     private var hpref = 0L; private var hct = 0L
+    private var sApt = 0L                             // [統一apt] 適切回数(双方向目標)の running total（SOFT, 重み1）
     private var scovO = 0L                            // [統一a] 過剰被覆(covO)の running total（SOFT）
     private var covP1 = 0L; private var covP2 = 0L
 
@@ -36,7 +37,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private var dC1 = 0L; private var dC2 = 0L; private var dC41 = 0L; private var dC42 = 0L
     private var dC41s = 0L; private var dC42s = 0L
     private var dC3 = 0L; private var dC3n = 0L; private var dC3m = 0L; private var dC3mn = 0L
-    private var dPref = 0L; private var dCt = 0L; private var dCovO = 0L; private var nCovP1 = 0L; private var nCovP2 = 0L
+    private var dPref = 0L; private var dCt = 0L; private var dApt = 0L; private var dCovO = 0L; private var nCovP1 = 0L; private var nCovP2 = 0L
 
     init {
         a = p.initialAssignment()
@@ -80,7 +81,8 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
         // [統一c] c3/c3m/c3mn に checker 重み(3/2/12)を適用（sc3等は #fire/run-deficit の生カウント）。
         // [統一c1] c1 にも checker 重み(4)を適用（sc1 は #fire 生カウント、canDoガード済）。
-        val soft = sc1 * 4 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 12 + hct + scovO
+        // [統一apt] sApt(適切回数の双方向L1偏差, 重み1) を SOFT に含める（aptViol が×1 を内包）。
+        val soft = sc1 * 4 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 12 + hct + sApt + scovO
         return h1 * 1_000_000L + soft
     }
 
@@ -90,7 +92,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         lI = i; lJ = j; lOld = old; lNw = nw
         if (nw == old) {
             dC1 = 0; dC2 = 0; dC41 = 0; dC42 = 0; dC41s = 0; dC42s = 0; dC3 = 0; dC3n = 0; dC3m = 0; dC3mn = 0
-            dPref = 0; dCt = 0; dCovO = 0; nCovP1 = covP1; nCovP2 = covP2
+            dPref = 0; dCt = 0; dApt = 0; dCovO = 0; nCovP1 = covP1; nCovP2 = covP2
             return score()
         }
 
@@ -118,6 +120,10 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         // ct (LimMin/LimMax) for shifts old / nw
         dCt = (rangeViol(i, old, cntSS[i][old] - 1) - rangeViol(i, old, cntSS[i][old])) +
               (rangeViol(i, nw, cntSS[i][nw] + 1) - rangeViol(i, nw, cntSS[i][nw]))
+
+        // [統一apt] 適切回数(双方向目標) for shifts old / nw — staff i の old/nw 列のみ変化（range と同形）。
+        dApt = (aptViol(i, old, cntSS[i][old] - 1) - aptViol(i, old, cntSS[i][old])) +
+               (aptViol(i, nw, cntSS[i][nw] + 1) - aptViol(i, nw, cntSS[i][nw]))
 
         // pref (this cell only)
         val w = p.wish[i][j]
@@ -199,7 +205,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         val dHard = dC3n + (covUOf(p1, p2) - covUOf(covP1, covP2)) + dPref
         // [統一c] c3/c3m/c3mn の delta にも checker 重み(3/2/12)を適用（full soft と同一係数）。
         // [統一c1] c1 の delta にも ×4。
-        val dSoft = dC1 * 4 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 12 + dCt + dCovO
+        val dSoft = dC1 * 4 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 12 + dCt + dApt + dCovO
         return score() + dHard * 1_000_000L + dSoft
     }
 
@@ -215,7 +221,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
             cntDay[old][j]--; cntDay[nw][j]++
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
-            hpref += dPref; hct += dCt; scovO += dCovO
+            hpref += dPref; hct += dCt; sApt += dApt; scovO += dCovO
             covP1 = nCovP1; covP2 = nCovP2
         } finally {
             // invalidate the stash so a stray double-commit cannot corrupt aggregates
@@ -233,7 +239,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         sc1 = c1All(); sc2 = c2All(); sc41 = c41All(); sc42 = c42All(); sc41s = c41sAll(); sc42s = c42sAll()
         sc3 = c3All(p.cons3, false); hc3n = c3All(p.cons3n, true)
         sc3m = c3All(p.cons3m, false); sc3mn = c3All(p.cons3mn, true)
-        hpref = prefAll(); hct = ctAll(); scovO = covOAll()
+        hpref = prefAll(); hct = ctAll(); sApt = aptAll(); scovO = covOAll()
         val cov = covAll(); covP1 = cov[0]; covP2 = cov[1]
     }
 
@@ -413,6 +419,17 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun ctAll(): Long {
         var h = 0L
         for (i in 0 until S) for (k in 0 until K) h += rangeViol(i, k, cntSS[i][k])
+        return h
+    }
+
+    /** [統一apt] 1セル(staff i, shift k)の適切回数偏差。重み1の L1 |n-t|。UnifiedViolationChecker の "apt" と一致。 */
+    private fun aptViol(i: Int, k: Int, n: Int): Long {
+        val t = p.apt[i][k]
+        return if (t >= 0) kotlin.math.abs(n - t).toLong() else 0L
+    }
+    private fun aptAll(): Long {
+        var h = 0L
+        for (i in 0 until S) for (k in 0 until K) h += aptViol(i, k, cntSS[i][k])
         return h
     }
 

@@ -1148,7 +1148,7 @@ internal fun TallyCard(ui: UiState) {
                             for (i in 0 until s) {
                                 val v = perStaff[i][kk]
                                 val vio = ui.countViolations["$i,$kk"]
-                                val cbg = when (vio) { "vio-low" -> shortBg; "vio-high" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
                                 TallyBox(cw, rh, cbg, false) {
                                     if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
                                 }

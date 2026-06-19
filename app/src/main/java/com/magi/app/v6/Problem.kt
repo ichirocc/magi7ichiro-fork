@@ -44,6 +44,10 @@ class Problem(val state: MagiState) {
     val rangeLo: Array<IntArray>
     val rangeHi: Array<IntArray>
 
+    /** apt[i][k] = 適切回数（群単位の双方向目標 groupShiftApt[群][シフト]）, or -1 when unset.
+     *  担当可能(canDo=bucket)なシフトのみ展開し、解消不能な幻のapt偏差を作らない（c1 と同じ方針）。 */
+    val apt: Array<IntArray>
+
     val cons1: List<C1>
     val cons2: List<C2>
     val cons3: List<C3>
@@ -82,6 +86,19 @@ class Problem(val state: MagiState) {
             if (i in 0 until S && k in 0 until K) {
                 r.lo.trim().toIntOrNull()?.let { rangeLo[i][k] = it }
                 r.hi.trim().toIntOrNull()?.let { rangeHi[i][k] = it }
+            }
+        }
+
+        // 適切回数（双方向目標）: state.groupShiftApt[群][シフト] を個人別 apt[i][k] へ展開（群単位＝同群全員に同一目標）。
+        // 担当ONシフトのみ（bucket=canDo）有効化し、担当不可シフトの幻のapt偏差を除外する。
+        apt = Array(S) { IntArray(K) { -1 } }
+        for (i in 0 until S) {
+            val g = sgrp[i]
+            val row = state.groupShiftApt.getOrNull(g) ?: continue
+            val canK = bucket.getOrNull(g)
+            for (k in 0 until K) {
+                val t = row.getOrNull(k)?.trim()?.toIntOrNull() ?: continue
+                if (t >= 0 && canK?.contains(k) == true) apt[i][k] = t
             }
         }
 

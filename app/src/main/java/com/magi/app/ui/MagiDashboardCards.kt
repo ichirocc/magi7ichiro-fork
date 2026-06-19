@@ -486,7 +486,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
 /** 内訳の家族キー → 日本語ラベル（BreakdownCard と FixSuggestionCard で共用）。 */
 internal val breakdownLabels: Map<String, String> = mapOf(
     "groupViol" to "グループ不整合", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
-    "low" to "下限割れ", "high" to "上限超過",
+    "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ",
     "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア", "covO" to "過剰な配置",
 )
@@ -504,6 +504,11 @@ internal fun breakdownLocations(famKey: String, ui: UiState): List<Pair<String, 
     val want = "vio-$famKey"
     return when (famKey) {
         "low", "high", "c2" -> ui.countViolations.entries.filter { it.value == want }.mapNotNull {
+            val p = it.key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
+            if (i == null || k == null) null else ("${nm(i)} 「${sym(k)}」" to i)
+        }
+        // 適切回数(apt) は不足=vio-aptLow / 超過=vio-aptHigh の2クラスで countViolations(i,k) に入る。
+        "apt" -> ui.countViolations.entries.filter { it.value == "vio-aptLow" || it.value == "vio-aptHigh" }.mapNotNull {
             val p = it.key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
             if (i == null || k == null) null else ("${nm(i)} 「${sym(k)}」" to i)
         }
@@ -537,7 +542,7 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}) {
             }
             BreakdownGroup("必須（満たすべき）", listOf("groupViol", "pref", "covU", "c3n"), 2, ui, labels, expanded, onTapChip)
             if (!criticalOnly) {
-                BreakdownGroup("人数の範囲", listOf("low", "high"), 1, ui, labels, expanded, onTapChip)
+                BreakdownGroup("人数の範囲", listOf("low", "high", "apt"), 1, ui, labels, expanded, onTapChip)
                 BreakdownGroup("任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "covO"), 0, ui, labels, expanded, onTapChip)
             }
             expanded?.let { key ->

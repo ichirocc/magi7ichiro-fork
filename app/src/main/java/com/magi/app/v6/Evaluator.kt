@@ -113,6 +113,9 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
             val n = ssn[i][k]
             if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) soft += (lo - n).toLong() * 90L
             if (hi != Int.MAX_VALUE && n > hi) soft += (n - hi).toLong() * 45L
+            // [統一apt] 適切回数(双方向目標) SOFT・重み1・L1偏差|n-t|。UnifiedViolationChecker の "apt" と一致。
+            val t = p.apt[i][k]
+            if (t >= 0) soft += kotlin.math.abs(n - t).toLong()
         }
 
         // covU: per-day need shortfall. MIN=OR two-generation design (P1 vs P2).

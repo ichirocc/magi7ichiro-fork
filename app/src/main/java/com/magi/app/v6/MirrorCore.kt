@@ -49,8 +49,8 @@ data class LightOptimizeResult(
 
 object MirrorKeys {
     val hard = listOf("groupViol", "c3n", "covU", "pref")
-    val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high")
-    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol")
+    val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt")
+    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt")
 }
 
 object UnifiedViolationChecker {
@@ -60,6 +60,8 @@ object UnifiedViolationChecker {
         "c41s" to "vio-c41s", "c42s" to "vio-c42s",
         "covU" to "vio-covU", "covO" to "vio-covO", "pref" to "vio-pref",
         "low" to "vio-low", "high" to "vio-high", "groupViol" to "vio-groupViol",
+        // 適切回数(双方向目標): 不足=赤 / 超過=橙（range と同色だが家族は別。TallyCard/内訳で個別解決可能にする）。
+        "aptLow" to "vio-aptLow", "aptHigh" to "vio-aptHigh",
     )
 
     fun check(state: MagiState, schedule: Array<IntArray> = state.schedule.toIntArray2D()): ViolationReport {
@@ -176,6 +178,13 @@ object UnifiedViolationChecker {
                 if (hi != Int.MAX_VALUE && n > hi) {
                     inc("high", n - hi)
                     markCount(i, k, "high")
+                }
+                // [統一apt] 適切回数(群単位の双方向目標)。SOFT・重み1・L1偏差|n-t|。担当可シフトのみ(apt 構築時に canDo ガード済)。
+                // セル着色は range(low/high, 重み90/45)を優先し、未マークのときだけ apt 色(不足=赤/超過=橙)を付ける。
+                val t = p.apt[i][k]
+                if (t >= 0 && n != t) {
+                    inc("apt", kotlin.math.abs(n - t))
+                    if (!countViolations.containsKey("$i,$k")) markCount(i, k, if (n > t) "aptHigh" else "aptLow")
                 }
             }
         }
@@ -324,6 +333,7 @@ object UnifiedViolationChecker {
         out += w("c42", 1.0)
         out += w("c41s", 1.0)   // [スキルグループ] スキル群C41の罰則（既存C41と同等）
         out += w("c42s", 1.0)   // [スキルグループ] スキル群C42の罰則
+        out += w("apt", 1.0)    // [統一apt] 適切回数(双方向目標) L1偏差・重み1（最適化器 Evaluator/Delta と一致）
         out += w("covO", 0.5)
         return out
     }
