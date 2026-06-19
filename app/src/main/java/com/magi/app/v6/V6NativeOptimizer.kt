@@ -282,7 +282,12 @@ object V6NativeOptimizer {
         for (r in 0 until restarts) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
-            var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
+            // [非線形 restart 摂動] 序盤の restart ほど大きく揺らして多様化、終盤ほど小さく intensify する
+            //   (VNS 流の段階的縮小)。frac=0(初回)→1(最終)。mult を二乗で減衰させ序盤の探索幅を確保。
+            //   摂動は盤面のランダム置換のみでスコア計算に触れず、globalBest は生スコア保持＝解は退化しない。
+            val frac = if (restarts <= 1) 0.0 else r.toDouble() / (restarts - 1)
+            val pertMult = 0.6 + 1.2 * (1.0 - frac) * (1.0 - frac)   // frac0→1.8倍, frac1→0.6倍
+            var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore * pertMult).coerceIn(0.05, 0.9))
             cur = hf67HardRepair(state, cur, rng).schedule
             var curReport = UnifiedViolationChecker.check(state, cur)
             eval.reset(cur)

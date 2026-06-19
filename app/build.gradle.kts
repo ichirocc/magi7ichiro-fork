@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 57
-        versionName = "2.50.0-gls-aging"
+        versionCode = 58
+        versionName = "2.51.0-nonlinear-restart"
     }
 
     buildTypes {
