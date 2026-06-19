@@ -1088,3 +1088,116 @@ private fun Int.floorMod(m: Int): Int = if (m == 0) 0 else ((this % m) + m) % m
 // ============================================================================
 // 大規模UI改良: ユニバーサルデザイン + スマホ特化シェル (ボトムナビ + ステータスヒーロー)
 // ============================================================================
+
+// ============================================================================
+// [集計] 各職員・各日のシフト集計（Excel版の右側=職員別 / 下側=日別 を再現）
+// 表示中スケジュール(gridUi)から countMatrix / coverage 相当を算出して表で示す。
+// 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
+// ============================================================================
+@Composable
+internal fun TallyCard(ui: UiState) {
+    val k = ui.shiftSymbols.size
+    val s = ui.schedule.size
+    val t = ui.days
+    if (s == 0 || k == 0 || t == 0) return
+    val cs = MaterialTheme.colorScheme
+    // 職員別: perStaff[i][k] = スタッフ i がシフト k を担当した回数
+    val perStaff = remember(ui.schedule, k) {
+        Array(s) { i -> IntArray(k).also { c -> ui.schedule[i].forEach { v -> if (v in 0 until k) c[v]++ } } }
+    }
+    // 日別: perDay[j][k] = 日 j にシフト k へ配置された人数
+    val perDay = remember(ui.schedule, k, t) {
+        Array(t) { j -> IntArray(k).also { c -> for (i in 0 until s) { val v = ui.schedule[i].getOrNull(j) ?: -1; if (v in 0 until k) c[v]++ } } }
+    }
+    var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Text("シフト集計", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(8.dp))
+            MagiSegmentedControl(options = listOf("職員別", "日別"), selected = mode, onSelect = { mode = it })
+            Spacer(Modifier.height(12.dp))
+            if (mode == 0) {
+                Text("各職員が対象期間に各シフトを担当した回数（左右にスクロール）",
+                    style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                val labW = 100.dp; val cw = 40.dp; val rh = 34.dp
+                Row {
+                    Column {
+                        TallyBox(labW, rh, cs.surfaceVariant, false) {
+                            Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                        }
+                        for (i in 0 until s) TallyBox(labW, rh, cs.surfaceVariant, true) {
+                            val nm = ui.staffNames.getOrNull(i) ?: "$i"
+                            val gp = ui.staffGroupSymbols.getOrNull(i) ?: ""
+                            Text(if (gp.isBlank()) nm else "$nm·$gp", style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState())) {
+                        for (kk in 0 until k) Column {
+                            val bg = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
+                            val fg = tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant
+                            TallyBox(cw, rh, bg, false) {
+                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.labelMedium, color = fg, maxLines = 1)
+                            }
+                            for (i in 0 until s) {
+                                val v = perStaff[i][kk]
+                                TallyBox(cw, rh, if (v == 0) cs.surface else cs.surfaceVariant, false) {
+                                    if (v != 0) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text("各日に各シフトへ配置されている人数（左右にスクロール）",
+                    style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+                val labW = 84.dp; val cw = 34.dp; val rh = 34.dp
+                Row {
+                    Column {
+                        TallyBox(labW, rh, cs.surfaceVariant, false) {
+                            Text("シフト", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                        }
+                        for (kk in 0 until k) {
+                            val bg = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
+                            val fg = tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant
+                            TallyBox(labW, rh, bg, true) {
+                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.bodySmall, color = fg, maxLines = 1)
+                            }
+                        }
+                    }
+                    Row(Modifier.horizontalScroll(rememberScrollState())) {
+                        for (j in 0 until t) Column {
+                            TallyBox(cw, rh, cs.surfaceVariant, false) {
+                                Text("${j + 1}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                            }
+                            for (kk in 0 until k) {
+                                val v = perDay[j][kk]
+                                TallyBox(cw, rh, if (v == 0) cs.surface else cs.surfaceVariant, false) {
+                                    if (v != 0) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else hexToColor(hex)
+
+@Composable
+private fun TallyBox(
+    w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, bg: Color, start: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Box(Modifier.width(w).height(h).padding(1.dp)) {
+        Box(
+            Modifier.fillMaxSize().background(bg, RoundedCornerShape(8.dp))
+                .then(if (start) Modifier.padding(horizontal = 6.dp) else Modifier),
+            contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
+        ) { content() }
+    }
+}
