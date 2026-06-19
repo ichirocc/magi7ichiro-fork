@@ -12,6 +12,7 @@ import com.magi.app.v6.SaParams
 import com.magi.app.v6.ScheduleCsvBridge
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.ViolationReport
+import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.V6PortAnalyzer
 import com.magi.app.v6.SettingIssue
 import com.magi.app.v6.SettingFixAction
@@ -952,7 +953,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun staffCountRules(): List<CountRuleView> {
         val st = state ?: return emptyList()
-        val p = Problem(st)
+        // [レビュー#1] 再描画毎に呼ばれるため cachedProblem で Problem 再構築(高コスト)を避ける。
+        val p = cachedProblem(st)
         val rows = mutableListOf<CountRuleView>()
         for (i in 0 until p.S) {
             val g = st.staff.getOrNull(i)?.groupIdx ?: continue
