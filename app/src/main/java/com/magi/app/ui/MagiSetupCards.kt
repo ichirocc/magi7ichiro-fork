@@ -197,14 +197,14 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
                 Button(onClick = { vm.setBudget((ui.budgetSec + 60).coerceAtMost(MAX_BUDGET_SEC)) },
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
             }
-            Text("計算方式: ${ui.v6Algorithm}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V6Algorithm.values().forEach { alg ->
                     val selected = ui.v6Algorithm == alg
                     if (selected) {
-                        Button(onClick = { vm.setV6Algorithm(alg) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(alg.name) }
+                        Button(onClick = { vm.setV6Algorithm(alg) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
                     } else {
-                        OutlinedButton(onClick = { vm.setV6Algorithm(alg) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(alg.name) }
+                        OutlinedButton(onClick = { vm.setV6Algorithm(alg) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
                     }
                 }
             }
@@ -220,6 +220,16 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
             }
         }
     }
+}
+
+/** [見やすさ] 計算方式(V6Algorithm)の一般向け日本語ラベル。技術名(AUTO/RSI 等)は操作者に不明なため。 */
+private fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
+    V6Algorithm.AUTO -> "おまかせ"
+    V6Algorithm.V5 -> "高速"
+    V6Algorithm.ALNS -> "破壊再構築"
+    V6Algorithm.RSI -> "違反集中"
+    V6Algorithm.RSI_PLUS -> "違反集中＋"
+    V6Algorithm.PORTFOLIO -> "並列(複数案)"
 }
 
 

@@ -336,7 +336,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
                     StaffCalendarCard(gridUi, onCellClick = onCell)
-                    TallyCard(gridUi)
+                    TallyCard(gridUi, vm, onFix = { staff -> tab = 3; vm.findFixSuggestions(staff) })
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
                     if (effectiveEditing) {
                         OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
@@ -500,7 +500,15 @@ internal fun MagiTopBar(ui: UiState) {
                 val ok = ui.hasResult && ui.bestHard == 0L
                 val label: String; val fg: Color; val bg: Color
                 when {
-                    ui.running -> { label = "実行中"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer }
+                    ui.running -> {
+                        // [進捗の見える化] バッジに改善の手応えを添える: hard残あり→⚠数、hard=0→soft改善(init→best)。
+                        val prog = when {
+                            ui.bestHard > 0L -> " ⚠${ui.bestHard}"
+                            ui.initSoft > 0L && ui.bestSoft in 0 until ui.initSoft -> " ${ui.initSoft}→${ui.bestSoft}"
+                            else -> ""
+                        }
+                        label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
+                    }
                     ok -> { label = "配布可"; fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
                     ui.hasResult -> { label = "未解決 ${ui.bestHard}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
                     else -> { label = "未計算"; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }

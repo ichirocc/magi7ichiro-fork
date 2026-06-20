@@ -107,6 +107,29 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
+/** 実行中の進捗サマリ文字列: 改善率(初期soft→現best) ・ 残り時間 ・ 探索数。読取専用。 */
+internal fun progressSummary(ui: UiState): String {
+    val parts = ArrayList<String>(3)
+    parts += when {
+        ui.bestHard > 0L -> "未解決 ⚠${ui.bestHard}"
+        ui.initSoft > 0L -> {
+            val pct = ((ui.initSoft - ui.bestSoft) * 100L / ui.initSoft).coerceAtLeast(0L)
+            "改善 ${pct}% (${ui.initSoft}→${ui.bestSoft})"
+        }
+        else -> "改善 –"
+    }
+    val secLeft = ((ui.budgetSec * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
+    parts += "残り %d:%02d".format(secLeft / 60, secLeft % 60)
+    val it = ui.iters
+    val iterStr = when {
+        it >= 1_000_000L -> "%.1fM回".format(it / 1_000_000.0)
+        it >= 1_000L -> "${it / 1_000L}K回"
+        else -> "${it}回"
+    }
+    parts += iterStr
+    return parts.joinToString("  ・  ")
+}
+
 @Composable
 internal fun LiveScheduleCard(ui: UiState) {
     if (!ui.running || ui.liveSchedule.isEmpty()) return
@@ -114,6 +137,8 @@ internal fun LiveScheduleCard(ui: UiState) {
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // [進捗の見える化] 改善率/残り時間/探索数を常時1行で。エンジニア向けログより「あと何分・どれだけ良くなった」を優先。
+            Text(progressSummary(ui), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.primary)
             val cur = ui.liveSchedule
             // 変化セル検出: 前回スナップショットとの差分。holder(非state)で保持し再合成ループを避ける。
             val prevHolder = remember { arrayOfNulls<List<List<Int>>>(1) }
@@ -1095,12 +1120,14 @@ private fun Int.floorMod(m: Int): Int = if (m == 0) 0 else ((this % m) + m) % m
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState) {
+internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?) -> Unit = {}) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
     if (s == 0 || k == 0 || t == 0) return
     val cs = MaterialTheme.colorScheme
+    // [直せる導線] 違反セルをタップ→原因(必要/下限/上限/目標 と現在)を数字で提示し「直し方を探す」へ。
+    var detail by remember { mutableStateOf<TallyDetailUi?>(null) }
     // 職員別: perStaff[i][k] = スタッフ i がシフト k を担当した回数
     val perStaff = remember(ui.schedule, k) {
         Array(s) { i -> IntArray(k).also { c -> ui.schedule[i].forEach { v -> if (v in 0 until k) c[v]++ } } }
@@ -1149,7 +1176,7 @@ internal fun TallyCard(ui: UiState) {
                                 val v = perStaff[i][kk]
                                 val vio = ui.countViolations["$i,$kk"]
                                 val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
-                                TallyBox(cw, rh, cbg, false) {
+                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null) {
                                     if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
                                 }
                             }
@@ -1184,7 +1211,7 @@ internal fun TallyCard(ui: UiState) {
                                 val v = perDay[j][kk]
                                 val vio = ui.needViolations["$kk,$j"]
                                 val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
-                                TallyBox(cw, rh, cbg, false) {
+                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null) {
                                     if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
                                 }
                             }
@@ -1192,8 +1219,58 @@ internal fun TallyCard(ui: UiState) {
                     }
                 }
             }
+            detail?.let { d ->
+                AlertDialog(
+                    onDismissRequest = { detail = null },
+                    title = { Text(d.title) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { val f = d.focus; detail = null; onFix(f) }) { Text("直し方を探す") }
+                    },
+                    dismissButton = { TextButton(onClick = { detail = null }) { Text("閉じる") } },
+                )
+            }
         }
     }
+}
+
+/** [直せる導線] 集計セルの違反詳細。focus=直す対象スタッフ(日別はnull=全体探索)。 */
+private data class TallyDetailUi(val title: String, val lines: List<String>, val focus: Int?)
+
+/** 職員別セル(i,k): 現在回数と 下限/上限/目標 の差を数字で。 */
+private fun staffViolDetail(vm: MagiViewModel, ui: UiState, i: Int, k: Int, count: Int, vio: String): TallyDetailUi {
+    val (lo, hi, apt) = vm.staffCellLimits(i, k)
+    val name = ui.staffNames.getOrNull(i) ?: "$i"
+    val sym = ui.shiftSymbols.getOrNull(k) ?: "$k"
+    val lines = ArrayList<String>()
+    lines += "現在 ${count}回"
+    when (vio) {
+        "vio-low" -> if (lo != null) lines += "下限 ${lo}回 → ${(lo - count).coerceAtLeast(0)}回 不足"
+        "vio-high" -> if (hi != null) lines += "上限 ${hi}回 → ${(count - hi).coerceAtLeast(0)}回 超過"
+        "vio-aptLow" -> if (apt != null) lines += "目標 ${apt}回 → ${(apt - count).coerceAtLeast(0)}回 不足"
+        "vio-aptHigh" -> if (apt != null) lines += "目標 ${apt}回 → ${(count - apt).coerceAtLeast(0)}回 超過"
+    }
+    return TallyDetailUi("$name ・ $sym", lines, i)
+}
+
+/** 日別セル(k,j): 現在人数と 必要数レンジ の差を数字で。 */
+private fun dayViolDetail(vm: MagiViewModel, ui: UiState, k: Int, j: Int, count: Int, vio: String): TallyDetailUi {
+    val limits = vm.needCellLimits(k, j)
+    val sym = ui.shiftSymbols.getOrNull(k) ?: "$k"
+    val lines = ArrayList<String>()
+    lines += "現在 ${count}人"
+    if (limits != null) {
+        val (lo, hi) = limits
+        when (vio) {
+            "vio-covU" -> lines += "必要 ${lo}人 → ${(lo - count).coerceAtLeast(0)}人 不足"
+            "vio-covO" -> lines += "適正 ${hi}人 → ${(count - hi).coerceAtLeast(0)}人 過剰"
+        }
+    }
+    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null)
 }
 
 private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else hexToColor(hex)
@@ -1217,11 +1294,13 @@ private fun TallyLegend(shortBg: Color, overBg: Color, shortLabel: String, overL
 @Composable
 private fun TallyBox(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, bg: Color, start: Boolean,
+    onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     Box(Modifier.width(w).height(h).padding(1.dp)) {
         Box(
             Modifier.fillMaxSize().background(bg, RoundedCornerShape(8.dp))
+                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
                 .then(if (start) Modifier.padding(horizontal = 6.dp) else Modifier),
             contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
         ) { content() }

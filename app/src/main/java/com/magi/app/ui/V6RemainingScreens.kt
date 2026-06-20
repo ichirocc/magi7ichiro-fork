@@ -182,6 +182,9 @@ fun ColorSettingsView(ui: UiState) {
 @Composable
 fun OperatorLogView(ui: UiState) {
     SectionSegment("操作ログ", "最近の処理ログ") {
+        // [進捗の見える化] 実行中は専門ログより先に 改善率/残り時間/探索数 を1行で示す。
+        if (ui.running) Text(progressSummary(ui), style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         if (ui.logs.isEmpty()) Text("ログなし", color = MaterialTheme.colorScheme.onSurfaceVariant)
         ui.logs.take(12).forEach { line ->
             Text(line, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)

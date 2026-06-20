@@ -943,6 +943,28 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         applyStructure(st.copy(staffRange = st.staffRange - "$i,$k"))
     }
 
+    /** [直せる導線] 集計セル(職員別)の違反詳細用しきい値: 下限/上限(staffRange)・目標(apt実効)。未設定は null。 */
+    fun staffCellLimits(i: Int, k: Int): Triple<Int?, Int?, Int?> {
+        val st = state ?: return Triple(null, null, null)
+        val p = cachedProblem(st)
+        if (i !in 0 until p.S || k !in 0 until p.K) return Triple(null, null, null)
+        val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE || it == 0) null else it }
+        val hi = p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) null else it }
+        val apt = p.apt[i][k].let { if (it < 0) null else it }
+        return Triple(lo, hi, apt)
+    }
+
+    /** [直せる導線] 集計セル(日別)の必要数レンジ lo..hi（need1/need2）。lo<0(対象外)は null。 */
+    fun needCellLimits(k: Int, j: Int): Pair<Int, Int>? {
+        val st = state ?: return null
+        val p = cachedProblem(st)
+        if (k !in 0 until p.K || j !in 0 until p.T) return null
+        val lo = p.need1[k][j]
+        if (lo < 0) return null
+        val hi = if (p.use2 && p.need2[k][j] >= 0) p.need2[k][j] else lo
+        return lo to hi
+    }
+
     /** [回数センター] 個人別の回数(上下限)と適切回数(apt)を職員×シフトで統合した一覧。
      *  staffRange または apt(実効=担当可＆クランプ後)が効くセルのみ返す。aptEff=実効目標(-1=なし),
      *  aptRaw=群目標の生値(-1=なし。aptEff と異なればクランプされている)。hasRange=個人別の上下限あり。 */
@@ -975,23 +997,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return rows.sortedWith(compareBy({ it.i }, { it.k }))
     }
 
-    // ---- [回数設定画面] シフト軸 / 個人軸の統合ビュー（apt=理想 / cons41=群の最少・最大 / staffRange=個人の最少・最大）----
-    data class GroupRule(val g: Int, val groupKigou: String, val groupName: String, val min: String, val ideal: String, val max: String)
+    // ---- [回数設定画面] シフト軸 / 個人軸の統合ビュー（apt=月の目標 / staffRange=個人の月 最少・最大）----
+    //   cons41(群の1日人数)は「回数(月)」とは別軸のため本画面では扱わない（制約画面で編集）。
+    data class GroupRule(val g: Int, val groupName: String, val ideal: String)
     data class IndivRule(val i: Int, val staffName: String, val min: String, val max: String)
     data class ShiftRuleBlock(val k: Int, val kigou: String, val name: String, val groups: List<GroupRule>, val indivs: List<IndivRule>)
 
     /** シフトタブ用: 各シフトの「群の回数(最少|理想|最大)」「個人の回数(最少|最大)」を集約。設定のある行のみ。 */
     fun shiftRuleBlocks(): List<ShiftRuleBlock> {
         val st = state ?: return emptyList()
-        val c41 = HashMap<String, Pair<String, String>>()
-        for (c in st.cons41) c41["${c.groupKigou} ${c.shiftKigou}"] = c.l to c.u
         return st.shifts.mapIndexed { k, sh ->
             val groups = st.groups.mapIndexedNotNull { g, grp ->
                 val ideal = st.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim() ?: ""
-                val lu = c41["${grp.kigou} ${sh.kigou}"]
-                val mn = lu?.first ?: ""; val mx = lu?.second ?: ""
-                if (ideal.isBlank() && mn.isBlank() && mx.isBlank()) null
-                else GroupRule(g, grp.kigou, grp.name, mn, ideal, mx)
+                if (ideal.isBlank()) null else GroupRule(g, grp.name, ideal)
             }
             val indivs = st.staff.indices.mapNotNull { i ->
                 val r = st.staffRange["$i,$k"]
@@ -999,7 +1017,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 else IndivRule(i, st.staff[i].name, r.lo, r.hi)
             }
             ShiftRuleBlock(k, sh.kigou, sh.name, groups, indivs)
-        }
+        }.filter { it.groups.isNotEmpty() || it.indivs.isNotEmpty() }
     }
 
     data class StaffShiftRule(val k: Int, val kigou: String, val min: String, val max: String)
@@ -1015,7 +1033,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 else StaffShiftRule(k, st.shifts[k].kigou, r.lo, r.hi)
             }
             StaffRuleBlock(i, sf.name, rows)
-        }
+        }.filter { it.rows.isNotEmpty() }
     }
 
     // ---- ws3 移植: 希望シフト wishes["i,j"]=シフトindex（採点=pref/hard1。割当やcons3系とは別。UIのみ・モデル/エンジン不変）----
@@ -1118,8 +1136,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3mn", "回避の並び", st.cons3mn.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons41", "グループ別の回数（上下限）",
-                st.cons41.map { "グループ ${it.groupKigou} の ${it.shiftKigou} を [${it.l.ifBlank { "-" }} 〜 ${it.u.ifBlank { "-" }}] 回" }),
+            ConstraintFamilyView("cons41", "グループ別の1日の人数（上下限）",
+                st.cons41.map { "グループ ${it.groupKigou} の ${it.shiftKigou} を [${it.l.ifBlank { "-" }} 〜 ${it.u.ifBlank { "-" }}] 人/1日" }),
             ConstraintFamilyView("cons42", "グループの組み合わせ禁止",
                 st.cons42.map { "グループ ${it.g1Kigou} の ${it.s1Kigou} と グループ ${it.g2Kigou} の ${it.s2Kigou} は同じ日に不可" }),
         )
@@ -1129,8 +1147,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun skillConstraintFamilies(): List<ConstraintFamilyView> {
         val st = state ?: return emptyList()
         return listOf(
-            ConstraintFamilyView("cons41s", "スキル別の回数（上下限）",
-                st.cons41s.map { "スキル ${it.groupKigou} の ${it.shiftKigou} を [${it.l.ifBlank { "-" }} 〜 ${it.u.ifBlank { "-" }}] 回" }),
+            ConstraintFamilyView("cons41s", "スキル別の1日の人数（上下限）",
+                st.cons41s.map { "スキル ${it.groupKigou} の ${it.shiftKigou} を [${it.l.ifBlank { "-" }} 〜 ${it.u.ifBlank { "-" }}] 人/1日" }),
             ConstraintFamilyView("cons42s", "スキルの組み合わせ禁止",
                 st.cons42s.map { "スキル ${it.g1Kigou} の ${it.s1Kigou} と スキル ${it.g2Kigou} の ${it.s2Kigou} は同じ日に不可" }),
         )

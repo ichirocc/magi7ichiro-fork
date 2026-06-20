@@ -1,9 +1,10 @@
 package com.magi.app.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.sp
  * (MagiViewModel.ws1* -> Ws1Ops) and re-runs the check; saving emits the full state.
  * Remove operations are deferred to a later increment.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Ws1Card(ui: UiState, vm: MagiViewModel) {
     val v = vm.ws1() ?: return
@@ -82,7 +83,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Text("シフト (${v.shifts.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             v.shifts.forEachIndexed { k, s ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${s.kigou}  ${s.name}  (必要数1 ${s.need1.ifBlank { "-" }} / 必要数2 ${s.need2.ifBlank { "-" }})",
+                    Text("${s.kigou}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
                         fontSize = 12.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) })
                     if (v.shifts.size > 1) {
@@ -130,12 +131,12 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
             Text("担当できるシフト（グループ × シフト）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            // [見やすさ] 横スクロール(12シフトで画面外)をやめ、群ごとに群名を行頭＋チップを FlowRow で折り返す。
+            //   選択中＝塗り＋✓（色だけに依存しない手がかり）、未選択＝外枠。
             v.groups.forEachIndexed { g, gr ->
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("${gr.kigou}: ", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    // [校正] テキストリンク（[休] Pｼ…）をやめ、ON/OFF が一目で分かる FilterChip に。
-                    //   選択中＝塗り＋✓（色だけに依存しない手がかり）、未選択＝外枠。
+                Spacer(Modifier.height(4.dp))
+                Text("${gr.kigou}  ${gr.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     v.shifts.forEachIndexed { k, s ->
                         val on = v.groupShift.getOrNull(g)?.getOrNull(k) == 1
                         FilterChip(
@@ -146,7 +147,6 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                                 { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                             } else null,
                         )
-                        Spacer(Modifier.width(6.dp))
                     }
                 }
             }
@@ -160,9 +160,9 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             v.groups.forEachIndexed { g, gr ->
                 val onShifts = v.shifts.indices.filter { v.groupShift.getOrNull(g)?.getOrNull(it) == 1 }
                 if (onShifts.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text("${gr.kigou}: ", fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.height(4.dp))
+                    Text("${gr.kigou}  ${gr.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         onShifts.forEach { k ->
                             val apt = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
                             AptStepper(label = v.shifts[k].kigou, value = apt,
@@ -230,8 +230,8 @@ private fun ShiftDialog(
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            W1Field("必要数1", need1, Modifier.width(140.dp)) { need1 = it }
-            W1Field("必要数2", need2, Modifier.width(140.dp)) { need2 = it }
+            W1Field("最低人数", need1, Modifier.width(140.dp)) { need1 = it }
+            W1Field("上限人数(2パターン時)", need2, Modifier.width(140.dp)) { need2 = it }
         }
     }
 }

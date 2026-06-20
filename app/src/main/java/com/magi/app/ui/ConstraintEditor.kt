@@ -149,7 +149,7 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
             var sk by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
             var l by remember { mutableStateOf("") }
             var u by remember { mutableStateOf("") }
-            Shell("グループ別の回数を追加", onClose, { vm.addCons41(gk, sk, l, u); onClose() },
+            Shell("グループ別の1日の人数を追加", onClose, { vm.addCons41(gk, sk, l, u); onClose() },
                 gk.isNotBlank() && sk.isNotBlank()) {
                 Picker("グループ", groups, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -177,7 +177,7 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
             var sk by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
             var l by remember { mutableStateOf("") }
             var u by remember { mutableStateOf("") }
-            Shell("スキル別の回数を追加", onClose, { vm.addCons41s(gk, sk, l, u); onClose() },
+            Shell("スキル別の1日の人数を追加", onClose, { vm.addCons41s(gk, sk, l, u); onClose() },
                 gk.isNotBlank() && sk.isNotBlank()) {
                 Picker("スキル", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }

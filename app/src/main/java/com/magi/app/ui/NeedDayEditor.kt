@@ -59,7 +59,7 @@ fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
                 overrides.forEach { o ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "${o.kigou}  ${o.j + 1}日  必要数1 ${o.p1.ifBlank { "-" }} / 必要数2 ${o.p2.ifBlank { "-" }}",
+                            "${o.kigou}  ${o.j + 1}日  最低 ${o.p1.ifBlank { "-" }}人 / 上限 ${o.p2.ifBlank { "-" }}人",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
@@ -148,8 +148,8 @@ private fun NeedDayDialog(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                NumberStepper("必要数1", p1, { p1 = it }, min = 0, blankLabel = "既定")
-                NumberStepper("必要数2", p2, { p2 = it }, min = 0, blankLabel = "既定")
+                NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
+                NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "既定")
             }
         },
     )

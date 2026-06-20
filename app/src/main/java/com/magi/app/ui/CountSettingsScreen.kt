@@ -96,29 +96,28 @@ private fun ShiftAxisList(
         if (openBlock == bk) {
             Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 if (b.groups.isNotEmpty()) {
-                    Text("グループ（最少｜理想｜最大）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("グループ（1か月の目標回数）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("※ 目標は各職員の月 最少〜最大 でクランプされます", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     b.groups.forEach { g ->
                         val rk = "g-${b.k}-${g.g}"
                         Text(
-                            "${g.groupName}   ${cell(g.min)}｜${cell(g.ideal)}｜${cell(g.max)}",
+                            "${g.groupName}   目標 ${cell(g.ideal)}回",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                         )
                         if (editRow == rk) {
-                            NumberStepper("最少", g.min, { vm.setCons41(g.groupKigou, b.kigou, it, g.max) }, 0, "なし")
-                            NumberStepper("理想", g.ideal, { vm.ws1SetGroupApt(g.g, b.k, it) }, 0, "なし")
-                            NumberStepper("最大", g.max, { vm.setCons41(g.groupKigou, b.kigou, g.min, it) }, 0, "なし")
-                            TextButton(onClick = { vm.setCons41(g.groupKigou, b.kigou, "", ""); vm.ws1SetGroupApt(g.g, b.k, ""); onEdit("") }, enabled = !ui.running) { Text("削除") }
+                            NumberStepper("目標", g.ideal, { vm.ws1SetGroupApt(g.g, b.k, it) }, 0, "なし")
+                            TextButton(onClick = { vm.ws1SetGroupApt(g.g, b.k, ""); onEdit("") }, enabled = !ui.running) { Text("削除") }
                         }
                     }
                 }
                 if (b.indivs.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("個人（最少｜最大）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("個人（1か月 最少｜最大）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     b.indivs.forEach { iv ->
                         val rk = "i-${b.k}-${iv.i}"
                         Text(
-                            "${iv.staffName}   ${cell(iv.min)}｜${cell(iv.max)}",
+                            "${iv.staffName}   ${cell(iv.min)}〜${cell(iv.max)}回",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                         )
@@ -128,9 +127,6 @@ private fun ShiftAxisList(
                             TextButton(onClick = { vm.removeStaffRange(iv.i, b.k); onEdit("") }, enabled = !ui.running) { Text("削除") }
                         }
                     }
-                }
-                if (b.groups.isEmpty() && b.indivs.isEmpty()) {
-                    Text("（このシフトの設定なし）", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -154,13 +150,11 @@ private fun StaffAxisList(
         BlockHeader(b.name, openBlock == bk) { onOpen(if (openBlock == bk) "" else bk) }
         if (openBlock == bk) {
             Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (b.rows.isEmpty()) {
-                    Text("（この職員の個人設定なし）", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Text("シフトごとの回数（1か月 最少｜最大）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 b.rows.forEach { r ->
                     val rk = "s-${b.i}-${r.k}"
                     Text(
-                        "${r.kigou}   ${cell(r.min)}｜${cell(r.max)}",
+                        "${r.kigou}   ${cell(r.min)}〜${cell(r.max)}回",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                     )

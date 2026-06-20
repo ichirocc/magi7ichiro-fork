@@ -238,7 +238,8 @@ internal fun OperatorNextActionCard(
             if (ui.running) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(Modifier.size(22.dp), color = plan.fg)
-                    Text("組み立て中…", color = plan.fg, modifier = Modifier.weight(1f))
+                    // [進捗の見える化] 「組み立て中…」だけでなく 改善率/残り時間/探索数 を出す。
+                    Text(progressSummary(ui), color = plan.fg, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                 }
             }
             if (plan.bigEnabled) {
@@ -314,9 +315,9 @@ internal fun CoverageDiagnosisCard(ui: UiState) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("人員不足の原因", style = MaterialTheme.typography.titleMedium)
             val headline = when {
-                diag.allInfeasible -> "不足 ${diag.totalShortfall} 件は全て充足不可。今のデータでは満たせません（想定内）。"
-                diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 件は枠が足りています。再実行や設定の見直しで解消し得ます。"
-                else -> "不足 ${diag.totalShortfall} 件 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
+                diag.allInfeasible -> "不足 ${diag.totalShortfall} 人は全て充足不可。今のデータでは満たせません（想定内）。"
+                diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再実行や設定の見直しで解消し得ます。"
+                else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
             }
             Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             for (s in diag.shortfalls.take(6)) {

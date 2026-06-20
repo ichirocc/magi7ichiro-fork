@@ -17,7 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
@@ -29,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -124,14 +127,16 @@ private fun WishDialog(
 ) {
     val maxDay = days.coerceAtLeast(1)
     var i by remember { mutableStateOf(initI) }
-    var day by remember { mutableStateOf((initJ + 1).coerceIn(1, maxDay)) }
+    // [見やすさ/効率] 日は ± だけでなく直接入力もできる(1->30で多タップを回避)。NeedDayEditor と同じ操作系。
+    var dayText by remember { mutableStateOf((initJ + 1).coerceIn(1, maxDay).toString()) }
+    val day = dayText.toIntOrNull()
     var k by remember { mutableStateOf(initK) }
     var openS by remember { mutableStateOf(false) }
-    val ok = i in staff.indices && k in shifts.indices && day in 1..maxDay
+    val ok = i in staff.indices && k in shifts.indices && day != null && day in 1..maxDay
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = {
-            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(i, day - 1, k) })
+            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(i, day!! - 1, k) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { Text("希望シフト") },
@@ -150,9 +155,16 @@ private fun WishDialog(
                 }
                 Text("日", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { day = (day - 1).coerceAtLeast(1) }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "日を減らす" }) { Text("−") }
-                    Text("${day}日", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center, modifier = Modifier.width(64.dp))
-                    Button(onClick = { day = (day + 1).coerceAtMost(maxDay) }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "日を増やす" }) { Text("＋") }
+                    Button(onClick = { dayText = ((day ?: 1) - 1).coerceAtLeast(1).toString() }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "日を減らす" }) { Text("−") }
+                    OutlinedTextField(
+                        value = dayText,
+                        onValueChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
+                        label = { Text("1〜$maxDay") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.width(110.dp),
+                    )
+                    Button(onClick = { dayText = ((day ?: 0) + 1).coerceAtMost(maxDay).toString() }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "日を増やす" }) { Text("＋") }
                 }
                 Text("希望シフト", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 // [web版参考 HF205/HF211] 担当可能シフトは大ボタンで選択。担当範囲外（勤務表不可）は

@@ -78,6 +78,7 @@ object V6HotfixPasses {
         seed: Long = System.nanoTime(),
         shouldStop: () -> Boolean = { false },
         onPhase: (String) -> Unit = {},
+        deadlineMs: Long = Long.MAX_VALUE,
     ): V6PostOptimizationResult {
         var work = schedule.copy2D()
         val logs = ArrayList<MirrorLog>()
@@ -97,7 +98,10 @@ object V6HotfixPasses {
 
         onPhase("後処理 HF66 職員内再配分")
         val t66 = System.currentTimeMillis()
-        val r66 = applyHF66IntraStaffRedistribution(state, work, maxMoves = 30, shouldStop = shouldStop)
+        // [残予算ガード] HF66 は手ごとに全候補をフル check する高コストパス。残予算の半分まで(残り半分を
+        //   後段の研磨群へ確保)＋絶対上限6sで打ち切り、暴走で後続パスを予算超過で打ち切らせない。
+        val hf66Cap = ((deadlineMs - t66).coerceAtLeast(0L) / 2).coerceAtMost(6_000L)
+        val r66 = applyHF66IntraStaffRedistribution(state, work, maxMoves = 30, shouldStop = shouldStop, deadlineMs = t66 + hf66Cap)
         work = r66.newSchedule.copy2D()
         logs.addAll(r66.logs)
 
@@ -792,7 +796,7 @@ object V6HotfixPasses {
         return HF67Result(work, before.total, current.total, swaps, shortage, capacity, rollback, logs)
     }
 
-    fun applyHF66IntraStaffRedistribution(state: MagiState, schedule: Array<IntArray>, maxMoves: Int = 30, shouldStop: () -> Boolean = { false }): HF66Result {
+    fun applyHF66IntraStaffRedistribution(state: MagiState, schedule: Array<IntArray>, maxMoves: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE): HF66Result {
         val p = Problem(state)
         var work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
@@ -801,13 +805,19 @@ object V6HotfixPasses {
         var shortageMoves = 0
         var capacityMoves = 0
         var rollback = 0
+        // [残予算ガード] shouldStop(全体締切)に加え HF66 専用の時間上限(deadlineMs)も尊重する。1手の全候補
+        //   スキャンは候補ごとにフル check するため高コスト。手ごとだけでなく内側ループでも締切を確認し、
+        //   締切後に1手分のスキャンを走り切って後段の研磨パスを押し出す(=予算超過で打ち切らせる)のを防ぐ。
+        //   keep-best のため途中中断しても解は退化しない(採用は isBetter な bestMove のみ)。
+        fun outOfTime() = shouldStop() || System.currentTimeMillis() >= deadlineMs
 
         while (moves < maxMoves) {
-            if (shouldStop()) break
+            if (outOfTime()) break
             val counts = countMatrix(p, work)
             var bestMove: MoveCandidate? = null
             var bestReport: ViolationReport? = null
-            for (i in 0 until p.S) {
+            scan@ for (i in 0 until p.S) {
+                if (outOfTime()) break@scan
                 val lows = ArrayList<Int>()
                 val highs = ArrayList<Int>()
                 for (k in 0 until p.K) {
@@ -815,6 +825,7 @@ object V6HotfixPasses {
                     if (counts[i][k] > effectiveHi(p, i, k)) highs.add(k)
                 }
                 for (want in lows) for (give in highs) {
+                    if (outOfTime()) break@scan
                     for (j in 0 until p.T) {
                         if (work[i][j] != give || p.wish[i][j] >= 0) continue
                         val cand = work.copy2D()
@@ -834,11 +845,11 @@ object V6HotfixPasses {
             shortageMoves++
             if (current.soft < before.soft) capacityMoves++
         }
-        if (moves == 0 && !shouldStop()) {
+        if (moves == 0 && !outOfTime()) {
             val rng = Random(0x66L)
             var t = 0
             while (t < maxMoves) {
-                if (shouldStop()) break
+                if (outOfTime()) break
                 if (p.S > 0 && p.T > 0) {
                     val cand = work.copy2D()
                     val i = rng.nextInt(p.S)
