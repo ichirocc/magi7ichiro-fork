@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 73
-        versionName = "2.67.0-earlier-stall-exit"
+        versionCode = 74
+        versionName = "2.68.0-wish-day-input"
     }
 
     buildTypes {
