@@ -172,15 +172,20 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   （探索の受理動学のみに作用）。ユニットテスト(GlsPenaltyTest: decayShrinks/decayRemoves)で減衰算術を検証。
 - (2.51.0, 完了): **restart摂動の非線形スケジュール**。restart 序盤ほど大きく揺らし(多様化)終盤ほど小さく(intensify)。
   mult=0.6+1.2*(1-frac)^2。摂動のみでスコア不変・globalBest 保持＝退化なし。
-- (2.52.0, 完了): **戦略的振動(Glover, λ係数オシレーション版)**。深い停滞時(OSC_TRIGGER=600)に受理判定のみ hard 差分を
-  (1-OSC_RELAX=0.9999) に割引し実行不可の壁を越え、ON/OFF窓(1200中800 ON)で別の実行可能盆地へ移る。**受理層だけに作用し
-  生スコア/globalBest は不変＝Δ×フル無関係・解は退化しない**。暴走防止に excursion 上限(curHard<=globalHard+OSC_MAX_HARD=2)
-  と per-step 上限(+2e6)を維持。Python PoC で escape 0/20→20/20・実行不可解 0/20 を確認(/tmp/osc_poc.py)。
-  ユニットテスト(StrategicOscillationTest)で壁越え・暴走bound・後方互換を検証。SA受理アームのみ(GD は hard 非増を維持)。
-- (保留・判断): HF63 の族別重み係数(HARD×0.125)の振動化(より選択的なλ緩和)は、HF63係数が「探索の重み系へ未配線」で
-  評価器スコアへの深い配線(HF77的に重み意味の業務承認＋Python Δ×フル検証必須=高リスク)か、HF63検出(5000iter)と
-  振動トリガ(600iter)のタイムスケール不整合で実質no-op、のいずれか。かつ 2.52 の一律振動は既に安全・自己修正的
-  (生スコアで globalBest ゲート＋OFF窓で実行可能へ復帰)で選択化の ROI が低い。→ 深い版は要・業務承認時のみ着手。
+- (2.52.0→**2.55.0 で revert**): 戦略的振動(λ係数オシレーション)。受理層で hard を一時割引し実行不可の壁を越える手法。
+  PoC(/tmp/osc_poc.py の理想化2盆地+薄い壁)では escape 20/20 だったが、**Python等価ベンチ(tools/nsp_bench.py)で
+  現実的NSPでは一貫して悪化(AUC +5%〜+15%)と実測**。理由: 現実の過拘束NSPは feasibility 到達自体が難しく「壁の向こうに
+  良い実行可能盆地が無い」ため、振動は限られた予算を実行不可彷徨に浪費するだけ。**「安全(解は退化しない)」は正しいが
+  「有益」ではなかった**=安全性と有益性は別物。2.54 の HF63 選択発動も同根のため一括 revert。CRINN流の実測が推論を覆した好例。
+  → nonlinear_restart(2.51, 実測で僅か改善)と GLS aging(2.50, 中立・無害)は維持。
+- (教訓): 探索動学の変更は **tools/nsp_bench.py の実測報酬で A/B 検証してから**採否する(PoCの理想化landscapeは現実を
+  代表しないことがある)。便益が測れない/負なら入れない。
+- (2.56.0, 実測結論): nsp_bench.py に **ALNS destroy-repair を追加(高忠実度化)** し再測定。**destroy-repair を入れると
+  GLS aging/nonlinear restart/振動 は全て AUC 中立**(repair が支配的で feasibility に容易到達=脱出の出番が消える)。
+  GLS keep%/decay_every/lambda・restart係数の**パラメータスイープも全て +0.0%=チューニング価値なし**と実測。
+  低忠実度(1セルSA)での「nonlinear_restart改善」は偽信号だった。→ **脱出ヒューリスティクスへの投資は停止**。
+  維持判断: GLS aging(2.50)/nonlinear restart(2.51)は中立=無害かつ proxy は短時間簡易のため実機の数百万iter regime
+  での penalty 肥大防止の意義が残り得る→維持。**今後の本当のレバーは repair/destroy-repair オペレータの質 と データ側**。
 
 ## バックログ / 未対応
 1. TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）。
