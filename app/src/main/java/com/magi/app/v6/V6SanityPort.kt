@@ -256,6 +256,41 @@ object V6SanityPort {
             }
         }
 
+        // 6) [事前診断] シフト単位の構造的な過拘束（席数 vs 下限/上限の合計）。実行前に「何をしても無理」を提示し、
+        //    無駄な最適化(数分)を避ける。誤検知を避けるため、明確に矛盾する2ケースのみ（読み取り専用・データ不変）。
+        for (k in 0 until p.K) {
+            var seatsLo = 0; var seatsHi = 0; var hasDemand = false
+            for (j in 0 until p.T) {
+                val n1 = p.need1[k][j]
+                if (n1 < 0) continue   // need 未設定の日は対象外
+                hasDemand = true
+                val hi = if (p.use2 && p.need2[k][j] >= 0) p.need2[k][j] else n1
+                seatsLo += maxOf(n1, 0); seatsHi += maxOf(hi, 0)
+            }
+            if (!hasDemand) continue
+            val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
+            var capable = 0; var loSum = 0; var capSum = 0; var allCapped = true
+            for (i in 0 until p.S) {
+                if (!p.canDo(i, k)) continue
+                capable++
+                val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
+                if (lo != Int.MIN_VALUE && lo > 0) loSum += lo
+                if (hi != Int.MAX_VALUE) capSum += hi else allCapped = false
+            }
+            // A) 下限の合計 > 必要数(上限)の合計 → 全員の下限を満たすと必要数を超える＝過剰配置/下限割れが不可避。
+            if (loSum > seatsHi) {
+                out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の回数下限の合計",
+                    "担当者の下限の合計が${loSum}回ですが、必要数の合計は${seatsHi}回しかありません。全員の下限は同時に満たせず、過剰配置か下限割れが必ず出ます",
+                    "「$sym」の個人下限を下げる(ws1)か、必要人数を増やしてください(ws2)"))
+            }
+            // B) 全担当者に上限があり、上限の合計 < 必要数 → 席を埋めきれず人員不足(covU)が不可避。
+            if (capable > 0 && allCapped && capSum < seatsLo) {
+                out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の必要人数",
+                    "必要数の合計は${seatsLo}回ですが、担当者の上限の合計は${capSum}回しかありません。席を埋めきれず人員不足になります",
+                    "「$sym」の個人上限を上げる/担当者を増やす(ws1)か、必要人数を下げてください(ws2)"))
+            }
+        }
+
         return out
     }
 
@@ -292,33 +327,66 @@ object V6SanityPort {
         // 0) 需給サマリ: シフトごとに「日次需要」と「個人下限/上限・適切回数(クランプ後)の供給圧力・現状配置」を
         //    対比し、過剰(covO=日数オーバー)/不足(covU)の構造的要因を一目で示す。読み取り専用（重み・データ不変）。
         //    例: Dﾃ 需要31 < 適切回数計35 → 各人をその回数へ近づける圧力が需要を超え、過剰配置(1日2人)が出る。
+        //    注: 下限/上限/適切回数の「計」は設定済み職員のみの合計。未設定者がいると実効上限は無制限なので、
+        //    上限計<需要でも不足とは限らない（不足の構造判定は全員に上限がある場合に限定する）。
         run {
             val cnt = countMatrix(p, s)
             for (k in 0 until p.K) {
                 var demand = 0
                 for (j in 0 until p.T) { val n = p.need1[k][j]; if (n > 0) demand += n }
                 var doable = 0; var loSum = 0; var hiSum = 0; var aptSum = 0
-                var hasRange = false; var hasApt = false; var cur = 0
+                var loCnt = 0; var hiCnt = 0; var aptCnt = 0; var cur = 0
                 for (i in 0 until p.S) {
                     cur += cnt[i][k]
                     if (!p.canDo(i, k)) continue
                     doable++
                     val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; val t = p.apt[i][k]
-                    if (lo != Int.MIN_VALUE) { loSum += lo; hasRange = true }
-                    if (hi != Int.MAX_VALUE) { hiSum += hi; hasRange = true }
-                    if (t >= 0) { aptSum += t; hasApt = true }
+                    if (lo != Int.MIN_VALUE) { loSum += lo; loCnt++ }
+                    if (hi != Int.MAX_VALUE) { hiSum += hi; hiCnt++ }
+                    if (t >= 0) { aptSum += t; aptCnt++ }
                 }
+                val hasRange = loCnt > 0 || hiCnt > 0
+                val hasApt = aptCnt > 0
                 if (demand == 0 && !hasRange && !hasApt) continue   // 需給の概念が薄いシフトは省略
-                val pull = maxOf(loSum, aptSum)                     // 各人は下限と適切回数の高い方まで埋まりやすい
-                val pullSrc = if (aptSum >= loSum) "適切回数" else "下限"
                 val notes = ArrayList<String>()
-                if (demand > 0 && pull > demand) notes.add("供給圧力${pull}(${pullSrc})>需要${demand}→過剰見込+${pull - demand}")
-                if (demand > 0 && hiSum in 1 until demand) notes.add("需要${demand}>上限計${hiSum}→不足見込${demand - hiSum}")
-                val tag = if (notes.isEmpty()) "需給" else "需給注意"
-                val rangeStr = if (hasRange) " 下限計$loSum 上限計$hiSum" else ""
-                val aptStr = if (hasApt) " 適切回数計$aptSum" else ""
+                // 実際の過不足: 最適化結果(現状) vs 日次需要 = covO/covU の方向。
+                if (demand > 0 && cur > demand) notes.add("現状${cur}>需要${demand}→過剰${cur - demand}(covO)")
+                if (demand > 0 && cur < demand) notes.add("現状${cur}<需要${demand}→不足${demand - cur}(covU)")
+                // 構造要因(過剰): 各人が下限/適切回数まで埋める圧力(=確実に埋まる量)の合計が需要超過。
+                val pull = maxOf(loSum, aptSum)
+                val pullSrc = if (aptSum >= loSum) "適切回数" else "下限"
+                if (demand > 0 && pull > demand) notes.add("供給圧力${pull}(${pullSrc})>需要${demand}")
+                // 構造要因(不足): 全担当者に上限があり、その合計が需要未満のときのみ（未設定者は無制限なので除外）。
+                if (demand > 0 && doable > 0 && hiCnt == doable && hiSum < demand) notes.add("全${doable}名の上限計${hiSum}<需要${demand}→構造的に不足")
+                fun cs(sum: Int, c: Int) = if (c == doable) "$sum" else "$sum(${c}/${doable}名)"
+                val tag = if (notes.any { it.contains("過剰") || it.contains("不足") }) "需給注意" else "需給"
+                val rangeStr = if (hasRange) " 下限計${cs(loSum, loCnt)} 上限計${cs(hiSum, hiCnt)}" else ""
+                val aptStr = if (hasApt) " 適切回数計${cs(aptSum, aptCnt)}" else ""
                 out.add("[D] $tag ${sym(k)}: 需要$demand 担当${doable}名$rangeStr$aptStr 現状$cur" +
                     (if (notes.isNotEmpty()) " → ${notes.joinToString(" / ")}" else ""))
+            }
+        }
+
+        // 0b) 上下チェック(全シフト網羅): 下限/上限(staffRange)が設定された全シフトについて、個人別の
+        //     下限割れ(low)/上限超過(high)を担当者ぶん洗い出す。違反詳細(low/high)は違反のみ列挙だが、
+        //     こちらは設定済みシフトを網羅し違反0でも「上下OK」を出す。判定は UnifiedViolationChecker と一致
+        //     （low: lo!=0 かつ canDo かつ 回数<lo / high: 回数>hi）。読み取り専用。
+        run {
+            val cnt = countMatrix(p, s)
+            for (k in 0 until p.K) {
+                val lows = ArrayList<String>(); val highs = ArrayList<String>()
+                var hasBound = false
+                for (i in 0 until p.S) {
+                    if (!p.canDo(i, k)) continue
+                    val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; val n = cnt[i][k]
+                    if (lo != Int.MIN_VALUE && lo != 0) { hasBound = true; if (n < lo) lows.add("${nm(i)} $n<$lo") }
+                    if (hi != Int.MAX_VALUE) { hasBound = true; if (n > hi) highs.add("${nm(i)} $n>$hi") }
+                }
+                if (!hasBound) continue
+                fun part(label: String, xs: List<String>) =
+                    if (xs.isEmpty()) "${label}0名" else "${label}${xs.size}名(${xs.take(8).joinToString(" ")}${if (xs.size > 8) " …他${xs.size - 8}件" else ""})"
+                val tag = if (lows.isEmpty() && highs.isEmpty()) "上下OK" else "上下注意"
+                out.add("[D] $tag ${sym(k)}: ${part("下限割れ", lows)} / ${part("上限超過", highs)}")
             }
         }
 

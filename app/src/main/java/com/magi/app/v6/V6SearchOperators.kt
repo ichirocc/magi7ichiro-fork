@@ -225,14 +225,23 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
  */
 internal fun glsAccept(
     ns: Long, curScore: Long, moveAug: Double, curAug: Double,
-    mode: AcceptMode, temp: Double, gdLevel: Double, rng: Random,
+    mode: AcceptMode, temp: Double, gdLevel: Double, rng: Random, hardRelax: Double = 0.0,
 ): Boolean {
-    if (ns > curScore + 2_000_000L) return false
+    if (ns > curScore + 2_000_000L) return false   // per-step 上限(±2 hard)。振動中も維持し実行不可への暴走を防ぐ。
     return when (mode) {
         AcceptMode.GREAT_DELUGE ->
             (ns.toDouble() + curAug + moveAug) <= gdLevel && (ns / 1_000_000L) <= (curScore / 1_000_000L)
         AcceptMode.SA -> {
-            val delta = (ns - curScore).toDouble() + moveAug
+            // [戦略的振動] hardRelax>0 の間だけ受理判定の hard 差分を (1-hardRelax) に割引し、実行不可の壁を
+            //   越えやすくする。生スコア(ns/curScore)・globalBest は不変＝Δ×フル無関係・解は退化しない
+            //   (Python PoC で escape 20/20・実行不可解 0/20 を確認済)。hardRelax=0 で従来と完全一致。
+            val delta = if (hardRelax > 0.0) {
+                val nh = ns / 1_000_000L; val nsSoft = ns % 1_000_000L
+                val ch = curScore / 1_000_000L; val csSoft = curScore % 1_000_000L
+                (nh - ch).toDouble() * (1.0 - hardRelax) * 1_000_000.0 + (nsSoft - csSoft).toDouble() + moveAug
+            } else {
+                (ns - curScore).toDouble() + moveAug
+            }
             delta <= 0.0 || rng.nextDouble() < exp(-max(0.0, delta) / (200.0 * temp + 1e-9))
         }
     }

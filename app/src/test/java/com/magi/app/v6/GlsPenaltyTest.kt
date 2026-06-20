@@ -43,4 +43,23 @@ class GlsPenaltyTest {
         assertEquals(1, gls.penaltyOf(1, 0, 3))
         assertEquals(0, gls.penaltyOf(0, 1, 1))
     }
+
+    @Test fun decayShrinksPenaltyAndAugment() {
+        val gls = GlsPenalty(2, 3, 4, lambda = 10.0)
+        repeat(10) { gls.penalizeWorst(sched, listOf(0 to 1)) }   // (0,1)割当 k=1 を penalty=10 まで強化
+        assertEquals(10, gls.penaltyOf(0, 1, 1))
+        assertEquals(100.0, gls.augment(sched), 1e-9)             // lambda*10
+        gls.decay(80)                                             // 10*80/100 = 8（整数床）
+        assertEquals(8, gls.penaltyOf(0, 1, 1))
+        assertEquals(80.0, gls.augment(sched), 1e-9)             // lambda*8
+    }
+
+    @Test fun decayRemovesEntriesReachingZero() {
+        val gls = GlsPenalty(2, 3, 4, lambda = 10.0)
+        gls.penalizeWorst(sched, listOf(0 to 1))   // penalty=1
+        assertEquals(1, gls.penaltyOf(0, 1, 1))
+        assertEquals(0, gls.decay(50))             // 1*50/100=0 → 除去 → 残り0項目
+        assertEquals(0, gls.penaltyOf(0, 1, 1))
+        assertEquals(0.0, gls.augment(sched), 1e-9)
+    }
 }

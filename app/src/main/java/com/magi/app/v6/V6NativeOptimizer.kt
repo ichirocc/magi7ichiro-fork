@@ -59,6 +59,14 @@ data class V6OptimizerResult(
 object V6NativeOptimizer {
     /** [GLS移植] 最良未更新がこの反復数を超えたら GLS penalty を強化（Web版 glsTrigger 既定200）。 */
     private const val GLS_TRIGGER = 200L
+    private const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
+    // [戦略的振動] 深い停滞時に hard を一時割引して実行不可の壁を越え別の実行可能盆地へ移る(Glover)。
+    //   生スコアで globalBest をゲートするため解は退化しない(Python PoCで escape↑・実行不可解0を検証済)。
+    private const val OSC_TRIGGER = 600L      // この反復数 改善なし(深い停滞)で振動を発動
+    private const val OSC_PERIOD = 1200L      // 振動の周期(反復)
+    private const val OSC_ON = 800L           // うち hard 割引を ON にする反復数(残りは OFF=通常受理で実行可能へ復帰)
+    private const val OSC_MAX_HARD = 2L       // current が globalBest より この hard 数を超えて悪化したら振動 OFF(暴走防止)
+    private const val OSC_RELAX = 0.9999      // hard 差分を (1-0.9999) に割引(壁を実質無料化。PoCでこの水準が必要と判明)
 
     /** [HF290 役割分担移植] 並列仮説の探索/精製プロファイル（温度・摂動の倍率）。
      *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。 */
@@ -281,7 +289,12 @@ object V6NativeOptimizer {
         for (r in 0 until restarts) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
-            var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
+            // [非線形 restart 摂動] 序盤の restart ほど大きく揺らして多様化、終盤ほど小さく intensify する
+            //   (VNS 流の段階的縮小)。frac=0(初回)→1(最終)。mult を二乗で減衰させ序盤の探索幅を確保。
+            //   摂動は盤面のランダム置換のみでスコア計算に触れず、globalBest は生スコア保持＝解は退化しない。
+            val frac = if (restarts <= 1) 0.0 else r.toDouble() / (restarts - 1)
+            val pertMult = 0.6 + 1.2 * (1.0 - frac) * (1.0 - frac)   // frac0→1.8倍, frac1→0.6倍
+            var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore * pertMult).coerceIn(0.05, 0.9))
             cur = hf67HardRepair(state, cur, rng).schedule
             var curReport = UnifiedViolationChecker.check(state, cur)
             eval.reset(cur)
@@ -304,6 +317,11 @@ object V6NativeOptimizer {
                 // [HF290 役割分担] explore 倍率で受理温度を調整（探索=受理寛容/精製=厳格）。explore=1.0 は従来と同一。
                 val temp = max(0.03, (deadline - nowMs()).toDouble() / max(1.0, per * 1000.0) * options.explore)
                 val curHard = curScore / 1_000_000L
+                // [戦略的振動] 深い停滞(OSC_TRIGGER 改善なし) かつ ON 窓 かつ current が globalBest+OSC_MAX_HARD 以内
+                //   のときだけ hard を割引して実行不可の壁を越える。excursion を bound し暴走を防ぐ。SA 受理でのみ有効。
+                val hardRelax = if (itersTotal - lastImproveIter > OSC_TRIGGER &&
+                    (iter % OSC_PERIOD) < OSC_ON &&
+                    curHard <= globalScore / 1_000_000L + OSC_MAX_HARD) OSC_RELAX else 0.0
                 val gdLevel = if (options.accept == AcceptMode.GREAT_DELUGE) {
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, per * 1000.0)).coerceIn(0.0, 1.0)
                     greatDelugeLevel(gdInitial, globalScore.toDouble(), frac)
@@ -377,7 +395,7 @@ object V6NativeOptimizer {
                     }
                     if (moved) {
                         val improvedCur = ns < curScore
-                        val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng)
+                        val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng, hardRelax)
                         if (accepted) {
                             cur[c0i][c0j] = eval.at(c0i, c0j)
                             if (c1i >= 0) cur[c1i][c1j] = eval.at(c1i, c1j)
@@ -428,7 +446,7 @@ object V6NativeOptimizer {
                     }
                     val ns = eval.score()
                     val improvedCur = ns < curScore
-                    val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng)
+                    val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng, hardRelax)
                     if (accepted) {
                         cur = fixed; curScore = ns; curAug += moveAug
                         if (ns < globalScore) {
@@ -454,7 +472,12 @@ object V6NativeOptimizer {
                         val cj = parts.getOrNull(1)?.toIntOrNull()
                         if (ci != null && cj != null) cells.add(ci to cj)
                     }
-                    if (gls.penalizeWorst(cur, cells)) curAug += gls.lambda   // penalized a current cell -> augment(cur) += lambda
+                    if (gls.penalizeWorst(cur, cells)) {
+                        curAug += gls.lambda   // penalized a current cell -> augment(cur) += lambda
+                        // [GLS aging] 一定 kick ごとに penalty を減衰し肥大化を防ぐ。penalty集合が変わるので
+                        //   curAug を augment(cur) で再同期（globalBest は生スコア管理＝解の質は退化しない）。
+                        if (gls.kickCount() % GLS_DECAY_EVERY == 0) { gls.decay(); curAug = gls.augment(cur) }
+                    }
                 }
                 // destroyRepairViolations 用に curReport を周期更新（hint の鮮度確保）。
                 if (iter % 200L == 0L) curReport = UnifiedViolationChecker.check(state, cur)
@@ -914,7 +937,7 @@ object V6NativeOptimizer {
         val out = base.copy2D()
         val p = cachedProblem(state)
         when (focus) {
-            "covU", "c41" -> repeat(8) { destroyRepairDay(state, out, rng) }
+            "covU", "c41", "c41s" -> repeat(8) { destroyRepairDay(state, out, rng) }   // c41s=スキル群の1日人数(c41と同型)
             "low", "high", "c2" -> repeat(8) { destroyRepairStaff(state, out, rng) }
             "groupViol", "pref", "c3n" -> {
                 val fixed = hf67HardRepair(state, out, rng).schedule
@@ -926,7 +949,7 @@ object V6NativeOptimizer {
     }
 
     private fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet()): String {
-        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c2", "covO", "c42", "c1", "c3", "c3m", "c3mn")
+        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "c1", "c3", "c3m", "c3mn")
         // [HF63] まず deprioritize 対象(構造的に充足困難)を除いた族から最大違反を選ぶ。
         if (avoid.isNotEmpty()) {
             var b = "total"; var bc = -1

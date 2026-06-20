@@ -22,6 +22,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -45,12 +47,17 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
     var dialog by remember { mutableStateOf<StaffRangeEdit?>(null) }
-    val rows = vm.staffRangeOverrides()
+    val rows = vm.staffCountRules()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("個人別の回数（上下限）", style = MaterialTheme.typography.titleMedium)
+            Text("個人別の回数（上下限・適切回数）", style = MaterialTheme.typography.titleMedium)
             Text(
-                "各スタッフが各シフトを担当する回数の下限・上限。設定した分だけ制約になります（空＝制限なし）。",
+                "各スタッフが各シフトを「1か月に何回」担当するか。上下限（個人別の制約）と適切回数（群の目標）の実効値を1か所で確認できます。",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                "「目標◯」=適切回数（群目標）。「目標A→B」はAが個人の上下限でBにクランプされた状態。「今◯」=現在の回数。🔴=下限割れ / 🟠=上限超過（適切回数の過不足も色で表示）。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -61,27 +68,50 @@ fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                // [校正] スタッフ名の繰り返しを排除し、スタッフ単位に集約。各上下限は
-                //   コンパクトなチップ（タップ＝編集 / ×＝削除）で密に一覧（冗長な行列挙を解消）。
+                // [統合] スタッフ単位に集約し、上下限(個人別)と適切回数(群目標)を同じチップ列に密に一覧。
+                //   個人別の上下限ありはタップ＝編集 / ×＝削除。適切回数のみのセルもタップで個人別上下限を追加可能。
                 rows.groupBy { it.i }.forEach { (_, list) ->
                     Text(list.first().staffName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         list.forEach { r ->
-                            val lab = when {
-                                r.lo.isNotBlank() && r.hi.isNotBlank() -> "${r.kigou} ${r.lo}–${r.hi}"
-                                r.hi.isNotBlank() -> "${r.kigou} ≤${r.hi}"
-                                r.lo.isNotBlank() -> "${r.kigou} ≥${r.lo}"
-                                else -> r.kigou
+                            // 「今◯」= 現在の回数（編集中スケジュール）。過不足は countViolations で色分け。
+                            val now = ui.schedule.getOrNull(r.i)?.count { it == r.k } ?: 0
+                            val vio = ui.countViolations["${r.i},${r.k}"]
+                            val range = when {
+                                r.lo.isNotBlank() && r.hi.isNotBlank() -> "${r.lo}–${r.hi}"
+                                r.hi.isNotBlank() -> "≤${r.hi}"
+                                r.lo.isNotBlank() -> "≥${r.lo}"
+                                else -> ""
+                            }
+                            val target = when {
+                                r.aptEff < 0 -> ""
+                                r.aptRaw >= 0 && r.aptRaw != r.aptEff -> "目標${r.aptRaw}→${r.aptEff}"
+                                else -> "目標${r.aptEff}"
+                            }
+                            val lab = buildList {
+                                add(r.kigou)
+                                if (range.isNotBlank()) add(range)
+                                if (target.isNotBlank()) add(target)
+                                add("・今$now")
+                            }.joinToString(" ")
+                            val chipColors = when (vio) {
+                                "vio-low", "vio-aptLow" -> InputChipDefaults.inputChipColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.30f))
+                                "vio-high", "vio-aptHigh" -> InputChipDefaults.inputChipColors(containerColor = Color(0xFFF59E0B).copy(alpha = 0.36f))
+                                else -> InputChipDefaults.inputChipColors()
                             }
                             InputChip(
                                 selected = false,
                                 enabled = !ui.running,
                                 onClick = { dialog = StaffRangeEdit(r.i, r.k, r.lo, r.hi) },
                                 label = { Text(lab) },
-                                trailingIcon = {
-                                    Icon(Icons.Filled.Close, contentDescription = "削除",
-                                        modifier = Modifier.size(18.dp).clickable(enabled = !ui.running) { vm.removeStaffRange(r.i, r.k) })
-                                },
+                                colors = chipColors,
+                                // 適切回数のみ（個人別の上下限なし）のチップは削除対象が無いので × を出さない。
+                                trailingIcon = if (r.hasRange) {
+                                    {
+                                        Icon(Icons.Filled.Close, contentDescription = "削除",
+                                            modifier = Modifier.size(18.dp).clickable(enabled = !ui.running) { vm.removeStaffRange(r.i, r.k) })
+                                    }
+                                } else null,
                             )
                         }
                     }
