@@ -41,7 +41,7 @@ fun CountSettingsCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("回数設定（シフト軸 / 個人軸）", style = MaterialTheme.typography.titleMedium)
-            MagiSegmentedControl(listOf("シフト", "個人"), tab) { tab = it; openBlock = ""; editRow = "" }
+            MagiSegmentedControl(listOf("シフト", "個人"), tab, onSelect = { tab = it; openBlock = ""; editRow = "" })
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
                 label = { Text("検索（シフト・グループ・職員名）") }, modifier = Modifier.fillMaxWidth(),
