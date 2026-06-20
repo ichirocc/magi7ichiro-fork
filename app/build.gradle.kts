@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 74
-        versionName = "2.68.0-wish-day-input"
+        versionCode = 75
+        versionName = "2.69.0-algorithm-labels"
     }
 
     buildTypes {
