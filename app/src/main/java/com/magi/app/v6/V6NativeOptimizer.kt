@@ -840,22 +840,48 @@ object V6NativeOptimizer {
         destroyRepairDayAt(state, schedule, rng.nextInt(p.T), rng)
     }
 
+    /** [soft-aware repair] 割当 i→shift k の per-staff soft(low/high/apt, checker と同一式)を count n で評価。 */
+    private fun staffCountPenaltyAt(p: Problem, i: Int, k: Int, n: Int): Long {
+        var pen = 0L
+        val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
+        if (lo != Int.MIN_VALUE && lo != 0 && n < lo) pen += (lo - n).toLong() * 90L
+        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 45L
+        val t = p.apt[i][k]
+        if (t >= 0) pen += kotlin.math.abs(n - t).toLong()
+        return pen
+    }
+
     private fun destroyRepairDayAt(state: MagiState, schedule: Array<IntArray>, j: Int, rng: Random) {
         val p = cachedProblem(state)
-        val order = ArrayList<Int>(p.S)
-        for (idx in 0 until p.S) order.add(idx)
-        java.util.Collections.shuffle(order, rng)
-        // [差分化] day j の coverage のみ O(S) で数える（全 T×K スキャンを回避）。
+        if (p.T == 0) return
+        // [soft-aware destroy-repair / 実測検証 tools/nsp_bench.py] 従来はランダム順で穴を埋めるだけ(soft無視)で、
+        //   等価ベンチでは soft-aware 修復が AUC -24%〜-34% と唯一の大幅改善だった。ここで同じレバーを適用:
+        //   非希望セルを休へ destroy → 各需要を「割当の marginal soft が最小の休スタッフ」で repair。
+        //   休→k のみ移すため被覆穴を新たに作らない。希望固定は保持。受理(SA/isBetter)が最終採否=安全。
+        val cnt = Array(p.S) { IntArray(p.K) }
+        for (i in 0 until p.S) for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cnt[i][k]++ }
+        // destroy: 非希望セルを休(0)へ。cnt も同期。
+        for (i in 0 until p.S) {
+            if (p.wish[i][j] >= 0) continue
+            val old = schedule[i][j]
+            if (old != 0 && old in 0 until p.K) { schedule[i][j] = 0; cnt[i][old]--; cnt[i][0]++ }
+        }
         val covJ = IntArray(p.K)
         for (i in 0 until p.S) { val k = schedule[i][j]; if (k in 0 until p.K) covJ[k]++ }
-        for (k in 0 until p.K) {
+        // repair: 各勤務シフトの需要を soft 最小の休スタッフで満たす。
+        for (k in 1 until p.K) {
             val need = p.need1[k][j]
             if (need <= 0) continue
             var miss = need - covJ[k]
-            for (i in order) {
-                if (miss <= 0) break
-                if (p.wish[i][j] >= 0 && p.wish[i][j] != k) continue
-                if (p.canDo(i, k) && schedule[i][j] != k) { schedule[i][j] = k; miss-- }
+            while (miss > 0) {
+                var bestI = -1; var bestDelta = Long.MAX_VALUE
+                for (i in 0 until p.S) {
+                    if (schedule[i][j] != 0 || p.wish[i][j] >= 0 || !p.canDo(i, k)) continue
+                    val delta = staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - staffCountPenaltyAt(p, i, k, cnt[i][k])
+                    if (delta < bestDelta) { bestDelta = delta; bestI = i }
+                }
+                if (bestI < 0) break
+                schedule[bestI][j] = k; cnt[bestI][k]++; cnt[bestI][0]--; covJ[k]++; miss--
             }
         }
     }
