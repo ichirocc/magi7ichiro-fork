@@ -69,7 +69,7 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
                         var open by remember { mutableStateOf(false) }
                         Box {
                             OutlinedButton(onClick = { open = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                                Text(skills.getOrNull(st.skillIdx)?.kigou ?: "(選択)")
+                                Text(skills.getOrNull(st.skillIdx)?.kigou ?: "(なし)")
                                 // [校正] ドロップダウンと分かるよう下向き矢印アフォーダンスを付与。
                                 Icon(
                                     Icons.Filled.KeyboardArrowDown,
@@ -78,6 +78,8 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
                                 )
                             }
                             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                                // [スキル解除] どのスキルにも所属させない選択肢(skillIdx=-1)。engine は ssk==groupIdx で常に偽=未所属。
+                                DropdownMenuItem(text = { Text("(なし)") }, onClick = { vm.setStaffSkill(i, -1); open = false })
                                 skills.forEachIndexed { gi, sg ->
                                     DropdownMenuItem(text = { Text("${sg.kigou}  ${sg.name}") }, onClick = { vm.setStaffSkill(i, gi); open = false })
                                 }

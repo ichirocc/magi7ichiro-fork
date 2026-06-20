@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 75
-        versionName = "2.69.0-algorithm-labels"
+        versionCode = 76
+        versionName = "2.70.0-skill-unassign"
     }
 
     buildTypes {
