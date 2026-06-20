@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 71
-        versionName = "2.65.0-hf66-budget-guard"
+        versionCode = 72
+        versionName = "2.66.0-groupshift-flowrow"
     }
 
     buildTypes {
