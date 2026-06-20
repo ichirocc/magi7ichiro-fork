@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 63
-        versionName = "2.57.0-soft-aware-repair"
+        versionCode = 64
+        versionName = "2.58.0-soft-aware-staff-viol"
     }
 
     buildTypes {
