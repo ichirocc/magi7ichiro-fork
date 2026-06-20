@@ -371,6 +371,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                                 style = MaterialTheme.typography.bodyMedium)
                         }
+                        CountSettingsCard(ui, vm)   // [回数設定画面] シフト軸/個人軸の統合(apt/個人range/群range)
                         Ws1Card(ui, vm)
                         SkillGroupCard(ui, vm)
                         SkillConstraintsCard(ui, vm)   // [校正] スキルC41/C42 をスキルG直下に co-locate

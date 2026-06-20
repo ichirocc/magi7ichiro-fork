@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 65
-        versionName = "2.59.0-c41-aware-repair"
+        versionCode = 66
+        versionName = "2.60.0-count-settings-screen"
     }
 
     buildTypes {

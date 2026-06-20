@@ -975,6 +975,49 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return rows.sortedWith(compareBy({ it.i }, { it.k }))
     }
 
+    // ---- [回数設定画面] シフト軸 / 個人軸の統合ビュー（apt=理想 / cons41=群の最少・最大 / staffRange=個人の最少・最大）----
+    data class GroupRule(val g: Int, val groupKigou: String, val groupName: String, val min: String, val ideal: String, val max: String)
+    data class IndivRule(val i: Int, val staffName: String, val min: String, val max: String)
+    data class ShiftRuleBlock(val k: Int, val kigou: String, val name: String, val groups: List<GroupRule>, val indivs: List<IndivRule>)
+
+    /** シフトタブ用: 各シフトの「群の回数(最少|理想|最大)」「個人の回数(最少|最大)」を集約。設定のある行のみ。 */
+    fun shiftRuleBlocks(): List<ShiftRuleBlock> {
+        val st = state ?: return emptyList()
+        val c41 = HashMap<String, Pair<String, String>>()
+        for (c in st.cons41) c41["${c.groupKigou} ${c.shiftKigou}"] = c.l to c.u
+        return st.shifts.mapIndexed { k, sh ->
+            val groups = st.groups.mapIndexedNotNull { g, grp ->
+                val ideal = st.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim() ?: ""
+                val lu = c41["${grp.kigou} ${sh.kigou}"]
+                val mn = lu?.first ?: ""; val mx = lu?.second ?: ""
+                if (ideal.isBlank() && mn.isBlank() && mx.isBlank()) null
+                else GroupRule(g, grp.kigou, grp.name, mn, ideal, mx)
+            }
+            val indivs = st.staff.indices.mapNotNull { i ->
+                val r = st.staffRange["$i,$k"]
+                if (r == null || (r.lo.isBlank() && r.hi.isBlank())) null
+                else IndivRule(i, st.staff[i].name, r.lo, r.hi)
+            }
+            ShiftRuleBlock(k, sh.kigou, sh.name, groups, indivs)
+        }
+    }
+
+    data class StaffShiftRule(val k: Int, val kigou: String, val min: String, val max: String)
+    data class StaffRuleBlock(val i: Int, val name: String, val rows: List<StaffShiftRule>)
+
+    /** 個人タブ用: 各職員の「シフトごとの回数(最少|最大)」を集約。設定のある行のみ。 */
+    fun staffRuleBlocks(): List<StaffRuleBlock> {
+        val st = state ?: return emptyList()
+        return st.staff.mapIndexed { i, sf ->
+            val rows = st.shifts.indices.mapNotNull { k ->
+                val r = st.staffRange["$i,$k"]
+                if (r == null || (r.lo.isBlank() && r.hi.isBlank())) null
+                else StaffShiftRule(k, st.shifts[k].kigou, r.lo, r.hi)
+            }
+            StaffRuleBlock(i, sf.name, rows)
+        }
+    }
+
     // ---- ws3 移植: 希望シフト wishes["i,j"]=シフトindex（採点=pref/hard1。割当やcons3系とは別。UIのみ・モデル/エンジン不変）----
     data class WishView(val i: Int, val j: Int, val staffName: String, val day: Int, val kigou: String, val k: Int)
 
@@ -1116,6 +1159,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun addCons41(groupKigou: String, shiftKigou: String, l: String, u: String) {
         val st = state ?: return
         mutateConstraints(st.copy(cons41 = st.cons41 + C41Row(groupKigou, shiftKigou, l.trim(), u.trim())))
+    }
+
+    /** [回数設定UI] (群,シフト) を一意キーに cons41 を更新-or-追加。l/u 両方空なら削除。重複行は1本に集約。 */
+    fun setCons41(groupKigou: String, shiftKigou: String, l: String, u: String) {
+        val st = state ?: return
+        val ll = l.trim(); val uu = u.trim()
+        val rest = st.cons41.filterNot { it.groupKigou == groupKigou && it.shiftKigou == shiftKigou }
+        val next = if (ll.isBlank() && uu.isBlank()) rest else rest + C41Row(groupKigou, shiftKigou, ll, uu)
+        mutateConstraints(st.copy(cons41 = next))
     }
 
     fun addCons42(g1: String, g2: String, s1: String, s2: String) {
