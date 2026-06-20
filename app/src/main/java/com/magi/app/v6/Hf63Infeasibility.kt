@@ -106,6 +106,10 @@ class Hf63Infeasibility {
     fun isInfeasibleLikely(c: Int): Boolean = c in 0 until N_CONSTRAINTS && gInfeasibleLikely[c]
     fun infeasibleCount(): Int = gInfeasibleLikely.count { it }
 
+    /** HARD 族(c3n/covU/pref)のいずれかが infeasible-likely か。戦略的振動の「選択的発動」に使う:
+     *  構造的に詰まった HARD 族があるとき(=越える価値のある実行不可の壁が存在)だけ受理層で hard を緩める。 */
+    fun hardInfeasibleLikely(): Boolean = HARD_INDICES.any { gInfeasibleLikely[it] }
+
     /** 構造的に充足不能と推定された制約族名（診断/ログ用）。 */
     fun infeasibleFamilies(): List<String> =
         (0 until N_CONSTRAINTS).filter { gInfeasibleLikely[it] }.map { CNAMES[it] }

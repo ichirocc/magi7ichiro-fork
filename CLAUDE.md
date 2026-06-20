@@ -177,10 +177,13 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   生スコア/globalBest は不変＝Δ×フル無関係・解は退化しない**。暴走防止に excursion 上限(curHard<=globalHard+OSC_MAX_HARD=2)
   と per-step 上限(+2e6)を維持。Python PoC で escape 0/20→20/20・実行不可解 0/20 を確認(/tmp/osc_poc.py)。
   ユニットテスト(StrategicOscillationTest)で壁越え・暴走bound・後方互換を検証。SA受理アームのみ(GD は hard 非増を維持)。
-- (保留・判断): HF63 の族別重み係数(HARD×0.125)の振動化(より選択的なλ緩和)は、HF63係数が「探索の重み系へ未配線」で
-  評価器スコアへの深い配線(HF77的に重み意味の業務承認＋Python Δ×フル検証必須=高リスク)か、HF63検出(5000iter)と
-  振動トリガ(600iter)のタイムスケール不整合で実質no-op、のいずれか。かつ 2.52 の一律振動は既に安全・自己修正的
-  (生スコアで globalBest ゲート＋OFF窓で実行可能へ復帰)で選択化の ROI が低い。→ 深い版は要・業務承認時のみ着手。
+- (2.54.0, 完了・業務承認版): **戦略的振動の HF63 選択的発動**。2.52 の一律振動を、HF63 が HARD 族(c3n/covU/pref)の
+  構造的充足不能を検出したとき(`hardInfeasibleLikely()`)だけ発動するよう選択化(=越える価値のある実行不可の壁が
+  あるときのみ hard を緩める)。**重要: 生スコアに HF63 係数を配線する危険な版(globalBest が振動重みで汚れ実行不可解を
+  返す)は避け、受理層の発動ゲートに HF63 検出を使うだけ**にした。よって生スコア/globalBest/評価器の重みは不変＝
+  Δ×フル完全無関係・実行不可解を返さない。runAlns に HF63 を供給(curReport.breakdown を 200iter ごとに updateFromBreakdown,
+  gIter=itersTotal)。ユニットテスト(Hf63InfeasibilityTest.hardInfeasibleLikelyGatesStrategicOscillation: SOFTだけ詰まっても
+  ゲートOFF / HARD詰まりでON)。HF77: 表示重み・source of truth は不変なので重み変更には当たらない(受理動学のみ)。
 
 ## バックログ / 未対応
 1. TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）。

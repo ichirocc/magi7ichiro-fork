@@ -87,4 +87,17 @@ class Hf63InfeasibilityTest {
         hf.update(8, 3, 0); hf.update(8, 3, 5000)
         assertEquals(0.125, hf.weightFactor(8), 1e-9) // HARD infeasible → 1/8
     }
+
+    @Test
+    fun hardInfeasibleLikelyGatesStrategicOscillation() {
+        val hf = Hf63Infeasibility()
+        assertFalse(hf.hardInfeasibleLikely())          // 初期: 振動は発動しない
+        // SOFT 族(LimMax=12)だけ詰まっても HARD ゲートは立たない(hard を緩める意味がないため)
+        hf.update(12, 5, 0); hf.update(12, 5, 5000)
+        assertTrue(hf.isInfeasibleLikely(12))
+        assertFalse(hf.hardInfeasibleLikely())
+        // HARD 族(covU=8)が構造的に詰まると ゲート ON → 戦略的振動が選択的に発動
+        hf.update(8, 2, 6000); hf.update(8, 2, 11000)
+        assertTrue(hf.hardInfeasibleLikely())
+    }
 }
