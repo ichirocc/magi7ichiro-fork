@@ -458,6 +458,40 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
 }
 
 
+/**
+ * [N2/⛏11] 重み表カード。weightedScore の内部重み（MirrorKeys.weights）をそのまま描画し、
+ * 「できあがり度/スコア」の根拠（どの違反が何倍効くか）を上級者が逆算できるようにする。
+ * 重みは最適化器と同じマップを参照＝表示と最適化器が常に一致（統一思想の延長）。プロ表示時のみ。
+ */
+@Composable
+internal fun WeightTableCard() {
+    fun fmt(w: Double): String = if (w == w.toLong().toDouble()) w.toLong().toString() else w.toString()
+    val sorted = MirrorKeys.weights.entries.sortedByDescending { it.value }
+    val hard = sorted.filter { it.value >= 1000.0 }
+    val soft = sorted.filter { it.value < 1000.0 }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("重み表（最適化器と一致）", fontWeight = FontWeight.Bold)
+            Text("スコアの内部重み。大きいほど優先して直されます。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("絶対に守る（HARD）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            hard.forEach { (k, w) ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(breakdownLabels[k] ?: k, modifier = Modifier.weight(1f))
+                    Text("×${fmt(w)}", fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.error)
+                }
+            }
+            Text("できれば守る（SOFT）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            soft.forEach { (k, w) ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(breakdownLabels[k] ?: k, modifier = Modifier.weight(1f))
+                    Text("×${fmt(w)}", fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+    }
+}
+
+
 @Composable
 internal fun RiskChip(label: String, shortage: Int, detail: String) {
     val cs = MaterialTheme.colorScheme
@@ -487,7 +521,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
 /** 内訳の家族キー → 日本語ラベル（BreakdownCard と FixSuggestionCard で共用）。 */
 internal val breakdownLabels: Map<String, String> = mapOf(
     "groupViol" to "グループ不整合", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
-    "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ",
+    "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ",
     "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア",
     "c41s" to "スキル群のレンジ", "c42s" to "スキル群ペア", "covO" to "過剰な配置",

@@ -51,6 +51,16 @@ object MirrorKeys {
     val hard = listOf("groupViol", "c3n", "covU", "pref")
     val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "fair")
     val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair")
+    // [N2/⛏11] weightedScore の重み（単一の真実）。UI の重み表もこのマップを描画して
+    //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
+    val weights: Map<String, Double> = linkedMapOf(
+        "groupViol" to 10000.0, "pref" to 9000.0, "covU" to 8000.0, "c3n" to 7000.0,
+        "low" to 90.0, "high" to 45.0,
+        "c3mn" to 12.0, "c1" to 4.0, "c3" to 3.0, "c3m" to 2.0,
+        "c2" to 1.0, "c41" to 1.0, "c42" to 1.0, "c41s" to 1.0, "c42s" to 1.0,
+        "apt" to 1.0, "fair" to 1.0,
+        "covO" to 0.5,
+    )
 }
 
 object UnifiedViolationChecker {
@@ -326,32 +336,10 @@ object UnifiedViolationChecker {
 
 
     private fun weightedScore(b: Map<String, Int>): Double {
-        fun w(key: String, weight: Double): Double = (b[key] ?: 0).toDouble() * weight
+        // [N2/⛏11] 重みは MirrorKeys.weights を単一の真実として参照。挿入順を保持しているため
+        //   加算順は従来と同一＝Double 結果は不変。UI の重み表も同マップを描画する。
         var out = 0.0
-        // HARD / lim tiers kept on the native scale so the single Double preserves the
-        // Web tier ordering (guard/displayHard >> lim >> soft); the Web does this with a
-        // tier vector, here folded into one weighted scalar.
-        out += w("groupViol", 10000.0)
-        out += w("pref", 9000.0)
-        out += w("covU", 8000.0)
-        out += w("c3n", 7000.0)
-        out += w("low", 90.0)
-        out += w("high", 45.0)
-        // [HF508 / V5_WEIGHTS HF513] SOFT-family weights transcribed from the authoritative
-        // Web V5_WEIGHTS (priority c3mn > c1 > c3 > c3m > c2): c1 3->4, c3 2->3, c3mn 4->12,
-        // c2 120->1, c41 120->1, c42 10->1, covO 15->0.5.
-        out += w("c3mn", 12.0)
-        out += w("c1", 4.0)
-        out += w("c3", 3.0)
-        out += w("c3m", 2.0)
-        out += w("c2", 1.0)
-        out += w("c41", 1.0)
-        out += w("c42", 1.0)
-        out += w("c41s", 1.0)   // [スキルグループ] スキル群C41の罰則（既存C41と同等）
-        out += w("c42s", 1.0)   // [スキルグループ] スキル群C42の罰則
-        out += w("apt", 1.0)    // [統一apt] 適切回数(双方向目標) L1偏差・重み1（最適化器 Evaluator/Delta と一致）
-        out += w("fair", 1.0)   // [統一fair] グループ内公平化 L1偏差・重み1（最適化器 Evaluator/Delta と一致）
-        out += w("covO", 0.5)
+        for ((key, weight) in MirrorKeys.weights) out += (b[key] ?: 0).toDouble() * weight
         return out
     }
 

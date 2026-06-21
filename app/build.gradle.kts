@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 76
-        versionName = "2.70.0-skill-unassign"
+        versionCode = 77
+        versionName = "2.71.0-pro-toggle-weights"
     }
 
     buildTypes {
