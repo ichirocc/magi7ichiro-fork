@@ -45,7 +45,7 @@ fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("日別の必要人数（例外）", style = MaterialTheme.typography.titleMedium)
             Text(
-                "通常はシフト既定の必要数を使います。特定の日だけ人数を変えたいときに追加します。",
+                "通常はシフト既定の必要数を使います（既定は『年次マスター → 基本情報 → シフト』で設定）。特定の日だけ人数を変えたいときに追加します。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

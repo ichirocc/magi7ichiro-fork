@@ -108,9 +108,10 @@ fun RingGauge(label: String, value: Int, max: Int, modifier: Modifier = Modifier
 
 @Composable
 fun OverviewDashboard(ui: UiState) {
-    SectionSegment("ようす（俯瞰）", "守れていない約束・気になる点・注意したい日") {
+    // [D2] 「守れない約束(HARD件数)」は直下の CheckSummaryView が言葉で示すため、ここの重複リングを廃止。
+    //   別指標の「気になる点(総違反)」「注意の日(高リスク日)」のみ表示し、HARDの三重表示を解消。
+    SectionSegment("ようす（俯瞰）", "気になる点・注意したい日") {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            RingGauge("守れない約束", ui.bestHard.toInt(), (ui.totalViolations).coerceAtLeast(1), Modifier.weight(1f))
             RingGauge("気になる点", ui.totalViolations, (ui.staff * ui.days).coerceAtLeast(1), Modifier.weight(1f))
             RingGauge("注意の日", ui.v6?.highRiskDays ?: 0, ui.days.coerceAtLeast(1), Modifier.weight(1f))
         }
