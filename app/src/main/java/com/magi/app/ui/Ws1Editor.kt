@@ -58,13 +58,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("基本情報（スタッフ・シフト・グループ）", style = MaterialTheme.typography.titleMedium)
-            Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", fontSize = 12.sp,
+            Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.primary)
 
             // --- period ---
             Spacer(Modifier.height(10.dp))
-            Text("期間", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text("${v.startDate} 〜 ${v.endDate}", fontSize = 12.sp,
+            Text("期間", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("${v.startDate} 〜 ${v.endDate}", fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 W1Field("日数(1-31)", daysText, Modifier.width(130.dp)) { daysText = it }
@@ -73,18 +73,18 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- use2 ---
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", fontSize = 14.sp, modifier = Modifier.weight(1f))
                 Switch(checked = v.use2, onCheckedChange = { vm.ws1SetUse2(it) })
             }
             Divider()
 
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
-            Text("シフト (${v.shifts.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("シフト (${v.shifts.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             v.shifts.forEachIndexed { k, s ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${s.kigou}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
-                        fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) })
                     if (v.shifts.size > 1) {
                         Spacer(Modifier.width(6.dp))
@@ -97,10 +97,10 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- groups ---
             Spacer(Modifier.height(8.dp))
-            Text("グループ (${v.groups.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("グループ (${v.groups.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             v.groups.forEachIndexed { g, gr ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${gr.kigou}  ${gr.name}", fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) })
                     if (vm.ws1CanRemoveGroup(g)) {
                         Spacer(Modifier.width(6.dp))
@@ -113,11 +113,11 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- staff ---
             Spacer(Modifier.height(8.dp))
-            Text("スタッフ (${v.staff.size})", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("スタッフ (${v.staff.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             v.staff.forEachIndexed { i, st ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou ?: "?"
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${st.name}  [グループ $gk]", fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Text("${st.name}  [グループ $gk]", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) })
                     if (v.staff.size > 1) {
                         Spacer(Modifier.width(6.dp))
@@ -130,12 +130,12 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
-            Text("担当できるシフト（グループ × シフト）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("担当できるシフト（グループ × シフト）", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             // [見やすさ] 横スクロール(12シフトで画面外)をやめ、群ごとに群名を行頭＋チップを FlowRow で折り返す。
             //   選択中＝塗り＋✓（色だけに依存しない手がかり）、未選択＝外枠。
             v.groups.forEachIndexed { g, gr ->
                 Spacer(Modifier.height(4.dp))
-                Text("${gr.kigou}  ${gr.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     v.shifts.forEachIndexed { k, s ->
                         val on = v.groupShift.getOrNull(g)?.getOrNull(k) == 1
@@ -154,14 +154,14 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- groupShiftApt（適切回数）: Web版「グループ別 担当シフトと適切回数」相当 ---
             // 担当ON のシフトだけ、1人あたり期間内目標回数を −/＋ で設定（空欄＝目標なし）。
             Spacer(Modifier.height(12.dp))
-            Text("適切回数（任意・1人あたり目標）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text("適切回数（任意・1人あたり目標）", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text("ONのシフトに目標回数を設定すると、最適化が各人をその回数に近づけます（空欄＝目標なし）",
-                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.groups.forEachIndexed { g, gr ->
                 val onShifts = v.shifts.indices.filter { v.groupShift.getOrNull(g)?.getOrNull(it) == 1 }
                 if (onShifts.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("${gr.kigou}  ${gr.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         onShifts.forEach { k ->
                             val apt = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
@@ -259,7 +259,7 @@ private fun StaffDialog(
     W1Shell(title, onClose, { onOk(name, gi) }, name.isNotBlank() && groupKigou.isNotEmpty()) {
         W1Text("名称", name) { name = it }
         var open by remember { mutableStateOf(false) }
-        Text("グループ", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("グループ", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedButton(onClick = { open = true }) { Text(groupKigou.getOrNull(gi) ?: "(なし)") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             groupKigou.forEachIndexed { idx, kg ->
@@ -287,7 +287,7 @@ private fun W1Shell(
 @Composable
 private fun W1Text(label: String, value: String, onChange: (String) -> Unit) {
     OutlinedTextField(value = value, onValueChange = onChange, singleLine = true,
-        label = { Text(label, fontSize = 12.sp) }, modifier = Modifier.fillMaxWidth())
+        label = { Text(label, fontSize = 14.sp) }, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -295,7 +295,7 @@ private fun W1Field(label: String, value: String, modifier: Modifier = Modifier,
     OutlinedTextField(
         value = value,
         onValueChange = { onChange(it.filter { c -> c.isDigit() }) },
-        label = { Text(label, fontSize = 12.sp) }, singleLine = true, modifier = modifier,
+        label = { Text(label, fontSize = 14.sp) }, singleLine = true, modifier = modifier,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
     )
 }
@@ -304,12 +304,12 @@ private fun W1Field(label: String, value: String, modifier: Modifier = Modifier,
 @Composable
 private fun AptStepper(label: String, value: String, onChange: (String) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 6.dp)) {
-        Text(label, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+        Text(label, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
         TextButton(onClick = {
             val c = value.trim().toIntOrNull() ?: 0
             onChange(if (c <= 1) "" else (c - 1).toString())
         }) { Text("−", fontSize = 16.sp) }
-        Text(value.ifBlank { "—" }, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+        Text(value.ifBlank { "—" }, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(22.dp), color = MaterialTheme.colorScheme.onSurface)
         TextButton(onClick = {
             val c = value.trim().toIntOrNull() ?: 0

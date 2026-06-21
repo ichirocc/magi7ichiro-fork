@@ -232,7 +232,7 @@ internal fun OperatorNextActionCard(
             Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
             // 数字は必ず言葉つきで意味を添える（operator_ux §6）。
             Text(
-                "人手が足りない日：${shortDays}日 ・ できあがり度：${ui.satisfaction}点",
+                "人手が足りない日：${shortDays}日 ・ できあがり度：${ui.satisfaction}%",
                 style = MaterialTheme.typography.bodyMedium, color = plan.fg,
             )
             if (ui.running) {
