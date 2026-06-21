@@ -527,26 +527,8 @@ internal fun ScheduleGrid(
                                 Box(Modifier.width(sumW).height(30.dp))
                             }
                         }
-                        // [集計] シフト別の合計（期間全体）。横スクロールで全シフト確認。
-                        Spacer(Modifier.height(10.dp))
-                        Text("シフト別の合計（期間）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                        Spacer(Modifier.height(4.dp))
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            ui.shiftSymbols.indices.forEach { kk ->
-                                val tot = ui.schedule.sumOf { row -> row.count { it == kk } }
-                                if (tot > 0) {
-                                    Box(
-                                        Modifier
-                                            .background(hexToColor(ui.shiftColorHex.getOrNull(kk) ?: ""), RoundedCornerShape(8.dp))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                                    ) {
-                                        Text("${ui.shiftSymbols.getOrNull(kk) ?: ""} $tot",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = hexToColor(ui.shiftTextHex.getOrNull(kk) ?: ""), maxLines = 1)
-                                    }
-                                }
-                            }
-                        }
+                        // [D1] 「シフト別の合計（期間）」はシフト集計カード(職員別の計行)へ一本化し、
+                        //   ここでは廃止（編集中に有用な出勤人数行はインラインに残す）。重複表示を解消。
                     }
                 } else if (gridMode == 1) {
                     // §4.12 カレンダー: 週列の月グリッド。各日にシフト色ピル＋不足マーカー。
@@ -1164,6 +1146,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?) -> Unit = {
                             Text(if (gp.isBlank()) nm else "$nm·$gp", style = MaterialTheme.typography.bodySmall,
                                 color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                        // [D1] 期間合計の見出し（勤務表グリッドの「シフト別の合計」をここへ一本化）。
+                        TallyBox(labW, rh, cs.surfaceVariant, true) {
+                            Text("計（期間）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                        }
                     }
                     Row(Modifier.horizontalScroll(rememberScrollState())) {
                         for (kk in 0 until k) Column {
@@ -1179,6 +1165,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?) -> Unit = {
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null) {
                                     if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
                                 }
+                            }
+                            // [D1] シフト別の期間合計（列合計）。グリッドの重複行を廃止しここへ集約。
+                            TallyBox(cw, rh, cs.surfaceVariant, false) {
+                                Text("${(0 until s).sumOf { perStaff[it][kk] }}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
                             }
                         }
                     }

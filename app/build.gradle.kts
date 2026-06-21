@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 78
-        versionName = "2.72.0-skillhdr-guidescope"
+        versionCode = 79
+        versionName = "2.73.0-tally-totals-d1"
     }
 
     buildTypes {
