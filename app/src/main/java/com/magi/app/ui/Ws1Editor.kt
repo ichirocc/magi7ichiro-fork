@@ -93,6 +93,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 }
             }
             AddRowButton("シフト追加", onClick = { dialog = Ws1Dialog.AddShift })
+            AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddShift })   // [⛏12]
             Divider()
 
             // --- groups ---
@@ -126,6 +127,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 }
             }
             AddRowButton("スタッフ追加", onClick = { dialog = Ws1Dialog.AddStaff })
+            AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddStaff })   // [⛏12]
             Divider()
 
             // --- groupShift bucket ---
@@ -187,6 +189,10 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             { n, gi -> vm.ws1EditStaff(d.i, n, gi); dialog = null }, { dialog = null })
         Ws1Dialog.AddStaff -> StaffDialog("スタッフ追加", "", 0, v.groups.map { it.kigou },
             { n, gi -> vm.ws1AddStaff(n, gi); dialog = null }, { dialog = null })
+        Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
+            { lines, _ -> lines.forEach { vm.ws1AddShift(it, it, "", "") }; dialog = null }, { dialog = null })
+        Ws1Dialog.BulkAddStaff -> BulkAddDialog("スタッフを一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。", v.groups.map { it.kigou },
+            { lines, gi -> lines.forEach { vm.ws1AddStaff(it, gi) }; dialog = null }, { dialog = null })
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
             confirmButton = {
@@ -214,6 +220,8 @@ private sealed interface Ws1Dialog {
     object AddGroup : Ws1Dialog
     data class EditStaff(val i: Int, val name: String, val groupIdx: Int) : Ws1Dialog
     object AddStaff : Ws1Dialog
+    object BulkAddShift : Ws1Dialog
+    object BulkAddStaff : Ws1Dialog
     data class ConfirmDelete(val kind: String, val index: Int, val label: String) : Ws1Dialog
 }
 
@@ -273,6 +281,46 @@ private fun StaffDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * [⛏12] 改行区切りで複数件をまとめて追加する汎用ダイアログ。1件ずつの追加(各4-5tap×N)を
+ * 1回の入力に短縮し、ゼロ構築の操作量を削減する。groups!=null のときは既定グループを選ぶ
+ * (スタッフ用)。groups==null はグループ選択なし(シフト用)。追加は呼び出し側で既存の
+ * ws1AddStaff/ws1AddShift をループ呼びするだけ＝ロジックは不変。
+ */
+@Composable
+private fun BulkAddDialog(
+    title: String, hint: String, groups: List<String>?,
+    onApply: (List<String>, Int) -> Unit, onClose: () -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    var gi by remember { mutableStateOf(0) }
+    var open by remember { mutableStateOf(false) }
+    val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+    val groupOk = groups == null || groups.isNotEmpty()
+    W1Shell(title, onClose, { onApply(lines, gi) }, lines.isNotEmpty() && groupOk) {
+        Text(hint, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = text, onValueChange = { text = it }, singleLine = false, minLines = 3,
+            label = { Text("1行に1件", fontSize = 14.sp) }, modifier = Modifier.fillMaxWidth(),
+        )
+        if (groups != null) {
+            if (groups.isEmpty()) {
+                Text("先に「グループ」を追加してください。", fontSize = 14.sp, color = MaterialTheme.colorScheme.error)
+            } else {
+                Text("既定のグループ", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedButton(onClick = { open = true }) { Text(groups.getOrNull(gi) ?: "(なし)") }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    groups.forEachIndexed { idx, kg ->
+                        DropdownMenuItem(text = { Text(kg, fontFamily = FontFamily.Monospace) },
+                            onClick = { gi = idx; open = false })
+                    }
+                }
+            }
+        }
+        if (lines.isNotEmpty()) Text("追加: ${lines.size}件", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
     }
 }
 
