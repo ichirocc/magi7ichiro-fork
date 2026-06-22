@@ -1166,9 +1166,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" -> ").ifEmpty { "(空)" }
         return listOf(
             ConstraintFamilyView("cons1", "期間の決まり（何日かの間の必要数）",
-                st.cons1.map { "${it.day1}日のあいだに ${it.shiftKigou} を ${it.day2} 回以上" }),
+                st.cons1.map { "${it.shiftKigou}   ${it.day1}日で${it.day2}回以上" }),
             ConstraintFamilyView("cons2", "個人の合計回数",
-                st.cons2.map { "${it.shiftKigou} を合計 ${it.count} 回以上" }),
+                st.cons2.map { "${it.shiftKigou}   合計${it.count}回以上" }),
             ConstraintFamilyView("cons3", "必須の並び", st.cons3.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
