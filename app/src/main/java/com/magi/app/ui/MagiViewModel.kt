@@ -1416,7 +1416,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * [改善提案] 違反を減らす「1手（変更/交換）」を探索して UI に提示する。
      * focusStaff != null のときはそのスタッフが関わる手だけに絞る（違反タップ起点）。重い処理のため非同期。
      */
-    fun findFixSuggestions(focusStaff: Int? = null) {
+    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
@@ -1425,7 +1425,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.value = _ui.value.copy(fixSearching = true, fixFocusName = focusName)
         fixJob = viewModelScope.launch {
             val list = withContext(Dispatchers.Default) {
-                FixSuggester.suggest(st, snap, focusStaff = focusStaff, maxResults = 8)
+                FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8)
             }
             _ui.value = _ui.value.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName)
         }

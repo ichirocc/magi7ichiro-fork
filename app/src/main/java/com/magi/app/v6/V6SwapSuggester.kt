@@ -39,6 +39,7 @@ object FixSuggester {
         state: MagiState,
         schedule: Array<IntArray>,
         focusStaff: Int? = null,
+        focusShift: Int? = null,
         maxResults: Int = 8,
         deadlineMs: Long = 8000L,
     ): List<FixSuggestion> {
@@ -323,10 +324,23 @@ object FixSuggester {
 
         // 効果順（必須減 > 合計減 > 重み減）。同型の手は1つに絞り多様性確保。
         found.sortWith(compareBy({ it.dHard }, { it.dTotal }, { it.dWeighted }))
+        // [セル限定] focusShift 指定時、押したセル(focus職員×focusシフト)に効く手だけに絞る。
+        //   そのセルからシフトを移す(原状=focusShift)か、そのシフトへ移す(toShift=focusShift)手を採用。
+        val fShift = focusShift
+        fun touchesFocusCell(sug: FixSuggestion): Boolean {
+            if (fShift == null) return true
+            return sug.ops.any { c ->
+                if (focusStaff != null && c.staff != focusStaff) return@any false
+                if (c.toShift == fShift) return@any true
+                val row = s.getOrNull(c.staff) ?: return@any false
+                c.day in row.indices && row[c.day] == fShift
+            }
+        }
         val seen = HashSet<String>()
         val result = ArrayList<FixSuggestion>()
         for (q in found) {
             val sug = q.sug
+            if (!touchesFocusCell(sug)) continue
             val sig = sug.kind.name + ":" + sug.ops.joinToString("|") { "${it.staff}.${it.toShift}" }
             if (seen.add(sig)) result.add(sug)
             if (result.size >= maxResults) break

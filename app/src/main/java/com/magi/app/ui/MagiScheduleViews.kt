@@ -1102,7 +1102,7 @@ private fun Int.floorMod(m: Int): Int = if (m == 0) 0 else ((this % m) + m) % m
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?) -> Unit = {}) {
+internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Unit = { _, _ -> }) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
@@ -1219,7 +1219,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?) -> Unit = {
                         }
                     },
                     confirmButton = {
-                        TextButton(onClick = { val f = d.focus; detail = null; onFix(f) }) { Text("直し方を探す") }
+                        TextButton(onClick = { val f = d.focus; val sh = d.shift; detail = null; onFix(f, sh) }) { Text("直し方を探す") }
                     },
                     dismissButton = { TextButton(onClick = { detail = null }) { Text("閉じる") } },
                 )
@@ -1229,7 +1229,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?) -> Unit = {
 }
 
 /** [直せる導線] 集計セルの違反詳細。focus=直す対象スタッフ(日別はnull=全体探索)。 */
-private data class TallyDetailUi(val title: String, val lines: List<String>, val focus: Int?)
+private data class TallyDetailUi(val title: String, val lines: List<String>, val focus: Int?, val shift: Int? = null)
 
 /** 職員別セル(i,k): 現在回数と 下限/上限/目標 の差を数字で。 */
 private fun staffViolDetail(vm: MagiViewModel, ui: UiState, i: Int, k: Int, count: Int, vio: String): TallyDetailUi {
@@ -1244,7 +1244,7 @@ private fun staffViolDetail(vm: MagiViewModel, ui: UiState, i: Int, k: Int, coun
         "vio-aptLow" -> if (apt != null) lines += "目標 ${apt}回 → ${(apt - count).coerceAtLeast(0)}回 不足"
         "vio-aptHigh" -> if (apt != null) lines += "目標 ${apt}回 → ${(count - apt).coerceAtLeast(0)}回 超過"
     }
-    return TallyDetailUi("$name ・ $sym", lines, i)
+    return TallyDetailUi("$name ・ $sym", lines, i, k)
 }
 
 /** 日別セル(k,j): 現在人数と 必要数レンジ の差を数字で。 */
@@ -1260,7 +1260,7 @@ private fun dayViolDetail(vm: MagiViewModel, ui: UiState, k: Int, j: Int, count:
             "vio-covO" -> lines += "適正 ${hi}人 → ${(count - hi).coerceAtLeast(0)}人 過剰"
         }
     }
-    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null)
+    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null, k)
 }
 
 private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else hexToColor(hex)

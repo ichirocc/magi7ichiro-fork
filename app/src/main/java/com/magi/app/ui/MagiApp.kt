@@ -338,7 +338,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
                     StaffCalendarCard(gridUi, onCellClick = onCell)
-                    TallyCard(gridUi, vm, onFix = { staff -> tab = 3; vm.findFixSuggestions(staff) })
+                    TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) })
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
                     if (effectiveEditing) {
                         OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
