@@ -214,6 +214,30 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun applyBgResult(r: OptimizationRepository.BgResult) {
         val st0 = state ?: return
+        // [再実行 keep-best] 背景完了結果が前回採用解より悪化なら前回を維持（前景と同じ方針）。
+        val prev = resultSchedule
+        if (prev != null) {
+            val prevReport = UnifiedViolationChecker.check(st0, prev)
+            val newHard = r.report.hard.toLong(); val newTotal = r.report.total
+            val worse = newHard > prevReport.hard.toLong() || (newHard == prevReport.hard.toLong() && newTotal > prevReport.total)
+            if (worse) {
+                val kept = prev.copy2D()
+                currentSchedule = kept
+                resultSchedule = kept
+                state = st0.withSchedule(kept)
+                autoSave()
+                _ui.value = makeUi(state ?: st0, kept, prevReport, _ui.value.copy(
+                    running = false, hasResult = true,
+                    message = "今回(必須$newHard/合計$newTotal)は前回(必須${prevReport.hard}/合計${prevReport.total})より改善せず。前回の結果を維持しました。",
+                ))
+                logOp("I", "バックグラウンド: 今回 必須$newHard/合計$newTotal は前回 以下に改善せず → 前回を維持")
+                clearRunMarker()
+                OptimizationWorker.clearFiles(getApplication<Application>())
+                OptimizationRepository.request = null
+                OptimizationRepository.publishResult(null)
+                return
+            }
+        }
         val sched = r.schedule.copy2D()
         currentSchedule = sched
         resultSchedule = sched
@@ -224,6 +248,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             message = "バックグラウンド最適化 完了: 必須=${r.report.hard} 合計=${r.report.total}",
         ))
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
+        lastResultHard = r.report.hard.toLong()
         clearRunMarker()
         OptimizationWorker.clearFiles(getApplication<Application>())   // [C1] 完了で途中状態ファイルを削除
         // 消費したらクリア（再生成時の二重適用を防ぐ）
@@ -608,6 +633,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         var lastHardLogMs = -10_000L
         job = viewModelScope.launch {
             try {
+                // [再実行 keep-best] 実行開始時の入力解(sched0)の違反を評価し、完了時の採用判定の基準にする。
+                //   sched0 はデータ編集直後なら新データの初期解なので、編集をまたいでも公平な基準になる。
+                val baseReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, sched0) }
                 val res = V6FinalPort.handleOptimize(
                     state = st0,
                     schedule = sched0.copy2D(),
@@ -647,17 +675,39 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         liveHard = rep.hard.toLong()
                     }
                 }
-                currentSchedule = res.schedule.copy2D()
-                autoSave()
-                resultSchedule = res.schedule.copy2D()
-                state = st0.withSchedule(res.schedule)
-                _ui.value = makeUi(state ?: st0, res.schedule, res.report, _ui.value.copy(
-                    running = false,
-                    hasResult = true,
-                    itersPerSec = if (_ui.value.elapsedMs > 0) _ui.value.iters * 1000 / _ui.value.elapsedMs else 0,
-                    message = "最適化（${res.phase}）完了: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)",
-                ))
-                lastResultHard = res.report.hard.toLong()
+                // [再実行 keep-best] 完了結果が入力より悪化(必須↑ or 同必須で合計↑)なら、入力解を維持して通知する。
+                //   「もう一度つくる」を繰り返したとき、稀に多様化フェーズ等で入力より悪い解が返り、それを採用して
+                //   良い結果(例 HARD=1)を捨てる事象があった(実機ログで確認)。入力以上の結果のみ採用する。
+                val newHard = res.report.hard.toLong(); val newTotal = res.report.total
+                val baseHard = baseReport.hard.toLong(); val baseTotal = baseReport.total
+                val worseThanInput = newHard > baseHard || (newHard == baseHard && newTotal > baseTotal)
+                if (worseThanInput) {
+                    val kept = sched0.copy2D()
+                    currentSchedule = kept
+                    autoSave()
+                    resultSchedule = kept
+                    state = st0.withSchedule(kept)
+                    _ui.value = makeUi(state ?: st0, kept, baseReport, _ui.value.copy(
+                        running = false,
+                        hasResult = true,
+                        itersPerSec = if (_ui.value.elapsedMs > 0) _ui.value.iters * 1000 / _ui.value.elapsedMs else 0,
+                        message = "今回(必須$newHard/合計$newTotal)は前回(必須$baseHard/合計$baseTotal)より改善しませんでした。前回の結果を維持します。",
+                    ))
+                    logOp("I", "再実行: 今回 必須$newHard/合計$newTotal は前回 必須$baseHard/合計$baseTotal 以下に改善せず → 前回を維持")
+                    lastResultHard = baseHard
+                } else {
+                    currentSchedule = res.schedule.copy2D()
+                    autoSave()
+                    resultSchedule = res.schedule.copy2D()
+                    state = st0.withSchedule(res.schedule)
+                    _ui.value = makeUi(state ?: st0, res.schedule, res.report, _ui.value.copy(
+                        running = false,
+                        hasResult = true,
+                        itersPerSec = if (_ui.value.elapsedMs > 0) _ui.value.iters * 1000 / _ui.value.elapsedMs else 0,
+                        message = "最適化（${res.phase}）完了: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)",
+                    ))
+                    lastResultHard = newHard
+                }
                 lastTopHardFamily = if (res.report.hard > 0) topHardFamilyJp(res.report.breakdown) else null
                 logOp(if (res.report.hard == 0) "I" else "W", "最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})")
                 // HF63 検出: 5000反復改善のない制約族＝データ上満たせない可能性が高い（業務担当者へ提示）。
