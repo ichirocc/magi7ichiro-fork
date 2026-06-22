@@ -100,6 +100,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * CSVのバイト列を文字列へ復号する。妥当な UTF-8 ならそれを採用し、そうでなければ日本の Excel CSV で
@@ -222,6 +223,17 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
                 Spacer(Modifier.width(8.dp))
                 Text("仕上げ最適化（品質を磨く）", fontSize = 13.sp)
             }
+            Spacer(Modifier.height(14.dp))
+            // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
+            //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
+            val ctx = LocalContext.current
+            val versionLabel = remember(ctx) {
+                runCatching {
+                    val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
+                    "${pi.versionName} (${pi.longVersionCode})"
+                }.getOrDefault("不明")
+            }
+            Text("バージョン: $versionLabel", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
