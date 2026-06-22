@@ -379,7 +379,16 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         CollapsibleSection("回数設定（適切回数・個人/群レンジ）", "yr_count") { CountSettingsCard(ui, vm) }
                         CollapsibleSection("スキルグループ", "yr_skillg") { SkillGroupCard(ui, vm) }
                         CollapsibleSection("スキルのルール（C41s・C42s）", "yr_skillc") { SkillConstraintsCard(ui, vm) }
-                        CollapsibleSection("ルール（並び・窓）", "yr_cons") { ConstraintsCard(ui, vm) }
+                        // [発見性] cons41(群の1日人数)/cons42(組み合わせ禁止)を、スキル版(C41s/C42s)と対称な専用節に。
+                        //   従来は「ルール（並び・窓）」に6family埋もれ、見出しから群の人数/組み合わせ設定と分からなかった。
+                        CollapsibleSection("グループのルール（C41 1日の人数・C42 組み合わせ禁止）", "yr_groupc") {
+                            ConstraintsCard(ui, vm, title = "グループのルール（C41 1日の人数・C42 組み合わせ禁止）",
+                                keys = setOf("cons41", "cons42"))
+                        }
+                        CollapsibleSection("ルール（並び・窓）", "yr_cons") {
+                            ConstraintsCard(ui, vm, title = "ルールの編集（勤務の並び・回数）",
+                                keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn"))
+                        }
                         CollapsibleSection("個人の回数（下限/上限）", "yr_range") { StaffRangeCard(ui, vm) }
                     }
                 }

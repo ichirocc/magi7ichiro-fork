@@ -41,13 +41,19 @@ import androidx.compose.ui.unit.sp
  * panels above update automatically. Edited constraints are written back on JSON save.
  */
 @Composable
-fun ConstraintsCard(ui: UiState, vm: MagiViewModel) {
+fun ConstraintsCard(
+    ui: UiState,
+    vm: MagiViewModel,
+    title: String = "ルールの編集（勤務の並び・回数）",
+    keys: Set<String>? = null,
+) {
     var addFamily by remember { mutableStateOf<String?>(null) }
-    val families = vm.constraintFamilies()
+    // [発見性] keys 指定時はその family だけ描画。群の C41/C42 を専用節に分けて見つけやすくするため。
+    val families = vm.constraintFamilies().let { all -> if (keys == null) all else all.filter { it.key in keys } }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("ルールの編集（勤務の並び・回数）", style = MaterialTheme.typography.titleMedium)
+            Text(title, style = MaterialTheme.typography.titleMedium)
             Text(
                 "追加・削除すると、すぐに問題がないか調べ直し、保存にも反映されます。",
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
