@@ -90,7 +90,9 @@ internal fun NumberStepper(label: String, value: String, onChange: (String) -> U
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         OutlinedButton(
-            onClick = { when { n == null -> {}; n <= min -> onChange(""); else -> onChange((n - 1).toString()) } },
+            // [ゼロ設定] 空欄(なし/既定)から「−」で下限値(=0)へ。従来は n==null で何も起きず、0にするには
+            //   「＋」が必要で「−でゼロにできない」と誤認された。0で更に「−」を押すと空欄(クリア)へ戻せる。
+            onClick = { when { n == null -> onChange(min.toString()); n <= min -> onChange(""); else -> onChange((n - 1).toString()) } },
             modifier = Modifier.height(48.dp).semantics { contentDescription = "$label を減らす" },
         ) { Text("−", style = MaterialTheme.typography.titleLarge) }
         Box(Modifier.width(72.dp), contentAlignment = Alignment.Center) {

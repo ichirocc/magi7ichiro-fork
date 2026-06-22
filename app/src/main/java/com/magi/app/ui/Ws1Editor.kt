@@ -354,20 +354,21 @@ private fun W1Field(label: String, value: String, modifier: Modifier = Modifier,
     )
 }
 
-/** 適切回数のステッパー（記号 −[値]＋）。空欄＝目標なし。1未満は空欄に戻す。 */
+/** 適切回数のステッパー（記号 −[値]＋）。空欄＝目標なし。0も設定可（空欄→0→1…、0で−→空欄）。 */
 @Composable
 private fun AptStepper(label: String, value: String, onChange: (String) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 6.dp)) {
         Text(label, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
         TextButton(onClick = {
-            val c = value.trim().toIntOrNull() ?: 0
-            onChange(if (c <= 1) "" else (c - 1).toString())
+            // [ゼロ設定] 0を許可（従来は「1未満→空欄」で目標0が設定できなかった）。空欄→0 / 0→空欄 / N→N-1。
+            val c = value.trim().toIntOrNull()
+            onChange(when { c == null -> "0"; c <= 0 -> ""; else -> (c - 1).toString() })
         }) { Text("−", fontSize = 16.sp) }
         Text(value.ifBlank { "—" }, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(22.dp), color = MaterialTheme.colorScheme.onSurface)
         TextButton(onClick = {
-            val c = value.trim().toIntOrNull() ?: 0
-            onChange((c + 1).toString())
+            val c = value.trim().toIntOrNull() ?: -1
+            onChange((c + 1).coerceAtLeast(0).toString())
         }) { Text("＋", fontSize = 16.sp) }
     }
 }
