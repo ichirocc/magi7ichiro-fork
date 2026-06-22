@@ -116,13 +116,13 @@ private fun ShiftAxisList(
                     b.groups.forEach { g ->
                         val rk = "g-${b.k}-${g.g}"
                         Text(
-                            "${g.groupName}   目標 ${cell(g.ideal)}回   ✎",
+                            "${g.groupName}   目標 ${if (g.ideal.isBlank()) "なし" else "${g.ideal}回"}   ✎",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                         )
                         if (editRow == rk) {
                             NumberStepper("目標", g.ideal, { vm.ws1SetGroupApt(g.g, b.k, it) }, 0, "なし")
-                            TextButton(onClick = { vm.ws1SetGroupApt(g.g, b.k, ""); onEdit("") }, enabled = !ui.running) { Text("削除") }
+                            if (g.ideal.isNotBlank()) TextButton(onClick = { vm.ws1SetGroupApt(g.g, b.k, ""); onEdit("") }, enabled = !ui.running) { Text("削除") }
                         }
                     }
                 }

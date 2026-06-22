@@ -1081,9 +1081,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun shiftRuleBlocks(): List<ShiftRuleBlock> {
         val st = state ?: return emptyList()
         return st.shifts.mapIndexed { k, sh ->
-            val groups = st.groups.mapIndexedNotNull { g, grp ->
-                val ideal = st.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim() ?: ""
-                if (ideal.isBlank()) null else GroupRule(g, grp.name, ideal)
+            // [apt 0設定] そのシフトを担当できる群(groupShift==1)を全て出す。未設定群は ideal="" のまま渡し、
+            //   UI で「なし」から ＋/− で 0 以上を設定可能にする(従来は設定済みの群しか出ず入口が無かった)。
+            //   apt は canDo 群のみ有効なので担当不可の群は除外。
+            val groups = st.groups.indices.mapNotNull { g ->
+                val canDo = st.groupShift.getOrNull(g)?.getOrNull(k) == 1
+                if (!canDo) null
+                else GroupRule(g, st.groups[g].name, st.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim() ?: "")
             }
             val indivs = st.staff.indices.mapNotNull { i ->
                 val r = st.staffRange["$i,$k"]
@@ -1091,7 +1095,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 else IndivRule(i, st.staff[i].name, r.lo, r.hi)
             }
             ShiftRuleBlock(k, sh.kigou, sh.name, groups, indivs)
-        }.filter { it.groups.isNotEmpty() || it.indivs.isNotEmpty() }
+        }
+            // 設定済みのシフトだけ表示(どれかの群に目標がある or 個人レンジがある)。表示シフト内なら未設定群も 0 から設定可。
+            //   これで休/有のような未設定シフトの雑音を避けつつ、A4 等の表示シフト内で未設定群に ＋/− を出せる。
+            .filter { b -> b.groups.any { it.ideal.isNotBlank() } || b.indivs.isNotEmpty() }
     }
 
     data class StaffShiftRule(val k: Int, val kigou: String, val min: String, val max: String)
