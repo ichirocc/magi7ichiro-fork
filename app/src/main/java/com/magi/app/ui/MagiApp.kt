@@ -472,9 +472,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                     )
                     SettingsCard(ui, vm)
-                    OperatorLogView(ui)
-                    // [screen_spec #12/#168] 実験フラグ(FlagsView)・ログ(LogsCard)・色トークン(ColorSettingsView)を
-                    // 折りたたみの詳細設定(既定=閉)に隔離。通常運用では触らない開発/上級項目。
+                    // [冗長性] 旧 OperatorLogView（見出し「操作ログ」だが中身は診断ログ＝誤ラベルで、
+                    //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(
                         ui = ui,
                         vm = vm,

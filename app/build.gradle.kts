@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 113
-        versionName = "3.7.0-dialog-scroll"
+        versionCode = 114
+        versionName = "3.8.0-settings-dedup"
     }
 
     buildTypes {

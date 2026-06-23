@@ -181,7 +181,7 @@ internal fun GuideRow(label: String, value: String, done: Boolean) {
 internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("最適化設定", fontWeight = FontWeight.Bold)
+            Text("最適化設定", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Text("並列ワーカー（同時に計算する数）: ${ui.workers}")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -291,7 +291,7 @@ internal fun AdvancedSettingsSection(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("詳細設定（上級者向け）", style = MaterialTheme.typography.titleMedium)
-                    Text("計算方式・実験フラグ・ログ・色トークン。一般の運用では触りません。",
+                    Text("1ヶ月の俯瞰（生指標）・ログ・違反色トークン。一般の運用では触りません。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [Planner テイスト] グリフ「▾/▸」をやめ、やわらかい丸の中に整ったアイコンシェブロン。
@@ -308,8 +308,10 @@ internal fun AdvancedSettingsSection(
             if (expanded) {
                 Spacer(Modifier.height(8.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                    FlagsView(ui, vm)
-                    V6DashboardCard(ui.v6)   // [移設] 開発用の V6 1ヶ月俯瞰（生指標・負荷プロフィール）
+                    // [冗長性] 旧 FlagsView（計算方式＋仕上げ最適化）は「最適化設定」カードと完全重複の
+                    //   ため撤去。設定の操作は「最適化設定」に一本化し、ここは開発用の生指標・ログ・
+                    //   違反色トークンのみを置く。
+                    V6DashboardCard(ui.v6)   // 開発用の V6 1ヶ月俯瞰（生指標・負荷プロフィール）
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
                     ColorSettingsView(ui)
                 }
@@ -326,7 +328,7 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
     val hasAny = ui.opLog.isNotEmpty() || ui.logs.isNotEmpty()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("ログ", fontWeight = FontWeight.Bold)
+            Text("ログ", style = MaterialTheme.typography.titleMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = onExportLog, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("テキスト出力") }
                 OutlinedButton(onClick = onExportJson, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("JSON出力") }
