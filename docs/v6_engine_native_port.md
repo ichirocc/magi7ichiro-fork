@@ -79,8 +79,9 @@ Each action launches a cancellable `job`; **計算を止める** calls `job?.can
   から個別に「採用」(`applyAlternative()`) 可能。
 - **希望で上書き**: `WishApplyCard`／`applyWishes(includeOutOfScope)`（Undo・autoSave・操作ログ・
   再チェック込み）で実装済み。
-- **操作ログ**: 設定タブの `OperatorLogView`／`LogsCard` からテキスト/JSON 出力。開始・完了は
-  記録されるが、長時間最適化中の詳細進捗監査としてはなお簡素。
+- **操作ログ**: 設定タブ＞詳細設定の `LogsCard`（操作ログ＋診断ログ）からテキスト/JSON 出力。開始・完了は
+  記録されるが、長時間最適化中の詳細進捗監査としてはなお簡素。（旧トップの `OperatorLogView` は
+  診断ログの誤ラベル重複のため v3.8 で撤去。）
 
 返却される `ViolationReport`（HARD / SOFT / total / weighted score）は Home / Schedule に表示。
 既存の resolved-engine スコア・breakdown・3-evaluator 整合チェックは Analysis タブで従来どおり。
