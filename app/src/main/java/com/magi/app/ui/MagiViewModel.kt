@@ -52,6 +52,7 @@ import com.magi.app.v6.V6WebCompat
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -544,7 +545,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     message = "高速計算完了: 必須=${report.hard} 合計=${report.total} (${res.totalIters}反復, ${res.elapsedMs}ms)",
                 ))
             } catch (e: CancellationException) {
-                _ui.value = _ui.value.copy(running = false, message = "停止しました")
+                // [停止 keep-best] 中断時は途中(未採用)盤面ではなく直前に確定していた入力解を保持し表示も整合させる。
+                val kept = sched0.copy2D()
+                val keptReport = withContext(NonCancellable + Dispatchers.Default) {
+                    UnifiedViolationChecker.check(runState, kept)
+                }
+                currentSchedule = kept
+                resultSchedule = kept
+                state = runState.withSchedule(kept)
+                _ui.value = makeUi(state ?: runState, kept, keptReport, _ui.value.copy(
+                    running = false,
+                    hasResult = true,
+                    message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
+                ))
                 throw e
             } catch (e: Exception) {
                 // [review D] 失敗時は進捗中に書き込んだメトリクス（反復数・速度・経過）を消す。
@@ -584,7 +597,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     message = "軽量最適化完了: 必須=${res.report.hard} 合計=${res.report.total}",
                 ))
             } catch (e: CancellationException) {
-                _ui.value = _ui.value.copy(running = false, message = "停止しました")
+                // [停止 keep-best] 中断時は途中(未採用)盤面ではなく直前に確定していた入力解を保持し表示も整合させる。
+                val kept = sched.copy2D()
+                val keptReport = withContext(NonCancellable + Dispatchers.Default) {
+                    UnifiedViolationChecker.check(st, kept)
+                }
+                currentSchedule = kept
+                resultSchedule = kept
+                state = st.withSchedule(kept)
+                _ui.value = makeUi(state ?: st, kept, keptReport, _ui.value.copy(
+                    running = false,
+                    hasResult = true,
+                    message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
+                ))
                 throw e
             } catch (e: Exception) {
                 _ui.value = _ui.value.copy(running = false, message = "軽量最適化失敗: ${e.message}")
@@ -721,7 +746,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 captureAlternatives()
             } catch (e: CancellationException) {
-                _ui.value = _ui.value.copy(running = false, message = "停止しました")
+                // [停止 keep-best] 中断時は実行中の(未採用の)途中盤面ではなく、直前に確定していた
+                //   入力解(sched0)をそのまま保持し、表示の違反数も実際の盤面に合わせる。これにより
+                //   「必須=0だったのに停止したら必須が増えて見える」不整合を防ぐ（完了時のkeep-bestと同じ思想）。
+                val kept = sched0.copy2D()
+                val keptReport = withContext(NonCancellable + Dispatchers.Default) {
+                    UnifiedViolationChecker.check(st0, kept)
+                }
+                currentSchedule = kept
+                resultSchedule = kept
+                state = st0.withSchedule(kept)
+                _ui.value = makeUi(state ?: st0, kept, keptReport, _ui.value.copy(
+                    running = false,
+                    hasResult = true,
+                    message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
+                ))
+                logOp("I", "停止: 直前の勤務表 必須=${keptReport.hard}/合計=${keptReport.total} を保持")
                 throw e
             } catch (e: Exception) {
                 _ui.value = _ui.value.copy(running = false, message = "V6最適化失敗: ${e.message}")
