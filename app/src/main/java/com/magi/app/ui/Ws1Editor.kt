@@ -1,6 +1,8 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -368,7 +370,12 @@ private fun W1Shell(
         confirmButton = { DialogConfirmButton("OK", enabled = okEnabled, onClick = onOk) },
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { Text(title) },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { content() } },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) { content() }
+        },
     )
 }
 

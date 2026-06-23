@@ -2,6 +2,8 @@ package com.magi.app.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -159,7 +161,7 @@ internal fun StaffRangeDialog(
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { Text("個人別の回数") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("スタッフ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(onClick = { openS = true }, modifier = Modifier.heightIn(min = 48.dp)) {

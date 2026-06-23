@@ -1,6 +1,8 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -130,7 +132,7 @@ private fun NeedDayDialog(
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { Text("日別の必要人数") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("シフト", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(onClick = { open = true }, modifier = Modifier.heightIn(min = 48.dp)) {
