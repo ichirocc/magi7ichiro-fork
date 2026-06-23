@@ -260,9 +260,8 @@ internal fun ActionCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit
                 OutlinedButton(onClick = { vm.start() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("速くつくる") }
                 OutlinedButton(onClick = { vm.runLightOptimize() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("かんたんに") }
             }
-            OutlinedButton(onClick = { vm.runSoftPolish() }, enabled = ui.loaded && !ui.running,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("ソフト研磨（必須は壊さず微調整だけ）") }
+            // [冗長性F1] ソフト研磨ボタンは CopilotCard（必須充足後の文脈付き案内）と重複のため撤去。
+            //   ON/OFFの自動研磨は設定の「仕上げ最適化」スイッチ、手動起動は Copilot 側に一本化。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) { Text("閉じても大丈夫（あとで通知でお知らせ）") }
@@ -291,7 +290,7 @@ internal fun AdvancedSettingsSection(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("詳細設定（上級者向け）", style = MaterialTheme.typography.titleMedium)
-                    Text("1ヶ月の俯瞰（生指標）・ログ・違反色トークン。一般の運用では触りません。",
+                    Text("ログ・違反色トークン。一般の運用では触りません。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [Planner テイスト] グリフ「▾/▸」をやめ、やわらかい丸の中に整ったアイコンシェブロン。
@@ -309,9 +308,9 @@ internal fun AdvancedSettingsSection(
                 Spacer(Modifier.height(8.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
                     // [冗長性] 旧 FlagsView（計算方式＋仕上げ最適化）は「最適化設定」カードと完全重複の
-                    //   ため撤去。設定の操作は「最適化設定」に一本化し、ここは開発用の生指標・ログ・
-                    //   違反色トークンのみを置く。
-                    V6DashboardCard(ui.v6)   // 開発用の V6 1ヶ月俯瞰（生指標・負荷プロフィール）
+                    //   ため撤去。設定の操作は「最適化設定」に一本化。
+                    // [冗長性J1] V6DashboardCard（1ヶ月俯瞰・生指標）は分析タブ「プロ」表示と重複のため
+                    //   ここから撤去し、分析タブ(プロ)に一本化。ここはログ・違反色トークンのみ。
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
                     ColorSettingsView(ui)
                 }

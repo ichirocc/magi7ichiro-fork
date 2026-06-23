@@ -221,7 +221,7 @@ internal fun OperatorNextActionCard(
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
-            "データを見直す", onSetup, true, "そのまま配る", onExport)
+            "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
         else -> OpNextPlan(amber, onAmber,
             "もう少しです。" + (worstDay?.let { "$it が人手不足です。" } ?: "人手が足りない日があります。"),
             "なおすのを手伝って", onFix, true, "もう一度つくる", onMake)
@@ -635,6 +635,10 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}) {
                 Spacer(Modifier.width(6.dp))
                 Switch(checked = criticalOnly, onCheckedChange = { criticalOnly = it })
             }
+            // [明確性I1] チップの数値は「ペナルティ量」（不足/超過の合計・並び違反の発火数）で、
+            //   違反したセルの「件数」とは一致しない。実際の場所はチップをタップして確認する。
+            Text("数値はペナルティの大きさ（不足・超過の合計や並び違反の回数）。タップで実際の場所（セル）を表示します。",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             BreakdownGroup("必須（満たすべき）", listOf("groupViol", "pref", "covU", "c3n"), 2, ui, labels, expanded, onTapChip)
             if (!criticalOnly) {
                 BreakdownGroup("人数の範囲", listOf("low", "high", "apt"), 1, ui, labels, expanded, onTapChip)

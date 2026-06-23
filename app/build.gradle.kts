@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 115
-        versionName = "3.9.0-edit-dedup"
+        versionCode = 116
+        versionName = "3.10.0-screen-audit"
     }
 
     buildTypes {

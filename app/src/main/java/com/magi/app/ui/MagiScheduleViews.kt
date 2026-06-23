@@ -202,6 +202,7 @@ internal fun ShiftPickerSheet(
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current   // [一貫性G2] 希望操作にも触覚を付ける（割当と対称）
     val sheetState = rememberModalBottomSheetState()
     val allowed = remember(cell) { vm.allowedShiftsFor(i).toList() }
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
@@ -278,7 +279,7 @@ internal fun ShiftPickerSheet(
                                 .background(bg, RoundedCornerShape(16.dp))
                                 .then(if (ng) Modifier.border(2.dp, cs.error, RoundedCornerShape(16.dp)) else Modifier)
                                 .clickable {
-                                    if (mode == 0) onPick(k) else { vm.setWish(i, j, k); onDismiss() }
+                                    if (mode == 0) onPick(k) else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.setWish(i, j, k); onDismiss() }
                                 }
                                 .padding(4.dp),
                             contentAlignment = Alignment.Center,
@@ -297,7 +298,7 @@ internal fun ShiftPickerSheet(
             }
             // 希望を削除（希望モード・登録済みのみ）
             if (mode == 1 && wish != null) {
-                OutlinedButton(onClick = { vm.removeWish(i, j); onDismiss() }, modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
+                OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.removeWish(i, j); onDismiss() }, modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)) {
                     Text("希望を削除（希望なし）", color = cs.error)
                 }
             }
