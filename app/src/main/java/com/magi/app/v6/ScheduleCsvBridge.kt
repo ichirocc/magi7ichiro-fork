@@ -349,7 +349,7 @@ object ScheduleCsvBridge {
         val schedule = normalizeSchedule(base, p)
         val nameToI = LinkedHashMap<String, Int>()
         for (i in state.staff.indices) {
-            nameToI[state.staff[i].name.trim()] = i
+            nameToI[nameMatchKey(state.staff[i].name)] = i
         }
         val kigouToK = LinkedHashMap<String, Int>()
         for (k in state.shifts.indices) {
@@ -360,7 +360,7 @@ object ScheduleCsvBridge {
         while (rr < rows.size) {
             val r = rows[rr]
             if (r.isNotEmpty() && r[0].trim().isNotEmpty()) {
-                val staffIndex = nameToI[r[0].trim()]
+                val staffIndex = nameToI[nameMatchKey(r[0])]
                 if (staffIndex != null) {
                     matched++
                     val last = minOf(p.T, r.size - 1)
@@ -404,6 +404,13 @@ private fun csvEscapeCell(value: String): String {
     val escaped = value.replace("\"", "\"\"")
     return if (mustQuote) "\"$escaped\"" else escaped
 }
+
+/**
+ * 氏名照合用キー: 全角(U+3000)/半角を含む空白を全て除去する。これにより外部CSVの
+ * "山本 昌幸"(空白あり) と 状態側の "山本昌幸"(空白なし) を同一人物として照合できる
+ * （取込で1人分しか入らない/氏名不一致で弾かれる事故を防ぐ）。
+ */
+private fun nameMatchKey(s: String): String = s.filterNot { it.isWhitespace() }
 
 private fun parseCsvRows(raw: String): List<List<String>> {
     // UTF-8 BOM(U+FEFF) 除去: 付いていると先頭セルが "\uFEFFユニット" 等になり、trim()でも消えず
@@ -467,7 +474,7 @@ object StaffCsvIO {
     fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
         val rows = parseCsvRows(text)
         if (rows.size < 2) return null
-        val nameToI = state.staff.indices.associateBy { state.staff[it].name.trim() }
+        val nameToI = state.staff.indices.associateBy { nameMatchKey(state.staff[it].name) }
         val gByK = state.groups.indices.associateBy { state.groups[it].kigou.trim() }
         val skByK = state.skillGroups.indices.associateBy { state.skillGroups[it].kigou.trim() }
         val newStaff = state.staff.toMutableList()
@@ -475,7 +482,7 @@ object StaffCsvIO {
         for (r in rows.drop(1)) {
             val name = r.getOrElse(0) { "" }.trim()
             if (name.isEmpty()) continue
-            val i = nameToI[name] ?: continue
+            val i = nameToI[nameMatchKey(name)] ?: continue
             matched++
             val gi = gByK[r.getOrElse(1) { "" }.trim()] ?: newStaff[i].groupIdx
             val si = skByK[r.getOrElse(2) { "" }.trim()] ?: newStaff[i].skillIdx
@@ -507,7 +514,7 @@ object WishesCsvIO {
     fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
         val rows = parseCsvRows(text)
         if (rows.size < 2) return null
-        val nameToI = state.staff.indices.associateBy { state.staff[it].name.trim() }
+        val nameToI = state.staff.indices.associateBy { nameMatchKey(state.staff[it].name) }
         val symToK = state.shifts.indices.associateBy { state.shifts[it].kigou.trim() }
         val m = LinkedHashMap<String, Int>()
         var n = 0
@@ -515,7 +522,7 @@ object WishesCsvIO {
             val name = r.getOrElse(0) { "" }.trim()
             val day = r.getOrElse(1) { "" }.trim().toIntOrNull()
             val sym = r.getOrElse(2) { "" }.trim()
-            val i = nameToI[name] ?: continue
+            val i = nameToI[nameMatchKey(name)] ?: continue
             val k = symToK[sym] ?: continue
             if (day == null || day < 1 || day > state.dayCount) continue
             m["$i,${day - 1}"] = k
@@ -555,7 +562,7 @@ object ConstraintsCsvIO {
     fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
         val rows = parseCsvRows(text)
         if (rows.size < 2) return null
-        val nameToI = state.staff.indices.associateBy { state.staff[it].name.trim() }
+        val nameToI = state.staff.indices.associateBy { nameMatchKey(state.staff[it].name) }
         fun c(r: List<String>, i: Int) = r.getOrElse(i) { "" }.trim()
         fun pat(r: List<String>): List<String> = (1..5).map { c(r, it) }.takeWhile { it.isNotEmpty() }.take(5)
         val cons1 = ArrayList<C1Row>(); val cons2 = ArrayList<C2Row>()
@@ -578,7 +585,7 @@ object ConstraintsCsvIO {
                 "群組合せ禁止" -> { cons42.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "スキル群組合せ禁止" -> { cons42s.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "個人レンジ" -> {
-                    val i = nameToI[c(r, 1)]
+                    val i = nameToI[nameMatchKey(c(r, 1))]
                     val sym = c(r, 2)
                     val k = state.shifts.indexOfFirst { it.kigou.trim() == sym }
                     if (i != null && k >= 0) { ranges["$i,$k"] = Range(c(r, 3), c(r, 4)); n++ }
