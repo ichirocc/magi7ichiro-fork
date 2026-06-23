@@ -123,6 +123,19 @@ internal fun decodeCsvBytes(bytes: ByteArray): String {
 @Composable
 fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (Int) -> Unit = {}) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    // [保存] バックグラウンド遷移(ON_STOP/ON_PAUSE)で保留中の編集を即時永続化する。
+    //   制約編集などはデバウンス保存のため、即背景化→プロセス破棄だと失われ得る。その保険。
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner, vm) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP ||
+                event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
+                vm.saveNow()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     // [Web反映/Wake Lock] 最適化(前景)中は画面を消灯させない＝計算の中断・ライブ表示の停止を防ぐ。
     val rootView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.LaunchedEffect(ui.running) { rootView.keepScreenOn = ui.running }

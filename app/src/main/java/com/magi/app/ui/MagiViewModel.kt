@@ -273,6 +273,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * 即時保存（デバウンスなし・同期書込）。バックグラウンド遷移(onStop/onPause)から呼び、
+     * 保留中の編集を確実に永続化する。autoSave の1200msデバウンス中に
+     * プロセスが破棄されても編集が失われないようにするための保険。
+     */
+    fun saveNow() {
+        if (!hydrated) return
+        saveJob?.cancel()
+        val json = exportJson() ?: return
+        runCatching { autosaveFile.writeText(json) }
+    }
+
     private fun pushUndo() {
         val snap = snapNow() ?: return
         undoStack.addLast(snap)
@@ -1448,9 +1460,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** Apply an edited state (constraints changed), then re-run the unified check on the current table. */
     private fun mutateConstraints(newState: MagiState?) {
         val ns = newState ?: return
+        pushUndo()
         state = ns
         _ui.value = _ui.value.copy(constraintsEdited = true)
         refreshCheck()
+        autoSave()
     }
 
     // ---- ws1 initial setup ----------------------------------------------------
