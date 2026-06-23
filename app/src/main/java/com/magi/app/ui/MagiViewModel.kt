@@ -1741,7 +1741,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "スキル割当: ${opNm(i)} → 区分[$skillIdx]"); applyStructure(st.copy(staff = st.staff.mapIndexed { idx, s -> if (idx == i) s.copy(skillIdx = skillIdx) else s }))
     }
 
-    fun ws1CanRemoveGroup(g: Int): Boolean = state?.let { Ws1Ops.canRemoveGroup(it, g) } ?: false
+    /** グループを削除できるか（2グループ以上あれば可。所属者がいても先頭グループへ移動して削除）。 */
+    fun ws1CanRemoveGroup(g: Int): Boolean = state?.let { g in it.groups.indices && it.groups.size > 1 } ?: false
+
+    /** グループgの所属人数（削除確認の警告表示用）。 */
+    fun ws1GroupMemberCount(g: Int): Int = state?.staff?.count { it.groupIdx == g } ?: 0
 
     fun ws1RemoveShift(k: Int) {
         val st = state ?: return
@@ -1757,7 +1761,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun ws1RemoveGroup(g: Int) {
         val st = state ?: return
-        if (!Ws1Ops.canRemoveGroup(st, g)) return
+        if (g !in st.groups.indices || st.groups.size <= 1) return
         applyStructure(Ws1Ops.removeGroup(st, g))
     }
 

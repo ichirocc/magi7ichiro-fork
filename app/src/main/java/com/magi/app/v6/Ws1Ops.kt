@@ -201,16 +201,24 @@ object Ws1Ops {
         return Ws1Result(withSchedule(ns, arr), arr)
     }
 
-    /** Remove group [g]: only when empty (no staff) and not the last group. groupShift/apt lose
-     *  the row; staff group indices > g are decremented. Constraints referencing the removed
+    /** Remove group [g]: allowed whenever 2+ groups exist. groupShift/apt lose the row; staff in
+     *  the removed group are reassigned to the first remaining group (new index 0); staff group
+     *  indices > g are decremented (skillIdx preserved). Constraints referencing the removed
      *  group kigou simply stop resolving. */
     fun removeGroup(state: MagiState, g: Int): MagiState {
-        if (g !in state.groups.indices || !canRemoveGroup(state, g)) return state
+        if (g !in state.groups.indices || state.groups.size <= 1) return state
         val groups = state.groups.filterIndexed { idx, _ -> idx != g }
         val gs = state.groupShift.filterIndexed { idx, _ -> idx != g }
         val apt = if (state.groupShiftApt.isEmpty()) state.groupShiftApt
         else state.groupShiftApt.filterIndexed { idx, _ -> idx != g }
-        val staff = state.staff.map { if (it.groupIdx > g) Staff(it.name, it.groupIdx - 1) else it }
+        val staff = state.staff.map { s ->
+            val ni = when {
+                s.groupIdx == g -> 0          // 所属者は先頭グループへ移動
+                s.groupIdx > g -> s.groupIdx - 1
+                else -> s.groupIdx
+            }
+            if (ni == s.groupIdx) s else Staff(s.name, ni, s.skillIdx)
+        }
         return state.copy(groups = groups, groupShift = gs, groupShiftApt = apt, staff = staff)
     }
 }

@@ -105,8 +105,12 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                     Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) })
                     if (vm.ws1CanRemoveGroup(g)) {
+                        val members = vm.ws1GroupMemberCount(g)
                         Spacer(Modifier.width(6.dp))
-                        DeleteRowButton(onClick = { dialog = Ws1Dialog.ConfirmDelete("group", g, "グループ ${gr.kigou}") })
+                        DeleteRowButton(onClick = {
+                            val label = "グループ ${gr.kigou}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
+                            dialog = Ws1Dialog.ConfirmDelete("group", g, label)
+                        })
                     }
                 }
             }
