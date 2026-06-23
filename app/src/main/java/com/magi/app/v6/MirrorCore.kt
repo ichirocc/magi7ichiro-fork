@@ -37,6 +37,8 @@ data class ViolationReport(
 data class ScheduleRunResult(
     val schedule: Array<IntArray>,
     val report: ViolationReport,
+    /** CSV取込で氏名が一致したスタッフ行数。最適化系の結果では未使用(-1)。 */
+    val matched: Int = -1,
 )
 
 data class LightOptimizeResult(

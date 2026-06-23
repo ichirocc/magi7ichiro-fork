@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 98
-        versionName = "2.92.0-hypothesis-verify-log"
+        versionCode = 99
+        versionName = "2.93.0-import-fail-message"
     }
 
     buildTypes {

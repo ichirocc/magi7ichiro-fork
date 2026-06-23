@@ -239,7 +239,7 @@ object ScheduleCsvBridge {
         val logs = ArrayList<MirrorLog>()
         logs.add(log)
         logs.addAll(report.logs)
-        return ScheduleRunResult(schedule, report.copy(logs = logs))
+        return ScheduleRunResult(schedule, report.copy(logs = logs), matched = matched)
     }
 }
 

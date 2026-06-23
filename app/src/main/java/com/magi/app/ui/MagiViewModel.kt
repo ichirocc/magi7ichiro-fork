@@ -1640,6 +1640,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (com.magi.app.v6.RosterCsvImport.detect(text)) {
             val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text) }.getOrNull()
             if (st != null) {
+                // 凡例(記号一覧)が無いとシフトが「休」1種のみになり全セルが公休化する。
+                // 取り込まず原因をオペレーターに表示する（Excel保存で凡例が消えるケース）。
+                if (st.shiftCount <= 1) {
+                    _ui.value = _ui.value.copy(message = "CSV取込失敗: シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧が削除されていないかご確認ください（Excelで開いて保存すると消える場合があります）。元のファイルをそのまま取り込んでください。")
+                    logOp("W", "勤務表CSV取込 中止: 凡例なし（シフト${st.shiftCount}種のみ→全公休化を防止）")
+                    return
+                }
                 logOp("I", "勤務表CSVを新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット")
                 load(StateParser.serialize(st, st.schedule.toIntArray2D()))
                 return
@@ -1665,6 +1672,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             _ui.value = _ui.value.copy(message = "このCSVを読み込めませんでした。形式をご確認ください。")
             return
         }
+        if (st.shiftCount <= 1) {
+            _ui.value = _ui.value.copy(message = "CSV取込失敗: シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧が削除されていないかご確認ください（Excelで保存すると消える場合があります）。")
+            logOp("W", "${if (asWishes) "希望シフト" else "勤務表"}CSV取込 中止: 凡例なし（シフト${st.shiftCount}種のみ）")
+            return
+        }
         val kind = if (asWishes) "希望シフト" else "勤務表"
         logOp("I", "${kind}として新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット" +
             if (asWishes) "（希望${st.wishes.size}件）" else "")
@@ -1675,22 +1687,39 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val text = MojibakeRepair.repair(rawText)
-        pushUndo()
         _ui.value = _ui.value.copy(running = true, message = "CSV取込中…")
         job = viewModelScope.launch {
             try {
                 if (text !== rawText) logOp("W", "文字化け（二重エンコード）を自動修復してCSVを取り込みました")
                 val res = withContext(Dispatchers.Default) { ScheduleCsvBridge.parse(text, st, sched) }
+                // 取込失敗の明示: 氏名が1件も一致しなければ適用せず、オペレーターに原因を表示する。
+                if (res.matched == 0) {
+                    _ui.value = _ui.value.copy(
+                        running = false,
+                        message = "CSV取込失敗: 一致する職員名がありませんでした（0名）。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。",
+                    )
+                    logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
+                    return@launch
+                }
+                pushUndo()
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
                 resultSchedule = res.schedule.copy2D()
                 state = st.withSchedule(res.schedule)
+                val total = st.staff.size
+                val msg = if (res.matched in 1 until total)
+                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}"
+                else
+                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}"
                 _ui.value = makeUi(state ?: st, res.schedule, res.report, _ui.value.copy(
                     running = false,
                     hasResult = true,
-                    message = "CSV取込完了: 必須=${res.report.hard} 合計=${res.report.total}",
+                    message = msg,
                 ))
-                logOp("I", "CSV取込 完了 必須=${res.report.hard} 合計=${res.report.total}")
+                if (res.matched in 1 until total) {
+                    logOp("W", "CSV取込 一部のみ反映: ${res.matched}/${total}名一致（${total - res.matched}名は氏名不一致）")
+                }
+                logOp("I", "CSV取込 完了 ${res.matched}名一致 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: Exception) {
                 _ui.value = _ui.value.copy(running = false, message = "CSV取込失敗: ${e.message}")
             }
