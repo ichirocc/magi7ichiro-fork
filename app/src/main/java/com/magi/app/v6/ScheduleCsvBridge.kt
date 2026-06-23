@@ -4,6 +4,12 @@ import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
 import com.magi.app.model.Group
 import com.magi.app.model.Staff
+import com.magi.app.model.Range
+import com.magi.app.model.C1Row
+import com.magi.app.model.C2Row
+import com.magi.app.model.C3Row
+import com.magi.app.model.C41Row
+import com.magi.app.model.C42Row
 import java.time.LocalDate
 
 /**
@@ -431,4 +437,157 @@ private fun parseCsvRows(text: String): List<List<String>> {
         rows.add(ArrayList(row))
     }
     return rows
+}
+
+// ============================================================================
+// コンポーネント別CSV入出力（オペレーターが取込種別を選択して使用）
+//   各CSVは1行目をヘッダとして読み飛ばす。氏名・群・シフトは「氏名/記号」で照合。
+//   上の private parseCsvRows / appendCsvRow / csvEscapeCell を共用する。
+// ============================================================================
+
+/** スタッフ一覧: 「氏名,グループ,スキル」。氏名一致で所属群・スキルを更新（追加/削除はしない）。 */
+object StaffCsvIO {
+    fun build(state: MagiState): String {
+        val sb = StringBuilder()
+        appendCsvRow(sb, listOf("氏名", "グループ", "スキル"))
+        for (s in state.staff) {
+            appendCsvRow(sb, listOf(
+                s.name,
+                state.groups.getOrNull(s.groupIdx)?.kigou ?: "",
+                state.skillGroups.getOrNull(s.skillIdx)?.kigou ?: "",
+            ))
+        }
+        return sb.toString()
+    }
+
+    /** @return Pair(更新後state, 一致件数) または null（解析不能/一致0件）。 */
+    fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
+        val rows = parseCsvRows(text)
+        if (rows.size < 2) return null
+        val nameToI = state.staff.indices.associateBy { state.staff[it].name.trim() }
+        val gByK = state.groups.indices.associateBy { state.groups[it].kigou.trim() }
+        val skByK = state.skillGroups.indices.associateBy { state.skillGroups[it].kigou.trim() }
+        val newStaff = state.staff.toMutableList()
+        var matched = 0
+        for (r in rows.drop(1)) {
+            val name = r.getOrElse(0) { "" }.trim()
+            if (name.isEmpty()) continue
+            val i = nameToI[name] ?: continue
+            matched++
+            val gi = gByK[r.getOrElse(1) { "" }.trim()] ?: newStaff[i].groupIdx
+            val si = skByK[r.getOrElse(2) { "" }.trim()] ?: newStaff[i].skillIdx
+            newStaff[i] = newStaff[i].copy(groupIdx = gi, skillIdx = si)
+        }
+        if (matched == 0) return null
+        return state.copy(staff = newStaff) to matched
+    }
+}
+
+/** 希望シフト: 「氏名,日,希望シフト」（1希望=1行）。氏名一致で希望を全置換。 */
+object WishesCsvIO {
+    fun build(state: MagiState): String {
+        val sb = StringBuilder()
+        appendCsvRow(sb, listOf("氏名", "日", "希望シフト"))
+        val entries = state.wishes.entries.mapNotNull { (key, k) ->
+            val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
+            if (i == null || j == null) null else Triple(i, j, k)
+        }.sortedWith(compareBy({ it.first }, { it.second }))
+        for ((i, j, k) in entries) {
+            val name = state.staff.getOrNull(i)?.name ?: continue
+            val sym = state.shifts.getOrNull(k)?.kigou ?: continue
+            appendCsvRow(sb, listOf(name, (j + 1).toString(), sym))
+        }
+        return sb.toString()
+    }
+
+    /** @return Pair(更新後state, 取込件数) または null（解析不能/0件）。 */
+    fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
+        val rows = parseCsvRows(text)
+        if (rows.size < 2) return null
+        val nameToI = state.staff.indices.associateBy { state.staff[it].name.trim() }
+        val symToK = state.shifts.indices.associateBy { state.shifts[it].kigou.trim() }
+        val m = LinkedHashMap<String, Int>()
+        var n = 0
+        for (r in rows.drop(1)) {
+            val name = r.getOrElse(0) { "" }.trim()
+            val day = r.getOrElse(1) { "" }.trim().toIntOrNull()
+            val sym = r.getOrElse(2) { "" }.trim()
+            val i = nameToI[name] ?: continue
+            val k = symToK[sym] ?: continue
+            if (day == null || day < 1 || day > state.dayCount) continue
+            m["$i,${day - 1}"] = k
+            n++
+        }
+        if (n == 0) return null
+        return state.copy(wishes = m) to n
+    }
+}
+
+/** 各制約: 種別タグ付き行（種別,a,b,c,d,e）。取込時は制約一式＋個人レンジを置換。氏名/群/シフトは記号・氏名で照合。 */
+object ConstraintsCsvIO {
+    fun build(state: MagiState): String {
+        val sb = StringBuilder()
+        appendCsvRow(sb, listOf("種別", "a", "b", "c", "d", "e"))
+        for (c in state.cons1) appendCsvRow(sb, listOf("連勤", c.day1, c.shiftKigou, c.day2))
+        for (c in state.cons2) appendCsvRow(sb, listOf("回数下限", c.shiftKigou, c.count))
+        for (c in state.cons3) appendCsvRow(sb, listOf("MUST連続") + c.pattern)
+        for (c in state.cons3n) appendCsvRow(sb, listOf("禁止連続") + c.pattern)
+        for (c in state.cons3m) appendCsvRow(sb, listOf("希望連続") + c.pattern)
+        for (c in state.cons3mn) appendCsvRow(sb, listOf("回避連続") + c.pattern)
+        for (c in state.cons41) appendCsvRow(sb, listOf("群回数", c.groupKigou, c.shiftKigou, c.l, c.u))
+        for (c in state.cons41s) appendCsvRow(sb, listOf("スキル群回数", c.groupKigou, c.shiftKigou, c.l, c.u))
+        for (c in state.cons42) appendCsvRow(sb, listOf("群組合せ禁止", c.g1Kigou, c.s1Kigou, c.g2Kigou, c.s2Kigou))
+        for (c in state.cons42s) appendCsvRow(sb, listOf("スキル群組合せ禁止", c.g1Kigou, c.s1Kigou, c.g2Kigou, c.s2Kigou))
+        for ((key, r) in state.staffRange) {
+            val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
+            if (i == null || k == null) continue
+            val name = state.staff.getOrNull(i)?.name ?: continue
+            val sym = state.shifts.getOrNull(k)?.kigou ?: continue
+            appendCsvRow(sb, listOf("個人レンジ", name, sym, r.lo, r.hi))
+        }
+        return sb.toString()
+    }
+
+    /** @return Pair(更新後state, 取込件数) または null（解析不能/0件）。 */
+    fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
+        val rows = parseCsvRows(text)
+        if (rows.size < 2) return null
+        val nameToI = state.staff.indices.associateBy { state.staff[it].name.trim() }
+        fun c(r: List<String>, i: Int) = r.getOrElse(i) { "" }.trim()
+        fun pat(r: List<String>): List<String> = (1..5).map { c(r, it) }.takeWhile { it.isNotEmpty() }.take(5)
+        val cons1 = ArrayList<C1Row>(); val cons2 = ArrayList<C2Row>()
+        val cons3 = ArrayList<C3Row>(); val cons3n = ArrayList<C3Row>()
+        val cons3m = ArrayList<C3Row>(); val cons3mn = ArrayList<C3Row>()
+        val cons41 = ArrayList<C41Row>(); val cons41s = ArrayList<C41Row>()
+        val cons42 = ArrayList<C42Row>(); val cons42s = ArrayList<C42Row>()
+        val ranges = LinkedHashMap<String, Range>()
+        var n = 0
+        for (r in rows.drop(1)) {
+            when (c(r, 0)) {
+                "連勤" -> { cons1.add(C1Row(c(r, 1), c(r, 2), c(r, 3))); n++ }
+                "回数下限" -> { cons2.add(C2Row(c(r, 1), c(r, 2))); n++ }
+                "MUST連続" -> { val p = pat(r); if (p.isNotEmpty()) { cons3.add(C3Row(p)); n++ } }
+                "禁止連続" -> { val p = pat(r); if (p.isNotEmpty()) { cons3n.add(C3Row(p)); n++ } }
+                "希望連続" -> { val p = pat(r); if (p.isNotEmpty()) { cons3m.add(C3Row(p)); n++ } }
+                "回避連続" -> { val p = pat(r); if (p.isNotEmpty()) { cons3mn.add(C3Row(p)); n++ } }
+                "群回数" -> { cons41.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
+                "スキル群回数" -> { cons41s.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
+                "群組合せ禁止" -> { cons42.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
+                "スキル群組合せ禁止" -> { cons42s.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
+                "個人レンジ" -> {
+                    val i = nameToI[c(r, 1)]
+                    val sym = c(r, 2)
+                    val k = state.shifts.indexOfFirst { it.kigou.trim() == sym }
+                    if (i != null && k >= 0) { ranges["$i,$k"] = Range(c(r, 3), c(r, 4)); n++ }
+                }
+                else -> {}
+            }
+        }
+        if (n == 0) return null
+        return state.copy(
+            cons1 = cons1, cons2 = cons2, cons3 = cons3, cons3n = cons3n,
+            cons3m = cons3m, cons3mn = cons3mn, cons41 = cons41, cons41s = cons41s,
+            cons42 = cons42, cons42s = cons42s, staffRange = ranges,
+        ) to n
+    }
 }

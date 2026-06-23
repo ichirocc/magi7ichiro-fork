@@ -1374,6 +1374,29 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         autoSave()
     }
 
+    /** 構造変更(ns)を適用し、再チェック後に独自の完了メッセージを表示（コンポーネント別取込で使用）。 */
+    private fun applyStructureWithMessage(ns: MagiState, doneMessage: String) {
+        pushUndo()
+        state = ns
+        autoSave()
+        val sched = currentSchedule?.copy2D()
+        if (sched == null) { _ui.value = _ui.value.copy(structureEdited = true, message = doneMessage); return }
+        val seq = ++checkSeq
+        checkJob?.cancel()
+        _ui.value = _ui.value.copy(running = true, structureEdited = true, message = "$doneMessage（違反チェック中…）")
+        checkJob = viewModelScope.launch {
+            try {
+                val r = V6FinalPort.handleCheck(ns, sched)
+                if (seq != checkSeq) return@launch
+                _ui.value = makeUi(ns, r.schedule, r.report, _ui.value.copy(running = false, message = "$doneMessage｜必須=${r.report.hard} 合計=${r.report.total}"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (seq == checkSeq) _ui.value = _ui.value.copy(running = false, message = "$doneMessage（チェック失敗: ${e.message}）")
+            }
+        }
+    }
+
     /**
      * [ワンタップ修正] 設定の見直しカードの1ボタンで、該当する設定ミスをその場で直す。
      * 画面遷移・スクロール・行探し不要。applyStructure 経由なので Undo 可・自動再診断・自動保存される。
@@ -1617,6 +1640,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return ScheduleCsvBridge.build(st, sched)
     }
 
+    /** コンポーネント別エクスポート（取込種別と対。出力→編集→取込で往復可）。 */
+    fun exportStaffCsv(): String? = state?.let { com.magi.app.v6.StaffCsvIO.build(it) }
+    fun exportWishesCsv(): String? = state?.let { com.magi.app.v6.WishesCsvIO.build(it) }
+    fun exportConstraintsCsv(): String? = state?.let { com.magi.app.v6.ConstraintsCsvIO.build(it) }
+
     /** Operator log as a plain-text file (mirrors the Web "ログ出力"). */
     fun exportLogs(): String? {
         val ops = _ui.value.opLog
@@ -1754,6 +1782,51 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 _ui.value = _ui.value.copy(running = false, message = "CSV取込失敗: ${e.message}")
             }
         }
+    }
+
+    /** [コンポーネント別取込] スタッフ一覧CSV（氏名,グループ,スキル）。氏名一致で所属群/スキルのみ更新（追加/削除なし）。 */
+    fun importStaffCsv(rawText: String) {
+        val st = state ?: run { _ui.value = _ui.value.copy(message = "先にデータを開いてください（スタッフ一覧は既存データに重ねます）"); return }
+        val text = MojibakeRepair.repair(rawText)
+        val res = runCatching { com.magi.app.v6.StaffCsvIO.parse(text, st) }.getOrNull()
+        if (res == null) {
+            _ui.value = _ui.value.copy(message = "スタッフ一覧の取込失敗: 氏名が一致しませんでした。形式『氏名,グループ,スキル』と、氏名が現在のデータと一致しているかご確認ください。")
+            logOp("W", "スタッフ一覧CSV取込 失敗: 一致0件")
+            return
+        }
+        val (ns, matched) = res
+        logOp("I", "スタッフ一覧CSV取込: ${matched}名の所属群/スキルを更新")
+        applyStructureWithMessage(ns, "スタッフ一覧を取込: ${matched}名の所属群/スキルを更新")
+    }
+
+    /** [コンポーネント別取込] 希望シフトCSV（氏名,日,希望シフト）。氏名一致で希望を全置換。 */
+    fun importWishesCsv(rawText: String) {
+        val st = state ?: run { _ui.value = _ui.value.copy(message = "先にデータを開いてください（希望シフトは既存データに重ねます）"); return }
+        val text = MojibakeRepair.repair(rawText)
+        val res = runCatching { com.magi.app.v6.WishesCsvIO.parse(text, st) }.getOrNull()
+        if (res == null) {
+            _ui.value = _ui.value.copy(message = "希望シフトの取込失敗: 取り込める行がありません。形式『氏名,日,希望シフト』と、氏名・シフト記号が一致しているかご確認ください。")
+            logOp("W", "希望シフトCSV取込 失敗: 0件")
+            return
+        }
+        val (ns, count) = res
+        logOp("I", "希望シフトCSV取込: ${count}件を反映（全置換）")
+        applyStructureWithMessage(ns, "希望シフトを取込: ${count}件を反映（既存の希望は置換）")
+    }
+
+    /** [コンポーネント別取込] 各制約CSV（種別タグ付き）。制約一式＋個人レンジを置換。 */
+    fun importConstraintsCsv(rawText: String) {
+        val st = state ?: run { _ui.value = _ui.value.copy(message = "先にデータを開いてください（各制約は既存データに重ねます）"); return }
+        val text = MojibakeRepair.repair(rawText)
+        val res = runCatching { com.magi.app.v6.ConstraintsCsvIO.parse(text, st) }.getOrNull()
+        if (res == null) {
+            _ui.value = _ui.value.copy(message = "各制約の取込失敗: 取り込める行がありません。1列目の種別（連勤/禁止連続/群組合せ禁止/個人レンジ 等）をご確認ください。")
+            logOp("W", "各制約CSV取込 失敗: 0件")
+            return
+        }
+        val (ns, count) = res
+        logOp("I", "各制約CSV取込: ${count}件を反映（制約一式を置換）")
+        applyStructureWithMessage(ns, "各制約を取込: ${count}件を反映（既存の制約・個人レンジは置換）")
     }
 
     fun clearMessage() { _ui.value = _ui.value.copy(message = null) }

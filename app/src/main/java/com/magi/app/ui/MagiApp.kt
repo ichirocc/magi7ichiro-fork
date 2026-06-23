@@ -135,6 +135,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     var editScope by rememberSaveable { mutableStateOf(0) }   // [Web反映] 編集タブ: 0=月次 / 1=年次マスター
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
+    var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
+    var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおすのを手伝って」対話
 
     val openJsonLauncher = rememberLauncherForActivityResult(
@@ -165,9 +167,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     }.getOrNull()
                 }
                 if (text != null) {
-                    // 勤務表テンプレCSVは「勤務表/希望シフト」の取り込み方法を選ばせる。それ以外は従来取込。
-                    if (com.magi.app.v6.RosterCsvImport.detect(text)) rosterCsvChoice = text
-                    else vm.importCsvSmart(text)
+                    // 取込種別はオペレーターが選択する（自動判定しない）。
+                    pendingCsvImport = text
                 }
             }
         }
@@ -202,6 +203,34 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                             ctx.contentResolver.openOutputStream(uri)?.use {
                                 // UTF-8 BOM を付与。日本の Excel は BOM 無し UTF-8 を CP932 と誤読し文字化けするため、
                                 // BOM(EF BB BF) を先頭に書いて Unicode(UTF-8) と認識させる。取込側は removePrefix で BOM 除去済。
+                                it.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
+                                it.write(csv.toByteArray(Charsets.UTF_8))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    val saveComponentCsvLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        val kind = pendingExportKind; pendingExportKind = null
+        if (uri != null && kind != null) {
+            scope.launch {
+                val csv = withContext(Dispatchers.Default) {
+                    when (kind) {
+                        "staff" -> vm.exportStaffCsv()
+                        "wishes" -> vm.exportWishesCsv()
+                        "cons" -> vm.exportConstraintsCsv()
+                        else -> null
+                    }
+                }
+                if (csv != null) {
+                    withContext(Dispatchers.IO) {
+                        runCatching {
+                            ctx.contentResolver.openOutputStream(uri)?.use {
                                 it.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
                                 it.write(csv.toByteArray(Charsets.UTF_8))
                             }
@@ -425,6 +454,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         onOpenCsv = { openCsvLauncher.launch(arrayOf("text/csv", "text/comma-separated-values", "text/plain", "*/*")) },
                         onSaveCsv = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                         onCheck = { vm.refreshCheck() },
+                        onSaveStaffCsv = { pendingExportKind = "staff"; saveComponentCsvLauncher.launch("magi_staff_${System.currentTimeMillis()}.csv") },
+                        onSaveWishesCsv = { pendingExportKind = "wishes"; saveComponentCsvLauncher.launch("magi_wishes_${System.currentTimeMillis()}.csv") },
+                        onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                     )
                     SettingsCard(ui, vm)
                     OperatorLogView(ui)
@@ -457,6 +489,35 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
         }
         if (guidedFix) {
             GuidedFixDialog(ui, vm, onDismiss = { guidedFix = false }, onRerun = { guidedFix = false; vm.runV6FullOptimize() })
+        }
+        pendingCsvImport?.let { csvText ->
+            AlertDialog(
+                onDismissRequest = { pendingCsvImport = null },
+                title = { Text("取込種別を選択") },
+                text = {
+                    Text(
+                        "この CSV を何として取り込みますか？\n\n" +
+                            "・データ全体（新規）：勤務表テンプレ/ユニット列形式を新しいデータとして読み込み\n" +
+                            "・勤務表（重ね合わせ）：氏名,1日,2日… の表を現在の割り当てに重ねる\n" +
+                            "・スタッフ一覧：氏名,グループ,スキル（所属群/スキルを更新）\n" +
+                            "・希望シフト：氏名,日,希望シフト（希望を置換）\n" +
+                            "・各制約：種別タグ付き（制約一式・個人レンジを置換）",
+                    )
+                },
+                confirmButton = {
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DialogConfirmButton("データ全体（新規）", onClick = {
+                            if (com.magi.app.v6.RosterCsvImport.detect(csvText)) { rosterCsvChoice = csvText } else { vm.importCsvSmart(csvText) }
+                            pendingCsvImport = null
+                        })
+                        DialogConfirmButton("勤務表（重ね合わせ）", onClick = { vm.importCsv(csvText); pendingCsvImport = null })
+                        DialogConfirmButton("スタッフ一覧", onClick = { vm.importStaffCsv(csvText); pendingCsvImport = null })
+                        DialogConfirmButton("希望シフト", onClick = { vm.importWishesCsv(csvText); pendingCsvImport = null })
+                        DialogConfirmButton("各制約", onClick = { vm.importConstraintsCsv(csvText); pendingCsvImport = null })
+                    }
+                },
+                dismissButton = { DialogDismissButton(onClick = { pendingCsvImport = null }) },
+            )
         }
         rosterCsvChoice?.let { csvText ->
             AlertDialog(
