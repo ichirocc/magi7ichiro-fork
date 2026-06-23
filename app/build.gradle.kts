@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 104
-        versionName = "2.98.0-soft-polish"
+        versionCode = 105
+        versionName = "2.99.0-apt-reset"
     }
 
     buildTypes {

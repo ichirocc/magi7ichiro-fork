@@ -1635,6 +1635,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         applyStructure(Ws1Ops.setGroupApt(st, g, k, value))
     }
 
+    /**
+     * [apt強制リセット] 適切回数(apt)を全グループ×全シフトで空欄(目標なし)に戻す。
+     * apt由来のソフト違反が消える。担当ON/OFF・回数レンジ・勤務表は不変、表も保持。元に戻すで復帰可。
+     */
+    fun ws1ResetGroupApt() {
+        val st = state ?: return
+        val cleared = st.groupShiftApt.sumOf { row -> row.count { it.trim().isNotEmpty() } }
+        logOp("I", "apt強制リセット: 適切回数を全空欄に（$cleared 件クリア）")
+        applyStructureWithMessage(Ws1Ops.resetGroupApt(st), "適切回数(apt)を全リセットしました（$cleared 件 → 0）")
+    }
+
     fun ws1SetUse2(on: Boolean) {
         val st = state ?: return
         applyStructure(Ws1Ops.setUse2(st, on))

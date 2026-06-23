@@ -54,6 +54,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
     val v = vm.ws1() ?: return
     var dialog by remember { mutableStateOf<Ws1Dialog?>(null) }
     var daysText by remember(v.days) { mutableStateOf(v.days.toString()) }
+    var confirmResetApt by remember { mutableStateOf(false) }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -159,6 +160,15 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Text("適切回数（任意・1人あたり目標）", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             Text("ONのシフトに目標回数を設定すると、最適化が各人をその回数に近づけます（空欄＝目標なし）",
                 fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (v.groups.isNotEmpty()) {
+                val aptSet = v.groupShiftApt.sumOf { row -> row.count { it.trim().isNotEmpty() } }
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DeleteRowButton(onClick = { confirmResetApt = true }, enabled = aptSet > 0, text = "適切回数を全リセット")
+                    Text(if (aptSet > 0) "設定中 $aptSet 件" else "設定なし",
+                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             v.groups.forEachIndexed { g, gr ->
                 val onShifts = v.shifts.indices.filter { v.groupShift.getOrNull(g)?.getOrNull(it) == 1 }
                 if (onShifts.isNotEmpty()) {
@@ -174,6 +184,26 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 }
             }
         }
+    }
+
+    if (confirmResetApt) {
+        AlertDialog(
+            onDismissRequest = { confirmResetApt = false },
+            title = { Text("適切回数(apt)を全リセット") },
+            text = {
+                Text(
+                    "全グループ×全シフトの適切回数を空欄（目標なし）に戻します。\n" +
+                        "・apt由来のソフト違反は消えます\n" +
+                        "・担当ON/OFF・回数レンジ・勤務表は変わりません\n" +
+                        "・「元に戻す」で復帰できます\n実行しますか？",
+                    fontSize = 14.sp,
+                )
+            },
+            confirmButton = {
+                DialogDangerButton("全リセット", onClick = { vm.ws1ResetGroupApt(); confirmResetApt = false })
+            },
+            dismissButton = { DialogDismissButton(onClick = { confirmResetApt = false }) },
+        )
     }
 
     when (val d = dialog) {

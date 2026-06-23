@@ -75,6 +75,16 @@ object Ws1Ops {
         return state.copy(groupShiftApt = grid)
     }
 
+    /**
+     * [apt強制リセット] グループ別シフトの適切回数(groupShiftApt)を全て空欄(=目標なし)に戻す。
+     * G×K に正規化したうえで全セルを "" にする。apt 由来のソフト違反は消えるが、
+     * 担当ON/OFF(groupShift)・回数レンジ・勤務表・シフト/グループ定義は一切変更しない。
+     */
+    fun resetGroupApt(state: MagiState): MagiState {
+        val grid = List(state.groups.size) { List(state.shifts.size) { "" } }
+        return state.copy(groupShiftApt = grid)
+    }
+
     fun setUse2(state: MagiState, on: Boolean): MagiState = state.copy(use2Patterns = on)
 
     // ---- append (low-risk dimension change, no re-indexing) ------------------
