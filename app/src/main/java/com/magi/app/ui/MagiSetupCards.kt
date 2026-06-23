@@ -260,6 +260,9 @@ internal fun ActionCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit
                 OutlinedButton(onClick = { vm.start() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("速くつくる") }
                 OutlinedButton(onClick = { vm.runLightOptimize() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("かんたんに") }
             }
+            OutlinedButton(onClick = { vm.runSoftPolish() }, enabled = ui.loaded && !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) { Text("ソフト研磨（必須は壊さず微調整だけ）") }
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) { Text("閉じても大丈夫（あとで通知でお知らせ）") }

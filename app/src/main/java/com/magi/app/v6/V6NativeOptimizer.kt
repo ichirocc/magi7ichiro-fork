@@ -680,6 +680,19 @@ object V6NativeOptimizer {
     private data class PolishResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>, val iterations: Long)
 
     /**
+     * [ソフト研磨専用] 現在の盤面をHARDガード付きで局所研磨し、SOFTのみ削減する公開エントリ。
+     * 破壊/多様化フェーズは行わず、hf80PostPolish の keep-best＋退化防止により入力以上の盤面のみ返す
+     * （HARD=0 は壊さない）。最適化(もう一度つくる)と違い、必須が一時的に増えることはない。
+     */
+    suspend fun softPolishOnly(
+        state: MagiState,
+        schedule: Array<IntArray>,
+        seconds: Int,
+        seed: Long = 0x50F11L,
+        shouldStop: () -> Boolean = { false },
+    ): Array<IntArray> = hf80PostPolish(state, schedule, max(1, seconds), seed, shouldStop).schedule
+
+    /**
      * 最終研磨フェーズ。[差分化移植] DeltaEvaluator を生スコア源にして直接評価で回す
      * （copy2D / 全件 check() を毎反復行わない）。op0-2 は単一/二セル直接評価、op3-8 は
      * findTargetedFix（シャッフル付きフォールバック）、op9-10 は copy 系の destroy/repair を

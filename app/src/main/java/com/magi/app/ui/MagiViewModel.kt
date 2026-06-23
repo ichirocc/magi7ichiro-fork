@@ -772,6 +772,69 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * [ソフト研磨のみ] 現在の勤務表をHARDガード付きで局所研磨し、SOFT違反だけを削る。
+     *   「もう一度つくる」と違い破壊/多様化を行わないため必須が一時的に増えることはなく、
+     *   keep-best により入力より悪い結果は採用しない（HARD=0 を壊さない）。
+     */
+    fun runSoftPolish() {
+        val st0 = state ?: return
+        val sched0 = currentSchedule ?: return
+        if (_ui.value.running) return
+        if (!ensureValidForRun(st0, sched0)) return
+        pushUndo()
+        _ui.value = _ui.value.copy(running = true, hasResult = false, liveSchedule = emptyList(), message = "ソフト研磨中…")
+        logOp("I", "ソフト研磨 開始 (予算${_ui.value.budgetSec}s)")
+        val startMs = System.currentTimeMillis()
+        job = viewModelScope.launch {
+            try {
+                val baseReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, sched0) }
+                val polished = withContext(Dispatchers.Default) {
+                    V6NativeOptimizer.softPolishOnly(st0, sched0.copy2D(), _ui.value.budgetSec)
+                }
+                val polishedReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, polished) }
+                // softPolishOnly は退化防止済みだが、VM側でも (必須, 合計) で入力以上のみ採用（保険）。
+                val worse = polishedReport.hard > baseReport.hard ||
+                    (polishedReport.hard == baseReport.hard && polishedReport.total > baseReport.total)
+                val finalSched = if (worse) sched0.copy2D() else polished.copy2D()
+                val finalReport = if (worse) baseReport else polishedReport
+                currentSchedule = finalSched
+                autoSave()
+                resultSchedule = finalSched
+                state = st0.withSchedule(finalSched)
+                val gain = baseReport.total - finalReport.total
+                _ui.value = makeUi(state ?: st0, finalSched, finalReport, _ui.value.copy(
+                    running = false,
+                    hasResult = true,
+                    message = if (gain > 0)
+                        "ソフト研磨 完了: 合計 ${baseReport.total} → ${finalReport.total}（-$gain）必須=${finalReport.hard} (${System.currentTimeMillis() - startMs}ms)"
+                    else
+                        "ソフト研磨 完了: これ以上の削減は見つかりませんでした（合計=${finalReport.total} 必須=${finalReport.hard}）。残りは構造的要因の可能性。",
+                ))
+                logOp("I", "ソフト研磨 完了 必須=${finalReport.hard} 合計=${finalReport.total}（${if (gain > 0) "-$gain" else "増減なし"}）")
+            } catch (e: CancellationException) {
+                // [停止 keep-best] 中断時は直前の確定盤面を保持し表示も整合させる。
+                val kept = sched0.copy2D()
+                val keptReport = withContext(NonCancellable + Dispatchers.Default) {
+                    UnifiedViolationChecker.check(st0, kept)
+                }
+                currentSchedule = kept
+                resultSchedule = kept
+                state = st0.withSchedule(kept)
+                _ui.value = makeUi(state ?: st0, kept, keptReport, _ui.value.copy(
+                    running = false,
+                    hasResult = true,
+                    message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
+                ))
+                throw e
+            } catch (e: Exception) {
+                _ui.value = _ui.value.copy(running = false, message = "ソフト研磨失敗: ${e.message}")
+            } finally {
+                if (_ui.value.running) _ui.value = _ui.value.copy(running = false)
+            }
+        }
+    }
+
     fun stop() { job?.cancel(); checkJob?.cancel(); fixJob?.cancel(); clearRunMarker() }
 
     /** Shift indices a staff member may take (for the cell-edit bottom sheet). */

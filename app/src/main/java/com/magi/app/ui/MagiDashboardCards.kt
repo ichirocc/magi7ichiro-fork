@@ -263,7 +263,7 @@ internal fun OperatorNextActionCard(
 /** [対象月の選択] 勤務表を作る月を前月/翌月/今月で選ぶ。変更でその月の日数に合わせて表を作り直す。 */
 
 @Composable
-internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit) {
+internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> Unit = {}) {
     // [冗長性削減] できあがり度・進捗は OperatorNextActionCard が表示するため、ここは助言/警告だけに専念。
     val cs = MaterialTheme.colorScheme
     val show = ui.impossibleWishCount > 0 || ui.copilotHint != null || (ui.polishExhausted && !ui.running)
@@ -291,9 +291,14 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit) {
             }
             if (ui.polishExhausted && !ui.running) {
                 Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
-                    Text("✓ 必須条件は満たしています。残りの微調整は勤務表タブでの手修正が早い場合があります。",
-                        color = cs.onTertiaryContainer,
-                        modifier = Modifier.fillMaxWidth().padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("✓ 必須条件は満たしています。残りのソフト違反は『ソフト研磨』で自動削減を試せます（必須は壊しません）。難しければ勤務表タブでの手修正が早い場合があります。",
+                            color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("ソフト研磨") }
+                            OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
+                        }
+                    }
                 }
             }
         }

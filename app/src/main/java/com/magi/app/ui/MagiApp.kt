@@ -337,7 +337,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     LiveScheduleCard(ui)
                     // [冗長性削減] StatusHero(状態三重表示) / SummaryCard(統計は「ようす」と重複＋開発用語) /
                     //   QuickActionGrid(下部ナビと4/6重複) は home から除外。詳細統計は「ようす」タブへ集約。
-                    CopilotCard(ui, onGoEdit = { tab = 2 })
+                    CopilotCard(ui, onGoEdit = { tab = 2 }, onSoftPolish = { vm.runSoftPolish() })
                     CoverageDiagnosisCard(ui)
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) }, onGoEdit = { tab = 2 })
                     ActionCard(ui, vm, onBgOptimize = onBgOptimize)
