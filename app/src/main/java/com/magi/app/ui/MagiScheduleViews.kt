@@ -433,6 +433,8 @@ internal fun ScheduleGrid(
         ui.violationCells.values.groupingBy { it.removePrefix("vio-") }.eachCount()
     }
     fun shown(v: String?) = v != null && v.removePrefix("vio-") !in hiddenVio
+    // [凡例の冗長対策] 実線/破線・シフト色キーは作成者には暗記済みのことが多いので既定で畳む。
+    var legendOpen by remember { mutableStateOf(false) }
     val maxPage = if (ui.days <= win) 0 else (ui.days - 1) / win
     val cur = page.coerceIn(0, maxPage)
     Card(Modifier.fillMaxWidth()) {
@@ -445,10 +447,6 @@ internal fun ScheduleGrid(
                 selected = gridMode,
                 onSelect = { gridMode = it },
             )
-            if (ui.violationCells.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                ViolationLegend(vioColor)
-            }
             // [違反フィルタ＋内訳] 種別ごとの件数つきチップで「どの違反が何件か」を勤務表上で一覧化。
             //   タップで表示/非表示（隠した種別はセル枠が消える）。1種別に絞れば誰の何日かが直接見える。
             if (vioTypes.size > 1) {
@@ -485,8 +483,23 @@ internal fun ScheduleGrid(
                         style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 }
             }
-            // [シフト色キー] 記号をそのシフトの実色で表示。作成者は名称を熟知のため色対応を提供（色＋形）。
-            ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
+            // [凡例] 参照情報（実線/破線の意味・シフト色キー）は作成者には暗記済みのことが多く、常時表示は冗長。
+            //   既定で畳み、タップで展開する（情報密度・スクロール量を優先）。新規/応援スタッフは開けば確認できる。
+            if (ui.violationCells.isNotEmpty() || ui.shiftSymbols.any { it.isNotBlank() }) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { legendOpen = !legendOpen }) {
+                    Text(if (legendOpen) "凡例を隠す ▾" else "凡例（色・記号の意味）▸",
+                        style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                }
+                if (legendOpen) {
+                    if (ui.violationCells.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        ViolationLegend(vioColor)
+                    }
+                    ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
+                }
+            }
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints {
                 val totalW = maxWidth

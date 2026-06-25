@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 120
-        versionName = "3.14.0-shift-color-key"
+        versionCode = 121
+        versionName = "3.15.0-legend-collapse"
     }
 
     buildTypes {
