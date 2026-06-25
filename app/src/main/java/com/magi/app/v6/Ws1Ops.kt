@@ -30,16 +30,57 @@ object Ws1Ops {
 
     fun editShift(state: MagiState, k: Int, name: String, kigou: String, need1: String, need2: String): MagiState {
         if (k !in state.shifts.indices) return state
+        val old = state.shifts[k].kigou
         val s = state.shifts.toMutableList()
         s[k] = Shift(name, kigou, need1, need2)
-        return state.copy(shifts = s)
+        // [記号変更の伝播] 制約はシフト記号(文字列)で参照するため、記号を変えたら参照行も一括置換し
+        //   旧記号の幽霊行化(評価では無視されるが表示に残る)を防ぐ。index保存(staffRange/希望/apt/勤務表)は
+        //   indexで参照するため自動追従＝対象外。
+        return renameShiftInConstraints(state.copy(shifts = s), old, kigou)
     }
 
     fun editGroup(state: MagiState, g: Int, name: String, kigou: String): MagiState {
         if (g !in state.groups.indices) return state
+        val old = state.groups[g].kigou
         val gl = state.groups.toMutableList()
         gl[g] = Group(name, kigou)
-        return state.copy(groups = gl)
+        // [記号変更の伝播] cons41/cons42 は群記号で参照。cons41s/cons42s(スキル群)は別系統で対象外。
+        return renameGroupInConstraints(state.copy(groups = gl), old, kigou)
+    }
+
+    // [記号変更の伝播] 制約は記号(kigou)文字列で参照するため、シフト/群/スキル群の記号を変えたら
+    //   参照する制約行も一括置換し、旧記号の幽霊行化を防ぐ。old空 or old==new は no-op。
+    private fun renameShiftInConstraints(s: MagiState, old: String, new: String): MagiState {
+        if (old.isBlank() || old == new) return s
+        fun pat(p: List<String>) = p.map { if (it == old) new else it }
+        return s.copy(
+            cons1 = s.cons1.map { if (it.shiftKigou == old) it.copy(shiftKigou = new) else it },
+            cons2 = s.cons2.map { if (it.shiftKigou == old) it.copy(shiftKigou = new) else it },
+            cons3 = s.cons3.map { it.copy(pattern = pat(it.pattern)) },
+            cons3n = s.cons3n.map { it.copy(pattern = pat(it.pattern)) },
+            cons3m = s.cons3m.map { it.copy(pattern = pat(it.pattern)) },
+            cons3mn = s.cons3mn.map { it.copy(pattern = pat(it.pattern)) },
+            cons41 = s.cons41.map { if (it.shiftKigou == old) it.copy(shiftKigou = new) else it },
+            cons41s = s.cons41s.map { if (it.shiftKigou == old) it.copy(shiftKigou = new) else it },
+            cons42 = s.cons42.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
+            cons42s = s.cons42s.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
+        )
+    }
+
+    private fun renameGroupInConstraints(s: MagiState, old: String, new: String): MagiState {
+        if (old.isBlank() || old == new) return s
+        return s.copy(
+            cons41 = s.cons41.map { if (it.groupKigou == old) it.copy(groupKigou = new) else it },
+            cons42 = s.cons42.map { it.copy(g1Kigou = if (it.g1Kigou == old) new else it.g1Kigou, g2Kigou = if (it.g2Kigou == old) new else it.g2Kigou) },
+        )
+    }
+
+    fun renameSkillGroupInConstraints(s: MagiState, old: String, new: String): MagiState {
+        if (old.isBlank() || old == new) return s
+        return s.copy(
+            cons41s = s.cons41s.map { if (it.groupKigou == old) it.copy(groupKigou = new) else it },
+            cons42s = s.cons42s.map { it.copy(g1Kigou = if (it.g1Kigou == old) new else it.g1Kigou, g2Kigou = if (it.g2Kigou == old) new else it.g2Kigou) },
+        )
     }
 
     fun editStaff(state: MagiState, i: Int, name: String, groupIdx: Int): MagiState {

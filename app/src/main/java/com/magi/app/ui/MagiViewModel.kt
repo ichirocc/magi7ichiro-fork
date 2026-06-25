@@ -1782,7 +1782,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun editSkillGroup(g: Int, name: String, kigou: String) {
         val st = state ?: return
-        logOp("I", "スキル区分編集: [$g] → ${name.trim()}(${kigou.trim()})"); applyStructure(st.copy(skillGroups = st.skillGroups.mapIndexed { i, x -> if (i == g) Group(name.trim(), kigou.trim()) else x }))
+        val old = st.skillGroups.getOrNull(g)?.kigou ?: ""
+        val renamed = st.copy(skillGroups = st.skillGroups.mapIndexed { i, x -> if (i == g) Group(name.trim(), kigou.trim()) else x })
+        logOp("I", "スキル区分編集: [$g] → ${name.trim()}(${kigou.trim()})")
+        // [記号変更の伝播] スキル群記号を変えたら cons41s/cons42s の参照も一括置換(幽霊行防止)
+        applyStructure(Ws1Ops.renameSkillGroupInConstraints(renamed, old, kigou.trim()))
     }
     fun removeSkillGroup(g: Int) {
         val st = state ?: return
