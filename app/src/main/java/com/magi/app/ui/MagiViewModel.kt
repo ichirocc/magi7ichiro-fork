@@ -1159,19 +1159,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return members.map { allowedShiftsFor(it).toHashSet() }.reduce { a, b -> a.apply { retainAll(b) } }
     }
 
-    /** グループ g に所属する全職員の staffRange["i,k"] を [lo,hi] に一括設定（両方空なら一括削除）。 */
+    /** グループ g 所属の全職員に、ws5 個人別[lo,hi](staffRange, low/high 重み90/45=強い境界) を一括設定し、
+     *  さらに ws1 C のグループ別 適切回数(groupShiftApt, apt 重み1=弱い目標) も同時に書く。
+     *  apt は「最低=最高」の単一値のときのみ設定（範囲指定や空欄時はクリア）＝Excelの ws1 C→ws5 展開を1操作で再現。 */
     fun setGroupRange(g: Int, k: Int, lo: String, hi: String) {
-        val st = state ?: return
-        val members = st.staff.indices.filter { st.staff[it].groupIdx == g }
+        val st0 = state ?: return
+        val members = st0.staff.indices.filter { st0.staff[it].groupIdx == g }
         if (members.isEmpty()) return
-        val m = st.staffRange.toMutableMap()
+        val loT = lo.trim(); val hiT = hi.trim()
+        // ws5: 個人別の最低/最高（強い境界）をメンバー全員に展開
+        val m = st0.staffRange.toMutableMap()
         for (i in members) {
             val key = "$i,$k"
-            if (lo.isBlank() && hi.isBlank()) m.remove(key) else m[key] = Range(lo.trim(), hi.trim())
+            if (loT.isBlank() && hiT.isBlank()) m.remove(key) else m[key] = Range(loT, hiT)
         }
-        val gname = st.groups.getOrNull(g)?.name ?: "#$g"
-        logOp("I", "グループ一括レンジ: $gname ${opSy(k)} → ${if (lo.isBlank() && hi.isBlank()) "削除" else "${lo.ifBlank { "?" }}〜${hi.ifBlank { "?" }}"} (${members.size}名)")
-        applyStructure(st.copy(staffRange = m))
+        // ws1 C: グループ別 適切回数（弱い目標）。単一値(最低=最高)のときのみ設定、範囲/空欄はクリア。
+        val aptVal = if (loT.isNotBlank() && loT == hiT) loT else ""
+        val stNew = Ws1Ops.setGroupApt(st0.copy(staffRange = m), g, k, aptVal)
+        val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
+        val desc = if (loT.isBlank() && hiT.isBlank()) "削除" else "${loT.ifBlank { "?" }}〜${hiT.ifBlank { "?" }}"
+        logOp("I", "グループ一括: $gname ${opSy(k)} → ws5=$desc / 適切回数=${aptVal.ifBlank { "なし" }} (${members.size}名)")
+        applyStructure(stNew)
     }
 
     /** [直せる導線] 集計セル(職員別)の違反詳細用しきい値: 下限/上限(staffRange)・目標(apt実効)。未設定は null。 */

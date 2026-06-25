@@ -201,7 +201,7 @@ fun GroupRangeCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "グループ単位でシフトの回数 下限/上限を一括設定します。選んだグループに所属する全職員の個人上下限（下限割れ/上限超過で最適化）に反映されます。",
+                "グループ単位でシフトの回数を一括設定します。選んだグループの全職員の個人上下限(ws5・下限割れ/上限超過で最適化)に反映され、最低=最高の単一値ならグループ別の適切回数(ws1 C)も同時に設定します。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -270,7 +270,7 @@ internal fun GroupRangeDialog(
                 }
                 NumberStepper("下限", lo, { lo = it }, min = 0, blankLabel = "なし")
                 NumberStepper("上限", hi, { hi = it }, min = 0, blankLabel = "なし")
-                Text("選んだグループの全員に同じ上下限を設定します（既存の個人設定は上書き）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("全員の個人上下限(ws5)に設定し、最低=最高なら適切回数(ws1 C)も同時に設定します（既存の個人設定は上書き）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )
