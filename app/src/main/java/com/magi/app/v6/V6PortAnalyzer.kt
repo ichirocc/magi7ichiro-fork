@@ -69,6 +69,7 @@ data class CoverageDiagnosis(
     val infeasibleSlots: Int,
     val fixableSlots: Int,
     val shortfalls: List<CoverageShortfall>,
+    val relaxations: List<String> = emptyList(),  // [IIS/緩和案] 担当追加で解ける見込みの提案（データは変えない）
 ) {
     val hasShortage: Boolean get() = totalShortfall > 0
     /** 不足が全て「充足不可」＝このデータでは HARD=0 にできない（想定内の残存）。 */
@@ -84,6 +85,7 @@ data class CoverageDiagnosis(
             out.add("[W] CoverageDiag: ${s.dayLabel} ${s.shiftSymbol} 必要${s.need}/現状${s.got}(不足${s.miss}) — ${v}: ${s.reason}")
         }
         if (shortfalls.size > 8) out.add("[W] CoverageDiag: ほか${shortfalls.size - 8}枠")
+        for (r in relaxations.take(4)) out.add("[W] CoverageDiag 緩和案: $r")
         return out
     }
 }
@@ -141,7 +143,28 @@ object V6PortAnalyzer {
             compareByDescending<CoverageShortfall> { it.verdict == CoverageVerdict.INFEASIBLE }
                 .thenByDescending { it.miss }
         )
-        return CoverageDiagnosis(total, infeasible, fixable, list)
+        // [緩和案/IIS] 構造的に充足不可なシフトについて、担当追加(クロストレーニング)で解ける見込みを提示する。
+        //   候補は未活用(需要のあるシフトへの稼働が少ない)職員を優先。これは担当追加の「提案」であって
+        //   データは一切変更しない（採否は業務担当者が判断）。HF77準拠。
+        val relaxations = ArrayList<String>()
+        run {
+            val demandShifts = (0 until p.K).filter { kk -> (0 until p.T).any { jj -> p.need1[kk][jj] > 0 } }.toSet()
+            fun demandLoad(i: Int): Int = (0 until p.T).count { jj -> norm[i][jj] in demandShifts }
+            val infeasByShift = list.filter { it.verdict == CoverageVerdict.INFEASIBLE }
+                .groupBy { it.shiftIndex }
+                .mapValues { e -> e.value.maxOf { it.miss } }
+            for ((k, peakMiss) in infeasByShift.entries.sortedByDescending { it.value }) {
+                val sym = state.shifts.getOrNull(k)?.kigou ?: "$k"
+                val cands = (0 until p.S).filter { !p.canDo(it, k) }
+                    .sortedBy { demandLoad(it) }
+                    .take((peakMiss + 1).coerceAtLeast(2))
+                    .map { state.staff.getOrNull(it)?.name ?: "#$it" }
+                if (cands.isNotEmpty()) {
+                    relaxations.add("「$sym」は担当可能者が不足（ピーク不足${peakMiss}人）。$sym を ${cands.joinToString("・")}（稼働が少なめ）に担当追加すると解消に近づきます")
+                }
+            }
+        }
+        return CoverageDiagnosis(total, infeasible, fixable, list, relaxations)
     }
 
     fun analyze(

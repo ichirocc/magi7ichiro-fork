@@ -347,6 +347,18 @@ internal fun CoverageDiagnosisCard(ui: UiState) {
                 Text("ほか ${diag.shortfalls.size - 6} 枠（詳細はログ出力を参照）",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
+            if (diag.relaxations.isNotEmpty()) {
+                Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("解けるようにするには（担当追加の案）", color = cs.onTertiaryContainer, style = MaterialTheme.typography.titleSmall)
+                        for (r in diag.relaxations.take(4)) {
+                            Text("・$r", color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("※ 担当追加の提案です。設定変更は行いません（採否はご判断ください）。",
+                            color = cs.onTertiaryContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
         }
     }
 }
