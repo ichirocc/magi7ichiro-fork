@@ -43,7 +43,6 @@ data class UiState(
     val staffNames: List<String> = emptyList(),
     val staffGroupSymbols: List<String> = emptyList(),
     val shiftSymbols: List<String> = emptyList(),
-    val shiftNames: List<String> = emptyList(),   // [凡例] 記号に対応する名称（Dﾃ=夜勤 等）。shiftSymbols と同順。
     val shiftColorHex: List<String> = emptyList(),
     val shiftTextHex: List<String> = emptyList(),
     val violationColorHex: String = "",   // 違反の表示色（空＝テーマのエラー色）。shiftColors["__vio__"] に保存。

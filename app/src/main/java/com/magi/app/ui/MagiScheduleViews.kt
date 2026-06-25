@@ -485,8 +485,8 @@ internal fun ScheduleGrid(
                         style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 }
             }
-            // [シフト記号凡例] Dﾃ=夜勤 等。記号の意味を常時表示（名称が記号と異なる場合のみ）。
-            ShiftSymbolLegend(ui.shiftSymbols, ui.shiftNames)
+            // [シフト色キー] 記号をそのシフトの実色で表示。作成者は名称を熟知のため色対応を提供（色＋形）。
+            ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints {
                 val totalW = maxWidth
@@ -847,26 +847,26 @@ internal fun ViolationLegend(vioColor: Color) {
 }
 
 /**
- * [凡例] シフト記号の意味（Dﾃ＝夜勤 等）。記号だけでは意味が分からない初見ユーザー向けに、
- *  名称が記号と異なるシフトのみ「記号 ＝ 名称」を常時表示する。意味のある名称が無ければ何も出さない。
+ * [色キー] シフトの色凡例。各シフトの記号を「実際のグリッド色」で表示し、色→シフトを即座にひける。
+ *  シフト作成者は記号・名称を熟知している前提のため、記号=名称の説明ではなく、グリッドの着色を
+ *  解読するための色対応を提供する（色覚配慮で記号文字も併記＝色＋形の二重符号化）。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ShiftSymbolLegend(symbols: List<String>, names: List<String>) {
+internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, textHex: List<String>) {
+    val items = symbols.indices.filter { symbols[it].isNotBlank() }
+    if (items.isEmpty()) return
     val cs = MaterialTheme.colorScheme
-    val pairs = symbols.mapIndexedNotNull { i, sym ->
-        val nm = names.getOrNull(i)?.takeIf { it.isNotBlank() && it != sym }
-        if (nm != null) sym to nm else null
-    }
-    if (pairs.isEmpty()) return
     Column {
         Spacer(Modifier.height(8.dp))
-        Text("記号の意味", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        Text("シフトの色", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            pairs.forEach { (sym, nm) ->
-                Box(Modifier.background(cs.surfaceVariant, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {
-                    Text("$sym ＝ $nm", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            items.forEach { i ->
+                val bg = hexToColor(colorHex.getOrNull(i) ?: "")
+                val fg = hexToColor(textHex.getOrNull(i) ?: "")
+                Box(Modifier.background(bg, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
+                    Text(symbols[i], style = MaterialTheme.typography.labelSmall, color = fg, fontWeight = FontWeight.Medium)
                 }
             }
         }

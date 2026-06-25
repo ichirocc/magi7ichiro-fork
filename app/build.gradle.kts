@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 119
-        versionName = "3.13.0-violation-insight"
+        versionCode = 120
+        versionName = "3.14.0-shift-color-key"
     }
 
     buildTypes {

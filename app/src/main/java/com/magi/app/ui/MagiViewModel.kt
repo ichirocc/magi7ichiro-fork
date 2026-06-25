@@ -2076,7 +2076,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             staffNames = st.staff.map { it.name },
             staffGroupSymbols = groupSymbols,
             shiftSymbols = st.shifts.map { it.kigou },
-            shiftNames = st.shifts.map { it.name },
             shiftColorHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i) },
             shiftTextHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.pickTextColor(V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i)) },
             violationColorHex = st.shiftColors["__vio__"] ?: "",
