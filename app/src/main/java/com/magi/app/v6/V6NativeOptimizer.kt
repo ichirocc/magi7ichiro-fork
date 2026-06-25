@@ -24,8 +24,9 @@ import java.util.Random
  */
 enum class V6Algorithm { AUTO, V5, ALNS, RSI, RSI_PLUS, PORTFOLIO }
 
-/** ALNS の受理基準。SA=Boltzmann(従来) / GREAT_DELUGE=時間予定型 Great Deluge（水位以下を受理）。 */
-enum class AcceptMode { SA, GREAT_DELUGE }
+/** ALNS の受理基準。SA=Boltzmann(従来) / GREAT_DELUGE=時間予定型 Great Deluge（水位以下を受理） /
+ *  LAM_ADAPTIVE=Lam-Delosme適応冷却（受理率を目標値に追従させ温度を自己調整。Boltzmann受理を使う）。 */
+enum class AcceptMode { SA, GREAT_DELUGE, LAM_ADAPTIVE }
 
 data class V6OptimizerOptions(
     val algorithm: V6Algorithm = V6Algorithm.AUTO,
@@ -66,8 +67,13 @@ object V6NativeOptimizer {
     private val ROLE_EXPLORE = doubleArrayOf(1.0, 2.0, 0.5, 1.6, 0.6)
     internal fun roleExploreFor(i: Int): Double = if (i in ROLE_EXPLORE.indices) ROLE_EXPLORE[i] else 1.0
 
-    /** [論文活用] 並列仮説の一部に Great Deluge 受理を割当てて受理戦略を多様化（W0,W1,W3=SA / W2,W4=GD）。 */
-    internal fun roleAcceptFor(i: Int): AcceptMode = if (i == 2 || i == 4) AcceptMode.GREAT_DELUGE else AcceptMode.SA
+    /** [論文活用] 並列仮説で受理戦略を多様化（W0,W1=SA基準 / W2,W4=Great Deluge / W3=Lam適応冷却）。
+     *  W0 は常に SA でベースライン保持＝退化防止。 */
+    internal fun roleAcceptFor(i: Int): AcceptMode = when (i) {
+        2, 4 -> AcceptMode.GREAT_DELUGE
+        3 -> AcceptMode.LAM_ADAPTIVE
+        else -> AcceptMode.SA
+    }
 
     /**
      * 時間予定型 Great Deluge の水位（Burke, Bykov, Newall & Petrovic 2004）。
@@ -307,11 +313,24 @@ object V6NativeOptimizer {
             val opScore = DoubleArray(7)
             val opCnt = IntArray(7)
             var sinceUpdate = 0
+            // [Lam適応冷却] W3 (accept==LAM_ADAPTIVE) のみ使用。観測受理率 lamAcc を Lam-Delosme の
+            //   目標受理率(序盤0.44で平坦→中盤で線形降下→終盤≈0)に追従させ、温度 lamTemp を乗算的に自己調整。
+            //   温度パラメータの手調整が不要になる。リスタートごとに高温から再開。他ワーカ/W0には無影響。
+            var lamTemp = max(1.0, options.explore)
+            var lamAcc = 0.44
+            fun lamUpdate(accepted: Boolean) {
+                lamAcc = 0.97 * lamAcc + 0.03 * (if (accepted) 1.0 else 0.0)
+                val f = ((deadline - nowMs()).toDouble() / max(1.0, per * 1000.0)).coerceIn(0.0, 1.0)
+                val target = when { f > 0.85 -> 0.44; f > 0.15 -> 0.44 * (f - 0.15) / 0.70; else -> 0.0 }
+                lamTemp = (lamTemp * if (lamAcc > target) 0.998 else 1.002).coerceIn(0.03, 4.0)
+            }
             while (nowMs() < deadline && !shouldStop()) {
                 coroutineContext.ensureActive()
                 val op = rouletteSelect(opW, rng)
                 // [HF290 役割分担] explore 倍率で受理温度を調整（探索=受理寛容/精製=厳格）。explore=1.0 は従来と同一。
-                val temp = max(0.03, (deadline - nowMs()).toDouble() / max(1.0, per * 1000.0) * options.explore)
+                //   ただし LAM_ADAPTIVE は受理率追従の適応温度 lamTemp を使う（自己調整）。
+                val temp = if (options.accept == AcceptMode.LAM_ADAPTIVE) lamTemp
+                           else max(0.03, (deadline - nowMs()).toDouble() / max(1.0, per * 1000.0) * options.explore)
                 val curHard = curScore / 1_000_000L
                 val gdLevel = if (options.accept == AcceptMode.GREAT_DELUGE) {
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, per * 1000.0)).coerceIn(0.0, 1.0)
@@ -387,6 +406,7 @@ object V6NativeOptimizer {
                     if (moved) {
                         val improvedCur = ns < curScore
                         val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng)
+                        if (options.accept == AcceptMode.LAM_ADAPTIVE) lamUpdate(accepted)
                         if (accepted) {
                             cur[c0i][c0j] = eval.at(c0i, c0j)
                             if (c1i >= 0) cur[c1i][c1j] = eval.at(c1i, c1j)
@@ -438,6 +458,7 @@ object V6NativeOptimizer {
                     val ns = eval.score()
                     val improvedCur = ns < curScore
                     val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng)
+                    if (options.accept == AcceptMode.LAM_ADAPTIVE) lamUpdate(accepted)
                     if (accepted) {
                         cur = fixed; curScore = ns; curAug += moveAug
                         if (ns < globalScore) {
