@@ -162,9 +162,9 @@ private fun ColorPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onClose,
-        confirmButton = { DialogDismissButton(onClick = onReset, text = "既定に戻す") },
-        dismissButton = { DialogConfirmButton("閉じる", onClick = onClose) },
-        title = { Text("「$kigou」の色") },
+        confirmButton = { DialogConfirmButton("閉じる", onClick = onClose) },
+        dismissButton = { DialogDismissButton(onClick = onReset, text = "既定に戻す") },
+        title = { DialogHeader("「$kigou」の色", onClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

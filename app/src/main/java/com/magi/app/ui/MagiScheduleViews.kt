@@ -216,7 +216,7 @@ internal fun ShiftPickerSheet(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("$name ・ ${j + 1}日", style = MaterialTheme.typography.titleMedium)
+            DialogHeader("$name ・ ${j + 1}日", onDismiss)
             // 凝縮ステータス: 現在の割当 + 希望
             Surface(color = cs.surfaceVariant, shape = RoundedCornerShape(12.dp)) {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
@@ -1021,7 +1021,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("希望シフトの一括操作", style = MaterialTheme.typography.titleMedium)
+            DialogHeader("希望シフトの一括操作", onDismiss)
             Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
@@ -1103,8 +1103,8 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
         AlertDialog(
             onDismissRequest = { showStaff = false },
             confirmButton = {},
-            dismissButton = { TextButton(onClick = { showStaff = false }) { Text("閉じる") } },
-            title = { Text("職員を選ぶ") },
+            dismissButton = { DialogDismissButton(onClick = { showStaff = false }, text = "閉じる") },
+            title = { DialogHeader("職員を選ぶ", { showStaff = false }) },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     ui.staffNames.forEachIndexed { idx, n ->

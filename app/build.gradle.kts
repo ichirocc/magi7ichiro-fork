@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 142
-        versionName = "3.33.0-form-dialog-header"
+        versionCode = 143
+        versionName = "3.34.0-unify-sheets-pickers"
     }
 
     buildTypes {
