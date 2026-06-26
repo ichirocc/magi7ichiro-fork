@@ -654,7 +654,7 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}) {
             BreakdownGroup("必須（満たすべき）", listOf("groupViol", "pref", "covU", "c3n"), 2, ui, labels, expanded, onTapChip)
             if (!criticalOnly) {
                 BreakdownGroup("人数の範囲", listOf("low", "high", "apt"), 1, ui, labels, expanded, onTapChip)
-                BreakdownGroup("任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO"), 0, ui, labels, expanded, onTapChip)
+                BreakdownGroup("任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "fair"), 0, ui, labels, expanded, onTapChip)
             }
             expanded?.let { key ->
                 val cs = MaterialTheme.colorScheme

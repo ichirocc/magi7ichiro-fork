@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 138
-        versionName = "3.29.0-edit-tab-redesign"
+        versionCode = 139
+        versionName = "3.30.0-fair-in-breakdown"
     }
 
     buildTypes {
