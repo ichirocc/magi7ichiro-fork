@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 136
-        versionName = "3.27.0-group-range-skip-ws5"
+        versionCode = 137
+        versionName = "3.28.0-wish-subtab"
     }
 
     buildTypes {
