@@ -320,7 +320,7 @@ private fun W1Shell(
         onDismissRequest = onClose,
         confirmButton = { DialogConfirmButton("OK", enabled = okEnabled, onClick = onOk) },
         dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { Text(title) },
+        title = { DialogHeader(title, onClose) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),

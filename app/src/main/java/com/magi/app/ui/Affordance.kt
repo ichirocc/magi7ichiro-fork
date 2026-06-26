@@ -1,6 +1,7 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -8,15 +9,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -52,6 +56,17 @@ fun DeleteRowButton(onClick: () -> Unit, enabled: Boolean = true, text: String =
         modifier = Modifier.heightIn(min = 44.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
     ) { Text(text) }
+}
+
+/** フォーム系ダイアログの統一ヘッダー: タイトル＋右上に閉じる(✕)。閉じる操作を画面上部にも置き発見性を上げる。 */
+@Composable
+fun DialogHeader(title: String, onClose: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        IconButton(onClick = onClose) {
+            Icon(Icons.Filled.Close, contentDescription = "閉じる")
+        }
+    }
 }
 
 /** ダイアログの確定（肯定の主操作）: 塗りボタン。一本指向けに最低48dp高。 */

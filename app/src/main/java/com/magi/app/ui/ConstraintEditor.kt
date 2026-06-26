@@ -245,7 +245,7 @@ private fun Shell(
         onDismissRequest = onClose,
         confirmButton = { DialogConfirmButton("追加", enabled = addEnabled, onClick = onAdd) },
         dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { Text(title) },
+        title = { DialogHeader(title, onClose) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),

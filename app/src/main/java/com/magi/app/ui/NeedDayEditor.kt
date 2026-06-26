@@ -130,7 +130,7 @@ private fun NeedDayDialog(
             DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(k, day!! - 1, p1.trim(), p2.trim()) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { Text("日別の必要人数") },
+        title = { DialogHeader("日別の必要人数", onClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("シフト", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

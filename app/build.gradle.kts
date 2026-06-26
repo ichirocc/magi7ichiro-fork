@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 141
-        versionName = "3.32.0-dialog-buttons-onefinger"
+        versionCode = 142
+        versionName = "3.33.0-form-dialog-header"
     }
 
     buildTypes {

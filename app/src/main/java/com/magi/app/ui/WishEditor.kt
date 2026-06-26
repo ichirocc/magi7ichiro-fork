@@ -141,7 +141,7 @@ private fun WishDialog(
             DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(i, day!! - 1, k) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { Text("希望シフト") },
+        title = { DialogHeader("希望シフト", onClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("スタッフ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -158,7 +158,7 @@ internal fun StaffRangeDialog(
             DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(i, k, lo.trim(), hi.trim()) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { Text("個人別の回数") },
+        title = { DialogHeader("個人別の回数", onClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("スタッフ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -271,7 +271,7 @@ internal fun GroupRangeDialog(
             DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(g, k, lo.trim(), hi.trim()) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { Text("グループ単位の回数") },
+        title = { DialogHeader("グループ単位の回数", onClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("グループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
