@@ -210,6 +210,7 @@ colorScheme に無い「意味色／シフト色」を一元化する。`@Immuta
 ```
 - `ModalBottomSheet`。上に title(`titleLarge`)、本文は入力欄を目立たせる、下に明確な確定/取消ボタン（最小48dp）。
 - 用途: スタッフ編集・希望編集・必要人数編集・色設定。既存 `ShiftPickerSheet` と作法を統一。
+- **実装メモ（v3.35）**: 専用 `MagiEditSheet` 名では作らず、**§4.14 の `DialogHeader`＋共有3ボタン＋`W1Shell`** で同等を実現（タイトル＋右上✕／確定=右・取消=左・48dp）。ボトムシート（`ShiftPickerSheet`/`WishBulkSheet`）も `DialogHeader` を共有し作法統一済み。
 
 ### 4.11 MagiColorPickerRow ⬜
 ```kotlin
@@ -234,11 +235,21 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 - `background` 地 / 上部に大タイトル / 縦スクロール `Column(padding(horizontal=screenH), spacedBy(section))`。
 - 既存の各タブ Column ラッパを段階的に置換。
 
+### 4.14 ポップアップ共有部品 ✅（`Affordance.kt`・全ダイアログ/シート/ピッカーの正典）
+```kotlin
+@Composable fun DialogHeader(title: String, onClose: () -> Unit)          // タイトル＋右上✕
+@Composable fun DialogConfirmButton(text: String, onClick: () -> Unit, enabled: Boolean = true) // 確定=塗り
+@Composable fun DialogDismissButton(onClick: () -> Unit, text: String = "キャンセル")            // 取消=枠線
+@Composable fun DialogDangerButton(text: String, onClick: () -> Unit, enabled: Boolean = true)  // 破壊的=⚠＋エラー色
+```
+- **`DialogHeader`**: `Row[ Text(title, titleLarge, weight 1f) + IconButton(Close) ]`。フォーム系ダイアログ・ボトムシート・ピッカーのタイトルスロットに置き、ドラッグ不要の明示的な閉じる導線を上部に与える（no-drag方針）。単純な確認ダイアログ（削除の確認 等）には付けず素のタイトル。
+- **3ボタン**: いずれも `Modifier.heightIn(min = 48.dp)`。`AlertDialog` の `confirmButton`=右・`dismissButton`=左に割り当てることで、Material標準により**確定=右／取消=左**が全画面で固定。`DialogDangerButton` は `Icons.Filled.Warning`(18dp)＋エラー色で破壊的操作（削除/全リセット/すべて削除）に使用。
+- **規約**: ダイアログ/シートのボタンに生の `Button`/`TextButton` を直書きしない（左右逆・サイズ不揃い・危険色の付け忘れを防ぐ）。多択（CSV取込の5択等）は `DialogConfirmButton` を縦積みにし、選択肢に✓は付けない（選択であり確定ではない）。
+- **フォーム外殻 `W1Shell`**(`Ws1Editor.kt`): `AlertDialog`＋縦スクロール本文の共通殻。`DialogHeader`＋3ボタンを内包し、シフト/グループ/スタッフ/一括追加の各フォームで共有。
+- 適用: 全 `AlertDialog`（約10箇所）＋`W1Shell`（フォーム4種）＋ボトムシート2種（`ShiftPickerSheet`/`WishBulkSheet`）＋ピッカー（色/職員）＝**全ポップアップ**。
+
 ---
 
-## 5. 画面反映（Phase C）
-
-### 5.0 画面カタログ（モック）
 
 > 下図は **トークン正確モック**（`MainActivity.kt`/`MagiApp.kt` の実トークンで描画）であり、
 > 実機スクリーンショットではない。`tools/mock_render_dogfood.py` で再生成できる
@@ -272,14 +283,12 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 ![カレンダー](screens/04_calendar.png)
 
 ### 5.3 編集 🟡
-一覧=`MagiListRow` / 追加・編集=`MagiEditSheet` / 色=`MagiColorPickerRow` /
-制約レベル=`MagiSegmentedControl` or `MagiLabeledSlider`。`WishApplyCard`✅（確認ダイアログ下図）/ `SetupGuideCard`🟡。
+3サブタブ **今月の調整／シフト希望／基本マスター**（`MagiSegmentedControl`→`editScope`）。基本マスターは**5節に集約**（①シフト・グループ・スタッフ ②スキルグループ ③回数[目標/個人/グループ] ④人数と組み合わせ[C41/C42/C41s/C42s] ⑤並び・くり返し[cons系]）。各節先頭に `SectionNote`。フォーム/ダイアログは `DialogHeader`＋共有3ボタンで統一（§4.14）。`WishApplyCard`✅。一覧の `MagiListRow` 化は段階移行。
 
 ![ダイアログ](screens/05_dialog.png)
 
 ### 5.4 分析 🟡
-上部 **`MagiScoreGauge`(人員充足率)** ✅ / 中段 `BigStat` グリッド(HARD/Guard/充足) /
-リスクチップ(日別不足) / 下段 負荷プロフィール。`重大のみ`フィルタ✅。`MagiListRow` 化は⬜。
+上部に **一般/プロ** 切替(`proMode`)。`OverviewDashboard`(ようす) / `CheckSummaryView`(チェック概要) / `BreakdownCard`(**違反内訳=全18種/100%**・fair含む) / `BottleneckCard` / `FixSuggestionCard`(1手提案)。`重大のみ`フィルタ✅。プロ時のみ `V6DashboardCard`＋`WeightTableCard`。プロ表示は冗長な説明文を非表示（構造的不足ヒント・状態・実データは常時）。
 
 ### 5.5 設定 ✅
 外観(`AppearanceCard`：自動/明/暗/UD ＋片手 ＋かんたん/プロ・`MagiSegmentedControl`化✅) /
