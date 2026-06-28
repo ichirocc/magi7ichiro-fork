@@ -207,10 +207,16 @@ def schedule7():
             elif sev == 1:
                 dashed_rrect(d, cxp, cyp, cw, chh, C["error"], ow=dp(2))
                 d.ellipse([cxp+cw-dp(9), cyp+dp(2), cxp+cw-dp(2), cyp+dp(9)], outline=C["error"], width=dp(2))  # ring dot
-            wst = {(0, 1): 1, (2, 0): 1, (3, 1): 1, (1, 3): 0, (4, 5): 0}.get((ri, j))
-            if wst is not None:
-                wcol = C["tertiary"] if wst else "#EC4899"
-                d.ellipse([cxp+cw-dp(11), cyp+chh-dp(11), cxp+cw-dp(3), cyp+chh-dp(3)], fill=wcol)  # wish badge (bottom-right): green=met / pink=unmet
+            wmap = {(0, 1): (1, "日"), (2, 0): (1, "夜"), (3, 1): (1, "有"), (1, 3): (0, "夜"), (4, 5): (0, "休")}
+            wd = wmap.get((ri, j))
+            if wd is not None:
+                wmet, wsym = wd
+                wcol = C["tertiary"] if wmet else "#EC4899"
+                bw, bhh = dp(15), dp(13)
+                bx, by = cxp+cw-bw-dp(1), cyp+chh-bhh-dp(1)
+                rrect(d, bx, by, bw, bhh, 4, wcol)  # wish badge (bottom-right): green=met / pink=unmet
+                d.rounded_rectangle([bx, by, bx+bw, by+bhh], radius=dp(4), outline=C["surface"], width=dp(1))
+                center(d, bx+bw//2, by+dp(1), wsym, 8, "#FFFFFF", True)  # wish symbol in white
     # legend
     ly = gy + 5*(chh+gap) + dp(6)
     rrect(d, gx, ly, dp(18), dp(14), 4, None, outline=C["error"], ow=dp(2))
@@ -218,9 +224,9 @@ def schedule7():
     dashed_rrect(d, gx+dp(150), ly, dp(18), dp(14), C["error"], ow=dp(2))
     text(d, gx+dp(174), ly, "破線＝要調整", 11, C["onSurfaceVariant"])
     ly2 = ly + dp(22)
-    d.ellipse([gx+dp(4), ly2+dp(2), gx+dp(14), ly2+dp(12)], fill=C["tertiary"])
+    rrect(d, gx+dp(4), ly2+dp(1), dp(13), dp(11), 3, C["tertiary"])
     text(d, gx+dp(24), ly2, "緑＝希望どおり（反映済）", 11, C["onSurfaceVariant"])
-    d.ellipse([gx+dp(180), ly2+dp(2), gx+dp(190), ly2+dp(12)], fill="#EC4899")
+    rrect(d, gx+dp(180), ly2+dp(1), dp(13), dp(11), 3, "#EC4899")
     text(d, gx+dp(200), ly2, "桃＝希望が未反映", 11, C["onSurfaceVariant"])
     bottom_bars(d, H, 1, "▶  最適化する")
     return img
