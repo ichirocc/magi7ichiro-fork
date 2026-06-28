@@ -171,7 +171,7 @@ def schedule7():
     H = dp(760); img, d = new_canvas(760)
     topbar(d, "要確認", C["amberBg"], C["amberFg"])
     x, y, w = dp(16), dp(70), W - dp(32)
-    ch = dp(420)
+    ch = dp(456)
     card(d, x, y, w, ch)
     text(d, x+dp(16), y+dp(14), "勤務表", 17, C["onSurface"], True)
     segmented(d, x+dp(16), y+dp(44), w-dp(32), ["7日表示", "カレンダー", "1ヶ月"], 0)
@@ -207,12 +207,21 @@ def schedule7():
             elif sev == 1:
                 dashed_rrect(d, cxp, cyp, cw, chh, C["error"], ow=dp(2))
                 d.ellipse([cxp+cw-dp(9), cyp+dp(2), cxp+cw-dp(2), cyp+dp(9)], outline=C["error"], width=dp(2))  # ring dot
+            wst = {(0, 1): 1, (2, 0): 1, (3, 1): 1, (1, 3): 0, (4, 5): 0}.get((ri, j))
+            if wst is not None:
+                wcol = C["tertiary"] if wst else "#EC4899"
+                d.ellipse([cxp+cw-dp(11), cyp+chh-dp(11), cxp+cw-dp(3), cyp+chh-dp(3)], fill=wcol)  # wish badge (bottom-right): green=met / pink=unmet
     # legend
     ly = gy + 5*(chh+gap) + dp(6)
     rrect(d, gx, ly, dp(18), dp(14), 4, None, outline=C["error"], ow=dp(2))
     text(d, gx+dp(24), ly, "実線＝必須違反", 11, C["onSurfaceVariant"])
     dashed_rrect(d, gx+dp(150), ly, dp(18), dp(14), C["error"], ow=dp(2))
     text(d, gx+dp(174), ly, "破線＝要調整", 11, C["onSurfaceVariant"])
+    ly2 = ly + dp(22)
+    d.ellipse([gx+dp(4), ly2+dp(2), gx+dp(14), ly2+dp(12)], fill=C["tertiary"])
+    text(d, gx+dp(24), ly2, "緑＝希望どおり（反映済）", 11, C["onSurfaceVariant"])
+    d.ellipse([gx+dp(180), ly2+dp(2), gx+dp(190), ly2+dp(12)], fill="#EC4899")
+    text(d, gx+dp(200), ly2, "桃＝希望が未反映", 11, C["onSurfaceVariant"])
     bottom_bars(d, H, 1, "▶  最適化する")
     return img
 
@@ -226,7 +235,7 @@ def picker():
     img.paste(Image.alpha_composite(img.convert("RGBA"), scrim).convert("RGB"), (0, 0))
     d = ImageDraw.Draw(img)
     # bottom sheet
-    sh = dp(360); sy = dp(760) - sh
+    sh = dp(470); sy = dp(760) - sh
     d.rounded_rectangle([0, sy, W, dp(760)+dp(28)], radius=dp(28), fill=C["surface"])
     rrect(d, W//2-dp(18), sy+dp(10), dp(36), dp(5), 3, C["outline"])
     text(d, dp(20), sy+dp(28), "佐藤 美和 ・ 12日 のシフト", 17, C["onSurface"], True)
@@ -234,9 +243,12 @@ def picker():
     d.line([_xx, _xy, _xx + dp(18), _xy + dp(18)], fill=C["onSurfaceVariant"], width=dp(2))
     d.line([_xx + dp(18), _xy, _xx, _xy + dp(18)], fill=C["onSurfaceVariant"], width=dp(2))
     text(d, dp(20), sy+dp(56), "担当できるシフトから選んでください（指1本・親指届く下段）", 12, C["onSurfaceVariant"])
+    segmented(d, dp(20), sy+dp(82), W-dp(40), ["割当を変更", "希望を変更"], 0)
+    rrect(d, dp(20), sy+dp(138), W-dp(40), dp(48), 16, C["primary"])
+    center(d, W//2, sy+dp(152), "希望どおり 夜 にする", 15, C["onPrimary"], True)
     tiles = [("日","#22C55E",True),("夜","#F59E0B",False),("明","#A855F7",False),
              ("休","#9CA3AF",False),("有","#3B82F6",False),("P","#EC4899",False)]
-    tx0, ty0 = dp(20), sy+dp(88); tw = (W-dp(40)-2*dp(10))//3; th = dp(64)
+    tx0, ty0 = dp(20), sy+dp(196); tw = (W-dp(40)-2*dp(10))//3; th = dp(64)
     for i,(s,col,seld) in enumerate(tiles):
         r,c = divmod(i,3)
         tx = tx0 + c*(tw+dp(10)); ty = ty0 + r*(th+dp(12))
