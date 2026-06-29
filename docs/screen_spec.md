@@ -302,6 +302,62 @@
 
 ---
 
+## A. 実装基盤（他AIが本アプリを再現するための詳細）
+
+本章は画面挙動（§00–§12）を実装へ落とす土台。**色・余白・字・角丸・サイズの具体値と共通コンポーネントAPIは同梱の `magi_design_system.md` §2–§4 が正典**（本書と併読が前提）。本章はそれに加え再現に不可欠な「アプリ構造／データモデル／キー規約／永続化」を定義する。スタック＝Android（単一Activity・Jetpack Compose・Material3・Kotlin・MVVM／`MagiViewModel`）。
+
+### A.1 アプリシェルとナビゲーション
+- **構成**: 最上部 `MagiTopBar`（ロゴ＋状態チップ＝未読込／実行中(青)／配布可(緑)／要確認(黄)）、本文、最下部に **コマンドバー** `BottomCommandBar`（主操作「最適化する」＋控えめな補助1つ。**実行中は「■ 計算を止める」(赤)** に差し替え）と **5タブ** `MagiBottomNav`（**ホーム / 勤務表 / 編集 / 分析 / 設定** ＝ tab 0..4）。
+- **画面間で共有する状態（`rememberSaveable`）**: `tab`(0–4)、`proMode`(false=かんたん/true=プロ。外観と分析で共有)、`editScope`(0=今月の調整/1=シフト希望/2=基本マスター)、勤務表内 `gridMode`(0=7日/1=カレンダー/2=1ヶ月。proMode時は2が既定)。
+- **テーマ**: `themeMode`=自動/明/暗/UD。`oneHand`(片手モード)で内容を下方寄せ。タップ最小48dp。
+
+### A.2 データモデル（＝JSON入出力スキーマ）
+ドメイン状態 `MagiState`（`model/MagiState.kt`）がそのままJSONへ往復（未対応キーは `extras` に保持しロスレス）。
+
+**MagiState（ドメイン・入力）**
+| フィールド | 型 | 意味 |
+|---|---|---|
+| `startDate`,`endDate` | String | 期間（曜日整列に使用） |
+| `shifts` | List\<Shift\> | 勤務種類 |
+| `groups` | List\<Group\> | ユニット（担当可否・covUに使用） |
+| `staff` | List\<Staff\> | 職員 |
+| `use2Patterns` | Bool | 平日/休日など2系統の必要人数を使うか |
+| `groupShift` | List\<List\<Int\>\> | 群×シフトの担当可否(0/1) |
+| `groupShiftApt` | List\<List\<String\>\> | 群×シフトの「1人あたり目標回数」(空=なし) |
+| `schedule` | List\<List\<Int\>\> | `schedule[i][j]`＝職員i・日jの**シフトidx**（<0＝未割当/公休） |
+| `wishes` | Map\<String,Int\> | 希望。キー `"i,j"`→シフトidx |
+| `staffRange` | Map\<String,Range\> | 個人別回数の下限上限。キー `"i,k"`(職員i・シフトk) |
+| `needDay1`,`needDay2` | Map\<String,String\> | 日別必要人数（系統1/2） |
+| `cons1`..`cons42` | List\<CxRow\> | 制約（下記サブ型） |
+| `skillGroups`,`cons41s`,`cons42s` | … | スキルグループ（第2分類）とそのC41/C42 |
+| `shiftColors` | Map\<String,String\> | シフト記号→"#rrggbb"（表示のみ。`"__vio__"`=違反色） |
+
+**サブ型**
+- `Shift(name, kigou, need1, need2)` … 表示名・記号・必要人数(系統1/2)
+- `Group(name, kigou)` ／ `Staff(name, groupIdx, skillIdx)`（groupIdx=ユニット＝担当可否、skillIdx=スキル群＝C41s/C42s専用）／ `Range(lo, hi)`
+- `C1Row(day1, shiftKigou, day2)` … day1日窓でシフトを day2 回以上（窓要件・職員ごと）
+- `C2Row(shiftKigou, count)` … 個人の合計回数
+- `C3Row(pattern: List<String>)` … 並びパターン（cons3=必須/cons3n=禁止/cons3m=推奨/cons3mn=回避で同型）
+- `C41Row(groupKigou, shiftKigou, l, u)` … 群のシフトを1日 [l,u] 人
+- `C42Row(g1Kigou, g2Kigou, s1Kigou, s2Kigou)` … 群g1のs1と群g2のs2は同日併存不可
+
+**UiState（UI・表示用、`ui/MagiUiState.kt`）**: ドメインから導出した表示集約。主なもの＝`loaded/running/hasResult`、`bestHard/bestSoft/weightedScore/totalViolations`、`breakdown`(18種→件数)、`violationCells`(キー`"i,j"`)／`needViolations`(`"k,j"`)／`countViolations`(`"i,k"`)→各説明文、`schedule/wishes/resultSchedule/liveSchedule`、`shiftSymbols/shiftColorHex/shiftTextHex/staffNames/staffGroupSymbols`、`fixSuggestions`(変更/交換の1手)、`satisfaction/copilotHint/coverageDiag/settingIssues`、`logs/opLog`、`canUndo/canRedo/workers/budgetSec/softPolish/v6Algorithm`。
+
+**キー規約（重要）**: セル＝`"i,j"`（i=職員index, j=日index, 0始まり）／回数＝`"i,k"`（k=シフトindex）／被覆＝`"k,j"`。`schedule[i][j]` のシフトidx `<0` は未割当（公休）。希望バッジは `wishes["i,j"]` と `schedule[i][j]` の一致で 反映済(緑)/未反映(桃) を判定（§03）。
+
+### A.3 デザイン基盤（正典：magi_design_system.md §2–§4）
+具体値とAPIは design_system 参照。**頻用トークンの要点**：タップ48dp・リスト行56dp・シフトタイル56dp・カレンダー日セル64dp／主操作は下部固定・横スクロール禁止／色＋形の二重符号化（HARD実線＋塗りドット・SOFT破線＋中空リング）／意味色＝実行中:青・配布可/緑系:tertiary・要確認:amber・未反映希望:桃 `#EC4899`・破壊的:error。共通部品＝`MagiSegmentedControl`／`MagiTagChip`／`MagiListRow`／`CollapsibleSection`／`SectionNote`／**`DialogHeader`＋3ダイアログボタン（§4.14：確定=右/取消=左/危険⚠・48dp）**。
+
+### A.4 最適化・制約評価（正典：§02・§08b）
+- **違反18種・重み・違反箇所**＝§08b（`MirrorKeys.weights` が唯一の真実、`weightedScore` に加算。HARD=守るべき約束／SOFT=できれば）。
+- **探索**＝§02：最大5並列の仮説（役割分担で多様化・**最良採用で退化なし**）、SA＋ALNS＋GLS＋Tabu＋Path Relinking＋Great Deluge、停滞脱出はUCB1多腕バンディット、**早期停止**（予算1/4の停滞で終了）、**keep-best 研磨**（C1窓/C3連結スワップ・日内Hungarian・平準化）。前景サービス＋約8秒スナップショットで中断耐性。
+
+### A.5 永続化・入出力
+- **自動保存** `magi_autosave.json`（編集を逐次・背景遷移ON_STOP/ON_PAUSEで即時flush・制約編集も対象）。**実行マーカー** `magi_run_marker.json`／**背景最良** `magi_bg_best.json`（中断復帰・「途中結果から再開」）。30段Undo＋Redo。
+- **I/O**: JSON開く/保存はOSファイルピッカー（SAF）。CSVは文字コード自動判定（妥当UTF-8はそのまま/不正はCP932復号）、勤務表テンプレCSVの丸ごと取込（勤務表/希望を選択）、コンポーネント別取込/出力（スタッフは upsert・氏名照合は空白/先頭BOM無視）。固定セル仕様と詳細は§09。
+
+---
+
 ## 品質ゲート（全画面共通・テイスト導入時の必須原則）
 
 1. タップ領域は広く（最小48dp、リスト行56dp、シフトタイル56dp、カレンダー日セル64dp）。
