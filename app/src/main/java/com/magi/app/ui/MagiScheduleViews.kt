@@ -50,6 +50,13 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import java.time.LocalDate
@@ -443,7 +450,7 @@ internal fun ScheduleGrid(
             Spacer(Modifier.height(8.dp))
             // 表示切替: §4.5 セグメント（7日=大きく編集 / カレンダー=月の俯瞰 / 1ヶ月=全セル色確認）
             MagiSegmentedControl(
-                options = listOf("7日表示", "カレンダー", "1ヶ月"),
+                options = listOf("7日表示", "カレンダー", "1ヶ月", "集中"),
                 selected = gridMode,
                 onSelect = { gridMode = it },
             )
@@ -503,7 +510,9 @@ internal fun ScheduleGrid(
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints {
                 val totalW = maxWidth
-                if (gridMode == 0) {
+                if (gridMode == 3) {
+                    MagiFocusCylinder(ui, onCellClick)
+                } else if (gridMode == 0) {
                     val staffW = 64.dp
                     val sumW = 44.dp   // [集計] 右端「勤務」計の列幅
                     val cellW = ((totalW - staffW - sumW) / win).coerceIn(34.dp, 80.dp)
@@ -1386,4 +1395,128 @@ private fun TallyBox(
             contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
         ) { content() }
     }
+}
+
+// ===== 集中モード（HUD円柱フィッシュアイ・カレンダー）=====
+// MAGI HUD コンセプトから移植：日付を円柱面に投影し焦点日を虫眼鏡状に拡大。
+// x(u)=RAD*sin(clamp(u*ANG))+AMP*tanh(u/WID) / 明度=0.64+0.36*cos。遠い日ほど細く暗い。
+// 違反枠(HARD実線/SOFT破線)・違反ドット・希望ドット(緑=反映/桃=未反映)は既存ロジックを流用。
+@Composable
+internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val days = ui.days.coerceAtLeast(1)
+    val staffCount = ui.schedule.size
+    val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+    val tm = rememberTextMeasurer()
+    var targetDay by rememberSaveable { mutableStateOf(0) }
+    val td = targetDay.coerceIn(0, days - 1)
+    val focusF by animateFloatAsState(targetValue = td.toFloat(), animationSpec = tween(360), label = "focusF")
+
+    val ANG = (7.7 * kotlin.math.PI / 180.0).toFloat()
+    val RAD = 205f; val AMP = 5.8f; val WID = 0.35f
+    val HALF = (kotlin.math.PI / 2.0).toFloat()
+    fun cl(x: Float) = if (x < -HALF) -HALF else if (x > HALF) HALF else x
+    fun sx(u: Float) = RAD * kotlin.math.sin(cl(u * ANG)) + AMP * kotlin.math.tanh(u / WID)
+    fun br(u: Float) = 0.64f + 0.36f * kotlin.math.cos(cl(u * ANG))
+
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val rowHpx = with(dens) { 40.dp.toPx() }
+    val headHpx = with(dens) { 26.dp.toPx() }
+    val nameWpx = with(dens) { 60.dp.toPx() }
+    val scale = dens.density
+    val totalH = with(dens) { (headHpx + rowHpx * staffCount).toDp() }
+
+    Column {
+        Text(
+            "\u2299 集中モード：横ドラッグ/前後で日付を回し、1日に集中。遠い日ほど細く暗く。焦点の日のセルをタップで編集。",
+            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(onClick = { targetDay = (td - 1).coerceAtLeast(0) }, enabled = td > 0, modifier = Modifier.height(48.dp)) { Text("\u25c0 前日") }
+            Text("${td + 1}日 / 全${days}日", style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            Button(onClick = { targetDay = (td + 1).coerceAtMost(days - 1) }, enabled = td < days - 1, modifier = Modifier.height(48.dp)) { Text("翌日 \u25b6") }
+        }
+        Spacer(Modifier.height(8.dp))
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(totalH)
+                .pointerInput(days, staffCount) {
+                    detectTapGestures { off ->
+                        val cur = targetDay.coerceIn(0, days - 1)
+                        val centerX = nameWpx + (size.width.toFloat() - nameWpx) / 2f
+                        var best = cur; var bd = Float.MAX_VALUE
+                        for (d in 0 until days) {
+                            val dd = kotlin.math.abs((centerX + sx(d - focusF) * scale) - off.x)
+                            if (dd < bd) { bd = dd; best = d }
+                        }
+                        val i = ((off.y - headHpx) / rowHpx).toInt()
+                        if (best == cur && i in 0 until staffCount) onCellClick(i, best) else targetDay = best
+                    }
+                }
+                .pointerInput(days) {
+                    var acc = 0f
+                    detectHorizontalDragGestures(onDragEnd = { acc = 0f }) { _, amt ->
+                        acc += amt
+                        val cur = targetDay.coerceIn(0, days - 1)
+                        if (acc > 26f) { targetDay = (cur - 1).coerceAtLeast(0); acc = 0f }
+                        else if (acc < -26f) { targetDay = (cur + 1).coerceAtMost(days - 1); acc = 0f }
+                    }
+                }
+        ) {
+            val centerX = nameWpx + (size.width - nameWpx) / 2f
+            for (d in 0 until days) {
+                val u = d - focusF
+                if (kotlin.math.abs(u) > 13f) continue
+                val cx = centerX + sx(u) * scale
+                val w = (sx(u + 0.5f) - sx(u - 0.5f)) * scale
+                if (w < 0.7f) continue
+                val bri = br(u)
+                val left = cx - w / 2f
+                val cr = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
+                if (w > 13f) {
+                    val r = tm.measure((d + 1).toString(), TextStyle(fontSize = 9.sp, color = cs.onSurfaceVariant))
+                    drawText(r, topLeft = Offset(cx - r.size.width / 2f, headHpx / 2f - r.size.height / 2f))
+                }
+                for (i in 0 until staffCount) {
+                    val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
+                    val top = headHpx + i * rowHpx
+                    val ch = rowHpx - 2f
+                    val base = if (k < 0) cs.surfaceVariant else hexToColor(ui.shiftColorHex.getOrNull(k) ?: "")
+                    drawRoundRect(color = dimColor(base, bri), topLeft = Offset(left, top + 1f), size = Size(maxOf(1f, w - 1f), ch), cornerRadius = cr)
+                    if (w > 22f && k >= 0) {
+                        val fg = hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")
+                        val r = tm.measure(ui.shiftSymbols.getOrNull(k) ?: "", TextStyle(fontSize = 13.sp, color = fg))
+                        drawText(r, topLeft = Offset(cx - r.size.width / 2f, top + ch / 2f - r.size.height / 2f))
+                    }
+                    val vv = ui.violationCells["$i,$d"]
+                    if (vv != null) {
+                        val hard = isHardCellViolation(vv)
+                        val st = if (hard) Stroke(width = 2f) else Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)))
+                        drawRoundRect(color = vioColor, topLeft = Offset(left, top + 1f), size = Size(maxOf(1f, w - 1f), ch), cornerRadius = cr, style = st)
+                        if (w > 16f) {
+                            val c = Offset(left + w - 6f, top + 6f)
+                            if (hard) drawCircle(vioColor, 4f, c) else { drawCircle(cs.surface, 4f, c); drawCircle(vioColor, 4f, c, style = Stroke(1.5f)) }
+                        }
+                    }
+                    val wk = ui.wishes["$i,$d"]
+                    if (wk != null && w > 18f) {
+                        drawCircle(if (wk == k) cs.tertiary else Color(0xFFEC4899), 4f, Offset(left + 6f, top + ch - 6f))
+                    }
+                }
+            }
+            for (i in 0 until staffCount) {
+                val top = headHpx + i * rowHpx
+                drawRect(cs.surface, topLeft = Offset(0f, top), size = Size(maxOf(1f, nameWpx - 2f), rowHpx))
+                val r = tm.measure(ui.staffNames.getOrNull(i) ?: i.toString(), TextStyle(fontSize = 11.sp, color = cs.onSurface), maxLines = 1)
+                drawText(r, topLeft = Offset(4f, top + rowHpx / 2f - r.size.height / 2f))
+            }
+        }
+    }
+}
+
+private fun dimColor(c: Color, b: Float): Color {
+    val bb = if (b < 0f) 0f else if (b > 1f) 1f else b
+    return Color(red = c.red * bb, green = c.green * bb, blue = c.blue * bb, alpha = c.alpha)
 }
