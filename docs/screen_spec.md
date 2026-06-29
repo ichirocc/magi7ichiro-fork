@@ -410,6 +410,28 @@
 - **設定(tab4)**: ① `AppearanceCard`(自動/明/暗/UD・片手・かんたん/プロ) → ② `ShiftColorCard`(シフト色) → ③ `DataActionsCard`(JSON/CSV/チェック) → ④ `SettingsCard`(最適化設定＝並列/時間/方式/研磨/版) → ⑤ `AdvancedSettingsSection`(折りたたみ・既定閉＝`V6DashboardCard`＋`LogsCard`＋`ColorSettingsView`)。§09/§12。
 - **共通**: 全タブ上に `MagiTopBar`(状態チップ)・下に `BottomCommandBar`(主操作/実行中は停止)＋`MagiBottomNav`(5タブ)。ポップアップ＝シフト選択シート(§04)・希望反映確認(§10)・中断復帰バナー(§11)。全ポップアップは `DialogHeader`＋共有3ボタン(品質ゲート#8)。
 
+### A.8 主要画面の実寸レイアウト（pixel-level）
+dpはCompose密度独立単位。未指定の余白はトークン(§A.3)に従う。
+
+**共通（カード／行）**: カード＝角丸20dp・内余白16dp・カード間20dp・画面左右16dp。リスト行56dp。セグメント／主ボタンは横幅いっぱい・高さ48dp以上。
+
+**勤務表 7日グリッド**（`gridMode==0`）: 縦に〔セグメント → Spacer8 → 行[「◀ 前」(h48) ／ 期間(weight1) ／ 「次 ▶」(h48)] → Spacer10 → 表〕。表は3列：
+- **氏名列** `staffW = 64dp`（見出し「スタッフ」＋各行 `StaffCell`）。
+- **日列（中央）**: 日見出し行（各 `HeaderCell` 幅=cellW）＋各職員行（`Cell`×表示日数）。**セル幅 `cellW = (総幅 − 64 − 44) ÷ 表示日数`、下限34dp・上限80dp**。
+- **集計列** `sumW = 44dp`（見出し「勤務」＋各行の勤務日数）。
+- 行の高さ＝セル52dp。集計/補助の小行＝30dp。
+
+**セル `Cell` の5層実寸**（既定 幅52dp × 高52dp・外padding2dp）:
+1. 内側ボックス＝角丸 **12dp**・背景＝シフト色。
+2. シフト記号＝`titleMedium`(17sp)・中央・1行。
+3. 違反枠＝`violationBorder(12dp)`（HARD実線／SOFT破線）。
+4. 違反ドット＝**右上**(`TopEnd`)・padding3dp・**11dp**・角丸6dp。HARD＝vioColor塗り＋1.5dpのsurface縁／SOFT＝surface塗り＋2.5dpのvioColor縁（中空リング）。
+5. 希望バッジ＝**右下**(`BottomEnd`)・padding1dp・角丸4dp・1dpのsurface縁・横padding3dp・中に希望記号（`labelSmall`・白・1行）。緑＝反映済／桃 `#EC4899`＝未反映。
+
+**シフト選択シート**（§04）: `ModalBottomSheet`。`DialogHeader`(タイトル＋右上✕) → 凝縮ステータス → 割当/希望トグル → (割当時)「希望どおり {記号} にする」大ボタン → シフトタイル（高さ約56dp・3列・親指届く下段に集約） → 下部に48dpボタン。
+
+**1ヶ月マトリクス**（`gridMode==2`）: 行＝極小セル（高さ約20dp・背景色＋違反枠のみ・記号は極小）。画面幅に圧縮し横スクロールなし。プロは複数選択→一括設定。**カレンダー**（`gridMode==1`）は週列の月グリッド・日セルに色ピル＋不足赤。
+
 ---
 
 ## 品質ゲート（全画面共通・テイスト導入時の必須原則）
