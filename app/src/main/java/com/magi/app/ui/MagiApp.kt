@@ -477,6 +477,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。
                     if (proMode) V6DashboardCard(ui.v6)
                     if (proMode) WeightTableCard()   // [N2/⛏11] スコアの重み根拠（最適化器と一致）
+                    BossCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) })
                     OverviewDashboard(ui, proMode)
                     CheckSummaryView(ui, proMode)
                     BreakdownCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, proMode = proMode)

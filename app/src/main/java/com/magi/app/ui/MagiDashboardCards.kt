@@ -229,6 +229,18 @@ internal fun OperatorNextActionCard(
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // [HUD段2] フェーズ名バッジ（探索/完成/狩猟）。既存の状態分岐に名前を与えるだけ。
+            //   未最適化→探索 / HARD=0→完成 / HARD>0(infeasible含む)→狩猟。実行中は非表示（カードが別表示）。
+            if (!ui.running) {
+                val (phName, phColor) = when {
+                    !ui.hasResult -> "探索" to MagiAccent.blue
+                    ui.bestHard == 0L -> "完成" to MagiAccent.green
+                    else -> "狩猟" to MagiAccent.orange
+                }
+                Box(Modifier.background(phColor, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
+                    Text(phName, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
             Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
             // 数字は必ず言葉つきで意味を添える（operator_ux §6）。
             Text(
@@ -845,6 +857,58 @@ internal fun WishApplyCard(ui: UiState, onApply: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             OutlinedButton(onClick = onApply, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を反映する") }
+        }
+    }
+}
+
+// ===== HUD段3: 違反のBOSS化 =====
+// 残りの必達違反(HARD)を「BOSS」として見せ、HP=HARD件数。0で撃破=配布可。
+// 「次の一撃」= 既存 FixSuggestion の最上位（適用でHARDが減る=ダメージ）。結果がある時のみ表示。
+@Composable
+internal fun BossCard(ui: UiState, onSearch: () -> Unit, onApply: (com.magi.app.v6.FixSuggestion) -> Unit) {
+    if (!ui.hasResult) return
+    val cs = MaterialTheme.colorScheme
+    val hp = ui.bestHard
+    val maxHp = maxOf(ui.initHard, ui.bestHard, 1L)
+    val defeated = hp == 0L
+    val container = if (defeated) cs.tertiaryContainer else cs.errorContainer
+    val fg = if (defeated) cs.onTertiaryContainer else cs.onErrorContainer
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = container)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (defeated) {
+                Text("\u2694 BOSS 撃破！", style = MaterialTheme.typography.titleLarge, color = fg, fontWeight = FontWeight.Bold)
+                Text("必達違反 0 ── そのまま配れます。残りのソフト違反はさらに磨けます。",
+                    style = MaterialTheme.typography.bodyMedium, color = fg)
+            } else {
+                Text("\u2694 BOSS：未充足の使徒", style = MaterialTheme.typography.titleLarge, color = fg, fontWeight = FontWeight.Bold)
+                Text("HP（必達違反）：$hp", style = MaterialTheme.typography.bodyMedium, color = fg)
+                // HPバー（手動描画。版依存の LinearProgressIndicator を避ける）
+                Box(Modifier.fillMaxWidth().height(10.dp).background(fg.copy(alpha = 0.2f), CircleShape)) {
+                    Box(
+                        Modifier.fillMaxWidth(fraction = (hp.toFloat() / maxHp.toFloat()).coerceIn(0f, 1f))
+                            .height(10.dp).background(fg, CircleShape)
+                    )
+                }
+                val top = ui.fixSuggestions.firstOrNull()
+                when {
+                    ui.fixSearching -> Text("弱点を探索中…", style = MaterialTheme.typography.bodyMedium, color = fg)
+                    top != null -> {
+                        val totalTxt = if (top.deltaTotal <= 0) "\u2212${-top.deltaTotal}" else "+${top.deltaTotal}"
+                        val hardTxt = if (top.deltaHard <= 0) "\u2212${-top.deltaHard}" else "+${top.deltaHard}"
+                        Text("次の一撃：${top.label}", style = MaterialTheme.typography.bodyMedium, color = fg)
+                        Text("見込みダメージ：違反 $totalTxt（必達 $hardTxt）", style = MaterialTheme.typography.labelLarge, color = fg)
+                        Button(onClick = { onApply(top) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                            Text("この一撃を放つ", style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                    else -> {
+                        Text("弱点が未探索です。", style = MaterialTheme.typography.bodyMedium, color = fg)
+                        Button(onClick = onSearch, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                            Text("弱点を探す（改善手を探索）", style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 144
-        versionName = "3.35.0-unify-remaining-buttons"
+        versionCode = 148
+        versionName = "3.38.0-hud-boss"
     }
 
     buildTypes {
