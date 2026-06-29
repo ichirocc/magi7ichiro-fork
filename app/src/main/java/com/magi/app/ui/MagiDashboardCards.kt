@@ -229,6 +229,18 @@ internal fun OperatorNextActionCard(
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // [HUD段2] フェーズ名バッジ（探索/完成/狩猟）。既存の状態分岐に名前を与えるだけ。
+            //   未最適化→探索 / HARD=0→完成 / HARD>0(infeasible含む)→狩猟。実行中は非表示（カードが別表示）。
+            if (!ui.running) {
+                val (phName, phColor) = when {
+                    !ui.hasResult -> "探索" to MagiAccent.blue
+                    ui.bestHard == 0L -> "完成" to MagiAccent.green
+                    else -> "狩猟" to MagiAccent.orange
+                }
+                Box(Modifier.background(phColor, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
+                    Text(phName, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
             Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
             // 数字は必ず言葉つきで意味を添える（operator_ux §6）。
             Text(
