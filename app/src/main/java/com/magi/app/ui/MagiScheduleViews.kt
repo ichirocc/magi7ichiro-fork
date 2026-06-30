@@ -39,6 +39,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -1418,7 +1419,8 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     val scope = rememberCoroutineScope()
     val rot = remember { Animatable(savedDay.coerceIn(0, days - 1).toFloat()) }
     LaunchedEffect(days) { rot.updateBounds(0f, (days - 1).coerceAtLeast(0).toFloat()) }
-    val td = rot.value.roundToInt().coerceIn(0, days - 1)
+    // [perf] 回転値の整数日のみ購読。アニメ中の毎フレーム再コンポーズを防ぎ、日が変わる時だけラベル/ボタンを更新（描画は別途rot.valueで毎フレーム）。
+    val td by remember(days) { derivedStateOf { rot.value.roundToInt().coerceIn(0, days - 1) } }
     fun goToDay(d: Int) {
         val t = d.coerceIn(0, days - 1)
         savedDay = t
