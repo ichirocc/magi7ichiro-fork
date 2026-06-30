@@ -1,5 +1,6 @@
 package com.magi.app.v6
 
+import com.magi.app.toHankakuKigou
 import com.magi.app.model.C3Row
 import com.magi.app.model.MagiState
 
@@ -152,8 +153,8 @@ object V6SanityPort {
                         staffIndex = si,
                         dayIndex = j ?: -1,
                         staffName = state.staff.getOrNull(si)?.name ?: "#$si",
-                        groupSymbol = state.groups.getOrNull(gi)?.kigou ?: "?",
-                        shiftSymbol = state.shifts.getOrNull(k)?.kigou ?: k.toString(),
+                        groupSymbol = state.groups.getOrNull(gi)?.kigou?.let { toHankakuKigou(it) } ?: "?",
+                        shiftSymbol = state.shifts.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: k.toString(),
                         reason = reason,
                     )
                 )

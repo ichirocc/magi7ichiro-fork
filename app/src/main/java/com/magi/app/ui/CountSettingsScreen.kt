@@ -1,5 +1,7 @@
 package com.magi.app.ui
 
+import com.magi.app.toHankakuKigou
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +109,7 @@ private fun ShiftAxisList(
     }
     blocks.forEach { b ->
         val bk = "shift-${b.k}"
-        BlockHeader("${b.kigou}  ${b.name}", openBlock == bk) { onOpen(if (openBlock == bk) "" else bk) }
+        BlockHeader("${toHankakuKigou(b.kigou)}  ${b.name}", openBlock == bk) { onOpen(if (openBlock == bk) "" else bk) }
         if (openBlock == bk) {
             Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 if (b.groups.isNotEmpty()) {
@@ -169,7 +171,7 @@ private fun StaffAxisList(
                 b.rows.forEach { r ->
                     val rk = "s-${b.i}-${r.k}"
                     Text(
-                        "${r.kigou}   ${cell(r.min)}〜${cell(r.max)}回   ✎",
+                        "${toHankakuKigou(r.kigou)}   ${cell(r.min)}〜${cell(r.max)}回   ✎",
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                     )

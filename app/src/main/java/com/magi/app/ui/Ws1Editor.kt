@@ -1,5 +1,7 @@
 package com.magi.app.ui
 
+import com.magi.app.toHankakuKigou
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -87,12 +89,12 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.shifts.forEachIndexed { k, s ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${s.kigou}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
+                    Text("${toHankakuKigou(s.kigou)}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
                         fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) })
                     if (v.shifts.size > 1) {
                         Spacer(Modifier.width(6.dp))
-                        DeleteRowButton(onClick = { dialog = Ws1Dialog.ConfirmDelete("shift", k, "シフト ${s.kigou}") })
+                        DeleteRowButton(onClick = { dialog = Ws1Dialog.ConfirmDelete("shift", k, "シフト ${toHankakuKigou(s.kigou)}") })
                     }
                 }
             }
@@ -106,13 +108,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Text("編集で改名。削除すると所属者は先頭グループへ移動。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.groups.forEachIndexed { g, gr ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) })
                     if (vm.ws1CanRemoveGroup(g)) {
                         val members = vm.ws1GroupMemberCount(g)
                         Spacer(Modifier.width(6.dp))
                         DeleteRowButton(onClick = {
-                            val label = "グループ ${gr.kigou}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
+                            val label = "グループ ${toHankakuKigou(gr.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
                             dialog = Ws1Dialog.ConfirmDelete("group", g, label)
                         })
                     }
@@ -126,7 +128,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             LoadoutHeader("PARTY", "仲間／スタッフ (${v.staff.size})")
             Text("編集で改名・所属グループの変更。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.staff.forEachIndexed { i, st ->
-                val gk = v.groups.getOrNull(st.groupIdx)?.kigou ?: "?"
+                val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${st.name}  [グループ $gk]", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) })
@@ -148,14 +150,14 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             //   選択中＝塗り＋✓（色だけに依存しない手がかり）、未選択＝外枠。
             v.groups.forEachIndexed { g, gr ->
                 Spacer(Modifier.height(4.dp))
-                Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     v.shifts.forEachIndexed { k, s ->
                         val on = v.groupShift.getOrNull(g)?.getOrNull(k) == 1
                         FilterChip(
                             selected = on,
                             onClick = { vm.ws1SetGroupShift(g, k, !on) },
-                            label = { Text(s.kigou, fontFamily = FontFamily.Monospace) },
+                            label = { Text(toHankakuKigou(s.kigou), fontFamily = FontFamily.Monospace) },
                             leadingIcon = if (on) {
                                 { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                             } else null,
@@ -178,13 +180,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             { n, kg -> vm.ws1EditGroup(d.g, n, kg); dialog = null }, { dialog = null })
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> vm.ws1AddGroup(n, kg); dialog = null }, { dialog = null })
-        is Ws1Dialog.EditStaff -> StaffDialog("スタッフ編集", d.name, d.groupIdx, v.groups.map { it.kigou },
+        is Ws1Dialog.EditStaff -> StaffDialog("スタッフ編集", d.name, d.groupIdx, v.groups.map { toHankakuKigou(it.kigou) },
             { n, gi -> vm.ws1EditStaff(d.i, n, gi); dialog = null }, { dialog = null })
-        Ws1Dialog.AddStaff -> StaffDialog("スタッフ追加", "", 0, v.groups.map { it.kigou },
+        Ws1Dialog.AddStaff -> StaffDialog("スタッフ追加", "", 0, v.groups.map { toHankakuKigou(it.kigou) },
             { n, gi -> vm.ws1AddStaff(n, gi); dialog = null }, { dialog = null })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
             { lines, _ -> lines.forEach { vm.ws1AddShift(it, it, "", "") }; dialog = null }, { dialog = null })
-        Ws1Dialog.BulkAddStaff -> BulkAddDialog("スタッフを一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。", v.groups.map { it.kigou },
+        Ws1Dialog.BulkAddStaff -> BulkAddDialog("スタッフを一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。", v.groups.map { toHankakuKigou(it.kigou) },
             { lines, gi -> lines.forEach { vm.ws1AddStaff(it, gi) }; dialog = null }, { dialog = null })
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
@@ -376,11 +378,11 @@ fun AptCard(ui: UiState, vm: MagiViewModel) {
                 val onShifts = v.shifts.indices.filter { v.groupShift.getOrNull(g)?.getOrNull(it) == 1 }
                 if (onShifts.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         onShifts.forEach { k ->
                             val apt = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
-                            AptStepper(label = v.shifts[k].kigou, value = apt,
+                            AptStepper(label = toHankakuKigou(v.shifts[k].kigou), value = apt,
                                 onChange = { vm.ws1SetGroupApt(g, k, it) })
                         }
                     }

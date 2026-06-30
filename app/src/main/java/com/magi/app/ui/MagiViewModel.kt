@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import com.magi.app.toHankakuKigou
 import androidx.lifecycle.AndroidViewModel
 import android.app.Application
 import androidx.lifecycle.viewModelScope
@@ -129,7 +130,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // 操作再現用デコード（現stateを参照。staff/shift一覧は操作中に不変）。
     private fun opNm(i: Int): String = state?.staff?.getOrNull(i)?.name ?: "#$i"
-    private fun opSy(k: Int): String = state?.shifts?.getOrNull(k)?.kigou ?: "#$k"
+    private fun opSy(k: Int): String = state?.shifts?.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: "#$k"
     private fun opDays(days: List<Int>): String = if (days.size <= 10) days.joinToString(",") { "${it + 1}日" } else "${days.size}日分"
 
     init {
@@ -2173,8 +2174,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             countViolations = report.countViolations,
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
-            staffGroupSymbols = groupSymbols,
-            shiftSymbols = st.shifts.map { it.kigou },
+            staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },
+            shiftSymbols = st.shifts.map { toHankakuKigou(it.kigou) },
             shiftColorHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i) },
             shiftTextHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.pickTextColor(V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i)) },
             violationColorHex = st.shiftColors["__vio__"] ?: "",
