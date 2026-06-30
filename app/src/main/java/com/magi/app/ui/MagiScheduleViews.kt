@@ -8,7 +8,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1497,9 +1496,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
         val marginPx = 8f * scale
         return if (designExtent > halfAvail - marginPx && designExtent > 0.01f) ((halfAvail - marginPx) / designExtent).coerceIn(0.2f, 1f) else 1f
     }
-    // 描画幅から fit(縮小係数)を確定し、投影sx・列幅にあらかじめ畳み込む。→ 描画ループの *fit と sx() 呼び出しを排除し純粋なLUT参照に。fit は画面サイズ変化時のみ再計算。
-    var canvasW by remember { mutableIntStateOf(0) }
-    val fit = if (canvasW > 0) fitFactor(canvasW.toFloat()) else 1f
+    // 投影sx・列幅に fit(縮小係数)をあらかじめ畳み込み、描画ループの *fit と sx() 呼び出しを排除。
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    // [見た目] 合成時に幅(constraints.maxWidth)が確定するので初回フレームから fit を正しく適用し、原寸→縮小の1フレームちらつきを防止。fit/LUTは幅・回転変化時のみ再計算。
+    val fit = if (constraints.maxWidth > 0) fitFactor(constraints.maxWidth.toFloat()) else 1f
     val lutSx = remember(scale, fit) { FloatArray(lutN) { sx(-uMax + it * lutStep) * scale * fit } }
     val lutW = remember(scale, fit) { FloatArray(lutN) { (sx(-uMax + it * lutStep + 0.5f) - sx(-uMax + it * lutStep - 0.5f)) * scale * fit } }
     val lutBr = remember(scale) { FloatArray(lutN) { br(-uMax + it * lutStep) } }
@@ -1520,7 +1520,6 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .height(totalH)
-                .onSizeChanged { canvasW = it.width }
                 .semantics { contentDescription = "集中カレンダー。${td + 1}日が中央。横スワイプで回転（指を離すと慣性で最寄りの日に吸着）、中央の日のセルをタップで修正画面を開きます。詳しい確認は7日表示へ。" }
                 .pointerInput(days, staffCount) {
                     detectTapGestures { off ->
@@ -1616,6 +1615,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                 }
             }
         }
+    }
     }
 }
 
