@@ -1453,6 +1453,34 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     val dragStepPx = with(dens) { 40.dp.toPx() }
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
 
+    // [perf] フレーム毎の重い処理を事前計算で排除（色文字列パース / "i,d"文字列キーのMap探索 / sin・cos・tanh）。
+    val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
+    val pinkC = Color(0xFFEC4899)
+    val hardStroke = remember { Stroke(width = 2f) }
+    val softStroke = remember { Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))) }
+    val thinStroke = remember { Stroke(width = 1.5f) }
+    // 違反/希望はセル配列へ展開（0=なし、違反:1=HARD/2=SOFT、希望:1=一致/2=不一致）。
+    val vioKind = remember(ui.violationCells, staffCount, days) {
+        Array(staffCount) { i -> IntArray(days) { d ->
+            val v = ui.violationCells["$i,$d"]
+            if (v == null) 0 else if (isHardCellViolation(v)) 1 else 2
+        } }
+    }
+    val wishKind = remember(ui.wishes, ui.schedule, staffCount, days) {
+        Array(staffCount) { i -> IntArray(days) { d ->
+            val wk = ui.wishes["$i,$d"]
+            if (wk == null) 0 else { val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1; if (wk == k) 1 else 2 }
+        } }
+    }
+    // 円柱投影(sx)・列幅・明るさを u の関数として事前計算しLUT化。描画は配列参照のみ（三角関数を毎フレーム呼ばない）。
+    val uMax = 14f
+    val lutStep = 0.02f
+    val lutN = ((2f * uMax) / lutStep).toInt() + 1
+    val lutSx = remember(scale) { FloatArray(lutN) { sx(-uMax + it * lutStep) * scale } }
+    val lutW = remember(scale) { FloatArray(lutN) { (sx(-uMax + it * lutStep + 0.5f) - sx(-uMax + it * lutStep - 0.5f)) * scale } }
+    val lutBr = remember(scale) { FloatArray(lutN) { br(-uMax + it * lutStep) } }
+    fun lerpLut(a: FloatArray, u: Float): Float { val f = (u + uMax) / lutStep; val i = f.toInt(); return if (i < 0) a[0] else if (i >= lutN - 1) a[lutN - 1] else a[i] + (a[i + 1] - a[i]) * (f - i) }
+
     Column {
         Text(
             "\u2299 集中モード：横スワイプでドラムを回転。指を離すと慣性で流れ、最寄りの日に吸着。中央の日のセルをタップで修正画面。遠い日ほど細く暗く。",
@@ -1511,15 +1539,18 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                 }
         ) {
             val centerX = nameWpx + (size.width - nameWpx) / 2f
+            val cr = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
+            val ch = rowHpx - 2f
+            val r0 = rot.value
             for (d in 0 until days) {
-                val u = d - rot.value
-                if (kotlin.math.abs(u) > 13f) continue
-                val cx = centerX + sx(u) * scale
-                val w = (sx(u + 0.5f) - sx(u - 0.5f)) * scale
+                val u = d - r0
+                if (u < -13f || u > 13f) continue
+                val w = lerpLut(lutW, u)
                 if (w < 0.7f) continue
-                val bri = br(u)
+                val cx = centerX + lerpLut(lutSx, u)
+                val bri = lerpLut(lutBr, u)
                 val left = cx - w / 2f
-                val cr = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
+                val rectW = maxOf(1f, w - 1f)
                 if (w > 13f) {
                     dayLayouts.getOrNull(d)?.let { r ->
                         drawText(r, topLeft = Offset(cx - r.size.width / 2f, headHpx / 2f - r.size.height / 2f))
@@ -1528,27 +1559,25 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                 for (i in 0 until staffCount) {
                     val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
                     val top = headHpx + i * rowHpx
-                    val ch = rowHpx - 2f
-                    val base = if (k < 0) cs.surfaceVariant else hexToColor(ui.shiftColorHex.getOrNull(k) ?: "")
-                    drawRoundRect(color = dimColor(base, bri), topLeft = Offset(left, top + 1f), size = Size(maxOf(1f, w - 1f), ch), cornerRadius = cr)
+                    val base = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
+                    drawRoundRect(color = dimColor(base, bri), topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr)
                     if (w > 22f && k >= 0) {
                         symLayouts.getOrNull(k)?.let { r ->
                             drawText(r, topLeft = Offset(cx - r.size.width / 2f, top + ch / 2f - r.size.height / 2f))
                         }
                     }
-                    val vv = ui.violationCells["$i,$d"]
-                    if (vv != null) {
-                        val hard = isHardCellViolation(vv)
-                        val st = if (hard) Stroke(width = 2f) else Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)))
-                        drawRoundRect(color = vioColor, topLeft = Offset(left, top + 1f), size = Size(maxOf(1f, w - 1f), ch), cornerRadius = cr, style = st)
+                    val vk = vioKind[i][d]
+                    if (vk != 0) {
+                        val hard = vk == 1
+                        drawRoundRect(color = vioColor, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr, style = if (hard) hardStroke else softStroke)
                         if (w > 16f) {
                             val c = Offset(left + w - 6f, top + 6f)
-                            if (hard) drawCircle(vioColor, 4f, c) else { drawCircle(cs.surface, 4f, c); drawCircle(vioColor, 4f, c, style = Stroke(1.5f)) }
+                            if (hard) drawCircle(vioColor, 4f, c) else { drawCircle(cs.surface, 4f, c); drawCircle(vioColor, 4f, c, style = thinStroke) }
                         }
                     }
-                    val wk = ui.wishes["$i,$d"]
-                    if (wk != null && w > 18f) {
-                        drawCircle(if (wk == k) cs.tertiary else Color(0xFFEC4899), 4f, Offset(left + 6f, top + ch - 6f))
+                    val wk = wishKind[i][d]
+                    if (wk != 0 && w > 18f) {
+                        drawCircle(if (wk == 1) cs.tertiary else pinkC, 4f, Offset(left + 6f, top + ch - 6f))
                     }
                 }
             }

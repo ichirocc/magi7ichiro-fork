@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 149
-        versionName = "3.39.0-focus-gestures"
+        versionCode = 150
+        versionName = "3.40.0-focus-perf"
     }
 
     buildTypes {
