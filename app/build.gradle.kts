@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 154
-        versionName = "3.44.0-focus-fitlut"
+        versionCode = 155
+        versionName = "3.45.0-loadout"
     }
 
     buildTypes {

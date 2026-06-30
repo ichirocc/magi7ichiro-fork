@@ -59,12 +59,14 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
+            LoadoutHeader("LOADOUT", "装備BOX — マスター設定")
+            Spacer(Modifier.height(6.dp))
             Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.primary)
 
             // --- period ---
             Spacer(Modifier.height(10.dp))
-            Text("期間", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            LoadoutHeader("PERIOD", "期間／対象月")
             Text("${v.startDate} 〜 ${v.endDate}", fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -81,7 +83,8 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
-            Text("シフト (${v.shifts.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            LoadoutHeader("ARSENAL", "装備／シフト種別 (${v.shifts.size})")
+            Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.shifts.forEachIndexed { k, s ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${s.kigou}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
@@ -99,7 +102,8 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- groups ---
             Spacer(Modifier.height(8.dp))
-            Text("グループ (${v.groups.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            LoadoutHeader("SQUAD", "班／グループ (${v.groups.size})")
+            Text("編集で改名。削除すると所属者は先頭グループへ移動。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.groups.forEachIndexed { g, gr ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${gr.kigou}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
@@ -119,7 +123,8 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- staff ---
             Spacer(Modifier.height(8.dp))
-            Text("スタッフ (${v.staff.size})", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            LoadoutHeader("PARTY", "仲間／スタッフ (${v.staff.size})")
+            Text("編集で改名・所属グループの変更。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.staff.forEachIndexed { i, st ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou ?: "?"
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -137,7 +142,8 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
-            Text("担当できるシフト（グループ × シフト）", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            LoadoutHeader("MATRIX", "担当可否（群 × シフト）")
+            Text("チップで担当できるシフトを切替（✓＝担当可）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [見やすさ] 横スクロール(12シフトで画面外)をやめ、群ごとに群名を行頭＋チップを FlowRow で折り返す。
             //   選択中＝塗り＋✓（色だけに依存しない手がかり）、未選択＝外枠。
             v.groups.forEachIndexed { g, gr ->
@@ -419,5 +425,15 @@ private fun AptStepper(label: String, value: String, onChange: (String) -> Unit)
             val c = value.trim().toIntOrNull() ?: -1
             onChange((c + 1).coerceAtLeast(0).toString())
         }) { Text("＋", fontSize = 16.sp) }
+    }
+}
+
+// ===== 装備BOX(LOADOUT) セクション識別見出し =====
+// HUDコンセプトの二段見出し(英コードネーム — 日本語)を踏襲。マスター設定を1枚に統合した識別子。
+@Composable
+private fun LoadoutHeader(code: String, jp: String) {
+    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(code, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary)
+        Text(jp, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
