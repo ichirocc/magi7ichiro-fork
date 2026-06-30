@@ -1480,6 +1480,13 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     val lutW = remember(scale) { FloatArray(lutN) { (sx(-uMax + it * lutStep + 0.5f) - sx(-uMax + it * lutStep - 0.5f)) * scale } }
     val lutBr = remember(scale) { FloatArray(lutN) { br(-uMax + it * lutStep) } }
     fun lerpLut(a: FloatArray, u: Float): Float { val f = (u + uMax) / lutStep; val i = f.toInt(); return if (i < 0) a[0] else if (i >= lutN - 1) a[lutN - 1] else a[i] + (a[i + 1] - a[i]) * (f - i) }
+    // [fit] 画面幅に応じて円柱を横に収める係数（設計値を超える拡大はせず、狭い端末でのみ縮めて端の日の見切れを防ぐ）。RAD_eff = RAD*fit 相当。
+    fun fitFactor(widthPx: Float): Float {
+        val halfAvail = (widthPx - nameWpx) / 2f
+        val designExtent = (RAD + AMP) * scale
+        val marginPx = 8f * scale
+        return if (designExtent > halfAvail - marginPx && designExtent > 0.01f) ((halfAvail - marginPx) / designExtent).coerceIn(0.2f, 1f) else 1f
+    }
 
     Column {
         Text(
@@ -1502,9 +1509,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     detectTapGestures { off ->
                         val cur = rot.value.roundToInt().coerceIn(0, days - 1)
                         val centerX = nameWpx + (size.width.toFloat() - nameWpx) / 2f
+                        val fit = fitFactor(size.width.toFloat())
                         var best = cur; var bd = Float.MAX_VALUE
                         for (d in 0 until days) {
-                            val dd = kotlin.math.abs((centerX + sx(d - rot.value) * scale) - off.x)
+                            val dd = kotlin.math.abs((centerX + sx(d - rot.value) * scale * fit) - off.x)
                             if (dd < bd) { bd = dd; best = d }
                         }
                         val i = ((off.y - headHpx) / rowHpx).toInt()
@@ -1539,15 +1547,16 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                 }
         ) {
             val centerX = nameWpx + (size.width - nameWpx) / 2f
+            val fit = fitFactor(size.width)
             val cr = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
             val ch = rowHpx - 2f
             val r0 = rot.value
             for (d in 0 until days) {
                 val u = d - r0
                 if (u < -13f || u > 13f) continue
-                val w = lerpLut(lutW, u)
+                val w = lerpLut(lutW, u) * fit
                 if (w < 0.7f) continue
-                val cx = centerX + lerpLut(lutSx, u)
+                val cx = centerX + lerpLut(lutSx, u) * fit
                 val bri = lerpLut(lutBr, u)
                 val left = cx - w / 2f
                 val rectW = maxOf(1f, w - 1f)
