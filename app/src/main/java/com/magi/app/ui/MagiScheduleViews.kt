@@ -108,6 +108,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.splineBasedDecay
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import kotlin.math.roundToInt
 
 /**
  * CSVのバイト列を文字列へ復号する。妥当な UTF-8 ならそれを採用し、そうでなければ日本の Excel CSV で
@@ -1408,9 +1413,16 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     val staffCount = ui.schedule.size
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     val tm = rememberTextMeasurer()
-    var targetDay by rememberSaveable { mutableStateOf(0) }
-    val td = targetDay.coerceIn(0, days - 1)
-    val focusF by animateFloatAsState(targetValue = td.toFloat(), animationSpec = tween(360), label = "focusF")
+    var savedDay by rememberSaveable { mutableStateOf(0) }
+    val scope = rememberCoroutineScope()
+    val rot = remember { Animatable(savedDay.coerceIn(0, days - 1).toFloat()) }
+    LaunchedEffect(days) { rot.updateBounds(0f, (days - 1).coerceAtLeast(0).toFloat()) }
+    val td = rot.value.roundToInt().coerceIn(0, days - 1)
+    fun goToDay(d: Int) {
+        val t = d.coerceIn(0, days - 1)
+        savedDay = t
+        scope.launch { rot.animateTo(t.toFloat(), tween(320)) }
+    }
 
     val ANG = (7.7 * kotlin.math.PI / 180.0).toFloat()
     val RAD = 205f; val AMP = 5.8f; val WID = 0.35f
@@ -1443,47 +1455,64 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
 
     Column {
         Text(
-            "\u2299 集中モード：横ドラッグ/前後で日付を回し、1日に集中。遠い日ほど細く暗く。焦点の日のセルをタップで編集。",
+            "\u2299 集中モード：横スワイプでドラムを回転。指を離すと慣性で流れ、最寄りの日に吸着。中央の日のセルをタップで修正画面。遠い日ほど細く暗く。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { targetDay = (td - 1).coerceAtLeast(0) }, enabled = td > 0, modifier = Modifier.height(48.dp)) { Text("\u25c0 前日") }
+            Button(onClick = { goToDay(td - 1) }, enabled = td > 0, modifier = Modifier.height(48.dp)) { Text("\u25c0 前日") }
             Text("${td + 1}日 / 全${days}日", style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-            Button(onClick = { targetDay = (td + 1).coerceAtMost(days - 1) }, enabled = td < days - 1, modifier = Modifier.height(48.dp)) { Text("翌日 \u25b6") }
+            Button(onClick = { goToDay(td + 1) }, enabled = td < days - 1, modifier = Modifier.height(48.dp)) { Text("翌日 \u25b6") }
         }
         Spacer(Modifier.height(8.dp))
         Canvas(
             Modifier
                 .fillMaxWidth()
                 .height(totalH)
-                .semantics { contentDescription = "集中カレンダー。${td + 1}日が焦点。横ドラッグで日付を回し、焦点の日のセルをタップで編集します。詳しい確認は7日表示へ。" }
+                .semantics { contentDescription = "集中カレンダー。${td + 1}日が中央。横スワイプで回転（指を離すと慣性で最寄りの日に吸着）、中央の日のセルをタップで修正画面を開きます。詳しい確認は7日表示へ。" }
                 .pointerInput(days, staffCount) {
                     detectTapGestures { off ->
-                        val cur = targetDay.coerceIn(0, days - 1)
+                        val cur = rot.value.roundToInt().coerceIn(0, days - 1)
                         val centerX = nameWpx + (size.width.toFloat() - nameWpx) / 2f
                         var best = cur; var bd = Float.MAX_VALUE
                         for (d in 0 until days) {
-                            val dd = kotlin.math.abs((centerX + sx(d - focusF) * scale) - off.x)
+                            val dd = kotlin.math.abs((centerX + sx(d - rot.value) * scale) - off.x)
                             if (dd < bd) { bd = dd; best = d }
                         }
                         val i = ((off.y - headHpx) / rowHpx).toInt()
-                        if (best == cur && i in 0 until staffCount) onCellClick(i, best) else targetDay = best
+                        // 中央(選択中)の日のセルをタップ → 修正画面。側面の日をタップ → その日を中央へ回す。
+                        if (best == cur && i in 0 until staffCount) onCellClick(i, best) else goToDay(best)
                     }
                 }
                 .pointerInput(days) {
-                    var acc = 0f
-                    detectHorizontalDragGestures(onDragEnd = { acc = 0f }) { _, amt ->
-                        acc += amt
-                        val cur = targetDay.coerceIn(0, days - 1)
-                        if (acc > dragStepPx) { targetDay = (cur - 1).coerceAtLeast(0); acc = 0f }
-                        else if (acc < -dragStepPx) { targetDay = (cur + 1).coerceAtMost(days - 1); acc = 0f }
+                    val decay = splineBasedDecay<Float>(this)
+                    val tracker = VelocityTracker()
+                    detectHorizontalDragGestures(
+                        onDragStart = { tracker.resetTracking(); scope.launch { rot.stop() } },
+                        onDragEnd = {
+                            val vx = tracker.calculateVelocity().x
+                            scope.launch {
+                                // 慣性で流す → 最寄りの日に吸着（dragStepPx を1日ぶんの感度に流用）
+                                if (kotlin.math.abs(vx) > 1f) rot.animateDecay(-vx / dragStepPx, decay)
+                                val n = rot.value.roundToInt().coerceIn(0, days - 1)
+                                rot.animateTo(n.toFloat(), tween(180)); savedDay = n
+                            }
+                        },
+                        onDragCancel = {
+                            scope.launch {
+                                val n = rot.value.roundToInt().coerceIn(0, days - 1)
+                                rot.animateTo(n.toFloat(), tween(180)); savedDay = n
+                            }
+                        }
+                    ) { change, amt ->
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                        scope.launch { rot.snapTo((rot.value - amt / dragStepPx).coerceIn(0f, (days - 1).coerceAtLeast(0).toFloat())) }
                     }
                 }
         ) {
             val centerX = nameWpx + (size.width - nameWpx) / 2f
             for (d in 0 until days) {
-                val u = d - focusF
+                val u = d - rot.value
                 if (kotlin.math.abs(u) > 13f) continue
                 val cx = centerX + sx(u) * scale
                 val w = (sx(u + 0.5f) - sx(u - 0.5f)) * scale
