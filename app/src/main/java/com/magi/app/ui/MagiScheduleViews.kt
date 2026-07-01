@@ -432,7 +432,7 @@ internal fun ScheduleGrid(
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     val win = 7
     // [プロ編集] プロ表示は高密度1ヶ月俯瞰を既定に（かんたんは7日表示）。
-    var gridMode by rememberSaveable { mutableStateOf(if (proMode) 2 else 0) } // 0=7日 / 1=カレンダー / 2=1ヶ月俯瞰
+    var gridMode by rememberSaveable { mutableStateOf(0) } // 0=集中 / 1=1ヶ月俯瞰
     // [プロ一括編集] 1ヶ月俯瞰での複数選択（i*100000+j のキー集合）。
     val proSel = remember { mutableStateListOf<Long>() }
     var page by rememberSaveable { mutableStateOf(0) }
@@ -456,8 +456,8 @@ internal fun ScheduleGrid(
             Spacer(Modifier.height(8.dp))
             // 表示切替: §4.5 セグメント（7日=大きく編集 / カレンダー=月の俯瞰 / 1ヶ月=全セル色確認）
             MagiSegmentedControl(
-                options = listOf("7日表示", "カレンダー", "1ヶ月", "集中"),
-                selected = gridMode,
+                options = listOf("集中", "1ヶ月"),
+                selected = if (gridMode == 0) 0 else 1,
                 onSelect = { gridMode = it },
             )
             // [違反フィルタ＋内訳] 種別ごとの件数つきチップで「どの違反が何件か」を勤務表上で一覧化。
@@ -516,105 +516,8 @@ internal fun ScheduleGrid(
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints {
                 val totalW = maxWidth
-                if (gridMode == 3) {
+                if (gridMode == 0) {
                     MagiFocusCylinder(ui, onCellClick)
-                } else if (gridMode == 0) {
-                    val staffW = 64.dp
-                    val sumW = 44.dp   // [集計] 右端「勤務」計の列幅
-                    val cellW = ((totalW - staffW - sumW) / win).coerceIn(34.dp, 80.dp)
-                    val startDay = cur * win
-                    val endDay = minOf(startDay + win, ui.days)
-                    Column(
-                        Modifier.pointerInput(cur, maxPage) {
-                            var dx = 0f
-                            detectHorizontalDragGestures(
-                                onDragEnd = {
-                                    if (dx > 60f) page = (cur - 1).coerceAtLeast(0)
-                                    else if (dx < -60f) page = (cur + 1).coerceAtMost(maxPage)
-                                    dx = 0f
-                                },
-                            ) { _, amount -> dx += amount }
-                        },
-                    ) {
-                        Text("◀ ▶ かスワイプで日付を送り、セルをタップでシフト選択。",
-                            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Button(onClick = { page = (cur - 1).coerceAtLeast(0) }, enabled = cur > 0,
-                                modifier = Modifier.height(48.dp)) { Text("◀ 前") }
-                            Text("${startDay + 1}〜${endDay}日 / 全${ui.days}日",
-                                style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center,
-                                modifier = Modifier.weight(1f))
-                            Button(onClick = { page = (cur + 1).coerceAtMost(maxPage) }, enabled = cur < maxPage,
-                                modifier = Modifier.height(48.dp)) { Text("次 ▶") }
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        // [集計] 休/公以外を「勤務」とみなす。各スタッフの勤務数・各日の出勤数・シフト別合計を表示。
-                        val restIdx = ui.shiftSymbols.indexOfFirst { it == "休" || it == "公" }
-                        Row {
-                            Column {
-                                HeaderCell("スタッフ", staffW)
-                                ui.schedule.indices.forEach { i ->
-                                    StaffCell(ui.staffNames.getOrNull(i) ?: i.toString(),
-                                        ui.staffGroupSymbols.getOrNull(i) ?: "", w = staffW)
-                                }
-                                Box(Modifier.width(staffW).height(30.dp).padding(2.dp), contentAlignment = Alignment.CenterStart) {
-                                    Text("各日の出勤", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
-                                }
-                            }
-                            Column {
-                                Row { for (j in startDay until endDay) HeaderCell((j + 1).toString(), cellW) }
-                                ui.schedule.forEachIndexed { i, row ->
-                                    Row {
-                                        for (j in startDay until endDay) {
-                                            val k = row.getOrNull(j) ?: -1
-                                            val vioVal = ui.violationCells["$i,$j"]
-                                            val vio = shown(vioVal)   // [違反フィルタ] 隠した種別はハイライトしない
-                                            val hard = isHardCellViolation(vioVal)
-                                            val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
-                                            val bg = if (k < 0) cs.surface else hexToColor(ui.shiftColorHex.getOrNull(k) ?: "")
-                                            val fg = if (k < 0) cs.onSurfaceVariant else hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")
-                                            val wk = ui.wishes["$i,$j"]
-                                            val wsym = wk?.let { ui.shiftSymbols.getOrNull(it) }
-                                            val wmet = wk != null && wk == k
-                                            Cell(symbol, vio, hard, bg, fg, vioColor, w = cellW, wishSym = wsym, wishMet = wmet) { onCellClick(i, j) }
-                                        }
-                                    }
-                                }
-                                // 各日の出勤人数（休/公を除く）。不足日は赤＋⚠で強調＝違反箇所が一目で分かる。
-                                Row {
-                                    for (j in startDay until endDay) {
-                                        val working = ui.schedule.count { (it.getOrNull(j) ?: -1).let { k -> k >= 0 && k != restIdx } }
-                                        val short = ui.v6?.dayRisks?.getOrNull(j)?.shortage ?: 0
-                                        Box(Modifier.width(cellW).height(30.dp).padding(2.dp), contentAlignment = Alignment.Center) {
-                                            Text(if (short > 0) "$working⚠" else "$working",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = if (short > 0) cs.error else cs.onSurface,
-                                                fontWeight = if (short > 0) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                                        }
-                                    }
-                                }
-                            }
-                            Column {
-                                HeaderCell("勤務", sumW)
-                                ui.schedule.forEach { row ->
-                                    val work = row.count { it >= 0 && it != restIdx }
-                                    Box(Modifier.width(sumW).height(52.dp).padding(2.dp), contentAlignment = Alignment.Center) {
-                                        Text("$work", style = MaterialTheme.typography.labelLarge, color = cs.onSurface)
-                                    }
-                                }
-                                Box(Modifier.width(sumW).height(30.dp))
-                            }
-                        }
-                        // [D1] 「シフト別の合計（期間）」はシフト集計カード(職員別の計行)へ一本化し、
-                        //   ここでは廃止（編集中に有用な出勤人数行はインラインに残す）。重複表示を解消。
-                    }
-                } else if (gridMode == 1) {
-                    // §4.12 カレンダー: 週列の月グリッド。各日にシフト色ピル＋不足マーカー。
-                    MagiCalendarMonthView(ui) { dayIdx ->
-                        page = dayIdx / win
-                        gridMode = 0
-                    }
                 } else {
                     val staffW = 60.dp
                     val d = ui.days.coerceAtLeast(1)
@@ -658,7 +561,7 @@ internal fun ScheduleGrid(
                                 }
                             }
                         } else {
-                            Text("月全体を色で確認できます。日付をタップするとその日の7日表示へ移動します。",
+                            Text("月全体を色で確認できます。日付をタップするとその日の集中モードへ移動します。",
                                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         }
                         Spacer(Modifier.height(8.dp))
@@ -684,14 +587,14 @@ internal fun ScheduleGrid(
                                 Row {
                                     for (j in 0 until ui.days) {
                                         Box(Modifier.width(cellW).height(22.dp)
-                                            .semantics { contentDescription = if (proMode) "${j + 1}日（タップで列を選択）" else "${j + 1}日（タップで7日表示へ）" }
+                                            .semantics { contentDescription = if (proMode) "${j + 1}日（タップで列を選択）" else "${j + 1}日（タップで集中へ）" }
                                             .clickable {
                                                 if (proMode) {
                                                     // 日付タップ＝その列(全スタッフ)をまとめて選択/解除。
                                                     val keys = ui.schedule.indices.map { i -> i * 100000L + j }
                                                     if (keys.all { proSel.contains(it) }) proSel.removeAll(keys)
                                                     else keys.forEach { if (!proSel.contains(it)) proSel.add(it) }
-                                                } else { page = j / win; gridMode = 0 }
+                                                } else { gridMode = 0 }
                                             },
                                             contentAlignment = Alignment.Center) {
                                             if (cellW >= 14.dp) Text((j + 1).toString(),
@@ -718,7 +621,7 @@ internal fun ScheduleGrid(
                                                 .semantics { contentDescription = "$staffA ${j + 1}日 $symA" + if (vio) (if (hard) "（必須違反）" else "（要調整）") else "" + if (sel) "・選択中" else "" }
                                                 .clickable {
                                                     if (proMode) { if (!proSel.remove(selKey)) proSel.add(selKey) }
-                                                    else { page = j / win; gridMode = 0 }
+                                                    else { gridMode = 0 }
                                                 })
                                         }
                                     }
@@ -1564,7 +1467,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .height(totalH)
-                .semantics { contentDescription = "集中カレンダー。${td + 1}日が中央。横スワイプで回転（指を離すと慣性で最寄りの日に吸着）、中央の日のセルをタップで修正画面を開きます。詳しい確認は7日表示へ。" }
+                .semantics { contentDescription = "集中カレンダー。${td + 1}日が中央。横スワイプで回転（指を離すと慣性で最寄りの日に吸着）、中央の日のセルをタップで修正画面を開きます。" }
                 .pointerInput(days, staffCount) {
                     detectTapGestures { off ->
                         val cur = rot.value.roundToInt().coerceIn(0, days - 1)
