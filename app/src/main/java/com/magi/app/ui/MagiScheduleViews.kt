@@ -448,9 +448,11 @@ internal fun ScheduleGrid(
         Column(Modifier.padding(16.dp)) {
             Text("勤務表", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            // [一括編集] 円柱は1セルずつ編集。まとめて変更したい時はこのダイアログで範囲×対象×シフトを一括指定。
-            OutlinedButton(onClick = { showBulk = true }, modifier = Modifier.heightIn(min = 44.dp)) {
-                Text("まとめて割当（一括編集）")
+            // [一括編集] まとめて変更は多数セルを上書きする上級操作のため、プロ表示時のみ。範囲×対象×シフトをダイアログで一括指定。
+            if (proMode) {
+                OutlinedButton(onClick = { showBulk = true }, modifier = Modifier.heightIn(min = 44.dp)) {
+                    Text("まとめて割当（一括編集）")
+                }
             }
             // [違反フィルタ＋内訳] 種別ごとの件数つきチップで「どの違反が何件か」を勤務表上で一覧化。
             //   タップで表示/非表示（隠した種別はセル枠が消える）。1種別に絞れば誰の何日かが直接見える。
@@ -518,125 +520,6 @@ internal fun startDowMonFirst(startDate: String): Int = try {
     (LocalDate.parse(startDate).dayOfWeek.value - 1).coerceIn(0, 6)
 } catch (_: Exception) { 0 }
 
-/**
- * §4.12 月カレンダー: 週列（月〜日）の月グリッド。各日に「その日に多いシフト」の色ピルと、
- * 人員不足マーカー（赤・実線=必須）を出す。日付タップでその週の7日表示へ。
- */
-
-@Composable
-internal fun MagiCalendarMonthView(ui: UiState, onDayClick: (Int) -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val days = ui.days
-    if (days <= 0 || ui.schedule.isEmpty()) {
-        Text("勤務表がありません。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-        return
-    }
-    val restIdx = ui.shiftSymbols.indexOfFirst { it == "休" || it == "公" }
-    val startDow = startDowMonFirst(ui.startDate)
-    val weekdays = listOf("月", "火", "水", "木", "金", "土", "日")
-    // 日別シフト人数を一度だけ算出（schedule 変化時のみ再計算）。各セルで S×K を再走査しない。
-    val k = ui.shiftSymbols.size
-    val dayCounts = remember(ui.schedule, k, days) {
-        Array(days) { d ->
-            val counts = IntArray(k)
-            ui.schedule.forEach { row ->
-                val s = row.getOrNull(d) ?: -1
-                if (s in 0 until k) counts[s]++
-            }
-            counts
-        }
-    }
-    Column(Modifier.fillMaxWidth()) {
-        Text("日付をタップでその週の7日表示へ。色はその日に多いシフト、赤枠は人員不足です。",
-            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth()) {
-            weekdays.forEachIndexed { i, w ->
-                // [校正②] 曜日ヘッダは低輝度でも判別できるよう一段大きく・太く、平日も onSurface で濃く。
-                val wc = when (i) { 5 -> MagiAccent.blue; 6 -> MagiAccent.red; else -> cs.onSurface }
-                Text(w, Modifier.weight(1f), color = wc, textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelMedium)
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        val totalCells = startDow + days
-        val rows = (totalCells + 6) / 7
-        for (r in 0 until rows) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (c in 0 until 7) {
-                    val dayIdx = r * 7 + c - startDow
-                    if (dayIdx < 0 || dayIdx >= days) {
-                        Spacer(Modifier.weight(1f))
-                    } else {
-                        DayShiftCell(ui, dayIdx, restIdx, dayCounts[dayIdx], Modifier.weight(1f)) { onDayClick(dayIdx) }
-                    }
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-        }
-    }
-}
-
-/** §4.12 月カレンダーの1日分セル。日番号＋不足マーカー＋上位シフトの色ピル。 */
-
-@Composable
-@OptIn(ExperimentalLayoutApi::class)
-internal fun DayShiftCell(ui: UiState, dayIdx: Int, restIdx: Int, counts: IntArray, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val shortage = ui.v6?.dayRisks?.getOrNull(dayIdx)?.shortage ?: 0
-    // [校正] その日の「すべての」シフトを表示（休は除く）。多い順に小ピルを折り返して並べる
-    //   （従来は上位2件だけ＝一部しか見えなかった）。セルは中身に合わせて伸びる。
-    val present = counts.indices
-        .filter { it != restIdx && counts[it] > 0 }
-        .sortedByDescending { counts[it] }
-    Box(
-        modifier
-            .height(96.dp)
-            .background(cs.surfaceVariant, MaterialTheme.shapes.medium)
-            .then(if (shortage > 0) Modifier.border(2.dp, cs.error, MaterialTheme.shapes.medium) else Modifier)
-            .clickable(onClick = onClick)
-            .padding(4.dp),
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${dayIdx + 1}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                    color = cs.onSurface, modifier = Modifier.weight(1f))
-                if (shortage > 0) {
-                    Box(Modifier.size(6.dp).background(cs.error, RoundedCornerShape(3.dp)))
-                }
-            }
-            Spacer(Modifier.height(2.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                present.forEach { k ->
-                    ShiftEventPill(
-                        symbol = ui.shiftSymbols.getOrNull(k) ?: "",
-                        count = counts[k],
-                        bg = hexToColor(ui.shiftColorHex.getOrNull(k) ?: ""),
-                        fg = hexToColor(ui.shiftTextHex.getOrNull(k) ?: ""),
-                    )
-                }
-            }
-            if (shortage > 0 && present.isEmpty()) {
-                Text("不足$shortage", style = MaterialTheme.typography.labelSmall, color = cs.error, maxLines = 1)
-            }
-        }
-    }
-}
-
-/** §4.12 シフトの小ピル（カレンダー日セル内）。シフト色で塗り、記号＋人数。中身幅で複数並ぶ。 */
-
-@Composable
-internal fun ShiftEventPill(symbol: String, count: Int, bg: Color, fg: Color) {
-    Box(
-        Modifier
-            .background(bg, RoundedCornerShape(4.dp))
-            .padding(horizontal = 3.dp, vertical = 1.dp),
-    ) {
-        Text("$symbol$count", color = fg, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
 /** 違反セルの凡例（実線=必須 / 破線=要調整）。非色手がかりの意味を必ず示す。 */
 
 @Composable
@@ -682,40 +565,6 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
 }
 
 /**
- * [screen_spec #12/#168] 詳細設定（上級者/開発者向け・折りたたみ・既定=閉）。
- * 実験フラグ(FlagsView) / ログ(LogsCard) / 色トークン(ColorSettingsView) を 1 か所に隔離する。
- * 通常運用に不要な項目を分析・設定の主導線から外し、誤操作と画面の汚れを防ぐ。
- */
-
-@Composable
-internal fun HeaderCell(text: String, width: androidx.compose.ui.unit.Dp) {
-    Box(Modifier.width(width).height(40.dp).padding(2.dp)) {
-        Box(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-        }
-    }
-}
-
-
-@Composable
-internal fun StaffCell(name: String, symbol: String, w: androidx.compose.ui.unit.Dp = 92.dp) {
-    Box(Modifier.width(w).height(52.dp).padding(2.dp)) {
-        Box(
-            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)).padding(horizontal = 8.dp),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Column {
-                Text(name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (symbol.isNotBlank()) Text(symbol, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
-        }
-    }
-}
-
-/**
  * 違反値("vio-<family>")が必須(HARD)系か判定。色に依らない手がかり(実線/破線)の切替に使う。
  * ハード族の一覧は MirrorKeys.hard を唯一の真実源とする（ここで列挙し直すと将来の追加/改名で乖離する）。
  */
@@ -742,54 +591,6 @@ internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: and
             )
         }
     }
-
-
-@Composable
-internal fun Cell(text: String, violation: Boolean, hard: Boolean, bg: Color, fg: Color, vioColor: Color, w: androidx.compose.ui.unit.Dp = 52.dp, wishSym: String? = null, wishMet: Boolean = false, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    // [UD/WCAG 4.1.2] スクリーンリーダー用の読み上げ名（色・形だけに依存しない）。
-    val wishA11y = wishSym?.let { "・希望" + it + (if (wishMet) "(反映済)" else "(未反映)") } ?: ""
-    val a11y = "シフト ${text.ifBlank { "なし" }}" + (if (violation) (if (hard) "・必須違反" else "・要調整") else "") + wishA11y + "、タップで変更"
-    Box(Modifier.width(w).height(52.dp).padding(2.dp)) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(bg, RoundedCornerShape(12.dp))
-                .then(if (violation) Modifier.violationBorder(hard, vioColor, 12.dp) else Modifier)
-                .clickable(onClick = onClick)
-                .semantics(mergeDescendants = true) { contentDescription = a11y },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text, style = MaterialTheme.typography.titleMedium, color = fg, textAlign = TextAlign.Center, maxLines = 1)
-            // 違反は色に加え形でも示す: HARD=塗りドット / SOFT=中空リング。
-            // [校正] 色付きセル上でも埋もれないよう拡大(11dp)＋背景色のリングで縁取りしコントラスト確保。
-            if (violation) {
-                Box(
-                    Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(3.dp)
-                        .size(11.dp)
-                        .background(if (hard) vioColor else cs.surface, RoundedCornerShape(6.dp))
-                        .border(if (hard) 1.5.dp else 2.5.dp, if (hard) cs.surface else vioColor, RoundedCornerShape(6.dp)),
-                )
-            }
-            // [希望表示融合] 希望シフトをセル右下に小バッジ表示。緑=反映済(割当==希望) / 桃=未反映。
-            if (wishSym != null) {
-                val wbg = if (wishMet) MagiAccent.green else MagiAccent.pink
-                Box(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(1.dp)
-                        .background(wbg, RoundedCornerShape(4.dp))
-                        .border(1.dp, cs.surface, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 3.dp),
-                ) {
-                    Text(wishSym, color = Color.White, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                }
-            }
-        }
-    }
-}
 
 
 /** [希望の一括操作] 対象範囲(曜日/期間全体) × 対象(全員/1名) × 希望シフト。登録/クリア。誤操作防止で明示確定。 */
