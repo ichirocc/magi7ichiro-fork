@@ -1465,6 +1465,20 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     val dragStepPx = with(dens) { 40.dp.toPx() }
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
 
+    // [融合] 7日/カレンダーの要点を集中へ取り込む: 日別の出勤人数・不足数、曜日、日ジャンプ帯のスクロール。
+    val restIdx = ui.shiftSymbols.indexOfFirst { it == "休" || it == "公" }
+    val dayPresent = remember(ui.schedule, days, restIdx) {
+        IntArray(days) { d -> ui.schedule.count { val k = it.getOrNull(d) ?: -1; k >= 0 && k != restIdx } }
+    }
+    val dayShort = remember(ui.v6, days) {
+        IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 }
+    }
+    val jumpDow = startDowMonFirst(ui.startDate)
+    val weekdayJa = listOf("月", "火", "水", "木", "金", "土", "日")
+    val jumpScroll = rememberScrollState()
+    val chipStepPx = with(dens) { 38.dp.toPx() }
+    LaunchedEffect(td) { jumpScroll.animateScrollTo(((td - 2).coerceAtLeast(0) * chipStepPx).toInt()) }
+
     // [perf] フレーム毎の重い処理を事前計算で排除（色文字列パース / "i,d"文字列キーのMap探索 / sin・cos・tanh）。
     val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
     val pinkC = Color(0xFFEC4899)
@@ -1506,14 +1520,44 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
 
     Column {
         Text(
-            "\u2299 集中モード：横スワイプでドラムを回転。指を離すと慣性で流れ、最寄りの日に吸着。中央の日のセルをタップで修正画面。土=青/日=赤/本日=緑下線。遠い日ほど細く暗く。",
+            "\u2299 集中モード：横スワイプで回転→最寄りの日に吸着。日付帯で任意の日へジャンプ（不足日は赤枠＋不足数）。ヘッダに出勤人数・不足を表示。中央の日のセルをタップで修正。土=青/日=赤/本日=緑。希望は左下ドット（一致=青緑/不一致=桃）。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = { goToDay(td - 1) }, enabled = td > 0, modifier = Modifier.height(48.dp)) { Text("\u25c0 前日") }
-            Text("${td + 1}日 / 全${days}日", style = MaterialTheme.typography.titleSmall, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("${td + 1}日（${weekdayJa[(jumpDow + td) % 7]}） / 全${days}日", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "出勤 ${dayPresent[td]}人" + if (dayShort[td] > 0) "  ・  不足 ${dayShort[td]}" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (dayShort[td] > 0) cs.error else cs.onSurfaceVariant,
+                )
+            }
             Button(onClick = { goToDay(td + 1) }, enabled = td < days - 1, modifier = Modifier.height(48.dp)) { Text("翌日 \u25b6") }
+        }
+        // [融合: 日ジャンプ＋不足マーカー] 任意の日へ即移動。土=青/日=赤/本日=緑、不足日は赤枠＋不足数、選択日を強調。
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.horizontalScroll(jumpScroll), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (d in 0 until days) {
+                val dow = (jumpDow + d) % 7
+                val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
+                val sel = d == td
+                val sh = dayShort[d]
+                Column(
+                    Modifier
+                        .background(if (sel) cs.primaryContainer else Color.Transparent, MaterialTheme.shapes.small)
+                        .then(if (sh > 0) Modifier.border(1.dp, cs.error, MaterialTheme.shapes.small) else Modifier)
+                        .clickable { goToDay(d) }
+                        .width(36.dp)
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("${d + 1}", fontSize = 12.sp, color = if (sel) cs.onPrimaryContainer else dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal)
+                    if (sh > 0) Text("不足$sh", fontSize = 8.sp, color = cs.error, maxLines = 1)
+                    else Spacer(Modifier.height(2.dp))
+                }
+            }
         }
         Spacer(Modifier.height(8.dp))
         Canvas(
