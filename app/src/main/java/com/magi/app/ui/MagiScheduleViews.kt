@@ -1407,7 +1407,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     // 投影sx・列幅に fit(縮小係数)をあらかじめ畳み込み、描画ループの *fit と sx() 呼び出しを排除。
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     // [見た目] 合成時に幅(constraints.maxWidth)が確定するので初回フレームから fit を正しく適用し、原寸→縮小の1フレームちらつきを防止。fit/LUTは幅・回転変化時のみ再計算。
-    val fit = if (constraints.maxWidth > 0) fitFactor(constraints.maxWidth.toFloat()) else 1f
+    val fit0 = if (constraints.maxWidth > 0) fitFactor(constraints.maxWidth.toFloat()) else 1f
+    // [中央列幅] フォーカス日(中央)の列幅を 38..40px に収める。fit を比率調整し、円柱の形状は保ったまま中央列を目標幅へスケール。
+    val centerW0 = (sx(0.5f) - sx(-0.5f)) * scale * fit0
+    val fit = if (centerW0 > 0.01f) fit0 * (centerW0.coerceIn(38f, 40f) / centerW0) else fit0
     val lutSx = remember(scale, fit) { FloatArray(lutN) { sx(-uMax + it * lutStep) * scale * fit } }
     val lutW = remember(scale, fit) { FloatArray(lutN) { (sx(-uMax + it * lutStep + 0.5f) - sx(-uMax + it * lutStep - 0.5f)) * scale * fit } }
     val lutBr = remember(scale) { FloatArray(lutN) { br(-uMax + it * lutStep) } }
