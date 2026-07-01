@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 162
-        versionName = "3.49.0-del-7cal"
+        versionCode = 163
+        versionName = "3.50.0-cyl-only"
     }
 
     buildTypes {

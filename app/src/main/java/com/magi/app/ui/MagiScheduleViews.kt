@@ -430,12 +430,8 @@ internal fun ScheduleGrid(
 ) {
     val cs = MaterialTheme.colorScheme
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
-    val win = 7
-    // [プロ編集] プロ表示は高密度1ヶ月俯瞰を既定に（かんたんは7日表示）。
-    var gridMode by rememberSaveable { mutableStateOf(0) } // 0=集中 / 1=1ヶ月俯瞰
-    // [プロ一括編集] 1ヶ月俯瞰での複数選択（i*100000+j のキー集合）。
-    val proSel = remember { mutableStateListOf<Long>() }
-    var page by rememberSaveable { mutableStateOf(0) }
+    // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
+    var showBulk by rememberSaveable { mutableStateOf(false) }
     // [違反フィルタ] グリッドのセル違反を種別ごとに表示/非表示。hiddenVio に入れた家族キーを隠す。
     //   violationCells の値は "vio-<famKey>" なので接頭辞を外して種別を取り出す。自己完結（VM不要）。
     var hiddenVio by remember { mutableStateOf(setOf<String>()) }
@@ -448,18 +444,14 @@ internal fun ScheduleGrid(
     fun shown(v: String?) = v != null && v.removePrefix("vio-") !in hiddenVio
     // [凡例の冗長対策] 実線/破線・シフト色キーは作成者には暗記済みのことが多いので既定で畳む。
     var legendOpen by remember { mutableStateOf(false) }
-    val maxPage = if (ui.days <= win) 0 else (ui.days - 1) / win
-    val cur = page.coerceIn(0, maxPage)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("勤務表", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            // 表示切替: §4.5 セグメント（7日=大きく編集 / カレンダー=月の俯瞰 / 1ヶ月=全セル色確認）
-            MagiSegmentedControl(
-                options = listOf("集中", "1ヶ月"),
-                selected = if (gridMode == 0) 0 else 1,
-                onSelect = { gridMode = it },
-            )
+            // [一括編集] 円柱は1セルずつ編集。まとめて変更したい時はこのダイアログで範囲×対象×シフトを一括指定。
+            OutlinedButton(onClick = { showBulk = true }, modifier = Modifier.heightIn(min = 44.dp)) {
+                Text("まとめて割当（一括編集）")
+            }
             // [違反フィルタ＋内訳] 種別ごとの件数つきチップで「どの違反が何件か」を勤務表上で一覧化。
             //   タップで表示/非表示（隠した種別はセル枠が消える）。1種別に絞れば誰の何日かが直接見える。
             if (vioTypes.size > 1) {
@@ -514,123 +506,8 @@ internal fun ScheduleGrid(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            BoxWithConstraints {
-                val totalW = maxWidth
-                if (gridMode == 0) {
-                    MagiFocusCylinder(ui, onCellClick)
-                } else {
-                    val staffW = 60.dp
-                    val d = ui.days.coerceAtLeast(1)
-                    val cellW = ((totalW - staffW) / d).coerceAtLeast(6.dp)
-                    Column {
-                        if (proMode) {
-                            // [プロ一括編集] セルを複数タップで選択 → シフトをタップで一括設定。
-                            Text("プロ：セル/スタッフ名(行)/日付(列)をタップで複数選択し、下のシフトで一括変更（日付タップで列選択）。",
-                                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                            Spacer(Modifier.height(4.dp))
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = {
-                                    proSel.clear()
-                                    for (i in ui.schedule.indices) for (j in 0 until ui.days) proSel.add(i * 100000L + j)
-                                }, modifier = Modifier.heightIn(min = 40.dp)) { Text("すべて選択") }
-                                OutlinedButton(onClick = {
-                                    val cur = proSel.toHashSet()
-                                    proSel.clear()
-                                    for (i in ui.schedule.indices) for (j in 0 until ui.days) {
-                                        val key = i * 100000L + j
-                                        if (key !in cur) proSel.add(key)
-                                    }
-                                }, modifier = Modifier.heightIn(min = 40.dp)) { Text("選択を反転") }
-                                if (proSel.isNotEmpty()) {
-                                    OutlinedButton(onClick = { proSel.clear() }, modifier = Modifier.heightIn(min = 40.dp)) { Text("選択解除") }
-                                }
-                            }
-                            if (proSel.isNotEmpty()) {
-                                Spacer(Modifier.height(6.dp))
-                                Text("選択 ${proSel.size} マス → このシフトに一括：", style = MaterialTheme.typography.labelMedium, color = cs.primary)
-                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    ui.shiftSymbols.indices.forEach { kk ->
-                                        Box(
-                                            Modifier.background(hexToColor(ui.shiftColorHex.getOrNull(kk) ?: ""), RoundedCornerShape(8.dp))
-                                                .clickable {
-                                                    onBulkSet(proSel.map { (it / 100000L).toInt() to (it % 100000L).toInt() }, kk)
-                                                    proSel.clear()
-                                                }.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        ) { Text(ui.shiftSymbols.getOrNull(kk) ?: "", color = hexToColor(ui.shiftTextHex.getOrNull(kk) ?: ""), maxLines = 1) }
-                                    }
-                                }
-                            }
-                        } else {
-                            Text("月全体を色で確認できます。日付をタップするとその日の集中モードへ移動します。",
-                                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Row {
-                            Column {
-                                Box(Modifier.width(staffW).height(22.dp))
-                                ui.schedule.indices.forEach { i ->
-                                    // [プロ一括編集] スタッフ名タップ＝その行(全日)をまとめて選択/解除。
-                                    val rowMod = if (proMode) Modifier.clickable {
-                                        val keys = (0 until ui.days).map { j -> i * 100000L + j }
-                                        if (keys.all { proSel.contains(it) }) proSel.removeAll(keys)
-                                        else keys.forEach { if (!proSel.contains(it)) proSel.add(it) }
-                                    } else Modifier
-                                    Box(Modifier.width(staffW).height(20.dp).padding(horizontal = 4.dp).then(rowMod),
-                                        contentAlignment = Alignment.CenterStart) {
-                                        Text(ui.staffNames.getOrNull(i) ?: i.toString(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                            }
-                            Column {
-                                Row {
-                                    for (j in 0 until ui.days) {
-                                        Box(Modifier.width(cellW).height(22.dp)
-                                            .semantics { contentDescription = if (proMode) "${j + 1}日（タップで列を選択）" else "${j + 1}日（タップで集中へ）" }
-                                            .clickable {
-                                                if (proMode) {
-                                                    // 日付タップ＝その列(全スタッフ)をまとめて選択/解除。
-                                                    val keys = ui.schedule.indices.map { i -> i * 100000L + j }
-                                                    if (keys.all { proSel.contains(it) }) proSel.removeAll(keys)
-                                                    else keys.forEach { if (!proSel.contains(it)) proSel.add(it) }
-                                                } else { gridMode = 0 }
-                                            },
-                                            contentAlignment = Alignment.Center) {
-                                            if (cellW >= 14.dp) Text((j + 1).toString(),
-                                                style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                                        }
-                                    }
-                                }
-                                ui.schedule.forEachIndexed { i, row ->
-                                    Row {
-                                        for (j in 0 until ui.days) {
-                                            val k = row.getOrNull(j) ?: -1
-                                            val vioVal = ui.violationCells["$i,$j"]
-                                            val vio = shown(vioVal)   // [違反フィルタ] 隠した種別はハイライトしない
-                                            val hard = isHardCellViolation(vioVal)
-                                            val bg = if (k < 0) cs.surfaceVariant else hexToColor(ui.shiftColorHex.getOrNull(k) ?: "")
-                                            val symA = if (k < 0) "未割当" else (ui.shiftSymbols.getOrNull(k) ?: "")
-                                            val staffA = ui.staffNames.getOrNull(i) ?: ""
-                                            val selKey = i * 100000L + j
-                                            val sel = proMode && proSel.contains(selKey)
-                                            Box(Modifier.width(cellW).height(20.dp).padding(0.5.dp)
-                                                .background(bg, RoundedCornerShape(4.dp))
-                                                .then(if (vio) Modifier.violationBorder(hard, vioColor, 4.dp) else Modifier)
-                                                .then(if (sel) Modifier.border(2.dp, cs.primary, RoundedCornerShape(4.dp)) else Modifier)
-                                                .semantics { contentDescription = "$staffA ${j + 1}日 $symA" + if (vio) (if (hard) "（必須違反）" else "（要調整）") else "" + if (sel) "・選択中" else "" }
-                                                .clickable {
-                                                    if (proMode) { if (!proSel.remove(selKey)) proSel.add(selKey) }
-                                                    else { gridMode = 0 }
-                                                })
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            MagiFocusCylinder(ui, onCellClick)
+            if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
     }
 }
@@ -1042,6 +919,120 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
             dismissButton = { DialogDismissButton(onClick = { confirmClearAll = false }) },
             title = { Text("すべての希望を削除") },
             text = { Text("登録済みの希望をすべて削除します。割当には影響しません。元に戻すで復元できます。") },
+        )
+    }
+}
+
+/** [割当の一括操作] 対象範囲(曜日/期間全体) × 対象(全員/1名) × シフト → まとめて割当。公・休で休みも設定可。元に戻すで取消可。円柱から起動。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val sheetState = rememberModalBottomSheetState()
+    val days = ui.days
+    val weekdays = listOf("月", "火", "水", "木", "金", "土", "日")
+    val startDow = startDowMonFirst(ui.startDate)
+    var scope by remember { mutableIntStateOf(1) }        // 0=この曜日, 1=期間全体
+    var weekday by remember { mutableIntStateOf(0) }
+    var staffSel by remember { mutableIntStateOf(-1) }    // -1=全職員, else staff index
+    var picked by remember { mutableIntStateOf(-1) }      // 選択中のシフト
+    var showStaff by remember { mutableStateOf(false) }
+    val targetDays = if (scope == 1) (0 until days).toList()
+        else (0 until days).filter { (startDow + it) % 7 == weekday }
+    val targetStaff = if (staffSel >= 0) listOf(staffSel) else ui.schedule.indices.toList()
+    val targetName = if (staffSel >= 0) (ui.staffNames.getOrNull(staffSel) ?: "$staffSel") else "全職員"
+    val cellCount = targetStaff.size * targetDays.size
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            DialogHeader("割当の一括操作", onDismiss)
+            Text("対象範囲", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
+                    val s = scope == idx
+                    Box(Modifier.weight(1f).heightIn(min = 44.dp)
+                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                        .clickable { scope = idx }, contentAlignment = Alignment.Center) {
+                        Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                            fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            }
+            if (scope == 0) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    weekdays.forEachIndexed { idx, wd ->
+                        val s = weekday == idx
+                        Box(Modifier.weight(1f).heightIn(min = 36.dp)
+                            .background(if (s) cs.primary else cs.surfaceVariant, RoundedCornerShape(10.dp))
+                            .clickable { weekday = idx }, contentAlignment = Alignment.Center) {
+                            Text(wd, color = if (s) cs.onPrimary else cs.onSurfaceVariant,
+                                fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+            }
+            Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f).heightIn(min = 40.dp)
+                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .clickable { staffSel = -1 }, contentAlignment = Alignment.Center) {
+                    Text("全職員", color = if (staffSel < 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                }
+                Box(Modifier.weight(1f).heightIn(min = 40.dp)
+                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .clickable { showStaff = true }, contentAlignment = Alignment.Center) {
+                    Text(if (staffSel >= 0) "職員：$targetName" else "職員を選ぶ",
+                        color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                }
+            }
+            Text("対象 ${targetStaff.size}名 × ${targetDays.size}日 = ${cellCount}マス。既存の割当は上書き。",
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Text("シフト（タップで選択。公・休で休みにできます）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            ui.shiftSymbols.indices.toList().chunked(3).forEach { rowKeys ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowKeys.forEach { k ->
+                        val sel = picked == k
+                        Box(Modifier.weight(1f).heightIn(min = 48.dp)
+                            .background(if (sel) cs.primaryContainer else cs.surface, RoundedCornerShape(12.dp))
+                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outline, RoundedCornerShape(12.dp))
+                            .clickable { picked = k }, contentAlignment = Alignment.Center) {
+                            Text(ui.shiftSymbols.getOrNull(k) ?: "$k",
+                                color = hexToColor(ui.shiftTextHex.getOrNull(k) ?: ""), fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                    repeat(3 - rowKeys.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Button(onClick = {
+                if (picked in ui.shiftSymbols.indices && cellCount > 0) {
+                    val cells = targetStaff.flatMap { i -> targetDays.map { j -> i to j } }
+                    onBulkSet(cells, picked); onDismiss()
+                }
+            }, enabled = picked in ui.shiftSymbols.indices && cellCount > 0,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text("この${cellCount}マスに一括割当")
+            }
+            Text("※ 選択したマスを上書きします。元に戻すで取消可。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+    }
+    if (showStaff) {
+        AlertDialog(
+            onDismissRequest = { showStaff = false },
+            confirmButton = {},
+            dismissButton = { DialogDismissButton(onClick = { showStaff = false }, text = "閉じる") },
+            title = { DialogHeader("職員を選ぶ", { showStaff = false }) },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    ui.staffNames.forEachIndexed { idx, n ->
+                        Box(Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable { staffSel = idx; showStaff = false },
+                            contentAlignment = Alignment.CenterStart) {
+                            Text(n, Modifier.padding(vertical = 8.dp))
+                        }
+                    }
+                }
+            },
         )
     }
 }
