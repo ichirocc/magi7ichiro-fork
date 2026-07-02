@@ -96,6 +96,17 @@ object V6SanityPort {
         val badRanges = badStaffRanges(state, p)
         if (badRanges > 0) warns.add("staffRange の範囲外キーまたは lo>hi が ${badRanges} 件あります")
 
+        // [監査#8 / Web HF557 A4 相当] 不能な連勤/休(cons1)行の警告:
+        //   窓長>日数 → 窓が一つも取れず無言で無効 / 回数>窓長 → 全ての窓が構造的に違反（充足不能）。
+        var c1OverT = 0
+        var c1Impossible = 0
+        for (c in p.cons1) {
+            if (c.day1 > p.T) c1OverT++
+            else if (c.day2 > c.day1) c1Impossible++
+        }
+        if (c1OverT > 0) warns.add("連勤/休制約: 窓長がスケジュール日数(${p.T}日)を超える行が ${c1OverT} 件あり、判定されません")
+        if (c1Impossible > 0) warns.add("連勤/休制約: 窓長より多い回数を要求する行が ${c1Impossible} 件あり、全ての窓が違反になります（充足不能）")
+
         val impossibleDemand = impossibleDemandDays(state, p)
         if (impossibleDemand.isNotEmpty()) {
             val head = ArrayList<String>()
