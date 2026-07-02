@@ -906,7 +906,9 @@ object V6NativeOptimizer {
             val hi = p.rangeHi[i][k]
             val over = if (hi != Int.MAX_VALUE && counts[i][k] >= hi) 500 else 0
             val oldNeedCost = coverageShortageCost(p, schedule, j, old)
-            val score = over + counts[i][k] * 3 - oldNeedCost
+            // [監査#12] 符号修正: 旧 `- oldNeedCost` は「外すと不足が生じる職員」ほど優先ドナー化していた
+            //   （最小スコア採用のため減算=優遇）。引き抜きコストとして加算し、休・過剰被覆側を優先する。
+            val score = over + counts[i][k] * 3 + oldNeedCost
             if (score < bestScore) { bestScore = score; bestI = i }
         }
         return bestI
