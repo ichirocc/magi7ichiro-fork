@@ -110,7 +110,10 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
 
         // c2 (per-staff total) for shifts old / nw
         var d2 = 0L
+        // [監査#5] 担当不可は対象外（全量/集計/差分の3箇所で同一条件に統一し再乖離を防ぐ）。
+        //   in-bucket不変量下では old/nw は常に担当可のため実質no-op（差分恒等性は保たれる）。
         for (c in p.cons2) {
+            if (!p.canDo(i, c.shiftIdx)) continue
             when (c.shiftIdx) {
                 old -> d2 += viol01(cntSS[i][old] - 1 < c.count) - viol01(cntSS[i][old] < c.count)
                 nw -> d2 += viol01(cntSS[i][nw] + 1 < c.count) - viol01(cntSS[i][nw] < c.count)
@@ -339,7 +342,8 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
 
     private fun c2All(): Long {
         var tot = 0L
-        for (c in p.cons2) for (i in 0 until S) if (cntSS[i][c.shiftIdx] < c.count) tot += 1
+        // [監査#5] 担当不可の職員は対象外（チェッカーと同一条件）
+        for (c in p.cons2) for (i in 0 until S) if (p.canDo(i, c.shiftIdx) && cntSS[i][c.shiftIdx] < c.count) tot += 1
         return tot
     }
 

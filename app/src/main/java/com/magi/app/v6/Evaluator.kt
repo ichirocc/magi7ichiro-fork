@@ -45,6 +45,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
         // c2: per-staff total of a shift must reach count
         for (c in p.cons2) {
             for (i in 0 until S) {
+                if (!p.canDo(i, c.shiftIdx)) continue   // [監査#5] 担当不可の職員は対象外（チェッカーと同一条件）
                 var z = 0
                 for (j in 0 until T) if (a[i][j] == c.shiftIdx) z++
                 if (z < c.count) soft += 1

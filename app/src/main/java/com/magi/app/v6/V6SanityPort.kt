@@ -214,6 +214,17 @@ object V6SanityPort {
             }
         }
 
+        // 2c) [監査#5] 担当可能者ゼロの回数制約(cons2) — canDoガード後は事実上無効になるため案内する。
+        for (c in p.cons2) {
+            val eligible = (0 until p.S).count { p.canDo(it, c.shiftIdx) }
+            if (eligible == 0) {
+                val sym = state.shifts.getOrNull(c.shiftIdx)?.kigou ?: c.shiftIdx.toString()
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "回数制約「$sym を${c.count}回以上」",
+                    "このシフトを担当できる職員がいないため、この制約は事実上無効です",
+                    "担当設定（グループ×シフト）で担当者を追加するか、この行を削除してください"))
+            }
+        }
+
         // 3) 需要 > 担当可能人数（その枠は誰をどう並べても必ず不足）
         for (j in 0 until p.T) for (k in 0 until p.K) {
             val need = p.need1[k][j]
