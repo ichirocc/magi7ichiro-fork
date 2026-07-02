@@ -258,7 +258,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun viol01(b: Boolean): Long = if (b) 1L else 0L
     private fun short0(need: Int, have: Int): Long = if (have < need) (need - have).toLong() else 0L
     private fun covUOf(p1: Long, p2: Long): Long =
-        if (p.use2) minOf(p1, if (p2 != 0L) p2 else p1) else p1
+        if (p.hasP2) minOf(p1, p2) else p1   // [監査#4] falsy-zero除去（hasP2=P2需要が実在するときのみOR緩和）
 
     private fun rangeViol(i: Int, k: Int, n: Int): Long {
         // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×90 / high=amount×45。

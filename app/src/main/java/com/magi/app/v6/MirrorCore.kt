@@ -218,20 +218,32 @@ object UnifiedViolationChecker {
         }
 
         val cov = coverage(p, s)
+        // [監査#4] covU 件数は最適化器と同式の min-OR 集計（hasP2 のときのみ P2 で緩和）。
+        //   セル着色は「実際に塞ぐべき穴」＝有効な下限（hasP2 なら P2、非use2/P2未定義セルは P1）に
+        //   届かないセルのみ（P2 で救済される P1 不足セルは光らせない）。covO は従来条件を完全保存。
+        var covP1 = 0L
+        var covP2 = 0L
         for (j in 0 until p.T) {
             for (k in 0 until p.K) {
                 val lo = p.need1[k][j]
-                if (lo < 0) continue
-                val hi = if (p.use2 && p.need2[k][j] >= 0) p.need2[k][j] else lo
+                val lo2 = if (p.use2) p.need2[k][j] else -1
                 val got = cov[j][k]
+                if (lo2 >= 0 && got < lo2) covP2 += (lo2 - got).toLong()
+                val eff = if (p.hasP2) lo2 else lo
+                if (eff >= 0 && got < eff) markNeed(k, j, "covU")
+                if (lo < 0) continue
+                val hi = if (p.use2 && lo2 >= 0) lo2 else lo
                 if (got < lo) {
-                    inc("covU", lo - got)
-                    markNeed(k, j, "covU")
+                    covP1 += (lo - got).toLong()
                 } else if (got > hi) {
                     inc("covO", got - hi)
                     markNeed(k, j, "covO")
                 }
             }
+        }
+        run {
+            val covU = if (p.hasP2) minOf(covP1, covP2) else covP1
+            if (covU > 0) inc("covU", covU.toInt())
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {

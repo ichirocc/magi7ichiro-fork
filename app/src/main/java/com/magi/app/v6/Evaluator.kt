@@ -157,7 +157,9 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
                 }
             }
         }
-        hard1 += if (p.use2) minOf(c2v1, if (c2v2 != 0L) c2v2 else c2v1) else c2v1
+        // [監査#4] min-OR は P2需要が実在する(hasP2)ときだけ有効。従来は c2v2==0（P2完全充足）を
+        //   P2未定義と混同する falsy-zero（Web `||` 由来）で、P2を満たした瞬間に緩和が失効していた。
+        hard1 += if (p.hasP2) minOf(c2v1, c2v2) else c2v1
 
         return hard1 * 1_000_000L + soft
     }

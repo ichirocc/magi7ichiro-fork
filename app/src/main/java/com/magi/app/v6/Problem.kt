@@ -42,6 +42,8 @@ class Problem(val state: MagiState) {
     /** need1[k][j] / need2[k][j] = required count, or -1 (= no requirement). */
     val need1: Array<IntArray>
     val need2: Array<IntArray>
+    // [監査#4] P2需要が1マスでも定義されているか（covU min-OR 緩和の有効条件）。
+    val hasP2: Boolean
 
     /** rangeLo/Hi[i][k] = LimMin/LimMax, or Int.MIN/MAX_VALUE when unset. */
     val rangeLo: Array<IntArray>
@@ -84,6 +86,8 @@ class Problem(val state: MagiState) {
             need1[k][j] = needAt(k, j, false)
             need2[k][j] = needAt(k, j, true)
         }
+        // [監査#4] falsy-zero（「P2不足合計=0」と「P2未定義」の混同）を根絶するための実在判定。
+        hasP2 = use2 && need2.any { row -> row.any { it >= 0 } }
 
         rangeLo = Array(S) { IntArray(K) { Int.MIN_VALUE } }
         rangeHi = Array(S) { IntArray(K) { Int.MAX_VALUE } }
