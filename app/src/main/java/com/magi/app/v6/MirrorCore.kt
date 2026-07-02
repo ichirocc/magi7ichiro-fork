@@ -360,6 +360,17 @@ fun Problem.canDo(staffI: Int, shiftK: Int): Boolean {
     return bucket.getOrNull(g)?.contains(shiftK) == true
 }
 
+/** [監査#11①] セル(i,j)の希望を「不可侵（凍結）」として扱うか。
+ *  実現可能な希望のみ凍結する。担当不可（bucket外）の不可能希望は凍結しない＝セルを
+ *  被覆等の最適化へ復帰させ、入口fallback値のまま座礁するのを防ぐ。
+ *  正当性: 不可能希望の pref 寄与は「w を割当て不能」ゆえ割当値に依存しない定数1。
+ *  可動化しても pref は増減せず、他目的の最適化余地だけが広がる。
+ *  pref の計数自体（不可能希望も違反として表示・カウント）は不変更（#11②は別裁定）。 */
+fun Problem.wishLocked(i: Int, j: Int): Boolean {
+    val w = wish[i][j]
+    return w >= 0 && canDo(i, w)
+}
+
 fun Problem.allowedShiftsForStaff(staffI: Int): IntArray {
     // canDo と整合: 群bucketをそのまま返す（空＝担当可能シフトなし）。全呼び出し側は空配列を
     // ガード済み。旧実装は空bucketで全Kにフォールバックし canDo(=false) と矛盾していた（潜在バグ）。

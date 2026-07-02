@@ -24,10 +24,10 @@ internal fun findCovOFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
     }
     if (overK < 0) return null
     var wCnt = 0
-    for (i in 0 until p.S) if (eval.at(i, j) == overK && p.wish[i][j] < 0) wCnt++
+    for (i in 0 until p.S) if (eval.at(i, j) == overK && !p.wishLocked(i, j)) wCnt++
     if (wCnt == 0) return null
     var pickW = rng.nextInt(wCnt); var i = 0
-    for (ii in 0 until p.S) if (eval.at(ii, j) == overK && p.wish[ii][j] < 0) { if (pickW-- == 0) { i = ii; break } }
+    for (ii in 0 until p.S) if (eval.at(ii, j) == overK && !p.wishLocked(ii, j)) { if (pickW-- == 0) { i = ii; break } }
     var bestNw = -1; var bestDef = Int.MIN_VALUE
     for (k in 0 until p.K) {
         if (k == overK || !p.canDo(i, k)) continue
@@ -47,10 +47,10 @@ internal fun findC2Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray?
     var pickI = rng.nextInt(dCnt); var stf = 0
     for (i in 0 until p.S) { if (!p.canDo(i, c.shiftIdx)) continue; if (eval.countForStaff(i, c.shiftIdx) < c.count) { if (pickI-- == 0) { stf = i; break } } }
     var dayCnt = 0
-    for (j in 0 until p.T) if (eval.at(stf, j) != c.shiftIdx && p.wish[stf][j] < 0) dayCnt++
+    for (j in 0 until p.T) if (eval.at(stf, j) != c.shiftIdx && !p.wishLocked(stf, j)) dayCnt++
     if (dayCnt == 0) return null
     var pickJ = rng.nextInt(dayCnt); var day = 0
-    for (j in 0 until p.T) if (eval.at(stf, j) != c.shiftIdx && p.wish[stf][j] < 0) { if (pickJ-- == 0) { day = j; break } }
+    for (j in 0 until p.T) if (eval.at(stf, j) != c.shiftIdx && !p.wishLocked(stf, j)) { if (pickJ-- == 0) { day = j; break } }
     return intArrayOf(stf, day, c.shiftIdx)
 }
 
@@ -61,10 +61,10 @@ internal fun findRangeLowFix(p: Problem, eval: DeltaEvaluator, rng: Random): Int
     var pickC = rng.nextInt(cCnt); var rlI = 0; var rlK = 0
     outer@ for (i in 0 until p.S) for (k in 0 until p.K) { val lo = p.rangeLo[i][k]; if (lo == Int.MIN_VALUE || !p.canDo(i, k)) continue; if (eval.countForStaff(i, k) < lo) { if (pickC-- == 0) { rlI = i; rlK = k; break@outer } } }
     var dayCnt = 0
-    for (j in 0 until p.T) if (eval.at(rlI, j) != rlK && p.wish[rlI][j] < 0) dayCnt++
+    for (j in 0 until p.T) if (eval.at(rlI, j) != rlK && !p.wishLocked(rlI, j)) dayCnt++
     if (dayCnt == 0) return null
     var pickJ = rng.nextInt(dayCnt); var day = 0
-    for (j in 0 until p.T) if (eval.at(rlI, j) != rlK && p.wish[rlI][j] < 0) { if (pickJ-- == 0) { day = j; break } }
+    for (j in 0 until p.T) if (eval.at(rlI, j) != rlK && !p.wishLocked(rlI, j)) { if (pickJ-- == 0) { day = j; break } }
     return intArrayOf(rlI, day, rlK)
 }
 
@@ -77,10 +77,10 @@ internal fun findC41Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray
     return when {
         cnt > c.u -> {
             var wCnt = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && p.wish[i][j] < 0) wCnt++
+            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) wCnt++
             if (wCnt == 0) return null
             var pickW = rng.nextInt(wCnt); var ci = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && p.wish[i][j] < 0) { if (pickW-- == 0) { ci = i; break } }
+            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) { if (pickW-- == 0) { ci = i; break } }
             val allowed41 = p.allowedShiftsForStaff(ci)
             var oCnt = 0; for (ak in allowed41) if (ak != c.shiftIdx) oCnt++
             if (oCnt == 0) return null
@@ -90,10 +90,10 @@ internal fun findC41Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray
         }
         cnt < c.l -> {
             var aCnt = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && p.wish[i][j] < 0 && p.canDo(i, c.shiftIdx)) aCnt++
+            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) aCnt++
             if (aCnt == 0) return null
             var pickA = rng.nextInt(aCnt); var ai = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && p.wish[i][j] < 0 && p.canDo(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
+            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
             intArrayOf(ai, j, c.shiftIdx)
         }
         else -> null
@@ -110,10 +110,10 @@ internal fun findC41sFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
     return when {
         cnt > c.u -> {
             var wCnt = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && p.wish[i][j] < 0) wCnt++
+            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) wCnt++
             if (wCnt == 0) return null
             var pickW = rng.nextInt(wCnt); var ci = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && p.wish[i][j] < 0) { if (pickW-- == 0) { ci = i; break } }
+            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) { if (pickW-- == 0) { ci = i; break } }
             val allowed41 = p.allowedShiftsForStaff(ci)
             var oCnt = 0; for (ak in allowed41) if (ak != c.shiftIdx) oCnt++
             if (oCnt == 0) return null
@@ -123,10 +123,10 @@ internal fun findC41sFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
         }
         cnt < c.l -> {
             var aCnt = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && p.wish[i][j] < 0 && p.canDo(i, c.shiftIdx)) aCnt++
+            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) aCnt++
             if (aCnt == 0) return null
             var pickA = rng.nextInt(aCnt); var ai = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && p.wish[i][j] < 0 && p.canDo(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
+            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
             intArrayOf(ai, j, c.shiftIdx)
         }
         else -> null
@@ -140,10 +140,10 @@ internal fun findRangeHighFix(p: Problem, eval: DeltaEvaluator, rng: Random): In
     var pickC = rng.nextInt(cCnt); var rhI = 0; var rhK = 0
     outer@ for (i in 0 until p.S) for (k in 0 until p.K) { val hi = p.rangeHi[i][k]; if (hi == Int.MAX_VALUE) continue; if (eval.countForStaff(i, k) > hi) { if (pickC-- == 0) { rhI = i; rhK = k; break@outer } } }
     var dayCnt = 0
-    for (j in 0 until p.T) if (eval.at(rhI, j) == rhK && p.wish[rhI][j] < 0) dayCnt++
+    for (j in 0 until p.T) if (eval.at(rhI, j) == rhK && !p.wishLocked(rhI, j)) dayCnt++
     if (dayCnt == 0) return null
     var pickJ = rng.nextInt(dayCnt); var day = 0
-    for (j in 0 until p.T) if (eval.at(rhI, j) == rhK && p.wish[rhI][j] < 0) { if (pickJ-- == 0) { day = j; break } }
+    for (j in 0 until p.T) if (eval.at(rhI, j) == rhK && !p.wishLocked(rhI, j)) { if (pickJ-- == 0) { day = j; break } }
     val allowed = p.allowedShiftsForStaff(rhI)
     var oCnt = 0; for (ak in allowed) if (ak != rhK) oCnt++
     if (oCnt == 0) return null
@@ -174,7 +174,7 @@ internal fun findC3WantFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntAr
                 }
                 if (miss == 1 && missL >= 0) {
                     val ml = j + missL
-                    if (p.wish[i][ml] < 0 && p.canDo(i, seq[missL])) return intArrayOf(i, ml, seq[missL])
+                    if (!p.wishLocked(i, ml) && p.canDo(i, seq[missL])) return intArrayOf(i, ml, seq[missL])
                 }
             }
             j++
@@ -230,7 +230,7 @@ internal fun findAptFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray
         val dayStart = rng.nextInt(p.T)
         for (d in 0 until p.T) {
             val j = (dayStart + d) % p.T
-            if (p.wish[i][j] < 0 && eval.at(i, j) == kOver) return intArrayOf(i, j, kUnder)
+            if (!p.wishLocked(i, j) && eval.at(i, j) == kOver) return intArrayOf(i, j, kUnder)
         }
     }
     return null

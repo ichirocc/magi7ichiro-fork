@@ -393,7 +393,7 @@ object V6NativeOptimizer {
                             val i = rng.nextInt(p.S)
                             var ja = rng.nextInt(p.T); var jb = rng.nextInt(p.T)
                             if (ja == jb) jb = (jb + 1) % p.T
-                            if (p.wish[i][ja] < 0 && p.wish[i][jb] < 0) {
+                            if (!p.wishLocked(i, ja) && !p.wishLocked(i, jb)) {
                                 val ka = eval.at(i, ja); val kb = eval.at(i, jb)
                                 if (ka != kb) {
                                     eval.apply(i, ja, kb); eval.apply(i, jb, ka)
@@ -405,7 +405,7 @@ object V6NativeOptimizer {
                         }
                         op == 4 && p.S > 0 && p.T > 0 -> {   // randomAllowedCell
                             val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
-                            if (p.wish[i][j] < 0) {
+                            if (!p.wishLocked(i, j)) {
                                 val allowed = p.allowedShiftsForStaff(i)
                                 if (allowed.isNotEmpty()) {
                                     val oldK = eval.at(i, j); val nw = allowed[rng.nextInt(allowed.size)]
@@ -434,7 +434,7 @@ object V6NativeOptimizer {
                             val j = rng.nextInt(p.T)
                             val i1 = rng.nextInt(p.S); var i2 = rng.nextInt(p.S)
                             if (i2 == i1) i2 = (i2 + 1) % p.S
-                            if (p.wish[i1][j] < 0 && p.wish[i2][j] < 0) {
+                            if (!p.wishLocked(i1, j) && !p.wishLocked(i2, j)) {
                                 val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
                                 if (k1 != k2 && p.canDo(i1, k2) && p.canDo(i2, k1)) {
                                     eval.apply(i1, j, k2); eval.apply(i2, j, k1)
@@ -727,7 +727,7 @@ object V6NativeOptimizer {
                 var bestJ = -1
                 var bestScore = Int.MAX_VALUE
                 for (jj in 0 until p.T) {
-                    if (p.wish[i][jj] >= 0 || out[i][jj] == k) continue
+                    if (p.wishLocked(i, jj) || out[i][jj] == k) continue
                     val score = coverageShortageCost(p, out, jj, out[i][jj]) + rng.nextInt(3)
                     if (score < bestScore) {
                         bestScore = score
@@ -795,7 +795,7 @@ object V6NativeOptimizer {
                 0 -> {   // random allowed single cell (direct-eval)
                     if (p.S > 0 && p.T > 0) {
                         val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
-                        if (p.wish[i][j] < 0) {
+                        if (!p.wishLocked(i, j)) {
                             val allowed = p.allowedShiftsForStaff(i)
                             if (allowed.isNotEmpty()) {
                                 val oldK = eval.at(i, j); val nw = allowed[rng.nextInt(allowed.size)]
@@ -816,7 +816,7 @@ object V6NativeOptimizer {
                         val i = rng.nextInt(p.S)
                         var ja = rng.nextInt(p.T); var jb = rng.nextInt(p.T)
                         if (ja == jb) jb = (jb + 1) % p.T
-                        if (p.wish[i][ja] < 0 && p.wish[i][jb] < 0) {
+                        if (!p.wishLocked(i, ja) && !p.wishLocked(i, jb)) {
                             val ka = eval.at(i, ja); val kb = eval.at(i, jb)
                             if (ka != kb) {
                                 eval.apply(i, ja, kb); eval.apply(i, jb, ka)
@@ -834,7 +834,7 @@ object V6NativeOptimizer {
                         val j = rng.nextInt(p.T)
                         val i1 = rng.nextInt(p.S); var i2 = rng.nextInt(p.S)
                         if (i2 == i1) i2 = (i2 + 1) % p.S
-                        if (p.wish[i1][j] < 0 && p.wish[i2][j] < 0) {
+                        if (!p.wishLocked(i1, j) && !p.wishLocked(i2, j)) {
                             val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
                             if (k1 != k2 && p.canDo(i1, k2) && p.canDo(i2, k1)) {
                                 eval.apply(i1, j, k2); eval.apply(i2, j, k1)
@@ -900,7 +900,7 @@ object V6NativeOptimizer {
         var bestScore = Int.MAX_VALUE
         for (i in 0 until p.S) {
             if (!p.canDo(i, k)) continue
-            if (p.wish[i][j] >= 0 && p.wish[i][j] != k) continue
+            if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
             val old = schedule[i][j]
             if (old == k) continue   // [監査#3] 既就業者はスキップ（旧: return で当該(日,シフト)の充填全体が中断していた）
             val hi = p.rangeHi[i][k]
@@ -952,7 +952,7 @@ object V6NativeOptimizer {
         for (i in 0 until p.S) for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cnt[i][k]++ }
         // destroy: 非希望セルを休へ。休を担当できない職員は対象外（群外割当を作らない）。cnt も同期。
         for (i in 0 until p.S) {
-            if (p.wish[i][j] >= 0 || !p.canDo(i, rest)) continue
+            if (p.wishLocked(i, j) || !p.canDo(i, rest)) continue
             val old = schedule[i][j]
             if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cnt[i][old]--; cnt[i][rest]++ }
         }
@@ -984,7 +984,7 @@ object V6NativeOptimizer {
             while (miss > 0) {
                 var bestI = -1; var bestDelta = Long.MAX_VALUE
                 for (i in 0 until p.S) {
-                    if (schedule[i][j] != rest || p.wish[i][j] >= 0 || !p.canDo(i, k)) continue
+                    if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.canDo(i, k)) continue
                     val delta = staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - staffCountPenaltyAt(p, i, k, cnt[i][k]) + c41DayMarg(p.sgrp[i], k)
                     if (delta < bestDelta) { bestDelta = delta; bestI = i }
                 }
@@ -1013,12 +1013,12 @@ object V6NativeOptimizer {
         val cntI = IntArray(p.K)
         for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cntI[k]++ }
         for (j in 0 until p.T) {
-            if (p.wish[i][j] >= 0) continue
+            if (p.wishLocked(i, j)) continue
             val old = schedule[i][j]
             if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cntI[old]--; cntI[rest]++ }
         }
         for (j in 0 until p.T) {
-            if (p.wish[i][j] >= 0 || schedule[i][j] != rest) continue
+            if (p.wishLocked(i, j) || schedule[i][j] != rest) continue
             var bestK = -1; var bestDelta = Long.MAX_VALUE
             for (k in 0 until p.K) {
                 if (k == rest || !p.canDo(i, k)) continue
@@ -1042,7 +1042,7 @@ object V6NativeOptimizer {
             val key = keys[rng.nextInt(keys.size)]
             val i = key.substringBefore(',').toIntOrNull() ?: return@repeat
             val j = key.substringAfter(',').toIntOrNull() ?: return@repeat
-            if (i !in 0 until p.S || j !in 0 until p.T || p.wish[i][j] >= 0) return@repeat
+            if (i !in 0 until p.S || j !in 0 until p.T || p.wishLocked(i, j)) return@repeat
             val allowed = p.allowedShiftsForStaff(i)
             if (allowed.isEmpty()) return@repeat
             // [soft-aware violations / 実測で実データ final -22.6%] 違反セルを、staff i の現状回数で
@@ -1067,7 +1067,7 @@ object V6NativeOptimizer {
         if (p.S == 0 || p.T == 0) return
         val i = rng.nextInt(p.S)
         val j = rng.nextInt(p.T)
-        if (p.wish[i][j] >= 0) return
+        if (p.wishLocked(i, j)) return
         val allowed = p.allowedShiftsForStaff(i)
         if (allowed.isNotEmpty()) schedule[i][j] = allowed[rng.nextInt(allowed.size)]
     }
@@ -1079,7 +1079,7 @@ object V6NativeOptimizer {
         var a = rng.nextInt(p.T)
         var b = rng.nextInt(p.T)
         if (a == b) b = (b + 1) % p.T
-        if (p.wish[i][a] >= 0 || p.wish[i][b] >= 0) return
+        if (p.wishLocked(i, a) || p.wishLocked(i, b)) return
         val tmp = schedule[i][a]
         schedule[i][a] = schedule[i][b]
         schedule[i][b] = tmp
