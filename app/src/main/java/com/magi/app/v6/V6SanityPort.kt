@@ -225,6 +225,16 @@ object V6SanityPort {
             }
         }
 
+        // 2d) [監査#9] 期間より長い連続パターン — パース段階で除外済み（Problem.c3OverT）。理由を案内する。
+        for ((fam, seqStr) in p.c3OverT) {
+            val famJp = c3FamilyJp(fam)
+            val negative = fam == "c3n" || fam == "c3mn"
+            out.add(SettingIssue(IssueKind.CONSTRAINT, "連続パターン「$seqStr」($famJp)",
+                if (negative) "パターン長が期間${p.T}日を超えるため期間内に発生し得ず、この制約は無効です"
+                else "パターン長が期間${p.T}日を超えるため物理的に充足できず、この制約は無効です",
+                "連続パターン設定(ws4)でパターンを${p.T}日以下に短縮するか、この行を削除してください"))
+        }
+
         // 3) 需要 > 担当可能人数（その枠は誰をどう並べても必ず不足）
         for (j in 0 until p.T) for (k in 0 until p.K) {
             val need = p.need1[k][j]

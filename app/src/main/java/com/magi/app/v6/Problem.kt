@@ -57,6 +57,11 @@ class Problem(val state: MagiState) {
     val cons3n: List<C3>
     val cons3m: List<C3>
     val cons3mn: List<C3>
+    // [監査#9] 期間より長い連続パターンはパース段階で除外し、(族, パターン表示) をここに記録する。
+    //   供給源を一元化することで、評価器/Δ/チェッカー/修復手のどれもが L>T 行を見ない状態を保証する
+    //   （従来: チェッカーのみ d>T skip、評価器の run-mode は罰し続ける乖離があった）。
+    private val _c3OverT = mutableListOf<Pair<String, String>>()
+    val c3OverT: List<Pair<String, String>> get() = _c3OverT
     val cons41: List<C41>
     val cons42: List<C42>
     // [スキルグループ新設] スキル群の C41/C42 相当（ssk = staff のスキル群index。既存 sgrp とは独立）。
@@ -122,10 +127,10 @@ class Problem(val state: MagiState) {
             val c = it.count.toIntOrNull() ?: 0
             if (si >= 0 && c > 0) C2(si, c) else null
         }
-        cons3 = resolveC3(state.cons3)
-        cons3n = resolveC3(state.cons3n)
-        cons3m = resolveC3(state.cons3m)
-        cons3mn = resolveC3(state.cons3mn)
+        cons3 = resolveC3(state.cons3, "c3")
+        cons3n = resolveC3(state.cons3n, "c3n")
+        cons3m = resolveC3(state.cons3m, "c3m")
+        cons3mn = resolveC3(state.cons3mn, "c3mn")
         cons41 = state.cons41.mapNotNull {
             val gi = groupIdxOf(it.groupKigou)
             val si = shiftIdxOf(it.shiftKigou)
@@ -172,7 +177,7 @@ class Problem(val state: MagiState) {
      * resolveC3: truncate the pattern at the first blank symbol; drop the whole row if
      * an interior symbol is unresolvable (mirrors the Web doc7#4 fix — never compact).
      */
-    private fun resolveC3(rows: List<com.magi.app.model.C3Row>): List<C3> = rows.mapNotNull { row ->
+    private fun resolveC3(rows: List<com.magi.app.model.C3Row>, fam: String): List<C3> = rows.mapNotNull { row ->
         val raw = row.pattern
         val end = raw.indexOfFirst { it.isBlank() }
         val body = if (end >= 0) raw.subList(0, end) else raw
@@ -182,6 +187,10 @@ class Problem(val state: MagiState) {
             val si = shiftIdxOf(body[idx])
             if (si < 0) return@mapNotNull null
             seq[idx] = si
+        }
+        if (seq.size > T) {   // [監査#9] L>期間はどの族でも判定不能/無意味 → 除外して記録（Sanityが案内）
+            _c3OverT.add(fam to body.joinToString(""))
+            return@mapNotNull null
         }
         C3(seq)
     }
