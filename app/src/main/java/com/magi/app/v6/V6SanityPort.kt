@@ -199,6 +199,21 @@ object V6SanityPort {
                 seqFamily = famRaw, seqKey = seq))
         }
 
+        // 2b) [監査#8 / Web HF557 A4 の native 移植] 連勤・回数窓制約(cons1)の不能設定
+        //   d1>期間: 窓が期間を超え、判定が一度も走らず無言で無効。 d2>d1: 物理的に不可能で全員・全窓が発火し続ける。
+        for (c in p.cons1) {
+            val sym = state.shifts.getOrNull(c.shiftIdx)?.kigou ?: c.shiftIdx.toString()
+            if (c.day1 > p.T) {
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "連勤/休制約「$sym ${c.day1}日で${c.day2}回以上」",
+                    "窓${c.day1}日が期間${p.T}日を超えるため、この制約は一度も判定されません（無言で無効です）",
+                    "制約設定（連勤・回数）で日数を期間${p.T}日以下に直すか、この行を削除してください"))
+            } else if (c.day2 > c.day1) {
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "連勤/休制約「$sym ${c.day1}日で${c.day2}回以上」",
+                    "${c.day1}日の窓に${c.day2}回は物理的に不可能で、全員・全期間が違反になり続けます",
+                    "制約設定（連勤・回数）で回数を${c.day1}回以下に直すか、この行を削除してください"))
+            }
+        }
+
         // 3) 需要 > 担当可能人数（その枠は誰をどう並べても必ず不足）
         for (j in 0 until p.T) for (k in 0 until p.K) {
             val need = p.need1[k][j]
