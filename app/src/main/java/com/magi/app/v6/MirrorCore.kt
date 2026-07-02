@@ -172,7 +172,10 @@ object UnifiedViolationChecker {
 
         for (i in 0 until p.S) for (j in 0 until p.T) {
             val w = p.wish[i][j]
-            if (w in 0 until p.K && s[i][j] != w) {
+            // [監査#11②] 実現可能な希望の未充足のみ HARD(pref) 計上・着色。担当不可の不可能希望は
+            //   充足しようがなく「配布可(HARD=0)」を恒久不能にしていたため計数から対称除外する。
+            //   可視性は impossibleWishCount と Sanity の不可能希望案内が担う。
+            if (w in 0 until p.K && p.canDo(i, w) && s[i][j] != w) {
                 inc("pref")
                 mark(i, j, "pref")
             }

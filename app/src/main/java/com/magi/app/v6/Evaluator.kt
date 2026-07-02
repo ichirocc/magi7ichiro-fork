@@ -99,10 +99,10 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
         soft += c3check(a, p.cons3m, false) * 2L
         soft += c3check(a, p.cons3mn, true) * 12L
 
-        // pref: wished cell not honored -> display HARD
+        // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
         for (i in 0 until S) for (j in 0 until T) {
             val w = p.wish[i][j]
-            if (w >= 0 && a[i][j] != w) hard1 += 1
+            if (w >= 0 && p.canDo(i, w) && a[i][j] != w) hard1 += 1
         }
 
         // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low=90/high=45)・

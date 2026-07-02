@@ -137,7 +137,9 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
 
         // pref (this cell only)
         val w = p.wish[i][j]
-        dPref = (if (w >= 0 && nw != w) 1L else 0L) - (if (w >= 0 && old != w) 1L else 0L)
+        // [監査#11②] 実現可能な希望のみ pref 計上（不可能希望は全量/集計/差分で対称除外）。
+        val wOk = w >= 0 && p.canDo(i, w)
+        dPref = (if (wOk && nw != w) 1L else 0L) - (if (wOk && old != w) 1L else 0L)
 
         // c41 (group/day range) on day j — only constraints touching this staff's group & shifts
         val gi = p.sgrp[i]
@@ -422,7 +424,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun prefAll(): Long {
         var h = 0L
         for (i in 0 until S) for (j in 0 until T) {
-            val w = p.wish[i][j]; if (w >= 0 && a[i][j] != w) h++
+            val w = p.wish[i][j]; if (w >= 0 && p.canDo(i, w) && a[i][j] != w) h++
         }
         return h
     }
