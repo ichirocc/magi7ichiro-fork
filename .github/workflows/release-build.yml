@@ -17,6 +17,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 concurrency:
   group: release-build-${{ github.ref }}
   cancel-in-progress: true
@@ -55,7 +58,15 @@ jobs:
           echo "$HOME/gradle-dist/gradle-8.7/bin" >> "$GITHUB_PATH"
 
       - name: Build release APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/build.log || {
+            { echo "[CI診断r4] Build失敗ログ抜粋:"; echo '```'; grep -nE "^e: |error:|FAILURE:|What went wrong|Caused by" /tmp/build.log | head -60; echo '--- tail40 ---'; tail -n 40 /tmp/build.log; echo '```'; } > /tmp/errbody.txt
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@/tmp/errbody.txt || true
+            exit 1
+          }
 
       # アップロードはベストエフォート（枠超過などで赤くしない）。
       # タグビルドでは常に、手動実行では upload_apk=true のときのみアップロードする。
