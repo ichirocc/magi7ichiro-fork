@@ -123,6 +123,15 @@ object V6NativeOptimizer {
         var schedule = hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
         schedule = hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
         var logs = listOf(MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s workers=${options.workers}"))
+        // [監査#7/#8] 入口設定診断: 解消不能/無効な cons1（Web HF557 A4 相当）と SOFT 桁溢れ(辞書式崩壊)を警告。
+        run {
+            var impC1 = 0; var voidC1 = 0
+            for (c in p.cons1) { if (c.day2 > c.day1) impC1++; if (c.day1 > p.T) voidC1++ }
+            if (impC1 > 0) logs = logs + MirrorLog(level = "W", tag = "設定診断", message = "連続勤務条件(cons1)に解消不能な行が${impC1}件（回数>日数）。全ての窓が違反として計上され続けます。設定の見直しを推奨。")
+            if (voidC1 > 0) logs = logs + MirrorLog(level = "W", tag = "設定診断", message = "連続勤務条件(cons1)に無効な行が${voidC1}件（日数>期間${p.T}日）。この行は判定されません。")
+            val parts = Evaluator(p).fullEvalParts(schedule)
+            if (parts[1] >= 900_000L) logs = logs + MirrorLog(level = "W", tag = "設定診断", message = "SOFT合計(${parts[1]})がスコア上限(1,000,000)に接近/超過。必須(HARD)優先の辞書式評価が崩れる恐れ。解消不能な制約や大規模な同時禁止(C42)の見直しを推奨。")
+        }
         // 仕様書 §2.2/§4.1: 最大5仮説を並列探索。
         val w = options.workers.coerceIn(1, 5)
         val full = max(1, options.totalBudgetSec)
@@ -393,7 +402,7 @@ object V6NativeOptimizer {
                             val i = rng.nextInt(p.S)
                             var ja = rng.nextInt(p.T); var jb = rng.nextInt(p.T)
                             if (ja == jb) jb = (jb + 1) % p.T
-                            if (p.wish[i][ja] < 0 && p.wish[i][jb] < 0) {
+                            if (!p.wishLock[i][ja] && !p.wishLock[i][jb]) {
                                 val ka = eval.at(i, ja); val kb = eval.at(i, jb)
                                 if (ka != kb) {
                                     eval.apply(i, ja, kb); eval.apply(i, jb, ka)
@@ -405,7 +414,7 @@ object V6NativeOptimizer {
                         }
                         op == 4 && p.S > 0 && p.T > 0 -> {   // randomAllowedCell
                             val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
-                            if (p.wish[i][j] < 0) {
+                            if (!p.wishLock[i][j]) {
                                 val allowed = p.allowedShiftsForStaff(i)
                                 if (allowed.isNotEmpty()) {
                                     val oldK = eval.at(i, j); val nw = allowed[rng.nextInt(allowed.size)]
@@ -434,7 +443,7 @@ object V6NativeOptimizer {
                             val j = rng.nextInt(p.T)
                             val i1 = rng.nextInt(p.S); var i2 = rng.nextInt(p.S)
                             if (i2 == i1) i2 = (i2 + 1) % p.S
-                            if (p.wish[i1][j] < 0 && p.wish[i2][j] < 0) {
+                            if (!p.wishLock[i1][j] && !p.wishLock[i2][j]) {
                                 val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
                                 if (k1 != k2 && p.canDo(i1, k2) && p.canDo(i2, k1)) {
                                     eval.apply(i1, j, k2); eval.apply(i2, j, k1)
@@ -637,7 +646,9 @@ object V6NativeOptimizer {
         // [HF361/528/541移植] EarlyChain: Refine 確定後の停滞境界で Chain3/4(常時)+Rect/BlkN(rectSwap)を発火
         run {
             val lr = V6LateOperators.improve(state, bestSched, best.report, Random(actualSeed(options.seed) xor 0x528L), started + budgetSec * 1000L, rectEnabled = options.rectSwap)
-            if (lr.chain3 + lr.chain4 + lr.rect + lr.blkN > 0) {
+            // [監査#1] runRsi と同じ better() ゲート。Chain系の受理(gateW=weighted単層)が HARD を上げた場合に
+            // 無条件採用で最終出力へ流れる穴を封じる（不採用時は Refine 確定解を維持）。
+            if (lr.chain3 + lr.chain4 + lr.rect + lr.blkN > 0 && better(lr.report, best.report)) {
                 bestSched = lr.schedule
                 logs.add(MirrorLog(tag = "EarlyChain", message = "早期循環フック改善 (Chain3=${lr.chain3} Chain4=${lr.chain4} Rect=${lr.rect} BlkN=${lr.blkN}) HARD=${lr.report.hard} total=${lr.report.total}"))
                 logs.addAll(lr.logs)
@@ -719,7 +730,7 @@ object V6NativeOptimizer {
                 var bestJ = -1
                 var bestScore = Int.MAX_VALUE
                 for (jj in 0 until p.T) {
-                    if (p.wish[i][jj] >= 0 || out[i][jj] == k) continue
+                    if (p.wishLock[i][jj] || out[i][jj] == k) continue
                     val score = coverageShortageCost(p, out, jj, out[i][jj]) + rng.nextInt(3)
                     if (score < bestScore) {
                         bestScore = score
@@ -787,7 +798,7 @@ object V6NativeOptimizer {
                 0 -> {   // random allowed single cell (direct-eval)
                     if (p.S > 0 && p.T > 0) {
                         val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
-                        if (p.wish[i][j] < 0) {
+                        if (!p.wishLock[i][j]) {
                             val allowed = p.allowedShiftsForStaff(i)
                             if (allowed.isNotEmpty()) {
                                 val oldK = eval.at(i, j); val nw = allowed[rng.nextInt(allowed.size)]
@@ -808,7 +819,7 @@ object V6NativeOptimizer {
                         val i = rng.nextInt(p.S)
                         var ja = rng.nextInt(p.T); var jb = rng.nextInt(p.T)
                         if (ja == jb) jb = (jb + 1) % p.T
-                        if (p.wish[i][ja] < 0 && p.wish[i][jb] < 0) {
+                        if (!p.wishLock[i][ja] && !p.wishLock[i][jb]) {
                             val ka = eval.at(i, ja); val kb = eval.at(i, jb)
                             if (ka != kb) {
                                 eval.apply(i, ja, kb); eval.apply(i, jb, ka)
@@ -826,7 +837,7 @@ object V6NativeOptimizer {
                         val j = rng.nextInt(p.T)
                         val i1 = rng.nextInt(p.S); var i2 = rng.nextInt(p.S)
                         if (i2 == i1) i2 = (i2 + 1) % p.S
-                        if (p.wish[i1][j] < 0 && p.wish[i2][j] < 0) {
+                        if (!p.wishLock[i1][j] && !p.wishLock[i2][j]) {
                             val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
                             if (k1 != k2 && p.canDo(i1, k2) && p.canDo(i2, k1)) {
                                 eval.apply(i1, j, k2); eval.apply(i2, j, k1)
@@ -892,9 +903,9 @@ object V6NativeOptimizer {
         var bestScore = Int.MAX_VALUE
         for (i in 0 until p.S) {
             if (!p.canDo(i, k)) continue
-            if (p.wish[i][j] >= 0 && p.wish[i][j] != k) continue
+            if (p.wishLock[i][j] && p.wish[i][j] != k) continue
             val old = schedule[i][j]
-            if (old == k) return i
+            if (old == k) continue   // [監査#3] return→continue（既割当職員の発見だけで充填全体が中断していた欠陥）
             val hi = p.rangeHi[i][k]
             val over = if (hi != Int.MAX_VALUE && counts[i][k] >= hi) 500 else 0
             val oldNeedCost = coverageShortageCost(p, schedule, j, old)
@@ -933,17 +944,19 @@ object V6NativeOptimizer {
     private fun destroyRepairDayAt(state: MagiState, schedule: Array<IntArray>, j: Int, rng: Random) {
         val p = cachedProblem(state)
         if (p.T == 0) return
+        val rest = restShiftIndex(state)   // [監査#2] 休=シフト0のハードコード廃止（休→公→先頭）
         // [soft-aware destroy-repair / 実測検証 tools/nsp_bench.py] 従来はランダム順で穴を埋めるだけ(soft無視)で、
         //   等価ベンチでは soft-aware 修復が AUC -24%〜-34% と唯一の大幅改善だった。ここで同じレバーを適用:
         //   非希望セルを休へ destroy → 各需要を「割当の marginal soft が最小の休スタッフ」で repair。
         //   休→k のみ移すため被覆穴を新たに作らない。希望固定は保持。受理(SA/isBetter)が最終採否=安全。
         val cnt = Array(p.S) { IntArray(p.K) }
         for (i in 0 until p.S) for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cnt[i][k]++ }
-        // destroy: 非希望セルを休(0)へ。cnt も同期。
+        // destroy: 非希望セルを休(rest)へ。cnt も同期。[監査#2] 休を担当できない職員は対象外（群外割当を作らない）。
         for (i in 0 until p.S) {
-            if (p.wish[i][j] >= 0) continue
+            if (p.wishLock[i][j]) continue
+            if (!p.canDo(i, rest)) continue
             val old = schedule[i][j]
-            if (old != 0 && old in 0 until p.K) { schedule[i][j] = 0; cnt[i][old]--; cnt[i][0]++ }
+            if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cnt[i][old]--; cnt[i][rest]++ }
         }
         val covJ = IntArray(p.K)
         for (i in 0 until p.S) { val k = schedule[i][j]; if (k in 0 until p.K) covJ[k]++ }
@@ -965,19 +978,20 @@ object V6NativeOptimizer {
             return d
         }
         // repair: 各勤務シフトの需要を soft(個人 low/high/apt ＋ 群レンジ c41)最小の休スタッフで満たす。
-        for (k in 1 until p.K) {
+        for (k in 0 until p.K) {
+            if (k == rest) continue   // [監査#2] 全シフト同等（Level Zero 哲学）: rest 以外の全シフトを需要対象に
             val need = p.need1[k][j]
             if (need <= 0) continue
             var miss = need - covJ[k]
             while (miss > 0) {
                 var bestI = -1; var bestDelta = Long.MAX_VALUE
                 for (i in 0 until p.S) {
-                    if (schedule[i][j] != 0 || p.wish[i][j] >= 0 || !p.canDo(i, k)) continue
+                    if (schedule[i][j] != rest || p.wishLock[i][j] || !p.canDo(i, k)) continue
                     val delta = staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - staffCountPenaltyAt(p, i, k, cnt[i][k]) + c41DayMarg(p.sgrp[i], k)
                     if (delta < bestDelta) { bestDelta = delta; bestI = i }
                 }
                 if (bestI < 0) break
-                schedule[bestI][j] = k; cnt[bestI][k]++; cnt[bestI][0]--; covJ[k]++; miss--
+                schedule[bestI][j] = k; cnt[bestI][k]++; cnt[bestI][rest]--; covJ[k]++; miss--
                 if (hasC41) grpCnt[p.sgrp[bestI]][k]++
             }
         }
@@ -993,20 +1007,23 @@ object V6NativeOptimizer {
         val p = cachedProblem(state)
         val allowed = p.allowedShiftsForStaff(i)
         if (allowed.isEmpty()) return
+        val rest = restShiftIndex(state)   // [監査#2]
+        if (!p.canDo(i, rest)) return      // 休を担当できない職員は破壊修復の対象外（群外割当を作らない）
         // [soft-aware staff-DR / 実測 tools/nsp_bench.py --real: staff+viol で実データ final -49.5%]
         //   非希望セルを休へ destroy → 各日の被覆穴を「staff i の marginal soft 最小のシフト」で repair。
         //   被覆穴のみ埋める(過剰=covO を作らない)。希望固定は保持。スコアリング不変=Δ×フル無関係。
         val cntI = IntArray(p.K)
         for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cntI[k]++ }
         for (j in 0 until p.T) {
-            if (p.wish[i][j] >= 0) continue
+            if (p.wishLock[i][j]) continue
             val old = schedule[i][j]
-            if (old != 0 && old in 0 until p.K) { schedule[i][j] = 0; cntI[old]--; cntI[0]++ }
+            if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cntI[old]--; cntI[rest]++ }
         }
         for (j in 0 until p.T) {
-            if (p.wish[i][j] >= 0 || schedule[i][j] != 0) continue
+            if (p.wishLock[i][j] || schedule[i][j] != rest) continue
             var bestK = -1; var bestDelta = Long.MAX_VALUE
-            for (k in 1 until p.K) {
+            for (k in 0 until p.K) {
+                if (k == rest) continue   // [監査#2]
                 if (!p.canDo(i, k)) continue
                 val need = p.need1[k][j]
                 if (need <= 0) continue
@@ -1016,7 +1033,7 @@ object V6NativeOptimizer {
                 val delta = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k])
                 if (delta < bestDelta) { bestDelta = delta; bestK = k }
             }
-            if (bestK >= 0) { schedule[i][j] = bestK; cntI[bestK]++; cntI[0]-- }
+            if (bestK >= 0) { schedule[i][j] = bestK; cntI[bestK]++; cntI[rest]-- }
         }
     }
 
@@ -1028,7 +1045,7 @@ object V6NativeOptimizer {
             val key = keys[rng.nextInt(keys.size)]
             val i = key.substringBefore(',').toIntOrNull() ?: return@repeat
             val j = key.substringAfter(',').toIntOrNull() ?: return@repeat
-            if (i !in 0 until p.S || j !in 0 until p.T || p.wish[i][j] >= 0) return@repeat
+            if (i !in 0 until p.S || j !in 0 until p.T || p.wishLock[i][j]) return@repeat
             val allowed = p.allowedShiftsForStaff(i)
             if (allowed.isEmpty()) return@repeat
             // [soft-aware violations / 実測で実データ final -22.6%] 違反セルを、staff i の現状回数で
@@ -1053,7 +1070,7 @@ object V6NativeOptimizer {
         if (p.S == 0 || p.T == 0) return
         val i = rng.nextInt(p.S)
         val j = rng.nextInt(p.T)
-        if (p.wish[i][j] >= 0) return
+        if (p.wishLock[i][j]) return
         val allowed = p.allowedShiftsForStaff(i)
         if (allowed.isNotEmpty()) schedule[i][j] = allowed[rng.nextInt(allowed.size)]
     }
@@ -1065,7 +1082,7 @@ object V6NativeOptimizer {
         var a = rng.nextInt(p.T)
         var b = rng.nextInt(p.T)
         if (a == b) b = (b + 1) % p.T
-        if (p.wish[i][a] >= 0 || p.wish[i][b] >= 0) return
+        if (p.wishLock[i][a] || p.wishLock[i][b]) return
         val tmp = schedule[i][a]
         schedule[i][a] = schedule[i][b]
         schedule[i][b] = tmp

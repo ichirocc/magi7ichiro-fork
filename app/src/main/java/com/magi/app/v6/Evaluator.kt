@@ -19,7 +19,10 @@ package com.magi.app.v6
  */
 class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
 
-    fun fullEval(a: Array<IntArray>): Long {
+    fun fullEval(a: Array<IntArray>): Long { val v = fullEvalParts(a); return v[0] * 1_000_000L + v[1] }
+
+    /** [監査#7] hard/soft を分離して返す（soft の 1e6 桁溢れ診断用）。fullEval はこの合成で挙動不変。 */
+    fun fullEvalParts(a: Array<IntArray>): LongArray {
         val S = p.S; val T = p.T; val K = p.K
         var hard1 = 0L
         var soft = 0L
@@ -45,6 +48,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
         // c2: per-staff total of a shift must reach count
         for (c in p.cons2) {
             for (i in 0 until S) {
+                if (!p.canDo(i, c.shiftIdx)) continue   // [監査#5統一] チェッカーと同じ canDo ガード（担当不可の幻soft除去）
                 var z = 0
                 for (j in 0 until T) if (a[i][j] == c.shiftIdx) z++
                 if (z < c.count) soft += 1
@@ -156,9 +160,9 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
                 }
             }
         }
-        hard1 += if (p.use2) minOf(c2v1, if (c2v2 != 0L) c2v2 else c2v1) else c2v1
+        hard1 += if (p.use2 && p.hasNeed2) minOf(c2v1, c2v2) else c2v1   // [監査#4] falsy-zero是正: P2定義時のみ純min(OR)
 
-        return hard1 * 1_000_000L + soft
+        return longArrayOf(hard1, soft)
     }
 
     /** Returns the hard / soft split for display (運用違反 vs SOFT). */
@@ -170,7 +174,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
         for (c in list) {
             val seq = c.seq
             val D = seq.size
-            if (D == 0) continue
+            if (D == 0 || D > T) continue   // [監査#9統一] 期間超の行はチェッカー同様スキップ（run-mode含む）
             val first = seq[0]
             // [HF507] non-forbidden single-shift run -> run deficit (per staff whole-row)
             if (!forbidden && c3RunMode && C3Run.isSingleShiftSeq(seq)) {

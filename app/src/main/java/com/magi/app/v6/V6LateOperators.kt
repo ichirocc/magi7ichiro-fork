@@ -223,7 +223,7 @@ object V6LateOperators {
                 if (k1 < 0 || k2 < 0 || k3 < 0) continue
                 if (k1 == k2 || k2 == k3 || k1 == k3) continue
                 if (!alw[i1].contains(k2) || !alw[i2].contains(k3) || !alw[i3].contains(k1)) continue
-                if (state.wishes.containsKey("$i1,$j") || state.wishes.containsKey("$i2,$j") || state.wishes.containsKey("$i3,$j")) continue
+                if (p.wishLock[i1][j] || p.wishLock[i2][j] || p.wishLock[i3][j]) continue   // [監査#11] 実現可能な希望のみ凍結
                 if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k1)) continue
                 sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k1
                 if (gateW()) chain3++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3 }
@@ -252,8 +252,7 @@ object V6LateOperators {
                 if (k1 < 0 || k2 < 0 || k3 < 0 || k4 < 0) continue
                 if (setOf(k1, k2, k3, k4).size < 4) continue
                 if (!alw[i1].contains(k2) || !alw[i2].contains(k3) || !alw[i3].contains(k4) || !alw[i4].contains(k1)) continue
-                if (state.wishes.containsKey("$i1,$j") || state.wishes.containsKey("$i2,$j") ||
-                    state.wishes.containsKey("$i3,$j") || state.wishes.containsKey("$i4,$j")) continue
+                if (p.wishLock[i1][j] || p.wishLock[i2][j] || p.wishLock[i3][j] || p.wishLock[i4][j]) continue   // [監査#11]
                 if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k4) || c3nHit(i4, j, k1)) continue
                 sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k4; sched[i4][j] = k1
                 if (gateW()) chain4++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3; sched[i4][j] = k4 }
@@ -325,7 +324,7 @@ object V6LateOperators {
                 var x = 0
                 var j = j1
                 while (j <= j2) {
-                    if (state.wishes.containsKey("$i1,$j") || state.wishes.containsKey("$i2,$j")) { ok = false; break } // 希望(pref=HARD)破壊回避
+                    if (p.wishLock[i1][j] || p.wishLock[i2][j]) { ok = false; break } // 実現可能な希望(pref=HARD)の破壊回避 [監査#11]
                     val k1 = sched[i1][j]
                     val k2 = sched[i2][j]
                     if (k1 < 0 || k2 < 0) { ok = false; break }
@@ -384,7 +383,7 @@ object V6LateOperators {
                         var okc = true
                         for (d in 0 until blen) {
                             val j = s0 + d
-                            if (state.wishes.containsKey("$i1,$j") || sched[i1][j] == kd) { okc = false; break }
+                            if (p.wishLock[i1][j] || sched[i1][j] == kd) { okc = false; break }
                         }
                         if (okc) { j1 = s0; break }
                     }
@@ -400,7 +399,7 @@ object V6LateOperators {
                         if (k1 < 0) { fail = true; break }
                         var pick = -1
                         for (u in used) {
-                            if (sched[u][j] == kd && !state.wishes.containsKey("$u,$j") &&
+                            if (sched[u][j] == kd && !p.wishLock[u][j] &&
                                 p.allowedShiftsForStaff(u).contains(k1)
                             ) { pick = u; break }
                         }
@@ -412,7 +411,7 @@ object V6LateOperators {
                                 val c2 = (st0 + o) % s
                                 if (c2 == i1 || used.contains(c2)) continue
                                 if (sched[c2][j] != kd) continue
-                                if (state.wishes.containsKey("$c2,$j")) continue
+                                if (p.wishLock[c2][j]) continue
                                 if (!p.allowedShiftsForStaff(c2).contains(k1)) continue
                                 var cnt2 = 0
                                 for (jj in 0 until t) if (sched[c2][jj] == kd) cnt2++

@@ -77,7 +77,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     fun score(): Long = scoreFrom(covP1, covP2)
 
     private fun scoreFrom(p1: Long, p2: Long): Long {
-        val cov = if (p.use2) minOf(p1, if (p2 != 0L) p2 else p1) else p1
+        val cov = covUOf(p1, p2)   // [監査#4] covUOf へ一元化（falsy-zero是正・Δ×フル一致）
         val h1 = hc3n + cov + hpref
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
         // [統一c] c3/c3m/c3mn に checker 重み(3/2/12)を適用（sc3等は #fire/run-deficit の生カウント）。
@@ -111,6 +111,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         // c2 (per-staff total) for shifts old / nw
         var d2 = 0L
         for (c in p.cons2) {
+            if (!p.canDo(i, c.shiftIdx)) continue   // [監査#5統一] c2All と同一ガード（Δ×フル一致）
             when (c.shiftIdx) {
                 old -> d2 += viol01(cntSS[i][old] - 1 < c.count) - viol01(cntSS[i][old] < c.count)
                 nw -> d2 += viol01(cntSS[i][nw] + 1 < c.count) - viol01(cntSS[i][nw] < c.count)
@@ -255,7 +256,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun viol01(b: Boolean): Long = if (b) 1L else 0L
     private fun short0(need: Int, have: Int): Long = if (have < need) (need - have).toLong() else 0L
     private fun covUOf(p1: Long, p2: Long): Long =
-        if (p.use2) minOf(p1, if (p2 != 0L) p2 else p1) else p1
+        if (p.use2 && p.hasNeed2) minOf(p1, p2) else p1   // [監査#4] Evaluator と同一（falsy-zero是正）
 
     private fun rangeViol(i: Int, k: Int, n: Int): Long {
         // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×90 / high=amount×45。
@@ -299,7 +300,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         var sub = 0L
         for (c in list) {
             val seq = c.seq; val D = seq.size
-            if (D == 0) continue
+            if (D == 0 || D > T) continue   // [監査#9統一] 期間超の行はチェッカー同様スキップ
             // [HF507] single-shift run: deficit is per-staff whole-row, not windowed.
             // A move at (i,j) only affects staff i's row, so recompute row i's run deficit
             // (before/after via the caller's swap captures the delta correctly).
@@ -339,7 +340,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
 
     private fun c2All(): Long {
         var tot = 0L
-        for (c in p.cons2) for (i in 0 until S) if (cntSS[i][c.shiftIdx] < c.count) tot += 1
+        for (c in p.cons2) for (i in 0 until S) { if (!p.canDo(i, c.shiftIdx)) continue; if (cntSS[i][c.shiftIdx] < c.count) tot += 1 }   // [監査#5統一]
         return tot
     }
 
@@ -393,7 +394,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         var sub = 0L
         for (c in list) {
             val seq = c.seq; val D = seq.size
-            if (D == 0) continue
+            if (D == 0 || D > T) continue   // [監査#9統一] 期間超の行はチェッカー同様スキップ
             // [HF507] non-forbidden single-shift run -> run deficit (per staff whole-row)
             if (!fbd && c3RunMode && C3Run.isSingleShiftSeq(seq)) {
                 for (i in 0 until S) sub += C3Run.rowDeficit(a, i, seq[0], D)

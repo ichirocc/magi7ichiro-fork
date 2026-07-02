@@ -421,13 +421,17 @@ fun lockedMatrix(p: Problem): Array<BooleanArray> {
     val out = Array(p.S) { BooleanArray(p.T) }
     for (i in 0 until p.S) {
         for (j in 0 until p.T) {
-            out[i][j] = p.wish[i][j] in 0 until p.K
+            out[i][j] = p.wishLock[i][j]   // [監査#11] 実現可能な希望のみロック
         }
     }
     return out
 }
 
-fun restShiftIndex(state: MagiState): Int = state.shifts.indexOfFirst { it.kigou == "休" }.takeIf { it >= 0 } ?: 0
+// [監査#2/三系統統一] UI(円柱)と同じ 休→公→先頭(0) の優先。「公」のみの職場でも正しい休indexを返す。
+fun restShiftIndex(state: MagiState): Int =
+    state.shifts.indexOfFirst { it.kigou == "休" }.takeIf { it >= 0 }
+        ?: state.shifts.indexOfFirst { it.kigou == "公" }.takeIf { it >= 0 }
+        ?: 0
 
 fun formatDay(startDate: String, offset: Int): String {
     return try {

@@ -43,6 +43,12 @@ class Problem(val state: MagiState) {
     val need1: Array<IntArray>
     val need2: Array<IntArray>
 
+    /** [監査#4] use2 で P2(need2) が1行でも定義されているか（covU min-OR の適用条件）。 */
+    val hasNeed2: Boolean
+
+    /** [監査#11] wishLock[i][j] = 実現可能な希望で固定されたセル（移動禁止）。不能希望(担当不可)は false。 */
+    val wishLock: Array<BooleanArray>
+
     /** rangeLo/Hi[i][k] = LimMin/LimMax, or Int.MIN/MAX_VALUE when unset. */
     val rangeLo: Array<IntArray>
     val rangeHi: Array<IntArray>
@@ -79,6 +85,17 @@ class Problem(val state: MagiState) {
             need1[k][j] = needAt(k, j, false)
             need2[k][j] = needAt(k, j, true)
         }
+
+        // [監査#4] covU の min-OR は「P2(need2) が実際に定義された運用」でのみ適用する。
+        // 旧: JS の falsy `||` を忠実移植した結果、P2 完全充足(=不足0)の瞬間に P1 へフォールバックし
+        // OR 緩和が効かない移植バグがあった。P2 行ゼロの運用は従来通り P1 のみで不変。
+        var h2 = false
+        outer@ for (k in 0 until K) for (j in 0 until T) if (need2[k][j] >= 0) { h2 = true; break@outer }
+        hasNeed2 = h2
+
+        // [監査#11] 移動凍結は「実現可能な希望」のみ。不能希望(担当不可)は割当値に依らず pref 恒久1のため、
+        // セルを凍結せず被覆/soft 最適化に参加させる（凍結は純損失だった）。pref の採点自体は不変。
+        wishLock = Array(S) { i -> BooleanArray(T) { j -> val w = wish[i][j]; w >= 0 && bucket[sgrp[i]].contains(w) } }
 
         rangeLo = Array(S) { IntArray(K) { Int.MIN_VALUE } }
         rangeHi = Array(S) { IntArray(K) { Int.MAX_VALUE } }
