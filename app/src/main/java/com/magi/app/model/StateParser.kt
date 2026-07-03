@@ -32,7 +32,8 @@ object StateParser {
             (0 until row.length()).map { asStr(row.opt(it)) }
         }
         val schedule = o.optJSONArray("schedule").mapArrays { row ->
-            (0 until row.length()).map { row.optInt(it, 0) }
+            // [監査A9] 不正/null セルは 0(先頭シフト) でなく -1(未割当) に倒す（勝手な勤務化を防ぐ）。
+            (0 until row.length()).map { row.optInt(it, -1) }
         }
 
         val wishes = HashMap<String, Int>()
@@ -140,6 +141,10 @@ object StateParser {
         o.put("cons3mn", consArr(state.cons3mn) { patternObj(it.pattern) })
         o.put("cons41", consArr(state.cons41) { obj("groupKigou" to it.groupKigou, "shiftKigou" to it.shiftKigou, "l" to it.l, "u" to it.u) })
         o.put("cons42", consArr(state.cons42) { obj("g1Kigou" to it.g1Kigou, "g2Kigou" to it.g2Kigou, "s1Kigou" to it.s1Kigou, "s2Kigou" to it.s2Kigou) })
+        // [監査A1] スキル制約も書き出す（従来は旧8族のみで、cons41s/42s の追加・削除・変更が
+        //   このエクスポート経路(constraintsEditedのみ)から無言で欠落していた）。
+        o.put("cons41s", consArr(state.cons41s) { obj("groupKigou" to it.groupKigou, "shiftKigou" to it.shiftKigou, "l" to it.l, "u" to it.u) })
+        o.put("cons42s", consArr(state.cons42s) { obj("g1Kigou" to it.g1Kigou, "g2Kigou" to it.g2Kigou, "s1Kigou" to it.s1Kigou, "s2Kigou" to it.s2Kigou) })
         return o.toString(2)
     }
 

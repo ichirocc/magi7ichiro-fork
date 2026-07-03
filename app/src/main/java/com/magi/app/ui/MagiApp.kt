@@ -289,10 +289,12 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     }
     val notifPermLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* 許可有無に関わらず計算は継続。許可時のみ完了通知が表示される。 */ }
+    ) { /* [監査A10] 権限ダイアログの解決後に開始（許可有無に関わらず計算は継続。許可時のみ前景・完了
+           通知が見える）。既許可なら即時に結果が返るため遅延なし。 */
+        vm.runInBackground()
+    }
     val onBgOptimize: () -> Unit = {
         notifPermLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-        vm.runInBackground()
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
