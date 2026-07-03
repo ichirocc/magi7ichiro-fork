@@ -42,8 +42,6 @@ class Problem(val state: MagiState) {
     /** need1[k][j] / need2[k][j] = required count, or -1 (= no requirement). */
     val need1: Array<IntArray>
     val need2: Array<IntArray>
-    // [監査#4] P2需要が1マスでも定義されているか（covU min-OR 緩和の有効条件）。
-    val hasP2: Boolean
 
     /** rangeLo/Hi[i][k] = LimMin/LimMax, or Int.MIN/MAX_VALUE when unset. */
     val rangeLo: Array<IntArray>
@@ -86,8 +84,6 @@ class Problem(val state: MagiState) {
             need1[k][j] = needAt(k, j, false)
             need2[k][j] = needAt(k, j, true)
         }
-        // [監査#4] falsy-zero（「P2不足合計=0」と「P2未定義」の混同）を根絶するための実在判定。
-        hasP2 = use2 && need2.any { row -> row.any { it >= 0 } }
 
         rangeLo = Array(S) { IntArray(K) { Int.MIN_VALUE } }
         rangeHi = Array(S) { IntArray(K) { Int.MAX_VALUE } }
@@ -203,6 +199,35 @@ class Problem(val state: MagiState) {
      * Initial assignment from state.schedule, overwriting a cell with its wish only when
      * the wished shift is actually in the staff's allowed bucket (Web HF143 capability guard).
      */
+    // [監査#4b] 被覆セル評価（per-cell OR/AND）— Evaluator/Δ/Checker の単一ソース（VBA本家=Web HF574と三面統一）。
+    //   U: 両定義=min(u1,u2)・片方定義=その値（P2単独定義セルも評価）。
+    //   O: 両定義=両超過時のみmin(o1,o2)・片方定義=その超過。U>0とO>0は同一セルで両立しない。
+    //   実データ(P1=P2)では u1=u2/o1=o2 のため旧・総量min式とビット単位で同値。
+    fun covUCell(k: Int, j: Int, got: Int): Int {
+        val lo1 = need1[k][j]
+        val lo2 = if (use2) need2[k][j] else -1
+        val u1 = if (lo1 >= 0) (lo1 - got).coerceAtLeast(0) else -1
+        val u2 = if (lo2 >= 0) (lo2 - got).coerceAtLeast(0) else -1
+        return when {
+            u1 >= 0 && u2 >= 0 -> minOf(u1, u2)
+            u1 >= 0 -> u1
+            u2 >= 0 -> u2
+            else -> 0
+        }
+    }
+    fun covOCell(k: Int, j: Int, got: Int): Int {
+        val lo1 = need1[k][j]
+        val lo2 = if (use2) need2[k][j] else -1
+        val o1 = if (lo1 >= 0) (got - lo1).coerceAtLeast(0) else -1
+        val o2 = if (lo2 >= 0) (got - lo2).coerceAtLeast(0) else -1
+        return when {
+            o1 >= 0 && o2 >= 0 -> minOf(o1, o2)
+            o1 >= 0 -> o1
+            o2 >= 0 -> o2
+            else -> 0
+        }
+    }
+
     fun initialAssignment(): Array<IntArray> = Array(S) { i ->
         val b = bucket[sgrp[i]]
         IntArray(T) { j ->

@@ -221,32 +221,17 @@ object UnifiedViolationChecker {
         }
 
         val cov = coverage(p, s)
-        // [監査#4] covU 件数は最適化器と同式の min-OR 集計（hasP2 のときのみ P2 で緩和）。
-        //   セル着色は「実際に塞ぐべき穴」＝有効な下限（hasP2 なら P2、非use2/P2未定義セルは P1）に
-        //   届かないセルのみ（P2 で救済される P1 不足セルは光らせない）。covO は従来条件を完全保存。
-        var covP1 = 0L
-        var covP2 = 0L
+        // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。件数=Σセル寄与、
+        //   着色=そのセルのU/Oが正のときのみ（「P2で救済されるP1不足は光らない」を自然に内包）。
+        //   U>0とO>0は同一セルで両立しないため旧else-if遮蔽は不要。共有ヘルパで最適化器と同式。
         for (j in 0 until p.T) {
             for (k in 0 until p.K) {
-                val lo = p.need1[k][j]
-                val lo2 = if (p.use2) p.need2[k][j] else -1
                 val got = cov[j][k]
-                if (lo2 >= 0 && got < lo2) covP2 += (lo2 - got).toLong()
-                val eff = if (p.hasP2) lo2 else lo
-                if (eff >= 0 && got < eff) markNeed(k, j, "covU")
-                if (lo < 0) continue
-                val hi = if (p.use2 && lo2 >= 0) lo2 else lo
-                if (got < lo) {
-                    covP1 += (lo - got).toLong()
-                } else if (got > hi) {
-                    inc("covO", got - hi)
-                    markNeed(k, j, "covO")
-                }
+                val u = p.covUCell(k, j, got)
+                if (u > 0) { inc("covU", u); markNeed(k, j, "covU") }
+                val o = p.covOCell(k, j, got)
+                if (o > 0) { inc("covO", o); markNeed(k, j, "covO") }
             }
-        }
-        run {
-            val covU = if (p.hasP2) minOf(covP1, covP2) else covP1
-            if (covU > 0) inc("covU", covU.toInt())
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {

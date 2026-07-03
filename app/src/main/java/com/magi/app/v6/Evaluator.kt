@@ -133,33 +133,18 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
             }
         }
 
-        // covU: per-day need shortfall. MIN=OR two-generation design (P1 vs P2).
-        var c2v1 = 0L; var c2v2 = 0L
+        // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。共有ヘルパで Δ/Checker と同式。
+        //   旧: 総量min（#4のhasP2式）は「日毎OR」の業務意味と不一致（大域コミット強制）だったため置換。
+        var covU = 0L
         for (j in 0 until T) {
             for (k in 0 until K) {
-                val n = p.need1[k][j]
-                if (n >= 0) {
-                    var dsn = 0
-                    for (i in 0 until S) if (a[i][j] == k) dsn++
-                    if (dsn < n) c2v1 += (n - dsn)
-                    // [統一a] covO(過剰被覆) を SOFT 追加。UnifiedViolationChecker と同じ上限 hi=(use2&&need2>=0?need2:need1)。
-                    // checker の covO 重み 0.5 を整数化(=1)。最適化器も過剰配置を減らすようになる。
-                    val hi = if (p.use2 && p.need2[k][j] >= 0) p.need2[k][j] else n
-                    if (dsn > hi) soft += (dsn - hi).toLong()
-                }
-                if (p.use2) {
-                    val n2 = p.need2[k][j]
-                    if (n2 >= 0) {
-                        var dsn2 = 0
-                        for (i in 0 until S) if (a[i][j] == k) dsn2++
-                        if (dsn2 < n2) c2v2 += (n2 - dsn2)
-                    }
-                }
+                var dsn = 0
+                for (i in 0 until S) if (a[i][j] == k) dsn++
+                covU += p.covUCell(k, j, dsn)
+                soft += p.covOCell(k, j, dsn).toLong()
             }
         }
-        // [監査#4] min-OR は P2需要が実在する(hasP2)ときだけ有効。従来は c2v2==0（P2完全充足）を
-        //   P2未定義と混同する falsy-zero（Web `||` 由来）で、P2を満たした瞬間に緩和が失効していた。
-        hard1 += if (p.hasP2) minOf(c2v1, c2v2) else c2v1
+        hard1 += covU
 
         return hard1 * 1_000_000L + soft
     }
