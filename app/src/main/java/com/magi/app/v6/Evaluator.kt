@@ -19,7 +19,10 @@ package com.magi.app.v6
  */
 class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
 
-    fun fullEval(a: Array<IntArray>): Long {
+    fun fullEval(a: Array<IntArray>): Long { val v = fullEvalParts(a); return v[0] * 1_000_000L + v[1] }
+
+    /** [監査#7] hard/soft を分離して返す（soft の 1e6 桁溢れ＝辞書式崩壊の診断用）。fullEval はこの合成で挙動不変。 */
+    fun fullEvalParts(a: Array<IntArray>): LongArray {
         val S = p.S; val T = p.T; val K = p.K
         var hard1 = 0L
         var soft = 0L
@@ -146,7 +149,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
         }
         hard1 += covU
 
-        return hard1 * 1_000_000L + soft
+        return longArrayOf(hard1, soft)
     }
 
     /** Returns the hard / soft split for display (運用違反 vs SOFT). */
