@@ -328,6 +328,17 @@ object V6SanityPort {
             }
         }
 
+        // [監査#7] SOFT 桁溢れ（辞書式崩壊）: soft 合計がスコア上限 1,000,000 に接近/超過すると、
+        //   HARD 1件(=1,000,000) と soft が桁で干渉し「必須違反ゼロ最優先」が崩れる。初期解の soft で概算警告。
+        run {
+            val soft = Evaluator(p).fullEvalParts(normalizeSchedule(state.schedule.toIntArray2D(), p))[1]
+            if (soft >= 900_000L) {
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "SOFT違反の合計が過大（${soft}）",
+                    "調整項(SOFT)の合計がスコア上限 1,000,000 に接近しており、必須(HARD)違反ゼロを最優先する評価が崩れる恐れがあります",
+                    "解消不能な制約（回数>日数の連勤条件など）や、多数の同時禁止(C42)・広すぎる範囲制約を見直して調整項を減らしてください"))
+            }
+        }
+
         return out
     }
 
@@ -596,17 +607,6 @@ object V6SanityPort {
         collectDuplicateSeq("c3n", state.cons3n, out)
         collectDuplicateSeq("c3m", state.cons3m, out)
         collectDuplicateSeq("c3mn", state.cons3mn, out)
-
-        // 6) [監査#7] SOFT 桁溢れ（辞書式崩壊）: soft 合計がスコア上限 1,000,000 に接近/超過すると、
-        //   HARD 1件(=1,000,000) と soft が桁で干渉し「必須違反ゼロ優先」が崩れる。初期解の soft で概算警告。
-        run {
-            val soft = Evaluator(p).fullEvalParts(normalizeSchedule(state.schedule.toIntArray2D(), p))[1]
-            if (soft >= 900_000L) {
-                out.add(SettingIssue(IssueKind.CONSTRAINT, "SOFT違反の合計が過大（${soft}）",
-                    "調整項(SOFT)の合計がスコア上限 1,000,000 に接近しており、必須(HARD)違反ゼロを最優先する評価が崩れる恐れがあります",
-                    "解消不能な制約（回数>日数の連勤条件など）や、多数の同時禁止(C42)・広すぎる範囲制約を見直して調整項を減らしてください"))
-            }
-        }
         return out
     }
 
