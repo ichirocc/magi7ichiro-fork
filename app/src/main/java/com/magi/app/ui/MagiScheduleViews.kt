@@ -1163,7 +1163,8 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
         }
     }
     val nameLayouts = remember(ui.staffNames, cs.onSurface) {
-        ui.staffNames.map { tm.measure(it, TextStyle(fontSize = 11.sp, color = cs.onSurface), maxLines = 1) }
+        // [表示] 集中モードの名前列は左から3文字のみ表示（幅を抑え中央列の視認性を優先）。
+        ui.staffNames.map { tm.measure(it.take(3), TextStyle(fontSize = 11.sp, color = cs.onSurface), maxLines = 1) }
     }
     val dragStepPx = with(dens) { 40.dp.toPx() }
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
