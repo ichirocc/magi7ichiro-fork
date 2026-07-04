@@ -1164,7 +1164,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
         (0 until days).map { d ->
             val dow = (sdow + d) % 7  // 0=月..6=日
             val col = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
-            tm.measure((d + 1).toString(), TextStyle(fontSize = 9.sp, color = col))
+            tm.measure((d + 1).toString(), TextStyle(fontSize = 11.sp, color = col))
         }
     }
     val symLayouts = remember(ui.shiftSymbols, ui.shiftTextHex) {
@@ -1174,7 +1174,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     }
     val nameLayouts = remember(ui.staffNames, cs.onSurface) {
         // [表示] 集中モードの名前列は左から3文字のみ表示（幅を抑え中央列の視認性を優先）。
-        ui.staffNames.map { tm.measure(it.take(3), TextStyle(fontSize = 11.sp, color = cs.onSurface), maxLines = 1) }
+        ui.staffNames.map { tm.measure(it.take(3), TextStyle(fontSize = 12.sp, color = cs.onSurface), maxLines = 1) }
     }
     val dragStepPx = with(dens) { 40.dp.toPx() }
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
@@ -1306,7 +1306,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     // [統合] 旧ヒートバーの日別違反色をこの下線バーへ（濃=必須HARD / 橙=要調整SOFT）。
                     if (hc != null) Box(Modifier.fillMaxWidth().height(3.dp).background(hc, RoundedCornerShape(2.dp)))
                     else Spacer(Modifier.height(3.dp))
-                    if (sh > 0) Text("不足$sh", fontSize = 8.sp, color = cs.error, maxLines = 1)
+                    if (sh > 0) Text("不足$sh", fontSize = 10.sp, color = cs.error, maxLines = 1)
                     else Spacer(Modifier.height(2.dp))
                 }
             }
@@ -1373,7 +1373,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                 val bri = lerpLut(lutBr, u)
                 val left = cx - w / 2f
                 val rectW = maxOf(1f, w - 1f)
-                if (w > 13f) {
+                if (w > 20f) {   // [細粒度合格化] 列見出し日番号を9→11spに拡大。幅が足りる列だけ表示し(狭い列は日付帯に委ねる)重なり/過小を回避。
                     dayLayouts.getOrNull(d)?.let { r ->
                         val ty = headHpx / 2f - r.size.height / 2f
                         drawText(r, topLeft = Offset(cx - r.size.width / 2f, ty))
