@@ -96,13 +96,19 @@ object UnifiedViolationChecker {
             for (i in 0 until p.S) {
                 if (!p.canDo(i, c.shiftIdx)) continue
                 var j = 0
+                // [視認性] scoring(inc)は各違反窓ごとに従来どおり計上（不変）。表示(mark)だけは
+                //   窓幅ぶんの塗り広げを止め、違反窓ランの先頭1セルにアンカーする。スライド窓が重複して
+                //   持続不足で行全体を破線で埋めていた（1論理違反≒窓幅×重複数セル）のを 1不足領域=1マーカーへ。
+                var prevViol = false
                 while (j <= p.T - c.day1) {
                     var z = 0
                     for (l in 0 until c.day1) if (cellIs(i, j + l, c.shiftIdx)) z++
-                    if (z < c.day2) {
+                    val viol = z < c.day2
+                    if (viol) {
                         inc("c1")
-                        for (l in 0 until c.day1) mark(i, j + l, "c1")
+                        if (!prevViol) mark(i, j, "c1")
                     }
+                    prevViol = viol
                     j++
                 }
             }
