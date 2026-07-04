@@ -965,8 +965,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perStaff[i][kk]
                                 val vio = ui.countViolations["$i,$kk"]
                                 val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
+                                val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null) {
-                                    if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                                    if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
                             // [D1] シフト別の期間合計（列合計）。グリッドの重複行を廃止しここへ集約。
@@ -1004,8 +1006,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perDay[j][kk]
                                 val vio = ui.needViolations["$kk,$j"]
                                 val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
+                                val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null) {
-                                    if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                                    if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
                         }
@@ -1076,11 +1080,11 @@ private fun TallyLegend(shortBg: Color, overBg: Color, shortLabel: String, overL
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(13.dp).background(shortBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
-        Text(shortLabel, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("▼ $shortLabel", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.width(14.dp))
         Box(Modifier.size(13.dp).background(overBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
-        Text(overLabel, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("▲ $overLabel", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
     }
 }
 
