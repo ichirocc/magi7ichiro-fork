@@ -233,7 +233,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
                     "${pi.versionName} (${pi.longVersionCode})"
                 }.getOrDefault("不明")
             }
-            Text("バージョン: $versionLabel", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("バージョン: $versionLabel", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
