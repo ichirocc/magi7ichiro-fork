@@ -1227,9 +1227,9 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     // [見た目] 合成時に幅(constraints.maxWidth)が確定するので初回フレームから fit を正しく適用し、原寸→縮小の1フレームちらつきを防止。fit/LUTは幅・回転変化時のみ再計算。
     val fit0 = if (constraints.maxWidth > 0) fitFactor(constraints.maxWidth.toFloat()) else 1f
-    // [中央列幅] フォーカス日(中央)の列幅を 38..40dp（密度スケール）に収める。fit を比率調整し、円柱の形状は保ったまま中央列を目標幅へスケール。
+    // [中央列幅] フォーカス日(中央)の列幅を約40dpに揃える（ユーザー指定）。fit を比率調整し、円柱の形状は保ったまま中央列を目標幅へスケール。
     val centerW0 = (sx(0.5f) - sx(-0.5f)) * scale * fit0
-    val cwMin = with(dens) { 38.dp.toPx() }
+    val cwMin = with(dens) { 40.dp.toPx() }
     val cwMax = with(dens) { 40.dp.toPx() }
     val fit = if (centerW0 > 0.01f) fit0 * (centerW0.coerceIn(cwMin, cwMax) / centerW0) else fit0
     val lutSx = remember(scale, fit) { FloatArray(lutN) { sx(-uMax + it * lutStep) * scale * fit } }
