@@ -523,16 +523,16 @@ internal fun startDowMonFirst(startDate: String): Int = try {
 /** 違反セルの凡例（実線=必須 / 破線=要調整）。非色手がかりの意味を必ず示す。 */
 
 @Composable
-internal fun ViolationLegend(vioColor: Color) {
+internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.orange) {
     val cs = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
-            Text("実線＝必須違反", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("赤・実線＝必須違反", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioColor, 4.dp))
-            Text("破線＝要調整", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioSoftColor, 4.dp))
+            Text("橙・破線＝要調整", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -921,8 +921,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     }
     // 違反ハイライト色（Excel版の色分けに対応）: 不足=赤 / 過剰=橙。
     // 職員別は countViolations["i,k"](vio-low/vio-high=人数範囲)、日別は needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
-    val shortBg = Color(0xFFEF4444).copy(alpha = 0.30f)
-    val overBg = Color(0xFFF59E0B).copy(alpha = 0.36f)
+    // [M6統一] 不足=vioColor(ユーザー設定色に連動・既定 赤)、超過=橙。グリッド/ヒートバーと同じ2色言語。
+    val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: Color(0xFFEF4444)
+    val shortBg = critC.copy(alpha = 0.30f)
+    val overBg = MagiAccent.orange.copy(alpha = 0.36f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -1177,12 +1179,16 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     // [perf] フレーム毎の重い処理を事前計算で排除（色文字列パース / "i,d"文字列キーのMap探索 / sin・cos・tanh）。
     val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
     val pinkC = Color(0xFFEC4899)
-    // [違反マーカーdp化] 線2dp・点半径3dp。従来は物理px指定で、高密度端末では線≒0.7dp/点≒2.7dpと視認困難だった。
+    // [M1 校正] 細線で埋もれる問題を直接解消。HARD枠 2→3dp・SOFT破線 2→2.5dp・中空リング 1.5→2dp。
     val vioStrokePx = with(dens) { 2.dp.toPx() }
+    val hardStrokePx = with(dens) { 3.dp.toPx() }
+    val softStrokePx = with(dens) { 2.5f.dp.toPx() }
     val vioDotR = with(dens) { 3.dp.toPx() }
-    val hardStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx) }
-    val softStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx, pathEffect = PathEffect.dashPathEffect(floatArrayOf(vioStrokePx * 3f, vioStrokePx * 2f))) }
-    val thinStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx * 0.75f) }
+    val hardStroke = remember(hardStrokePx) { Stroke(width = hardStrokePx) }
+    val softStroke = remember(softStrokePx) { Stroke(width = softStrokePx, pathEffect = PathEffect.dashPathEffect(floatArrayOf(softStrokePx * 2.4f, softStrokePx * 1.6f))) }
+    val thinStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx) }
+    // [M6 統一] SOFT/要調整=橙・HARD=vioColor(赤系)。3表＋ヒートバー共通の2色言語（赤=必須/不足, 橙=要調整/超過）。
+    val vioSoftColor = MagiAccent.orange
     // 違反/希望はセル配列へ展開（0=なし、違反:1=HARD/2=SOFT、希望:1=一致/2=不一致）。
     val vioKind = remember(ui.violationCells, staffCount, days) {
         Array(staffCount) { i -> IntArray(days) { d ->
@@ -1255,7 +1261,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             val gap = kotlin.math.min(1.dp.toPx(), segW * 0.15f)
             drawRoundRect(cs.surfaceVariant.copy(alpha = 0.45f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f, size.height / 2f))
             for (d in 0 until days) {
-                val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioColor.copy(alpha = 0.4f); else -> null }
+                val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
                 if (hc != null) drawRect(hc, topLeft = Offset(d * segW + gap / 2f, 0f), size = Size(segW - gap, size.height))
             }
             drawRoundRect(cs.onSurface.copy(alpha = 0.85f), topLeft = Offset(td * segW, 0f), size = Size(segW, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx(), 2.dp.toPx()), style = Stroke(1.dp.toPx()))
@@ -1280,7 +1286,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     Text("${d + 1}", fontSize = 12.sp, color = if (sel) cs.onPrimaryContainer else dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal)
                     // 違反点: 塗り=必須(HARD)あり / 輪郭=要調整(SOFT)のみ（不足の赤枠とは独立）
                     if (dayVioH[d] > 0) Box(Modifier.size(6.dp).background(vioColor, RoundedCornerShape(50)))
-                    else if (dayVioS[d] > 0) Box(Modifier.size(6.dp).border(1.dp, vioColor, RoundedCornerShape(50)))
+                    else if (dayVioS[d] > 0) Box(Modifier.size(6.dp).border(1.5.dp, vioSoftColor, RoundedCornerShape(50)))
                     else Spacer(Modifier.height(6.dp))
                     if (sh > 0) Text("不足$sh", fontSize = 8.sp, color = cs.error, maxLines = 1)
                     else Spacer(Modifier.height(2.dp))
@@ -1367,10 +1373,11 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     val vk = vioKind[i][d]
                     if (vk != 0) {
                         val hard = vk == 1
-                        drawRoundRect(color = vioColor, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr, style = if (hard) hardStroke else softStroke)
+                        val vcol = if (hard) vioColor else vioSoftColor   // [M6統一] HARD=赤 / SOFT=橙
+                        drawRoundRect(color = vcol, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr, style = if (hard) hardStroke else softStroke)
                         if (w > vioDotR * 4f) {
                             val c = Offset(left + w - (vioDotR + 3f), top + vioDotR + 3f)
-                            if (hard) drawCircle(vioColor, vioDotR, c) else { drawCircle(cs.surface, vioDotR, c); drawCircle(vioColor, vioDotR, c, style = thinStroke) }
+                            if (hard) drawCircle(vcol, vioDotR, c) else { drawCircle(cs.surface, vioDotR, c); drawCircle(vcol, vioDotR, c, style = thinStroke) }
                         }
                     }
                     val wk = wishKind[i][d]

@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 180
-        versionName = "3.54.3-wishshape"
+        versionCode = 181
+        versionName = "3.55.0-vio-color-unify"
     }
 
     buildTypes {

@@ -102,7 +102,10 @@ fun ShiftColorCard(ui: UiState, vm: MagiViewModel) {
             }
             // [違反色] 違反セルの枠・マーカー色をタップで変更（保存される）。空＝テーマの赤。
             Divider()
-            Text("違反の色（枠・マーカー）", style = MaterialTheme.typography.titleSmall)
+            Text("違反の色（必須違反）", style = MaterialTheme.typography.titleSmall)
+            Text("必須違反（枠・マーカー・集計の不足）の色。要調整・超過は橙で固定表示されます。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             val vc = MaterialTheme.colorScheme
             Row(
                 verticalAlignment = Alignment.CenterVertically,
