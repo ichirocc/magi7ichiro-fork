@@ -121,8 +121,23 @@ object V6NativeOptimizer {
         val chosen = chooseAlgorithm(options.algorithm, options.totalBudgetSec)
         val p = cachedProblem(state)
         var schedule = hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
-        schedule = hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
-        var logs = listOf(MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s workers=${options.workers}"))
+        // [N1b] 入口修復(hf67)は better(hard→total→weighted) 改善時のみ採用。既に良好な入力
+        //   （前回結果の再最適化など）を破壊し、探索を劣化seedに係留する事故を防ぐ
+        //   （運用ログ実例: 入力214 → 修復後HARD4/250 → 275秒が回復に浪費）。hf66(群内正規化)は無条件維持。
+        val entryReport = UnifiedViolationChecker.check(state, schedule)
+        val repaired = hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
+        val repairedReport = UnifiedViolationChecker.check(state, repaired)
+        val hf67Adopted = better(repairedReport, entryReport)
+        if (hf67Adopted) schedule = repaired
+        val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入口盤面を保持
+        val entryBoardReport = if (hf67Adopted) repairedReport else entryReport
+        var logs = listOf(
+            MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s workers=${options.workers.coerceIn(1, 5)}（設定${options.workers}）"),
+            MirrorLog(tag = "HF67", message = if (hf67Adopted)
+                "入口修復を採用 HARD ${entryReport.hard}->${repairedReport.hard} / total ${entryReport.total}->${repairedReport.total}"
+            else
+                "入口修復を見送り（入力の方が良好: HARD ${entryReport.hard}/total ${entryReport.total} ≦ 修復後 HARD ${repairedReport.hard}/total ${repairedReport.total}）"),
+        )
         // 仕様書 §2.2/§4.1: 最大5仮説を並列探索。
         val w = options.workers.coerceIn(1, 5)
         val full = max(1, options.totalBudgetSec)
@@ -153,6 +168,13 @@ object V6NativeOptimizer {
             tag = "V6Dispatcher",
             message = "完了 algorithm=$chosen HARD=${finalReport.hard} total=${finalReport.total} elapsed=${nowMs() - started}ms",
         )
+        // [N1c] 内側番兵: 最終結果が入口盤面より劣るなら入口盤面へ復帰（FinalPortの外側Sentinelと二重化）。
+        //   全段keep-bestのため通常は発火しない。発火時は「予算が改善に寄与しなかった」ことの可視化を兼ねる。
+        if (better(entryBoardReport, finalReport)) {
+            logs = logs + MirrorLog(level = "W", tag = "V6Dispatcher",
+                message = "内側番兵: 結果(HARD=${finalReport.hard}/total=${finalReport.total})が入口盤面(HARD=${entryBoardReport.hard}/total=${entryBoardReport.total})より劣化のため入口盤面を採用")
+            return V6OptimizerResult(entryBoard, entryBoardReport.copy(logs = logs + entryBoardReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
+        }
         return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
     }
 
@@ -576,6 +598,7 @@ object V6NativeOptimizer {
         // [HF63] ラウンド境界で改善ストリームを追跡し、構造的に充足困難な族を focus 対象から外す。
         // best-of-rounds のため、回避は「無駄なラウンドを達成可能な族へ振り向ける」だけで悪化は起きない。
         val hf63 = Hf63Infeasibility()
+        var stagnantRounds = 0   // [N4] better() 無改善の連続ラウンド数
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
@@ -604,10 +627,20 @@ object V6NativeOptimizer {
             if (better(candReport, bestReport)) {
                 best = candSched.copy2D()
                 bestReport = candReport
+                stagnantRounds = 0
+            } else {
+                stagnantRounds++
             }
             logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "round=${round + 1}/$rounds focus=$focus best HARD=${bestReport.hard} total=${bestReport.total}"))
             liveBest = best.map { it.toList() }   // [DefragLiveView] 計算中ライブ盤面を公開
             onProgress("RSI $focus", bestReport, iters, nowMs() - started)
+            // [N4] HF63 が deprioritize を積み増して focus が枯渇すると、以降は同一 best の反復になる
+            //   （運用ログ実例: R2-5 が total=258 固定・focus=c1 連発）。2R連続無改善で打切り、
+            //   残時間を後段（RSI++ の Refine/Polish 等）へ譲る。
+            if (stagnantRounds >= 2) {
+                logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: ${stagnantRounds}ラウンド連続無改善（残${rounds - round - 1}Rをスキップし後段へ予算移譲）"))
+                break
+            }
         }
         return V6OptimizerResult(best, bestReport.copy(logs = logs + bestReport.logs), V6Algorithm.RSI, logs, iters, nowMs() - started)
     }
@@ -699,9 +732,9 @@ object V6NativeOptimizer {
             val cov = coverage(p, out)
             val counts = countMatrix(p, out)
             for (j in 0 until p.T) for (k in 0 until p.K) {
-                val need = p.need1[k][j]
-                if (need <= 0) continue
-                var miss = need - cov[j][k]
+                // [N1a] 充填量は per-cell 実需要（#4b: OR/AND）。旧 need1 のみ基準では P2 で救済済みの
+                //   セル（休日体制など P1>P2）まで埋めに行き、既良盤面を壊していた。
+                var miss = p.covUCell(k, j, cov[j][k])
                 while (miss > 0) {
                     val i = bestStaffForCoverage(p, out, counts, j, k)
                     if (i < 0) break
@@ -916,11 +949,11 @@ object V6NativeOptimizer {
 
     private fun coverageShortageCost(p: Problem, schedule: Array<IntArray>, j: Int, k: Int): Int {
         if (k !in 0 until p.K) return 0
-        val need = p.need1[k][j]
-        if (need <= 0) return 0
         var cov = 0
         for (i in 0 until p.S) if (schedule[i][j] == k) cov++
-        return if (cov <= need) 50 else 0
+        // [N1a] 引き抜きで per-cell 実需要(U)が増える＝不足を生む職員はコスト50（旧: need1のみ基準）。
+        //   ちょうど充足のセル(U=0→1)も保護される点は旧 `cov <= need` と同等。
+        return if (p.covUCell(k, j, cov - 1) > p.covUCell(k, j, cov)) 50 else 0
     }
 
     private fun destroyRepairDay(state: MagiState, schedule: Array<IntArray>, rng: Random) {
