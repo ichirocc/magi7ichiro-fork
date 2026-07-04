@@ -1374,16 +1374,21 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
                     val top = headHpx + i * rowHpx
                     val base = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
-                    drawRoundRect(color = dimColor(base, bri, surfaceC), topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr)
+                    val vk = vioKind[i][d]
+                    val vcol = if (vk == 1) vioColor else vioSoftColor   // [M6統一] HARD=赤 / SOFT=橙
+                    // [M8 周辺日の可読] 端の狭いセルは記号(w>22)が出ず違反の識別が落ちる。違反時は塗り自体を
+                    //   違反色寄り(60%)にブレンドし、周辺日でも「違反あり」が色で判るようにする（中央の広いセルは不変）。
+                    val fillC = if (vk != 0 && w <= 22f)
+                        androidx.compose.ui.graphics.lerp(dimColor(base, bri, surfaceC), vcol, 0.6f)
+                    else dimColor(base, bri, surfaceC)
+                    drawRoundRect(color = fillC, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr)
                     if (w > 22f && k >= 0) {
                         symLayouts.getOrNull(k)?.let { r ->
                             drawText(r, topLeft = Offset(cx - r.size.width / 2f, top + ch / 2f - r.size.height / 2f))
                         }
                     }
-                    val vk = vioKind[i][d]
                     if (vk != 0) {
                         val hard = vk == 1
-                        val vcol = if (hard) vioColor else vioSoftColor   // [M6統一] HARD=赤 / SOFT=橙
                         drawRoundRect(color = vcol, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr, style = if (hard) hardStroke else softStroke)
                         if (w > vioDotR * 4f) {
                             val c = Offset(left + w - (vioDotR + 3f), top + vioDotR + 3f)
