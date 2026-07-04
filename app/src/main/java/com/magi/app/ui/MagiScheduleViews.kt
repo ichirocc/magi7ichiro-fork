@@ -1235,6 +1235,21 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     val lutSx = remember(scale, fit) { FloatArray(lutN) { sx(-uMax + it * lutStep) * scale * fit } }
     val lutW = remember(scale, fit) { FloatArray(lutN) { (sx(-uMax + it * lutStep + 0.5f) - sx(-uMax + it * lutStep - 0.5f)) * scale * fit } }
     val lutBr = remember(scale) { FloatArray(lutN) { br(-uMax + it * lutStep) } }
+    // [境界パン] 焦点日を常に中央へ置くと境界日(1日/末日)で片側が空き、上部の全幅日付帯とも列が合わない。
+    //   存在する端の日がグリッド枠端に来るよう水平パンして空白を詰める（中央域は pan=0＝従来の中央拡大を維持）。
+    //   描画とタップ判定の両方で同一値を使う（片方だけだと日の当たり判定がズレる）。
+    fun panXAt(r0: Float, widthPx: Float): Float {
+        val cX = nameWpx + (widthPx - nameWpx) / 2f
+        val uL = (0f - r0).coerceAtLeast(-13f)
+        val uR = (days - 1 - r0).coerceAtMost(13f)
+        val leftEdge = cX + lerpLut(lutSx, uL) - lerpLut(lutW, uL) / 2f
+        val rightEdge = cX + lerpLut(lutSx, uR) + lerpLut(lutW, uR) / 2f
+        return when {
+            leftEdge > nameWpx -> nameWpx - leftEdge
+            rightEdge < widthPx -> widthPx - rightEdge
+            else -> 0f
+        }
+    }
 
     Column {
         Text(
@@ -1309,9 +1324,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     detectTapGestures { off ->
                         val cur = rot.value.roundToInt().coerceIn(0, days - 1)
                         val centerX = nameWpx + (size.width.toFloat() - nameWpx) / 2f
+                        val pan = panXAt(rot.value, size.width.toFloat())   // [境界パン] 描画と同一のパンで当たり判定
                         var best = cur; var bd = Float.MAX_VALUE
                         for (d in 0 until days) {
-                            val dd = kotlin.math.abs((centerX + lerpLut(lutSx, d - rot.value)) - off.x)
+                            val dd = kotlin.math.abs((centerX + pan + lerpLut(lutSx, d - rot.value)) - off.x)
                             if (dd < bd) { bd = dd; best = d }
                         }
                         val i = ((off.y - headHpx) / rowHpx).toInt()
@@ -1350,12 +1366,13 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             val cr = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
             val ch = rowHpx - 2f
             val r0 = rot.value
+            val panX = panXAt(r0, size.width)   // [境界パン] 境界日で空白を詰める（中央域は0）
             for (d in 0 until days) {
                 val u = d - r0
                 if (u < -13f || u > 13f) continue
                 val w = lerpLut(lutW, u)
                 if (w < 0.7f) continue
-                val cx = centerX + lerpLut(lutSx, u)
+                val cx = centerX + panX + lerpLut(lutSx, u)
                 val bri = lerpLut(lutBr, u)
                 val left = cx - w / 2f
                 val rectW = maxOf(1f, w - 1f)
