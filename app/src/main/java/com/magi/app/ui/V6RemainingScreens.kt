@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -159,20 +160,34 @@ fun FlagsView(ui: UiState, vm: MagiViewModel) {
 
 @Composable
 fun ColorSettingsView(ui: UiState) {
-    SectionSegment("違反種別の色", "違反カテゴリと重大度の色凡例") {
+    SectionSegment("違反種別の色", "重大度の色凡例（赤=必須 / 橙=要調整 / 灰=情報）") {
+        val cs = MaterialTheme.colorScheme
         val keys = MirrorKeys.all
         keys.chunked(4).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 row.forEach { key ->
                     val sev = V6WebCompat.severityFromVioKey(key)
-                    val active = (ui.breakdown[key] ?: 0) > 0
+                    // [不具合修正] 旧版は「重大度の色凡例」なのに色が primary(ブランド緑)＝違反有無で、重大度と無関係だった。
+                    //   緑は普遍的に「OK」の意で違反表示に不適＋統一パレット(赤=必須/橙=要調整)とも乖離。
+                    //   重大度で静的に色分けし(凡例=データ非依存の参照)、現在件数は末尾に併記する。
+                    val count = ui.breakdown[key] ?: 0
+                    val bg = when (sev) {
+                        "CRITICAL" -> MagiAccent.red
+                        "HIGH", "WARN" -> MagiAccent.orange
+                        else -> cs.surfaceVariant   // INFO
+                    }
+                    val fg = when (sev) {
+                        "CRITICAL" -> Color(0xFFFFFFFF)
+                        "HIGH", "WARN" -> Color(0xFF231400)
+                        else -> cs.onSurfaceVariant
+                    }
                     Box(
                         Modifier
                             .weight(1f)
-                            .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                            .background(bg, RoundedCornerShape(8.dp))
                             .padding(6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text("$key\n$sev", fontSize = 10.sp, textAlign = TextAlign.Center, color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant) }
+                    ) { Text("$key\n$sev" + (if (count > 0) " ·$count" else ""), fontSize = 10.sp, textAlign = TextAlign.Center, color = fg) }
                 }
             }
             Spacer(Modifier.height(6.dp))
