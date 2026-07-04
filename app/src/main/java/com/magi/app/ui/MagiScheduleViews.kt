@@ -1254,7 +1254,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
 
     Column {
         Text(
-            "\u2299 集中モード：横スワイプで回転→最寄りの日に吸着。日付帯で任意の日へジャンプ（不足日は赤枠＋不足数）。ヘッダに出勤人数・不足・違反を表示。日付帯の下線＝その日の違反（濃=必須/橙=要調整）。中央の日のセルをタップで修正。土=青/日=赤/本日=緑。希望は左下ドット（反映済=青緑リング/未反映=桃塗り）。",
+            "\u2299 集中モード：横スワイプで日を回転（最寄り日に吸着）／日付帯タップで移動。日付帯の下線＝違反（濃=必須・橙=要調整）、不足日は赤枠＋不足数。中央の日のセルをタップで修正。色・記号の詳しい意味は下の「凡例」。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))

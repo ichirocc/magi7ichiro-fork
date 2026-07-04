@@ -111,7 +111,9 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             LoadoutHeader("SQUAD", "班／グループ (${v.groups.size})")
             Text("編集で改名。削除すると所属者は先頭グループへ移動。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.groups.forEachIndexed { g, gr ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
+                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
+                    verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) })
                     if (vm.ws1CanRemoveGroup(g)) {
@@ -133,7 +135,9 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Text("編集で改名・所属グループの変更。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.staff.forEachIndexed { i, st ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // [押下明示O4] 行タップで編集（シフト/グループ行と統一）。
+                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
+                    verticalAlignment = Alignment.CenterVertically) {
                     Text("${st.name}  [グループ $gk]", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) })
                     if (v.staff.size > 1) {
