@@ -1226,7 +1226,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
 
     Column {
         Text(
-            "\u2299 集中モード：横スワイプで回転→最寄りの日に吸着。日付帯で任意の日へジャンプ（不足日は赤枠＋不足数）。ヘッダに出勤人数・不足・違反を表示。上の細バーは月全体の違反マップ（濃赤=必須/淡赤=要調整、タップで移動）。日付帯の赤点=違反のある日。中央の日のセルをタップで修正。土=青/日=赤/本日=緑。希望は左下ドット（一致=青緑/不一致=桃）。",
+            "\u2299 集中モード：横スワイプで回転→最寄りの日に吸着。日付帯で任意の日へジャンプ（不足日は赤枠＋不足数）。ヘッダに出勤人数・不足・違反を表示。上の細バーは月全体の違反マップ（濃赤=必須/淡赤=要調整、タップで移動）。日付帯の赤点=違反のある日。中央の日のセルをタップで修正。土=青/日=赤/本日=緑。希望は左下ドット（反映済=青緑リング/未反映=桃塗り）。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
@@ -1375,7 +1375,11 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     }
                     val wk = wishKind[i][d]
                     if (wk != 0 && w > vioDotR * 4f) {
-                        drawCircle(if (wk == 1) cs.tertiary else pinkC, vioDotR, Offset(left + vioDotR + 3f, top + ch - (vioDotR + 3f)))
+                        val wc = Offset(left + vioDotR + 3f, top + ch - (vioDotR + 3f))
+                        // [色覚安全] 一致/不一致を色(teal/pink)だけでなく形でも区別（第2色覚で teal/pink は同化する）。
+                        //   未反映(要対応)=塗り＝目立つ / 反映済(満足)=中空リング＝控えめ。満足済みの視覚ノイズも低減。
+                        if (wk == 2) drawCircle(pinkC, vioDotR, wc)
+                        else { drawCircle(cs.surface, vioDotR, wc); drawCircle(cs.tertiary, vioDotR, wc, style = thinStroke) }
                     }
                 }
             }
