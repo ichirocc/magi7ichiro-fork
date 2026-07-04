@@ -923,8 +923,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // 職員別は countViolations["i,k"](vio-low/vio-high=人数範囲)、日別は needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
     // [M6統一] 不足=vioColor(ユーザー設定色に連動・既定 赤)、超過=橙。グリッド/ヒートバーと同じ2色言語。
     val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: Color(0xFFEF4444)
-    val shortBg = critC.copy(alpha = 0.30f)
-    val overBg = MagiAccent.orange.copy(alpha = 0.36f)
+    // [M2] 塗り飽和度を上げ暗テーマ・屋外グレアでの視認性を確保（0.30/0.36→0.45/0.50）。
+    //   数字は太字化済(第5段)のため濃い塗りでも可読。
+    val shortBg = critC.copy(alpha = 0.45f)
+    val overBg = MagiAccent.orange.copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
