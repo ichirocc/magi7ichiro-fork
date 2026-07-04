@@ -315,7 +315,8 @@ object UnifiedViolationChecker {
                             val deficit = d - r
                             if (deficit > 0) {
                                 inc(key, deficit)
-                                for (jj in runStart until runStart + r) mark(i, jj, key)
+                                // [視認性] 不足run全塗り→run先頭1セルへアンカー（scoring不変: incは不足ぶん従来どおり）。
+                                mark(i, runStart, key)
                             }
                             r = 0; runStart = -1
                         }
@@ -333,7 +334,9 @@ object UnifiedViolationChecker {
                         val fire = if (forbidden) z == d - 1 else z < d - 1
                         if (fire) {
                             inc(key, 1)
-                            for (l in 0 until d) mark(i, j + l, key)
+                            // [視認性] SOFT want窓は先頭1セルへアンカー。forbidden(c3n=HARD/c3mn)は禁止パターン
+                            //   全体を表示（短く、致命は「どの並びが禁止か」を示す方が有益）。scoring(inc)は不変。
+                            if (forbidden) { for (l in 0 until d) mark(i, j + l, key) } else mark(i, j, key)
                         }
                     }
                     j++
