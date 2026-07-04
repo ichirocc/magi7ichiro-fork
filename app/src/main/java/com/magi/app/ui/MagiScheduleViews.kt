@@ -1209,7 +1209,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             if (wk == null) 0 else { val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1; if (wk == k) 1 else 2 }
         } }
     }
-    // [違反可視化] 日別の違反件数（ヒートバー・日付帯の点・ヘッダ表示用）。
+    // [違反可視化] 日別の違反件数（日付帯の下線・ヘッダ表示用）。
     val dayVioH = remember(ui.violationCells, staffCount, days) { IntArray(days) { d -> (0 until staffCount).count { i -> vioKind[i][d] == 1 } } }
     val dayVioS = remember(ui.violationCells, staffCount, days) { IntArray(days) { d -> (0 until staffCount).count { i -> vioKind[i][d] == 2 } } }
     // 円柱投影(sx)・列幅・明るさを u の関数として事前計算しLUT化。描画は配列参照のみ（三角関数を毎フレーム呼ばない）。
@@ -1254,7 +1254,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
 
     Column {
         Text(
-            "\u2299 集中モード：横スワイプで回転→最寄りの日に吸着。日付帯で任意の日へジャンプ（不足日は赤枠＋不足数）。ヘッダに出勤人数・不足・違反を表示。上の細バーは月全体の違反マップ（濃赤=必須/淡赤=要調整、タップで移動）。日付帯の赤点=違反のある日。中央の日のセルをタップで修正。土=青/日=赤/本日=緑。希望は左下ドット（反映済=青緑リング/未反映=桃塗り）。",
+            "\u2299 集中モード：横スワイプで回転→最寄りの日に吸着。日付帯で任意の日へジャンプ（不足日は赤枠＋不足数）。ヘッダに出勤人数・不足・違反を表示。日付帯の下線＝その日の違反（濃=必須/橙=要調整）。中央の日のセルをタップで修正。土=青/日=赤/本日=緑。希望は左下ドット（反映済=青緑リング/未反映=桃塗り）。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
@@ -1270,25 +1270,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             }
             Button(onClick = { goToDay(td + 1) }, enabled = td < days - 1, modifier = Modifier.height(48.dp)) { Text("翌日 \u25b6") }
         }
-        // [違反可視化: 全月ヒートバー] 31日を常時一目。濃赤=必須(HARD)違反のある日、淡赤=要調整(SOFT)のみ、枠=選択日。タップでその日へ移動。
-        Spacer(Modifier.height(6.dp))
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .pointerInput(days) { detectTapGestures { off -> goToDay((off.x / (size.width / days.toFloat())).toInt().coerceIn(0, days - 1)) } }
-                .semantics { contentDescription = "違反ヒートバー。濃い赤は必須違反のある日、薄い赤は要調整のみの日。タップした位置の日へ移動します。" }
-        ) {
-            val segW = size.width / days
-            val gap = kotlin.math.min(1.dp.toPx(), segW * 0.15f)
-            drawRoundRect(cs.surfaceVariant.copy(alpha = 0.45f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f, size.height / 2f))
-            for (d in 0 until days) {
-                val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
-                if (hc != null) drawRect(hc, topLeft = Offset(d * segW + gap / 2f, 0f), size = Size(segW - gap, size.height))
-            }
-            drawRoundRect(cs.onSurface.copy(alpha = 0.85f), topLeft = Offset(td * segW, 0f), size = Size(segW, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx(), 2.dp.toPx()), style = Stroke(1.dp.toPx()))
-        }
-        // [融合: 日ジャンプ＋不足マーカー] 任意の日へ即移動。土=青/日=赤/本日=緑、不足日は赤枠＋不足数、選択日を強調。
+        // [冗長性削減B: ヒートバー廃止→日付帯に統合] 全月違反マップ(別Canvas)と日付帯ドットは同じ
+        //   「日別の違反有無」を二重表示していた。ヒートバーを廃し、日別違反色を各チップの下線バーへ
+        //   集約して1段に統合（日番号の隣接2段も解消）。土=青/日=赤/本日=緑、下線＝違反(濃=必須/橙=要調整)、
+        //   不足日は赤枠＋不足数、選択日を強調。任意の日へタップで即移動。
         Spacer(Modifier.height(6.dp))
         Row(Modifier.horizontalScroll(jumpScroll), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             for (d in 0 until days) {
@@ -1296,6 +1281,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                 val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
                 val sel = d == td
                 val sh = dayShort[d]
+                val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
                 Column(
                     Modifier
                         .background(if (sel) cs.primaryContainer else Color.Transparent, MaterialTheme.shapes.small)
@@ -1306,10 +1292,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text("${d + 1}", fontSize = 12.sp, color = if (sel) cs.onPrimaryContainer else dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal)
-                    // 違反点: 塗り=必須(HARD)あり / 輪郭=要調整(SOFT)のみ（不足の赤枠とは独立）
-                    if (dayVioH[d] > 0) Box(Modifier.size(6.dp).background(vioColor, RoundedCornerShape(50)))
-                    else if (dayVioS[d] > 0) Box(Modifier.size(6.dp).border(1.5.dp, vioSoftColor, RoundedCornerShape(50)))
-                    else Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(2.dp))
+                    // [統合] 旧ヒートバーの日別違反色をこの下線バーへ（濃=必須HARD / 橙=要調整SOFT）。
+                    if (hc != null) Box(Modifier.fillMaxWidth().height(3.dp).background(hc, RoundedCornerShape(2.dp)))
+                    else Spacer(Modifier.height(3.dp))
                     if (sh > 0) Text("不足$sh", fontSize = 8.sp, color = cs.error, maxLines = 1)
                     else Spacer(Modifier.height(2.dp))
                 }
