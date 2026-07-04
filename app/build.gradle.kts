@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 184
-        versionName = "3.55.3-boundary-pan"
+        versionCode = 185
+        versionName = "3.55.4-n4-focusgate"
     }
 
     buildTypes {
