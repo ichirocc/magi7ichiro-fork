@@ -634,11 +634,14 @@ object V6NativeOptimizer {
             logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "round=${round + 1}/$rounds focus=$focus best HARD=${bestReport.hard} total=${bestReport.total}"))
             liveBest = best.map { it.toList() }   // [DefragLiveView] 計算中ライブ盤面を公開
             onProgress("RSI $focus", bestReport, iters, nowMs() - started)
-            // [N4] HF63 が deprioritize を積み増して focus が枯渇すると、以降は同一 best の反復になる
-            //   （運用ログ実例: R2-5 が total=258 固定・focus=c1 連発）。2R連続無改善で打切り、
-            //   残時間を後段（RSI++ の Refine/Polish 等）へ譲る。
-            if (stagnantRounds >= 2) {
-                logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: ${stagnantRounds}ラウンド連続無改善（残${rounds - round - 1}Rをスキップし後段へ予算移譲）"))
+            // [N4改] focus枯渇の早期終了。旧版は「2R無改善」だけで打ち切っていたが、これは達成可能族が
+            //   残る場合でもランダム探索(destroy-repair)を早期に切り、乱数運の悪い2Rで本来伸びる盤面を捨てうる
+            //   （proxyでA/B不能な領域＝安全側に倒す）。発火条件を hf63 が infeasible 族を検出済み(avoid非空)＝
+            //   「達成可能な focus を撃ち尽くした」ときに限定する。これは旧条件の厳密な部分集合のため、
+            //   旧N4より早く止まることはない＝品質は退化しない。avoid が空(まだ狙える族がある)の間は全予算で探索。
+            //   ※後段(hf80)は固定予算のため厳密な「予算移譲」ではなく、無改善ラウンドの空転停止(電池/熱/時間節約)。
+            if (stagnantRounds >= 2 && avoid.isNotEmpty()) {
+                logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: focus枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                 break
             }
         }

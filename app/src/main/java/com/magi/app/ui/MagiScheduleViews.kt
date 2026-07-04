@@ -325,38 +325,48 @@ internal fun ShiftPickerSheet(
 internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     if (ui.schedule.isEmpty() || ui.staff == 0) return
     var staffIdx by remember { mutableIntStateOf(0) }
+    // [冗長性削減A] 既定は畳む。勤務表グリッド(全職員)と盤面ビューが二重化＝タブの密度/冗長の主因のため、
+    //   既定OFFにして「1職員を週レイアウトで見たい」時だけ開く（機能自体は保持）。
+    var expanded by remember { mutableStateOf(false) }
     val si = staffIdx.coerceIn(0, (ui.staff - 1).coerceAtLeast(0))
     val row = ui.schedule.getOrNull(si) ?: return
     val labels = ui.v6?.dayRisks?.map { it.label } ?: (0 until ui.days).map { "${it + 1}日" }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("スタッフ別カレンダー", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { staffIdx = (si - 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("前") }
-                OutlinedButton(onClick = { staffIdx = (si + 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次") }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            ) {
+                Text("スタッフ別カレンダー ${if (expanded) "▾" else "▸"}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (!expanded) Text("開いて1人ずつ確認", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                "${ui.staffNames.getOrNull(si) ?: si} / ${ui.staffGroupSymbols.getOrNull(si) ?: ""} — タップで担当可能シフトを巡回",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp,
-            )
-            Spacer(Modifier.height(8.dp))
-            val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MaterialTheme.colorScheme.error
-            row.indices.chunked(7).forEach { week ->
-                Row(Modifier.fillMaxWidth()) {
-                    week.forEach { j ->
-                        val k = row.getOrNull(j) ?: -1
-                        val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
-                        val vioVal = ui.violationCells["$si,$j"]
-                        val vio = vioVal != null
-                        val hard = isHardCellViolation(vioVal)
-                        CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, vioColor, Modifier.weight(1f)) {
-                            onCellClick(si, j)
-                        }
-                    }
-                    repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${ui.staffNames.getOrNull(si) ?: si} / ${ui.staffGroupSymbols.getOrNull(si) ?: ""}",
+                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = { staffIdx = (si - 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("前") }
+                    OutlinedButton(onClick = { staffIdx = (si + 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次") }
                 }
-                Spacer(Modifier.height(6.dp))
+                Text("タップで担当可能シフトを巡回", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(8.dp))
+                val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MaterialTheme.colorScheme.error
+                row.indices.chunked(7).forEach { week ->
+                    Row(Modifier.fillMaxWidth()) {
+                        week.forEach { j ->
+                            val k = row.getOrNull(j) ?: -1
+                            val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
+                            val vioVal = ui.violationCells["$si,$j"]
+                            val vio = vioVal != null
+                            val hard = isHardCellViolation(vioVal)
+                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, vioColor, Modifier.weight(1f)) {
+                                onCellClick(si, j)
+                            }
+                        }
+                        repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
             }
         }
     }
@@ -523,16 +533,16 @@ internal fun startDowMonFirst(startDate: String): Int = try {
 /** 違反セルの凡例（実線=必須 / 破線=要調整）。非色手がかりの意味を必ず示す。 */
 
 @Composable
-internal fun ViolationLegend(vioColor: Color) {
+internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.orange) {
     val cs = MaterialTheme.colorScheme
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
-            Text("実線＝必須違反", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("赤・実線＝必須違反", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioColor, 4.dp))
-            Text("破線＝要調整", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioSoftColor, 4.dp))
+            Text("橙・破線＝要調整", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -921,8 +931,12 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     }
     // 違反ハイライト色（Excel版の色分けに対応）: 不足=赤 / 過剰=橙。
     // 職員別は countViolations["i,k"](vio-low/vio-high=人数範囲)、日別は needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
-    val shortBg = Color(0xFFEF4444).copy(alpha = 0.30f)
-    val overBg = Color(0xFFF59E0B).copy(alpha = 0.36f)
+    // [M6統一] 不足=vioColor(ユーザー設定色に連動・既定 赤)、超過=橙。グリッド/ヒートバーと同じ2色言語。
+    val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: Color(0xFFEF4444)
+    // [M2] 塗り飽和度を上げ暗テーマ・屋外グレアでの視認性を確保（0.30/0.36→0.45/0.50）。
+    //   数字は太字化済(第5段)のため濃い塗りでも可読。
+    val shortBg = critC.copy(alpha = 0.45f)
+    val overBg = MagiAccent.orange.copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -963,8 +977,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perStaff[i][kk]
                                 val vio = ui.countViolations["$i,$kk"]
                                 val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
+                                val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null) {
-                                    if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                                    if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
                             // [D1] シフト別の期間合計（列合計）。グリッドの重複行を廃止しここへ集約。
@@ -1002,8 +1018,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perDay[j][kk]
                                 val vio = ui.needViolations["$kk,$j"]
                                 val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
+                                val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null) {
-                                    if (v != 0 || vio != null) Text("$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                                    if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
                         }
@@ -1074,11 +1092,11 @@ private fun TallyLegend(shortBg: Color, overBg: Color, shortLabel: String, overL
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(13.dp).background(shortBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
-        Text(shortLabel, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("▼ $shortLabel", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.width(14.dp))
         Box(Modifier.size(13.dp).background(overBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
-        Text(overLabel, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("▲ $overLabel", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
     }
 }
 
@@ -1146,7 +1164,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
         (0 until days).map { d ->
             val dow = (sdow + d) % 7  // 0=月..6=日
             val col = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
-            tm.measure((d + 1).toString(), TextStyle(fontSize = 9.sp, color = col))
+            tm.measure((d + 1).toString(), TextStyle(fontSize = 11.sp, color = col))
         }
     }
     val symLayouts = remember(ui.shiftSymbols, ui.shiftTextHex) {
@@ -1155,7 +1173,8 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
         }
     }
     val nameLayouts = remember(ui.staffNames, cs.onSurface) {
-        ui.staffNames.map { tm.measure(it, TextStyle(fontSize = 11.sp, color = cs.onSurface), maxLines = 1) }
+        // [表示] 集中モードの名前列は左から3文字のみ表示（幅を抑え中央列の視認性を優先）。
+        ui.staffNames.map { tm.measure(it.take(3), TextStyle(fontSize = 12.sp, color = cs.onSurface), maxLines = 1) }
     }
     val dragStepPx = with(dens) { 40.dp.toPx() }
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
@@ -1177,12 +1196,16 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     // [perf] フレーム毎の重い処理を事前計算で排除（色文字列パース / "i,d"文字列キーのMap探索 / sin・cos・tanh）。
     val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
     val pinkC = Color(0xFFEC4899)
-    // [違反マーカーdp化] 線2dp・点半径3dp。従来は物理px指定で、高密度端末では線≒0.7dp/点≒2.7dpと視認困難だった。
+    // [M1 校正] 細線で埋もれる問題を直接解消。HARD枠 2→3dp・SOFT破線 2→2.5dp・中空リング 1.5→2dp。
     val vioStrokePx = with(dens) { 2.dp.toPx() }
+    val hardStrokePx = with(dens) { 3.dp.toPx() }
+    val softStrokePx = with(dens) { 2.5f.dp.toPx() }
     val vioDotR = with(dens) { 3.dp.toPx() }
-    val hardStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx) }
-    val softStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx, pathEffect = PathEffect.dashPathEffect(floatArrayOf(vioStrokePx * 3f, vioStrokePx * 2f))) }
-    val thinStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx * 0.75f) }
+    val hardStroke = remember(hardStrokePx) { Stroke(width = hardStrokePx) }
+    val softStroke = remember(softStrokePx) { Stroke(width = softStrokePx, pathEffect = PathEffect.dashPathEffect(floatArrayOf(softStrokePx * 2.4f, softStrokePx * 1.6f))) }
+    val thinStroke = remember(vioStrokePx) { Stroke(width = vioStrokePx) }
+    // [M6 統一] SOFT/要調整=橙・HARD=vioColor(赤系)。3表＋ヒートバー共通の2色言語（赤=必須/不足, 橙=要調整/超過）。
+    val vioSoftColor = MagiAccent.orange
     // 違反/希望はセル配列へ展開（0=なし、違反:1=HARD/2=SOFT、希望:1=一致/2=不一致）。
     val vioKind = remember(ui.violationCells, staffCount, days) {
         Array(staffCount) { i -> IntArray(days) { d ->
@@ -1196,7 +1219,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             if (wk == null) 0 else { val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1; if (wk == k) 1 else 2 }
         } }
     }
-    // [違反可視化] 日別の違反件数（ヒートバー・日付帯の点・ヘッダ表示用）。
+    // [違反可視化] 日別の違反件数（日付帯の下線・ヘッダ表示用）。
     val dayVioH = remember(ui.violationCells, staffCount, days) { IntArray(days) { d -> (0 until staffCount).count { i -> vioKind[i][d] == 1 } } }
     val dayVioS = remember(ui.violationCells, staffCount, days) { IntArray(days) { d -> (0 until staffCount).count { i -> vioKind[i][d] == 2 } } }
     // 円柱投影(sx)・列幅・明るさを u の関数として事前計算しLUT化。描画は配列参照のみ（三角関数を毎フレーム呼ばない）。
@@ -1215,18 +1238,33 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     // [見た目] 合成時に幅(constraints.maxWidth)が確定するので初回フレームから fit を正しく適用し、原寸→縮小の1フレームちらつきを防止。fit/LUTは幅・回転変化時のみ再計算。
     val fit0 = if (constraints.maxWidth > 0) fitFactor(constraints.maxWidth.toFloat()) else 1f
-    // [中央列幅] フォーカス日(中央)の列幅を 38..40dp（密度スケール）に収める。fit を比率調整し、円柱の形状は保ったまま中央列を目標幅へスケール。
+    // [中央列幅] フォーカス日(中央)の列幅を約44dpに揃える（ユーザー指定）。fit を比率調整し、円柱の形状は保ったまま中央列を目標幅へスケール。
     val centerW0 = (sx(0.5f) - sx(-0.5f)) * scale * fit0
-    val cwMin = with(dens) { 38.dp.toPx() }
-    val cwMax = with(dens) { 40.dp.toPx() }
+    val cwMin = with(dens) { 44.dp.toPx() }
+    val cwMax = with(dens) { 44.dp.toPx() }
     val fit = if (centerW0 > 0.01f) fit0 * (centerW0.coerceIn(cwMin, cwMax) / centerW0) else fit0
     val lutSx = remember(scale, fit) { FloatArray(lutN) { sx(-uMax + it * lutStep) * scale * fit } }
     val lutW = remember(scale, fit) { FloatArray(lutN) { (sx(-uMax + it * lutStep + 0.5f) - sx(-uMax + it * lutStep - 0.5f)) * scale * fit } }
     val lutBr = remember(scale) { FloatArray(lutN) { br(-uMax + it * lutStep) } }
+    // [境界パン] 焦点日を常に中央へ置くと境界日(1日/末日)で片側が空き、上部の全幅日付帯とも列が合わない。
+    //   存在する端の日がグリッド枠端に来るよう水平パンして空白を詰める（中央域は pan=0＝従来の中央拡大を維持）。
+    //   描画とタップ判定の両方で同一値を使う（片方だけだと日の当たり判定がズレる）。
+    fun panXAt(r0: Float, widthPx: Float): Float {
+        val cX = nameWpx + (widthPx - nameWpx) / 2f
+        val uL = (0f - r0).coerceAtLeast(-13f)
+        val uR = (days - 1 - r0).coerceAtMost(13f)
+        val leftEdge = cX + lerpLut(lutSx, uL) - lerpLut(lutW, uL) / 2f
+        val rightEdge = cX + lerpLut(lutSx, uR) + lerpLut(lutW, uR) / 2f
+        return when {
+            leftEdge > nameWpx -> nameWpx - leftEdge
+            rightEdge < widthPx -> widthPx - rightEdge
+            else -> 0f
+        }
+    }
 
     Column {
         Text(
-            "\u2299 集中モード：横スワイプで回転→最寄りの日に吸着。日付帯で任意の日へジャンプ（不足日は赤枠＋不足数）。ヘッダに出勤人数・不足・違反を表示。上の細バーは月全体の違反マップ（濃赤=必須/淡赤=要調整、タップで移動）。日付帯の赤点=違反のある日。中央の日のセルをタップで修正。土=青/日=赤/本日=緑。希望は左下ドット（一致=青緑/不一致=桃）。",
+            "\u2299 集中モード：横スワイプで日を回転（最寄り日に吸着）／日付帯タップで移動。日付帯の下線＝違反（濃=必須・橙=要調整）、不足日は赤枠＋不足数。中央の日のセルをタップで修正。色・記号の詳しい意味は下の「凡例」。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
@@ -1242,25 +1280,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             }
             Button(onClick = { goToDay(td + 1) }, enabled = td < days - 1, modifier = Modifier.height(48.dp)) { Text("翌日 \u25b6") }
         }
-        // [違反可視化: 全月ヒートバー] 31日を常時一目。濃赤=必須(HARD)違反のある日、淡赤=要調整(SOFT)のみ、枠=選択日。タップでその日へ移動。
-        Spacer(Modifier.height(6.dp))
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(10.dp)
-                .pointerInput(days) { detectTapGestures { off -> goToDay((off.x / (size.width / days.toFloat())).toInt().coerceIn(0, days - 1)) } }
-                .semantics { contentDescription = "違反ヒートバー。濃い赤は必須違反のある日、薄い赤は要調整のみの日。タップした位置の日へ移動します。" }
-        ) {
-            val segW = size.width / days
-            val gap = kotlin.math.min(1.dp.toPx(), segW * 0.15f)
-            drawRoundRect(cs.surfaceVariant.copy(alpha = 0.45f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2f, size.height / 2f))
-            for (d in 0 until days) {
-                val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioColor.copy(alpha = 0.4f); else -> null }
-                if (hc != null) drawRect(hc, topLeft = Offset(d * segW + gap / 2f, 0f), size = Size(segW - gap, size.height))
-            }
-            drawRoundRect(cs.onSurface.copy(alpha = 0.85f), topLeft = Offset(td * segW, 0f), size = Size(segW, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx(), 2.dp.toPx()), style = Stroke(1.dp.toPx()))
-        }
-        // [融合: 日ジャンプ＋不足マーカー] 任意の日へ即移動。土=青/日=赤/本日=緑、不足日は赤枠＋不足数、選択日を強調。
+        // [冗長性削減B: ヒートバー廃止→日付帯に統合] 全月違反マップ(別Canvas)と日付帯ドットは同じ
+        //   「日別の違反有無」を二重表示していた。ヒートバーを廃し、日別違反色を各チップの下線バーへ
+        //   集約して1段に統合（日番号の隣接2段も解消）。土=青/日=赤/本日=緑、下線＝違反(濃=必須/橙=要調整)、
+        //   不足日は赤枠＋不足数、選択日を強調。任意の日へタップで即移動。
         Spacer(Modifier.height(6.dp))
         Row(Modifier.horizontalScroll(jumpScroll), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             for (d in 0 until days) {
@@ -1268,6 +1291,7 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                 val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
                 val sel = d == td
                 val sh = dayShort[d]
+                val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
                 Column(
                     Modifier
                         .background(if (sel) cs.primaryContainer else Color.Transparent, MaterialTheme.shapes.small)
@@ -1278,11 +1302,11 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text("${d + 1}", fontSize = 12.sp, color = if (sel) cs.onPrimaryContainer else dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal)
-                    // 違反点: 塗り=必須(HARD)あり / 輪郭=要調整(SOFT)のみ（不足の赤枠とは独立）
-                    if (dayVioH[d] > 0) Box(Modifier.size(6.dp).background(vioColor, RoundedCornerShape(50)))
-                    else if (dayVioS[d] > 0) Box(Modifier.size(6.dp).border(1.dp, vioColor, RoundedCornerShape(50)))
-                    else Spacer(Modifier.height(6.dp))
-                    if (sh > 0) Text("不足$sh", fontSize = 8.sp, color = cs.error, maxLines = 1)
+                    Spacer(Modifier.height(2.dp))
+                    // [統合] 旧ヒートバーの日別違反色をこの下線バーへ（濃=必須HARD / 橙=要調整SOFT）。
+                    if (hc != null) Box(Modifier.fillMaxWidth().height(3.dp).background(hc, RoundedCornerShape(2.dp)))
+                    else Spacer(Modifier.height(3.dp))
+                    if (sh > 0) Text("不足$sh", fontSize = 10.sp, color = cs.error, maxLines = 1)
                     else Spacer(Modifier.height(2.dp))
                 }
             }
@@ -1297,9 +1321,10 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     detectTapGestures { off ->
                         val cur = rot.value.roundToInt().coerceIn(0, days - 1)
                         val centerX = nameWpx + (size.width.toFloat() - nameWpx) / 2f
+                        val pan = panXAt(rot.value, size.width.toFloat())   // [境界パン] 描画と同一のパンで当たり判定
                         var best = cur; var bd = Float.MAX_VALUE
                         for (d in 0 until days) {
-                            val dd = kotlin.math.abs((centerX + lerpLut(lutSx, d - rot.value)) - off.x)
+                            val dd = kotlin.math.abs((centerX + pan + lerpLut(lutSx, d - rot.value)) - off.x)
                             if (dd < bd) { bd = dd; best = d }
                         }
                         val i = ((off.y - headHpx) / rowHpx).toInt()
@@ -1338,16 +1363,17 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             val cr = androidx.compose.ui.geometry.CornerRadius(3f, 3f)
             val ch = rowHpx - 2f
             val r0 = rot.value
+            val panX = panXAt(r0, size.width)   // [境界パン] 境界日で空白を詰める（中央域は0）
             for (d in 0 until days) {
                 val u = d - r0
                 if (u < -13f || u > 13f) continue
                 val w = lerpLut(lutW, u)
                 if (w < 0.7f) continue
-                val cx = centerX + lerpLut(lutSx, u)
+                val cx = centerX + panX + lerpLut(lutSx, u)
                 val bri = lerpLut(lutBr, u)
                 val left = cx - w / 2f
                 val rectW = maxOf(1f, w - 1f)
-                if (w > 13f) {
+                if (w > 20f) {   // [細粒度合格化] 列見出し日番号を9→11spに拡大。幅が足りる列だけ表示し(狭い列は日付帯に委ねる)重なり/過小を回避。
                     dayLayouts.getOrNull(d)?.let { r ->
                         val ty = headHpx / 2f - r.size.height / 2f
                         drawText(r, topLeft = Offset(cx - r.size.width / 2f, ty))
@@ -1358,24 +1384,34 @@ internal fun MagiFocusCylinder(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                     val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
                     val top = headHpx + i * rowHpx
                     val base = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
-                    drawRoundRect(color = dimColor(base, bri, surfaceC), topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr)
+                    val vk = vioKind[i][d]
+                    val vcol = if (vk == 1) vioColor else vioSoftColor   // [M6統一] HARD=赤 / SOFT=橙
+                    // [M8 周辺日の可読] 端の狭いセルは記号(w>22)が出ず違反の識別が落ちる。違反時は塗り自体を
+                    //   違反色寄り(60%)にブレンドし、周辺日でも「違反あり」が色で判るようにする（中央の広いセルは不変）。
+                    val fillC = if (vk != 0 && w <= 22f)
+                        androidx.compose.ui.graphics.lerp(dimColor(base, bri, surfaceC), vcol, 0.6f)
+                    else dimColor(base, bri, surfaceC)
+                    drawRoundRect(color = fillC, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr)
                     if (w > 22f && k >= 0) {
                         symLayouts.getOrNull(k)?.let { r ->
                             drawText(r, topLeft = Offset(cx - r.size.width / 2f, top + ch / 2f - r.size.height / 2f))
                         }
                     }
-                    val vk = vioKind[i][d]
                     if (vk != 0) {
                         val hard = vk == 1
-                        drawRoundRect(color = vioColor, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr, style = if (hard) hardStroke else softStroke)
+                        drawRoundRect(color = vcol, topLeft = Offset(left, top + 1f), size = Size(rectW, ch), cornerRadius = cr, style = if (hard) hardStroke else softStroke)
                         if (w > vioDotR * 4f) {
                             val c = Offset(left + w - (vioDotR + 3f), top + vioDotR + 3f)
-                            if (hard) drawCircle(vioColor, vioDotR, c) else { drawCircle(cs.surface, vioDotR, c); drawCircle(vioColor, vioDotR, c, style = thinStroke) }
+                            if (hard) drawCircle(vcol, vioDotR, c) else { drawCircle(cs.surface, vioDotR, c); drawCircle(vcol, vioDotR, c, style = thinStroke) }
                         }
                     }
                     val wk = wishKind[i][d]
                     if (wk != 0 && w > vioDotR * 4f) {
-                        drawCircle(if (wk == 1) cs.tertiary else pinkC, vioDotR, Offset(left + vioDotR + 3f, top + ch - (vioDotR + 3f)))
+                        val wc = Offset(left + vioDotR + 3f, top + ch - (vioDotR + 3f))
+                        // [色覚安全] 一致/不一致を色(teal/pink)だけでなく形でも区別（第2色覚で teal/pink は同化する）。
+                        //   未反映(要対応)=塗り＝目立つ / 反映済(満足)=中空リング＝控えめ。満足済みの視覚ノイズも低減。
+                        if (wk == 2) drawCircle(pinkC, vioDotR, wc)
+                        else { drawCircle(cs.surface, vioDotR, wc); drawCircle(cs.tertiary, vioDotR, wc, style = thinStroke) }
                     }
                 }
             }

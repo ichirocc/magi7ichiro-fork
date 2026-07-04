@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -86,9 +87,12 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
             LoadoutHeader("ARSENAL", "装備／シフト種別 (${v.shifts.size})")
-            Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.shifts.forEachIndexed { k, s ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
+                //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
+                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
+                    verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
                         fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) })
@@ -105,9 +109,11 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- groups ---
             Spacer(Modifier.height(8.dp))
             LoadoutHeader("SQUAD", "班／グループ (${v.groups.size})")
-            Text("編集で改名。削除すると所属者は先頭グループへ移動。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.groups.forEachIndexed { g, gr ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
+                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
+                    verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) })
                     if (vm.ws1CanRemoveGroup(g)) {
@@ -126,10 +132,12 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- staff ---
             Spacer(Modifier.height(8.dp))
             LoadoutHeader("PARTY", "仲間／スタッフ (${v.staff.size})")
-            Text("編集で改名・所属グループの変更。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("編集で改名・所属グループの変更。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.staff.forEachIndexed { i, st ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // [押下明示O4] 行タップで編集（シフト/グループ行と統一）。
+                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
+                    verticalAlignment = Alignment.CenterVertically) {
                     Text("${st.name}  [グループ $gk]", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) })
                     if (v.staff.size > 1) {
@@ -145,7 +153,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
             LoadoutHeader("MATRIX", "担当可否（群 × シフト）")
-            Text("チップで担当できるシフトを切替（✓＝担当可）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("チップで担当できるシフトを切替（✓＝担当可）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [見やすさ] 横スクロール(12シフトで画面外)をやめ、群ごとに群名を行頭＋チップを FlowRow で折り返す。
             //   選択中＝塗り＋✓（色だけに依存しない手がかり）、未選択＝外枠。
             v.groups.forEachIndexed { g, gr ->

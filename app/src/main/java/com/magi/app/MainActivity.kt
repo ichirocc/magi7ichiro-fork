@@ -128,9 +128,12 @@ private fun MagiTheme(mode: Int = 0, content: @Composable () -> Unit) {
         titleSmall = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 20.sp),
         bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
         bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
-        bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+        bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
         labelLarge = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
         labelMedium = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
+        // [N3/O10 横断改善] labelSmall は未定義でMaterial既定=11spに落ち、チップ/凡例/補足/違反内訳が
+        //   全画面で11spだった。補足の可読下限(12〜14)へ 13sp に引き上げ（全画面横断・1箇所で是正）。
+        labelSmall = TextStyle(fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.Medium),
     )
     // 柔らかいカード(20dp)・タイル(24dp)・ピル(round)。
     val shapes = Shapes(
