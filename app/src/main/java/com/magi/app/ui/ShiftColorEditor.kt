@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -176,12 +177,15 @@ private fun ColorPickerDialog(
                 }
                 Text("色を選ぶ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 COLOR_PALETTE.chunked(6).forEach { rowColors ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // [不具合修正] 固定40dp×6＋余白がダイアログ幅を超え、6個目が切れて「大きさ不揃い」だった。
+                    //   幅いっぱいを等分(weight)＋正方形(aspectRatio)にし、全スウォッチ均等・切れ無し・タップ可に。
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         rowColors.forEach { hex ->
                             val selected = hex.equals(currentHex, ignoreCase = true)
                             Box(
                                 Modifier
-                                    .size(40.dp)
+                                    .weight(1f)
+                                    .aspectRatio(1f)
                                     .background(hexToColor(hex), RoundedCornerShape(8.dp))
                                     .border(
                                         if (selected) 3.dp else 1.dp,

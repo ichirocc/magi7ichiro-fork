@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -88,7 +89,10 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             LoadoutHeader("ARSENAL", "装備／シフト種別 (${v.shifts.size})")
             Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.shifts.forEachIndexed { k, s ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
+                //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
+                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
+                    verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
                         fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) })
