@@ -4,7 +4,7 @@ package com.magi.app.v6
  * Faithful port of the Web worker's `fullEval`.
  *
  * Lexicographic objective:  score = hard1 * 1_000_000 + soft
- *   hard1 = c3n (forbidden seq) + covU (per-day need shortfall, MIN=OR over P1/P2) + pref
+ *   hard1 = c3n (forbidden seq) + covU (per-cell OR/AND shortfall over P1/P2, #4b) + pref
  *   soft  = c1 (window) + c2 (per-staff total) + c41 (group/day range)
  *           + c42 (group pair conflict) + c41s/c42s (skill-group変種) + c3 (want seq) + c3m + c3mn
  *           + [統一a/b] low/high (range, amount×90/45) + covO (over-coverage, amount)

@@ -117,7 +117,7 @@ object V6SanityPort {
         }
         notes.add("groupShiftApt 適切回数: ${aptSet} 件")
         notes.add("shifts=${p.K} groups=${p.G} staff=${p.S} days=${p.T}")
-        if (state.use2Patterns) notes.add("2世代需要(MIN=OR)が有効") else notes.add("需要はP1のみ")
+        if (state.use2Patterns) notes.add("2世代需要(セル毎OR/AND: #4b)が有効") else notes.add("需要はP1のみ")
 
         return V6SanityReport(
             ok = warns.isEmpty(),

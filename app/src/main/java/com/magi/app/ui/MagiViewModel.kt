@@ -699,6 +699,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 最適化中ログ強化用のスロットル状態（操作ログへマイルストーンだけを残しスパムを防ぐ）。
         var liveHard = Long.MAX_VALUE
         var livePhase = ""
+        val runWall0 = System.currentTimeMillis()   // [N6] 経過表示は壁時計基準（onProgressのelapsedは仮説ローカルで巻き戻る）
         var lastPhaseLogMs = -10_000L
         var lastHardLogMs = -10_000L
         job = viewModelScope.launch {
@@ -734,12 +735,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     // フェーズ遷移と「必須違反が減った瞬間」だけを操作ログへ。頻度上限を設けてスパムを防ぐ。
                     val base = phase.substringAfter("/ ").trim().ifEmpty { phase }
                     if (base != livePhase && elapsed - lastPhaseLogMs >= 2_500) {
-                        logOp("I", "探索フェーズ: $base（${elapsed / 1000}秒経過）")
+                        logOp("I", "探索フェーズ: $base（経過${(System.currentTimeMillis() - runWall0) / 1000}秒）")
                         livePhase = base; lastPhaseLogMs = elapsed
                     }
                     if (rep != null && rep.hard.toLong() < liveHard) {
                         if (rep.hard == 0 || elapsed - lastHardLogMs >= 1_500) {
-                            logOp("I", "必須違反 残り${rep.hard}件 に改善（${elapsed / 1000}秒・合計${rep.total}）")
+                            logOp("I", "必須違反 残り${rep.hard}件 に改善（経過${(System.currentTimeMillis() - runWall0) / 1000}秒・合計${rep.total}）")
                             lastHardLogMs = elapsed
                         }
                         liveHard = rep.hard.toLong()
@@ -1967,6 +1968,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         o.put("staff", _ui.value.staff); o.put("days", _ui.value.days); o.put("shifts", _ui.value.shifts)
         o.put("hard", _ui.value.bestHard); o.put("soft", _ui.value.bestSoft); o.put("total", _ui.value.totalViolations)
         o.put("satisfaction", _ui.value.satisfaction)
+        // [N6] satisfaction は 0-100 の進捗スコア（違反減少度: hard>0 で×55系）であり希望充足率ではない。
+        //   外部AI/人間の誤読が実際に発生したため意味を同梱する。
+        o.put("satisfactionMeaning", "0-100の進捗スコア（必須・合計違反の減少度）。希望充足率ではありません")
         o.put("opLog", org.json.JSONArray().apply { _ui.value.opLog.forEach { put(it) } })
         o.put("diagLog", org.json.JSONArray().apply { rawDiagLogs.ifEmpty { _ui.value.logs }.forEach { put(it) } })
         o.put("breakdown", org.json.JSONObject().apply { _ui.value.breakdown.forEach { (k, v) -> put(k, v) } })

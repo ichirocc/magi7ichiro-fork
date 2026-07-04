@@ -319,10 +319,18 @@ object V6FinalPort {
         val regression = checkResultWorse(inputReport, post.report)
         val finalSched = if (regression != null) normInput else post.schedule
         val finalReport = if (regression != null) inputReport else post.report
-        val sentinelLog = if (regression != null) listOf(MirrorLog(
-            level = "W", tag = "Sentinel",
-            message = "後処理結果が入力より悪化を検知したため入力を採用しました（多重防御）: $regression",
-        )) else emptyList()
+        val sentinelLog = if (regression != null) listOf(
+            MirrorLog(
+                level = "W", tag = "Sentinel",
+                message = "後処理結果が入力より悪化を検知したため入力を採用しました（多重防御）: $regression",
+            ),
+            // [N3] ログ末尾には棄却盤面(post)の UnifiedCheck/診断行が履歴として残るため、
+            //   採用盤面の集計を明示して読者の取り違え（例: covU詳細と件数の不一致に見える）を防ぐ。
+            MirrorLog(
+                level = "I", tag = "UnifiedCheck",
+                message = "採用盤面の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
+            ),
+        ) else emptyList()
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
         val logs = listOf(timingLog) + sentinelLog + relinkLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
