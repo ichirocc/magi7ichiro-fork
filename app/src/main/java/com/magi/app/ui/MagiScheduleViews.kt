@@ -325,38 +325,48 @@ internal fun ShiftPickerSheet(
 internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     if (ui.schedule.isEmpty() || ui.staff == 0) return
     var staffIdx by remember { mutableIntStateOf(0) }
+    // [冗長性削減A] 既定は畳む。勤務表グリッド(全職員)と盤面ビューが二重化＝タブの密度/冗長の主因のため、
+    //   既定OFFにして「1職員を週レイアウトで見たい」時だけ開く（機能自体は保持）。
+    var expanded by remember { mutableStateOf(false) }
     val si = staffIdx.coerceIn(0, (ui.staff - 1).coerceAtLeast(0))
     val row = ui.schedule.getOrNull(si) ?: return
     val labels = ui.v6?.dayRisks?.map { it.label } ?: (0 until ui.days).map { "${it + 1}日" }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("スタッフ別カレンダー", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { staffIdx = (si - 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("前") }
-                OutlinedButton(onClick = { staffIdx = (si + 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次") }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            ) {
+                Text("スタッフ別カレンダー ${if (expanded) "▾" else "▸"}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (!expanded) Text("開いて1人ずつ確認", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text(
-                "${ui.staffNames.getOrNull(si) ?: si} / ${ui.staffGroupSymbols.getOrNull(si) ?: ""} — タップで担当可能シフトを巡回",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp,
-            )
-            Spacer(Modifier.height(8.dp))
-            val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MaterialTheme.colorScheme.error
-            row.indices.chunked(7).forEach { week ->
-                Row(Modifier.fillMaxWidth()) {
-                    week.forEach { j ->
-                        val k = row.getOrNull(j) ?: -1
-                        val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
-                        val vioVal = ui.violationCells["$si,$j"]
-                        val vio = vioVal != null
-                        val hard = isHardCellViolation(vioVal)
-                        CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, vioColor, Modifier.weight(1f)) {
-                            onCellClick(si, j)
-                        }
-                    }
-                    repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+            if (expanded) {
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${ui.staffNames.getOrNull(si) ?: si} / ${ui.staffGroupSymbols.getOrNull(si) ?: ""}",
+                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    OutlinedButton(onClick = { staffIdx = (si - 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("前") }
+                    OutlinedButton(onClick = { staffIdx = (si + 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次") }
                 }
-                Spacer(Modifier.height(6.dp))
+                Text("タップで担当可能シフトを巡回", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(8.dp))
+                val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MaterialTheme.colorScheme.error
+                row.indices.chunked(7).forEach { week ->
+                    Row(Modifier.fillMaxWidth()) {
+                        week.forEach { j ->
+                            val k = row.getOrNull(j) ?: -1
+                            val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
+                            val vioVal = ui.violationCells["$si,$j"]
+                            val vio = vioVal != null
+                            val hard = isHardCellViolation(vioVal)
+                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, vioColor, Modifier.weight(1f)) {
+                                onCellClick(si, j)
+                            }
+                        }
+                        repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
             }
         }
     }

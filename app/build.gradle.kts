@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 195
-        versionName = "3.57.3-caption-size"
+        versionCode = 196
+        versionName = "3.58.0-staffcal-collapse"
     }
 
     buildTypes {
