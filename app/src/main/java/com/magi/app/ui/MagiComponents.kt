@@ -128,8 +128,9 @@ fun MagiTagChip(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            leadingIcon?.let { Icon(it, contentDescription = null, modifier = Modifier.heightIn(min = 16.dp)) }
-            Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            leadingIcon?.let { Icon(it, contentDescription = null, modifier = Modifier.heightIn(min = 18.dp)) }
+            // [判読性] タグチップ文字を 13sp→15sp(labelLarge/SemiBold)へ。
+            Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

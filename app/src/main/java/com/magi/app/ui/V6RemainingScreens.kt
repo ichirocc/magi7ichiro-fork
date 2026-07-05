@@ -140,7 +140,7 @@ fun FlagsView(ui: UiState, vm: MagiViewModel) {
                     selected = ui.v6Algorithm == alg,
                     onClick = { vm.setV6Algorithm(alg) },
                     enabled = !ui.running,
-                    label = { Text(alg.name, fontSize = 12.sp) },
+                    label = { Text(alg.name, fontSize = 15.sp) },
                     leadingIcon = if (ui.v6Algorithm == alg) {
                         { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                     } else null,

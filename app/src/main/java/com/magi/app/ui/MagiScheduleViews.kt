@@ -465,7 +465,7 @@ internal fun ScheduleGrid(
                     if (hiddenVio.isNotEmpty()) {
                         Spacer(Modifier.weight(1f))
                         TextButton(onClick = { hiddenVio = emptySet() }) {
-                            Text("すべて表示", style = MaterialTheme.typography.labelSmall)
+                            Text("すべて表示", style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
@@ -475,7 +475,8 @@ internal fun ScheduleGrid(
                         FilterChip(
                             selected = t !in hiddenVio,
                             onClick = { hiddenVio = if (t in hiddenVio) hiddenVio - t else hiddenVio + t },
-                            label = { Text("${breakdownLabels[t] ?: t} ${vioCounts[t] ?: 0}", style = MaterialTheme.typography.labelSmall) },
+                            // [判読性] チップ文字を 13sp→15sp(titleSmall/SemiBold)へ。件数付きの絞り込みチップは主操作なので明確に読める大きさに。
+                            label = { Text("${breakdownLabels[t] ?: t} ${vioCounts[t] ?: 0}", style = MaterialTheme.typography.titleSmall) },
                         )
                     }
                 }
@@ -559,7 +560,7 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
                 val bg = hexToColor(colorHex.getOrNull(i) ?: "")
                 val fg = hexToColor(textHex.getOrNull(i) ?: "")
                 Box(Modifier.background(bg, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                    Text(symbols[i], style = MaterialTheme.typography.labelSmall, color = fg, fontWeight = FontWeight.Medium)
+                    Text(symbols[i], style = MaterialTheme.typography.labelLarge, color = ensureReadable(bg, fg), fontWeight = FontWeight.Bold)
                 }
             }
         }
