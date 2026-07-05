@@ -174,7 +174,8 @@ fun ColorSettingsView(ui: UiState) {
                     //   重大度で静的に色分けし(凡例=データ非依存の参照)、現在件数は末尾に併記する。
                     val count = ui.breakdown[key] ?: 0
                     val bg = when (sev) {
-                        "CRITICAL" -> MagiAccent.red
+                        // [コントラスト] 白文字 on 0xEF4444 は 3.76:1 で WCAG AA 不足のため、濃い赤(約5.9:1)へ。
+                        "CRITICAL" -> Color(0xFFBA1A1A)
                         "HIGH", "WARN" -> MagiAccent.orange
                         else -> cs.surfaceVariant   // INFO
                     }

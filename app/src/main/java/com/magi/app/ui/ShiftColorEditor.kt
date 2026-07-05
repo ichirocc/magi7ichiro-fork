@@ -32,6 +32,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -176,7 +178,7 @@ private fun ColorPickerDialog(
                     Text("  現在の色", style = MaterialTheme.typography.bodyMedium)
                 }
                 Text("色を選ぶ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                COLOR_PALETTE.chunked(6).forEach { rowColors ->
+                COLOR_PALETTE.chunked(5).forEach { rowColors ->
                     // [不具合修正] 固定40dp×6＋余白がダイアログ幅を超え、6個目が切れて「大きさ不揃い」だった。
                     //   幅いっぱいを等分(weight)＋正方形(aspectRatio)にし、全スウォッチ均等・切れ無し・タップ可に。
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -192,7 +194,9 @@ private fun ColorPickerDialog(
                                         if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                                         RoundedCornerShape(8.dp),
                                     )
-                                    .clickable { onPick(hex) },
+                                    .clickable { onPick(hex) }
+                                    // [a11y] 色のみの選択肢に読み上げ名を付与。
+                                    .semantics { contentDescription = "色 $hex" + (if (selected) "・選択中" else "") },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (selected) Text("✓", color = hexToColor(pickFg(hex)), textAlign = TextAlign.Center)

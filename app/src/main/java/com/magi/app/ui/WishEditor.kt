@@ -87,7 +87,7 @@ fun WishCard(ui: UiState, vm: MagiViewModel) {
                                 label = { Text("${r.day}日 ${r.kigou}") },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, contentDescription = "削除",
-                                        modifier = Modifier.size(18.dp).clickable(enabled = !ui.running) { vm.removeWish(r.i, r.j) })
+                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.removeWish(r.i, r.j) }.padding(7.dp))
                                 },
                             )
                         }

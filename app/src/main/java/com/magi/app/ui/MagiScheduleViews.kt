@@ -166,7 +166,7 @@ internal fun LiveScheduleCard(ui: UiState) {
                 Text(if (show) "途中経過を隠す" else "途中経過を見る（組んでいる様子）")
             }
             if (show) {
-                Text("状態遷移  赤枠＝今回変化 (${changed.size})", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                Text("状態遷移  赤枠＝今回変化 (${changed.size})", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 Column(
                     Modifier.horizontalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -1179,7 +1179,12 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                             val bg = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
                             // [コントラスト] 淡い背景に沈まないよう記号色をWCAGで保証（色データは不変）。
                             val fg = ensureReadable(bg, shiftTextC.getOrNull(k) ?: cs.onSurface)
-                            FlatCell(cellW, cellH, ui.shiftSymbols.getOrNull(k) ?: "", bg, fg, vioKind[i][d], wishKind[i][d], vioColor, vioSoftColor) { onCellClick(i, d) }
+                            val sym = ui.shiftSymbols.getOrNull(k) ?: ""
+                            val vk = vioKind[i][d]; val wkk = wishKind[i][d]
+                            val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
+                                (if (vk == 1) "・必須違反" else if (vk == 2) "・要調整" else "") +
+                                (if (wkk == 2) "・希望未反映" else if (wkk != 0) "・希望" else "") + "、タップで変更"
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd) { onCellClick(i, d) }
                         }
                     }
                 }
@@ -1191,7 +1196,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit) {
 @Composable
 private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
-    bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, onClick: () -> Unit,
+    bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.width(w).height(h).padding(1.5.dp)) {
@@ -1201,15 +1206,19 @@ private fun FlatCell(
                 // [分離] 無違反セルにも微細な輪郭を付け、似た明度の隣接セルと切り分ける（違反時は違反枠が優先）。
                 .then(if (vk != 0) Modifier.violationBorder(vk == 1, if (vk == 1) vioColor else vioSoftColor, 6.dp)
                       else Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp)))
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                // [a11y] 主操作セルを読み上げ対応（従来 contentDescription 無し）。氏名/日/シフト/違反/希望を1文で。
+                .semantics(mergeDescendants = true) { contentDescription = cd },
             contentAlignment = Alignment.Center,
         ) {
             // [コントラスト] 記号は太字＋15sp（48dpセルに合わせ拡大）で沈み込みを防ぐ。
             if (symbol.isNotBlank()) Text(symbol, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
             // [希望] 左下ドット: 反映済=青緑リング / 未反映=桃塗り（色覚安全）。
+            //   [コントラスト] 任意のシフト色上でも消えないよう surface のハローで縁取り＋8dpに拡大。
             if (wk != 0) {
                 Box(
-                    Modifier.align(Alignment.BottomStart).padding(2.dp).size(6.dp)
+                    Modifier.align(Alignment.BottomStart).padding(1.5.dp).size(9.dp)
+                        .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)
                         .then(if (wk == 2) Modifier.background(Color(0xFFEC4899), RoundedCornerShape(50)) else Modifier.border(1.5.dp, cs.tertiary, RoundedCornerShape(50))),
                 )
             }

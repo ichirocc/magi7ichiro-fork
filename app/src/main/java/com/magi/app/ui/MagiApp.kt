@@ -693,7 +693,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 ) {
                     Icon(Icons.Filled.Stop, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 !ui.hasResult -> Button(
                     // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
@@ -703,7 +703,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 else -> Button(
                     onClick = { vm.runV6FullOptimize() },
@@ -711,7 +711,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -733,7 +733,7 @@ internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
             NavigationBarItem(
                 selected = selected == i,
                 onClick = { onSelect(i) },
-                icon = { Icon(item.second, contentDescription = item.third) },
+                icon = { Icon(item.second, contentDescription = null) }, // [a11y] ラベル常時表示のためアイコンCDは重複回避で null
                 label = { Text(item.first, style = MaterialTheme.typography.labelMedium) },
                 alwaysShowLabel = true,
             )

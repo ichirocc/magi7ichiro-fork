@@ -238,7 +238,8 @@ internal fun OperatorNextActionCard(
                     else -> "狩猟" to MagiAccent.orange
                 }
                 Box(Modifier.background(phColor, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
-                    Text(phName, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                    // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
+                    Text(phName, style = MaterialTheme.typography.labelMedium, color = ensureReadable(phColor, Color.White), fontWeight = FontWeight.Bold)
                 }
             }
             Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
@@ -546,7 +547,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 12.sp, color = fg, maxLines = 1)
+            Text(label, fontSize = 12.sp, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (shortage > 0) "不足$shortage" else "OK", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = fg)
             if (detail.isNotBlank()) Text(detail, fontSize = 12.sp, color = fg.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -731,6 +732,7 @@ internal fun SeverityChip(label: String, count: Int, severity: Int, famKey: Stri
     var m = modifier.heightIn(min = 48.dp)
     if (expanded) m = m.border(2.dp, onContainer.copy(alpha = 0.7f), shape)
     if (active) m = m.clickable { onTap(famKey) }
+        .semantics { contentDescription = "$label $count 件" + (if (expanded) "・展開中" else "・タップで場所を表示") }
     Surface(color = container, shape = shape, modifier = m) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium, color = onContainer,

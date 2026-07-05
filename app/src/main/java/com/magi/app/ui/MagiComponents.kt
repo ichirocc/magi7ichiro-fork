@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +54,8 @@ fun MagiSegmentedControl(
                 val active = i == selected
                 Surface(
                     onClick = { onSelect(i) },
-                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                    // [a11y/touch] Surface(onClick) は 48dp 自動補完が無いため明示。選択状態を読み上げに公開。
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { selected = active },
                     // [Planner テイスト] 選択中はやわらかい色付きピル（白の段差でなく穏やかな塗り）。
                     color = if (active) cs.primaryContainer else Color.Transparent,
                     contentColor = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
