@@ -518,7 +518,7 @@ internal fun ScheduleGrid(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFocusCylinder(ui, onCellClick)
+            MagiFlatGrid(ui, onCellClick)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（円柱コードは未使用として当面残置）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
     }
@@ -1113,6 +1113,105 @@ private fun TallyBox(
                 .then(if (start) Modifier.padding(horizontal = 6.dp) else Modifier),
             contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
         ) { content() }
+    }
+}
+
+// ===== 平面グリッド（円柱インターフェース置き換え）=====
+// フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
+// 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
+@Composable
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val days = ui.days.coerceAtLeast(1)
+    val staffCount = ui.schedule.size
+    if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
+    val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+    val vioSoftColor = MagiAccent.orange
+    val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
+    val shiftTextC = remember(ui.shiftTextHex) { ui.shiftTextHex.map { hexToColor(it) } }
+    val sdow = startDowMonFirst(ui.startDate)
+    val weekdayJa = listOf("月", "火", "水", "木", "金", "土", "日")
+    val todayIdx = remember(ui.startDate, days) {
+        runCatching {
+            val off = (LocalDate.now().toEpochDay() - LocalDate.parse(ui.startDate).toEpochDay()).toInt()
+            if (off in 0 until days) off else -1
+        }.getOrDefault(-1)
+    }
+    val vioKind = remember(ui.violationCells, staffCount, days) {
+        Array(staffCount) { i -> IntArray(days) { d -> val v = ui.violationCells["$i,$d"]; if (v == null) 0 else if (isHardCellViolation(v)) 1 else 2 } }
+    }
+    val wishKind = remember(ui.wishes, ui.schedule, staffCount, days) {
+        Array(staffCount) { i -> IntArray(days) { d -> val wk = ui.wishes["$i,$d"]; if (wk == null) 0 else { val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1; if (wk == k) 1 else 2 } } }
+    }
+    val dayVioH = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 1 } } }
+    val dayVioS = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 2 } } }
+    val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
+
+    val nameW = 68.dp; val cellW = 42.dp; val cellH = 38.dp; val headH = 40.dp
+    val hScroll = rememberScrollState()
+    Column {
+        Text("平面表：横スクロールで日移動、セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。日番号下の下線＝その日の違反（濃=必須/橙=要調整）、不足日は赤字。",
+            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        Spacer(Modifier.height(8.dp))
+        Row {
+            Column {
+                Box(Modifier.width(nameW).height(headH), contentAlignment = Alignment.CenterStart) {
+                    Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                }
+                for (i in 0 until staffCount) {
+                    Box(Modifier.width(nameW).height(cellH).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
+                        Text(ui.staffNames.getOrNull(i) ?: "$i", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            Row(Modifier.horizontalScroll(hScroll)) {
+                for (d in 0 until days) {
+                    val dow = (sdow + d) % 7
+                    val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
+                    val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
+                    Column {
+                        Column(Modifier.width(cellW).height(headH), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+                            Text(weekdayJa[dow] + (if (dayShort[d] > 0) " 不足${dayShort[d]}" else ""), fontSize = 9.sp, color = if (dayShort[d] > 0) cs.error else dcol, maxLines = 1)
+                            if (hc != null) Box(Modifier.width(cellW - 10.dp).height(2.5.dp).background(hc, RoundedCornerShape(2.dp)))
+                            else Spacer(Modifier.height(2.5.dp))
+                        }
+                        for (i in 0 until staffCount) {
+                            val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
+                            val bg = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
+                            val fg = shiftTextC.getOrNull(k) ?: cs.onSurface
+                            FlatCell(cellW, cellH, ui.shiftSymbols.getOrNull(k) ?: "", bg, fg, vioKind[i][d], wishKind[i][d], vioColor, vioSoftColor) { onCellClick(i, d) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FlatCell(
+    w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
+    bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, onClick: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Box(Modifier.width(w).height(h).padding(1.dp)) {
+        Box(
+            Modifier.fillMaxSize()
+                .background(bg, RoundedCornerShape(6.dp))
+                .then(if (vk != 0) Modifier.violationBorder(vk == 1, if (vk == 1) vioColor else vioSoftColor, 6.dp) else Modifier)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (symbol.isNotBlank()) Text(symbol, fontSize = 13.sp, color = fg, maxLines = 1)
+            // [希望] 左下ドット: 反映済=青緑リング / 未反映=桃塗り（色覚安全）。
+            if (wk != 0) {
+                Box(
+                    Modifier.align(Alignment.BottomStart).padding(2.dp).size(6.dp)
+                        .then(if (wk == 2) Modifier.background(Color(0xFFEC4899), RoundedCornerShape(50)) else Modifier.border(1.5.dp, cs.tertiary, RoundedCornerShape(50))),
+                )
+            }
+        }
     }
 }
 
