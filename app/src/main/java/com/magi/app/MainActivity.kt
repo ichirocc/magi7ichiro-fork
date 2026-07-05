@@ -125,15 +125,16 @@ private fun MagiTheme(mode: Int = 0, content: @Composable () -> Unit) {
         headlineSmall = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold, lineHeight = 30.sp),
         titleLarge = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.SemiBold, lineHeight = 26.sp),
         titleMedium = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, lineHeight = 23.sp),
-        titleSmall = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 20.sp),
-        bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 24.sp),
-        bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 22.sp),
-        bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
-        labelLarge = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-        labelMedium = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium),
-        // [N3/O10 横断改善] labelSmall は未定義でMaterial既定=11spに落ち、チップ/凡例/補足/違反内訳が
-        //   全画面で11spだった。補足の可読下限(12〜14)へ 13sp に引き上げ（全画面横断・1箇所で是正）。
-        labelSmall = TextStyle(fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.Medium),
+        titleSmall = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, lineHeight = 21.sp),
+        // [判読性・全画面底上げ] 実機で「文字が小さい」との指摘を受け本文/ラベル層を +1sp 底上げ（最小tier=14sp）。
+        //   密な表の折返しを避けるため見出し層(title Medium/Large・headline・display)は据え置き。1箇所で全画面横断。
+        bodyLarge = TextStyle(fontSize = 17.sp, lineHeight = 25.sp),
+        bodyMedium = TextStyle(fontSize = 16.sp, lineHeight = 23.sp),
+        bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+        labelLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+        labelMedium = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+        // labelSmall はチップ/凡例/補足/違反内訳の下限。11sp(Material既定)→13→14sp へ継続底上げ。
+        labelSmall = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium),
     )
     // 柔らかいカード(20dp)・タイル(24dp)・ピル(round)。
     val shapes = Shapes(
