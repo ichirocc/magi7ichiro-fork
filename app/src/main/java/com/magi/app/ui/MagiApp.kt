@@ -312,7 +312,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     val openJson: () -> Unit = { openJsonLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
 
     Scaffold(
-        topBar = { MagiTopBar(ui) },
+        // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
+        topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }) },
         bottomBar = {
             Column {
                 if (ui.loaded) BottomCommandBar(ui, vm)
@@ -605,7 +606,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
  */
 
 @Composable
-internal fun MagiTopBar(ui: UiState) {
+internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表") {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -621,7 +622,7 @@ internal fun MagiTopBar(ui: UiState) {
                 )
             }
             Spacer(Modifier.width(10.dp))
-            Text("勤務表", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(sectionTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
             if (ui.loaded) {
                 val ok = ui.hasResult && ui.bestHard == 0L
