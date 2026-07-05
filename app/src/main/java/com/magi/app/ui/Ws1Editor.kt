@@ -3,6 +3,7 @@ package com.magi.app.ui
 import com.magi.app.toHankakuKigou
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
@@ -91,7 +92,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             v.shifts.forEachIndexed { k, s ->
                 // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
                 //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
-                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
                         fontSize = 14.sp, modifier = Modifier.weight(1f))
@@ -112,7 +113,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.groups.forEachIndexed { g, gr ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
-                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) })
@@ -136,7 +137,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             v.staff.forEachIndexed { i, st ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
                 // [押下明示O4] 行タップで編集（シフト/グループ行と統一）。
-                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("${st.name}  [グループ $gk]", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) })

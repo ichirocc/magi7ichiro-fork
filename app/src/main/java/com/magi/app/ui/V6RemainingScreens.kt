@@ -99,11 +99,11 @@ fun RingGauge(label: String, value: Int, max: Int, modifier: Modifier = Modifier
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(value.toString(), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("${(pct * 100).roundToInt()}%", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${(pct * 100).roundToInt()}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.height(4.dp))
-        Text(label, fontSize = 11.sp, textAlign = TextAlign.Center)
+        Text(label, fontSize = 12.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -140,7 +140,7 @@ fun FlagsView(ui: UiState, vm: MagiViewModel) {
                     selected = ui.v6Algorithm == alg,
                     onClick = { vm.setV6Algorithm(alg) },
                     enabled = !ui.running,
-                    label = { Text(alg.name, fontSize = 11.sp) },
+                    label = { Text(alg.name, fontSize = 12.sp) },
                     leadingIcon = if (ui.v6Algorithm == alg) {
                         { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                     } else null,
@@ -154,7 +154,7 @@ fun FlagsView(ui: UiState, vm: MagiViewModel) {
             Text("仕上げ最適化（品質を磨く）")
         }
         val label = V6FinalPort.getAlgorithmLabel(ui.budgetSec)
-        Text("選択時間 ${ui.budgetSec}s → ${label.icon} ${label.name}（${label.tech}）", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("選択時間 ${ui.budgetSec}s → ${label.icon} ${label.name}（${label.tech}）", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -187,7 +187,7 @@ fun ColorSettingsView(ui: UiState) {
                             .background(bg, RoundedCornerShape(8.dp))
                             .padding(6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text("$key\n$sev" + (if (count > 0) " ·$count" else ""), fontSize = 10.sp, textAlign = TextAlign.Center, color = fg) }
+                    ) { Text("$key\n$sev" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -203,7 +203,7 @@ fun OperatorLogView(ui: UiState) {
             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         if (ui.logs.isEmpty()) Text("ログなし", color = MaterialTheme.colorScheme.onSurfaceVariant)
         ui.logs.take(12).forEach { line ->
-            Text(line, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(line, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

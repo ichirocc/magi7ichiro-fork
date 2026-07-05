@@ -5,6 +5,7 @@ import com.magi.app.toHankakuKigou
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -85,7 +86,7 @@ private fun cell(v: String) = v.ifBlank { "-" }
 @Composable
 private fun BlockHeader(label: String, open: Boolean, onToggle: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable { onToggle() }.padding(vertical = 8.dp),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onToggle() }.padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(if (open) "▼" else "▶", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -120,7 +121,7 @@ private fun ShiftAxisList(
                         Text(
                             "${g.groupName}   目標 ${if (g.ideal.isBlank()) "なし" else "${g.ideal}回"}   ✎",
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                         )
                         if (editRow == rk) {
                             NumberStepper("目標", g.ideal, { vm.ws1SetGroupApt(g.g, b.k, it) }, 0, "なし")
@@ -136,7 +137,7 @@ private fun ShiftAxisList(
                         Text(
                             "${iv.staffName}   ${cell(iv.min)}〜${cell(iv.max)}回   ✎",
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                         )
                         if (editRow == rk) {
                             NumberStepper("最少", iv.min, { vm.setStaffRange(iv.i, b.k, it, iv.max) }, 0, "なし")
@@ -173,7 +174,7 @@ private fun StaffAxisList(
                     Text(
                         "${toHankakuKigou(r.kigou)}   ${cell(r.min)}〜${cell(r.max)}回   ✎",
                         style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth().clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { onEdit(if (editRow == rk) "" else rk) }.padding(vertical = 6.dp),
                     )
                     if (editRow == rk) {
                         NumberStepper("最少", r.min, { vm.setStaffRange(b.i, r.k, it, r.max) }, 0, "なし")

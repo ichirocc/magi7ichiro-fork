@@ -146,7 +146,7 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                                         textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            Text("入れたら「元に戻す」でいつでも取り消せます。", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                            Text("入れたら「元に戻す」でいつでも取り消せます。", fontSize = 12.sp, color = cs.onSurfaceVariant)
                         }
                     }
                     infeasible.isNotEmpty() -> {
@@ -407,7 +407,7 @@ internal fun SettingIssuesCard(ui: UiState, onFix: (com.magi.app.v6.SettingIssue
                         Text(s.problem, color = cs.onErrorContainer, style = MaterialTheme.typography.bodySmall)
                         Text("→ ${s.fix}", color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
                         if (s.actionLabel.isNotEmpty()) {
-                            Button(onClick = { onFix(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 44.dp)) {
+                            Button(onClick = { onFix(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                                 Text(s.actionLabel)
                             }
                         }
@@ -546,9 +546,9 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 11.sp, color = fg, maxLines = 1)
+            Text(label, fontSize = 12.sp, color = fg, maxLines = 1)
             Text(if (shortage > 0) "不足$shortage" else "OK", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = fg)
-            if (detail.isNotBlank()) Text(detail, fontSize = 10.sp, color = fg.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (detail.isNotBlank()) Text(detail, fontSize = 12.sp, color = fg.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -686,7 +686,7 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}, proMod
                                 locs.forEach { (txt, staff) ->
                                     if (staff != null) {
                                         Text("$txt　→直し方を探す", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer,
-                                            modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).clickable { onFocusStaff(staff) })
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onFocusStaff(staff) })
                                     } else {
                                         Text(txt, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                     }
@@ -812,7 +812,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             val totalTxt = if (s.deltaTotal <= 0) "−${-s.deltaTotal}" else "+${s.deltaTotal}"
                             Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                            Button(onClick = { onApply(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 44.dp)) {
+                            Button(onClick = { onApply(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                                 Text("この手を適用")
                             }
                         }
