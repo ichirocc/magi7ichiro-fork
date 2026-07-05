@@ -652,7 +652,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表") {
                     else -> { label = "未計算"; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
                 Surface(color = bg, shape = MaterialTheme.shapes.small) {
-                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge,
+                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
             }
@@ -673,7 +673,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
             if (ui.canUndo && !ui.running) {
                 OutlinedButton(
                     onClick = { vm.undo() },
-                    modifier = Modifier.height(60.dp).semantics { contentDescription = "直前の操作を元に戻す" },
+                    modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "直前の操作を元に戻す" },
                 ) { Text("元に戻す") }
                 Spacer(Modifier.width(10.dp))
             }
@@ -681,37 +681,37 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
             if (ui.canRedo && !ui.running) {
                 OutlinedButton(
                     onClick = { vm.redo() },
-                    modifier = Modifier.height(60.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
+                    modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
                 ) { Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
             when {
                 ui.running -> Button(
                     onClick = { vm.stop() },
-                    modifier = Modifier.weight(1f).height(60.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
                 ) {
                     Icon(Icons.Filled.Stop, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("やめる", style = MaterialTheme.typography.titleMedium)
+                    Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 }
                 !ui.hasResult -> Button(
                     // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
                     //   下書きは思考誘導カードの補助「下書きをつくる」が担う（同名ラベルで別動作の不整合を解消）。
                     onClick = { vm.runV6FullOptimize() },
-                    modifier = Modifier.weight(1f).height(60.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium)
+                    Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 }
                 else -> Button(
                     onClick = { vm.runV6FullOptimize() },
-                    modifier = Modifier.weight(1f).height(60.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("もう一度つくる", style = MaterialTheme.typography.titleMedium)
+                    Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1)
                 }
             }
         }

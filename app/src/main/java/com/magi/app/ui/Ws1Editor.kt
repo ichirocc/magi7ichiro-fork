@@ -242,8 +242,8 @@ private fun ShiftDialog(
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            W1Field("最低人数", need1, Modifier.width(140.dp)) { need1 = it }
-            W1Field("上限人数(2パターン時)", need2, Modifier.width(140.dp)) { need2 = it }
+            W1Field("最低人数", need1, Modifier.weight(1f)) { need1 = it }
+            W1Field("上限人数(2パターン時)", need2, Modifier.weight(1f)) { need2 = it }
         }
     }
 }

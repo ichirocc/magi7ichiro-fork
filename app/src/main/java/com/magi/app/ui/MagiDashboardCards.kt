@@ -734,7 +734,7 @@ internal fun SeverityChip(label: String, count: Int, severity: Int, famKey: Stri
     Surface(color = container, shape = shape, modifier = m) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium, color = onContainer,
-                modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(count.toString(), style = MaterialTheme.typography.titleMedium, color = onContainer)
             if (active) {
                 Spacer(Modifier.width(2.dp))

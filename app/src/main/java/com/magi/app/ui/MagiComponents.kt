@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -62,10 +63,12 @@ fun MagiSegmentedControl(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             label,
-                            modifier = Modifier.padding(vertical = 10.dp),
+                            // [レイアウト整合] 狭幅(320dp)/フォント拡大でも制御ラベルが硬クリップせず省略表示へ退避。左右に微小padding。
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }

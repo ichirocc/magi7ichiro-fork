@@ -1141,7 +1141,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit) {
     val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
 
     // [a11y] 生の Box.clickable セルは M3 の 48dp タッチ補完が効かないため、主操作面のセルを 48dp 化（片手一本指仕様）。
-    val nameW = 68.dp; val cellW = 48.dp; val cellH = 48.dp; val headH = 56.dp
+    // [レイアウト整合] headH は 日番号+曜日+不足+下線 の3行分。端末フォント拡大(≥1.3x)でも下線/数字が欠けないよう 72dp。
+    //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
+    val nameW = 80.dp; val cellW = 48.dp; val cellH = 48.dp; val headH = 72.dp
     val hScroll = rememberScrollState()
     Column {
         Text("平面表：横スクロールで日移動、セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。日番号下の下線＝その日の違反（濃=必須/橙=要調整）、不足日は赤字。",
