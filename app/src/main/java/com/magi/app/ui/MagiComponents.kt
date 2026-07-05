@@ -55,7 +55,7 @@ fun MagiSegmentedControl(
                 Surface(
                     onClick = { onSelect(i) },
                     // [a11y/touch] Surface(onClick) は 48dp 自動補完が無いため明示。選択状態を読み上げに公開。
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { selected = active },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { this.selected = active },
                     // [Planner テイスト] 選択中はやわらかい色付きピル（白の段差でなく穏やかな塗り）。
                     color = if (active) cs.primaryContainer else Color.Transparent,
                     contentColor = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
