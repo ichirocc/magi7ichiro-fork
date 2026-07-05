@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 204
-        versionName = "3.65.0-dedup"
+        versionCode = 205
+        versionName = "3.66.0-consistency"
     }
 
     buildTypes {

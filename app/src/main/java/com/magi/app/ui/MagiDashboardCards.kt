@@ -304,10 +304,10 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
             if (ui.polishExhausted && !ui.running) {
                 Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("✓ 必須条件は満たしています。残りのソフト違反は『ソフト研磨』で自動削減を試せます（必須は壊しません）。難しければ勤務表タブでの手修正が早い場合があります。",
+                        Text("✓ 必須条件は満たしています。残りの『できれば守りたい条件』は自動で整えて減らせます（必須は壊しません）。難しければ勤務表タブでの手修正が早い場合があります。",
                             color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("ソフト研磨") }
+                            Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自動で整える") }
                             OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
                         }
                     }

@@ -45,6 +45,8 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
     val skills = vm.skillGroups()
     val staff = vm.ws1()?.staff ?: emptyList()
     var dialog by remember { mutableStateOf<SkillDlg?>(null) }
+    // [破壊操作ガード] スキル群削除は職員の skillIdx を再割当てする高影響操作。確認を挟む。
+    var confirmDelete by remember { mutableStateOf<Int?>(null) }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -56,7 +58,7 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
                     Text("${sg.kigou}  ${sg.name}", fontSize = 12.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = SkillDlg.Edit(g, sg.name, sg.kigou) })
                     Spacer(Modifier.width(6.dp))
-                    DeleteRowButton(onClick = { vm.removeSkillGroup(g) })
+                    DeleteRowButton(onClick = { confirmDelete = g })
                 }
             }
             AddRowButton("スキルグループ追加", onClick = { dialog = SkillDlg.Add })
@@ -96,6 +98,17 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
         SkillDlg.Add -> SkillGroupDialog("スキルグループ追加", "", "", onOk = { n, k -> vm.addSkillGroup(n, k); dialog = null }, onClose = { dialog = null })
         is SkillDlg.Edit -> SkillGroupDialog("スキルグループ編集", d.name, d.kigou, onOk = { n, k -> vm.editSkillGroup(d.g, n, k); dialog = null }, onClose = { dialog = null })
         null -> {}
+    }
+
+    confirmDelete?.let { g ->
+        val name = skills.getOrNull(g)?.let { "${it.kigou} ${it.name}" } ?: "このスキルグループ"
+        AlertDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = { Text("スキルグループを削除しますか？") },
+            text = { Text("「$name」を削除します。所属していた職員のスキル割当は自動で付け替わります。元に戻すで取り消せます。") },
+            confirmButton = { DialogDangerButton("削除する", onClick = { vm.removeSkillGroup(g); confirmDelete = null }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }) },
+        )
     }
 }
 

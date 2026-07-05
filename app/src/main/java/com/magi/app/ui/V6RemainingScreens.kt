@@ -167,6 +167,8 @@ fun ColorSettingsView(ui: UiState) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 row.forEach { key ->
                     val sev = V6WebCompat.severityFromVioKey(key)
+                    // [色覚/日本語化] 色に依らない文字バックアップ。英語enum(CRITICAL/…)ではなく日本語の重大度語で示す。
+                    val sevJp = when (sev) { "CRITICAL" -> "必須"; "HIGH", "WARN" -> "要調整"; else -> "情報" }
                     // [不具合修正] 旧版は「重大度の色凡例」なのに色が primary(ブランド緑)＝違反有無で、重大度と無関係だった。
                     //   緑は普遍的に「OK」の意で違反表示に不適＋統一パレット(赤=必須/橙=要調整)とも乖離。
                     //   重大度で静的に色分けし(凡例=データ非依存の参照)、現在件数は末尾に併記する。
@@ -187,7 +189,7 @@ fun ColorSettingsView(ui: UiState) {
                             .background(bg, RoundedCornerShape(8.dp))
                             .padding(6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text("$key\n$sev" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
+                    ) { Text("$key\n$sevJp" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
                 }
             }
             Spacer(Modifier.height(6.dp))
