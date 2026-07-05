@@ -412,6 +412,16 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     SetupGuideCard(ui, vm)
                     // [Web反映] 毎月触る「今月の調整/シフト希望」と、たまにしか触らない「基本マスター」を分けて誤編集を防ぐ。
                     MagiSegmentedControl(options = listOf("今月の調整", "シフト希望", "基本マスター"), selected = editScope, onSelect = { editScope = it })
+                    // [発見性] 各スコープの中身を1行で示す。「回数設定はどこ？」→基本マスター、を迷わず辿れるように。
+                    Text(
+                        when (editScope) {
+                            0 -> "今月の必要人数など、月ごとに変える設定"
+                            1 -> "個人の日別シフト希望"
+                            else -> "回数・人数・並びルールなど、毎月は変えない土台"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     when (editScope) {
                         0 -> {
                             MonthPickerCard(ui, vm)

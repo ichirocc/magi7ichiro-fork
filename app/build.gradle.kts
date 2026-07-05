@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 202
-        versionName = "3.63.0-topbar-loc"
+        versionCode = 203
+        versionName = "3.64.0-scope-hint"
     }
 
     buildTypes {
