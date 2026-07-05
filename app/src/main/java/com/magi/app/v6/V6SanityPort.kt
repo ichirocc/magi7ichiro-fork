@@ -163,6 +163,37 @@ object V6SanityPort {
         return out.sortedWith(compareBy<ImpossibleWish> { it.staffIndex }.thenBy { it.dayIndex })
     }
 
+    /** シフト単位の「証明可能に解消不能な covU 不足」。担当可能人数 capable(k) を全員そのシフトへ
+     *  就けても残る不足（= covUCell(k,j,capable) の総和）。covUCell は got 単調減少なので、これは当該セルの
+     *  covU 最小値＝どう割り当てても避けられない不足量。need1/need2 両設定時は covUCell が MIN(OR救済) を返す
+     *  ため過大検出しない。誤検知ゼロ・読み取り専用・データ不変。 */
+    data class ForcedCovU(val shiftIndex: Int, val shiftSymbol: String, val cells: Int, val amount: Int)
+
+    fun forcedCovU(state: MagiState, p: Problem = Problem(state)): List<ForcedCovU> {
+        val out = ArrayList<ForcedCovU>()
+        for (k in 0 until p.K) {
+            val capable = (0 until p.S).count { i -> p.canDo(i, k) }
+            var cells = 0; var amount = 0
+            for (j in 0 until p.T) {
+                val u = p.covUCell(k, j, capable)
+                if (u > 0) { cells++; amount += u }
+            }
+            if (amount > 0) {
+                val sym = state.shifts.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: k.toString()
+                out.add(ForcedCovU(k, sym, cells, amount))
+            }
+        }
+        return out
+    }
+
+    /** データ起因で証明可能に解消不能な HARD 違反の下限（report.hard と同単位＝covU 不足量の総和）。
+     *  ・covU: forcedCovU の総量。有資格者を全員そのシフトに就けても埋まらない席＝どう探索しても消えない HARD。
+     *  ・実現不能希望(pref): 監査#11② で HARD 寄与0（対称除外）のため下限に含めない。
+     *  ・群外配置(groupViol): 探索は canDo ガードで群外を置かない＋不可能希望は gate 済＝構造下限では常時0。
+     *  構造(assignability/need)のみ依存で最適化中に変化しないため一度だけ算出してよい。 */
+    fun structuralHardFloor(state: MagiState, p: Problem = Problem(state)): Int =
+        forcedCovU(state, p).sumOf { it.amount }
+
     /**
      * [設定ミスの誘導修正] 制約・希望の設定間違いを、人間が直せる粒度（誰の/何日の/どのシフト/どの制約、
      * そして具体的な直し方）で列挙する。検出済みの構造化データを平易な日本語の指示文に変換するだけで、
@@ -328,6 +359,14 @@ object V6SanityPort {
             }
         }
 
+        // 7) [事前診断/配布不可] ある日に「そのシフトを担当できる人数」より必要人数が多い＝どう割り当てても
+        //    人員不足(covU=HARD)が確定＝配布不可。最適化の hardFloor と同じ forcedCovU で検出（誤検知ゼロ）。
+        for (fc in forcedCovU(state, p)) {
+            out.add(SettingIssue(IssueKind.DEMAND, "「${fc.shiftSymbol}」の担当者不足（配布不可の原因）",
+                "${fc.cells}日で、担当できる人数より必要人数が多く、人員不足(covU)が必ず出ます（不足の合計${fc.amount}）。この不足は最適化では解消できません",
+                "「${fc.shiftSymbol}」を担当できるスタッフを増やす(ws1)か、その日の必要人数を下げてください(ws2)"))
+        }
+
         // [監査#7] SOFT 桁溢れ（辞書式崩壊）: soft 合計がスコア上限 1,000,000 に接近/超過すると、
         //   HARD 1件(=1,000,000) と soft が桁で干渉し「必須違反ゼロ最優先」が崩れる。初期解の soft で概算警告。
         run {
@@ -367,6 +406,15 @@ object V6SanityPort {
         fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: k.toString()
         fun nm(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
         fun day(j: Int) = safeDayLabel(state.startDate, j)
+        // [構造HARD下限] データ起因で解消不能な必須違反(covU)の下限。最適化の hardFloor と同値。
+        //   >0 なら「配布不可はデータ起因＝最適化は残りをSOFT研磨する」と判断できる（読み取り専用）。
+        run {
+            val forced = forcedCovU(state, p)
+            val floor = forced.sumOf { it.amount }
+            if (floor > 0) out.add("[W] 構造HARD下限: 担当者不足で covU=$floor が解消不能（配布不可はデータ起因）: " +
+                forced.joinToString(" / ") { "${it.shiftSymbol} ${it.cells}日 不足${it.amount}" })
+            else out.add("[I] 構造HARD下限: 0（各シフトは担当者数で需要を満たせる＝データ起因の必須違反なし）")
+        }
         fun emit(byFam: Map<String, MutableList<String>>, cap: Int) {
             for ((fam, items) in byFam) {
                 val shown = items.take(cap).joinToString(" ; ")

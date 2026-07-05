@@ -207,12 +207,15 @@ object V6FinalPort {
         val stallMs = (budgetMs * 9 / 10).coerceAtLeast(20_000L)
         // [5分圧縮] HARD=0到達後（=配布可・残りは研磨のみ）は頭打ちをより早く検知して終了（plateauなので品質は不変）。
         val stallHardMs = (budgetMs / 8).coerceAtLeast(15_000L)   // 5分予算→37.5s
-        // [賢い早期脱出] 証明可能に解消不能なHARDの下限。実現不能な希望（担当外シフトへの希望）は
-        //   どう探索しても消せない＝恒久pref違反なので、HARD はこの件数より下がらない。HARD がこの
-        //   下限まで到達したら「HARD=0 到達」と同じく頭打ち(plateau)とみなし、短い stallHardMs で早く返す。
-        //   解ける可能性のあるHARD(>下限)は従来どおり stallMs(=予算9/10)でしっかり粘るため退行はしない。
-        //   下限は構造的(assignabilityのみ)で最適化中に変化しないため一度だけ算出する。
-        val hardFloor = try { V6SanityPort.detectImpossibleWishes(state).size } catch (_: Exception) { 0 }
+        // [賢い早期脱出] 証明可能に解消不能な「データ起因HARD」の下限（report.hard と同単位）。
+        //   ＝有資格者を全員そのシフトに就けても埋まらない席（構造的covU）。どう探索しても消えない HARD なので、
+        //   HARD がこの下限まで到達したら「HARD=0 到達」と同じく頭打ち(plateau)とみなし短い stallHardMs へ移行して
+        //   残り予算を SOFT 制約の研磨に充てる（データ起因HARDを配慮しつつソフト研磨へ移行）。
+        //   下限超のHARD（解ける可能性がある）は従来どおり stallMs(=予算9/10)でしっかり粘るため退行しない。
+        //   [修正] 旧版は detectImpossibleWishes().size を下限にしていたが、監査#11②で実現不能希望は pref から
+        //     対称除外＝HARD寄与0のため下限にならず、逆に「解けるHARD」を早々に諦める誤りだった。構造的covUへ是正。
+        //   構造(assignability/need)のみ依存で最適化中に不変＝一度だけ算出する。
+        val hardFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
         val lastImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
         val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)   // 並列ワーカーから読むため atomic
