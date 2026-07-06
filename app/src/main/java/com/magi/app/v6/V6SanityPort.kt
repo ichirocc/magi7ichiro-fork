@@ -245,6 +245,46 @@ object V6SanityPort {
             }
         }
 
+        // 2b-2) [壁/ダイヤル分類] c1 窓制約の「構造的不能(壁)」検知。供給<需要下界なら、どう組んでもこの窓違反(c1)は
+        //   残る＝作成者が最適化で追っても無駄（staffingを変えるかルールを緩めるしかない）。供給≥需要(=ダイヤル:
+        //   優先度で減らせる)は正常なので出さない。conservative 設計で false wall を出さない:
+        //   ・需要 = 各 canDo 職員 × day2 × floor(T/day1)（disjoint窓の下界）＝真の下界（sliding はより厳しいので過小評価）。
+        //   ・供給 = 休窓:S*T−Σ最小work需要(=休へ回せる上限) / 作業シフト窓:Σ上限被覆(=最大スロット数)＝供給を高めに見積もる。
+        //   両者とも「壁を過剰断定しない」向きに丸めているため、発火＝真に構造的不能。read-only・スコアリング不変。
+        run {
+            var workMinDemand = 0
+            for (k in 0 until p.K) for (j in 0 until p.T) workMinDemand += p.need1[k][j].coerceAtLeast(0)
+            for (c in p.cons1) {
+                val si = c.shiftIdx
+                // 退化ケース(窓>期間 / 回数>窓)は 2b が別途案内。ここは通常窓の構造的不能のみ。
+                if (c.day1 <= 0 || c.day2 <= 0 || c.day1 > p.T || c.day2 > c.day1) continue
+                val disjoint = p.T / c.day1
+                if (disjoint <= 0) continue
+                val nCanDo = (0 until p.S).count { p.canDo(it, si) }
+                if (nCanDo == 0) continue   // 担当者ゼロは別の案内対象
+                val demand = nCanDo * c.day2 * disjoint
+                val isRest = si == p.restIdx
+                val supply = if (isRest) {
+                    p.S * p.T - workMinDemand
+                } else {
+                    var s = 0
+                    for (j in 0 until p.T) {
+                        val h = if (p.use2 && p.need2[si][j] >= 0) p.need2[si][j] else p.need1[si][j]
+                        s += h.coerceAtLeast(0)
+                    }
+                    s
+                }
+                if (supply < demand) {
+                    val sym = state.shifts.getOrNull(si)?.kigou ?: si.toString()
+                    val short = demand - supply
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "窓ルール「$sym を${c.day1}日で${c.day2}回以上」",
+                        "「$sym」の供給${supply}に対し必要${demand}(=担当${nCanDo}人×${c.day2}回×${disjoint}窓)で$short 不足。" +
+                            "どう組んでもこの窓違反(c1)は構造的に残ります（最適化では消せません）。",
+                        "「$sym」の担当者を増やす(ws1)か、窓ルールの回数を下げる／日数を延ばす(制約設定)。"))
+                }
+            }
+        }
+
         // 2c) [監査#5] 担当可能者ゼロの回数制約(cons2) — canDoガード後は事実上無効になるため案内する。
         for (c in p.cons2) {
             val eligible = (0 until p.S).count { p.canDo(it, c.shiftIdx) }

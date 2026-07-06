@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 218
-        versionName = "3.75.0-vio-filter"
+        versionCode = 219
+        versionName = "3.76.0-wall-dial"
     }
 
     buildTypes {

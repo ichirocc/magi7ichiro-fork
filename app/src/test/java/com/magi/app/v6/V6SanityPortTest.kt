@@ -32,4 +32,31 @@ class V6SanityPortTest {
         assertTrue(rep.warns.any { it.contains("実現不能") })
         assertTrue(rep.warns.any { it.contains("担当不可") })
     }
+
+    /** ベース: 2職員×6日、A は 1日1スロット。cons1 A(窓3日で2回以上) を切替えて壁/ダイヤルを検証。 */
+    private fun windowState(need1A: String, cons1: List<com.magi.app.model.C1Row>) = MagiState(
+        startDate = "2026-06-01", endDate = "2026-06-06",
+        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", need1A, "")),
+        groups = listOf(Group("G", "G")),
+        staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1)),
+        groupShiftApt = listOf(listOf("", "")),
+        schedule = List(2) { listOf(1, 1, 0, 1, 1, 0) },
+        wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = cons1, cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun classifiesStructuralWindowWallButNotDial() {
+        val cons = listOf(com.magi.app.model.C1Row("3", "A", "2"))   // A を3日窓で2回以上
+        // 壁: A 供給=6(1/日×6) < 需要下界=2人×2回×floor(6/3=2)=8 → 構造的不能。
+        val wall = V6SanityPort.buildGuidance(windowState("1", cons))
+        assertTrue("A の窓が壁として案内される",
+            wall.any { it.where.contains("A") && it.problem.contains("構造的に残ります") })
+        // ダイヤル: A 供給=12(2/日×6) ≥ 需要8 → 案内しない。
+        val dial = V6SanityPort.buildGuidance(windowState("2", cons))
+        assertTrue("供給充足なら窓の壁案内は出さない",
+            dial.none { it.where.contains("窓ルール") && it.problem.contains("構造的に残ります") })
+    }
 }
