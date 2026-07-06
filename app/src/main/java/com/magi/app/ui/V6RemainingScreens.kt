@@ -99,11 +99,11 @@ fun RingGauge(label: String, value: Int, max: Int, modifier: Modifier = Modifier
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(value.toString(), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("${(pct * 100).roundToInt()}%", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${(pct * 100).roundToInt()}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Spacer(Modifier.height(4.dp))
-        Text(label, fontSize = 11.sp, textAlign = TextAlign.Center)
+        Text(label, fontSize = 12.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -140,7 +140,7 @@ fun FlagsView(ui: UiState, vm: MagiViewModel) {
                     selected = ui.v6Algorithm == alg,
                     onClick = { vm.setV6Algorithm(alg) },
                     enabled = !ui.running,
-                    label = { Text(alg.name, fontSize = 11.sp) },
+                    label = { Text(v6AlgorithmLabel(alg), fontSize = 15.sp) },
                     leadingIcon = if (ui.v6Algorithm == alg) {
                         { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                     } else null,
@@ -154,7 +154,7 @@ fun FlagsView(ui: UiState, vm: MagiViewModel) {
             Text("仕上げ最適化（品質を磨く）")
         }
         val label = V6FinalPort.getAlgorithmLabel(ui.budgetSec)
-        Text("選択時間 ${ui.budgetSec}s → ${label.icon} ${label.name}（${label.tech}）", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("選択時間 ${ui.budgetSec}s → ${label.icon} ${label.name}（${label.tech}）", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -167,12 +167,15 @@ fun ColorSettingsView(ui: UiState) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                 row.forEach { key ->
                     val sev = V6WebCompat.severityFromVioKey(key)
+                    // [色覚/日本語化] 色に依らない文字バックアップ。英語enum(CRITICAL/…)ではなく日本語の重大度語で示す。
+                    val sevJp = when (sev) { "CRITICAL" -> "必須"; "HIGH", "WARN" -> "要調整"; else -> "情報" }
                     // [不具合修正] 旧版は「重大度の色凡例」なのに色が primary(ブランド緑)＝違反有無で、重大度と無関係だった。
                     //   緑は普遍的に「OK」の意で違反表示に不適＋統一パレット(赤=必須/橙=要調整)とも乖離。
                     //   重大度で静的に色分けし(凡例=データ非依存の参照)、現在件数は末尾に併記する。
                     val count = ui.breakdown[key] ?: 0
                     val bg = when (sev) {
-                        "CRITICAL" -> MagiAccent.red
+                        // [コントラスト] 白文字 on 0xEF4444 は 3.76:1 で WCAG AA 不足のため、濃い赤(約5.9:1)へ。
+                        "CRITICAL" -> Color(0xFFBA1A1A)
                         "HIGH", "WARN" -> MagiAccent.orange
                         else -> cs.surfaceVariant   // INFO
                     }
@@ -187,7 +190,7 @@ fun ColorSettingsView(ui: UiState) {
                             .background(bg, RoundedCornerShape(8.dp))
                             .padding(6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text("$key\n$sev" + (if (count > 0) " ·$count" else ""), fontSize = 10.sp, textAlign = TextAlign.Center, color = fg) }
+                    ) { Text("$key\n$sevJp" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -203,7 +206,7 @@ fun OperatorLogView(ui: UiState) {
             fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         if (ui.logs.isEmpty()) Text("ログなし", color = MaterialTheme.colorScheme.onSurfaceVariant)
         ui.logs.take(12).forEach { line ->
-            Text(line, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(line, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

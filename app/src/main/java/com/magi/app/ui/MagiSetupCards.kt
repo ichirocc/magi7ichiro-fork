@@ -202,7 +202,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
                 Button(onClick = { vm.setBudget((ui.budgetSec + 60).coerceAtMost(MAX_BUDGET_SEC)) },
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
             }
-            Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V6Algorithm.values().forEach { alg ->
                     val selected = ui.v6Algorithm == alg
@@ -221,7 +221,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
                     enabled = !ui.running,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("仕上げ最適化（品質を磨く）", fontSize = 13.sp)
+                Text("仕上げ最適化（品質を磨く）", fontSize = 14.sp)
             }
             Spacer(Modifier.height(14.dp))
             // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
@@ -239,7 +239,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
 }
 
 /** [見やすさ] 計算方式(V6Algorithm)の一般向け日本語ラベル。技術名(AUTO/RSI 等)は操作者に不明なため。 */
-private fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
+internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
     V6Algorithm.AUTO -> "おまかせ"
     V6Algorithm.V5 -> "高速"
     V6Algorithm.ALNS -> "破壊再構築"
@@ -410,7 +410,7 @@ internal fun AppearanceCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = oneHand, onCheckedChange = onOneHand)
                 Spacer(Modifier.width(8.dp))
-                Text("片手モード（内容を下方に寄せて親指で届きやすく）", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text("片手モード（内容を下方に寄せて親指で届きやすく）", fontSize = 14.sp, modifier = Modifier.weight(1f))
             }
             // [B5/A8] 2×2ボタン → 4セグメント（自動/明/暗/UD）。themeMode の index 対応は不変。
             MagiSegmentedControl(options = options, selected = themeMode, onSelect = onThemeMode)

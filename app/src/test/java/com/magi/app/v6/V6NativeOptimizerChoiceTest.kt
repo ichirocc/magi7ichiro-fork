@@ -36,7 +36,9 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(0))   // W0 ベースライン
         assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(1))
         assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(2))
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(3))
+        // [陳腐化修正] W3 は後日 Lam-Delosme 適応冷却(LAM_ADAPTIVE)へ多様化された（roleAcceptFor 実装＋専用コード）。
+        //   テストが旧SA期待のまま残り V6 Engine Check が恒常赤だったのを実装に追随。
+        assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
         assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
     }
 }

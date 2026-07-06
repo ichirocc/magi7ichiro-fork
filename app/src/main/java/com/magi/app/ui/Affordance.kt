@@ -44,7 +44,7 @@ fun AddRowButton(text: String, onClick: () -> Unit, enabled: Boolean = true, mod
 fun EditRowButton(onClick: () -> Unit, enabled: Boolean = true, text: String = "編集") {
     FilledTonalButton(
         onClick = onClick, enabled = enabled,
-        contentPadding = CompactPad, modifier = Modifier.heightIn(min = 44.dp),
+        contentPadding = CompactPad, modifier = Modifier.heightIn(min = 48.dp),
     ) { Text(text) }
 }
 
@@ -53,7 +53,7 @@ fun EditRowButton(onClick: () -> Unit, enabled: Boolean = true, text: String = "
 fun DeleteRowButton(onClick: () -> Unit, enabled: Boolean = true, text: String = "削除") {
     OutlinedButton(
         onClick = onClick, enabled = enabled, contentPadding = CompactPad,
-        modifier = Modifier.heightIn(min = 44.dp),
+        modifier = Modifier.heightIn(min = 48.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
     ) { Text(text) }
 }

@@ -3,6 +3,7 @@ package com.magi.app.ui
 import com.magi.app.toHankakuKigou
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -91,7 +94,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             v.shifts.forEachIndexed { k, s ->
                 // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
                 //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
-                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
                         fontSize = 14.sp, modifier = Modifier.weight(1f))
@@ -112,7 +115,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.groups.forEachIndexed { g, gr ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
-                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) })
@@ -136,7 +139,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             v.staff.forEachIndexed { i, st ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
                 // [押下明示O4] 行タップで編集（シフト/グループ行と統一）。
-                Row(Modifier.fillMaxWidth().clickable { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("${st.name}  [グループ $gk]", fontSize = 14.sp, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) })
@@ -241,8 +244,8 @@ private fun ShiftDialog(
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            W1Field("最低人数", need1, Modifier.width(140.dp)) { need1 = it }
-            W1Field("上限人数(2パターン時)", need2, Modifier.width(140.dp)) { need2 = it }
+            W1Field("最低人数", need1, Modifier.weight(1f)) { need1 = it }
+            W1Field("上限人数(2パターン時)", need2, Modifier.weight(1f)) { need2 = it }
         }
     }
 }
@@ -428,13 +431,13 @@ private fun AptStepper(label: String, value: String, onChange: (String) -> Unit)
             // [ゼロ設定] 0を許可（従来は「1未満→空欄」で目標0が設定できなかった）。空欄→0 / 0→空欄 / N→N-1。
             val c = value.trim().toIntOrNull()
             onChange(when { c == null -> "0"; c <= 0 -> ""; else -> (c - 1).toString() })
-        }) { Text("−", fontSize = 16.sp) }
+        }, modifier = Modifier.semantics { contentDescription = "$label の適切回数を減らす" }) { Text("−", fontSize = 16.sp) }
         Text(value.ifBlank { "—" }, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(22.dp), color = MaterialTheme.colorScheme.onSurface)
         TextButton(onClick = {
             val c = value.trim().toIntOrNull() ?: -1
             onChange((c + 1).coerceAtLeast(0).toString())
-        }) { Text("＋", fontSize = 16.sp) }
+        }, modifier = Modifier.semantics { contentDescription = "$label の適切回数を増やす" }) { Text("＋", fontSize = 16.sp) }
     }
 }
 
@@ -444,6 +447,6 @@ private fun AptStepper(label: String, value: String, onChange: (String) -> Unit)
 private fun LoadoutHeader(code: String, jp: String) {
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(code, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary)
-        Text(jp, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text(jp, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }

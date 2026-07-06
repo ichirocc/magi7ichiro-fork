@@ -312,7 +312,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     val openJson: () -> Unit = { openJsonLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
 
     Scaffold(
-        topBar = { MagiTopBar(ui) },
+        // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
+        topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }) },
         bottomBar = {
             Column {
                 if (ui.loaded) BottomCommandBar(ui, vm)
@@ -367,6 +368,12 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     var editing by rememberSaveable { mutableStateOf(false) }
                     var copyConfirm by rememberSaveable { mutableStateOf(false) }
                     var wishBulkOpen by rememberSaveable { mutableStateOf(false) }
+                    // [E7] 違反 種別フィルタ（勤務表タブ全面共有）。初期=全ON。bitmask(Int)で rememberSaveable 保存
+                    //   （回転/プロセス復元で保持）。表示のみ・スコアリング不変。ビット i = vioBuckets[i] のON/OFF。
+                    var vioMask by rememberSaveable { mutableIntStateOf((1 shl vioBuckets.size) - 1) }
+                    val vioEnabled = remember(vioMask) {
+                        vioBuckets.filterIndexed { i, _ -> (vioMask shr i) and 1 == 1 }.map { it.key }.toSet()
+                    }
                     val canRead = ui.hasResultSnapshot
                     val effectiveEditing = editing || !canRead
                     ScheduleModeCard(
@@ -384,10 +391,15 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     })
                     val gridUi = if (effectiveEditing) ui else ui.copy(schedule = ui.resultSchedule)
                     val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
-                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode,
+                    // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
+                    ViolationFilterBar(gridUi.breakdown, vioEnabled) { key ->
+                        val i = vioBuckets.indexOfFirst { it.key == key }
+                        if (i >= 0) vioMask = vioMask xor (1 shl i)
+                    }
+                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
-                    StaffCalendarCard(gridUi, onCellClick = onCell)
-                    TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) })
+                    StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
+                    TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
                     if (effectiveEditing) {
                         OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
@@ -411,6 +423,16 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     SetupGuideCard(ui, vm)
                     // [Web反映] 毎月触る「今月の調整/シフト希望」と、たまにしか触らない「基本マスター」を分けて誤編集を防ぐ。
                     MagiSegmentedControl(options = listOf("今月の調整", "シフト希望", "基本マスター"), selected = editScope, onSelect = { editScope = it })
+                    // [発見性] 各スコープの中身を1行で示す。「回数設定はどこ？」→基本マスター、を迷わず辿れるように。
+                    Text(
+                        when (editScope) {
+                            0 -> "今月の必要人数など、月ごとに変える設定"
+                            1 -> "個人の日別シフト希望"
+                            else -> "回数・人数・並びルールなど、毎月は変えない土台"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     when (editScope) {
                         0 -> {
                             MonthPickerCard(ui, vm)
@@ -479,7 +501,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。
                     if (proMode) V6DashboardCard(ui.v6)
                     if (proMode) WeightTableCard()   // [N2/⛏11] スコアの重み根拠（最適化器と一致）
-                    BossCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) })
+                    // [IA重複解消] BossCard は FixSuggestionCard と同じ提案＋適用を二重描画していたため撤去（下の FixSuggestionCard に一本化）。
                     OverviewDashboard(ui, proMode)
                     CheckSummaryView(ui, proMode)
                     BreakdownCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, proMode = proMode)
@@ -605,7 +627,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
  */
 
 @Composable
-internal fun MagiTopBar(ui: UiState) {
+internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表") {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -621,7 +643,7 @@ internal fun MagiTopBar(ui: UiState) {
                 )
             }
             Spacer(Modifier.width(10.dp))
-            Text("勤務表", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(sectionTitle, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.weight(1f))
             if (ui.loaded) {
                 val ok = ui.hasResult && ui.bestHard == 0L
@@ -641,7 +663,7 @@ internal fun MagiTopBar(ui: UiState) {
                     else -> { label = "未計算"; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
                 Surface(color = bg, shape = MaterialTheme.shapes.small) {
-                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge,
+                    Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
             }
@@ -662,7 +684,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
             if (ui.canUndo && !ui.running) {
                 OutlinedButton(
                     onClick = { vm.undo() },
-                    modifier = Modifier.height(60.dp).semantics { contentDescription = "直前の操作を元に戻す" },
+                    modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "直前の操作を元に戻す" },
                 ) { Text("元に戻す") }
                 Spacer(Modifier.width(10.dp))
             }
@@ -670,37 +692,37 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
             if (ui.canRedo && !ui.running) {
                 OutlinedButton(
                     onClick = { vm.redo() },
-                    modifier = Modifier.height(60.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
+                    modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
                 ) { Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
             when {
                 ui.running -> Button(
                     onClick = { vm.stop() },
-                    modifier = Modifier.weight(1f).height(60.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
                 ) {
                     Icon(Icons.Filled.Stop, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("やめる", style = MaterialTheme.typography.titleMedium)
+                    Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 !ui.hasResult -> Button(
                     // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
                     //   下書きは思考誘導カードの補助「下書きをつくる」が担う（同名ラベルで別動作の不整合を解消）。
                     onClick = { vm.runV6FullOptimize() },
-                    modifier = Modifier.weight(1f).height(60.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium)
+                    Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 else -> Button(
                     onClick = { vm.runV6FullOptimize() },
-                    modifier = Modifier.weight(1f).height(60.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                 ) {
                     Icon(Icons.Filled.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("もう一度つくる", style = MaterialTheme.typography.titleMedium)
+                    Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -722,7 +744,7 @@ internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
             NavigationBarItem(
                 selected = selected == i,
                 onClick = { onSelect(i) },
-                icon = { Icon(item.second, contentDescription = item.third) },
+                icon = { Icon(item.second, contentDescription = null) }, // [a11y] ラベル常時表示のためアイコンCDは重複回避で null
                 label = { Text(item.first, style = MaterialTheme.typography.labelMedium) },
                 alwaysShowLabel = true,
             )

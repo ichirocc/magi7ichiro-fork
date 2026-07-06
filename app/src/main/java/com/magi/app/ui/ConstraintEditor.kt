@@ -63,7 +63,7 @@ fun ConstraintsCard(
             families.forEachIndexed { fi, fam ->
                 if (fi > 0) Spacer(Modifier.height(6.dp))
                 Spacer(Modifier.height(8.dp))
-                Text(fam.title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(fam.title, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 if (fam.rows.isEmpty()) {
                     Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
@@ -102,7 +102,7 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
                 families.forEachIndexed { fi, fam ->
                     if (fi > 0) Spacer(Modifier.height(6.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text(fam.title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(fam.title, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     if (fam.rows.isEmpty()) {
                         Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
@@ -161,8 +161,8 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
                 Picker("グループ", groups, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumField("下限(空=0)", l) { l = it }
-                    NumField("上限(空=無制限)", u) { u = it }
+                    NumField("下限(空=0)", l, Modifier.weight(1f)) { l = it }
+                    NumField("上限(空=無制限)", u, Modifier.weight(1f)) { u = it }
                 }
             }
         }
@@ -189,8 +189,8 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
                 Picker("スキル", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NumField("下限(空=0)", l) { l = it }
-                    NumField("上限(空=無制限)", u) { u = it }
+                    NumField("下限(空=0)", l, Modifier.weight(1f)) { l = it }
+                    NumField("上限(空=無制限)", u, Modifier.weight(1f)) { u = it }
                 }
             }
         }
@@ -256,13 +256,14 @@ private fun Shell(
 }
 
 @Composable
-private fun NumField(label: String, value: String, onChange: (String) -> Unit) {
+private fun NumField(label: String, value: String, modifier: Modifier = Modifier.width(150.dp), onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = { onChange(it.filter { c -> c.isDigit() }) },
         label = { Text(label, fontSize = 12.sp) },
         singleLine = true,
-        modifier = Modifier.width(150.dp),
+        // [レイアウト整合] 既定は width(150)。Row 内2連で並べる箇所は weight(1f) を渡してダイアログ幅からの溢れ(欠け)を防ぐ。
+        modifier = modifier,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
     )
 }

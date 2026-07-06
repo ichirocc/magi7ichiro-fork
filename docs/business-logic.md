@@ -35,9 +35,10 @@
 | `c42s` | 1 | SOFT | スキル群ペア同日併存 | セル/日 |
 | `apt` | 1 | SOFT | 適切回数からの L1 偏差 `|n-t|`（群単位の双方向目標） | 回数 `i,k`（aptLow/aptHigh） |
 | `fair` | 1 | SOFT | グループ内公平化：群×担当ONシフトで round(平均) からの L1 偏差和 | 場所表示なし |
+| `weekly` | 1 | SOFT | 7日周期(曜日)シフト平準化：職員×曜日で round(勤務日/7) からの L1 偏差和 | 場所表示なし |
 | `covO` | 0.5 | SOFT | 過剰な配置（上限 hi 超過、`got-hi`） | 被覆 `k,j` |
 
-> **HARD = {groupViol, c3n, covU, pref}**、それ以外は SOFT。`apt`/`fair` は内訳チップ（UI）には出さないが `weightedScore`/total には算入する。
+> **HARD = {groupViol, c3n, covU, pref}**、それ以外は SOFT。`apt`/`fair`/`weekly` は内訳チップ（UI）には出さないが `weightedScore`/total には算入する。
 
 ---
 
@@ -53,6 +54,8 @@
 - **群レンジ/ペア（C41/C42）**と**スキル群版（C41s/C42s）**：`C41Row(groupKigou, shiftKigou, l, u)` ＝1日に [l,u] 回／`C42Row(g1,g2,s1,s2)` ＝群g1のs1と群g2のs2が同日併存不可。
 - **個人下限/上限（low/high）**：`staffRange["i,k"]={lo,hi}`。`low` は `lo!=0 && 担当可 && 回数<lo`、`high` は `回数>hi`。重み 90/45（被覆や c1 に負けない最低限の重み）。
 - **適切回数（apt）**：群目標を個人 `staffRange[lo,hi]` でクランプし、固定職員の解消不能な幻 apt を除去。
+- **グループ内公平化（fair）**：群×担当ONシフトで、メンバー回数の round(平均) からの L1 偏差和（m<2 の群は対象外）。同群職員間で各シフト回数を均す。
+- **7日周期(曜日)平準化（weekly）**：職員ごと、勤務日(非休)の**曜日別カウント**の round(勤務日数/7) からの L1 偏差和。`weekday(j)=(dow0+j)%7`（`Problem.dow0/restIdx`）。「毎週おなじ曜日に偏る」を均す。fair と同型・重み1。
 - **希望（pref）/群マスク（groupViol）**：上表のとおり HARD。
 
 ---

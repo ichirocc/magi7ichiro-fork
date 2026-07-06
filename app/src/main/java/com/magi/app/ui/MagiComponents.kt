@@ -20,8 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -52,7 +54,8 @@ fun MagiSegmentedControl(
                 val active = i == selected
                 Surface(
                     onClick = { onSelect(i) },
-                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                    // [a11y/touch] Surface(onClick) は 48dp 自動補完が無いため明示。選択状態を読み上げに公開。
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).semantics { this.selected = active },
                     // [Planner テイスト] 選択中はやわらかい色付きピル（白の段差でなく穏やかな塗り）。
                     color = if (active) cs.primaryContainer else Color.Transparent,
                     contentColor = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
@@ -62,10 +65,12 @@ fun MagiSegmentedControl(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             label,
-                            modifier = Modifier.padding(vertical = 10.dp),
+                            // [レイアウト整合] 狭幅(320dp)/フォント拡大でも制御ラベルが硬クリップせず省略表示へ退避。左右に微小padding。
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -88,7 +93,7 @@ fun MagiScoreGauge(
     val tint = accent ?: cs.primary
     val ratio = if (max > 0) (score.toFloat() / max).coerceIn(0f, 1f) else 0f
     Column(
-        modifier.fillMaxWidth().semantics { },
+        modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -128,8 +133,9 @@ fun MagiTagChip(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            leadingIcon?.let { Icon(it, contentDescription = null, modifier = Modifier.heightIn(min = 16.dp)) }
-            Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            leadingIcon?.let { Icon(it, contentDescription = null, modifier = Modifier.heightIn(min = 18.dp)) }
+            // [判読性] タグチップ文字を 13sp→15sp(labelLarge/SemiBold)へ。
+            Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

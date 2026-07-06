@@ -51,8 +51,8 @@ data class LightOptimizeResult(
 
 object MirrorKeys {
     val hard = listOf("groupViol", "c3n", "covU", "pref")
-    val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "fair")
-    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair")
+    val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "fair", "weekly")
+    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly")
     // [N2/⛏11] weightedScore の重み（単一の真実）。UI の重み表もこのマップを描画して
     //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
     val weights: Map<String, Double> = linkedMapOf(
@@ -60,7 +60,7 @@ object MirrorKeys {
         "low" to 90.0, "high" to 45.0,
         "c3mn" to 12.0, "c1" to 4.0, "c3" to 3.0, "c3m" to 2.0,
         "c2" to 1.0, "c41" to 1.0, "c42" to 1.0, "c41s" to 1.0, "c42s" to 1.0,
-        "apt" to 1.0, "fair" to 1.0,
+        "apt" to 1.0, "fair" to 1.0, "weekly" to 1.0,
         "covO" to 0.5,
     )
 }
@@ -224,6 +224,15 @@ object UnifiedViolationChecker {
                 for (x in mem) d += kotlin.math.abs(counts[x][k] - tgt)
                 if (d > 0) inc("fair", d)
             }
+        }
+
+        // [統一weekly] 7日周期(曜日)シフト平準化: 職員ごと、勤務日(非休)の曜日別カウントの round(平均) からの
+        // L1 偏差和。SOFT・重み1。最適化器(Evaluator/Delta)と同一指標。内訳チップ(UI)には出さず weightedScore/total に算入。
+        for (i in 0 until p.S) {
+            val wd = IntArray(7)
+            for (j in 0 until p.T) { val k = s[i][j]; if (k != p.restIdx && k in 0 until p.K) wd[(p.dow0 + j) % 7]++ }
+            val d = weeklyDevOfBucket(wd)
+            if (d > 0) inc("weekly", d)
         }
 
         val cov = coverage(p, s)
@@ -392,6 +401,17 @@ fun normalizeSchedule(schedule: Array<IntArray>, p: Problem): Array<IntArray> = 
         val k = schedule.getOrNull(i)?.getOrNull(j) ?: 0
         if (k in 0 until p.K) k else -1
     }
+}
+
+/** [統一weekly] 曜日バケット(size 7)の平準化偏差 = round(平均) からの L1 偏差和。
+ *  Evaluator / DeltaEvaluator / UnifiedViolationChecker の "weekly" 共通ソース（3面のドリフト防止）。 */
+fun weeklyDevOfBucket(wd: IntArray): Int {
+    var sum = 0
+    for (w in wd) sum += w
+    val tgt = Math.round(sum.toDouble() / 7.0).toInt()
+    var d = 0
+    for (w in wd) d += kotlin.math.abs(w - tgt)
+    return d
 }
 
 fun countMatrix(p: Problem, schedule: Array<IntArray>): Array<IntArray> {

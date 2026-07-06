@@ -146,7 +146,7 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                                         textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            Text("入れたら「元に戻す」でいつでも取り消せます。", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                            Text("入れたら「元に戻す」でいつでも取り消せます。", fontSize = 12.sp, color = cs.onSurfaceVariant)
                         }
                     }
                     infeasible.isNotEmpty() -> {
@@ -238,7 +238,8 @@ internal fun OperatorNextActionCard(
                     else -> "狩猟" to MagiAccent.orange
                 }
                 Box(Modifier.background(phColor, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
-                    Text(phName, style = MaterialTheme.typography.labelMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                    // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
+                    Text(phName, style = MaterialTheme.typography.labelMedium, color = ensureReadable(phColor, Color.White), fontWeight = FontWeight.Bold)
                 }
             }
             Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
@@ -304,10 +305,10 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
             if (ui.polishExhausted && !ui.running) {
                 Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("✓ 必須条件は満たしています。残りのソフト違反は『ソフト研磨』で自動削減を試せます（必須は壊しません）。難しければ勤務表タブでの手修正が早い場合があります。",
+                        Text("✓ 必須条件は満たしています。残りの『できれば守りたい条件』は自動で整えて減らせます（必須は壊しません）。難しければ勤務表タブでの手修正が早い場合があります。",
                             color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("ソフト研磨") }
+                            Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自動で整える") }
                             OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
                         }
                     }
@@ -407,7 +408,7 @@ internal fun SettingIssuesCard(ui: UiState, onFix: (com.magi.app.v6.SettingIssue
                         Text(s.problem, color = cs.onErrorContainer, style = MaterialTheme.typography.bodySmall)
                         Text("→ ${s.fix}", color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
                         if (s.actionLabel.isNotEmpty()) {
-                            Button(onClick = { onFix(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 44.dp)) {
+                            Button(onClick = { onFix(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                                 Text(s.actionLabel)
                             }
                         }
@@ -415,7 +416,8 @@ internal fun SettingIssuesCard(ui: UiState, onFix: (com.magi.app.v6.SettingIssue
                 }
             }
             if (issues.size > 6) {
-                Text("ほか ${issues.size - 6} 件（詳細はログ出力を参照）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                // [誘導] 重要な順に整列済み。届かない「ログ出力」ではなく、上から直せば解消する旨を案内。
+                Text("ほか ${issues.size - 6} 件（重要な順に表示中。まず上から直してください）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             OutlinedButton(onClick = onGoEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定・希望を編集する") }
         }
@@ -482,7 +484,7 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Text("負荷プロフィール", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text("負荷プロフィール", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             v6.staffProfiles.take(5).forEach { st ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${st.name} ${st.groupSymbol}", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -546,9 +548,9 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 11.sp, color = fg, maxLines = 1)
+            Text(label, fontSize = 12.sp, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(if (shortage > 0) "不足$shortage" else "OK", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = fg)
-            if (detail.isNotBlank()) Text(detail, fontSize = 10.sp, color = fg.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (detail.isNotBlank()) Text(detail, fontSize = 12.sp, color = fg.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -557,7 +559,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
 /** 内訳の家族キー → 日本語ラベル（BreakdownCard と FixSuggestionCard で共用）。 */
 internal val breakdownLabels: Map<String, String> = mapOf(
     "groupViol" to "グループ不整合", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
-    "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ",
+    "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ", "weekly" to "曜日の偏り",
     "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア",
     "c41s" to "スキル群のレンジ", "c42s" to "スキル群ペア", "covO" to "過剰な配置",
@@ -667,7 +669,7 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}, proMod
             BreakdownGroup(if (proMode) "必須" else "必須（満たすべき）", listOf("groupViol", "pref", "covU", "c3n"), 2, ui, labels, expanded, onTapChip)
             if (!criticalOnly) {
                 BreakdownGroup("人数の範囲", listOf("low", "high", "apt"), 1, ui, labels, expanded, onTapChip)
-                BreakdownGroup(if (proMode) "任意" else "任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "fair"), 0, ui, labels, expanded, onTapChip)
+                BreakdownGroup(if (proMode) "任意" else "任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "fair", "weekly"), 0, ui, labels, expanded, onTapChip)
             }
             expanded?.let { key ->
                 val cs = MaterialTheme.colorScheme
@@ -686,7 +688,7 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}, proMod
                                 locs.forEach { (txt, staff) ->
                                     if (staff != null) {
                                         Text("$txt　→直し方を探す", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer,
-                                            modifier = Modifier.fillMaxWidth().heightIn(min = 36.dp).clickable { onFocusStaff(staff) })
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onFocusStaff(staff) })
                                     } else {
                                         Text(txt, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                     }
@@ -731,10 +733,11 @@ internal fun SeverityChip(label: String, count: Int, severity: Int, famKey: Stri
     var m = modifier.heightIn(min = 48.dp)
     if (expanded) m = m.border(2.dp, onContainer.copy(alpha = 0.7f), shape)
     if (active) m = m.clickable { onTap(famKey) }
+        .semantics { contentDescription = "$label $count 件" + (if (expanded) "・展開中" else "・タップで場所を表示") }
     Surface(color = container, shape = shape, modifier = m) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium, color = onContainer,
-                modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(count.toString(), style = MaterialTheme.typography.titleMedium, color = onContainer)
             if (active) {
                 Spacer(Modifier.width(2.dp))
@@ -757,7 +760,8 @@ internal fun BigStat(label: String, value: String, modifier: Modifier = Modifier
             Modifier.padding(vertical = 16.dp, horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            // [B7] 5桁等の大きな値でも2行に折り返して崩れないよう1行固定＋省略（hardCore/Guard の大値は稀）。
+            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(2.dp))
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
@@ -812,7 +816,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             val totalTxt = if (s.deltaTotal <= 0) "−${-s.deltaTotal}" else "+${s.deltaTotal}"
                             Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                            Button(onClick = { onApply(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 44.dp)) {
+                            Button(onClick = { onApply(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                                 Text("この手を適用")
                             }
                         }
@@ -861,54 +865,3 @@ internal fun WishApplyCard(ui: UiState, onApply: () -> Unit) {
     }
 }
 
-// ===== HUD段3: 違反のBOSS化 =====
-// 残りの必達違反(HARD)を「BOSS」として見せ、HP=HARD件数。0で撃破=配布可。
-// 「次の一撃」= 既存 FixSuggestion の最上位（適用でHARDが減る=ダメージ）。結果がある時のみ表示。
-@Composable
-internal fun BossCard(ui: UiState, onSearch: () -> Unit, onApply: (com.magi.app.v6.FixSuggestion) -> Unit) {
-    if (!ui.hasResult) return
-    val cs = MaterialTheme.colorScheme
-    val hp = ui.bestHard
-    val maxHp = maxOf(ui.initHard, ui.bestHard, 1L)
-    val defeated = hp == 0L
-    val container = if (defeated) cs.tertiaryContainer else cs.errorContainer
-    val fg = if (defeated) cs.onTertiaryContainer else cs.onErrorContainer
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = container)) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (defeated) {
-                Text("\u2694 BOSS 撃破！", style = MaterialTheme.typography.titleLarge, color = fg, fontWeight = FontWeight.Bold)
-                Text("必達違反 0 ── そのまま配れます。残りのソフト違反はさらに磨けます。",
-                    style = MaterialTheme.typography.bodyMedium, color = fg)
-            } else {
-                Text("\u2694 BOSS：未充足の使徒", style = MaterialTheme.typography.titleLarge, color = fg, fontWeight = FontWeight.Bold)
-                Text("HP（必達違反）：$hp", style = MaterialTheme.typography.bodyMedium, color = fg)
-                // HPバー（手動描画。版依存の LinearProgressIndicator を避ける）
-                Box(Modifier.fillMaxWidth().height(10.dp).background(fg.copy(alpha = 0.2f), CircleShape)) {
-                    Box(
-                        Modifier.fillMaxWidth(fraction = (hp.toFloat() / maxHp.toFloat()).coerceIn(0f, 1f))
-                            .height(10.dp).background(fg, CircleShape)
-                    )
-                }
-                val top = ui.fixSuggestions.firstOrNull()
-                when {
-                    ui.fixSearching -> Text("弱点を探索中…", style = MaterialTheme.typography.bodyMedium, color = fg)
-                    top != null -> {
-                        val totalTxt = if (top.deltaTotal <= 0) "\u2212${-top.deltaTotal}" else "+${top.deltaTotal}"
-                        val hardTxt = if (top.deltaHard <= 0) "\u2212${-top.deltaHard}" else "+${top.deltaHard}"
-                        Text("次の一撃：${top.label}", style = MaterialTheme.typography.bodyMedium, color = fg)
-                        Text("見込みダメージ：違反 $totalTxt（必達 $hardTxt）", style = MaterialTheme.typography.labelLarge, color = fg)
-                        Button(onClick = { onApply(top) }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                            Text("この一撃を放つ", style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                    else -> {
-                        Text("弱点が未探索です。", style = MaterialTheme.typography.bodyMedium, color = fg)
-                        Button(onClick = onSearch, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                            Text("弱点を探す（改善手を探索）", style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}

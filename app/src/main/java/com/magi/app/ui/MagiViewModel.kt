@@ -825,7 +825,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (!ensureValidForRun(st0, sched0)) return
         pushUndo()
         writeRunMarker("fg")   // [監査A8]
-        _ui.update { it.copy(running = true, hasResult = false, liveSchedule = emptyList(), message = "ソフト研磨中…") }
+        _ui.update { it.copy(running = true, hasResult = false, liveSchedule = emptyList(), message = "自動で整えています…") }
         logOp("I", "ソフト研磨 開始 (予算${_ui.value.budgetSec}s)")
         val startMs = System.currentTimeMillis()
         job = viewModelScope.launch {
@@ -870,7 +870,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 )) }
                 throw e
             } catch (e: Exception) {
-                _ui.update { it.copy(running = false, message = "ソフト研磨失敗: ${e.message}") }
+                _ui.update { it.copy(running = false, message = "自動整えに失敗: ${e.message}") }
             } finally {
                 clearRunMarker()   // [監査A8]
                 if (_ui.value.running) _ui.update { it.copy(running = false) }

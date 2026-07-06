@@ -112,7 +112,7 @@ fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
                                 trailingIcon = if (r.hasRange) {
                                     {
                                         Icon(Icons.Filled.Close, contentDescription = "削除",
-                                            modifier = Modifier.size(18.dp).clickable(enabled = !ui.running) { vm.removeStaffRange(r.i, r.k) })
+                                            modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.removeStaffRange(r.i, r.k) }.padding(7.dp))
                                     }
                                 } else null,
                             )
@@ -229,7 +229,7 @@ fun GroupRangeCard(ui: UiState, vm: MagiViewModel) {
                             label = { Text("${gr.groupName}·${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）") },
                             trailingIcon = {
                                 Icon(Icons.Filled.Close, contentDescription = "削除",
-                                    modifier = Modifier.size(18.dp).clickable(enabled = !ui.running) { vm.clearGroupRange(gr.g, gr.k, gr.lo, gr.hi) })
+                                    modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.clearGroupRange(gr.g, gr.k, gr.lo, gr.hi) }.padding(7.dp))
                             },
                         )
                     }

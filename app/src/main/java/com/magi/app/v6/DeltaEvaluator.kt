@@ -22,6 +22,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     // aggregates
     private val cntSS = Array(S) { IntArray(K) }      // per-staff per-shift count
     private val cntDay = Array(K) { IntArray(T) }     // per-shift per-day count
+    private val wdCnt = Array(S) { IntArray(7) }      // [統一weekly] per-staff 勤務日(非休)の曜日別カウント
 
     // running penalty pieces
     private var sc1 = 0L; private var sc2 = 0L; private var sc41 = 0L; private var sc42 = 0L
@@ -30,6 +31,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private var hpref = 0L; private var hct = 0L
     private var sApt = 0L                             // [統一apt] 適切回数(双方向目標)の running total（SOFT, 重み1）
     private var sFair = 0L                            // [統一fair] グループ内公平化の running total（SOFT, 重み1）
+    private var sWeekly = 0L                          // [統一weekly] 曜日平準化の running total（SOFT, 重み1）
     private var scovO = 0L                            // [統一a] 過剰被覆(covO)の running total（SOFT）
     private var covUTot = 0L   // [監査#4b] per-cell covU の総和（セル局所Δで維持）
 
@@ -38,7 +40,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private var dC1 = 0L; private var dC2 = 0L; private var dC41 = 0L; private var dC42 = 0L
     private var dC41s = 0L; private var dC42s = 0L
     private var dC3 = 0L; private var dC3n = 0L; private var dC3m = 0L; private var dC3mn = 0L
-    private var dPref = 0L; private var dCt = 0L; private var dApt = 0L; private var dFair = 0L; private var dCovO = 0L; private var nCovU = 0L
+    private var dPref = 0L; private var dCt = 0L; private var dApt = 0L; private var dFair = 0L; private var dWeekly = 0L; private var dCovO = 0L; private var nCovU = 0L
 
     init {
         a = p.initialAssignment()
@@ -81,8 +83,8 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
         // [統一c] c3/c3m/c3mn に checker 重み(3/2/12)を適用（sc3等は #fire/run-deficit の生カウント）。
         // [統一c1] c1 にも checker 重み(4)を適用（sc1 は #fire 生カウント、canDoガード済）。
-        // [統一apt/fair] sApt(適切回数の双方向L1偏差) と sFair(群内公平化L1偏差) を SOFT に含める（共に重み1）。
-        val soft = sc1 * 4 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 12 + hct + sApt + sFair + scovO
+        // [統一apt/fair/weekly] sApt(適切回数) sFair(群内公平化) sWeekly(曜日平準化) を SOFT に含める（共に重み1）。
+        val soft = sc1 * 4 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 12 + hct + sApt + sFair + sWeekly + scovO
         return h1 * 1_000_000L + soft
     }
 
@@ -92,7 +94,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         lI = i; lJ = j; lOld = old; lNw = nw
         if (nw == old) {
             dC1 = 0; dC2 = 0; dC41 = 0; dC42 = 0; dC41s = 0; dC42s = 0; dC3 = 0; dC3n = 0; dC3m = 0; dC3mn = 0
-            dPref = 0; dCt = 0; dApt = 0; dFair = 0; dCovO = 0; nCovU = covUTot
+            dPref = 0; dCt = 0; dApt = 0; dFair = 0; dWeekly = 0; dCovO = 0; nCovU = covUTot
             return score()
         }
 
@@ -133,6 +135,19 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         dFair = 0L
         if (p.canDo(i, old)) dFair += fairDevAt(gI, old, i, -1) - fairDevAt(gI, old, -1, 0)
         if (p.canDo(i, nw)) dFair += fairDevAt(gI, nw, i, +1) - fairDevAt(gI, nw, -1, 0)
+
+        // [統一weekly] 曜日平準化 — staff i の勤務/休が反転する時のみ曜日バケットが動く（同種→同種は不変）。
+        // old/nw は最適化領域で常に 0..K-1 のため work 判定は restIdx との比較で足りる。
+        dWeekly = 0L
+        val wdIdx = (p.dow0 + j) % 7
+        val wStep = (if (nw != p.restIdx) 1 else 0) - (if (old != p.restIdx) 1 else 0)
+        if (wStep != 0) {
+            val before = weeklyDevOfBucket(wdCnt[i]).toLong()
+            wdCnt[i][wdIdx] += wStep
+            val after = weeklyDevOfBucket(wdCnt[i]).toLong()
+            wdCnt[i][wdIdx] -= wStep
+            dWeekly = after - before
+        }
 
         // pref (this cell only)
         val w = p.wish[i][j]
@@ -211,7 +226,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         val dHard = dC3n + (nCovU - covUTot) + dPref
         // [統一c] c3/c3m/c3mn の delta にも checker 重み(3/2/12)を適用（full soft と同一係数）。
         // [統一c1] c1 の delta にも ×4。
-        val dSoft = dC1 * 4 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 12 + dCt + dApt + dFair + dCovO
+        val dSoft = dC1 * 4 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 12 + dCt + dApt + dFair + dWeekly + dCovO
         return score() + dHard * 1_000_000L + dSoft
     }
 
@@ -225,9 +240,12 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
             a[i][j] = nw
             cntSS[i][old]--; cntSS[i][nw]++
             cntDay[old][j]--; cntDay[nw][j]++
+            // [統一weekly] 勤務/休 反転時のみ曜日バケットを更新（previewMove の dWeekly と同ステップ）。
+            val wStep = (if (nw != p.restIdx) 1 else 0) - (if (old != p.restIdx) 1 else 0)
+            if (wStep != 0) wdCnt[i][(p.dow0 + j) % 7] += wStep
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
-            hpref += dPref; hct += dCt; sApt += dApt; sFair += dFair; scovO += dCovO
+            hpref += dPref; hct += dCt; sApt += dApt; sFair += dFair; sWeekly += dWeekly; scovO += dCovO
             covUTot = nCovU
         } finally {
             // invalidate the stash so a stray double-commit cannot corrupt aggregates
@@ -240,12 +258,16 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun rebuild() {
         for (i in 0 until S) java.util.Arrays.fill(cntSS[i], 0)
         for (k in 0 until K) java.util.Arrays.fill(cntDay[k], 0)
-        for (i in 0 until S) for (j in 0 until T) { val k = a[i][j]; cntSS[i][k]++; cntDay[k][j]++ }
+        for (i in 0 until S) java.util.Arrays.fill(wdCnt[i], 0)
+        for (i in 0 until S) for (j in 0 until T) {
+            val k = a[i][j]; cntSS[i][k]++; cntDay[k][j]++
+            if (k != p.restIdx && k in 0 until K) wdCnt[i][(p.dow0 + j) % 7]++
+        }
 
         sc1 = c1All(); sc2 = c2All(); sc41 = c41All(); sc42 = c42All(); sc41s = c41sAll(); sc42s = c42sAll()
         sc3 = c3All(p.cons3, false); hc3n = c3All(p.cons3n, true)
         sc3m = c3All(p.cons3m, false); sc3mn = c3All(p.cons3mn, true)
-        hpref = prefAll(); hct = ctAll(); sApt = aptAll(); sFair = fairAll(); scovO = covOAll()
+        hpref = prefAll(); hct = ctAll(); sApt = aptAll(); sFair = fairAll(); sWeekly = weeklyAll(); scovO = covOAll()
         covUTot = covUAll()
     }
 
@@ -447,6 +469,13 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun fairAll(): Long {
         var h = 0L
         for (g in 0 until p.G) for (k in p.bucket[g]) h += fairDevAt(g, k, -1, 0)
+        return h
+    }
+
+    /** [統一weekly] 全職員の曜日平準化偏差の総和。wdCnt を単一ソースとし checker/Evaluator と同一。 */
+    private fun weeklyAll(): Long {
+        var h = 0L
+        for (i in 0 until S) h += weeklyDevOfBucket(wdCnt[i]).toLong()
         return h
     }
 

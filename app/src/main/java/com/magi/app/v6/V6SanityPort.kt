@@ -163,6 +163,37 @@ object V6SanityPort {
         return out.sortedWith(compareBy<ImpossibleWish> { it.staffIndex }.thenBy { it.dayIndex })
     }
 
+    /** シフト単位の「証明可能に解消不能な covU 不足」。担当可能人数 capable(k) を全員そのシフトへ
+     *  就けても残る不足（= covUCell(k,j,capable) の総和）。covUCell は got 単調減少なので、これは当該セルの
+     *  covU 最小値＝どう割り当てても避けられない不足量。need1/need2 両設定時は covUCell が MIN(OR救済) を返す
+     *  ため過大検出しない。誤検知ゼロ・読み取り専用・データ不変。 */
+    data class ForcedCovU(val shiftIndex: Int, val shiftSymbol: String, val cells: Int, val amount: Int)
+
+    fun forcedCovU(state: MagiState, p: Problem = Problem(state)): List<ForcedCovU> {
+        val out = ArrayList<ForcedCovU>()
+        for (k in 0 until p.K) {
+            val capable = (0 until p.S).count { i -> p.canDo(i, k) }
+            var cells = 0; var amount = 0
+            for (j in 0 until p.T) {
+                val u = p.covUCell(k, j, capable)
+                if (u > 0) { cells++; amount += u }
+            }
+            if (amount > 0) {
+                val sym = state.shifts.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: k.toString()
+                out.add(ForcedCovU(k, sym, cells, amount))
+            }
+        }
+        return out
+    }
+
+    /** データ起因で証明可能に解消不能な HARD 違反の下限（report.hard と同単位＝covU 不足量の総和）。
+     *  ・covU: forcedCovU の総量。有資格者を全員そのシフトに就けても埋まらない席＝どう探索しても消えない HARD。
+     *  ・実現不能希望(pref): 監査#11② で HARD 寄与0（対称除外）のため下限に含めない。
+     *  ・群外配置(groupViol): 探索は canDo ガードで群外を置かない＋不可能希望は gate 済＝構造下限では常時0。
+     *  構造(assignability/need)のみ依存で最適化中に変化しないため一度だけ算出してよい。 */
+    fun structuralHardFloor(state: MagiState, p: Problem = Problem(state)): Int =
+        forcedCovU(state, p).sumOf { it.amount }
+
     /**
      * [設定ミスの誘導修正] 制約・希望の設定間違いを、人間が直せる粒度（誰の/何日の/どのシフト/どの制約、
      * そして具体的な直し方）で列挙する。検出済みの構造化データを平易な日本語の指示文に変換するだけで、
@@ -211,6 +242,46 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "連勤/休制約「$sym ${c.day1}日で${c.day2}回以上」",
                     "${c.day1}日の窓に${c.day2}回は物理的に不可能で、全員・全期間が違反になり続けます",
                     "制約設定（連勤・回数）で回数を${c.day1}回以下に直すか、この行を削除してください"))
+            }
+        }
+
+        // 2b-2) [壁/ダイヤル分類] c1 窓制約の「構造的不能(壁)」検知。供給<需要下界なら、どう組んでもこの窓違反(c1)は
+        //   残る＝作成者が最適化で追っても無駄（staffingを変えるかルールを緩めるしかない）。供給≥需要(=ダイヤル:
+        //   優先度で減らせる)は正常なので出さない。conservative 設計で false wall を出さない:
+        //   ・需要 = 各 canDo 職員 × day2 × floor(T/day1)（disjoint窓の下界）＝真の下界（sliding はより厳しいので過小評価）。
+        //   ・供給 = 休窓:S*T−Σ最小work需要(=休へ回せる上限) / 作業シフト窓:Σ上限被覆(=最大スロット数)＝供給を高めに見積もる。
+        //   両者とも「壁を過剰断定しない」向きに丸めているため、発火＝真に構造的不能。read-only・スコアリング不変。
+        run {
+            var workMinDemand = 0
+            for (k in 0 until p.K) for (j in 0 until p.T) workMinDemand += p.need1[k][j].coerceAtLeast(0)
+            for (c in p.cons1) {
+                val si = c.shiftIdx
+                // 退化ケース(窓>期間 / 回数>窓)は 2b が別途案内。ここは通常窓の構造的不能のみ。
+                if (c.day1 <= 0 || c.day2 <= 0 || c.day1 > p.T || c.day2 > c.day1) continue
+                val disjoint = p.T / c.day1
+                if (disjoint <= 0) continue
+                val nCanDo = (0 until p.S).count { p.canDo(it, si) }
+                if (nCanDo == 0) continue   // 担当者ゼロは別の案内対象
+                val demand = nCanDo * c.day2 * disjoint
+                val isRest = si == p.restIdx
+                val supply = if (isRest) {
+                    p.S * p.T - workMinDemand
+                } else {
+                    var s = 0
+                    for (j in 0 until p.T) {
+                        val h = if (p.use2 && p.need2[si][j] >= 0) p.need2[si][j] else p.need1[si][j]
+                        s += h.coerceAtLeast(0)
+                    }
+                    s
+                }
+                if (supply < demand) {
+                    val sym = state.shifts.getOrNull(si)?.kigou ?: si.toString()
+                    val short = demand - supply
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "窓ルール「$sym を${c.day1}日で${c.day2}回以上」",
+                        "「$sym」の供給${supply}に対し必要${demand}(=担当${nCanDo}人×${c.day2}回×${disjoint}窓)で$short 不足。" +
+                            "どう組んでもこの窓違反(c1)は構造的に残ります（最適化では消せません）。",
+                        "「$sym」の担当者を増やす(ws1)か、窓ルールの回数を下げる／日数を延ばす(制約設定)。"))
+                }
             }
         }
 
@@ -306,13 +377,14 @@ object V6SanityPort {
             }
             if (!hasDemand) continue
             val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
-            var capable = 0; var loSum = 0; var capSum = 0; var allCapped = true
+            var capable = 0; var loSum = 0; var capSum = 0; var allCapped = true; var aptSum = 0
             for (i in 0 until p.S) {
                 if (!p.canDo(i, k)) continue
                 capable++
                 val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
                 if (lo != Int.MIN_VALUE && lo > 0) loSum += lo
                 if (hi != Int.MAX_VALUE) capSum += hi else allCapped = false
+                val a = p.apt[i][k]; if (a >= 0) aptSum += a   // 適切回数(職員別に展開・staffRangeクランプ済)
             }
             // A) 下限の合計 > 必要数(上限)の合計 → 全員の下限を満たすと必要数を超える＝過剰配置/下限割れが不可避。
             if (loSum > seatsHi) {
@@ -326,6 +398,21 @@ object V6SanityPort {
                     "必要数の合計は${seatsLo}回ですが、担当者の上限の合計は${capSum}回しかありません。席を埋めきれず人員不足になります",
                     "「$sym」の個人上限を上げる/担当者を増やす(ws1)か、必要人数を下げてください(ws2)"))
             }
+            // C) 適切回数(apt=職員のレパートリー目標)の合計 > 必要数(上限)の合計 → 全員の目標を満たすと過剰配置。
+            //    レパートリーと被覆が両立しない設定ズレ。目標割れ(aptLow)か過剰配置(covO/aptHigh)が必ず出る。
+            if (aptSum > seatsHi) {
+                out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の適切回数の合計",
+                    "適切回数(レパートリー目標)の合計が${aptSum}回ですが、必要数の合計は${seatsHi}回しかありません。全員の目標は同時に満たせず、目標割れか過剰配置が必ず出ます",
+                    "「$sym」の適切回数を下げる(ws1)か、必要人数を増やしてください(ws2)"))
+            }
+        }
+
+        // 7) [事前診断/配布不可] ある日に「そのシフトを担当できる人数」より必要人数が多い＝どう割り当てても
+        //    人員不足(covU=HARD)が確定＝配布不可。最適化の hardFloor と同じ forcedCovU で検出（誤検知ゼロ）。
+        for (fc in forcedCovU(state, p)) {
+            out.add(SettingIssue(IssueKind.DEMAND, "「${fc.shiftSymbol}」の担当者不足（配布不可の原因）",
+                "${fc.cells}日で、担当できる人数より必要人数が多く、人員不足(covU)が必ず出ます（不足の合計${fc.amount}）。この不足は最適化では解消できません",
+                "「${fc.shiftSymbol}」を担当できるスタッフを増やす(ws1)か、その日の必要人数を下げてください(ws2)"))
         }
 
         // [監査#7] SOFT 桁溢れ（辞書式崩壊）: soft 合計がスコア上限 1,000,000 に接近/超過すると、
@@ -339,7 +426,17 @@ object V6SanityPort {
             }
         }
 
-        return out
+        // [誘導] 直すべき度合いが高い順に整列。SettingIssuesCard は先頭 take(6) のみ表示するため、
+        //   最重要のデータ起因（配布不可→実現不能希望→過拘束→範囲矛盾）を確実に上位へ。sortedBy は安定＝同順は挿入順。
+        return out.sortedBy { iss ->
+            when {
+                iss.where.contains("配布不可") -> 0   // covU 確定＝配布不可（最優先）
+                iss.kind == IssueKind.WISH -> 1        // 実現不能希望
+                iss.kind == IssueKind.DEMAND -> 2      // 過拘束（下限/上限/適切回数 vs 必要数）
+                iss.kind == IssueKind.RANGE -> 3       // 範囲の矛盾
+                else -> 4                              // 制約・SOFT桁溢れ ほか
+            }
+        }
     }
 
     private fun c3FamilyJp(fam: String): String = when (fam) {
@@ -367,6 +464,15 @@ object V6SanityPort {
         fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: k.toString()
         fun nm(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
         fun day(j: Int) = safeDayLabel(state.startDate, j)
+        // [構造HARD下限] データ起因で解消不能な必須違反(covU)の下限。最適化の hardFloor と同値。
+        //   >0 なら「配布不可はデータ起因＝最適化は残りをSOFT研磨する」と判断できる（読み取り専用）。
+        run {
+            val forced = forcedCovU(state, p)
+            val floor = forced.sumOf { it.amount }
+            if (floor > 0) out.add("[W] 構造HARD下限: 担当者不足で covU=$floor が解消不能（配布不可はデータ起因）: " +
+                forced.joinToString(" / ") { "${it.shiftSymbol} ${it.cells}日 不足${it.amount}" })
+            else out.add("[I] 構造HARD下限: 0（各シフトは担当者数で需要を満たせる＝データ起因の必須違反なし）")
+        }
         fun emit(byFam: Map<String, MutableList<String>>, cap: Int) {
             for ((fam, items) in byFam) {
                 val shown = items.take(cap).joinToString(" ; ")

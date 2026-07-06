@@ -44,6 +44,23 @@ fun magiWarnColors(): Pair<Color, Color> {
 // シフト記号→色の既定フォールバックは V6WebCompat.resolveShiftColor が唯一の真実源。
 // （以前ここに同等の shiftAccentFallback があったが未配線・二重管理のため削除）
 
+/**
+ * 前景（記号・文字）色を背景に対して必ず読めるようにする（WCAG コントラスト比）。
+ * ユーザー指定色 [preferred] が背景 [bg] に対して [minRatio] 以上のコントラストを持てば
+ * そのまま採用。不足する場合のみ 黒/白 のうち高コントラストな方へフォールバックする。
+ * ＊描画時のみの補正で、保存済みの色データ（shiftTextHex 等）は一切書き換えない（HF77 セーフ）。
+ * 記号は短い太字グリフのため既定しきい値は 4.5（通常テキスト基準）。
+ */
+fun ensureReadable(bg: Color, preferred: Color, minRatio: Float = 4.5f): Color {
+    fun ratio(a: Color, b: Color): Float {
+        val hi = maxOf(a.luminance(), b.luminance())
+        val lo = minOf(a.luminance(), b.luminance())
+        return (hi + 0.05f) / (lo + 0.05f)
+    }
+    if (ratio(bg, preferred) >= minRatio) return preferred
+    return if (ratio(bg, Color.White) >= ratio(bg, Color.Black)) Color.White else Color.Black
+}
+
 /** 4dp グリッドの余白トークン（docs §2.2）。 */
 @Immutable
 object MagiSpacing {

@@ -1146,19 +1146,20 @@ object V6NativeOptimizer {
 
     private fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet()): String {
         val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "c1", "c3", "c3m", "c3mn")
-        // [HF63] まず deprioritize 対象(構造的に充足困難)を除いた族から最大違反を選ぶ。
-        if (avoid.isNotEmpty()) {
-            var b = "total"; var bc = -1
-            for (key in order) {
-                if (key in avoid) continue
-                val n = report.breakdown[key] ?: 0
-                if (n > bc) { bc = n; b = key }
-            }
-            if (bc > 0) return b   // 達成可能な族に違反が残っていればそれを優先
+        // [D1/A1] 解ける HARD 族(groupViol/covU/pref/c3n)は件数に関わらず SOFT より先に focus する。
+        //   旧実装は純・件数最大だったため、単一の c3n=1 が c1=118 等の高頻度 SOFT に埋もれ RSI が一度も HARD を
+        //   狙わない失敗があった。目的関数 better() は辞書式(hard<<total<<weighted)で HARD 支配ゆえ focus も HARD
+        //   優先が整合。avoid(HF63=構造的に充足困難)に入る HARD は「解けない」ため除外し無駄打ちを避ける(残予算は
+        //   下段の SOFT 研磨へ)。この分岐は hard=0 のとき no-op＝全 soft の一般ケースは従来と不変。
+        for (key in order) {
+            if (key !in MirrorKeys.hard || key in avoid) continue
+            if ((report.breakdown[key] ?: 0) > 0) return key
         }
+        // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
         var best = "total"
         var bestCount = -1
         for (key in order) {
+            if (key in avoid) continue
             val n = report.breakdown[key] ?: 0
             if (n > bestCount) {
                 bestCount = n
