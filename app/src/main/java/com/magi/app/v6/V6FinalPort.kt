@@ -219,6 +219,11 @@ object V6FinalPort {
         val lastImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
         val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)   // 並列ワーカーから読むため atomic
+        // [hardFloor 精度] best の「非covU HARD」(groupViol/pref/c3n=解けるHARD)件数。hardFloor は構造的covU
+        //   のみの下限なので、`bestHard<=hardFloor` だけだと、担当不可の過配置(groupViol)が covU を構造下限より
+        //   見かけ上へこませたケースで、解ける groupViol が残っているのに短い stallHardMs へ早期移行してしまう。
+        //   非covU HARD が 0（＝残るHARDが構造的covUのみ）を追加条件にし、上記コメント(214行)の設計意図と一致させる。
+        val bestNonCovUHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)
         var bTotal = Int.MAX_VALUE; var bWeighted = Double.MAX_VALUE; var lastPhase = ""
         val progressLock = Any()   // [競合解消] 並列ワーカーから呼ばれる best 追跡の read-modify-write を直列化
         val progressWatch: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
@@ -229,7 +234,12 @@ object V6FinalPort {
                     val h = report.hard; val t = report.total; val wgt = report.weightedScore
                     val bh = bestHard.get()
                     val improved = h < bh || (h == bh && t < bTotal) || (h == bh && t == bTotal && wgt < bWeighted - 1e-6)
-                    if (improved) { bestHard.set(h); bTotal = t; bWeighted = wgt; lastImproveMs.set(System.currentTimeMillis()) }
+                    if (improved) {
+                        bestHard.set(h); bTotal = t; bWeighted = wgt; lastImproveMs.set(System.currentTimeMillis())
+                        // 非covU HARD(=解けるHARD)件数を best と同時に捕捉（stallHardMs 早期移行の判定に使う）。
+                        val nonCovU = (report.breakdown["groupViol"] ?: 0) + (report.breakdown["pref"] ?: 0) + (report.breakdown["c3n"] ?: 0)
+                        bestNonCovUHard.set(nonCovU)
+                    }
                 }
             }
             onProgress(phase, report, iters, elapsed)   // ユーザーコールバックはロック外で呼ぶ
@@ -241,10 +251,12 @@ object V6FinalPort {
         val searchDeadlineMs = (hardDeadlineMs - postReserveMs).coerceAtLeast(startMs + minRunMs)
         val shouldStop = {
             val now = System.currentTimeMillis()
-            // [賢い早期脱出] bestHard が「解消不能な下限(hardFloor)」以下＝解けるHARDは出し切った状態。
-            //   この時点で残るのは消せない実現不能希望のみなので、HARD=0 と同様に短い猶予で頭打ち終了。
-            //   hardFloor=0（実現不能希望なし）なら従来の「bestHard==0」と完全一致＝挙動不変。
-            val effStall = if (bestHard.get() <= hardFloor) stallHardMs else stallMs
+            // [賢い早期脱出] bestHard が「解消不能な下限(hardFloor=構造的covU)」以下＝解けるHARDは出し切った状態。
+            //   この時点で残るのは構造的に埋まらない covU 席のみなので、HARD=0 と同様に短い猶予で頭打ち終了。
+            //   ただし非covU HARD(groupViol/pref/c3n=解ける可能性あり)が残る間は long stall で粘る（214行の設計意図）。
+            //   担当不可過配置が covU を構造下限より見かけ上へこませ、bestHard<=hardFloor でも groupViol が残るケースを防ぐ。
+            //   hardFloor=0 かつ 非covU HARD=0（＝bestHard==0）なら従来の「bestHard==0」と完全一致＝挙動不変。
+            val effStall = if (bestHard.get() <= hardFloor && bestNonCovUHard.get() == 0) stallHardMs else stallMs
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 now - startMs > minRunMs && now - lastImproveMs.get() > effStall -> { stagnationFired.set(true); true }
