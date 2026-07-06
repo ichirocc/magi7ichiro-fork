@@ -93,7 +93,7 @@ fun MagiScoreGauge(
     val tint = accent ?: cs.primary
     val ratio = if (max > 0) (score.toFloat() / max).coerceIn(0f, 1f) else 0f
     Column(
-        modifier.fillMaxWidth().semantics { },
+        modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

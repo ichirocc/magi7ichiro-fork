@@ -41,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -429,13 +431,13 @@ private fun AptStepper(label: String, value: String, onChange: (String) -> Unit)
             // [ゼロ設定] 0を許可（従来は「1未満→空欄」で目標0が設定できなかった）。空欄→0 / 0→空欄 / N→N-1。
             val c = value.trim().toIntOrNull()
             onChange(when { c == null -> "0"; c <= 0 -> ""; else -> (c - 1).toString() })
-        }) { Text("−", fontSize = 16.sp) }
+        }, modifier = Modifier.semantics { contentDescription = "$label の適切回数を減らす" }) { Text("−", fontSize = 16.sp) }
         Text(value.ifBlank { "—" }, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.width(22.dp), color = MaterialTheme.colorScheme.onSurface)
         TextButton(onClick = {
             val c = value.trim().toIntOrNull() ?: -1
             onChange((c + 1).coerceAtLeast(0).toString())
-        }) { Text("＋", fontSize = 16.sp) }
+        }, modifier = Modifier.semantics { contentDescription = "$label の適切回数を増やす" }) { Text("＋", fontSize = 16.sp) }
     }
 }
 

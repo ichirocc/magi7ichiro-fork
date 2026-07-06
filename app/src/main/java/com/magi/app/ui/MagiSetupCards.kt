@@ -239,7 +239,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
 }
 
 /** [見やすさ] 計算方式(V6Algorithm)の一般向け日本語ラベル。技術名(AUTO/RSI 等)は操作者に不明なため。 */
-private fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
+internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
     V6Algorithm.AUTO -> "おまかせ"
     V6Algorithm.V5 -> "高速"
     V6Algorithm.ALNS -> "破壊再構築"
