@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 217
-        versionName = "3.74.1-hardfloor-guard"
+        versionCode = 218
+        versionName = "3.75.0-vio-filter"
     }
 
     buildTypes {

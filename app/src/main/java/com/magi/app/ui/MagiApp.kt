@@ -368,6 +368,12 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     var editing by rememberSaveable { mutableStateOf(false) }
                     var copyConfirm by rememberSaveable { mutableStateOf(false) }
                     var wishBulkOpen by rememberSaveable { mutableStateOf(false) }
+                    // [E7] 違反 種別フィルタ（勤務表タブ全面共有）。初期=全ON。bitmask(Int)で rememberSaveable 保存
+                    //   （回転/プロセス復元で保持）。表示のみ・スコアリング不変。ビット i = vioBuckets[i] のON/OFF。
+                    var vioMask by rememberSaveable { mutableIntStateOf((1 shl vioBuckets.size) - 1) }
+                    val vioEnabled = remember(vioMask) {
+                        vioBuckets.filterIndexed { i, _ -> (vioMask shr i) and 1 == 1 }.map { it.key }.toSet()
+                    }
                     val canRead = ui.hasResultSnapshot
                     val effectiveEditing = editing || !canRead
                     ScheduleModeCard(
@@ -385,10 +391,15 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     })
                     val gridUi = if (effectiveEditing) ui else ui.copy(schedule = ui.resultSchedule)
                     val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
-                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode,
+                    // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
+                    ViolationFilterBar(gridUi.breakdown, vioEnabled) { key ->
+                        val i = vioBuckets.indexOfFirst { it.key == key }
+                        if (i >= 0) vioMask = vioMask xor (1 shl i)
+                    }
+                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
-                    StaffCalendarCard(gridUi, onCellClick = onCell)
-                    TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) })
+                    StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
+                    TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
                     if (effectiveEditing) {
                         OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {

@@ -314,7 +314,7 @@ internal fun ShiftPickerSheet(
 
 
 @Composable
-internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit) {
+internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys) {
     if (ui.schedule.isEmpty() || ui.staff == 0) return
     var staffIdx by remember { mutableIntStateOf(0) }
     // [冗長性削減A] 既定は畳む。勤務表グリッド(全職員)と盤面ビューが二重化＝タブの密度/冗長の主因のため、
@@ -348,7 +348,8 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                         week.forEach { j ->
                             val k = row.getOrNull(j) ?: -1
                             val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
-                            val vioVal = ui.violationCells["$si,$j"]
+                            // [E7] 種別フィルタ: バケツOFF のセル違反は出さない。
+                            val vioVal = ui.violationCells["$si,$j"]?.takeIf { vioVisible(it, vioEnabled) }
                             val vio = vioVal != null
                             val hard = isHardCellViolation(vioVal)
                             CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, vioColor, Modifier.weight(1f)) {
@@ -424,26 +425,87 @@ internal fun ScheduleModeCard(
 }
 
 
+// ===== [E7] 違反 種別フィルタ（勤務表タブ全面共有・コース6分類） =====
+// 主軸=制約種別。18族を作成者の語彙で6バケツに束ね、勤務表タブの全面(グリッドセル/日ヘッダ/Tally職員・日/
+// カレンダー)を1つの共有フィルタで絞る。複数トグル・初期全ON（見たくないノイズを引き算）。件数付きチップで
+// 「まずどの種類を潰すか」の種別トリアージを兼ねる。表示のみ・スコアリング不変（どの違反が存在するかは不変、
+// 表示するかだけを制御）。公平/曜日(fair/weekly)は場所マップが無いのでバケツ対象外＝常に非表示対象にならない。
+internal data class VioBucket(val key: String, val label: String, val families: Set<String>)
+internal val vioBuckets: List<VioBucket> = listOf(
+    VioBucket("need", "人員", setOf("covU", "covO")),
+    VioBucket("pref", "希望", setOf("pref")),
+    VioBucket("seq", "連勤", setOf("c3", "c3n", "c3m", "c3mn")),
+    VioBucket("count", "回数", setOf("low", "high", "apt", "c2")),
+    VioBucket("group", "群ルール", setOf("groupViol", "c41", "c42", "c41s", "c42s")),
+    VioBucket("window", "窓", setOf("c1")),
+)
+/** vio-class（"vio-covU"/"vio-aptLow" 等）→ 族キー。aptLow/aptHigh は apt に畳む。 */
+internal fun familyOfVioClass(cls: String): String =
+    when (val f = cls.removePrefix("vio-")) { "aptLow", "aptHigh" -> "apt"; else -> f }
+/** 族キー → バケツキー（対象外＝null）。 */
+internal fun bucketOfFamily(fam: String): String? = vioBuckets.firstOrNull { fam in it.families }?.key
+/** この違反クラスが現在のフィルタ(enabled=表示中バケツ集合)で表示されるか。バケツ対象外の族は常に表示。 */
+internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
+    if (cls == null) return false
+    val b = bucketOfFamily(familyOfVioClass(cls)) ?: return true
+    return b in enabled
+}
+internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
+
+/** [E7] 6バケツの件数付きフィルタチップ行（勤務表タブ共有）。件数は breakdown から族合計。0件は淡色。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun ViolationFilterBar(breakdown: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val counts = remember(breakdown) { vioBuckets.associate { b -> b.key to b.families.sumOf { breakdown[it] ?: 0 } } }
+    val anyViol = counts.values.any { it > 0 }
+    if (!anyViol) return   // 違反ゼロなら出さない（ノイズ削減）
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("違反フィルタ（種別）", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                if (enabled != allVioBucketKeys) {
+                    TextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
+                        Text("すべて表示", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                vioBuckets.forEach { b ->
+                    val n = counts[b.key] ?: 0
+                    val on = b.key in enabled
+                    FilterChip(
+                        selected = on,
+                        onClick = { onToggle(b.key) },
+                        label = {
+                            Text("${b.label} $n",
+                                style = MaterialTheme.typography.titleSmall,
+                                // 0件は淡色（存在しない種別＝トリアージ上ノイズ）。トグル自体は可能。
+                                color = if (n == 0) cs.onSurfaceVariant.copy(alpha = 0.5f) else Color.Unspecified)
+                        },
+                    )
+                }
+            }
+            Text("タップで種類ごとに表示/非表示。件数の多い種類から潰すと配布可へ近づきます。",
+                style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ScheduleGrid(
     ui: UiState, onCellClick: (Int, Int) -> Unit, proMode: Boolean = false,
+    vioEnabled: Set<String> = allVioBucketKeys,
     onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit = { _, _ -> },
 ) {
     val cs = MaterialTheme.colorScheme
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
     var showBulk by rememberSaveable { mutableStateOf(false) }
-    // [違反フィルタ] グリッドのセル違反を種別ごとに表示/非表示。hiddenVio に入れた家族キーを隠す。
-    //   violationCells の値は "vio-<famKey>" なので接頭辞を外して種別を取り出す。自己完結（VM不要）。
-    var hiddenVio by remember { mutableStateOf(setOf<String>()) }
-    val vioTypes = remember(ui.violationCells) {
-        ui.violationCells.values.map { it.removePrefix("vio-") }.distinct()
-    }
-    val vioCounts = remember(ui.violationCells) {
-        ui.violationCells.values.groupingBy { it.removePrefix("vio-") }.eachCount()
-    }
-    fun shown(v: String?) = v != null && v.removePrefix("vio-") !in hiddenVio
+    // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示。violationCells の値="vio-<famKey>"。
+    fun shown(v: String?) = vioVisible(v, vioEnabled)
     // [凡例の冗長対策] 実線/破線・シフト色キーは作成者には暗記済みのことが多いので既定で畳む。
     var legendOpen by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
@@ -456,32 +518,9 @@ internal fun ScheduleGrid(
                     Text("まとめて割当（一括編集）")
                 }
             }
-            // [違反フィルタ＋内訳] 種別ごとの件数つきチップで「どの違反が何件か」を勤務表上で一覧化。
-            //   タップで表示/非表示（隠した種別はセル枠が消える）。1種別に絞れば誰の何日かが直接見える。
-            if (vioTypes.size > 1) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("違反の内訳（タップで絞り込み）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                    if (hiddenVio.isNotEmpty()) {
-                        Spacer(Modifier.weight(1f))
-                        TextButton(onClick = { hiddenVio = emptySet() }) {
-                            Text("すべて表示", style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    vioTypes.forEach { t ->
-                        FilterChip(
-                            selected = t !in hiddenVio,
-                            onClick = { hiddenVio = if (t in hiddenVio) hiddenVio - t else hiddenVio + t },
-                            // [判読性] チップ文字を 13sp→15sp(titleSmall/SemiBold)へ。件数付きの絞り込みチップは主操作なので明確に読める大きさに。
-                            label = { Text("${breakdownLabels[t] ?: t} ${vioCounts[t] ?: 0}", style = MaterialTheme.typography.titleSmall) },
-                        )
-                    }
-                }
-                // [誰が・いつ] 表示中の違反セルを「名前 d日」で列挙（最大8件）。7日表示で画面外の違反も把握でき、
-                //   1種別に絞ると場所が一目で分かる。グリッドを端から探さずに済む。
+            // [E7 誰が・いつ] 表示中(フィルタ通過)のセル違反を「名前 d日」で列挙（最大8件）。種別を絞ると場所が一目で分かる。
+            //   種別チップは勤務表タブ上部の共有フィルタ(ViolationFilterBar)へ集約したのでここには出さない。
+            run {
                 val shownLocs = ui.violationCells.entries.filter { shown(it.value) }.mapNotNull { e ->
                     val p = e.key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
                     if (i == null || j == null) null else "${ui.staffNames.getOrNull(i) ?: "#$i"} ${j + 1}日"
@@ -489,7 +528,7 @@ internal fun ScheduleGrid(
                 if (shownLocs.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     val more = if (shownLocs.size > 8) " 他${shownLocs.size - 8}件" else ""
-                    Text("場所：${shownLocs.take(8).joinToString("、")}$more",
+                    Text("違反セル：${shownLocs.take(8).joinToString("、")}$more",
                         style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 }
             }
@@ -511,7 +550,7 @@ internal fun ScheduleGrid(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
     }
@@ -908,7 +947,7 @@ private fun Int.floorMod(m: Int): Int = if (m == 0) 0 else ((this % m) + m) % m
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Unit = { _, _ -> }) {
+internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
@@ -970,7 +1009,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                             }
                             for (i in 0 until s) {
                                 val v = perStaff[i][kk]
-                                val vio = ui.countViolations["$i,$kk"]
+                                // [E7] 回数(low/high/apt/c2)バケツOFF時はこのセルの違反表示を抑止（値は表示・色/枠だけ消す）。
+                                val vio = ui.countViolations["$i,$kk"]?.takeIf { vioVisible(it, vioEnabled) }
                                 val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
                                 // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
                                 val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
@@ -1015,7 +1055,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                             }
                             for (kk in 0 until k) {
                                 val v = perDay[j][kk]
-                                val vio = ui.needViolations["$kk,$j"]
+                                // [E7] 人員(covU/covO)バケツOFF時はこの日セルの違反表示を抑止（値は表示・色/枠だけ消す）。
+                                val vio = ui.needViolations["$kk,$j"]?.takeIf { vioVisible(it, vioEnabled) }
                                 val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
                                 // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
                                 val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
@@ -1127,7 +1168,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit) {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1144,8 +1185,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit) {
             if (off in 0 until days) off else -1
         }.getOrDefault(-1)
     }
-    val vioKind = remember(ui.violationCells, staffCount, days) {
-        Array(staffCount) { i -> IntArray(days) { d -> val v = ui.violationCells["$i,$d"]; if (v == null) 0 else if (isHardCellViolation(v)) 1 else 2 } }
+    // [E7] 種別フィルタ: バケツOFFのセル違反は枠を出さない（vioVisible=false→0）。表示のみ・違反自体は不変。
+    val vioKind = remember(ui.violationCells, staffCount, days, vioEnabled) {
+        Array(staffCount) { i -> IntArray(days) { d -> val v = ui.violationCells["$i,$d"]; if (!vioVisible(v, vioEnabled)) 0 else if (isHardCellViolation(v)) 1 else 2 } }
     }
     val wishKind = remember(ui.wishes, ui.schedule, staffCount, days) {
         Array(staffCount) { i -> IntArray(days) { d -> val wk = ui.wishes["$i,$d"]; if (wk == null) 0 else { val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1; if (wk == k) 1 else 2 } } }
@@ -1184,7 +1226,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit) {
                             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                             // [a11y] 9sp→12sp。荷重情報の「不足N」は別行の赤字バッジに分離（曜日と混ざって潰れないように）。
                             Text(weekdayJa[dow], fontSize = 12.sp, color = dcol, maxLines = 1)
-                            if (dayShort[d] > 0) Text("不足${dayShort[d]}", fontSize = 12.sp, color = cs.error, fontWeight = FontWeight.Bold, maxLines = 1)
+                            // [E7] 「不足N」は人員(covU)由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
+                            if (dayShort[d] > 0 && "need" in vioEnabled) Text("不足${dayShort[d]}", fontSize = 12.sp, color = cs.error, fontWeight = FontWeight.Bold, maxLines = 1)
                             if (hc != null) Box(Modifier.width(cellW - 10.dp).height(2.5.dp).background(hc, RoundedCornerShape(2.dp)))
                             else Spacer(Modifier.height(2.5.dp))
                         }
