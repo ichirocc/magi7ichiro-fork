@@ -452,10 +452,23 @@ internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
 }
 internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
 
+/** [週ページング] 月曜始まりで日を週に分割（各週=その週に属する日index）。最初の週は部分週になり得る。
+ *  週送りで横スクロールを解消するのに使う（画面修正版の「週」ビュー）。startDate 不正でも 7日ずつに退避。 */
+internal fun mondayWeeks(startDate: String, days: Int): List<List<Int>> {
+    val sdow = startDowMonFirst(startDate)   // 0=月
+    val weeks = ArrayList<MutableList<Int>>()
+    for (d in 0 until days) {
+        val wd = (sdow + d) % 7
+        if (weeks.isEmpty() || wd == 0) weeks.add(ArrayList())
+        weeks.last().add(d)
+    }
+    return weeks
+}
+
 /** [E7] 6バケツの件数付きフィルタチップ行（勤務表タブ共有）。件数は breakdown から族合計。0件は淡色。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ViolationFilterBar(breakdown: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit) {
+internal fun ViolationFilterBar(breakdown: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int = -1) {
     val cs = MaterialTheme.colorScheme
     val counts = remember(breakdown) { vioBuckets.associate { b -> b.key to b.families.sumOf { breakdown[it] ?: 0 } } }
     val anyViol = counts.values.any { it > 0 }
@@ -463,7 +476,9 @@ internal fun ViolationFilterBar(breakdown: Map<String, Int>, enabled: Set<String
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("違反フィルタ（種別）", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                // [画面修正版 ③] 「要確認 N件」= 違反ロケーション数（族fire数でなく作成者が見るべきセル数）。
+                Text(if (locCount >= 0) "違反フィルタ（種別）・要確認 ${locCount}件" else "違反フィルタ（種別）",
+                    style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                 if (enabled != allVioBucketKeys) {
                     TextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
                         Text("すべて表示", style = MaterialTheme.typography.labelLarge)
@@ -504,6 +519,13 @@ internal fun ScheduleGrid(
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
     var showBulk by rememberSaveable { mutableStateOf(false) }
+    // [週ページング] 画面修正版の「週」ビュー: 既定は週送り(7列・横スクロール無)。全日一覧に切替も可。
+    val allDays = ui.days.coerceAtLeast(1)
+    val weeks = remember(ui.startDate, allDays) { mondayWeeks(ui.startDate, allDays) }
+    var weekMode by rememberSaveable { mutableStateOf(true) }
+    var weekIdx by rememberSaveable { mutableIntStateOf(0) }
+    val wIdx = weekIdx.coerceIn(0, (weeks.size - 1).coerceAtLeast(0))
+    val visibleDays = if (weekMode && weeks.isNotEmpty()) weeks[wIdx] else null
     // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示。violationCells の値="vio-<famKey>"。
     fun shown(v: String?) = vioVisible(v, vioEnabled)
     // [凡例の冗長対策] 実線/破線・シフト色キーは作成者には暗記済みのことが多いので既定で畳む。
@@ -549,8 +571,30 @@ internal fun ScheduleGrid(
                     ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
                 }
             }
+            // [週ページング] 週送り/全日 切替＋前週/次週。既定=週送り(7列・横スクロール解消＝片手一本指向け)。
+            if (weeks.size > 1) {
+                Spacer(Modifier.height(10.dp))
+                MagiSegmentedControl(
+                    options = listOf("週送り", "全日一覧"),
+                    selected = if (weekMode) 0 else 1,
+                    onSelect = { weekMode = it == 0 },
+                )
+                if (weekMode) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { weekIdx = (wIdx - 1).coerceAtLeast(0) }, enabled = wIdx > 0,
+                            modifier = Modifier.heightIn(min = 48.dp)) { Text("← 前週") }
+                        val wk = weeks.getOrNull(wIdx)
+                        val label = if (wk != null && wk.isNotEmpty()) "第${wIdx + 1}/${weeks.size}週（${wk.first() + 1}〜${wk.last() + 1}日）" else "第${wIdx + 1}週"
+                        Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
+                            modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1)
+                        OutlinedButton(onClick = { weekIdx = (wIdx + 1).coerceAtMost(weeks.size - 1) }, enabled = wIdx < weeks.size - 1,
+                            modifier = Modifier.heightIn(min = 48.dp)) { Text("次週 →") }
+                    }
+                }
+            }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, visibleDays)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
     }
@@ -1168,11 +1212,13 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys) {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, visibleDays: List<Int>? = null) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
+    // [週ページング] visibleDays が渡されればその日だけ描画（週送りで横スクロール解消）。null=全日（従来）。
+    val dayList = (visibleDays ?: (0 until days).toList()).filter { it in 0 until days }
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     val vioSoftColor = MagiAccent.orange
     val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
@@ -1199,10 +1245,12 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [a11y] 生の Box.clickable セルは M3 の 48dp タッチ補完が効かないため、主操作面のセルを 48dp 化（片手一本指仕様）。
     // [レイアウト整合] headH は 日番号+曜日+不足+下線 の3行分。端末フォント拡大(≥1.3x)でも下線/数字が欠けないよう 72dp。
     //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
-    val nameW = 80.dp; val cellW = 48.dp; val cellH = 48.dp; val headH = 72.dp
+    // [週ページング] 7列(週)なら少し詰めて横スクロール無しで収める（80+7×44=388dp ≒ 端末幅）。全日は48dp。
+    val nameW = 80.dp; val cellW = if (dayList.size <= 7) 44.dp else 48.dp; val cellH = 48.dp; val headH = 72.dp
     val hScroll = rememberScrollState()
     Column {
-        Text("平面表：横スクロールで日移動、セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。日番号下の下線＝その日の違反（濃=必須/橙=要調整）、不足日は赤字。",
+        Text((if (visibleDays != null) "この週を表示中（上の週送りで移動）。" else "横スクロールで日移動。") +
+            "セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。日番号下の下線＝その日の違反（濃=必須/橙=要調整）、不足日は赤字。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row {
@@ -1217,7 +1265,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                 }
             }
             Row(Modifier.horizontalScroll(hScroll)) {
-                for (d in 0 until days) {
+                for (d in dayList) {
                     val dow = (sdow + d) % 7
                     val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
                     val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }

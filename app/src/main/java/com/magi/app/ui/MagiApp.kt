@@ -392,10 +392,12 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     val gridUi = if (effectiveEditing) ui else ui.copy(schedule = ui.resultSchedule)
                     val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
-                    ViolationFilterBar(gridUi.breakdown, vioEnabled) { key ->
+                    // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
+                    val vioLocCount = gridUi.violationCells.size + gridUi.needViolations.size + gridUi.countViolations.size
+                    ViolationFilterBar(gridUi.breakdown, vioEnabled, onToggle = { key ->
                         val i = vioBuckets.indexOfFirst { it.key == key }
                         if (i >= 0) vioMask = vioMask xor (1 shl i)
-                    }
+                    }, locCount = vioLocCount)
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
