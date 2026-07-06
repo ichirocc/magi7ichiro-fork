@@ -22,6 +22,14 @@ class Problem(val state: MagiState) {
 
     val sgrp = IntArray(S) { state.staff[it].groupIdx }
 
+    /** 休シフトの index（記号"休"解決、無ければ0）。曜日平準化(weekly)で「勤務日か休か」を判定。 */
+    val restIdx: Int = restShiftIndex(state)
+
+    /** startDate の曜日オフセット（%7）。weekday(j)=(dow0+j)%7。曜日平準化(weekly)の曜日バケットに使う。
+     *  絶対曜日ラベルは重要でなく、day j と day j+7 が同一バケットに落ちることのみが必要。
+     *  V6HotfixPasses.dayOfWeekVariance / V6PortAnalyzer.startDow と同式。 */
+    val dow0: Int = runCatching { java.time.LocalDate.parse(state.startDate).dayOfWeek.value % 7 }.getOrDefault(0)
+
     /** Allowed shift indices per group (groupShift[g][k]==1). */
     val bucket: Array<IntArray> = Array(G) { g ->
         val row = state.groupShift.getOrNull(g) ?: emptyList()

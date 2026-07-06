@@ -136,6 +136,14 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
             }
         }
 
+        // [統一weekly] 7日周期(曜日)シフト平準化 SOFT・重み1。職員ごと、勤務日(非休)の曜日別カウントの
+        // round(平均) からの L1偏差和（UnifiedViolationChecker の "weekly" と一致）。
+        for (i in 0 until S) {
+            val wd = IntArray(7)
+            for (j in 0 until T) { val k = a[i][j]; if (k != p.restIdx && k in 0 until K) wd[(p.dow0 + j) % 7]++ }
+            soft += weeklyDevOfBucket(wd).toLong()
+        }
+
         // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。共有ヘルパで Δ/Checker と同式。
         //   旧: 総量min（#4のhasP2式）は「日毎OR」の業務意味と不一致（大域コミット強制）だったため置換。
         var covU = 0L

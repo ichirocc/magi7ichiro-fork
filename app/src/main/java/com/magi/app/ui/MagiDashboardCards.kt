@@ -559,7 +559,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
 /** 内訳の家族キー → 日本語ラベル（BreakdownCard と FixSuggestionCard で共用）。 */
 internal val breakdownLabels: Map<String, String> = mapOf(
     "groupViol" to "グループ不整合", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
-    "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ",
+    "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ", "weekly" to "曜日の偏り",
     "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア",
     "c41s" to "スキル群のレンジ", "c42s" to "スキル群ペア", "covO" to "過剰な配置",
@@ -669,7 +669,7 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}, proMod
             BreakdownGroup(if (proMode) "必須" else "必須（満たすべき）", listOf("groupViol", "pref", "covU", "c3n"), 2, ui, labels, expanded, onTapChip)
             if (!criticalOnly) {
                 BreakdownGroup("人数の範囲", listOf("low", "high", "apt"), 1, ui, labels, expanded, onTapChip)
-                BreakdownGroup(if (proMode) "任意" else "任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "fair"), 0, ui, labels, expanded, onTapChip)
+                BreakdownGroup(if (proMode) "任意" else "任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "fair", "weekly"), 0, ui, labels, expanded, onTapChip)
             }
             expanded?.let { key ->
                 val cs = MaterialTheme.colorScheme
