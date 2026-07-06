@@ -531,11 +531,13 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
-            Text("赤・実線＝必須違反", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            // [B4] 色名は固定しない（ユーザーが違反色を変更でき、凡例とグリッドが食い違うため）。
+            //   実線/破線の形状＋左の色見本が真の手がかり（色覚配慮＝形状符号化）。
+            Text("実線＝必須違反", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioSoftColor, 4.dp))
-            Text("橙・破線＝要調整", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("破線＝要調整", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -972,7 +974,11 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
                                 // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
                                 val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
-                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null) {
+                                val cellCd = if (vio != null) {
+                                    val dir = when (vio) { "vio-low", "vio-aptLow" -> "不足"; else -> "超過" }
+                                    "${ui.staffNames.getOrNull(i) ?: i} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}回 $dir・タップで詳細"
+                                } else null
+                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null, cd = cellCd) {
                                     if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
@@ -1013,7 +1019,11 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
                                 // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
                                 val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
-                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null) {
+                                val cellCd = if (vio != null) {
+                                    val dir = if (vio == "vio-covU") "人員不足" else "人員過剰"
+                                    "${j + 1}日 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
+                                } else null
+                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null, cd = cellCd) {
                                     if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
@@ -1097,12 +1107,16 @@ private fun TallyLegend(shortBg: Color, overBg: Color, shortLabel: String, overL
 private fun TallyBox(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, bg: Color, start: Boolean,
     onClick: (() -> Unit)? = null,
+    cd: String? = null,
     content: @Composable () -> Unit,
 ) {
     Box(Modifier.width(w).height(h).padding(1.dp)) {
         Box(
             Modifier.fillMaxSize().background(bg, RoundedCornerShape(8.dp))
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+                // [a11y/B1] 違反セルは数字だけでは読み上げが「9」等になり文脈が失われる。渡された時のみ
+                //   「氏名 シフト N回 不足」のような説明を公開（タップ先の詳細と同義）。非違反セルは cd=null で無音のまま。
+                .then(if (cd != null) Modifier.semantics { contentDescription = cd } else Modifier)
                 .then(if (start) Modifier.padding(horizontal = 6.dp) else Modifier),
             contentAlignment = if (start) Alignment.CenterStart else Alignment.Center,
         ) { content() }
