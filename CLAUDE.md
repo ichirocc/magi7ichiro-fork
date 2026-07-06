@@ -87,6 +87,9 @@ UI は `app/src/main/java/com/magi/app/ui/`:
 weightedScore 階層: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) > high(45) >
 c3mn(12) > c1(4) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1) > covO(0.5)。
 
+> **決定記録（D3, 業務判断）**: apt/weekly/fair の重みは**現状維持（各1）で確定**（業務担当者レビュー済）。
+> ws8/ws9 等と同様、以後この3族の重み変更は**再提案しない**（明示的な数値指示があった場合のみ変更）。
+
 ## 目的関数の統一（完了。最重要の達成事項）
 **最適化器（Evaluator/Delta）とUI/提案（UnifiedViolationChecker）が乖離していた目的関数を統一した。**
 原則: **チェッカーを source of truth とし、より正確なモデルへ両者を寄せる**。重みは線形集約点で適用し
