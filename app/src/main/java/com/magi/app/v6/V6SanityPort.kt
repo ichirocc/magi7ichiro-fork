@@ -337,13 +337,14 @@ object V6SanityPort {
             }
             if (!hasDemand) continue
             val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
-            var capable = 0; var loSum = 0; var capSum = 0; var allCapped = true
+            var capable = 0; var loSum = 0; var capSum = 0; var allCapped = true; var aptSum = 0
             for (i in 0 until p.S) {
                 if (!p.canDo(i, k)) continue
                 capable++
                 val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
                 if (lo != Int.MIN_VALUE && lo > 0) loSum += lo
                 if (hi != Int.MAX_VALUE) capSum += hi else allCapped = false
+                val a = p.apt[i][k]; if (a >= 0) aptSum += a   // 適切回数(職員別に展開・staffRangeクランプ済)
             }
             // A) 下限の合計 > 必要数(上限)の合計 → 全員の下限を満たすと必要数を超える＝過剰配置/下限割れが不可避。
             if (loSum > seatsHi) {
@@ -356,6 +357,13 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の必要人数",
                     "必要数の合計は${seatsLo}回ですが、担当者の上限の合計は${capSum}回しかありません。席を埋めきれず人員不足になります",
                     "「$sym」の個人上限を上げる/担当者を増やす(ws1)か、必要人数を下げてください(ws2)"))
+            }
+            // C) 適切回数(apt=職員のレパートリー目標)の合計 > 必要数(上限)の合計 → 全員の目標を満たすと過剰配置。
+            //    レパートリーと被覆が両立しない設定ズレ。目標割れ(aptLow)か過剰配置(covO/aptHigh)が必ず出る。
+            if (aptSum > seatsHi) {
+                out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の適切回数の合計",
+                    "適切回数(レパートリー目標)の合計が${aptSum}回ですが、必要数の合計は${seatsHi}回しかありません。全員の目標は同時に満たせず、目標割れか過剰配置が必ず出ます",
+                    "「$sym」の適切回数を下げる(ws1)か、必要人数を増やしてください(ws2)"))
             }
         }
 
@@ -378,7 +386,17 @@ object V6SanityPort {
             }
         }
 
-        return out
+        // [誘導] 直すべき度合いが高い順に整列。SettingIssuesCard は先頭 take(6) のみ表示するため、
+        //   最重要のデータ起因（配布不可→実現不能希望→過拘束→範囲矛盾）を確実に上位へ。sortedBy は安定＝同順は挿入順。
+        return out.sortedBy { iss ->
+            when {
+                iss.where.contains("配布不可") -> 0   // covU 確定＝配布不可（最優先）
+                iss.kind == IssueKind.WISH -> 1        // 実現不能希望
+                iss.kind == IssueKind.DEMAND -> 2      // 過拘束（下限/上限/適切回数 vs 必要数）
+                iss.kind == IssueKind.RANGE -> 3       // 範囲の矛盾
+                else -> 4                              // 制約・SOFT桁溢れ ほか
+            }
+        }
     }
 
     private fun c3FamilyJp(fam: String): String = when (fam) {

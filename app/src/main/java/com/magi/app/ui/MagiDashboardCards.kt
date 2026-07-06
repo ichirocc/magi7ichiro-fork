@@ -416,7 +416,8 @@ internal fun SettingIssuesCard(ui: UiState, onFix: (com.magi.app.v6.SettingIssue
                 }
             }
             if (issues.size > 6) {
-                Text("ほか ${issues.size - 6} 件（詳細はログ出力を参照）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                // [誘導] 重要な順に整列済み。届かない「ログ出力」ではなく、上から直せば解消する旨を案内。
+                Text("ほか ${issues.size - 6} 件（重要な順に表示中。まず上から直してください）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             OutlinedButton(onClick = onGoEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定・希望を編集する") }
         }
