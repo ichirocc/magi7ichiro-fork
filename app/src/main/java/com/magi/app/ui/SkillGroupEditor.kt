@@ -65,7 +65,8 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
 
             if (skills.isNotEmpty()) {
                 Divider()
-                Text("職員のスキル割当", fontSize = 13.sp, style = MaterialTheme.typography.titleSmall)
+                // [B6] fontSize=13sp が titleSmall(16sp・+1sp スケール)を打ち消していた。override を外し scale に従わせる。
+                Text("職員のスキル割当", style = MaterialTheme.typography.titleSmall)
                 staff.forEachIndexed { i, st ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(st.name, fontSize = 12.sp, modifier = Modifier.weight(1f))

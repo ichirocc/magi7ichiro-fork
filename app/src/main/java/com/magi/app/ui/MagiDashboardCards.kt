@@ -484,7 +484,7 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
                 }
             }
             Spacer(Modifier.height(10.dp))
-            Text("負荷プロフィール", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            Text("負荷プロフィール", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             v6.staffProfiles.take(5).forEach { st ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("${st.name} ${st.groupSymbol}", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))

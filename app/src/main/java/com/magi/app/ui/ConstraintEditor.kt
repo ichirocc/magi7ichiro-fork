@@ -63,7 +63,7 @@ fun ConstraintsCard(
             families.forEachIndexed { fi, fam ->
                 if (fi > 0) Spacer(Modifier.height(6.dp))
                 Spacer(Modifier.height(8.dp))
-                Text(fam.title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(fam.title, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 if (fam.rows.isEmpty()) {
                     Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
@@ -102,7 +102,7 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
                 families.forEachIndexed { fi, fam ->
                     if (fi > 0) Spacer(Modifier.height(6.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text(fam.title, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Text(fam.title, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     if (fam.rows.isEmpty()) {
                         Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {

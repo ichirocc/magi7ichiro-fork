@@ -447,6 +447,6 @@ private fun AptStepper(label: String, value: String, onChange: (String) -> Unit)
 private fun LoadoutHeader(code: String, jp: String) {
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(code, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary)
-        Text(jp, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text(jp, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
