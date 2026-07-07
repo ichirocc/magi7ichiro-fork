@@ -374,6 +374,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     val vioEnabled = remember(vioMask) {
                         vioBuckets.filterIndexed { i, _ -> (vioMask shr i) and 1 == 1 }.map { it.key }.toSet()
                     }
+                    // [画面修正版 ②] 検索・凡例（折りたたみ）。検索=職員名で該当グリッド行を強調（回転/復元で保持）。
+                    var searchQuery by rememberSaveable { mutableStateOf("") }
                     val canRead = ui.hasResultSnapshot
                     val effectiveEditing = editing || !canRead
                     ScheduleModeCard(
@@ -392,11 +394,15 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     val gridUi = if (effectiveEditing) ui else ui.copy(schedule = ui.resultSchedule)
                     val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
-                    ViolationFilterBar(gridUi.breakdown, vioEnabled) { key ->
+                    // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
+                    val vioLocCount = gridUi.violationCells.size + gridUi.needViolations.size + gridUi.countViolations.size
+                    ViolationFilterBar(gridUi.breakdown, vioEnabled, onToggle = { key ->
                         val i = vioBuckets.indexOfFirst { it.key == key }
                         if (i >= 0) vioMask = vioMask xor (1 shl i)
-                    }
-                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled,
+                    }, locCount = vioLocCount)
+                    // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
+                    SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
+                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
                     TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
@@ -496,6 +502,14 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [N2/⛏11] プロ表示トグルを分析タブ上部に常設（従来は設定タブの外観カード内＝
                     //   タブ往復が必要だった）。proMode は共有状態なので設定側トグルと同期する。
                     MagiSegmentedControl(options = listOf("一般", "プロ"), selected = if (proMode) 1 else 0, onSelect = { proMode = it == 1 })
+                    // [★2] 概要ヒーロー（対象人数/対象期間/確認事項）＝要確認一覧の前に規模・件数を提示（web「画面修正版」hero 移植）。
+                    HeroMetricsRow(ui)
+                    // [★1/E1] 要確認一覧＝散在していた診断を「箇所単位・重大度」で1ハブに統合（web「画面修正版」confirm 移植）。
+                    //   タブ先頭のヒーローとして配置。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。表示のみ・スコア不変。
+                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode)
+                    // [★3+4] 日別/人別 注意リスト＋「要確認のみ」トグル（web「画面修正版」day/staff＋alertOnly 融合）。
+                    //   人別行タップで修復フローへ。BottleneckCard(top5テキスト) の上位互換のため下の BottleneckCard は撤去。
+                    AttentionCardsSection(ui, onFocusStaff = { vm.findFixSuggestions(it) })
                     // [冗長性/用語] 「ようす」は やさしい俯瞰＋チェック＋内訳 のみ。開発用の V6 1ヶ月俯瞰
                     //   (HARD Core/Guard・Apt/Equalize/covU 等の生指標) は詳細設定(上級者)へ移設。
                     // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。
@@ -505,7 +519,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     OverviewDashboard(ui, proMode)
                     CheckSummaryView(ui, proMode)
                     BreakdownCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, proMode = proMode)
-                    BottleneckCard(ui, proMode)
+                    // [★3+4] BottleneckCard(top5テキスト) は AttentionCardsSection(上・全件＋トグル＋タップ修復) が上位互換のため撤去。
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode)
                     // [校正] 開発用の ColorSettingsView（英語名・生の制約コード/WARN/CRITICAL露出）と
                     // FlagsView（実験フラグ）は一般ユーザー画面から除外。詳細設定は上級者向けに別途。
