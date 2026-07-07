@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 220
-        versionName = "3.77.0-week-paging"
+        versionCode = 221
+        versionName = "3.78.0-week-scroll"
     }
 
     buildTypes {
