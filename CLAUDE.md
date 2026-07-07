@@ -277,6 +277,14 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   MagiSegmentedControl で切替、**「要確認のみ」トグル(既定ON)** で違反0行を隠す＝そのまま triage。**BottleneckCard(top5テキスト・read-only)は
   AttentionCardsSection(全件＋トグル＋タップ修復)の上位互換のため詳細タブから撤去**(composable 定義は残置=無害)。全て表示のみ・スコアリング不変(読取専用)。
   E5(全月横表)は保留維持。★1→★4 の融合移植これにて一巡。
+- (3.82.0, ★1-★4 コードレビュー修正): /code-review(並列 finder×verify)で判明した表示バグを修正(スコアリング不変)。
+  ①**ConfirmListCard の迷子フィルタ**: 選択中フィルタの件数がデータ変化で0になるとチップは消えるが `filter` は残り
+  空リスト＋見出し件数>0 の迷子に。`effFilter`(件数0なら全部へ戻す)を導入しリスト・チップ選択の両方に適用。
+  ②**stale タイトル**: `remember` キーに `staffNames/shiftSymbols/startDate` を追加(職員/シフト改名で行タイトルが古いまま残る)。
+  ③**c2 の方向誤表示**: c2(個人の合計)は方向を持たない単一クラス vio-c2 なのに「過」固定だった→ ConfirmList はマーク「計」、
+  AttentionCards は方向サフィックスなし(記号のみ)に(下限割れ/上限超過と混同回避)。④`ConfirmItem.shiftSym` 死にフィールド除去。
+  非対応(判断): BottleneckCard 定義残置=既に無害と記載済で維持 / AttentionCards の remember 化=毎再構成で再計算するため
+  そもそも stale にならず、データ極小で効率影響も無視可 / キー解析の共通化=別スコープ。
 
 ## 停滞脱出の改善（進行中）
 探索本体が過拘束データで空転しがちな問題（停滞脱出の質向上）。
