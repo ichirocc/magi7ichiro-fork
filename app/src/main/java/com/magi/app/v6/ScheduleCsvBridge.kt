@@ -359,7 +359,11 @@ object ScheduleCsvBridge {
         var rr = 1
         while (rr < rows.size) {
             val r = rows[rr]
-            if (r.isNotEmpty() && r[0].trim().isNotEmpty()) {
+            // build() は勤務表の後に「空行＋『集計』ヘッダ＋職員名で始まる回数行」を出力する。ここで終端しないと
+            // 回数行が名前一致で再取込され matched が二重化し、シフト記号が数値の場合は回数値が記号解決して勤務表を破壊する。
+            if (r.isEmpty() || r.all { it.isBlank() }) break
+            if (r[0].trim() == "集計") break
+            if (r[0].trim().isNotEmpty()) {
                 val staffIndex = nameToI[nameMatchKey(r[0])]
                 if (staffIndex != null) {
                     matched++

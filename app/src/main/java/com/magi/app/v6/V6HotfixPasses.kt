@@ -434,8 +434,10 @@ object V6HotfixPasses {
                     val cand = (0 until p.S).filter { i -> (0 until w).all { movable(i, j + it) } }
                     if (cand.size < 3) continue
                     for (ai in cand) {
+                        if (shouldStop()) break   // [予算ガード] 締切後は O(cand^3) の全候補フル評価を走り切らせない(HF66=2.65.0と同方針)。
                         if (ai !in anchorStaff) continue
                         for (bi in cand) {
+                            if (shouldStop()) break   // [予算ガード] 内側スキャンでも締切確認しバーストを O(cand) 以内に抑える。
                             if (bi == ai) continue
                             for (ci in cand) {
                                 if (ci == ai || ci == bi) continue
@@ -1009,8 +1011,9 @@ object V6HotfixPasses {
     // ============================================================================
     // [#5 差分前フィルタ] 職員 i の packed メトリクス = (hard:c3n件数) を最上位、(total:変化しうる全family
     // の件数) を中位、(weighted) を下位に詰めた単一 Long（isBetter の hard→total→weighted と同順）。
-    // 研磨手で動きうる per-staff family を漏れなく集計: c1(4)/c2(1)/c3(3)/c3n(HARD7000)/c3m(2)/c3mn(12)/
-    // low(90)/high(45)。関与職員が sgrp も ssk も同一なら、群(c41/c42)・スキル群(c41s/c42s)・被覆(covU/covO)・
+    // 研磨手で動きうる per-staff family のうち主要分を集計: c1(4)/c2(1)/c3(3)/c3n(HARD7000)/c3m(2)/c3mn(12)/
+    // low(90)/high(45)。※apt/fair/weekly(各1) は本 packed に含めない＝それら**のみ**を改善する手はこの前フィルタで
+    // こぼす(研磨が弱まるだけ=keep-best 安全、誤採用や悪化は起きない)。関与職員が sgrp も ssk も同一なら、群(c41/c42)・スキル群(c41s/c42s)・被覆(covU/covO)・
     // pref(希望固定セルは不動) は全て不変。よって関与職員のこの packed が改善しなければ全体目的も改善しえず、
     // その手はフル評価をスキップしてよい(前フィルタ)。採用判定は従来どおりフル評価 isBetter が担う＝安全。
     // 1職員あたり各レベルは小さく、関与2-3名の和でも桁跨ぎしない(hardレベル:1e15, totalレベル:1e9)。
