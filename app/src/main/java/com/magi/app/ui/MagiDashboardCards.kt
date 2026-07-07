@@ -647,6 +647,23 @@ internal fun BottleneckCard(ui: UiState, proMode: Boolean = false) {
     }
 }
 
+/**
+ * [★2] 概要ヒーロー：対象人数 / 対象期間 / 確認事項 の3指標（web「画面修正版」hero 移植）。
+ * 確認事項＝違反箇所の実数（violationCells＋needViolations＋countViolations、ConfirmListCard/E7バーと同一定義）。
+ * 詳細タブ先頭に置き、要確認一覧の前に規模と件数を一目で示す。表示のみ・スコアリング不変（読取専用）。
+ */
+@Composable
+internal fun HeroMetricsRow(ui: UiState) {
+    if (ui.schedule.isEmpty()) return
+    val days = ui.schedule.firstOrNull()?.size ?: 0
+    val alerts = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BigStat("対象人数", "${ui.staffNames.size}名", Modifier.weight(1f))
+        BigStat("対象期間", "${days}日", Modifier.weight(1f))
+        BigStat("確認事項", "${alerts}件", Modifier.weight(1f))
+    }
+}
+
 /** [★1/E1] 要確認一覧の1項目。個々の違反箇所を重大度マーク付きで表す（web「画面修正版」confirm ビュー移植）。 */
 private data class ConfirmItem(
     val kind: Int,          // 0=不足/必須(bad) 1=過剰/調整(warn) 2=窓(c1)
@@ -798,6 +815,98 @@ internal fun ConfirmListCard(
             shown.take(40).forEach { ConfirmRow(it, onFocusStaff) }
             if (shown.size > 40) Text("ほか ${shown.size - 40} 件（重大な順に表示中）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
             if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+    }
+}
+
+/**
+ * [★3+4] 日別/人別 注意リスト＋「要確認のみ」トグル（web「画面修正版」day/staff カード＋alertOnly の融合移植）。
+ *  - 人別＝countViolations(職員×シフト)＋violationCells(職員×日)を職員ごとに件数集計。行タップで修復フロー。
+ *  - 日別＝needViolations(シフト×日)を日ごとに件数集計。各行に不足/過剰のシフトを併記。
+ *  - 「要確認のみ」ON(既定)で違反0の行を隠す＝そのまま triage。既存 BottleneckCard(top5テキスト)の上位互換だが
+ *    additive-safe で併存。表示のみ・スコアリング不変（読取専用）。
+ */
+@Composable
+internal fun AttentionCardsSection(ui: UiState, onFocusStaff: (Int) -> Unit) {
+    if (ui.schedule.isEmpty()) return
+    fun nm(i: Int) = ui.staffNames.getOrNull(i) ?: "#$i"
+    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
+    // 人別: countViolations(i,k)=回数, violationCells(i,j)=セル
+    val staffAlerts = HashMap<Int, Int>()
+    val staffShifts = HashMap<Int, LinkedHashSet<String>>()
+    for ((key, cls) in ui.countViolations) {
+        val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull() ?: continue; val k = p.getOrNull(1)?.toIntOrNull() ?: continue
+        staffAlerts[i] = (staffAlerts[i] ?: 0) + 1
+        val dir = if (cls == "vio-low" || cls == "vio-aptLow") "不足" else "過"
+        staffShifts.getOrPut(i) { LinkedHashSet() }.add("${sym(k)}$dir")
+    }
+    for ((key, _) in ui.violationCells) {
+        val i = key.substringBefore(",").toIntOrNull() ?: continue
+        staffAlerts[i] = (staffAlerts[i] ?: 0) + 1
+    }
+    // 日別: needViolations(k,j)=被覆/群レンジ
+    val dayAlerts = HashMap<Int, Int>()
+    val dayShifts = HashMap<Int, LinkedHashSet<String>>()
+    for ((key, cls) in ui.needViolations) {
+        val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
+        dayAlerts[j] = (dayAlerts[j] ?: 0) + 1
+        val dir = when (cls) { "vio-covU" -> "不足"; "vio-covO" -> "過"; else -> "範囲" }
+        dayShifts.getOrPut(j) { LinkedHashSet() }.add("${sym(k)}$dir")
+    }
+    val days = ui.schedule.firstOrNull()?.size ?: 0
+    val staffCount = ui.staffNames.size
+    var mode by rememberSaveable { mutableIntStateOf(0) }        // 0=日別 1=人別
+    var alertOnly by rememberSaveable { mutableStateOf(true) }
+    val cs = MaterialTheme.colorScheme
+    val (warnBg, warnFg) = magiWarnColors()
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("日別・人別の要確認", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text("要確認のみ", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Spacer(Modifier.width(6.dp))
+                Switch(checked = alertOnly, onCheckedChange = { alertOnly = it })
+            }
+            MagiSegmentedControl(options = listOf("日別", "人別"), selected = mode, onSelect = { mode = it })
+            if (mode == 0) {
+                val rows = (0 until days).filter { !alertOnly || (dayAlerts[it] ?: 0) > 0 }
+                if (rows.isEmpty()) {
+                    Text(if (alertOnly) "日別の要確認はありません。" else "日がありません。", style = MaterialTheme.typography.bodyMedium, color = MagiAccent.green)
+                } else rows.forEach { j ->
+                    val ac = dayAlerts[j] ?: 0
+                    AttentionRow(title = dayMD(ui.startDate, j), sub = dayShifts[j]?.joinToString("・") ?: "", alerts = ac, warnBg = warnBg, warnFg = warnFg, onClick = null)
+                }
+            } else {
+                val rows = (0 until staffCount).filter { !alertOnly || (staffAlerts[it] ?: 0) > 0 }
+                if (rows.isEmpty()) {
+                    Text(if (alertOnly) "人別の要確認はありません。" else "職員がいません。", style = MaterialTheme.typography.bodyMedium, color = MagiAccent.green)
+                } else rows.forEach { i ->
+                    val ac = staffAlerts[i] ?: 0
+                    AttentionRow(title = nm(i), sub = staffShifts[i]?.joinToString("・") ?: "", alerts = ac, warnBg = warnBg, warnFg = warnFg, onClick = if (ac > 0) ({ onFocusStaff(i) }) else null)
+                }
+            }
+        }
+    }
+}
+
+/** [★3+4] 日別/人別 注意リストの1行。alerts>0 で警告バッジ、onClick!=null でタップ修復可。 */
+@Composable
+private fun AttentionRow(title: String, sub: String, alerts: Int, warnBg: Color, warnFg: Color, onClick: (() -> Unit)?) {
+    val cs = MaterialTheme.colorScheme
+    var m = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+    if (onClick != null) m = m.clickable { onClick() }
+    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (alerts > 0) {
+                Surface(color = warnBg, shape = MaterialTheme.shapes.small) {
+                    Text("確認$alerts", color = warnFg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                }
+            }
+            if (onClick != null) Text("直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
         }
     }
 }
