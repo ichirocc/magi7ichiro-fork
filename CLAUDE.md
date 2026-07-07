@@ -371,6 +371,9 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   → ai/bi ループ先頭に `shouldStop()` を追加しバーストを O(cand) 以内に。keep-best 保持=品質不変。
 - **コメント整合(HF77)** `findTargetedFix` の「6種」→実装8種(covO/c2/low/c41/high/c41s/c3want/apt)に訂正 /
   `staffPacked` 前フィルタの「漏れなく」を訂正(apt/fair/weekly は非集計＝それらのみ改善する手はこぼす＝keep-best 安全)。
+- (3.85.0) **色凡例の重大度逆転(live)** `V6WebCompat.severityFromVioKey`: low(90)/high(45)=最重 soft を INFO(灰)、covO(0.5)=最軽を
+  WARN(橙) と逆転表示していた(凡例=`ColorSettingsView` は `MagiSetupCards` 詳細設定で live＝当初「死に画面」判定は誤り)。
+  重み階層に整合(low/high/c3mn→HIGH, c1/c3/c3m/c2/c41/c42/c41s/c42s/apt→WARN, covO/fair/weekly→INFO)。表示のみ・スコア不変。
 
 **報告のみ(未修正=判断/測定待ち)**:
 - `applyDayAssignmentPolish` の rangePen 重み 3/3・apt 1 は Evaluator の 90/45/1 と乖離(候補生成プロキシの誤重み付け)。
@@ -378,9 +381,9 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 - `staffPacked`/`c3FamCount` が c3/c3m を run-deficit でなく窓#fire でモデル化(前フィルタ限定・keep-best 安全)。
 - 平準化研磨(`applyGroupShiftEqualizePolish`/`applyWeeklyEqualizePolish`)は分散指標で目的関数(fair/weekly=L1)と別物＝既知の冗長。
   `weekly` の `restIdx=-1`(休記号改名時) で全シフトを勤務扱いする潜在バグ(冗長パス内)・`dow0` 3箇所再計算(Problem.dow0 未使用)。
-- **デッドコード**: `V6RemainingScreens`(未描画)＋そこからのみ参照の `OverviewDashboard`/`ColorSettingsView`/`severityFromVioKey`
-  (凡例は low/high→INFO・c41s/apt 未列挙で**重大度が重み階層と逆転**するが**死に画面**) / `V6WebCompat` の
-  `classifyHardBreakdown`/`scoreVecStable`/`betterVec`/`firstDiffTier`/`buildWorkbook`(呼出無)。撤去は別コミット候補。
+- **デッドコード**: `V6RemainingScreens`(未描画・外部参照0)＋そこからのみ実呼出の `HeaderBar`/`BottomNav`/`FlagsView`/
+  `OverviewDashboard`/`OperatorLogView` / `V6WebCompat` の `classifyHardBreakdown`/`scoreVecStable`/`betterVec`/
+  `firstDiffTier`/`buildWorkbook`(呼出無)。撤去は別コミット候補(※`ColorSettingsView`/`CheckSummaryView` は他画面で live のため残す)。
 - `ScheduleCsvBridge` 各コンポーネント取込の `drop(1)` ヘッダ無検証(ヘッダ無CSVで先頭行黙殺=軽微)。
 
 ## 直近の状態
