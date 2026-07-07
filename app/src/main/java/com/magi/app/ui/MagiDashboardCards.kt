@@ -648,19 +648,17 @@ internal fun BottleneckCard(ui: UiState, proMode: Boolean = false) {
 }
 
 /**
- * [★2] 概要ヒーロー：対象人数 / 対象期間 / 確認事項 の3指標（web「画面修正版」hero 移植）。
- * 確認事項＝違反箇所の実数（violationCells＋needViolations＋countViolations、ConfirmListCard/E7バーと同一定義）。
- * 詳細タブ先頭に置き、要確認一覧の前に規模と件数を一目で示す。表示のみ・スコアリング不変（読取専用）。
+ * [★2/見直し] 概要ヒーロー：対象人数 / 対象期間 の2指標（web「画面修正版」hero 移植）。
+ * 旧「確認事項(件)」タイルは直下 ConfirmListCard ヘッダ「要確認一覧（N件）」と完全に同じ数＝重複のため撤去。
+ * ヒーローは規模（人数・期間）のコンテキストに純化し、件数は要確認一覧に一本化。表示のみ・スコアリング不変（読取専用）。
  */
 @Composable
 internal fun HeroMetricsRow(ui: UiState) {
     if (ui.schedule.isEmpty()) return
     val days = ui.schedule.firstOrNull()?.size ?: 0
-    val alerts = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         BigStat("対象人数", "${ui.staffNames.size}名", Modifier.weight(1f))
         BigStat("対象期間", "${days}日", Modifier.weight(1f))
-        BigStat("確認事項", "${alerts}件", Modifier.weight(1f))
     }
 }
 

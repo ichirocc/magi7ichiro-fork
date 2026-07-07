@@ -516,7 +516,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     if (proMode) V6DashboardCard(ui.v6)
                     if (proMode) WeightTableCard()   // [N2/⛏11] スコアの重み根拠（最適化器と一致）
                     // [IA重複解消] BossCard は FixSuggestionCard と同じ提案＋適用を二重描画していたため撤去（下の FixSuggestionCard に一本化）。
-                    OverviewDashboard(ui, proMode)
+                    // [見直し/IA重複解消] OverviewDashboard(気になる点=総違反リング / 注意の日リング)を撤去。融合カードが上位代替:
+                    //   気になる点(総数)→ヒーロー規模＋要確認一覧ヘッダ件数、注意の日→AttentionCardsSection の日別リスト。
+                    //   「違反総数」の三重表示を D2(HARD三重リング撤去)と同方針で解消。composable 定義は残置=無害。
                     CheckSummaryView(ui, proMode)
                     BreakdownCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, proMode = proMode)
                     // [★3+4] BottleneckCard(top5テキスト) は AttentionCardsSection(上・全件＋トグル＋タップ修復) が上位互換のため撤去。
