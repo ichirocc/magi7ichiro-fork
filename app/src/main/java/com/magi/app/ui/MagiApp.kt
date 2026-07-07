@@ -502,6 +502,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [N2/⛏11] プロ表示トグルを分析タブ上部に常設（従来は設定タブの外観カード内＝
                     //   タブ往復が必要だった）。proMode は共有状態なので設定側トグルと同期する。
                     MagiSegmentedControl(options = listOf("一般", "プロ"), selected = if (proMode) 1 else 0, onSelect = { proMode = it == 1 })
+                    // [★1/E1] 要確認一覧＝散在していた診断を「箇所単位・重大度」で1ハブに統合（web「画面修正版」confirm 移植）。
+                    //   タブ先頭のヒーローとして配置。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。表示のみ・スコア不変。
+                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode)
                     // [冗長性/用語] 「ようす」は やさしい俯瞰＋チェック＋内訳 のみ。開発用の V6 1ヶ月俯瞰
                     //   (HARD Core/Guard・Apt/Equalize/covU 等の生指標) は詳細設定(上級者)へ移設。
                     // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。

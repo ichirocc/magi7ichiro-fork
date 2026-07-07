@@ -647,6 +647,161 @@ internal fun BottleneckCard(ui: UiState, proMode: Boolean = false) {
     }
 }
 
+/** [★1/E1] 要確認一覧の1項目。個々の違反箇所を重大度マーク付きで表す（web「画面修正版」confirm ビュー移植）。 */
+private data class ConfirmItem(
+    val kind: Int,          // 0=不足/必須(bad) 1=過剰/調整(warn) 2=窓(c1)
+    val mark: String,       // バッジ内グリフ（2文字以内）
+    val title: String,      // 場所（職員名 / 日「シフト」）
+    val sub: String,        // 族ラベル（人員不足・下限割れ 等）
+    val shiftSym: String,   // メタチップ（シフト記号）
+    val staff: Int?,        // タップ修復のフォーカス職員（null=全体探索）
+    val order: Int,         // 並び（kind→場所）
+)
+
+/**
+ * [★1/E1] 各違反マップ（needViolations/countViolations/violationCells）を個々の「要確認」項目に展開。
+ * BreakdownCard が族単位の集計なのに対し、こちらは spec「画面修正版」confirm ビューと同型の箇所単位リスト。
+ * 表示のみ・スコアリング不変（読取専用）。
+ */
+private fun confirmItems(ui: UiState): List<ConfirmItem> {
+    fun nm(i: Int) = ui.staffNames.getOrNull(i) ?: "#$i"
+    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
+    val out = ArrayList<ConfirmItem>()
+    // 被覆・群レンジ: needViolations "k,j" -> vio-covU/covO/c41/c41s（日×シフト）
+    for ((key, cls) in ui.needViolations) {
+        val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
+        val fam = cls.removePrefix("vio-")
+        val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過" to 1; else -> "調整" to 1 }
+        out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, sym(k), null, kind * 100000 + j * 100 + k)
+    }
+    // 個人回数: countViolations "i,k" -> vio-low/high/c2/aptLow/aptHigh（職員×シフト）
+    for ((key, cls) in ui.countViolations) {
+        val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull() ?: continue; val k = p.getOrNull(1)?.toIntOrNull() ?: continue
+        val fam = cls.removePrefix("vio-")
+        val (mark, kind) = when (fam) { "low", "aptLow" -> "不足" to 0; else -> "過" to 1 }
+        val labelFam = when (fam) { "aptLow", "aptHigh" -> "apt"; else -> fam }
+        out += ConfirmItem(kind, mark, nm(i), "${sym(k)}・${breakdownLabels[labelFam] ?: labelFam}", sym(k), i, kind * 100000 + 40000 + i * 100 + k)
+    }
+    // セル違反: violationCells "i,j" -> vio-pref/groupViol/c3n/c3/c3m/c3mn/c1/c42/c42s（職員×日=実シフト）
+    for ((key, cls) in ui.violationCells) {
+        val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
+        val fam = cls.removePrefix("vio-")
+        val cell = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
+        val cellSym = if (cell >= 0) sym(cell) else "—"
+        val (mark, kind) = when (fam) {
+            "c1" -> "窓" to 2
+            "pref", "groupViol", "c3n" -> "必須" to 0
+            else -> "調整" to 1
+        }
+        out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", breakdownLabels[fam] ?: fam, cellSym, i, kind * 100000 + 80000 + j * 100 + i)
+    }
+    return out.sortedWith(compareBy({ it.kind }, { it.order }))
+}
+
+/** [★1] 要確認一覧のフィルタチップ（Surface ベース＝新規 import 不要）。 */
+@Composable
+private fun ConfirmFilterChip(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val bg = if (selected) cs.secondaryContainer else cs.surfaceVariant
+    val fg = if (selected) cs.onSecondaryContainer else cs.onSurfaceVariant
+    Surface(
+        color = bg, shape = MaterialTheme.shapes.small,
+        modifier = Modifier.heightIn(min = 40.dp).clickable { onClick() },
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("$label $count", style = MaterialTheme.typography.labelLarge, color = fg,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+        }
+    }
+}
+
+/** [★1] 要確認一覧の1行（spec confirmCard 同型：マークバッジ＋タイトル＋族＋メタ）。 */
+@Composable
+private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val (warnBg, warnFg) = magiWarnColors()
+    val (bg, fg) = when (item.kind) {
+        0 -> cs.errorContainer to cs.onErrorContainer
+        1 -> warnBg to warnFg
+        else -> cs.tertiaryContainer to cs.onTertiaryContainer
+    }
+    val clickable = item.staff != null
+    var m = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+    if (clickable) m = m.clickable { onFocusStaff(item.staff!!) }
+        .semantics { contentDescription = "${item.title} ${item.sub}・タップで直し方を探す" }
+    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
+        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Surface(color = bg, shape = MaterialTheme.shapes.small) {
+                Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
+                    Text(item.mark, color = fg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            if (clickable) Text("直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
+        }
+    }
+}
+
+/**
+ * [★1/E1 要確認一覧] 散在していた診断を「箇所単位の重大度リスト」で1ハブに統合（web「画面修正版」confirm 移植）。
+ * BreakdownCard（族集計）を補完し、covU/pref/c1/low/high/apt… の各違反箇所を 不足/過剰/窓 の重大度マーク付きで列挙。
+ * 重大度フィルタ（全部/不足・必須/過剰・調整/窓）で絞り、staff 紐付き項目はタップで修復フロー(onFocusStaff)へ。
+ * 設定ミス(settingIssues)があれば先頭に件数導線を出す。表示のみ・スコアリング不変（読取専用）。
+ */
+@Composable
+internal fun ConfirmListCard(
+    ui: UiState,
+    onFocusStaff: (Int) -> Unit,
+    onGoEdit: () -> Unit,
+    proMode: Boolean = false,
+) {
+    val items = remember(ui.violationCells, ui.needViolations, ui.countViolations, ui.schedule) { confirmItems(ui) }
+    val issueCount = ui.settingIssues.size
+    val cs = MaterialTheme.colorScheme
+    if (items.isEmpty() && issueCount == 0) {
+        // 達成表示（結果があり違反ゼロのときのみ）。データ未読込・実行中は何も出さない。
+        if (ui.schedule.isNotEmpty() && !ui.running) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("要確認一覧", style = MaterialTheme.typography.titleMedium)
+                    Text("確認事項はありません（すべての条件を満たしています）。", style = MaterialTheme.typography.bodyMedium, color = MagiAccent.green)
+                }
+            }
+        }
+        return
+    }
+    var filter by rememberSaveable { mutableStateOf(-1) }   // -1=全部 / 0=不足・必須 / 1=過剰・調整 / 2=窓
+    val counts = intArrayOf(items.count { it.kind == 0 }, items.count { it.kind == 1 }, items.count { it.kind == 2 })
+    val shown = items.filter { filter < 0 || it.kind == filter }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("要確認一覧（${items.size}件）", style = MaterialTheme.typography.titleMedium)
+            if (!proMode) Text("直したほうがよい箇所を重大度でまとめました。タップで直し方を探します。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            if (issueCount > 0) {
+                Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.medium) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("設定の見直し ${issueCount}件（実行前に直せます）", color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = onGoEdit) { Text("設定へ") }
+                    }
+                }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ConfirmFilterChip("全部", items.size, filter == -1) { filter = -1 }
+                if (counts[0] > 0) ConfirmFilterChip("不足・必須", counts[0], filter == 0) { filter = 0 }
+                if (counts[1] > 0) ConfirmFilterChip("過剰・調整", counts[1], filter == 1) { filter = 1 }
+                if (counts[2] > 0) ConfirmFilterChip("窓", counts[2], filter == 2) { filter = 2 }
+            }
+            shown.take(40).forEach { ConfirmRow(it, onFocusStaff) }
+            if (shown.size > 40) Text("ほか ${shown.size - 40} 件（重大な順に表示中）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}, proMode: Boolean = false) {
     val labels = breakdownLabels
