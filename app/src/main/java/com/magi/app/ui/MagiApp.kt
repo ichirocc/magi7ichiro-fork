@@ -374,6 +374,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     val vioEnabled = remember(vioMask) {
                         vioBuckets.filterIndexed { i, _ -> (vioMask shr i) and 1 == 1 }.map { it.key }.toSet()
                     }
+                    // [画面修正版 ②] 検索・凡例（折りたたみ）。検索=職員名で該当グリッド行を強調（回転/復元で保持）。
+                    var searchQuery by rememberSaveable { mutableStateOf("") }
                     val canRead = ui.hasResultSnapshot
                     val effectiveEditing = editing || !canRead
                     ScheduleModeCard(
@@ -398,7 +400,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         val i = vioBuckets.indexOfFirst { it.key == key }
                         if (i >= 0) vioMask = vioMask xor (1 shl i)
                     }, locCount = vioLocCount)
-                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled,
+                    // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
+                    SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
+                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
                     TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)

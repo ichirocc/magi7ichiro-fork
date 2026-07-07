@@ -36,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -510,15 +511,44 @@ internal fun ViolationFilterBar(breakdown: Map<String, Int>, enabled: Set<String
     }
 }
 
+/** [画面修正版 ②] 検索・凡例の統合折りたたみ（既定=閉）。E7種別フィルタは含めない＝可視のまま別バー(ユーザー指示)。
+ *  検索=職員名で該当グリッド行を強調(行は隠さず被覆の文脈保持)。凡例=シフト色＋違反(実線=必須/破線=要調整)。 */
+@Composable
+internal fun SearchLegendBar(ui: UiState, query: String, onQuery: (String) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var open by rememberSaveable { mutableStateOf(false) }
+    val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { open = !open }) {
+                Text("検索・凡例" + (if (!open && query.isNotBlank()) "（検索中: $query）" else ""),
+                    style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text(if (open) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+            }
+            if (open) {
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = query, onValueChange = onQuery,
+                    label = { Text("職員名で検索（該当行を強調）") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { onQuery("") }) { Text("消す") } },
+                )
+                Spacer(Modifier.height(10.dp))
+                if (ui.violationCells.isNotEmpty()) { ViolationLegend(vioColor); Spacer(Modifier.height(6.dp)) }
+                ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ScheduleGrid(
-    ui: UiState, onCellClick: (Int, Int) -> Unit, proMode: Boolean = false,
+    ui: UiState, onCellClick: (Int, Int) -> Unit, proMode: Boolean = false, nameQuery: String = "",
     vioEnabled: Set<String> = allVioBucketKeys,
     onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit = { _, _ -> },
 ) {
     val cs = MaterialTheme.colorScheme
-    val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
     var showBulk by rememberSaveable { mutableStateOf(false) }
     // [週ページング＋横スクロール併用] 全日を横スクロールで保持しつつ、前週/次週 で1週ぶんジャンプ。
@@ -538,8 +568,6 @@ internal fun ScheduleGrid(
     }
     // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示。violationCells の値="vio-<famKey>"。
     fun shown(v: String?) = vioVisible(v, vioEnabled)
-    // [凡例の冗長対策] 実線/破線・シフト色キーは作成者には暗記済みのことが多いので既定で畳む。
-    var legendOpen by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("勤務表", style = MaterialTheme.typography.titleMedium)
@@ -564,23 +592,7 @@ internal fun ScheduleGrid(
                         style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
                 }
             }
-            // [凡例] 参照情報（実線/破線の意味・シフト色キー）は作成者には暗記済みのことが多く、常時表示は冗長。
-            //   既定で畳み、タップで展開する（情報密度・スクロール量を優先）。新規/応援スタッフは開けば確認できる。
-            if (ui.violationCells.isNotEmpty() || ui.shiftSymbols.any { it.isNotBlank() }) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { legendOpen = !legendOpen }) {
-                    Text(if (legendOpen) "凡例を隠す ▾" else "凡例（色・記号の意味）▸",
-                        style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                }
-                if (legendOpen) {
-                    if (ui.violationCells.isNotEmpty()) {
-                        Spacer(Modifier.height(6.dp))
-                        ViolationLegend(vioColor)
-                    }
-                    ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
-                }
-            }
+            // [②] 凡例は上部「検索・凡例」折りたたみへ集約したためグリッド内からは撤去（重複回避）。
             // [週ページング＋横スクロール併用] 前週/次週 は hScroll を1週ぶんジャンプ（列は隠さない＝自由スクロールと併用）。
             if (weeks.size > 1) {
                 Spacer(Modifier.height(10.dp))
@@ -598,7 +610,7 @@ internal fun ScheduleGrid(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
     }
@@ -1216,7 +1228,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState()) {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "") {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1260,7 +1272,11 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                 }
                 for (i in 0 until staffCount) {
                     Box(Modifier.width(nameW).height(cellH).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
-                        Text(ui.staffNames.getOrNull(i) ?: "$i", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // [検索] 一致する職員名を太字＋青で強調（行は隠さず＝被覆の文脈を保つ）。
+                        val nm = ui.staffNames.getOrNull(i) ?: "$i"
+                        val hit = nameQuery.isNotBlank() && nm.contains(nameQuery, ignoreCase = true)
+                        Text(nm, style = MaterialTheme.typography.bodySmall, color = if (hit) MagiAccent.blue else cs.onSurface,
+                            fontWeight = if (hit) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
