@@ -353,13 +353,38 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 ## バックログ / 未対応
 1. TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）。
 2. 未レビュー領域の精読: `V6LateOperators`/`V6SearchOperators`/`V6HotfixPasses` 各パス内部, `V6WebCompat`,
-   CSV/UI 層。
+   CSV/UI 層。**(3.84.0, 並列監査で一巡・下記参照)**。
 3. C++/NDK 移植は**不要**の結論（純Kotlin＋被覆対応Δ評価で十分高速）。エンジンは ALNS/Destroy-Repair/
    ChainSwap3-4/C1BlockN/PathRelink/LNS/Reheat/Oscillation/適応的オペレータ重み/希望ロック枝刈り を実装済み。
    §4 ILP matheuristic のみ意図的に未実装。
 4. cons3n のデータ重複（Dﾃ→A4 が2行）は二重計上だが最適化器/チェッカーで一貫（SettingIssue が dedup を提案）。
 5. **E5「月全体の俯瞰」= ユーザーの明示 go まで保留**（決定記録）。指数(見やすさ12指標)で唯一70未満(58)だが、
    最低スコア≠最高価値・片手一本指/編集主体との緊張のため、着手も再提案もしない（明示 go があった場合のみ）。
+
+## 未レビュー領域の精読（3.84.0, 並列監査で一巡）
+`V6HotfixPasses`/`V6SearchOperators`/`V6LateOperators`/`V6WebCompat`/`ScheduleCsvBridge` を並列エージェントで監査。
+探索/後処理は heavily-audited で**深刻な正しさバグ・不変条件破壊は無し**（全 late-operator は同日置換で被覆保存、`wishLocked` は各 mutator でガード、
+空データガードあり）。**修正済み(3.84.0)**:
+- **CSV 往復バグ(live)** `ScheduleCsvBridge.parse`: `build` が出力する「空行＋集計ヘッダ＋職員名で始まる回数行」を終端せず再取込し
+  `matched` 二重化（記号が数値なら勤務表破壊）→ 空行/「集計」で break。
+- **予算ガード** `applyBlockRotationPolish`: O(cand³) の全候補フル評価に内側 `shouldStop` が無く締切後も走り切っていた(HF66=2.65.0と同クラス)
+  → ai/bi ループ先頭に `shouldStop()` を追加しバーストを O(cand) 以内に。keep-best 保持=品質不変。
+- **コメント整合(HF77)** `findTargetedFix` の「6種」→実装8種(covO/c2/low/c41/high/c41s/c3want/apt)に訂正 /
+  `staffPacked` 前フィルタの「漏れなく」を訂正(apt/fair/weekly は非集計＝それらのみ改善する手はこぼす＝keep-best 安全)。
+- (3.85.0) **色凡例の重大度逆転(live)** `V6WebCompat.severityFromVioKey`: low(90)/high(45)=最重 soft を INFO(灰)、covO(0.5)=最軽を
+  WARN(橙) と逆転表示していた(凡例=`ColorSettingsView` は `MagiSetupCards` 詳細設定で live＝当初「死に画面」判定は誤り)。
+  重み階層に整合(low/high/c3mn→HIGH, c1/c3/c3m/c2/c41/c42/c41s/c42s/apt→WARN, covO/fair/weekly→INFO)。表示のみ・スコア不変。
+
+**報告のみ(未修正=判断/測定待ち)**:
+- `applyDayAssignmentPolish` の rangePen 重み 3/3・apt 1 は Evaluator の 90/45/1 と乖離(候補生成プロキシの誤重み付け)。
+  keep-best で誤採用は無いが良候補を生み損ねる。修正は探索動学変更＝**nsp_bench 実測でA/B後に採否**(測定駆動原則)。
+- `staffPacked`/`c3FamCount` が c3/c3m を run-deficit でなく窓#fire でモデル化(前フィルタ限定・keep-best 安全)。
+- 平準化研磨(`applyGroupShiftEqualizePolish`/`applyWeeklyEqualizePolish`)は分散指標で目的関数(fair/weekly=L1)と別物＝既知の冗長。
+  `weekly` の `restIdx=-1`(休記号改名時) で全シフトを勤務扱いする潜在バグ(冗長パス内)・`dow0` 3箇所再計算(Problem.dow0 未使用)。
+- **デッドコード**: `V6RemainingScreens`(未描画・外部参照0)＋そこからのみ実呼出の `HeaderBar`/`BottomNav`/`FlagsView`/
+  `OverviewDashboard`/`OperatorLogView` / `V6WebCompat` の `classifyHardBreakdown`/`scoreVecStable`/`betterVec`/
+  `firstDiffTier`/`buildWorkbook`(呼出無)。撤去は別コミット候補(※`ColorSettingsView`/`CheckSummaryView` は他画面で live のため残す)。
+- `ScheduleCsvBridge` 各コンポーネント取込の `drop(1)` ヘッダ無検証(ヘッダ無CSVで先頭行黙殺=軽微)。
 
 ## 直近の状態
 versionName=`2.41.0-bound-check`（versionCode 48）。目的関数統一は covO/range/c3族(単一+複数連)/c1/apt/fair まで完了。

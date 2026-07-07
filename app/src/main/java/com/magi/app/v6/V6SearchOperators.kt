@@ -184,7 +184,7 @@ internal fun findC3WantFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntAr
 }
 
 /**
- * 6 種のターゲット修正を一様シャッフル順に試し、最初に見つかった修正を返す（無ければ null）。
+ * 8 種のターゲット修正(covO/c2/low/c41/high/c41s/c3want/apt)を一様シャッフル順に試し、最初に見つかった修正を返す（無ければ null）。
  * 1 種が null でも次へフォールスルーするため、違反が少ない近最適解でも毎反復に有効手を当てやすい。
  */
 internal fun findTargetedFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? {
