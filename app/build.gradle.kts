@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 228
-        versionName = "3.85.0-legend-severity"
+        versionCode = 229
+        versionName = "3.86.0-deadcode-ui"
     }
 
     buildTypes {

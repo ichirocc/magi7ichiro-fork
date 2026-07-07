@@ -381,9 +381,10 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 - `staffPacked`/`c3FamCount` が c3/c3m を run-deficit でなく窓#fire でモデル化(前フィルタ限定・keep-best 安全)。
 - 平準化研磨(`applyGroupShiftEqualizePolish`/`applyWeeklyEqualizePolish`)は分散指標で目的関数(fair/weekly=L1)と別物＝既知の冗長。
   `weekly` の `restIdx=-1`(休記号改名時) で全シフトを勤務扱いする潜在バグ(冗長パス内)・`dow0` 3箇所再計算(Problem.dow0 未使用)。
-- **デッドコード**: `V6RemainingScreens`(未描画・外部参照0)＋そこからのみ実呼出の `HeaderBar`/`BottomNav`/`FlagsView`/
-  `OverviewDashboard`/`OperatorLogView` / `V6WebCompat` の `classifyHardBreakdown`/`scoreVecStable`/`betterVec`/
-  `firstDiffTier`/`buildWorkbook`(呼出無)。撤去は別コミット候補(※`ColorSettingsView`/`CheckSummaryView` は他画面で live のため残す)。
+- **デッドコード**: ~~`V6RemainingScreens`(未描画・外部参照0)＋そこからのみ実呼出の `HeaderBar`/`RingGauge`/`BottomNav`/`FlagsView`/
+  `OverviewDashboard`/`OperatorLogView`~~ **→ 3.86.0 で撤去済**(外部参照0を再確認。live な `CheckSummaryView`/`ColorSettingsView` と
+  それらが使う `SectionSegment` のみ残置)。残: `V6WebCompat` の `classifyHardBreakdown`/`scoreVecStable`/`betterVec`/
+  `firstDiffTier`/`buildWorkbook`(呼出無・内部連鎖=一括撤去要)は別コミット候補。
 - `ScheduleCsvBridge` 各コンポーネント取込の `drop(1)` ヘッダ無検証(ヘッダ無CSVで先頭行黙殺=軽微)。
 
 ## 直近の状態
