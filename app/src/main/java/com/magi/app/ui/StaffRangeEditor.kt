@@ -38,7 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -98,8 +97,8 @@ fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
                                 add("・今$now")
                             }.joinToString(" ")
                             val chipColors = when (vio) {
-                                "vio-low", "vio-aptLow" -> InputChipDefaults.inputChipColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.30f))
-                                "vio-high", "vio-aptHigh" -> InputChipDefaults.inputChipColors(containerColor = Color(0xFFF59E0B).copy(alpha = 0.36f))
+                                "vio-low", "vio-aptLow" -> InputChipDefaults.inputChipColors(containerColor = MagiAccent.red.copy(alpha = 0.30f))
+                                "vio-high", "vio-aptHigh" -> InputChipDefaults.inputChipColors(containerColor = MagiAccent.orange.copy(alpha = 0.36f))
                                 else -> InputChipDefaults.inputChipColors()
                             }
                             InputChip(

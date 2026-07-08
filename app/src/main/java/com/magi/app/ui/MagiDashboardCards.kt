@@ -543,7 +543,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
     Box(
         Modifier
             .width(76.dp)
-            .background(bg, RoundedCornerShape(16.dp))
+            .background(bg, MaterialTheme.shapes.medium)   // [DESIGN.md P4] 任意16dp → tier(medium)。テーマ角丸に追従。
             .padding(horizontal = 7.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -782,7 +782,7 @@ internal fun ConfirmListCard(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("要確認一覧", style = MaterialTheme.typography.titleMedium)
-                    Text("確認事項はありません（すべての条件を満たしています）。", style = MaterialTheme.typography.bodyMedium, color = MagiAccent.green)
+                    Text("確認事項はありません（すべての条件を満たしています）。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)   // [監査修正] 成功テキストは AA を満たす tertiary(緑ロール)。MagiAccent.green は text で 3.3:1
                 }
             }
         }
@@ -873,7 +873,7 @@ internal fun AttentionCardsSection(ui: UiState, onFocusStaff: (Int) -> Unit) {
             if (mode == 0) {
                 val rows = (0 until days).filter { !alertOnly || (dayAlerts[it] ?: 0) > 0 }
                 if (rows.isEmpty()) {
-                    Text(if (alertOnly) "日別の要確認はありません。" else "日がありません。", style = MaterialTheme.typography.bodyMedium, color = MagiAccent.green)
+                    Text(if (alertOnly) "日別の要確認はありません。" else "日がありません。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)   // [監査修正] 成功テキストは AA を満たす tertiary(緑ロール)。MagiAccent.green は text で 3.3:1
                 } else rows.forEach { j ->
                     val ac = dayAlerts[j] ?: 0
                     AttentionRow(title = dayMD(ui.startDate, j), sub = dayShifts[j]?.joinToString("・") ?: "", alerts = ac, warnBg = warnBg, warnFg = warnFg, onClick = null)
@@ -881,7 +881,7 @@ internal fun AttentionCardsSection(ui: UiState, onFocusStaff: (Int) -> Unit) {
             } else {
                 val rows = (0 until staffCount).filter { !alertOnly || (staffAlerts[it] ?: 0) > 0 }
                 if (rows.isEmpty()) {
-                    Text(if (alertOnly) "人別の要確認はありません。" else "職員がいません。", style = MaterialTheme.typography.bodyMedium, color = MagiAccent.green)
+                    Text(if (alertOnly) "人別の要確認はありません。" else "職員がいません。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)   // [監査修正] 成功テキストは AA を満たす tertiary(緑ロール)。MagiAccent.green は text で 3.3:1
                 } else rows.forEach { i ->
                     val ac = staffAlerts[i] ?: 0
                     AttentionRow(title = nm(i), sub = staffShifts[i]?.joinToString("・") ?: "", alerts = ac, warnBg = warnBg, warnFg = warnFg, onClick = if (ac > 0) ({ onFocusStaff(i) }) else null)

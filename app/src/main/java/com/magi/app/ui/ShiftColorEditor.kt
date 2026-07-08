@@ -92,8 +92,8 @@ fun ShiftColorCard(ui: UiState, vm: MagiViewModel) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
                                 .heightIn(min = 48.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .border(if (sc.custom) 2.dp else 1.dp, if (sc.custom) cs.primary else cs.outline, RoundedCornerShape(14.dp))
+                                .clip(MaterialTheme.shapes.medium)
+                                .border(if (sc.custom) 2.dp else 1.dp, if (sc.custom) cs.primary else cs.outline, MaterialTheme.shapes.medium)
                                 .clickable(enabled = !ui.running) { target = sc.kigou }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         ) {
@@ -115,9 +115,9 @@ fun ShiftColorCard(ui: UiState, vm: MagiViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier
                     .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(MaterialTheme.shapes.medium)
                     .border(if (ui.violationColorHex.isNotBlank()) 2.dp else 1.dp,
-                        if (ui.violationColorHex.isNotBlank()) vc.primary else vc.outline, RoundedCornerShape(14.dp))
+                        if (ui.violationColorHex.isNotBlank()) vc.primary else vc.outline, MaterialTheme.shapes.medium)
                     .clickable(enabled = !ui.running) { vioPicker = true }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             ) {
@@ -153,8 +153,8 @@ private fun Swatch(hex: String, sizeDp: androidx.compose.ui.unit.Dp) {
     Box(
         Modifier
             .size(sizeDp)
-            .background(hexToColor(hex), RoundedCornerShape(12.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+            .background(hexToColor(hex), MaterialTheme.shapes.small)
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), MaterialTheme.shapes.small),
     )
 }
 

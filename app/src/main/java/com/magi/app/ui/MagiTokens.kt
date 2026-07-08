@@ -17,13 +17,16 @@ import androidx.compose.ui.unit.dp
  */
 @Immutable
 object MagiAccent {
-    val blue = Color(0xFF3B82F6)    // 実行中 / 早番
-    val green = Color(0xFF22C55E)   // 成功 / 日勤
-    val orange = Color(0xFFF59E0B)  // 警告 / 夜勤
-    val purple = Color(0xFFA855F7)  // 遅番 / 個人属性
-    val pink = Color(0xFFEC4899)    // 希望 / 個人属性
-    val red = Color(0xFFEF4444)     // 重大違反 / NG制約
-    val gray = Color(0xFF9CA3AF)    // 休み / 無効
+    // [3.89.0 "Ward" 調和] ネオン Tailwind-500 系 → ディープティール地／冷たいペーパーに馴染む
+    //   一段深い「診療チャート」調へ。7 色の色相位置(青/緑/橙/紫/桃/赤/灰)は据え置き＝認識性を保つ。
+    //   保存済みのユーザー指定シフト色(shiftColors 等)は不変。ここは既定パレット＋直接使用アクセントのみ更新。
+    val blue = Color(0xFF3B6FD4)    // 実行中 / 早番（スティールブルー）
+    val green = Color(0xFF2E9E62)   // 成功 / 日勤（リーフ、ティール主色と弁別）
+    val orange = Color(0xFFE08A1E)  // 警告 / 夜勤（アンバー）
+    val purple = Color(0xFF8A5CD1)  // 遅番 / 個人属性（ミュートバイオレット）
+    val pink = Color(0xFFD24D89)    // 希望 / 個人属性（ローズ）
+    val red = Color(0xFFD23B34)     // 重大違反 / NG制約（明快なアラート赤）
+    val gray = Color(0xFF8A979B)    // 休み / 無効（クールスレート、ペーパーに調和）
 
     /** 色ピッカー等で提示する既定パレット。 */
     val all: List<Color> = listOf(blue, green, orange, purple, pink, red, gray)

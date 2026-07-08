@@ -396,7 +396,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
                     val vioLocCount = gridUi.violationCells.size + gridUi.needViolations.size + gridUi.countViolations.size
-                    ViolationFilterBar(gridUi.breakdown, vioEnabled, onToggle = { key ->
+                    ViolationFilterBar(vioBucketLocCounts(gridUi), vioEnabled, onToggle = { key ->
                         val i = vioBuckets.indexOfFirst { it.key == key }
                         if (i >= 0) vioMask = vioMask xor (1 shl i)
                     }, locCount = vioLocCount)
@@ -692,7 +692,8 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表") {
 internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
     val cs = MaterialTheme.colorScheme
     // 一本指: 主要操作を画面下部に全幅・大ボタン(60dp)で常設。指の届く範囲で押し外しにくい。文脈で 停止/作成/最適化。
-    Surface(color = cs.surface, tonalElevation = 3.dp, shadowElevation = 8.dp) {
+    // [DESIGN.md P3] 重い影(8dp)を廃し、surfaceContainer トーン＋軽い影(2dp)で本文から分離（melta-ui: 影より境界/トーン）。
+    Surface(color = cs.surfaceContainer, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,

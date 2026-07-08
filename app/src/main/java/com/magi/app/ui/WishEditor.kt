@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -186,8 +185,8 @@ private fun WishDialog(
                                 Modifier
                                     .weight(1f)
                                     .heightIn(min = 52.dp)
-                                    .background(bg, RoundedCornerShape(12.dp))
-                                    .border(2.dp, borderColor, RoundedCornerShape(12.dp))
+                                    .background(bg, MaterialTheme.shapes.small)
+                                    .border(2.dp, borderColor, MaterialTheme.shapes.small)
                                     .clickable { k = idx }
                                     .semantics { contentDescription = (shifts.getOrNull(idx) ?: "") + (if (ng) "・担当外" else "") + (if (sel) "・選択中" else "") }
                                     .padding(4.dp),

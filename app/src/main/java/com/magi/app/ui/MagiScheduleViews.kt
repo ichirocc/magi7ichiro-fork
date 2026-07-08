@@ -226,7 +226,7 @@ internal fun ShiftPickerSheet(
         ) {
             DialogHeader("$name ・ ${j + 1}日", onDismiss)
             // 凝縮ステータス: 現在の割当 + 希望
-            Surface(color = cs.surfaceVariant, shape = RoundedCornerShape(12.dp)) {
+            Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
@@ -247,7 +247,7 @@ internal fun ShiftPickerSheet(
                     val selSeg = mode == idx
                     Box(
                         Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (selSeg) cs.primaryContainer else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                            .background(if (selSeg) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
                             .clickable { mode = idx },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -381,7 +381,7 @@ internal fun CalendarCell(label: String, symbol: String, violation: Boolean, har
         modifier
             .height(58.dp)
             .padding(horizontal = 2.dp)
-            .background(bg, RoundedCornerShape(14.dp))
+            .background(bg, MaterialTheme.shapes.medium)
             .then(if (violation) Modifier.violationBorder(hard, vioColor, 14.dp) else Modifier)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = a11y },
@@ -455,6 +455,17 @@ internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
 }
 internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
 
+/** [E7] 各バケットの「違反ロケーション数」(=セル/エントリ件数、見出し『要確認 N件』と同単位)。
+ *  breakdown の量/#fire ではなく箇所数で集計＝チップ間・見出しと比較可能なトリアージ指標にする。 */
+internal fun vioBucketLocCounts(ui: UiState): Map<String, Int> {
+    val out = HashMap<String, Int>()
+    fun tally(cls: String) { bucketOfFamily(familyOfVioClass(cls))?.let { out[it] = (out[it] ?: 0) + 1 } }
+    ui.violationCells.values.forEach(::tally)
+    ui.needViolations.values.forEach(::tally)
+    ui.countViolations.values.forEach(::tally)
+    return out
+}
+
 /** [週ページング] 月曜始まりで日を週に分割（各週=その週に属する日index）。最初の週は部分週になり得る。
  *  週送りで横スクロールを解消するのに使う（画面修正版の「週」ビュー）。startDate 不正でも 7日ずつに退避。 */
 internal fun mondayWeeks(startDate: String, days: Int): List<List<Int>> {
@@ -471,9 +482,11 @@ internal fun mondayWeeks(startDate: String, days: Int): List<List<Int>> {
 /** [E7] 6バケツの件数付きフィルタチップ行（勤務表タブ共有）。件数は breakdown から族合計。0件は淡色。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ViolationFilterBar(breakdown: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int = -1) {
+internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int = -1) {
     val cs = MaterialTheme.colorScheme
-    val counts = remember(breakdown) { vioBuckets.associate { b -> b.key to b.families.sumOf { breakdown[it] ?: 0 } } }
+    // [監査修正] チップ件数は「違反ロケーション数(箇所)」＝見出し「要確認 N件」と同単位。旧: breakdown の量(low/high は
+    //   不足量計・c1 は #fire)を混在合算しており、単位不一致で「回数20 vs 要確認1件」の誤トリアージを招いていた。
+    val counts = bucketCounts
     val anyViol = counts.values.any { it > 0 }
     if (!anyViol) return   // 違反ゼロなら出さない（ノイズ削減）
     Card(Modifier.fillMaxWidth()) {
@@ -727,7 +740,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
                     val s = scope == idx
                     Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
                         .clickable { scope = idx }, contentAlignment = Alignment.Center) {
                         Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant,
                             fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -739,7 +752,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                     weekdays.forEachIndexed { idx, wd ->
                         val s = weekday == idx
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (s) cs.primary else cs.surfaceVariant, RoundedCornerShape(10.dp))
+                            .background(if (s) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.extraSmall)
                             .clickable { weekday = idx }, contentAlignment = Alignment.Center) {
                             Text(wd, color = if (s) cs.onPrimary else cs.onSurfaceVariant,
                                 fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -751,12 +764,12 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
             Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { staffSel = -1 }, contentAlignment = Alignment.Center) {
                     Text("全職員", color = if (staffSel < 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { showStaff = true }, contentAlignment = Alignment.Center) {
                     Text(if (staffSel >= 0) "職員：$targetName" else "職員を選ぶ",
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
@@ -769,8 +782,8 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                         val sel = picked == k
                         val ng = staffSel >= 0 && k !in allowed
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (sel) cs.primaryContainer else cs.surface, RoundedCornerShape(12.dp))
-                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else if (ng) cs.error else cs.outline, RoundedCornerShape(12.dp))
+                            .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
+                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else if (ng) cs.error else cs.outline, MaterialTheme.shapes.small)
                             .clickable { picked = k }, contentAlignment = Alignment.Center) {
                             Text((ui.shiftSymbols.getOrNull(k) ?: "$k") + (if (ng) " 外" else ""),
                                 color = if (ng) cs.error else cs.onSurface, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
@@ -858,7 +871,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
                     val s = scope == idx
                     Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
                         .clickable { scope = idx }, contentAlignment = Alignment.Center) {
                         Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant,
                             fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -870,7 +883,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                     weekdays.forEachIndexed { idx, wd ->
                         val s = weekday == idx
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (s) cs.primary else cs.surfaceVariant, RoundedCornerShape(10.dp))
+                            .background(if (s) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.extraSmall)
                             .clickable { weekday = idx }, contentAlignment = Alignment.Center) {
                             Text(wd, color = if (s) cs.onPrimary else cs.onSurfaceVariant,
                                 fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -881,12 +894,12 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
             Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { staffSel = -1 }, contentAlignment = Alignment.Center) {
                     Text("全職員", color = if (staffSel < 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { showStaff = true }, contentAlignment = Alignment.Center) {
                     Text(if (staffSel >= 0) "職員：$targetName" else "職員を選ぶ",
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
@@ -900,8 +913,8 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                     rowKeys.forEach { k ->
                         val sel = picked == k
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (sel) cs.primaryContainer else cs.surface, RoundedCornerShape(12.dp))
-                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outline, RoundedCornerShape(12.dp))
+                            .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
+                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outline, MaterialTheme.shapes.small)
                             .clickable { picked = k }, contentAlignment = Alignment.Center) {
                             Text(ui.shiftSymbols.getOrNull(k) ?: "$k",
                                 color = ensureReadable(if (sel) cs.primaryContainer else cs.surface, hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")), fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
@@ -1026,7 +1039,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // 違反ハイライト色（Excel版の色分けに対応）: 不足=赤 / 過剰=橙。
     // 職員別は countViolations["i,k"](vio-low/vio-high=人数範囲)、日別は needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
     // [M6統一] 不足=vioColor(ユーザー設定色に連動・既定 赤)、超過=橙。グリッド/ヒートバーと同じ2色言語。
-    val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: Color(0xFFEF4444)
+    val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.red
     // [M2] 塗り飽和度を上げ暗テーマ・屋外グレアでの視認性を確保（0.30/0.36→0.45/0.50）。
     //   数字は太字化済(第5段)のため濃い塗りでも可読。
     val shortBg = critC.copy(alpha = 0.45f)
@@ -1340,7 +1353,7 @@ private fun FlatCell(
                 Box(
                     Modifier.align(Alignment.BottomStart).padding(1.5.dp).size(9.dp)
                         .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)
-                        .then(if (wk == 2) Modifier.background(Color(0xFFEC4899), RoundedCornerShape(50)) else Modifier.border(1.5.dp, cs.tertiary, RoundedCornerShape(50))),
+                        .then(if (wk == 2) Modifier.background(MagiAccent.pink, RoundedCornerShape(50)) else Modifier.border(1.5.dp, cs.tertiary, RoundedCornerShape(50))),
                 )
             }
         }
