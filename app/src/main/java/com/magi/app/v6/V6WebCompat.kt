@@ -31,16 +31,6 @@ object V6WebCompat {
         object Clear : HistoryAction()
     }
 
-    data class HardBreakdown(
-        val guard: Int,
-        val coverage: Int,
-        val preference: Int,
-        val sequence: Int,
-        val monthly: Int,
-        val other: Int,
-        val total: Int,
-    )
-
     data class ImpossibleAssignment(
         val staffIndex: Int,
         val dayIndex: Int,
@@ -73,31 +63,6 @@ object V6WebCompat {
         val soft: Int,
         val messages: List<String>,
     )
-
-    data class ScoreVector(
-        val groupViol: Int = 0,
-        val covU: Int = 0,
-        val pref: Int = 0,
-        val c3n: Int = 0,
-        val c2: Int = 0,
-        val c41: Int = 0,
-        val soft: Int = 0,
-        val weighted: Double = 0.0,
-    ) {
-        val asList: List<Double>
-            get() {
-                val out = ArrayList<Double>(8)
-                out.add(groupViol.toDouble())
-                out.add(covU.toDouble())
-                out.add(pref.toDouble())
-                out.add(c3n.toDouble())
-                out.add(c2.toDouble())
-                out.add(c41.toDouble())
-                out.add(soft.toDouble())
-                out.add(weighted)
-                return out
-            }
-    }
 
     data class WorksheetCell(
         val row: Int,
@@ -267,17 +232,6 @@ object V6WebCompat {
         return sb.toString()
     }
 
-    fun classifyHardBreakdown(report: ViolationReport): HardBreakdown {
-        val b = report.breakdown
-        val guard = b["groupViol"] ?: 0
-        val coverage = b["covU"] ?: 0
-        val preference = b["pref"] ?: 0
-        val sequence = b["c3n"] ?: 0
-        val monthly = (b["c2"] ?: 0) + (b["c41"] ?: 0)
-        val known = guard + coverage + preference + sequence + monthly
-        return HardBreakdown(guard, coverage, preference, sequence, monthly, max(0, report.hard - known), report.hard)
-    }
-
     fun buildShiftCountDiagnosticStructured(
         state: MagiState,
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
@@ -386,37 +340,6 @@ object V6WebCompat {
             out.add(StaffViolLog(i, state.staff.getOrNull(i)?.name ?: "#${i}", hard, msgs.size - hard, msgs))
         }
         return out
-    }
-
-    fun scoreVecStable(report: ViolationReport): ScoreVector {
-        val b = report.breakdown
-        return ScoreVector(
-            b["groupViol"] ?: 0,
-            b["covU"] ?: 0,
-            b["pref"] ?: 0,
-            b["c3n"] ?: 0,
-            b["c2"] ?: 0,
-            b["c41"] ?: 0,
-            report.soft,
-            report.weightedScore,
-        )
-    }
-
-    fun betterVec(a: ScoreVector, b: ScoreVector): Boolean {
-        val aa = a.asList
-        val bb = b.asList
-        for (i in aa.indices) {
-            if (aa[i] < bb[i]) return true
-            if (aa[i] > bb[i]) return false
-        }
-        return false
-    }
-
-    fun firstDiffTier(a: ScoreVector, b: ScoreVector): Int {
-        val aa = a.asList
-        val bb = b.asList
-        for (i in aa.indices) if (aa[i] != bb[i]) return i
-        return -1
     }
 
     fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray> = state.schedule.toIntArray2D()): Int {

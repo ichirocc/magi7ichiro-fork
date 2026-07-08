@@ -383,8 +383,9 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   `weekly` の `restIdx=-1`(休記号改名時) で全シフトを勤務扱いする潜在バグ(冗長パス内)・`dow0` 3箇所再計算(Problem.dow0 未使用)。
 - **デッドコード**: ~~`V6RemainingScreens`(未描画・外部参照0)＋そこからのみ実呼出の `HeaderBar`/`RingGauge`/`BottomNav`/`FlagsView`/
   `OverviewDashboard`/`OperatorLogView`~~ **→ 3.86.0 で撤去済**(外部参照0を再確認。live な `CheckSummaryView`/`ColorSettingsView` と
-  それらが使う `SectionSegment` のみ残置)。残: `V6WebCompat` の `classifyHardBreakdown`/`scoreVecStable`/`betterVec`/
-  `firstDiffTier`/`buildWorkbook`(呼出無・内部連鎖=一括撤去要)は別コミット候補。
+  それらが使う `SectionSegment` のみ残置)。**→ 3.87.0 で `V6WebCompat` のスコアベクタ死蔵クラスタも撤去**
+  (`classifyHardBreakdown`/`HardBreakdown`/`scoreVecStable`/`betterVec`/`firstDiffTier`/`ScoreVector`=呼出0)。
+  `buildWorkbook`/`buildWs2-7` は `V6WebCompatTest` がカバー中のため残置。
 - `ScheduleCsvBridge` 各コンポーネント取込の `drop(1)` ヘッダ無検証(ヘッダ無CSVで先頭行黙殺=軽微)。
 
 ## 直近の状態
