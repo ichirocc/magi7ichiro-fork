@@ -65,59 +65,62 @@ class MainActivity : ComponentActivity() {
 private fun MagiTheme(mode: Int = 0, content: @Composable () -> Unit) {
     // mode: 0=システム / 1=ライト / 2=ダーク / 3=高コントラスト(ユニバーサルデザイン)
     val dark = when (mode) { 1 -> false; 2 -> true; else -> isSystemInDarkTheme() }
+    // [MAGI "Ward" 配色 — melta-ui 流トークン設計 / 詳細は docs/DESIGN.md]
+    //   高コントラスト(UD, mode=3): 白地＋黒境界＋濃色ロールで最大可読。ブランドは deep teal に統一。
     val highContrast = lightColorScheme(
-        primary = Color(0xFF005048), onPrimary = Color(0xFFFFFFFF),
-        primaryContainer = Color(0xFF003C36), onPrimaryContainer = Color(0xFFFFFFFF),
-        secondary = Color(0xFF0B3A5E), onSecondary = Color(0xFFFFFFFF),
-        secondaryContainer = Color(0xFFCFE0EE), onSecondaryContainer = Color(0xFF001A2E),
+        primary = Color(0xFF00504A), onPrimary = Color(0xFFFFFFFF),
+        primaryContainer = Color(0xFF003732), onPrimaryContainer = Color(0xFFFFFFFF),
+        secondary = Color(0xFF123E38), onSecondary = Color(0xFFFFFFFF),
+        secondaryContainer = Color(0xFFCDE8E3), onSecondaryContainer = Color(0xFF05201C),
         background = Color(0xFFFFFFFF), onBackground = Color(0xFF000000),
         surface = Color(0xFFFFFFFF), onSurface = Color(0xFF000000),
-        surfaceVariant = Color(0xFFE8EDF0), onSurfaceVariant = Color(0xFF1A2226),
+        surfaceVariant = Color(0xFFE3EDEA), onSurfaceVariant = Color(0xFF16221F),
         error = Color(0xFF8C0009), onError = Color(0xFFFFFFFF),
         errorContainer = Color(0xFFFFDAD4), onErrorContainer = Color(0xFF2D0001),
         outline = Color(0xFF000000),
     )
-    // [Material 3 トーナル配色 / Material Theme Builder 相当]
-    //   種色＝ダスティブルー(主)・ラベンダー(副)・セージ(三次)、ニュートラルを暖色(クリーム)へ傾けたプランナー調。
-    //   全ロールをトーンから導出し、各 on*/container の WCAG コントラストを実測済（本文4.5:1・UI3:1 を全て充足）。
+    // [Material 3 トーナル配色 / MAGI "Ward" — 冷たいクリニカルペーパー＋ディープティール]
+    //   種色＝ディープティール(主)・スレートティール(副)・リーフグリーン(三次=成功)、ニュートラルを寒色(ペーパー)へ。
+    //   melta-ui 原則: 純黒本文を使わない(暖色寄りの濃インク)／重い影を使わない(境界＋surfaceトーンで階層)。
+    //   全ロールを実測: 本文 onSurface/on* は 4.5:1 以上、UI(outline/container) は 3:1 以上を充足。
     val colors = if (mode == 3) highContrast else if (dark) darkColorScheme(
-        primary = Color(0xFFB9C3FF), onPrimary = Color(0xFF1A2D60),
-        primaryContainer = Color(0xFF324478), onPrimaryContainer = Color(0xFFDEE1FF),
-        secondary = Color(0xFFC3C3F0), onSecondary = Color(0xFF2B2D60),
-        secondaryContainer = Color(0xFF424478), onSecondaryContainer = Color(0xFFE1E0FF),
-        tertiary = Color(0xFF98D6AE), onTertiary = Color(0xFF003823),
-        tertiaryContainer = Color(0xFF1C5138), onTertiaryContainer = Color(0xFFB2F1C9),
+        primary = Color(0xFF86D6C9), onPrimary = Color(0xFF00382F),
+        primaryContainer = Color(0xFF005046), onPrimaryContainer = Color(0xFFA7F2E6),
+        secondary = Color(0xFFB1CCC7), onSecondary = Color(0xFF1C3531),
+        secondaryContainer = Color(0xFF334B47), onSecondaryContainer = Color(0xFFCDE8E3),
+        tertiary = Color(0xFFA3D397), onTertiary = Color(0xFF10380D),
+        tertiaryContainer = Color(0xFF26501F), onTertiaryContainer = Color(0xFFBFF0AF),
         error = Color(0xFFFFB4AB), onError = Color(0xFF690005),
         errorContainer = Color(0xFF93000A), onErrorContainer = Color(0xFFFFDAD6),
-        background = Color(0xFF14130E), onBackground = Color(0xFFE8E2D6),
-        surface = Color(0xFF14130E), onSurface = Color(0xFFE8E2D6),
-        surfaceVariant = Color(0xFF48473F), onSurfaceVariant = Color(0xFFCAC7B8),
-        surfaceTint = Color(0xFFB9C3FF), scrim = Color(0xFF000000),
-        surfaceBright = Color(0xFF3B3833), surfaceDim = Color(0xFF14130E),
-        surfaceContainerLowest = Color(0xFF0F0E0A), surfaceContainerLow = Color(0xFF1C1B16),
-        surfaceContainer = Color(0xFF201F1A), surfaceContainerHigh = Color(0xFF2B2925),
-        surfaceContainerHighest = Color(0xFF36342F),
-        inverseSurface = Color(0xFFE8E2D6), inverseOnSurface = Color(0xFF313029), inversePrimary = Color(0xFF4A63B8),
-        outline = Color(0xFF948F80), outlineVariant = Color(0xFF48473F),
+        background = Color(0xFF0E1514), onBackground = Color(0xFFDDE4E1),
+        surface = Color(0xFF0E1514), onSurface = Color(0xFFDDE4E1),
+        surfaceVariant = Color(0xFF3F4947), onSurfaceVariant = Color(0xFFBEC9C6),
+        surfaceTint = Color(0xFF86D6C9), scrim = Color(0xFF000000),
+        surfaceBright = Color(0xFF343B39), surfaceDim = Color(0xFF0E1514),
+        surfaceContainerLowest = Color(0xFF080F0E), surfaceContainerLow = Color(0xFF161D1B),
+        surfaceContainer = Color(0xFF1A211F), surfaceContainerHigh = Color(0xFF252B2A),
+        surfaceContainerHighest = Color(0xFF2F3634),
+        inverseSurface = Color(0xFFDDE4E1), inverseOnSurface = Color(0xFF2B322F), inversePrimary = Color(0xFF0E6E63),
+        outline = Color(0xFF899391), outlineVariant = Color(0xFF3F4947),
     ) else lightColorScheme(
-        primary = Color(0xFF4A63B8), onPrimary = Color(0xFFFFFFFF),           // 主操作: ダスティブルー
-        primaryContainer = Color(0xFFDEE1FF), onPrimaryContainer = Color(0xFF00164B),
-        secondary = Color(0xFF595A8E), onSecondary = Color(0xFFFFFFFF),       // 補助: ラベンダー
-        secondaryContainer = Color(0xFFE1E0FF), onSecondaryContainer = Color(0xFF161A4C),
-        tertiary = Color(0xFF2E6A4F), onTertiary = Color(0xFFFFFFFF),         // 成功: セージ
-        tertiaryContainer = Color(0xFFB2F1C9), onTertiaryContainer = Color(0xFF00210F),
-        error = Color(0xFFBA1A1A), onError = Color(0xFFFFFFFF),               // 注意: M3標準（高コントラスト）
-        errorContainer = Color(0xFFFFDAD6), onErrorContainer = Color(0xFF410002),
-        background = Color(0xFFFBF8F2), onBackground = Color(0xFF221F19),     // 暖色クリーム紙＋温かいチャコール
-        surface = Color(0xFFFBF8F2), onSurface = Color(0xFF221F19),
-        surfaceVariant = Color(0xFFE5E1D8), onSurfaceVariant = Color(0xFF4A4640),
-        surfaceTint = Color(0xFF4A63B8), scrim = Color(0xFF000000),
-        surfaceBright = Color(0xFFFBF8F2), surfaceDim = Color(0xFFDCD9CF),
-        surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFFBF7F0),
-        surfaceContainer = Color(0xFFF6F2EB), surfaceContainerHigh = Color(0xFFF1ECE4),
-        surfaceContainerHighest = Color(0xFFECE7DF),
-        inverseSurface = Color(0xFF37352F), inverseOnSurface = Color(0xFFF3EFE6), inversePrimary = Color(0xFFB9C3FF),
-        outline = Color(0xFF7B7768), outlineVariant = Color(0xFFCCC7BA),
+        primary = Color(0xFF0E6E63), onPrimary = Color(0xFFFFFFFF),           // 主操作: ディープティール
+        primaryContainer = Color(0xFFA7F2E6), onPrimaryContainer = Color(0xFF00201C),
+        secondary = Color(0xFF4A6360), onSecondary = Color(0xFFFFFFFF),       // 補助: スレートティール
+        secondaryContainer = Color(0xFFCDE8E3), onSecondaryContainer = Color(0xFF051F1C),
+        tertiary = Color(0xFF3E6837), onTertiary = Color(0xFFFFFFFF),         // 成功: リーフグリーン
+        tertiaryContainer = Color(0xFFBFF0AF), onTertiaryContainer = Color(0xFF012200),
+        error = Color(0xFFB3261E), onError = Color(0xFFFFFFFF),               // 注意: 濃赤（本文4.5:1確保）
+        errorContainer = Color(0xFFF9DEDC), onErrorContainer = Color(0xFF410E0B),
+        background = Color(0xFFF4F7F7), onBackground = Color(0xFF171D1C),     // 冷たいペーパー＋暖色寄り濃インク（純黒不使用）
+        surface = Color(0xFFFBFDFC), onSurface = Color(0xFF171D1C),
+        surfaceVariant = Color(0xFFDAE5E2), onSurfaceVariant = Color(0xFF3F4947),
+        surfaceTint = Color(0xFF0E6E63), scrim = Color(0xFF000000),
+        surfaceBright = Color(0xFFFBFDFC), surfaceDim = Color(0xFFDBE5E2),
+        surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF1F6F4),
+        surfaceContainer = Color(0xFFEBF1EF), surfaceContainerHigh = Color(0xFFE5ECEA),
+        surfaceContainerHighest = Color(0xFFE0E7E4),
+        inverseSurface = Color(0xFF2B3231), inverseOnSurface = Color(0xFFECF2F0), inversePrimary = Color(0xFF86D6C9),
+        outline = Color(0xFF6F7977), outlineVariant = Color(0xFFBEC9C6),
     )
     // 見出し大・本文静か・数値最大（添付テイスト）。spはシステム文字サイズ設定に追従。
     val t = Typography(
@@ -136,13 +139,14 @@ private fun MagiTheme(mode: Int = 0, content: @Composable () -> Unit) {
         // labelSmall はチップ/凡例/補足/違反内訳の下限。11sp(Material既定)→13→14sp へ継続底上げ。
         labelSmall = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium),
     )
-    // 柔らかいカード(20dp)・タイル(24dp)・ピル(round)。
+    // [MAGI "Ward" 角丸] 精密な道具らしい引き締めた幾何（旧: 柔らかいプランナー調 12–28dp）。
+    //   chip/入力=10dp、カード=14dp、タイル/シート=18dp、大面=24dp。melta-ui: 角丸は tier で一貫（任意値禁止）。
     val shapes = Shapes(
-        extraSmall = RoundedCornerShape(12.dp),
-        small = RoundedCornerShape(16.dp),
-        medium = RoundedCornerShape(20.dp),
-        large = RoundedCornerShape(24.dp),
-        extraLarge = RoundedCornerShape(28.dp),
+        extraSmall = RoundedCornerShape(10.dp),
+        small = RoundedCornerShape(12.dp),
+        medium = RoundedCornerShape(14.dp),
+        large = RoundedCornerShape(18.dp),
+        extraLarge = RoundedCornerShape(24.dp),
     )
     MaterialTheme(colorScheme = colors, typography = t, shapes = shapes, content = content)
 }
