@@ -55,7 +55,9 @@ def scan():
                         findings["P3"].append(f"{rel}:{n} (shadowElevation {m.group(1)}dp)")
                 for m in RE_SHAPE.finditer(code):
                     dp = int(m.group(1))
-                    if dp != 999:  # pill(999)/CircleShape は意図的
+                    # 密なデータセル(≤6dp: グリッド/カレンダー/集計)と pill(999) は意図的＝対象外。
+                    # カード/チップ級(≥8dp)の任意角丸のみ「tier(shapes.*)に寄せる候補」として監視。
+                    if 8 <= dp != 999:
                         findings["P4"].append(f"{rel}:{n} ({dp}dp)")
     return findings
 

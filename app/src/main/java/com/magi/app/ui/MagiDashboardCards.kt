@@ -543,7 +543,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
     Box(
         Modifier
             .width(76.dp)
-            .background(bg, RoundedCornerShape(16.dp))
+            .background(bg, MaterialTheme.shapes.medium)   // [DESIGN.md P4] 任意16dp → tier(medium)。テーマ角丸に追従。
             .padding(horizontal = 7.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
