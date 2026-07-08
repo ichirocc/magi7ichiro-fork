@@ -455,6 +455,17 @@ internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
 }
 internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
 
+/** [E7] 各バケットの「違反ロケーション数」(=セル/エントリ件数、見出し『要確認 N件』と同単位)。
+ *  breakdown の量/#fire ではなく箇所数で集計＝チップ間・見出しと比較可能なトリアージ指標にする。 */
+internal fun vioBucketLocCounts(ui: UiState): Map<String, Int> {
+    val out = HashMap<String, Int>()
+    fun tally(cls: String) { bucketOfFamily(familyOfVioClass(cls))?.let { out[it] = (out[it] ?: 0) + 1 } }
+    ui.violationCells.values.forEach(::tally)
+    ui.needViolations.values.forEach(::tally)
+    ui.countViolations.values.forEach(::tally)
+    return out
+}
+
 /** [週ページング] 月曜始まりで日を週に分割（各週=その週に属する日index）。最初の週は部分週になり得る。
  *  週送りで横スクロールを解消するのに使う（画面修正版の「週」ビュー）。startDate 不正でも 7日ずつに退避。 */
 internal fun mondayWeeks(startDate: String, days: Int): List<List<Int>> {
@@ -471,9 +482,11 @@ internal fun mondayWeeks(startDate: String, days: Int): List<List<Int>> {
 /** [E7] 6バケツの件数付きフィルタチップ行（勤務表タブ共有）。件数は breakdown から族合計。0件は淡色。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ViolationFilterBar(breakdown: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int = -1) {
+internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int = -1) {
     val cs = MaterialTheme.colorScheme
-    val counts = remember(breakdown) { vioBuckets.associate { b -> b.key to b.families.sumOf { breakdown[it] ?: 0 } } }
+    // [監査修正] チップ件数は「違反ロケーション数(箇所)」＝見出し「要確認 N件」と同単位。旧: breakdown の量(low/high は
+    //   不足量計・c1 は #fire)を混在合算しており、単位不一致で「回数20 vs 要確認1件」の誤トリアージを招いていた。
+    val counts = bucketCounts
     val anyViol = counts.values.any { it > 0 }
     if (!anyViol) return   // 違反ゼロなら出さない（ノイズ削減）
     Card(Modifier.fillMaxWidth()) {
@@ -1026,7 +1039,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // 違反ハイライト色（Excel版の色分けに対応）: 不足=赤 / 過剰=橙。
     // 職員別は countViolations["i,k"](vio-low/vio-high=人数範囲)、日別は needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
     // [M6統一] 不足=vioColor(ユーザー設定色に連動・既定 赤)、超過=橙。グリッド/ヒートバーと同じ2色言語。
-    val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: Color(0xFFEF4444)
+    val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.red
     // [M2] 塗り飽和度を上げ暗テーマ・屋外グレアでの視認性を確保（0.30/0.36→0.45/0.50）。
     //   数字は太字化済(第5段)のため濃い塗りでも可読。
     val shortBg = critC.copy(alpha = 0.45f)
@@ -1340,7 +1353,7 @@ private fun FlatCell(
                 Box(
                     Modifier.align(Alignment.BottomStart).padding(1.5.dp).size(9.dp)
                         .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)
-                        .then(if (wk == 2) Modifier.background(Color(0xFFEC4899), RoundedCornerShape(50)) else Modifier.border(1.5.dp, cs.tertiary, RoundedCornerShape(50))),
+                        .then(if (wk == 2) Modifier.background(MagiAccent.pink, RoundedCornerShape(50)) else Modifier.border(1.5.dp, cs.tertiary, RoundedCornerShape(50))),
                 )
             }
         }

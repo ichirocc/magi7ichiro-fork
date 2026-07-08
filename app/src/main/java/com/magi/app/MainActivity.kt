@@ -72,12 +72,21 @@ private fun MagiTheme(mode: Int = 0, content: @Composable () -> Unit) {
         primaryContainer = Color(0xFF003732), onPrimaryContainer = Color(0xFFFFFFFF),
         secondary = Color(0xFF123E38), onSecondary = Color(0xFFFFFFFF),
         secondaryContainer = Color(0xFFCDE8E3), onSecondaryContainer = Color(0xFF05201C),
+        // [監査修正] UD で未指定だと M3 既定(mauve/pink/lavender)が混入していた tertiary/surfaceContainer*/outlineVariant を
+        //   ブランド(teal/leaf)で明示。成功バッジ(tertiaryContainer)・下部バー(surfaceContainer)が正色で描画される。
+        tertiary = Color(0xFF1C5030), onTertiary = Color(0xFFFFFFFF),
+        tertiaryContainer = Color(0xFFBFF0AF), onTertiaryContainer = Color(0xFF002200),
         background = Color(0xFFFFFFFF), onBackground = Color(0xFF000000),
         surface = Color(0xFFFFFFFF), onSurface = Color(0xFF000000),
         surfaceVariant = Color(0xFFE3EDEA), onSurfaceVariant = Color(0xFF16221F),
         error = Color(0xFF8C0009), onError = Color(0xFFFFFFFF),
         errorContainer = Color(0xFFFFDAD4), onErrorContainer = Color(0xFF2D0001),
-        outline = Color(0xFF000000),
+        surfaceTint = Color(0xFF00504A),
+        surfaceContainerLowest = Color(0xFFFFFFFF), surfaceContainerLow = Color(0xFFF3F6F5),
+        surfaceContainer = Color(0xFFEDF2F0), surfaceContainerHigh = Color(0xFFE6ECEA),
+        surfaceContainerHighest = Color(0xFFDFE6E3),
+        inverseSurface = Color(0xFF1A211F), inverseOnSurface = Color(0xFFFFFFFF), inversePrimary = Color(0xFF86D6C9),
+        outline = Color(0xFF000000), outlineVariant = Color(0xFF45504D),
     )
     // [Material 3 トーナル配色 / MAGI "Ward" — 冷たいクリニカルペーパー＋ディープティール]
     //   種色＝ディープティール(主)・スレートティール(副)・リーフグリーン(三次=成功)、ニュートラルを寒色(ペーパー)へ。
