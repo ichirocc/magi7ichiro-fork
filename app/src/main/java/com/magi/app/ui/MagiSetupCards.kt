@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -339,7 +338,7 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
             } else {
                 Box(
                     Modifier.fillMaxWidth().heightIn(max = 220.dp)
-                        .background(cs.surfaceVariant, RoundedCornerShape(12.dp)).padding(10.dp),
+                        .background(cs.surfaceVariant, MaterialTheme.shapes.small).padding(10.dp),
                 ) {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         ui.opLog.take(60).forEach { line ->

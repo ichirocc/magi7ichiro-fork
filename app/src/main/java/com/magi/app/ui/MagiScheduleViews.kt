@@ -226,7 +226,7 @@ internal fun ShiftPickerSheet(
         ) {
             DialogHeader("$name ・ ${j + 1}日", onDismiss)
             // 凝縮ステータス: 現在の割当 + 希望
-            Surface(color = cs.surfaceVariant, shape = RoundedCornerShape(12.dp)) {
+            Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
@@ -247,7 +247,7 @@ internal fun ShiftPickerSheet(
                     val selSeg = mode == idx
                     Box(
                         Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (selSeg) cs.primaryContainer else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                            .background(if (selSeg) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
                             .clickable { mode = idx },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -381,7 +381,7 @@ internal fun CalendarCell(label: String, symbol: String, violation: Boolean, har
         modifier
             .height(58.dp)
             .padding(horizontal = 2.dp)
-            .background(bg, RoundedCornerShape(14.dp))
+            .background(bg, MaterialTheme.shapes.medium)
             .then(if (violation) Modifier.violationBorder(hard, vioColor, 14.dp) else Modifier)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = a11y },
@@ -727,7 +727,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
                     val s = scope == idx
                     Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
                         .clickable { scope = idx }, contentAlignment = Alignment.Center) {
                         Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant,
                             fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -739,7 +739,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                     weekdays.forEachIndexed { idx, wd ->
                         val s = weekday == idx
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (s) cs.primary else cs.surfaceVariant, RoundedCornerShape(10.dp))
+                            .background(if (s) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.extraSmall)
                             .clickable { weekday = idx }, contentAlignment = Alignment.Center) {
                             Text(wd, color = if (s) cs.onPrimary else cs.onSurfaceVariant,
                                 fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -751,12 +751,12 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
             Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { staffSel = -1 }, contentAlignment = Alignment.Center) {
                     Text("全職員", color = if (staffSel < 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { showStaff = true }, contentAlignment = Alignment.Center) {
                     Text(if (staffSel >= 0) "職員：$targetName" else "職員を選ぶ",
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
@@ -769,8 +769,8 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                         val sel = picked == k
                         val ng = staffSel >= 0 && k !in allowed
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (sel) cs.primaryContainer else cs.surface, RoundedCornerShape(12.dp))
-                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else if (ng) cs.error else cs.outline, RoundedCornerShape(12.dp))
+                            .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
+                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else if (ng) cs.error else cs.outline, MaterialTheme.shapes.small)
                             .clickable { picked = k }, contentAlignment = Alignment.Center) {
                             Text((ui.shiftSymbols.getOrNull(k) ?: "$k") + (if (ng) " 外" else ""),
                                 color = if (ng) cs.error else cs.onSurface, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
@@ -858,7 +858,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                 listOf("この曜日", "期間全体").forEachIndexed { idx, label ->
                     val s = scope == idx
                     Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                        .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
                         .clickable { scope = idx }, contentAlignment = Alignment.Center) {
                         Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant,
                             fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -870,7 +870,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                     weekdays.forEachIndexed { idx, wd ->
                         val s = weekday == idx
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (s) cs.primary else cs.surfaceVariant, RoundedCornerShape(10.dp))
+                            .background(if (s) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.extraSmall)
                             .clickable { weekday = idx }, contentAlignment = Alignment.Center) {
                             Text(wd, color = if (s) cs.onPrimary else cs.onSurfaceVariant,
                                 fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
@@ -881,12 +881,12 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
             Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel < 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { staffSel = -1 }, contentAlignment = Alignment.Center) {
                     Text("全職員", color = if (staffSel < 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, RoundedCornerShape(12.dp))
+                    .background(if (staffSel >= 0) cs.primary else cs.surfaceVariant, MaterialTheme.shapes.small)
                     .clickable { showStaff = true }, contentAlignment = Alignment.Center) {
                     Text(if (staffSel >= 0) "職員：$targetName" else "職員を選ぶ",
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
@@ -900,8 +900,8 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                     rowKeys.forEach { k ->
                         val sel = picked == k
                         Box(Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (sel) cs.primaryContainer else cs.surface, RoundedCornerShape(12.dp))
-                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outline, RoundedCornerShape(12.dp))
+                            .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.small)
+                            .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outline, MaterialTheme.shapes.small)
                             .clickable { picked = k }, contentAlignment = Alignment.Center) {
                             Text(ui.shiftSymbols.getOrNull(k) ?: "$k",
                                 color = ensureReadable(if (sel) cs.primaryContainer else cs.surface, hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")), fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
