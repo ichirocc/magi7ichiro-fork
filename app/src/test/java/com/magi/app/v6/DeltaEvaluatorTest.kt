@@ -70,7 +70,9 @@ class DeltaEvaluatorTest {
         return MagiState(
             startDate = "2025-01-01", endDate = "2025-01-08",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = true,
-            groupShift = groupShift, groupShiftApt = listOf(listOf("", "", "", ""), listOf("", "", "", "")), schedule = schedule,
+            // [監査補強] apt(適切回数)の Δ 差分パスを差分テストで実行するため非空目標を設定（従来は全空で未カバー）。
+            //   G0(休/A/B可): A目標2・B目標1、G1(休/B/C可): B目標1・C目標2。staffRange でクランプされ apt Δ を発火させる。
+            groupShift = groupShift, groupShiftApt = listOf(listOf("", "2", "1", ""), listOf("", "", "1", "2")), schedule = schedule,
             wishes = wishes, staffRange = staffRange, needDay1 = needDay1, needDay2 = needDay2,
             cons1 = cons1, cons2 = cons2, cons3 = cons3, cons3n = cons3n,
             cons3m = cons3m, cons3mn = cons3mn, cons41 = cons41, cons42 = cons42,

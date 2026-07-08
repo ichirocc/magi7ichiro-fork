@@ -357,7 +357,9 @@ object V6FinalPort {
         return when {
             after.hard > before.hard -> "HARDが悪化しました: ${before.hard} -> ${after.hard}"
             after.total > before.total && after.hard >= before.hard -> "違反総数が悪化しました: ${before.total} -> ${after.total}"
-            after.weightedScore > before.weightedScore && after.total >= before.total -> "重み付きスコアが悪化しました: ${before.weightedScore.toLong()} -> ${after.weightedScore.toLong()}"
+            // [監査修正] hard 同値ガードを追加。旧: after.hard<before.hard(HARD改善)でも total==・weighted悪化で発火し、
+            //   HARDが改善した結果を「悪化」と誤判定し悪い入力へ復帰し得た（clause2 と同じ hard>= ガードに揃える）。
+            after.hard >= before.hard && after.weightedScore > before.weightedScore && after.total >= before.total -> "重み付きスコアが悪化しました: ${before.weightedScore.toLong()} -> ${after.weightedScore.toLong()}"
             else -> null
         }
     }
