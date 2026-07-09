@@ -571,18 +571,24 @@ internal fun ScheduleGrid(
     val weeks = remember(ui.startDate, allDays) { mondayWeeks(ui.startDate, allDays) }
     val hScroll = rememberScrollState()
     val scrollScope = rememberCoroutineScope()
-    val cellWpx = with(LocalDensity.current) { 48.dp.roundToPx() }
-    // derivedStateOf: hScroll.value を読むのはこの派生値の中だけ＝スクロールで再構成するのは週ラベル等の読者のみ
-    //   （グリッド本体は curWeek を読まないので再構成されない＝スクロール性能を保つ）。
-    val curWeek by remember(weeks, cellWpx) {
-        derivedStateOf {
-            val d = if (cellWpx > 0) hScroll.value / cellWpx else 0
-            weeks.indexOfFirst { d <= it.last() }.let { if (it < 0) (weeks.size - 1).coerceAtLeast(0) else it }
-        }
-    }
     // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示。violationCells の値="vio-<famKey>"。
     fun shown(v: String?) = vioVisible(v, vioEnabled)
     Card(Modifier.fillMaxWidth()) {
+        BoxWithConstraints {
+        // [7日間表示] セル幅を「利用可能幅から1週間(7日)が名前列と同時に収まる」よう動的計算（旧: 48dp固定＝
+        //   多くの端末で6日強しか見えず週の模様が切れていた）。36dp未満は記号(2文字15sp)の可読性が崩れるため
+        //   下限36dp（極端に狭い端末のみ7日未満に妥協）、48dp超は広げない（広い端末はより多くの日が見える）。
+        //   週ページングのスクロール量(cellWpx)も同じ値から計算＝ジャンプ位置は常にグリッドと整合。
+        val gridCellW = ((this.maxWidth - 32.dp - 80.dp) / 7).coerceIn(36.dp, 48.dp)   // 32=Column水平padding, 80=名前列
+        val cellWpx = with(LocalDensity.current) { gridCellW.roundToPx() }
+        // derivedStateOf: hScroll.value を読むのはこの派生値の中だけ＝スクロールで再構成するのは週ラベル等の読者のみ
+        //   （グリッド本体は curWeek を読まないので再構成されない＝スクロール性能を保つ）。
+        val curWeek by remember(weeks, cellWpx) {
+            derivedStateOf {
+                val d = if (cellWpx > 0) hScroll.value / cellWpx else 0
+                weeks.indexOfFirst { d <= it.last() }.let { if (it < 0) (weeks.size - 1).coerceAtLeast(0) else it }
+            }
+        }
         Column(Modifier.padding(16.dp)) {
             Text("勤務表", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
@@ -624,8 +630,9 @@ internal fun ScheduleGrid(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
+        }
         }
     }
 }
@@ -1257,7 +1264,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "") {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1294,10 +1301,12 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     val dayVioS = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] >= 2 } } }
     val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
 
-    // [a11y] 生の Box.clickable セルは M3 の 48dp タッチ補完が効かないため、主操作面のセルを 48dp 化（片手一本指仕様）。
+    // [a11y] 生の Box.clickable セルは M3 の 48dp タッチ補完が効かないため、主操作セルの高さは 48dp を維持。
+    //   幅は「7日間表示」の明示要件でセル幅を 36〜48dp に可変化（36×48dp = タッチ面は縦方向で確保・片手一本指仕様）。
     // [レイアウト整合] headH は 日番号+曜日+不足+下線 の3行分。端末フォント拡大(≥1.3x)でも下線/数字が欠けないよう 72dp。
     //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
-    val nameW = 80.dp; val cellW = 48.dp; val cellH = 48.dp; val headH = 72.dp
+    // [7日間表示] cellW は ScheduleGrid が「1週間が収まる幅」を動的計算して注入（既定48dp=単独利用時）。
+    val nameW = 80.dp; val cellH = 48.dp; val headH = 72.dp
     Column {
         Text("横スクロールで日移動（上の 前週/次週 で1週ぶんジャンプ）。セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。" +
             "違反は3段階: 実線枠=必須 ・ 破線枠=要調整（重） ・ 右上の角=要調整（軽）。休は淡色。日番号下の下線＝その日の違反、不足日は赤字。",
