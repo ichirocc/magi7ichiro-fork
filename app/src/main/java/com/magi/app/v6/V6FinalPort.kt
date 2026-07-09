@@ -328,11 +328,16 @@ object V6FinalPort {
             val extraMs = hardDeadlineMs - tPost1
             if (extraMs >= 5_000 && isActive && !stagnationFired.get() && post.report.total > 0) {
                 val extraStop = { System.currentTimeMillis() >= hardDeadlineMs || !isActive }
+                // [他の案の保全] optimize() は入口で lastAlternatives を空にするため、本走行ポートフォリオが
+                //   保持した「他の案」を退避し、追加精製の後に復元する（ViewModel の captureAlternatives は
+                //   handleOptimize 復帰後に読むため、退避しないと他の案が消える）。
+                val savedAlts = V6NativeOptimizer.lastAlternatives
                 val extra = V6NativeOptimizer.optimize(
                     state, post.schedule,
                     optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5)),
                     extraStop, progressWatch,
                 )
+                V6NativeOptimizer.restoreAlternatives(savedAlts)
                 val imp = extra.report.hard < post.report.hard ||
                     (extra.report.hard == post.report.hard && extra.report.total < post.report.total) ||
                     (extra.report.hard == post.report.hard && extra.report.total == post.report.total && extra.report.weightedScore < post.report.weightedScore - 1e-6)

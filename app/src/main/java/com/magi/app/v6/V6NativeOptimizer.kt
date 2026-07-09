@@ -103,6 +103,10 @@ object V6NativeOptimizer {
     @Volatile var lastAlternatives: List<Array<IntArray>> = emptyList()
         private set
 
+    /** [他の案の保全] optimize() は入口で lastAlternatives を空にするため、追加精製(ExtraRefine)等で
+     *  optimize() を再呼出しする側が「本走行の他の案」を退避→復元できるようにする（V6FinalPort 専用）。 */
+    fun restoreAlternatives(saved: List<Array<IntArray>>) { lastAlternatives = saved }
+
     /** [DefragLiveView移植] 実行中の最良盤面スナップショット（計算中ライブ表示用・読取専用）。
      *  進捗の節目で更新。並列時はどのワーカーの最良でも有効な解なので last-writer-wins で問題ない。 */
     @Volatile var liveBest: List<List<Int>>? = null
