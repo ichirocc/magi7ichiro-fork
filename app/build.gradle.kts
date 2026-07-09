@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 240
-        versionName = "3.95.1-n4-dynamic-gate"
+        versionCode = 241
+        versionName = "3.96.0-result-check-maps"
     }
 
     buildTypes {

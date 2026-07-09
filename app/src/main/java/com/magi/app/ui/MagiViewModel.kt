@@ -1091,6 +1091,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(
             resultSchedule = cur.map { it.toList() },
             hasResultSnapshot = true,
+            // [backlog#1] 結果=編集中の確定なので、結果専用マップも現行(編集中)の検査結果をそのまま引き継ぐ。
+            //   直前編集の refreshCheck が進行中でも、完了時の makeUi が schedule==resultSchedule で再充填（自己修復）。
+            resultViolationCells = it.violationCells,
+            resultNeedViolations = it.needViolations,
+            resultCountViolations = it.countViolations,
             message = "編集中の内容を「結果」として確定しました",
         ) }
         logOp("I", "編集中→結果に確定")
@@ -2204,6 +2209,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val initTotal = (base.initHard + base.initSoft).coerceAtLeast(1L)
         val ratio = (1.0 - report.total.toDouble() / initTotal).coerceIn(0.0, 1.0)
         val sat = if (report.hard > 0) (ratio * 55).toInt() else (40 + (ratio * 60).toInt()).coerceIn(0, 100)
+        // [backlog#1] この検査対象が結果(ws6)そのものか（＝report が結果専用マップの最新値か）。
+        val resultFresh = resultSchedule != null && schedule.contentDeepEquals(resultSchedule)
         return base.copy(
             staff = st.staffCount,
             days = st.dayCount,
@@ -2218,6 +2225,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             violationCells = report.violations,
             needViolations = report.needViolations,
             countViolations = report.countViolations,
+            // [backlog#1] 検査対象が結果(ws6)そのものなら、この report が結果専用マップの最新値。
+            //   最適化完了/他案適用/結果→編集複製後の refreshCheck 等、resultSchedule 更新サイトは全て
+            //   makeUi(schedule==resultSchedule, 対応report) を通るためここで一元的に充填できる。
+            //   編集で schedule が結果から離れた場合は既存値を保持（resultSchedule 不変＝マップも有効なまま）。
+            resultViolationCells = when { resultSchedule == null -> null; resultFresh -> report.violations; else -> base.resultViolationCells },
+            resultNeedViolations = when { resultSchedule == null -> null; resultFresh -> report.needViolations; else -> base.resultNeedViolations },
+            resultCountViolations = when { resultSchedule == null -> null; resultFresh -> report.countViolations; else -> base.resultCountViolations },
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },

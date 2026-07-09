@@ -50,6 +50,12 @@ data class UiState(
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
     val resultSchedule: List<List<Int>> = emptyList(),   // [B1] 確定結果(ws6)。読取モードで表示する。
     val hasResultSnapshot: Boolean = false,               // [B1] 結果スナップショットが存在するか
+    // [backlog#1] 結果(ws6)専用の違反マップ。読取モードのグリッド/集計は schedule=resultSchedule に差し替わるが、
+    //   従来は violationCells 等が「編集中盤面の検査結果」のままでズレ得た。makeUi が schedule==resultSchedule の
+    //   検査時に report から充填する（null=未計算。読取側は現行マップへフォールバック=従来挙動）。表示のみ・スコア不変。
+    val resultViolationCells: Map<String, String>? = null,
+    val resultNeedViolations: Map<String, String>? = null,
+    val resultCountViolations: Map<String, String>? = null,
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,
