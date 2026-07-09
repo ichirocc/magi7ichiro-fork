@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 239
-        versionName = "3.95.0-static-covu-floor"
+        versionCode = 241
+        versionName = "3.96.0-result-check-maps"
     }
 
     buildTypes {

@@ -613,9 +613,14 @@ object V6NativeOptimizer {
             //   判定→focus 除外していた。ラウンド境界の呼出に「ラウンド番号×1800」を渡し、閾値5000到達を約3ラウンドの
             //   連続無改善に引き伸ばす（class は Web 忠実移植のまま・呼出側で粒度を補正）。iters 自体は本来用途に不変。
             hf63.updateFromBreakdown(bestReport.breakdown, round * 1800)
-            val avoid = hf63.infeasibleBreakdownKeys().toMutableSet()
+            // [12h見直し] 動的(HF63)と静的(covU床)の avoid を分離して保持する。N4 早期脱出(下記)の発火条件は
+            //   HF63 の動的検知のみでゲートしないと、構造的covU>0 のデータでは静的除外が round 0 から avoid を
+            //   非空にし、「旧N4の厳密な部分集合」保証(650-654行)を破って2停滞ラウンドで RSI が即終了してしまう。
+            val dynamicAvoid = hf63.infeasibleBreakdownKeys()
+            val avoid = dynamicAvoid.toMutableSet()
             // [静的covU床] covU が構造的下限（covUFloor）に達している間は解けないので focus から即除外する。
-            //   covU >= covUFloor は常に成立（下限）なので、`== 床` ＝「これ以上は無理」を意味する。床>0 の時のみ発火。
+            //   合法配置では covU >= covUFloor（下限）。担当外配置(groupViol)が混在すると covU が床を下回り得るが、
+            //   その間 covU を focus しても無意味（groupViol が hard-first で先に選ばれる）なので `<=` で除外が正しい。
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             val focus = maxViolatedFamily(bestReport, avoid)
             if (avoid.isNotEmpty()) {
@@ -653,8 +658,10 @@ object V6NativeOptimizer {
             //   「達成可能な focus を撃ち尽くした」ときに限定する。これは旧条件の厳密な部分集合のため、
             //   旧N4より早く止まることはない＝品質は退化しない。avoid が空(まだ狙える族がある)の間は全予算で探索。
             //   ※後段(hf80)は固定予算のため厳密な「予算移譲」ではなく、無改善ラウンドの空転停止(電池/熱/時間節約)。
-            if (stagnantRounds >= 2 && avoid.isNotEmpty()) {
-                logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: focus枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
+            // [12h見直し] 発火は動的検知(dynamicAvoid=HF63)のみでゲートする。静的covU床(合流後のavoid)を使うと
+            //   構造的covU>0 のデータで round 0 から常時武装し、旧N4保証(上記)を破る。
+            if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
+                logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: focus枯渇(deprioritize=${dynamicAvoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                 break
             }
         }

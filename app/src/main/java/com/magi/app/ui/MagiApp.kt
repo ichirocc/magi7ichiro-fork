@@ -391,7 +391,15 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         val oos = vm.wishOutOfScopeCount()
                         if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
                     })
-                    val gridUi = if (effectiveEditing) ui else ui.copy(schedule = ui.resultSchedule)
+                    // [backlog#1] 読取モードは schedule だけでなく違反マップも結果(ws6)専用の検査結果へ差し替える。
+                    //   従来は編集中盤面の検査結果が残り、編集後に読取へ切替えると集計値と違反ハイライトがズレた。
+                    //   result*==null（未計算）は現行マップへフォールバック＝従来挙動のまま安全。
+                    val gridUi = if (effectiveEditing) ui else ui.copy(
+                        schedule = ui.resultSchedule,
+                        violationCells = ui.resultViolationCells ?: ui.violationCells,
+                        needViolations = ui.resultNeedViolations ?: ui.needViolations,
+                        countViolations = ui.resultCountViolations ?: ui.countViolations,
+                    )
                     val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。

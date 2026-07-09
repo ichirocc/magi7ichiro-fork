@@ -243,7 +243,10 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
             cntSS[i][old]--; cntSS[i][nw]++
             cntDay[old][j]--; cntDay[nw][j]++
             // [統一weekly] 勤務/休 反転時のみ曜日バケットを更新（previewMove の dWeekly と同ステップ）。
-            val wStep = (if (nw != p.restIdx) 1 else 0) - (if (old != p.restIdx) 1 else 0)
+            // [12h見直し] work 判定を previewMove(isWork)/rebuild/Evaluator と同一の範囲ガード付きに統一。
+            //   3.92.0 のハードニングが preview 側のみで、範囲外セントネルの仮定下では preview と commit の
+            //   wdCnt 更新が乖離し Δ が発散し得た（現状の変異は全て 0..K-1 なので latent、対称性の回復）。
+            val wStep = (if (nw in 0 until K && nw != p.restIdx) 1 else 0) - (if (old in 0 until K && old != p.restIdx) 1 else 0)
             if (wStep != 0) wdCnt[i][(p.dow0 + j) % 7] += wStep
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
