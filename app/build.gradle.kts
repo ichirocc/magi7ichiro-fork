@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 235
-        versionName = "3.92.0-optimizer-audit"
+        versionCode = 236
+        versionName = "3.93.0-escape-fixes"
     }
 
     buildTypes {
