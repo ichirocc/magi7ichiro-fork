@@ -717,7 +717,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     allowImpossible = true,
                 ) { phase, report, iters, elapsed ->
                     val rep = report
-                    if (rep != null) hf63.updateFromBreakdown(rep.breakdown, iters.toInt())
+                    // [3.93.1と同クラスの補正 / 実機ログ起因] 旧: 累積iter(数千万)を渡すと閾値5000が「約20msの無改善」
+                    //   相当になり、違反>0の族がほぼ全て即 infeasible 判定＝9族ノイズ警告になっていた。経過時間ベース
+                    //   (100単位/秒)に補正し、閾値5000＝「50秒無改善」で発火させる(class は Web 忠実移植のまま)。
+                    if (rep != null) hf63.updateFromBreakdown(rep.breakdown, (elapsed / 10L).toInt())
                     _ui.update { it.copy(
                         bestHard = rep?.hard?.toLong() ?: it.bestHard,
                         bestSoft = rep?.soft?.toLong() ?: it.bestSoft,
@@ -781,9 +784,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 lastTopHardFamily = if (res.report.hard > 0) topHardFamilyJp(res.report.breakdown) else null
                 logOp(if (res.report.hard == 0) "I" else "W", "最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})")
-                // HF63 検出: 5000反復改善のない制約族＝データ上満たせない可能性が高い（業務担当者へ提示）。
-                if (hf63.infeasibleCount() > 0) {
-                    logOp("W", "構造的に充足が難しい制約を検出: ${hf63.infeasibleFamilies().joinToString(", ")}（データの見直しを推奨）")
+                // HF63 検出: 50秒改善のない制約族＝データ上満たせない可能性が高い（業務担当者へ提示）。
+                // [実機ログ起因] 探索中の一時盤面でしか違反が無かった族（最終盤面で0）は「充足できている」ので
+                //   警告から除外する（旧: 破棄された探索トラックの covO/LimMax まで列挙され誤解を招いた）。
+                val staleKeys = hf63.infeasibleBreakdownKeys().filter { (res.report.breakdown[it] ?: 0) > 0 }
+                if (staleKeys.isNotEmpty()) {
+                    val names = staleKeys.mapNotNull { k -> Hf63Infeasibility.KEY_TO_INDEX[k]?.let { Hf63Infeasibility.CNAMES[it] } }
+                    logOp("W", "構造的に充足が難しい制約を検出: ${names.joinToString(", ")}（データの見直しを推奨）")
                 }
                 captureAlternatives()
             } catch (e: CancellationException) {

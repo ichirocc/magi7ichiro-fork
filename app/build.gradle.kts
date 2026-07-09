@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 241
-        versionName = "3.96.0-result-check-maps"
+        versionCode = 242
+        versionName = "3.97.0-v5-sentinel"
     }
 
     buildTypes {
