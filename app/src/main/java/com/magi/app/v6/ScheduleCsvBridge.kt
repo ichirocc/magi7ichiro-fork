@@ -483,7 +483,9 @@ object StaffCsvIO {
         val skByK = state.skillGroups.indices.associateBy { state.skillGroups[it].kigou.trim() }
         val newStaff = state.staff.toMutableList()
         var matched = 0
-        for (r in rows.drop(1)) {
+        // [一括修正/ヘッダ無CSV] 先頭行が既知の職員名なら実データとして取り込む（旧: 無条件 drop(1) で黙殺）。
+        val body = if (nameToI.containsKey(nameMatchKey(rows[0].getOrElse(0) { "" }.trim()))) rows else rows.drop(1)
+        for (r in body) {
             val name = r.getOrElse(0) { "" }.trim()
             if (name.isEmpty()) continue
             val i = nameToI[nameMatchKey(name)] ?: continue
@@ -517,7 +519,10 @@ object StaffCsvIO {
         val seenNew = HashMap<String, Int>()
         var updated = 0
         var added = 0
-        for (r in rows.drop(1)) {
+        // [一括修正/ヘッダ無CSV] 先頭行が既知の職員名なら実データとして取り込む。未知名は「新規追加」される仕様のため
+        //   ヘッダ文字列（氏名等）を誤って職員登録しないよう、既知名一致の場合のみ先頭行を本体に含める（保守的）。
+        val body = if (nameToI.containsKey(nameMatchKey(rows[0].getOrElse(0) { "" }.trim()))) rows else rows.drop(1)
+        for (r in body) {
             val rawName = r.getOrElse(0) { "" }.trim()
             if (rawName.isEmpty()) continue
             val key = nameMatchKey(rawName)
@@ -575,7 +580,9 @@ object WishesCsvIO {
         val symToK = state.shifts.indices.associateBy { state.shifts[it].kigou.trim() }
         val m = LinkedHashMap<String, Int>()
         var n = 0
-        for (r in rows.drop(1)) {
+        // [一括修正/ヘッダ無CSV] 先頭行が既知の職員名なら実データとして取り込む（旧: 無条件 drop(1) で黙殺）。
+        val body = if (nameToI.containsKey(nameMatchKey(rows[0].getOrElse(0) { "" }.trim()))) rows else rows.drop(1)
+        for (r in body) {
             val name = r.getOrElse(0) { "" }.trim()
             val day = r.getOrElse(1) { "" }.trim().toIntOrNull()
             val sym = r.getOrElse(2) { "" }.trim()
@@ -629,7 +636,11 @@ object ConstraintsCsvIO {
         val cons42 = ArrayList<C42Row>(); val cons42s = ArrayList<C42Row>()
         val ranges = LinkedHashMap<String, Range>()
         var n = 0
-        for (r in rows.drop(1)) {
+        // [一括修正/ヘッダ無CSV] 先頭行の種別が既知キーワードなら実データとして取り込む（旧: 無条件 drop(1) で黙殺）。
+        val kinds = setOf("連勤", "回数下限", "MUST連続", "禁止連続", "希望連続", "回避連続",
+            "群回数", "スキル群回数", "群組合せ禁止", "スキル群組合せ禁止", "個人レンジ")
+        val body = if (c(rows[0], 0) in kinds) rows else rows.drop(1)
+        for (r in body) {
             when (c(r, 0)) {
                 "連勤" -> { cons1.add(C1Row(c(r, 1), c(r, 2), c(r, 3))); n++ }
                 "回数下限" -> { cons2.add(C2Row(c(r, 1), c(r, 2))); n++ }

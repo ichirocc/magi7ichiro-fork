@@ -317,12 +317,54 @@ object V6FinalPort {
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
         )
         val tPost1 = System.currentTimeMillis()
-        val overBudget = tPost1 - startMs > budgetMs
+        // [高精度化/予算残の活用] 後処理予約枠(budget/12, 8〜25s)は後処理が早期にフィックスポイント到達すると
+        //   大半が未使用のまま返っていた(実機: 予約25s中 実使用0.45s＝約24.5s廃棄)。残り5s以上かつ違反が残る場合、
+        //   最終盤面を起点に keep-best の追加精製(ALNS)へ回す。runAlns は入力比番兵つき＝結果は post 以上を保証。
+        //   停滞検知(stagnationFired)による早期終了時はスキップ＝「無改善なら早く返す」方針を壊さない。
+        var refSched = post.schedule
+        var refReport = post.report
+        var extraLog = emptyList<MirrorLog>()
+        run {
+            // [監査(3e)] 上限は後処理予約枠(postReserveMs, 8〜25s)＝「未使用の予約を再利用する」設計意図に固定。
+            //   全予算走行なら残り≒予約枠で従来どおり。N4 早期脱出等 stagnationFired 以外の早期復帰では
+            //   残りが数分になり得るが、その節約(電池/熱)を ExtraRefine が食い潰さないよう予約枠でキャップする。
+            val extraMs = minOf(hardDeadlineMs - tPost1, postReserveMs)
+            if (extraMs >= 5_000 && isActive && !stagnationFired.get() && post.report.total > 0) {
+                val extraDeadline = tPost1 + extraMs
+                val extraStop = { System.currentTimeMillis() >= extraDeadline || !isActive }
+                // [他の案の保全] optimize() は入口で lastAlternatives を空にするため、本走行ポートフォリオが
+                //   保持した「他の案」を退避し、追加精製の後に復元する（ViewModel の captureAlternatives は
+                //   handleOptimize 復帰後に読むため、退避しないと他の案が消える）。
+                val savedAlts = V6NativeOptimizer.lastAlternatives
+                val extra = V6NativeOptimizer.optimize(
+                    state, post.schedule,
+                    optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5)),
+                    extraStop, progressWatch,
+                )
+                V6NativeOptimizer.restoreAlternatives(savedAlts)
+                val imp = extra.report.hard < post.report.hard ||
+                    (extra.report.hard == post.report.hard && extra.report.total < post.report.total) ||
+                    (extra.report.hard == post.report.hard && extra.report.total == post.report.total && extra.report.weightedScore < post.report.weightedScore - 1e-6)
+                if (imp) {
+                    refSched = extra.schedule; refReport = extra.report
+                    extraLog = listOf(
+                        MirrorLog(level = "I", tag = "ExtraRefine",
+                            message = "予算残${extraMs / 1000}sで追加精製: HARD ${post.report.hard}→${extra.report.hard} / total ${post.report.total}→${extra.report.total}"),
+                        // [監査(3c)/N3と同型] ログ末尾の UnifiedCheck/違反詳細は「精製前の盤面」の診断のまま残るため、
+                        //   採用盤面の集計を明示して件数の取り違えを防ぐ。
+                        MirrorLog(level = "I", tag = "UnifiedCheck",
+                            message = "採用盤面の集計: HARD=${extra.report.hard} 合計=${extra.report.total}（直近のUnifiedCheck行・違反詳細は追加精製前の盤面の診断）"),
+                    )
+                }
+            }
+        }
+        val tExtra1 = System.currentTimeMillis()
+        val overBudget = tExtra1 - startMs > budgetMs
         val timingLog = MirrorLog(
             level = if (overBudget) "W" else "I",
             tag = "TIME",
-            message = "総${(tPost1 - startMs) / 1000.0}s (予算${seconds}s${if (overBudget) " 超過" else ""}): " +
-                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 再結合${(tRelink1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tRelink1) / 1000.0}s " +
+            message = "総${(tExtra1 - startMs) / 1000.0}s (予算${seconds}s${if (overBudget) " 超過" else ""}): " +
+                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 再結合${(tRelink1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tRelink1) / 1000.0}s + 追加精製${(tExtra1 - tPost1) / 1000.0}s " +
                 "/ workers設定${workers} 実効仮説${effHypotheses}",
         )
         val relinkLog = if (relinkImproved) listOf(MirrorLog(
@@ -335,9 +377,9 @@ object V6FinalPort {
         )) else emptyList()
         // [最終番兵/多重防御] 全段 keep-best のため通常は発火しないが、万一パイプラインが入力より
         // 悪い結果を返した場合は入力を採用し退化を防ぐ（checkResultWorse をここで配線）。
-        val regression = checkResultWorse(inputReport, post.report)
-        val finalSched = if (regression != null) normInput else post.schedule
-        val finalReport = if (regression != null) inputReport else post.report
+        val regression = checkResultWorse(inputReport, refReport)
+        val finalSched = if (regression != null) normInput else refSched
+        val finalReport = if (regression != null) inputReport else refReport
         val sentinelLog = if (regression != null) listOf(
             MirrorLog(
                 level = "W", tag = "Sentinel",
@@ -352,7 +394,7 @@ object V6FinalPort {
         ) else emptyList()
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog) + sentinelLog + relinkLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        val logs = listOf(timingLog) + sentinelLog + relinkLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, post)
     }
 

@@ -625,8 +625,11 @@ object V6SanityPort {
                 if (i !in 0 until p.S || k !in 0 until p.K) continue
                 val lo = p.rangeLo[i][k].takeIf { it != Int.MIN_VALUE }
                 val hi = p.rangeHi[i][k].takeIf { it != Int.MAX_VALUE }
+                // [実機ログ起因] aptLow/aptHigh は「目標(クランプ後)との偏差」が発火理由なのに従来は staffRange の
+                //   下限/上限しか出ず（例: 回数4 下限4 上限5 → なぜ違反?）、読者が原因を特定できなかった。目標を併記。
+                val apt = if (cls == "vio-aptLow" || cls == "vio-aptHigh") p.apt[i][k].takeIf { it >= 0 } else null
                 byFam.getOrPut(cls.removePrefix("vio-")) { ArrayList() }
-                    .add("${nm(i)} ${sym(k)} 回数${cnt[i][k]}" + (lo?.let { " 下限$it" } ?: "") + (hi?.let { " 上限$it" } ?: ""))
+                    .add("${nm(i)} ${sym(k)} 回数${cnt[i][k]}" + (apt?.let { " 目標$it" } ?: "") + (lo?.let { " 下限$it" } ?: "") + (hi?.let { " 上限$it" } ?: ""))
             }
             emit(byFam, DETAIL_CAP)
         }

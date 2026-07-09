@@ -600,52 +600,8 @@ internal fun breakdownLocations(famKey: String, ui: UiState): List<Pair<String, 
     }
 }
 
-/**
- * [ボトルネック可視化] 違反が集中している「職員」と「日」を集約ランキングで俯瞰する read-only 診断。
- * セル単位の着色(TallyCard)を補完し「どこにしわ寄せが来ているか」を一目で示す。countViolations(職員×シフト)
- * を職員ごと、needViolations(シフト×日)を日ごとに件数集計し多い順に上位を提示。データ・重み不変。
- */
-@Composable
-internal fun BottleneckCard(ui: UiState, proMode: Boolean = false) {
-    if (ui.countViolations.isEmpty() && ui.needViolations.isEmpty()) return
-    fun nm(i: Int) = ui.staffNames.getOrNull(i) ?: "#$i"
-    val perStaff = HashMap<Int, Int>()
-    for (key in ui.countViolations.keys) {
-        val i = key.substringBefore(",").toIntOrNull() ?: continue
-        perStaff[i] = (perStaff[i] ?: 0) + 1
-    }
-    val perDay = HashMap<Int, Int>()
-    for (key in ui.needViolations.keys) {
-        val j = key.substringAfter(",").toIntOrNull() ?: continue
-        perDay[j] = (perDay[j] ?: 0) + 1
-    }
-    val topStaff = perStaff.entries.sortedByDescending { it.value }.take(5)
-    val topDay = perDay.entries.sortedByDescending { it.value }.take(5)
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (proMode) "ボトルネック" else "ボトルネック（しわ寄せの集中箇所）", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "違反が集中している職員・日です。ここの設定（担当範囲・希望・必要人数）を見直すと全体が解けやすくなります。",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (topStaff.isNotEmpty()) {
-                Text("職員別（回数の違反が多い順）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    topStaff.joinToString("  ・  ") { "${nm(it.key)}(${it.value})" },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            if (topDay.isNotEmpty()) {
-                Text("日別（人数の過不足が多い順）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    topDay.joinToString("  ・  ") { "${dayMD(ui.startDate, it.key)}(${it.value})" },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-        }
-    }
-}
+// [死にコード整理] BottleneckCard は 3.81.0 で AttentionCardsSection(全件＋トグル＋タップ修復)が上位互換となり
+//   詳細タブから撤去済み。呼出0の composable 定義もここで撤去した（履歴は git にある）。
 
 /**
  * [★2/見直し] 概要ヒーロー：対象人数 / 対象期間 の2指標（web「画面修正版」hero 移植）。

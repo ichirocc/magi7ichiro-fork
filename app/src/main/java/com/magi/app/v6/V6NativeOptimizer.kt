@@ -103,6 +103,10 @@ object V6NativeOptimizer {
     @Volatile var lastAlternatives: List<Array<IntArray>> = emptyList()
         private set
 
+    /** [他の案の保全] optimize() は入口で lastAlternatives を空にするため、追加精製(ExtraRefine)等で
+     *  optimize() を再呼出しする側が「本走行の他の案」を退避→復元できるようにする（V6FinalPort 専用）。 */
+    fun restoreAlternatives(saved: List<Array<IntArray>>) { lastAlternatives = saved }
+
     /** [DefragLiveView移植] 実行中の最良盤面スナップショット（計算中ライブ表示用・読取専用）。
      *  進捗の節目で更新。並列時はどのワーカーの最良でも有効な解なので last-writer-wins で問題ない。 */
     @Volatile var liveBest: List<List<Int>>? = null
@@ -359,6 +363,10 @@ object V6NativeOptimizer {
         val eval = DeltaEvaluator(p)
         eval.reset(globalBest)
         var globalScore = eval.score()
+        // [高速化/零アロケ] op0-2(copy系)は毎反復 cur.copy2D() を新規確保していた（数百万回/実行のGC圧）。
+        //   使い回しのスクラッチ盤面へ arraycopy し、採用時は cur とスワップ（旧 cur が次のスクラッチになる）。
+        //   hf67 経由(fixed!==cand)の採用時は fixed が新規配列なのでスクラッチはそのまま次反復で再利用。
+        var scratchBuf = Array(p.S) { IntArray(p.T) }
         val diffBuf = IntArray(p.S * p.T)   // scratch: flat indices i*T+j of changed cells (zero-alloc)
         for (r in 0 until restarts) {
             if (shouldStop()) break
@@ -502,7 +510,8 @@ object V6NativeOptimizer {
                     }
                 } else {
                     // ── copy系パス(op0-2): 変更セルだけ eval へ反映（targeted O(S)/O(T) 差分） ──
-                    val cand = cur.copy2D()
+                    val cand = scratchBuf
+                    for (i2 in 0 until p.S) System.arraycopy(cur[i2], 0, cand[i2], 0, p.T)
                     val drDay = if (op == 0 && p.T > 0) rng.nextInt(p.T) else -1
                     val drStaff = if (op == 1 && p.S > 0) rng.nextInt(p.S) else -1
                     when (op) {
@@ -537,7 +546,9 @@ object V6NativeOptimizer {
                     val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng)
                     if (options.accept == AcceptMode.LAM_ADAPTIVE) lamUpdate(accepted)
                     if (accepted) {
-                        cur = fixed; curScore = ns; curAug += moveAug
+                        // [零アロケ] スクラッチ採用時は cur とスワップ（旧 cur を次のスクラッチへ）。
+                        if (fixed === scratchBuf) { val t = cur; cur = fixed; scratchBuf = t } else cur = fixed
+                        curScore = ns; curAug += moveAug
                         if (ns < globalScore) {
                             globalBest = fixed.copy2D(); globalScore = ns
                             globalReport = UnifiedViolationChecker.check(state, fixed)
@@ -1086,6 +1097,10 @@ object V6NativeOptimizer {
             val old = schedule[i][j]
             if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cntI[old]--; cntI[rest]++ }
         }
+        // [高速化] 旧: 日×シフトごとに被覆を全職員走査(O(T×K×S))。盤面のうち本関数中に変わるのは staff i の行
+        //   だけなので、被覆を一度だけ数え(O(S×T))、割当のたびに差分更新する(O(T×K))。挙動は再カウントと同一。
+        val cov = Array(p.T) { IntArray(p.K) }
+        for (x in 0 until p.S) for (j in 0 until p.T) { val k2 = schedule[x][j]; if (k2 in 0 until p.K) cov[j][k2]++ }
         for (j in 0 until p.T) {
             if (p.wishLocked(i, j) || schedule[i][j] != rest) continue
             var bestK = -1; var bestDelta = Long.MAX_VALUE
@@ -1093,13 +1108,11 @@ object V6NativeOptimizer {
                 if (k == rest || !p.canDo(i, k)) continue
                 val need = p.need1[k][j]
                 if (need <= 0) continue
-                var cov = 0
-                for (x in 0 until p.S) if (schedule[x][j] == k) cov++
-                if (cov >= need) continue
+                if (cov[j][k] >= need) continue
                 val delta = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k])
                 if (delta < bestDelta) { bestDelta = delta; bestK = k }
             }
-            if (bestK >= 0) { schedule[i][j] = bestK; cntI[bestK]++; cntI[rest]-- }
+            if (bestK >= 0) { schedule[i][j] = bestK; cntI[bestK]++; cntI[rest]--; cov[j][bestK]++; cov[j][rest]-- }
         }
     }
 
@@ -1168,7 +1181,12 @@ object V6NativeOptimizer {
         when (focus) {
             "covU", "c41", "c41s" -> repeat(8) { destroyRepairDay(state, out, rng) }   // c41s=スキル群の1日人数(c41と同型)
             "low", "high", "c2" -> repeat(8) { destroyRepairStaff(state, out, rng) }
-            "groupViol", "pref", "c3n" -> {
+            // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
+            //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
+            //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
+            //   violations マップに載る(両端2セル)ので、違反セルを直接再割当する destroyRepairViolations(else)へ回す。
+            //   仮説はラウンド単位 better() keep-best でゲート済＝退化なし。
+            "groupViol", "pref" -> {
                 val fixed = hf67HardRepair(state, out, rng).schedule
                 for (i in 0 until p.S) for (j in 0 until p.T) out[i][j] = fixed[i][j]
             }

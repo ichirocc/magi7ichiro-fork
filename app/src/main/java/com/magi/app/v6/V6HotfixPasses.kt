@@ -505,7 +505,8 @@ object V6HotfixPasses {
 
     // 7日周期(曜日)の偏り: 各職員の勤務(休以外)を曜日7バケットに割り、分散を総和。小さいほど曜日が均等。
     private fun dayOfWeekVariance(p: Problem, state: MagiState, work: Array<IntArray>, restIdx: Int): Double {
-        val dow0 = runCatching { java.time.LocalDate.parse(state.startDate).dayOfWeek.value % 7 }.getOrDefault(0)
+        // [一括修正] dow0 は Problem.dow0（目的関数 weekly と同一ソース）を使う（旧: ここで再パース＝重複計算）。
+        val dow0 = p.dow0
         var v = 0.0
         for (i in 0 until p.S) {
             val wd = IntArray(7)
@@ -565,7 +566,9 @@ object V6HotfixPasses {
         val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
-        val restIdx = state.shifts.indexOfFirst { it.kigou == "休" }
+        // [一括修正] 休 index は Problem.restIdx（目的関数 weekly と同一解決・未発見時は 0 フォールバック）を使う。
+        //   旧: ローカル indexOfFirst は未発見で -1 ＝全シフトを勤務扱いし、目的関数と別の指標を最小化していた（latent）。
+        val restIdx = p.restIdx
         var bestRep = before
         var bestMetric = dayOfWeekVariance(p, state, work, restIdx)
         val beforeMetric = bestMetric

@@ -1077,7 +1077,9 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
             if (mode == 0) {
                 Text("各職員が対象期間に各シフトを担当した回数（左右にスクロール）",
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                TallyLegend(shortBg, overBg, "回数が下限未満", "上限超過")
+                // [一括修正] 職員別の赤/橙は low/high(上下限)だけでなく aptLow/aptHigh(適切回数=目標)も同色マーク
+                //   のため、凡例に「目標」を含める（旧「上限超過」だけでは 美幸B4=目標超過 の橙が読めなかった）。
+                TallyLegend(shortBg, overBg, "回数が下限/目標未満", "上限/目標超過")
                 Spacer(Modifier.height(8.dp))
                 val labW = 100.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 集計セル 40x34 -> 48x48（違反セルはタップ可のため）
                 Row {

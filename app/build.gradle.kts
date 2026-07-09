@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 245
-        versionName = "3.100.0-week-fit"
+        versionCode = 251
+        versionName = "3.103.1-regression-tests"
     }
 
     buildTypes {
