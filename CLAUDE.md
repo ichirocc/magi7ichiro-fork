@@ -472,13 +472,15 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 - ~~`applyDayAssignmentPolish` の rangePen 重み 3/3・apt 1 は Evaluator の 90/45/1 と乖離~~ **→ 3.94.0 で 90/45/1 へ整合(下記)**。
 - `staffPacked`/`c3FamCount` が c3/c3m を run-deficit でなく窓#fire でモデル化(前フィルタ限定・keep-best 安全)。
 - 平準化研磨(`applyGroupShiftEqualizePolish`/`applyWeeklyEqualizePolish`)は分散指標で目的関数(fair/weekly=L1)と別物＝既知の冗長。
-  `weekly` の `restIdx=-1`(休記号改名時) で全シフトを勤務扱いする潜在バグ(冗長パス内)・`dow0` 3箇所再計算(Problem.dow0 未使用)。
+  ~~`weekly` の `restIdx=-1`(休記号改名時) で全シフトを勤務扱いする潜在バグ・`dow0` 再計算~~ **→ 3.103.0 で修正**
+  (restIdx/dow0 とも Problem と同一ソースへ統一)。
 - **デッドコード**: ~~`V6RemainingScreens`(未描画・外部参照0)＋そこからのみ実呼出の `HeaderBar`/`RingGauge`/`BottomNav`/`FlagsView`/
   `OverviewDashboard`/`OperatorLogView`~~ **→ 3.86.0 で撤去済**(外部参照0を再確認。live な `CheckSummaryView`/`ColorSettingsView` と
   それらが使う `SectionSegment` のみ残置)。**→ 3.87.0 で `V6WebCompat` のスコアベクタ死蔵クラスタも撤去**
   (`classifyHardBreakdown`/`HardBreakdown`/`scoreVecStable`/`betterVec`/`firstDiffTier`/`ScoreVector`=呼出0)。
   `buildWorkbook`/`buildWs2-7` は `V6WebCompatTest` がカバー中のため残置。
-- `ScheduleCsvBridge` 各コンポーネント取込の `drop(1)` ヘッダ無検証(ヘッダ無CSVで先頭行黙殺=軽微)。
+- ~~`ScheduleCsvBridge` 各コンポーネント取込の `drop(1)` ヘッダ無検証(ヘッダ無CSVで先頭行黙殺=軽微)~~ **→ 3.103.0 で修正**
+  (4サイトとも先頭行が実データ=既知の職員名/制約キーワードなら取り込む。upsert は新規追加の誤登録を防ぐため既知名のみ=保守的)。
 
 ## 直近の状態
 versionName=`2.41.0-bound-check`（versionCode 48）。目的関数統一は covO/range/c3族(単一+複数連)/c1/apt/fair まで完了。

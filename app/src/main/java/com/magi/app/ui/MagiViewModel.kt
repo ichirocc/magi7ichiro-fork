@@ -707,6 +707,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [再実行 keep-best] 実行開始時の入力解(sched0)の違反を評価し、完了時の採用判定の基準にする。
                 //   sched0 はデータ編集直後なら新データの初期解なので、編集をまたいでも公平な基準になる。
                 val baseReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, sched0) }
+                // [一括修正] 「必須違反 残りN件 に改善」の基準を入力盤面の必須数でシード。旧: Long.MAX_VALUE 始まりの
+                //   ため、探索シードが入力より悪い局面(例: 入力1→シード2)でも最初の報告を「改善」と表示していた。
+                liveHard = baseReport.hard.toLong()
                 val res = V6FinalPort.handleOptimize(
                     state = st0,
                     schedule = sched0.copy2D(),

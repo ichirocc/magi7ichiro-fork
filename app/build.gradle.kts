@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 249
-        versionName = "3.102.2-audit-latents"
+        versionCode = 250
+        versionName = "3.103.0-batch-fixes"
     }
 
     buildTypes {
