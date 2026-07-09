@@ -1168,7 +1168,12 @@ object V6NativeOptimizer {
         when (focus) {
             "covU", "c41", "c41s" -> repeat(8) { destroyRepairDay(state, out, rng) }   // c41s=スキル群の1日人数(c41と同型)
             "low", "high", "c2" -> repeat(8) { destroyRepairStaff(state, out, rng) }
-            "groupViol", "pref", "c3n" -> {
+            // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
+            //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
+            //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
+            //   violations マップに載る(両端2セル)ので、違反セルを直接再割当する destroyRepairViolations(else)へ回す。
+            //   仮説はラウンド単位 better() keep-best でゲート済＝退化なし。
+            "groupViol", "pref" -> {
                 val fixed = hf67HardRepair(state, out, rng).schedule
                 for (i in 0 until p.S) for (j in 0 until p.T) out[i][j] = fixed[i][j]
             }
