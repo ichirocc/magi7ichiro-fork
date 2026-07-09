@@ -325,9 +325,13 @@ object V6FinalPort {
         var refReport = post.report
         var extraLog = emptyList<MirrorLog>()
         run {
-            val extraMs = hardDeadlineMs - tPost1
+            // [監査(3e)] 上限は後処理予約枠(postReserveMs, 8〜25s)＝「未使用の予約を再利用する」設計意図に固定。
+            //   全予算走行なら残り≒予約枠で従来どおり。N4 早期脱出等 stagnationFired 以外の早期復帰では
+            //   残りが数分になり得るが、その節約(電池/熱)を ExtraRefine が食い潰さないよう予約枠でキャップする。
+            val extraMs = minOf(hardDeadlineMs - tPost1, postReserveMs)
             if (extraMs >= 5_000 && isActive && !stagnationFired.get() && post.report.total > 0) {
-                val extraStop = { System.currentTimeMillis() >= hardDeadlineMs || !isActive }
+                val extraDeadline = tPost1 + extraMs
+                val extraStop = { System.currentTimeMillis() >= extraDeadline || !isActive }
                 // [他の案の保全] optimize() は入口で lastAlternatives を空にするため、本走行ポートフォリオが
                 //   保持した「他の案」を退避し、追加精製の後に復元する（ViewModel の captureAlternatives は
                 //   handleOptimize 復帰後に読むため、退避しないと他の案が消える）。
@@ -343,8 +347,14 @@ object V6FinalPort {
                     (extra.report.hard == post.report.hard && extra.report.total == post.report.total && extra.report.weightedScore < post.report.weightedScore - 1e-6)
                 if (imp) {
                     refSched = extra.schedule; refReport = extra.report
-                    extraLog = listOf(MirrorLog(level = "I", tag = "ExtraRefine",
-                        message = "予算残${extraMs / 1000}sで追加精製: HARD ${post.report.hard}→${extra.report.hard} / total ${post.report.total}→${extra.report.total}"))
+                    extraLog = listOf(
+                        MirrorLog(level = "I", tag = "ExtraRefine",
+                            message = "予算残${extraMs / 1000}sで追加精製: HARD ${post.report.hard}→${extra.report.hard} / total ${post.report.total}→${extra.report.total}"),
+                        // [監査(3c)/N3と同型] ログ末尾の UnifiedCheck/違反詳細は「精製前の盤面」の診断のまま残るため、
+                        //   採用盤面の集計を明示して件数の取り違えを防ぐ。
+                        MirrorLog(level = "I", tag = "UnifiedCheck",
+                            message = "採用盤面の集計: HARD=${extra.report.hard} 合計=${extra.report.total}（直近のUnifiedCheck行・違反詳細は追加精製前の盤面の診断）"),
+                    )
                 }
             }
         }

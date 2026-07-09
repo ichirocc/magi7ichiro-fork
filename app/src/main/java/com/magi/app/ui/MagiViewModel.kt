@@ -720,7 +720,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     // [3.93.1と同クラスの補正 / 実機ログ起因] 旧: 累積iter(数千万)を渡すと閾値5000が「約20msの無改善」
                     //   相当になり、違反>0の族がほぼ全て即 infeasible 判定＝9族ノイズ警告になっていた。経過時間ベース
                     //   (100単位/秒)に補正し、閾値5000＝「50秒無改善」で発火させる(class は Web 忠実移植のまま)。
-                    if (rep != null) hf63.updateFromBreakdown(rep.breakdown, (elapsed / 10L).toInt())
+                    //   [監査(6)] callback の elapsed はフェーズ境界で巻き戻るローカル時計＝長いフェーズ後に族が永久に
+                    //   フラグ不能になるため、最適化開始からの単調な壁時計(startMs基準)を使う。
+                    if (rep != null) hf63.updateFromBreakdown(rep.breakdown, ((System.currentTimeMillis() - startMs) / 10L).toInt())
                     _ui.update { it.copy(
                         bestHard = rep?.hard?.toLong() ?: it.bestHard,
                         bestSoft = rep?.soft?.toLong() ?: it.bestSoft,
