@@ -264,6 +264,12 @@ read-only・ダッシュボードの SettingIssuesCard に常時=実行前に表
 発展: ②**ボトルネック可視化の集約(2.53.0 完了)** = `BottleneckCard`(MagiDashboardCards)。countViolations を職員別、
 needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-only・詳細タブ、BreakdownCard 直後)。セル着色(TallyCard)を補完し
 「どこにしわ寄せが集中するか」を一目で提示。③hard→soft の What-if 提案(checkResultWorse で部分的に既存)は未着手。
+- (3.98.0, 幻のapt目標検知 = 検査6b): 実機ドッグフーディング(桒澤美幸 B4 目標1・今20)で判明した「担当レパートリーから
+  強制される最低回数 > apt目標」をユーザー指示で事前診断に追加。全日はいずれかの担当可シフトで埋まるため
+  `count(k) >= T − Σ_{k'≠k,担当可} min(上限(k'),T)` の下界が成立。この強制下限が apt 目標を超えるなら aptHigh は
+  何をしても残る＝データ修正が正道と提示（例: 担当={休,B4,有}・休10-10・有1-1・31日 → B4最低20回で目標1は達成不能）。
+  他シフトに上限未設定が1つでもあれば下界0以下＝発火しない(保守的・誤検知ゼロ)。golden_state 検証で美幸B4のみ発火
+  (他22 aptセル過検知ゼロ)。read-only・SettingIssue channel・スコアリング不変。
 - (3.76.0, 壁/ダイヤル分類器 = soft floor signal): ドッグフーディングで判明した「アプリは**解ける soft と構造的 soft 下限を区別しない**
   ＝一番大きい数字が一番追っても無駄になり得る」問題への対処。`buildGuidance` に **検査(2b-2): c1 窓制約の構造的不能(壁)検知**を追加。
   各 cons1 について **供給 vs 需要下界**を比較し、供給<需要なら「窓ルール『X≥n/d日』は構造的に残る＝担当追加かルール緩和」を SettingIssue で提示。
