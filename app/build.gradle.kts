@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 237
-        versionName = "3.93.1-hf63-caller"
+        versionCode = 238
+        versionName = "3.94.0-dayassign-weights"
     }
 
     buildTypes {

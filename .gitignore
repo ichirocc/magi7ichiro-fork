@@ -7,3 +7,4 @@
 tools/*.png
 tools/*.pdf
 tools/*.xlsx
+__pycache__/
