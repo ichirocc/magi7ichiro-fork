@@ -281,7 +281,11 @@ object V6FinalPort {
         //   両者の中間にある良解を拾う。早期停止等で空いた予算の一部(≤15%・15〜60s)だけを使い、5分は超えない。
         //   現行最良起点なので退化しない（best-of-best）。
         val relinkBudgetMs = (budgetMs * 15 / 100).coerceIn(15_000L, 60_000L)
-        val relinkDeadline = minOf(hardDeadlineMs, System.currentTimeMillis() + relinkBudgetMs)
+        // [監査修正] 旧: relink が hardDeadlineMs まで走り、後処理(fair/weekly/c41s 研磨)の予約枠を丸ごと食い潰して
+        //   runPostOptimization が 0 iter に。relink を hardDeadlineMs-postReserveMs/2 で止め、後処理へ予約枠の
+        //   半分を必ず残す（両者 keep-best＝退化なし、文書化された予算分割を復元）。
+        val relinkDeadline = minOf(hardDeadlineMs - postReserveMs / 2, System.currentTimeMillis() + relinkBudgetMs)
+            .coerceAtLeast(System.currentTimeMillis())
         val relinkStop = { System.currentTimeMillis() >= relinkDeadline || !isActive }
         // [#3 並列の論理改善: 反復パスリンク] 精鋭解を一度再結合して終わりにせず、改善が出る限り
         //   「再結合結果を新たな起点」にして残り精鋭解と再結合し直す(島モデルの再結合を逐次で深掘り)。
@@ -357,7 +361,9 @@ object V6FinalPort {
         return when {
             after.hard > before.hard -> "HARDが悪化しました: ${before.hard} -> ${after.hard}"
             after.total > before.total && after.hard >= before.hard -> "違反総数が悪化しました: ${before.total} -> ${after.total}"
-            after.weightedScore > before.weightedScore && after.total >= before.total -> "重み付きスコアが悪化しました: ${before.weightedScore.toLong()} -> ${after.weightedScore.toLong()}"
+            // [監査修正] hard 同値ガードを追加。旧: after.hard<before.hard(HARD改善)でも total==・weighted悪化で発火し、
+            //   HARDが改善した結果を「悪化」と誤判定し悪い入力へ復帰し得た（clause2 と同じ hard>= ガードに揃える）。
+            after.hard >= before.hard && after.weightedScore > before.weightedScore && after.total >= before.total -> "重み付きスコアが悪化しました: ${before.weightedScore.toLong()} -> ${after.weightedScore.toLong()}"
             else -> null
         }
     }

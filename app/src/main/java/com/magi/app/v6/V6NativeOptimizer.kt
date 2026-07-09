@@ -598,12 +598,25 @@ object V6NativeOptimizer {
         // [HF63] ラウンド境界で改善ストリームを追跡し、構造的に充足困難な族を focus 対象から外す。
         // best-of-rounds のため、回避は「無駄なラウンドを達成可能な族へ振り向ける」だけで悪化は起きない。
         val hf63 = Hf63Infeasibility()
+        // [HARD=0非到達への配慮 / 静的covU床] 構造的 covU 下限（有資格者を全員就けても埋まらない席=forcedCovU）は
+        //   最適化中に不変。covU がこの床に達したら「これ以上 covU は下げられない」と静的に確定するので、HF63 の
+        //   動的検知(約3ラウンド無改善を要する)を待たず round 0 から即 focus 除外し、RSI の残ラウンドを解ける族
+        //   (他HARD/SOFT)へ回す。床=0（構造的不足なし＝HARD=0 到達可能な一般ケース）なら常に no-op＝挙動不変。
+        //   focus 選択のみの変更でスコアリング不変（keep-best=better() が結果を担保）＝退化なし・3.74.0 と同方針。
+        val covUFloor = try { V6SanityPort.structuralHardFloor(state, cachedProblem(state)) } catch (_: Exception) { 0 }
         var stagnantRounds = 0   // [N4] better() 無改善の連続ラウンド数
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
-            hf63.updateFromBreakdown(bestReport.breakdown, iters.toInt())
-            val avoid = hf63.infeasibleBreakdownKeys()
+            // [監査修正] HF63 は Web の per-iter 前提(5000 iter 無改善で infeasible)だが、native はここで per-round
+            //   にしか呼べず cumulative iters を渡すと1ラウンドで ≫5000 跳び、解ける HARD を約1ラウンドで誤 infeasible
+            //   判定→focus 除外していた。ラウンド境界の呼出に「ラウンド番号×1800」を渡し、閾値5000到達を約3ラウンドの
+            //   連続無改善に引き伸ばす（class は Web 忠実移植のまま・呼出側で粒度を補正）。iters 自体は本来用途に不変。
+            hf63.updateFromBreakdown(bestReport.breakdown, round * 1800)
+            val avoid = hf63.infeasibleBreakdownKeys().toMutableSet()
+            // [静的covU床] covU が構造的下限（covUFloor）に達している間は解けないので focus から即除外する。
+            //   covU >= covUFloor は常に成立（下限）なので、`== 床` ＝「これ以上は無理」を意味する。床>0 の時のみ発火。
+            if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             val focus = maxViolatedFamily(bestReport, avoid)
             if (avoid.isNotEmpty()) {
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))

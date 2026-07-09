@@ -137,10 +137,12 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         if (p.canDo(i, nw)) dFair += fairDevAt(gI, nw, i, +1) - fairDevAt(gI, nw, -1, 0)
 
         // [統一weekly] 曜日平準化 — staff i の勤務/休が反転する時のみ曜日バケットが動く（同種→同種は不変）。
-        // old/nw は最適化領域で常に 0..K-1 のため work 判定は restIdx との比較で足りる。
+        // [監査ハードニング] work 判定を Evaluator/rebuild/checker と同一の `k in 0 until K && k != restIdx` に統一。
+        //   old/nw は最適化領域で常に 0..K-1 のため現状は no-op だが、範囲外セントネルが入っても Δ が発散しない。
         dWeekly = 0L
         val wdIdx = (p.dow0 + j) % 7
-        val wStep = (if (nw != p.restIdx) 1 else 0) - (if (old != p.restIdx) 1 else 0)
+        fun isWork(k: Int) = k in 0 until p.K && k != p.restIdx
+        val wStep = (if (isWork(nw)) 1 else 0) - (if (isWork(old)) 1 else 0)
         if (wStep != 0) {
             val before = weeklyDevOfBucket(wdCnt[i]).toLong()
             wdCnt[i][wdIdx] += wStep
