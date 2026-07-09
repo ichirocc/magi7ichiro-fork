@@ -602,7 +602,11 @@ object V6NativeOptimizer {
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
-            hf63.updateFromBreakdown(bestReport.breakdown, iters.toInt())
+            // [監査修正] HF63 は Web の per-iter 前提(5000 iter 無改善で infeasible)だが、native はここで per-round
+            //   にしか呼べず cumulative iters を渡すと1ラウンドで ≫5000 跳び、解ける HARD を約1ラウンドで誤 infeasible
+            //   判定→focus 除外していた。ラウンド境界の呼出に「ラウンド番号×1800」を渡し、閾値5000到達を約3ラウンドの
+            //   連続無改善に引き伸ばす（class は Web 忠実移植のまま・呼出側で粒度を補正）。iters 自体は本来用途に不変。
+            hf63.updateFromBreakdown(bestReport.breakdown, round * 1800)
             val avoid = hf63.infeasibleBreakdownKeys()
             val focus = maxViolatedFamily(bestReport, avoid)
             if (avoid.isNotEmpty()) {

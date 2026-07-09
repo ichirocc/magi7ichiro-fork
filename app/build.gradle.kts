@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 236
-        versionName = "3.93.0-escape-fixes"
+        versionCode = 237
+        versionName = "3.93.1-hf63-caller"
     }
 
     buildTypes {

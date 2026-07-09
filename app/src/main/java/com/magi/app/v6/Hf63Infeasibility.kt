@@ -21,10 +21,6 @@ package com.magi.app.v6
 class Hf63Infeasibility {
     companion object {
         const val INFEAS_STALL_ITERS = 5000        // 不可能性判定の iter 閾値
-        // [監査修正] update() は RSI ラウンド境界で 1回/ラウンドしか呼ばれず(cumulative iter を渡す)、1ラウンドで
-        //   iter が ≫5000 跳ぶため「5000 iter 無改善」が実質「1ラウンド無改善」に化けていた。ラウンド数の下限を
-        //   併用し、解ける HARD 族を約1ラウンドで infeasible 誤判定 → focus 除外する退行を防ぐ（多ラウンド持続を要求）。
-        const val MIN_INFEAS_ROUNDS = 3            // infeasible 判定に要する連続無改善「更新回数(=RSIラウンド)」の下限
         const val INFEAS_HARD_CAP_DIV = 8          // HARD infeas で LAM_MAX/8
         const val INFEAS_SOFT_CAP_DIV = 4          // SOFT infeas で LAM_MAX/4
         const val LAM_HARD_MAX_INT = 50000         // HARD λ 上限 = 50 x SCALE
@@ -47,14 +43,12 @@ class Hf63Infeasibility {
     private val gBestCurV = IntArray(N_CONSTRAINTS) { Int.MAX_VALUE }
     private val gLastImproveIter = IntArray(N_CONSTRAINTS)
     private val gInfeasibleLikely = BooleanArray(N_CONSTRAINTS)
-    private val gStallRounds = IntArray(N_CONSTRAINTS)   // [監査修正] 連続無改善の更新回数(=RSIラウンド)
 
     fun reset() {
         for (c in 0 until N_CONSTRAINTS) {
             gBestCurV[c] = Int.MAX_VALUE
             gLastImproveIter[c] = 0
             gInfeasibleLikely[c] = false
-            gStallRounds[c] = 0
         }
     }
 
@@ -64,21 +58,15 @@ class Hf63Infeasibility {
         if (curV < gBestCurV[c]) {
             gBestCurV[c] = curV
             gLastImproveIter[c] = gIter
-            gStallRounds[c] = 0
             if (gInfeasibleLikely[c]) gInfeasibleLikely[c] = false   // self-correction
         } else if (curV == 0) {
             // 一度でも充足(0)に到達した族は「不能」ではない。再違反に備え停滞カウンタを進めておく
             // （これを怠ると、0到達後に摂動で再違反した瞬間 gIter-旧改善 が即 STALL を超え、
             //  解けた族を誤って infeasible 判定し RSI focus から外してしまう）。
             gLastImproveIter[c] = gIter
-            gStallRounds[c] = 0
-        } else {
-            // curV>0 かつ無改善。[監査修正] iter 閾値 AND 連続無改善ラウンド下限の両方を満たしたときのみ deprioritize。
-            //   後者が無いと、1ラウンドで iter が ≫5000 跳ぶため解ける HARD を1ラウンドで誤 infeasible 判定していた。
-            gStallRounds[c]++
-            if (gIter - gLastImproveIter[c] >= INFEAS_STALL_ITERS && gStallRounds[c] >= MIN_INFEAS_ROUNDS) {
-                gInfeasibleLikely[c] = true                           // 構造的下限推定 → deprioritize
-            }
+        } else if (gIter - gLastImproveIter[c] >= INFEAS_STALL_ITERS) {
+            // curV>0 かつ STALL 反復改善なし。focus 回避/診断のため deprioritize する。
+            gInfeasibleLikely[c] = true                               // 構造的下限推定 → deprioritize
         }
     }
 
