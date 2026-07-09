@@ -407,6 +407,35 @@ object V6SanityPort {
             }
         }
 
+        // 6b) [事前診断/幻のapt目標] 担当レパートリーから強制される最低回数 > apt目標 → 目標は構造的に達成不能。
+        //    全日はいずれかの担当可シフトで埋まるため、シフト k の回数には
+        //      count(k) >= T − Σ_{k'≠k, 担当可} min(上限(k'), T)
+        //    の下界が成立（他シフトの上限合計では期間を埋めきれない分が k に必ず回る）。この強制下限が
+        //    apt目標を超えるなら、超過(aptHigh)は何をどう最適化しても残る＝データ側の目標を直すのが正道。
+        //    例: 担当={休,B4,有}・休10-10固定・有1-1固定・31日 → B4は最低20回。目標1は幻のaptHigh違反。
+        //    上限未設定の他シフトが1つでもあれば下界は0以下＝発火しない（誤検知ゼロの保守的判定・読み取り専用）。
+        for (i in 0 until p.S) {
+            val name = state.staff.getOrNull(i)?.name ?: "#$i"
+            for (k in 0 until p.K) {
+                val t = p.apt[i][k]
+                if (t < 0 || !p.canDo(i, k)) continue
+                var otherHiSum = 0
+                for (k2 in 0 until p.K) {
+                    if (k2 == k || !p.canDo(i, k2)) continue
+                    val hi = p.rangeHi[i][k2]
+                    otherHiSum += if (hi == Int.MAX_VALUE) p.T else minOf(maxOf(hi, 0), p.T)
+                    if (otherHiSum >= p.T) break   // 下界0以下が確定＝発火しない
+                }
+                val forcedMin = p.T - otherHiSum
+                if (forcedMin > t) {
+                    val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
+                    out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」適切回数",
+                        "担当できるシフトの構成上、「$sym」は最低${forcedMin}回になります（他の担当シフトの上限合計${otherHiSum}回では${p.T}日を埋めきれません）。適切回数${t}回は達成できず、目標超過が必ず出ます",
+                        "「$sym」の適切回数を${forcedMin}回以上にするか空欄にする、または他シフトの担当・上限を見直してください(ws1)"))
+                }
+            }
+        }
+
         // 7) [事前診断/配布不可] ある日に「そのシフトを担当できる人数」より必要人数が多い＝どう割り当てても
         //    人員不足(covU=HARD)が確定＝配布不可。最適化の hardFloor と同じ forcedCovU で検出（誤検知ゼロ）。
         for (fc in forcedCovU(state, p)) {

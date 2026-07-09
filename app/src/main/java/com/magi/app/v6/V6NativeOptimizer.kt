@@ -306,10 +306,23 @@ object V6NativeOptimizer {
             if (pr.elapsedMs % 1000L < 220L) onProgress("V5 SA", lastReport, pr.totalIters, pr.elapsedMs)
         }
         val repaired = hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
-        val report = UnifiedViolationChecker.check(state, repaired.schedule)
+        var outSched = repaired.schedule
+        var report = UnifiedViolationChecker.check(state, outSched)
+        // [退化防止番兵 / 実機ログ起因] runAlns(578行)と同じ入力比keep-best。従来 runV5 だけ番兵が無く、SA+修復が
+        //   入力より悪化した結果をそのまま返していた。RSI++ は Phase1 Seed に runV5 を使い、以降の各段は前段比
+        //   keep-best のため、Phase1 の劣化(実測: 入力HARD=1/195 → Seed HARD=2/229)が全チェーンへ伝播し、
+        //   最後にディスパッチャ番兵が入力へ復帰＝予算全体が無駄になっていた(実機で 275s×2回)。入力を品質床に
+        //   することで以降の全フェーズが「入力以上」から積み上がる。SA が入力より良い解を見つけた場合は素通し
+        //   ＝多様化は維持。スコアリング不変(選択のみ・better()=hard→total→weighted)。
+        val baseSched = normalizeSchedule(initial, p)
+        val baseReport = UnifiedViolationChecker.check(state, baseSched)
+        val keptInput = better(baseReport, report)
+        if (keptInput) { outSched = baseSched; report = baseReport }
         lastReport = report
-        val logs = listOf(MirrorLog(tag = "RunMAGI_V5", message = "高速SA完了 HARD=${report.hard} total=${report.total} iter=${res.totalIters}")) + repaired.logs
-        return V6OptimizerResult(repaired.schedule, report.copy(logs = logs + report.logs), V6Algorithm.V5, logs, res.totalIters, nowMs() - t0)
+        val logs = listOf(MirrorLog(tag = "RunMAGI_V5",
+            message = "高速SA完了 HARD=${report.hard} total=${report.total} iter=${res.totalIters}" +
+                if (keptInput) "（SA結果が入力より悪化のため入力を維持=番兵）" else "")) + repaired.logs
+        return V6OptimizerResult(outSched, report.copy(logs = logs + report.logs), V6Algorithm.V5, logs, res.totalIters, nowMs() - t0)
     }
 
     private suspend fun runAlns(
