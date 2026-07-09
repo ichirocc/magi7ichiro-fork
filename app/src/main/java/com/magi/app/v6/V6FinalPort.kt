@@ -317,12 +317,39 @@ object V6FinalPort {
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
         )
         val tPost1 = System.currentTimeMillis()
-        val overBudget = tPost1 - startMs > budgetMs
+        // [高精度化/予算残の活用] 後処理予約枠(budget/12, 8〜25s)は後処理が早期にフィックスポイント到達すると
+        //   大半が未使用のまま返っていた(実機: 予約25s中 実使用0.45s＝約24.5s廃棄)。残り5s以上かつ違反が残る場合、
+        //   最終盤面を起点に keep-best の追加精製(ALNS)へ回す。runAlns は入力比番兵つき＝結果は post 以上を保証。
+        //   停滞検知(stagnationFired)による早期終了時はスキップ＝「無改善なら早く返す」方針を壊さない。
+        var refSched = post.schedule
+        var refReport = post.report
+        var extraLog = emptyList<MirrorLog>()
+        run {
+            val extraMs = hardDeadlineMs - tPost1
+            if (extraMs >= 5_000 && isActive && !stagnationFired.get() && post.report.total > 0) {
+                val extraStop = { System.currentTimeMillis() >= hardDeadlineMs || !isActive }
+                val extra = V6NativeOptimizer.optimize(
+                    state, post.schedule,
+                    optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5)),
+                    extraStop, progressWatch,
+                )
+                val imp = extra.report.hard < post.report.hard ||
+                    (extra.report.hard == post.report.hard && extra.report.total < post.report.total) ||
+                    (extra.report.hard == post.report.hard && extra.report.total == post.report.total && extra.report.weightedScore < post.report.weightedScore - 1e-6)
+                if (imp) {
+                    refSched = extra.schedule; refReport = extra.report
+                    extraLog = listOf(MirrorLog(level = "I", tag = "ExtraRefine",
+                        message = "予算残${extraMs / 1000}sで追加精製: HARD ${post.report.hard}→${extra.report.hard} / total ${post.report.total}→${extra.report.total}"))
+                }
+            }
+        }
+        val tExtra1 = System.currentTimeMillis()
+        val overBudget = tExtra1 - startMs > budgetMs
         val timingLog = MirrorLog(
             level = if (overBudget) "W" else "I",
             tag = "TIME",
-            message = "総${(tPost1 - startMs) / 1000.0}s (予算${seconds}s${if (overBudget) " 超過" else ""}): " +
-                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 再結合${(tRelink1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tRelink1) / 1000.0}s " +
+            message = "総${(tExtra1 - startMs) / 1000.0}s (予算${seconds}s${if (overBudget) " 超過" else ""}): " +
+                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 再結合${(tRelink1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tRelink1) / 1000.0}s + 追加精製${(tExtra1 - tPost1) / 1000.0}s " +
                 "/ workers設定${workers} 実効仮説${effHypotheses}",
         )
         val relinkLog = if (relinkImproved) listOf(MirrorLog(
@@ -335,9 +362,9 @@ object V6FinalPort {
         )) else emptyList()
         // [最終番兵/多重防御] 全段 keep-best のため通常は発火しないが、万一パイプラインが入力より
         // 悪い結果を返した場合は入力を採用し退化を防ぐ（checkResultWorse をここで配線）。
-        val regression = checkResultWorse(inputReport, post.report)
-        val finalSched = if (regression != null) normInput else post.schedule
-        val finalReport = if (regression != null) inputReport else post.report
+        val regression = checkResultWorse(inputReport, refReport)
+        val finalSched = if (regression != null) normInput else refSched
+        val finalReport = if (regression != null) inputReport else refReport
         val sentinelLog = if (regression != null) listOf(
             MirrorLog(
                 level = "W", tag = "Sentinel",
@@ -352,7 +379,7 @@ object V6FinalPort {
         ) else emptyList()
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog) + sentinelLog + relinkLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        val logs = listOf(timingLog) + sentinelLog + relinkLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, post)
     }
 
