@@ -57,6 +57,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import java.time.LocalDate
@@ -649,7 +650,15 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioSoftColor, 4.dp))
-            Text("破線＝要調整", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("破線＝要調整（重）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(width = 22.dp, height = 16.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(4.dp)).drawBehind {
+                val t = 9.dp.toPx()
+                val p = Path().apply { moveTo(size.width - t, 0f); lineTo(size.width, 0f); lineTo(size.width, t); close() }
+                drawPath(p, vioSoftColor)
+            })
+            Text("右上の角＝要調整（軽）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -688,6 +697,13 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
 
 internal fun isHardCellViolation(v: String?): Boolean =
     v != null && MirrorKeys.hard.any { v.contains(it) }
+
+/** [判読性] 重いソフト族（low=90 / high=45 / c3mn=12 ＝ weightedScore 上位のソフト）か。
+ *  軽い族（重み≤4: c1/c3/c3m/c2/c41系/apt/covO）は破線枠でなく右上の角マークに落とし、
+ *  「格子全体が警告に埋まって必須違反が埋没する」のを防ぐ（重み階層と表示の強さを一致させる）。 */
+internal val heavySoftFamilies = setOf("low", "high", "c3mn")
+internal fun isHeavySoftCellViolation(v: String?): Boolean =
+    v != null && familyOfVioClass(v) in heavySoftFamilies
 
 /** 違反セルの非色手がかり: HARD=実線枠、SOFT=破線枠（色覚多様性／モノクロ印刷でも区別可能）。
  *  [校正] 色付きセル上でも埋もれないよう枠を太く（3dp）。 */
@@ -1260,14 +1276,22 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
         }.getOrDefault(-1)
     }
     // [E7] 種別フィルタ: バケツOFFのセル違反は枠を出さない（vioVisible=false→0）。表示のみ・違反自体は不変。
+    // [判読性] 0=なし / 1=必須(実線) / 2=重いソフト(破線) / 3=軽いソフト(右上角マーク)。
+    //   従来は全ソフトが太い破線枠＝数百件で格子が警告に飽和し、必須違反1件が埋没していた。
     val vioKind = remember(ui.violationCells, staffCount, days, vioEnabled) {
-        Array(staffCount) { i -> IntArray(days) { d -> val v = ui.violationCells["$i,$d"]; if (!vioVisible(v, vioEnabled)) 0 else if (isHardCellViolation(v)) 1 else 2 } }
+        Array(staffCount) { i -> IntArray(days) { d ->
+            val v = ui.violationCells["$i,$d"]
+            when { !vioVisible(v, vioEnabled) -> 0; isHardCellViolation(v) -> 1; isHeavySoftCellViolation(v) -> 2; else -> 3 }
+        } }
     }
     val wishKind = remember(ui.wishes, ui.schedule, staffCount, days) {
         Array(staffCount) { i -> IntArray(days) { d -> val wk = ui.wishes["$i,$d"]; if (wk == null) 0 else { val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1; if (wk == k) 1 else 2 } } }
     }
+    // [判読性] 休セルは淡色＋細字で視覚的に後退させ、勤務セルの模様（誰がいつ働くか）を浮かび上がらせる。
+    //   記号「休」から解決（改名データでは -1=後退なし＝従来表示）。色データ・スコアリング不変。
+    val restIdx = remember(ui.shiftSymbols) { ui.shiftSymbols.indexOfFirst { it.trim() == "休" } }
     val dayVioH = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 1 } } }
-    val dayVioS = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 2 } } }
+    val dayVioS = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] >= 2 } } }
     val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
 
     // [a11y] 生の Box.clickable セルは M3 の 48dp タッチ補完が効かないため、主操作面のセルを 48dp 化（片手一本指仕様）。
@@ -1275,7 +1299,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
     val nameW = 80.dp; val cellW = 48.dp; val cellH = 48.dp; val headH = 72.dp
     Column {
-        Text("横スクロールで日移動（上の 前週/次週 で1週ぶんジャンプ）。セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。日番号下の下線＝その日の違反（濃=必須/橙=要調整）、不足日は赤字。",
+        Text("横スクロールで日移動（上の 前週/次週 で1週ぶんジャンプ）。セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。" +
+            "違反は3段階: 実線枠=必須 ・ 破線枠=要調整（重） ・ 右上の角=要調整（軽）。休は淡色。日番号下の下線＝その日の違反、不足日は赤字。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row {
@@ -1310,15 +1335,18 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                         }
                         for (i in 0 until staffCount) {
                             val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
-                            val bg = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
+                            val isRest = k >= 0 && k == restIdx
+                            val rawBg = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
+                            // [判読性] 休は淡色化して後退（勤務セルが浮かぶ）。文字は onSurfaceVariant で可読性を担保。
+                            val bg = if (isRest) rawBg.copy(alpha = 0.30f) else rawBg
                             // [コントラスト] 淡い背景に沈まないよう記号色をWCAGで保証（色データは不変）。
-                            val fg = ensureReadable(bg, shiftTextC.getOrNull(k) ?: cs.onSurface)
+                            val fg = if (isRest) cs.onSurfaceVariant else ensureReadable(rawBg, shiftTextC.getOrNull(k) ?: cs.onSurface)
                             val sym = ui.shiftSymbols.getOrNull(k) ?: ""
                             val vk = vioKind[i][d]; val wkk = wishKind[i][d]
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
-                                (if (vk == 1) "・必須違反" else if (vk == 2) "・要調整" else "") +
+                                (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映" else if (wkk != 0) "・希望" else "") + "、タップで変更"
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd) { onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest) { onCellClick(i, d) }
                         }
                     }
                 }
@@ -1330,7 +1358,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
 @Composable
 private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
-    bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, onClick: () -> Unit,
+    bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.width(w).height(h).padding(1.5.dp)) {
@@ -1338,15 +1366,26 @@ private fun FlatCell(
             Modifier.fillMaxSize()
                 .background(bg, RoundedCornerShape(6.dp))
                 // [分離] 無違反セルにも微細な輪郭を付け、似た明度の隣接セルと切り分ける（違反時は違反枠が優先）。
-                .then(if (vk != 0) Modifier.violationBorder(vk == 1, if (vk == 1) vioColor else vioSoftColor, 6.dp)
-                      else Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp)))
+                // [判読性] 枠は 1=実線(必須)/2=破線(重い調整)のみ。3=軽い調整は右上の角マークに落とし飽和を防ぐ。
+                .then(when {
+                    vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp)
+                    vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp)
+                    else -> Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp))
+                })
                 .clickable(onClick = onClick)
                 // [a11y] 主操作セルを読み上げ対応（従来 contentDescription 無し）。氏名/日/シフト/違反/希望を1文で。
                 .semantics(mergeDescendants = true) { contentDescription = cd },
             contentAlignment = Alignment.Center,
         ) {
-            // [コントラスト] 記号は太字＋15sp（48dpセルに合わせ拡大）で沈み込みを防ぐ。
-            if (symbol.isNotBlank()) Text(symbol, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
+            // [コントラスト] 記号は太字＋15sp（48dpセルに合わせ拡大）で沈み込みを防ぐ。休(dim)は細字で後退。
+            if (symbol.isNotBlank()) Text(symbol, fontSize = 15.sp, fontWeight = if (dim) FontWeight.Normal else FontWeight.Bold, color = fg, maxLines = 1)
+            // [判読性] 軽いソフト違反(vk=3)＝右上の小さな角マーク（枠より静かな手がかり。色＋位置の二重符号化）。
+            if (vk == 3) {
+                Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(9.dp).drawBehind {
+                    val p = Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); close() }
+                    drawPath(p, vioSoftColor)
+                })
+            }
             // [希望] 左下ドット: 反映済=青緑リング / 未反映=桃塗り（色覚安全）。
             //   [コントラスト] 任意のシフト色上でも消えないよう surface のハローで縁取り＋8dpに拡大。
             if (wk != 0) {

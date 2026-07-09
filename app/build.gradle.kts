@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 243
-        versionName = "3.98.0-forced-apt-check"
+        versionCode = 244
+        versionName = "3.99.0-grid-readability"
     }
 
     buildTypes {
