@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 238
-        versionName = "3.94.0-dayassign-weights"
+        versionCode = 239
+        versionName = "3.95.0-static-covu-floor"
     }
 
     buildTypes {
