@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 239
-        versionName = "3.95.0-static-covu-floor"
+        versionCode = 240
+        versionName = "3.95.1-n4-dynamic-gate"
     }
 
     buildTypes {
