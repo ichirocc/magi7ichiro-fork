@@ -222,7 +222,10 @@ internal fun OperatorNextActionCard(
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
             "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
         else -> OpNextPlan(amber, onAmber,
-            "もう少しです。" + (worstDay?.let { "$it が人手不足です。" } ?: "人手が足りない日があります。"),
+            // [監査#1] 人手不足ゼロでも必須違反(希望/禁止連続/群)で此処に来る。不足が無いのに
+            //   「人手が足りない」と告げる誤診断を排し、実態（必須違反の残数）を言う。
+            "もう少しです。" + (worstDay?.let { "$it が人手不足です。" }
+                ?: "必須の条件が ${ui.bestHard}件 残っています。"),
             "なおすのを手伝って", onFix, true, "もう一度つくる", onMake)
     }
 
@@ -708,7 +711,8 @@ private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCel
                 Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(item.sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (clickable) Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
+            if (clickable) Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium,
+                color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
         }
     }
 }
@@ -867,7 +871,8 @@ private fun AttentionRow(title: String, sub: String, alerts: Int, warnBg: Color,
                     Text("確認$alerts", color = warnFg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
                 }
             }
-            if (onClick != null) Text("直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
+            if (onClick != null) Text("直し方→", style = MaterialTheme.typography.labelMedium,
+                color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
         }
     }
 }

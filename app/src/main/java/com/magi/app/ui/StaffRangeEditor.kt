@@ -59,7 +59,7 @@ fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "「目標◯」=適切回数（群目標）。「目標A→B」はAが個人の上下限でBにクランプされた状態。「今◯」=現在の回数。🔴=下限割れ / 🟠=上限超過（適切回数の過不足も色で表示）。",
+                "「目標◯」=適切回数（群目標）。「目標A→B」はAが個人の上下限でBにクランプされた状態。「今◯」=現在の回数。チップの色=不足（必須色）/超過（要調整色）。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -96,9 +96,12 @@ fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
                                 if (target.isNotBlank()) add(target)
                                 add("・今$now")
                             }.joinToString(" ")
+                            // [監査C2] 違反色トークンに追従（グリッド/集計と同じ色言語。旧: 赤/橙の直書き）。
+                            val lowC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.red
+                            val highC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
                             val chipColors = when (vio) {
-                                "vio-low", "vio-aptLow" -> InputChipDefaults.inputChipColors(containerColor = MagiAccent.red.copy(alpha = 0.30f))
-                                "vio-high", "vio-aptHigh" -> InputChipDefaults.inputChipColors(containerColor = MagiAccent.orange.copy(alpha = 0.36f))
+                                "vio-low", "vio-aptLow" -> InputChipDefaults.inputChipColors(containerColor = lowC.copy(alpha = 0.30f))
+                                "vio-high", "vio-aptHigh" -> InputChipDefaults.inputChipColors(containerColor = highC.copy(alpha = 0.36f))
                                 else -> InputChipDefaults.inputChipColors()
                             }
                             InputChip(

@@ -154,7 +154,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             if (!resultTxt.isNullOrBlank()) {
                 clearRunMarker()
                 OptimizationWorker.clearFiles(getApplication<Application>())
-                if (state == null) loadAsync(resultTxt)   // initialAssignment が state.schedule を返すため結果が復元される
+                if (state == null) loadAsync(resultTxt, markResult = true)   // initialAssignment が state.schedule を返すため結果が復元される
                 logOp("I", "前回のバックグラウンド最適化の結果を反映しました")
             } else {
                 // [#4/C1] 中断時、途中最良解のスナップショットがあれば「途中結果から再開」する。
@@ -178,7 +178,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (marker != null) {
                     val hasSnap = !snapTxt.isNullOrBlank()
                     val info = if (hasSnap)
-                        "前回の計算は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度つくる』で仕上げられます。"
+                        "前回の計算は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。"
                     else runCatching {
                         val o = org.json.JSONObject(marker)
                         val modeJp = if (o.optString("mode") == "bg") "バックグラウンド" else ""
@@ -379,7 +379,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         load(seed)
     }
 
-    fun loadAsync(rawJson: String) {
+    fun loadAsync(rawJson: String, markResult: Boolean = false) {
         val json = MojibakeRepair.repair(rawJson)
         val repaired = json !== rawJson
         job?.cancel()
@@ -1926,6 +1926,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setThisMonth() {
         val now = java.time.LocalDate.now()
         setMonth(now.year, now.monthValue)
+    }
+    /** [実機指摘] 月末に「来月」の勤務表を作る業務のため、ワンタップは来月が適切。 */
+    fun setNextMonth() {
+        val next = java.time.LocalDate.now().plusMonths(1)
+        setMonth(next.year, next.monthValue)
     }
 
     // ---- スキルグループ（年次マスター・新C41s/C42s 専用） -----------------------

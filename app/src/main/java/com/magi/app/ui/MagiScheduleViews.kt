@@ -615,6 +615,7 @@ internal fun ScheduleGrid(
     onFocusShown: () -> Unit = {},
     focusRange: Triple<Int, Int, Int>? = null,   // [窓ハイライト③] (職員i, 開始日, 終了日)
     focusMode: Boolean = false,                  // [集中モード] 違反・未反映希望以外のセルを淡色化
+    canDo: (Int, Int) -> Boolean = { _, _ -> true },   // [矛盾なく選択] 一括割当の担当可否（(職員i, シフトk)）
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -654,7 +655,7 @@ internal fun ScheduleGrid(
             Spacer(Modifier.height(8.dp))
             // [一括編集] まとめて変更は多数セルを上書きする上級操作のため、プロ表示時のみ。範囲×対象×シフトをダイアログで一括指定。
             if (proMode) {
-                OutlinedButton(onClick = { showBulk = true }, modifier = Modifier.heightIn(min = 48.dp)) {
+                OutlinedButton(onClick = { showBulk = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text("まとめて割当（一括編集）")
                 }
             }
@@ -748,7 +749,7 @@ internal fun ScheduleGrid(
             }
             Spacer(Modifier.height(12.dp))
             MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
-            if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
+            if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
     }
@@ -766,9 +767,11 @@ internal fun startDowMonFirst(startDate: String): Int = try {
 /** 違反セルの凡例（実線=必須 / 破線=要調整）。非色手がかりの意味を必ず示す。 */
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.orange) {
     val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    // [実機指摘] 固定 Row では幅不足時に3項目目が縦1文字に潰れた→ FlowRow で項目単位に折り返す。
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
             // [B4] 色名は固定しない（ユーザーが違反色を変更でき、凡例とグリッドが食い違うため）。
@@ -809,8 +812,14 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
             items.forEach { i ->
                 val bg = hexToColor(colorHex.getOrNull(i) ?: "")
                 val fg = hexToColor(textHex.getOrNull(i) ?: "")
-                Box(Modifier.background(bg, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                    Text(symbols[i], style = MaterialTheme.typography.labelLarge, color = ensureReadable(bg, fg), fontWeight = FontWeight.Bold)
+                // [実機指摘「有やAｱの形がおかしい」] 記号の文字種（ASCII/半角カナ/漢字）で内在サイズが
+                //   異なりチップの高さ・形がバラついていた→ 固定サイズ（高さ32dp・最小幅48dp）＋中央寄せで均一に。
+                Box(
+                    Modifier.height(32.dp).widthIn(min = 48.dp).background(bg, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(symbols[i], style = MaterialTheme.typography.labelLarge, color = ensureReadable(bg, fg), fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }
@@ -954,16 +963,16 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                 OutlinedButton(onClick = {
                     if (scope == 1 && staffSel < 0) confirmClearAll = true
                     else { vm.clearWishesForDays(if (staffSel < 0) null else staffSel, targetDays); onDismiss() }
-                }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                }, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Text("この範囲を希望なしに", color = cs.error)
                 }
                 Button(onClick = {
                     if (picked in ui.shiftSymbols.indices) {
                         vm.setWishesForDays(if (staffSel < 0) null else staffSel, targetDays, picked); onDismiss()
                     }
-                }, enabled = picked in ui.shiftSymbols.indices && targetDays.isNotEmpty(),
+                }, enabled = picked in ui.shiftSymbols.indices && targetDays.isNotEmpty() && !ui.running,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text("適用（${targetDays.size}件）")
+                    Text(if (ui.running) "計算中は変更できません" else "適用（${targetDays.size}件）")
                 }
             }
             Text("※ 期間全体×全職員の「希望なし」は全削除（確認あり）。元に戻すで取消可。",
@@ -1002,7 +1011,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
 /** [割当の一括操作] 対象範囲(曜日/期間全体) × 対象(全員/1名) × シフト → まとめて割当。公・休で休みも設定可。元に戻すで取消可。円柱から起動。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit, onDismiss: () -> Unit) {
+internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit, onDismiss: () -> Unit, canDo: (Int, Int) -> Boolean = { _, _ -> true }) {
     val cs = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState()
     val days = ui.days
@@ -1017,7 +1026,11 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
         else (0 until days).filter { (startDow + it) % 7 == weekday }
     val targetStaff = if (staffSel >= 0) listOf(staffSel) else ui.schedule.indices.toList()
     val targetName = if (staffSel >= 0) (ui.staffNames.getOrNull(staffSel) ?: "$staffSel") else "全職員"
-    val cellCount = targetStaff.size * targetDays.size
+    // [矛盾なく選択/実機指摘] 選んだシフトを担当できない職員は対象から自動で外す（担当外の一括割当＝
+    //   大量の担当外違反を作れてしまう矛盾を根元で防ぐ）。除外人数は下の対象行に明示。
+    val eligibleStaff = if (picked in ui.shiftSymbols.indices) targetStaff.filter { canDo(it, picked) } else targetStaff
+    val skippedStaff = targetStaff.size - eligibleStaff.size
+    val cellCount = eligibleStaff.size * targetDays.size
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
@@ -1063,9 +1076,11 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
             }
-            Text("対象 ${targetStaff.size}名 × ${targetDays.size}日 = ${cellCount}マス。既存の割当は上書き。",
+            Text("対象 ${eligibleStaff.size}名 × ${targetDays.size}日 = ${cellCount}マス。既存の割当は上書き。" +
+                (if (skippedStaff > 0) "（担当外 ${skippedStaff}名は対象外）" else ""),
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Text("シフト（タップで選択。公・休で休みにできます）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            // [文言修正] 旧「公・休で…」の「公」はデータに存在しない記号だった（存在しない項目を語らない）。
+            Text("シフト（タップで選択）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             ui.shiftSymbols.indices.toList().chunked(3).forEach { rowKeys ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     rowKeys.forEach { k ->
@@ -1083,12 +1098,19 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
             }
             Button(onClick = {
                 if (picked in ui.shiftSymbols.indices && cellCount > 0) {
-                    val cells = targetStaff.flatMap { i -> targetDays.map { j -> i to j } }
+                    val cells = eligibleStaff.flatMap { i -> targetDays.map { j -> i to j } }
                     onBulkSet(cells, picked); onDismiss()
                 }
-            }, enabled = picked in ui.shiftSymbols.indices && cellCount > 0,
+            }, enabled = picked in ui.shiftSymbols.indices && cellCount > 0 && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text("この${cellCount}マスに一括割当")
+                // [矛盾なく選択] 押せない理由をボタン自身が語る（灰色の理由が見えない矛盾を解消）。
+                // [監査#1] 実行中は適用不可（最適化完了時に上書きされ黙って消えるため）。
+                Text(when {
+                    ui.running -> "計算中は変更できません"
+                    picked !in ui.shiftSymbols.indices -> "まずシフトを選んでください"
+                    cellCount == 0 -> "対象がありません（担当できる職員なし）"
+                    else -> "この${cellCount}マスに一括割当"
+                })
             }
             Text("※ 選択したマスを上書きします。元に戻すで取消可。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }

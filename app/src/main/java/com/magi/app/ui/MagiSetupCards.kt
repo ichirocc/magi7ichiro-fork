@@ -127,8 +127,9 @@ internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
                 OutlinedButton(onClick = { vm.shiftMonth(1) }, enabled = !ui.running,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("次の月") }
             }
-            OutlinedButton(onClick = { vm.setThisMonth() }, enabled = !ui.running,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("今月にする") }
+            // [実機指摘] 月末に「来月」の表を作る業務フローに合わせ、ワンタップは来月へ。
+            OutlinedButton(onClick = { vm.setNextMonth() }, enabled = !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("来月にする") }
         }
     }
 }
@@ -144,12 +145,13 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel) {
             Text("初期設定の手順", style = MaterialTheme.typography.titleMedium)
             // [E1] 番号順(①〜⑤)とeditScopeの不一致を解消：毎月触る項目と年次マスター項目を分けて表示。
             //   ①基本情報・④制約・⑤回数範囲は「年次マスター」scopeにあり、月次では編集しない。
-            Text("── 毎月 ──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            GuideRow("② 希望シフト", "${c.wishes}件", c.wishes > 0)
-            GuideRow("③ 必要人数", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
-            Text("── 年次マスター（制度・人員が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            GuideRow("① 基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
-            GuideRow("④ 制約", "${c.constraints}件", true)
+            // [監査A1] 旧①〜⑤番号と旧スコープ名（年次マスター等）が新3ドア/新節番号と食い違っていた→ドア名で案内。
+            Text("── 月次条件（毎月）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0)
+            GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
+            Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
+            GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
             GuideRow("⑤ 個人の回数範囲", "${c.ranges}件", true)
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（スタッフ／シフト）を整えましょう。"

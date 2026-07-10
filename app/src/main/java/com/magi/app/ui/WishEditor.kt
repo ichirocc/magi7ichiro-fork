@@ -128,7 +128,8 @@ private fun WishDialog(
 ) {
     val maxDay = days.coerceAtLeast(1)
     var i by remember { mutableStateOf(initI) }
-    // [見やすさ/効率] 日は ± だけでなく直接入力もできる(1->30で多タップを回避)。NeedDayEditor と同じ操作系。
+    // [見やすさ/効率] 日は ± だけでなく直接入力もできる(1->30で多タップを回避)。
+    //   ※NeedDayEditor は 3.112 でカレンダー形式へ移行済み（こちらは指示範囲外のため据え置き）。
     var dayText by remember { mutableStateOf((initJ + 1).coerceIn(1, maxDay).toString()) }
     val day = dayText.toIntOrNull()
     var k by remember { mutableStateOf(initK) }

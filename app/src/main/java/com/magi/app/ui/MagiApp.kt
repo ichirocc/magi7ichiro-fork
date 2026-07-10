@@ -145,7 +145,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
-    var editScope by rememberSaveable { mutableStateOf(0) }   // [Web反映] 編集タブ: 0=今月の調整 / 1=シフト希望 / 2=基本マスター
+    var editScope by rememberSaveable { mutableStateOf(0) }   // [入口4分割] 編集タブ: 0=月次条件 / 1=職員管理 / 2=年間マスター
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
     var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
@@ -350,7 +350,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onStop = { vm.stop() },
                         onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                         onSchedule = { tab = 1 },
-                        onFix = { guidedFix = true },
+                        // [監査#1] 人手不足が無い必須違反(希望/禁止連続/群)では GuidedFix(不足専用)が空回りする
+                        //   → 不足なし時は分析タブの修復フローへ。
+                        onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
                         onSetup = { tab = 2 },
                     )
                     LiveScheduleCard(ui)
@@ -400,11 +402,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     SearchLegendBar(ui, searchQuery, onQuery = { searchQuery = it })
                     ScheduleGrid(ui, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
-                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode)
+                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
+                        canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) })
                     StaffCalendarCard(ui, onCellClick = openEditor, vioEnabled = vioEnabled)
                     TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     MismatchExtractCard(ui, onOpenCell = openEditor)
-                    OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
                         Text("希望シフトの一括操作（曜日／全体）")
                     }
                     if (wishBulkOpen) {
@@ -511,7 +514,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   (HARD Core/Guard・Apt/Equalize/covU 等の生指標) は詳細設定(上級者)へ移設。
                     // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。
                     if (proMode) V6DashboardCard(ui.v6)
-                    if (proMode) WeightTableCard()   // [N2/⛏11] スコアの重み根拠（最適化器と一致）
+                    // [実機指摘] 重み表（WeightTableCard）は分析タブから設定タブの最適化設定直後へ移動。
                     // [IA重複解消] BossCard は FixSuggestionCard と同じ提案＋適用を二重描画していたため撤去（下の FixSuggestionCard に一本化）。
                     // [見直し/IA重複解消] OverviewDashboard(気になる点=総違反リング / 注意の日リング)を撤去。融合カードが上位代替:
                     //   気になる点(総数)→ヒーロー規模＋要確認一覧ヘッダ件数、注意の日→AttentionCardsSection の日別リスト。
@@ -538,6 +541,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                     )
                     SettingsCard(ui, vm, onBgOptimize = onBgOptimize)
+                    // [実機指摘/移動] 重み表＝最適化の優先順位の根拠。実行条件（最適化設定）の隣が定位置。
+                    WeightTableCard()
                     // [冗長性] 旧 OperatorLogView（見出し「操作ログ」だが中身は診断ログ＝誤ラベルで、
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(
