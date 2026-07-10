@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 272
-        versionName = "3.122.0-family-colors"
+        versionCode = 273
+        versionName = "3.123.0-tally-legibility"
     }
 
     buildTypes {

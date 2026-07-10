@@ -1218,7 +1218,9 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perStaff[i][kk]
                                 // [E7] 回数(low/high/apt/c2)バケツOFF時はこのセルの違反表示を抑止（値は表示・色/枠だけ消す）。
                                 val vio = ui.countViolations["$i,$kk"]?.takeIf { vioVisible(it, vioEnabled) }
-                                val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [レイアウト/実機指摘] 0セルは旧 cs.surface(UDで真っ白)＝表に白い穴が空いて見えた。
+                                //   淡い同系色に沈めて「数字のあるセルが浮かぶ」市松を解消。
+                                val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
                                 // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
                                 val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
                                 val cellCd = if (vio != null) {
@@ -1249,10 +1251,14 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                             Text("シフト", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                         }
                         for (kk in 0 until k) {
-                            val bg = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
-                            val fg = ensureReadable(bg, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
+                            // [レイアウト/実機指摘] 全日0のシフト行（未使用シフト）はラベルも淡色に沈め、
+                            //   使っている行の模様を浮かび上がらせる（行は消さない＝存在は読める）。
+                            val rowZero = (0 until t).all { perDay[it][kk] == 0 }
+                            val bg0 = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
+                            val bg = if (rowZero) bg0.copy(alpha = 0.35f) else bg0
+                            val fg = if (rowZero) cs.onSurfaceVariant else ensureReadable(bg0, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
                             TallyBox(labW, rh, bg, true) {
-                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
+                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.bodySmall, fontWeight = if (rowZero) FontWeight.Normal else FontWeight.Bold, color = fg, maxLines = 1)
                             }
                         }
                     }
@@ -1265,7 +1271,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perDay[j][kk]
                                 // [E7] 人員(covU/covO)バケツOFF時はこの日セルの違反表示を抑止（値は表示・色/枠だけ消す）。
                                 val vio = ui.needViolations["$kk,$j"]?.takeIf { vioVisible(it, vioEnabled) }
-                                val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [レイアウト/実機指摘] 0セルは白い穴に見えるため淡色へ（職員別と同じ）。
+                                val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
                                 // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
                                 val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
                                 val cellCd = if (vio != null) {
