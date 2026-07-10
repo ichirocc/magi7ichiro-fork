@@ -300,6 +300,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     var tab by rememberSaveable { mutableStateOf(0) }
     // [ジャンプ/Web試作の移植] 要確認一覧→勤務表タブの注目セル(i,j)。表示後に自動クリア（一時ハイライト）。
     var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
+    var focusRange by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     val loadSample: () -> Unit = {
         scope.launch {
             val text = withContext(Dispatchers.IO) {
@@ -365,6 +367,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     val openEditor: (Int, Int) -> Unit = { i, j ->
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         editingCell = i to j
+                        // [窓ハイライト③] c1/c3/c3m はどの範囲の違反かをグリッド上でも示す（シート表示中のみ）。
+                        focusRange = vm.violationRange(i, j)?.let { Triple(i, it.first, it.second) }
                     }
                     // [B1] 結果(読取ws6)/下書き(ws7) モード分離。既定=結果(読取)。確定結果が無ければ下書き扱い。
                     var editing by rememberSaveable { mutableStateOf(false) }
@@ -414,7 +418,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() },
-                        focusCell = focusCell, onFocusShown = { focusCell = null })
+                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange)
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
                     TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
@@ -577,8 +581,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     vm.setCell(cell.first, cell.second, k)
                     editingCell = null
+                    focusRange = null
                 },
-                onDismiss = { editingCell = null },
+                onDismiss = { editingCell = null; focusRange = null },
             )
         }
         if (guidedFix) {

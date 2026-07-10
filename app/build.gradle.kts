@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 257
-        versionName = "3.109.0-cell-reason"
+        versionCode = 258
+        versionName = "3.110.0-window-highlight"
     }
 
     buildTypes {
