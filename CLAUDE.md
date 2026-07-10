@@ -302,6 +302,11 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+- (3.131.0, 希望シフトの日入力カレンダー化=バックログ「希望の日範囲選択」解消): WishDialog の日入力（±ステッパー＋
+  テキスト、3.112 で「指示範囲外」と据え置いた最後の旧式）を **NeedDayEditor と同じ DayPickerGrid**（日曜始まり・
+  タップトグル・**複数日一括**）へ統一。「適用（N日）」で選択日すべてに同じ希望を登録。チップ編集は**移動の意味論**
+  （元の日を選択から外す/別スタッフへ付替えると元の希望を削除。同スタッフ×元日が残っていれば setWish 上書き）。
+  未使用 import（Button/OutlinedTextField/KeyboardOptions/KeyboardType/width）除去。表示・入力導線のみ＝スコア不変。
 - (3.130.0, 実機指摘2件=制約行の編集＋色ピッカー修正 / bg復元配線の完遂): ①**「登録した制約の変更ができない」**:
   ConstraintsCard/SkillConstraintsCard の行は削除のみだった→ **行タップで変更**（追加ダイアログのプリフィル版
   `ConstraintDialog(editIndex)`・確定で同位置を置換）。vm に `constraintRowValues(family,index)`（生値の取得、

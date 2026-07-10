@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 282
-        versionName = "3.130.0-constraint-edit-colorpicker"
+        versionCode = 283
+        versionName = "3.131.0-wish-calendar"
     }
 
     buildTypes {

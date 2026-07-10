@@ -17,14 +17,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -32,7 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,7 +46,7 @@ import androidx.compose.ui.unit.dp
  * ws3 移植: 希望シフト wishes["i,j"]=シフトindex（スタッフ i が j 日目に希望するシフト）。
  * 採点は pref（hard1 のソフト寄り）。モデル(wishes)・エンジン(pref)は既存のため不変、UI のみ追加。
  * 注意: これは「希望」であり、勤務表セルの「割当」変更とも、cons3系（連勤の並び）とも別概念。
- * 一本指対応: スタッフ/希望シフトはタップで選ぶプルダウン、日は ＋− ステッパー。
+ * 一本指対応: スタッフ/希望シフトはタップで選択、日は NeedDayEditor と同じカレンダー（複数日の一括登録可）。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -82,7 +77,7 @@ fun WishCard(ui: UiState, vm: MagiViewModel) {
                             InputChip(
                                 selected = false,
                                 enabled = !ui.running,
-                                onClick = { dialog = WishEdit(r.i, r.j, r.k) },
+                                onClick = { dialog = WishEdit(r.i, r.j, r.k, edit = true) },
                                 label = { Text("${r.day}日 ${r.kigou}") },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, contentDescription = "削除",
@@ -100,45 +95,52 @@ fun WishCard(ui: UiState, vm: MagiViewModel) {
     dialog?.let { d ->
         WishDialog(
             initI = d.i,
-            initJ = d.j,
+            initDays = if (d.edit) setOf(d.j + 1) else emptySet(),
             initK = d.k,
             days = ui.days,
+            startDate = ui.startDate,
             staff = ui.staffNames,
             shifts = vm.shiftKigouList(),
             allowedFor = { idx -> vm.allowedShiftsFor(idx).toHashSet() },
-            onApply = { i, j, k -> vm.setWish(i, j, k); dialog = null },
+            onApply = { i, daysSel, k ->
+                daysSel.forEach { vm.setWish(i, it - 1, k) }
+                // [編集=移動] チップ編集で元の日が選択から外れた（or 別スタッフへ付け替えた）場合は
+                //   元の希望を削除＝「動かす」。同スタッフ×元日が選択に残っていれば setWish が上書き済み。
+                if (d.edit && !(i == d.i && (d.j + 1) in daysSel)) vm.removeWish(d.i, d.j)
+                dialog = null
+            },
             onClose = { dialog = null },
         )
     }
 }
 
-private data class WishEdit(val i: Int, val j: Int, val k: Int)
+private data class WishEdit(val i: Int, val j: Int, val k: Int, val edit: Boolean = false)
 
 @Composable
 private fun WishDialog(
     initI: Int,
-    initJ: Int,
+    initDays: Set<Int>,
     initK: Int,
     days: Int,
+    startDate: String,
     staff: List<String>,
     shifts: List<String>,
     allowedFor: (Int) -> Set<Int>,
-    onApply: (Int, Int, Int) -> Unit,
+    onApply: (Int, Set<Int>, Int) -> Unit,
     onClose: () -> Unit,
 ) {
     val maxDay = days.coerceAtLeast(1)
     var i by remember { mutableStateOf(initI) }
-    // [見やすさ/効率] 日は ± だけでなく直接入力もできる(1->30で多タップを回避)。
-    //   ※NeedDayEditor は 3.112 でカレンダー形式へ移行済み（こちらは指示範囲外のため据え置き）。
-    var dayText by remember { mutableStateOf((initJ + 1).coerceIn(1, maxDay).toString()) }
-    val day = dayText.toIntOrNull()
+    // [カレンダー化 3.131系] 日は NeedDayEditor と同じ DayPickerGrid（日曜始まり・タップでトグル）。
+    //   複数日を選んで一括登録できる＝バックログ「希望の日範囲選択」の解消。操作系も NeedDay と統一。
+    var daysSel by remember { mutableStateOf(initDays.filter { it in 1..maxDay }.toSet()) }
     var k by remember { mutableStateOf(initK) }
     var openS by remember { mutableStateOf(false) }
-    val ok = i in staff.indices && k in shifts.indices && day != null && day in 1..maxDay
+    val ok = i in staff.indices && k in shifts.indices && daysSel.isNotEmpty()
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = {
-            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(i, day!! - 1, k) })
+            DialogConfirmButton("適用（${daysSel.size}日）", enabled = ok, onClick = { if (ok) onApply(i, daysSel, k) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { DialogHeader("希望シフト", onClose) },
@@ -155,18 +157,9 @@ private fun WishDialog(
                         }
                     }
                 }
-                Text("日", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { dayText = ((day ?: 1) - 1).coerceAtLeast(1).toString() }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "日を減らす" }) { Text("−") }
-                    OutlinedTextField(
-                        value = dayText,
-                        onValueChange = { dayText = it.filter { c -> c.isDigit() }.take(2) },
-                        label = { Text("1〜$maxDay") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.width(110.dp),
-                    )
-                    Button(onClick = { dayText = ((day ?: 0) + 1).coerceAtMost(maxDay).toString() }, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "日を増やす" }) { Text("＋") }
+                Text("日（タップで選択・複数可）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                DayPickerGrid(startDate, maxDay, daysSel) { d ->
+                    daysSel = if (d in daysSel) daysSel - d else daysSel + d
                 }
                 Text("希望シフト", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 // [web版参考 HF205/HF211] 担当可能シフトは大ボタンで選択。担当範囲外（勤務表不可）は
