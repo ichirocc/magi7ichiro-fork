@@ -157,18 +157,18 @@ private fun NeedDayDialog(
 }
 
 /** [カレンダー形式] 月内の日を曜日整列グリッドから1タップで選ぶ（片手一本指・キーボード不要）。
- *  週の並びは勤務表グリッドと同じ月曜始まり（startDowMonFirst 共有）。土=青/日=赤で週の手掛かりを添える。 */
+ *  週の並びは**日曜始まり**（ユーザー指示・紙のカレンダー慣習）。日=赤/土=青で週の手掛かりを添える。 */
 @Composable
 internal fun DayPickerGrid(startDate: String, maxDay: Int, selected: Int?, onSelect: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val sdow = startDowMonFirst(startDate)   // 0=月
-    val weekJa = listOf("月", "火", "水", "木", "金", "土", "日")
+    val sdow = (startDowMonFirst(startDate) + 1) % 7   // 月曜始まり(0=月)→日曜始まり(0=日)へ変換
+    val weekJa = listOf("日", "月", "火", "水", "木", "金", "土")
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
             weekJa.forEachIndexed { idx, w ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(w, style = MaterialTheme.typography.labelSmall,
-                        color = when (idx) { 5 -> MagiAccent.blue; 6 -> MagiAccent.red; else -> cs.onSurfaceVariant })
+                        color = when (idx) { 0 -> MagiAccent.red; 6 -> MagiAccent.blue; else -> cs.onSurfaceVariant })
                 }
             }
         }
