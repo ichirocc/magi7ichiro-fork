@@ -229,11 +229,10 @@ internal fun ShiftPickerSheet(
             // 凝縮ステータス: 現在の割当 + 希望 + 違反理由
             Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                    // [セルタップで違反理由/認知ウォークスルー最優先] このセルの違反族を1行で提示。
+                    // [セルタップで違反理由/認知ウォークスルー最優先] このセルの違反族を提示。
                     //   従来は枠の意味(なぜ違反か)が要確認一覧/診断ログへ往復しないと分からなかった。
-                    //   3.107 の重み優先マークにより「最重の族」が保証される。表示のみ・スコア不変。
-                    val vioCls = ui.violationCells["$i,$j"]
-                    if (vioCls != null) {
+                    //   [Set化] 重なった違反は全列挙（重み降順＝必須が先頭）。表示のみ・スコア不変。
+                    cellVioClasses(ui, "$i,$j").forEach { vioCls ->
                         val fam = vioCls.removePrefix("vio-")
                         val hard = isHardCellViolation(vioCls)
                         Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
@@ -363,8 +362,8 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                         week.forEach { j ->
                             val k = row.getOrNull(j) ?: -1
                             val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
-                            // [E7] 種別フィルタ: バケツOFF のセル違反は出さない。
-                            val vioVal = ui.violationCells["$si,$j"]?.takeIf { vioVisible(it, vioEnabled) }
+                            // [E7] 種別フィルタ: バケツOFF のセル違反は出さない。[Set化] 表示中の最重族で判定。
+                            val vioVal = visibleCellVio(ui, "$si,$j", vioEnabled)
                             val vio = vioVal != null
                             val hard = isHardCellViolation(vioVal)
                             CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, vioColor, Modifier.weight(1f)) {
@@ -467,12 +466,24 @@ internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
 }
 internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
 
+/** [Set化] セル("i,j")の全違反クラス（重み降順）。families 未充填の経路では最重1クラスへフォールバック。 */
+internal fun cellVioClasses(ui: UiState, key: String): List<String> =
+    ui.violationCellFamilies[key] ?: listOfNotNull(ui.violationCells[key])
+/** [Set化×E7] フィルタを通過する最重の違反クラス。旧: 最重1クラスのみ判定＝最重族のバケツをOFFにすると
+ *  表示中の族が同セルに残っていても枠ごと消えていた（フィルタと表示の不整合）。 */
+internal fun visibleCellVio(ui: UiState, key: String, enabled: Set<String>): String? =
+    cellVioClasses(ui, key).firstOrNull { vioVisible(it, enabled) }
+
 /** [E7] 各バケットの「違反ロケーション数」(=セル/エントリ件数、見出し『要確認 N件』と同単位)。
  *  breakdown の量/#fire ではなく箇所数で集計＝チップ間・見出しと比較可能なトリアージ指標にする。 */
 internal fun vioBucketLocCounts(ui: UiState): Map<String, Int> {
     val out = HashMap<String, Int>()
     fun tally(cls: String) { bucketOfFamily(familyOfVioClass(cls))?.let { out[it] = (out[it] ?: 0) + 1 } }
-    ui.violationCells.values.forEach(::tally)
+    // [Set化] セルは重なった全族のバケツへ計上（同セル同バケツは1回）＝バケツOFF/ONの見え方と件数が一致。
+    ui.violationCells.keys.forEach { key ->
+        cellVioClasses(ui, key).mapNotNull { bucketOfFamily(familyOfVioClass(it)) }.toSet()
+            .forEach { b -> out[b] = (out[b] ?: 0) + 1 }
+    }
     ui.needViolations.values.forEach(::tally)
     ui.countViolations.values.forEach(::tally)
     return out
@@ -587,8 +598,7 @@ internal fun ScheduleGrid(
     val weeks = remember(ui.startDate, allDays) { mondayWeeks(ui.startDate, allDays) }
     val hScroll = rememberScrollState()
     val scrollScope = rememberCoroutineScope()
-    // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示。violationCells の値="vio-<famKey>"。
-    fun shown(v: String?) = vioVisible(v, vioEnabled)
+    // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示（[Set化] visibleCellVio で判定）。
     Card(Modifier.fillMaxWidth()) {
         BoxWithConstraints {
         // [7日間表示] セル幅を「利用可能幅から1週間(7日)が名前列と同時に収まる」よう動的計算（旧: 48dp固定＝
@@ -624,7 +634,7 @@ internal fun ScheduleGrid(
             // [E7 誰が・いつ] 表示中(フィルタ通過)のセル違反を「名前 d日」で列挙（最大8件）。種別を絞ると場所が一目で分かる。
             //   種別チップは勤務表タブ上部の共有フィルタ(ViolationFilterBar)へ集約したのでここには出さない。
             run {
-                val shownLocs = ui.violationCells.entries.filter { shown(it.value) }.mapNotNull { e ->
+                val shownLocs = ui.violationCells.entries.filter { visibleCellVio(ui, it.key, vioEnabled) != null }.mapNotNull { e ->
                     val p = e.key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
                     if (i == null || j == null) null else "${ui.staffNames.getOrNull(i) ?: "#$i"} ${j + 1}日"
                 }
@@ -1312,10 +1322,11 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [E7] 種別フィルタ: バケツOFFのセル違反は枠を出さない（vioVisible=false→0）。表示のみ・違反自体は不変。
     // [判読性] 0=なし / 1=必須(実線) / 2=重いソフト(破線) / 3=軽いソフト(右上角マーク)。
     //   従来は全ソフトが太い破線枠＝数百件で格子が警告に飽和し、必須違反1件が埋没していた。
-    val vioKind = remember(ui.violationCells, staffCount, days, vioEnabled) {
+    val vioKind = remember(ui.violationCells, ui.violationCellFamilies, staffCount, days, vioEnabled) {
         Array(staffCount) { i -> IntArray(days) { d ->
-            val v = ui.violationCells["$i,$d"]
-            when { !vioVisible(v, vioEnabled) -> 0; isHardCellViolation(v) -> 1; isHeavySoftCellViolation(v) -> 2; else -> 3 }
+            // [Set化] 表示中(フィルタ通過)の最重クラスで段階を決める＝最重族OFFでも残る族の枠が出る。
+            val v = visibleCellVio(ui, "$i,$d", vioEnabled)
+            when { v == null -> 0; isHardCellViolation(v) -> 1; isHeavySoftCellViolation(v) -> 2; else -> 3 }
         } }
     }
     val wishKind = remember(ui.wishes, ui.schedule, staffCount, days) {
@@ -1373,8 +1384,13 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                     val dow = (sdow + d) % 7
                     val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
                     val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
+                    // [⑥日別ジャンプ] 要確認一覧の日別項目(人員/群レンジ)から来たとき、日ヘッダを primary 枠で注目表示
+                    //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。
+                    val dayFocused = focusCell != null && focusCell.first < 0 && focusCell.second == d
                     Column {
-                        Column(Modifier.width(cellW).height(headH), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Column(Modifier.width(cellW).height(headH)
+                            .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier),
+                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                             // [a11y] 荷重情報の「▼N」は別行の赤字バッジに分離（曜日と混ざって潰れないように）。
                             Text(weekdayJa[dow], fontSize = headFontSize, color = dcol, maxLines = 1)

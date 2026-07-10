@@ -405,6 +405,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         violationCells = ui.resultViolationCells ?: ui.violationCells,
                         needViolations = ui.resultNeedViolations ?: ui.needViolations,
                         countViolations = ui.resultCountViolations ?: ui.countViolations,
+                        violationCellFamilies = ui.resultViolationCellFamilies ?: ui.violationCellFamilies,
                     )
                     val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
@@ -522,7 +523,10 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     HeroMetricsRow(ui)
                     // [★1/E1] 要確認一覧＝散在していた診断を「箇所単位・重大度」で1ハブに統合（web「画面修正版」confirm 移植）。
                     //   タブ先頭のヒーローとして配置。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。表示のみ・スコア不変。
-                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode, onShowCell = { i, j -> focusCell = i to j; tab = 1 })
+                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode,
+                        onShowCell = { i, j -> focusCell = i to j; tab = 1 },
+                        // [⑥日別ジャンプ] 人員/群レンジ(日×シフト)の項目→勤務表タブの該当日列へ（i=-1=日のみ注目）。
+                        onShowDay = { j -> focusCell = -1 to j; tab = 1 })
                     // [★3+4] 日別/人別 注意リスト＋「要確認のみ」トグル（web「画面修正版」day/staff＋alertOnly 融合）。
                     //   人別行タップで修復フローへ。BottleneckCard(top5テキスト) の上位互換のため下の BottleneckCard は撤去。
                     AttentionCardsSection(ui, onFocusStaff = { vm.findFixSuggestions(it) })

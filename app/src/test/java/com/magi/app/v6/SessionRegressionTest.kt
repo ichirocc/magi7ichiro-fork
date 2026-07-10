@@ -158,6 +158,13 @@ class SessionRegressionTest {
         val rep = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
         assertTrue("pref と c3 の両方が計上される", (rep.breakdown["pref"] ?: 0) >= 1 && (rep.breakdown["c3"] ?: 0) >= 1)
         assertEquals("重い族(pref)のマークが保持される", "vio-pref", rep.violations["0,0"])
+        // [Set化] cellFamilies は重なった全クラスを重み降順で保持し、先頭は violations と一致する
+        val fams = rep.cellFamilies["0,0"] ?: emptyList()
+        assertEquals("先頭=最重クラス", "vio-pref", fams.firstOrNull())
+        assertTrue("軽い族(c3)も保持される", "vio-c3" in fams)
+        for ((key, cls) in rep.violations) {
+            assertEquals("全セルで families 先頭 == violations", cls, rep.cellFamilies[key]?.firstOrNull())
+        }
     }
 
     @Test fun editStaffPreservesSkillIdx() {
