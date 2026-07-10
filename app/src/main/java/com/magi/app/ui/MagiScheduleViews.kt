@@ -247,6 +247,15 @@ internal fun ShiftPickerSheet(
                         else "希望  ${sym(wish)}" + (if (wish == current) "（反映済）" else "（未反映）")
                     Text(wt, style = MaterialTheme.typography.bodyMedium,
                         color = if (wish != null && wish != current) MagiAccent.pink else cs.onSurfaceVariant)
+                    // [見直し候補] 割当変更（今回だけ）と土台ルールの直し（年間マスター）を混同させない第3の出口。
+                    //   違反セルのみ表示。メモは年間マスターの先頭（ReviewMemoCard）に積まれる。
+                    val vioFams = cellVioClasses(ui, "$i,$j")
+                    if (vioFams.isNotEmpty()) {
+                        TextButton(onClick = {
+                            val famsJp = vioFams.joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
+                            vm.addReviewMemo("$name ${j + 1}日=${sym(current)}：$famsJp")
+                        }) { Text("基本ルールの見直し候補にする（年間マスターへメモ）") }
+                    }
                 }
             }
             // 希望どおりにする（割当モード・未反映・担当可のときだけ）= 最頻操作を1タップ
@@ -669,8 +678,43 @@ internal fun ScheduleGrid(
                         enabled = curWeek < weeks.size - 1, modifier = Modifier.heightIn(min = 48.dp)) { Text("次週 →") }
                 }
             }
+            // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
+            //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
+            val vioDays = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, vioEnabled) {
+                val days = sortedSetOf<Int>()
+                ui.violationCells.keys.forEach { key ->
+                    if (visibleCellVio(ui, key, vioEnabled) != null) key.substringAfter(",").toIntOrNull()?.let { days.add(it) }
+                }
+                for ((k, cls) in ui.needViolations) {
+                    if (vioVisible(cls, vioEnabled)) k.substringAfter(",").toIntOrNull()?.let { days.add(it) }
+                }
+                days.toList()
+            }
+            var navFlash by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+            LaunchedEffect(navFlash) {
+                if (navFlash != null) { kotlinx.coroutines.delay(2_500); navFlash = null }
+            }
+            if (vioDays.isNotEmpty()) {
+                var navIdx by remember(vioDays) { mutableIntStateOf(-1) }
+                fun jumpTo(n: Int) {
+                    navIdx = n
+                    val d = vioDays[n]
+                    navFlash = -1 to d
+                    scrollScope.launch { hScroll.animateScrollTo((d * cellWpx).coerceAtLeast(0)) }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
+                        modifier = Modifier.heightIn(min = 48.dp)) { Text("＜ 前の違反") }
+                    Text(if (navIdx < 0) "違反のある日 ${vioDays.size}日" else "違反日 ${navIdx + 1}/${vioDays.size}",
+                        style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
+                        modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1)
+                    OutlinedButton(onClick = { jumpTo(if (navIdx < 0) 0 else (navIdx + 1) % vioDays.size) },
+                        modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ＞") }
+                }
+            }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell, focusRange = focusRange)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
         }

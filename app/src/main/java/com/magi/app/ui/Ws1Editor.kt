@@ -264,7 +264,7 @@ private fun GroupDialog(
 }
 
 @Composable
-private fun StaffDialog(
+internal fun StaffDialog(
     title: String, name0: String, group0: Int, groupKigou: List<String>,
     onOk: (String, Int) -> Unit, onClose: () -> Unit,
 ) {

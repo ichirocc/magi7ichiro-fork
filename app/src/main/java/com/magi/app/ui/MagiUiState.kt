@@ -48,6 +48,8 @@ data class UiState(
     val shiftColorHex: List<String> = emptyList(),
     val shiftTextHex: List<String> = emptyList(),
     val violationColorHex: String = "",   // 違反の表示色（空＝テーマのエラー色）。shiftColors["__vio__"] に保存。
+    // [見直し候補] セル修正時に「基本ルールの見直し候補にする」で積むメモ（セッション内のみ・state 非保存）。
+    val reviewMemos: List<String> = emptyList(),
     val violationSoftColorHex: String = "",   // 要調整(ソフト違反)の表示色（空＝既定の橙）。shiftColors["__vioSoft__"] に保存。
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）

@@ -1507,6 +1507,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         applyStructure(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
     }
+
+    // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
+    fun addReviewMemo(text: String) {
+        if (text.isBlank()) return
+        _ui.update { it.copy(reviewMemos = it.reviewMemos + text.trim(), message = "見直し候補に追加しました") }
+    }
+    fun removeReviewMemo(index: Int) {
+        _ui.update { val l = it.reviewMemos; if (index !in l.indices) it else it.copy(reviewMemos = l.filterIndexed { j, _ -> j != index }) }
+    }
     fun groupKigouList(): List<String> = state?.groups?.map { it.kigou } ?: emptyList()
 
     /** [冗長除去/データ密度] 1日人数の上下限 [l〜u] を意味で圧縮して短く表す。見出しが「人数(上下限)」の

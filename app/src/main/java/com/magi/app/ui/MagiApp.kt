@@ -445,33 +445,38 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                 }
                 2 -> {
                     SetupGuideCard(ui, vm)
-                    // [Web反映] 毎月触る「今月の調整/シフト希望」と、たまにしか触らない「基本マスター」を分けて誤編集を防ぐ。
-                    MagiSegmentedControl(options = listOf("今月の調整", "シフト希望", "基本マスター"), selected = editScope, onSelect = { editScope = it })
-                    // [発見性] 各スコープの中身を1行で示す。「回数設定はどこ？」→基本マスター、を迷わず辿れるように。
+                    // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
+                    //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
+                    MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })
+                    // [発見性] 各スコープの中身を1行で示す。
                     Text(
                         when (editScope) {
-                            0 -> "今月の必要人数など、月ごとに変える設定"
-                            1 -> "個人の日別シフト希望"
-                            else -> "回数・人数・並びルールなど、毎月は変えない土台"
+                            0 -> "翌月だけの条件：希望・必要人数・例外（毎月ここから）"
+                            1 -> "入退職・所属・資格スキル・個人の回数（随時変更）"
+                            else -> "毎月は変えない土台：シフト・ルール・人数（制度変更時のみ）"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     when (editScope) {
                         0 -> {
+                            // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
+                            MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 })
                             MonthPickerCard(ui, vm)
+                            WishCard(ui, vm)
                             NeedDayCard(ui, vm)
                         }
                         1 -> {
-                            // [独立サブタブ] シフト希望(ws3=日別・個人のセル希望)。並びパターン(cons3系/ws4)とは別物。
-                            //   月コンテキストを示すため月えらびも表示（編集対象月は月次と共有の shiftMonth）。
-                            MonthPickerCard(ui, vm)
-                            WishCard(ui, vm)
+                            // [職員管理] 入退職・所属・スキルの随時変更＋個人の回数上下限（職員に紐づく設定を集約）。
+                            StaffManageCard(ui, vm)
+                            StaffRangeCard(ui, vm)
                         }
                         else -> {
+                            // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
+                            ReviewMemoCard(ui, vm)
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                                 // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
-                                Text("土台の設定（制度・人の入替時のみ）。毎月の調整は「今月の調整」「シフト希望」へ。",
+                                Text("土台の設定（制度変更時のみ）。毎月の調整は「月次条件」、人の入替は「職員管理」へ。",
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     style = MaterialTheme.typography.bodyMedium)

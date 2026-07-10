@@ -257,6 +257,70 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
 // [3.112.0 撤去] ActionCard（ほかの作り方: 速くつくる/かんたんに/閉じても大丈夫）はユーザー赤囲い指示で撤去。
 //   速く/かんたんは主導線（思考誘導カード onMake/onDraft）と重複、バックグラウンド実行は SettingsCard へ移設。
 
+/**
+ * [入口4分割/月次条件] 今月の作成条件チェックリスト。作成前の入力状況（職員/希望/必要人数/入力診断）を
+ * 1枚で確認し、そのまま作成へ進む（月末モードの Step0）。read-only＋作成ボタン＝スコアリング不変。
+ * 例外件数は D6 に従い、明示的な例外リストを持つ「日別必要人数の例外」のみを数える。
+ */
+@Composable
+internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> Unit) {
+    if (!ui.loaded) return
+    val staffN = ui.staffNames.size
+    val wishStaff = remember(ui.wishes, staffN) {
+        ui.wishes.keys.mapNotNull { it.substringBefore(",").toIntOrNull() }.toSet().size
+    }
+    val needExceptions = vm.needDayOverrides().size
+    val needStdOk = vm.ws1()?.shifts?.any { it.need1.isNotBlank() } == true
+    val issues = ui.settingIssues.size
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("今月の作成条件（チェックリスト）", style = MaterialTheme.typography.titleMedium)
+            ChecklistRow("職員", "${staffN}名", ok = staffN > 0)
+            ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0)
+            ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
+            ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件（ホームに詳細）", ok = issues == 0)
+            Button(onClick = onMake, enabled = ui.loaded && !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Text("▶ 勤務表をつくる", style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChecklistRow(label: String, value: String, ok: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(if (ok) "✓" else "！", color = if (ok) cs.tertiary else cs.error, fontWeight = FontWeight.Bold)
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Text(value, color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/**
+ * [見直し候補] 月次の修正（セル編集シート）から送られた「基本ルールの見直し候補」メモの一覧。
+ * 年間マスターを開いたとき最初に目に入る位置に置き、「毎月同じ手修正→制度の直し」への橋にする。
+ * セッション内メモ（state 非保存）＝アプリ終了で消える旨を明示。read-only・スコアリング不変。
+ */
+@Composable
+internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
+    if (ui.reviewMemos.isEmpty()) return
+    val cs = MaterialTheme.colorScheme
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
+            Text("勤務表の修正中に印を付けたルール見直しのメモです（アプリ終了で消えます）。",
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            ui.reviewMemos.forEachIndexed { idx, memo ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(memo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    DeleteRowButton(onClick = { vm.removeReviewMemo(idx) }, text = "済")
+                }
+            }
+        }
+    }
+}
+
 
 @Composable
 internal fun AdvancedSettingsSection(
