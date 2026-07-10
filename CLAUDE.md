@@ -302,6 +302,11 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+- (3.127.1, クラッシュ修正=「閉じても大丈夫」で即落ち): 実機報告。原因=**マニフェスト不足**。Worker は
+  setForeground(FOREGROUND_SERVICE_TYPE_DATA_SYNC) で前景化するが、targetSdk 34+ は WorkManager の
+  SystemForegroundService **宣言側にも foregroundServiceType="dataSync" のマージが必須**（権限だけでは不足）。
+  無いと起動瞬間に MissingForegroundServiceTypeException（サービス側スレッド発生＝runCatching 捕捉不能）で
+  アプリごと落ちる。manifest に tools:node="merge" のサービス宣言を追加。
 - (3.127.0, 他画面見直し第2弾＋実機指摘5件の一括): 並列3監査（編集タブ3ドア/ホーム・分析/設定・エディタ）＋
   実機スクショ5枚。**実バグ修正**: ①ホーム見出しが人手不足ゼロの必須違反(希望/禁止連続/群)でも「人手が足りない」と
   誤診断＋GuidedFix が空回り→ 不足なし時は「必須の条件がN件残っています」＋分析タブの修復フローへ振り分け
