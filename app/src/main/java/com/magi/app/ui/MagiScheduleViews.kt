@@ -1358,7 +1358,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     Column {
         // [P7/実務者向け短文化] スクロール・週送り・土日色・休の淡色は操作/見た目から自明のため説明しない。
         //   常時可視で必要なのは違反枠の読み方だけ（詳細凡例は「検索・凡例」内）。
-        Text("タップで修正。違反枠: 実線=必須 ・ 破線=重 ・ 右上角=軽",
+        Text("タップで修正。違反枠: 実線=必須 ・ 破線=重 ・ 右上角=軽 ・ 桃バッジ=未反映の希望",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row {
@@ -1413,10 +1413,13 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                             val fg = if (isRest) cs.onSurfaceVariant else ensureReadable(rawBg, shiftTextC.getOrNull(k) ?: cs.onSurface)
                             val sym = ui.shiftSymbols.getOrNull(k) ?: ""
                             val vk = vioKind[i][d]; val wkk = wishKind[i][d]
+                            // [希望バッジ] 未反映（割付≠希望）のときは希望シフトの記号をバッジでセルに重ねる
+                            //   （旧: 桃ドットのみで「何を希望していたか」が編集シートを開かないと分からなかった）。
+                            val wishSym = if (wkk == 2) ui.wishes["$i,$d"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "" else ""
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") +
-                                (if (wkk == 2) "・希望未反映" else if (wkk != 0) "・希望" else "") + "、タップで変更"
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest, symSize = symFontSize, focused = (focusCell?.first == i && focusCell.second == d) || (focusRange != null && focusRange.first == i && d >= focusRange.second && d <= focusRange.third)) { onCellClick(i, d) }
+                                (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") + "、タップで変更"
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest, symSize = symFontSize, focused = (focusCell?.first == i && focusCell.second == d) || (focusRange != null && focusRange.first == i && d >= focusRange.second && d <= focusRange.third), wishSym = wishSym) { onCellClick(i, d) }
                         }
                     }
                 }
@@ -1429,7 +1432,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
 private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
     bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false,
-    symSize: androidx.compose.ui.unit.TextUnit = 15.sp, focused: Boolean = false, onClick: () -> Unit,
+    symSize: androidx.compose.ui.unit.TextUnit = 15.sp, focused: Boolean = false, wishSym: String = "", onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.width(w).height(h).padding(1.5.dp)) {
@@ -1460,9 +1463,20 @@ private fun FlatCell(
                     drawPath(p, vioSoftColor)
                 })
             }
-            // [希望] 左下ドット: 反映済=青緑リング / 未反映=桃塗り（色覚安全）。
-            //   [コントラスト] 任意のシフト色上でも消えないよう surface のハローで縁取り＋8dpに拡大。
-            if (wk != 0) {
+            // [希望バッジ] 未反映（割付≠希望）= 希望シフトの記号を桃色バッジで左下に重ねる（ユーザー指示。
+            //   旧: 桃ドットのみで希望の中身が読めなかった）。反映済は従来どおり青緑リング（控えめ・情報は割付記号と同じ）。
+            //   [コントラスト] 任意のシフト色上でも消えないよう surface のハローで縁取り。
+            if (wk == 2 && wishSym.isNotBlank()) {
+                Box(
+                    Modifier.align(Alignment.BottomStart).padding(1.dp)
+                        .background(cs.surface, RoundedCornerShape(4.dp)).padding(1.dp)
+                        .background(MagiAccent.pink, RoundedCornerShape(3.dp))
+                        .padding(horizontal = 2.dp),
+                ) {
+                    Text(wishSym, fontSize = symSize * 0.70f, fontWeight = FontWeight.Bold,
+                        color = ensureReadable(MagiAccent.pink, Color(0xFFFFFFFF)), maxLines = 1)
+                }
+            } else if (wk != 0) {
                 Box(
                     Modifier.align(Alignment.BottomStart).padding(1.5.dp).size(9.dp)
                         .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)

@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 261
-        versionName = "3.112.1-sunday-calendar"
+        versionCode = 262
+        versionName = "3.113.0-wish-badge"
     }
 
     buildTypes {
