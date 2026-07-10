@@ -647,6 +647,28 @@ internal fun ScheduleGrid(
                     Text("まとめて割当（一括編集）")
                 }
             }
+            // [Web試作①] シフト別の人員不足サマリー: covU のある日数をシフト別に集計（多い順）＝
+            //   「どのシフトが慢性的に埋まらないか」を1行で提示。E7 人員バケツOFF時は他の covU 表示と同様に隠す。
+            if ("need" in vioEnabled) {
+                val shortByShift = ui.needViolations.entries
+                    .filter { it.value == "vio-covU" }
+                    .mapNotNull { e ->
+                        val p = e.key.split(",")
+                        val k = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
+                        if (k == null || j == null) null else k to j
+                    }
+                    .groupBy({ it.first }, { it.second })
+                    .entries.sortedByDescending { it.value.size }
+                if (shortByShift.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.small) {
+                        Text("人員不足（全${allDays}日中）: " +
+                            shortByShift.joinToString(" ・ ") { (k, ds) -> "${ui.shiftSymbols.getOrNull(k) ?: k} ${ds.distinct().size}日" },
+                            color = cs.onErrorContainer, style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                }
+            }
             // [E7 誰が・いつ] 表示中(フィルタ通過)のセル違反を「名前 d日」で列挙（最大8件）。種別を絞ると場所が一目で分かる。
             //   種別チップは勤務表タブ上部の共有フィルタ(ViolationFilterBar)へ集約したのでここには出さない。
             run {
