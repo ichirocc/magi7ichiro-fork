@@ -121,7 +121,7 @@ internal fun decodeCsvBytes(bytes: ByteArray): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (Int) -> Unit = {}) {
+fun MagiApp(vm: MagiViewModel = viewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     // [保存] バックグラウンド遷移(ON_STOP/ON_PAUSE)で保留中の編集を即時永続化する。
     //   制約編集などはデバウンス保存のため、即背景化→プロセス破棄だと失われ得る。その保険。
@@ -525,7 +525,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // FlagsView（実験フラグ）は一般ユーザー画面から除外。詳細設定は上級者向けに別途。
                 }
                 else -> {
-                    AppearanceCard(themeMode, onThemeMode, oneHand, { oneHand = it }, proMode) { proMode = it }
+                    AppearanceCard(oneHand, { oneHand = it }, proMode) { proMode = it }
                     ShiftColorCard(ui, vm)
                     DataActionsCard(
                         ui = ui,

@@ -302,6 +302,10 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+- (3.121.0, D8=外観UD固定): ユーザー指示「外観は UD モードのみ」。テーマセレクタ（自動/明/暗/UD）を撤去し
+  **UD（高コントラスト・白地）固定**。MainActivity は MagiTheme(3) 直指定＋ステータスバー暗アイコン固定、
+  AppearanceCard は 片手モード＋表示モード（かんたん/プロ）のみに。明/暗/UD の配色定義は MagiTheme に温存
+  （mode引数経由・復活可能）。表示のみ・スコアリング不変。
 - (3.120.0, D7=読取(結果)モード撤去): ユーザー判断「読み取り結果モードは不要。下書き直すモードだけで大丈夫」。
   勤務表タブの ScheduleModeCard(結果/下書き切替)・gridUi差し替え・CellInfoDialog(3.119.0)・hintReadOnly を撤去し、
   **常に直接編集の1本**（タップ=即編集シート）。最適化完了時は schedule==resultSchedule のため結果はそのまま見える。

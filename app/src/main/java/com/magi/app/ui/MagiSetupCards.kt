@@ -502,22 +502,20 @@ internal fun DataActionsCard(
 
 @Composable
 internal fun AppearanceCard(
-    themeMode: Int, onThemeMode: (Int) -> Unit, oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
+    oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
     proMode: Boolean = false, onProMode: (Boolean) -> Unit = {},
 ) {
-    val options = listOf("自動", "明", "暗", "UD")   // [B5/A8] 4セグメント用の短ラベル(=システム/ライト/ダーク/高コントラスト)
+    // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("外観", style = MaterialTheme.typography.titleMedium)
-            Text("見やすさに合わせて配色を選べます。",
+            Text("配色はユニバーサルデザイン（高コントラスト）固定です。",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = oneHand, onCheckedChange = onOneHand)
                 Spacer(Modifier.width(8.dp))
                 Text("片手モード（内容を下方に寄せて親指で届きやすく）", fontSize = 14.sp, modifier = Modifier.weight(1f))
             }
-            // [B5/A8] 2×2ボタン → 4セグメント（自動/明/暗/UD）。themeMode の index 対応は不変。
-            MagiSegmentedControl(options = options, selected = themeMode, onSelect = onThemeMode)
             // [プロ編集] 表示モード。プロ＝数値診断（生指標）を前面に。今後さらに高密度編集を拡張予定。
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
             MagiSegmentedControl(options = listOf("かんたん", "プロ"), selected = if (proMode) 1 else 0, onSelect = { onProMode(it == 1) })
