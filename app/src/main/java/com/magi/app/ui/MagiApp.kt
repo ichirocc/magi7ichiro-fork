@@ -408,7 +408,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     MismatchExtractCard(ui, onOpenCell = openEditor)
                     OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
-                        Text("希望シフトの一括操作（曜日／全体）")
+                        Text("希望シフトの一括操作")
                     }
                     if (wishBulkOpen) {
                         WishBulkSheet(ui, vm, presetWeekday = 0, onDismiss = { wishBulkOpen = false })
@@ -457,7 +457,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [E6案A] 長大スクロールを畳んで削減。①のみ既定で展開。展開状態は rememberSaveable で保持。
                             CollapsibleSection("① シフト・グループ・スタッフ", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("勤務の種類・グループ分け・スタッフを登録し、どのグループがどの勤務に入れるかを決めます。ここがすべての土台です。")
+                                    SectionNote("勤務の種類・グループ・スタッフと、群×勤務の担当可否を決めます。")
                                     Ws1Card(ui, vm)
                                 }
                             }

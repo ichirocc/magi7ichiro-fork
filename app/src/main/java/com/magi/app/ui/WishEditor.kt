@@ -62,7 +62,7 @@ fun WishCard(ui: UiState, vm: MagiViewModel) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("希望シフト", style = MaterialTheme.typography.titleMedium)
             Text(
-                "各スタッフが特定の日に希望するシフトを登録します（できれば叶える＝任意）。勤務表の割当変更とは別です。",
+                "特定の日の希望シフトを登録（任意）。割当の直接変更とは別です。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

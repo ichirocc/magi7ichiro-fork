@@ -50,7 +50,7 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("ユニットとは別の分類。担当できるシフトには影響せず、下の「スキル別の回数／組み合わせ禁止」だけが使います（1人1スキル）。",
+            Text("担当シフトには影響しない別の分類。スキル別の回数/禁止ペアだけが参照します（1人1スキル）。",
                 fontSize = 12.sp, color = cs.onSurfaceVariant)
 
             skills.forEachIndexed { g, sg ->

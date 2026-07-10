@@ -168,7 +168,7 @@ internal fun LiveScheduleCard(ui: UiState) {
             TextButton(onClick = { show = !show }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(if (show) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                Text(if (show) "途中経過を隠す" else "途中経過を見る（組んでいる様子）")
+                Text(if (show) "途中経過を隠す" else "途中経過を見る")
             }
             if (show) {
                 Text("状態遷移  赤枠＝今回変化 (${changed.size})", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
@@ -257,7 +257,7 @@ internal fun ShiftPickerSheet(
                         TextButton(onClick = {
                             val famsJp = vioFams.joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
                             vm.addReviewMemo("$name ${j + 1}日=${sym(current)}：$famsJp")
-                        }) { Text("基本ルールの見直し候補にする（年間マスターへメモ）") }
+                        }) { Text("基本ルールの見直し候補にする") }
                     }
                 }
             }
@@ -568,8 +568,7 @@ internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<Str
                 }
             }
             // [P7/実務者向け短文化] コーチング文（多い種類から潰す…）は削除。チップの件数が優先順を語る。
-            Text("タップで種類の表示/非表示",
-                style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+            // [冗長性見直し] 操作説明はチップのトグル自体が示すため削除。
         }
     }
 }
@@ -657,7 +656,7 @@ internal fun ScheduleGrid(
             // [一括編集] まとめて変更は多数セルを上書きする上級操作のため、プロ表示時のみ。範囲×対象×シフトをダイアログで一括指定。
             if (proMode) {
                 OutlinedButton(onClick = { showBulk = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text("まとめて割当（一括編集）")
+                    Text("まとめて割当")
                 }
             }
             // [Web試作①] シフト別の人員不足サマリー: covU のある日数をシフト別に集計（多い順）＝

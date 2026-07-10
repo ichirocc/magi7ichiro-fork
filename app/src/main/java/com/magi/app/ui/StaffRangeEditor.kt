@@ -59,7 +59,7 @@ fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                "「目標◯」=適切回数（群目標）。「目標A→B」はAが個人の上下限でBにクランプされた状態。「今◯」=現在の回数。チップの色=不足（必須色）/超過（要調整色）。",
+                "「目標」=適切回数（A→Bは個人上下限で丸め）・「今」=現在の回数。色=不足/超過。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -206,7 +206,7 @@ fun GroupRangeCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "グループ単位でシフトの回数を一括設定します（個人レンジ ws5 に書込み）。既に個人で設定済みの職員は上書きせず保持します。最低=最高の単一値ならグループ別の適切回数(ws1 C)も同時に設定します。",
+                "選んだグループ全員に同じ回数の上下限を設定します（個人設定済みは保持）。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

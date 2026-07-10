@@ -117,7 +117,7 @@ internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象の月", style = MaterialTheme.typography.titleMedium)
-            Text("勤務表を作る月です。変えると、その月の日数に合わせて表を作り直します。",
+            Text("作成対象の月。変えると日数に合わせて表を作り直します。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { vm.shiftMonth(-1) }, enabled = !ui.running,
@@ -194,7 +194,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を増やす" }) { Text("＋", fontSize = 20.sp) }
             }
             Spacer(Modifier.height(10.dp))
-            Text("時間予算（計算の制限時間・上限5分／停滞時はさらに早期終了）: ${ui.budgetSec} 秒")
+            Text("計算の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.setBudget((ui.budgetSec - 60).coerceAtLeast(10)) },
                     enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.height(48.dp)) { Text("− 60秒") }
@@ -222,14 +222,14 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     enabled = !ui.running,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("仕上げ最適化（品質を磨く）", fontSize = 14.sp)
+                Text("仕上げ最適化", fontSize = 14.sp)
             }
             Spacer(Modifier.height(10.dp))
             // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
             //   バックグラウンド実行だけをここ（実行条件＝予算/並列の設定と同じ場所）へ移設。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("閉じても大丈夫（バックグラウンドで作る）") }
+            ) { Text("バックグラウンドで作る（閉じても続行）") }
             Spacer(Modifier.height(14.dp))
             // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
             //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
@@ -276,7 +276,7 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> 
     val issues = ui.settingIssues.size
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("今月の作成条件（チェックリスト）", style = MaterialTheme.typography.titleMedium)
+            Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
             ChecklistRow("職員", "${staffN}名", ok = staffN > 0)
             ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0)
             ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
@@ -322,8 +322,8 @@ internal fun StaffingRealityCard(ui: UiState, vm: MagiViewModel) {
     if (rows.isEmpty()) return
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("実働チェック（この体制で回るか）", style = MaterialTheme.typography.titleMedium)
-            Text("シフトごとに「担当できる人数」で見ます（担当4人なら実質4人で運営）。余裕=1人欠けても1日の必要人数を揃えられるか。",
+            Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
+            Text("シフト別に「担当できる人数」で確認。余裕=1人欠けても回るか。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             rows.forEach { r ->
                 val slack = r.q - r.maxNeed
@@ -517,7 +517,7 @@ internal fun AppearanceCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = oneHand, onCheckedChange = onOneHand)
                 Spacer(Modifier.width(8.dp))
-                Text("片手モード（内容を下方に寄せて親指で届きやすく）", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text("片手モード", fontSize = 14.sp, modifier = Modifier.weight(1f))
             }
             // [プロ編集] 表示モード。プロ＝数値診断（生指標）を前面に。今後さらに高密度編集を拡張予定。
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
