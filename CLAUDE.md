@@ -292,6 +292,18 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+- (3.112.0, スクショ手書き指摘3系統=撤去・カレンダー化・違反色の変更対応): ユーザーが実機スクショ5枚に赤/青/黄で指示。
+  **赤（オブジェクト不要→撤去）**: ①`HeroMetricsRow`(対象人数/対象期間タイル=読込ステータス行と重複、定義ごと撤去)
+  ②ホーム`ActionCard`「ほかの作り方」(速く/かんたんは主導線と重複・実行中は全ボタン無効の死に領域。定義ごと撤去。
+  **固有機能のバックグラウンド実行だけ SettingsCard(設定タブ最適化設定)へ移設**=`SettingsCard(onBgOptimize)`)
+  ③実行中カードの見出し「いま、コンピューターが組んでいます…あと約N分…」(進捗行 progressSummary と重複。headline=""
+  ＋isNotBlank ガード)。**青（カレンダー形式）**: 日別の必要人数ダイアログの日入力(テキスト+数字キーボード)→
+  **`DayPickerGrid`**(月曜始まり曜日整列・土青/日赤・1タップ選択・40dp床)。WishEditor の日入力は対象外(指示範囲外)。
+  **黄（違反種別の色が変更できない）**: `ColorSettingsView` が read-only 凡例でチップを押しても無反応だった→
+  **チップタップでその重大度の色を変更**（必須=既存 `__vio__`・要調整=**新トークン `__vioSoft__`**(shiftColors 予約キー、
+  vm.setViolationSoftColor/reset・UiState.violationSoftColorHex)・灰=情報は固定）。要調整色は MagiFlatGrid(破線枠/角マーク/
+  日ヘッダ下線)・SearchLegendBar 凡例へ即反映(旧 MagiAccent.orange 直書きをトークン解決に)。ColorPickerDialog を internal 化し
+  再利用。外観「違反の色」の説明文も更新。全て表示のみ・スコアリング不変。
 - (3.111.0, 残作業④⑤⑥の一括完成=用語統一・違反Set化・日別ジャンプ): ユーザー指示「すべて一括完成させます」。
   ⑤**違反マップSet化**: `ViolationReport.cellFamilies`("i,j"→全違反クラスを重み降順、violations=最重1クラスは後方互換で不変)
   を新設し UiState `violationCellFamilies`(+result版) へ plumbing。効果=①編集シートの違反理由が**全列挙**(重なった c42+c3 等が

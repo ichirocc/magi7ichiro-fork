@@ -1,6 +1,7 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -52,9 +57,16 @@ fun CheckSummaryView(ui: UiState, proMode: Boolean = false) {
 }
 
 @Composable
-fun ColorSettingsView(ui: UiState) {
-    SectionSegment("違反種別の色", "重大度の色凡例（赤=必須 / 橙=要調整 / 灰=情報）") {
+fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
+    // [色変更/スクショ指摘] 旧版は read-only の凡例で、チップを押しても何も起きず「色を変更出来ない」と誤解を
+    //   招いていた（カード題も「違反種別の色」）。チップタップでその重大度の色を変更できるように:
+    //   必須=既存トークン __vio__（外観の「違反の色」と同一）/ 要調整=新トークン __vioSoft__。灰=情報は固定。
+    //   変更はグリッド枠・角マーク・日ヘッダ下線・凡例へ即反映。表示のみ・スコアリング不変。
+    var pick by remember { mutableStateOf<String?>(null) }   // "hard" / "soft"
+    SectionSegment("違反種別の色", "重大度の色凡例。チップをタップで 必須/要調整 の色を変更（灰=情報は固定）") {
         val cs = MaterialTheme.colorScheme
+        val hardBg = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: Color(0xFFBA1A1A)
+        val softBg = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
         val keys = MirrorKeys.all
         keys.chunked(4).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
@@ -62,25 +74,20 @@ fun ColorSettingsView(ui: UiState) {
                     val sev = V6WebCompat.severityFromVioKey(key)
                     // [色覚/日本語化] 色に依らない文字バックアップ。英語enum(CRITICAL/…)ではなく日本語の重大度語で示す。
                     val sevJp = when (sev) { "CRITICAL" -> "必須"; "HIGH", "WARN" -> "要調整"; else -> "情報" }
-                    // [不具合修正] 旧版は「重大度の色凡例」なのに色が primary(ブランド緑)＝違反有無で、重大度と無関係だった。
-                    //   緑は普遍的に「OK」の意で違反表示に不適＋統一パレット(赤=必須/橙=要調整)とも乖離。
-                    //   重大度で静的に色分けし(凡例=データ非依存の参照)、現在件数は末尾に併記する。
                     val count = ui.breakdown[key] ?: 0
                     val bg = when (sev) {
-                        // [コントラスト] 白文字 on 0xEF4444 は 3.76:1 で WCAG AA 不足のため、濃い赤(約5.9:1)へ。
-                        "CRITICAL" -> Color(0xFFBA1A1A)
-                        "HIGH", "WARN" -> MagiAccent.orange
+                        "CRITICAL" -> hardBg
+                        "HIGH", "WARN" -> softBg
                         else -> cs.surfaceVariant   // INFO
                     }
-                    val fg = when (sev) {
-                        "CRITICAL" -> Color(0xFFFFFFFF)
-                        "HIGH", "WARN" -> Color(0xFF231400)
-                        else -> cs.onSurfaceVariant
-                    }
+                    // [コントラスト] ユーザー色でも読めるよう WCAG で文字色を保証（白が不足なら黒へ）。
+                    val fg = if (sev == "CRITICAL" || sev == "HIGH" || sev == "WARN") ensureReadable(bg, Color(0xFFFFFFFF)) else cs.onSurfaceVariant
+                    val editable = sev != "INFO" && !ui.running
                     Box(
                         Modifier
                             .weight(1f)
                             .background(bg, RoundedCornerShape(8.dp))
+                            .then(if (editable) Modifier.clickable { pick = if (sev == "CRITICAL") "hard" else "soft" } else Modifier)
                             .padding(6.dp),
                         contentAlignment = Alignment.Center,
                     ) { Text("$key\n$sevJp" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
@@ -88,5 +95,21 @@ fun ColorSettingsView(ui: UiState) {
             }
             Spacer(Modifier.height(6.dp))
         }
+    }
+    when (pick) {
+        "hard" -> ColorPickerDialog(
+            kigou = "必須違反",
+            currentHex = ui.violationColorHex,
+            onPick = { hex -> vm.setViolationColor(hex); pick = null },
+            onReset = { vm.resetViolationColor(); pick = null },
+            onClose = { pick = null },
+        )
+        "soft" -> ColorPickerDialog(
+            kigou = "要調整",
+            currentHex = ui.violationSoftColorHex,
+            onPick = { hex -> vm.setViolationSoftColor(hex); pick = null },
+            onReset = { vm.resetViolationSoftColor(); pick = null },
+            onClose = { pick = null },
+        )
     }
 }

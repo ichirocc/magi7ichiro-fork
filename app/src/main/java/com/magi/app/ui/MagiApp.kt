@@ -360,7 +360,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     CopilotCard(ui, onGoEdit = { tab = 2 }, onSoftPolish = { vm.runSoftPolish() })
                     CoverageDiagnosisCard(ui)
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) }, onGoEdit = { tab = 2 })
-                    ActionCard(ui, vm, onBgOptimize = onBgOptimize)
+                    // [スクショ指摘/撤去] 「ほかの作り方」カード（速くつくる/かんたんに/閉じても大丈夫）は
+                    //   主導線（思考誘導カード＋下部バー）と重複し、実行中は全ボタン無効の死に領域だった
+                    //   （ユーザー赤囲い指示）。唯一固有のバックグラウンド実行は設定タブ「最適化設定」へ移設。
                     AlternativesCard(ui, onApply = { vm.applyAlternative(it) })
                 }
                 1 -> {
@@ -519,8 +521,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [N2/⛏11] プロ表示トグルを分析タブ上部に常設（従来は設定タブの外観カード内＝
                     //   タブ往復が必要だった）。proMode は共有状態なので設定側トグルと同期する。
                     MagiSegmentedControl(options = listOf("一般", "プロ"), selected = if (proMode) 1 else 0, onSelect = { proMode = it == 1 })
-                    // [★2] 概要ヒーロー（対象人数/対象期間/確認事項）＝要確認一覧の前に規模・件数を提示（web「画面修正版」hero 移植）。
-                    HeroMetricsRow(ui)
+                    // [スクショ指摘/撤去] 概要ヒーロー（対象人数/対象期間）は読込ステータス行と重複の固定値で
+                    //   トリアージに寄与しないため撤去（ユーザー赤囲い指示）。件数は要確認一覧の見出しが担う。
                     // [★1/E1] 要確認一覧＝散在していた診断を「箇所単位・重大度」で1ハブに統合（web「画面修正版」confirm 移植）。
                     //   タブ先頭のヒーローとして配置。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。表示のみ・スコア不変。
                     ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode,
@@ -561,7 +563,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         onSaveWishesCsv = { pendingExportKind = "wishes"; saveComponentCsvLauncher.launch("magi_wishes_${System.currentTimeMillis()}.csv") },
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                     )
-                    SettingsCard(ui, vm)
+                    SettingsCard(ui, vm, onBgOptimize = onBgOptimize)
                     // [冗長性] 旧 OperatorLogView（見出し「操作ログ」だが中身は診断ログ＝誤ラベルで、
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(

@@ -555,6 +555,7 @@ internal fun SearchLegendBar(ui: UiState, query: String, onQuery: (String) -> Un
     val cs = MaterialTheme.colorScheme
     var open by rememberSaveable { mutableStateOf(false) }
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+    val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { open = !open }) {
@@ -571,7 +572,7 @@ internal fun SearchLegendBar(ui: UiState, query: String, onQuery: (String) -> Un
                     trailingIcon = { if (query.isNotEmpty()) TextButton(onClick = { onQuery("") }) { Text("消す") } },
                 )
                 Spacer(Modifier.height(10.dp))
-                if (ui.violationCells.isNotEmpty()) { ViolationLegend(vioColor); Spacer(Modifier.height(6.dp)) }
+                if (ui.violationCells.isNotEmpty()) { ViolationLegend(vioColor, vioSoftColor); Spacer(Modifier.height(6.dp)) }
                 ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
             }
         }
@@ -1308,7 +1309,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
     // [週ページング] 全日を横スクロールで保持しつつ（併用）、外部 hScroll を受けて 前週/次週 でジャンプできる。
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
-    val vioSoftColor = MagiAccent.orange
+    // [色変更] 要調整(ソフト)色はトークン __vioSoft__（設定→詳細設定→違反種別の色）から解決。空=既定の橙。
+    val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
     val shiftTextC = remember(ui.shiftTextHex) { ui.shiftTextHex.map { hexToColor(it) } }
     val sdow = startDowMonFirst(ui.startDate)

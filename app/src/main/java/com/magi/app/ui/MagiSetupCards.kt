@@ -177,7 +177,7 @@ internal fun GuideRow(label: String, value: String, done: Boolean) {
 
 
 @Composable
-internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
+internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
@@ -222,6 +222,12 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
                 Spacer(Modifier.width(8.dp))
                 Text("仕上げ最適化（品質を磨く）", fontSize = 14.sp)
             }
+            Spacer(Modifier.height(10.dp))
+            // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
+            //   バックグラウンド実行だけをここ（実行条件＝予算/並列の設定と同じ場所）へ移設。
+            OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) { Text("閉じても大丈夫（バックグラウンドで作る）") }
             Spacer(Modifier.height(14.dp))
             // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
             //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
@@ -248,25 +254,8 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
 }
 
 
-@Composable
-internal fun ActionCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit = {}) {
-    // [冗長性削減] 主操作「勤務表をつくる」は思考誘導カード＋下部バーが担うため、ここは
-    //   「ほかの作り方」(速く/かんたん) と「閉じても続ける(バックグラウンド)」だけに絞る。進捗/停止も他で表示。
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("ほかの作り方", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { vm.start() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("速くつくる") }
-                OutlinedButton(onClick = { vm.runLightOptimize() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("かんたんに") }
-            }
-            // [冗長性F1] ソフト研磨ボタンは CopilotCard（必須充足後の文脈付き案内）と重複のため撤去。
-            //   ON/OFFの自動研磨は設定の「仕上げ最適化」スイッチ、手動起動は Copilot 側に一本化。
-            OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("閉じても大丈夫（あとで通知でお知らせ）") }
-        }
-    }
-}
+// [3.112.0 撤去] ActionCard（ほかの作り方: 速くつくる/かんたんに/閉じても大丈夫）はユーザー赤囲い指示で撤去。
+//   速く/かんたんは主導線（思考誘導カード onMake/onDraft）と重複、バックグラウンド実行は SettingsCard へ移設。
 
 
 @Composable
@@ -311,7 +300,7 @@ internal fun AdvancedSettingsSection(
                     // [冗長性J1] V6DashboardCard（1ヶ月俯瞰・生指標）は分析タブ「プロ」表示と重複のため
                     //   ここから撤去し、分析タブ(プロ)に一本化。ここはログ・違反色トークンのみ。
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
-                    ColorSettingsView(ui)
+                    ColorSettingsView(ui, vm)
                 }
             }
         }

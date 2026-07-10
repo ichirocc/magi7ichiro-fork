@@ -1496,6 +1496,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         applyStructure(st.copy(shiftColors = st.shiftColors - "__vio__"))
     }
+    /** [違反色] 要調整(ソフト違反)の枠/マーカー色。予約キー "__vioSoft__"（空=既定の橙）。 */
+    fun setViolationSoftColor(hex: String) {
+        val st = state ?: return; if (hex.isBlank()) return
+        applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioSoft__" to hex.trim())))
+    }
+    fun resetViolationSoftColor() {
+        val st = state ?: return
+        applyStructure(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
+    }
     fun groupKigouList(): List<String> = state?.groups?.map { it.kigou } ?: emptyList()
 
     /** [冗長除去/データ密度] 1日人数の上下限 [l〜u] を意味で圧縮して短く表す。見出しが「人数(上下限)」の
@@ -2299,6 +2308,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             shiftColorHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i) },
             shiftTextHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.pickTextColor(V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i)) },
             violationColorHex = st.shiftColors["__vio__"] ?: "",
+            violationSoftColorHex = st.shiftColors["__vioSoft__"] ?: "",
             schedule = schedule.map { it.toList() },
             wishes = st.wishes,
             resultSchedule = resultSchedule?.map { it.toList() } ?: emptyList(),   // [B1] 確定結果(ws6)

@@ -207,11 +207,10 @@ internal fun OperatorNextActionCard(
 
     val plan = when {
         ui.running -> {
-            val remainMin = ((ui.budgetSec * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 60_000L) + 1
             // [校正] 「やめる」は下部コマンドバーに常設済み。カード側の補助ボタンは重複のため出さない。
-            OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer,
-                "いま、コンピューターが組んでいます。\nあと約 ${remainMin} 分。閉じても大丈夫です。",
-                "", {}, false, null, onStop)
+            // [スクショ指摘/撤去] 見出し文（コンピューターが組んでいます…あと約N分…）は下の進捗行
+            //   （残り時間/改善率/回数 = progressSummary）と重複のため出さない（ユーザー赤囲い指示）。
+            OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "", "", {}, false, null, onStop)
         }
         !ui.hasResult -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer,
             "② ボタンひとつで、勤務表を作ります。",
@@ -242,7 +241,7 @@ internal fun OperatorNextActionCard(
                     Text(phName, style = MaterialTheme.typography.labelMedium, color = ensureReadable(phColor, Color.White), fontWeight = FontWeight.Bold)
                 }
             }
-            Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+            if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
             // 数字は必ず言葉つきで意味を添える（operator_ux §6）。
             Text(
                 "人手が足りない日：${shortDays}日 ・ できあがり度（全体の完成度）：${ui.satisfaction}%",
@@ -604,20 +603,8 @@ internal fun breakdownLocations(famKey: String, ui: UiState): List<Pair<String, 
 // [死にコード整理] BottleneckCard は 3.81.0 で AttentionCardsSection(全件＋トグル＋タップ修復)が上位互換となり
 //   詳細タブから撤去済み。呼出0の composable 定義もここで撤去した（履歴は git にある）。
 
-/**
- * [★2/見直し] 概要ヒーロー：対象人数 / 対象期間 の2指標（web「画面修正版」hero 移植）。
- * 旧「確認事項(件)」タイルは直下 ConfirmListCard ヘッダ「要確認一覧（N件）」と完全に同じ数＝重複のため撤去。
- * ヒーローは規模（人数・期間）のコンテキストに純化し、件数は要確認一覧に一本化。表示のみ・スコアリング不変（読取専用）。
- */
-@Composable
-internal fun HeroMetricsRow(ui: UiState) {
-    if (ui.schedule.isEmpty()) return
-    val days = ui.schedule.firstOrNull()?.size ?: 0
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        BigStat("対象人数", "${ui.staffNames.size}名", Modifier.weight(1f))
-        BigStat("対象期間", "${days}日", Modifier.weight(1f))
-    }
-}
+// [3.112.0 撤去] HeroMetricsRow（対象人数/対象期間の2タイル）はユーザー赤囲い指示で撤去。
+//   読込ステータス行「読込完了: N名/N日/Nシフト」と重複する固定値で、トリアージに寄与しないため。
 
 /** [★1/E1] 要確認一覧の1項目。個々の違反箇所を重大度マーク付きで表す（web「画面修正版」confirm ビュー移植）。 */
 private data class ConfirmItem(

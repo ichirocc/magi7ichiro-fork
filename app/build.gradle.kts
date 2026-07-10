@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 259
-        versionName = "3.111.0-multivio-dayjump"
+        versionCode = 260
+        versionName = "3.112.0-screenshot-triage"
     }
 
     buildTypes {
