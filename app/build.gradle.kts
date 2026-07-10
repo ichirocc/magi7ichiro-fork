@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 283
-        versionName = "3.131.0-wish-calendar"
+        versionCode = 284
+        versionName = "3.132.0-color-entry-unify"
     }
 
     buildTypes {

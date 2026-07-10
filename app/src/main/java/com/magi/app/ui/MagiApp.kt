@@ -523,11 +523,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     BreakdownCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, proMode = proMode)
                     // [★3+4] BottleneckCard(top5テキスト) は AttentionCardsSection(上・全件＋トグル＋タップ修復) が上位互換のため撤去。
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode)
-                    // [3.122.0] ColorSettingsView（違反種別の色=族別の色設定）は設定タブの詳細設定（上級者向け）に配置。
+                    // [3.122.0→3.132系] ColorSettingsView（違反種別の色=族別の色設定）は設定タブのシフトの表示色直後に配置。
                 }
                 else -> {
                     AppearanceCard(oneHand, { oneHand = it }, proMode) { proMode = it }
                     ShiftColorCard(ui, vm)
+                    // [IA重複解消 3.132系] 違反の色は ColorSettingsView（基準色2種＋族別）へ一本化し、
+                    //   シフトの表示色の直後＝色設定の定位置に配置（旧: 詳細設定の折りたたみ内で見つけにくい＋
+                    //   ShiftColorCard 内に必須色だけの部分入口が重複していた）。
+                    ColorSettingsView(ui, vm)
                     DataActionsCard(
                         ui = ui,
                         onOpenJson = openJson,

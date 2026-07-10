@@ -1440,7 +1440,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
     // [週ページング] 全日を横スクロールで保持しつつ（併用）、外部 hScroll を受けて 前週/次週 でジャンプできる。
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
-    // [色変更] 要調整(ソフト)色はトークン __vioSoft__（設定→詳細設定→違反種別の色）から解決。空=既定の橙。
+    // [色変更] 要調整(ソフト)色はトークン __vioSoft__（設定→違反種別の色）から解決。空=既定の橙。
     val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
     val shiftTextC = remember(ui.shiftTextHex) { ui.shiftTextHex.map { hexToColor(it) } }

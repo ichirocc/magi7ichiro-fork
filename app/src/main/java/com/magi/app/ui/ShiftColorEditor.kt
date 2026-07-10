@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -70,7 +69,6 @@ private val COLOR_PALETTE = listOf(
 @Composable
 fun ShiftColorCard(ui: UiState, vm: MagiViewModel) {
     var target by remember { mutableStateOf<String?>(null) }
-    var vioPicker by remember { mutableStateOf(false) }
     val shifts = vm.shiftColorList()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -108,39 +106,9 @@ fun ShiftColorCard(ui: UiState, vm: MagiViewModel) {
                     }
                 }
             }
-            // [違反色] 違反セルの枠・マーカー色をタップで変更（保存される）。空＝テーマの赤。
-            Divider()
-            Text("違反の色（必須違反）", style = MaterialTheme.typography.titleSmall)
-            Text("必須違反（枠・マーカー・集計の不足）の基準色。種別ごとの色や要調整の色は 設定 → 詳細設定 → 違反種別の色 で変更できます。",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            val vc = MaterialTheme.colorScheme
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .border(if (ui.violationColorHex.isNotBlank()) 2.dp else 1.dp,
-                        if (ui.violationColorHex.isNotBlank()) vc.primary else vc.outline, MaterialTheme.shapes.medium)
-                    .clickable(enabled = !ui.running) { vioPicker = true }
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                Swatch(ui.violationColorHex.ifBlank { "#BA1A1A" }, 24.dp)
-                Text(if (ui.violationColorHex.isBlank()) "既定（赤）・タップで変更" else "指定の色・タップで変更",
-                    style = MaterialTheme.typography.bodyMedium)
-            }
+            // [IA重複解消 3.132系] 旧「違反の色（必須違反）」節（__vio__ のみの入口）は撤去。違反の色は
+            //   直下の ColorSettingsView（違反種別の色＝基準色2種＋族別）に一本化（詳細設定から移動）。
         }
-    }
-    if (vioPicker) {
-        ColorPickerDialog(
-            kigou = "違反",
-            currentHex = ui.violationColorHex,
-            defaultHex = "#BA1A1A",
-            onPick = { hex -> vm.setViolationColor(hex); vioPicker = false },
-            onReset = { vm.resetViolationColor(); vioPicker = false },
-            onClose = { vioPicker = false },
-        )
     }
     target?.let { kg ->
         val current = shifts.firstOrNull { it.kigou == kg }

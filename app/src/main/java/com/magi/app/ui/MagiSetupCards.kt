@@ -417,9 +417,10 @@ internal fun AdvancedSettingsSection(
                     // [冗長性] 旧 FlagsView（計算方式＋仕上げ最適化）は「最適化設定」カードと完全重複の
                     //   ため撤去。設定の操作は「最適化設定」に一本化。
                     // [冗長性J1] V6DashboardCard（1ヶ月俯瞰・生指標）は分析タブ「プロ」表示と重複のため
-                    //   ここから撤去し、分析タブ(プロ)に一本化。ここはログ・違反色トークンのみ。
+                    //   ここから撤去し、分析タブ(プロ)に一本化。
+                    // [IA重複解消 3.132系] ColorSettingsView（違反種別の色）はシフトの表示色の直後
+                    //   （設定タブ上部）へ移動＝色設定を1か所に。ここはログのみ。
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
-                    ColorSettingsView(ui, vm)
                 }
             }
         }
