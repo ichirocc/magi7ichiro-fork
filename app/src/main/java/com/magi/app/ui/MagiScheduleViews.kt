@@ -245,7 +245,9 @@ internal fun ShiftPickerSheet(
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
                         else "希望  ${sym(wish)}" + (if (wish == current) "（反映済）" else "（未反映）")
+                    // [UD監査] 桃(4.07:1)は通常文字でAA不足→太字(14sp bold=大テキスト扱い・3:1基準)で担保。
                     Text(wt, style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (wish != null && wish != current) FontWeight.Bold else FontWeight.Normal,
                         color = if (wish != null && wish != current) MagiAccent.pink else cs.onSurfaceVariant)
                     // [見直し候補] 割当変更（今回だけ）と土台ルールの直し（年間マスター）を混同させない第3の出口。
                     //   違反セルのみ表示。メモは年間マスターの先頭（ReviewMemoCard）に積まれる。
@@ -319,8 +321,9 @@ internal fun ShiftPickerSheet(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(symbol + (if (ng) " 外" else ""), color = if (ng) cs.error else fg, fontWeight = FontWeight.Bold)
                                 if (note.isNotEmpty()) {
+                                    // [UD監査] 任意のシフト色上の注記は WCAG 保証（橙/緑の生アクセントは淡色上で不足）。
                                     Text(note, style = MaterialTheme.typography.labelSmall,
-                                        color = if (noteWarn) MagiAccent.orange else if (sel) cs.onPrimary else MagiAccent.green)
+                                        color = if (sel) cs.onPrimary else ensureReadable(bg, if (noteWarn) MagiAccent.orange else MagiAccent.green))
                                 }
                             }
                         }
@@ -1198,7 +1201,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // [M2] 塗り飽和度を上げ暗テーマ・屋外グレアでの視認性を確保（0.30/0.36→0.45/0.50）。
     //   数字は太字化済(第5段)のため濃い塗りでも可読。
     val shortBg = critC.copy(alpha = 0.45f)
-    val overBg = MagiAccent.orange.copy(alpha = 0.50f)
+    // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
+    val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -1492,7 +1496,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
             Row(Modifier.horizontalScroll(hScroll)) {
                 for (d in 0 until days) {
                     val dow = (sdow + d) % 7
-                    val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
+                    // [UD監査] 今日マーカーの緑(3.4:1)は白地で不足→ tertiary(濃緑ロール)へ。
+                    val dcol = when { d == todayIdx -> cs.tertiary; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
                     val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
                     // [⑥日別ジャンプ] 要確認一覧の日別項目(人員/群レンジ)から来たとき、日ヘッダを primary 枠で注目表示
                     //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。

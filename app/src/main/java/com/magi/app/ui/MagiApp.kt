@@ -521,8 +521,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     BreakdownCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, proMode = proMode)
                     // [★3+4] BottleneckCard(top5テキスト) は AttentionCardsSection(上・全件＋トグル＋タップ修復) が上位互換のため撤去。
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode)
-                    // [校正] 開発用の ColorSettingsView（英語名・生の制約コード/WARN/CRITICAL露出）と
-                    // FlagsView（実験フラグ）は一般ユーザー画面から除外。詳細設定は上級者向けに別途。
+                    // [3.122.0] ColorSettingsView（違反種別の色=族別の色設定）は設定タブの詳細設定（上級者向け）に配置。
                 }
                 else -> {
                     AppearanceCard(oneHand, { oneHand = it }, proMode) { proMode = it }

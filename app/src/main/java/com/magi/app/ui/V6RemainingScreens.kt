@@ -98,7 +98,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
             }
             Spacer(Modifier.height(6.dp))
         }
-        Text("基準色の変更: 必須違反は 外観 → 違反の色、要調整は下の一括変更から。",
+        Text("基準色（未設定の種別に効く色）は下の2チップから変更できます。",
             fontSize = 12.sp, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {

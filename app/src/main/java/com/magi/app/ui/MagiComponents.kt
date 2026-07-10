@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
@@ -120,11 +121,14 @@ fun MagiTagChip(
     modifier: Modifier = Modifier,
     leadingIcon: ImageVector? = null,
 ) {
+    // [UD監査] 淡い塗り(α0.14)上の生アクセント文字は 橙2.7:1/緑3.4:1 で不足。実効背景（白地に合成後）に
+    //   対して WCAG を保証（不足時は自動で濃色へ）。
+    val chipBg = color.copy(alpha = 0.14f).compositeOver(MaterialTheme.colorScheme.surface)
     Surface(
         modifier = modifier,
         // [Planner テイスト] やわらかい塗り＋細い同系ボーダーで、クリーム地でも輪郭がやさしく締まるピル。
         color = color.copy(alpha = 0.14f),
-        contentColor = color,
+        contentColor = ensureReadable(chipBg, color),
         shape = RoundedCornerShape(50),
         border = BorderStroke(1.dp, color.copy(alpha = 0.30f)),
     ) {

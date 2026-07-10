@@ -328,7 +328,8 @@ internal fun StaffingRealityCard(ui: UiState, vm: MagiViewModel) {
                 val tenths = if (r.q > 0) (r.d * 10 + r.q / 2) / r.q else 0
                 val (mark, col) = when {
                     slack < 0 -> "⚠" to cs.error
-                    slack == 0 -> "！" to MagiAccent.orange
+                    // [UD監査] 橙(2.7:1)は白地の文字色として不足→警告トークンの濃色(fg)へ。
+                    slack == 0 -> "！" to magiWarnColors().second
                     else -> "✓" to cs.tertiary
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

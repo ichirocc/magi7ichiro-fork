@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 274
-        versionName = "3.124.0-calendar-legibility"
+        versionCode = 275
+        versionName = "3.125.0-ud-audit"
     }
 
     buildTypes {
