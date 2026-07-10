@@ -380,7 +380,6 @@ internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
 @Composable
 internal fun AdvancedSettingsSection(
     ui: UiState,
-    vm: MagiViewModel,
     onExportLog: () -> Unit,
     onExportJson: () -> Unit,
 ) {
@@ -397,7 +396,7 @@ internal fun AdvancedSettingsSection(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("詳細設定（上級者向け）", style = MaterialTheme.typography.titleMedium)
-                    Text("ログ・違反色トークン。一般の運用では触りません。",
+                    Text("ログの確認と出力。一般の運用では触りません。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [Planner テイスト] グリフ「▾/▸」をやめ、やわらかい丸の中に整ったアイコンシェブロン。

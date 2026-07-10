@@ -551,7 +551,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(
                         ui = ui,
-                        vm = vm,
                         onExportLog = { saveLogLauncher.launch("magi_log_${System.currentTimeMillis()}.txt") },
                         onExportJson = { saveLogJsonLauncher.launch("magi_log_${System.currentTimeMillis()}.json") },
                     )

@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 284
-        versionName = "3.132.0-color-entry-unify"
+        versionCode = 285
+        versionName = "3.132.1-review-cleanup"
     }
 
     buildTypes {
