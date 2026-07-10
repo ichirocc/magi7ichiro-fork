@@ -507,6 +507,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // [3.126.0] UI導線（下書きをつくる）はユーザー判断で撤去。API として温存。
     fun generateSimple() {
         val st = state ?: return
         val sched = currentSchedule ?: return

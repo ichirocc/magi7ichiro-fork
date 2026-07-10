@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 275
-        versionName = "3.125.0-ud-audit"
+        versionCode = 276
+        versionName = "3.126.0-no-draft-button"
     }
 
     buildTypes {

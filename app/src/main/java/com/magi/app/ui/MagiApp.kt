@@ -347,7 +347,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     OperatorNextActionCard(
                         ui = ui,
                         onMake = { vm.runV6FullOptimize() },
-                        onDraft = { vm.generateSimple() },
                         onStop = { vm.stop() },
                         onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                         onSchedule = { tab = 1 },
@@ -723,7 +722,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 }
                 !ui.hasResult -> Button(
                     // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
-                    //   下書きは思考誘導カードの補助「下書きをつくる」が担う（同名ラベルで別動作の不整合を解消）。
+                    //   [3.126.0] 「下書きをつくる」補助はユーザー判断で撤去済み＝作成導線はこの1本。
                     onClick = { vm.runV6FullOptimize() },
                     modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                 ) {
