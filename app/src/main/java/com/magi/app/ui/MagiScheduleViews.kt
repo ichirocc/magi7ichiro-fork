@@ -519,7 +519,8 @@ internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<Str
                     )
                 }
             }
-            Text("タップで種類ごとに表示/非表示。件数の多い種類から潰すと配布可へ近づきます。",
+            // [P7/実務者向け短文化] コーチング文（多い種類から潰す…）は削除。チップの件数が優先順を語る。
+            Text("タップで種類の表示/非表示",
                 style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         }
     }
@@ -1075,7 +1076,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
             MagiSegmentedControl(options = listOf("職員別", "日別"), selected = mode, onSelect = { mode = it })
             Spacer(Modifier.height(12.dp))
             if (mode == 0) {
-                Text("各職員が対象期間に各シフトを担当した回数（左右にスクロール）",
+                // [P7/実務者向け短文化] 「職員別」タブ名＋表そのもので内容は自明。残すのは操作の含意だけ。
+                Text("違反セルはタップで内訳と直し方",
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 // [一括修正] 職員別の赤/橙は low/high(上下限)だけでなく aptLow/aptHigh(適切回数=目標)も同色マーク
                 //   のため、凡例に「目標」を含める（旧「上限超過」だけでは 美幸B4=目標超過 の橙が読めなかった）。
@@ -1128,7 +1130,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                     }
                 }
             } else {
-                Text("各日に各シフトへ配置されている人数（左右にスクロール）",
+                // [P7/実務者向け短文化] 「日別」タブ名＋表で自明。
+                Text("違反セルはタップで内訳と直し方",
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 TallyLegend(shortBg, overBg, "人員不足", "人員過剰")
                 Spacer(Modifier.height(8.dp))
@@ -1310,8 +1313,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [7日間表示] cellW は ScheduleGrid が「1週間が収まる幅」を動的計算して注入（既定48dp=単独利用時）。
     val nameW = 80.dp; val cellH = 48.dp; val headH = 72.dp
     Column {
-        Text("横スクロールで日移動（上の 前週/次週 で1週ぶんジャンプ）。セルをタップで修正。名前列は固定。土=青/日=赤/本日=緑。" +
-            "違反は3段階: 実線枠=必須 ・ 破線枠=要調整（重） ・ 右上の角=要調整（軽）。休は淡色。日番号下の下線＝その日の違反、不足日は赤字。",
+        // [P7/実務者向け短文化] スクロール・週送り・土日色・休の淡色は操作/見た目から自明のため説明しない。
+        //   常時可視で必要なのは違反枠の読み方だけ（詳細凡例は「検索・凡例」内）。
+        Text("タップで修正。違反枠: 実線=必須 ・ 破線=重 ・ 右上角=軽",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row {

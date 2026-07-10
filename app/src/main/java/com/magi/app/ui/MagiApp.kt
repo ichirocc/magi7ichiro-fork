@@ -460,7 +460,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         }
                         else -> {
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                                Text("毎月は変わらない土台です。制度や人の入れ替えのときだけ触ってください。毎月の調整は「今月の調整」「シフト希望」へ。",
+                                // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
+                                Text("土台の設定（制度・人の入替時のみ）。毎月の調整は「今月の調整」「シフト希望」へ。",
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     style = MaterialTheme.typography.bodyMedium)
