@@ -973,11 +973,6 @@ internal fun SeverityChip(label: String, count: Int, severity: Int, famKey: Stri
     }
 }
 
-/**
- * [B1] 勤務表の「結果(読取ws6)／編集中(ws7)」モード切替カード。
- * 既存の 7日/カレンダー/1ヶ月 切替の上に置く。結果モードは誤編集防止のため読取専用。
- */
-
 @Composable
 internal fun BigStat(label: String, value: String, modifier: Modifier = Modifier) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = modifier) {

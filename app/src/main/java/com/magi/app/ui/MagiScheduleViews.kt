@@ -348,7 +348,6 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
     var expanded by remember { mutableStateOf(false) }
     val si = staffIdx.coerceIn(0, (ui.staff - 1).coerceAtLeast(0))
     val row = ui.schedule.getOrNull(si) ?: return
-    val labels = ui.v6?.dayRisks?.map { it.label } ?: (0 until ui.days).map { "${it + 1}日" }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -372,6 +371,10 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                 // [見直しF2] ソフト違反の破線はソフト色トークン(__vioSoft__)で描く（メイングリッド/凡例と整合。
                 //   旧: 必須色のまま＝重大度の色分けがカレンダーだけ効いていなかった）。
                 val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
+                // [レイアウト/実機指摘] 「12/1(月)」の月接頭辞×31個は冗長ノイズ→「1(月)」へ短縮し、
+                //   土=青/日=赤の曜日色（メイングリッドと同語彙）。月はカード上部の期間表示が担う。
+                val sdow = startDowMonFirst(ui.startDate)
+                val weekJa = listOf("月", "火", "水", "木", "金", "土", "日")
                 row.indices.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
                         week.forEach { j ->
@@ -379,10 +382,18 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                             val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
                             // [E7] 種別フィルタ: バケツOFF のセル違反は出さない。[Set化] 表示中の最重族で判定。
                             val vioVal = visibleCellVio(ui, "$si,$j", vioEnabled)
-                            val vio = vioVal != null
-                            val hard = isHardCellViolation(vioVal)
-                            // [違反色/族別] 族色→重大度色の順で解決（グリッドと同じ規則）。
-                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, resolvedVioColor(ui, vioVal, vioColor, vioSoftC), Modifier.weight(1f)) {
+                            // [レイアウト/実機指摘] 全違反を桃塗り＋枠で描くとカレンダーが警告で飽和（グリッドが
+                            //   3.99.0 で解消した問題の残存）→ グリッドと同じ3段階へ: 必須=桃地+実線 /
+                            //   重い調整=破線のみ / 軽い調整=右上角マークのみ。
+                            val vk = when {
+                                vioVal == null -> 0
+                                isHardCellViolation(vioVal) -> 1
+                                isHeavySoftCellViolation(vioVal) -> 2
+                                else -> 3
+                            }
+                            val wd = (sdow + j) % 7
+                            val labelC = when (wd) { 5 -> MagiAccent.blue; 6 -> MagiAccent.red; else -> null }
+                            CalendarCell("${j + 1}(${weekJa[wd]})", symbol, vk, resolvedVioColor(ui, vioVal, vioColor, vioSoftC), labelC, Modifier.weight(1f)) {
                                 onCellClick(si, j)
                             }
                         }
@@ -397,23 +408,36 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
 
 
 @Composable
-internal fun CalendarCell(label: String, symbol: String, violation: Boolean, hard: Boolean, vioColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun CalendarCell(label: String, symbol: String, vk: Int, vioColor: Color, labelColor: Color? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val bg = if (violation) cs.errorContainer else cs.surfaceVariant
-    val labelFg = if (violation) cs.onErrorContainer.copy(alpha = 0.8f) else cs.onSurfaceVariant
-    val symbolFg = if (violation) cs.onErrorContainer else cs.onSurface
+    // [3段階/グリッドと同語彙] vk: 0=なし / 1=必須(桃地+実線) / 2=重い調整(破線のみ) / 3=軽い調整(角マークのみ)。
+    val bg = if (vk == 1) cs.errorContainer else cs.surfaceVariant
+    val labelFg = when { vk == 1 -> cs.onErrorContainer.copy(alpha = 0.8f); labelColor != null -> labelColor; else -> cs.onSurfaceVariant }
+    val symbolFg = if (vk == 1) cs.onErrorContainer else cs.onSurface
     // [UD/WCAG 4.1.2] 色・形に依存しない読み上げ名。
-    val a11y = "$label シフト ${symbol.ifBlank { "なし" }}" + (if (violation) (if (hard) "・必須違反" else "・要調整") else "") + "、タップで変更"
+    val a11y = "$label シフト ${symbol.ifBlank { "なし" }}" + (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") + "、タップで変更"
     Box(
         modifier
             .height(58.dp)
             .padding(horizontal = 2.dp)
             .background(bg, MaterialTheme.shapes.medium)
-            .then(if (violation) Modifier.violationBorder(hard, vioColor, 14.dp, halo = cs.surface) else Modifier)
+            .then(when (vk) {
+                1 -> Modifier.violationBorder(true, vioColor, 14.dp, halo = cs.surface)
+                2 -> Modifier.violationBorder(false, vioColor, 14.dp, halo = cs.surface)
+                else -> Modifier
+            })
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = a11y },
         contentAlignment = Alignment.Center,
     ) {
+        // [軽い調整] 枠でなく右上の小さな角マーク（グリッドの vk=3 と同形・飽和防止）。
+        if (vk == 3) {
+            Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(12.dp).drawBehind {
+                val p = Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); close() }
+                drawPath(p, cs.surface, style = Stroke(width = 2.dp.toPx()))
+                drawPath(p, vioColor)
+            })
+        }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, fontSize = 12.sp, color = labelFg, maxLines = 1)
             Text(symbol, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = symbolFg, maxLines = 1)
