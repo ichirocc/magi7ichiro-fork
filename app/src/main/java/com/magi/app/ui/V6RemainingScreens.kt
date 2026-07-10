@@ -115,10 +115,15 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
         }
     }
     pickFam?.let { pf ->
+        // [実機指摘] 未設定時にグレーの偽「現在の色」を出さないよう、実効の既定色を defaultHex で渡す
+        //   （必須=UD赤 / 要調整=橙 / 族=その重大度の基準色）。ColorPickerDialog 側で✓も一致表示。
+        val hardHex = ui.violationColorHex.ifBlank { "#BA1A1A" }
+        val softHex = ui.violationSoftColorHex.ifBlank { "#E08A1E" }
         when (pf) {
             "__hard__" -> ColorPickerDialog(
                 kigou = "必須違反（基準色）",
                 currentHex = ui.violationColorHex,
+                defaultHex = "#BA1A1A",
                 onPick = { hex -> vm.setViolationColor(hex); pickFam = null },
                 onReset = { vm.resetViolationColor(); pickFam = null },
                 onClose = { pickFam = null },
@@ -126,6 +131,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
             "__soft__" -> ColorPickerDialog(
                 kigou = "要調整（基準色）",
                 currentHex = ui.violationSoftColorHex,
+                defaultHex = "#E08A1E",
                 onPick = { hex -> vm.setViolationSoftColor(hex); pickFam = null },
                 onReset = { vm.resetViolationSoftColor(); pickFam = null },
                 onClose = { pickFam = null },
@@ -133,6 +139,11 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
             else -> ColorPickerDialog(
                 kigou = pf,
                 currentHex = ui.violationFamilyColorHex[pf] ?: "",
+                defaultHex = when (V6WebCompat.severityFromVioKey(pf)) {
+                    "CRITICAL" -> hardHex
+                    "HIGH", "WARN" -> softHex
+                    else -> "#8A979B"   // INFO(灰)
+                },
                 onPick = { hex -> vm.setViolationFamilyColor(pf, hex); pickFam = null },
                 onReset = { vm.resetViolationFamilyColor(pf); pickFam = null },
                 onClose = { pickFam = null },

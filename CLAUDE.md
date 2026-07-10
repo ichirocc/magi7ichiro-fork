@@ -302,6 +302,23 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+- (3.130.0, 実機指摘2件=制約行の編集＋色ピッカー修正 / bg復元配線の完遂): ①**「登録した制約の変更ができない」**:
+  ConstraintsCard/SkillConstraintsCard の行は削除のみだった→ **行タップで変更**（追加ダイアログのプリフィル版
+  `ConstraintDialog(editIndex)`・確定で同位置を置換）。vm に `constraintRowValues(family,index)`（生値の取得、
+  値順=追加ダイアログの入力順）と `updateConstraint(family,index,values)`（cons3系は addCons3 と同じ正規化
+  =最初の空白まで・最大5）を新設。全10族（cons1/2/3系4/41(s)/42(s)）対応。mutateConstraints 経由=undo/再検査/保存は
+  追加・削除と同一。②**「色ピッカーのレイアウトがおかしい・現在の色が無い・他の色も選択できない」**:
+  ColorPickerDialog が 12色を chunked(5)→端数行2個が weight で巨大化していた→ **20色=5×4 の完全グリッド**
+  （端数行は空 Spacer で同サイズ維持）。未設定時に「現在の色」がグレー（hexToColor("")のフォールバック）だった→
+  **defaultHex（実効の既定色）**を新設し、必須=#BA1A1A/要調整=#E08A1E/族=重大度の基準色を渡して表示＋パレット✓一致。
+  パレットに既定色と MagiAccent 系（赤/橙/緑/青/紫/桃/灰）を収載。③3.127.0-③の `loadAsync(markResult)` が
+  **本体未配線**（hasResult=false のまま）だった回帰を完遂: markResult 時は hasResult=true＋resultSchedule も設定。
+  ①②は表示・編集導線のみ、③は表示フラグのみ＝スコアリング不変。
+- (3.129.0, 冗長性見直し=説明・項目名称の短文化): 指示「説明や項目名称の冗長性を見直す」。監査28件のうち
+  適用対象を一括置換: 見出しの括弧補足を削除（今月の作成条件/片手モード/仕上げ最適化/まとめて割当 等）、
+  重複説明文の削除（SettingIssues/E7チップ操作説明）、長文説明の要点化（FixSuggestion/Breakdown/ConfirmList/
+  実働チェック/WishEditor/NeedDayEditor/StaffRangeEditor/SkillGroupEditor/SectionNote①）、「時間予算」→
+  「計算の制限時間」。文言のみ・スコアリング不変。
 - (3.128.0, 短予算も複合パイプラインへ=実機指摘「60秒予算を1つだけのアルゴリズムで使用」): AUTO の予算プランで
   31〜90s が ALNS 単発（60s=ALNS×1）＝詰まった HARD 族（アリフ c3n 等）を狙う RSI フェーズが一度も走らず、
   仮説5本も同一解に収束していた。**31〜210s を RSI(2/3)→ALNS(1/3) の複合に統一**（既存 RSIThenALNS チェーン

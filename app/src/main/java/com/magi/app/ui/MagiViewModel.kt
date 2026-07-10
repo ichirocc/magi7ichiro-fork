@@ -402,7 +402,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         originalJson = json
                         state = lp.state.withSchedule(lp.schedule)
                         currentSchedule = lp.schedule.copy2D()
-                        resultSchedule = null
+                        // [bg復元] markResult=true は「バックグラウンド最適化の結果 JSON」の読込。schedule が
+                        //   結果そのものなので resultSchedule/hasResult を立て、上位バーの「未計算」を防ぐ。
+                        resultSchedule = if (markResult) lp.schedule.copy2D() else null
                         clearUndo()
                         autoSave()
                         _ui.update { makeUi(
@@ -412,7 +414,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             base = it.copy(
                                 loaded = true,
                                 running = false,
-                                hasResult = false,
+                                hasResult = markResult,
                                 constraintsEdited = false,
                                 structureEdited = false,
                                 staff = lp.state.staffCount,
@@ -1649,6 +1651,57 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 else -> return
             }
         )
+    }
+
+    /** [制約編集/実機指摘「登録した制約の変更ができない」] 行の生値（編集ダイアログのプリフィル用）。
+     *  値の並びは追加ダイアログの入力順と同じ:
+     *  cons1=[日数,シフト,回数] / cons2=[シフト,回数] / cons3系=並び(最大5) /
+     *  cons41(s)=[群,シフト,下限,上限] / cons42(s)=[群1,シフト1,群2,シフト2]。 */
+    fun constraintRowValues(family: String, index: Int): List<String>? {
+        val st = state ?: return null
+        return when (family) {
+            "cons1" -> st.cons1.getOrNull(index)?.let { listOf(it.day1, it.shiftKigou, it.day2) }
+            "cons2" -> st.cons2.getOrNull(index)?.let { listOf(it.shiftKigou, it.count) }
+            "cons3" -> st.cons3.getOrNull(index)?.pattern
+            "cons3n" -> st.cons3n.getOrNull(index)?.pattern
+            "cons3m" -> st.cons3m.getOrNull(index)?.pattern
+            "cons3mn" -> st.cons3mn.getOrNull(index)?.pattern
+            "cons41" -> st.cons41.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
+            "cons41s" -> st.cons41s.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
+            "cons42" -> st.cons42.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
+            "cons42s" -> st.cons42s.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
+            else -> null
+        }
+    }
+
+    /** [制約編集] 行を同じ位置で置き換える。values の並びは constraintRowValues と同一。
+     *  cons3系は追加(addCons3)と同じ正規化（先頭から最初の空白まで・最大5）。 */
+    fun updateConstraint(family: String, index: Int, values: List<String>) {
+        val st = state ?: return
+        fun <T> List<T>.replaced(i: Int, v: T) = mapIndexed { idx, e -> if (idx == i) v else e }
+        val v = values.map { it.trim() }
+        fun g(i: Int) = v.getOrElse(i) { "" }
+        val next = when (family) {
+            "cons1" -> { if (index !in st.cons1.indices) return; st.copy(cons1 = st.cons1.replaced(index, C1Row(g(0), g(1), g(2)))) }
+            "cons2" -> { if (index !in st.cons2.indices) return; st.copy(cons2 = st.cons2.replaced(index, C2Row(g(0), g(1)))) }
+            "cons41" -> { if (index !in st.cons41.indices) return; st.copy(cons41 = st.cons41.replaced(index, C41Row(g(0), g(1), g(2), g(3)))) }
+            "cons41s" -> { if (index !in st.cons41s.indices) return; st.copy(cons41s = st.cons41s.replaced(index, C41Row(g(0), g(1), g(2), g(3)))) }
+            "cons42" -> { if (index !in st.cons42.indices) return; st.copy(cons42 = st.cons42.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
+            "cons42s" -> { if (index !in st.cons42s.indices) return; st.copy(cons42s = st.cons42s.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
+            "cons3", "cons3n", "cons3m", "cons3mn" -> {
+                val pat = v.takeWhile { it.isNotEmpty() }.take(5)
+                if (pat.isEmpty()) return
+                when (family) {
+                    "cons3" -> { if (index !in st.cons3.indices) return; st.copy(cons3 = st.cons3.replaced(index, C3Row(pat))) }
+                    "cons3n" -> { if (index !in st.cons3n.indices) return; st.copy(cons3n = st.cons3n.replaced(index, C3Row(pat))) }
+                    "cons3m" -> { if (index !in st.cons3m.indices) return; st.copy(cons3m = st.cons3m.replaced(index, C3Row(pat))) }
+                    else -> { if (index !in st.cons3mn.indices) return; st.copy(cons3mn = st.cons3mn.replaced(index, C3Row(pat))) }
+                }
+            }
+            else -> return
+        }
+        logOp("I", "制約変更: $family[$index] → ${v.filter { it.isNotBlank() }.joinToString(" ")}")
+        mutateConstraints(next)
     }
 
     /** Apply an edited state (constraints changed), then re-run the unified check on the current table. */

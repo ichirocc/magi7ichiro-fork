@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 281
-        versionName = "3.129.0-terse-copy"
+        versionCode = 282
+        versionName = "3.130.0-constraint-edit-colorpicker"
     }
 
     buildTypes {

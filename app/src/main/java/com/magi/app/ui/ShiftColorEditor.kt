@@ -51,9 +51,14 @@ internal fun hexToColor(hex: String): Color {
     return Color((v shr 16) and 0xFF, (v shr 8) and 0xFF, v and 0xFF)
 }
 
+// [実機指摘 3.129系] 12色(5+5+2)では最終行2個が weight で巨大化＋既定色(必須の赤/要調整の橙)が
+//   パレットに無く「現在の色が画面の中にない・他の色も選択できない」だった。20色=5×4の完全グリッドにし、
+//   既定色(#BA1A1A 必須 / #E08A1E 要調整)と MagiAccent 系(赤/橙/緑/青/紫/桃/灰)を含める。
 private val COLOR_PALETTE = listOf(
-    "#8195a8", "#a96bff", "#4fa89c", "#d7a13b", "#6fa56b", "#5fb3d4",
-    "#a89a86", "#6e6354", "#9d8a64", "#c0563f", "#3f6fc0", "#7a4fd0",
+    "#ba1a1a", "#d23b34", "#c0563f", "#e08a1e", "#d7a13b",
+    "#6fa56b", "#2e9e62", "#4fa89c", "#556b2f", "#8a979b",
+    "#5fb3d4", "#3b6fd4", "#3f6fc0", "#34558b", "#8195a8",
+    "#8a5cd1", "#7a4fd0", "#a96bff", "#d24d89", "#6e6354",
 )
 
 /**
@@ -131,6 +136,7 @@ fun ShiftColorCard(ui: UiState, vm: MagiViewModel) {
         ColorPickerDialog(
             kigou = "違反",
             currentHex = ui.violationColorHex,
+            defaultHex = "#BA1A1A",
             onPick = { hex -> vm.setViolationColor(hex); vioPicker = false },
             onReset = { vm.resetViolationColor(); vioPicker = false },
             onClose = { vioPicker = false },
@@ -165,7 +171,11 @@ internal fun ColorPickerDialog(
     onPick: (String) -> Unit,
     onReset: () -> Unit,
     onClose: () -> Unit,
+    defaultHex: String = "",
 ) {
+    // [実機指摘「現在の設定している色が画面の中にない」] 未設定(空)のときグレーの偽色を出していた →
+    //   実効色(既定色)を表示し、パレット上の一致スウォッチにも✓を付ける。
+    val effectiveHex = currentHex.ifBlank { defaultHex }
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = { DialogConfirmButton("閉じる", onClick = onClose) },
@@ -174,16 +184,18 @@ internal fun ColorPickerDialog(
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Swatch(currentHex, 28.dp)
-                    Text("  現在の色", style = MaterialTheme.typography.bodyMedium)
+                    Swatch(effectiveHex, 28.dp)
+                    Text(if (currentHex.isBlank()) "  現在の色（既定）" else "  現在の色",
+                        style = MaterialTheme.typography.bodyMedium)
                 }
                 Text("色を選ぶ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                COLOR_PALETTE.chunked(5).forEach { rowColors ->
-                    // [不具合修正] 固定40dp×6＋余白がダイアログ幅を超え、6個目が切れて「大きさ不揃い」だった。
-                    //   幅いっぱいを等分(weight)＋正方形(aspectRatio)にし、全スウォッチ均等・切れ無し・タップ可に。
+                val perRow = 5
+                COLOR_PALETTE.chunked(perRow).forEach { rowColors ->
+                    // [不具合修正×2] 固定40dp×6は幅超過で6個目が切れ、weight等分は端数行(2個)が巨大化していた。
+                    //   幅いっぱいを等分(weight)＋正方形(aspectRatio)＋端数行は空 Spacer で埋めて全行同サイズに。
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         rowColors.forEach { hex ->
-                            val selected = hex.equals(currentHex, ignoreCase = true)
+                            val selected = hex.equals(effectiveHex, ignoreCase = true)
                             Box(
                                 Modifier
                                     .weight(1f)
@@ -202,6 +214,7 @@ internal fun ColorPickerDialog(
                                 if (selected) Text("✓", color = hexToColor(pickFg(hex)), textAlign = TextAlign.Center)
                             }
                         }
+                        repeat(perRow - rowColors.size) { Spacer(Modifier.weight(1f).aspectRatio(1f)) }
                     }
                 }
                 Spacer(Modifier.height(2.dp))
