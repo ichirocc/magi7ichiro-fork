@@ -240,7 +240,7 @@ internal fun ShiftPickerSheet(
                         val hard = isHardCellViolation(vioCls)
                         Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
                             style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                            color = if (hard) vioHardC else vioSoftC)
+                            color = resolvedVioColor(ui, vioCls, vioHardC, vioSoftC))
                     }
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
@@ -381,7 +381,8 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                             val vioVal = visibleCellVio(ui, "$si,$j", vioEnabled)
                             val vio = vioVal != null
                             val hard = isHardCellViolation(vioVal)
-                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, if (hard) vioColor else vioSoftC, Modifier.weight(1f)) {
+                            // [違反色/族別] 族色→重大度色の順で解決（グリッドと同じ規則）。
+                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, resolvedVioColor(ui, vioVal, vioColor, vioSoftC), Modifier.weight(1f)) {
                                 onCellClick(si, j)
                             }
                         }
@@ -459,6 +460,13 @@ internal fun cellVioClasses(ui: UiState, key: String): List<String> =
  *  表示中の族が同セルに残っていても枠ごと消えていた（フィルタと表示の不整合）。 */
 internal fun visibleCellVio(ui: UiState, key: String, enabled: Set<String>): String? =
     cellVioClasses(ui, key).firstOrNull { vioVisible(it, enabled) }
+
+/** [違反色/族別] 違反クラスの表示色を解決: 族別色（__vioFam_*）→ 重大度色（必須/要調整）の順でフォールバック。 */
+internal fun resolvedVioColor(ui: UiState, cls: String?, hardC: Color, softC: Color): Color {
+    if (cls == null) return hardC
+    ui.violationFamilyColorHex[familyOfVioClass(cls)]?.takeIf { it.isNotBlank() }?.let { return hexToColor(it) }
+    return if (isHardCellViolation(cls)) hardC else softC
+}
 
 /** [E7] 各バケットの「違反ロケーション数」(=セル/エントリ件数、見出し『要確認 N件』と同単位)。
  *  breakdown の量/#fire ではなく箇所数で集計＝チップ間・見出しと比較可能なトリアージ指標にする。 */
@@ -1390,10 +1398,13 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [E7] 種別フィルタ: バケツOFFのセル違反は枠を出さない（vioVisible=false→0）。表示のみ・違反自体は不変。
     // [判読性] 0=なし / 1=必須(実線) / 2=重いソフト(破線) / 3=軽いソフト(右上角マーク)。
     //   従来は全ソフトが太い破線枠＝数百件で格子が警告に飽和し、必須違反1件が埋没していた。
-    val vioKind = remember(ui.violationCells, ui.violationCellFamilies, staffCount, days, vioEnabled) {
+    // [Set化] 表示中(フィルタ通過)の最重クラス。段階(vioKind)と族別色(3.122.0)の両方の源泉。
+    val vioCls = remember(ui.violationCells, ui.violationCellFamilies, staffCount, days, vioEnabled) {
+        Array(staffCount) { i -> Array(days) { d -> visibleCellVio(ui, "$i,$d", vioEnabled) } }
+    }
+    val vioKind = remember(vioCls) {
         Array(staffCount) { i -> IntArray(days) { d ->
-            // [Set化] 表示中(フィルタ通過)の最重クラスで段階を決める＝最重族OFFでも残る族の枠が出る。
-            val v = visibleCellVio(ui, "$i,$d", vioEnabled)
+            val v = vioCls[i][d]
             when { v == null -> 0; isHardCellViolation(v) -> 1; isHeavySoftCellViolation(v) -> 2; else -> 3 }
         } }
     }
@@ -1489,7 +1500,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") + "、タップで変更"
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest || quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym) { onCellClick(i, d) }
+                            // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
+                            val cellVioC = vioCls[i][d]?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = isRest || quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym) { onCellClick(i, d) }
                         }
                     }
                 }

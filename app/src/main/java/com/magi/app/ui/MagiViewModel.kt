@@ -1507,6 +1507,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         applyStructure(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
     }
 
+    /** [違反色/族別] 違反種別（族）ごとの個別色。予約キー "__vioFam_<fam>__"（例: __vioFam_c3n__）。
+     *  未設定の族は重大度色（__vio__/__vioSoft__）へフォールバック。 */
+    fun setViolationFamilyColor(fam: String, hex: String) {
+        val st = state ?: return; if (hex.isBlank() || fam.isBlank()) return
+        applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioFam_${fam}__" to hex.trim())))
+    }
+    fun resetViolationFamilyColor(fam: String) {
+        val st = state ?: return
+        applyStructure(st.copy(shiftColors = st.shiftColors - "__vioFam_${fam}__"))
+    }
+
     // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
     fun addReviewMemo(text: String) {
         if (text.isBlank()) return
@@ -2319,6 +2330,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             shiftTextHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.pickTextColor(V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i)) },
             violationColorHex = st.shiftColors["__vio__"] ?: "",
             violationSoftColorHex = st.shiftColors["__vioSoft__"] ?: "",
+            violationFamilyColorHex = st.shiftColors.entries
+                .filter { it.key.startsWith("__vioFam_") && it.key.endsWith("__") }
+                .associate { it.key.removePrefix("__vioFam_").removeSuffix("__") to it.value },
             schedule = schedule.map { it.toList() },
             wishes = st.wishes,
             resultSchedule = resultSchedule?.map { it.toList() } ?: emptyList(),   // [B1] 確定結果(ws6)

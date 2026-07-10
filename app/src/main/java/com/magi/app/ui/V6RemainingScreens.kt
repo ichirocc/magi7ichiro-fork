@@ -62,8 +62,11 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
     //   招いていた（カード題も「違反種別の色」）。チップタップでその重大度の色を変更できるように:
     //   必須=既存トークン __vio__（外観の「違反の色」と同一）/ 要調整=新トークン __vioSoft__。灰=情報は固定。
     //   変更はグリッド枠・角マーク・日ヘッダ下線・凡例へ即反映。表示のみ・スコアリング不変。
-    var pick by remember { mutableStateOf<String?>(null) }   // "hard" / "soft"
-    SectionSegment("違反種別の色", "重大度の色凡例。チップをタップで 必須/要調整 の色を変更（灰=情報は固定）") {
+    // [3.122.0 族別色] チップタップで「その種別（族）の色」を個別に変更（実機指摘「個別に設定できない」）。
+    //   未設定の族は重大度色（必須=__vio__/要調整=__vioSoft__）で表示＝従来互換。族色はグリッドの枠・角マーク・
+    //   カレンダー・編集シートの理由テキストへ即反映（resolvedVioColor が族→重大度の順で解決）。
+    var pickFam by remember { mutableStateOf<String?>(null) }   // 族キー(c1/c3n/…)
+    SectionSegment("違反種別の色", "チップをタップで、その種別の色を個別に変更できます（未設定は重大度の色）") {
         val cs = MaterialTheme.colorScheme
         val hardBg = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: Color(0xFFBA1A1A)
         val softBg = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
@@ -75,19 +78,19 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                     // [色覚/日本語化] 色に依らない文字バックアップ。英語enum(CRITICAL/…)ではなく日本語の重大度語で示す。
                     val sevJp = when (sev) { "CRITICAL" -> "必須"; "HIGH", "WARN" -> "要調整"; else -> "情報" }
                     val count = ui.breakdown[key] ?: 0
-                    val bg = when (sev) {
+                    val famHex = ui.violationFamilyColorHex[key]?.takeIf { it.isNotBlank() }
+                    val bg = famHex?.let { hexToColor(it) } ?: when (sev) {
                         "CRITICAL" -> hardBg
                         "HIGH", "WARN" -> softBg
-                        else -> cs.surfaceVariant   // INFO
+                        else -> cs.surfaceVariant   // INFO（族色を設定すればそれが優先）
                     }
                     // [コントラスト] ユーザー色でも読めるよう WCAG で文字色を保証（白が不足なら黒へ）。
-                    val fg = if (sev == "CRITICAL" || sev == "HIGH" || sev == "WARN") ensureReadable(bg, Color(0xFFFFFFFF)) else cs.onSurfaceVariant
-                    val editable = sev != "INFO" && !ui.running
+                    val fg = if (famHex != null || sev != "INFO") ensureReadable(bg, Color(0xFFFFFFFF)) else cs.onSurfaceVariant
                     Box(
                         Modifier
                             .weight(1f)
                             .background(bg, RoundedCornerShape(8.dp))
-                            .then(if (editable) Modifier.clickable { pick = if (sev == "CRITICAL") "hard" else "soft" } else Modifier)
+                            .then(if (!ui.running) Modifier.clickable { pickFam = key } else Modifier)
                             .padding(6.dp),
                         contentAlignment = Alignment.Center,
                     ) { Text("$key\n$sevJp" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
@@ -95,21 +98,45 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
             }
             Spacer(Modifier.height(6.dp))
         }
+        Text("基準色の変更: 必須違反は 外観 → 違反の色、要調整は下の一括変更から。",
+            fontSize = 12.sp, color = cs.onSurfaceVariant)
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            Box(Modifier.weight(1f).background(hardBg, RoundedCornerShape(8.dp))
+                .then(if (!ui.running) Modifier.clickable { pickFam = "__hard__" } else Modifier).padding(6.dp),
+                contentAlignment = Alignment.Center) {
+                Text("必須の基準色", fontSize = 12.sp, textAlign = TextAlign.Center, color = ensureReadable(hardBg, Color(0xFFFFFFFF)))
+            }
+            Box(Modifier.weight(1f).background(softBg, RoundedCornerShape(8.dp))
+                .then(if (!ui.running) Modifier.clickable { pickFam = "__soft__" } else Modifier).padding(6.dp),
+                contentAlignment = Alignment.Center) {
+                Text("要調整の基準色", fontSize = 12.sp, textAlign = TextAlign.Center, color = ensureReadable(softBg, Color(0xFFFFFFFF)))
+            }
+        }
     }
-    when (pick) {
-        "hard" -> ColorPickerDialog(
-            kigou = "必須違反",
-            currentHex = ui.violationColorHex,
-            onPick = { hex -> vm.setViolationColor(hex); pick = null },
-            onReset = { vm.resetViolationColor(); pick = null },
-            onClose = { pick = null },
-        )
-        "soft" -> ColorPickerDialog(
-            kigou = "要調整",
-            currentHex = ui.violationSoftColorHex,
-            onPick = { hex -> vm.setViolationSoftColor(hex); pick = null },
-            onReset = { vm.resetViolationSoftColor(); pick = null },
-            onClose = { pick = null },
-        )
+    pickFam?.let { pf ->
+        when (pf) {
+            "__hard__" -> ColorPickerDialog(
+                kigou = "必須違反（基準色）",
+                currentHex = ui.violationColorHex,
+                onPick = { hex -> vm.setViolationColor(hex); pickFam = null },
+                onReset = { vm.resetViolationColor(); pickFam = null },
+                onClose = { pickFam = null },
+            )
+            "__soft__" -> ColorPickerDialog(
+                kigou = "要調整（基準色）",
+                currentHex = ui.violationSoftColorHex,
+                onPick = { hex -> vm.setViolationSoftColor(hex); pickFam = null },
+                onReset = { vm.resetViolationSoftColor(); pickFam = null },
+                onClose = { pickFam = null },
+            )
+            else -> ColorPickerDialog(
+                kigou = pf,
+                currentHex = ui.violationFamilyColorHex[pf] ?: "",
+                onPick = { hex -> vm.setViolationFamilyColor(pf, hex); pickFam = null },
+                onReset = { vm.resetViolationFamilyColor(pf); pickFam = null },
+                onClose = { pickFam = null },
+            )
+        }
     }
 }

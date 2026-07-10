@@ -51,6 +51,8 @@ data class UiState(
     // [見直し候補] セル修正時に「基本ルールの見直し候補にする」で積むメモ（セッション内のみ・state 非保存）。
     val reviewMemos: List<String> = emptyList(),
     val violationSoftColorHex: String = "",   // 要調整(ソフト違反)の表示色（空＝既定の橙）。shiftColors["__vioSoft__"] に保存。
+    // [違反色/族別] 族(c1/c3n/…)ごとの個別色。shiftColors["__vioFam_<fam>__"] 由来。未設定族は重大度色へフォールバック。
+    val violationFamilyColorHex: Map<String, String> = emptyMap(),
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
     val resultSchedule: List<List<Int>> = emptyList(),   // [B1] 確定結果(ws6)。読取モードで表示する。
