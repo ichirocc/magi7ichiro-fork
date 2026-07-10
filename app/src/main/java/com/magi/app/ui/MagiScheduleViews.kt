@@ -232,12 +232,15 @@ internal fun ShiftPickerSheet(
                     // [セルタップで違反理由/認知ウォークスルー最優先] このセルの違反族を提示。
                     //   従来は枠の意味(なぜ違反か)が要確認一覧/診断ログへ往復しないと分からなかった。
                     //   [Set化] 重なった違反は全列挙（重み降順＝必須が先頭）。表示のみ・スコア不変。
+                    // [見直しF1] 重大度色はユーザートークン(__vio__/__vioSoft__)から解決（グリッド/凡例と同色）。
+                    val vioHardC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+                    val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
                     cellVioClasses(ui, "$i,$j").forEach { vioCls ->
                         val fam = vioCls.removePrefix("vio-")
                         val hard = isHardCellViolation(vioCls)
                         Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
                             style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                            color = if (hard) cs.error else MagiAccent.orange)
+                            color = if (hard) vioHardC else vioSoftC)
                     }
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
@@ -357,6 +360,9 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                 Text("タップで担当可能シフトを巡回", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                 Spacer(Modifier.height(8.dp))
                 val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MaterialTheme.colorScheme.error
+                // [見直しF2] ソフト違反の破線はソフト色トークン(__vioSoft__)で描く（メイングリッド/凡例と整合。
+                //   旧: 必須色のまま＝重大度の色分けがカレンダーだけ効いていなかった）。
+                val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
                 row.indices.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
                         week.forEach { j ->
@@ -366,7 +372,7 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                             val vioVal = visibleCellVio(ui, "$si,$j", vioEnabled)
                             val vio = vioVal != null
                             val hard = isHardCellViolation(vioVal)
-                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, vioColor, Modifier.weight(1f)) {
+                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, if (hard) vioColor else vioSoftC, Modifier.weight(1f)) {
                                 onCellClick(si, j)
                             }
                         }

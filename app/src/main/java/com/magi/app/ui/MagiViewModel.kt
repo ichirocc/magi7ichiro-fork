@@ -535,6 +535,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // [3.112.0] UI導線（ホーム「ほかの作り方」の速くつくる）はユーザー指示で撤去済み。API として温存。
     fun start() {
         val st0 = state ?: return
         val sched0 = currentSchedule ?: return
@@ -615,6 +616,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // [3.112.0] UI導線（ホーム「ほかの作り方」のかんたんに）はユーザー指示で撤去済み。API として温存。
     fun runLightOptimize() {
         val st = state ?: return
         val sched = currentSchedule ?: return
