@@ -226,9 +226,20 @@ internal fun ShiftPickerSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             DialogHeader("$name ・ ${j + 1}日", onDismiss)
-            // 凝縮ステータス: 現在の割当 + 希望
+            // 凝縮ステータス: 現在の割当 + 希望 + 違反理由
             Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    // [セルタップで違反理由/認知ウォークスルー最優先] このセルの違反族を1行で提示。
+                    //   従来は枠の意味(なぜ違反か)が要確認一覧/診断ログへ往復しないと分からなかった。
+                    //   3.107 の重み優先マークにより「最重の族」が保証される。表示のみ・スコア不変。
+                    val vioCls = ui.violationCells["$i,$j"]
+                    if (vioCls != null) {
+                        val fam = vioCls.removePrefix("vio-")
+                        val hard = isHardCellViolation(vioCls)
+                        Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
+                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                            color = if (hard) cs.error else MagiAccent.orange)
+                    }
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
                         else "希望  ${sym(wish)}" + (if (wish == current) "（反映済）" else "（未反映）")
