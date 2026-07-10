@@ -408,7 +408,7 @@ internal fun CalendarCell(label: String, symbol: String, violation: Boolean, har
             .height(58.dp)
             .padding(horizontal = 2.dp)
             .background(bg, MaterialTheme.shapes.medium)
-            .then(if (violation) Modifier.violationBorder(hard, vioColor, 14.dp) else Modifier)
+            .then(if (violation) Modifier.violationBorder(hard, vioColor, 14.dp, halo = cs.surface) else Modifier)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = a11y },
         contentAlignment = Alignment.Center,
@@ -824,15 +824,30 @@ internal fun isHeavySoftCellViolation(v: String?): Boolean =
     v != null && familyOfVioClass(v) in heavySoftFamilies
 
 /** 違反セルの非色手がかり: HARD=実線枠、SOFT=破線枠（色覚多様性／モノクロ印刷でも区別可能）。
- *  [校正] 色付きセル上でも埋もれないよう枠を太く（3dp）。 */
+ *  [校正] 色付きセル上でも埋もれないよう枠を太く（3dp）。
+ *  [実機指摘/枠のハロー] halo!=null で枠の内側に対比色（surface）の縁取りを敷く。ダークテーマの違反色
+ *  （淡い赤）は桃系セル背景と同系色で枠が埋没していた（アリフの c3n 実線枠が判読不能）。ハローが
+ *  枠とセル地を分離し、任意のシフト色上で枠が浮く（角マーク 3.105.0 と同じ手法）。 */
 
-internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: androidx.compose.ui.unit.Dp): Modifier =
+internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: androidx.compose.ui.unit.Dp, halo: Color? = null): Modifier =
     if (hard) {
-        this.border(3.dp, color, RoundedCornerShape(radiusDp))
+        // border は後掛けが上に描かれる: 先に 5dp のハロー、上に 3dp の違反色 → 外側3dp=違反色/内側2dp=ハロー。
+        (if (halo != null) this.border(5.dp, halo, RoundedCornerShape(radiusDp)) else this)
+            .border(3.dp, color, RoundedCornerShape(radiusDp))
     } else {
         this.drawBehind {
             val stroke = 3.dp.toPx()
             val r = radiusDp.toPx()
+            // 破線の下に実線ハロー（太め）を敷く: 破線の隙間・両脇がハロー色になり、同系色セル上でも読める。
+            if (halo != null) {
+                drawRoundRect(
+                    color = halo,
+                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(r, r),
+                    style = Stroke(width = stroke + 2.dp.toPx()),
+                )
+            }
             drawRoundRect(
                 color = color,
                 topLeft = Offset(stroke / 2f, stroke / 2f),
@@ -1524,8 +1539,9 @@ private fun FlatCell(
                 // [判読性] 枠は 1=実線(必須)/2=破線(重い調整)のみ。3=軽い調整は右上の角マークに落とし飽和を防ぐ。
                 .then(when {
                     focused -> Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp))   // [ジャンプ] 注目セル
-                    vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp)
-                    vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp)
+                    // [枠のハロー] 違反色と同系色のセル背景でも枠が埋没しないよう surface の縁取りを敷く。
+                    vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp, halo = cs.surface)
+                    vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp, halo = cs.surface)
                     else -> Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp))
                 })
                 .clickable(onClick = onClick)

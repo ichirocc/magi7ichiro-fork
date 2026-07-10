@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 267
-        versionName = "3.117.0-focus-mode"
+        versionCode = 268
+        versionName = "3.118.0-halo-border"
     }
 
     buildTypes {
