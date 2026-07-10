@@ -105,6 +105,42 @@ class SessionRegressionTest {
         assertEquals(1, withHeader!!.second)
     }
 
+    // ---- レビュー指摘P1: 休シフト削除でセルが勤務に化けない／休自体は削除禁止 ----
+
+    private fun threeShiftState() = MagiState(
+        startDate = "2026-06-01", endDate = "2026-06-03",
+        // 休が index0 でない配置（旧実装のハードコード0が露呈するケース）
+        shifts = listOf(Shift("A", "A", "1", ""), Shift("休", "休", "", ""), Shift("B", "B", "1", "")),
+        groups = listOf(Group("G", "G")),
+        staff = listOf(Staff("s0", 0, 2)),   // skillIdx=2
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1, 1)),
+        groupShiftApt = listOf(listOf("", "", "")),
+        schedule = listOf(listOf(0, 1, 2)),
+        wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun removeShiftMapsDeletedCellsToRestAndBlocksRestDeletion() {
+        val st = threeShiftState()
+        val sched = arrayOf(intArrayOf(0, 1, 2))
+        // A(idx0) を削除: A のセルは休(削除後 idx0)へ、休(1)→0、B(2)→1 に追従
+        val r = Ws1Ops.removeShift(st, sched, 0)
+        assertEquals("休", r.state.shifts[0].kigou)
+        assertEquals(listOf(0, 0, 1), r.schedule[0].toList())
+        // 休(idx1) 自体の削除は no-op（全休日が勤務へ化けるため禁止）
+        val blocked = Ws1Ops.removeShift(st, sched, 1)
+        assertEquals(3, blocked.state.shifts.size)
+    }
+
+    @Test fun editStaffPreservesSkillIdx() {
+        val st = threeShiftState()
+        val ns = Ws1Ops.editStaff(st, 0, "改名した", 0)
+        assertEquals("改名した", ns.staff[0].name)
+        assertEquals(2, ns.staff[0].skillIdx)   // 旧実装は 0 に化けていた
+    }
+
     @Test fun headerlessWishesCsvKeepsFirstRow() {
         val st = csvState()
         val headerless = WishesCsvIO.parse("花子,1,A\n花子,2,休", st)

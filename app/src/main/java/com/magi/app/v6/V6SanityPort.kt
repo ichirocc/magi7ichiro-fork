@@ -444,6 +444,34 @@ object V6SanityPort {
                 "「${fc.shiftSymbol}」を担当できるスタッフを増やす(ws1)か、その日の必要人数を下げてください(ws2)"))
         }
 
+        // 8) [事前診断/重複定義・レビュー指摘P1] 氏名(空白無視)・シフト/グループ/スキル群の記号の重複を警告。
+        //    重複があると制約評価・CSV取込とも「最初の1件」に解決される(firstWinsMap で統一済)が、2件が
+        //    同一視されること自体は利用者に見えないため、定義の一意化を促す(read-only・非ブロック＝既存データは開ける)。
+        run {
+            fun dups(items: List<String>): List<String> =
+                items.filter { it.isNotBlank() }.groupingBy { it }.eachCount().filter { it.value > 1 }.keys.toList()
+            for (d in dups(state.staff.map { nameMatchKey(it.name) })) {
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "職員名の重複「$d」",
+                    "同名（空白を除き一致）の職員が複数います。制約とCSV取込は最初の1人に解決され、2人目以降は区別できません",
+                    "氏名を一意にしてください（例: 姓名の間や末尾に識別子を付ける）(ws1)"))
+            }
+            for (d in dups(state.shifts.map { it.kigou.trim() })) {
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "シフト記号の重複「$d」",
+                    "同じ記号のシフトが複数あります。制約とCSV取込は最初の1件に解決され、2件目以降は参照されません",
+                    "シフト記号を一意にしてください(ws1)"))
+            }
+            for (d in dups(state.groups.map { it.kigou.trim() })) {
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "グループ記号の重複「$d」",
+                    "同じ記号のグループが複数あります。制約とCSV取込は最初の1件に解決されます",
+                    "グループ記号を一意にしてください(ws1)"))
+            }
+            for (d in dups(state.skillGroups.map { it.kigou.trim() })) {
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "スキルグループ記号の重複「$d」",
+                    "同じ記号のスキルグループが複数あります。制約とCSV取込は最初の1件に解決されます",
+                    "スキルグループ記号を一意にしてください(ws1)"))
+            }
+        }
+
         // [監査#7] SOFT 桁溢れ（辞書式崩壊）: soft 合計がスコア上限 1,000,000 に接近/超過すると、
         //   HARD 1件(=1,000,000) と soft が桁で干渉し「必須違反ゼロ最優先」が崩れる。初期解の soft で概算警告。
         run {

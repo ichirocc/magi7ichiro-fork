@@ -232,6 +232,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         OptimizationRepository.workers = _ui.value.workers
         val work = androidx.work.OneTimeWorkRequestBuilder<OptimizationWorker>()
             .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            // [P2修正/レビュー指摘] 予算秒数・並列数を WorkManager の inputData に永続化。プロセス再起動後の
+            //   再実行でも開始時の条件（例: 300秒/8並列）が保たれる（旧: インメモリのみで既定60秒/4並列に化けた）。
+            .setInputData(androidx.work.workDataOf(
+                OptimizationWorker.KEY_SECONDS to _ui.value.budgetSec,
+                OptimizationWorker.KEY_WORKERS to _ui.value.workers,
+            ))
             .build()
         androidx.work.WorkManager.getInstance(getApplication())
             .enqueueUniqueWork(OptimizationWorker.UNIQUE, androidx.work.ExistingWorkPolicy.REPLACE, work)
@@ -1924,6 +1930,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun ws1RemoveShift(k: Int) {
         val st = state ?: return
         val sched = currentSchedule ?: return
+        // [P1修正/レビュー指摘] 休シフトの削除は Ws1Ops 側で no-op（全休日が勤務に化けるため禁止）。理由を提示する。
+        if (k == com.magi.app.v6.restShiftIndex(st)) {
+            _ui.update { it.copy(message = "「休」シフトは削除できません（全ての休日が別のシフトに変わってしまうため）") }
+            return
+        }
         applyStructure(Ws1Ops.removeShift(st, sched, k))
     }
 
