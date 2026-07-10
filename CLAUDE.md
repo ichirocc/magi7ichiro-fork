@@ -302,6 +302,11 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+- (3.117.0, 集中モード=Web試作③の移植・最終候補): 違反フィルタバーに **「集中」トグル**（既定OFF・rememberSaveable）。
+  ON で**違反(vk>0)・未反映希望(wkk=2)・注目セル以外を淡色化**（休セル後退=3.99.0 と同じ alpha0.30＋onSurfaceVariant＋細字。
+  非表示にはしない＝被覆の文脈は読める）。E7=種類の絞り込み・検索=行強調・集中=異常の浮き上がり、の直交3機能が揃った。
+  `ViolationFilterBar(focusMode,onFocusMode)`→`ScheduleGrid/MagiFlatGrid(focusMode)`→quiet 判定。対象はメイングリッドのみ。
+  表示のみ・スコアリング不変。これで Web試作検証の移植候補は**全て完了**。
 - (3.116.0, シフト別不足サマリー=Web試作①の移植): 勤務表グリッド上部に **「人員不足（全31日中）: B4 29日 ・ 有 19日 …」**
   の1行バナー（errorContainer）。needViolations の covU をシフト別に日数集計（多い順・重複日dedup）。
   「どのシフトが慢性的に埋まらないか」を数字で即答＝採用/教育判断の入口。E7 人員バケツOFF時は非表示（covU 表示と整合）。

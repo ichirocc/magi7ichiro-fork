@@ -520,7 +520,8 @@ internal fun mondayWeeks(startDate: String, days: Int): List<List<Int>> {
 /** [E7] 6バケツの件数付きフィルタチップ行（勤務表タブ共有）。件数は breakdown から族合計。0件は淡色。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int = -1) {
+internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<String>, onToggle: (String) -> Unit, locCount: Int = -1,
+    focusMode: Boolean = false, onFocusMode: (Boolean) -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     // [監査修正] チップ件数は「違反ロケーション数(箇所)」＝見出し「要確認 N件」と同単位。旧: breakdown の量(low/high は
     //   不足量計・c1 は #fire)を混在合算しており、単位不一致で「回数20 vs 要確認1件」の誤トリアージを招いていた。
@@ -538,6 +539,9 @@ internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<Str
                         Text("すべて表示", style = MaterialTheme.typography.labelLarge)
                     }
                 }
+                // [集中モード/Web試作③] 違反・未反映希望のセルだけを浮かせ、他を淡色に沈めるトグル（表示のみ）。
+                FilterChip(selected = focusMode, onClick = { onFocusMode(!focusMode) },
+                    label = { Text("集中", style = MaterialTheme.typography.titleSmall) })
             }
             Spacer(Modifier.height(4.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -604,6 +608,7 @@ internal fun ScheduleGrid(
     focusCell: Pair<Int, Int>? = null,
     onFocusShown: () -> Unit = {},
     focusRange: Triple<Int, Int, Int>? = null,   // [窓ハイライト③] (職員i, 開始日, 終了日)
+    focusMode: Boolean = false,                  // [集中モード] 違反・未反映希望以外のセルを淡色化
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -736,7 +741,7 @@ internal fun ScheduleGrid(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
         }
@@ -1374,7 +1379,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null) {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1479,19 +1484,23 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                             val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
                             val isRest = k >= 0 && k == restIdx
                             val rawBg = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
-                            // [判読性] 休は淡色化して後退（勤務セルが浮かぶ）。文字は onSurfaceVariant で可読性を担保。
-                            val bg = if (isRest) rawBg.copy(alpha = 0.30f) else rawBg
-                            // [コントラスト] 淡い背景に沈まないよう記号色をWCAGで保証（色データは不変）。
-                            val fg = if (isRest) cs.onSurfaceVariant else ensureReadable(rawBg, shiftTextC.getOrNull(k) ?: cs.onSurface)
                             val sym = ui.shiftSymbols.getOrNull(k) ?: ""
                             val vk = vioKind[i][d]; val wkk = wishKind[i][d]
+                            val cellFocused = (focusCell?.first == i && focusCell.second == d) ||
+                                (focusRange != null && focusRange.first == i && d >= focusRange.second && d <= focusRange.third)
+                            // [集中モード] 違反・未反映希望・注目セル以外を淡色に沈める（非表示にはしない＝被覆の文脈は残す）。
+                            val quiet = focusMode && vk == 0 && wkk != 2 && !cellFocused
+                            // [判読性] 休は淡色化して後退（勤務セルが浮かぶ）。文字は onSurfaceVariant で可読性を担保。
+                            val bg = if (isRest || quiet) rawBg.copy(alpha = 0.30f) else rawBg
+                            // [コントラスト] 淡い背景に沈まないよう記号色をWCAGで保証（色データは不変）。
+                            val fg = if (isRest || quiet) cs.onSurfaceVariant else ensureReadable(rawBg, shiftTextC.getOrNull(k) ?: cs.onSurface)
                             // [希望バッジ] 未反映（割付≠希望）のときは希望シフトの記号をバッジでセルに重ねる
                             //   （旧: 桃ドットのみで「何を希望していたか」が編集シートを開かないと分からなかった）。
                             val wishSym = if (wkk == 2) ui.wishes["$i,$d"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "" else ""
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") + "、タップで変更"
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest, symSize = symFontSize, focused = (focusCell?.first == i && focusCell.second == d) || (focusRange != null && focusRange.first == i && d >= focusRange.second && d <= focusRange.third), wishSym = wishSym) { onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest || quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym) { onCellClick(i, d) }
                         }
                     }
                 }
