@@ -421,37 +421,8 @@ internal fun CalendarCell(label: String, symbol: String, violation: Boolean, har
 }
 
 
-@Composable
-internal fun ScheduleModeCard(
-    editing: Boolean,
-    canRead: Boolean,
-    onSelect: (Boolean) -> Unit,
-    onCommit: () -> Unit,
-    onCopy: () -> Unit,
-) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // [校正] ラベルを平易化し「見るだけ/直す」を明示。選択中の区分で状態は分かるため、
-            //   重複する「編集中・未確定」バッジは廃止し、説明を1行に集約（冗長解消）。
-            MagiSegmentedControl(
-                options = listOf("結果（見るだけ）", "下書き（直す）"),
-                selected = if (editing) 1 else 0,
-                onSelect = { onSelect(it == 1) },
-            )
-            Text(
-                if (editing) "いまは下書きを直しています。よければ［結果に反映］。最適化もこの下書きが起点です。"
-                else "確定した結果を見ています（このままでは変えられません）。直すには「下書き（直す）」へ。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (editing && canRead) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = onCommit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("結果に反映") }
-                    OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("結果を複製") }
-                }
-            }
-        }
-    }
-}
+// [D7撤去] ScheduleModeCard（結果=読取/下書き=編集の切替）はユーザー判断で撤去。勤務表は常に直接編集の1本。
+//   結果スナップショット(resultSchedule/result専用違反マップ)のモデルは温存（最適化完了時に充填・将来のCSV等）。
 
 
 // ===== [E7] 違反 種別フィルタ（勤務表タブ全面共有・コース6分類） =====
@@ -748,48 +719,8 @@ internal fun ScheduleGrid(
     }
 }
 
-/**
- * [読み取りモードの理由表示] 結果（読取）モードではセル編集シートを開けず、違反の角マーク/枠の
- * 「なぜ」が確認できなかった（実機指摘「なぜ例が出ていないんですか？」）。読取タップで開く
- * 見るだけのダイアログ: 割当・違反理由の全列挙（重み降順）・希望の反映状態。表示のみ・スコア不変。
- */
-@Composable
-internal fun CellInfoDialog(ui: UiState, i: Int, j: Int, onClose: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val name = ui.staffNames.getOrNull(i) ?: "$i"
-    val k = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
-    val sym = if (k >= 0) ui.shiftSymbols.getOrNull(k) ?: "$k" else "—"
-    val vioHardC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
-    val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-    AlertDialog(
-        onDismissRequest = onClose,
-        confirmButton = { DialogConfirmButton("閉じる", onClick = onClose) },
-        title = { DialogHeader("$name ・ ${j + 1}日", onClose) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("割当  $sym", style = MaterialTheme.typography.bodyMedium)
-                val fams = cellVioClasses(ui, "$i,$j")
-                if (fams.isEmpty()) {
-                    Text("このセルに違反はありません。", style = MaterialTheme.typography.bodyMedium, color = cs.tertiary)
-                } else fams.forEach { cls ->
-                    val fam = cls.removePrefix("vio-")
-                    val hard = isHardCellViolation(cls)
-                    Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
-                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                        color = if (hard) vioHardC else vioSoftC)
-                }
-                val wish = ui.wishes["$i,$j"]
-                if (wish != null) {
-                    Text("希望  ${ui.shiftSymbols.getOrNull(wish) ?: wish}" + (if (wish == k) "（反映済）" else "（未反映）"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (wish != k) MagiAccent.pink else cs.onSurfaceVariant)
-                }
-                Text("いまは読み取り（結果）の表示です。修正するには勤務表上部で「下書き（直す）」に切り替えてください。",
-                    style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-            }
-        },
-    )
-}
+// [D7撤去] CellInfoDialog（読取モードの見るだけ理由表示, 3.119.0）は読取モード自体の撤去に伴い不要化・撤去。
+//   理由表示はセル編集シート（常時開く）が一元的に担う。
 
 /** 期間開始日の曜日インデックス（0=月..6=日）。解析不能なら 0。 */
 

@@ -372,9 +372,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         // [窓ハイライト③] c1/c3/c3m はどの範囲の違反かをグリッド上でも示す（シート表示中のみ）。
                         focusRange = vm.violationRange(i, j)?.let { Triple(i, it.first, it.second) }
                     }
-                    // [B1] 結果(読取ws6)/下書き(ws7) モード分離。既定=結果(読取)。確定結果が無ければ下書き扱い。
-                    var editing by rememberSaveable { mutableStateOf(false) }
-                    var copyConfirm by rememberSaveable { mutableStateOf(false) }
+                    // [D7] 読取(結果)モードはユーザー判断で撤去（「下書き（直す）モードだけで大丈夫」）。
+                    //   勤務表は常に直接編集の1本＝タップで即編集シート。最適化完了時は schedule==resultSchedule
+                    //   のため結果はそのまま見えている。誤編集は「元に戻す」が担保。
                     var wishBulkOpen by rememberSaveable { mutableStateOf(false) }
                     // [E7] 違反 種別フィルタ（勤務表タブ全面共有）。初期=全ON。bitmask(Int)で rememberSaveable 保存
                     //   （回転/プロセス復元で保持）。表示のみ・スコアリング不変。ビット i = vioBuckets[i] のON/OFF。
@@ -386,67 +386,30 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     var focusMode by rememberSaveable { mutableStateOf(false) }
                     // [画面修正版 ②] 検索・凡例（折りたたみ）。検索=職員名で該当グリッド行を強調（回転/復元で保持）。
                     var searchQuery by rememberSaveable { mutableStateOf("") }
-                    val canRead = ui.hasResultSnapshot
-                    val effectiveEditing = editing || !canRead
-                    ScheduleModeCard(
-                        editing = effectiveEditing,
-                        canRead = canRead,
-                        onSelect = { editing = it },
-                        onCommit = { vm.commitEditingToResult() },
-                        onCopy = { copyConfirm = true },
-                    )
-                    // [校正] 希望の反映は「下書き（直す）」時だけ表示。読取結果には適用できないため
-                    //   読取時に出すのは冗長＝誤操作のもと。
-                    if (effectiveEditing) WishApplyCard(ui, onApply = {
+                    WishApplyCard(ui, onApply = {
                         val oos = vm.wishOutOfScopeCount()
                         if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
                     })
-                    // [backlog#1] 読取モードは schedule だけでなく違反マップも結果(ws6)専用の検査結果へ差し替える。
-                    //   従来は編集中盤面の検査結果が残り、編集後に読取へ切替えると集計値と違反ハイライトがズレた。
-                    //   result*==null（未計算）は現行マップへフォールバック＝従来挙動のまま安全。
-                    val gridUi = if (effectiveEditing) ui else ui.copy(
-                        schedule = ui.resultSchedule,
-                        violationCells = ui.resultViolationCells ?: ui.violationCells,
-                        needViolations = ui.resultNeedViolations ?: ui.needViolations,
-                        countViolations = ui.resultCountViolations ?: ui.countViolations,
-                        violationCellFamilies = ui.resultViolationCellFamilies ?: ui.violationCellFamilies,
-                    )
-                    // [読取の理由表示] 読取(結果)モードのタップは従来ヒントだけで、違反マークの「なぜ」が
-                    //   確認できなかった → 見るだけの CellInfoDialog を開く（変更は不可のまま）。
-                    var readInfoCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-                    val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { i, j -> readInfoCell = i to j }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
-                    val vioLocCount = gridUi.violationCells.size + gridUi.needViolations.size + gridUi.countViolations.size
-                    ViolationFilterBar(vioBucketLocCounts(gridUi), vioEnabled, onToggle = { key ->
+                    val vioLocCount = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
+                    ViolationFilterBar(vioBucketLocCounts(ui), vioEnabled, onToggle = { key ->
                         val i = vioBuckets.indexOfFirst { it.key == key }
                         if (i >= 0) vioMask = vioMask xor (1 shl i)
                     }, locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it })
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
-                    SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
-                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
-                        onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() },
+                    SearchLegendBar(ui, searchQuery, onQuery = { searchQuery = it })
+                    ScheduleGrid(ui, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
+                        onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode)
-                    readInfoCell?.let { (ri, rj) -> CellInfoDialog(gridUi, ri, rj) { readInfoCell = null } }
-                    StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
-                    TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
-                    if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
-                    if (effectiveEditing) {
-                        OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("希望シフトの一括操作（曜日／全体）")
-                        }
+                    StaffCalendarCard(ui, onCellClick = openEditor, vioEnabled = vioEnabled)
+                    TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
+                    MismatchExtractCard(ui, onOpenCell = openEditor)
+                    OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("希望シフトの一括操作（曜日／全体）")
                     }
                     if (wishBulkOpen) {
                         WishBulkSheet(ui, vm, presetWeekday = 0, onDismiss = { wishBulkOpen = false })
-                    }
-                    if (copyConfirm) {
-                        AlertDialog(
-                            onDismissRequest = { copyConfirm = false },
-                            title = { Text("結果を下書きに複製しますか？") },
-                            text = { Text("いまの下書きは破棄され、確定済みの「結果」で置き換わります。「元に戻す」で取り消せます。") },
-                            confirmButton = { DialogConfirmButton("複製する", onClick = { copyConfirm = false; vm.copyResultToEditing() }) },
-                            dismissButton = { DialogDismissButton(onClick = { copyConfirm = false }) },
-                        )
                     }
                 }
                 2 -> {

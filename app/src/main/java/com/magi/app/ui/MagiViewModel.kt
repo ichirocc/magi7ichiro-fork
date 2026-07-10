@@ -1104,6 +1104,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         refreshCheck()
     }
 
+    // [D7] 読取(結果)モードUIは撤去済み（勤務表=常に直接編集）。以下2関数は結果スナップショット操作の
+    //   API として温存（UI 参照ゼロ・テスト非依存。結果モデル自体は最適化完了時に充填され続ける）。
     /** [B1] 編集中(ws7) を結果(ws6) として確定する。表示・違反は不変なのでスナップショットのみ更新。 */
     fun commitEditingToResult() {
         val cur = currentSchedule ?: return
@@ -1140,10 +1142,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "結果→編集中に複製")
     }
 
-    /** [B1] 読取専用モードでセル編集が試行された時の案内。 */
-    fun hintReadOnly() {
-        _ui.update { it.copy(message = "「結果」は読取専用です。修正は「編集中」モードに切り替えてください。") }
-    }
+    // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
 
     // ---- constraint editing (ws3-5) -------------------------------------------
 
