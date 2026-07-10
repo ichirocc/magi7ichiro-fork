@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 252
-        versionName = "3.104.0-terse-captions"
+        versionCode = 253
+        versionName = "3.105.0-fit-symbols"
     }
 
     buildTypes {

@@ -662,7 +662,7 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(4.dp)).drawBehind {
-                val t = 9.dp.toPx()
+                val t = 12.dp.toPx()
                 val p = Path().apply { moveTo(size.width - t, 0f); lineTo(size.width, 0f); lineTo(size.width, t); close() }
                 drawPath(p, vioSoftColor)
             })
@@ -1302,6 +1302,11 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [判読性] 休セルは淡色＋細字で視覚的に後退させ、勤務セルの模様（誰がいつ働くか）を浮かび上がらせる。
     //   記号「休」から解決（改名データでは -1=後退なし＝従来表示）。色データ・スコアリング不変。
     val restIdx = remember(ui.shiftSymbols) { ui.shiftSymbols.indexOfFirst { it.trim() == "休" } }
+    // [悲観検証P2/フォント拡大] 記号はセル幅への物理フィット優先（cellW×0.40・上限15dp を dp→sp 変換）。
+    //   端末のフォント拡大(1.3x等)で 15sp→19.5dp となり全角2文字がセル(36〜48dp)からクリップして
+    //   記号が誤読になる（Dﾃ→D）のを防ぐ。可読の代替は contentDescription と編集シート（通常どおり拡大）。
+    val symFontSize = with(LocalDensity.current) { minOf(cellW * 0.40f, 15.dp).toSp() }
+    val headFontSize = with(LocalDensity.current) { 12.dp.toSp() }   // 曜日/▼N も同方針で列幅フィット
     val dayVioH = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 1 } } }
     val dayVioS = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] >= 2 } } }
     val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
@@ -1341,10 +1346,12 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                     Column {
                         Column(Modifier.width(cellW).height(headH), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                            // [a11y] 9sp→12sp。荷重情報の「不足N」は別行の赤字バッジに分離（曜日と混ざって潰れないように）。
-                            Text(weekdayJa[dow], fontSize = 12.sp, color = dcol, maxLines = 1)
-                            // [E7] 「不足N」は人員(covU)由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
-                            if (dayShort[d] > 0 && "need" in vioEnabled) Text("不足${dayShort[d]}", fontSize = 12.sp, color = cs.error, fontWeight = FontWeight.Bold, maxLines = 1)
+                            // [a11y] 荷重情報の「▼N」は別行の赤字バッジに分離（曜日と混ざって潰れないように）。
+                            Text(weekdayJa[dow], fontSize = headFontSize, color = dcol, maxLines = 1)
+                            // [E7] 「▼N」(人員不足)は covU 由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
+                            // [悲観検証P2+P7] 旧「不足N」(4文字)はフォント拡大時に38dp列からクリップ。集計凡例と
+                            //   同語彙の「▼N」(2-3文字)へ短縮し、サイズも列幅フィット(dp→sp)に。
+                            if (dayShort[d] > 0 && "need" in vioEnabled) Text("▼${dayShort[d]}", fontSize = headFontSize, color = cs.error, fontWeight = FontWeight.Bold, maxLines = 1)
                             if (hc != null) Box(Modifier.width(cellW - 10.dp).height(2.5.dp).background(hc, RoundedCornerShape(2.dp)))
                             else Spacer(Modifier.height(2.5.dp))
                         }
@@ -1361,7 +1368,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映" else if (wkk != 0) "・希望" else "") + "、タップで変更"
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest) { onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest, symSize = symFontSize) { onCellClick(i, d) }
                         }
                     }
                 }
@@ -1373,7 +1380,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
 @Composable
 private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
-    bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false, onClick: () -> Unit,
+    bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false,
+    symSize: androidx.compose.ui.unit.TextUnit = 15.sp, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.width(w).height(h).padding(1.5.dp)) {
@@ -1392,12 +1400,14 @@ private fun FlatCell(
                 .semantics(mergeDescendants = true) { contentDescription = cd },
             contentAlignment = Alignment.Center,
         ) {
-            // [コントラスト] 記号は太字＋15sp（48dpセルに合わせ拡大）で沈み込みを防ぐ。休(dim)は細字で後退。
-            if (symbol.isNotBlank()) Text(symbol, fontSize = 15.sp, fontWeight = if (dim) FontWeight.Normal else FontWeight.Bold, color = fg, maxLines = 1)
-            // [判読性] 軽いソフト違反(vk=3)＝右上の小さな角マーク（枠より静かな手がかり。色＋位置の二重符号化）。
+            // [コントラスト] 記号は太字＋セル幅フィットの物理サイズ(P2)で沈み込み/クリップを防ぐ。休(dim)は細字で後退。
+            if (symbol.isNotBlank()) Text(symbol, fontSize = symSize, fontWeight = if (dim) FontWeight.Normal else FontWeight.Bold, color = fg, maxLines = 1)
+            // [判読性] 軽いソフト違反(vk=3)＝右上の角マーク（枠より静かな手がかり。色＋位置の二重符号化）。
+            // [悲観検証P3] 9dp→12dp＋斜辺に surface のハロー縁取り。直射日光下・任意のシフト色上でも消えないように。
             if (vk == 3) {
-                Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(9.dp).drawBehind {
+                Box(Modifier.align(Alignment.TopEnd).padding(1.5.dp).size(12.dp).drawBehind {
                     val p = Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); close() }
+                    drawPath(p, cs.surface, style = Stroke(width = 2.dp.toPx()))
                     drawPath(p, vioSoftColor)
                 })
             }
