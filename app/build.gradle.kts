@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 255
-        versionName = "3.107.0-mark-priority"
+        versionCode = 256
+        versionName = "3.108.0-jump-groupband"
     }
 
     buildTypes {

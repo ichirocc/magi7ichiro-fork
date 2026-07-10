@@ -625,6 +625,7 @@ private data class ConfirmItem(
     val title: String,      // 場所（職員名 / 日「シフト」）
     val sub: String,        // 族ラベル（人員不足・下限割れ 等）
     val staff: Int?,        // タップ修復のフォーカス職員（null=全体探索）
+    val day: Int?,          // [ジャンプ] セル違反の日index（null=セルに紐付かない項目）
     val order: Int,         // 並び（kind→場所）
 )
 
@@ -642,7 +643,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
         val fam = cls.removePrefix("vio-")
         val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過" to 1; else -> "調整" to 1 }
-        out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, kind * 100000 + j * 100 + k)
+        out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, null, kind * 100000 + j * 100 + k)
     }
     // 個人回数: countViolations "i,k" -> vio-low/high/c2/aptLow/aptHigh（職員×シフト）
     for ((key, cls) in ui.countViolations) {
@@ -651,7 +652,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         // c2(個人の合計) は方向を持たない単一クラス vio-c2 → 「過」ではなく中立マーク「計」（誤って過剰と表示しない）。
         val (mark, kind) = when (fam) { "low", "aptLow" -> "不足" to 0; "c2" -> "計" to 1; else -> "過" to 1 }
         val labelFam = when (fam) { "aptLow", "aptHigh" -> "apt"; else -> fam }
-        out += ConfirmItem(kind, mark, nm(i), "${sym(k)}・${breakdownLabels[labelFam] ?: labelFam}", i, kind * 100000 + 40000 + i * 100 + k)
+        out += ConfirmItem(kind, mark, nm(i), "${sym(k)}・${breakdownLabels[labelFam] ?: labelFam}", i, null, kind * 100000 + 40000 + i * 100 + k)
     }
     // セル違反: violationCells "i,j" -> vio-pref/groupViol/c3n/c3/c3m/c3mn/c1/c42/c42s（職員×日=実シフト）
     for ((key, cls) in ui.violationCells) {
@@ -664,7 +665,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
             "pref", "groupViol", "c3n" -> "必須" to 0
             else -> "調整" to 1
         }
-        out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", breakdownLabels[fam] ?: fam, i, kind * 100000 + 80000 + j * 100 + i)
+        out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", breakdownLabels[fam] ?: fam, i, j, kind * 100000 + 80000 + j * 100 + i)
     }
     return out.sortedWith(compareBy({ it.kind }, { it.order }))
 }
@@ -688,7 +689,7 @@ private fun ConfirmFilterChip(label: String, count: Int, selected: Boolean, onCl
 
 /** [★1] 要確認一覧の1行（spec confirmCard 同型：マークバッジ＋タイトル＋族＋メタ）。 */
 @Composable
-private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit) {
+private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCell: (Int, Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
     val (bg, fg) = when (item.kind) {
@@ -698,7 +699,7 @@ private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit) {
     }
     val clickable = item.staff != null
     var m = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-    if (clickable) m = m.clickable { onFocusStaff(item.staff!!) }
+    if (clickable) m = m.clickable { val d = item.day; if (d != null) onShowCell(item.staff!!, d) else onFocusStaff(item.staff!!) }
         .semantics { contentDescription = "${item.title} ${item.sub}・タップで直し方を探す" }
     Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -728,6 +729,8 @@ internal fun ConfirmListCard(
     onFocusStaff: (Int) -> Unit,
     onGoEdit: () -> Unit,
     proMode: Boolean = false,
+    // [ジャンプ/Web試作の移植] セル違反の項目タップで勤務表タブの該当セルへ移動＋ハイライト。
+    onShowCell: (Int, Int) -> Unit = { i, _ -> onFocusStaff(i) },
 ) {
     val items = remember(ui.violationCells, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
     val issueCount = ui.settingIssues.size
@@ -769,7 +772,7 @@ internal fun ConfirmListCard(
                 if (counts[1] > 0) ConfirmFilterChip("過剰・調整", counts[1], effFilter == 1) { filter = 1 }
                 if (counts[2] > 0) ConfirmFilterChip("窓", counts[2], effFilter == 2) { filter = 2 }
             }
-            shown.take(40).forEach { ConfirmRow(it, onFocusStaff) }
+            shown.take(40).forEach { ConfirmRow(it, onFocusStaff, onShowCell) }
             if (shown.size > 40) Text("ほか ${shown.size - 40} 件（重大な順に表示中）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
             if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }

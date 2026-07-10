@@ -562,6 +562,9 @@ internal fun ScheduleGrid(
     ui: UiState, onCellClick: (Int, Int) -> Unit, proMode: Boolean = false, nameQuery: String = "",
     vioEnabled: Set<String> = allVioBucketKeys,
     onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit = { _, _ -> },
+    // [ジャンプ/Web試作の移植] 要確認一覧から渡される注目セル(i,j)。該当日へ自動スクロール＋一時ハイライト。
+    focusCell: Pair<Int, Int>? = null,
+    onFocusShown: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -589,6 +592,13 @@ internal fun ScheduleGrid(
                 val d = if (cellWpx > 0) hScroll.value / cellWpx else 0
                 weeks.indexOfFirst { d <= it.last() }.let { if (it < 0) (weeks.size - 1).coerceAtLeast(0) else it }
             }
+        }
+        // [ジャンプ] 注目セルの日列へスクロールし、約2.5秒後にハイライトを解除（表示のみ）。
+        LaunchedEffect(focusCell) {
+            val fc = focusCell ?: return@LaunchedEffect
+            hScroll.animateScrollTo((fc.second * cellWpx).coerceAtLeast(0))
+            kotlinx.coroutines.delay(2_500)
+            onFocusShown()
         }
         Column(Modifier.padding(16.dp)) {
             Text("勤務表", style = MaterialTheme.typography.titleMedium)
@@ -631,7 +641,7 @@ internal fun ScheduleGrid(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
         }
         }
@@ -1269,7 +1279,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp) {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, focusCell: Pair<Int, Int>? = null) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1302,6 +1312,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [判読性] 休セルは淡色＋細字で視覚的に後退させ、勤務セルの模様（誰がいつ働くか）を浮かび上がらせる。
     //   記号「休」から解決（改名データでは -1=後退なし＝従来表示）。色データ・スコアリング不変。
     val restIdx = remember(ui.shiftSymbols) { ui.shiftSymbols.indexOfFirst { it.trim() == "休" } }
+    // [グループ色帯/Web試作の移植] 名前列の左端4dpにグループ色の帯。行の視線追跡と所属の一目把握を助ける。
+    //   色は群の出現順に黄金角で自動割当（設定不要・群1つなら実質無地）。
+    val groupOrder = remember(ui.staffGroupSymbols) { ui.staffGroupSymbols.distinct() }
     // [悲観検証P2/フォント拡大] 記号はセル幅への物理フィット優先（cellW×0.40・上限15dp を dp→sp 変換）。
     //   端末のフォント拡大(1.3x等)で 15sp→19.5dp となり全角2文字がセル(36〜48dp)からクリップして
     //   記号が誤読になる（Dﾃ→D）のを防ぐ。可読の代替は contentDescription と編集シート（通常どおり拡大）。
@@ -1329,7 +1342,12 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                     Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 }
                 for (i in 0 until staffCount) {
-                    Box(Modifier.width(nameW).height(cellH).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
+                    Row(Modifier.width(nameW).height(cellH).padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // [グループ色帯] 左端4dp=所属グループ色（出現順に黄金角で自動割当）。行追跡の視線ガイド兼用。
+                        val gi = groupOrder.indexOf(ui.staffGroupSymbols.getOrNull(i) ?: "").coerceAtLeast(0)
+                        Box(Modifier.width(4.dp).height(cellH - 12.dp)
+                            .background(Color.hsv(((gi * 137) % 360).toFloat(), 0.40f, 0.72f), RoundedCornerShape(2.dp)))
+                        Spacer(Modifier.width(4.dp))
                         // [検索] 一致する職員名を太字＋青で強調（行は隠さず＝被覆の文脈を保つ）。
                         val nm = ui.staffNames.getOrNull(i) ?: "$i"
                         val hit = nameQuery.isNotBlank() && nm.contains(nameQuery, ignoreCase = true)
@@ -1368,7 +1386,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映" else if (wkk != 0) "・希望" else "") + "、タップで変更"
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest, symSize = symFontSize) { onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest, symSize = symFontSize, focused = (focusCell?.first == i && focusCell.second == d)) { onCellClick(i, d) }
                         }
                     }
                 }
@@ -1381,7 +1399,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
 private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
     bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false,
-    symSize: androidx.compose.ui.unit.TextUnit = 15.sp, onClick: () -> Unit,
+    symSize: androidx.compose.ui.unit.TextUnit = 15.sp, focused: Boolean = false, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.width(w).height(h).padding(1.5.dp)) {
@@ -1391,6 +1409,7 @@ private fun FlatCell(
                 // [分離] 無違反セルにも微細な輪郭を付け、似た明度の隣接セルと切り分ける（違反時は違反枠が優先）。
                 // [判読性] 枠は 1=実線(必須)/2=破線(重い調整)のみ。3=軽い調整は右上の角マークに落とし飽和を防ぐ。
                 .then(when {
+                    focused -> Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp))   // [ジャンプ] 注目セル
                     vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp)
                     vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp)
                     else -> Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp))

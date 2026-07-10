@@ -298,6 +298,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
+    // [ジャンプ/Web試作の移植] 要確認一覧→勤務表タブの注目セル(i,j)。表示後に自動クリア（一時ハイライト）。
+    var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val loadSample: () -> Unit = {
         scope.launch {
             val text = withContext(Dispatchers.IO) {
@@ -411,7 +413,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
                     SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
-                        onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
+                        onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() },
+                        focusCell = focusCell, onFocusShown = { focusCell = null })
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
                     TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
@@ -515,7 +518,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     HeroMetricsRow(ui)
                     // [★1/E1] 要確認一覧＝散在していた診断を「箇所単位・重大度」で1ハブに統合（web「画面修正版」confirm 移植）。
                     //   タブ先頭のヒーローとして配置。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。表示のみ・スコア不変。
-                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode)
+                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode, onShowCell = { i, j -> focusCell = i to j; tab = 1 })
                     // [★3+4] 日別/人別 注意リスト＋「要確認のみ」トグル（web「画面修正版」day/staff＋alertOnly 融合）。
                     //   人別行タップで修復フローへ。BottleneckCard(top5テキスト) の上位互換のため下の BottleneckCard は撤去。
                     AttentionCardsSection(ui, onFocusStaff = { vm.findFixSuggestions(it) })
