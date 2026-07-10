@@ -232,6 +232,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         OptimizationRepository.workers = _ui.value.workers
         val work = androidx.work.OneTimeWorkRequestBuilder<OptimizationWorker>()
             .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+            // [P2修正/レビュー指摘] 予算秒数・並列数を WorkManager の inputData に永続化。プロセス再起動後の
+            //   再実行でも開始時の条件（例: 300秒/8並列）が保たれる（旧: インメモリのみで既定60秒/4並列に化けた）。
+            .setInputData(androidx.work.workDataOf(
+                OptimizationWorker.KEY_SECONDS to _ui.value.budgetSec,
+                OptimizationWorker.KEY_WORKERS to _ui.value.workers,
+            ))
             .build()
         androidx.work.WorkManager.getInstance(getApplication())
             .enqueueUniqueWork(OptimizationWorker.UNIQUE, androidx.work.ExistingWorkPolicy.REPLACE, work)
@@ -1108,6 +1114,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             resultViolationCells = it.violationCells,
             resultNeedViolations = it.needViolations,
             resultCountViolations = it.countViolations,
+            resultViolationCellFamilies = it.violationCellFamilies,
             message = "編集中の内容を「結果」として確定しました",
         ) }
         logOp("I", "編集中→結果に確定")
@@ -1921,9 +1928,48 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** グループgの所属人数（削除確認の警告表示用）。 */
     fun ws1GroupMemberCount(g: Int): Int = state?.staff?.count { it.groupIdx == g } ?: 0
 
+    /** [窓ハイライト③] セル(i,j)の違反が c1/c3/c3m のとき、その違反が指す窓/連の範囲(開始日..終了日)を返す。
+     *  c1=最初に不足している窓 / c3・c3m=複数シフト窓なら未完成パターンの窓、単一シフト連なら連の実範囲。
+     *  該当なし・他族は null（読み取り専用・表示のみ）。 */
+    fun violationRange(i: Int, j: Int): Pair<Int, Int>? {
+        val st = state ?: return null
+        val sched = currentSchedule ?: return null
+        val cls = _ui.value.violationCells["$i,$j"] ?: return null
+        val p = com.magi.app.v6.cachedProblem(st)
+        if (i !in 0 until p.S || j !in 0 until p.T) return null
+        when (cls) {
+            "vio-c1" -> for (c in p.cons1) {
+                if (!p.canDo(i, c.shiftIdx) || j + c.day1 > p.T) continue
+                var z = 0
+                for (l in 0 until c.day1) if (sched[i][j + l] == c.shiftIdx) z++
+                if (z < c.day2) return j to (j + c.day1 - 1)
+            }
+            "vio-c3", "vio-c3m" -> {
+                val k0 = sched[i][j]
+                val lists = if (cls == "vio-c3") p.cons3 else p.cons3m
+                for (c in lists) {
+                    val seq = c.seq
+                    if (seq.size < 2 || seq[0] != k0 || j + seq.size > p.T) continue
+                    var ok = true
+                    for (l in 1 until seq.size) if (sched[i][j + l] != seq[l]) { ok = false; break }
+                    if (!ok) return j to (j + seq.size - 1)   // 未完成パターン=この窓が違反
+                }
+                var end = j
+                while (end + 1 < p.T && sched[i][end + 1] == k0) end++   // 単一シフト連の実範囲
+                if (end > j) return j to end
+            }
+        }
+        return null
+    }
+
     fun ws1RemoveShift(k: Int) {
         val st = state ?: return
         val sched = currentSchedule ?: return
+        // [P1修正/レビュー指摘] 休シフトの削除は Ws1Ops 側で no-op（全休日が勤務に化けるため禁止）。理由を提示する。
+        if (k == com.magi.app.v6.restShiftIndex(st)) {
+            _ui.update { it.copy(message = "「休」シフトは削除できません（全ての休日が別のシフトに変わってしまうため）") }
+            return
+        }
         applyStructure(Ws1Ops.removeShift(st, sched, k))
     }
 
@@ -2237,6 +2283,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             violationCells = report.violations,
             needViolations = report.needViolations,
             countViolations = report.countViolations,
+            violationCellFamilies = report.cellFamilies,
             // [backlog#1] 検査対象が結果(ws6)そのものなら、この report が結果専用マップの最新値。
             //   最適化完了/他案適用/結果→編集複製後の refreshCheck 等、resultSchedule 更新サイトは全て
             //   makeUi(schedule==resultSchedule, 対応report) を通るためここで一元的に充填できる。
@@ -2244,6 +2291,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             resultViolationCells = when { resultSchedule == null -> null; resultFresh -> report.violations; else -> base.resultViolationCells },
             resultNeedViolations = when { resultSchedule == null -> null; resultFresh -> report.needViolations; else -> base.resultNeedViolations },
             resultCountViolations = when { resultSchedule == null -> null; resultFresh -> report.countViolations; else -> base.resultCountViolations },
+            resultViolationCellFamilies = when { resultSchedule == null -> null; resultFresh -> report.cellFamilies; else -> base.resultViolationCellFamilies },
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },

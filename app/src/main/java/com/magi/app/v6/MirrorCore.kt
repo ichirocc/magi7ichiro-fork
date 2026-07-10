@@ -26,6 +26,9 @@ data class ViolationReport(
     val violations: Map<String, String>,
     val needViolations: Map<String, String>,
     val countViolations: Map<String, String>,
+    // [Set化] セル("i,j")に重なった全違反クラスを重み降順で保持（violations は最重1クラス＝後方互換のまま）。
+    //   タップ時の全列挙と E7 フィルタの整合（最重族がOFFでも表示中の族があれば枠を出す）に使う。表示のみ。
+    val cellFamilies: Map<String, List<String>> = emptyMap(),
     val breakdown: Map<String, Int>,
     val total: Int,
     val hard: Int,
@@ -87,8 +90,37 @@ object UnifiedViolationChecker {
         val countViolations = linkedMapOf<String, String>()
 
         fun inc(key: String, amount: Int = 1) { breakdown[key] = (breakdown[key] ?: 0) + amount }
-        fun mark(i: Int, j: Int, family: String) { violations["$i,$j"] = vioClass[family] ?: family }
-        fun markNeed(k: Int, j: Int, family: String) { needViolations["$k,$j"] = vioClass[family] ?: family }
+        // [判読性/レビュー指摘] 同一セルに複数族が重なる場合、従来は「後にマークした族」が無条件上書きで、
+        //   評価順の最後(c3系)が pref/groupViol(必須)のマークを潰し、実線枠が角マーク(軽ソフト)へ降格し得た
+        //   （重大度の逆転）。MirrorKeys.weights を表示優先度として使い、常に最重の族のマークを保持する。
+        //   1セル1クラスの型は維持（複数違反の全保持=Set化は別段の改修）。inc/breakdown は従来どおり全件計上
+        //   ＝スコアリング不変・表示のみ。
+        // [Set化] 重なった全クラスは cellFams("i,j"→クラス列)にも蓄積（重複なし・後で重み降順に整列）。
+        //   violations は従来どおり最重1クラス＝既存読者は不変。
+        val cellFams = linkedMapOf<String, MutableList<String>>()
+        fun mark(i: Int, j: Int, family: String) {
+            val key = "$i,$j"
+            val cls = vioClass[family] ?: family
+            val fams = cellFams.getOrPut(key) { ArrayList(2) }
+            if (cls !in fams) fams.add(cls)
+            val prev = violations[key]
+            if (prev != null) {
+                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
+                val newW = MirrorKeys.weights[family] ?: 0.0
+                if (prevW >= newW) return
+            }
+            violations[key] = cls
+        }
+        // [判読性] mark() と同じ重み優先。旧: 後勝ちで covO(0.5) が c41(1.0) のマークを上書きし得た。
+        fun markNeed(k: Int, j: Int, family: String) {
+            val key = "$k,$j"
+            val prev = needViolations[key]
+            if (prev != null) {
+                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
+                if (prevW >= (MirrorKeys.weights[family] ?: 0.0)) return
+            }
+            needViolations[key] = vioClass[family] ?: family
+        }
         fun markCount(i: Int, k: Int, family: String) { countViolations["$i,$k"] = vioClass[family] ?: family }
         fun cellIs(i: Int, j: Int, k: Int): Boolean = i in 0 until p.S && j in 0 until p.T && s[i][j] == k
 
@@ -278,10 +310,15 @@ object UnifiedViolationChecker {
             "合計=$total | HARD=$hard [$hardStr]" + if (soft > 0) " | SOFT=$soft [$softStr]" else ""
         }
         val level = if (total == 0) "I" else "W"
+        // [Set化] クラス列を重み降順に整列（安定ソート＝同重みはマーク順維持 → 先頭は violations[key] と常に一致）。
+        val cellFamilies = LinkedHashMap<String, List<String>>(cellFams.size)
+        for ((ck, cv) in cellFams) cellFamilies[ck] =
+            if (cv.size <= 1) cv else cv.sortedByDescending { MirrorKeys.weights[it.removePrefix("vio-")] ?: 0.0 }
         return ViolationReport(
             violations = violations,
             needViolations = needViolations,
             countViolations = countViolations,
+            cellFamilies = cellFamilies,
             breakdown = breakdown,
             total = total,
             hard = hard,

@@ -298,6 +298,10 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
+    // [ジャンプ/Web試作の移植] 要確認一覧→勤務表タブの注目セル(i,j)。表示後に自動クリア（一時ハイライト）。
+    var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
+    var focusRange by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     val loadSample: () -> Unit = {
         scope.launch {
             val text = withContext(Dispatchers.IO) {
@@ -363,6 +367,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     val openEditor: (Int, Int) -> Unit = { i, j ->
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         editingCell = i to j
+                        // [窓ハイライト③] c1/c3/c3m はどの範囲の違反かをグリッド上でも示す（シート表示中のみ）。
+                        focusRange = vm.violationRange(i, j)?.let { Triple(i, it.first, it.second) }
                     }
                     // [B1] 結果(読取ws6)/下書き(ws7) モード分離。既定=結果(読取)。確定結果が無ければ下書き扱い。
                     var editing by rememberSaveable { mutableStateOf(false) }
@@ -399,6 +405,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         violationCells = ui.resultViolationCells ?: ui.violationCells,
                         needViolations = ui.resultNeedViolations ?: ui.needViolations,
                         countViolations = ui.resultCountViolations ?: ui.countViolations,
+                        violationCellFamilies = ui.resultViolationCellFamilies ?: ui.violationCellFamilies,
                     )
                     val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
@@ -411,7 +418,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
                     SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
-                        onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() })
+                        onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() },
+                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange)
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
                     TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
@@ -460,7 +468,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         }
                         else -> {
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                                Text("毎月は変わらない土台です。制度や人の入れ替えのときだけ触ってください。毎月の調整は「今月の調整」「シフト希望」へ。",
+                                // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
+                                Text("土台の設定（制度・人の入替時のみ）。毎月の調整は「今月の調整」「シフト希望」へ。",
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     style = MaterialTheme.typography.bodyMedium)
@@ -514,7 +523,10 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     HeroMetricsRow(ui)
                     // [★1/E1] 要確認一覧＝散在していた診断を「箇所単位・重大度」で1ハブに統合（web「画面修正版」confirm 移植）。
                     //   タブ先頭のヒーローとして配置。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。表示のみ・スコア不変。
-                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode)
+                    ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode,
+                        onShowCell = { i, j -> focusCell = i to j; tab = 1 },
+                        // [⑥日別ジャンプ] 人員/群レンジ(日×シフト)の項目→勤務表タブの該当日列へ（i=-1=日のみ注目）。
+                        onShowDay = { j -> focusCell = -1 to j; tab = 1 })
                     // [★3+4] 日別/人別 注意リスト＋「要確認のみ」トグル（web「画面修正版」day/staff＋alertOnly 融合）。
                     //   人別行タップで修復フローへ。BottleneckCard(top5テキスト) の上位互換のため下の BottleneckCard は撤去。
                     AttentionCardsSection(ui, onFocusStaff = { vm.findFixSuggestions(it) })
@@ -573,8 +585,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     vm.setCell(cell.first, cell.second, k)
                     editingCell = null
+                    focusRange = null
                 },
-                onDismiss = { editingCell = null },
+                onDismiss = { editingCell = null; focusRange = null },
             )
         }
         if (guidedFix) {

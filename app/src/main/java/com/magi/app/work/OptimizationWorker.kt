@@ -29,12 +29,19 @@ class OptimizationWorker(
 
     override suspend fun doWork(): Result {
         // [C1] kill後にWorkManagerが再起動した場合、同一プロセス参照(request)は失われている。
-        // 入力をファイルから復元して続行する（参照が無くても完走する）。
+        // [P2修正/レビュー指摘] 復元は「途中最良スナップショット」を優先（8秒毎に退避済み＝実質的な途中再開。
+        //   無ければ元入力）。旧: 常に元入力から再スタートし、途中の改善を捨てていた。
         val req = OptimizationRepository.request ?: loadInputFromFile(ctx) ?: return Result.failure()
         ensureChannel()
         // [C1] 入力をファイルへ退避（現在は参照渡し）。kill後の再起動でここから復元できる。
         runCatching { inputFile(ctx).writeText(StateParser.serialize(req.first, req.second)) }
         OptimizationRepository.setRunning(true)
+        // [P2修正/レビュー指摘] 予算秒数・並列数は WorkManager の inputData から復元する。
+        //   旧: インメモリの OptimizationRepository のみで、プロセス再起動後は既定の 60秒/4並列 に
+        //   化けていた（300秒/8並列で開始したジョブが別条件で再実行される）。inputData は WorkManager が
+        //   永続化するため kill/再起動を跨いで開始時の条件が保たれる（0=未設定なら従来どおり Repository）。
+        val budgetSec = inputData.getInt(KEY_SECONDS, 0).takeIf { it > 0 } ?: OptimizationRepository.seconds
+        val bgWorkers = inputData.getInt(KEY_WORKERS, 0).takeIf { it > 0 } ?: OptimizationRepository.workers
         // [#4] 前景サービス化: 5分のCPUジョブをOSに止めさせない（FGS不可な環境では通常実行へフォールバック）。
         runCatching { setForeground(getForegroundInfo()) }
         var lastSnapMs = 0L
@@ -42,8 +49,8 @@ class OptimizationWorker(
             val res = V6FinalPort.handleOptimize(
                 state = req.first,
                 schedule = req.second.copy2D(),
-                secondsRaw = OptimizationRepository.seconds,
-                workers = OptimizationRepository.workers,
+                secondsRaw = budgetSec,
+                workers = bgWorkers,
                 allowImpossible = true,
             ) { phase, report, iters, elapsed ->
                 if (report != null) {
@@ -132,13 +139,19 @@ class OptimizationWorker(
             runCatching { snapshotFile(ctx).takeIf { it.exists() }?.delete() }
         }
 
-        private fun loadInputFromFile(ctx: Context): Pair<MagiState, Array<IntArray>>? {
-            val f = inputFile(ctx)
+        const val KEY_SECONDS = "seconds"   // [P2] enqueue 時の予算秒数（WorkManager が永続化）
+        const val KEY_WORKERS = "workers"   // [P2] enqueue 時の並列数
+
+        private fun loadPair(f: File): Pair<MagiState, Array<IntArray>>? {
             if (!f.exists()) return null
             return runCatching {
                 val st = StateParser.parse(f.readText())
                 st to st.schedule.toIntArray2D()
             }.getOrNull()
         }
+
+        /** [P2] kill後の復元: 途中最良スナップショット優先（8秒毎退避＝実質の途中再開）、無ければ元入力。 */
+        private fun loadInputFromFile(ctx: Context): Pair<MagiState, Array<IntArray>>? =
+            loadPair(snapshotFile(ctx)) ?: loadPair(inputFile(ctx))
     }
 }

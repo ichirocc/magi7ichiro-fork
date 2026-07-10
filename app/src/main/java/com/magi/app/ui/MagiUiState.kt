@@ -29,6 +29,8 @@ data class UiState(
     val violationCells: Map<String, String> = emptyMap(),
     val needViolations: Map<String, String> = emptyMap(),
     val countViolations: Map<String, String> = emptyMap(),
+    // [Set化] セル("i,j")の全違反クラス（重み降順。violationCells は最重1クラス）。タップ全列挙とE7整合に使う。
+    val violationCellFamilies: Map<String, List<String>> = emptyMap(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
     val fixSearching: Boolean = false,                                       // 改善手を探索中
     val fixFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）
@@ -56,6 +58,7 @@ data class UiState(
     val resultViolationCells: Map<String, String>? = null,
     val resultNeedViolations: Map<String, String>? = null,
     val resultCountViolations: Map<String, String>? = null,
+    val resultViolationCellFamilies: Map<String, List<String>>? = null,
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,

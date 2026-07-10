@@ -562,7 +562,8 @@ internal val breakdownLabels: Map<String, String> = mapOf(
     "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ", "weekly" to "曜日の偏り",
     "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア",
-    "c41s" to "スキル群のレンジ", "c42s" to "スキル群ペア", "covO" to "過剰な配置",
+    // [④用語統一] covO は covU「人員不足」/集計凡例「人員過剰」と対にする（旧「過剰な配置」は同じ違反の別名で紛らわしい）。
+    "c41s" to "スキル群のレンジ", "c42s" to "スキル群ペア", "covO" to "人員過剰",
 )
 
 /**
@@ -625,6 +626,7 @@ private data class ConfirmItem(
     val title: String,      // 場所（職員名 / 日「シフト」）
     val sub: String,        // 族ラベル（人員不足・下限割れ 等）
     val staff: Int?,        // タップ修復のフォーカス職員（null=全体探索）
+    val day: Int?,          // [ジャンプ] セル違反の日index（null=セルに紐付かない項目）
     val order: Int,         // 並び（kind→場所）
 )
 
@@ -641,17 +643,18 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
     for ((key, cls) in ui.needViolations) {
         val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
         val fam = cls.removePrefix("vio-")
-        val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過" to 1; else -> "調整" to 1 }
-        out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, kind * 100000 + j * 100 + k)
+        // [④用語統一] 過剰マークは「過剰」（凡例/集計と同語）。[⑥日別ジャンプ] day=j で勤務表の該当日列へ飛べる。
+        val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過剰" to 1; else -> "調整" to 1 }
+        out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, j, kind * 100000 + j * 100 + k)
     }
     // 個人回数: countViolations "i,k" -> vio-low/high/c2/aptLow/aptHigh（職員×シフト）
     for ((key, cls) in ui.countViolations) {
         val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull() ?: continue; val k = p.getOrNull(1)?.toIntOrNull() ?: continue
         val fam = cls.removePrefix("vio-")
         // c2(個人の合計) は方向を持たない単一クラス vio-c2 → 「過」ではなく中立マーク「計」（誤って過剰と表示しない）。
-        val (mark, kind) = when (fam) { "low", "aptLow" -> "不足" to 0; "c2" -> "計" to 1; else -> "過" to 1 }
+        val (mark, kind) = when (fam) { "low", "aptLow" -> "不足" to 0; "c2" -> "計" to 1; else -> "過剰" to 1 }
         val labelFam = when (fam) { "aptLow", "aptHigh" -> "apt"; else -> fam }
-        out += ConfirmItem(kind, mark, nm(i), "${sym(k)}・${breakdownLabels[labelFam] ?: labelFam}", i, kind * 100000 + 40000 + i * 100 + k)
+        out += ConfirmItem(kind, mark, nm(i), "${sym(k)}・${breakdownLabels[labelFam] ?: labelFam}", i, null, kind * 100000 + 40000 + i * 100 + k)
     }
     // セル違反: violationCells "i,j" -> vio-pref/groupViol/c3n/c3/c3m/c3mn/c1/c42/c42s（職員×日=実シフト）
     for ((key, cls) in ui.violationCells) {
@@ -664,7 +667,10 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
             "pref", "groupViol", "c3n" -> "必須" to 0
             else -> "調整" to 1
         }
-        out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", breakdownLabels[fam] ?: fam, i, kind * 100000 + 80000 + j * 100 + i)
+        // [Set化] 同セルに重なった族は sub に全列挙（重み降順）。行数=箇所数は不変（見出し件数の意味を保つ）。
+        val famsAll = (ui.violationCellFamilies[key] ?: listOf(cls)).map { it.removePrefix("vio-") }
+        val sub = famsAll.joinToString("・") { breakdownLabels[it] ?: it }
+        out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", sub, i, j, kind * 100000 + 80000 + j * 100 + i)
     }
     return out.sortedWith(compareBy({ it.kind }, { it.order }))
 }
@@ -688,7 +694,7 @@ private fun ConfirmFilterChip(label: String, count: Int, selected: Boolean, onCl
 
 /** [★1] 要確認一覧の1行（spec confirmCard 同型：マークバッジ＋タイトル＋族＋メタ）。 */
 @Composable
-private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit) {
+private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCell: (Int, Int) -> Unit, onShowDay: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
     val (bg, fg) = when (item.kind) {
@@ -696,10 +702,14 @@ private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit) {
         1 -> warnBg to warnFg
         else -> cs.tertiaryContainer to cs.onTertiaryContainer
     }
-    val clickable = item.staff != null
+    // [⑥日別ジャンプ] staff無し・day有り（人員/群レンジ=日×シフト）は勤務表の該当日列へ移動できる。
+    val dayOnly = item.staff == null && item.day != null
+    val clickable = item.staff != null || dayOnly
     var m = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-    if (clickable) m = m.clickable { onFocusStaff(item.staff!!) }
-        .semantics { contentDescription = "${item.title} ${item.sub}・タップで直し方を探す" }
+    if (clickable) m = m.clickable {
+        val s = item.staff; val d = item.day
+        when { s != null && d != null -> onShowCell(s, d); s != null -> onFocusStaff(s); d != null -> onShowDay(d) }
+    }.semantics { contentDescription = "${item.title} ${item.sub}・" + (if (dayOnly) "タップで勤務表の該当日へ" else "タップで直し方を探す") }
     Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Surface(color = bg, shape = MaterialTheme.shapes.small) {
@@ -711,7 +721,7 @@ private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit) {
                 Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(item.sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (clickable) Text("直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
+            if (clickable) Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
         }
     }
 }
@@ -719,7 +729,7 @@ private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit) {
 /**
  * [★1/E1 要確認一覧] 散在していた診断を「箇所単位の重大度リスト」で1ハブに統合（web「画面修正版」confirm 移植）。
  * BreakdownCard（族集計）を補完し、covU/pref/c1/low/high/apt… の各違反箇所を 不足/過剰/窓 の重大度マーク付きで列挙。
- * 重大度フィルタ（全部/不足・必須/過剰・調整/窓）で絞り、staff 紐付き項目はタップで修復フロー(onFocusStaff)へ。
+ * 重大度フィルタ（全部/不足・必須/過剰・要調整/窓）で絞り、staff 紐付き項目はタップで修復フロー(onFocusStaff)へ。
  * 設定ミス(settingIssues)があれば先頭に件数導線を出す。表示のみ・スコアリング不変（読取専用）。
  */
 @Composable
@@ -728,8 +738,12 @@ internal fun ConfirmListCard(
     onFocusStaff: (Int) -> Unit,
     onGoEdit: () -> Unit,
     proMode: Boolean = false,
+    // [ジャンプ/Web試作の移植] セル違反の項目タップで勤務表タブの該当セルへ移動＋ハイライト。
+    onShowCell: (Int, Int) -> Unit = { i, _ -> onFocusStaff(i) },
+    // [⑥日別ジャンプ] 日×シフト項目（人員/群レンジ）タップで勤務表タブの該当日列へ移動＋日ヘッダをハイライト。
+    onShowDay: (Int) -> Unit = {},
 ) {
-    val items = remember(ui.violationCells, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
+    val items = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
     val issueCount = ui.settingIssues.size
     val cs = MaterialTheme.colorScheme
     if (items.isEmpty() && issueCount == 0) {
@@ -744,7 +758,7 @@ internal fun ConfirmListCard(
         }
         return
     }
-    var filter by rememberSaveable { mutableStateOf(-1) }   // -1=全部 / 0=不足・必須 / 1=過剰・調整 / 2=窓
+    var filter by rememberSaveable { mutableStateOf(-1) }   // -1=全部 / 0=不足・必須 / 1=過剰・要調整 / 2=窓
     val counts = intArrayOf(items.count { it.kind == 0 }, items.count { it.kind == 1 }, items.count { it.kind == 2 })
     // データ変化で選択中フィルタの件数が0になり得る（例: 窓を選択→再最適化で c1 消滅）。その時チップは消えるが
     // filter は残るため空リスト＋見出しの件数>0 という迷子状態になる。有効フィルタを「件数0なら全部へ戻す」で防ぐ。
@@ -766,10 +780,11 @@ internal fun ConfirmListCard(
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ConfirmFilterChip("全部", items.size, effFilter == -1) { filter = -1 }
                 if (counts[0] > 0) ConfirmFilterChip("不足・必須", counts[0], effFilter == 0) { filter = 0 }
-                if (counts[1] > 0) ConfirmFilterChip("過剰・調整", counts[1], effFilter == 1) { filter = 1 }
+                // [④用語統一] 「調整」→「要調整」（グリッド凡例・編集シートの重大度語と揃える）。
+                if (counts[1] > 0) ConfirmFilterChip("過剰・要調整", counts[1], effFilter == 1) { filter = 1 }
                 if (counts[2] > 0) ConfirmFilterChip("窓", counts[2], effFilter == 2) { filter = 2 }
             }
-            shown.take(40).forEach { ConfirmRow(it, onFocusStaff) }
+            shown.take(40).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay) }
             if (shown.size > 40) Text("ほか ${shown.size - 40} 件（重大な順に表示中）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
             if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
@@ -795,7 +810,7 @@ internal fun AttentionCardsSection(ui: UiState, onFocusStaff: (Int) -> Unit) {
         val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull() ?: continue; val k = p.getOrNull(1)?.toIntOrNull() ?: continue
         staffAlerts[i] = (staffAlerts[i] ?: 0) + 1
         // c2(個人の合計) は方向を持たない → 「過」を付けず記号のみ（下限割れ/上限超過と混同させない）。
-        val dir = when { cls == "vio-low" || cls == "vio-aptLow" -> "不足"; cls == "vio-c2" -> ""; else -> "過" }
+        val dir = when { cls == "vio-low" || cls == "vio-aptLow" -> "不足"; cls == "vio-c2" -> ""; else -> "過剰" }   // [④用語統一]
         staffShifts.getOrPut(i) { LinkedHashSet() }.add("${sym(k)}$dir")
     }
     for ((key, _) in ui.violationCells) {
@@ -808,7 +823,8 @@ internal fun AttentionCardsSection(ui: UiState, onFocusStaff: (Int) -> Unit) {
     for ((key, cls) in ui.needViolations) {
         val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
         dayAlerts[j] = (dayAlerts[j] ?: 0) + 1
-        val dir = when (cls) { "vio-covU" -> "不足"; "vio-covO" -> "過"; else -> "範囲" }
+        val dir = when (cls) { "vio-covU" -> "不足"; "vio-covO" -> "過剰"; else -> "群レンジ" }   // [④用語統一] 群のレンジ(c41系)と同語
+
         dayShifts.getOrPut(j) { LinkedHashSet() }.add("${sym(k)}$dir")
     }
     val days = ui.schedule.firstOrNull()?.size ?: 0

@@ -87,7 +87,9 @@ object Ws1Ops {
         if (i !in state.staff.indices) return state
         val gi = groupIdx.coerceIn(0, (state.groups.size - 1).coerceAtLeast(0))
         val sl = state.staff.toMutableList()
-        sl[i] = Staff(name, gi)
+        // [P1修正/レビュー指摘] 旧 Staff(name, gi) は skillIdx を既定0へ戻し、名前だけ直しても
+        //   スキル区分が無言で消えて cons41s/cons42s の評価が変わっていた。既存のコピーで保持する。
+        sl[i] = sl[i].copy(name = name, groupIdx = gi)
         return state.copy(staff = sl)
     }
 
@@ -202,18 +204,25 @@ object Ws1Ops {
     fun canRemoveGroup(state: MagiState, g: Int): Boolean =
         state.groups.size > 1 && state.staff.none { it.groupIdx == g }
 
-    /** Remove shift [k]: drop the shift; schedule cells ==k -> 休/idx0, >k decremented; wish
-     *  values ==k dropped, >k decremented; groupShift/apt lose column k; needDay (axis k) and
+    /** Remove shift [k]: drop the shift; schedule cells ==k -> 休（削除後のindexへ追従）, >k decremented;
+     *  wish values ==k dropped, >k decremented; groupShift/apt lose column k; needDay (axis k) and
      *  staffRange (axis k) re-indexed. Constraints referencing the removed kigou simply stop
-     *  resolving (kept verbatim). No-op if only one shift remains. */
+     *  resolving (kept verbatim). No-op if only one shift remains, or if [k] is the 休 shift itself
+     *  （削除すると次のシフトが index0 となり全休日が無言で勤務へ変わるため禁止＝P1修正/レビュー指摘）. */
     fun removeShift(state: MagiState, sched: Array<IntArray>, k: Int): Ws1Result {
         if (k !in state.shifts.indices || state.shifts.size <= 1) return Ws1Result(state, sched)
+        // [P1修正] 休シフト自体の削除は禁止（no-op）。呼出側(ViewModel)がメッセージを出す。
+        val rest = restShiftIndex(state)
+        if (k == rest) return Ws1Result(state, sched)
+        // [P1修正] 削除シフトのセルは「休」へ。旧実装はハードコードの 0 で、休が index0 でないデータや
+        //   休より前のシフトを消した場合に勤務シフトへ化けていた。削除後の休indexへ正しく追従させる。
+        val newRest = if (rest > k) rest - 1 else rest
         val shifts = state.shifts.filterIndexed { i, _ -> i != k }
         val gs = state.groupShift.map { row -> row.filterIndexed { i, _ -> i != k } }
         val apt = if (state.groupShiftApt.isEmpty()) state.groupShiftApt
         else state.groupShiftApt.map { row -> row.filterIndexed { i, _ -> i != k } }
         val newSched = Array(sched.size) { r ->
-            IntArray(sched[r].size) { j -> val v = sched[r][j]; if (v == k) 0 else if (v > k) v - 1 else v }
+            IntArray(sched[r].size) { j -> val v = sched[r][j]; if (v == k) newRest else if (v > k) v - 1 else v }
         }
         val wishes = LinkedHashMap<String, Int>()
         for ((key, v) in state.wishes) { if (v == k) continue; wishes[key] = if (v > k) v - 1 else v }

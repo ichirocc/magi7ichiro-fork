@@ -347,14 +347,10 @@ object ScheduleCsvBridge {
         val rows = parseCsvRows(text)
         val p = Problem(state)
         val schedule = normalizeSchedule(base, p)
-        val nameToI = LinkedHashMap<String, Int>()
-        for (i in state.staff.indices) {
-            nameToI[nameMatchKey(state.staff[i].name)] = i
-        }
-        val kigouToK = LinkedHashMap<String, Int>()
-        for (k in state.shifts.indices) {
-            kigouToK[state.shifts[k].kigou.trim()] = k
-        }
+        // [P1修正/レビュー指摘] 重複した氏名/記号は「最初の1件」に解決する（Problem.shiftIdxOf=indexOfFirst と同じ）。
+        //   旧: 後勝ちで、制約評価(最初)とCSV取込(最後)が同じ記号を別シフトとして扱っていた。
+        val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
+        val kigouToK = firstWinsMap(state.shifts.size) { state.shifts[it].kigou.trim() }
         var matched = 0
         var rr = 1
         while (rr < rows.size) {
@@ -414,7 +410,15 @@ private fun csvEscapeCell(value: String): String {
  * "山本 昌幸"(空白あり) と 状態側の "山本昌幸"(空白なし) を同一人物として照合できる
  * （取込で1人分しか入らない/氏名不一致で弾かれる事故を防ぐ）。
  */
-private fun nameMatchKey(s: String): String = s.filterNot { it.isWhitespace() }
+internal fun nameMatchKey(s: String): String = s.filterNot { it.isWhitespace() }
+
+/** [P1/重複解決の一致] 先勝ちの index マップ。Kotlin の associateBy は後勝ちで、制約評価
+ *  （Problem の indexOfFirst=先勝ち）と食い違うため、CSV照合は必ずこちらを使う。 */
+internal fun firstWinsMap(n: Int, key: (Int) -> String): Map<String, Int> {
+    val m = LinkedHashMap<String, Int>()
+    for (i in 0 until n) { val k = key(i); if (!m.containsKey(k)) m[k] = i }
+    return m
+}
 
 private fun parseCsvRows(raw: String): List<List<String>> {
     // UTF-8 BOM(U+FEFF) 除去: 付いていると先頭セルが "\uFEFFユニット" 等になり、trim()でも消えず
@@ -478,9 +482,9 @@ object StaffCsvIO {
     fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
         val rows = parseCsvRows(text)
         if (rows.size < 2) return null
-        val nameToI = state.staff.indices.associateBy { nameMatchKey(state.staff[it].name) }
-        val gByK = state.groups.indices.associateBy { state.groups[it].kigou.trim() }
-        val skByK = state.skillGroups.indices.associateBy { state.skillGroups[it].kigou.trim() }
+        val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
+        val gByK = firstWinsMap(state.groups.size) { state.groups[it].kigou.trim() }
+        val skByK = firstWinsMap(state.skillGroups.size) { state.skillGroups[it].kigou.trim() }
         val newStaff = state.staff.toMutableList()
         var matched = 0
         // [一括修正/ヘッダ無CSV] 先頭行が既知の職員名なら実データとして取り込む（旧: 無条件 drop(1) で黙殺）。
@@ -510,9 +514,9 @@ object StaffCsvIO {
     fun parseUpsert(text: String, state: MagiState, sched: Array<IntArray>): StaffUpsertResult? {
         val rows = parseCsvRows(text)
         if (rows.size < 2) return null
-        val nameToI = state.staff.indices.associateBy { nameMatchKey(state.staff[it].name) }
-        val gByK = state.groups.indices.associateBy { state.groups[it].kigou.trim() }
-        val skByK = state.skillGroups.indices.associateBy { state.skillGroups[it].kigou.trim() }
+        val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
+        val gByK = firstWinsMap(state.groups.size) { state.groups[it].kigou.trim() }
+        val skByK = firstWinsMap(state.skillGroups.size) { state.skillGroups[it].kigou.trim() }
         val newStaff = state.staff.toMutableList()
         val t = if (sched.isNotEmpty()) sched[0].size else state.dayCount
         val extraRows = ArrayList<IntArray>()
@@ -576,8 +580,8 @@ object WishesCsvIO {
     fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
         val rows = parseCsvRows(text)
         if (rows.size < 2) return null
-        val nameToI = state.staff.indices.associateBy { nameMatchKey(state.staff[it].name) }
-        val symToK = state.shifts.indices.associateBy { state.shifts[it].kigou.trim() }
+        val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
+        val symToK = firstWinsMap(state.shifts.size) { state.shifts[it].kigou.trim() }
         val m = LinkedHashMap<String, Int>()
         var n = 0
         // [一括修正/ヘッダ無CSV] 先頭行が既知の職員名なら実データとして取り込む（旧: 無条件 drop(1) で黙殺）。
@@ -626,7 +630,7 @@ object ConstraintsCsvIO {
     fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
         val rows = parseCsvRows(text)
         if (rows.size < 2) return null
-        val nameToI = state.staff.indices.associateBy { nameMatchKey(state.staff[it].name) }
+        val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         fun c(r: List<String>, i: Int) = r.getOrElse(i) { "" }.trim()
         fun pat(r: List<String>): List<String> = (1..5).map { c(r, it) }.takeWhile { it.isNotEmpty() }.take(5)
         val cons1 = ArrayList<C1Row>(); val cons2 = ArrayList<C2Row>()
