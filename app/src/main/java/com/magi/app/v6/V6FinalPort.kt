@@ -96,8 +96,9 @@ object V6FinalPort {
         val s = seconds.coerceAtLeast(1)
         return when {
             s <= 30 -> OptimizationPlan.V5(s)
-            s <= 60 -> OptimizationPlan.ALNS(s, 1)
-            s <= 90 -> OptimizationPlan.ALNS(s, 2)
+            // [実機指摘「60秒予算を1つだけのアルゴリズムで使用」] 旧: 31〜90s は ALNS 単発で、詰まった
+            //   HARD 族（c3n 等）を狙う RSI フェーズが一度も走らなかった。短予算でも複合
+            //   （RSI=違反集中 2/3 → ALNS=研磨 1/3）へ。各段は入力比 keep-best 番兵つき＝退化なし。
             s <= 210 -> { val rsi = (s * 2) / 3; OptimizationPlan.RSIThenALNS(rsi, s - rsi, 2) }
             else -> OptimizationPlan.RSIPlus(s)
         }
@@ -106,9 +107,8 @@ object V6FinalPort {
     fun getAlgorithmLabel(seconds: Int): AlgorithmLabel = when {
         seconds <= 10 -> AlgorithmLabel("⚡", "高速", "短時間でサッと作成", "v5")
         seconds <= 30 -> AlgorithmLabel("★", "標準", "速さと品質のバランス", "v5")
-        seconds <= 60 -> AlgorithmLabel("★★", "高品質", "じっくり改善", "ALNS×1")
-        seconds <= 90 -> AlgorithmLabel("★★", "推奨", "品質重視 （おすすめ）", "ALNS×2")
-        seconds <= 210 -> AlgorithmLabel("🧬", "学習+研磨", "RSI重み学習→ALNS研磨 （再現性検証付き）", "RSI→ALNS")
+        // [実機指摘] 31〜210s は複合（違反集中→研磨）に統一。表示ラベルもプランと同期。
+        seconds <= 210 -> AlgorithmLabel("🧬", "学習+研磨", "RSI違反集中→ALNS研磨", "RSI→ALNS")
         seconds <= 300 -> AlgorithmLabel("🌈", "究極(5分)", "RSI++ 4フェーズ (Open-ended探索→PhaseC研磨)", "RSI++")
         else -> AlgorithmLabel("🌈", "究極", "最大限の品質 (${seconds / 60}分)", "RSI++拡張")
     }
