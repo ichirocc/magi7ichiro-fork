@@ -298,6 +298,58 @@ private fun ChecklistRow(label: String, value: String, ok: Boolean) {
 }
 
 /**
+ * [年度始めモード/実働チェック] 「15人いるから大丈夫」ではなく、シフトごとの実働体制で見る（D5 残スコープ）。
+ * Q=担当できる人数(canDo)・D=月間需要人日(Σ日次必要数)・日最大=1日に同時に必要な最大人数。
+ * 欠勤余裕 = Q − 日最大（1人欠けてもその日の必要人数を揃えられるか）。read-only・スコアリング不変。
+ * データは Problem 由来（allowedShiftsFor / needCellLimits=need1+日別例外込み）＝チェッカーと同じ実効値。
+ */
+@Composable
+internal fun StaffingRealityCard(ui: UiState, vm: MagiViewModel) {
+    if (!ui.loaded) return
+    val cs = MaterialTheme.colorScheme
+    val days = ui.days
+    val staffN = ui.staffNames.size
+    val canDoCount = IntArray(ui.shiftSymbols.size)
+    for (i in 0 until staffN) vm.allowedShiftsFor(i).forEach { k -> if (k in canDoCount.indices) canDoCount[k]++ }
+    data class RowV(val sym: String, val q: Int, val d: Int, val maxNeed: Int)
+    val rows = ui.shiftSymbols.indices.mapNotNull { k ->
+        var d = 0; var mx = 0
+        for (j in 0 until days) { val lo = vm.needCellLimits(k, j)?.first ?: 0; d += lo; if (lo > mx) mx = lo }
+        if (d == 0) null else RowV(ui.shiftSymbols[k], canDoCount[k], d, mx)
+    }
+    if (rows.isEmpty()) return
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("実働チェック（この体制で回るか）", style = MaterialTheme.typography.titleMedium)
+            Text("シフトごとに「担当できる人数」で見ます（担当4人なら実質4人で運営）。余裕=1人欠けても1日の必要人数を揃えられるか。",
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            rows.forEach { r ->
+                val slack = r.q - r.maxNeed
+                val tenths = if (r.q > 0) (r.d * 10 + r.q / 2) / r.q else 0
+                val (mark, col) = when {
+                    slack < 0 -> "⚠" to cs.error
+                    slack == 0 -> "！" to MagiAccent.orange
+                    else -> "✓" to cs.tertiary
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(mark, color = col, fontWeight = FontWeight.Bold)
+                    Text(r.sym, fontWeight = FontWeight.Bold, modifier = Modifier.width(44.dp), maxLines = 1)
+                    Text(
+                        "担当${r.q}人・月${r.d}人日（1人あたり${tenths / 10}.${tenths % 10}回）・" +
+                            when {
+                                slack < 0 -> "日最大${r.maxNeed}人 → 担当不足"
+                                slack == 0 -> "日最大${r.maxNeed}人 → 欠勤余裕なし"
+                                else -> "欠勤余裕${slack}人"
+                            },
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * [見直し候補] 月次の修正（セル編集シート）から送られた「基本ルールの見直し候補」メモの一覧。
  * 年間マスターを開いたとき最初に目に入る位置に置き、「毎月同じ手修正→制度の直し」への橋にする。
  * セッション内メモ（state 非保存）＝アプリ終了で消える旨を明示。read-only・スコアリング不変。

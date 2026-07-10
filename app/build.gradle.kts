@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 264
-        versionName = "3.114.0-four-doors"
+        versionCode = 265
+        versionName = "3.115.0-staffing-reality"
     }
 
     buildTypes {

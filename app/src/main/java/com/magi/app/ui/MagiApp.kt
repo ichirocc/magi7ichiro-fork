@@ -474,6 +474,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         else -> {
                             // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
                             ReviewMemoCard(ui, vm)
+                            // [年度始めモード] シフト別の実働体制（担当人数 vs 需要・欠勤耐性）を土台編集の入口で提示。
+                            StaffingRealityCard(ui, vm)
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                                 // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
                                 Text("土台の設定（制度変更時のみ）。毎月の調整は「月次条件」、人の入替は「職員管理」へ。",
