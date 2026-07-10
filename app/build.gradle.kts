@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 259
-        versionName = "3.111.0-multivio-dayjump"
+        versionCode = 267
+        versionName = "3.117.0-focus-mode"
     }
 
     buildTypes {

@@ -177,7 +177,7 @@ internal fun GuideRow(label: String, value: String, done: Boolean) {
 
 
 @Composable
-internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
+internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
@@ -222,6 +222,12 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel) {
                 Spacer(Modifier.width(8.dp))
                 Text("仕上げ最適化（品質を磨く）", fontSize = 14.sp)
             }
+            Spacer(Modifier.height(10.dp))
+            // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
+            //   バックグラウンド実行だけをここ（実行条件＝予算/並列の設定と同じ場所）へ移設。
+            OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) { Text("閉じても大丈夫（バックグラウンドで作る）") }
             Spacer(Modifier.height(14.dp))
             // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
             //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
@@ -248,22 +254,121 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
 }
 
 
+// [3.112.0 撤去] ActionCard（ほかの作り方: 速くつくる/かんたんに/閉じても大丈夫）はユーザー赤囲い指示で撤去。
+//   速く/かんたんは主導線（思考誘導カード onMake/onDraft）と重複、バックグラウンド実行は SettingsCard へ移設。
+
+/**
+ * [入口4分割/月次条件] 今月の作成条件チェックリスト。作成前の入力状況（職員/希望/必要人数/入力診断）を
+ * 1枚で確認し、そのまま作成へ進む（月末モードの Step0）。read-only＋作成ボタン＝スコアリング不変。
+ * 例外件数は D6 に従い、明示的な例外リストを持つ「日別必要人数の例外」のみを数える。
+ */
 @Composable
-internal fun ActionCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit = {}) {
-    // [冗長性削減] 主操作「勤務表をつくる」は思考誘導カード＋下部バーが担うため、ここは
-    //   「ほかの作り方」(速く/かんたん) と「閉じても続ける(バックグラウンド)」だけに絞る。進捗/停止も他で表示。
+internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> Unit) {
+    if (!ui.loaded) return
+    val staffN = ui.staffNames.size
+    val wishStaff = remember(ui.wishes, staffN) {
+        ui.wishes.keys.mapNotNull { it.substringBefore(",").toIntOrNull() }.toSet().size
+    }
+    val needExceptions = vm.needDayOverrides().size
+    val needStdOk = vm.ws1()?.shifts?.any { it.need1.isNotBlank() } == true
+    val issues = ui.settingIssues.size
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("ほかの作り方", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { vm.start() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("速くつくる") }
-                OutlinedButton(onClick = { vm.runLightOptimize() }, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("かんたんに") }
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("今月の作成条件（チェックリスト）", style = MaterialTheme.typography.titleMedium)
+            ChecklistRow("職員", "${staffN}名", ok = staffN > 0)
+            ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0)
+            ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
+            ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件（ホームに詳細）", ok = issues == 0)
+            Button(onClick = onMake, enabled = ui.loaded && !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Text("▶ 勤務表をつくる", style = MaterialTheme.typography.titleMedium)
             }
-            // [冗長性F1] ソフト研磨ボタンは CopilotCard（必須充足後の文脈付き案内）と重複のため撤去。
-            //   ON/OFFの自動研磨は設定の「仕上げ最適化」スイッチ、手動起動は Copilot 側に一本化。
-            OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("閉じても大丈夫（あとで通知でお知らせ）") }
+        }
+    }
+}
+
+@Composable
+private fun ChecklistRow(label: String, value: String, ok: Boolean) {
+    val cs = MaterialTheme.colorScheme
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(if (ok) "✓" else "！", color = if (ok) cs.tertiary else cs.error, fontWeight = FontWeight.Bold)
+        Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+        Text(value, color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/**
+ * [年度始めモード/実働チェック] 「15人いるから大丈夫」ではなく、シフトごとの実働体制で見る（D5 残スコープ）。
+ * Q=担当できる人数(canDo)・D=月間需要人日(Σ日次必要数)・日最大=1日に同時に必要な最大人数。
+ * 欠勤余裕 = Q − 日最大（1人欠けてもその日の必要人数を揃えられるか）。read-only・スコアリング不変。
+ * データは Problem 由来（allowedShiftsFor / needCellLimits=need1+日別例外込み）＝チェッカーと同じ実効値。
+ */
+@Composable
+internal fun StaffingRealityCard(ui: UiState, vm: MagiViewModel) {
+    if (!ui.loaded) return
+    val cs = MaterialTheme.colorScheme
+    val days = ui.days
+    val staffN = ui.staffNames.size
+    val canDoCount = IntArray(ui.shiftSymbols.size)
+    for (i in 0 until staffN) vm.allowedShiftsFor(i).forEach { k -> if (k in canDoCount.indices) canDoCount[k]++ }
+    data class RowV(val sym: String, val q: Int, val d: Int, val maxNeed: Int)
+    val rows = ui.shiftSymbols.indices.mapNotNull { k ->
+        var d = 0; var mx = 0
+        for (j in 0 until days) { val lo = vm.needCellLimits(k, j)?.first ?: 0; d += lo; if (lo > mx) mx = lo }
+        if (d == 0) null else RowV(ui.shiftSymbols[k], canDoCount[k], d, mx)
+    }
+    if (rows.isEmpty()) return
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("実働チェック（この体制で回るか）", style = MaterialTheme.typography.titleMedium)
+            Text("シフトごとに「担当できる人数」で見ます（担当4人なら実質4人で運営）。余裕=1人欠けても1日の必要人数を揃えられるか。",
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            rows.forEach { r ->
+                val slack = r.q - r.maxNeed
+                val tenths = if (r.q > 0) (r.d * 10 + r.q / 2) / r.q else 0
+                val (mark, col) = when {
+                    slack < 0 -> "⚠" to cs.error
+                    slack == 0 -> "！" to MagiAccent.orange
+                    else -> "✓" to cs.tertiary
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(mark, color = col, fontWeight = FontWeight.Bold)
+                    Text(r.sym, fontWeight = FontWeight.Bold, modifier = Modifier.width(44.dp), maxLines = 1)
+                    Text(
+                        "担当${r.q}人・月${r.d}人日（1人あたり${tenths / 10}.${tenths % 10}回）・" +
+                            when {
+                                slack < 0 -> "日最大${r.maxNeed}人 → 担当不足"
+                                slack == 0 -> "日最大${r.maxNeed}人 → 欠勤余裕なし"
+                                else -> "欠勤余裕${slack}人"
+                            },
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * [見直し候補] 月次の修正（セル編集シート）から送られた「基本ルールの見直し候補」メモの一覧。
+ * 年間マスターを開いたとき最初に目に入る位置に置き、「毎月同じ手修正→制度の直し」への橋にする。
+ * セッション内メモ（state 非保存）＝アプリ終了で消える旨を明示。read-only・スコアリング不変。
+ */
+@Composable
+internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
+    if (ui.reviewMemos.isEmpty()) return
+    val cs = MaterialTheme.colorScheme
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
+            Text("勤務表の修正中に印を付けたルール見直しのメモです（アプリ終了で消えます）。",
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            ui.reviewMemos.forEachIndexed { idx, memo ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(memo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    DeleteRowButton(onClick = { vm.removeReviewMemo(idx) }, text = "済")
+                }
+            }
         }
     }
 }
@@ -311,7 +416,7 @@ internal fun AdvancedSettingsSection(
                     // [冗長性J1] V6DashboardCard（1ヶ月俯瞰・生指標）は分析タブ「プロ」表示と重複のため
                     //   ここから撤去し、分析タブ(プロ)に一本化。ここはログ・違反色トークンのみ。
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
-                    ColorSettingsView(ui)
+                    ColorSettingsView(ui, vm)
                 }
             }
         }

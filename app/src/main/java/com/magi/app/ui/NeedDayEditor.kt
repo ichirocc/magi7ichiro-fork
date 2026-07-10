@@ -1,5 +1,7 @@
 package com.magi.app.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -12,14 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,7 +31,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
@@ -79,6 +80,7 @@ fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
             init = d,
             shifts = vm.shiftKigouList(),
             maxDay = ui.days,
+            startDate = ui.startDate,
             onApply = { k, j, p1, p2 -> vm.setNeedDay(k, j, p1, p2); dialog = null },
             onClose = { dialog = null },
         )
@@ -114,20 +116,21 @@ private fun NeedDayDialog(
     init: NeedDayEdit,
     shifts: List<String>,
     maxDay: Int,
+    startDate: String,
     onApply: (Int, Int, String, String) -> Unit,
     onClose: () -> Unit,
 ) {
     var k by remember { mutableStateOf(init.k) }
-    var dayText by remember { mutableStateOf((init.j + 1).toString()) }
+    // [カレンダー形式/スクショ指摘] 日はテキスト入力でなく月のカレンダーから1タップ選択（青囲い指示）。
+    var day by remember { mutableStateOf(init.j + 1) }
     var p1 by remember { mutableStateOf(init.p1) }
     var p2 by remember { mutableStateOf(init.p2) }
     var open by remember { mutableStateOf(false) }
-    val day = dayText.toIntOrNull()
-    val ok = k in shifts.indices && day != null && day in 1..maxDay && (p1.isNotBlank() || p2.isNotBlank())
+    val ok = k in shifts.indices && day in 1..maxDay && (p1.isNotBlank() || p2.isNotBlank())
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = {
-            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(k, day!! - 1, p1.trim(), p2.trim()) })
+            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(k, day - 1, p1.trim(), p2.trim()) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { DialogHeader("日別の必要人数", onClose) },
@@ -144,17 +147,53 @@ private fun NeedDayDialog(
                         }
                     }
                 }
-                OutlinedTextField(
-                    value = dayText,
-                    onValueChange = { dayText = it.filter { c -> c.isDigit() } },
-                    label = { Text("日 (1〜$maxDay)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Text("日（タップで選択・${day}日）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                DayPickerGrid(startDate = startDate, maxDay = maxDay, selected = day, onSelect = { day = it })
                 NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
                 NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "既定")
             }
         },
     )
+}
+
+/** [カレンダー形式] 月内の日を曜日整列グリッドから1タップで選ぶ（片手一本指・キーボード不要）。
+ *  週の並びは**日曜始まり**（ユーザー指示・紙のカレンダー慣習）。日=赤/土=青で週の手掛かりを添える。 */
+@Composable
+internal fun DayPickerGrid(startDate: String, maxDay: Int, selected: Int?, onSelect: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val sdow = (startDowMonFirst(startDate) + 1) % 7   // 月曜始まり(0=月)→日曜始まり(0=日)へ変換
+    val weekJa = listOf("日", "月", "火", "水", "木", "金", "土")
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+            weekJa.forEachIndexed { idx, w ->
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text(w, style = MaterialTheme.typography.labelSmall,
+                        color = when (idx) { 0 -> MagiAccent.red; 6 -> MagiAccent.blue; else -> cs.onSurfaceVariant })
+                }
+            }
+        }
+        val cells: List<Int?> = List(sdow) { null } + (1..maxDay).toList()
+        cells.chunked(7).forEach { wk ->
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                wk.forEach { d ->
+                    if (d == null) Box(Modifier.weight(1f).height(40.dp))
+                    else {
+                        val sel = selected == d
+                        Box(
+                            Modifier.weight(1f).height(40.dp)
+                                .background(if (sel) cs.primary else cs.surfaceVariant, RoundedCornerShape(8.dp))
+                                .clickable { onSelect(d) }
+                                .semantics { contentDescription = "${d}日を選択" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text("$d", style = MaterialTheme.typography.bodyMedium,
+                                color = if (sel) cs.onPrimary else cs.onSurface,
+                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(40.dp)) }
+            }
+        }
+    }
 }

@@ -106,7 +106,7 @@ fun ShiftColorCard(ui: UiState, vm: MagiViewModel) {
             // [違反色] 違反セルの枠・マーカー色をタップで変更（保存される）。空＝テーマの赤。
             Divider()
             Text("違反の色（必須違反）", style = MaterialTheme.typography.titleSmall)
-            Text("必須違反（枠・マーカー・集計の不足）の色。要調整・超過は橙で固定表示されます。",
+            Text("必須違反（枠・マーカー・集計の不足）の色。要調整の色は 設定 → 詳細設定 → 違反種別の色 で変更できます。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             val vc = MaterialTheme.colorScheme
@@ -159,7 +159,7 @@ private fun Swatch(hex: String, sizeDp: androidx.compose.ui.unit.Dp) {
 }
 
 @Composable
-private fun ColorPickerDialog(
+internal fun ColorPickerDialog(
     kigou: String,
     currentHex: String,
     onPick: (String) -> Unit,

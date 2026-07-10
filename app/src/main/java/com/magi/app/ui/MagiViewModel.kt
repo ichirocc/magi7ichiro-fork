@@ -535,6 +535,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // [3.112.0] UI導線（ホーム「ほかの作り方」の速くつくる）はユーザー指示で撤去済み。API として温存。
     fun start() {
         val st0 = state ?: return
         val sched0 = currentSchedule ?: return
@@ -615,6 +616,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // [3.112.0] UI導線（ホーム「ほかの作り方」のかんたんに）はユーザー指示で撤去済み。API として温存。
     fun runLightOptimize() {
         val st = state ?: return
         val sched = currentSchedule ?: return
@@ -1496,6 +1498,24 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         applyStructure(st.copy(shiftColors = st.shiftColors - "__vio__"))
     }
+    /** [違反色] 要調整(ソフト違反)の枠/マーカー色。予約キー "__vioSoft__"（空=既定の橙）。 */
+    fun setViolationSoftColor(hex: String) {
+        val st = state ?: return; if (hex.isBlank()) return
+        applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioSoft__" to hex.trim())))
+    }
+    fun resetViolationSoftColor() {
+        val st = state ?: return
+        applyStructure(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
+    }
+
+    // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
+    fun addReviewMemo(text: String) {
+        if (text.isBlank()) return
+        _ui.update { it.copy(reviewMemos = it.reviewMemos + text.trim(), message = "見直し候補に追加しました") }
+    }
+    fun removeReviewMemo(index: Int) {
+        _ui.update { val l = it.reviewMemos; if (index !in l.indices) it else it.copy(reviewMemos = l.filterIndexed { j, _ -> j != index }) }
+    }
     fun groupKigouList(): List<String> = state?.groups?.map { it.kigou } ?: emptyList()
 
     /** [冗長除去/データ密度] 1日人数の上下限 [l〜u] を意味で圧縮して短く表す。見出しが「人数(上下限)」の
@@ -2299,6 +2319,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             shiftColorHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i) },
             shiftTextHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.pickTextColor(V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i)) },
             violationColorHex = st.shiftColors["__vio__"] ?: "",
+            violationSoftColorHex = st.shiftColors["__vioSoft__"] ?: "",
             schedule = schedule.map { it.toList() },
             wishes = st.wishes,
             resultSchedule = resultSchedule?.map { it.toList() } ?: emptyList(),   // [B1] 確定結果(ws6)

@@ -360,7 +360,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     CopilotCard(ui, onGoEdit = { tab = 2 }, onSoftPolish = { vm.runSoftPolish() })
                     CoverageDiagnosisCard(ui)
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) }, onGoEdit = { tab = 2 })
-                    ActionCard(ui, vm, onBgOptimize = onBgOptimize)
+                    // [スクショ指摘/撤去] 「ほかの作り方」カード（速くつくる/かんたんに/閉じても大丈夫）は
+                    //   主導線（思考誘導カード＋下部バー）と重複し、実行中は全ボタン無効の死に領域だった
+                    //   （ユーザー赤囲い指示）。唯一固有のバックグラウンド実行は設定タブ「最適化設定」へ移設。
                     AlternativesCard(ui, onApply = { vm.applyAlternative(it) })
                 }
                 1 -> {
@@ -380,6 +382,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     val vioEnabled = remember(vioMask) {
                         vioBuckets.filterIndexed { i, _ -> (vioMask shr i) and 1 == 1 }.map { it.key }.toSet()
                     }
+                    // [集中モード] 違反・未反映希望以外のセルを淡色化するトグル（既定OFF・回転/復元で保持）。
+                    var focusMode by rememberSaveable { mutableStateOf(false) }
                     // [画面修正版 ②] 検索・凡例（折りたたみ）。検索=職員名で該当グリッド行を強調（回転/復元で保持）。
                     var searchQuery by rememberSaveable { mutableStateOf("") }
                     val canRead = ui.hasResultSnapshot
@@ -414,12 +418,12 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     ViolationFilterBar(vioBucketLocCounts(gridUi), vioEnabled, onToggle = { key ->
                         val i = vioBuckets.indexOfFirst { it.key == key }
                         if (i >= 0) vioMask = vioMask xor (1 shl i)
-                    }, locCount = vioLocCount)
+                    }, locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it })
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
                     SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() },
-                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange)
+                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode)
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
                     TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
@@ -443,33 +447,40 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                 }
                 2 -> {
                     SetupGuideCard(ui, vm)
-                    // [Web反映] 毎月触る「今月の調整/シフト希望」と、たまにしか触らない「基本マスター」を分けて誤編集を防ぐ。
-                    MagiSegmentedControl(options = listOf("今月の調整", "シフト希望", "基本マスター"), selected = editScope, onSelect = { editScope = it })
-                    // [発見性] 各スコープの中身を1行で示す。「回数設定はどこ？」→基本マスター、を迷わず辿れるように。
+                    // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
+                    //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
+                    MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })
+                    // [発見性] 各スコープの中身を1行で示す。
                     Text(
                         when (editScope) {
-                            0 -> "今月の必要人数など、月ごとに変える設定"
-                            1 -> "個人の日別シフト希望"
-                            else -> "回数・人数・並びルールなど、毎月は変えない土台"
+                            0 -> "翌月だけの条件：希望・必要人数・例外（毎月ここから）"
+                            1 -> "入退職・所属・資格スキル・個人の回数（随時変更）"
+                            else -> "毎月は変えない土台：シフト・ルール・人数（制度変更時のみ）"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     when (editScope) {
                         0 -> {
+                            // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
+                            MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 })
                             MonthPickerCard(ui, vm)
+                            WishCard(ui, vm)
                             NeedDayCard(ui, vm)
                         }
                         1 -> {
-                            // [独立サブタブ] シフト希望(ws3=日別・個人のセル希望)。並びパターン(cons3系/ws4)とは別物。
-                            //   月コンテキストを示すため月えらびも表示（編集対象月は月次と共有の shiftMonth）。
-                            MonthPickerCard(ui, vm)
-                            WishCard(ui, vm)
+                            // [職員管理] 入退職・所属・スキルの随時変更＋個人の回数上下限（職員に紐づく設定を集約）。
+                            StaffManageCard(ui, vm)
+                            StaffRangeCard(ui, vm)
                         }
                         else -> {
+                            // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
+                            ReviewMemoCard(ui, vm)
+                            // [年度始めモード] シフト別の実働体制（担当人数 vs 需要・欠勤耐性）を土台編集の入口で提示。
+                            StaffingRealityCard(ui, vm)
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                                 // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
-                                Text("土台の設定（制度・人の入替時のみ）。毎月の調整は「今月の調整」「シフト希望」へ。",
+                                Text("土台の設定（制度変更時のみ）。毎月の調整は「月次条件」、人の入替は「職員管理」へ。",
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     style = MaterialTheme.typography.bodyMedium)
@@ -519,8 +530,8 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     // [N2/⛏11] プロ表示トグルを分析タブ上部に常設（従来は設定タブの外観カード内＝
                     //   タブ往復が必要だった）。proMode は共有状態なので設定側トグルと同期する。
                     MagiSegmentedControl(options = listOf("一般", "プロ"), selected = if (proMode) 1 else 0, onSelect = { proMode = it == 1 })
-                    // [★2] 概要ヒーロー（対象人数/対象期間/確認事項）＝要確認一覧の前に規模・件数を提示（web「画面修正版」hero 移植）。
-                    HeroMetricsRow(ui)
+                    // [スクショ指摘/撤去] 概要ヒーロー（対象人数/対象期間）は読込ステータス行と重複の固定値で
+                    //   トリアージに寄与しないため撤去（ユーザー赤囲い指示）。件数は要確認一覧の見出しが担う。
                     // [★1/E1] 要確認一覧＝散在していた診断を「箇所単位・重大度」で1ハブに統合（web「画面修正版」confirm 移植）。
                     //   タブ先頭のヒーローとして配置。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。表示のみ・スコア不変。
                     ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode,
@@ -561,7 +572,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         onSaveWishesCsv = { pendingExportKind = "wishes"; saveComponentCsvLauncher.launch("magi_wishes_${System.currentTimeMillis()}.csv") },
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                     )
-                    SettingsCard(ui, vm)
+                    SettingsCard(ui, vm, onBgOptimize = onBgOptimize)
                     // [冗長性] 旧 OperatorLogView（見出し「操作ログ」だが中身は診断ログ＝誤ラベルで、
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(
