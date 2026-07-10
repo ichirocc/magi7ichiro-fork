@@ -411,7 +411,10 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         countViolations = ui.resultCountViolations ?: ui.countViolations,
                         violationCellFamilies = ui.resultViolationCellFamilies ?: ui.violationCellFamilies,
                     )
-                    val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
+                    // [読取の理由表示] 読取(結果)モードのタップは従来ヒントだけで、違反マークの「なぜ」が
+                    //   確認できなかった → 見るだけの CellInfoDialog を開く（変更は不可のまま）。
+                    var readInfoCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+                    val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { i, j -> readInfoCell = i to j }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
                     val vioLocCount = gridUi.violationCells.size + gridUi.needViolations.size + gridUi.countViolations.size
@@ -424,6 +427,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode)
+                    readInfoCell?.let { (ri, rj) -> CellInfoDialog(gridUi, ri, rj) { readInfoCell = null } }
                     StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
                     TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)

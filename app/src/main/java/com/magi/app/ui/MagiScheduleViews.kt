@@ -748,6 +748,49 @@ internal fun ScheduleGrid(
     }
 }
 
+/**
+ * [読み取りモードの理由表示] 結果（読取）モードではセル編集シートを開けず、違反の角マーク/枠の
+ * 「なぜ」が確認できなかった（実機指摘「なぜ例が出ていないんですか？」）。読取タップで開く
+ * 見るだけのダイアログ: 割当・違反理由の全列挙（重み降順）・希望の反映状態。表示のみ・スコア不変。
+ */
+@Composable
+internal fun CellInfoDialog(ui: UiState, i: Int, j: Int, onClose: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val name = ui.staffNames.getOrNull(i) ?: "$i"
+    val k = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
+    val sym = if (k >= 0) ui.shiftSymbols.getOrNull(k) ?: "$k" else "—"
+    val vioHardC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+    val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { DialogConfirmButton("閉じる", onClick = onClose) },
+        title = { DialogHeader("$name ・ ${j + 1}日", onClose) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("割当  $sym", style = MaterialTheme.typography.bodyMedium)
+                val fams = cellVioClasses(ui, "$i,$j")
+                if (fams.isEmpty()) {
+                    Text("このセルに違反はありません。", style = MaterialTheme.typography.bodyMedium, color = cs.tertiary)
+                } else fams.forEach { cls ->
+                    val fam = cls.removePrefix("vio-")
+                    val hard = isHardCellViolation(cls)
+                    Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
+                        style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                        color = if (hard) vioHardC else vioSoftC)
+                }
+                val wish = ui.wishes["$i,$j"]
+                if (wish != null) {
+                    Text("希望  ${ui.shiftSymbols.getOrNull(wish) ?: wish}" + (if (wish == k) "（反映済）" else "（未反映）"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (wish != k) MagiAccent.pink else cs.onSurfaceVariant)
+                }
+                Text("いまは読み取り（結果）の表示です。修正するには勤務表上部で「下書き（直す）」に切り替えてください。",
+                    style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            }
+        },
+    )
+}
+
 /** 期間開始日の曜日インデックス（0=月..6=日）。解析不能なら 0。 */
 
 internal fun startDowMonFirst(startDate: String): Int = try {
@@ -1450,7 +1493,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     Column {
         // [P7/実務者向け短文化] スクロール・週送り・土日色・休の淡色は操作/見た目から自明のため説明しない。
         //   常時可視で必要なのは違反枠の読み方だけ（詳細凡例は「検索・凡例」内）。
-        Text("タップで修正。違反枠: 実線=必須 ・ 破線=重 ・ 右上角=軽 ・ 桃バッジ=未反映の希望",
+        Text("タップで修正。違反枠: 実線=必須 ・ 破線=重 ・ 右上角=軽。希望: 桃バッジ=未反映 ・ 緑リング=反映済み",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row {
