@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 278
-        versionName = "3.127.1-bg-crash-fix"
+        versionCode = 279
+        versionName = "3.127.2-import-fix"
     }
 
     buildTypes {
