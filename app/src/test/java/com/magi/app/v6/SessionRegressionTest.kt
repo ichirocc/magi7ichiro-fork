@@ -134,6 +134,32 @@ class SessionRegressionTest {
         assertEquals(3, blocked.state.shifts.size)
     }
 
+    // ---- 判読性/レビュー指摘: 同一セルの複数違反で「重い族」のマークが軽い族に上書きされない ----
+
+    @Test fun cellMarkKeepsHeaviestFamily() {
+        // (0,0)=A で 希望=休(pref, HARD 9000) が発火し、かつ cons3 [A,B] の窓不成立(c3, SOFT 3) も (0,0) を
+        // マークする。旧実装は評価順の最後(c3系)が後勝ちで vio-c3 に降格していた。修正後は vio-pref を保持。
+        val st = MagiState(
+            startDate = "2026-06-01", endDate = "2026-06-03",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1)),
+            groupShiftApt = listOf(listOf("", "", "")),
+            schedule = listOf(listOf(1, 0, 0)),                 // (0,0)=A, 残り休
+            wishes = mapOf("0,0" to 0),                          // 希望=休 → pref違反
+            staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(),
+            cons3 = listOf(com.magi.app.model.C3Row(listOf("A", "B"))),   // A→B 必須連続(未完成=c3発火)
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val rep = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        assertTrue("pref と c3 の両方が計上される", (rep.breakdown["pref"] ?: 0) >= 1 && (rep.breakdown["c3"] ?: 0) >= 1)
+        assertEquals("重い族(pref)のマークが保持される", "vio-pref", rep.violations["0,0"])
+    }
+
     @Test fun editStaffPreservesSkillIdx() {
         val st = threeShiftState()
         val ns = Ws1Ops.editStaff(st, 0, "改名した", 0)

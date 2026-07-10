@@ -87,8 +87,31 @@ object UnifiedViolationChecker {
         val countViolations = linkedMapOf<String, String>()
 
         fun inc(key: String, amount: Int = 1) { breakdown[key] = (breakdown[key] ?: 0) + amount }
-        fun mark(i: Int, j: Int, family: String) { violations["$i,$j"] = vioClass[family] ?: family }
-        fun markNeed(k: Int, j: Int, family: String) { needViolations["$k,$j"] = vioClass[family] ?: family }
+        // [判読性/レビュー指摘] 同一セルに複数族が重なる場合、従来は「後にマークした族」が無条件上書きで、
+        //   評価順の最後(c3系)が pref/groupViol(必須)のマークを潰し、実線枠が角マーク(軽ソフト)へ降格し得た
+        //   （重大度の逆転）。MirrorKeys.weights を表示優先度として使い、常に最重の族のマークを保持する。
+        //   1セル1クラスの型は維持（複数違反の全保持=Set化は別段の改修）。inc/breakdown は従来どおり全件計上
+        //   ＝スコアリング不変・表示のみ。
+        fun mark(i: Int, j: Int, family: String) {
+            val key = "$i,$j"
+            val prev = violations[key]
+            if (prev != null) {
+                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
+                val newW = MirrorKeys.weights[family] ?: 0.0
+                if (prevW >= newW) return
+            }
+            violations[key] = vioClass[family] ?: family
+        }
+        // [判読性] mark() と同じ重み優先。旧: 後勝ちで covO(0.5) が c41(1.0) のマークを上書きし得た。
+        fun markNeed(k: Int, j: Int, family: String) {
+            val key = "$k,$j"
+            val prev = needViolations[key]
+            if (prev != null) {
+                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
+                if (prevW >= (MirrorKeys.weights[family] ?: 0.0)) return
+            }
+            needViolations[key] = vioClass[family] ?: family
+        }
         fun markCount(i: Int, k: Int, family: String) { countViolations["$i,$k"] = vioClass[family] ?: family }
         fun cellIs(i: Int, j: Int, k: Int): Boolean = i in 0 until p.S && j in 0 until p.T && s[i][j] == k
 
