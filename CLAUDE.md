@@ -302,6 +302,22 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+## ネイティブ加速 第2期: ALNS/RSI本体のC++化（進行中・明示合意）
+> ユーザー指示「ALNS/RSI本体のC++化する」（2026-07-11）。3.139.0 の範囲確定（対象外）を**明示指示で解除**。
+> 前提: Kotlin チェッカー/修復系が「正」の原則は維持し、C++ は同値の高速版＋2層番兵（チャンク自己整合
+> ＋Kotlin照合、発火で NativeGate 退化）を第1期と同様に必須とする。段階計画:
+> - **Stage5**: C++ 違反セル抽出（UnifiedViolationChecker の violations マップ相当＝GLSキック/
+>   destroyRepairViolations の hint 用。MirrorCore の mark 系を移植・cells のみで breakdown/weighted は不要）
+>   ＋ GlsPenalty 移植（penalty行列・augment/moveAug/penalizeWorst(util)/decay/lambda）。
+> - **Stage6**: soft-aware repairs 移植 = destroyRepairDayAt/StaffAt/Violations＋staffCountPenaltyAt＋
+>   c41DayMarg（V6NativeOptimizer 1006-1200行）＋ findTargetedFix（8種, V6HotfixPasses）。
+> - **Stage7**: hf67HardRepair 移植（copy系オペの7反復毎・hard>0時のみ呼ばれる修復）。
+> - **Stage8**: ALNSチャンク統合（チャンク=200反復: curReport更新周期に一致。7オペ・適応重み(roulette/
+>   Thompson)・受理3モード(SA/GreatDeluge/Lam)・softFocus・wishLocked・GLSキック(50反復毎)を C++ 内で。
+>   Kotlin保持: restart境界(perturb+hf67入口)・進捗/liveBest・キャンセル・番兵）。
+> - **Stage9**: RSI ラウンドの同様のチャンク化＋実測（TIME行の反復数比較）。
+> 各Stageでホスト検証（scratchpad/native_test.cpp 拡張）→CI→実機ログ確認の順。
+
 ## ネイティブ加速（C++/NDK, 進行中）
 > ユーザー指示「アンドロイドのネイティブ開発言語にして、実行速度改善する」（2026-07-11）。backlog#3 の
 > 「C++/NDK 移植は不要」結論を明示指示で解除。**目的=両方（待ち時間短縮＋同時間の品質向上）／範囲=ホットパス
