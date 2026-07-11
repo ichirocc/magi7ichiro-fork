@@ -368,6 +368,47 @@ object V6NativeOptimizer {
         //   hf67 経由(fixed!==cand)の採用時は fixed が新規配列なのでスクラッチはそのまま次反復で再利用。
         var scratchBuf = Array(p.S) { IntArray(p.T) }
         val diffBuf = IntArray(p.S * p.T)   // scratch: flat indices i*T+j of changed cells (zero-alloc)
+
+        // [ネイティブ加速 Stage8b] runAlns の内側ループ(下の while)を C++ ALNS チャンクへ JNI 委譲する。
+        //   Kotlin 保持: restart 境界の perturb+hf67・進捗/liveBest・キャンセル・2層番兵。problem は read-only で
+        //   restart 跨ぎ共有。ネイティブ不可 or 番兵発火時は下の従来 Kotlin ループへフォールバック（退化不能）。
+        val nativeProblem = if (NativeGate.usable) runCatching { NativeEval.createHandle(p) }.getOrDefault(0L) else 0L
+        val fullEvaluator = Evaluator(p)
+        val bestFlat = IntArray(p.S * p.T)
+        suspend fun runRestartNative(cur: Array<IntArray>, deadline: Long, perSec: Int, r: Int): Boolean {
+            val alns = runCatching {
+                NativeBridge.nativeAlnsCreate(nativeProblem, NativeEval.flatten(cur), rng.nextLong(),
+                    options.accept.ordinal, options.opSelect.ordinal, options.explore)
+            }.getOrDefault(0L)
+            if (alns == 0L) { NativeGate.disable("ALNS状態生成NG"); return false }
+            try {
+                while (nowMs() < deadline && !shouldStop()) {
+                    coroutineContext.ensureActive()
+                    val frac = ((deadline - nowMs()).toDouble() / max(1.0, perSec * 1000.0)).coerceIn(0.0, 1.0)
+                    val ret = NativeBridge.nativeAlnsChunk(alns, 200, frac)
+                    if (ret.size < 6 || ret[0] != 0L) { NativeGate.disable("ALNSチャンク整合性NG(status=${ret.getOrNull(0)})"); return false }
+                    itersTotal += ret[4]
+                    if (ret[3] == 1L && ret[2] < globalScore) {
+                        // [2層目の番兵] best 更新を Kotlin Evaluator でフル照合（Long== 許容誤差なし）。
+                        NativeBridge.nativeAlnsRead(alns, 0, bestFlat)
+                        val bestSol = NativeEval.unflatten(bestFlat, p.S, p.T)
+                        val kScore = fullEvaluator.fullEval(bestSol)
+                        if (kScore != ret[2]) { NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
+                        globalBest = bestSol; globalScore = kScore
+                        globalReport = UnifiedViolationChecker.check(state, bestSol)
+                        lastImproveIter = itersTotal
+                        liveBest = bestSol.map { it.toList() }
+                    }
+                    onProgress("ALNS restart ${r + 1}/$restarts", globalReport, itersTotal, nowMs() - started)
+                    yield()
+                }
+                return true
+            } finally {
+                NativeBridge.nativeAlnsDestroy(alns)
+            }
+        }
+
+        try {
         for (r in 0 until restarts) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
@@ -375,11 +416,14 @@ object V6NativeOptimizer {
             //   +101% 悪化と実測されたため revert(序盤の大摂動が強い repair 下で良解を壊し最終品質を損なう)。
             var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
             cur = hf67HardRepair(state, cur, rng).schedule
+            val deadline = nowMs() + per * 1000L
+            // [Stage8b] ネイティブ ALNS チャンクへ委譲。不可 or 番兵発火なら下の従来 Kotlin ループへ。
+            val usedNative = nativeProblem != 0L && NativeGate.enabled && runRestartNative(cur, deadline, per, r)
+            if (!usedNative) {
             var curReport = UnifiedViolationChecker.check(state, cur)
             eval.reset(cur)
             var curScore = eval.score()
             var curAug = gls.augment(cur)   // [GLS] 現行盤面の penalty 拡張分を増分維持（再構築は restart 毎のみ）
-            val deadline = nowMs() + per * 1000L
             // [論文活用] Great Deluge の初期水位＝このリスタート開始時のスコア（時間予定型で best へ降下）。
             val gdInitial = curScore.toDouble()
             var iter = 0L
@@ -596,8 +640,10 @@ object V6NativeOptimizer {
                     yield()
                 }
             }
-            logs.add(MirrorLog(iter = itersTotal, tag = "RunMAGI_ALNS", message = "restart=${r + 1}/$restarts best HARD=${globalReport.hard} total=${globalReport.total} GLS=${gls.kickCount()}"))
+            }   // if (!usedNative)
+            logs.add(MirrorLog(iter = itersTotal, tag = "RunMAGI_ALNS", message = "restart=${r + 1}/$restarts best HARD=${globalReport.hard} total=${globalReport.total} GLS=${if (usedNative) "native" else gls.kickCount().toString()}"))
         }
+        } finally { if (nativeProblem != 0L) NativeBridge.nativeDestroyProblem(nativeProblem) }
         // [退化防止] 生スコア最良が weightedScore 辞書順では入力より悪い可能性があるため番兵で保証。
         if (better(baseReport, globalReport)) { globalBest = baseBest; globalReport = baseReport }
         return V6OptimizerResult(globalBest, globalReport.copy(logs = logs + globalReport.logs), V6Algorithm.ALNS, logs, itersTotal, nowMs() - started)

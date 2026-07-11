@@ -336,7 +336,15 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 >   番兵1層目=チャンク末尾の自己整合(status!=0で退化)。ホスト検証: 3受理×2選択×20チャンクで status=0・
 >   cur/best自己整合・keep-best単調（合成問題で 63M→800台の改善実効も確認）。**Kotlin runAlns への配線は
 >   Stage8b（次段）**: SaOptimizer.runWorkerNative と同型の退化フォールバック＋2層目のKotlin照合を付す。
-> - **Stage8** (配線Stage8b): ALNSチャンク統合（チャンク=200反復: curReport更新周期に一致。7オペ・適応重み(roulette/
+> - **Stage8b 完了(3.144.0)**: Kotlin runAlns へ配線。restart 本体の内側 while を `if (!usedNative)` で
+>   囲み、ネイティブ可能時は `runRestartNative`（ローカル suspend fun）が 1チャンク=200反復で C++ ALNS を
+>   駆動。Kotlin 保持: restart 境界の perturb+hf67・進捗onProgress/liveBest・キャンセル(チャンク間ensureActive)・
+>   予算deadline・**2層目番兵**（best 更新チャンクを Kotlin Evaluator.fullEval で Long== 照合、不一致で
+>   NativeGate 退化）。problem ハンドルは restart 跨ぎ共有・try/finally で destroy。番兵発火時は false 返しで
+>   その restart 以降 Kotlin ループへ。SaOptimizer.runWorkerNative と同型。診断ログ「ネイティブ探索=有効(SA＋
+>   ALNSチャンク)」。これで 60s 主経路(RSI→ALNS)の ALNS フェーズが加速。GLS penalty は restart 毎再構築
+>   （生スコア最良は別管理＝退化なし）。Kotlin コンパイル検証は CI（assembleDebug）。実機で番兵不発を要確認。
+> - ~~Stage8/8b~~（完了・上記）: ALNSチャンク統合（チャンク=200反復: curReport更新周期に一致。7オペ・適応重み(roulette/
 >   Thompson)・受理3モード(SA/GreatDeluge/Lam)・softFocus・wishLocked・GLSキック(50反復毎)を C++ 内で。
 >   Kotlin保持: restart境界(perturb+hf67入口)・進捗/liveBest・キャンセル・番兵）。
 > - **Stage9**: RSI ラウンドの同様のチャンク化＋実測（TIME行の反復数比較）。

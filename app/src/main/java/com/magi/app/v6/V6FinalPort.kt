@@ -404,7 +404,7 @@ object V6FinalPort {
                 tag = "NativeBridge",
                 message = when {
                     parity == null -> "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）"
-                    parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)・SAチャンク=${if (NativeGate.enabled) "有効(V5/高速/RSI++種)" else "無効"}$gate"
+                    parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)・ネイティブ探索=${if (NativeGate.enabled) "有効(SA＋ALNSチャンク)" else "無効"}$gate"
                     else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません (C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft})$gate"
                 },
             )
