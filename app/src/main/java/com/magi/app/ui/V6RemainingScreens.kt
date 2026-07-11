@@ -49,7 +49,7 @@ fun SectionSegment(title: String, subtitle: String? = null, content: @Composable
 @Composable
 fun CheckSummaryView(ui: UiState, proMode: Boolean = false) {
     SectionSegment("チェック概要", if (proMode) null else "問題がないかの確認") {
-        val status = if (ui.bestHard == 0L) (if (proMode) "配れます" else "配れます（守るべき約束はすべて守れています）") else (if (proMode) "未解決 ${ui.bestHard}" else "もう少し（守れていない約束 ${ui.bestHard}）")
+        val status = if (ui.bestHard == 0L) (if (proMode) "配れます" else "配れます（守るべき約束はすべて守れています）") else (if (proMode) "未解決 ${ui.bestHard}" else "もう少し（必須違反 ${ui.bestHard}件）")
         Text(status, fontWeight = FontWeight.Bold,
             color = if (ui.bestHard == 0L) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
         // [校正] 生の操作ログは「ようす」に出さない（B2 平易/ B8 最小限）。詳細はログ＝詳細設定の「操作ログ」へ集約。

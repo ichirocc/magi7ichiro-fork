@@ -262,7 +262,7 @@ object V6WebCompat {
                 val reason = if (k !in 0 until p.K) {
                     "シフト番号が範囲外"
                 } else if (!p.canDo(i, k)) {
-                    "スタッフのグループでは担当不可"
+                    "職員のグループでは担当不可"
                 } else {
                     null
                 }

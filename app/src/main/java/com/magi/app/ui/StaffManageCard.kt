@@ -79,7 +79,7 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                     }
                 }
             }
-            AddRowButton("入職（スタッフ追加）", onClick = { addOpen = true }, enabled = ui.loaded && !ui.running)
+            AddRowButton("入職（職員追加）", onClick = { addOpen = true }, enabled = ui.loaded && !ui.running)
         }
     }
     edit?.let { (i, nm, gi0) ->
@@ -87,7 +87,7 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
             { n, gi -> vm.ws1EditStaff(i, n, gi); edit = null }, { edit = null })
     }
     if (addOpen) {
-        StaffDialog("入職（スタッフ追加）", "", 0, v.groups.map { toHankakuKigou(it.kigou) },
+        StaffDialog("入職（職員追加）", "", 0, v.groups.map { toHankakuKigou(it.kigou) },
             { n, gi -> vm.ws1AddStaff(n, gi); addOpen = false }, { addOpen = false })
     }
     confirmDelete?.let { i ->

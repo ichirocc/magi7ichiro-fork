@@ -140,9 +140,9 @@ object V6SanityPort {
             val j = parts.getOrNull(1)?.toIntOrNull()
             val reason = when {
                 i == null || j == null -> "希望キーが i,j 形式ではありません"
-                i !in 0 until p.S || j !in 0 until p.T -> "スタッフまたは日付が範囲外です"
+                i !in 0 until p.S || j !in 0 until p.T -> "職員または日付が範囲外です"
                 k !in 0 until p.K -> "希望シフトが範囲外です"
-                !p.canDo(i, k) -> "スタッフのグループでは担当不可です"
+                !p.canDo(i, k) -> "職員のグループでは担当不可です"
                 else -> null
             }
             if (reason != null) {
@@ -316,7 +316,7 @@ object V6SanityPort {
                 val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                 out.add(SettingIssue(IssueKind.DEMAND, "${safeDayLabel(state.startDate, j)} $sym",
                     "必要${need}人ですが担当できるのは${capable}人だけです",
-                    "担当できるスタッフを増やす(ws1)か、必要人数を${capable}人以下に下げてください(ws2)",
+                    "担当できる職員を増やす(ws1)か、必要人数を${capable}人以下に下げてください(ws2)",
                     action = SettingFixAction.CAP_DEMAND, actionLabel = "必要数を${capable}人に下げる",
                     demandShiftIdx = k, demandCap = capable))
             }
@@ -332,7 +332,7 @@ object V6SanityPort {
             val name = i?.let { state.staff.getOrNull(it)?.name } ?: "#$i"
             val sym = k?.let { state.shifts.getOrNull(it)?.kigou } ?: "$k"
             if (i == null || k == null || i !in 0 until p.S || k !in 0 until p.K) {
-                out.add(SettingIssue(IssueKind.RANGE, "回数設定 $key", "対象スタッフ/シフトが範囲外です", "設定(ws1)で正しいスタッフ・シフトに付け直してください"))
+                out.add(SettingIssue(IssueKind.RANGE, "回数設定 $key", "対象職員/シフトが範囲外です", "設定(ws1)で正しい職員・シフトに付け直してください"))
                 continue
             }
             if (lo != null && hi != null && lo > hi) {
@@ -441,7 +441,7 @@ object V6SanityPort {
         for (fc in forcedCovU(state, p)) {
             out.add(SettingIssue(IssueKind.DEMAND, "「${fc.shiftSymbol}」の担当者不足（配布不可の原因）",
                 "${fc.cells}日で、担当できる人数より必要人数が多く、人員不足(covU)が必ず出ます（不足の合計${fc.amount}）。この不足は最適化では解消できません",
-                "「${fc.shiftSymbol}」を担当できるスタッフを増やす(ws1)か、その日の必要人数を下げてください(ws2)"))
+                "「${fc.shiftSymbol}」を担当できる職員を増やす(ws1)か、その日の必要人数を下げてください(ws2)"))
         }
 
         // 8) [事前診断/重複定義・レビュー指摘P1] 氏名(空白無視)・シフト/グループ/スキル群の記号の重複を警告。

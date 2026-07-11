@@ -358,7 +358,7 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
             ) {
-                Text("スタッフ別カレンダー ${if (expanded) "▾" else "▸"}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("職員別カレンダー ${if (expanded) "▾" else "▸"}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 if (!expanded) Text("開いて1人ずつ確認", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (expanded) {

@@ -351,9 +351,9 @@ object V6FinalPort {
                         MirrorLog(level = "I", tag = "ExtraRefine",
                             message = "予算残${extraMs / 1000}sで追加精製: HARD ${post.report.hard}→${extra.report.hard} / total ${post.report.total}→${extra.report.total}"),
                         // [監査(3c)/N3と同型] ログ末尾の UnifiedCheck/違反詳細は「精製前の盤面」の診断のまま残るため、
-                        //   採用盤面の集計を明示して件数の取り違えを防ぐ。
+                        //   採用した勤務表の集計を明示して件数の取り違えを防ぐ。
                         MirrorLog(level = "I", tag = "UnifiedCheck",
-                            message = "採用盤面の集計: HARD=${extra.report.hard} 合計=${extra.report.total}（直近のUnifiedCheck行・違反詳細は追加精製前の盤面の診断）"),
+                            message = "採用した勤務表の集計: HARD=${extra.report.hard} 合計=${extra.report.total}（直近のUnifiedCheck行・違反詳細は追加精製前の盤面の診断）"),
                     )
                 }
             }
@@ -386,10 +386,10 @@ object V6FinalPort {
                 message = "後処理結果が入力より悪化を検知したため入力を採用しました（多重防御）: $regression",
             ),
             // [N3] ログ末尾には棄却盤面(post)の UnifiedCheck/診断行が履歴として残るため、
-            //   採用盤面の集計を明示して読者の取り違え（例: covU詳細と件数の不一致に見える）を防ぐ。
+            //   採用した勤務表の集計を明示して読者の取り違え（例: covU詳細と件数の不一致に見える）を防ぐ。
             MirrorLog(
                 level = "I", tag = "UnifiedCheck",
-                message = "採用盤面の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
+                message = "採用した勤務表の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
             ),
         ) else emptyList()
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。

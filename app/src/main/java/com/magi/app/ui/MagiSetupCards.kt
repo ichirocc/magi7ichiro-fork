@@ -154,7 +154,7 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel) {
             GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
             GuideRow("⑤ 個人の回数範囲", "${c.ranges}件", true)
             val next = when {
-                c.staff == 0 || c.shifts == 0 -> "基本情報（スタッフ／シフト）を整えましょう。"
+                c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
                 c.wishes == 0 -> "次に『希望シフト』を登録すると できあがり度 が上がります。"
                 else -> "準備OK。ホームの『勤務表をつくる』で勤務表を作成しましょう。"
             }
@@ -229,7 +229,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
             //   バックグラウンド実行だけをここ（実行条件＝予算/並列の設定と同じ場所）へ移設。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("バックグラウンドで作る（閉じても続行）") }
+            ) { Text("バックグラウンドでつくる（閉じても続行）") }
             Spacer(Modifier.height(14.dp))
             // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
             //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
@@ -494,7 +494,7 @@ internal fun DataActionsCard(
             Text("コンポーネント別 出力（取込種別と対・往復用）",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("スタッフ") }
+                OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("職員") }
                 OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("希望") }
                 OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("制約") }
             }

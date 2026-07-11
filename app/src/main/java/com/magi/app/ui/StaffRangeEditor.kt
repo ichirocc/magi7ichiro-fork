@@ -54,7 +54,7 @@ fun StaffRangeCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                "各スタッフが各シフトを「1か月に何回」担当するか。上下限（個人別の制約）と適切回数（群の目標）の実効値を1か所で確認できます。",
+                "各職員が各シフトを「1か月に何回」担当するか。上下限（個人別の制約）と適切回数（群の目標）の実効値を1か所で確認できます。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -165,7 +165,7 @@ internal fun StaffRangeDialog(
         title = { DialogHeader("個人別の回数", onClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("スタッフ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("職員", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(onClick = { openS = true }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(staff.getOrNull(i) ?: "(選択)")
@@ -302,7 +302,7 @@ internal fun GroupRangeDialog(
                 }
                 NumberStepper("下限", lo, { lo = it }, min = 0, blankLabel = "なし")
                 NumberStepper("上限", hi, { hi = it }, min = 0, blankLabel = "なし")
-                Text("全員の個人上下限(ws5)に設定し、最低=最高なら適切回数(ws1 C)も同時に設定します（既存の個人設定は上書き）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("全員の個人上下限(ws5)に設定し、下限=上限なら適切回数(ws1 C)も同時に設定します（既存の個人設定は上書き）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )

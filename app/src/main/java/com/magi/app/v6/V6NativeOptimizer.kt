@@ -133,7 +133,7 @@ object V6NativeOptimizer {
         val repairedReport = UnifiedViolationChecker.check(state, repaired)
         val hf67Adopted = better(repairedReport, entryReport)
         if (hf67Adopted) schedule = repaired
-        val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入口盤面を保持
+        val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入力の勤務表を保持
         val entryBoardReport = if (hf67Adopted) repairedReport else entryReport
         var logs = listOf(
             MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s workers=${options.workers.coerceIn(1, 5)}（設定${options.workers}）"),
@@ -172,11 +172,11 @@ object V6NativeOptimizer {
             tag = "V6Dispatcher",
             message = "完了 algorithm=$chosen HARD=${finalReport.hard} total=${finalReport.total} elapsed=${nowMs() - started}ms",
         )
-        // [N1c] 内側番兵: 最終結果が入口盤面より劣るなら入口盤面へ復帰（FinalPortの外側Sentinelと二重化）。
+        // [N1c] 内側番兵: 最終結果が入力の勤務表より劣るなら入力の勤務表へ復帰（FinalPortの外側Sentinelと二重化）。
         //   全段keep-bestのため通常は発火しない。発火時は「予算が改善に寄与しなかった」ことの可視化を兼ねる。
         if (better(entryBoardReport, finalReport)) {
             logs = logs + MirrorLog(level = "W", tag = "V6Dispatcher",
-                message = "内側番兵: 結果(HARD=${finalReport.hard}/total=${finalReport.total})が入口盤面(HARD=${entryBoardReport.hard}/total=${entryBoardReport.total})より劣化のため入口盤面を採用")
+                message = "内側番兵: 結果(HARD=${finalReport.hard}/total=${finalReport.total})が入力の勤務表(HARD=${entryBoardReport.hard}/total=${entryBoardReport.total})より劣化のため入力の勤務表を採用")
             return V6OptimizerResult(entryBoard, entryBoardReport.copy(logs = logs + entryBoardReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
         }
         return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)

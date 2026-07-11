@@ -455,9 +455,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     style = MaterialTheme.typography.bodyMedium)
                             }
                             // [E6案A] 長大スクロールを畳んで削減。①のみ既定で展開。展開状態は rememberSaveable で保持。
-                            CollapsibleSection("① シフト・グループ・スタッフ", "yr_ws1", initiallyExpanded = true) {
+                            CollapsibleSection("① シフト・グループ・職員", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("勤務の種類・グループ・スタッフと、群×勤務の担当可否を決めます。")
+                                    SectionNote("勤務の種類・グループ・職員と、群×勤務の担当可否を決めます。")
                                     Ws1Card(ui, vm)
                                 }
                             }
@@ -479,7 +479,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
                             CollapsibleSection("④ 人数と組み合わせ", "yr_headcount") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("その日その勤務に最低／最高で何人いるか（人数）と、同じ日に一緒に入れない組み合わせ（禁止ペア）を設定します。グループ単位とスキルグループ単位の両方を扱えます。")
+                                    SectionNote("その日その勤務に下限／上限で何人いるか（人数）と、同じ日に一緒に入れない組み合わせ（禁止ペア）を設定します。グループ単位とスキルグループ単位の両方を扱えます。")
                                     ConstraintsCard(ui, vm, title = "グループ単位（C41 人数・C42 禁止ペア）",
                                         keys = setOf("cons41", "cons42"))
                                     SkillConstraintsCard(ui, vm)
@@ -586,7 +586,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         "この CSV を何として取り込みますか？\n\n" +
                             "・データ全体（新規）：勤務表テンプレ/ユニット列形式を新しいデータとして読み込み\n" +
                             "・勤務表（重ね合わせ）：氏名,1日,2日… の表を現在の割り当てに重ねる\n" +
-                            "・スタッフ一覧：氏名,グループ,スキル（所属群/スキルを更新）\n" +
+                            "・職員一覧：氏名,グループ,スキル（所属群/スキルを更新）\n" +
                             "・希望シフト：氏名,日,希望シフト（希望を置換）\n" +
                             "・各制約：種別タグ付き（制約一式・個人レンジを置換）",
                     )
@@ -598,7 +598,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             pendingCsvImport = null
                         })
                         DialogConfirmButton("勤務表（重ね合わせ）", onClick = { vm.importCsv(csvText); pendingCsvImport = null })
-                        DialogConfirmButton("スタッフ一覧", onClick = { vm.importStaffCsv(csvText); pendingCsvImport = null })
+                        DialogConfirmButton("職員一覧", onClick = { vm.importStaffCsv(csvText); pendingCsvImport = null })
                         DialogConfirmButton("希望シフト", onClick = { vm.importWishesCsv(csvText); pendingCsvImport = null })
                         DialogConfirmButton("各制約", onClick = { vm.importConstraintsCsv(csvText); pendingCsvImport = null })
                     }
@@ -614,7 +614,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     Text(
                         "この勤務表CSVを、どちらとして取り込みますか？\n\n" +
                             "・勤務表：表のとおり、いまの割り当てとして読み込みます。\n" +
-                            "・希望シフト：表をスタッフの希望として読み込み、勤務表は空から作成して最適化で希望を尊重します。",
+                            "・希望シフト：表を職員の希望として読み込み、勤務表は空から作成して最適化で希望を尊重します。",
                     )
                 },
                 confirmButton = {
@@ -816,7 +816,7 @@ internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () 
             }
             // [⛏6] ゼロから作る起点。最小データで開始し、編集タブ(年次マスター)へ誘導する。
             OutlinedButton(onClick = onNew, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-                Text("新規に作る（空から）", style = MaterialTheme.typography.labelLarge)
+                Text("新規につくる（空から）", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
