@@ -40,6 +40,7 @@ data class UiState(
     val elapsedMs: Long = 0,
     val workers: Int = Runtime.getRuntime().availableProcessors().coerceIn(1, 8),
     val budgetSec: Int = 300,
+    val nativeAccel: Boolean = true,           // [Stage4] C++ネイティブ加速（SAチャンク）のユーザートグル
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),

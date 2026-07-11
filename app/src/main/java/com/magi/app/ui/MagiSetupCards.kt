@@ -203,6 +203,16 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                 Button(onClick = { vm.setBudget((ui.budgetSec + 60).coerceAtMost(MAX_BUDGET_SEC)) },
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
             }
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("ネイティブ加速（C++）")
+                    Text("計算の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = ui.nativeAccel, onCheckedChange = { vm.setNativeAccel(it) }, enabled = !ui.running)
+            }
+            Spacer(Modifier.height(6.dp))
             Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V6Algorithm.values().forEach { alg ->

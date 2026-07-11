@@ -57,6 +57,8 @@ object NativeBridge {
  * 理由は診断ログ（V6FinalPort の NativeBridge 行）に出す。
  */
 object NativeGate {
+    /** ユーザーの設定トグル（設定タブ「ネイティブ加速」）。番兵ゲート enabled とは独立。 */
+    @Volatile var userEnabled: Boolean = true
     @Volatile var enabled: Boolean = true
         private set
     @Volatile var reason: String? = null
@@ -64,6 +66,6 @@ object NativeGate {
 
     fun disable(why: String) { enabled = false; reason = why }
 
-    /** ネイティブSAチャンクを使ってよいか（ロード成功×ゲート開）。 */
-    val usable: Boolean get() = enabled && NativeBridge.available
+    /** ネイティブSAチャンクを使ってよいか（ロード成功×番兵ゲート開×ユーザーON）。 */
+    val usable: Boolean get() = enabled && userEnabled && NativeBridge.available
 }
