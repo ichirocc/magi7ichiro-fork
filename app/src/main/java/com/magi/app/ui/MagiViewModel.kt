@@ -677,7 +677,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         "covU" -> "人員不足（必要人数）"
         "c3n" -> "禁止の並び（連勤など）"
         "pref" -> "希望シフト"
-        "groupViol" -> "担当できないシフト"
+        "groupViol" -> "担当外シフト"
         "low" -> "個人の回数下限"
         "high" -> "個人の回数上限"
         else -> key
@@ -1548,17 +1548,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return emptyList()
         fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" -> ").ifEmpty { "(空)" }
         return listOf(
-            ConstraintFamilyView("cons1", "期間の決まり（何日かの間の必要数）",
+            // [用語統一/下流→上流] 節タイトルは違反チップ(breakdownLabels)の語彙を正として一致させる
+            //   （違反を見て設定を直しに来たとき同じ名前で見つかるように）。単位や補足は括弧で添える。
+            ConstraintFamilyView("cons1", "窓の要件（○日間に△回以上）",
                 st.cons1.map { "${it.shiftKigou}   ${it.day1}日で${it.day2}回以上" }),
-            ConstraintFamilyView("cons2", "個人の合計回数",
+            ConstraintFamilyView("cons2", "個人の合計（回数）",
                 st.cons2.map { "${it.shiftKigou}   合計${it.count}回以上" }),
             ConstraintFamilyView("cons3", "必須の並び", st.cons3.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons3m", "並び希望", st.cons3m.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons3mn", "並び回避", st.cons3mn.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons41", "グループ別の1日の人数（群・シフト → 人数）",
+            ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
+            ConstraintFamilyView("cons3mn", "回避の並び", st.cons3mn.map { seq(it.pattern) }),
+            ConstraintFamilyView("cons41", "群のレンジ（1日の人数の下限〜上限）",
                 st.cons41.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
-            ConstraintFamilyView("cons42", "グループの組み合わせ禁止（同じ日に不可）",
+            ConstraintFamilyView("cons42", "群ペア禁止（同じ日に不可）",
                 st.cons42.map { "${it.g1Kigou}・${it.s1Kigou}  ✕  ${it.g2Kigou}・${it.s2Kigou}" }),
         )
     }
@@ -1567,9 +1569,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun skillConstraintFamilies(): List<ConstraintFamilyView> {
         val st = state ?: return emptyList()
         return listOf(
-            ConstraintFamilyView("cons41s", "スキル別の1日の人数（スキル・シフト → 人数）",
+            ConstraintFamilyView("cons41s", "スキル群のレンジ（1日の人数の下限〜上限）",
                 st.cons41s.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
-            ConstraintFamilyView("cons42s", "スキルの組み合わせ禁止（同じ日に不可）",
+            ConstraintFamilyView("cons42s", "スキル群ペア禁止（同じ日に不可）",
                 st.cons42s.map { "${it.g1Kigou}・${it.s1Kigou}  ✕  ${it.g2Kigou}・${it.s2Kigou}" }),
         )
     }
@@ -2259,23 +2261,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** [コンポーネント別取込] スタッフ一覧CSV（氏名,グループ,スキル）。既存は所属群/スキルを更新、未知の氏名は新規追加（勤務表に休の行を追加）。 */
     fun importStaffCsv(rawText: String) {
-        val st = state ?: run { _ui.update { it.copy(message = "先にデータを開いてください（スタッフ一覧は既存データに追加/更新します）") }; return }
-        val sched = currentSchedule ?: run { _ui.update { it.copy(message = "先にデータを開いてください（スタッフ一覧は既存データに追加/更新します）") }; return }
+        val st = state ?: run { _ui.update { it.copy(message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
+        val sched = currentSchedule ?: run { _ui.update { it.copy(message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
         val text = MojibakeRepair.repair(rawText)
         val res = runCatching { com.magi.app.v6.StaffCsvIO.parseUpsert(text, st, sched) }.getOrNull()
         if (res == null) {
             val hint = componentImportMismatchHint(text)
             val tail = if (hint.isEmpty()) "形式『氏名,グループ,スキル』（1行=1名）をご確認ください。" else hint
-            _ui.update { it.copy(message = "スタッフ一覧の取込失敗（追加0・更新0）。$tail") }
-            logOp("W", "スタッフ一覧CSV取込 失敗: 0件")
+            _ui.update { it.copy(message = "職員一覧の取込失敗（追加0・更新0）。$tail") }
+            logOp("W", "職員一覧CSV取込 失敗: 0件")
             return
         }
         val parts = buildList {
             if (res.added > 0) add("${res.added}名を新規追加")
             if (res.updated > 0) add("${res.updated}名を更新")
         }
-        val msg = "スタッフ一覧を取込: " + parts.joinToString("・")
-        logOp("I", "スタッフ一覧CSV取込: 追加${res.added} 更新${res.updated}")
+        val msg = "職員一覧を取込: " + parts.joinToString("・")
+        logOp("I", "職員一覧CSV取込: 追加${res.added} 更新${res.updated}")
         applyStructureWithMessage(com.magi.app.v6.Ws1Result(res.state, res.schedule), msg)
     }
 

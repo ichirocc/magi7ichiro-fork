@@ -6,13 +6,25 @@ plugins {
 android {
     namespace = "com.magi.app"
     compileSdk = 36
+    // [ネイティブ加速] AGP 8.6 の既定 NDK に固定（CI と開発環境で同一ビルドを保証）。
+    ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 285
-        versionName = "3.132.1-review-cleanup"
+        versionCode = 290
+        versionName = "3.137.0-native-eval-parity"
+        // [ネイティブ加速] minSdk 35（Android 15+）の実機は arm64 のみ対象で十分。
+        //   .so が無い環境でも NativeBridge が false を返し Kotlin パスで全機能が動く。
+        ndk { abiFilters += listOf("arm64-v8a") }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {

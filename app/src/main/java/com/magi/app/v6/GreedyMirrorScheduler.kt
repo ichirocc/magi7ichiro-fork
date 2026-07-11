@@ -18,7 +18,7 @@ object GreedyMirrorScheduler {
     fun generate(state: MagiState): ScheduleRunResult {
         val t0 = System.nanoTime()
         val p = Problem(state)
-        if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/スタッフ/シフトが不足しています")
+        if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
         val restK = restShiftIndex(state)
         val existing = state.schedule.toIntArray2D()
         var filled = 0

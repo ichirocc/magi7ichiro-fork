@@ -146,7 +146,7 @@ private fun WishDialog(
         title = { DialogHeader("希望シフト", onClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("スタッフ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("職員", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Box {
                     OutlinedButton(onClick = { openS = true }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Text(staff.getOrNull(i) ?: "(選択)")
@@ -198,7 +198,7 @@ private fun WishDialog(
                 }
                 val curNg = k in shifts.indices && k !in allowed
                 if (curNg) {
-                    Text("⚠「${shifts.getOrNull(k)}」はこのスタッフの担当外です。希望は登録できますが、配置すると違反になります。",
+                    Text("⚠「${shifts.getOrNull(k)}」はこの職員の担当外です。希望は登録できますが、配置すると違反になります。",
                         style = MaterialTheme.typography.labelSmall, color = cs.error)
                 }
             }

@@ -134,7 +134,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- staff ---
             Spacer(Modifier.height(8.dp))
-            LoadoutHeader("PARTY", "仲間／スタッフ (${v.staff.size})")
+            LoadoutHeader("PARTY", "仲間／職員 (${v.staff.size})")
             Text("編集で改名・所属グループの変更。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.staff.forEachIndexed { i, st ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
@@ -149,7 +149,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                     }
                 }
             }
-            AddRowButton("スタッフ追加", onClick = { dialog = Ws1Dialog.AddStaff })
+            AddRowButton("職員追加", onClick = { dialog = Ws1Dialog.AddStaff })
             AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddStaff })   // [⛏12]
             Divider()
 
@@ -191,13 +191,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             { n, kg -> vm.ws1EditGroup(d.g, n, kg); dialog = null }, { dialog = null })
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> vm.ws1AddGroup(n, kg); dialog = null }, { dialog = null })
-        is Ws1Dialog.EditStaff -> StaffDialog("スタッフ編集", d.name, d.groupIdx, v.groups.map { toHankakuKigou(it.kigou) },
+        is Ws1Dialog.EditStaff -> StaffDialog("職員編集", d.name, d.groupIdx, v.groups.map { toHankakuKigou(it.kigou) },
             { n, gi -> vm.ws1EditStaff(d.i, n, gi); dialog = null }, { dialog = null })
-        Ws1Dialog.AddStaff -> StaffDialog("スタッフ追加", "", 0, v.groups.map { toHankakuKigou(it.kigou) },
+        Ws1Dialog.AddStaff -> StaffDialog("職員追加", "", 0, v.groups.map { toHankakuKigou(it.kigou) },
             { n, gi -> vm.ws1AddStaff(n, gi); dialog = null }, { dialog = null })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
             { lines, _ -> lines.forEach { vm.ws1AddShift(it, it, "", "") }; dialog = null }, { dialog = null })
-        Ws1Dialog.BulkAddStaff -> BulkAddDialog("スタッフを一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。", v.groups.map { toHankakuKigou(it.kigou) },
+        Ws1Dialog.BulkAddStaff -> BulkAddDialog("職員を一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。", v.groups.map { toHankakuKigou(it.kigou) },
             { lines, gi -> lines.forEach { vm.ws1AddStaff(it, gi) }; dialog = null }, { dialog = null })
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
@@ -276,7 +276,7 @@ internal fun StaffDialog(
         Text("グループ", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (groupKigou.isEmpty()) {
             // [A7] 鶏卵問題の誘導：グループが無いとスタッフの所属先が決められない（OKは無効）。
-            Text("先に「グループ」を追加してください。スタッフはグループに所属します。",
+            Text("先に「グループ」を追加してください。職員はグループに所属します。",
                 fontSize = 14.sp, color = MaterialTheme.colorScheme.error)
         } else {
             OutlinedButton(onClick = { open = true }) { Text(groupKigou.getOrNull(gi) ?: "(なし)") }

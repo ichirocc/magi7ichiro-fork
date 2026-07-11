@@ -302,6 +302,51 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+## ネイティブ加速（C++/NDK, 進行中）
+> ユーザー指示「アンドロイドのネイティブ開発言語にして、実行速度改善する」（2026-07-11）。backlog#3 の
+> 「C++/NDK 移植は不要」結論を明示指示で解除。**目的=両方（待ち時間短縮＋同時間の品質向上）／範囲=ホットパス
+> （Δ評価＋SA内側ループ）のみ**で合意（AskUserQuestion）。方針: **Kotlin 実装を常に正として残し**、C++ は
+> 高速版。返却盤面は Kotlin 側フル再評価で照合し不一致なら破棄（退化不能の番兵）。.so ロード失敗時は
+> `NativeBridge.available=false` → 全経路 Kotlin フォールバック（JVMユニットテストも従来どおり）。
+- (3.136.0, Stage1=足場): NDK/CMake ビルド配線（`app/src/main/cpp/`・ndkVersion 26.1.10909125・
+  arm64-v8a のみ・CMake 3.22.1）＋ JNI 疎通（`NativeBridge.nativeAbiVersion` の ABI 照合）＋
+  handleOptimize の診断ログに読込可否を1行表示。CI 両ワークフローの sdkmanager に ndk/cmake を追加
+  （v6-engine-check は assembleDebug で NDK ビルドも検証）。エンジン動作は完全不変。
+- (3.137.0, Stage2=C++フル評価器＋実行時パリティ): Evaluator.fullEvalParts を C++ へ忠実移植
+  （magi_native.cpp。c1 canDoガード・c3 run-deficit/窓#fire・pref実現可能のみ・range 90/45・apt/fair/weekly
+  L1偏差・covU/covO per-cell OR/AND、Math.round は floor(x+0.5) で同一化）。Problem は NativeEval.flatten が
+  平坦配列（meta/staff/canDo/wish/needs/ranges/cons/c3/bucket）で1回だけ JNI へ渡す（members は sgrp から
+  C++側導出）。**実行時パリティ**: handleOptimize 完了時に採用盤面で C++ vs Kotlin の hard/soft を照合し
+  診断ログ1行（一致=µs比較付き / 不一致=W警告＋ネイティブ経路不使用）。ABI_VERSION=2。read-only＝採用結果に
+  影響なし・スコアリング不変。JVMテストは available=false で全経路 Kotlin のまま。
+- 予定: ~~Stage2~~（完了・上記）→ Stage2旧記述: C++フル評価器（平坦化 Problem を JNI へ1回渡し・Kotlin Evaluator と実行時照合）→
+  Stage3=SAチャンク（Δ評価＋受理を C++ で回し返却盤面を Kotlin 再評価）→ Stage4=V6NativeOptimizer 配線
+  （設定でON/OFF・フォールバック維持）。
+
+- (3.135.0, 制約の項目名称を下流→上流で統一): 指示「各制約などの項目名称を下流から上流に向かって用語統一する」。
+  **下流=違反チップ(breakdownLabels)の語彙を正**とし、上流（編集画面の節タイトル・ダイアログ題・診断ログ）を一致させる
+  （違反を見て設定を直しに来たとき同じ名前で見つかるように。単位・補足は括弧で添える）:
+  c1「期間の決まり」→**「窓の要件（○日間に△回以上）」**・c2「個人の合計回数」→「個人の合計（回数）」・
+  c3m「並び希望」→**「推奨の並び」**・c3mn「並び回避」→**「回避の並び」**・c41(s)「グループ/スキル別の1日の人数」→
+  **「群/スキル群のレンジ（1日の人数の下限〜上限）」**・c42(s)「…組み合わせ禁止」→**「群/スキル群ペア禁止（同じ日に不可）」**。
+  診断 c3FamilyJp の英字混じり「必須MUST/禁止FORBIDDEN/希望Want/回避Hate」→ 並び4族の日本語名へ（operator_ux の
+  「英字記号を画面に出さない」に整合）。groupViol は下流内の分裂（グループ不整合 vs 担当できないシフト）を
+  **「担当外シフト」**へ統一。ColorSettingsView のチップ/ピッカー題も生キー(c3n等)→ breakdownLabels の日本語ラベルに。
+  AttentionCards の「群レンジ」→「群のレンジ」。セクション注記（C41/C42 の生コード含む）も同語彙へ。文字列のみ・スコア不変。
+- (3.134.0, 実機バグ修正=必須違反の枠が白リングだけに見える): 実機報告「違反の枠の色がおかしい」。原因=
+  **Modifier.border はチェーンの先が最後=最前面に描かれる**（内側 drawContent 後に自枠を描く）のに、
+  violationBorder(hard) がハロー5dp→違反色3dp の順で連結し、**ハローが違反色を完全に覆って白リングだけが見えていた**
+  （3.118.0 のコメント「後掛けが上に描かれる」が逆。暗テーマでは暗ハローで目立たず、UD白地固定=3.121.0 で露呈。
+  凡例はハロー無し単純枠のため赤く表示され、グリッドと食い違っていた）。違反色を先（最前面）・ハローを後（背面）に
+  修正: 外側3dp=違反色/内側2dp=ハロー。破線(vk2)と角マーク(vk3)は同一 draw ブロック内で正順のため影響なし。
+  FlatCell/CalendarCell 双方が同ヘルパー経由で同時修正。表示のみ・スコアリング不変。
+- (3.133.0, 用語統一=全画面の表記ゆれ解消): 指示「用語統一する」。UI文字列を全数調査し5クラスタを統一:
+  ①**「スタッフ」→「職員」**(34件。3.114.0 のドア名「職員管理」・集計「職員別」に整合。**CSV往復キーワードは除外**=
+  ScheduleCsvBridge の「スタッフ \\ 日付」ヘッダと looksLikeScheduleCsv の startsWith 判定は同期のため不変。
+  「ユニット」は外部フォーマット(ユニット列形式)の語彙のため不変) ②「盤面」→「勤務表」(診断ログ) ③「守れていない約束」
+  「必須の条件」→**「必須違反」**(凡例と統一) ④c41説明の「最低／最高」・一括設定の「最低=最高」→**「下限／上限」**
+  (ConstraintDialog の入力語と統一。need の「最低人数」は 3.127.0-B の決定どおり維持) ⑤「作る」→**「つくる」**
+  (主導線「勤務表をつくる」に統一)。文字列リテラルのみ・スコアリング不変。V6SanityPortTest の assert("担当不可")は部分一致で不変。
 - (3.132.0, 違反色の入口一本化=IA重複解消): 違反色の設定が **ShiftColorCard 内の必須色のみの部分入口** と
   **詳細設定（折りたたみ）内の ColorSettingsView（基準色2種＋族別の完全版）** の2か所に分裂し、後者は見つけにくかった。
   ShiftColorCard の「違反の色（必須違反）」節を撤去し、**ColorSettingsView を設定タブのシフトの表示色直後へ移動**

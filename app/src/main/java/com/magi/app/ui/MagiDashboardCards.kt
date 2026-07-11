@@ -225,7 +225,7 @@ internal fun OperatorNextActionCard(
             // [監査#1] 人手不足ゼロでも必須違反(希望/禁止連続/群)で此処に来る。不足が無いのに
             //   「人手が足りない」と告げる誤診断を排し、実態（必須違反の残数）を言う。
             "もう少しです。" + (worstDay?.let { "$it が人手不足です。" }
-                ?: "必須の条件が ${ui.bestHard}件 残っています。"),
+                ?: "必須違反が ${ui.bestHard}件 残っています。"),
             "なおすのを手伝って", onFix, true, "もう一度つくる", onMake)
     }
 
@@ -560,7 +560,7 @@ internal fun RiskChip(label: String, shortage: Int, detail: String) {
 
 /** 内訳の家族キー → 日本語ラベル（BreakdownCard と FixSuggestionCard で共用）。 */
 internal val breakdownLabels: Map<String, String> = mapOf(
-    "groupViol" to "グループ不整合", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
+    "groupViol" to "担当外シフト", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
     "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ", "weekly" to "曜日の偏り",
     "c1" to "窓の要件", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア",
@@ -814,7 +814,7 @@ internal fun AttentionCardsSection(ui: UiState, onFocusStaff: (Int) -> Unit) {
     for ((key, cls) in ui.needViolations) {
         val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
         dayAlerts[j] = (dayAlerts[j] ?: 0) + 1
-        val dir = when (cls) { "vio-covU" -> "不足"; "vio-covO" -> "過剰"; else -> "群レンジ" }   // [④用語統一] 群のレンジ(c41系)と同語
+        val dir = when (cls) { "vio-covU" -> "不足"; "vio-covO" -> "過剰"; else -> "群のレンジ" }   // [④用語統一] breakdownLabels の c41系と同語
 
         dayShifts.getOrPut(j) { LinkedHashSet() }.add("${sym(k)}$dir")
     }

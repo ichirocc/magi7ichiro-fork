@@ -351,9 +351,9 @@ object V6FinalPort {
                         MirrorLog(level = "I", tag = "ExtraRefine",
                             message = "予算残${extraMs / 1000}sで追加精製: HARD ${post.report.hard}→${extra.report.hard} / total ${post.report.total}→${extra.report.total}"),
                         // [監査(3c)/N3と同型] ログ末尾の UnifiedCheck/違反詳細は「精製前の盤面」の診断のまま残るため、
-                        //   採用盤面の集計を明示して件数の取り違えを防ぐ。
+                        //   採用した勤務表の集計を明示して件数の取り違えを防ぐ。
                         MirrorLog(level = "I", tag = "UnifiedCheck",
-                            message = "採用盤面の集計: HARD=${extra.report.hard} 合計=${extra.report.total}（直近のUnifiedCheck行・違反詳細は追加精製前の盤面の診断）"),
+                            message = "採用した勤務表の集計: HARD=${extra.report.hard} 合計=${extra.report.total}（直近のUnifiedCheck行・違反詳細は追加精製前の盤面の診断）"),
                     )
                 }
             }
@@ -386,15 +386,29 @@ object V6FinalPort {
                 message = "後処理結果が入力より悪化を検知したため入力を採用しました（多重防御）: $regression",
             ),
             // [N3] ログ末尾には棄却盤面(post)の UnifiedCheck/診断行が履歴として残るため、
-            //   採用盤面の集計を明示して読者の取り違え（例: covU詳細と件数の不一致に見える）を防ぐ。
+            //   採用した勤務表の集計を明示して読者の取り違え（例: covU詳細と件数の不一致に見える）を防ぐ。
             MirrorLog(
                 level = "I", tag = "UnifiedCheck",
-                message = "採用盤面の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
+                message = "採用した勤務表の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
             ),
         ) else emptyList()
+        // [ネイティブ加速 Stage2] C++フル評価器と Kotlin Evaluator を採用盤面で照合し、結果を診断ログへ。
+        //   照合は read-only（採用結果に影響なし）。Stage3 の SA チャンクはこのパリティ一致を前提条件にする。
+        val nativeLog = run {
+            val parity = runCatching { NativeEval.parityCheck(baseProblem, finalSched) }.getOrNull()
+            MirrorLog(
+                level = if (parity?.match == false) "W" else "I",
+                tag = "NativeBridge",
+                message = when {
+                    parity == null -> "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）"
+                    parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)（探索は従来Kotlin・Stage2）"
+                    else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません (C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft})"
+                },
+            )
+        }
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog) + sentinelLog + relinkLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        val logs = listOf(timingLog, nativeLog) + sentinelLog + relinkLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, post)
     }
 
