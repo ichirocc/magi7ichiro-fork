@@ -93,7 +93,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                             .then(if (!ui.running) Modifier.clickable { pickFam = key } else Modifier)
                             .padding(6.dp),
                         contentAlignment = Alignment.Center,
-                    ) { Text("$key\n$sevJp" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
+                    ) { Text("${breakdownLabels[key] ?: key}\n$sevJp" + (if (count > 0) " ·$count" else ""), fontSize = 12.sp, textAlign = TextAlign.Center, color = fg) }
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -137,7 +137,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 onClose = { pickFam = null },
             )
             else -> ColorPickerDialog(
-                kigou = pf,
+                kigou = breakdownLabels[pf] ?: pf,
                 currentHex = ui.violationFamilyColorHex[pf] ?: "",
                 defaultHex = when (V6WebCompat.severityFromVioKey(pf)) {
                     "CRITICAL" -> hardHex

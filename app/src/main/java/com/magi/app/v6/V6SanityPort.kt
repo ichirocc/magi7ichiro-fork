@@ -497,10 +497,10 @@ object V6SanityPort {
     }
 
     private fun c3FamilyJp(fam: String): String = when (fam) {
-        "c3" -> "必須MUST"
-        "c3n" -> "禁止FORBIDDEN"
-        "c3m" -> "希望Want"
-        "c3mn" -> "回避Hate"
+        "c3" -> "必須の並び"
+        "c3n" -> "禁止の並び"
+        "c3m" -> "推奨の並び"
+        "c3mn" -> "回避の並び"
         else -> fam
     }
 

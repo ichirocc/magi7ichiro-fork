@@ -11,8 +11,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 287
-        versionName = "3.134.0-halo-order-fix"
+        versionCode = 288
+        versionName = "3.135.0-term-unify-upstream"
     }
 
     buildTypes {

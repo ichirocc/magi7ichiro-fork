@@ -114,7 +114,7 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
     val families = vm.skillConstraintFamilies()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("上の「スキルグループ」に対する専用ルールです。スキル別の回数（上下限）と、スキルの組み合わせ禁止を設定します。行をタップすると変更できます。",
+            Text("上の「スキルグループ」に対する専用ルールです。スキル群のレンジ（1日の人数）と、スキル群ペア禁止（同じ日に不可）を設定します。行をタップすると変更できます。",
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
             if (vm.skillGroupKigouList().isEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -166,7 +166,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var d1 by remember { mutableStateOf(init?.getOrNull(0) ?: "") }
             var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var d2 by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
-            Shell("期間の決まり$mode", okLabel, onClose, { commit(listOf(d1, sk, d2)) { vm.addCons1(d1, sk, d2) } },
+            Shell("窓の要件$mode", okLabel, onClose, { commit(listOf(d1, sk, d2)) { vm.addCons1(d1, sk, d2) } },
                 d1.isNotBlank() && sk.isNotBlank() && d2.isNotBlank()) {
                 NumField("何日間", d1) { d1 = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -187,7 +187,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var l by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
             var u by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
-            Shell("グループ別の1日の人数$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41(gk, sk, l, u) } },
+            Shell("群のレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41(gk, sk, l, u) } },
                 gk.isNotBlank() && sk.isNotBlank()) {
                 Picker("グループ", groups, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -202,7 +202,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: groups.firstOrNull() ?: "") }
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
-            Shell("グループの組み合わせ禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42(g1, g2, s1, s2) } },
+            Shell("群ペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42(g1, g2, s1, s2) } },
                 g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
                 Picker("グループ1", groups, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
@@ -215,7 +215,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var l by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
             var u by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
-            Shell("スキル別の1日の人数$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41s(gk, sk, l, u) } },
+            Shell("スキル群のレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41s(gk, sk, l, u) } },
                 gk.isNotBlank() && sk.isNotBlank()) {
                 Picker("スキル", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -230,7 +230,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: skills.firstOrNull() ?: "") }
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
-            Shell("スキルの組み合わせ禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42s(g1, g2, s1, s2) } },
+            Shell("スキル群ペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42s(g1, g2, s1, s2) } },
                 g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
                 Picker("スキル1", skills, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
@@ -246,8 +246,8 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var e by remember { mutableStateOf(init?.getOrNull(4) ?: "") }
             val kind = when (family) {
                 "cons3n" -> "禁止の並び"
-                "cons3m" -> "並び希望"
-                "cons3mn" -> "並び回避"
+                "cons3m" -> "推奨の並び"
+                "cons3mn" -> "回避の並び"
                 else -> "必須の並び"
             }
             Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { vm.addCons3(family, listOf(a, b, c, d, e)) } }, a.isNotBlank()) {
