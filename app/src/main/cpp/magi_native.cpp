@@ -737,6 +737,375 @@ inline bool glsAcceptN(long long ns, long long curScore, double moveAug, double 
     return u01 < std::exp(-(delta > 0.0 ? delta : 0.0) / (200.0 * temp + 1e-9));
 }
 
+// ============ [第2期 Stage6] soft-aware 修復3種 ＋ ターゲット修正8種 ============
+// V6NativeOptimizer.destroyRepair* / V6SearchOperators.find*Fix の忠実移植。
+// 盤面(平坦 a)と counts(ssn/dsn 相当)を引数に取り、Kotlin と同じ選択規則で動く
+// （乱数系列は別物＝経路一致は狙わない。採否は呼び出し側の受理と番兵が担保）。
+
+inline int rnInt(std::mt19937_64& rng, int bound) { return (int)(rng() % (uint64_t)bound); }
+inline bool wishLockedN(const MagiProblem& p, int i, int j) {
+    int w = p.wish[(size_t)i * p.T + j];
+    return w >= 0 && p.cd(i, w);
+}
+// staffCountPenaltyAt と同式（低90/高45/apt L1、n=回数）。
+inline long long staffCountPenaltyAtN(const MagiProblem& p, int i, int k, int n) {
+    long long pen = 0;
+    int lo = p.rangeLo[(size_t)i * p.K + k], hi = p.rangeHi[(size_t)i * p.K + k];
+    if (lo != INT32_MIN && lo != 0 && n < lo) pen += (long long)(lo - n) * 90;
+    if (hi != INT32_MAX && n > hi) pen += (long long)(n - hi) * 45;
+    int t = p.apt[(size_t)i * p.K + k];
+    if (t >= 0) pen += std::llabs((long long)n - t);
+    return pen;
+}
+
+void randomAllowedCellN(const MagiProblem& p, int* a, std::mt19937_64& rng) {
+    if (p.S == 0 || p.T == 0) return;
+    int i = rnInt(rng, p.S), j = rnInt(rng, p.T);
+    if (wishLockedN(p, i, j)) return;
+    const auto& allowed = p.bucket[p.sgrp[i]];
+    if (!allowed.empty()) a[(size_t)i * p.T + j] = allowed[rnInt(rng, (int)allowed.size())];
+}
+
+// destroyRepairDayAt: 非希望セルを休へ destroy → need1 の不足を marginal soft（個人low/high/apt＋群c41）最小の休職員で repair。
+void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64&) {
+    const int S = p.S, T = p.T, K = p.K, rest = p.restIdx;
+    if (T == 0 || rest < 0 || rest >= K) return;
+    std::vector<int> cnt((size_t)S * K, 0);
+    for (int i = 0; i < S; i++) for (int jj = 0; jj < T; jj++) {
+        int k = a[(size_t)i * T + jj];
+        if (k >= 0 && k < K) cnt[(size_t)i * K + k]++;
+    }
+    for (int i = 0; i < S; i++) {
+        if (wishLockedN(p, i, j) || !p.cd(i, rest)) continue;
+        int old = a[(size_t)i * T + j];
+        if (old != rest && old >= 0 && old < K) { a[(size_t)i * T + j] = rest; cnt[(size_t)i * K + old]--; cnt[(size_t)i * K + rest]++; }
+    }
+    std::vector<int> covJ(K, 0);
+    for (int i = 0; i < S; i++) { int k = a[(size_t)i * T + j]; if (k >= 0 && k < K) covJ[k]++; }
+    const bool hasC41 = !p.cons41.empty();
+    std::vector<int> grpCnt(hasC41 ? (size_t)p.G * K : 0, 0);
+    if (hasC41) for (int i = 0; i < S; i++) {
+        int k = a[(size_t)i * T + j];
+        if (k >= 0 && k < K) grpCnt[(size_t)p.sgrp[i] * K + k]++;
+    }
+    auto c41DayMarg = [&](int g, int k) -> long long {
+        if (!hasC41) return 0;
+        long long d = 0;
+        for (const auto& c : p.cons41) {
+            if (c.g != g || c.s != k) continue;
+            int z = grpCnt[(size_t)g * K + k], z1 = z + 1;
+            int before = (z < c.l ? c.l - z : 0) + (z > c.u ? z - c.u : 0);
+            int after = (z1 < c.l ? c.l - z1 : 0) + (z1 > c.u ? z1 - c.u : 0);
+            d += after - before;
+        }
+        return d;
+    };
+    for (int k = 0; k < K; k++) {
+        if (k == rest) continue;
+        int need = p.need1[(size_t)k * T + j];
+        if (need <= 0) continue;
+        int miss = need - covJ[k];
+        while (miss > 0) {
+            int bestI = -1;
+            long long bestDelta = INT64_MAX;
+            for (int i = 0; i < S; i++) {
+                if (a[(size_t)i * T + j] != rest || wishLockedN(p, i, j) || !p.cd(i, k)) continue;
+                long long delta = staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k] + 1)
+                    - staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k]) + c41DayMarg(p.sgrp[i], k);
+                if (delta < bestDelta) { bestDelta = delta; bestI = i; }
+            }
+            if (bestI < 0) break;
+            a[(size_t)bestI * T + j] = k;
+            cnt[(size_t)bestI * K + k]++; cnt[(size_t)bestI * K + rest]--;
+            covJ[k]++; miss--;
+            if (hasC41) grpCnt[(size_t)p.sgrp[bestI] * K + k]++;
+        }
+    }
+}
+
+// destroyRepairStaffAt: 職員 i の非希望セルを休へ → 各日の被覆穴を marginal soft 最小のシフトで repair（covO を作らない）。
+void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&) {
+    const int S = p.S, T = p.T, K = p.K, rest = p.restIdx;
+    const auto& allowed = p.bucket[p.sgrp[i]];
+    if (allowed.empty() || rest < 0 || rest >= K || !p.cd(i, rest)) return;
+    std::vector<int> cntI(K, 0);
+    for (int jj = 0; jj < T; jj++) { int k = a[(size_t)i * T + jj]; if (k >= 0 && k < K) cntI[k]++; }
+    for (int j = 0; j < T; j++) {
+        if (wishLockedN(p, i, j)) continue;
+        int old = a[(size_t)i * T + j];
+        if (old != rest && old >= 0 && old < K) { a[(size_t)i * T + j] = rest; cntI[old]--; cntI[rest]++; }
+    }
+    std::vector<int> cov((size_t)T * K, 0);
+    for (int x = 0; x < S; x++) for (int j = 0; j < T; j++) {
+        int k2 = a[(size_t)x * T + j];
+        if (k2 >= 0 && k2 < K) cov[(size_t)j * K + k2]++;
+    }
+    for (int j = 0; j < T; j++) {
+        if (wishLockedN(p, i, j) || a[(size_t)i * T + j] != rest) continue;
+        int bestK = -1;
+        long long bestDelta = INT64_MAX;
+        for (int k = 0; k < K; k++) {
+            if (k == rest || !p.cd(i, k)) continue;
+            int need = p.need1[(size_t)k * T + j];
+            if (need <= 0) continue;
+            if (cov[(size_t)j * K + k] >= need) continue;
+            long long delta = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k]);
+            if (delta < bestDelta) { bestDelta = delta; bestK = k; }
+        }
+        if (bestK >= 0) {
+            a[(size_t)i * T + j] = bestK;
+            cntI[bestK]++; cntI[rest]--;
+            cov[(size_t)j * K + bestK]++; cov[(size_t)j * K + rest]--;
+        }
+    }
+}
+
+// destroyRepairViolations: 違反セル(hint)から最大8セルを marginal soft 最小の担当可シフトへ再割当。
+void destroyRepairViolationsN(const MagiProblem& p, int* a, const std::vector<int>& cells, std::mt19937_64& rng) {
+    const int T = p.T, K = p.K;
+    if (cells.empty()) { randomAllowedCellN(p, a, rng); return; }
+    int reps = (int)cells.size() < 8 ? (int)cells.size() : 8;
+    for (int r = 0; r < reps; r++) {
+        int flat = cells[rnInt(rng, (int)cells.size())];
+        int i = flat / T, j = flat % T;
+        if (i < 0 || i >= p.S || j < 0 || j >= T || wishLockedN(p, i, j)) continue;
+        const auto& allowed = p.bucket[p.sgrp[i]];
+        if (allowed.empty()) continue;
+        std::vector<int> cntI(K, 0);
+        for (int jj = 0; jj < T; jj++) { int k = a[(size_t)i * T + jj]; if (k >= 0 && k < K) cntI[k]++; }
+        int old = a[(size_t)i * T + j];
+        int bestK = old;
+        long long bestDelta = INT64_MAX;
+        for (int k : allowed) {
+            if (k == old) continue;
+            long long dOld = (old >= 0 && old < K)
+                ? staffCountPenaltyAtN(p, i, old, cntI[old] - 1) - staffCountPenaltyAtN(p, i, old, cntI[old]) : 0;
+            long long dK = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k]);
+            if (dOld + dK < bestDelta) { bestDelta = dOld + dK; bestK = k; }
+        }
+        if (bestK != old) a[(size_t)i * T + j] = bestK;
+    }
+}
+
+// ── find*Fix 群: SaChunk の a/ssn/dsn を読み [i, j, newK] を返す（無ければ {-1}）。
+// eval.at → a / countForStaff → ssn / countOnDay → dsn の対応で V6SearchOperators と同式。
+struct Fix { int i = -1, j = -1, k = -1; bool ok() const { return i >= 0; } };
+
+Fix findCovOFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
+    const int S = p.S, T = p.T, K = p.K;
+    if (T == 0 || K == 0) return {};
+    int j = rnInt(rng, T);
+    int overK = -1, maxOver = 0;
+    for (int k = 0; k < K; k++) {
+        int lo = p.need1[(size_t)k * T + j];
+        if (lo < 0) continue;
+        int hi = (p.use2 && p.need2[(size_t)k * T + j] >= 0) ? p.need2[(size_t)k * T + j] : lo;
+        int over = st.dsn[(size_t)j * K + k] - hi;
+        if (over > maxOver) { maxOver = over; overK = k; }
+    }
+    if (overK < 0) return {};
+    int wCnt = 0;
+    for (int i = 0; i < S; i++) if (st.a[(size_t)i * T + j] == overK && !wishLockedN(p, i, j)) wCnt++;
+    if (wCnt == 0) return {};
+    int pickW = rnInt(rng, wCnt), sel = 0;
+    for (int ii = 0; ii < S; ii++) if (st.a[(size_t)ii * T + j] == overK && !wishLockedN(p, ii, j)) { if (pickW-- == 0) { sel = ii; break; } }
+    int bestNw = -1, bestDef = INT32_MIN;
+    for (int k = 0; k < K; k++) {
+        if (k == overK || !p.cd(sel, k)) continue;
+        int lo = p.need1[(size_t)k * T + j];
+        int def = lo >= 0 ? lo - st.dsn[(size_t)j * K + k] : 0;
+        if (def > bestDef) { bestDef = def; bestNw = k; }
+    }
+    return bestNw >= 0 ? Fix{sel, j, bestNw} : Fix{};
+}
+
+Fix findC2FixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
+    const int S = p.S, T = p.T, K = p.K;
+    if (p.cons2.empty()) return {};
+    const auto& c = p.cons2[rnInt(rng, (int)p.cons2.size())];
+    int dCnt = 0;
+    for (int i = 0; i < S; i++) { if (!p.cd(i, c.si)) continue; if (st.ssn[(size_t)i * K + c.si] < c.c) dCnt++; }
+    if (dCnt == 0) return {};
+    int pickI = rnInt(rng, dCnt), stf = 0;
+    for (int i = 0; i < S; i++) { if (!p.cd(i, c.si)) continue; if (st.ssn[(size_t)i * K + c.si] < c.c) { if (pickI-- == 0) { stf = i; break; } } }
+    int dayCnt = 0;
+    for (int j = 0; j < T; j++) if (st.a[(size_t)stf * T + j] != c.si && !wishLockedN(p, stf, j)) dayCnt++;
+    if (dayCnt == 0) return {};
+    int pickJ = rnInt(rng, dayCnt), day = 0;
+    for (int j = 0; j < T; j++) if (st.a[(size_t)stf * T + j] != c.si && !wishLockedN(p, stf, j)) { if (pickJ-- == 0) { day = j; break; } }
+    return Fix{stf, day, c.si};
+}
+
+Fix findRangeLowFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
+    const int S = p.S, T = p.T, K = p.K;
+    int cCnt = 0;
+    for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) {
+        int lo = p.rangeLo[(size_t)i * K + k];
+        if (lo == INT32_MIN || !p.cd(i, k)) continue;
+        if (st.ssn[(size_t)i * K + k] < lo) cCnt++;
+    }
+    if (cCnt == 0) return {};
+    int pickC = rnInt(rng, cCnt), rlI = 0, rlK = 0;
+    bool done = false;
+    for (int i = 0; i < S && !done; i++) for (int k = 0; k < K && !done; k++) {
+        int lo = p.rangeLo[(size_t)i * K + k];
+        if (lo == INT32_MIN || !p.cd(i, k)) continue;
+        if (st.ssn[(size_t)i * K + k] < lo) { if (pickC-- == 0) { rlI = i; rlK = k; done = true; } }
+    }
+    int dayCnt = 0;
+    for (int j = 0; j < T; j++) if (st.a[(size_t)rlI * T + j] != rlK && !wishLockedN(p, rlI, j)) dayCnt++;
+    if (dayCnt == 0) return {};
+    int pickJ = rnInt(rng, dayCnt), day = 0;
+    for (int j = 0; j < T; j++) if (st.a[(size_t)rlI * T + j] != rlK && !wishLockedN(p, rlI, j)) { if (pickJ-- == 0) { day = j; break; } }
+    return Fix{rlI, day, rlK};
+}
+
+Fix findRangeHighFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
+    const int S = p.S, T = p.T, K = p.K;
+    int cCnt = 0;
+    for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) {
+        int hi = p.rangeHi[(size_t)i * K + k];
+        if (hi == INT32_MAX) continue;
+        if (st.ssn[(size_t)i * K + k] > hi) cCnt++;
+    }
+    if (cCnt == 0) return {};
+    int pickC = rnInt(rng, cCnt), rhI = 0, rhK = 0;
+    bool done = false;
+    for (int i = 0; i < S && !done; i++) for (int k = 0; k < K && !done; k++) {
+        int hi = p.rangeHi[(size_t)i * K + k];
+        if (hi == INT32_MAX) continue;
+        if (st.ssn[(size_t)i * K + k] > hi) { if (pickC-- == 0) { rhI = i; rhK = k; done = true; } }
+    }
+    int dayCnt = 0;
+    for (int j = 0; j < T; j++) if (st.a[(size_t)rhI * T + j] == rhK && !wishLockedN(p, rhI, j)) dayCnt++;
+    if (dayCnt == 0) return {};
+    int pickJ = rnInt(rng, dayCnt), day = 0;
+    for (int j = 0; j < T; j++) if (st.a[(size_t)rhI * T + j] == rhK && !wishLockedN(p, rhI, j)) { if (pickJ-- == 0) { day = j; break; } }
+    const auto& allowed = p.bucket[p.sgrp[rhI]];
+    int oCnt = 0;
+    for (int ak : allowed) if (ak != rhK) oCnt++;
+    if (oCnt == 0) return {};
+    int pickK = rnInt(rng, oCnt), nwK = 0;
+    for (int ak : allowed) if (ak != rhK) { if (pickK-- == 0) { nwK = ak; break; } }
+    return Fix{rhI, day, nwK};
+}
+
+// c41/c41s（群/スキル群の日次レンジ）: 超過なら群内の1人を別シフトへ、不足なら群内の1人を対象シフトへ。
+Fix findC41FamFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng,
+                   const std::vector<C41r>& cons, const std::vector<int>& grp) {
+    const int S = p.S, T = p.T;
+    if (cons.empty() || T == 0) return {};
+    const auto& c = cons[rnInt(rng, (int)cons.size())];
+    int j = rnInt(rng, T);
+    int cnt = 0;
+    for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] == c.s) cnt++;
+    if (cnt > c.u) {
+        int wCnt = 0;
+        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] == c.s && !wishLockedN(p, i, j)) wCnt++;
+        if (wCnt == 0) return {};
+        int pickW = rnInt(rng, wCnt), ci = 0;
+        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] == c.s && !wishLockedN(p, i, j)) { if (pickW-- == 0) { ci = i; break; } }
+        const auto& allowed = p.bucket[p.sgrp[ci]];
+        int oCnt = 0;
+        for (int ak : allowed) if (ak != c.s) oCnt++;
+        if (oCnt == 0) return {};
+        int pickK = rnInt(rng, oCnt), nwK = 0;
+        for (int ak : allowed) if (ak != c.s) { if (pickK-- == 0) { nwK = ak; break; } }
+        return Fix{ci, j, nwK};
+    }
+    if (cnt < c.l) {
+        int aCnt = 0;
+        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] != c.s && !wishLockedN(p, i, j) && p.cd(i, c.s)) aCnt++;
+        if (aCnt == 0) return {};
+        int pickA = rnInt(rng, aCnt), ai = 0;
+        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] != c.s && !wishLockedN(p, i, j) && p.cd(i, c.s)) { if (pickA-- == 0) { ai = i; break; } }
+        return Fix{ai, j, c.s};
+    }
+    return {};
+}
+
+Fix findC3WantFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
+    const int S = p.S, T = p.T;
+    const std::vector<C3r>* list;
+    if (!p.cons3.empty() && !p.cons3m.empty()) list = (rng() & 1) ? &p.cons3 : &p.cons3m;
+    else if (!p.cons3.empty()) list = &p.cons3;
+    else if (!p.cons3m.empty()) list = &p.cons3m;
+    else return {};
+    const auto& c = (*list)[rnInt(rng, (int)list->size())];
+    const int D = (int)c.seq.size();
+    if (D < 2 || D > T) return {};
+    int iStart = rnInt(rng, S);
+    for (int di = 0; di < S; di++) {
+        int i = (iStart + di) % S;
+        const int* row = st.a.data() + (size_t)i * T;
+        for (int j = 0; j <= T - D; j++) {
+            if (row[j] == c.seq[0]) {
+                int miss = 0, missL = -1;
+                for (int l = 1; l < D; l++) {
+                    if (row[j + l] != c.seq[l]) { miss++; if (miss > 1) break; missL = l; }
+                }
+                if (miss == 1 && missL >= 0) {
+                    int ml = j + missL;
+                    if (!wishLockedN(p, i, ml) && p.cd(i, c.seq[missL])) return Fix{i, ml, c.seq[missL]};
+                }
+            }
+        }
+    }
+    return {};
+}
+
+Fix findAptFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
+    const int S = p.S, T = p.T, K = p.K;
+    if (S == 0 || T == 0) return {};
+    std::vector<int> order(S);
+    for (int i = 0; i < S; i++) order[i] = i;
+    for (int i = S - 1; i >= 1; i--) { int j = rnInt(rng, i + 1); std::swap(order[i], order[j]); }
+    for (int i : order) {
+        const auto& allowed = p.bucket[p.sgrp[i]];
+        if (allowed.empty()) continue;
+        int kOver = -1, kUnder = -1;
+        for (int k = 0; k < K; k++) {
+            int tg = p.apt[(size_t)i * K + k];
+            if (tg < 0) continue;
+            int n = st.ssn[(size_t)i * K + k];
+            if (kOver < 0 && n > tg) kOver = k;
+            if (kUnder < 0 && n < tg) {
+                bool can = false;
+                for (int ak : allowed) if (ak == k) { can = true; break; }
+                if (can) kUnder = k;
+            }
+        }
+        if (kOver < 0 || kUnder < 0 || kOver == kUnder) continue;
+        int dayStart = rnInt(rng, T);
+        for (int d = 0; d < T; d++) {
+            int j = (dayStart + d) % T;
+            if (!wishLockedN(p, i, j) && st.a[(size_t)i * T + j] == kOver) return Fix{i, j, kUnder};
+        }
+    }
+    return {};
+}
+
+// findTargetedFix: 8種を一様シャッフル順に試し最初の手を返す（Kotlin と同順序集合）。
+Fix findTargetedFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
+    int order[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    for (int i = 7; i >= 1; i--) { int j = rnInt(rng, i + 1); std::swap(order[i], order[j]); }
+    for (int idx : order) {
+        Fix f;
+        switch (idx) {
+            case 0: f = findCovOFixN(p, st, rng); break;
+            case 1: f = findC2FixN(p, st, rng); break;
+            case 2: f = findRangeLowFixN(p, st, rng); break;
+            case 3: f = findC41FamFixN(p, st, rng, p.cons41, p.sgrp); break;
+            case 4: f = findRangeHighFixN(p, st, rng); break;
+            case 5: f = findC41FamFixN(p, st, rng, p.cons41s, p.ssk); break;
+            case 6: f = findC3WantFixN(p, st, rng); break;
+            default: f = findAptFixN(p, st, rng); break;
+        }
+        if (f.ok()) return f;
+    }
+    return {};
+}
+
 // ---- JNI 平坦データの読み取りヘルパ ----
 std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
     jsize n = env->GetArrayLength(arr);

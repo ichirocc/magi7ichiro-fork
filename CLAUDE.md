@@ -314,7 +314,13 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 > - ~~Stage5~~（完了・上記）: C++ 違反セル抽出（UnifiedViolationChecker の violations マップ相当＝GLSキック/
 >   destroyRepairViolations の hint 用。MirrorCore の mark 系を移植・cells のみで breakdown/weighted は不要）
 >   ＋ GlsPenalty 移植（penalty行列・augment/moveAug/penalizeWorst(util)/decay/lambda）。
-> - **Stage6**: soft-aware repairs 移植 = destroyRepairDayAt/StaffAt/Violations＋staffCountPenaltyAt＋
+> - **Stage6 完了(3.141.0)**: soft-aware 修復3種（destroyRepairDayAtN=非希望→休destroy+need1不足を
+>   marginal soft(個人90/45/apt＋群c41DayMarg)最小の休職員でrepair / StaffAtN=行destroy+被覆穴のみ埋め /
+>   ViolationsN=hint最大8セルをmarginal最小へ再割当・空hintはrandomAllowedCell）＋ find*Fix 8種
+>   （covO/c2/rangeLow/c41/rangeHigh/c41s/c3Want/apt、c41系は群/スキル群を共通関数でパラメタ化）＋
+>   findTargetedFixN（一様シャッフル順）。SaChunk の ssn/dsn が countForStaff/countOnDay に対応。
+>   ホスト検証: 修復3種×200試行=wishLocked不変・担当可のみ・変更範囲閉じ込め、finder 500/500発見・全手妥当。
+> - ~~Stage6~~（完了・上記）: soft-aware repairs 移植 = destroyRepairDayAt/StaffAt/Violations＋staffCountPenaltyAt＋
 >   c41DayMarg（V6NativeOptimizer 1006-1200行）＋ findTargetedFix（8種, V6HotfixPasses）。
 > - **Stage7**: hf67HardRepair 移植（copy系オペの7反復毎・hard>0時のみ呼ばれる修復）。
 > - **Stage8**: ALNSチャンク統合（チャンク=200反復: curReport更新周期に一致。7オペ・適応重み(roulette/
