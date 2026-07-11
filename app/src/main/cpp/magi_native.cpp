@@ -575,6 +575,168 @@ void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn
     out[5] = tail;
 }
 
+// ============ [第2期 Stage5] 違反セル抽出 ＋ GLS ペナルティ ＋ 受理判定 ============
+// ALNS チャンク(Stage8)の部品。violations セルは GLSキック/destroyRepairViolations の hint 用で
+// スコアには不使用（正しさは番兵が担保・hint はチェッカーの mark 位置へ忠実に移植）。
+
+// UnifiedViolationChecker の violations マップ（セル着色）のキー集合と同じセルを列挙する。
+// 対象8族: c1(違反窓ランの先頭)・c42/c42s(ペア両セル)・c3×4(単一連=run先頭/非forbidden窓=先頭/
+// forbidden=パターン全セル)・pref・groupViol。countViolations/needViolations 系はループ内未使用のため対象外。
+void collectViolationCells(const MagiProblem& p, const int* a, std::vector<int>& out) {
+    const int S = p.S, T = p.T, K = p.K;
+    out.clear();
+    std::vector<uint8_t> seen((size_t)S * T, 0);
+    auto markCell = [&](int i, int j) {
+        if (i < 0 || i >= S || j < 0 || j >= T) return;
+        size_t x = (size_t)i * T + j;
+        if (!seen[x]) { seen[x] = 1; out.push_back((int)x); }
+    };
+    // c1: canDo ガード＋違反窓ランの先頭セル
+    for (const auto& c : p.cons1) {
+        for (int i = 0; i < S; i++) {
+            if (!p.cd(i, c.si)) continue;
+            const int* row = a + (size_t)i * T;
+            bool prevViol = false;
+            for (int j = 0; j <= T - c.d1; j++) {
+                int z = 0;
+                for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
+                bool viol = z < c.d2;
+                if (viol && !prevViol) markCell(i, j);
+                prevViol = viol;
+            }
+        }
+    }
+    // c42/c42s: 同日ペアの両セル
+    auto pairCells = [&](const std::vector<C42r>& list, const std::vector<int>& grp) {
+        for (const auto& c : list) {
+            for (int j = 0; j < T; j++) {
+                bool anyL = false, anyR = false;
+                for (int i = 0; i < S; i++) {
+                    int v = a[(size_t)i * T + j];
+                    if (grp[i] == c.g1 && v == c.s1) anyL = true;
+                    if (grp[i] == c.g2 && v == c.s2) anyR = true;
+                }
+                if (anyL && anyR) {
+                    for (int i = 0; i < S; i++) {
+                        int v = a[(size_t)i * T + j];
+                        if ((grp[i] == c.g1 && v == c.s1) || (grp[i] == c.g2 && v == c.s2)) markCell(i, j);
+                    }
+                }
+            }
+        }
+    };
+    pairCells(p.cons42, p.sgrp);
+    pairCells(p.cons42s, p.ssk);
+    // c3×4: checkC3Family の mark 位置
+    auto c3Cells = [&](const std::vector<C3r>& list, bool forbidden) {
+        for (const auto& c : list) {
+            const int D = (int)c.seq.size();
+            if (D == 0 || D > T) continue;
+            const int first = c.seq[0];
+            if (!forbidden && c.singleRun) {
+                for (int i = 0; i < S; i++) {
+                    const int* row = a + (size_t)i * T;
+                    int runStart = -1, r = 0;
+                    for (int j = 0; j <= T; j++) {
+                        bool on = j < T && row[j] == first;
+                        if (on) { if (r == 0) runStart = j; r++; }
+                        else if (r > 0) {
+                            if (D - r > 0) markCell(i, runStart);
+                            r = 0; runStart = -1;
+                        }
+                    }
+                }
+                continue;
+            }
+            for (int i = 0; i < S; i++) {
+                const int* row = a + (size_t)i * T;
+                for (int j = 0; j <= T - D; j++) {
+                    if (row[j] == first) {
+                        int z = 0;
+                        for (int l = 1; l < D; l++) if (row[j + l] == c.seq[l]) z++;
+                        bool fire = forbidden ? (z == D - 1) : (z < D - 1);
+                        if (fire) {
+                            if (forbidden) { for (int l = 0; l < D; l++) markCell(i, j + l); }
+                            else markCell(i, j);
+                        }
+                    }
+                }
+            }
+        }
+    };
+    c3Cells(p.cons3, false);
+    c3Cells(p.cons3n, true);
+    c3Cells(p.cons3m, false);
+    c3Cells(p.cons3mn, true);
+    // pref（実現可能な希望の未充足）と groupViol（担当外割当）
+    for (int i = 0; i < S; i++) {
+        const int* row = a + (size_t)i * T;
+        for (int j = 0; j < T; j++) {
+            int w = p.wish[(size_t)i * T + j];
+            if (w >= 0 && p.cd(i, w) && row[j] != w) markCell(i, j);
+            int k = row[j];
+            if (k >= 0 && k < K && !p.cd(i, k)) markCell(i, j);
+        }
+    }
+}
+
+// GlsPenalty.kt の移植（疎HashMap→密配列。S*T*K は実データ規模で数千intと小さい）。
+struct GlsPenaltyN {
+    int S, T, K;
+    double lambda = 200.0;
+    std::vector<int> pen;   // S*T*K
+    long long kicks = 0;
+    GlsPenaltyN(int s, int t, int k) : S(s), T(t), K(k), pen((size_t)s * t * k, 0) {}
+    inline int penaltyOf(int i, int j, int k) const { return pen[((size_t)i * T + j) * K + k]; }
+    double augment(const int* a) const {
+        long long sum = 0;
+        for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) {
+            int k = a[(size_t)i * T + j];
+            if (k >= 0 && k < K) sum += penaltyOf(i, j, k);
+        }
+        return lambda * (double)sum;
+    }
+    // V6SearchOperators.glsMoveAug と同式（変更セルだけの O(1) 差分）。
+    inline double moveAug(int i, int j, int oldK, int nwK) const {
+        return oldK == nwK ? 0.0 : lambda * (double)(penaltyOf(i, j, nwK) - penaltyOf(i, j, oldK));
+    }
+    // util = 1/(1+penalty) 最大の違反セル割当を penalty+1（severity は既定 1.0 のみ使用＝Kotlin 呼出と同じ）。
+    bool penalizeWorst(const int* a, const std::vector<int>& cells) {
+        long long bestKey = -1;
+        double bestUtil = -1.0;
+        for (int flat : cells) {
+            int i = flat / T, j = flat % T;
+            if (i < 0 || i >= S || j < 0 || j >= T) continue;
+            int k = a[(size_t)i * T + j];
+            if (k < 0 || k >= K) continue;
+            double util = 1.0 / (1.0 + penaltyOf(i, j, k));
+            if (util > bestUtil) { bestUtil = util; bestKey = ((long long)i * T + j) * K + k; }
+        }
+        if (bestKey < 0) return false;
+        pen[(size_t)bestKey]++;
+        kicks++;
+        return true;
+    }
+    // [GLS aging] keepPercent% へ整数床で減衰（Kotlin decay と同算術）。戻り値=非ゼロ項目数。
+    int decay(int keepPercent = 80) {
+        int nonZero = 0;
+        for (auto& v : pen) { v = v * keepPercent / 100; if (v > 0) nonZero++; }
+        return nonZero;
+    }
+};
+
+// V6SearchOperators.glsAccept と同式（AcceptMode: 0=SA, 1=GREAT_DELUGE, 2=LAM_ADAPTIVE）。
+inline bool glsAcceptN(long long ns, long long curScore, double moveAug, double curAug,
+                       int mode, double temp, double gdLevel, double u01) {
+    if (ns > curScore + 2000000LL) return false;
+    if (mode == 1) {
+        return ((double)ns + curAug + moveAug) <= gdLevel && (ns / 1000000LL) <= (curScore / 1000000LL);
+    }
+    double delta = (double)(ns - curScore) + moveAug;
+    if (delta <= 0.0) return true;
+    return u01 < std::exp(-(delta > 0.0 ? delta : 0.0) / (200.0 * temp + 1e-9));
+}
+
 // ---- JNI 平坦データの読み取りヘルパ ----
 std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
     jsize n = env->GetArrayLength(arr);
