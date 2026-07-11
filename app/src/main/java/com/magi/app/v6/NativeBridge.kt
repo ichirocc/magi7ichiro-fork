@@ -14,7 +14,7 @@ package com.magi.app.v6
  */
 object NativeBridge {
     /** Kotlin 側が期待する ABI バージョン。C++ 側と不一致ならネイティブ経路を使わない。 */
-    const val ABI_VERSION = 3
+    const val ABI_VERSION = 4
 
     /** .so がロードでき、ABI が一致するときだけ true（初回参照時に一度だけ判定）。 */
     val available: Boolean by lazy {
@@ -49,6 +49,22 @@ object NativeBridge {
         handle: Long, cur: IntArray, best: IntArray, bestScore: Long, seed: Long,
         t0: Double, tf: Double, alpha: Double, chain: Int,
     ): LongArray
+
+    // ---- [Stage8] ALNS チャンク ----
+    /** ALNS チャンク状態を生成（problemHandle＋初期盤面 cur）。accept: 0=SA 1=GD 2=Lam / opSel: 0=roulette 1=thompson。0=失敗。 */
+    @JvmStatic
+    external fun nativeAlnsCreate(problemHandle: Long, cur: IntArray, seed: Long, accept: Int, opSel: Int, explore: Double): Long
+    @JvmStatic
+    external fun nativeAlnsDestroy(handle: Long)
+    /** 1チャンク実行。戻り値 [status, curScore, bestScore, bestImproved, iters, kicks]。status!=0 で退化。 */
+    @JvmStatic
+    external fun nativeAlnsChunk(handle: Long, iters: Int, frac: Double): LongArray
+    /** which: 0=best, 1=cur を out(S*T) へ読み出す。 */
+    @JvmStatic
+    external fun nativeAlnsRead(handle: Long, which: Int, out: IntArray)
+    /** restart 境界で cur を差し替え（score/counts/GLS augment 再同期）。戻り値=新 cur スコア（-1=失敗）。 */
+    @JvmStatic
+    external fun nativeAlnsSetCur(handle: Long, cur: IntArray): Long
 }
 
 /**
