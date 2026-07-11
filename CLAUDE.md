@@ -302,6 +302,60 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+## ネイティブ加速 第2期: ALNS/RSI本体のC++化（進行中・明示合意）
+> ユーザー指示「ALNS/RSI本体のC++化する」（2026-07-11）。3.139.0 の範囲確定（対象外）を**明示指示で解除**。
+> 前提: Kotlin チェッカー/修復系が「正」の原則は維持し、C++ は同値の高速版＋2層番兵（チャンク自己整合
+> ＋Kotlin照合、発火で NativeGate 退化）を第1期と同様に必須とする。段階計画:
+> - **Stage5 完了(3.140.0)**: C++ に `collectViolationCells`（violations マップの8族=c1窓ラン先頭/
+>   c42(s)ペア両セル/c3×4(run先頭・窓先頭・forbidden全セル)/pref/groupViol、count/need系はループ内未使用で対象外）
+>   ＋ `GlsPenaltyN`（密配列・augment/moveAug/penalizeWorst/decay80%・lambda200）＋ `glsAcceptN`（SA/GD/Lam 3モード、
+>   hard+2超は常に却下）。ホスト検証: セル抽出=重複なし・pref/groupViol完全包含、GLS=augment/moveAug 2000手一致・
+>   decay算術一致。まだ未配線（Stage8 で ALNS チャンクが使用）。
+> - ~~Stage5~~（完了・上記）: C++ 違反セル抽出（UnifiedViolationChecker の violations マップ相当＝GLSキック/
+>   destroyRepairViolations の hint 用。MirrorCore の mark 系を移植・cells のみで breakdown/weighted は不要）
+>   ＋ GlsPenalty 移植（penalty行列・augment/moveAug/penalizeWorst(util)/decay/lambda）。
+> - **Stage6 完了(3.141.0)**: soft-aware 修復3種（destroyRepairDayAtN=非希望→休destroy+need1不足を
+>   marginal soft(個人90/45/apt＋群c41DayMarg)最小の休職員でrepair / StaffAtN=行destroy+被覆穴のみ埋め /
+>   ViolationsN=hint最大8セルをmarginal最小へ再割当・空hintはrandomAllowedCell）＋ find*Fix 8種
+>   （covO/c2/rangeLow/c41/rangeHigh/c41s/c3Want/apt、c41系は群/スキル群を共通関数でパラメタ化）＋
+>   findTargetedFixN（一様シャッフル順）。SaChunk の ssn/dsn が countForStaff/countOnDay に対応。
+>   ホスト検証: 修復3種×200試行=wishLocked不変・担当可のみ・変更範囲閉じ込め、finder 500/500発見・全手妥当。
+> - ~~Stage6~~（完了・上記）: soft-aware repairs 移植 = destroyRepairDayAt/StaffAt/Violations＋staffCountPenaltyAt＋
+>   c41DayMarg（V6NativeOptimizer 1006-1200行）＋ findTargetedFix（8種, V6HotfixPasses）。
+> - **Stage7 完了(3.142.0)**: hf67HardRepairN 移植（hf66=範囲外/担当外→先頭担当可 → 実現可能希望の適用 →
+>   被覆不足3周充填(bestStaffForCoverage=上限超過500+回数×3+引き抜き不足コスト50・counts周内据え置き=Kotlin同) →
+>   range下限充填(乱数タイブレーク)）。in-place 変異・changed数を返す。ホスト検証: 範囲外混入盤面100試行で
+>   全セル担当可＋実現可能希望の完全充足、hard 63→48 の修復実効を確認。
+> - ~~Stage7~~（完了・上記）: hf67HardRepair 移植（copy系オペの7反復毎・hard>0時のみ呼ばれる修復）。
+> - **Stage8 本体完成(3.143.0・未配線)**: C++ に `runAlnsChunk`＋`AlnsState`（GLS・適応重み・Lam温度・best・
+>   停滞カウンタをチャンク跨ぎで保持）を実装。runAlns 404-597 の内側ループを 1チャンク=N反復で完走:
+>   7オペ（op0-2=copy系destroyRepair＋差分適用/op3-6=直接評価swap/randomCell/targetedFix）・
+>   受理3モード(SA/GD/Lam)・opSelect(roulette/thompson)・softFocus(0.30/0.15)・hf67(7反復毎hard>0)・
+>   GLSキック(停滞200超・50反復毎・256キック毎decay)・適応重み(64反復毎・反応0.2・下限0.05)。SaChunk に
+>   resetBoard(restart境界のcur差替)追加。JNI: nativeAlnsCreate/Chunk/Read/SetCur/Destroy＋ABI_VERSION=4。
+>   番兵1層目=チャンク末尾の自己整合(status!=0で退化)。ホスト検証: 3受理×2選択×20チャンクで status=0・
+>   cur/best自己整合・keep-best単調（合成問題で 63M→800台の改善実効も確認）。**Kotlin runAlns への配線は
+>   Stage8b（次段）**: SaOptimizer.runWorkerNative と同型の退化フォールバック＋2層目のKotlin照合を付す。
+> - **Stage8b 完了(3.144.0)**: Kotlin runAlns へ配線。restart 本体の内側 while を `if (!usedNative)` で
+>   囲み、ネイティブ可能時は `runRestartNative`（ローカル suspend fun）が 1チャンク=200反復で C++ ALNS を
+>   駆動。Kotlin 保持: restart 境界の perturb+hf67・進捗onProgress/liveBest・キャンセル(チャンク間ensureActive)・
+>   予算deadline・**2層目番兵**（best 更新チャンクを Kotlin Evaluator.fullEval で Long== 照合、不一致で
+>   NativeGate 退化）。problem ハンドルは restart 跨ぎ共有・try/finally で destroy。番兵発火時は false 返しで
+>   その restart 以降 Kotlin ループへ。SaOptimizer.runWorkerNative と同型。診断ログ「ネイティブ探索=有効(SA＋
+>   ALNSチャンク)」。これで 60s 主経路(RSI→ALNS)の ALNS フェーズが加速。GLS penalty は restart 毎再構築
+>   （生スコア最良は別管理＝退化なし）。Kotlin コンパイル検証は CI（assembleDebug）。実機で番兵不発を要確認。
+> - ~~Stage8/8b~~（完了・上記）: ALNSチャンク統合（チャンク=200反復: curReport更新周期に一致。7オペ・適応重み(roulette/
+>   Thompson)・受理3モード(SA/GreatDeluge/Lam)・softFocus・wishLocked・GLSキック(50反復毎)を C++ 内で。
+>   Kotlin保持: restart境界(perturb+hf67入口)・進捗/liveBest・キャンセル・番兵）。
+> - **Stage9 完了(追加移植なし・実測は実機)**: RSI/RSI++ のラウンド内探索本体は `runAlns`(Stage8b) または
+>   `runV5`→`SaOptimizer.run`(Stage3) を呼ぶため、**Stage3+8b の配線で既に全探索フェーズが加速済み**（追加の
+>   チャンク化コード不要を確認: runRsi:700 が phase=runAlns/runV5、runRsiPlus も seed=runV5＋runRsi/runAlns）。
+>   RSI 固有の制御層（focus選択/HF63/rsiGenerateHypothesis/EarlyChain=V6LateOperators/better判定）はラウンド境界で
+>   O(2〜8回)しか走らない軽量な Kotlin「正」の層＋チェッカー breakdown 依存のため C++化は対象外（3.139.0 と同方針）。
+>   実測は実機ログの TIME行 反復数比較＋NativeBridge行の番兵不発確認で行う（サンドボックスは Android コンパイル不可）。
+>   **これで第2期(ALNS/RSI本体のC++化)の移植は完了**。加速経路=V5/高速/RSI/ALNS/RSI++ の全探索フェーズ。
+> 各Stageでホスト検証（scratchpad/native_test.cpp 拡張）→CI→実機ログ確認の順。
+
 ## ネイティブ加速（C++/NDK, 進行中）
 > ユーザー指示「アンドロイドのネイティブ開発言語にして、実行速度改善する」（2026-07-11）。backlog#3 の
 > 「C++/NDK 移植は不要」結論を明示指示で解除。**目的=両方（待ち時間短縮＋同時間の品質向上）／範囲=ホットパス
@@ -312,6 +366,25 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   arm64-v8a のみ・CMake 3.22.1）＋ JNI 疎通（`NativeBridge.nativeAbiVersion` の ABI 照合）＋
   handleOptimize の診断ログに読込可否を1行表示。CI 両ワークフローの sdkmanager に ndk/cmake を追加
   （v6-engine-check は assembleDebug で NDK ビルドも検証）。エンジン動作は完全不変。
+- (3.139.0, Stage4=配線完成＋範囲確定): ①**設定トグル「ネイティブ加速（C++）」**を最適化設定に新設
+  （UiState.nativeAccel 既定ON・NativeGate.userEnabled と連動・実行中は変更不可）。番兵ゲートとは独立の
+  ユーザー意思で、OFF=常に従来Kotlin。②**範囲決定: ALNS/RSI 本体のチャンク化は対象外**（=このプロジェクトの
+  ネイティブ化はこれで完了）。理由: runAlns の反復ループは 7反復ごとの hf67HardRepair・200反復ごとの
+  UnifiedViolationChecker 再検査・GLSキック(違反セルhint)が Kotlin の「正」実装と分かちがたく、これらの
+  C++化は「ホットパス限定・Kotlinが正」の合意に反するエンジン全体移植になる。加速済み経路=V5(≤30s)・
+  高速計算・RSI++(≥211s) Phase1種。60s主経路(RSI→ALNS)は Kotlin のまま（差分評価・零アロケ済みで
+  1,800万反復/52s の実測性能）。再チャレンジする場合はチェッカー/hf67 の C++ 移植込みの新規合意が必要。
+- (3.138.0, Stage3=SAチャンク): SaOptimizer PhaseA の**冷却ラダー1本を1チャンク**として C++ で完走
+  （runSaChunk: Kotlin と同じ4オペレータ(single/swapDays/blockFill/LNS)＋Metropolis＋undoバッファ。乱数は
+  mt19937_64=経路一致は狙わずスコアと盤面でパリティ）。スコアは**影響スライスの before/after 再計算**による
+  差分方式（行族=c1/c2/c3系/pref/range/apt/weekly・日族=c41系/c42系/cov・群族=fair、ssn/dsn/wd を増分維持）。
+  **番兵2層**: ①チャンク末尾に C++ 内で fullEval と照合(status!=0=Kotlin側が破棄) ②best 更新チャンクは
+  Kotlin Evaluator.fullEval で Long== 照合。どちらか発火で NativeGate が閉じ**そのプロセスは Kotlin へ退化**
+  （クラッシュさせない）。Kotlin が保持: 予算/キャンセル(チャンク間)・進捗flush・MagiConductor 境界
+  （updateStagnationBulk 新設で停滞を一括反映）・strongPerturb。softPolish(PhaseB=LAHC) 有効時は従来 Kotlin。
+  対象経路=SaOptimizer 利用箇所（V5≤30s・高速計算・RSI++ Phase1種）。ALNS 本体は Stage4+。
+  **ホスト検証済み**（サンドボックスの clang++ ＋ JNI スタブ）: ランダム2万手で差分==フル一致・12シード×
+  ラダーで status=0/スコア照合/keep-best 保持（scratchpad/native_test.cpp）。ABI_VERSION=3。
 - (3.137.0, Stage2=C++フル評価器＋実行時パリティ): Evaluator.fullEvalParts を C++ へ忠実移植
   （magi_native.cpp。c1 canDoガード・c3 run-deficit/窓#fire・pref実現可能のみ・range 90/45・apt/fair/weekly
   L1偏差・covU/covO per-cell OR/AND、Math.round は floor(x+0.5) で同一化）。Problem は NativeEval.flatten が

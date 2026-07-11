@@ -392,17 +392,20 @@ object V6FinalPort {
                 message = "採用した勤務表の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
             ),
         ) else emptyList()
-        // [ネイティブ加速 Stage2] C++フル評価器と Kotlin Evaluator を採用盤面で照合し、結果を診断ログへ。
-        //   照合は read-only（採用結果に影響なし）。Stage3 の SA チャンクはこのパリティ一致を前提条件にする。
+        // [ネイティブ加速 Stage2/3] C++フル評価器と Kotlin Evaluator を採用盤面で照合し、結果を診断ログへ。
+        //   照合は read-only（採用結果に影響なし）。SA チャンク(Stage3)の使用可否・番兵発火もここで可視化。
         val nativeLog = run {
             val parity = runCatching { NativeEval.parityCheck(baseProblem, finalSched) }.getOrNull()
+            // フル評価パリティ不一致もゲートを閉じる（以後の実行で SA チャンクを使わない＝退化）。
+            if (parity?.match == false) NativeGate.disable("フル評価パリティ不一致")
+            val gate = if (NativeGate.enabled) "" else "／番兵発火→Kotlinへ退化: ${NativeGate.reason}"
             MirrorLog(
-                level = if (parity?.match == false) "W" else "I",
+                level = if (parity?.match == false || !NativeGate.enabled) "W" else "I",
                 tag = "NativeBridge",
                 message = when {
                     parity == null -> "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）"
-                    parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)（探索は従来Kotlin・Stage2）"
-                    else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません (C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft})"
+                    parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)・ネイティブ探索=${if (NativeGate.enabled) "有効(SA＋ALNSチャンク)" else "無効"}$gate"
+                    else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません (C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft})$gate"
                 },
             )
         }

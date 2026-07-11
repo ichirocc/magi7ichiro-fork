@@ -27,6 +27,12 @@ class MagiConductor(var stagThreshold: Int = 3000) {
         itersSinceImprove = if (improved) 0 else itersSinceImprove + 1
     }
 
+    /** [ネイティブ加速] チャンク実行後にまとめて反映。improvedInChunk=チャンク内で最良更新があったか、
+     *  tailIters=最後の更新以降の反復数（無更新チャンクなら全反復数）。逐次 updateStagnation と等価。 */
+    fun updateStagnationBulk(improvedInChunk: Boolean, tailIters: Int) {
+        itersSinceImprove = if (improvedInChunk) tailIters else itersSinceImprove + tailIters
+    }
+
     /** 停滞しきい値未満は NoOp。到達後は UCB1 で 1..3（NoOp以外）から選ぶ。 */
     fun selectAction(): ConductorAction {
         if (itersSinceImprove < stagThreshold) return ConductorAction.NOOP

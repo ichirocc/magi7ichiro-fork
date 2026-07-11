@@ -57,6 +57,9 @@ object NativeEval {
         return out
     }
 
+    fun unflatten(flat: IntArray, s: Int, t: Int): Array<IntArray> =
+        Array(s) { i -> IntArray(t) { j -> flat[i * t + j] } }
+
     /**
      * 実行時パリティ照合: C++ fullEval と Kotlin Evaluator.fullEvalParts を同一盤面で比較。
      * 戻り値は診断ログ用の1行（null=ネイティブ不可）。不一致の場合も内容を返す（呼び出し側が

@@ -482,6 +482,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setWorkers(n: Int) { val v = n.coerceIn(1, 16); _ui.update { it.copy(workers = v) }; logOp("I", "設定変更: 並列数 → $v") }
     // タイムアウト上限は5分(300s)。エンジンは budgetMs を全フェーズで厳守し、超過しない（停滞時はさらに早期終了）。
+    /** [ネイティブ加速 Stage4] ユーザートグル。OFF=C++チャンク不使用（番兵ゲートとは独立の意思表示）。 */
+    fun setNativeAccel(on: Boolean) {
+        com.magi.app.v6.NativeGate.userEnabled = on
+        _ui.update { it.copy(nativeAccel = on) }
+        logOp("I", "設定変更: ネイティブ加速 → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }

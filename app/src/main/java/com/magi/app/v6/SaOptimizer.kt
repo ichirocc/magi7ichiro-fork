@@ -75,26 +75,117 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         fun report() { onProgress(SaProgress(globalBest, totalIters, (System.nanoTime() / 1_000_000L) - start)) }
         report()
 
-        val jobs = (0 until params.workers).map { w ->
-            async(Dispatchers.Default) {
-                // [多様化] params.seed!=0 なら各仮説の固有シードを使用（runMultiWorker が仮説ごとに別シードを渡す）。
-                //   0 のときのみ従来の System.nanoTime()。ワーカー内は seed xor (w*定数) で更に分散。
-                val sbase = if (params.seed != 0L) params.seed else System.nanoTime()
-                val seed = sbase xor (w.toLong() * -0x61c8864680b583ebL)
-                runWorker(init, params, Random(seed), start) { localBest, localSol, iters ->
-                    synchronized(lock) {
-                        totalIters += iters
-                        if (localBest < globalBest) { globalBest = localBest; globalBestSol = localSol }
-                        report()
+        // [ネイティブ加速 Stage3] PhaseA（冷却ラダー）を C++ チャンクで回す。ハンドルは read-only の
+        //   問題データで全ワーカー共有（チャンクの可変状態は C++ 側ローカル＝スレッド安全）。
+        //   softPolish(PhaseB=LAHC) 有効時は従来 Kotlin パス（PhaseB は Kotlin 実装のみ）。
+        val nativeHandle = if (!params.softPolish && NativeGate.usable)
+            runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L) else 0L
+        try {
+            val jobs = (0 until params.workers).map { w ->
+                async(Dispatchers.Default) {
+                    // [多様化] params.seed!=0 なら各仮説の固有シードを使用（runMultiWorker が仮説ごとに別シードを渡す）。
+                    //   0 のときのみ従来の System.nanoTime()。ワーカー内は seed xor (w*定数) で更に分散。
+                    val sbase = if (params.seed != 0L) params.seed else System.nanoTime()
+                    val seed = sbase xor (w.toLong() * -0x61c8864680b583ebL)
+                    val flush: (Long, Array<IntArray>, Long) -> Unit = { localBest, localSol, iters ->
+                        synchronized(lock) {
+                            totalIters += iters
+                            if (localBest < globalBest) { globalBest = localBest; globalBestSol = localSol }
+                            report()
+                        }
                     }
+                    // ネイティブ経路（番兵発火時は false を返し、同ワーカーを Kotlin で走らせ直す=退化）。
+                    val nativeOk = if (nativeHandle != 0L && NativeGate.enabled)
+                        runWorkerNative(nativeHandle, init, params, Random(seed), start, flush) else false
+                    if (!nativeOk) runWorker(init, params, Random(seed), start, flush)
                 }
             }
+            jobs.awaitAll()
+        } finally {
+            if (nativeHandle != 0L) NativeBridge.nativeDestroyProblem(nativeHandle)
         }
-        jobs.awaitAll()
 
         val finalScore = evaluator.fullEval(globalBestSol)
         synchronized(lock) { globalBest = finalScore; report() }
         SaResult(globalBestSol, finalScore, totalIters, (System.nanoTime() / 1_000_000L) - start)
+    }
+
+    /**
+     * [ネイティブ加速 Stage3] PhaseA を「1チャンク=1冷却ラダー」で C++ に委譲するワーカー。
+     * Kotlin が保持するもの: 予算/キャンセル（チャンク間で確認）・進捗 flush・MagiConductor の境界処理
+     * （reset-to-best / 脱出戦略）・**2層目の番兵**（チャンク best 更新時に Kotlin Evaluator でフル照合）。
+     * 番兵発火時は NativeGate を閉じて false を返し、呼び出し側が Kotlin ワーカーへ退化させる。
+     * 戻り値 true=予算まで走了（best は flush 済み）。
+     */
+    private suspend fun runWorkerNative(
+        handle: Long,
+        init: Array<IntArray>,
+        params: SaParams,
+        rng: Random,
+        start: Long,
+        flush: (Long, Array<IntArray>, Long) -> Unit,
+    ): Boolean {
+        val s = problem.S; val t = problem.T
+        val cur = NativeEval.flatten(init)
+        val best = cur.copyOf()
+        var bestScore = evaluator.fullEval(init)   // 初期スコアは Kotlin（正）で確定
+        val conductor = if (params.conductor) MagiConductor(params.conductorStag) else null
+        var pendingAction: ConductorAction? = null
+        var bestAtAction = bestScore
+        fun timeUp() = params.shouldStop() || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
+
+        while (!timeUp()) {
+            coroutineContext.ensureActive()
+            val ret = runCatching {
+                NativeBridge.nativeSaChunk(handle, cur, best, bestScore, rng.nextLong(),
+                    params.t0, params.tf, params.alpha, params.chain)
+            }.getOrNull()
+            if (ret == null || ret.size < 6 || ret[0] != 0L) {
+                NativeGate.disable("SAチャンク整合性NG (status=${ret?.getOrNull(0)})")
+                return false
+            }
+            val newBest = ret[2]
+            if (newBest < bestScore) {
+                // [2層目の番兵] 採用前に Kotlin フル再評価で照合（Long の == 比較・許容誤差なし）。
+                val bestSol = NativeEval.unflatten(best, s, t)
+                val kotlinScore = evaluator.fullEval(bestSol)
+                if (kotlinScore != newBest) {
+                    NativeGate.disable("Kotlin照合NG (native=$newBest kotlin=$kotlinScore)")
+                    return false
+                }
+                bestScore = newBest
+                flush(bestScore, bestSol, ret[3])
+            } else {
+                flush(bestScore, NativeEval.unflatten(best, s, t), ret[3])
+            }
+            if (timeUp()) return true
+
+            // ---- ラダー境界: 従来 PhaseA の reheat / MagiConductor 脱出戦略と同じ分岐 ----
+            conductor?.updateStagnationBulk(ret[4] == 1L, ret[5].toInt())
+            if (conductor == null) {
+                best.copyInto(cur)   // 既定の reset-to-best 再加熱
+            } else {
+                pendingAction?.let { conductor.updateReward(it, if (bestScore < bestAtAction) 1.0 else 0.0) }
+                when (conductor.selectAction()) {
+                    ConductorAction.STRONG_PERTURB -> { best.copyInto(cur); strongPerturbFlat(cur, rng); pendingAction = ConductorAction.STRONG_PERTURB }
+                    ConductorAction.SCALE_TEMP -> { pendingAction = ConductorAction.SCALE_TEMP }   // 現在解から再加熱
+                    ConductorAction.REHEAT -> { best.copyInto(cur); pendingAction = ConductorAction.REHEAT }
+                    ConductorAction.NOOP -> { best.copyInto(cur); pendingAction = null }
+                }
+                bestAtAction = bestScore
+            }
+        }
+        return true
+    }
+
+    /** strongPerturb の平坦配列版（従来: best から数手の単発移動で離す。スコア不要＝次チャンクが再計算）。 */
+    private fun strongPerturbFlat(cur: IntArray, rng: Random) {
+        val s = problem.S; val t = problem.T
+        repeat(4 + rng.nextInt(8)) {
+            val i = rng.nextInt(s)
+            val b = problem.bucket[problem.sgrp[i]]
+            if (b.isNotEmpty()) cur[i * t + rng.nextInt(t)] = b[rng.nextInt(b.size)]
+        }
     }
 
     private suspend fun runWorker(
