@@ -5,6 +5,9 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(magi_native CXX)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 add_library(magi_native SHARED magi_native.cpp)
 
 # エンジンの内側ループ向け: 最適化最大・例外/RTTI 不使用（JNI 境界では戻り値で結果を返す設計）。
