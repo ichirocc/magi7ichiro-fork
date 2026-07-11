@@ -312,7 +312,14 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   arm64-v8a のみ・CMake 3.22.1）＋ JNI 疎通（`NativeBridge.nativeAbiVersion` の ABI 照合）＋
   handleOptimize の診断ログに読込可否を1行表示。CI 両ワークフローの sdkmanager に ndk/cmake を追加
   （v6-engine-check は assembleDebug で NDK ビルドも検証）。エンジン動作は完全不変。
-- 予定: Stage2=C++フル評価器（平坦化 Problem を JNI へ1回渡し・Kotlin Evaluator と実行時照合）→
+- (3.137.0, Stage2=C++フル評価器＋実行時パリティ): Evaluator.fullEvalParts を C++ へ忠実移植
+  （magi_native.cpp。c1 canDoガード・c3 run-deficit/窓#fire・pref実現可能のみ・range 90/45・apt/fair/weekly
+  L1偏差・covU/covO per-cell OR/AND、Math.round は floor(x+0.5) で同一化）。Problem は NativeEval.flatten が
+  平坦配列（meta/staff/canDo/wish/needs/ranges/cons/c3/bucket）で1回だけ JNI へ渡す（members は sgrp から
+  C++側導出）。**実行時パリティ**: handleOptimize 完了時に採用盤面で C++ vs Kotlin の hard/soft を照合し
+  診断ログ1行（一致=µs比較付き / 不一致=W警告＋ネイティブ経路不使用）。ABI_VERSION=2。read-only＝採用結果に
+  影響なし・スコアリング不変。JVMテストは available=false で全経路 Kotlin のまま。
+- 予定: ~~Stage2~~（完了・上記）→ Stage2旧記述: C++フル評価器（平坦化 Problem を JNI へ1回渡し・Kotlin Evaluator と実行時照合）→
   Stage3=SAチャンク（Δ評価＋受理を C++ で回し返却盤面を Kotlin 再評価）→ Stage4=V6NativeOptimizer 配線
   （設定でON/OFF・フォールバック維持）。
 
