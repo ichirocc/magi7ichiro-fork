@@ -392,9 +392,17 @@ object V6FinalPort {
                 message = "採用した勤務表の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
             ),
         ) else emptyList()
+        // [ネイティブ加速 Stage1] .so のロード可否を診断ログで可視化（実機確認用）。探索はまだ Kotlin のまま。
+        val nativeLog = MirrorLog(
+            level = "I", tag = "NativeBridge",
+            message = if (NativeBridge.available)
+                "ネイティブ加速: ライブラリ読込OK（Stage1=疎通のみ・探索は従来Kotlin）"
+            else
+                "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）",
+        )
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog) + sentinelLog + relinkLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        val logs = listOf(timingLog, nativeLog) + sentinelLog + relinkLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, post)
     }
 

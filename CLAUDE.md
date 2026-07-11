@@ -302,6 +302,20 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+## ネイティブ加速（C++/NDK, 進行中）
+> ユーザー指示「アンドロイドのネイティブ開発言語にして、実行速度改善する」（2026-07-11）。backlog#3 の
+> 「C++/NDK 移植は不要」結論を明示指示で解除。**目的=両方（待ち時間短縮＋同時間の品質向上）／範囲=ホットパス
+> （Δ評価＋SA内側ループ）のみ**で合意（AskUserQuestion）。方針: **Kotlin 実装を常に正として残し**、C++ は
+> 高速版。返却盤面は Kotlin 側フル再評価で照合し不一致なら破棄（退化不能の番兵）。.so ロード失敗時は
+> `NativeBridge.available=false` → 全経路 Kotlin フォールバック（JVMユニットテストも従来どおり）。
+- (3.136.0, Stage1=足場): NDK/CMake ビルド配線（`app/src/main/cpp/`・ndkVersion 26.1.10909125・
+  arm64-v8a のみ・CMake 3.22.1）＋ JNI 疎通（`NativeBridge.nativeAbiVersion` の ABI 照合）＋
+  handleOptimize の診断ログに読込可否を1行表示。CI 両ワークフローの sdkmanager に ndk/cmake を追加
+  （v6-engine-check は assembleDebug で NDK ビルドも検証）。エンジン動作は完全不変。
+- 予定: Stage2=C++フル評価器（平坦化 Problem を JNI へ1回渡し・Kotlin Evaluator と実行時照合）→
+  Stage3=SAチャンク（Δ評価＋受理を C++ で回し返却盤面を Kotlin 再評価）→ Stage4=V6NativeOptimizer 配線
+  （設定でON/OFF・フォールバック維持）。
+
 - (3.135.0, 制約の項目名称を下流→上流で統一): 指示「各制約などの項目名称を下流から上流に向かって用語統一する」。
   **下流=違反チップ(breakdownLabels)の語彙を正**とし、上流（編集画面の節タイトル・ダイアログ題・診断ログ）を一致させる
   （違反を見て設定を直しに来たとき同じ名前で見つかるように。単位・補足は括弧で添える）:
