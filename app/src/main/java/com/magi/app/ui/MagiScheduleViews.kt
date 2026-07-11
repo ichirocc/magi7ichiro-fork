@@ -849,9 +849,11 @@ internal fun isHeavySoftCellViolation(v: String?): Boolean =
 
 internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: androidx.compose.ui.unit.Dp, halo: Color? = null): Modifier =
     if (hard) {
-        // border は後掛けが上に描かれる: 先に 5dp のハロー、上に 3dp の違反色 → 外側3dp=違反色/内側2dp=ハロー。
-        (if (halo != null) this.border(5.dp, halo, RoundedCornerShape(radiusDp)) else this)
-            .border(3.dp, color, RoundedCornerShape(radiusDp))
+        // [実機バグ修正] Modifier.border はチェーンの「先」が最後=最前面に描かれる（内側の drawContent 後に
+        //   自分の枠を描くため）。旧実装はハローを先に置いたため 5dp のハローが違反色 3dp を覆い、枠が
+        //   白リングだけに見えていた。違反色を先（最前面）・ハローを後（背面）に: 外側3dp=違反色/内側2dp=ハロー。
+        this.border(3.dp, color, RoundedCornerShape(radiusDp))
+            .then(if (halo != null) Modifier.border(5.dp, halo, RoundedCornerShape(radiusDp)) else Modifier)
     } else {
         this.drawBehind {
             val stroke = 3.dp.toPx()
