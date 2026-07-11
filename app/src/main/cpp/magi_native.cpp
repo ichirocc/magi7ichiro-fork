@@ -1106,6 +1106,101 @@ Fix findTargetedFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& r
     return {};
 }
 
+// ============ [第2期 Stage7] hf67HardRepair 移植 ============
+// hf66DataHardening（範囲外/担当外→先頭担当可）→ 実現可能希望の適用 → 被覆不足の3周充填 →
+// range下限充填、の合成（V6NativeOptimizer.hf67HardRepair と同順・同式）。in-place 変異。
+
+// coverageShortageCost: セル(j,k) から1人引き抜くと per-cell 実需要(U)の不足が増えるなら 50。
+inline int coverageShortageCostN(const MagiProblem& p, const int* a, int j, int k) {
+    if (k < 0 || k >= p.K) return 0;
+    int cov = 0;
+    for (int i = 0; i < p.S; i++) if (a[(size_t)i * p.T + j] == k) cov++;
+    return p.covUCell(k, j, cov - 1) > p.covUCell(k, j, cov) ? 50 : 0;
+}
+
+// bestStaffForCoverage: (j,k) の被覆に入れる職員を「上限超過500＋現回数×3＋引き抜き不足コスト」最小で選ぶ。
+inline int bestStaffForCoverageN(const MagiProblem& p, const int* a, const std::vector<int>& counts, int j, int k) {
+    int bestI = -1, bestScore = INT32_MAX;
+    for (int i = 0; i < p.S; i++) {
+        if (!p.cd(i, k)) continue;
+        if (wishLockedN(p, i, j) && p.wish[(size_t)i * p.T + j] != k) continue;
+        int old = a[(size_t)i * p.T + j];
+        if (old == k) continue;
+        int hi = p.rangeHi[(size_t)i * p.K + k];
+        int over = (hi != INT32_MAX && counts[(size_t)i * p.K + k] >= hi) ? 500 : 0;
+        int score = over + counts[(size_t)i * p.K + k] * 3 + coverageShortageCostN(p, a, j, old);
+        if (score < bestScore) { bestScore = score; bestI = i; }
+    }
+    return bestI;
+}
+
+int hf67HardRepairN(const MagiProblem& p, int* a, std::mt19937_64& rng) {
+    const int S = p.S, T = p.T, K = p.K;
+    int changed = 0;
+    // hf66DataHardening: 範囲外・担当外セルを先頭の担当可シフト（無ければ0）へ。
+    for (int i = 0; i < S; i++) {
+        const auto& allowed = p.bucket[p.sgrp[i]];
+        int fallback = allowed.empty() ? 0 : allowed[0];
+        for (int j = 0; j < T; j++) {
+            int k = a[(size_t)i * T + j];
+            if (k < 0 || k >= K || !p.cd(i, k)) a[(size_t)i * T + j] = fallback;
+        }
+    }
+    // 実現可能な希望を適用（不可能希望は強制しない=Sanityの領分）。
+    for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) {
+        int w = p.wish[(size_t)i * T + j];
+        if (w >= 0 && w < K && p.cd(i, w) && a[(size_t)i * T + j] != w) { a[(size_t)i * T + j] = w; changed++; }
+    }
+    // 被覆不足の充填 ×3周（counts は周の頭で再計算・周内は Kotlin と同じく据え置き）。
+    for (int rep = 0; rep < 3; rep++) {
+        std::vector<int> cov((size_t)T * K, 0), counts((size_t)S * K, 0);
+        for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) {
+            int k = a[(size_t)i * T + j];
+            if (k >= 0 && k < K) { cov[(size_t)j * K + k]++; counts[(size_t)i * K + k]++; }
+        }
+        for (int j = 0; j < T; j++) for (int k = 0; k < K; k++) {
+            int miss = p.covUCell(k, j, cov[(size_t)j * K + k]);
+            while (miss > 0) {
+                int i = bestStaffForCoverageN(p, a, counts, j, k);
+                if (i < 0) break;
+                int old = a[(size_t)i * T + j];
+                if (old == k) break;
+                a[(size_t)i * T + j] = k;
+                cov[(size_t)j * K + k]++;
+                if (old >= 0 && old < K) cov[(size_t)j * K + old]--;
+                changed++; miss--;
+            }
+        }
+    }
+    // range 下限の充填（希望ロックは触らない・引き抜き不足コスト＋乱数タイブレーク最小の日）。
+    std::vector<int> counts((size_t)S * K, 0);
+    for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) {
+        int k = a[(size_t)i * T + j];
+        if (k >= 0 && k < K) counts[(size_t)i * K + k]++;
+    }
+    for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) {
+        int lo = p.rangeLo[(size_t)i * K + k];
+        if (lo == INT32_MIN || !p.cd(i, k)) continue;
+        int need = lo - counts[(size_t)i * K + k];
+        int guard = 0;
+        while (need > 0 && guard++ < T) {
+            int bestJ = -1, bestScore = INT32_MAX;
+            for (int jj = 0; jj < T; jj++) {
+                if (wishLockedN(p, i, jj) || a[(size_t)i * T + jj] == k) continue;
+                int score = coverageShortageCostN(p, a, jj, a[(size_t)i * T + jj]) + rnInt(rng, 3);
+                if (score < bestScore) { bestScore = score; bestJ = jj; }
+            }
+            if (bestJ < 0) break;
+            int old = a[(size_t)i * T + bestJ];
+            a[(size_t)i * T + bestJ] = k;
+            if (old >= 0 && old < K) counts[(size_t)i * K + old]--;
+            counts[(size_t)i * K + k]++;
+            changed++; need--;
+        }
+    }
+    return changed;
+}
+
 // ---- JNI 平坦データの読み取りヘルパ ----
 std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
     jsize n = env->GetArrayLength(arr);

@@ -322,7 +322,11 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 >   ホスト検証: 修復3種×200試行=wishLocked不変・担当可のみ・変更範囲閉じ込め、finder 500/500発見・全手妥当。
 > - ~~Stage6~~（完了・上記）: soft-aware repairs 移植 = destroyRepairDayAt/StaffAt/Violations＋staffCountPenaltyAt＋
 >   c41DayMarg（V6NativeOptimizer 1006-1200行）＋ findTargetedFix（8種, V6HotfixPasses）。
-> - **Stage7**: hf67HardRepair 移植（copy系オペの7反復毎・hard>0時のみ呼ばれる修復）。
+> - **Stage7 完了(3.142.0)**: hf67HardRepairN 移植（hf66=範囲外/担当外→先頭担当可 → 実現可能希望の適用 →
+>   被覆不足3周充填(bestStaffForCoverage=上限超過500+回数×3+引き抜き不足コスト50・counts周内据え置き=Kotlin同) →
+>   range下限充填(乱数タイブレーク)）。in-place 変異・changed数を返す。ホスト検証: 範囲外混入盤面100試行で
+>   全セル担当可＋実現可能希望の完全充足、hard 63→48 の修復実効を確認。
+> - ~~Stage7~~（完了・上記）: hf67HardRepair 移植（copy系オペの7反復毎・hard>0時のみ呼ばれる修復）。
 > - **Stage8**: ALNSチャンク統合（チャンク=200反復: curReport更新周期に一致。7オペ・適応重み(roulette/
 >   Thompson)・受理3モード(SA/GreatDeluge/Lam)・softFocus・wishLocked・GLSキック(50反復毎)を C++ 内で。
 >   Kotlin保持: restart境界(perturb+hf67入口)・進捗/liveBest・キャンセル・番兵）。
