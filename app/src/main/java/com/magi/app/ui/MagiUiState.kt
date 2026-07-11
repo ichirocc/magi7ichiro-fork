@@ -51,13 +51,13 @@ data class UiState(
     // [見直し候補] セル修正時に「基本ルールの見直し候補にする」で積むメモ（セッション内のみ・state 非保存）。
     val reviewMemos: List<String> = emptyList(),
     val violationSoftColorHex: String = "",   // 要調整(ソフト違反)の表示色（空＝既定の橙）。shiftColors["__vioSoft__"] に保存。
+    // [違反色/族別] 族(c1/c3n/…)ごとの個別色。shiftColors["__vioFam_<fam>__"] 由来。未設定族は重大度色へフォールバック。
+    val violationFamilyColorHex: Map<String, String> = emptyMap(),
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
-    val resultSchedule: List<List<Int>> = emptyList(),   // [B1] 確定結果(ws6)。読取モードで表示する。
-    val hasResultSnapshot: Boolean = false,               // [B1] 結果スナップショットが存在するか
-    // [backlog#1] 結果(ws6)専用の違反マップ。読取モードのグリッド/集計は schedule=resultSchedule に差し替わるが、
-    //   従来は violationCells 等が「編集中盤面の検査結果」のままでズレ得た。makeUi が schedule==resultSchedule の
-    //   検査時に report から充填する（null=未計算。読取側は現行マップへフォールバック=従来挙動）。表示のみ・スコア不変。
+    val resultSchedule: List<List<Int>> = emptyList(),   // [B1→D7] 確定結果(ws6)スナップショット。読取モード撤去に伴い UI 参照ゼロ（モデルのみ温存）。
+    val hasResultSnapshot: Boolean = false,               // [B1→D7] 結果スナップショットの有無（UI 参照ゼロ・温存）。
+    // [backlog#1→D7] 結果(ws6)専用の違反マップ。読取モード撤去に伴い UI 参照ゼロ（makeUi の充填のみ継続・温存）。
     val resultViolationCells: Map<String, String>? = null,
     val resultNeedViolations: Map<String, String>? = null,
     val resultCountViolations: Map<String, String>? = null,

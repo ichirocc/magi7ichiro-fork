@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -10,8 +11,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -50,6 +54,8 @@ fun ConstraintsCard(
     keys: Set<String>? = null,
 ) {
     var addFamily by remember { mutableStateOf<String?>(null) }
+    // [制約編集] 行タップで既存行を変更（追加ダイアログのプリフィル版）。実機指摘「登録した制約の変更ができない」。
+    var editTarget by remember { mutableStateOf<Pair<String, Int>?>(null) }
     // [発見性] keys 指定時はその family だけ描画。群の C41/C42 を専用節に分けて見つけやすくするため。
     val families = vm.constraintFamilies().let { all -> if (keys == null) all else all.filter { it.key in keys } }
 
@@ -57,7 +63,7 @@ fun ConstraintsCard(
         Column(Modifier.padding(16.dp)) {
             if (title.isNotBlank()) Text(title, style = MaterialTheme.typography.titleMedium)
             Text(
-                "追加・削除すると、すぐに問題がないか調べ直し、保存にも反映されます。",
+                "行をタップすると変更できます。追加・変更・削除はすぐに調べ直し、保存にも反映されます。",
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.primary,
             )
             families.forEachIndexed { fi, fam ->
@@ -68,10 +74,9 @@ fun ConstraintsCard(
                     Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     fam.rows.forEachIndexed { idx, row ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(row, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                            DeleteRowButton(onClick = { vm.removeConstraint(fam.key, idx) })
-                        }
+                        ConstraintRow(row,
+                            onEdit = { editTarget = fam.key to idx },
+                            onDelete = { vm.removeConstraint(fam.key, idx) })
                     }
                 }
                 AddRowButton("追加", onClick = { addFamily = fam.key })
@@ -81,7 +86,23 @@ fun ConstraintsCard(
     }
 
     val fam = addFamily
-    if (fam != null) AddConstraintDialog(fam, vm) { addFamily = null }
+    if (fam != null) ConstraintDialog(fam, vm, onClose = { addFamily = null })
+    editTarget?.let { (k, i) -> ConstraintDialog(k, vm, editIndex = i, onClose = { editTarget = null }) }
+}
+
+/** 制約1行: 本文タップ=変更、右端=削除。タップ可能に見えるよう最小高44dpを確保。 */
+@Composable
+private fun ConstraintRow(row: String, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(row, fontSize = 12.sp, modifier = Modifier
+            .weight(1f)
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onEdit)
+            .heightIn(min = 44.dp)
+            .wrapContentHeight(Alignment.CenterVertically)
+            .padding(horizontal = 4.dp))
+        DeleteRowButton(onClick = onDelete)
+    }
 }
 
 /** [校正] スキルグループの C41/C42（cons41s/cons42s）をスキルグループ定義の直下に co-locate。
@@ -89,10 +110,11 @@ fun ConstraintsCard(
 @Composable
 fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
     var addFamily by remember { mutableStateOf<String?>(null) }
+    var editTarget by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val families = vm.skillConstraintFamilies()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("上の「スキルグループ」に対する専用ルールです。スキル別の回数（上下限）と、スキルの組み合わせ禁止を設定します。",
+            Text("上の「スキルグループ」に対する専用ルールです。スキル別の回数（上下限）と、スキルの組み合わせ禁止を設定します。行をタップすると変更できます。",
                 fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
             if (vm.skillGroupKigouList().isEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -107,10 +129,9 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
                         Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         fam.rows.forEachIndexed { idx, row ->
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text(row, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                DeleteRowButton(onClick = { vm.removeConstraint(fam.key, idx) })
-                            }
+                            ConstraintRow(row,
+                                onEdit = { editTarget = fam.key to idx },
+                                onDelete = { vm.removeConstraint(fam.key, idx) })
                         }
                     }
                     AddRowButton("追加", onClick = { addFamily = fam.key })
@@ -120,22 +141,32 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
         }
     }
     val fam = addFamily
-    if (fam != null) AddConstraintDialog(fam, vm) { addFamily = null }
+    if (fam != null) ConstraintDialog(fam, vm, onClose = { addFamily = null })
+    editTarget?.let { (k, i) -> ConstraintDialog(k, vm, editIndex = i, onClose = { editTarget = null }) }
 }
 
+/** 追加・変更を兼ねる制約ダイアログ。editIndex 指定時は既存行の値をプリフィルし、確定で同じ位置を置換。 */
 @Composable
-private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -> Unit) {
+private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? = null, onClose: () -> Unit) {
     val shifts = vm.shiftKigouList()
     val groups = vm.groupKigouList()
     val skills = vm.skillGroupKigouList()
     val shiftsOpt = listOf("") + shifts
+    // 値の並びは vm.constraintRowValues と同一（追加ダイアログの入力順）。
+    val init = remember(family, editIndex) { editIndex?.let { vm.constraintRowValues(family, it) } }
+    val mode = if (editIndex != null) "を変更" else "を追加"
+    val okLabel = if (editIndex != null) "変更" else "追加"
+    fun commit(values: List<String>, add: () -> Unit) {
+        if (editIndex != null) vm.updateConstraint(family, editIndex, values) else add()
+        onClose()
+    }
 
     when (family) {
         "cons1" -> {
-            var d1 by remember { mutableStateOf("") }
-            var sk by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            var d2 by remember { mutableStateOf("") }
-            Shell("期間の決まりを追加", onClose, { vm.addCons1(d1, sk, d2); onClose() },
+            var d1 by remember { mutableStateOf(init?.getOrNull(0) ?: "") }
+            var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
+            var d2 by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
+            Shell("期間の決まり$mode", okLabel, onClose, { commit(listOf(d1, sk, d2)) { vm.addCons1(d1, sk, d2) } },
                 d1.isNotBlank() && sk.isNotBlank() && d2.isNotBlank()) {
                 NumField("何日間", d1) { d1 = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -143,20 +174,20 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
             }
         }
         "cons2" -> {
-            var sk by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            var c by remember { mutableStateOf("") }
-            Shell("個人の合計を追加", onClose, { vm.addCons2(sk, c); onClose() },
+            var sk by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
+            var c by remember { mutableStateOf(init?.getOrNull(1) ?: "") }
+            Shell("個人の合計$mode", okLabel, onClose, { commit(listOf(sk, c)) { vm.addCons2(sk, c) } },
                 sk.isNotBlank() && c.isNotBlank()) {
                 Picker("シフト", shifts, sk) { sk = it }
                 NumField("合計(以上)", c) { c = it }
             }
         }
         "cons41" -> {
-            var gk by remember { mutableStateOf(groups.firstOrNull() ?: "") }
-            var sk by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            var l by remember { mutableStateOf("") }
-            var u by remember { mutableStateOf("") }
-            Shell("グループ別の1日の人数を追加", onClose, { vm.addCons41(gk, sk, l, u); onClose() },
+            var gk by remember { mutableStateOf(init?.getOrNull(0) ?: groups.firstOrNull() ?: "") }
+            var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
+            var l by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
+            var u by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
+            Shell("グループ別の1日の人数$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41(gk, sk, l, u) } },
                 gk.isNotBlank() && sk.isNotBlank()) {
                 Picker("グループ", groups, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -167,11 +198,11 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
             }
         }
         "cons42" -> {
-            var g1 by remember { mutableStateOf(groups.firstOrNull() ?: "") }
-            var s1 by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            var g2 by remember { mutableStateOf(groups.firstOrNull() ?: "") }
-            var s2 by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            Shell("グループの組み合わせ禁止を追加", onClose, { vm.addCons42(g1, g2, s1, s2); onClose() },
+            var g1 by remember { mutableStateOf(init?.getOrNull(0) ?: groups.firstOrNull() ?: "") }
+            var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
+            var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: groups.firstOrNull() ?: "") }
+            var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
+            Shell("グループの組み合わせ禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42(g1, g2, s1, s2) } },
                 g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
                 Picker("グループ1", groups, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
@@ -180,11 +211,11 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
             }
         }
         "cons41s" -> {
-            var gk by remember { mutableStateOf(skills.firstOrNull() ?: "") }
-            var sk by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            var l by remember { mutableStateOf("") }
-            var u by remember { mutableStateOf("") }
-            Shell("スキル別の1日の人数を追加", onClose, { vm.addCons41s(gk, sk, l, u); onClose() },
+            var gk by remember { mutableStateOf(init?.getOrNull(0) ?: skills.firstOrNull() ?: "") }
+            var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
+            var l by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
+            var u by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
+            Shell("スキル別の1日の人数$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41s(gk, sk, l, u) } },
                 gk.isNotBlank() && sk.isNotBlank()) {
                 Picker("スキル", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -195,11 +226,11 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
             }
         }
         "cons42s" -> {
-            var g1 by remember { mutableStateOf(skills.firstOrNull() ?: "") }
-            var s1 by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            var g2 by remember { mutableStateOf(skills.firstOrNull() ?: "") }
-            var s2 by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            Shell("スキルの組み合わせ禁止を追加", onClose, { vm.addCons42s(g1, g2, s1, s2); onClose() },
+            var g1 by remember { mutableStateOf(init?.getOrNull(0) ?: skills.firstOrNull() ?: "") }
+            var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
+            var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: skills.firstOrNull() ?: "") }
+            var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
+            Shell("スキルの組み合わせ禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42s(g1, g2, s1, s2) } },
                 g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
                 Picker("スキル1", skills, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
@@ -208,18 +239,18 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
             }
         }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
-            var a by remember { mutableStateOf(shifts.firstOrNull() ?: "") }
-            var b by remember { mutableStateOf("") }
-            var c by remember { mutableStateOf("") }
-            var d by remember { mutableStateOf("") }
-            var e by remember { mutableStateOf("") }
-            val title = when (family) {
-                "cons3n" -> "禁止の並びを追加"
-                "cons3m" -> "並び希望を追加"
-                "cons3mn" -> "並び回避を追加"
-                else -> "必須の並びを追加"
+            var a by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
+            var b by remember { mutableStateOf(init?.getOrNull(1) ?: "") }
+            var c by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
+            var d by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
+            var e by remember { mutableStateOf(init?.getOrNull(4) ?: "") }
+            val kind = when (family) {
+                "cons3n" -> "禁止の並び"
+                "cons3m" -> "並び希望"
+                "cons3mn" -> "並び回避"
+                else -> "必須の並び"
             }
-            Shell(title, onClose, { vm.addCons3(family, listOf(a, b, c, d, e)); onClose() }, a.isNotBlank()) {
+            Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { vm.addCons3(family, listOf(a, b, c, d, e)) } }, a.isNotBlank()) {
                 Text("並び (上から順・最大5連日 / 空=ここで終了)", fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Picker("1番目", shifts, a) { a = it }
@@ -236,6 +267,7 @@ private fun AddConstraintDialog(family: String, vm: MagiViewModel, onClose: () -
 @Composable
 private fun Shell(
     title: String,
+    okLabel: String,
     onClose: () -> Unit,
     onAdd: () -> Unit,
     addEnabled: Boolean,
@@ -243,7 +275,7 @@ private fun Shell(
 ) {
     AlertDialog(
         onDismissRequest = onClose,
-        confirmButton = { DialogConfirmButton("追加", enabled = addEnabled, onClick = onAdd) },
+        confirmButton = { DialogConfirmButton(okLabel, enabled = addEnabled, onClick = onAdd) },
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { DialogHeader(title, onClose) },
         text = {

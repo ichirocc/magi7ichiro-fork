@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -167,7 +168,7 @@ internal fun LiveScheduleCard(ui: UiState) {
             TextButton(onClick = { show = !show }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(if (show) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                Text(if (show) "途中経過を隠す" else "途中経過を見る（組んでいる様子）")
+                Text(if (show) "途中経過を隠す" else "途中経過を見る")
             }
             if (show) {
                 Text("状態遷移  赤枠＝今回変化 (${changed.size})", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
@@ -240,12 +241,14 @@ internal fun ShiftPickerSheet(
                         val hard = isHardCellViolation(vioCls)
                         Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
                             style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                            color = if (hard) vioHardC else vioSoftC)
+                            color = resolvedVioColor(ui, vioCls, vioHardC, vioSoftC))
                     }
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
                         else "希望  ${sym(wish)}" + (if (wish == current) "（反映済）" else "（未反映）")
+                    // [UD監査] 桃(4.07:1)は通常文字でAA不足→太字(14sp bold=大テキスト扱い・3:1基準)で担保。
                     Text(wt, style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (wish != null && wish != current) FontWeight.Bold else FontWeight.Normal,
                         color = if (wish != null && wish != current) MagiAccent.pink else cs.onSurfaceVariant)
                     // [見直し候補] 割当変更（今回だけ）と土台ルールの直し（年間マスター）を混同させない第3の出口。
                     //   違反セルのみ表示。メモは年間マスターの先頭（ReviewMemoCard）に積まれる。
@@ -254,7 +257,7 @@ internal fun ShiftPickerSheet(
                         TextButton(onClick = {
                             val famsJp = vioFams.joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
                             vm.addReviewMemo("$name ${j + 1}日=${sym(current)}：$famsJp")
-                        }) { Text("基本ルールの見直し候補にする（年間マスターへメモ）") }
+                        }) { Text("基本ルールの見直し候補にする") }
                     }
                 }
             }
@@ -319,8 +322,9 @@ internal fun ShiftPickerSheet(
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(symbol + (if (ng) " 外" else ""), color = if (ng) cs.error else fg, fontWeight = FontWeight.Bold)
                                 if (note.isNotEmpty()) {
+                                    // [UD監査] 任意のシフト色上の注記は WCAG 保証（橙/緑の生アクセントは淡色上で不足）。
                                     Text(note, style = MaterialTheme.typography.labelSmall,
-                                        color = if (noteWarn) MagiAccent.orange else if (sel) cs.onPrimary else MagiAccent.green)
+                                        color = if (sel) cs.onPrimary else ensureReadable(bg, if (noteWarn) MagiAccent.orange else MagiAccent.green))
                                 }
                             }
                         }
@@ -348,7 +352,6 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
     var expanded by remember { mutableStateOf(false) }
     val si = staffIdx.coerceIn(0, (ui.staff - 1).coerceAtLeast(0))
     val row = ui.schedule.getOrNull(si) ?: return
-    val labels = ui.v6?.dayRisks?.map { it.label } ?: (0 until ui.days).map { "${it + 1}日" }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -372,6 +375,10 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                 // [見直しF2] ソフト違反の破線はソフト色トークン(__vioSoft__)で描く（メイングリッド/凡例と整合。
                 //   旧: 必須色のまま＝重大度の色分けがカレンダーだけ効いていなかった）。
                 val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
+                // [レイアウト/実機指摘] 「12/1(月)」の月接頭辞×31個は冗長ノイズ→「1(月)」へ短縮し、
+                //   土=青/日=赤の曜日色（メイングリッドと同語彙）。月はカード上部の期間表示が担う。
+                val sdow = startDowMonFirst(ui.startDate)
+                val weekJa = listOf("月", "火", "水", "木", "金", "土", "日")
                 row.indices.chunked(7).forEach { week ->
                     Row(Modifier.fillMaxWidth()) {
                         week.forEach { j ->
@@ -379,9 +386,18 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
                             val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
                             // [E7] 種別フィルタ: バケツOFF のセル違反は出さない。[Set化] 表示中の最重族で判定。
                             val vioVal = visibleCellVio(ui, "$si,$j", vioEnabled)
-                            val vio = vioVal != null
-                            val hard = isHardCellViolation(vioVal)
-                            CalendarCell(labels.getOrNull(j) ?: "${j + 1}日", symbol, vio, hard, if (hard) vioColor else vioSoftC, Modifier.weight(1f)) {
+                            // [レイアウト/実機指摘] 全違反を桃塗り＋枠で描くとカレンダーが警告で飽和（グリッドが
+                            //   3.99.0 で解消した問題の残存）→ グリッドと同じ3段階へ: 必須=桃地+実線 /
+                            //   重い調整=破線のみ / 軽い調整=右上角マークのみ。
+                            val vk = when {
+                                vioVal == null -> 0
+                                isHardCellViolation(vioVal) -> 1
+                                isHeavySoftCellViolation(vioVal) -> 2
+                                else -> 3
+                            }
+                            val wd = (sdow + j) % 7
+                            val labelC = when (wd) { 5 -> MagiAccent.blue; 6 -> MagiAccent.red; else -> null }
+                            CalendarCell("${j + 1}(${weekJa[wd]})", symbol, vk, resolvedVioColor(ui, vioVal, vioColor, vioSoftC), labelC, Modifier.weight(1f)) {
                                 onCellClick(si, j)
                             }
                         }
@@ -396,23 +412,36 @@ internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vio
 
 
 @Composable
-internal fun CalendarCell(label: String, symbol: String, violation: Boolean, hard: Boolean, vioColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun CalendarCell(label: String, symbol: String, vk: Int, vioColor: Color, labelColor: Color? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val bg = if (violation) cs.errorContainer else cs.surfaceVariant
-    val labelFg = if (violation) cs.onErrorContainer.copy(alpha = 0.8f) else cs.onSurfaceVariant
-    val symbolFg = if (violation) cs.onErrorContainer else cs.onSurface
+    // [3段階/グリッドと同語彙] vk: 0=なし / 1=必須(桃地+実線) / 2=重い調整(破線のみ) / 3=軽い調整(角マークのみ)。
+    val bg = if (vk == 1) cs.errorContainer else cs.surfaceVariant
+    val labelFg = when { vk == 1 -> cs.onErrorContainer.copy(alpha = 0.8f); labelColor != null -> labelColor; else -> cs.onSurfaceVariant }
+    val symbolFg = if (vk == 1) cs.onErrorContainer else cs.onSurface
     // [UD/WCAG 4.1.2] 色・形に依存しない読み上げ名。
-    val a11y = "$label シフト ${symbol.ifBlank { "なし" }}" + (if (violation) (if (hard) "・必須違反" else "・要調整") else "") + "、タップで変更"
+    val a11y = "$label シフト ${symbol.ifBlank { "なし" }}" + (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") + "、タップで変更"
     Box(
         modifier
             .height(58.dp)
             .padding(horizontal = 2.dp)
             .background(bg, MaterialTheme.shapes.medium)
-            .then(if (violation) Modifier.violationBorder(hard, vioColor, 14.dp) else Modifier)
+            .then(when (vk) {
+                1 -> Modifier.violationBorder(true, vioColor, 14.dp, halo = cs.surface)
+                2 -> Modifier.violationBorder(false, vioColor, 14.dp, halo = cs.surface)
+                else -> Modifier
+            })
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = a11y },
         contentAlignment = Alignment.Center,
     ) {
+        // [軽い調整] 枠でなく右上の小さな角マーク（グリッドの vk=3 と同形・飽和防止）。
+        if (vk == 3) {
+            Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(12.dp).drawBehind {
+                val p = Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); close() }
+                drawPath(p, cs.surface, style = Stroke(width = 2.dp.toPx()))
+                drawPath(p, vioColor)
+            })
+        }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, fontSize = 12.sp, color = labelFg, maxLines = 1)
             Text(symbol, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = symbolFg, maxLines = 1)
@@ -421,37 +450,8 @@ internal fun CalendarCell(label: String, symbol: String, violation: Boolean, har
 }
 
 
-@Composable
-internal fun ScheduleModeCard(
-    editing: Boolean,
-    canRead: Boolean,
-    onSelect: (Boolean) -> Unit,
-    onCommit: () -> Unit,
-    onCopy: () -> Unit,
-) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // [校正] ラベルを平易化し「見るだけ/直す」を明示。選択中の区分で状態は分かるため、
-            //   重複する「編集中・未確定」バッジは廃止し、説明を1行に集約（冗長解消）。
-            MagiSegmentedControl(
-                options = listOf("結果（見るだけ）", "下書き（直す）"),
-                selected = if (editing) 1 else 0,
-                onSelect = { onSelect(it == 1) },
-            )
-            Text(
-                if (editing) "いまは下書きを直しています。よければ［結果に反映］。最適化もこの下書きが起点です。"
-                else "確定した結果を見ています（このままでは変えられません）。直すには「下書き（直す）」へ。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (editing && canRead) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = onCommit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("結果に反映") }
-                    OutlinedButton(onClick = onCopy, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("結果を複製") }
-                }
-            }
-        }
-    }
-}
+// [D7撤去] ScheduleModeCard（結果=読取/下書き=編集の切替）はユーザー判断で撤去。勤務表は常に直接編集の1本。
+//   結果スナップショット(resultSchedule/result専用違反マップ)のモデルは温存（最適化完了時に充填・将来のCSV等）。
 
 
 // ===== [E7] 違反 種別フィルタ（勤務表タブ全面共有・コース6分類） =====
@@ -488,6 +488,13 @@ internal fun cellVioClasses(ui: UiState, key: String): List<String> =
  *  表示中の族が同セルに残っていても枠ごと消えていた（フィルタと表示の不整合）。 */
 internal fun visibleCellVio(ui: UiState, key: String, enabled: Set<String>): String? =
     cellVioClasses(ui, key).firstOrNull { vioVisible(it, enabled) }
+
+/** [違反色/族別] 違反クラスの表示色を解決: 族別色（__vioFam_*）→ 重大度色（必須/要調整）の順でフォールバック。 */
+internal fun resolvedVioColor(ui: UiState, cls: String?, hardC: Color, softC: Color): Color {
+    if (cls == null) return hardC
+    ui.violationFamilyColorHex[familyOfVioClass(cls)]?.takeIf { it.isNotBlank() }?.let { return hexToColor(it) }
+    return if (isHardCellViolation(cls)) hardC else softC
+}
 
 /** [E7] 各バケットの「違反ロケーション数」(=セル/エントリ件数、見出し『要確認 N件』と同単位)。
  *  breakdown の量/#fire ではなく箇所数で集計＝チップ間・見出しと比較可能なトリアージ指標にする。 */
@@ -561,8 +568,7 @@ internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<Str
                 }
             }
             // [P7/実務者向け短文化] コーチング文（多い種類から潰す…）は削除。チップの件数が優先順を語る。
-            Text("タップで種類の表示/非表示",
-                style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+            // [冗長性見直し] 操作説明はチップのトグル自体が示すため削除。
         }
     }
 }
@@ -609,6 +615,7 @@ internal fun ScheduleGrid(
     onFocusShown: () -> Unit = {},
     focusRange: Triple<Int, Int, Int>? = null,   // [窓ハイライト③] (職員i, 開始日, 終了日)
     focusMode: Boolean = false,                  // [集中モード] 違反・未反映希望以外のセルを淡色化
+    canDo: (Int, Int) -> Boolean = { _, _ -> true },   // [矛盾なく選択] 一括割当の担当可否（(職員i, シフトk)）
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -648,8 +655,8 @@ internal fun ScheduleGrid(
             Spacer(Modifier.height(8.dp))
             // [一括編集] まとめて変更は多数セルを上書きする上級操作のため、プロ表示時のみ。範囲×対象×シフトをダイアログで一括指定。
             if (proMode) {
-                OutlinedButton(onClick = { showBulk = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                    Text("まとめて割当（一括編集）")
+                OutlinedButton(onClick = { showBulk = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("まとめて割当")
                 }
             }
             // [Web試作①] シフト別の人員不足サマリー: covU のある日数をシフト別に集計（多い順）＝
@@ -742,11 +749,14 @@ internal fun ScheduleGrid(
             }
             Spacer(Modifier.height(12.dp))
             MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
-            if (showBulk) AssignBulkSheet(ui, onBulkSet) { showBulk = false }
+            if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
     }
 }
+
+// [D7撤去] CellInfoDialog（読取モードの見るだけ理由表示, 3.119.0）は読取モード自体の撤去に伴い不要化・撤去。
+//   理由表示はセル編集シート（常時開く）が一元的に担う。
 
 /** 期間開始日の曜日インデックス（0=月..6=日）。解析不能なら 0。 */
 
@@ -757,9 +767,11 @@ internal fun startDowMonFirst(startDate: String): Int = try {
 /** 違反セルの凡例（実線=必須 / 破線=要調整）。非色手がかりの意味を必ず示す。 */
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.orange) {
     val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    // [実機指摘] 固定 Row では幅不足時に3項目目が縦1文字に潰れた→ FlowRow で項目単位に折り返す。
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
             // [B4] 色名は固定しない（ユーザーが違反色を変更でき、凡例とグリッドが食い違うため）。
@@ -800,8 +812,14 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
             items.forEach { i ->
                 val bg = hexToColor(colorHex.getOrNull(i) ?: "")
                 val fg = hexToColor(textHex.getOrNull(i) ?: "")
-                Box(Modifier.background(bg, RoundedCornerShape(6.dp)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                    Text(symbols[i], style = MaterialTheme.typography.labelLarge, color = ensureReadable(bg, fg), fontWeight = FontWeight.Bold)
+                // [実機指摘「有やAｱの形がおかしい」] 記号の文字種（ASCII/半角カナ/漢字）で内在サイズが
+                //   異なりチップの高さ・形がバラついていた→ 固定サイズ（高さ32dp・最小幅48dp）＋中央寄せで均一に。
+                Box(
+                    Modifier.height(32.dp).widthIn(min = 48.dp).background(bg, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(symbols[i], style = MaterialTheme.typography.labelLarge, color = ensureReadable(bg, fg), fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }
@@ -824,15 +842,30 @@ internal fun isHeavySoftCellViolation(v: String?): Boolean =
     v != null && familyOfVioClass(v) in heavySoftFamilies
 
 /** 違反セルの非色手がかり: HARD=実線枠、SOFT=破線枠（色覚多様性／モノクロ印刷でも区別可能）。
- *  [校正] 色付きセル上でも埋もれないよう枠を太く（3dp）。 */
+ *  [校正] 色付きセル上でも埋もれないよう枠を太く（3dp）。
+ *  [実機指摘/枠のハロー] halo!=null で枠の内側に対比色（surface）の縁取りを敷く。ダークテーマの違反色
+ *  （淡い赤）は桃系セル背景と同系色で枠が埋没していた（アリフの c3n 実線枠が判読不能）。ハローが
+ *  枠とセル地を分離し、任意のシフト色上で枠が浮く（角マーク 3.105.0 と同じ手法）。 */
 
-internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: androidx.compose.ui.unit.Dp): Modifier =
+internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: androidx.compose.ui.unit.Dp, halo: Color? = null): Modifier =
     if (hard) {
-        this.border(3.dp, color, RoundedCornerShape(radiusDp))
+        // border は後掛けが上に描かれる: 先に 5dp のハロー、上に 3dp の違反色 → 外側3dp=違反色/内側2dp=ハロー。
+        (if (halo != null) this.border(5.dp, halo, RoundedCornerShape(radiusDp)) else this)
+            .border(3.dp, color, RoundedCornerShape(radiusDp))
     } else {
         this.drawBehind {
             val stroke = 3.dp.toPx()
             val r = radiusDp.toPx()
+            // 破線の下に実線ハロー（太め）を敷く: 破線の隙間・両脇がハロー色になり、同系色セル上でも読める。
+            if (halo != null) {
+                drawRoundRect(
+                    color = halo,
+                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(r, r),
+                    style = Stroke(width = stroke + 2.dp.toPx()),
+                )
+            }
             drawRoundRect(
                 color = color,
                 topLeft = Offset(stroke / 2f, stroke / 2f),
@@ -930,16 +963,16 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                 OutlinedButton(onClick = {
                     if (scope == 1 && staffSel < 0) confirmClearAll = true
                     else { vm.clearWishesForDays(if (staffSel < 0) null else staffSel, targetDays); onDismiss() }
-                }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                }, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Text("この範囲を希望なしに", color = cs.error)
                 }
                 Button(onClick = {
                     if (picked in ui.shiftSymbols.indices) {
                         vm.setWishesForDays(if (staffSel < 0) null else staffSel, targetDays, picked); onDismiss()
                     }
-                }, enabled = picked in ui.shiftSymbols.indices && targetDays.isNotEmpty(),
+                }, enabled = picked in ui.shiftSymbols.indices && targetDays.isNotEmpty() && !ui.running,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text("適用（${targetDays.size}件）")
+                    Text(if (ui.running) "計算中は変更できません" else "適用（${targetDays.size}件）")
                 }
             }
             Text("※ 期間全体×全職員の「希望なし」は全削除（確認あり）。元に戻すで取消可。",
@@ -978,7 +1011,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
 /** [割当の一括操作] 対象範囲(曜日/期間全体) × 対象(全員/1名) × シフト → まとめて割当。公・休で休みも設定可。元に戻すで取消可。円柱から起動。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit, onDismiss: () -> Unit) {
+internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit, onDismiss: () -> Unit, canDo: (Int, Int) -> Boolean = { _, _ -> true }) {
     val cs = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState()
     val days = ui.days
@@ -993,7 +1026,11 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
         else (0 until days).filter { (startDow + it) % 7 == weekday }
     val targetStaff = if (staffSel >= 0) listOf(staffSel) else ui.schedule.indices.toList()
     val targetName = if (staffSel >= 0) (ui.staffNames.getOrNull(staffSel) ?: "$staffSel") else "全職員"
-    val cellCount = targetStaff.size * targetDays.size
+    // [矛盾なく選択/実機指摘] 選んだシフトを担当できない職員は対象から自動で外す（担当外の一括割当＝
+    //   大量の担当外違反を作れてしまう矛盾を根元で防ぐ）。除外人数は下の対象行に明示。
+    val eligibleStaff = if (picked in ui.shiftSymbols.indices) targetStaff.filter { canDo(it, picked) } else targetStaff
+    val skippedStaff = targetStaff.size - eligibleStaff.size
+    val cellCount = eligibleStaff.size * targetDays.size
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
@@ -1039,9 +1076,11 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
             }
-            Text("対象 ${targetStaff.size}名 × ${targetDays.size}日 = ${cellCount}マス。既存の割当は上書き。",
+            Text("対象 ${eligibleStaff.size}名 × ${targetDays.size}日 = ${cellCount}マス。既存の割当は上書き。" +
+                (if (skippedStaff > 0) "（担当外 ${skippedStaff}名は対象外）" else ""),
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Text("シフト（タップで選択。公・休で休みにできます）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            // [文言修正] 旧「公・休で…」の「公」はデータに存在しない記号だった（存在しない項目を語らない）。
+            Text("シフト（タップで選択）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             ui.shiftSymbols.indices.toList().chunked(3).forEach { rowKeys ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     rowKeys.forEach { k ->
@@ -1059,12 +1098,19 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
             }
             Button(onClick = {
                 if (picked in ui.shiftSymbols.indices && cellCount > 0) {
-                    val cells = targetStaff.flatMap { i -> targetDays.map { j -> i to j } }
+                    val cells = eligibleStaff.flatMap { i -> targetDays.map { j -> i to j } }
                     onBulkSet(cells, picked); onDismiss()
                 }
-            }, enabled = picked in ui.shiftSymbols.indices && cellCount > 0,
+            }, enabled = picked in ui.shiftSymbols.indices && cellCount > 0 && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Text("この${cellCount}マスに一括割当")
+                // [矛盾なく選択] 押せない理由をボタン自身が語る（灰色の理由が見えない矛盾を解消）。
+                // [監査#1] 実行中は適用不可（最適化完了時に上書きされ黙って消えるため）。
+                Text(when {
+                    ui.running -> "計算中は変更できません"
+                    picked !in ui.shiftSymbols.indices -> "まずシフトを選んでください"
+                    cellCount == 0 -> "対象がありません（担当できる職員なし）"
+                    else -> "この${cellCount}マスに一括割当"
+                })
             }
             Text("※ 選択したマスを上書きします。元に戻すで取消可。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
@@ -1177,7 +1223,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // [M2] 塗り飽和度を上げ暗テーマ・屋外グレアでの視認性を確保（0.30/0.36→0.45/0.50）。
     //   数字は太字化済(第5段)のため濃い塗りでも可読。
     val shortBg = critC.copy(alpha = 0.45f)
-    val overBg = MagiAccent.orange.copy(alpha = 0.50f)
+    // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
+    val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -1221,7 +1268,9 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perStaff[i][kk]
                                 // [E7] 回数(low/high/apt/c2)バケツOFF時はこのセルの違反表示を抑止（値は表示・色/枠だけ消す）。
                                 val vio = ui.countViolations["$i,$kk"]?.takeIf { vioVisible(it, vioEnabled) }
-                                val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [レイアウト/実機指摘] 0セルは旧 cs.surface(UDで真っ白)＝表に白い穴が空いて見えた。
+                                //   淡い同系色に沈めて「数字のあるセルが浮かぶ」市松を解消。
+                                val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
                                 // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
                                 val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
                                 val cellCd = if (vio != null) {
@@ -1252,10 +1301,14 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                             Text("シフト", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                         }
                         for (kk in 0 until k) {
-                            val bg = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
-                            val fg = ensureReadable(bg, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
+                            // [レイアウト/実機指摘] 全日0のシフト行（未使用シフト）はラベルも淡色に沈め、
+                            //   使っている行の模様を浮かび上がらせる（行は消さない＝存在は読める）。
+                            val rowZero = (0 until t).all { perDay[it][kk] == 0 }
+                            val bg0 = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
+                            val bg = if (rowZero) bg0.copy(alpha = 0.35f) else bg0
+                            val fg = if (rowZero) cs.onSurfaceVariant else ensureReadable(bg0, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
                             TallyBox(labW, rh, bg, true) {
-                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
+                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.bodySmall, fontWeight = if (rowZero) FontWeight.Normal else FontWeight.Bold, color = fg, maxLines = 1)
                             }
                         }
                     }
@@ -1268,7 +1321,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                 val v = perDay[j][kk]
                                 // [E7] 人員(covU/covO)バケツOFF時はこの日セルの違反表示を抑止（値は表示・色/枠だけ消す）。
                                 val vio = ui.needViolations["$kk,$j"]?.takeIf { vioVisible(it, vioEnabled) }
-                                val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surface else cs.surfaceVariant }
+                                // [レイアウト/実機指摘] 0セルは白い穴に見えるため淡色へ（職員別と同じ）。
+                                val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
                                 // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
                                 val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
                                 val cellCd = if (vio != null) {
@@ -1386,7 +1440,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     if (staffCount == 0) { Text("勤務表データがありません。", color = cs.onSurfaceVariant); return }
     // [週ページング] 全日を横スクロールで保持しつつ（併用）、外部 hScroll を受けて 前週/次週 でジャンプできる。
     val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
-    // [色変更] 要調整(ソフト)色はトークン __vioSoft__（設定→詳細設定→違反種別の色）から解決。空=既定の橙。
+    // [色変更] 要調整(ソフト)色はトークン __vioSoft__（設定→違反種別の色）から解決。空=既定の橙。
     val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     val shiftColorsC = remember(ui.shiftColorHex) { ui.shiftColorHex.map { hexToColor(it) } }
     val shiftTextC = remember(ui.shiftTextHex) { ui.shiftTextHex.map { hexToColor(it) } }
@@ -1401,10 +1455,13 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [E7] 種別フィルタ: バケツOFFのセル違反は枠を出さない（vioVisible=false→0）。表示のみ・違反自体は不変。
     // [判読性] 0=なし / 1=必須(実線) / 2=重いソフト(破線) / 3=軽いソフト(右上角マーク)。
     //   従来は全ソフトが太い破線枠＝数百件で格子が警告に飽和し、必須違反1件が埋没していた。
-    val vioKind = remember(ui.violationCells, ui.violationCellFamilies, staffCount, days, vioEnabled) {
+    // [Set化] 表示中(フィルタ通過)の最重クラス。段階(vioKind)と族別色(3.122.0)の両方の源泉。
+    val vioCls = remember(ui.violationCells, ui.violationCellFamilies, staffCount, days, vioEnabled) {
+        Array(staffCount) { i -> Array(days) { d -> visibleCellVio(ui, "$i,$d", vioEnabled) } }
+    }
+    val vioKind = remember(vioCls) {
         Array(staffCount) { i -> IntArray(days) { d ->
-            // [Set化] 表示中(フィルタ通過)の最重クラスで段階を決める＝最重族OFFでも残る族の枠が出る。
-            val v = visibleCellVio(ui, "$i,$d", vioEnabled)
+            val v = vioCls[i][d]
             when { v == null -> 0; isHardCellViolation(v) -> 1; isHeavySoftCellViolation(v) -> 2; else -> 3 }
         } }
     }
@@ -1435,7 +1492,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     Column {
         // [P7/実務者向け短文化] スクロール・週送り・土日色・休の淡色は操作/見た目から自明のため説明しない。
         //   常時可視で必要なのは違反枠の読み方だけ（詳細凡例は「検索・凡例」内）。
-        Text("タップで修正。違反枠: 実線=必須 ・ 破線=重 ・ 右上角=軽 ・ 桃バッジ=未反映の希望",
+        Text("タップで修正。違反枠: 実線=必須 ・ 破線=重 ・ 右上角=軽。希望: 桃バッジ=未反映 ・ 緑リング=反映済み",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
         Row {
@@ -1461,7 +1518,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
             Row(Modifier.horizontalScroll(hScroll)) {
                 for (d in 0 until days) {
                     val dow = (sdow + d) % 7
-                    val dcol = when { d == todayIdx -> MagiAccent.green; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
+                    // [UD監査] 今日マーカーの緑(3.4:1)は白地で不足→ tertiary(濃緑ロール)へ。
+                    val dcol = when { d == todayIdx -> cs.tertiary; dow == 5 -> MagiAccent.blue; dow == 6 -> MagiAccent.red; else -> cs.onSurfaceVariant }
                     val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
                     // [⑥日別ジャンプ] 要確認一覧の日別項目(人員/群レンジ)から来たとき、日ヘッダを primary 枠で注目表示
                     //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。
@@ -1500,7 +1558,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") + "、タップで変更"
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, vioColor, vioSoftColor, cd, dim = isRest || quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym) { onCellClick(i, d) }
+                            // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
+                            val cellVioC = vioCls[i][d]?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = isRest || quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym) { onCellClick(i, d) }
                         }
                     }
                 }
@@ -1524,8 +1584,9 @@ private fun FlatCell(
                 // [判読性] 枠は 1=実線(必須)/2=破線(重い調整)のみ。3=軽い調整は右上の角マークに落とし飽和を防ぐ。
                 .then(when {
                     focused -> Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp))   // [ジャンプ] 注目セル
-                    vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp)
-                    vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp)
+                    // [枠のハロー] 違反色と同系色のセル背景でも枠が埋没しないよう surface の縁取りを敷く。
+                    vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp, halo = cs.surface)
+                    vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp, halo = cs.surface)
                     else -> Modifier.border(1.dp, cs.outlineVariant, RoundedCornerShape(6.dp))
                 })
                 .clickable(onClick = onClick)

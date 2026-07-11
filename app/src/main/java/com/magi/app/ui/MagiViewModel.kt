@@ -154,7 +154,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             if (!resultTxt.isNullOrBlank()) {
                 clearRunMarker()
                 OptimizationWorker.clearFiles(getApplication<Application>())
-                if (state == null) loadAsync(resultTxt)   // initialAssignment が state.schedule を返すため結果が復元される
+                if (state == null) loadAsync(resultTxt, markResult = true)   // initialAssignment が state.schedule を返すため結果が復元される
                 logOp("I", "前回のバックグラウンド最適化の結果を反映しました")
             } else {
                 // [#4/C1] 中断時、途中最良解のスナップショットがあれば「途中結果から再開」する。
@@ -178,7 +178,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (marker != null) {
                     val hasSnap = !snapTxt.isNullOrBlank()
                     val info = if (hasSnap)
-                        "前回の計算は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度つくる』で仕上げられます。"
+                        "前回の計算は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。"
                     else runCatching {
                         val o = org.json.JSONObject(marker)
                         val modeJp = if (o.optString("mode") == "bg") "バックグラウンド" else ""
@@ -379,7 +379,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         load(seed)
     }
 
-    fun loadAsync(rawJson: String) {
+    fun loadAsync(rawJson: String, markResult: Boolean = false) {
         val json = MojibakeRepair.repair(rawJson)
         val repaired = json !== rawJson
         job?.cancel()
@@ -402,7 +402,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         originalJson = json
                         state = lp.state.withSchedule(lp.schedule)
                         currentSchedule = lp.schedule.copy2D()
-                        resultSchedule = null
+                        // [bg復元] markResult=true は「バックグラウンド最適化の結果 JSON」の読込。schedule が
+                        //   結果そのものなので resultSchedule/hasResult を立て、上位バーの「未計算」を防ぐ。
+                        resultSchedule = if (markResult) lp.schedule.copy2D() else null
                         clearUndo()
                         autoSave()
                         _ui.update { makeUi(
@@ -412,7 +414,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             base = it.copy(
                                 loaded = true,
                                 running = false,
-                                hasResult = false,
+                                hasResult = markResult,
                                 constraintsEdited = false,
                                 structureEdited = false,
                                 staff = lp.state.staffCount,
@@ -507,6 +509,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // [3.126.0] UI導線（下書きをつくる）はユーザー判断で撤去。API として温存。
     fun generateSimple() {
         val st = state ?: return
         val sched = currentSchedule ?: return
@@ -1104,6 +1107,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         refreshCheck()
     }
 
+    // [D7] 読取(結果)モードUIは撤去済み（勤務表=常に直接編集）。以下2関数は結果スナップショット操作の
+    //   API として温存（UI 参照ゼロ・テスト非依存。結果モデル自体は最適化完了時に充填され続ける）。
     /** [B1] 編集中(ws7) を結果(ws6) として確定する。表示・違反は不変なのでスナップショットのみ更新。 */
     fun commitEditingToResult() {
         val cur = currentSchedule ?: return
@@ -1140,10 +1145,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "結果→編集中に複製")
     }
 
-    /** [B1] 読取専用モードでセル編集が試行された時の案内。 */
-    fun hintReadOnly() {
-        _ui.update { it.copy(message = "「結果」は読取専用です。修正は「編集中」モードに切り替えてください。") }
-    }
+    // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
 
     // ---- constraint editing (ws3-5) -------------------------------------------
 
@@ -1508,6 +1510,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         applyStructure(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
     }
 
+    /** [違反色/族別] 違反種別（族）ごとの個別色。予約キー "__vioFam_<fam>__"（例: __vioFam_c3n__）。
+     *  未設定の族は重大度色（__vio__/__vioSoft__）へフォールバック。 */
+    fun setViolationFamilyColor(fam: String, hex: String) {
+        val st = state ?: return; if (hex.isBlank() || fam.isBlank()) return
+        applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioFam_${fam}__" to hex.trim())))
+    }
+    fun resetViolationFamilyColor(fam: String) {
+        val st = state ?: return
+        applyStructure(st.copy(shiftColors = st.shiftColors - "__vioFam_${fam}__"))
+    }
+
     // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
     fun addReviewMemo(text: String) {
         if (text.isBlank()) return
@@ -1638,6 +1651,57 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 else -> return
             }
         )
+    }
+
+    /** [制約編集/実機指摘「登録した制約の変更ができない」] 行の生値（編集ダイアログのプリフィル用）。
+     *  値の並びは追加ダイアログの入力順と同じ:
+     *  cons1=[日数,シフト,回数] / cons2=[シフト,回数] / cons3系=並び(最大5) /
+     *  cons41(s)=[群,シフト,下限,上限] / cons42(s)=[群1,シフト1,群2,シフト2]。 */
+    fun constraintRowValues(family: String, index: Int): List<String>? {
+        val st = state ?: return null
+        return when (family) {
+            "cons1" -> st.cons1.getOrNull(index)?.let { listOf(it.day1, it.shiftKigou, it.day2) }
+            "cons2" -> st.cons2.getOrNull(index)?.let { listOf(it.shiftKigou, it.count) }
+            "cons3" -> st.cons3.getOrNull(index)?.pattern
+            "cons3n" -> st.cons3n.getOrNull(index)?.pattern
+            "cons3m" -> st.cons3m.getOrNull(index)?.pattern
+            "cons3mn" -> st.cons3mn.getOrNull(index)?.pattern
+            "cons41" -> st.cons41.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
+            "cons41s" -> st.cons41s.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
+            "cons42" -> st.cons42.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
+            "cons42s" -> st.cons42s.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
+            else -> null
+        }
+    }
+
+    /** [制約編集] 行を同じ位置で置き換える。values の並びは constraintRowValues と同一。
+     *  cons3系は追加(addCons3)と同じ正規化（先頭から最初の空白まで・最大5）。 */
+    fun updateConstraint(family: String, index: Int, values: List<String>) {
+        val st = state ?: return
+        fun <T> List<T>.replaced(i: Int, v: T) = mapIndexed { idx, e -> if (idx == i) v else e }
+        val v = values.map { it.trim() }
+        fun g(i: Int) = v.getOrElse(i) { "" }
+        val next = when (family) {
+            "cons1" -> { if (index !in st.cons1.indices) return; st.copy(cons1 = st.cons1.replaced(index, C1Row(g(0), g(1), g(2)))) }
+            "cons2" -> { if (index !in st.cons2.indices) return; st.copy(cons2 = st.cons2.replaced(index, C2Row(g(0), g(1)))) }
+            "cons41" -> { if (index !in st.cons41.indices) return; st.copy(cons41 = st.cons41.replaced(index, C41Row(g(0), g(1), g(2), g(3)))) }
+            "cons41s" -> { if (index !in st.cons41s.indices) return; st.copy(cons41s = st.cons41s.replaced(index, C41Row(g(0), g(1), g(2), g(3)))) }
+            "cons42" -> { if (index !in st.cons42.indices) return; st.copy(cons42 = st.cons42.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
+            "cons42s" -> { if (index !in st.cons42s.indices) return; st.copy(cons42s = st.cons42s.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
+            "cons3", "cons3n", "cons3m", "cons3mn" -> {
+                val pat = v.takeWhile { it.isNotEmpty() }.take(5)
+                if (pat.isEmpty()) return
+                when (family) {
+                    "cons3" -> { if (index !in st.cons3.indices) return; st.copy(cons3 = st.cons3.replaced(index, C3Row(pat))) }
+                    "cons3n" -> { if (index !in st.cons3n.indices) return; st.copy(cons3n = st.cons3n.replaced(index, C3Row(pat))) }
+                    "cons3m" -> { if (index !in st.cons3m.indices) return; st.copy(cons3m = st.cons3m.replaced(index, C3Row(pat))) }
+                    else -> { if (index !in st.cons3mn.indices) return; st.copy(cons3mn = st.cons3mn.replaced(index, C3Row(pat))) }
+                }
+            }
+            else -> return
+        }
+        logOp("I", "制約変更: $family[$index] → ${v.filter { it.isNotBlank() }.joinToString(" ")}")
+        mutateConstraints(next)
     }
 
     /** Apply an edited state (constraints changed), then re-run the unified check on the current table. */
@@ -1915,6 +1979,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setThisMonth() {
         val now = java.time.LocalDate.now()
         setMonth(now.year, now.monthValue)
+    }
+    /** [実機指摘] 月末に「来月」の勤務表を作る業務のため、ワンタップは来月が適切。 */
+    fun setNextMonth() {
+        val next = java.time.LocalDate.now().plusMonths(1)
+        setMonth(next.year, next.monthValue)
     }
 
     // ---- スキルグループ（年次マスター・新C41s/C42s 専用） -----------------------
@@ -2320,6 +2389,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             shiftTextHex = st.shifts.mapIndexed { i, sh -> V6WebCompat.pickTextColor(V6WebCompat.resolveShiftColor(sh.kigou, sh.name, st.shiftColors[sh.kigou], i)) },
             violationColorHex = st.shiftColors["__vio__"] ?: "",
             violationSoftColorHex = st.shiftColors["__vioSoft__"] ?: "",
+            violationFamilyColorHex = st.shiftColors.entries
+                .filter { it.key.startsWith("__vioFam_") && it.key.endsWith("__") }
+                .associate { it.key.removePrefix("__vioFam_").removeSuffix("__") to it.value },
             schedule = schedule.map { it.toList() },
             wishes = st.wishes,
             resultSchedule = resultSchedule?.map { it.toList() } ?: emptyList(),   // [B1] 確定結果(ws6)

@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- 最適化完了通知（Android 13+ は実行時許可が必要） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- バックグラウンド最適化を前景サービスとして実行（5分のCPUジョブをOSに止められない） -->
@@ -20,5 +21,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- [クラッシュ修正/実機報告「閉じても大丈夫でクラッシュ」] targetSdk 34+ では、Worker の
+             setForeground(FOREGROUND_SERVICE_TYPE_DATA_SYNC) に対応する型を WorkManager の前景サービス
+             宣言側にもマージで明記しないと、起動の瞬間に MissingForegroundServiceTypeException で落ちる
+             （権限 FOREGROUND_SERVICE_DATA_SYNC だけでは不足。例外はサービス側スレッドで発生するため
+             コード側の runCatching では捕捉不能）。 -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 </manifest>

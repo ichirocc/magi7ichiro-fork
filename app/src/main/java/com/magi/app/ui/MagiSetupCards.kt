@@ -117,7 +117,7 @@ internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象の月", style = MaterialTheme.typography.titleMedium)
-            Text("勤務表を作る月です。変えると、その月の日数に合わせて表を作り直します。",
+            Text("作成対象の月。変えると日数に合わせて表を作り直します。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { vm.shiftMonth(-1) }, enabled = !ui.running,
@@ -127,8 +127,9 @@ internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
                 OutlinedButton(onClick = { vm.shiftMonth(1) }, enabled = !ui.running,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("次の月") }
             }
-            OutlinedButton(onClick = { vm.setThisMonth() }, enabled = !ui.running,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("今月にする") }
+            // [実機指摘] 月末に「来月」の表を作る業務フローに合わせ、ワンタップは来月へ。
+            OutlinedButton(onClick = { vm.setNextMonth() }, enabled = !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("来月にする") }
         }
     }
 }
@@ -144,12 +145,13 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel) {
             Text("初期設定の手順", style = MaterialTheme.typography.titleMedium)
             // [E1] 番号順(①〜⑤)とeditScopeの不一致を解消：毎月触る項目と年次マスター項目を分けて表示。
             //   ①基本情報・④制約・⑤回数範囲は「年次マスター」scopeにあり、月次では編集しない。
-            Text("── 毎月 ──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            GuideRow("② 希望シフト", "${c.wishes}件", c.wishes > 0)
-            GuideRow("③ 必要人数", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
-            Text("── 年次マスター（制度・人員が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            GuideRow("① 基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
-            GuideRow("④ 制約", "${c.constraints}件", true)
+            // [監査A1] 旧①〜⑤番号と旧スコープ名（年次マスター等）が新3ドア/新節番号と食い違っていた→ドア名で案内。
+            Text("── 月次条件（毎月）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0)
+            GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
+            Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
+            GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
             GuideRow("⑤ 個人の回数範囲", "${c.ranges}件", true)
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（スタッフ／シフト）を整えましょう。"
@@ -192,7 +194,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を増やす" }) { Text("＋", fontSize = 20.sp) }
             }
             Spacer(Modifier.height(10.dp))
-            Text("時間予算（計算の制限時間・上限5分／停滞時はさらに早期終了）: ${ui.budgetSec} 秒")
+            Text("計算の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.setBudget((ui.budgetSec - 60).coerceAtLeast(10)) },
                     enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.height(48.dp)) { Text("− 60秒") }
@@ -220,14 +222,14 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     enabled = !ui.running,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("仕上げ最適化（品質を磨く）", fontSize = 14.sp)
+                Text("仕上げ最適化", fontSize = 14.sp)
             }
             Spacer(Modifier.height(10.dp))
             // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
             //   バックグラウンド実行だけをここ（実行条件＝予算/並列の設定と同じ場所）へ移設。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("閉じても大丈夫（バックグラウンドで作る）") }
+            ) { Text("バックグラウンドで作る（閉じても続行）") }
             Spacer(Modifier.height(14.dp))
             // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
             //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
@@ -274,7 +276,7 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> 
     val issues = ui.settingIssues.size
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("今月の作成条件（チェックリスト）", style = MaterialTheme.typography.titleMedium)
+            Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
             ChecklistRow("職員", "${staffN}名", ok = staffN > 0)
             ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0)
             ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
@@ -320,15 +322,16 @@ internal fun StaffingRealityCard(ui: UiState, vm: MagiViewModel) {
     if (rows.isEmpty()) return
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("実働チェック（この体制で回るか）", style = MaterialTheme.typography.titleMedium)
-            Text("シフトごとに「担当できる人数」で見ます（担当4人なら実質4人で運営）。余裕=1人欠けても1日の必要人数を揃えられるか。",
+            Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
+            Text("シフト別に「担当できる人数」で確認。余裕=1人欠けても回るか。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             rows.forEach { r ->
                 val slack = r.q - r.maxNeed
                 val tenths = if (r.q > 0) (r.d * 10 + r.q / 2) / r.q else 0
                 val (mark, col) = when {
                     slack < 0 -> "⚠" to cs.error
-                    slack == 0 -> "！" to MagiAccent.orange
+                    // [UD監査] 橙(2.7:1)は白地の文字色として不足→警告トークンの濃色(fg)へ。
+                    slack == 0 -> "！" to magiWarnColors().second
                     else -> "✓" to cs.tertiary
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -377,7 +380,6 @@ internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
 @Composable
 internal fun AdvancedSettingsSection(
     ui: UiState,
-    vm: MagiViewModel,
     onExportLog: () -> Unit,
     onExportJson: () -> Unit,
 ) {
@@ -394,7 +396,7 @@ internal fun AdvancedSettingsSection(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("詳細設定（上級者向け）", style = MaterialTheme.typography.titleMedium)
-                    Text("ログ・違反色トークン。一般の運用では触りません。",
+                    Text("ログの確認と出力。一般の運用では触りません。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [Planner テイスト] グリフ「▾/▸」をやめ、やわらかい丸の中に整ったアイコンシェブロン。
@@ -414,9 +416,10 @@ internal fun AdvancedSettingsSection(
                     // [冗長性] 旧 FlagsView（計算方式＋仕上げ最適化）は「最適化設定」カードと完全重複の
                     //   ため撤去。設定の操作は「最適化設定」に一本化。
                     // [冗長性J1] V6DashboardCard（1ヶ月俯瞰・生指標）は分析タブ「プロ」表示と重複のため
-                    //   ここから撤去し、分析タブ(プロ)に一本化。ここはログ・違反色トークンのみ。
+                    //   ここから撤去し、分析タブ(プロ)に一本化。
+                    // [IA重複解消 3.132系] ColorSettingsView（違反種別の色）はシフトの表示色の直後
+                    //   （設定タブ上部）へ移動＝色設定を1か所に。ここはログのみ。
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
-                    ColorSettingsView(ui, vm)
                 }
             }
         }
@@ -502,22 +505,20 @@ internal fun DataActionsCard(
 
 @Composable
 internal fun AppearanceCard(
-    themeMode: Int, onThemeMode: (Int) -> Unit, oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
+    oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
     proMode: Boolean = false, onProMode: (Boolean) -> Unit = {},
 ) {
-    val options = listOf("自動", "明", "暗", "UD")   // [B5/A8] 4セグメント用の短ラベル(=システム/ライト/ダーク/高コントラスト)
+    // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("外観", style = MaterialTheme.typography.titleMedium)
-            Text("見やすさに合わせて配色を選べます。",
+            Text("配色はユニバーサルデザイン（高コントラスト）固定です。",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = oneHand, onCheckedChange = onOneHand)
                 Spacer(Modifier.width(8.dp))
-                Text("片手モード（内容を下方に寄せて親指で届きやすく）", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text("片手モード", fontSize = 14.sp, modifier = Modifier.weight(1f))
             }
-            // [B5/A8] 2×2ボタン → 4セグメント（自動/明/暗/UD）。themeMode の index 対応は不変。
-            MagiSegmentedControl(options = options, selected = themeMode, onSelect = onThemeMode)
             // [プロ編集] 表示モード。プロ＝数値診断（生指標）を前面に。今後さらに高密度編集を拡張予定。
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
             MagiSegmentedControl(options = listOf("かんたん", "プロ"), selected = if (proMode) 1 else 0, onSelect = { onProMode(it == 1) })

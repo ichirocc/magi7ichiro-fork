@@ -121,7 +121,7 @@ internal fun decodeCsvBytes(bytes: ByteArray): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (Int) -> Unit = {}) {
+fun MagiApp(vm: MagiViewModel = viewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     // [保存] バックグラウンド遷移(ON_STOP/ON_PAUSE)で保留中の編集を即時永続化する。
     //   制約編集などはデバウンス保存のため、即背景化→プロセス破棄だと失われ得る。その保険。
@@ -145,7 +145,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
-    var editScope by rememberSaveable { mutableStateOf(0) }   // [Web反映] 編集タブ: 0=今月の調整 / 1=シフト希望 / 2=基本マスター
+    var editScope by rememberSaveable { mutableStateOf(0) }   // [入口4分割] 編集タブ: 0=月次条件 / 1=職員管理 / 2=年間マスター
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
     var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
@@ -347,11 +347,12 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     OperatorNextActionCard(
                         ui = ui,
                         onMake = { vm.runV6FullOptimize() },
-                        onDraft = { vm.generateSimple() },
                         onStop = { vm.stop() },
                         onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                         onSchedule = { tab = 1 },
-                        onFix = { guidedFix = true },
+                        // [監査#1] 人手不足が無い必須違反(希望/禁止連続/群)では GuidedFix(不足専用)が空回りする
+                        //   → 不足なし時は分析タブの修復フローへ。
+                        onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
                         onSetup = { tab = 2 },
                     )
                     LiveScheduleCard(ui)
@@ -372,9 +373,9 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         // [窓ハイライト③] c1/c3/c3m はどの範囲の違反かをグリッド上でも示す（シート表示中のみ）。
                         focusRange = vm.violationRange(i, j)?.let { Triple(i, it.first, it.second) }
                     }
-                    // [B1] 結果(読取ws6)/下書き(ws7) モード分離。既定=結果(読取)。確定結果が無ければ下書き扱い。
-                    var editing by rememberSaveable { mutableStateOf(false) }
-                    var copyConfirm by rememberSaveable { mutableStateOf(false) }
+                    // [D7] 読取(結果)モードはユーザー判断で撤去（「下書き（直す）モードだけで大丈夫」）。
+                    //   勤務表は常に直接編集の1本＝タップで即編集シート。最適化完了時は schedule==resultSchedule
+                    //   のため結果はそのまま見えている。誤編集は「元に戻す」が担保。
                     var wishBulkOpen by rememberSaveable { mutableStateOf(false) }
                     // [E7] 違反 種別フィルタ（勤務表タブ全面共有）。初期=全ON。bitmask(Int)で rememberSaveable 保存
                     //   （回転/プロセス復元で保持）。表示のみ・スコアリング不変。ビット i = vioBuckets[i] のON/OFF。
@@ -386,63 +387,31 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     var focusMode by rememberSaveable { mutableStateOf(false) }
                     // [画面修正版 ②] 検索・凡例（折りたたみ）。検索=職員名で該当グリッド行を強調（回転/復元で保持）。
                     var searchQuery by rememberSaveable { mutableStateOf("") }
-                    val canRead = ui.hasResultSnapshot
-                    val effectiveEditing = editing || !canRead
-                    ScheduleModeCard(
-                        editing = effectiveEditing,
-                        canRead = canRead,
-                        onSelect = { editing = it },
-                        onCommit = { vm.commitEditingToResult() },
-                        onCopy = { copyConfirm = true },
-                    )
-                    // [校正] 希望の反映は「下書き（直す）」時だけ表示。読取結果には適用できないため
-                    //   読取時に出すのは冗長＝誤操作のもと。
-                    if (effectiveEditing) WishApplyCard(ui, onApply = {
+                    WishApplyCard(ui, onApply = {
                         val oos = vm.wishOutOfScopeCount()
                         if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
                     })
-                    // [backlog#1] 読取モードは schedule だけでなく違反マップも結果(ws6)専用の検査結果へ差し替える。
-                    //   従来は編集中盤面の検査結果が残り、編集後に読取へ切替えると集計値と違反ハイライトがズレた。
-                    //   result*==null（未計算）は現行マップへフォールバック＝従来挙動のまま安全。
-                    val gridUi = if (effectiveEditing) ui else ui.copy(
-                        schedule = ui.resultSchedule,
-                        violationCells = ui.resultViolationCells ?: ui.violationCells,
-                        needViolations = ui.resultNeedViolations ?: ui.needViolations,
-                        countViolations = ui.resultCountViolations ?: ui.countViolations,
-                        violationCellFamilies = ui.resultViolationCellFamilies ?: ui.violationCellFamilies,
-                    )
-                    val onCell: (Int, Int) -> Unit = if (effectiveEditing) openEditor else { _, _ -> vm.hintReadOnly() }
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
-                    val vioLocCount = gridUi.violationCells.size + gridUi.needViolations.size + gridUi.countViolations.size
-                    ViolationFilterBar(vioBucketLocCounts(gridUi), vioEnabled, onToggle = { key ->
+                    val vioLocCount = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
+                    ViolationFilterBar(vioBucketLocCounts(ui), vioEnabled, onToggle = { key ->
                         val i = vioBuckets.indexOfFirst { it.key == key }
                         if (i >= 0) vioMask = vioMask xor (1 shl i)
                     }, locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it })
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
-                    SearchLegendBar(gridUi, searchQuery, onQuery = { searchQuery = it })
-                    ScheduleGrid(gridUi, onCellClick = onCell, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
-                        onBulkSet = { cells, k -> if (effectiveEditing) vm.setCells(cells, k) else vm.hintReadOnly() },
-                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode)
-                    StaffCalendarCard(gridUi, onCellClick = onCell, vioEnabled = vioEnabled)
-                    TallyCard(gridUi, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
-                    if (effectiveEditing) MismatchExtractCard(ui, onOpenCell = openEditor)
-                    if (effectiveEditing) {
-                        OutlinedButton(onClick = { wishBulkOpen = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("希望シフトの一括操作（曜日／全体）")
-                        }
+                    SearchLegendBar(ui, searchQuery, onQuery = { searchQuery = it })
+                    ScheduleGrid(ui, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
+                        onBulkSet = { cells, k -> vm.setCells(cells, k) },
+                        focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
+                        canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) })
+                    StaffCalendarCard(ui, onCellClick = openEditor, vioEnabled = vioEnabled)
+                    TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
+                    MismatchExtractCard(ui, onOpenCell = openEditor)
+                    OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
+                        Text("希望シフトの一括操作")
                     }
                     if (wishBulkOpen) {
                         WishBulkSheet(ui, vm, presetWeekday = 0, onDismiss = { wishBulkOpen = false })
-                    }
-                    if (copyConfirm) {
-                        AlertDialog(
-                            onDismissRequest = { copyConfirm = false },
-                            title = { Text("結果を下書きに複製しますか？") },
-                            text = { Text("いまの下書きは破棄され、確定済みの「結果」で置き換わります。「元に戻す」で取り消せます。") },
-                            confirmButton = { DialogConfirmButton("複製する", onClick = { copyConfirm = false; vm.copyResultToEditing() }) },
-                            dismissButton = { DialogDismissButton(onClick = { copyConfirm = false }) },
-                        )
                     }
                 }
                 2 -> {
@@ -488,7 +457,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                             // [E6案A] 長大スクロールを畳んで削減。①のみ既定で展開。展開状態は rememberSaveable で保持。
                             CollapsibleSection("① シフト・グループ・スタッフ", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("勤務の種類・グループ分け・スタッフを登録し、どのグループがどの勤務に入れるかを決めます。ここがすべての土台です。")
+                                    SectionNote("勤務の種類・グループ・スタッフと、群×勤務の担当可否を決めます。")
                                     Ws1Card(ui, vm)
                                 }
                             }
@@ -545,7 +514,7 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     //   (HARD Core/Guard・Apt/Equalize/covU 等の生指標) は詳細設定(上級者)へ移設。
                     // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。
                     if (proMode) V6DashboardCard(ui.v6)
-                    if (proMode) WeightTableCard()   // [N2/⛏11] スコアの重み根拠（最適化器と一致）
+                    // [実機指摘] 重み表（WeightTableCard）は分析タブから設定タブの最適化設定直後へ移動。
                     // [IA重複解消] BossCard は FixSuggestionCard と同じ提案＋適用を二重描画していたため撤去（下の FixSuggestionCard に一本化）。
                     // [見直し/IA重複解消] OverviewDashboard(気になる点=総違反リング / 注意の日リング)を撤去。融合カードが上位代替:
                     //   気になる点(総数)→ヒーロー規模＋要確認一覧ヘッダ件数、注意の日→AttentionCardsSection の日別リスト。
@@ -554,12 +523,15 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                     BreakdownCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, proMode = proMode)
                     // [★3+4] BottleneckCard(top5テキスト) は AttentionCardsSection(上・全件＋トグル＋タップ修復) が上位互換のため撤去。
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode)
-                    // [校正] 開発用の ColorSettingsView（英語名・生の制約コード/WARN/CRITICAL露出）と
-                    // FlagsView（実験フラグ）は一般ユーザー画面から除外。詳細設定は上級者向けに別途。
+                    // [3.122.0→3.132系] ColorSettingsView（違反種別の色=族別の色設定）は設定タブのシフトの表示色直後に配置。
                 }
                 else -> {
-                    AppearanceCard(themeMode, onThemeMode, oneHand, { oneHand = it }, proMode) { proMode = it }
+                    AppearanceCard(oneHand, { oneHand = it }, proMode) { proMode = it }
                     ShiftColorCard(ui, vm)
+                    // [IA重複解消 3.132系] 違反の色は ColorSettingsView（基準色2種＋族別）へ一本化し、
+                    //   シフトの表示色の直後＝色設定の定位置に配置（旧: 詳細設定の折りたたみ内で見つけにくい＋
+                    //   ShiftColorCard 内に必須色だけの部分入口が重複していた）。
+                    ColorSettingsView(ui, vm)
                     DataActionsCard(
                         ui = ui,
                         onOpenJson = openJson,
@@ -573,11 +545,12 @@ fun MagiApp(vm: MagiViewModel = viewModel(), themeMode: Int = 0, onThemeMode: (I
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                     )
                     SettingsCard(ui, vm, onBgOptimize = onBgOptimize)
+                    // [実機指摘/移動] 重み表＝最適化の優先順位の根拠。実行条件（最適化設定）の隣が定位置。
+                    WeightTableCard()
                     // [冗長性] 旧 OperatorLogView（見出し「操作ログ」だが中身は診断ログ＝誤ラベルで、
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(
                         ui = ui,
-                        vm = vm,
                         onExportLog = { saveLogLauncher.launch("magi_log_${System.currentTimeMillis()}.txt") },
                         onExportJson = { saveLogJsonLauncher.launch("magi_log_${System.currentTimeMillis()}.json") },
                     )
@@ -757,7 +730,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 }
                 !ui.hasResult -> Button(
                     // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
-                    //   下書きは思考誘導カードの補助「下書きをつくる」が担う（同名ラベルで別動作の不整合を解消）。
+                    //   [3.126.0] 「下書きをつくる」補助はユーザー判断で撤去済み＝作成導線はこの1本。
                     onClick = { vm.runV6FullOptimize() },
                     modifier = Modifier.weight(1f).heightIn(min = 60.dp),
                 ) {

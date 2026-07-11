@@ -48,7 +48,7 @@ fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("日別の必要人数（例外）", style = MaterialTheme.typography.titleMedium)
             Text(
-                "通常はシフト既定の必要数を使います（既定は『年次マスター → 基本情報 → シフト』で設定）。特定の日だけ人数を変えたいときに追加します。",
+                "特定の日だけ必要人数を変えるときに追加します（通常はシフト既定）。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -81,7 +81,8 @@ fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
             shifts = vm.shiftKigouList(),
             maxDay = ui.days,
             startDate = ui.startDate,
-            onApply = { k, j, p1, p2 -> vm.setNeedDay(k, j, p1, p2); dialog = null },
+            // [実機指摘「日付を複数設定できない」] カレンダーは複数選択トグル＝選んだ全日に同じ例外を一括登録。
+            onApply = { k, days, p1, p2 -> days.forEach { j -> vm.setNeedDay(k, j, p1, p2) }; dialog = null },
             onClose = { dialog = null },
         )
     }
@@ -117,20 +118,21 @@ private fun NeedDayDialog(
     shifts: List<String>,
     maxDay: Int,
     startDate: String,
-    onApply: (Int, Int, String, String) -> Unit,
+    onApply: (Int, List<Int>, String, String) -> Unit,
     onClose: () -> Unit,
 ) {
     var k by remember { mutableStateOf(init.k) }
-    // [カレンダー形式/スクショ指摘] 日はテキスト入力でなく月のカレンダーから1タップ選択（青囲い指示）。
-    var day by remember { mutableStateOf(init.j + 1) }
+    // [カレンダー形式/スクショ指摘] 日はカレンダーから選択。[複数設定] タップでON/OFFトグル＝複数日へ一括登録。
+    var daysSel by remember { mutableStateOf(setOf(init.j + 1)) }
     var p1 by remember { mutableStateOf(init.p1) }
     var p2 by remember { mutableStateOf(init.p2) }
     var open by remember { mutableStateOf(false) }
-    val ok = k in shifts.indices && day in 1..maxDay && (p1.isNotBlank() || p2.isNotBlank())
+    val ok = k in shifts.indices && daysSel.isNotEmpty() && (p1.isNotBlank() || p2.isNotBlank())
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = {
-            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(k, day - 1, p1.trim(), p2.trim()) })
+            DialogConfirmButton(if (daysSel.size > 1) "適用（${daysSel.size}日）" else "適用", enabled = ok,
+                onClick = { if (ok) onApply(k, daysSel.map { it - 1 }.sorted(), p1.trim(), p2.trim()) })
         },
         dismissButton = { DialogDismissButton(onClick = onClose) },
         title = { DialogHeader("日別の必要人数", onClose) },
@@ -147,8 +149,9 @@ private fun NeedDayDialog(
                         }
                     }
                 }
-                Text("日（タップで選択・${day}日）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                DayPickerGrid(startDate = startDate, maxDay = maxDay, selected = day, onSelect = { day = it })
+                Text("日（タップで複数選択できます・${daysSel.size}日選択中）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                DayPickerGrid(startDate = startDate, maxDay = maxDay, selectedDays = daysSel,
+                    onToggle = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d })
                 NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
                 NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "既定")
             }
@@ -156,10 +159,11 @@ private fun NeedDayDialog(
     )
 }
 
-/** [カレンダー形式] 月内の日を曜日整列グリッドから1タップで選ぶ（片手一本指・キーボード不要）。
- *  週の並びは**日曜始まり**（ユーザー指示・紙のカレンダー慣習）。日=赤/土=青で週の手掛かりを添える。 */
+/** [カレンダー形式] 月内の日を曜日整列グリッドからタップで選ぶ（片手一本指・キーボード不要）。
+ *  週の並びは**日曜始まり**（ユーザー指示・紙のカレンダー慣習）。日=赤/土=青で週の手掛かりを添える。
+ *  [複数設定] selectedDays の Set トグル＝複数日の一括選択に対応（実機指摘「日付を複数設定できない」）。 */
 @Composable
-internal fun DayPickerGrid(startDate: String, maxDay: Int, selected: Int?, onSelect: (Int) -> Unit) {
+internal fun DayPickerGrid(startDate: String, maxDay: Int, selectedDays: Set<Int>, onToggle: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val sdow = (startDowMonFirst(startDate) + 1) % 7   // 月曜始まり(0=月)→日曜始まり(0=日)へ変換
     val weekJa = listOf("日", "月", "火", "水", "木", "金", "土")
@@ -178,12 +182,12 @@ internal fun DayPickerGrid(startDate: String, maxDay: Int, selected: Int?, onSel
                 wk.forEach { d ->
                     if (d == null) Box(Modifier.weight(1f).height(40.dp))
                     else {
-                        val sel = selected == d
+                        val sel = d in selectedDays
                         Box(
                             Modifier.weight(1f).height(40.dp)
                                 .background(if (sel) cs.primary else cs.surfaceVariant, RoundedCornerShape(8.dp))
-                                .clickable { onSelect(d) }
-                                .semantics { contentDescription = "${d}日を選択" },
+                                .clickable { onToggle(d) }
+                                .semantics { contentDescription = "${d}日を" + (if (sel) "解除" else "選択") },
                             contentAlignment = Alignment.Center,
                         ) {
                             Text("$d", style = MaterialTheme.typography.bodyMedium,

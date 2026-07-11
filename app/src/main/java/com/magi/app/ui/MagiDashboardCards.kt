@@ -190,7 +190,7 @@ internal class OpNextPlan(
 internal fun OperatorNextActionCard(
     ui: UiState,
     onMake: () -> Unit,      // 勤務表をつくる（最適化）
-    onDraft: () -> Unit,     // 下書きをつくる（簡易作成）
+    // [3.126.0 撤去] onDraft（下書きをつくる=簡易作成）はユーザー判断で撤去。主導線は「勤務表をつくる」1本。
     onStop: () -> Unit,      // やめる（停止）
     onExport: () -> Unit,    // 印刷・書き出し / そのまま配る（CSV書き出し）
     onSchedule: () -> Unit,  // 中身を見る（勤務表へ）
@@ -214,7 +214,7 @@ internal fun OperatorNextActionCard(
         }
         !ui.hasResult -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer,
             "② ボタンひとつで、勤務表を作ります。",
-            "勤務表をつくる", onMake, true, "下書きをつくる", onDraft)
+            "勤務表をつくる", onMake, true, null, {})
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             "③ できました！ そのまま配れます。",
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
@@ -222,7 +222,10 @@ internal fun OperatorNextActionCard(
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
             "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
         else -> OpNextPlan(amber, onAmber,
-            "もう少しです。" + (worstDay?.let { "$it が人手不足です。" } ?: "人手が足りない日があります。"),
+            // [監査#1] 人手不足ゼロでも必須違反(希望/禁止連続/群)で此処に来る。不足が無いのに
+            //   「人手が足りない」と告げる誤診断を排し、実態（必須違反の残数）を言う。
+            "もう少しです。" + (worstDay?.let { "$it が人手不足です。" }
+                ?: "必須の条件が ${ui.bestHard}件 残っています。"),
             "なおすのを手伝って", onFix, true, "もう一度つくる", onMake)
     }
 
@@ -244,7 +247,7 @@ internal fun OperatorNextActionCard(
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
             // 数字は必ず言葉つきで意味を添える（operator_ux §6）。
             Text(
-                "人手が足りない日：${shortDays}日 ・ できあがり度（全体の完成度）：${ui.satisfaction}%",
+                "人手が足りない日：${shortDays}日 ・ できあがり度：${ui.satisfaction}%",
                 style = MaterialTheme.typography.bodyMedium, color = plan.fg,
             )
             if (ui.running) {
@@ -304,7 +307,7 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
             if (ui.polishExhausted && !ui.running) {
                 Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("✓ 必須条件は満たしています。残りの『できれば守りたい条件』は自動で整えて減らせます（必須は壊しません）。難しければ勤務表タブでの手修正が早い場合があります。",
+                        Text("✓ 必須は満たしています。残りの調整は自動で減らせます（必須は壊しません）。",
                             color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自動で整える") }
@@ -388,7 +391,7 @@ internal fun SettingIssuesCard(ui: UiState, onFix: (com.magi.app.v6.SettingIssue
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("設定の見直し（${issues.size}件）", style = MaterialTheme.typography.titleMedium)
-            Text("制約や希望シフトの入力に、直したほうがよい点があります。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            // [冗長性見直し] 見出し「設定の見直し（N件）」＋各行の具体表示と重複するため説明文は削除。
             for (s in issues.take(6)) {
                 val label: String
                 val tagColor: androidx.compose.ui.graphics.Color
@@ -708,7 +711,8 @@ private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCel
                 Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(item.sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (clickable) Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
+            if (clickable) Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium,
+                color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
         }
     }
 }
@@ -754,7 +758,7 @@ internal fun ConfirmListCard(
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("要確認一覧（${items.size}件）", style = MaterialTheme.typography.titleMedium)
-            if (!proMode) Text("直したほうがよい箇所を重大度でまとめました。タップで直し方を探します。",
+            if (!proMode) Text("タップで直し方を探します。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             if (issueCount > 0) {
                 Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.medium) {
@@ -867,7 +871,8 @@ private fun AttentionRow(title: String, sub: String, alerts: Int, warnBg: Color,
                     Text("確認$alerts", color = warnFg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
                 }
             }
-            if (onClick != null) Text("直し方→", style = MaterialTheme.typography.labelMedium, color = MagiAccent.blue)
+            if (onClick != null) Text("直し方→", style = MaterialTheme.typography.labelMedium,
+                color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
         }
     }
 }
@@ -888,7 +893,7 @@ internal fun BreakdownCard(ui: UiState, onFocusStaff: (Int) -> Unit = {}, proMod
             }
             // [明確性I1] チップの数値は「ペナルティ量」。熟練者向けプロ表示では注記を省く。
             if (!proMode) {
-                Text("数値はペナルティの大きさ（不足・超過の合計や並び違反の回数）。タップで実際の場所（セル）を表示します。",
+                Text("数値は違反の大きさ。タップで場所を表示。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             BreakdownGroup(if (proMode) "必須" else "必須（満たすべき）", listOf("groupViol", "pref", "covU", "c3n"), 2, ui, labels, expanded, onTapChip)
@@ -973,11 +978,6 @@ internal fun SeverityChip(label: String, count: Int, severity: Int, famKey: Stri
     }
 }
 
-/**
- * [B1] 勤務表の「結果(読取ws6)／編集中(ws7)」モード切替カード。
- * 既存の 7日/カレンダー/1ヶ月 切替の上に置く。結果モードは誤編集防止のため読取専用。
- */
-
 @Composable
 internal fun BigStat(label: String, value: String, modifier: Modifier = Modifier) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = modifier) {
@@ -1020,7 +1020,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                 }
             }
             if (!proMode) {
-                Text("違反を減らす1手を効果順に提案します。「変更」は1マスを別の勤務に、「交換」は2人の同日を入れ替えます。",
+                Text("違反を減らす1手を効果順に提案します。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             when {
@@ -1058,7 +1058,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
-            Text("並列探索で見つかった、採用案以外の候補です。", style = MaterialTheme.typography.bodySmall,
+            Text("採用案以外の候補です。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             ui.alternatives.forEachIndexed { i, s ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
