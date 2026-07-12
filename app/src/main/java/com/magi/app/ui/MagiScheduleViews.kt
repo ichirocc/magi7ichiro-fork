@@ -1228,19 +1228,33 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
+    // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
+    //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
+    val periodLabel = remember(ui.startDate, ui.days) {
+        runCatching {
+            val wk = listOf("月", "火", "水", "木", "金", "土", "日")
+            fun fmt(d: LocalDate) = "${d.year}年${d.monthValue}月${d.dayOfMonth}日(${wk[d.dayOfWeek.value - 1]})"
+            val s0 = LocalDate.parse(ui.startDate)
+            "集計期間 ${fmt(s0)}〜${fmt(s0.plusDays((ui.days - 1).toLong()))}"
+        }.getOrNull()
+    }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("シフト集計", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             MagiSegmentedControl(options = listOf("職員別", "日別"), selected = mode, onSelect = { mode = it })
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
+            periodLabel?.let {
+                Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Spacer(Modifier.height(8.dp))
+            }
             if (mode == 0) {
                 // [P7/実務者向け短文化] 「職員別」タブ名＋表そのもので内容は自明。残すのは操作の含意だけ。
-                Text("違反セルはタップで内訳と直し方",
+                Text("ⓘ タップで内訳と直し方",
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 // [一括修正] 職員別の赤/橙は low/high(上下限)だけでなく aptLow/aptHigh(適切回数=目標)も同色マーク
                 //   のため、凡例に「目標」を含める（旧「上限超過」だけでは 美幸B4=目標超過 の橙が読めなかった）。
-                TallyLegend(shortBg, overBg, "回数が下限/目標未満", "上限/目標超過")
+                TallyLegend(shortBg, overBg)
                 Spacer(Modifier.height(8.dp))
                 val labW = 100.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 集計セル 40x34 -> 48x48（違反セルはタップ可のため）
                 Row {
@@ -1291,10 +1305,10 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                     }
                 }
             } else {
-                // [P7/実務者向け短文化] 「日別」タブ名＋表で自明。
-                Text("違反セルはタップで内訳と直し方",
+                // [P7/実務者向け短文化] 「日別」タブ名＋表で自明。日別は横スクロール（他の日）の含意も添える。
+                Text("ⓘ タップで内訳と直し方 ・ 👆 左右スワイプで他の日",
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                TallyLegend(shortBg, overBg, "人員不足", "人員過剰")
+                TallyLegend(shortBg, overBg)
                 Spacer(Modifier.height(8.dp))
                 val labW = 84.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 日別集計セル 34x34 -> 48x48
                 Row {
@@ -1397,17 +1411,22 @@ private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else 
 
 /** シフト集計の違反ハイライト凡例（不足=赤 / 過剰=橙）。 */
 @Composable
-private fun TallyLegend(shortBg: Color, overBg: Color, shortLabel: String, overLabel: String) {
+private fun TallyLegend(shortBg: Color, overBg: Color) {
+    // [シンプルデザイン融合] スクショの1行凡例に統一: ▼不足 ▲超過 — 対象外。
+    //   タブ名（職員別/日別）が不足/超過の意味を文脈で示すため、旧・長文ラベル
+    //   （回数が下限/目標未満 等）は撤去。詳細はセルのタップで出す。色見本＋▼▲＝色覚二重符号化。
     val cs = MaterialTheme.colorScheme
     Spacer(Modifier.height(6.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(13.dp).background(shortBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
-        Text("▼ $shortLabel", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("▼ 不足", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.width(14.dp))
         Box(Modifier.size(13.dp).background(overBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
-        Text("▲ $overLabel", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("▲ 超過", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Spacer(Modifier.width(14.dp))
+        Text("— 対象外", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
     }
 }
 
