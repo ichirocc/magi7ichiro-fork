@@ -905,7 +905,7 @@ object V6HotfixPasses {
         if (impossible > 0) issues.add("不可能希望 $impossible 件")
         if (hardCore > 0) issues.add("希望以外HARD $hardCore 件")
         val msg = if (issues.isEmpty()) "HF70: $algoName 異常なし" else "HF70: ${issues.joinToString(" / ")}"
-        val advice = if (issues.isEmpty()) "" else "設定(ws1/担当範囲), 希望(ws3), 必要人数, 連勤禁止条件を確認してください"
+        val advice = if (issues.isEmpty()) "" else "設定(担当範囲), 希望, 必要人数, 連勤禁止条件を確認してください"
         val level = if (issues.isEmpty()) "I" else "W"
         val logs = listOf(MirrorLog(level = level, tag = "HF70", message = msg + if (advice.isNotBlank()) " — $advice" else ""))
         return HF70Result(issues.size, msg, advice, logs)

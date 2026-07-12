@@ -1025,7 +1025,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
             }
             when {
                 ui.fixSearching -> Text("候補を探しています。少しお待ちください。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                ui.fixSuggestions.isEmpty() -> Text("候補がありません。「探す」を押すか、上の違反の場所をタップしてください。\n※1手で直せない違反（下限が競合する等の構造的不足）は、設定(ws1)の見直しが根本解です。",
+                ui.fixSuggestions.isEmpty() -> Text("候補がありません。「探す」を押すか、上の違反の場所をタップしてください。\n※1手で直せない違反（下限が競合する等の構造的不足）は、設定の見直しが根本解です。",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 else -> ui.fixSuggestions.forEach { s ->
                     val (tag, tagColor) = fixKindTag(s.kind)
