@@ -302,7 +302,7 @@ internal fun GroupRangeDialog(
                 }
                 NumberStepper("下限", lo, { lo = it }, min = 0, blankLabel = "なし")
                 NumberStepper("上限", hi, { hi = it }, min = 0, blankLabel = "なし")
-                Text("全員の個人上下限(ws5)に設定し、下限=上限なら適切回数(ws1 C)も同時に設定します（既存の個人設定は上書き）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（既存の個人設定は上書き）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )

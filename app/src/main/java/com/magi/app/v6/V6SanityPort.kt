@@ -207,7 +207,7 @@ object V6SanityPort {
             val where = "${w.staffName} ${safeDayLabel(state.startDate, w.dayIndex)} 希望「${w.shiftSymbol}」"
             val fix = when {
                 w.reason.contains("担当不可") ->
-                    "この希望を取り消すか、設定(ws1)で${w.staffName}さんの担当に「${w.shiftSymbol}」を追加してください"
+                    "この希望を取り消すか、設定で${w.staffName}さんの担当に「${w.shiftSymbol}」を追加してください"
                 w.reason.contains("範囲外") ->
                     "希望のシフト記号・日付が勤務表の範囲内かを確認してください"
                 else -> "希望の入力（i,j形式）を確認してください"
@@ -225,7 +225,7 @@ object V6SanityPort {
             val fam = c3FamilyJp(famRaw)
             val seq = d.substringAfter(':')
             out.add(SettingIssue(IssueKind.CONSTRAINT, "連続パターン「$seq」($fam)",
-                "同じパターンが2重に登録されています", "連続パターン設定(ws4)で「$seq」の重複行を1つ削除してください",
+                "同じパターンが2重に登録されています", "連続パターン設定で「$seq」の重複行を1つ削除してください",
                 action = SettingFixAction.DELETE_DUP_SEQ, actionLabel = "重複を1つ削除",
                 seqFamily = famRaw, seqKey = seq))
         }
@@ -280,7 +280,7 @@ object V6SanityPort {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "窓ルール「$sym を${c.day1}日で${c.day2}回以上」",
                         "「$sym」の供給${supply}に対し必要${demand}(=担当${nCanDo}人×${c.day2}回×${disjoint}窓)で$short 不足。" +
                             "どう組んでもこの窓違反(c1)は構造的に残ります（最適化では消せません）。",
-                        "「$sym」の担当者を増やす(ws1)か、窓ルールの回数を下げる／日数を延ばす(制約設定)。"))
+                        "「$sym」の担当者を増やすか、窓ルールの回数を下げる／日数を延ばす(制約設定)。"))
                 }
             }
         }
@@ -303,7 +303,7 @@ object V6SanityPort {
             out.add(SettingIssue(IssueKind.CONSTRAINT, "連続パターン「$seqStr」($famJp)",
                 if (negative) "パターン長が期間${p.T}日を超えるため期間内に発生し得ず、この制約は無効です"
                 else "パターン長が期間${p.T}日を超えるため物理的に充足できず、この制約は無効です",
-                "連続パターン設定(ws4)でパターンを${p.T}日以下に短縮するか、この行を削除してください"))
+                "連続パターン設定でパターンを${p.T}日以下に短縮するか、この行を削除してください"))
         }
 
         // 3) 需要 > 担当可能人数（その枠は誰をどう並べても必ず不足）
@@ -316,7 +316,7 @@ object V6SanityPort {
                 val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                 out.add(SettingIssue(IssueKind.DEMAND, "${safeDayLabel(state.startDate, j)} $sym",
                     "必要${need}人ですが担当できるのは${capable}人だけです",
-                    "担当できる職員を増やす(ws1)か、必要人数を${capable}人以下に下げてください(ws2)",
+                    "担当できる職員を増やすか、必要人数を${capable}人以下に下げてください",
                     action = SettingFixAction.CAP_DEMAND, actionLabel = "必要数を${capable}人に下げる",
                     demandShiftIdx = k, demandCap = capable))
             }
@@ -332,19 +332,19 @@ object V6SanityPort {
             val name = i?.let { state.staff.getOrNull(it)?.name } ?: "#$i"
             val sym = k?.let { state.shifts.getOrNull(it)?.kigou } ?: "$k"
             if (i == null || k == null || i !in 0 until p.S || k !in 0 until p.K) {
-                out.add(SettingIssue(IssueKind.RANGE, "回数設定 $key", "対象職員/シフトが範囲外です", "設定(ws1)で正しい職員・シフトに付け直してください"))
+                out.add(SettingIssue(IssueKind.RANGE, "回数設定 $key", "対象職員/シフトが範囲外です", "設定で正しい職員・シフトに付け直してください"))
                 continue
             }
             if (lo != null && hi != null && lo > hi) {
-                out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限$lo > 上限$hi で矛盾しています", "設定(ws1)で下限≤上限に直してください",
+                out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限$lo > 上限$hi で矛盾しています", "設定で下限≤上限に直してください",
                     action = SettingFixAction.CLAMP_RANGE_LO, actionLabel = "下限を${hi}に下げる", rangeKey = key, newLo = hi.toString()))
             }
             if (lo != null && lo > 0 && !p.canDo(i, k)) {
-                out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "担当できないシフトに下限${lo}が設定されています", "下限を0にするか、${name}さんの担当に「$sym」を追加してください(ws1)",
+                out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "担当できないシフトに下限${lo}が設定されています", "下限を0にするか、${name}さんの担当に「$sym」を追加してください",
                     action = SettingFixAction.ZERO_RANGE_LO, actionLabel = "下限を0にする", rangeKey = key, newLo = "0"))
             }
             if (lo != null && lo > p.T) {
-                out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限${lo}が期間日数(${p.T}日)を超えています", "下限を${p.T}以下に直してください(ws1)",
+                out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限${lo}が期間日数(${p.T}日)を超えています", "下限を${p.T}以下に直してください",
                     action = SettingFixAction.CLAMP_RANGE_LO, actionLabel = "下限を${p.T}に下げる", rangeKey = key, newLo = p.T.toString()))
             }
         }
@@ -360,7 +360,7 @@ object V6SanityPort {
                 val name = state.staff.getOrNull(i)?.name ?: "#$i"
                 out.add(SettingIssue(IssueKind.RANGE, "$name の回数下限の合計",
                     "各シフトの下限の合計が${sumLo}で、期間日数(${p.T}日)を超えています",
-                    "どれかのシフトの下限を下げてください（合計を${p.T}以下に）(ws1)"))
+                    "どれかのシフトの下限を下げてください（合計を${p.T}以下に）"))
             }
         }
 
@@ -390,20 +390,20 @@ object V6SanityPort {
             if (loSum > seatsHi) {
                 out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の回数下限の合計",
                     "担当者の下限の合計が${loSum}回ですが、必要数の合計は${seatsHi}回しかありません。全員の下限は同時に満たせず、過剰配置か下限割れが必ず出ます",
-                    "「$sym」の個人下限を下げる(ws1)か、必要人数を増やしてください(ws2)"))
+                    "「$sym」の個人下限を下げるか、必要人数を増やしてください"))
             }
             // B) 全担当者に上限があり、上限の合計 < 必要数 → 席を埋めきれず人員不足(covU)が不可避。
             if (capable > 0 && allCapped && capSum < seatsLo) {
                 out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の必要人数",
                     "必要数の合計は${seatsLo}回ですが、担当者の上限の合計は${capSum}回しかありません。席を埋めきれず人員不足になります",
-                    "「$sym」の個人上限を上げる/担当者を増やす(ws1)か、必要人数を下げてください(ws2)"))
+                    "「$sym」の個人上限を上げる/担当者を増やすか、必要人数を下げてください"))
             }
             // C) 適切回数(apt=職員のレパートリー目標)の合計 > 必要数(上限)の合計 → 全員の目標を満たすと過剰配置。
             //    レパートリーと被覆が両立しない設定ズレ。目標割れ(aptLow)か過剰配置(covO/aptHigh)が必ず出る。
             if (aptSum > seatsHi) {
                 out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の適切回数の合計",
                     "適切回数(レパートリー目標)の合計が${aptSum}回ですが、必要数の合計は${seatsHi}回しかありません。全員の目標は同時に満たせず、目標割れか過剰配置が必ず出ます",
-                    "「$sym」の適切回数を下げる(ws1)か、必要人数を増やしてください(ws2)"))
+                    "「$sym」の適切回数を下げるか、必要人数を増やしてください"))
             }
         }
 
@@ -431,7 +431,7 @@ object V6SanityPort {
                     val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                     out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」適切回数",
                         "担当できるシフトの構成上、「$sym」は最低${forcedMin}回になります（他の担当シフトの上限合計${otherHiSum}回では${p.T}日を埋めきれません）。適切回数${t}回は達成できず、目標超過が必ず出ます",
-                        "「$sym」の適切回数を${forcedMin}回以上にするか空欄にする、または他シフトの担当・上限を見直してください(ws1)"))
+                        "「$sym」の適切回数を${forcedMin}回以上にするか空欄にする、または他シフトの担当・上限を見直してください"))
                 }
             }
         }
@@ -441,7 +441,7 @@ object V6SanityPort {
         for (fc in forcedCovU(state, p)) {
             out.add(SettingIssue(IssueKind.DEMAND, "「${fc.shiftSymbol}」の担当者不足（配布不可の原因）",
                 "${fc.cells}日で、担当できる人数より必要人数が多く、人員不足(covU)が必ず出ます（不足の合計${fc.amount}）。この不足は最適化では解消できません",
-                "「${fc.shiftSymbol}」を担当できる職員を増やす(ws1)か、その日の必要人数を下げてください(ws2)"))
+                "「${fc.shiftSymbol}」を担当できる職員を増やすか、その日の必要人数を下げてください"))
         }
 
         // 8) [事前診断/重複定義・レビュー指摘P1] 氏名(空白無視)・シフト/グループ/スキル群の記号の重複を警告。
@@ -453,22 +453,22 @@ object V6SanityPort {
             for (d in dups(state.staff.map { nameMatchKey(it.name) })) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "職員名の重複「$d」",
                     "同名（空白を除き一致）の職員が複数います。制約とCSV取込は最初の1人に解決され、2人目以降は区別できません",
-                    "氏名を一意にしてください（例: 姓名の間や末尾に識別子を付ける）(ws1)"))
+                    "氏名を一意にしてください（例: 姓名の間や末尾に識別子を付ける）"))
             }
             for (d in dups(state.shifts.map { it.kigou.trim() })) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "シフト記号の重複「$d」",
                     "同じ記号のシフトが複数あります。制約とCSV取込は最初の1件に解決され、2件目以降は参照されません",
-                    "シフト記号を一意にしてください(ws1)"))
+                    "シフト記号を一意にしてください"))
             }
             for (d in dups(state.groups.map { it.kigou.trim() })) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "グループ記号の重複「$d」",
                     "同じ記号のグループが複数あります。制約とCSV取込は最初の1件に解決されます",
-                    "グループ記号を一意にしてください(ws1)"))
+                    "グループ記号を一意にしてください"))
             }
             for (d in dups(state.skillGroups.map { it.kigou.trim() })) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "スキルグループ記号の重複「$d」",
                     "同じ記号のスキルグループが複数あります。制約とCSV取込は最初の1件に解決されます",
-                    "スキルグループ記号を一意にしてください(ws1)"))
+                    "スキルグループ記号を一意にしてください"))
             }
         }
 
