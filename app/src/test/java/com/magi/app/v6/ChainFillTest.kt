@@ -404,7 +404,7 @@ class ChainFillTest {
     @Test
     fun chainFillAdjacentFixTriesRepeatShiftThenFallsBackToSafeAlternative() {
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("P", "P", "1", ""),
+            Shift("休", "休", "", ""), Shift("P", "P", "", ""),
             Shift("N", "N", "", ""), Shift("O", "O", "", ""),
         )
         val groups = listOf(Group("G0", "G0"))
@@ -416,7 +416,9 @@ class ChainFillTest {
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
             groupShift = groupShift, groupShiftApt = List(1) { List(4) { "" } },
             schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
-            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            // [S=1のためP(need1)は「day1のみ」に限定] 基本need1を空にし、needDay1でday1だけ1を要求。
+            //   基本need1="1"をシフト全日一律にすると、単一staffでは他日のPも埋まらずcovUが残ってしまう。
+            needDay1 = mapOf("1,1" to 1), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = listOf(C3Row(listOf("P", "N")), C3Row(listOf("P", "休", "N"))),
             cons3m = emptyList(), cons3mn = emptyList(),
