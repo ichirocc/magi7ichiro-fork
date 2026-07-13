@@ -749,6 +749,28 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## covU多人数連鎖(E11)を禁止連続の回避=隣接日調整へ拡張（3.163.0）
+ユーザー指摘「残り1人は動かすと連続禁止ルール（c3n）に触れるため使えないのであれば、連続禁止ルールの
+並びにならないようにする」（CoverageDiagnosisの「禁止連続」ブロック候補を見て）。grillingで「隣接日調整
+自体が新たな不足/禁止連続を生む場合の扱い」を確認 → **そこも玉突き連鎖として深掘りする**方針で確定。
+- `findCovUChain`（`V6SearchOperators.kt`）の `candidates()` で、候補 i が禁止連続(c3n)に触れて除外され
+  ていた箇所を拡張。即除外せず `tryFixC3nViaAdjacentDay(i, fillShift)` を試す: 隣接日(j-1/j+1)の i 自身の
+  割当を別シフト（休を優先、続けて担当可能シフト一覧）へ変えてパターンを崩せるか、`makesForbiddenRun` で
+  day j・day j2 双方の安全性を確認。崩した隣接日の元シフトが covU 悪化を招く場合は、**同じ `findCovUChain`
+  を `allowCrossDayFix=false` で1段だけ再帰**し玉突き連鎖として埋め直す（cross-day 再帰は1段のみに制限＝
+  無限展開防止。同日内の同一BFS(`maxDepth`)自体は従来どおり最大5人まで）。見つかった追加手は
+  `Node.extra: List<IntArray>?` に積み、`tryComplete` の手順収集時に合流する（day j 本体の手＝
+  `[(i,j,fillShift)]` はそのまま・day j2 の手＋サブ連鎖は `extra` として付随）。盤面は判定中に一時変更する
+  が、成功・失敗いずれの分岐でも呼出前に必ず復元（本関数の「盤面を変更しない」契約は不変）。
+- `findCovUChain` に `allowCrossDayFix: Boolean = true` パラメータを新設（全既存呼出はデフォルト維持＝
+  非破壊。RSI focus/エピローグ/C1Polish はいずれもこの新機能の恩恵を自動的に受ける）。
+- ユニットテスト: 既存 `chainFillAvoidsTripleForbiddenRun` は新機能により結果が非決定的になり得たため
+  （bがaの隣接日肩代わりに使え、RNG次第でaかbかが変わる）、bへ day0/day2 の希望固定を追加して隣接日調整
+  の対象外に固定し、従来の「三連トラップを避けてbのみ使う」という元の検証意図を保った（決定的に復元）。
+  新規 `chainFillResolvesC3nBlockViaAdjacentDayFix`: bをday1のみ希望固定（直接候補から除外）し、aの
+  隣接日調整＋玉突き（day0を休へ・bがday0のPを玉突き充填）でcovUとc3nが両方解消することを検証。
+  スコアリング不変・退化不能（最終防波堤は既存のkeep-best/isBetter、呼出元は全て変更なし）。
+
 ## 対応OSをAndroid 16以降のみに変更（3.162.0）
 ユーザー指示「Android 16以降のみ対応する」。`minSdk` を 35(Android 15) → **36(Android 16)** へ引き上げ
 （compileSdk/targetSdkは元々36で変更なし）。API 36未満の端末は対象外になる（Google Play配布時は

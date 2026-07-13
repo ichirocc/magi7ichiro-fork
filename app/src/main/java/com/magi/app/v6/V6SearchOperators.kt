@@ -261,10 +261,17 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
  * シフト（需要0 or 余裕あり）で終端」。リンク条件: canDo・非wishLocked・禁止連続(c3n, 任意長=三連/五連等)の
  * プルーニング・同一職員の再訪なし・同一シフト展開の再訪なし・深さ≤maxDepth(既定5=最大5人の玉突き)。
  * 同日内交換なので被覆総量は保存。
+ *
+ * [禁止連続の回避=隣接日調整] 候補 i が k0 を埋めると禁止連続(c3n)に触れる場合、即除外せず、
+ * 隣接日(j-1/j+1)の i 自身の割当も変えてパターンを崩せないか試す（`tryFixC3nViaAdjacentDay`）。
+ * その調整で i の隣接日の元シフトが空き covU が悪化するなら、そこも同じ findCovUChain を
+ * `allowCrossDayFix=false` で再帰し玉突き連鎖として埋め直す（cross-day 再帰は1段のみ＝無限展開防止）。
+ * 見つかった追加手は Node.extra に積み、最終手順に合流する。
+ *
  * 返り値 = 適用手 [(i, j, newK), ...]（本関数は盤面を変更しない。適用と採否=keep-best は呼び出し側＝
  * スコアリング不変・退化不能）。見つからなければ null。
  */
-internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5, exclude: Int = -1): List<IntArray>? {
+internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5, exclude: Int = -1, allowCrossDayFix: Boolean = true): List<IntArray>? {
     if (j !in 0 until p.T || k0 !in 0 until p.K || p.S == 0) return null
     val cnt = IntArray(p.K)
     for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
@@ -275,8 +282,43 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
     //   担保＝ここは成功率向上の枝刈り。Problem.makesForbiddenRun が任意長ルールを一般判定）。
     fun c3nHits(i: Int, newK: Int): Boolean = p.makesForbiddenRun(sched, i, j, newK)
 
+    // [禁止連続の回避=隣接日調整] i を k0(day j) へ動かすと禁止連続に触れるとき、隣接日(j-1/j+1)の
+    //   i の割当を別シフトへ変えてパターンを崩せないか試す。変更で空くシフトが covU 悪化を招くなら、
+    //   同じアルゴリズムを1段だけ再帰して玉突きで埋め直す（allowCrossDayFix=false で無限展開を防止）。
+    //   見つかれば [(i, j2, alt), ...サブ連鎖] を返す（盤面は一時変更するが必ず復元する）。
+    fun tryFixC3nViaAdjacentDay(i: Int, fillShift: Int): List<IntArray>? {
+        if (!allowCrossDayFix) return null
+        for (j2 in intArrayOf(j - 1, j + 1)) {
+            if (j2 !in 0 until p.T || p.wishLocked(i, j2)) continue
+            val oldJ2 = sched[i][j2]
+            if (oldJ2 !in 0 until p.K) continue
+            // 候補シフト: 休を優先（連続禁止を崩す最も安全な既定手）、続けて担当可能シフト一覧。
+            val altOrder = ArrayList<Int>()
+            if (p.restIdx != oldJ2 && p.canDo(i, p.restIdx)) altOrder.add(p.restIdx)
+            for (s in p.allowedShiftsForStaff(i)) if (s != oldJ2 && s !in altOrder) altOrder.add(s)
+            for (alt in altOrder) {
+                val cntBefore = (0 until p.S).count { sched[it][j2] == oldJ2 }
+                sched[i][j2] = alt   // [一時変更] 下の判定後に必ず復元する
+                val jOk = !p.makesForbiddenRun(sched, i, j, fillShift)
+                val j2Ok = !p.makesForbiddenRun(sched, i, j2, alt)
+                if (!jOk || !j2Ok) { sched[i][j2] = oldJ2; continue }
+                if (p.covUCell(oldJ2, j2, cntBefore - 1) > p.covUCell(oldJ2, j2, cntBefore)) {
+                    // i の離脱で oldJ2 が covU 悪化 → 同アルゴリズムを1段だけ再帰して埋め直す。
+                    val subChain = findCovUChain(p, sched, oldJ2, j2, rng, maxDepth = maxDepth, exclude = i, allowCrossDayFix = false)
+                    sched[i][j2] = oldJ2
+                    if (subChain != null) return listOf(intArrayOf(i, j2, alt)) + subChain
+                } else {
+                    sched[i][j2] = oldJ2
+                    return listOf(intArrayOf(i, j2, alt))
+                }
+            }
+        }
+        return null
+    }
+
     // BFS ノード = 「fillShift へ staff が入る」手。子 = staff が空けた現シフトを埋める手。
-    class Node(val fillShift: Int, val staff: Int, val prev: Node?)
+    // extra = 禁止連続を回避するための追加手（隣接日調整＋サブ連鎖。無ければ null）。
+    class Node(val fillShift: Int, val staff: Int, val prev: Node?, val extra: List<IntArray>? = null)
 
     // 職員の走査順を乱択（同型解の多様化。決定性が欲しい呼び出しは seed 固定の rng を渡す）。
     val order = IntArray(p.S) { it }
@@ -288,10 +330,16 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
             if (i == exclude) continue   // [C1×E11] 呼出元が別途動かした職員を連鎖の候補から除外（無効な回帰手を防ぐ）
             val m = sched[i][j]
             if (m !in 0 until p.K || m == fillShift) continue
-            if (!p.canDo(i, fillShift) || p.wishLocked(i, j) || c3nHits(i, fillShift)) continue
+            if (!p.canDo(i, fillShift) || p.wishLocked(i, j)) continue
             var q = prev; var used = false
             while (q != null) { if (q.staff == i) { used = true; break }; q = q.prev }
-            if (!used) out.add(Node(fillShift, i, prev))
+            if (used) continue
+            if (c3nHits(i, fillShift)) {
+                val fix = tryFixC3nViaAdjacentDay(i, fillShift) ?: continue
+                out.add(Node(fillShift, i, prev, extra = fix))
+                continue
+            }
+            out.add(Node(fillShift, i, prev))
         }
         return out
     }
@@ -318,7 +366,11 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
         if (p.covUCell(m, j, trueCnt - 1) > p.covUCell(m, j, trueCnt)) return null
         val moves = ArrayList<IntArray>()
         var n: Node? = node
-        while (n != null) { moves.add(intArrayOf(n.staff, j, n.fillShift)); n = n.prev }
+        while (n != null) {
+            moves.add(intArrayOf(n.staff, j, n.fillShift))
+            n.extra?.let { moves.addAll(it) }   // [禁止連続の回避] 隣接日調整＋サブ連鎖の追加手を合流
+            n = n.prev
+        }
         return moves
     }
 
