@@ -387,6 +387,64 @@ class ChainFillTest {
         assertTrue("total も悪化しない（keep-best）", after.total <= before.total)
     }
 
+    // [ユーザー指摘の検証=「Dﾃ-Dﾃ」仮説] 「移動先の翌日が別の禁止連続に触れるなら、同じシフトを
+    //   もう一度充てる(例: 夜勤の連続=Dﾃ-Dﾃ)ことを試してみては」という提案の検証。実データ(cons3n=
+    //   Dﾃ-A4/Aｱ/Cｵ/Cｱ/B4/Cｳ/B1・Dﾃ-休-A4/Aｱ の3連含む)を Python でリプレイしたところ、対象3名
+    //   （実機ログの金沢勇輝=Dﾃ-Cｳ・モニカ=Dﾃ-休-Aｱ・アリフ=Dﾃ-Cｱ）はいずれも tryFixC3nViaAdjacentDay
+    //   の altOrder 走査（休優先→担当可能シフト全種）で既に解決できることを確認。「同じシフトの
+    //   繰り返し」は altOrder の2番目（休の次）に自然に含まれるため自動的に試されるが、単発では
+    //   万能ではない: 翌々日が別の禁止連続の相手（例 Dﾃ-Aｱ）だと「Dﾃ-Dﾃ」自体が新たな禁止連続を
+    //   翌日側へ1日ずらすだけで終わる。本テストは、この「繰り返しでは解決しないが、全候補探索の
+    //   結果、別の安全なシフトで解決する」ケースを最小構成で再現し固定する:
+    //   shift: 0=休 1=P(need1・充填対象=「Dﾃ」役) 2=N(P-Nが2連禁止＝「Aｱ」役) 3=O(禁止連続と無関係="有"役)
+    //   cons3n = [P,N](2連) と [P,休,N](3連)。i の day1(j)=休(現在)・day2(j+1)=休・day3(j+2)=N。
+    //   day1をPにすると [P,休,N] の3連禁止に触れる → 隣接日調整は day2 を別シフトへ変えようとする。
+    //   1回目の試み(繰り返し=P, 「Dﾃ-Dﾃ」相当)は day2,3=[P,N] で2連禁止に新たに触れて失敗 → 続けて
+    //   day2=N も day1,2=[P,N]で直ちに失敗 → day2=O でようやく成立（P-O・O-N とも禁止パターン外）。
+    @Test
+    fun chainFillAdjacentFixTriesRepeatShiftThenFallsBackToSafeAlternative() {
+        val shifts = listOf(
+            Shift("休", "休", "", ""), Shift("P", "P", "1", ""),
+            Shift("N", "N", "", ""), Shift("O", "O", "", ""),
+        )
+        val groups = listOf(Group("G0", "G0"))
+        val groupShift = listOf(listOf(1, 1, 1, 1))
+        val staff = listOf(Staff("i", 0))
+        val schedule = listOf(listOf(0, 0, 0, 2))   // day0=休, day1(j)=休, day2(j+1)=休, day3(j+2)=N
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-04",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(1) { List(4) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(listOf("P", "N")), C3Row(listOf("P", "休", "N"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val p = cachedProblem(st)
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertTrue("day1 の P不足(covU)が前提", (before.breakdown["covU"] ?: 0) > 0)
+        assertEquals(0, before.breakdown["c3n"] ?: 0)
+        assertTrue("day1をPにすると[P,休,N]の3連禁止に触れる前提", p.makesForbiddenRun(sched, 0, 1, 1))
+        // 「繰り返し(Dﾃ-Dﾃ相当)」= day2もPにする案は、day2,3=[P,N]で新たな2連禁止に触れ単体では不成立。
+        val repeatSched = arrayOf(sched[0].copyOf())
+        repeatSched[0][2] = 1
+        assertTrue("繰り返し(day2もP)は day2,3=[P,N]で新たな禁止連続に触れる", p.makesForbiddenRun(repeatSched, 0, 2, 1))
+
+        val chain = findCovUChain(p, sched, 1, 1, Random(9))
+        assertNotNull("altOrder走査で「Dﾃ-Dﾃ」を試した上で別の安全なシフトへ着地すること", chain)
+        for (mv in chain!!) sched[mv[0]][mv[1]] = mv[2]
+
+        assertEquals("i の day1 が P で埋まる", 1, sched[0][1])
+        assertEquals("day2 は繰り返し(P)でもN でもなく安全なOへ", 3, sched[0][2])
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals("covU が解消されること", 0, after.breakdown["covU"] ?: 0)
+        assertEquals("三連禁止(c3n)を新たに作らないこと", 0, after.breakdown["c3n"] ?: 0)
+        assertTrue("hard は悪化しない", after.hard <= before.hard)
+    }
+
     // [敵対的レビュー修正の回帰] tryComplete の静的 cnt[] 補正が「到着」だけでなく「離脱」も
     // 両方加味しないと、実際には別の covU を作る連鎖を安全と誤判定しうる（false accept）ことを固定する。
     // P(root,need1,0人)←Q(need2,2人=a,k1 在勤)←M(need1,1人=g 在勤) の3段連鎖: a が Q→P、g が M→Q、
