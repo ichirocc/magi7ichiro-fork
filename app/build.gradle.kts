@@ -1,20 +1,23 @@
+// [Gradle 9移行] AGP 9.0+ の内蔵Kotlinサポートを使用（org.jetbrains.kotlin.android は不要）。
+// Compose Compiler のみ独立プラグインとして明示適用（root build.gradle.kts でオーバーライドした
+// Kotlin 2.3.21 と版数を一致させる）。
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.magi.app"
     compileSdk = 36
-    // [ネイティブ加速] AGP 8.6 の既定 NDK に固定（CI と開発環境で同一ビルドを保証）。
+    // [ネイティブ加速] NDK を明示固定（CI と開発環境で同一ビルドを保証。AGP の既定NDKに追従させない）。
     ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "com.magi.app"
         minSdk = 35
         targetSdk = 36
-        versionCode = 312
-        versionName = "3.158.0-c1-polish-chain-fallback"
+        versionCode = 314
+        versionName = "3.160.0-gradle9-migration"
         // [ネイティブ加速] minSdk 35（Android 15+）の実機は arm64 のみ対象で十分。
         //   .so が無い環境でも NativeBridge が false を返し Kotlin パスで全機能が動く。
         ndk { abiFilters += listOf("arm64-v8a") }
@@ -46,9 +49,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
+    // [Gradle 9移行] kotlinOptions{jvmTarget}は撤去。内蔵Kotlinは既定で
+    // android.compileOptions.targetCompatibility(=17, 上記)からjvmTargetを継承するため明示不要
+    // （公式ドキュメント確認: "You don't need to explicitly set jvmTarget... it defaults to
+    // android.compileOptions.targetCompatibility"）。composeOptions.kotlinCompilerExtensionVersion は
+    // Compose Compiler の独立プラグイン化(Kotlin 2.0+)で不要（版数は root build.gradle.kts の
+    // org.jetbrains.kotlin.plugin.compose(2.3.21) が管理）。
     buildFeatures { compose = true }
-    composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
     packaging { resources { excludes += setOf("/META-INF/{AL2.0,LGPL2.1}") } }
 
     // This release variant is a personal-test APK signed with the debug key (see buildTypes.release),

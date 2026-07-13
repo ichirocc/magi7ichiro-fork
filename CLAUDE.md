@@ -723,6 +723,65 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   旧実装なら頭打ちだった c1 不足が新パスで解消することを検証。解の一意性を保証するため候補を非対称化
   （対称だと乱数シャッフル順で結果が変わりテストがフレークするため）。スコアリング不変・退化不能。
 
+## 敵対的コードレビューで判明した2件の修正（3.159.0）
+ユーザー指示「愚直にコードトレースしてコードレビューする」→「修正する」。PR#19マージ後の全差分(12コミット)を
+手動で行単位トレースし2件を確認・修正。
+- **[CONFIRMED, 正しさ] `findCovUChain.tryComplete` の静的ヘッドカウント補正**: 終端判定(その職員が
+  シフトmを抜けても covU が増えないか)が探索開始時点の静的 `cnt[m]` をそのまま使っており、3段以上の
+  連鎖では祖先ノードの適用で実際の m のheadcountが変わりうるため不正確だった（呼出3箇所すべてが外側
+  keep-best(isBetter/checker)で最終ガードされるため誤採用はしないが、判定自体の精度が甘かった）。
+  祖先を辿って m への**「到着」(+1: 祖先の fillShift==m)と「離脱」(-1: 祖先の元シフト==m)を両方**加味した
+  真のheadcountで判定するよう修正。**[重要]** 初版修正は到着のみを補正する不完全なものだったが、自己の
+  敵対的再検証で「祖先が m から離脱しつつ別の祖先が m へ到着する」3段連鎖（P←Q←M型）だと離脱を見逃して
+  headcountを過大評価し、実際には別シフトの covU を悪化させる連鎖を安全と誤判定しうる(false accept)ことを
+  発見・出荷前に是正。回帰テスト `chainFillNeverBreaksAnotherShiftViaStaleAncestorCount`
+  （P(need1,0人)←Q(need2,2人=a,k1)←M(need1,1人=g) の連鎖で、a:Q→P・g:M→Q・k1:Q→M という手は
+  正味 Q から2人抜け1人しか戻らずQを壊すため、正しい修正なら null=見つからないことを固定）を追加。
+  既存の depth1/2/3/5 連鎖テストは全て祖先とターゲットのシフトが重複しない一本道構造のため adj=0 で
+  不変（手動トレースで確認・退行なし）。スコアリング不変（探索の枝刈り精度向上のみ・最終防波堤は不変）。
+- **[CONFIRMED, 表示の整合] CoverageDiagnosis の内訳がcapacityと合わない**: 3.156.0 の4分類
+  (空き番/玉突き/希望固定/禁止連続)が「既にこのシフトに在勤中」の職員を素通りしており、
+  `free+cascade+pinned+forbid` の合計が `capacity`（担当可能人数）と一致せず表示が混乱を招いていた。
+  `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
+  対象とする既存の意味論を維持。読取専用・スコア不変。
+
+## Gradle 9 移行（3.160.0）
+ユーザー指示「Gradle 9移行する」。ビルド基盤を Gradle 8.7/AGP 8.6.0/Kotlin 1.9.24 から
+**Gradle 9.3.1 / AGP 9.1.1 / Kotlin 2.3.21（AGP 9 の内蔵Kotlinサポート＋KGPオーバーライド）**へ移行。
+（公式ドキュメント確認: AGP 9.1.1 の最小/既定 Gradle は 9.3.1・JDK 17・SDK Build Tools 36.0.0・
+同梱 KGP 2.2.10。この組合せは Android 公式リリースノートに明記された自己整合な組み。）
+- **`org.jetbrains.kotlin.android` プラグインを撤去**: AGP 9.0+ は Kotlin サポートを内蔵し不要
+  （`build.gradle.kts`/`app/build.gradle.kts` 両方）。代わりに **`org.jetbrains.kotlin.plugin.compose`**
+  を明示適用（Compose Compiler は Kotlin 2.0+ で独立プラグイン化されたため、使用するKGPの版数と
+  一致させる必要がある）。
+- **[ユーザー指示「Kotlin 2.3.21以上にする」] KGP を 2.2.10(AGP 9.1.1 既定同梱) → 2.3.21 へオーバーライド**:
+  公式手順（`buildscript { dependencies { classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21") } }`
+  を root `build.gradle.kts` の `plugins{}` より前に追加）で明示上書き。既定より低いKGPを指定した場合は
+  AGP が自動で 2.2.10 へ引き上げるが、より高い版数は明示 classpath 指定でのみ有効という公式仕様に準拠。
+  Compose Compiler プラグインの版数も 2.3.21 へ追従（Kotlin本体と版数を一致させる必要があるため）。
+- **`kotlinOptions{jvmTarget="17"}` を撤去（置換ではなく削除）**: 内蔵Kotlinの `compilerOptions` は
+  `android{}` 直下ではなく別の場所にあり、初版で `android.compilerOptions{jvmTarget=...}` として実装した
+  ところ CI（release-build.yml）で `Unresolved reference 'compilerOptions'` と実際にビルド失敗、公式ドキュメント
+  再確認で誤りと判明（"You don't need to explicitly set jvmTarget... it defaults to
+  android.compileOptions.targetCompatibility" に訂正）。**jvmTarget は既存の `compileOptions.
+  targetCompatibility=17` から内蔵Kotlinが自動継承するため、ブロックごと削除**が正しい修正（HF77非該当だが
+  「CIの実結果で検証する」という本移行自身の方針どおり、誤りをCI失敗で検出→即訂正した実例）。
+- **`composeOptions{kotlinCompilerExtensionVersion}` を撤去**: 独立プラグイン化で無効・不要
+  （版数は `org.jetbrains.kotlin.plugin.compose` が一元管理）。
+- `gradle/wrapper/gradle-wrapper.properties` の distributionUrl を 9.3.1 へ。CI 3ワークフロー
+  （android-sdk/release-build/v6-engine-check）は wrapper でなく system Gradle を直接ダウンロードして
+  PATH へ通す方式のため、各ワークフローの「Install Gradle」ステップも 9.3.1 へ同時更新（wrapper だけ
+  更新しても CI には反映されない構成のため必須）。あわせて `build-tools;36.0.0` を追加インストール
+  （AGP 9 の最小要求。既存の 35.0.0 は後方互換のため残置）。
+- **意図的に不変**: NDK(26.1.10909125)/CMake(3.22.1) は明示固定のため AGP の既定値変更（NDK既定は
+  28.2.13676358 化）の影響を受けない。Compose BOM(2024.09.02)含む依存関係バージョンは今回のスコープ外
+  （Gradle/AGP/Kotlin ツールチェーンのみ）。JDK は既存の temurin 17 のままで AGP 9 の最小要求(17)を満たす。
+- **検証方針（HF77非該当・ビルド基盤のみ）**: サンドボックスは Android/Kotlin コンパイル不可のため、
+  この移行は CI（v6-engine-check.yml の testDebugUnitTest/assembleDebug、release-build.yml の
+  assembleRelease＝ネイティブC++含む全ビルド経路）の実結果で検証する。DSL変更は理論上ハイリスクで、
+  実際に初版の `android.compilerOptions` が CI 失敗で誤りと判明→上記のとおり訂正済み（この項目自体が
+  その検証記録）。
+
 ## 人員不足の「なぜ埋まらないか」内訳（CoverageDiag 拡張, 3.156.0）
 実機での繰り返しの「なぜ Cｵ/Cｱ が不足するのか」に**アプリ自身が答える**ため、`V6PortAnalyzer.diagnoseCoverage` の
 FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止まりから**候補の4分類**へ拡張:「移せる候補」(canDo・別シフト

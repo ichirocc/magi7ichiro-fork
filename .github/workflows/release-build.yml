@@ -47,15 +47,15 @@ jobs:
         run: yes | sdkmanager --licenses >/dev/null || true
 
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
+        run: sdkmanager "platform-tools" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0" "ndk;26.1.10909125" "cmake;3.22.1"
 
-      - name: Install Gradle 8.7
+      - name: Install Gradle 9.3.1
         shell: bash
         run: |
-          wget -q -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          wget -q -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           mkdir -p "$HOME/gradle-dist"
           unzip -q /tmp/gradle.zip -d "$HOME/gradle-dist"
-          echo "$HOME/gradle-dist/gradle-8.7/bin" >> "$GITHUB_PATH"
+          echo "$HOME/gradle-dist/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
       - name: Build release APK
         env:
