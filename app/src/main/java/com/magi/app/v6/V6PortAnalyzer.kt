@@ -106,6 +106,16 @@ object V6PortAnalyzer {
         val p = cachedProblem(state)
         val norm = normalizeSchedule(schedule, p)
         val cov = coverage(p, norm)
+        // [なぜ埋まらないか] 職員 i を日 j にシフト newK へ動かすと長さ2の禁止連続(c3n)を作るか。
+        fun c3nAt(i: Int, j: Int, newK: Int): Boolean {
+            for (c in p.cons3n) {
+                if (c.seq.size != 2) continue
+                val a = c.seq[0]; val b = c.seq[1]
+                if (j > 0 && newK == b && norm[i][j - 1] == a) return true
+                if (j < p.T - 1 && newK == a && norm[i][j + 1] == b) return true
+            }
+            return false
+        }
         val list = ArrayList<CoverageShortfall>()
         var infeasible = 0
         var fixable = 0
@@ -131,8 +141,27 @@ object V6PortAnalyzer {
                 val reason = if (verdict == CoverageVerdict.INFEASIBLE) {
                     "担当可能な職員が${capacity}人で必要数${need}に届きません（データ上、充足不可）"
                 } else {
-                    // 必要なのは miss 人の移動（capacity は候補プールであって移動人数ではない）。
-                    "担当可能${capacity}人。うち${miss}人をこの日の${sym}へ移せば充足できます（制約により最適化が未到達）"
+                    // [なぜ埋まらないか] 「移せる候補」(canDo・別シフト希望でない・現在このシフトに未在勤)を、
+                    //   なぜ今動かせないかで4分類する。空き番=休/過剰から直接移せる / 玉突き=引くと別のcovU /
+                    //   希望固定=本人の希望で固定 / 禁止連続=移すと c3n。読取専用・スコア不変。
+                    var free = 0; var cascade = 0; var pinned = 0; var forbid = 0
+                    for (i in 0 until p.S) {
+                        if (!p.canDo(i, k)) continue
+                        val m = norm[i][j]
+                        if (m == k) continue                                   // 既にこのシフト=移す対象でない
+                        val w = p.wish[i][j]
+                        if (w in 0 until p.K && w != k) continue               // 別シフトへ希望固定=capacity 対象外
+                        if (p.wishLocked(i, j)) { pinned++; continue }
+                        if (c3nAt(i, j, k)) { forbid++; continue }
+                        // m から1人引くと covU が増える=玉突き（多人数入替=連鎖でしか解けない）。
+                        if (m in 0 until p.K && p.covUCell(m, j, cov[j][m] - 1) > p.covUCell(m, j, cov[j][m])) cascade++ else free++
+                    }
+                    val hint = when {
+                        free > 0 -> "空き番${free}人を${sym}へ移せば充足（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
+                        cascade > 0 -> "空き番が無く、過剰シフトからの多人数入替（玉突き=ブロック移動）が必要"
+                        else -> "候補が希望/禁止連続で塞がっており、希望を1件調整するか担当を追加すると解消に近づく"
+                    }
+                    "担当可能${capacity}人・今動かせる空き番${free}人（玉突き${cascade}・希望固定${pinned}・禁止連続${forbid}）。$hint"
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity, verdict, reason)
