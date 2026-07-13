@@ -298,7 +298,23 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
     // 終端: このノードの職員が空けるシフト m は、1人減っても covU が増えない（需要0 or 余裕あり）。
     fun tryComplete(node: Node): List<IntArray>? {
         val m = sched[node.staff][j]
-        if (p.covUCell(m, j, cnt[m] - 1) > p.covUCell(m, j, cnt[m])) return null
+        // [敵対的レビュー修正] cnt[] は探索開始時点の静的値。祖先ノードのチェーン適用でシフト m の
+        //   実際のheadcountは変わりうるため、祖先を辿って m への「到着」(+1: 祖先の fillShift==m)と
+        //   「離脱」(-1: 祖先の元シフト==m、つまりその祖先はチェーンの一員として既に m を離れることが
+        //   確定している)を両方加味した真のheadcountで安全性を判定する。
+        //   [第2版・重要] 到着分だけを補正する初版修正は不完全だった: 祖先 a が m から離脱しつつ別の
+        //   祖先 g が m へ到着するケース（3段連鎖等）では、離脱を差し引かないと m のheadcountを過大評価し、
+        //   実際には covU を悪化させる連鎖を安全と誤判定しかねない（false accept）。呼出元の checker+isBetter
+        //   が最終防波堤とはいえ、判定ロジック自体は到着・離脱の両方を対称に扱うのが正しい。
+        var adj = 0
+        var q: Node? = node.prev
+        while (q != null) {
+            if (q.fillShift == m) adj++                      // 祖先 q が m へ到着済み
+            if (sched[q.staff][j] == m) adj--                 // 祖先 q の元シフトが m＝m から離脱済み
+            q = q.prev
+        }
+        val trueCnt = cnt[m] + adj
+        if (p.covUCell(m, j, trueCnt - 1) > p.covUCell(m, j, trueCnt)) return null
         val moves = ArrayList<IntArray>()
         var n: Node? = node
         while (n != null) { moves.add(intArrayOf(n.staff, j, n.fillShift)); n = n.prev }

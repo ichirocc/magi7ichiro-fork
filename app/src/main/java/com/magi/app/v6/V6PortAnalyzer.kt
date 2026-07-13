@@ -134,16 +134,18 @@ object V6PortAnalyzer {
                 val reason = if (verdict == CoverageVerdict.INFEASIBLE) {
                     "担当可能な職員が${capacity}人で必要数${need}に届きません（データ上、充足不可）"
                 } else {
-                    // [なぜ埋まらないか] 「移せる候補」(canDo・別シフト希望でない・現在このシフトに未在勤)を、
-                    //   なぜ今動かせないかで4分類する。空き番=休/過剰から直接移せる / 玉突き=引くと別のcovU /
-                    //   希望固定=本人の希望で固定 / 禁止連続=移すと c3n。読取専用・スコア不変。
-                    var free = 0; var cascade = 0; var pinned = 0; var forbid = 0
+                    // [なぜ埋まらないか] 「移せる候補」(canDo・別シフト希望でない)を、なぜ今動かせないかで
+                    //   5分類する。既に在勤=capacity には入るが移動候補ではない / 空き番=休/過剰から直接移せる /
+                    //   玉突き=引くと別のcovU / 希望固定=本人の希望で固定 / 禁止連続=移すと c3n。読取専用・スコア不変。
+                    //   [敵対的レビュー修正] already を明示計上し free+cascade+pinned+forbid+already==capacity を
+                    //   保証（旧: already を素通り=capacity と内訳合計が一致せず表示が混乱を招いた）。
+                    var already = 0; var free = 0; var cascade = 0; var pinned = 0; var forbid = 0
                     for (i in 0 until p.S) {
                         if (!p.canDo(i, k)) continue
                         val m = norm[i][j]
-                        if (m == k) continue                                   // 既にこのシフト=移す対象でない
                         val w = p.wish[i][j]
                         if (w in 0 until p.K && w != k) continue               // 別シフトへ希望固定=capacity 対象外
+                        if (m == k) { already++; continue }                    // 既にこのシフト=移す対象でない
                         if (p.wishLocked(i, j)) { pinned++; continue }
                         if (c3nAt(i, j, k)) { forbid++; continue }
                         // m から1人引くと covU が増える=玉突き（多人数入替=連鎖でしか解けない）。
@@ -154,7 +156,7 @@ object V6PortAnalyzer {
                         cascade > 0 -> "空き番が無く、過剰シフトからの多人数入替（玉突き=ブロック移動）が必要"
                         else -> "候補が希望/禁止連続で塞がっており、希望を1件調整するか担当を追加すると解消に近づく"
                     }
-                    "担当可能${capacity}人・今動かせる空き番${free}人（玉突き${cascade}・希望固定${pinned}・禁止連続${forbid}）。$hint"
+                    "担当可能${capacity}人（うち在勤中${already}人）・今動かせる空き番${free}人（玉突き${cascade}・希望固定${pinned}・禁止連続${forbid}）。$hint"
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity, verdict, reason)

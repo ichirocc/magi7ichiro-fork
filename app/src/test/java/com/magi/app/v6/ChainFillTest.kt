@@ -9,6 +9,7 @@ import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
@@ -334,5 +335,51 @@ class ChainFillTest {
         assertEquals("h2 はB(不変・1人に減って丁度need1)", 3, r.newSchedule[2][0])
         assertTrue("hard は悪化しない", after.hard <= before.hard)
         assertTrue("total も悪化しない（keep-best）", after.total <= before.total)
+    }
+
+    // [敵対的レビュー修正の回帰] tryComplete の静的 cnt[] 補正が「到着」だけでなく「離脱」も
+    // 両方加味しないと、実際には別の covU を作る連鎖を安全と誤判定しうる（false accept）ことを固定する。
+    // P(root,need1,0人)←Q(need2,2人=a,k1 在勤)←M(need1,1人=g 在勤) の3段連鎖: a が Q→P、g が M→Q、
+    // k1 が Q→M と動く手は P を解消するが、正味では a と k1 の2人が Q を抜け g の1人しか戻らないため
+    // Q が need2→1人 に壊れる。祖先の「到着」(g→Q)のみを補正し「離脱」(a→Q)を見逃す半端な修正だと
+    // Q のtrueCntを3(過大)と誤算し、この有害な連鎖を安全と判定してしまう。正しい修正は到着と離脱を
+    // 両方加味し trueCnt=2(不変)と正しく算出してこの連鎖を却下する。
+    @Test
+    fun chainFillNeverBreaksAnotherShiftViaStaleAncestorCount() {
+        val shifts = listOf(
+            Shift("休", "休", "", ""), Shift("P", "P", "1", ""),
+            Shift("Q", "Q", "2", ""), Shift("M", "M", "1", ""),
+        )
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
+        // G0(a)=休/P/Q, G1(k1,g)=休/Q/M（k1・gは同一群＝同じ担当可能シフトで対称）
+        val groupShift = listOf(listOf(1, 1, 1, 0), listOf(1, 0, 1, 1))
+        val staff = listOf(Staff("a", 0), Staff("k1", 1), Staff("g", 1))
+        val schedule = listOf(listOf(2), listOf(2), listOf(3))   // a=Q, k1=Q（Qが2人=need2ちょうど）, g=M
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(2) { List(4) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val p = cachedProblem(st)
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertTrue("P不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
+        assertNull("Qはちょうどneed2で充足済み(covU無し)が前提", before.needViolations["2,0"])
+
+        val chain = findCovUChain(p, sched, 1, 0, Random(5))
+        if (chain != null) {
+            // 万一チェーンが見つかった場合でも、適用後に他シフト(Q含む)へ新たな covU を作らないこと
+            // （見つからず null が最も一般的だが、候補順序の実装詳細に依存しないよう安全性で担保する）。
+            for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
+            val after = UnifiedViolationChecker.check(st, sched)
+            assertTrue("連鎖適用後に新たな covU を作らないこと", (after.breakdown["covU"] ?: 0) <= (before.breakdown["covU"] ?: 0))
+        }
+        // このデータでは有効な安全な連鎖が存在しない設計のため、見つからない(null)ことが期待値。
+        assertNull("Qを壊す唯一の経路しか無いため連鎖は見つからない(null)であること", chain)
     }
 }
