@@ -675,6 +675,11 @@ object V6NativeOptimizer {
         //   focus 選択のみの変更でスコアリング不変（keep-best=better() が結果を担保）＝退化なし・3.74.0 と同方針。
         val covUFloor = try { V6SanityPort.structuralHardFloor(state, cachedProblem(state)) } catch (_: Exception) { 0 }
         var stagnantRounds = 0   // [N4] better() 無改善の連続ラウンド数
+        // [E9/状況適応] 直前ラウンドが「完全空振り」(候補不採用＋focus族の件数も不変)だった focus を
+        //   次の1ラウンドだけ回避する軽い冷却。同一 focus の同一仮説を3連発する空転(実機: c3n×3R=~63s 無変化、
+        //   HF63 の恒久判定は約3R を要す)を、c3n→c1→c3n… の交互へ多様化する。1ラウンド限定なので
+        //   乱数運の悪い1回で族を見捨てない(恒久除外は従来どおり HF63 のみ)。focus 選択のみ＝スコアリング不変。
+        var cooldownFocus: String? = null
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
@@ -692,10 +697,16 @@ object V6NativeOptimizer {
             //   合法配置では covU >= covUFloor（下限）。担当外配置(groupViol)が混在すると covU が床を下回り得るが、
             //   その間 covU を focus しても無意味（groupViol が hard-first で先に選ばれる）なので `<=` で除外が正しい。
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
-            val focus = maxViolatedFamily(bestReport, avoid)
+            // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
+            val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
+            val focus = maxViolatedFamily(bestReport, focusAvoid)
             if (avoid.isNotEmpty()) {
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
             }
+            if (cooldownFocus != null) {
+                logs.add(MirrorLog(iter = iters, tag = "RSIFocus", message = "直前ラウンド空振りのため ${cooldownFocus} を1ラウンド休止 → focus=$focus (round ${round + 1})"))
+            }
+            val focusedBefore = bestReport.breakdown[focus] ?: 0
             val hypothesis = rsiGenerateHypothesis(state, best, bestReport, focus, rng)
             val phase = if (round % 2 == 0) runAlns(state, hypothesis, options.copy(restarts = 1), per, shouldStop, onProgress) else runV5(state, hypothesis, options, per, shouldStop, onProgress)
             iters += phase.iterations
@@ -716,8 +727,12 @@ object V6NativeOptimizer {
                 best = candSched.copy2D()
                 bestReport = candReport
                 stagnantRounds = 0
+                cooldownFocus = null   // [E9] 進展あり＝冷却解除
             } else {
                 stagnantRounds++
+                // [E9] 完全空振り(不採用＋focus族の件数が減っていない)なら次ラウンドだけこの focus を休止。
+                //   候補が focus 族を減らしていた(=方向は有望だが総合で負けた)場合は冷却しない。
+                cooldownFocus = if (focus != "total" && (candReport.breakdown[focus] ?: 0) >= focusedBefore) focus else null
             }
             logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "round=${round + 1}/$rounds focus=$focus best HARD=${bestReport.hard} total=${bestReport.total}"))
             liveBest = best.map { it.toList() }   // [DefragLiveView] 計算中ライブ盤面を公開
@@ -913,7 +928,19 @@ object V6NativeOptimizer {
         var iters = 0L
         val diffBuf = IntArray(p.S * p.T)
         val deadline = nowMs() + seconds * 1000L
-        while (nowMs() < deadline && !shouldStop()) {
+        // [E10/停滞早期終了] 実機ログで PostPolish が 45s枠を最後まで走り切って改善0（40.977s/40.988s の2例）
+        //   ＝重研磨済み盤面ではプラトー後の期待値が低い。best が枠の1/5(下限3s)無改善なら早期に返す。
+        //   keep-best＋末尾の入力比番兵(better(baseReport,bestReport)→入力復帰)のため品質は不変＝時間/電池だけ節約
+        //   （2.65.0 HF66 / 2.67.0 停滞ウォッチドッグと同方針）。
+        val stallMs = max(3000L, seconds * 1000L / 5)
+        var lastImproveMs = nowMs()
+        var lastBestMark = bestScore
+        var stalled = false
+        while (!shouldStop()) {
+            val nowLoop = nowMs()
+            if (nowLoop >= deadline) break
+            if (bestScore < lastBestMark) { lastBestMark = bestScore; lastImproveMs = nowLoop }
+            else if (nowLoop - lastImproveMs >= stallMs) { stalled = true; break }
             coroutineContext.ensureActive()
             val curHard = curScore / 1_000_000L
             val bestHard = bestScore / 1_000_000L
@@ -1017,7 +1044,7 @@ object V6NativeOptimizer {
         }
         // [退化防止] 生スコア最良が weightedScore 辞書順で入力より悪い場合は入力へ戻す。
         if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
-        val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}"))
+        val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}" + if (stalled) "（停滞早期終了 枠${seconds}s）" else ""))
         return PolishResult(best, logs, iters)
     }
 
@@ -1253,8 +1280,13 @@ object V6NativeOptimizer {
             if ((report.breakdown[key] ?: 0) > 0) return key
         }
         // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
+        // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が
+        //   order に1つも無いと先頭 groupViol=0 が「0 > -1」で当選→hf67ルートがクリーン盤面への no-op 仮説
+        //   ＝1ラウンド(実測~21s)空振りしていた。12シフト実機ログ round=4/5 focus=groupViol(件数0)で確認）。
+        //   該当なしは "total" を返し、rsiGenerateHypothesis の else 分岐＝全違反セル hint の汎用修復
+        //   (destroyRepairViolations, focus 非依存)ラウンドとして時間を有効化する。focus 選択のみ＝スコアリング不変。
         var best = "total"
-        var bestCount = -1
+        var bestCount = 0
         for (key in order) {
             if (key in avoid) continue
             val n = report.breakdown[key] ?: 0
