@@ -270,16 +270,9 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
     // 充填で covU が実際に減るセルのみ対象（need 未設定などは対象外）。
     if (p.covUCell(k0, j, cnt[k0] + 1) >= p.covUCell(k0, j, cnt[k0])) return null
 
-    // 長さ2の禁止連続(c3n)を作る移動を除外（最終ゲートは呼び出し側 checker が担保＝ここは成功率向上の枝刈り）。
-    fun c3nHits(i: Int, newK: Int): Boolean {
-        for (c in p.cons3n) {
-            if (c.seq.size != 2) continue
-            val a = c.seq[0]; val b = c.seq[1]
-            if (j > 0 && newK == b && sched[i][j - 1] == a) return true
-            if (j < p.T - 1 && newK == a && sched[i][j + 1] == b) return true
-        }
-        return false
-    }
+    // [三連/五連など任意長対応] 禁止連続(c3n)を作る移動を除外（最終ゲートは呼び出し側 checker が
+    //   担保＝ここは成功率向上の枝刈り。Problem.makesForbiddenRun が任意長ルールを一般判定）。
+    fun c3nHits(i: Int, newK: Int): Boolean = p.makesForbiddenRun(sched, i, j, newK)
 
     // BFS ノード = 「fillShift へ staff が入る」手。子 = staff が空けた現シフトを埋める手。
     class Node(val fillShift: Int, val staff: Int, val prev: Node?)

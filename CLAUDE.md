@@ -677,6 +677,24 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   未描画の V6RemainingScreens から参照=無害)。CheckSummaryView(守れていない約束=bestHard)/BreakdownCard(族内訳)は固有情報で維持。
   表示のみ・スコアリング不変(読取専用)。
 
+## 禁止連続の枝刈りを任意長へ一般化（三連・五連など, 3.157.0）
+ユーザー指摘「三連や五連なども配慮する」。直近3件（`findCovUChain`／`V6LateOperators.c3nHit`／
+`CoverageDiagnosis.c3nAt`）の禁止連続(c3n)枝刈りが**すべて「長さ2のペアのみ」**を仮定していた
+（`V6LateOperators` の既存コメントにも「長さ2の禁止連続のみ」と明記された既知の狭さ）。実際の
+cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三連・五連等）を正しく評価できるため
+（source of truth 側は元から一般的）、枝刈り側だけが取り残されていた。
+- **`Problem.makesForbiddenRun(schedule, i, j, newK)`** を新設し単一ソース化: 各 cons3n ルール(長さd)に
+  ついて j をカバーする開始位置 s の窓を全部調べ、位置jだけ newK に差し替え残りは現状のまま完全一致(z==d)
+  するかを判定（MirrorCore の forbidden 判定と同じ意味論）。他セルは変えない=1手の影響範囲チェックとして正しい。
+  枝刈り用途のため、仮に見逃しても最終正しさは常に checker が担保（安全側）。
+- 3箇所とも1行で置換: `findCovUChain`/`c3nHit`/`c3nAt` は全て `p.makesForbiddenRun(...)` を呼ぶだけに簡略化
+  （`V6LateOperators` は既存コード・`sched` が職員行ごとに独立=同日循環スワップの判定と意味論が一致することを確認）。
+  C++側（cons3n を使う fullEval/contribC3RowFam 等）は元々任意長対応済みで変更不要。掃討済み: `cons3` の
+  `seq.size==2` フィルタ(HF356「2連続必須の孤立検知」)は別機能で対象外（禁止連続でなく必須連続の孤立検知）。
+- ユニットテスト `ChainFillTest`: `makesForbiddenRunDetectsTripleAndQuintuple`（三連/五連の直接検証・positive/negative）
+  ＋ `chainFillAvoidsTripleForbiddenRun`（連鎖探索が三連トラップを避けて安全な候補へ着地）を追加。
+  スコアリング不変・枝刈りロジックの一般化のみ。
+
 ## 人員不足の「なぜ埋まらないか」内訳（CoverageDiag 拡張, 3.156.0）
 実機での繰り返しの「なぜ Cｵ/Cｱ が不足するのか」に**アプリ自身が答える**ため、`V6PortAnalyzer.diagnoseCoverage` の
 FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止まりから**候補の4分類**へ拡張:「移せる候補」(canDo・別シフト

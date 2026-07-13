@@ -1,10 +1,12 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -114,5 +116,80 @@ class ChainFillTest {
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["covU"] ?: 0)
         assertTrue(after.hard <= before.hard)
+    }
+
+    // [三連/五連など任意長への配慮] 長さ2の枝刈りしか見ていないと、三連禁止(P,P,P)を新たに作る手を
+    // 素通ししてしまう。a=[P,Q,P]・b=[休,休,休] で day1 の P不足を埋める候補は a/b の2人だが、
+    // a の day1 を P にすると day0,1,2=P,P,P で三連禁止に触れる。b は無関係なので安全。
+    // findCovUChain が a を枝刈りし、b だけを使う連鎖（1手）に着地することを確認する。
+    @Test
+    fun chainFillAvoidsTripleForbiddenRun() {
+        // shift: 0=休 1=P(need1・cons3n=P,P,P三連禁止) 2=Q
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val groupShift = listOf(listOf(1, 1, 1))
+        val staff = listOf(Staff("a", 0), Staff("b", 0))
+        val schedule = listOf(
+            listOf(1, 2, 1),   // a: P, Q, P（day1 を P にすると P,P,P で三連禁止）
+            listOf(0, 0, 0),   // b: 休, 休, 休（day1 を P にしても無関係で安全）
+        )
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-03",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(1) { List(3) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(listOf("P", "P", "P"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val p = cachedProblem(st)
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        // 前提: day1 は P が0人(covU)・三連はまだ未成立（a は P,Q,P で Q が割って入っている）。
+        assertTrue("day1 の P不足(covU)が前提", (before.breakdown["covU"] ?: 0) > 0)
+        assertEquals(0, before.breakdown["c3n"] ?: 0)
+
+        val chain = findCovUChain(p, sched, 1, 1, Random(3))
+        assertNotNull("day1 の P不足を埋める連鎖が見つかること", chain)
+        for (mv in chain!!) sched[mv[0]][mv[1]] = mv[2]
+
+        assertEquals("a の行は不変（三連トラップを避けて動かさない）", listOf(1, 2, 1), sched[0].toList())
+        assertEquals("b の day1 が P で埋まる", 1, sched[1][1])
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals("covU が解消されること", 0, after.breakdown["covU"] ?: 0)
+        assertEquals("三連禁止(c3n)を新たに作らないこと", 0, after.breakdown["c3n"] ?: 0)
+    }
+
+    // Problem.makesForbiddenRun 自体の直接検証（三連・五連）。
+    @Test
+    fun makesForbiddenRunDetectsTripleAndQuintuple() {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("a", 0))
+        fun stateWith(sched: List<Int>, cons3n: List<C3Row>) = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-0${sched.size}",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = List(1) { List(2) { "" } },
+            schedule = listOf(sched), wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = cons3n, cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        // 三連禁止(P,P,P)。row = P,休,P,休,休（休=0,P=1）。
+        val row3 = listOf(1, 0, 1, 0, 0)
+        val p3 = cachedProblem(stateWith(row3, listOf(C3Row(listOf("P", "P", "P")))))
+        val sc3 = row3.toIntArray()
+        // position1(休)をPにすると positions0..2=P,P,P で三連成立。
+        assertTrue("position1をPにすると三連禁止に触れる", p3.makesForbiddenRun(arrayOf(sc3), 0, 1, 1))
+        // position3(休)をPにすると positions1..3=休,P,P / positions2..4=P,P,休 のどちらも三連に届かない。
+        assertFalse("position3をPにしても三連には届かない", p3.makesForbiddenRun(arrayOf(sc3), 0, 3, 1))
+
+        // 五連禁止(P×5)。row = P,P,休,P,P。position2(休)をPにすると全区間が P,P,P,P,P で五連成立。
+        val row5 = listOf(1, 1, 0, 1, 1)
+        val p5 = cachedProblem(stateWith(row5, listOf(C3Row(List(5) { "P" }))))
+        assertTrue("position2をPにすると五連禁止に触れる", p5.makesForbiddenRun(arrayOf(row5.toIntArray()), 0, 2, 1))
     }
 }

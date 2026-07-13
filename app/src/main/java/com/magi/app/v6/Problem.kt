@@ -236,6 +236,39 @@ class Problem(val state: MagiState) {
         }
     }
 
+    /**
+     * [三連/五連など任意長への配慮] 職員 i の j 列を newK に変えたとき、cons3n（禁止連続, HARD）を
+     * 新たに作るかを判定する。旧: 呼び出し側3箇所（V6SearchOperators.findCovUChain の枝刈り／
+     * V6LateOperators の ChainSwap3/4 前後チェック／CoverageDiagnosis の内訳分類）がいずれも
+     * 「長さ2の禁止連続のみ」を仮定した専用コードを個別に持っていた（コメントで明記された既知の狭さ）。
+     * cons3n ルールは MirrorCore.checkC3Family の forbidden 分岐と同じ意味論で**任意長**（三連・五連等）
+     * を表現できるため、ここで単一ソースとして一般化する: 各ルール(長さd)について j をカバーする
+     * 開始位置 s の窓を全て調べ、位置jだけ newK に差し替えて残りは現在の schedule のまま完全一致
+     * (z==d)するかを見る。他セルは変えない=1手の影響範囲チェックとして正しい。
+     * これは探索の**枝刈り**（成功率向上のヒント）用途で、最終的な正しさは常に UnifiedViolationChecker
+     * （source of truth）が担保する＝本関数の判定が仮に見逃しても結果は不変（安全側）。
+     */
+    fun makesForbiddenRun(schedule: Array<IntArray>, i: Int, j: Int, newK: Int): Boolean {
+        for (c in cons3n) {
+            val seq = c.seq
+            val d = seq.size
+            if (d == 0 || d > T) continue
+            val sLo = (j - d + 1).coerceAtLeast(0)
+            val sHi = j.coerceAtMost(T - d)
+            var s = sLo
+            while (s <= sHi) {
+                var z = 0
+                for (l in 0 until d) {
+                    val v = if (s + l == j) newK else schedule[i][s + l]
+                    if (v == seq[l]) z++
+                }
+                if (z == d) return true
+                s++
+            }
+        }
+        return false
+    }
+
     fun initialAssignment(): Array<IntArray> = Array(S) { i ->
         val b = bucket[sgrp[i]]
         IntArray(T) { j ->

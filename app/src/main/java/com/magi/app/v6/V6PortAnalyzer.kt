@@ -106,16 +106,9 @@ object V6PortAnalyzer {
         val p = cachedProblem(state)
         val norm = normalizeSchedule(schedule, p)
         val cov = coverage(p, norm)
-        // [なぜ埋まらないか] 職員 i を日 j にシフト newK へ動かすと長さ2の禁止連続(c3n)を作るか。
-        fun c3nAt(i: Int, j: Int, newK: Int): Boolean {
-            for (c in p.cons3n) {
-                if (c.seq.size != 2) continue
-                val a = c.seq[0]; val b = c.seq[1]
-                if (j > 0 && newK == b && norm[i][j - 1] == a) return true
-                if (j < p.T - 1 && newK == a && norm[i][j + 1] == b) return true
-            }
-            return false
-        }
+        // [なぜ埋まらないか / 三連・五連など任意長対応] 職員 i を日 j にシフト newK へ動かすと
+        //   禁止連続(c3n)を作るか。Problem.makesForbiddenRun が任意長ルールを一般判定する。
+        fun c3nAt(i: Int, j: Int, newK: Int): Boolean = p.makesForbiddenRun(norm, i, j, newK)
         val list = ArrayList<CoverageShortfall>()
         var infeasible = 0
         var fixable = 0
