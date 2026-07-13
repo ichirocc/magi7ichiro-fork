@@ -454,7 +454,12 @@ object V6NativeOptimizer {
             var curReport = UnifiedViolationChecker.check(state, cur)
             eval.reset(cur)
             var curScore = eval.score()
-            var curAug = gls.augment(cur)   // [GLS] 現行盤面の penalty 拡張分を増分維持（再構築は restart 毎のみ）
+            // [監査(未レビュー領域再監査) HF77修正] 旧コメント「再構築は restart 毎のみ」は実装と不一致だった。
+            //   `gls`(374行目)は本 runAlns 呼出につき1回だけ生成され、restart(for r)ループ間で共有・持ち越される
+            //   （decay(654行目)のみが希薄化する）。再構築が起きるのは runAlns が新規に呼ばれた時（RSI各ラウンド/
+            //   各並列ワーカー等）のみ。globalBestは生スコアで別管理のため、この共有自体は受理動学にのみ作用し
+            //   正しさは不変（keep-best）。
+            var curAug = gls.augment(cur)   // [GLS] 現行盤面の penalty 拡張分を増分維持
             // [論文活用] Great Deluge の初期水位＝このリスタート開始時のスコア（時間予定型で best へ降下）。
             val gdInitial = curScore.toDouble()
             var iter = 0L

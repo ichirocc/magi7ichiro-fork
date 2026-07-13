@@ -392,6 +392,10 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 >   その restart 以降 Kotlin ループへ。SaOptimizer.runWorkerNative と同型。診断ログ「ネイティブ探索=有効(SA＋
 >   ALNSチャンク)」。これで 60s 主経路(RSI→ALNS)の ALNS フェーズが加速。GLS penalty は restart 毎再構築
 >   （生スコア最良は別管理＝退化なし）。Kotlin コンパイル検証は CI（assembleDebug）。実機で番兵不発を要確認。
+>   **[3.161.0で訂正]** 上記「GLS penalty は restart 毎再構築」は誤り。実装は`runAlns`呼出につき1個の
+>   `GlsPenalty`をrestartループの外側で生成し、全restart間で共有（decayのみ希薄化）。再構築されるのは
+>   `runAlns`が新規に呼ばれた時（RSI各ラウンド/並列ワーカー等）のみ。globalBestは生スコアで別管理のため
+>   受理動学にのみ作用し正しさは不変（keep-best）＝実害なしのHF77（コメント≠実装）訂正。
 > - ~~Stage8/8b~~（完了・上記）: ALNSチャンク統合（チャンク=200反復: curReport更新周期に一致。7オペ・適応重み(roulette/
 >   Thompson)・受理3モード(SA/GreatDeluge/Lam)・softFocus・wishLocked・GLSキック(50反復毎)を C++ 内で。
 >   Kotlin保持: restart境界(perturb+hf67入口)・進捗/liveBest・キャンセル・番兵）。
@@ -744,6 +748,52 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `free+cascade+pinned+forbid` の合計が `capacity`（担当可能人数）と一致せず表示が混乱を招いていた。
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
+
+## 未レビュー領域の再監査（3.161.0）
+ユーザー指示「未レビュー領域の再監査」。3.84.0以降に積み重なった大量の変更（ネイティブ第1〜3期・E7〜E11・
+Gradle9移行等）を対象に、5系統（ネイティブC++/JNI・SA/ALNS/RSI探索本体・修復研磨パス・UI/ViewModel層・
+診断分析層）へ並列サブエージェントを起動し再監査。ネイティブ/JNIとSA/ALNS/RSI探索本体は正しさバグ0
+（番兵・keep-best・ハンドル破棄とも健全）。以下、CONFIRMEDな指摘を修正:
+- **[CONFIRMED, 重大・実害あり] 最適化実行中のセル編集で配列の別名共有によりデータ消失/違反表示不整合**:
+  `runV6FullOptimize`/`start`/`runSoftPolish`は`val sched0 = currentSchedule ?: return`で**参照をそのまま**
+  保持し数十〜300秒使い続けるが、`setCell`/`setCells`/`cycleCell`/`applyFixSuggestion`は`currentSchedule`を
+  **同一配列へin-placeで直接変更**する。実行中にグリッドをタップして編集すると、良化時は編集が無言で
+  上書き消失し、劣化時(`worseThanInput`分岐)は編集後の盤面と実行開始時点の`baseReport`(編集前基準)が
+  食い違って誤った位置に違反が表示される。3.127.0でバルクシート/希望一括シート/AlternativesCard/
+  WishApplyCardには`!ui.running`ガードを追加済みだったが、単発セル編集(ShiftPickerSheet経由の`setCell`)と
+  改善提案適用(`applyFixSuggestion`)が対象漏れだった。`setCell`/`setCells`/`cycleCell`/`applyFixSuggestion`
+  （`MagiViewModel.kt`）に`_ui.value.running`ガード＋案内メッセージを追加、`FixSuggestionCard`の適用ボタン
+  （`MagiDashboardCards.kt`）も`enabled = !ui.running`に統一。
+- **[CONFIRMED, 予算超過リスク] 5研磨パスのO(S²)内側ループに`shouldStop()`欠落**: `applyCyclicSwapPolish`
+  （k=2/k=3）・`applyC3SequencePolish`・`applyC1WindowPolish`・`applyGroupShiftEqualizePolish`・
+  `applyWeeklyEqualizePolish`が、日(j)ループ先頭のみで締切確認し内側の職員×職員(O(S²))二重ループには
+  確認が無かった（HF66=2.65.0・BlockRotationPolish=3.84.0で既に修正済みの「内側スキャンでも締切確認する」
+  方針の対象漏れ）。職員数が多いデータで締切超過後も1日分のフルスキャンが走り切りうる。各パスの外側
+  職員(a)ループ先頭に`shouldStop()`を追加。keep-best不変・時間予算の逸脱のみを解消。
+- **[CONFIRMED, 診断バグ] `V6PortAnalyzer.buildStaffProfiles`が休記号改名時に全日を勤務と誤カウント**:
+  `rest`をローカルの`indexOfFirst{kigou=="休"}`で再計算しフォールバックが無く、休記号改名で`rest=-1`に
+  なると`schedule!=rest`が常に真＝全職員の勤務日数が常に全期間日数と誤表示された。`weekly`で3.103.0に
+  修正済みと同型のバグ（対象漏れ）。`Problem.restIdx`（`?:0`フォールバック付き・source of truth）に統一。
+- **[CONFIRMED, 診断バグ] `CoverageDiagnosis`が希望と移動先が一致する候補を「希望固定」と誤分類**:
+  `diagnoseCoverage`の候補分類は事前フィルタ(`w!=k`除外)により残る候補が`wish==-1`か`wish==k`のみなのに、
+  その後`p.wishLocked(i,j)`（=希望が設定されている、の意味）を「動かせない」判定に使っていた。この文脈で
+  `wishLocked==true`は必ず`wish==k`（=まさに動かしたい移動先と希望が一致）＝本来は**最も動かすべき候補**
+  （移すと covU と pref を同時に解消できる）なのに「固定」表示は意味が逆転していた。この行を削除し
+  free/cascade判定へ委ねる（他シフトへの希望固定は既にcapacity計算の外側フィルタで除外済みのため、
+  本関数内で「希望固定」に該当する候補はそもそも存在しない）。
+- **[CONFIRMED, HF77=コメント≠実装] `runAlns`のGLS penaltyコメント訂正**: 「再構築は restart 毎のみ」と
+  コメントされていたが、実装は`runAlns`呼出につき1個の`GlsPenalty`をrestartループの外側で生成し全restart
+  間で共有（decayのみ希薄化、再構築は`runAlns`が新規に呼ばれた時のみ）。globalBestは生スコア別管理のため
+  正しさは不変（keep-best）＝実害なし・コメントのみ訂正。
+- **報告のみ（未修正・判断/測定待ち）**: ①`V6SanityPort`のc1「壁」判定が非休シフトの供給見積りに`need2`
+  （covOのSOFT目標）を実質的なハード上限として使っており、covO(重み1.0)を犠牲にc1(重み4)を解消する
+  トレードオフが数学的に可能な局面を過大に「構造的不能」と報告しうる（3.76.0の「false wallを出さない」
+  設計意図と逆方向）。真の供給上限の再定義（canDo職員数ベース等）を要する設計変更のため、実データでの
+  影響確認まで保留。②`CoverageDiagnosis`のneed1のみ判定（need2<need1の逆転データでOR救済を無視、通常
+  運用では無害な理論的エッジケース）。③`hf80PostPolish`のE10停滞早期終了が、native→Kotlin番兵発火時に
+  native区間の経過時間を引き継がず停滞時計を再スタートする（異常系=番兵不一致時のみ発現、実害は電池/時間
+  の節約が一部効かなくなる程度）。④`nativeAlnsSetCur`（JNI関数）がKotlin側から一度も呼ばれていないデッド
+  コード（挙動に影響なし、C++変更のコスト対効果が低いため未対応）。
 
 ## Gradle 9 移行（3.160.0）
 ユーザー指示「Gradle 9移行する」。ビルド基盤を Gradle 8.7/AGP 8.6.0/Kotlin 1.9.24 から

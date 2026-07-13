@@ -146,7 +146,12 @@ object V6PortAnalyzer {
                         val w = p.wish[i][j]
                         if (w in 0 until p.K && w != k) continue               // 別シフトへ希望固定=capacity 対象外
                         if (m == k) { already++; continue }                    // 既にこのシフト=移す対象でない
-                        if (p.wishLocked(i, j)) { pinned++; continue }
+                        // [監査(未レビュー領域再監査) 実バグ修正] p.wishLocked(i,j) は「希望が設定されている」の
+                        //   意味だが、上の事前フィルタ(127-128行目)で w!=k の候補は既に除外済み＝ここに残る
+                        //   wishLocked==true は必ず wish==k（=まさにこのシフトへの希望）。希望と移動先が一致する
+                        //   候補を「固定されていて動かせない」と分類するのは意味が逆転している（むしろ動かすと
+                        //   希望未充足(pref)も同時に解消できる最良の候補）。他シフトへの希望固定は既に対象外
+                        //   なので、本関数では「希望固定」で除外すべき候補は存在せず、free/cascade判定へ委ねる。
                         if (c3nAt(i, j, k)) { forbid++; continue }
                         // m から1人引くと covU が増える=玉突き（多人数入替=連鎖でしか解けない）。
                         if (m in 0 until p.K && p.covUCell(m, j, cov[j][m] - 1) > p.covUCell(m, j, cov[j][m])) cascade++ else free++
@@ -291,7 +296,9 @@ object V6PortAnalyzer {
         counts: Array<IntArray>,
         staffViol: IntArray,
     ): List<V6StaffProfile> {
-        val rest = state.shifts.indexOfFirst { shift -> shift.kigou == "休" }
+        // [監査(未レビュー領域再監査) 実バグ修正] 休記号改名時に rest=-1 となり「schedule!=-1」が常に真＝
+        //   全職員を全日勤務と誤カウントしていた（3.103.0でweeklyに適用済みの p.restIdx フォールバックへ統一）。
+        val rest = p.restIdx
         val profiles = ArrayList<V6StaffProfile>(p.S)
         for (i in 0 until p.S) {
             var work = 0
