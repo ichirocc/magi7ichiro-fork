@@ -64,7 +64,10 @@ object MirrorKeys {
         "c3mn" to 12.0, "c1" to 4.0, "c3" to 3.0, "c3m" to 2.0,
         "c2" to 1.0, "c41" to 1.0, "c42" to 1.0, "c41s" to 1.0, "c42s" to 1.0,
         "apt" to 1.0, "fair" to 1.0, "weekly" to 1.0,
-        "covO" to 0.5,
+        // [目的関数統一] covO は最適化器(Evaluator/Delta/C++)が amount×1.0 で加算しており、
+        //   チェッカー weightedScore も 1.0 に統一（旧: 0.5 で最適化器と factor-2 乖離＝族寄与不一致）。
+        //   ユーザー指示(2026-07-13)により「最適化器を正」として 1.0 で確定（HF77 明示数値指示）。
+        "covO" to 1.0,
     )
 }
 
@@ -111,7 +114,7 @@ object UnifiedViolationChecker {
             }
             violations[key] = cls
         }
-        // [判読性] mark() と同じ重み優先。旧: 後勝ちで covO(0.5) が c41(1.0) のマークを上書きし得た。
+        // [判読性] mark() と同じ重み優先。旧: 後勝ちで軽い族(旧 covO=0.5 等)が重い族(c41 等)のマークを上書きし得た。
         fun markNeed(k: Int, j: Int, family: String) {
             val key = "$k,$j"
             val prev = needViolations[key]

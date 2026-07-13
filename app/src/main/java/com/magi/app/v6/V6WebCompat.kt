@@ -552,13 +552,15 @@ object V6WebCompat {
     }
 
     // [監査修正] 凡例の重大度を重み階層(MirrorKeys)に整合させる。旧実装は low(90)/high(45)=最重 softを INFO(灰),
-    //   covO(0.5)=最軽を WARN(橙) と**逆転**表示していた(色凡例=ColorSettingsView は live)。表示のみ・スコア不変。
-    //   階層: low(90)>high(45)>c3mn(12)>c1(4)>c3(3)>c3m(2)>c2/c41/c42/c41s/c42s/apt/fair/weekly(1)>covO(0.5)。
+    //   covO を最軽 WARN(橙) と**逆転**表示していた(色凡例=ColorSettingsView は live)。表示のみ・スコア不変。
+    //   階層: low(90)>high(45)>c3mn(12)>c1(4)>c3(3)>c3m(2)>c2/c41/c42/c41s/c42s/apt/covO(1)>fair/weekly(整え1)。
+    //   [目的関数統一] covO は 0.5→1.0 に統一（2026-07-13）。重み1.0=c2/c41 と同格の実違反(過剰配置)なので
+    //   WARN へ移動（旧: INFO。集計/グリッドで既に橙=過剰表示のため整合）。fair/weekly は「整え・常時非ゼロ」で INFO 維持。
     fun severityFromVioKey(key: String): String = when (key.removePrefix("vio-")) {
         "groupViol", "covU", "pref", "c3n" -> "CRITICAL"                                   // HARD
         "low", "high", "c3mn" -> "HIGH"                                                    // 重い soft(90/45/12)
-        "c1", "c3", "c3m", "c2", "c41", "c42", "c41s", "c42s", "apt" -> "WARN"             // 中 soft
-        "covO", "fair", "weekly" -> "INFO"                                                 // 最軽/整え(0.5・常時非ゼロ)
+        "c1", "c3", "c3m", "c2", "c41", "c42", "c41s", "c42s", "apt", "covO" -> "WARN"     // 中 soft(1〜4・過剰配置含む)
+        "fair", "weekly" -> "INFO"                                                         // 整え(常時非ゼロ)
         else -> "INFO"
     }
 
