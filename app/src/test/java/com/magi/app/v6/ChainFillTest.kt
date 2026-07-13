@@ -418,7 +418,7 @@ class ChainFillTest {
             schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
             // [S=1のためP(need1)は「day1のみ」に限定] 基本need1を空にし、needDay1でday1だけ1を要求。
             //   基本need1="1"をシフト全日一律にすると、単一staffでは他日のPも埋まらずcovUが残ってしまう。
-            needDay1 = mapOf("1,1" to 1), needDay2 = emptyMap(),
+            needDay1 = mapOf("1,1" to "1"), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = listOf(C3Row(listOf("P", "N")), C3Row(listOf("P", "休", "N"))),
             cons3m = emptyList(), cons3mn = emptyList(),
