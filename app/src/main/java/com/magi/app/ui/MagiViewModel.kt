@@ -2382,6 +2382,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             needViolations = report.needViolations,
             countViolations = report.countViolations,
             violationCellFamilies = report.cellFamilies,
+            distLocations = report.distLocations,
             // [backlog#1] 検査対象が結果(ws6)そのものなら、この report が結果専用マップの最新値。
             //   最適化完了/他案適用/結果→編集複製後の refreshCheck 等、resultSchedule 更新サイトは全て
             //   makeUi(schedule==resultSchedule, 対応report) を通るためここで一元的に充填できる。
