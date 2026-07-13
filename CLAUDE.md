@@ -12,7 +12,7 @@ VBA/Web 版から移植した「MAGI V6」最適化エンジン（SA + ALNS + Ta
 PathRelinking + ChainSwap + 適応的オペレータ重み + RSI++ 等）を内蔵。
 
 - パッケージ/applicationId: `com.magi.app`（namespace も同じ）
-- minSdk=35 (Android 15+), compileSdk/targetSdk=36, java.time ネイティブ可, NDK/desugaring 不使用
+- minSdk=36 (Android 16+), compileSdk/targetSdk=36, java.time ネイティブ可, NDK/desugaring 不使用
 - リポジトリ: `ichirocc/magi7ichiro`（public）
 - UI 制約: **片手一本指**（ドラッグ不可）、**最小デザイン**（冗長な安全表示はエンジン側に持たせ、操作画面は効率優先）
 - 全作業・UI 文言は日本語
@@ -748,6 +748,15 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `free+cascade+pinned+forbid` の合計が `capacity`（担当可能人数）と一致せず表示が混乱を招いていた。
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
+
+## 対応OSをAndroid 16以降のみに変更（3.162.0）
+ユーザー指示「Android 16以降のみ対応する」。`minSdk` を 35(Android 15) → **36(Android 16)** へ引き上げ
+（compileSdk/targetSdkは元々36で変更なし）。API 36未満の端末は対象外になる（Google Play配布時は
+インストール不可端末が絞られる）。関連コメント（`app/build.gradle.kts`のarm64限定理由・
+`OptimizationWorker.kt`のforegroundServiceType注記）を更新。`ForegroundInfo`生成は元々SDK_INT分岐が
+無い（常にFOREGROUND_SERVICE_TYPE_DATA_SYNCを指定）ため、コメント修正のみでロジック変更は無し。
+CI（android-sdk/release-build/v6-engine-check）は`platforms;android-35`も引き続きインストールするが
+実害なし（AGPが不要なら単に使わないだけ・除去は本変更のスコープ外）。
 
 ## 未レビュー領域の再監査（3.161.0）
 ユーザー指示「未レビュー領域の再監査」。3.84.0以降に積み重なった大量の変更（ネイティブ第1〜3期・E7〜E11・

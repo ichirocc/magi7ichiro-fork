@@ -94,7 +94,7 @@ class OptimizationWorker(
             .setContentText("バックグラウンドで計算しています…")
             .setOngoing(true)
             .build()
-        // minSdk 35: foregroundServiceType is always required.
+        // minSdk 36 (Android 16+): foregroundServiceType is always required.
         return ForegroundInfo(NID_PROGRESS, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     }
 
