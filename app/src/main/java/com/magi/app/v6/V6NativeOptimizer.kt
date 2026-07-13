@@ -382,26 +382,39 @@ object V6NativeOptimizer {
             }.getOrDefault(0L)
             if (alns == 0L) { NativeGate.disable("ALNS状態生成NG"); return false }
             try {
+                // [全体計算の最小化] checker.check と liveBest 全面コピーは表示専用のため 250ms 周期に間引く。
+                //   2層目番兵の fullEval（正しさ）は従来どおり改善チャンクごとに実施＝退化不能は不変。
+                var reportStale = false
+                var lastUiMs = 0L
+                fun syncReport() {
+                    if (reportStale) {
+                        globalReport = UnifiedViolationChecker.check(state, globalBest)
+                        liveBest = globalBest.map { it.toList() }
+                        reportStale = false
+                    }
+                }
                 while (nowMs() < deadline && !shouldStop()) {
                     coroutineContext.ensureActive()
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, perSec * 1000.0)).coerceIn(0.0, 1.0)
                     val ret = NativeBridge.nativeAlnsChunk(alns, 200, frac)
-                    if (ret.size < 6 || ret[0] != 0L) { NativeGate.disable("ALNSチャンク整合性NG(status=${ret.getOrNull(0)})"); return false }
+                    if (ret.size < 6 || ret[0] != 0L) { syncReport(); NativeGate.disable("ALNSチャンク整合性NG(status=${ret.getOrNull(0)})"); return false }
                     itersTotal += ret[4]
                     if (ret[3] == 1L && ret[2] < globalScore) {
                         // [2層目の番兵] best 更新を Kotlin Evaluator でフル照合（Long== 許容誤差なし）。
                         NativeBridge.nativeAlnsRead(alns, 0, bestFlat)
                         val bestSol = NativeEval.unflatten(bestFlat, p.S, p.T)
                         val kScore = fullEvaluator.fullEval(bestSol)
-                        if (kScore != ret[2]) { NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
+                        if (kScore != ret[2]) { syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
                         globalBest = bestSol; globalScore = kScore
-                        globalReport = UnifiedViolationChecker.check(state, bestSol)
                         lastImproveIter = itersTotal
-                        liveBest = bestSol.map { it.toList() }
+                        reportStale = true
                     }
+                    val nowUi = nowMs()
+                    if (reportStale && nowUi - lastUiMs >= 250) { syncReport(); lastUiMs = nowUi }
                     onProgress("ALNS restart ${r + 1}/$restarts", globalReport, itersTotal, nowMs() - started)
                     yield()
                 }
+                syncReport()   // restart 終端ログ(HARD/total)と liveBest を最終同期
                 return true
             } finally {
                 NativeBridge.nativeAlnsDestroy(alns)
@@ -1096,7 +1109,10 @@ object V6NativeOptimizer {
                     if (nowLoop >= deadline) return NativePolishRun(true, best, iters, false)
                     if (nowLoop - lastImproveMs >= stallMs) return NativePolishRun(true, best, iters, true)
                     coroutineContext.ensureActive()
-                    val ret = NativeBridge.nativePolishChunk(h, 200)
+                    // [全体計算の最小化] 400反復/チャンク＝チャンク末尾の自己整合フル評価の頻度を半減
+                    //   （hint は best 改善駆動で更新されるためチャンク粒度に依存しない。締切/停滞/キャンセルの
+                    //   確認粒度は ms 級のまま）。
+                    val ret = NativeBridge.nativePolishChunk(h, 400)
                     if (ret.size < 5 || ret[0] != 0L) {
                         NativeGate.disable("Polishチャンク整合性NG(status=${ret.getOrNull(0)})")
                         return NativePolishRun(false, best, iters, false)

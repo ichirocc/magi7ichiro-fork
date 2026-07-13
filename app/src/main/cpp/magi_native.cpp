@@ -1628,6 +1628,9 @@ struct PolishState {
         scratch.resize((size_t)prob.S * prob.T);
         diffFlat.resize((size_t)prob.S * prob.T);
         diffOld.resize((size_t)prob.S * prob.T);
+        // [全体計算の最小化] hint は best 盤面基準で、best 改善時にのみ変わる。生成時に1回収集し、
+        // 以後は runPolishChunk 内の best 改善時のみ更新（旧: 毎チャンク頭の全面スキャン＝冗長）。
+        collectViolationCells(p, bestSol.data(), vioCells);
     }
 };
 
@@ -1649,9 +1652,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
     auto& rng = st.rng;
     long long curScore = st.score;
     bool bestImproved = false;
-
-    // hint はチャンク頭に best 盤面から更新（Kotlin は destroyRepairViolations へ bestReport を渡す＝同源）。
-    collectViolationCells(p, s.bestSol.data(), s.vioCells);
+    // hint(vioCells) は PolishState 生成時＋best 改善時に更新済み（Kotlin の bestReport 相当＝同源・同鮮度）。
 
     for (int it = 0; it < iters; it++) {
         long long curHard = curScore / 1000000LL;

@@ -136,6 +136,8 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         // [Stage11] PhaseB(LAHC) 切替用: HARD 水準が最後に下がった時刻（Kotlin runWorker と同じ hardStallMs 判定。
         //   検知粒度はラダー境界＝1チャンク（数千反復・ms級）で、毎反復判定の Kotlin より僅かに粗いだけ）。
         var lastHardImprove = (System.nanoTime() / 1_000_000L)
+        // [全体計算の最小化] 直近の照合済み best 盤面キャッシュ（非改善チャンクの flush 用）。
+        var lastSol: Array<IntArray> = NativeEval.unflatten(best, s, t)
         fun timeUp() = params.shouldStop() || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
 
         while (!timeUp()) {
@@ -159,9 +161,13 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                 }
                 if (newBest / M < bestScore / M) lastHardImprove = (System.nanoTime() / 1_000_000L)
                 bestScore = newBest
+                lastSol = bestSol
                 flush(bestScore, bestSol, ret[3])
             } else {
-                flush(bestScore, NativeEval.unflatten(best, s, t), ret[3])
+                // [全体計算の最小化] 非改善チャンクは直近の照合済み best（キャッシュ）を渡す。
+                //   flush は localBest < globalBest のときしか盤面を読まず、非改善では勝てないため
+                //   毎チャンクの unflatten（全面コピー＋確保）は純粋な無駄だった。
+                flush(bestScore, lastSol, ret[3])
             }
             if (timeUp()) return true
             // [Stage11] HARD 床到達（hardStallMs 無改善）で PhaseB=LAHC ソフト研磨へ恒久切替
@@ -210,6 +216,8 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         val h = NativeBridge.nativeLahcCreate(handle, bestFlat, rng.nextLong(), params.lahcLen)
         if (h == 0L) { NativeGate.disable("LAHC状態生成NG"); return false }
         try {
+            // [全体計算の最小化] 直近の照合済み best 盤面キャッシュ（非改善チャンクの flush 用）。
+            var lastSol: Array<IntArray> = NativeEval.unflatten(bestFlat, s, t)
             while (!timeUp()) {
                 coroutineContext.ensureActive()
                 val ret = runCatching { NativeBridge.nativeLahcChunk(h, 4000) }.getOrNull()
@@ -227,9 +235,10 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                         return false
                     }
                     bestScore = ret[2]
+                    lastSol = sol
                     flush(bestScore, sol, ret[4])
                 } else {
-                    flush(bestScore, NativeEval.unflatten(bestFlat, s, t), ret[4])
+                    flush(bestScore, lastSol, ret[4])
                 }
             }
             return true
