@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // [Gradle 9移行] AGP 9.0+ の内蔵Kotlinサポートを使用（org.jetbrains.kotlin.android は不要）。
 // Compose Compiler のみ独立プラグインとして明示適用（root build.gradle.kts でオーバーライドした
 // Kotlin 2.3.21 と版数を一致させる）。
@@ -51,10 +49,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    // [Gradle 9移行] kotlinOptions{} は AGP 9 で compilerOptions{} へ置換。composeOptions.
-    // kotlinCompilerExtensionVersion は Compose Compiler の独立プラグイン化(Kotlin 2.0+)で不要
-    // （版数は root build.gradle.kts の org.jetbrains.kotlin.plugin.compose(2.3.21) が管理）。
-    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+    // [Gradle 9移行] kotlinOptions{jvmTarget}は撤去。内蔵Kotlinは既定で
+    // android.compileOptions.targetCompatibility(=17, 上記)からjvmTargetを継承するため明示不要
+    // （公式ドキュメント確認: "You don't need to explicitly set jvmTarget... it defaults to
+    // android.compileOptions.targetCompatibility"）。composeOptions.kotlinCompilerExtensionVersion は
+    // Compose Compiler の独立プラグイン化(Kotlin 2.0+)で不要（版数は root build.gradle.kts の
+    // org.jetbrains.kotlin.plugin.compose(2.3.21) が管理）。
     buildFeatures { compose = true }
     packaging { resources { excludes += setOf("/META-INF/{AL2.0,LGPL2.1}") } }
 

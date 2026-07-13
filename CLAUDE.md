@@ -759,8 +759,13 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   を root `build.gradle.kts` の `plugins{}` より前に追加）で明示上書き。既定より低いKGPを指定した場合は
   AGP が自動で 2.2.10 へ引き上げるが、より高い版数は明示 classpath 指定でのみ有効という公式仕様に準拠。
   Compose Compiler プラグインの版数も 2.3.21 へ追従（Kotlin本体と版数を一致させる必要があるため）。
-- **`kotlinOptions{jvmTarget="17"}` → `compilerOptions{jvmTarget.set(JvmTarget.JVM_17)}`**
-  （AGP 9 での置換。`import org.jetbrains.kotlin.gradle.dsl.JvmTarget` を追加）。
+- **`kotlinOptions{jvmTarget="17"}` を撤去（置換ではなく削除）**: 内蔵Kotlinの `compilerOptions` は
+  `android{}` 直下ではなく別の場所にあり、初版で `android.compilerOptions{jvmTarget=...}` として実装した
+  ところ CI（release-build.yml）で `Unresolved reference 'compilerOptions'` と実際にビルド失敗、公式ドキュメント
+  再確認で誤りと判明（"You don't need to explicitly set jvmTarget... it defaults to
+  android.compileOptions.targetCompatibility" に訂正）。**jvmTarget は既存の `compileOptions.
+  targetCompatibility=17` から内蔵Kotlinが自動継承するため、ブロックごと削除**が正しい修正（HF77非該当だが
+  「CIの実結果で検証する」という本移行自身の方針どおり、誤りをCI失敗で検出→即訂正した実例）。
 - **`composeOptions{kotlinCompilerExtensionVersion}` を撤去**: 独立プラグイン化で無効・不要
   （版数は `org.jetbrains.kotlin.plugin.compose` が一元管理）。
 - `gradle/wrapper/gradle-wrapper.properties` の distributionUrl を 9.3.1 へ。CI 3ワークフロー
@@ -773,9 +778,9 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   （Gradle/AGP/Kotlin ツールチェーンのみ）。JDK は既存の temurin 17 のままで AGP 9 の最小要求(17)を満たす。
 - **検証方針（HF77非該当・ビルド基盤のみ）**: サンドボックスは Android/Kotlin コンパイル不可のため、
   この移行は CI（v6-engine-check.yml の testDebugUnitTest/assembleDebug、release-build.yml の
-  assembleRelease＝ネイティブC++含む全ビルド経路）の実結果で検証する。DSL変更（compilerOptions の
-  import解決含む）は理論上ハイリスクだが、この項目自体がその検証記録＝ここに書いてある通りに動くかは
-  CI ログで確認済みの前提とする（本記述はコミット時点の実装意図。実機/CI 不一致が出た場合は追記修正）。
+  assembleRelease＝ネイティブC++含む全ビルド経路）の実結果で検証する。DSL変更は理論上ハイリスクで、
+  実際に初版の `android.compilerOptions` が CI 失敗で誤りと判明→上記のとおり訂正済み（この項目自体が
+  その検証記録）。
 
 ## 人員不足の「なぜ埋まらないか」内訳（CoverageDiag 拡張, 3.156.0）
 実機での繰り返しの「なぜ Cｵ/Cｱ が不足するのか」に**アプリ自身が答える**ため、`V6PortAnalyzer.diagnoseCoverage` の
