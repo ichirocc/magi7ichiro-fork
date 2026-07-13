@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,8 +51,13 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun WishCard(ui: UiState, vm: MagiViewModel) {
+fun WishCard(ui: UiState, vm: MagiViewModel, autoOpenAdd: Boolean = false, onAutoOpenConsumed: () -> Unit = {}) {
     var dialog by remember { mutableStateOf<WishEdit?>(null) }
+    // [見つけやすさ改善] 案内カードの「希望シフト」行タップから直行するための自動オープン。
+    //   1回消費したら呼出側の状態(autoOpenAdd)を戻してもらう＝タブ再訪等での再オープンを防ぐ。
+    LaunchedEffect(autoOpenAdd) {
+        if (autoOpenAdd) { dialog = WishEdit(0, 0, 0); onAutoOpenConsumed() }
+    }
     val rows = vm.wishOverrides()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

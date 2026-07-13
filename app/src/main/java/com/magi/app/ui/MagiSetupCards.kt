@@ -136,7 +136,7 @@ internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
 
 
 @Composable
-internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel) {
+internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, onOpenWish: (() -> Unit)? = null) {
     if (!ui.loaded) return
     val c = vm.setupCounts()
     val cs = MaterialTheme.colorScheme
@@ -147,7 +147,9 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel) {
             //   ①基本情報・④制約・⑤回数範囲は「年次マスター」scopeにあり、月次では編集しない。
             // [監査A1] 旧①〜⑤番号と旧スコープ名（年次マスター等）が新3ドア/新節番号と食い違っていた→ドア名で案内。
             Text("── 月次条件（毎月）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0)
+            // [見つけやすさ改善] 「希望シフト」行をタップで登録画面へ直行（既存機能の入口が編集タブの奥に
+            //   埋もれ見つけにくいという指摘。新規画面は作らず、常時表示のこの案内カードから最短で開く）。
+            GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0, onClick = onOpenWish)
             GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
             Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
@@ -168,12 +170,16 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel) {
 
 
 @Composable
-internal fun GuideRow(label: String, value: String, done: Boolean) {
+internal fun GuideRow(label: String, value: String, done: Boolean, onClick: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick) else Modifier,
+    ) {
         Text(if (done) "✓" else "・", color = if (done) cs.primary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Text(value, color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Text(value + (if (onClick != null) " ›" else ""), color = if (onClick != null) cs.primary else cs.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -275,7 +281,7 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
  * 例外件数は D6 に従い、明示的な例外リストを持つ「日別必要人数の例外」のみを数える。
  */
 @Composable
-internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> Unit) {
+internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> Unit, onOpenWish: (() -> Unit)? = null) {
     if (!ui.loaded) return
     val staffN = ui.staffNames.size
     val wishStaff = remember(ui.wishes, staffN) {
@@ -288,7 +294,8 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> 
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
             ChecklistRow("職員", "${staffN}名", ok = staffN > 0)
-            ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0)
+            // [見つけやすさ改善] タップで希望シフト登録へ直行（SetupGuideCardと同じ入口を共有）。
+            ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0, onClick = onOpenWish)
             ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
             ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件（ホームに詳細）", ok = issues == 0)
             Button(onClick = onMake, enabled = ui.loaded && !ui.running,
@@ -300,12 +307,16 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> 
 }
 
 @Composable
-private fun ChecklistRow(label: String, value: String, ok: Boolean) {
+private fun ChecklistRow(label: String, value: String, ok: Boolean, onClick: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick) else Modifier,
+    ) {
         Text(if (ok) "✓" else "！", color = if (ok) cs.tertiary else cs.error, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        Text(value, color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        Text(value + (if (onClick != null) " ›" else ""), color = if (onClick != null) cs.primary else cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

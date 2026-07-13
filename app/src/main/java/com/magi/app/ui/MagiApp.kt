@@ -146,6 +146,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
     var editScope by rememberSaveable { mutableStateOf(0) }   // [入口4分割] 編集タブ: 0=月次条件 / 1=職員管理 / 2=年間マスター
+    var wishQuickAdd by remember { mutableStateOf(false) }    // [見つけやすさ改善] 案内カードから希望シフト登録へ直行
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
     var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
@@ -415,7 +416,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }
                 }
                 2 -> {
-                    SetupGuideCard(ui, vm)
+                    // [見つけやすさ改善] 案内カードの「希望シフト」行タップで月次条件タブ＋希望シフト
+                    //   追加ダイアログへ直行（新規画面は作らず既存WishCardの入口を最短化）。
+                    val openWish: () -> Unit = { editScope = 0; wishQuickAdd = true }
+                    SetupGuideCard(ui, vm, onOpenWish = openWish)
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
                     MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })
@@ -432,9 +436,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     when (editScope) {
                         0 -> {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
-                            MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 })
+                            MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 }, onOpenWish = openWish)
                             MonthPickerCard(ui, vm)
-                            WishCard(ui, vm)
+                            WishCard(ui, vm, autoOpenAdd = wishQuickAdd, onAutoOpenConsumed = { wishQuickAdd = false })
                             NeedDayCard(ui, vm)
                         }
                         1 -> {
