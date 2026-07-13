@@ -439,6 +439,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 }, onOpenWish = openWish)
                             MonthPickerCard(ui, vm)
                             WishCard(ui, vm, autoOpenAdd = wishQuickAdd, onAutoOpenConsumed = { wishQuickAdd = false })
+                            // [必要人数カレンダー] モックアップの長所（月全体の実効needを一目で見渡す概観）を追加。
+                            //   編集は下の一覧（例外の追加/編集/削除）のまま＝操作系は温存(ユーザー選択)。
+                            NeedCalendarCard(ui, vm)
                             NeedDayCard(ui, vm)
                         }
                         1 -> {

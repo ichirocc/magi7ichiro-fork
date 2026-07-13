@@ -108,6 +108,10 @@ fun WishCard(ui: UiState, vm: MagiViewModel, autoOpenAdd: Boolean = false, onAut
             staff = ui.staffNames,
             shifts = vm.shiftKigouList(),
             allowedFor = { idx -> vm.allowedShiftsFor(idx).toHashSet() },
+            // [実機指摘「登録済みの希望シフトが表示されていない」] 日選択カレンダーはこれまで今回の
+            //   選択状態しか示さず、その職員が既に登録済みの希望（他の日）が見えなかった。職員ごとの
+            //   既存希望(日→記号)をDayPickerGridへ渡し、登録済みの日に小さくバッジ表示する。
+            wishesFor = { idx -> rows.filter { it.i == idx }.associate { it.day to it.kigou } },
             onApply = { i, daysSel, k ->
                 daysSel.forEach { vm.setWish(i, it - 1, k) }
                 // [編集=移動] チップ編集で元の日が選択から外れた（or 別スタッフへ付け替えた）場合は
@@ -132,6 +136,7 @@ private fun WishDialog(
     staff: List<String>,
     shifts: List<String>,
     allowedFor: (Int) -> Set<Int>,
+    wishesFor: (Int) -> Map<Int, String> = { emptyMap() },
     onApply: (Int, Set<Int>, Int) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -164,7 +169,11 @@ private fun WishDialog(
                     }
                 }
                 Text("日（タップで選択・複数可）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                DayPickerGrid(startDate, maxDay, daysSel) { d ->
+                val existingWishes = remember(i) { wishesFor(i) }
+                if (existingWishes.isNotEmpty()) {
+                    Text("桃色＝この職員が既に登録済みの希望", style = MaterialTheme.typography.labelSmall, color = MagiAccent.pink)
+                }
+                DayPickerGrid(startDate, maxDay, daysSel, markedDays = existingWishes) { d ->
                     daysSel = if (d in daysSel) daysSel - d else daysSel + d
                 }
                 Text("希望シフト", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
