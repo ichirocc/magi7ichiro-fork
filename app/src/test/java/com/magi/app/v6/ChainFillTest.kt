@@ -224,6 +224,9 @@ class ChainFillTest {
     // 素通ししてしまう。a=[P,Q,P]・b=[休,休,休] で day1 の P不足を埋める候補は a/b の2人だが、
     // a の day1 を P にすると day0,1,2=P,P,P で三連禁止に触れる。b は無関係なので安全。
     // findCovUChain が a を枝刈りし、b だけを使う連鎖（1手）に着地することを確認する。
+    // [隣接日調整の対象外であることを保証] b を day0/day2 に希望固定し、a の禁止連続を隣接日調整
+    //   （下記 chainFillResolvesC3nBlockViaAdjacentDayFix）で回避できないようにする。これが無いと
+    //   b が a の day0/day2 の肩代わりに使えてしまい、結果が非決定的（RNG次第でaかbか）になる。
     @Test
     fun chainFillAvoidsTripleForbiddenRun() {
         // shift: 0=休 1=P(need1・cons3n=P,P,P三連禁止) 2=Q
@@ -239,7 +242,7 @@ class ChainFillTest {
             startDate = "2026-08-01", endDate = "2026-08-03",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
             groupShift = groupShift, groupShiftApt = List(1) { List(3) { "" } },
-            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            schedule = schedule, wishes = mapOf("1,0" to 0, "1,2" to 0), staffRange = emptyMap(),
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = listOf(C3Row(listOf("P", "P", "P"))),
@@ -262,6 +265,53 @@ class ChainFillTest {
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("covU が解消されること", 0, after.breakdown["covU"] ?: 0)
         assertEquals("三連禁止(c3n)を新たに作らないこと", 0, after.breakdown["c3n"] ?: 0)
+    }
+
+    // [禁止連続の回避=隣接日調整] a=[P,Q,P]・b=[休,休,休]で day1 の P不足を埋めたいが、b は day1 に
+    // 希望固定（休）で使えず、直接候補は a のみ。a を day1=P にすると三連禁止に触れるため、
+    // findCovUChain が a の day0 を休へ変えて三連を崩し、空いた day0 の P不足を b で玉突き充填する
+    // （2段の合流手）ことを確認する。ユーザー指摘「禁止連続の並びにならないようにする」への対応。
+    @Test
+    fun chainFillResolvesC3nBlockViaAdjacentDayFix() {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val groupShift = listOf(listOf(1, 1, 1))
+        val staff = listOf(Staff("a", 0), Staff("b", 0))
+        val schedule = listOf(
+            listOf(1, 2, 1),   // a: P, Q, P
+            listOf(0, 0, 0),   // b: 休, 休, 休
+        )
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-03",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(1) { List(3) { "" } },
+            schedule = schedule,
+            wishes = mapOf("1,1" to 0),   // b は day1 のみ希望固定(休)＝直接候補から除外。day0/day2は自由。
+            staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(listOf("P", "P", "P"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val p = cachedProblem(st)
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertTrue("day1 の P不足(covU)が前提", (before.breakdown["covU"] ?: 0) > 0)
+        assertEquals(0, before.breakdown["c3n"] ?: 0)
+        assertTrue("bはday1希望固定で直接候補から除外される前提", p.wishLocked(1, 1))
+
+        val chain = findCovUChain(p, sched, 1, 1, Random(5))
+        assertNotNull("隣接日調整＋玉突きでday1のP不足を埋める連鎖が見つかること", chain)
+        for (mv in chain!!) sched[mv[0]][mv[1]] = mv[2]
+
+        assertEquals("a の day1 が P で埋まる（禁止連続を回避しつつ使われる）", 1, sched[0][1])
+        assertEquals("a の day0 が休へ変わり三連を崩す", 0, sched[0][0])
+        assertEquals("空いた day0 の P不足を b が玉突きで埋める", 1, sched[1][0])
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals("covU が解消されること", 0, after.breakdown["covU"] ?: 0)
+        assertEquals("三連禁止(c3n)を新たに作らないこと", 0, after.breakdown["c3n"] ?: 0)
+        assertTrue("hard は悪化しない", after.hard <= before.hard)
     }
 
     // Problem.makesForbiddenRun 自体の直接検証（三連・五連）。

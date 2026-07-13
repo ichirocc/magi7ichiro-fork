@@ -1050,7 +1050,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             val totalTxt = if (s.deltaTotal <= 0) "−${-s.deltaTotal}" else "+${s.deltaTotal}"
                             Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                            Button(onClick = { onApply(s) }, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
+                            Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
                                 Text("この手を適用")
                             }
                         }

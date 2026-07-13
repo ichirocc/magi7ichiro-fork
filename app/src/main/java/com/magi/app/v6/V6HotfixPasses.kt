@@ -283,6 +283,9 @@ object V6HotfixPasses {
                 if (shouldStop()) break
                 // --- k=2: 2職員スワップ（同日・被覆不変）---
                 for (a in 0 until p.S) {
+                    // [監査(未レビュー領域再監査)] HF66(2.65.0)/BlockRotationPolish(3.84.0)と同型の予算超過対策。
+                    //   旧: 日(j)ループ先頭のみで確認していたため、1日分のO(S^2)スキャンが締切後も走り切っていた。
+                    if (shouldStop()) break
                     if (!movable(a, j)) continue
                     for (b in a + 1 until p.S) {
                         if (!movable(b, j)) continue
@@ -296,6 +299,7 @@ object V6HotfixPasses {
                 }
                 // --- k=3: 3職員ローテーション（同日・被覆不変）---
                 for (a in 0 until p.S) {
+                    if (shouldStop()) break
                     if (!movable(a, j)) continue
                     for (b in a + 1 until p.S) {
                         if (!movable(b, j)) continue
@@ -356,6 +360,8 @@ object V6HotfixPasses {
                 for (j in 0..p.T - w) {
                     if (shouldStop()) break
                     for (i in 0 until p.S) {
+                        // [監査(未レビュー領域再監査)] O(S^2)内側スキャンにも締切確認を追加（HF66/BlockRotationPolishと同型）。
+                        if (shouldStop()) break
                         if ((0 until w).any { !movable(i, j + it) }) continue
                         for (i2 in i + 1 until p.S) {
                             if (i !in anchorStaff && i2 !in anchorStaff) continue   // 違反職員を含む対のみ
@@ -537,6 +543,8 @@ object V6HotfixPasses {
             for (j in 0 until p.T) {
                 if (shouldStop()) break
                 for (a in 0 until p.S) {
+                    // [監査(未レビュー領域再監査)] O(S^2)内側スキャンにも締切確認を追加。
+                    if (shouldStop()) break
                     if (!movable(a, j)) continue
                     for (b in a + 1 until p.S) {
                         if (!movable(b, j) || p.sgrp[a] != p.sgrp[b]) continue
@@ -581,6 +589,8 @@ object V6HotfixPasses {
             for (j in 0 until p.T) {
                 if (shouldStop()) break
                 for (a in 0 until p.S) {
+                    // [監査(未レビュー領域再監査)] O(S^2)内側スキャンにも締切確認を追加。
+                    if (shouldStop()) break
                     if (!movable(a, j)) continue
                     for (b in a + 1 until p.S) {
                         if (!movable(b, j)) continue
@@ -658,6 +668,9 @@ object V6HotfixPasses {
                     if (i !in anchorStaff) continue
                     if (!p.canDo(i, x)) continue
                     for (j in 0 until p.T) {
+                        // [監査(未レビュー領域再監査)] このjループはi2走査に加えfindCovUChainのBFSも伴い重い
+                        //   （HF66/BlockRotationPolishと同型の予算超過対策として日ごとにも確認）。
+                        if (shouldStop()) break
                         if (work[i][j] == x || !movable(i, j)) continue
                         if (!inDeficientC1Window(p, work, i, x, d, n, j)) continue
                         val a = work[i][j]                                  // i の旧シフト
