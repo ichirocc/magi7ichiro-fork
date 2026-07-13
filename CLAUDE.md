@@ -677,6 +677,21 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   未描画の V6RemainingScreens から参照=無害)。CheckSummaryView(守れていない約束=bestHard)/BreakdownCard(族内訳)は固有情報で維持。
   表示のみ・スコアリング不変(読取専用)。
 
+## 多人数ブロック移動（勤務→勤務連鎖, 3.155.0）
+実機 2026-08 データでユーザーが手作業で見つけた covU の解（8/11 モニカ B4→Cｵ／8/17 上條 Cｵ→Cｱ・山本 →Cｵ）を
+最適化器が見つけられなかった。**根本原因**: 既存修復オペレータ `destroyRepairDay` は「**休→勤務**」でしか穴を
+埋めず、候補が全員 (a)希望ロック (b)単一被覆シフト在勤=引き抜くと玉突き covU (c)禁止連続 に当たる局面で必要な
+「**勤務→勤務**（過剰シフト/連鎖から引く）」を試さない。ランダム探索(ChainSwap/destroy-repair)は確率的にしか
+踏めず、7500万反復×5並列でも 5仮説すべて必須3で同一収束していた。
+- **`findCovUChain`(V6SearchOperators)**: covU セル (k0,j) を同日・多人数の玉突き連鎖で充填する交代連鎖を BFS
+  （最短優先）で決定的に探索。「k0 を i が埋める→i が空けたシフト m を次が埋める→…→空けても covU が増えない
+  シフト(需要0 or 余裕あり=過剰/休)で終端」。リンク条件=canDo・非wishLocked・長さ2 c3n の前後枝刈り・同一職員/
+  シフト再訪なし・深さ≤5。同日内交換=被覆総量保存。返り値=適用手[(i,j,newK)]（盤面不変・採否は呼出側 keep-best）。
+- **配線**: ①`rsiGenerateHypothesis` covU/c41/c41s focus の先頭で `applyCovUChains`（全 covU セルに連鎖適用・ラウンド
+  better() でゲート）②optimize エピローグで covU>0 のとき keep-best 照合つきの保険パス（ALNS単独/covU非focus経路でも走る・
+  ログ `ChainFill`）。スコアリング不変・退化不能（checker 照合）。ユニットテスト `ChainFillTest`（深さ1/深さ2＝8/11・8/17
+  相当）で covU=0 到達・hard 非増加を検証。
+
 ## 停滞脱出の改善（進行中）
 探索本体が過拘束データで空転しがちな問題（停滞脱出の質向上）。
 - (2.49.0): コードレビューで判明した冗長な後処理パス(applyGroupRangePairPolish)を revert。同日2者スワップ族

@@ -163,10 +163,28 @@ object V6NativeOptimizer {
             V6Algorithm.AUTO -> error("AUTO must be resolved")
         }
         logs = logs + result.phaseLogs
+        // [E11/多人数ブロック移動] エピローグで残 covU を「勤務→勤務」連鎖で充填（ALNS単独や covU を focus
+        //   しなかった経路でも走る保険）。keep-best 照合＝退化不能。ユーザー実例(8/11・8/17)の詰み局面を解く。
+        var resultSched = result.schedule
+        run {
+            val preRep = UnifiedViolationChecker.check(state, resultSched)
+            if (preRep.hard > 0 && (preRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
+                val cand = resultSched.copy2D()
+                val n = applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL))
+                if (n > 0) {
+                    val candRep = UnifiedViolationChecker.check(state, cand)
+                    if (better(candRep, preRep)) {
+                        resultSched = cand
+                        logs = logs + MirrorLog(tag = "ChainFill",
+                            message = "多人数ブロック移動で covU 充填: HARD ${preRep.hard}→${candRep.hard} / total ${preRep.total}→${candRep.total}（連鎖${n}件）")
+                    }
+                }
+            }
+        }
         // [review #3] Final epilogue polish only when the caller isn't running its own post chain.
         val polished = if (options.postPolish && !shouldStop())
-            hf80PostPolish(state, result.schedule, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop)
-        else PolishResult(result.schedule, emptyList(), 0)
+            hf80PostPolish(state, resultSched, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop)
+        else PolishResult(resultSched, emptyList(), 0)
         val finalReport = UnifiedViolationChecker.check(state, polished.schedule)
         logs = logs + polished.logs + MirrorLog(
             tag = "V6Dispatcher",
@@ -1346,7 +1364,9 @@ object V6NativeOptimizer {
         val out = base.copy2D()
         val p = cachedProblem(state)
         when (focus) {
-            "covU", "c41", "c41s" -> repeat(8) { destroyRepairDay(state, out, rng) }   // c41s=スキル群の1日人数(c41と同型)
+            // [E11] covU は先に「勤務→勤務」の多人数連鎖で充填（既存 destroyRepairDay は休→勤務のみ＝
+            //   候補が過剰シフト/連鎖からしか引けない局面を踏めない）。仮説はラウンド better() でゲート＝退化なし。
+            "covU", "c41", "c41s" -> { applyCovUChains(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }   // c41s=スキル群の1日人数(c41と同型)
             "low", "high", "c2" -> repeat(8) { destroyRepairStaff(state, out, rng) }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
@@ -1360,6 +1380,33 @@ object V6NativeOptimizer {
             else -> repeat(12) { destroyRepairViolations(state, out, report, rng) }
         }
         return out
+    }
+
+    /**
+     * [E11/多人数ブロック移動] 現盤面の全 covU セルを、同日・多人数の玉突き連鎖（findCovUChain）で
+     * 充填する。sched を in-place 変更し、適用手数を返す。連鎖は同日内交換＝被覆総量保存で、canDo/非wishLocked/
+     * c3n枝刈り済み。最終採否は呼び出し側の keep-best（ラウンド better() or エピローグの checker 照合）が担保。
+     * ユーザー実例（2026-08）: 8/11 モニカ B4→Cｵ（深さ1）／8/17 上條 Cｵ→Cｱ・山本 →Cｵ（深さ2）。
+     */
+    private fun applyCovUChains(state: MagiState, sched: Array<IntArray>, rng: Random): Int {
+        val p = cachedProblem(state)
+        if (p.S == 0 || p.T == 0) return 0
+        var applied = 0
+        val cnt = IntArray(p.K)
+        for (j in 0 until p.T) {
+            for (k in 0 until p.K) cnt[k] = 0
+            for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
+            for (k in 0 until p.K) {
+                if (p.covUCell(k, j, cnt[k]) <= 0) continue
+                val chain = findCovUChain(p, sched, k, j, rng) ?: continue
+                for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
+                applied++
+                // 同日に複数 covU があり得るので当日カウントを再計算。
+                for (kk in 0 until p.K) cnt[kk] = 0
+                for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
+            }
+        }
+        return applied
     }
 
     private fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet()): String {
