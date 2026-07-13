@@ -694,6 +694,14 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
 - ユニットテスト `ChainFillTest`: `makesForbiddenRunDetectsTripleAndQuintuple`（三連/五連の直接検証・positive/negative）
   ＋ `chainFillAvoidsTripleForbiddenRun`（連鎖探索が三連トラップを避けて安全な候補へ着地）を追加。
   スコアリング不変・枝刈りロジックの一般化のみ。
+- (3.157.1, 玉突きの三連・五連=多人数連鎖の深さ検証): ユーザー指摘「玉突きの三連、五連なども配慮する」。
+  `findCovUChain` は元々 `maxDepth=5`（最大5人の玉突き）に対応済みだったが、テストは深さ1・2のみで
+  3人・5人連鎖は未検証だった。各シフトを隣接シフトのみ担当可能な群で一本道につなぎ、末端を過剰配置にした
+  盤面で `chainFillSolvesDepth3Cascade`/`chainFillSolvesDepth5Cascade` を追加し、BFS が3手・5手の連鎖を
+  正しく1発で見つけること（設計上その深さでしか covU が解消しない一本道のため、乱数シードに依らず一意）を
+  検証。あわせて `findCovUChain` の docstring の「長さ2 c3n の前後プルーニング」という古い記述を
+  3.157.0 の一般化後の実態（任意長・makesForbiddenRun）に合わせて訂正（HF77: コメント≠実装の解消）。
+  スコアリング不変・テスト追加のみ。
 
 ## 人員不足の「なぜ埋まらないか」内訳（CoverageDiag 拡張, 3.156.0）
 実機での繰り返しの「なぜ Cｵ/Cｱ が不足するのか」に**アプリ自身が答える**ため、`V6PortAnalyzer.diagnoseCoverage` の

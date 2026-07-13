@@ -79,6 +79,106 @@ class ChainFillTest {
         assertTrue("hard は悪化しない", after.hard <= before.hard)
     }
 
+    // [玉突きの三連] 3人の交代連鎖でしか埋まらない局面: P<-Q<-R<-S（末端Sが過剰=余裕）。
+    // a(Q担当) が P へ、b(R担当) が Q へ、c(S担当) が R へ動いて初めて covU=0 になり、
+    // どの1人の直接移動でも別の covU を生むだけの「深さ3」を BFS が正しく踏むことを確認する。
+    @Test
+    fun chainFillSolvesDepth3Cascade() {
+        val shifts = listOf(
+            Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
+            Shift("R", "R", "1", ""), Shift("S", "S", "1", ""),
+        )
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"), Group("G3", "G3"))
+        // G0=休/P/Q, G1=休/Q/R, G2=休/R/S, G3=休/S（各群は隣接シフトのみ担当可＝連鎖を1本道にする）
+        val groupShift = listOf(
+            listOf(1, 1, 1, 0, 0),
+            listOf(1, 0, 1, 1, 0),
+            listOf(1, 0, 0, 1, 1),
+            listOf(1, 0, 0, 0, 1),
+        )
+        val staff = listOf(Staff("a", 0), Staff("b", 1), Staff("c", 2), Staff("d", 3))
+        // a=Q, b=R, c=S, d=S（Sが2人＝過剰=末端の余裕）
+        val schedule = listOf(listOf(2), listOf(3), listOf(4), listOf(4))
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(4) { List(5) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val p = cachedProblem(st)
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertTrue("P不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
+
+        val chain = findCovUChain(p, sched, 1, 0, Random(11))
+        assertNotNull("3人連鎖が見つかること", chain)
+        assertEquals("深さ3(3手)の連鎖であること", 3, chain!!.size)
+        for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
+
+        assertEquals("a=P, b=Q, c=R, d=S(不変)", listOf(1, 2, 3, 4), listOf(sched[0][0], sched[1][0], sched[2][0], sched[3][0]))
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals("covU が解消されること", 0, after.breakdown["covU"] ?: 0)
+        assertTrue("hard は悪化しない", after.hard <= before.hard)
+    }
+
+    // [玉突きの五連] 5人の交代連鎖: P<-Q<-R<-S<-T<-U（末端Uが過剰=余裕）。maxDepth=5 の上限まで
+    // BFS が正しく踏み、5手全てを一括で返すことを確認する（深さ3と同型の一本道を1段長くしたもの）。
+    @Test
+    fun chainFillSolvesDepth5Cascade() {
+        val shifts = listOf(
+            Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
+            Shift("R", "R", "1", ""), Shift("S", "S", "1", ""), Shift("T", "T", "1", ""), Shift("U", "U", "1", ""),
+        )
+        val groups = listOf(
+            Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"),
+            Group("G3", "G3"), Group("G4", "G4"), Group("G5", "G5"),
+        )
+        // G0=休/P/Q ... G4=休/T/U, G5=休/U（末端）。各群は隣接シフトのみ担当可＝連鎖を1本道にする。
+        val groupShift = listOf(
+            listOf(1, 1, 1, 0, 0, 0, 0),
+            listOf(1, 0, 1, 1, 0, 0, 0),
+            listOf(1, 0, 0, 1, 1, 0, 0),
+            listOf(1, 0, 0, 0, 1, 1, 0),
+            listOf(1, 0, 0, 0, 0, 1, 1),
+            listOf(1, 0, 0, 0, 0, 0, 1),
+        )
+        val staff = listOf(Staff("a", 0), Staff("b", 1), Staff("c", 2), Staff("d", 3), Staff("e", 4), Staff("f", 5))
+        // a=Q, b=R, c=S, d=T, e=U, f=U（Uが2人＝過剰=末端の余裕）
+        val schedule = listOf(listOf(2), listOf(3), listOf(4), listOf(5), listOf(6), listOf(6))
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(6) { List(7) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val p = cachedProblem(st)
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertTrue("P不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
+
+        val chain = findCovUChain(p, sched, 1, 0, Random(13))
+        assertNotNull("5人連鎖が見つかること", chain)
+        assertEquals("深さ5(5手)の連鎖であること", 5, chain!!.size)
+        for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
+
+        assertEquals(
+            "a=P,b=Q,c=R,d=S,e=T,f=U(不変)",
+            listOf(1, 2, 3, 4, 5, 6),
+            listOf(sched[0][0], sched[1][0], sched[2][0], sched[3][0], sched[4][0], sched[5][0]),
+        )
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals("covU が解消されること", 0, after.breakdown["covU"] ?: 0)
+        assertTrue("hard は悪化しない", after.hard <= before.hard)
+    }
+
     // 8/11 相当（深さ1）: covU=Cｵ、唯一の Cｵ可能者が過剰シフト B4 に在勤 → 1手で covU/covO 同時解消。
     @Test
     fun chainFillSolvesDepth1FromOvercoveredShift() {
