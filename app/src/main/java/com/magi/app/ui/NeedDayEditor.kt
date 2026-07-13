@@ -3,6 +3,8 @@ package com.magi.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
@@ -13,11 +15,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -34,6 +38,102 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+
+/**
+ * [必要人数カレンダー] シフトを1つ選び、月全体の実効need（シフト既定＋日別例外を統合済み、
+ * `vm.needCellLimits(k,j)`）を一目で見渡す概観。ユーザー提示のモックアップの長所（①シフト種類
+ * チップで対象を絞る ②月全体カレンダーに各日の実効値をインライン色分け表示 ③設定済/未設定の
+ * 日数サマリー）を取り入れた。**表示専用**（タップ不可）で、編集は従来どおり下の「日別の必要人数
+ * （例外）」の一覧・追加ダイアログで行う（ユーザー選択：一覧の操作系は温存し概観を追加するだけ）。
+ * 読取専用・スコアリング不変。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun NeedCalendarCard(ui: UiState, vm: MagiViewModel) {
+    val shifts = vm.shiftKigouList()
+    if (shifts.isEmpty()) return
+    var k by remember { mutableStateOf(0) }
+    if (k !in shifts.indices) k = 0
+    val cs = MaterialTheme.colorScheme
+    val cells = remember(ui.startDate, ui.days, k, ui.loaded) {
+        (0 until ui.days).map { j -> vm.needCellLimits(k, j) }
+    }
+    val setCount = cells.count { it != null }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("必要人数カレンダー", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "シフトを選ぶと、月全体の必要人数（最低〜上限）を一覧できます（表示のみ）。",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                shifts.forEachIndexed { idx, kg ->
+                    InputChip(selected = idx == k, onClick = { k = idx }, label = { Text(kg) })
+                }
+            }
+            Text(
+                "設定済 ${setCount}日 / 未設定 ${ui.days - setCount}日",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            NeedMonthGrid(startDate = ui.startDate, cells = cells)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(14.dp).background(MagiAccent.green.copy(alpha = 0.30f), RoundedCornerShape(4.dp)))
+                Text("設定済(最低-上限)", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Spacer(Modifier.width(8.dp))
+                Box(Modifier.size(14.dp).background(cs.surfaceVariant, RoundedCornerShape(4.dp)))
+                Text("未設定", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/** [表示専用] 月内の日を曜日整列グリッドで並べ、各日の実効need(lo-hi)をインライン表示する。
+ *  DayPickerGrid（選択トグル用）とは別物＝タップ不可・選択状態を持たない読取専用グリッド。 */
+@Composable
+private fun NeedMonthGrid(startDate: String, cells: List<Pair<Int, Int>?>) {
+    val cs = MaterialTheme.colorScheme
+    val sdow = (startDowMonFirst(startDate) + 1) % 7   // 月曜始まり(0=月)→日曜始まり(0=日)へ変換
+    val weekJa = listOf("日", "月", "火", "水", "木", "金", "土")
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+            weekJa.forEachIndexed { idx, w ->
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text(w, style = MaterialTheme.typography.labelSmall,
+                        color = when (idx) { 0 -> MagiAccent.red; 6 -> MagiAccent.blue; else -> cs.onSurfaceVariant })
+                }
+            }
+        }
+        val dayCells: List<Int?> = List(sdow) { null } + cells.indices.toList()
+        dayCells.chunked(7).forEach { wk ->
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+                wk.forEach { j ->
+                    if (j == null) Box(Modifier.weight(1f).height(50.dp))
+                    else {
+                        val range = cells[j]
+                        val bg = if (range != null) MagiAccent.green.copy(alpha = 0.16f) else cs.surfaceVariant.copy(alpha = 0.5f)
+                        Box(
+                            Modifier.weight(1f).height(50.dp).background(bg, RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("${j + 1}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+                                Text(
+                                    if (range != null) (if (range.first == range.second) "${range.first}人" else "${range.first}-${range.second}人") else "未設定",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (range != null) ensureReadable(bg, MagiAccent.green) else cs.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(50.dp)) }
+            }
+        }
+    }
+}
 
 /**
  * ws2 移植: 日別の必要人数（例外）。
@@ -161,12 +261,16 @@ private fun NeedDayDialog(
 
 /** [カレンダー形式] 月内の日を曜日整列グリッドからタップで選ぶ（片手一本指・キーボード不要）。
  *  週の並びは**日曜始まり**（ユーザー指示・紙のカレンダー慣習）。日=赤/土=青で週の手掛かりを添える。
- *  [複数設定] selectedDays の Set トグル＝複数日の一括選択に対応（実機指摘「日付を複数設定できない」）。 */
+ *  [複数設定] selectedDays の Set トグル＝複数日の一括選択に対応（実機指摘「日付を複数設定できない」）。
+ *  [既存値の可視化] markedDays(日→短いラベル、例:希望シフト記号)を渡すと、日番号の下に小さく表示する
+ *  （実機指摘「登録済みの希望シフトが表示されていない」＝選択中の状態しか見えず既存登録が分からなかった）。
+ *  空Map(既定)なら従来どおり表示なし＝呼出元(NeedDayEditor等)は無変更。 */
 @Composable
-internal fun DayPickerGrid(startDate: String, maxDay: Int, selectedDays: Set<Int>, onToggle: (Int) -> Unit) {
+internal fun DayPickerGrid(startDate: String, maxDay: Int, selectedDays: Set<Int>, markedDays: Map<Int, String> = emptyMap(), onToggle: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     val sdow = (startDowMonFirst(startDate) + 1) % 7   // 月曜始まり(0=月)→日曜始まり(0=日)へ変換
     val weekJa = listOf("日", "月", "火", "水", "木", "金", "土")
+    val cellHeight = if (markedDays.isEmpty()) 40.dp else 50.dp
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
             weekJa.forEachIndexed { idx, w ->
@@ -180,23 +284,34 @@ internal fun DayPickerGrid(startDate: String, maxDay: Int, selectedDays: Set<Int
         cells.chunked(7).forEach { wk ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { d ->
-                    if (d == null) Box(Modifier.weight(1f).height(40.dp))
+                    if (d == null) Box(Modifier.weight(1f).height(cellHeight))
                     else {
                         val sel = d in selectedDays
+                        val mark = markedDays[d]
+                        val bg = if (sel) cs.primary else cs.surfaceVariant
                         Box(
-                            Modifier.weight(1f).height(40.dp)
-                                .background(if (sel) cs.primary else cs.surfaceVariant, RoundedCornerShape(8.dp))
+                            Modifier.weight(1f).height(cellHeight)
+                                .background(bg, RoundedCornerShape(8.dp))
                                 .clickable { onToggle(d) }
-                                .semantics { contentDescription = "${d}日を" + (if (sel) "解除" else "選択") },
+                                .semantics {
+                                    contentDescription = "${d}日を" + (if (sel) "解除" else "選択") +
+                                        (mark?.let { "・登録済み$it" } ?: "")
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text("$d", style = MaterialTheme.typography.bodyMedium,
-                                color = if (sel) cs.onPrimary else cs.onSurface,
-                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("$d", style = MaterialTheme.typography.bodyMedium,
+                                    color = if (sel) cs.onPrimary else cs.onSurface,
+                                    fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                                if (mark != null) {
+                                    Text(mark, style = MaterialTheme.typography.labelSmall,
+                                        color = ensureReadable(bg, MagiAccent.pink), maxLines = 1)
+                                }
+                            }
                         }
                     }
                 }
-                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(40.dp)) }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(cellHeight)) }
             }
         }
     }
