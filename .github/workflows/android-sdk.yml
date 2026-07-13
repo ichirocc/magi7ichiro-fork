@@ -32,15 +32,15 @@ jobs:
         run: yes | sdkmanager --licenses >/dev/null || true
 
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-35" "platforms;android-36" "build-tools;35.0.0" "build-tools;36.0.0"
 
-      - name: Install Gradle 8.7
+      - name: Install Gradle 9.3.1
         shell: bash
         run: |
-          wget -q -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          wget -q -O /tmp/gradle.zip https://services.gradle.org/distributions/gradle-9.3.1-bin.zip
           mkdir -p "$HOME/gradle-dist"
           unzip -q /tmp/gradle.zip -d "$HOME/gradle-dist"
-          echo "$HOME/gradle-dist/gradle-8.7/bin" >> "$GITHUB_PATH"
+          echo "$HOME/gradle-dist/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
       - name: Show Android SDK versions
         run: sdkmanager --list_installed || true

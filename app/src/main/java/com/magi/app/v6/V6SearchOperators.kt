@@ -307,11 +307,12 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
         //   実際には covU を悪化させる連鎖を安全と誤判定しかねない（false accept）。呼出元の checker+isBetter
         //   が最終防波堤とはいえ、判定ロジック自体は到着・離脱の両方を対称に扱うのが正しい。
         var adj = 0
-        var q: Node? = node.prev
-        while (q != null) {
-            if (q.fillShift == m) adj++                      // 祖先 q が m へ到着済み
-            if (sched[q.staff][j] == m) adj--                 // 祖先 q の元シフトが m＝m から離脱済み
-            q = q.prev
+        var anc: Node? = node.prev
+        while (anc != null) {
+            val a = anc                                       // [Kotlin] var の smart-cast 回避のため局所val化
+            if (a.fillShift == m) adj++                        // 祖先 a が m へ到着済み
+            if (sched[a.staff][j] == m) adj--                  // 祖先 a の元シフトが m＝m から離脱済み
+            anc = a.prev
         }
         val trueCnt = cnt[m] + adj
         if (p.covUCell(m, j, trueCnt - 1) > p.covUCell(m, j, trueCnt)) return null

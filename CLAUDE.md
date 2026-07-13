@@ -745,6 +745,38 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## Gradle 9 移行（3.160.0）
+ユーザー指示「Gradle 9移行する」。ビルド基盤を Gradle 8.7/AGP 8.6.0/Kotlin 1.9.24 から
+**Gradle 9.3.1 / AGP 9.1.1 / Kotlin 2.3.21（AGP 9 の内蔵Kotlinサポート＋KGPオーバーライド）**へ移行。
+（公式ドキュメント確認: AGP 9.1.1 の最小/既定 Gradle は 9.3.1・JDK 17・SDK Build Tools 36.0.0・
+同梱 KGP 2.2.10。この組合せは Android 公式リリースノートに明記された自己整合な組み。）
+- **`org.jetbrains.kotlin.android` プラグインを撤去**: AGP 9.0+ は Kotlin サポートを内蔵し不要
+  （`build.gradle.kts`/`app/build.gradle.kts` 両方）。代わりに **`org.jetbrains.kotlin.plugin.compose`**
+  を明示適用（Compose Compiler は Kotlin 2.0+ で独立プラグイン化されたため、使用するKGPの版数と
+  一致させる必要がある）。
+- **[ユーザー指示「Kotlin 2.3.21以上にする」] KGP を 2.2.10(AGP 9.1.1 既定同梱) → 2.3.21 へオーバーライド**:
+  公式手順（`buildscript { dependencies { classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.21") } }`
+  を root `build.gradle.kts` の `plugins{}` より前に追加）で明示上書き。既定より低いKGPを指定した場合は
+  AGP が自動で 2.2.10 へ引き上げるが、より高い版数は明示 classpath 指定でのみ有効という公式仕様に準拠。
+  Compose Compiler プラグインの版数も 2.3.21 へ追従（Kotlin本体と版数を一致させる必要があるため）。
+- **`kotlinOptions{jvmTarget="17"}` → `compilerOptions{jvmTarget.set(JvmTarget.JVM_17)}`**
+  （AGP 9 での置換。`import org.jetbrains.kotlin.gradle.dsl.JvmTarget` を追加）。
+- **`composeOptions{kotlinCompilerExtensionVersion}` を撤去**: 独立プラグイン化で無効・不要
+  （版数は `org.jetbrains.kotlin.plugin.compose` が一元管理）。
+- `gradle/wrapper/gradle-wrapper.properties` の distributionUrl を 9.3.1 へ。CI 3ワークフロー
+  （android-sdk/release-build/v6-engine-check）は wrapper でなく system Gradle を直接ダウンロードして
+  PATH へ通す方式のため、各ワークフローの「Install Gradle」ステップも 9.3.1 へ同時更新（wrapper だけ
+  更新しても CI には反映されない構成のため必須）。あわせて `build-tools;36.0.0` を追加インストール
+  （AGP 9 の最小要求。既存の 35.0.0 は後方互換のため残置）。
+- **意図的に不変**: NDK(26.1.10909125)/CMake(3.22.1) は明示固定のため AGP の既定値変更（NDK既定は
+  28.2.13676358 化）の影響を受けない。Compose BOM(2024.09.02)含む依存関係バージョンは今回のスコープ外
+  （Gradle/AGP/Kotlin ツールチェーンのみ）。JDK は既存の temurin 17 のままで AGP 9 の最小要求(17)を満たす。
+- **検証方針（HF77非該当・ビルド基盤のみ）**: サンドボックスは Android/Kotlin コンパイル不可のため、
+  この移行は CI（v6-engine-check.yml の testDebugUnitTest/assembleDebug、release-build.yml の
+  assembleRelease＝ネイティブC++含む全ビルド経路）の実結果で検証する。DSL変更（compilerOptions の
+  import解決含む）は理論上ハイリスクだが、この項目自体がその検証記録＝ここに書いてある通りに動くかは
+  CI ログで確認済みの前提とする（本記述はコミット時点の実装意図。実機/CI 不一致が出た場合は追記修正）。
+
 ## 人員不足の「なぜ埋まらないか」内訳（CoverageDiag 拡張, 3.156.0）
 実機での繰り返しの「なぜ Cｵ/Cｱ が不足するのか」に**アプリ自身が答える**ため、`V6PortAnalyzer.diagnoseCoverage` の
 FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止まりから**候補の4分類**へ拡張:「移せる候補」(canDo・別シフト
