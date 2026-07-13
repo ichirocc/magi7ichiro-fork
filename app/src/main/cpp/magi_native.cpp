@@ -580,6 +580,136 @@ void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn
     out[5] = tail;
 }
 
+// ============================================================================
+// [Stage11/第3期] SaOptimizer PhaseB（HARD ガード付き LAHC ソフト研磨）のチャンク。
+// Kotlin SaOptimizer.runWorker PhaseB と同一: オペ=PhaseA と同じ4種(60/20/12/8)、
+// 受理 candHard<=bestHard && (cand<=hist[bIt%L] || cand<=cur)、hist 更新 cur<hist→hist=cur、
+// keep-best。状態(hist/bIt/bestHard)はチャンク跨ぎで保持。番兵1層目=チャンク末尾の自己整合。
+// ============================================================================
+struct LahcState {
+    const MagiProblem& p;
+    SaChunk st;                          // cur 盤面＋差分スコア維持
+    std::vector<int> bestSol;
+    long long bestScore;
+    long long bestHard;                  // 到達済み HARD 水準（これを超える手は受理しない）
+    std::vector<long long> hist;
+    long long bIt = 0;
+
+    LahcState(const MagiProblem& prob, const int* board, uint64_t seed, int lahcLen)
+        : p(prob), st(prob, board, seed),
+          bestSol(board, board + (size_t)prob.S * prob.T) {
+        bestScore = st.score;
+        bestHard = bestScore / 1000000LL;
+        hist.assign((size_t)(lahcLen < 1 ? 1 : lahcLen), st.score);   // Kotlin: LongArray(lahcLen){curVal}
+    }
+};
+
+// 1チャンク＝iters 反復。out[5]: [status, curScore, bestScore, bestImproved, itersDone]。
+void runLahcChunk(LahcState& s, int iters, long long out[5]) {
+    const MagiProblem& p = s.p;
+    const int S = p.S, T = p.T;
+    auto& st = s.st;
+    long long curVal = st.score;
+    bool improved = false;
+
+    // ---- runSaChunk と同一の undo バッファ＋4オペ（PhaseA/B 共通近傍）----
+    const int cap = T + S + 16;
+    std::vector<int> bi(cap), bj(cap), bOld(cap);
+    int bn = 0;
+    auto applyCell = [&](int i, int j, int nw) {
+        if (bn >= cap) return;
+        bi[bn] = i; bj[bn] = j; bOld[bn] = st.a[(size_t)i * T + j]; bn++;
+        st.deltaApply(i, j, nw);
+    };
+    auto revert = [&]() {
+        for (int k = bn - 1; k >= 0; k--) st.deltaApply(bi[k], bj[k], bOld[k]);
+        bn = 0;
+    };
+    auto randShiftFor = [&](int i) -> int {
+        const auto& b = p.bucket[p.sgrp[i]];
+        return b.empty() ? st.a[(size_t)i * T] : b[st.nextInt((int)b.size())];
+    };
+    auto opSingle = [&]() {
+        int i = st.nextInt(S), j = st.nextInt(T);
+        const auto& b = p.bucket[p.sgrp[i]];
+        if (b.empty()) return;
+        applyCell(i, j, b[st.nextInt((int)b.size())]);
+    };
+    auto opSwapDays = [&]() {
+        if (T < 2) return;
+        int i = st.nextInt(S);
+        int j1 = st.nextInt(T), j2 = st.nextInt(T);
+        if (j1 == j2) j2 = (j2 + 1) % T;
+        int o1 = st.a[(size_t)i * T + j1], o2 = st.a[(size_t)i * T + j2];
+        if (o1 == o2) return;
+        applyCell(i, j1, o2);
+        applyCell(i, j2, o1);
+    };
+    auto opBlockFill = [&]() {
+        if (p.cons1.empty()) { opSingle(); return; }
+        const auto& c = p.cons1[st.nextInt((int)p.cons1.size())];
+        const auto& pool = p.staffForShift[c.si];
+        if (pool.empty()) { opSingle(); return; }
+        int i = pool[st.nextInt((int)pool.size())];
+        int maxStart = T - c.d1;
+        if (maxStart < 0) { opSingle(); return; }
+        int js = st.nextInt(maxStart + 1);
+        for (int l = 0; l < c.d1; l++) applyCell(i, js + l, c.si);
+    };
+    auto opLns = [&]() {
+        switch (st.nextInt(3)) {
+            case 0: { int i = st.nextInt(S); int cnt = 2 + st.nextInt(T < 7 ? T : 7);
+                for (int k = 0; k < cnt; k++) applyCell(i, st.nextInt(T), randShiftFor(i)); break; }
+            case 1: { int j = st.nextInt(T);
+                for (int i = 0; i < S; i++) applyCell(i, j, randShiftFor(i)); break; }
+            default: { int cnt = 3 + st.nextInt(8);
+                for (int k = 0; k < cnt; k++) { int i = st.nextInt(S); applyCell(i, st.nextInt(T), randShiftFor(i)); } break; }
+        }
+    };
+    const bool hasC1 = !p.cons1.empty();
+    auto pickOperator = [&]() {
+        int r = st.nextInt(100);
+        if (r < 60) opSingle();
+        else if (r < 80) opSwapDays();
+        else if (r < 92) { if (hasC1) opBlockFill(); else opSingle(); }
+        else opLns();
+    };
+
+    const long long L = (long long)s.hist.size();
+    for (int it = 0; it < iters; it++) {
+        bn = 0;
+        pickOperator();
+        long long cand = st.score;
+        long long candHard = cand / 1000000LL;
+        long long v = s.hist[(size_t)(s.bIt % L)];
+        if (candHard <= s.bestHard && (cand <= v || cand <= curVal)) {
+            curVal = cand;
+            if (candHard < s.bestHard) s.bestHard = candHard;
+            if (cand < s.bestScore) {
+                s.bestScore = cand;
+                std::memcpy(s.bestSol.data(), st.a.data(), sizeof(int) * (size_t)S * T);
+                improved = true;
+            }
+            bn = 0;
+        } else revert();
+        size_t hi = (size_t)(s.bIt % L);
+        if (curVal < s.hist[hi]) s.hist[hi] = curVal;
+        s.bIt++;
+    }
+
+    // ---- 番兵1層目: チャンク末尾の自己整合検査（差分スコア==フル再計算）----
+    long long full = fullEvalCombined(p, st.a.data());
+    long long status = 0;
+    if (full != curVal || curVal != st.score) status = 1;
+    else if (improved && fullEvalCombined(p, s.bestSol.data()) != s.bestScore) status = 2;
+
+    out[0] = status;
+    out[1] = curVal;
+    out[2] = s.bestScore;
+    out[3] = improved ? 1 : 0;
+    out[4] = iters;
+}
+
 // ============ [第2期 Stage5] 違反セル抽出 ＋ GLS ペナルティ ＋ 受理判定 ============
 // ALNS チャンク(Stage8)の部品。violations セルは GLSキック/destroyRepairViolations の hint 用で
 // スコアには不使用（正しさは番兵が担保・hint はチェッカーの mark 位置へ忠実に移植）。
@@ -1636,7 +1766,7 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 5;
+    return 6;
 }
 
 // [Stage8] ALNS チャンク状態の生成。problem ハンドル＋初期盤面 cur から AlnsState を作る。
@@ -1741,6 +1871,50 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_magi_app_v6_NativeBridge_nativePolishRead(
     JNIEnv* env, jclass, jlong handle, jint which, jintArray outArr) {
     auto* s = reinterpret_cast<PolishState*>(handle);
+    if (s == nullptr) return;
+    jsize n = env->GetArrayLength(outArr);
+    if (n != s->p.S * s->p.T) return;
+    const int* src = which == 0 ? s->bestSol.data() : s->st.a.data();
+    env->SetIntArrayRegion(outArr, 0, n, reinterpret_cast<const jint*>(src));
+}
+
+// [Stage11] LAHC チャンク状態の生成（problemHandle＋PhaseB 入口の best 盤面＋lahcLen）。0=失敗。
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeLahcCreate(
+    JNIEnv* env, jclass, jlong problemHandle, jintArray boardArr, jlong seed, jint lahcLen) {
+    auto* p = reinterpret_cast<MagiProblem*>(problemHandle);
+    if (p == nullptr || lahcLen < 1) return 0;
+    jsize n = env->GetArrayLength(boardArr);
+    if (n != p->S * p->T) return 0;
+    std::vector<int> board((size_t)n);
+    env->GetIntArrayRegion(boardArr, 0, n, reinterpret_cast<jint*>(board.data()));
+    auto* s = new LahcState(*p, board.data(), (uint64_t)seed, (int)lahcLen);
+    return reinterpret_cast<jlong>(s);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeLahcDestroy(JNIEnv*, jclass, jlong handle) {
+    delete reinterpret_cast<LahcState*>(handle);
+}
+
+// [Stage11] 1チャンク実行。戻り値 long[5]=[status, curScore, bestScore, bestImproved, iters]。status!=0 で退化。
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeLahcChunk(JNIEnv* env, jclass, jlong handle, jint iters) {
+    jlongArray outArr = env->NewLongArray(5);
+    long long out[5] = {3, -1, -1, 0, 0};
+    auto* s = reinterpret_cast<LahcState*>(handle);
+    if (s != nullptr && iters > 0) runLahcChunk(*s, (int)iters, out);
+    jlong jv[5];
+    for (int x = 0; x < 5; x++) jv[x] = (jlong)out[x];
+    env->SetLongArrayRegion(outArr, 0, 5, jv);
+    return outArr;
+}
+
+// [Stage11] best/cur 盤面の読み出し（which: 0=best, 1=cur）。
+extern "C" JNIEXPORT void JNICALL
+Java_com_magi_app_v6_NativeBridge_nativeLahcRead(
+    JNIEnv* env, jclass, jlong handle, jint which, jintArray outArr) {
+    auto* s = reinterpret_cast<LahcState*>(handle);
     if (s == nullptr) return;
     jsize n = env->GetArrayLength(outArr);
     if (n != s->p.S * s->p.T) return;

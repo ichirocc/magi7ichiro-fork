@@ -320,7 +320,18 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
 >   照合済みbestを引き継いで従来 Kotlin ループが残り時間を続行（退化不能）。ホスト検証 TEST9: 6シード×25チャンク
 >   =status0・自己整合・keep-best単調・hardゲート(63→0)・希望ロック不変。恩恵経路=RSI++ Phase4(45s×5ワーカー)・
 >   optimize epilogue・仕上げ(polishOnly)。
-> - 次段候補（未着手・順は実測熱量順）: Stage11=PhaseB LAHC チャンク / Stage12=V6LateOperators / Stage13=後処理チェーン。
+> - **Stage11 完了(3.152.0)**: ①**[重要発見] `UiState.softPolish=true`（仕上げ最適化トグル）が既定ON のため、
+>   `SaOptimizer:81` の `!params.softPolish` 条件で**既定設定では SA ネイティブ(Stage3)が丸ごと無効**だった
+>   （実機ログの「ネイティブ探索=有効」表示でも V5 シード60s と RSI 奇数ラウンドの SA は全部 Kotlin。加速して
+>   いたのは ALNS チャンクのみ＝実測+20%はALNS だけの寄与）。②C++ に `LahcState`＋`runLahcChunk`
+>   （PhaseB=HARDガード付きLAHC の忠実移植: オペ=PhaseAと同一4種60/20/12/8・受理 candHard<=bestHard &&
+>   (cand<=hist[bIt%L] || cand<=cur)・hist更新 cur<hist→hist=cur・keep-best。hist/bIt/bestHard はチャンク跨ぎ保持）。
+>   JNI 4関数（nativeLahcCreate/Chunk/Read/Destroy）・ABI_VERSION=6。③SaOptimizer: softPolish 条件を撤去して
+>   ネイティブ有効化＋`runWorkerNative` にラダー境界の hardStallMs 判定→`runLahcNative`（4000反復/チャンク・
+>   2層番兵・発火時はワーカーごと Kotlin runWorker へ退化）で PhaseA→PhaseB の一方向遷移を移植。
+>   ホスト検証 TEST10: 6シード×25チャンク=status0・自己整合・keep-best単調・HARDガード(hard 1〜4→0 単調)。
+>   恩恵経路=**既定設定の全 SA フェーズ**（V5シード・高速・RSI 奇数ラウンド・RSI++ Phase1）が初めてネイティブ化。
+> - 次段候補（未着手・順は実測熱量順）: Stage12=V6LateOperators / Stage13=後処理チェーン。
 >   チェッカー本体の C++ 化は「Kotlinが正」の合意に反するため**第3期でも対象外**（変更するなら新規合意が必要）。
 
 ## ネイティブ加速 第2期: ALNS/RSI本体のC++化（進行中・明示合意）

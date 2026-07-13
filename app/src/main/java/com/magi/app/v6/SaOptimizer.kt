@@ -77,8 +77,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
 
         // [ネイティブ加速 Stage3] PhaseA（冷却ラダー）を C++ チャンクで回す。ハンドルは read-only の
         //   問題データで全ワーカー共有（チャンクの可変状態は C++ 側ローカル＝スレッド安全）。
-        //   softPolish(PhaseB=LAHC) 有効時は従来 Kotlin パス（PhaseB は Kotlin 実装のみ）。
-        val nativeHandle = if (!params.softPolish && NativeGate.usable)
+        // [Stage11] PhaseB(LAHC) も C++ チャンク化したため softPolish 有効時もネイティブ経路を使う
+        //   （旧: !softPolish 条件で、既定ON の仕上げ最適化トグルにより SA ネイティブが事実上無効だった）。
+        val nativeHandle = if (NativeGate.usable)
             runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L) else 0L
         try {
             val jobs = (0 until params.workers).map { w ->
@@ -132,6 +133,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         val conductor = if (params.conductor) MagiConductor(params.conductorStag) else null
         var pendingAction: ConductorAction? = null
         var bestAtAction = bestScore
+        // [Stage11] PhaseB(LAHC) 切替用: HARD 水準が最後に下がった時刻（Kotlin runWorker と同じ hardStallMs 判定。
+        //   検知粒度はラダー境界＝1チャンク（数千反復・ms級）で、毎反復判定の Kotlin より僅かに粗いだけ）。
+        var lastHardImprove = (System.nanoTime() / 1_000_000L)
         fun timeUp() = params.shouldStop() || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
 
         while (!timeUp()) {
@@ -153,12 +157,18 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                     NativeGate.disable("Kotlin照合NG (native=$newBest kotlin=$kotlinScore)")
                     return false
                 }
+                if (newBest / M < bestScore / M) lastHardImprove = (System.nanoTime() / 1_000_000L)
                 bestScore = newBest
                 flush(bestScore, bestSol, ret[3])
             } else {
                 flush(bestScore, NativeEval.unflatten(best, s, t), ret[3])
             }
             if (timeUp()) return true
+            // [Stage11] HARD 床到達（hardStallMs 無改善）で PhaseB=LAHC ソフト研磨へ恒久切替
+            //   （Kotlin runWorker の phaseB=true と同じ一方向遷移。以後は予算末まで LAHC）。
+            if (params.softPolish && (System.nanoTime() / 1_000_000L) - lastHardImprove > params.hardStallMs) {
+                return runLahcNative(handle, best, bestScore, params, rng, start, flush)
+            }
 
             // ---- ラダー境界: 従来 PhaseA の reheat / MagiConductor 脱出戦略と同じ分岐 ----
             conductor?.updateStagnationBulk(ret[4] == 1L, ret[5].toInt())
@@ -176,6 +186,56 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             }
         }
         return true
+    }
+
+    /**
+     * [Stage11] PhaseB=LAHC を C++ チャンクで回す。Kotlin runWorker PhaseB と同一意味論
+     * （hist/bestHard/bIt は C++ 側 LahcState がチャンク跨ぎで保持・一方向遷移で予算末まで）。
+     * Kotlin が保持: 予算/キャンセル（チャンク間）・進捗 flush・2層目番兵（best 改善チャンクを
+     * Kotlin Evaluator.fullEval で Long== 照合）。番兵発火時は NativeGate を閉じ false を返し、
+     * 呼び出し側（run()）がそのワーカーを Kotlin runWorker で走らせ直す（退化・クラッシュなし）。
+     */
+    private suspend fun runLahcNative(
+        handle: Long,
+        bestFlat: IntArray,
+        bestScoreIn: Long,
+        params: SaParams,
+        rng: Random,
+        start: Long,
+        flush: (Long, Array<IntArray>, Long) -> Unit,
+    ): Boolean {
+        val s = problem.S; val t = problem.T
+        var bestScore = bestScoreIn
+        fun timeUp() = params.shouldStop() || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
+        val h = NativeBridge.nativeLahcCreate(handle, bestFlat, rng.nextLong(), params.lahcLen)
+        if (h == 0L) { NativeGate.disable("LAHC状態生成NG"); return false }
+        try {
+            while (!timeUp()) {
+                coroutineContext.ensureActive()
+                val ret = runCatching { NativeBridge.nativeLahcChunk(h, 4000) }.getOrNull()
+                if (ret == null || ret.size < 5 || ret[0] != 0L) {
+                    NativeGate.disable("LAHCチャンク整合性NG (status=${ret?.getOrNull(0)})")
+                    return false
+                }
+                if (ret[2] < bestScore) {
+                    // [2層目の番兵] best 更新チャンクの盤面を Kotlin フル評価で照合（Long== 許容誤差なし）。
+                    NativeBridge.nativeLahcRead(h, 0, bestFlat)
+                    val sol = NativeEval.unflatten(bestFlat, s, t)
+                    val kotlinScore = evaluator.fullEval(sol)
+                    if (kotlinScore != ret[2]) {
+                        NativeGate.disable("LAHC Kotlin照合NG (native=${ret[2]} kotlin=$kotlinScore)")
+                        return false
+                    }
+                    bestScore = ret[2]
+                    flush(bestScore, sol, ret[4])
+                } else {
+                    flush(bestScore, NativeEval.unflatten(bestFlat, s, t), ret[4])
+                }
+            }
+            return true
+        } finally {
+            NativeBridge.nativeLahcDestroy(h)
+        }
     }
 
     /** strongPerturb の平坦配列版（従来: best から数手の単発移動で離す。スコア不要＝次チャンクが再計算）。 */

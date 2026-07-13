@@ -14,7 +14,7 @@ package com.magi.app.v6
  */
 object NativeBridge {
     /** Kotlin 側が期待する ABI バージョン。C++ 側と不一致ならネイティブ経路を使わない。 */
-    const val ABI_VERSION = 5
+    const val ABI_VERSION = 6
 
     /** .so がロードでき、ABI が一致するときだけ true（初回参照時に一度だけ判定）。 */
     val available: Boolean by lazy {
@@ -78,6 +78,19 @@ object NativeBridge {
     /** which: 0=best, 1=cur を out(S*T) へ読み出す。 */
     @JvmStatic
     external fun nativePolishRead(handle: Long, which: Int, out: IntArray)
+
+    // ---- [Stage11/第3期] LAHC チャンク（SaOptimizer PhaseB の C++ 版） ----
+    /** LAHC チャンク状態を生成（problemHandle＋PhaseB 入口の best 盤面＋履歴長）。0=失敗。 */
+    @JvmStatic
+    external fun nativeLahcCreate(problemHandle: Long, board: IntArray, seed: Long, lahcLen: Int): Long
+    @JvmStatic
+    external fun nativeLahcDestroy(handle: Long)
+    /** 1チャンク実行。戻り値 [status, curScore, bestScore, bestImproved, iters]。status!=0 で退化。 */
+    @JvmStatic
+    external fun nativeLahcChunk(handle: Long, iters: Int): LongArray
+    /** which: 0=best, 1=cur を out(S*T) へ読み出す。 */
+    @JvmStatic
+    external fun nativeLahcRead(handle: Long, which: Int, out: IntArray)
 }
 
 /**
