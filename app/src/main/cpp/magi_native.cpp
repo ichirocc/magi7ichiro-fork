@@ -1475,6 +1475,155 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
     out[5] = s.gls.kicks;
 }
 
+// ============================================================================
+// [Stage10/第3期] hf80PostPolish（最終研磨）の C++ チャンク。
+// Kotlin V6NativeOptimizer.hf80PostPolish と同一のオペ構成(11-way: 0=単一セル/
+// 1=行内2日swap/2=同日2者swap/3..8=targetedFix/9-10=copy系DR+hard時hf67)・
+// 同一受理(best-hard ゲート＋SA temp0.15固定)・keep-best。GLS/適応重みは無し
+// (Kotlin 側に無いため)。番兵1層目=チャンク末尾の自己整合（差分スコア==フル再計算）。
+// 2層目は Kotlin 側（best 改善チャンクの盤面を Evaluator.fullEval で Long== 照合）。
+// ============================================================================
+struct PolishState {
+    const MagiProblem& p;
+    SaChunk st;                         // cur 盤面＋差分スコア維持
+    std::vector<int> bestSol;
+    long long bestScore;
+    std::vector<int> vioCells;          // 修復 hint（best 盤面の違反セル=Kotlin の bestReport.violations 相当）
+    std::vector<int> scratch, diffFlat, diffOld;
+
+    PolishState(const MagiProblem& prob, const int* cur, uint64_t seed)
+        : p(prob), st(prob, cur, seed),
+          bestSol(cur, cur + (size_t)prob.S * prob.T) {
+        bestScore = st.score;
+        scratch.resize((size_t)prob.S * prob.T);
+        diffFlat.resize((size_t)prob.S * prob.T);
+        diffOld.resize((size_t)prob.S * prob.T);
+    }
+};
+
+// V6SearchOperators.acceptWorseScore(temp=0.15) と同式: hard +2 超は却下、
+// Δ<=0 受理、それ以外 exp(-Δ/(200*0.15)) = exp(-Δ/30)。
+inline bool polishAcceptN(long long ns, long long cur, double u01) {
+    if (ns > cur + 2000000LL) return false;
+    long long d = ns - cur;
+    if (d <= 0) return true;
+    return u01 < std::exp(-(double)d / 30.0);
+}
+
+// 1チャンク＝iters 反復。out[5]: [status, curScore, bestScore, bestImproved, itersDone]。
+// status: 0=OK / 1=cur整合性NG / 2=best整合性NG（Kotlin 側が破棄・NativeGate 退化）。
+void runPolishChunk(PolishState& s, int iters, long long out[5]) {
+    const MagiProblem& p = s.p;
+    const int S = p.S, T = p.T;
+    auto& st = s.st;
+    auto& rng = st.rng;
+    long long curScore = st.score;
+    bool bestImproved = false;
+
+    // hint はチャンク頭に best 盤面から更新（Kotlin は destroyRepairViolations へ bestReport を渡す＝同源）。
+    collectViolationCells(p, s.bestSol.data(), s.vioCells);
+
+    for (int it = 0; it < iters; it++) {
+        long long curHard = curScore / 1000000LL;
+        long long bestHard = s.bestScore / 1000000LL;
+        int op = rnInt(rng, 11);
+        if (op <= 8) {
+            // ── 単一/2セルの直接評価オペ（3..8 は targetedFix の6スロット＝Kotlin と同比率）──
+            int c0i = -1, c0j = -1, c0old = -1, c1i = -1, c1j = -1, c1old = -1;
+            bool moved = false;
+            if (op == 0 && S > 0 && T > 0) {            // random allowed single cell
+                int i = rnInt(rng, S), j = rnInt(rng, T);
+                if (!wishLockedN(p, i, j)) {
+                    const auto& allowed = p.bucket[p.sgrp[i]];
+                    if (!allowed.empty()) {
+                        int oldK = st.a[(size_t)i * T + j];
+                        int nw = allowed[rnInt(rng, (int)allowed.size())];
+                        if (nw != oldK) { st.deltaApply(i, j, nw); c0i = i; c0j = j; c0old = oldK; moved = true; }
+                    }
+                }
+            } else if (op == 1 && S > 0 && T >= 2) {    // swap two days within one staff row
+                int i = rnInt(rng, S);
+                int ja = rnInt(rng, T), jb = rnInt(rng, T);
+                if (ja == jb) jb = (jb + 1) % T;
+                if (!wishLockedN(p, i, ja) && !wishLockedN(p, i, jb)) {
+                    int ka = st.a[(size_t)i * T + ja], kb = st.a[(size_t)i * T + jb];
+                    if (ka != kb) {
+                        st.deltaApply(i, ja, kb); st.deltaApply(i, jb, ka);
+                        c0i = i; c0j = ja; c0old = ka; c1i = i; c1j = jb; c1old = kb; moved = true;
+                    }
+                }
+            } else if (op == 2 && S >= 2 && T > 0) {    // swap two staff on same day (coverage-neutral)
+                int j = rnInt(rng, T);
+                int i1 = rnInt(rng, S), i2 = rnInt(rng, S);
+                if (i2 == i1) i2 = (i2 + 1) % S;
+                if (!wishLockedN(p, i1, j) && !wishLockedN(p, i2, j)) {
+                    int k1 = st.a[(size_t)i1 * T + j], k2 = st.a[(size_t)i2 * T + j];
+                    if (k1 != k2 && p.cd(i1, k2) && p.cd(i2, k1)) {
+                        st.deltaApply(i1, j, k2); st.deltaApply(i2, j, k1);
+                        c0i = i1; c0j = j; c0old = k1; c1i = i2; c1j = j; c1old = k2; moved = true;
+                    }
+                }
+            } else if (op >= 3) {                        // targeted single-cell fix
+                Fix fix = findTargetedFixN(p, st, rng);
+                if (fix.ok()) {
+                    int oldK = st.a[(size_t)fix.i * T + fix.j];
+                    if (fix.k != oldK) { st.deltaApply(fix.i, fix.j, fix.k); c0i = fix.i; c0j = fix.j; c0old = oldK; moved = true; }
+                }
+            }
+            if (moved) {
+                long long ns = st.score;
+                if (ns / 1000000LL <= bestHard && (ns < curScore || polishAcceptN(ns, curScore, st.nextDouble()))) {
+                    curScore = ns;
+                    if (ns < s.bestScore) {
+                        std::memcpy(s.bestSol.data(), st.a.data(), sizeof(int) * (size_t)S * T);
+                        s.bestScore = ns; bestImproved = true;
+                        collectViolationCells(p, st.a.data(), s.vioCells);   // hint を新 best で更新（Kotlin の bestReport 更新と同鮮度）
+                    }
+                } else {
+                    if (c1i >= 0) st.deltaApply(c1i, c1j, c1old);
+                    if (c0i >= 0) st.deltaApply(c0i, c0j, c0old);
+                }
+            }
+        } else {
+            // ── copy系 op9-10: violations 50% / day 50%、hard>0 なら hf67（Kotlin と同一条件）──
+            std::memcpy(s.scratch.data(), st.a.data(), sizeof(int) * (size_t)S * T);
+            if (rnInt(rng, 2) == 0) destroyRepairViolationsN(p, s.scratch.data(), s.vioCells, rng);
+            else if (T > 0) destroyRepairDayAtN(p, s.scratch.data(), rnInt(rng, T), rng);
+            if (curHard > 0) hf67HardRepairN(p, s.scratch.data(), rng);
+            int nDiffs = 0;
+            for (int f = 0; f < S * T; f++) {
+                if (st.a[(size_t)f] != s.scratch[(size_t)f]) {
+                    s.diffFlat[nDiffs] = f; s.diffOld[nDiffs] = st.a[(size_t)f]; nDiffs++;
+                }
+            }
+            for (int d = 0; d < nDiffs; d++) { int f = s.diffFlat[d]; st.deltaApply(f / T, f % T, s.scratch[(size_t)f]); }
+            long long ns = st.score;
+            if (ns / 1000000LL <= bestHard && (ns < curScore || polishAcceptN(ns, curScore, st.nextDouble()))) {
+                curScore = ns;
+                if (ns < s.bestScore) {
+                    std::memcpy(s.bestSol.data(), st.a.data(), sizeof(int) * (size_t)S * T);
+                    s.bestScore = ns; bestImproved = true;
+                    collectViolationCells(p, st.a.data(), s.vioCells);
+                }
+            } else {
+                for (int d = nDiffs - 1; d >= 0; d--) { int f = s.diffFlat[d]; st.deltaApply(f / T, f % T, s.diffOld[d]); }
+            }
+        }
+    }
+
+    // ---- 番兵1層目: チャンク末尾の自己整合検査（差分スコア==フル再計算）----
+    long long full = fullEvalCombined(p, st.a.data());
+    long long status = 0;
+    if (full != curScore || curScore != st.score) status = 1;
+    else if (bestImproved && fullEvalCombined(p, s.bestSol.data()) != s.bestScore) status = 2;
+
+    out[0] = status;
+    out[1] = curScore;
+    out[2] = s.bestScore;
+    out[3] = bestImproved ? 1 : 0;
+    out[4] = iters;
+}
+
 // ---- JNI 平坦データの読み取りヘルパ ----
 std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
     jsize n = env->GetArrayLength(arr);
@@ -1487,7 +1636,7 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 4;
+    return 5;
 }
 
 // [Stage8] ALNS チャンク状態の生成。problem ハンドル＋初期盤面 cur から AlnsState を作る。
@@ -1553,6 +1702,50 @@ Java_com_magi_app_v6_NativeBridge_nativeAlnsSetCur(
     s->curAug = s->gls.augment(s->st.a.data());
     s->itersSinceImprove = 0;
     return (jlong)s->st.score;
+}
+
+// [Stage10] Polish チャンク状態の生成（problemHandle＋初期盤面）。0=失敗。
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_magi_app_v6_NativeBridge_nativePolishCreate(
+    JNIEnv* env, jclass, jlong problemHandle, jintArray curArr, jlong seed) {
+    auto* p = reinterpret_cast<MagiProblem*>(problemHandle);
+    if (p == nullptr) return 0;
+    jsize n = env->GetArrayLength(curArr);
+    if (n != p->S * p->T) return 0;
+    std::vector<int> cur((size_t)n);
+    env->GetIntArrayRegion(curArr, 0, n, reinterpret_cast<jint*>(cur.data()));
+    auto* s = new PolishState(*p, cur.data(), (uint64_t)seed);
+    return reinterpret_cast<jlong>(s);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_magi_app_v6_NativeBridge_nativePolishDestroy(JNIEnv*, jclass, jlong handle) {
+    delete reinterpret_cast<PolishState*>(handle);
+}
+
+// [Stage10] 1チャンク実行。戻り値 long[5]=[status, curScore, bestScore, bestImproved, iters]。status!=0 で退化。
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_com_magi_app_v6_NativeBridge_nativePolishChunk(JNIEnv* env, jclass, jlong handle, jint iters) {
+    jlongArray outArr = env->NewLongArray(5);
+    long long out[5] = {3, -1, -1, 0, 0};
+    auto* s = reinterpret_cast<PolishState*>(handle);
+    if (s != nullptr && iters > 0) runPolishChunk(*s, (int)iters, out);
+    jlong jv[5];
+    for (int x = 0; x < 5; x++) jv[x] = (jlong)out[x];
+    env->SetLongArrayRegion(outArr, 0, 5, jv);
+    return outArr;
+}
+
+// [Stage10] best/cur 盤面の読み出し（which: 0=best, 1=cur）。S*T の配列へ書き込む。
+extern "C" JNIEXPORT void JNICALL
+Java_com_magi_app_v6_NativeBridge_nativePolishRead(
+    JNIEnv* env, jclass, jlong handle, jint which, jintArray outArr) {
+    auto* s = reinterpret_cast<PolishState*>(handle);
+    if (s == nullptr) return;
+    jsize n = env->GetArrayLength(outArr);
+    if (n != s->p.S * s->p.T) return;
+    const int* src = which == 0 ? s->bestSol.data() : s->st.a.data();
+    env->SetIntArrayRegion(outArr, 0, n, reinterpret_cast<const jint*>(src));
 }
 
 // [Stage3] SA チャンク（SaOptimizer PhaseA の冷却ラダー1本）。cur/best は S*T の平坦配列で、

@@ -920,22 +920,34 @@ object V6NativeOptimizer {
         var bestReport = UnifiedViolationChecker.check(state, best)
         val baseSched = best          // 入力スナップショット（best は改善時に別配列へ差し替わる）
         val baseReport = bestReport
+        var iters = 0L
+        val deadline = started + seconds * 1000L
+        // [E10/停滞早期終了] 実機ログで PostPolish が 45s枠を最後まで走り切って改善0（40.977s/40.988s の2例）
+        //   ＝重研磨済み盤面ではプラトー後の期待値が低い。best が枠の1/5(下限3s)無改善なら早期に返す。
+        //   keep-best＋末尾の入力比番兵(better(baseReport,bestReport)→入力復帰)のため品質は不変＝時間/電池だけ節約
+        //   （2.65.0 HF66 / 2.67.0 停滞ウォッチドッグと同方針）。native/Kotlin 両経路で共通。
+        val stallMs = max(3000L, seconds * 1000L / 5)
+        var stalled = false
+        // [Stage10/第3期] ネイティブ経路: C++ PolishChunk（同一オペ構成11-way・同一受理・keep-best）＋2層番兵。
+        //   枠を消費し切れば早期 return。番兵発火時は「照合済み best」だけ引き継ぎ、下の Kotlin ループが
+        //   残り時間を続行する（NativeGate は閉鎖済み＝以後の実行は全て Kotlin）。
+        val nat = runPolishChunksNative(p, best, deadline, stallMs, seed, shouldStop)
+        iters += nat.iters
+        nat.best?.let { best = it; bestReport = UnifiedViolationChecker.check(state, it) }
+        if (nat.stalled) stalled = true
+        if (nat.completed) {
+            if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
+            val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}（ネイティブ）" + if (stalled) "（停滞早期終了 枠${seconds}s）" else ""))
+            return PolishResult(best, logs, iters)
+        }
         var cur = best.copy2D()
         val eval = DeltaEvaluator(p)
         eval.reset(cur)
         var curScore = eval.score()
         var bestScore = curScore
-        var iters = 0L
         val diffBuf = IntArray(p.S * p.T)
-        val deadline = nowMs() + seconds * 1000L
-        // [E10/停滞早期終了] 実機ログで PostPolish が 45s枠を最後まで走り切って改善0（40.977s/40.988s の2例）
-        //   ＝重研磨済み盤面ではプラトー後の期待値が低い。best が枠の1/5(下限3s)無改善なら早期に返す。
-        //   keep-best＋末尾の入力比番兵(better(baseReport,bestReport)→入力復帰)のため品質は不変＝時間/電池だけ節約
-        //   （2.65.0 HF66 / 2.67.0 停滞ウォッチドッグと同方針）。
-        val stallMs = max(3000L, seconds * 1000L / 5)
         var lastImproveMs = nowMs()
         var lastBestMark = bestScore
-        var stalled = false
         while (!shouldStop()) {
             val nowLoop = nowMs()
             if (nowLoop >= deadline) break
@@ -1046,6 +1058,72 @@ object V6NativeOptimizer {
         if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
         val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}" + if (stalled) "（停滞早期終了 枠${seconds}s）" else ""))
         return PolishResult(best, logs, iters)
+    }
+
+    /** [Stage10] ネイティブ Polish 実行の結果。completed=枠を消費し切った(=Kotlin ループ不要) /
+     *  best=Kotlin フル評価で照合済みの改善盤面(改善なし・未使用は null) / stalled=E10 停滞早期終了で戻った。 */
+    private class NativePolishRun(val completed: Boolean, val best: Array<IntArray>?, val iters: Long, val stalled: Boolean)
+
+    /**
+     * [Stage10/第3期] hf80PostPolish の C++ チャンク駆動。SaOptimizer.runWorkerNative / runRestartNative と同型:
+     * チャンク間でキャンセル・締切・E10 停滞を確認し、best 更新チャンクの盤面を Kotlin Evaluator.fullEval で
+     * Long== 照合（2層目番兵。1層目=チャンク末尾の C++ 自己整合=status）。どちらか発火で NativeGate を閉じ
+     * completed=false を返す＝呼び出し側の Kotlin ループが「照合済み best」から残り時間を続行（退化不能）。
+     */
+    private suspend fun runPolishChunksNative(
+        p: Problem,
+        initial: Array<IntArray>,
+        deadline: Long,
+        stallMs: Long,
+        seed: Long,
+        shouldStop: () -> Boolean,
+    ): NativePolishRun {
+        if (!NativeGate.usable) return NativePolishRun(false, null, 0L, false)
+        val ph = runCatching { NativeEval.createHandle(p) }.getOrDefault(0L)
+        if (ph == 0L) return NativePolishRun(false, null, 0L, false)
+        try {
+            val h = NativeBridge.nativePolishCreate(ph, NativeEval.flatten(initial), seed)
+            if (h == 0L) return NativePolishRun(false, null, 0L, false)
+            try {
+                val fullEvaluator = Evaluator(p)
+                val buf = IntArray(p.S * p.T)
+                var verifiedBest = fullEvaluator.fullEval(initial)
+                var best: Array<IntArray>? = null
+                var iters = 0L
+                var lastImproveMs = nowMs()
+                while (!shouldStop()) {
+                    val nowLoop = nowMs()
+                    if (nowLoop >= deadline) return NativePolishRun(true, best, iters, false)
+                    if (nowLoop - lastImproveMs >= stallMs) return NativePolishRun(true, best, iters, true)
+                    coroutineContext.ensureActive()
+                    val ret = NativeBridge.nativePolishChunk(h, 200)
+                    if (ret.size < 5 || ret[0] != 0L) {
+                        NativeGate.disable("Polishチャンク整合性NG(status=${ret.getOrNull(0)})")
+                        return NativePolishRun(false, best, iters, false)
+                    }
+                    iters += ret[4]
+                    if (ret[3] == 1L && ret[2] < verifiedBest) {
+                        // [2層目番兵] best 更新チャンクの盤面を Kotlin フル評価で照合（Long== 許容誤差なし）。
+                        NativeBridge.nativePolishRead(h, 0, buf)
+                        val sol = NativeEval.unflatten(buf, p.S, p.T)
+                        val k = fullEvaluator.fullEval(sol)
+                        if (k != ret[2]) {
+                            NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
+                            return NativePolishRun(false, best, iters, false)
+                        }
+                        best = sol
+                        verifiedBest = k
+                        lastImproveMs = nowLoop
+                    }
+                    yield()
+                }
+                return NativePolishRun(true, best, iters, false)   // shouldStop=キャンセル/締切は呼び出し側の扱いと同じ
+            } finally {
+                NativeBridge.nativePolishDestroy(h)
+            }
+        } finally {
+            NativeBridge.nativeDestroyProblem(ph)
+        }
     }
 
     private fun bestStaffForCoverage(p: Problem, schedule: Array<IntArray>, counts: Array<IntArray>, j: Int, k: Int): Int {

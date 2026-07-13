@@ -305,6 +305,24 @@ needViolations を日別に件数集計し多い順 top5 を俯瞰表示(read-on
   週の模様が切れていた→ ScheduleGrid が BoxWithConstraints で **`cellW=((利用可能幅−32−80)÷7).coerceIn(36,48)dp`** を
   動的計算し MagiFlatGrid へ注入（週ページングの cellWpx も同値＝ジャンプ整合）。下限36dp=記号可読性の床（極端に
   狭い端末のみ7日未満に妥協）・上限48dp=広い端末はより多くの日が見える。セル高は48dp維持（片手一本指のタッチ面）。
+## ネイティブ加速 第3期: 完全版C++移行（進行中・明示指示 2026-07-13「完全版C++移行できるようにする」）
+> 方針は第1/2期と同一: **Kotlin チェッカー/評価器を「正」として温存**し、実行時間を占める残りの Kotlin ホットパスを
+> C++ チャンク＋2層番兵（①チャンク自己整合 ②Kotlin fullEval Long== 照合、発火で NativeGate 退化）で置換する。
+> 残余ヒートマップ（実機300sログ基準）: ①hf80PostPolish 45s×5並列ワーカー（最大の残り）→ **Stage10 で完了** /
+> ②SaOptimizer PhaseB(LAHC, softPolish時のみ) / ③V6LateOperators(Chain3/4/Rect/BlkN, ラウンド境界) /
+> ④後処理チェーン研磨(CyclicSwap/C1/C3系, 実測~1s) / ⑤RSI制御層・チェッカー=**軽量O(ラウンド)＋「正」のため対象外**。
+> - **Stage10 完了(3.151.0)**: C++ に `PolishState`＋`runPolishChunk`（hf80PostPolish と同一の 11-way オペ構成
+>   =単一セル/行内2日swap/同日2者swap/targetedFix×6/copy系DR(violations50%・day50%)＋hard時hf67、同一受理
+>   =best-hardゲート＋`polishAcceptN`(acceptWorseScore temp0.15 と同式 exp(-Δ/30))、keep-best、hint=best盤面の
+>   violations セル）。JNI 4関数（nativePolishCreate/Chunk/Read/Destroy）・ABI_VERSION=5。Kotlin `hf80PostPolish` は
+>   `runPolishChunksNative`（200反復/チャンク・チャンク間で締切/E10停滞/キャンセル確認・best改善チャンクを
+>   Kotlin fullEval Long== 照合）を先に試し、完走なら早期return（ログ「PostPolish …（ネイティブ）」）・番兵発火時は
+>   照合済みbestを引き継いで従来 Kotlin ループが残り時間を続行（退化不能）。ホスト検証 TEST9: 6シード×25チャンク
+>   =status0・自己整合・keep-best単調・hardゲート(63→0)・希望ロック不変。恩恵経路=RSI++ Phase4(45s×5ワーカー)・
+>   optimize epilogue・仕上げ(polishOnly)。
+> - 次段候補（未着手・順は実測熱量順）: Stage11=PhaseB LAHC チャンク / Stage12=V6LateOperators / Stage13=後処理チェーン。
+>   チェッカー本体の C++ 化は「Kotlinが正」の合意に反するため**第3期でも対象外**（変更するなら新規合意が必要）。
+
 ## ネイティブ加速 第2期: ALNS/RSI本体のC++化（進行中・明示合意）
 > ユーザー指示「ALNS/RSI本体のC++化する」（2026-07-11）。3.139.0 の範囲確定（対象外）を**明示指示で解除**。
 > 前提: Kotlin チェッカー/修復系が「正」の原則は維持し、C++ は同値の高速版＋2層番兵（チャンク自己整合

@@ -14,7 +14,7 @@ package com.magi.app.v6
  */
 object NativeBridge {
     /** Kotlin 側が期待する ABI バージョン。C++ 側と不一致ならネイティブ経路を使わない。 */
-    const val ABI_VERSION = 4
+    const val ABI_VERSION = 5
 
     /** .so がロードでき、ABI が一致するときだけ true（初回参照時に一度だけ判定）。 */
     val available: Boolean by lazy {
@@ -65,6 +65,19 @@ object NativeBridge {
     /** restart 境界で cur を差し替え（score/counts/GLS augment 再同期）。戻り値=新 cur スコア（-1=失敗）。 */
     @JvmStatic
     external fun nativeAlnsSetCur(handle: Long, cur: IntArray): Long
+
+    // ---- [Stage10/第3期] Polish チャンク（hf80PostPolish の C++ 版） ----
+    /** Polish チャンク状態を生成（problemHandle＋初期盤面）。0=失敗。 */
+    @JvmStatic
+    external fun nativePolishCreate(problemHandle: Long, cur: IntArray, seed: Long): Long
+    @JvmStatic
+    external fun nativePolishDestroy(handle: Long)
+    /** 1チャンク実行。戻り値 [status, curScore, bestScore, bestImproved, iters]。status!=0 で退化。 */
+    @JvmStatic
+    external fun nativePolishChunk(handle: Long, iters: Int): LongArray
+    /** which: 0=best, 1=cur を out(S*T) へ読み出す。 */
+    @JvmStatic
+    external fun nativePolishRead(handle: Long, which: Int, out: IntArray)
 }
 
 /**
