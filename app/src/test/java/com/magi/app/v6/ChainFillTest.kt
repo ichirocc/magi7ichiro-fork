@@ -1,5 +1,6 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C1Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
@@ -291,5 +292,47 @@ class ChainFillTest {
         val row5 = listOf(1, 1, 0, 1, 1)
         val p5 = cachedProblem(stateWith(row5, listOf(C3Row(List(5) { "P" }))))
         assertTrue("position2をPにすると五連禁止に触れる", p5.makesForbiddenRun(arrayOf(row5.toIntArray()), 0, 2, 1))
+    }
+
+    // [C1にE11を反映] i の c1 不足(shift X必須)を直そうにも、その日 X に在勤中の直接交換相手がいない局面。
+    // 旧C1Polishはここで諦めていたが、i を X へ動かし、空いた旧シフト A の穴を玉突き連鎖（findCovUChain と
+    // 同じ機構）で埋め直せば解決できる: A(i の担当・唯一在勤=1人)が空く → B(過剰=2人)在勤の h が A へ補充。
+    @Test
+    fun c1PolishSolvesViaChainWhenNoDirectSwapPartner() {
+        // shift: 0=休 1=X(c1対象・need無) 2=A(need1・iのみ在勤) 3=B(need1・過剰=2人在勤)
+        val shifts = listOf(
+            Shift("休", "休", "", ""), Shift("X", "X", "", ""),
+            Shift("A", "A", "1", ""), Shift("B", "B", "1", ""),
+        )
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"))
+        // G0(i)=休/X/A（Bはできない）, G1(h)=休/A/B（Aへ補充できる唯一の候補）, G2(h2)=休/Bのみ（Aは担当不可
+        //   ＝h/h2を非対称にして解を一意にする。乱数シャッフル順に依らずhが選ばれることを検証できる）。
+        val groupShift = listOf(listOf(1, 1, 1, 0), listOf(1, 0, 1, 1), listOf(1, 0, 0, 1))
+        val staff = listOf(Staff("i", 0), Staff("h", 1), Staff("h2", 2))
+        val schedule = listOf(listOf(2), listOf(3), listOf(3))   // i=A, h=B, h2=B（Bが2人＝過剰）
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(3) { List(4) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row("1", "X", "1")),   // 1日窓でXが1回以上＝毎日Xが必須
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        assertTrue("c1(Xの窓不足)が前提", (before.breakdown["c1"] ?: 0) > 0)
+        // 前提: day0 に X在勤者がいない＝直接スワップ相手が存在しない（旧実装はここで頭打ち）。
+        assertTrue("day0にX在勤者がいない(直接交換相手なし)が前提", st.schedule.none { it[0] == 1 })
+
+        val r = V6HotfixPasses.applyC1WindowPolish(st, st.schedule.toIntArray2D())
+        val after = UnifiedViolationChecker.check(st, r.newSchedule)
+        assertEquals("玉突き連鎖でc1不足が解消すること", 0, after.breakdown["c1"] ?: 0)
+        assertEquals("i がXへ移ること", 1, r.newSchedule[0][0])
+        assertEquals("h がAへ玉突きで補充されること", 2, r.newSchedule[1][0])
+        assertEquals("h2 はB(不変・1人に減って丁度need1)", 3, r.newSchedule[2][0])
+        assertTrue("hard は悪化しない", after.hard <= before.hard)
+        assertTrue("total も悪化しない（keep-best）", after.total <= before.total)
     }
 }

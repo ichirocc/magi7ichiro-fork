@@ -264,7 +264,7 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
  * 返り値 = 適用手 [(i, j, newK), ...]（本関数は盤面を変更しない。適用と採否=keep-best は呼び出し側＝
  * スコアリング不変・退化不能）。見つからなければ null。
  */
-internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5): List<IntArray>? {
+internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5, exclude: Int = -1): List<IntArray>? {
     if (j !in 0 until p.T || k0 !in 0 until p.K || p.S == 0) return null
     val cnt = IntArray(p.K)
     for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
@@ -285,6 +285,7 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
     fun candidates(fillShift: Int, prev: Node?): List<Node> {
         val out = ArrayList<Node>()
         for (i in order) {
+            if (i == exclude) continue   // [C1×E11] 呼出元が別途動かした職員を連鎖の候補から除外（無効な回帰手を防ぐ）
             val m = sched[i][j]
             if (m !in 0 until p.K || m == fillShift) continue
             if (!p.canDo(i, fillShift) || p.wishLocked(i, j) || c3nHits(i, fillShift)) continue
