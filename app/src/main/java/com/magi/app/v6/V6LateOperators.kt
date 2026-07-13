@@ -113,16 +113,9 @@ object V6LateOperators {
             }
             return v
         }
-        // [HF354] c3n前後チェック(長さ2の禁止連続のみ): 循環後 newK が前後日と c3n を作るなら true
-        fun c3nHit(i: Int, j: Int, newK: Int): Boolean {
-            for (c in p.cons3n) {
-                if (c.seq.size != 2) continue
-                val a = c.seq[0]; val b = c.seq[1]
-                if (j > 0 && newK == b && sched[i][j - 1] == a) return true
-                if (j < tN - 1 && newK == a && sched[i][j + 1] == b) return true
-            }
-            return false
-        }
+        // [HF354→三連/五連など任意長対応] c3n前後チェック: 循環後 newK が前後日と c3n を作るなら true。
+        //   Problem.makesForbiddenRun が任意長ルール(旧: 長さ2の禁止連続のみ)を一般判定する。
+        fun c3nHit(i: Int, j: Int, newK: Int): Boolean = p.makesForbiddenRun(sched, i, j, newK)
         // [HF411 Level Zero準拠] 平準化対象シフト: need定義済み かつ 担当可能2名以上(番号非依存=全シフト同等)
         fun isBalanceable(bk: Int): Boolean {
             if (bk !in 0 until kN) return false

@@ -31,6 +31,9 @@ data class UiState(
     val countViolations: Map<String, String> = emptyMap(),
     // [Set化] セル("i,j")の全違反クラス（重み降順。violationCells は最重1クラス）。タップ全列挙とE7整合に使う。
     val violationCellFamilies: Map<String, List<String>> = emptyMap(),
+    // [場所表示] fair/weekly の職員単位の偏り箇所。"weekly"->[[i,dev],..] / "fair"->[[i,k,dev],..]（dev降順）。
+    //   内訳パネルの場所表示専用（グリッドには出さない）。表示のみ・スコア不変。
+    val distLocations: Map<String, List<List<Int>>> = emptyMap(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
     val fixSearching: Boolean = false,                                       // 改善手を探索中
     val fixFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）

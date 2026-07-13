@@ -163,10 +163,28 @@ object V6NativeOptimizer {
             V6Algorithm.AUTO -> error("AUTO must be resolved")
         }
         logs = logs + result.phaseLogs
+        // [E11/多人数ブロック移動] エピローグで残 covU を「勤務→勤務」連鎖で充填（ALNS単独や covU を focus
+        //   しなかった経路でも走る保険）。keep-best 照合＝退化不能。ユーザー実例(8/11・8/17)の詰み局面を解く。
+        var resultSched = result.schedule
+        run {
+            val preRep = UnifiedViolationChecker.check(state, resultSched)
+            if (preRep.hard > 0 && (preRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
+                val cand = resultSched.copy2D()
+                val n = applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL))
+                if (n > 0) {
+                    val candRep = UnifiedViolationChecker.check(state, cand)
+                    if (better(candRep, preRep)) {
+                        resultSched = cand
+                        logs = logs + MirrorLog(tag = "ChainFill",
+                            message = "多人数ブロック移動で covU 充填: HARD ${preRep.hard}→${candRep.hard} / total ${preRep.total}→${candRep.total}（連鎖${n}件）")
+                    }
+                }
+            }
+        }
         // [review #3] Final epilogue polish only when the caller isn't running its own post chain.
         val polished = if (options.postPolish && !shouldStop())
-            hf80PostPolish(state, result.schedule, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop)
-        else PolishResult(result.schedule, emptyList(), 0)
+            hf80PostPolish(state, resultSched, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop)
+        else PolishResult(resultSched, emptyList(), 0)
         val finalReport = UnifiedViolationChecker.check(state, polished.schedule)
         logs = logs + polished.logs + MirrorLog(
             tag = "V6Dispatcher",
@@ -382,26 +400,39 @@ object V6NativeOptimizer {
             }.getOrDefault(0L)
             if (alns == 0L) { NativeGate.disable("ALNS状態生成NG"); return false }
             try {
+                // [全体計算の最小化] checker.check と liveBest 全面コピーは表示専用のため 250ms 周期に間引く。
+                //   2層目番兵の fullEval（正しさ）は従来どおり改善チャンクごとに実施＝退化不能は不変。
+                var reportStale = false
+                var lastUiMs = 0L
+                fun syncReport() {
+                    if (reportStale) {
+                        globalReport = UnifiedViolationChecker.check(state, globalBest)
+                        liveBest = globalBest.map { it.toList() }
+                        reportStale = false
+                    }
+                }
                 while (nowMs() < deadline && !shouldStop()) {
                     coroutineContext.ensureActive()
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, perSec * 1000.0)).coerceIn(0.0, 1.0)
                     val ret = NativeBridge.nativeAlnsChunk(alns, 200, frac)
-                    if (ret.size < 6 || ret[0] != 0L) { NativeGate.disable("ALNSチャンク整合性NG(status=${ret.getOrNull(0)})"); return false }
+                    if (ret.size < 6 || ret[0] != 0L) { syncReport(); NativeGate.disable("ALNSチャンク整合性NG(status=${ret.getOrNull(0)})"); return false }
                     itersTotal += ret[4]
                     if (ret[3] == 1L && ret[2] < globalScore) {
                         // [2層目の番兵] best 更新を Kotlin Evaluator でフル照合（Long== 許容誤差なし）。
                         NativeBridge.nativeAlnsRead(alns, 0, bestFlat)
                         val bestSol = NativeEval.unflatten(bestFlat, p.S, p.T)
                         val kScore = fullEvaluator.fullEval(bestSol)
-                        if (kScore != ret[2]) { NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
+                        if (kScore != ret[2]) { syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
                         globalBest = bestSol; globalScore = kScore
-                        globalReport = UnifiedViolationChecker.check(state, bestSol)
                         lastImproveIter = itersTotal
-                        liveBest = bestSol.map { it.toList() }
+                        reportStale = true
                     }
+                    val nowUi = nowMs()
+                    if (reportStale && nowUi - lastUiMs >= 250) { syncReport(); lastUiMs = nowUi }
                     onProgress("ALNS restart ${r + 1}/$restarts", globalReport, itersTotal, nowMs() - started)
                     yield()
                 }
+                syncReport()   // restart 終端ログ(HARD/total)と liveBest を最終同期
                 return true
             } finally {
                 NativeBridge.nativeAlnsDestroy(alns)
@@ -675,6 +706,11 @@ object V6NativeOptimizer {
         //   focus 選択のみの変更でスコアリング不変（keep-best=better() が結果を担保）＝退化なし・3.74.0 と同方針。
         val covUFloor = try { V6SanityPort.structuralHardFloor(state, cachedProblem(state)) } catch (_: Exception) { 0 }
         var stagnantRounds = 0   // [N4] better() 無改善の連続ラウンド数
+        // [E9/状況適応] 直前ラウンドが「完全空振り」(候補不採用＋focus族の件数も不変)だった focus を
+        //   次の1ラウンドだけ回避する軽い冷却。同一 focus の同一仮説を3連発する空転(実機: c3n×3R=~63s 無変化、
+        //   HF63 の恒久判定は約3R を要す)を、c3n→c1→c3n… の交互へ多様化する。1ラウンド限定なので
+        //   乱数運の悪い1回で族を見捨てない(恒久除外は従来どおり HF63 のみ)。focus 選択のみ＝スコアリング不変。
+        var cooldownFocus: String? = null
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
@@ -692,10 +728,16 @@ object V6NativeOptimizer {
             //   合法配置では covU >= covUFloor（下限）。担当外配置(groupViol)が混在すると covU が床を下回り得るが、
             //   その間 covU を focus しても無意味（groupViol が hard-first で先に選ばれる）なので `<=` で除外が正しい。
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
-            val focus = maxViolatedFamily(bestReport, avoid)
+            // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
+            val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
+            val focus = maxViolatedFamily(bestReport, focusAvoid)
             if (avoid.isNotEmpty()) {
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
             }
+            if (cooldownFocus != null) {
+                logs.add(MirrorLog(iter = iters, tag = "RSIFocus", message = "直前ラウンド空振りのため ${cooldownFocus} を1ラウンド休止 → focus=$focus (round ${round + 1})"))
+            }
+            val focusedBefore = bestReport.breakdown[focus] ?: 0
             val hypothesis = rsiGenerateHypothesis(state, best, bestReport, focus, rng)
             val phase = if (round % 2 == 0) runAlns(state, hypothesis, options.copy(restarts = 1), per, shouldStop, onProgress) else runV5(state, hypothesis, options, per, shouldStop, onProgress)
             iters += phase.iterations
@@ -716,8 +758,12 @@ object V6NativeOptimizer {
                 best = candSched.copy2D()
                 bestReport = candReport
                 stagnantRounds = 0
+                cooldownFocus = null   // [E9] 進展あり＝冷却解除
             } else {
                 stagnantRounds++
+                // [E9] 完全空振り(不採用＋focus族の件数が減っていない)なら次ラウンドだけこの focus を休止。
+                //   候補が focus 族を減らしていた(=方向は有望だが総合で負けた)場合は冷却しない。
+                cooldownFocus = if (focus != "total" && (candReport.breakdown[focus] ?: 0) >= focusedBefore) focus else null
             }
             logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "round=${round + 1}/$rounds focus=$focus best HARD=${bestReport.hard} total=${bestReport.total}"))
             liveBest = best.map { it.toList() }   // [DefragLiveView] 計算中ライブ盤面を公開
@@ -905,15 +951,39 @@ object V6NativeOptimizer {
         var bestReport = UnifiedViolationChecker.check(state, best)
         val baseSched = best          // 入力スナップショット（best は改善時に別配列へ差し替わる）
         val baseReport = bestReport
+        var iters = 0L
+        val deadline = started + seconds * 1000L
+        // [E10/停滞早期終了] 実機ログで PostPolish が 45s枠を最後まで走り切って改善0（40.977s/40.988s の2例）
+        //   ＝重研磨済み盤面ではプラトー後の期待値が低い。best が枠の1/5(下限3s)無改善なら早期に返す。
+        //   keep-best＋末尾の入力比番兵(better(baseReport,bestReport)→入力復帰)のため品質は不変＝時間/電池だけ節約
+        //   （2.65.0 HF66 / 2.67.0 停滞ウォッチドッグと同方針）。native/Kotlin 両経路で共通。
+        val stallMs = max(3000L, seconds * 1000L / 5)
+        var stalled = false
+        // [Stage10/第3期] ネイティブ経路: C++ PolishChunk（同一オペ構成11-way・同一受理・keep-best）＋2層番兵。
+        //   枠を消費し切れば早期 return。番兵発火時は「照合済み best」だけ引き継ぎ、下の Kotlin ループが
+        //   残り時間を続行する（NativeGate は閉鎖済み＝以後の実行は全て Kotlin）。
+        val nat = runPolishChunksNative(p, best, deadline, stallMs, seed, shouldStop)
+        iters += nat.iters
+        nat.best?.let { best = it; bestReport = UnifiedViolationChecker.check(state, it) }
+        if (nat.stalled) stalled = true
+        if (nat.completed) {
+            if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
+            val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}（ネイティブ）" + if (stalled) "（停滞早期終了 枠${seconds}s）" else ""))
+            return PolishResult(best, logs, iters)
+        }
         var cur = best.copy2D()
         val eval = DeltaEvaluator(p)
         eval.reset(cur)
         var curScore = eval.score()
         var bestScore = curScore
-        var iters = 0L
         val diffBuf = IntArray(p.S * p.T)
-        val deadline = nowMs() + seconds * 1000L
-        while (nowMs() < deadline && !shouldStop()) {
+        var lastImproveMs = nowMs()
+        var lastBestMark = bestScore
+        while (!shouldStop()) {
+            val nowLoop = nowMs()
+            if (nowLoop >= deadline) break
+            if (bestScore < lastBestMark) { lastBestMark = bestScore; lastImproveMs = nowLoop }
+            else if (nowLoop - lastImproveMs >= stallMs) { stalled = true; break }
             coroutineContext.ensureActive()
             val curHard = curScore / 1_000_000L
             val bestHard = bestScore / 1_000_000L
@@ -1017,8 +1087,77 @@ object V6NativeOptimizer {
         }
         // [退化防止] 生スコア最良が weightedScore 辞書順で入力より悪い場合は入力へ戻す。
         if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
-        val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}"))
+        val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}" + if (stalled) "（停滞早期終了 枠${seconds}s）" else ""))
         return PolishResult(best, logs, iters)
+    }
+
+    /** [Stage10] ネイティブ Polish 実行の結果。completed=枠を消費し切った(=Kotlin ループ不要) /
+     *  best=Kotlin フル評価で照合済みの改善盤面(改善なし・未使用は null) / stalled=E10 停滞早期終了で戻った。 */
+    private class NativePolishRun(val completed: Boolean, val best: Array<IntArray>?, val iters: Long, val stalled: Boolean)
+
+    /**
+     * [Stage10/第3期] hf80PostPolish の C++ チャンク駆動。SaOptimizer.runWorkerNative / runRestartNative と同型:
+     * チャンク間でキャンセル・締切・E10 停滞を確認し、best 更新チャンクの盤面を Kotlin Evaluator.fullEval で
+     * Long== 照合（2層目番兵。1層目=チャンク末尾の C++ 自己整合=status）。どちらか発火で NativeGate を閉じ
+     * completed=false を返す＝呼び出し側の Kotlin ループが「照合済み best」から残り時間を続行（退化不能）。
+     */
+    private suspend fun runPolishChunksNative(
+        p: Problem,
+        initial: Array<IntArray>,
+        deadline: Long,
+        stallMs: Long,
+        seed: Long,
+        shouldStop: () -> Boolean,
+    ): NativePolishRun {
+        if (!NativeGate.usable) return NativePolishRun(false, null, 0L, false)
+        val ph = runCatching { NativeEval.createHandle(p) }.getOrDefault(0L)
+        if (ph == 0L) return NativePolishRun(false, null, 0L, false)
+        try {
+            val h = NativeBridge.nativePolishCreate(ph, NativeEval.flatten(initial), seed)
+            if (h == 0L) return NativePolishRun(false, null, 0L, false)
+            try {
+                val fullEvaluator = Evaluator(p)
+                val buf = IntArray(p.S * p.T)
+                var verifiedBest = fullEvaluator.fullEval(initial)
+                var best: Array<IntArray>? = null
+                var iters = 0L
+                var lastImproveMs = nowMs()
+                while (!shouldStop()) {
+                    val nowLoop = nowMs()
+                    if (nowLoop >= deadline) return NativePolishRun(true, best, iters, false)
+                    if (nowLoop - lastImproveMs >= stallMs) return NativePolishRun(true, best, iters, true)
+                    coroutineContext.ensureActive()
+                    // [全体計算の最小化] 400反復/チャンク＝チャンク末尾の自己整合フル評価の頻度を半減
+                    //   （hint は best 改善駆動で更新されるためチャンク粒度に依存しない。締切/停滞/キャンセルの
+                    //   確認粒度は ms 級のまま）。
+                    val ret = NativeBridge.nativePolishChunk(h, 400)
+                    if (ret.size < 5 || ret[0] != 0L) {
+                        NativeGate.disable("Polishチャンク整合性NG(status=${ret.getOrNull(0)})")
+                        return NativePolishRun(false, best, iters, false)
+                    }
+                    iters += ret[4]
+                    if (ret[3] == 1L && ret[2] < verifiedBest) {
+                        // [2層目番兵] best 更新チャンクの盤面を Kotlin フル評価で照合（Long== 許容誤差なし）。
+                        NativeBridge.nativePolishRead(h, 0, buf)
+                        val sol = NativeEval.unflatten(buf, p.S, p.T)
+                        val k = fullEvaluator.fullEval(sol)
+                        if (k != ret[2]) {
+                            NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
+                            return NativePolishRun(false, best, iters, false)
+                        }
+                        best = sol
+                        verifiedBest = k
+                        lastImproveMs = nowLoop
+                    }
+                    yield()
+                }
+                return NativePolishRun(true, best, iters, false)   // shouldStop=キャンセル/締切は呼び出し側の扱いと同じ
+            } finally {
+                NativeBridge.nativePolishDestroy(h)
+            }
+        } finally {
+            NativeBridge.nativeDestroyProblem(ph)
+        }
     }
 
     private fun bestStaffForCoverage(p: Problem, schedule: Array<IntArray>, counts: Array<IntArray>, j: Int, k: Int): Int {
@@ -1225,7 +1364,9 @@ object V6NativeOptimizer {
         val out = base.copy2D()
         val p = cachedProblem(state)
         when (focus) {
-            "covU", "c41", "c41s" -> repeat(8) { destroyRepairDay(state, out, rng) }   // c41s=スキル群の1日人数(c41と同型)
+            // [E11] covU は先に「勤務→勤務」の多人数連鎖で充填（既存 destroyRepairDay は休→勤務のみ＝
+            //   候補が過剰シフト/連鎖からしか引けない局面を踏めない）。仮説はラウンド better() でゲート＝退化なし。
+            "covU", "c41", "c41s" -> { applyCovUChains(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }   // c41s=スキル群の1日人数(c41と同型)
             "low", "high", "c2" -> repeat(8) { destroyRepairStaff(state, out, rng) }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
@@ -1241,6 +1382,33 @@ object V6NativeOptimizer {
         return out
     }
 
+    /**
+     * [E11/多人数ブロック移動] 現盤面の全 covU セルを、同日・多人数の玉突き連鎖（findCovUChain）で
+     * 充填する。sched を in-place 変更し、適用手数を返す。連鎖は同日内交換＝被覆総量保存で、canDo/非wishLocked/
+     * c3n枝刈り済み。最終採否は呼び出し側の keep-best（ラウンド better() or エピローグの checker 照合）が担保。
+     * ユーザー実例（2026-08）: 8/11 モニカ B4→Cｵ（深さ1）／8/17 上條 Cｵ→Cｱ・山本 →Cｵ（深さ2）。
+     */
+    private fun applyCovUChains(state: MagiState, sched: Array<IntArray>, rng: Random): Int {
+        val p = cachedProblem(state)
+        if (p.S == 0 || p.T == 0) return 0
+        var applied = 0
+        val cnt = IntArray(p.K)
+        for (j in 0 until p.T) {
+            for (k in 0 until p.K) cnt[k] = 0
+            for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
+            for (k in 0 until p.K) {
+                if (p.covUCell(k, j, cnt[k]) <= 0) continue
+                val chain = findCovUChain(p, sched, k, j, rng) ?: continue
+                for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
+                applied++
+                // 同日に複数 covU があり得るので当日カウントを再計算。
+                for (kk in 0 until p.K) cnt[kk] = 0
+                for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
+            }
+        }
+        return applied
+    }
+
     private fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet()): String {
         val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "c1", "c3", "c3m", "c3mn")
         // [D1/A1] 解ける HARD 族(groupViol/covU/pref/c3n)は件数に関わらず SOFT より先に focus する。
@@ -1253,8 +1421,13 @@ object V6NativeOptimizer {
             if ((report.breakdown[key] ?: 0) > 0) return key
         }
         // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
+        // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が
+        //   order に1つも無いと先頭 groupViol=0 が「0 > -1」で当選→hf67ルートがクリーン盤面への no-op 仮説
+        //   ＝1ラウンド(実測~21s)空振りしていた。12シフト実機ログ round=4/5 focus=groupViol(件数0)で確認）。
+        //   該当なしは "total" を返し、rsiGenerateHypothesis の else 分岐＝全違反セル hint の汎用修復
+        //   (destroyRepairViolations, focus 非依存)ラウンドとして時間を有効化する。focus 選択のみ＝スコアリング不変。
         var best = "total"
-        var bestCount = -1
+        var bestCount = 0
         for (key in order) {
             if (key in avoid) continue
             val n = report.breakdown[key] ?: 0

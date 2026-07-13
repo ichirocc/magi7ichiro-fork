@@ -251,6 +251,77 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
 }
 
 /**
+ * [E11/多人数ブロック移動] covU セル (k0, j) を同日・多人数の「玉突き連鎖」で充填する交代連鎖を
+ * BFS（最短優先）で探す。対象の failure mode（実機 2026-08 データ・ユーザー指摘で確認）:
+ * 直接充填の候補が (a)希望ロック (b)単一被覆シフト在勤＝引き抜くと玉突き covU (c)禁止連続 に当たり、
+ * 既存の修復オペレータ（destroyRepairDay=「休→勤務」しか試さない）では踏めない「勤務→勤務」連鎖でのみ
+ * 埋まる局面。ユーザー実例: 8/11 モニカ B4→Cｵ（深さ1・過剰B4から補充）／8/17 上條 Cｵ→Cｱ, 山本 →Cｵ（深さ2）。
+ *
+ * 探索: 「k0 を職員 i が埋める → i が空けたシフト m を次の職員が埋める → … → 空けても covU が増えない
+ * シフト（需要0 or 余裕あり）で終端」。リンク条件: canDo・非wishLocked・禁止連続(c3n, 任意長=三連/五連等)の
+ * プルーニング・同一職員の再訪なし・同一シフト展開の再訪なし・深さ≤maxDepth(既定5=最大5人の玉突き)。
+ * 同日内交換なので被覆総量は保存。
+ * 返り値 = 適用手 [(i, j, newK), ...]（本関数は盤面を変更しない。適用と採否=keep-best は呼び出し側＝
+ * スコアリング不変・退化不能）。見つからなければ null。
+ */
+internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5, exclude: Int = -1): List<IntArray>? {
+    if (j !in 0 until p.T || k0 !in 0 until p.K || p.S == 0) return null
+    val cnt = IntArray(p.K)
+    for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
+    // 充填で covU が実際に減るセルのみ対象（need 未設定などは対象外）。
+    if (p.covUCell(k0, j, cnt[k0] + 1) >= p.covUCell(k0, j, cnt[k0])) return null
+
+    // [三連/五連など任意長対応] 禁止連続(c3n)を作る移動を除外（最終ゲートは呼び出し側 checker が
+    //   担保＝ここは成功率向上の枝刈り。Problem.makesForbiddenRun が任意長ルールを一般判定）。
+    fun c3nHits(i: Int, newK: Int): Boolean = p.makesForbiddenRun(sched, i, j, newK)
+
+    // BFS ノード = 「fillShift へ staff が入る」手。子 = staff が空けた現シフトを埋める手。
+    class Node(val fillShift: Int, val staff: Int, val prev: Node?)
+
+    // 職員の走査順を乱択（同型解の多様化。決定性が欲しい呼び出しは seed 固定の rng を渡す）。
+    val order = IntArray(p.S) { it }
+    for (x in p.S - 1 downTo 1) { val y = rng.nextInt(x + 1); val t = order[x]; order[x] = order[y]; order[y] = t }
+
+    fun candidates(fillShift: Int, prev: Node?): List<Node> {
+        val out = ArrayList<Node>()
+        for (i in order) {
+            if (i == exclude) continue   // [C1×E11] 呼出元が別途動かした職員を連鎖の候補から除外（無効な回帰手を防ぐ）
+            val m = sched[i][j]
+            if (m !in 0 until p.K || m == fillShift) continue
+            if (!p.canDo(i, fillShift) || p.wishLocked(i, j) || c3nHits(i, fillShift)) continue
+            var q = prev; var used = false
+            while (q != null) { if (q.staff == i) { used = true; break }; q = q.prev }
+            if (!used) out.add(Node(fillShift, i, prev))
+        }
+        return out
+    }
+    // 終端: このノードの職員が空けるシフト m は、1人減っても covU が増えない（需要0 or 余裕あり）。
+    fun tryComplete(node: Node): List<IntArray>? {
+        val m = sched[node.staff][j]
+        if (p.covUCell(m, j, cnt[m] - 1) > p.covUCell(m, j, cnt[m])) return null
+        val moves = ArrayList<IntArray>()
+        var n: Node? = node
+        while (n != null) { moves.add(intArrayOf(n.staff, j, n.fillShift)); n = n.prev }
+        return moves
+    }
+
+    val visited = BooleanArray(p.K).also { it[k0] = true }
+    var frontier = candidates(k0, null)
+    var depth = 0
+    while (depth < maxDepth && frontier.isNotEmpty()) {
+        for (node in frontier) tryComplete(node)?.let { return it }
+        val next = ArrayList<Node>()
+        for (node in frontier) {
+            val m = sched[node.staff][j]
+            if (m in 0 until p.K && !visited[m]) { visited[m] = true; next.addAll(candidates(m, node)) }
+        }
+        frontier = next
+        depth++
+    }
+    return null
+}
+
+/**
  * 非改善手の受理判定（生スコア＝hard*1_000_000+soft）。GLS 拡張分(moveAug=候補−現行)を加味する。
  * hard が +2 超増える手は常に却下。Great Deluge は水位以下かつ hard 非増加で受理。
  */

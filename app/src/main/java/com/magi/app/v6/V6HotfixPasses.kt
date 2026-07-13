@@ -621,8 +621,12 @@ object V6HotfixPasses {
      * c1不足の (職員 i, 窓) を見つけ、その窓内で i が X でない日 j に対し、その日に X をしている提供者 i' と
      * **同日スワップ**（i←X, i'←iの旧シフト＝被覆不変・HARD維持）して i の X を増やす。実目的関数で評価し
      * 改善時のみ採用（keep-best＝退化なし）。汎用循環交換と違い**c1不足の窓に的を絞る**ので c1 を効率的に削る。
+     * [E11/多人数ブロック移動を反映] 同日スワップの直接相手 i' が見つからない/不採用のときは諦めず、
+     * i を X へ直接動かし、空いた旧シフト a の穴を `findCovUChain`（covU の玉突き連鎖）と同じ機構で
+     * 埋め直す（a に need1 が無い/余裕があるなら連鎖不要でそのまま採用判定）。i の移動＋連鎖手をまとめて
+     * 1候補として実目的関数で評価し、改善時のみ採用（不採用時は連鎖手も含め正しく全巻き戻し）。
      */
-    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }): CyclicSwapResult {
+    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L): CyclicSwapResult {
         val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
@@ -632,6 +636,7 @@ object V6HotfixPasses {
             return CyclicSwapResult(work, before.total, bestRep.total, 0,
                 listOf(MirrorLog(tag = "C1Polish", message = "cons1なし=スキップ")))
         }
+        val rng = Random(seed)
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
         var pass = 0
         while (pass < maxPasses) {
@@ -656,12 +661,29 @@ object V6HotfixPasses {
                         if (work[i][j] == x || !movable(i, j)) continue
                         if (!inDeficientC1Window(p, work, i, x, d, n, j)) continue
                         val a = work[i][j]                                  // i の旧シフト
+                        var done = false
                         for (i2 in 0 until p.S) {
                             if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.canDo(i2, a)) continue
                             work[i][j] = x; work[i2][j] = a                 // 同日スワップ（被覆不変）
                             val rep = UnifiedViolationChecker.check(state, work)
-                            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; break }
+                            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true; break }
                             work[i][j] = a; work[i2][j] = x                 // 巻き戻し
+                        }
+                        if (done) continue
+                        // [E11反映] 直接の交換相手が見つからない/不採用 → i を X へ動かし、空いた a の穴を
+                        //   玉突き連鎖で埋め直す（findCovUChain は盤面を変えないため元値を保存して巻き戻せるようにする）。
+                        work[i][j] = x
+                        // exclude=i: i は既に x へ動かした本人なので、a を埋め戻す候補から除外
+                        //   （除外しないと「i が a に戻る」= i の移動そのものを打ち消す退行手をBFSが選びうる）。
+                        val chain = findCovUChain(p, work, a, j, rng, exclude = i)
+                        val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
+                        chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
+                        val rep = UnifiedViolationChecker.check(state, work)
+                        if (isBetter(rep, bestRep)) {
+                            bestRep = rep; applied++; improved = true
+                        } else {
+                            if (chain != null && oldVals != null) for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
+                            work[i][j] = a
                         }
                     }
                 }

@@ -34,6 +34,10 @@ data class ViolationReport(
     val hard: Int,
     val soft: Int,
     val weightedScore: Double,
+    // [場所表示] fair/weekly はセル単位でなく職員/群×シフト単位の偏りのため violations(mark) に出せない。
+    //   内訳パネルの場所表示専用に、職員単位の偏り箇所を構造化して持つ（グリッドには出さない＝飽和回避）。
+    //   "weekly" -> [[staffIdx, dev], ...] / "fair" -> [[staffIdx, shiftIdx, dev], ...]（dev降順）。表示のみ・スコア不変。
+    val distLocations: Map<String, List<List<Int>>> = emptyMap(),
     val logs: List<MirrorLog> = emptyList(),
 )
 
@@ -64,7 +68,10 @@ object MirrorKeys {
         "c3mn" to 12.0, "c1" to 4.0, "c3" to 3.0, "c3m" to 2.0,
         "c2" to 1.0, "c41" to 1.0, "c42" to 1.0, "c41s" to 1.0, "c42s" to 1.0,
         "apt" to 1.0, "fair" to 1.0, "weekly" to 1.0,
-        "covO" to 0.5,
+        // [目的関数統一] covO は最適化器(Evaluator/Delta/C++)が amount×1.0 で加算しており、
+        //   チェッカー weightedScore も 1.0 に統一（旧: 0.5 で最適化器と factor-2 乖離＝族寄与不一致）。
+        //   ユーザー指示(2026-07-13)により「最適化器を正」として 1.0 で確定（HF77 明示数値指示）。
+        "covO" to 1.0,
     )
 }
 
@@ -111,7 +118,7 @@ object UnifiedViolationChecker {
             }
             violations[key] = cls
         }
-        // [判読性] mark() と同じ重み優先。旧: 後勝ちで covO(0.5) が c41(1.0) のマークを上書きし得た。
+        // [判読性] mark() と同じ重み優先。旧: 後勝ちで軽い族(旧 covO=0.5 等)が重い族(c41 等)のマークを上書きし得た。
         fun markNeed(k: Int, j: Int, family: String) {
             val key = "$k,$j"
             val prev = needViolations[key]
@@ -244,6 +251,8 @@ object UnifiedViolationChecker {
 
         // [統一fair] グループ内公平化: 群×担当ONシフトごと、メンバー回数の round(平均) からの L1 偏差和。
         // SOFT・重み1。最適化器(Evaluator/Delta)と同一指標。内訳チップ(UI)には出さず weightedScore/total に算入。
+        // [場所表示] 偏っているメンバー(x,k,dev)を収集（内訳パネル用・グリッドには出さない）。
+        val fairLocs = ArrayList<List<Int>>()
         for (g in 0 until p.G) {
             val mem = p.groupMembers[g]
             val m = mem.size
@@ -253,19 +262,29 @@ object UnifiedViolationChecker {
                 for (x in mem) sum += counts[x][k]
                 val tgt = Math.round(sum.toDouble() / m).toInt()
                 var d = 0
-                for (x in mem) d += kotlin.math.abs(counts[x][k] - tgt)
+                for (x in mem) {
+                    val dx = kotlin.math.abs(counts[x][k] - tgt)
+                    d += dx
+                    if (dx > 0) fairLocs.add(listOf(x, k, dx))
+                }
                 if (d > 0) inc("fair", d)
             }
         }
 
         // [統一weekly] 7日周期(曜日)シフト平準化: 職員ごと、勤務日(非休)の曜日別カウントの round(平均) からの
         // L1 偏差和。SOFT・重み1。最適化器(Evaluator/Delta)と同一指標。内訳チップ(UI)には出さず weightedScore/total に算入。
+        // [場所表示] 偏っている職員(i,dev)を収集（内訳パネル用・グリッドには出さない）。
+        val weeklyLocs = ArrayList<List<Int>>()
         for (i in 0 until p.S) {
             val wd = IntArray(7)
             for (j in 0 until p.T) { val k = s[i][j]; if (k != p.restIdx && k in 0 until p.K) wd[(p.dow0 + j) % 7]++ }
             val d = weeklyDevOfBucket(wd)
-            if (d > 0) inc("weekly", d)
+            if (d > 0) { inc("weekly", d); weeklyLocs.add(listOf(i, d)) }
         }
+        val distLocations = mapOf(
+            "weekly" to weeklyLocs.sortedByDescending { it[1] },
+            "fair" to fairLocs.sortedByDescending { it[2] },
+        )
 
         val cov = coverage(p, s)
         // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。件数=Σセル寄与、
@@ -324,6 +343,7 @@ object UnifiedViolationChecker {
             hard = hard,
             soft = soft,
             weightedScore = weightedScore(breakdown),
+            distLocations = distLocations,
             logs = listOf(MirrorLog(iter = 0, level = level, tag = "UnifiedCheck", message = "$msg (${elapsedMs}ms)")),
         )
     }

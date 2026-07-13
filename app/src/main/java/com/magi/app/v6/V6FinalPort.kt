@@ -399,12 +399,19 @@ object V6FinalPort {
             // フル評価パリティ不一致もゲートを閉じる（以後の実行で SA チャンクを使わない＝退化）。
             if (parity?.match == false) NativeGate.disable("フル評価パリティ不一致")
             val gate = if (NativeGate.enabled) "" else "／番兵発火→Kotlinへ退化: ${NativeGate.reason}"
+            // [表示バグ修正] 有効/無効は usable（番兵×ユーザートグル×ロード）で判定する。旧: enabled（番兵のみ）
+            //   参照のため、設定トグル OFF の実行でも「有効」と表示され A/B ログの判読を妨げていた。
+            val searchState = when {
+                NativeGate.usable -> "有効(SA＋LAHC＋ALNS＋研磨チャンク)"
+                !NativeGate.userEnabled -> "無効(設定トグルOFF)"
+                else -> "無効"
+            }
             MirrorLog(
                 level = if (parity?.match == false || !NativeGate.enabled) "W" else "I",
                 tag = "NativeBridge",
                 message = when {
                     parity == null -> "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）"
-                    parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)・ネイティブ探索=${if (NativeGate.enabled) "有効(SA＋ALNSチャンク)" else "無効"}$gate"
+                    parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)・ネイティブ探索=$searchState$gate"
                     else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません (C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft})$gate"
                 },
             )
