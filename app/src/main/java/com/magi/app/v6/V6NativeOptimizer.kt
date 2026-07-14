@@ -1376,7 +1376,13 @@ object V6NativeOptimizer {
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
             //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
             //   apt専用の新規オペレータ不要。ラウンド better() keep-best でゲート＝退化なし。
-            "low", "high", "c2", "apt" -> repeat(8) { destroyRepairStaff(state, out, rng) }
+            // [同根の穴=weekly/fair] 同じ理由で weekly/fair も order に無く一度も focus されていなかった
+            //   （実データ検証: weekly L1偏差合計65(aptの37より大きい)・fair合計11）。staffCountPenaltyAt は
+            //   weekly/fair 未対応(曜日バケット・群平均を持たない)のため厳密な cost-aware 研磨ではないが、
+            //   destroyRepairStaff は職員1人の月全体を破壊再構築する汎用オペレータであり、weekly/fair が
+            //   支配的なときに専用ラウンドを割り当てるだけでも「total」の無指向な空振りより改善機会が増える。
+            //   ラウンド better() keep-best でゲート＝退化なし（厳密な cost 統合は将来の拡張候補）。
+            "low", "high", "c2", "apt", "weekly", "fair" -> repeat(8) { destroyRepairStaff(state, out, rng) }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
             //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
@@ -1423,8 +1429,11 @@ object V6NativeOptimizer {
         //   focus されず、post-processing(applyDayAssignmentPolish)頼みで広く未研磨のまま残っていた
         //   （実データ検証: apt L1偏差合計37、staffRange低/高はわずか3で規模が逆転）。rsiGenerateHypothesis
         //   側は既存の destroyRepairStaff(low/high/c2 と同経路、marginal costに apt 込み)へ合流するだけ＝
-        //   新規オペレータ不要。fair/weekly はセル位置を持たない集約指標のため対象外(現状維持)。
-        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "apt", "c1", "c3", "c3m", "c3mn")
+        //   新規オペレータ不要。
+        // [同根の穴=weekly/fair] 同じ理由で weekly/fair も未focusだったため追加（実データ検証: weekly=65
+        //   （aptの37より大きい）・fair=11）。destroyRepairStaff は weekly/fair の cost には未対応だが、
+        //   専用ラウンドを割り当てるだけで無指向な"total"空振りより改善機会が増える（詳細はrsiGenerateHypothesis）。
+        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "apt", "weekly", "fair", "c1", "c3", "c3m", "c3mn")
         // [D1/A1] 解ける HARD 族(groupViol/covU/pref/c3n)は件数に関わらず SOFT より先に focus する。
         //   旧実装は純・件数最大だったため、単一の c3n=1 が c1=118 等の高頻度 SOFT に埋もれ RSI が一度も HARD を
         //   狙わない失敗があった。目的関数 better() は辞書式(hard<<total<<weighted)で HARD 支配ゆえ focus も HARD

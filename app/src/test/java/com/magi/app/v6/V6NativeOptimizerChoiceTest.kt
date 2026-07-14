@@ -69,9 +69,21 @@ class V6NativeOptimizerChoiceTest {
     }
 
     @Test fun maxViolatedFamilyFallsBackToTotalWhenAllZero() {
-        // [回帰/E8] 全族0件なら apt 追加後も従来どおり "total"（件数0族を focus しない）。
+        // [回帰/E8] 全族0件なら apt/weekly/fair 追加後も従来どおり "total"（件数0族を focus しない）。
         val r = report(emptyMap())
         assertEquals("total", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    // [同根の穴=weekly/fair] apt と同じ理由で未focusだった weekly/fair も件数最大なら選ばれること
+    //   （実データ検証: weekly L1偏差合計65はaptの37より大きい・fair合計11）。
+    @Test fun maxViolatedFamilyPicksWeeklyWhenDominantSoft() {
+        val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
+        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    @Test fun maxViolatedFamilyPicksFairWhenDominantSoft() {
+        val r = report(mapOf("fair" to 11, "c2" to 1))
+        assertEquals("fair", V6NativeOptimizer.maxViolatedFamily(r))
     }
 
     // [smoke] focus="apt" が destroyRepairStaff 経路(low/high/c2と合流)へ正しくルーティングされ、
@@ -97,5 +109,11 @@ class V6NativeOptimizerChoiceTest {
         assertNotNull(out)
         assertEquals(base.size, out.size)
         assertEquals(base[0].size, out[0].size)
+        // [smoke] weekly/fair も同じ経路（apt同様、専用オペレータ不要で例外なく完走すること）。
+        for (focus in listOf("weekly", "fair")) {
+            val out2 = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            assertNotNull(out2)
+            assertEquals(base.size, out2.size)
+        }
     }
 }

@@ -749,6 +749,20 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## weekly/fairも同じ理由でRSI探索focusに追加（3.170.0, 「apt以外は大丈夫か」への回答）
+ユーザーの追加確認「apt以外は大丈夫ですか?」を受け、apt同様の穴が他族にも無いか同じ実データ
+(state.json)で網羅的に検証。**weekly（7日周期の曜日偏り）のL1偏差合計は65で、apt(37)より大きい**
+（上條洋平11・大島愛10 等）。fair（グループ内公平化）も合計11で非ゼロ。両者とも apt と全く同じ
+原因＝`maxViolatedFamily`の order に無く RSI 探索中は一度も focus されていなかった。
+- **対応**: orderにweekly/fairを追加し、`rsiGenerateHypothesis`のapt/low/high/c2と同じ
+  `destroyRepairStaff`経路へ合流。**正直な限界の明記**: `staffCountPenaltyAt`（destroyRepairStaffの
+  marginal cost）はlow/high/aptには対応済みだがweekly/fairの cost 計算は未対応（weekly=曜日バケット・
+  fair=群平均が必要で、対応するには`weeklyDevOfBucket`/`DeltaEvaluator.fairDevAt`相当の統合が要る、
+  より大きな改修）。今回は「専用ラウンドを割り当てるだけ」の focus 露出に留めた＝厳密な cost-aware
+  研磨ではないが、無指向な"total"空振りよりは改善機会が増える、hard>0時は完全no-op・keep-best不変の
+  安全な最小差分。将来の拡張候補として cost 関数への正式統合を残す。
+  テスト2件追加（weekly/fair優位選択）＋smokeテスト拡張（weekly/fair focusが例外なく完走）。
+
 ## apt(適切回数)をRSI探索focusに追加（3.169.0, 「公平化のズレ」実機report対応）
 ユーザーが実機TallyCardスクショ（多数の▼/▲）を提示し「公平化のズレの研磨などが出来ていない」と報告。
 実際のstate.jsonで検証したところ、staffRange(低/高, 重み90/45)の乖離は合計わずか3だったのに対し、
