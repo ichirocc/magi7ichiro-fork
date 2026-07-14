@@ -1,12 +1,11 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,10 +16,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -32,67 +32,126 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * [必要人数カレンダー] シフトを1つ選び、月全体の実効need（シフト既定＋日別例外を統合済み、
- * `vm.needCellLimits(k,j)`）を一目で見渡す概観。ユーザー提示のモックアップの長所（①シフト種類
- * チップで対象を絞る ②月全体カレンダーに各日の実効値をインライン色分け表示 ③設定済/未設定の
- * 日数サマリー）を取り入れた。**表示専用**（タップ不可）で、編集は従来どおり下の「日別の必要人数
- * （例外）」の一覧・追加ダイアログで行う（ユーザー選択：一覧の操作系は温存し概観を追加するだけ）。
- * 読取専用・スコアリング不変。
+ * [必要人数カレンダー] シフトを1つ選び、月全体の必要人数を見渡し・その場で編集する主画面。
+ * ユーザー提示の第2モックアップ（必要人数設定/Dテスト）に基づき、方針を「表示専用」から転換:
+ * カレンダー自体をタップして複数日を選び、下部固定パネルで一括編集する（旧NeedDayDialogを吸収）。
+ * ①シフト種類チップ ②「基本の必要人数」（シフト既定need1/need2）をこの画面で直接編集
+ *   （Ws1Cardと入口が二重になるがユーザー選択） ③日セルは実際の勤務表充足度で色分け
+ *   （緑=充足/橙=過剰=covO/赤=不足=covU/灰=need未設定。TallyCard/グリッドの赤=covU・橙=covOと同じ
+ *   語彙に統一。covUは呼び名「不足」・covOは「過剰」でNeedDayCard/CoverageDiagnosis等と揃える）
+ *   ④タップで複数日選択→下部パネル「選択したN日間に適用する」で一括登録（DayPickerGridと同じ
+ *   トグル選択の考え方をこのカード専用の色分けグリッドに統合）。月送りは導入しない（1state=1か月の
+ *   スナップショットモデル、D6決定と整合）。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NeedCalendarCard(ui: UiState, vm: MagiViewModel) {
-    val shifts = vm.shiftKigouList()
-    if (shifts.isEmpty()) return
+    val v = vm.ws1() ?: return
+    if (v.shifts.isEmpty()) return
     var k by remember { mutableStateOf(0) }
-    if (k !in shifts.indices) k = 0
+    if (k !in v.shifts.indices) k = 0
+    val shift = v.shifts[k]
     val cs = MaterialTheme.colorScheme
-    val cells = remember(ui.startDate, ui.days, k, ui.loaded) {
-        (0 until ui.days).map { j -> vm.needCellLimits(k, j) }
+    var daysSel by remember(k) { mutableStateOf(emptySet<Int>()) }
+    var selP1 by remember { mutableStateOf(shift.need1) }
+    var selP2 by remember { mutableStateOf(shift.need2) }
+    val onToggleDay: (Int) -> Unit = { d ->
+        val wasEmpty = daysSel.isEmpty()
+        daysSel = if (d in daysSel) daysSel - d else daysSel + d
+        if (wasEmpty && daysSel.isNotEmpty()) { selP1 = shift.need1; selP2 = shift.need2 }
     }
-    val setCount = cells.count { it != null }
+    val cells = (0 until ui.days).map { j -> vm.needCellLimits(k, j) to ui.needViolations["$k,$j"] }
+    val setCount = cells.count { it.first != null }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("必要人数カレンダー", style = MaterialTheme.typography.titleMedium)
             Text(
-                "シフトを選ぶと、月全体の必要人数（最低〜上限）を一覧できます（表示のみ）。",
+                "シフトを選び、日をタップして必要人数を一括登録できます。色は現在の勤務表の充足状況です。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                shifts.forEachIndexed { idx, kg ->
-                    InputChip(selected = idx == k, onClick = { k = idx }, label = { Text(kg) })
-                }
+                v.shifts.forEachIndexed { idx, s -> InputChip(selected = idx == k, onClick = { k = idx }, label = { Text(s.kigou) }) }
+            }
+            // [基本の必要人数] シフト既定need1/need2をこの画面で直接編集（インライン・即時反映）。
+            Column(
+                Modifier.fillMaxWidth().border(1.dp, cs.outlineVariant, RoundedCornerShape(8.dp)).padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text("基本の必要人数（${shift.kigou}の既定値）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                NumberStepper("最低人数", shift.need1, { vm.setShiftNeed(k, it, shift.need2) }, min = 0, blankLabel = "未設定")
+                NumberStepper("上限人数", shift.need2, { vm.setShiftNeed(k, shift.need1, it) }, min = 0, blankLabel = "未設定")
             }
             Text(
                 "設定済 ${setCount}日 / 未設定 ${ui.days - setCount}日",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            NeedMonthGrid(startDate = ui.startDate, cells = cells)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.size(14.dp).background(MagiAccent.green.copy(alpha = 0.30f), RoundedCornerShape(4.dp)))
-                Text("設定済(最低-上限)", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.size(14.dp).background(cs.surfaceVariant, RoundedCornerShape(4.dp)))
-                Text("未設定", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            NeedMonthGrid(startDate = ui.startDate, cells = cells, selectedDays = daysSel, onToggle = onToggleDay)
+            FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LegendDot(MagiAccent.green, "充足")
+                LegendDot(MagiAccent.orange, "過剰")
+                LegendDot(MagiAccent.red, "不足")
+                LegendDot(cs.outlineVariant, "未設定")
+            }
+            if (daysSel.isNotEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth().background(cs.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp)).padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${daysSel.size}日選択中の設定を変更", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { daysSel = emptySet() }, enabled = !ui.running) { Text("選択をクリア") }
+                    }
+                    NumberStepper("最低人数", selP1, { selP1 = it }, min = 0, blankLabel = "既定")
+                    NumberStepper("上限人数", selP2, { selP2 = it }, min = 0, blankLabel = "既定")
+                    Text(
+                        "基本の必要人数：最低 ${shift.need1.ifBlank { "未設定" }}人 〜 上限 ${shift.need2.ifBlank { "未設定" }}人",
+                        style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = {
+                            daysSel.forEach { d -> vm.setNeedDay(k, d - 1, selP1, selP2) }
+                            daysSel = emptySet()
+                        },
+                        enabled = !ui.running && (selP1.isNotBlank() || selP2.isNotBlank()),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    ) { Text("選択した${daysSel.size}日間に適用する") }
+                }
             }
         }
     }
 }
 
-/** [表示専用] 月内の日を曜日整列グリッドで並べ、各日の実効need(lo-hi)をインライン表示する。
- *  DayPickerGrid（選択トグル用）とは別物＝タップ不可・選択状態を持たない読取専用グリッド。 */
 @Composable
-private fun NeedMonthGrid(startDate: String, cells: List<Pair<Int, Int>?>) {
+private fun LegendDot(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.size(10.dp).background(color, CircleShape))
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** [必要人数カレンダーの本体グリッド] 月内の日を曜日整列で並べ、タップで複数日選択できる。
+ *  各日は実効need(lo-hi、`vm.needCellLimits`)と現在の勤務表充足度(`ui.needViolations`)から
+ *  色分けドットを表示（緑=充足/橙=過剰covO/赤=不足covU/灰=need未設定）。選択中の日は
+ *  チェックマーク＋枠線で示す（DayPickerGridと同じ「タップでトグル」操作系）。 */
+@Composable
+private fun NeedMonthGrid(
+    startDate: String,
+    cells: List<Pair<Pair<Int, Int>?, String?>>,
+    selectedDays: Set<Int>,
+    onToggle: (Int) -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val sdow = (startDowMonFirst(startDate) + 1) % 7   // 月曜始まり(0=月)→日曜始まり(0=日)へ変換
     val weekJa = listOf("日", "月", "火", "水", "木", "金", "土")
@@ -109,46 +168,67 @@ private fun NeedMonthGrid(startDate: String, cells: List<Pair<Int, Int>?>) {
         dayCells.chunked(7).forEach { wk ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { j ->
-                    if (j == null) Box(Modifier.weight(1f).height(50.dp))
+                    if (j == null) Box(Modifier.weight(1f).height(54.dp))
                     else {
-                        val range = cells[j]
-                        val bg = if (range != null) MagiAccent.green.copy(alpha = 0.16f) else cs.surfaceVariant.copy(alpha = 0.5f)
+                        val (range, vio) = cells[j]
+                        val sel = (j + 1) in selectedDays
+                        val dot = when {
+                            range == null -> cs.outlineVariant
+                            vio == "vio-covU" -> MagiAccent.red
+                            vio == "vio-covO" -> MagiAccent.orange
+                            else -> MagiAccent.green
+                        }
                         Box(
-                            Modifier.weight(1f).height(50.dp).background(bg, RoundedCornerShape(8.dp)),
+                            Modifier.weight(1f).height(54.dp)
+                                .background(if (sel) cs.primaryContainer else cs.surface, RoundedCornerShape(8.dp))
+                                .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outlineVariant, RoundedCornerShape(8.dp))
+                                .clickable { onToggle(j + 1) }
+                                .semantics {
+                                    contentDescription = "${j + 1}日を" + (if (sel) "選択解除" else "選択") +
+                                        (range?.let { "・必要人数${it.first}〜${it.second}人" } ?: "・未設定")
+                                },
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("${j + 1}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurface)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("${j + 1}", style = MaterialTheme.typography.bodyMedium,
+                                        color = if (sel) cs.onPrimaryContainer else cs.onSurface,
+                                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.primary, modifier = Modifier.size(12.dp))
+                                    else Box(Modifier.size(8.dp).background(dot, CircleShape))
+                                }
                                 Text(
                                     if (range != null) (if (range.first == range.second) "${range.first}人" else "${range.first}-${range.second}人") else "未設定",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (range != null) ensureReadable(bg, MagiAccent.green) else cs.onSurfaceVariant,
+                                    color = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
                                     maxLines = 1,
                                 )
                             }
                         }
                     }
                 }
-                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(50.dp)) }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(54.dp)) }
             }
         }
     }
 }
 
 /**
- * ws2 移植: 日別の必要人数（例外）。
+ * ws2 移植: 日別の必要人数（例外）一覧。
  * 通常はシフト既定の need1/need2 を使うが、特定日だけ必要数を変えたい場合に
  * needDay1/needDay2 の疎な上書きを編集する。モデル・エンジンは不変。
+ * [必要人数カレンダーへ編集導線を集約] 登録/変更は上の`NeedCalendarCard`（タップ選択→一括適用）へ
+ * 一本化。本カードは**全シフト横断で例外を一覧できる**（カレンダーは1シフトずつしか見えない弱点を
+ * 補う）確認・削除専用に簡略化（追加/編集ダイアログは廃止）。
  */
 @Composable
 fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
-    var dialog by remember { mutableStateOf<NeedDayEdit?>(null) }
     val overrides = vm.needDayOverrides()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("日別の必要人数（例外）", style = MaterialTheme.typography.titleMedium)
+            Text("日別の必要人数（例外）一覧", style = MaterialTheme.typography.titleMedium)
             Text(
-                "特定の日だけ必要人数を変えるときに追加します（通常はシフト既定）。",
+                "登録・変更は上の必要人数カレンダーから。ここは全シフト横断の一覧確認・削除用です。",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -166,25 +246,11 @@ fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
-                        EditRowButton(onClick = { dialog = NeedDayEdit(o.k, o.j, o.p1, o.p2) }, enabled = !ui.running)
-                        Spacer(Modifier.width(6.dp))
                         DeleteRowButton(onClick = { vm.removeNeedDay(o.k, o.j) }, enabled = !ui.running)
                     }
                 }
             }
-            AddRowButton("例外を追加", onClick = { dialog = NeedDayEdit(0, 0, "", "") }, enabled = ui.loaded && !ui.running)
         }
-    }
-    dialog?.let { d ->
-        NeedDayDialog(
-            init = d,
-            shifts = vm.shiftKigouList(),
-            maxDay = ui.days,
-            startDate = ui.startDate,
-            // [実機指摘「日付を複数設定できない」] カレンダーは複数選択トグル＝選んだ全日に同じ例外を一括登録。
-            onApply = { k, days, p1, p2 -> days.forEach { j -> vm.setNeedDay(k, j, p1, p2) }; dialog = null },
-            onClose = { dialog = null },
-        )
     }
 }
 
@@ -208,55 +274,6 @@ internal fun NumberStepper(label: String, value: String, onChange: (String) -> U
             modifier = Modifier.height(48.dp).semantics { contentDescription = "$label を増やす" },
         ) { Text("＋", style = MaterialTheme.typography.titleLarge) }
     }
-}
-
-private data class NeedDayEdit(val k: Int, val j: Int, val p1: String, val p2: String)
-
-@Composable
-private fun NeedDayDialog(
-    init: NeedDayEdit,
-    shifts: List<String>,
-    maxDay: Int,
-    startDate: String,
-    onApply: (Int, List<Int>, String, String) -> Unit,
-    onClose: () -> Unit,
-) {
-    var k by remember { mutableStateOf(init.k) }
-    // [カレンダー形式/スクショ指摘] 日はカレンダーから選択。[複数設定] タップでON/OFFトグル＝複数日へ一括登録。
-    var daysSel by remember { mutableStateOf(setOf(init.j + 1)) }
-    var p1 by remember { mutableStateOf(init.p1) }
-    var p2 by remember { mutableStateOf(init.p2) }
-    var open by remember { mutableStateOf(false) }
-    val ok = k in shifts.indices && daysSel.isNotEmpty() && (p1.isNotBlank() || p2.isNotBlank())
-    AlertDialog(
-        onDismissRequest = onClose,
-        confirmButton = {
-            DialogConfirmButton(if (daysSel.size > 1) "適用（${daysSel.size}日）" else "適用", enabled = ok,
-                onClick = { if (ok) onApply(k, daysSel.map { it - 1 }.sorted(), p1.trim(), p2.trim()) })
-        },
-        dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { DialogHeader("日別の必要人数", onClose) },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("シフト", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Box {
-                    OutlinedButton(onClick = { open = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(shifts.getOrNull(k) ?: "(選択)")
-                    }
-                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        shifts.forEachIndexed { idx, kg ->
-                            DropdownMenuItem(text = { Text(kg) }, onClick = { k = idx; open = false })
-                        }
-                    }
-                }
-                Text("日（タップで複数選択できます・${daysSel.size}日選択中）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                DayPickerGrid(startDate = startDate, maxDay = maxDay, selectedDays = daysSel,
-                    onToggle = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d })
-                NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
-                NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "既定")
-            }
-        },
-    )
 }
 
 /** [カレンダー形式] 月内の日を曜日整列グリッドからタップで選ぶ（片手一本指・キーボード不要）。
