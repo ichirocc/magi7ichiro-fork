@@ -1915,6 +1915,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         applyStructure(Ws1Ops.editShift(st, k, name.trim(), kigou.trim(), need1.trim(), need2.trim()))
     }
 
+    /** [必要人数カレンダー] シフト既定のneed1/need2だけをその場で編集する（name/kigouは不変）。
+     *  ws1EditShiftの狭い版＝NeedCalendarCardの「基本の必要人数」インライン編集用。 */
+    fun setShiftNeed(k: Int, need1: String, need2: String) {
+        val st = state ?: return
+        val sh = st.shifts.getOrNull(k) ?: return
+        applyStructure(Ws1Ops.editShift(st, k, sh.name, sh.kigou, need1.trim(), need2.trim()))
+    }
+
     fun ws1EditGroup(g: Int, name: String, kigou: String) {
         val st = state ?: return
         applyStructure(Ws1Ops.editGroup(st, g, name.trim(), kigou.trim()))
