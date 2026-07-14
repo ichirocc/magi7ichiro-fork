@@ -749,6 +749,31 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## SaChunk のビット化評価（c1窓・c41/c42/c41s/c42s の O(1) 化, 3.172.0）
+バックログ#6（自動パリティテスト無し）への根本対策として提示されたホストビルド可能なパリティ/ベンチ
+harness（`tools/native/host_parity_bench.cpp`）を先に検証してから適用（バックログ#6は依然未解消＝この
+harness はオンデマンド実行専用でCI配線はしていない。将来 CI 化する場合はバックログ#6の続きとする）。
+- **中身**: `SaChunk`（C++ SA差分評価の中核）に `S<=64 && T<=64` のとき有効化される bitmask
+  （`rowMask[S*K]`=職員×シフトの日ビット集合／`dayShiftMask[T*K]`=日×シフトの職員ビット集合／
+  `grpMask`/`sskMask`=群/スキル群→職員ビット集合、静的）を追加し、`contribC1Row`(c1窓制約)と
+  `contribDayGroups`(c41/c42/c41s/c42s)を popcount ベースの O(1)（走査でなくビット演算）へ置換。
+  `fullEvalParts`/`fullEvalCombined`（2層番兵のオラクル）は**意図的にスカラーのまま不変**（diff で該当
+  範囲に触れていないことを確認済み）。JNI 関数群は `#ifndef MAGI_HOST_TEST` で囲み、ホストharnessが
+  同じ .cpp を `#include` してJNI依存なしでビルドできるようにする追加のみ（Android/CMake ビルドは
+  `MAGI_HOST_TEST` 未定義のため無変更＝本番JNI面に一切影響なし）。
+- **検証（提示されたコードをそのまま信用せず本セッションで独立に再現）**: サンドボックスで
+  `g++ -O3 -std=c++17 -DMAGI_HOST_TEST -I app/src/main/cpp tools/native/host_parity_bench.cpp` を実際に
+  ビルド・実行し、5種の合成問題(最大40職員×62日×20シフト)×6シード×4万手(リバート含め約150万手)で
+  **mismatch=0**、`deltaApply` 単体スループットは環境ノイズ込みで **×1.12〜1.37**（-O3再現で×1.32、
+  提示値と整合）を独立に確認。あわせて①`buildGroupMasks`が群id最大値を`sgrp/ssk`だけでなく
+  `cons41/42/41s/42s`の参照群idからも算出しベクタを安全にサイズ確保している点（制約側の群idはKotlin
+  `Problem.kt`の`groupIdxOf/skillGroupIdxOf`が`mapNotNull`で負値を事前に除外済み＝`grpMask[(size_t)c.g]`
+  の負値キャストOOBは構造的に到達不能）②全セル変更が例外なく`deltaApply`経由（直接`a[]`書換え箇所なし
+  ＝bitmaskが盤面と乖離しない）③`1ULL<<64`のUB回避（`c.d1>=64`の別分岐）、をコードトレースで確認。
+  実データ(S=10,T=31)は`useBits`が常時真になる規模＝本番で実際に経路が使われる。
+- **対象外**: covU/covO・pref・c2・c3系・range/apt/fair/weekly はスカラーのまま（bitmask化は c1/c41系の
+  みが対象。他族は職員数ループが既に軽い、または L1偏差など popcount で表現しにくいため対象外）。
+
 ## ネイティブ照合トグル＋監査#7 SIGSEGV修正（3.171.0）
 ユーザー質問「C++移行の実機確認が済んだので、Kotlin パリティ照合の役目終了ですか?」への回答と、
 別セッションの未レビュー領域監査（3.168.0系）で見つかった項目の対応。
@@ -1195,8 +1220,9 @@ FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止ま
    ロード不可（`NativeBridge.available=false`）→ Kotlin のみ検証。CI(Release Build/Android SDK)は CMake で `.so` を
    ビルドするので**C++コンパイルエラーは捕捉**するが**意味的乖離（重み取り違え等）は捕捉しない**。`Evaluator.kt`（や
    `MirrorCore`/`DeltaEvaluator`）を変えて `magi_native.cpp` を変え忘れると実機で番兵発火→**ネイティブ黙殺（速度退行・誤出力なし）**。
-   3.171.0 で緩和策の一つ（ユーザーが明示的に照合を切れる「照合トグル」＋既定ONの維持）を実装したが、根本対策
-   （ホストビルド可能なパリティfixtureをCIへ追加）はまだ未着手のまま残る。
+   3.171.0 で緩和策の一つ（ユーザーが明示的に照合を切れる「照合トグル」＋既定ONの維持）を実装。3.172.0 で
+   `tools/native/host_parity_bench.cpp`（ホストビルド可能なパリティ+ベンチharness）を追加し**オンデマンド
+   実行**では検証可能になったが、**CI配線（自動化）はまだ未着手のまま残る**（バックログとして継続）。
 7. ~~**[ネイティブ・堅牢性] 群index無検証のOOB（潜在）**（3.168.0系精読で判明）。探索オペレータ約13箇所が
    `p.bucket[p.sgrp[i]]`／`grpCnt[sgrp[i]*K+k]` を sgrp範囲未検証で使用しており、不正な groupIdx が渡ると
    C++側はUB（bucket=範囲外読み・grpCnt=範囲外**書込=ヒープ破壊**）でSIGSEGVし得た（Kotlin側は例外→
