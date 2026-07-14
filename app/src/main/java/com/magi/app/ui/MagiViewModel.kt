@@ -489,6 +489,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: ネイティブ加速 → ${if (on) "ON" else "OFF"}")
     }
 
+    /** [照合トグル] Kotlinパリティ照合の ON/OFF。OFF=純ネイティブ（Kotlin照合を行わず C++結果を信頼＝
+     *  検証/ベンチ用・誤結果の可能性）。C++内部の自己整合(status)番兵は独立に常時有効。 */
+    fun setNativeParity(on: Boolean) {
+        com.magi.app.v6.NativeGate.parityCheckEnabled = on
+        _ui.update { it.copy(nativeParity = on) }
+        logOp(if (on) "I" else "W", "設定変更: Kotlinパリティ照合 → ${if (on) "ON" else "OFF（純ネイティブ・誤結果の可能性）"}")
+    }
+
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }

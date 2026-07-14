@@ -419,11 +419,14 @@ object V6NativeOptimizer {
                     itersTotal += ret[4]
                     if (ret[3] == 1L && ret[2] < globalScore) {
                         // [2層目の番兵] best 更新を Kotlin Evaluator でフル照合（Long== 許容誤差なし）。
+                        //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                         NativeBridge.nativeAlnsRead(alns, 0, bestFlat)
                         val bestSol = NativeEval.unflatten(bestFlat, p.S, p.T)
-                        val kScore = fullEvaluator.fullEval(bestSol)
-                        if (kScore != ret[2]) { syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
-                        globalBest = bestSol; globalScore = kScore
+                        if (NativeGate.parityCheckEnabled) {
+                            val kScore = fullEvaluator.fullEval(bestSol)
+                            if (kScore != ret[2]) { syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
+                        }
+                        globalBest = bestSol; globalScore = ret[2]
                         lastImproveIter = itersTotal
                         reportStale = true
                     }
@@ -1143,15 +1146,18 @@ object V6NativeOptimizer {
                     iters += ret[4]
                     if (ret[3] == 1L && ret[2] < verifiedBest) {
                         // [2層目番兵] best 更新チャンクの盤面を Kotlin フル評価で照合（Long== 許容誤差なし）。
+                        //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                         NativeBridge.nativePolishRead(h, 0, buf)
                         val sol = NativeEval.unflatten(buf, p.S, p.T)
-                        val k = fullEvaluator.fullEval(sol)
-                        if (k != ret[2]) {
-                            NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
-                            return NativePolishRun(false, best, iters, false)
+                        if (NativeGate.parityCheckEnabled) {
+                            val k = fullEvaluator.fullEval(sol)
+                            if (k != ret[2]) {
+                                NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
+                                return NativePolishRun(false, best, iters, false)
+                            }
                         }
                         best = sol
-                        verifiedBest = k
+                        verifiedBest = ret[2]
                         lastImproveMs = nowLoop
                     }
                     yield()

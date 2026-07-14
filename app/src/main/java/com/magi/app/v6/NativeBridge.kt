@@ -101,6 +101,11 @@ object NativeBridge {
 object NativeGate {
     /** ユーザーの設定トグル（設定タブ「ネイティブ加速」）。番兵ゲート enabled とは独立。 */
     @Volatile var userEnabled: Boolean = true
+
+    /** [照合トグル] Kotlin パリティ照合の実施可否（設定タブ「Kotlin照合」・既定ON・セッション内のみ）。
+     *  OFF=純ネイティブ（C++結果を Kotlin と照合せず信頼＝検証/ベンチ用・誤結果の可能性）。
+     *  番兵ゲート enabled / C++内部の自己整合(status) とは独立。OFF でも status 番兵は生きるため暴走はしない。 */
+    @Volatile var parityCheckEnabled: Boolean = true
     @Volatile var enabled: Boolean = true
         private set
     @Volatile var reason: String? = null

@@ -44,6 +44,7 @@ data class UiState(
     val workers: Int = Runtime.getRuntime().availableProcessors().coerceIn(1, 8),
     val budgetSec: Int = 300,
     val nativeAccel: Boolean = true,           // [Stage4] C++ネイティブ加速（SAチャンク）のユーザートグル
+    val nativeParity: Boolean = true,          // [照合トグル] Kotlinパリティ照合。OFF=純ネイティブ(検証/ベンチ用・誤結果の可能性)
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),

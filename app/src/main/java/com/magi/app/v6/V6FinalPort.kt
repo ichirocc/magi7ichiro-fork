@@ -395,21 +395,25 @@ object V6FinalPort {
         // [ネイティブ加速 Stage2/3] C++フル評価器と Kotlin Evaluator を採用盤面で照合し、結果を診断ログへ。
         //   照合は read-only（採用結果に影響なし）。SA チャンク(Stage3)の使用可否・番兵発火もここで可視化。
         val nativeLog = run {
-            val parity = runCatching { NativeEval.parityCheck(baseProblem, finalSched) }.getOrNull()
+            // [照合トグル] OFF=純ネイティブ（起動時パリティも含め Kotlin 照合を一切行わない）。native未ロード時は従来どおり。
+            val parityOff = NativeBridge.available && NativeGate.userEnabled && !NativeGate.parityCheckEnabled
+            val parity = if (parityOff) null else runCatching { NativeEval.parityCheck(baseProblem, finalSched) }.getOrNull()
             // フル評価パリティ不一致もゲートを閉じる（以後の実行で SA チャンクを使わない＝退化）。
             if (parity?.match == false) NativeGate.disable("フル評価パリティ不一致")
             val gate = if (NativeGate.enabled) "" else "／番兵発火→Kotlinへ退化: ${NativeGate.reason}"
             // [表示バグ修正] 有効/無効は usable（番兵×ユーザートグル×ロード）で判定する。旧: enabled（番兵のみ）
             //   参照のため、設定トグル OFF の実行でも「有効」と表示され A/B ログの判読を妨げていた。
             val searchState = when {
+                NativeGate.usable && parityOff -> "有効(照合OFF・純ネイティブ)"
                 NativeGate.usable -> "有効(SA＋LAHC＋ALNS＋研磨チャンク)"
                 !NativeGate.userEnabled -> "無効(設定トグルOFF)"
                 else -> "無効"
             }
             MirrorLog(
-                level = if (parity?.match == false || !NativeGate.enabled) "W" else "I",
+                level = if (parityOff || parity?.match == false || !NativeGate.enabled) "W" else "I",
                 tag = "NativeBridge",
                 message = when {
+                    parityOff -> "ネイティブ加速: Kotlin照合OFF＝純ネイティブ（検証/ベンチ用・誤結果の可能性）・ネイティブ探索=$searchState$gate"
                     parity == null -> "ネイティブ加速: 未ロード（Kotlin実行・機能差なし）"
                     parity.match -> "ネイティブ加速: C++評価器パリティ一致 (hard=${parity.kotlinHard} soft=${parity.kotlinSoft} / C++ ${parity.nativeUs}µs vs Kotlin ${parity.kotlinUs}µs)・ネイティブ探索=$searchState$gate"
                     else -> "ネイティブ加速: パリティ不一致のためネイティブ経路は使いません (C++ hard=${parity.nativeHard}/soft=${parity.nativeSoft} ≠ Kotlin hard=${parity.kotlinHard}/soft=${parity.kotlinSoft})$gate"

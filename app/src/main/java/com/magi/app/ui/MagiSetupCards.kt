@@ -218,6 +218,21 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                 }
                 Switch(checked = ui.nativeAccel, onCheckedChange = { vm.setNativeAccel(it) }, enabled = !ui.running)
             }
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("Kotlin照合", color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+                    Text(
+                        if (ui.nativeParity)
+                            "高速版の結果を毎回Kotlin実装で検証。不一致なら自動で従来方式に戻ります（推奨・既定）。"
+                        else
+                            "⚠ 検証せず高速版の結果をそのまま採用します（速度重視の検証/ベンチ用）。誤った勤務表が表示される可能性があります。",
+                        fontSize = 12.sp,
+                        color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                    )
+                }
+                Switch(checked = ui.nativeParity, onCheckedChange = { vm.setNativeParity(it) }, enabled = !ui.running && ui.nativeAccel)
+            }
             Spacer(Modifier.height(6.dp))
             Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

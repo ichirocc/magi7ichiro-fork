@@ -1982,6 +1982,14 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
         (int)needs.size() != 2 * K * T || (int)ranges.size() != 3 * S * K) { delete p; return 0; }
 
     p->sgrp.assign(staff.begin(), staff.begin() + S);
+    // [監査#7 安全retreat] 探索オペレータ約13箇所が p.bucket[p.sgrp[i]] / grpCnt[sgrp[i]*K+k] を
+    // sgrp範囲未検証で使う。Kotlin側は不正indexで例外→runCatchingにより安全に Kotlin パスへ退化するが、
+    // C++ は UB（bucket=範囲外読み・grpCnt=範囲外書込=ヒープ破壊）でSIGSEGVがrunCatchingに捕まらず
+    // プロセスクラッシュし得る。正規のエディタ/取込では groupIdx は常に [0,G) のはずだが、construction
+    // 時点で一括検証し、外れていればハンドル生成自体を拒否（0=native不可）してKotlinへ安全退化させる。
+    for (int i = 0; i < S; i++) {
+        if (p->sgrp[i] < 0 || p->sgrp[i] >= G) { delete p; return 0; }
+    }
     p->ssk.assign(staff.begin() + S, staff.end());
     p->canDo.resize((size_t)S * K);
     for (int x = 0; x < S * K; x++) p->canDo[x] = canDo[x] != 0 ? 1 : 0;
