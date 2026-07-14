@@ -749,6 +749,27 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## apt(適切回数)をRSI探索focusに追加（3.169.0, 「公平化のズレ」実機report対応）
+ユーザーが実機TallyCardスクショ（多数の▼/▲）を提示し「公平化のズレの研磨などが出来ていない」と報告。
+実際のstate.jsonで検証したところ、staffRange(低/高, 重み90/45)の乖離は合計わずか3だったのに対し、
+**apt(適切回数, 重み1)のL1偏差合計は37**（大島愛「休」実績15 vs 目標10 等）で規模が逆転しており、
+スクショの▼/▲は主にapt違反と判明。コード調査で根本原因を特定: `maxViolatedFamily`（RSI探索のfocus
+選択）の`order`リストに**aptが一度も入っていなかった**ため、探索中は常にlow/high/c1等の他族に埋もれ、
+post-processing（`applyDayAssignmentPolish`のハンガリアン割当）頼みのまま広く未研磨で残っていた。
+- **採用した修正**: `order`にaptを追加（groupViol/covU/pref/c3nのHARD優先ルールは不変＝hard>0時の
+  挙動は無変化）。`rsiGenerateHypothesis`の`"low","high","c2"`分岐に`"apt"`を追加し**既存の
+  destroyRepairStaff経路へ合流**（`staffCountPenaltyAt`のmarginal costには既にapt(重み1)が織込み済み
+  ＝新規オペレータ不要、最小差分）。ラウンド単位 better() keep-best でゲート済＝退化不能。
+- **検証方針の訂正**: 当初ユーザーに「tools/nsp_bench.pyで実測A/B検証してから進める」と伝えたが、
+  `nsp_bench.py`は"focus"/"RSI"/"maxViolatedFamily"の概念を一切持たない（grep 0件）ため、**この種の
+  focus選択変更はそもそも計測不能**と判明（3.74.0/3.95.0の先例と同じ制約＝「bench は RSI focus/
+  portfolio を模擬できない」）。よって同じ2件の先例と同方針＝**実測でなく原理（hard>0時は完全no-op・
+  既存の実証済みdestroyRepairStaff経路への合流のみ・keep-best不変）で採否**。
+  `V6NativeOptimizer.maxViolatedFamily`/`rsiGenerateHypothesis`を`private`→`internal`化しテスト可能に。
+  ユニットテスト3件（apt優位選択・HARD優先の回帰・全0時"total"フォールバックの回帰）＋
+  focus="apt"のsmokeテスト（例外なく同一次元の盤面を返す）を追加。fair/weekly はセル位置を持たない
+  集約指標のため対象外のまま（現状維持）。
+
 ## 希望シフトカレンダーのインタラクティブ化（3.168.0）
 ユーザーが第3のモックアップ（希望シフト登録画面）を提示。3.167.0の必要人数カレンダーと同じ
 方針転換をWishCardにも適用（AskUserQuestionのタイムアウトにより明示確認は取れなかったが、
