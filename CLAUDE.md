@@ -1377,6 +1377,43 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
 - 検証: サンドボックスは Kotlin コンパイル不可＝ブレース均衡・重複定義0・呼び出し側シグネチャ一致・既存 VM API のみ使用を
   静的確認。最終判定は CI（Release Build＝assembleRelease）。
 
+## 必要人数設定を「4つの情報」に集約（3.186.0）
+ユーザー指示「情報を4つに絞ります」。必要人数画面を勤務作成者が知りたい**4点だけ**に集約（`NeedCalendarCard`＝`NeedDayEditor.kt`）:
+①どのシフトか（見出し行のドロップダウン）②各日の最低–最高（カレンダー）③どの日を選んでいるか（枠＋✓）
+④選択日に何人を適用するか（下部のインライン一括パネル）。**表示・導線のみ・スコアリング不変**（needDay モデル/covU エンジンは不変）。
+- **撤去**: 長い説明文／独立3カード（3.180.0 の「シフト」「基本設定」「複数日選択」）→ 見出し1行に統合（`[休 ▼] 標準 N人`。
+  標準タップで `BaseNeedSheet`＝基本 need1/need2 編集を温存）／「設定済N日・未設定M日」凡例／**充足色ドット(covU/covO 緑橙赤)＋色凡例**
+  （3.167.0 で入れた実充足の色分けを本画面=**設定**からは撤去。充足は勤務表グリッド/集計で見る）。
+- **カレンダー表示（色でなく形と文字で区別）**: 未設定=「—」(淡色) / 標準どおり=通常文字 `1–2` / **個別設定(日別例外)=太字＋小さな印**
+  （`vm.needDayOverrides()` の当該シフト日を太字＋brand小点）/ 選択中=枠＋✓。土日は文字色のみ（従来どおり）。
+- **④インライン一括パネル**（`NeedApplyPanel`, 1日以上選択時のみカレンダー直下に表示）: モーダルで隠さない＝カレンダーを見ながら
+  追加選択・適用できる（3.180.0 の `NeedApplySheet` モーダル＋`MultiSelectOpener` カードを置換）。`N日選択中`＋日付（**多いと
+  「6/3、6/8、6/17、ほか2日」省略**）＋最低/上限ステッパー＋`キャンセル`｜`N日に適用`＋従属の`選択した日を未設定に戻す`。
+  **入力エラー(最低>最高)=ステッパー赤枠＋「最低は最高以下に」で適用不可**（spec の「赤枠」実装）。
+- 判断: 標準の編集入口（`標準 N人` タップ）と `未設定に戻す`（未設定状態への唯一の到達手段・3.180.0 の明示機能）は**温存**
+  （spec のモック非掲載だが機能保全）。`NeedApplySheet`/`LegendDot` は本画面専用で未使用化→削除。共有部品（`SelectorField`/
+  `MultiSelectOpener`/`CountPill`）は `WishCard` が使用中のため残置。希望シフト画面(`WishCard`)は本指示のスコープ外＝現状維持。
+  **[3.187.0で訂正]** 「希望シフト画面はスコープ外」はユーザーが直後に同画面のスクショを共有し「同じ4情報の原則を適用してほしい」
+  と明示したため撤回。`MultiSelectOpener` も両画面がインラインパネル化した結果、呼出0の死蔵コードとなり 3.187.0 で削除済み。
+- 検証: サンドボックスは Kotlin コンパイル不可＝ブレース/丸括弧均衡0・削除シンボル参照0・呼び出し側シグネチャ一致を静的確認。
+  最終判定は CI（Release Build＝assembleRelease）。
+
+## 希望シフト登録も「4つの情報」に集約（3.187.0）
+ユーザーが希望シフト登録画面のスクショを共有し、AskUserQuestion で確認したところ「必要人数設定(3.186.0)と同じ4情報の
+原則を適用してほしい」と回答。`WishCard`（`WishEditor.kt`）へ同一方針を適用。**表示・導線のみ・スコアリング不変**
+（wishes モデル/pref エンジンは不変）。
+- **4点への写像**: ①どの職員か（見出し行のドロップダウン）②各日の登録済み希望（カレンダーのシフト表示色チップ）
+  ③どの日を選んでいるか（枠＋✓）④選択日にどのシフトを適用するか（下部のインライン一括パネル`WishApplyPanel`、モーダルでない）。
+- **撤去**: 「設定日数N日・シフト別内訳」の常時表示テキスト／「希望シフトは1日につき1つのみ登録できます」等の説明文／
+  `WishApplySheet`（モーダルボトムシート）を `NeedApplyPanel` と同型のインラインパネルへ置換（1日以上選択時のみカレンダー直下に
+  表示・キャンセル｜N日に適用・従属の「選択した日を未設定に戻す」・日付は多いと「6/3、6/8、6/17、ほか2日」と省略）。
+- **判断（spec 非掲載だが機能保全）**: 「全職員を見る」（確認・削除専用の一覧、カレンダーが1職員ずつしか見えない弱点を補う）は
+  必要人数設定の「標準N人タップ」と同様、常時は表示しないが到達可能な副次機能として温存。ボタンから小さな文字リンクへ格下げし
+  常時表示の面積を縮小。担当外シフトの⚠警告文は安全情報のため維持。
+- **デッドコード除去**: `MultiSelectOpener`（`NeedDayEditor.kt`）は両画面のモーダル→インラインパネル化で呼出0になったため削除。
+- 検証: サンドボックスは Kotlin コンパイル不可＝ブレース/丸括弧均衡0・削除シンボル参照0・呼び出し側シグネチャ一致を静的確認。
+  最終判定は CI（Release Build＝assembleRelease）。
+
 ## Android 16並行/並列監査＋16KBページ対応（3.181.0）
 ユーザー提示の「Android 16(API36)＋Kotlin 2 世代の並行・並列設計指針」に照らし全コードを監査。**唯一の実バグ＝
 16KBメモリページ非対応**を修正し、他の指針は既に充足 or 盲目適用が有害と判定。
@@ -1401,6 +1438,60 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
   CPU計算の本ジョブには不適合＝移行不要。
 - 検証: サンドボックスは arm64 クロスコンパイル不可＝flag は lld 標準（NDK26 の lld 対応）で低リスク、最終判定は
   CI（Release Build＝CMake/NDK が .so をリンク）。スコアリング/エンジン不変（ビルド設定のみ）。
+
+## 下流→上流ディープリンク「設定で直す」（3.182.0, 3.180.0 タスク2の完了）
+3.180.0 で「粗い経路は成立・精密ディープリンクは未実装＝バックログ」とした項目を、grilling で範囲確定（対象=pref/covU/covO
+のみ／入口=要確認一覧／スクロール=事前選択のみ）して実装。**表示・導線のみ・スコアリング不変**（読取専用の違反マップから
+編集画面の職員/シフトを事前選択するだけ）。
+- **ConfirmItem 拡張**: `wishStaff`/`needShift`（既定 null）を追加。`confirmItems` で **pref**（violationCells の族に "pref" 含む）→
+  `wishStaff=i`、**covU/covO**（needViolations）→`needShift=k`。他族（c1/c3/群/回数）は null＝導線を出さない。
+- **ConfirmRow**: 末尾に「設定で直す」TextButton（行本体タップの勤務表/直し方導線とは別アクション）。`when` はローカル val
+  （ws/ns）でラムダ内スマートキャストを安全化。
+- **配線**（MagiApp）: `deepLinkWishStaff`/`deepLinkNeedShift`（rememberSaveable Int・-1=無し）を新設。ConfirmListCard の
+  `onFixWish`/`onFixNeed` が該当値をセット＋`editScope=0`＋`tab=2`。`WishCard(initialStaff, onInitialConsumed)`/
+  `NeedCalendarCard(initialShift, onInitialConsumed)` に事前選択パラメータを追加し、`LaunchedEffect(initial)` で内部 `i`/`k` を
+  該当職員/シフトへ設定して消費（-1 へ戻す）。自動スクロールは無し（ユーザー選択どおり）。
+- 検証: ブレース均衡・呼び出し側シグネチャ一致（新パラメータは全て default 付き＝既存呼出非破壊）・重複定義0を静的確認、
+  最終判定は CI（Release Build）。
+
+## HARD残でもSOFTをRSI focusできるようにする（3.183.0, 実データ検証で根本特定）
+ユーザー報告「再最適化しても人員不足のまま／RSIでaptを最適化していない／回数制約は大丈夫か」を、**実機state
+（10職員/31日/2026-07, /tmp/us.json）を Python で忠実検証**して根本特定。
+- **covU=2 の正体（実データ確定）**: 7/11 Cｵ・7/17 B4。日単位ピジョンホール（Σneed=6 < 10人）は成立せず＝
+  日単位では余裕あり。真因は**希望固定＋禁止連続で可動候補が実質いない**: 7/17 B4 は全必要シフトがちょうど1人
+  （余剰0）＋空きは有(佐藤)/休(古泉・金沢)が全員**希望固定**→動かすと pref(9000)>covU(8000)で悪化＝最適化器は
+  埋めないのが正しい。7/11 Cｵ は古泉が休だが7/10=Dﾃで Cｵ にすると「Dﾃ-Cｵ」禁止連続。**＝再最適化では埋まらない
+  ／診断「充足可能」は過度に楽観的**（`diagnoseCoverage` は capacity≥need だけで判定）。
+- **apt/SOFT飢餓の根本**: `structuralHardFloor`(=forcedCovU)は**シフト単位の担当可能数<need しか見ない**ため、この
+  covU=2（担当可能8≥need1）に対し **0** を返す→ covU が RSI の `avoid`(L738 `covU<=covUFloor`)に入らない→
+  `maxViolatedFamily` が毎R "covU"(HARD優先)を返し続け SOFT第2ループ(apt等)に到達しない→ HF63が~3R後に検知しても
+  **N4早期終了(L787)でRSIごと停止**。**apt固有でなく、埋まらないHARDが全SOFT/回数制約(low/high/c2・c41系・covO・
+  weekly・fair・c1・c3系)を道連れに飢餓させていた**。
+- **修正（ユーザー指示）**: N4早期終了を「停滞HARDを deprioritize してもなお狙える族が残るなら早期終了せず
+  SOFTへピボット継続」へ変更（L787）。`maxViolatedFamily(bestReport, avoid)` が実族(件数>0)を返す間は break せず、
+  focus は L741 の focusAvoid で既に SOFT へピボット済のため残ラウンドを SOFT 最適化に使う。**keep-best(better()は
+  hard非悪化を要求)がHARD悪化を防ぐ＝HARD残のままSOFT最適化しても安全**。stuck な SOFT も HF63 が順次
+  dynamicAvoid へ入れて focusable から外すため、pivot 枯渇(=="total"/件数0)でいずれ自己終了。focus選択/終了条件
+  のみ＝スコアリング不変。nsp_bench は RSI focus を模擬不能のため原理採否(3.74.0/3.169.0 と同方針)。
+- **(3.184.0, 実機ログで判明した第2の穴=HF63のSOFT誤deprioritize)**: 実機ログ（RSI_PLUS 300s）で round1-3 focus=covU
+  不変→round4 で **HF63 が c1,c3n,c3m,c3mn,c42,covU,covO,low,high の9族を deprioritize**→focus=weekly→早期終了、を確認。
+  `Hf63Infeasibility.update` は breakdown 値が不減なら stall 計上するため、**covU に focus が張り付いて一度も focus
+  されなかった SOFT 族(c1=87/low=10/high=4 等=本来直せる)まで infeasible 誤判定**していた。3.183.0 の pivot だけでは
+  残るのが weekly/fair(destroyRepairStaff が cost 未対応で効かない)だけになり不十分。**修正: focus の avoid を真に
+  構造的な HARD(covU床/c3n/pref/groupViol)のみに限定**（`avoid = dynamicAvoid.filterTo{ it in MirrorKeys.hard }`）。
+  SOFT は常に focusable に保ち、HF63 が covU 等 HARD を flag した時点で focus が c1/low/high 等の直せる SOFT へ自動
+  ピボットする。SOFT の同一 focus 空転は cooldownFocus(1R休止)＋keep-best＋有限ラウンドで自己収束。N4 武装判定は
+  従来どおり dynamicAvoid(全族)、pivot 可否は avoid(HARD) で判定。focus選択のみ＝スコアリング不変。
+- **(3.185.0, apt目標の「+/-で数字が変わらない」実機バグ修正)**: ユーザーが「通常画面でも +/- で数字が変わらない」と
+  確認＝コードバグ確定。`ws1SetGroupApt`→`applyStructure(MagiState)` は `_ui.update{copy(structureEdited=true)}` を
+  呼ぶが、**structureEdited が既 true だと copy が同値で StateFlow が emit せず**、かつ **currentSchedule=null 時は
+  refreshCheck も早期return**するため、`AptCard`（`vm.ws1()`=state 直読み、ui 変化でしか再構成しない）が再構成されず、
+  state は更新されるのに表示が変わらなかった。**修正: UiState に `editRev:Int` を追加し applyStructure が毎回
+  `editRev+1` で必ず distinct な UiState を emit＝確実に再構成**。両 applyStructure(MagiState/Ws1Result)に適用。
+  additive フィールド(既定0)・スコアリング不変・テスト非依存（golden/Session は state/report を検証）。
+- **未（別課題）**: ①`diagnoseCoverage`の「充足可能」honest化（希望固定/終端余剰を検証）③**[実機ログ]ネイティブ探索が実データで無効化**（`NativeBridge:
+  SAチャンク整合性NG status=1`＝評価器パリティは一致(hard=3 soft=1628)だが C++ SaChunk の自己整合が実データで失敗→
+  番兵発火で Kotlin 退化＝正しいが遅い。合成 harness では出ない実データ固有の乖離。要・当該 state での SaChunk 差分追跡）。
 
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。

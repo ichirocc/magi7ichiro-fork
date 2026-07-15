@@ -1767,7 +1767,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyStructure(ns: MagiState) {
         pushUndo()
         state = ns
-        _ui.update { it.copy(structureEdited = true) }
+        // [再構成保証] editRev を必ず増やして distinct な UiState を emit（structureEdited 既true時の非emit＋
+        //   currentSchedule=null 時の refreshCheck 早期return で編集画面が再構成されない「+/-で数字が変わらない」修正）。
+        _ui.update { it.copy(structureEdited = true, editRev = it.editRev + 1) }
         refreshCheck()
         autoSave()
     }
@@ -1900,7 +1902,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 事前クローンで保護されるが、currentSchedule を以降 in-place 編集する経路があるため、
         // 全 schedule 取り込み口を copy2D() で統一して別名共有を断つ。
         currentSchedule = r.schedule.copy2D()
-        _ui.update { it.copy(structureEdited = true) }
+        _ui.update { it.copy(structureEdited = true, editRev = it.editRev + 1) }
         refreshCheck()
         autoSave()
     }

@@ -731,7 +731,14 @@ object V6NativeOptimizer {
             //   HF63 の動的検知のみでゲートしないと、構造的covU>0 のデータでは静的除外が round 0 から avoid を
             //   非空にし、「旧N4の厳密な部分集合」保証(650-654行)を破って2停滞ラウンドで RSI が即終了してしまう。
             val dynamicAvoid = hf63.infeasibleBreakdownKeys()
-            val avoid = dynamicAvoid.toMutableSet()
+            // [実機ログ起因/SOFT誤deprioritize] HF63 は breakdown 値が減らなければ族を stall 計上するため、
+            //   「covU に focus が張り付いて一度も focus されず不減の SOFT 族」(実機: c1=87/low/high 等)まで
+            //   infeasible 判定してしまう。これを focus の avoid に入れると本来直せる SOFT が永久に focus されない
+            //   （pivot しても weekly/fair だけ残り destroyRepairStaff が cost 未対応で効かない）。focus の
+            //   deprioritize は真に構造的な HARD（covU 床/c3n/pref/groupViol）のみに限定し、SOFT は常に focusable に
+            //   保つ（SOFT の同一 focus 空転は cooldownFocus の1R休止＋keep-best＋有限ラウンドで自己収束）。
+            //   N4 早期終了の武装判定（下記）は従来どおり dynamicAvoid（全族）で行い、pivot 可否は avoid(HARD) で判定する。
+            val avoid = dynamicAvoid.filterTo(mutableSetOf()) { it in MirrorKeys.hard }
             // [静的covU床] covU が構造的下限（covUFloor）に達している間は解けないので focus から即除外する。
             //   合法配置では covU >= covUFloor（下限）。担当外配置(groupViol)が混在すると covU が床を下回り得るが、
             //   その間 covU を focus しても無意味（groupViol が hard-first で先に選ばれる）なので `<=` で除外が正しい。
@@ -784,9 +791,19 @@ object V6NativeOptimizer {
             //   ※後段(hf80)は固定予算のため厳密な「予算移譲」ではなく、無改善ラウンドの空転停止(電池/熱/時間節約)。
             // [12h見直し] 発火は動的検知(dynamicAvoid=HF63)のみでゲートする。静的covU床(合流後のavoid)を使うと
             //   構造的covU>0 のデータで round 0 から常時武装し、旧N4保証(上記)を破る。
+            // [ユーザー指示/HARD残でもSOFT focus] 停滞した HARD(covU等)を deprioritize してもなお狙える族
+            //   (low/high/c2・c41/c41s/c42/c42s・covO・weekly・fair・c1・c3系・apt)が残るなら、早期終了せず
+            //   残ラウンドを SOFT 最適化に振り向ける（focus は L741 で focusAvoid により既に SOFT へピボット済）。
+            //   keep-best(better() は hard 非悪化を要求)が HARD 悪化を防ぐ＝HARD残のまま SOFT を最適化しても安全。
+            //   本当に狙える族が尽きた(pivot=="total" or 件数0)ときだけ従来どおり空転停止する。stuck な SOFT も
+            //   HF63 が順次 dynamicAvoid へ入れて focusable から外すため、いずれ pivot 枯渇→終了で自己収束する。
             if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
-                logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: focus枯渇(deprioritize=${dynamicAvoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
-                break
+                val pivot = maxViolatedFamily(bestReport, avoid)   // avoid=dynamicAvoid＋静的covU床
+                if (pivot == "total" || (bestReport.breakdown[pivot] ?: 0) == 0) {
+                    logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: 狙える族が枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
+                    break
+                }
+                logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "HARD残(${dynamicAvoid.joinToString(",")})を回避しSOFTへピボット継続 → 次focus候補=$pivot（HARD非悪化はkeep-bestが担保）"))
             }
         }
         return V6OptimizerResult(best, bestReport.copy(logs = logs + bestReport.logs), V6Algorithm.RSI, logs, iters, nowMs() - started)
