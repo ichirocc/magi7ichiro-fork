@@ -749,6 +749,27 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## SaChunk の c3 窓マッチもビット化（3.174.0, 3.172.0の続き）
+ユーザー指示「ビット演算できる箇所を見直す…ピックアップする」→ ピックアップした最有力候補（`contribC3RowFam`
+の窓マッチ分岐）を「C++化対応する」指示で実装。3.172.0（c1窓・c41/c42系）の続きで、**deltaApply の
+ホットパスに残っていた唯一のスカラー窓走査**を popcount 化した。
+- **対象**: `SaChunk::contribC3RowFam`（c3/c3n/c3m/c3mn の4族、`deltaApply` が毎手 before/after で呼ぶ）。
+  既存 `rowMask[i*K+k]`（職員×シフト→日ビット集合、deltaApply が維持済＝**新規マスク不要**）を消費して:
+  - **forbidden（c3n/c3mn 完全一致 #fire）**: `full = rowMask[seq[0]]; for l: full &= (rowMask[seq[l]] >> l)`
+    で「窓開始 j に完全一致」の日集合を得て `popcount(full & 有効範囲)`。c1（窓ごと popcount の O(T)）より
+    さらに畳めて **O(D) の AND＋popcount 1回**。
+  - **非forbidden 多シフト（c3/c3m の z<D-1）**: `popcount(rowMask[first] & range) − popcount(full & range)`
+    （先頭一致数−完全一致数＝部分不一致数）。
+  - **非forbidden 単一シフト連（rowDeficit）は run長ベース＝スカラー据え置き**（3.172.0 の「popcount化困難」
+    方針を踏襲）。マスク索引の安全のため `seq` が全て [0,K) のときのみ bit path（範囲外は理論上到達不能だが
+    scalar へ退避＝audit#7 の「C++側でOOBを作らない」原則）。`D>T`・`!useBits`（S,T>64）も scalar。
+- **オラクル不変**: `fullEvalParts`/`c3check`（2層番兵の基準・別関数）はスカラーのまま＝番兵の照合基準は不変。
+- **検証（提示コードを信用せず独立再現）**: `tools/native/host_parity_bench.cpp` に多シフト D=3(非forbidden)/
+  D=4(forbidden) 規則を追加し、サンドボックスで `g++ -O3 -DMAGI_HOST_TEST` ビルド・実行。5種の合成問題×6
+  シード×約150万手（scalar/bit 両path）で **mismatch=0**、`deltaApply` スループットは **×1.94**（3.172.0 の
+  c1+c41 のみ時 ×1.32 から向上＝c3はルール数最多のため窓マッチbit化の寄与が大きい）。実データ(S=10,T=31)は
+  `useBits` 常時真＝本番で経路使用。
+
 ## CoverageDiagnosis の need2 単独定義セル見落とし修正（3.173.0）
 ユーザー指示「あなたが正しく論理的に不具合をつけてください」を受けた独立監査で発見・修正。
 `V6PortAnalyzer.diagnoseCoverage`（人員不足診断、`CoverageDiagnosisCard`のデータ源）が
