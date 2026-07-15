@@ -12,7 +12,8 @@ VBA/Web 版から移植した「MAGI V6」最適化エンジン（SA + ALNS + Ta
 PathRelinking + ChainSwap + 適応的オペレータ重み + RSI++ 等）を内蔵。
 
 - パッケージ/applicationId: `com.magi.app`（namespace も同じ）
-- minSdk=36 (Android 16+), compileSdk/targetSdk=37 (Android 17), java.time ネイティブ可, NDK/desugaring 不使用
+- minSdk=36 (Android 16+), compileSdk/targetSdk=36, java.time ネイティブ可, NDK/desugaring 不使用
+  （※Android 17 会話バブル対応済。API 37 の platform SDK は未公開のため compileSdk は 36 のまま＝下記セクション参照）
 - リポジトリ: `ichirocc/magi7ichiro`（public）
 - UI 制約: **片手一本指**（ドラッグ不可）、**最小デザイン**（冗長な安全表示はエンジン側に持たせ、操作画面は効率優先）
 - 全作業・UI 文言は日本語
@@ -1221,10 +1222,13 @@ FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止ま
 - **配線**（`OptimizationWorker`）: FGS 進捗通知（`NID_PROGRESS`）は FGS 要件のため**別に維持**し、バブルは会話
   チャンネルの別通知として扱う。開始時に channel/shortcut を用意し開始バブルを提示、進捗コールバックで ~1.5秒間引き
   ＋`onlyAlertOnce` 静音更新、完了/失敗で `postDone`。
-- **SDK**: `compileSdk/targetSdk 36→37`（minSdk は 36 維持）＋ CI 3ワークフロー（release-build/v6-engine-check/
-  android-sdk）の sdkmanager に `platforms;android-37`・`build-tools;37.0.0` を追加。**注意**: API 37 の platform SDK が
-  CI 環境で未提供だと SDK インストールで失敗し得る。その場合は compileSdk/targetSdk を 36 へ戻すだけでよい（Bubbles は
-  API30+ ＝バブル機能は 36 でもそのまま動作）。検証は CI（Android コンパイル不可のサンドボックスのため）。
+- **SDK（CI 実測で確定）**: 当初 `compileSdk/targetSdk 36→37`＋CI sdkmanager へ `platforms;android-37` を追加したが、
+  Release Build（run 29385635188）が **`Failed to find package 'platforms;android-37'`** で SDK インストール段落ち
+  （API 37=Android 17 の platform SDK は 2026-07 時点で sdkmanager 未提供）。**compileSdk/targetSdk は 36 のまま**へ戻し
+  CI 変更も撤回した。Bubbles は API30+＝minSdk 36 でバブル機能は完全動作するため実害なし。API 37 SDK 公開後に
+  36→37＋CI sdkmanager 行へ `platforms;android-37`・`build-tools;37.0.0` を足せば「Android 17 でコンパイル」へ移行可能。
+  検証は CI（Android コンパイル不可のサンドボックスのため。タグ push は org egress ポリシーで 403 のため
+  Release Build を workflow_dispatch でブランチ上に起動）。
 
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。
