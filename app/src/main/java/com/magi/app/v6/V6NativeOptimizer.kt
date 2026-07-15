@@ -985,7 +985,11 @@ object V6NativeOptimizer {
         var curScore = eval.score()
         var bestScore = curScore
         val diffBuf = IntArray(p.S * p.T)
-        var lastImproveMs = nowMs()
+        // [C③修正] ここへ来るのは native 経路が番兵発火で未完了(nat.completed==false)に戻った異常系のみ。
+        //   native 区間で一度も改善しなかった(nat.best==null)なら、その無改善経過を停滞時計へ引き継ぐため
+        //   起点を started にする（旧: 常に nowMs() で再スタートし、native の無改善時間が停滞判定から抜け落ち、
+        //   さらに約 stallMs ぶん余計に回っていた）。改善済みは最終改善時刻不明のため保守的に nowMs()。
+        var lastImproveMs = if (nat.best == null) started else nowMs()
         var lastBestMark = bestScore
         while (!shouldStop()) {
             val nowLoop = nowMs()

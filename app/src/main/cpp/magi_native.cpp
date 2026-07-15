@@ -648,9 +648,11 @@ void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn
     }
 
     // 自己整合検査（差分スコア==フル再計算）。best 更新があれば best 側も検査。
+    // [backlog#8] LAHC/ALNS/Polish と対称に curVal!=st.score（局所受理簿記==チャンク増分スコア）も検査。
+    //   受理時 curVal=st.score・revert で st.score 復元のため通常は恒真＝挙動不変、不整合時のみ退化。
     long long full = fullEvalCombined(p, st.a.data());
     long long status = 0;
-    if (full != curVal) status = 1;
+    if (full != curVal || curVal != st.score) status = 1;
     else if (improved && fullEvalCombined(p, bestSol.data()) != bestScore) status = 2;
 
     if (status == 0) {
@@ -1903,24 +1905,6 @@ Java_com_magi_app_v6_NativeBridge_nativeAlnsRead(
     if (n != s->p.S * s->p.T) return;
     const int* src = which == 0 ? s->bestSol.data() : s->st.a.data();
     env->SetIntArrayRegion(outArr, 0, n, reinterpret_cast<const jint*>(src));
-}
-
-// [Stage8] restart 境界の cur 差し替え（Kotlin が perturb/reset-to-best した盤面を注入）。
-// score/counts/GLS augment を再同期して以後のチャンクが正しく差分維持できるようにする。
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_magi_app_v6_NativeBridge_nativeAlnsSetCur(
-    JNIEnv* env, jclass, jlong handle, jintArray curArr) {
-    auto* s = reinterpret_cast<AlnsState*>(handle);
-    if (s == nullptr) return -1;
-    jsize n = env->GetArrayLength(curArr);
-    if (n != s->p.S * s->p.T) return -1;
-    std::vector<int> cur((size_t)n);
-    env->GetIntArrayRegion(curArr, 0, n, reinterpret_cast<jint*>(cur.data()));
-    // 盤面を差し替えて counts/wd/score を再初期化（GLS penalty は保持し augment を再計算）。
-    s->st.resetBoard(cur.data());
-    s->curAug = s->gls.augment(s->st.a.data());
-    s->itersSinceImprove = 0;
-    return (jlong)s->st.score;
 }
 
 // [Stage10] Polish チャンク状態の生成（problemHandle＋初期盤面）。0=失敗。
