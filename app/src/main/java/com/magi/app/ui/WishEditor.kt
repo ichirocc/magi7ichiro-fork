@@ -26,15 +26,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,11 +51,12 @@ import androidx.compose.ui.unit.dp
  * 採点は pref（hard1 のソフト寄り）。モデル(wishes)・エンジン(pref)は既存のため不変、UI のみ。
  * 注意: これは「希望」であり、勤務表セルの「割当」変更とも、cons3系（連勤の並び）とも別概念。
  *
- * [スクショ準拠のレイアウト取り入れ] 職員は**ドロップダウン**＋「全職員を見る N名」、カレンダー上部に
- * **静的な月見出し**（月送りなし＝D6決定）、日をタップして複数選択→「複数日選択 N日選択中 ›」から
- * **モーダルボトムシート**で一括登録。シフトボタンは**担当可能シフトを主ボタン＋「その他」で全シフト**。
- * ボトムシートに**「未設定に戻す」**（選択日の希望を一括クリア）を追加。「1日1個のみ」は wishes["i,j"] が
- * 単一値の Map である既存モデルで自動保証。全職員横断の登録済み一覧は確認・削除用に温存。表示のみ・スコア不変。
+ * [必要人数設定(3.186.0)と同じ「4つの情報」原則を適用] ①どの職員か（見出し行のドロップダウン）
+ * ②各日の登録済み希望（カレンダーのシフト色チップ）③どの日を選んでいるか（枠＋✓）④選択日にどのシフトを
+ * 適用するか（下部のインライン一括パネル、モーダルではない）。「設定日数N日・シフト別内訳」の常時表示・
+ * 「1日1個のみ」等の説明文は撤去。「全職員を見る」（確認・削除専用の一覧）は既定非表示のトグルのまま温存
+ * （必要人数設定の「標準N人タップ」「未設定に戻す」と同様、常時は出さないが到達可能な副次機能として残す）。
+ * 「1日1個のみ」は wishes["i,j"] が単一値の Map である既存モデルで自動保証。表示のみ・スコア不変。
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -77,21 +76,19 @@ fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitia
     }
     var staffMenu by remember { mutableStateOf(false) }
     var showAllStaff by remember { mutableStateOf(false) }
-    var sheetOpen by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
     val allowed = vm.allowedShiftsFor(i).toHashSet()
     val rows = vm.wishOverrides()
     val myRows = rows.filter { it.i == i }
     val marked = myRows.associate { it.day to it.k }
-    val byShift = myRows.groupingBy { it.k }.eachCount()
 
     val onToggleDay: (Int) -> Unit = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d }
 
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("希望シフト登録", style = MaterialTheme.typography.titleMedium)
-            // [職員ドロップダウン ＋ 全職員を見る]
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // [1行に統合] 職員▼のみ常時表示。「全職員を見る」は小さな文字リンクで副次的に残す。
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.weight(1f)) {
                     SelectorField(label = "職員", value = staff.getOrElse(i) { "" }, onClick = { staffMenu = true })
                     DropdownMenu(expanded = staffMenu, onDismissRequest = { staffMenu = false }) {
@@ -100,24 +97,25 @@ fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitia
                         }
                     }
                 }
-                OutlinedButton(onClick = { showAllStaff = !showAllStaff }, modifier = Modifier.heightIn(min = 52.dp)) {
-                    Text(if (showAllStaff) "一覧を隠す" else "全職員を見る（${staff.size}名）", style = MaterialTheme.typography.labelMedium)
-                }
+                Text(
+                    if (showAllStaff) "一覧を隠す" else "全職員を見る",
+                    style = MaterialTheme.typography.labelMedium, color = cs.primary,
+                    modifier = Modifier.clickable { showAllStaff = !showAllStaff }.padding(vertical = 4.dp),
+                )
             }
-            Text(
-                "設定日数 ${myRows.size}日" + shifts.indices.filter { byShift.containsKey(it) }
-                    .joinToString("") { " ・ ${shifts[it]} ${byShift[it]}日" },
-                style = MaterialTheme.typography.labelMedium,
-                color = cs.onSurfaceVariant,
-            )
             MonthHeaderStatic(ui.startDate)
             WishMonthGrid(
                 startDate = ui.startDate, maxDay = ui.days, marked = marked,
                 shiftKigou = shifts, shiftColorHex = ui.shiftColorHex, shiftTextHex = ui.shiftTextHex,
                 selectedDays = daysSel, onToggle = onToggleDay,
             )
-            MultiSelectOpener(count = daysSel.size, onOpen = { sheetOpen = true }, onClear = { daysSel = emptySet() }, running = ui.running)
-            // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー（トグル表示）。
+            // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（モーダルシートは撤去）。
+            if (daysSel.isNotEmpty()) {
+                WishApplyPanel(ui, vm, i, daysSel, shifts, allowed, onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
+            } else {
+                Text("日をタップして希望シフトを設定します", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            }
+            // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー（既定非表示）。
             if (showAllStaff && rows.isNotEmpty()) {
                 Text("登録済み希望（全職員）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 rows.groupBy { it.i }.forEach { (_, list) ->
@@ -140,71 +138,56 @@ fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitia
             }
         }
     }
-
-    if (sheetOpen && daysSel.isNotEmpty()) {
-        WishApplySheet(
-            ui = ui, vm = vm, staffIdx = i, days = daysSel, shifts = shifts, allowed = allowed,
-            onDone = { daysSel = emptySet(); sheetOpen = false },
-            onDismiss = { sheetOpen = false },
-        )
-    }
 }
 
-/** 希望の一括適用シート（モーダルボトムシート）。担当可能シフトを主ボタン＋「その他」で全シフト、
- *  「未設定に戻す」で選択日の希望を一括クリア。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/** [選択日の一括設定] カレンダー下部にインライン表示（1日以上選択時のみ）。モーダルで隠さないので
+ *  カレンダーを見ながら追加選択・適用できる。担当可能シフトを主ボタン＋「その他」で全シフト、
+ *  「選択した日を未設定に戻す」で希望を一括クリア。 */
 @Composable
-private fun WishApplySheet(
+private fun WishApplyPanel(
     ui: UiState,
     vm: MagiViewModel,
     staffIdx: Int,
     days: Set<Int>,
     shifts: List<String>,
     allowed: HashSet<Int>,
+    onCancel: () -> Unit,
     onDone: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val sheetState = rememberModalBottomSheetState()
     val primary = shifts.indices.filter { it in allowed }
     val others = shifts.indices.filter { it !in allowed }
-    var selK by remember { mutableStateOf(primary.firstOrNull() ?: 0) }
+    var selK by remember(staffIdx) { mutableStateOf(primary.firstOrNull() ?: 0) }
     var showOther by remember { mutableStateOf(false) }
     val sorted = days.sorted()
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CountPill("${days.size}日選択中")
-                Text("選択した日付の希望シフトを変更", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            }
-            Text(sorted.joinToString("・") { dayChipLabel(ui.startDate, it) },
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            Text("希望シフトは1日につき1つのみ登録できます", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-            ShiftButtonGrid(shifts, primary, selK, ui.shiftColorHex, ui.shiftTextHex) { selK = it }
-            if (showOther && others.isNotEmpty()) ShiftButtonGrid(shifts, others, selK, ui.shiftColorHex, ui.shiftTextHex, warnSet = others.toHashSet()) { selK = it }
-            if (others.isNotEmpty()) {
-                TextButton(onClick = { showOther = !showOther }) { Text(if (showOther) "その他を閉じる" else "その他（担当外シフト）") }
-            }
-            if (selK !in allowed) {
-                Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると違反になります。",
-                    style = MaterialTheme.typography.labelSmall, color = cs.error)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { vm.clearWishesForDays(staffIdx, days.map { it - 1 }); onDone() },
-                    enabled = !ui.running,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text("未設定に戻す") }
-                Button(
-                    onClick = { vm.setWishesForDays(staffIdx, days.map { it - 1 }, selK); onDone() },
-                    enabled = !ui.running,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text("${days.size}日に適用") }
-            }
+    // 選択日が多い場合は「6/3、6/8、6/17、ほか2日」と省略。
+    val datesLabel = if (sorted.size <= 4) sorted.joinToString("、") { dayChipLabel(ui.startDate, it) }
+    else sorted.take(3).joinToString("、") { dayChipLabel(ui.startDate, it) } + "、ほか${sorted.size - 3}日"
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HorizontalDivider()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CountPill("${days.size}日選択中")
+            Text(datesLabel, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 2, modifier = Modifier.weight(1f))
         }
+        ShiftButtonGrid(shifts, primary, selK, ui.shiftColorHex, ui.shiftTextHex) { selK = it }
+        if (showOther && others.isNotEmpty()) ShiftButtonGrid(shifts, others, selK, ui.shiftColorHex, ui.shiftTextHex, warnSet = others.toHashSet()) { selK = it }
+        if (others.isNotEmpty()) {
+            TextButton(onClick = { showOther = !showOther }) { Text(if (showOther) "その他を閉じる" else "その他（担当外シフト）") }
+        }
+        if (selK !in allowed) {
+            Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると違反になります。",
+                style = MaterialTheme.typography.labelSmall, color = cs.error)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
+            Button(
+                onClick = { vm.setWishesForDays(staffIdx, days.map { it - 1 }, selK); onDone() },
+                enabled = !ui.running,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text("${days.size}日に適用") }
+        }
+        TextButton(onClick = { vm.clearWishesForDays(staffIdx, days.map { it - 1 }); onDone() }, enabled = !ui.running,
+            modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
     }
 }
 

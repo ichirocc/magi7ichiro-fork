@@ -96,29 +96,6 @@ internal fun CountPill(text: String) {
     }
 }
 
-/** 「複数日選択 ・ N日選択中 ›」オープナー（タップでボトムシート）。0件時は操作ヒントのみ。 */
-@Composable
-internal fun MultiSelectOpener(count: Int, onOpen: () -> Unit, onClear: () -> Unit, running: Boolean) {
-    val cs = MaterialTheme.colorScheme
-    if (count == 0) {
-        Text("日をタップして複数選択できます", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-    } else {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Surface(
-                color = cs.primaryContainer, shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1f).clickable(enabled = !running, onClick = onOpen),
-            ) {
-                Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("複数日選択 ・ ${count}日選択中", style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold, color = cs.onPrimaryContainer, modifier = Modifier.weight(1f))
-                    Text("›", style = MaterialTheme.typography.titleMedium, color = cs.onPrimaryContainer)
-                }
-            }
-            TextButton(onClick = onClear, enabled = !running) { Text("クリア") }
-        }
-    }
-}
-
 /**
  * [必要人数設定] 勤務作成者が必要とする4点だけに集約した画面（スクショ準拠のリデザイン）:
  *   ①どのシフトか（見出し行のドロップダウン）②各日の最低–最高（カレンダー）③どの日を選んでいるか（枠＋✓）
