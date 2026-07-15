@@ -21,6 +21,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- [Android 17 バブル] 会話バブルの展開ビュー。バブルに埋め込む Activity は
+             allowEmbedded / resizeableActivity / documentLaunchMode="always" が必須
+             （これらが無いと BubbleMetadata を付けても通知はバブル化されない）。
+             起動は BubbleSupport の PendingIntent 経由のみのため exported=false。 -->
+        <activity
+            android:name=".work.BubbleActivity"
+            android:exported="false"
+            android:allowEmbedded="true"
+            android:resizeableActivity="true"
+            android:documentLaunchMode="always"
+            android:theme="@style/Theme.Magi" />
         <!-- [クラッシュ修正/実機報告「閉じても大丈夫でクラッシュ」] targetSdk 34+ では、Worker の
              setForeground(FOREGROUND_SERVICE_TYPE_DATA_SYNC) に対応する型を WorkManager の前景サービス
              宣言側にもマージで明記しないと、起動の瞬間に MissingForegroundServiceTypeException で落ちる

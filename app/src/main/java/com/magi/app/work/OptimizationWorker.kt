@@ -44,7 +44,14 @@ class OptimizationWorker(
         val bgWorkers = inputData.getInt(KEY_WORKERS, 0).takeIf { it > 0 } ?: OptimizationRepository.workers
         // [#4] 前景サービス化: 5分のCPUジョブをOSに止めさせない（FGS不可な環境では通常実行へフォールバック）。
         runCatching { setForeground(getForegroundInfo()) }
+        // [Android 17 バブル] 会話バブルの前提（会話チャンネル＋長寿命ショートカット）を用意し、開始バブルを提示。
+        runCatching {
+            BubbleSupport.ensureChannel(ctx)
+            BubbleSupport.pushShortcut(ctx)
+            BubbleSupport.postProgress(ctx, "最適化を開始しました")
+        }
         var lastSnapMs = 0L
+        var lastBubbleMs = 0L
         return try {
             val res = V6FinalPort.handleOptimize(
                 state = req.first,
@@ -57,6 +64,15 @@ class OptimizationWorker(
                     OptimizationRepository.publishProgress(
                         OptimizationRepository.BgProgress(phase, report.hard, report.soft, report.total, iters, elapsed),
                     )
+                    // [Android 17 バブル] 進捗を会話バブルへ反映（連続更新は onlyAlertOnce で静音・~1.5秒間引き）。
+                    if (elapsed - lastBubbleMs > 1_500L) {
+                        lastBubbleMs = elapsed
+                        val s = elapsed / 1000
+                        val clock = "%d:%02d".format(s / 60, s % 60)
+                        runCatching {
+                            BubbleSupport.postProgress(ctx, "計算中 ・ 経過 $clock ・ 違反 ${report.total}（必須 ${report.hard}）")
+                        }
+                    }
                     // [#4/C1] 途中最良解を定期スナップショット → kill されても「途中結果から再開」できる。
                     if (elapsed - lastSnapMs > 8_000L) {
                         lastSnapMs = elapsed
@@ -79,6 +95,7 @@ class OptimizationWorker(
             throw e
         } catch (e: Exception) {
             notify("最適化に失敗しました", e.message ?: "原因不明")
+            runCatching { BubbleSupport.postDone(ctx, "最適化に失敗しました") }
             Result.failure()
         } finally {
             OptimizationRepository.setRunning(false)
@@ -101,6 +118,8 @@ class OptimizationWorker(
     private fun notifyDone(hard: Int, total: Int) {
         val msg = if (hard == 0) "配布できます（必須違反0・合計$total）" else "未解決$hard 件（合計$total）"
         notify("最適化が完了しました", msg)
+        // [Android 17 バブル] 完了サマリを会話バブルへ反映（ongoing 解除）。
+        runCatching { BubbleSupport.postDone(ctx, msg) }
     }
 
     private fun notify(title: String, text: String) {

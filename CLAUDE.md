@@ -12,7 +12,7 @@ VBA/Web 版から移植した「MAGI V6」最適化エンジン（SA + ALNS + Ta
 PathRelinking + ChainSwap + 適応的オペレータ重み + RSI++ 等）を内蔵。
 
 - パッケージ/applicationId: `com.magi.app`（namespace も同じ）
-- minSdk=36 (Android 16+), compileSdk/targetSdk=36, java.time ネイティブ可, NDK/desugaring 不使用
+- minSdk=36 (Android 16+), compileSdk/targetSdk=37 (Android 17), java.time ネイティブ可, NDK/desugaring 不使用
 - リポジトリ: `ichirocc/magi7ichiro`（public）
 - UI 制約: **片手一本指**（ドラッグ不可）、**最小デザイン**（冗長な安全表示はエンジン側に持たせ、操作画面は効率優先）
 - 全作業・UI 文言は日本語
@@ -1204,6 +1204,27 @@ FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止ま
   既存データは開ける)。④**[P2] bg再開で計算条件が化ける**: 予算秒数/並列数を WorkManager inputData に永続化
   (旧: インメモリのみで kill 後は既定60s/4並列)＋kill後の復元は**途中最良スナップショット優先**(8秒毎退避済み。
   旧: 常に元入力から再スタート)。SessionRegressionTest に removeShift/editStaff の回帰テスト追加。
+
+## Android 17 会話バブル対応（3.173.0）
+ユーザー指示「アンドロイド17のバブル対応をコードでする」。バックグラウンド最適化の**進捗と完了を会話バブル**
+（他アプリの上に浮かぶ小窓）として提示する。grilling で用途（進捗＋完了の両方）と SDK 方針（compileSdk/targetSdk を
+37 へ）を確定。**表示専用・スコアリング不変**（最適化器/チェッカー/重みには一切触れない・HF77 非該当）。
+- **成立要件（Bubbles API は Android 11/API30+。minSdk 36 で常時可）**: ①会話チャンネル（`setAllowBubbles(true)`）
+  ②長寿命の会話ショートカット（`ShortcutInfoCompat.setLongLived(true)`＋`Person`）③`MessagingStyle` 通知＋
+  `BubbleMetadata`（`setShortcutId` で②に紐付け）④埋め込み可能な専用Activity（manifest で `allowEmbedded`／
+  `resizeableActivity`／`documentLaunchMode="always"`）。この4点が揃わないと `BubbleMetadata` を付けても通知は
+  バブル化されない。
+- **新規**: `work/BubbleSupport.kt`（①②③のビルダ＋`postProgress`/`postDone`/`clear`。冪等・`runCatching` で通知
+  失敗を握り本体継続）／`work/BubbleActivity.kt`（④＝`OptimizationRepository` の running/progress/result フローを
+  購読する読取専用 Compose 画面）。会話チャンネル `magi_optimize_bubble`・ショートカット `magi_optimize_conversation`・
+  通知ID `NID_BUBBLE=4103`。
+- **配線**（`OptimizationWorker`）: FGS 進捗通知（`NID_PROGRESS`）は FGS 要件のため**別に維持**し、バブルは会話
+  チャンネルの別通知として扱う。開始時に channel/shortcut を用意し開始バブルを提示、進捗コールバックで ~1.5秒間引き
+  ＋`onlyAlertOnce` 静音更新、完了/失敗で `postDone`。
+- **SDK**: `compileSdk/targetSdk 36→37`（minSdk は 36 維持）＋ CI 3ワークフロー（release-build/v6-engine-check/
+  android-sdk）の sdkmanager に `platforms;android-37`・`build-tools;37.0.0` を追加。**注意**: API 37 の platform SDK が
+  CI 環境で未提供だと SDK インストールで失敗し得る。その場合は compileSdk/targetSdk を 36 へ戻すだけでよい（Bubbles は
+  API30+ ＝バブル機能は 36 でもそのまま動作）。検証は CI（Android コンパイル不可のサンドボックスのため）。
 
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。

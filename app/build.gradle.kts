@@ -8,16 +8,20 @@ plugins {
 
 android {
     namespace = "com.magi.app"
-    compileSdk = 36
+    // [Android 17 対応] 会話バブル（Android 17）まで見据えて API 37 でコンパイル。
+    //   ※ Bubbles API 自体は Android 11/API30+（minSdk 36 で常時可）で、37 化は「最新 Android に対応」の
+    //     ブランド要件。API 37 の platform SDK が未提供の環境では CI の SDK インストールで失敗し得るため、
+    //     その場合は compileSdk/targetSdk を 36 へ戻してもバブル機能はそのまま動作する。
+    compileSdk = 37
     // [ネイティブ加速] NDK を明示固定（CI と開発環境で同一ビルドを保証。AGP の既定NDKに追従させない）。
     ndkVersion = "26.1.10909125"
 
     defaultConfig {
         applicationId = "com.magi.app"
         minSdk = 36
-        targetSdk = 36
-        versionCode = 326
-        versionName = "3.172.0-native-bitmask-eval"
+        targetSdk = 37
+        versionCode = 327
+        versionName = "3.173.0-android17-bubbles"
         // [ネイティブ加速] minSdk 36（Android 16+）の実機は arm64 のみ対象で十分。
         //   .so が無い環境でも NativeBridge が false を返し Kotlin パスで全機能が動く。
         ndk { abiFilters += listOf("arm64-v8a") }
