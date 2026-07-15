@@ -1445,9 +1445,14 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
   SOFT は常に focusable に保ち、HF63 が covU 等 HARD を flag した時点で focus が c1/low/high 等の直せる SOFT へ自動
   ピボットする。SOFT の同一 focus 空転は cooldownFocus(1R休止)＋keep-best＋有限ラウンドで自己収束。N4 武装判定は
   従来どおり dynamicAvoid(全族)、pivot 可否は avoid(HARD) で判定。focus選択のみ＝スコアリング不変。
-- **未（別課題）**: ①`diagnoseCoverage`の「充足可能」honest化（希望固定/終端余剰を検証）②apt目標の「+/-で数字が
-  変わらない」（`applyStructure` の `structureEdited` 既true時の非emit＋currentSchedule null時 refreshCheck 早期
-  return で再構成漏れの疑い。要・実機切り分け）③**[実機ログ]ネイティブ探索が実データで無効化**（`NativeBridge:
+- **(3.185.0, apt目標の「+/-で数字が変わらない」実機バグ修正)**: ユーザーが「通常画面でも +/- で数字が変わらない」と
+  確認＝コードバグ確定。`ws1SetGroupApt`→`applyStructure(MagiState)` は `_ui.update{copy(structureEdited=true)}` を
+  呼ぶが、**structureEdited が既 true だと copy が同値で StateFlow が emit せず**、かつ **currentSchedule=null 時は
+  refreshCheck も早期return**するため、`AptCard`（`vm.ws1()`=state 直読み、ui 変化でしか再構成しない）が再構成されず、
+  state は更新されるのに表示が変わらなかった。**修正: UiState に `editRev:Int` を追加し applyStructure が毎回
+  `editRev+1` で必ず distinct な UiState を emit＝確実に再構成**。両 applyStructure(MagiState/Ws1Result)に適用。
+  additive フィールド(既定0)・スコアリング不変・テスト非依存（golden/Session は state/report を検証）。
+- **未（別課題）**: ①`diagnoseCoverage`の「充足可能」honest化（希望固定/終端余剰を検証）③**[実機ログ]ネイティブ探索が実データで無効化**（`NativeBridge:
   SAチャンク整合性NG status=1`＝評価器パリティは一致(hard=3 soft=1628)だが C++ SaChunk の自己整合が実データで失敗→
   番兵発火で Kotlin 退化＝正しいが遅い。合成 harness では出ない実データ固有の乖離。要・当該 state での SaChunk 差分追跡）。
 
