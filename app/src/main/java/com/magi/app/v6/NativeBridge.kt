@@ -62,9 +62,6 @@ object NativeBridge {
     /** which: 0=best, 1=cur を out(S*T) へ読み出す。 */
     @JvmStatic
     external fun nativeAlnsRead(handle: Long, which: Int, out: IntArray)
-    /** restart 境界で cur を差し替え（score/counts/GLS augment 再同期）。戻り値=新 cur スコア（-1=失敗）。 */
-    @JvmStatic
-    external fun nativeAlnsSetCur(handle: Long, cur: IntArray): Long
 
     // ---- [Stage10/第3期] Polish チャンク（hf80PostPolish の C++ 版） ----
     /** Polish チャンク状態を生成（problemHandle＋初期盤面）。0=失敗。 */

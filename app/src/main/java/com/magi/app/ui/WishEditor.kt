@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
@@ -22,11 +23,18 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,17 +49,16 @@ import androidx.compose.ui.unit.dp
 
 /**
  * ws3 移植: 希望シフト wishes["i,j"]=シフトindex（スタッフ i が j 日目に希望するシフト）。
- * 採点は pref（hard1 のソフト寄り）。モデル(wishes)・エンジン(pref)は既存のため不変、UI のみ追加。
+ * 採点は pref（hard1 のソフト寄り）。モデル(wishes)・エンジン(pref)は既存のため不変、UI のみ。
  * 注意: これは「希望」であり、勤務表セルの「割当」変更とも、cons3系（連勤の並び）とも別概念。
  *
- * [必要人数カレンダーと同じ方針への刷新] ユーザー提示の第3モックアップ（希望シフト登録）を元に、
- * 表示専用のリスト＋モーダルダイアログから、**カレンダー自体をタップする主要編集導線**へ刷新。
- * 職員を1人選ぶと月全体の登録済み希望が一目で見え（シフト色チップ）、日をタップして複数選択→
- * 下部固定パネルで一括登録できる（旧WishDialogを吸収・廃止）。全職員横断のチップ一覧は
- * NeedDayCardと同じ理由（カレンダーは1職員ずつしか見えない弱点を補う）で確認・削除専用に温存。
- * 「1日1個のみ登録」はwishes["i,j"]が単一値のMapである既存モデルにより自動的に保証される。
+ * [スクショ準拠のレイアウト取り入れ] 職員は**ドロップダウン**＋「全職員を見る N名」、カレンダー上部に
+ * **静的な月見出し**（月送りなし＝D6決定）、日をタップして複数選択→「複数日選択 N日選択中 ›」から
+ * **モーダルボトムシート**で一括登録。シフトボタンは**担当可能シフトを主ボタン＋「その他」で全シフト**。
+ * ボトムシートに**「未設定に戻す」**（選択日の希望を一括クリア）を追加。「1日1個のみ」は wishes["i,j"] が
+ * 単一値の Map である既存モデルで自動保証。全職員横断の登録済み一覧は確認・削除用に温存。表示のみ・スコア不変。
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun WishCard(ui: UiState, vm: MagiViewModel) {
     val staff = ui.staffNames
@@ -60,7 +67,9 @@ fun WishCard(ui: UiState, vm: MagiViewModel) {
     var i by remember { mutableStateOf(0) }
     if (i !in staff.indices) i = 0
     var daysSel by remember(i) { mutableStateOf(emptySet<Int>()) }
-    var selK by remember { mutableStateOf(0) }
+    var staffMenu by remember { mutableStateOf(false) }
+    var showAllStaff by remember { mutableStateOf(false) }
+    var sheetOpen by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
     val allowed = vm.allowedShiftsFor(i).toHashSet()
     val rows = vm.wishOverrides()
@@ -73,86 +82,35 @@ fun WishCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("希望シフト登録", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "職員を選び、日をタップして希望シフトを一括登録できます。1日につき1つのみ登録できます。",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                staff.forEachIndexed { idx, n -> InputChip(selected = idx == i, onClick = { i = idx }, label = { Text(n) }) }
+            // [職員ドロップダウン ＋ 全職員を見る]
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) {
+                    SelectorField(label = "職員", value = staff.getOrElse(i) { "" }, onClick = { staffMenu = true })
+                    DropdownMenu(expanded = staffMenu, onDismissRequest = { staffMenu = false }) {
+                        staff.forEachIndexed { idx, n ->
+                            DropdownMenuItem(text = { Text(n) }, onClick = { i = idx; daysSel = emptySet(); staffMenu = false })
+                        }
+                    }
+                }
+                OutlinedButton(onClick = { showAllStaff = !showAllStaff }, modifier = Modifier.heightIn(min = 52.dp)) {
+                    Text(if (showAllStaff) "一覧を隠す" else "全職員を見る（${staff.size}名）", style = MaterialTheme.typography.labelMedium)
+                }
             }
             Text(
                 "設定日数 ${myRows.size}日" + shifts.indices.filter { byShift.containsKey(it) }
                     .joinToString("") { " ・ ${shifts[it]} ${byShift[it]}日" },
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = cs.onSurfaceVariant,
             )
+            MonthHeaderStatic(ui.startDate)
             WishMonthGrid(
                 startDate = ui.startDate, maxDay = ui.days, marked = marked,
                 shiftKigou = shifts, shiftColorHex = ui.shiftColorHex, shiftTextHex = ui.shiftTextHex,
                 selectedDays = daysSel, onToggle = onToggleDay,
             )
-            if (daysSel.isNotEmpty()) {
-                Column(
-                    Modifier.fillMaxWidth().background(cs.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(8.dp)).padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${daysSel.size}日選択中の希望シフトを変更", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { daysSel = emptySet() }, enabled = !ui.running) { Text("選択をクリア") }
-                    }
-                    Text("希望シフトを選択（1日1個のみ）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                    // [web版参考 HF205/HF211] 担当可能シフトは大ボタンで選択。担当範囲外（勤務表不可）は
-                    //   赤枠＋⚠（色だけに依存しない手がかり）で明示し誤選択を防ぐ。範囲外も選択は可能
-                    //   （意図的な範囲外希望＝不可能希望として別途警告）。背景はシフトの表示色で識別。
-                    shifts.indices.chunked(4).forEach { rowIdxs ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            rowIdxs.forEach { idx ->
-                                val sel = selK == idx
-                                val ng = idx !in allowed
-                                val bg = hexToColor(ui.shiftColorHex.getOrElse(idx) { "" })
-                                val fg = hexToColor(ui.shiftTextHex.getOrElse(idx) { "" })
-                                val borderColor = when { ng -> MagiAccent.red; sel -> cs.primary; else -> cs.outline }
-                                Box(
-                                    Modifier
-                                        .weight(1f)
-                                        .heightIn(min = 52.dp)
-                                        .background(bg, MaterialTheme.shapes.small)
-                                        .border(if (sel) 3.dp else 2.dp, borderColor, MaterialTheme.shapes.small)
-                                        .clickable { selK = idx }
-                                        .semantics { contentDescription = (shifts.getOrNull(idx) ?: "") + (if (ng) "・担当外" else "") + (if (sel) "・選択中" else "") }
-                                        .padding(4.dp),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
-                                        Text(
-                                            (shifts.getOrNull(idx) ?: "") + if (ng) " ⚠" else "",
-                                            color = fg, textAlign = TextAlign.Center,
-                                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                    }
-                                }
-                            }
-                            repeat(4 - rowIdxs.size) { Spacer(Modifier.weight(1f)) }
-                        }
-                    }
-                    if (selK !in allowed) {
-                        Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると違反になります。",
-                            style = MaterialTheme.typography.labelSmall, color = cs.error)
-                    }
-                    Button(
-                        onClick = {
-                            daysSel.forEach { d -> vm.setWish(i, d - 1, selK) }
-                            daysSel = emptySet()
-                        },
-                        enabled = !ui.running,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    ) { Text("選択した${daysSel.size}日間に適用する") }
-                }
-            }
-            // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー。
-            if (rows.isNotEmpty()) {
+            MultiSelectOpener(count = daysSel.size, onOpen = { sheetOpen = true }, onClear = { daysSel = emptySet() }, running = ui.running)
+            // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー（トグル表示）。
+            if (showAllStaff && rows.isNotEmpty()) {
                 Text("登録済み希望（全職員）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 rows.groupBy { it.i }.forEach { (_, list) ->
                     Text(list.first().staffName, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -174,11 +132,114 @@ fun WishCard(ui: UiState, vm: MagiViewModel) {
             }
         }
     }
+
+    if (sheetOpen && daysSel.isNotEmpty()) {
+        WishApplySheet(
+            ui = ui, vm = vm, staffIdx = i, days = daysSel, shifts = shifts, allowed = allowed,
+            onDone = { daysSel = emptySet(); sheetOpen = false },
+            onDismiss = { sheetOpen = false },
+        )
+    }
+}
+
+/** 希望の一括適用シート（モーダルボトムシート）。担当可能シフトを主ボタン＋「その他」で全シフト、
+ *  「未設定に戻す」で選択日の希望を一括クリア。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WishApplySheet(
+    ui: UiState,
+    vm: MagiViewModel,
+    staffIdx: Int,
+    days: Set<Int>,
+    shifts: List<String>,
+    allowed: HashSet<Int>,
+    onDone: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val sheetState = rememberModalBottomSheetState()
+    val primary = shifts.indices.filter { it in allowed }
+    val others = shifts.indices.filter { it !in allowed }
+    var selK by remember { mutableStateOf(primary.firstOrNull() ?: 0) }
+    var showOther by remember { mutableStateOf(false) }
+    val sorted = days.sorted()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CountPill("${days.size}日選択中")
+                Text("選択した日付の希望シフトを変更", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            }
+            Text(sorted.joinToString("・") { dayChipLabel(ui.startDate, it) },
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Text("希望シフトは1日につき1つのみ登録できます", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            ShiftButtonGrid(shifts, primary, selK, ui.shiftColorHex, ui.shiftTextHex) { selK = it }
+            if (showOther && others.isNotEmpty()) ShiftButtonGrid(shifts, others, selK, ui.shiftColorHex, ui.shiftTextHex, warnSet = others.toHashSet()) { selK = it }
+            if (others.isNotEmpty()) {
+                TextButton(onClick = { showOther = !showOther }) { Text(if (showOther) "その他を閉じる" else "その他（担当外シフト）") }
+            }
+            if (selK !in allowed) {
+                Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると違反になります。",
+                    style = MaterialTheme.typography.labelSmall, color = cs.error)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { vm.clearWishesForDays(staffIdx, days.map { it - 1 }); onDone() },
+                    enabled = !ui.running,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) { Text("未設定に戻す") }
+                Button(
+                    onClick = { vm.setWishesForDays(staffIdx, days.map { it - 1 }, selK); onDone() },
+                    enabled = !ui.running,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                ) { Text("${days.size}日に適用") }
+            }
+        }
+    }
+}
+
+/** 希望シフト選択の大ボタン群（担当外は赤枠＋⚠、背景はシフト表示色）。 */
+@Composable
+private fun ShiftButtonGrid(
+    shifts: List<String>, idxs: List<Int>, selK: Int,
+    colorHex: List<String>, textHex: List<String>,
+    warnSet: HashSet<Int> = HashSet(), onPick: (Int) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    idxs.chunked(4).forEach { rowIdxs ->
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            rowIdxs.forEach { idx ->
+                val sel = selK == idx
+                val ng = idx in warnSet
+                val bg = hexToColor(colorHex.getOrElse(idx) { "" })
+                val fg = hexToColor(textHex.getOrElse(idx) { "" })
+                val borderColor = when { ng -> MagiAccent.red; sel -> cs.primary; else -> cs.outline }
+                Box(
+                    Modifier.weight(1f).heightIn(min = 52.dp)
+                        .background(bg, MaterialTheme.shapes.small)
+                        .border(if (sel) 3.dp else 2.dp, borderColor, MaterialTheme.shapes.small)
+                        .clickable { onPick(idx) }
+                        .semantics { contentDescription = (shifts.getOrNull(idx) ?: "") + (if (ng) "・担当外" else "") + (if (sel) "・選択中" else "") }
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+                        Text((shifts.getOrNull(idx) ?: "") + if (ng) " ⚠" else "",
+                            color = fg, textAlign = TextAlign.Center,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                    }
+                }
+            }
+            repeat(4 - rowIdxs.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
 }
 
 /** [希望シフトカレンダーの本体グリッド] 月内の日を曜日整列で並べ、タップで複数日選択できる。
- *  各日は登録済みの希望（marked: 日→シフトindex）をシフトの表示色チップ（記号入り）で示す。
- *  選択中の日はチェックマーク＋枠線で示す（NeedCalendarCardのNeedMonthGridと同じ操作系）。 */
+ *  各日は登録済みの希望（marked: 日→シフトindex）をシフトの表示色チップ（記号入り）で示す。 */
 @Composable
 private fun WishMonthGrid(
     startDate: String,
