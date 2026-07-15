@@ -389,7 +389,26 @@ struct SaChunk {
             const int D = (int)c.seq.size();
             if (D == 0) continue;
             const int first = c.seq[0];
+            // 非forbidden単一シフト連は run-deficit（run長ベース＝popcount化困難。3.172.0 の対象外方針を踏襲）。
             if (!forbidden && c.singleRun) { v += rowDeficit(row, T, first, D) * w; continue; }
+            // [ビット化] 窓マッチ（forbidden 完全一致 / 非forbidden 多シフト部分不一致）を popcount で。
+            //   rowMask[i*K+k]=職員 i がシフト k を持つ日ビット集合（deltaApply が維持済＝新規マスク不要）。
+            //   (rowMask[seq[l]] >> l) の bit j = (row[j+l]==seq[l])。AND で「窓開始 j に完全一致」の集合を得る。
+            //   forbidden: fire=完全一致数（z==D-1）。非forbidden多シフト: fire=先頭一致−完全一致（z<D-1）。
+            //   マスク索引の安全のため seq が全て [0,K) のときのみ（範囲外は理論上到達不能だが scalar へ退避）。
+            if (useBits && D <= T) {
+                bool seqOk = first >= 0 && first < K;
+                for (int l = 1; seqOk && l < D; l++) if (c.seq[l] < 0 || c.seq[l] >= K) seqOk = false;
+                if (seqOk) {
+                    uint64_t full = rowMask[(size_t)i * K + first];
+                    for (int l = 1; l < D; l++) full &= (rowMask[(size_t)i * K + c.seq[l]] >> l);
+                    uint64_t range = (T - D + 1 >= 64) ? ~0ULL : ((1ULL << (T - D + 1)) - 1ULL);
+                    long long fullCnt = __builtin_popcountll(full & range);
+                    if (forbidden) v += fullCnt * w;
+                    else v += (__builtin_popcountll(rowMask[(size_t)i * K + first] & range) - fullCnt) * w;
+                    continue;
+                }
+            }
             for (int j = 0; j <= T - D; j++) {
                 if (row[j] == first) {
                     int z = 0;

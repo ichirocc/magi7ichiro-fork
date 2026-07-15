@@ -115,11 +115,15 @@ object V6PortAnalyzer {
         var total = 0
         for (j in 0 until p.T) {
             for (k in 0 until p.K) {
-                val need = p.need1[k][j]
-                if (need <= 0) continue
+                // [監査/実バグ修正] need1 のみを見て miss=need1-got を計算していたため、need1 が未設定で
+                //   need2 単独定義のセル（Problem.covUCell の「片方定義=その値」対応セル）が丸ごと
+                //   スキップされ、本物の covU(HARD) 違反が診断から完全に消えていた（need2<need1 の
+                //   OR救済無視という既知の理論的エッジケースより広く、通常のデータでも起こり得る）。
+                //   covUCell（source of truth）を直接使い、need1/need2 双方の OR 意味論に一致させる。
                 val got = cov[j][k]
-                val miss = need - got
+                val miss = p.covUCell(k, j, got)
                 if (miss <= 0) continue
+                val need = got + miss   // [表示用] 実際に不足を生んだ実効しきい値（covUCellのOR選択と整合）
                 total += miss
                 var capacity = 0
                 for (i in 0 until p.S) {
@@ -177,7 +181,10 @@ object V6PortAnalyzer {
         //   データは一切変更しない（採否は業務担当者が判断）。HF77準拠。
         val relaxations = ArrayList<String>()
         run {
-            val demandShifts = (0 until p.K).filter { kk -> (0 until p.T).any { jj -> p.need1[kk][jj] > 0 } }.toSet()
+            // [同根修正] need1 単独判定だと need2 単独定義シフトの需要を見落とす（上の miss 計算と同じ穴）。
+            val demandShifts = (0 until p.K).filter { kk ->
+                (0 until p.T).any { jj -> p.need1[kk][jj] > 0 || (p.use2 && p.need2[kk][jj] > 0) }
+            }.toSet()
             fun demandLoad(i: Int): Int = (0 until p.T).count { jj -> norm[i][jj] in demandShifts }
             val infeasByShift = list.filter { it.verdict == CoverageVerdict.INFEASIBLE }
                 .groupBy { it.shiftIndex }

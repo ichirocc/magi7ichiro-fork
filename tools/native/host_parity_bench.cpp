@@ -89,6 +89,12 @@ static MagiProblem buildProblem(int S, int T, int K, int G, uint64_t seed, bool 
     for (int c = 0; c < ri(1, 3); c++) { int s = ri(1, K - 1); p.cons3n.push_back(mkC3({s, s, s})); }   // forbidden triple-run
     for (int c = 0; c < ri(1, 2); c++) { int s = ri(1, K - 1); p.cons3m.push_back(mkC3({s, s})); }        // single-run want
     for (int c = 0; c < ri(1, 2); c++) p.cons3mn.push_back(mkC3({ri(1, K - 1), 0}));
+    // [c3 窓マッチのビット化(3.174.0)を明示的に踏む] 多シフト D>=3 の非forbidden/forbidden を追加。
+    //   これらは singleRun=false の窓マッチ経路＝新しい popcount パスの主対象。
+    if (K >= 4) {
+        p.cons3.push_back(mkC3({ri(1, K - 1), ri(1, K - 1), ri(1, K - 1)}));                       // 非forbidden 多シフト D=3
+        p.cons3mn.push_back(mkC3({ri(1, K - 1), ri(1, K - 1), ri(1, K - 1), ri(1, K - 1)}));       // forbidden 多シフト D=4
+    }
     finalizeProblem(p);
     return p;
 }
