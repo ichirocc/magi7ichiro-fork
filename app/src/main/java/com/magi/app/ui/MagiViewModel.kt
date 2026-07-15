@@ -27,6 +27,7 @@ import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.V6FinalPort
 import com.magi.app.v6.V6NativeOptimizer
 import com.magi.app.v6.V6SanityPort
+import com.magi.app.v6.V6SanityReport
 import com.magi.app.v6.Hf63Infeasibility
 import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.Ws1Result
@@ -56,6 +57,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -139,17 +142,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     init {
         // 起動時: 前回の自動保存があれば復元（無ければ何もしない）
         viewModelScope.launch {
-            val txt = withContext(Dispatchers.IO) {
-                runCatching { autosaveFile.takeIf { it.exists() }?.readText() }.getOrNull()
-            }
-            // 中断検知: 実行中マーカーが残っていれば前回の計算は完遂前に終了（プロセスkill等）。
-            // loadAsync より先にフラグを立て、makeUi の base 経由で保持させる。
-            val marker = withContext(Dispatchers.IO) {
-                runCatching { runMarkerFile.takeIf { it.exists() }?.readText() }.getOrNull()
-            }
-            // [C1] 完了結果ファイルがあれば、bg最適化はUI不在でも完走済み＝結果を最優先で採用する。
-            val resultTxt = withContext(Dispatchers.IO) {
-                runCatching { OptimizationWorker.resultFile(getApplication<Application>()).takeIf { it.exists() }?.readText() }.getOrNull()
+            // [並行I/O] 独立した3つのファイル読み込み（自動保存・中断マーカー・完了結果）は互いに依存しない
+            //   ＝async で待ち時間を重ね合わせ起動レイテンシを縮める（snapTxt/bgActive は resultTxt に依存
+            //   するため後段で逐次に読む）。marker=中断検知（loadAsync より先にフラグを立て base 経由で保持）、
+            //   resultTxt=[C1] bg最適化の完了結果（UI不在でも完走済み＝最優先で採用）。
+            val (txt, marker, resultTxt) = coroutineScope {
+                val a = async(Dispatchers.IO) { runCatching { autosaveFile.takeIf { it.exists() }?.readText() }.getOrNull() }
+                val b = async(Dispatchers.IO) { runCatching { runMarkerFile.takeIf { it.exists() }?.readText() }.getOrNull() }
+                val c = async(Dispatchers.IO) { runCatching { OptimizationWorker.resultFile(getApplication<Application>()).takeIf { it.exists() }?.readText() }.getOrNull() }
+                Triple(a.await(), b.await(), c.await())
             }
             if (!resultTxt.isNullOrBlank()) {
                 clearRunMarker()
@@ -246,12 +247,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers})")
     }
 
-    private fun applyBgResult(r: OptimizationRepository.BgResult) {
+    private suspend fun applyBgResult(r: OptimizationRepository.BgResult) {
         val st0 = state ?: return
         // [再実行 keep-best] 背景完了結果が前回採用解より悪化なら前回を維持（前景と同じ方針）。
         val prev = resultSchedule
         if (prev != null) {
-            val prevReport = UnifiedViolationChecker.check(st0, prev)
+            val prevReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, prev) }
             val newHard = r.report.hard.toLong(); val newTotal = r.report.total
             val worse = newHard > prevReport.hard.toLong() || (newHard == prevReport.hard.toLong() && newTotal > prevReport.total)
             if (worse) {
@@ -260,10 +261,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 resultSchedule = kept
                 state = st0.withSchedule(kept)
                 autoSave()
-                _ui.update { makeUi(state ?: st0, kept, prevReport, it.copy(
+                pushReport(state ?: st0, kept, prevReport) { it.copy(
                     running = false, hasResult = true,
                     message = "今回(必須$newHard/合計$newTotal)は前回(必須${prevReport.hard}/合計${prevReport.total})より改善せず。前回の結果を維持しました。",
-                )) }
+                ) }
                 logOp("I", "バックグラウンド: 今回 必須$newHard/合計$newTotal は前回 以下に改善せず → 前回を維持")
                 clearRunMarker()
                 OptimizationWorker.clearFiles(getApplication<Application>())
@@ -277,10 +278,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = sched
         state = st0.withSchedule(sched)
         autoSave()
-        _ui.update { makeUi(state ?: st0, sched, r.report, it.copy(
+        pushReport(state ?: st0, sched, r.report) { it.copy(
             running = false, hasResult = true,
             message = "バックグラウンド最適化 完了: 必須=${r.report.hard} 合計=${r.report.total}",
-        )) }
+        ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
         lastResultHard = r.report.hard.toLong()
         clearRunMarker()
@@ -407,11 +408,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         resultSchedule = if (markResult) lp.schedule.copy2D() else null
                         clearUndo()
                         autoSave()
-                        _ui.update { makeUi(
-                            st = lp.state,
-                            schedule = lp.schedule,
-                            report = lp.report,
-                            base = it.copy(
+                        pushReport(lp.state, lp.schedule, lp.report) {
+                            it.copy(
                                 loaded = true,
                                 running = false,
                                 hasResult = markResult,
@@ -428,8 +426,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 itersPerSec = 0,
                                 elapsedMs = 0,
                                 message = "読込完了: ${lp.state.staffCount}名 / ${lp.state.dayCount}日 / ${lp.state.shiftCount}シフト",
-                            ),
-                        ) }
+                            )
+                        }
                         logOp("I", "読込 ${lp.state.staffCount}名/${lp.state.dayCount}日/${lp.state.shiftCount}シフト")
                     },
                     onFailure = {
@@ -511,10 +509,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val res = V6FinalPort.handleCheck(st, sched)
                 if (seq != checkSeq) return@launch   // [review #6] a newer check started; drop stale result
-                _ui.update { makeUi(st, res.schedule, res.report, it.copy(
+                pushReport(st, res.schedule, res.report) { it.copy(
                     running = false,
                     message = "違反チェック完了: 必須=${res.report.hard} 合計=${res.report.total}",
-                )) }
+                ) }
                 logOp("I", "違反チェック 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: CancellationException) {
                 throw e
@@ -538,14 +536,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 autoSave()
                 resultSchedule = res.schedule.copy2D()
                 state = st.withSchedule(res.schedule)
-                _ui.update { makeUi(state ?: st, res.schedule, res.report, it.copy(
+                pushReport(state ?: st, res.schedule, res.report) { it.copy(
                     running = false,
                     hasResult = true,
                     iters = 0,
                     itersPerSec = 0,
                     elapsedMs = 0,
                     message = "簡易作成完了: 必須=${res.report.hard} 合計=${res.report.total}",
-                )) }
+                ) }
                 logOp("I", "簡易作成 完了 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: Exception) {
                 _ui.update { it.copy(running = false, message = "簡易作成失敗: ${e.message}") }
@@ -560,8 +558,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (_ui.value.running) return
         if (!ensureValidForRun(st0, sched0)) return
         val runState = st0.withSchedule(sched0)
-        val p = Problem(runState)
-        val ev = Evaluator(p)
         val params = SaParams(
             workers = _ui.value.workers,
             budgetMs = _ui.value.budgetSec * 1000L,
@@ -574,6 +570,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             try {
                 val res = withContext(Dispatchers.Default) {
+                    // [Main負荷回避] Problem/Evaluator の構築（同期CPU）も Default で行う（他経路と統一）。
+                    val p = Problem(runState)
+                    val ev = Evaluator(p)
                     SaOptimizer(p, ev).run(params) { pr ->
                         val now = System.currentTimeMillis()
                         if (now - lastUiMs >= 200) {
@@ -596,14 +595,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 resultSchedule = res.schedule.copy2D()
                 state = runState.withSchedule(res.schedule)
                 val ips = if (res.elapsedMs > 0) res.totalIters * 1000 / res.elapsedMs else 0
-                _ui.update { makeUi(state ?: runState, res.schedule, report, it.copy(
+                pushReport(state ?: runState, res.schedule, report) { it.copy(
                     running = false,
                     hasResult = true,
                     iters = res.totalIters,
                     itersPerSec = ips,
                     elapsedMs = res.elapsedMs,
                     message = "高速計算完了: 必須=${report.hard} 合計=${report.total} (${res.totalIters}反復, ${res.elapsedMs}ms)",
-                )) }
+                ) }
             } catch (e: CancellationException) {
                 // [停止 keep-best] 中断時は途中(未採用)盤面ではなく直前に確定していた入力解を保持し表示も整合させる。
                 val kept = sched0.copy2D()
@@ -613,11 +612,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = kept
                 resultSchedule = kept
                 state = runState.withSchedule(kept)
-                _ui.update { makeUi(state ?: runState, kept, keptReport, it.copy(
+                pushReport(state ?: runState, kept, keptReport, nonCancellable = true) { it.copy(
                     running = false,
                     hasResult = true,
                     message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
-                )) }
+                ) }
                 throw e
             } catch (e: Exception) {
                 // [review D] 失敗時は進捗中に書き込んだメトリクス（反復数・速度・経過）を消す。
@@ -651,14 +650,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 resultSchedule = res.schedule.copy2D()
                 state = st.withSchedule(res.schedule)
                 val ips = if (res.elapsedMs > 0) res.iterations * 1000 / res.elapsedMs else 0
-                _ui.update { makeUi(state ?: st, res.schedule, res.report, it.copy(
+                pushReport(state ?: st, res.schedule, res.report) { it.copy(
                     running = false,
                     hasResult = true,
                     iters = res.iterations,
                     itersPerSec = ips,
                     elapsedMs = res.elapsedMs,
                     message = "軽量最適化完了: 必須=${res.report.hard} 合計=${res.report.total}",
-                )) }
+                ) }
             } catch (e: CancellationException) {
                 // [停止 keep-best] 中断時は途中(未採用)盤面ではなく直前に確定していた入力解を保持し表示も整合させる。
                 val kept = sched.copy2D()
@@ -668,11 +667,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = kept
                 resultSchedule = kept
                 state = st.withSchedule(kept)
-                _ui.update { makeUi(state ?: st, kept, keptReport, it.copy(
+                pushReport(state ?: st, kept, keptReport, nonCancellable = true) { it.copy(
                     running = false,
                     hasResult = true,
                     message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
-                )) }
+                ) }
                 throw e
             } catch (e: Exception) {
                 _ui.update { it.copy(running = false, message = "軽量最適化失敗: ${e.message}") }
@@ -792,12 +791,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     autoSave()
                     resultSchedule = kept
                     state = st0.withSchedule(kept)
-                    _ui.update { makeUi(state ?: st0, kept, baseReport, it.copy(
+                    pushReport(state ?: st0, kept, baseReport) { it.copy(
                         running = false,
                         hasResult = true,
                         itersPerSec = if (it.elapsedMs > 0) it.iters * 1000 / it.elapsedMs else 0,
                         message = "今回(必須$newHard/合計$newTotal)は前回(必須$baseHard/合計$baseTotal)より改善しませんでした。前回の結果を維持します。",
-                    )) }
+                    ) }
                     logOp("I", "再実行: 今回 必須$newHard/合計$newTotal は前回 必須$baseHard/合計$baseTotal 以下に改善せず → 前回を維持")
                     lastResultHard = baseHard
                 } else {
@@ -805,12 +804,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     autoSave()
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
-                    _ui.update { makeUi(state ?: st0, res.schedule, res.report, it.copy(
+                    pushReport(state ?: st0, res.schedule, res.report) { it.copy(
                         running = false,
                         hasResult = true,
                         itersPerSec = if (it.elapsedMs > 0) it.iters * 1000 / it.elapsedMs else 0,
                         message = "最適化（${res.phase}）完了: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)",
-                    )) }
+                    ) }
                     lastResultHard = newHard
                 }
                 lastTopHardFamily = if (res.report.hard > 0) topHardFamilyJp(res.report.breakdown) else null
@@ -835,11 +834,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = kept
                 resultSchedule = kept
                 state = st0.withSchedule(kept)
-                _ui.update { makeUi(state ?: st0, kept, keptReport, it.copy(
+                pushReport(state ?: st0, kept, keptReport, nonCancellable = true) { it.copy(
                     running = false,
                     hasResult = true,
                     message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
-                )) }
+                ) }
                 logOp("I", "停止: 直前の勤務表 必須=${keptReport.hard}/合計=${keptReport.total} を保持")
                 throw e
             } catch (e: Exception) {
@@ -883,14 +882,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 resultSchedule = finalSched
                 state = st0.withSchedule(finalSched)
                 val gain = baseReport.total - finalReport.total
-                _ui.update { makeUi(state ?: st0, finalSched, finalReport, it.copy(
+                pushReport(state ?: st0, finalSched, finalReport) { it.copy(
                     running = false,
                     hasResult = true,
                     message = if (gain > 0)
                         "ソフト研磨 完了: 合計 ${baseReport.total} → ${finalReport.total}（-$gain）必須=${finalReport.hard} (${System.currentTimeMillis() - startMs}ms)"
                     else
                         "ソフト研磨 完了: これ以上の削減は見つかりませんでした（合計=${finalReport.total} 必須=${finalReport.hard}）。残りは構造的要因の可能性。",
-                )) }
+                ) }
                 logOp("I", "ソフト研磨 完了 必須=${finalReport.hard} 合計=${finalReport.total}（${if (gain > 0) "-$gain" else "増減なし"}）")
             } catch (e: CancellationException) {
                 // [停止 keep-best] 中断時は直前の確定盤面を保持し表示も整合させる。
@@ -901,11 +900,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = kept
                 resultSchedule = kept
                 state = st0.withSchedule(kept)
-                _ui.update { makeUi(state ?: st0, kept, keptReport, it.copy(
+                pushReport(state ?: st0, kept, keptReport, nonCancellable = true) { it.copy(
                     running = false,
                     hasResult = true,
                     message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
-                )) }
+                ) }
                 throw e
             } catch (e: Exception) {
                 _ui.update { it.copy(running = false, message = "自動整えに失敗: ${e.message}") }
@@ -932,9 +931,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Shift indices a staff member may take (for the cell-edit bottom sheet). */
+    // [メインスレッド負荷削減] cachedProblem を使用（兄弟の staffCellLimits/needCellLimits と統一）。
+    //   本アクセサは StaffingRealityCard の `for i: allowedShiftsFor(i)` ループや ScheduleGrid の
+    //   canDo ラムダ等、Compose の合成/再合成から O(職員数) 回呼ばれる。旧実装は呼び出し毎に
+    //   Problem(st) を新規構築し（canDo/range/apt/wish 行列を毎回再割当）メインスレッドを浪費していた。
+    //   Problem は state の純粋関数のため、state 参照で識別する ProblemCache のヒットに置換して等価かつ
+    //   スコアリング不変（allowedShiftsForStaff は bucket を返す読み取り専用）。
     fun allowedShiftsFor(i: Int): IntArray {
         val st = state ?: return IntArray(0)
-        return Problem(st).allowedShiftsForStaff(i)
+        return cachedProblem(st).allowedShiftsForStaff(i)
     }
 
     /** 入力ガイド（月次/年次の入力手順）用の各項目の件数。 */
@@ -1004,13 +1009,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var alternativeScheds: List<Array<IntArray>> = emptyList()
 
     /** 直近の並列最適化で得た「他の案」を取り込み、サマリをUIへ反映。 */
-    private fun captureAlternatives() {
+    private suspend fun captureAlternatives() {
         val st = state ?: return
         val alts = V6NativeOptimizer.lastAlternatives.map { it.copy2D() }
         alternativeScheds = alts
-        val summaries = alts.mapIndexed { idx, sch ->
-            val rep = UnifiedViolationChecker.check(st, sch)
-            "案${idx + 1}: 必須=${rep.hard} 合計=${rep.total}"
+        // [Main負荷回避] 他案（最大3件）の違反チェックは同期CPU → Default で実行してから反映。
+        val summaries = withContext(Dispatchers.Default) {
+            alts.mapIndexed { idx, sch ->
+                val rep = UnifiedViolationChecker.check(st, sch)
+                "案${idx + 1}: 必須=${rep.hard} 合計=${rep.total}"
+            }
         }
         _ui.update { it.copy(alternatives = summaries) }
     }
@@ -1024,9 +1032,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = sch
         state = st.withSchedule(sch)
         autoSave()
-        val rep = UnifiedViolationChecker.check(state ?: st, sch)
-        _ui.update { makeUi(state ?: st, sch, rep, it.copy(hasResult = true, message = "他の案 ${i + 1} を適用")) }
-        logOp("I", "他の案 ${i + 1} を適用 必須=${rep.hard} 合計=${rep.total}")
+        viewModelScope.launch {
+            val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(state ?: st, sch) }
+            pushReport(state ?: st, sch, rep) { it.copy(hasResult = true, message = "他の案 ${i + 1} を適用") }
+            logOp("I", "他の案 ${i + 1} を適用 必須=${rep.hard} 合計=${rep.total}")
+        }
     }
 
     /** Set a specific shift in a cell (bottom-sheet picker). */
@@ -1776,7 +1786,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val r = V6FinalPort.handleCheck(ns, sched)
                 if (seq != checkSeq) return@launch
-                _ui.update { makeUi(ns, r.schedule, r.report, it.copy(running = false, message = "$doneMessage｜必須=${r.report.hard} 合計=${r.report.total}")) }
+                pushReport(ns, r.schedule, r.report) { it.copy(running = false, message = "$doneMessage｜必須=${r.report.hard} 合計=${r.report.total}") }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -1909,7 +1919,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val rep = V6FinalPort.handleCheck(r.state, sched)
                 if (seq != checkSeq) return@launch
-                _ui.update { makeUi(r.state, rep.schedule, rep.report, it.copy(running = false, message = "$doneMessage｜必須=${rep.report.hard} 合計=${rep.report.total}")) }
+                pushReport(r.state, rep.schedule, rep.report) { it.copy(running = false, message = "$doneMessage｜必須=${rep.report.hard} 合計=${rep.report.total}") }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -2255,11 +2265,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}"
                 else
                     "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}"
-                _ui.update { makeUi(state ?: st, res.schedule, res.report, it.copy(
+                pushReport(state ?: st, res.schedule, res.report) { it.copy(
                     running = false,
                     hasResult = true,
                     message = msg,
-                )) }
+                ) }
                 if (res.matched in 1 until total) {
                     logOp("W", "CSV取込 一部のみ反映: ${res.matched}/${total}名一致（${total - res.matched}名は氏名不一致）")
                 }
@@ -2374,17 +2384,81 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return out
     }
 
-    private fun makeUi(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, base: UiState): UiState {
-        val groupSymbols = st.staff.map { staff -> st.groups.getOrNull(staff.groupIdx)?.kigou ?: "" }
-        val v6 = V6PortAnalyzer.analyze(st, schedule, report)
-        val sanity = V6SanityPort.build(st, schedule)
+    /**
+     * makeUi の重い解析4パスの出力を束ねる不変ホルダ。純関数の出力のみを保持するため、
+     * どのスレッドで生成しても安全（背景スレッドで作りメインへ受け渡せる）。
+     */
+    private data class Analysis(
+        val v6: V6PortReport,
+        val sanity: V6SanityReport,
+        val coverageDiag: CoverageDiagnosis?,
+        val v6Logs: List<String>,
+        val rawDiagLogs: List<String>,
+    )
+
+    /**
+     * makeUi が必要とする4つの重い解析を Dispatchers.Default 上で「並列」に実行する。
+     * 4パス（analyze / build / diagnoseCoverage / buildViolationDebug）は同じ不変入力にのみ依存し
+     * 相互参照しない純関数なので、別コアで同時実行でき、壁時計時間が sum(パス) → max(パス) に短縮される
+     * （最重量は全制約走査の buildViolationDebug）。coroutineScope により、いずれかの失敗・呼び出し元の
+     * キャンセルは兄弟 async へ確実に伝播する（構造化並行性）。
+     */
+    private suspend fun analyzeParallel(
+        st: MagiState,
+        schedule: Array<IntArray>,
+        report: ViolationReport,
+    ): Analysis = coroutineScope {
+        val v6D       = async(Dispatchers.Default) { V6PortAnalyzer.analyze(st, schedule, report) }
+        val sanityD   = async(Dispatchers.Default) { V6SanityPort.build(st, schedule) }
         // 人員不足(covU)が残る場合のみ原因診断（どの日/シフトが「充足不可」か「未到達」か）を算出しログに残す。
-        val coverageDiag = V6PortAnalyzer.diagnoseCoverage(st, schedule, report).takeIf { it.hasShortage }
+        val coverageD = async(Dispatchers.Default) {
+            V6PortAnalyzer.diagnoseCoverage(st, schedule, report).takeIf { it.hasShortage }
+        }
+        // [デバッグ] 制約違反を家族ごとに「場所＋実値(必要/現状, 回数/下限上限, 誰/何日/シフト)」で出力。
+        val vioDebugD = async(Dispatchers.Default) { V6SanityPort.buildViolationDebug(st, schedule, report) }
+
+        // v6Logs は sanity/coverageDiag に依存 → 依存先だけ先に await（依存グラフを尊重）
+        val sanity = sanityD.await()
+        val coverageDiag = coverageD.await()
         val v6Logs = listOf("[I] LoadDataBit: ${sanity.loadDataBitSummary}") + sanity.warns.map { "[W] SanityCheck: $it" } + sanity.notes.map { "[I] V6Port: $it" } + sanity.duplicateSeqConstraints.take(4).map { "[W] DuplicateSeq: $it" } + sanity.guidance.take(12).map { "[W] 設定ミス: ${it.where} — ${it.problem} → ${it.fix}" } + (coverageDiag?.logLines() ?: emptyList())
         val mappedDiag = report.logs.map { "[${it.level}] ${it.tag}: ${it.message}" }
-        // [デバッグ] 制約違反を家族ごとに「場所＋実値(必要/現状, 回数/下限上限, 誰/何日/シフト)」で出力。
-        val violationDebug = V6SanityPort.buildViolationDebug(st, schedule, report)
-        rawDiagLogs = v6Logs + mappedDiag + violationDebug   // 出力用の全文（非圧縮）。表示は下で圧縮版を使う。
+        Analysis(
+            v6 = v6D.await(),
+            sanity = sanity,
+            coverageDiag = coverageDiag,
+            v6Logs = v6Logs,
+            rawDiagLogs = v6Logs + mappedDiag + vioDebugD.await(),   // 出力用の全文（非圧縮）。表示は圧縮版を使う。
+        )
+    }
+
+    /**
+     * 重い解析(analyzeParallel)を Default で並列実行し、その結果を StateFlow へ反映する共通経路。
+     * 共有可変(rawDiagLogs)の書き込みと _ui.update はメインスレッドで行い、背景スレッドからは書かない
+     * （＝レース不能・単一ライタ）。全 makeUi 呼び出しをこの1経路へ集約する。
+     * @param nonCancellable 停止(keep-best)経路から呼ぶ場合 true＝スコープキャンセル後も解析を完了させる。
+     */
+    private suspend fun pushReport(
+        st: MagiState,
+        schedule: Array<IntArray>,
+        report: ViolationReport,
+        nonCancellable: Boolean = false,
+        transform: (UiState) -> UiState = { it },
+    ) {
+        val analysis =
+            if (nonCancellable) withContext(NonCancellable) { analyzeParallel(st, schedule, report) }
+            else analyzeParallel(st, schedule, report)
+        rawDiagLogs = analysis.rawDiagLogs
+        _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)) }
+    }
+
+    private fun makeUi(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, analysis: Analysis, base: UiState): UiState {
+        val groupSymbols = st.staff.map { staff -> st.groups.getOrNull(staff.groupIdx)?.kigou ?: "" }
+        val v6 = analysis.v6
+        val sanity = analysis.sanity
+        val coverageDiag = analysis.coverageDiag
+        val v6Logs = analysis.v6Logs
+        val mappedDiag = report.logs.map { "[${it.level}] ${it.tag}: ${it.message}" }
+        // rawDiagLogs は pushReport がメインスレッドで設定済み（背景スレッドからは書かない＝レース回避）。
         // 満足度(0-100): 初期からの違反削減率。HARD未解決の間は上限を抑える。
         val initTotal = (base.initHard + base.initSoft).coerceAtLeast(1L)
         val ratio = (1.0 - report.total.toDouble() / initTotal).coerceIn(0.0, 1.0)
