@@ -801,6 +801,30 @@ Compose 合成/再合成中に O(職員数) 回呼ばれ、呼び出し毎に ca
 数学的に整合）から逆算。同根の穴（緩和案候補`demandShifts`が`need1>0`のみで判定）も同じ関数内で発見し
 同時に修正。回帰テスト`diagnoseCoverageCatchesNeed2OnlyShortfall`追加（need1=""・need2="2"・配置1人の
 盤面でmiss=1を検出）。読取専用・スコアリング/エンジンは不変（診断表示のみ）。
+## メインスレッド負荷の削減=表示解析の並列化＋起動I/Oの並行化（3.176.0）
+ユーザー指示「並行(Concurrency)・並列(Parallelism)を検証・適用してモダン化」。エンジンの重い処理
+（handleCheck/handleOptimize 等）は既に `suspend fun … = withContext(Dispatchers.Default)` で Main 外だが、
+**その結果を表示用に再解析する `makeUi` が Main 上で逐次実行**されていた（`_ui.update { makeUi(...) }` は
+`withContext` を抜けた直後＝`Dispatchers.Main.immediate` で走る）。makeUi の4パス（`V6PortAnalyzer.analyze`／
+`V6SanityPort.build`／`diagnoseCoverage`／`buildViolationDebug`＝いずれも内部に `withContext` を持たない純同期
+関数）は**同じ不変入力にのみ依存し相互参照しない**ため、セル編集ごと（refreshCheck）に Main で `sum(パス)` を
+費やしていた。**表示ロジック不変・スコアリング不変**（makeUi の出力は同一、実行スレッド/並列度のみ変更）。
+- **並列(Parallelism)**: `analyzeParallel`（新設・suspend）で4パスを `async(Dispatchers.Default)` に分解し
+  `coroutineScope` 配下で同時実行→壁時計 `sum → max(パス)`（最重量=全制約走査の buildViolationDebug）。
+  `v6Logs` は sanity/coverageDiag 依存のため依存先だけ先に await（依存グラフ尊重）。純関数の出力を不変ホルダ
+  `Analysis` に束ね、共有可変（`rawDiagLogs`）の書き込みと `_ui.update` は**メインスレッドの単一ライタ**に限定
+  （背景から書かない＝レース不能）。全 makeUi 呼び出しを `pushReport(st, sched, report, nonCancellable?) { … }`
+  の1経路へ集約（18箇所置換）。停止(keep-best)経路は `nonCancellable=true`＝`withContext(NonCancellable)` で
+  スコープキャンセル後も解析を完了（既存の keptReport 計算と同思想）。
+- **並行(Concurrency)**: `init` の独立3ファイル読み込み（自動保存/中断マーカー/完了結果）を逐次
+  `withContext(Dispatchers.IO)` から `async(Dispatchers.IO)` + `Triple(a.await(),b.await(),c.await())` へ＝I/O待ちを
+  重ね合わせ起動レイテンシ短縮（snapTxt/bgActive は resultTxt 依存のため逐次のまま）。
+- **軽微(同種の Main 上同期CPUの掃討)**: `applyBgResult`/`captureAlternatives`/`applyAlternative` を suspend 化し
+  `UnifiedViolationChecker.check` を `withContext(Dispatchers.Default)` へ退避／`start()` の `Problem`/`Evaluator`
+  構築を launch 内の `withContext(Default)` へ移動（他経路と統一）。
+- 検証: サンドボックスは Android/Kotlin コンパイル不可＝波括弧/丸括弧balance（差0）と全 makeUi 呼び出しの
+  置換漏れ0を静的確認。最終判定は CI（v6-engine-check の assembleDebug/testDebugUnitTest・Release Build）。
+  HF77 非該当（重み/スコア不変・探索内部不変、UI 反映のスレッド/並列度のみ変更）。
 
 ## SaChunk のビット化評価（c1窓・c41/c42/c41s/c42s の O(1) 化, 3.172.0）
 バックログ#6（自動パリティテスト無し）への根本対策として提示されたホストビルド可能なパリティ/ベンチ
