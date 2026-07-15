@@ -12,7 +12,6 @@ on:
   push:
     branches:
       - main
-      - claude/github-repo-fork-x8ygvy   # [一時] マージ前のCI緑確認用。確認後に撤去する。
   pull_request:
     branches:
       - main
