@@ -146,6 +146,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
     var editScope by rememberSaveable { mutableStateOf(0) }   // [入口4分割] 編集タブ: 0=月次条件 / 1=職員管理 / 2=年間マスター
+    // [下流→上流ディープリンク] 要確認一覧「設定で直す」→ 該当職員/シフトを事前選択して開く（-1=無し・消費で戻す）。
+    var deepLinkWishStaff by rememberSaveable { mutableStateOf(-1) }
+    var deepLinkNeedShift by rememberSaveable { mutableStateOf(-1) }
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
     var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
@@ -437,8 +440,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
                             MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 }, onOpenWish = openWish)
                             MonthPickerCard(ui, vm)
-                            WishCard(ui, vm)
-                            NeedCalendarCard(ui, vm)
+                            WishCard(ui, vm, initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, onInitialConsumed = { deepLinkWishStaff = -1 })
+                            NeedCalendarCard(ui, vm, initialShift = deepLinkNeedShift.takeIf { it >= 0 }, onInitialConsumed = { deepLinkNeedShift = -1 })
                             NeedDayCard(ui, vm)
                         }
                         1 -> {
@@ -510,7 +513,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ConfirmListCard(ui, onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode,
                         onShowCell = { i, j -> focusCell = i to j; tab = 1 },
                         // [⑥日別ジャンプ] 人員/群レンジ(日×シフト)の項目→勤務表タブの該当日列へ（i=-1=日のみ注目）。
-                        onShowDay = { j -> focusCell = -1 to j; tab = 1 })
+                        onShowDay = { j -> focusCell = -1 to j; tab = 1 },
+                        // [下流→上流ディープリンク] pref→希望シフト登録(職員)、covU/covO→必要人数カレンダー(シフト)。編集タブ/月次条件へ。
+                        onFixWish = { s -> deepLinkWishStaff = s; editScope = 0; tab = 2 },
+                        onFixNeed = { k -> deepLinkNeedShift = k; editScope = 0; tab = 2 })
                     // [★3+4] 日別/人別 注意リスト＋「要確認のみ」トグル（web「画面修正版」day/staff＋alertOnly 融合）。
                     //   人別行タップで修復フローへ。BottleneckCard(top5テキスト) の上位互換のため下の BottleneckCard は撤去。
                     AttentionCardsSection(ui, onFocusStaff = { vm.findFixSuggestions(it) })

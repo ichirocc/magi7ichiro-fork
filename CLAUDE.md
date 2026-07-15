@@ -1402,6 +1402,21 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
 - 検証: サンドボックスは arm64 クロスコンパイル不可＝flag は lld 標準（NDK26 の lld 対応）で低リスク、最終判定は
   CI（Release Build＝CMake/NDK が .so をリンク）。スコアリング/エンジン不変（ビルド設定のみ）。
 
+## 下流→上流ディープリンク「設定で直す」（3.182.0, 3.180.0 タスク2の完了）
+3.180.0 で「粗い経路は成立・精密ディープリンクは未実装＝バックログ」とした項目を、grilling で範囲確定（対象=pref/covU/covO
+のみ／入口=要確認一覧／スクロール=事前選択のみ）して実装。**表示・導線のみ・スコアリング不変**（読取専用の違反マップから
+編集画面の職員/シフトを事前選択するだけ）。
+- **ConfirmItem 拡張**: `wishStaff`/`needShift`（既定 null）を追加。`confirmItems` で **pref**（violationCells の族に "pref" 含む）→
+  `wishStaff=i`、**covU/covO**（needViolations）→`needShift=k`。他族（c1/c3/群/回数）は null＝導線を出さない。
+- **ConfirmRow**: 末尾に「設定で直す」TextButton（行本体タップの勤務表/直し方導線とは別アクション）。`when` はローカル val
+  （ws/ns）でラムダ内スマートキャストを安全化。
+- **配線**（MagiApp）: `deepLinkWishStaff`/`deepLinkNeedShift`（rememberSaveable Int・-1=無し）を新設。ConfirmListCard の
+  `onFixWish`/`onFixNeed` が該当値をセット＋`editScope=0`＋`tab=2`。`WishCard(initialStaff, onInitialConsumed)`/
+  `NeedCalendarCard(initialShift, onInitialConsumed)` に事前選択パラメータを追加し、`LaunchedEffect(initial)` で内部 `i`/`k` を
+  該当職員/シフトへ設定して消費（-1 へ戻す）。自動スクロールは無し（ユーザー選択どおり）。
+- 検証: ブレース均衡・呼び出し側シグネチャ一致（新パラメータは全て default 付き＝既存呼出非破壊）・重複定義0を静的確認、
+  最終判定は CI（Release Build）。
+
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。
 2. 未レビュー領域の精読: `V6LateOperators`/`V6SearchOperators`/`V6HotfixPasses` 各パス内部, `V6WebCompat`,

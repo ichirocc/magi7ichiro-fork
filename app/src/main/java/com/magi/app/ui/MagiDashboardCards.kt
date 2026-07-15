@@ -627,6 +627,10 @@ private data class ConfirmItem(
     val staff: Int?,        // タップ修復のフォーカス職員（null=全体探索）
     val day: Int?,          // [ジャンプ] セル違反の日index（null=セルに紐付かない項目）
     val order: Int,         // 並び（kind→場所）
+    // [下流→上流ディープリンク] pref違反→希望シフト登録(該当職員) / covU・covO→必要人数カレンダー(該当シフト)。
+    //   null=そのカレンダーへの「設定で直す」導線を出さない。
+    val wishStaff: Int? = null,
+    val needShift: Int? = null,
 )
 
 /**
@@ -644,7 +648,8 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val fam = cls.removePrefix("vio-")
         // [④用語統一] 過剰マークは「過剰」（凡例/集計と同語）。[⑥日別ジャンプ] day=j で勤務表の該当日列へ飛べる。
         val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過剰" to 1; else -> "調整" to 1 }
-        out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, j, kind * 100000 + j * 100 + k)
+        out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, j, kind * 100000 + j * 100 + k,
+            needShift = if (fam == "covU" || fam == "covO") k else null)
     }
     // 個人回数: countViolations "i,k" -> vio-low/high/c2/aptLow/aptHigh（職員×シフト）
     for ((key, cls) in ui.countViolations) {
@@ -669,7 +674,8 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         // [Set化] 同セルに重なった族は sub に全列挙（重み降順）。行数=箇所数は不変（見出し件数の意味を保つ）。
         val famsAll = (ui.violationCellFamilies[key] ?: listOf(cls)).map { it.removePrefix("vio-") }
         val sub = famsAll.joinToString("・") { breakdownLabels[it] ?: it }
-        out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", sub, i, j, kind * 100000 + 80000 + j * 100 + i)
+        out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", sub, i, j, kind * 100000 + 80000 + j * 100 + i,
+            wishStaff = if ("pref" in famsAll) i else null)
     }
     return out.sortedWith(compareBy({ it.kind }, { it.order }))
 }
@@ -693,7 +699,10 @@ private fun ConfirmFilterChip(label: String, count: Int, selected: Boolean, onCl
 
 /** [★1] 要確認一覧の1行（spec confirmCard 同型：マークバッジ＋タイトル＋族＋メタ）。 */
 @Composable
-private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCell: (Int, Int) -> Unit, onShowDay: (Int) -> Unit) {
+private fun ConfirmRow(
+    item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCell: (Int, Int) -> Unit, onShowDay: (Int) -> Unit,
+    onFixWish: (Int) -> Unit = {}, onFixNeed: (Int) -> Unit = {},
+) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
     val (bg, fg) = when (item.kind) {
@@ -720,8 +729,16 @@ private fun ConfirmRow(item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCel
                 Text(item.title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(item.sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            if (clickable) Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium,
-                color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
+            // [下流→上流ディープリンク] 末尾に「設定で直す」（行本体タップの勤務表/直し方導線とは別アクション）。
+            //   ローカル val に取り出してラムダ内スマートキャストを安全化。
+            val ws = item.wishStaff
+            val ns = item.needShift
+            when {
+                ws != null -> TextButton(onClick = { onFixWish(ws) }) { Text("設定で直す") }
+                ns != null -> TextButton(onClick = { onFixNeed(ns) }) { Text("設定で直す") }
+                clickable -> Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium,
+                    color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
+            }
         }
     }
 }
@@ -742,6 +759,9 @@ internal fun ConfirmListCard(
     onShowCell: (Int, Int) -> Unit = { i, _ -> onFocusStaff(i) },
     // [⑥日別ジャンプ] 日×シフト項目（人員/群レンジ）タップで勤務表タブの該当日列へ移動＋日ヘッダをハイライト。
     onShowDay: (Int) -> Unit = {},
+    // [下流→上流ディープリンク] pref項目→希望シフト登録(該当職員)、covU/covO項目→必要人数カレンダー(該当シフト)へ。
+    onFixWish: (Int) -> Unit = {},
+    onFixNeed: (Int) -> Unit = {},
 ) {
     val items = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
     val issueCount = ui.settingIssues.size
@@ -784,7 +804,7 @@ internal fun ConfirmListCard(
                 if (counts[1] > 0) ConfirmFilterChip("過剰・要調整", counts[1], effFilter == 1) { filter = 1 }
                 if (counts[2] > 0) ConfirmFilterChip("窓", counts[2], effFilter == 2) { filter = 2 }
             }
-            shown.take(40).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay) }
+            shown.take(40).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay, onFixWish, onFixNeed) }
             if (shown.size > 40) Text("ほか ${shown.size - 40} 件（重大な順に表示中）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
             if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }

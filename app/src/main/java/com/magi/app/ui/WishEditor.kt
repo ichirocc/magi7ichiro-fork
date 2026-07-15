@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,13 +61,20 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun WishCard(ui: UiState, vm: MagiViewModel) {
+fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitialConsumed: () -> Unit = {}) {
     val staff = ui.staffNames
     val shifts = vm.shiftKigouList()
     if (staff.isEmpty() || shifts.isEmpty()) return
-    var i by remember { mutableStateOf(0) }
+    var i by remember { mutableStateOf(initialStaff?.takeIf { it in staff.indices } ?: 0) }
     if (i !in staff.indices) i = 0
     var daysSel by remember(i) { mutableStateOf(emptySet<Int>()) }
+    // [下流→上流ディープリンク] 要確認一覧の pref 項目「設定で直す」から該当職員を事前選択して開く。
+    LaunchedEffect(initialStaff) {
+        if (initialStaff != null) {
+            if (initialStaff in staff.indices) i = initialStaff
+            onInitialConsumed()
+        }
+    }
     var staffMenu by remember { mutableStateOf(false) }
     var showAllStaff by remember { mutableStateOf(false) }
     var sheetOpen by remember { mutableStateOf(false) }

@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -128,11 +129,18 @@ internal fun MultiSelectOpener(count: Int, onOpen: () -> Unit, onClear: () -> Un
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun NeedCalendarCard(ui: UiState, vm: MagiViewModel) {
+fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, onInitialConsumed: () -> Unit = {}) {
     val v = vm.ws1() ?: return
     if (v.shifts.isEmpty()) return
-    var k by remember { mutableStateOf(0) }
+    var k by remember { mutableStateOf(initialShift?.takeIf { it in v.shifts.indices } ?: 0) }
     if (k !in v.shifts.indices) k = 0
+    // [下流→上流ディープリンク] 要確認一覧の covU/covO 項目「設定で直す」から該当シフトを事前選択して開く。
+    LaunchedEffect(initialShift) {
+        if (initialShift != null) {
+            if (initialShift in v.shifts.indices) k = initialShift
+            onInitialConsumed()
+        }
+    }
     val shift = v.shifts[k]
     val cs = MaterialTheme.colorScheme
     var daysSel by remember(k) { mutableStateOf(emptySet<Int>()) }
