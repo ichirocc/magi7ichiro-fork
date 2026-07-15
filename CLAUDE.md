@@ -749,6 +749,92 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## SaChunk のビット化評価（c1窓・c41/c42/c41s/c42s の O(1) 化, 3.172.0）
+バックログ#6（自動パリティテスト無し）への根本対策として提示されたホストビルド可能なパリティ/ベンチ
+harness（`tools/native/host_parity_bench.cpp`）を先に検証してから適用（バックログ#6は依然未解消＝この
+harness はオンデマンド実行専用でCI配線はしていない。将来 CI 化する場合はバックログ#6の続きとする）。
+- **中身**: `SaChunk`（C++ SA差分評価の中核）に `S<=64 && T<=64` のとき有効化される bitmask
+  （`rowMask[S*K]`=職員×シフトの日ビット集合／`dayShiftMask[T*K]`=日×シフトの職員ビット集合／
+  `grpMask`/`sskMask`=群/スキル群→職員ビット集合、静的）を追加し、`contribC1Row`(c1窓制約)と
+  `contribDayGroups`(c41/c42/c41s/c42s)を popcount ベースの O(1)（走査でなくビット演算）へ置換。
+  `fullEvalParts`/`fullEvalCombined`（2層番兵のオラクル）は**意図的にスカラーのまま不変**（diff で該当
+  範囲に触れていないことを確認済み）。JNI 関数群は `#ifndef MAGI_HOST_TEST` で囲み、ホストharnessが
+  同じ .cpp を `#include` してJNI依存なしでビルドできるようにする追加のみ（Android/CMake ビルドは
+  `MAGI_HOST_TEST` 未定義のため無変更＝本番JNI面に一切影響なし）。
+- **検証（提示されたコードをそのまま信用せず本セッションで独立に再現）**: サンドボックスで
+  `g++ -O3 -std=c++17 -DMAGI_HOST_TEST -I app/src/main/cpp tools/native/host_parity_bench.cpp` を実際に
+  ビルド・実行し、5種の合成問題(最大40職員×62日×20シフト)×6シード×4万手(リバート含め約150万手)で
+  **mismatch=0**、`deltaApply` 単体スループットは環境ノイズ込みで **×1.12〜1.37**（-O3再現で×1.32、
+  提示値と整合）を独立に確認。あわせて①`buildGroupMasks`が群id最大値を`sgrp/ssk`だけでなく
+  `cons41/42/41s/42s`の参照群idからも算出しベクタを安全にサイズ確保している点（制約側の群idはKotlin
+  `Problem.kt`の`groupIdxOf/skillGroupIdxOf`が`mapNotNull`で負値を事前に除外済み＝`grpMask[(size_t)c.g]`
+  の負値キャストOOBは構造的に到達不能）②全セル変更が例外なく`deltaApply`経由（直接`a[]`書換え箇所なし
+  ＝bitmaskが盤面と乖離しない）③`1ULL<<64`のUB回避（`c.d1>=64`の別分岐）、をコードトレースで確認。
+  実データ(S=10,T=31)は`useBits`が常時真になる規模＝本番で実際に経路が使われる。
+- **対象外**: covU/covO・pref・c2・c3系・range/apt/fair/weekly はスカラーのまま（bitmask化は c1/c41系の
+  みが対象。他族は職員数ループが既に軽い、または L1偏差など popcount で表現しにくいため対象外）。
+
+## ネイティブ照合トグル＋監査#7 SIGSEGV修正（3.171.0）
+ユーザー質問「C++移行の実機確認が済んだので、Kotlin パリティ照合の役目終了ですか?」への回答と、
+別セッションの未レビュー領域監査（3.168.0系）で見つかった項目の対応。
+- **結論（質問への回答）**: 終わっていない。実機確認は「試した範囲」の正しさしか保証せず、今後入力される
+  未知のデータ形状までは保証できない。C++評価器のパリティを検証する自動テストが無い（JVM単体テストは
+  `.so` をロードできず、CIはC++の**コンパイル成功**しか見ない＝**意味的乖離は捕捉しない**）ため、実行時の
+  Kotlinパリティ照合が唯一の安全網。既定ONを維持する。
+- **照合トグル**（ユーザー提供パッチを適用・明示承認2026-07-15）: 設定タブに「Kotlin照合」トグルを追加
+  （`NativeGate.parityCheckEnabled`・既定ON・ネイティブ加速ON時のみ操作可）。OFF=純ネイティブ＝5経路
+  （起動時フル＋SA/LAHC/ALNS/Polish各チャンク後のLong==再評価）すべてスキップしC++結果を信頼する
+  **検証/ベンチ専用モード**（⚠警告ラベル・誤った勤務表が表示される可能性を明記）。C++内部の自己整合
+  (status)番兵はトグルと独立に常時ON。診断ログ NativeBridge 行は OFF 時「Kotlin照合OFF＝純ネイティブ」を
+  Wレベルで表示。
+- **監査#7修正（SIGSEGV潜在バグ）**: 探索オペレータ約13箇所（`applyDayAssignmentPolish`/ALNS各オペ等）が
+  `p.bucket[p.sgrp[i]]`／`grpCnt[sgrp[i]*K+k]` を sgrp範囲未検証で使用。Kotlinなら不正indexは例外→
+  runCatchingで安全退化するが、C++はUB（bucket=範囲外読み・grpCnt=範囲外**書込=ヒープ破壊**）でSIGSEGVが
+  runCatchingに捕まらずプロセスクラッシュし得た（正規のエディタ/取込では`groupIdx`は常に`[0,G)`のはずで
+  到達性は低いが潜在）。個別箇所を13箇所ガードするのではなく、`nativeCreateProblem`（ハンドル生成の唯一の
+  入口）で`sgrp`を一括範囲検証し、外れていれば生成自体を拒否（0返却）する方式を採用。既存の
+  「handle==0=native不可→Kotlinへ安全退化」という確立済みの契約（`NativeEval.createHandle`の全呼出元が
+  既に`runCatching{...}.getOrDefault(0L)`でこの規約に従っている）にそのまま乗るため、Kotlin側の変更は不要
+  （C++の1ファイルのみ）。
+- **監査#6（自動パリティテスト無し）**: 緩和策として照合トグル（既定ON維持）を実装したが、根本対策
+  （ホストビルド可能なパリティfixtureをCIへ追加）は未着手のまま残す（バックログ#6）。
+- **監査#8（SAチャンク自己整合の非対称）**: 優先度低のため今回は対応せず、バックログ#8に記録のみ。
+
+## weekly/fairも同じ理由でRSI探索focusに追加（3.170.0, 「apt以外は大丈夫か」への回答）
+ユーザーの追加確認「apt以外は大丈夫ですか?」を受け、apt同様の穴が他族にも無いか同じ実データ
+(state.json)で網羅的に検証。**weekly（7日周期の曜日偏り）のL1偏差合計は65で、apt(37)より大きい**
+（上條洋平11・大島愛10 等）。fair（グループ内公平化）も合計11で非ゼロ。両者とも apt と全く同じ
+原因＝`maxViolatedFamily`の order に無く RSI 探索中は一度も focus されていなかった。
+- **対応**: orderにweekly/fairを追加し、`rsiGenerateHypothesis`のapt/low/high/c2と同じ
+  `destroyRepairStaff`経路へ合流。**正直な限界の明記**: `staffCountPenaltyAt`（destroyRepairStaffの
+  marginal cost）はlow/high/aptには対応済みだがweekly/fairの cost 計算は未対応（weekly=曜日バケット・
+  fair=群平均が必要で、対応するには`weeklyDevOfBucket`/`DeltaEvaluator.fairDevAt`相当の統合が要る、
+  より大きな改修）。今回は「専用ラウンドを割り当てるだけ」の focus 露出に留めた＝厳密な cost-aware
+  研磨ではないが、無指向な"total"空振りよりは改善機会が増える、hard>0時は完全no-op・keep-best不変の
+  安全な最小差分。将来の拡張候補として cost 関数への正式統合を残す。
+  テスト2件追加（weekly/fair優位選択）＋smokeテスト拡張（weekly/fair focusが例外なく完走）。
+
+## apt(適切回数)をRSI探索focusに追加（3.169.0, 「公平化のズレ」実機report対応）
+ユーザーが実機TallyCardスクショ（多数の▼/▲）を提示し「公平化のズレの研磨などが出来ていない」と報告。
+実際のstate.jsonで検証したところ、staffRange(低/高, 重み90/45)の乖離は合計わずか3だったのに対し、
+**apt(適切回数, 重み1)のL1偏差合計は37**（大島愛「休」実績15 vs 目標10 等）で規模が逆転しており、
+スクショの▼/▲は主にapt違反と判明。コード調査で根本原因を特定: `maxViolatedFamily`（RSI探索のfocus
+選択）の`order`リストに**aptが一度も入っていなかった**ため、探索中は常にlow/high/c1等の他族に埋もれ、
+post-processing（`applyDayAssignmentPolish`のハンガリアン割当）頼みのまま広く未研磨で残っていた。
+- **採用した修正**: `order`にaptを追加（groupViol/covU/pref/c3nのHARD優先ルールは不変＝hard>0時の
+  挙動は無変化）。`rsiGenerateHypothesis`の`"low","high","c2"`分岐に`"apt"`を追加し**既存の
+  destroyRepairStaff経路へ合流**（`staffCountPenaltyAt`のmarginal costには既にapt(重み1)が織込み済み
+  ＝新規オペレータ不要、最小差分）。ラウンド単位 better() keep-best でゲート済＝退化不能。
+- **検証方針の訂正**: 当初ユーザーに「tools/nsp_bench.pyで実測A/B検証してから進める」と伝えたが、
+  `nsp_bench.py`は"focus"/"RSI"/"maxViolatedFamily"の概念を一切持たない（grep 0件）ため、**この種の
+  focus選択変更はそもそも計測不能**と判明（3.74.0/3.95.0の先例と同じ制約＝「bench は RSI focus/
+  portfolio を模擬できない」）。よって同じ2件の先例と同方針＝**実測でなく原理（hard>0時は完全no-op・
+  既存の実証済みdestroyRepairStaff経路への合流のみ・keep-best不変）で採否**。
+  `V6NativeOptimizer.maxViolatedFamily`/`rsiGenerateHypothesis`を`private`→`internal`化しテスト可能に。
+  ユニットテスト3件（apt優位選択・HARD優先の回帰・全0時"total"フォールバックの回帰）＋
+  focus="apt"のsmokeテスト（例外なく同一次元の盤面を返す）を追加。fair/weekly はセル位置を持たない
+  集約指標のため対象外のまま（現状維持）。
+
 ## 希望シフトカレンダーのインタラクティブ化（3.168.0）
 ユーザーが第3のモックアップ（希望シフト登録画面）を提示。3.167.0の必要人数カレンダーと同じ
 方針転換をWishCardにも適用（AskUserQuestionのタイムアウトにより明示確認は取れなかったが、
@@ -1123,12 +1209,29 @@ FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止ま
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。
 2. 未レビュー領域の精読: `V6LateOperators`/`V6SearchOperators`/`V6HotfixPasses` 各パス内部, `V6WebCompat`,
    CSV/UI 層。**(3.84.0, 並列監査で一巡・下記参照)**。
-3. C++/NDK 移植は**不要**の結論（純Kotlin＋被覆対応Δ評価で十分高速）。エンジンは ALNS/Destroy-Repair/
+3. ~~C++/NDK 移植は**不要**の結論（純Kotlin＋被覆対応Δ評価で十分高速）~~ **→ 撤回（3.136〜／第2期・第3期でネイティブ加速＝
+   C++フル評価器＋SA/LAHC/ALNS/Polishチャンク＋JNI＋実行時パリティを実装。監査指摘は下記6/7）**。エンジンは ALNS/Destroy-Repair/
    ChainSwap3-4/C1BlockN/PathRelink/LNS/Reheat/Oscillation/適応的オペレータ重み/希望ロック枝刈り を実装済み。
    §4 ILP matheuristic のみ意図的に未実装。
 4. cons3n のデータ重複（Dﾃ→A4 が2行）は二重計上だが最適化器/チェッカーで一貫（SettingIssue が dedup を提案）。
 5. **E5「月全体の俯瞰」= ユーザーの明示 go まで保留**（決定記録）。指数(見やすさ12指標)で唯一70未満(58)だが、
    最低スコア≠最高価値・片手一本指/編集主体との緊張のため、着手も再提案もしない（明示 go があった場合のみ）。
+6. **[ネイティブ・保守性] C++評価器のパリティに自動テスト無し**（3.168.0系精読で判明）。JVM単体テストは arm64 `.so` を
+   ロード不可（`NativeBridge.available=false`）→ Kotlin のみ検証。CI(Release Build/Android SDK)は CMake で `.so` を
+   ビルドするので**C++コンパイルエラーは捕捉**するが**意味的乖離（重み取り違え等）は捕捉しない**。`Evaluator.kt`（や
+   `MirrorCore`/`DeltaEvaluator`）を変えて `magi_native.cpp` を変え忘れると実機で番兵発火→**ネイティブ黙殺（速度退行・誤出力なし）**。
+   3.171.0 で緩和策の一つ（ユーザーが明示的に照合を切れる「照合トグル」＋既定ONの維持）を実装。3.172.0 で
+   `tools/native/host_parity_bench.cpp`（ホストビルド可能なパリティ+ベンチharness）を追加し**オンデマンド
+   実行**では検証可能になったが、**CI配線（自動化）はまだ未着手のまま残る**（バックログとして継続）。
+7. ~~**[ネイティブ・堅牢性] 群index無検証のOOB（潜在）**（3.168.0系精読で判明）。探索オペレータ約13箇所が
+   `p.bucket[p.sgrp[i]]`／`grpCnt[sgrp[i]*K+k]` を sgrp範囲未検証で使用しており、不正な groupIdx が渡ると
+   C++側はUB（bucket=範囲外読み・grpCnt=範囲外**書込=ヒープ破壊**）でSIGSEGVし得た（Kotlin側は例外→
+   runCatchingで安全退化するのと非対称）~~ **→ 3.171.0 で解消**（`nativeCreateProblem` に sgrp 一括範囲検証を
+   追加し、外れていればハンドル生成自体を拒否=0返却。既存の「handle==0=native不可→Kotlinへ安全退化」という
+   確立済みの契約にそのまま乗るため Kotlin 側の変更は不要）。
+8. **[軽微・未対応] SAチャンク自己整合の非対称**（3.168.0系精読で判明）。`runSaChunk` の番兵は `full != curVal` のみ。
+   他3ランナー（LAHC/ALNS/Polish）は `curVal != st.score` の相互検査も持つ。バグではない（Kotlin外側網＋fullEval
+   照合で担保）が、SA にも足すと防御が均一になる。優先度低・明示指示があれば着手。
 
 ## 未レビュー領域の精読（3.84.0, 並列監査で一巡）
 `V6HotfixPasses`/`V6SearchOperators`/`V6LateOperators`/`V6WebCompat`/`ScheduleCsvBridge` を並列エージェントで監査。

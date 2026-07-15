@@ -419,11 +419,14 @@ object V6NativeOptimizer {
                     itersTotal += ret[4]
                     if (ret[3] == 1L && ret[2] < globalScore) {
                         // [2層目の番兵] best 更新を Kotlin Evaluator でフル照合（Long== 許容誤差なし）。
+                        //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                         NativeBridge.nativeAlnsRead(alns, 0, bestFlat)
                         val bestSol = NativeEval.unflatten(bestFlat, p.S, p.T)
-                        val kScore = fullEvaluator.fullEval(bestSol)
-                        if (kScore != ret[2]) { syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
-                        globalBest = bestSol; globalScore = kScore
+                        if (NativeGate.parityCheckEnabled) {
+                            val kScore = fullEvaluator.fullEval(bestSol)
+                            if (kScore != ret[2]) { syncReport(); NativeGate.disable("ALNS Kotlin照合NG(native=${ret[2]} kotlin=$kScore)"); return false }
+                        }
+                        globalBest = bestSol; globalScore = ret[2]
                         lastImproveIter = itersTotal
                         reportStale = true
                     }
@@ -1143,15 +1146,18 @@ object V6NativeOptimizer {
                     iters += ret[4]
                     if (ret[3] == 1L && ret[2] < verifiedBest) {
                         // [2層目番兵] best 更新チャンクの盤面を Kotlin フル評価で照合（Long== 許容誤差なし）。
+                        //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                         NativeBridge.nativePolishRead(h, 0, buf)
                         val sol = NativeEval.unflatten(buf, p.S, p.T)
-                        val k = fullEvaluator.fullEval(sol)
-                        if (k != ret[2]) {
-                            NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
-                            return NativePolishRun(false, best, iters, false)
+                        if (NativeGate.parityCheckEnabled) {
+                            val k = fullEvaluator.fullEval(sol)
+                            if (k != ret[2]) {
+                                NativeGate.disable("Polish Kotlin照合NG(native=${ret[2]} kotlin=$k)")
+                                return NativePolishRun(false, best, iters, false)
+                            }
                         }
                         best = sol
-                        verifiedBest = k
+                        verifiedBest = ret[2]
                         lastImproveMs = nowLoop
                     }
                     yield()
@@ -1365,14 +1371,24 @@ object V6NativeOptimizer {
         return out
     }
 
-    private fun rsiGenerateHypothesis(state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random): Array<IntArray> {
+    internal fun rsiGenerateHypothesis(state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random): Array<IntArray> {
         val out = base.copy2D()
         val p = cachedProblem(state)
         when (focus) {
             // [E11] covU は先に「勤務→勤務」の多人数連鎖で充填（既存 destroyRepairDay は休→勤務のみ＝
             //   候補が過剰シフト/連鎖からしか引けない局面を踏めない）。仮説はラウンド better() でゲート＝退化なし。
             "covU", "c41", "c41s" -> { applyCovUChains(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }   // c41s=スキル群の1日人数(c41と同型)
-            "low", "high", "c2" -> repeat(8) { destroyRepairStaff(state, out, rng) }
+            // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
+            //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
+            //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
+            //   apt専用の新規オペレータ不要。ラウンド better() keep-best でゲート＝退化なし。
+            // [同根の穴=weekly/fair] 同じ理由で weekly/fair も order に無く一度も focus されていなかった
+            //   （実データ検証: weekly L1偏差合計65(aptの37より大きい)・fair合計11）。staffCountPenaltyAt は
+            //   weekly/fair 未対応(曜日バケット・群平均を持たない)のため厳密な cost-aware 研磨ではないが、
+            //   destroyRepairStaff は職員1人の月全体を破壊再構築する汎用オペレータであり、weekly/fair が
+            //   支配的なときに専用ラウンドを割り当てるだけでも「total」の無指向な空振りより改善機会が増える。
+            //   ラウンド better() keep-best でゲート＝退化なし（厳密な cost 統合は将来の拡張候補）。
+            "low", "high", "c2", "apt", "weekly", "fair" -> repeat(8) { destroyRepairStaff(state, out, rng) }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
             //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
@@ -1414,8 +1430,16 @@ object V6NativeOptimizer {
         return applied
     }
 
-    private fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet()): String {
-        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "c1", "c3", "c3m", "c3mn")
+    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet()): String {
+        // [実機ログ起因=公平化のズレ] apt(適切回数)を追加。旧orderに無かったため RSI 探索中は一度も
+        //   focus されず、post-processing(applyDayAssignmentPolish)頼みで広く未研磨のまま残っていた
+        //   （実データ検証: apt L1偏差合計37、staffRange低/高はわずか3で規模が逆転）。rsiGenerateHypothesis
+        //   側は既存の destroyRepairStaff(low/high/c2 と同経路、marginal costに apt 込み)へ合流するだけ＝
+        //   新規オペレータ不要。
+        // [同根の穴=weekly/fair] 同じ理由で weekly/fair も未focusだったため追加（実データ検証: weekly=65
+        //   （aptの37より大きい）・fair=11）。destroyRepairStaff は weekly/fair の cost には未対応だが、
+        //   専用ラウンドを割り当てるだけで無指向な"total"空振りより改善機会が増える（詳細はrsiGenerateHypothesis）。
+        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "apt", "weekly", "fair", "c1", "c3", "c3m", "c3mn")
         // [D1/A1] 解ける HARD 族(groupViol/covU/pref/c3n)は件数に関わらず SOFT より先に focus する。
         //   旧実装は純・件数最大だったため、単一の c3n=1 が c1=118 等の高頻度 SOFT に埋もれ RSI が一度も HARD を
         //   狙わない失敗があった。目的関数 better() は辞書式(hard<<total<<weighted)で HARD 支配ゆえ focus も HARD

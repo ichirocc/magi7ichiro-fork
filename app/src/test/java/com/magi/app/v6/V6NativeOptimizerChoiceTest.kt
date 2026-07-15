@@ -1,7 +1,13 @@
 package com.magi.app.v6
 
+import com.magi.app.model.Group
+import com.magi.app.model.MagiState
+import com.magi.app.model.Shift
+import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
+import java.util.Random
 
 class V6NativeOptimizerChoiceTest {
     @Test fun autoBudgetChoosesExpectedAlgorithm() {
@@ -40,5 +46,74 @@ class V6NativeOptimizerChoiceTest {
         //   テストが旧SA期待のまま残り V6 Engine Check が恒常赤だったのを実装に追随。
         assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
         assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
+    }
+
+    // [実機ログ起因=公平化のズレ] apt(適切回数)は旧 order に無く RSI 探索中は一度も focus されなかった
+    //   （実データ検証: apt L1偏差合計37 vs staffRange低/高はわずか3）。maxViolatedFamily の SOFT
+    //   フォールバックが apt を件数最大の族として選べることを固定する。
+    private fun report(breakdown: Map<String, Int>, hard: Int = 0): ViolationReport = ViolationReport(
+        violations = emptyMap(), needViolations = emptyMap(), countViolations = emptyMap(),
+        breakdown = breakdown, total = breakdown.values.sum(), hard = hard,
+        soft = breakdown.values.sum() - hard, weightedScore = breakdown.values.sum().toDouble(),
+    )
+
+    @Test fun maxViolatedFamilyPicksAptWhenDominantSoft() {
+        val r = report(mapOf("apt" to 5, "c2" to 1, "covO" to 2))
+        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    @Test fun maxViolatedFamilyStillPrioritizesHardOverApt() {
+        // [回帰] apt追加が既存のHARD優先ルール(D1/A1)を壊さないこと。
+        val r = report(mapOf("c3n" to 1, "apt" to 100), hard = 1)
+        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    @Test fun maxViolatedFamilyFallsBackToTotalWhenAllZero() {
+        // [回帰/E8] 全族0件なら apt/weekly/fair 追加後も従来どおり "total"（件数0族を focus しない）。
+        val r = report(emptyMap())
+        assertEquals("total", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    // [同根の穴=weekly/fair] apt と同じ理由で未focusだった weekly/fair も件数最大なら選ばれること
+    //   （実データ検証: weekly L1偏差合計65はaptの37より大きい・fair合計11）。
+    @Test fun maxViolatedFamilyPicksWeeklyWhenDominantSoft() {
+        val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
+        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    @Test fun maxViolatedFamilyPicksFairWhenDominantSoft() {
+        val r = report(mapOf("fair" to 11, "c2" to 1))
+        assertEquals("fair", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    // [smoke] focus="apt" が destroyRepairStaff 経路(low/high/c2と合流)へ正しくルーティングされ、
+    //   例外なく同一次元の盤面を返すこと。改善量そのものはラウンド単位 keep-best が別途保証する。
+    @Test fun rsiGenerateHypothesisAptFocusReturnsValidSchedule() {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("a", 0), Staff("b", 0))
+        val schedule = listOf(listOf(0, 1, 0, 1), listOf(1, 0, 1, 0))
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-04",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "1")),
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val base = st.schedule.toIntArray2D()
+        val rep = UnifiedViolationChecker.check(st, base)
+        val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, "apt", Random(1))
+        assertNotNull(out)
+        assertEquals(base.size, out.size)
+        assertEquals(base[0].size, out[0].size)
+        // [smoke] weekly/fair も同じ経路（apt同様、専用オペレータ不要で例外なく完走すること）。
+        for (focus in listOf("weekly", "fair")) {
+            val out2 = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            assertNotNull(out2)
+            assertEquals(base.size, out2.size)
+        }
     }
 }

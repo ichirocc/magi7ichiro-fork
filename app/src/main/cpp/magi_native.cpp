@@ -1,4 +1,6 @@
+#ifndef MAGI_HOST_TEST
 #include <jni.h>
+#endif
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>
@@ -294,12 +296,37 @@ struct SaChunk {
     std::vector<int> ssn;  // S*K
     std::vector<int> dsn;  // T*K
     std::vector<int> wd;   // S*7
+    // [ビット化] c1窓 / c41-c42 の O(1) 評価用マスク（S,T<=64 のとき有効）。効果は deltaApply の contrib* 経由。
+    //   fullEvalParts はスカラーのまま＝自己整合(status)がビット化 delta をチャンク毎に照合する基準。
+    bool useBits;
+    std::vector<uint64_t> rowMask;       // S*K : bit=日（staff i がシフト k を担当する日集合）
+    std::vector<uint64_t> dayShiftMask;  // T*K : bit=職員（日 j にシフト k の職員集合）
+    std::vector<uint64_t> grpMask;       // sgrp群id -> 職員bit集合（静的）
+    std::vector<uint64_t> sskMask;       // skill群id -> 職員bit集合（静的）
     long long score = 0;   // hard*1e6+soft（combined）
     std::mt19937_64 rng;
 
     SaChunk(const MagiProblem& prob, const int* cur, uint64_t seed)
-        : p(prob), S(prob.S), T(prob.T), K(prob.K), rng(seed) {
+        : p(prob), S(prob.S), T(prob.T), K(prob.K),
+          useBits(prob.S <= 64 && prob.T <= 64), rng(seed) {
+        if (useBits) buildGroupMasks();
         resetBoard(cur);
+    }
+
+    // 群→職員bit集合（静的・盤面非依存）。制約が参照する群idまで被覆してサイズ確保。
+    void buildGroupMasks() {
+        int maxG = p.G - 1, maxGs = 0;
+        for (int i = 0; i < S; i++) { if (p.sgrp[i] > maxG) maxG = p.sgrp[i]; if (p.ssk[i] > maxGs) maxGs = p.ssk[i]; }
+        for (const auto& c : p.cons41) if (c.g > maxG) maxG = c.g;
+        for (const auto& c : p.cons42) { if (c.g1 > maxG) maxG = c.g1; if (c.g2 > maxG) maxG = c.g2; }
+        for (const auto& c : p.cons41s) if (c.g > maxGs) maxGs = c.g;
+        for (const auto& c : p.cons42s) { if (c.g1 > maxGs) maxGs = c.g1; if (c.g2 > maxGs) maxGs = c.g2; }
+        grpMask.assign((size_t)(maxG < 0 ? 0 : maxG) + 1, 0ULL);
+        sskMask.assign((size_t)(maxGs < 0 ? 0 : maxGs) + 1, 0ULL);
+        for (int i = 0; i < S; i++) {
+            if (p.sgrp[i] >= 0 && p.sgrp[i] < (int)grpMask.size()) grpMask[(size_t)p.sgrp[i]] |= (1ULL << i);
+            if (p.ssk[i]  >= 0 && p.ssk[i]  < (int)sskMask.size()) sskMask[(size_t)p.ssk[i]]  |= (1ULL << i);
+        }
     }
 
     // 盤面を差し替えて counts(ssn/dsn/wd)と score を再初期化（rng 系列は継続）。restart 境界用。
@@ -308,10 +335,12 @@ struct SaChunk {
         ssn.assign((size_t)S * K, 0);
         dsn.assign((size_t)T * K, 0);
         wd.assign((size_t)S * 7, 0);
+        if (useBits) { rowMask.assign((size_t)S * K, 0ULL); dayShiftMask.assign((size_t)T * K, 0ULL); }
         for (int i = 0; i < S; i++) {
             for (int j = 0; j < T; j++) {
                 int k = a[(size_t)i * T + j];
-                if (k >= 0 && k < K) { ssn[(size_t)i * K + k]++; dsn[(size_t)j * K + k]++; }
+                if (k >= 0 && k < K) { ssn[(size_t)i * K + k]++; dsn[(size_t)j * K + k]++;
+                    if (useBits) { rowMask[(size_t)i * K + k] |= (1ULL << j); dayShiftMask[(size_t)j * K + k] |= (1ULL << i); } }
                 if (k != p.restIdx && k >= 0 && k < K) wd[(size_t)i * 7 + (p.dow0 + j) % 7]++;
             }
         }
@@ -324,6 +353,16 @@ struct SaChunk {
     // ---- 影響スライスの寄与（combined: HARD族は ×1e6）----
     long long contribC1Row(int i) const {
         long long v = 0;
+        if (useBits) {
+            for (const auto& c : p.cons1) {
+                if (!p.cd(i, c.si)) continue;
+                uint64_t rm = rowMask[(size_t)i * K + c.si];
+                uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
+                for (int j = 0; j <= T - c.d1; j++)
+                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += 4;
+            }
+            return v;
+        }
         for (const auto& c : p.cons1) {
             if (!p.cd(i, c.si)) continue;
             const int* row = a.data() + (size_t)i * T;
@@ -400,6 +439,28 @@ struct SaChunk {
     long long contribWeekly(int i) const { return weeklyDevOfBucket(&wd[(size_t)i * 7]); }
     long long contribDayGroups(int j) const {
         long long v = 0;
+        if (useBits) {
+            const uint64_t* dm = &dayShiftMask[(size_t)j * K];
+            for (const auto& c : p.cons41) {
+                int z = __builtin_popcountll(dm[c.s] & grpMask[(size_t)c.g]);
+                if (z < c.l || c.u < z) v += 1;
+            }
+            for (const auto& c : p.cons42) {
+                long long n1 = __builtin_popcountll(dm[c.s1] & grpMask[(size_t)c.g1]);
+                long long n2 = __builtin_popcountll(dm[c.s2] & grpMask[(size_t)c.g2]);
+                v += n1 * n2;
+            }
+            for (const auto& c : p.cons41s) {
+                int z = __builtin_popcountll(dm[c.s] & sskMask[(size_t)c.g]);
+                if (z < c.l || c.u < z) v += 1;
+            }
+            for (const auto& c : p.cons42s) {
+                long long n1 = __builtin_popcountll(dm[c.s1] & sskMask[(size_t)c.g1]);
+                long long n2 = __builtin_popcountll(dm[c.s2] & sskMask[(size_t)c.g2]);
+                v += n1 * n2;
+            }
+            return v;
+        }
         for (const auto& c : p.cons41) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
@@ -451,6 +512,11 @@ struct SaChunk {
         a[(size_t)i * T + j] = nw;
         ssn[(size_t)i * K + old]--; ssn[(size_t)i * K + nw]++;
         dsn[(size_t)j * K + old]--; dsn[(size_t)j * K + nw]++;
+        if (useBits) {
+            uint64_t jb = 1ULL << j, ib = 1ULL << i;
+            rowMask[(size_t)i * K + old] &= ~jb; rowMask[(size_t)i * K + nw] |= jb;
+            dayShiftMask[(size_t)j * K + old] &= ~ib; dayShiftMask[(size_t)j * K + nw] |= ib;
+        }
         bool oldWork = old != p.restIdx;
         bool newWork = nw != p.restIdx;
         if (oldWork != newWork) wd[(size_t)i * 7 + (p.dow0 + j) % 7] += newWork ? 1 : -1;
@@ -1756,15 +1822,18 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
 }
 
 // ---- JNI 平坦データの読み取りヘルパ ----
+#ifndef MAGI_HOST_TEST
 std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
     jsize n = env->GetArrayLength(arr);
     std::vector<int> v((size_t)n);
     if (n > 0) env->GetIntArrayRegion(arr, 0, n, reinterpret_cast<jint*>(v.data()));
     return v;
 }
+#endif
 
 }  // namespace
 
+#ifndef MAGI_HOST_TEST
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
     return 6;
@@ -1982,6 +2051,14 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
         (int)needs.size() != 2 * K * T || (int)ranges.size() != 3 * S * K) { delete p; return 0; }
 
     p->sgrp.assign(staff.begin(), staff.begin() + S);
+    // [監査#7 安全retreat] 探索オペレータ約13箇所が p.bucket[p.sgrp[i]] / grpCnt[sgrp[i]*K+k] を
+    // sgrp範囲未検証で使う。Kotlin側は不正indexで例外→runCatchingにより安全に Kotlin パスへ退化するが、
+    // C++ は UB（bucket=範囲外読み・grpCnt=範囲外書込=ヒープ破壊）でSIGSEGVがrunCatchingに捕まらず
+    // プロセスクラッシュし得る。正規のエディタ/取込では groupIdx は常に [0,G) のはずだが、construction
+    // 時点で一括検証し、外れていればハンドル生成自体を拒否（0=native不可）してKotlinへ安全退化させる。
+    for (int i = 0; i < S; i++) {
+        if (p->sgrp[i] < 0 || p->sgrp[i] >= G) { delete p; return 0; }
+    }
     p->ssk.assign(staff.begin() + S, staff.end());
     p->canDo.resize((size_t)S * K);
     for (int x = 0; x < S * K; x++) p->canDo[x] = canDo[x] != 0 ? 1 : 0;
@@ -2076,3 +2153,4 @@ Java_com_magi_app_v6_NativeBridge_nativeFullEval(JNIEnv* env, jclass, jlong hand
     env->SetLongArrayRegion(out, 0, 2, jv);
     return out;
 }
+#endif  // MAGI_HOST_TEST

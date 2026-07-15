@@ -153,11 +153,14 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             val newBest = ret[2]
             if (newBest < bestScore) {
                 // [2層目の番兵] 採用前に Kotlin フル再評価で照合（Long の == 比較・許容誤差なし）。
+                //   [照合トグル] OFF=純ネイティブ（照合せず C++結果を信頼）。C++自己整合(status)は上で常時検査済。
                 val bestSol = NativeEval.unflatten(best, s, t)
-                val kotlinScore = evaluator.fullEval(bestSol)
-                if (kotlinScore != newBest) {
-                    NativeGate.disable("Kotlin照合NG (native=$newBest kotlin=$kotlinScore)")
-                    return false
+                if (NativeGate.parityCheckEnabled) {
+                    val kotlinScore = evaluator.fullEval(bestSol)
+                    if (kotlinScore != newBest) {
+                        NativeGate.disable("Kotlin照合NG (native=$newBest kotlin=$kotlinScore)")
+                        return false
+                    }
                 }
                 if (newBest / M < bestScore / M) lastHardImprove = (System.nanoTime() / 1_000_000L)
                 bestScore = newBest
@@ -227,12 +230,15 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                 }
                 if (ret[2] < bestScore) {
                     // [2層目の番兵] best 更新チャンクの盤面を Kotlin フル評価で照合（Long== 許容誤差なし）。
+                    //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                     NativeBridge.nativeLahcRead(h, 0, bestFlat)
                     val sol = NativeEval.unflatten(bestFlat, s, t)
-                    val kotlinScore = evaluator.fullEval(sol)
-                    if (kotlinScore != ret[2]) {
-                        NativeGate.disable("LAHC Kotlin照合NG (native=${ret[2]} kotlin=$kotlinScore)")
-                        return false
+                    if (NativeGate.parityCheckEnabled) {
+                        val kotlinScore = evaluator.fullEval(sol)
+                        if (kotlinScore != ret[2]) {
+                            NativeGate.disable("LAHC Kotlin照合NG (native=${ret[2]} kotlin=$kotlinScore)")
+                            return false
+                        }
                     }
                     bestScore = ret[2]
                     lastSol = sol
