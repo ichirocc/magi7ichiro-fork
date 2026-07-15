@@ -749,6 +749,24 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## CoverageDiagnosis の need2 単独定義セル見落とし修正（3.173.0）
+ユーザー指示「あなたが正しく論理的に不具合をつけてください」を受けた独立監査で発見・修正。
+`V6PortAnalyzer.diagnoseCoverage`（人員不足診断、`CoverageDiagnosisCard`のデータ源）が
+`val need = p.need1[k][j]; if (need <= 0) continue` で **need1 のみ**を見ており、`Problem.covUCell`
+（source of truth、docstring「片方定義=その値（P2単独定義セルも評価）」）が本来 need2 単独でも有効な
+不足として扱うセルを**丸ごと診断から見落としていた**。バックログ既知項目「②CoverageDiagnosisのneed1の
+み判定（need2<need1の逆転データでOR救済を無視、通常運用では無害な理論的エッジケース）」はこの一部
+（両方定義済みで過大報告になるケース）のみを指しており、**need1が完全未設定・need2単独定義のセルが
+診断に一切現れない**というより広く・データ入力の通常運用でも起こり得る欠落（false negative）は未記載
+だった。実際の最適化器/チェッカー（Evaluator/DeltaEvaluator/MirrorCore/magi_native.cpp）はcovUCellを
+共通ソースとして正しく評価・ペナルティを課すため**勤務表そのものは正しく最適化される**。影響は
+診断UI（CoverageDiagnosisCard）が本物のHARD違反(covU)を「不足なし」であるかのように見せてしまう
+表示層のみ。修正: `miss` を `need1-got` の自前計算から `p.covUCell(k,j,got)`（source of truth）の
+直接呼び出しへ置換し、表示用`need`は `got+miss`（実際に不足を生んだ実効しきい値、covUCellのOR選択と
+数学的に整合）から逆算。同根の穴（緩和案候補`demandShifts`が`need1>0`のみで判定）も同じ関数内で発見し
+同時に修正。回帰テスト`diagnoseCoverageCatchesNeed2OnlyShortfall`追加（need1=""・need2="2"・配置1人の
+盤面でmiss=1を検出）。読取専用・スコアリング/エンジンは不変（診断表示のみ）。
+
 ## SaChunk のビット化評価（c1窓・c41/c42/c41s/c42s の O(1) 化, 3.172.0）
 バックログ#6（自動パリティテスト無し）への根本対策として提示されたホストビルド可能なパリティ/ベンチ
 harness（`tools/native/host_parity_bench.cpp`）を先に検証してから適用（バックログ#6は依然未解消＝この
@@ -1004,8 +1022,10 @@ Gradle9移行等）を対象に、5系統（ネイティブC++/JNI・SA/ALNS/RSI
   （covOのSOFT目標）を実質的なハード上限として使っており、covO(重み1.0)を犠牲にc1(重み4)を解消する
   トレードオフが数学的に可能な局面を過大に「構造的不能」と報告しうる（3.76.0の「false wallを出さない」
   設計意図と逆方向）。真の供給上限の再定義（canDo職員数ベース等）を要する設計変更のため、実データでの
-  影響確認まで保留。②`CoverageDiagnosis`のneed1のみ判定（need2<need1の逆転データでOR救済を無視、通常
-  運用では無害な理論的エッジケース）。③`hf80PostPolish`のE10停滞早期終了が、native→Kotlin番兵発火時に
+  影響確認まで保留。②~~`CoverageDiagnosis`のneed1のみ判定（need2<need1の逆転データでOR救済を無視、通常
+  運用では無害な理論的エッジケース）~~ **→ 3.173.0で修正**（同根でより広い「need1未設定・need2単独定義
+  セルの完全見落とし」も含め、covUCellへ委譲する形で解消。詳細は3.173.0セクション参照）。
+  ③`hf80PostPolish`のE10停滞早期終了が、native→Kotlin番兵発火時に
   native区間の経過時間を引き継がず停滞時計を再スタートする（異常系=番兵不一致時のみ発現、実害は電池/時間
   の節約が一部効かなくなる程度）。④`nativeAlnsSetCur`（JNI関数）がKotlin側から一度も呼ばれていないデッド
   コード（挙動に影響なし、C++変更のコスト対効果が低いため未対応）。
