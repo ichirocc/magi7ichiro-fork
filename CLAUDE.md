@@ -1309,6 +1309,22 @@ FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止ま
   検証は CI（Android コンパイル不可のサンドボックスのため。タグ push は org egress ポリシーで 403 のため
   Release Build を workflow_dispatch でブランチ上に起動）。
 
+## ネイティブパリティのCI自動化（backlog#6 解消, 3.178.0）
+ユーザー指示「C++パリティ作業＝ハーネスをCI配線」。**最重要の事実確認**: 別セッションの混入で見えた「マスク最適化
+#1〜#4」はどのブランチ・PR・全履歴にもコミットされておらず（`git log --all -S canDoMask/buildMasks` で0件）、
+復元対象は存在しない。かつ #1「c3がスコアを変える」はパリティ原則（mask==scalar はスコア不変）に反する内部矛盾で、
+c3窓は既に 3.172.0/3.174.0 で delta 経路にビット化済み＝再実装は冗長/危険。よってマスク実装は行わず、実体のある
+backlog#6（C++評価器のパリティ自動テスト無し）を解消する方向に確定（AskUserQuestion）。
+- **配線**: `.github/workflows/native-parity.yml` を新設。`host_parity_bench.cpp` を `g++ -O3 -std=c++17
+  -DMAGI_HOST_TEST -I app/src/main/cpp` でビルドし実行、`main()` が mismatch>0 で 1 を返す＝ステップ失敗。
+  トリガ= pull_request→main / push→main / workflow_dispatch。**g++ のみで数十秒**＝Android SDK/NDK 不要のため
+  SDK ジョブ（v6-engine-check 等）と分離した専用ワークフロー。失敗時のみログを短期保持でアップロード。
+- **検証**: サンドボックスで実ビルド・実行し **1,498,930手・mismatch=0・EXIT=0**（bit-op は scalar 比 2.21x）を
+  確認してから配線（提示物を信用せず独立再現＝規律どおり）。
+- **効果**: 以後 Evaluator.kt/MirrorCore/DeltaEvaluator を変えて magi_native.cpp を変え忘れる意味的乖離
+  （実機で番兵発火→ネイティブ黙殺＝速度退行）が CI で自動検出される。エンジン本体・スコアは一切変更なし
+  （CI＋docs のみ）。残: harness fixture は合成（S<=64/T<=64）で実データ形状網羅は将来課題。
+
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。
 2. 未レビュー領域の精読: `V6LateOperators`/`V6SearchOperators`/`V6HotfixPasses` 各パス内部, `V6WebCompat`,
@@ -1325,8 +1341,11 @@ FIXABLE(充足可能)理由を「担当可能N人・M人移せば充足」止ま
    ビルドするので**C++コンパイルエラーは捕捉**するが**意味的乖離（重み取り違え等）は捕捉しない**。`Evaluator.kt`（や
    `MirrorCore`/`DeltaEvaluator`）を変えて `magi_native.cpp` を変え忘れると実機で番兵発火→**ネイティブ黙殺（速度退行・誤出力なし）**。
    3.171.0 で緩和策の一つ（ユーザーが明示的に照合を切れる「照合トグル」＋既定ONの維持）を実装。3.172.0 で
-   `tools/native/host_parity_bench.cpp`（ホストビルド可能なパリティ+ベンチharness）を追加し**オンデマンド
-   実行**では検証可能になったが、**CI配線（自動化）はまだ未着手のまま残る**（バックログとして継続）。
+   `tools/native/host_parity_bench.cpp`（ホストビルド可能なパリティ+ベンチharness）を追加。
+   **→ CI配線 完了（下記「ネイティブパリティのCI自動化」）**。`.github/workflows/native-parity.yml` が
+   pull_request→main / push→main / 手動 で harness を g++ ビルド・実行し、mismatch>0 で非ゼロ終了＝ジョブ失敗。
+   これで Evaluator.kt を変えて magi_native.cpp を変え忘れる意味的乖離が自動検出される。**残課題**: harness の
+   合成問題は S<=64/T<=64・乱数生成で、実データ形状の網羅ではない（fixture 拡充は将来課題）。
 7. ~~**[ネイティブ・堅牢性] 群index無検証のOOB（潜在）**（3.168.0系精読で判明）。探索オペレータ約13箇所が
    `p.bucket[p.sgrp[i]]`／`grpCnt[sgrp[i]*K+k]` を sgrp範囲未検証で使用しており、不正な groupIdx が渡ると
    C++側はUB（bucket=範囲外読み・grpCnt=範囲外**書込=ヒープ破壊**）でSIGSEGVし得た（Kotlin側は例外→
