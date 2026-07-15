@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +20,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -121,13 +120,14 @@ internal fun MultiSelectOpener(count: Int, onOpen: () -> Unit, onClear: () -> Un
 }
 
 /**
- * [必要人数カレンダー] シフトを1つ選び、月全体の必要人数を見渡し・その場で編集する主画面。
- * [スクショ準拠のレイアウト取り入れ] シフトは**ドロップダウン**、基本の必要人数は**「基本設定」カード**
- * （タップでボトムシート編集）、日をタップして複数選択→「複数日選択 N日選択中 ›」から**モーダルボトムシート**で
- * 一括編集。ボトムシートに**「未設定に戻す」**（選択日の例外を一括削除＝既定へ戻す）を追加。月送りは無し
- * （D6=1state=1か月）。日セルは実際の勤務表充足度で色分け（緑=充足/橙=過剰covO/赤=不足covU/灰=未設定）。
+ * [必要人数設定] 勤務作成者が必要とする4点だけに集約した画面（スクショ準拠のリデザイン）:
+ *   ①どのシフトか（見出し行のドロップダウン）②各日の最低–最高（カレンダー）③どの日を選んでいるか（枠＋✓）
+ *   ④選択日に何人を適用するか（下部のインライン一括パネル）。それ以外は常時表示しない
+ *   （長い説明文・独立した「基本設定/複数日選択」カード・設定済/未設定の凡例・充足色ドット・全セルの「未設定」文字を撤去）。
+ * 区別は色でなく形と文字で: 標準=通常文字 / 個別設定=太字＋小さな印 / 未設定=「—」 / 選択中=枠＋✓ / 入力エラー=赤枠。
+ * 基本(標準)は見出し行に「標準 N人」で示し、タップで編集シート。月送りは無し（D6=1state=1か月）。表示のみ・スコアリング不変。
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, onInitialConsumed: () -> Unit = {}) {
     val v = vm.ws1() ?: return
@@ -146,57 +146,94 @@ fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, 
     var daysSel by remember(k) { mutableStateOf(emptySet<Int>()) }
     var shiftMenu by remember { mutableStateOf(false) }
     var baseSheet by remember { mutableStateOf(false) }
-    var applySheet by remember { mutableStateOf(false) }
     val onToggleDay: (Int) -> Unit = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d }
-    val cells = (0 until ui.days).map { j -> vm.needCellLimits(k, j) to ui.needViolations["$k,$j"] }
-    val setCount = cells.count { it.first != null }
+    val ranges = (0 until ui.days).map { j -> vm.needCellLimits(k, j) }
+    // 個別設定＝日別例外が登録された日（0始まり）。カレンダーで太字＋小さな印にする。
+    val individualDays = vm.needDayOverrides().filter { it.k == k }.map { it.j }.toSet()
+    // 標準（基本設定）の表示ラベル。「N人」または「lo–hi人」、未設定は「未設定」。
+    val baseLabel = run {
+        val n1 = shift.need1.toIntOrNull(); val n2 = shift.need2.toIntOrNull()
+        when {
+            n1 == null && n2 == null -> "未設定"
+            n2 == null || n2 == n1 -> "${n1 ?: n2}人"
+            n1 == null -> "${n2}人"
+            else -> "$n1–${n2}人"
+        }
+    }
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("必要人数カレンダー", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "シフトを選び、日をタップして必要人数を一括登録できます。色は現在の勤務表の充足状況です。",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) {
-                    SelectorField(label = "シフト", value = shift.kigou, onClick = { shiftMenu = true })
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // [1行に統合] タイトル＋「シフト▼ ・ 標準 N人」。説明文/設定済・未設定の凡例は撤去。
+            Text("必要人数設定", style = MaterialTheme.typography.titleMedium)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box {
+                    Surface(color = cs.surfaceVariant, shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable { shiftMenu = true }) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(shift.kigou, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("▼", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        }
+                    }
                     DropdownMenu(expanded = shiftMenu, onDismissRequest = { shiftMenu = false }) {
                         v.shifts.forEachIndexed { idx, s ->
                             DropdownMenuItem(text = { Text(s.kigou) }, onClick = { k = idx; daysSel = emptySet(); shiftMenu = false })
                         }
                     }
                 }
-                Column(
-                    Modifier.weight(1f).border(1.dp, cs.outline, RoundedCornerShape(8.dp))
-                        .clickable { baseSheet = true }.padding(horizontal = 12.dp, vertical = 8.dp),
-                ) {
-                    Text("基本設定", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-                    Text("最低 ${shift.need1.ifBlank { "—" }} / 上限 ${shift.need2.ifBlank { "—" }}",
-                        style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                }
+                Text("標準 $baseLabel", style = MaterialTheme.typography.bodyLarge, color = cs.primary,
+                    modifier = Modifier.clickable { baseSheet = true }.padding(vertical = 4.dp))
             }
-            Text(
-                "設定済 ${setCount}日 / 未設定 ${ui.days - setCount}日",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
-            )
             MonthHeaderStatic(ui.startDate)
-            NeedMonthGrid(startDate = ui.startDate, cells = cells, selectedDays = daysSel, onToggle = onToggleDay)
-            FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                LegendDot(MagiAccent.green, "充足")
-                LegendDot(MagiAccent.orange, "過剰")
-                LegendDot(MagiAccent.red, "不足")
-                LegendDot(cs.outlineVariant, "未設定")
+            NeedMonthGrid(startDate = ui.startDate, ranges = ranges, individualDays = individualDays, selectedDays = daysSel, onToggle = onToggleDay)
+            // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（専用「複数日選択」カードは撤去）。
+            if (daysSel.isNotEmpty()) {
+                NeedApplyPanel(ui, vm, k, daysSel, shift.need1, shift.need2,
+                    onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
+            } else {
+                Text("日をタップして必要人数を設定します", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
-            MultiSelectOpener(count = daysSel.size, onOpen = { applySheet = true }, onClear = { daysSel = emptySet() }, running = ui.running)
         }
     }
     if (baseSheet) {
         BaseNeedSheet(shift.kigou, shift.need1, shift.need2, running = ui.running,
             onApply = { p1, p2 -> vm.setShiftNeed(k, p1, p2) }, onDismiss = { baseSheet = false })
     }
-    if (applySheet && daysSel.isNotEmpty()) {
-        NeedApplySheet(ui, vm, k, daysSel, shift.need1, shift.need2,
-            onDone = { daysSel = emptySet(); applySheet = false }, onDismiss = { applySheet = false })
+}
+
+/**
+ * [選択日の一括設定] カレンダー下部にインライン表示（1日以上選択時のみ）。モーダルで隠さないので
+ * カレンダーを見ながら追加選択・適用できる。「未設定に戻す」で選択日の例外を削除＝既定へ。入力エラー(最低>最高)は赤枠＋注記。
+ */
+@Composable
+private fun NeedApplyPanel(ui: UiState, vm: MagiViewModel, k: Int, days: Set<Int>, baseN1: String, baseN2: String, onCancel: () -> Unit, onDone: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var p1 by remember(k) { mutableStateOf(baseN1) }
+    var p2 by remember(k) { mutableStateOf(baseN2) }
+    val sorted = days.sorted()
+    // 選択日が多い場合は「6/3、6/8、6/17、ほか2日」と省略。
+    val datesLabel = if (sorted.size <= 4) sorted.joinToString("、") { dayChipLabel(ui.startDate, it) }
+    else sorted.take(3).joinToString("、") { dayChipLabel(ui.startDate, it) } + "、ほか${sorted.size - 3}日"
+    val n1 = p1.toIntOrNull(); val n2 = p2.toIntOrNull()
+    val invalid = n1 != null && n2 != null && n1 > n2
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        HorizontalDivider()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CountPill("${days.size}日選択中")
+            Text(datesLabel, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 2, modifier = Modifier.weight(1f))
+        }
+        Column(Modifier.border(1.dp, if (invalid) cs.error else Color.Transparent, RoundedCornerShape(8.dp))) {
+            NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
+            NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "既定")
+        }
+        if (invalid) Text("最低は最高以下にしてください", style = MaterialTheme.typography.labelMedium, color = cs.error)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
+            Button(
+                onClick = { days.forEach { d -> vm.setNeedDay(k, d - 1, p1, p2) }; onDone() },
+                enabled = !ui.running && (p1.isNotBlank() || p2.isNotBlank()) && !invalid,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text("${days.size}日に適用") }
+        }
+        TextButton(onClick = { days.forEach { d -> vm.removeNeedDay(k, d - 1) }; onDone() }, enabled = !ui.running,
+            modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
     }
 }
 
@@ -217,57 +254,15 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, running: 
     }
 }
 
-/** 選択日の必要人数（日別例外）を一括編集するシート。「未設定に戻す」で例外を削除＝既定へ。 */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun NeedApplySheet(ui: UiState, vm: MagiViewModel, k: Int, days: Set<Int>, baseN1: String, baseN2: String, onDone: () -> Unit, onDismiss: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val sheetState = rememberModalBottomSheetState()
-    var p1 by remember { mutableStateOf(baseN1) }
-    var p2 by remember { mutableStateOf(baseN2) }
-    val sorted = days.sorted()
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CountPill("${days.size}日選択中")
-                Text("選択した日付の設定を変更", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            }
-            Text(sorted.joinToString("・") { dayChipLabel(ui.startDate, it) }, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
-            NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "既定")
-            Text("基本の必要人数：最低 ${baseN1.ifBlank { "未設定" }}人 〜 上限 ${baseN2.ifBlank { "未設定" }}人",
-                style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { days.forEach { d -> vm.removeNeedDay(k, d - 1) }; onDone() },
-                    enabled = !ui.running,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text("未設定に戻す") }
-                Button(
-                    onClick = { days.forEach { d -> vm.setNeedDay(k, d - 1, p1, p2) }; onDone() },
-                    enabled = !ui.running && (p1.isNotBlank() || p2.isNotBlank()),
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-                ) { Text("${days.size}日に適用") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LegendDot(color: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.size(10.dp).background(color, CircleShape))
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-/** [必要人数カレンダーの本体グリッド] 月内の日を曜日整列で並べ、タップで複数日選択できる。
- *  各日は実効need(lo-hi、`vm.needCellLimits`)と現在の勤務表充足度(`ui.needViolations`)から
- *  色分けドットを表示（緑=充足/橙=過剰covO/赤=不足covU/灰=need未設定）。 */
+/** [必要人数設定のカレンダー本体] 月内の日を曜日整列で並べ、タップで複数日選択できる。
+ *  各日は実効need(lo–hi、`vm.needCellLimits`)を表示。区別は色でなく形と文字で:
+ *  未設定=「—」(淡色) / 標準どおり=通常文字 / 個別設定(日別例外)=太字＋小さな印 / 選択中=枠＋✓。
+ *  充足色ドット(covU/covO)は本画面(設定)では出さない＝勤務表グリッド/集計で確認する。 */
 @Composable
 private fun NeedMonthGrid(
     startDate: String,
-    cells: List<Pair<Pair<Int, Int>?, String?>>,
+    ranges: List<Pair<Int, Int>?>,
+    individualDays: Set<Int>,
     selectedDays: Set<Int>,
     onToggle: (Int) -> Unit,
 ) {
@@ -283,19 +278,19 @@ private fun NeedMonthGrid(
                 }
             }
         }
-        val dayCells: List<Int?> = List(sdow) { null } + cells.indices.toList()
+        val dayCells: List<Int?> = List(sdow) { null } + ranges.indices.toList()
         dayCells.chunked(7).forEach { wk ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { j ->
                     if (j == null) Box(Modifier.weight(1f).height(54.dp))
                     else {
-                        val (range, vio) = cells[j]
+                        val range = ranges[j]
                         val sel = (j + 1) in selectedDays
-                        val dot = when {
-                            range == null -> cs.outlineVariant
-                            vio == "vio-covU" -> MagiAccent.red
-                            vio == "vio-covO" -> MagiAccent.orange
-                            else -> MagiAccent.green
+                        val individual = range != null && j in individualDays
+                        val rangeLabel = when {
+                            range == null -> "—"
+                            range.first == range.second -> "${range.first}"
+                            else -> "${range.first}–${range.second}"
                         }
                         Box(
                             Modifier.weight(1f).height(54.dp)
@@ -304,7 +299,7 @@ private fun NeedMonthGrid(
                                 .clickable { onToggle(j + 1) }
                                 .semantics {
                                     contentDescription = "${j + 1}日を" + (if (sel) "選択解除" else "選択") +
-                                        (range?.let { "・必要人数${it.first}〜${it.second}人" } ?: "・未設定")
+                                        (range?.let { "・必要人数${it.first}〜${it.second}人" + (if (individual) "・個別設定" else "") } ?: "・未設定")
                                 },
                             contentAlignment = Alignment.Center,
                         ) {
@@ -313,13 +308,19 @@ private fun NeedMonthGrid(
                                     Text("${j + 1}", style = MaterialTheme.typography.bodyMedium,
                                         color = if (sel) cs.onPrimaryContainer else cs.onSurface,
                                         fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                                    // 選択中=✓ / 個別設定=小さな印 / それ以外=印なし。
                                     if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.primary, modifier = Modifier.size(12.dp))
-                                    else Box(Modifier.size(8.dp).background(dot, CircleShape))
+                                    else if (individual) Box(Modifier.size(5.dp).background(cs.primary, CircleShape))
                                 }
                                 Text(
-                                    if (range != null) (if (range.first == range.second) "${range.first}人" else "${range.first}-${range.second}人") else "未設定",
+                                    rangeLabel,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                    color = when {
+                                        sel -> cs.onPrimaryContainer
+                                        range == null -> cs.outlineVariant
+                                        else -> cs.onSurface
+                                    },
+                                    fontWeight = if (individual) FontWeight.Bold else FontWeight.Normal,
                                     maxLines = 1,
                                 )
                             }
