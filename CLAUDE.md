@@ -1417,6 +1417,29 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
 - 検証: ブレース均衡・呼び出し側シグネチャ一致（新パラメータは全て default 付き＝既存呼出非破壊）・重複定義0を静的確認、
   最終判定は CI（Release Build）。
 
+## HARD残でもSOFTをRSI focusできるようにする（3.183.0, 実データ検証で根本特定）
+ユーザー報告「再最適化しても人員不足のまま／RSIでaptを最適化していない／回数制約は大丈夫か」を、**実機state
+（10職員/31日/2026-07, /tmp/us.json）を Python で忠実検証**して根本特定。
+- **covU=2 の正体（実データ確定）**: 7/11 Cｵ・7/17 B4。日単位ピジョンホール（Σneed=6 < 10人）は成立せず＝
+  日単位では余裕あり。真因は**希望固定＋禁止連続で可動候補が実質いない**: 7/17 B4 は全必要シフトがちょうど1人
+  （余剰0）＋空きは有(佐藤)/休(古泉・金沢)が全員**希望固定**→動かすと pref(9000)>covU(8000)で悪化＝最適化器は
+  埋めないのが正しい。7/11 Cｵ は古泉が休だが7/10=Dﾃで Cｵ にすると「Dﾃ-Cｵ」禁止連続。**＝再最適化では埋まらない
+  ／診断「充足可能」は過度に楽観的**（`diagnoseCoverage` は capacity≥need だけで判定）。
+- **apt/SOFT飢餓の根本**: `structuralHardFloor`(=forcedCovU)は**シフト単位の担当可能数<need しか見ない**ため、この
+  covU=2（担当可能8≥need1）に対し **0** を返す→ covU が RSI の `avoid`(L738 `covU<=covUFloor`)に入らない→
+  `maxViolatedFamily` が毎R "covU"(HARD優先)を返し続け SOFT第2ループ(apt等)に到達しない→ HF63が~3R後に検知しても
+  **N4早期終了(L787)でRSIごと停止**。**apt固有でなく、埋まらないHARDが全SOFT/回数制約(low/high/c2・c41系・covO・
+  weekly・fair・c1・c3系)を道連れに飢餓させていた**。
+- **修正（ユーザー指示）**: N4早期終了を「停滞HARDを deprioritize してもなお狙える族が残るなら早期終了せず
+  SOFTへピボット継続」へ変更（L787）。`maxViolatedFamily(bestReport, avoid)` が実族(件数>0)を返す間は break せず、
+  focus は L741 の focusAvoid で既に SOFT へピボット済のため残ラウンドを SOFT 最適化に使う。**keep-best(better()は
+  hard非悪化を要求)がHARD悪化を防ぐ＝HARD残のままSOFT最適化しても安全**。stuck な SOFT も HF63 が順次
+  dynamicAvoid へ入れて focusable から外すため、pivot 枯渇(=="total"/件数0)でいずれ自己終了。focus選択/終了条件
+  のみ＝スコアリング不変。nsp_bench は RSI focus を模擬不能のため原理採否(3.74.0/3.169.0 と同方針)。
+- **未（別課題）**: ①`diagnoseCoverage`の「充足可能」honest化（希望固定/終端余剰を検証）②apt目標の「+/-で数字が
+  変わらない」（`applyStructure` の `structureEdited` 既true時の非emit＋currentSchedule null時 refreshCheck 早期
+  return で再構成漏れの疑い。要・実機切り分け）。
+
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。
 2. 未レビュー領域の精読: `V6LateOperators`/`V6SearchOperators`/`V6HotfixPasses` 各パス内部, `V6WebCompat`,
