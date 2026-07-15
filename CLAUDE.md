@@ -749,6 +749,20 @@ cons3n は `MirrorCore.checkC3Family` の forbidden 分岐で**任意長**（三
   `already`（在勤中）を明示計上し「担当可能N人（うち在勤中M人）」を追記、内訳4分類は移動候補のみを
   対象とする既存の意味論を維持。読取専用・スコア不変。
 
+## allowedShiftsFor をキャッシュ経由に統一（メインスレッド負荷削減, 3.175.0）
+ユーザーのKotlin並行/並列レビュー依頼を受けた並行性監査で、**架構は既に良好**（ViewModel=StateFlow＋
+`update{copy}`／`viewModelScope`＋`Dispatchers.IO(ファイル)/Default(計算)`／`job`別キャンセル／`NonCancellable`
+仕上げ、エンジン=`coroutineScope`＋`async(Dispatchers.Default)`＋`AtomicInteger`＋`compareAndSet`＋兄弟キャンセル
+＋`ensureActive`）と確認。`runBlocking`/`GlobalScope`/`Thread`/メインスレッドI/Oは皆無。唯一の実害は
+**`MagiViewModel.allowedShiftsFor(i)` だけが兄弟アクセサ（`staffCellLimits`/`needCellLimits`＝`cachedProblem`
+使用）と異なり `Problem(st)` を毎回新規構築**していた点。本アクセサは `StaffingRealityCard` の
+`for i: allowedShiftsFor(i)` ループ・`ScheduleGrid`/`AssignBulkSheet` の canDo ラムダ・各エディタから
+Compose 合成/再合成中に O(職員数) 回呼ばれ、呼び出し毎に canDo/range/apt/wish 行列を再割当してメイン
+スレッドを浪費していた。`cachedProblem(st)`（state 参照で識別する `@Volatile` 単一エントリ ProblemCache・
+既にメイン/Default 両スレッドから共用）へ置換。Problem は state の純粋関数＝等価・**スコアリング不変**
+（`allowedShiftsForStaff` は bucket を返す読み取り専用）。`allowedShiftsForGroup` は内部で `allowedShiftsFor`
+を呼ぶため透過的に恩恵。1行変更（新規レース区分なし＝既存の共用キャッシュに合流するだけ）。
+
 ## SaChunk の c3 窓マッチもビット化（3.174.0, 3.172.0の続き）
 ユーザー指示「ビット演算できる箇所を見直す…ピックアップする」→ ピックアップした最有力候補（`contribC3RowFam`
 の窓マッチ分岐）を「C++化対応する」指示で実装。3.172.0（c1窓・c41/c42系）の続きで、**deltaApply の

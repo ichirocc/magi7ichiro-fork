@@ -932,9 +932,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Shift indices a staff member may take (for the cell-edit bottom sheet). */
+    // [メインスレッド負荷削減] cachedProblem を使用（兄弟の staffCellLimits/needCellLimits と統一）。
+    //   本アクセサは StaffingRealityCard の `for i: allowedShiftsFor(i)` ループや ScheduleGrid の
+    //   canDo ラムダ等、Compose の合成/再合成から O(職員数) 回呼ばれる。旧実装は呼び出し毎に
+    //   Problem(st) を新規構築し（canDo/range/apt/wish 行列を毎回再割当）メインスレッドを浪費していた。
+    //   Problem は state の純粋関数のため、state 参照で識別する ProblemCache のヒットに置換して等価かつ
+    //   スコアリング不変（allowedShiftsForStaff は bucket を返す読み取り専用）。
     fun allowedShiftsFor(i: Int): IntArray {
         val st = state ?: return IntArray(0)
-        return Problem(st).allowedShiftsForStaff(i)
+        return cachedProblem(st).allowedShiftsForStaff(i)
     }
 
     /** 入力ガイド（月次/年次の入力手順）用の各項目の件数。 */
