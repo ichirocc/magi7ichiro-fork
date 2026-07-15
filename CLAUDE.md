@@ -1377,6 +1377,31 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
 - 検証: サンドボックスは Kotlin コンパイル不可＝ブレース均衡・重複定義0・呼び出し側シグネチャ一致・既存 VM API のみ使用を
   静的確認。最終判定は CI（Release Build＝assembleRelease）。
 
+## Android 16並行/並列監査＋16KBページ対応（3.181.0）
+ユーザー提示の「Android 16(API36)＋Kotlin 2 世代の並行・並列設計指針」に照らし全コードを監査。**唯一の実バグ＝
+16KBメモリページ非対応**を修正し、他の指針は既に充足 or 盲目適用が有害と判定。
+- **[実装] 16KBメモリページ対応**（essay の NDK 注意点）: `app/src/main/cpp/CMakeLists.txt` に
+  `target_link_options(magi_native PRIVATE "-Wl,-z,max-page-size=16384")` を追加。**NDK r26.1 は 16KB
+  アライメントを既定にしない**（既定化は r27/r28 以降）ため、16KB ページの Android 16 端末で 4KB アライメントの
+  `.so` がロードできず、`NativeGate.available=false` で Kotlin フォールバック＝**クラッシュはしないが native 加速が
+  丸ごと失われる**（対象プラットフォームで速度退行）。flag で 4KB/16KB 両ページ端末にロード可能化（4KB 端末でも
+  無害・低リスク）。NDK は CLAUDE.md 方針どおりピン留め維持（版上げより surgical）。
+- **[非変更・盲目適用は有害] synchronized→Mutex**: `SaOptimizer:92/110`（SAワーカー集約）・`V6FinalPort:230`
+  （進捗ロック）・`KigouFormat:31`（ICU Transliterator）の3箇所は**いずれも非suspendの短いCPU臨界区間**。
+  `Mutex.withLock` は suspend 前提で、非suspend呼び出し鎖（`flush` ラムダ等）を作り替えねばならず、ホットパスに
+  サスペンド越しのオーバーヘッドを足す＝pessimization。essay の「synchronized→Mutex」は suspend な I/O 待ちで
+  ディスパッチャスレッドをブロックしない指針で、ここには非該当（brief CPU critical section は synchronized が正）。
+- **[既に充足＝変更不要]**: ①Dispatchers IO/Default の並行/並列切り分け（3.176.0）②下位モジュールの
+  withContext メインセーフ化（3.176.0）③MutableStateFlow＋`update{copy}` の不変更新（既存）④@Volatile/AtomicInteger/
+  compareAndSet のロックフリー（既存）⑤ART内部/非公開API へのリフレクション＝**皆無**（grep 0件）⑥Thread/runBlocking/
+  GlobalScope/Executors＝**皆無**。⑦C++層に std::thread/pthread＝**皆無**（並列は Kotlin async 層・C++ は JNI 毎に単スレッド
+  ＝16KB は thread stack でなく .so ロードの問題）。
+- **[所見・実害なし]**: FGS runtime quota（Android 16）＝5分の最適化ジョブは DATA_SYNC FGS の日次上限内。kill耐性は
+  WorkManager＋ファイルスナップショット復元（C1）で対応済。User-Initiated Data Transfer Job は「データ転送」用途で
+  CPU計算の本ジョブには不適合＝移行不要。
+- 検証: サンドボックスは arm64 クロスコンパイル不可＝flag は lld 標準（NDK26 の lld 対応）で低リスク、最終判定は
+  CI（Release Build＝CMake/NDK が .so をリンク）。スコアリング/エンジン不変（ビルド設定のみ）。
+
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。
 2. 未レビュー領域の精読: `V6LateOperators`/`V6SearchOperators`/`V6HotfixPasses` 各パス内部, `V6WebCompat`,

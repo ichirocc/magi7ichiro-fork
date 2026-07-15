@@ -15,3 +15,11 @@ target_compile_options(magi_native PRIVATE -O3 -fno-exceptions -fno-rtti -Wall)
 
 find_library(log-lib log)
 target_link_libraries(magi_native ${log-lib})
+
+# [Android 16 / 16KBメモリページ対応] NDK r26 は 16KB アライメントを既定にしないため（既定化は
+# r27/r28 以降）、16KB ページの Android 16 端末では 4KB アライメントの .so がロードできず、
+# NativeGate.available=false で Kotlin フォールバック＝クラッシュはしないが native 加速が丸ごと
+# 失われる（＝対象プラットフォームで速度退行）。lld に 16KB の max-page-size を明示し、4KB/16KB
+# 両ページ端末でロード可能にする（4KB 端末でも無害）。target_link_options は CMake 3.13+（本プロジェクト
+# 3.22.1）で利用可。
+target_link_options(magi_native PRIVATE "-Wl,-z,max-page-size=16384")
