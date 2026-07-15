@@ -184,22 +184,17 @@ internal fun GuideRow(label: String, value: String, done: Boolean, onClick: (() 
 }
 
 
+/**
+ * [3.188.0 オプション集約] 主要（毎回の判断材料になる項目）だけを常時表示: 計算の制限時間・計算方式・
+ * バックグラウンドでつくる。技術系（並列ワーカー・ネイティブ加速・Kotlin照合・仕上げ最適化＝一般の運用では
+ * 触らない内部チューニング）は既存の「詳細設定（上級者向け）」（`AdvancedSettingsSection`）へ移動。
+ */
 @Composable
 internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text("並列ワーカー（同時に計算する数）: ${ui.workers}")
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.setWorkers((ui.workers - 1).coerceAtLeast(1)) },
-                    enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を減らす" }) { Text("−", fontSize = 20.sp) }
-                Text("${ui.workers}", style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
-                Button(onClick = { vm.setWorkers((ui.workers + 1).coerceAtMost(16)) },
-                    enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を増やす" }) { Text("＋", fontSize = 20.sp) }
-            }
-            Spacer(Modifier.height(10.dp))
             Text("計算の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.setBudget((ui.budgetSec - 60).coerceAtLeast(10)) },
@@ -210,30 +205,6 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
             }
             Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text("ネイティブ加速（C++）")
-                    Text("計算の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Switch(checked = ui.nativeAccel, onCheckedChange = { vm.setNativeAccel(it) }, enabled = !ui.running)
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text("Kotlin照合", color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
-                    Text(
-                        if (ui.nativeParity)
-                            "高速版の結果を毎回Kotlin実装で検証。不一致なら自動で従来方式に戻ります（推奨・既定）。"
-                        else
-                            "⚠ 検証せず高速版の結果をそのまま採用します（速度重視の検証/ベンチ用）。誤った勤務表が表示される可能性があります。",
-                        fontSize = 12.sp,
-                        color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                    )
-                }
-                Switch(checked = ui.nativeParity, onCheckedChange = { vm.setNativeParity(it) }, enabled = !ui.running && ui.nativeAccel)
-            }
-            Spacer(Modifier.height(6.dp))
             Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V6Algorithm.values().forEach { alg ->
@@ -245,19 +216,9 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(
-                    checked = ui.softPolish,
-                    onCheckedChange = { vm.setSoftPolish(it) },
-                    enabled = !ui.running,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("仕上げ最適化", fontSize = 14.sp)
-            }
             Spacer(Modifier.height(10.dp))
             // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
-            //   バックグラウンド実行だけをここ（実行条件＝予算/並列の設定と同じ場所）へ移設。
+            //   バックグラウンド実行だけをここ（実行条件＝予算の設定と同じ場所）へ移設。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) { Text("バックグラウンドでつくる（閉じても続行）") }
@@ -272,6 +233,54 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                 }.getOrDefault("不明")
             }
             Text("バージョン: $versionLabel", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** [3.188.0 オプション集約] 技術系チューニング（並列ワーカー・ネイティブ加速・Kotlin照合・仕上げ最適化）。
+ *  `SettingsCard` から「詳細設定（上級者向け）」へ移動した項目。一般の運用では既定値のままで問題ない。 */
+@Composable
+private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("並列ワーカー（同時に計算する数）: ${ui.workers}")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { vm.setWorkers((ui.workers - 1).coerceAtLeast(1)) },
+                enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を減らす" }) { Text("−", fontSize = 20.sp) }
+            Text("${ui.workers}", style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
+            Button(onClick = { vm.setWorkers((ui.workers + 1).coerceAtMost(16)) },
+                enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を増やす" }) { Text("＋", fontSize = 20.sp) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("ネイティブ加速（C++）")
+                Text("計算の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.nativeAccel, onCheckedChange = { vm.setNativeAccel(it) }, enabled = !ui.running)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Kotlin照合", color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+                Text(
+                    if (ui.nativeParity)
+                        "高速版の結果を毎回Kotlin実装で検証。不一致なら自動で従来方式に戻ります（推奨・既定）。"
+                    else
+                        "⚠ 検証せず高速版の結果をそのまま採用します（速度重視の検証/ベンチ用）。誤った勤務表が表示される可能性があります。",
+                    fontSize = 12.sp,
+                    color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                )
+            }
+            Switch(checked = ui.nativeParity, onCheckedChange = { vm.setNativeParity(it) }, enabled = !ui.running && ui.nativeAccel)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(
+                checked = ui.softPolish,
+                onCheckedChange = { vm.setSoftPolish(it) },
+                enabled = !ui.running,
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("仕上げ最適化", fontSize = 14.sp)
         }
     }
 }
@@ -416,6 +425,7 @@ internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
 @Composable
 internal fun AdvancedSettingsSection(
     ui: UiState,
+    vm: MagiViewModel,
     onExportLog: () -> Unit,
     onExportJson: () -> Unit,
 ) {
@@ -432,7 +442,9 @@ internal fun AdvancedSettingsSection(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("詳細設定（上級者向け）", style = MaterialTheme.typography.titleMedium)
-                    Text("ログの確認と出力。一般の運用では触りません。",
+                    // [3.188.0 オプション集約] 並列/ネイティブ/仕上げの技術系チューニングを SettingsCard から
+                    //   ここへ移設したため、説明文を「ログのみ」から実態に同期。
+                    Text("並列数・ネイティブ加速・仕上げ最適化の調整とログの確認。一般の運用では触りません。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [Planner テイスト] グリフ「▾/▸」をやめ、やわらかい丸の中に整ったアイコンシェブロン。
@@ -455,6 +467,9 @@ internal fun AdvancedSettingsSection(
                     //   ここから撤去し、分析タブ(プロ)に一本化。
                     // [IA重複解消 3.132系] ColorSettingsView（違反種別の色）はシフトの表示色の直後
                     //   （設定タブ上部）へ移動＝色設定を1か所に。ここはログのみ。
+                    // [3.188.0 オプション集約] 並列ワーカー/ネイティブ加速/Kotlin照合/仕上げ最適化は
+                    //   一般の運用では触らない内部チューニングのため SettingsCard からここへ移動。
+                    OptimizationTuningSection(ui, vm)
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
                 }
             }
