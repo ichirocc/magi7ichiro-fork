@@ -1,0 +1,58 @@
+name: Native Parity Check
+
+# [backlog#6] C++ 評価器（magi_native.cpp）のパリティ自動テスト。
+# host_parity_bench.cpp は Android SDK/NDK 不要の純ホスト C++ で、SaChunk の増分 Δ 評価が
+# スカラーの fullEvalCombined（Kotlin オラクルの C++ ミラー）と一致することを合成問題×多シード×
+# 約150万手で照合し、mismatch があれば非ゼロ終了する。これを CI で自動実行し、Evaluator.kt を
+# 変えて magi_native.cpp を変え忘れる（意味的乖離＝実機で番兵発火→ネイティブ黙殺）回帰を捕捉する。
+# g++ のみで数十秒＝軽量なので SDK ジョブとは分離した専用ワークフローにする。
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build parity + bench harness
+        shell: bash
+        run: |
+          mkdir -p build/ci-logs
+          g++ -O3 -std=c++17 -DMAGI_HOST_TEST -I app/src/main/cpp \
+            tools/native/host_parity_bench.cpp -o build/magi_host \
+            2>&1 | tee build/ci-logs/native-parity-build.log
+
+      - name: Run parity check (fails on any mismatch)
+        shell: bash
+        run: |
+          set -o pipefail
+          # 非ゼロ終了（mismatch>0）でこのステップ＝ジョブが失敗する。
+          ./build/magi_host 2>&1 | tee build/ci-logs/native-parity-run.log
+
+      - name: Upload logs (on failure only)
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-parity-logs
+          path: build/ci-logs
+          if-no-files-found: ignore
+          retention-days: 7
