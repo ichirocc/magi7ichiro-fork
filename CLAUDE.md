@@ -1436,9 +1436,20 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
   hard非悪化を要求)がHARD悪化を防ぐ＝HARD残のままSOFT最適化しても安全**。stuck な SOFT も HF63 が順次
   dynamicAvoid へ入れて focusable から外すため、pivot 枯渇(=="total"/件数0)でいずれ自己終了。focus選択/終了条件
   のみ＝スコアリング不変。nsp_bench は RSI focus を模擬不能のため原理採否(3.74.0/3.169.0 と同方針)。
+- **(3.184.0, 実機ログで判明した第2の穴=HF63のSOFT誤deprioritize)**: 実機ログ（RSI_PLUS 300s）で round1-3 focus=covU
+  不変→round4 で **HF63 が c1,c3n,c3m,c3mn,c42,covU,covO,low,high の9族を deprioritize**→focus=weekly→早期終了、を確認。
+  `Hf63Infeasibility.update` は breakdown 値が不減なら stall 計上するため、**covU に focus が張り付いて一度も focus
+  されなかった SOFT 族(c1=87/low=10/high=4 等=本来直せる)まで infeasible 誤判定**していた。3.183.0 の pivot だけでは
+  残るのが weekly/fair(destroyRepairStaff が cost 未対応で効かない)だけになり不十分。**修正: focus の avoid を真に
+  構造的な HARD(covU床/c3n/pref/groupViol)のみに限定**（`avoid = dynamicAvoid.filterTo{ it in MirrorKeys.hard }`）。
+  SOFT は常に focusable に保ち、HF63 が covU 等 HARD を flag した時点で focus が c1/low/high 等の直せる SOFT へ自動
+  ピボットする。SOFT の同一 focus 空転は cooldownFocus(1R休止)＋keep-best＋有限ラウンドで自己収束。N4 武装判定は
+  従来どおり dynamicAvoid(全族)、pivot 可否は avoid(HARD) で判定。focus選択のみ＝スコアリング不変。
 - **未（別課題）**: ①`diagnoseCoverage`の「充足可能」honest化（希望固定/終端余剰を検証）②apt目標の「+/-で数字が
   変わらない」（`applyStructure` の `structureEdited` 既true時の非emit＋currentSchedule null時 refreshCheck 早期
-  return で再構成漏れの疑い。要・実機切り分け）。
+  return で再構成漏れの疑い。要・実機切り分け）③**[実機ログ]ネイティブ探索が実データで無効化**（`NativeBridge:
+  SAチャンク整合性NG status=1`＝評価器パリティは一致(hard=3 soft=1628)だが C++ SaChunk の自己整合が実データで失敗→
+  番兵発火で Kotlin 退化＝正しいが遅い。合成 harness では出ない実データ固有の乖離。要・当該 state での SaChunk 差分追跡）。
 
 ## バックログ / 未対応
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。

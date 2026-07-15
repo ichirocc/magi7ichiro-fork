@@ -731,7 +731,14 @@ object V6NativeOptimizer {
             //   HF63 の動的検知のみでゲートしないと、構造的covU>0 のデータでは静的除外が round 0 から avoid を
             //   非空にし、「旧N4の厳密な部分集合」保証(650-654行)を破って2停滞ラウンドで RSI が即終了してしまう。
             val dynamicAvoid = hf63.infeasibleBreakdownKeys()
-            val avoid = dynamicAvoid.toMutableSet()
+            // [実機ログ起因/SOFT誤deprioritize] HF63 は breakdown 値が減らなければ族を stall 計上するため、
+            //   「covU に focus が張り付いて一度も focus されず不減の SOFT 族」(実機: c1=87/low/high 等)まで
+            //   infeasible 判定してしまう。これを focus の avoid に入れると本来直せる SOFT が永久に focus されない
+            //   （pivot しても weekly/fair だけ残り destroyRepairStaff が cost 未対応で効かない）。focus の
+            //   deprioritize は真に構造的な HARD（covU 床/c3n/pref/groupViol）のみに限定し、SOFT は常に focusable に
+            //   保つ（SOFT の同一 focus 空転は cooldownFocus の1R休止＋keep-best＋有限ラウンドで自己収束）。
+            //   N4 早期終了の武装判定（下記）は従来どおり dynamicAvoid（全族）で行い、pivot 可否は avoid(HARD) で判定する。
+            val avoid = dynamicAvoid.filterTo(mutableSetOf()) { it in MirrorKeys.hard }
             // [静的covU床] covU が構造的下限（covUFloor）に達している間は解けないので focus から即除外する。
             //   合法配置では covU >= covUFloor（下限）。担当外配置(groupViol)が混在すると covU が床を下回り得るが、
             //   その間 covU を focus しても無意味（groupViol が hard-first で先に選ばれる）なので `<=` で除外が正しい。
