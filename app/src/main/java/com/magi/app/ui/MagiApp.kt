@@ -38,6 +38,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -407,9 +408,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
                         canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) })
-                    StaffCalendarCard(ui, onCellClick = openEditor, vioEnabled = vioEnabled)
+                    // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
+                    //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
-                    MismatchExtractCard(ui, onOpenCell = openEditor)
+                    // [3.194.0 情報の冗長性検証] 「不一致だけ抽出」（MismatchExtractCard）を撤去。
+                    //   TallyCard(職員別/日別)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
+                    //   内容が重複しており、しかも apt(適切回数)由来の違反を含まず新しい表示より不完全だった。
                     OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
                         Text("希望シフトの一括操作")
                     }
@@ -440,14 +444,18 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
                             MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 }, onOpenWish = openWish)
                             MonthPickerCard(ui, vm)
+                            // [3.190.0 横展開・検討のうえ対象外] WishCard/NeedCalendarCard は選択中の職員/シフト
+                            //   (i/k・remember)を保持したまま複数回編集する設計のため、key(ui.editRev)で包むと
+                            //   自分自身の編集コミット(editRev変化)のたびに選択がリセットされ、③より悪い退行を生む。
+                            //   よって対象外（未確認のリスクへの予防的変更よりも確定した退行の回避を優先）。
                             WishCard(ui, vm, initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, onInitialConsumed = { deepLinkWishStaff = -1 })
                             NeedCalendarCard(ui, vm, initialShift = deepLinkNeedShift.takeIf { it >= 0 }, onInitialConsumed = { deepLinkNeedShift = -1 })
-                            NeedDayCard(ui, vm)
+                            key(ui.editRev) { NeedDayCard(ui, vm) }
                         }
                         1 -> {
                             // [職員管理] 入退職・所属・スキルの随時変更＋個人の回数上下限（職員に紐づく設定を集約）。
-                            StaffManageCard(ui, vm)
-                            StaffRangeCard(ui, vm)
+                            key(ui.editRev) { StaffManageCard(ui, vm) }
+                            key(ui.editRev) { StaffRangeCard(ui, vm) }
                         }
                         else -> {
                             // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
@@ -462,41 +470,55 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     style = MaterialTheme.typography.bodyMedium)
                             }
                             // [E6案A] 長大スクロールを畳んで削減。①のみ既定で展開。展開状態は rememberSaveable で保持。
+                            // [3.190.0 横展開] ①②④⑤も③と同じ再構成保証を適用（CollapsibleSection の content
+                            //   ラムダが ui/vm を捕捉しスキップ判定に絡む同型の懸念に対する予防的対応。
+                            //   Ws1Card=use2トグル・担当可否チップ／SkillGroupCard=スキル割当ボタン／
+                            //   ConstraintsCard(s)=行タップ編集後の一覧表示、がいずれも生の vm 読取で
+                            //   即時反映を期待する箇所のため key(ui.editRev) で編集ごとに確実に作り直す）。
                             CollapsibleSection("① シフト・グループ・職員", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("勤務の種類・グループ・職員と、群×勤務の担当可否を決めます。")
-                                    Ws1Card(ui, vm)
+                                    key(ui.editRev) { Ws1Card(ui, vm) }
                                 }
                             }
                             CollapsibleSection("② スキルグループ", "yr_skillg") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("資格や対応できる業務などの“スキル”でまとめる単位です。勤務のグループとは別の切り口で分けます（例：採血できる人・リーダーできる人）。")
-                                    SkillGroupCard(ui, vm)
+                                    key(ui.editRev) { SkillGroupCard(ui, vm) }
                                 }
                             }
                             // ③ 回数（1人あたり）★統合: 目標(apt) ＋ 個人の下限上限(ws5) ＋ グループ一括
                             CollapsibleSection("③ 回数（1人あたり）", "yr_count") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("1人がその勤務へ1か月に何回入るかを調整します。『目標』は近づけたい回数（やわらかい）、『下限/上限』は必ず守る回数（かたい）。グループまとめての一括設定もできます。")
-                                    AptCard(ui, vm)
-                                    StaffRangeCard(ui, vm)
-                                    GroupRangeCard(ui, vm)
+                                    // [実機バグ修正/③回数] +/-を押しても画面上の数字が更新されない（タブを離れて
+                                    //   戻ると反映される＝データは正しく保存されるが同一画面での再描画だけが
+                                    //   遅れる）。CollapsibleSection の content ラムダが ui/vm を捕捉するため
+                                    //   スキップ判定が絡み再構成が伝播しないケースがある。key(ui.editRev) で
+                                    //   editRev 変化ごとにこの3カードのみ確実に作り直す（タブ往復と同じ効果）。
+                                    key(ui.editRev) { AptCard(ui, vm) }
+                                    key(ui.editRev) { StaffRangeCard(ui, vm) }
+                                    key(ui.editRev) { GroupRangeCard(ui, vm) }
                                 }
                             }
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
                             CollapsibleSection("④ 人数と組み合わせ", "yr_headcount") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("その日その勤務に入る人数の下限／上限（群のレンジ）と、同じ日に一緒に入れない組み合わせ（群ペア禁止）を設定します。グループ単位とスキルグループ単位の両方を扱えます。")
-                                    ConstraintsCard(ui, vm, title = "グループ単位（群のレンジ・群ペア禁止）",
-                                        keys = setOf("cons41", "cons42"))
-                                    SkillConstraintsCard(ui, vm)
+                                    key(ui.editRev) {
+                                        ConstraintsCard(ui, vm, title = "グループ単位（群のレンジ・群ペア禁止）",
+                                            keys = setOf("cons41", "cons42"))
+                                    }
+                                    key(ui.editRev) { SkillConstraintsCard(ui, vm) }
                                 }
                             }
                             CollapsibleSection("⑤ 並び・くり返し", "yr_cons") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("勤務の並び方のルールです。『○日間に△回以上』の窓の要件、個人の合計（回数）、『必須／禁止／推奨／回避の並び』のパターンを設定します。")
-                                    ConstraintsCard(ui, vm, title = "",
-                                        keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn"))
+                                    key(ui.editRev) {
+                                        ConstraintsCard(ui, vm, title = "",
+                                            keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn"))
+                                    }
                                 }
                             }
                         }
@@ -561,6 +583,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(
                         ui = ui,
+                        vm = vm,
                         onExportLog = { saveLogLauncher.launch("magi_log_${System.currentTimeMillis()}.txt") },
                         onExportJson = { saveLogJsonLauncher.launch("magi_log_${System.currentTimeMillis()}.json") },
                     )
