@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.magi.app.v6.V6PortReport
 import com.magi.app.v6.V6Algorithm
+import com.magi.app.v6.V6FinalPort
 import com.magi.app.v6.CoverageVerdict
 import com.magi.app.v6.MirrorKeys
 import kotlinx.coroutines.Dispatchers
@@ -206,6 +207,14 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
             }
             Spacer(Modifier.height(10.dp))
             Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // [3.192.0 情報不足の解消] 「おまかせ」選択中は実際に動く方式が計算の制限時間から自動決定される
+            // （V6FinalPort.optimizationPlan/getAlgorithmLabelと同一ロジック）が、画面には「おまかせ」としか
+            // 出ず、今の時間設定で何が動くか見えなかった。現在の budgetSec での解決結果を併記する（表示のみ）。
+            if (ui.v6Algorithm == V6Algorithm.AUTO) {
+                val resolved = V6FinalPort.getAlgorithmLabel(ui.budgetSec)
+                Text("→ 今の設定(${ui.budgetSec}秒)では ${resolved.icon} ${resolved.name}（${resolved.desc}）が動きます",
+                    fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+            }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V6Algorithm.values().forEach { alg ->
                     val selected = ui.v6Algorithm == alg
