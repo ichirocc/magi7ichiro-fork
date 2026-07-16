@@ -408,7 +408,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
                         canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) })
-                    StaffCalendarCard(ui, onCellClick = openEditor, vioEnabled = vioEnabled)
+                    // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
+                    //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     MismatchExtractCard(ui, onOpenCell = openEditor)
                     OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {

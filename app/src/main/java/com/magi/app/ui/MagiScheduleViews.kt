@@ -343,112 +343,8 @@ internal fun ShiftPickerSheet(
 }
 
 
-@Composable
-internal fun StaffCalendarCard(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys) {
-    if (ui.schedule.isEmpty() || ui.staff == 0) return
-    var staffIdx by remember { mutableIntStateOf(0) }
-    // [冗長性削減A] 既定は畳む。勤務表グリッド(全職員)と盤面ビューが二重化＝タブの密度/冗長の主因のため、
-    //   既定OFFにして「1職員を週レイアウトで見たい」時だけ開く（機能自体は保持）。
-    var expanded by remember { mutableStateOf(false) }
-    val si = staffIdx.coerceIn(0, (ui.staff - 1).coerceAtLeast(0))
-    val row = ui.schedule.getOrNull(si) ?: return
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
-            ) {
-                Text("職員別カレンダー ${if (expanded) "▾" else "▸"}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                if (!expanded) Text("開いて1人ずつ確認", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (expanded) {
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${ui.staffNames.getOrNull(si) ?: si} / ${ui.staffGroupSymbols.getOrNull(si) ?: ""}",
-                        modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = { staffIdx = (si - 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("前") }
-                    OutlinedButton(onClick = { staffIdx = (si + 1).floorMod(ui.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次") }
-                }
-                Text("タップで担当可能シフトを巡回", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
-                Spacer(Modifier.height(8.dp))
-                val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MaterialTheme.colorScheme.error
-                // [見直しF2] ソフト違反の破線はソフト色トークン(__vioSoft__)で描く（メイングリッド/凡例と整合。
-                //   旧: 必須色のまま＝重大度の色分けがカレンダーだけ効いていなかった）。
-                val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-                // [レイアウト/実機指摘] 「12/1(月)」の月接頭辞×31個は冗長ノイズ→「1(月)」へ短縮し、
-                //   土=青/日=赤の曜日色（メイングリッドと同語彙）。月はカード上部の期間表示が担う。
-                val sdow = startDowMonFirst(ui.startDate)
-                val weekJa = listOf("月", "火", "水", "木", "金", "土", "日")
-                row.indices.chunked(7).forEach { week ->
-                    Row(Modifier.fillMaxWidth()) {
-                        week.forEach { j ->
-                            val k = row.getOrNull(j) ?: -1
-                            val symbol = if (k < 0) "·" else ui.shiftSymbols.getOrNull(k) ?: k.toString()
-                            // [E7] 種別フィルタ: バケツOFF のセル違反は出さない。[Set化] 表示中の最重族で判定。
-                            val vioVal = visibleCellVio(ui, "$si,$j", vioEnabled)
-                            // [レイアウト/実機指摘] 全違反を桃塗り＋枠で描くとカレンダーが警告で飽和（グリッドが
-                            //   3.99.0 で解消した問題の残存）→ グリッドと同じ3段階へ: 必須=桃地+実線 /
-                            //   重い調整=破線のみ / 軽い調整=右上角マークのみ。
-                            val vk = when {
-                                vioVal == null -> 0
-                                isHardCellViolation(vioVal) -> 1
-                                isHeavySoftCellViolation(vioVal) -> 2
-                                else -> 3
-                            }
-                            val wd = (sdow + j) % 7
-                            val labelC = when (wd) { 5 -> MagiAccent.blue; 6 -> MagiAccent.red; else -> null }
-                            CalendarCell("${j + 1}(${weekJa[wd]})", symbol, vk, resolvedVioColor(ui, vioVal, vioColor, vioSoftC), labelC, Modifier.weight(1f)) {
-                                onCellClick(si, j)
-                            }
-                        }
-                        repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                    Spacer(Modifier.height(6.dp))
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-internal fun CalendarCell(label: String, symbol: String, vk: Int, vioColor: Color, labelColor: Color? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    // [3段階/グリッドと同語彙] vk: 0=なし / 1=必須(桃地+実線) / 2=重い調整(破線のみ) / 3=軽い調整(角マークのみ)。
-    val bg = if (vk == 1) cs.errorContainer else cs.surfaceVariant
-    val labelFg = when { vk == 1 -> cs.onErrorContainer.copy(alpha = 0.8f); labelColor != null -> labelColor; else -> cs.onSurfaceVariant }
-    val symbolFg = if (vk == 1) cs.onErrorContainer else cs.onSurface
-    // [UD/WCAG 4.1.2] 色・形に依存しない読み上げ名。
-    val a11y = "$label シフト ${symbol.ifBlank { "なし" }}" + (if (vk == 1) "・必須違反" else if (vk >= 2) "・要調整" else "") + "、タップで変更"
-    Box(
-        modifier
-            .height(58.dp)
-            .padding(horizontal = 2.dp)
-            .background(bg, MaterialTheme.shapes.medium)
-            .then(when (vk) {
-                1 -> Modifier.violationBorder(true, vioColor, 14.dp, halo = cs.surface)
-                2 -> Modifier.violationBorder(false, vioColor, 14.dp, halo = cs.surface)
-                else -> Modifier
-            })
-            .clickable(onClick = onClick)
-            .semantics(mergeDescendants = true) { contentDescription = a11y },
-        contentAlignment = Alignment.Center,
-    ) {
-        // [軽い調整] 枠でなく右上の小さな角マーク（グリッドの vk=3 と同形・飽和防止）。
-        if (vk == 3) {
-            Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(12.dp).drawBehind {
-                val p = Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); close() }
-                drawPath(p, cs.surface, style = Stroke(width = 2.dp.toPx()))
-                drawPath(p, vioColor)
-            })
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, fontSize = 12.sp, color = labelFg, maxLines = 1)
-            Text(symbol, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = symbolFg, maxLines = 1)
-        }
-    }
-}
-
+// [3.193.0 シンプル化] StaffCalendarCard/CalendarCell（職員別カレンダー）を撤去。全職員グリッド
+//   （ScheduleGrid）と同じ盤面の二重表示＝タブの密度/冗長の主因だった（旧コメントが自認済み）。呼出0を確認済み。
 
 // [D7撤去] ScheduleModeCard（結果=読取/下書き=編集の切替）はユーザー判断で撤去。勤務表は常に直接編集の1本。
 //   結果スナップショット(resultSchedule/result専用違反マップ)のモデルは温存（最適化完了時に充填・将来のCSV等）。
@@ -1189,8 +1085,6 @@ internal fun MismatchExtractCard(ui: UiState, onOpenCell: (Int, Int) -> Unit) {
         }
     }
 }
-
-private fun Int.floorMod(m: Int): Int = if (m == 0) 0 else ((this % m) + m) % m
 
 // ============================================================================
 // 大規模UI改良: ユニバーサルデザイン + スマホ特化シェル (ボトムナビ + ステータスヒーロー)
