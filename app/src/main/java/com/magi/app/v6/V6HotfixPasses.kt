@@ -184,6 +184,14 @@ object V6HotfixPasses {
         work = rWrb.newSchedule.copy2D()
         logs.addAll(rWrb.logs)
 
+        // [交互最適化(Alternating Optimization)] 長方形交換(クロス日)が届かない同日内の「休の割当先」を、日ブロック
+        //   ごとの最小費用割当(Hungarian＝凸最適化)で weekly/range/apt 同時最適に再配置し、不動点まで巡回する。
+        //   rectangle(クロス日)と AO(同日内)は相補的＝両方走らせて weekly の取りこぼしを二方向から詰める。keep-best。
+        onPhase("後処理 交互最適化(日ブロック割当)")
+        val rAlt = applyAlternatingSoftPolish(state, work, maxSweeps = 4, shouldStop = shouldStop)
+        work = rAlt.newSchedule.copy2D()
+        logs.addAll(rAlt.logs)
+
         onPhase("後処理 グループ内シフト回数の平準化")
         val rGeq = applyGroupShiftEqualizePolish(state, work, maxPasses = 2, shouldStop = shouldStop)
         work = rGeq.newSchedule.copy2D()
@@ -869,6 +877,104 @@ object V6HotfixPasses {
         }
         val logs = listOf(MirrorLog(tag = "DayAssign",
             message = "日ごと厳密割当: total ${before.total}->${bestRep.total} 採用${applied}日"))
+        return DayAssignResult(work, before.total, bestRep.total, applied, logs)
+    }
+
+    /**
+     * [ソフト研磨・交互最適化(Alternating Optimization / 交代最適化)] 全変数を同時に解かず「1ブロックずつ順に最適化
+     * して巡回する」座標降下法（block coordinate descent）をソフト制約研磨に導入する新アルゴリズム。ブロック＝各日(列):
+     * その日の (シフト人数=被覆) を固定したまま、希望未固定(wish<0)の職員を「個人別回数(range 90/45)・適切回数(apt 1)・
+     * **曜日平準化(weekly 1)**」の限界費用が最小になるよう **最小費用割当(Hungarian＝割当LP＝凸最適化)** で最適再配置し、
+     * 日 j を 0..T-1 と巡回して 1スイープで1日も変化しなくなるまで（＝座標降下の不動点）反復する。
+     *
+     * 既存 `applyDayAssignmentPolish`（range/apt のみ・単発）を、①weekly を費用に含め ②反復収束（交互）まで一般化した
+     * もの。weekly を費用に入れる意味＝その日の「休スロット」を誰に割り当てるかで各職員の曜日別勤務数が変わる（被覆は不変）。
+     * 「その曜日に働き過ぎの職員へ休を、少なすぎる職員へ勤務を」割り当てる候補を Hungarian が同日内で**同時最適**に生成し、
+     * 曜日偏りを直す。同日内の最適再配置＝rectangle（3.197.0, クロス日の2職員×2日）とは別種の被覆保存手＝相補的。
+     * 採否は実目的関数 isBetter（hard→total→weighted, keep-best）＝退化なし。fair 等の他 soft は isBetter が担保する
+     * （費用に無い族も採用判定で悪化しないことを保証）。純 Kotlin 後処理＝ネイティブ hot-path 非干渉（parity 影響なし）。
+     */
+    fun applyAlternatingSoftPolish(state: MagiState, schedule: Array<IntArray>, maxSweeps: Int = 4, shouldStop: () -> Boolean = { false }): DayAssignResult {
+        val p = Problem(state)
+        var work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        var applied = 0
+        val rest = p.restIdx
+        fun aptTarget(i: Int, k: Int): Int? {
+            val g = state.staff.getOrNull(i)?.groupIdx ?: return null
+            return state.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim()?.toIntOrNull()
+        }
+        // weekly の wd バケット（職員×曜日の勤務数）と目標 round(勤務日/7)。被覆保存の再配置ごとに更新。
+        fun wdOf(i: Int): IntArray {
+            val wd = IntArray(7)
+            for (j in 0 until p.T) { val k = work[i][j]; if (k != rest && k in 0 until p.K) wd[(p.dow0 + j) % 7]++ }
+            return wd
+        }
+        fun tgtOf(wd: IntArray): Int { var s = 0; for (w in wd) s += w; return Math.round(s.toDouble() / 7.0).toInt() }
+        var wd = Array(p.S) { wdOf(it) }
+        var wdTgt = IntArray(p.S) { tgtOf(wd[it]) }
+        fun cnt(): Array<IntArray> = countMatrix(p, work)
+        var counts = cnt()
+        var sweep = 0
+        var lastSweep = 0
+        while (sweep < maxSweeps) {
+            if (shouldStop()) break
+            var changedInSweep = false
+            for (j in 0 until p.T) {
+                if (shouldStop()) break
+                val free = (0 until p.S).filter { i -> p.wish[i][j] < 0 }
+                if (free.size < 2) continue
+                val slots = free.map { work[it][j] }
+                val n = free.size
+                val wdj = (p.dow0 + j) % 7
+                val costM = Array(n) { r ->
+                    val i = free[r]
+                    LongArray(n) { c ->
+                        val k = slots[c]
+                        if (k !in 0 until p.K || !p.canDo(i, k)) MinCostAssignment.INF
+                        else {
+                            val x0 = counts[i][k] - (if (work[i][j] == k) 1 else 0)   // この日を除いた現状カウント
+                            val x1 = x0 + 1
+                            val lo = p.rangeLo[i][k]
+                            val hi = effectiveHi(p, i, k)
+                            // range/apt は applyDayAssignmentPolish と同一の目的関数整合 proxy（90/45/1）。
+                            fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 90L * maxOf(0, lo - x) else 0L) + 45L * maxOf(0, x - hi)
+                            var cost = rangePen(x1) - rangePen(x0)
+                            val t = aptTarget(i, k)
+                            if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong()
+                            // weekly 限界費用: 当日を k(=勤務 or 休)にしたときの職員 i の曜日 wdj バケットの L1 偏差変化（重み1）。
+                            val curWork = if (work[i][j] != rest && work[i][j] in 0 until p.K) 1 else 0
+                            val newWork = if (k != rest) 1 else 0
+                            if (curWork != newWork) {
+                                val base = wd[i][wdj] - curWork              // 当日を除いた曜日カウント
+                                val tgt = wdTgt[i]
+                                cost += (kotlin.math.abs((base + newWork) - tgt) - kotlin.math.abs((base + curWork) - tgt)).toLong()
+                            }
+                            cost
+                        }
+                    }
+                }
+                val assign = MinCostAssignment.solve(costM)
+                val cand = work.copy2D()
+                var changed = false
+                for (r in free.indices) {
+                    val i = free[r]; val k = slots[assign[r]]
+                    if (cand[i][j] != k) { cand[i][j] = k; changed = true }
+                }
+                if (!changed) continue
+                val rep = UnifiedViolationChecker.check(state, cand)
+                if (isBetter(rep, bestRep)) {
+                    work = cand; bestRep = rep; counts = cnt()
+                    wd = Array(p.S) { wdOf(it) }; wdTgt = IntArray(p.S) { tgtOf(wd[it]) }
+                    applied++; changedInSweep = true
+                }
+            }
+            sweep++; lastSweep = sweep
+            if (!changedInSweep) break   // 座標降下の不動点＝この巡回で1日も改善しない
+        }
+        val logs = listOf(MirrorLog(tag = "AltOptPolish",
+            message = "交互最適化(日ブロック・weekly込み割当): total ${before.total}->${bestRep.total} 採用${applied}日 (${lastSweep}スイープ)"))
         return DayAssignResult(work, before.total, bestRep.total, applied, logs)
     }
 

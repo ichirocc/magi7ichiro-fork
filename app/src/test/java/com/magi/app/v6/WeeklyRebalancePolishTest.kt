@@ -68,6 +68,52 @@ class WeeklyRebalancePolishTest {
     }
 
     @Test
+    fun alternatingOptimizationReducesWeeklyViaPerDayReassignment() {
+        // 交互最適化(日ブロックの最小費用割当・weekly込み)が、被覆保存の同日再配置で weekly を下げること。
+        // 2職員・14日・各日 {W, 休} の1枠ずつ＝各日どちらが働くかを日ブロックで最適に決め直せる。
+        val st = weeklyState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期 HARD=0", 0, before.hard)
+        assertTrue("初期 weekly>0", (before.breakdown["weekly"] ?: 0) > 0)
+
+        val res = V6HotfixPasses.applyAlternatingSoftPolish(st, sched)
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+
+        assertTrue("交互最適化で1日以上採用", res.applied > 0)
+        assertTrue("weekly が減少", (after.breakdown["weekly"] ?: 0) < (before.breakdown["weekly"] ?: 0))
+        assertTrue("total 非悪化(keep-best)", after.total <= before.total)
+        assertEquals("HARD 不変(=0)", 0, after.hard)
+        assertEquals("被覆保存: covU=0", 0, after.breakdown["covU"] ?: 0)
+        assertEquals("被覆保存: covO=0", 0, after.breakdown["covO"] ?: 0)
+    }
+
+    @Test
+    fun alternatingOptimizationIsNoOpWhenAlreadyOptimal() {
+        // 均等配置(weekly=0・range/apt無し)では交互最適化が1日も採用しない(no-op)。
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("W", "W", "1", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("A", 0), Staff("B", 0))
+        val aRow = listOf(1, 1, 1, 1, 1, 1, 1)
+        val bRow = listOf(0, 0, 0, 0, 0, 0, 0)
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-07",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = listOf(aRow, bRow),
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val res = V6HotfixPasses.applyAlternatingSoftPolish(st, sched)
+        assertEquals("均等配置では採用0(no-op)", 0, res.applied)
+    }
+
+    @Test
     fun weeklyRebalanceIsNoOpWhenBalanced() {
         // 既に weekly=0（各職員が全曜日を均等に勤務）なら 1手も採用しない（空探索は即終了）。
         val shifts = listOf(Shift("休", "休", "", ""), Shift("W", "W", "1", ""))
