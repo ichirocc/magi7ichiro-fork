@@ -80,7 +80,7 @@ class WeeklyRebalancePolishTest {
         val res = V6HotfixPasses.applyAlternatingSoftPolish(st, sched)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
-        assertTrue("交互最適化で1日以上採用", res.applied > 0)
+        assertTrue("交互最適化で1日以上採用", res.appliedDays > 0)
         assertTrue("weekly が減少", (after.breakdown["weekly"] ?: 0) < (before.breakdown["weekly"] ?: 0))
         assertTrue("total 非悪化(keep-best)", after.total <= before.total)
         assertEquals("HARD 不変(=0)", 0, after.hard)
@@ -110,7 +110,7 @@ class WeeklyRebalancePolishTest {
         )
         val sched = st.schedule.toIntArray2D()
         val res = V6HotfixPasses.applyAlternatingSoftPolish(st, sched)
-        assertEquals("均等配置では採用0(no-op)", 0, res.applied)
+        assertEquals("均等配置では採用0(no-op)", 0, res.appliedDays)
     }
 
     @Test
