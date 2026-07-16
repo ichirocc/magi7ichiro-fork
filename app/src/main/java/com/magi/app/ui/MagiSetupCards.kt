@@ -292,7 +292,10 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
     V6Algorithm.ALNS -> "破壊再構築"
     V6Algorithm.RSI -> "違反集中"
     V6Algorithm.RSI_PLUS -> "違反集中＋"
-    V6Algorithm.PORTFOLIO -> "並列(複数案)"
+    // [3.191.0 用語重複解消] 「並列ワーカー」（同時実行数=workers）と「並列(複数案)」が同じ「並列」を
+    //   冠していて意味が重複して見えた。本方式はworkers本のうち各hypothesisへ異なるアルゴリズムを
+    //   割り当てる（portfolioAlgoFor）＝並列度そのものではなく「方式を組み合わせる」戦略のため改称。
+    V6Algorithm.PORTFOLIO -> "方式ミックス"
 }
 
 
