@@ -766,15 +766,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     ) }
                     // ---- 最適化中ログ強化（スロットル付き）----
                     // フェーズ遷移と「必須違反が減った瞬間」だけを操作ログへ。頻度上限を設けてスパムを防ぐ。
+                    // [ログ欠落バグ修正] スロットル判定に onProgress の仮説ローカル elapsed をそのまま使うと、
+                    //   フェーズ境界で elapsed が巻き戻る（N6コメント参照）ため「elapsed - lastXxxMs」が新フェーズ
+                    //   開始直後に大きく負になり得た。lastXxxMs は前フェーズ終盤の(大きい)値のまま残るため、新フェーズの
+                    //   持続時間がその残存値+閾値に届かない場合、遷移ログが1件も出ないまま丸ごと欠落していた
+                    //   （実機ログでRSI++のALNS Refineフェーズ(約90秒)が操作ログから完全に消えていたのはこれが原因）。
+                    //   表示に既に使っている壁時計(runWall0基準)へスロットル判定・保持値とも統一する。
+                    val wallElapsed = System.currentTimeMillis() - runWall0
                     val base = phase.substringAfter("/ ").trim().ifEmpty { phase }
-                    if (base != livePhase && elapsed - lastPhaseLogMs >= 2_500) {
-                        logOp("I", "探索フェーズ: $base（経過${(System.currentTimeMillis() - runWall0) / 1000}秒）")
-                        livePhase = base; lastPhaseLogMs = elapsed
+                    if (base != livePhase && wallElapsed - lastPhaseLogMs >= 2_500) {
+                        logOp("I", "探索フェーズ: $base（経過${wallElapsed / 1000}秒）")
+                        livePhase = base; lastPhaseLogMs = wallElapsed
                     }
                     if (rep != null && rep.hard.toLong() < liveHard) {
-                        if (rep.hard == 0 || elapsed - lastHardLogMs >= 1_500) {
-                            logOp("I", "必須違反 残り${rep.hard}件 に改善（経過${(System.currentTimeMillis() - runWall0) / 1000}秒・合計${rep.total}）")
-                            lastHardLogMs = elapsed
+                        if (rep.hard == 0 || wallElapsed - lastHardLogMs >= 1_500) {
+                            logOp("I", "必須違反 残り${rep.hard}件 に改善（経過${wallElapsed / 1000}秒・合計${rep.total}）")
+                            lastHardLogMs = wallElapsed
                         }
                         liveHard = rep.hard.toLong()
                     }
