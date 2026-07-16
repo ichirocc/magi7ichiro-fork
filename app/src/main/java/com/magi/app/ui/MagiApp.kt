@@ -38,6 +38,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -478,9 +479,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             CollapsibleSection("③ 回数（1人あたり）", "yr_count") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("1人がその勤務へ1か月に何回入るかを調整します。『目標』は近づけたい回数（やわらかい）、『下限/上限』は必ず守る回数（かたい）。グループまとめての一括設定もできます。")
-                                    AptCard(ui, vm)
-                                    StaffRangeCard(ui, vm)
-                                    GroupRangeCard(ui, vm)
+                                    // [実機バグ修正/③回数] +/-を押しても画面上の数字が更新されない（タブを離れて
+                                    //   戻ると反映される＝データは正しく保存されるが同一画面での再描画だけが
+                                    //   遅れる）。CollapsibleSection の content ラムダが ui/vm を捕捉するため
+                                    //   スキップ判定が絡み再構成が伝播しないケースがある。key(ui.editRev) で
+                                    //   editRev 変化ごとにこの3カードのみ確実に作り直す（タブ往復と同じ効果）。
+                                    key(ui.editRev) { AptCard(ui, vm) }
+                                    key(ui.editRev) { StaffRangeCard(ui, vm) }
+                                    key(ui.editRev) { GroupRangeCard(ui, vm) }
                                 }
                             }
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
