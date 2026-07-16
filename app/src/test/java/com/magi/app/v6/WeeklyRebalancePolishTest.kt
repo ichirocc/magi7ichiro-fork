@@ -43,6 +43,31 @@ class WeeklyRebalancePolishTest {
         )
     }
 
+    // AO(日ブロック再配置)用: weeklyState と同じ勤務パターンだが A/B を別々の単独グループに置く。
+    // 交互最適化は「その日の休を誰に割り当てるか」で各職員の勤務総数を変えるため、同一グループだと
+    // weekly の改善が fair(群内シフト回数)の悪化と 1:1 で相殺され採用されない。単独グループ(メンバー<2)は
+    // fair の対象外のため、weekly のみが目的関数に効く純粋な検証になる。
+    private fun weeklyStateSeparateGroups(): MagiState {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("W", "W", "1", ""))
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
+        val groupShift = listOf(listOf(1, 1), listOf(1, 1))
+        val staff = listOf(Staff("A", 0), Staff("B", 1))   // A∈G0, B∈G1（各単独＝fair対象外）
+        val aRow = listOf(1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0)
+        val bRow = listOf(0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1)
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-14",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift,
+            groupShiftApt = List(2) { List(2) { "" } },
+            schedule = listOf(aRow, bRow),
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
     @Test
     fun weeklyRebalanceReducesWeeklyDeviationAndPreservesCoverage() {
         val st = weeklyState()
@@ -71,7 +96,8 @@ class WeeklyRebalancePolishTest {
     fun alternatingOptimizationReducesWeeklyViaPerDayReassignment() {
         // 交互最適化(日ブロックの最小費用割当・weekly込み)が、被覆保存の同日再配置で weekly を下げること。
         // 2職員・14日・各日 {W, 休} の1枠ずつ＝各日どちらが働くかを日ブロックで最適に決め直せる。
-        val st = weeklyState()
+        // A/B は別グループ(単独)＝fair 対象外なので weekly のみが効く純検証。
+        val st = weeklyStateSeparateGroups()
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals("初期 HARD=0", 0, before.hard)
@@ -90,17 +116,18 @@ class WeeklyRebalancePolishTest {
 
     @Test
     fun alternatingOptimizationIsNoOpWhenAlreadyOptimal() {
-        // 均等配置(weekly=0・range/apt無し)では交互最適化が1日も採用しない(no-op)。
+        // weekly=0(A が各曜日ちょうど1回勤務)・A/B は別グループ(単独=fair対象外)。どの日を入替えても
+        // weekly が増える(改善余地なし)ため交互最適化は1日も採用しない(no-op)。
         val shifts = listOf(Shift("休", "休", "", ""), Shift("W", "W", "1", ""))
-        val groups = listOf(Group("G0", "G0"))
-        val staff = listOf(Staff("A", 0), Staff("B", 0))
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
+        val staff = listOf(Staff("A", 0), Staff("B", 1))
         val aRow = listOf(1, 1, 1, 1, 1, 1, 1)
         val bRow = listOf(0, 0, 0, 0, 0, 0, 0)
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-07",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
-            groupShift = listOf(listOf(1, 1)),
-            groupShiftApt = List(1) { List(2) { "" } },
+            groupShift = listOf(listOf(1, 1), listOf(1, 1)),
+            groupShiftApt = List(2) { List(2) { "" } },
             schedule = listOf(aRow, bRow),
             wishes = emptyMap(), staffRange = emptyMap(),
             needDay1 = emptyMap(), needDay2 = emptyMap(),
