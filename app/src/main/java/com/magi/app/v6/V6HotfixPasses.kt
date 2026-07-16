@@ -176,6 +176,14 @@ object V6HotfixPasses {
                     " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r})"))
         }
 
+        // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の
+        //   勤務/休が不変）ため、被覆保存の2職員×2日 長方形交換で「過剰曜日→過少曜日」へ勤務を移す。実目的関数
+        //   isBetter で採否＝退化なし。下の equalize 系(分散指標)より先に L1 指向のこのパスを走らせる。
+        onPhase("後処理 曜日平準化(長方形交換)")
+        val rWrb = applyWeeklyRebalancePolish(state, work, maxPasses = 2, shouldStop = shouldStop)
+        work = rWrb.newSchedule.copy2D()
+        logs.addAll(rWrb.logs)
+
         onPhase("後処理 グループ内シフト回数の平準化")
         val rGeq = applyGroupShiftEqualizePolish(state, work, maxPasses = 2, shouldStop = shouldStop)
         work = rGeq.newSchedule.copy2D()
@@ -609,6 +617,87 @@ object V6HotfixPasses {
         }
         val logs = listOf(MirrorLog(tag = "WeeklyEqualize",
             message = "7日周期(曜日)の平準化: 偏り ${"%.1f".format(beforeMetric)}->${"%.1f".format(bestMetric)} 採用${applied}回"))
+        return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
+    }
+
+    /**
+     * [ソフト研磨・weekly（曜日平準化）＝長方形交換] weekly は「職員が特定の曜日にばかり勤務する」偏りで、
+     * L1偏差（`weeklyDevOfBucket`＝各曜日の勤務数の round(平均) からの偏差和）で評価される。**同日2者スワップ
+     * （CyclicSwap / equalize 系）は勤務↔勤務では曜日別の勤務/休が変わらず weekly をほぼ動かせない**（勤務種類が
+     * 入れ替わるだけで、どちらの職員も「その曜日に勤務している」事実は不変）。これが「weekly の研磨ができていない」
+     * 実害の根本（実機ログで weekly=56＝SOFT 残差の最大級）。
+     *
+     * そこで **被覆保存の 2職員×2日 長方形交換** を導入する: 職員 i が「過剰曜日の日 j1 で勤務(シフト x)・過少曜日の
+     * 日 j2 で休」、相手 i' が「j1 で休・j2 で勤務(シフト y)」のとき、両者の j1/j2 を丸ごと入替える
+     * （i: j1→休/j2→y、i': j1→x/j2→休）。各日の各シフト人数は保存される（j1 の x は i→i'、j2 の y は i'→i へ移るだけ）
+     * ため covU/covO・群レンジ・pref は不変で、i の勤務が過剰曜日→過少曜日へ移動して weekly が下がる。fair（群内シフト
+     * 回数）や low/high/apt/c2 など per-staff 族も副次的に動く。**採否は実目的関数 isBetter のみ**（hard→total→weighted、
+     * total は weekly/fair を含む）＝退化なし（keep-best）。weekly>0 の職員のみ起点＋first-improvement で空探索は即終了。
+     * 変更セルは wish 固定なら不動（4セルとも movable ガード）。covO/c42/c2 など per-day 族は同日 CyclicSwap（isBetter）が
+     * 既に最適に研磨済みのため本パスの対象外（2.49.0 の「専用パスは冗長」の結論を踏襲）。
+     */
+    fun applyWeeklyRebalancePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2, shouldStop: () -> Boolean = { false }): CyclicSwapResult {
+        val p = Problem(state)
+        val work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        var applied = 0
+        val rest = p.restIdx
+        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        fun weekdayOf(j: Int) = (p.dow0 + j) % 7
+        fun wdBucket(i: Int): IntArray {
+            val wd = IntArray(7)
+            for (j in 0 until p.T) { val k = work[i][j]; if (k != rest && k in 0 until p.K) wd[weekdayOf(j)]++ }
+            return wd
+        }
+        var pass = 0
+        while (pass < maxPasses) {
+            if (shouldStop()) break
+            var improved = false
+            for (i in 0 until p.S) {
+                if (shouldStop()) break
+                val wd = wdBucket(i)
+                if (weeklyDevOfBucket(wd) == 0) continue
+                var sum = 0; for (w in wd) sum += w
+                val tgt = Math.round(sum.toDouble() / 7.0).toInt()
+                // 最も過剰な曜日（勤務が多すぎ）と最も過少な曜日（少なすぎ）を1つずつ狙う。
+                var wOver = -1; var wUnder = -1; var maxOver = 0; var maxUnder = 0
+                for (w in 0 until 7) {
+                    if (wd[w] - tgt > maxOver) { maxOver = wd[w] - tgt; wOver = w }
+                    if (tgt - wd[w] > maxUnder) { maxUnder = tgt - wd[w]; wUnder = w }
+                }
+                if (wOver < 0 || wUnder < 0) continue
+                // i が過剰曜日に勤務している日(movable, 非休) / 過少曜日に休んでいる日(movable)。
+                val overDays = (0 until p.T).filter { weekdayOf(it) == wOver && movable(i, it) && work[i][it] != rest && work[i][it] in 0 until p.K }
+                val underDays = (0 until p.T).filter { weekdayOf(it) == wUnder && movable(i, it) && work[i][it] == rest }
+                var done = false
+                for (j1 in overDays) {
+                    if (done || shouldStop()) break
+                    val x = work[i][j1]
+                    for (j2 in underDays) {
+                        if (done) break
+                        for (ip in 0 until p.S) {
+                            if (ip == i) continue
+                            // 相手 i' は j1 で休・j2 で勤務(非休)、両日 movable。被覆保存には i'←x(j1), i←y(j2) が担当可であること。
+                            if (!movable(ip, j1) || !movable(ip, j2)) continue
+                            if (work[ip][j1] != rest) continue
+                            val y = work[ip][j2]
+                            if (y == rest || y !in 0 until p.K) continue
+                            if (!p.canDo(ip, x) || !p.canDo(i, y)) continue
+                            // 長方形交換を適用（被覆保存）→ フル評価 → 改善時のみ採用、不採用なら完全巻き戻し。
+                            work[i][j1] = rest; work[i][j2] = y; work[ip][j1] = x; work[ip][j2] = rest
+                            val rep = UnifiedViolationChecker.check(state, work)
+                            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true; break }
+                            work[i][j1] = x; work[i][j2] = rest; work[ip][j1] = rest; work[ip][j2] = y
+                        }
+                    }
+                }
+            }
+            pass++
+            if (!improved) break
+        }
+        val logs = listOf(MirrorLog(tag = "WeeklyRebalance",
+            message = "曜日平準化(長方形交換): total ${before.total}->${bestRep.total} 採用${applied}回"))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
