@@ -1454,6 +1454,27 @@ grilling で4点確定（静的月見出し=D6維持／その他=担当可能シ
 - 検証: サンドボックスは Kotlin コンパイル不可＝ブレース/丸括弧均衡0を静的確認。最終判定は CI
   （Release Build＝assembleRelease）＋ユーザーの実機再確認（同一画面での即時反映）。
 
+## 同種の再構成バグの横展開（3.190.0, ユーザー指示「他の画面も再検索してください」）
+3.189.0 の「未対応（同種の懸念）」を実際に洗い出し、対象範囲を確定して修正。`CollapsibleSection`（generic な
+`content: @Composable () -> Unit` を受け取る再利用コンポーネント）配下で、**生の `vm.xxx()` 読取値を即座に
+表示し、ローカルの `remember` バッファを経由せず直接コミットする**箇所を全カード横断で洗い出した:
+- **同一パターンで確認・修正**: `Ws1Card`（`use2`トグル・担当可否chipマトリクス＝`v.groupShift`直読み）、
+  `SkillGroupCard`（職員のスキル割当ボタンのラベル＝`st.skillIdx`直読み）、`ConstraintsCard`/`SkillConstraintsCard`
+  （行タップ編集後の一覧テキスト＝`vm.constraintFamilies()`直読み）、`StaffManageCard`（スキル割当ボタン）、
+  `StaffRangeCard`（職員管理タブ側の呼び出し。年間マスター側は3.189.0で対応済）。いずれも `key(ui.editRev){ ... }`
+  で個別に包んだ（`CollapsibleSection`配下でない`StaffManageCard`/`StaffRangeCard`(職員管理タブ)にも同型の懸念が
+  あるため予防的に適用）。
+- **確認したうえで対象外**: `WishCard`/`NeedCalendarCard`（月次条件タブ）。この2枚は「選択中の職員/シフト
+  （`i`/`k`、`remember`）を保持したまま複数日を編集する」設計のため、`key(ui.editRev)`で包むと**自分自身の編集
+  コミット（それ自体がeditRevを増やす）のたびに選択がリセットされ、③より悪い退行を生む**と判断し見送った
+  （AptCard等は「開いているダイアログ」程度の軽いローカル状態しか持たないため無害だったが、この2枚は主要な
+  ナビゲーション状態を持つため事情が異なる）。
+- 各カードの内部状態を精査し、`key()`で包んでも失われるのは「編集操作自体が同じフレームで既に閉じている
+  ダイアログ/ドロップダウン」の初期値（null/false）のみであることを確認（＝退行なし）。
+  グリッド編集(ScheduleGrid/ShiftPickerSheet)は別の確立された経路で同種の報告が過去に無いため対象外のまま。
+- 検証: サンドボックスは Kotlin コンパイル不可＝ブレース/丸括弧均衡0を静的確認。最終判定は CI
+  （Release Build＝assembleRelease）＋ユーザーの実機再確認。
+
 ## Android 16並行/並列監査＋16KBページ対応（3.181.0）
 ユーザー提示の「Android 16(API36)＋Kotlin 2 世代の並行・並列設計指針」に照らし全コードを監査。**唯一の実バグ＝
 16KBメモリページ非対応**を修正し、他の指針は既に充足 or 盲目適用が有害と判定。
