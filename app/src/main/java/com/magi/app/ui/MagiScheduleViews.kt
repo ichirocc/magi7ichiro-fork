@@ -148,8 +148,8 @@ internal fun LiveScheduleCard(ui: UiState) {
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            // [進捗の見える化] 改善率/残り時間/探索数を常時1行で。エンジニア向けログより「あと何分・どれだけ良くなった」を優先。
-            Text(progressSummary(ui), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.primary)
+            // [冗長性見直し] progressSummary(ui) は直上の OperatorNextActionCard の実行中表示（進捗行）に
+            //   既出のため、ここでの再表示は削除（同一文字列が直列2回並んでいた）。
             val cur = ui.liveSchedule
             // 変化セル検出: 前回スナップショットとの差分。holder(非state)で保持し再合成ループを避ける。
             val prevHolder = remember { arrayOfNulls<List<List<Int>>>(1) }

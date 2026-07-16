@@ -425,7 +425,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [見つけやすさ改善] 案内カードの「希望シフト」行タップで月次条件タブへ直行。
                     //   WishCardは常時展開のカレンダー主導線のため、タブ切替のみで編集画面に到達する。
                     val openWish: () -> Unit = { editScope = 0 }
-                    SetupGuideCard(ui, vm, onOpenWish = openWish)
+                    SetupGuideCard(ui, vm, editScope = editScope, onOpenWish = openWish)
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
                     MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })
@@ -542,8 +542,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [★3+4] 日別/人別 注意リスト＋「要確認のみ」トグル（web「画面修正版」day/staff＋alertOnly 融合）。
                     //   人別行タップで修復フローへ。BottleneckCard(top5テキスト) の上位互換のため下の BottleneckCard は撤去。
                     AttentionCardsSection(ui, onFocusStaff = { vm.findFixSuggestions(it) })
-                    // [冗長性/用語] 「ようす」は やさしい俯瞰＋チェック＋内訳 のみ。開発用の V6 1ヶ月俯瞰
-                    //   (HARD Core/Guard・Apt/Equalize/covU 等の生指標) は詳細設定(上級者)へ移設。
+                    // [冗長性/用語][コメント訂正] 開発用の V6 1ヶ月俯瞰(HARD Core/Guard・Apt/Equalize/covU 等の
+                    //   生指標)は「詳細設定(上級者)」ではなく分析タブのプロ表示にのみ一本化済み（冗長性J1、
+                    //   MagiSetupCards.kt 参照。旧コメントは移設先が実態と食い違っていたため訂正）。
                     // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。
                     if (proMode) V6DashboardCard(ui.v6)
                     // [実機指摘] 重み表（WeightTableCard）は分析タブから設定タブの最適化設定直後へ移動。

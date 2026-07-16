@@ -137,7 +137,7 @@ internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
 
 
 @Composable
-internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, onOpenWish: (() -> Unit)? = null) {
+internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, editScope: Int = -1, onOpenWish: (() -> Unit)? = null) {
     if (!ui.loaded) return
     val c = vm.setupCounts()
     val cs = MaterialTheme.colorScheme
@@ -147,11 +147,16 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, onOpenWish: (() -> U
             // [E1] 番号順(①〜⑤)とeditScopeの不一致を解消：毎月触る項目と年次マスター項目を分けて表示。
             //   ①基本情報・④制約・⑤回数範囲は「年次マスター」scopeにあり、月次では編集しない。
             // [監査A1] 旧①〜⑤番号と旧スコープ名（年次マスター等）が新3ドア/新節番号と食い違っていた→ドア名で案内。
-            Text("── 月次条件（毎月）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            // [見つけやすさ改善] 「希望シフト」行をタップで登録画面へ直行（既存機能の入口が編集タブの奥に
-            //   埋もれ見つけにくいという指摘。新規画面は作らず、常時表示のこの案内カードから最短で開く）。
-            GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0, onClick = onOpenWish)
-            GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
+            // [冗長性見直し] editScope==0(月次条件)では MonthlyChecklistCard がこの直下により詳しい形
+            //   （件数比・標準/例外の区別・作成ボタン）で同じ2行を表示するため、そこでは重複を隠す。
+            //   他スコープ(職員管理/年間マスター)では引き続き表示し、希望シフトへのショートカットを維持する。
+            if (editScope != 0) {
+                Text("── 月次条件（毎月）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                // [見つけやすさ改善] 「希望シフト」行をタップで登録画面へ直行（既存機能の入口が編集タブの奥に
+                //   埋もれ見つけにくいという指摘。新規画面は作らず、常時表示のこの案内カードから最短で開く）。
+                GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0, onClick = onOpenWish)
+                GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
+            }
             Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
             GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
