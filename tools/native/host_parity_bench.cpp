@@ -1,13 +1,19 @@
 // Host-buildable parity + benchmark harness for magi_native.cpp.
 //
 //   g++ -O3 -std=c++17 -DMAGI_HOST_TEST -I app/src/main/cpp \
-//       tools/native/host_parity_bench.cpp -o /tmp/magi_host && /tmp/magi_host
+//       tools/native/host_parity_bench.cpp -o /tmp/magi_host && /tmp/magi_host [state.flat ...]
 //
-// Parity: builds synthetic MagiProblem fixtures, then over millions of random
+// Parity: builds synthetic MagiProblem fixtures — and, when given flat problem files
+//   (tools/native/state_to_flat.py で実 state JSON から生成) — then over millions of random
 //   single-cell moves checks that the incrementally maintained SaChunk.score
 //   (delta) exactly equals a fresh scalar fullEvalCombined (the Kotlin oracle's
 //   C++ mirror). This is the runtime self-consistency check, run offline and
 //   exhaustively. Mismatch count MUST be 0.
+//
+// [実データ形状] 実機で SaChunk 自己整合NG(status=1)が発生した回帰を受け、合成フィクスチャに
+//   実データで実際に使われる形状を追加: 休(rest)シフトへの range/apt/c1/c2・実現不可能な希望
+//   (非canDoへのwish)・盤面中の -1(未割当=normalizeSchedule の正規化結果)と非canDo値。
+//   さらに flat ファイル引数で実 state（golden_state.json 等）の問題をそのまま照合できる。
 // Bench: times raw deltaApply throughput (apply+revert) so bit-op changes can be
 //   measured A/B via SaChunk.useBits.
 #ifndef MAGI_HOST_TEST
@@ -19,6 +25,8 @@
 #include <chrono>
 #include <random>
 #include <algorithm>
+#include <fstream>
+#include <string>
 
 // Fill the derived tables the JNI decode normally builds (members / bucketHas /
 // staffForShift), so a hand-built MagiProblem behaves like a decoded one.
@@ -37,6 +45,63 @@ static C3r mkC3(std::initializer_list<int> seq) {
     r.singleRun = !r.seq.empty();
     for (size_t l = 1; l < r.seq.size(); l++) if (r.seq[l] != r.seq[0]) { r.singleRun = false; break; }
     return r;
+}
+
+// ---- 実データ問題ローダ: tools/native/state_to_flat.py の MAGIFLAT1 形式 ----
+static bool loadFlat(const char* path, MagiProblem& p, std::vector<int>& board) {
+    std::ifstream f(path);
+    if (!f) { printf("loadFlat: cannot open %s\n", path); return false; }
+    std::string magic; f >> magic;
+    if (magic != "MAGIFLAT1") { printf("loadFlat: bad magic in %s\n", path); return false; }
+    auto readArr = [&](std::vector<int>& v) -> bool {
+        long long n; if (!(f >> n) || n < 0) return false;
+        v.resize((size_t)n);
+        for (long long i = 0; i < n; i++) if (!(f >> v[i])) return false;
+        return true;
+    };
+    std::vector<int> meta, staffArr, canDo, wish, needs, ranges, cons, c3, bucketBlob;
+    if (!readArr(meta) || meta.size() != 7 || !readArr(staffArr) || !readArr(canDo) ||
+        !readArr(wish) || !readArr(needs) || !readArr(ranges) || !readArr(cons) ||
+        !readArr(c3) || !readArr(bucketBlob) || !readArr(board)) {
+        printf("loadFlat: truncated %s\n", path); return false;
+    }
+    p.S = meta[0]; p.T = meta[1]; p.K = meta[2]; p.G = meta[3];
+    p.restIdx = meta[4]; p.dow0 = meta[5]; p.use2 = meta[6] != 0;
+    const int S = p.S, T = p.T, K = p.K, G = p.G;
+    p.sgrp.assign(staffArr.begin(), staffArr.begin() + S);
+    p.ssk.assign(staffArr.begin() + S, staffArr.begin() + 2 * S);
+    p.canDo.assign(canDo.begin(), canDo.end());
+    p.wish = wish;
+    p.need1.assign(needs.begin(), needs.begin() + (size_t)K * T);
+    p.need2.assign(needs.begin() + (size_t)K * T, needs.end());
+    p.rangeLo.assign(ranges.begin(), ranges.begin() + (size_t)S * K);
+    p.rangeHi.assign(ranges.begin() + (size_t)S * K, ranges.begin() + 2 * (size_t)S * K);
+    p.apt.assign(ranges.begin() + 2 * (size_t)S * K, ranges.end());
+    size_t ix = 0;
+    auto rd = [&]() { return cons[ix++]; };
+    int n = rd(); for (int c = 0; c < n; c++) { int d1 = rd(), si = rd(), d2 = rd(); p.cons1.push_back({d1, si, d2}); }
+    n = rd(); for (int c = 0; c < n; c++) { int si = rd(), ct = rd(); p.cons2.push_back({si, ct}); }
+    n = rd(); for (int c = 0; c < n; c++) { int g = rd(), s = rd(), l = rd(), u = rd(); p.cons41.push_back({g, s, l, u}); }
+    n = rd(); for (int c = 0; c < n; c++) { int g1 = rd(), s1 = rd(), g2 = rd(), s2 = rd(); p.cons42.push_back({g1, s1, g2, s2}); }
+    n = rd(); for (int c = 0; c < n; c++) { int g = rd(), s = rd(), l = rd(), u = rd(); p.cons41s.push_back({g, s, l, u}); }
+    n = rd(); for (int c = 0; c < n; c++) { int g1 = rd(), s1 = rd(), g2 = rd(), s2 = rd(); p.cons42s.push_back({g1, s1, g2, s2}); }
+    size_t cx = 0;
+    auto rdc = [&]() { return c3[cx++]; };
+    for (std::vector<C3r>* fam : {&p.cons3, &p.cons3n, &p.cons3m, &p.cons3mn}) {
+        int cnt = rdc();
+        for (int r = 0; r < cnt; r++) {
+            C3r row; int len = rdc();
+            for (int l = 0; l < len; l++) row.seq.push_back(rdc());
+            row.singleRun = !row.seq.empty();
+            for (size_t l = 1; l < row.seq.size(); l++) if (row.seq[l] != row.seq[0]) { row.singleRun = false; break; }
+            fam->push_back(row);
+        }
+    }
+    size_t bx = 0;
+    p.bucket.assign((size_t)G, {});
+    for (int g = 0; g < G; g++) { int len = bucketBlob[bx++]; for (int l = 0; l < len; l++) p.bucket[g].push_back(bucketBlob[bx++]); }
+    finalizeProblem(p);
+    return true;
 }
 
 // Build a varied but self-consistent problem. rest = shift 0.
@@ -58,10 +123,12 @@ static MagiProblem buildProblem(int S, int T, int K, int G, uint64_t seed, bool 
     // canDo(i,k) = k in bucket[sgrp[i]]
     p.canDo.assign((size_t)S * K, 0);
     for (int i = 0; i < S; i++) for (int k : p.bucket[p.sgrp[i]]) p.canDo[(size_t)i * K + k] = 1;
-    // wish: ~10% of cells wished to an allowed shift
+    // wish: ~10% of cells wished. [実データ形状] うち1/4は任意シフト＝非canDoの実現不可能な希望を含む
+    //   （実データに常在。pref は canDo ガードで数えない＝Δ/フル双方の対称性をここで照合する）。
     p.wish.assign((size_t)S * T, -1);
     for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) if (ri(0, 9) == 0) {
-        const auto& b = p.bucket[p.sgrp[i]]; p.wish[(size_t)i * T + j] = b[ri(0, (int)b.size() - 1)];
+        if (ri(0, 3) == 0) { p.wish[(size_t)i * T + j] = ri(0, K - 1); }
+        else { const auto& b = p.bucket[p.sgrp[i]]; p.wish[(size_t)i * T + j] = b[ri(0, (int)b.size() - 1)]; }
     }
     // needs: a few critical shifts get P1 (and P2 if use2)
     p.need1.assign((size_t)K * T, -1); p.need2.assign((size_t)K * T, -1);
@@ -69,17 +136,18 @@ static MagiProblem buildProblem(int S, int T, int K, int G, uint64_t seed, bool 
         p.need1[(size_t)k * T + j] = ri(1, 2);
         if (use2 && ri(0, 1) == 0) p.need2[(size_t)k * T + j] = ri(1, 2);
     }
-    // ranges + apt: sparse
+    // ranges + apt: sparse. [実データ形状] k=0(休) も対象（実データは休の上下限・apt目標が最も濃い:
+    //   例 golden_state 休 lo=10/hi=10・apt=10。旧フィクスチャは k>=1 のみで未照合だった）。
     p.rangeLo.assign((size_t)S * K, INT32_MIN); p.rangeHi.assign((size_t)S * K, INT32_MAX); p.apt.assign((size_t)S * K, -1);
-    for (int i = 0; i < S; i++) for (int k = 1; k < K; k++) if (p.canDo[(size_t)i * K + k]) {
-        if (ri(0, 2) == 0) p.rangeLo[(size_t)i * K + k] = ri(1, 4);
-        if (ri(0, 2) == 0) p.rangeHi[(size_t)i * K + k] = ri(3, 8);
-        if (ri(0, 2) == 0) p.apt[(size_t)i * K + k] = ri(0, 6);
+    for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) if (p.canDo[(size_t)i * K + k]) {
+        if (ri(0, 2) == 0) p.rangeLo[(size_t)i * K + k] = ri(1, 4 + (k == 0 ? 8 : 0));
+        if (ri(0, 2) == 0) p.rangeHi[(size_t)i * K + k] = ri(3, 8 + (k == 0 ? 8 : 0));
+        if (ri(0, 2) == 0) p.apt[(size_t)i * K + k] = ri(0, 6 + (k == 0 ? 6 : 0));
     }
-    // cons1 windows
+    // cons1 windows. [実データ形状] rest(0) 窓も混ぜる（例 golden: 14日窓 休>=5）。
     int nC1 = ri(2, 5);
-    for (int c = 0; c < nC1; c++) { int d1 = ri(2, std::min(T, 7)); p.cons1.push_back({d1, ri(1, K - 1), ri(1, std::max(1, d1 - 1))}); }
-    int nC2 = ri(1, 4); for (int c = 0; c < nC2; c++) p.cons2.push_back({ri(1, K - 1), ri(1, T / 3 + 1)});
+    for (int c = 0; c < nC1; c++) { int d1 = ri(2, std::min(T, 14)); p.cons1.push_back({d1, ri(0, K - 1), ri(1, std::max(1, d1 - 1))}); }
+    int nC2 = ri(1, 4); for (int c = 0; c < nC2; c++) p.cons2.push_back({ri(0, K - 1), ri(1, T / 3 + 1)});
     int nC41 = ri(2, 5); for (int c = 0; c < nC41; c++) { int l = ri(0, 2); p.cons41.push_back({ri(0, G - 1), ri(1, K - 1), l, l + ri(0, 2)}); }
     int nC42 = ri(1, 4); for (int c = 0; c < nC42; c++) p.cons42.push_back({ri(0, G - 1), ri(1, K - 1), ri(0, G - 1), ri(1, K - 1)});
     int nC41s = ri(1, 3); for (int c = 0; c < nC41s; c++) { int l = ri(0, 2); p.cons41s.push_back({ri(0, Gs - 1), ri(1, K - 1), l, l + ri(0, 2)}); }
@@ -106,7 +174,73 @@ static std::vector<int> randomBoard(const MagiProblem& p, std::mt19937_64& rng) 
     return a;
 }
 
-int main() {
+// [実データ形状] 盤面に -1(未割当) と 非canDo 値を混ぜる。normalizeSchedule は範囲外セルを -1 に
+// 写像し（MirrorCore.normalizeSchedule）、範囲内なら非canDo値もそのまま残す。どちらも実ランタイムで
+// SaChunk へ正当に到達する（undo バッファは旧値=-1/非canDo をそのまま復元する）。
+static void injectRealisticNoise(const MagiProblem& p, std::vector<int>& a, std::mt19937_64& rng) {
+    const size_t n = a.size();
+    for (size_t c = 0; c < n; c++) {
+        uint64_t r = rng() % 100;
+        if (r < 3) a[c] = -1;                        // ~3% 未割当
+        else if (r < 5) a[c] = (int)(rng() % (uint64_t)p.K);   // ~2% 任意（非canDoを含む）
+    }
+}
+
+// 共有パリティループ: 乱択1セル手（bucket からの割当）＋25% リバート（旧値へ戻す＝-1/非canDo の
+// 復元も踏む）。delta==full を1手ごとに照合。
+static void runParityLoop(const MagiProblem& p, const std::vector<int>& board, const char* name,
+                          uint64_t seed, bool bits, int moves,
+                          long long& totalMoves, long long& mismatches) {
+    std::mt19937_64 rng(seed * 104729ULL + 1);
+    SaChunk st(p, board.data(), seed * 2654435761ULL);
+    st.useBits = st.useBits && bits;
+    if (st.score != fullEvalCombined(p, st.a.data())) {
+        mismatches++;
+        printf("INIT MISMATCH %s seed=%llu\n", name, (unsigned long long)seed);
+    }
+    for (int m = 0; m < moves; m++) {
+        int i = (int)(rng() % (uint64_t)p.S), j = (int)(rng() % (uint64_t)p.T);
+        const auto& b = p.bucket[p.sgrp[i]];
+        if (b.empty()) continue;
+        int nw = b[rng() % b.size()];
+        int old = st.a[(size_t)i * p.T + j];
+        st.deltaApply(i, j, nw);
+        totalMoves++;
+        long long full = fullEvalCombined(p, st.a.data());
+        if (st.score != full) {
+            mismatches++;
+            if (mismatches <= 8) printf("MISMATCH %s seed=%llu move=%d (i=%d j=%d %d->%d) delta=%lld full=%lld\n",
+                                        name, (unsigned long long)seed, m, i, j, old, nw, st.score, full);
+        }
+        // 25% chance revert (exercise reversibility incl. restoring -1 / non-canDo)
+        if ((rng() & 3) == 0) { st.deltaApply(i, j, old); totalMoves++;
+            long long f2 = fullEvalCombined(p, st.a.data());
+            if (st.score != f2) { mismatches++; if (mismatches <= 8) printf("REVERT MISMATCH %s (restore %d)\n", name, old); }
+        }
+    }
+}
+
+int main(int argc, char** argv) {
+    long long totalMoves = 0, mismatches = 0;
+
+    // ---- 実データ問題（flat ファイル引数）: 素の盤面＋実運転ノイズ(-1/非canDo)入り盤面 ----
+    for (int ai = 1; ai < argc; ai++) {
+        MagiProblem p;
+        std::vector<int> board;
+        if (!loadFlat(argv[ai], p, board)) return 2;
+        printf("REAL %s: S=%d T=%d K=%d G=%d rest=%d c1=%zu c2=%zu c41=%zu c42=%zu c3n=%zu\n",
+               argv[ai], p.S, p.T, p.K, p.G, p.restIdx, p.cons1.size(), p.cons2.size(),
+               p.cons41.size(), p.cons42.size(), p.cons3n.size());
+        for (uint64_t seed = 1; seed <= 6; seed++) {
+            runParityLoop(p, board, "real(as-is)", seed, seed % 2 == 0, 40000, totalMoves, mismatches);
+            std::mt19937_64 nz(seed * 7717ULL);
+            std::vector<int> noisy = board;
+            injectRealisticNoise(p, noisy, nz);
+            runParityLoop(p, noisy, "real(noisy -1/nonCanDo)", seed, seed % 2 == 0, 40000, totalMoves, mismatches);
+        }
+    }
+
+    // ---- 合成フィクスチャ ----
     struct Dim { int S, T, K, G; bool use2; const char* name; };
     Dim dims[] = {
         {10, 31, 6, 3, true,  "real-ish 10x31 K6 (P1+P2)"},
@@ -115,36 +249,17 @@ int main() {
         {8,  28, 5, 2, true,  "8x28 K5"},
         {40, 62, 20, 6, true, "40x62 K20 (large, still <=64)"},
     };
-    long long totalMoves = 0, mismatches = 0;
     for (const Dim& d : dims) {
         for (uint64_t seed = 1; seed <= 6; seed++) {
             MagiProblem p = buildProblem(d.S, d.T, d.K, d.G, seed * 7919ULL, d.use2);
-            std::mt19937_64 rng(seed * 104729ULL + 1);
+            std::mt19937_64 rng(seed * 104729ULL);
             std::vector<int> board = randomBoard(p, rng);
-            SaChunk st(p, board.data(), seed * 2654435761ULL);
-            if (seed % 2 == 1) st.useBits = false;   // odd seed = scalar path, even seed = bit-op path
-            // verify initial score
-            if (st.score != fullEvalCombined(p, st.a.data())) { mismatches++; printf("INIT MISMATCH %s seed=%llu\n", d.name, (unsigned long long)seed); }
-            const int MOVES = 40000;
-            for (int m = 0; m < MOVES; m++) {
-                int i = rng() % p.S, j = rng() % p.T;
-                const auto& b = p.bucket[p.sgrp[i]];
-                int nw = b[rng() % b.size()];
-                int old = st.a[(size_t)i * p.T + j];
-                st.deltaApply(i, j, nw);
-                totalMoves++;
-                long long full = fullEvalCombined(p, st.a.data());
-                if (st.score != full) {
-                    mismatches++;
-                    if (mismatches <= 5) printf("MISMATCH %s seed=%llu move=%d (i=%d j=%d %d->%d) delta=%lld full=%lld\n",
-                                                d.name, (unsigned long long)seed, m, i, j, old, nw, st.score, full);
-                }
-                // 25% chance revert (exercise reversibility)
-                if ((rng() & 3) == 0) { st.deltaApply(i, j, old); totalMoves++;
-                    long long f2 = fullEvalCombined(p, st.a.data());
-                    if (st.score != f2) { mismatches++; if (mismatches <= 5) printf("REVERT MISMATCH %s\n", d.name); }
-                }
-            }
+            // odd seed = scalar path, even seed = bit-op path
+            runParityLoop(p, board, d.name, seed, seed % 2 == 0, 40000, totalMoves, mismatches);
+            // [実データ形状] -1/非canDo 混入盤面でも同一パリティ（旧: 全セル canDo 割当のみで未照合）。
+            std::vector<int> noisy = board;
+            injectRealisticNoise(p, noisy, rng);
+            runParityLoop(p, noisy, "noisy", seed + 100, seed % 2 == 1, 40000, totalMoves, mismatches);
         }
     }
     printf("\nPARITY: %lld moves checked (scalar + bit-op paths), %lld mismatches\n", totalMoves, mismatches);
