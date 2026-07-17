@@ -779,6 +779,18 @@ object V6HotfixPasses {
         }
         val rng = Random(seed)
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [C1研磨・手B強化] staff i2 が shift x2 について day を含むいずれかの窓で不足しているか（全cons1横断）。
+        //   手B(findCovUChain の玉突き連鎖)の候補選定に c1Pref として渡し、「連鎖に組み込む相手が、たまたま
+        //   その相手自身のc1不足も一緒に解消する」候補を優先させる（並べ替えのみ・安全条件は不変・探索の
+        //   正しさは常に isBetter が最終担保）。
+        fun c1Deficient(i2: Int, x2: Int, day: Int): Boolean {
+            if (day !in 0 until p.T) return false
+            for (c2 in p.cons1) {
+                if (c2.shiftIdx != x2 || c2.day1 <= 0) continue
+                if (inDeficientC1Window(p, work, i2, x2, c2.day1, c2.day2, day)) return true
+            }
+            return false
+        }
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -899,7 +911,10 @@ object V6HotfixPasses {
                         work[i][j] = x
                         // exclude=i: i は既に x へ動かした本人なので、a を埋め戻す候補から除外
                         //   （除外しないと「i が a に戻る」= i の移動そのものを打ち消す退行手をBFSが選びうる）。
-                        val chain = findCovUChain(p, work, a, j, rng, exclude = i)
+                        // c1Pref=c1Deficient: 連鎖の相手選びを「その相手自身のc1不足も一緒に解消するか」で
+                        //   優先付け（並べ替えのみ・見つからなければ従来どおり）。
+                        val chain = findCovUChain(p, work, a, j, rng, exclude = i,
+                            c1Pref = { s2, sh, dy -> c1Deficient(s2, sh, dy) })
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
                         chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                         val rep = UnifiedViolationChecker.check(state, work)
