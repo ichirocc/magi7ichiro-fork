@@ -432,6 +432,9 @@ struct SaChunk {
         return 0;
     }
     long long contribRangeApt(int i, int k) const {
+        // [実データ対応] k=-1(未割当セル=normalizeSchedule の正規化結果)や範囲外は寄与0。
+        //   contribCov/contribFair と同じガード（旧: 無ガードで rangeLo[i*K-1] 等の範囲外読み）。
+        if (k < 0 || k >= K) return 0;
         long long v = 0;
         int lo = p.rangeLo[(size_t)i * K + k];
         int hi = p.rangeHi[(size_t)i * K + k];
@@ -517,9 +520,20 @@ struct SaChunk {
     }
 
     // セル(i,j)を nw へ差分適用（影響スライスの before/after 再計算で score を維持）。
+    // [実データ対応・重要] 盤面には -1（未割当）が正当に現れる: normalizeSchedule（MirrorCore）は
+    //   範囲外セルを -1 に写像し、その盤面が各ネイティブランナー（SA/LAHC/ALNS/Polish は全て本構造体を
+    //   共有）へ flatten されて届く。さらに undo バッファのリバートは旧値=-1 をそのまま復元する。
+    //   旧実装は old/nw を無条件に ssn/dsn/rowMask/dayShiftMask へ索引し（-1 で範囲外書込＝カウント/
+    //   ヒープ破壊。ホスト再現で free(): invalid pointer を確認）、wd の work 判定にも範囲ガードが
+    //   無かった（Kotlin DeltaEvaluator は 3.92.0/3.95.1 で同一クラスをハードニング済み＝C++ ミラーの
+    //   直し漏れ）。score がドリフトしチャンク末尾の自己整合で status=1 → 番兵発火 → Kotlin 退化
+    //   （実機ログ「NativeBridge: SAチャンク整合性NG status=1」の根本原因）。resetBoard/fullEvalParts
+    //   と同じ range ガードで対称化する。
     void deltaApply(int i, int j, int nw) {
         int old = a[(size_t)i * T + j];
         if (old == nw) return;
+        const bool oldIn = old >= 0 && old < K;
+        const bool newIn = nw >= 0 && nw < K;
         int g = p.sgrp[i];
         long long before = contribC1Row(i) + contribC2Row(i) + contribC3Row(i)
             + contribPrefCell(i, j)
@@ -529,15 +543,15 @@ struct SaChunk {
             + contribDayGroups(j)
             + contribCov(old, j) + contribCov(nw, j);
         a[(size_t)i * T + j] = nw;
-        ssn[(size_t)i * K + old]--; ssn[(size_t)i * K + nw]++;
-        dsn[(size_t)j * K + old]--; dsn[(size_t)j * K + nw]++;
+        if (oldIn) { ssn[(size_t)i * K + old]--; dsn[(size_t)j * K + old]--; }
+        if (newIn) { ssn[(size_t)i * K + nw]++; dsn[(size_t)j * K + nw]++; }
         if (useBits) {
             uint64_t jb = 1ULL << j, ib = 1ULL << i;
-            rowMask[(size_t)i * K + old] &= ~jb; rowMask[(size_t)i * K + nw] |= jb;
-            dayShiftMask[(size_t)j * K + old] &= ~ib; dayShiftMask[(size_t)j * K + nw] |= ib;
+            if (oldIn) { rowMask[(size_t)i * K + old] &= ~jb; dayShiftMask[(size_t)j * K + old] &= ~ib; }
+            if (newIn) { rowMask[(size_t)i * K + nw] |= jb;  dayShiftMask[(size_t)j * K + nw] |= ib; }
         }
-        bool oldWork = old != p.restIdx;
-        bool newWork = nw != p.restIdx;
+        bool oldWork = oldIn && old != p.restIdx;
+        bool newWork = newIn && nw != p.restIdx;
         if (oldWork != newWork) wd[(size_t)i * 7 + (p.dow0 + j) % 7] += newWork ? 1 : -1;
         long long after = contribC1Row(i) + contribC2Row(i) + contribC3Row(i)
             + contribPrefCell(i, j)
