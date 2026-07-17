@@ -336,12 +336,23 @@ object FixSuggester {
                 c.day in row.indices && row[c.day] == fShift
             }
         }
+        // [重複排除の頑健化] 旧署名(kind名+ops列挙順)は3種の見落としで実質同一の盤面変化を複数回
+        // 表示していた: ①SWAP_XDAY は起点(i1,j1)/(i2,j2)どちらから見るかで ops が逆順生成され別署名化
+        // ②同日の SWAP と kind違いなだけの SWAP_XDAY（Phase5 は j2==j1 も除外していない＝「別日」ラベルが
+        // 実は同日）③SWAP_MULTI の退化3巡回(1脚が無変化=実質2人交換)や CHAIN(同一shiftへの2コマ)が
+        // CHANGE_MULTI 等と同じ盤面変化になり得る、のいずれも kind をまたいで重複表示されていた。
+        // ここに至る時点で s は Phase1-7 の全 tryOps が適用→復元を徹底しているため元の(normalize後)
+        // 盤面に一致する＝「toShift==sの現在値」は実質no-opの脚と判定できる。no-op脚を除外し、
+        // 残りを (staff,day) で正規化した順序で署名化することで、kind やops列挙順に依らず
+        // 「最終的にどのセルがどの値になるか」という盤面変化の実体だけで重複を判定する。
         val seen = HashSet<String>()
         val result = ArrayList<FixSuggestion>()
         for (q in found) {
             val sug = q.sug
             if (!touchesFocusCell(sug)) continue
-            val sig = sug.kind.name + ":" + sug.ops.joinToString("|") { "${it.staff}.${it.toShift}" }
+            val realOps = sug.ops.filter { it.toShift != s[it.staff][it.day] }
+            if (realOps.isEmpty()) continue   // 全脚が無変化＝実質no-op（表示する意味がない）
+            val sig = realOps.sortedWith(compareBy({ it.staff }, { it.day })).joinToString("|") { "${it.staff}.${it.toShift}" }
             if (seen.add(sig)) result.add(sug)
             if (result.size >= maxResults) break
         }
