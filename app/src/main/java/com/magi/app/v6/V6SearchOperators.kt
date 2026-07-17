@@ -271,7 +271,13 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
  * 返り値 = 適用手 [(i, j, newK), ...]（本関数は盤面を変更しない。適用と採否=keep-best は呼び出し側＝
  * スコアリング不変・退化不能）。見つからなければ null。
  */
-internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5, exclude: Int = -1, allowCrossDayFix: Boolean = true): List<IntArray>? {
+internal fun findCovUChain(
+    p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5, exclude: Int = -1, allowCrossDayFix: Boolean = true,
+    // [C1研磨・手B強化] 候補(staff,shift,day)がその職員自身のc1不足解消にも資するかの述語。
+    //   非nullのとき candidates() の返り値を「述語=true」優先に並べ替えるだけ（探索ロジック自体は不変）。
+    //   既定null=既存呼出元は完全に挙動不変。
+    c1Pref: ((staff: Int, shift: Int, day: Int) -> Boolean)? = null,
+): List<IntArray>? {
     if (j !in 0 until p.T || k0 !in 0 until p.K || p.S == 0) return null
     val cnt = IntArray(p.K)
     for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
@@ -340,6 +346,13 @@ internal fun findCovUChain(p: Problem, sched: Array<IntArray>, k0: Int, j: Int, 
                 continue
             }
             out.add(Node(fillShift, i, prev))
+        }
+        // [C1研磨・手B強化] c1Pref を満たす候補を先頭へ（tryComplete は frontier を先頭から見て
+        //   最初に成立した連鎖を採用するため、並べ替えだけで「その職員のc1不足も一緒に解消する連鎖」が
+        //   優先的に見つかる。安全条件(canDo/wishLock/c3n)は上のフィルタ済のままなので探索の正しさは不変）。
+        if (c1Pref != null && out.size > 1) {
+            val (pref, rest) = out.partition { c1Pref(it.staff, fillShift, j) }
+            return pref + rest
         }
         return out
     }

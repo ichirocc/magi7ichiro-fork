@@ -723,6 +723,23 @@ object V6HotfixPasses {
         return false
     }
 
+    /** 職員 i の c1 fire 総数（全 cons1・canDo ガード。checker/MirrorCore と同一のスライド窓意味論）。 */
+    private fun c1RowFires(p: Problem, work: Array<IntArray>, i: Int): Int {
+        var fires = 0
+        for (c in p.cons1) {
+            val x = c.shiftIdx; val d = c.day1; val n = c.day2
+            if (x !in 0 until p.K || d <= 0 || !p.canDo(i, x)) continue
+            var w = 0
+            while (w <= p.T - d) {
+                var z = 0
+                for (l in 0 until d) if (work[i][w + l] == x) z++
+                if (z < n) fires++
+                w++
+            }
+        }
+        return fires
+    }
+
     /**
      * [ソフト研磨・C1] 期間要件 cons1（D日窓にシフトXをN回以上・職員ごと）の研磨。
      * c1不足の (職員 i, 窓) を見つけ、その窓内で i が X でない日 j に対し、その日に X をしている提供者 i' と
@@ -732,6 +749,22 @@ object V6HotfixPasses {
      * i を X へ直接動かし、空いた旧シフト a の穴を `findCovUChain`（covU の玉突き連鎖）と同じ機構で
      * 埋め直す（a に need1 が無い/余裕があるなら連鎖不要でそのまま採用判定）。i の移動＋連鎖手をまとめて
      * 1候補として実目的関数で評価し、改善時のみ採用（不採用時は連鎖手も含め正しく全巻き戻し）。
+     *
+     * [C1研磨アルゴリズムの再設計/回数保存移設の追加] 手A(同日スワップ)/手B(直接移動+連鎖)はどちらも
+     * 「i の X 回数を+1する」count-changing 手しか生成できない。golden_state の残差解剖(Python実測)では
+     * c1=115 fires のうち relocation-only=48（休 fires の80%が個人別回数の下限=上限で固定された職員由来）
+     * は、X追加が low/high(90/45)>c1(4×窓数)で必ず isBetter に棄却され、**i自身のXを余剰位置→不足窓へ
+     * 移す回数保存の移設**だけが唯一の改善手と判明（行内2日swapの貪欲シムで c1 115→62, -46%）。
+     * 現行手A/Bにこの移設プリミティブが無い欠落を埋めるため、手A(同日交換)の直後・手B(直接移動)の前に
+     * 保存性の強い順で2手を追加する:
+     *   手R1=鏡像長方形（i=[X@j1,b@j]↔i'=[b@j1,X@j]の4セル交換）: 両職員の回数と日別人数が両方保存
+     *        （groupViol/pref/low/high/apt/c2/covU/covO/c41系まで構造的不変）＝isBetterはc1/c3系/weekly
+     *        だけの勝負になり採用されやすい最も安全な移設。
+     *   手R2=自己2日swap（i の X@j1 ↔ b@j）: i の回数は保存（low/high/apt/c2/pref/groupViol不変）だが
+     *        日別人数が変わるため、離脱側2箇所を p.covUCell（source of truth）で事前除外してから適用。
+     * どちらも c3n(HARD) は p.makesForbiddenRun で事前枝刈り（見逃しても isBetter が最終拒否＝安全側）。
+     * 採否は既存と同じ isBetter(hard→total→weighted) の keep-best のみ＝退化不能・HF77非該当（重み不変）。
+     * add-fixable（追加が唯一の解の局面）は既存手A/Bの担当のまま＝手クラスが互いに素で冗長を作らない。
      */
     fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L): CyclicSwapResult {
         val p = Problem(state)
@@ -739,12 +772,25 @@ object V6HotfixPasses {
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
+        var aRect = 0; var aSelf = 0
         if (p.cons1.isEmpty()) {
             return CyclicSwapResult(work, before.total, bestRep.total, 0,
                 listOf(MirrorLog(tag = "C1Polish", message = "cons1なし=スキップ")))
         }
         val rng = Random(seed)
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [C1研磨・手B強化] staff i2 が shift x2 について day を含むいずれかの窓で不足しているか（全cons1横断）。
+        //   手B(findCovUChain の玉突き連鎖)の候補選定に c1Pref として渡し、「連鎖に組み込む相手が、たまたま
+        //   その相手自身のc1不足も一緒に解消する」候補を優先させる（並べ替えのみ・安全条件は不変・探索の
+        //   正しさは常に isBetter が最終担保）。
+        fun c1Deficient(i2: Int, x2: Int, day: Int): Boolean {
+            if (day !in 0 until p.T) return false
+            for (c2 in p.cons1) {
+                if (c2.shiftIdx != x2 || c2.day1 <= 0) continue
+                if (inDeficientC1Window(p, work, i2, x2, c2.day1, c2.day2, day)) return true
+            }
+            return false
+        }
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -764,6 +810,22 @@ object V6HotfixPasses {
                     if (shouldStop()) break
                     if (i !in anchorStaff) continue
                     if (!p.canDo(i, x)) continue
+                    // [移設ドナー] i 自身の X 保有日のうち「抜いても this ルールの窓が新規に不足化しない」余剰位置。
+                    //   盤面が変わるたび(i,x)単位で無効化し次の j で再構築する（遅延キャッシュ）。
+                    var donorsCache: List<Int>? = null
+                    fun donors(): List<Int> = donorsCache ?: (0 until p.T).filter { j1 ->
+                        work[i][j1] == x && movable(i, j1) && run {
+                            var wStart = maxOf(0, j1 - d + 1); val wEnd = minOf(j1, p.T - d)
+                            var surplus = true
+                            while (wStart <= wEnd) {
+                                var z = 0
+                                for (l in 0 until d) if (work[i][wStart + l] == x) z++
+                                if (z <= n) { surplus = false; break }   // 閾値ちょうど以下=抜くと新規fire→保守的に除外
+                                wStart++
+                            }
+                            surplus
+                        }
+                    }.also { donorsCache = it }
                     for (j in 0 until p.T) {
                         // [監査(未レビュー領域再監査)] このjループはi2走査に加えfindCovUChainのBFSも伴い重い
                         //   （HF66/BlockRotationPolishと同型の予算超過対策として日ごとにも確認）。
@@ -779,18 +841,86 @@ object V6HotfixPasses {
                             if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true; break }
                             work[i][j] = a; work[i2][j] = x                 // 巻き戻し
                         }
+                        if (done) { donorsCache = null; continue }
+
+                        // [手R1] 鏡像長方形: i=[X@j1,a@j] ↔ i2=[a@j1,X@j]。回数・日別人数とも完全保存
+                        //   （i2 は既に保有しているシフトしか持たない＝canDo自動成立だが規律として明示検査する）。
+                        val fires0 = c1RowFires(p, work, i)
+                        for (j1 in donors()) {
+                            if (done || shouldStop()) break
+                            if (j1 == j) continue
+                            work[i][j1] = a; work[i][j] = x
+                            val gain = fires0 - c1RowFires(p, work, i)
+                            work[i][j1] = x; work[i][j] = a                 // 判定用の一時変更は必ず復元
+                            if (gain <= 0) continue
+                            for (i2 in 0 until p.S) {
+                                if (done || shouldStop()) break
+                                if (i2 == i) continue
+                                if (work[i2][j1] != a || work[i2][j] != x) continue      // 完全鏡像の相手のみ
+                                if (!movable(i2, j1) || !movable(i2, j)) continue
+                                if (!p.canDo(i, x) || !p.canDo(i2, a)) continue           // 構造上恒真・規律として明示
+                                work[i][j1] = a; work[i][j] = x; work[i2][j1] = x; work[i2][j] = a
+                                val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x) ||
+                                    p.makesForbiddenRun(work, i2, j1, x) || p.makesForbiddenRun(work, i2, j, a)
+                                if (!bad3n) {
+                                    val rep = UnifiedViolationChecker.check(state, work)
+                                    if (isBetter(rep, bestRep)) {
+                                        bestRep = rep; applied++; aRect++; improved = true; done = true
+                                        donorsCache = null
+                                        break
+                                    }
+                                }
+                                if (!done) { work[i][j1] = x; work[i][j] = a; work[i2][j1] = a; work[i2][j] = x }
+                            }
+                        }
                         if (done) continue
+
+                        // [手R2] 自己2日swap: i の X@j1 ↔ a@j（回数保存＝low/high/apt/c2不変。日別人数が
+                        //   変わるため離脱側2箇所を covUCell(source of truth)で事前除外してから適用）。
+                        //   a が normalizeSchedule 由来の -1(範囲外/未割当) なら「本物のシフト」ではないため
+                        //   R2(自己内の付け替え)の対象外とする（work[i][j1] へ -1 を書き込む不正な手を防ぐ。
+                        //   手A/手Bは a=-1 でも canDo(-1)=false / findCovUChain の範囲ガードで元々安全なので
+                        //   この場合も手Bへは進める＝ここは continue でなく R2 ブロックだけを囲む）。
+                        if (a in 0 until p.K) {
+                            for (j1 in donors()) {
+                                if (done || shouldStop()) break
+                                if (j1 == j) continue
+                                work[i][j1] = a; work[i][j] = x
+                                val gain = fires0 - c1RowFires(p, work, i)
+                                work[i][j1] = x; work[i][j] = a
+                                if (gain <= 0) continue
+                                var cx = 0; var ca = 0
+                                for (s in 0 until p.S) { if (work[s][j1] == x) cx++; if (work[s][j] == a) ca++ }
+                                if (p.covUCell(x, j1, cx - 1) > p.covUCell(x, j1, cx)) continue   // X の j1 離脱で covU 悪化
+                                if (p.covUCell(a, j, ca - 1) > p.covUCell(a, j, ca)) continue      // a の j 離脱で covU 悪化
+                                work[i][j1] = a; work[i][j] = x
+                                val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x)
+                                if (!bad3n) {
+                                    val rep = UnifiedViolationChecker.check(state, work)
+                                    if (isBetter(rep, bestRep)) {
+                                        bestRep = rep; applied++; aSelf++; improved = true; done = true; donorsCache = null
+                                    }
+                                }
+                                if (!done) { work[i][j1] = x; work[i][j] = a }
+                            }
+                        }
+                        if (done) continue
+
                         // [E11反映] 直接の交換相手が見つからない/不採用 → i を X へ動かし、空いた a の穴を
                         //   玉突き連鎖で埋め直す（findCovUChain は盤面を変えないため元値を保存して巻き戻せるようにする）。
                         work[i][j] = x
                         // exclude=i: i は既に x へ動かした本人なので、a を埋め戻す候補から除外
                         //   （除外しないと「i が a に戻る」= i の移動そのものを打ち消す退行手をBFSが選びうる）。
-                        val chain = findCovUChain(p, work, a, j, rng, exclude = i)
+                        // c1Pref=c1Deficient: 連鎖の相手選びを「その相手自身のc1不足も一緒に解消するか」で
+                        //   優先付け（並べ替えのみ・見つからなければ従来どおり）。
+                        val chain = findCovUChain(p, work, a, j, rng, exclude = i,
+                            c1Pref = { s2, sh, dy -> c1Deficient(s2, sh, dy) })
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
                         chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                         val rep = UnifiedViolationChecker.check(state, work)
                         if (isBetter(rep, bestRep)) {
                             bestRep = rep; applied++; improved = true
+                            donorsCache = null
                         } else {
                             if (chain != null && oldVals != null) for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
                             work[i][j] = a
@@ -802,7 +932,7 @@ object V6HotfixPasses {
             if (!improved) break
         }
         val logs = listOf(MirrorLog(tag = "C1Polish",
-            message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
+            message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf)" +
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
