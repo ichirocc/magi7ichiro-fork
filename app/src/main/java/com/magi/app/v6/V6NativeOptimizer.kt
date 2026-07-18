@@ -745,7 +745,7 @@ object V6NativeOptimizer {
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
             val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
-            val focus = maxViolatedFamily(bestReport, focusAvoid)
+            val focus = maxViolatedFamily(bestReport, focusAvoid, round)
             if (avoid.isNotEmpty()) {
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
             }
@@ -798,7 +798,7 @@ object V6NativeOptimizer {
             //   本当に狙える族が尽きた(pivot=="total" or 件数0)ときだけ従来どおり空転停止する。stuck な SOFT も
             //   HF63 が順次 dynamicAvoid へ入れて focusable から外すため、いずれ pivot 枯渇→終了で自己収束する。
             if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
-                val pivot = maxViolatedFamily(bestReport, avoid)   // avoid=dynamicAvoid＋静的covU床
+                val pivot = maxViolatedFamily(bestReport, avoid, round)   // avoid=dynamicAvoid＋静的covU床
                 if (pivot == "total" || (bestReport.breakdown[pivot] ?: 0) == 0) {
                     logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: 狙える族が枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                     break
@@ -1410,6 +1410,13 @@ object V6NativeOptimizer {
             //   支配的なときに専用ラウンドを割り当てるだけでも「total」の無指向な空振りより改善機会が増える。
             //   ラウンド better() keep-best でゲート＝退化なし（厳密な cost 統合は将来の拡張候補）。
             "low", "high", "c2", "apt", "weekly", "fair" -> repeat(8) { destroyRepairStaff(state, out, rng) }
+            // [3.204.0/実機ログ起因=covOがfocusされても直せなかった] covO は markNeed(k,j) で needViolations に
+            //   載り、report.violations(セル"i,j"マップ)には現れないため、他の focus 未対応族の else 分岐が
+            //   使う destroyRepairViolations(report.violations.keys 基準)では covO 専用のヒントが1つも無く、
+            //   focus が回っても実質ランダムな空振りになっていた。covO診断(V6PortAnalyzer.diagnoseCoverage)と
+            //   同じ「動かせるか」判定(希望固定/禁止連続を避け・移動先でcovOを悪化させない)をその場で「実行」する
+            //   専用オペレータ applyCovOFree を新設し、covU chain(applyCovUChains)と対称に配線する。
+            "covO" -> { applyCovOFree(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
             //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
@@ -1451,7 +1458,47 @@ object V6NativeOptimizer {
         return applied
     }
 
-    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet()): String {
+    /**
+     * [3.204.0/covO専用repair] 人員過剰(covO)セルの在勤者のうち、他シフトへ移しても新たな違反を生まない
+     * （希望固定でない・移すと禁止連続(c3n)を作らない・移動先で covO が悪化しない＝受け皿あり）候補を1人
+     * 見つけて実際に移す。V6PortAnalyzer.diagnoseCoverage の covO 診断（動かせる/玉突き必要/希望固定/
+     * 禁止連続の4分類）と同じ判定を「実行」する版（診断＝読取専用、こちらは探索オペレータ）。
+     * 被覆総量は保存しない（過剰シフトから1人引くだけ＝covOのみ改善方向）。動かせる候補が尽きたセルは
+     * そのまま残す（希望固定/禁止連続で本当に動かせない、または玉突きが要る＝本オペレータの対象外）。
+     * sched を in-place 変更し、適用手数を返す。最終採否は呼び出し側の keep-best が担保＝退化なし。
+     */
+    internal fun applyCovOFree(state: MagiState, sched: Array<IntArray>, rng: Random): Int {
+        val p = cachedProblem(state)
+        if (p.S == 0 || p.T == 0) return 0
+        var applied = 0
+        val cov = Array(p.T) { IntArray(p.K) }
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
+        for (j in 0 until p.T) {
+            for (k in 0 until p.K) {
+                while (p.covOCell(k, j, cov[j][k]) > 0) {
+                    val staffOnK = (0 until p.S).filter { sched[it][j] == k }.shuffled(rng)
+                    var movedThisPass = false
+                    for (i in staffOnK) {
+                        if (p.wish[i][j] == k) continue   // 本人希望＝動かすとpref未充足化、対象外
+                        for (m in p.allowedShiftsForStaff(i).filter { it != k }.shuffled(rng)) {
+                            if (p.makesForbiddenRun(sched, i, j, m)) continue
+                            if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue
+                            sched[i][j] = m
+                            cov[j][k]--; cov[j][m]++
+                            applied++
+                            movedThisPass = true
+                            break
+                        }
+                        if (movedThisPass) break
+                    }
+                    if (!movedThisPass) break   // 動かせる在勤者がいない＝このセルは諦める（安全側）
+                }
+            }
+        }
+        return applied
+    }
+
+    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet(), round: Int = -1): String {
         // [実機ログ起因=公平化のズレ] apt(適切回数)を追加。旧orderに無かったため RSI 探索中は一度も
         //   focus されず、post-processing(applyDayAssignmentPolish)頼みで広く未研磨のまま残っていた
         //   （実データ検証: apt L1偏差合計37、staffRange低/高はわずか3で規模が逆転）。rsiGenerateHypothesis
@@ -1470,6 +1517,14 @@ object V6NativeOptimizer {
             if (key !in MirrorKeys.hard || key in avoid) continue
             if ((report.breakdown[key] ?: 0) > 0) return key
         }
+        // [3.204.0/実機ログ起因=covOが「件数最大」選択に構造的に勝てない] covO は日×シフトのセル単独違反
+        //   （新設したCoverageDiag診断＝V6PortAnalyzer.diagnoseCoverage の covO 版で判明）のため件数が常に
+        //   一桁台に留まり、c1/c42/c3mn/weekly のような数十件規模の族に下段の「件数最大」選択で恒久的に
+        //   絶対勝てない（実機ログで「動かせる」と診断されたcovOセルが300秒経っても解消されないことを確認）。
+        //   HARDの「件数に関わらず先に狙う」と同じ発想で、covO専用に周期的な保証枠(3ラウンドに1回)を設け、
+        //   count>0かつavoid対象でなければ下段の最大値選択より優先する。他のSOFT族の選択順は完全に不変
+        //   （round<0=呼出元が未対応の旧経路 or この分岐に該当しないラウンドは従来どおり件数最大へフォールバック）。
+        if (round >= 0 && round % 3 == 2 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0) return "covO"
         // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
         // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が
         //   order に1つも無いと先頭 groupViol=0 が「0 > -1」で当選→hf67ルートがクリーン盤面への no-op 仮説

@@ -86,6 +86,77 @@ class V6NativeOptimizerChoiceTest {
         assertEquals("fair", V6NativeOptimizer.maxViolatedFamily(r))
     }
 
+    // [3.204.0/実機ログ起因] covO は日×シフトのセル単独違反のため件数が常に一桁台に留まり、
+    // c1/c42/weekly のような数十件規模の族に「件数最大」選択で恒久的に勝てない
+    // （CoverageDiag診断で「動かせる」と出たcovOセルが300秒経っても解消されないことを実機ログで確認）。
+    // 3ラウンドに1回、count>0のcovOを件数によらず優先する周期的保証枠を固定する。
+    @Test fun maxViolatedFamilyGivesCovOPeriodicSlotEvenWhenSmall() {
+        val r = report(mapOf("c1" to 87, "covO" to 2))
+        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 5))
+    }
+
+    @Test fun maxViolatedFamilyCovOPeriodicSlotDoesNotFireOnOtherRounds() {
+        // [回帰] round%3==2 以外は従来どおり件数最大(c1)が選ばれること。
+        val r = report(mapOf("c1" to 87, "covO" to 2))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 0))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r))   // round省略(-1)も従来どおり
+    }
+
+    @Test fun maxViolatedFamilyStillPrioritizesHardOverCovOPeriodicSlot() {
+        // [回帰] covO周期枠の追加がD1/A1のHARD優先ルールを壊さないこと。
+        val r = report(mapOf("c3n" to 1, "covO" to 5), hard = 1)
+        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+    }
+
+    @Test fun maxViolatedFamilyCovOPeriodicSlotRespectsAvoid() {
+        // [回帰] E9冷却等でcovOがavoidに入っていれば周期枠も発火せず通常選択にフォールバックすること。
+        val r = report(mapOf("c1" to 87, "covO" to 2))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, avoid = setOf("covO"), round = 2))
+    }
+
+    // [3.204.0] covO は markNeed(k,j) で needViolations に載り report.violations(セル"i,j"マップ)には
+    // 現れないため、他の focus 未対応族が使う destroyRepairViolations では covO 専用のヒントが無かった。
+    // applyCovOFree が「動かせる」在勤者を実際に他シフトへ移し covO を解消することを固定する。
+    private fun covOState(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-01",
+        shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+        groups = listOf(Group("G0", "G0")),
+        staff = listOf(Staff("a", 0), Staff("b", 0)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+        schedule = schedule, wishes = wishes, staffRange = emptyMap(),
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+        cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun applyCovOFreeRelievesFreelyMovableSurplus() {
+        val st = covOState(listOf(listOf(1), listOf(1)))   // 両者ともA（必要1に対し現状2＝過剰1）
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["covO"])
+        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        assertEquals(1, applied)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals(0, after.breakdown["covO"] ?: 0)
+        assertEquals(0, after.hard)
+    }
+
+    @Test fun applyCovOFreeLeavesWishPinnedSurplusUntouched() {
+        // 両者ともAを希望固定（希望どおり配置済み）だと、動かすと希望未充足(pref)に化けるため何もしない。
+        val st = covOState(listOf(listOf(1), listOf(1)), wishes = mapOf("0,0" to 1, "1,0" to 1))
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["covO"])
+        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        assertEquals(0, applied)
+        assertEquals(1, sched[0][0])
+        assertEquals(1, sched[1][0])
+    }
+
     // [smoke] focus="apt" が destroyRepairStaff 経路(low/high/c2と合流)へ正しくルーティングされ、
     //   例外なく同一次元の盤面を返すこと。改善量そのものはラウンド単位 keep-best が別途保証する。
     @Test fun rsiGenerateHypothesisAptFocusReturnsValidSchedule() {
@@ -115,5 +186,17 @@ class V6NativeOptimizerChoiceTest {
             assertNotNull(out2)
             assertEquals(base.size, out2.size)
         }
+    }
+
+    // [smoke] focus="covO" が新設の applyCovOFree 経路へ正しくルーティングされ、例外なく同一次元の
+    //   盤面を返すこと。実際の解消効果は applyCovOFreeRelievesFreelyMovableSurplus が直接検証する。
+    @Test fun rsiGenerateHypothesisCovOFocusReturnsValidSchedule() {
+        val st = covOState(listOf(listOf(1), listOf(1)))
+        val base = st.schedule.toIntArray2D()
+        val rep = UnifiedViolationChecker.check(st, base)
+        val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, "covO", Random(1))
+        assertNotNull(out)
+        assertEquals(base.size, out.size)
+        assertEquals(base[0].size, out[0].size)
     }
 }
