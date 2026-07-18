@@ -12,6 +12,17 @@
 - **選択肢にはそれぞれ、推奨度と理由を提示する**
   - 推奨度は⭐の5段階評価
 
+## スキル自動起動（2026-07-18 ユーザー決定）
+- **タスク着手前にスキル一覧を確認し、該当スキルを Skill ツールで自動起動する**（superpowers流）:
+  新機能/設計→brainstorming・計画深掘り→dig・実装/バグ修正→test-driven-development・
+  バグ調査→systematic-debugging・完了宣言前→verification-before-completion・
+  複数ステップ計画→writing-plans→executing-plans/subagent-driven-development・文章推敲→writing-clearly-and-concisely
+- **genshijin 常時起動（通常レベル）**: 全応答を圧縮体（敬語なし・体言止め・助詞省略可）で書く。
+  技術用語/コード識別子は正確維持。破壊的操作警告・セキュリティ説明のみ Auto-Clarity で通常日本語。
+  解除は「原始人やめて」「通常モード」の明示指示のみ。
+- 実装: `~/.claude/settings.json` の SessionStart フック（`~/.claude/session-bootstrap.md` を注入）＋本節の二重化。
+  リモートコンテナは使い捨てのためフックは環境ごと消えうる＝本節が永続側の正。
+
 ## プロジェクト概要
 看護師/スタッフのシフト表を最適化する Android ネイティブアプリ（Kotlin + Jetpack Compose）。
 VBA/Web 版から移植した「MAGI V6」最適化エンジン（SA + ALNS + Tabu + GLS + LNS + VNS + LAHC +
