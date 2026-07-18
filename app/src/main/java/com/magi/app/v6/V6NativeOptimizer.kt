@@ -1398,7 +1398,12 @@ object V6NativeOptimizer {
         when (focus) {
             // [E11] covU は先に「勤務→勤務」の多人数連鎖で充填（既存 destroyRepairDay は休→勤務のみ＝
             //   候補が過剰シフト/連鎖からしか引けない局面を踏めない）。仮説はラウンド better() でゲート＝退化なし。
-            "covU", "c41", "c41s" -> { applyCovUChains(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }   // c41s=スキル群の1日人数(c41と同型)
+            "covU" -> { applyCovUChains(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }
+            // [3.209.0/covOと同型の穴=c41/c41sがfocusされてもdestroyRepairDayのc41DayMargは副次効果でしか
+            //   効かない] markNeed系(needViolations)にしか載らずGLSキック/destroyRepairViolationsのヒントを
+            //   一切持てない点がcovOと同じ。applyC41Freeで群レンジの超過/不足を直接動かす専用オペレータへ。
+            "c41" -> { applyC41Free(state, out, rng, skill = false); repeat(6) { destroyRepairDay(state, out, rng) } }
+            "c41s" -> { applyC41Free(state, out, rng, skill = true); repeat(6) { destroyRepairDay(state, out, rng) } }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
             //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
@@ -1492,6 +1497,75 @@ object V6NativeOptimizer {
                         if (movedThisPass) break
                     }
                     if (!movedThisPass) break   // 動かせる在勤者がいない＝このセルは諦める（安全側）
+                }
+            }
+        }
+        return applied
+    }
+
+    /**
+     * [3.209.0/c41・c41s専用repair] c41/c41s（群×日×シフトの人数レンジ[l,u]違反）は covO/covU と同じく
+     * markNeed(needViolations)にしか載らず report.violations（職員×日マップ）には現れないため、
+     * GLSキック・destroyRepairViolations が一切ヒントを持てず、RSI focus されても
+     * applyCovUChains+destroyRepairDay（covU=シフト単位の不足専用）では群レンジの上限超過・下限割れの
+     * どちらも直接には狙えない（destroyRepairDayAt の c41DayMarg は covU 充填の副次効果でしか働かない）。
+     * covO診断/applyCovOFreeと同じ「動かせるか」判定をこの群レンジにも適用し、超過なら群内在籍者を
+     * 他シフトへ・不足なら群内の他シフト在籍者を引き入れて実際に解消する。skill=false は cons41(sgrp)、
+     * skill=true は cons41s(ssk) を対象にする（DRY化）。希望固定でない・禁止連続(c3n)を作らない・
+     * 移動元/移動先で covU/covO を悪化させない候補のみ動かす。sched を in-place 変更し適用手数を返す。
+     * 最終採否は呼び出し側の keep-best が担保＝退化不能。
+     */
+    internal fun applyC41Free(state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean): Int {
+        val p = cachedProblem(state)
+        if (p.S == 0 || p.T == 0) return 0
+        val rules = if (skill) p.cons41s else p.cons41
+        if (rules.isEmpty()) return 0
+        val grp = if (skill) p.ssk else p.sgrp
+        var applied = 0
+        val cov = Array(p.T) { IntArray(p.K) }
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
+        fun groupCount(c: C41, j: Int): Int {
+            var z = 0
+            for (i in 0 until p.S) if (grp[i] == c.groupIdx && sched[i][j] == c.shiftIdx) z++
+            return z
+        }
+        for (c in rules) {
+            for (j in 0 until p.T) {
+                // 超過(z>u): 群在籍者を他シフトへ移す。
+                while (groupCount(c, j) > c.u) {
+                    val onShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] == c.shiftIdx }.shuffled(rng)
+                    var moved = false
+                    for (i in onShift) {
+                        if (p.wish[i][j] == c.shiftIdx) continue   // 本人希望＝動かすとpref未充足化、対象外
+                        for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }.shuffled(rng)) {
+                            if (p.makesForbiddenRun(sched, i, j, m)) continue
+                            if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue         // 移動先でcovO悪化させない
+                            if (p.covUCell(c.shiftIdx, j, cov[j][c.shiftIdx] - 1) > p.covUCell(c.shiftIdx, j, cov[j][c.shiftIdx])) continue  // 離脱元でcovU悪化させない
+                            sched[i][j] = m
+                            cov[j][c.shiftIdx]--; cov[j][m]++
+                            applied++; moved = true
+                            break
+                        }
+                        if (moved) break
+                    }
+                    if (!moved) break   // 動かせる在籍者がいない＝諦める（安全側）
+                }
+                // 不足(z<l): 群内の他シフト在籍者を引き入れる。
+                while (groupCount(c, j) < c.l) {
+                    val offShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] != c.shiftIdx && p.canDo(it, c.shiftIdx) }.shuffled(rng)
+                    var moved = false
+                    for (i in offShift) {
+                        val old = sched[i][j]
+                        if (old !in 0 until p.K || p.wish[i][j] == old) continue   // 現シフトが本人希望＝対象外
+                        if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
+                        if (p.covUCell(old, j, cov[j][old] - 1) > p.covUCell(old, j, cov[j][old])) continue         // 離脱元でcovU悪化させない
+                        if (p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx] + 1) > p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx])) continue  // 移動先でcovO悪化させない
+                        sched[i][j] = c.shiftIdx
+                        cov[j][old]--; cov[j][c.shiftIdx]++
+                        applied++; moved = true
+                        break
+                    }
+                    if (!moved) break   // 動かせる在籍者がいない＝諦める（安全側）
                 }
             }
         }
