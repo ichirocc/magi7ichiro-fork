@@ -1,8 +1,10 @@
 package com.magi.app.v6
 
 import com.magi.app.model.C1Row
+import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
+import com.magi.app.model.Range
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
@@ -127,6 +129,174 @@ class C1RelocationPolishTest {
         // 自己swapは職員0自身のX/Y総回数を保存する。
         val cx0Before = sched[0].count { it == 1 }; val cx0After = res.newSchedule[0].count { it == 1 }
         assertEquals("職員0の X 回数保存", cx0Before, cx0After)
+    }
+
+    /**
+     * [実バグ修正/anchorStaff の重み優先シャドーイング] 旧実装は anchorStaff の判定に rep0.violations
+     * （1セル=最重1クラスのみ）を使っていた。i(職員0)の唯一のc1マーク位置(day2)に、より重いc3n(HARD)も
+     * 同時に発火すると、violations["0,2"]は"vio-c3n"に上書きされ"vio-c1"は消える。iの他の日には
+     * c1マークが無いため、iはanchorStaffから完全に漏れ、本来採用可能な手A(同日スワップ)すら一度も
+     * 試されず c1=1のまま採用0回になっていた（cellFamilies=1セルの全クラス保持マップへ切替えて解消）。
+     * i(職員0)=[X,X,Y,Y]・cons3n=[Y,Y]（day2,3が禁止連続の完全一致で c3n 発火・c1のマーク位置と一致）。
+     * i2(職員1)=[X,X,X,X]（day2にXを持つ唯一の交換相手）。手計算: 同日day2スワップで i の窓[2,3]が
+     * 0X→1Xで解消(c1 1→0)・i2は窓が全てz=2→z=1でも>=1のため不変。かつc3nもi側day2がXになり消滅(1→0)。
+     * HARDが1→0に改善するため isBetter は自明に採用する（旧実装ではそもそも試行されなかった手）。
+     */
+    private fun shadowedAnchorState(): MagiState {
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("i", 0), Staff("i2", 0))
+        val schedule = listOf(
+            listOf(1, 1, 0, 0),   // i:  X,X,Y,Y
+            listOf(1, 1, 1, 1),   // i2: X,X,X,X
+        )
+        return MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-04",
+            shifts = shifts(), groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = schedule,
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "2", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(pattern = listOf("Y", "Y"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun c1PolishFindsAnchorEvenWhenC1MarkIsShadowedByHeavierViolationAtSameCell() {
+        val st = shadowedAnchorState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期 HARD=1（c3n 1件）", 1, before.hard)
+        assertEquals("初期 c1=1（day2窓のみ不足）", 1, before.breakdown["c1"] ?: 0)
+        // [前提確認] c1のマーク位置がc3nに上書きされ、旧実装ではiがanchorStaffから漏れていたことの確認。
+        assertTrue("職員0の day2 セルは vio-c1 を含まない（c3nに上書き済み）", before.violations["0,2"] != "vio-c1")
+        assertTrue("しかし cellFamilies には vio-c1 も残っている", "vio-c1" in (before.cellFamilies["0,2"] ?: emptyList()))
+
+        val res = V6HotfixPasses.applyC1WindowPolish(st, sched, maxPasses = 1)
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+
+        assertTrue("cellFamilies切替えにより職員0がanchorに入り、同日スワップが試行・採用されること", res.applied > 0)
+        assertEquals("c1 が解消されたこと", 0, after.breakdown["c1"] ?: 0)
+        assertEquals("HARD も解消されたこと（c3n 1->0）", 0, after.hard)
+    }
+
+    /**
+     * [同根の実バグ修正/applyC3SequencePolish] c1と同じ anchorStaff の重み優先シャドーイングが
+     * c3/c3m/c3mn研磨にも存在した。c3m違反(職員0のday1)がc3n(HARD)に同一セルで上書きされ、
+     * 職員0の唯一のc3m/c3n発生源がシャドーイングを受けるため、旧実装では anchorStaff が完全に
+     * 空になり(職員1は元々c3系違反なし)、2者ブロック交換が一度も試されなかった。
+     * ブロック交換はシフト値の完全な入替のため、c3m/c3n自体は「解消」でなく「移動」だが、
+     * 同時に staffRange(low/high) の実改善が乗るため総合スコアは真に改善する（手計算で確認）。
+     * i(職員0)=[Y,X,Z]・i2(職員1)=[Z,Z,Y]（3日, T=3）。cons3m=[X,Y]（Want）・cons3n=[X,Z]（禁止）。
+     * staffRange: 職員0はZ下限2(現状1=不足1)／職員1はZ上限0(現状2=超過2)。
+     * 手計算(w=2,j=0の2日ブロック交換): 職員0→[Z,Z,Z]（Z=3,下限2達成・c3m/c3n消滅）、
+     * 職員1→[Y,X,Y]（Z=0,上限0達成・c3mも「Xの次がY」で充足=不発・c3nも不発）。
+     * 全違反が解消(HARD 1->0, total 5->0)。
+     */
+    private fun shadowedC3AnchorState(): MagiState {
+        val shifts3 = listOf(
+            Shift("Y", "Y", "", ""),  // index0
+            Shift("X", "X", "", ""),  // index1
+            Shift("Z", "Z", "", ""),  // index2
+        )
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("i", 0), Staff("i2", 0))
+        val schedule = listOf(
+            listOf(0, 1, 2),   // i:  Y,X,Z
+            listOf(2, 2, 0),   // i2: Z,Z,Y
+        )
+        return MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-03",
+            shifts = shifts3, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1)),
+            groupShiftApt = List(1) { List(3) { "" } },
+            schedule = schedule,
+            wishes = emptyMap(),
+            staffRange = mapOf(
+                "0,2" to Range(lo = "2", hi = ""),
+                "1,2" to Range(lo = "", hi = "0"),
+            ),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(pattern = listOf("X", "Z"))),
+            cons3m = listOf(C3Row(pattern = listOf("X", "Y"))),
+            cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun c3PolishFindsAnchorEvenWhenC3mMarkIsShadowedByHeavierViolationAtSameCell() {
+        val st = shadowedC3AnchorState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期 HARD=1（c3n 1件）", 1, before.hard)
+        assertEquals("初期 c3m=1", 1, before.breakdown["c3m"] ?: 0)
+        assertTrue("職員0の day1 セルは vio-c3m を含まない（c3nに上書き済み）", before.violations["0,1"] != "vio-c3m")
+        assertTrue("しかし cellFamilies には vio-c3m も残っている", "vio-c3m" in (before.cellFamilies["0,1"] ?: emptyList()))
+
+        val res = V6HotfixPasses.applyC3SequencePolish(st, sched, maxPasses = 1)
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+
+        assertTrue("cellFamilies切替えにより職員0がanchorに入り、ブロック交換が試行・採用されること", res.applied > 0)
+        assertTrue("総合スコアが改善したこと", after.total < before.total)
+        assertTrue("HARDが悪化しないこと(keep-best)", after.hard <= before.hard)
+    }
+
+    /**
+     * [同根の実バグ修正/applyBlockRotationPolish] C1Rotate/C3Rotate が共有するこの関数も同じ
+     * シャドーイングを受ける。3者回転が必要なため職員2名(mirrorStateと同一の ai=[X,X,Y,Y] とドナー
+     * bi=[X,X,X,X])に無関係な第3の職員 ci=[X,X,X,X] を加え、ciには Y の下限(staffRange)を設定する。
+     * 手計算: 回転 ai<-bi, bi<-ci, ci<-ai により ai=[X,X,X,X](c1/c3n解消)・bi=[X,X,X,X](無変化)・
+     * ci=[X,X,Y,Y](aiの旧パターンを継承=c1/c3n再発)。c1/c3n自体は「移動」だが、ciのY下限(2)が
+     * ちょうど満たされる(Y=0→2)ため総合スコアは真に改善する（staffPacked前フィルタも通過することを
+     * 手計算で確認済み）。
+     */
+    private fun shadowedC1RotationState(): MagiState {
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("ai", 0), Staff("bi", 0), Staff("ci", 0))
+        val schedule = listOf(
+            listOf(1, 1, 0, 0),   // ai: X,X,Y,Y
+            listOf(1, 1, 1, 1),   // bi: X,X,X,X
+            listOf(1, 1, 1, 1),   // ci: X,X,X,X
+        )
+        return MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-04",
+            shifts = shifts(), groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = schedule,
+            wishes = emptyMap(),
+            staffRange = mapOf("2,0" to Range(lo = "2", hi = "")),   // ci: Y(index0)の下限2
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "2", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(pattern = listOf("Y", "Y"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun blockRotationPolishFindsAnchorEvenWhenC1MarkIsShadowedByHeavierViolationAtSameCell() {
+        val st = shadowedC1RotationState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期 HARD=1（c3n 1件）", 1, before.hard)
+        assertEquals("初期 c1=1", 1, before.breakdown["c1"] ?: 0)
+        assertTrue("職員aiの day2 セルは vio-c1 を含まない（c3nに上書き済み）", before.violations["0,2"] != "vio-c1")
+        assertTrue("しかし cellFamilies には vio-c1 も残っている", "vio-c1" in (before.cellFamilies["0,2"] ?: emptyList()))
+
+        val res = V6HotfixPasses.applyBlockRotationPolish(st, sched, setOf("vio-c1"), "C1Rotate", maxPasses = 1)
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+
+        assertTrue("cellFamilies切替えによりaiがanchorに入り、3者回転が試行・採用されること", res.applied > 0)
+        assertTrue("総合スコアが改善したこと", after.total < before.total)
+        assertTrue("HARDが悪化しないこと(keep-best)", after.hard <= before.hard)
     }
 
     @Test
