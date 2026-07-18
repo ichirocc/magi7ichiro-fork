@@ -745,7 +745,7 @@ object V6NativeOptimizer {
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
             val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
-            val focus = maxViolatedFamily(bestReport, focusAvoid, round)
+            val focus = maxViolatedFamily(bestReport, focusAvoid, round, rounds)
             if (avoid.isNotEmpty()) {
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
             }
@@ -798,7 +798,7 @@ object V6NativeOptimizer {
             //   本当に狙える族が尽きた(pivot=="total" or 件数0)ときだけ従来どおり空転停止する。stuck な SOFT も
             //   HF63 が順次 dynamicAvoid へ入れて focusable から外すため、いずれ pivot 枯渇→終了で自己収束する。
             if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
-                val pivot = maxViolatedFamily(bestReport, avoid, round)   // avoid=dynamicAvoid＋静的covU床
+                val pivot = maxViolatedFamily(bestReport, avoid, round, rounds)   // avoid=dynamicAvoid＋静的covU床
                 if (pivot == "total" || (bestReport.breakdown[pivot] ?: 0) == 0) {
                     logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: 狙える族が枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                     break
@@ -1498,7 +1498,7 @@ object V6NativeOptimizer {
         return applied
     }
 
-    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet(), round: Int = -1): String {
+    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet(), round: Int = -1, roundsTotal: Int = -1): String {
         // [実機ログ起因=公平化のズレ] apt(適切回数)を追加。旧orderに無かったため RSI 探索中は一度も
         //   focus されず、post-processing(applyDayAssignmentPolish)頼みで広く未研磨のまま残っていた
         //   （実データ検証: apt L1偏差合計37、staffRange低/高はわずか3で規模が逆転）。rsiGenerateHypothesis
@@ -1524,7 +1524,29 @@ object V6NativeOptimizer {
         //   HARDの「件数に関わらず先に狙う」と同じ発想で、covO専用に周期的な保証枠(3ラウンドに1回)を設け、
         //   count>0かつavoid対象でなければ下段の最大値選択より優先する。他のSOFT族の選択順は完全に不変
         //   （round<0=呼出元が未対応の旧経路 or この分岐に該当しないラウンドは従来どおり件数最大へフォールバック）。
-        if (round >= 0 && round % 3 == 2 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0) return "covO"
+        // [3.207.0/実機ログで判明した3.204.0の実効性不足] 典型的な5ラウンドRSIでは round%3==2 の唯一の
+        //   該当ラウンド(0始まりで2番目)が、HF63がc3n/covUをdeprioritizeし終える前(HF63は約3ラウンドの
+        //   停滞を要する)に来てしまい、HARD優先ループがそのラウンドを丸ごと消費して covO 分岐へ到達しない
+        //   （実機ログ: round=3/5 focus=c3n、covOは合計6のまま最後まで不変）。HARDが本当に解けない場合は
+        //   HF63が最終的にdeprioritizeし尽くすため、**RSIフェーズの最終ラウンドでは高確率でavoidが揃っている**
+        //   （実機ログでもround=5/5時点でc3n,covU,c1(E9冷却)が全てavoid/cooldown済）。最終ラウンドも
+        //   保証枠に加え、周期枠が典型的な短いRSIフェーズで丸ごと空振りする問題を解消する
+        //   （roundsTotal<0=呼出元が未対応なら従来どおり無効化＝後方互換）。
+        val finalRound = roundsTotal > 0 && round == roundsTotal - 1
+        // [3.208.0/実機ログで判明したaptの同型の恒久的starvation] 提供された全ログ(7本)を確認したところ、
+        //   apt は常に breakdown 最小級（1または11、他族(c1=87/c42=18/weekly=56等)の一桁〜二桁下）で、
+        //   "focus=apt" は一度も出現しなかった（"focus=weekly" のみが件数最大フォールバックで選ばれ続ける）。
+        //   apt は 3.169.0 で正に「focus されず未研磨」を解消する狙いで order に追加されたが、追加した
+        //   だけでは件数最大選択に構造的に勝てないという covO と全く同じ欠陥を抱えていた（3.169.0時点の
+        //   検証データではapt=37とcovOより大きく問題が露呈しなかったが、実運用データでは apt が最小級に
+        //   落ち着くことが多いと判明）。covOとは別の周期(round%3==1、covOの%3==2と衝突しない)を割当て、
+        //   最終ラウンドではaptを先にチェックする（covOより小さく恒常的に不利なため優先）。
+        if (round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 &&
+            (round % 3 == 1 || finalRound)
+        ) return "apt"
+        if (round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 &&
+            (round % 3 == 2 || finalRound)
+        ) return "covO"
         // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
         // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が
         //   order に1つも無いと先頭 groupViol=0 が「0 > -1」で当選→hf67ルートがクリーン盤面への no-op 仮説
