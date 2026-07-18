@@ -1532,8 +1532,20 @@ object V6NativeOptimizer {
         //   （実機ログでもround=5/5時点でc3n,covU,c1(E9冷却)が全てavoid/cooldown済）。最終ラウンドも
         //   保証枠に加え、周期枠が典型的な短いRSIフェーズで丸ごと空振りする問題を解消する
         //   （roundsTotal<0=呼出元が未対応なら従来どおり無効化＝後方互換）。
+        val finalRound = roundsTotal > 0 && round == roundsTotal - 1
+        // [3.208.0/実機ログで判明したaptの同型の恒久的starvation] 提供された全ログ(7本)を確認したところ、
+        //   apt は常に breakdown 最小級（1または11、他族(c1=87/c42=18/weekly=56等)の一桁〜二桁下）で、
+        //   "focus=apt" は一度も出現しなかった（"focus=weekly" のみが件数最大フォールバックで選ばれ続ける）。
+        //   apt は 3.169.0 で正に「focus されず未研磨」を解消する狙いで order に追加されたが、追加した
+        //   だけでは件数最大選択に構造的に勝てないという covO と全く同じ欠陥を抱えていた（3.169.0時点の
+        //   検証データではapt=37とcovOより大きく問題が露呈しなかったが、実運用データでは apt が最小級に
+        //   落ち着くことが多いと判明）。covOとは別の周期(round%3==1、covOの%3==2と衝突しない)を割当て、
+        //   最終ラウンドではaptを先にチェックする（covOより小さく恒常的に不利なため優先）。
+        if (round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 &&
+            (round % 3 == 1 || finalRound)
+        ) return "apt"
         if (round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 &&
-            (round % 3 == 2 || (roundsTotal > 0 && round == roundsTotal - 1))
+            (round % 3 == 2 || finalRound)
         ) return "covO"
         // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
         // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が

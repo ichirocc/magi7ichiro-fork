@@ -142,6 +142,45 @@ class V6NativeOptimizerChoiceTest {
         assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r2, avoid = setOf("covO"), round = 4, roundsTotal = 5))
     }
 
+    // [3.208.0/提供された全実機ログ(7本)でaptが同型のstarvationを起こしていたことを確認] apt は常に
+    // breakdown 最小級(1〜11、他族の一桁〜二桁下)で、"focus=apt" は一度も出現せず"focus=weekly"のみが
+    // 件数最大フォールバックで選ばれ続けていた。covOとは別の周期(round%3==1)と最終ラウンドをaptにも割当てる。
+    @Test fun maxViolatedFamilyGivesAptPeriodicSlotEvenWhenSmall() {
+        val r = report(mapOf("c1" to 87, "apt" to 1))
+        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
+        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 4))
+    }
+
+    @Test fun maxViolatedFamilyAptPeriodicSlotDoesNotFireOnOtherRounds() {
+        // [回帰] round%3==1 以外(かつ最終ラウンドでもない)は従来どおり件数最大(c1)が選ばれること。
+        val r = report(mapOf("c1" to 87, "apt" to 1))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 0))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r))   // round省略(-1)も従来どおり
+    }
+
+    @Test fun maxViolatedFamilyAptAndCovOPeriodicSlotsDoNotCollide() {
+        // [回帰] apt(round%3==1)とcovO(round%3==2)は別ラウンドに割当てられ、互いを上書きしないこと。
+        val r = report(mapOf("c1" to 87, "apt" to 1, "covO" to 6))
+        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
+        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+    }
+
+    @Test fun maxViolatedFamilyFinalRoundPrefersAptOverCovOWhenBothPresent() {
+        // aptはcovOよりさらに恒常的に不利(実機ログで常に最小級)なため、最終ラウンドでの取り合いでは
+        // aptを優先する。
+        val r = report(mapOf("weekly" to 56, "apt" to 1, "covO" to 6))
+        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+    }
+
+    @Test fun maxViolatedFamilyAptSlotStillRespectsHardPriorityAndAvoid() {
+        // [回帰] aptの保証枠もHARD優先ルールとavoidを壊さないこと。
+        val r1 = report(mapOf("c3n" to 1, "apt" to 1), hard = 1)
+        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r1, round = 1))
+        val r2 = report(mapOf("c1" to 87, "apt" to 1))
+        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r2, avoid = setOf("apt"), round = 1))
+    }
+
     // [3.204.0] covO は markNeed(k,j) で needViolations に載り report.violations(セル"i,j"マップ)には
     // 現れないため、他の focus 未対応族が使う destroyRepairViolations では covO 専用のヒントが無かった。
     // applyCovOFree が「動かせる」在勤者を実際に他シフトへ移し covO を解消することを固定する。
