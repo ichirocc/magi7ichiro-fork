@@ -329,49 +329,69 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
 @Composable
 internal fun CoverageDiagnosisCard(ui: UiState) {
     val diag = ui.coverageDiag ?: return
-    if (!diag.hasShortage) return
+    if (!diag.hasShortage && !diag.hasSurplus) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("人員不足の原因", style = MaterialTheme.typography.titleMedium)
-            val headline = when {
-                diag.allInfeasible -> "不足 ${diag.totalShortfall} 人は全て充足不可。今のデータでは満たせません（想定内）。"
-                diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再実行や設定の見直しで解消し得ます。"
-                else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
-            }
-            Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-            for (s in diag.shortfalls.take(6)) {
-                val infeasible = s.verdict == CoverageVerdict.INFEASIBLE
-                val container = if (infeasible) cs.errorContainer else cs.secondaryContainer
-                val onContainer = if (infeasible) cs.onErrorContainer else cs.onSecondaryContainer
-                Surface(color = container, shape = MaterialTheme.shapes.medium) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("${s.dayLabel}  ${s.shiftSymbol}  必要${s.need}/現状${s.got}（不足${s.miss}）",
-                                color = onContainer, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                            MagiTagChip(
-                                text = if (infeasible) "充足不可" else "充足可能",
-                                color = if (infeasible) MagiAccent.red else MagiAccent.blue,
-                            )
+            if (diag.hasShortage) {
+                Text("人員不足の原因", style = MaterialTheme.typography.titleMedium)
+                val headline = when {
+                    diag.allInfeasible -> "不足 ${diag.totalShortfall} 人は全て充足不可。今のデータでは満たせません（想定内）。"
+                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再実行や設定の見直しで解消し得ます。"
+                    else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
+                }
+                Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                for (s in diag.shortfalls.take(6)) {
+                    val infeasible = s.verdict == CoverageVerdict.INFEASIBLE
+                    val container = if (infeasible) cs.errorContainer else cs.secondaryContainer
+                    val onContainer = if (infeasible) cs.onErrorContainer else cs.onSecondaryContainer
+                    Surface(color = container, shape = MaterialTheme.shapes.medium) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("${s.dayLabel}  ${s.shiftSymbol}  必要${s.need}/現状${s.got}（不足${s.miss}）",
+                                    color = onContainer, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                                MagiTagChip(
+                                    text = if (infeasible) "充足不可" else "充足可能",
+                                    color = if (infeasible) MagiAccent.red else MagiAccent.blue,
+                                )
+                            }
+                            Text(s.reason, color = onContainer, style = MaterialTheme.typography.bodySmall)
                         }
-                        Text(s.reason, color = onContainer, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if (diag.shortfalls.size > 6) {
+                    Text("ほか ${diag.shortfalls.size - 6} 枠（詳細はログ出力を参照）",
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+                if (diag.relaxations.isNotEmpty()) {
+                    Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("解けるようにするには（担当追加の案）", color = cs.onTertiaryContainer, style = MaterialTheme.typography.titleSmall)
+                            for (r in diag.relaxations.take(4)) {
+                                Text("・$r", color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text("※ 担当追加の提案です。設定変更は行いません（採否はご判断ください）。",
+                                color = cs.onTertiaryContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }
-            if (diag.shortfalls.size > 6) {
-                Text("ほか ${diag.shortfalls.size - 6} 枠（詳細はログ出力を参照）",
-                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            }
-            if (diag.relaxations.isNotEmpty()) {
-                Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("解けるようにするには（担当追加の案）", color = cs.onTertiaryContainer, style = MaterialTheme.typography.titleSmall)
-                        for (r in diag.relaxations.take(4)) {
-                            Text("・$r", color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodySmall)
+            if (diag.hasSurplus) {
+                Text("人員過剰がなぜ減らないか", style = MaterialTheme.typography.titleMedium)
+                Text("過剰 ${diag.totalSurplus} 人 — 在勤者を他シフトへ動かせば消えるはずが、動かない理由を枠ごとに示します。",
+                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                for (s in diag.surpluses.take(6)) {
+                    Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${s.dayLabel}  ${s.shiftSymbol}  必要${s.need}/現状${s.got}（過剰${s.excess}）",
+                                color = cs.onSecondaryContainer, style = MaterialTheme.typography.titleSmall)
+                            Text(s.reason, color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodySmall)
                         }
-                        Text("※ 担当追加の提案です。設定変更は行いません（採否はご判断ください）。",
-                            color = cs.onTertiaryContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall)
                     }
+                }
+                if (diag.surpluses.size > 6) {
+                    Text("ほか ${diag.surpluses.size - 6} 枠（詳細はログ出力を参照）",
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
             }
         }

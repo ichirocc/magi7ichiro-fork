@@ -63,6 +63,19 @@ data class CoverageShortfall(
     val reason: String,
 )
 
+/** 人員過剰(covO)が残る 1 つの (日, シフト) 枠の診断。読み取り専用・エンジン非変更。 */
+data class CoverageSurplus(
+    val dayIndex: Int,
+    val dayLabel: String,
+    val shiftIndex: Int,
+    val shiftSymbol: String,
+    val need: Int,
+    val got: Int,
+    val excess: Int,
+    /** この枠の在勤者中、他シフトへ動かせる／動かせない内訳と理由。 */
+    val reason: String,
+)
+
 /** covU(人員不足)の原因診断。どの枠が「数学的に充足不可」か「充足可能だが未到達」かを切り分ける。 */
 data class CoverageDiagnosis(
     val totalShortfall: Int,
@@ -70,22 +83,34 @@ data class CoverageDiagnosis(
     val fixableSlots: Int,
     val shortfalls: List<CoverageShortfall>,
     val relaxations: List<String> = emptyList(),  // [IIS/緩和案] 担当追加で解ける見込みの提案（データは変えない）
+    /** [人員過剰(covO)の「なぜ減らないか」診断] shortfalls と対の存在。データは変えない。 */
+    val totalSurplus: Int = 0,
+    val surpluses: List<CoverageSurplus> = emptyList(),
 ) {
     val hasShortage: Boolean get() = totalShortfall > 0
     /** 不足が全て「充足不可」＝このデータでは HARD=0 にできない（想定内の残存）。 */
     val allInfeasible: Boolean get() = hasShortage && fixableSlots == 0
+    val hasSurplus: Boolean get() = totalSurplus > 0
 
     /** 診断ログ（エクスポートされる「MAGI ログ」に載る形式の文字列）。 */
     fun logLines(): List<String> {
-        if (!hasShortage) return emptyList()
         val out = ArrayList<String>()
-        out.add("[W] CoverageDiag: 人員不足 合計${totalShortfall} — 充足不可${infeasibleSlots}枠 / 充足可能${fixableSlots}枠")
-        for (s in shortfalls.take(8)) {
-            val v = if (s.verdict == CoverageVerdict.INFEASIBLE) "充足不可" else "充足可能"
-            out.add("[W] CoverageDiag: ${s.dayLabel} ${s.shiftSymbol} 必要${s.need}/現状${s.got}(不足${s.miss}) — ${v}: ${s.reason}")
+        if (hasShortage) {
+            out.add("[W] CoverageDiag: 人員不足 合計${totalShortfall} — 充足不可${infeasibleSlots}枠 / 充足可能${fixableSlots}枠")
+            for (s in shortfalls.take(8)) {
+                val v = if (s.verdict == CoverageVerdict.INFEASIBLE) "充足不可" else "充足可能"
+                out.add("[W] CoverageDiag: ${s.dayLabel} ${s.shiftSymbol} 必要${s.need}/現状${s.got}(不足${s.miss}) — ${v}: ${s.reason}")
+            }
+            if (shortfalls.size > 8) out.add("[W] CoverageDiag: ほか${shortfalls.size - 8}枠")
+            for (r in relaxations.take(4)) out.add("[W] CoverageDiag 緩和案: $r")
         }
-        if (shortfalls.size > 8) out.add("[W] CoverageDiag: ほか${shortfalls.size - 8}枠")
-        for (r in relaxations.take(4)) out.add("[W] CoverageDiag 緩和案: $r")
+        if (hasSurplus) {
+            out.add("[W] CoverageDiag: 人員過剰 合計${totalSurplus} — ${surpluses.size}枠（なぜ減らないか）")
+            for (s in surpluses.take(8)) {
+                out.add("[W] CoverageDiag: ${s.dayLabel} ${s.shiftSymbol} 必要${s.need}/現状${s.got}(過剰${s.excess}) — ${s.reason}")
+            }
+            if (surpluses.size > 8) out.add("[W] CoverageDiag: ほか${surpluses.size - 8}枠（過剰）")
+        }
         return out
     }
 }
@@ -200,7 +225,53 @@ object V6PortAnalyzer {
                 }
             }
         }
-        return CoverageDiagnosis(total, infeasible, fixable, list, relaxations)
+        // [人員過剰(covO)の「なぜ減らないか」診断] covU診断(空き番/玉突き/希望固定/禁止連続)の対。
+        //   在勤者を他シフトへ動かせば消えるはずの過剰が、なぜ最適化で解消されないかを枠ごとに示す。
+        //   covO は全19族中もっとも軽い(重み1.0)ため、動かした先で他の族が1点でも悪化すると
+        //   isBetter に負けて採用されない＝件数自体は「動かせるか」の構造診断であり、
+        //   「動かせるのに動いていない」ことの説明にはならない点に注意（読取専用・スコア不変）。
+        val surplusList = ArrayList<CoverageSurplus>()
+        var totalSurplus = 0
+        for (j in 0 until p.T) {
+            for (k in 0 until p.K) {
+                val got = cov[j][k]
+                val excess = p.covOCell(k, j, got)
+                if (excess <= 0) continue
+                val need = got - excess
+                totalSurplus += excess
+                val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
+                var pinned = 0; var forbid = 0; var cascade = 0; var free = 0
+                for (i in 0 until p.S) {
+                    if (norm[i][j] != k) continue   // このシフトの在勤者だけが移動候補
+                    if (p.wish[i][j] == k) { pinned++; continue }   // 本人希望＝動かすと希望未充足(pref)化
+                    val alts = p.allowedShiftsForStaff(i).filter { it != k }
+                    if (alts.isEmpty()) { forbid++; continue }      // 担当可能な代替シフトが無い
+                    var hasRoom = false; var blockedByC3n = true
+                    for (m in alts) {
+                        if (c3nAt(i, j, m)) continue
+                        blockedByC3n = false
+                        // m へ1人足しても covO が増えない＝受け皿あり。
+                        if (p.covOCell(m, j, cov[j][m] + 1) <= p.covOCell(m, j, cov[j][m])) { hasRoom = true; break }
+                    }
+                    when {
+                        hasRoom -> free++
+                        !blockedByC3n -> cascade++   // 代替はあるが、どこも受け皿がない＝玉突きが必要
+                        else -> forbid++              // 代替は全て禁止連続で塞がる
+                    }
+                }
+                val hint = when {
+                    free > 0 -> "在勤${free}人を他シフトへ移せば解消可能（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
+                    cascade > 0 -> "移動先はどこも定員一杯で、過剰シフトからの多人数入替（玉突き）が必要"
+                    else -> "在籍者は希望固定/禁止連続で動かせず、希望を1件調整するか担当を減らすと解消に近づく"
+                }
+                surplusList.add(
+                    CoverageSurplus(j, dayLabel(state.startDate, j), k, sym, need, got, excess,
+                        "在勤者中 動かせる${free}人・玉突き必要${cascade}人・希望固定${pinned}人・禁止連続${forbid}人。$hint")
+                )
+            }
+        }
+        surplusList.sortByDescending { it.excess }
+        return CoverageDiagnosis(total, infeasible, fixable, list, relaxations, totalSurplus, surplusList)
     }
 
     fun analyze(

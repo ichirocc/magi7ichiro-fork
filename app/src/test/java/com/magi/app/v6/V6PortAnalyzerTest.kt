@@ -64,4 +64,66 @@ class V6PortAnalyzerTest {
         assertEquals(1, sf.got)
         assertEquals(1, sf.miss)
     }
+
+    // [人員過剰(covO)の「なぜ減らないか」診断] 在勤2人のうち誰も希望固定・禁止連続に阻まれない盤面では
+    // 「動かせる」人数が過剰人数と一致し、解消可能ヒントが出ることを固定する。
+    @Test
+    fun diagnoseCoverageMarksFreelyRelievableSurplus() {
+        val st = MagiState(
+            startDate = "2025-12-01",
+            endDate = "2025-12-01",
+            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1), listOf(1)),   // 両者ともA（必要1に対し現状2＝過剰1、休へ動かす余地あり）
+            wishes = emptyMap(),
+            staffRange = emptyMap(),
+            needDay1 = emptyMap(),
+            needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val diag = V6PortAnalyzer.diagnoseCoverage(st)
+        assertEquals(1, diag.totalSurplus)
+        assertEquals(1, diag.surpluses.size)
+        val sp = diag.surpluses.single()
+        assertEquals(1, sp.shiftIndex)
+        assertEquals(2, sp.got)
+        assertEquals(1, sp.excess)
+        assertTrue(sp.reason.contains("動かせる2人"))
+        assertTrue(sp.reason.contains("解消可能"))
+    }
+
+    // 両者とも希望固定（希望どおりに配置済み＝pref違反ゼロ）だと、動かすと希望未充足に化けるため
+    // 「動かせる」人数は0になり、希望調整が必要という理由が出ることを固定する
+    // （実機ログで「回数制限のない有が増えない」問い合わせの根本原因の再現）。
+    @Test
+    fun diagnoseCoverageMarksWishPinnedSurplusAsUnmovable() {
+        val st = MagiState(
+            startDate = "2025-12-01",
+            endDate = "2025-12-01",
+            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1), listOf(1)),
+            wishes = mapOf("0,0" to 1, "1,0" to 1),   // 両者ともAを希望固定
+            staffRange = emptyMap(),
+            needDay1 = emptyMap(),
+            needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val diag = V6PortAnalyzer.diagnoseCoverage(st)
+        assertEquals(1, diag.totalSurplus)
+        val sp = diag.surpluses.single()
+        assertEquals(1, sp.excess)
+        assertTrue(sp.reason.contains("希望固定2人"))
+        assertTrue(sp.reason.contains("希望"))
+    }
 }

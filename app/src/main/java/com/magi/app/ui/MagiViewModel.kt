@@ -2419,9 +2419,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     ): Analysis = coroutineScope {
         val v6D       = async(Dispatchers.Default) { V6PortAnalyzer.analyze(st, schedule, report) }
         val sanityD   = async(Dispatchers.Default) { V6SanityPort.build(st, schedule) }
-        // 人員不足(covU)が残る場合のみ原因診断（どの日/シフトが「充足不可」か「未到達」か）を算出しログに残す。
+        // 人員不足(covU)または人員過剰(covO)が残る場合のみ原因診断（どの日/シフトが「充足不可」か
+        // 「未到達」か／過剰がなぜ動かせないか）を算出しログに残す。
         val coverageD = async(Dispatchers.Default) {
-            V6PortAnalyzer.diagnoseCoverage(st, schedule, report).takeIf { it.hasShortage }
+            V6PortAnalyzer.diagnoseCoverage(st, schedule, report).takeIf { it.hasShortage || it.hasSurplus }
         }
         // [デバッグ] 制約違反を家族ごとに「場所＋実値(必要/現状, 回数/下限上限, 誰/何日/シフト)」で出力。
         val vioDebugD = async(Dispatchers.Default) { V6SanityPort.buildViolationDebug(st, schedule, report) }
