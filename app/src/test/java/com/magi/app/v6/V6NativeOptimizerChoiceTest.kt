@@ -116,6 +116,32 @@ class V6NativeOptimizerChoiceTest {
         assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, avoid = setOf("covO"), round = 2))
     }
 
+    // [3.207.0/実機ログ起因=3.204.0の周期枠が典型的な5ラウンドRSIで丸ごと空振りしていた] round%3==2 の
+    // 唯一の該当ラウンド(0始まりで2番目)は、HF63がc3n/covUをdeprioritizeし終える前(約3ラウンドの停滞を要する)
+    // に来てしまい、HARD優先ループがそのラウンドを消費してcovO分岐へ到達しなかった（実機ログ: round=3/5
+    // focus=c3n、covO=6は最後まで不変）。HARDが本当に解けない場合はHF63が最終的にdeprioritizeし尽くすため、
+    // RSIフェーズの最終ラウンドを追加の保証枠にする。
+    @Test fun maxViolatedFamilyGivesCovOFinalRoundSlotEvenOutsidePeriodicModulo() {
+        val r = report(mapOf("weekly" to 56, "covO" to 6))
+        // round=4は5ラウンド構成(roundsTotal=5)の最終ラウンド(0始まり)。4%3=1で周期枠には該当しないが
+        // 最終ラウンドとして発火し、件数最大(weekly=56)を上書きしてcovOが選ばれること。
+        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+    }
+
+    @Test fun maxViolatedFamilyFinalRoundSlotRequiresRoundsTotalToBeProvided() {
+        // [回帰] roundsTotal省略(-1、旧経路)では最終ラウンド判定が無効化され従来どおり件数最大に戻ること。
+        val r = report(mapOf("weekly" to 56, "covO" to 6))
+        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r, round = 4))
+    }
+
+    @Test fun maxViolatedFamilyFinalRoundSlotStillRespectsHardPriorityAndAvoid() {
+        // [回帰] 最終ラウンドの保証枠もHARD優先ルールとavoidを壊さないこと。
+        val r1 = report(mapOf("c3n" to 1, "covO" to 6), hard = 1)
+        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r1, round = 4, roundsTotal = 5))
+        val r2 = report(mapOf("weekly" to 56, "covO" to 6))
+        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r2, avoid = setOf("covO"), round = 4, roundsTotal = 5))
+    }
+
     // [3.204.0] covO は markNeed(k,j) で needViolations に載り report.violations(セル"i,j"マップ)には
     // 現れないため、他の focus 未対応族が使う destroyRepairViolations では covO 専用のヒントが無かった。
     // applyCovOFree が「動かせる」在勤者を実際に他シフトへ移し covO を解消することを固定する。
