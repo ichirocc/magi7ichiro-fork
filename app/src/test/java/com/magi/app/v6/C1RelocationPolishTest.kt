@@ -1,6 +1,7 @@
 package com.magi.app.v6
 
 import com.magi.app.model.C1Row
+import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
@@ -127,6 +128,59 @@ class C1RelocationPolishTest {
         // 自己swapは職員0自身のX/Y総回数を保存する。
         val cx0Before = sched[0].count { it == 1 }; val cx0After = res.newSchedule[0].count { it == 1 }
         assertEquals("職員0の X 回数保存", cx0Before, cx0After)
+    }
+
+    /**
+     * [実バグ修正/anchorStaff の重み優先シャドーイング] 旧実装は anchorStaff の判定に rep0.violations
+     * （1セル=最重1クラスのみ）を使っていた。i(職員0)の唯一のc1マーク位置(day2)に、より重いc3n(HARD)も
+     * 同時に発火すると、violations["0,2"]は"vio-c3n"に上書きされ"vio-c1"は消える。iの他の日には
+     * c1マークが無いため、iはanchorStaffから完全に漏れ、本来採用可能な手A(同日スワップ)すら一度も
+     * 試されず c1=1のまま採用0回になっていた（cellFamilies=1セルの全クラス保持マップへ切替えて解消）。
+     * i(職員0)=[X,X,Y,Y]・cons3n=[Y,Y]（day2,3が禁止連続の完全一致で c3n 発火・c1のマーク位置と一致）。
+     * i2(職員1)=[X,X,X,X]（day2にXを持つ唯一の交換相手）。手計算: 同日day2スワップで i の窓[2,3]が
+     * 0X→1Xで解消(c1 1→0)・i2は窓が全てz=2→z=1でも>=1のため不変。かつc3nもi側day2がXになり消滅(1→0)。
+     * HARDが1→0に改善するため isBetter は自明に採用する（旧実装ではそもそも試行されなかった手）。
+     */
+    private fun shadowedAnchorState(): MagiState {
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("i", 0), Staff("i2", 0))
+        val schedule = listOf(
+            listOf(1, 1, 0, 0),   // i:  X,X,Y,Y
+            listOf(1, 1, 1, 1),   // i2: X,X,X,X
+        )
+        return MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-04",
+            shifts = shifts(), groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = schedule,
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "2", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(pattern = listOf("Y", "Y"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun c1PolishFindsAnchorEvenWhenC1MarkIsShadowedByHeavierViolationAtSameCell() {
+        val st = shadowedAnchorState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期 HARD=1（c3n 1件）", 1, before.hard)
+        assertEquals("初期 c1=1（day2窓のみ不足）", 1, before.breakdown["c1"] ?: 0)
+        // [前提確認] c1のマーク位置がc3nに上書きされ、旧実装ではiがanchorStaffから漏れていたことの確認。
+        assertTrue("職員0の day2 セルは vio-c1 を含まない（c3nに上書き済み）", before.violations["0,2"] != "vio-c1")
+        assertTrue("しかし cellFamilies には vio-c1 も残っている", "vio-c1" in (before.cellFamilies["0,2"] ?: emptyList()))
+
+        val res = V6HotfixPasses.applyC1WindowPolish(st, sched, maxPasses = 1)
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+
+        assertTrue("cellFamilies切替えにより職員0がanchorに入り、同日スワップが試行・採用されること", res.applied > 0)
+        assertEquals("c1 が解消されたこと", 0, after.breakdown["c1"] ?: 0)
+        assertEquals("HARD も解消されたこと（c3n 1->0）", 0, after.hard)
     }
 
     @Test

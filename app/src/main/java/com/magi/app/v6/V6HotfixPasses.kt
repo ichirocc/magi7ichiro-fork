@@ -797,10 +797,18 @@ object V6HotfixPasses {
             var improved = false
             // [違反セル指向] c1で違反している職員のみを起点に絞る。c1は職員ごと→改善手は必ず違反職員を
             //   含む＝ロスレス。空なら即終了でコスト0。
+            // [実機ログ起因/実バグ修正] 旧実装は rep0.violations（1セル=最重1クラスのみ）を見ていたため、
+            //   c1違反セルが同じセルでc3n(HARD,重み7000)等の更に重い違反も起こしている場合、そのセルの
+            //   c1マークが violations 上では上書きされて消え、該当職員のc1違反自体が研磨の起点候補から
+            //   漏れうる潜在バグだった（他のc1違反セルで既に起点に入っていれば実害なしだが、全run-startが
+            //   重い違反と同居する職員では研磨が一度も試みられない）。cellFamilies（3.111.0で追加された
+            //   1セル=重み降順の全クラスリスト、weight-priorityで discard しない）に切替えれば漏れなく検出
+            //   できる。起点集合が広がるだけ(既存の起点は cellFamilies にも必ず含まれる=violationsの
+            //   最重クラスはcellFamiliesの先頭要素と同一)なので後方互換・退化なし。
             val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
             val anchorStaff = HashSet<Int>()
-            for ((key, cls) in rep0.violations) {
-                if (cls == "vio-c1") anchorStaff.add(key.substringBefore(",").toIntOrNull() ?: continue)
+            for ((key, fams) in rep0.cellFamilies) {
+                if ("vio-c1" in fams) anchorStaff.add(key.substringBefore(",").toIntOrNull() ?: continue)
             }
             if (anchorStaff.isEmpty()) break
             for (c in p.cons1) {
