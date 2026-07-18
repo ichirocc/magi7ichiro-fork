@@ -1,5 +1,6 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C41Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
@@ -263,5 +264,81 @@ class V6NativeOptimizerChoiceTest {
         assertNotNull(out)
         assertEquals(base.size, out.size)
         assertEquals(base[0].size, out[0].size)
+    }
+
+    // [3.209.0] c41/c41s は covO と同じく markNeed(needViolations) にしか載らず、GLSキック/
+    // destroyRepairViolations が一切ヒントを持てない。applyC41Free が群レンジ[l,u]の超過・不足を
+    // 実際に動かして解消することを固定する。
+    private fun c41State(schedule: List<List<Int>>, l: String, u: String, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-01",
+        shifts = listOf(Shift("休み", "Y", "", ""), Shift("勤務", "X", "", "")),
+        groups = listOf(Group("G0", "G0")),
+        staff = listOf(Staff("a", 0), Staff("b", 0)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+        schedule = schedule, wishes = wishes, staffRange = emptyMap(),
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+        cons41 = listOf(C41Row(groupKigou = "G0", shiftKigou = "X", l = l, u = u)),
+        cons42 = emptyList(),
+    )
+
+    @Test fun applyC41FreeRelievesFreelyMovableExcess() {
+        // 群定員[0,1]に対し2名がXに在籍＝超過1。両者とも希望固定なしなので1名が動かせるはず。
+        val st = c41State(listOf(listOf(1), listOf(1)), l = "0", u = "1")
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c41"] ?: 0)
+        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        assertEquals(1, applied)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals(0, after.breakdown["c41"] ?: 0)
+        assertEquals(0, after.hard)
+    }
+
+    @Test fun applyC41FreeFillsFreelyMovableDeficiency() {
+        // 群定員[1,2]に対し0名がXに在籍＝不足1。両者ともYで希望固定なしなので1名を引き込めるはず。
+        val st = c41State(listOf(listOf(0), listOf(0)), l = "1", u = "2")
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c41"] ?: 0)
+        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        assertEquals(1, applied)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals(0, after.breakdown["c41"] ?: 0)
+        assertEquals(0, after.hard)
+    }
+
+    @Test fun applyC41FreeLeavesWishPinnedExcessUntouched() {
+        // 両者ともXを希望固定（希望どおり配置済み）だと、動かすと希望未充足に化けるため何もしない。
+        val st = c41State(listOf(listOf(1), listOf(1)), l = "0", u = "1", wishes = mapOf("0,0" to 1, "1,0" to 1))
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c41"] ?: 0)
+        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        assertEquals(0, applied)
+        assertEquals(1, sched[0][0])
+        assertEquals(1, sched[1][0])
+    }
+
+    @Test fun applyC41FreeIsNoOpWhenRulesEmpty() {
+        val st = c41State(listOf(listOf(1), listOf(1)), l = "0", u = "1").copy(cons41 = emptyList())
+        val sched = st.schedule.toIntArray2D()
+        assertEquals(0, V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false))
+    }
+
+    // [smoke] focus="c41"/"c41s" が新設の applyC41Free 経路へ正しくルーティングされ、例外なく
+    //   同一次元の盤面を返すこと。実際の解消効果は上記の直接テストが検証する。
+    @Test fun rsiGenerateHypothesisC41FocusReturnsValidSchedule() {
+        val st = c41State(listOf(listOf(1), listOf(1)), l = "0", u = "1")
+        val base = st.schedule.toIntArray2D()
+        val rep = UnifiedViolationChecker.check(st, base)
+        for (focus in listOf("c41", "c41s")) {
+            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            assertNotNull(out)
+            assertEquals(base.size, out.size)
+            assertEquals(base[0].size, out[0].size)
+        }
     }
 }
