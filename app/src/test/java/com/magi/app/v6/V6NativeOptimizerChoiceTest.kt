@@ -356,6 +356,8 @@ class V6NativeOptimizerChoiceTest {
 
     @Test fun perHypothesisWorkersNeverReturnsLessThanOne() {
         assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 0, hypotheses = 5))
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 3, hypotheses = 0))
+        // hypotheses=0 は縮退入力（実際は coerceIn(1,5) 済みで到達しない）。内側ガード max(1,hypotheses)=1 に
+        //   より 3/1=3 が返る＝「1未満を返さない」性質は満たす（初版の期待値1は誤り→CI失敗で検出・修正）。
+        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 3, hypotheses = 0))
     }
 }
