@@ -341,4 +341,21 @@ class V6NativeOptimizerChoiceTest {
             assertEquals(base[0].size, out[0].size)
         }
     }
+
+    // [余剰ワーカー活用] perHypothesisWorkers: 仕様§2.2の5仮説上限を超えて設定したworkersを、
+    // 各仮説の内部並列度（RSI/RSI++のSAチェーン数・ALNSの多チェーン）へ均等配分する計算のみを固定する
+    // 純粋関数テスト（並列実行そのものはJVMユニットテストでは検証しない＝実機ログ/CIビルドで確認）。
+    @Test fun perHypothesisWorkersDistributesSurplusEvenly() {
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 1, hypotheses = 5))
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 5, hypotheses = 5))
+        // 実機ログ実例: workers設定8・仮説5 → 8/5=1(切り捨て)。旧実装は常に1だったのでこの値は不変。
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 8, hypotheses = 5))
+        // workers=16・仮説5 → 16/5=3。旧実装なら5を超えた11ワーカー分が完全に無駄だった。
+        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 16, hypotheses = 5))
+    }
+
+    @Test fun perHypothesisWorkersNeverReturnsLessThanOne() {
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 0, hypotheses = 5))
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 3, hypotheses = 0))
+    }
 }

@@ -265,6 +265,17 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             Button(onClick = { vm.setWorkers((ui.workers + 1).coerceAtMost(16)) },
                 enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を増やす" }) { Text("＋", fontSize = 20.sp) }
         }
+        // [余剰ワーカー活用] 「高速」は設定値をそのままSAチェーン数に使うが、それ以外(おまかせ/破壊再構築/
+        //   違反集中/違反集中＋/方式ミックス)は仕様§2.2で最大5仮説に固定され、5を超えた分は各仮説内の
+        //   並列探索(SA複数系列・ALNS多チェーン)へ均等配分される（無駄にはならないが5仮説自体は増えない）。
+        //   実機ログの「実効仮説」表記と対応させ、設定を上げた効果が読める最小限の注記を添える。
+        if (ui.workers > 5) {
+            Text(
+                "※「高速」以外の方式では、5を超えた分は仮説を増やさず各仮説内の並列探索の厚みに使われます" +
+                    "（例: ${ui.workers} → 仮説5×内部${com.magi.app.v6.V6NativeOptimizer.perHypothesisWorkers(ui.workers, 5)}並列）。",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("ネイティブ加速（C++）")

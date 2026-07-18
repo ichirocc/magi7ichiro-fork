@@ -71,6 +71,14 @@ Each action launches a cancellable `job`; **計算を止める** calls `job?.can
 - **並列ワーカー vs 実効仮説**: `workers` は設定上 `1..16`（`UiState` 初期は端末 CPU 数で最大 8）。
   ただし最適化エンジンは仕様 §2.2 により**最大 5 仮説**並列（`workers.coerceIn(1,5)`）。
   ログ・UI では「workers 設定 N / 実効仮説 M」を分けて表示する。
+  - **[余剰ワーカー活用] 5 を超えた分は仮説内並列度へ配分**（`perHypothesisWorkers(workers, w)`
+    = `max(1, workers/w)`）: RSI/RSI++ が Phase1/奇数ラウンドで呼ぶ `runV5`(`SaOptimizer`) は
+    元々 `workers` 本の SA チェーンを並列実行できる実装だったが、旧 `runMultiWorker` が各仮説へ
+    一律 `workers=1` を強制していたため 5 を超える設定は完全に無駄だった（実機ログ「workers設定8
+    実効仮説5」で発覚）。`runAlns` にも同型の多チェーン機構(`runAlnsChains`)を新設し、
+    `options.workers>1` のとき異なるシードで並列実行し `better()`（hard→total→weighted 辞書式）で
+    最良を採用する（内側呼出は `workers=1` 固定・再帰1段のみ＝無限増殖しない）。
+    「高速」(V5)は元々仮説の概念が無く `workers` をそのまま SA チェーン数として使うため対象外。
 - **バックグラウンド最適化**: `OptimizationWorker`（WorkManager 前景サービス）＋
   `OptimizationRepository` ＋ 完了通知。**プロセス kill 耐性に対応**＝約 8 秒ごとに
   `V6NativeOptimizer.liveBest` を `snapshotFile` へ保存し、再起動時に「途中結果から再開」を

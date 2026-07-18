@@ -135,15 +135,18 @@ object V6NativeOptimizer {
         if (hf67Adopted) schedule = repaired
         val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入力の勤務表を保持
         val entryBoardReport = if (hf67Adopted) repairedReport else entryReport
+        // 仕様書 §2.2/§4.1: 最大5仮説を並列探索（V5だけは仮説の概念を使わずworkersをそのままSAチェーン数とする）。
+        val w = options.workers.coerceIn(1, 5)
+        // [余剰ワーカー活用] workers>5の分は仮説内並列度(perW)へ配分。V5はworkersをそのまま使うため対象外。
+        val workersNote = if (chosen == V6Algorithm.V5) "workers=${options.workers}（SAチェーン）"
+            else "workers=${options.workers}（実効仮説${w}・仮説内${perHypothesisWorkers(options.workers, w)}並列）"
         var logs = listOf(
-            MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s workers=${options.workers.coerceIn(1, 5)}（設定${options.workers}）"),
+            MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s $workersNote"),
             MirrorLog(tag = "HF67", message = if (hf67Adopted)
                 "入口修復を採用 HARD ${entryReport.hard}->${repairedReport.hard} / total ${entryReport.total}->${repairedReport.total}"
             else
                 "入口修復を見送り（入力の方が良好: HARD ${entryReport.hard}/total ${entryReport.total} ≦ 修復後 HARD ${repairedReport.hard}/total ${repairedReport.total}）"),
         )
-        // 仕様書 §2.2/§4.1: 最大5仮説を並列探索。
-        val w = options.workers.coerceIn(1, 5)
         val full = max(1, options.totalBudgetSec)
         val result = when (chosen) {
             // V5 already runs `workers` parallel SA chains inside SaOptimizer.
@@ -200,6 +203,12 @@ object V6NativeOptimizer {
         return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
     }
 
+    /** [余剰ワーカー活用] 仮説数(hypotheses, 仕様§2.2で最大5)に対し、設定workersのうち何本を各仮説の
+     *  内部並列度（SAチェーン数・ALNS多チェーン）へ均等配分するか。workers<=hypothesesなら1(旧来どおり
+     *  単一チェーン)。余りは切り捨て（例: workers=8,hypotheses=5 → 1本/仮説・workers=16,hypotheses=5 → 3本/仮説）。 */
+    internal fun perHypothesisWorkers(workers: Int, hypotheses: Int): Int =
+        max(1, workers / max(1, hypotheses))
+
     /**
      * Run up to [w] independent hypotheses concurrently (distinct seeds) and keep the best —
      * the native W0..Wn multi-worker pool with the spec's hybrid termination (§2.2/§4.2):
@@ -214,7 +223,12 @@ object V6NativeOptimizer {
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
         run: suspend (Int, V6OptimizerOptions, (String, ViolationReport?, Long, Long) -> Unit) -> V6OptimizerResult,
     ): V6OptimizerResult = coroutineScope {
-        if (w <= 1) return@coroutineScope run(0, options.copy(workers = 1), onProgress)
+        // [余剰ワーカー活用] 仕様§2.2の「最大5仮説」上限(w)は不変。workers>5で設定した分は無駄にせず、
+        //   各仮説の内部並列度（RSI/RSI++がPhase1/奇数ラウンドで呼ぶrunV5のSAチェーン数、ALNSの多チェーン
+        //   =runAlnsChains）へ均等配分する。旧実装は仮説ごとに一律 workers=1 を強制しており、5を超える設定は
+        //   完全に無駄だった（実機ログ「workers設定8 実効仮説5」で確認）。
+        val perW = perHypothesisWorkers(options.workers, w)
+        if (w <= 1) return@coroutineScope run(0, options.copy(workers = perW), onProgress)
         val base = actualSeed(options.seed)
         val completed = java.util.concurrent.atomic.AtomicInteger(0)
         val winner = java.util.concurrent.atomic.AtomicInteger(-1)
@@ -222,7 +236,7 @@ object V6NativeOptimizer {
         for (i in 0 until w) {
             jobs[i] = async(Dispatchers.Default) {
                 // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
-                val res = run(i, options.copy(workers = 1, seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
+                val res = run(i, options.copy(workers = perW, seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
                     if (i == 0) onProgress("仮説${(w - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
                     // 絶対評価: 合格ライン(HARD=0)に最初に到達した仮説が、残りを即キャンセル
                     if (report != null && report.hard == 0 && winner.compareAndSet(-1, i)) {
@@ -238,7 +252,7 @@ object V6NativeOptimizer {
         }
         // 兄弟キャンセル(自己)とユーザー停止(外部)を区別: 外部停止ならここで伝播させる。
         ensureActive()
-        val best = if (results.isEmpty()) run(0, options.copy(workers = 1), onProgress)
+        val best = if (results.isEmpty()) run(0, options.copy(workers = perW), onProgress)
         else results.reduce { a, b -> if (better(b.report, a.report)) b else a }
         // 「他の案」: 採用案以外の仮説結果を品質順に保持（重複schedule除外、最大3件）
         lastAlternatives = results.asSequence()
@@ -250,7 +264,8 @@ object V6NativeOptimizer {
             .toList()
         val totalIters = results.sumOf { it.iterations }
         val mode = if (winner.get() >= 0) "合格で早期キャンセル" else "時間内最良採用"
-        val extra = MirrorLog(tag = "MultiWorker", message = "仮説 ${w} 本 ($mode・役割分担:探索/精製＋受理SA/GreatDeluge多様化) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
+        val chainNote = if (perW > 1) "・仮説内${perW}並列(SA/ALNS多チェーン)" else ""
+        val extra = MirrorLog(tag = "MultiWorker", message = "仮説 ${w} 本 ($mode・役割分担:探索/精製＋受理SA/GreatDeluge多様化$chainNote) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
         // [過程検証] 各仮説の個別結果・多様性（相異なる解の数）・保持した他の案数をログ化し、探索過程を後から検証できるようにする。
         //   各仮説の合計が揃っていれば収束、ばらけていれば多様な探索ができている、と判別できる。
         val perHyp = results.sortedWith(compareBy({ it.report.hard }, { it.report.total }))
@@ -347,6 +362,36 @@ object V6NativeOptimizer {
         return V6OptimizerResult(outSched, report.copy(logs = logs + report.logs), V6Algorithm.V5, logs, res.totalIters, nowMs() - t0)
     }
 
+    /** [余剰ワーカー活用/多チェーンALNS] runAlns を [chains] 本、異なるシードで並列実行し keep-best
+     *  で最良を採用する（SaOptimizer の多チェーンSAと同型の考え方をALNSへ拡張）。各チェーンは既存の
+     *  runAlns 本体を workers=1 で（変更なし・再帰1段のみ）呼ぶだけの薄い外側ラッパー。restarts・GLS・
+     *  destroy-repair 等の内部ロジックは一切変更しない。最終選択は全チェーン共通の better()（hard→total→
+     *  weighted辞書式）でゲートするため退化不能。進捗は先頭チェーン(c=0)のものだけ転送する。 */
+    private suspend fun runAlnsChains(
+        chains: Int,
+        state: MagiState,
+        initial: Array<IntArray>,
+        options: V6OptimizerOptions,
+        budgetSec: Int,
+        shouldStop: () -> Boolean,
+        onProgress: (String, ViolationReport?, Long, Long) -> Unit,
+    ): V6OptimizerResult = coroutineScope {
+        val base = actualSeed(options.seed)
+        val jobs = (0 until chains).map { c ->
+            async(Dispatchers.Default) {
+                runAlns(state, initial.copy2D(), options.copy(workers = 1, seed = base + (c + 1) * 0x2545F4914F6CDD1DL), budgetSec, shouldStop) { phase, report, iters, elapsed ->
+                    if (c == 0) onProgress(phase, report, iters, elapsed)
+                }
+            }
+        }
+        val results = jobs.map { it.await() }
+        ensureActive()
+        val best = results.reduce { a, b -> if (better(b.report, a.report)) b else a }
+        val totalIters = results.sumOf { it.iterations }
+        val extra = MirrorLog(tag = "AlnsChains", message = "ALNS多チェーン(${chains}並列) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
+        best.copy(phaseLogs = best.phaseLogs + extra, iterations = totalIters)
+    }
+
     private suspend fun runAlns(
         state: MagiState,
         initial: Array<IntArray>,
@@ -355,6 +400,10 @@ object V6NativeOptimizer {
         shouldStop: () -> Boolean = { false },
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
     ): V6OptimizerResult {
+        // [余剰ワーカー活用] workers>1（RSI/RSI++/ALNS/PORTFOLIOの各仮説へ配分された仮説内並列度）のとき、
+        //   独立シードのALNSチェーンをworkers本並列実行し最良を採用する。1段のみ再帰（内側呼出はworkers=1
+        //   固定）＝無限増殖しない。既存の単一チェーン本体（このあと）は一切変更なし。
+        if (options.workers > 1) return runAlnsChains(options.workers, state, initial, options, budgetSec, shouldStop, onProgress)
         val started = nowMs()
         val rng = Random(actualSeed(options.seed) xor 0xA17A5L)
         val p = cachedProblem(state)
