@@ -83,4 +83,36 @@ class MirrorEngineTest {
         assertEquals(st.staffCount, opt.schedule.size)
         assertEquals(st.dayCount, opt.schedule[0].size)
     }
+
+    // [防御的統一/敵対的監査] markCount(countViolations) が mark/markNeed と同じ重み優先で解決することを
+    // 固定する。旧・無条件上書き実装は c2(重み1)→low(重み90) の呼出順に依存して偶然に正しかった
+    // （呼出順は現状のソースでは固定だがそれ自体が地雷＝将来の族追加/並べ替えで壊れうる）。この回帰
+    // テストは「同一セルで複数族が重なったとき常に最重の族が表示される」という不変条件を固定する。
+    @Test
+    fun countViolationsPrefersHeavierFamilyOverLighterAtSameCell() {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("s0", 0))
+        // X を1回しか勤務していない: cons2(count>=3)とstaffRange低(lo=3)の両方が同一セル(0,1=staff0,shift X)で発火。
+        val schedule = listOf(listOf(1, 0, 0, 0))
+        val st = MagiState(
+            startDate = "2025-01-01", endDate = "2025-01-04",
+            shifts = shifts, groups = groups, staff = staff,
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = schedule,
+            wishes = emptyMap(),
+            staffRange = mapOf("0,1" to Range("3", "")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(),
+            cons2 = listOf(C2Row("X", "3")),
+            cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val report = UnifiedViolationChecker.check(st)
+        assertEquals(1, report.breakdown["c2"])
+        assertEquals(2, report.breakdown["low"])   // lo(3) - got(1) = 2
+        assertEquals("vio-low", report.countViolations["0,1"])   // 重い族(low=90)が軽い族(c2=1)を上書きしない/されない
+    }
 }

@@ -128,7 +128,22 @@ object UnifiedViolationChecker {
             }
             needViolations[key] = vioClass[family] ?: family
         }
-        fun markCount(i: Int, k: Int, family: String) { countViolations["$i,$k"] = vioClass[family] ?: family }
+        // [防御的統一/敵対的監査で確認] mark()/markNeed() と同じ重み優先へ統一。旧: 無条件上書き
+        //   (last-write-wins)は、現在の呼出順(c2→low→high→apt)と apt呼出側の手動 containsKey ガードが
+        //   偶然噛み合っているだけで安全が成立していた（低い重みの族が後から呼ばれると高い重みの族の
+        //   マークを消し得る潜在的な地雷）。今回は実害の確認された不具合ではないが、mark/markNeed と
+        //   同じ規律に揃えて将来の族追加に対して頑健にする。aptLow/aptHigh は MirrorKeys.weights に
+        //   個別キーが無く 0.0 扱い＝他の全実族(c2以上)に対し常に劣後（旧来の「未マークのときだけ apt
+        //   色を付ける」という挙動と完全に一致）。表示のみ・スコアリング不変。
+        fun markCount(i: Int, k: Int, family: String) {
+            val key = "$i,$k"
+            val prev = countViolations[key]
+            if (prev != null) {
+                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
+                if (prevW >= (MirrorKeys.weights[family] ?: 0.0)) return
+            }
+            countViolations[key] = vioClass[family] ?: family
+        }
         fun cellIs(i: Int, j: Int, k: Int): Boolean = i in 0 until p.S && j in 0 until p.T && s[i][j] == k
 
         for (c in p.cons1) {
@@ -240,11 +255,13 @@ object UnifiedViolationChecker {
                     markCount(i, k, "high")
                 }
                 // [統一apt] 適切回数(群単位の双方向目標)。SOFT・重み1・L1偏差|n-t|。担当可シフトのみ(apt 構築時に canDo ガード済)。
-                // セル着色は range(low/high, 重み90/45)を優先し、未マークのときだけ apt 色(不足=赤/超過=橙)を付ける。
+                // セル着色は range(low/high, 重み90/45)を優先し、markCount の重み優先ガードにより低優先の
+                // apt 色(不足=赤/超過=橙)は既存マークを上書きしない（手動 containsKey ガードは markCount 側の
+                // 重み優先に統合済みのため撤去）。
                 val t = p.apt[i][k]
                 if (t >= 0 && n != t) {
                     inc("apt", kotlin.math.abs(n - t))
-                    if (!countViolations.containsKey("$i,$k")) markCount(i, k, if (n > t) "aptHigh" else "aptLow")
+                    markCount(i, k, if (n > t) "aptHigh" else "aptLow")
                 }
             }
         }
