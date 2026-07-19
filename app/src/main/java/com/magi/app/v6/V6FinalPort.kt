@@ -104,6 +104,22 @@ object V6FinalPort {
         }
     }
 
+    /** [3.230.0/停滞ウォッチドッグの分離] 「フェーズ公平猶予」と「真の頭打ち検知」を分離した判定を
+     *  純関数として抽出（壁時計に依存する周囲のコードから切り離してユニットテスト可能にする）。
+     *  旧実装は `max(lastBestImproveMs, lastPhaseChangeMs)` を単一のstallMs(=予算9/10、300s予算で270s)
+     *  と比較しており、20〜90秒間隔で頻発するフェーズ遷移のたびにタイマがリセットされ続け、270秒という
+     *  長い閾値には実質的に一度も到達し得なかった（改善が本当に無くても検知できない）。
+     *  本関数は two-condition AND: ①現フェーズ自身が phaseGraceMs 以上経過（起動直後の誤検知防止のみ）
+     *  ②最終改善から effStall 以上経過（フェーズ遷移でリセットしない＝真の頭打ち）。 */
+    internal fun watchdogStagnationFired(
+        now: Long, startMs: Long, minRunMs: Long,
+        lastPhaseChangeMs: Long, phaseGraceMs: Long,
+        lastBestImproveMs: Long, effStall: Long,
+    ): Boolean =
+        now - startMs > minRunMs &&
+            now - lastPhaseChangeMs > phaseGraceMs &&
+            now - lastBestImproveMs > effStall
+
     fun getAlgorithmLabel(seconds: Int): AlgorithmLabel = when {
         seconds <= 10 -> AlgorithmLabel("⚡", "高速", "短時間でサッと作成", "v5")
         seconds <= 30 -> AlgorithmLabel("★", "標準", "速さと品質のバランス", "v5")
@@ -219,9 +235,14 @@ object V6FinalPort {
         //     対称除外＝HARD寄与0のため下限にならず、逆に「解けるHARD」を早々に諦める誤りだった。構造的covUへ是正。
         //   構造(assignability/need)のみ依存で最適化中に不変＝一度だけ算出する。
         val hardFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
-        // [レビュー#9 3.213.0] 「最良改善」と「フェーズ遷移」の時計を分離（挙動は max() で従来と同一）。
-        //   旧は単一 lastImproveMs に両者を混載し、停滞検知の意味（何からの経過か）が読めなかった。
-        //   分離により将来フェーズ猶予と改善猶予へ別閾値を与える拡張も可能になる。
+        // [レビュー#9 3.213.0→3.230.0で本格分離] 「最良改善」と「フェーズ遷移」の時計を分離。
+        //   [3.230.0/ドッグフーディングで発見・修正] 3.213.0時点では両者を max() で合成していたため、
+        //   stallMs=270s(予算9/10)という長い閾値が、20〜90秒間隔で頻発するフェーズ遷移
+        //   （RSI各ラウンド・ALNS各restart等）のたびにリセットされ続け、実質的に一度も発火し得ない
+        //   状態だった（実機ログでPhase1完了直後から270秒以上一切改善が無いまま予算を使い切る事例を
+        //   確認）。フェーズ遷移は「今始まったばかりのフェーズを即座に打ち切らない」ための短い個別
+        //   猶予(phaseGraceMs、下記)としてのみ機能させ、「本当に改善が無い時間」は lastBestImproveMs
+        //   単独で計測する（フェーズが何回切り替わっても改善が無ければ着実に積み上がる）。
         val lastBestImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val lastPhaseChangeMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -259,6 +280,10 @@ object V6FinalPort {
         //   stall早期終了時は探索が早く返るので後処理は自然に余裕を得る＝無改善の末尾だけを後処理へ回す。
         val postReserveMs = (budgetMs / 12).coerceIn(8_000L, 25_000L)
         val searchDeadlineMs = (hardDeadlineMs - postReserveMs).coerceAtLeast(startMs + minRunMs)
+        // [3.230.0] 現フェーズ自身にも与える短い個別猶予（フェーズ開始直後の誤検知防止のみが目的。
+        //   真の頭打ち検知は effStall/lastBestImproveMs が単独で担う）。stallMs(=予算9/10)のような
+        //   長さは不要で、「フェーズがまだ何も試していない」瞬間を除外できれば十分。
+        val phaseGraceMs = (budgetMs / 40).coerceIn(2_000L, 15_000L)
         val shouldStop = {
             val now = System.currentTimeMillis()
             // [賢い早期脱出] bestHard が「解消不能な下限(hardFloor=構造的covU)」以下＝解けるHARDは出し切った状態。
@@ -269,8 +294,8 @@ object V6FinalPort {
             val effStall = if (bestHard.get() <= hardFloor && bestNonCovUHard.get() == 0) stallHardMs else stallMs
             when {
                 now >= searchDeadlineMs || !isActive -> true
-                now - startMs > minRunMs && now - maxOf(lastBestImproveMs.get(), lastPhaseChangeMs.get()) > effStall -> {
-                    stagnationDurationMs.set(now - maxOf(lastBestImproveMs.get(), lastPhaseChangeMs.get()))
+                watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, lastBestImproveMs.get(), effStall) -> {
+                    stagnationDurationMs.set(now - lastBestImproveMs.get())
                     stagnationFired.set(true); true
                 }
                 else -> false

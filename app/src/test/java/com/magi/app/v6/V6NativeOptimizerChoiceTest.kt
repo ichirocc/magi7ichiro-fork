@@ -23,13 +23,44 @@ class V6NativeOptimizerChoiceTest {
     }
 
     @Test fun roleProfilesDiversifyWithBaselineFirst() {
-        // [HF290 役割分担] W0 は必ず 1.0（ベースライン＝退化防止）、以降は探索(>1)/精製(<1)で多様化、範囲外は 1.0。
+        // [HF290 役割分担] W0 は必ず 1.0（ベースライン＝退化防止）、以降は探索(>1)/精製(<1)で多様化。
         assertEquals(1.0, V6NativeOptimizer.roleExploreFor(0), 1e-9)
         assertEquals(2.0, V6NativeOptimizer.roleExploreFor(1), 1e-9)   // 探索
         assertEquals(0.5, V6NativeOptimizer.roleExploreFor(2), 1e-9)   // 精製
         assertEquals(1.6, V6NativeOptimizer.roleExploreFor(3), 1e-9)
         assertEquals(0.6, V6NativeOptimizer.roleExploreFor(4), 1e-9)
-        assertEquals(1.0, V6NativeOptimizer.roleExploreFor(7), 1e-9)   // 範囲外=既定
+    }
+
+    // [3.228.0/ドッグフーディングで発見・修正] 仮説数上限撤廃(3.225.0)でi>=5の仮説が実際に生成される
+    // ようになったが、旧実装はi>=5で全てroleExploreFor(0)=1.0・roleAcceptFor=SA・roleOpSelectFor=
+    // ROULETTEへ縮退し、種(seed)以外ベースラインと同一の「クローン仮説」になっていた。i<5は不変
+    // （既存テストroleProfilesDiversifyWithBaselineFirstが担保）で、i>=5が実際に多様化することを固定する。
+    @Test fun roleProfilesDiversifyBeyondOldFixedArraySize() {
+        val exploreValues = (5..12).map { V6NativeOptimizer.roleExploreFor(it) }
+        // 旧実装のクローン値(=roleExploreFor(0)=1.0)へ縮退していないこと
+        assertTrue("i>=5はベースライン(1.0)への縮退でないこと", exploreValues.none { kotlin.math.abs(it - 1.0) < 1e-6 })
+        // 互いに異なる値へ分散していること（同じ値の繰り返しでない＝真の多様化）
+        assertEquals("i=5..12の8個が全て相異なる値であること", 8, exploreValues.toSet().size)
+        // 値域[0.35,2.4]に収まっていること
+        assertTrue(exploreValues.all { it in 0.35..2.4 })
+
+        // accept/opSelectも旧来の一律デフォルト(SA/ROULETTE)への縮退でなく複数モードへ分散していること
+        val acceptModes = (5..10).map { V6NativeOptimizer.roleAcceptFor(it) }.toSet()
+        assertTrue("i>=5のacceptModeが複数種に分散していること(旧: 全てSAに縮退)", acceptModes.size > 1)
+        val opSelectModes = (5..10).map { V6NativeOptimizer.roleOpSelectFor(it) }.toSet()
+        assertTrue("i>=5のopSelectModeが複数種に分散していること(旧: 全てROULETTEに縮退)", opSelectModes.size > 1)
+    }
+
+    @Test fun roleProfilesForIndicesBelowFiveAreUnaffectedByDiversification() {
+        // [回帰] i<5の既存分岐(SA/GD/LAM・ROULETTE/THOMPSON)は3.228.0で一切変更していないこと。
+        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(0))
+        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(1))
+        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(2))
+        assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
+        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
+        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(0))
+        assertEquals(OpSelectMode.THOMPSON, V6NativeOptimizer.roleOpSelectFor(1))
+        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(2))
     }
 
     @Test fun greatDelugeLevelDecaysFromInitialToBest() {
@@ -558,6 +589,29 @@ class V6NativeOptimizerChoiceTest {
         // 旧上限5以下の帯でも従来どおり workers に一致すること（回帰確認）。
         assertEquals(2, V6NativeOptimizer.hypothesisCount(2))
         assertEquals(5, V6NativeOptimizer.hypothesisCount(5))
+    }
+
+    // [3.231.0/ドッグフーディングで発見・修正] rsiHf63EffortIters: 実機ログ(rounds=5)で
+    // covU/apt/c1がE9冷却で交互切替を続け全ラウンドtotal不変だった事例。旧1800固定は5000到達に
+    // 3回のfocusを要し、round1,3,5(=最終)でようやく成立し振り向け先が残らなかった。
+    @Test fun rsiHf63EffortItersReachesThresholdInTwoAttemptsForTypicalRoundBudget() {
+        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
+        assertTrue("2回のfocusで5000へ到達すること(round1,3で成立しround4,5を振り向けに残せる)", e5 * 2 >= 5000)
+        assertTrue("1回の不運なfocusだけでは5000へ到達しない(E9の1R冷却との役割分担を保つ)こと", e5 * 1 < 5000)
+    }
+
+    @Test fun rsiHf63EffortItersNeverDropsBelowTwoAttempts() {
+        // 極小のrounds(2)でも下限2回のfocusは必ず要する。
+        val e2 = V6NativeOptimizer.rsiHf63EffortIters(2)
+        assertTrue(e2 * 1 < 5000)
+        assertTrue(e2 * 2 >= 5000)
+    }
+
+    @Test fun rsiHf63EffortItersRelaxesForLargerRoundBudgets() {
+        // roundsが大きいほど許容attempts回数が増え、effortItersは小さくなる(じっくり粘れる)。
+        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
+        val e8 = V6NativeOptimizer.rsiHf63EffortIters(8)
+        assertTrue(e8 <= e5)
     }
 
     // [敵対的レビュー修正・#3] liveBest の CAS 管理: publishLiveBest は真に better() な報告のときだけ

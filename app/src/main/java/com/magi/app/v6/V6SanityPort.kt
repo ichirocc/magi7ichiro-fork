@@ -285,6 +285,30 @@ object V6SanityPort {
             }
         }
 
+        // 2b-3) [壁/ダイヤル分類・個人版/ドッグフーディングで発見] 2b-2は全体供給(集計)のみ判定するため、
+        //   「集計では担当者が大勢いて足りているのに、特定の1人だけは自分の個人上限(staffRange上限)のせいで
+        //   自分自身の窓ルールを満たせない」局面を見逃していた（例: Aｱ担当可能者は全体で10人いても、
+        //   ある1人だけAｱ個人上限が低く「14日窓でAｱ≥1」を自分では満たせない）。2b-2と同じ保守的下界
+        //   （非重複窓: day2×floor(T/day1)）を個人の上限と突き合わせ、上限がこの下界を下回るなら
+        //   その人にとって構造的に満たせない（false wall回避のため保守的＝発火＝真に個人内で不能）。
+        for (c in p.cons1) {
+            if (c.day1 <= 0 || c.day2 <= 0 || c.day1 > p.T || c.day2 > c.day1) continue
+            val disjoint = p.T / c.day1
+            if (disjoint <= 0) continue
+            val minNeeded = c.day2 * disjoint
+            val sym = state.shifts.getOrNull(c.shiftIdx)?.kigou ?: c.shiftIdx.toString()
+            for (i in 0 until p.S) {
+                if (!p.canDo(i, c.shiftIdx)) continue
+                val hi = p.rangeHi[i][c.shiftIdx]
+                if (hi == Int.MAX_VALUE || hi >= minNeeded) continue
+                val name = state.staff.getOrNull(i)?.name ?: "#$i"
+                out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と窓ルールの衝突",
+                    "窓ルール「${sym}を${c.day1}日で${c.day2}回以上」を満たすには最低${minNeeded}回が必要ですが、" +
+                        "${name}さんの「$sym」個人上限は${hi}回です。この人だけではどう配置しても窓ルールを満たせません",
+                    "${name}さんの「$sym」個人上限を${minNeeded}回以上に上げるか、窓ルールの回数を下げてください"))
+            }
+        }
+
         // 2c) [監査#5] 担当可能者ゼロの回数制約(cons2) — canDoガード後は事実上無効になるため案内する。
         for (c in p.cons2) {
             val eligible = (0 until p.S).count { p.canDo(it, c.shiftIdx) }

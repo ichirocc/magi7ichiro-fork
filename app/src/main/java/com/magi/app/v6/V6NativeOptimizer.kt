@@ -76,21 +76,47 @@ object V6NativeOptimizer {
     private const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
 
     /** [HF290 役割分担移植] 並列仮説の探索/精製プロファイル（温度・摂動の倍率）。
-     *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。 */
+     *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。
+     *  [仮説数上限撤廃(3.225.0)後のドッグフーディングで発見・3.228.0で修正] この配列は5要素固定のため
+     *  i>=5（3.225.0でworkers設定まで仮説数が増えたことで実際に生成されうる）は全て else 節の
+     *  既定値=roleExploreFor(0)と同値に縮退し、役割分担が完全に無効化されていた（仮説5,6,7…は
+     *  種(seed)以外ベースラインと区別できないクローン＝「多様性を優先する」という3.225.0自身の
+     *  狙いを裏切っていた）。i<5 の既存値は一切変更せず(既存テスト・チューニング結果を保持)、
+     *  i>=5 だけ黄金比の低食い違い列(golden-ratio low-discrepancy sequence)で [0.35, 2.4] へ
+     *  決定的かつ非周期的に写像する（配列を単に延長・循環させるとi=5%5=0で結局ベースラインに
+     *  戻るクローン問題を繰り返すため、周期を持たない生成式を採用）。 */
     private val ROLE_EXPLORE = doubleArrayOf(1.0, 2.0, 0.5, 1.6, 0.6)
-    internal fun roleExploreFor(i: Int): Double = if (i in ROLE_EXPLORE.indices) ROLE_EXPLORE[i] else 1.0
+    internal fun roleExploreFor(i: Int): Double {
+        if (i in ROLE_EXPLORE.indices) return ROLE_EXPLORE[i]
+        val frac = (i * 0.6180339887498949) % 1.0
+        return 0.35 + frac * (2.4 - 0.35)
+    }
 
     /** [論文活用] 並列仮説で受理戦略を多様化（W0,W1=SA基準 / W2,W4=Great Deluge / W3=Lam適応冷却）。
-     *  W0 は常に SA でベースライン保持＝退化防止。 */
+     *  W0 は常に SA でベースライン保持＝退化防止。
+     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は else節で一律SAに縮退していた（roleExploreFor と同じ
+     *  クローン問題）ため、GD/LAM/SAを i%3 で巡回させ実際に多様化する。 */
     internal fun roleAcceptFor(i: Int): AcceptMode = when (i) {
         2, 4 -> AcceptMode.GREAT_DELUGE
         3 -> AcceptMode.LAM_ADAPTIVE
-        else -> AcceptMode.SA
+        0, 1 -> AcceptMode.SA
+        else -> when (i % 3) {
+            0 -> AcceptMode.GREAT_DELUGE
+            1 -> AcceptMode.LAM_ADAPTIVE
+            else -> AcceptMode.SA
+        }
     }
 
     /** [論文活用] 並列仮説で演算子選択を多様化（W1=Thompson sampling / 他=roulette）。
-     *  W0 は常に roulette でベースライン保持＝退化防止。 */
-    internal fun roleOpSelectFor(i: Int): OpSelectMode = if (i == 1) OpSelectMode.THOMPSON else OpSelectMode.ROULETTE
+     *  W0 は常に roulette でベースライン保持＝退化防止。
+     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は一律rouletteに縮退していたため、偶奇でTHOMPSON/ROULETTEを
+     *  交互に割当てて多様化する。 */
+    internal fun roleOpSelectFor(i: Int): OpSelectMode = when {
+        i == 1 -> OpSelectMode.THOMPSON
+        i in 0..4 -> OpSelectMode.ROULETTE
+        i % 2 == 1 -> OpSelectMode.THOMPSON
+        else -> OpSelectMode.ROULETTE
+    }
 
     /**
      * 時間予定型 Great Deluge の水位（Burke, Bykov, Newall & Petrovic 2004）。
@@ -237,6 +263,20 @@ object V6NativeOptimizer {
             return V6OptimizerResult(entryBoard, entryBoardReport.copy(logs = logs + entryBoardReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
         }
         return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
+    }
+
+    /** [3.231.0/ドッグフーディングで発見・修正] RSIラウンドループがHf63Infeasibilityへ渡す
+     *  ラウンド当たりeffortIters。旧実装は1800/round固定で、INFEAS_STALL_ITERS=5000到達に
+     *  約3ラウンドの同族focusを要した。E9冷却(1ラウンド休止)が2〜3の詰んだ族を交互に切替える
+     *  実運用では、rounds が小さい(既定5等)と3回目のfocusが最終ラウンドに達し、deprioritize が
+     *  成立しても振り向け先の残りラウンドが無かった。rounds に応じて動的に決め、
+     *  「残り最低reserveRounds分を振り向けに残せる」タイミングでdeprioritizeが完了するようにする
+     *  （E9の1-in-2交互を想定しattemptsTarget=ceil((rounds-reserveRounds)/2)、下限2で一度の不運な
+     *  1ラウンドだけではdeprioritizeしない=E9のより軽い1R冷却との役割分担を保つ）。純関数として抽出し
+     *  ユニットテスト可能にする。 */
+    internal fun rsiHf63EffortIters(rounds: Int, reserveRounds: Int = 2): Int {
+        val attemptsTarget = max(2, (max(0, rounds - reserveRounds) + 1) / 2)
+        return (Hf63Infeasibility.INFEAS_STALL_ITERS + attemptsTarget - 1) / attemptsTarget
     }
 
     /** [仮説数上限撤廃・ユーザー指示] かつて仕様§2.2の仮説数固定上限(5)だった定数。optimize() の
@@ -954,15 +994,27 @@ object V6NativeOptimizer {
         // [レビュー#5 3.213.0] HF63 の停滞加算を「直前ラウンドで実際に focus した族」に限定する。
         //   旧: updateFromBreakdown が全族を無差別に停滞加算し、covU 張り付き中に一度も試していない
         //   c3n 等の HARD 族まで約3ラウンドで誤 deprioritize し得た（SOFT は 3.184.0 の avoid フィルタで
-        //   緩和済みだが HARD は残っていた）。effortIters=1800/round は既存の粒度補正と同一。
+        //   緩和済みだが HARD は残っていた）。
+        // [3.231.0/ドッグフーディングで発見・修正] 旧 effortIters=1800/round(固定) は
+        //   INFEAS_STALL_ITERS=5000 到達に約3ラウンドの同族focusを要する。E9冷却(1ラウンド休止)が
+        //   2〜3の詰んだ族を交互に切替えるため、実際にその族が3回目の focus を受けるのは
+        //   （rounds=5の場合）round1,3,5＝最終ラウンドで、deprioritize が成立しても振り向け先の
+        //   ラウンドが残っていなかった（実機ログでround1〜5が3族の堂々巡りのまま全く改善しない事例を
+        //   確認）。effortIters を rounds に応じて動的に決め、詰んだ族の deprioritize が
+        //   「残り最低2ラウンドを振り向けに残せる」タイミングで完了するようにする
+        //   （reserveRounds=2・E9の1-in-2交互を想定しattemptsTarget=ceil((rounds-2)/2)を2で下駄履かせ、
+        //   一度の不運な1ラウンドだけでは deprioritize しない=E9のより軽い1R冷却との役割分担を保つ）。
+        //   rounds が大きいほど attemptsTarget も緩み、旧来同様じっくり粘れる。focus 選択のみの変更で
+        //   スコアリング不変（keep-best=better()が結果を担保）。
+        val effortIters = rsiHf63EffortIters(rounds)
         var lastFocus: String? = null
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
             // [監査修正] HF63 は Web の per-iter 前提(5000 iter 無改善で infeasible)。ラウンド粒度の呼出に
-            //   1800/round を渡し、閾値5000到達を約3ラウンド分の focus 投入無改善に引き伸ばす
+            //   effortIters/round を渡し、閾値5000到達を有限ラウンド分の focus 投入無改善に引き伸ばす
             //   （class は Web 忠実移植のまま・呼出側で粒度を補正）。iters 自体は本来用途に不変。
-            hf63.updateFromBreakdownFocused(bestReport.breakdown, lastFocus, 1800)
+            hf63.updateFromBreakdownFocused(bestReport.breakdown, lastFocus, effortIters)
             // [12h見直し] 動的(HF63)と静的(covU床)の avoid を分離して保持する。N4 早期脱出(下記)の発火条件は
             //   HF63 の動的検知のみでゲートしないと、構造的covU>0 のデータでは静的除外が round 0 から avoid を
             //   非空にし、「旧N4の厳密な部分集合」保証(650-654行)を破って2停滞ラウンドで RSI が即終了してしまう。
