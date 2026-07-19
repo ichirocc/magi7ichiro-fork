@@ -673,6 +673,36 @@ object V6SanityPort {
             emit(byFam, DETAIL_CAP)
         }
 
+        // 3.5) [c1族の職員×窓ルール別件数] 「違反詳細 c1(N件)」はDETAIL_CAP=8で打ち切られ、特定職員が
+        //   どの窓ルールで何件かは埋もれる（例: N件中8件しか見えず職員別内訳が分からない）。全件を
+        //   MirrorCore.checkC1Familyと同じロジック（窓スライド・違反ラン先頭のみ計上）で職員×ルール別に
+        //   再集計し、打ち切りなしの1行サマリとして追加する。読取専用（重み・データ不変）。
+        if ((report.breakdown["c1"] ?: 0) > 0) {
+            val perStaffRule = LinkedHashMap<Int, LinkedHashMap<String, Int>>()
+            for (c in p.cons1) {
+                val ruleLabel = "${sym(c.shiftIdx)}(${c.day1}日窓≥${c.day2})"
+                for (i in 0 until p.S) {
+                    if (!p.canDo(i, c.shiftIdx)) continue
+                    var j = 0
+                    var prevViol = false
+                    while (j <= p.T - c.day1) {
+                        var z = 0
+                        for (l in 0 until c.day1) if (s[i][j + l] == c.shiftIdx) z++
+                        val viol = z < c.day2
+                        if (viol && !prevViol) perStaffRule.getOrPut(i) { LinkedHashMap() }.merge(ruleLabel, 1, Int::plus)
+                        prevViol = viol
+                        j++
+                    }
+                }
+            }
+            if (perStaffRule.isNotEmpty()) {
+                val lines = perStaffRule.entries.joinToString(" / ") { (i, rules) ->
+                    "${nm(i)} " + rules.entries.joinToString(", ") { (label, cnt) -> "$label${cnt}件" }
+                }
+                out.add("[D] c1内訳（職員×窓ルール別件数・全件）: $lines")
+            }
+        }
+
         if (out.isEmpty()) out.add("[D] 違反詳細: 制約違反はありません")
         return out
     }
