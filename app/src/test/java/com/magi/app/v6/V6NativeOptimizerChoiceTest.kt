@@ -1,5 +1,6 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
@@ -222,6 +223,48 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(0, applied)
         assertEquals(1, sched[0][0])
         assertEquals(1, sched[1][0])
+    }
+
+    // [3.226.0/隣接日調整] 8/26相当の実機ケース: covO対象(休, day1)の唯一の在勤者(a)が、移動先候補
+    // すべて禁止連続(c3n)で塞がっている（直接候補X→"Y,X"禁止・直接候補Y→"Y,Y"禁止）。旧実装は
+    // どちらも即諦めて covO を残していたが、隣接日調整(day0のYを休へ変更しパターンを崩す)で
+    // X側の候補が解放され解消できることを固定する。
+    @Test fun applyCovOFreeResolvesViaAdjacentDayFixWhenAllDirectMovesAreForbidden() {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val groupShift = listOf(listOf(1, 1, 1))
+        val staff = listOf(Staff("a", 0), Staff("b", 0))
+        val schedule = listOf(
+            listOf(2, 0, 1),   // a: Y, 休(covO対象), X
+            listOf(1, 1, 1),   // b: X, X, X（休には関与しない）
+        )
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-03",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(1) { List(3) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = mapOf("0,1" to "0"), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(listOf("Y", "X")), C3Row(listOf("Y", "Y"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["covO"])
+        assertEquals(0, before.breakdown["c3n"] ?: 0)
+        val p = cachedProblem(st)
+        assertTrue("直接移動は両候補とも禁止連続で塞がる前提", p.makesForbiddenRun(sched, 0, 1, 1))
+        assertTrue("直接移動は両候補とも禁止連続で塞がる前提", p.makesForbiddenRun(sched, 0, 1, 2))
+
+        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(2))
+        assertEquals(1, applied)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals(0, after.breakdown["covO"] ?: 0)
+        assertEquals(0, after.breakdown["c3n"] ?: 0)
+        assertEquals(0, after.hard)
+        assertEquals(0, sched[0][0])   // a の day0 が休へ変わりYYYパターンを崩す
+        assertEquals(1, sched[0][1])   // a の day1 がXへ（禁止連続を回避しつつ使われる）
     }
 
     // [smoke] focus="apt" が destroyRepairStaff 経路(low/high/c2と合流)へ正しくルーティングされ、

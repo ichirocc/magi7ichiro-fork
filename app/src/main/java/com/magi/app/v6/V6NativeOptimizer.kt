@@ -1708,8 +1708,16 @@ object V6NativeOptimizer {
      * 見つけて実際に移す。V6PortAnalyzer.diagnoseCoverage の covO 診断（動かせる/玉突き必要/希望固定/
      * 禁止連続の4分類）と同じ判定を「実行」する版（診断＝読取専用、こちらは探索オペレータ）。
      * 被覆総量は保存しない（過剰シフトから1人引くだけ＝covOのみ改善方向）。動かせる候補が尽きたセルは
-     * そのまま残す（希望固定/禁止連続で本当に動かせない、または玉突きが要る＝本オペレータの対象外）。
-     * sched を in-place 変更し、適用手数を返す。最終採否は呼び出し側の keep-best が担保＝退化なし。
+     * そのまま残す（希望固定/または隣接日調整(下記)を含め本当に動かせない、または玉突きが要る＝本
+     * オペレータの対象外）。sched を in-place 変更し、適用手数を返す。最終採否は呼び出し側の
+     * keep-best が担保＝退化なし。
+     *
+     * [3.226.0/禁止連続の回避=隣接日調整] 移動先が全て禁止連続(c3n)で塞がる場合、即諦めず
+     * `tryFixForbiddenRunViaAdjacentDay`（findCovUChainのcovU側と共通のヘルパー）で隣接日(j-1/j+1)の
+     * 本人の割当を変えてパターンを崩せないか試す。空くシフトのcovU悪化はfindCovUChainで玉突き埋め直し
+     * 済み（ヘルパー内部で完結）。ここでは追加で「隣接日の変更後、移動先mでcovOが悪化しないか」を
+     * 確認し、悪化するなら隣接日側の変更ごと巻き戻して次の候補へ（実際に適用したcov[j2]/schedは
+     * 必ず復元してから次を試す）。
      */
     internal fun applyCovOFree(state: MagiState, sched: Array<IntArray>, rng: Random): Int {
         val p = cachedProblem(state)
@@ -1717,6 +1725,10 @@ object V6NativeOptimizer {
         var applied = 0
         val cov = Array(p.T) { IntArray(p.K) }
         for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
+        fun recount(j2: Int) {
+            for (kk in 0 until p.K) cov[j2][kk] = 0
+            for (ii in 0 until p.S) { val kk2 = sched[ii][j2]; if (kk2 in 0 until p.K) cov[j2][kk2]++ }
+        }
         for (j in 0 until p.T) {
             for (k in 0 until p.K) {
                 while (p.covOCell(k, j, cov[j][k]) > 0) {
@@ -1725,7 +1737,23 @@ object V6NativeOptimizer {
                     for (i in staffOnK) {
                         if (p.wish[i][j] == k) continue   // 本人希望＝動かすとpref未充足化、対象外
                         for (m in p.allowedShiftsForStaff(i).filter { it != k }.shuffled(rng)) {
-                            if (p.makesForbiddenRun(sched, i, j, m)) continue
+                            if (p.makesForbiddenRun(sched, i, j, m)) {
+                                val fix = tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, m, rng) ?: continue
+                                val j2 = fix[0][1]
+                                val savedSchedJ2 = IntArray(p.S) { sched[it][j2] }
+                                for (mv in fix) sched[mv[0]][mv[1]] = mv[2]
+                                recount(j2)
+                                if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) {
+                                    for (ii in 0 until p.S) sched[ii][j2] = savedSchedJ2[ii]
+                                    recount(j2)
+                                    continue
+                                }
+                                sched[i][j] = m
+                                cov[j][k]--; cov[j][m]++
+                                applied++
+                                movedThisPass = true
+                                break
+                            }
                             if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue
                             sched[i][j] = m
                             cov[j][k]--; cov[j][m]++

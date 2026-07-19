@@ -254,6 +254,48 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
 }
 
 /**
+ * [3.163.0でfindCovUChain内に導入・3.226.0で共通ヘルパーへ汎用化] 職員 i を day j で fillShift へ
+ * 動かすと禁止連続(c3n)に触れる場合、隣接日(j-1/j+1)の i 自身の割当を別シフトへ変えてパターンを
+ * 崩せないか試す。変更で空くシフト(oldJ2)が covU 悪化を招くなら、findCovUChain を
+ * `allowCrossDayFix=false` で1段だけ再帰し玉突き連鎖として埋め直す（無限展開防止）。
+ * 見つかれば [(i, j2, alt), ...サブ連鎖]（すべて day j2 のみの手）を返す（盤面は判定中に一時変更するが
+ * 必ず復元＝呼び出し側が実際に適用するかを決める）。見つからなければ null。
+ * findCovUChain（covU側の禁止連続回避）・applyCovOFree（covO側、3.226.0で追加採用）から共通利用。
+ */
+internal fun tryFixForbiddenRunViaAdjacentDay(
+    p: Problem, sched: Array<IntArray>, i: Int, j: Int, fillShift: Int, rng: Random,
+    allowCrossDayFix: Boolean = true, maxDepth: Int = 5,
+): List<IntArray>? {
+    if (!allowCrossDayFix) return null
+    for (j2 in intArrayOf(j - 1, j + 1)) {
+        if (j2 !in 0 until p.T || p.wishLocked(i, j2)) continue
+        val oldJ2 = sched[i][j2]
+        if (oldJ2 !in 0 until p.K) continue
+        // 候補シフト: 休を優先（連続禁止を崩す最も安全な既定手）、続けて担当可能シフト一覧。
+        val altOrder = ArrayList<Int>()
+        if (p.restIdx != oldJ2 && p.canDo(i, p.restIdx)) altOrder.add(p.restIdx)
+        for (s in p.allowedShiftsForStaff(i)) if (s != oldJ2 && s !in altOrder) altOrder.add(s)
+        for (alt in altOrder) {
+            val cntBefore = (0 until p.S).count { sched[it][j2] == oldJ2 }
+            sched[i][j2] = alt   // [一時変更] 下の判定後に必ず復元する
+            val jOk = !p.makesForbiddenRun(sched, i, j, fillShift)
+            val j2Ok = !p.makesForbiddenRun(sched, i, j2, alt)
+            if (!jOk || !j2Ok) { sched[i][j2] = oldJ2; continue }
+            if (p.covUCell(oldJ2, j2, cntBefore - 1) > p.covUCell(oldJ2, j2, cntBefore)) {
+                // i の離脱で oldJ2 が covU 悪化 → 同アルゴリズムを1段だけ再帰して埋め直す。
+                val subChain = findCovUChain(p, sched, oldJ2, j2, rng, maxDepth = maxDepth, exclude = i, allowCrossDayFix = false)
+                sched[i][j2] = oldJ2
+                if (subChain != null) return listOf(intArrayOf(i, j2, alt)) + subChain
+            } else {
+                sched[i][j2] = oldJ2
+                return listOf(intArrayOf(i, j2, alt))
+            }
+        }
+    }
+    return null
+}
+
+/**
  * [E11/多人数ブロック移動] covU セル (k0, j) を同日・多人数の「玉突き連鎖」で充填する交代連鎖を
  * BFS（最短優先）で探す。対象の failure mode（実機 2026-08 データ・ユーザー指摘で確認）:
  * 直接充填の候補が (a)希望ロック (b)単一被覆シフト在勤＝引き抜くと玉突き covU (c)禁止連続 に当たり、
@@ -300,38 +342,10 @@ internal fun findCovUChain(
     fun c3nHits(i: Int, newK: Int): Boolean = p.makesForbiddenRun(sched, i, j, newK)
 
     // [禁止連続の回避=隣接日調整] i を k0(day j) へ動かすと禁止連続に触れるとき、隣接日(j-1/j+1)の
-    //   i の割当を別シフトへ変えてパターンを崩せないか試す。変更で空くシフトが covU 悪化を招くなら、
-    //   同じアルゴリズムを1段だけ再帰して玉突きで埋め直す（allowCrossDayFix=false で無限展開を防止）。
-    //   見つかれば [(i, j2, alt), ...サブ連鎖] を返す（盤面は一時変更するが必ず復元する）。
-    fun tryFixC3nViaAdjacentDay(i: Int, fillShift: Int): List<IntArray>? {
-        if (!allowCrossDayFix) return null
-        for (j2 in intArrayOf(j - 1, j + 1)) {
-            if (j2 !in 0 until p.T || p.wishLocked(i, j2)) continue
-            val oldJ2 = sched[i][j2]
-            if (oldJ2 !in 0 until p.K) continue
-            // 候補シフト: 休を優先（連続禁止を崩す最も安全な既定手）、続けて担当可能シフト一覧。
-            val altOrder = ArrayList<Int>()
-            if (p.restIdx != oldJ2 && p.canDo(i, p.restIdx)) altOrder.add(p.restIdx)
-            for (s in p.allowedShiftsForStaff(i)) if (s != oldJ2 && s !in altOrder) altOrder.add(s)
-            for (alt in altOrder) {
-                val cntBefore = (0 until p.S).count { sched[it][j2] == oldJ2 }
-                sched[i][j2] = alt   // [一時変更] 下の判定後に必ず復元する
-                val jOk = !p.makesForbiddenRun(sched, i, j, fillShift)
-                val j2Ok = !p.makesForbiddenRun(sched, i, j2, alt)
-                if (!jOk || !j2Ok) { sched[i][j2] = oldJ2; continue }
-                if (p.covUCell(oldJ2, j2, cntBefore - 1) > p.covUCell(oldJ2, j2, cntBefore)) {
-                    // i の離脱で oldJ2 が covU 悪化 → 同アルゴリズムを1段だけ再帰して埋め直す。
-                    val subChain = findCovUChain(p, sched, oldJ2, j2, rng, maxDepth = maxDepth, exclude = i, allowCrossDayFix = false)
-                    sched[i][j2] = oldJ2
-                    if (subChain != null) return listOf(intArrayOf(i, j2, alt)) + subChain
-                } else {
-                    sched[i][j2] = oldJ2
-                    return listOf(intArrayOf(i, j2, alt))
-                }
-            }
-        }
-        return null
-    }
+    //   i の割当を別シフトへ変えてパターンを崩せないか試す（共通ヘルパー tryFixForbiddenRunViaAdjacentDay
+    //   に汎用化・3.226.0でapplyCovOFreeからも再利用）。
+    fun tryFixC3nViaAdjacentDay(i: Int, fillShift: Int): List<IntArray>? =
+        tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, fillShift, rng, allowCrossDayFix, maxDepth)
 
     // BFS ノード = 「fillShift へ staff が入る」手。子 = staff が空けた現シフトを埋める手。
     // extra = 禁止連続を回避するための追加手（隣接日調整＋サブ連鎖。無ければ null）。
