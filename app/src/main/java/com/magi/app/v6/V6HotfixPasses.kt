@@ -121,7 +121,7 @@ object V6HotfixPasses {
         val c1Anchor = setOf("vio-c1")
         val maxRounds = 4
         var round = 0
-        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0
+        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0
         while (round < maxRounds && !shouldStop()) {
             var roundApplied = 0
 
@@ -157,6 +157,14 @@ object V6HotfixPasses {
             work = rC3mn.newSchedule.copy2D(); totalC3mn += rC3mn.applied; roundApplied += rC3mn.applied
             if (round == 0) logs.addAll(rC3mn.logs)
 
+            // [RangePolish・玉突き連鎖の横展開その2] 個人別回数(low/high)を、交換相手が構造的に存在しない
+            //   局面(担当可能シフトが極端に少ない職員等)向けに findCovUChain で研磨（grilling不要・
+            //   C3mnPolishと同型のためユーザー承認のうえ直接実装、桒澤美幸のAｱ超過実例）。
+            onPhase("後処理 個人回数(low/high)玉突き研磨 [巡${round + 1}]")
+            val rRange = applyRangePolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            work = rRange.newSchedule.copy2D(); totalRange += rRange.applied; roundApplied += rRange.applied
+            if (round == 0) logs.addAll(rRange.logs)
+
             round++
             if (roundApplied == 0) break   // この巡で1手も採用なし＝joint局所最適に到達
         }
@@ -166,8 +174,9 @@ object V6HotfixPasses {
         run {
             val softAfter = UnifiedViolationChecker.check(state, work)
             fun bd(r: ViolationReport, k: String) = r.breakdown[k] ?: 0
-            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn
-            val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn")
+            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn + totalRange
+            val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn") +
+                bd(preSoftRep, "low") + bd(preSoftRep, "high")
             val verdict = when {
                 adopted > 0 -> "有効(採用${adopted}手)"
                 targets == 0 -> "対象なし"
@@ -179,8 +188,10 @@ object V6HotfixPasses {
                     " / c3 ${bd(preSoftRep, "c3")}->${bd(softAfter, "c3")}" +
                     " / c3m ${bd(preSoftRep, "c3m")}->${bd(softAfter, "c3m")}" +
                     " / c3mn ${bd(preSoftRep, "c3mn")}->${bd(softAfter, "c3mn")}" +
+                    " / low ${bd(preSoftRep, "low")}->${bd(softAfter, "low")}" +
+                    " / high ${bd(preSoftRep, "high")}->${bd(softAfter, "high")}" +
                     " | HARD $hardNote / total ${preSoftRep.total}->${softAfter.total}" +
-                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn})"))
+                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} range玉突き:${totalRange})"))
         }
 
         // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の
@@ -1047,6 +1058,107 @@ object V6HotfixPasses {
         val logs = listOf(MirrorLog(tag = "C3mnPolish",
             message = "回避パターン(c3mn)研磨: c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 (if (applied == 0 && (before.breakdown["c3mn"] ?: 0) > 0) " [頭打ち=改善手なし]" else "")))
+        return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
+    }
+
+    /**
+     * [RangePolish・玉突き連鎖の横展開その2] 個人別回数(staffRange low/high, SOFT重み90/45)専用の研磨パス。
+     * 動機（桒澤美幸の実例, 実機ログ2026-07-19）: 担当可能シフトが「休/Aｱ/B1」のみで、休=10/10固定・
+     * Aｱ上限2の職員が、実際にはAｱ=6(超過4)・休=12(超過2)のまま残っていた。彼女はB1担当が全職員中唯一
+     * のため、既存のCyclicSwap/HF67(同日に相手シフトを持つ相手との交換が前提)では交換相手が構造的に
+     * 存在せず、「相手を必要としない一方的な付け替え(休/Aｱ→B1)＋被覆が要る側だけ玉突きで埋め直す」手が
+     * 必要——C3mnPolish(3.214.0)と同型の穴。
+     *
+     * アンカー: `report.countViolations`（"i,k"→"vio-low"/"vio-high"、3.210.0で重み優先解決済）から
+     * 違反している(staff,shift)ペアを列挙。HIGH(超過)は当該シフトの保有日を他の担当可能シフトへ、
+     * LOW(不足)は保有していない日のうち担当可能な1日をそのシフトへ、それぞれ付け替える。付け替えで
+     * 空く/埋まる側の被覆(covUCell)が悪化する場合は`findCovUChain`で玉突き修復する（C1Polish手B/
+     * C3mnPolishと同一パターン）。採否はisBetter(hard→total→weighted)keep-best＝退化不能。
+     */
+    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL): CyclicSwapResult {
+        val p = Problem(state)
+        val work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        var applied = 0
+        val rng = Random(seed)
+        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+
+        // [玉突き連鎖つき1セル付け替え] day j の staff i を fromK から toK へ動かす。fromK 側の被覆が
+        //   悪化するなら findCovUChain で埋め直す。採用ならtrue（bestRep/appliedは呼び出し側で更新済み）。
+        fun tryRelocate(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
+            if (!movable(i, j) || p.makesForbiddenRun(work, i, j, toK)) return false
+            var cnt = 0
+            for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
+            val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
+            work[i][j] = toK
+            if (!needsChain) {
+                val rep = UnifiedViolationChecker.check(state, work)
+                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                work[i][j] = fromK
+                return false
+            }
+            val chain = findCovUChain(p, work, fromK, j, rng, exclude = i)
+            if (chain == null) { work[i][j] = fromK; return false }
+            val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
+            chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
+            val rep = UnifiedViolationChecker.check(state, work)
+            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
+            work[i][j] = fromK
+            return false
+        }
+
+        var pass = 0
+        while (pass < maxPasses) {
+            if (shouldStop()) break
+            var improved = false
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val highTargets = ArrayList<Pair<Int, Int>>()
+            val lowTargets = ArrayList<Pair<Int, Int>>()
+            for ((key, cls) in rep0.countViolations) {
+                val parts = key.split(",")
+                val i = parts.getOrNull(0)?.toIntOrNull() ?: continue
+                val k = parts.getOrNull(1)?.toIntOrNull() ?: continue
+                when (cls) {
+                    "vio-high" -> highTargets.add(i to k)
+                    "vio-low" -> lowTargets.add(i to k)
+                }
+            }
+            if (highTargets.isEmpty() && lowTargets.isEmpty()) break
+
+            // HIGH(超過): shift k の保有日を他の担当可能シフトへ動かす。
+            for ((i, k) in highTargets) {
+                if (shouldStop()) break
+                var done = false
+                for (j in 0 until p.T) {
+                    if (done || shouldStop()) break
+                    if (work[i][j] != k) continue
+                    for (alt in p.allowedShiftsForStaff(i)) {
+                        if (done || shouldStop()) break
+                        if (alt == k) continue
+                        if (tryRelocate(i, j, k, alt)) { improved = true; done = true }
+                    }
+                }
+            }
+            // LOW(不足): shift k を保有していない日のうち1日をshift kへ動かす。
+            for ((i, k) in lowTargets) {
+                if (shouldStop()) break
+                if (!p.canDo(i, k)) continue
+                var done = false
+                for (j in 0 until p.T) {
+                    if (done || shouldStop()) break
+                    val oldK = work[i][j]
+                    if (oldK == k || oldK !in 0 until p.K) continue
+                    if (tryRelocate(i, j, oldK, k)) { improved = true; done = true }
+                }
+            }
+            pass++
+            if (!improved) break
+        }
+        val logs = listOf(MirrorLog(tag = "RangePolish",
+            message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
+                (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
