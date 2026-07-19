@@ -498,6 +498,108 @@ class V6NativeOptimizerChoiceTest {
         }
     }
 
+    // [3.233.0/covO(3.204.0)・c41,c41s(3.209.0)と同型の穴] c42(群ペア禁止: 群g1のs1×群g2のs2が同日に
+    // 同時発生禁止)も「動かせるか」を判定する専用オペレータが無くdestroyRepairViolationsの汎用ランダム
+    // 再割当頼みだった。applyC42Freeが違反ペアの片側を実際に動かして解消することを固定する。
+    private fun c42State(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-01",
+        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
+        staff = listOf(Staff("A", 0), Staff("B", 1)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1, 0), listOf(1, 0, 1)),
+        groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
+        schedule = schedule, wishes = wishes, staffRange = emptyMap(),
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+        cons41 = emptyList(),
+        cons42 = listOf(com.magi.app.model.C42Row(g1Kigou = "G0", g2Kigou = "G1", s1Kigou = "X", s2Kigou = "Y")),
+    )
+
+    @Test fun applyC42FreeResolvesFreelyMovablePair() {
+        // A(G0)=X, B(G1)=Y は禁止ペア。Xに需要なし＝Aを休へ直接動かすだけで解消できるはず。
+        val st = c42State(listOf(listOf(1), listOf(2)))
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c42"] ?: 0)
+        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        assertEquals(1, applied)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals(0, after.breakdown["c42"] ?: 0)
+        assertEquals(0, after.hard)
+    }
+
+    @Test fun applyC42FreeLeavesWishPinnedPairUntouched() {
+        // 両者とも現在のシフトを希望固定（希望どおり配置済み）だと、動かすと希望未充足に化けるため何もしない。
+        val st = c42State(listOf(listOf(1), listOf(2)), wishes = mapOf("0,0" to 1, "1,0" to 2))
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c42"] ?: 0)
+        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        assertEquals(0, applied)
+        assertEquals(1, sched[0][0])
+        assertEquals(2, sched[1][0])
+    }
+
+    @Test fun applyC42FreeIsNoOpWhenRulesEmpty() {
+        val st = c42State(listOf(listOf(1), listOf(2))).copy(cons42 = emptyList())
+        val sched = st.schedule.toIntArray2D()
+        assertEquals(0, V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false))
+    }
+
+    // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開] 旧実装（今回新設した直接移動のみ）だと、離脱元シフトが
+    //   全体needをちょうど単独充足しており誰か1人が離脱すると即covU化する構造的にブロックされた局面を
+    //   解けない。findCovUChainで別職員に玉突き充填すれば解消できることを固定する。
+    @Test fun applyC42FreeResolvesViaChainWhenDirectMoveWouldCreateCovU() {
+        // shift: 0=休(need無) 1=X(c42対象、need1=1でAがちょうど単独充足) 2=Y(need無、Bの現在地)
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"))
+        val groupShift = listOf(
+            listOf(1, 1, 0), // G0(A)=休,X
+            listOf(1, 0, 1), // G1(B)=休,Y
+            listOf(1, 1, 0), // G2(C)=休,X（Aの離脱後にXを埋め直せる玉突き候補）
+        )
+        val staff = listOf(Staff("A", 0), Staff("B", 1), Staff("C", 2))
+        val schedule = listOf(listOf(1), listOf(2), listOf(0)) // A=X, B=Y（禁止ペア）, C=休
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(3) { List(3) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(),
+            cons42 = listOf(com.magi.app.model.C42Row(g1Kigou = "G0", g2Kigou = "G1", s1Kigou = "X", s2Kigou = "Y")),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c42"] ?: 0)
+        assertEquals(0, before.hard)   // Xはneed1=1をAがちょうど充足＝離脱すると即covU化する構造的にブロックされた局面
+
+        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals("c42が解消", 0, after.breakdown["c42"] ?: -1)
+        assertEquals("HARDは悪化しない", 0, after.hard)
+        assertEquals("Xの被覆(covU)は悪化しない", 0, after.breakdown["covU"] ?: -1)
+    }
+
+    // [smoke] focus="c42"/"c42s" が新設の applyC42Free 経路へ正しくルーティングされ、例外なく
+    //   同一次元の盤面を返すこと。実際の解消効果は上記の直接テストが検証する。
+    @Test fun rsiGenerateHypothesisC42FocusReturnsValidSchedule() {
+        val st = c42State(listOf(listOf(1), listOf(2)))
+        val base = st.schedule.toIntArray2D()
+        val rep = UnifiedViolationChecker.check(st, base)
+        for (focus in listOf("c42", "c42s")) {
+            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            assertNotNull(out)
+            assertEquals(base.size, out.size)
+            assertEquals(base[0].size, out[0].size)
+        }
+    }
+
     // [余剰ワーカー活用] perHypothesisWorkers: 仕様§2.2の5仮説上限を超えて設定したworkersを、
     // 各仮説の内部並列度（RSI/RSI++のSAチェーン数・ALNSの多チェーン）へ均等配分する計算のみを固定する
     // 純粋関数テスト（並列実行そのものはJVMユニットテストでは検証しない＝実機ログ/CIビルドで確認）。

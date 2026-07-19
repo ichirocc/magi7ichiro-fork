@@ -1695,6 +1695,11 @@ object V6NativeOptimizer {
             //   一切持てない点がcovOと同じ。applyC41Freeで群レンジの超過/不足を直接動かす専用オペレータへ。
             "c41" -> { applyC41Free(state, out, rng, skill = false); repeat(6) { destroyRepairDay(state, out, rng) } }
             "c41s" -> { applyC41Free(state, out, rng, skill = true); repeat(6) { destroyRepairDay(state, out, rng) } }
+            // [3.233.0/c41,c41sと同型の穴] c42/c42sも「動かせるか」を判定する専用オペレータが無く
+            // destroyRepairViolationsの汎用ランダム再割当頼みだった。applyC42Freeで違反ペアの
+            // 片側を直接動かす専用オペレータへ。
+            "c42" -> { applyC42Free(state, out, rng, skill = false); repeat(6) { destroyRepairDay(state, out, rng) } }
+            "c42s" -> { applyC42Free(state, out, rng, skill = true); repeat(6) { destroyRepairDay(state, out, rng) } }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
             //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
@@ -1937,6 +1942,73 @@ object V6NativeOptimizer {
                         }
                     }
                     if (!moved) break   // 玉突きでも動かせない＝諦める（安全側）
+                }
+            }
+        }
+        return applied
+    }
+
+    /**
+     * [3.233.0/ドッグフーディングで発見・covO(3.204.0)/c41,c41s(3.209.0)と同型の専用repair欠如]
+     * c42(群ペア禁止: 群g1のs1×群g2のs2が同日に同時発生禁止)は`mark(i,j,"c42")`で
+     * report.violations(セルマップ)には載るため destroyRepairViolations の汎用ランダム再割当は
+     * 一応届くが、covU/covO/c41のような「動かせるか(希望固定/禁止連続/被覆悪化を避ける)」を判定して
+     * 実際に動かす専用オペレータが無かった。違反ペア(left∈g1×s1, right∈g2×s2)のどちらか一方を
+     * 実際に他シフトへ動かして崩す。移動先でcovOが悪化しない候補を探し、離脱元でcovUが悪化するなら
+     * findCovUChainで玉突きフォールバック（c41Free(3.209.0)で判明済みの罠=「離脱を先にschedへ適用して
+     * からfindCovUChainを呼ぶ」順序を踏襲。逆順だと本人がまだ在籍中に見え常にnullが返る）。
+     * skill=false は cons42(sgrp)、skill=true は cons42s(ssk) を対象にする（DRY化）。
+     * sched を in-place 変更し適用手数を返す。最終採否は呼び出し側のkeep-best（ラウンドbetter()）が
+     * 担保＝退化不能。
+     */
+    internal fun applyC42Free(state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean): Int {
+        val p = cachedProblem(state)
+        if (p.S == 0 || p.T == 0) return 0
+        val rules = if (skill) p.cons42s else p.cons42
+        if (rules.isEmpty()) return 0
+        val grp = if (skill) p.ssk else p.sgrp
+        var applied = 0
+        val cov = Array(p.T) { IntArray(p.K) }
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
+        fun recomputeCovDay(j: Int) {
+            val col = cov[j]; for (k in col.indices) col[k] = 0
+            for (i in 0 until p.S) { val k = sched[i][j]; if (k in 0 until p.K) col[k]++ }
+        }
+        // 違反ペアの片側(候補)を実際に他シフトへ動かす。動かせたら true。
+        fun tryFreeOneSide(candidates: List<Int>, j: Int, fromShift: Int): Boolean {
+            for (i in candidates) {
+                if (p.wish[i][j] == fromShift) continue   // 本人希望＝動かすとpref未充足化、対象外
+                for (m in p.allowedShiftsForStaff(i).filter { it != fromShift }.shuffled(rng)) {
+                    if (p.makesForbiddenRun(sched, i, j, m)) continue
+                    if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue   // 移動先でcovO悪化させない
+                    if (p.covUCell(fromShift, j, cov[j][fromShift] - 1) <= p.covUCell(fromShift, j, cov[j][fromShift])) {
+                        sched[i][j] = m
+                        cov[j][fromShift]--; cov[j][m]++
+                        return true
+                    }
+                    // [玉突き連鎖フォールバック] c41Freeと同じ理由で、離脱を先に適用してから呼ぶ。
+                    val oldK = sched[i][j]
+                    sched[i][j] = m
+                    val chain = findCovUChain(p, sched, fromShift, j, rng, exclude = i)
+                    if (chain == null) { sched[i][j] = oldK; continue }
+                    chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
+                    recomputeCovDay(j)
+                    return true
+                }
+            }
+            return false
+        }
+        for (c in rules) {
+            for (j in 0 until p.T) {
+                while (true) {
+                    val left = (0 until p.S).filter { grp[it] == c.g1 && sched[it][j] == c.s1 }
+                    val right = (0 until p.S).filter { grp[it] == c.g2 && sched[it][j] == c.s2 }
+                    if (left.isEmpty() || right.isEmpty()) break   // ペアが存在しない＝この日は解消済み
+                    val movedLeft = tryFreeOneSide(left.shuffled(rng), j, c.s1)
+                    if (movedLeft) { applied++; continue }
+                    val movedRight = tryFreeOneSide(right.shuffled(rng), j, c.s2)
+                    if (movedRight) { applied++; continue }
+                    break   // 左右どちらも動かせない＝この日は諦める（安全側）
                 }
             }
         }
