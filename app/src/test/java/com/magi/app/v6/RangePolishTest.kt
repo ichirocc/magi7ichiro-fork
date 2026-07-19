@@ -59,7 +59,7 @@ class RangePolishTest {
         assertTrue("初期はhigh違反があること", (before.breakdown["high"] ?: 0) > 0)
         assertEquals("初期はHARD=0(covU無し、AがXを単独充足)", 0, before.hard)
 
-        val result = applyRangePolish(st, sched, seed = 1L)
+        val result = V6HotfixPasses.applyRangePolish(st, sched, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("玉突き適用後はhigh=0", 0, after.breakdown["high"] ?: -1)
@@ -72,7 +72,7 @@ class RangePolishTest {
     fun rangePolishIsNoOpWhenNoStaffRange() {
         val st = highState().copy(staffRange = emptyMap())
         val sched = st.schedule.toIntArray2D()
-        val result = applyRangePolish(st, sched, seed = 1L)
+        val result = V6HotfixPasses.applyRangePolish(st, sched, seed = 1L)
         assertEquals(0, result.applied)
     }
 }
