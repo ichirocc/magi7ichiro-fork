@@ -121,7 +121,7 @@ object V6HotfixPasses {
         val c1Anchor = setOf("vio-c1")
         val maxRounds = 4
         var round = 0
-        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0; var totalC3run = 0
+        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0; var totalC3run = 0; var totalBlockSwap = 0
         while (round < maxRounds && !shouldStop()) {
             var roundApplied = 0
 
@@ -173,6 +173,14 @@ object V6HotfixPasses {
             work = rC3run.newSchedule.copy2D(); totalC3run += rC3run.applied; roundApplied += rC3run.applied
             if (round == 0) logs.addAll(rC3run.logs)
 
+            // [BlockSwapPolish・15日ブロック丸ごと2人交換] 同一担当グループの2人×15日ブロックを
+            //   丸ごと入替える大きな手。1日単位の局所交換が踏めない改善（range/pref/apt/weekly が
+            //   絡む多家族同時トレード）に到達し得る（grilling 2026-07-19、金沢/アリフの検討から）。
+            onPhase("後処理 15日ブロック丸ごと交換研磨 [巡${round + 1}]")
+            val rBlockSwap = applyBlockSwapPolish(state, work, blockLen = 15, maxPasses = 3, shouldStop = shouldStop)
+            work = rBlockSwap.newSchedule.copy2D(); totalBlockSwap += rBlockSwap.applied; roundApplied += rBlockSwap.applied
+            if (round == 0) logs.addAll(rBlockSwap.logs)
+
             round++
             if (roundApplied == 0) break   // この巡で1手も採用なし＝joint局所最適に到達
         }
@@ -182,7 +190,7 @@ object V6HotfixPasses {
         run {
             val softAfter = UnifiedViolationChecker.check(state, work)
             fun bd(r: ViolationReport, k: String) = r.breakdown[k] ?: 0
-            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn + totalRange + totalC3run
+            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn + totalRange + totalC3run + totalBlockSwap
             val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn") +
                 bd(preSoftRep, "low") + bd(preSoftRep, "high")
             val verdict = when {
@@ -199,7 +207,7 @@ object V6HotfixPasses {
                     " / low ${bd(preSoftRep, "low")}->${bd(softAfter, "low")}" +
                     " / high ${bd(preSoftRep, "high")}->${bd(softAfter, "high")}" +
                     " | HARD $hardNote / total ${preSoftRep.total}->${softAfter.total}" +
-                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} range玉突き:${totalRange} c3run玉突き:${totalC3run})"))
+                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} range玉突き:${totalRange} c3run玉突き:${totalC3run} ブロック交換:${totalBlockSwap})"))
         }
 
         // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の
@@ -1314,6 +1322,82 @@ object V6HotfixPasses {
             message = "連続規則(c3/c3m単一シフト連)玉突き研磨: c3 ${before.breakdown["c3"] ?: 0}->${bestRep.breakdown["c3"] ?: 0} / c3m ${before.breakdown["c3m"] ?: 0}->${bestRep.breakdown["c3m"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 (if (applied == 0 && ((before.breakdown["c3"] ?: 0) + (before.breakdown["c3m"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
+        return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
+    }
+
+    /**
+     * [BlockSwapPolish・15日ブロック丸ごと2人交換] ユーザー指示「15日間まるごと2人交換を実装する」
+     * （grillingで確定: 対象=同一担当グループのみ／位置=全オフセットのスライド窓／実行=後処理Polish
+     * パス／探索範囲=アンカーなし・同グループ内全ペア×全オフセットを無条件に試す）。
+     *
+     * 動機: 既存の交換系(CyclicSwap=同日1〜3人・鏡像長方形=2日)は局所的なため、「1日ずつ動かすと
+     * 途中経過が悪化して isBetter に拒否される」が「まとめて動かせば全体は改善する」ような大きな
+     * 交換を発見できない（金沢⇔アリフのような同一range設定のペアでは無意味だが、range/wish/apt等が
+     * 異なる同グループのペアでは、ブロックまるごとの入替がlow/high/pref/apt/weeklyを同時に動かし、
+     * 1日単位の局所探索が踏めない改善に到達し得る）。
+     *
+     * 安全性: 同一担当グループ(canDo完全一致)のペアに限定するため、交換後も groupViol/covU/covO/
+     * c41(s)/c42(s)/禁止連続の**内部**は構造的に不変（同じシフト列がそのまま相手に移るだけ）。
+     * ブロック境界(直前日・直後日との接続)でのみ新規の禁止連続が起こり得るが、それは isBetter の
+     * hard判定が担保する。ブロック内に希望固定(wish-lock)がある場合は事前にスキップ（他パスと同じ
+     * `movable`規約。無条件に希望を破壊する交換を試みない安全側フィルタ、コスト削減も兼ねる）。
+     * 採否はisBetter(hard→total→weighted)keep-best＝退化不能。
+     */
+    fun applyBlockSwapPolish(state: MagiState, schedule: Array<IntArray>, blockLen: Int = 15, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }): CyclicSwapResult {
+        val p = Problem(state)
+        val work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        var applied = 0
+        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        fun name(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
+
+        // 同一担当グループ(sgrp)ごとに職員をまとめ、グループ内の全ペアを列挙。
+        val byGroup = LinkedHashMap<Int, MutableList<Int>>()
+        for (i in 0 until p.S) byGroup.getOrPut(p.sgrp[i]) { ArrayList() }.add(i)
+        val pairs = ArrayList<Pair<Int, Int>>()
+        for (members in byGroup.values) {
+            for (a in members.indices) for (b in a + 1 until members.size) pairs.add(members[a] to members[b])
+        }
+        if (pairs.isEmpty() || blockLen <= 0 || blockLen > p.T) {
+            return CyclicSwapResult(work, before.total, before.total, 0,
+                listOf(MirrorLog(tag = "BlockSwapPolish", message = "対象ペア(同一グループ2名以上)なし=スキップ")))
+        }
+
+        val fixedNames = ArrayList<String>()
+        var pass = 0
+        while (pass < maxPasses) {
+            if (shouldStop()) break
+            var improved = false
+            for ((i, i2) in pairs) {
+                if (shouldStop()) break
+                for (start in 0..(p.T - blockLen)) {
+                    if (shouldStop()) break
+                    val end = start + blockLen - 1
+                    var locked = false
+                    var same = true
+                    for (j in start..end) {
+                        if (!movable(i, j) || !movable(i2, j)) { locked = true; break }
+                        if (work[i][j] != work[i2][j]) same = false
+                    }
+                    if (locked || same) continue
+                    for (j in start..end) { val t = work[i][j]; work[i][j] = work[i2][j]; work[i2][j] = t }
+                    val rep = UnifiedViolationChecker.check(state, work)
+                    if (isBetter(rep, bestRep)) {
+                        bestRep = rep; applied++; improved = true
+                        fixedNames.add("${name(i)}⇔${name(i2)} ${start + 1}〜${end + 1}日")
+                    } else {
+                        for (j in start..end) { val t = work[i][j]; work[i][j] = work[i2][j]; work[i2][j] = t }
+                    }
+                }
+            }
+            pass++
+            if (!improved) break
+        }
+        val logs = listOf(MirrorLog(tag = "BlockSwapPolish",
+            message = "${blockLen}日ブロック丸ごと交換研磨: total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
+                (if (applied == 0) " [頭打ち=改善手なし]" else "") +
+                (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
