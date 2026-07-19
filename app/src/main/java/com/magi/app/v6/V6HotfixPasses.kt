@@ -121,7 +121,7 @@ object V6HotfixPasses {
         val c1Anchor = setOf("vio-c1")
         val maxRounds = 4
         var round = 0
-        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0
+        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0
         while (round < maxRounds && !shouldStop()) {
             var roundApplied = 0
 
@@ -150,6 +150,13 @@ object V6HotfixPasses {
             work = rC3r.newSchedule.copy2D(); totalC3r += rC3r.applied; roundApplied += rC3r.applied
             if (round == 0) logs.addAll(rC3r.logs)
 
+            // [C3mnPolish・玉突き連鎖の横展開] cons3n(HARD)で直接候補が全滅する局面向けに findCovUChain
+            //   をc3mn(回避,SOFT)専用に反映（grilling 2026-07-19、金沢勇輝のDﾃ4連続実例）。
+            onPhase("後処理 回避パターン(c3mn)玉突き研磨 [巡${round + 1}]")
+            val rC3mn = applyC3mnPolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            work = rC3mn.newSchedule.copy2D(); totalC3mn += rC3mn.applied; roundApplied += rC3mn.applied
+            if (round == 0) logs.addAll(rC3mn.logs)
+
             round++
             if (roundApplied == 0) break   // この巡で1手も採用なし＝joint局所最適に到達
         }
@@ -159,7 +166,7 @@ object V6HotfixPasses {
         run {
             val softAfter = UnifiedViolationChecker.check(state, work)
             fun bd(r: ViolationReport, k: String) = r.breakdown[k] ?: 0
-            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r
+            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn
             val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn")
             val verdict = when {
                 adopted > 0 -> "有効(採用${adopted}手)"
@@ -173,7 +180,7 @@ object V6HotfixPasses {
                     " / c3m ${bd(preSoftRep, "c3m")}->${bd(softAfter, "c3m")}" +
                     " / c3mn ${bd(preSoftRep, "c3mn")}->${bd(softAfter, "c3mn")}" +
                     " | HARD $hardNote / total ${preSoftRep.total}->${softAfter.total}" +
-                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r})"))
+                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn})"))
         }
 
         // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の
@@ -954,6 +961,92 @@ object V6HotfixPasses {
         val logs = listOf(MirrorLog(tag = "C1Polish",
             message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf)" +
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "")))
+        return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
+    }
+
+    /**
+     * [C3mnPolish・玉突き連鎖の横展開] cons3mn(回避パターン, SOFT重み12)専用の研磨パス。
+     * grilling(2026-07-19)で確定: 対象はc3mnのみ(c3nはHARDで既存のRSI focus優先/keep-bestが担当済み・
+     * 同一パスに混ぜると役割が重複し測定しづらくなる)。既存の`findCovUChain`(玉突き連鎖BFS、深さ5まで)を
+     * そのまま再利用し、C1Polish(3.158.0)の「手B/E11」ブロックと同型の構成にする。
+     *
+     * 動機（金沢勇輝の実例, 実機ログ2026-07-19）: cons3n(HARD)がDﾃ直後の主要シフトを軒並み禁止するため、
+     * Dﾃを複数回持つ職員はDﾃを連続させるのが安全側になりやすく、cons3mnの「N連続回避」パターンに
+     * ヒットしたまま残ることがある。休を追加すればhigh違反(weight90)の方が高くつく局面では崩せないため、
+     * 「その職員自身のDﾃ/休の回数を変えずに、そのセルだけ他シフトへ動かす」手が必要——これはまさに
+     * findCovUChainが対応する「直接候補が全員(希望固定/禁止連続/被覆)でブロックされる」局面と同型。
+     *
+     * アンカー: [レビュー3.111.0系]と同じ理由でcellFamilies(1セル=重み降順の全クラス)から"vio-c3mn"を含む
+     * セルを起点にする（violations単一クラスマップだと、より重い違反が同居するセルで見落としうるため）。
+     * 各アンカーセル(i,j)について、i の担当可能シフトへ付け替える(c3n新規発生はmakesForbiddenRunで事前枝刈り)。
+     * 付け替えで元シフトの被覆が悪化するなら`findCovUChain`で玉突き連鎖を試す(C1Polish手Bと同一パターン)。
+     * 採否は既存のisBetter(hard→total→weighted)keep-best＝退化不能。完了条件はユニットテストのみ(grilling決定)。
+     */
+    fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL): CyclicSwapResult {
+        val p = Problem(state)
+        val work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        var applied = 0
+        if (p.cons3mn.isEmpty()) {
+            return CyclicSwapResult(work, before.total, bestRep.total, 0,
+                listOf(MirrorLog(tag = "C3mnPolish", message = "cons3mnなし=スキップ")))
+        }
+        val rng = Random(seed)
+        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        var pass = 0
+        while (pass < maxPasses) {
+            if (shouldStop()) break
+            var improved = false
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val anchors = ArrayList<Pair<Int, Int>>()
+            for ((key, fams) in rep0.cellFamilies) {
+                if ("vio-c3mn" !in fams) continue
+                val parts = key.split(",")
+                val i = parts.getOrNull(0)?.toIntOrNull() ?: continue
+                val j = parts.getOrNull(1)?.toIntOrNull() ?: continue
+                anchors.add(i to j)
+            }
+            if (anchors.isEmpty()) break
+            for ((i, j) in anchors) {
+                if (shouldStop()) break
+                if (!movable(i, j)) continue
+                val curK = work[i][j]
+                if (curK !in 0 until p.K) continue
+                var done = false
+                for (alt in p.allowedShiftsForStaff(i)) {
+                    if (done || shouldStop()) break
+                    if (alt == curK) continue
+                    if (p.makesForbiddenRun(work, i, j, alt)) continue
+                    var cnt = 0
+                    for (s in 0 until p.S) if (work[s][j] == curK) cnt++
+                    val needsChain = p.covUCell(curK, j, cnt - 1) > p.covUCell(curK, j, cnt)
+                    work[i][j] = alt
+                    if (!needsChain) {
+                        val rep = UnifiedViolationChecker.check(state, work)
+                        if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true }
+                        else work[i][j] = curK
+                        continue
+                    }
+                    // [玉突き連鎖] i の離脱で curK の被覆が悪化する → 玉突きで埋め直す（盤面不変・巻き戻し可能）。
+                    val chain = findCovUChain(p, work, curK, j, rng, exclude = i)
+                    if (chain == null) { work[i][j] = curK; continue }
+                    val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
+                    chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
+                    val rep = UnifiedViolationChecker.check(state, work)
+                    if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true }
+                    else {
+                        for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
+                        work[i][j] = curK
+                    }
+                }
+            }
+            pass++
+            if (!improved) break
+        }
+        val logs = listOf(MirrorLog(tag = "C3mnPolish",
+            message = "回避パターン(c3mn)研磨: c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
+                (if (applied == 0 && (before.breakdown["c3mn"] ?: 0) > 0) " [頭打ち=改善手なし]" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
