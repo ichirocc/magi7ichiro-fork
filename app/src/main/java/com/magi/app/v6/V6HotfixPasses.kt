@@ -1001,6 +1001,21 @@ object V6HotfixPasses {
      * 付け替えで元シフトの被覆が悪化するなら`findCovUChain`で玉突き連鎖を試す(C1Polish手Bと同一パターン)。
      * 採否は既存のisBetter(hard→total→weighted)keep-best＝退化不能。完了条件はユニットテストのみ(grilling決定)。
      */
+    /**
+     * [頭打ち調査・findCovUChainのrangeAvoid用] 候補(staff)がfillShiftを1つ得ると自身のstaffRange上限
+     * (rangeHi)を新たに超えるか。桒澤美幸のAｱ超過が研磨後も残る実例を追跡した結果、findCovUChainの
+     * 候補選定がコスト無視（構造的に妥当な最初の1件で確定）なため、「別の職員の新規high違反」で
+     * 相殺され isBetter に却下される手を引き続けて頭打ちになるケースを確認。C3mnPolish/RangePolish/
+     * C3RunPolishの3箇所で findCovUChain 呼出に渡し、そのような候補を後回し（除外はしない）にする。
+     */
+    private fun exceedsOwnRangeHi(p: Problem, work: Array<IntArray>, staff: Int, fillShift: Int): Boolean {
+        val hi = p.rangeHi[staff][fillShift]
+        if (hi == Int.MAX_VALUE) return false
+        var c = 0
+        for (jj in 0 until p.T) if (work[staff][jj] == fillShift) c++
+        return c + 1 > hi
+    }
+
     fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL): CyclicSwapResult {
         val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
@@ -1048,7 +1063,8 @@ object V6HotfixPasses {
                         continue
                     }
                     // [玉突き連鎖] i の離脱で curK の被覆が悪化する → 玉突きで埋め直す（盤面不変・巻き戻し可能）。
-                    val chain = findCovUChain(p, work, curK, j, rng, exclude = i)
+                    val chain = findCovUChain(p, work, curK, j, rng, exclude = i,
+                        rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
                     if (chain == null) { work[i][j] = curK; continue }
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                     chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
@@ -1106,7 +1122,8 @@ object V6HotfixPasses {
                 work[i][j] = fromK
                 return false
             }
-            val chain = findCovUChain(p, work, fromK, j, rng, exclude = i)
+            val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
+                rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
             if (chain == null) { work[i][j] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
@@ -1217,7 +1234,8 @@ object V6HotfixPasses {
                 work[i][extDay] = fromK
                 return false
             }
-            val chain = findCovUChain(p, work, fromK, extDay, rng, exclude = i)
+            val chain = findCovUChain(p, work, fromK, extDay, rng, exclude = i,
+                rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
             if (chain == null) { work[i][extDay] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }

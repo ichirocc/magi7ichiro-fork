@@ -4,6 +4,7 @@ import com.magi.app.model.C1Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
+import com.magi.app.model.Range
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
@@ -491,5 +492,77 @@ class ChainFillTest {
         }
         // このデータでは有効な安全な連鎖が存在しない設計のため、見つからない(null)ことが期待値。
         assertNull("Qを壊す唯一の経路しか無いため連鎖は見つからない(null)であること", chain)
+    }
+
+    // [頭打ち調査・3.218.0] rangeAvoid が無いと、findCovUChain は候補のコストを一切見ず rng順で最初に
+    // 完成した候補をそのまま返す。桒澤美幸のAｱ超過(3.215.0 RangePolish)が研磨されずに残る実例を追跡した
+    // 結果、「候補自身の新規range(high)違反を招く」手を引くと、isBetterが改善なしとして却下し、その日は
+    // 二度と試行されない（1日1回きりの呼出のため）ことが根本原因と判明。
+    // 盤面: 休(0)/P(1)の2シフト。day0=Pがcovid(covU)、bad/goodともにday0=休で担当可能・希望非固定・
+    // 禁止連続なし＝どちらも構造的に同格の候補（1手で即完成）。bad は day1 に既にP保有＋staffRange hi=1
+    // のため、day0のPを埋めると2>hi=1で自身の新規high違反を招く。good は無制限（staffRange未設定）。
+    // rangeAvoid を渡すと、rng順に関わらず必ず good が選ばれることを複数seedで固定する
+    // （渡さない場合は shuffle 次第で bad が選ばれ得ることも併せて確認＝旧実装の脆さの実証）。
+    private fun rangeAvoidState(): MagiState {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val groupShift = listOf(listOf(1, 1))   // 休/Pとも担当可
+        val staff = listOf(Staff("bad", 0), Staff("good", 0))
+        val schedule = listOf(
+            listOf(0, 1), // bad = 休, P（day1に既にP保有）
+            listOf(0, 0), // good = 休, 休
+        )
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-02",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(1) { List(2) { "" } },
+            schedule = schedule, wishes = emptyMap(),
+            staffRange = mapOf("0,1" to Range(lo = "", hi = "1")),   // bad(index0)のP上限=1
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun chainFillRangeAvoidAlwaysPrefersCandidateWithoutOwnRangeViolation() {
+        val st = rangeAvoidState()
+        val p = cachedProblem(st)
+        val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        assertTrue("day0のP不足(covU>0)が前提", (before.breakdown["covU"] ?: 0) > 0)
+
+        fun exceedsHi(staffIdx: Int, work: Array<IntArray>, fillShift: Int): Boolean {
+            val hi = p.rangeHi[staffIdx][fillShift]
+            if (hi == Int.MAX_VALUE) return false
+            var c = 0
+            for (jj in 0 until p.T) if (work[staffIdx][jj] == fillShift) c++
+            return c + 1 > hi
+        }
+
+        var badPickedWithoutAvoid = false
+        for (seed in 0..15) {
+            val sched = st.schedule.toIntArray2D()
+            val chain = findCovUChain(p, sched, 1, 0, Random(seed.toLong()))
+            assertNotNull("候補が2人ともいるため必ず連鎖(1手)が見つかること seed=$seed", chain)
+            assertEquals(1, chain!!.size)
+            if (chain[0][0] == 0) badPickedWithoutAvoid = true
+
+            val schedWithAvoid = st.schedule.toIntArray2D()
+            val chainWithAvoid = findCovUChain(
+                p, schedWithAvoid, 1, 0, Random(seed.toLong()),
+                rangeAvoid = { staffIdx, fillShift -> exceedsHi(staffIdx, schedWithAvoid, fillShift) },
+            )
+            assertNotNull("rangeAvoid指定時も連鎖は見つかること seed=$seed", chainWithAvoid)
+            assertEquals(
+                "rangeAvoid指定時はrng順に関わらずgood(index1)が選ばれること seed=$seed",
+                1, chainWithAvoid!![0][0],
+            )
+        }
+        assertTrue(
+            "rangeAvoid無しではrng順次第でbad(index0, 自身の新規high違反を招く候補)が選ばれ得ること" +
+                "（旧実装の脆さの実証。全seedでgoodのみ選ばれるなら本テストの前提が崩れている）",
+            badPickedWithoutAvoid,
+        )
     }
 }
