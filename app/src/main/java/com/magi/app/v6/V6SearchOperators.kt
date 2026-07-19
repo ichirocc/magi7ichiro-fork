@@ -245,7 +245,10 @@ internal fun betterScore(a: Long, b: Long): Boolean = a < b
 
 /** DeltaEvaluator 生スコアの SA 受理。hard が +2 超増える手は却下。 */
 internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Boolean {
-    if (a > b + 2_000_000L) return false
+    // [3.213.0見落とし修正] SCORE_HARD_UNIT を1e6→1e9へ拡大した際にこの閾値だけ旧スケール(2*1e6)の
+    //   まま残っていた。新スケールでは2*1e6は1 HARD単位(1e9)の0.2%に過ぎず、hardが1増えるだけで
+    //   即座に(却下する意図の"+2超"よりずっと手前で)却下される退行だった。2*SCORE_HARD_UNITへ同期。
+    if (a > b + 2 * SCORE_HARD_UNIT) return false
     val delta = (a - b).toDouble()
     return delta <= 0.0 || rng.nextDouble() < exp(-max(0.0, delta) / (200.0 * temp + 1e-9))
 }
@@ -411,7 +414,8 @@ internal fun glsAccept(
     ns: Long, curScore: Long, moveAug: Double, curAug: Double,
     mode: AcceptMode, temp: Double, gdLevel: Double, rng: Random,
 ): Boolean {
-    if (ns > curScore + 2_000_000L) return false
+    // [3.213.0見落とし修正] acceptWorseScore と同じ理由で 2*SCORE_HARD_UNIT へ同期（詳細は上のコメント参照）。
+    if (ns > curScore + 2 * SCORE_HARD_UNIT) return false
     return when (mode) {
         AcceptMode.GREAT_DELUGE ->
             (ns.toDouble() + curAug + moveAug) <= gdLevel && (ns / SCORE_HARD_UNIT) <= (curScore / SCORE_HARD_UNIT)
