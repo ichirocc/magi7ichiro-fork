@@ -1750,7 +1750,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val ns = newState ?: return
         pushUndo()
         state = ns
-        _ui.update { it.copy(constraintsEdited = true) }
+        // [3.222.0, 実機バグ修正「回避の並びなどが削除できない」] constraintsEdited が既に true だと
+        //   copy が同値でStateFlowがemitせず（3.185.0/3.189.0と同型）、ConstraintsCard/SkillConstraintsCard
+        //   を包む key(ui.editRev) が再構成されず一覧が更新されなかった。editRev を必ず増やして
+        //   distinct な UiState を emit する（3.185.0のapplyStructureと同一パターン）。
+        _ui.update { it.copy(constraintsEdited = true, editRev = it.editRev + 1) }
         refreshCheck()
         autoSave()
     }

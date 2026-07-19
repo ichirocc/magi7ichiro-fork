@@ -1144,10 +1144,20 @@ object V6HotfixPasses {
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
 
+        // [頭打ちの理由を可視化] 対象(staff,shift)ごとに、何が原因で付け替えが不成立だったかを集計。
+        //   希望固定=movableで即除外・禁止連続=makesForbiddenRunで即除外・候補なし=findCovUChainがnull・
+        //   range後回し=findCovUChainは成立したが使った候補がrangeAvoid該当(=自身の新規high違反を招く)
+        //   だった・不採用=chainは成立したがisBetterに拒否された、の5分類。最も多い理由を「残存:」へ表示。
+        val blockStats = HashMap<Pair<Int, Int>, MutableMap<String, Int>>()
+        fun recordBlock(target: Pair<Int, Int>, reason: String) {
+            blockStats.getOrPut(target) { HashMap() }.merge(reason, 1, Int::plus)
+        }
+
         // [玉突き連鎖つき1セル付け替え] day j の staff i を fromK から toK へ動かす。fromK 側の被覆が
         //   悪化するなら findCovUChain で埋め直す。採用ならtrue（bestRep/appliedは呼び出し側で更新済み）。
-        fun tryRelocate(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
-            if (!movable(i, j) || p.makesForbiddenRun(work, i, j, toK)) return false
+        fun tryRelocate(target: Pair<Int, Int>, i: Int, j: Int, fromK: Int, toK: Int): Boolean {
+            if (!movable(i, j)) { recordBlock(target, "希望固定"); return false }
+            if (p.makesForbiddenRun(work, i, j, toK)) { recordBlock(target, "禁止連続"); return false }
             var cnt = 0
             for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
             val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
@@ -1156,17 +1166,20 @@ object V6HotfixPasses {
                 val rep = UnifiedViolationChecker.check(state, work)
                 if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
+                recordBlock(target, "不採用")
                 return false
             }
             val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
                 rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
-            if (chain == null) { work[i][j] = fromK; return false }
+            if (chain == null) { work[i][j] = fromK; recordBlock(target, "候補なし"); return false }
+            val usedAvoided = chain.any { mv -> exceedsOwnRangeHi(p, work, mv[0], mv[2]) }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work)
             if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
+            recordBlock(target, if (usedAvoided) "range後回し" else "不採用")
             return false
         }
 
@@ -1191,6 +1204,7 @@ object V6HotfixPasses {
             // HIGH(超過): shift k の保有日を他の担当可能シフトへ動かす。
             for ((i, k) in highTargets) {
                 if (shouldStop()) break
+                val target = i to k
                 var done = false
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break
@@ -1198,7 +1212,7 @@ object V6HotfixPasses {
                     for (alt in p.allowedShiftsForStaff(i)) {
                         if (done || shouldStop()) break
                         if (alt == k) continue
-                        if (tryRelocate(i, j, k, alt)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                        if (tryRelocate(target, i, j, k, alt)) { improved = true; done = true; fixedNames.add(label(i, k)) }
                     }
                 }
             }
@@ -1206,25 +1220,29 @@ object V6HotfixPasses {
             for ((i, k) in lowTargets) {
                 if (shouldStop()) break
                 if (!p.canDo(i, k)) continue
+                val target = i to k
                 var done = false
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break
                     val oldK = work[i][j]
                     if (oldK == k || oldK !in 0 until p.K) continue
-                    if (tryRelocate(i, j, oldK, k)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                    if (tryRelocate(target, i, j, oldK, k)) { improved = true; done = true; fixedNames.add(label(i, k)) }
                 }
             }
             pass++
             if (!improved) break
         }
-        // [ログから職員が分かるように] 研磨後もなお残っている(staff,shift)を名前付きで列挙。
+        // [ログから職員が分かるように・頭打ちの理由を可視化] 研磨後もなお残っている(staff,shift)を、
+        //   最も多かった頭打ち理由(希望固定/禁止連続/候補なし/range後回し/不採用)付きで列挙。
         val stuckNames = bestRep.countViolations.entries
             .filter { it.value == "vio-high" || it.value == "vio-low" }
             .mapNotNull { (key, _) ->
                 val parts = key.split(",")
                 val i = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
                 val k = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
-                label(i, k)
+                val reasons = blockStats[i to k]
+                val top = reasons?.maxByOrNull { it.value }
+                if (top != null) "${label(i, k)}(${top.key}×${top.value})" else label(i, k)
             }
         val logs = listOf(MirrorLog(tag = "RangePolish",
             message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
