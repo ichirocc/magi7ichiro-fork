@@ -471,4 +471,72 @@ class V6NativeOptimizerChoiceTest {
         // 縮退入力も安全
         assertTrue(V6NativeOptimizer.hypothesisChainPlan(0, 0, 0).all { it >= 1 })
     }
+
+    // [敵対的レビュー] cores<hypotheses（低コア端末で5仮説固定）のときは、仕様上の「最低1仮説1本」の
+    //   floorがコア数クランプより優先される（各仮説は最低1本必要＝5仮説なら5本を下回れない）。これは
+    //   hypothesisChainPlan の欠陥ではなく、hypotheses数自体を減らさない設計（w=MAX_HYPOTHESESは
+    //   仕様上不変）に由来する構造的な下限であることを固定する（余剰チェーンの"追加"はしないことを
+    //   合わせて確認=このケースでは各仮説ちょうど1本のみで、コア数超のオーバーサブスクライブを
+    //   それ以上増やさない）。
+    @Test fun chainPlanFloorsAtHypothesesCountEvenBelowCoreCount() {
+        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 2)
+        assertEquals(5, plan.sum())
+        assertEquals(listOf(1, 1, 1, 1, 1), plan.toList())
+    }
+
+    // [敵対的レビュー修正・#6] V5(高速計算)はhypothesisChainPlanを使わずoptions.workersをそのまま
+    //   SAチェーン数へ渡していたため、コア数クランプの恩恵を受けなかった。専用の総並列度クランプを検証。
+    @Test fun clampWorkersToCoresLimitsToAvailableCores() {
+        assertEquals(8, V6NativeOptimizer.clampWorkersToCores(workers = 16, cores = 8))
+        assertEquals(16, V6NativeOptimizer.clampWorkersToCores(workers = 16, cores = 16))
+        assertEquals(4, V6NativeOptimizer.clampWorkersToCores(workers = 4, cores = 8))
+    }
+
+    @Test fun clampWorkersToCoresNeverReturnsLessThanOne() {
+        assertEquals(1, V6NativeOptimizer.clampWorkersToCores(workers = 0, cores = 8))
+        assertEquals(1, V6NativeOptimizer.clampWorkersToCores(workers = 4, cores = 0))
+    }
+
+    // [敵対的レビュー修正・#3] liveBest の CAS 管理: publishLiveBest は真に better() な報告のときだけ
+    // liveBest を更新し、劣る/同値の報告では既存の liveBest を保持する（旧last-writer-winsの退行を防ぐ）。
+    // グローバルなシングルトン状態(liveBest/liveBestReport)を扱うため、他テストの残存値に依存しないよう
+    // 「明確に最良(hard=0,total=0)」→「明確に劣る(hard=0,total=極大)」の順で呼び、劣る側が無視されることを
+    // 直接確認する（逆順=劣る値を先に публиしても後続の最良値が正しく採用されることも合わせて確認）。
+    private fun tinyState(): MagiState {
+        val shifts = listOf(Shift("休", "休", "", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("A", 0))
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1)), groupShiftApt = listOf(listOf("")),
+            schedule = listOf(listOf(0)), wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test fun publishLiveBestIgnoresWorseReportAfterBestPublished() {
+        val st = tinyState()
+        val sched = st.schedule.toIntArray2D()
+        val goodReport = UnifiedViolationChecker.check(st, sched)  // hard=0/total=0（休のみ・制約なし）
+        val goodSched = arrayOf(intArrayOf(0))
+        V6NativeOptimizer.publishLiveBest(goodReport, goodSched)
+        assertEquals(listOf(listOf(0)), V6NativeOptimizer.liveBest)
+
+        // 明確に劣る report をでっち上げて publish を試みる（同一 hard・total だけ悪化させた copy）。
+        val worseReport = goodReport.copy(total = goodReport.total + 999_999)
+        val worseSched = arrayOf(intArrayOf(999))
+        V6NativeOptimizer.publishLiveBest(worseReport, worseSched)
+        // 劣る report は無視され、liveBest は直前の良好な盤面のまま。
+        assertEquals(listOf(listOf(0)), V6NativeOptimizer.liveBest)
+
+        // 更に良い report(total を減らす)なら正しく更新される。
+        val betterReport = goodReport.copy(total = -1)
+        val betterSched = arrayOf(intArrayOf(7))
+        V6NativeOptimizer.publishLiveBest(betterReport, betterSched)
+        assertEquals(listOf(listOf(7)), V6NativeOptimizer.liveBest)
+    }
 }

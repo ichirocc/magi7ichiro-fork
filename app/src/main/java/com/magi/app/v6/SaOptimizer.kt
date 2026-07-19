@@ -81,29 +81,37 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         //   （旧: !softPolish 条件で、既定ON の仕上げ最適化トグルにより SA ネイティブが事実上無効だった）。
         val nativeHandle = if (NativeGate.usable)
             runCatching { NativeEval.createHandle(problem) }.getOrDefault(0L) else 0L
-        try {
-            val jobs = (0 until params.workers).map { w ->
-                async(Dispatchers.Default) {
-                    // [多様化] params.seed!=0 なら各仮説の固有シードを使用（runMultiWorker が仮説ごとに別シードを渡す）。
-                    //   0 のときのみ従来の System.nanoTime()。ワーカー内は seed xor (w*定数) で更に分散。
-                    val sbase = if (params.seed != 0L) params.seed else System.nanoTime()
-                    val seed = sbase xor (w.toLong() * -0x61c8864680b583ebL)
-                    val flush: (Long, Array<IntArray>, Long) -> Unit = { localBest, localSol, iters ->
-                        synchronized(lock) {
-                            totalIters += iters
-                            if (localBest < globalBest) { globalBest = localBest; globalBestSol = localSol }
-                            report()
-                        }
+        val jobs = (0 until params.workers).map { w ->
+            async(Dispatchers.Default) {
+                // [多様化] params.seed!=0 なら各仮説の固有シードを使用（runMultiWorker が仮説ごとに別シードを渡す）。
+                //   0 のときのみ従来の System.nanoTime()。ワーカー内は seed xor (w*定数) で更に分散。
+                val sbase = if (params.seed != 0L) params.seed else System.nanoTime()
+                val seed = sbase xor (w.toLong() * -0x61c8864680b583ebL)
+                val flush: (Long, Array<IntArray>, Long) -> Unit = { localBest, localSol, iters ->
+                    synchronized(lock) {
+                        totalIters += iters
+                        if (localBest < globalBest) { globalBest = localBest; globalBestSol = localSol }
+                        report()
                     }
-                    // ネイティブ経路（番兵発火時は false を返し、同ワーカーを Kotlin で走らせ直す=退化）。
-                    val nativeOk = if (nativeHandle != 0L && NativeGate.enabled)
-                        runWorkerNative(nativeHandle, init, params, Random(seed), start, flush) else false
-                    if (!nativeOk) runWorker(init, params, Random(seed), start, flush)
                 }
+                // ネイティブ経路（番兵発火時は false を返し、同ワーカーを Kotlin で走らせ直す=退化）。
+                val nativeOk = if (nativeHandle != 0L && NativeGate.enabled)
+                    runWorkerNative(nativeHandle, init, params, Random(seed), start, flush) else false
+                if (!nativeOk) runWorker(init, params, Random(seed), start, flush)
             }
+        }
+        try {
             jobs.awaitAll()
         } finally {
-            if (nativeHandle != 0L) NativeBridge.nativeDestroyProblem(nativeHandle)
+            // [敵対的レビュー: 共有ネイティブハンドルの解放タイミング] 親キャンセルや1ワーカーの例外で
+            //   awaitAll() が他ワーカーの完了を待たずに例外/キャンセルを伝播し得る（kotlinx.coroutines の
+            //   awaitAll は最初に失敗/キャンセルされた1件を検知した時点で再送出し得る）。全ワーカーの
+            //   Job が実際に終了（＝JNI呼出から戻り切る）まで明示的に join してから handle を破棄する。
+            //   NonCancellable 下で行い、外側キャンセル中でも join/破棄自体は必ず完了させる。
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                jobs.forEach { job -> job.cancel(); runCatching { job.join() } }
+                if (nativeHandle != 0L) NativeBridge.nativeDestroyProblem(nativeHandle)
+            }
         }
 
         val finalScore = evaluator.fullEval(globalBestSol)
@@ -138,7 +146,10 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         var lastHardImprove = (System.nanoTime() / 1_000_000L)
         // [全体計算の最小化] 直近の照合済み best 盤面キャッシュ（非改善チャンクの flush 用）。
         var lastSol: Array<IntArray> = NativeEval.unflatten(best, s, t)
-        fun timeUp() = params.shouldStop() || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
+        // [敵対的レビュー: NativeGate伝播] 兄弟ワーカーが番兵発火でゲートを閉じたら、このワーカーも
+        //   次チャンク前に停止する（自チャンクは全て個別に自己整合/照合済みのため、ここまでの進捗
+        //   flush済みの結果はそのまま採用＝退化ではなく単なる早期終了。予算超過と同じ扱い）。
+        fun timeUp() = params.shouldStop() || !NativeGate.enabled || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
 
         while (!timeUp()) {
             coroutineContext.ensureActive()
@@ -215,7 +226,8 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
     ): Boolean {
         val s = problem.S; val t = problem.T
         var bestScore = bestScoreIn
-        fun timeUp() = params.shouldStop() || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
+        // [敵対的レビュー: NativeGate伝播] runWorkerNativeと同じ理由でゲート閉鎖を停止条件へ加える。
+        fun timeUp() = params.shouldStop() || !NativeGate.enabled || (System.nanoTime() / 1_000_000L) - start >= params.budgetMs
         val h = NativeBridge.nativeLahcCreate(handle, bestFlat, rng.nextLong(), params.lahcLen)
         if (h == 0L) { NativeGate.disable("LAHC状態生成NG"); return false }
         try {

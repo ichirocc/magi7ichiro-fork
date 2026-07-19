@@ -92,6 +92,12 @@ class OptimizationWorker(
             runCatching { snapshotFile(ctx).delete() }   // [#4] 完了でスナップショット破棄
             Result.success()
         } catch (e: CancellationException) {
+            // [敵対的レビュー修正・#9] UI の stop() は cancelUniqueWork() の完了を待たず即座に
+            //   clearFiles() するため、その直後に本Workerの進捗コールバックがまだキャンセルに
+            //   気づかずスナップショットを再生成しうる。自身のキャンセルを検知した時点で必ず
+            //   もう一度片付けてから伝播する（次回起動時に明示停止済みの古い盤面を復旧候補として
+            //   読んでしまう事故を防ぐ）。
+            runCatching { clearFiles(ctx) }
             throw e
         } catch (e: Exception) {
             notify("最適化に失敗しました", e.message ?: "原因不明")

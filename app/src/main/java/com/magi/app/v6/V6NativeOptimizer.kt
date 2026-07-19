@@ -108,20 +108,48 @@ object V6NativeOptimizer {
     fun restoreAlternatives(saved: List<Array<IntArray>>) { lastAlternatives = saved }
 
     /** [DefragLiveView移植] 実行中の最良盤面スナップショット（計算中ライブ表示用・読取専用）。
-     *  進捗の節目で更新。並列時はどのワーカーの最良でも有効な解なので last-writer-wins で問題ない。 */
+     *  進捗の節目で更新。
+     *  [敵対的レビュー修正] 旧実装は単純 last-writer-wins だった（コメント上は「並列時はどのワーカーの
+     *  最良でも有効な解」としていたが、実際には各仮説/チェーンが**自分のローカル最良**を無条件に書くため、
+     *  劣った仮説が後から書き込むと途中結果(kill復旧用)の品質が非単調に退行し得た）。[liveBestReport]で
+     *  CAS管理する真のグローバル最良のときだけ更新する（[publishLiveBest]経由。better()と同一基準）。 */
     @Volatile var liveBest: List<List<Int>>? = null
         private set
+    private val liveBestReport = java.util.concurrent.atomic.AtomicReference<ViolationReport?>(null)
+
+    /** [敵対的レビュー修正] liveBest を真にグローバルな最良のときだけ更新する。呼出元のローカル
+     *  best/report が既存の liveBest より劣る/同値なら何もしない＝退行を防ぐ。 */
+    internal fun publishLiveBest(report: ViolationReport, schedule: Array<IntArray>) {
+        while (true) {
+            val cur = liveBestReport.get()
+            if (cur != null && !better(report, cur)) return
+            if (liveBestReport.compareAndSet(cur, report)) {
+                liveBest = schedule.map { it.toList() }
+                return
+            }
+        }
+    }
 
     suspend fun optimize(
         state: MagiState,
         initial: Array<IntArray> = state.schedule.toIntArray2D(),
         options: V6OptimizerOptions = V6OptimizerOptions(),
         shouldStop: () -> Boolean = { false },
-        onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
+        onProgressRaw: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
     ): V6OptimizerResult {
         val started = nowMs()
         lastAlternatives = emptyList()
         liveBest = null
+        liveBestReport.set(null)
+        // [敵対的レビュー: 進捗コールバックの直列化] runMultiWorker(仮説横断)・runAlnsChains(チェーン横断)は
+        //   複数の Dispatchers.Default コルーチンから同じ onProgress を並行呼出しうる（best更新自体は
+        //   各所でCAS/ロック済みだが、呼出元のコールバック本体＝UI/Worker側の非同期共有状態(スナップショット
+        //   ファイル書込み等)は無保護だった）。この最上位の入口1箇所でロックすれば、内側の多層fan-out
+        //   （仮説×チェーン）を経ても最終的にユーザーコールバックへは必ず直列で届く。
+        val progressLock = Any()
+        val onProgress: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
+            synchronized(progressLock) { onProgressRaw(phase, report, iters, elapsed) }
+        }
         val chosen = chooseAlgorithm(options.algorithm, options.totalBudgetSec)
         val p = cachedProblem(state)
         var schedule = hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
@@ -219,6 +247,15 @@ object V6NativeOptimizer {
     internal fun perHypothesisWorkers(workers: Int, hypotheses: Int): Int =
         max(1, workers / max(1, hypotheses))
 
+    /** [敵対的レビュー修正・#6] V5(高速計算)は仮説の概念を使わず options.workers をそのまま
+     *  SaParams.workers(=SAチェーン数)へ渡していたため、hypothesisChainPlan のコア数クランプの
+     *  恩恵を受けず、コア数を超えるCPU-boundコルーチンを壁時計締切下で希釈しうる（例: 8コア機に
+     *  workers=16設定でV5選択→16並列SAチェーンが8コアを奪い合う）。V5専用に総並列度をコア数以内へ
+     *  クランプする（hypothesisChainPlan と異なりV5は「最低1仮説」のような競合する下限が無いため、
+     *  単純にコア数でクランプするだけで良い）。 */
+    internal fun clampWorkersToCores(workers: Int, cores: Int = Runtime.getRuntime().availableProcessors()): Int =
+        max(1, workers).coerceAtMost(max(1, cores))
+
     /** [敵対的レビュー3.212.0/単一ソース] 仮説ごとのチェーン本数プラン。レビューで確定した2欠陥を修正:
      *  ①旧 perW=床のみ配分は workers 6〜9（既定上限8＝動機の実機ログ当該ケース）で余り1〜4本を黙って
      *    廃棄しながらUI/docsが「無駄にならない」と虚偽主張（HF77: コメント≠実装）→ 余りを先頭仮説から
@@ -253,7 +290,7 @@ object V6NativeOptimizer {
         options: V6OptimizerOptions,
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
         run: suspend (Int, V6OptimizerOptions, (String, ViolationReport?, Long, Long) -> Unit) -> V6OptimizerResult,
-    ): V6OptimizerResult = coroutineScope {
+    ): V6OptimizerResult = kotlinx.coroutines.supervisorScope {
         // [余剰ワーカー活用] 仕様§2.2の「最大MAX_HYPOTHESES仮説」上限(w)は不変。workers>上限の分は各仮説の
         //   内部並列度（RSI/RSI++がPhase1/奇数ラウンドで呼ぶrunV5のSAチェーン数、ALNSの多チェーン
         //   =runAlnsChains）へ配分する。旧実装は仮説ごとに一律 workers=1 を強制しており、5を超える設定は
@@ -262,7 +299,7 @@ object V6NativeOptimizer {
         //   表示する虚偽（HF77）＋コア数超の希釈リスクがあった → hypothesisChainPlan（余り配分＋コア数
         //   クランプ）で仮説ごとの本数を決める。plan.max()>1 の仮説だけが多チェーン化する。
         val plan = hypothesisChainPlan(options.workers, w)
-        if (w <= 1) return@coroutineScope run(0, options.copy(workers = plan[0]), onProgress)
+        if (w <= 1) return@supervisorScope run(0, options.copy(workers = plan[0]), onProgress)
         val base = actualSeed(options.seed)
         val completed = java.util.concurrent.atomic.AtomicInteger(0)
         val winner = java.util.concurrent.atomic.AtomicInteger(-1)
@@ -279,22 +316,39 @@ object V6NativeOptimizer {
                 if (sharedBest.compareAndSet(cur, r)) return true
             }
         }
-        val jobs = arrayOfNulls<kotlinx.coroutines.Deferred<V6OptimizerResult>>(w)
+        // [敵対的レビュー修正・#4例外隔離] supervisorScope＋仮説ごとのtry/catchで、1仮説の通常例外が
+        //   他仮説を道連れにしない（runAlnsChainsと同型のパターンへ統一）。firstErrorは全滅時のみ使用。
+        val firstError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+        // [敵対的レビュー修正・#5早期winner] 全ジョブをLAZYで生成してから一斉start。生成前のjobsはnullでは
+        //   なくLAZYな未開始Deferredなので、早いwinnerのcancel()がまだstart前のジョブにも正しく効く
+        //   （旧実装はjobs配列がnullのままcancel()を呼んでも無効化されず、後から作られる新規ジョブが
+        //   キャンセルを免れて走ってしまっていた）。
+        val jobs = arrayOfNulls<kotlinx.coroutines.Deferred<V6OptimizerResult?>>(w)
         for (i in 0 until w) {
-            jobs[i] = async(Dispatchers.Default) {
-                // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
-                val res = run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
-                    val improved = report != null && improvesShared(report)
-                    if (i == 0 || improved) onProgress("仮説${(w - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
-                    // 絶対評価: 合格ライン(HARD=0)に最初に到達した仮説が、残りを即キャンセル
-                    if (report != null && report.hard == 0 && winner.compareAndSet(-1, i)) {
-                        for (j in 0 until w) if (j != i) jobs[j]?.cancel()
+            jobs[i] = async(Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.LAZY) {
+                // 開始時点で既に勝者が確定していれば(まれな競合)何もせず抜ける。
+                if (winner.get() >= 0 && winner.get() != i) return@async null
+                try {
+                    // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
+                    run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
+                        val improved = report != null && improvesShared(report)
+                        if (i == 0 || improved) onProgress("仮説${(w - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
+                        // 絶対評価: 合格ライン(HARD=0)に最初に到達した仮説が、残りを即キャンセル
+                        if (report != null && report.hard == 0 && winner.compareAndSet(-1, i)) {
+                            for (j in 0 until w) if (j != i) jobs[j]?.cancel()
+                        }
                     }
+                } catch (ce: kotlinx.coroutines.CancellationException) {
+                    throw ce
+                } catch (e: Exception) {
+                    firstError.compareAndSet(null, e)
+                    null
+                } finally {
+                    completed.incrementAndGet()
                 }
-                completed.incrementAndGet()
-                res
             }
         }
+        jobs.forEach { it?.start() }
         val results = jobs.mapNotNull { d ->
             try { d?.await() } catch (_: kotlinx.coroutines.CancellationException) { null }
         }
@@ -313,7 +367,8 @@ object V6NativeOptimizer {
         val totalIters = results.sumOf { it.iterations }
         val mode = if (winner.get() >= 0) "合格で早期キャンセル" else "時間内最良採用"
         val chainNote = if (plan.max() > 1) "・仮説内${plan.min()}〜${plan.max()}並列(SA/ALNS多チェーン)" else ""
-        val extra = MirrorLog(tag = "MultiWorker", message = "仮説 ${w} 本 ($mode・役割分担:探索/精製＋受理SA/GreatDeluge多様化$chainNote) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
+        val failNote = if (results.size < w) "・失敗${w - results.size}本(例外/キャンセル${firstError.get()?.let { "・${it.message}" } ?: ""})" else ""
+        val extra = MirrorLog(tag = "MultiWorker", message = "仮説 ${w} 本 ($mode・役割分担:探索/精製＋受理SA/GreatDeluge多様化$chainNote$failNote) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
         // [過程検証] 各仮説の個別結果・多様性（相異なる解の数）・保持した他の案数をログ化し、探索過程を後から検証できるようにする。
         //   各仮説の合計が揃っていれば収束、ばらけていれば多様な探索ができている、と判別できる。
         val perHyp = results.sortedWith(compareBy({ it.report.hard }, { it.report.total }))
@@ -386,7 +441,7 @@ object V6NativeOptimizer {
         // [HF290 役割分担] explore 倍率で初期温度を調整（探索=高温/精製=低温）。explore=1.0 は従来と同一。
         val saT0 = (10.0 * options.explore).coerceIn(2.0, 40.0)
         val res = SaOptimizer(p, ev).run(
-            SaParams(t0 = saT0, workers = options.workers, budgetMs = budgetSec * 1000L, softPolish = options.softPolish, shouldStop = shouldStop, seed = options.seed),
+            SaParams(t0 = saT0, workers = clampWorkersToCores(options.workers), budgetMs = budgetSec * 1000L, softPolish = options.softPolish, shouldStop = shouldStop, seed = options.seed),
         ) { pr ->
             if (pr.elapsedMs % 1000L < 220L) onProgress("V5 SA", lastReport, pr.totalIters, pr.elapsedMs)
         }
@@ -444,9 +499,11 @@ object V6NativeOptimizer {
                 if (sharedBest.compareAndSet(cur, r)) return true
             }
         }
+        // [敵対的レビュー修正・#5早期winner] runMultiWorkerと同型: 全チェーンをLAZYで生成してから一斉start。
         val jobs = arrayOfNulls<kotlinx.coroutines.Deferred<V6OptimizerResult?>>(chains)
         for (c in 0 until chains) {
-            jobs[c] = async(Dispatchers.Default) {
+            jobs[c] = async(Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.LAZY) {
+                if (passed.get() >= 0 && passed.get() != c) return@async null
                 try {
                     runAlnsSingle(state, initial.copy2D(), options.copy(workers = 1, seed = base + (c + 1) * 0x2545F4914F6CDD1DL), budgetSec, shouldStop) { phase, report, iters, elapsed ->
                         val won = report != null && report.hard == 0 && passed.compareAndSet(-1, c)
@@ -464,6 +521,7 @@ object V6NativeOptimizer {
                 }
             }
         }
+        jobs.forEach { it?.start() }
         val results = jobs.mapNotNull { d ->
             try { d?.await() } catch (_: kotlinx.coroutines.CancellationException) { null }
         }
@@ -561,7 +619,7 @@ object V6NativeOptimizer {
                 fun syncReport() {
                     if (reportStale) {
                         globalReport = UnifiedViolationChecker.check(state, globalBest)
-                        liveBest = globalBest.map { it.toList() }
+                        publishLiveBest(globalReport, globalBest)
                         reportStale = false
                     }
                 }
@@ -828,7 +886,7 @@ object V6NativeOptimizer {
                 iter++
                 itersTotal++
                 if (iter % 120L == 0L) {
-                    liveBest = globalBest.map { it.toList() }   // [DefragLiveView] 計算中ライブ盤面を公開
+                    publishLiveBest(globalReport, globalBest)   // [DefragLiveView] 計算中ライブ盤面を公開
                     onProgress("ALNS restart ${r + 1}/$restarts", globalReport, itersTotal, nowMs() - started)
                     yield()
                 }
@@ -940,7 +998,7 @@ object V6NativeOptimizer {
                 cooldownFocus = if (focus != "total" && (candReport.breakdown[focus] ?: 0) >= focusedBefore) focus else null
             }
             logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "round=${round + 1}/$rounds focus=$focus best HARD=${bestReport.hard} total=${bestReport.total}"))
-            liveBest = best.map { it.toList() }   // [DefragLiveView] 計算中ライブ盤面を公開
+            publishLiveBest(bestReport, best)   // [DefragLiveView] 計算中ライブ盤面を公開
             onProgress("RSI $focus", bestReport, iters, nowMs() - started)
             // [N4改] focus枯渇の早期終了。旧版は「2R無改善」だけで打ち切っていたが、これは達成可能族が
             //   残る場合でもランダム探索(destroy-repair)を早期に切り、乱数運の悪い2Rで本来伸びる盤面を捨てうる
