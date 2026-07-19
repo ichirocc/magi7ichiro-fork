@@ -1,15 +1,22 @@
 package com.magi.app.v6
 
+/** [レビュー#1 3.213.0] 辞書式パック score = hard × SCORE_HARD_UNIT + soft の HARD 桁単位。
+ *  soft がこの値以上になると hard/soft の分解・比較（split / SA の HARD ゲート / LAHC / GLS）が壊れる。
+ *  実機実測 soft は ~2e3 だが理論上限を強制しないままだったため、余裕を 1e6→1e9 へ拡大（Long 上限まで
+ *  hard ~9e9 の余地＝実データ規模の hard 数千に対し十分）。C++ (magi_native.cpp の SaChunk::M と
+ *  リテラル 1000000000LL 群) と必ず同期させること（乖離は2層番兵＋native-parity CI が検出）。 */
+const val SCORE_HARD_UNIT = 1_000_000_000L
+
 /**
  * Faithful port of the Web worker's `fullEval`.
  *
- * Lexicographic objective:  score = hard1 * 1_000_000 + soft
+ * Lexicographic objective:  score = hard1 * SCORE_HARD_UNIT + soft
  *   hard1 = c3n (forbidden seq) + covU (per-cell OR/AND shortfall over P1/P2, #4b) + pref
  *   soft  = c1 (window) + c2 (per-staff total) + c41 (group/day range)
  *           + c42 (group pair conflict) + c41s/c42s (skill-group変種) + c3 (want seq) + c3m + c3mn
  *           + [統一a/b] low/high (range, amount×90/45) + covO (over-coverage, amount)
  *   ※ range と covO は UnifiedViolationChecker と同分類(SOFT)・同重み。Web betterVec の lim 層は
- *     soft 内の高重み(90/45)として表現（hard1 は *1_000_000 で常に優先）。
+ *     soft 内の高重み(90/45)として表現（hard1 は ×SCORE_HARD_UNIT で常に優先）。
  *
  * The solution `a[i][j]` is the assigned shift index (exactly one shift per cell),
  * the equivalent of the Web's one-hot `x[i][j][k] === 1`.
@@ -19,9 +26,9 @@ package com.magi.app.v6
  */
 class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
 
-    fun fullEval(a: Array<IntArray>): Long { val v = fullEvalParts(a); return v[0] * 1_000_000L + v[1] }
+    fun fullEval(a: Array<IntArray>): Long { val v = fullEvalParts(a); return v[0] * SCORE_HARD_UNIT + v[1] }
 
-    /** [監査#7] hard/soft を分離して返す（soft の 1e6 桁溢れ＝辞書式崩壊の診断用）。fullEval はこの合成で挙動不変。 */
+    /** [監査#7] hard/soft を分離して返す（soft の SCORE_HARD_UNIT 桁溢れ＝辞書式崩壊の診断用）。fullEval はこの合成で挙動不変。 */
     fun fullEvalParts(a: Array<IntArray>): LongArray {
         val S = p.S; val T = p.T; val K = p.K
         var hard1 = 0L
@@ -111,7 +118,10 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
         // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low=90/high=45)・
         // 同じガード(lo!=0, low は canDo 必須)。旧実装は hard2(=表示HARD) として +1 計上していた。
         val ssn = Array(S) { IntArray(K) }
-        for (i in 0 until S) for (j in 0 until T) ssn[i][a[i][j]]++
+        // [レビュー#7 3.213.0] normalizeSchedule は不正セルを -1 に写像する（MirrorCore:476）。
+        //   旧: 無ガードの ssn[i][a[i][j]]++ が -1 で ArrayIndexOutOfBoundsException。C++ fullEvalParts
+        //   （3.199.0 で全面ガード済＝範囲外セルはスキップ）と同じ意味論へ対称化する。
+        for (i in 0 until S) for (j in 0 until T) { val k = a[i][j]; if (k in 0 until K) ssn[i][k]++ }
         for (i in 0 until S) for (k in 0 until K) {
             val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
             val n = ssn[i][k]
@@ -161,7 +171,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
     }
 
     /** Returns the hard / soft split for display (運用違反 vs SOFT). */
-    fun split(score: Long): Pair<Long, Long> = (score / 1_000_000L) to (score % 1_000_000L)
+    fun split(score: Long): Pair<Long, Long> = (score / SCORE_HARD_UNIT) to (score % SCORE_HARD_UNIT)
 
     private fun c3check(a: Array<IntArray>, list: List<C3>, forbidden: Boolean): Long {
         val S = p.S; val T = p.T

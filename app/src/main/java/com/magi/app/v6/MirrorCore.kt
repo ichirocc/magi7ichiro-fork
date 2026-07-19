@@ -531,15 +531,8 @@ fun coverage(p: Problem, schedule: Array<IntArray>): Array<IntArray> {
     return out
 }
 
-fun lockedMatrix(p: Problem): Array<BooleanArray> {
-    val out = Array(p.S) { BooleanArray(p.T) }
-    for (i in 0 until p.S) {
-        for (j in 0 until p.T) {
-            out[i][j] = p.wish[i][j] in 0 until p.K
-        }
-    }
-    return out
-}
+// [レビュー#4 3.213.0] lockedMatrix(canDo 無視の全希望ロック)は撤去。唯一の呼出元 LightMirrorOptimizer が
+//   wishLocked（実現可能希望のみ凍結）へ統一されたため呼出0のデッドコード＝削除。
 
 fun restShiftIndex(state: MagiState): Int = state.shifts.indexOfFirst { it.kigou == "休" }.takeIf { it >= 0 } ?: 0
 

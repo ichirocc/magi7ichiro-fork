@@ -66,6 +66,8 @@ class GlsPenalty(
      * @return 減衰後に残った非ゼロ項目数。
      */
     fun decay(keepPercent: Int = 80): Int {
+        // [レビュー#8 3.213.0] 値域契約の明示。100超は aging でなくペナルティ増幅になる（現行呼出は固定80のみ）。
+        require(keepPercent in 0..100) { "keepPercent must be in 0..100: $keepPercent" }
         val it = pen.entries.iterator()
         while (it.hasNext()) {
             val e = it.next()

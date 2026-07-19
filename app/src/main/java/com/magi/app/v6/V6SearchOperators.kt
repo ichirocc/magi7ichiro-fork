@@ -414,7 +414,7 @@ internal fun glsAccept(
     if (ns > curScore + 2_000_000L) return false
     return when (mode) {
         AcceptMode.GREAT_DELUGE ->
-            (ns.toDouble() + curAug + moveAug) <= gdLevel && (ns / 1_000_000L) <= (curScore / 1_000_000L)
+            (ns.toDouble() + curAug + moveAug) <= gdLevel && (ns / SCORE_HARD_UNIT) <= (curScore / SCORE_HARD_UNIT)
         AcceptMode.SA, AcceptMode.LAM_ADAPTIVE -> {
             // LAM_ADAPTIVE は受理式は SA と同じ Boltzmann。違いは呼び出し側が temp を受理率追従で適応させる点。
             val delta = (ns - curScore).toDouble() + moveAug

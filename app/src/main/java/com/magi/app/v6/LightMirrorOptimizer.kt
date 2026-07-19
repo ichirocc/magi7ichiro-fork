@@ -19,8 +19,14 @@ object LightMirrorOptimizer {
         val t0 = System.nanoTime()
         val rng = Random(seed)
         val p = Problem(state)
-        val locked = lockedMatrix(p)
+        // [レビュー#4 3.213.0] 希望の凍結規則をエンジン本体と統一。
+        //   旧: lockedMatrix(p)=canDo 無視で全希望をロック＋事前適用なし＝(a)実現可能だが未充足の希望が
+        //   永久に直らない (b)実現不能希望が凍結され他制約の修復を妨げる、の両方を抱えていた。
+        //   wishLocked（実現可能な希望のみ凍結・MirrorCore 監査#11①）へ統一し、凍結する希望は
+        //   最初に盤面へ適用してから探索する（pref=HARD の凍結セルを最初から充足させる）。
         var bestSchedule = normalizeSchedule(initial, p)
+        val locked = Array(p.S) { i -> BooleanArray(p.T) { j -> p.wishLocked(i, j) } }
+        for (i in 0 until p.S) for (j in 0 until p.T) if (locked[i][j]) bestSchedule[i][j] = p.wish[i][j]
         var curSchedule = bestSchedule.copy2D()
         var curReport = UnifiedViolationChecker.check(state, curSchedule)
         var bestReport = curReport
