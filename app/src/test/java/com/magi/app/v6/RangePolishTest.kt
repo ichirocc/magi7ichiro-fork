@@ -75,4 +75,17 @@ class RangePolishTest {
         val result = V6HotfixPasses.applyRangePolish(st, sched, seed = 1L)
         assertEquals(0, result.applied)
     }
+
+    // [頭打ちの理由を可視化] Bが両日とも希望固定(Z)だと玉突きの唯一の候補が使えず「候補なし」で
+    // 頭打ちする。ログの残存表示にその理由が出ることを固定する。
+    @Test
+    fun rangePolishLogsNoCandidateReasonWhenOnlyChainPartnerIsWishLocked() {
+        val st = highState().copy(wishes = mapOf("1,0" to 3, "1,1" to 3))
+        val sched = st.schedule.toIntArray2D()
+        val result = V6HotfixPasses.applyRangePolish(st, sched, seed = 1L)
+        assertEquals("唯一の候補が希望固定のため採用0回", 0, result.applied)
+        val msg = result.logs.first().message
+        assertTrue("残存表示に候補なしの理由が出ること: $msg", msg.contains("候補なし"))
+        assertTrue("対象職員名(A)が出ること: $msg", msg.contains("A "))
+    }
 }
