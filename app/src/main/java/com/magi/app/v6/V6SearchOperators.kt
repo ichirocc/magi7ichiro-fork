@@ -261,10 +261,12 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
  * 見つかれば [(i, j2, alt), ...サブ連鎖]（すべて day j2 のみの手）を返す（盤面は判定中に一時変更するが
  * 必ず復元＝呼び出し側が実際に適用するかを決める）。見つからなければ null。
  * findCovUChain（covU側の禁止連続回避）・applyCovOFree（covO側、3.226.0で追加採用）から共通利用。
+ * [3.232.0/ドッグフーディングで発見] maxDepth既定は findCovUChain と同じ理由で (p.K-1).coerceAtLeast(1)
+ * （下記 findCovUChain の docstring 参照）。
  */
 internal fun tryFixForbiddenRunViaAdjacentDay(
     p: Problem, sched: Array<IntArray>, i: Int, j: Int, fillShift: Int, rng: Random,
-    allowCrossDayFix: Boolean = true, maxDepth: Int = 5,
+    allowCrossDayFix: Boolean = true, maxDepth: Int = (p.K - 1).coerceAtLeast(1),
 ): List<IntArray>? {
     if (!allowCrossDayFix) return null
     for (j2 in intArrayOf(j - 1, j + 1)) {
@@ -304,8 +306,17 @@ internal fun tryFixForbiddenRunViaAdjacentDay(
  *
  * 探索: 「k0 を職員 i が埋める → i が空けたシフト m を次の職員が埋める → … → 空けても covU が増えない
  * シフト（需要0 or 余裕あり）で終端」。リンク条件: canDo・非wishLocked・禁止連続(c3n, 任意長=三連/五連等)の
- * プルーニング・同一職員の再訪なし・同一シフト展開の再訪なし・深さ≤maxDepth(既定5=最大5人の玉突き)。
+ * プルーニング・同一職員の再訪なし・同一シフト展開の再訪なし・深さ≤maxDepth。
  * 同日内交換なので被覆総量は保存。
+ *
+ * [3.232.0/ドッグフーディングで発見・maxDepth既定を(p.K-1)へ引き上げ] `visited`はシフト単位
+ * (BooleanArray(p.K))で管理されるため、本BFSは元々シフト数K種を超えて展開できない＝maxDepthを
+ * K以上にしても計算量は増えない（自然にO(K×S)で頭打ち）。旧既定5(「最大5人の玉突き」という
+ * 検証しやすさ重視の設計意図)は、実データでこの上限より深い箇所にのみ解が存在する場合に
+ * 「候補なし」として誤って諦めてしまう（桒澤美幸のAｱ超過・8/6のCｱ不足など、RangePolish/RSI covU
+ * focusで繰り返し「候補なし/玉突き必要」のまま残る事例で確認）。計算コストがほぼ無視できることを
+ * 踏まえ、既定を(p.K-1).coerceAtLeast(1)（=シフト全種を使い切るまで探索）へ引き上げた
+ * （ユーザー承認: 「人間が検証しやすい5人まで」の設計意図より網羅性を優先）。
  *
  * [禁止連続の回避=隣接日調整] 候補 i が k0 を埋めると禁止連続(c3n)に触れる場合、即除外せず、
  * 隣接日(j-1/j+1)の i 自身の割当も変えてパターンを崩せないか試す（`tryFixC3nViaAdjacentDay`）。
@@ -317,7 +328,7 @@ internal fun tryFixForbiddenRunViaAdjacentDay(
  * スコアリング不変・退化不能）。見つからなければ null。
  */
 internal fun findCovUChain(
-    p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = 5, exclude: Int = -1, allowCrossDayFix: Boolean = true,
+    p: Problem, sched: Array<IntArray>, k0: Int, j: Int, rng: Random, maxDepth: Int = (p.K - 1).coerceAtLeast(1), exclude: Int = -1, allowCrossDayFix: Boolean = true,
     // [C1研磨・手B強化] 候補(staff,shift,day)がその職員自身のc1不足解消にも資するかの述語。
     //   非nullのとき candidates() の返り値を「述語=true」優先に並べ替えるだけ（探索ロジック自体は不変）。
     //   既定null=既存呼出元は完全に挙動不変。

@@ -76,21 +76,47 @@ object V6NativeOptimizer {
     private const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
 
     /** [HF290 役割分担移植] 並列仮説の探索/精製プロファイル（温度・摂動の倍率）。
-     *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。 */
+     *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。
+     *  [仮説数上限撤廃(3.225.0)後のドッグフーディングで発見・3.228.0で修正] この配列は5要素固定のため
+     *  i>=5（3.225.0でworkers設定まで仮説数が増えたことで実際に生成されうる）は全て else 節の
+     *  既定値=roleExploreFor(0)と同値に縮退し、役割分担が完全に無効化されていた（仮説5,6,7…は
+     *  種(seed)以外ベースラインと区別できないクローン＝「多様性を優先する」という3.225.0自身の
+     *  狙いを裏切っていた）。i<5 の既存値は一切変更せず(既存テスト・チューニング結果を保持)、
+     *  i>=5 だけ黄金比の低食い違い列(golden-ratio low-discrepancy sequence)で [0.35, 2.4] へ
+     *  決定的かつ非周期的に写像する（配列を単に延長・循環させるとi=5%5=0で結局ベースラインに
+     *  戻るクローン問題を繰り返すため、周期を持たない生成式を採用）。 */
     private val ROLE_EXPLORE = doubleArrayOf(1.0, 2.0, 0.5, 1.6, 0.6)
-    internal fun roleExploreFor(i: Int): Double = if (i in ROLE_EXPLORE.indices) ROLE_EXPLORE[i] else 1.0
+    internal fun roleExploreFor(i: Int): Double {
+        if (i in ROLE_EXPLORE.indices) return ROLE_EXPLORE[i]
+        val frac = (i * 0.6180339887498949) % 1.0
+        return 0.35 + frac * (2.4 - 0.35)
+    }
 
     /** [論文活用] 並列仮説で受理戦略を多様化（W0,W1=SA基準 / W2,W4=Great Deluge / W3=Lam適応冷却）。
-     *  W0 は常に SA でベースライン保持＝退化防止。 */
+     *  W0 は常に SA でベースライン保持＝退化防止。
+     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は else節で一律SAに縮退していた（roleExploreFor と同じ
+     *  クローン問題）ため、GD/LAM/SAを i%3 で巡回させ実際に多様化する。 */
     internal fun roleAcceptFor(i: Int): AcceptMode = when (i) {
         2, 4 -> AcceptMode.GREAT_DELUGE
         3 -> AcceptMode.LAM_ADAPTIVE
-        else -> AcceptMode.SA
+        0, 1 -> AcceptMode.SA
+        else -> when (i % 3) {
+            0 -> AcceptMode.GREAT_DELUGE
+            1 -> AcceptMode.LAM_ADAPTIVE
+            else -> AcceptMode.SA
+        }
     }
 
     /** [論文活用] 並列仮説で演算子選択を多様化（W1=Thompson sampling / 他=roulette）。
-     *  W0 は常に roulette でベースライン保持＝退化防止。 */
-    internal fun roleOpSelectFor(i: Int): OpSelectMode = if (i == 1) OpSelectMode.THOMPSON else OpSelectMode.ROULETTE
+     *  W0 は常に roulette でベースライン保持＝退化防止。
+     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は一律rouletteに縮退していたため、偶奇でTHOMPSON/ROULETTEを
+     *  交互に割当てて多様化する。 */
+    internal fun roleOpSelectFor(i: Int): OpSelectMode = when {
+        i == 1 -> OpSelectMode.THOMPSON
+        i in 0..4 -> OpSelectMode.ROULETTE
+        i % 2 == 1 -> OpSelectMode.THOMPSON
+        else -> OpSelectMode.ROULETTE
+    }
 
     /**
      * 時間予定型 Great Deluge の水位（Burke, Bykov, Newall & Petrovic 2004）。
@@ -237,6 +263,20 @@ object V6NativeOptimizer {
             return V6OptimizerResult(entryBoard, entryBoardReport.copy(logs = logs + entryBoardReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
         }
         return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
+    }
+
+    /** [3.231.0/ドッグフーディングで発見・修正] RSIラウンドループがHf63Infeasibilityへ渡す
+     *  ラウンド当たりeffortIters。旧実装は1800/round固定で、INFEAS_STALL_ITERS=5000到達に
+     *  約3ラウンドの同族focusを要した。E9冷却(1ラウンド休止)が2〜3の詰んだ族を交互に切替える
+     *  実運用では、rounds が小さい(既定5等)と3回目のfocusが最終ラウンドに達し、deprioritize が
+     *  成立しても振り向け先の残りラウンドが無かった。rounds に応じて動的に決め、
+     *  「残り最低reserveRounds分を振り向けに残せる」タイミングでdeprioritizeが完了するようにする
+     *  （E9の1-in-2交互を想定しattemptsTarget=ceil((rounds-reserveRounds)/2)、下限2で一度の不運な
+     *  1ラウンドだけではdeprioritizeしない=E9のより軽い1R冷却との役割分担を保つ）。純関数として抽出し
+     *  ユニットテスト可能にする。 */
+    internal fun rsiHf63EffortIters(rounds: Int, reserveRounds: Int = 2): Int {
+        val attemptsTarget = max(2, (max(0, rounds - reserveRounds) + 1) / 2)
+        return (Hf63Infeasibility.INFEAS_STALL_ITERS + attemptsTarget - 1) / attemptsTarget
     }
 
     /** [仮説数上限撤廃・ユーザー指示] かつて仕様§2.2の仮説数固定上限(5)だった定数。optimize() の
@@ -954,15 +994,27 @@ object V6NativeOptimizer {
         // [レビュー#5 3.213.0] HF63 の停滞加算を「直前ラウンドで実際に focus した族」に限定する。
         //   旧: updateFromBreakdown が全族を無差別に停滞加算し、covU 張り付き中に一度も試していない
         //   c3n 等の HARD 族まで約3ラウンドで誤 deprioritize し得た（SOFT は 3.184.0 の avoid フィルタで
-        //   緩和済みだが HARD は残っていた）。effortIters=1800/round は既存の粒度補正と同一。
+        //   緩和済みだが HARD は残っていた）。
+        // [3.231.0/ドッグフーディングで発見・修正] 旧 effortIters=1800/round(固定) は
+        //   INFEAS_STALL_ITERS=5000 到達に約3ラウンドの同族focusを要する。E9冷却(1ラウンド休止)が
+        //   2〜3の詰んだ族を交互に切替えるため、実際にその族が3回目の focus を受けるのは
+        //   （rounds=5の場合）round1,3,5＝最終ラウンドで、deprioritize が成立しても振り向け先の
+        //   ラウンドが残っていなかった（実機ログでround1〜5が3族の堂々巡りのまま全く改善しない事例を
+        //   確認）。effortIters を rounds に応じて動的に決め、詰んだ族の deprioritize が
+        //   「残り最低2ラウンドを振り向けに残せる」タイミングで完了するようにする
+        //   （reserveRounds=2・E9の1-in-2交互を想定しattemptsTarget=ceil((rounds-2)/2)を2で下駄履かせ、
+        //   一度の不運な1ラウンドだけでは deprioritize しない=E9のより軽い1R冷却との役割分担を保つ）。
+        //   rounds が大きいほど attemptsTarget も緩み、旧来同様じっくり粘れる。focus 選択のみの変更で
+        //   スコアリング不変（keep-best=better()が結果を担保）。
+        val effortIters = rsiHf63EffortIters(rounds)
         var lastFocus: String? = null
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
             // [監査修正] HF63 は Web の per-iter 前提(5000 iter 無改善で infeasible)。ラウンド粒度の呼出に
-            //   1800/round を渡し、閾値5000到達を約3ラウンド分の focus 投入無改善に引き伸ばす
+            //   effortIters/round を渡し、閾値5000到達を有限ラウンド分の focus 投入無改善に引き伸ばす
             //   （class は Web 忠実移植のまま・呼出側で粒度を補正）。iters 自体は本来用途に不変。
-            hf63.updateFromBreakdownFocused(bestReport.breakdown, lastFocus, 1800)
+            hf63.updateFromBreakdownFocused(bestReport.breakdown, lastFocus, effortIters)
             // [12h見直し] 動的(HF63)と静的(covU床)の avoid を分離して保持する。N4 早期脱出(下記)の発火条件は
             //   HF63 の動的検知のみでゲートしないと、構造的covU>0 のデータでは静的除外が round 0 から avoid を
             //   非空にし、「旧N4の厳密な部分集合」保証(650-654行)を破って2停滞ラウンドで RSI が即終了してしまう。
@@ -1643,6 +1695,11 @@ object V6NativeOptimizer {
             //   一切持てない点がcovOと同じ。applyC41Freeで群レンジの超過/不足を直接動かす専用オペレータへ。
             "c41" -> { applyC41Free(state, out, rng, skill = false); repeat(6) { destroyRepairDay(state, out, rng) } }
             "c41s" -> { applyC41Free(state, out, rng, skill = true); repeat(6) { destroyRepairDay(state, out, rng) } }
+            // [3.233.0/c41,c41sと同型の穴] c42/c42sも「動かせるか」を判定する専用オペレータが無く
+            // destroyRepairViolationsの汎用ランダム再割当頼みだった。applyC42Freeで違反ペアの
+            // 片側を直接動かす専用オペレータへ。
+            "c42" -> { applyC42Free(state, out, rng, skill = false); repeat(6) { destroyRepairDay(state, out, rng) } }
+            "c42s" -> { applyC42Free(state, out, rng, skill = true); repeat(6) { destroyRepairDay(state, out, rng) } }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
             //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
@@ -1885,6 +1942,73 @@ object V6NativeOptimizer {
                         }
                     }
                     if (!moved) break   // 玉突きでも動かせない＝諦める（安全側）
+                }
+            }
+        }
+        return applied
+    }
+
+    /**
+     * [3.233.0/ドッグフーディングで発見・covO(3.204.0)/c41,c41s(3.209.0)と同型の専用repair欠如]
+     * c42(群ペア禁止: 群g1のs1×群g2のs2が同日に同時発生禁止)は`mark(i,j,"c42")`で
+     * report.violations(セルマップ)には載るため destroyRepairViolations の汎用ランダム再割当は
+     * 一応届くが、covU/covO/c41のような「動かせるか(希望固定/禁止連続/被覆悪化を避ける)」を判定して
+     * 実際に動かす専用オペレータが無かった。違反ペア(left∈g1×s1, right∈g2×s2)のどちらか一方を
+     * 実際に他シフトへ動かして崩す。移動先でcovOが悪化しない候補を探し、離脱元でcovUが悪化するなら
+     * findCovUChainで玉突きフォールバック（c41Free(3.209.0)で判明済みの罠=「離脱を先にschedへ適用して
+     * からfindCovUChainを呼ぶ」順序を踏襲。逆順だと本人がまだ在籍中に見え常にnullが返る）。
+     * skill=false は cons42(sgrp)、skill=true は cons42s(ssk) を対象にする（DRY化）。
+     * sched を in-place 変更し適用手数を返す。最終採否は呼び出し側のkeep-best（ラウンドbetter()）が
+     * 担保＝退化不能。
+     */
+    internal fun applyC42Free(state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean): Int {
+        val p = cachedProblem(state)
+        if (p.S == 0 || p.T == 0) return 0
+        val rules = if (skill) p.cons42s else p.cons42
+        if (rules.isEmpty()) return 0
+        val grp = if (skill) p.ssk else p.sgrp
+        var applied = 0
+        val cov = Array(p.T) { IntArray(p.K) }
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
+        fun recomputeCovDay(j: Int) {
+            val col = cov[j]; for (k in col.indices) col[k] = 0
+            for (i in 0 until p.S) { val k = sched[i][j]; if (k in 0 until p.K) col[k]++ }
+        }
+        // 違反ペアの片側(候補)を実際に他シフトへ動かす。動かせたら true。
+        fun tryFreeOneSide(candidates: List<Int>, j: Int, fromShift: Int): Boolean {
+            for (i in candidates) {
+                if (p.wish[i][j] == fromShift) continue   // 本人希望＝動かすとpref未充足化、対象外
+                for (m in p.allowedShiftsForStaff(i).filter { it != fromShift }.shuffled(rng)) {
+                    if (p.makesForbiddenRun(sched, i, j, m)) continue
+                    if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue   // 移動先でcovO悪化させない
+                    if (p.covUCell(fromShift, j, cov[j][fromShift] - 1) <= p.covUCell(fromShift, j, cov[j][fromShift])) {
+                        sched[i][j] = m
+                        cov[j][fromShift]--; cov[j][m]++
+                        return true
+                    }
+                    // [玉突き連鎖フォールバック] c41Freeと同じ理由で、離脱を先に適用してから呼ぶ。
+                    val oldK = sched[i][j]
+                    sched[i][j] = m
+                    val chain = findCovUChain(p, sched, fromShift, j, rng, exclude = i)
+                    if (chain == null) { sched[i][j] = oldK; continue }
+                    chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
+                    recomputeCovDay(j)
+                    return true
+                }
+            }
+            return false
+        }
+        for (c in rules) {
+            for (j in 0 until p.T) {
+                while (true) {
+                    val left = (0 until p.S).filter { grp[it] == c.g1 && sched[it][j] == c.s1 }
+                    val right = (0 until p.S).filter { grp[it] == c.g2 && sched[it][j] == c.s2 }
+                    if (left.isEmpty() || right.isEmpty()) break   // ペアが存在しない＝この日は解消済み
+                    val movedLeft = tryFreeOneSide(left.shuffled(rng), j, c.s1)
+                    if (movedLeft) { applied++; continue }
+                    val movedRight = tryFreeOneSide(right.shuffled(rng), j, c.s2)
+                    if (movedRight) { applied++; continue }
+                    break   // 左右どちらも動かせない＝この日は諦める（安全側）
                 }
             }
         }

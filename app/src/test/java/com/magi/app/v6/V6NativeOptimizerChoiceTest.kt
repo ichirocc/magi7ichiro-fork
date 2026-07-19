@@ -23,13 +23,44 @@ class V6NativeOptimizerChoiceTest {
     }
 
     @Test fun roleProfilesDiversifyWithBaselineFirst() {
-        // [HF290 役割分担] W0 は必ず 1.0（ベースライン＝退化防止）、以降は探索(>1)/精製(<1)で多様化、範囲外は 1.0。
+        // [HF290 役割分担] W0 は必ず 1.0（ベースライン＝退化防止）、以降は探索(>1)/精製(<1)で多様化。
         assertEquals(1.0, V6NativeOptimizer.roleExploreFor(0), 1e-9)
         assertEquals(2.0, V6NativeOptimizer.roleExploreFor(1), 1e-9)   // 探索
         assertEquals(0.5, V6NativeOptimizer.roleExploreFor(2), 1e-9)   // 精製
         assertEquals(1.6, V6NativeOptimizer.roleExploreFor(3), 1e-9)
         assertEquals(0.6, V6NativeOptimizer.roleExploreFor(4), 1e-9)
-        assertEquals(1.0, V6NativeOptimizer.roleExploreFor(7), 1e-9)   // 範囲外=既定
+    }
+
+    // [3.228.0/ドッグフーディングで発見・修正] 仮説数上限撤廃(3.225.0)でi>=5の仮説が実際に生成される
+    // ようになったが、旧実装はi>=5で全てroleExploreFor(0)=1.0・roleAcceptFor=SA・roleOpSelectFor=
+    // ROULETTEへ縮退し、種(seed)以外ベースラインと同一の「クローン仮説」になっていた。i<5は不変
+    // （既存テストroleProfilesDiversifyWithBaselineFirstが担保）で、i>=5が実際に多様化することを固定する。
+    @Test fun roleProfilesDiversifyBeyondOldFixedArraySize() {
+        val exploreValues = (5..12).map { V6NativeOptimizer.roleExploreFor(it) }
+        // 旧実装のクローン値(=roleExploreFor(0)=1.0)へ縮退していないこと
+        assertTrue("i>=5はベースライン(1.0)への縮退でないこと", exploreValues.none { kotlin.math.abs(it - 1.0) < 1e-6 })
+        // 互いに異なる値へ分散していること（同じ値の繰り返しでない＝真の多様化）
+        assertEquals("i=5..12の8個が全て相異なる値であること", 8, exploreValues.toSet().size)
+        // 値域[0.35,2.4]に収まっていること
+        assertTrue(exploreValues.all { it in 0.35..2.4 })
+
+        // accept/opSelectも旧来の一律デフォルト(SA/ROULETTE)への縮退でなく複数モードへ分散していること
+        val acceptModes = (5..10).map { V6NativeOptimizer.roleAcceptFor(it) }.toSet()
+        assertTrue("i>=5のacceptModeが複数種に分散していること(旧: 全てSAに縮退)", acceptModes.size > 1)
+        val opSelectModes = (5..10).map { V6NativeOptimizer.roleOpSelectFor(it) }.toSet()
+        assertTrue("i>=5のopSelectModeが複数種に分散していること(旧: 全てROULETTEに縮退)", opSelectModes.size > 1)
+    }
+
+    @Test fun roleProfilesForIndicesBelowFiveAreUnaffectedByDiversification() {
+        // [回帰] i<5の既存分岐(SA/GD/LAM・ROULETTE/THOMPSON)は3.228.0で一切変更していないこと。
+        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(0))
+        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(1))
+        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(2))
+        assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
+        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
+        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(0))
+        assertEquals(OpSelectMode.THOMPSON, V6NativeOptimizer.roleOpSelectFor(1))
+        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(2))
     }
 
     @Test fun greatDelugeLevelDecaysFromInitialToBest() {
@@ -467,6 +498,108 @@ class V6NativeOptimizerChoiceTest {
         }
     }
 
+    // [3.233.0/covO(3.204.0)・c41,c41s(3.209.0)と同型の穴] c42(群ペア禁止: 群g1のs1×群g2のs2が同日に
+    // 同時発生禁止)も「動かせるか」を判定する専用オペレータが無くdestroyRepairViolationsの汎用ランダム
+    // 再割当頼みだった。applyC42Freeが違反ペアの片側を実際に動かして解消することを固定する。
+    private fun c42State(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-01",
+        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
+        staff = listOf(Staff("A", 0), Staff("B", 1)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1, 0), listOf(1, 0, 1)),
+        groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
+        schedule = schedule, wishes = wishes, staffRange = emptyMap(),
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+        cons41 = emptyList(),
+        cons42 = listOf(com.magi.app.model.C42Row(g1Kigou = "G0", g2Kigou = "G1", s1Kigou = "X", s2Kigou = "Y")),
+    )
+
+    @Test fun applyC42FreeResolvesFreelyMovablePair() {
+        // A(G0)=X, B(G1)=Y は禁止ペア。Xに需要なし＝Aを休へ直接動かすだけで解消できるはず。
+        val st = c42State(listOf(listOf(1), listOf(2)))
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c42"] ?: 0)
+        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        assertEquals(1, applied)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals(0, after.breakdown["c42"] ?: 0)
+        assertEquals(0, after.hard)
+    }
+
+    @Test fun applyC42FreeLeavesWishPinnedPairUntouched() {
+        // 両者とも現在のシフトを希望固定（希望どおり配置済み）だと、動かすと希望未充足に化けるため何もしない。
+        val st = c42State(listOf(listOf(1), listOf(2)), wishes = mapOf("0,0" to 1, "1,0" to 2))
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c42"] ?: 0)
+        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        assertEquals(0, applied)
+        assertEquals(1, sched[0][0])
+        assertEquals(2, sched[1][0])
+    }
+
+    @Test fun applyC42FreeIsNoOpWhenRulesEmpty() {
+        val st = c42State(listOf(listOf(1), listOf(2))).copy(cons42 = emptyList())
+        val sched = st.schedule.toIntArray2D()
+        assertEquals(0, V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false))
+    }
+
+    // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開] 旧実装（今回新設した直接移動のみ）だと、離脱元シフトが
+    //   全体needをちょうど単独充足しており誰か1人が離脱すると即covU化する構造的にブロックされた局面を
+    //   解けない。findCovUChainで別職員に玉突き充填すれば解消できることを固定する。
+    @Test fun applyC42FreeResolvesViaChainWhenDirectMoveWouldCreateCovU() {
+        // shift: 0=休(need無) 1=X(c42対象、need1=1でAがちょうど単独充足) 2=Y(need無、Bの現在地)
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"))
+        val groupShift = listOf(
+            listOf(1, 1, 0), // G0(A)=休,X
+            listOf(1, 0, 1), // G1(B)=休,Y
+            listOf(1, 1, 0), // G2(C)=休,X（Aの離脱後にXを埋め直せる玉突き候補）
+        )
+        val staff = listOf(Staff("A", 0), Staff("B", 1), Staff("C", 2))
+        val schedule = listOf(listOf(1), listOf(2), listOf(0)) // A=X, B=Y（禁止ペア）, C=休
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = List(3) { List(3) { "" } },
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(),
+            cons42 = listOf(com.magi.app.model.C42Row(g1Kigou = "G0", g2Kigou = "G1", s1Kigou = "X", s2Kigou = "Y")),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c42"] ?: 0)
+        assertEquals(0, before.hard)   // Xはneed1=1をAがちょうど充足＝離脱すると即covU化する構造的にブロックされた局面
+
+        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
+        val after = UnifiedViolationChecker.check(st, sched)
+        assertEquals("c42が解消", 0, after.breakdown["c42"] ?: -1)
+        assertEquals("HARDは悪化しない", 0, after.hard)
+        assertEquals("Xの被覆(covU)は悪化しない", 0, after.breakdown["covU"] ?: -1)
+    }
+
+    // [smoke] focus="c42"/"c42s" が新設の applyC42Free 経路へ正しくルーティングされ、例外なく
+    //   同一次元の盤面を返すこと。実際の解消効果は上記の直接テストが検証する。
+    @Test fun rsiGenerateHypothesisC42FocusReturnsValidSchedule() {
+        val st = c42State(listOf(listOf(1), listOf(2)))
+        val base = st.schedule.toIntArray2D()
+        val rep = UnifiedViolationChecker.check(st, base)
+        for (focus in listOf("c42", "c42s")) {
+            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            assertNotNull(out)
+            assertEquals(base.size, out.size)
+            assertEquals(base[0].size, out[0].size)
+        }
+    }
+
     // [余剰ワーカー活用] perHypothesisWorkers: 仕様§2.2の5仮説上限を超えて設定したworkersを、
     // 各仮説の内部並列度（RSI/RSI++のSAチェーン数・ALNSの多チェーン）へ均等配分する計算のみを固定する
     // 純粋関数テスト（並列実行そのものはJVMユニットテストでは検証しない＝実機ログ/CIビルドで確認）。
@@ -558,6 +691,29 @@ class V6NativeOptimizerChoiceTest {
         // 旧上限5以下の帯でも従来どおり workers に一致すること（回帰確認）。
         assertEquals(2, V6NativeOptimizer.hypothesisCount(2))
         assertEquals(5, V6NativeOptimizer.hypothesisCount(5))
+    }
+
+    // [3.231.0/ドッグフーディングで発見・修正] rsiHf63EffortIters: 実機ログ(rounds=5)で
+    // covU/apt/c1がE9冷却で交互切替を続け全ラウンドtotal不変だった事例。旧1800固定は5000到達に
+    // 3回のfocusを要し、round1,3,5(=最終)でようやく成立し振り向け先が残らなかった。
+    @Test fun rsiHf63EffortItersReachesThresholdInTwoAttemptsForTypicalRoundBudget() {
+        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
+        assertTrue("2回のfocusで5000へ到達すること(round1,3で成立しround4,5を振り向けに残せる)", e5 * 2 >= 5000)
+        assertTrue("1回の不運なfocusだけでは5000へ到達しない(E9の1R冷却との役割分担を保つ)こと", e5 * 1 < 5000)
+    }
+
+    @Test fun rsiHf63EffortItersNeverDropsBelowTwoAttempts() {
+        // 極小のrounds(2)でも下限2回のfocusは必ず要する。
+        val e2 = V6NativeOptimizer.rsiHf63EffortIters(2)
+        assertTrue(e2 * 1 < 5000)
+        assertTrue(e2 * 2 >= 5000)
+    }
+
+    @Test fun rsiHf63EffortItersRelaxesForLargerRoundBudgets() {
+        // roundsが大きいほど許容attempts回数が増え、effortItersは小さくなる(じっくり粘れる)。
+        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
+        val e8 = V6NativeOptimizer.rsiHf63EffortIters(8)
+        assertTrue(e8 <= e5)
     }
 
     // [敵対的レビュー修正・#3] liveBest の CAS 管理: publishLiveBest は真に better() な報告のときだけ
