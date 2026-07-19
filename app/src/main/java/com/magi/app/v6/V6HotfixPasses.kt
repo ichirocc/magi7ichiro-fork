@@ -121,7 +121,7 @@ object V6HotfixPasses {
         val c1Anchor = setOf("vio-c1")
         val maxRounds = 4
         var round = 0
-        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0
+        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0; var totalC3run = 0
         while (round < maxRounds && !shouldStop()) {
             var roundApplied = 0
 
@@ -165,6 +165,14 @@ object V6HotfixPasses {
             work = rRange.newSchedule.copy2D(); totalRange += rRange.applied; roundApplied += rRange.applied
             if (round == 0) logs.addAll(rRange.logs)
 
+            // [C3RunPolish・玉突き連鎖の横展開その3] cons3/cons3m(単一シフト連=run-deficit)を、
+            //   相互交換の相手が構造的に存在しない局面向けに findCovUChain で研磨（grilling不要・
+            //   C3mnPolish/RangePolishと同型のためユーザー承認のうえ直接実装）。
+            onPhase("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨 [巡${round + 1}]")
+            val rC3run = applyC3RunPolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            work = rC3run.newSchedule.copy2D(); totalC3run += rC3run.applied; roundApplied += rC3run.applied
+            if (round == 0) logs.addAll(rC3run.logs)
+
             round++
             if (roundApplied == 0) break   // この巡で1手も採用なし＝joint局所最適に到達
         }
@@ -174,7 +182,7 @@ object V6HotfixPasses {
         run {
             val softAfter = UnifiedViolationChecker.check(state, work)
             fun bd(r: ViolationReport, k: String) = r.breakdown[k] ?: 0
-            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn + totalRange
+            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn + totalRange + totalC3run
             val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn") +
                 bd(preSoftRep, "low") + bd(preSoftRep, "high")
             val verdict = when {
@@ -191,7 +199,7 @@ object V6HotfixPasses {
                     " / low ${bd(preSoftRep, "low")}->${bd(softAfter, "low")}" +
                     " / high ${bd(preSoftRep, "high")}->${bd(softAfter, "high")}" +
                     " | HARD $hardNote / total ${preSoftRep.total}->${softAfter.total}" +
-                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} range玉突き:${totalRange})"))
+                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} range玉突き:${totalRange} c3run玉突き:${totalC3run})"))
         }
 
         // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の
@@ -1159,6 +1167,105 @@ object V6HotfixPasses {
         val logs = listOf(MirrorLog(tag = "RangePolish",
             message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "")))
+        return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
+    }
+
+    /**
+     * [C3RunPolish・玉突き連鎖の横展開その3] cons3/cons3m のうち単一シフト連(run-deficit モデル,
+     * HF507/C3Run.rowDeficit)専用の研磨パス。C3mnPolish(3.214.0)/RangePolish(3.215.0)と同じ監査
+     * （ユーザー指摘「他の制約は大丈夫ですか?」）で発見: 既存のC3Polish(2者ブロック交換)/C3Rotate
+     * (3者回転)は「相手が現在の自分のシフトを担当可能」という相互条件を要求し、単一シフト連の
+     * run不足（既存runを隣接日へ伸ばせば直る局面）に対しては交換相手が構造的に存在しないと解消できない。
+     *
+     * スコープ限定（安全側）: 対象は`C3Run.isSingleShiftSeq`が真の規則のみ（cons3/cons3mの大半を占める
+     * 典型ケース）。複数シフトのMUST/Wantパターン(非single-shift)は既存のC3Polish/C3Rotateのまま
+     * 対象外＝挙動不変（cellFamiliesの"vio-c3"/"vio-c3m"キーは両方のサブケースで共有されるため、
+     * アンカー自体は両方拾うが、対応するルールが見つからない/runが既に規定長以上のセルは単に
+     * スキップされ何もしない）。
+     *
+     * アンカー: `report.cellFamilies`から"vio-c3"/"vio-c3m"を含むセル。run-deficitモデルはrun先頭
+     * セルをマークするため、そこから実際の run 境界(runStart..runEnd)を再走査し、隣接日(runStart-1
+     * または runEnd+1)を該当シフトへ拡張する。拡張元シフトの被覆が悪化する場合は`findCovUChain`
+     * （C1Polish/C3mnPolish/RangePolishと同一パターン）で玉突き修復。採否はisBetter keep-best＝退化不能。
+     */
+    fun applyC3RunPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3A2L): CyclicSwapResult {
+        val p = Problem(state)
+        val work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        var applied = 0
+        data class RunRule(val k: Int, val len: Int)
+        val rules = ArrayList<RunRule>()
+        for (c in p.cons3) if (C3Run.isSingleShiftSeq(c.seq)) rules.add(RunRule(c.seq[0], c.seq.size))
+        for (c in p.cons3m) if (C3Run.isSingleShiftSeq(c.seq)) rules.add(RunRule(c.seq[0], c.seq.size))
+        if (rules.isEmpty()) {
+            return CyclicSwapResult(work, before.total, bestRep.total, 0,
+                listOf(MirrorLog(tag = "C3RunPolish", message = "対象規則(単一シフト連)なし=スキップ")))
+        }
+        val rng = Random(seed)
+        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+
+        fun tryExtend(i: Int, extDay: Int, fromK: Int, toK: Int): Boolean {
+            if (!movable(i, extDay) || p.makesForbiddenRun(work, i, extDay, toK)) return false
+            var cnt = 0
+            for (s in 0 until p.S) if (work[s][extDay] == fromK) cnt++
+            val needsChain = p.covUCell(fromK, extDay, cnt - 1) > p.covUCell(fromK, extDay, cnt)
+            work[i][extDay] = toK
+            if (!needsChain) {
+                val rep = UnifiedViolationChecker.check(state, work)
+                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                work[i][extDay] = fromK
+                return false
+            }
+            val chain = findCovUChain(p, work, fromK, extDay, rng, exclude = i)
+            if (chain == null) { work[i][extDay] = fromK; return false }
+            val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
+            chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
+            val rep = UnifiedViolationChecker.check(state, work)
+            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
+            work[i][extDay] = fromK
+            return false
+        }
+
+        var pass = 0
+        while (pass < maxPasses) {
+            if (shouldStop()) break
+            var improved = false
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val anchors = ArrayList<Pair<Int, Int>>()
+            for ((key, fams) in rep0.cellFamilies) {
+                if ("vio-c3" !in fams && "vio-c3m" !in fams) continue
+                val parts = key.split(",")
+                val i = parts.getOrNull(0)?.toIntOrNull() ?: continue
+                val j = parts.getOrNull(1)?.toIntOrNull() ?: continue
+                anchors.add(i to j)
+            }
+            if (anchors.isEmpty()) break
+            for ((i, j) in anchors) {
+                if (shouldStop()) break
+                val k = work[i][j]
+                if (k !in 0 until p.K) continue
+                val rule = rules.firstOrNull { it.k == k } ?: continue
+                var s0 = j
+                while (s0 - 1 >= 0 && work[i][s0 - 1] == k) s0--
+                var e0 = j
+                while (e0 + 1 < p.T && work[i][e0 + 1] == k) e0++
+                if (e0 - s0 + 1 >= rule.len) continue   // 既に規定長以上=スキップ(古いアンカー)
+                var done = false
+                for (extDay in listOfNotNull((s0 - 1).takeIf { it >= 0 }, (e0 + 1).takeIf { it < p.T })) {
+                    if (done || shouldStop()) break
+                    val oldK = work[i][extDay]
+                    if (oldK == k || oldK !in 0 until p.K) continue
+                    if (tryExtend(i, extDay, oldK, k)) { improved = true; done = true }
+                }
+            }
+            pass++
+            if (!improved) break
+        }
+        val logs = listOf(MirrorLog(tag = "C3RunPolish",
+            message = "連続規則(c3/c3m単一シフト連)玉突き研磨: c3 ${before.breakdown["c3"] ?: 0}->${bestRep.breakdown["c3"] ?: 0} / c3m ${before.breakdown["c3m"] ?: 0}->${bestRep.breakdown["c3m"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
+                (if (applied == 0 && ((before.breakdown["c3"] ?: 0) + (before.breakdown["c3m"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
