@@ -163,10 +163,13 @@ object V6NativeOptimizer {
         if (hf67Adopted) schedule = repaired
         val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入力の勤務表を保持
         val entryBoardReport = if (hf67Adopted) repairedReport else entryReport
-        // 仕様書 §2.2/§4.1: 最大MAX_HYPOTHESES仮説を並列探索（V5だけは仮説の概念を使わずworkersをそのままSAチェーン数とする）。
-        val w = options.workers.coerceIn(1, MAX_HYPOTHESES)
-        // [余剰ワーカー活用] workers>上限の分は仮説内並列度へ配分（hypothesisChainPlan=余り配分＋コア数クランプ）。
-        //   V5はworkersをそのまま使うため対象外。表示はエンジンが実際に使うプランから導出（乖離防止）。
+        // [仮説数上限撤廃] 旧仕様は「最大MAX_HYPOTHESES(5)仮説」固定で、超過ワーカーは仮説内並列度へ配分
+        //   していた。ユーザー指示により固定上限を撤廃し、仮説数(w)をワーカー設定にそのまま連動させる
+        //   （多様性>深さ。V5だけは仮説の概念を使わずworkersをそのままSAチェーン数とする＝対象外）。
+        val w = hypothesisCount(options.workers)
+        // [余剰ワーカー活用] w=workers(>=2時)のため通常は仮説内並列度は1本(hypothesisChainPlanのh floorが
+        //   distributableと一致)。workers=1の縮退時(w=2>workers)や端末コア数<workersの高負荷設定では
+        //   1本を下回らない範囲でオーバーサブスクライブし得る＝表示はエンジンが実際に使うプランから導出。
         val planNote = hypothesisChainPlan(options.workers, w).let { pl ->
             val mn = pl.min(); val mx = pl.max()
             if (mn == mx) "仮説内${mn}並列" else "仮説内${mn}〜${mx}並列"
@@ -236,14 +239,28 @@ object V6NativeOptimizer {
         return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
     }
 
-    /** [敵対的レビュー3.212.0] 仕様§2.2の仮説数上限。従来はマジックナンバー5が optimize()/V6FinalPort/
-     *  UI注記/docs に散在しドリフトの温床だった（レビュー指摘: 上限変更時にUI表示だけ陳腐化する）。 */
+    /** [仮説数上限撤廃・ユーザー指示] かつて仕様§2.2の仮説数固定上限(5)だった定数。optimize() の
+     *  仮説数計算（[hypothesisCount] 参照）はこの値を上限として使わなくなった＝ワーカー設定まで仮説を
+     *  増やす（下限2）。現在は ①ExtraRefine(微小予算5〜25sの追加精製)専用の意図的な小さいキャップ
+     *  （仮説内多チェーンの固定費が小予算を侵食するのを避ける、V6FinalPort参照）②hypothesisChainPlan の
+     *  デフォルト引数、の2用途にのみ残置（名前は歴史的経緯・値の意味は「旧上限」から「小予算時の安全キャップ」
+     *  へ転用）。 */
     const val MAX_HYPOTHESES = 5
 
-    /** [余剰ワーカー活用] 仮説数(hypotheses, 仕様§2.2で最大5)に対し、設定workersのうち何本を各仮説の
+    /** [仮説数上限撤廃・ユーザー指示「仮説数は最低2最大設定値」] 仮説数(w)の実効値。旧 optimize() は
+     *  `options.workers.coerceIn(1, MAX_HYPOTHESES)` で workers>5 分を仮説内並列度へ配分していたが、
+     *  ユーザー指示によりこの固定上限を撤廃し**多様性(仮説数)を優先**する。下限2（workers=1でも最低2仮説の
+     *  多様探索を保証・diversity目的で意図的にworkersを1オーバーサブスクライブする）・上限は無し
+     *  （options.workers自体が上限）。optimize() 本体と V6FinalPort の診断表示(effHypotheses)が両方
+     *  本関数から導出＝独立再計算によるUI/ログの乖離を防ぐ（3.212.0 と同じ設計原則）。 */
+    internal fun hypothesisCount(workers: Int): Int = max(2, workers)
+
+    /** [余剰ワーカー活用] 仮説数(hypotheses)に対し、設定workersのうち何本を各仮説の
      *  内部並列度（SAチェーン数・ALNS多チェーン）へ均等配分するか。workers<=hypothesesなら1(旧来どおり
      *  単一チェーン)。余りは切り捨て（例: workers=8,hypotheses=5 → 1本/仮説・workers=16,hypotheses=5 → 3本/仮説）。
-     *  ※均等床の計算のみ。実際の配分は hypothesisChainPlan（余り配分＋コア数クランプ）を使う。 */
+     *  ※均等床の計算のみ。実際の配分は hypothesisChainPlan（余り配分＋コア数クランプ）を使う。
+     *  [仮説数上限撤廃後] 本体の w=hypothesisCount(workers) は workers>=2 で hypotheses==workers となるため
+     *  実運用では常に1（内部並列は事実上不使用）。本関数は ExtraRefine 等 hypotheses<workers な呼出のために残置。 */
     internal fun perHypothesisWorkers(workers: Int, hypotheses: Int): Int =
         max(1, workers / max(1, hypotheses))
 
@@ -291,10 +308,13 @@ object V6NativeOptimizer {
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
         run: suspend (Int, V6OptimizerOptions, (String, ViolationReport?, Long, Long) -> Unit) -> V6OptimizerResult,
     ): V6OptimizerResult = kotlinx.coroutines.supervisorScope {
-        // [余剰ワーカー活用] 仕様§2.2の「最大MAX_HYPOTHESES仮説」上限(w)は不変。workers>上限の分は各仮説の
-        //   内部並列度（RSI/RSI++がPhase1/奇数ラウンドで呼ぶrunV5のSAチェーン数、ALNSの多チェーン
-        //   =runAlnsChains）へ配分する。旧実装は仮説ごとに一律 workers=1 を強制しており、5を超える設定は
-        //   完全に無駄だった（実機ログ「workers設定8 実効仮説5」で確認）。
+        // [仮説数上限撤廃・ユーザー指示] w=hypothesisCount(workers) は workers>=2 のとき workers に等しく
+        //   なるため、以下の hypothesisChainPlan による「仮説内並列度への配分」は通常 plan.max()==1 に
+        //   収束する（仮説そのものが増えるため内部並列で吸収する必要が無い）。workers=1(w=2でオーバー
+        //   サブスクライブ)やコア数<workersの高負荷設定でのみ非自明な配分になる。旧実装（仮説数固定5・
+        //   超過ワーカーは内部並列=RSI/RSI++のrunV5 SAチェーン数・runAlnsChainsへ配分）は「仮説ごとに
+        //   一律 workers=1 を強制し5を超える設定が完全に無駄」だった実機ログ由来のバグ修正だったが、
+        //   ユーザー指示によりさらに「多様性(仮説数)優先」へ設計変更。
         // [敵対的レビュー3.212.0] 均等床(perW)のみの配分は 6〜9 で余りを黙って廃棄しつつ「使われる」と
         //   表示する虚偽（HF77）＋コア数超の希釈リスクがあった → hypothesisChainPlan（余り配分＋コア数
         //   クランプ）で仮説ごとの本数を決める。plan.max()>1 の仮説だけが多チェーン化する。

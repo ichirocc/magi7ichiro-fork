@@ -497,6 +497,26 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, V6NativeOptimizer.clampWorkersToCores(workers = 4, cores = 0))
     }
 
+    // [仮説数上限撤廃・ユーザー指示「仮説数は最低2最大設定値」] 旧 optimize() は
+    // options.workers.coerceIn(1, MAX_HYPOTHESES=5) で固定上限だった。hypothesisCount はこの上限を
+    // 撤廃し、workers>=2 ならそのまま workers を仮説数として使う（多様性優先）。
+    @Test fun hypothesisCountScalesWithWorkersBeyondOldFixedCapOfFive() {
+        assertEquals(8, V6NativeOptimizer.hypothesisCount(8))
+        assertEquals(16, V6NativeOptimizer.hypothesisCount(16))
+    }
+
+    @Test fun hypothesisCountFloorsAtTwoEvenWhenWorkersIsOne() {
+        // workers=1 でも最低2仮説の多様探索を保証する（意図的なオーバーサブスクライブ）。
+        assertEquals(2, V6NativeOptimizer.hypothesisCount(1))
+        assertEquals(2, V6NativeOptimizer.hypothesisCount(0))
+    }
+
+    @Test fun hypothesisCountMatchesWorkersInTheOldCapRange() {
+        // 旧上限5以下の帯でも従来どおり workers に一致すること（回帰確認）。
+        assertEquals(2, V6NativeOptimizer.hypothesisCount(2))
+        assertEquals(5, V6NativeOptimizer.hypothesisCount(5))
+    }
+
     // [敵対的レビュー修正・#3] liveBest の CAS 管理: publishLiveBest は真に better() な報告のときだけ
     // liveBest を更新し、劣る/同値の報告では既存の liveBest を保持する（旧last-writer-winsの退行を防ぐ）。
     // グローバルなシングルトン状態(liveBest/liveBestReport)を扱うため、他テストの残存値に依存しないよう

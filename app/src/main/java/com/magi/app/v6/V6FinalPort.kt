@@ -188,8 +188,10 @@ object V6FinalPort {
         val startMs = System.currentTimeMillis()
         val budgetMs = seconds.toLong() * 1000L
         val hardDeadlineMs = startMs + budgetMs
-        // 仕様§2.2: 最大MAX_HYPOTHESES仮説並列（[敵対的レビュー3.212.0] マジック5を共有定数へ統一）
-        val effHypotheses = workers.coerceIn(1, V6NativeOptimizer.MAX_HYPOTHESES)
+        // [仮説数上限撤廃・ユーザー指示] 診断ログ表示専用。実際の dispatch は V6NativeOptimizer.optimize()
+        //   内の同名関数呼出が担うため、ここも同じ V6NativeOptimizer.hypothesisCount から導出し独立再計算による
+        //   表示/実挙動の乖離を防ぐ（3.212.0 と同じ設計原則）。
+        val effHypotheses = V6NativeOptimizer.hypothesisCount(workers)
 
         // ----- 停滞早期脱出ウォッチドッグ -----
         // 進捗ストリームから「最良解(hard→total→重み付きの辞書順)」の更新時刻を追跡し、一定時間
@@ -347,9 +349,10 @@ object V6FinalPort {
                 //   保持した「他の案」を退避し、追加精製の後に復元する（ViewModel の captureAlternatives は
                 //   handleOptimize 復帰後に読むため、退避しないと他の案が消える）。
                 val savedAlts = V6NativeOptimizer.lastAlternatives
-                // [敵対的レビュー3.212.0] 微小予算(5〜25s)の追加精製に仮説内多チェーンは不適
-                //   （チェーン毎の固定費=入口hf67+フルcheck×2+nativeハンドル生成 が予算を侵食し、3.102.0が
-                //   回収した予約枠が高worker設定で再び浪費される）→ 仮説数上限までにキャップ＝旧来の5×1構成。
+                // [敵対的レビュー3.212.0、仮説数上限撤廃後も維持] 微小予算(5〜25s)の追加精製は本走行と異なり
+                //   仮説数を workers まで増やすと悪化しうる（チェーン毎の固定費=入口hf67+フルcheck×2+
+                //   nativeハンドル生成 が小予算を侵食し、3.102.0が回収した予約枠が高worker設定で再び浪費
+                //   される）→ ここだけ意図的に MAX_HYPOTHESES(5) までにキャップ＝旧来の5×1構成を維持。
                 val extra = V6NativeOptimizer.optimize(
                     state, post.schedule,
                     optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5),
