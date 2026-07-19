@@ -1167,11 +1167,12 @@ object V6NativeOptimizer {
         //   さらに約 stallMs ぶん余計に回っていた）。改善済みは最終改善時刻不明のため保守的に nowMs()。
         var lastImproveMs = if (nat.best == null) started else nowMs()
         var lastBestMark = bestScore
+        var stallDurationMs = -1L   // [停滞時間のログ出力] 発火の瞬間の無改善経過(ms)
         while (!shouldStop()) {
             val nowLoop = nowMs()
             if (nowLoop >= deadline) break
             if (bestScore < lastBestMark) { lastBestMark = bestScore; lastImproveMs = nowLoop }
-            else if (nowLoop - lastImproveMs >= stallMs) { stalled = true; break }
+            else if (nowLoop - lastImproveMs >= stallMs) { stalled = true; stallDurationMs = nowLoop - lastImproveMs; break }
             coroutineContext.ensureActive()
             val curHard = curScore / SCORE_HARD_UNIT
             val bestHard = bestScore / SCORE_HARD_UNIT
@@ -1275,7 +1276,8 @@ object V6NativeOptimizer {
         }
         // [退化防止] 生スコア最良が weightedScore 辞書順で入力より悪い場合は入力へ戻す。
         if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
-        val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}" + if (stalled) "（停滞早期終了 枠${seconds}s）" else ""))
+        val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}" +
+            if (stalled) "（停滞早期終了 枠${seconds}s・停滞${stallDurationMs}ms無改善）" else ""))
         return PolishResult(best, logs, iters)
     }
 

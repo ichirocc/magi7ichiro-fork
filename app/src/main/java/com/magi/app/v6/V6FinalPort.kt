@@ -223,6 +223,9 @@ object V6FinalPort {
         val lastBestImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val lastPhaseChangeMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
+        // [停滞時間のログ出力] 発火の瞬間に「何ms無改善だったか」を記録する（ログ側で再計算すると
+        //   後処理(runPostOptimization)の所要時間が混入し、実際に判定へ使った値とズレるため）。
+        val stagnationDurationMs = java.util.concurrent.atomic.AtomicLong(-1)
         val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)   // 並列ワーカーから読むため atomic
         // [hardFloor 精度] best の「非covU HARD」(groupViol/pref/c3n=解けるHARD)件数。hardFloor は構造的covU
         //   のみの下限なので、`bestHard<=hardFloor` だけだと、担当不可の過配置(groupViol)が covU を構造下限より
@@ -264,7 +267,10 @@ object V6FinalPort {
             val effStall = if (bestHard.get() <= hardFloor && bestNonCovUHard.get() == 0) stallHardMs else stallMs
             when {
                 now >= searchDeadlineMs || !isActive -> true
-                now - startMs > minRunMs && now - maxOf(lastBestImproveMs.get(), lastPhaseChangeMs.get()) > effStall -> { stagnationFired.set(true); true }
+                now - startMs > minRunMs && now - maxOf(lastBestImproveMs.get(), lastPhaseChangeMs.get()) > effStall -> {
+                    stagnationDurationMs.set(now - maxOf(lastBestImproveMs.get(), lastPhaseChangeMs.get()))
+                    stagnationFired.set(true); true
+                }
                 else -> false
             }
         }
@@ -382,7 +388,8 @@ object V6FinalPort {
         )) else emptyList()
         val stagnationLog = if (stagnationFired.get()) listOf(MirrorLog(
             level = "I", tag = "EarlyStop",
-            message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 ${(tPost1 - startMs) / 1000}sで停止・解は最良を維持）",
+            message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 ${(tPost1 - startMs) / 1000}sで停止・" +
+                "停滞${stagnationDurationMs.get() / 1000}s無改善・解は最良を維持）",
         )) else emptyList()
         // [最終番兵/多重防御] 全段 keep-best のため通常は発火しないが、万一パイプラインが入力より
         // 悪い結果を返した場合は入力を採用し退化を防ぐ（checkResultWorse をここで配線）。
