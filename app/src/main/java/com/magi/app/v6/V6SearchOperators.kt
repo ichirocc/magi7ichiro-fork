@@ -280,6 +280,14 @@ internal fun findCovUChain(
     //   非nullのとき candidates() の返り値を「述語=true」優先に並べ替えるだけ（探索ロジック自体は不変）。
     //   既定null=既存呼出元は完全に挙動不変。
     c1Pref: ((staff: Int, shift: Int, day: Int) -> Boolean)? = null,
+    // [頭打ち調査で判明・RangePolish/C3mnPolish/C3RunPolish向け] candidates() は構造的妥当性
+    //   (canDo/希望ロック/禁止連続)のみで選び、rng順の最初の1件が完成すればそれで確定＝コスト無視。
+    //   桒澤美幸のAｱ超過(3.215.0)研磨が頭打ちする実例を追跡した結果、「候補自身のstaffRange上限を
+    //   新たに超えさせる」手を先頭で引くと、excess(3)+excess(1)で合計は不変＝isBetterが改善なしとして
+    //   却下し、その日は二度と試行されない（1日1回きりの呼出のため）ことを確認。rangeAvoid が真を返す
+    //   候補は「除外」でなく「後回し」にするだけ（他に候補が無ければ従来どおり使う＝解が消えない）。
+    //   既定null=既存呼出元は完全に挙動不変。
+    rangeAvoid: ((staff: Int, fillShift: Int) -> Boolean)? = null,
 ): List<IntArray>? {
     if (j !in 0 until p.T || k0 !in 0 until p.K || p.S == 0) return null
     val cnt = IntArray(p.K)
@@ -350,14 +358,21 @@ internal fun findCovUChain(
             }
             out.add(Node(fillShift, i, prev))
         }
+        // [頭打ち調査] rangeAvoid が真の候補（自身の新規range違反を招く）を後回しへ。他に候補が無ければ
+        //   最終的にはこの中から使われる＝解が消えることはない（「除外」でなく「並べ替え」のみ）。
+        var result: List<Node> = out
+        if (rangeAvoid != null && result.size > 1) {
+            val (keep, avoid) = result.partition { !rangeAvoid(it.staff, fillShift) }
+            result = keep + avoid
+        }
         // [C1研磨・手B強化] c1Pref を満たす候補を先頭へ（tryComplete は frontier を先頭から見て
         //   最初に成立した連鎖を採用するため、並べ替えだけで「その職員のc1不足も一緒に解消する連鎖」が
         //   優先的に見つかる。安全条件(canDo/wishLock/c3n)は上のフィルタ済のままなので探索の正しさは不変）。
-        if (c1Pref != null && out.size > 1) {
-            val (pref, rest) = out.partition { c1Pref(it.staff, fillShift, j) }
-            return pref + rest
+        if (c1Pref != null && result.size > 1) {
+            val (pref, rest) = result.partition { c1Pref(it.staff, fillShift, j) }
+            result = pref + rest
         }
-        return out
+        return result
     }
     // 終端: このノードの職員が空けるシフト m は、1人減っても covU が増えない（需要0 or 余裕あり）。
     fun tryComplete(node: Node): List<IntArray>? {
