@@ -1719,15 +1719,20 @@ object V6NativeOptimizer {
                         if (moved) break
                     }
                     if (!moved) {
-                        // [玉突き連鎖フォールバック] 離脱でcovU悪化する場合のみ、findCovUChainで埋め直す。
+                        // [玉突き連鎖フォールバック] findCovUChainは「埋めると実際にcovUが減るか」を
+                        //   現在の sched から判定するため、離脱を先に適用してから呼ぶ必要がある
+                        //   （離脱前に呼ぶと本人がまだ在籍中に見え「埋めても改善しない」と誤判定され
+                        //   常にnullが返っていた＝実バグ）。失敗時は必ず元に戻す。
                         for (i in onShift) {
                             if (moved) break
                             if (p.wish[i][j] == c.shiftIdx) continue
                             for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }.shuffled(rng)) {
                                 if (p.makesForbiddenRun(sched, i, j, m)) continue
                                 if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue
-                                val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, exclude = i) ?: continue
+                                val oldK = sched[i][j]
                                 sched[i][j] = m
+                                val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, exclude = i)
+                                if (chain == null) { sched[i][j] = oldK; continue }
                                 chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
                                 recomputeCovDay(j)
                                 applied += 1 + chain.size
@@ -1754,15 +1759,17 @@ object V6NativeOptimizer {
                         break
                     }
                     if (!moved) {
-                        // [玉突き連鎖フォールバック] 離脱元(old)のcovU悪化のみ findCovUChain で埋め直す。
+                        // [玉突き連鎖フォールバック] HIGH側と同じ理由で、到着(=oldからの離脱)を先に
+                        //   適用してから findCovUChain を呼ぶ。失敗時は必ず元に戻す。
                         for (i in offShift) {
                             if (moved) break
                             val old = sched[i][j]
                             if (old !in 0 until p.K || p.wish[i][j] == old) continue
                             if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
                             if (p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx] + 1) > p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx])) continue
-                            val chain = findCovUChain(p, sched, old, j, rng, exclude = i) ?: continue
                             sched[i][j] = c.shiftIdx
+                            val chain = findCovUChain(p, sched, old, j, rng, exclude = i)
+                            if (chain == null) { sched[i][j] = old; continue }
                             chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
                             recomputeCovDay(j)
                             applied += 1 + chain.size

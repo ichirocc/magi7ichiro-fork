@@ -331,13 +331,15 @@ class V6NativeOptimizerChoiceTest {
 
     // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開その4] 旧実装は「離脱元/到着先どちらもcovU/covO
     //   非悪化」の直接移動が見つからないと即座に諦めていた。c3mn(3.214.0)/RangePolish(3.215.0)/
-    //   C3RunPolishと同型の穴: 離脱元の被覆(need1)が実際に埋まっている(単独充足)ため直接移動が
-    //   常にcovU悪化になるが、findCovUChainで別職員に玉突き充填すれば解消できる局面を固定する。
+    //   C3RunPolishと同型の穴: 離脱元シフト(X)自体が全体needをちょうど単独充足しており、誰か1人が
+    //   離脱すると即covU化する構造的にブロックされた局面。findCovUChainで別職員に玉突き充填すれば
+    //   解消できることを固定する。
     @Test fun applyC41FreeResolvesExcessViaChainWhenDirectMoveWouldCreateCovU() {
-        // shift: 0=休(need無) 1=X(c41対象、need無) 2=Y(need1=1、A/Bの現在地) 3=Z(need無、Cの現在地)
+        // shift: 0=休(need無) 1=X(c41対象、need1=2でA/Bちょうど単独充足) 2=Y(need無、Aの逃げ先)
+        //   3=Z(need無、Cの現在地)
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("X", "X", "", ""),
-            Shift("Y", "Y", "1", ""), Shift("Z", "Z", "", ""),
+            Shift("休", "休", "", ""), Shift("X", "X", "2", ""),
+            Shift("Y", "Y", "", ""), Shift("Z", "Z", "", ""),
         )
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
         val groupShift = listOf(
@@ -345,7 +347,7 @@ class V6NativeOptimizerChoiceTest {
             listOf(1, 1, 1, 1), // G1(C)=休,X,Y,Z
         )
         val staff = listOf(Staff("A", 0), Staff("B", 0), Staff("C", 1))
-        val schedule = listOf(listOf(1), listOf(1), listOf(3)) // A=X, B=X（G0のX在籍2名=超過1）, C=Z
+        val schedule = listOf(listOf(1), listOf(1), listOf(3)) // A=X, B=X（G0のX在籍2名=超過1、Xのneed1=2をちょうど充足）
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-01",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
@@ -360,14 +362,14 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
-        assertEquals(0, before.hard)   // Yはaが単独充足＝離脱すると即covU化する構造的にブロックされた局面
+        assertEquals(0, before.hard)   // Xはneed1=2をA/Bがちょうど充足＝離脱すると即covU化する構造的にブロックされた局面
 
         val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
         assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("c41超過が解消", 0, after.breakdown["c41"] ?: -1)
         assertEquals("HARDは悪化しない", 0, after.hard)
-        assertEquals("Yの被覆(covU)は悪化しない", 0, after.breakdown["covU"] ?: -1)
+        assertEquals("Xの被覆(covU)は悪化しない", 0, after.breakdown["covU"] ?: -1)
     }
 
     @Test fun applyC41FreeResolvesDeficiencyViaChainWhenDirectMoveWouldCreateCovU() {

@@ -12,14 +12,15 @@ import org.junit.Test
 /**
  * [C3RunPolish・玉突き連鎖の横展開その3] grilling不要(C3mnPolish/RangePolishと同型、ユーザー承認2026-07-19)で
  * 実装したcons3/cons3m(単一シフト連=run-deficitモデル)専用研磨の検証。
- * A(職員)がshift Xの2連続(cons3 "X,X")を1件しか持たず(run長1<L=2)deficit。Aが隣接日を自身で
- * Xへ拡張するだけではYの被覆(need1=1)が欠けるため、直接の自己修正は成立しない。B(在勤中のZ、
- * 需要なし=いつでも動かせない別職員だが、Yを担当可能)が玉突きで補充することで初めて解消する局面。
+ * A(職員)がshift Xの2連続(cons3 "X,X")を1件しか持たず(run長1<L=2)deficit。Yは全日need1=1で
+ * day0=B・day1=Aがそれぞれ単独充足しているため、Aが隣接日(day1)を自身でXへ拡張するだけでは
+ * day1のYの被覆が欠け、直接の自己修正は成立しない。B(day1はZに在勤=需要なし)が玉突きで
+ * day1のYを補充することで初めて解消する局面。
  */
 class C3RunPolishTest {
 
     private fun chainState(): MagiState {
-        // shift: 0=休(need無) 1=X(need無、連続させたい対象) 2=Y(need1=1、Aの現在地) 3=Z(need無、Bの現在地)
+        // shift: 0=休(need無) 1=X(need無、連続させたい対象) 2=Y(need1=1、全日担保が必要) 3=Z(need無)
         val shifts = listOf(
             Shift("休", "休", "", ""),
             Shift("X", "X", "", ""),
@@ -33,8 +34,8 @@ class C3RunPolishTest {
         )
         val staff = listOf(Staff("A", 0), Staff("B", 1))
         val schedule = listOf(
-            listOf(1, 2), // A = X, Y （Xの連続が1日のみ＝L=2に対しdeficit=1）
-            listOf(3, 3), // B = Z, Z （需要なし=いつでも動かせる）
+            listOf(1, 2), // A = X, Y （Xの連続が1日のみ＝L=2に対しdeficit=1。day1のYはAが単独充足）
+            listOf(2, 3), // B = Y, Z （day0のYはBが単独充足＝両日ともYの被覆はちょうど満たされている）
         )
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-02",
