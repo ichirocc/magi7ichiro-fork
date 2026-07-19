@@ -87,4 +87,34 @@ class Hf63InfeasibilityTest {
         hf.update(8, 3, 0); hf.update(8, 3, 5000)
         assertEquals(0.125, hf.weightFactor(8), 1e-9) // HARD infeasible → 1/8
     }
+    // ---- [レビュー#5 3.213.0] focus 投入量ベースの更新（updateFromBreakdownFocused）----
+
+    @Test
+    fun focusedUpdateFlagsOnlyTheFocusedFamilyAfterStall() {
+        val hf = Hf63Infeasibility()
+        val bd = mapOf("covU" to 3, "c3n" to 1, "c1" to 5)
+        hf.updateFromBreakdownFocused(bd, null, 1800)      // round0 頭（前ラウンド無し）＝ベースライン記録のみ
+        hf.updateFromBreakdownFocused(bd, "covU", 1800)    // covU へ focus 投入（無改善 +1800）
+        hf.updateFromBreakdownFocused(bd, "covU", 1800)    // +3600
+        assertFalse(hf.isInfeasibleLikely(8))              // 5000 未満はまだ flag しない
+        hf.updateFromBreakdownFocused(bd, "covU", 1800)    // +5400 >= 5000 → flag
+        assertTrue(hf.isInfeasibleLikely(8))
+        // 一度も focus していない族は、値が不減でも「不能」と推定しない（旧実装との差分の核心）
+        assertFalse(hf.isInfeasibleLikely(3))   // c3n
+        assertFalse(hf.isInfeasibleLikely(0))   // c1
+    }
+
+    @Test
+    fun focusedUpdateImprovementResetsStallAndFlag() {
+        val hf = Hf63Infeasibility()
+        hf.updateFromBreakdownFocused(mapOf("covU" to 3), null, 1800)
+        repeat(3) { hf.updateFromBreakdownFocused(mapOf("covU" to 3), "covU", 1800) }
+        assertTrue(hf.isInfeasibleLikely(8))
+        hf.updateFromBreakdownFocused(mapOf("covU" to 2), "covU", 1800)   // 改善 → self-correction＋stall リセット
+        assertFalse(hf.isInfeasibleLikely(8))
+        repeat(2) { hf.updateFromBreakdownFocused(mapOf("covU" to 2), "covU", 1800) }
+        assertFalse(hf.isInfeasibleLikely(8))   // リセット後は再び約3ラウンドの focus 無改善を要する
+        hf.updateFromBreakdownFocused(mapOf("covU" to 2), "covU", 1800)
+        assertTrue(hf.isInfeasibleLikely(8))
+    }
 }

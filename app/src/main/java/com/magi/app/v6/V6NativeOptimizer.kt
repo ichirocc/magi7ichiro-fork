@@ -266,12 +266,26 @@ object V6NativeOptimizer {
         val base = actualSeed(options.seed)
         val completed = java.util.concurrent.atomic.AtomicInteger(0)
         val winner = java.util.concurrent.atomic.AtomicInteger(-1)
+        // [レビュー#2 3.213.0] 全ワーカー横断の最良(hard→total→weighted)を追跡し、どのワーカーの改善も
+        //   外側へ転送する。旧: i==0 のみ転送＝W1..W4 だけが改善を続ける局面で外側ウォッチドッグ
+        //   (V6FinalPort の停滞時計)が改善を観測できず、HARD平坦時の短い猶予(stallHardMs)で全ワーカーを
+        //   早期停止し得た。非改善レポートまで転送すると phase 文字列が W0 と交互に振れて外側の
+        //   フェーズ遷移リセット（意図的な猶予付与）を偽発火させるため、改善時のみ転送する。
+        val sharedBest = java.util.concurrent.atomic.AtomicReference<ViolationReport?>(null)
+        fun improvesShared(r: ViolationReport): Boolean {
+            while (true) {
+                val cur = sharedBest.get()
+                if (cur != null && !better(r, cur)) return false
+                if (sharedBest.compareAndSet(cur, r)) return true
+            }
+        }
         val jobs = arrayOfNulls<kotlinx.coroutines.Deferred<V6OptimizerResult>>(w)
         for (i in 0 until w) {
             jobs[i] = async(Dispatchers.Default) {
                 // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
                 val res = run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
-                    if (i == 0) onProgress("仮説${(w - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
+                    val improved = report != null && improvesShared(report)
+                    if (i == 0 || improved) onProgress("仮説${(w - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
                     // 絶対評価: 合格ライン(HARD=0)に最初に到達した仮説が、残りを即キャンセル
                     if (report != null && report.hard == 0 && winner.compareAndSet(-1, i)) {
                         for (j in 0 until w) if (j != i) jobs[j]?.cancel()
@@ -421,6 +435,15 @@ object V6NativeOptimizer {
         val base = actualSeed(options.seed)
         val passed = java.util.concurrent.atomic.AtomicInteger(-1)
         val firstError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+        // [レビュー#2 3.213.0] runMultiWorker と同型: チェーン横断の改善も外側へ転送（停滞時計の集約）。
+        val sharedBest = java.util.concurrent.atomic.AtomicReference<ViolationReport?>(null)
+        fun improvesShared(r: ViolationReport): Boolean {
+            while (true) {
+                val cur = sharedBest.get()
+                if (cur != null && !better(r, cur)) return false
+                if (sharedBest.compareAndSet(cur, r)) return true
+            }
+        }
         val jobs = arrayOfNulls<kotlinx.coroutines.Deferred<V6OptimizerResult?>>(chains)
         for (c in 0 until chains) {
             jobs[c] = async(Dispatchers.Default) {
@@ -428,8 +451,10 @@ object V6NativeOptimizer {
                     runAlnsSingle(state, initial.copy2D(), options.copy(workers = 1, seed = base + (c + 1) * 0x2545F4914F6CDD1DL), budgetSec, shouldStop) { phase, report, iters, elapsed ->
                         val won = report != null && report.hard == 0 && passed.compareAndSet(-1, c)
                         if (won) { for (j in 0 until chains) if (j != c) jobs[j]?.cancel() }
-                        // 先頭チェーンは常時、非先頭は合格時のみ転送（合格の可視化がrunMultiWorkerの絶対評価に必要）。
-                        if (c == 0 || won) onProgress(phase, report, iters, elapsed)
+                        // 先頭チェーンは常時、非先頭は合格時＋チェーン横断改善時に転送
+                        //（合格の可視化がrunMultiWorkerの絶対評価に、改善の可視化が外側停滞時計に必要）。
+                        val improved = report != null && improvesShared(report)
+                        if (c == 0 || won || improved) onProgress(phase, report, iters, elapsed)
                     }
                 } catch (ce: kotlinx.coroutines.CancellationException) {
                     throw ce
@@ -622,13 +647,13 @@ object V6NativeOptimizer {
                 //   op5(targeted repair=covO/c2/上下限/c41/c41s/c3Want/apt 修復)を優先。HARD>床 の間はHARD優先で不変。
                 //   従来 curHard==0 限定だと、構造的HARD床から下がれない局面で soft研磨が一度も起動しなかった
                 //   (apt超過/fair が放置)。最良HARD水準なら床>0 でも soft を磨くよう修正。
-                val softFocusProb = if (globalScore / 1_000_000L == 0L) 0.30 else 0.15
-                if (curScore / 1_000_000L <= globalScore / 1_000_000L && rng.nextDouble() < softFocusProb) op = 5
+                val softFocusProb = if (globalScore / SCORE_HARD_UNIT == 0L) 0.30 else 0.15
+                if (curScore / SCORE_HARD_UNIT <= globalScore / SCORE_HARD_UNIT && rng.nextDouble() < softFocusProb) op = 5
                 // [HF290 役割分担] explore 倍率で受理温度を調整（探索=受理寛容/精製=厳格）。explore=1.0 は従来と同一。
                 //   ただし LAM_ADAPTIVE は受理率追従の適応温度 lamTemp を使う（自己調整）。
                 val temp = if (options.accept == AcceptMode.LAM_ADAPTIVE) lamTemp
                            else max(0.03, (deadline - nowMs()).toDouble() / max(1.0, per * 1000.0) * options.explore)
-                val curHard = curScore / 1_000_000L
+                val curHard = curScore / SCORE_HARD_UNIT
                 val gdLevel = if (options.accept == AcceptMode.GREAT_DELUGE) {
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, per * 1000.0)).coerceIn(0.0, 1.0)
                     greatDelugeLevel(gdInitial, globalScore.toDouble(), frac)
@@ -848,14 +873,18 @@ object V6NativeOptimizer {
         //   HF63 の恒久判定は約3R を要す)を、c3n→c1→c3n… の交互へ多様化する。1ラウンド限定なので
         //   乱数運の悪い1回で族を見捨てない(恒久除外は従来どおり HF63 のみ)。focus 選択のみ＝スコアリング不変。
         var cooldownFocus: String? = null
+        // [レビュー#5 3.213.0] HF63 の停滞加算を「直前ラウンドで実際に focus した族」に限定する。
+        //   旧: updateFromBreakdown が全族を無差別に停滞加算し、covU 張り付き中に一度も試していない
+        //   c3n 等の HARD 族まで約3ラウンドで誤 deprioritize し得た（SOFT は 3.184.0 の avoid フィルタで
+        //   緩和済みだが HARD は残っていた）。effortIters=1800/round は既存の粒度補正と同一。
+        var lastFocus: String? = null
         for (round in 0 until rounds) {
             if (shouldStop()) break
             coroutineContext.ensureActive()
-            // [監査修正] HF63 は Web の per-iter 前提(5000 iter 無改善で infeasible)だが、native はここで per-round
-            //   にしか呼べず cumulative iters を渡すと1ラウンドで ≫5000 跳び、解ける HARD を約1ラウンドで誤 infeasible
-            //   判定→focus 除外していた。ラウンド境界の呼出に「ラウンド番号×1800」を渡し、閾値5000到達を約3ラウンドの
-            //   連続無改善に引き伸ばす（class は Web 忠実移植のまま・呼出側で粒度を補正）。iters 自体は本来用途に不変。
-            hf63.updateFromBreakdown(bestReport.breakdown, round * 1800)
+            // [監査修正] HF63 は Web の per-iter 前提(5000 iter 無改善で infeasible)。ラウンド粒度の呼出に
+            //   1800/round を渡し、閾値5000到達を約3ラウンド分の focus 投入無改善に引き伸ばす
+            //   （class は Web 忠実移植のまま・呼出側で粒度を補正）。iters 自体は本来用途に不変。
+            hf63.updateFromBreakdownFocused(bestReport.breakdown, lastFocus, 1800)
             // [12h見直し] 動的(HF63)と静的(covU床)の avoid を分離して保持する。N4 早期脱出(下記)の発火条件は
             //   HF63 の動的検知のみでゲートしないと、構造的covU>0 のデータでは静的除外が round 0 から avoid を
             //   非空にし、「旧N4の厳密な部分集合」保証(650-654行)を破って2停滞ラウンドで RSI が即終了してしまう。
@@ -882,6 +911,7 @@ object V6NativeOptimizer {
                 logs.add(MirrorLog(iter = iters, tag = "RSIFocus", message = "直前ラウンド空振りのため ${cooldownFocus} を1ラウンド休止 → focus=$focus (round ${round + 1})"))
             }
             val focusedBefore = bestReport.breakdown[focus] ?: 0
+            lastFocus = focus   // [レビュー#5] 次ラウンド頭の HF63 更新へ「このラウンドの投入先」を渡す
             val hypothesis = rsiGenerateHypothesis(state, best, bestReport, focus, rng)
             val phase = if (round % 2 == 0) runAlns(state, hypothesis, options.copy(restarts = 1), per, shouldStop, onProgress) else runV5(state, hypothesis, options, per, shouldStop, onProgress)
             iters += phase.iterations
@@ -1143,8 +1173,8 @@ object V6NativeOptimizer {
             if (bestScore < lastBestMark) { lastBestMark = bestScore; lastImproveMs = nowLoop }
             else if (nowLoop - lastImproveMs >= stallMs) { stalled = true; break }
             coroutineContext.ensureActive()
-            val curHard = curScore / 1_000_000L
-            val bestHard = bestScore / 1_000_000L
+            val curHard = curScore / SCORE_HARD_UNIT
+            val bestHard = bestScore / SCORE_HARD_UNIT
             when (rng.nextInt(11)) {
                 0 -> {   // random allowed single cell (direct-eval)
                     if (p.S > 0 && p.T > 0) {
@@ -1156,7 +1186,7 @@ object V6NativeOptimizer {
                                 if (nw != oldK) {
                                     eval.apply(i, j, nw)
                                     val ns = eval.score()
-                                    if (ns / 1_000_000L <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
+                                    if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                         cur[i][j] = nw; curScore = ns
                                         if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
                                     } else eval.apply(i, j, oldK)
@@ -1175,7 +1205,7 @@ object V6NativeOptimizer {
                             if (ka != kb) {
                                 eval.apply(i, ja, kb); eval.apply(i, jb, ka)
                                 val ns = eval.score()
-                                if (ns / 1_000_000L <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
+                                if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                     cur[i][ja] = kb; cur[i][jb] = ka; curScore = ns
                                     if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
                                 } else { eval.apply(i, ja, ka); eval.apply(i, jb, kb) }
@@ -1193,7 +1223,7 @@ object V6NativeOptimizer {
                             if (k1 != k2 && p.canDo(i1, k2) && p.canDo(i2, k1)) {
                                 eval.apply(i1, j, k2); eval.apply(i2, j, k1)
                                 val ns = eval.score()
-                                if (ns / 1_000_000L <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
+                                if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                     cur[i1][j] = k2; cur[i2][j] = k1; curScore = ns
                                     if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
                                 } else { eval.apply(i1, j, k1); eval.apply(i2, j, k2) }
@@ -1208,7 +1238,7 @@ object V6NativeOptimizer {
                         if (fix[2] != oldK) {
                             eval.apply(fix[0], fix[1], fix[2])
                             val ns = eval.score()
-                            if (ns / 1_000_000L <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
+                            if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                 cur[fix[0]][fix[1]] = fix[2]; curScore = ns
                                 if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
                             } else eval.apply(fix[0], fix[1], oldK)
@@ -1230,7 +1260,7 @@ object V6NativeOptimizer {
                         val flat = diffBuf[idx]; eval.apply(flat / p.T, flat % p.T, fixed[flat / p.T][flat % p.T])
                     }
                     val ns = eval.score()
-                    if (ns / 1_000_000L <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
+                    if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                         cur = fixed; curScore = ns
                         if (betterScore(ns, bestScore)) { best = fixed.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, fixed) }
                     } else {

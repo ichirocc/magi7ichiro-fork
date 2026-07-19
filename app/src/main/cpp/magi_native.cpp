@@ -281,7 +281,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
 inline long long fullEvalCombined(const MagiProblem& p, const int* a) {
     long long v[2];
     fullEvalParts(p, a, v);
-    return v[0] * 1000000LL + v[1];
+    return v[0] * 1000000000LL + v[1];
 }
 
 // ============ [Stage3] SA チャンク: 差分評価つき冷却ラダーを C++ 内で完走 ============
@@ -291,7 +291,9 @@ inline long long fullEvalCombined(const MagiProblem& p, const int* a) {
 // 乱数は mt19937_64（Kotlin と経路一致は狙わない。パリティはスコアと盤面で取る）。
 struct SaChunk {
     const MagiProblem& p;
-    const int S, T, K, M = 1000000;
+    const int S, T, K;
+    // [レビュー#1 3.213.0] 辞書式パックの HARD 桁単位。Kotlin の SCORE_HARD_UNIT (Evaluator.kt) と要同期。
+    const long long M = 1000000000LL;
     std::vector<int> a;    // S*T
     std::vector<int> ssn;  // S*K
     std::vector<int> dsn;  // T*K
@@ -303,7 +305,7 @@ struct SaChunk {
     std::vector<uint64_t> dayShiftMask;  // T*K : bit=職員（日 j にシフト k の職員集合）
     std::vector<uint64_t> grpMask;       // sgrp群id -> 職員bit集合（静的）
     std::vector<uint64_t> sskMask;       // skill群id -> 職員bit集合（静的）
-    long long score = 0;   // hard*1e6+soft（combined）
+    long long score = 0;   // hard*M(=1e9)+soft（combined）
     std::mt19937_64 rng;
 
     SaChunk(const MagiProblem& prob, const int* cur, uint64_t seed)
@@ -700,7 +702,7 @@ struct LahcState {
         : p(prob), st(prob, board, seed),
           bestSol(board, board + (size_t)prob.S * prob.T) {
         bestScore = st.score;
-        bestHard = bestScore / 1000000LL;
+        bestHard = bestScore / 1000000000LL;
         hist.assign((size_t)(lahcLen < 1 ? 1 : lahcLen), st.score);   // Kotlin: LongArray(lahcLen){curVal}
     }
 };
@@ -781,7 +783,7 @@ void runLahcChunk(LahcState& s, int iters, long long out[5]) {
         bn = 0;
         pickOperator();
         long long cand = st.score;
-        long long candHard = cand / 1000000LL;
+        long long candHard = cand / 1000000000LL;
         long long v = s.hist[(size_t)(s.bIt % L)];
         if (candHard <= s.bestHard && (cand <= v || cand <= curVal)) {
             curVal = cand;
@@ -966,7 +968,7 @@ inline bool glsAcceptN(long long ns, long long curScore, double moveAug, double 
                        int mode, double temp, double gdLevel, double u01) {
     if (ns > curScore + 2000000LL) return false;
     if (mode == 1) {
-        return ((double)ns + curAug + moveAug) <= gdLevel && (ns / 1000000LL) <= (curScore / 1000000LL);
+        return ((double)ns + curAug + moveAug) <= gdLevel && (ns / 1000000000LL) <= (curScore / 1000000000LL);
     }
     double delta = (double)(ns - curScore) + moveAug;
     if (delta <= 0.0) return true;
@@ -1531,8 +1533,8 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
     for (int it = 0; it < iters; it++) {
         int op = s.opSelectMode == 1 ? thompsonSelectN(s.opW, 7, s.itersRestart, rng)
                                      : rouletteSelectN(s.opW, 7, rng);
-        long long globalHard = s.bestScore / 1000000LL;
-        long long curHard = curScore / 1000000LL;
+        long long globalHard = s.bestScore / 1000000000LL;
+        long long curHard = curScore / 1000000000LL;
         double softFocusProb = globalHard == 0 ? 0.30 : 0.15;
         if (curHard <= globalHard && st.nextDouble() < softFocusProb) op = 5;
         double temp = s.acceptMode == 2 ? s.lamTemp
@@ -1756,8 +1758,8 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
     // hint(vioCells) は PolishState 生成時＋best 改善時に更新済み（Kotlin の bestReport 相当＝同源・同鮮度）。
 
     for (int it = 0; it < iters; it++) {
-        long long curHard = curScore / 1000000LL;
-        long long bestHard = s.bestScore / 1000000LL;
+        long long curHard = curScore / 1000000000LL;
+        long long bestHard = s.bestScore / 1000000000LL;
         int op = rnInt(rng, 11);
         if (op <= 8) {
             // ── 単一/2セルの直接評価オペ（3..8 は targetedFix の6スロット＝Kotlin と同比率）──
@@ -1804,7 +1806,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
             }
             if (moved) {
                 long long ns = st.score;
-                if (ns / 1000000LL <= bestHard && (ns < curScore || polishAcceptN(ns, curScore, st.nextDouble()))) {
+                if (ns / 1000000000LL <= bestHard && (ns < curScore || polishAcceptN(ns, curScore, st.nextDouble()))) {
                     curScore = ns;
                     if (ns < s.bestScore) {
                         std::memcpy(s.bestSol.data(), st.a.data(), sizeof(int) * (size_t)S * T);
@@ -1830,7 +1832,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
             }
             for (int d = 0; d < nDiffs; d++) { int f = s.diffFlat[d]; st.deltaApply(f / T, f % T, s.scratch[(size_t)f]); }
             long long ns = st.score;
-            if (ns / 1000000LL <= bestHard && (ns < curScore || polishAcceptN(ns, curScore, st.nextDouble()))) {
+            if (ns / 1000000000LL <= bestHard && (ns < curScore || polishAcceptN(ns, curScore, st.nextDouble()))) {
                 curScore = ns;
                 if (ns < s.bestScore) {
                     std::memcpy(s.bestSol.data(), st.a.data(), sizeof(int) * (size_t)S * T);
@@ -1871,7 +1873,7 @@ std::vector<int> readIntArray(JNIEnv* env, jintArray arr) {
 #ifndef MAGI_HOST_TEST
 extern "C" JNIEXPORT jint JNICALL
 Java_com_magi_app_v6_NativeBridge_nativeAbiVersion(JNIEnv*, jclass) {
-    return 6;
+    return 7;
 }
 
 // [Stage8] ALNS チャンク状態の生成。problem ハンドル＋初期盤面 cur から AlnsState を作る。

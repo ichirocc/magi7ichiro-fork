@@ -692,8 +692,11 @@ object V6HotfixPasses {
                     if (done || shouldStop()) break
                     val x = work[i][j1]
                     for (j2 in underDays) {
-                        if (done) break
+                        // [レビュー#6 3.213.0] 内側ループにも締切確認（各候補がフル check を伴うため、
+                        //   キャンセル後のバーストを1候補以内に抑える。HF66=2.65.0/BlockRotation=3.84.0 と同方針）。
+                        if (done || shouldStop()) break
                         for (ip in 0 until p.S) {
+                            if (done || shouldStop()) break
                             if (ip == i) continue
                             // 相手 i' は j1 で休・j2 で勤務(非休)、両日 movable。被覆保存には i'←x(j1), i←y(j2) が担当可であること。
                             if (!movable(ip, j1) || !movable(ip, j2)) continue

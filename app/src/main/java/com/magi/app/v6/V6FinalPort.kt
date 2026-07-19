@@ -204,7 +204,7 @@ object V6FinalPort {
         // [5分強化] HARD>0（=未配布・配れない）は最優先で解消すべき失敗状態。予算の大半を使って多様化
         //   （多仮説＋HF80 戦略的振動）で HARD クリアを試みる。旧 budgetMs/6(=300s予算で50s) は早すぎ、
         //   実機ログで HARD=1 のまま 50s で早期終了し残り 250s を捨てていた。→ budgetMs*9/10(=270s)。
-        //   改善が続く限り lastImproveMs がリセットされるので、生産的な探索は自然に締切まで走る。
+        //   改善が続く限り lastBestImproveMs がリセットされるので、生産的な探索は自然に締切まで走る。
         val stallMs = (budgetMs * 9 / 10).coerceAtLeast(20_000L)
         // [5分圧縮] HARD=0到達後（=配布可・残りは研磨のみ）は頭打ちをより早く検知して終了（plateauなので品質は不変）。
         val stallHardMs = (budgetMs / 8).coerceAtLeast(15_000L)   // 5分予算→37.5s
@@ -217,7 +217,11 @@ object V6FinalPort {
         //     対称除外＝HARD寄与0のため下限にならず、逆に「解けるHARD」を早々に諦める誤りだった。構造的covUへ是正。
         //   構造(assignability/need)のみ依存で最適化中に不変＝一度だけ算出する。
         val hardFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
-        val lastImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
+        // [レビュー#9 3.213.0] 「最良改善」と「フェーズ遷移」の時計を分離（挙動は max() で従来と同一）。
+        //   旧は単一 lastImproveMs に両者を混載し、停滞検知の意味（何からの経過か）が読めなかった。
+        //   分離により将来フェーズ猶予と改善猶予へ別閾値を与える拡張も可能になる。
+        val lastBestImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
+        val lastPhaseChangeMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
         val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)   // 並列ワーカーから読むため atomic
         // [hardFloor 精度] best の「非covU HARD」(groupViol/pref/c3n=解けるHARD)件数。hardFloor は構造的covU
@@ -230,13 +234,13 @@ object V6FinalPort {
         val progressWatch: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
             synchronized(progressLock) {
                 val base = phase.substringAfter("/ ").trim().ifEmpty { phase }   // 「仮説N本探索中 / 」接頭辞を除去
-                if (base != lastPhase) { lastPhase = base; lastImproveMs.set(System.currentTimeMillis()) }
+                if (base != lastPhase) { lastPhase = base; lastPhaseChangeMs.set(System.currentTimeMillis()) }
                 if (report != null) {
                     val h = report.hard; val t = report.total; val wgt = report.weightedScore
                     val bh = bestHard.get()
                     val improved = h < bh || (h == bh && t < bTotal) || (h == bh && t == bTotal && wgt < bWeighted - 1e-6)
                     if (improved) {
-                        bestHard.set(h); bTotal = t; bWeighted = wgt; lastImproveMs.set(System.currentTimeMillis())
+                        bestHard.set(h); bTotal = t; bWeighted = wgt; lastBestImproveMs.set(System.currentTimeMillis())
                         // 非covU HARD(=解けるHARD)件数を best と同時に捕捉（stallHardMs 早期移行の判定に使う）。
                         val nonCovU = (report.breakdown["groupViol"] ?: 0) + (report.breakdown["pref"] ?: 0) + (report.breakdown["c3n"] ?: 0)
                         bestNonCovUHard.set(nonCovU)
@@ -260,7 +264,7 @@ object V6FinalPort {
             val effStall = if (bestHard.get() <= hardFloor && bestNonCovUHard.get() == 0) stallHardMs else stallMs
             when {
                 now >= searchDeadlineMs || !isActive -> true
-                now - startMs > minRunMs && now - lastImproveMs.get() > effStall -> { stagnationFired.set(true); true }
+                now - startMs > minRunMs && now - maxOf(lastBestImproveMs.get(), lastPhaseChangeMs.get()) > effStall -> { stagnationFired.set(true); true }
                 else -> false
             }
         }

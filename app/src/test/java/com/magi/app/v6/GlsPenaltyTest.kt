@@ -62,4 +62,11 @@ class GlsPenaltyTest {
         assertEquals(0, gls.penaltyOf(0, 1, 1))
         assertEquals(0.0, gls.augment(sched), 1e-9)
     }
+    // [レビュー#8 3.213.0] decay の値域契約（100超=増幅・負値は無意味）を固定。
+    @Test fun decayRejectsOutOfRangeKeepPercent() {
+        val gls = GlsPenalty(2, 3, 4, lambda = 10.0)
+        try { gls.decay(101); org.junit.Assert.fail("expected IAE for 101") } catch (_: IllegalArgumentException) {}
+        try { gls.decay(-1); org.junit.Assert.fail("expected IAE for -1") } catch (_: IllegalArgumentException) {}
+        assertEquals(0, gls.decay(80))   // 有効値は従来どおり（空 penalty → 0 件）
+    }
 }

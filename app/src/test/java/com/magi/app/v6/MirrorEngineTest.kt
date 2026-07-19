@@ -115,4 +115,42 @@ class MirrorEngineTest {
         assertEquals(2, report.breakdown["low"])   // lo(3) - got(1) = 2
         assertEquals("vio-low", report.countViolations["0,1"])   // 重い族(low=90)が軽い族(c2=1)を上書きしない/されない
     }
+    // [レビュー#4 3.213.0] LightMirrorOptimizer の希望凍結規則がエンジン本体(wishLocked)と一致することを固定。
+    //   旧 lockedMatrix は canDo 無視の全希望ロック＋事前適用なしで、初期盤面で未充足の実現可能希望が
+    //   最適化後も永久に未充足のまま残っていた。
+    @Test
+    fun lightOptimizerHonorsFeasibleWishesEvenWhenInitialViolatesThem() {
+        val st = buildState()
+        // 初期盤面で実現可能希望(0,0)=休 / (1,4)=A / (2,2)=C を全て「未充足」に崩す
+        val initial = st.schedule.toIntArray2D()
+        initial[0][0] = 1; initial[1][4] = 0; initial[2][2] = 0
+        val opt = LightMirrorOptimizer.optimize(st, initial, seconds = 0.05, seed = 7)
+        assertEquals(0, opt.schedule[0][0])
+        assertEquals(1, opt.schedule[1][4])
+        assertEquals(3, opt.schedule[2][2])
+    }
+
+    // [レビュー#7 3.213.0] normalizeSchedule が生成する -1 セルで Evaluator.fullEval が
+    //   ArrayIndexOutOfBoundsException を投げない（C++ fullEvalParts と同じスキップ意味論への対称化）。
+    @Test
+    fun evaluatorFullEvalIsSafeOnNormalizedMinusOneCells() {
+        val st = buildState()
+        val p = Problem(st)
+        val raw = st.schedule.toIntArray2D()
+        raw[0][0] = 99   // 範囲外 → normalizeSchedule が -1 に写像
+        val norm = normalizeSchedule(raw, p)
+        assertEquals(-1, norm[0][0])
+        val v = Evaluator(p).fullEvalParts(norm)   // 旧実装はここで AIOOBE
+        assertTrue(v[0] >= 0 && v[1] >= 0)
+    }
+
+    // [レビュー#1 3.213.0] パック桁単位 1e9 拡大の回帰: soft が旧上限(1e6)を超えても hard/soft 分解が壊れない。
+    @Test
+    fun packedScoreSplitSurvivesSoftBeyondMillion() {
+        val ev = Evaluator(Problem(buildState()))
+        val hard = 3L; val soft = 5_000_000L   // 旧 1e6 パックでは hard=8/soft=0 に化けていた領域
+        val (h, sft) = ev.split(hard * SCORE_HARD_UNIT + soft)
+        assertEquals(hard, h)
+        assertEquals(soft, sft)
+    }
 }

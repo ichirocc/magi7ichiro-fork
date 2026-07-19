@@ -58,7 +58,7 @@ data class SaResult(
  */
 class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator) {
 
-    private val M = 1_000_000L
+    private val M = SCORE_HARD_UNIT
 
     suspend fun run(
         params: SaParams = SaParams(),
@@ -187,7 +187,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                 pendingAction?.let { conductor.updateReward(it, if (bestScore < bestAtAction) 1.0 else 0.0) }
                 when (conductor.selectAction()) {
                     ConductorAction.STRONG_PERTURB -> { best.copyInto(cur); strongPerturbFlat(cur, rng); pendingAction = ConductorAction.STRONG_PERTURB }
-                    ConductorAction.SCALE_TEMP -> { pendingAction = ConductorAction.SCALE_TEMP }   // 現在解から再加熱
+                    ConductorAction.SCALE_TEMP -> { pendingAction = ConductorAction.SCALE_TEMP }   // 現在解を保持（温度倍率なし＝次ラダーで t0 再加熱、REHEAT との差は盤面のみ）
                     ConductorAction.REHEAT -> { best.copyInto(cur); pendingAction = ConductorAction.REHEAT }
                     ConductorAction.NOOP -> { best.copyInto(cur); pendingAction = null }
                 }
@@ -408,7 +408,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                     pendingAction?.let { conductor.updateReward(it, if (best < bestAtAction) 1.0 else 0.0) }
                     when (conductor.selectAction()) {
                         ConductorAction.STRONG_PERTURB -> { de.reset(bestSol); strongPerturb(); curVal = de.score(); pendingAction = ConductorAction.STRONG_PERTURB }
-                        ConductorAction.SCALE_TEMP -> { curVal = de.score(); pendingAction = ConductorAction.SCALE_TEMP }   // best へ戻さず現在解から再加熱
+                        ConductorAction.SCALE_TEMP -> { curVal = de.score(); pendingAction = ConductorAction.SCALE_TEMP }   // best へ戻さず現在解を保持（温度倍率なし＝次ラダーで t0 再加熱）
                         ConductorAction.REHEAT -> { de.reset(bestSol); curVal = best; pendingAction = ConductorAction.REHEAT }
                         ConductorAction.NOOP -> { de.reset(bestSol); curVal = best; pendingAction = null }   // 既定の reset-to-best
                     }

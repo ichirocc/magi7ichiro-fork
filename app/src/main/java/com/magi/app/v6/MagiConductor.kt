@@ -4,7 +4,9 @@ import kotlin.math.ln
 import kotlin.math.sqrt
 
 /** 停滞脱出アクション。NoOp=何もしない（停滞前の既定）/ Reheat=最良へ戻して再加熱 /
- *  StrongPerturb=最良から大きく摂動して脱出 / ScaleTemp=現在解から温度を上げて再探索。 */
+ *  StrongPerturb=最良から大きく摂動して脱出 / ScaleTemp=盤面を最良へ戻さず現在解のまま次ラダーへ。
+ *  [HF77訂正 3.213.0] ScaleTemp は専用の温度倍率を持たない（全アクション共通で次ラダーが t0 から再加熱）。
+ *  Reheat との差は「盤面を best へ戻すか（Reheat）/ 現在解を保つか（ScaleTemp）」のみ。 */
 enum class ConductorAction { NOOP, REHEAT, STRONG_PERTURB, SCALE_TEMP }
 
 /**

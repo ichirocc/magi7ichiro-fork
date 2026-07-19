@@ -85,7 +85,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         // [統一c1] c1 にも checker 重み(4)を適用（sc1 は #fire 生カウント、canDoガード済）。
         // [統一apt/fair/weekly] sApt(適切回数) sFair(群内公平化) sWeekly(曜日平準化) を SOFT に含める（共に重み1）。
         val soft = sc1 * 4 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 12 + hct + sApt + sFair + sWeekly + scovO
-        return h1 * 1_000_000L + soft
+        return h1 * SCORE_HARD_UNIT + soft
     }
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
@@ -229,7 +229,7 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
         // [統一c] c3/c3m/c3mn の delta にも checker 重み(3/2/12)を適用（full soft と同一係数）。
         // [統一c1] c1 の delta にも ×4。
         val dSoft = dC1 * 4 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 12 + dCt + dApt + dFair + dWeekly + dCovO
-        return score() + dHard * 1_000_000L + dSoft
+        return score() + dHard * SCORE_HARD_UNIT + dSoft
     }
 
     /** Apply the stashed move from the last previewMove(i,j,nw). Internal — external callers use apply(). */

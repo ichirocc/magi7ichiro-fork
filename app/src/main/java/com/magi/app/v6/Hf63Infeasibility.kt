@@ -43,12 +43,16 @@ class Hf63Infeasibility {
     private val gBestCurV = IntArray(N_CONSTRAINTS) { Int.MAX_VALUE }
     private val gLastImproveIter = IntArray(N_CONSTRAINTS)
     private val gInfeasibleLikely = BooleanArray(N_CONSTRAINTS)
+    // [レビュー#5 3.213.0] focus 投入量ベースの停滞累積（updateFromBreakdownFocused 用）。
+    //   gIter 時計と独立に「実際に focus した無改善ラウンドの概算反復数」だけを族ごとに積む。
+    private val gFocusedStall = IntArray(N_CONSTRAINTS)
 
     fun reset() {
         for (c in 0 until N_CONSTRAINTS) {
             gBestCurV[c] = Int.MAX_VALUE
             gLastImproveIter[c] = 0
             gInfeasibleLikely[c] = false
+            gFocusedStall[c] = 0
         }
     }
 
@@ -79,10 +83,36 @@ class Hf63Infeasibility {
         }
     }
 
-    /** UnifiedViolationChecker の breakdown から更新（族→indexへマップ）。 */
+    /** UnifiedViolationChecker の breakdown から更新（族→indexへマップ）。
+     *  注: 全族の停滞を無差別に加算する旧セマンティクス。focus の概念が無い呼出元
+     *  （ViewModel の実行後警告など）用に温存。RSI の focus 選択には
+     *  [updateFromBreakdownFocused] を使う（レビュー#5）。 */
     fun updateFromBreakdown(breakdown: Map<String, Int>, gIter: Int) {
         for ((key, idx) in KEY_TO_INDEX) {
             update(idx, breakdown[key] ?: 0, gIter)
+        }
+    }
+
+    /** [レビュー#5 3.213.0] focus 投入量ベースの更新。実際に探索資源を投入した族（focusedKey=
+     *  直前ラウンドの focus）だけ停滞を加算し、他族は改善/0到達の追跡（self-correction）のみ行う。
+     *  旧 updateFromBreakdown は「covU に focus が張り付いている間、一度も focus されなかった族」まで
+     *  約3ラウンドで infeasible 判定していた（3.184.0 は SOFT 側のみ avoid フィルタで緩和＝HARD 族の
+     *  誤 deprioritize は残っていた）。本更新は HARD/SOFT を問わず「試していない族を不能と推定しない」。
+     *  effortIters=そのラウンドに focus へ投入した概算反復数（RSI は 1800/round 換算＝既存の粒度補正と同じ）。 */
+    fun updateFromBreakdownFocused(breakdown: Map<String, Int>, focusedKey: String?, effortIters: Int) {
+        for ((key, idx) in KEY_TO_INDEX) {
+            val curV = breakdown[key] ?: 0
+            if (curV < gBestCurV[idx]) {
+                gBestCurV[idx] = curV
+                gFocusedStall[idx] = 0
+                if (gInfeasibleLikely[idx]) gInfeasibleLikely[idx] = false   // self-correction
+            } else if (curV == 0) {
+                gFocusedStall[idx] = 0   // 充足済みの族は「不能」ではない（update() の 0 到達分岐と同義）
+            } else if (key == focusedKey) {
+                gFocusedStall[idx] += effortIters
+                if (gFocusedStall[idx] >= INFEAS_STALL_ITERS) gInfeasibleLikely[idx] = true
+            }
+            // focus外かつ非改善: 何もしない＝停滞時計を進めない（探索資源を投入していないため）。
         }
     }
 
