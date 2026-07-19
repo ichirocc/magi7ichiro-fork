@@ -1016,6 +1016,17 @@ object V6HotfixPasses {
         return c + 1 > hi
     }
 
+    /** [ログから職員が分かるように] cellFamiliesに famKey を含むセルの職員名を重複なく列挙（登場順）。 */
+    private fun stuckStaffNames(state: MagiState, cellFamilies: Map<String, List<String>>, famKey: String): List<String> {
+        val out = LinkedHashSet<String>()
+        for ((key, fams) in cellFamilies) {
+            if (famKey !in fams) continue
+            val i = key.split(",").getOrNull(0)?.toIntOrNull() ?: continue
+            out.add(state.staff.getOrNull(i)?.name ?: "#$i")
+        }
+        return out.toList()
+    }
+
     fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL): CyclicSwapResult {
         val p = Problem(state)
         val work = normalizeSchedule(schedule, p)
@@ -1079,9 +1090,11 @@ object V6HotfixPasses {
             pass++
             if (!improved) break
         }
+        val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3mn")
         val logs = listOf(MirrorLog(tag = "C3mnPolish",
             message = "回避パターン(c3mn)研磨: c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
-                (if (applied == 0 && (before.breakdown["c3mn"] ?: 0) > 0) " [頭打ち=改善手なし]" else "")))
+                (if (applied == 0 && (before.breakdown["c3mn"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -1107,6 +1120,9 @@ object V6HotfixPasses {
         var applied = 0
         val rng = Random(seed)
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [ログから職員が分かるように] 対象(staff,shift)の表示名。
+        fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
+        val fixedNames = ArrayList<String>()
 
         // [玉突き連鎖つき1セル付け替え] day j の staff i を fromK から toK へ動かす。fromK 側の被覆が
         //   悪化するなら findCovUChain で埋め直す。採用ならtrue（bestRep/appliedは呼び出し側で更新済み）。
@@ -1162,7 +1178,7 @@ object V6HotfixPasses {
                     for (alt in p.allowedShiftsForStaff(i)) {
                         if (done || shouldStop()) break
                         if (alt == k) continue
-                        if (tryRelocate(i, j, k, alt)) { improved = true; done = true }
+                        if (tryRelocate(i, j, k, alt)) { improved = true; done = true; fixedNames.add(label(i, k)) }
                     }
                 }
             }
@@ -1175,15 +1191,26 @@ object V6HotfixPasses {
                     if (done || shouldStop()) break
                     val oldK = work[i][j]
                     if (oldK == k || oldK !in 0 until p.K) continue
-                    if (tryRelocate(i, j, oldK, k)) { improved = true; done = true }
+                    if (tryRelocate(i, j, oldK, k)) { improved = true; done = true; fixedNames.add(label(i, k)) }
                 }
             }
             pass++
             if (!improved) break
         }
+        // [ログから職員が分かるように] 研磨後もなお残っている(staff,shift)を名前付きで列挙。
+        val stuckNames = bestRep.countViolations.entries
+            .filter { it.value == "vio-high" || it.value == "vio-low" }
+            .mapNotNull { (key, _) ->
+                val parts = key.split(",")
+                val i = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                val k = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+                label(i, k)
+            }
         val logs = listOf(MirrorLog(tag = "RangePolish",
             message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
-                (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "")))
+                (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
+                (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -1281,9 +1308,12 @@ object V6HotfixPasses {
             pass++
             if (!improved) break
         }
+        val stuckNames = (stuckStaffNames(state, bestRep.cellFamilies, "vio-c3") +
+            stuckStaffNames(state, bestRep.cellFamilies, "vio-c3m")).distinct()
         val logs = listOf(MirrorLog(tag = "C3RunPolish",
             message = "連続規則(c3/c3m単一シフト連)玉突き研磨: c3 ${before.breakdown["c3"] ?: 0}->${bestRep.breakdown["c3"] ?: 0} / c3m ${before.breakdown["c3m"] ?: 0}->${bestRep.breakdown["c3m"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
-                (if (applied == 0 && ((before.breakdown["c3"] ?: 0) + (before.breakdown["c3m"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "")))
+                (if (applied == 0 && ((before.breakdown["c3"] ?: 0) + (before.breakdown["c3m"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
