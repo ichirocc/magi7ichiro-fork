@@ -1688,6 +1688,17 @@ object V6NativeOptimizer {
             for (i in 0 until p.S) if (grp[i] == c.groupIdx && sched[i][j] == c.shiftIdx) z++
             return z
         }
+        // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開その4] 直接移動が「離脱元/到着先どちらもcovU/covO
+        //   非悪化」を同時に満たせない場合、旧実装は即座に諦めていた。これはc3mn/high/c3系と同型の穴
+        //   （交換相手が構造的に存在しない局面）。離脱側のcovU悪化のみは findCovUChain（同日玉突き連鎖）で
+        //   埋め直せるため、そちらだけ chain フォールバックを追加する（到着側の covO は引き続き直接ガード
+        //   ＝候補を変えて試す。findCovUChain は covU 専用でcovO向けの玉突きではないため対象外のまま）。
+        //   本関数は呼び出し元(rsiGenerateHypothesis)がラウンド単位のbetter()でkeep-best評価する
+        //   仮説生成器のため、内部にisBetterは持たない（従来と同じ契約）。
+        fun recomputeCovDay(j: Int) {
+            val col = cov[j]; for (k in col.indices) col[k] = 0
+            for (i in 0 until p.S) { val k = sched[i][j]; if (k in 0 until p.K) col[k]++ }
+        }
         for (c in rules) {
             for (j in 0 until p.T) {
                 // 超過(z>u): 群在籍者を他シフトへ移す。
@@ -1707,7 +1718,30 @@ object V6NativeOptimizer {
                         }
                         if (moved) break
                     }
-                    if (!moved) break   // 動かせる在籍者がいない＝諦める（安全側）
+                    if (!moved) {
+                        // [玉突き連鎖フォールバック] findCovUChainは「埋めると実際にcovUが減るか」を
+                        //   現在の sched から判定するため、離脱を先に適用してから呼ぶ必要がある
+                        //   （離脱前に呼ぶと本人がまだ在籍中に見え「埋めても改善しない」と誤判定され
+                        //   常にnullが返っていた＝実バグ）。失敗時は必ず元に戻す。
+                        for (i in onShift) {
+                            if (moved) break
+                            if (p.wish[i][j] == c.shiftIdx) continue
+                            for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }.shuffled(rng)) {
+                                if (p.makesForbiddenRun(sched, i, j, m)) continue
+                                if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue
+                                val oldK = sched[i][j]
+                                sched[i][j] = m
+                                val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, exclude = i)
+                                if (chain == null) { sched[i][j] = oldK; continue }
+                                chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
+                                recomputeCovDay(j)
+                                applied += 1 + chain.size
+                                moved = true
+                                break
+                            }
+                        }
+                    }
+                    if (!moved) break   // 玉突きでも動かせない＝諦める（安全側）
                 }
                 // 不足(z<l): 群内の他シフト在籍者を引き入れる。
                 while (groupCount(c, j) < c.l) {
@@ -1724,7 +1758,25 @@ object V6NativeOptimizer {
                         applied++; moved = true
                         break
                     }
-                    if (!moved) break   // 動かせる在籍者がいない＝諦める（安全側）
+                    if (!moved) {
+                        // [玉突き連鎖フォールバック] HIGH側と同じ理由で、到着(=oldからの離脱)を先に
+                        //   適用してから findCovUChain を呼ぶ。失敗時は必ず元に戻す。
+                        for (i in offShift) {
+                            if (moved) break
+                            val old = sched[i][j]
+                            if (old !in 0 until p.K || p.wish[i][j] == old) continue
+                            if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
+                            if (p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx] + 1) > p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx])) continue
+                            sched[i][j] = c.shiftIdx
+                            val chain = findCovUChain(p, sched, old, j, rng, exclude = i)
+                            if (chain == null) { sched[i][j] = old; continue }
+                            chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
+                            recomputeCovDay(j)
+                            applied += 1 + chain.size
+                            moved = true
+                        }
+                    }
+                    if (!moved) break   // 玉突きでも動かせない＝諦める（安全側）
                 }
             }
         }

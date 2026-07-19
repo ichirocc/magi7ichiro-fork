@@ -966,7 +966,9 @@ struct GlsPenaltyN {
 // V6SearchOperators.glsAccept と同式（AcceptMode: 0=SA, 1=GREAT_DELUGE, 2=LAM_ADAPTIVE）。
 inline bool glsAcceptN(long long ns, long long curScore, double moveAug, double curAug,
                        int mode, double temp, double gdLevel, double u01) {
-    if (ns > curScore + 2000000LL) return false;
+    // [3.213.0見落とし修正] M(=SCORE_HARD_UNIT)を1e6→1e9へ拡大した際にこの閾値だけ旧スケール
+    //   (2*1e6)のまま残っていた。Kotlin側(V6SearchOperators.glsAccept)と同期し2*1e9へ。
+    if (ns > curScore + 2000000000LL) return false;
     if (mode == 1) {
         return ((double)ns + curAug + moveAug) <= gdLevel && (ns / 1000000000LL) <= (curScore / 1000000000LL);
     }
@@ -1740,7 +1742,8 @@ struct PolishState {
 // V6SearchOperators.acceptWorseScore(temp=0.15) と同式: hard +2 超は却下、
 // Δ<=0 受理、それ以外 exp(-Δ/(200*0.15)) = exp(-Δ/30)。
 inline bool polishAcceptN(long long ns, long long cur, double u01) {
-    if (ns > cur + 2000000LL) return false;
+    // [3.213.0見落とし修正] Kotlin側(acceptWorseScore)と同じく2*SCORE_HARD_UNIT(=2e9)へ同期。
+    if (ns > cur + 2000000000LL) return false;
     long long d = ns - cur;
     if (d <= 0) return true;
     return u01 < std::exp(-(double)d / 30.0);

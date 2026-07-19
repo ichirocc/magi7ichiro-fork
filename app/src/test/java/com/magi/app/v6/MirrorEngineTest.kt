@@ -11,6 +11,7 @@ import com.magi.app.model.Range
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -152,5 +153,22 @@ class MirrorEngineTest {
         val (h, sft) = ev.split(hard * SCORE_HARD_UNIT + soft)
         assertEquals(hard, h)
         assertEquals(soft, sft)
+    }
+
+    // [3.213.0見落とし修正の回帰] acceptWorseScore の早期ゲート("delta > 2*SCORE_HARD_UNIT は却下")が
+    //   SCORE_HARD_UNIT 拡大(1e6→1e9)後も正しく2e9基準になっていることを固定。旧バグは閾値が
+    //   2_000_000Lのまま残っており、delta=1e8(=1億、新旧いずれの1ハード単位(1e6/1e9)よりずっと小さい
+    //   純粋なsoft差程度の値)ですら旧閾値(2e6)を超えるため即ゲート却下されていた。
+    @Test
+    fun acceptWorseScoreGateThresholdMatchesNewScale() {
+        val base = 1000L
+        // delta=1e8: 新閾値(2e9)未満→ゲート通過。極端に大きいtempでBoltzmann項をほぼ1にし
+        // (通常運用tempでは delta/(200*temp) が大きすぎ確率がほぼ0になり外部から観測できないため)、
+        // ゲートを通過した事実を外部から観測可能にする。旧閾値(2e6)ならここで即false=ゲート却下。
+        val candWithinNewGate = base + 100_000_000L
+        assertTrue(acceptWorseScore(candWithinNewGate, base, temp = 1.0e9, rng = java.util.Random(1)))
+        // delta=3e9: 新閾値(2e9)超なのでtempに関わらずゲートで即却下(RNGに触れる前にreturn falseする)。
+        val candBeyondNewGate = base + 3L * SCORE_HARD_UNIT
+        assertFalse(acceptWorseScore(candBeyondNewGate, base, temp = 1.0e9, rng = java.util.Random(1)))
     }
 }
