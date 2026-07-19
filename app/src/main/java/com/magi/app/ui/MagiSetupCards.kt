@@ -265,6 +265,23 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             Button(onClick = { vm.setWorkers((ui.workers + 1).coerceAtMost(16)) },
                 enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を増やす" }) { Text("＋", fontSize = 20.sp) }
         }
+        // [余剰ワーカー活用/敵対的レビュー3.212.0で正直化] 表示はエンジンが実際に使う配分プラン
+        //   (V6NativeOptimizer.hypothesisChainPlan=余り配分＋コア数クランプ)から導出し、UI側の並行再計算による
+        //   乖離を防ぐ。旧注記は workers6〜9 で余剰が廃棄されるのに「厚みに使われます」と虚偽表示していた
+        //   （現在は余り配分により実際に使われる）。「高速」およびおまかせが高速へ解決される短予算
+        //   (chooseAlgorithm: 予算≤30s) では workers がそのままSAチェーン数になる旨も明記（旧注記はAUTO→V5
+        //   解決ケースを誤説明していた）。
+        if (ui.workers > com.magi.app.v6.V6NativeOptimizer.MAX_HYPOTHESES) {
+            val plan = com.magi.app.v6.V6NativeOptimizer.hypothesisChainPlan(ui.workers)
+            val planText = if (plan.min() == plan.max()) "内部${plan.min()}並列" else "内部${plan.min()}〜${plan.max()}並列"
+            val clampNote = if (plan.sum() < ui.workers) "（端末コア数${Runtime.getRuntime().availableProcessors()}に合わせ計${plan.sum()}本まで使用）" else ""
+            Text(
+                "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値をそのままSAチェーン数に使います。" +
+                    "それ以外の方式では仮説${com.magi.app.v6.V6NativeOptimizer.MAX_HYPOTHESES}本(上限)は増えず、超過分は各仮説内の並列探索に配分されます" +
+                    "（この端末では ${ui.workers} → 仮説${com.magi.app.v6.V6NativeOptimizer.MAX_HYPOTHESES}×${planText}$clampNote）。",
+                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("ネイティブ加速（C++）")

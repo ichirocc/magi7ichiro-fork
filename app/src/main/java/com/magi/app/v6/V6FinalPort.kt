@@ -188,7 +188,8 @@ object V6FinalPort {
         val startMs = System.currentTimeMillis()
         val budgetMs = seconds.toLong() * 1000L
         val hardDeadlineMs = startMs + budgetMs
-        val effHypotheses = workers.coerceIn(1, 5)   // 仕様§2.2: 最大5仮説並列(workers>5でも実効5)
+        // 仕様§2.2: 最大MAX_HYPOTHESES仮説並列（[敵対的レビュー3.212.0] マジック5を共有定数へ統一）
+        val effHypotheses = workers.coerceIn(1, V6NativeOptimizer.MAX_HYPOTHESES)
 
         // ----- 停滞早期脱出ウォッチドッグ -----
         // 進捗ストリームから「最良解(hard→total→重み付きの辞書順)」の更新時刻を追跡し、一定時間
@@ -336,9 +337,13 @@ object V6FinalPort {
                 //   保持した「他の案」を退避し、追加精製の後に復元する（ViewModel の captureAlternatives は
                 //   handleOptimize 復帰後に読むため、退避しないと他の案が消える）。
                 val savedAlts = V6NativeOptimizer.lastAlternatives
+                // [敵対的レビュー3.212.0] 微小予算(5〜25s)の追加精製に仮説内多チェーンは不適
+                //   （チェーン毎の固定費=入口hf67+フルcheck×2+nativeハンドル生成 が予算を侵食し、3.102.0が
+                //   回収した予約枠が高worker設定で再び浪費される）→ 仮説数上限までにキャップ＝旧来の5×1構成。
                 val extra = V6NativeOptimizer.optimize(
                     state, post.schedule,
-                    optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5)),
+                    optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5),
+                        workers = optsR.workers.coerceAtMost(V6NativeOptimizer.MAX_HYPOTHESES)),
                     extraStop, progressWatch,
                 )
                 V6NativeOptimizer.restoreAlternatives(savedAlts)

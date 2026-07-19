@@ -7,6 +7,7 @@ import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Random
 
@@ -340,5 +341,53 @@ class V6NativeOptimizerChoiceTest {
             assertEquals(base.size, out.size)
             assertEquals(base[0].size, out[0].size)
         }
+    }
+
+    // [余剰ワーカー活用] perHypothesisWorkers: 仕様§2.2の5仮説上限を超えて設定したworkersを、
+    // 各仮説の内部並列度（RSI/RSI++のSAチェーン数・ALNSの多チェーン）へ均等配分する計算のみを固定する
+    // 純粋関数テスト（並列実行そのものはJVMユニットテストでは検証しない＝実機ログ/CIビルドで確認）。
+    @Test fun perHypothesisWorkersDistributesSurplusEvenly() {
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 1, hypotheses = 5))
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 5, hypotheses = 5))
+        // 実機ログ実例: workers設定8・仮説5 → 8/5=1(切り捨て)。旧実装は常に1だったのでこの値は不変。
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 8, hypotheses = 5))
+        // workers=16・仮説5 → 16/5=3。旧実装なら5を超えた11ワーカー分が完全に無駄だった。
+        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 16, hypotheses = 5))
+    }
+
+    @Test fun perHypothesisWorkersNeverReturnsLessThanOne() {
+        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 0, hypotheses = 5))
+        // hypotheses=0 は縮退入力（実際は coerceIn(1,5) 済みで到達しない）。内側ガード max(1,hypotheses)=1 に
+        //   より 3/1=3 が返る＝「1未満を返さない」性質は満たす（初版の期待値1は誤り→CI失敗で検出・修正）。
+        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 3, hypotheses = 0))
+    }
+
+    // [敵対的レビュー3.212.0] hypothesisChainPlan: 余り配分（6〜9帯で余剰が実際に使われる=旧perW床のみの
+    //   「無駄にならない」虚偽表示の是正）＋コア数クランプ（壁時計締切下の希釈=品質逆行リスクの回避）。
+    @Test fun chainPlanDistributesRemainderToLeadingHypotheses() {
+        // 動機となった実機ログ当該ケース: workers=8/8コア → [2,2,2,1,1]（旧perW床は全仮説1で余剰3本廃棄だった）
+        val plan8 = V6NativeOptimizer.hypothesisChainPlan(workers = 8, hypotheses = 5, cores = 8)
+        assertEquals(listOf(2, 2, 2, 1, 1), plan8.toList())
+        assertEquals(8, plan8.sum())
+        // 割り切れるケース: workers=5 → 全仮説1（旧来どおり）
+        assertEquals(listOf(1, 1, 1, 1, 1), V6NativeOptimizer.hypothesisChainPlan(5, 5, 8).toList())
+    }
+
+    @Test fun chainPlanClampsToCoreCount() {
+        // workers=16/8コア → 配分総量はコア数8まで（15コルーチン/8スレッドの希釈を作らない）
+        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 8)
+        assertEquals(8, plan.sum())
+        assertEquals(listOf(2, 2, 2, 1, 1), plan.toList())
+        // 16コアなら16本フル配分
+        assertEquals(16, V6NativeOptimizer.hypothesisChainPlan(16, 5, 16).sum())
+    }
+
+    @Test fun chainPlanEveryHypothesisGetsAtLeastOneChain() {
+        // workers<hypotheses でも各仮説に最低1本（合計は hypotheses を下回らない）
+        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 2, hypotheses = 5, cores = 8)
+        assertEquals(5, plan.size)
+        assertTrue(plan.all { it >= 1 })
+        // 縮退入力も安全
+        assertTrue(V6NativeOptimizer.hypothesisChainPlan(0, 0, 0).all { it >= 1 })
     }
 }

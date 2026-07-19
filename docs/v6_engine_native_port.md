@@ -71,6 +71,25 @@ Each action launches a cancellable `job`; **計算を止める** calls `job?.can
 - **並列ワーカー vs 実効仮説**: `workers` は設定上 `1..16`（`UiState` 初期は端末 CPU 数で最大 8）。
   ただし最適化エンジンは仕様 §2.2 により**最大 5 仮説**並列（`workers.coerceIn(1,5)`）。
   ログ・UI では「workers 設定 N / 実効仮説 M」を分けて表示する。
+  - **[余剰ワーカー活用] 上限を超えた分は仮説内並列度へ配分**（`hypothesisChainPlan(workers,
+    w, cores)`＝**余り配分＋コア数クランプ**）: RSI/RSI++ が Phase1/奇数ラウンドで呼ぶ
+    `runV5`(`SaOptimizer`) は元々 `workers` 本の SA チェーンを並列実行できる実装だったが、
+    旧 `runMultiWorker` が各仮説へ一律 `workers=1` を強制していたため 5 を超える設定は完全に
+    無駄だった（実機ログ「workers設定8 実効仮説5」で発覚）。`runAlns` にも同型の多チェーン機構
+    (`runAlnsChains`)を新設し、`options.workers>1` のとき異なるシードで並列実行し `better()`
+    （hard→total→weighted 辞書式）で最良を採用する（各チェーンは `runAlnsSingle` を直接呼ぶ
+    ＝再帰は構造的に不可能）。「高速」(V5)と、おまかせが高速へ解決される短予算(≤30s)は仮説の
+    概念が無く `workers` をそのまま SA チェーン数として使うため対象外。
+    - 配分は `hypothesisChainPlan`: `min(workers, コア数)` を仮説数で割り、**余りは先頭仮説から
+      +1 ずつ**（例: workers=8/8コア → [2,2,2,1,1]）。コア数クランプは壁時計締切下の
+      オーバーサブスクリプション（浅い多チェーン < 深い単一チェーンの品質逆行）を防ぐ。
+      仮説数上限は共有定数 `V6NativeOptimizer.MAX_HYPOTHESES`（UI 注記・ログ・エンジンが
+      同一プランから表示を導出＝表示と実挙動の乖離を構造的に防止）。
+    - `runAlnsChains` は仮説内でも §2.2 絶対評価を維持（HARD=0 到達チェーンが兄弟を即キャンセル・
+      非先頭チェーンの合格 report も外側へ転送）し、1チェーンの例外は当該チェーンのみの損失に
+      隔離（全滅時のみ再送出）。チェーン毎結果・相異なる解数をログ化。
+    - ExtraRefine（残予算 5〜25s の追加精製）はチェーン毎固定費が予算を侵食するため
+      `workers ≤ MAX_HYPOTHESES` にキャップ（従来の 5×1 構成のまま）。
 - **バックグラウンド最適化**: `OptimizationWorker`（WorkManager 前景サービス）＋
   `OptimizationRepository` ＋ 完了通知。**プロセス kill 耐性に対応**＝約 8 秒ごとに
   `V6NativeOptimizer.liveBest` を `snapshotFile` へ保存し、再起動時に「途中結果から再開」を
