@@ -135,11 +135,16 @@ object V6NativeOptimizer {
         if (hf67Adopted) schedule = repaired
         val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入力の勤務表を保持
         val entryBoardReport = if (hf67Adopted) repairedReport else entryReport
-        // 仕様書 §2.2/§4.1: 最大5仮説を並列探索（V5だけは仮説の概念を使わずworkersをそのままSAチェーン数とする）。
-        val w = options.workers.coerceIn(1, 5)
-        // [余剰ワーカー活用] workers>5の分は仮説内並列度(perW)へ配分。V5はworkersをそのまま使うため対象外。
+        // 仕様書 §2.2/§4.1: 最大MAX_HYPOTHESES仮説を並列探索（V5だけは仮説の概念を使わずworkersをそのままSAチェーン数とする）。
+        val w = options.workers.coerceIn(1, MAX_HYPOTHESES)
+        // [余剰ワーカー活用] workers>上限の分は仮説内並列度へ配分（hypothesisChainPlan=余り配分＋コア数クランプ）。
+        //   V5はworkersをそのまま使うため対象外。表示はエンジンが実際に使うプランから導出（乖離防止）。
+        val planNote = hypothesisChainPlan(options.workers, w).let { pl ->
+            val mn = pl.min(); val mx = pl.max()
+            if (mn == mx) "仮説内${mn}並列" else "仮説内${mn}〜${mx}並列"
+        }
         val workersNote = if (chosen == V6Algorithm.V5) "workers=${options.workers}（SAチェーン）"
-            else "workers=${options.workers}（実効仮説${w}・仮説内${perHypothesisWorkers(options.workers, w)}並列）"
+            else "workers=${options.workers}（実効仮説${w}・$planNote）"
         var logs = listOf(
             MirrorLog(tag = "V6Dispatcher", message = "algorithm=$chosen budget=${options.totalBudgetSec}s $workersNote"),
             MirrorLog(tag = "HF67", message = if (hf67Adopted)
@@ -203,11 +208,37 @@ object V6NativeOptimizer {
         return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
     }
 
+    /** [敵対的レビュー3.212.0] 仕様§2.2の仮説数上限。従来はマジックナンバー5が optimize()/V6FinalPort/
+     *  UI注記/docs に散在しドリフトの温床だった（レビュー指摘: 上限変更時にUI表示だけ陳腐化する）。 */
+    const val MAX_HYPOTHESES = 5
+
     /** [余剰ワーカー活用] 仮説数(hypotheses, 仕様§2.2で最大5)に対し、設定workersのうち何本を各仮説の
      *  内部並列度（SAチェーン数・ALNS多チェーン）へ均等配分するか。workers<=hypothesesなら1(旧来どおり
-     *  単一チェーン)。余りは切り捨て（例: workers=8,hypotheses=5 → 1本/仮説・workers=16,hypotheses=5 → 3本/仮説）。 */
+     *  単一チェーン)。余りは切り捨て（例: workers=8,hypotheses=5 → 1本/仮説・workers=16,hypotheses=5 → 3本/仮説）。
+     *  ※均等床の計算のみ。実際の配分は hypothesisChainPlan（余り配分＋コア数クランプ）を使う。 */
     internal fun perHypothesisWorkers(workers: Int, hypotheses: Int): Int =
         max(1, workers / max(1, hypotheses))
+
+    /** [敵対的レビュー3.212.0/単一ソース] 仮説ごとのチェーン本数プラン。レビューで確定した2欠陥を修正:
+     *  ①旧 perW=床のみ配分は workers 6〜9（既定上限8＝動機の実機ログ当該ケース）で余り1〜4本を黙って
+     *    廃棄しながらUI/docsが「無駄にならない」と虚偽主張（HF77: コメント≠実装）→ 余りを先頭仮説から
+     *    +1ずつ配分し、主張どおり「5を超えた分は実際に使われる」ようにする。
+     *  ②コア数クランプ無しで workers=16/8コア端末が15 CPU-boundコルーチンを壁時計締切下で希釈し
+     *    「浅い3本のkeep-best < 深い1本」の品質逆行リスク（2.55/2.56のA/B実測原則にも反する）→
+     *    配分総量を min(workers, cores) にクランプ（コア数以内なら挙動は配分の名のとおり）。
+     *  UI注記・診断ログ・エンジン本体が全て本関数から導出＝表示と実挙動の乖離を構造的に防ぐ。
+     *  返り値: 長さ hypotheses の各仮説チェーン本数（各要素>=1・合計=max(hypotheses, min(workers, cores))）。 */
+    internal fun hypothesisChainPlan(
+        workers: Int,
+        hypotheses: Int = MAX_HYPOTHESES,
+        cores: Int = Runtime.getRuntime().availableProcessors(),
+    ): IntArray {
+        val h = max(1, hypotheses)
+        val distributable = max(h, kotlin.math.min(max(1, workers), max(1, cores)))
+        val basePer = distributable / h
+        val remainder = distributable % h
+        return IntArray(h) { i -> basePer + if (i < remainder) 1 else 0 }
+    }
 
     /**
      * Run up to [w] independent hypotheses concurrently (distinct seeds) and keep the best —
@@ -223,12 +254,15 @@ object V6NativeOptimizer {
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
         run: suspend (Int, V6OptimizerOptions, (String, ViolationReport?, Long, Long) -> Unit) -> V6OptimizerResult,
     ): V6OptimizerResult = coroutineScope {
-        // [余剰ワーカー活用] 仕様§2.2の「最大5仮説」上限(w)は不変。workers>5で設定した分は無駄にせず、
-        //   各仮説の内部並列度（RSI/RSI++がPhase1/奇数ラウンドで呼ぶrunV5のSAチェーン数、ALNSの多チェーン
-        //   =runAlnsChains）へ均等配分する。旧実装は仮説ごとに一律 workers=1 を強制しており、5を超える設定は
+        // [余剰ワーカー活用] 仕様§2.2の「最大MAX_HYPOTHESES仮説」上限(w)は不変。workers>上限の分は各仮説の
+        //   内部並列度（RSI/RSI++がPhase1/奇数ラウンドで呼ぶrunV5のSAチェーン数、ALNSの多チェーン
+        //   =runAlnsChains）へ配分する。旧実装は仮説ごとに一律 workers=1 を強制しており、5を超える設定は
         //   完全に無駄だった（実機ログ「workers設定8 実効仮説5」で確認）。
-        val perW = perHypothesisWorkers(options.workers, w)
-        if (w <= 1) return@coroutineScope run(0, options.copy(workers = perW), onProgress)
+        // [敵対的レビュー3.212.0] 均等床(perW)のみの配分は 6〜9 で余りを黙って廃棄しつつ「使われる」と
+        //   表示する虚偽（HF77）＋コア数超の希釈リスクがあった → hypothesisChainPlan（余り配分＋コア数
+        //   クランプ）で仮説ごとの本数を決める。plan.max()>1 の仮説だけが多チェーン化する。
+        val plan = hypothesisChainPlan(options.workers, w)
+        if (w <= 1) return@coroutineScope run(0, options.copy(workers = plan[0]), onProgress)
         val base = actualSeed(options.seed)
         val completed = java.util.concurrent.atomic.AtomicInteger(0)
         val winner = java.util.concurrent.atomic.AtomicInteger(-1)
@@ -236,7 +270,7 @@ object V6NativeOptimizer {
         for (i in 0 until w) {
             jobs[i] = async(Dispatchers.Default) {
                 // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
-                val res = run(i, options.copy(workers = perW, seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
+                val res = run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
                     if (i == 0) onProgress("仮説${(w - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
                     // 絶対評価: 合格ライン(HARD=0)に最初に到達した仮説が、残りを即キャンセル
                     if (report != null && report.hard == 0 && winner.compareAndSet(-1, i)) {
@@ -252,7 +286,7 @@ object V6NativeOptimizer {
         }
         // 兄弟キャンセル(自己)とユーザー停止(外部)を区別: 外部停止ならここで伝播させる。
         ensureActive()
-        val best = if (results.isEmpty()) run(0, options.copy(workers = perW), onProgress)
+        val best = if (results.isEmpty()) run(0, options.copy(workers = plan[0]), onProgress)
         else results.reduce { a, b -> if (better(b.report, a.report)) b else a }
         // 「他の案」: 採用案以外の仮説結果を品質順に保持（重複schedule除外、最大3件）
         lastAlternatives = results.asSequence()
@@ -264,7 +298,7 @@ object V6NativeOptimizer {
             .toList()
         val totalIters = results.sumOf { it.iterations }
         val mode = if (winner.get() >= 0) "合格で早期キャンセル" else "時間内最良採用"
-        val chainNote = if (perW > 1) "・仮説内${perW}並列(SA/ALNS多チェーン)" else ""
+        val chainNote = if (plan.max() > 1) "・仮説内${plan.min()}〜${plan.max()}並列(SA/ALNS多チェーン)" else ""
         val extra = MirrorLog(tag = "MultiWorker", message = "仮説 ${w} 本 ($mode・役割分担:探索/精製＋受理SA/GreatDeluge多様化$chainNote) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
         // [過程検証] 各仮説の個別結果・多様性（相異なる解の数）・保持した他の案数をログ化し、探索過程を後から検証できるようにする。
         //   各仮説の合計が揃っていれば収束、ばらけていれば多様な探索ができている、と判別できる。
@@ -363,12 +397,19 @@ object V6NativeOptimizer {
     }
 
     /** [余剰ワーカー活用/多チェーンALNS] runAlns を [chains] 本、異なるシードで並列実行し keep-best
-     *  で最良を採用する（SaOptimizer の多チェーンSAと同型の考え方をALNSへ拡張）。各チェーンは既存の
-     *  runAlns 本体を workers=1 で（変更なし・再帰1段のみ）呼ぶだけの薄い外側ラッパー。restarts・GLS・
-     *  destroy-repair 等の内部ロジックは一切変更しない。最終選択は全チェーン共通の better()（hard→total→
-     *  weighted辞書式）でゲートするため退化不能。進捗は先頭チェーン(c=0)のものだけ転送する。 */
+     *  で最良を採用する（SaOptimizer の多チェーンSAと同型の考え方をALNSへ拡張）。各チェーンは runAlnsSingle
+     *  （単一チェーン本体）を直接呼ぶ＝再帰は構造的に不可能（[敵対的レビュー3.212.0] 旧実装は runAlns 経由の
+     *  ガード再帰で、無限再帰防止が options.copy(workers=1) 1引数とコメントのみに依存していた）。
+     *  restarts・GLS・destroy-repair 等の内部ロジックは一切変更しない。最終選択は全チェーン共通の
+     *  better()（hard→total→weighted辞書式）でゲートするため退化不能。
+     *  [敵対的レビュー3.212.0で追加した3つの堅牢化]
+     *  ①部分結果許容: 1チェーンの非Cancellation例外で兄弟チェーンの有効な結果を道連れにしない（チェーン毎に
+     *    捕捉・全滅時のみ最初の例外を再送出=旧単一チェーンと同じ失敗面）。
+     *  ②HARD=0早期キャンセル: 非先頭チェーンの合格も検知して兄弟を即キャンセルし（§2.2絶対評価）、合格
+     *    reportは c!=0 でも外側 onProgress へ転送＝runMultiWorker の仮説間キャンセルにも見えるようにする。
+     *  ③観測性: 仮説検証と同型のチェーン毎結果・相異なる解数・chain0内訳をログ化（全チェーン同一解収束＝
+     *    並列の無駄、をログレビューで検出可能に）。 */
     private suspend fun runAlnsChains(
-        chains: Int,
         state: MagiState,
         initial: Array<IntArray>,
         options: V6OptimizerOptions,
@@ -376,22 +417,53 @@ object V6NativeOptimizer {
         shouldStop: () -> Boolean,
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
     ): V6OptimizerResult = coroutineScope {
+        val chains = max(1, options.workers)
         val base = actualSeed(options.seed)
-        val jobs = (0 until chains).map { c ->
-            async(Dispatchers.Default) {
-                runAlns(state, initial.copy2D(), options.copy(workers = 1, seed = base + (c + 1) * 0x2545F4914F6CDD1DL), budgetSec, shouldStop) { phase, report, iters, elapsed ->
-                    if (c == 0) onProgress(phase, report, iters, elapsed)
+        val passed = java.util.concurrent.atomic.AtomicInteger(-1)
+        val firstError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+        val jobs = arrayOfNulls<kotlinx.coroutines.Deferred<V6OptimizerResult?>>(chains)
+        for (c in 0 until chains) {
+            jobs[c] = async(Dispatchers.Default) {
+                try {
+                    runAlnsSingle(state, initial.copy2D(), options.copy(workers = 1, seed = base + (c + 1) * 0x2545F4914F6CDD1DL), budgetSec, shouldStop) { phase, report, iters, elapsed ->
+                        val won = report != null && report.hard == 0 && passed.compareAndSet(-1, c)
+                        if (won) { for (j in 0 until chains) if (j != c) jobs[j]?.cancel() }
+                        // 先頭チェーンは常時、非先頭は合格時のみ転送（合格の可視化がrunMultiWorkerの絶対評価に必要）。
+                        if (c == 0 || won) onProgress(phase, report, iters, elapsed)
+                    }
+                } catch (ce: kotlinx.coroutines.CancellationException) {
+                    throw ce
+                } catch (e: Exception) {
+                    firstError.compareAndSet(null, e)
+                    null
                 }
             }
         }
-        val results = jobs.map { it.await() }
+        val results = jobs.mapNotNull { d ->
+            try { d?.await() } catch (_: kotlinx.coroutines.CancellationException) { null }
+        }
         ensureActive()
+        if (results.isEmpty()) {
+            // 全チェーン失敗（キャンセル起因は上のensureActiveで伝播済＝ここは例外全滅のみ）。
+            // 旧単一チェーンと同じ失敗面へ縮退: 最初の例外を再送出（黙って空成功にしない）。
+            throw firstError.get() ?: IllegalStateException("runAlnsChains: no chain produced a result")
+        }
         val best = results.reduce { a, b -> if (better(b.report, a.report)) b else a }
         val totalIters = results.sumOf { it.iterations }
-        val extra = MirrorLog(tag = "AlnsChains", message = "ALNS多チェーン(${chains}並列) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
+        val chain0Iters = results.firstOrNull()?.iterations ?: 0L
+        val perChain = results.sortedWith(compareBy({ it.report.hard }, { it.report.total }))
+            .joinToString("  ") { r -> "[必須${r.report.hard}/合計${r.report.total}${if (r === best) "★採用" else ""}]" }
+        val distinctSols = results.map { r -> r.schedule.joinToString("|") { row -> row.joinToString(",") } }.distinct().size
+        val failNote = if (results.size < chains) "・失敗${chains - results.size}本(例外/キャンセル)" else ""
+        val extra = MirrorLog(tag = "AlnsChains", message =
+            "ALNS多チェーン(${chains}並列$failNote) → 採用 HARD=${best.report.hard} total=${best.report.total}" +
+                " 合計iter=${totalIters}(先頭chain=${chain0Iters}) / 各チェーン: $perChain / 相異なる解=${distinctSols}件")
         best.copy(phaseLogs = best.phaseLogs + extra, iterations = totalIters)
     }
 
+    /** [敵対的レビュー3.212.0/構造分割] workers の意味過重（設定値/仮説内チェーン数/チェーン内=1）を
+     *  ディスパッチャ3行に閉じ込める。本体 runAlnsSingle は workers を一切読まない＝再帰・誤fan-outが
+     *  構造的に不可能。既存呼出元（optimize/runRsi/runRsiPlus）のシグネチャは不変。 */
     private suspend fun runAlns(
         state: MagiState,
         initial: Array<IntArray>,
@@ -400,10 +472,18 @@ object V6NativeOptimizer {
         shouldStop: () -> Boolean = { false },
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
     ): V6OptimizerResult {
-        // [余剰ワーカー活用] workers>1（RSI/RSI++/ALNS/PORTFOLIOの各仮説へ配分された仮説内並列度）のとき、
-        //   独立シードのALNSチェーンをworkers本並列実行し最良を採用する。1段のみ再帰（内側呼出はworkers=1
-        //   固定）＝無限増殖しない。既存の単一チェーン本体（このあと）は一切変更なし。
-        if (options.workers > 1) return runAlnsChains(options.workers, state, initial, options, budgetSec, shouldStop, onProgress)
+        if (options.workers > 1) return runAlnsChains(state, initial, options, budgetSec, shouldStop, onProgress)
+        return runAlnsSingle(state, initial, options, budgetSec, shouldStop, onProgress)
+    }
+
+    private suspend fun runAlnsSingle(
+        state: MagiState,
+        initial: Array<IntArray>,
+        options: V6OptimizerOptions,
+        budgetSec: Int,
+        shouldStop: () -> Boolean = { false },
+        onProgress: (String, ViolationReport?, Long, Long) -> Unit,
+    ): V6OptimizerResult {
         val started = nowMs()
         val rng = Random(actualSeed(options.seed) xor 0xA17A5L)
         val p = cachedProblem(state)
