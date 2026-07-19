@@ -65,6 +65,18 @@ data class V6PostOptimizationResult(
 
 object V6HotfixPasses {
     /**
+     * [頭打ち調査・「なぜゼロにならないのか」] C1Polish/C3mnPolish/RangePolish/C3RunPolish は
+     * `runPostOptimization`のフィックスポイント巡回(最大maxRounds=4)から**ラウンドごとに再呼出**
+     * されるが、旧実装はseed引数を渡さず既定値固定のままだった。findCovUChainの候補順はrng由来
+     * なので、ある(staff,shift)ペアがラウンドNで頭打ち(候補が構造的に全滅/isBetterに拒否)すると、
+     * 盤面の当該箇所が変化しない限りラウンドN+1以降も**全く同じrng列＝同じ結果**を再生するだけで、
+     * 永久に頭打ちのまま抜け出せなかった（桒澤美幸のAｱ超過が段階的にしか縮まらない実例で発覚）。
+     * ラウンドごとに異なるseedを与え、再挑戦のたびに違う候補順を試せるようにする（isBetterによる
+     * keep-best採否は不変＝退化不能。単なる探索の多様化）。
+     */
+    internal fun roundSeed(base: Long, tag: Long, round: Int) = base xor tag xor (round.toLong() * -0x61c8864680b583ebL)
+
+    /**
      * [review: budget] 後処理チェーン HF80 -> HF67 -> HF66 -> HF70。
      * @param shouldStop true を返した時点で各パスの反復を打ち切る。全体予算(deadline)超過と
      *        coroutine キャンセルの両方を呼び出し側でこのラムダに束ねる。HF80/67/66 は
@@ -131,7 +143,7 @@ object V6HotfixPasses {
             if (round == 0) logs.addAll(rCyc.logs)
 
             onPhase("後処理 期間要件(c1)研磨 [巡${round + 1}]")
-            val rC1 = applyC1WindowPolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            val rC1 = applyC1WindowPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0x1C1L, round))
             work = rC1.newSchedule.copy2D(); totalC1 += rC1.applied; roundApplied += rC1.applied
             if (round == 0) logs.addAll(rC1.logs)
 
@@ -153,7 +165,7 @@ object V6HotfixPasses {
             // [C3mnPolish・玉突き連鎖の横展開] cons3n(HARD)で直接候補が全滅する局面向けに findCovUChain
             //   をc3mn(回避,SOFT)専用に反映（grilling 2026-07-19、金沢勇輝のDﾃ4連続実例）。
             onPhase("後処理 回避パターン(c3mn)玉突き研磨 [巡${round + 1}]")
-            val rC3mn = applyC3mnPolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            val rC3mn = applyC3mnPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0xC3AL, round))
             work = rC3mn.newSchedule.copy2D(); totalC3mn += rC3mn.applied; roundApplied += rC3mn.applied
             if (round == 0) logs.addAll(rC3mn.logs)
 
@@ -161,7 +173,7 @@ object V6HotfixPasses {
             //   局面(担当可能シフトが極端に少ない職員等)向けに findCovUChain で研磨（grilling不要・
             //   C3mnPolishと同型のためユーザー承認のうえ直接実装、桒澤美幸のAｱ超過実例）。
             onPhase("後処理 個人回数(low/high)玉突き研磨 [巡${round + 1}]")
-            val rRange = applyRangePolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            val rRange = applyRangePolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0x8A9EL, round))
             work = rRange.newSchedule.copy2D(); totalRange += rRange.applied; roundApplied += rRange.applied
             if (round == 0) logs.addAll(rRange.logs)
 
@@ -169,7 +181,7 @@ object V6HotfixPasses {
             //   相互交換の相手が構造的に存在しない局面向けに findCovUChain で研磨（grilling不要・
             //   C3mnPolish/RangePolishと同型のためユーザー承認のうえ直接実装）。
             onPhase("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨 [巡${round + 1}]")
-            val rC3run = applyC3RunPolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            val rC3run = applyC3RunPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0xC3A2L, round))
             work = rC3run.newSchedule.copy2D(); totalC3run += rC3run.applied; roundApplied += rC3run.applied
             if (round == 0) logs.addAll(rC3run.logs)
 
