@@ -2,9 +2,11 @@ package com.magi.app.v6
 
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
+import com.magi.app.model.Range
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -177,5 +179,55 @@ class V6SanityPortTest {
         val rep = V6SanityPort.buildGuidance(aptVsNeedState(days = 10, need1 = "0", aptTarget = "3", otherLo = "8"))
         assertTrue("他シフトの個人下限を差し引いた実質上限を下回るなら検出すること",
             rep.any { it.where.contains("休") && it.where.contains("適切回数の合計") })
+    }
+
+    // [3.242.0/6c=staffRange上限版・grilling確定=美幸・上條・大島の実例を踏まえ実装] 6bと同じ
+    // 「担当レパートリーから強制される最低回数」ロジックを staffRange 上限(hi)にも適用する検査。
+    // target(担当=休,X,Y): 休lo=hi=4固定・Yのhi=3・T=10日 → 休+Yの上限合計7では10日を埋めきれず、
+    // 残り3日は必ずXに回る(強制下限3)。Xの個人上限は2なので、targetがXを担当し続ける限り上限超過は
+    // 構造的に不可避。sub(G0=target側と同じグループ)はXを担当可能＝代用要員候補として提示されるはず。
+    private fun rangeHiWallState(subCanDoX: Boolean): MagiState = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-10",
+        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
+        staff = listOf(Staff("target", 0), Staff("sub", if (subCanDoX) 0 else 1)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1, 1), listOf(1, 0, 1)),   // G0=休,X,Y全部可 / G1=休,Yのみ可(X不可)
+        groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
+        schedule = listOf(List(10) { 0 }, List(10) { 0 }),
+        wishes = emptyMap(),
+        staffRange = mapOf(
+            "0,0" to Range("4", "4"),   // target: 休 lo=hi=4固定
+            "0,1" to Range("", "2"),    // target: X 上限2(対象)
+            "0,2" to Range("", "3"),    // target: Y 上限3
+        ),
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun personalHighWallDetectsWhenForcedMinExceedsRangeHiAndListsSubstitute() {
+        val rep = V6SanityPort.buildGuidance(rangeHiWallState(subCanDoX = true))
+        val issue = rep.firstOrNull { it.where.contains("target") && it.where.contains("X") && it.where.contains("上限") }
+        assertNotNull("担当構成上Xの強制下限(3)が上限(2)を超えるため検出されること", issue)
+        assertTrue("代用要員候補(sub)が案内されること", issue!!.problem.contains("sub"))
+    }
+
+    @Test fun personalHighWallReportsNoSubstituteWhenNoneCanDo() {
+        val rep = V6SanityPort.buildGuidance(rangeHiWallState(subCanDoX = false))
+        val issue = rep.firstOrNull { it.where.contains("target") && it.where.contains("X") && it.where.contains("上限") }
+        assertNotNull("subがXを担当できなくても壁自体は検出されること", issue)
+        assertTrue("代用要員がいない旨が案内されること", issue!!.problem.contains("代用できる他の担当者がいません"))
+    }
+
+    @Test fun personalHighWallDoesNotFireWhenOtherShiftHasNoUpperBound() {
+        // Yの上限を未設定(無制限)にすると、休+Y(無制限)だけで10日を埋めきれるため強制下限が0以下になり
+        // 発火しない(6bと同じ保守的判定)。
+        val st = rangeHiWallState(subCanDoX = true).let {
+            it.copy(staffRange = it.staffRange - "0,2")
+        }
+        val rep = V6SanityPort.buildGuidance(st)
+        assertTrue("他シフトに上限未設定が1つでもあれば誤検知しないこと",
+            rep.none { it.where.contains("target") && it.where.contains("X") && it.where.contains("上限") })
     }
 }
