@@ -1189,7 +1189,7 @@ object V6HotfixPasses {
         //   結合で解消した箇所が「残存」に残らないようにする。
         val c1CombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = c1CombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = c1CombStats,
         )
         applied += c1CombStats.combosAccepted
         // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手B(直接移動+玉突き)が最終的に失敗した
@@ -1334,7 +1334,7 @@ object V6HotfixPasses {
         //   「残存」に残らないようにする。
         val c3mnCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = c3mnCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = c3mnCombStats,
         )
         applied += c3mnCombStats.combosAccepted
         val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3mn")
@@ -1873,7 +1873,7 @@ object V6HotfixPasses {
         //   「残存」に残らないようにする。
         val rangeCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = rangeCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = rangeCombStats,
         )
         applied += rangeCombStats.combosAccepted
         // [ログから職員が分かるように・頭打ちの理由を可視化] 研磨後もなお残っている(staff,shift)を、
@@ -2081,7 +2081,7 @@ object V6HotfixPasses {
         //   「残存」に残らないようにする。
         val aptCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = aptCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = aptCombStats,
         )
         applied += aptCombStats.combosAccepted
         val stuckNames = bestRep.countViolations.entries
@@ -2292,7 +2292,7 @@ object V6HotfixPasses {
         //   結合でwork/bestRepが変わってもdistLocationsはbestRep自身から再取得するため自動整合。
         val fairCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = fairCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = fairCombStats,
         )
         applied += fairCombStats.combosAccepted
         // [AptPolishと同型] work は毎手の成功時のみコミットしbestRepと同期を保つ（失敗時は必ず巻き戻し）
