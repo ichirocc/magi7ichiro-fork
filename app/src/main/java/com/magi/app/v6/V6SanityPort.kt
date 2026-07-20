@@ -424,7 +424,33 @@ object V6SanityPort {
             }
             // C) 適切回数(apt=職員のレパートリー目標)の合計 > 必要数(上限)の合計 → 全員の目標を満たすと過剰配置。
             //    レパートリーと被覆が両立しない設定ズレ。目標割れ(aptLow)か過剰配置(covO/aptHigh)が必ず出る。
-            if (aptSum > seatsHi) {
+            // [休(restIdx)専用の比較へ差替え] 休は「1日に何人休んでよいか」という座席上限を持たないため、
+            //   need1/need2の合計(seatsHi、通常0)と比較しても意味を持たない（実機報告「必要数の合計は0回の
+            //   理由」＝旧実装の誤検知）。とはいえ「休の適切回数が本当に過大」なケースは実在し得るため、
+            //   単純に検査対象から除外する（黙って警告を消す）のではなく、休に意味のある実質的な上限＝
+            //   「各職員が他シフトの個人下限を満たしたうえで、最大何日休めるか」の合計(restCapacity)と
+            //   比較する。6b(幻のapt目標)と同じ「担当レパートリーから強制される最低回数」ロジックを
+            //   個人単位でなく全員合計に適用したもの。他シフトの下限が未設定の職員は minOther=0＝ほぼ
+            //   T日まるごと休める計算になり、誤検知はまず起きない（保守的）。
+            if (k == p.restIdx) {
+                var restCapacity = 0
+                for (i in 0 until p.S) {
+                    if (!p.canDo(i, k)) continue
+                    var minOther = 0
+                    for (k2 in 0 until p.K) {
+                        if (k2 == k || !p.canDo(i, k2)) continue
+                        val lo2 = p.rangeLo[i][k2]
+                        if (lo2 != Int.MIN_VALUE && lo2 > 0) minOther += lo2
+                    }
+                    restCapacity += maxOf(0, p.T - minOther)
+                }
+                if (aptSum > restCapacity) {
+                    out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の適切回数の合計",
+                        "適切回数(レパートリー目標)の合計が${aptSum}回ですが、他シフトの個人下限を差し引いた「$sym」の" +
+                            "最大可能日数の合計は${restCapacity}回しかありません。全員の目標は同時に満たせず、目標割れか過剰配置が必ず出ます",
+                        "「$sym」の適切回数を下げるか、他シフトの個人下限を見直してください"))
+                }
+            } else if (aptSum > seatsHi) {
                 out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の適切回数の合計",
                     "適切回数(レパートリー目標)の合計が${aptSum}回ですが、必要数の合計は${seatsHi}回しかありません。全員の目標は同時に満たせず、目標割れか過剰配置が必ず出ます",
                     "「$sym」の適切回数を下げるか、必要人数を増やしてください"))
