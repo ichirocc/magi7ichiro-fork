@@ -1727,6 +1727,14 @@ K=3〜4件の可変長組合せ** ④候補プール上限=**なし**（shouldSt
   （互いに排他な代替案）はフルchecker呼出をスキップ（combosTriedには計上）。候補プールに上限は設けず、
   `shouldStop()` のみで打ち切る（grilling確定どおり時間予算ベース）。`Stats`（結合探索の試行数・打ち切り
   有無・機構別の供給件数・結合成立の件数と対象ラベル）を`summary()`でログ文字列化。
+- **[追加, ユーザー指摘「早期脱出しないのか?」] 停滞検知**: 候補プール無上限(grilling確定)のまま
+  `shouldStop()`のみに頼ると、実データで候補数が多い(不採用×78等)場合に結合が1件も成立しない盤面でも
+  組合せを尽くすまで(または予算切れまで)律儀に試し続け、その研磨パスが残り時間予算を無駄に食い潰しうる
+  懸念をユーザーが指摘。既存のE9/E10/N4/HF63と同種の「進展が無いなら早期に諦める」停滞検知として、
+  連続`maxStagnantTries`回(既定200)不採用のまま進むと`stagnantExit=true`で早期breakする`misses`
+  カウンタを追加（結合成立のたびにリセット＝進展がある間は打ち切らない）。採否は依然isBetterが決めるため
+  退化不能。ログの打ち切り理由を「時間切れ打ち切り」（shouldStop）と「無駄打ち回避で早期終了」
+  （stagnantExit）で区別表示。
 - **5族への配線**: `applyC1WindowPolish`（手B・手R3の不採用時）／`applyC3mnPolish`（alt試行の不採用時、
   非chain・chain両分岐）／`applyRangePolish`（`tryRelocate`の不採用時。手M/手Fは既にそれ自体が多職員
   同時最適化のため対象外＝スコープ限定）／`applyAptPolish`／`applyFairPolish`（ともに`tryChainRelocate`
@@ -1746,15 +1754,16 @@ K=3〜4件の可変長組合せ** ④候補プール上限=**なし**（shouldSt
   発見してしまい、新フレームワークを経由せず既存機構だけで解決してしまう、という3つの構造的制約が
   重なるため。**完了条件は「apt/fair(weight1族)で厳密に検証済みの最小盤面テストを固定」へ縮小**
   （5族すべての配線自体は完了、テストはAptPolishTest 1件＋共有ロジック本体を直接検証する
-  `CombinatorialRepairTest`（4件: 結合成立・重複セル排他・shouldStop打ち切り・候補1件時no-op）で
-  代替）。range/c1/c3mn/fairの配線自体は健全（既存の`isBetter`keep-bestが最終防波堤のため、たとえ
-  実運用で結合が一度も発火しなくても退化しない）。
+  `CombinatorialRepairTest`（5件: 結合成立・重複セル排他・shouldStop打ち切り・候補1件時no-op・
+  停滞検知での早期終了）で代替）。range/c1/c3mn/fairの配線自体は健全（既存の`isBetter`keep-bestが
+  最終防波堤のため、たとえ実運用で結合が一度も発火しなくても退化しない）。
 - ユニットテスト: `AptPolishTest.aptPolishCombinesTwoIndividuallyRejectedCandidatesAcrossFamilies`
   （X:aptHigh(P)・Y:aptLow(D)、共有group+c41[l=u=1]でQres在籍数を固定。Xの唯一の代替候補Dは
   staffRangeでhi=0固定し単独での「解決」を防ぐ。X→Qres・Y→Qres退出がそれぞれ単独ではc41とのタイで
   不採用、結合すると相殺してapt=0まで解消することを固定）＋`CombinatorialRepairTest`（同一盤面を
   `combineAndApply`へ直接投入し、単独タイの事前確認・結合成立・重複セルの排他・shouldStop即時打ち切り・
-  候補1件時no-opを検証）。
+  候補1件時no-op・同一セルへの無変化候補10件を`maxStagnantTries=3`で全45通り網羅する前に早期終了
+  することを検証）。
 
 ## c1(窓の要件)重み4→5・c3mn(回避の並び)重み12→15（3.249.0, ユーザー明示数値指示）
 ユーザー指示「回避の並びは重み15、窓の要件は重み5」（HF77＝明示数値指示）。目的関数統一の原則どおり

@@ -35,6 +35,9 @@ internal object CombinatorialRepair {
         var combosTried = 0
         var combosAccepted = 0
         var truncated = false
+        // [停滞検知, ユーザー指示「早期脱出しないのか?」への対応] 連続maxStagnantTries回不採用のまま
+        //   進むと成立見込み薄と判断し早期break（truncated=時間切れ、こちらは無駄打ち回避で区別）。
+        var stagnantExit = false
         val mechanismCounts = LinkedHashMap<String, Int>()
         val acceptedLabels = ArrayList<String>()
 
@@ -47,7 +50,12 @@ internal object CombinatorialRepair {
             if (mechanismCounts.isEmpty()) return ""
             val parts = ArrayList<String>()
             parts.add("結合候補: " + mechanismCounts.entries.joinToString(" ") { "${it.key}×${it.value}" })
-            parts.add("結合探索: ${combosTried}通り試行" + (if (truncated) "→打ち切り" else ""))
+            val exitReason = when {
+                truncated -> "→時間切れ打ち切り"
+                stagnantExit -> "→無駄打ち回避で早期終了"
+                else -> ""
+            }
+            parts.add("結合探索: ${combosTried}通り試行$exitReason")
             if (combosAccepted > 0) {
                 val labelPart = if (acceptedLabels.isNotEmpty()) "(${acceptedLabels.joinToString(", ")})" else ""
                 parts.add("結合成立×$combosAccepted$labelPart")
@@ -59,8 +67,14 @@ internal object CombinatorialRepair {
     /**
      * rejected プールから2〜maxK件の組合せを列挙し、まとめて適用してisBetterなら採用する。
      * first-improvementで見つかり次第そのcomboを盤面へコミットし、使った候補をプールから除去
-     * して残りでさらに探す（1回の呼出で複数回の結合採用がありうる）。shouldStop()または全組合せ
-     * 枯渇で終了。候補プールに上限は設けず、時間予算(shouldStop)のみで打ち切る（grilling確定）。
+     * して残りでさらに探す（1回の呼出で複数回の結合採用がありうる）。shouldStop()・全組合せ枯渇・
+     * 停滞検知（下記）のいずれかで終了。候補プールに上限は設けず、時間予算(shouldStop)のみで
+     * 打ち切る（grilling確定）。
+     *
+     * [停滞検知] 連続maxStagnantTries回（既定200）不採用のまま進むと、それ以上試しても成立見込みが
+     * 薄いと判断し早期break（E9/E10/N4等、既存の探索停滞検知と同種の無駄打ち回避）。採否は依然
+     * isBetterが決めるため退化不能＝安全に早期終了できる。カウンタは結合成立のたびにリセット
+     * （進展がある間は打ち切らない）。
      *
      * ops が重複するセル(staff,day)を含む組合せは互いに排他な代替案で意味を持たないため、列挙は
      * するがフルchecker呼出はスキップする(combosTriedには計上する＝実際に検討した件数として正直)。
@@ -73,12 +87,14 @@ internal object CombinatorialRepair {
         isBetter: (ViolationReport, ViolationReport) -> Boolean,
         maxK: Int = 4,
         shouldStop: () -> Boolean = { false },
+        maxStagnantTries: Int = 200,
         stats: Stats = Stats(),
         label: (Candidate) -> String = { it.hint },
     ): ViolationReport {
         rejected.forEach(stats::onFeed)
         var bestRep = bestRepIn
         val pool = rejected.toMutableList()
+        var misses = 0
         while (pool.size >= 2) {
             if (shouldStop()) { stats.truncated = true; break }
             var acceptedIdx: List<Int>? = null
@@ -102,10 +118,13 @@ internal object CombinatorialRepair {
                             break@searchK
                         }
                     }
+                    misses++
+                    if (misses >= maxStagnantTries) { stats.stagnantExit = true; break@searchK }
                     if (!nextCombination(combo, pool.size)) break
                 }
             }
             if (acceptedIdx == null) break
+            misses = 0
             val ops = acceptedIdx.flatMap { pool[it].ops }
             for (op in ops) work[op[0]][op[1]] = op[2]
             bestRep = acceptedRep!!

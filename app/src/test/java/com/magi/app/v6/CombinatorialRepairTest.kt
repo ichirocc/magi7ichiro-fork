@@ -156,4 +156,27 @@ class CombinatorialRepairTest {
         assertEquals(0, stats.combosAccepted)
         assertEquals(before, after)
     }
+
+    // [停滞検知, ユーザー指示「早期脱出しないのか?」への対応] 全て同一セル(staff0,day0)への
+    // 無変化(no-op)候補＝どの2件を組合せても必ず重複セルでスキップされ続ける。10件・C(10,2)=45通り
+    // のうち、maxStagnantTries=3で全網羅する前に早期終了することを固定。
+    @Test
+    fun combineAndApplyGivesUpEarlyAfterConsecutiveMisses() {
+        val st = combineTwoRejectedState()
+        val work = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, work)
+
+        val dupes = (0 until 10).map { CombinatorialRepair.Candidate(listOf(intArrayOf(0, 0, 1)), "dup") }
+
+        val stats = CombinatorialRepair.Stats()
+        val after = CombinatorialRepair.combineAndApply(
+            st, work, before, dupes, ::isBetterLocal, maxStagnantTries = 3, stats = stats,
+        )
+
+        assertTrue("停滞検知で早期終了", stats.stagnantExit)
+        assertFalse("時間切れではない", stats.truncated)
+        assertEquals("採用0件", 0, stats.combosAccepted)
+        assertEquals("maxStagnantTries通りで打ち切り(45通り網羅しない)", 3, stats.combosTried)
+        assertEquals("盤面は不変", before, after)
+    }
 }
