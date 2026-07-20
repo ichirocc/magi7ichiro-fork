@@ -768,4 +768,23 @@ class V6NativeOptimizerChoiceTest {
         V6NativeOptimizer.publishLiveBest(betterReport, betterSched)
         assertEquals(listOf(listOf(7)), V6NativeOptimizer.liveBest)
     }
+
+    // [3.240.0/5ラウンド完全停滞の修正] destroyRepairStaffReps は destroyRepairDay(1回で最大S人分の
+    // セル変化・repeat(6))と総攪乱セル数(6*S)を揃えるための反復回数。実機データ(S=10,T=31)のような
+    // S<T では旧固定repeat(8)より小さくなり摂動が弱まる。S>=T では従来以上(>=6)を維持し退化しない。
+    @Test fun destroyRepairStaffRepsShrinksWhenDaysExceedStaff() {
+        // S=10,T=31: (6*10+30)/31 = 90/31 = 2（切り捨て）。旧固定値8より大幅に小さい。
+        assertEquals(2, V6NativeOptimizer.destroyRepairStaffReps(10, 31))
+    }
+
+    @Test fun destroyRepairStaffRepsStaysAtOrAboveSixWhenStaffExceedsDays() {
+        // S=31,T=10: (6*31+9)/10 = 195/10 = 19。S=10,T=10: (60+9)/10=6。いずれも旧repeat(6)基準以上。
+        assertEquals(19, V6NativeOptimizer.destroyRepairStaffReps(31, 10))
+        assertEquals(6, V6NativeOptimizer.destroyRepairStaffReps(10, 10))
+    }
+
+    @Test fun destroyRepairStaffRepsNeverReturnsLessThanOne() {
+        assertEquals(1, V6NativeOptimizer.destroyRepairStaffReps(0, 100))
+        assertEquals(6, V6NativeOptimizer.destroyRepairStaffReps(1, 1))
+    }
 }

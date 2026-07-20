@@ -1683,6 +1683,11 @@ object V6NativeOptimizer {
         return out
     }
 
+    /** [3.240.0] destroyRepairStaff(1回で最大T(日数)セル変化)を、destroyRepairDay(1回で最大S(職員数)
+     *  セル変化・covU focusでrepeat(6))と同程度の総攪乱セル数(6*S)に揃えるための反復回数。S>=Tなら
+     *  従来のrepeat(8)相当以上(reps>=6の切り上げ計算)を維持し既存の攪乱強度を落とさない。 */
+    internal fun destroyRepairStaffReps(s: Int, t: Int): Int = max(1, (6 * s + t - 1) / max(1, t))
+
     internal fun rsiGenerateHypothesis(state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random): Array<IntArray> {
         val out = base.copy2D()
         val p = cachedProblem(state)
@@ -1710,7 +1715,17 @@ object V6NativeOptimizer {
             //   destroyRepairStaff は職員1人の月全体を破壊再構築する汎用オペレータであり、weekly/fair が
             //   支配的なときに専用ラウンドを割り当てるだけでも「total」の無指向な空振りより改善機会が増える。
             //   ラウンド better() keep-best でゲート＝退化なし（厳密な cost 統合は将来の拡張候補）。
-            "low", "high", "c2", "apt", "weekly", "fair" -> repeat(8) { destroyRepairStaff(state, out, rng) }
+            // [3.240.0/実機ログ起因=5ラウンド完全停滞の修正] destroyRepairStaff は「1人を丸ごと非希望日
+            //   全休化→被覆穴のみ埋め直す」という1回で最大T(日数)セルを変える大きな摂動。covU focus の
+            //   destroyRepairDay(1回で最大S(職員数)セル、repeat(6))と揃えるはずが、固定repeat(8)のまま
+            //   だったため、S<T のデータ（実機=10職員/31日）では1ラウンドの総攪乱セル数が数倍に膨らみ、
+            //   60秒/ラウンドのSA/ALNSでは破壊前の解に匹敵する状態まで回復しきれず、5ラウンド全て
+            //   total不変のまま予算を使い切っていた（runV5の入力比番兵はhypothesis自体との比較のため
+            //   この過大摂動を防げない）。destroyRepairDay基準(6回×S人ぶんのセル変化)に総攪乱セル数を
+            //   揃えるよう reps を動的計算する（S>=T のデータでは reps>=6 相当まで許容＝挙動退化なし）。
+            "low", "high", "c2", "apt", "weekly", "fair" -> {
+                repeat(destroyRepairStaffReps(p.S, p.T)) { destroyRepairStaff(state, out, rng) }
+            }
             // [3.204.0/実機ログ起因=covOがfocusされても直せなかった] covO は markNeed(k,j) で needViolations に
             //   載り、report.violations(セル"i,j"マップ)には現れないため、他の focus 未対応族の else 分岐が
             //   使う destroyRepairViolations(report.violations.keys 基準)では covO 専用のヒントが1つも無く、
