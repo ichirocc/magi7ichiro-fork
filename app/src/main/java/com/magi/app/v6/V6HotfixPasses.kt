@@ -236,6 +236,16 @@ object V6HotfixPasses {
             work = rC1r.newSchedule.copy2D(); totalC1r += rC1r.applied; roundApplied += rC1r.applied
             if (round == 0) logs.addAll(rC1r.logs)
 
+            // [BeamC1PolishV2/外部パッチ受領・検証のうえ適用] 手A/R1/R2/B/R3/C1TemporalDp/C1Rotate は
+            // いずれも「1手だけで即座に改善するか」を単発判定する。単独ではタイ/悪化だが複数の同日手を
+            // 束ねて初めて改善する局面（手Aが1つずつ試して即巻き戻す・combinableにも記録しない盲点）を
+            // ビームサーチ(debt予算つき中間ノード・最終採用は実チェッカーのみ)で狙う。既存パスと重複する
+            // 部分はあるが、最終採否は必ずisBetter相当のkeep-best＝退化不能。
+            onPhase("後処理 期間要件(c1)協調ビーム研磨 [巡${round + 1}]")
+            val rC1beam = BeamC1PolishV2.apply(state, work, maxPasses = 1, shouldStop = shouldStop)
+            work = rC1beam.newSchedule.copy2D(); totalC1 += rC1beam.applied; roundApplied += rC1beam.applied
+            if (round == 0) logs.addAll(rC1beam.logs)
+
             onPhase("後処理 連続規則(c3系)研磨 [巡${round + 1}]")
             val rC3 = applyC3SequencePolish(state, work, maxPasses = 3, shouldStop = shouldStop)
             work = rC3.newSchedule.copy2D(); totalC3 += rC3.applied; roundApplied += rC3.applied
