@@ -369,4 +369,83 @@ class C1RelocationPolishTest {
         assertTrue("残存表示に候補なしの理由が出ること: $msg", msg.contains("候補なし"))
         assertTrue("対象職員名(A)と休が出ること: $msg", msg.contains("A 休"))
     }
+
+    /**
+     * [手R3・局所探索の強化=ユーザー指示「賢く深く網羅的に」] 単独職員(相手なし＝手A/R1不可能)・
+     * donors()が構造的に空(手R2不可能)・単独職員のためfindCovUChainも候補なし(手B不可能)という、
+     * 既存の手A/R1/R2/手Bが全滅する局面で、手R3(アンカー限定なしの全ペア網羅)だけが解消できることを
+     * 手計算(Pythonで独立検証済み)で確認する。d=3,n=1窓・T=6日・Xを2回(day0,day4、互いに独立な窓
+     * しかカバーしない配置)。
+     * 手計算: 窓は4個(wStart=0..3)。day0は窓0のみをカバー(z=1,n=1でdonor対象外＝抜くと即NG)。
+     * day4は窓2,3をカバー(いずれもz=1でdonor対象外)。窓1のみ無人でfires=1。
+     * day4→day3への1回の交換で窓1,2,3を全てday3がカバーし(day0は窓0のまま)fires=0まで完全解消
+     * できるが、この移動先(day3)は「現在違反しているセル(アンカー=窓1の先頭)」そのものではあるが、
+     * donors()が空のため既存の手R2はそもそも一度も候補ペアを試せない（donorsループが0回転）。
+     */
+    private fun isolatedRepackState(): MagiState {
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("solo", 0))
+        val schedule = listOf(
+            listOf(1, 0, 0, 0, 1, 0),   // X,Y,Y,Y,X,Y
+        )
+        return MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-06",
+            shifts = shifts(), groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = schedule,
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "3", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun c1PolishResolvesViaExhaustiveRepackWhenNoPartnerOrDonorExists() {
+        val st = isolatedRepackState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期 c1=1（窓1が不足）", 1, before.breakdown["c1"] ?: 0)
+
+        val res = V6HotfixPasses.applyC1WindowPolish(st, sched, maxPasses = 1)
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+
+        assertTrue("手R3(全ペア再配置)が採用されたこと", res.applied > 0)
+        assertEquals("c1 が完全解消されたこと（窓を全カバーする配置へ再構成）", 0, after.breakdown["c1"] ?: 0)
+        assertEquals("HARD 不変(=0)", 0, after.hard)
+        assertTrue("再配置のログが記録されていること", res.logs.any { it.message.contains("再配置:1") })
+        // X の総回数は保存される（配置だけが変わる）。
+        val cxBefore = sched[0].count { it == 1 }; val cxAfter = res.newSchedule[0].count { it == 1 }
+        assertEquals("X 回数保存", cxBefore, cxAfter)
+    }
+
+    @Test
+    fun c1PolishRepackIsNoOpWhenAlreadyOptimallyPlaced() {
+        // 既に窓を全カバーする最適配置（day0, day3）なら fires=0＝手R3も何もしない。
+        val groups = listOf(Group("G0", "G0"))
+        val staff = listOf(Staff("solo", 0))
+        val schedule = listOf(listOf(1, 0, 0, 1, 0, 0))   // X,Y,Y,X,Y,Y
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-06",
+            shifts = shifts(), groups = groups, staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = schedule,
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "3", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("既に最適配置でc1=0", 0, before.breakdown["c1"] ?: 0)
+
+        val res = V6HotfixPasses.applyC1WindowPolish(st, sched)
+        assertEquals("既に最適なら採用0(no-op)", 0, res.applied)
+    }
 }
