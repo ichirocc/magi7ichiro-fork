@@ -113,6 +113,12 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Spacer(Modifier.height(8.dp))
             LoadoutHeader("SQUAD", "班／グループ (${v.groups.size})")
             Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // [不具合報告「グループが削除出来ない」対応] 残り1グループの場合、削除ボタンが理由の説明なく
+            //   消えるだけだった（担当可否の分類が無くなるため意図的に不可＝休シフトの削除不可と同型の
+            //   ガードだが、そちらには理由メッセージがある一方こちらは無言で消えるだけだった）。理由を明示。
+            if (v.groups.size <= 1) {
+                Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+            }
             v.groups.forEachIndexed { g, gr ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },

@@ -135,4 +135,30 @@ class V6SanityPortTest {
         assertTrue("s0が休(5日窓≥2)で1件と表示されること", summary!!.contains("s0 休(5日窓≥2)1件"))
         assertTrue("s1は違反なしのため内訳に出ないこと", !summary.contains("s1 "))
     }
+
+    /** [3.234.0/休の適切回数合計チェック誤検知修正] 2職員×2日、休とXが同一設定(need1=0・apt目標5)。
+     *  休は「1日に何人休んでよいか」という座席上限を持たないため need1=0 は"座席が無い"の表現であり
+     *  "休むべきでない"ではない。同一設定の非休シフトXでは検査Cが発火し、休だけは発火しないことを確認
+     *  （実機報告「『休』の適切回数の合計が101回ですが、必要数の合計は0回」の誤検知修正）。 */
+    private fun aptVsNeedState(need1: String, aptTarget: String) = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-02",
+        shifts = listOf(Shift("休", "休", need1, ""), Shift("X", "X", need1, "")),
+        groups = listOf(Group("G", "G")),
+        staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1)),
+        groupShiftApt = listOf(listOf(aptTarget, aptTarget)),
+        schedule = List(2) { listOf(0, 0) },
+        wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun aptSumCheckSkipsRestShiftButStillFlagsWorkShift() {
+        val rep = V6SanityPort.buildGuidance(aptVsNeedState(need1 = "0", aptTarget = "5"))
+        assertTrue("休の適切回数過大は検査対象外(誤検知修正)",
+            rep.none { it.where.contains("休") && it.problem.contains("適切回数の合計") })
+        assertTrue("同一設定の非休シフト(X)は従来どおり検出する",
+            rep.any { it.where.contains("X") && it.problem.contains("適切回数の合計") })
+    }
 }
