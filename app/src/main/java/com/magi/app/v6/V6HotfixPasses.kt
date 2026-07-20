@@ -76,6 +76,78 @@ object V6HotfixPasses {
      */
     internal fun roundSeed(base: Long, tag: Long, round: Int) = base xor tag xor (round.toLong() * -0x61c8864680b583ebL)
 
+    private const val DAY_MATCH_INF = 1_000_000_000_000L
+
+    /**
+     * 正方コスト行列の最小費用完全割当（Hungarian法、O(n^3)）。
+     * 戻り値[row] = 採用した column。到達不能辺は [DAY_MATCH_INF]。
+     *
+     * RangePolishの日単位再割当で、現在日のシフト多重集合を一切変えずに、
+     * 「誰がどのシフトを担当するか」だけを全員同時に最適化するために使う。
+     */
+    private fun minCostPerfectAssignment(
+        cost: Array<LongArray>,
+        inf: Long = DAY_MATCH_INF,
+    ): IntArray? {
+        val n = cost.size
+        if (n == 0 || cost.any { it.size != n }) return null
+        val u = LongArray(n + 1)
+        val v = LongArray(n + 1)
+        val p = IntArray(n + 1)
+        val way = IntArray(n + 1)
+
+        for (i in 1..n) {
+            p[0] = i
+            var j0 = 0
+            val minv = LongArray(n + 1) { inf }
+            val used = BooleanArray(n + 1)
+            do {
+                used[j0] = true
+                val i0 = p[j0]
+                var delta = inf
+                var j1 = -1
+                for (j in 1..n) {
+                    if (used[j]) continue
+                    val raw = cost[i0 - 1][j - 1]
+                    if (raw < inf / 2) {
+                        val cur = raw - u[i0] - v[j]
+                        if (cur < minv[j]) {
+                            minv[j] = cur
+                            way[j] = j0
+                        }
+                    }
+                    // raw が到達不能でも、別の交互木ノードから既に入った minv は比較対象。
+                    if (minv[j] < delta) {
+                        delta = minv[j]
+                        j1 = j
+                    }
+                }
+                if (j1 < 0 || delta >= inf / 2) return null
+                for (j in 0..n) {
+                    if (used[j]) {
+                        u[p[j]] += delta
+                        v[j] -= delta
+                    } else if (j > 0 && minv[j] < inf / 2) {
+                        minv[j] -= delta
+                    }
+                }
+                j0 = j1
+            } while (p[j0] != 0)
+
+            do {
+                val j1 = way[j0]
+                p[j0] = p[j1]
+                j0 = j1
+            } while (j0 != 0)
+        }
+
+        val out = IntArray(n) { -1 }
+        for (j in 1..n) if (p[j] > 0) out[p[j] - 1] = j - 1
+        if (out.any { it < 0 }) return null
+        for (i in 0 until n) if (cost[i][out[i]] >= inf / 2) return null
+        return out
+    }
+
     /**
      * [review: budget] 後処理チェーン HF80 -> HF67 -> HF66 -> HF70。
      * @param shouldStop true を返した時点で各パスの反復を打ち切る。全体予算(deadline)超過と
@@ -1234,6 +1306,21 @@ object V6HotfixPasses {
      * 存在せず、「相手を必要としない一方的な付け替え(休/Aｱ→B1)＋被覆が要る側だけ玉突きで埋め直す」手が
      * 必要——C3mnPolish(3.214.0)と同型の穴。
      *
+     * [3.244.0 日単位最小費用完全割当]
+     * 既存の「1セル付替え＋最初に見つかった玉突き連鎖」は、同日の直接交換が不可能なとき、
+     * ランダム順で最初に完成した1本しか評価しない。そのため、桒澤美幸Aｱを代用可能な一般職員へ
+     * 渡したくても、相手の現在シフトを美幸が担当できない局面では「候補なし」を繰り返しやすい。
+     *
+     * 新しい手Mは、対象日の現在シフト多重集合をtokenとして固定し、全職員への再割当をHungarian法で
+     * 厳密に解く。2人交換に限定せず、3人・4人・任意長の循環を1回で発見する。日別の各シフト人数は
+     * 完全保存されるためcovU/covOは構造的に不変。canDo・希望固定・禁止連続を辺の実行可能条件、
+     * staffRange low/high・apt・変更人数を費用とし、最後はUnifiedViolationChecker＋isBetterで採否する。
+     *
+     * 代用候補はlow違反者だけに限定しない。target shiftを担当可能で上限余力のある全員を対象にし、
+     * ①同shiftのlow、②担当可能シフト数が多い一般代用者、③上限余力、④現在回数が少ない順で試す。
+     * 実データでは9シフト担当可能な8名が第1層、4シフト限定の専門職員は第2層となり、名前のハードコード
+     * なしで「古泉・山本・福澤・佐藤・上條・金沢・モニカ・アリフ」を先に評価できる。
+     *
      * アンカー: `report.countViolations`（"i,k"→"vio-low"/"vio-high"、3.210.0で重み優先解決済）から
      * 違反している(staff,shift)ペアを列挙。HIGH(超過)は当該シフトの保有日を他の担当可能シフトへ、
      * LOW(不足)は保有していない日のうち担当可能な1日をそのシフトへ、それぞれ付け替える。付け替えで
@@ -1251,6 +1338,7 @@ object V6HotfixPasses {
         // [ログから職員が分かるように] 対象(staff,shift)の表示名。
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
+        var dayMatchingApplied = 0
 
         // [頭打ちの理由を可視化] 対象(staff,shift)ごとに、何が原因で付け替えが不成立だったかを集計。
         //   希望固定=movableで即除外・禁止連続=makesForbiddenRunで即除外・候補なし=findCovUChainがnull・
@@ -1313,6 +1401,151 @@ object V6HotfixPasses {
             return false
         }
 
+        /**
+         * 手M: 対象日の全職員を最小費用完全割当で同時に組み替える。
+         *
+         * - `hi` は当該日の k を必ず手放す。
+         * - `receiver` は当該日の k を必ず受け取る。
+         * - その日のシフトtokenは並べ替えるだけなので日別人数は完全保存。
+         * - receiverごとに完全割当を解き、full checkerで最良の1案だけ採用。
+         */
+        fun tryExactDayMatching(target: Pair<Int, Int>, hi: Int, k: Int): Boolean {
+            if (p.S <= 1 || p.T <= 0) return false
+
+            val counts = Array(p.S) { IntArray(p.K) }
+            for (i in 0 until p.S) for (j in 0 until p.T) {
+                val kk = work[i][j]
+                if (kk in 0 until p.K) counts[i][kk]++
+            }
+            val flex = IntArray(p.S) { p.allowedShiftsForStaff(it).size }
+
+            fun rangePenalty(i: Int, kk: Int, count: Int): Long {
+                var out = 0L
+                val lo = p.rangeLo[i][kk]
+                val hiLim = p.rangeHi[i][kk]
+                if (lo != Int.MIN_VALUE && count < lo) out += (lo - count).toLong() * 90L
+                if (hiLim != Int.MAX_VALUE && count > hiLim) out += (count - hiLim).toLong() * 45L
+                return out
+            }
+
+            fun rowCost(i: Int, oldK: Int, newK: Int): Long {
+                var out = 0L
+                for (kk in 0 until p.K) {
+                    var c = counts[i][kk]
+                    if (newK != oldK) {
+                        if (kk == oldK) c--
+                        if (kk == newK) c++
+                    }
+                    out += rangePenalty(i, kk, c)
+                    val apt = p.apt[i][kk]
+                    if (apt >= 0) out += (if (c >= apt) c - apt else apt - c).toLong()
+                }
+                // 同品質なら短い循環を優先し、不要な大規模入替えを避ける。
+                if (newK != oldK) out += 2L
+                // target shiftの偏在を軽く抑える。明示rangeが無い一般代用者同士のtie-break。
+                if (newK == k) out += counts[i][k].toLong()
+                return out
+            }
+
+            fun receiverRoom(i: Int): Int {
+                val hiLim = p.rangeHi[i][k]
+                return if (hiLim == Int.MAX_VALUE) 10_000 else hiLim - counts[i][k]
+            }
+
+            data class DayPlan(
+                val day: Int,
+                val shifts: IntArray,
+                val report: ViolationReport,
+                val changed: Int,
+                val heuristic: Long,
+            )
+
+            var bestPlan: DayPlan? = null
+            var trials = 0
+            // 実データ10名×31日では全候補を網羅。大規模データでも後処理予算を食い潰さない上限。
+            val maxTrials = 128
+
+            for (j in 0 until p.T) {
+                if (shouldStop() || trials >= maxTrials) break
+                if (work[hi][j] != k || !movable(hi, j)) continue
+                val tokens = IntArray(p.S) { work[it][j] }
+
+                val rawReceivers = (0 until p.S).filter { r ->
+                    r != hi &&
+                        work[r][j] != k &&
+                        movable(r, j) &&
+                        p.canDo(r, k) &&
+                        receiverRoom(r) > 0
+                }
+                if (rawReceivers.isEmpty()) continue
+                val maxFlex = rawReceivers.maxOf { flex[it] }
+                val receivers = rawReceivers.sortedWith(
+                    compareByDescending<Int> { if (bestRep.countViolations["$it,$k"] == "vio-low") 1 else 0 }
+                        .thenByDescending { if (flex[it] >= maxFlex - 1) 1 else 0 }
+                        .thenByDescending { receiverRoom(it) }
+                        .thenBy { counts[it][k] }
+                        .thenBy { it },
+                )
+
+                for (receiver in receivers) {
+                    if (shouldStop() || trials++ >= maxTrials) break
+                    val cost = Array(p.S) { LongArray(p.S) { DAY_MATCH_INF } }
+                    for (i in 0 until p.S) {
+                        val oldK = work[i][j]
+                        for (tokenIdx in 0 until p.S) {
+                            val newK = tokens[tokenIdx]
+                            if (newK !in 0 until p.K) continue
+                            if (i == hi && newK == k) continue
+                            if (i == receiver && newK != k) continue
+                            if (newK != oldK) {
+                                if (!movable(i, j) || !p.canDo(i, newK)) continue
+                                work[i][j] = newK
+                                val badRun = p.makesForbiddenRun(work, i, j, newK)
+                                work[i][j] = oldK
+                                if (badRun) continue
+                            }
+                            cost[i][tokenIdx] = rowCost(i, oldK, newK)
+                        }
+                    }
+
+                    val assignment = minCostPerfectAssignment(cost) ?: continue
+                    val newDay = IntArray(p.S) { i -> tokens[assignment[i]] }
+                    if (newDay[hi] == k || newDay[receiver] != k) continue
+                    var changed = 0
+                    var heuristic = 0L
+                    for (i in 0 until p.S) {
+                        if (newDay[i] != tokens[i]) changed++
+                        heuristic += cost[i][assignment[i]]
+                        work[i][j] = newDay[i]
+                    }
+                    val rep = UnifiedViolationChecker.check(state, work)
+                    for (i in 0 until p.S) work[i][j] = tokens[i]
+
+                    if (!isBetter(rep, bestRep)) continue
+                    val oldBest = bestPlan
+                    val betterPlan = oldBest == null ||
+                        isBetter(rep, oldBest.report) ||
+                        (rep.hard == oldBest.report.hard &&
+                            rep.total == oldBest.report.total &&
+                            kotlin.math.abs(rep.weightedScore - oldBest.report.weightedScore) <= 1e-6 &&
+                            (heuristic < oldBest.heuristic ||
+                                (heuristic == oldBest.heuristic && changed < oldBest.changed)))
+                    if (betterPlan) bestPlan = DayPlan(j, newDay, rep, changed, heuristic)
+                }
+            }
+
+            val plan = bestPlan
+            if (plan == null) {
+                recordBlock(target, "日割当候補なし")
+                return false
+            }
+            for (i in 0 until p.S) work[i][plan.day] = plan.shifts[i]
+            bestRep = plan.report
+            applied++
+            dayMatchingApplied++
+            return true
+        }
+
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -1336,6 +1569,15 @@ object V6HotfixPasses {
                 if (shouldStop()) break
                 val target = i to k
                 var done = false
+                // [手M] low違反者との2人交換に限定せず、担当可能な一般代用者を受け手に固定して
+                // その日の全職員割当を厳密に解く。美幸Aｱ→8名の代用者＋必要な橋渡し職員の循環を
+                // 1回で発見でき、日別被覆は完全保存される。
+                if (tryExactDayMatching(target, i, k)) {
+                    improved = true
+                    done = true
+                    fixedNames.add(label(i, k))
+                }
+                if (done) continue
                 // [複数ターゲット同時解決] まず同一シフトkのlow(不足)職員との直接ペアスワップを試す
                 //   （findCovUChain経由の玉突きより優先＝被覆完全保存で確実に解決できる）。
                 for ((lo, lk) in lowTargets) {
@@ -1393,6 +1635,7 @@ object V6HotfixPasses {
             }
         val logs = listOf(MirrorLog(tag = "RangePolish",
             message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
+                "（日割当:$dayMatchingApplied）" +
                 (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
