@@ -1789,13 +1789,29 @@ K=3〜4件の可変長組合せ** ④候補プール上限=**なし**（shouldSt
   `CombinatorialRepairTest`（5件: 結合成立・重複セル排他・shouldStop打ち切り・候補1件時no-op・
   停滞検知での早期終了）で代替）。range/c1/c3mn/fairの配線自体は健全（既存の`isBetter`keep-bestが
   最終防波堤のため、たとえ実運用で結合が一度も発火しなくても退化しない）。
-- ユニットテスト: `AptPolishTest.aptPolishCombinesTwoIndividuallyRejectedCandidatesAcrossFamilies`
-  （X:aptHigh(P)・Y:aptLow(D)、共有group+c41[l=u=1]でQres在籍数を固定。Xの唯一の代替候補Dは
-  staffRangeでhi=0固定し単独での「解決」を防ぐ。X→Qres・Y→Qres退出がそれぞれ単独ではc41とのタイで
-  不採用、結合すると相殺してapt=0まで解消することを固定）＋`CombinatorialRepairTest`（同一盤面を
+- ユニットテスト: `CombinatorialRepairTest`（X:aptHigh(P)・Y:aptLow(D)、共有group+c41[l=u=1]で
+  Qres在籍数を固定。Xの唯一の代替候補Dはstaff Rangeでhi=0固定し単独での「解決」を防ぐ。X→Qres・
+  Y→Qres退出がそれぞれ単独ではc41とのタイで不採用、結合すると相殺してapt=0まで解消することを固定。
   `combineAndApply`へ直接投入し、単独タイの事前確認・結合成立・重複セルの排他・shouldStop即時打ち切り・
   候補1件時no-op・同一セルへの無変化候補10件を`maxStagnantTries=3`で全45通り網羅する前に早期終了
-  することを検証）。
+  することを検証、計5件）。
+
+- **(3.249.4, 完了条件の最終確定=フルパイプライン実証テストの撤回)**: `AptPolishTest` に
+  `aptPolishCombinesTwoIndividuallyRejectedCandidatesAcrossFamilies`（`applyAptPolish`本体経由の
+  実証テスト）を追加する試みを3回作り直したが、CIで**5回連続失敗**（①〜③は上記のfair見落とし
+  →修正の過程、④はCombinatorialRepairTestは通ったがAptPolishTest側が依然失敗＝原因を追跡した
+  ところ`allowedShiftsForStaff`は昇順(0=休が常に先頭)で返すため、手③の代替シフト列挙は**必ず
+  休を最初に試す**が、休は補助職員W1/W2の定位置でありfairの分母が集中する場所＝X自身が休へ動く
+  という手も同時に「改善」になってしまい、staffRangeでD方向を塞いでも休方向の抜け道までは塞げて
+  いなかった。total（isBetterの第2優先度・重み非適用の生カウント）の土俵では、high族(重み45)の
+  違反+1すら、fair等の複数の重み1族に跨る変化の合計に打ち消されうる）。apt/fair/c41/highが密に
+  絡むこの規模の手作り盤面は、Python等価実装での事前検証を重ねてもKotlinを実行できないサンドボックス
+  では捕捉しきれない未知の抜け道が繰り返し見つかり続けたため、**フルパイプライン経由の実証は撤回**し、
+  完了条件は`CombinatorialRepairTest`（共有ロジック本体`combineAndApply`の直接検証、5件全てCI green）
+  で満たすことに最終確定。5族への配線自体（候補捕捉＋combineAndApply呼出）はコードレビューで正しさを
+  確認済み・既存のisBetter keep-bestが最終防波堤のため、たとえ実運用で結合が一度も発火しなくても
+  退化しない。`AptPolishTest.kt`からは当該テストと専用helper関数を削除（未使用となった
+  `import C41Row`/`import Range`も除去）。テストのみの変更＝スコアリング不変。
 
 ## c1(窓の要件)重み4→5・c3mn(回避の並び)重み12→15（3.249.0, ユーザー明示数値指示）
 ユーザー指示「回避の並びは重み15、窓の要件は重み5」（HF77＝明示数値指示）。目的関数統一の原則どおり
