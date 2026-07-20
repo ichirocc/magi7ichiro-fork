@@ -1339,6 +1339,7 @@ object V6HotfixPasses {
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
         var dayMatchingApplied = 0
+        var flexibleDayApplied = 0
 
         // [頭打ちの理由を可視化] 対象(staff,shift)ごとに、何が原因で付け替えが不成立だったかを集計。
         //   希望固定=movableで即除外・禁止連続=makesForbiddenRunで即除外・候補なし=findCovUChainがnull・
@@ -1546,10 +1547,169 @@ object V6HotfixPasses {
             return true
         }
 
+        /**
+         * 手F: 日別シフト多重集合も変えられる最小費用フロー。
+         *
+         * 手Mは「その日に既に存在するシフトtokenの並替え」なので、美幸Aｱ→B1のように
+         * その日にB1 tokenが存在しないケースを表現できない。手Fは各職員から担当可能シフトへ辺を張り、
+         * シフト側の1人目・2人目…にcovU/covOの限界費用を与える。これにより
+         *   美幸 Aｱ→B1 ＋ 別職員 休/C系→Aｱ
+         * のような、日別人数を変える置換を1回の厳密最適化で作る。
+         *
+         * - 希望/管理者固定セルは現在シフト以外へ移動不可。
+         * - 変更先はcanDo必須。希望休「希」は新規生成しない。
+         * - c3nはmakesForbiddenRunで辺を除外。
+         * - staffRange low/high、apt、変更セル数を職員辺費用へ入れる。
+         * - covU/covOは人数qに対する凸罰則の限界費用としてシフト→sink辺へ入れる。
+         * - 最終採否は必ずUnifiedViolationChecker＋isBetter。近似費用だけでは採用しない。
+         */
+        fun tryFlexibleDayFlow(
+            target: Pair<Int, Int>,
+            victim: Int,
+            forbiddenK: Int,
+            candidateDays: IntArray,
+        ): Boolean {
+            if (p.S <= 0 || p.K <= 0) return false
+            val counts = Array(p.S) { IntArray(p.K) }
+            for (i in 0 until p.S) for (j in 0 until p.T) {
+                val kk = work[i][j]
+                if (kk in 0 until p.K) counts[i][kk]++
+            }
+
+            fun rangeAndAptCost(i: Int, oldK: Int, newK: Int): Long {
+                var out = 0L
+                for (kk in 0 until p.K) {
+                    var c = counts[i][kk]
+                    if (newK != oldK) {
+                        if (kk == oldK) c--
+                        if (kk == newK) c++
+                    }
+                    val lo = p.rangeLo[i][kk]
+                    val hi = p.rangeHi[i][kk]
+                    if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * 90L
+                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 45L
+                    val a = p.apt[i][kk]
+                    if (a >= 0) out += kotlin.math.abs(c - a).toLong()
+                }
+                if (newK != oldK) out += 2L
+                return out
+            }
+
+            fun dayPenalty(k: Int, j: Int, q: Int): Long =
+                p.covUCell(k, j, q).toLong() * 8000L + p.covOCell(k, j, q).toLong()
+
+            data class FlowPlan(
+                val day: Int,
+                val assignment: IntArray,
+                val report: ViolationReport,
+                val changed: Int,
+                val flowCost: Long,
+            )
+
+            var bestPlan: FlowPlan? = null
+            val days = candidateDays.filter { it in 0 until p.T }.distinct()
+            for (j in days) {
+                if (shouldStop()) break
+                if (work[victim][j] != forbiddenK || !movable(victim, j)) continue
+                val oldDay = IntArray(p.S) { work[it][j] }
+
+                // primary costを1024倍し、下位10bitだけを決定的tie-breakに使う。
+                // 8試行してc42/c1等の非分離制約に対する代替案もfull checkerへ渡す。
+                for (trial in 0 until 8) {
+                    if (shouldStop()) break
+                    val staffCost = Array(p.S) { LongArray(p.K) { FlexibleDayFlow.INF } }
+                    for (i in 0 until p.S) {
+                        val oldK = oldDay[i]
+                        for (newK in 0 until p.K) {
+                            if (i == victim && newK == forbiddenK) continue
+                            val changed = newK != oldK
+                            if (changed) {
+                                if (!movable(i, j) || !p.canDo(i, newK)) continue
+                                // 「希」は希望セルとしてのみ存在させ、最適化が自由生成しない。
+                                if (state.shifts.getOrNull(newK)?.kigou == "希") continue
+                                work[i][j] = newK
+                                val badRun = p.makesForbiddenRun(work, i, j, newK)
+                                work[i][j] = oldK
+                                if (badRun) continue
+                            } else if (i == victim && !p.canDo(i, newK)) {
+                                // groupViol対象をそのまま残す辺は禁止。他職員の固定済み不正セルは
+                                // この1手の実行可能性を壊さないため現状維持だけ許す。
+                                continue
+                            }
+                            val primary = rangeAndAptCost(i, oldK, newK)
+                            val tie = ((i * 131 + newK * 31 + trial * 17) and 1023).toLong()
+                            staffCost[i][newK] = primary * 1024L + tie
+                        }
+                    }
+
+                    val marginal = Array(p.K) { k ->
+                        LongArray(p.S) { q0 ->
+                            val q = q0 + 1
+                            (dayPenalty(k, j, q) - dayPenalty(k, j, q - 1)) * 1024L
+                        }
+                    }
+                    val solved = FlexibleDayFlow.solve(staffCost, marginal) ?: continue
+                    if (solved.assignment[victim] == forbiddenK) continue
+
+                    var changedCount = 0
+                    for (i in 0 until p.S) {
+                        if (solved.assignment[i] != oldDay[i]) changedCount++
+                        work[i][j] = solved.assignment[i]
+                    }
+                    val rep = UnifiedViolationChecker.check(state, work)
+                    for (i in 0 until p.S) work[i][j] = oldDay[i]
+                    if (!isBetter(rep, bestRep)) continue
+
+                    val oldBest = bestPlan
+                    val betterPlan = oldBest == null ||
+                        isBetter(rep, oldBest.report) ||
+                        (rep.hard == oldBest.report.hard &&
+                            rep.total == oldBest.report.total &&
+                            kotlin.math.abs(rep.weightedScore - oldBest.report.weightedScore) <= 1e-6 &&
+                            (changedCount < oldBest.changed ||
+                                (changedCount == oldBest.changed && solved.cost < oldBest.flowCost)))
+                    if (betterPlan) bestPlan = FlowPlan(j, solved.assignment, rep, changedCount, solved.cost)
+                }
+            }
+
+            val plan = bestPlan
+            if (plan == null) {
+                recordBlock(target, "柔軟日割当候補なし")
+                return false
+            }
+            for (i in 0 until p.S) work[i][plan.day] = plan.assignment[i]
+            bestRep = plan.report
+            applied++
+            flexibleDayApplied++
+            return true
+        }
+
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
             var improved = false
+
+            // [手F/groupViol] staffRangeのhigh表示に依存せず、担当不可セルを直接対象にする。
+            // 添付データの美幸AｱはstaffRange[3,4]が無くてもgroupShift上で担当不可なのでここで5日全て拾う。
+            val groupTargets = ArrayList<Triple<Int, Int, Int>>()
+            for (i in 0 until p.S) for (j in 0 until p.T) {
+                val k = work[i][j]
+                if (k in 0 until p.K && !p.canDo(i, k)) groupTargets.add(Triple(i, j, k))
+            }
+            for ((i, j, k) in groupTargets) {
+                if (shouldStop()) break
+                if (work[i][j] != k || p.canDo(i, k)) continue
+                val target = i to k
+                if (!movable(i, j)) {
+                    recordBlock(target, "担当不可セルが希望/管理者固定")
+                    continue
+                }
+                if (tryFlexibleDayFlow(target, i, k, intArrayOf(j))) {
+                    improved = true
+                    fixedNames.add("${label(i, k)} ${j + 1}日")
+                }
+            }
+
             val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
             val highTargets = ArrayList<Pair<Int, Int>>()
             val lowTargets = ArrayList<Pair<Int, Int>>()
@@ -1569,10 +1729,17 @@ object V6HotfixPasses {
                 if (shouldStop()) break
                 val target = i to k
                 var done = false
-                // [手M] low違反者との2人交換に限定せず、担当可能な一般代用者を受け手に固定して
-                // その日の全職員割当を厳密に解く。美幸Aｱ→8名の代用者＋必要な橋渡し職員の循環を
-                // 1回で発見でき、日別被覆は完全保存される。
-                if (tryExactDayMatching(target, i, k)) {
+                // [手M→手F] まず日別人数を保存する完全割当。無ければ日別人数も最適化するフローへ拡張。
+                // 同じ(i,k)が上限を複数回超えていても、この1パス内で上限まで反復して落とす。
+                val hiLim = p.rangeHi[i][k]
+                var guard = 0
+                while (hiLim != Int.MAX_VALUE && work[i].count { it == k } > hiLim && guard++ < p.T) {
+                    val fixedOne = tryExactDayMatching(target, i, k) ||
+                        tryFlexibleDayFlow(
+                            target, i, k,
+                            (0 until p.T).filter { j -> work[i][j] == k && movable(i, j) }.toIntArray(),
+                        )
+                    if (!fixedOne) break
                     improved = true
                     done = true
                     fixedNames.add(label(i, k))
@@ -1635,7 +1802,7 @@ object V6HotfixPasses {
             }
         val logs = listOf(MirrorLog(tag = "RangePolish",
             message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
-                "（日割当:$dayMatchingApplied）" +
+                "（日割当:$dayMatchingApplied / 柔軟日割当:$flexibleDayApplied）" +
                 (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
