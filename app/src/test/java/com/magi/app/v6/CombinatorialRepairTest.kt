@@ -27,11 +27,16 @@ class CombinatorialRepairTest {
         return a.weightedScore < b.weightedScore
     }
 
-    // shifts: 休(0) P(1) Qres(2) D(3)。staff: X(0) Y(1)。
+    // shifts: 休(0) P(1) Qres(2) D(3)。staff: X(0) Y(1) W1(2) W2(3)。
     // X=P(aptHigh, 目標0)・Y=Qres(目標なし、Dへ動けばaptLow(目標1)を解消)。
     // Xの唯一の代替候補DはstaffRangeでhi=0固定＝Xが単独で「解決」する抜け道を塞ぐ。
     // G0のQres在籍数は常に1人固定(c41 l=u=1)。X到着(+1)とY退出(-1)が相殺すると
     // c41違反ゼロのままapt違反だけが2件解消する＝どちらも単独では不採用(タイ)。
+    // W1/W2(常に休、動かない)は fair(グループ内公平化) の分母を薄める補助。X,Yのみ(2人)だと
+    // X単独の1手がP側とQres側のfair偏りを同時に均してしまい、apt/c41の弱いタイをfairの大きな
+    // 隠れ改善が圧倒してしまう（AptPolishTestの敵対検証=CI実測で発見・Pythonで独立再検証済み）。
+    // W1/W2にもstaffRangeでDを禁止(hi=0)し、apt目標をクランプで実効0へ潰す（さもないとD目標=1が
+    // グループ共有のためW1/W2も常時aptLow(D)を持ち、彼ら自身がDへ動いて「解決」してしまう）。
     private fun combineTwoRejectedState(): MagiState {
         val shifts = listOf(
             Shift("休", "休", "", ""),
@@ -42,14 +47,18 @@ class CombinatorialRepairTest {
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1, 1, 1))
         val groupShiftApt = listOf(listOf("", "0", "", "1"))
-        val staff = listOf(Staff("X", 0), Staff("Y", 0))
-        val schedule = listOf(listOf(1), listOf(2))
+        val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("W1", 0), Staff("W2", 0))
+        val schedule = listOf(listOf(1), listOf(2), listOf(0), listOf(0))
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-01",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
             groupShift = groupShift, groupShiftApt = groupShiftApt,
             schedule = schedule, wishes = emptyMap(),
-            staffRange = mapOf("0,3" to Range("", "0")),
+            staffRange = mapOf(
+                "0,3" to Range("", "0"), // X, D
+                "2,3" to Range("", "0"), // W1, D
+                "3,3" to Range("", "0"), // W2, D
+            ),
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
@@ -62,6 +71,7 @@ class CombinatorialRepairTest {
         val st = combineTwoRejectedState()
         val work = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, work)
+        // apt=2: X(P超過1)+Y(D不足1)。W1/W2はstaffRangeのクランプで実効目標0=違反なし。
         assertEquals(2, before.breakdown["apt"] ?: 0)
         assertEquals(0, before.hard)
 

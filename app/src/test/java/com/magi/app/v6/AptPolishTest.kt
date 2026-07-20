@@ -167,6 +167,18 @@ class AptPolishTest {
     // X単独ではQres行き(c41超過とのタイ)以外に解が無い。Y単独もQres退出でc41不足の
     // タイとなり、どちらも不採用。だが両者を同時適用するとQresの人数が完全に相殺され
     // (Yが抜けてXが入る)、c41違反ゼロのままapt違反だけが2件解消する。
+    //
+    // [敵対検証で発見・修正、Kotlin未実行のまま手計算のみで作った初版がCI失敗] 同一グループ内で
+    // 見落としていた1点: fair(グループ内公平化)はgroupShift全体(休/P/Qres/D)にわたりgroup×shift
+    // ごとのround(平均)偏差を計算するため、X,Yのみの2人構成だとX単独の1手がP側とQres側の偏りを
+    // 同時に均してしまい、fairだけで-2という大きな隠れた改善を生み、apt/c41の弱いタイを圧倒していた。
+    // W1/W2(常に休、apt/c41/fairの分母を薄める補助)を追加してfairの感度を鈍らせる。ただしD目標(="1")は
+    // グループ共有のためW1/W2も素朴に追加すると常時aptLow(D)を持ってしまい、AptPolishが実際にW1/W2を
+    // Dへ動かして"解決"してしまう(Xの個人的hi=0禁止と同型の抜け道)。そこでW1/W2にもstaffRangeでDの
+    // hi=0を設定し、apt目標をクランプで0へ潰す(=最初からD不足ではない扱いにする)ことで、W1/W2を
+    // 完全に不動の背景ノイズに固定した。Python(/tmp/verify_apt3.py相当)で独立に数値検証: 単独移動は
+    // 4パターンとも total/weightedScore が baseline(=6) と厳密に同値(タイ)か悪化、結合
+    // (X→Qres+Y→D)のみが total を6→4へ真に改善することを再現・確認した上で反映。
     private fun combineTwoRejectedState(): MagiState {
         val shifts = listOf(
             Shift("休", "休", "", ""),
@@ -176,21 +188,29 @@ class AptPolishTest {
         )
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1, 1, 1))
-        // P目標0(Xの問題)・Qres目標なし(共有の中継地点)・D目標1(Yの問題)。
+        // P目標0(Xの問題)・Qres目標なし(共有の中継地点)・D目標1(Yの問題。W1/W2はstaffRangeのクランプで
+        // 実効目標0になるため、この行だけでは違反を持たない)。
         val groupShiftApt = listOf(listOf("", "0", "", "1"))
-        val staff = listOf(Staff("X", 0), Staff("Y", 0))
+        val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("W1", 0), Staff("W2", 0))
         val schedule = listOf(
             listOf(1), // X = P（目標0に対し1=超過1）
             listOf(2), // Y = Qres（Qresは目標なし＝Y自身のapt違反はここには無い）
+            listOf(0), // W1 = 休（常時・fairの分母を薄める補助、動かない）
+            listOf(0), // W2 = 休（同上）
         )
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-01",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
             groupShift = groupShift, groupShiftApt = groupShiftApt,
             schedule = schedule, wishes = emptyMap(),
-            // Xの唯一の代替候補D自体を個人的に禁止(hi=0)し、Xが単独でDへ逃げて
-            // 見かけ上「解決」してしまう抜け道を塞ぐ（Yはこの制約の対象外＝Dへ自由に動ける）。
-            staffRange = mapOf("0,3" to Range("", "0")),
+            // Xの唯一の代替候補D自体を個人的に禁止(hi=0)し、Xが単独でDへ逃げて見かけ上「解決」
+            // してしまう抜け道を塞ぐ（Yはこの制約の対象外＝Dへ自由に動ける）。W1/W2も同様にDを
+            // 禁止し、彼ら自身がDへ動いて「解決」してしまう(fairの分母薄め役が消える)ことを防ぐ。
+            staffRange = mapOf(
+                "0,3" to Range("", "0"), // X, D
+                "2,3" to Range("", "0"), // W1, D
+                "3,3" to Range("", "0"), // W2, D
+            ),
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
@@ -204,6 +224,7 @@ class AptPolishTest {
         val st = combineTwoRejectedState()
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
+        // apt=2: X(P超過1)+Y(D不足1)。W1/W2はstaffRangeのクランプで実効目標0=違反なし。
         assertEquals("初期apt違反=2(XのaptHigh+YのaptLow)", 2, before.breakdown["apt"] ?: 0)
         assertEquals("初期HARD=0", 0, before.hard)
         assertEquals("初期はc41/staffRange違反なし", 0, before.breakdown["c41"] ?: 0)
