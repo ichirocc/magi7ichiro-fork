@@ -160,22 +160,22 @@ class V6SanityPortTest {
         // T=10・apt目標3(合計6)。休の実質上限=2人×10日=20 ≥ 6 → 誤検知しない。
         val rep = V6SanityPort.buildGuidance(aptVsNeedState(days = 10, need1 = "0", aptTarget = "3"))
         assertTrue("控えめな休の目標は誤検知しない(need=0との比較をやめた効果)",
-            rep.none { it.where.contains("休") && it.problem.contains("適切回数の合計") })
+            rep.none { it.where.contains("休") && it.where.contains("適切回数の合計") })
         assertTrue("同一設定の非休シフト(X)は従来どおり検出する",
-            rep.any { it.where.contains("X") && it.problem.contains("適切回数の合計") })
+            rep.any { it.where.contains("X") && it.where.contains("適切回数の合計") })
     }
 
     @Test fun aptSumCheckStillFlagsRestShiftWhenGenuinelyExcessive() {
         // T=2・apt目標5(合計10)。休の実質上限=2人×2日=4 < 10 → 本当に過大なので検出する。
         val rep = V6SanityPort.buildGuidance(aptVsNeedState(days = 2, need1 = "0", aptTarget = "5"))
         assertTrue("物理的に不可能な休の目標(T=2日に対し目標5)は検出すること",
-            rep.any { it.where.contains("休") && it.problem.contains("適切回数の合計") })
+            rep.any { it.where.contains("休") && it.where.contains("適切回数の合計") })
     }
 
     @Test fun aptSumCheckAccountsForOtherShiftLowerBoundsReducingRestCapacity() {
         // T=10・apt目標3(合計6)だが、他シフトXの個人下限が8(各自)設定済み＝休の実質上限=2人×(10-8)=4 < 6。
         val rep = V6SanityPort.buildGuidance(aptVsNeedState(days = 10, need1 = "0", aptTarget = "3", otherLo = "8"))
         assertTrue("他シフトの個人下限を差し引いた実質上限を下回るなら検出すること",
-            rep.any { it.where.contains("休") && it.problem.contains("適切回数の合計") })
+            rep.any { it.where.contains("休") && it.where.contains("適切回数の合計") })
     }
 }
