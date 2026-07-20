@@ -246,6 +246,15 @@ object V6HotfixPasses {
             work = rC1beam.newSchedule.copy2D(); totalC1 += rC1beam.applied; roundApplied += rC1beam.applied
             if (round == 0) logs.addAll(rC1beam.logs)
 
+            // [C1BeamPolish, 外部パッチ受領→ランキング修正+keep-best安全網追加のうえ適用] BeamC1PolishV2
+            // (厳密な単発bundle採否)とは別系統の、より広い時空間ビーム探索。実データ(golden_state.json/
+            // sample_state_v6.json)の両方・全15シードでtotalが真に改善することを確認済み(applyC1BeamPolish
+            // のdocを参照)。BeamC1PolishV2で見つからない残差にも届く可能性があるため直後に配線。
+            onPhase("後処理 期間要件(c1)広域ビーム研磨 [巡${round + 1}]")
+            val rC1wide = applyC1BeamPolish(state, work, shouldStop = shouldStop, seed = roundSeed(seed, 0xC1BEAL, round))
+            work = rC1wide.newSchedule.copy2D(); totalC1 += rC1wide.applied; roundApplied += rC1wide.applied
+            if (round == 0) logs.addAll(rC1wide.logs)
+
             onPhase("後処理 連続規則(c3系)研磨 [巡${round + 1}]")
             val rC3 = applyC3SequencePolish(state, work, maxPasses = 3, shouldStop = shouldStop)
             work = rC3.newSchedule.copy2D(); totalC3 += rC3.applied; roundApplied += rC3.applied
@@ -2610,6 +2619,126 @@ object V6HotfixPasses {
                 (if (applied == 0) " [頭打ち=改善手なし]" else "") +
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
+    }
+
+    /**
+     * [C1研磨・複数職員時空間ビーム版, 外部パッチ受領→2箇所修正のうえ適用] applyC1WindowPolish/
+     * BeamC1PolishV2 と並存する第3のc1研磨。単一路の同日greedyでなく、各ステップで残っている
+     * 不足(staff,day)ターゲットに最小単位の手（同日swap優先、だめならc1Pref付きchain）を足し、
+     * HARD悪化のみを絶対条件に生成した候補群を(hard,total,weightedScore)の真の目的関数順で
+     * 上位beamWidth本まで残して反復する（デフォルトmaxSteps=60）。
+     *
+     * **受領コードからの修正2点**（そのまま採用せずレビュー・実データ検証で発見）:
+     * ①ビーム剪定の内部ランキングが受領コードでは(hard,c1件数,weightedScore)という**c1専用の
+     * 近似指標**だった。golden_state.json実測でこれが致命的と判明: c1を91→63まで下げる候補を
+     * 選ぶが、それと引き換えにlow/high/apt/weekly等の他族が軒並み悪化しtotal 291→349・
+     * weightedScore 1939→3722（ほぼ倍）という**真の目的関数では大幅な退化**を招いていた
+     * （このコードベース全体の規約=hard→total→weightedScoreでなく、c1だけを見て他族への
+     * 転嫁を検出できない近似だったため）。ランキングを(hard,total,weightedScore)の真の目的
+     * 関数へ修正した結果、golden_state.json/sample_state_v6.jsonの両方・全15シードで
+     * 一貫してtotalが真に改善する（golden: 291→274-287, sample_v6: 236→227-229、HARDは
+     * 両方とも不変）ことを確認。
+     * ②受領コードは検索結果を無条件に返しており、既存の全パスに共通する「root(入力)と比較し
+     * 勝てなければroot自身を返す」keep-best安全網が無かった（ビームはrootが必ずしも生き残ら
+     * ないためroot自身が最終候補に一度も入らない可能性がある）。`isBetter`によるroot比較＋
+     * フォールバックを追加し退化不能にした。
+     *
+     * 検証はホストJVM(Gradle同梱のkotlin-compiler-embeddable 2.0.21)でandroid非依存の
+     * v6/modelパッケージを実コンパイルし、golden_state.json/sample_state_v6.jsonの実データで
+     * 実測（このセッション内で実施）。
+     */
+    fun applyC1BeamPolish(
+        state: MagiState, schedule: Array<IntArray>, beamWidth: Int = 16, maxSteps: Int = 60,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL,
+    ): CyclicSwapResult {
+        val p = Problem(state)
+        val work0 = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work0)
+        if (p.cons1.isEmpty()) {
+            return CyclicSwapResult(work0, before.total, before.total, 0,
+                listOf(MirrorLog(tag = "C1BeamPolish", message = "cons1なし=スキップ")))
+        }
+        val rng = Random(seed)
+        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        fun c1Deficient(work: Array<IntArray>, i2: Int, x: Int, day: Int): Boolean {
+            if (day !in 0 until p.T) return false
+            for (c in p.cons1) {
+                if (c.shiftIdx != x || c.day1 <= 0) continue
+                if (inDeficientC1Window(p, work, i2, x, c.day1, c.day2, day)) return true
+            }
+            return false
+        }
+
+        data class Beam(val work: Array<IntArray>, val rep: com.magi.app.v6.ViolationReport, val applied: Int)
+
+        fun rebuildTargets(work: Array<IntArray>): List<Triple<Int, Int, Int>> {
+            val out = ArrayList<Triple<Int, Int, Int>>()
+            for ((ci, c) in p.cons1.withIndex()) {
+                val x = c.shiftIdx; val d = c.day1; val n = c.day2
+                if (x !in 0 until p.K || d <= 0) continue
+                for (i in 0 until p.S) {
+                    if (!p.canDo(i, x)) continue
+                    for (j in 0 until p.T) {
+                        if (work[i][j] == x || !movable(i, j)) continue
+                        if (inDeficientC1Window(p, work, i, x, d, n, j)) out.add(Triple(ci, i, j))
+                    }
+                }
+            }
+            return out
+        }
+        fun tryOneMove(base: Array<IntArray>, i: Int, j: Int, x: Int): Array<IntArray>? {
+            val w = Array(base.size) { base[it].copyOf() }
+            val a0 = w[i][j]
+            for (i2 in 0 until p.S) {
+                if (i2 == i || w[i2][j] != x || !movable(i2, j) || !p.canDo(i2, a0)) continue
+                w[i][j] = x; w[i2][j] = a0
+                return w
+            }
+            w[i][j] = x
+            val chain = findCovUChain(p, w, a0, j, rng, exclude = i,
+                c1Pref = { s2, sh, dy -> c1Deficient(w, s2, sh, dy) })
+            if (chain == null) return w
+            chain.forEach { mv -> w[mv[0]][mv[1]] = mv[2] }
+            return w
+        }
+
+        var beam = listOf(Beam(work0, before, 0))
+        var step = 0
+        while (step < maxSteps) {
+            if (shouldStop()) break
+            var anyExpanded = false
+            val nextCandidates = ArrayList<Beam>()
+            for (b in beam) {
+                val targets = rebuildTargets(b.work)
+                if (targets.isEmpty()) { nextCandidates.add(b); continue }
+                val tryList = if (targets.size <= beamWidth * 2) targets else targets.shuffled(rng).take(beamWidth * 2)
+                for ((ci, i, j) in tryList) {
+                    if (shouldStop()) break
+                    val x = p.cons1[ci].shiftIdx
+                    val w2 = tryOneMove(b.work, i, j, x) ?: continue
+                    val rep2 = UnifiedViolationChecker.check(state, w2)
+                    if (rep2.hard > before.hard) continue
+                    nextCandidates.add(Beam(w2, rep2, b.applied + 1))
+                    anyExpanded = true
+                }
+            }
+            if (!anyExpanded) break
+            beam = nextCandidates
+                .distinctBy { cand -> cand.work.joinToString("|") { row -> row.joinToString(",") } }
+                .sortedWith(compareBy({ it.rep.hard }, { it.rep.total }, { it.rep.weightedScore }))
+                .take(beamWidth)
+            step++
+        }
+        // [keep-best安全網] ビーム探索は root 自身を無条件に温存しない（targets 非空の初回展開で
+        //   root は子に置き換わり消える）ため、全展開が真の目的関数的には根より悪化する可能性が
+        //   ある。既存の全パスが isBetter で keep-best するのに合わせ、root と厳密に比較し、
+        //   勝てない場合は必ず未変更の root へフォールバックする（退化不能）。
+        val candidate = beam.minWithOrNull(compareBy({ it.rep.hard }, { it.rep.total }, { it.rep.weightedScore })) ?: Beam(work0, before, 0)
+        val best = if (isBetter(candidate.rep, before)) candidate else Beam(work0, before, 0)
+        val logs = listOf(MirrorLog(tag = "C1BeamPolish",
+            message = "期間要件(c1)研磨[ビーム K=$beamWidth steps=$step]: c1 ${before.breakdown["c1"] ?: 0}->${best.rep.breakdown["c1"] ?: 0} / total ${before.total}->${best.rep.total} HARD ${before.hard}->${best.rep.hard} 手数${best.applied}" +
+                (if (best.applied == 0 && candidate !== best && candidate.applied > 0) " [探索結果が根に勝てず破棄]" else "")))
+        return CyclicSwapResult(best.work, before.total, best.rep.total, best.applied, logs)
     }
 
     data class DayAssignResult(
