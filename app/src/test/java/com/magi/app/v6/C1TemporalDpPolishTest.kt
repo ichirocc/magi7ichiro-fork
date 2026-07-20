@@ -111,7 +111,7 @@ class C1TemporalDpPolishTest {
         for (j in 0 until 11) {
             val b = (0 until 3).map { sched[it][j] }.sorted()
             val a = (0 until 3).map { out.newSchedule[it][j] }.sorted()
-            assertEquals("day=$jの日別シフト人数", b, a)
+            assertEquals("day=${j}の日別シフト人数", b, a)
         }
         assertEquals("targetのX月間回数", 4, out.newSchedule[0].count { it == 1 })
     }
