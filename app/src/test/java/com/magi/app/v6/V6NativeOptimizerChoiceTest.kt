@@ -351,6 +351,48 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(base[0].size, out[0].size)
     }
 
+    // [3.241.0/実機ログ起因=専用オペレータの改善がdestroyRepairDayで相殺される順序バグ修正]
+    //   旧実装は「applyCovOFree→destroyRepairDay×6」の順で、destroyRepairDayのdestroy段階
+    //   （非希望セルを休へ変える）がneed<=0のシフト(休)へは一切repairが働かないため、直前に
+    //   applyCovOFreeが解消したcovOをdestroy段階で再発させ、そのまま最終hypothesisに残っていた
+    //   （8/26の休過剰1がcovO focusのラウンドでも解消されなかった実例の再現）。T=1日のため
+    //   destroyRepairDay(6回)は必ずこの日を選ぶ＝決定的に検証できる。休1人(b)が過剰・Cへ動かせば
+    //   受け皿あり(need1/need2とも未設定=完全無制限)という最小構成で、新しい順序(destroyRepairDay→
+    //   applyCovOFree)なら複数seedいずれでも最終的にcovOが解消されることを固定する。
+    //   [手計算で確認済みの罠] AのneedはCとは異なり need1=1(use2Patterns=false のため実質上限も1)
+    //   であり、既に a が1人埋めているため b を A へ動かすと新たな covO(A) を作ってしまい
+    //   applyCovOFree のガードで拒否される＝わざと「Aは受け皿でない・Cのみが受け皿」という
+    //   構成にして、destroyRepairDay の repair 段階(need>0のAのみ埋め戻す)がこの b→C の解決を
+    //   決して代替できないことも同時に検証する。
+    private fun covOOrderState(): MagiState = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-01",
+        shifts = listOf(Shift("休み", "休", "0", ""), Shift("早番", "A", "1", ""), Shift("雑務", "C", "", "")),
+        groups = listOf(Group("G0", "G0")),
+        staff = listOf(Staff("a", 0), Staff("b", 0)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", "")),
+        schedule = listOf(listOf(1), listOf(0)),   // a=A(需要どおり1人), b=休(過剰1人)
+        wishes = emptyMap(), staffRange = emptyMap(),
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+        cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun rsiGenerateHypothesisCovOFocusOrderKeepsFixAfterDestroyRepairDay() {
+        val st = covOOrderState()
+        val base = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, base)
+        assertEquals("初期 covO=1（休の過剰1）", 1, before.breakdown["covO"] ?: 0)
+
+        for (seed in 1L..5L) {
+            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, before, "covO", Random(seed))
+            val after = UnifiedViolationChecker.check(st, out)
+            assertEquals("seed=$seed: destroyRepairDayを先に・applyCovOFreeを最後に実行する順序のため" +
+                "hypothesisの最終状態でcovOが解消されていること", 0, after.breakdown["covO"] ?: 0)
+        }
+    }
+
     // [3.209.0] c41/c41s は covO と同じく markNeed(needViolations) にしか載らず、GLSキック/
     // destroyRepairViolations が一切ヒントを持てない。applyC41Free が群レンジ[l,u]の超過・不足を
     // 実際に動かして解消することを固定する。
