@@ -88,4 +88,85 @@ class RangePolishTest {
         assertTrue("残存表示に候補なしの理由が出ること: $msg", msg.contains("候補なし"))
         assertTrue("対象職員名(A)が出ること: $msg", msg.contains("A "))
     }
+
+    /**
+     * [3.244.0 手M] 直接2人交換が不可能な4人循環。
+     *
+     * 初期: high=A, substitute=C, bridge1=D, bridge2=B
+     * 解:   high=B, substitute=A, bridge1=C, bridge2=D
+     *
+     * highはCを担当不可なので direct pair swap は不可能。日単位完全割当なら
+     * A→B→D→C→A の4-cycleを一度に解き、日別シフト人数を完全保存できる。
+     * substituteにはAのlow違反を設定しないため、「low対象だけを見る」旧ロジックではなく
+     * 担当可能＋上限余力の代用者探索が動くことも同時に固定する。
+     */
+    private fun exactDayCycleState(bridgeWishLocked: Boolean = false): MagiState {
+        val shifts = listOf(
+            Shift("A", "A", "1", ""),
+            Shift("B", "B", "1", ""),
+            Shift("C", "C", "1", ""),
+            Shift("D", "D", "1", ""),
+        )
+        val groups = listOf(
+            Group("H", "H"), Group("S", "S"), Group("R1", "R1"), Group("R2", "R2"),
+        )
+        val groupShift = listOf(
+            listOf(1, 1, 0, 0), // high: A/B
+            listOf(1, 0, 1, 0), // substitute: A/C
+            listOf(0, 0, 1, 1), // bridge1: C/D
+            listOf(0, 1, 0, 1), // bridge2: B/D
+        )
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = shifts,
+            groups = groups,
+            staff = listOf(
+                Staff("high", 0), Staff("substitute", 1), Staff("bridge1", 2), Staff("bridge2", 3),
+            ),
+            use2Patterns = false,
+            groupShift = groupShift,
+            groupShiftApt = List(4) { List(4) { "" } },
+            schedule = listOf(
+                listOf(0), // high=A（hi=0に対し超過1）
+                listOf(2), // substitute=C
+                listOf(3), // bridge1=D
+                listOf(1), // bridge2=B
+            ),
+            wishes = if (bridgeWishLocked) mapOf("3,0" to 1) else emptyMap(),
+            staffRange = mapOf("0,0" to Range("0", "0")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun rangePolishExactDayMatchingFindsFourPersonCycleWithoutLowReceiver() {
+        val st = exactDayCycleState()
+        val sched = st.schedule.toIntArray2D()
+        val beforeDay = sched.map { it[0] }.sorted()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["high"] ?: 0)
+        assertTrue("代用者にはAのlow違反が無い", before.countViolations["1,0"] != "vio-low")
+
+        val result = V6HotfixPasses.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
+        val after = UnifiedViolationChecker.check(st, result.newSchedule)
+
+        assertEquals("high解消", 0, after.breakdown["high"] ?: -1)
+        assertEquals("HARD不変", 0, after.hard)
+        assertEquals("日別シフト多重集合を完全保存", beforeDay, result.newSchedule.map { it[0] }.sorted())
+        assertEquals("4-cycleの一意解", listOf(1, 0, 2, 3), result.newSchedule.map { it[0] })
+        assertTrue("手Mが採用されたこと", result.logs.first().message.contains("日割当:1"))
+    }
+
+    @Test
+    fun rangePolishExactDayMatchingRespectsWishLockedBridge() {
+        val st = exactDayCycleState(bridgeWishLocked = true)
+        val sched = st.schedule.toIntArray2D()
+        val result = V6HotfixPasses.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
+
+        assertEquals("循環に必須のbridge2が希望固定なら不採用", 0, result.applied)
+        assertEquals(sched.map { it.toList() }, result.newSchedule.map { it.toList() })
+    }
 }
