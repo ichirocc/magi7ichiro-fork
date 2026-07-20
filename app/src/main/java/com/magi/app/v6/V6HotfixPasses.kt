@@ -219,6 +219,18 @@ object V6HotfixPasses {
             work = rC1.newSchedule.copy2D(); totalC1 += rC1.applied; roundApplied += rC1.applied
             if (round == 0) logs.addAll(rC1.logs)
 
+            // [3.247.0/C1時系列DP] 既存の1回swap近傍が局所最適で止まった残差を、月全体の
+            // 対象シフト二値配置DP＋複数日の同日swap一括採用で解く。日別シフト人数は完全保存。
+            // 候補生成はDP/beamだが、採否はUnifiedViolationCheckerのkeep-bestのみ。後処理予算を
+            // 圧迫しないようフィックスポイント1巡あたり1pass・4試行・beam96へ制限する。
+            onPhase("後処理 期間要件(c1)時系列DP研磨 [巡${round + 1}]")
+            val rC1dp = C1TemporalSwapPolish.apply(
+                state, work, maxPasses = 1, maxRelocations = 4, trials = 4, beamWidth = 96,
+                shouldStop = shouldStop, seed = roundSeed(seed, 0xC1D0L, round),
+            )
+            work = rC1dp.newSchedule.copy2D(); totalC1 += rC1dp.applied; roundApplied += rC1dp.applied
+            if (round == 0) logs.addAll(rC1dp.logs)
+
             onPhase("後処理 期間要件(c1)3者回転研磨 [巡${round + 1}]")
             val rC1r = applyBlockRotationPolish(state, work, c1Anchor, "C1Rotate", maxPasses = 2, shouldStop = shouldStop)
             work = rC1r.newSchedule.copy2D(); totalC1r += rC1r.applied; roundApplied += rC1r.applied
