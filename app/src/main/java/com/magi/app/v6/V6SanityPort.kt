@@ -486,6 +486,39 @@ object V6SanityPort {
             }
         }
 
+        // 6c) [事前診断/幻のhigh超過+代用要員提示・grilling確定=美幸・上條・大島の実例を踏まえ実装]
+        //    6bと同じ「担当レパートリーから強制される最低回数」ロジックを staffRange 上限(hi、個人上限)
+        //    にも適用。担当できるシフトの構成上、あるシフトの回数が個人上限を必ず上回ってしまう（他の
+        //    担当シフトの上限合計だけでは全日を埋めきれない＝残りが必ずこのシフトに回る）場合、その
+        //    職員をこのシフトの担当から外し、代わりに担当できる他の職員（代用要員候補）に置き換える
+        //    ことを提案する。データは変更しない（HF77準拠、実際の担当変更は業務担当者が判断）。
+        //    他シフトに上限未設定が1つでもあれば下界0以下＝発火しない（6bと同じ保守的判定・誤検知ゼロ）。
+        for (i in 0 until p.S) {
+            val name = state.staff.getOrNull(i)?.name ?: "#$i"
+            for (k in 0 until p.K) {
+                val hi = p.rangeHi[i][k]
+                if (hi == Int.MAX_VALUE || !p.canDo(i, k)) continue
+                var otherHiSum = 0
+                for (k2 in 0 until p.K) {
+                    if (k2 == k || !p.canDo(i, k2)) continue
+                    val hi2 = p.rangeHi[i][k2]
+                    otherHiSum += if (hi2 == Int.MAX_VALUE) p.T else minOf(maxOf(hi2, 0), p.T)
+                    if (otherHiSum >= p.T) break
+                }
+                val forcedMin = p.T - otherHiSum
+                if (forcedMin > hi) {
+                    val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
+                    val substitutes = (0 until p.S).filter { it != i && p.canDo(it, k) }
+                        .map { state.staff.getOrNull(it)?.name ?: "#$it" }
+                    val subText = if (substitutes.isEmpty()) "代用できる他の担当者がいません"
+                        else "代用要員候補: ${substitutes.joinToString("・")}"
+                    out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」上限と担当構成の衝突",
+                        "担当できるシフトの構成上、「$sym」は最低${forcedMin}回になります（他の担当シフトの上限合計${otherHiSum}回では${p.T}日を埋めきれません）が、${name}さんの「$sym」上限は${hi}回です。この人が担当を続ける限り上限超過は必ず出ます。$subText",
+                        "${name}さんを「$sym」の担当から外し代用要員に置き換えるか、上限を${forcedMin}回以上に上げてください"))
+                }
+            }
+        }
+
         // 7) [事前診断/配布不可] ある日に「そのシフトを担当できる人数」より必要人数が多い＝どう割り当てても
         //    人員不足(covU=HARD)が確定＝配布不可。最適化の hardFloor と同じ forcedCovU で検出（誤検知ゼロ）。
         for (fc in forcedCovU(state, p)) {
@@ -644,7 +677,16 @@ object V6SanityPort {
                     if (!p.canDo(i, k)) continue
                     val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; val n = cnt[i][k]
                     if (lo != Int.MIN_VALUE && lo != 0) { hasBound = true; if (n < lo) lows.add("${nm(i)} $n<$lo") }
-                    if (hi != Int.MAX_VALUE) { hasBound = true; if (n > hi) highs.add("${nm(i)} $n>$hi") }
+                    if (hi != Int.MAX_VALUE) {
+                        hasBound = true
+                        // [代用要員提示/grilling確定=美幸・上條・大島の実例] 上限超過している職員に、
+                        //   このシフトを担当できる他の職員(代用要員候補)の人数を併記する。担当を外し
+                        //   代用要員へ置き換えることで解消できる可能性を示す（読取専用・データ変更なし）。
+                        if (n > hi) {
+                            val subCount = (0 until p.S).count { it != i && p.canDo(it, k) }
+                            highs.add("${nm(i)} $n>$hi(代用可${subCount}名)")
+                        }
+                    }
                 }
                 if (!hasBound) continue
                 fun part(label: String, xs: List<String>) =
