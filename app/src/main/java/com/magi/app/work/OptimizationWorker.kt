@@ -52,6 +52,7 @@ class OptimizationWorker(
         }
         var lastSnapMs = 0L
         var lastBubbleMs = 0L
+        val wallStart = System.currentTimeMillis()   // [実機報告「残り時間表示が5分から何度も巡回する」修正]
         return try {
             val res = V6FinalPort.handleOptimize(
                 state = req.first,
@@ -61,21 +62,27 @@ class OptimizationWorker(
                 allowImpossible = true,
             ) { phase, report, iters, elapsed ->
                 if (report != null) {
+                    // [実機報告「残り時間表示が5分から何度も巡回する」修正] onProgressのelapsedはフェーズ
+                    //   境界（V5→ALNS→RSIラウンド等）で巻き戻るローカル時計。UI(progressSummaryの「残り」)と
+                    //   会話バブルの「経過」表示、および下のスロットル判定(elapsed差分)はいずれも単調増加を
+                    //   前提とするため、単調な壁時計(wallStart基準、MagiViewModel.runV6FullOptimizeの
+                    //   startMsと同じ考え方)に統一する。
+                    val wallElapsed = System.currentTimeMillis() - wallStart
                     OptimizationRepository.publishProgress(
-                        OptimizationRepository.BgProgress(phase, report.hard, report.soft, report.total, iters, elapsed),
+                        OptimizationRepository.BgProgress(phase, report.hard, report.soft, report.total, iters, wallElapsed),
                     )
                     // [Android 17 バブル] 進捗を会話バブルへ反映（連続更新は onlyAlertOnce で静音・~1.5秒間引き）。
-                    if (elapsed - lastBubbleMs > 1_500L) {
-                        lastBubbleMs = elapsed
-                        val s = elapsed / 1000
+                    if (wallElapsed - lastBubbleMs > 1_500L) {
+                        lastBubbleMs = wallElapsed
+                        val s = wallElapsed / 1000
                         val clock = "%d:%02d".format(s / 60, s % 60)
                         runCatching {
                             BubbleSupport.postProgress(ctx, "計算中 ・ 経過 $clock ・ 違反 ${report.total}（必須 ${report.hard}）")
                         }
                     }
                     // [#4/C1] 途中最良解を定期スナップショット → kill されても「途中結果から再開」できる。
-                    if (elapsed - lastSnapMs > 8_000L) {
-                        lastSnapMs = elapsed
+                    if (wallElapsed - lastSnapMs > 8_000L) {
+                        lastSnapMs = wallElapsed
                         com.magi.app.v6.V6NativeOptimizer.liveBest?.let { live ->
                             runCatching { snapshotFile(ctx).writeText(StateParser.serialize(req.first, live.toIntArray2D())) }
                         }

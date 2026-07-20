@@ -759,7 +759,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         breakdown = if (rep != null) emptyBreakdown + rep.breakdown else it.breakdown,
                         iters = iters,
                         itersPerSec = if (elapsed > 0) iters * 1000 / elapsed else 0,
-                        elapsedMs = elapsed,
+                        // [実機報告「残り時間表示が5分から何度も巡回する」修正] onProgressのelapsedは
+                        //   フェーズ境界で巻き戻るローカル時計（727/751行のコメントと同じ既知の性質）。
+                        //   progressSummary の「残り」表示はこれを budgetSec から引くため、V5→ALNS→RSI
+                        //   ラウンド等の頻繁なフェーズ遷移のたびに残り時間が予算近くまで跳ね戻って見えていた。
+                        //   HF63(753行)と同じ単調な壁時計(startMs基準)に統一する。
+                        elapsedMs = System.currentTimeMillis() - startMs,
                         // [DefragLiveView] 計算中の最良盤面をライブ表示用に反映（節目で更新される）。
                         liveSchedule = V6NativeOptimizer.liveBest ?: it.liveSchedule,
                         message = "V6 $phase 実行中…",
