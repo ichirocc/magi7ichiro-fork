@@ -1558,10 +1558,13 @@ object V6HotfixPasses {
          *
          * - 希望/管理者固定セルは現在シフト以外へ移動不可。
          * - 変更先はcanDo必須。希望休「希」は新規生成しない。
-         * - c3nはmakesForbiddenRunで辺を除外。
+         * - c3nはmakesForbiddenRunで辺を除外。ただし直接は禁止連続でも、隣接日(j±1)を本人が
+         *   調整すれば崩せる場合は`tryFixForbiddenRunViaAdjacentDay`(3.163.0)で救済し、辺を生かす
+         *   （3.246.0・「隣接日連動型」拡張。受取職員自身の隣接日にも同じ救済が及ぶ＝対称）。
          * - staffRange low/high、apt、変更セル数を職員辺費用へ入れる。
          * - covU/covOは人数qに対する凸罰則の限界費用としてシフト→sink辺へ入れる。
-         * - 最終採否は必ずUnifiedViolationChecker＋isBetter。近似費用だけでは採用しない。
+         * - 最終採否は必ずUnifiedViolationChecker＋isBetter。近似費用だけでは採用しない
+         *   （隣接日の追加手・玉突きも含めた盤面全体で1回評価）。
          */
         fun tryFlexibleDayFlow(
             target: Pair<Int, Int>,
@@ -1604,6 +1607,7 @@ object V6HotfixPasses {
                 val report: ViolationReport,
                 val changed: Int,
                 val flowCost: Long,
+                val extras: List<IntArray>,
             )
 
             var bestPlan: FlowPlan? = null
@@ -1612,6 +1616,9 @@ object V6HotfixPasses {
                 if (shouldStop()) break
                 if (work[victim][j] != forbiddenK || !movable(victim, j)) continue
                 val oldDay = IntArray(p.S) { work[it][j] }
+                // [3.246.0 隣接日連動] (i,newK)ペア単位で「直接は禁止連続だが隣接日調整で救済できるか」を
+                // メモ化。j±1は本ループの間ずっと不変(day-jのtrialは他日を触らない)なので日jの間は再利用可。
+                val adjacentFix = HashMap<Pair<Int, Int>, List<IntArray>>()
 
                 // primary costを1024倍し、下位10bitだけを決定的tie-breakに使う。
                 // 8試行してc42/c1等の非分離制約に対する代替案もfull checkerへ渡す。
@@ -1630,7 +1637,13 @@ object V6HotfixPasses {
                                 work[i][j] = newK
                                 val badRun = p.makesForbiddenRun(work, i, j, newK)
                                 work[i][j] = oldK
-                                if (badRun) continue
+                                if (badRun) {
+                                    val key = i to newK
+                                    val fix = adjacentFix.getOrPut(key) {
+                                        tryFixForbiddenRunViaAdjacentDay(p, work, i, j, newK, rng) ?: emptyList()
+                                    }
+                                    if (fix.isEmpty()) continue
+                                }
                             } else if (i == victim && !p.canDo(i, newK)) {
                                 // groupViol対象をそのまま残す辺は禁止。他職員の固定済み不正セルは
                                 // この1手の実行可能性を壊さないため現状維持だけ許す。
@@ -1651,12 +1664,23 @@ object V6HotfixPasses {
                     val solved = FlexibleDayFlow.solve(staffCost, marginal) ?: continue
                     if (solved.assignment[victim] == forbiddenK) continue
 
+                    // 選ばれた(i,newK)のうち禁止連続の隣接日救済が要ったものを1件の候補として合流。
+                    val extras = ArrayList<IntArray>()
+                    for (i in 0 until p.S) {
+                        val newK = solved.assignment[i]
+                        if (newK == oldDay[i]) continue
+                        adjacentFix[i to newK]?.let { extras.addAll(it) }
+                    }
+
                     var changedCount = 0
                     for (i in 0 until p.S) {
                         if (solved.assignment[i] != oldDay[i]) changedCount++
                         work[i][j] = solved.assignment[i]
                     }
+                    val extraOld = IntArray(extras.size) { work[extras[it][0]][extras[it][1]] }
+                    extras.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work)
+                    for (idx in extras.indices) work[extras[idx][0]][extras[idx][1]] = extraOld[idx]
                     for (i in 0 until p.S) work[i][j] = oldDay[i]
                     if (!isBetter(rep, bestRep)) continue
 
@@ -1668,7 +1692,7 @@ object V6HotfixPasses {
                             kotlin.math.abs(rep.weightedScore - oldBest.report.weightedScore) <= 1e-6 &&
                             (changedCount < oldBest.changed ||
                                 (changedCount == oldBest.changed && solved.cost < oldBest.flowCost)))
-                    if (betterPlan) bestPlan = FlowPlan(j, solved.assignment, rep, changedCount, solved.cost)
+                    if (betterPlan) bestPlan = FlowPlan(j, solved.assignment, rep, changedCount, solved.cost, extras)
                 }
             }
 
@@ -1678,6 +1702,7 @@ object V6HotfixPasses {
                 return false
             }
             for (i in 0 until p.S) work[i][plan.day] = plan.assignment[i]
+            plan.extras.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             bestRep = plan.report
             applied++
             flexibleDayApplied++

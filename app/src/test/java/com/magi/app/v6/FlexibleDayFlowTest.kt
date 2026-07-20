@@ -2,6 +2,7 @@ package com.magi.app.v6
 
 import com.magi.app.model.*
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -86,5 +87,54 @@ class FlexibleDayFlowTest {
         assertEquals("希望固定Aｱは保持", 1, result.newSchedule[0][0])
         assertEquals("残るgroupViolは明示的固定由来", 1,
             UnifiedViolationChecker.check(st, result.newSchedule).breakdown["groupViol"] ?: 0)
+    }
+
+    /**
+     * [3.246.0 隣接日連動] 上條洋平の実例（Dﾃを別職員へ渡そうとすると、自分自身の隣接日がまだDﾃの
+     * ままなので新たな禁止連続に触れる）を最小盤面で再現。手Fの直接付替えだけでは日1の候補
+     * （休・Q）がどちらも「日0=Q固定＋Q→休/Q→Qの禁止連続」で塞がる。`tryFixForbiddenRunViaAdjacentDay`
+     * による隣接日(日0)の調整（Q→休）を伴って初めて日1をDﾃから解放できることを固定する。
+     */
+    private fun kamijoLikeState(): MagiState {
+        val shifts = listOf(
+            Shift("休", "休", "", ""),
+            Shift("Dﾃ", "Dﾃ", "", ""),
+            Shift("Q", "Q", "", ""),
+        )
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-02",
+            shifts = shifts,
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("上條相当", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1)),
+            groupShiftApt = listOf(listOf("", "", "")),
+            schedule = listOf(listOf(2, 1)), // 日0=Q(固定), 日1=Dﾃ(個人上限超過の対象)
+            wishes = emptyMap(),
+            staffRange = mapOf("0,1" to Range("0", "0")), // Dﾃ上限0
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(listOf("Q", "休")), C3Row(listOf("Q", "Q"))),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun rangePolishResolvesDteViaAdjacentDayLinkedFlexibleFlow() {
+        val st = kamijoLikeState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期はDﾃ上限超過(high)が1件", 1, before.breakdown["high"] ?: 0)
+        assertEquals("初期は禁止連続なし", 0, before.breakdown["c3n"] ?: 0)
+
+        val result = V6HotfixPasses.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
+        val after = UnifiedViolationChecker.check(st, result.newSchedule)
+
+        assertEquals("Dﾃ超過が解消", 0, after.breakdown["high"] ?: -1)
+        assertEquals("禁止連続を新たに作らない", 0, after.breakdown["c3n"] ?: -1)
+        assertEquals("HARD不変", 0, after.hard)
+        assertEquals("日1はDﾃから退避", 0, result.newSchedule[0].count { it == 1 })
+        assertNotEquals("隣接日(日0)もQから調整されている", 2, result.newSchedule[0][0])
     }
 }
