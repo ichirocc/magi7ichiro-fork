@@ -73,6 +73,15 @@ object MirrorKeys {
         //   ユーザー指示(2026-07-13)により「最適化器を正」として 1.0 で確定（HF77 明示数値指示）。
         "covO" to 1.0,
     )
+
+    // [表示優先度/HF77明示指示 2026-07-20] aptLow/aptHigh は apt の表示専用サブクラス（重み表(WeightTableCard)には
+    //   出さない＝weights map 自体には追加しない）。markCount/cellFamilies の重み優先比較では実体である apt の
+    //   重み(1.0)をそのまま使う（旧: weights にキーが無く 0.0 扱い＝常に最下位に劣後していた。ユーザー指示により
+    //   「aptLow/aptHighは重み1.0扱いにする」＝c2/c41/c42/c41s/c42s/fair/weekly と同格の重み1.0で競わせる）。
+    fun weightOf(family: String): Double = when (family) {
+        "aptLow", "aptHigh" -> weights["apt"] ?: 0.0
+        else -> weights[family] ?: 0.0
+    }
 }
 
 object UnifiedViolationChecker {
@@ -112,8 +121,8 @@ object UnifiedViolationChecker {
             if (cls !in fams) fams.add(cls)
             val prev = violations[key]
             if (prev != null) {
-                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
-                val newW = MirrorKeys.weights[family] ?: 0.0
+                val prevW = MirrorKeys.weightOf(prev.removePrefix("vio-"))
+                val newW = MirrorKeys.weightOf(family)
                 if (prevW >= newW) return
             }
             violations[key] = cls
@@ -123,8 +132,8 @@ object UnifiedViolationChecker {
             val key = "$k,$j"
             val prev = needViolations[key]
             if (prev != null) {
-                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
-                if (prevW >= (MirrorKeys.weights[family] ?: 0.0)) return
+                val prevW = MirrorKeys.weightOf(prev.removePrefix("vio-"))
+                if (prevW >= MirrorKeys.weightOf(family)) return
             }
             needViolations[key] = vioClass[family] ?: family
         }
@@ -132,15 +141,17 @@ object UnifiedViolationChecker {
         //   (last-write-wins)は、現在の呼出順(c2→low→high→apt)と apt呼出側の手動 containsKey ガードが
         //   偶然噛み合っているだけで安全が成立していた（低い重みの族が後から呼ばれると高い重みの族の
         //   マークを消し得る潜在的な地雷）。今回は実害の確認された不具合ではないが、mark/markNeed と
-        //   同じ規律に揃えて将来の族追加に対して頑健にする。aptLow/aptHigh は MirrorKeys.weights に
-        //   個別キーが無く 0.0 扱い＝他の全実族(c2以上)に対し常に劣後（旧来の「未マークのときだけ apt
-        //   色を付ける」という挙動と完全に一致）。表示のみ・スコアリング不変。
+        //   同じ規律に揃えて将来の族追加に対して頑健にする。
+        //   [3.243.0, HF77明示指示] aptLow/aptHigh は `MirrorKeys.weightOf` により apt 本体と同じ重み1.0で
+        //   解決する（旧: weights にキーが無く 0.0 扱い＝c2/low/high 等の全実族に対し常に劣後していた）。
+        //   同重み同士は先勝ち(mark順)＝c2(先に呼ばれる)が apt(後に呼ばれる)より引き続き優先される。
+        //   表示のみ・スコアリング(weightedScore/breakdown/inc)は不変。
         fun markCount(i: Int, k: Int, family: String) {
             val key = "$i,$k"
             val prev = countViolations[key]
             if (prev != null) {
-                val prevW = MirrorKeys.weights[prev.removePrefix("vio-")] ?: 0.0
-                if (prevW >= (MirrorKeys.weights[family] ?: 0.0)) return
+                val prevW = MirrorKeys.weightOf(prev.removePrefix("vio-"))
+                if (prevW >= MirrorKeys.weightOf(family)) return
             }
             countViolations[key] = vioClass[family] ?: family
         }
@@ -349,7 +360,7 @@ object UnifiedViolationChecker {
         // [Set化] クラス列を重み降順に整列（安定ソート＝同重みはマーク順維持 → 先頭は violations[key] と常に一致）。
         val cellFamilies = LinkedHashMap<String, List<String>>(cellFams.size)
         for ((ck, cv) in cellFams) cellFamilies[ck] =
-            if (cv.size <= 1) cv else cv.sortedByDescending { MirrorKeys.weights[it.removePrefix("vio-")] ?: 0.0 }
+            if (cv.size <= 1) cv else cv.sortedByDescending { MirrorKeys.weightOf(it.removePrefix("vio-")) }
         return ViolationReport(
             violations = violations,
             needViolations = needViolations,
