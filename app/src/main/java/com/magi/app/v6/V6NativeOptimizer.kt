@@ -2116,6 +2116,14 @@ object V6NativeOptimizer {
                 best = key
             }
         }
+        // [ユーザー明示指示(2026-07-20)「weeklyをaptより優先順位を下げる」] weekly は件数が大きくなりやすく
+        //   (実機ログで41〜65)、apt(同1〜29)より小さくても件数最大選択で恒常的に勝ってしまっていた。
+        //   件数比較でweeklyが選ばれた場合でも、aptに残り(avoid対象でなければ)があれば apt を優先する
+        //   （apt自身の周期枠=aptEligibleが不発だったラウンドのみ到達＝この分岐で初めて効く）。
+        //   apt/weekly以外の族どうしの順位（c1/c3/fair等）は無変更。
+        if (best == "weekly" && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0) {
+            best = "apt"
+        }
         return best
     }
 

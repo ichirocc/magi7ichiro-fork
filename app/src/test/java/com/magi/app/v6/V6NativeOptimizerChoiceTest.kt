@@ -109,10 +109,28 @@ class V6NativeOptimizerChoiceTest {
     }
 
     // [同根の穴=weekly/fair] apt と同じ理由で未focusだった weekly/fair も件数最大なら選ばれること
-    //   （実データ検証: weekly L1偏差合計65はaptの37より大きい・fair合計11）。
+    //   （実データ検証: weekly L1偏差合計65はaptの37より大きい・fair合計11）。aptが0のときのみ有効。
     @Test fun maxViolatedFamilyPicksWeeklyWhenDominantSoft() {
-        val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
+        val r = report(mapOf("weekly" to 65, "fair" to 11))
         assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    // [ユーザー明示指示(2026-07-20)「weeklyをaptより優先順位を下げる」] weeklyの件数がaptより大きくても、
+    //   aptに残りがあれば常にaptを優先する（HARD>SOFTと同型の絶対優先。件数比較には依らない）。
+    @Test fun maxViolatedFamilyPrefersAptOverWeeklyEvenWhenWeeklyCountIsHigher() {
+        val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
+        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    @Test fun maxViolatedFamilyStillPicksWeeklyWhenAptIsZero() {
+        val r = report(mapOf("weekly" to 65, "apt" to 0, "fair" to 11))
+        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+    }
+
+    @Test fun maxViolatedFamilyAptOverWeeklyRuleRespectsAvoid() {
+        // aptがavoid対象(HF63等でdeprioritize済み)なら、従来どおり件数最大のweeklyが選ばれる。
+        val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
+        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r, avoid = setOf("apt")))
     }
 
     @Test fun maxViolatedFamilyPicksFairWhenDominantSoft() {
