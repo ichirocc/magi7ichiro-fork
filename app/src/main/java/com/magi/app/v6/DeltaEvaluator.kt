@@ -81,10 +81,11 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
     private fun scoreFrom(cu: Long): Long {
         val h1 = hc3n + cu + hpref
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
-        // [統一c] c3/c3m/c3mn に checker 重み(3/2/12)を適用（sc3等は #fire/run-deficit の生カウント）。
-        // [統一c1] c1 にも checker 重み(4)を適用（sc1 は #fire 生カウント、canDoガード済）。
+        // [統一c] c3/c3m/c3mn に checker 重み(3/2/15)を適用（sc3等は #fire/run-deficit の生カウント）。
+        // [統一c1] c1 にも checker 重み(5)を適用（sc1 は #fire 生カウント、canDoガード済）。
         // [統一apt/fair/weekly] sApt(適切回数) sFair(群内公平化) sWeekly(曜日平準化) を SOFT に含める（共に重み1）。
-        val soft = sc1 * 4 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 12 + hct + sApt + sFair + sWeekly + scovO
+        // [HF77明示数値指示(2026-07-20)] c1=4→5・c3mn=12→15 に変更。
+        val soft = sc1 * 5 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 15 + hct + sApt + sFair + sWeekly + scovO
         return h1 * SCORE_HARD_UNIT + soft
     }
 
@@ -226,9 +227,9 @@ class DeltaEvaluator(private val p: Problem, private val c3RunMode: Boolean = tr
 
         // [統一b] dCt(range) は SOFT へ移動（hard から除外）。
         val dHard = dC3n + (nCovU - covUTot) + dPref
-        // [統一c] c3/c3m/c3mn の delta にも checker 重み(3/2/12)を適用（full soft と同一係数）。
-        // [統一c1] c1 の delta にも ×4。
-        val dSoft = dC1 * 4 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 12 + dCt + dApt + dFair + dWeekly + dCovO
+        // [統一c] c3/c3m/c3mn の delta にも checker 重み(3/2/15)を適用（full soft と同一係数）。
+        // [統一c1] c1 の delta にも ×5。[HF77明示数値指示(2026-07-20)] c1=4→5・c3mn=12→15 に変更。
+        val dSoft = dC1 * 5 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 15 + dCt + dApt + dFair + dWeekly + dCovO
         return score() + dHard * SCORE_HARD_UNIT + dSoft
     }
 

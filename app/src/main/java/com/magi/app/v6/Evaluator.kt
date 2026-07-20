@@ -36,7 +36,8 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
 
         // c1: every window of length day1 must contain >= day2 of shiftIdx
         // [統一] (1)担当不可スタッフは対象外(canDoガード=チェッカーと一致、解消不能な幻の違反を除去)、
-        //   (2)#fire 計上(soft += 1*重み4)。旧: 全スタッフ・soft += d1(フラット)。
+        //   (2)#fire 計上(soft += 1*重み5)。旧: 全スタッフ・soft += d1(フラット)。
+        // [HF77明示数値指示(2026-07-20)] 窓の要件(c1)の重みを4→5に変更。
         for (c in p.cons1) {
             val d1 = c.day1; val si = c.shiftIdx; val d2 = c.day2
             for (i in 0 until S) {
@@ -46,7 +47,7 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
                     var z = 0
                     var l = 0
                     while (l < d1) { if (a[i][j + l] == si) z++; l++ }
-                    if (z < d2) soft += 4L
+                    if (z < d2) soft += 5L
                     j++
                 }
             }
@@ -102,12 +103,13 @@ class Evaluator(private val p: Problem, private val c3RunMode: Boolean = true) {
             }
         }
 
-        // c3 family — [統一] UnifiedViolationChecker と同じ重み(c3=3/c3m=2/c3mn=12)を soft に適用。
+        // c3 family — [統一] UnifiedViolationChecker と同じ重み(c3=3/c3m=2/c3mn=15)を soft に適用。
         // c3n は forbidden=HARD として hard1(count, ×1e6) のまま。窓マッチは #fire 計上(後述の sub += 1)。
+        // [HF77明示数値指示(2026-07-20)] 回避の並び(c3mn)の重みを12→15に変更。
         soft += c3check(a, p.cons3, false) * 3L
         hard1 += c3check(a, p.cons3n, true)    // forbidden -> display HARD (count)
         soft += c3check(a, p.cons3m, false) * 2L
-        soft += c3check(a, p.cons3mn, true) * 12L
+        soft += c3check(a, p.cons3mn, true) * 15L
 
         // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
         for (i in 0 until S) for (j in 0 until T) {

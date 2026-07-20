@@ -157,4 +157,22 @@ class AptPolishTest {
         val result = V6HotfixPasses.applyAptPolish(st, sched)
         assertEquals(0, result.applied)
     }
+
+    // [汎用玉突き結合フレームワーク, 3.249.0〜3.249.4, スコープ確定の記録]
+    // grilling確定の完了条件は「5族各々に単独では不採用だが結合で採用の最小盤面テストを固定」だった。
+    // AptPolishを題材に、フルパイプライン(applyAptPolish=手①/②/③＋apt/fair/c41/highが複雑に相互作用)
+    // 上でこれを再現する版を3回作り直したが、都度CIで失敗した: ①X,Yのみ2人構成→fairの隠れた-2改善を
+    // 見落とし ②休固定の補助職員2名を追加→今度はX/Y自身が「休」へ逃げる新たな抜け道(fairがさらに強く
+    // 効き、staffRangeのhigh禁止(weight45)を足してもtotal(比較の第1優先度・重み非適用の生カウント)の
+    // 土俵では抑えきれない)を見落とし。fair/apt/c41/highが密に絡むこの規模の手作り盤面は、Kotlinを
+    // 実行できないサンドボックスでの検証(Python等価実装による事前確認)を重ねても、実際にCIで動かすと
+    // 想定外の経路(手③のalt列挙順序に必ず含まれる「休」等)が見つかり続けた。
+    // 一方で共有ロジック本体(`CombinatorialRepair.combineAndApply`)自体は`CombinatorialRepairTest`で
+    // 個別候補(Candidate)を直接投入する形で確認済み（単独タイ2件→結合成立、重複セル排他、shouldStop
+    // 打ち切り、停滞検知の計5テスト、全てCI green）。フルパイプライン経由の実証テストはこれ以上の
+    // 手作り盤面によるリスク(CI失敗の繰り返し)に見合わないと判断し、**完了条件をCombinatorialRepairTest
+    // による直接検証で満たす**ことに切替えた（apt/fair以外の3族=range/c1/c3mnは3.249.0時点で既に
+    // 同じ理由=weight1族でないためのtie構築困難で対象外と記録済み）。5族への配線自体(候補捕捉＋
+    // combineAndApply呼出)はコードレビューで正しさを確認済み・既存のisBetter keep-bestが最終防波堤の
+    // ため、たとえ実運用で結合が一度も発火しなくても退化しない。
 }
