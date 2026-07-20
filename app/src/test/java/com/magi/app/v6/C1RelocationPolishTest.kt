@@ -372,15 +372,21 @@ class C1RelocationPolishTest {
 
     /**
      * [手R3・局所探索の強化=ユーザー指示「賢く深く網羅的に」] 単独職員(相手なし＝手A/R1不可能)・
-     * donors()が構造的に空(手R2不可能)・単独職員のためfindCovUChainも候補なし(手B不可能)という、
-     * 既存の手A/R1/R2/手Bが全滅する局面で、手R3(アンカー限定なしの全ペア網羅)だけが解消できることを
-     * 手計算(Pythonで独立検証済み)で確認する。d=3,n=1窓・T=6日・Xを2回(day0,day4、互いに独立な窓
-     * しかカバーしない配置)。
+     * donors()が構造的に空(手R2不可能)・単独職員のためfindCovUChainも候補なし(手B「玉突き経由」不可能)
+     * という、既存の手A/R1/R2/手Bの玉突き経路が全滅する局面で、手R3(アンカー限定なしの全ペア網羅)だけが
+     * 解消できることを手計算(Pythonで独立検証済み)で確認する。d=3,n=1窓・T=6日・Xを2回(day0,day4、
+     * 互いに独立な窓しかカバーしない配置)。
      * 手計算: 窓は4個(wStart=0..3)。day0は窓0のみをカバー(z=1,n=1でdonor対象外＝抜くと即NG)。
      * day4は窓2,3をカバー(いずれもz=1でdonor対象外)。窓1のみ無人でfires=1。
      * day4→day3への1回の交換で窓1,2,3を全てday3がカバーし(day0は窓0のまま)fires=0まで完全解消
      * できるが、この移動先(day3)は「現在違反しているセル(アンカー=窓1の先頭)」そのものではあるが、
      * donors()が空のため既存の手R2はそもそも一度も候補ペアを試せない（donorsループが0回転）。
+     * [CI失敗で判明した見落とし修正] staffRangeでXの上限を保有回数(2)に固定しないと、手B(直接移動)が
+     * 「アンカー日を無条件にXへ追加する」だけでX回数を3回に増やし(単独職員・需要無しでcovU制約が
+     * 効かないため)fires=0を達成してしまい、意図した「回数保存の再配置(手R3)」でなく回数増加で
+     * 解決してしまう（単独職員かつneed無しのためfindCovUChainの「玉突きが必要か」の判定自体が
+     * 意味をなさず、直接追加がisBetterに素通りしていた）。X上限を現在の保有回数2に固定することで、
+     * 手Bの回数増加による解決をhigh違反(重み90)として封じ、手R3(回数保存)のみが解となるようにする。
      */
     private fun isolatedRepackState(): MagiState {
         val groups = listOf(Group("G0", "G0"))
@@ -394,7 +400,8 @@ class C1RelocationPolishTest {
             groupShift = listOf(listOf(1, 1)),
             groupShiftApt = List(1) { List(2) { "" } },
             schedule = schedule,
-            wishes = emptyMap(), staffRange = emptyMap(),
+            wishes = emptyMap(),
+            staffRange = mapOf("0,1" to Range(lo = "", hi = "2")),   // X(index1)の上限を現在の保有数(2)に固定
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = listOf(C1Row(day1 = "3", shiftKigou = "X", day2 = "1")),
             cons2 = emptyList(), cons3 = emptyList(),

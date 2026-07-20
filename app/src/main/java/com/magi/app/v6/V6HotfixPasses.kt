@@ -1291,6 +1291,28 @@ object V6HotfixPasses {
             return false
         }
 
+        // [複数ターゲット同時解決=ユーザー指示「賢く深く網羅的に」・grilling確定] 同一シフトkについて
+        //   high(超過)のhiとlow(不足)のloが両方存在する場合、findCovUChainの玉突き探索を経由せず、
+        //   直接のペアスワップ(hiのk保有日を1日、loへ振替え・loの元シフトをhiが引き受ける)を最優先で
+        //   試す。被覆(covU/covO)は完全保存(同日2者の役割入替のみ)のため、玉突き連鎖が構造的に見つから
+        //   ない(=「候補なし」)局面でも確実に解決できる（桒澤美幸のAｱ超過×他職員のAｱ不足のような、
+        //   同一シフトの過不足ペアに直接効く。RangePolishの`findCovUChain`頭打ちを回避する第2の経路）。
+        fun tryPairSwap(hi: Int, k: Int, lo: Int): Boolean {
+            for (j in 0 until p.T) {
+                if (shouldStop()) return false
+                if (work[hi][j] != k || !movable(hi, j) || !movable(lo, j)) continue
+                val loK = work[lo][j]
+                if (loK == k || loK !in 0 until p.K) continue
+                if (!p.canDo(hi, loK) || !p.canDo(lo, k)) continue
+                if (p.makesForbiddenRun(work, hi, j, loK) || p.makesForbiddenRun(work, lo, j, k)) continue
+                work[hi][j] = loK; work[lo][j] = k
+                val rep = UnifiedViolationChecker.check(state, work)
+                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                work[hi][j] = k; work[lo][j] = loK
+            }
+            return false
+        }
+
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -1314,6 +1336,14 @@ object V6HotfixPasses {
                 if (shouldStop()) break
                 val target = i to k
                 var done = false
+                // [複数ターゲット同時解決] まず同一シフトkのlow(不足)職員との直接ペアスワップを試す
+                //   （findCovUChain経由の玉突きより優先＝被覆完全保存で確実に解決できる）。
+                for ((lo, lk) in lowTargets) {
+                    if (done || shouldStop()) break
+                    if (lk != k || lo == i) continue
+                    if (tryPairSwap(i, k, lo)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                }
+                if (done) continue
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break
                     if (work[i][j] != k) continue
@@ -1330,6 +1360,15 @@ object V6HotfixPasses {
                 if (!p.canDo(i, k)) continue
                 val target = i to k
                 var done = false
+                // [複数ターゲット同時解決] まず同一シフトkのhigh(超過)職員との直接ペアスワップを試す
+                //   （HIGHループで既に解決済みのペアはtryPairSwap内でその日を再訪しても無害＝重複コスト
+                //   のみ）。
+                for ((hi, hk) in highTargets) {
+                    if (done || shouldStop()) break
+                    if (hk != k || hi == i) continue
+                    if (tryPairSwap(hi, k, i)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                }
+                if (done) continue
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break
                     val oldK = work[i][j]
