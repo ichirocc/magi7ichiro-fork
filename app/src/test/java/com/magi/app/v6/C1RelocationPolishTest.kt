@@ -322,4 +322,51 @@ class C1RelocationPolishTest {
         val res = V6HotfixPasses.applyC1WindowPolish(st, sched)
         assertEquals("既に充足済みでは採用0(no-op)", 0, res.applied)
     }
+
+    // [頭打ちの理由を可視化=RangePolish(3.222.0)と同型をC1Polishへ横展開] Aが「休 5日窓≥2」に恒常的に
+    // 不足(休を一度も持たない)。手A(同日交換=誰も休を持たない)/手R1/R2(donors()=Aは休を保有しない為
+    // 常に空)は全滅し、手B(直接移動+玉突き)だけが唯一の経路になるが、唯一の玉突き候補Bが全日希望固定
+    // (Z)のため findCovUChain が候補を1人も見つけられず「候補なし」で頭打ちする。ログの残存表示に
+    // その理由が出ることを固定する。
+    @Test
+    fun c1PolishLogsNoCandidateReasonWhenOnlyChainPartnerIsWishLocked() {
+        val shifts = listOf(
+            Shift("休", "休", "", ""),
+            Shift("X", "X", "1", ""),
+            Shift("Y", "Y", "", ""),
+            Shift("Z", "Z", "", ""),
+        )
+        val groups = listOf(Group("GA", "GA"), Group("GB", "GB"))
+        val groupShift = listOf(
+            listOf(1, 1, 1, 0), // GA(A)=休,X,Y
+            listOf(1, 1, 0, 1), // GB(B)=休,X,Z
+        )
+        val staff = listOf(Staff("A", 0), Staff("B", 1))
+        val schedule = listOf(
+            listOf(1, 1, 1, 1, 1), // A = X×5（休を一度も持たない＝5日窓で常に不足）
+            listOf(3, 3, 3, 3, 3), // B = Z×5（需要なしだが全日希望固定＝玉突き候補として使えない）
+        )
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-05",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift,
+            groupShiftApt = List(2) { List(4) { "" } },
+            schedule = schedule,
+            wishes = mapOf("1,0" to 3, "1,1" to 3, "1,2" to 3, "1,3" to 3, "1,4" to 3),
+            staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "5", shiftKigou = "休", day2 = "2")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertTrue("初期はc1違反があること", (before.breakdown["c1"] ?: 0) > 0)
+
+        val result = V6HotfixPasses.applyC1WindowPolish(st, sched, seed = 1L)
+        assertEquals("唯一の玉突き候補が希望固定のため採用0回", 0, result.applied)
+        val msg = result.logs.first().message
+        assertTrue("残存表示に候補なしの理由が出ること: $msg", msg.contains("候補なし"))
+        assertTrue("対象職員名(A)と休が出ること: $msg", msg.contains("A 休"))
+    }
 }

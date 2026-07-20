@@ -872,6 +872,15 @@ object V6HotfixPasses {
             }
             return false
         }
+        // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手A/R1/R2いずれも成立しなかった最終フォール
+        //   バック(手B=直接移動+玉突き)の結果を(staff,shift)ごとに集計。「候補なし」=findCovUChainが
+        //   埋め戻し相手を1人も見つけられなかった／「不採用」=候補は見つかったが実目的関数(isBetter)が
+        //   総合的に拒否した、の2分類（RangePolishと同じ粒度）。休の窓ルールが解消しない理由を
+        //   ユーザーがログから直接読めるようにする。
+        val blockStats = HashMap<Pair<Int, Int>, MutableMap<String, Int>>()
+        fun recordBlock(i: Int, x: Int, reason: String) {
+            blockStats.getOrPut(i to x) { HashMap() }.merge(reason, 1, Int::plus)
+        }
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -1013,6 +1022,7 @@ object V6HotfixPasses {
                         } else {
                             if (chain != null && oldVals != null) for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
                             work[i][j] = a
+                            recordBlock(i, x, if (chain == null) "候補なし" else "不採用")
                         }
                     }
                 }
@@ -1020,9 +1030,24 @@ object V6HotfixPasses {
             pass++
             if (!improved) break
         }
+        // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手B(直接移動+玉突き)が最終的に失敗した
+        //   (staff,ルールのシフト)のうち、最終盤面でなお当該窓が不足しているものだけを「残存」として表示
+        //   （途中で別の手/別のjで解消済みなら除外）。「候補なし」=玉突き相手が1人も見つからない構造的
+        //   ブロック／「不採用」=候補は見つかったが総合的に isBetter が拒否（他族とのトレードオフで負け）。
+        val stuckNames = blockStats.entries.mapNotNull { (key, reasons) ->
+            val (i, x) = key
+            val stillDeficient = p.cons1.any { c ->
+                c.shiftIdx == x && c.day1 > 0 && (0..p.T - c.day1).any { j -> inDeficientC1Window(p, work, i, x, c.day1, c.day2, j) }
+            }
+            if (!stillDeficient) return@mapNotNull null
+            val lbl = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(x)?.kigou ?: x.toString()}"
+            val top = reasons.maxByOrNull { it.value }
+            if (top != null) "$lbl(${top.key}×${top.value})" else lbl
+        }.distinct()
         val logs = listOf(MirrorLog(tag = "C1Polish",
             message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf)" +
-                (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "")))
+                (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 

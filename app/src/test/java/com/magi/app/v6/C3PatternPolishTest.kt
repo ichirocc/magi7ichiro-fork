@@ -29,12 +29,12 @@ class C3PatternPolishTest {
         val groups = listOf(Group("GA", "GA"), Group("GB", "GB"))
         val groupShift = listOf(
             listOf(1, 1, 1, 0), // GA(A)=休,X,Y
-            listOf(1, 1, 0, 1), // GB(B)=休,X,Z
+            listOf(1, 1, 1, 1), // GB(B)=休,X,Y,Z（Yも担当可＝玉突きでXを埋めても新規発火しないように）
         )
         val staff = listOf(Staff("A", 0), Staff("B", 1))
         val schedule = listOf(
             listOf(1, 1), // A = X,X（「X→Y」必須パターン: day0=Xの後day1がYでない=未完成で発火）
-            listOf(3, 3), // B = Z,Z（需要なし=いつでも動かせる）
+            listOf(3, 2), // B = Z,Y（day1が既にY＝玉突きでday0をXへ埋めても「X→Y」が完成し新規発火しない）
         )
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-02",
