@@ -965,6 +965,9 @@ object V6HotfixPasses {
         fun recordBlock(i: Int, x: Int, reason: String) {
             blockStats.getOrPut(i to x) { HashMap() }.merge(reason, 1, Int::plus)
         }
+        // [汎用玉突き結合フレームワーク, 3.249.0] 手B/手R3が単独では isBetter に不採用だった候補
+        //   （chain/repackとも構築自体は成功したもの）を蓄積し、末尾で複数を束ねて再挑戦する。
+        val combinable = ArrayList<CombinatorialRepair.Candidate>()
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -1104,7 +1107,11 @@ object V6HotfixPasses {
                             bestRep = rep; applied++; improved = true
                             donorsCache = null
                         } else {
-                            if (chain != null && oldVals != null) for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
+                            if (chain != null && oldVals != null) {
+                                for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
+                                val hint = "${state.staff.getOrNull(i)?.name ?: "#$i"}(${state.shifts.getOrNull(x)?.kigou ?: x})"
+                                combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, x)) + chain, "手B", hint))
+                            }
                             work[i][j] = a
                             recordBlock(i, x, if (chain == null) "候補なし" else "不採用")
                         }
@@ -1167,6 +1174,9 @@ object V6HotfixPasses {
                         bestRep = rep; applied++; aRepack++
                     } else {
                         work[i][bestJx] = x; work[i][bestJo] = a
+                        val hint = "${state.staff.getOrNull(i)?.name ?: "#$i"}(${state.shifts.getOrNull(x)?.kigou ?: x})"
+                        combinable.add(CombinatorialRepair.Candidate(
+                            listOf(intArrayOf(i, bestJx, a), intArrayOf(i, bestJo, x)), "手R3", hint))
                         recordBlock(i, x, "不採用")
                     }
                 } else {
@@ -1174,6 +1184,14 @@ object V6HotfixPasses {
                 }
             }
         }
+        // [汎用玉突き結合フレームワーク, 3.249.0] 単独では不採用だった候補群を2〜4件束ねて再挑戦
+        //   （grilling確定・c1/range/c3mn/apt/fair横断の共通ヘルパ）。stuckNames より前に実行し、
+        //   結合で解消した箇所が「残存」に残らないようにする。
+        val c1CombStats = CombinatorialRepair.Stats()
+        bestRep = CombinatorialRepair.combineAndApply(
+            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = c1CombStats,
+        )
+        applied += c1CombStats.combosAccepted
         // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手B(直接移動+玉突き)が最終的に失敗した
         //   (staff,ルールのシフト)のうち、最終盤面でなお当該窓が不足しているものだけを「残存」として表示
         //   （途中で別の手/別のjで解消済みなら除外）。「候補なし」=玉突き相手が1人も見つからない構造的
@@ -1188,10 +1206,12 @@ object V6HotfixPasses {
             val top = reasons.maxByOrNull { it.value }
             if (top != null) "$lbl(${top.key}×${top.value})" else lbl
         }.distinct()
+        val c1CombSummary = c1CombStats.summary()
         val logs = listOf(MirrorLog(tag = "C1Polish",
             message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf 再配置:$aRepack)" +
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
-                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
+                (if (c1CombSummary.isNotEmpty()) " / $c1CombSummary" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -1251,6 +1271,8 @@ object V6HotfixPasses {
         }
         val rng = Random(seed)
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [汎用玉突き結合フレームワーク, 3.249.0] 単独では不採用だった候補を蓄積し末尾で束ねる。
+        val combinable = ArrayList<CombinatorialRepair.Candidate>()
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -1282,7 +1304,11 @@ object V6HotfixPasses {
                     if (!needsChain) {
                         val rep = UnifiedViolationChecker.check(state, work)
                         if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true }
-                        else work[i][j] = curK
+                        else {
+                            val hint = "${state.staff.getOrNull(i)?.name ?: "#$i"}(${state.shifts.getOrNull(curK)?.kigou ?: curK})"
+                            combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, alt)), "C3mnAlt", hint))
+                            work[i][j] = curK
+                        }
                         continue
                     }
                     // [玉突き連鎖] i の離脱で curK の被覆が悪化する → 玉突きで埋め直す（盤面不変・巻き戻し可能）。
@@ -1296,17 +1322,28 @@ object V6HotfixPasses {
                     else {
                         for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
                         work[i][j] = curK
+                        val hint = "${state.staff.getOrNull(i)?.name ?: "#$i"}(${state.shifts.getOrNull(curK)?.kigou ?: curK})"
+                        combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, alt)) + chain, "C3mnAlt", hint))
                     }
                 }
             }
             pass++
             if (!improved) break
         }
+        // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames より前に実行し、結合で解消した箇所が
+        //   「残存」に残らないようにする。
+        val c3mnCombStats = CombinatorialRepair.Stats()
+        bestRep = CombinatorialRepair.combineAndApply(
+            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = c3mnCombStats,
+        )
+        applied += c3mnCombStats.combosAccepted
         val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3mn")
+        val c3mnCombSummary = c3mnCombStats.summary()
         val logs = listOf(MirrorLog(tag = "C3mnPolish",
             message = "回避パターン(c3mn)研磨: c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 (if (applied == 0 && (before.breakdown["c3mn"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
-                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
+                (if (c3mnCombSummary.isNotEmpty()) " / $c3mnCombSummary" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -1361,6 +1398,9 @@ object V6HotfixPasses {
         fun recordBlock(target: Pair<Int, Int>, reason: String) {
             blockStats.getOrPut(target) { HashMap() }.merge(reason, 1, Int::plus)
         }
+        // [汎用玉突き結合フレームワーク, 3.249.0] tryRelocate が単独では不採用だった候補を蓄積し
+        //   末尾で束ねる（手M/手Fは既にそれ自体が多職員同時最適化のため対象外＝スコープ限定）。
+        val combinable = ArrayList<CombinatorialRepair.Candidate>()
 
         // [玉突き連鎖つき1セル付け替え] day j の staff i を fromK から toK へ動かす。fromK 側の被覆が
         //   悪化するなら findCovUChain で埋め直す。採用ならtrue（bestRep/appliedは呼び出し側で更新済み）。
@@ -1375,6 +1415,8 @@ object V6HotfixPasses {
                 val rep = UnifiedViolationChecker.check(state, work)
                 if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
+                combinable.add(CombinatorialRepair.Candidate(
+                    listOf(intArrayOf(i, j, toK)), "tryRelocate", label(target.first, target.second)))
                 recordBlock(target, "不採用")
                 return false
             }
@@ -1388,6 +1430,8 @@ object V6HotfixPasses {
             if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
+            combinable.add(CombinatorialRepair.Candidate(
+                listOf(intArrayOf(i, j, toK)) + chain, "tryRelocate", label(target.first, target.second)))
             recordBlock(target, if (usedAvoided) "range後回し" else "不採用")
             return false
         }
@@ -1825,6 +1869,13 @@ object V6HotfixPasses {
             pass++
             if (!improved) break
         }
+        // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames より前に実行し、結合で解消した箇所が
+        //   「残存」に残らないようにする。
+        val rangeCombStats = CombinatorialRepair.Stats()
+        bestRep = CombinatorialRepair.combineAndApply(
+            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = rangeCombStats,
+        )
+        applied += rangeCombStats.combosAccepted
         // [ログから職員が分かるように・頭打ちの理由を可視化] 研磨後もなお残っている(staff,shift)を、
         //   最も多かった頭打ち理由(希望固定/禁止連続/候補なし/range後回し/不採用)付きで列挙。
         val stuckNames = bestRep.countViolations.entries
@@ -1837,12 +1888,14 @@ object V6HotfixPasses {
                 val top = reasons?.maxByOrNull { it.value }
                 if (top != null) "${label(i, k)}(${top.key}×${top.value})" else label(i, k)
             }
+        val rangeCombSummary = rangeCombStats.summary()
         val logs = listOf(MirrorLog(tag = "RangePolish",
             message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 "（日割当:$dayMatchingApplied / 柔軟日割当:$flexibleDayApplied）" +
                 (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
-                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
+                (if (rangeCombSummary.isNotEmpty()) " / $rangeCombSummary" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -1879,6 +1932,9 @@ object V6HotfixPasses {
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
+        // [汎用玉突き結合フレームワーク, 3.249.0] tryChainRelocate(手③)が単独では不採用だった候補を
+        //   蓄積し末尾で束ねる。
+        val combinable = ArrayList<CombinatorialRepair.Candidate>()
 
         // [玉突きチェーンのavoid述語] 候補がfillShiftを1つ得ると自身のapt目標からちょうど新規に
         //   乖離するか（既に乖離済みなら「まだ動いていない」ので中立扱い＝対象外）。
@@ -1940,6 +1996,7 @@ object V6HotfixPasses {
                 val rep = UnifiedViolationChecker.check(state, work)
                 if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
+                combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "AptChain", label(i, fromK)))
                 return false
             }
             val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
@@ -1951,6 +2008,7 @@ object V6HotfixPasses {
             if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
+            combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)) + chain, "AptChain", label(i, fromK)))
             return false
         }
 
@@ -2019,6 +2077,13 @@ object V6HotfixPasses {
             pass++
             if (!improved) break
         }
+        // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames より前に実行し、結合で解消した箇所が
+        //   「残存」に残らないようにする。
+        val aptCombStats = CombinatorialRepair.Stats()
+        bestRep = CombinatorialRepair.combineAndApply(
+            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = aptCombStats,
+        )
+        applied += aptCombStats.combosAccepted
         val stuckNames = bestRep.countViolations.entries
             .filter { it.value == "vio-aptHigh" || it.value == "vio-aptLow" }
             .mapNotNull { (key, _) ->
@@ -2027,11 +2092,13 @@ object V6HotfixPasses {
                 val k = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
                 label(i, k)
             }
+        val aptCombSummary = aptCombStats.summary()
         val logs = listOf(MirrorLog(tag = "AptPolish",
             message = "適切回数(apt)研磨: apt ${before.breakdown["apt"] ?: 0}->${bestRep.breakdown["apt"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 (if (applied == 0 && (before.breakdown["apt"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
-                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
+                (if (aptCombSummary.isNotEmpty()) " / $aptCombSummary" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
@@ -2061,6 +2128,9 @@ object V6HotfixPasses {
         fun movable(i: Int, j: Int) = p.wish[i][j] < 0
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
+        // [汎用玉突き結合フレームワーク, 3.249.0] tryChainRelocate(手③)が単独では不採用だった候補を
+        //   蓄積し末尾で束ねる。
+        val combinable = ArrayList<CombinatorialRepair.Candidate>()
 
         fun fairTarget(g: Int, k: Int, counts: Array<IntArray>): Int {
             val mem = p.groupMembers.getOrNull(g) ?: return 0
@@ -2131,6 +2201,7 @@ object V6HotfixPasses {
                 val rep = UnifiedViolationChecker.check(state, work)
                 if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
+                combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "FairChain", label(i, fromK)))
                 return false
             }
             val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
@@ -2142,6 +2213,7 @@ object V6HotfixPasses {
             if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
+            combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)) + chain, "FairChain", label(i, fromK)))
             return false
         }
 
@@ -2216,6 +2288,13 @@ object V6HotfixPasses {
             pass++
             if (!improved) break
         }
+        // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames(distLocations由来)より前に実行する。
+        //   結合でwork/bestRepが変わってもdistLocationsはbestRep自身から再取得するため自動整合。
+        val fairCombStats = CombinatorialRepair.Stats()
+        bestRep = CombinatorialRepair.combineAndApply(
+            state, work, bestRep, combinable, ::isBetter, shouldStop = shouldStop, stats = fairCombStats,
+        )
+        applied += fairCombStats.combosAccepted
         // [AptPolishと同型] work は毎手の成功時のみコミットしbestRepと同期を保つ（失敗時は必ず巻き戻し）
         //   ため、bestRep.distLocations がそのまま最終盤面の残存箇所＝再チェック不要。
         val stuckNames = bestRep.distLocations["fair"].orEmpty().mapNotNull { loc ->
@@ -2223,11 +2302,13 @@ object V6HotfixPasses {
             val k = loc.getOrNull(1) ?: return@mapNotNull null
             label(i, k)
         }
+        val fairCombSummary = fairCombStats.summary()
         val logs = listOf(MirrorLog(tag = "FairPolish",
             message = "グループ内公平化(fair)研磨: fair ${before.breakdown["fair"] ?: 0}->${bestRep.breakdown["fair"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 (if (applied == 0 && (before.breakdown["fair"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
-                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
+                (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
+                (if (fairCombSummary.isNotEmpty()) " / $fairCombSummary" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
