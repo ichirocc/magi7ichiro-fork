@@ -2056,14 +2056,24 @@ object V6NativeOptimizer {
         //   apt は 3.169.0 で正に「focus されず未研磨」を解消する狙いで order に追加されたが、追加した
         //   だけでは件数最大選択に構造的に勝てないという covO と全く同じ欠陥を抱えていた（3.169.0時点の
         //   検証データではapt=37とcovOより大きく問題が露呈しなかったが、実運用データでは apt が最小級に
-        //   落ち着くことが多いと判明）。covOとは別の周期(round%3==1、covOの%3==2と衝突しない)を割当て、
-        //   最終ラウンドではaptを先にチェックする（covOより小さく恒常的に不利なため優先）。
-        if (round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 &&
-            (round % 3 == 1 || finalRound)
-        ) return "apt"
-        if (round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 &&
-            (round % 3 == 2 || finalRound)
-        ) return "covO"
+        //   落ち着くことが多いと判明）。covOとは別の周期(round%3==1、covOの%3==2と衝突しない)を割当てる。
+        // [3.239.0/実機ログで判明した最終ラウンド枠の固定順バグ] 旧実装は最終ラウンドで常に
+        //   「aptを先にチェック（covOより小さく恒常的に不利なため優先）」という固定順だった。これは
+        //   「aptは常にcovOより小さい」という3.208.0時点の観測（7本のログ全てでapt<covO）に基づく前提
+        //   だったが、この前提自体がデータ依存で普遍的ではない（実機ログで apt=29 > covO=4 という逆転を
+        //   確認。5ラウンドRSI中、covUがHARDとして数ラウンド粘り+周期枠(round%3==2)もHARD優先ループに
+        //   食われ、最終ラウンドはfinalRound分岐に到達するがaptが先にreturnするためcovOには一度も
+        //   到達しなかった＝8/26のcovO過剰1が「動かせる」診断なのに300秒経っても未解消だった根本原因の
+        //   一つ）。最終ラウンドで両方が候補になる場合のみ、実際の件数を比較し「より少ない方
+        //   （より構造的に不利＝件数最大選択に絶対勝てない方）」を優先する。通常ラウンド(round%3==1/2の
+        //   単独枠)は従来どおり衝突しないため無変更。
+        val aptEligible = round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 && (round % 3 == 1 || finalRound)
+        val covOEligible = round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 && (round % 3 == 2 || finalRound)
+        if (aptEligible && covOEligible) {
+            return if ((report.breakdown["covO"] ?: 0) <= (report.breakdown["apt"] ?: 0)) "covO" else "apt"
+        }
+        if (aptEligible) return "apt"
+        if (covOEligible) return "covO"
         // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
         // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が
         //   order に1つも無いと先頭 groupViol=0 が「0 > -1」で当選→hf67ルートがクリーン盤面への no-op 仮説

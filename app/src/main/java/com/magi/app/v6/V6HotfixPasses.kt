@@ -1030,6 +1030,66 @@ object V6HotfixPasses {
             pass++
             if (!improved) break
         }
+        // [手R3・局所探索の強化=ユーザー指示「賢く深く網羅的に」] 手A/R1/R2/手Bを尽くしてもなお不足
+        //   しているルールに対し、アンカーセルに限定しない全ペア網羅(2-opt完全探索)を1回だけ試す。
+        //   grilling確定: 真に壁がある職員（例: 休の個人上限が窓ルール最低必要回数を下回る）でも、
+        //   休の「配置の仕方」次第で窓違反件数は変動しうる。既存の手A/R1/R2/手Bはいずれも「現在違反
+        //   しているセルj」をアンカーに限定した局所改善のみで、その職員の休配置パターン全体を作り直す
+        //   大きな手を一度も試していなかった。DP等の厳密最適化は3.200.0で「正しさのリスクが実装前から
+        //   顕在化」として不採用済みのため、既存アーキテクチャに忠実な局所探索強化（手R2の一般化＝
+        //   アンカー限定とdonors(改善見込みの事前判定)の両方の制約を外した全ペア評価）を採用。
+        //   xの保有movable日×非保有movable日の全ペアを評価し、職員全体のfires(全cons1横断合計)が
+        //   最も改善するペアを採用する(best-improvement)。安全性は手R2と同一の被覆ガード(covUCell)＋
+        //   makesForbiddenRun事前枝刈り＋isBetter最終ゲート。真に壁がある場合はgain<=0のまま全ペアが
+        //   尽き、安全に諦める（退化不能）。対象は残存c1違反のある全職員（壁の有無を問わない＝
+        //   壁でない職員も既存の狭い近傍だけでは見つからない改善を拾える）。
+        var aRepack = 0
+        for (i in 0 until p.S) {
+            if (shouldStop()) break
+            for (c in p.cons1) {
+                if (shouldStop()) break
+                val x = c.shiftIdx; val d = c.day1; val n = c.day2
+                if (x !in 0 until p.K || d <= 0 || !p.canDo(i, x)) continue
+                val stillDeficient0 = (0..p.T - d).any { j -> inDeficientC1Window(p, work, i, x, d, n, j) }
+                if (!stillDeficient0) continue
+                val hx = (0 until p.T).filter { work[i][it] == x && movable(i, it) }
+                val ho = (0 until p.T).filter { work[i][it] != x && movable(i, it) }
+                if (hx.isEmpty() || ho.isEmpty()) { recordBlock(i, x, "再配置候補なし"); continue }
+                val fires0 = c1RowFires(p, work, i)
+                var bestGain = 0; var bestJx = -1; var bestJo = -1
+                for (jx in hx) {
+                    if (shouldStop()) break
+                    for (jo in ho) {
+                        val a = work[i][jo]
+                        var cx = 0; var ca = 0
+                        for (s in 0 until p.S) { if (work[s][jx] == x) cx++; if (work[s][jo] == a) ca++ }
+                        if (p.covUCell(x, jx, cx - 1) > p.covUCell(x, jx, cx)) continue
+                        if (p.covUCell(a, jo, ca - 1) > p.covUCell(a, jo, ca)) continue
+                        work[i][jx] = a; work[i][jo] = x
+                        val bad3n = p.makesForbiddenRun(work, i, jx, a) || p.makesForbiddenRun(work, i, jo, x)
+                        if (!bad3n) {
+                            val fires1 = c1RowFires(p, work, i)
+                            val gain = fires0 - fires1
+                            if (gain > bestGain) { bestGain = gain; bestJx = jx; bestJo = jo }
+                        }
+                        work[i][jx] = x; work[i][jo] = a
+                    }
+                }
+                if (bestGain > 0) {
+                    val a = work[i][bestJo]
+                    work[i][bestJx] = a; work[i][bestJo] = x
+                    val rep = UnifiedViolationChecker.check(state, work)
+                    if (isBetter(rep, bestRep)) {
+                        bestRep = rep; applied++; aRepack++
+                    } else {
+                        work[i][bestJx] = x; work[i][bestJo] = a
+                        recordBlock(i, x, "不採用")
+                    }
+                } else {
+                    recordBlock(i, x, "再配置候補なし")
+                }
+            }
+        }
         // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手B(直接移動+玉突き)が最終的に失敗した
         //   (staff,ルールのシフト)のうち、最終盤面でなお当該窓が不足しているものだけを「残存」として表示
         //   （途中で別の手/別のjで解消済みなら除外）。「候補なし」=玉突き相手が1人も見つからない構造的
@@ -1045,7 +1105,7 @@ object V6HotfixPasses {
             if (top != null) "$lbl(${top.key}×${top.value})" else lbl
         }.distinct()
         val logs = listOf(MirrorLog(tag = "C1Polish",
-            message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf)" +
+            message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf 再配置:$aRepack)" +
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
@@ -1231,6 +1291,28 @@ object V6HotfixPasses {
             return false
         }
 
+        // [複数ターゲット同時解決=ユーザー指示「賢く深く網羅的に」・grilling確定] 同一シフトkについて
+        //   high(超過)のhiとlow(不足)のloが両方存在する場合、findCovUChainの玉突き探索を経由せず、
+        //   直接のペアスワップ(hiのk保有日を1日、loへ振替え・loの元シフトをhiが引き受ける)を最優先で
+        //   試す。被覆(covU/covO)は完全保存(同日2者の役割入替のみ)のため、玉突き連鎖が構造的に見つから
+        //   ない(=「候補なし」)局面でも確実に解決できる（桒澤美幸のAｱ超過×他職員のAｱ不足のような、
+        //   同一シフトの過不足ペアに直接効く。RangePolishの`findCovUChain`頭打ちを回避する第2の経路）。
+        fun tryPairSwap(hi: Int, k: Int, lo: Int): Boolean {
+            for (j in 0 until p.T) {
+                if (shouldStop()) return false
+                if (work[hi][j] != k || !movable(hi, j) || !movable(lo, j)) continue
+                val loK = work[lo][j]
+                if (loK == k || loK !in 0 until p.K) continue
+                if (!p.canDo(hi, loK) || !p.canDo(lo, k)) continue
+                if (p.makesForbiddenRun(work, hi, j, loK) || p.makesForbiddenRun(work, lo, j, k)) continue
+                work[hi][j] = loK; work[lo][j] = k
+                val rep = UnifiedViolationChecker.check(state, work)
+                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                work[hi][j] = k; work[lo][j] = loK
+            }
+            return false
+        }
+
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -1254,6 +1336,14 @@ object V6HotfixPasses {
                 if (shouldStop()) break
                 val target = i to k
                 var done = false
+                // [複数ターゲット同時解決] まず同一シフトkのlow(不足)職員との直接ペアスワップを試す
+                //   （findCovUChain経由の玉突きより優先＝被覆完全保存で確実に解決できる）。
+                for ((lo, lk) in lowTargets) {
+                    if (done || shouldStop()) break
+                    if (lk != k || lo == i) continue
+                    if (tryPairSwap(i, k, lo)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                }
+                if (done) continue
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break
                     if (work[i][j] != k) continue
@@ -1270,6 +1360,15 @@ object V6HotfixPasses {
                 if (!p.canDo(i, k)) continue
                 val target = i to k
                 var done = false
+                // [複数ターゲット同時解決] まず同一シフトkのhigh(超過)職員との直接ペアスワップを試す
+                //   （HIGHループで既に解決済みのペアはtryPairSwap内でその日を再訪しても無害＝重複コスト
+                //   のみ）。
+                for ((hi, hk) in highTargets) {
+                    if (done || shouldStop()) break
+                    if (hk != k || hi == i) continue
+                    if (tryPairSwap(hi, k, i)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                }
+                if (done) continue
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break
                     val oldK = work[i][j]

@@ -201,10 +201,20 @@ class V6NativeOptimizerChoiceTest {
     }
 
     @Test fun maxViolatedFamilyFinalRoundPrefersAptOverCovOWhenBothPresent() {
-        // aptはcovOよりさらに恒常的に不利(実機ログで常に最小級)なため、最終ラウンドでの取り合いでは
-        // aptを優先する。
+        // [3.239.0で固定順→件数比較へ訂正] apt=1 < covO=6 のため、より件数が少ない(=件数最大選択に
+        // 構造的に勝てない)方であるaptが選ばれる。結果は旧実装(固定でapt優先)と同じだが、判定基準が
+        // 「常にapt優先」から「件数が少ない方優先」へ変わったことをこのテスト自体でも明示する。
         val r = report(mapOf("weekly" to 56, "apt" to 1, "covO" to 6))
         assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+    }
+
+    @Test fun maxViolatedFamilyFinalRoundPrefersCovOWhenAptIsLarger() {
+        // [3.239.0/実機ログ起因の実バグ修正] 旧実装は最終ラウンドで常にaptを先にチェックする固定順
+        // だったため、apt=29 > covO=4（実機ログで確認された逆転データ）でもaptが選ばれ、covOには
+        // 一度も到達しなかった（8/26のcovO過剰1が「動かせる」診断なのに300秒経っても未解消だった
+        // 根本原因の一つ）。新ロジックでは件数が少ない方(covO)を優先する。
+        val r = report(mapOf("c1" to 164, "apt" to 29, "covO" to 4))
+        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
     }
 
     @Test fun maxViolatedFamilyAptSlotStillRespectsHardPriorityAndAvoid() {
