@@ -1692,19 +1692,28 @@ object V6NativeOptimizer {
         val out = base.copy2D()
         val p = cachedProblem(state)
         when (focus) {
-            // [E11] covU は先に「勤務→勤務」の多人数連鎖で充填（既存 destroyRepairDay は休→勤務のみ＝
+            // [E11] covU は「勤務→勤務」の多人数連鎖で充填（既存 destroyRepairDay は休→勤務のみ＝
             //   候補が過剰シフト/連鎖からしか引けない局面を踏めない）。仮説はラウンド better() でゲート＝退化なし。
-            "covU" -> { applyCovUChains(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }
+            // [3.241.0/実機ログ起因=専用オペレータの改善がdestroyRepairDayで相殺される順序バグ修正]
+            //   旧実装は「専用free関数→destroyRepairDay×6」の順で、destroyRepairDayのdestroy段階
+            //   （非希望セルを休へ変える）がneed<=0のシフト（covOの主対象＝休等）へは一切repair
+            //   （need>0のシフトのみ埋め戻す設計）が働かないため、直後の専用オペレータの改善を
+            //   ランダムに(31日中6日=無視できない確率で)打ち消してしまっていた（8/26の休過剰1が
+            //   covO focusのラウンドでも解消されなかった実例）。covU/c41/c41sの不足側はrepair段階
+            //   （need>0のシフトを埋める設計）で自動的に再修復されるため実害は薄いが、covO/c42/c42s
+            //   の過剰・違反ペア解消はrepairの対象外で影響が直接的。順序を「destroyRepairDay×6→
+            //   専用free関数」へ統一し、hypothesisの最終状態に専用オペレータの改善が必ず残るようにする。
+            "covU" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyCovUChains(state, out, rng) }
             // [3.209.0/covOと同型の穴=c41/c41sがfocusされてもdestroyRepairDayのc41DayMargは副次効果でしか
             //   効かない] markNeed系(needViolations)にしか載らずGLSキック/destroyRepairViolationsのヒントを
             //   一切持てない点がcovOと同じ。applyC41Freeで群レンジの超過/不足を直接動かす専用オペレータへ。
-            "c41" -> { applyC41Free(state, out, rng, skill = false); repeat(6) { destroyRepairDay(state, out, rng) } }
-            "c41s" -> { applyC41Free(state, out, rng, skill = true); repeat(6) { destroyRepairDay(state, out, rng) } }
+            "c41" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = false) }
+            "c41s" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = true) }
             // [3.233.0/c41,c41sと同型の穴] c42/c42sも「動かせるか」を判定する専用オペレータが無く
             // destroyRepairViolationsの汎用ランダム再割当頼みだった。applyC42Freeで違反ペアの
             // 片側を直接動かす専用オペレータへ。
-            "c42" -> { applyC42Free(state, out, rng, skill = false); repeat(6) { destroyRepairDay(state, out, rng) } }
-            "c42s" -> { applyC42Free(state, out, rng, skill = true); repeat(6) { destroyRepairDay(state, out, rng) } }
+            "c42" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = false) }
+            "c42s" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = true) }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
             //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
@@ -1732,7 +1741,9 @@ object V6NativeOptimizer {
             //   focus が回っても実質ランダムな空振りになっていた。covO診断(V6PortAnalyzer.diagnoseCoverage)と
             //   同じ「動かせるか」判定(希望固定/禁止連続を避け・移動先でcovOを悪化させない)をその場で「実行」する
             //   専用オペレータ applyCovOFree を新設し、covU chain(applyCovUChains)と対称に配線する。
-            "covO" -> { applyCovOFree(state, out, rng); repeat(6) { destroyRepairDay(state, out, rng) } }
+            //   [3.241.0] destroyRepairDayを先に(順序バグ修正、上記covUコメント参照)＝covOは特にneed<=0
+            //   シフト(休等)の過剰が主対象でrepair段階の恩恵が皆無のため、この順序修正の効果が最も直接的。
+            "covO" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyCovOFree(state, out, rng) }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
             //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
