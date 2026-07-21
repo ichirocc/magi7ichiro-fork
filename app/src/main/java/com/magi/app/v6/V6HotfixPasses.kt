@@ -499,9 +499,12 @@ object V6HotfixPasses {
                         if (!movable(b, j)) continue
                         val sa = work[a][j]; val sb = work[b][j]
                         if (sa == sb || !p.canDo(a, sb) || !p.canDo(b, sa)) continue
+                        // [厳密ピン保護] 異なるシフト同士の同日交換はa/bの自身のシフト回数を変えるため、
+                        //   staffRange厳密ピン(lo==hi)を新たに崩す候補は不採用にする（keep-best/重み不変）。
+                        val workBeforeSwap2 = work.copy2D()
                         work[a][j] = sb; work[b][j] = sa
                         val rep = UnifiedViolationChecker.check(state, work)
-                        if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true }
+                        if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeSwap2, work)) { bestRep = rep; applied++; improved = true }
                         else { work[a][j] = sa; work[b][j] = sb }
                     }
                 }
@@ -518,9 +521,10 @@ object V6HotfixPasses {
                             if (sa == sb && sb == sc) continue
                             // a←sb, b←sc, c←sa（feasibleなら適用→評価→不採用なら巻き戻し）
                             if (p.canDo(a, sb) && p.canDo(b, sc) && p.canDo(c, sa)) {
+                                val workBeforeRotate3 = work.copy2D()
                                 work[a][j] = sb; work[b][j] = sc; work[c][j] = sa
                                 val rep = UnifiedViolationChecker.check(state, work)
-                                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; continue }
+                                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRotate3, work)) { bestRep = rep; applied++; improved = true; continue }
                                 work[a][j] = sa; work[b][j] = sb; work[c][j] = sc
                             }
                         }
@@ -588,13 +592,17 @@ object V6HotfixPasses {
                             // [#5 差分前フィルタ] 同 sgrp かつ同 ssk の2者ブロック交換のみ前判定。
                             val canPre = p.sgrp[i] == p.sgrp[i2] && p.ssk[i] == p.ssk[i2]
                             val preP = if (canPre) staffPacked(p, work, i) + staffPacked(p, work, i2) else 0L
+                            // [厳密ピン保護] ブロック交換はwindow内の日ごとにi/i2の自身のシフト回数を変えうる
+                            //   （2者間で異なるシフトが混在する日がある限り）。staffRange厳密ピン(lo==hi)を
+                            //   崩す候補は不採用にする（keep-best/重みは不変・追加ガードのみ）。
+                            val workBeforeBlock = work.copy2D()
                             for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }
                             if (canPre) {
                                 val postP = staffPacked(p, work, i) + staffPacked(p, work, i2)
                                 if (postP >= preP) { for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }; skipped++; continue }
                             }
                             val rep = UnifiedViolationChecker.check(state, work)
-                            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true }
+                            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeBlock, work)) { bestRep = rep; applied++; improved = true }
                             else for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }   // 巻き戻し
                         }
                     }
@@ -678,13 +686,16 @@ object V6HotfixPasses {
                                 val canPre = p.sgrp[ai] == p.sgrp[bi] && p.sgrp[bi] == p.sgrp[ci] &&
                                     p.ssk[ai] == p.ssk[bi] && p.ssk[bi] == p.ssk[ci]
                                 val preP = if (canPre) staffPacked(p, work, ai) + staffPacked(p, work, bi) + staffPacked(p, work, ci) else 0L
+                                // [厳密ピン保護] 3者回転もwindow内で各職員の自身のシフト回数を変えうるため、
+                                //   staffRange厳密ピン(lo==hi)を崩す候補は不採用にする（keep-best/重みは不変）。
+                                val workBeforeRotate = work.copy2D()
                                 for (t in 0 until w) { work[ai][j + t] = sb[t]; work[bi][j + t] = sc[t]; work[ci][j + t] = sa[t] }
                                 if (canPre) {
                                     val postP = staffPacked(p, work, ai) + staffPacked(p, work, bi) + staffPacked(p, work, ci)
                                     if (postP >= preP) { for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }; skipped++; continue }
                                 }
                                 val rep = UnifiedViolationChecker.check(state, work)
-                                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true }
+                                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRotate, work)) { bestRep = rep; applied++; improved = true }
                                 else for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }   // 巻き戻し
                             }
                         }
@@ -1057,12 +1068,19 @@ object V6HotfixPasses {
                         if (work[i][j] == x || !movable(i, j)) continue
                         if (!inDeficientC1Window(p, work, i, x, d, n, j)) continue
                         val a = work[i][j]                                  // i の旧シフト
+                        // [厳密ピン保護] 手A/手B は i(・i2)の自身のシフト回数を実際に変える(x+1/a-1)唯一の
+                        //   手（手R1/R2/R3は同一職員内の日入替のみで回数は代数的に保存される＝対象外）。
+                        //   staffRangeが下限=上限で完全固定("厳密ピン")の職員をこの手で崩さないよう、
+                        //   swap前の盤面を基準にexactPinRegressionで追加ガードする（keep-best/重みは不変）。
+                        val workBeforeDay = work.copy2D()
                         var done = false
                         for (i2 in 0 until p.S) {
                             if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.canDo(i2, a)) continue
                             work[i][j] = x; work[i2][j] = a                 // 同日スワップ（被覆不変）
                             val rep = UnifiedViolationChecker.check(state, work)
-                            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true; break }
+                            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeDay, work)) {
+                                bestRep = rep; applied++; improved = true; done = true; break
+                            }
                             work[i][j] = a; work[i2][j] = x                 // 巻き戻し
                         }
                         if (done) { donorsCache = null; continue }
@@ -1142,7 +1160,7 @@ object V6HotfixPasses {
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
                         chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                         val rep = UnifiedViolationChecker.check(state, work)
-                        if (isBetter(rep, bestRep)) {
+                        if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeDay, work)) {
                             bestRep = rep; applied++; improved = true
                             donorsCache = null
                         } else {
@@ -1228,7 +1246,7 @@ object V6HotfixPasses {
         //   結合で解消した箇所が「残存」に残らないようにする。
         val c1CombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = c1CombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = c1CombStats, p = p,
         )
         applied += c1CombStats.combosAccepted
         // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手B(直接移動+玉突き)が最終的に失敗した
@@ -1373,7 +1391,7 @@ object V6HotfixPasses {
         //   「残存」に残らないようにする。
         val c3mnCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = c3mnCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = c3mnCombStats, p = p,
         )
         applied += c3mnCombStats.combosAccepted
         val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3mn")
@@ -1449,10 +1467,13 @@ object V6HotfixPasses {
             var cnt = 0
             for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
             val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
+            // [厳密ピン保護] i(・玉突き相手)の回数変更がstaffRange厳密ピン(lo==hi)を新たに崩す候補は
+            //   不採用にする（keep-best/重みは不変・追加ガードのみ）。
+            val workBeforeRelocate = work.copy2D()
             work[i][j] = toK
             if (!needsChain) {
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(
                     listOf(intArrayOf(i, j, toK)), "tryRelocate", label(target.first, target.second)))
@@ -1466,7 +1487,7 @@ object V6HotfixPasses {
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work)
-            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
             combinable.add(CombinatorialRepair.Candidate(
@@ -1489,9 +1510,10 @@ object V6HotfixPasses {
                 if (loK == k || loK !in 0 until p.K) continue
                 if (!p.canDo(hi, loK) || !p.canDo(lo, k)) continue
                 if (p.makesForbiddenRun(work, hi, j, loK) || p.makesForbiddenRun(work, lo, j, k)) continue
+                val workBeforeSwap = work.copy2D()
                 work[hi][j] = loK; work[lo][j] = k
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeSwap, work)) { bestRep = rep; applied++; return true }
                 work[hi][j] = k; work[lo][j] = loK
             }
             return false
@@ -1609,15 +1631,19 @@ object V6HotfixPasses {
                     if (newDay[hi] == k || newDay[receiver] != k) continue
                     var changed = 0
                     var heuristic = 0L
+                    // [厳密ピン保護] 完全割当は当日のトークンを全職員で並べ替えるため、複数職員の回数を
+                    //   同時に変えうる。staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする。
+                    val workBeforeDayMatch = work.copy2D()
                     for (i in 0 until p.S) {
                         if (newDay[i] != tokens[i]) changed++
                         heuristic += cost[i][assignment[i]]
                         work[i][j] = newDay[i]
                     }
                     val rep = UnifiedViolationChecker.check(state, work)
+                    val pinBad = exactPinRegression(p, workBeforeDayMatch, work)
                     for (i in 0 until p.S) work[i][j] = tokens[i]
 
-                    if (!isBetter(rep, bestRep)) continue
+                    if (!isBetter(rep, bestRep) || pinBad) continue
                     val oldBest = bestPlan
                     val betterPlan = oldBest == null ||
                         isBetter(rep, oldBest.report) ||
@@ -1768,6 +1794,9 @@ object V6HotfixPasses {
                     }
 
                     var changedCount = 0
+                    // [厳密ピン保護] 柔軟日フローも当日の人数構成と隣接日調整(extras)を同時に変えるため、
+                    //   複数職員の回数を同時に変えうる。staffRange厳密ピン(lo==hi)を新たに崩す案は不採用。
+                    val workBeforeFlow = work.copy2D()
                     for (i in 0 until p.S) {
                         if (solved.assignment[i] != oldDay[i]) changedCount++
                         work[i][j] = solved.assignment[i]
@@ -1775,9 +1804,10 @@ object V6HotfixPasses {
                     val extraOld = IntArray(extras.size) { work[extras[it][0]][extras[it][1]] }
                     extras.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work)
+                    val pinBad = exactPinRegression(p, workBeforeFlow, work)
                     for (idx in extras.indices) work[extras[idx][0]][extras[idx][1]] = extraOld[idx]
                     for (i in 0 until p.S) work[i][j] = oldDay[i]
-                    if (!isBetter(rep, bestRep)) continue
+                    if (!isBetter(rep, bestRep) || pinBad) continue
 
                     val oldBest = bestPlan
                     val betterPlan = oldBest == null ||
@@ -1912,7 +1942,7 @@ object V6HotfixPasses {
         //   「残存」に残らないようにする。
         val rangeCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = rangeCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = rangeCombStats, p = p,
         )
         applied += rangeCombStats.combosAccepted
         // [ログから職員が分かるように・頭打ちの理由を可視化] 研磨後もなお残っている(staff,shift)を、
@@ -1985,10 +2015,13 @@ object V6HotfixPasses {
             return c == t
         }
 
+        // [厳密ピン保護] 本パスの全手は i(・相手)の回数を直接変える(apt/fair研磨の本質)ため、staffRange
+        //   厳密ピン(lo==hi)を新たに崩す候補だけは不採用にする（keep-best/重みは不変・追加ガードのみ）。
         fun applyAndCheck(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
+            val workBefore = work.copy2D()
             work[i][j] = toK
             val rep = UnifiedViolationChecker.check(state, work)
-            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBefore, work)) { bestRep = rep; applied++; return true }
             work[i][j] = fromK
             return false
         }
@@ -2016,9 +2049,10 @@ object V6HotfixPasses {
                 if (a != sharedK || b == sharedK) continue
                 if (!movable(i, j) || !movable(i2, j)) continue
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
+                val workBefore = work.copy2D()
                 work[i][j] = b; work[i2][j] = a
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBefore, work)) { bestRep = rep; applied++; return true }
                 work[i][j] = a; work[i2][j] = b
             }
             return false
@@ -2030,10 +2064,11 @@ object V6HotfixPasses {
             var cnt = 0
             for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
             val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
+            val workBeforeRelocate = work.copy2D()
             work[i][j] = toK
             if (!needsChain) {
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "AptChain", label(i, fromK)))
                 return false
@@ -2044,7 +2079,7 @@ object V6HotfixPasses {
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work)
-            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
             combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)) + chain, "AptChain", label(i, fromK)))
@@ -2120,7 +2155,7 @@ object V6HotfixPasses {
         //   「残存」に残らないようにする。
         val aptCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = aptCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = aptCombStats, p = p,
         )
         applied += aptCombStats.combosAccepted
         val stuckNames = bestRep.countViolations.entries
@@ -2189,10 +2224,13 @@ object V6HotfixPasses {
             return counts[staff][fillShift] == tgt
         }
 
+        // [厳密ピン保護] 本パスの全手は i(・相手)の回数を直接変える(apt/fair研磨の本質)ため、staffRange
+        //   厳密ピン(lo==hi)を新たに崩す候補だけは不採用にする（keep-best/重みは不変・追加ガードのみ）。
         fun applyAndCheck(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
+            val workBefore = work.copy2D()
             work[i][j] = toK
             val rep = UnifiedViolationChecker.check(state, work)
-            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBefore, work)) { bestRep = rep; applied++; return true }
             work[i][j] = fromK
             return false
         }
@@ -2221,9 +2259,10 @@ object V6HotfixPasses {
                 if (!movable(i, j) || !movable(i2, j)) continue
                 if (!p.canDo(i, b) || !p.canDo(i2, a)) continue
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
+                val workBefore = work.copy2D()
                 work[i][j] = b; work[i2][j] = a
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBefore, work)) { bestRep = rep; applied++; return true }
                 work[i][j] = a; work[i2][j] = b
             }
             return false
@@ -2235,10 +2274,11 @@ object V6HotfixPasses {
             var cnt = 0
             for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
             val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
+            val workBeforeRelocate = work.copy2D()
             work[i][j] = toK
             if (!needsChain) {
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "FairChain", label(i, fromK)))
                 return false
@@ -2249,7 +2289,7 @@ object V6HotfixPasses {
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work)
-            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
             combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)) + chain, "FairChain", label(i, fromK)))
@@ -2331,7 +2371,7 @@ object V6HotfixPasses {
         //   結合でwork/bestRepが変わってもdistLocationsはbestRep自身から再取得するため自動整合。
         val fairCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = fairCombStats,
+            state, work, bestRep, combinable.asReversed(), ::isBetter, shouldStop = shouldStop, stats = fairCombStats, p = p,
         )
         applied += fairCombStats.combosAccepted
         // [AptPolishと同型] work は毎手の成功時のみコミットしbestRepと同期を保つ（失敗時は必ず巻き戻し）
@@ -2391,10 +2431,13 @@ object V6HotfixPasses {
             var cnt = 0
             for (s in 0 until p.S) if (work[s][extDay] == fromK) cnt++
             val needsChain = p.covUCell(fromK, extDay, cnt - 1) > p.covUCell(fromK, extDay, cnt)
+            // [厳密ピン保護] i の fromK→toK 直接付替え(+チェーン)は自身の回数を変える唯一の手のため、
+            //   staffRange厳密ピン(lo==hi)を崩す候補は不採用にする（keep-best/重みは不変）。
+            val workBeforeExtend = work.copy2D()
             work[i][extDay] = toK
             if (!needsChain) {
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeExtend, work)) { bestRep = rep; applied++; return true }
                 work[i][extDay] = fromK
                 return false
             }
@@ -2404,7 +2447,7 @@ object V6HotfixPasses {
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work)
-            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; return true }
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeExtend, work)) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][extDay] = fromK
             return false
@@ -2529,10 +2572,13 @@ object V6HotfixPasses {
                     var cnt = 0
                     for (s in 0 until p.S) if (work[s][j] == curK) cnt++
                     val needsChain = p.covUCell(curK, j, cnt - 1) > p.covUCell(curK, j, cnt)
+                    // [厳密ピン保護] i(・玉突き相手)の回数変更がstaffRange厳密ピン(lo==hi)を新たに崩す
+                    //   候補は不採用にする（keep-best/重みは不変・追加ガードのみ）。
+                    val workBeforePattern = work.copy2D()
                     work[i][j] = alt
                     if (!needsChain) {
                         val rep = UnifiedViolationChecker.check(state, work)
-                        if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true }
+                        if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforePattern, work)) { bestRep = rep; applied++; improved = true; done = true }
                         else work[i][j] = curK
                         continue
                     }
@@ -2543,7 +2589,7 @@ object V6HotfixPasses {
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                     chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work)
-                    if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true }
+                    if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforePattern, work)) { bestRep = rep; applied++; improved = true; done = true }
                     else {
                         for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
                         work[i][j] = curK
@@ -2754,7 +2800,9 @@ object V6HotfixPasses {
         //   ある。既存の全パスが isBetter で keep-best するのに合わせ、root と厳密に比較し、
         //   勝てない場合は必ず未変更の root へフォールバックする（退化不能）。
         val candidate = beam.minWithOrNull(compareBy({ it.rep.hard }, { it.rep.total }, { it.rep.weightedScore })) ?: Beam(work0, before, 0)
-        val best = if (isBetter(candidate.rep, before)) candidate else Beam(work0, before, 0)
+        // [厳密ピン保護] ビーム探索の手A/玉突きも i の自身のシフト回数を変えうるため、根(work0)と比較し
+        //   staffRange厳密ピン(lo==hi)を崩す最終候補は不採用にする（keep-best/重みは不変・追加ガードのみ）。
+        val best = if (isBetter(candidate.rep, before) && !exactPinRegression(p, work0, candidate.work)) candidate else Beam(work0, before, 0)
         val logs = listOf(MirrorLog(tag = "C1BeamPolish",
             message = "期間要件(c1)研磨[ビーム K=$beamWidth steps=$step]: c1 ${before.breakdown["c1"] ?: 0}->${best.rep.breakdown["c1"] ?: 0} / total ${before.total}->${best.rep.total} HARD ${before.hard}->${best.rep.hard} 手数${best.applied}" +
                 (if (best.applied == 0 && candidate !== best && candidate.applied > 0) " [探索結果が根に勝てず破棄]" else "")))
@@ -2827,7 +2875,9 @@ object V6HotfixPasses {
             }
             if (!changed) continue
             val rep = UnifiedViolationChecker.check(state, cand)
-            if (isBetter(rep, bestRep)) { work = cand; bestRep = rep; counts = cnt(); applied++ }
+            // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
+            //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, work, cand)) { work = cand; bestRep = rep; counts = cnt(); applied++ }
         }
         val logs = listOf(MirrorLog(tag = "DayAssign",
             message = "日ごと厳密割当: total ${before.total}->${bestRep.total} 採用${applied}日"))
@@ -2918,7 +2968,9 @@ object V6HotfixPasses {
                 }
                 if (!changed) continue
                 val rep = UnifiedViolationChecker.check(state, cand)
-                if (isBetter(rep, bestRep)) {
+                // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
+                //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
+                if (isBetter(rep, bestRep) && !exactPinRegression(p, work, cand)) {
                     work = cand; bestRep = rep; counts = cnt()
                     wd = Array(p.S) { wdOf(it) }; wdTgt = IntArray(p.S) { tgtOf(wd[it]) }
                     applied++; changedInSweep = true

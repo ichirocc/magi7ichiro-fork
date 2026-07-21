@@ -476,3 +476,37 @@ internal fun diffInto(T: Int, from: Array<IntArray>, to: Array<IntArray>, buf: I
     }
     return n
 }
+
+/**
+ * [厳密ピン(lo==hi)保護] 職員×シフトの staffRange が下限=上限で完全固定("厳密ピン"＝月に必ずちょうど
+ * N回)されている箇所について、候補盤面が基準盤面より目標回数からより遠ざかる職員が1人でもいるか判定する。
+ *
+ * 動機（桒澤美幸の実例、実機ログ+実データ検証）: 休(rest)が10-10固定の彼女が、C1JointLnsPolish/
+ * C1TemporalFlowPolish/PersonalBalanceJointLnsPolish 等の複数職員横断ジョイント研磨により、他職員の
+ * c1/covU改善の副作用として10→13へ動かされる（total/weightedScoreは全体として改善するため既存の
+ * isBetter/better(hard→total→weighted辞書式)keep-bestだけでは防げない）。通常のlo<hi範囲は既存の
+ * 重み(90/45)付きソフト評価のままで良いが、"厳密ピン"は「担当外(canDo)ガード」や「希望固定」と同種の
+ * 個人単位の確定事項として扱い、これらのジョイント研磨パスの最終採否にAND条件として追加する。
+ *
+ * 目的関数・重みは不変（MirrorCore/Evaluator/DeltaEvaluator/magi_native.cppは無変更）。あくまで
+ * 該当パスの候補受理を追加で絞るだけ＝退化不能（現状維持したままでも常に選べる）。
+ * 既に基準盤面がピンから外れている(データ側の既存不整合)場合は、そこから遠ざける変更のみを禁じ、
+ * 現状維持やピンへ近づける変更は妨げない。
+ */
+internal fun exactPinRegression(p: Problem, before: Array<IntArray>, after: Array<IntArray>): Boolean {
+    for (i in 0 until p.S) {
+        for (k in 0 until p.K) {
+            val lo = p.rangeLo[i][k]
+            val hi = p.rangeHi[i][k]
+            if (lo == Int.MIN_VALUE || hi == Int.MAX_VALUE || lo != hi) continue
+            var beforeCnt = 0
+            var afterCnt = 0
+            for (j in 0 until p.T) {
+                if (before[i][j] == k) beforeCnt++
+                if (after[i][j] == k) afterCnt++
+            }
+            if (kotlin.math.abs(afterCnt - lo) > kotlin.math.abs(beforeCnt - lo)) return true
+        }
+    }
+    return false
+}

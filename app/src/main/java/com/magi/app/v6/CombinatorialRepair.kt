@@ -90,6 +90,7 @@ internal object CombinatorialRepair {
         maxStagnantTries: Int = 200,
         stats: Stats = Stats(),
         label: (Candidate) -> String = { it.hint },
+        p: Problem? = null,
     ): ViolationReport {
         rejected.forEach(stats::onFeed)
         var bestRep = bestRepIn
@@ -108,9 +109,13 @@ internal object CombinatorialRepair {
                     val ops = combo.flatMap { pool[it].ops }
                     if (!hasCellOverlap(ops)) {
                         val saved = IntArray(ops.size) { work[ops[it][0]][ops[it][1]] }
+                        // [厳密ピン保護] 束ねた候補群も複数職員の回数を同時に変えうるため、staffRange
+                        //   厳密ピン(lo==hi)を新たに崩す組合せは不採用にする（keep-best/重みは不変）。
+                        val workBefore = if (p != null) work.copy2D() else null
                         for (op in ops) work[op[0]][op[1]] = op[2]
                         val rep = UnifiedViolationChecker.check(state, work)
-                        val ok = isBetter(rep, bestRep)
+                        val ok = isBetter(rep, bestRep) &&
+                            (p == null || workBefore == null || !exactPinRegression(p, workBefore, work))
                         for ((idx, op) in ops.withIndex()) work[op[0]][op[1]] = saved[idx]
                         if (ok) {
                             acceptedIdx = combo.toList()

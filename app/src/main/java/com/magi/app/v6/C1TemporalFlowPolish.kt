@@ -162,6 +162,9 @@ internal object C1TemporalFlowPolish {
             if (newRowFires >= rowC1Fires(work, i)) return null
             val rep = UnifiedViolationChecker.check(state, trialWork)
             if (!better(rep, bestRep)) return null
+            // [厳密ピン保護] 他職員のジョイント再割当(FlexibleDayFlow)がstaffRange厳密ピンを崩す
+            // 副作用は、total/weightedScoreが改善してもここで拒否する（keep-best不変・追加ガードのみ）。
+            if (exactPinRegression(p, work, trialWork)) return null
             return Plan(trialWork, rep, i, x, candidate.relocations, changedDays.size)
         }
 

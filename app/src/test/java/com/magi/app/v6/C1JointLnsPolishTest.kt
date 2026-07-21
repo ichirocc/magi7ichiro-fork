@@ -30,7 +30,11 @@ class C1JointLnsPolishTest {
             groupShiftApt = List(1) { List(2) { "" } },
             schedule = listOf(target, partner),
             wishes = emptyMap(),
-            staffRange = mapOf("0,1" to Range("4", "4")),
+            // [3.256.0, 厳密ピン保護追加に伴う訂正] 実際に見つかる同日swap束は target の X 回数を
+            //   4→6 へ変える（窓[6-10]の充足には既存4回の再配置でなく純増が必要と判明・手計算で確認済み）。
+            //   旧 Range("4","4")（意図せぬ厳密ピン）は新設の exactPinRegression 保護に正しく拒否される
+            //   ため、本テストの主旨（同日swap束によるc1解消）に無関係な下限4のみへ緩和。
+            staffRange = mapOf("0,1" to Range("4", "")),
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = listOf(C1Row(day1 = "5", shiftKigou = "X", day2 = "2")),
             cons2 = emptyList(), cons3 = emptyList(),
