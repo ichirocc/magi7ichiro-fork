@@ -58,29 +58,30 @@ class C1TemporalDpPolishTest {
         assertFalse(out.targetDays[9])
     }
 
-    private fun multiSwapState(): MagiState {
-        val shifts = listOf(
-            Shift("Y", "Y", "", ""),
-            Shift("X", "X", "", ""),
-        )
-        val groups = listOf(Group("G", "G"))
-        val staff = listOf(
-            Staff("target", 0),
-            Staff("partner", 0),
-            Staff("stable", 0),
-        )
+    // [3.254.0/C1TemporalFlowPolish, C1TemporalSwapPolish置換] 旧C1TemporalSwapPolishは変更日ごとに
+    // 「厳密に相補的なシフトを持つ1人との同日swap」でしかDPの目標パターンを実現できず、そのような
+    // 相手が居ない日では改善が丸ごと死んでいた（実データ検証=golden_state.jsonで寄与0%確認）。
+    // この盤面は day0 に「相手がYへ渡せる余剰を持たない」よう partner を意図的に非対称化し
+    // （partnerのday0はY=targetと同じでswap不成立）、旧実装なら day0 の改善だけが失敗する構成にする。
+    // 被覆制約(needDay)を一切設定しないため、target が1人だけ自由に動いても構造的に無害
+    // （FlexibleDayFlowは強制的な2人swapでなく、費用最小の任意人数再割当を解く）。
+    private fun asymmetricSwapState(): MagiState {
+        val shifts = listOf(Shift("Y", "Y", "", ""), Shift("X", "X", "", ""), Shift("Z", "Z", "", ""))
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
+        val staff = listOf(Staff("target", 0), Staff("partner", 0), Staff("stable", 0), Staff("helper", 1))
         val target = listOf(1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0)
-        val partner = target.map { if (it == 1) 0 else 1 } // 全変更日に完全な同日swap相手がいる
+        val partnerRow = intArrayOf(0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1)
+        partnerRow[0] = 0   // day0のpartnerもYのまま＝day0だけ同日swap相手が存在しない
         val stable = List(11) { 1 }
+        val helper = List(11) { 2 }
         return MagiState(
             startDate = "2026-01-01", endDate = "2026-01-11",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
-            groupShift = listOf(listOf(1, 1)),
-            groupShiftApt = List(1) { List(2) { "" } },
-            schedule = listOf(target, partner, stable),
+            groupShift = listOf(listOf(1, 1, 0), listOf(1, 0, 1)),   // G1(helper)はXを担当不可＝c1対象外
+            groupShiftApt = List(2) { List(3) { "" } },
+            schedule = listOf(target, partnerRow.toList(), stable, helper),
             wishes = emptyMap(),
-            // count-changingの手Bを不採用にし、X回数保存の同時移設だけが解になるよう固定。
-            staffRange = mapOf("0,1" to Range("4", "4")),
+            staffRange = mapOf("0,1" to Range("4", "4")),   // X回数保存の同時移設だけが解になるよう固定
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = listOf(C1Row(day1 = "5", shiftKigou = "X", day2 = "2")),
             cons2 = emptyList(), cons3 = emptyList(),
@@ -90,34 +91,28 @@ class C1TemporalDpPolishTest {
     }
 
     @Test
-    fun temporalDpPolishAcceptsTwoSimultaneousDailySwaps() {
-        // [CI失敗の修正] 既存applyC1WindowPolish(手R1-R3含む)は本セッションの累積改善により
-        // この最小盤面を単独で解消してしまい(=手R3の全ペア探索がこの規模では十分に強力)、
-        // 「1回swapでは越えられない」という前提の再現に使えなくなっていた。本テストの目的は
-        // C1TemporalSwapPolish自体が2同時移設を実現できることの検証のため、既存C1Polishの
-        // 前処理を経由せず対象パスを直接呼び出す形に変更する。
-        val st = multiSwapState()
+    fun temporalFlowPolishResolvesWhenNoExactSwapPartnerExistsOnChangedDay() {
+        val st = asymmetricSwapState()
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c1"] ?: 0)
         assertEquals(0, before.hard)
 
-        val out = C1TemporalSwapPolish.apply(
-            st, sched,
-            maxPasses = 1, maxRelocations = 4, trials = 8, beamWidth = 128, seed = 7L,
+        val out = C1TemporalFlowPolish.apply(
+            st, sched, maxPasses = 1, maxRelocations = 4, trials = 8, seed = 7L,
         )
         val after = UnifiedViolationChecker.check(st, out.newSchedule)
-        assertEquals(0, after.breakdown["c1"] ?: -1)
+        assertEquals("day0に同日swap相手が居なくても解消できる", 0, after.breakdown["c1"] ?: -1)
         assertEquals(0, after.hard)
         assertEquals(1, out.applied)
-        assertTrue(out.logs.first().message.contains("2移設"))
+        assertEquals("targetのX月間回数を保存", 4, out.newSchedule[0].count { it == 1 })
+    }
 
-        // 同日swapだけで実現するため、全日でシフト多重集合が完全保存される。
-        for (j in 0 until 11) {
-            val b = (0 until 3).map { sched[it][j] }.sorted()
-            val a = (0 until 3).map { out.newSchedule[it][j] }.sorted()
-            assertEquals("day=${j}の日別シフト人数", b, a)
-        }
-        assertEquals("targetのX月間回数", 4, out.newSchedule[0].count { it == 1 })
+    @Test
+    fun temporalFlowPolishIsNoOpWhenNoCons1Rules() {
+        val st = asymmetricSwapState().copy(cons1 = emptyList())
+        val sched = st.schedule.toIntArray2D()
+        val out = C1TemporalFlowPolish.apply(st, sched)
+        assertEquals(0, out.applied)
     }
 }

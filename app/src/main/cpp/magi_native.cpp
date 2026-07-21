@@ -131,7 +131,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
     const int S = p.S, T = p.T, K = p.K;
     long long hard1 = 0, soft = 0;
 
-    // c1（canDo ガード＋#fire×重み5、HF77明示数値指示2026-07-20で4→5）
+    // c1（canDo ガード＋#fire×重み15、HF77明示数値指示2026-07-20で4→5・2026-07-21で5→15）
     for (const auto& c : p.cons1) {
         for (int i = 0; i < S; i++) {
             if (!p.cd(i, c.si)) continue;
@@ -139,7 +139,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
             for (int j = 0; j <= T - c.d1; j++) {
                 int z = 0;
                 for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                if (z < c.d2) soft += 5;
+                if (z < c.d2) soft += 15;
             }
         }
     }
@@ -353,7 +353,7 @@ struct SaChunk {
     inline double nextDouble() { return (double)(rng() >> 11) * 0x1.0p-53; }
 
     // ---- 影響スライスの寄与（combined: HARD族は ×1e6）----
-    // c1 重み5・c3mn重み15（HF77明示数値指示2026-07-20で旧4/12から変更、下記 contribAllRow 参照）。
+    // c1 重み15・c3mn重み15（HF77明示数値指示2026-07-20で旧4/12から5/15へ・2026-07-21でc1を5→15へ変更）。
     long long contribC1Row(int i) const {
         long long v = 0;
         if (useBits) {
@@ -362,7 +362,7 @@ struct SaChunk {
                 uint64_t rm = rowMask[(size_t)i * K + c.si];
                 uint64_t wmask = (c.d1 >= 64) ? ~0ULL : ((1ULL << c.d1) - 1ULL);
                 for (int j = 0; j <= T - c.d1; j++)
-                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += 5;
+                    if (__builtin_popcountll((rm >> j) & wmask) < c.d2) v += 15;
             }
             return v;
         }
@@ -372,7 +372,7 @@ struct SaChunk {
             for (int j = 0; j <= T - c.d1; j++) {
                 int z = 0;
                 for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                if (z < c.d2) v += 5;
+                if (z < c.d2) v += 15;
             }
         }
         return v;

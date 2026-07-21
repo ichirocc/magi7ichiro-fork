@@ -202,10 +202,9 @@ object V6HotfixPasses {
         //   なるまで」最大 maxRounds 巡だけ繰り返す。全パスkeep-best＝退化なし。shouldStop と maxRounds で
         //   上限。違反セル指向なので空巡は即終了（コスト0）。
         val c3Anchor = setOf("vio-c3", "vio-c3m", "vio-c3mn")
-        val c1Anchor = setOf("vio-c1")
         val maxRounds = 4
         var round = 0
-        var totalCyc = 0; var totalC1 = 0; var totalC1r = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0; var totalC3run = 0; var totalC3pat = 0; var totalBlockSwap = 0; var totalApt = 0; var totalFair = 0
+        var totalCyc = 0; var totalC1 = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0; var totalC3run = 0; var totalC3pat = 0; var totalBlockSwap = 0; var totalApt = 0; var totalFair = 0
         while (round < maxRounds && !shouldStop()) {
             var roundApplied = 0
 
@@ -219,32 +218,34 @@ object V6HotfixPasses {
             work = rC1.newSchedule.copy2D(); totalC1 += rC1.applied; roundApplied += rC1.applied
             if (round == 0) logs.addAll(rC1.logs)
 
-            // [3.247.0/C1時系列DP] 既存の1回swap近傍が局所最適で止まった残差を、月全体の
-            // 対象シフト二値配置DP＋複数日の同日swap一括採用で解く。日別シフト人数は完全保存。
-            // 候補生成はDP/beamだが、採否はUnifiedViolationCheckerのkeep-bestのみ。後処理予算を
-            // 圧迫しないようフィックスポイント1巡あたり1pass・4試行・beam96へ制限する。
-            onPhase("後処理 期間要件(c1)時系列DP研磨 [巡${round + 1}]")
-            val rC1dp = C1TemporalSwapPolish.apply(
-                state, work, maxPasses = 1, maxRelocations = 4, trials = 4, beamWidth = 96,
-                shouldStop = shouldStop, seed = roundSeed(seed, 0xC1D0L, round),
+            // [3.254.0/C1TemporalFlowPolish, C1時系列DP+ジョイント再割当研磨=旧C1TemporalSwapPolish/
+            // C1Rotate/BeamC1PolishV2 を置換] ユーザー指摘「applyC1WindowPolish(単一職員局所)・
+            // applyC1BeamPolish(広域ビーム)・BeamC1PolishV2(同日swap束)・CombinatorialRepair の
+            // 責任を整理し統合してほしい」に対する実測駆動の回答。ホストJVM実行で golden_state.json/
+            // sample_state_v6.json に対しablation測定した結果:
+            //  - 旧`C1TemporalSwapPolish`(DP+同日2人swap限定の実現)は単体でも他パスと組み合わせても
+            //    寄与ゼロ(golden: DP単体0.0%改善、Window+DP+Rotateは Window単体と完全一致)。
+            //    原因はDPが選ぶ目標パターンを「厳密に相補的なシフトを持つ同日1人との交換」でしか
+            //    実現できず、そのような相手が存在しない日ではDPの改善が丸ごと死ぬため。
+            //  - `applyBlockRotationPolish(c1Anchor)`(3者回転)も同様に寄与ゼロ(no-Rotateの結果が
+            //    ALL5と完全一致)。
+            //  - `BeamC1PolishV2`(同日swap束)も寄与ゼロ(no-BeamV2の結果がALL5と完全一致。3.252.0の
+            //    実機ログでの「採用0/頭打ち」が本番ログ限定でなく実データでも構造的と確認)。
+            // → 3者とも撤去し、DPの実現ステップを`FlexibleDayFlow`(3.245.0既存の同日全員参加min-cost
+            //   flow)による同日ジョイント再割当へ置換した`C1TemporalFlowPolish`に一本化。実測:
+            //   golden_state.json で c1 115→79(旧ALL5比 92→79 でさらに改善)・total 313→260
+            //   (Window+Flow+BeamWideの順、旧ALL5の274より改善)。sample_state_v6.json で
+            //   c1 7→2(71.4%改善、HARDも15→10へ同時改善)。順序が重要(Flow は BeamWide の**前**に
+            //   置く。逆順だと golden で 278 止まりに劣化することを実測確認済み)。
+            // CombinatorialRepair(3.249.0)はC1Window/C3mn/Range/Apt/Fairの内部augmentationで
+            // C1系の別パスではないため対象外(廃止候補にはしない)。
+            onPhase("後処理 期間要件(c1)時系列DP+ジョイント再割当研磨 [巡${round + 1}]")
+            val rC1flow = C1TemporalFlowPolish.apply(
+                state, work, maxPasses = 2, maxRelocations = 4, trials = 4,
+                shouldStop = shouldStop, seed = roundSeed(seed, 0xC1F10L, round),
             )
-            work = rC1dp.newSchedule.copy2D(); totalC1 += rC1dp.applied; roundApplied += rC1dp.applied
-            if (round == 0) logs.addAll(rC1dp.logs)
-
-            onPhase("後処理 期間要件(c1)3者回転研磨 [巡${round + 1}]")
-            val rC1r = applyBlockRotationPolish(state, work, c1Anchor, "C1Rotate", maxPasses = 2, shouldStop = shouldStop)
-            work = rC1r.newSchedule.copy2D(); totalC1r += rC1r.applied; roundApplied += rC1r.applied
-            if (round == 0) logs.addAll(rC1r.logs)
-
-            // [BeamC1PolishV2/外部パッチ受領・検証のうえ適用] 手A/R1/R2/B/R3/C1TemporalDp/C1Rotate は
-            // いずれも「1手だけで即座に改善するか」を単発判定する。単独ではタイ/悪化だが複数の同日手を
-            // 束ねて初めて改善する局面（手Aが1つずつ試して即巻き戻す・combinableにも記録しない盲点）を
-            // ビームサーチ(debt予算つき中間ノード・最終採用は実チェッカーのみ)で狙う。既存パスと重複する
-            // 部分はあるが、最終採否は必ずisBetter相当のkeep-best＝退化不能。
-            onPhase("後処理 期間要件(c1)協調ビーム研磨 [巡${round + 1}]")
-            val rC1beam = BeamC1PolishV2.apply(state, work, maxPasses = 1, shouldStop = shouldStop, seed = roundSeed(seed, 0xBEA2L, round))
-            work = rC1beam.newSchedule.copy2D(); totalC1 += rC1beam.applied; roundApplied += rC1beam.applied
-            if (round == 0) logs.addAll(rC1beam.logs)
+            work = rC1flow.newSchedule.copy2D(); totalC1 += rC1flow.applied; roundApplied += rC1flow.applied
+            if (round == 0) logs.addAll(rC1flow.logs)
 
             // [C1BeamPolish, 外部パッチ受領→ランキング修正+keep-best安全網追加のうえ適用] BeamC1PolishV2
             // (厳密な単発bundle採否)とは別系統の、より広い時空間ビーム探索。実データ(golden_state.json/
@@ -326,7 +327,7 @@ object V6HotfixPasses {
         run {
             val softAfter = UnifiedViolationChecker.check(state, work)
             fun bd(r: ViolationReport, k: String) = r.breakdown[k] ?: 0
-            val adopted = totalCyc + totalC1 + totalC1r + totalC3 + totalC3r + totalC3mn + totalRange + totalC3run + totalC3pat + totalBlockSwap + totalApt + totalFair
+            val adopted = totalCyc + totalC1 + totalC3 + totalC3r + totalC3mn + totalRange + totalC3run + totalC3pat + totalBlockSwap + totalApt + totalFair
             val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn") +
                 bd(preSoftRep, "low") + bd(preSoftRep, "high") + bd(preSoftRep, "apt") + bd(preSoftRep, "fair")
             val verdict = when {
@@ -345,7 +346,7 @@ object V6HotfixPasses {
                     " / apt ${bd(preSoftRep, "apt")}->${bd(softAfter, "apt")}" +
                     " / fair ${bd(preSoftRep, "fair")}->${bd(softAfter, "fair")}" +
                     " | HARD $hardNote / total ${preSoftRep.total}->${softAfter.total}" +
-                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c1回転:${totalC1r} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} range玉突き:${totalRange} c3run玉突き:${totalC3run} c3pattern玉突き:${totalC3pat} ブロック交換:${totalBlockSwap} apt玉突き:${totalApt} fair玉突き:${totalFair})"))
+                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} range玉突き:${totalRange} c3run玉突き:${totalC3run} c3pattern玉突き:${totalC3pat} ブロック交換:${totalBlockSwap} apt玉突き:${totalApt} fair玉突き:${totalFair})"))
         }
 
         // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の
@@ -373,6 +374,25 @@ object V6HotfixPasses {
         val rWeq = applyWeeklyEqualizePolish(state, work, maxPasses = 2, shouldStop = shouldStop)
         work = rWeq.newSchedule.copy2D()
         logs.addAll(rWeq.logs)
+
+        // [3.255.0/C1JointLnsPolish・PersonalBalanceJointLnsPolish, 受領・検証のうえ適用] ここまでの
+        // 巡回研磨は各パスが候補を作った直後に正式目的関数で採否するため、C1改善や個人回数改善に伴う
+        // coverage/range/c3系の副作用を別の手で相殺する前に候補を失うことがある。この2パスはdebt付き
+        // beamで複数手を束ね、最終採用のみ正式順序(hard→total→weighted)のkeep-bestで判定する（中間ノードの
+        // debtは探索のみに影響し退化不能）。ホストJVM実行でgolden_state.json/sample_state_v6.jsonに対し
+        // 既存パイプライン適用後の追加効果を実測: golden_state.jsonでは両方とも0（既存パイプラインが
+        // 既に汲み尽くし済み＝安全なno-op）、sample_state_v6.jsonではC1JointLnsPolishがHARD5→4（既存
+        // パイプラインが見つけていなかったHARD削減）、PersonalBalanceJointLnsPolishが個人回数34→31
+        // （total 196→195）を発見。実行コストが高い(既定8s/6s)ため巡回ループでなく最終1回のみ実行。
+        onPhase("後処理 期間要件(c1)共同LNS")
+        val rC1Lns = C1JointLnsPolish.apply(state, work, shouldStop = shouldStop)
+        work = rC1Lns.newSchedule.copy2D()
+        logs.addAll(rC1Lns.logs)
+
+        onPhase("後処理 個人回数/適切回数 共同LNS")
+        val rPersonalLns = PersonalBalanceJointLnsPolish.apply(state, work, shouldStop = shouldStop)
+        work = rPersonalLns.newSchedule.copy2D()
+        logs.addAll(rPersonalLns.logs)
 
         val tHf = System.currentTimeMillis()
         if (shouldStop()) {

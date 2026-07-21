@@ -66,7 +66,7 @@ object MirrorKeys {
         "groupViol" to 10000.0, "pref" to 9000.0, "covU" to 8000.0, "c3n" to 7000.0,
         "low" to 90.0, "high" to 45.0,
         // [HF77明示数値指示(2026-07-20)] 回避の並び(c3mn)=15・窓の要件(c1)=5 に変更（旧12/4）。
-        "c3mn" to 15.0, "c1" to 5.0, "c3" to 3.0, "c3m" to 2.0,
+        "c3mn" to 15.0, "c1" to 15.0, "c3" to 3.0, "c3m" to 2.0,
         "c2" to 1.0, "c41" to 1.0, "c42" to 1.0, "c41s" to 1.0, "c42s" to 1.0,
         "apt" to 1.0, "fair" to 1.0, "weekly" to 1.0,
         // [目的関数統一] covO は最適化器(Evaluator/Delta/C++)が amount×1.0 で加算しており、
