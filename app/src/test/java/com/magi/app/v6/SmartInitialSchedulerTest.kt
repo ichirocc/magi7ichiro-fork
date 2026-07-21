@@ -64,6 +64,65 @@ class SmartInitialSchedulerTest {
     }
 
     @Test
+    fun satisfiesMultipleC1RulesOnSameShiftSimultaneously() {
+        // 同一シフト(休)に「5日窓≥1」と「14日窓≥4」の2規則を同時に課す
+        // （CLAUDE.md記載の実運用例 cons1=[5日窓休≥1, 14日窓休≥4, ...] と同型の同一シフト複数規則）。
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-14",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("a", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(List(14) { -1 }),
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(
+                C1Row(day1 = "5", shiftKigou = "休", day2 = "1"),
+                C1Row(day1 = "14", shiftKigou = "休", day2 = "4"),
+            ),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val result = SmartInitialScheduler.generate(st)
+        assertEquals(0, result.report.breakdown["c1"] ?: -1)
+        assertEquals(0, result.report.hard)
+        val restCount = result.schedule[0].count { it == 0 }
+        assertTrue("14日窓規則(≥4)を満たすには休が4日以上必要", restCount >= 4)
+    }
+
+    @Test
+    fun satisfiesC1RulesOnDifferentShiftsForSameStaff() {
+        // 異なるシフト(A/B)に別々のC1規則を課すケース（複数規則がシフトをまたぐ場合）。
+        // シフトindex順(A→B)で逐次構築するため、Aの決定がBの空き日を狭めるが、
+        // 各規則が軽い(5日窓≥1)ため両立できることを確認する。
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-11",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("a", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1)),
+            groupShiftApt = listOf(listOf("", "", "")),
+            schedule = listOf(List(11) { -1 }),
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(
+                C1Row(day1 = "5", shiftKigou = "A", day2 = "1"),
+                C1Row(day1 = "5", shiftKigou = "B", day2 = "1"),
+            ),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val result = SmartInitialScheduler.generate(st)
+        assertEquals(0, result.report.breakdown["c1"] ?: -1)
+        assertEquals(0, result.report.hard)
+    }
+
+    @Test
     fun keepsExistingScheduleWhenMostlyFilled() {
         // 11日中6日(過半数)を希望と無関係な値で埋めた状態は「既存表ベース」として保持される。
         val filled = listOf(0, 0, 0, 1, 1, 1, -1, -1, -1, -1, -1)
