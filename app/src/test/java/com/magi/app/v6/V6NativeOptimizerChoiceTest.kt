@@ -246,13 +246,18 @@ class V6NativeOptimizerChoiceTest {
     // [3.204.0] covO は markNeed(k,j) で needViolations に載り report.violations(セル"i,j"マップ)には
     // 現れないため、他の focus 未対応族が使う destroyRepairViolations では covO 専用のヒントが無かった。
     // applyCovOFree が「動かせる」在勤者を実際に他シフトへ移し covO を解消することを固定する。
+    // [3.253.0] 両staffを別々の単独群(G0/G1)にする（m<2で fair 対象外＝covO単体の効果を汚染しない）。
+    //   旧実装は同一群(G0)2名だったため、a,b どちらも group内公平化(fair)の唯一のペアとなり、
+    //   commitBestMoveの全体評価導入後は「covO解消の代わりにfairが同量発生する」ちょうど中立な
+    //   トレードになって不採用になっていた（実データ検証で判明した Free 系共通の欠陥そのものを
+    //   このテスト自身が偶然踏んでいた＝新実装が正しく動作している証拠）。
     private fun covOState(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-01",
         shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
-        groups = listOf(Group("G0", "G0")),
-        staff = listOf(Staff("a", 0), Staff("b", 0)),
+        groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
+        staff = listOf(Staff("a", 0), Staff("b", 1)),
         use2Patterns = false,
-        groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+        groupShift = listOf(listOf(1, 1), listOf(1, 1)), groupShiftApt = listOf(listOf("", ""), listOf("", "")),
         schedule = schedule, wishes = wishes, staffRange = emptyMap(),
         needDay1 = emptyMap(), needDay2 = emptyMap(),
         cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
@@ -374,7 +379,7 @@ class V6NativeOptimizerChoiceTest {
     //   （非希望セルを休へ変える）がneed<=0のシフト(休)へは一切repairが働かないため、直前に
     //   applyCovOFreeが解消したcovOをdestroy段階で再発させ、そのまま最終hypothesisに残っていた
     //   （8/26の休過剰1がcovO focusのラウンドでも解消されなかった実例の再現）。T=1日のため
-    //   destroyRepairDay(6回)は必ずこの日を選ぶ＝決定的に検証できる。休1人(b)が過剰・Cへ動かせば
+    //   destroyRepairDay(6回)は必ずこの日を選ぶ＝決定的に検証できる。過剰1人(b)をCへ動かせば
     //   受け皿あり(need1/need2とも未設定=完全無制限)という最小構成で、新しい順序(destroyRepairDay→
     //   applyCovOFree)なら複数seedいずれでも最終的にcovOが解消されることを固定する。
     //   [手計算で確認済みの罠] AのneedはCとは異なり need1=1(use2Patterns=false のため実質上限も1)
@@ -382,14 +387,19 @@ class V6NativeOptimizerChoiceTest {
     //   applyCovOFree のガードで拒否される＝わざと「Aは受け皿でない・Cのみが受け皿」という
     //   構成にして、destroyRepairDay の repair 段階(need>0のAのみ埋め戻す)がこの b→C の解決を
     //   決して代替できないことも同時に検証する。
+    // [3.253.0] 過剰の起点をAに変更（旧: 休。休を過剰起点にすると、修復のb:休→Cが本人の
+    //   休↔勤務(weekly)分類を跨ぐため T=1 日ではweeklyの偏差とcovOの解消が必ず同量で相殺される
+    //   ちょうど中立なトレードになっていた＝Free系共通欠陥をこのテスト自身が踏んでいた）。
+    //   A→A(過剰)→Cはどちらも「勤務」区分でweeklyの分類を跨がないため中立化しない。
+    //   また両staffを別々の単独群(G0/G1)にしfair対象外にする（covOState と同じ理由）。
     private fun covOOrderState(): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-01",
-        shifts = listOf(Shift("休み", "休", "0", ""), Shift("早番", "A", "1", ""), Shift("雑務", "C", "", "")),
-        groups = listOf(Group("G0", "G0")),
-        staff = listOf(Staff("a", 0), Staff("b", 0)),
+        shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", ""), Shift("雑務", "C", "", "")),
+        groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
+        staff = listOf(Staff("a", 0), Staff("b", 1)),
         use2Patterns = false,
-        groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", "")),
-        schedule = listOf(listOf(1), listOf(0)),   // a=A(需要どおり1人), b=休(過剰1人)
+        groupShift = listOf(listOf(1, 1, 1), listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
+        schedule = listOf(listOf(1), listOf(1)),   // a=A(需要どおり1人), b=A(過剰1人)
         wishes = emptyMap(), staffRange = emptyMap(),
         needDay1 = emptyMap(), needDay2 = emptyMap(),
         cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
@@ -414,24 +424,31 @@ class V6NativeOptimizerChoiceTest {
     // [3.209.0] c41/c41s は covO と同じく markNeed(needViolations) にしか載らず、GLSキック/
     // destroyRepairViolations が一切ヒントを持てない。applyC41Free が群レンジ[l,u]の超過・不足を
     // 実際に動かして解消することを固定する。
-    private fun c41State(schedule: List<List<Int>>, l: String, u: String, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
-        startDate = "2026-08-01", endDate = "2026-08-01",
-        shifts = listOf(Shift("休み", "Y", "", ""), Shift("勤務", "X", "", "")),
-        groups = listOf(Group("G0", "G0")),
-        staff = listOf(Staff("a", 0), Staff("b", 0)),
-        use2Patterns = false,
-        groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
-        schedule = schedule, wishes = wishes, staffRange = emptyMap(),
-        needDay1 = emptyMap(), needDay2 = emptyMap(),
-        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
-        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
-        cons41 = listOf(C41Row(groupKigou = "G0", shiftKigou = "X", l = l, u = u)),
-        cons42 = emptyList(),
-    )
+    private fun c41State(schedule: List<List<Int>>, l: String, u: String, wishes: Map<String, Int> = emptyMap()): MagiState {
+        val days = schedule.firstOrNull()?.size ?: 1
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-0$days",
+            shifts = listOf(Shift("休み", "Y", "", ""), Shift("勤務", "X", "", "")),
+            groups = listOf(Group("G0", "G0")),
+            staff = listOf(Staff("a", 0), Staff("b", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = schedule, wishes = wishes, staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = listOf(C41Row(groupKigou = "G0", shiftKigou = "X", l = l, u = u)),
+            cons42 = emptyList(),
+        )
+    }
 
+    // [3.253.0] T=2へ拡張し、2日目に「修復後は a/b の X・Y 回数が完全に対称化する」背景を1日分だけ
+    //   固定で持たせた（旧: T=1・単日のみだったため、a のみを動かす修復は必ず group内公平化(fair)を
+    //   ちょうど同量発生させ、commitBestMoveの全体評価導入後は中立トレードとして不採用になっていた
+    //   ＝Free系共通欠陥をこのテスト自身が踏んでいた。日1固定＋日0修復で対称化するよう設計）。
     @Test fun applyC41FreeRelievesFreelyMovableExcess() {
-        // 群定員[0,1]に対し2名がXに在籍＝超過1。両者とも希望固定なしなので1名が動かせるはず。
-        val st = c41State(listOf(listOf(1), listOf(1)), l = "0", u = "1")
+        // 群定員[0,1]に対し day0 は2名がXに在籍＝超過1。day1(背景, a=X,b=Y)は対称化のため固定。
+        val st = c41State(listOf(listOf(1, 1), listOf(1, 0)), l = "0", u = "1")
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
@@ -443,8 +460,8 @@ class V6NativeOptimizerChoiceTest {
     }
 
     @Test fun applyC41FreeFillsFreelyMovableDeficiency() {
-        // 群定員[1,2]に対し0名がXに在籍＝不足1。両者ともYで希望固定なしなので1名を引き込めるはず。
-        val st = c41State(listOf(listOf(0), listOf(0)), l = "1", u = "2")
+        // 群定員[1,2]に対し day0 は0名がXに在籍＝不足1。day1(背景, a=Y,b=X)は対称化のため固定。
+        val st = c41State(listOf(listOf(0, 0), listOf(0, 1)), l = "1", u = "2")
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
@@ -478,9 +495,12 @@ class V6NativeOptimizerChoiceTest {
     //   C3RunPolishと同型の穴: 離脱元シフト(X)自体が全体needをちょうど単独充足しており、誰か1人が
     //   離脱すると即covU化する構造的にブロックされた局面。findCovUChainで別職員に玉突き充填すれば
     //   解消できることを固定する。
+    // [3.253.0] T=2へ拡張。day1に「修復後は A/B の X・Y 回数が対称化する」背景を1日固定で追加
+    //   （旧: T=1・単日だったため、Aのみを動かす修復が group内公平化(fair)をちょうど同量発生させ、
+    //   commitBestMoveの全体評価導入後は中立トレードとして不採用になっていた＝Free系共通欠陥の再発）。
     @Test fun applyC41FreeResolvesExcessViaChainWhenDirectMoveWouldCreateCovU() {
         // shift: 0=休(need無) 1=X(c41対象、need1=2でA/Bちょうど単独充足) 2=Y(need無、Aの逃げ先)
-        //   3=Z(need無、Cの現在地)
+        //   3=Z(need無、Cのday0在籍地)
         val shifts = listOf(
             Shift("休", "休", "", ""), Shift("X", "X", "2", ""),
             Shift("Y", "Y", "", ""), Shift("Z", "Z", "", ""),
@@ -491,9 +511,11 @@ class V6NativeOptimizerChoiceTest {
             listOf(1, 1, 1, 1), // G1(C)=休,X,Y,Z
         )
         val staff = listOf(Staff("A", 0), Staff("B", 0), Staff("C", 1))
-        val schedule = listOf(listOf(1), listOf(1), listOf(3)) // A=X, B=X（G0のX在籍2名=超過1、Xのneed1=2をちょうど充足）
+        // day0: A=X,B=X,C=Z（G0のX在籍2名=超過1、Xのneed1=2をちょうど充足）。
+        // day1(背景, 固定): A=X,B=Y,C=X（G0のX在籍=Aのみ=1、need1=2はA,Cが充足）。
+        val schedule = listOf(listOf(1, 1), listOf(1, 2), listOf(3, 1))
         val st = MagiState(
-            startDate = "2026-08-01", endDate = "2026-08-01",
+            startDate = "2026-08-01", endDate = "2026-08-02",
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
             groupShift = groupShift, groupShiftApt = List(2) { List(4) { "" } },
             schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),

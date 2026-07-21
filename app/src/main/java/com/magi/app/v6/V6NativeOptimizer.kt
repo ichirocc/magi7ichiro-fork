@@ -1802,51 +1802,70 @@ object V6NativeOptimizer {
      * 確認し、悪化するなら隣接日側の変更ごと巻き戻して次の候補へ（実際に適用したcov[j2]/schedは
      * 必ず復元してから次を試す）。
      */
+    /**
+     * [3.253.0, 実データ検証で判明した「Free」系リペア共通の欠陥を修正] `applyCovOFree`/`applyC41Free`/
+     * `applyC42Free` は従来「移動先/移動元のcovU/covOだけを見て構造的に安全な最初の候補」を採用しており、
+     * 動かす本人自身の他制約(staffRange低/高・apt・c1・c2・weekly・fair等)への影響を一切見ずに移動していた。
+     * 実データ検証(golden_state.json/sample_state_v6.json、ホストJVM実行で独立検証)で、covOは単体実行の
+     * 大半の試行でtotalを悪化(313→325〜351)、c42はgolden 15/15・sample_v6 11/15が悪化——「動かせる」は
+     * 「動かして得」を意味しないことを確認した（ユーザー指摘「大嶋と美幸の違反研磨は適切か」を機に、
+     * AptPolish/RangePolishは既に全候補で実チェッカー+isBetter/betterのkeep-best gateを持つ健全な実装と
+     * 確認済み＝この欠陥はcovO/c41/c41s/c42/c42s専用のFree系のみ）。
+     *
+     * 候補（セル代入の束＝直接移動、または移動＋玉突き連鎖の複合手）を1つずつ実際に一時適用し、
+     * UnifiedViolationChecker で全体評価、baseline(この手を試す直前の盤面)に対して真に改善する
+     * (better()=hard→total→weighted辞書式で厳密改善)候補の中から最良の1件だけを選んでコミットする。
+     * 改善する候補が1つも無ければ何もしない(null)＝そのセルは諦める（安全側・退化不能）。
+     * 実装コストは度外視（ユーザー指示）＝候補ごとにフルcheckを行うため計算量は増えるが、
+     * これらはRSI 1ラウンドにつき1回しか呼ばれない仮説生成器のため許容範囲。
+     */
+    private fun commitBestMove(
+        state: MagiState, sched: Array<IntArray>,
+        baseline: ViolationReport, candidates: List<List<IntArray>>,
+    ): ViolationReport? {
+        var bestOps: List<IntArray>? = null
+        var bestRep: ViolationReport? = null
+        for (ops in candidates) {
+            val saved = IntArray(ops.size) { sched[ops[it][0]][ops[it][1]] }
+            for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
+            val rep = UnifiedViolationChecker.check(state, sched)
+            for (idx in ops.indices) sched[ops[idx][0]][ops[idx][1]] = saved[idx]
+            if (better(rep, baseline) && (bestRep == null || better(rep, bestRep!!))) {
+                bestOps = ops; bestRep = rep
+            }
+        }
+        val ops = bestOps ?: return null
+        for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
+        return bestRep
+    }
+
     internal fun applyCovOFree(state: MagiState, sched: Array<IntArray>, rng: Random): Int {
         val p = cachedProblem(state)
         if (p.S == 0 || p.T == 0) return 0
         var applied = 0
-        val cov = Array(p.T) { IntArray(p.K) }
-        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
-        fun recount(j2: Int) {
-            for (kk in 0 until p.K) cov[j2][kk] = 0
-            for (ii in 0 until p.S) { val kk2 = sched[ii][j2]; if (kk2 in 0 until p.K) cov[j2][kk2]++ }
-        }
         for (j in 0 until p.T) {
             for (k in 0 until p.K) {
-                while (p.covOCell(k, j, cov[j][k]) > 0) {
-                    val staffOnK = (0 until p.S).filter { sched[it][j] == k }.shuffled(rng)
-                    var movedThisPass = false
+                while (true) {
+                    val cov = IntArray(p.K)
+                    for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cov[kk]++ }
+                    if (p.covOCell(k, j, cov[k]) <= 0) break
+                    val baseline = UnifiedViolationChecker.check(state, sched)
+                    val staffOnK = (0 until p.S).filter { sched[it][j] == k }
+                    val candidates = ArrayList<List<IntArray>>()
                     for (i in staffOnK) {
                         if (p.wish[i][j] == k) continue   // 本人希望＝動かすとpref未充足化、対象外
-                        for (m in p.allowedShiftsForStaff(i).filter { it != k }.shuffled(rng)) {
+                        for (m in p.allowedShiftsForStaff(i).filter { it != k }) {
                             if (p.makesForbiddenRun(sched, i, j, m)) {
                                 val fix = tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, m, rng) ?: continue
-                                val j2 = fix[0][1]
-                                val savedSchedJ2 = IntArray(p.S) { sched[it][j2] }
-                                for (mv in fix) sched[mv[0]][mv[1]] = mv[2]
-                                recount(j2)
-                                if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) {
-                                    for (ii in 0 until p.S) sched[ii][j2] = savedSchedJ2[ii]
-                                    recount(j2)
-                                    continue
-                                }
-                                sched[i][j] = m
-                                cov[j][k]--; cov[j][m]++
-                                applied++
-                                movedThisPass = true
-                                break
+                                candidates.add(fix + listOf(intArrayOf(i, j, m)))
+                            } else {
+                                candidates.add(listOf(intArrayOf(i, j, m)))
                             }
-                            if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue
-                            sched[i][j] = m
-                            cov[j][k]--; cov[j][m]++
-                            applied++
-                            movedThisPass = true
-                            break
                         }
-                        if (movedThisPass) break
                     }
-                    if (!movedThisPass) break   // 動かせる在勤者がいない＝このセルは諦める（安全側）
+                    if (candidates.isEmpty()) break
+                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    applied++
                 }
             }
         }
@@ -1872,102 +1891,59 @@ object V6NativeOptimizer {
         if (rules.isEmpty()) return 0
         val grp = if (skill) p.ssk else p.sgrp
         var applied = 0
-        val cov = Array(p.T) { IntArray(p.K) }
-        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
         fun groupCount(c: C41, j: Int): Int {
             var z = 0
             for (i in 0 until p.S) if (grp[i] == c.groupIdx && sched[i][j] == c.shiftIdx) z++
             return z
         }
-        // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開その4] 直接移動が「離脱元/到着先どちらもcovU/covO
-        //   非悪化」を同時に満たせない場合、旧実装は即座に諦めていた。これはc3mn/high/c3系と同型の穴
-        //   （交換相手が構造的に存在しない局面）。離脱側のcovU悪化のみは findCovUChain（同日玉突き連鎖）で
-        //   埋め直せるため、そちらだけ chain フォールバックを追加する（到着側の covO は引き続き直接ガード
-        //   ＝候補を変えて試す。findCovUChain は covU 専用でcovO向けの玉突きではないため対象外のまま）。
-        //   本関数は呼び出し元(rsiGenerateHypothesis)がラウンド単位のbetter()でkeep-best評価する
-        //   仮説生成器のため、内部にisBetterは持たない（従来と同じ契約）。
-        fun recomputeCovDay(j: Int) {
-            val col = cov[j]; for (k in col.indices) col[k] = 0
-            for (i in 0 until p.S) { val k = sched[i][j]; if (k in 0 until p.K) col[k]++ }
-        }
+        // [3.253.0, commitBestMoveへ全面移行] 旧実装は「離脱元/到着先のcovU/covOが非悪化」を満たす
+        //   最初の候補（見つからなければ玉突き連鎖の最初の候補）で即採用しており、動かす本人自身の
+        //   staffRange/apt/c1/c2/weekly/fair等への影響を一切見ていなかった（実データ検証でcovO/c42の
+        //   同型実装が大半の試行でtotalを悪化させることを確認、詳細はcommitBestMoveのdoc参照）。
+        //   ここでは構造的に安全（希望非固定・禁止連続なし）な候補を直接移動・玉突き連鎖の両方で
+        //   網羅的に集め、commitBestMoveが実チェッカーで全体評価して真に改善する最良の1件だけを選ぶ。
         for (c in rules) {
             for (j in 0 until p.T) {
                 // 超過(z>u): 群在籍者を他シフトへ移す。
                 while (groupCount(c, j) > c.u) {
-                    val onShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] == c.shiftIdx }.shuffled(rng)
-                    var moved = false
+                    val baseline = UnifiedViolationChecker.check(state, sched)
+                    val onShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] == c.shiftIdx }
+                    val candidates = ArrayList<List<IntArray>>()
                     for (i in onShift) {
                         if (p.wish[i][j] == c.shiftIdx) continue   // 本人希望＝動かすとpref未充足化、対象外
-                        for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }.shuffled(rng)) {
+                        for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }) {
                             if (p.makesForbiddenRun(sched, i, j, m)) continue
-                            if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue         // 移動先でcovO悪化させない
-                            if (p.covUCell(c.shiftIdx, j, cov[j][c.shiftIdx] - 1) > p.covUCell(c.shiftIdx, j, cov[j][c.shiftIdx])) continue  // 離脱元でcovU悪化させない
+                            candidates.add(listOf(intArrayOf(i, j, m)))
+                            // 玉突き連鎖版（離脱先を先に適用してから探索＝本人がまだ在籍中に見える誤判定を防ぐ既定の作法）。
+                            val oldK = sched[i][j]
                             sched[i][j] = m
-                            cov[j][c.shiftIdx]--; cov[j][m]++
-                            applied++; moved = true
-                            break
-                        }
-                        if (moved) break
-                    }
-                    if (!moved) {
-                        // [玉突き連鎖フォールバック] findCovUChainは「埋めると実際にcovUが減るか」を
-                        //   現在の sched から判定するため、離脱を先に適用してから呼ぶ必要がある
-                        //   （離脱前に呼ぶと本人がまだ在籍中に見え「埋めても改善しない」と誤判定され
-                        //   常にnullが返っていた＝実バグ）。失敗時は必ず元に戻す。
-                        for (i in onShift) {
-                            if (moved) break
-                            if (p.wish[i][j] == c.shiftIdx) continue
-                            for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }.shuffled(rng)) {
-                                if (p.makesForbiddenRun(sched, i, j, m)) continue
-                                if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue
-                                val oldK = sched[i][j]
-                                sched[i][j] = m
-                                val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, exclude = i)
-                                if (chain == null) { sched[i][j] = oldK; continue }
-                                chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
-                                recomputeCovDay(j)
-                                applied += 1 + chain.size
-                                moved = true
-                                break
-                            }
+                            val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, exclude = i)
+                            sched[i][j] = oldK
+                            if (chain != null) candidates.add(listOf(intArrayOf(i, j, m)) + chain)
                         }
                     }
-                    if (!moved) break   // 玉突きでも動かせない＝諦める（安全側）
+                    if (candidates.isEmpty()) break
+                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    applied++
                 }
                 // 不足(z<l): 群内の他シフト在籍者を引き入れる。
                 while (groupCount(c, j) < c.l) {
-                    val offShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] != c.shiftIdx && p.canDo(it, c.shiftIdx) }.shuffled(rng)
-                    var moved = false
+                    val baseline = UnifiedViolationChecker.check(state, sched)
+                    val offShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] != c.shiftIdx && p.canDo(it, c.shiftIdx) }
+                    val candidates = ArrayList<List<IntArray>>()
                     for (i in offShift) {
                         val old = sched[i][j]
                         if (old !in 0 until p.K || p.wish[i][j] == old) continue   // 現シフトが本人希望＝対象外
                         if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
-                        if (p.covUCell(old, j, cov[j][old] - 1) > p.covUCell(old, j, cov[j][old])) continue         // 離脱元でcovU悪化させない
-                        if (p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx] + 1) > p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx])) continue  // 移動先でcovO悪化させない
+                        candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)))
                         sched[i][j] = c.shiftIdx
-                        cov[j][old]--; cov[j][c.shiftIdx]++
-                        applied++; moved = true
-                        break
+                        val chain = findCovUChain(p, sched, old, j, rng, exclude = i)
+                        sched[i][j] = old
+                        if (chain != null) candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)) + chain)
                     }
-                    if (!moved) {
-                        // [玉突き連鎖フォールバック] HIGH側と同じ理由で、到着(=oldからの離脱)を先に
-                        //   適用してから findCovUChain を呼ぶ。失敗時は必ず元に戻す。
-                        for (i in offShift) {
-                            if (moved) break
-                            val old = sched[i][j]
-                            if (old !in 0 until p.K || p.wish[i][j] == old) continue
-                            if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
-                            if (p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx] + 1) > p.covOCell(c.shiftIdx, j, cov[j][c.shiftIdx])) continue
-                            sched[i][j] = c.shiftIdx
-                            val chain = findCovUChain(p, sched, old, j, rng, exclude = i)
-                            if (chain == null) { sched[i][j] = old; continue }
-                            chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
-                            recomputeCovDay(j)
-                            applied += 1 + chain.size
-                            moved = true
-                        }
-                    }
-                    if (!moved) break   // 玉突きでも動かせない＝諦める（安全側）
+                    if (candidates.isEmpty()) break
+                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    applied++
                 }
             }
         }
@@ -1994,35 +1970,22 @@ object V6NativeOptimizer {
         if (rules.isEmpty()) return 0
         val grp = if (skill) p.ssk else p.sgrp
         var applied = 0
-        val cov = Array(p.T) { IntArray(p.K) }
-        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sched[i][j]; if (k in 0 until p.K) cov[j][k]++ }
-        fun recomputeCovDay(j: Int) {
-            val col = cov[j]; for (k in col.indices) col[k] = 0
-            for (i in 0 until p.S) { val k = sched[i][j]; if (k in 0 until p.K) col[k]++ }
-        }
-        // 違反ペアの片側(候補)を実際に他シフトへ動かす。動かせたら true。
-        fun tryFreeOneSide(candidates: List<Int>, j: Int, fromShift: Int): Boolean {
+        // [3.253.0, commitBestMoveへ全面移行] 詳細はcommitBestMove/applyC41Freeのdoc参照。
+        //   違反ペアの片側(left=g1×s1 / right=g2×s2)それぞれについて、構造的に安全な直接移動・
+        //   玉突き連鎖の両方の候補を集め、commitBestMoveが実チェッカーで全体評価する。
+        fun gatherSide(candidates: List<Int>, j: Int, fromShift: Int, out: ArrayList<List<IntArray>>) {
             for (i in candidates) {
                 if (p.wish[i][j] == fromShift) continue   // 本人希望＝動かすとpref未充足化、対象外
-                for (m in p.allowedShiftsForStaff(i).filter { it != fromShift }.shuffled(rng)) {
+                for (m in p.allowedShiftsForStaff(i).filter { it != fromShift }) {
                     if (p.makesForbiddenRun(sched, i, j, m)) continue
-                    if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue   // 移動先でcovO悪化させない
-                    if (p.covUCell(fromShift, j, cov[j][fromShift] - 1) <= p.covUCell(fromShift, j, cov[j][fromShift])) {
-                        sched[i][j] = m
-                        cov[j][fromShift]--; cov[j][m]++
-                        return true
-                    }
-                    // [玉突き連鎖フォールバック] c41Freeと同じ理由で、離脱を先に適用してから呼ぶ。
+                    out.add(listOf(intArrayOf(i, j, m)))
                     val oldK = sched[i][j]
                     sched[i][j] = m
                     val chain = findCovUChain(p, sched, fromShift, j, rng, exclude = i)
-                    if (chain == null) { sched[i][j] = oldK; continue }
-                    chain.forEach { mv -> sched[mv[0]][mv[1]] = mv[2] }
-                    recomputeCovDay(j)
-                    return true
+                    sched[i][j] = oldK
+                    if (chain != null) out.add(listOf(intArrayOf(i, j, m)) + chain)
                 }
             }
-            return false
         }
         for (c in rules) {
             for (j in 0 until p.T) {
@@ -2030,11 +1993,13 @@ object V6NativeOptimizer {
                     val left = (0 until p.S).filter { grp[it] == c.g1 && sched[it][j] == c.s1 }
                     val right = (0 until p.S).filter { grp[it] == c.g2 && sched[it][j] == c.s2 }
                     if (left.isEmpty() || right.isEmpty()) break   // ペアが存在しない＝この日は解消済み
-                    val movedLeft = tryFreeOneSide(left.shuffled(rng), j, c.s1)
-                    if (movedLeft) { applied++; continue }
-                    val movedRight = tryFreeOneSide(right.shuffled(rng), j, c.s2)
-                    if (movedRight) { applied++; continue }
-                    break   // 左右どちらも動かせない＝この日は諦める（安全側）
+                    val baseline = UnifiedViolationChecker.check(state, sched)
+                    val candidates = ArrayList<List<IntArray>>()
+                    gatherSide(left, j, c.s1, candidates)
+                    gatherSide(right, j, c.s2, candidates)
+                    if (candidates.isEmpty()) break
+                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    applied++
                 }
             }
         }
