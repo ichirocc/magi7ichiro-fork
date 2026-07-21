@@ -143,7 +143,7 @@ internal object PersonalBalanceJointLnsPolish {
                                 changedCellCount(rootSchedule, candidate.schedule),
                             )
                             children.add(child)
-                            if (isFinalCandidate(child, root, focus, primary, primaryGap)) {
+                            if (isFinalCandidate(p, child, root, focus, primary, primaryGap)) {
                                 if (best === root || betterFinal(child, best, focus, lower)) best = child
                             }
                         }
@@ -159,7 +159,8 @@ internal object PersonalBalanceJointLnsPolish {
         val valid = best !== root && better(checked, rootReport) &&
             focus.sumOf { checkedPersonal[it] } < rootFocus &&
             focus.all { checkedPersonal[it] <= rootPersonal[it] } &&
-            (primaryGap == 0 || checkedPersonal[primary] < rootPersonal[primary])
+            (primaryGap == 0 || checkedPersonal[primary] < rootPersonal[primary]) &&
+            !exactPinRegression(p, rootSchedule, best.schedule)
 
         val chosen = if (valid) best.schedule.copy2D() else rootSchedule.copy2D()
         val chosenReport = if (valid) checked else rootReport
@@ -468,6 +469,7 @@ internal object PersonalBalanceJointLnsPolish {
         .joinToString(";") { "${it.staff},${it.day},${it.shift}" }
 
     private fun isFinalCandidate(
+        p: Problem,
         node: Node,
         root: Node,
         focus: IntArray,
@@ -478,6 +480,9 @@ internal object PersonalBalanceJointLnsPolish {
         if (node.focusTotal >= root.focusTotal) return false
         if (focus.any { node.personal[it] > root.personal[it] }) return false
         if (primaryGap > 0 && node.personal[primary] >= root.personal[primary]) return false
+        // [厳密ピン保護] focus外の職員(coverage連鎖の donor/receiver等)がstaffRange厳密ピンから
+        // 遠ざかる副作用も拒否する（focusのみを見る上記チェックでは対象外のため追加）。
+        if (exactPinRegression(p, root.schedule, node.schedule)) return false
         return true
     }
 

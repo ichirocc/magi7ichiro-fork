@@ -160,7 +160,7 @@ internal object C1JointLnsPolish {
                             }
                             children.add(child)
 
-                            val finalCandidate = isFinalCandidate(child, root)
+                            val finalCandidate = isFinalCandidate(p, child, root)
                             if (finalCandidate && c1 <= targetC1) targetSeen = true
                             if (finalCandidate && better(child.report, best.report)) best = child
                         }
@@ -174,7 +174,8 @@ internal object C1JointLnsPolish {
         // Defensive re-check. A shared-array bug or future operator mistake can never escape this gate.
         val finalReport = UnifiedViolationChecker.check(state, best.schedule)
         val finalC1 = finalReport.breakdown["c1"] ?: 0
-        val valid = best !== root && finalC1 < rootC1 && better(finalReport, rootReport)
+        val valid = best !== root && finalC1 < rootC1 && better(finalReport, rootReport) &&
+            !exactPinRegression(p, rootSchedule, best.schedule)
         val chosen = if (valid) best.schedule.copy2D() else rootSchedule.copy2D()
         val chosenReport = if (valid) finalReport else rootReport
         val chosenC1 = if (valid) finalC1 else rootC1
@@ -200,8 +201,9 @@ internal object C1JointLnsPolish {
         )
     }
 
-    private fun isFinalCandidate(node: Node, root: Node): Boolean =
-        node.c1 < root.c1 && better(node.report, root.report)
+    private fun isFinalCandidate(p: Problem, node: Node, root: Node): Boolean =
+        node.c1 < root.c1 && better(node.report, root.report) &&
+            !exactPinRegression(p, root.schedule, node.schedule)
 
     private fun better(a: ViolationReport, b: ViolationReport): Boolean {
         if (a.hard != b.hard) return a.hard < b.hard
