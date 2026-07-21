@@ -242,7 +242,7 @@ object V6HotfixPasses {
             // ビームサーチ(debt予算つき中間ノード・最終採用は実チェッカーのみ)で狙う。既存パスと重複する
             // 部分はあるが、最終採否は必ずisBetter相当のkeep-best＝退化不能。
             onPhase("後処理 期間要件(c1)協調ビーム研磨 [巡${round + 1}]")
-            val rC1beam = BeamC1PolishV2.apply(state, work, maxPasses = 1, shouldStop = shouldStop)
+            val rC1beam = BeamC1PolishV2.apply(state, work, maxPasses = 1, shouldStop = shouldStop, seed = roundSeed(seed, 0xBEA2L, round))
             work = rC1beam.newSchedule.copy2D(); totalC1 += rC1beam.applied; roundApplied += rC1beam.applied
             if (round == 0) logs.addAll(rC1beam.logs)
 

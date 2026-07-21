@@ -82,4 +82,27 @@ class BeamC1PolishV2Test {
         val result = BeamC1PolishV2.apply(st, sched)
         assertEquals(0, result.applied)
     }
+
+    // [停滞脱出, ユーザー指摘「停滞脱出しないのか?」への対応] collectAnchors/generateMoves の候補走査
+    // 順をseed由来のRandomでシャッフルするよう変更（旧: 常に職員index昇順の固定順でmaxAnchors/
+    // maxDirectDonors/maxRotationsPerAnchorの上限に達し打ち切られていたため、候補がその上限を超える
+    // データでは毎ラウンド同じ候補だけが試され続け、切り捨てられた側は永遠に試されなかった）。
+    // ホストJVM実測(golden_state.json/sample_state_v6.json)ではこの修正単独でのヒット率変化は
+    // 確認できなかった（診断: 既存パスが既に同種の候補をほぼ汲み尽くしているため。CLAUDE.md
+    // 3.252.0参照）が、seedの有無に関わらず安全（keep-best退化不能）であることを広く固定する。
+    @Test
+    fun beamPolishNeverRegressesAcrossManySeeds() {
+        val st = coordinatedBundleState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        for (seed in 0L until 30L) {
+            val result = BeamC1PolishV2.apply(st, sched, seed = seed * 131L + 17L)
+            val after = UnifiedViolationChecker.check(st, result.newSchedule)
+            assertTrue(
+                "seed=$seed: total悪化(before=${before.total}, after=${after.total})は許されない",
+                after.total <= before.total,
+            )
+            assertEquals("seed=$seed: HARDは不変", before.hard, after.hard)
+        }
+    }
 }
