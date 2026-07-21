@@ -375,6 +375,25 @@ object V6HotfixPasses {
         work = rWeq.newSchedule.copy2D()
         logs.addAll(rWeq.logs)
 
+        // [3.255.0/C1JointLnsPolish・PersonalBalanceJointLnsPolish, 受領・検証のうえ適用] ここまでの
+        // 巡回研磨は各パスが候補を作った直後に正式目的関数で採否するため、C1改善や個人回数改善に伴う
+        // coverage/range/c3系の副作用を別の手で相殺する前に候補を失うことがある。この2パスはdebt付き
+        // beamで複数手を束ね、最終採用のみ正式順序(hard→total→weighted)のkeep-bestで判定する（中間ノードの
+        // debtは探索のみに影響し退化不能）。ホストJVM実行でgolden_state.json/sample_state_v6.jsonに対し
+        // 既存パイプライン適用後の追加効果を実測: golden_state.jsonでは両方とも0（既存パイプラインが
+        // 既に汲み尽くし済み＝安全なno-op）、sample_state_v6.jsonではC1JointLnsPolishがHARD5→4（既存
+        // パイプラインが見つけていなかったHARD削減）、PersonalBalanceJointLnsPolishが個人回数34→31
+        // （total 196→195）を発見。実行コストが高い(既定8s/6s)ため巡回ループでなく最終1回のみ実行。
+        onPhase("後処理 期間要件(c1)共同LNS")
+        val rC1Lns = C1JointLnsPolish.apply(state, work, shouldStop = shouldStop)
+        work = rC1Lns.newSchedule.copy2D()
+        logs.addAll(rC1Lns.logs)
+
+        onPhase("後処理 個人回数/適切回数 共同LNS")
+        val rPersonalLns = PersonalBalanceJointLnsPolish.apply(state, work, shouldStop = shouldStop)
+        work = rPersonalLns.newSchedule.copy2D()
+        logs.addAll(rPersonalLns.logs)
+
         val tHf = System.currentTimeMillis()
         if (shouldStop()) {
             logs.add(MirrorLog(level = "W", tag = "POST", message = "予算超過のため後処理を短縮しました(残りパスは打ち切り)"))
