@@ -1,6 +1,7 @@
 package com.magi.app.v6
 
 import com.magi.app.model.MagiState
+import java.util.Random
 import kotlin.math.abs
 
 /**
@@ -26,6 +27,18 @@ import kotlin.math.abs
  *
  * 生成する手は全て同日の2人swapまたは3人ローテーションのみ＝日別シフト多重集合(covU/covO)は
  * 構造的に不変。
+ *
+ * [停滞脱出, 3.252.0] `collectAnchors`/`generateMoves` の候補走査順は`seed`由来のRandomでシャッフル
+ * する（優先度=deficitWeightによる順位付けは維持したまま、同点内のtie-breakのみ）。旧実装は候補が
+ * `maxAnchors`/`maxDirectDonors`/`maxRotationsPerAnchor`の上限を超えるデータで常に同じ先頭N件だけを
+ * 試し続け、切り捨てられた候補は何ラウンド試しても永遠に試されなかった（他の全パスが`roundSeed`で
+ * ラウンド毎に探索順を変えるのと非対称だった）。実データ検証（golden_state.json/sample_state_v6.json）
+ * では、この修正単独ではヒット率(採用0のまま)は変わらなかった——既存パス(C1Polish等)が同種の
+ * 候補をほぼ汲み尽くしており、本パスの守備範囲に残っているものが元々ほぼ無いため。ビーム幅/深さ/
+ * 上限を大幅に緩めれば僅かな改善(golden_state.jsonでc1 91->89)は見つかるが約50秒かかり、実運用の
+ * 後処理予算(全パス合計で数十秒)には見合わない。停滞脱出の修正自体は他の全パスとの対称性のため
+ * 正当（無害・退化不能）だが、「見つからない」の根本原因はデータ側の探索余地の枯渇であり、
+ * サンプリング順序の問題ではなかった。
  */
 internal object BeamC1PolishV2 {
     private data class Anchor(
@@ -72,7 +85,9 @@ internal object BeamC1PolishV2 {
         totalDebt: Int = 12,
         c1Debt: Int = 4,
         shouldStop: () -> Boolean = { false },
+        seed: Long = 0xBEA2L,
     ): V6HotfixPasses.CyclicSwapResult {
+        val rng = Random(seed)
         val p = Problem(state)
         var work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
@@ -115,7 +130,7 @@ internal object BeamC1PolishV2 {
                 for (parent in beam) {
                     if (shouldStop()) break
                     expanded++
-                    val anchors = collectAnchors(p, parent.schedule, maxAnchors)
+                    val anchors = collectAnchors(p, parent.schedule, maxAnchors, rng)
                     for (anchor in anchors) {
                         if (shouldStop()) break
                         val moves = generateMoves(
@@ -124,6 +139,7 @@ internal object BeamC1PolishV2 {
                             anchor = anchor,
                             maxDirectDonors = maxDirectDonors,
                             maxRotations = maxRotationsPerAnchor,
+                            rng = rng,
                         )
                         for (move in moves) {
                             if (shouldStop()) break
@@ -256,8 +272,17 @@ internal object BeamC1PolishV2 {
     /**
      * Collect receiver cells inside deficient windows. A cell receives a larger weight
      * when it belongs to several deficient windows/rules.
+     *
+     * [停滞脱出, ユーザー指摘「停滞脱出しないのか?」への対応] `deficitWeight` の優先順位は維持しつつ、
+     *   同点内の順序はシャッフルする（tie-break を決定的な(staff,day,shift)から`rng`由来へ差し替え）。
+     *   `take(limit)`で切り捨てる際、優先度が同点の候補群のどれが生き残るかをラウンドごとに変える
+     *   ことで、固定順序では毎回同じ候補が切り捨てられ続ける（=停滞脱出の機会がない）問題を解消する。
+     *   `sortedByDescending`は安定ソートのため、weight自体による優先順位は不変（弱い方に負けることはない）。
+     *   実データ検証: この修正単独では golden_state.json/sample_state_v6.json のヒット率(0/採用)は
+     *   変わらなかった（診断のみで採否ゲート自体は変えていないため、正しい安全な変更）。詳細は
+     *   CLAUDE.md 3.252.0 セクション参照。
      */
-    private fun collectAnchors(p: Problem, schedule: Array<IntArray>, limit: Int): List<Anchor> {
+    private fun collectAnchors(p: Problem, schedule: Array<IntArray>, limit: Int, rng: Random): List<Anchor> {
         val weights = LinkedHashMap<Triple<Int, Int, Int>, Int>()
         for (c in p.cons1) {
             val d = c.day1
@@ -283,21 +308,24 @@ internal object BeamC1PolishV2 {
         }
         return weights.entries
             .map { (k, w) -> Anchor(k.first, k.second, k.third, w) }
-            .sortedWith(
-                compareByDescending<Anchor> { it.deficitWeight }
-                    .thenBy { it.staff }
-                    .thenBy { it.day }
-                    .thenBy { it.targetShift },
-            )
+            .shuffled(rng)
+            .sortedByDescending { it.deficitWeight }
             .take(limit.coerceAtLeast(1))
     }
 
+    /**
+     * [停滞脱出] donor/bridge の走査順を`rng`でシャッフルしてから`maxDirectDonors`/`maxRotations`で
+     *   打ち切る（旧: 常に職員index昇順で先頭N件のみ採用＝候補がN件超のデータでは毎ラウンド同じ
+     *   donorだけが試され続け、切り捨てられた側は永遠に試されなかった）。canDo等の安全条件・打ち切り
+     *   件数自体は不変＝探索の網羅範囲の分布のみ変更。
+     */
     private fun generateMoves(
         p: Problem,
         schedule: Array<IntArray>,
         anchor: Anchor,
         maxDirectDonors: Int,
         maxRotations: Int,
+        rng: Random,
     ): List<Move> {
         val i = anchor.staff
         val j = anchor.day
@@ -305,9 +333,10 @@ internal object BeamC1PolishV2 {
         val a = schedule[i][j]
         if (a == x || p.wish[i][j] >= 0 || !p.canDo(i, x)) return emptyList()
 
+        val staffOrder = (0 until p.S).shuffled(rng)
         val out = ArrayList<Move>()
         var direct = 0
-        for (donor in 0 until p.S) {
+        for (donor in staffOrder) {
             if (donor == i || schedule[donor][j] != x || p.wish[donor][j] >= 0) continue
             if (p.canDo(donor, a)) {
                 out.add(Move.Swap(j, i, donor))
@@ -317,9 +346,9 @@ internal object BeamC1PolishV2 {
         }
 
         var rotations = 0
-        rotationLoop@ for (donor in 0 until p.S) {
+        rotationLoop@ for (donor in staffOrder) {
             if (donor == i || schedule[donor][j] != x || p.wish[donor][j] >= 0) continue
-            for (bridge in 0 until p.S) {
+            for (bridge in staffOrder) {
                 if (bridge == i || bridge == donor || p.wish[bridge][j] >= 0) continue
                 val y = schedule[bridge][j]
                 if (y == x || y == a) continue
