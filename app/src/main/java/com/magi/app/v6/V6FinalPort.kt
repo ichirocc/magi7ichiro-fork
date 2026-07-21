@@ -144,6 +144,26 @@ object V6FinalPort {
         ActionResult(res.schedule, res.report.copy(logs = logs), "simple", busy, logs)
     }
 
+    /**
+     * [初期解生成(賢い版)] 希望シフト→C1(窓の要件)→日別必要人数→個人下限→残り埋め の順で
+     * 初期解を組み立てる`SmartInitialScheduler`のポート。本最適化(SA/ALNS)へは続けず、
+     * 生成した下書きをそのまま返す（続けての本最適化は既存の「勤務表をつくる」が担当）。
+     */
+    suspend fun handleSmartInitial(state: MagiState, allowImpossible: Boolean = false): ActionResult = withContext(Dispatchers.Default) {
+        require(state.dayCount > 0) { "対象期間が無効です。終了日を開始日より後の日付にしてください" }
+        val gate = confirmDespiteImpossibleWishes(state, allowImpossible)
+        if (!gate.allowed) error(gate.message)
+        val busy = buildBusyDetail(state, "初期解を作成中", mapOf(
+            "subtitle" to "初期解を作成中",
+            "phaseDesc" to "希望シフトとC1(窓の要件)を優先し、次に必要人数・個人下限を考慮しています",
+            "expectedSec" to "< 1 秒",
+            "estimatedIter" to "~800 回",
+        ))
+        val res = SmartInitialScheduler.generate(state)
+        val logs = gate.logs + res.report.logs + MirrorLog(tag = "MAGI_GenerateInitial", message = "初期解生成 完了 HARD=${res.report.hard} total=${res.report.total}")
+        ActionResult(res.schedule, res.report.copy(logs = logs), "smart_initial", busy, logs)
+    }
+
     suspend fun handleCheck(state: MagiState, schedule: Array<IntArray> = state.schedule.toIntArray2D()): ActionResult = withContext(Dispatchers.Default) {
         val busy = buildBusyDetail(state, "違反チェック中", mapOf(
             "subtitle" to "違反チェック",

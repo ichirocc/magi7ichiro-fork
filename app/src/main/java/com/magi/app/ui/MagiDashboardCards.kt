@@ -191,6 +191,7 @@ internal fun OperatorNextActionCard(
     ui: UiState,
     onMake: () -> Unit,      // 勤務表をつくる（最適化）
     // [3.126.0 撤去] onDraft（下書きをつくる=簡易作成）はユーザー判断で撤去。主導線は「勤務表をつくる」1本。
+    onSmartInitial: () -> Unit,  // [新設] 初期解を作る（希望→C1優先の下書き。本最適化は続けない）
     onStop: () -> Unit,      // やめる（停止）
     onExport: () -> Unit,    // 印刷・書き出し / そのまま配る（CSV書き出し）
     onSchedule: () -> Unit,  // 中身を見る（勤務表へ）
@@ -214,7 +215,7 @@ internal fun OperatorNextActionCard(
         }
         !ui.hasResult -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer,
             "② ボタンひとつで、勤務表を作ります。",
-            "勤務表をつくる", onMake, true, null, {})
+            "勤務表をつくる", onMake, true, "初期解を作る（希望・C1を優先した下書き）", onSmartInitial)
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             "③ できました！ そのまま配れます。",
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
