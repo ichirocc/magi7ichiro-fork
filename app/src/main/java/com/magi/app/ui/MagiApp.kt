@@ -351,6 +351,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     OperatorNextActionCard(
                         ui = ui,
                         onMake = { vm.runV6FullOptimize() },
+                        onSmartInitial = { vm.generateSmartInitial() },
                         onStop = { vm.stop() },
                         onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                         onSchedule = { tab = 1 },

@@ -522,6 +522,39 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * [初期解生成(賢い版)] 希望シフト→C1(窓の要件)→日別必要人数→個人下限→残り埋め の順で
+     * 初期解を組み立てる。本最適化(SA/ALNS)へは続けない（続けて最適化したい場合は
+     * この後に別途「勤務表をつくる」を押す）。ホームの「勤務表をつくる」の隣に新設。
+     */
+    fun generateSmartInitial() {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        if (!ensureValidForRun(st, sched)) return
+        pushUndo()
+        _ui.update { it.copy(running = true, hasResult = false, message = "初期解生成中…") }
+        job = viewModelScope.launch {
+            try {
+                val res = V6FinalPort.handleSmartInitial(st.withSchedule(sched), allowImpossible = true)
+                currentSchedule = res.schedule.copy2D()
+                autoSave()
+                resultSchedule = res.schedule.copy2D()
+                state = st.withSchedule(res.schedule)
+                pushReport(state ?: st, res.schedule, res.report) { it.copy(
+                    running = false,
+                    hasResult = true,
+                    iters = 0,
+                    itersPerSec = 0,
+                    elapsedMs = 0,
+                    message = "初期解生成完了: 必須=${res.report.hard} 合計=${res.report.total}",
+                ) }
+                logOp("I", "初期解生成 完了 必須=${res.report.hard} 合計=${res.report.total}")
+            } catch (e: Exception) {
+                _ui.update { it.copy(running = false, message = "初期解生成失敗: ${e.message}") }
+            }
+        }
+    }
+
     // [3.126.0] UI導線（下書きをつくる）はユーザー判断で撤去。API として温存。
     fun generateSimple() {
         val st = state ?: return
