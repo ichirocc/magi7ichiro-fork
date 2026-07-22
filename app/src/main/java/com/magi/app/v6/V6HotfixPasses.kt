@@ -384,14 +384,23 @@ object V6HotfixPasses {
         // 既に汲み尽くし済み＝安全なno-op）、sample_state_v6.jsonではC1JointLnsPolishがHARD5→4（既存
         // パイプラインが見つけていなかったHARD削減）、PersonalBalanceJointLnsPolishが個人回数34→31
         // （total 196→195）を発見。実行コストが高い(既定8s/6s)ため巡回ループでなく最終1回のみ実行。
-        // [予算按分, receiving-code-review] HF66(187行)と同型。以前は各パスの既定Config(8s/6s)を
-        //   そのまま使い shouldStop のみを渡していたため、外側 deadlineMs の残りがそれより短くても
-        //   内部deadlineは呼出時点から新規に8s/6s確保され、最大14秒ぶん外側締切を超過し得た。
-        //   残予算をHF66と同じ考え方(半分を後段へ確保)で按分する。残0なら各パスの
-        //   maxMillis<=0ガードにより即スキップ(explicitly無効)される。
+        // [予算按分, receiving-code-review→自己検証で訂正] 以前は各パスの既定Config(8s/6s)をそのまま
+        //   使いshouldStopのみを渡していたため、外側deadlineMsの残りがそれより短くても内部deadlineは
+        //   呼出時点から新規に8s/6s確保され、最大14秒ぶん外側締切を超過し得た。
+        //   [訂正の経緯] 初版はHF66(187行)と同型の「残予算の半分を後段へ確保」を踏襲したが、HF66は
+        //   後段に巡回ループ全体(多数のパス)を控えるのに対し、この2パスの後段はPersonalBalance
+        //   JointLnsPolish単体(既定6s)+HF70(安価・常時実行)のみ＝文脈が異なり折半は不適切と判明。
+        //   remaining=14000ms(=両者の既定合計値)ちょうどの境界で検算すると、折半案はC1に7000msしか
+        //   与えず自身の既定8000msに届かず、Personalは残り7000msのうち自身の既定6000msしか使わず
+        //   1000msが誰にも使われないまま終わる(半分確保がPersonalの実需要=6000msを知らずに一律確保
+        //   するため)。既定比8:6の按分なら、この境界で双方とも過不足なく自身の既定を得られる。
+        //   remainingは整数乗算オーバーフロー回避のため安全な上限(100秒、実運用の予算を大きく超える
+        //   値)へ先にクランプしてから按分する。残0なら各パスのmaxMillis<=0ガードにより即スキップ
+        //   (explicitly無効)される。
         onPhase("後処理 期間要件(c1)共同LNS")
         val tC1Lns = System.currentTimeMillis()
-        val c1LnsCap = ((deadlineMs - tC1Lns).coerceAtLeast(0L) / 2).coerceAtMost(8_000L)
+        val remainingForC1Lns = (deadlineMs - tC1Lns).coerceAtLeast(0L).coerceAtMost(100_000L)
+        val c1LnsCap = (remainingForC1Lns * 8_000L / 14_000L).coerceAtMost(8_000L)
         val rC1Lns = C1JointLnsPolish.apply(
             state, work, config = C1JointLnsPolish.Config(maxMillis = c1LnsCap), shouldStop = shouldStop,
         )
