@@ -272,6 +272,15 @@ internal fun OperatorNextActionCard(
                     border = BorderStroke(1.dp, plan.fg.copy(alpha = 0.5f)),
                 ) { Text(hl) }
             }
+            // [3.261.0, ユーザー指摘「初期解生成が何度も出来ない」] !ui.hasResult状態の補助ボタンは
+            // hasResult=true化後（=初期解生成の完了直後を含む全ての完成/狩猟/未充足状態）に消えるため、
+            // 一度使うと二度と初期解生成へ戻れなかった。小さな常設リンクとして独立させ、実行中以外は
+            // 常に再生成できるようにする（元に戻すで取消可能・破壊的でない）。
+            if (!ui.running && ui.hasResult) {
+                TextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) {
+                    Text("初期解を作り直す（希望・C1優先の下書きに戻す）")
+                }
+            }
         }
     }
 }

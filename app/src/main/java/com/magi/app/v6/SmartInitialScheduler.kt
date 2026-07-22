@@ -26,18 +26,17 @@ object SmartInitialScheduler {
         val p = Problem(state)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
         val restK = restShiftIndex(state)
-        val existing = state.schedule.toIntArray2D()
-        var filled = 0
-        for (row in existing) for (v in row) if (v >= 0) filled++
-        val schedule: Array<IntArray>
-        val baseMode: String
-        if (filled >= max(1, p.S * p.T / 2)) {
-            schedule = normalizeSchedule(existing, p)
-            baseMode = "既存表ベース"
-        } else {
-            schedule = Array(p.S) { IntArray(p.T) { -1 } }
-            baseMode = "空表ベース"
-        }
+        // [3.261.0, ユーザー実機報告「初期解生成後にC1違反になる/何度も出来ない」で判明した実バグ修正]
+        // 旧実装は既存スケジュールの充足率で「既存表ベース(そのまま保持)/空表ベース(ゼロから構築)」を
+        // 切り替えていたが、本関数の呼出元(ボタン)は「初期解を(作り直す)」という常に**ゼロから組み立て
+        // 直す**操作である以上、これは有害だった: ①1回目の生成が完了すると盤面は必ず100%充足済みに
+        // なり、②次に呼ぶと「既存表ベース」判定でschedule=既存のまま=希望/C1/必要人数/個人下限/残り埋め
+        // の全ステップが「空きセルが無い」ため丸ごとno-op（実データで検証: run1=C1充足セル0件・
+        // c1=78、run2はrun1と盤面が完全一致=無変化、対照の白紙強制ではC1充足セル57件・c1=31と大幅改善）。
+        // 実運用データは最初からschedule欄が埋まっていることも多く、**初回の生成ですらこの穴を踏み得た**。
+        // 希望(state.wish)は盤面と独立に保持されるため、常に白紙から組み立てても希望登録は失われない。
+        // 呼出元(generateSmartInitial)は実行前に必ずpushUndo()する＝元の盤面へはいつでも復元可能。
+        val schedule = Array(p.S) { IntArray(p.T) { -1 } }
 
         // ① 希望シフト（担当可能な希望のみ直接適用。担当外は据え置き＝後段の診断で案内される）。
         var wishIn = 0
@@ -157,7 +156,7 @@ object SmartInitialScheduler {
         val elapsedMs = ((System.nanoTime() - t0) / 1_000_000L)
         val log = MirrorLog(
             tag = "SmartInitial",
-            message = "初期解生成($baseMode): HARD=${report.hard} total=${report.total} " +
+            message = "初期解生成: HARD=${report.hard} total=${report.total} " +
                 "希望seed=${wishIn}件/担当外=${wishOut}件 C1充足セル=${c1Filled}件 (${elapsedMs}ms)",
         )
         return ScheduleRunResult(schedule, report.copy(logs = listOf(log) + report.logs))

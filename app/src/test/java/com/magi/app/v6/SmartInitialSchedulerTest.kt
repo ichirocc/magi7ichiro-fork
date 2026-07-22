@@ -162,14 +162,26 @@ class SmartInitialSchedulerTest {
     }
 
     @Test
-    fun keepsExistingScheduleWhenMostlyFilled() {
-        // 11日中6日(過半数)を希望と無関係な値で埋めた状態は「既存表ベース」として保持される。
-        val filled = listOf(0, 0, 0, 1, 1, 1, -1, -1, -1, -1, -1)
+    fun rebuildsFromScratchEvenWhenInputScheduleIsAlreadyFullyFilled() {
+        // [3.261.0, 実機報告「初期解生成後にC1違反になる/何度も出来ない」の再現] 旧実装は
+        // 入力スケジュールの充足率(>=50%)で「既存表ベース(保持)/空表ベース(構築)」を切り替えており、
+        // 既に100%充足済みの入力（1回目の生成直後・あるいは既存データ読込直後によくある状態）では
+        // 全ステップが「空きセルが無い」でno-opし、C1が一切改善されないまま返っていた。
+        // 全11日を「休」で埋めた（Xを一度も使わずC1「5日窓でX2回以上」に違反する）状態を入力にしても、
+        // 常にゼロから組み立て直しC1が解消されることを固定する。
         val st = blankState(cons1 = listOf(C1Row(day1 = "5", shiftKigou = "X", day2 = "2")))
-            .let { it.copy(schedule = listOf(filled)) }
+            .let { it.copy(schedule = listOf(List(11) { 0 })) }
+        val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        assertTrue("入力(全休)は初期状態でC1違反があること", (before.breakdown["c1"] ?: 0) > 0)
 
         val result = SmartInitialScheduler.generate(st)
-        for (j in 0 until 6) assertEquals(filled[j], result.schedule[0][j])
+        assertEquals("入力が100%充足済みでもC1が解消されること", 0, result.report.breakdown["c1"] ?: -1)
+
+        // 実際にボタンを連打した状況を再現: 1回目の出力を入力にしてもう一度呼んでも、
+        // no-opで劣化せず同じ良い結果に到達すること（旧実装は完全な無変化になっていた）。
+        val st2 = st.copy(schedule = result.schedule.map { it.toList() })
+        val result2 = SmartInitialScheduler.generate(st2)
+        assertEquals("繰り返し実行してもC1解消が保たれること", 0, result2.report.breakdown["c1"] ?: -1)
     }
 
     private fun ScheduleRunResult.newScheduleXAt(staff: Int, day: Int): Int = schedule[staff][day]
