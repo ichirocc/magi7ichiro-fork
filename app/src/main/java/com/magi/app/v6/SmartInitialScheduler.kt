@@ -66,7 +66,8 @@ object SmartInitialScheduler {
                 val forced = IntArray(p.T) { j ->
                     when (schedule[i][j]) { -1 -> -1; x -> 1; else -> 0 }
                 }
-                val targetDays = solveConstructionDp(p.T, rules, forced, rng.nextLong()) ?: continue
+                val cap = p.rangeHi[i][x]
+                val targetDays = solveConstructionDp(p.T, rules, forced, rng.nextLong(), cap) ?: continue
                 for (j in 0 until p.T) {
                     if (targetDays[j] && schedule[i][j] < 0) { schedule[i][j] = x; c1Filled++ }
                 }
@@ -167,10 +168,20 @@ object SmartInitialScheduler {
      * 直接求める（`C1TemporalDp`と異なり回数保存・移設数上限は課さない＝構築専用）。
      *
      * @param forced[day] 1=希望等で既にx確定・0=希望等で既に他シフト確定(選べない)・-1=自由。
+     * @param maxCount 対象日数の上限（`staffRange`の個人上限=rangeHi。未設定はInt.MAX_VALUE）。
+     *   high違反(重み45)はc1(重み15)より重いため、C1充足のためだけに個人上限を超えて割り当てない。
+     *   forced済み(希望由来)の対象日もこの上限に含める＝希望だけで既に上限超過なら
+     *   (=既存の別問題)これ以上は増やさずnullで安全側に諦める。
      * @return 目的= まず違反窓数を最小化、次に対象日数を最小化（他制約(③④⑤)への自由度を残す）、
      *   最後にseed由来の決定的tie-breakで一意に選ぶ。
      */
-    private fun solveConstructionDp(t: Int, rules: List<C1Rule>, forced: IntArray, seed: Long): BooleanArray? {
+    private fun solveConstructionDp(
+        t: Int,
+        rules: List<C1Rule>,
+        forced: IntArray,
+        seed: Long,
+        maxCount: Int = Int.MAX_VALUE,
+    ): BooleanArray? {
         if (t <= 0 || t > 62 || forced.size != t) return null
         val validRules = rules.filter { it.days in 1..t && it.minimum > 0 }
         if (validRules.isEmpty()) return null
@@ -178,6 +189,8 @@ object SmartInitialScheduler {
         if (maxWindow >= 62) return null
         val keepBits = (maxWindow - 1).coerceAtLeast(0)
         val keepMask = if (keepBits == 0) 0L else (1L shl keepBits) - 1L
+        // t以上のcapは実質無制限（対象日はt日を超えられない）＝既存の無制限挙動と完全に同値。
+        val capBound = if (maxCount >= t) t else maxCount.coerceAtLeast(0)
 
         data class Rec(val cost: Long, val bits: Long)
         fun tie(day: Int): Long {
@@ -186,17 +199,22 @@ object SmartInitialScheduler {
             return z and 511L
         }
 
-        var dp = HashMap<Long, Rec>()
-        dp[0L] = Rec(0L, 0L)
+        // 状態キー=(直近maxWindow-1日分のビット列, 累積対象日数)。累積数がcapBoundを超える遷移は
+        // 生成しない＝個人上限を構造的に超過できない。
+        var dp = HashMap<Pair<Long, Int>, Rec>()
+        dp[0L to 0] = Rec(0L, 0L)
         for (day in 0 until t) {
-            val next = HashMap<Long, Rec>(maxOf(16, dp.size * 2))
+            val next = HashMap<Pair<Long, Int>, Rec>(maxOf(16, dp.size * 2))
             val choices = when (forced[day]) {
                 1 -> intArrayOf(1)
                 0 -> intArrayOf(0)
                 else -> intArrayOf(0, 1)
             }
-            for ((mask, rec) in dp) {
+            for ((key, rec) in dp) {
+                val (mask, cnt) = key
                 for (bit in choices) {
+                    val newCnt = cnt + bit
+                    if (newCnt > capBound) continue
                     val full = (mask shl 1) or bit.toLong()
                     var fireInc = 0
                     for (rule in validRules) {
@@ -207,11 +225,12 @@ object SmartInitialScheduler {
                     val cost = rec.cost + fireInc.toLong() * 1_000_000L + bit.toLong() * 1_000L + tie(day)
                     val newMask = full and keepMask
                     val bits = if (bit == 1) rec.bits or (1L shl day) else rec.bits
-                    val old = next[newMask]
+                    val nk = newMask to newCnt
+                    val old = next[nk]
                     if (old == null || cost < old.cost ||
                         (cost == old.cost && java.lang.Long.compareUnsigned(bits, old.bits) < 0)
                     ) {
-                        next[newMask] = Rec(cost, bits)
+                        next[nk] = Rec(cost, bits)
                     }
                 }
             }

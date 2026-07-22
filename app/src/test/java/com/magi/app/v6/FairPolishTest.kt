@@ -153,6 +153,47 @@ class FairPolishTest {
         assertTrue("実際に手が採用されている", result.applied > 0)
     }
 
+    // [3.260.0, AptPolishと同型の穴] 手①(自己振替)は旧実装だと1パスにつき(i,k)ペア1回成功したら
+    // 次のhighTargetsへ移っており、excess/deficitが複数単位ある職員は1パスで1単位しか解消できなかった。
+    private fun multiUnitSelfSwapState(): MagiState {
+        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val groups = listOf(Group("G0", "G0"))
+        val groupShift = listOf(listOf(1, 1, 1))
+        val staff = listOf(Staff("A", 0), Staff("B", 0), Staff("C", 0), Staff("D", 0))
+        val schedule = listOf(
+            listOf(1, 1, 1, 1, 1, 0, 0), // A: X*5, 休*2 (X過多・Yは0で過少)
+            listOf(1, 1, 2, 2, 0, 0, 0), // B: X*2,Y*2,休*3
+            listOf(1, 1, 2, 2, 0, 0, 0), // C: 同上
+            listOf(1, 1, 2, 2, 0, 0, 0), // D: 同上
+        )
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-07",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = listOf(listOf("", "", "")),
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun fairPolishExhaustsSelfSwapWithinSinglePassForMultiUnitImbalance() {
+        val st = multiUnitSelfSwapState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期fair偏差=8", 8, before.breakdown["fair"] ?: -1)
+
+        // maxPasses=1に固定し、1パス内での自己振替の反復可否そのものを検証する。
+        val result = V6HotfixPasses.applyFairPolish(st, sched, maxPasses = 1)
+        val after = UnifiedViolationChecker.check(st, result.newSchedule)
+
+        assertEquals("1パスで自己振替の反復によりfair=0まで解消されること", 0, after.breakdown["fair"] ?: -1)
+        assertEquals("HARDは悪化しない", 0, after.hard)
+        assertTrue("複数回の手が採用されている(単発なら1)", result.applied > 1)
+    }
+
     @Test
     fun fairPolishIsNoOpWhenAlreadyBalanced() {
         val st = selfSwapState().copy(
