@@ -150,6 +150,51 @@ class AptPolishTest {
         assertTrue("実際に手が採用されている", result.applied > 0)
     }
 
+    // [3.260.0, ユーザー指摘「大島が違反研磨で来てない」の根本原因] 手①(自己振替)は旧実装だと
+    // 1パスにつき(i,k)ペア1回成功したら次のhighTargetsへ移っており、excess/deficitが複数単位ある
+    // 職員は1パスで1単位しか解消できなかった（実機ログで大島愛の休(目標11・実績17=超過6)/Pｼ(目標19・
+    // 実績9=不足10)が、AptPolishの1回の呼出で採用1回=2単位しか縮まらず残存し続けていた実例を再現）。
+    private fun multiUnitSelfSwapState(): MagiState {
+        val shifts = listOf(
+            Shift("休", "休", "", ""),
+            Shift("X", "X", "", ""),
+            Shift("Y", "Y", "", ""),
+        )
+        val groups = listOf(Group("G0", "G0"))
+        val groupShift = listOf(listOf(1, 1, 1))
+        val groupShiftApt = listOf(listOf("", "1", "3")) // X目標1・Y目標3
+        val staff = listOf(Staff("A", 0))
+        // A: X,X,X,X,休,休,休（Xは目標1に対し4=超過3、Yは目標3に対し0=不足3）
+        val schedule = listOf(listOf(1, 1, 1, 1, 0, 0, 0))
+        return MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-07",
+            shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
+            groupShift = groupShift, groupShiftApt = groupShiftApt,
+            schedule = schedule, wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun aptPolishExhaustsSelfSwapWithinSinglePassForMultiUnitImbalance() {
+        val st = multiUnitSelfSwapState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期apt偏差=6(X超過3+Y不足3)", 6, before.breakdown["apt"] ?: -1)
+
+        // maxPasses=1に固定し、1パス内での自己振替の反復可否そのものを検証する
+        // （旧実装は1パス・1ターゲットにつき1回しか自己振替せず、超過3件のうち1件しか解消できなかった）。
+        val result = V6HotfixPasses.applyAptPolish(st, sched, maxPasses = 1)
+        val after = UnifiedViolationChecker.check(st, result.newSchedule)
+
+        assertEquals("1パスで超過3件すべてが自己振替により解消されること", 0, after.breakdown["apt"] ?: -1)
+        assertEquals("HARDは悪化しない", 0, after.hard)
+        assertTrue("複数回の手が採用されている(単発なら1)", result.applied >= 3)
+    }
+
     @Test
     fun aptPolishIsNoOpWhenNoAptTargetsSet() {
         val st = selfSwapState().copy(groupShiftApt = listOf(listOf("", "", "")))

@@ -2107,13 +2107,18 @@ object V6HotfixPasses {
             for ((i, k) in highTargets) {
                 if (shouldStop()) break
                 var done = false
-                // 手①: 自身の別シフトでaptLowのものへ振替。
+                // 手①: 自身の別シフトでaptLowのものへ振替（同一(fromK,toK)ペアで解消するまで反復＝
+                //   RangePolishの「上限まで反復して落とす」と同型に統一。他者に一切影響しない自己完結の
+                //   手のためisBetterが認める限り繰り返して安全。旧実装は1回成功したら次のhighTargetsへ
+                //   移っており、excess/deficitが複数単位ある職員は1パスにつき1単位しか解消できず、
+                //   予算超過で後続パスが打ち切られると大きな乖離が残存し続けていた）。
                 for (k2 in 0 until p.K) {
-                    if (done) break
+                    if (shouldStop()) break
                     if (k2 == k || !p.canDo(i, k2)) continue
                     if (lowTargets.none { it.first == i && it.second == k2 }) continue
-                    if (trySelfSwap(i, k, k2)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                    while (trySelfSwap(i, k, k2)) { improved = true; done = true }
                 }
+                if (done) fixedNames.add(label(i, k))
                 // 手②: 同一グループで逆方向(aptLow)の相手と相互交換。
                 if (!done) {
                     for (i2 in 0 until p.S) {
@@ -2323,13 +2328,15 @@ object V6HotfixPasses {
             for ((i, k) in highTargets) {
                 if (shouldStop()) break
                 var done = false
-                // 手①: 自身の別シフトでfairLow(逆方向)のものへ振替。
+                // 手①: 自身の別シフトでfairLow(逆方向)のものへ振替（AptPolishと同型に統一。同一
+                //   (fromK,toK)ペアで解消するまで反復。isBetterが認める限り繰り返して安全）。
                 for (k2 in 0 until p.K) {
-                    if (done) break
+                    if (shouldStop()) break
                     if (k2 == k || !p.canDo(i, k2)) continue
                     if (lowTargets.none { it.first == i && it.second == k2 }) continue
-                    if (trySelfSwap(i, k, k2)) { improved = true; done = true; fixedNames.add(label(i, k)) }
+                    while (trySelfSwap(i, k, k2)) { improved = true; done = true }
                 }
+                if (done) fixedNames.add(label(i, k))
                 // 手②: 同一グループで逆方向(fairLow)の相手と相互交換。
                 if (!done) {
                     for (i2 in 0 until p.S) {
