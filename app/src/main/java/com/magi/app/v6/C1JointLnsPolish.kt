@@ -112,7 +112,6 @@ internal object C1JointLnsPolish {
         var generated = 0
         var debtRejected = 0
         var duplicateRejected = 0
-        var targetSeen = rootC1 <= targetC1
         var restartsDone = 0
 
         for (restart in 0 until restartLimit) {
@@ -161,7 +160,6 @@ internal object C1JointLnsPolish {
                             children.add(child)
 
                             val finalCandidate = isFinalCandidate(p, child, root)
-                            if (finalCandidate && c1 <= targetC1) targetSeen = true
                             if (finalCandidate && better(child.report, best.report)) best = child
                         }
                     }
@@ -181,6 +179,10 @@ internal object C1JointLnsPolish {
         val chosenC1 = if (valid) finalC1 else rootC1
         val progress = if (improvable <= 0) 100 else
             (((rootC1 - chosenC1).coerceAtLeast(0) * 100) / improvable).coerceIn(0, 100)
+        // [receiving-code-review] 返却盤面(chosenC1)基準。以前は探索中に一度でもtargetC1へ届いた
+        // 中間候補があれば恒久trueになる targetSeen フラグを表示しており、その後 better() がより
+        // 良い(だがc1はtargetC1超の)候補へ best を差し替えても「到達」と表示され続けていた。
+        val targetReached = chosenC1 <= targetC1
 
         val stopReason = when {
             chosenC1 <= lowerBound -> "構造下限到達"
@@ -190,7 +192,7 @@ internal object C1JointLnsPolish {
         }
         val log = MirrorLog(
             tag = "C1JointLNS",
-            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, 50%目標=${if (targetSeen) "到達" else "未達"})" +
+            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, 50%目標=${if (targetReached) "到達" else "未達"})" +
                 " / total ${rootReport.total}->${chosenReport.total} HARD ${rootReport.hard}->${chosenReport.hard}" +
                 " 採用${if (valid) 1 else 0}束 手数${if (valid) best.path.size else 0}" +
                 " restart$restartsDone 展開$expanded 候補$generated debt除外$debtRejected 重複除外$duplicateRejected 停止=$stopReason" +
@@ -247,8 +249,9 @@ internal object C1JointLnsPolish {
         for (day in 0 until p.T) {
             val next = Array(p.T + 1) { IntArray(maskLimit) { inf } }
             val wished = p.wish[staff][day]
-            val minBit = if (wished >= 0) if (wished == c.shiftIdx) 1 else 0 else 0
-            val maxBit = if (wished >= 0) minBit else 1
+            val locked = p.wishLocked(staff, day)
+            val minBit = if (locked) (if (wished == c.shiftIdx) 1 else 0) else 0
+            val maxBit = if (locked) minBit else 1
             for (cnt in 0..day) for (mask in 0 until maskLimit) {
                 val base = dp[cnt][mask]
                 if (base >= inf) continue
@@ -471,7 +474,7 @@ internal object C1JointLnsPolish {
 
     private fun allowed(p: Problem, staff: Int, day: Int, shift: Int): Boolean {
         val wish = p.wish[staff][day]
-        return if (wish >= 0) wish == shift else p.canDo(staff, shift)
+        return if (p.wishLocked(staff, day)) wish == shift else p.canDo(staff, shift)
     }
 
     private fun selectBeam(
