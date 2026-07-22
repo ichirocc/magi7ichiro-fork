@@ -3,6 +3,7 @@ package com.magi.app.v6
 import com.magi.app.model.C1Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
+import com.magi.app.model.Range
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
@@ -120,6 +121,44 @@ class SmartInitialSchedulerTest {
         val result = SmartInitialScheduler.generate(st)
         assertEquals(0, result.report.breakdown["c1"] ?: -1)
         assertEquals(0, result.report.hard)
+    }
+
+    @Test
+    fun respectsPersonalUpperLimitEvenWhenC1WindowRequiresMore() {
+        // 実機ログ由来の構造的矛盾を最小再現: 「5日窓でXを2回以上」というC1規則は、
+        // 10日間を通して満たすには複数回のX配置が要る（例: day2,4,6,8）。しかし本人の
+        // 個人上限(staffRange hi=1)は1回までしか許さない。high(重み45)はc1(重み15)より
+        // 重いため、C1充足のためだけに上限を超えてXを増やしてはならない。
+        fun state(withCap: Boolean): MagiState = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-10",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("a", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(List(10) { -1 }),
+            wishes = emptyMap(),
+            staffRange = if (withCap) mapOf("0,1" to Range(lo = "", hi = "1")) else emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "5", shiftKigou = "X", day2 = "2")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+
+        val cappedResult = SmartInitialScheduler.generate(state(withCap = true))
+        val cappedX = cappedResult.schedule[0].count { it == 1 }
+        assertTrue("個人上限(hi=1)を超えて割り当ててはならない: xCount=$cappedX", cappedX <= 1)
+
+        // 対照: 上限が無ければC1充足のためもっと多くのXを割り当てる
+        // （＝上限パラメータが実際に効いていることの確認、恒常的にno-opでないことの担保）。
+        val uncappedResult = SmartInitialScheduler.generate(state(withCap = false))
+        val uncappedX = uncappedResult.schedule[0].count { it == 1 }
+        assertTrue(
+            "上限が無ければcapped構成(${cappedX}件)より多くXを割り当てるはず: uncapped=$uncappedX",
+            uncappedX > cappedX,
+        )
     }
 
     @Test
