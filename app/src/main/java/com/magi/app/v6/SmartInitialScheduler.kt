@@ -163,6 +163,31 @@ object SmartInitialScheduler {
     }
 
     /**
+     * [3.262.0, V6SanityPort検査2b-3(個人内壁検知)向け] 個人上限(rangeHi)を無視した場合に、
+     * 指定の窓ルール群(同一シフトの複数規則も可)を**同時に**完全充足するには最低何日必要かを、
+     * 構築本体(`solveConstructionDp`)自身で計算する。旧2b-3は非重複窓の粗い下界
+     * （`day2*floor(T/day1)`）を使っており、スライド窓の真の必要量を過小評価していた
+     * （実データ検証: 15日窓4回以上の粗い下界=8だが、実際にDPが0違反へ到達するには9〜11日
+     * 必要な職員が複数存在し、粗い下界では「上限8/9で足りている」と誤って見逃していた）。
+     * 無制限cap・全日自由で`solveConstructionDp`を呼び、0違反を達成する解のうち対象日数最小の
+     * ものを返す（DPの優先順位=違反数最優先→対象日数次点、と一致するため正確）。
+     * 0違反が原理的に不可能（規則の日数が期間を超える等）ならnullを返す。
+     */
+    fun minDaysForFullCompliance(t: Int, rules: List<Pair<Int, Int>>, seed: Long = 0x517A2L): Int? {
+        val c1Rules = rules.map { C1Rule(it.first, it.second) }
+        val forced = IntArray(t) { -1 }
+        val targetDays = solveConstructionDp(t, c1Rules, forced, seed, t) ?: return null
+        for (rule in c1Rules) {
+            for (j0 in 0..(t - rule.days)) {
+                var cnt = 0
+                for (j in j0 until j0 + rule.days) if (targetDays[j]) cnt++
+                if (cnt < rule.minimum) return null
+            }
+        }
+        return targetDays.count { it }
+    }
+
+    /**
      * 単一シフトxのC1規則群を満たす「対象日か否か」の月内配置を、ゼロからビットマスクDPで
      * 直接求める（`C1TemporalDp`と異なり回数保存・移設数上限は課さない＝構築専用）。
      *
