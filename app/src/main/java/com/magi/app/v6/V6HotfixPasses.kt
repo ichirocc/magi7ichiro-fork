@@ -384,13 +384,26 @@ object V6HotfixPasses {
         // 既に汲み尽くし済み＝安全なno-op）、sample_state_v6.jsonではC1JointLnsPolishがHARD5→4（既存
         // パイプラインが見つけていなかったHARD削減）、PersonalBalanceJointLnsPolishが個人回数34→31
         // （total 196→195）を発見。実行コストが高い(既定8s/6s)ため巡回ループでなく最終1回のみ実行。
+        // [予算按分, receiving-code-review] HF66(187行)と同型。以前は各パスの既定Config(8s/6s)を
+        //   そのまま使い shouldStop のみを渡していたため、外側 deadlineMs の残りがそれより短くても
+        //   内部deadlineは呼出時点から新規に8s/6s確保され、最大14秒ぶん外側締切を超過し得た。
+        //   残予算をHF66と同じ考え方(半分を後段へ確保)で按分する。残0なら各パスの
+        //   maxMillis<=0ガードにより即スキップ(explicitly無効)される。
         onPhase("後処理 期間要件(c1)共同LNS")
-        val rC1Lns = C1JointLnsPolish.apply(state, work, shouldStop = shouldStop)
+        val tC1Lns = System.currentTimeMillis()
+        val c1LnsCap = ((deadlineMs - tC1Lns).coerceAtLeast(0L) / 2).coerceAtMost(8_000L)
+        val rC1Lns = C1JointLnsPolish.apply(
+            state, work, config = C1JointLnsPolish.Config(maxMillis = c1LnsCap), shouldStop = shouldStop,
+        )
         work = rC1Lns.newSchedule.copy2D()
         logs.addAll(rC1Lns.logs)
 
         onPhase("後処理 個人回数/適切回数 共同LNS")
-        val rPersonalLns = PersonalBalanceJointLnsPolish.apply(state, work, shouldStop = shouldStop)
+        val tPersonalLns = System.currentTimeMillis()
+        val personalLnsCap = (deadlineMs - tPersonalLns).coerceAtLeast(0L).coerceAtMost(6_000L)
+        val rPersonalLns = PersonalBalanceJointLnsPolish.apply(
+            state, work, config = PersonalBalanceJointLnsPolish.Config(maxMillis = personalLnsCap), shouldStop = shouldStop,
+        )
         work = rPersonalLns.newSchedule.copy2D()
         logs.addAll(rPersonalLns.logs)
 

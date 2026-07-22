@@ -82,8 +82,6 @@ internal object PersonalBalanceJointLnsPolish {
         val focus = chooseFocusStaff(p, rootSchedule, rootPersonal, lower, config.maxFocusStaff)
         if (focus.isEmpty()) return noOp(rootSchedule, rootReport, "range/apt対象なし")
 
-        val primary = focus.maxByOrNull { (rootPersonal[it] - lower[it]).coerceAtLeast(0) } ?: focus.first()
-        val primaryGap = (rootPersonal[primary] - lower[primary]).coerceAtLeast(0)
         val rootFocus = focus.sumOf { rootPersonal[it] }
         val budgetMillis = config.maxMillis.coerceAtMost(60_000L)
         val deadline = System.nanoTime() + budgetMillis * 1_000_000L
@@ -143,7 +141,7 @@ internal object PersonalBalanceJointLnsPolish {
                                 changedCellCount(rootSchedule, candidate.schedule),
                             )
                             children.add(child)
-                            if (isFinalCandidate(p, child, root, focus, primary, primaryGap)) {
+                            if (isFinalCandidate(p, child, root, focus)) {
                                 if (best === root || betterFinal(child, best, focus, lower)) best = child
                             }
                         }
@@ -156,10 +154,15 @@ internal object PersonalBalanceJointLnsPolish {
 
         val checked = UnifiedViolationChecker.check(state, best.schedule)
         val checkedPersonal = personalPenaltyByStaff(p, best.schedule)
+        // [receiving-code-review] focusTotal は「悪化させない(<=)」まで緩和。以前は狭義減少(<)を
+        // 要求しており、docstring が明記する「下限到達済みの違反は、同じ下限値の別配置が正式目的
+        // (better())を改善する場合だけ移し替える」ケース（personal合計は不変・total等は改善）を
+        // 機械的に拒否していた。best自体は better() で選ばれた真に改善する解であり、focus側は
+        // 「その改善の副作用でfocus対象が悪化していないか」だけを見れば十分（primary固有の狭義
+        // 改善要求は focus.all の悪化なしチェックと重複するため撤去）。
         val valid = best !== root && better(checked, rootReport) &&
-            focus.sumOf { checkedPersonal[it] } < rootFocus &&
+            focus.sumOf { checkedPersonal[it] } <= rootFocus &&
             focus.all { checkedPersonal[it] <= rootPersonal[it] } &&
-            (primaryGap == 0 || checkedPersonal[primary] < rootPersonal[primary]) &&
             !exactPinRegression(p, rootSchedule, best.schedule)
 
         val chosen = if (valid) best.schedule.copy2D() else rootSchedule.copy2D()
@@ -473,13 +476,14 @@ internal object PersonalBalanceJointLnsPolish {
         node: Node,
         root: Node,
         focus: IntArray,
-        primary: Int,
-        primaryGap: Int,
     ): Boolean {
         if (!better(node.report, root.report)) return false
-        if (node.focusTotal >= root.focusTotal) return false
+        // focusTotal は「悪化させない(<=)」まで緩和。狭義減少(<)のみを許すと、docstring が明記する
+        // 「下限到達済みの職員は、personal合計が同じ別配置でも better() が改善するなら移し替える」
+        // ケースを機械的に拒否してしまう（primary固有の狭義改善要求は次行の悪化なしチェックと
+        // 重複するため撤去済み）。
+        if (node.focusTotal > root.focusTotal) return false
         if (focus.any { node.personal[it] > root.personal[it] }) return false
-        if (primaryGap > 0 && node.personal[primary] >= root.personal[primary]) return false
         // [厳密ピン保護] focus外の職員(coverage連鎖の donor/receiver等)がstaffRange厳密ピンから
         // 遠ざかる副作用も拒否する（focusのみを見る上記チェックでは対象外のため追加）。
         if (exactPinRegression(p, root.schedule, node.schedule)) return false
