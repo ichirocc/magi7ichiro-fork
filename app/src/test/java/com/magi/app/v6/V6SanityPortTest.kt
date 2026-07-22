@@ -106,6 +106,49 @@ class V6SanityPortTest {
         assertTrue(uncapped.none { it.where.contains("個人上限と窓ルールの衝突") })
     }
 
+    // [3.262.0, 「初期解生成でC1違反をゼロにする」調査で判明] 旧2b-3は同一シフトの複数窓ルールを
+    // 各ルール独立(非重複窓の粗い下界)で判定していたが、`SmartInitialScheduler.minDaysForFullCompliance`
+    // で総当たり検証したところ、同一シフトに複数ルールがある場合の**真の同時充足に必要な最小日数**は
+    // 各ルール個別の下界の最大値を上回りうることを確認（例: T=26,「9日窓5回以上」＋「14日窓7回以上」＝
+    // 個別下界は5,10で旧判定なら上限10で「足りている」と誤判定するが、実際の同時充足には14日必要）。
+    private fun personalWallStateTwoRules(
+        day1a: String, day2a: String, day1b: String, day2b: String, hi: String, t: Int,
+    ) = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-${t.toString().padStart(2, '0')}",
+        shifts = listOf(Shift("休", "休", "0", ""), Shift("X", "X", "0", "")),
+        groups = listOf(Group("G", "G")),
+        staff = listOf(Staff("s0", 0)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1)),
+        groupShiftApt = listOf(listOf("", "")),
+        schedule = listOf(List(t) { 0 }),
+        wishes = emptyMap(),
+        staffRange = mapOf("0,1" to Range("0", hi)),
+        needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = listOf(
+            com.magi.app.model.C1Row(day1a, "X", day2a),
+            com.magi.app.model.C1Row(day1b, "X", day2b),
+        ),
+        cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun personalC1WallDetectsTrueJointMinimumExceedingEachRulesOwnBound() {
+        // T=26,「9日窓5回以上」(旧下界=5×floor(26/9)=5)＋「14日窓7回以上」(旧下界=7×floor(26/14)=7)。
+        // 旧判定(各ルール独立)なら上限10は両方の下界(5,7)以上のため「足りている」と誤判定するが、
+        // 実際に0違反へ同時到達するには14日必要（ホストJVM実行で確認済み）で、上限10は真に不足。
+        val flagged = V6SanityPort.buildGuidance(personalWallStateTwoRules("9", "5", "14", "7", "10", 26))
+        assertTrue("同一シフト複数ルールの真の同時最小(14)>上限(10)は壁として案内されること",
+            flagged.any { it.where.contains("s0") && it.where.contains("個人上限と窓ルールの衝突") })
+    }
+
+    @Test fun personalC1WallDoesNotFlagWhenCapMeetsTrueJointMinimum() {
+        // 同じ規則で上限=14(真の同時最小と一致)なら壁として誤検知しないこと。
+        val ok = V6SanityPort.buildGuidance(personalWallStateTwoRules("9", "5", "14", "7", "14", 26))
+        assertTrue("上限が真の同時最小と一致すれば壁として誤検知しないこと",
+            ok.none { it.where.contains("個人上限と窓ルールの衝突") })
+    }
+
     // [3.227.0/c1内訳] 「違反詳細 c1(N件)」はDETAIL_CAP=8で打ち切られ職員別の内訳が読めないため、
     // 職員×窓ルール別の全件集計を別行で出すようにした。s0のみ「休(5日窓≥2)」ルールに1件違反する
     // 最小盤面で、正確な件数がその1行に出ることを固定する。
