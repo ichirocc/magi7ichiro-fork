@@ -37,7 +37,11 @@ object V6FinalPort {
         data class V5(val seconds: Int) : OptimizationPlan()
         data class ALNS(val seconds: Int, val restarts: Int) : OptimizationPlan()
         data class RSIThenALNS(val rsiSec: Int, val alnsSec: Int, val alnsRestarts: Int) : OptimizationPlan()
-        data class RSIPlus(val seconds: Int) : OptimizationPlan()
+        // [3.266.0] 旧RSIPlusから改称。211秒以上はRSI++クローン群でなく、ALNS/RSI/RSI++の異種
+        //   非同期適応ポートフォリオ(V6Algorithm.PORTFOLIO)を使う（HypothesisDiversityPolicy.
+        //   autoAlgorithmForBudget と同じ閾値・同じ意図。旧実装はここが独立した別ロジックのままで、
+        //   V6NativeOptimizer.chooseAlgorithm側だけを直しても実際のAUTOフローには反映されなかった）。
+        data class Portfolio(val seconds: Int) : OptimizationPlan()
     }
 
     data class ImpossibleWishGate(
@@ -92,7 +96,7 @@ object V6FinalPort {
     fun optimizationPlan(seconds: Int): OptimizationPlan {
         // [review #4] Honor the user's budget: the algorithm is still chosen by range, but the
         // run time uses the requested `seconds` (previously fixed 10/30/90/150+75... regardless).
-        // [5分圧縮] 上限300sでも最上位の RSI++ 4フェーズが回るよう閾値を前倒し。
+        // [5分圧縮] 上限300sでも最上位のフェーズが回るよう閾値を前倒し。
         val s = seconds.coerceAtLeast(1)
         return when {
             s <= 30 -> OptimizationPlan.V5(s)
@@ -100,7 +104,11 @@ object V6FinalPort {
             //   HARD 族（c3n 等）を狙う RSI フェーズが一度も走らなかった。短予算でも複合
             //   （RSI=違反集中 2/3 → ALNS=研磨 1/3）へ。各段は入力比 keep-best 番兵つき＝退化なし。
             s <= 210 -> { val rsi = (s * 2) / 3; OptimizationPlan.RSIThenALNS(rsi, s - rsi, 2) }
-            else -> OptimizationPlan.RSIPlus(s)
+            // [3.266.0] 211秒以上は同型RSI++クローン8本でなく、ALNS/RSI/RSI++の異種非同期適応
+            //   ポートフォリオ(V6Algorithm.PORTFOLIO)を使う。旧実装はここが一貫してRSIPlusを返すため、
+            //   V6NativeOptimizer.chooseAlgorithm側の同種の変更だけでは実際のAUTOフローに反映されず、
+            //   本来の狙い（長時間AUTOでの基盤/役割多様化）が発現しない欠陥があった。
+            else -> OptimizationPlan.Portfolio(s)
         }
     }
 
@@ -125,8 +133,10 @@ object V6FinalPort {
         seconds <= 30 -> AlgorithmLabel("★", "標準", "速さと品質のバランス", "v5")
         // [実機指摘] 31〜210s は複合（違反集中→研磨）に統一。表示ラベルもプランと同期。
         seconds <= 210 -> AlgorithmLabel("🧬", "学習+研磨", "RSI違反集中→ALNS研磨", "RSI→ALNS")
-        seconds <= 300 -> AlgorithmLabel("🌈", "究極(5分)", "RSI++ 4フェーズ (Open-ended探索→PhaseC研磨)", "RSI++")
-        else -> AlgorithmLabel("🌈", "究極", "最大限の品質 (${seconds / 60}分)", "RSI++拡張")
+        // [3.266.0] 表示ラベルもプラン(Portfolio)と同期。同型RSI++クローン8本でなく、ALNS/RSI/RSI++が
+        //   異なる基盤・役割から非同期に探索し、停滞/重複を検知して再配属する。
+        seconds <= 300 -> AlgorithmLabel("🌈", "究極(5分)", "ALNS/RSI/RSI++ 異種並列探索(適応epoch)", "PORTFOLIO")
+        else -> AlgorithmLabel("🌈", "究極", "最大限の品質 (${seconds / 60}分)", "PORTFOLIO拡張")
     }
 
     suspend fun handleSimple(state: MagiState, allowImpossible: Boolean = false): ActionResult = withContext(Dispatchers.Default) {
@@ -214,7 +224,7 @@ object V6FinalPort {
             is OptimizationPlan.V5 -> V6OptimizerOptions(V6Algorithm.V5, plan.seconds, workers, softPolish, restarts = 1, postPolish = false)
             is OptimizationPlan.ALNS -> V6OptimizerOptions(V6Algorithm.ALNS, plan.seconds, workers, softPolish, restarts = plan.restarts, postPolish = false)
             is OptimizationPlan.RSIThenALNS -> V6OptimizerOptions(V6Algorithm.RSI, plan.rsiSec, workers, softPolish, restarts = plan.alnsRestarts, postPolish = false)
-            is OptimizationPlan.RSIPlus -> V6OptimizerOptions(V6Algorithm.RSI_PLUS, plan.seconds, workers, softPolish, restarts = 2, postPolish = false)
+            is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false)
         }
         val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true))   // [HF532移植] optFlags.rectSwap 既定ON
         // [review: 600s budget] optimize() + runPostOptimization() を一つの予算で管理する。
@@ -335,41 +345,41 @@ object V6FinalPort {
         } else first
         val tChain1 = System.currentTimeMillis()
 
-        // [品質向上] エリート再結合(Path Relinking): 並列ポートフォリオの精鋭解と現行最良を再結合し、
-        //   両者の中間にある良解を拾う。早期停止等で空いた予算の一部(≤15%・15〜60s)だけを使い、5分は超えない。
-        //   現行最良起点なので退化しない（best-of-best）。
-        val relinkBudgetMs = (budgetMs * 15 / 100).coerceIn(15_000L, 60_000L)
-        // [監査修正] 旧: relink が hardDeadlineMs まで走り、後処理(fair/weekly/c41s 研磨)の予約枠を丸ごと食い潰して
-        //   runPostOptimization が 0 iter に。relink を hardDeadlineMs-postReserveMs/2 で止め、後処理へ予約枠の
-        //   半分を必ず残す（両者 keep-best＝退化なし、文書化された予算分割を復元）。
-        val relinkDeadline = minOf(hardDeadlineMs - postReserveMs / 2, System.currentTimeMillis() + relinkBudgetMs)
+        // [3.268.0/エリート統合] 旧「エリート再結合(Path Relinking)」を置換。8役の最終1解だけでなく、
+        //   非同期適応ポートフォリオが全epochから保存した品質/距離/橋渡しエリート(lastFusionElites)を
+        //   統合する: 双方向Path Relinking＋不一致セル限定Fusionを同じ期限で実行。PORTFOLIO以外の
+        //   アルゴリズムではlastFusionElitesが空のため、旧来のlastAlternatives(最大3件)にフォールバック
+        //   する（挙動は変わらず、対象が無ければ即no-op）。
+        val integrationBudgetMs = (budgetMs / 20).coerceIn(6_000L, 16_000L)
+        // [監査修正を継承] 旧relinkと同じ理由でintegrationもhardDeadlineMs-postReserveMs/2で止め、
+        //   後処理(fair/weekly/c41s 研磨)へ予約枠の半分を必ず残す（両者 keep-best＝退化なし）。
+        val integrationDeadline = minOf(hardDeadlineMs - postReserveMs / 2, System.currentTimeMillis() + integrationBudgetMs)
             .coerceAtLeast(System.currentTimeMillis())
-        val relinkStop = { System.currentTimeMillis() >= relinkDeadline || !isActive }
-        // [#3 並列の論理改善: 反復パスリンク] 精鋭解を一度再結合して終わりにせず、改善が出る限り
-        //   「再結合結果を新たな起点」にして残り精鋭解と再結合し直す(島モデルの再結合を逐次で深掘り)。
-        //   elitePathRelink は常に起点(best)から評価＝各回退化しない(best-of-best)。最大3巡＋relinkStopで停止。
-        val alts = V6NativeOptimizer.lastAlternatives
-        var relinkSched = chained.schedule
-        var relinkRep = chained.report
-        if (alts.isNotEmpty() && !relinkStop()) {
-            var rl = 0
-            while (rl < 3 && !relinkStop()) {
-                val (s, r) = V6NativeOptimizer.elitePathRelink(state, relinkSched, alts, relinkStop)
-                val improved = r.hard < relinkRep.hard ||
-                    (r.hard == relinkRep.hard && r.total < relinkRep.total) ||
-                    (r.hard == relinkRep.hard && r.total == relinkRep.total && r.weightedScore < relinkRep.weightedScore - 1e-6)
-                relinkSched = s; relinkRep = r
-                rl++
-                if (!improved) break   // この巡で改善なし＝再結合の不動点に到達
+        val integrationStop = { System.currentTimeMillis() >= integrationDeadline || !isActive }
+        val archivedElites = V6NativeOptimizer.lastFusionElites
+        val fusionElites = if (archivedElites.isNotEmpty()) archivedElites else {
+            V6NativeOptimizer.lastAlternatives.mapIndexed { index, sched ->
+                AdaptiveElite(
+                    schedule = sched.copy2D(),
+                    report = UnifiedViolationChecker.check(state, sched),
+                    role = HypothesisEpochRole.ELITE_RELINK,
+                    worker = index,
+                    epoch = 0,
+                    bridge = false,
+                )
             }
         }
-        val relinkImproved = relinkRep.hard < chained.report.hard ||
-            (relinkRep.hard == chained.report.hard && relinkRep.total < chained.report.total) ||
-            (relinkRep.hard == chained.report.hard && relinkRep.total == chained.report.total && relinkRep.weightedScore < chained.report.weightedScore - 1e-6)
-        val tRelink1 = System.currentTimeMillis()
+        val integrated = EliteIntegrationPolish.apply(
+            state = state,
+            rootSchedule = chained.schedule,
+            elites = fusionElites,
+            shouldStop = integrationStop,
+            deadlineMs = integrationDeadline,
+        )
+        val tIntegration1 = System.currentTimeMillis()
 
         val post = V6HotfixPasses.runPostOptimization(
-            state, relinkSched, label.tech,
+            state, integrated.schedule, label.tech,
             shouldStop = postShouldStop,
             onPhase = { phase -> progressWatch(phase, null, System.currentTimeMillis() - startMs, budgetMs) },
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
@@ -394,6 +404,7 @@ object V6FinalPort {
                 //   保持した「他の案」を退避し、追加精製の後に復元する（ViewModel の captureAlternatives は
                 //   handleOptimize 復帰後に読むため、退避しないと他の案が消える）。
                 val savedAlts = V6NativeOptimizer.lastAlternatives
+                val savedFusionElites = V6NativeOptimizer.lastFusionElites
                 // [敵対的レビュー3.212.0、仮説数上限撤廃後も維持] 微小予算(5〜25s)の追加精製は本走行と異なり
                 //   仮説数を workers まで増やすと悪化しうる（チェーン毎の固定費=入口hf67+フルcheck×2+
                 //   nativeハンドル生成 が小予算を侵食し、3.102.0が回収した予約枠が高worker設定で再び浪費
@@ -405,6 +416,7 @@ object V6FinalPort {
                     extraStop, progressWatch,
                 )
                 V6NativeOptimizer.restoreAlternatives(savedAlts)
+                V6NativeOptimizer.restoreFusionElites(savedFusionElites)
                 val imp = extra.report.hard < post.report.hard ||
                     (extra.report.hard == post.report.hard && extra.report.total < post.report.total) ||
                     (extra.report.hard == post.report.hard && extra.report.total == post.report.total && extra.report.weightedScore < post.report.weightedScore - 1e-6)
@@ -427,13 +439,10 @@ object V6FinalPort {
             level = if (overBudget) "W" else "I",
             tag = "TIME",
             message = "総${(tExtra1 - startMs) / 1000.0}s (予算${seconds}s${if (overBudget) " 超過" else ""}): " +
-                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 再結合${(tRelink1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tRelink1) / 1000.0}s + 追加精製${(tExtra1 - tPost1) / 1000.0}s " +
+                "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 統合${(tIntegration1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tIntegration1) / 1000.0}s + 追加精製${(tExtra1 - tPost1) / 1000.0}s " +
                 "/ workers設定${workers} 実効仮説${effHypotheses}",
         )
-        val relinkLog = if (relinkImproved) listOf(MirrorLog(
-            level = "I", tag = "PathRelink",
-            message = "エリート再結合で改善: HARD ${chained.report.hard}→${relinkRep.hard} / total ${chained.report.total}→${relinkRep.total}（精鋭${alts.size}解と再結合）",
-        )) else emptyList()
+        val integrationLog = integrated.logs
         val stagnationLog = if (stagnationFired.get()) listOf(MirrorLog(
             level = "I", tag = "EarlyStop",
             message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 ${(tPost1 - startMs) / 1000}sで停止・" +
@@ -486,7 +495,7 @@ object V6FinalPort {
         }
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog, nativeLog) + sentinelLog + relinkLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        val logs = listOf(timingLog, nativeLog) + sentinelLog + integrationLog + extraLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, post)
     }
 
