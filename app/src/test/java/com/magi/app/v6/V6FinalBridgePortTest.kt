@@ -11,15 +11,15 @@ import org.junit.Test
 
 class V6FinalBridgePortTest {
     @Test fun algorithmLabelsMatchWebThresholds() {
-        // [5分圧縮] 上限300sに RSI++ を前倒し（300→RSI++、それ以上は拡張）。
         // [3.128.0] 31〜210s は複合（RSI違反集中→ALNS研磨）に統一（実機指摘: 60s が ALNS 単発だった）。
+        // [3.266.0] 211s〜は異種並列ポートフォリオ（PORTFOLIO、300超は拡張）。
         assertEquals("v5", V6FinalPort.getAlgorithmLabel(10).tech)
         assertEquals("v5", V6FinalPort.getAlgorithmLabel(30).tech)
         assertEquals("RSI→ALNS", V6FinalPort.getAlgorithmLabel(60).tech)
         assertEquals("RSI→ALNS", V6FinalPort.getAlgorithmLabel(90).tech)
         assertEquals("RSI→ALNS", V6FinalPort.getAlgorithmLabel(180).tech)
-        assertEquals("RSI++", V6FinalPort.getAlgorithmLabel(300).tech)
-        assertEquals("RSI++拡張", V6FinalPort.getAlgorithmLabel(600).tech)
+        assertEquals("PORTFOLIO", V6FinalPort.getAlgorithmLabel(300).tech)
+        assertEquals("PORTFOLIO拡張", V6FinalPort.getAlgorithmLabel(600).tech)
     }
 
     @Test fun busyDetailAndGateWork() {

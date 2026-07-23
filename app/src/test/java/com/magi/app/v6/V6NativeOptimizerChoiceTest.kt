@@ -14,11 +14,11 @@ import java.util.Random
 
 class V6NativeOptimizerChoiceTest {
     @Test fun autoBudgetChoosesExpectedAlgorithm() {
-        // [5分圧縮] 上限300sでも RSI++ に到達するよう前倒し（≤30 V5 / ≤90 ALNS / ≤210 RSI / それ以上 RSI++）。
+        // [異種並列ポートフォリオ] ≤30 V5 / ≤90 ALNS / ≤210 RSI / それ以上 PORTFOLIO(適応epoch異種並列)。
         assertEquals(V6Algorithm.V5, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 10))
         assertEquals(V6Algorithm.ALNS, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 60))
         assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 150))
-        assertEquals(V6Algorithm.RSI_PLUS, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 300))
+        assertEquals(V6Algorithm.PORTFOLIO, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 300))
         assertEquals(V6Algorithm.ALNS, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.ALNS, 10))
     }
 

@@ -118,6 +118,61 @@ object V6NativeOptimizer {
         else -> OpSelectMode.ROULETTE
     }
 
+    /** [3.266.0/hypothesis basin diversity] 変更セル数。診断ログとdiversity判定の両方に使う。
+     *  実体は AdaptiveEliteArchive.scheduleDistance（唯一の実装）への委譲。両クラスから同じ距離定義を
+     *  共有し、アルゴリズムの二重実装（DRY違反）を避ける。 */
+    internal fun scheduleDistance(a: Array<IntArray>, b: Array<IntArray>): Int =
+        AdaptiveEliteArchive.scheduleDistance(a, b)
+
+    /**
+     * [3.266.0/hypothesis basin diversity] 非ベースライン仮説に構造的に異なる吸引域を与える。
+     * W0/W4 は現行盤面の完全コピーのまま＝既存の安全フロアは維持される。
+     */
+    internal fun hypothesisStartFor(
+        state: MagiState,
+        base: Array<IntArray>,
+        index: Int,
+        seed: Long,
+    ): Array<IntArray> {
+        val out = base.copy2D()
+        val plan = HypothesisDiversityPolicy.startPlanFor(index)
+        if (plan.mode == HypothesisStartMode.BASELINE) return out
+        val p = cachedProblem(state)
+        val rng = Random(actualSeed(seed) xor 0xD1A5EEDL xor
+            (index.toLong() * -0x61c8864680b583ebL))
+        repeat(plan.intensity) {
+            when (plan.mode) {
+                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                HypothesisStartMode.MIXED_REPAIR -> {
+                    if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                    if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                }
+                HypothesisStartMode.BASELINE -> Unit
+            }
+        }
+        if (scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
+        return out
+    }
+
+    private fun forceDiverseKick(p: Problem, out: Array<IntArray>, rng: Random, target: Int) {
+        if (p.S == 0 || p.T == 0) return
+        val touched = HashSet<Long>()
+        var changed = 0
+        var attempts = 0
+        val maxAttempts = max(32, p.S * p.T * 4)
+        while (changed < target && attempts++ < maxAttempts) {
+            val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
+            val key = i.toLong() * max(1, p.T) + j
+            if (!touched.add(key) || p.wishLocked(i, j)) continue
+            val old = out[i][j]
+            val alternatives = p.allowedShiftsForStaff(i).filter { it != old }
+            if (alternatives.isEmpty()) continue
+            out[i][j] = alternatives[rng.nextInt(alternatives.size)]
+            changed++
+        }
+    }
+
     /**
      * 時間予定型 Great Deluge の水位（Burke, Bykov, Newall & Petrovic 2004）。
      * frac=1(序盤)で initial、frac=0(終盤)で best へ線形降下。候補スコア ≤ 水位 なら受理。
@@ -132,6 +187,16 @@ object V6NativeOptimizer {
     /** [他の案の保全] optimize() は入口で lastAlternatives を空にするため、追加精製(ExtraRefine)等で
      *  optimize() を再呼出しする側が「本走行の他の案」を退避→復元できるようにする（V6FinalPort 専用）。 */
     fun restoreAlternatives(saved: List<Array<IntArray>>) { lastAlternatives = saved }
+
+    /** [3.268.0/elite archive fusion] 全epochから圧縮した品質・距離・橋渡しエリート
+     *  （最適化後の再結合/Fusion専用、PORTFOLIO実行時のみ非空）。 */
+    @Volatile internal var lastFusionElites: List<AdaptiveElite> = emptyList()
+        private set
+
+    /** ExtraRefine の optimize() 再入で消える本走行アーカイブを復元する（restoreAlternatives と対）。 */
+    internal fun restoreFusionElites(saved: List<AdaptiveElite>) {
+        lastFusionElites = saved.map { it.copy(schedule = it.schedule.copy2D()) }
+    }
 
     /** [DefragLiveView移植] 実行中の最良盤面スナップショット（計算中ライブ表示用・読取専用）。
      *  進捗の節目で更新。
@@ -165,6 +230,7 @@ object V6NativeOptimizer {
     ): V6OptimizerResult {
         val started = nowMs()
         lastAlternatives = emptyList()
+        lastFusionElites = emptyList()
         liveBest = null
         liveBestReport.set(null)
         // [敵対的レビュー: 進捗コールバックの直列化] runMultiWorker(仮説横断)・runAlnsChains(チェーン横断)は
@@ -214,17 +280,23 @@ object V6NativeOptimizer {
             // V5 already runs `workers` parallel SA chains inside SaOptimizer.
             V6Algorithm.V5 -> runV5(state, schedule, options, full, shouldStop, onProgress)
             // ALNS/RSI/RSI++ are run as up to 5 parallel hypotheses with hybrid early-cancel.
-            V6Algorithm.ALNS -> runMultiWorker(w, options, onProgress) { _, o, prog -> runAlns(state, schedule.copy2D(), o, full, shouldStop, prog) }
-            V6Algorithm.RSI -> runMultiWorker(w, options, onProgress) { _, o, prog -> runRsi(state, schedule.copy2D(), o, full, shouldStop, prog) }
-            V6Algorithm.RSI_PLUS -> runMultiWorker(w, options, onProgress) { _, o, prog -> runRsiPlus(state, schedule.copy2D(), o, full, shouldStop, prog) }
-            // [協力ポートフォリオ] 1回の最適化で各仮説に異なる方式を割当て、keep-best プールで最良を共有採用。
-            V6Algorithm.PORTFOLIO -> runMultiWorker(w, options, onProgress) { i, o, prog ->
-                when (portfolioAlgoFor(i)) {
-                    V6Algorithm.ALNS -> runAlns(state, schedule.copy2D(), o, full, shouldStop, prog)
-                    V6Algorithm.RSI -> runRsi(state, schedule.copy2D(), o, full, shouldStop, prog)
-                    else -> runRsiPlus(state, schedule.copy2D(), o, full, shouldStop, prog)
-                }
+            // [3.266.0/hypothesis basin diversity] 各仮説の入口盤面を hypothesisStartFor で多様化
+            //   （W0/W4のみ現行盤面のコピー=安全フロア維持）。旧実装は全仮説が同一盤面から出発しており、
+            //   探索経路が異なっても頻繁に同じ吸引域へ収束していた（実データで8仮説→相異なる解1件を確認）。
+            V6Algorithm.ALNS -> runMultiWorker(w, options, onProgress) { i, o, prog ->
+                runAlns(state, hypothesisStartFor(state, schedule, i, o.seed), o, full, shouldStop, prog)
             }
+            V6Algorithm.RSI -> runMultiWorker(w, options, onProgress) { i, o, prog ->
+                runRsi(state, hypothesisStartFor(state, schedule, i, o.seed), o, full, shouldStop, prog)
+            }
+            V6Algorithm.RSI_PLUS -> runMultiWorker(w, options, onProgress) { i, o, prog ->
+                runRsiPlus(state, hypothesisStartFor(state, schedule, i, o.seed), o, full, shouldStop, prog)
+            }
+            // [3.267.0/adaptive hypothesis epochs] 1回起動して終了を待つ旧協力ポートフォリオ（各仮説に
+            //   異なる方式を割当て keep-best で最良採用）では、入口を多様化しても収束後は同じ吸引域へ
+            //   潰れたまま残時間を消費していた。5〜8秒（RSI++は35秒）epochで停滞/basin重複を検知し、
+            //   エリートを保存しながら役割を再配属する非同期適応ポートフォリオへ置換。
+            V6Algorithm.PORTFOLIO -> runAdaptivePortfolio(state, schedule, w, options, full, shouldStop, onProgress)
             V6Algorithm.AUTO -> error("AUTO must be resolved")
         }
         logs = logs + result.phaseLogs
@@ -334,6 +406,396 @@ object V6NativeOptimizer {
         return IntArray(h) { i -> basePer + if (i < remainder) 1 else 0 }
     }
 
+    private data class AdaptiveWorkerOutcome(
+        val elite: Array<IntArray>,
+        val report: ViolationReport,
+        val logs: List<MirrorLog>,
+        val iterations: Long,
+        val epochs: Int,
+        val reassignments: Int,
+        val roleRuns: Map<HypothesisEpochRole, Int>,
+    )
+
+    /**
+     * [3.267.0/adaptive hypothesis epochs, 3.268.0/elite archive fusion]
+     * Adaptive asynchronous island portfolio. Each worker owns its epoch clock, so lightweight
+     * ALNS/RSI roles can rotate every 5-8 seconds while RSI++ roles receive the 35 seconds required
+     * to execute Seed(10)+RSI(10)+ALNS(10)+Polish(5) instead of being accidentally reduced to Seed.
+     * A plateau saves the local elite and changes role/start basin/seed; only the shared deadline,
+     * user cancellation, or HARD=0 ends the portfolio. W0 is never reassigned. Every schedule ever
+     * produced by an epoch (start or role-search result) is registered into an [AdaptiveEliteArchive]
+     * so the post-portfolio elite integration (EliteIntegrationPolish, see V6FinalPort) can relink
+     * and fuse across the whole run, not just the final per-worker elite.
+     */
+    private suspend fun runAdaptivePortfolio(
+        state: MagiState,
+        entry: Array<IntArray>,
+        w: Int,
+        options: V6OptimizerOptions,
+        budgetSec: Int,
+        shouldStop: () -> Boolean,
+        onProgress: (String, ViolationReport?, Long, Long) -> Unit,
+    ): V6OptimizerResult = kotlinx.coroutines.supervisorScope {
+        val started = nowMs()
+        val deadline = started + budgetSec.coerceAtLeast(1) * 1000L
+        val baseSeed = actualSeed(options.seed)
+        val workers = max(1, w)
+        val lock = Any()
+        val firstError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+        val hardZeroWinner = java.util.concurrent.atomic.AtomicInteger(-1)
+        val archive = AdaptiveEliteArchive()
+
+        val sharedTrajectories = Array(workers) { i -> hypothesisStartFor(state, entry, i, baseSeed) }
+        val initialReports = Array(workers) { i -> UnifiedViolationChecker.check(state, sharedTrajectories[i]) }
+        var globalBest = entry.copy2D()
+        var globalReport = UnifiedViolationChecker.check(state, globalBest)
+        var globalLogs: List<MirrorLog> = emptyList()
+        archive.register(
+            entry, globalReport, HypothesisEpochRole.BASELINE_REFINE, worker = 0, epoch = 0, bridge = false,
+        )
+        for (i in 0 until workers) {
+            val assignment = AdaptiveHypothesisEpochPolicy.assignmentFor(i, 0)
+            archive.register(
+                sharedTrajectories[i], initialReports[i], assignment.role, i, 0,
+                bridge = initialReports[i].hard == globalReport.hard + 1,
+            )
+            if (better(initialReports[i], globalReport)) {
+                globalBest = sharedTrajectories[i].copy2D(); globalReport = initialReports[i]
+            }
+        }
+
+        val jobs = Array<kotlinx.coroutines.Deferred<AdaptiveWorkerOutcome>>(workers) { i ->
+            async(Dispatchers.Default) {
+                var trajectory = synchronized(lock) { sharedTrajectories[i].copy2D() }
+                var elite = trajectory.copy2D()
+                var eliteReport = initialReports[i]
+                var eliteLogs: List<MirrorLog> = emptyList()
+                var reassignments = 0
+                var stagnantEpochs = 0
+                var improvedPrevious = false
+                var epoch = 0
+                var iterations = 0L
+                val roleRuns = LinkedHashMap<HypothesisEpochRole, Int>()
+
+                while (!shouldStop() && nowMs() < deadline && hardZeroWinner.get() < 0) {
+                    val assignment = AdaptiveHypothesisEpochPolicy.assignmentFor(i, reassignments)
+                    roleRuns.merge(assignment.role, 1, Int::plus)
+                    val roleSeed = AdaptiveHypothesisEpochPolicy.epochSeed(baseSeed, i, epoch, reassignments)
+                    val snapshot = synchronized(lock) {
+                        Triple(
+                            globalBest.copy2D(),
+                            globalReport,
+                            Array(workers) { x -> sharedTrajectories[x].copy2D() },
+                        )
+                    }
+                    val start = adaptiveEpochStart(
+                        state = state,
+                        globalBest = snapshot.first,
+                        localTrajectory = trajectory,
+                        peers = snapshot.third,
+                        assignment = assignment,
+                        seed = roleSeed,
+                        shouldStop = shouldStop,
+                    )
+                    val startReport = UnifiedViolationChecker.check(state, start)
+                    archive.register(
+                        start, startReport, assignment.role, i, epoch,
+                        bridge = startReport.hard == snapshot.second.hard + 1,
+                    )
+                    trajectory = start
+                    if (better(startReport, eliteReport)) {
+                        elite = start.copy2D(); eliteReport = startReport
+                    }
+                    var startImprovedGlobal = false
+                    synchronized(lock) {
+                        sharedTrajectories[i] = start.copy2D()
+                        if (better(startReport, globalReport)) {
+                            globalBest = start.copy2D(); globalReport = startReport
+                            startImprovedGlobal = true
+                        }
+                    }
+                    if (startImprovedGlobal) {
+                        onProgress(
+                            "適応portfolio W$i ${AdaptiveHypothesisEpochPolicy.roleLabel(assignment)} 入口改善",
+                            startReport, iterations, nowMs() - started,
+                        )
+                    }
+
+                    val remainingSec = ((deadline - nowMs() + 999L) / 1000L).toInt().coerceAtLeast(0)
+                    val quantum = AdaptiveHypothesisEpochPolicy.quantumSeconds(
+                        assignment, improvedPrevious, remainingSec,
+                    )
+                    if (quantum <= 0) break
+                    val roleDeadline = minOf(deadline, nowMs() + quantum * 1000L)
+                    val roleIndex = i + reassignments * 8
+                    val roleOptions = options.copy(
+                        workers = 1,
+                        seed = roleSeed,
+                        explore = when (assignment.role) {
+                            HypothesisEpochRole.HARD_DEBT_RSI_PLUS,
+                            HypothesisEpochRole.LARGE_DESTROY_ALNS,
+                            HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> max(2.0, roleExploreFor(roleIndex))
+                            else -> roleExploreFor(roleIndex)
+                        },
+                        accept = roleAcceptFor(roleIndex),
+                        opSelect = roleOpSelectFor(roleIndex),
+                        tabu = assignment.role != HypothesisEpochRole.BASELINE_REFINE,
+                    )
+                    val stopRole = {
+                        shouldStop() || nowMs() >= roleDeadline ||
+                            (hardZeroWinner.get() >= 0 && hardZeroWinner.get() != i)
+                    }
+                    val result = try {
+                        val progress: (String, ViolationReport?, Long, Long) -> Unit = { phase, rep, it, elapsed ->
+                            if (rep?.hard == 0) hardZeroWinner.compareAndSet(-1, i)
+                            if (i == 0 || rep?.hard == 0) {
+                                onProgress(
+                                    "適応portfolio W$i epoch${epoch + 1} ${AdaptiveHypothesisEpochPolicy.roleLabel(assignment)} / $phase",
+                                    rep, it, elapsed,
+                                )
+                            }
+                        }
+                        when (assignment.algorithm) {
+                            V6Algorithm.ALNS -> runAlns(state, start.copy2D(), roleOptions, quantum, stopRole, progress)
+                            V6Algorithm.RSI -> runRsi(state, start.copy2D(), roleOptions, quantum, stopRole, progress)
+                            else -> runRsiPlus(state, start.copy2D(), roleOptions, quantum, stopRole, progress)
+                        }
+                    } catch (ce: kotlinx.coroutines.CancellationException) {
+                        throw ce
+                    } catch (e: Exception) {
+                        firstError.compareAndSet(null, e)
+                        null
+                    }
+
+                    val improvedThisEpoch: Boolean
+                    if (result == null) {
+                        improvedThisEpoch = false
+                    } else {
+                        if (result.report.hard == 0) hardZeroWinner.compareAndSet(-1, i)
+                        iterations += result.iterations
+                        archive.register(
+                            result.schedule, result.report, assignment.role, i, epoch,
+                            bridge = result.report.hard == snapshot.second.hard + 1,
+                        )
+                        trajectory = result.schedule.copy2D()
+                        improvedThisEpoch = better(result.report, startReport)
+                        if (better(result.report, eliteReport)) {
+                            elite = result.schedule.copy2D()
+                            eliteReport = result.report
+                            eliteLogs = result.phaseLogs
+                        }
+                        var improvedGlobal = false
+                        synchronized(lock) {
+                            sharedTrajectories[i] = result.schedule.copy2D()
+                            if (better(result.report, globalReport)) {
+                                globalBest = result.schedule.copy2D()
+                                globalReport = result.report
+                                globalLogs = result.phaseLogs
+                                improvedGlobal = true
+                            }
+                        }
+                        if (improvedGlobal) {
+                            onProgress(
+                                "適応portfolio グローバル最良更新 W$i epoch${epoch + 1}",
+                                result.report, iterations, nowMs() - started,
+                            )
+                        }
+                    }
+
+                    stagnantEpochs = AdaptiveHypothesisEpochPolicy.nextStagnantEpochs(
+                        stagnantEpochs, improvedThisEpoch,
+                    )
+                    val nearest = synchronized(lock) {
+                        var d = Int.MAX_VALUE
+                        for (x in 0 until workers) if (x != i) {
+                            d = minOf(d, scheduleDistance(trajectory, sharedTrajectories[x]))
+                        }
+                        d
+                    }
+                    if (AdaptiveHypothesisEpochPolicy.shouldReassign(
+                            index = i,
+                            improvedThisEpoch = improvedThisEpoch,
+                            stagnantEpochs = stagnantEpochs,
+                            nearestOtherDistance = nearest,
+                        )
+                    ) {
+                        reassignments++
+                        stagnantEpochs = 0
+                        improvedPrevious = false
+                    } else {
+                        improvedPrevious = improvedThisEpoch
+                    }
+                    epoch++
+                }
+
+                AdaptiveWorkerOutcome(
+                    elite = elite,
+                    report = eliteReport,
+                    logs = eliteLogs,
+                    iterations = iterations,
+                    epochs = epoch,
+                    reassignments = reassignments,
+                    roleRuns = roleRuns,
+                )
+            }
+        }
+
+        val outcomes = jobs.map { d -> d.await() }
+        ensureActive()
+        for ((index, o) in outcomes.withIndex()) {
+            archive.register(
+                o.elite, o.report,
+                AdaptiveHypothesisEpochPolicy.assignmentFor(index, o.reassignments).role,
+                index, o.epochs, bridge = o.report.hard == globalReport.hard + 1,
+            )
+            if (better(o.report, globalReport)) {
+                globalBest = o.elite.copy2D(); globalReport = o.report; globalLogs = o.logs
+            }
+        }
+        val compressedElites = archive.snapshot(globalBest, globalReport)
+        lastFusionElites = compressedElites
+        lastAlternatives = compressedElites.asSequence()
+            .filter { !it.bridge }
+            .filter { !AdaptiveEliteArchive.sameSchedule(it.schedule, globalBest) }
+            .map { it.schedule.copy2D() }
+            .take(3)
+            .toList()
+
+        val distinctElites = compressedElites.map { o ->
+            o.schedule.joinToString("|") { it.joinToString(",") }
+        }.distinct().size
+        val pairDistances = ArrayList<Int>()
+        for (i in outcomes.indices) for (j in i + 1 until outcomes.size) {
+            pairDistances.add(scheduleDistance(outcomes[i].elite, outcomes[j].elite))
+        }
+        val distanceNote = if (pairDistances.isEmpty()) "対象外" else
+            "${pairDistances.minOrNull()}..${pairDistances.maxOrNull()}セル"
+        val roleNote = outcomes.indices.joinToString(" | ") { i ->
+            val o = outcomes[i]
+            val used = o.roleRuns.entries.joinToString(",") { "${it.key.name}x${it.value}" }
+            "W${i}:epoch${o.epochs}/再配属${o.reassignments}[$used]"
+        }
+        val summary = MirrorLog(
+            tag = "AdaptivePortfolio",
+            message = "非同期適応仮説 archive=${archive.size()} 圧縮elite=${compressedElites.size} " +
+                "相異なるelite=$distinctElites 距離=$distanceNote / $roleNote" +
+                (firstError.get()?.let { " / 一部例外=${it.message}" } ?: "") +
+                " / 採用 HARD=${globalReport.hard} total=${globalReport.total}",
+        )
+        val logs = globalLogs + summary
+        V6OptimizerResult(
+            globalBest,
+            globalReport.copy(logs = logs + globalReport.logs),
+            V6Algorithm.PORTFOLIO,
+            logs,
+            outcomes.sumOf { it.iterations },
+            nowMs() - started,
+        )
+    }
+
+    private fun adaptiveEpochStart(
+        state: MagiState,
+        globalBest: Array<IntArray>,
+        localTrajectory: Array<IntArray>,
+        peers: Array<Array<IntArray>>,
+        assignment: HypothesisEpochAssignment,
+        seed: Long,
+        shouldStop: () -> Boolean,
+    ): Array<IntArray> {
+        val p = cachedProblem(state)
+        val rng = Random(seed)
+        val n = max(1, assignment.intensity)
+        return when (assignment.role) {
+            HypothesisEpochRole.BASELINE_REFINE -> localTrajectory.copy2D()
+            HypothesisEpochRole.ELITE_RELINK -> {
+                val alternatives = peers.asSequence()
+                    .filter { scheduleDistance(globalBest, it) > 0 }
+                    .sortedByDescending { scheduleDistance(globalBest, it) }
+                    .take(3).map { it.copy2D() }.toList()
+                val relinked = elitePathRelink(state, globalBest, alternatives, shouldStop).first
+                if (scheduleDistance(globalBest, relinked) > 0) relinked
+                else hypothesisStartFor(state, globalBest, 7, seed)
+            }
+            HypothesisEpochRole.DAY_BLOCK_ALNS -> globalBest.copy2D().also { out ->
+                if (p.T > 0) {
+                    val first = rng.nextInt(p.T)
+                    repeat(n * 2) { x -> destroyRepairDayAt(state, out, (first + x) % p.T, rng) }
+                }
+            }
+            HypothesisEpochRole.HARD_FAMILY_RSI -> {
+                var out = globalBest.copy2D()
+                repeat(n) {
+                    val rep = UnifiedViolationChecker.check(state, out)
+                    val focus = when {
+                        (rep.breakdown["covU"] ?: 0) > 0 -> "covU"
+                        (rep.breakdown["c3n"] ?: 0) > 0 -> "c3n"
+                        else -> maxViolatedFamily(rep)
+                    }
+                    out = rsiGenerateHypothesis(state, out, rep, focus, rng)
+                }
+                out
+            }
+            HypothesisEpochRole.HARD_DEBT_RSI_PLUS -> globalBest.copy2D().also { out ->
+                forceDiverseKick(p, out, rng, 2 + n)
+            }
+            HypothesisEpochRole.LARGE_DESTROY_ALNS -> globalBest.copy2D().also { out ->
+                repeat(n * 2) {
+                    if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                    if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                }
+            }
+            HypothesisEpochRole.PERSONAL_RSI -> {
+                var out = globalBest.copy2D()
+                repeat(n) {
+                    val rep = UnifiedViolationChecker.check(state, out)
+                    val focus = when {
+                        (rep.breakdown["apt"] ?: 0) > 0 -> "apt"
+                        (rep.breakdown["high"] ?: 0) > 0 -> "high"
+                        (rep.breakdown["low"] ?: 0) > 0 -> "low"
+                        (rep.breakdown["fair"] ?: 0) > 0 -> "fair"
+                        else -> "total"
+                    }
+                    out = rsiGenerateHypothesis(state, out, rep, focus, rng)
+                }
+                out
+            }
+            HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> globalBest.copy2D().also { out ->
+                forceMaxDistanceKick(p, out, peers, rng, 3 + n)
+            }
+        }
+    }
+
+    private fun forceMaxDistanceKick(
+        p: Problem,
+        out: Array<IntArray>,
+        peers: Array<Array<IntArray>>,
+        rng: Random,
+        target: Int,
+    ) {
+        if (p.S == 0 || p.T == 0) return
+        var changed = 0
+        var attempts = 0
+        val touched = HashSet<Long>()
+        while (changed < target && attempts++ < max(64, p.S * p.T * 6)) {
+            val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
+            val key = i.toLong() * max(1, p.T) + j
+            if (!touched.add(key) || p.wishLocked(i, j)) continue
+            val old = out[i][j]
+            val allowed = p.allowedShiftsForStaff(i).filter { it != old }
+            if (allowed.isEmpty()) continue
+            var bestK = -1; var bestFreq = Int.MAX_VALUE; var tied = 0
+            for (k in allowed) {
+                val freq = peers.count { peer -> peer.getOrNull(i)?.getOrNull(j) == k }
+                if (freq < bestFreq) { bestFreq = freq; bestK = k; tied = 1 }
+                else if (freq == bestFreq) {
+                    tied++
+                    if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestK = k
+                }
+            }
+            if (bestK >= 0) { out[i][j] = bestK; changed++ }
+        }
+    }
+
     /**
      * Run up to [w] independent hypotheses concurrently (distinct seeds) and keep the best —
      * the native W0..Wn multi-worker pool with the spec's hybrid termination (§2.2/§4.2):
@@ -428,13 +890,24 @@ object V6NativeOptimizer {
         val mode = if (winner.get() >= 0) "合格で早期キャンセル" else "時間内最良採用"
         val chainNote = if (plan.max() > 1) "・仮説内${plan.min()}〜${plan.max()}並列(SA/ALNS多チェーン)" else ""
         val failNote = if (results.size < w) "・失敗${w - results.size}本(例外/キャンセル${firstError.get()?.let { "・${it.message}" } ?: ""})" else ""
-        val extra = MirrorLog(tag = "MultiWorker", message = "仮説 ${w} 本 ($mode・役割分担:探索/精製＋受理SA/GreatDeluge多様化$chainNote$failNote) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters}")
+        // [3.266.0/hypothesis basin diversity] 各仮説の入口が実際にどう多様化されたかをログに残す。
+        val entryRoles = (0 until w).joinToString(" ") { i ->
+            val sp = HypothesisDiversityPolicy.startPlanFor(i)
+            "W$i=${sp.mode.name.removeSuffix("_REPAIR")}${if (sp.intensity > 0) "x${sp.intensity}" else ""}"
+        }
+        val extra = MirrorLog(tag = "MultiWorker", message = "仮説 ${w} 本 ($mode・役割分担:探索/精製＋受理SA/GreatDeluge多様化$chainNote$failNote) → 採用 HARD=${best.report.hard} total=${best.report.total} 合計iter=${totalIters} / 入口役割 $entryRoles")
         // [過程検証] 各仮説の個別結果・多様性（相異なる解の数）・保持した他の案数をログ化し、探索過程を後から検証できるようにする。
         //   各仮説の合計が揃っていれば収束、ばらけていれば多様な探索ができている、と判別できる。
         val perHyp = results.sortedWith(compareBy({ it.report.hard }, { it.report.total }))
             .joinToString("  ") { r -> "[必須${r.report.hard}/合計${r.report.total}${if (r === best) "★採用" else ""}]" }
         val distinctSols = results.map { r -> r.schedule.joinToString("|") { row -> row.joinToString(",") } }.distinct().size
-        val verifyLog = MirrorLog(tag = "仮説検証", message = "各仮説 ${results.size} 本の結果: $perHyp / 相異なる解=${distinctSols}件 / 他の案として保持=${lastAlternatives.size}件")
+        val pairDistances = ArrayList<Int>()
+        for (a in results.indices) for (b in a + 1 until results.size) {
+            pairDistances.add(AdaptiveEliteArchive.scheduleDistance(results[a].schedule, results[b].schedule))
+        }
+        val distanceNote = if (pairDistances.isEmpty()) "解間距離=対象外" else
+            "解間距離=${pairDistances.minOrNull()}..${pairDistances.maxOrNull()}セル"
+        val verifyLog = MirrorLog(tag = "仮説検証", message = "各仮説 ${results.size} 本の結果: $perHyp / 相異なる解=${distinctSols}件 / $distanceNote / 他の案として保持=${lastAlternatives.size}件")
         best.copy(phaseLogs = best.phaseLogs + extra + verifyLog, iterations = totalIters)
     }
 
@@ -468,22 +941,12 @@ object V6NativeOptimizer {
         return bestOp
     }
 
-    /** [協力ポートフォリオ] 仮説 i に割り当てる方式。最上位(RSI++)を厚めに、ALNS/RSI で多様化。 */
-    private fun portfolioAlgoFor(i: Int): V6Algorithm = when (i % 4) {
-        1 -> V6Algorithm.ALNS
-        2 -> V6Algorithm.RSI
-        else -> V6Algorithm.RSI_PLUS
-    }
-
     fun chooseAlgorithm(requested: V6Algorithm, budgetSec: Int): V6Algorithm {
         if (requested != V6Algorithm.AUTO) return requested
-        // [5分圧縮] 上限300sでも最上位 RSI++ に到達できるよう閾値を前倒し。
-        return when {
-            budgetSec <= 30 -> V6Algorithm.V5
-            budgetSec <= 90 -> V6Algorithm.ALNS
-            budgetSec <= 210 -> V6Algorithm.RSI
-            else -> V6Algorithm.RSI_PLUS
-        }
+        // [3.266.0] 211秒以上は同型RSI++クローン群でなく、ALNS/RSI/RSI++の異種PORTFOLIOを使う
+        //   （HypothesisDiversityPolicy.autoAlgorithmForBudget、旧 portfolioAlgoFor は
+        //   runAdaptivePortfolio への置換で不要化したため削除）。
+        return HypothesisDiversityPolicy.autoAlgorithmForBudget(budgetSec)
     }
 
     private suspend fun runV5(
@@ -1570,11 +2033,16 @@ object V6NativeOptimizer {
             if (need <= 0) continue
             var miss = need - covJ[k]
             while (miss > 0) {
-                var bestI = -1; var bestDelta = Long.MAX_VALUE
+                var bestI = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
                 for (i in 0 until p.S) {
                     if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.canDo(i, k)) continue
                     val delta = staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - staffCountPenaltyAt(p, i, k, cnt[i][k]) + c41DayMarg(p.sgrp[i], k)
-                    if (delta < bestDelta) { bestDelta = delta; bestI = i }
+                    if (delta < bestDelta) {
+                        bestDelta = delta; bestI = i; tied = 1
+                    } else if (delta == bestDelta) {
+                        tied++
+                        if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestI = i
+                    }
                 }
                 if (bestI < 0) break
                 schedule[bestI][j] = k; cnt[bestI][k]++; cnt[bestI][rest]--; covJ[k]++; miss--
@@ -1611,14 +2079,19 @@ object V6NativeOptimizer {
         for (x in 0 until p.S) for (j in 0 until p.T) { val k2 = schedule[x][j]; if (k2 in 0 until p.K) cov[j][k2]++ }
         for (j in 0 until p.T) {
             if (p.wishLocked(i, j) || schedule[i][j] != rest) continue
-            var bestK = -1; var bestDelta = Long.MAX_VALUE
+            var bestK = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
             for (k in 0 until p.K) {
                 if (k == rest || !p.canDo(i, k)) continue
                 val need = p.need1[k][j]
                 if (need <= 0) continue
                 if (cov[j][k] >= need) continue
                 val delta = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k])
-                if (delta < bestDelta) { bestDelta = delta; bestK = k }
+                if (delta < bestDelta) {
+                    bestDelta = delta; bestK = k; tied = 1
+                } else if (delta == bestDelta) {
+                    tied++
+                    if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestK = k
+                }
             }
             if (bestK >= 0) { schedule[i][j] = bestK; cntI[bestK]++; cntI[rest]--; cov[j][bestK]++; cov[j][rest]-- }
         }
@@ -1640,13 +2113,18 @@ object V6NativeOptimizer {
             val cntI = IntArray(p.K)
             for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cntI[k]++ }
             val old = schedule[i][j]
-            var bestK = old; var bestDelta = Long.MAX_VALUE
+            var bestK = old; var bestDelta = Long.MAX_VALUE; var tied = 0
             for (k in allowed) {
                 if (k == old) continue
                 val dOld = if (old in 0 until p.K) staffCountPenaltyAt(p, i, old, cntI[old] - 1) - staffCountPenaltyAt(p, i, old, cntI[old]) else 0L
                 val dK = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k])
                 val delta = dOld + dK
-                if (delta < bestDelta) { bestDelta = delta; bestK = k }
+                if (delta < bestDelta) {
+                    bestDelta = delta; bestK = k; tied = 1
+                } else if (delta == bestDelta) {
+                    tied++
+                    if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestK = k
+                }
             }
             if (bestK != old) schedule[i][j] = bestK
         }
