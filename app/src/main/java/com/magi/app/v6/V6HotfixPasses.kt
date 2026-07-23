@@ -188,6 +188,7 @@ object V6HotfixPasses {
         val r66 = applyHF66IntraStaffRedistribution(state, work, maxMoves = 30, shouldStop = shouldStop, deadlineMs = t66 + hf66Cap)
         work = r66.newSchedule.copy2D()
         logs.addAll(r66.logs)
+        val t66Done = System.currentTimeMillis()
 
         onPhase("後処理 厳密日割当")
         val rAsg = applyDayAssignmentPolish(state, work, shouldStop = shouldStop)
@@ -427,8 +428,16 @@ object V6HotfixPasses {
         logs.addAll(r70.logs)
 
         val tEnd = System.currentTimeMillis()
+        // [ログ精度修正] 旧表記は t66〜tHf の間(=HF66本体＋厳密日割当＋巡回研磨4巡＋曜日/交互研磨＋
+        //   C1/個人共同LNS＝パイプライン成長で大半を占めるようになった区間)を丸ごと「HF66」と誤表示していた
+        //   （HF66自身は t66+hf66Cap で内部上限≤6s に自己制限済みのため、実際にそれ以上かかっていたのは
+        //   後続の巡回研磨クラスタ）。C1JointLNS/個人共同LNSが「探索上限0=明示的に無効」になる理由
+        //   （＝ここまでの区間で後処理予算を使い切った）が読めるよう区間ごとに分割表示する。表示のみ・
+        //   スコアリング不変。
         logs.add(MirrorLog(level = "I", tag = "POST",
-            message = "後処理タイミング 総${tEnd - t0}ms: HF80=${t67 - t80}ms HF67=${t66 - t67}ms HF66=${tHf - t66}ms"))
+            message = "後処理タイミング 総${tEnd - t0}ms: HF80=${t67 - t80}ms HF67=${t66 - t67}ms HF66=${t66Done - t66}ms" +
+                " 巡回研磨(厳密日割当+c1/c3/range/apt/fair+曜日/交互)=${tC1Lns - t66Done}ms" +
+                " C1共同LNS=${tPersonalLns - tC1Lns}ms 個人共同LNS=${tHf - tPersonalLns}ms"))
 
         val allLogs = ArrayList<MirrorLog>()
         allLogs.addAll(logs)
