@@ -318,8 +318,11 @@ internal object PersonalBalanceJointLnsPolish {
         limit: Int,
         rng: Random,
     ): List<Goal> {
+        // [監査で発見・3.270.0] normalizeSchedule はセンチネル -1 を作りうる（削除済シフトの残存index等）
+        //   ため、生の schedule[i][j] を無検証で配列添字に使うとAIOOBEになりうる。ガード追加
+        //   （同ファイル内 hasExclusiveAptViolation/personalPenaltyByStaff は既に同種のガード付き）。
         val counts = Array(p.S) { IntArray(p.K) }
-        for (i in 0 until p.S) for (j in 0 until p.T) counts[i][schedule[i][j]]++
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = schedule[i][j]; if (k in 0 until p.K) counts[i][k]++ }
         val groups = ArrayList<MutableList<Goal>>()
         for (i in focus) {
             val before = countPenalty(p, i, counts[i])
@@ -327,6 +330,7 @@ internal object PersonalBalanceJointLnsPolish {
             for (j in 0 until p.T) {
                 if (p.wish[i][j] >= 0) continue
                 val old = schedule[i][j]
+                if (old !in 0 until p.K) continue
                 for (target in 0 until p.K) {
                     if (target == old || !p.canDo(i, target)) continue
                     counts[i][old]--
@@ -420,7 +424,10 @@ internal object PersonalBalanceJointLnsPolish {
                 ops.add(CellOp(i, j, target))
                 var ok = true
                 if (needsRepair) {
-                    val counts = Array(p.S) { s -> IntArray(p.K).also { a -> for (day in 0 until p.T) a[w[s][day]]++ } }
+                    // [監査で発見・3.270.0] w は盤面全体のコピー。goal のセル(i,j)自体はcollectGoalsで
+                    //   -1(センチネル)を除外済みだが、他のセル(s,day)は無関係な位置で-1が残っている
+                    //   可能性がある。無検証添字はAIOOBEになりうるためガード。
+                    val counts = Array(p.S) { s -> IntArray(p.K).also { a -> for (day in 0 until p.T) { val k = w[s][day]; if (k in 0 until p.K) a[k]++ } } }
                     val chain = findCovUChain(
                         p, w, old, j, rng, exclude = i,
                         rangeAvoid = { s, fill ->
