@@ -183,8 +183,18 @@ internal object EliteIntegrationPolish {
             }
         }
         if (diffs.isEmpty()) return null
+        // [賢く再構成] c1(期間要件の窓不足)の違反セルを最優先し、他族の違反セル・非違反セルの順で並べる。
+        // 従来は「違反セルか否か」の2階層のみで、covU/pref等の件数が多いデータではc1セルが希釈され
+        // 後回しにされ得た（C1JointLnsPolish/EliteIntegrationPolish双方でユーザー指摘の穴）。
+        val c1Priority = c1Cells(source.report)
         val violationCells = violationCells(source.report)
-        diffs.sortWith(compareBy<Pair<Int, Int>>({ if (it in violationCells) 0 else 1 }, { it.first }, { it.second }))
+        diffs.sortWith(
+            compareBy<Pair<Int, Int>>(
+                { if (it in c1Priority) 0 else if (it in violationCells) 1 else 2 },
+                { it.first },
+                { it.second },
+            ),
+        )
         if (variant == 1) diffs.reverse()
 
         var bestSchedule: Array<IntArray>? = null
@@ -216,6 +226,9 @@ internal object EliteIntegrationPolish {
         config: Config,
     ): Pair<Array<IntArray>, ViolationReport>? {
         if (group.size < 2) return null
+        // [賢く再構成] relinkOnePathと同じ3階層(c1違反セル最優先)。maxFusionCellsの枠がc1改善に
+        // 使われずcovU/pref等の件数優位な族に埋め尽くされる問題への対応。
+        val c1Priority = c1Cells(currentBestReport)
         val priority = violationCells(currentBestReport)
         val cells = ArrayList<Pair<Int, Int>>()
         for (i in currentBest.indices) for (j in currentBest[i].indices) {
@@ -226,7 +239,7 @@ internal object EliteIntegrationPolish {
         }
         if (cells.isEmpty()) return null
         cells.sortWith(
-            compareBy<Pair<Int, Int>>({ if (it in priority) 0 else 1 })
+            compareBy<Pair<Int, Int>>({ if (it in c1Priority) 0 else if (it in priority) 1 else 2 })
                 .thenByDescending { cell ->
                     group.mapNotNull { it.schedule.getOrNull(cell.first)?.getOrNull(cell.second) }.distinct().size
                 }
@@ -318,6 +331,21 @@ internal object EliteIntegrationPolish {
     private fun violationCells(report: ViolationReport): Set<Pair<Int, Int>> {
         val out = HashSet<Pair<Int, Int>>()
         for (key in report.violations.keys) {
+            val i = key.substringBefore(',').toIntOrNull() ?: continue
+            val j = key.substringAfter(',').substringBefore(',').toIntOrNull() ?: continue
+            out.add(i to j)
+        }
+        return out
+    }
+
+    /** [賢く再構成] c1(期間要件の窓不足)が重なっているセルだけを抽出。`cellFamilies`(1セルに重なった
+     *  全違反クラスを保持、`violations`は最重1クラスのみ)を使うため、c1がより重い違反(例: c3n)に
+     *  上書きされて`violations`の最重クラスから消えていても取りこぼさない（3.205.0のC1Polish
+     *  anchor選定と同種の穴をここでも回避）。 */
+    internal fun c1Cells(report: ViolationReport): Set<Pair<Int, Int>> {
+        val out = HashSet<Pair<Int, Int>>()
+        for ((key, fams) in report.cellFamilies) {
+            if ("vio-c1" !in fams) continue
             val i = key.substringBefore(',').toIntOrNull() ?: continue
             val j = key.substringAfter(',').substringBefore(',').toIntOrNull() ?: continue
             out.add(i to j)
