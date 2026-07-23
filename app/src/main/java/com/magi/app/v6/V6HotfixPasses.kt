@@ -513,7 +513,11 @@ object V6HotfixPasses {
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0     // 希望固定セルは動かさない
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は「希望が一切ない」判定で、実現不能な希望
+        //   (canDo(i,wish)==false)まで動かせないと誤判定していた（3.183.0 LightMirrorOptimizer と
+        //   同型のバグ）。実現不能な希望はpref計上上も定数=動かして良い＝canDoガード込みの
+        //   wishLocked が正しい判定。安全側（isBetter/checkerが最終ゲート）で候補が広がるのみ。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -584,7 +588,9 @@ object V6HotfixPasses {
         var bestRep = before
         var applied = 0
         var skipped = 0     // [#5] 前フィルタでフル評価を省いた手数
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         val windows = intArrayOf(2, 3)   // 連続2日・3日（c3は最大5連日だが2-3日窓でほぼ捕捉）
         var pass = 0
         while (pass < maxPasses) {
@@ -671,7 +677,11 @@ object V6HotfixPasses {
         var bestRep = before
         var applied = 0
         var skipped = 0     // [#5] 前フィルタでフル評価を省いた手数(有効性ログ用)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0     // 希望固定セルは動かさない
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は「希望が一切ない」判定で、実現不能な希望
+        //   (canDo(i,wish)==false)まで動かせないと誤判定していた（3.183.0 LightMirrorOptimizer と
+        //   同型のバグ）。実現不能な希望はpref計上上も定数=動かして良い＝canDoガード込みの
+        //   wishLocked が正しい判定。安全側（isBetter/checkerが最終ゲート）で候補が広がるのみ。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         val windows = intArrayOf(2, 3)
         var pass = 0
         while (pass < maxPasses) {
@@ -794,7 +804,9 @@ object V6HotfixPasses {
         var bestRep = before
         var bestMetric = groupShiftVariance(p, state, countMatrix(p, work))
         var applied = 0
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         var pass = 0
         while (pass < maxPasses && bestMetric > 0.0) {
             if (shouldStop()) break
@@ -840,7 +852,9 @@ object V6HotfixPasses {
         var bestMetric = dayOfWeekVariance(p, state, work, restIdx)
         val beforeMetric = bestMetric
         var applied = 0
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         var pass = 0
         while (pass < maxPasses && bestMetric > 0.0) {
             if (shouldStop()) break
@@ -894,7 +908,9 @@ object V6HotfixPasses {
         var bestRep = before
         var applied = 0
         val rest = p.restIdx
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         fun weekdayOf(j: Int) = (p.dow0 + j) % 7
         fun wdBucket(i: Int): IntArray {
             val wd = IntArray(7)
@@ -939,9 +955,14 @@ object V6HotfixPasses {
                             if (y == rest || y !in 0 until p.K) continue
                             if (!p.canDo(ip, x) || !p.canDo(i, y)) continue
                             // 長方形交換を適用（被覆保存）→ フル評価 → 改善時のみ採用、不採用なら完全巻き戻し。
+                            // [監査で発見・3.270.0] isBetter は hard→total→weightedScore の辞書式のため、
+                            //   raw total が改善してもweightedScoreが悪化する組合せ(重い厳密ピン破りを軽い
+                            //   weekly改善が数の上で上回る)がありうる。同型の全パスに既に適用済みの
+                            //   exactPinRegression ガードをここにも追加（3.256.0の retrofit 漏れ）。
+                            val workBeforeRect = work.copy2D()
                             work[i][j1] = rest; work[i][j2] = y; work[ip][j1] = x; work[ip][j2] = rest
                             val rep = UnifiedViolationChecker.check(state, work)
-                            if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true; break }
+                            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeRect, work)) { bestRep = rep; applied++; improved = true; done = true; break }
                             work[i][j1] = x; work[i][j2] = rest; work[ip][j1] = rest; work[ip][j2] = y
                         }
                     }
@@ -1024,7 +1045,9 @@ object V6HotfixPasses {
                 listOf(MirrorLog(tag = "C1Polish", message = "cons1なし=スキップ")))
         }
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         // [C1研磨・手B強化] staff i2 が shift x2 について day を含むいずれかの窓で不足しているか（全cons1横断）。
         //   手B(findCovUChain の玉突き連鎖)の候補選定に c1Pref として渡し、「連鎖に組み込む相手が、たまたま
         //   その相手自身のc1不足も一緒に解消する」候補を優先させる（並べ替えのみ・安全条件は不変・探索の
@@ -1358,7 +1381,9 @@ object V6HotfixPasses {
                 listOf(MirrorLog(tag = "C3mnPolish", message = "cons3mnなし=スキップ")))
         }
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         // [汎用玉突き結合フレームワーク, 3.249.0] 単独では不採用だった候補を蓄積し末尾で束ねる。
         val combinable = ArrayList<CombinatorialRepair.Candidate>()
         var pass = 0
@@ -1388,10 +1413,14 @@ object V6HotfixPasses {
                     var cnt = 0
                     for (s in 0 until p.S) if (work[s][j] == curK) cnt++
                     val needsChain = p.covUCell(curK, j, cnt - 1) > p.covUCell(curK, j, cnt)
+                    // [監査で発見・3.270.0] isBetter は hard→total→weightedScore の辞書式のため、raw
+                    //   total 改善だけでweightedScoreが悪化する組合せ(厳密ピン破り)がありうる。同型の
+                    //   全パスに既に適用済みの exactPinRegression ガードをここにも追加（3.256.0 retrofit漏れ）。
+                    val workBeforeMove = work.copy2D()
                     work[i][j] = alt
                     if (!needsChain) {
                         val rep = UnifiedViolationChecker.check(state, work)
-                        if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true }
+                        if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeMove, work)) { bestRep = rep; applied++; improved = true; done = true }
                         else {
                             val hint = "${state.staff.getOrNull(i)?.name ?: "#$i"}(${state.shifts.getOrNull(curK)?.kigou ?: curK})"
                             combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, alt)), "C3mnAlt", hint))
@@ -1406,7 +1435,7 @@ object V6HotfixPasses {
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                     chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work)
-                    if (isBetter(rep, bestRep)) { bestRep = rep; applied++; improved = true; done = true }
+                    if (isBetter(rep, bestRep) && !exactPinRegression(p, workBeforeMove, work)) { bestRep = rep; applied++; improved = true; done = true }
                     else {
                         for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
                         work[i][j] = curK
@@ -1471,7 +1500,9 @@ object V6HotfixPasses {
         var bestRep = before
         var applied = 0
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         // [ログから職員が分かるように] 対象(staff,shift)の表示名。
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
@@ -2029,7 +2060,9 @@ object V6HotfixPasses {
         var bestRep = before
         var applied = 0
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
         // [汎用玉突き結合フレームワーク, 3.249.0] tryChainRelocate(手③)が単独では不採用だった候補を
@@ -2235,7 +2268,9 @@ object V6HotfixPasses {
         var bestRep = before
         var applied = 0
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         fun label(i: Int, k: Int) = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(k)?.kigou ?: k.toString()}"
         val fixedNames = ArrayList<String>()
         // [汎用玉突き結合フレームワーク, 3.249.0] tryChainRelocate(手③)が単独では不採用だった候補を
@@ -2462,7 +2497,9 @@ object V6HotfixPasses {
                 listOf(MirrorLog(tag = "C3RunPolish", message = "対象規則(単一シフト連)なし=スキップ")))
         }
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
 
         fun tryExtend(i: Int, extDay: Int, fromK: Int, toK: Int): Boolean {
             if (!movable(i, extDay) || p.makesForbiddenRun(work, i, extDay, toK)) return false
@@ -2568,7 +2605,9 @@ object V6HotfixPasses {
                 listOf(MirrorLog(tag = "C3PatternPolish", message = "複数シフトc3/c3mパターンなし=スキップ")))
         }
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
 
         // アンカー: 各規則(seq,d)で「schedule[i][j]==seq[0]かつ残りd-1日が全一致しない(z<d-1)」窓の
         //   先頭(i,j,seq[0])。checkC3Familyの非forbidden複数シフト分岐と同一の意味論。
@@ -2673,7 +2712,9 @@ object V6HotfixPasses {
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         fun name(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
 
         // 同一担当グループ(sgrp)ごとに職員をまとめ、グループ内の全ペアを列挙。
@@ -2763,7 +2804,9 @@ object V6HotfixPasses {
                 listOf(MirrorLog(tag = "C1BeamPolish", message = "cons1なし=スキップ")))
         }
         val rng = Random(seed)
-        fun movable(i: Int, j: Int) = p.wish[i][j] < 0
+        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
+        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
+        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         fun c1Deficient(work: Array<IntArray>, i2: Int, x: Int, day: Int): Boolean {
             if (day !in 0 until p.T) return false
             for (c in p.cons1) {

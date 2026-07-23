@@ -340,7 +340,7 @@ internal object C1JointLnsPolish {
         // the same beam so a C1 move and its coverage repair can be completed as one bundle.
         for (j in 0 until p.T) {
             val got = IntArray(p.K)
-            for (i in 0 until p.S) got[schedule[i][j]]++
+            for (i in 0 until p.S) { val k = schedule[i][j]; if (k in 0 until p.K) got[k]++ }
             for (x in 0 until p.K) {
                 val shortage = p.covUCell(x, j, got[x])
                 if (shortage <= 0) continue
@@ -349,8 +349,10 @@ internal object C1JointLnsPolish {
         }
 
         // Monthly lower-range shortages. They are SOFT but frequently counterbalance C1/range-high.
+        // [監査で発見・3.270.0] normalizeSchedule はセンチネル -1 を作りうる（削除済シフトの残存index等）
+        //   ため、生の schedule[i][j] を無検証で配列添字に使うとAIOOBEになりうる。ガード追加。
         val counts = Array(p.S) { IntArray(p.K) }
-        for (i in 0 until p.S) for (j in 0 until p.T) counts[i][schedule[i][j]]++
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = schedule[i][j]; if (k in 0 until p.K) counts[i][k]++ }
         for (i in 0 until p.S) for (x in 0 until p.K) {
             val lo = p.rangeLo[i][x]
             if (lo == Int.MIN_VALUE || counts[i][x] >= lo) continue

@@ -78,15 +78,25 @@ class FlexibleDayFlowTest {
     }
 
     @Test
-    fun fixedIllegalCellIsNotMoved() {
+    fun infeasibleWishForTheIllegalShiftDoesNotBlockTheFix() {
+        // [3.270.0 監査で訂正] このテストは元々「希望固定Aｱは保持」＝`p.wish[i][j]>=0` だけで
+        // 判定する旧`movable`実装（applyRangePolish等15箇所が共有していた定義）の挙動を固定していた。
+        // だが `wishes = mapOf("0,0" to 1)` の希望先はまさにvictimがcanDo=falseなAｱ自身
+        // （groupShift victim行=listOf(1,0,1)でAｱ不可）＝実現不能な希望。`Problem.wishLocked`
+        // （MirrorCore.kt）は「実現不能な希望は凍結しない＝セルを最適化へ復帰させ、入口fallback値の
+        // まま座礁するのを防ぐ」と明記済み（3.183.0でLightMirrorOptimizerに同種のバグを発見・修正した
+        // のと同じ設計原則）。まさにこの座礁（担当不可Aｱに固定されたまま動かせない）を検証していた
+        // 旧テストは、`applyRangePolish`等が`wishLocked`でなく生の`wish>=0`を使っていた実バグの
+        // 回帰テストになっていた。`movable`を`!p.wishLocked(i,j)`へ統一した今、正しい挙動は
+        // 「実現不能な希望はロックにならず、担当不可(groupViol)セルは通常どおり修復される」こと。
         val base = fiveIllegalAaState()
         val st = base.copy(wishes = mapOf("0,0" to 1))
         val result = V6HotfixPasses.applyRangePolish(
             st, st.schedule.toIntArray2D(), maxPasses = 1, seed = 1L,
         )
-        assertEquals("希望固定Aｱは保持", 1, result.newSchedule[0][0])
-        assertEquals("残るgroupViolは明示的固定由来", 1,
-            UnifiedViolationChecker.check(st, result.newSchedule).breakdown["groupViol"] ?: 0)
+        assertEquals("実現不能な希望はロックにならずB1へ修復される", 2, result.newSchedule[0][0])
+        assertEquals("担当不可groupViolは解消される", 0,
+            UnifiedViolationChecker.check(st, result.newSchedule).breakdown["groupViol"] ?: -1)
     }
 
     /**
