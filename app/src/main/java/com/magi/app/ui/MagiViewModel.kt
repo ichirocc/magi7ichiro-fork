@@ -530,6 +530,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun generateSmartInitial() {
         val st = state ?: return
         val sched = currentSchedule ?: return
+        // [3.271.0, 実機ログ起因] 実行中ガード。旧: ガード無しのため「勤務表をつくる」の直後に隣接する
+        //   本ボタンを連続タップすると、走行中の最適化と初期解生成が併走し、job 参照の上書き
+        //   （走行中jobが stop() 不能のゾンビ化）と currentSchedule の同時書き換え（3.161.0 と同じ
+        //   別名共有クラス）が起きていた（実機ログ 19:56:41 最適化開始→19:56:48 初期解生成完了 で実証）。
+        //   runV6FullOptimize/start/runSoftPolish と同じガードに統一（3.161.0 のセル編集ガードと同方針）。
+        if (_ui.value.running) {
+            _ui.update { it.copy(message = "計算の実行中は初期解を作れません（完了または「やめる」の後にどうぞ）") }
+            return
+        }
         if (!ensureValidForRun(st, sched)) return
         pushUndo()
         _ui.update { it.copy(running = true, hasResult = false, message = "初期解生成中…") }
@@ -550,6 +559,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 ) }
                 logOp("I", "初期解生成 完了 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: Exception) {
+                // [3.271.0] 失敗を操作ログにも残す（旧: message のみ＝書き出したログから消えた実行が
+                //   追跡不能だった。実機ログ解析で「開始したのに完了も停止も無い実行」の死因特定を阻んだ）。
+                logOp("W", "初期解生成 失敗: ${e.message}")
                 _ui.update { it.copy(running = false, message = "初期解生成失敗: ${e.message}") }
             }
         }
@@ -559,6 +571,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun generateSimple() {
         val st = state ?: return
         val sched = currentSchedule ?: return
+        // [3.271.0] generateSmartInitial と同じ実行中ガード（API温存中だが同じ穴を残さない）。
+        if (_ui.value.running) {
+            _ui.update { it.copy(message = "計算の実行中は下書きを作れません（完了または「やめる」の後にどうぞ）") }
+            return
+        }
         if (!ensureValidForRun(st, sched)) return
         pushUndo()
         _ui.update { it.copy(running = true, hasResult = false, message = "簡易作成中…") }
@@ -579,6 +596,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 ) }
                 logOp("I", "簡易作成 完了 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: Exception) {
+                logOp("W", "簡易作成 失敗: ${e.message}")   // [3.271.0] 操作ログにも残す
                 _ui.update { it.copy(running = false, message = "簡易作成失敗: ${e.message}") }
             }
         }
@@ -654,6 +672,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 // [review D] 失敗時は進捗中に書き込んだメトリクス（反復数・速度・経過）を消す。
                 //   「事故前データ」を失敗メッセージの脇に残さない。hasResult は開始時に false 済み。
+                logOp("W", "高速計算 失敗: ${e.message}")   // [3.271.0] 操作ログにも残す（サイレント死の防止）
                 _ui.update { it.copy(
                     running = false, hasResult = false,
                     iters = 0, itersPerSec = 0, elapsedMs = 0,
@@ -707,6 +726,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 ) }
                 throw e
             } catch (e: Exception) {
+                logOp("W", "軽量最適化 失敗: ${e.message}")   // [3.271.0] 操作ログにも残す
                 _ui.update { it.copy(running = false, message = "軽量最適化失敗: ${e.message}") }
             } finally {
                 clearRunMarker()   // [監査A8]
@@ -887,6 +907,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 logOp("I", "停止: 直前の勤務表 必須=${keptReport.hard}/合計=${keptReport.total} を保持")
                 throw e
             } catch (e: Exception) {
+                // [3.271.0, 実機ログ起因] 失敗を操作ログにも残す。旧: message のみのため、書き出した
+                //   ログに「最適化 開始」だけあって完了も停止も無い実行が現れても死因（例外で静かに
+                //   落ちたのか）を判別できなかった（実機ログ 19:56:41 の消えた実行の解析を阻んだ実例）。
+                logOp("W", "最適化 失敗: ${e.message}")
                 _ui.update { it.copy(running = false, message = "V6最適化失敗: ${e.message}") }
             } finally {
                 clearRunMarker()  // 正常終了・停止・失敗いずれでもマーカーを消す（中断のみ残す）
@@ -952,6 +976,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 ) }
                 throw e
             } catch (e: Exception) {
+                logOp("W", "ソフト研磨 失敗: ${e.message}")   // [3.271.0] 操作ログにも残す
                 _ui.update { it.copy(running = false, message = "自動整えに失敗: ${e.message}") }
             } finally {
                 clearRunMarker()   // [監査A8]
@@ -1713,6 +1738,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeConstraint(family: String, index: Int) {
         val st = state ?: return
+        // [3.271.0, 実機ログ起因] index を先に検証する。旧: 検証なしで先にログ→mutate のため、
+        //   リスト縮小後の古い index（連続タップ等）でも「制約削除: cons3mn[7]」の幻ログ＋無駄な
+        //   undo/保存/再検査が走り、実機ログで「2回削除されたのか1回なのか」が判別不能だった
+        //   （without() 自体は no-op なのでデータは壊れない＝ログと副作用だけが嘘をつく状態）。
+        val size = when (family) {
+            "cons1" -> st.cons1.size
+            "cons2" -> st.cons2.size
+            "cons3" -> st.cons3.size
+            "cons3n" -> st.cons3n.size
+            "cons3m" -> st.cons3m.size
+            "cons3mn" -> st.cons3mn.size
+            "cons41" -> st.cons41.size
+            "cons42" -> st.cons42.size
+            "cons41s" -> st.cons41s.size
+            "cons42s" -> st.cons42s.size
+            else -> return
+        }
+        if (index !in 0 until size) {
+            logOp("W", "制約削除を無視: $family[$index] は存在しません（削除済みの行への連続タップ等）")
+            return
+        }
         logOp("I", "制約削除: $family[$index]")
         fun <T> List<T>.without(i: Int) = filterIndexed { idx, _ -> idx != i }
         mutateConstraints(

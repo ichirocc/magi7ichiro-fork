@@ -190,8 +190,21 @@ object V6HotfixPasses {
         logs.addAll(r66.logs)
         val t66Done = System.currentTimeMillis()
 
+        // [3.271.0, 実機ログ2本連続で実証された飢餓の解消] 巡回研磨クラスタ（厳密日割当〜曜日平準化）は
+        //   自身の締切を持たず shouldStop（全体予算）だけで走るため、探索フェーズが予算を使い切る実運用
+        //   では後処理予約枠(8〜25s)を丸ごと消費し、後段の C1共同LNS/個人共同LNS が毎回「探索上限0=
+        //   明示的に無効」でスキップされていた（両パスは実データで HARD削減の実績があるのに本番では
+        //   一度も走れない＝事実上の死に機能）。HF66 の予算按分と同じ考え方で、クラスタ開始時点の
+        //   残予算の半分（上限14s=両LNSの既定合計 8s+6s）を共同LNS用に確保し、クラスタには
+        //   clusterStop（自前の締切つき）を渡す。クラスタが早期にフィックスポイント到達すれば共同LNSは
+        //   確保分より多く使える（従来挙動と同一）。全パス keep-best のため時間配分の変更のみ＝退化不能。
+        val jointLnsReserve = if (deadlineMs == Long.MAX_VALUE) 0L
+            else ((deadlineMs - t66Done).coerceAtLeast(0L) / 2).coerceAtMost(14_000L)
+        val clusterDeadline = if (deadlineMs == Long.MAX_VALUE) Long.MAX_VALUE else deadlineMs - jointLnsReserve
+        val clusterStop: () -> Boolean = { shouldStop() || System.currentTimeMillis() >= clusterDeadline }
+
         onPhase("後処理 厳密日割当")
-        val rAsg = applyDayAssignmentPolish(state, work, shouldStop = shouldStop)
+        val rAsg = applyDayAssignmentPolish(state, work, shouldStop = clusterStop)
         work = rAsg.newSchedule.copy2D()
         logs.addAll(rAsg.logs)
 
@@ -206,16 +219,16 @@ object V6HotfixPasses {
         val maxRounds = 4
         var round = 0
         var totalCyc = 0; var totalC1 = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalRange = 0; var totalC3run = 0; var totalC3pat = 0; var totalBlockSwap = 0; var totalApt = 0; var totalFair = 0
-        while (round < maxRounds && !shouldStop()) {
+        while (round < maxRounds && !clusterStop()) {
             var roundApplied = 0
 
             onPhase("後処理 循環交換(k=2,3) [巡${round + 1}]")
-            val rCyc = applyCyclicSwapPolish(state, work, maxPasses = 4, shouldStop = shouldStop)
+            val rCyc = applyCyclicSwapPolish(state, work, maxPasses = 4, shouldStop = clusterStop)
             work = rCyc.newSchedule.copy2D(); totalCyc += rCyc.applied; roundApplied += rCyc.applied
             if (round == 0) logs.addAll(rCyc.logs)
 
             onPhase("後処理 期間要件(c1)研磨 [巡${round + 1}]")
-            val rC1 = applyC1WindowPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0x1C1L, round))
+            val rC1 = applyC1WindowPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0x1C1L, round))
             work = rC1.newSchedule.copy2D(); totalC1 += rC1.applied; roundApplied += rC1.applied
             if (round == 0) logs.addAll(rC1.logs)
 
@@ -243,7 +256,7 @@ object V6HotfixPasses {
             onPhase("後処理 期間要件(c1)時系列DP+ジョイント再割当研磨 [巡${round + 1}]")
             val rC1flow = C1TemporalFlowPolish.apply(
                 state, work, maxPasses = 2, maxRelocations = 4, trials = 4,
-                shouldStop = shouldStop, seed = roundSeed(seed, 0xC1F10L, round),
+                shouldStop = clusterStop, seed = roundSeed(seed, 0xC1F10L, round),
             )
             work = rC1flow.newSchedule.copy2D(); totalC1 += rC1flow.applied; roundApplied += rC1flow.applied
             if (round == 0) logs.addAll(rC1flow.logs)
@@ -253,24 +266,24 @@ object V6HotfixPasses {
             // sample_state_v6.json)の両方・全15シードでtotalが真に改善することを確認済み(applyC1BeamPolish
             // のdocを参照)。BeamC1PolishV2で見つからない残差にも届く可能性があるため直後に配線。
             onPhase("後処理 期間要件(c1)広域ビーム研磨 [巡${round + 1}]")
-            val rC1wide = applyC1BeamPolish(state, work, shouldStop = shouldStop, seed = roundSeed(seed, 0xC1BEAL, round))
+            val rC1wide = applyC1BeamPolish(state, work, shouldStop = clusterStop, seed = roundSeed(seed, 0xC1BEAL, round))
             work = rC1wide.newSchedule.copy2D(); totalC1 += rC1wide.applied; roundApplied += rC1wide.applied
             if (round == 0) logs.addAll(rC1wide.logs)
 
             onPhase("後処理 連続規則(c3系)研磨 [巡${round + 1}]")
-            val rC3 = applyC3SequencePolish(state, work, maxPasses = 3, shouldStop = shouldStop)
+            val rC3 = applyC3SequencePolish(state, work, maxPasses = 3, shouldStop = clusterStop)
             work = rC3.newSchedule.copy2D(); totalC3 += rC3.applied; roundApplied += rC3.applied
             if (round == 0) logs.addAll(rC3.logs)
 
             onPhase("後処理 連続規則(c3系)3者回転研磨 [巡${round + 1}]")
-            val rC3r = applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = 2, shouldStop = shouldStop)
+            val rC3r = applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = 2, shouldStop = clusterStop)
             work = rC3r.newSchedule.copy2D(); totalC3r += rC3r.applied; roundApplied += rC3r.applied
             if (round == 0) logs.addAll(rC3r.logs)
 
             // [C3mnPolish・玉突き連鎖の横展開] cons3n(HARD)で直接候補が全滅する局面向けに findCovUChain
             //   をc3mn(回避,SOFT)専用に反映（grilling 2026-07-19、金沢勇輝のDﾃ4連続実例）。
             onPhase("後処理 回避パターン(c3mn)玉突き研磨 [巡${round + 1}]")
-            val rC3mn = applyC3mnPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0xC3AL, round))
+            val rC3mn = applyC3mnPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xC3AL, round))
             work = rC3mn.newSchedule.copy2D(); totalC3mn += rC3mn.applied; roundApplied += rC3mn.applied
             if (round == 0) logs.addAll(rC3mn.logs)
 
@@ -278,7 +291,7 @@ object V6HotfixPasses {
             //   局面(担当可能シフトが極端に少ない職員等)向けに findCovUChain で研磨（grilling不要・
             //   C3mnPolishと同型のためユーザー承認のうえ直接実装、桒澤美幸のAｱ超過実例）。
             onPhase("後処理 個人回数(low/high)玉突き研磨 [巡${round + 1}]")
-            val rRange = applyRangePolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0x8A9EL, round))
+            val rRange = applyRangePolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0x8A9EL, round))
             work = rRange.newSchedule.copy2D(); totalRange += rRange.applied; roundApplied += rRange.applied
             if (round == 0) logs.addAll(rRange.logs)
 
@@ -286,14 +299,14 @@ object V6HotfixPasses {
             //   相互交換の相手が構造的に存在しない局面向けに findCovUChain で研磨（grilling不要・
             //   C3mnPolish/RangePolishと同型のためユーザー承認のうえ直接実装）。
             onPhase("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨 [巡${round + 1}]")
-            val rC3run = applyC3RunPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0xC3A2L, round))
+            val rC3run = applyC3RunPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xC3A2L, round))
             work = rC3run.newSchedule.copy2D(); totalC3run += rC3run.applied; roundApplied += rC3run.applied
             if (round == 0) logs.addAll(rC3run.logs)
 
             // [C3PatternPolish・玉突き連鎖の横展開その4] 複数シフトc3/c3mパターン(非single-shift)を、
             //   交換相手が構造的に存在しない局面向けに findCovUChain で研磨（棚卸し監査で発見、ユーザー承認）。
             onPhase("後処理 連続規則(c3/c3m複数シフトパターン)玉突き研磨 [巡${round + 1}]")
-            val rC3pat = applyC3PatternPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0xC3B4L, round))
+            val rC3pat = applyC3PatternPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xC3B4L, round))
             work = rC3pat.newSchedule.copy2D(); totalC3pat += rC3pat.applied; roundApplied += rC3pat.applied
             if (round == 0) logs.addAll(rC3pat.logs)
 
@@ -301,21 +314,21 @@ object V6HotfixPasses {
             //   丸ごと入替える大きな手。1日単位の局所交換が踏めない改善（range/pref/apt/weekly が
             //   絡む多家族同時トレード）に到達し得る（grilling 2026-07-19、金沢/アリフの検討から）。
             onPhase("後処理 15日ブロック丸ごと交換研磨 [巡${round + 1}]")
-            val rBlockSwap = applyBlockSwapPolish(state, work, blockLen = 15, maxPasses = 3, shouldStop = shouldStop)
+            val rBlockSwap = applyBlockSwapPolish(state, work, blockLen = 15, maxPasses = 3, shouldStop = clusterStop)
             work = rBlockSwap.newSchedule.copy2D(); totalBlockSwap += rBlockSwap.applied; roundApplied += rBlockSwap.applied
             if (round == 0) logs.addAll(rBlockSwap.logs)
 
             // [AptPolish・適切回数(apt)専用研磨] 自己振替→同一グループ相互交換→玉突きチェーンの順で
             //   apt(重み1)違反を専用に研磨（grilling 2026-07-19、大島愛の休/Pｼ実例）。
             onPhase("後処理 適切回数(apt)研磨 [巡${round + 1}]")
-            val rApt = applyAptPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0xA97L, round))
+            val rApt = applyAptPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xA97L, round))
             work = rApt.newSchedule.copy2D(); totalApt += rApt.applied; roundApplied += rApt.applied
             if (round == 0) logs.addAll(rApt.logs)
 
             // [FairPolish・グループ内公平化(fair)専用研磨] 棚卸し(c42/c42s以外の「動かせるか」欠如監査)で
             //   発見。AptPolishと同型の3段構成（自己振替→同一グループ相互交換→玉突きチェーン）。
             onPhase("後処理 グループ内公平化(fair)玉突き研磨 [巡${round + 1}]")
-            val rFair = applyFairPolish(state, work, maxPasses = 3, shouldStop = shouldStop, seed = roundSeed(seed, 0xFA12L, round))
+            val rFair = applyFairPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xFA12L, round))
             work = rFair.newSchedule.copy2D(); totalFair += rFair.applied; roundApplied += rFair.applied
             if (round == 0) logs.addAll(rFair.logs)
 
@@ -338,7 +351,10 @@ object V6HotfixPasses {
             }
             val hardNote = if (softAfter.hard == preSoftRep.hard) "不変" else "変化${preSoftRep.hard}->${softAfter.hard}!"
             logs.add(MirrorLog(tag = "SoftPolishVerify", message =
-                "ソフトc1/c3系研磨 可否=$verdict (${round}巡) | c1 ${bd(preSoftRep, "c1")}->${bd(softAfter, "c1")}" +
+                // [3.271.0, 外部レビューの誤読対策] 各パスの個別ログ行は巡1のみ表示（4巡ぶんのスパム防止）
+                //   だが、この集約行の増減・採用内訳は全巡合計。旧表記では「C1Polish 採用0なのにc1が
+                //   65→57に減った＝責務逆転?」という誤読を実際に生んだため、表示仕様を行内に明記する。
+                "ソフトc1/c3系研磨 可否=$verdict (${round}巡・各パス行は巡1のみ表示/本行は全巡合計) | c1 ${bd(preSoftRep, "c1")}->${bd(softAfter, "c1")}" +
                     " / c3 ${bd(preSoftRep, "c3")}->${bd(softAfter, "c3")}" +
                     " / c3m ${bd(preSoftRep, "c3m")}->${bd(softAfter, "c3m")}" +
                     " / c3mn ${bd(preSoftRep, "c3mn")}->${bd(softAfter, "c3mn")}" +
@@ -354,7 +370,7 @@ object V6HotfixPasses {
         //   勤務/休が不変）ため、被覆保存の2職員×2日 長方形交換で「過剰曜日→過少曜日」へ勤務を移す。実目的関数
         //   isBetter で採否＝退化なし。下の equalize 系(分散指標)より先に L1 指向のこのパスを走らせる。
         onPhase("後処理 曜日平準化(長方形交換)")
-        val rWrb = applyWeeklyRebalancePolish(state, work, maxPasses = 2, shouldStop = shouldStop)
+        val rWrb = applyWeeklyRebalancePolish(state, work, maxPasses = 2, shouldStop = clusterStop)
         work = rWrb.newSchedule.copy2D()
         logs.addAll(rWrb.logs)
 
@@ -362,17 +378,17 @@ object V6HotfixPasses {
         //   ごとの最小費用割当(Hungarian＝凸最適化)で weekly/range/apt 同時最適に再配置し、不動点まで巡回する。
         //   rectangle(クロス日)と AO(同日内)は相補的＝両方走らせて weekly の取りこぼしを二方向から詰める。keep-best。
         onPhase("後処理 交互最適化(日ブロック割当)")
-        val rAlt = applyAlternatingSoftPolish(state, work, maxSweeps = 4, shouldStop = shouldStop)
+        val rAlt = applyAlternatingSoftPolish(state, work, maxSweeps = 4, shouldStop = clusterStop)
         work = rAlt.newSchedule.copy2D()
         logs.addAll(rAlt.logs)
 
         onPhase("後処理 グループ内シフト回数の平準化")
-        val rGeq = applyGroupShiftEqualizePolish(state, work, maxPasses = 2, shouldStop = shouldStop)
+        val rGeq = applyGroupShiftEqualizePolish(state, work, maxPasses = 2, shouldStop = clusterStop)
         work = rGeq.newSchedule.copy2D()
         logs.addAll(rGeq.logs)
 
         onPhase("後処理 7日周期(曜日)の平準化")
-        val rWeq = applyWeeklyEqualizePolish(state, work, maxPasses = 2, shouldStop = shouldStop)
+        val rWeq = applyWeeklyEqualizePolish(state, work, maxPasses = 2, shouldStop = clusterStop)
         work = rWeq.newSchedule.copy2D()
         logs.addAll(rWeq.logs)
 
