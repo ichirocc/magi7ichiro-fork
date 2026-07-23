@@ -190,4 +190,39 @@ class EliteIntegrationPolishTest {
             assertTrue(saved[i].contentEquals(result.schedule[i]))
         }
     }
+
+    // [賢く再構成, 3.268.0] relink/fusion のセル優先順位をc1優先(3段階)へ拡張した際に新設した
+    // `c1Cells` の抽出正しさを直接検証する。`violations`(1セル=最重1クラスのみ)だけを見ると、
+    // c1がより重い違反(c3n等)と同一セルで重なった場合に取りこぼす(3.205.0のC1Polish anchor選定と
+    // 同型のシャドーイング)。`c1Cells` は `cellFamilies`(1セルの全クラスを保持)を見るため、
+    // このシャドーイングがあっても正しく拾えることを固定する。
+    @Test
+    fun c1CellsFindsC1ViolationEvenWhenShadowedByHeavierViolationAtSameCell() {
+        val report = ViolationReport(
+            violations = mapOf("0,0" to "vio-c3n", "1,1" to "vio-c2"),
+            needViolations = emptyMap(),
+            countViolations = emptyMap(),
+            cellFamilies = mapOf(
+                "0,0" to listOf("vio-c3n", "vio-c1"),
+                "1,1" to listOf("vio-c2"),
+            ),
+            breakdown = emptyMap(),
+            total = 0, hard = 0, soft = 0, weightedScore = 0.0,
+        )
+        val cells = EliteIntegrationPolish.c1Cells(report)
+        assertEquals(setOf(0 to 0), cells)
+    }
+
+    @Test
+    fun c1CellsIsEmptyWhenNoCellHasC1() {
+        val report = ViolationReport(
+            violations = mapOf("0,0" to "vio-c2"),
+            needViolations = emptyMap(),
+            countViolations = emptyMap(),
+            cellFamilies = mapOf("0,0" to listOf("vio-c2")),
+            breakdown = emptyMap(),
+            total = 0, hard = 0, soft = 0, weightedScore = 0.0,
+        )
+        assertTrue(EliteIntegrationPolish.c1Cells(report).isEmpty())
+    }
 }

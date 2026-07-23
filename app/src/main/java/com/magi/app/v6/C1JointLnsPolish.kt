@@ -382,6 +382,12 @@ internal object C1JointLnsPolish {
         val i = goal.staff; val j = goal.day; val x = goal.targetShift
         val a = schedule[i][j]
         if (a == x || !allowed(p, i, j, x)) return emptyList()
+        // [賢く再構成] 全Move種の共通効果=「iのday jにxを置く」がこの時点で既に禁止連続(c3n)を
+        // 作るなら、このgoal自体を即座に諦める(手を1つも生成しない)。従来はdebt+最終ゲート
+        // (isFinalCandidate/defensive re-check)だけに頼っており、正しさは常に保たれていたが、
+        // c3n を作るとhard debtを使い切る候補ばかり生成してしまい、maxMovesPerGoalの枠が
+        // 無駄な候補で埋まっていた。事前に弾くのは効率のみの改善＝最終正しさは無関係(不変)。
+        if (p.makesForbiddenRun(schedule, i, j, x)) return emptyList()
         val scored = ArrayList<Pair<Int, Move>>()
 
         // Elastic move. It may temporarily create coverage debt; later goals can repair it.
@@ -390,6 +396,8 @@ internal object C1JointLnsPolish {
         val staffOrder = (0 until p.S).shuffled(rng)
         for (donor in staffOrder) {
             if (donor == i || schedule[donor][j] != x || !allowed(p, donor, j, a)) continue
+            // [賢く再構成] donorがaを受け取る側の禁止連続も同様に事前に弾く。
+            if (p.makesForbiddenRun(schedule, donor, j, a)) continue
             scored.add(100 to Move.SameDaySwap(i, donor, j))
         }
 
@@ -400,6 +408,7 @@ internal object C1JointLnsPolish {
                 val y = schedule[bridge][j]
                 if (y == x || y == a) continue
                 if (!allowed(p, donor, j, y) || !allowed(p, bridge, j, a)) continue
+                if (p.makesForbiddenRun(schedule, donor, j, y) || p.makesForbiddenRun(schedule, bridge, j, a)) continue
                 scored.add(80 to Move.Rotate3(i, donor, bridge, j))
             }
         }
@@ -407,6 +416,9 @@ internal object C1JointLnsPolish {
         val dayOrder = (0 until p.T).shuffled(rng)
         for (otherDay in dayOrder) {
             if (otherDay == j || schedule[i][otherDay] != x || !allowed(p, i, otherDay, a)) continue
+            // [賢く再構成] iがotherDayでaに戻る側も事前チェック(同一職員の別日、元盤面基準の
+            // 保守的近似＝jとotherDayが同一窓に入る稀なケースを見逃しても最終checkerが必ず拾う)。
+            if (p.makesForbiddenRun(schedule, i, otherDay, a)) continue
             scored.add(70 to Move.SelfDaySwap(i, j, otherDay))
         }
 
@@ -417,6 +429,7 @@ internal object C1JointLnsPolish {
             if (donor == i && otherDay == j) continue
             if (schedule[donor][otherDay] != x) continue
             if (!allowed(p, donor, otherDay, a)) continue
+            if (p.makesForbiddenRun(schedule, donor, otherDay, a)) continue
             scored.add(60 to Move.CrossDayTransfer(i, j, donor, otherDay))
         }
 
