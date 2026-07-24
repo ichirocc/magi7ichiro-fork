@@ -270,6 +270,14 @@ object V6HotfixPasses {
             work = rC1wide.newSchedule.copy2D(); totalC1 += rC1wide.applied; roundApplied += rC1wide.applied
             if (round == 0) logs.addAll(rC1wide.logs)
 
+            // [A2/A3 厳密窓修復] 上記の局所/ビーム系が届かない「別日で連動して初めて解ける多職員手」を、
+            //   窓スコープの coverage保存 permutation 厳密探索で拾う（純Kotlin・依存ゼロ）。A1=解析駆動
+            //   ディスパッチ: 証明された解消不能スパン(exhaustive && min==base)を memo で二度解かない。
+            onPhase("後処理 期間要件(c1)厳密窓修復 [巡${round + 1}]")
+            val rC1exact = applyC1ExactWindowRepair(state, work, shouldStop = clusterStop)
+            work = rC1exact.newSchedule.copy2D(); totalC1 += rC1exact.applied; roundApplied += rC1exact.applied
+            if (round == 0) logs.addAll(rC1exact.logs)
+
             onPhase("後処理 連続規則(c3系)研磨 [巡${round + 1}]")
             val rC3 = applyC3SequencePolish(state, work, maxPasses = 3, shouldStop = clusterStop)
             work = rC3.newSchedule.copy2D(); totalC3 += rC3.applied; roundApplied += rC3.applied
@@ -506,6 +514,74 @@ object V6HotfixPasses {
         val reason = if (applied) "strategic oscillation accepted" else "no improving oscillation"
         val logs = listOf(MirrorLog(tag = "HF80", message = "SO applied=$applied HARD ${before.hard}->${bestReport.hard} score ${before.weightedScore.toLong()}->${bestReport.weightedScore.toLong()} cycles=$usedCycles"))
         return HF80Result(best, before.hard, bestReport.hard, before.weightedScore, bestReport.weightedScore, usedCycles, applied, reason, logs)
+    }
+
+    /**
+     * [A1+A2+A3, 3.273.0] C1厳密窓修復パス。C1RepairAnalysis の窓スコープ厳密探索（coverage保存
+     * permutation の分枝限定）で、局所/ビーム系が届かない多日多職員連動手を拾う。
+     *  - A1 解析駆動ディスパッチ: 「exhaustive で min==baseline」と証明されたスパンは、その (焦点職員,
+     *    シフト, スパン内容ハッシュ) を memo し、内容が変わらない限り二度と厳密探索しない（死に候補の刈込）。
+     *  - 採否は必ず本物の checker + isBetter + exactPinRegression（keep-best＝退化不能）。厳密探索が返す
+     *    patch はあくまで候補（node予算超過時は best-effort＝多様化として安全）。
+     */
+    fun applyC1ExactWindowRepair(
+        state: MagiState,
+        schedule: Array<IntArray>,
+        cfg: C1RepairAnalysis.Config = C1RepairAnalysis.Config(),
+        shouldStop: () -> Boolean = { false },
+    ): CyclicSwapResult {
+        val p = Problem(state)
+        val work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        var applied = 0
+        var solved = 0
+        var provenWalls = 0
+        if (p.cons1.isEmpty() || (before.breakdown["c1"] ?: 0) == 0) {
+            return CyclicSwapResult(work, before.total, before.total, 0,
+                listOf(MirrorLog(tag = "C1ExactRepair", message = "c1対象なし=スキップ")))
+        }
+        // [A1] 証明済み「解消不能スパン」のmemo（キー=焦点職員,シフト,スパン内容ハッシュ）。
+        val deadSpans = HashSet<String>()
+        fun spanKey(staff: Int, shift: Int, days: List<Int>): String {
+            val sb = StringBuilder().append(staff).append('|').append(shift).append('|')
+            for (d in days) for (i in 0 until p.S) sb.append(work[i][d]).append(',')
+            return sb.toString()
+        }
+        // 焦点=(職員,シフト)ごとに1回だけ厳密探索（同一職員の多数窓は1スパンに束ねられる）。
+        val seenFocus = HashSet<Long>()
+        for (v in C1RepairAnalysis.analyze(p, work)) {
+            if (shouldStop()) break
+            val focus = v.staff.toLong() * 1000 + v.shift
+            if (!seenFocus.add(focus)) continue
+            val span = minOf(cfg.maxWindowDays, p.T)
+            val startD = v.start.coerceAtMost(p.T - span).coerceAtLeast(0)
+            val days = (startD until startD + span).toList()
+            val key = spanKey(v.staff, v.shift, days)
+            if (key in deadSpans) continue
+            val res = C1RepairAnalysis.solveWindow(p, work, v, cfg)
+            solved++
+            if (res.patch == null) {
+                // 改善候補なし。exhaustive なら「coverage保存では解消不能」と証明済み＝memo。
+                if (res.exhaustive) { deadSpans.add(key); provenWalls++ }
+                continue
+            }
+            val workBefore = work.copy2D()
+            for (op in res.patch) work[op[0]][op[1]] = op[2]
+            val rep = UnifiedViolationChecker.check(state, work)
+            if (isBetter(rep, bestRep) && !exactPinRegression(p, workBefore, work)) {
+                bestRep = rep; applied++
+            } else {
+                for (mi in work.indices) work[mi] = workBefore[mi]
+            }
+        }
+        val c1b = before.breakdown["c1"] ?: 0
+        val c1a = bestRep.breakdown["c1"] ?: 0
+        val logs = listOf(MirrorLog(tag = "C1ExactRepair",
+            message = "期間要件(c1)厳密窓修復: c1 $c1b->$c1a / total ${before.total}->${bestRep.total} " +
+                "HARD ${before.hard}->${bestRep.hard} 採用${applied}回 探索${solved}回 証明済み壁${provenWalls}件" +
+                (if (applied == 0 && c1b > 0) " [頭打ち=改善手なし]" else "")))
+        return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
 
     data class CyclicSwapResult(
