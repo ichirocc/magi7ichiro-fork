@@ -302,7 +302,9 @@ object V6SanityPort {
                 rulesByShift.getOrPut(c.shiftIdx) { ArrayList() }.add(c)
             }
             for ((shiftIdx, rules) in rulesByShift) {
-                val minNeeded = SmartInitialScheduler.minDaysForFullCompliance(
+                // [3.272.0] ConstraintMus.cachedMinDays（同じ純関数のプロセス全域キャッシュ）経由に統一。
+                //   buildGuidance はセル編集ごとに走るため、重いDP（15日窓で数百ms）を毎回払わない。
+                val minNeeded = ConstraintMus.cachedMinDays(
                     p.T, rules.map { it.day1 to it.day2 },
                 ) ?: continue
                 val sym = state.shifts.getOrNull(shiftIdx)?.kigou ?: shiftIdx.toString()
@@ -563,6 +565,48 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "スキルグループ記号の重複「$d」",
                     "同じ記号のスキルグループが複数あります。制約とCSV取込は最初の1件に解決されます",
                     "スキルグループ記号を一意にしてください"))
+            }
+        }
+
+        // 9) [Constraint IR + MUS / 3.272.0] 矛盾の「最小説明」。希望（wishLocked）が絡む証明可能な
+        //    矛盾の組合せを ConstraintMus（厳密DP・鳩の巣・二部マッチングの健全な証明）で検出し、
+        //    「この◯件は同時に成立しません→どれか1件を緩めると解消」まで提示する。既存の手彫り検査
+        //    （2b-3/6b/6c/検査3）はいずれも希望を扱わないため、**コアに希望を含む矛盾のみ**を出す＝
+        //    重複ゼロ。read-only・スコアリング不変。発火＝真に矛盾（健全・誤検知ゼロの設計）。
+        run {
+            fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: k.toString()
+            fun staffName(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
+            fun itemLabel(it: ConstraintMus.Item): String = when (it) {
+                is ConstraintMus.WishPin ->
+                    "希望「${staffName(it.staff)} ${safeDayLabel(state.startDate, it.day)}=${sym(it.shift)}」"
+                is ConstraintMus.RangeCap -> "個人上限「${sym(it.shift)}を最大${it.hi}回」"
+                is ConstraintMus.RangeFloor -> "個人下限「${sym(it.shift)}を最低${it.lo}回」"
+                is ConstraintMus.WindowRule -> "窓ルール「${sym(it.shift)}を${it.windowDays}日で${it.minCount}回以上」"
+                is ConstraintMus.DayNeed -> "必要人数「${sym(it.shift)}に${it.need}人」"
+            }
+            fun relaxHint(it: ConstraintMus.Item): String = when (it) {
+                is ConstraintMus.WishPin ->
+                    "${staffName(it.staff)}さんの${safeDayLabel(state.startDate, it.day)}の希望を調整する"
+                is ConstraintMus.RangeCap -> "「${sym(it.shift)}」の個人上限を上げる"
+                is ConstraintMus.RangeFloor -> "「${sym(it.shift)}」の個人下限を下げる"
+                is ConstraintMus.WindowRule -> "窓ルール「${sym(it.shift)} ${it.windowDays}日で${it.minCount}回以上」の回数を下げる"
+                is ConstraintMus.DayNeed -> "${sym(it.shift)}の必要人数を下げる"
+            }
+            fun hasWish(core: List<ConstraintMus.Item>) = core.any { it is ConstraintMus.WishPin }
+            for (sc in ConstraintMus.analyzeStaffConflicts(p).filter { hasWish(it.core) }.sortedBy { it.core.size }.take(3)) {
+                val name = staffName(sc.staff)
+                val labels = sc.core.joinToString(" ・ ") { itemLabel(it) }
+                val hints = sc.core.take(2).joinToString(" / ") { relaxHint(it) }
+                out.add(SettingIssue(IssueKind.WISH, "${name}さんの希望と条件の組合せ",
+                    "次の${sc.core.size}件は同時に成立しません（証明つき）: $labels",
+                    "いずれか1件を緩めてください（例: $hints）"))
+            }
+            for (dc in ConstraintMus.analyzeDayConflicts(p).filter { hasWish(it.core) }.sortedBy { it.core.size }.take(3)) {
+                val labels = dc.core.joinToString(" ・ ") { itemLabel(it) }
+                val wishHint = dc.core.firstOrNull { it is ConstraintMus.WishPin }?.let { relaxHint(it) }
+                out.add(SettingIssue(IssueKind.WISH, "${safeDayLabel(state.startDate, dc.day)} の必要人数と固定希望の衝突",
+                    "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません（証明つき）: $labels",
+                    "この日の希望を1件調整するか、必要人数を下げてください" + (wishHint?.let { "（例: $it）" } ?: "")))
             }
         }
 
