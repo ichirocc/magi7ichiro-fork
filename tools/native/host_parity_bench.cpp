@@ -147,6 +147,16 @@ static MagiProblem buildProblem(int S, int T, int K, int G, uint64_t seed, bool 
     // cons1 windows. [実データ形状] rest(0) 窓も混ぜる（例 golden: 14日窓 休>=5）。
     int nC1 = ri(2, 5);
     for (int c = 0; c < nC1; c++) { int d1 = ri(2, std::min(T, 14)); p.cons1.push_back({d1, ri(0, K - 1), ri(1, std::max(1, d1 - 1))}); }
+    // [A5/3.273.0 実データ形状] 同一シフトに複数窓ルール（golden の「休 5日窓>=1 かつ 15日窓>=4」型）を
+    //   明示的に追加し、重複スライド窓での c1 累積（scalar/bit 両path）を照合対象に含める。rest(0) と
+    //   もう1つ非rest シフトへ、短窓＋長窓の2規則を重ねる。
+    {
+        int longW = std::min(T, 15);
+        p.cons1.push_back({5, 0, 1});            // 休 5日窓>=1
+        p.cons1.push_back({longW, 0, std::max(1, longW / 4)});   // 休 15日窓>=~4
+        int wk = (K > 1) ? 1 : 0;
+        p.cons1.push_back({std::min(T, 14), wk, 2});  // 勤務シフト 14日窓>=2（golden の Dﾃ型）
+    }
     int nC2 = ri(1, 4); for (int c = 0; c < nC2; c++) p.cons2.push_back({ri(0, K - 1), ri(1, T / 3 + 1)});
     int nC41 = ri(2, 5); for (int c = 0; c < nC41; c++) { int l = ri(0, 2); p.cons41.push_back({ri(0, G - 1), ri(1, K - 1), l, l + ri(0, 2)}); }
     int nC42 = ri(1, 4); for (int c = 0; c < nC42; c++) p.cons42.push_back({ri(0, G - 1), ri(1, K - 1), ri(0, G - 1), ri(1, K - 1)});
