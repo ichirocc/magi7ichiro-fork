@@ -1720,6 +1720,28 @@ covUも増える」と検証したうえで、「隣接日連動型の複数日�
 - 検証: サンドボックスは Kotlin コンパイル不可＝ブレース/丸括弧/角括弧均衡0を静的確認。
   最終判定は CI（v6-engine-check の testDebugUnitTest／Release Build）。
 
+## 画面間冗長性の解消3件（3.286.0, ユーザー指示「各画面と各オブジェクトの一覧表を作成し、画面間の冗長性をシンプルにする」）
+全5画面×オブジェクトの一覧表をコード実測（MagiApp.kt タブ構成）で作成し、冗長性候補4件（A〜D）を提示。
+AskUserQuestion は「No preference」＝推奨に委任と解釈し、**A+B（推奨⭐5）＋C（3.195.0記録済み次点候補）を適用、
+D（CheckSummaryView撤去）は 3.83.0 の明示維持判断を覆すため据え置き**。全て表示・デッドコードのみ＝スコアリング不変。
+- **[A] StaffRangeCard 二重配置の一本化**: 編集タブ内で職員管理ドアと年間マスター「③ 回数（1人あたり）」の
+  2か所に同一カード全体が重複していた（唯一のカード丸ごと重複）。**③へ一本化**（職員管理から撤去。回数設定は
+  ③が意味的定位置・職員管理は人の属性管理=入職/退職/改名/所属/スキルに純化）。
+- **[B] 旧「回数設定画面」の孤児VMクラスタ削除**: CountSettingsCard（2.60〜2.63世代）の画面本体は既に撤去済み
+  だったが、VM 側の `shiftRuleBlocks`/`staffRuleBlocks`/`setCons41`＋データ型5種（GroupRule/IndivRule/
+  ShiftRuleBlock/StaffShiftRule/StaffRuleBlock）が呼出0のまま残存していた。grep で外部参照0（テスト含む）を
+  確認して削除。`staffCountRules`/`CountRuleView` は StaffRangeCard が使用中のため残置。
+- **[C] V6DashboardCard の日別/人別重複リスト撤去**（分析タブ・プロのみ）: dayRisks チップ列と負荷プロフィール
+  （staffProfiles top5）は AttentionCardsSection（全件＋要確認のみトグル＋タップ修復）が上位互換（3.195.0 で
+  保留した次点候補の実施）。固有の生指標（充足率/HARD Core/Guard/Apt/Equalize/sanity警告/最優先行）は残置。
+  孤児化した `RiskChip` も削除。`dayRisks` 自体は MagiScheduleViews（グリッドの日別不足）が使用中＝analyzer 不変。
+- **維持と判断（提案せず）**: CoverageDiag/ConfirmList/Attention の3層（粒度別・相互補完=3.195.0判断）／
+  Ws1Card vs StaffManageCard（群×シフト表 vs 職員単位の別ビュー=3.114.0決定）／BreakdownCard vs
+  ViolationFilterBar（内訳 vs 操作）／D=CheckSummaryView（3.83.0 の維持判断を尊重・ユーザー明示指示があれば実施）。
+- 検証: UI/VM層のみ＝サンドボックスは Kotlin コンパイル不可、ブレース/丸括弧/角括弧均衡0・削除シンボル残存参照0・
+  流用シンボル（NumberStepper=NeedDayEditor定義・horizontalScroll等の import）の他所使用を静的確認。
+  最終判定は CI（v6-engine-check の testDebugUnitTest／Release Build）。
+
 ## 判断設計監査の改善3件（3.285.0, 全5画面監査の「改善して再テスト」項目→「マージする」）
 ユーザー主導の**判断設計監査**（13項目チェックリスト: 利用者の目的/守る前提/判断主体/UIの代行範囲/根拠/
 影響表示/介入手段/誤認防止 等。不採用条件=前提の誤解・判断主体の誤認・根拠や取消手段の不明確さ）を
