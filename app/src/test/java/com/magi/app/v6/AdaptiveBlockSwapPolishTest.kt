@@ -25,7 +25,7 @@ class AdaptiveBlockSwapPolishTest {
      * 個人の回数ピンは A=「Xを11回」/ B=「Yを11回」だが、初期盤面は真逆（A=Y×11, B=X×11）。
      * → 11日ブロックを丸ごと交換した時だけ両者の下限割れが同時に解消する。
      */
-    private fun crossGroupState(): MagiState {
+    private fun crossGroupState(wishes: Map<String, Int> = emptyMap()): MagiState {
         val shifts = listOf(
             Shift("休み", "休", "", ""),
             Shift("X", "X", "1", "1"),
@@ -42,7 +42,7 @@ class AdaptiveBlockSwapPolishTest {
                 List(11) { 2 },   // A: Y×11（Xの下限11を丸ごと割っている）
                 List(11) { 1 },   // B: X×11（Yの下限11を丸ごと割っている）
             ),
-            wishes = emptyMap(),
+            wishes = wishes,
             staffRange = mapOf(
                 "0,1" to Range("11", "11"),   // A の X を 11 に固定
                 "1,2" to Range("11", "11"),   // B の Y を 11 に固定
@@ -73,6 +73,36 @@ class AdaptiveBlockSwapPolishTest {
         assertEquals("個人下限割れが解消", 0, after.breakdown["low"] ?: 0)
         assertEquals("HARD は不変(=0)", 0, after.hard)
         // 被覆保存: 各日の X/Y はそれぞれ1人のまま。
+        for (j in 0 until 11) {
+            val col = (0 until 2).map { res.newSchedule[it][j] }
+            assertEquals("日${j + 1}のXは1人", 1, col.count { it == 1 })
+            assertEquals("日${j + 1}のYは1人", 1, col.count { it == 2 })
+        }
+    }
+
+    /**
+     * [3.291.0 候補生成の緩和] 希望固定日をブロック内に含んでいても、その日だけ据え置いて残りを交換する。
+     *
+     * 旧（全か無か）の候補生成では、ブロック内に希望固定が1日でもあれば `return null` でブロックごと棄却
+     * していた。この盤面は T=11 で有効な長さが 11 のみ＝唯一のブロック(0〜10日)が固定日を必ず含むため、
+     * 旧実装なら候補0件＝完全に不活性になる。緩和後は固定日を除く10日が交換され、下限割れが 22→2 まで縮む
+     * （固定日ぶんの1回だけ届かない＝据え置きの意味論そのもの）。
+     */
+    @Test
+    fun adaptiveSwapKeepsWishLockedDaysInPlaceAndSwapsTheRest() {
+        // A は6日目(index 5)に Y を希望＝その日は動かせない。
+        val st = crossGroupState(wishes = mapOf("0,5" to 2))
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期の下限割れ合計(A11+B11)", 22, before.breakdown["low"] ?: 0)
+
+        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+        assertTrue("固定日があっても残りの日で交換が成立すること", res.applied > 0)
+        assertEquals("希望固定日の A は据え置き(Y のまま)", 2, res.newSchedule[0][5])
+        assertEquals("希望固定日の B も据え置き(X のまま)", 1, res.newSchedule[1][5])
+        assertEquals("固定日ぶん(A・B 各1回)だけ残して下限割れが縮む", 2, after.breakdown["low"] ?: 0)
+        assertEquals("HARD は不変(=0・希望も充足のまま)", 0, after.hard)
         for (j in 0 until 11) {
             val col = (0 until 2).map { res.newSchedule[it][j] }
             assertEquals("日${j + 1}のXは1人", 1, col.count { it == 1 })

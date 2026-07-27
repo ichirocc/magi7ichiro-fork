@@ -3013,7 +3013,9 @@ object V6HotfixPasses {
      * 安全性:
      * - 同日・同人数のシフトを交換するため、全体の被覆量は保存する。
      * - 異なる担当グループ間でも、ブロック内の全セルを相手が担当可能な場合だけ候補化する。
-     * - 実現可能な希望で固定されたセル、担当不可セル、厳密回数ピンを破る候補は除外する。
+     * - 実現可能な希望で固定されたセル・担当不可の日は**据え置き**（その日は交換しない）、残りの日だけを
+     *   入れ替える。ブロック全体を棄却しないため、希望が多いデータでも長い期間の候補が成立する。
+     * - 厳密回数ピンを破る候補は exactPinRegression で除外する。
      * - 最終採否は [UnifiedViolationChecker] と [betterReport] の正式順
      *   （HARD → weightedScore → total）だけで決めるため、探索順にかかわらず退化しない。
      */
@@ -3047,12 +3049,16 @@ object V6HotfixPasses {
             val length: Int,
             val priority: Long,
             val differences: Int,
+            /** 実際に入れ替える日（希望固定・担当不可の日は据え置くため、ブロック内の部分集合になる）。 */
+            val days: IntArray,
         )
 
         fun name(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         fun swap(candidate: Candidate) {
-            for (j in candidate.start until candidate.start + candidate.length) {
+            // ブロック全体でなく candidate.days（据え置き分を除いた実交換日）だけを入れ替える。
+            //   各日は2人の値を交換するだけなので、日ごとのシフト多重集合＝被覆量は保存される。
+            for (j in candidate.days) {
                 val tmp = work[candidate.staffA][j]
                 work[candidate.staffA][j] = work[candidate.staffB][j]
                 work[candidate.staffB][j] = tmp
@@ -3100,21 +3106,26 @@ object V6HotfixPasses {
             pressure: LongArray,
         ): Candidate? {
             val deltaA = IntArray(p.K)
-            var differences = 0
+            val swapDays = ArrayList<Int>(length)
             for (j in start until start + length) {
-                // 希望固定セルが1つでもあればブロックごと候補から外す（部分的に飛ばして交換すると
-                //   「期間をまとめて入れ替える」という手の意味が崩れるため）。同値セルでも同様に扱う。
-                if (!movable(staffA, j) || !movable(staffB, j)) return null
+                // [3.291.0 候補生成の緩和] 旧: 希望固定が1つでもあればブロックごと棄却(return null)。
+                //   実データ（希望81件/10名31日）では11日以上の無ロック連続がほぼ存在せず、全探索空間で
+                //   候補が4件しか生成されない＝実質不活性だった（実測）。据え置き（その日は交換しない）へ
+                //   変更すると候補は100箇所超へ増える。交換するのは残りの日だけなので、日ごとの
+                //   シフト多重集合＝被覆量は依然として保存される（安全性は不変）。
+                if (!movable(staffA, j) || !movable(staffB, j)) continue
                 val a = work[staffA][j]
                 val b = work[staffB][j]
                 if (a == b) continue
-                // 異グループの相手でも、相互に担当可能なときだけ交換する。
-                if (a !in 0 until p.K || b !in 0 until p.K || !p.canDo(staffA, b) || !p.canDo(staffB, a)) return null
+                // 異グループの相手でも、相互に担当可能な日だけ交換する（できない日は据え置き）。
+                if (a !in 0 until p.K || b !in 0 until p.K || !p.canDo(staffA, b) || !p.canDo(staffB, a)) continue
                 deltaA[a]--
                 deltaA[b]++
-                differences++
+                swapDays.add(j)
             }
-            if (differences == 0) return null
+            val differences = swapDays.size
+            // 1日だけの交換は既存の同日交換パス(CyclicSwap)と同一＝「期間をまとめて入れ替える」手にならないので除外。
+            if (differences < 2) return null
 
             var beforeBalance = 0L
             var afterBalance = 0L
@@ -3129,7 +3140,7 @@ object V6HotfixPasses {
             // 大きい推定改善を優先しつつ、違反に関与する職員と実際に変わるセル数をタイブレークに使う。
             val priority = (beforeBalance - afterBalance) * 1_000_000L +
                 (pressure[staffA] + pressure[staffB]) * 16L + differences.toLong()
-            return Candidate(staffA, staffB, start, length, priority, differences)
+            return Candidate(staffA, staffB, start, length, priority, differences, swapDays.toIntArray())
         }
 
         var bestRep = before
@@ -3221,7 +3232,7 @@ object V6HotfixPasses {
             swap(accepted)
             bestRep = chosenRep ?: break
             applied++
-            selectedLabels.add("${accepted.length}日:${name(accepted.staffA)}⇔${name(accepted.staffB)} ${accepted.start + 1}〜${accepted.start + accepted.length}日")
+            selectedLabels.add("${accepted.length}日:${name(accepted.staffA)}⇔${name(accepted.staffB)} ${accepted.start + 1}〜${accepted.start + accepted.length}日(${accepted.differences}セル)")
             pass++
         }
 
