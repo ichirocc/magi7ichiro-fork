@@ -3238,6 +3238,26 @@ object V6HotfixPasses {
             //   （実データは10名中9名の「休」が厳密ピン＝長いブロックを丸ごと交換すると必ず回数が動く）。
             if (!balancePinnedDays(cycle, swapDays, counts)) return null
 
+            // [3.295.0 境界c3nの事前フィルタ] 3.294.0 でピン破りを消した結果、残る不採用は**全て**
+            //   必須増＝c3n（禁止連続）になった（user 48/48・golden 39・real 34）。この巡回交換では
+            //   covU/covO は同日置換で不変・groupViol は canDo・pref は movable で不変なので、
+            //   **変化しうる HARD は c3n だけ**。c3n は職員行ローカルなので、参加者の行に交換を当てた
+            //   fire 数を数えれば**近似でなく厳密**に判定できる。正味増える候補はここで捨て、
+            //   評価枠(48)を soft 判定まで進める候補へ回す（採否そのものは従来どおり checker が決める）。
+            if (p.cons3n.isNotEmpty()) {
+                var firesBefore = 0
+                var firesAfter = 0
+                for (t in 0 until n) {
+                    val self = cycle[t]
+                    val giver = cycle[(t + 1) % n]
+                    val row = work[self].copyOf()
+                    firesBefore += C1DeltaPrefilter.staffC3nFires(p, row)
+                    for (j in swapDays) row[j] = work[giver][j]
+                    firesAfter += C1DeltaPrefilter.staffC3nFires(p, row)
+                }
+                if (firesAfter > firesBefore) return null
+            }
+
             val differences = swapDays.size
             // 1日だけの交換は既存の同日交換/同日3者回転(CyclicSwap)と同一＝「期間をまとめて入れ替える」手にならないので除外。
             if (differences < 2) return null
