@@ -211,6 +211,15 @@ object V6SanityPort {
      *   全員の目標は同時に満たせない（目標割れ aptLow か過剰配置 covO/aptHigh が必ず出る）。
      * - 休(restIdx): 「1日に何人休んでよいか」という座席上限を持たないため、
      *   capacity = 各職員が他シフトの個人下限を満たしたうえで最大何日休めるかの合計。
+     *
+     * [3.301.0 で直った挙動] 旧実装は検査6-C を「必要人数が1日でも設定されているシフト」のループ内に
+     * 置いていたため、**休に必要人数を設定しない通常運用では休の判定が一度も実行されなかった**
+     * （golden_state で実測: 休の必要人数設定日=0）。3.235.0 で入れた休向け restCapacity 比較が
+     * そのゲートに阻まれて死んでいた潜在バグ。休は必要人数を参照しないので、ここではゲートの外に出す。
+     * 通常シフトのゲート（必要人数が1日も無ければ対象外）は維持する：勤務シフトの必要人数未設定は
+     * 「まだ設定していない」だけの可能性が高く、上限0とみなすと誤検知になる（3.235.0 の指摘と同型）。
+     * なお休の capacity は休自身の個人上限(rangeHi)を見ていない＝実際より大きく見積もる。
+     * 検出漏れ側に倒れるだけで誤検知は増えない。
      */
     data class AptBalance(
         val shiftIdx: Int,
@@ -227,9 +236,13 @@ object V6SanityPort {
         val shortfall: Int get() = (aptSum - capacity).coerceAtLeast(0)
     }
 
-    /** [適切回数の検算] 目標が設定されているシフトについて [AptBalance] を返す（盤面不要）。 */
-    fun aptBalances(state: MagiState): List<AptBalance> {
-        val p = cachedProblem(state)
+    /**
+     * [適切回数の検算] 目標が設定されているシフトについて [AptBalance] を返す（盤面不要）。
+     *
+     * [p] は既定で state のキャッシュを使うが、[buildGuidance] のように呼び出し元が既に Problem を
+     * 持っている場合はそれを渡す（同じ関数が別の Problem を見て診断と設定画面がズレるのを防ぐ）。
+     */
+    fun aptBalances(state: MagiState, p: Problem = cachedProblem(state)): List<AptBalance> {
         val out = ArrayList<AptBalance>()
         for (k in 0 until p.K) {
             var aptSum = 0
@@ -513,7 +526,7 @@ object V6SanityPort {
         //    「各職員が他シフトの個人下限を満たしたうえで最大何日休めるか」の合計と比較する。
         //    [3.301.0] 判定は aptBalances() に集約した。設定画面の「目標」カードが同じ関数を読むため、
         //    「診断は警告を出すのに設定画面は何も言わない」というズレが構造的に起きない。
-        for (b in aptBalances(state)) {
+        for (b in aptBalances(state, p)) {
             if (!b.overloaded) continue
             out.add(SettingIssue(IssueKind.DEMAND, "「${b.kigou}」の適切回数の合計",
                 if (b.isRest)
