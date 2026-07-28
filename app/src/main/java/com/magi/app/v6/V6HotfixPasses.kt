@@ -3130,6 +3130,75 @@ object V6HotfixPasses {
         }
 
         /**
+         * [ピン保存交換] 交換日 [swapDays] を「厳密ピン(lo==hi)のシフト回数が1つも動かない」部分集合へ絞る。
+         * 絞れた場合だけ true（[swapDays] を破壊的に更新）。
+         *
+         * 対象は**いま満たされている**厳密ピンだけ（`counts == lo == hi`）。すでに外れているピンは
+         * 動かして直せる余地があるため拘束しない（悪化は従来どおり `exactPinRegression` が弾く）。
+         *
+         * 各日 j について、参加者 t のピン付きシフト k の増減
+         * `d = [直前者が k] - [自分が k]`（∈ {-1,0,+1}）を並べた**符号ベクトル**を作る。
+         * 交換日集合の総和がゼロベクトルならピンは1つも動かない。ゼロベクトルの日は常に採り、
+         * 非ゼロの日は**符号が正反対の日と対にして**採る（打ち消し合う）。3日以上での相殺は拾わないが
+         * 安価で安全側（採れなかった日を落とすだけ＝退化しない）。
+         */
+        fun balancePinnedDays(cycle: IntArray, swapDays: ArrayList<Int>, counts: Array<IntArray>): Boolean {
+            val n = cycle.size
+            // いま満たされている厳密ピン (参加者位置, シフト) を集める。
+            var slots = 0
+            val slotStaff = IntArray(32)
+            val slotShift = IntArray(32)
+            for (t in 0 until n) {
+                val i = cycle[t]
+                for (k in 0 until p.K) {
+                    val lo = p.rangeLo[i][k]
+                    if (lo == Int.MIN_VALUE || lo != p.rangeHi[i][k] || counts[i][k] != lo) continue
+                    if (slots >= 31) return true   // 対象が多すぎる＝この安価な相殺では扱えない（従来どおり）
+                    slotStaff[slots] = t; slotShift[slots] = k; slots++
+                }
+            }
+            if (slots == 0) return true   // ピン無し＝制約なし（コストゼロで従来と同一）
+
+            fun signatureOf(j: Int): Long {
+                var sig = 0L
+                for (s in 0 until slots) {
+                    val t = slotStaff[s]
+                    val k = slotShift[s]
+                    val mine = if (work[cycle[t]][j] == k) 1 else 0
+                    val incoming = if (work[cycle[(t + 1) % n]][j] == k) 1 else 0
+                    val d = incoming - mine
+                    if (d > 0) sig = sig or (1L shl (2 * s))
+                    else if (d < 0) sig = sig or (2L shl (2 * s))
+                }
+                return sig
+            }
+            // 符号の反転（+1↔-1 のビットを入れ替える）。
+            fun negate(sig: Long): Long = ((sig and 0x5555_5555_5555_5555L) shl 1) or ((sig ushr 1) and 0x5555_5555_5555_5555L)
+
+            val bySig = LinkedHashMap<Long, ArrayList<Int>>()
+            for (j in swapDays) bySig.getOrPut(signatureOf(j)) { ArrayList() }.add(j)
+
+            val kept = ArrayList<Int>(swapDays.size)
+            bySig[0L]?.let { kept.addAll(it) }
+            val done = HashSet<Long>()
+            done.add(0L)
+            for ((sig, days) in bySig) {
+                if (sig in done) continue
+                done.add(sig)
+                val opposite = negate(sig)
+                done.add(opposite)
+                val other = bySig[opposite] ?: continue
+                val pairs = min(days.size, other.size)
+                for (t in 0 until pairs) { kept.add(days[t]); kept.add(other[t]) }
+            }
+            if (kept.size < 2) return false
+            kept.sort()
+            swapDays.clear()
+            swapDays.addAll(kept)
+            return true
+        }
+
+        /**
          * 巡回 [cycle] をブロック (start, length) に適用する正式な候補を作る。
          * 交換日は「全参加者が movable」「その日の受け渡しが全辺 canDo」「実際に値が動く」を満たす日だけ。
          */
@@ -3163,6 +3232,12 @@ object V6HotfixPasses {
                 if (!ok || !changes) continue
                 swapDays.add(j)
             }
+            if (swapDays.size < 2) return null
+            // [3.294.0 ピン保存交換] 交換日の集合を「厳密ピン(lo==hi)の回数が変わらない」ように選び直す。
+            //   3.293.0 の不採用内訳で、採用0の55〜80%が exactPinRegression のピン破りと判明した
+            //   （実データは10名中9名の「休」が厳密ピン＝長いブロックを丸ごと交換すると必ず回数が動く）。
+            if (!balancePinnedDays(cycle, swapDays, counts)) return null
+
             val differences = swapDays.size
             // 1日だけの交換は既存の同日交換/同日3者回転(CyclicSwap)と同一＝「期間をまとめて入れ替える」手にならないので除外。
             if (differences < 2) return null

@@ -242,6 +242,65 @@ class AdaptiveBlockSwapPolishTest {
         }
     }
 
+    /**
+     * [3.294.0 ピン保存交換] ブロック全体を交換すると厳密ピン(lo==hi)が崩れる盤面で、
+     * **ピンの回数が変わらない部分集合**だけを交換して改善に到達する。
+     *
+     * A は休4回で固定（lo=hi=4・充足中）、Y が下限2に対し0回。ブロック(11日)を丸ごと B と交換すると
+     * A の休は 4→2 になり `exactPinRegression` で必ず却下される（＝旧実装なら採用0）。
+     * 休の増減が打ち消し合う日だけを選べば、休4を保ったまま Y の下限割れを解消できる。
+     */
+    private fun pinnedRestState(): MagiState {
+        val shifts = listOf(
+            Shift("休み", "休", "1", "1"),
+            Shift("X", "X", "1", "1"),
+            Shift("Y", "Y", "1", "1"),
+        )
+        val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"))
+        return MagiState(
+            startDate = "2026-02-01", endDate = "2026-02-11",
+            shifts = shifts, groups = groups,
+            staff = listOf(Staff("A", 0), Staff("B", 1), Staff("C", 2)),
+            use2Patterns = false,
+            groupShift = List(3) { listOf(1, 1, 1) },
+            groupShiftApt = List(3) { List(3) { "" } },
+            schedule = listOf(
+                listOf(0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1),   // A: 休4 / X7 / Y0
+                listOf(1, 1, 1, 1, 0, 0, 2, 2, 2, 2, 2),   // B: X4 / 休2 / Y5
+                listOf(2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0),   // C: Y6 / 休5
+            ),
+            wishes = emptyMap(),
+            staffRange = mapOf(
+                "0,0" to Range("4", "4"),   // A の休を4回に固定（現状ちょうど充足）
+                "0,2" to Range("2", ""),    // A の Y は2回以上（現状0＝下限割れ）
+            ),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun pinPreservingSwapKeepsExactPinAndStillImproves() {
+        val st = pinnedRestState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals("初期は A の Y が下限2に対し0＝下限割れ2", 2, before.breakdown["low"] ?: 0)
+        assertEquals("初期の A の休は4（ピン充足）", 4, (0 until 11).count { sched[0][it] == 0 })
+
+        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
+        val after = UnifiedViolationChecker.check(st, res.newSchedule)
+        assertTrue("部分集合の交換が採用されたこと", res.applied > 0)
+        assertEquals("厳密ピン（A の休4）が保たれること", 4, (0 until 11).count { res.newSchedule[0][it] == 0 })
+        assertTrue("下限割れが減ること", (after.breakdown["low"] ?: 0) < (before.breakdown["low"] ?: 0))
+        assertEquals("HARD は不変(=0)", 0, after.hard)
+        for (j in 0 until 11) {
+            val col = (0 until 3).map { res.newSchedule[it][j] }
+            assertEquals("日${j + 1}の被覆保存(休/X/Y 各1人)", listOf(0, 1, 2), col.sorted())
+        }
+    }
+
     @Test
     fun adaptiveSwapIsNoOpOnAlreadyOptimalBoard() {
         val st = crossGroupState()
