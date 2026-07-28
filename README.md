@@ -22,7 +22,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・廃止済み・未実施の提案） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 
-**最終更新**：2026-07-28（3.299.0 `docs/algorithm_portfolio.md` を新設＝探索・研磨の入口と責務を一覧化した運用台帳。実装済みの事実と未実施の提案を分けて記載。3.214.0〜3.298.0 の詳細は `CLAUDE.md` の各節に記録）／ **コード基準コミット**：main HEAD（この目次が古いと他が正しくても信頼が崩れるため、改修時は対象文書と本目次を必ず更新）。
+**最終更新**：2026-07-28（3.300.0 台帳の未実施2件を実施＝旧 applyBlockSwapPolish の定義削除と、C3 3者ブロック回転の「停滞時・最終巡のみ」への格下げ。後者は ablation で寄与ゼロを実測してから格下げ。3.214.0〜3.299.0 の詳細は `CLAUDE.md` の各節に記録）／ **コード基準コミット**：main HEAD（この目次が古いと他が正しくても信頼が崩れるため、改修時は対象文書と本目次を必ず更新）。
 
 ## Status
 

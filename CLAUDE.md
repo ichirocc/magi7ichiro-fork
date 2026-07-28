@@ -5241,3 +5241,31 @@ Kotlin側で full==delta を検証。Golden parity は soft total 非アサー�
   偏り職員を収集→UiState→`breakdownLocations` が「職員（曜日の偏り N）」「職員 「シフト」（偏り N）」で整形・タップで
   当該職員へフォーカス。**内訳パネルのみに表示（グリッド不変＝飽和回避）・スコアリング不変**。配線=MirrorCore→
   ViolationReport→UiState→makeUi→breakdownLocations（表示専用フィールド追加、既存構築は全て named 引数＋デフォルトで非破壊）。
+
+## アルゴリズム台帳の新設と未実施2件の実施（3.299.0 / 3.300.0, ユーザー提示の台帳案→「両方」）
+ユーザーが `algorithm_portfolio.md` 案（同一内容を3回アップロード）を提示。全項目をコードと突合したところ
+**約80%は事実と一致**していたが、**未実施の提案が2件「廃止・統合済み」として完了形で書かれていた**。
+完了形の未実施項目は読み手がコードを確認せずに信じるため最も危険＝この点を最優先で分離した。
+- **3.299.0（docs のみ）**: `docs/algorithm_portfolio.md` を新設し README 目次へ追加。事実に合わせた修正=
+  ①**入口を3→4種類**（初期解生成 `handleSmartInitial`→`SmartInitialScheduler` / `handleSimple`→
+  `GreedyMirrorScheduler` が漏れていた。`handleCheck` は評価のみ＝入口でない旨も明記）
+  ②後処理を「前段(1回)→巡回ループ(最大4巡)→後段(1回)」の実コード順で記載。とくに**長距離交換は Range より
+  後・Apt/Fair より前**という実際の位置を明示（案は「個人回数の後」と一括りにしていた）
+  ③未記載だった横断機構を追加（`CombinatorialRepair` 5パス配線・`PolishGate`・`exactPinRegression`・
+  `EliteIntegrationPolish` は `runPostOptimization` の**手前**・`HF70`）
+  ④「廃止・統合済み」へ `BeamC1PolishV2`/`C1TemporalSwapPolish`（3.254.0 で削除済み）を追加
+  ⑤未実施2件を**「未実施の提案」節へ隔離**。台帳の規律「書くのは実装済みの事実だけ・構想は隔離」を冒頭と末尾に明記。
+- **3.300.0（コード）**: 隔離した2件を実施。
+  - **旧 `applyBlockSwapPolish`（同一グループ×15日固定）を定義ごと削除**（77行）。本番パイプラインからは
+    3.290.0 で既に外れており、残っていたのは定義とテスト4箇所のみ。`BlockSwapPolishTest`(3件)を削除し、
+    `AdaptiveBlockSwapPolishTest` の新旧対照アサーションを撤去（同一グループのペアが無い盤面＝旧パスは
+    手を作れなかった、という事実はコメントで保存）。
+  - **C3 3者ブロック回転を「停滞時・最終巡のみ」へ格下げ**。**格下げの前に ablation を実測**（3データセットで
+    完全に外して実行）し、**採用0かつ結果がバイト一致**＝通常時の寄与ゼロを確認してから実施した
+    （C1 用の同じ回転を 3.254.0 で撤去したのと同じ根拠。C3 側は未測定だったため今回測った）。撤去はせず
+    `rC3.applied == 0 || round == maxRounds - 1` のゲートに限定＝別のデータ形状で主手が詰まる局面には従来どおり効く。
+    c3 違反が無ければ `applyBlockRotationPolish` 自身がアンカー0で即 return するため追加コストなし。
+  - 実測（後処理研磨のみ・pin-regressions は3件とも0）: golden 2469/306/c1 104（不変）／real 49232/179→
+    **49231/178**／user 33167/170/c1 54（不変）。real の −1 は JointLNS の壁時計由来の経路依存
+    （ablation では 49232/179 だった＝格下げの効果ではない）。ホストJVM **全322テスト green**
+    （325 − 削除した BlockSwapPolishTest 3件）。

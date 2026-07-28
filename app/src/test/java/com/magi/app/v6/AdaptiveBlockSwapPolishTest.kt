@@ -11,11 +11,11 @@ import org.junit.Test
 
 /**
  * [可変長ブロック交換] applyAdaptiveBlockSwapPolish の検証。
- * 旧 applyBlockSwapPolish は「同一担当グループ × 15日固定」のため、
+ * 旧 applyBlockSwapPolish（3.300.0 で削除）は「同一担当グループ × 15日固定」のため、
  *   (a) 別グループ同士の交換
  *   (b) 15日以外の長さ（11/13/17/19/23/28）
  * に到達できなかった。本テストは (a)+(b) の両方を同時に要求する最小盤面で、
- * 新演算子だけが改善に到達することを固定する（旧パスが 0 採用であることも同じ盤面で確認）。
+ * 新演算子だけが改善に到達することを固定する。
  */
 class AdaptiveBlockSwapPolishTest {
 
@@ -62,11 +62,9 @@ class AdaptiveBlockSwapPolishTest {
         assertTrue("初期は個人下限割れがある", (before.breakdown["low"] ?: 0) > 0)
         assertEquals("初期 HARD=0（被覆は満たしている）", 0, before.hard)
 
-        // 旧パス: 同一グループのペアが存在しない＝そもそも手が無い。
-        val legacy = V6HotfixPasses.applyBlockSwapPolish(st, sched.copy2D(), blockLen = 15, maxPasses = 3)
-        assertEquals("旧15日固定・同一グループ限定では到達不能", 0, legacy.applied)
-
-        // 新パス: 別グループ×11日ブロックで両者の下限割れが同時に解消する。
+        // [3.300.0] 旧 applyBlockSwapPolish（同一グループ×15日固定）は削除済み。この盤面は同一グループの
+        //   ペアが存在しないため旧パスは手を1つも作れなかった＝ここで確認する改善は新演算子に固有のもの。
+        //   別グループ×11日ブロックで両者の下限割れが同時に解消する。
         val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
         assertTrue("可変長ブロック交換が採用されたこと", res.applied > 0)

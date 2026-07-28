@@ -332,10 +332,18 @@ object V6HotfixPasses {
             work = rC3.newSchedule.copy2D(); totalC3 += rC3.applied; roundApplied += rC3.applied
             if (round == 0) logs.addAll(rC3.logs)
 
-            onPhase("後処理 連続規則(c3系)3者回転研磨 [巡${round + 1}]")
-            val rC3r = applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = 2, shouldStop = clusterStop)
-            work = rC3r.newSchedule.copy2D(); totalC3r += rC3r.applied; roundApplied += rC3r.applied
-            if (round == 0) logs.addAll(rC3r.logs)
+            // [3.300.0 高コストの脱出手へ格下げ] 3者回転は O(候補^3) の全組合せをフル評価する重い手。
+            //   ablation（3データセットで完全に外して実行）の結果、**採用0かつ結果がバイト一致**＝
+            //   通常時の寄与はゼロと実測した（C1 用の同じ回転を 3.254.0 で撤去したのと同じ根拠）。
+            //   撤去はせず、**主手 applyC3SequencePolish が1手も採れなかった巡（＝停滞）**と
+            //   **最終巡**だけに限定する。別のデータ形状で主手が詰まる局面には従来どおり効く。
+            //   c3 違反が無ければ applyBlockRotationPolish 自身がアンカー0で即 return する＝追加コストなし。
+            if (rC3.applied == 0 || round == maxRounds - 1) {
+                onPhase("後処理 連続規則(c3系)3者回転研磨 [巡${round + 1}]")
+                val rC3r = applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = 2, shouldStop = clusterStop)
+                work = rC3r.newSchedule.copy2D(); totalC3r += rC3r.applied; roundApplied += rC3r.applied
+                if (round == 0) logs.addAll(rC3r.logs)
+            }
 
             // [C3mnPolish・玉突き連鎖の横展開] cons3n(HARD)で直接候補が全滅する局面向けに findCovUChain
             //   をc3mn(回避,SOFT)専用に反映（grilling 2026-07-19、金沢勇輝のDﾃ4連続実例）。
@@ -2942,87 +2950,9 @@ object V6HotfixPasses {
     }
 
     /**
-     * [BlockSwapPolish・15日ブロック丸ごと2人交換] ユーザー指示「15日間まるごと2人交換を実装する」
-     * （grillingで確定: 対象=同一担当グループのみ／位置=全オフセットのスライド窓／実行=後処理Polish
-     * パス／探索範囲=アンカーなし・同グループ内全ペア×全オフセットを無条件に試す）。
-     *
-     * 動機: 既存の交換系(CyclicSwap=同日1〜3人・鏡像長方形=2日)は局所的なため、「1日ずつ動かすと
-     * 途中経過が悪化して isBetter に拒否される」が「まとめて動かせば全体は改善する」ような大きな
-     * 交換を発見できない（金沢⇔アリフのような同一range設定のペアでは無意味だが、range/wish/apt等が
-     * 異なる同グループのペアでは、ブロックまるごとの入替がlow/high/pref/apt/weeklyを同時に動かし、
-     * 1日単位の局所探索が踏めない改善に到達し得る）。
-     *
-     * 安全性: 同一担当グループ(canDo完全一致)のペアに限定するため、交換後も groupViol/covU/covO/
-     * c41(s)/c42(s)/禁止連続の**内部**は構造的に不変（同じシフト列がそのまま相手に移るだけ）。
-     * ブロック境界(直前日・直後日との接続)でのみ新規の禁止連続が起こり得るが、それは isBetter の
-     * hard判定が担保する。ブロック内に希望固定(wish-lock)がある場合は事前にスキップ（他パスと同じ
-     * `movable`規約。無条件に希望を破壊する交換を試みない安全側フィルタ、コスト削減も兼ねる）。
-     * 採否はisBetter(hard→total→weighted)keep-best＝退化不能。
-     */
-    fun applyBlockSwapPolish(state: MagiState, schedule: Array<IntArray>, blockLen: Int = 15, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }): CyclicSwapResult {
-        val p = Problem(state)
-        val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
-        var bestRep = before
-        var applied = 0
-        // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
-        //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
-        fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
-        fun name(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
-
-        // 同一担当グループ(sgrp)ごとに職員をまとめ、グループ内の全ペアを列挙。
-        val byGroup = LinkedHashMap<Int, MutableList<Int>>()
-        for (i in 0 until p.S) byGroup.getOrPut(p.sgrp[i]) { ArrayList() }.add(i)
-        val pairs = ArrayList<Pair<Int, Int>>()
-        for (members in byGroup.values) {
-            for (a in members.indices) for (b in a + 1 until members.size) pairs.add(members[a] to members[b])
-        }
-        if (pairs.isEmpty() || blockLen <= 0 || blockLen > p.T) {
-            return CyclicSwapResult(work, before.total, before.total, 0,
-                listOf(MirrorLog(tag = "BlockSwapPolish", message = "対象ペア(同一グループ2名以上)なし=スキップ")))
-        }
-
-        val fixedNames = ArrayList<String>()
-        var pass = 0
-        while (pass < maxPasses) {
-            if (shouldStop()) break
-            var improved = false
-            for ((i, i2) in pairs) {
-                if (shouldStop()) break
-                for (start in 0..(p.T - blockLen)) {
-                    if (shouldStop()) break
-                    val end = start + blockLen - 1
-                    var locked = false
-                    var same = true
-                    for (j in start..end) {
-                        if (!movable(i, j) || !movable(i2, j)) { locked = true; break }
-                        if (work[i][j] != work[i2][j]) same = false
-                    }
-                    if (locked || same) continue
-                    for (j in start..end) { val t = work[i][j]; work[i][j] = work[i2][j]; work[i2][j] = t }
-                    val rep = UnifiedViolationChecker.check(state, work)
-                    if (isBetter(rep, bestRep)) {
-                        bestRep = rep; applied++; improved = true
-                        fixedNames.add("${name(i)}⇔${name(i2)} ${start + 1}〜${end + 1}日")
-                    } else {
-                        for (j in start..end) { val t = work[i][j]; work[i][j] = work[i2][j]; work[i2][j] = t }
-                    }
-                }
-            }
-            pass++
-            if (!improved) break
-        }
-        val logs = listOf(MirrorLog(tag = "BlockSwapPolish",
-            message = "${blockLen}日ブロック丸ごと交換研磨: total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
-                (if (applied == 0) " [頭打ち=改善手なし]" else "") +
-                (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "")))
-        return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
-    }
-
-    /**
      * 指定した長さの勤務ブロックを、他職員と丸ごと交換／巡回交換する適応ポートフォリオ演算子。
      *
-     * 旧 [applyBlockSwapPolish] は「同一担当グループ × 15日 × 2者」に固定されていた。本演算子は
+     * 旧 applyBlockSwapPolish（3.300.0 で削除）は「同一担当グループ × 15日 × 2者」に固定されていた。本演算子は
      * 11/13/17/19/23/28日を独立した候補プールとして持ち、各長さから有望候補を必ず残す。
      * これにより、短い窓では途中退化して届かない個人回数・apt・週偏り・連続規則の同時改善を、
      * 期間ごとのまとまりとして探索できる。
