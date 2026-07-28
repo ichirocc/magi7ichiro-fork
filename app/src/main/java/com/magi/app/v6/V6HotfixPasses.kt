@@ -3193,6 +3193,8 @@ object V6HotfixPasses {
         var generated = 0            // DFS が列挙した巡回の数（見積りキーだけで選別する安価な段）
         var builtCandidates = 0      // 実候補まで組み立てた数（プール上位のみ）
         val builtByCycleSize = sortedMapOf<Int, Int>()   // 巡回人数別の実候補数（多者交換が実際に出ているかの診断）
+        val rejectReasons = LinkedHashMap<String, Int>() // 不採用の理由別件数（採用0のとき何に負けたか）
+        val rejectCulprits = LinkedHashMap<String, Int>()// 悪化の主因になった族（重み付きで最も増えた族）
         var evaluated = 0
         var cycleHits = 0            // 3者以上の巡回として採用した手数（2者交換と区別してログに出す）
         val selectedLabels = ArrayList<String>()
@@ -3358,6 +3360,31 @@ object V6HotfixPasses {
                 if (!pinRegression && isBetter(report, bestRep) && (chosenRep == null || isBetter(report, chosenRep!!))) {
                     chosen = candidate
                     chosenRep = report
+                } else {
+                    // [不採用理由の分類] 採用0のとき「何に負けたか」がログから読めるようにする
+                    //   （RangePolish 3.222.0・C1Polish 3.236.0 の頭打ち理由と同じ趣旨）。
+                    //   分類は isBetter の判定順（HARD → weightedScore → total）と厳密に一致させる。
+                    val why = when {
+                        pinRegression -> "ピン破り"
+                        report.hard > bestRep.hard -> "必須増"
+                        report.hard < bestRep.hard -> "採用手に劣後"   // bestRep には勝つが同パスの別候補に負けた
+                        report.weightedScore > bestRep.weightedScore -> "重み悪化"
+                        report.weightedScore < bestRep.weightedScore -> "採用手に劣後"
+                        report.total < bestRep.total -> "採用手に劣後"
+                        report.total > bestRep.total -> "件数悪化"
+                        else -> "同値"
+                    }
+                    rejectReasons[why] = (rejectReasons[why] ?: 0) + 1
+                    if (why == "重み悪化" || why == "必須増") {
+                        // 重み付きで最も増えた族＝この手が壊した本体。
+                        var worstFam: String? = null
+                        var worstDelta = 0.0
+                        for (fam in MirrorKeys.all) {
+                            val d = ((report.breakdown[fam] ?: 0) - (bestRep.breakdown[fam] ?: 0)) * MirrorKeys.weightOf(fam)
+                            if (d > worstDelta) { worstDelta = d; worstFam = fam }
+                        }
+                        worstFam?.let { rejectCulprits[it] = (rejectCulprits[it] ?: 0) + 1 }
+                    }
                 }
             }
             val accepted = chosen ?: break
@@ -3378,6 +3405,10 @@ object V6HotfixPasses {
                 (if (builtByCycleSize.isEmpty()) "" else " 内訳 " + builtByCycleSize.entries.joinToString(" ") { "${it.key}者:${it.value}" }) +
                 ")/正式評価${evaluated}件" +
                 (if (applied == 0) " [頭打ち=改善手なし]" else "") +
+                (if (rejectReasons.isEmpty()) "" else " 不採用内訳: " +
+                    rejectReasons.entries.sortedByDescending { it.value }.joinToString(" ") { "${it.key}${it.value}" }) +
+                (if (rejectCulprits.isEmpty()) "" else " (悪化の主因 " +
+                    rejectCulprits.entries.sortedByDescending { it.value }.take(4).joinToString(" ") { "${it.key}:${it.value}" } + ")") +
                 (if (selectedLabels.isNotEmpty()) " 対象: ${selectedLabels.joinToString(", ")}" else "")))
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs)
     }
