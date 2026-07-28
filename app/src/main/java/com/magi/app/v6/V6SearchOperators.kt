@@ -478,6 +478,26 @@ internal fun diffInto(T: Int, from: Array<IntArray>, to: Array<IntArray>, buf: I
 }
 
 /**
+ * [不採用の主因] 候補盤面 [after] が基準 [before] より「重み付きで最も増えた」族を返す（同点は
+ * MirrorKeys.all の順で先勝ち・悪化が無ければ null）。研磨パスが候補を捨てたとき、ログに
+ * 「何を壊したから捨てたのか」を族名で残すための読み取り専用ヘルパー。
+ *
+ * 動機: 頭打ち理由の分類（RangePolish 3.222.0 / C1Polish 3.236.0）は「候補なし（構造的に手が無い）」と
+ * 「不採用（手はあるが目的関数が拒否）」を区別するが、後者の**理由**までは出していなかった。実機ログの
+ * c1 残存が「不採用×65 / 候補なし×4」＝ほぼ全部が拒否だったため、次に何を緩めるべきかがログから読めない。
+ * AdaptiveBlockSwap（3.293.0）は同じ趣旨の「悪化の主因」を既に出しており、その計算をここへ共通化する。
+ */
+internal fun worstWorsenedFamily(after: ViolationReport, before: ViolationReport): String? {
+    var worstFam: String? = null
+    var worstDelta = 0.0
+    for (fam in MirrorKeys.all) {
+        val d = ((after.breakdown[fam] ?: 0) - (before.breakdown[fam] ?: 0)) * MirrorKeys.weightOf(fam)
+        if (d > worstDelta) { worstDelta = d; worstFam = fam }
+    }
+    return worstFam
+}
+
+/**
  * [厳密ピン(lo==hi)保護] 職員×シフトの staffRange が下限=上限で完全固定("厳密ピン"＝月に必ずちょうど
  * N回)されている箇所について、候補盤面が基準盤面より目標回数からより遠ざかる職員が1人でもいるか判定する。
  *

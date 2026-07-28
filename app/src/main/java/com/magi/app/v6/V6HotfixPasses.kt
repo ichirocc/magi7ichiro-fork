@@ -1318,8 +1318,15 @@ object V6HotfixPasses {
         //   総合的に拒否した、の2分類（RangePolishと同じ粒度）。休の窓ルールが解消しない理由を
         //   ユーザーがログから直接読めるようにする。
         val blockStats = HashMap<Pair<Int, Int>, MutableMap<String, Int>>()
-        fun recordBlock(i: Int, x: Int, reason: String) {
+        // [不採用の主因, 3.302.0] 「不採用」だけでは何に負けたか読めないため、拒否した候補が重み付きで
+        //   最も増やした族を併記する（実機ログの c1 残存が「不採用×65 / 候補なし×4」＝ほぼ全部が拒否で、
+        //   次に何を緩めるべきかが読めなかった）。AdaptiveBlockSwap と同じ worstWorsenedFamily を共用。
+        val culpritStats = HashMap<Pair<Int, Int>, MutableMap<String, Int>>()
+        fun recordBlock(i: Int, x: Int, reason: String, after: ViolationReport? = null, before: ViolationReport? = null) {
             blockStats.getOrPut(i to x) { HashMap() }.merge(reason, 1, Int::plus)
+            if (after != null && before != null) {
+                worstWorsenedFamily(after, before)?.let { culpritStats.getOrPut(i to x) { HashMap() }.merge(it, 1, Int::plus) }
+            }
         }
         // [汎用玉突き結合フレームワーク, 3.249.0] 手B/手R3が単独では isBetter に不採用だった候補
         //   （chain/repackとも構築自体は成功したもの）を蓄積し、末尾で複数を束ねて再挑戦する。
@@ -1476,7 +1483,13 @@ object V6HotfixPasses {
                                 combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, x)) + chain, "手B", hint))
                             }
                             work[i][j] = a
-                            recordBlock(i, x, if (chain == null) "候補なし" else "不採用")
+                            // [不採用の主因, 3.302.0] ピン破り（厳密ピンを崩すため却下）は違反自体が
+                            //   悪化していないので主因族を持たない＝別ラベルにして混同を避ける。
+                            when {
+                                chain == null -> recordBlock(i, x, "候補なし")
+                                isBetter(rep, bestRep) -> recordBlock(i, x, "ピン破り")
+                                else -> recordBlock(i, x, "不採用", after = rep, before = bestRep)
+                            }
                         }
                     }
                 }
@@ -1540,7 +1553,7 @@ object V6HotfixPasses {
                         val hint = "${state.staff.getOrNull(i)?.name ?: "#$i"}(${state.shifts.getOrNull(x)?.kigou ?: x})"
                         combinable.add(CombinatorialRepair.Candidate(
                             listOf(intArrayOf(i, bestJx, a), intArrayOf(i, bestJo, x)), "手R3", hint))
-                        recordBlock(i, x, "不採用")
+                        recordBlock(i, x, "不採用", after = rep, before = bestRep)
                     }
                 } else {
                     recordBlock(i, x, "再配置候補なし")
@@ -1566,8 +1579,14 @@ object V6HotfixPasses {
             }
             if (!stillDeficient) return@mapNotNull null
             val lbl = "${state.staff.getOrNull(i)?.name ?: "#$i"} ${state.shifts.getOrNull(x)?.kigou ?: x.toString()}"
-            val top = reasons.maxByOrNull { it.value }
-            if (top != null) "$lbl(${top.key}×${top.value})" else lbl
+            val top = reasons.maxByOrNull { it.value } ?: return@mapNotNull lbl
+            // [不採用の主因, 3.302.0] 「不採用」のときだけ、拒否された候補が重み付きで最も壊した族を
+            //   上位2件まで併記する（何を緩めれば通るのかがログから直接読める）。
+            val culprits = if (top.key != "不採用") "" else
+                culpritStats[key]?.entries?.sortedByDescending { it.value }?.take(2)
+                    ?.joinToString(" ") { "${it.key}:${it.value}" }
+                    ?.let { if (it.isEmpty()) "" else " 主因 $it" } ?: ""
+            "$lbl(${top.key}×${top.value}$culprits)"
         }.distinct()
         val c1CombSummary = c1CombStats.summary()
         val logs = listOf(MirrorLog(tag = "C1Polish",
@@ -1766,8 +1785,13 @@ object V6HotfixPasses {
         //   range後回し=findCovUChainは成立したが使った候補がrangeAvoid該当(=自身の新規high違反を招く)
         //   だった・不採用=chainは成立したがisBetterに拒否された、の5分類。最も多い理由を「残存:」へ表示。
         val blockStats = HashMap<Pair<Int, Int>, MutableMap<String, Int>>()
-        fun recordBlock(target: Pair<Int, Int>, reason: String) {
+        // [不採用の主因, 3.302.0] C1Polish と同じく、拒否された候補が重み付きで最も壊した族を併記する。
+        val culpritStats = HashMap<Pair<Int, Int>, MutableMap<String, Int>>()
+        fun recordBlock(target: Pair<Int, Int>, reason: String, after: ViolationReport? = null, before: ViolationReport? = null) {
             blockStats.getOrPut(target) { HashMap() }.merge(reason, 1, Int::plus)
+            if (after != null && before != null) {
+                worstWorsenedFamily(after, before)?.let { culpritStats.getOrPut(target) { HashMap() }.merge(it, 1, Int::plus) }
+            }
         }
         // [汎用玉突き結合フレームワーク, 3.249.0] tryRelocate が単独では不採用だった候補を蓄積し
         //   末尾で束ねる（手M/手Fは既にそれ自体が多職員同時最適化のため対象外＝スコープ限定）。
@@ -1791,7 +1815,8 @@ object V6HotfixPasses {
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(
                     listOf(intArrayOf(i, j, toK)), "tryRelocate", label(target.first, target.second)))
-                recordBlock(target, "不採用")
+                if (isBetter(rep, bestRep)) recordBlock(target, "ピン破り")
+                else recordBlock(target, "不採用", after = rep, before = bestRep)
                 return false
             }
             val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
@@ -1806,7 +1831,11 @@ object V6HotfixPasses {
             work[i][j] = fromK
             combinable.add(CombinatorialRepair.Candidate(
                 listOf(intArrayOf(i, j, toK)) + chain, "tryRelocate", label(target.first, target.second)))
-            recordBlock(target, if (usedAvoided) "range後回し" else "不採用")
+            when {
+                usedAvoided -> recordBlock(target, "range後回し")
+                isBetter(rep, bestRep) -> recordBlock(target, "ピン破り")
+                else -> recordBlock(target, "不採用", after = rep, before = bestRep)
+            }
             return false
         }
 
@@ -2277,8 +2306,13 @@ object V6HotfixPasses {
                 val i = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
                 val k = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
                 val reasons = blockStats[i to k]
-                val top = reasons?.maxByOrNull { it.value }
-                if (top != null) "${label(i, k)}(${top.key}×${top.value})" else label(i, k)
+                val top = reasons?.maxByOrNull { it.value } ?: return@mapNotNull label(i, k)
+                // [不採用の主因, 3.302.0] C1Polish と同型。「不採用」のときだけ主因族を上位2件併記。
+                val culprits = if (top.key != "不採用") "" else
+                    culpritStats[i to k]?.entries?.sortedByDescending { it.value }?.take(2)
+                        ?.joinToString(" ") { "${it.key}:${it.value}" }
+                        ?.let { if (it.isEmpty()) "" else " 主因 $it" } ?: ""
+                "${label(i, k)}(${top.key}×${top.value}$culprits)"
             }
         val rangeCombSummary = rangeCombStats.summary()
         val logs = listOf(MirrorLog(tag = "RangePolish",
@@ -3430,14 +3464,8 @@ object V6HotfixPasses {
                     }
                     rejectReasons[why] = (rejectReasons[why] ?: 0) + 1
                     if (why == "重み悪化" || why == "必須増") {
-                        // 重み付きで最も増えた族＝この手が壊した本体。
-                        var worstFam: String? = null
-                        var worstDelta = 0.0
-                        for (fam in MirrorKeys.all) {
-                            val d = ((report.breakdown[fam] ?: 0) - (bestRep.breakdown[fam] ?: 0)) * MirrorKeys.weightOf(fam)
-                            if (d > worstDelta) { worstDelta = d; worstFam = fam }
-                        }
-                        worstFam?.let { rejectCulprits[it] = (rejectCulprits[it] ?: 0) + 1 }
+                        // 重み付きで最も増えた族＝この手が壊した本体（共通ヘルパー worstWorsenedFamily）。
+                        worstWorsenedFamily(report, bestRep)?.let { rejectCulprits[it] = (rejectCulprits[it] ?: 0) + 1 }
                     }
                 }
             }
