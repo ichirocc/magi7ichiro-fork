@@ -3047,6 +3047,12 @@ object V6HotfixPasses {
         maxFocusStaff: Int = 16,
         maxCycle: Int = 5,
         maxCycleVisits: Int = 50_000,
+        /**
+         * 禁止連続(c3n)が正味増える候補を**候補生成の段階で**捨てるか。既定 false（＝捨てない）。
+         * c3n は HARD なので増える候補は最終的に `isBetter` が必ず却下する＝true/false で**採用結果は
+         * 変わらない**。true にすると詰んだ候補へフル checker を呼ばなくなり評価枠を節約できる。
+         */
+        filterC3nIncrease: Boolean = false,
         shouldStop: () -> Boolean = { false },
     ): CyclicSwapResult {
         val p = Problem(state)
@@ -3238,13 +3244,18 @@ object V6HotfixPasses {
             //   （実データは10名中9名の「休」が厳密ピン＝長いブロックを丸ごと交換すると必ず回数が動く）。
             if (!balancePinnedDays(cycle, swapDays, counts)) return null
 
-            // [3.295.0 境界c3nの事前フィルタ] 3.294.0 でピン破りを消した結果、残る不採用は**全て**
-            //   必須増＝c3n（禁止連続）になった（user 48/48・golden 39・real 34）。この巡回交換では
-            //   covU/covO は同日置換で不変・groupViol は canDo・pref は movable で不変なので、
-            //   **変化しうる HARD は c3n だけ**。c3n は職員行ローカルなので、参加者の行に交換を当てた
-            //   fire 数を数えれば**近似でなく厳密**に判定できる。正味増える候補はここで捨て、
-            //   評価枠(48)を soft 判定まで進める候補へ回す（採否そのものは従来どおり checker が決める）。
-            if (p.cons3n.isNotEmpty()) {
+            // [3.295.0 境界c3nの事前フィルタ / 3.296.0 で既定OFF] 3.294.0 でピン破りを消した結果、
+            //   残る不採用は**全て**必須増＝c3n（禁止連続）になった（user 48/48・golden 39・real 34）。
+            //   この巡回交換では covU/covO は同日置換で不変・groupViol は canDo・pref は movable で
+            //   不変なので、**変化しうる HARD は c3n だけ**。c3n は職員行ローカルなので、参加者の行に
+            //   交換を当てた fire 数を数えれば**近似でなく厳密**に判定できる。
+            //
+            //   **既定は OFF**（ユーザー指示 3.296.0「巡回交換の c3n フィルタを外す」）。フィルタは
+            //   `firesAfter > firesBefore` の候補だけを落とす＝**減る・同数の候補は元から通している**ため、
+            //   外しても採用は増えない（c3n は HARD なので増える候補は `isBetter` が第1キーで必ず却下）。
+            //   ON にすると構造的に詰んだ候補へ checker を呼ばなくなり、評価枠を soft 判定まで進める
+            //   候補へ回せる（実測: 正式評価 48→14〜38 件・不採用が全て soft のトレードオフになる）。
+            if (filterC3nIncrease && p.cons3n.isNotEmpty()) {
                 var firesBefore = 0
                 var firesAfter = 0
                 for (t in 0 until n) {
