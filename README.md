@@ -19,9 +19,10 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/screen_spec.md`](./docs/screen_spec.md) | 画面仕様（挙動・実寸・違反/希望の表示） |
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
+| [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・廃止済み・未実施の提案） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 
-**最終更新**：2026-07-28（3.298.0 c3n 事前フィルタを PolishGate 経由で配線＝設定タブ→詳細設定のトグルから切替可能に（既定OFF）。NativeGate と同型で、呼び出し鎖に引数を通さず UI 設定をエンジンへ届ける。3.214.0〜3.297.0 の詳細は `CLAUDE.md` の各節に記録）／ **コード基準コミット**：main HEAD（この目次が古いと他が正しくても信頼が崩れるため、改修時は対象文書と本目次を必ず更新）。
+**最終更新**：2026-07-28（3.299.0 `docs/algorithm_portfolio.md` を新設＝探索・研磨の入口と責務を一覧化した運用台帳。実装済みの事実と未実施の提案を分けて記載。3.214.0〜3.298.0 の詳細は `CLAUDE.md` の各節に記録）／ **コード基準コミット**：main HEAD（この目次が古いと他が正しくても信頼が崩れるため、改修時は対象文書と本目次を必ず更新）。
 
 ## Status
 
