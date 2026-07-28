@@ -41,6 +41,12 @@
 VBA/Web 版から移植した「MAGI V6」最適化エンジン（SA + ALNS + Tabu + GLS + LNS + VNS + LAHC +
 PathRelinking + ChainSwap + 適応的オペレータ重み + RSI++ 等）を内蔵。
 
+- **規模の上限（業務前提・2026-07-28 ユーザー明示）**: **職員は最大30名 / 期間は最大1か月（=31日）**。
+  この範囲を超えるデータは想定しない。既存のビット化経路はすべてこの範囲に収まる:
+  `C3nBitScan.usable`(T<=64) と C++ `SaChunk` の `useBits`(S<=64 && T<=64) は**実運用では常に真**＝
+  スカラーへのフォールバックは防御であって通常経路ではない。`adaptiveBlockLengths` の最大28日も
+  「2月まるごと」を1ブロックで扱うための上限で、1か月という前提と整合する。
+  新しくビット/固定長配列を使う実装を足すときは 30×31 を基準に見積もってよい。
 - パッケージ/applicationId: `com.magi.app`（namespace も同じ）
 - minSdk=36 (Android 16+), compileSdk/targetSdk=36, java.time ネイティブ可, NDK/desugaring 不使用
   （※Android 17 会話バブル対応済。API 37 の platform SDK は未公開のため compileSdk は 36 のまま＝下記セクション参照）
