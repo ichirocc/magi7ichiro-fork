@@ -65,6 +65,23 @@ data class V6PostOptimizationResult(
     val logs: List<MirrorLog>,
 )
 
+/**
+ * [後処理研磨のユーザー設定ゲート] UI トグル → エンジン内部フラグの受け渡し。
+ * `NativeGate`（ネイティブ加速／Kotlin照合）と同じ形で、呼び出し鎖に引数を通さずに設定を届ける。
+ * セッション内のみ（state には保存しない＝勤務表データに影響しない実行時の調整）。
+ */
+object PolishGate {
+    /**
+     * ブロック巡回交換で、禁止連続(c3n)が正味増える候補を**候補生成の段階で**捨てるか。既定 false。
+     *
+     * c3n は HARD なので増える候補は最終的に `isBetter` が必ず却下する＝ON/OFF で**採用結果は変わらない**
+     * （3.296.0 の A/B 実測で最終盤面・採用数が完全一致することを確認済み）。ON にすると構造的に詰んだ
+     * 候補へフル checker を呼ばなくなり、評価枠を soft 判定まで進める候補へ回せる
+     * （実測: 正式評価 48→14〜38 件）。
+     */
+    @Volatile var filterC3nIncrease: Boolean = false
+}
+
 object V6HotfixPasses {
     /**
      * 長期ブロック交換の候補長。月次勤務表で「局所交換では越えにくい」谷を越えるための
@@ -3048,11 +3065,12 @@ object V6HotfixPasses {
         maxCycle: Int = 5,
         maxCycleVisits: Int = 50_000,
         /**
-         * 禁止連続(c3n)が正味増える候補を**候補生成の段階で**捨てるか。既定 false（＝捨てない）。
+         * 禁止連続(c3n)が正味増える候補を**候補生成の段階で**捨てるか。
+         * 既定は [PolishGate.filterC3nIncrease]（設定タブ→詳細設定のトグル・既定 false＝捨てない）。
          * c3n は HARD なので増える候補は最終的に `isBetter` が必ず却下する＝true/false で**採用結果は
          * 変わらない**。true にすると詰んだ候補へフル checker を呼ばなくなり評価枠を節約できる。
          */
-        filterC3nIncrease: Boolean = false,
+        filterC3nIncrease: Boolean = PolishGate.filterC3nIncrease,
         shouldStop: () -> Boolean = { false },
     ): CyclicSwapResult {
         val p = Problem(state)

@@ -21,7 +21,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 
-**最終更新**：2026-07-28（3.297.0 壁になっている禁止の並び(c3n)を名指しして緩める導線＝ForbiddenDiag が「崩せない」と判定した run をルール単位に集約し、そのルールをカードから直接削除できるように（Undo 可・自動再診断）。3.214.0〜3.296.0 の詳細は `CLAUDE.md` の各節に記録）／ **コード基準コミット**：main HEAD（この目次が古いと他が正しくても信頼が崩れるため、改修時は対象文書と本目次を必ず更新）。
+**最終更新**：2026-07-28（3.298.0 c3n 事前フィルタを PolishGate 経由で配線＝設定タブ→詳細設定のトグルから切替可能に（既定OFF）。NativeGate と同型で、呼び出し鎖に引数を通さず UI 設定をエンジンへ届ける。3.214.0〜3.297.0 の詳細は `CLAUDE.md` の各節に記録）／ **コード基準コミット**：main HEAD（この目次が古いと他が正しくても信頼が崩れるため、改修時は対象文書と本目次を必ず更新）。
 
 ## Status
 

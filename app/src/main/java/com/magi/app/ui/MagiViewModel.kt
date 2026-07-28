@@ -547,6 +547,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp(if (on) "I" else "W", "設定変更: Kotlinパリティ照合 → ${if (on) "ON" else "OFF（純ネイティブ・誤結果の可能性）"}")
     }
 
+    /**
+     * [3.298.0 配線] ブロック巡回交換の c3n 事前フィルタ ON/OFF（既定OFF＝捨てない）。
+     * c3n は HARD なので増える候補は `isBetter` が必ず却下する＝**採用結果は ON/OFF で変わらない**
+     * （3.296.0 の A/B 実測で最終盤面・採用数の完全一致を確認済み）。ON は「詰んだ候補へフル checker を
+     * 呼ばない」ぶんの節約だけで、評価枠を soft 判定まで進める候補へ回せる。
+     */
+    fun setBlockSwapC3nFilter(on: Boolean) {
+        com.magi.app.v6.PolishGate.filterC3nIncrease = on
+        _ui.update { it.copy(blockSwapC3nFilter = on) }
+        logOp("I", "設定変更: 禁止連続の事前フィルタ → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }
