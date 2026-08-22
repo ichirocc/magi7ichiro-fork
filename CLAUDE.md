@@ -5392,8 +5392,12 @@ P8 は §4 の状態列（kotlin ブロック内の `fun`）しか見ておら�
 ファイル名や「⬜（… ✅ を訂正）」には当たらない）。教訓#30 どおり、`StatusHero`✅ と `TallyCard`✅ を
 注入して**前者だけが exit 1 で報告される**ことを実行して確認した。
 
-- 検証: `design_lint` exit 0（P8 0件・P10 は baseline 2）。コード変更はコメントのみ＝ホストJVM/CI は
-  main と同一（main の 3.420.0 は4ワークフローとも success）。
+- **[追記] §3 Typography も同じ乖離があった**（残り作業の棚卸し中に発見）: `titleSmall 15→**16**`・
+  `bodyLarge/Medium/Small 16/15/13→**17/16/14**`・`labelLarge/Medium 15/13→**16/14**`、かつ
+  **実際の下限 `labelSmall`(14) が表に無かった**。本文・ラベル層だけ +1sp 底上げ済み（見出し層は据え置き）
+  という**2層で数字が揃わない**事情も書いていなかったので併記した。
+- 検証: `design_lint` exit 0（P8 0件・P10 は baseline 2）。コード変更はコメントのみ＝**CI は6/6 success**
+  （design-lint / native-parity / v6-engine-check の push・PR 両方）。
 
 ## P10 が baseline超過を検出＝removeShift 自身の記号比較を一本化（3.420.0, ラチェット実効）
 

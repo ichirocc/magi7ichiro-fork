@@ -115,11 +115,14 @@ colorScheme に無い「意味色／シフト色」を一元化する。**値の
 | `headlineSmall` | 24 Bold | 画面タイトル |
 | `titleLarge` | 20 SemiBold | セクションタイトル |
 | `titleMedium` | 17 SemiBold | カード見出し |
-| `titleSmall` | 15 SemiBold | 行タイトル |
-| `bodyLarge/Medium/Small` | 16/15/13 | 本文・補助 |
-| `labelLarge/Medium` | 15/13 | ボタン・ラベル |
+| `titleSmall` | 16 SemiBold | 行タイトル |
+| `bodyLarge/Medium/Small` | 17/16/14 | 本文・補助 |
+| `labelLarge/Medium` | 16/14 | ボタン・ラベル |
+| `labelSmall` | 14 Medium | チップ・凡例・補足の**下限**（11sp→13→14 と継続して底上げ） |
 
 ルール: 画面タイトル大・本文静か・**数値最大**。`sp` はシステム文字サイズに追従。
+本文・ラベル層は実機の「文字が小さい」指摘を受けて +1sp 底上げ済み（最小 tier=14sp）。見出し層
+（title/headline/display）は密な表の折返しを避けるため据え置き＝**この2層は同じ数字にならない**。
 大数値は `displaySmall`（34）を基準にし、特に強調する箇所のみ `fontSize=44.sp` をローカル指定。
 
 ---
