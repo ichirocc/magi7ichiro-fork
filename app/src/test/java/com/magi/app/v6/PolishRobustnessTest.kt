@@ -74,7 +74,7 @@ class PolishRobustnessTest {
         // 空bucket職員(s1)の行は全列 INF → 旧実装は Hungarian 内で AIOOBE。新実装は null→その日 skip の no-op。
         val s = emptyBucketState()
         val p = Problem(s)
-        val res = V6HotfixPasses.applyDayAssignmentPolish(s, s.schedule.toIntArray2D())
+        val res = DayAssignmentPolish.applyDayAssignmentPolish(s, s.schedule.toIntArray2D())
         val norm = normalizeSchedule(s.schedule.toIntArray2D(), p)
         assertTrue("盤面は不変（全日が実行可能な割当なし=skip）",
             res.newSchedule.indices.all { res.newSchedule[it].contentEquals(norm[it]) })

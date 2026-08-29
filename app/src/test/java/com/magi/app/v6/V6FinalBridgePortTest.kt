@@ -72,7 +72,7 @@ class V6FinalBridgePortTest {
     @Test fun dayAssignmentPolishNeverWorsens() {
         val st = sampleState()
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyDayAssignmentPolish(st, st.schedule.toIntArray2D())
+        val r = DayAssignmentPolish.applyDayAssignmentPolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         // 退化しない: hard→weighted→total の辞書順で悪化しない。
         val notWorse = notWorseThan(after, before)
