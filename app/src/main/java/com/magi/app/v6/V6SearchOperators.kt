@@ -261,28 +261,31 @@ internal fun acceptWorseScore(a: Long, b: Long, temp: Double, rng: Random): Bool
  * 当日が末尾(A4)のときパターンの先頭は j-2 にあるため、**旧実装ではそのパターンを一度も崩せなかった**
  * （c1 研磨の不採用主因が c3n だと 3.302.0 のログ強化で実測できたことが、この穴を追う入口になった）。
  * ここでは実際に成立している窓がまたぐ日をビット走査で求め、その全部を候補にする。
- * T>64 は `C3nBitScan` が使えないので従来どおり j±1 のみ（安全側＝候補が減るだけ）。
+ * [3.469.0] 走査は `C3nRowScan` 経由＝T>64 も同じ意味論のスカラーへ退避する（旧: そこだけ j±1 に落ちていた）。
  */
 internal fun breakableDaysFor(p: Problem, sched: Array<IntArray>, i: Int, j: Int, fillShift: Int): IntArray {
     // [既定 OFF・3.303.0] 一般化として正しいが実データ3件で利得が一貫しなかった（PolishGate の
     //   docstring に計測値）。既定は従来どおり j±1 のみで、ゲートを ON にしたときだけ広げる。
     TuningTelemetry.wideC3nCalls.incrementAndGet()
     if (!PolishGate.wideC3nBreakDays) return intArrayOf(j - 1, j + 1)
-    if (!C3nBitScan.usable(p) || i !in sched.indices) return intArrayOf(j - 1, j + 1)
-    val row = sched[i]
-    val mask = C3nBitScan.buildRowMask(p, row)
-    val old = if (j in 0 until p.T && j < row.size) row[j] else -1
-    val days = C3nBitScan.coveringRunDaysAfterSet(p, mask, j, old, fillShift)
+    if (i !in sched.indices) return intArrayOf(j - 1, j + 1)
+    // [3.469.0/周辺再検証] 旧実装は `C3nBitScan` を**直叩き**しており、`C3nRowScan`（3.305.0 で
+    //   「呼び出し側がビット経路かどうかを分岐しない」ために作られた窓口）を**この関数だけが迂回**していた
+    //   ＝コードベースで唯一の逸脱。実害は **T>64 で候補を作らず j±1 へ落としていた**こと
+    //   （`!usable(p)` の早期 return）。3.303.0 が「3連の先頭 j-2 に届かない」を直すために
+    //   パターン全域を見に行くようにした目的が、その期間だけ失われていた。窓口経由なら同じ意味論の
+    //   スカラー走査へ退避する。**業務前提は最大1か月**（3.409.0 の検査2j）なので通常運用では到達せず、
+    //   かつこの経路自体が `wideC3nBreakDays`（既定 OFF）配下＝二重に潜在。
+    //   なお「`1L shl j` が mod 64 で折り返す」経路は**旧実装にも無かった**
+    //   （`coveringRunDaysAfterSet` が入口で `j !in 0 until p.T` を弾き、`days==0L` で早期 return するため
+    //   下の `1L shl j` へ到達しない）。窓口化はその検証を呼び出し側から見えるようにするのが目的。
+    val days = C3nRowScan(p, sched[i]).coveringDaysAfterSet(j, fillShift)
     // [3.356.0] 既定(j±1)と違う結果になった回数を数える。**広がる場合だけでなく狭まる場合もある**
     //   （covering run が無ければ空を返す＝既定より狭い）ので、「違うかどうか」で数える。
-    if (days == 0L) { TuningTelemetry.wideC3nDiffered.incrementAndGet(); return IntArray(0) }
+    if (days.isEmpty()) { TuningTelemetry.wideC3nDiffered.incrementAndGet(); return IntArray(0) }
     // j に近い日から試す（当日から遠い日ほど他の制約への波及が読みにくいため、影響の小さい順）。
-    val out = ArrayList<Int>(java.lang.Long.bitCount(days))
-    var rest = days and (1L shl j).inv()
-    while (rest != 0L) {
-        out.add(java.lang.Long.numberOfTrailingZeros(rest))
-        rest = rest and (rest - 1)
-    }
+    val out = ArrayList<Int>(days.size)
+    for (d in days) if (d != j) out.add(d)
     out.sortBy { kotlin.math.abs(it - j) }
     if (out.size != 2 || !(out.contains(j - 1) && out.contains(j + 1))) TuningTelemetry.wideC3nDiffered.incrementAndGet()
     return out.toIntArray()

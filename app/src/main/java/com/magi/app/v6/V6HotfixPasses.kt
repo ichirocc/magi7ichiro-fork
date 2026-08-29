@@ -3509,7 +3509,17 @@ object V6HotfixPasses {
             .distinct()
             .sorted()
             .toList()
-        val cycleCap = maxCycle.coerceAtLeast(2)
+        // [3.469.0/周辺再検証] 巡回の署名 `nodes` は参加者 index を 1 バイトずつ `ni.toLong() shl (8 * depth)`
+        //   で詰め、取り出し側は `(packed ushr (8 * it)) and 0xFF` で戻す。**depth が 8 に達すると
+        //   シフト距離 64 が mod 64 で 0 へ折り返り、取り出し側も同じ位置でアンカーの1バイト目を読む**＝
+        //   `cycle` に同じ職員が2回入った巡回ができる。`rotate` は全員の値を先に読んでから書き戻すので、
+        //   重複があると同じ行へ2回書いて最後の書き込みが勝ち、**その日の値が1つ消えて1つ複製される**
+        //   ＝このオペレータが構造的に保証しているはずの「日ごとのシフト多重集合の保存」が破れる。
+        //   採否は checker が守るので誤った勤務表が採用されるとは限らないが、保証の根拠は失われる。
+        //   本番の唯一の呼出は既定 `maxCycle=5` なので**到達しない**＝防御ガード（3.369.0 で
+        //   `C1TemporalDp` の RELOC_BITS に同型のガードを足したのと同じ理由・同じ立ち位置）。
+        //   参加者 index 側（ni<=255）は既に `packable = nf <= 255` が守っているので触らない。
+        val cycleCap = maxCycle.coerceAtLeast(2).coerceAtMost(8)
         if (p.S < 2 || lengths.isEmpty() || maxPasses <= 0 || candidatesPerLength <= 0 || maxEvaluations <= 0 || maxFocusStaff <= 0) {
             return CyclicSwapResult(work, before.total, before.total, 0,
                 listOf(MirrorLog(tag = "AdaptiveBlockSwap", message = "対象長または職員ペアなし=スキップ")))
