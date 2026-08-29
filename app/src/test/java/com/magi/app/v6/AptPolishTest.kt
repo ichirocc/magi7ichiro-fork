@@ -47,7 +47,7 @@ class AptPolishTest {
         assertTrue("初期はapt違反があること", (before.breakdown["apt"] ?: 0) > 0)
         assertEquals("初期HARD=0", 0, before.hard)
 
-        val result = V6HotfixPasses.applyAptPolish(st, sched)
+        val result = AptFairPolish.applyAptPolish(st, sched)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("自己振替後はapt=0", 0, after.breakdown["apt"] ?: -1)
@@ -86,7 +86,7 @@ class AptPolishTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertTrue("初期はapt違反(AがaptHigh・BがaptLow)があること", (before.breakdown["apt"] ?: 0) > 0)
 
-        val result = V6HotfixPasses.applyAptPolish(st, sched)
+        val result = AptFairPolish.applyAptPolish(st, sched)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("相互交換後はapt=0", 0, after.breakdown["apt"] ?: -1)
@@ -141,7 +141,7 @@ class AptPolishTest {
         assertTrue("初期はapt違反があること", (before.breakdown["apt"] ?: 0) > 0)
         assertEquals("初期HARD=0(AがXを単独充足)", 0, before.hard)
 
-        val result = V6HotfixPasses.applyAptPolish(st, sched, seed = 1L)
+        val result = AptFairPolish.applyAptPolish(st, sched, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("玉突き適用後はapt=0", 0, after.breakdown["apt"] ?: -1)
@@ -187,7 +187,7 @@ class AptPolishTest {
 
         // maxPasses=1に固定し、1パス内での自己振替の反復可否そのものを検証する
         // （旧実装は1パス・1ターゲットにつき1回しか自己振替せず、超過3件のうち1件しか解消できなかった）。
-        val result = V6HotfixPasses.applyAptPolish(st, sched, maxPasses = 1)
+        val result = AptFairPolish.applyAptPolish(st, sched, maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         // [3.345.0] weekly が「職員×シフト×曜日」になり同じ目的関数の中で自己振替と競合するため、
@@ -199,7 +199,7 @@ class AptPolishTest {
         // [3.345.0] apt=0 まで到達するとは限らない。この盤面は T=7＝各曜日が1回しか無く、apt(重み1)と
         //   weekly(重み1)が同じ目的関数の中で正面から競合するため、目的関数の最適が apt=0 とは一致しない
         //   （実測 apt=5 で落ち着く）。ここで固定できる真の不変条件は keep-best＝パスを重ねても悪化しないこと。
-        val settled = UnifiedViolationChecker.check(st, V6HotfixPasses.applyAptPolish(st, result.newSchedule, maxPasses = 4).newSchedule)
+        val settled = UnifiedViolationChecker.check(st, AptFairPolish.applyAptPolish(st, result.newSchedule, maxPasses = 4).newSchedule)
         assertTrue("keep-best: パスを重ねても目的関数(total)は悪化しない", settled.total <= after.total)
     }
 
@@ -207,7 +207,7 @@ class AptPolishTest {
     fun aptPolishIsNoOpWhenNoAptTargetsSet() {
         val st = selfSwapState().copy(groupShiftApt = listOf(listOf("", "", "")))
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyAptPolish(st, sched)
+        val result = AptFairPolish.applyAptPolish(st, sched)
         assertEquals(0, result.applied)
     }
 

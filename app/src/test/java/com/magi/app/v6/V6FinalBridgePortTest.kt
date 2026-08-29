@@ -116,7 +116,7 @@ class V6FinalBridgePortTest {
         //   後継へ差し替え。fair/weekly の平準化は主目的(hard→weighted→total)を悪化させない。
         val st = sampleState()
         for (op in listOf<(MagiState, Array<IntArray>) -> Array<IntArray>>(
-            { s, sc -> V6HotfixPasses.applyFairPolish(s, sc).newSchedule },
+            { s, sc -> AptFairPolish.applyFairPolish(s, sc).newSchedule },
             { s, sc -> V6HotfixPasses.applyWeeklyRebalancePolish(s, sc).newSchedule },
         )) {
             val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
