@@ -23,6 +23,17 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
+| [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-08-29（CLAUDE.md を「現行ルール（本体, ~300行）」と「版ごとの詳細変更履歴
+（`docs/changelog.md`, ~11,800行）」に分割。動機＝5大ファイル（CLAUDE.md/V6HotfixPasses.kt/
+V6NativeOptimizer.kt/MagiViewModel.kt/magi_native.cpp）が AI コードレビュー時の対話コンテキストを
+圧迫していた件のうち、CLAUDE.md は毎セッション開始時にシステムプロンプトへ丸ごと注入される最大の
+圧迫源だったため最優先で対応。D3〜D8・E5の恒久的な業務決定は、元々埋め込まれていた版ログ本体が
+移動しても参照できるよう「決定記録（D3〜D8・E5）」節へ集約して本体側に残した。移動時に発見した
+既存の書式崩れ（「スキル / 作業の進め方」節の末尾に無関係な日付付き履歴が見出し無しで直接続いていた
+手作業ミスの残骸）も同時に是正し、行の欠落・重複が無いことをスクリプトで検証してから書き出した。
+Kotlin/C++側の物理分割は別コミットで対応予定。）
 
 **最終更新**：2026-08-27（3.467.1＝CI失敗の是正。3.466.0で新設した`CountsCard`の見出し2箇所が
 `.sp`（fontSize）を使うのに`StaffRangeEditor.kt`が`androidx.compose.ui.unit.sp`を import していな
