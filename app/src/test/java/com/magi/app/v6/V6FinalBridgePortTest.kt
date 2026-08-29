@@ -104,7 +104,7 @@ class V6FinalBridgePortTest {
     @Test fun c3SequencePolishNeverWorsens() {
         val st = sampleState()
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyC3SequencePolish(st, st.schedule.toIntArray2D())
+        val r = C3RotationPolish.applyC3SequencePolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         val notWorse = notWorseThan(after, before)
         assertTrue(notWorse)

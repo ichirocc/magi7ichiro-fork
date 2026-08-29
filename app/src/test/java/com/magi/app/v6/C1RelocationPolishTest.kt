@@ -245,7 +245,7 @@ class C1RelocationPolishTest {
         assertTrue("職員0の day1 セルは vio-c3m を含まない（c3nに上書き済み）", before.violations["0,1"] != "vio-c3m")
         assertTrue("しかし cellFamilies には vio-c3m も残っている", "vio-c3m" in (before.cellFamilies["0,1"] ?: emptyList()))
 
-        val res = V6HotfixPasses.applyC3SequencePolish(st, sched, maxPasses = 1)
+        val res = C3RotationPolish.applyC3SequencePolish(st, sched, maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
         assertTrue("cellFamilies切替えにより職員0がanchorに入り、ブロック交換が試行・採用されること", res.applied > 0)
@@ -297,7 +297,7 @@ class C1RelocationPolishTest {
         assertTrue("職員aiの day2 セルは vio-c1 を含まない（c3nに上書き済み）", before.violations["0,2"] != "vio-c1")
         assertTrue("しかし cellFamilies には vio-c1 も残っている", "vio-c1" in (before.cellFamilies["0,2"] ?: emptyList()))
 
-        val res = V6HotfixPasses.applyBlockRotationPolish(st, sched, setOf("vio-c1"), "C1Rotate", maxPasses = 1)
+        val res = C3RotationPolish.applyBlockRotationPolish(st, sched, setOf("vio-c1"), "C1Rotate", maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
         assertTrue("cellFamilies切替えによりaiがanchorに入り、3者回転が試行・採用されること", res.applied > 0)
