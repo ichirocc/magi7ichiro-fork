@@ -21,10 +21,15 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
+| [`docs/history/`](./docs/history/) | **作業記録の本文**（版数付き203節）。`CLAUDE.md` 末尾の索引で当たりを付けてから `grep` で引く。毎ターン自動では読み込まれない＝過去に測って否決した案・同型のバグ・決定記録を再発させないため、同じ領域を触る前に索引を必ず確認する |
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 
-**最終更新**：2026-08-27（3.467.1＝CI失敗の是正。3.466.0で新設した`CountsCard`の見出し2箇所が
+**最終更新**：2026-08-29（3.468.0＝「AIレビューをしやすくする」の困りごとが「コンテキスト圧迫」と判明したので測ったところ、
+CLAUDE.md 422k-tok（毎ターン固定）に対し V6HotfixPasses.kt 93k-tok（読んだときだけ）で、しかも CLAUDE.md の9割が版数付き作業記録だった
+＝固定費を毎ターン払いながら変動費のファイルを分割しようとしていた。作業記録203節を`docs/history/`へ移し原文見出しの索引だけ残す
+（422k→202k・非空行の多重集合一致で内容の欠落ゼロを確認）。`## 直近の状態`が400版以上前のまま「直近」を名乗っていたのも改題。
+前版は 3.467.1＝CI失敗の是正。3.466.0で新設した`CountsCard`の見出し2箇所が
 `.sp`（fontSize）を使うのに`StaffRangeEditor.kt`が`androidx.compose.ui.unit.sp`を import していな
 かった＝`Unresolved reference 'sp'`でコンパイル失敗。`mcp__github__get_job_logs`でCIログを取得して
 特定し、import 1行を追加して解消。静的確認（ブレース均衡・design_lint）では検出できない種類の誤り
