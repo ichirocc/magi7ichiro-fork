@@ -286,7 +286,7 @@ object V6HotfixPasses {
         //   大規模データでのフォールバック総当たり暴走だけを防ぐ保険。
         val hf67Cap = ((deadlineMs - t67).coerceAtLeast(0L) / 2).coerceAtMost(3_000L)
         val __t1 = System.currentTimeMillis()
-        val r67 = applyHF67InterStaffSwap(state, work, maxSwaps = 30, shouldStop = shouldStop, deadlineMs = t67 + hf67Cap)
+        val r67 = HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = 30, shouldStop = shouldStop, deadlineMs = t67 + hf67Cap)
         passMs.merge("HF67InterStaffSwap", System.currentTimeMillis() - __t1) { a, b -> a + b }
         work = r67.newSchedule.copy2D()
         logs.addAll(r67.logs)
@@ -297,7 +297,7 @@ object V6HotfixPasses {
         //   後段の研磨群へ確保)＋絶対上限6sで打ち切り、暴走で後続パスを予算超過で打ち切らせない。
         val hf66Cap = ((deadlineMs - t66).coerceAtLeast(0L) / 2).coerceAtMost(6_000L)
         val __t2 = System.currentTimeMillis()
-        val r66 = applyHF66IntraStaffRedistribution(state, work, maxMoves = 30, shouldStop = shouldStop, deadlineMs = t66 + hf66Cap)
+        val r66 = HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = 30, shouldStop = shouldStop, deadlineMs = t66 + hf66Cap)
         passMs.merge("HF66IntraStaffRedistribution", System.currentTimeMillis() - __t2) { a, b -> a + b }
         work = r66.newSchedule.copy2D()
         logs.addAll(r66.logs)
@@ -675,7 +675,7 @@ object V6HotfixPasses {
 
         onPhase("後処理 HF70 異常検知")
         val report = UnifiedViolationChecker.check(state, work)
-        val r70 = detectHF70Anomalies(state, work, algoName, report)
+        val r70 = HfSwapPolish.detectHF70Anomalies(state, work, algoName, report)
         logs.addAll(r70.logs)
 
         val tEnd = System.currentTimeMillis()
@@ -2460,223 +2460,6 @@ object V6HotfixPasses {
         return CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
     }
 
-    fun applyHF67InterStaffSwap(state: MagiState, schedule: Array<IntArray>, maxSwaps: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE): HF67Result {
-        val p = Problem(state)
-        var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
-        var current = before
-        var swaps = 0
-        var shortage = 0
-        var capacity = 0
-        var rollback = 0
-        // [3.282.0/新領域ログ監査] 兄弟の HF66 は専用上限(deadlineMs)＋内側スキャンの outOfTime 確認
-        //   （2.65.0/3.161.0 の確立方針）を持つのに、HF67 だけ手ごとの shouldStop のみ＝候補ごとフル check の
-        //   内側スキャン（k×lows×highs）とフォールバック（全ペア×全日の総当たり=実機で rollback=264 の正体）が
-        //   締切後も走り切る非対称だった。同型の締切確認を追加（keep-best のため途中中断でも退化なし）。
-        fun outOfTime() = shouldStop() || System.currentTimeMillis() >= deadlineMs
-
-        while (swaps < maxSwaps) {
-            if (outOfTime()) break
-            val counts = countMatrix(p, work)
-            var best: SwapCandidate? = null
-            var bestReport: ViolationReport? = null
-            scan@ for (k in 0 until p.K) {
-                if (outOfTime()) break@scan
-                val lows = ArrayList<Int>()
-                val highs = ArrayList<Int>()
-                for (i in 0 until p.S) {
-                    if (p.canDo(i, k) && p.rangeLo[i][k] != Int.MIN_VALUE && counts[i][k] < p.rangeLo[i][k]) lows.add(i)
-                    if (counts[i][k] > effectiveHi(p, i, k)) highs.add(i)
-                }
-                for (to in lows) {
-                    if (outOfTime()) break@scan
-                    for (from in highs) {
-                        if (to == from) continue
-                        val cand = trySwapShiftBetweenStaff(p, work, from, to, k) ?: continue
-                        val rep = UnifiedViolationChecker.check(state, cand.first)
-                        val ref = bestReport ?: current
-                        if (isBetter(rep, ref)) {
-                            best = cand.second
-                            bestReport = rep
-                        }
-                    }
-                }
-            }
-            if (best == null || bestReport == null) break
-            val b = best
-            val next = work.copy2D()
-            val tmp = next[b.fromStaff][b.fromDay]
-            next[b.fromStaff][b.fromDay] = next[b.toStaff][b.toDay]
-            next[b.toStaff][b.toDay] = tmp
-            work = next
-            current = bestReport
-            swaps++
-            shortage++
-            if (current.soft < before.soft) capacity++
-        }
-        if (swaps == 0 && !outOfTime()) {
-            val improved = localPairwiseStaffSwap(state, work, maxSwaps, { outOfTime() })
-            work = improved.first
-            swaps = improved.second
-            rollback = improved.third
-            current = UnifiedViolationChecker.check(state, work)
-            capacity = swaps
-        }
-        val logs = listOf(MirrorLog(tag = "HF67", message = "inter-staff swap applied=$swaps rollback=$rollback total ${before.total}->${current.total}"))
-        return HF67Result(work, before.total, current.total, swaps, shortage, capacity, rollback, logs)
-    }
-
-    fun applyHF66IntraStaffRedistribution(state: MagiState, schedule: Array<IntArray>, maxMoves: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE): HF66Result {
-        val p = Problem(state)
-        var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
-        var current = before
-        var moves = 0
-        var shortageMoves = 0
-        var capacityMoves = 0
-        var rollback = 0
-        // [残予算ガード] shouldStop(全体締切)に加え HF66 専用の時間上限(deadlineMs)も尊重する。1手の全候補
-        //   スキャンは候補ごとにフル check するため高コスト。手ごとだけでなく内側ループでも締切を確認し、
-        //   締切後に1手分のスキャンを走り切って後段の研磨パスを押し出す(=予算超過で打ち切らせる)のを防ぐ。
-        //   keep-best のため途中中断しても解は退化しない(採用は isBetter な bestMove のみ)。
-        fun outOfTime() = shouldStop() || System.currentTimeMillis() >= deadlineMs
-
-        while (moves < maxMoves) {
-            if (outOfTime()) break
-            val counts = countMatrix(p, work)
-            var bestMove: MoveCandidate? = null
-            var bestReport: ViolationReport? = null
-            scan@ for (i in 0 until p.S) {
-                if (outOfTime()) break@scan
-                val lows = ArrayList<Int>()
-                val highs = ArrayList<Int>()
-                for (k in 0 until p.K) {
-                    if (p.canDo(i, k) && p.rangeLo[i][k] != Int.MIN_VALUE && counts[i][k] < p.rangeLo[i][k]) lows.add(k)
-                    if (counts[i][k] > effectiveHi(p, i, k)) highs.add(k)
-                }
-                for (want in lows) for (give in highs) {
-                    if (outOfTime()) break@scan
-                    for (j in 0 until p.T) {
-                        if (work[i][j] != give || p.wishLocked(i, j)) continue
-                        val cand = work.copy2D()
-                        cand[i][j] = want
-                        val rep = UnifiedViolationChecker.check(state, cand)
-                        if (isBetter(rep, bestReport ?: current)) {
-                            bestMove = MoveCandidate(i, j, give, want)
-                            bestReport = rep
-                        }
-                    }
-                }
-            }
-            val mv = bestMove ?: break
-            work[mv.staff][mv.day] = mv.toShift
-            current = bestReport ?: UnifiedViolationChecker.check(state, work)
-            moves++
-            shortageMoves++
-            if (current.soft < before.soft) capacityMoves++
-        }
-        if (moves == 0 && !outOfTime()) {
-            val rng = Random(0x66L)
-            var t = 0
-            while (t < maxMoves) {
-                if (outOfTime()) break
-                if (p.S > 0 && p.T > 0) {
-                    val cand = work.copy2D()
-                    val i = rng.nextInt(p.S)
-                    val j = rng.nextInt(p.T)
-                    if (!p.wishLocked(i, j)) {
-                        val allowed = p.allowedShiftsForStaff(i)
-                        if (allowed.isNotEmpty()) {
-                            val old = cand[i][j]
-                            cand[i][j] = allowed[rng.nextInt(allowed.size)]
-                            if (cand[i][j] != old) {
-                                val rep = UnifiedViolationChecker.check(state, cand)
-                                if (isBetter(rep, current)) {
-                                    work = cand
-                                    current = rep
-                                    moves++
-                                    capacityMoves++
-                                } else {
-                                    rollback++
-                                }
-                            }
-                        }
-                    }
-                }
-                t++
-            }
-        }
-        val logs = listOf(MirrorLog(tag = "HF66", message = "intra-staff redistribution applied=$moves rollback=$rollback total ${before.total}->${current.total}"))
-        return HF66Result(work, before.total, current.total, moves, shortageMoves, capacityMoves, rollback, logs)
-    }
-
-    fun detectHF70Anomalies(
-        state: MagiState,
-        schedule: Array<IntArray>,
-        algoName: String,
-        report: ViolationReport = UnifiedViolationChecker.check(state, schedule),
-    ): HF70Result {
-        val invalid = invalidAssignmentCount(state, schedule)
-        val impossible = V6SanityPort.detectImpossibleWishes(state).size
-        val hardCore = report.hard - (report.breakdown["pref"] ?: 0)
-        val issues = ArrayList<String>()
-        if (invalid > 0) issues.add("担当不可/範囲外配置 $invalid 件")
-        if (impossible > 0) issues.add("不可能希望 $impossible 件")
-        if (hardCore > 0) issues.add("希望以外HARD $hardCore 件")
-        val msg = if (issues.isEmpty()) "HF70: $algoName 異常なし" else "HF70: ${issues.joinToString(" / ")}"
-        val advice = if (issues.isEmpty()) "" else "設定(担当範囲), 希望, 必要人数, 連勤禁止条件を確認してください"
-        val level = if (issues.isEmpty()) "I" else "W"
-        val logs = listOf(MirrorLog(level = level, tag = "HF70", message = msg + if (advice.isNotBlank()) " — $advice" else ""))
-        return HF70Result(issues.size, msg, advice, logs)
-    }
-
-    private data class SwapCandidate(val fromStaff: Int, val fromDay: Int, val toStaff: Int, val toDay: Int)
-    private data class MoveCandidate(val staff: Int, val day: Int, val fromShift: Int, val toShift: Int)
-
-    private fun trySwapShiftBetweenStaff(p: Problem, schedule: Array<IntArray>, from: Int, to: Int, shift: Int): Pair<Array<IntArray>, SwapCandidate>? {
-        val fromDays = ArrayList<Int>()
-        val toDays = ArrayList<Int>()
-        for (j in 0 until p.T) {
-            if (schedule[from][j] == shift && !p.wishLocked(from, j)) fromDays.add(j)
-            if (schedule[to][j] != shift && !p.wishLocked(to, j) && p.canDo(to, shift) && p.canDo(from, schedule[to][j])) toDays.add(j)
-        }
-        for (jf in fromDays) for (jt in toDays) {
-            val cand = schedule.copy2D()
-            val tmp = cand[from][jf]
-            cand[from][jf] = cand[to][jt]
-            cand[to][jt] = tmp
-            return Pair(cand, SwapCandidate(from, jf, to, jt))
-        }
-        return null
-    }
-
-    private fun localPairwiseStaffSwap(state: MagiState, schedule: Array<IntArray>, maxSwaps: Int, shouldStop: () -> Boolean = { false }): Triple<Array<IntArray>, Int, Int> {
-        val p = Problem(state)
-        var work = schedule.copy2D()
-        var current = UnifiedViolationChecker.check(state, work)
-        var applied = 0
-        var rollback = 0
-        loop@ for (i in 0 until p.S) for (i2 in i + 1 until p.S) for (j in 0 until p.T) {
-            if (applied >= maxSwaps || shouldStop()) break@loop
-            if (p.wishLocked(i, j) || p.wishLocked(i2, j)) continue
-            val a = work[i][j]
-            val b = work[i2][j]
-            if (a == b || !p.canDo(i, b) || !p.canDo(i2, a)) continue
-            val cand = work.copy2D()
-            cand[i][j] = b
-            cand[i2][j] = a
-            val rep = UnifiedViolationChecker.check(state, cand)
-            if (isBetter(rep, current)) {
-                work = cand
-                current = rep
-                applied++
-            } else {
-                rollback++
-            }
-        }
-        return Triple(work, applied, rollback)
-    }
-
     /**
      * [3.451.0/largeHeap-OOMの根本修正] `UnifiedViolationChecker.check()` は Map/List フィールド7つを
      * 持つ重い `ViolationReport` を毎回新規アロケートする（3.450.0で確認: HF80戦略的振動の呼出元
@@ -2740,17 +2523,6 @@ object V6HotfixPasses {
     internal fun effectiveHi(p: Problem, i: Int, k: Int): Int {
         val hi = p.rangeHi[i][k]
         return if (hi == Int.MAX_VALUE) Int.MAX_VALUE / 4 else hi
-    }
-
-    private fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray>): Int {
-        val p = Problem(state)
-        val s = normalizeSchedule(schedule, p)
-        var n = 0
-        for (i in 0 until p.S) for (j in 0 until p.T) {
-            val k = s[i][j]
-            if (k !in 0 until p.K || !p.canDo(i, k)) n++
-        }
-        return n
     }
 
     // [3.287.0 keep-best統一] hard→weightedScore→total（単一ソース betterReport へ委譲。MirrorCore.kt 参照）。
