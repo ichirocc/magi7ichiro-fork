@@ -83,7 +83,7 @@ class V6FinalBridgePortTest {
     @Test fun cyclicSwapPolishNeverWorsens() {
         val st = sampleState()
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyCyclicSwapPolish(st, st.schedule.toIntArray2D())
+        val r = CyclicSwapWeeklyPolish.applyCyclicSwapPolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         val notWorse = notWorseThan(after, before)
         assertTrue(notWorse)
@@ -117,7 +117,7 @@ class V6FinalBridgePortTest {
         val st = sampleState()
         for (op in listOf<(MagiState, Array<IntArray>) -> Array<IntArray>>(
             { s, sc -> AptFairPolish.applyFairPolish(s, sc).newSchedule },
-            { s, sc -> V6HotfixPasses.applyWeeklyRebalancePolish(s, sc).newSchedule },
+            { s, sc -> CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(s, sc).newSchedule },
         )) {
             val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
             val after = UnifiedViolationChecker.check(st, op(st, st.schedule.toIntArray2D()))

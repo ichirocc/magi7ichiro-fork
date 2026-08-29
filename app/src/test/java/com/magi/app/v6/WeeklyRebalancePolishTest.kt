@@ -80,7 +80,7 @@ class WeeklyRebalancePolishTest {
         assertEquals("初期 HARD=0", 0, before.hard)
         assertTrue("初期 weekly>0（曜日の偏りがある）", (before.breakdown["weekly"] ?: 0) > 0)
 
-        val res = V6HotfixPasses.applyWeeklyRebalancePolish(st, sched)
+        val res = CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(st, sched)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
         assertTrue("長方形交換を1手以上採用したこと", res.applied > 0)
@@ -162,7 +162,7 @@ class WeeklyRebalancePolishTest {
             cons41 = emptyList(), cons42 = emptyList(),
         )
         val sched = st.schedule.toIntArray2D()
-        val res = V6HotfixPasses.applyWeeklyRebalancePolish(st, sched)
+        val res = CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(st, sched)
         assertEquals("均等配置では採用0（no-op）", 0, res.applied)
     }
 }
