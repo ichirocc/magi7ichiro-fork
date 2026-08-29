@@ -2892,7 +2892,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * （本セッションでも、アップロードされたログがどの版のものか判定できず解析が止まった。
      * 外部レポートが古い `.so` を現行ソースの不具合と誤読した件も同根）。
      *
-     * CPU コア数を出すのは、[V6NativeOptimizer.clampWorkersToCores]（3.224.0）が
+     * CPU コア数を出すのは、[HypothesisPlanning.clampWorkersToCores]（3.224.0）が
      * 並列ワーカー設定を**黙ってコア数まで切り下げる**ため（設定8でも4本しか走らない実測あり）。
      * 設定値だけを見ても実際の並列度が読めない。
      */

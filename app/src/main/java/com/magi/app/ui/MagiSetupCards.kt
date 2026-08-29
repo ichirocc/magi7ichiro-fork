@@ -267,14 +267,14 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
         }
         // [仮説数上限撤廃・ユーザー指示] 旧: 仮説数は5固定・超過ワーカーは仮説内並列度へ配分。
         //   現在は設定値がそのまま並列に探索する仮説（案）の数になる（下限2、上限=設定値自体）。
-        //   表示はエンジン本体と同じ V6NativeOptimizer.hypothesisCount から導出し独立再計算による乖離を防ぐ。
+        //   表示はエンジン本体と同じ HypothesisPlanning.hypothesisCount から導出し独立再計算による乖離を防ぐ。
         run {
             val cores = Runtime.getRuntime().availableProcessors()
-            val hyp = com.magi.app.v6.V6NativeOptimizer.hypothesisCount(ui.workers)
+            val hyp = com.magi.app.v6.HypothesisPlanning.hypothesisCount(ui.workers)
             // [3.372.0/レビュー修正] コア数を超える設定では、runMultiWorker 経路（破壊再構築/違反集中/
             //   違反集中＋）は仮説を増やさず spawn 数をコア数まで畳み、余剰は各仮説の内部並列へ回す
             //   （3.371.0）。旧表示は hyp をそのまま「仮説（案）の数」と言い切っており実挙動と食い違った。
-            val spawn = com.magi.app.v6.V6NativeOptimizer.hypothesisSpawnPlan(ui.workers, hyp).first
+            val spawn = com.magi.app.v6.HypothesisPlanning.hypothesisSpawnPlan(ui.workers, hyp).first
             val overNote = if (ui.workers > cores)
                 "この端末のコア数(${cores})を超えるためコアを奪い合います。極端に大きい値は電池・発熱に注意してください。" +
                     (if (spawn < hyp) "なお「破壊再構築」「違反集中」「違反集中＋」では、コア数を超える分は" +

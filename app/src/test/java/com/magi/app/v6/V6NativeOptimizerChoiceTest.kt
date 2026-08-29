@@ -738,48 +738,48 @@ class V6NativeOptimizerChoiceTest {
     // 各仮説の内部並列度（RSI/RSI++のSAチェーン数・ALNSの多チェーン）へ均等配分する計算のみを固定する
     // 純粋関数テスト（並列実行そのものはJVMユニットテストでは検証しない＝実機ログ/CIビルドで確認）。
     @Test fun perHypothesisWorkersDistributesSurplusEvenly() {
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 1, hypotheses = 5))
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 5, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 1, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 5, hypotheses = 5))
         // 実機ログ実例: workers設定8・仮説5 → 8/5=1(切り捨て)。旧実装は常に1だったのでこの値は不変。
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 8, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 8, hypotheses = 5))
         // workers=16・仮説5 → 16/5=3。旧実装なら5を超えた11ワーカー分が完全に無駄だった。
-        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 16, hypotheses = 5))
+        assertEquals(3, HypothesisPlanning.perHypothesisWorkers(workers = 16, hypotheses = 5))
     }
 
     @Test fun perHypothesisWorkersNeverReturnsLessThanOne() {
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 0, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 0, hypotheses = 5))
         // hypotheses=0 は縮退入力（実際は coerceIn(1,5) 済みで到達しない）。内側ガード max(1,hypotheses)=1 に
         //   より 3/1=3 が返る＝「1未満を返さない」性質は満たす（初版の期待値1は誤り→CI失敗で検出・修正）。
-        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 3, hypotheses = 0))
+        assertEquals(3, HypothesisPlanning.perHypothesisWorkers(workers = 3, hypotheses = 0))
     }
 
     // [敵対的レビュー3.212.0] hypothesisChainPlan: 余り配分（6〜9帯で余剰が実際に使われる=旧perW床のみの
     //   「無駄にならない」虚偽表示の是正）＋コア数クランプ（壁時計締切下の希釈=品質逆行リスクの回避）。
     @Test fun chainPlanDistributesRemainderToLeadingHypotheses() {
         // 動機となった実機ログ当該ケース: workers=8/8コア → [2,2,2,1,1]（旧perW床は全仮説1で余剰3本廃棄だった）
-        val plan8 = V6NativeOptimizer.hypothesisChainPlan(workers = 8, hypotheses = 5, cores = 8)
+        val plan8 = HypothesisPlanning.hypothesisChainPlan(workers = 8, hypotheses = 5, cores = 8)
         assertEquals(listOf(2, 2, 2, 1, 1), plan8.toList())
         assertEquals(8, plan8.sum())
         // 割り切れるケース: workers=5 → 全仮説1（旧来どおり）
-        assertEquals(listOf(1, 1, 1, 1, 1), V6NativeOptimizer.hypothesisChainPlan(5, 5, 8).toList())
+        assertEquals(listOf(1, 1, 1, 1, 1), HypothesisPlanning.hypothesisChainPlan(5, 5, 8).toList())
     }
 
     @Test fun chainPlanClampsToCoreCount() {
         // workers=16/8コア → 配分総量はコア数8まで（15コルーチン/8スレッドの希釈を作らない）
-        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 8)
+        val plan = HypothesisPlanning.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 8)
         assertEquals(8, plan.sum())
         assertEquals(listOf(2, 2, 2, 1, 1), plan.toList())
         // 16コアなら16本フル配分
-        assertEquals(16, V6NativeOptimizer.hypothesisChainPlan(16, 5, 16).sum())
+        assertEquals(16, HypothesisPlanning.hypothesisChainPlan(16, 5, 16).sum())
     }
 
     @Test fun chainPlanEveryHypothesisGetsAtLeastOneChain() {
         // workers<hypotheses でも各仮説に最低1本（合計は hypotheses を下回らない）
-        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 2, hypotheses = 5, cores = 8)
+        val plan = HypothesisPlanning.hypothesisChainPlan(workers = 2, hypotheses = 5, cores = 8)
         assertEquals(5, plan.size)
         assertTrue(plan.all { it >= 1 })
         // 縮退入力も安全
-        assertTrue(V6NativeOptimizer.hypothesisChainPlan(0, 0, 0).all { it >= 1 })
+        assertTrue(HypothesisPlanning.hypothesisChainPlan(0, 0, 0).all { it >= 1 })
     }
 
     // [敵対的レビュー] cores<hypotheses（低コア端末で5仮説固定）のときは、仕様上の「最低1仮説1本」の
@@ -789,7 +789,7 @@ class V6NativeOptimizerChoiceTest {
     //   合わせて確認=このケースでは各仮説ちょうど1本のみで、コア数超のオーバーサブスクライブを
     //   それ以上増やさない）。
     @Test fun chainPlanFloorsAtHypothesesCountEvenBelowCoreCount() {
-        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 2)
+        val plan = HypothesisPlanning.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 2)
         assertEquals(5, plan.sum())
         assertEquals(listOf(1, 1, 1, 1, 1), plan.toList())
     }
@@ -797,54 +797,54 @@ class V6NativeOptimizerChoiceTest {
     // [敵対的レビュー修正・#6] V5(高速計算)はhypothesisChainPlanを使わずoptions.workersをそのまま
     //   SAチェーン数へ渡していたため、コア数クランプの恩恵を受けなかった。専用の総並列度クランプを検証。
     @Test fun clampWorkersToCoresLimitsToAvailableCores() {
-        assertEquals(8, V6NativeOptimizer.clampWorkersToCores(workers = 16, cores = 8))
-        assertEquals(16, V6NativeOptimizer.clampWorkersToCores(workers = 16, cores = 16))
-        assertEquals(4, V6NativeOptimizer.clampWorkersToCores(workers = 4, cores = 8))
+        assertEquals(8, HypothesisPlanning.clampWorkersToCores(workers = 16, cores = 8))
+        assertEquals(16, HypothesisPlanning.clampWorkersToCores(workers = 16, cores = 16))
+        assertEquals(4, HypothesisPlanning.clampWorkersToCores(workers = 4, cores = 8))
     }
 
     @Test fun clampWorkersToCoresNeverReturnsLessThanOne() {
-        assertEquals(1, V6NativeOptimizer.clampWorkersToCores(workers = 0, cores = 8))
-        assertEquals(1, V6NativeOptimizer.clampWorkersToCores(workers = 4, cores = 0))
+        assertEquals(1, HypothesisPlanning.clampWorkersToCores(workers = 0, cores = 8))
+        assertEquals(1, HypothesisPlanning.clampWorkersToCores(workers = 4, cores = 0))
     }
 
     // [仮説数上限撤廃・ユーザー指示「仮説数は最低2最大設定値」] 旧 optimize() は
     // options.workers.coerceIn(1, MAX_HYPOTHESES=5) で固定上限だった。hypothesisCount はこの上限を
     // 撤廃し、workers>=2 ならそのまま workers を仮説数として使う（多様性優先）。
     @Test fun hypothesisCountScalesWithWorkersBeyondOldFixedCapOfFive() {
-        assertEquals(8, V6NativeOptimizer.hypothesisCount(8))
-        assertEquals(16, V6NativeOptimizer.hypothesisCount(16))
+        assertEquals(8, HypothesisPlanning.hypothesisCount(8))
+        assertEquals(16, HypothesisPlanning.hypothesisCount(16))
     }
 
     @Test fun hypothesisCountFloorsAtTwoEvenWhenWorkersIsOne() {
         // workers=1 でも最低2仮説の多様探索を保証する（意図的なオーバーサブスクライブ）。
-        assertEquals(2, V6NativeOptimizer.hypothesisCount(1))
-        assertEquals(2, V6NativeOptimizer.hypothesisCount(0))
+        assertEquals(2, HypothesisPlanning.hypothesisCount(1))
+        assertEquals(2, HypothesisPlanning.hypothesisCount(0))
     }
 
     @Test fun hypothesisCountMatchesWorkersInTheOldCapRange() {
         // 旧上限5以下の帯でも従来どおり workers に一致すること（回帰確認）。
-        assertEquals(2, V6NativeOptimizer.hypothesisCount(2))
-        assertEquals(5, V6NativeOptimizer.hypothesisCount(5))
+        assertEquals(2, HypothesisPlanning.hypothesisCount(2))
+        assertEquals(5, HypothesisPlanning.hypothesisCount(5))
     }
 
     // [3.371.0/並列SA本格再有効化] hypothesisSpawnPlan: workers<=cores（大半の端末）では
     // hypothesisChainPlan の旧来どおりの結果と完全一致すること（無変更を固定）。
     @Test fun spawnPlanMatchesLegacyBehaviorWhenWorkersFitsWithinCores() {
-        val (hSpawn8, plan8) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 8, w = 8, cores = 8)
+        val (hSpawn8, plan8) = HypothesisPlanning.hypothesisSpawnPlan(workers = 8, w = 8, cores = 8)
         assertEquals(8, hSpawn8)
-        assertEquals(V6NativeOptimizer.hypothesisChainPlan(8, 8, cores = 8).toList(), plan8.toList())
+        assertEquals(HypothesisPlanning.hypothesisChainPlan(8, 8, cores = 8).toList(), plan8.toList())
         assertTrue("workers<=coresでは常に1本ずつ(旧来と同一)", plan8.all { it == 1 })
 
-        val (hSpawn4, plan4) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 4, w = 4, cores = 8)
+        val (hSpawn4, plan4) = HypothesisPlanning.hypothesisSpawnPlan(workers = 4, w = 4, cores = 8)
         assertEquals(4, hSpawn4)
-        assertEquals(V6NativeOptimizer.hypothesisChainPlan(4, 4, cores = 8).toList(), plan4.toList())
+        assertEquals(HypothesisPlanning.hypothesisChainPlan(4, 4, cores = 8).toList(), plan4.toList())
         assertTrue(plan4.all { it == 1 })
     }
 
     // workers>cores（端末のコア数を超える設定）のときだけ、spawn数をコア数まで絞り、
     // その分を仮説内チェーン数へ配分する（並列SAの本格再有効化）。
     @Test fun spawnPlanRedistributesSurplusAsChainDepthWhenWorkersExceedsCores() {
-        val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 16, w = 16, cores = 4)
+        val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = 16, w = 16, cores = 4)
         assertEquals(4, hSpawn)                 // 希釈を避けコア数まで縮小（1 hypothesis/core）
         assertEquals(4, plan.size)
         assertEquals(16, plan.sum())            // workers予算の合計は不変（コルーチンをコア数超に増やさない）
@@ -855,7 +855,7 @@ class V6NativeOptimizerChoiceTest {
     // workers=2（オーバーサブスクライブ時のhypothesisCount floor）は cores に関わらず
     // 多様性の下限2を割らない＝深さへの転用を行わない（コーナーケースの安全確認）。
     @Test fun spawnPlanNeverDropsBelowTheDiversityFloorOfTwo() {
-        val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 1, w = 2, cores = 1)
+        val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = 1, w = 2, cores = 1)
         assertEquals(2, hSpawn)
         assertEquals(2, plan.size)
         assertTrue(plan.all { it >= 1 })
@@ -873,7 +873,7 @@ class V6NativeOptimizerChoiceTest {
     @Test fun spawnPlanAlwaysMatchesItsPlanLength() {
         // w<2（旧実装が壊れていた領域）を含め、退化入力から通常帯まで不変条件を総当たりで固定する。
         for (w in 0..8) for (cores in 0..8) for (workers in 0..8) {
-            val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = workers, w = w, cores = cores)
+            val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = workers, w = w, cores = cores)
             assertEquals("hSpawn==plan.size (w=$w cores=$cores workers=$workers)", hSpawn, plan.size)
             assertTrue("hSpawn>=1 (w=$w cores=$cores workers=$workers)", hSpawn >= 1)
             // 要求された仮説数を超えて spawn しない（超えると plan と対応が取れなくなる）。
@@ -883,7 +883,7 @@ class V6NativeOptimizerChoiceTest {
     }
 
     @Test fun spawnPlanIsSafeForDegenerateInputs() {
-        val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 0, w = 0, cores = 0)
+        val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = 0, w = 0, cores = 0)
         assertEquals(hSpawn, plan.size)
         assertTrue(hSpawn >= 1)
         assertTrue(plan.isNotEmpty())
@@ -894,22 +894,22 @@ class V6NativeOptimizerChoiceTest {
     // covU/apt/c1がE9冷却で交互切替を続け全ラウンドtotal不変だった事例。旧1800固定は5000到達に
     // 3回のfocusを要し、round1,3,5(=最終)でようやく成立し振り向け先が残らなかった。
     @Test fun rsiHf63EffortItersReachesThresholdInTwoAttemptsForTypicalRoundBudget() {
-        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
+        val e5 = HypothesisPlanning.rsiHf63EffortIters(5)
         assertTrue("2回のfocusで5000へ到達すること(round1,3で成立しround4,5を振り向けに残せる)", e5 * 2 >= 5000)
         assertTrue("1回の不運なfocusだけでは5000へ到達しない(E9の1R冷却との役割分担を保つ)こと", e5 * 1 < 5000)
     }
 
     @Test fun rsiHf63EffortItersNeverDropsBelowTwoAttempts() {
         // 極小のrounds(2)でも下限2回のfocusは必ず要する。
-        val e2 = V6NativeOptimizer.rsiHf63EffortIters(2)
+        val e2 = HypothesisPlanning.rsiHf63EffortIters(2)
         assertTrue(e2 * 1 < 5000)
         assertTrue(e2 * 2 >= 5000)
     }
 
     @Test fun rsiHf63EffortItersRelaxesForLargerRoundBudgets() {
         // roundsが大きいほど許容attempts回数が増え、effortItersは小さくなる(じっくり粘れる)。
-        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
-        val e8 = V6NativeOptimizer.rsiHf63EffortIters(8)
+        val e5 = HypothesisPlanning.rsiHf63EffortIters(5)
+        val e8 = HypothesisPlanning.rsiHf63EffortIters(8)
         assertTrue(e8 <= e5)
     }
 
@@ -1184,15 +1184,15 @@ class V6NativeOptimizerChoiceTest {
     //         「HARD=0 到達時に残りを即キャンセル」そのもの。この指標なら一目で検出できた。
     @Test
     fun observedOuterParallelismSeparatesHealthyFromSingleLaneRuns() {
-        assertEquals(7.96, V6NativeOptimizer.observedOuterParallelism(2_189_000L, 275_007L), 0.01)
-        assertEquals(0.93, V6NativeOptimizer.observedOuterParallelism(74_000L, 79_593L), 0.01)
+        assertEquals(7.96, HypothesisPlanning.observedOuterParallelism(2_189_000L, 275_007L), 0.01)
+        assertEquals(0.93, HypothesisPlanning.observedOuterParallelism(74_000L, 79_593L), 0.01)
     }
 
     // 0 除算と空サンプルで例外を投げない（診断値なので、壊れるより 0 を返すほうが安全）。
     @Test
     fun observedOuterParallelismIsSafeForEmptyOrZeroDurationSamples() {
-        assertEquals(0.0, V6NativeOptimizer.observedOuterParallelism(0L, 100L), 0.0)
-        assertEquals(0.0, V6NativeOptimizer.observedOuterParallelism(100L, 0L), 0.0)
+        assertEquals(0.0, HypothesisPlanning.observedOuterParallelism(0L, 100L), 0.0)
+        assertEquals(0.0, HypothesisPlanning.observedOuterParallelism(100L, 0L), 0.0)
     }
 
     // [3.409.16/実機ログ 3.409.14] 「探索締切」は締切が stop シグナル経由で届いた正常終了。
@@ -1200,10 +1200,10 @@ class V6NativeOptimizerChoiceTest {
     //   「8/8本が締切前(探索締切8本@275s)」と自己矛盾で報告していた。
     @Test
     fun searchDeadlineExitIsNotCountedAsAnEarlyWorkerExit() {
-        assertFalse("while締切は早期離脱でない", V6NativeOptimizer.isEarlyWorkerExit("締切"))
-        assertFalse("stopシグナル経由の探索締切も正常終了", V6NativeOptimizer.isEarlyWorkerExit("探索締切"))
-        assertTrue("確認窓を通った停滞シグナルは早期離脱", V6NativeOptimizer.isEarlyWorkerExit("停滞シグナル"))
-        assertTrue("例外は早期離脱", V6NativeOptimizer.isEarlyWorkerExit("例外"))
+        assertFalse("while締切は早期離脱でない", HypothesisPlanning.isEarlyWorkerExit("締切"))
+        assertFalse("stopシグナル経由の探索締切も正常終了", HypothesisPlanning.isEarlyWorkerExit("探索締切"))
+        assertTrue("確認窓を通った停滞シグナルは早期離脱", HypothesisPlanning.isEarlyWorkerExit("停滞シグナル"))
+        assertTrue("例外は早期離脱", HypothesisPlanning.isEarlyWorkerExit("例外"))
     }
 
     // [3.409.17] エポック超過の集約行: 空なら null（通常の実行でログを増やさない）・非空なら
@@ -1211,11 +1211,11 @@ class V6NativeOptimizerChoiceTest {
     //   遅いロールを注入しないと踏めないため対象外＝整形だけを固定する（KDoc に明記済み）。
     @Test
     fun epochOverrunLogKeepsRoleNamesAndStaysSilentWhenEmpty() {
-        assertNull(V6NativeOptimizer.epochOverrunLog(emptyList()))
-        val one = V6NativeOptimizer.epochOverrunLog(listOf("W4:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))!!
+        assertNull(HypothesisPlanning.epochOverrunLog(emptyList()))
+        val one = HypothesisPlanning.epochOverrunLog(listOf("W4:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))!!
         assertEquals("W", one.level)
         assertTrue(one.message, one.message.contains("W4:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))
-        val many = V6NativeOptimizer.epochOverrunLog((1..10).map { "W$it:ROLE(q=5s→実60s)" })!!
+        val many = HypothesisPlanning.epochOverrunLog((1..10).map { "W$it:ROLE(q=5s→実60s)" })!!
         assertTrue(many.message, many.message.contains("ほか2件"))
     }
 
