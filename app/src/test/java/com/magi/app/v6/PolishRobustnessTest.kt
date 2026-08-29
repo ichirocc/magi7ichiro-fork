@@ -100,7 +100,7 @@ class PolishRobustnessTest {
         assertEquals("前提: 99 は -1 に正規化される", -1, normalizeSchedule(sc, p)[0][1])
         val index = C1RepairIndex.build(p, sc)
         assertTrue("不足窓は正しく検出される（クラッシュせず）", C1DeltaPrefilter.hasActionableC1(index))
-        val res = V6HotfixPasses.applyC1IndexChainRepair(s, sc)
+        val res = C1WindowPolish.applyC1IndexChainRepair(s, sc)
         assertTrue("index駆動修復も完走する", res.afterTotal >= 0)
     }
     /**

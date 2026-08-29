@@ -38,7 +38,7 @@ internal object C1RepairOperators {
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L,
     ): V6HotfixPasses.CyclicSwapResult =
-        V6HotfixPasses.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed)
+        C1WindowPolish.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed)
 
     /** Temporal DP + FlexibleDayFlow。 */
     fun temporalFlow(
@@ -52,21 +52,21 @@ internal object C1RepairOperators {
         state: MagiState, schedule: Array<IntArray>, beamWidth: Int = 16, maxSteps: Int = 60,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL,
     ): V6HotfixPasses.CyclicSwapResult =
-        V6HotfixPasses.applyC1BeamPolish(state, schedule, beamWidth, maxSteps, shouldStop, seed)
+        C1WindowPolish.applyC1BeamPolish(state, schedule, beamWidth, maxSteps, shouldStop, seed)
 
     /** 厳密窓修復（coverage保存 permutation の分枝限定探索）。 */
     fun exactWindow(
         state: MagiState, schedule: Array<IntArray>, cfg: C1RepairAnalysis.Config = C1RepairAnalysis.Config(),
         shouldStop: () -> Boolean = { false },
     ): V6HotfixPasses.CyclicSwapResult =
-        V6HotfixPasses.applyC1ExactWindowRepair(state, schedule, cfg, shouldStop)
+        C1WindowPolish.applyC1ExactWindowRepair(state, schedule, cfg, shouldStop)
 
     /** [3.276.0] index駆動の候補生成＋prefilter選別＋玉突き連鎖のC1修復（Index/Prefilterを実駆動する経路）。 */
     fun indexChainRepair(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L,
     ): V6HotfixPasses.CyclicSwapResult =
-        V6HotfixPasses.applyC1IndexChainRepair(state, schedule, maxPasses, shouldStop, seed)
+        C1WindowPolish.applyC1IndexChainRepair(state, schedule, maxPasses, shouldStop, seed)
 
     /** Joint LNS（c1 + covU/range-low を同一 goal pool で）。 */
     fun jointLns(

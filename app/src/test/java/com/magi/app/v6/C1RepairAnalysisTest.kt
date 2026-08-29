@@ -176,7 +176,7 @@ class C1RepairAnalysisTest {
         val s = st(4, 2, listOf(listOf(1, 1, 2, 2), listOf(2, 2, 1, 1)), listOf(C1Row("2", "X", "1")))
         val sched = s.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(s, sched)
-        val res = V6HotfixPasses.applyC1ExactWindowRepair(s, sched)
+        val res = C1WindowPolish.applyC1ExactWindowRepair(s, sched)
         val after = UnifiedViolationChecker.check(s, res.newSchedule)
         assertTrue("c1 が改善", (after.breakdown["c1"] ?: 0) < (before.breakdown["c1"] ?: 0))
         assertTrue("HARD 非悪化", after.hard <= before.hard)
@@ -188,7 +188,7 @@ class C1RepairAnalysisTest {
     @Test
     fun passIsNoOpWhenNoCons1() {
         val s = st(3, 2, listOf(listOf(1, 0, 1), listOf(0, 1, 0)), emptyList())
-        val res = V6HotfixPasses.applyC1ExactWindowRepair(s, s.schedule.toIntArray2D())
+        val res = C1WindowPolish.applyC1ExactWindowRepair(s, s.schedule.toIntArray2D())
         assertEquals(0, res.applied)
     }
 

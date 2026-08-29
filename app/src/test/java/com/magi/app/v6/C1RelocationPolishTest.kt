@@ -70,7 +70,7 @@ class C1RelocationPolishTest {
         assertEquals("初期 HARD=0（covU/c3n無し）", 0, before.hard)
         assertTrue("初期 c1>0", (before.breakdown["c1"] ?: 0) > 0)
 
-        val res = V6HotfixPasses.applyC1WindowPolish(st, sched, maxPasses = 1)
+        val res = C1WindowPolish.applyC1WindowPolish(st, sched, maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
         assertTrue("鏡像長方形が採用されたこと（手計算どおり同日スワップは総和±0で不採用のはず）", res.applied > 0)
@@ -125,7 +125,7 @@ class C1RelocationPolishTest {
         assertEquals("初期 HARD=0", 0, before.hard)
         assertTrue("初期 c1>0", (before.breakdown["c1"] ?: 0) > 0)
 
-        val res = V6HotfixPasses.applyC1WindowPolish(st, sched, maxPasses = 1)
+        val res = C1WindowPolish.applyC1WindowPolish(st, sched, maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
         assertTrue("自己swapが採用されたこと（相方候補が存在しないため手A/R1は不可能）", res.applied > 0)
@@ -182,7 +182,7 @@ class C1RelocationPolishTest {
         assertTrue("職員0の day2 セルは vio-c1 を含まない（c3nに上書き済み）", before.violations["0,2"] != "vio-c1")
         assertTrue("しかし cellFamilies には vio-c1 も残っている", "vio-c1" in (before.cellFamilies["0,2"] ?: emptyList()))
 
-        val res = V6HotfixPasses.applyC1WindowPolish(st, sched, maxPasses = 1)
+        val res = C1WindowPolish.applyC1WindowPolish(st, sched, maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
         assertTrue("cellFamilies切替えにより職員0がanchorに入り、同日スワップが試行・採用されること", res.applied > 0)
@@ -325,7 +325,7 @@ class C1RelocationPolishTest {
             cons41 = emptyList(), cons42 = emptyList(),
         )
         val sched = st.schedule.toIntArray2D()
-        val res = V6HotfixPasses.applyC1WindowPolish(st, sched)
+        val res = C1WindowPolish.applyC1WindowPolish(st, sched)
         assertEquals("既に充足済みでは採用0(no-op)", 0, res.applied)
     }
 
@@ -369,7 +369,7 @@ class C1RelocationPolishTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertTrue("初期はc1違反があること", (before.breakdown["c1"] ?: 0) > 0)
 
-        val result = V6HotfixPasses.applyC1WindowPolish(st, sched, seed = 1L)
+        val result = C1WindowPolish.applyC1WindowPolish(st, sched, seed = 1L)
         assertEquals("唯一の玉突き候補が希望固定のため採用0回", 0, result.applied)
         val msg = result.logs.first().message
         assertTrue("残存表示に候補なしの理由が出ること: $msg", msg.contains("候補なし"))
@@ -423,7 +423,7 @@ class C1RelocationPolishTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals("初期 c1=1（窓1が不足）", 1, before.breakdown["c1"] ?: 0)
 
-        val res = V6HotfixPasses.applyC1WindowPolish(st, sched, maxPasses = 1)
+        val res = C1WindowPolish.applyC1WindowPolish(st, sched, maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
 
         assertTrue("手R3(全ペア再配置)が採用されたこと", res.applied > 0)
@@ -458,7 +458,7 @@ class C1RelocationPolishTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals("既に最適配置でc1=0", 0, before.breakdown["c1"] ?: 0)
 
-        val res = V6HotfixPasses.applyC1WindowPolish(st, sched)
+        val res = C1WindowPolish.applyC1WindowPolish(st, sched)
         assertEquals("既に最適なら採用0(no-op)", 0, res.applied)
     }
 }

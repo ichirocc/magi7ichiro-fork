@@ -438,7 +438,7 @@ class ChainFillTest {
         // 前提: day0 に X在勤者がいない＝直接スワップ相手が存在しない（旧実装はここで頭打ち）。
         assertTrue("day0にX在勤者がいない(直接交換相手なし)が前提", st.schedule.none { it[0] == 1 })
 
-        val r = V6HotfixPasses.applyC1WindowPolish(st, st.schedule.toIntArray2D())
+        val r = C1WindowPolish.applyC1WindowPolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         assertEquals("玉突き連鎖でc1不足が解消すること", 0, after.breakdown["c1"] ?: 0)
         assertEquals("i がXへ移ること", 1, r.newSchedule[0][0])

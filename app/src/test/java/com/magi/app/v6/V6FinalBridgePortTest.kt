@@ -94,7 +94,7 @@ class V6FinalBridgePortTest {
         // cons1（2日窓に「日」を1回以上）付きの状態でも退化しない＋割当は妥当。
         val st = sampleState().copy(cons1 = listOf(com.magi.app.model.C1Row("2", "日", "1")))
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyC1WindowPolish(st, st.schedule.toIntArray2D())
+        val r = C1WindowPolish.applyC1WindowPolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         val notWorse = notWorseThan(after, before)
         assertTrue(notWorse)
