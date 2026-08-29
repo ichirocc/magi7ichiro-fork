@@ -73,7 +73,7 @@ class C3nPolishTest {
         val beforeRep = UnifiedViolationChecker.check(st, sched)
         assertEquals("前提: 3連がちょうど1件成立", 1, beforeRep.breakdown["c3n"] ?: 0)
 
-        val result = V6HotfixPasses.applyC3nPolish(st, sched, maxPasses = 2, seed = 7L)
+        val result = C3FamilyPolish.applyC3nPolish(st, sched, maxPasses = 2, seed = 7L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("禁止連続が解消", 0, after.breakdown["c3n"] ?: -1)
@@ -102,7 +102,7 @@ class C3nPolishTest {
         val sched = st.schedule.toIntArray2D()
         assertEquals("前提: 2連が成立", 1, UnifiedViolationChecker.check(st, sched).breakdown["c3n"] ?: 0)
 
-        val result = V6HotfixPasses.applyC3nPolish(st, sched, maxPasses = 2, seed = 7L)
+        val result = C3FamilyPolish.applyC3nPolish(st, sched, maxPasses = 2, seed = 7L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("禁止連続が解消", 0, after.breakdown["c3n"] ?: -1)
@@ -114,7 +114,7 @@ class C3nPolishTest {
     fun isNoOpWhenNoForbiddenRuleExists() {
         val st = state(schedule = listOf(List(4) { rest }), cons3n = emptyList())
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyC3nPolish(st, sched, maxPasses = 2, seed = 7L)
+        val result = C3FamilyPolish.applyC3nPolish(st, sched, maxPasses = 2, seed = 7L)
         assertEquals(0, result.applied)
         assertEquals(sched.map { it.toList() }, result.newSchedule.map { it.toList() })
     }
