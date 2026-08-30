@@ -2208,11 +2208,11 @@ object V6NativeOptimizer {
      * c3n枝刈り済み。最終採否は呼び出し側の keep-best（ラウンド better() or エピローグの checker 照合）が担保。
      * ユーザー実例（2026-08）: 8/11 モニカ B4→Cｵ（深さ1）／8/17 上條 Cｵ→Cｱ・山本 →Cｵ（深さ2）。
      */
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-private fun applyCovUChains(
+    // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
+    //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
+    //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
+    //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
+    private fun applyCovUChains(
         state: MagiState, sched: Array<IntArray>, rng: Random,
         shouldStop: () -> Boolean = { false },
     ): Int {
@@ -2255,11 +2255,11 @@ private fun applyCovUChains(
      * 必ず復元してから次を試す）。
      */
 
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-internal fun applyCovOFree(
+    // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
+    //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
+    //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
+    //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
+    internal fun applyCovOFree(
         state: MagiState, sched: Array<IntArray>, rng: Random,
         shouldStop: () -> Boolean = { false },
     ): Int {
@@ -2313,11 +2313,11 @@ internal fun applyCovOFree(
      * 移動元/移動先で covU/covO を悪化させない候補のみ動かす。sched を in-place 変更し適用手数を返す。
      * 最終採否は呼び出し側の keep-best が担保＝退化不能。
      */
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-internal fun applyC41Free(
+    // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
+    //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
+    //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
+    //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
+    internal fun applyC41Free(
         state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
         shouldStop: () -> Boolean = { false },
     ): Int {
@@ -2403,11 +2403,11 @@ internal fun applyC41Free(
      * sched を in-place 変更し適用手数を返す。最終採否は呼び出し側のkeep-best（ラウンドbetter()）が
      * 担保＝退化不能。
      */
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-internal fun applyC42Free(
+    // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
+    //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
+    //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
+    //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
+    internal fun applyC42Free(
         state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
         shouldStop: () -> Boolean = { false },
     ): Int {
