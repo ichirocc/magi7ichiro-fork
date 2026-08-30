@@ -91,7 +91,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   書き込みは従来どおり本体の入口（loadAsync/applyStructure/mutateConstraints/undo系）だけ＝private set。
     internal var state: MagiState? = null
         private set
-    private var currentSchedule: Array<IntArray>? = null
+    // [分割V2] extension ファイル（MagiViewModelWs1.kt 等）が読むため internal 化。書き込みは従来どおり本体のみ＝private set。
+    internal var currentSchedule: Array<IntArray>? = null
+        private set
     private var resultSchedule: Array<IntArray>? = null
     private var job: Job? = null
     private var checkJob: Job? = null
@@ -279,8 +281,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // 操作再現用デコード（現stateを参照。staff/shift一覧は操作中に不変）。
-    private fun opNm(i: Int): String = state?.staff?.getOrNull(i)?.name ?: "#$i"
-    private fun opSy(k: Int): String = state?.shifts?.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: "#$k"
+    internal fun opNm(i: Int): String = state?.staff?.getOrNull(i)?.name ?: "#$i"
+    internal fun opSy(k: Int): String = state?.shifts?.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: "#$k"
     private fun opDays(days: List<Int>): String = if (days.size <= 10) days.joinToString(",") { "${it + 1}日" } else "${days.size}日分"
 
     init {
@@ -2190,7 +2192,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return Ws1View(st.startDate, st.endDate, days, st.use2Patterns, st.shifts, st.groups, st.staff, st.groupShift, st.groupShiftApt)
     }
 
-    private fun applyStructure(ns: MagiState) {
+    internal fun applyStructure(ns: MagiState) {
         if (structuralEditBlocked()) return
         pushUndo()
         state = ns
@@ -2407,7 +2409,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         refreshCheck()
     }
 
-    private fun applyStructure(r: Ws1Result) {
+    internal fun applyStructure(r: Ws1Result) {
         if (structuralEditBlocked()) return
         pushUndo()
         state = r.state
@@ -2421,7 +2423,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Ws1Result(状態+勤務表)を適用し、再チェック後に独自メッセージを表示（スタッフ新規追加など行数変化を伴う取込）。 */
-    private fun applyStructureWithMessage(r: Ws1Result, doneMessage: String) {
+    internal fun applyStructureWithMessage(r: Ws1Result, doneMessage: String) {
         // [3.404.0] 3.328.0 は「編集は必ずこの4入口を通るのでその4つだけを塞ぐ」としたが、**ここだけ
         //   ガードが無かった**。通るのは apt全リセットと職員一覧CSV取込で、後者は `currentSchedule` ごと
         //   差し替えるため、最適化中に到達すると 3.161.0 の「別名共有で編集が消える」クラスに触れる。
@@ -2451,170 +2453,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
-
-    fun ws1EditShift(k: Int, name: String, kigou: String, need1: String, need2: String) {
-        val st = state ?: return
-        if (symbolTaken(st.shifts.map { it.kigou }, kigou, "シフト", exceptIndex = k)) return
-        // [3.416.0] 3.415.0 の R-04 ガード（休シフトの改名禁止）はユーザー方針「休は通常のシフト定義」により
-        //   撤回。改名は他シフトと同じ経路＝renameShiftInConstraints が制約参照を追従させ、「休」記号が
-        //   無くなった場合の帰結（既定シフト解決が先頭へ倒れる）は検査2g が案内する。
-        logOp("I", "シフト編集: ${opSy(k)} → ${name.trim()}(${kigou.trim()}) 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-        applyStructure(Ws1Ops.editShift(st, k, name.trim(), kigou.trim(), need1.trim(), need2.trim()))
-    }
-
-    /** [必要人数カレンダー] シフト既定のneed1/need2だけをその場で編集する（name/kigouは不変）。
-     *  ws1EditShiftの狭い版＝NeedCalendarCardの「基本の必要人数」インライン編集用。 */
-    fun setShiftNeed(k: Int, need1: String, need2: String) {
-        val st = state ?: return
-        val sh = st.shifts.getOrNull(k) ?: return
-        logOp("I", "必要人数編集: ${opSy(k)} → 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-        applyStructure(Ws1Ops.editShift(st, k, sh.name, sh.kigou, need1.trim(), need2.trim()))
-    }
-
-    fun ws1EditGroup(g: Int, name: String, kigou: String) {
-        val st = state ?: return
-        if (symbolTaken(st.groups.map { it.kigou }, kigou, "グループ", exceptIndex = g)) return
-        logOp("I", "グループ編集: [$g] → ${name.trim()}(${kigou.trim()})")
-        applyStructure(Ws1Ops.editGroup(st, g, name.trim(), kigou.trim()))
-    }
-
-    fun ws1EditStaff(i: Int, name: String, groupIdx: Int) {
-        val st = state ?: return
-        logOp("I", "職員編集: ${opNm(i)} → ${name.trim()} / グループ[$groupIdx]")
-        applyStructure(Ws1Ops.editStaff(st, i, name.trim(), groupIdx))
-    }
-
-    fun ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
-        val st = state ?: return
-        logOp("I", "担当可否: グループ[$g] × ${opSy(k)} → ${if (allowed) "担当できる" else "担当しない"}")
-        applyStructure(Ws1Ops.setGroupShift(st, g, k, allowed))
-    }
-
-    /** グループ別シフトの適切回数（1人あたり期間内目標。空欄＝目標なし）を設定。 */
-    fun ws1SetGroupApt(g: Int, k: Int, value: String) {
-        val st = state ?: return
-        logOp("I", "適切回数: グループ[$g] × ${opSy(k)} → ${value.trim().ifBlank { "未設定" }}")
-        applyStructure(Ws1Ops.setGroupApt(st, g, k, value))
-    }
-
-    /**
-     * [apt強制リセット] 適切回数(apt)を全グループ×全シフトで空欄(目標なし)に戻す。
-     * apt由来のソフト違反が消える。担当ON/OFF・回数レンジ・勤務表は不変、表も保持。元に戻すで復帰可。
-     */
-    fun ws1ResetGroupApt() {
-        val st = state ?: return
-        val cleared = st.groupShiftApt.sumOf { row -> row.count { it.trim().isNotEmpty() } }
-        logOp("I", "apt強制リセット: 適切回数を全空欄に（$cleared 件クリア）")
-        applyStructureWithMessage(Ws1Ops.resetGroupApt(st), "適切回数(apt)を全リセットしました（$cleared 件 → 0）")
-    }
-
-    fun ws1SetUse2(on: Boolean) {
-        val st = state ?: return
-        logOp("I", "設定変更: 上限人数(2パターン目) → ${if (on) "使う" else "使わない"}")
-        applyStructure(Ws1Ops.setUse2(st, on))
-    }
-
-    /**
-     * [3.410.0/W-01・W-02] 記号の重複を**入力時に**断る。既存の記号へ改名すると制約行が一括置換されて
-     * 別の行と合流し、改名し直しても戻らない（検査8 が事後に警告するが、そのときには手遅れ）。
-     */
-    private fun symbolTaken(existing: List<String>, kigou: String, what: String, exceptIndex: Int = -1): Boolean {
-        if (!com.magi.app.v6.Ws1Ops.symbolCollides(existing, kigou, exceptIndex)) return false
-        val k = kigou.trim()
-        notify("記号「$k」はすでに別の${what}で使われています（制約の参照が混ざるため、別の記号にしてください）", "W")
-        return true
-    }
-
-    fun ws1AddShift(name: String, kigou: String, need1: String, need2: String) {
-        val st = state ?: return
-        if (kigou.isBlank()) return
-        if (symbolTaken(st.shifts.map { it.kigou }, kigou, "シフト")) return
-        logOp("I", "シフト追加: ${name.trim()}(${kigou.trim()}) 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-        applyStructure(Ws1Ops.addShift(st, name.trim(), kigou.trim(), need1.trim(), need2.trim()))
-    }
-
-    fun ws1AddGroup(name: String, kigou: String) {
-        val st = state ?: return
-        if (kigou.isBlank()) return
-        if (symbolTaken(st.groups.map { it.kigou }, kigou, "グループ")) return
-        logOp("I", "グループ追加: ${name.trim()}(${kigou.trim()})")
-        applyStructure(Ws1Ops.addGroup(st, name.trim(), kigou.trim()))
-    }
-
-    fun ws1AddStaff(name: String, groupIdx: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        logOp("I", "職員追加: ${name.trim()} / グループ[$groupIdx]")
-        applyStructure(Ws1Ops.addStaff(st, sched, name.trim(), groupIdx))
-    }
-
-    fun ws1ResizeDays(newT: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        logOp("I", "期間変更: ${st.dayCount}日 → ${newT}日")
-        applyStructure(Ws1Ops.resizeDays(st, sched, newT))
-    }
-
-    /** [対象月の選択] 開始日を指定年月の1日にし、その月の日数へ整える（endDate/希望/必要人数も追従）。 */
-    fun setMonth(year: Int, month1to12: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        val first = runCatching { java.time.LocalDate.of(year, month1to12, 1) }.getOrNull() ?: return
-        logOp("I", "期間変更: ${year}年${month1to12}月"); applyStructure(Ws1Ops.resizeDays(st.copy(startDate = first.toString()), sched, first.lengthOfMonth()))
-    }
-
-    /** 現在の開始日から相対的に月を移動（-1=前月 / +1=翌月）。開始日が不明なら端末の今月を起点。 */
-    fun shiftMonth(delta: Int) {
-        val base = runCatching { java.time.LocalDate.parse(_ui.value.startDate) }.getOrNull()
-            ?: java.time.LocalDate.now().withDayOfMonth(1)
-        val m = base.withDayOfMonth(1).plusMonths(delta.toLong())
-        setMonth(m.year, m.monthValue)
-    }
-
-    /** [実機指摘] 月末に「来月」の勤務表を作る業務のため、ワンタップは来月が適切。 */
-    fun setNextMonth() {
-        val next = java.time.LocalDate.now().plusMonths(1)
-        setMonth(next.year, next.monthValue)
-    }
-
-    // ---- スキルグループ（年次マスター・新C41s/C42s 専用） -----------------------
-    fun skillGroups(): List<Group> = state?.skillGroups ?: emptyList()
-    fun addSkillGroup(name: String, kigou: String) {
-        val st = state ?: return; if (kigou.isBlank()) return
-        if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分")) return
-        logOp("I", "スキル区分追加: ${name.trim()}(${kigou.trim()})"); applyStructure(st.copy(skillGroups = st.skillGroups + Group(name.trim(), kigou.trim())))
-    }
-    fun editSkillGroup(g: Int, name: String, kigou: String) {
-        val st = state ?: return
-        if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分", exceptIndex = g)) return
-        val old = st.skillGroups.getOrNull(g)?.kigou ?: ""
-        val renamed = st.copy(skillGroups = st.skillGroups.mapIndexed { i, x -> if (i == g) Group(name.trim(), kigou.trim()) else x })
-        logOp("I", "スキル区分編集: [$g] → ${name.trim()}(${kigou.trim()})")
-        // [記号変更の伝播] スキル群記号を変えたら cons41s/cons42s の参照も一括置換(幽霊行防止)
-        applyStructure(Ws1Ops.renameSkillGroupInConstraints(renamed, old, kigou.trim()))
-    }
-    fun removeSkillGroup(g: Int) {
-        val st = state ?: return
-        // [3.330.0] 移行規則は Ws1Ops.removeSkillGroup（担当グループの removeGroup と対）。
-        //   ここに手書きしていた間はホストでテストできなかった。
-        logOp("I", "スキル区分削除: [$g]"); applyStructure(Ws1Ops.removeSkillGroup(st, g))
-    }
-    fun setStaffSkill(i: Int, skillIdx: Int) {
-        val st = state ?: return
-        logOp("I", "スキル割当: ${opNm(i)} → 区分[$skillIdx]"); applyStructure(st.copy(staff = st.staff.mapIndexed { idx, s -> if (idx == i) s.copy(skillIdx = skillIdx) else s }))
-    }
-
-    /** グループを削除できるか（2グループ以上あれば可。所属者がいても先頭グループへ移動して削除）。 */
-    fun ws1CanRemoveGroup(g: Int): Boolean = state?.let { g in it.groups.indices && it.groups.size > 1 } ?: false
-
-    /** グループgの所属人数（削除確認の警告表示用）。 */
-    fun ws1GroupMemberCount(g: Int): Int = state?.staff?.count { it.groupIdx == g } ?: 0
-
-    /** [3.429.0/R-03] 削除確認ダイアログで見せる影響件数（Ws1Ops.shiftRefCount/groupRefCount へ委譲）。
-     *  対象のシフト/グループを参照する制約行数。0 件なら影響なし。 */
-    fun ws1ShiftRefCount(k: Int): Int = state?.let { st -> st.shifts.getOrNull(k)?.let { Ws1Ops.shiftRefCount(st, it.kigou) } } ?: 0
-    fun ws1GroupRefCount(g: Int): Int = state?.let { st -> st.groups.getOrNull(g)?.let { Ws1Ops.groupRefCount(st, it.kigou) } } ?: 0
-    fun ws1SkillGroupRefCount(g: Int): Int = state?.let { st -> st.skillGroups.getOrNull(g)?.let { Ws1Ops.skillGroupRefCount(st, it.kigou) } } ?: 0
 
     /** [窓ハイライト③] セル(i,j)の違反が c1/c3/c3m のとき、その違反が指す窓/連の範囲(開始日..終了日)を返す。
      *  c1=最初に不足している窓 / c3・c3m=複数シフト窓なら未完成パターンの窓、単一シフト連なら連の実範囲。
@@ -2648,31 +2486,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         return null
-    }
-
-    fun ws1RemoveShift(k: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        // [3.416.0/方針「休は通常のシフト定義」] 旧: 休シフトの削除を入口で拒否（3.106.0）。撤廃＝
-        //   休も他シフトと同じ編集規則。削除セルは残りの一覧の「休」（無ければ先頭シフト）へ。
-        logOp("I", "シフト削除: ${opSy(k)}（このシフトのマスは休（無ければ先頭シフト）へ・希望も削除）")
-        applyStructure(Ws1Ops.removeShift(st, sched, k))
-    }
-
-    fun ws1RemoveStaff(i: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        logOp("I", "職員削除: ${opNm(i)}（勤務行・希望・個人の回数も削除）")
-        applyStructure(Ws1Ops.removeStaff(st, sched, i))
-    }
-
-    fun ws1RemoveGroup(g: Int) {
-        val st = state ?: return
-        if (g !in st.groups.indices || st.groups.size <= 1) return
-        // 所属者は先頭グループへ移る＝担当できるシフトが黙って変わるので、人数を必ず記録する。
-        val moved = st.staff.count { it.groupIdx == g }
-        logOp("I", "グループ削除: [$g]" + if (moved > 0) "（所属${moved}名は先頭グループへ移動＝担当できるシフトが変わります）" else "")
-        applyStructure(Ws1Ops.removeGroup(st, g))
     }
 
     /** Current JSON to export. ws1 edits -> full serialize; constraint edits -> overwrite cons; else schedule only. */
