@@ -51,7 +51,7 @@ class ReviewFixes3428Test {
         //   ここへ渡すと fallback に一度も到達せず、テストが何も検証しなくなる（最初にそう書いて
         //   「戻しても落ちない」ことで気づいた＝教訓#30）。生の範囲外セルを直接渡す。
         val raw = arrayOf(intArrayOf(99, 0))
-        val out = V6NativeOptimizer.hf66DataHardening(st, raw, "test")
+        val out = HardRepairCore.hf66DataHardening(st, raw, "test")
         assertEquals("埋めシフトは休（旧実装は勤務シフト X へ倒れていた）", p.restIdx, out[0][0])
         assertEquals("担当可の既存セルは触らない", 0, out[0][1])
     }

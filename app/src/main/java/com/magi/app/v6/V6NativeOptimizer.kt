@@ -315,12 +315,12 @@ object V6NativeOptimizer {
         }
         val chosen = SelectionHeuristics.chooseAlgorithm(options.algorithm, options.totalBudgetSec)
         val p = cachedProblem(state)
-        var schedule = hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
+        var schedule = HardRepairCore.hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
         // [N1b] 入口修復(hf67)は better(hard→weighted→total) 改善時のみ採用。既に良好な入力
         //   （前回結果の再最適化など）を破壊し、探索を劣化seedに係留する事故を防ぐ
         //   （運用ログ実例: 入力214 → 修復後HARD4/250 → 275秒が回復に浪費）。hf66(群内正規化)は無条件維持。
         val entryReport = UnifiedViolationChecker.check(state, schedule)
-        val repaired = hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
+        val repaired = HardRepairCore.hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
         val repairedReport = UnifiedViolationChecker.check(state, repaired)
         val hf67Adopted = better(repairedReport, entryReport)
         if (hf67Adopted) schedule = repaired
@@ -1182,7 +1182,7 @@ object V6NativeOptimizer {
         ) { pr ->
             if (pr.elapsedMs % 1000L < 220L) onProgress("V5 SA", lastReport, pr.totalIters, pr.elapsedMs)
         }
-        val repaired = hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
+        val repaired = HardRepairCore.hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
         var outSched = repaired.schedule
         var report = UnifiedViolationChecker.check(state, outSched)
         // [退化防止番兵 / 実機ログ起因] runAlns(578行)と同じ入力比keep-best。従来 runV5 だけ番兵が無く、SA+修復が
@@ -1409,7 +1409,7 @@ object V6NativeOptimizer {
             // [restart 摂動] 一律 strength=0.18。非線形スケジュール(2.51)は nsp_bench --real の final 品質で
             //   +101% 悪化と実測されたため revert(序盤の大摂動が強い repair 下で良解を壊し最終品質を損なう)。
             var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
-            cur = hf67HardRepair(state, cur, rng).schedule
+            cur = HardRepairCore.hf67HardRepair(state, cur, rng).schedule
             val deadline = nowMs() + per * 1000L
             // [Stage8b] ネイティブ ALNS チャンクへ委譲。不可 or 番兵発火なら下の従来 Kotlin ループへ。
             val usedNative = nativeProblem != 0L && NativeGate.enabled && runRestartNative(cur, deadline, per, r)
@@ -1563,7 +1563,7 @@ object V6NativeOptimizer {
                         else -> destroyRepairViolations(state, cand, curReport, rng)
                     }
                     // hf67 は hard 違反がある時のみ必要。
-                    val fixed = if (iter % 7L == 0L && curHard > 0L) hf67HardRepair(state, cand, rng).schedule else cand
+                    val fixed = if (iter % 7L == 0L && curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
                     val nDiffs = when {
                         op == 0 && drDay >= 0 && fixed === cand -> {
                             var n = 0
@@ -1878,96 +1878,6 @@ object V6NativeOptimizer {
         )
     }
 
-    /** [3.428.0/#30] 埋めシフト規則の委譲を直接固定するため internal（本番の可視性要件は private のまま）。 */
-    internal fun hf66DataHardening(state: MagiState, schedule: Array<IntArray>, tag: String): Array<IntArray> {
-        val p = cachedProblem(state)
-        val out = normalizeSchedule(schedule, p)
-        for (i in 0 until p.S) {
-            val allowed = p.allowedShiftsForStaff(i)
-            // [3.428.0/#30] 「担当外セルを何で埋めるか」の規則は `fillShiftIndex` の1箇所に置く
-            //   （3.419.0 で構造編集の3経路を統一したときの取り残し＝ここだけ独自の `?: 0` だった）。
-            //   旧実装との違いは2つ: ①休が担当可なら休を選ぶ（旧は index 最小＝休が先頭でないデータでは
-            //   勤務シフトへ倒れる）②担当可能が空なら 0 でなく休へ倒す。実データ3件は restIdx=0 かつ
-            //   全群が休を担当できるので**挙動は完全に不変**（測って確認済み）。
-            val fallback = fillShiftIndex(allowed, p.restIdx)
-            for (j in 0 until p.T) {
-                val k = out[i][j]
-                if (k !in 0 until p.K || !p.canDo(i, k)) out[i][j] = fallback
-            }
-        }
-        return out
-    }
-
-    private data class RepairResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>)
-
-    private fun hf67HardRepair(state: MagiState, schedule: Array<IntArray>, rng: Random): RepairResult {
-        val p = cachedProblem(state)
-        val out = hf66DataHardening(state, schedule, "hf67")
-        val logs = ArrayList<MirrorLog>()
-        var changed = 0
-
-        // Apply feasible wishes first; infeasible wishes are logged by Sanity, not forced.
-        for (i in 0 until p.S) for (j in 0 until p.T) {
-            val w = p.wish[i][j]
-            if (w in 0 until p.K && p.canDo(i, w) && out[i][j] != w) {
-                out[i][j] = w
-                changed++
-            }
-        }
-
-        repeat(3) {
-            val cov = coverage(p, out)
-            val counts = countMatrix(p, out)
-            for (j in 0 until p.T) for (k in 0 until p.K) {
-                // [N1a] 充填量は per-cell 実需要（#4b: OR/AND）。旧 need1 のみ基準では P2 で救済済みの
-                //   セル（休日体制など P1>P2）まで埋めに行き、既良盤面を壊していた。
-                var miss = p.covUCell(k, j, cov[j][k])
-                while (miss > 0) {
-                    val i = CoverageRepairScoring.bestStaffForCoverage(p, out, counts, j, k)
-                    if (i < 0) break
-                    val old = out[i][j]
-                    if (old == k) break
-                    out[i][j] = k
-                    cov[j][k]++
-                    if (old in 0 until p.K) cov[j][old]--
-                    changed++
-                    miss--
-                }
-            }
-        }
-
-        // Range lower bounds: fill shortage where possible without touching locked wishes.
-        val counts = countMatrix(p, out)
-        for (i in 0 until p.S) for (k in 0 until p.K) {
-            val lo = p.rangeLo[i][k]
-            if (lo == Int.MIN_VALUE || !p.canDo(i, k)) continue
-            var need = lo - counts[i][k]
-            var guard = 0
-            while (need > 0 && guard++ < p.T) {
-                var bestJ = -1
-                var bestScore = Int.MAX_VALUE
-                for (jj in 0 until p.T) {
-                    if (p.wishLocked(i, jj) || out[i][jj] == k) continue
-                    val score = CoverageRepairScoring.coverageShortageCost(p, out, jj, out[i][jj]) + rng.nextInt(3)
-                    if (score < bestScore) {
-                        bestScore = score
-                        bestJ = jj
-                    }
-                }
-                if (bestJ < 0) break
-                val j = bestJ
-                val old = out[i][j]
-                out[i][j] = k
-                if (old in 0 until p.K) counts[i][old]--
-                counts[i][k]++
-                changed++
-                need--
-            }
-        }
-        if (changed > 0) logs.add(MirrorLog(tag = "HF67", message = "HardRepair changed=$changed"))
-        return RepairResult(out, logs)
-    }
-
     private data class PolishResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>, val iterations: Long)
 
     /**
@@ -2115,7 +2025,7 @@ object V6NativeOptimizer {
                     val drDay2 = if (rng.nextBoolean()) { destroyRepairViolations(state, cand, bestReport, rng); -1 }
                                  else { val j = if (p.T > 0) rng.nextInt(p.T) else -1; if (j >= 0) destroyRepairDayAt(state, cand, j, rng); j }
                     // hard-feasible のときは hf67 を省略（DeltaEvaluator が hard 退化を弾く）。
-                    val fixed = if (curHard > 0L) hf67HardRepair(state, cand, rng).schedule else cand
+                    val fixed = if (curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
                     val nDiffs = if (drDay2 >= 0 && fixed === cand) {
                         var n = 0
                         for (i in 0 until p.S) if (cur[i][drDay2] != fixed[i][drDay2]) diffBuf[n++] = i * p.T + drDay2
@@ -2505,7 +2415,7 @@ object V6NativeOptimizer {
             //   violations マップに載る(両端2セル)ので、違反セルを直接再割当する destroyRepairViolations(else)へ回す。
             //   仮説はラウンド単位 better() keep-best でゲート済＝退化なし。
             "groupViol", "pref" -> {
-                val fixed = hf67HardRepair(state, out, rng).schedule
+                val fixed = HardRepairCore.hf67HardRepair(state, out, rng).schedule
                 for (i in 0 until p.S) for (j in 0 until p.T) out[i][j] = fixed[i][j]
             }
             else -> repeat(12) { destroyRepairViolations(state, out, report, rng) }
