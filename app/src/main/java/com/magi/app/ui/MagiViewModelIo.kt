@@ -5,6 +5,7 @@ import com.magi.app.model.MojibakeRepair
 import com.magi.app.model.StateParser
 import com.magi.app.v6.ScheduleCsvBridge
 import com.magi.app.v6.toIntArray2D
+import kotlinx.coroutines.flow.update
 
 /**
  * [MagiViewModel] の入出力（エクスポート: JSON/勤務表CSV/職員・希望・制約CSV/ログ、
