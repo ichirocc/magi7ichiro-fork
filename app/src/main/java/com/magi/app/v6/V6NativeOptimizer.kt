@@ -106,11 +106,11 @@ object V6NativeOptimizer {
             (index.toLong() * -0x61c8864680b583ebL))
         repeat(plan.intensity) {
             when (plan.mode) {
-                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
                 HypothesisStartMode.MIXED_REPAIR -> {
-                    if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                    if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
                 }
                 HypothesisStartMode.BASELINE -> Unit
             }
@@ -974,7 +974,7 @@ object V6NativeOptimizer {
             HypothesisEpochRole.DAY_BLOCK_ALNS -> globalBest.copy2D().also { out ->
                 if (p.T > 0) {
                     val first = rng.nextInt(p.T)
-                    repeat(n * 2) { x -> destroyRepairDayAt(state, out, (first + x) % p.T, rng) }
+                    repeat(n * 2) { x -> DestroyRepairOperators.destroyRepairDayAt(state, out, (first + x) % p.T, rng) }
                 }
             }
             HypothesisEpochRole.HARD_FAMILY_RSI -> {
@@ -995,8 +995,8 @@ object V6NativeOptimizer {
             }
             HypothesisEpochRole.LARGE_DESTROY_ALNS -> globalBest.copy2D().also { out ->
                 repeat(n * 2) {
-                    if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                    if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
                 }
             }
             HypothesisEpochRole.PERSONAL_RSI -> {
@@ -1408,7 +1408,7 @@ object V6NativeOptimizer {
             coroutineContext.ensureActive()
             // [restart 摂動] 一律 strength=0.18。非線形スケジュール(2.51)は nsp_bench --real の final 品質で
             //   +101% 悪化と実測されたため revert(序盤の大摂動が強い repair 下で良解を壊し最終品質を損なう)。
-            var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
+            var cur = if (r == 0) globalBest.copy2D() else DestroyRepairOperators.perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
             cur = HardRepairCore.hf67HardRepair(state, cur, rng).schedule
             val deadline = nowMs() + per * 1000L
             // [Stage8b] ネイティブ ALNS チャンクへ委譲。不可 or 番兵発火なら下の従来 Kotlin ループへ。
@@ -1558,9 +1558,9 @@ object V6NativeOptimizer {
                     val drDay = if (op == 0 && p.T > 0) rng.nextInt(p.T) else -1
                     val drStaff = if (op == 1 && p.S > 0) rng.nextInt(p.S) else -1
                     when (op) {
-                        0 -> if (drDay >= 0) destroyRepairDayAt(state, cand, drDay, rng)
-                        1 -> if (drStaff >= 0) destroyRepairStaffAt(state, cand, drStaff, rng)
-                        else -> destroyRepairViolations(state, cand, curReport, rng)
+                        0 -> if (drDay >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, drDay, rng)
+                        1 -> if (drStaff >= 0) DestroyRepairOperators.destroyRepairStaffAt(state, cand, drStaff, rng)
+                        else -> DestroyRepairOperators.destroyRepairViolations(state, cand, curReport, rng)
                     }
                     // hf67 は hard 違反がある時のみ必要。
                     val fixed = if (iter % 7L == 0L && curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
@@ -2022,8 +2022,8 @@ object V6NativeOptimizer {
                 }
                 else -> {   // copy-based multi-cell destroy/repair (ops 9,10)
                     val cand = cur.copy2D()
-                    val drDay2 = if (rng.nextBoolean()) { destroyRepairViolations(state, cand, bestReport, rng); -1 }
-                                 else { val j = if (p.T > 0) rng.nextInt(p.T) else -1; if (j >= 0) destroyRepairDayAt(state, cand, j, rng); j }
+                    val drDay2 = if (rng.nextBoolean()) { DestroyRepairOperators.destroyRepairViolations(state, cand, bestReport, rng); -1 }
+                                 else { val j = if (p.T > 0) rng.nextInt(p.T) else -1; if (j >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, j, rng); j }
                     // hard-feasible のときは hf67 を省略（DeltaEvaluator が hard 退化を弾く）。
                     val fixed = if (curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
                     val nDiffs = if (drDay2 >= 0 && fixed === cand) {
@@ -2128,227 +2128,6 @@ object V6NativeOptimizer {
         }
     }
 
-    private fun destroyRepairDay(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.T == 0) return
-        destroyRepairDayAt(state, schedule, rng.nextInt(p.T), rng)
-    }
-
-    internal fun destroyRepairDayAt(state: MagiState, schedule: Array<IntArray>, j: Int, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.T == 0) return
-        // [soft-aware destroy-repair / 実測検証 tools/nsp_bench.py] 従来はランダム順で穴を埋めるだけ(soft無視)で、
-        //   等価ベンチでは soft-aware 修復が AUC -24%〜-34% と唯一の大幅改善だった。ここで同じレバーを適用:
-        //   非希望セルを休へ destroy → 各需要を「割当の marginal soft が最小の休スタッフ」で repair。
-        //   休→k のみ移すため被覆穴を新たに作らない。希望固定は保持。受理(SA/isBetter)が最終採否=安全。
-        val rest = restShiftIndex(state)   // [監査#2] 休はindex0固定でなく記号から解決（Level Zero: 全シフト同等・番号非依存）
-        val cnt = Array(p.S) { IntArray(p.K) }
-        for (i in 0 until p.S) for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cnt[i][k]++ }
-        // destroy: 非希望セルを休へ。休を担当できない職員は対象外（群外割当を作らない）。cnt も同期。
-        for (i in 0 until p.S) {
-            if (p.wishLocked(i, j) || !p.canDo(i, rest)) continue
-            val old = schedule[i][j]
-            if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cnt[i][old]--; cnt[i][rest]++ }
-        }
-        val covJ = IntArray(p.K)
-        for (i in 0 until p.S) { val k = schedule[i][j]; if (k in 0 until p.K) covJ[k]++ }
-        // [c41-aware / 実測 tools/nsp_bench.py: 群レンジ(cons41)があると小幅改善・無ければゼロ overhead で無害]
-        //   群の「日次人数レンジ(cons41)」も marginal に加味し、群レンジ(上下限)も同時に研磨する。
-        val hasC41 = p.cons41.isNotEmpty()
-        val grpCnt = if (hasC41) Array(p.G) { IntArray(p.K) } else emptyArray()
-        if (hasC41) for (i in 0 until p.S) { val k = schedule[i][j]; if (k in 0 until p.K) grpCnt[p.sgrp[i]][k]++ }
-        fun c41DayMarg(g: Int, k: Int): Long {
-            if (!hasC41) return 0L
-            var d = 0L
-            for (c in p.cons41) {
-                if (c.groupIdx != g || c.shiftIdx != k) continue
-                val z = grpCnt[g][k]; val z1 = z + 1
-                val before = (if (z < c.l) c.l - z else 0) + (if (z > c.u) z - c.u else 0)
-                val after = (if (z1 < c.l) c.l - z1 else 0) + (if (z1 > c.u) z1 - c.u else 0)
-                d += (after - before).toLong()
-            }
-            return d
-        }
-        // [3.267.0/weekly+fair統合] 群合計(fair, 月間total)と職員別曜日バケット(weekly)を一度だけ構築
-        // （destroy後のschedule基準＝c41のgrpCntと同じ順序）。day j は固定のため bucket は全候補共通。
-        val grpTotal = Array(p.G) { IntArray(p.K) }
-        for (i in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[i]][k] += cnt[i][k]
-        val wd = Array(p.S) { s ->
-            Array(p.K) { IntArray(7) }.also { a ->
-                for (jj in 0 until p.T) { val k2 = schedule[s][jj]; if (k2 in 0 until p.K) a[k2][(p.dow0 + jj) % 7]++ }
-            }
-        }
-        val bucket = (p.dow0 + j) % 7
-        // repair: 各勤務シフトの需要を soft(個人 low/high/apt/weekly/fair ＋ 群レンジ c41)最小の休スタッフで満たす。
-        for (k in 0 until p.K) {
-            if (k == rest) continue   // [監査#2] 休以外の全シフトを対象（旧: k in 1..K-1 の「0=休」前提）
-            // [3.379.0/need1直参照の第4世代] 旧: `p.need1[k][j] <= 0 → continue` で
-            //   **need2 単独定義の需要を丸ごと素通り**していた（need1 未設定は -1）。3.173.0
-            //   (CoverageDiagnosis)・3.309.0(isBalanceable)・3.369.0(初期解生成2つ+findCovOFix)で
-            //   同じ穴を潰したのに、**RSI/ALNS 修復の中核であるこの2関数が取り残されていた**＝
-            //   そのデータでは covU(HARD, 重み8000) を修復オペレータが原理的に埋められない。
-            //   source of truth の `covUCell`（片方定義=その値）へ委譲する。
-            var miss = p.covUCell(k, j, covJ[k])
-            if (miss <= 0) continue
-            while (miss > 0) {
-                var bestI = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
-                for (i in 0 until p.S) {
-                    if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.canDo(i, k)) continue
-                    val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k]) +
-                        c41DayMarg(p.sgrp[i], k) +
-                        DestroyRepairMarginalCost.weeklyMarginalAt(wd[i], bucket, rest, k) +
-                        DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, cnt, grpTotal) +
-                        DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, cnt, grpTotal)
-                    if (delta < bestDelta) {
-                        bestDelta = delta; bestI = i; tied = 1
-                    } else if (delta == bestDelta) {
-                        tied++
-                        if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestI = i
-                    }
-                }
-                if (bestI < 0) break
-                schedule[bestI][j] = k; cnt[bestI][k]++; cnt[bestI][rest]--; covJ[k]++; miss--
-                if (hasC41) grpCnt[p.sgrp[bestI]][k]++
-                grpTotal[p.sgrp[bestI]][k]++; grpTotal[p.sgrp[bestI]][rest]--
-                wd[bestI][rest][bucket]--; wd[bestI][k][bucket]++
-            }
-        }
-    }
-
-    private fun destroyRepairStaff(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.S == 0) return
-        destroyRepairStaffAt(state, schedule, rng.nextInt(p.S), rng)
-    }
-
-    internal fun destroyRepairStaffAt(state: MagiState, schedule: Array<IntArray>, i: Int, rng: Random) {
-        val p = cachedProblem(state)
-        val allowed = p.allowedShiftsForStaff(i)
-        if (allowed.isEmpty()) return
-        val rest = restShiftIndex(state)   // [監査#2] 休の記号解決
-        if (!p.canDo(i, rest)) return      // 休を担当できない職員は破壊修復の対象外（群外割当を作らない）
-        // [soft-aware staff-DR / 実測 tools/nsp_bench.py --real: staff+viol で実データ final -49.5%]
-        //   非希望セルを休へ destroy → 各日の被覆穴を「staff i の marginal soft 最小のシフト」で repair。
-        //   被覆穴のみ埋める(過剰=covO を作らない)。希望固定は保持。スコアリング不変=Δ×フル無関係。
-        // [3.267.0/weekly+fair統合] fair(群内公平化)は群メンバー全員の月間totalが要るため、counts は
-        // 全職員S×Kで構築する（cntI は counts[i] の別名＝同一配列参照、以降どちらの名前で更新しても
-        // 他方に反映される）。grpTotal(G×K, 群合計)とwd(staff iの曜日別非休日数, 7要素)も一度だけ構築。
-        val counts = Array(p.S) { s ->
-            IntArray(p.K).also { a -> for (jj in 0 until p.T) { val k = schedule[s][jj]; if (k in 0 until p.K) a[k]++ } }
-        }
-        val cntI = counts[i]
-        val grpTotal = Array(p.G) { IntArray(p.K) }
-        for (s in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[s]][k] += counts[s][k]
-        val wd = Array(p.K) { IntArray(7) }
-        for (jj in 0 until p.T) { val k2 = schedule[i][jj]; if (k2 in 0 until p.K) wd[k2][(p.dow0 + jj) % 7]++ }
-        for (j in 0 until p.T) {
-            if (p.wishLocked(i, j)) continue
-            val old = schedule[i][j]
-            if (old != rest && old in 0 until p.K) {
-                schedule[i][j] = rest
-                cntI[old]--; cntI[rest]++
-                grpTotal[p.sgrp[i]][old]--; grpTotal[p.sgrp[i]][rest]++
-                wd[old][(p.dow0 + j) % 7]--; wd[rest][(p.dow0 + j) % 7]++
-            }
-        }
-        // [高速化] 旧: 日×シフトごとに被覆を全職員走査(O(T×K×S))。盤面のうち本関数中に変わるのは staff i の行
-        //   だけなので、被覆を一度だけ数え(O(S×T))、割当のたびに差分更新する(O(T×K))。挙動は再カウントと同一。
-        val cov = Array(p.T) { IntArray(p.K) }
-        for (x in 0 until p.S) for (j in 0 until p.T) { val k2 = schedule[x][j]; if (k2 in 0 until p.K) cov[j][k2]++ }
-        for (j in 0 until p.T) {
-            if (p.wishLocked(i, j) || schedule[i][j] != rest) continue
-            val bucket = (p.dow0 + j) % 7
-            var bestK = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
-            for (k in 0 until p.K) {
-                if (k == rest || !p.canDo(i, k)) continue
-                // [3.379.0/同上] need2 単独定義の穴を塞ぐ。`covUCell<=0` は「需要なし」と
-                //   「既に足りている」の両方を同時に表すので、旧2条件をこれ1つで置き換えられる。
-                if (p.covUCell(k, j, cov[j][k]) <= 0) continue
-                val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k]) +
-                    DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, rest, k) +
-                    DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, counts, grpTotal) +
-                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts, grpTotal)
-                if (delta < bestDelta) {
-                    bestDelta = delta; bestK = k; tied = 1
-                } else if (delta == bestDelta) {
-                    tied++
-                    if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestK = k
-                }
-            }
-            if (bestK >= 0) {
-                schedule[i][j] = bestK
-                cntI[bestK]++; cntI[rest]--
-                grpTotal[p.sgrp[i]][bestK]++; grpTotal[p.sgrp[i]][rest]--
-                wd[rest][bucket]--; wd[bestK][bucket]++
-                cov[j][bestK]++; cov[j][rest]--
-            }
-        }
-    }
-
-    private fun destroyRepairViolations(state: MagiState, schedule: Array<IntArray>, report: ViolationReport, rng: Random) {
-        val p = cachedProblem(state)
-        val keys = report.violations.keys.toList()
-        if (keys.isEmpty()) { randomAllowedCell(state, schedule, rng); return }
-        repeat(min(8, keys.size)) {
-            val key = keys[rng.nextInt(keys.size)]
-            val i = key.substringBefore(',').toIntOrNull() ?: return@repeat
-            val j = key.substringAfter(',').toIntOrNull() ?: return@repeat
-            if (i !in 0 until p.S || j !in 0 until p.T || p.wishLocked(i, j)) return@repeat
-            val allowed = p.allowedShiftsForStaff(i)
-            if (allowed.isEmpty()) return@repeat
-            // [soft-aware violations / 実測で実データ final -22.6%] 違反セルを、staff i の現状回数で
-            //   marginal soft(old→k)最小のシフトへ再割当(従来はランダム)。スコアリング不変=Δ×フル無関係。
-            val cntI = IntArray(p.K)
-            for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cntI[k]++ }
-            // [3.267.0/weekly+fair統合] この手専用にwd(staff iの曜日別非休日数)とgrpTotal(群合計, 全職員
-            // スキャン)を構築。件数は最大8回(repeat)に限られ盤面規模も小さいため、毎回の再走査を許容する。
-            val wd = Array(p.K) { IntArray(7) }
-            for (jj in 0 until p.T) { val k2 = schedule[i][jj]; if (k2 in 0 until p.K) wd[k2][(p.dow0 + jj) % 7]++ }
-            val counts = Array(p.S) { s ->
-                IntArray(p.K).also { a -> for (jj in 0 until p.T) { val k = schedule[s][jj]; if (k in 0 until p.K) a[k]++ } }
-            }
-            val grpTotal = Array(p.G) { IntArray(p.K) }
-            for (s in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[s]][k] += counts[s][k]
-            val bucket = (p.dow0 + j) % 7
-            val old = schedule[i][j]
-            var bestK = old; var bestDelta = Long.MAX_VALUE; var tied = 0
-            for (k in allowed) {
-                if (k == old) continue
-                val dOld = if (old in 0 until p.K) DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old] - 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old]) else 0L
-                val dK = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k])
-                val dWeekly = DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, old, k)
-                val dFair = (if (old in 0 until p.K) DestroyRepairMarginalCost.fairMarginalAt(p, i, old, -1, counts, grpTotal) else 0L) +
-                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts, grpTotal)
-                val delta = dOld + dK + dWeekly + dFair
-                if (delta < bestDelta) {
-                    bestDelta = delta; bestK = k; tied = 1
-                } else if (delta == bestDelta) {
-                    tied++
-                    if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestK = k
-                }
-            }
-            if (bestK != old) schedule[i][j] = bestK
-        }
-    }
-
-    private fun randomAllowedCell(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.S == 0 || p.T == 0) return
-        val i = rng.nextInt(p.S)
-        val j = rng.nextInt(p.T)
-        if (p.wishLocked(i, j)) return
-        val allowed = p.allowedShiftsForStaff(i)
-        if (allowed.isNotEmpty()) schedule[i][j] = allowed[rng.nextInt(allowed.size)]
-    }
-
-    private fun perturb(state: MagiState, base: Array<IntArray>, rng: Random, strength: Double): Array<IntArray> {
-        val p = cachedProblem(state)
-        val out = base.copy2D()
-        val n = max(1, (p.S * p.T * strength).toInt())
-        repeat(n) { randomAllowedCell(state, out, rng) }
-        return out
-    }
-
     internal fun rsiGenerateHypothesis(
         state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random,
         // [3.313.0] free repair 群へ締切を通す。既定 `{ false }` ＝既存の直接呼出・テストは挙動不変。
@@ -2368,17 +2147,17 @@ object V6NativeOptimizer {
             //   （need>0のシフトを埋める設計）で自動的に再修復されるため実害は薄いが、covO/c42/c42s
             //   の過剰・違反ペア解消はrepairの対象外で影響が直接的。順序を「destroyRepairDay×6→
             //   専用free関数」へ統一し、hypothesisの最終状態に専用オペレータの改善が必ず残るようにする。
-            "covU" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyCovUChains(state, out, rng, shouldStop) }
+            "covU" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyCovUChains(state, out, rng, shouldStop) }
             // [3.209.0/covOと同型の穴=c41/c41sがfocusされてもdestroyRepairDayのc41DayMargは副次効果でしか
             //   効かない] markNeed系(needViolations)にしか載らずGLSキック/destroyRepairViolationsのヒントを
             //   一切持てない点がcovOと同じ。applyC41Freeで群レンジの超過/不足を直接動かす専用オペレータへ。
-            "c41" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = false, shouldStop = shouldStop) }
-            "c41s" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = true, shouldStop = shouldStop) }
+            "c41" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = false, shouldStop = shouldStop) }
+            "c41s" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = true, shouldStop = shouldStop) }
             // [3.233.0/c41,c41sと同型の穴] c42/c42sも「動かせるか」を判定する専用オペレータが無く
             // destroyRepairViolationsの汎用ランダム再割当頼みだった。applyC42Freeで違反ペアの
             // 片側を直接動かす専用オペレータへ。
-            "c42" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = false, shouldStop = shouldStop) }
-            "c42s" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = true, shouldStop = shouldStop) }
+            "c42" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = false, shouldStop = shouldStop) }
+            "c42s" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = true, shouldStop = shouldStop) }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
             //   cost(DestroyRepairMarginalCost.staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
@@ -2398,7 +2177,7 @@ object V6NativeOptimizer {
             //   この過大摂動を防げない）。destroyRepairDay基準(6回×S人ぶんのセル変化)に総攪乱セル数を
             //   揃えるよう reps を動的計算する（S>=T のデータでは reps>=6 相当まで許容＝挙動退化なし）。
             "low", "high", "c2", "apt", "weekly", "fair" -> {
-                repeat(DestroyRepairMarginalCost.destroyRepairStaffReps(p.S, p.T)) { destroyRepairStaff(state, out, rng) }
+                repeat(DestroyRepairMarginalCost.destroyRepairStaffReps(p.S, p.T)) { DestroyRepairOperators.destroyRepairStaff(state, out, rng) }
             }
             // [3.204.0/実機ログ起因=covOがfocusされても直せなかった] covO は markNeed(k,j) で needViolations に
             //   載り、report.violations(セル"i,j"マップ)には現れないため、他の focus 未対応族の else 分岐が
@@ -2408,7 +2187,7 @@ object V6NativeOptimizer {
             //   専用オペレータ applyCovOFree を新設し、covU chain(applyCovUChains)と対称に配線する。
             //   [3.241.0] destroyRepairDayを先に(順序バグ修正、上記covUコメント参照)＝covOは特にneed<=0
             //   シフト(休等)の過剰が主対象でrepair段階の恩恵が皆無のため、この順序修正の効果が最も直接的。
-            "covO" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyCovOFree(state, out, rng, shouldStop) }
+            "covO" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng) }; applyCovOFree(state, out, rng, shouldStop) }
             // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
             //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
             //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
@@ -2418,7 +2197,7 @@ object V6NativeOptimizer {
                 val fixed = HardRepairCore.hf67HardRepair(state, out, rng).schedule
                 for (i in 0 until p.S) for (j in 0 until p.T) out[i][j] = fixed[i][j]
             }
-            else -> repeat(12) { destroyRepairViolations(state, out, report, rng) }
+            else -> repeat(12) { DestroyRepairOperators.destroyRepairViolations(state, out, report, rng) }
         }
         return out
     }

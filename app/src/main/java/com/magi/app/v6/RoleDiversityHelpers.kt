@@ -15,8 +15,9 @@ package com.magi.app.v6
  * - [compressFocusTrail]：RSI focus 遷移ログの連続圧縮表示。
  *
  * 同じ理由で抽出しなかったもの（[V6NativeOptimizer] に残置）: `hypothesisStartFor`/
- * `forceDiverseKick`（cachedProblem/destroyRepairDayAt等・統括状態機械側の関数を呼ぶ）、
- * `RunSlot`一式・`lastAlternatives`等（実行間状態分離の共有可変状態そのもの）。
+ * `forceDiverseKick`（探索本体と密結合＝Round6 で [DestroyRepairOperators] へ抽出済みの
+ * オペレータ群を跨いで束ねる薄い入口）、`RunSlot`一式・`lastAlternatives`等
+ * （実行間状態分離の共有可変状態そのもの）。
  *
  * `AcceptMode`/`OpSelectMode` は [V6NativeOptimizer] と同一ファイル冒頭のトップレベルenum
  * （同一パッケージのため修飾不要）。呼び出し側は全て`V6NativeOptimizer.<name>`の完全修飾で

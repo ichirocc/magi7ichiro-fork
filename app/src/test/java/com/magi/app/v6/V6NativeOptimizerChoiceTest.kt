@@ -1164,7 +1164,7 @@ class V6NativeOptimizerChoiceTest {
         val st = need2OnlyState()
         assertEquals("前提: need2 単独でも covU が立つ", 1, cachedProblem(st).covUCell(1, 0, 0))
         val sched = arrayOf(intArrayOf(0))
-        V6NativeOptimizer.destroyRepairDayAt(st, sched, 0, Random(1))
+        DestroyRepairOperators.destroyRepairDayAt(st, sched, 0, Random(1))
         assertEquals("need2 単独定義の需要を埋める", 1, sched[0][0])
         assertEquals("covU が解消する", 0, UnifiedViolationChecker.check(st, sched).breakdown["covU"] ?: 0)
     }
@@ -1173,7 +1173,7 @@ class V6NativeOptimizerChoiceTest {
     fun staffRepairFillsDemandDefinedOnlyByNeed2() {
         val st = need2OnlyState()
         val sched = arrayOf(intArrayOf(0))
-        V6NativeOptimizer.destroyRepairStaffAt(st, sched, 0, Random(1))
+        DestroyRepairOperators.destroyRepairStaffAt(st, sched, 0, Random(1))
         assertEquals("need2 単独定義の需要を埋める", 1, sched[0][0])
         assertEquals("covU が解消する", 0, UnifiedViolationChecker.check(st, sched).breakdown["covU"] ?: 0)
     }

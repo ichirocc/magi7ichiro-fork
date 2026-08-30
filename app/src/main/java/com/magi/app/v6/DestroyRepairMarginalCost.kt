@@ -15,9 +15,11 @@ import kotlin.math.max
  * - [fairMarginalAt]：グループ内公平化(fair)のsoft cost。
  * - [destroyRepairStaffReps]：destroyRepairStaffの反復回数（destroyRepairDayと攪乱量を揃える）。
  *
- * 同じ理由で抽出しなかったもの（[V6NativeOptimizer] に残置）: `destroyRepairDay(At)`/
- * `destroyRepairStaff(At)`/`destroyRepairViolations`/`randomAllowedCell`/`perturb`
- * （`cachedProblem`等の統括状態機械側の関数を呼ぶ・盤面を直接変更する副作用を持つ）。
+ * オペレータ本体（`destroyRepairDay(At)`/`destroyRepairStaff(At)`/`destroyRepairViolations`/
+ * `randomAllowedCell`/`perturb`）は当初「`cachedProblem`等を呼ぶ・盤面を直接変更する副作用を持つ」を
+ * 理由に残置したが、全文再読で `cachedProblem` は MirrorCore.kt のトップレベルmemo（統括状態機械の
+ * 並行実行状態ではない）・in-place変更は引数配列への正当な副作用と再評価し、Round6 で
+ * [DestroyRepairOperators] へ抽出済み。
  *
  * 呼び出し側は全て`V6NativeOptimizer.<name>`の完全修飾で参照していたため、抽出時に
  * `DestroyRepairMarginalCost.<name>`へ一括置換した（本体内部からの無修飾自己呼出は元々無い）。
