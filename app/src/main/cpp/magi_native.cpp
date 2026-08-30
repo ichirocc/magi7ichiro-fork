@@ -19,6 +19,80 @@
 // - Java の Math.round(double) は floor(x+0.5)（half-up）。jround() で同一化。
 // - c3RunMode=true 固定（Evaluator の既定と同じ。非forbidden 単一シフト連は run-deficit）。
 
+// ===== TOC（自動生成: tools/native/gen_toc.py。コード改修時は再実行して更新） =====
+//  L   98  fn     jround
+//  L  100  struct C1r
+//  L  101  struct C2r
+//  L  102  struct C41r
+//  L  103  struct C42r
+//  L  109  fn     c42PairCount
+//  L  112  struct C3r
+//  L  114  struct MagiProblem
+//  L  168  fn     consIndicesValidN
+//  L  198  fn     weeklyDevOfBucket
+//  L  208  fn     rowDeficit
+//  L  225  fn     c3check
+//  L  251  fn     fullEvalParts
+//  L  416  const  SCORE_HARD_UNIT
+//  L  419  const  ACCEPT_REJECT_DELTA
+//  L  421  fn     fullEvalCombined
+//  L  432  struct SaChunk
+//  L  730  fn     wishLockedN
+//  L  735  fn     runSaChunk
+//  L  868  struct LahcState
+//  L  887  fn     runLahcChunk
+//  L 1012  fn     collectViolationCells
+//  L 1114  struct GlsPenaltyN
+//  L 1159  fn     glsAcceptN
+//  L 1177  fn     rnInt
+//  L 1185  fn     weeklyMarginalN
+//  L 1202  fn     fairMarginalN
+//  L 1225  fn     reservoirTieN
+//  L 1239  fn     staffCountPenaltyAtN
+//  L 1249  fn     randomAllowedCellN
+//  L 1260  fn     destroyRepairDayAtN
+//  L 1338  fn     destroyRepairStaffAtN
+//  L 1400  fn     destroyRepairViolationsN
+//  L 1452  struct Fix
+//  L 1454  fn     findCovOFixN
+//  L 1481  fn     findC2FixN
+//  L 1498  fn     findRangeLowFixN
+//  L 1522  fn     findRangeHighFixN
+//  L 1553  fn     findC41FamFixN
+//  L 1586  fn     findC3WantFixN
+//  L 1616  fn     findAptFixN
+//  L 1648  fn     findTargetedFixN
+//  L 1673  fn     coverageShortageCostN
+//  L 1681  fn     bestStaffForCoverageN
+//  L 1696  fn     hf67HardRepairN
+//  L 1769  fn     rouletteSelectN
+//  L 1777  fn     thompsonSelectN
+//  L 1791  fn     greatDelugeLevelN
+//  L 1800  struct AlnsState
+//  L 1843  fn     runAlnsChunk
+//  L 2040  struct PolishState
+//  L 2063  fn     polishAcceptN
+//  L 2073  fn     runPolishChunk
+//  L 2185  fn     readIntArray
+//  L 2196  JNI    nativeAbiVersion
+//  L 2203  JNI    nativeAlnsCreate
+//  L 2217  JNI    nativeAlnsDestroy
+//  L 2223  JNI    nativeAlnsChunk
+//  L 2237  JNI    nativeAlnsRead
+//  L 2249  JNI    nativePolishCreate
+//  L 2262  JNI    nativePolishDestroy
+//  L 2268  JNI    nativePolishChunk
+//  L 2281  JNI    nativePolishRead
+//  L 2293  JNI    nativeLahcCreate
+//  L 2306  JNI    nativeLahcDestroy
+//  L 2312  JNI    nativeLahcChunk
+//  L 2325  JNI    nativeLahcRead
+//  L 2339  JNI    nativeSaChunk
+//  L 2369  JNI    nativeCreateProblem
+//  L 2521  JNI    nativeDestroyProblem
+//  L 2527  JNI    nativeFullEval
+// ===== TOC end =====
+
 namespace {
 
 inline long long jround(double x) { return (long long)std::floor(x + 0.5); }
