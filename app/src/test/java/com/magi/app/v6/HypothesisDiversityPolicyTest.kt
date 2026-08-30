@@ -70,7 +70,7 @@ class HypothesisDiversityPolicyTest {
         assertTrue(base.contentDeepEquals(starts[4]))
         val distinct = starts.map { s -> s.joinToString("|") { it.joinToString(",") } }.distinct().size
         assertTrue("at least four genuinely different entry boards", distinct >= 4)
-        assertTrue(starts.indices.filter { it != 0 && it != 4 }.any { V6NativeOptimizer.scheduleDistance(base, starts[it]) > 0 })
+        assertTrue(starts.indices.filter { it != 0 && it != 4 }.any { RoleDiversityHelpers.scheduleDistance(base, starts[it]) > 0 })
     }
 
     @Test

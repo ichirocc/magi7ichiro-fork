@@ -30,11 +30,11 @@ class V6NativeOptimizerChoiceTest {
 
     @Test fun roleProfilesDiversifyWithBaselineFirst() {
         // [HF290 役割分担] W0 は必ず 1.0（ベースライン＝退化防止）、以降は探索(>1)/精製(<1)で多様化。
-        assertEquals(1.0, V6NativeOptimizer.roleExploreFor(0), 1e-9)
-        assertEquals(2.0, V6NativeOptimizer.roleExploreFor(1), 1e-9)   // 探索
-        assertEquals(0.5, V6NativeOptimizer.roleExploreFor(2), 1e-9)   // 精製
-        assertEquals(1.6, V6NativeOptimizer.roleExploreFor(3), 1e-9)
-        assertEquals(0.6, V6NativeOptimizer.roleExploreFor(4), 1e-9)
+        assertEquals(1.0, RoleDiversityHelpers.roleExploreFor(0), 1e-9)
+        assertEquals(2.0, RoleDiversityHelpers.roleExploreFor(1), 1e-9)   // 探索
+        assertEquals(0.5, RoleDiversityHelpers.roleExploreFor(2), 1e-9)   // 精製
+        assertEquals(1.6, RoleDiversityHelpers.roleExploreFor(3), 1e-9)
+        assertEquals(0.6, RoleDiversityHelpers.roleExploreFor(4), 1e-9)
     }
 
     // [3.228.0/ドッグフーディングで発見・修正] 仮説数上限撤廃(3.225.0)でi>=5の仮説が実際に生成される
@@ -42,7 +42,7 @@ class V6NativeOptimizerChoiceTest {
     // ROULETTEへ縮退し、種(seed)以外ベースラインと同一の「クローン仮説」になっていた。i<5は不変
     // （既存テストroleProfilesDiversifyWithBaselineFirstが担保）で、i>=5が実際に多様化することを固定する。
     @Test fun roleProfilesDiversifyBeyondOldFixedArraySize() {
-        val exploreValues = (5..12).map { V6NativeOptimizer.roleExploreFor(it) }
+        val exploreValues = (5..12).map { RoleDiversityHelpers.roleExploreFor(it) }
         // 旧実装のクローン値(=roleExploreFor(0)=1.0)へ縮退していないこと
         assertTrue("i>=5はベースライン(1.0)への縮退でないこと", exploreValues.none { kotlin.math.abs(it - 1.0) < 1e-6 })
         // 互いに異なる値へ分散していること（同じ値の繰り返しでない＝真の多様化）
@@ -51,41 +51,41 @@ class V6NativeOptimizerChoiceTest {
         assertTrue(exploreValues.all { it in 0.35..2.4 })
 
         // accept/opSelectも旧来の一律デフォルト(SA/ROULETTE)への縮退でなく複数モードへ分散していること
-        val acceptModes = (5..10).map { V6NativeOptimizer.roleAcceptFor(it) }.toSet()
+        val acceptModes = (5..10).map { RoleDiversityHelpers.roleAcceptFor(it) }.toSet()
         assertTrue("i>=5のacceptModeが複数種に分散していること(旧: 全てSAに縮退)", acceptModes.size > 1)
-        val opSelectModes = (5..10).map { V6NativeOptimizer.roleOpSelectFor(it) }.toSet()
+        val opSelectModes = (5..10).map { RoleDiversityHelpers.roleOpSelectFor(it) }.toSet()
         assertTrue("i>=5のopSelectModeが複数種に分散していること(旧: 全てROULETTEに縮退)", opSelectModes.size > 1)
     }
 
     @Test fun roleProfilesForIndicesBelowFiveAreUnaffectedByDiversification() {
         // [回帰] i<5の既存分岐(SA/GD/LAM・ROULETTE/THOMPSON)は3.228.0で一切変更していないこと。
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(0))
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(1))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(2))
-        assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
-        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(0))
-        assertEquals(OpSelectMode.THOMPSON, V6NativeOptimizer.roleOpSelectFor(1))
-        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(2))
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(0))
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(1))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(2))
+        assertEquals(AcceptMode.LAM_ADAPTIVE, RoleDiversityHelpers.roleAcceptFor(3))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(4))
+        assertEquals(OpSelectMode.ROULETTE, RoleDiversityHelpers.roleOpSelectFor(0))
+        assertEquals(OpSelectMode.THOMPSON, RoleDiversityHelpers.roleOpSelectFor(1))
+        assertEquals(OpSelectMode.ROULETTE, RoleDiversityHelpers.roleOpSelectFor(2))
     }
 
     @Test fun greatDelugeLevelDecaysFromInitialToBest() {
         // [論文活用] 時間予定型GD: frac=1(序盤)→initial、frac=0(終盤)→best へ線形降下、外れ値はクランプ。
-        assertEquals(100.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 1.0), 1e-9)
-        assertEquals(10.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 0.0), 1e-9)
-        assertEquals(55.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 0.5), 1e-9)
-        assertEquals(100.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 2.0), 1e-9)
-        assertEquals(10.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, -1.0), 1e-9)
+        assertEquals(100.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 1.0), 1e-9)
+        assertEquals(10.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 0.0), 1e-9)
+        assertEquals(55.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 0.5), 1e-9)
+        assertEquals(100.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 2.0), 1e-9)
+        assertEquals(10.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, -1.0), 1e-9)
     }
 
     @Test fun roleAcceptAssignsGreatDelugeToSomeWorkers() {
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(0))   // W0 ベースライン
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(1))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(2))
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(0))   // W0 ベースライン
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(1))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(2))
         // [陳腐化修正] W3 は後日 Lam-Delosme 適応冷却(LAM_ADAPTIVE)へ多様化された（roleAcceptFor 実装＋専用コード）。
         //   テストが旧SA期待のまま残り V6 Engine Check が恒常赤だったのを実装に追随。
-        assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
+        assertEquals(AcceptMode.LAM_ADAPTIVE, RoleDiversityHelpers.roleAcceptFor(3))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(4))
     }
 
     // [実機ログ起因=公平化のズレ] apt(適切回数)は旧 order に無く RSI 探索中は一度も focus されなかった
@@ -978,20 +978,20 @@ class V6NativeOptimizerChoiceTest {
     // ---- [3.288.0/ログ強化=回数軸] focus 足跡の連続圧縮 ----
 
     @Test fun compressFocusTrailCollapsesConsecutiveRepeats() {
-        assertEquals("covU×2→c3n", V6NativeOptimizer.compressFocusTrail(listOf("covU", "covU", "c3n")))
-        assertEquals("c1", V6NativeOptimizer.compressFocusTrail(listOf("c1")))
-        assertEquals("", V6NativeOptimizer.compressFocusTrail(emptyList()))
+        assertEquals("covU×2→c3n", RoleDiversityHelpers.compressFocusTrail(listOf("covU", "covU", "c3n")))
+        assertEquals("c1", RoleDiversityHelpers.compressFocusTrail(listOf("c1")))
+        assertEquals("", RoleDiversityHelpers.compressFocusTrail(emptyList()))
     }
 
     @Test fun compressFocusTrailKeepsMarkersInPlaceAndDoesNotMergeThem() {
         // マーカー([..])は圧縮対象にせず、発生位置のまま挟む（同じ族が前後に分かれても別区間として残る）。
         assertEquals(
             "covU×2→[HF63降格:covU]→c3n",
-            V6NativeOptimizer.compressFocusTrail(listOf("covU", "covU", "[HF63降格:covU]", "c3n")),
+            RoleDiversityHelpers.compressFocusTrail(listOf("covU", "covU", "[HF63降格:covU]", "c3n")),
         )
         assertEquals(
             "c1→[HF63降格:covU]→c1",
-            V6NativeOptimizer.compressFocusTrail(listOf("c1", "[HF63降格:covU]", "c1")),
+            RoleDiversityHelpers.compressFocusTrail(listOf("c1", "[HF63降格:covU]", "c1")),
         )
     }
 

@@ -88,55 +88,6 @@ object V6NativeOptimizer {
     private const val GLS_TRIGGER = 200L
     private const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
 
-    /** [HF290 役割分担移植] 並列仮説の探索/精製プロファイル（温度・摂動の倍率）。
-     *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。
-     *  [仮説数上限撤廃(3.225.0)後のドッグフーディングで発見・3.228.0で修正] この配列は5要素固定のため
-     *  i>=5（3.225.0でworkers設定まで仮説数が増えたことで実際に生成されうる）は全て else 節の
-     *  既定値=roleExploreFor(0)と同値に縮退し、役割分担が完全に無効化されていた（仮説5,6,7…は
-     *  種(seed)以外ベースラインと区別できないクローン＝「多様性を優先する」という3.225.0自身の
-     *  狙いを裏切っていた）。i<5 の既存値は一切変更せず(既存テスト・チューニング結果を保持)、
-     *  i>=5 だけ黄金比の低食い違い列(golden-ratio low-discrepancy sequence)で [0.35, 2.4] へ
-     *  決定的かつ非周期的に写像する（配列を単に延長・循環させるとi=5%5=0で結局ベースラインに
-     *  戻るクローン問題を繰り返すため、周期を持たない生成式を採用）。 */
-    private val ROLE_EXPLORE = doubleArrayOf(1.0, 2.0, 0.5, 1.6, 0.6)
-    internal fun roleExploreFor(i: Int): Double {
-        if (i in ROLE_EXPLORE.indices) return ROLE_EXPLORE[i]
-        val frac = (i * 0.6180339887498949) % 1.0
-        return 0.35 + frac * (2.4 - 0.35)
-    }
-
-    /** [論文活用] 並列仮説で受理戦略を多様化（W0,W1=SA基準 / W2,W4=Great Deluge / W3=Lam適応冷却）。
-     *  W0 は常に SA でベースライン保持＝退化防止。
-     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は else節で一律SAに縮退していた（roleExploreFor と同じ
-     *  クローン問題）ため、GD/LAM/SAを i%3 で巡回させ実際に多様化する。 */
-    internal fun roleAcceptFor(i: Int): AcceptMode = when (i) {
-        2, 4 -> AcceptMode.GREAT_DELUGE
-        3 -> AcceptMode.LAM_ADAPTIVE
-        0, 1 -> AcceptMode.SA
-        else -> when (i % 3) {
-            0 -> AcceptMode.GREAT_DELUGE
-            1 -> AcceptMode.LAM_ADAPTIVE
-            else -> AcceptMode.SA
-        }
-    }
-
-    /** [論文活用] 並列仮説で演算子選択を多様化（W1=Thompson sampling / 他=roulette）。
-     *  W0 は常に roulette でベースライン保持＝退化防止。
-     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は一律rouletteに縮退していたため、偶奇でTHOMPSON/ROULETTEを
-     *  交互に割当てて多様化する。 */
-    internal fun roleOpSelectFor(i: Int): OpSelectMode = when {
-        i == 1 -> OpSelectMode.THOMPSON
-        i in 0..4 -> OpSelectMode.ROULETTE
-        i % 2 == 1 -> OpSelectMode.THOMPSON
-        else -> OpSelectMode.ROULETTE
-    }
-
-    /** [3.266.0/hypothesis basin diversity] 変更セル数。診断ログとdiversity判定の両方に使う。
-     *  実体は AdaptiveEliteArchive.scheduleDistance（唯一の実装）への委譲。両クラスから同じ距離定義を
-     *  共有し、アルゴリズムの二重実装（DRY違反）を避ける。 */
-    internal fun scheduleDistance(a: Array<IntArray>, b: Array<IntArray>): Int =
-        AdaptiveEliteArchive.scheduleDistance(a, b)
-
     /**
      * [3.266.0/hypothesis basin diversity] 非ベースライン仮説に構造的に異なる吸引域を与える。
      * W0/W4 は現行盤面の完全コピーのまま＝既存の安全フロアは維持される。
@@ -164,7 +115,7 @@ object V6NativeOptimizer {
                 HypothesisStartMode.BASELINE -> Unit
             }
         }
-        if (scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
+        if (RoleDiversityHelpers.scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
         return out
     }
 
@@ -186,12 +137,6 @@ object V6NativeOptimizer {
         }
     }
 
-    /**
-     * 時間予定型 Great Deluge の水位（Burke, Bykov, Newall & Petrovic 2004）。
-     * frac=1(序盤)で initial、frac=0(終盤)で best へ線形降下。候補スコア ≤ 水位 なら受理。
-     */
-    internal fun greatDelugeLevel(initial: Double, best: Double, frac: Double): Double =
-        best + (initial - best) * frac.coerceIn(0.0, 1.0)
 
     // ───────── [3.335.0/外部レビュー P1] 実行ごとの成果物入れ ─────────
     //   `lastAlternatives` などの可変 static は「直近の実行の値」しか持てず、実行が重なると
@@ -246,20 +191,6 @@ object V6NativeOptimizer {
     }
     internal fun clearInfeasible() { synchronized(infeasLock) { lastInfeasibleFamilies = emptySet() } }
 
-    /** [3.288.0/ログ強化=回数軸] focus 足跡の連続圧縮（"c3n,c3n,c1" → "c3n×2→c1"）。マーカー([..])はそのまま挟む。 */
-    internal fun compressFocusTrail(trail: List<String>): String {
-        val out = StringBuilder(); var i = 0
-        while (i < trail.size) {
-            val t = trail[i]
-            if (t.startsWith("[")) { if (out.isNotEmpty()) out.append("→"); out.append(t); i++; continue }
-            var j = i + 1
-            while (j < trail.size && trail[j] == t) j++
-            if (out.isNotEmpty()) out.append("→")
-            out.append(t); if (j - i > 1) out.append("×${j - i}")
-            i = j
-        }
-        return out.toString()
-    }
 
     /** [3.268.0/elite archive fusion] 全epochから圧縮した品質・距離・橋渡しエリート
      *  （最適化後の再結合/Fusion専用、PORTFOLIO実行時のみ非空）。 */
@@ -763,11 +694,11 @@ object V6NativeOptimizer {
                         explore = when (assignment.role) {
                             HypothesisEpochRole.HARD_DEBT_RSI_PLUS,
                             HypothesisEpochRole.LARGE_DESTROY_ALNS,
-                            HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> max(2.0, roleExploreFor(roleIndex))
-                            else -> roleExploreFor(roleIndex)
+                            HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> max(2.0, RoleDiversityHelpers.roleExploreFor(roleIndex))
+                            else -> RoleDiversityHelpers.roleExploreFor(roleIndex)
                         },
-                        accept = roleAcceptFor(roleIndex),
-                        opSelect = roleOpSelectFor(roleIndex),
+                        accept = RoleDiversityHelpers.roleAcceptFor(roleIndex),
+                        opSelect = RoleDiversityHelpers.roleOpSelectFor(roleIndex),
                         tabu = assignment.role != HypothesisEpochRole.BASELINE_REFINE,
                     )
                     val stopRole = {
@@ -845,7 +776,7 @@ object V6NativeOptimizer {
                     val nearest = synchronized(lock) {
                         var d = Int.MAX_VALUE
                         for (x in 0 until workers) if (x != i) {
-                            d = minOf(d, scheduleDistance(trajectory, sharedTrajectories[x]))
+                            d = minOf(d, RoleDiversityHelpers.scheduleDistance(trajectory, sharedTrajectories[x]))
                         }
                         d
                     }
@@ -952,7 +883,7 @@ object V6NativeOptimizer {
         }.distinct().size
         val pairDistances = ArrayList<Int>()
         for (i in outcomes.indices) for (j in i + 1 until outcomes.size) {
-            pairDistances.add(scheduleDistance(outcomes[i].elite, outcomes[j].elite))
+            pairDistances.add(RoleDiversityHelpers.scheduleDistance(outcomes[i].elite, outcomes[j].elite))
         }
         val distanceNote = if (pairDistances.isEmpty()) "対象外" else
             "${pairDistances.minOrNull()}..${pairDistances.maxOrNull()}セル" +
@@ -1033,11 +964,11 @@ object V6NativeOptimizer {
             HypothesisEpochRole.BASELINE_REFINE -> localTrajectory.copy2D()
             HypothesisEpochRole.ELITE_RELINK -> {
                 val alternatives = peers.asSequence()
-                    .filter { scheduleDistance(globalBest, it) > 0 }
-                    .sortedByDescending { scheduleDistance(globalBest, it) }
+                    .filter { RoleDiversityHelpers.scheduleDistance(globalBest, it) > 0 }
+                    .sortedByDescending { RoleDiversityHelpers.scheduleDistance(globalBest, it) }
                     .take(3).map { it.copy2D() }.toList()
                 val relinked = elitePathRelink(state, globalBest, alternatives, shouldStop).first
-                if (scheduleDistance(globalBest, relinked) > 0) relinked
+                if (RoleDiversityHelpers.scheduleDistance(globalBest, relinked) > 0) relinked
                 else hypothesisStartFor(state, globalBest, 7, seed)
             }
             HypothesisEpochRole.DAY_BLOCK_ALNS -> globalBest.copy2D().also { out ->
@@ -1168,7 +1099,7 @@ object V6NativeOptimizer {
                 if (winner.get() >= 0 && winner.get() != i) return@async null
                 try {
                     // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
-                    run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
+                    run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = RoleDiversityHelpers.roleExploreFor(i), accept = RoleDiversityHelpers.roleAcceptFor(i), opSelect = RoleDiversityHelpers.roleOpSelectFor(i))) { phase, report, iters, elapsed ->
                         val improved = report != null && improvesShared(report)
                         if (i == 0 || improved) onProgress("仮説${(hSpawn - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
                         // 絶対評価: 合格ライン(HARD=0)に最初に到達した仮説が、残りを即キャンセル
@@ -1568,7 +1499,7 @@ object V6NativeOptimizer {
                 val curHard = curScore / SCORE_HARD_UNIT
                 val gdLevel = if (options.accept == AcceptMode.GREAT_DELUGE) {
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, per * 1000.0)).coerceIn(0.0, 1.0)
-                    greatDelugeLevel(gdInitial, globalScore.toDouble(), frac)
+                    RoleDiversityHelpers.greatDelugeLevel(gdInitial, globalScore.toDouble(), frac)
                 } else 0.0
                 var reward = 0.2   // default: rejected / no-op
 
@@ -1921,7 +1852,7 @@ object V6NativeOptimizer {
         // [3.288.0/ログ強化=回数軸] 戦略変更の1行サマリ（focus遷移を連続圧縮）。2手以上あるときだけ出す＝スパムなし。
         if (focusTrail.count { !it.startsWith("[") } >= 2) {
             logs.add(MirrorLog(iter = iters, tag = "戦略変更", message =
-                "RSI focus遷移: ${compressFocusTrail(focusTrail)}" +
+                "RSI focus遷移: ${RoleDiversityHelpers.compressFocusTrail(focusTrail)}" +
                     (if (e9Cooldowns > 0) " / E9冷却${e9Cooldowns}回" else "") +
                     (hf63.infeasibleFamilies().takeIf { it.isNotEmpty() }?.let { " / HF63降格={${it.joinToString(",")}}" } ?: "")))
         }
