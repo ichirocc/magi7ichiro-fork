@@ -276,7 +276,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["covO"])
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(1))
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["covO"] ?: 0)
@@ -312,7 +312,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["covO"])
         assertEquals("前提: 担当外セルなので groupViol が立っている", 1, before.breakdown["groupViol"])
 
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(1))
         assertEquals("旧実装は実現不能な希望を固定扱いして何もしなかった", 1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("過剰が解消", 0, after.breakdown["covO"] ?: 0)
@@ -325,7 +325,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["covO"])
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(1))
         assertEquals(0, applied)
         assertEquals(1, sched[0][0])
         assertEquals(1, sched[1][0])
@@ -363,7 +363,7 @@ class V6NativeOptimizerChoiceTest {
         assertTrue("直接移動は両候補とも禁止連続で塞がる前提", p.makesForbiddenRun(sched, 0, 1, 1))
         assertTrue("直接移動は両候補とも禁止連続で塞がる前提", p.makesForbiddenRun(sched, 0, 1, 2))
 
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(2))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(2))
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["covO"] ?: 0)
@@ -392,13 +392,13 @@ class V6NativeOptimizerChoiceTest {
         )
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
-        val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, "apt", Random(1))
+        val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, "apt", Random(1))
         assertNotNull(out)
         assertEquals(base.size, out.size)
         assertEquals(base[0].size, out[0].size)
         // [smoke] weekly/fair も同じ経路（apt同様、専用オペレータ不要で例外なく完走すること）。
         for (focus in listOf("weekly", "fair")) {
-            val out2 = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            val out2 = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
             assertNotNull(out2)
             assertEquals(base.size, out2.size)
         }
@@ -410,7 +410,7 @@ class V6NativeOptimizerChoiceTest {
         val st = covOState(listOf(listOf(1), listOf(1)))
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
-        val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, "covO", Random(1))
+        val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, "covO", Random(1))
         assertNotNull(out)
         assertEquals(base.size, out.size)
         assertEquals(base[0].size, out[0].size)
@@ -456,7 +456,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals("初期 covO=1（休の過剰1）", 1, before.breakdown["covO"] ?: 0)
 
         for (seed in 1L..5L) {
-            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, before, "covO", Random(seed))
+            val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, before, "covO", Random(seed))
             val after = UnifiedViolationChecker.check(st, out)
             assertEquals("seed=$seed: destroyRepairDayを先に・applyCovOFreeを最後に実行する順序のため" +
                 "hypothesisの最終状態でcovOが解消されていること", 0, after.breakdown["covO"] ?: 0)
@@ -494,7 +494,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["c41"] ?: 0)
@@ -507,7 +507,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["c41"] ?: 0)
@@ -520,7 +520,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertEquals(0, applied)
         assertEquals(1, sched[0][0])
         assertEquals(1, sched[1][0])
@@ -529,7 +529,7 @@ class V6NativeOptimizerChoiceTest {
     @Test fun applyC41FreeIsNoOpWhenRulesEmpty() {
         val st = c41State(listOf(listOf(1), listOf(1)), l = "0", u = "1").copy(cons41 = emptyList())
         val sched = st.schedule.toIntArray2D()
-        assertEquals(0, V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false))
+        assertEquals(0, RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false))
     }
 
     // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開その4] 旧実装は「離脱元/到着先どちらもcovU/covO
@@ -572,7 +572,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["c41"] ?: 0)
         assertEquals(0, before.hard)   // Xはneed1=2をA/Bがちょうど充足＝離脱すると即covU化する構造的にブロックされた局面
 
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("c41超過が解消", 0, after.breakdown["c41"] ?: -1)
@@ -610,7 +610,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["c41"] ?: 0)
         assertEquals(0, before.hard)
 
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("c41不足が解消", 0, after.breakdown["c41"] ?: -1)
@@ -625,7 +625,7 @@ class V6NativeOptimizerChoiceTest {
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
         for (focus in listOf("c41", "c41s")) {
-            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
             assertNotNull(out)
             assertEquals(base.size, out.size)
             assertEquals(base[0].size, out[0].size)
@@ -657,7 +657,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c42"] ?: 0)
-        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false)
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["c42"] ?: 0)
@@ -670,7 +670,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c42"] ?: 0)
-        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false)
         assertEquals(0, applied)
         assertEquals(1, sched[0][0])
         assertEquals(2, sched[1][0])
@@ -679,7 +679,7 @@ class V6NativeOptimizerChoiceTest {
     @Test fun applyC42FreeIsNoOpWhenRulesEmpty() {
         val st = c42State(listOf(listOf(1), listOf(2))).copy(cons42 = emptyList())
         val sched = st.schedule.toIntArray2D()
-        assertEquals(0, V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false))
+        assertEquals(0, RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false))
     }
 
     // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開] 旧実装（今回新設した直接移動のみ）だと、離脱元シフトが
@@ -712,7 +712,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["c42"] ?: 0)
         assertEquals(0, before.hard)   // Xはneed1=1をAがちょうど充足＝離脱すると即covU化する構造的にブロックされた局面
 
-        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false)
         assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("c42が解消", 0, after.breakdown["c42"] ?: -1)
@@ -727,7 +727,7 @@ class V6NativeOptimizerChoiceTest {
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
         for (focus in listOf("c42", "c42s")) {
-            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
             assertNotNull(out)
             assertEquals(base.size, out.size)
             assertEquals(base[0].size, out[0].size)
