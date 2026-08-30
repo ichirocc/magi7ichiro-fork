@@ -40,7 +40,7 @@ object V6FinalPort {
         // [3.266.0] 旧RSIPlusから改称。211秒以上はRSI++クローン群でなく、ALNS/RSI/RSI++の異種
         //   非同期適応ポートフォリオ(V6Algorithm.PORTFOLIO)を使う（HypothesisDiversityPolicy.
         //   autoAlgorithmForBudget と同じ閾値・同じ意図。旧実装はここが独立した別ロジックのままで、
-        //   V6NativeOptimizer.chooseAlgorithm側だけを直しても実際のAUTOフローには反映されなかった）。
+        //   SelectionHeuristics.chooseAlgorithm側だけを直しても実際のAUTOフローには反映されなかった）。
         data class Portfolio(val seconds: Int) : OptimizationPlan()
     }
 
@@ -109,7 +109,7 @@ object V6FinalPort {
             s <= 210 -> { val rsi = (s * 2) / 3; OptimizationPlan.RSIThenALNS(rsi, s - rsi, 2) }
             // [3.266.0] 211秒以上は同型RSI++クローン8本でなく、ALNS/RSI/RSI++の異種非同期適応
             //   ポートフォリオ(V6Algorithm.PORTFOLIO)を使う。旧実装はここが一貫してRSIPlusを返すため、
-            //   V6NativeOptimizer.chooseAlgorithm側の同種の変更だけでは実際のAUTOフローに反映されず、
+            //   SelectionHeuristics.chooseAlgorithm側の同種の変更だけでは実際のAUTOフローに反映されず、
             //   本来の狙い（長時間AUTOでの基盤/役割多様化）が発現しない欠陥があった。
             else -> OptimizationPlan.Portfolio(s)
         }

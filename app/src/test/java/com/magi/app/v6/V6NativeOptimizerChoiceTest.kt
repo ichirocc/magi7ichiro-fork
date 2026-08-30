@@ -21,11 +21,11 @@ class V6NativeOptimizerChoiceTest {
         // [3.284.0/外部レビュー=AUTO帯統一] ≤30 V5 / 31-210 RSI / それ以上 PORTFOLIO(適応epoch異種並列)。
         //   旧 31-90=ALNS はアプリ経路(optimizationPlan=RSI→ALNS複合)と食い違う二重分岐だったため、
         //   複合プランの主段= RSI へ寄せて統一（詳細は HypothesisDiversityPolicy.autoAlgorithmForBudget）。
-        assertEquals(V6Algorithm.V5, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 10))
-        assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 60))
-        assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 150))
-        assertEquals(V6Algorithm.PORTFOLIO, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 300))
-        assertEquals(V6Algorithm.ALNS, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.ALNS, 10))
+        assertEquals(V6Algorithm.V5, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 10))
+        assertEquals(V6Algorithm.RSI, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 60))
+        assertEquals(V6Algorithm.RSI, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 150))
+        assertEquals(V6Algorithm.PORTFOLIO, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 300))
+        assertEquals(V6Algorithm.ALNS, SelectionHeuristics.chooseAlgorithm(V6Algorithm.ALNS, 10))
     }
 
     @Test fun roleProfilesDiversifyWithBaselineFirst() {
@@ -961,18 +961,18 @@ class V6NativeOptimizerChoiceTest {
     // S<T では旧固定repeat(8)より小さくなり摂動が弱まる。S>=T では従来以上(>=6)を維持し退化しない。
     @Test fun destroyRepairStaffRepsShrinksWhenDaysExceedStaff() {
         // S=10,T=31: (6*10+30)/31 = 90/31 = 2（切り捨て）。旧固定値8より大幅に小さい。
-        assertEquals(2, V6NativeOptimizer.destroyRepairStaffReps(10, 31))
+        assertEquals(2, DestroyRepairMarginalCost.destroyRepairStaffReps(10, 31))
     }
 
     @Test fun destroyRepairStaffRepsStaysAtOrAboveSixWhenStaffExceedsDays() {
         // S=31,T=10: (6*31+9)/10 = 195/10 = 19。S=10,T=10: (60+9)/10=6。いずれも旧repeat(6)基準以上。
-        assertEquals(19, V6NativeOptimizer.destroyRepairStaffReps(31, 10))
-        assertEquals(6, V6NativeOptimizer.destroyRepairStaffReps(10, 10))
+        assertEquals(19, DestroyRepairMarginalCost.destroyRepairStaffReps(31, 10))
+        assertEquals(6, DestroyRepairMarginalCost.destroyRepairStaffReps(10, 10))
     }
 
     @Test fun destroyRepairStaffRepsNeverReturnsLessThanOne() {
-        assertEquals(1, V6NativeOptimizer.destroyRepairStaffReps(0, 100))
-        assertEquals(6, V6NativeOptimizer.destroyRepairStaffReps(1, 1))
+        assertEquals(1, DestroyRepairMarginalCost.destroyRepairStaffReps(0, 100))
+        assertEquals(6, DestroyRepairMarginalCost.destroyRepairStaffReps(1, 1))
     }
 
     // ---- [3.288.0/ログ強化=回数軸] focus 足跡の連続圧縮 ----
@@ -1068,7 +1068,7 @@ class V6NativeOptimizerChoiceTest {
         val p = Problem(canDoState(mapOf("0,2" to Range("2", ""))))
         assertFalse("前提: s0 は Y を担当できない", p.canDo(0, 2))
         assertEquals("担当外の下限は marginal cost に入らない",
-            0L, V6NativeOptimizer.staffCountPenaltyAt(p, 0, 2, 0))
+            0L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 2, 0))
     }
 
     @Test
@@ -1077,14 +1077,14 @@ class V6NativeOptimizerChoiceTest {
         val p = Problem(canDoState(mapOf("0,1" to Range("2", ""))))
         assertTrue("前提: s0 は X を担当できる", p.canDo(0, 1))
         assertEquals("担当可の下限は従来どおり重み90で数える",
-            180L, V6NativeOptimizer.staffCountPenaltyAt(p, 0, 1, 0))
+            180L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 0))
     }
 
     @Test
     fun marginalCostUpperBoundIsUnchanged() {
         // high は担当可否を問わず Evaluator と同じ扱い（両方ガード無しで一致）。X 上限1に対し3回で 2×45=90。
         val p = Problem(canDoState(mapOf("0,1" to Range("", "1"))))
-        assertEquals("上限側は不変", 90L, V6NativeOptimizer.staffCountPenaltyAt(p, 0, 1, 3))
+        assertEquals("上限側は不変", 90L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 3))
     }
 
     // ---- [3.346.1/方針B] 停滞シグナルの確認窓 ------------------------------------------------

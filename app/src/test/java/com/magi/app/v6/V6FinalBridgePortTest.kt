@@ -46,12 +46,12 @@ class V6FinalBridgePortTest {
         val best = listOf(listOf(0, 1), listOf(1, 0)).toIntArray2D()
         val alt = listOf(listOf(1, 0), listOf(0, 1)).toIntArray2D()
         val bestRep = UnifiedViolationChecker.check(st, best)
-        val (_, rep) = V6NativeOptimizer.elitePathRelink(st, best, listOf(alt)) { false }
+        val (_, rep) = EliteRelinking.elitePathRelink(st, best, listOf(alt)) { false }
         // 退化しない: 結果は best 以上（hard→weighted→total の辞書順で悪化しない）。
         val notWorse = notWorseThan(rep, bestRep)
         assertTrue(notWorse)
         // 精鋭解が無ければ best 不変。
-        val (_, r2) = V6NativeOptimizer.elitePathRelink(st, best, emptyList()) { false }
+        val (_, r2) = EliteRelinking.elitePathRelink(st, best, emptyList()) { false }
         assertEquals(bestRep.total, r2.total)
     }
 

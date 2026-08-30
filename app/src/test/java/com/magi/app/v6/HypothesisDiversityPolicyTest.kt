@@ -41,12 +41,12 @@ class HypothesisDiversityPolicyTest {
     fun longAutoUsesHeterogeneousPortfolio() {
         // [3.284.0/外部レビュー] AUTO帯の二重分岐解消: 31-210秒は直接APIでも RSI（アプリ経路の
         //   optimizationPlan=RSI→ALNS 複合の主段と同種）。旧 31-90=ALNS の食い違いを固定的に排除。
-        assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 31))
-        assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 90))
-        assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 210))
-        assertEquals(V6Algorithm.PORTFOLIO, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 211))
-        assertEquals(V6Algorithm.PORTFOLIO, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 300))
-        assertEquals(V6Algorithm.RSI_PLUS, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.RSI_PLUS, 300))
+        assertEquals(V6Algorithm.RSI, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 31))
+        assertEquals(V6Algorithm.RSI, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 90))
+        assertEquals(V6Algorithm.RSI, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 210))
+        assertEquals(V6Algorithm.PORTFOLIO, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 211))
+        assertEquals(V6Algorithm.PORTFOLIO, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 300))
+        assertEquals(V6Algorithm.RSI_PLUS, SelectionHeuristics.chooseAlgorithm(V6Algorithm.RSI_PLUS, 300))
     }
 
     @Test

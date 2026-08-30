@@ -313,7 +313,7 @@ object V6NativeOptimizer {
         val onProgress: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
             synchronized(progressLock) { onProgressRaw(phase, report, iters, elapsed) }
         }
-        val chosen = chooseAlgorithm(options.algorithm, options.totalBudgetSec)
+        val chosen = SelectionHeuristics.chooseAlgorithm(options.algorithm, options.totalBudgetSec)
         val p = cachedProblem(state)
         var schedule = hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
         // [N1b] 入口修復(hf67)は better(hard→weighted→total) 改善時のみ採用。既に良好な入力
@@ -967,7 +967,7 @@ object V6NativeOptimizer {
                     .filter { RoleDiversityHelpers.scheduleDistance(globalBest, it) > 0 }
                     .sortedByDescending { RoleDiversityHelpers.scheduleDistance(globalBest, it) }
                     .take(3).map { it.copy2D() }.toList()
-                val relinked = elitePathRelink(state, globalBest, alternatives, shouldStop).first
+                val relinked = EliteRelinking.elitePathRelink(state, globalBest, alternatives, shouldStop).first
                 if (RoleDiversityHelpers.scheduleDistance(globalBest, relinked) > 0) relinked
                 else hypothesisStartFor(state, globalBest, 7, seed)
             }
@@ -1162,43 +1162,6 @@ object V6NativeOptimizer {
         best.copy(phaseLogs = best.phaseLogs + extra + verifyLog, iterations = totalIters)
     }
 
-    /** Roulette-wheel operator selection for the adaptive LNS. */
-    private fun rouletteSelect(weights: DoubleArray, rng: Random): Int {
-        var sum = 0.0
-        for (wgt in weights) sum += wgt
-        if (sum <= 0.0) return rng.nextInt(weights.size)
-        var r = rng.nextDouble() * sum
-        for (i in weights.indices) {
-            r -= weights[i]
-            if (r <= 0.0) return i
-        }
-        return weights.size - 1
-    }
-
-    /** [Thompson sampling] 演算子選択。平滑報酬 opW を事後平均、探索ノイズを反復で減衰させた
-     *  ガウス事後から各演算子の標本を引き、最大の演算子を選ぶ。重み比例(roulette)より停滞しにくく、
-     *  不確実性下での選択が原理的。ノイズσは序盤大きく(探索)→終盤小さく(活用)アニールする。 */
-    private fun thompsonSelect(opW: DoubleArray, iter: Long, rng: Random): Int {
-        val sigma = 0.5 / sqrt(1.0 + iter / 500.0)
-        var bestOp = 0
-        var bestSample = Double.NEGATIVE_INFINITY
-        for (k in opW.indices) {
-            val u1 = rng.nextDouble().coerceIn(1e-9, 1.0)
-            val u2 = rng.nextDouble()
-            val g = sqrt(-2.0 * ln(u1)) * cos(2.0 * PI * u2)   // Box-Muller 標準正規
-            val s = opW[k] + g * sigma
-            if (s > bestSample) { bestSample = s; bestOp = k }
-        }
-        return bestOp
-    }
-
-    fun chooseAlgorithm(requested: V6Algorithm, budgetSec: Int): V6Algorithm {
-        if (requested != V6Algorithm.AUTO) return requested
-        // [3.266.0] 211秒以上は同型RSI++クローン群でなく、ALNS/RSI/RSI++の異種PORTFOLIOを使う
-        //   （HypothesisDiversityPolicy.autoAlgorithmForBudget、旧 portfolioAlgoFor は
-        //   runAdaptivePortfolio への置換で不要化したため削除）。
-        return HypothesisDiversityPolicy.autoAlgorithmForBudget(budgetSec)
-    }
 
     private suspend fun runV5(
         state: MagiState,
@@ -1483,8 +1446,8 @@ object V6NativeOptimizer {
             }
             while (nowMs() < deadline && !shouldStop()) {
                 coroutineContext.ensureActive()
-                var op = if (options.opSelect == OpSelectMode.THOMPSON) thompsonSelect(opW, iter, rng)
-                         else rouletteSelect(opW, rng)
+                var op = if (options.opSelect == OpSelectMode.THOMPSON) SelectionHeuristics.thompsonSelect(opW, iter, rng)
+                         else SelectionHeuristics.rouletteSelect(opW, rng)
                 // [賢いsoft集中] HARD が最良水準(curHard<=bestHard)に到達したら残り探索を soft 修復へ寄せる。
                 //   HARD=0 なら積極的に(0.30)、HARD>0 の床(構造的に解けない covU/pref/c3n 等)では控えめに(0.15)
                 //   op5(targeted repair=covO/c2/上下限/c41/c41s/c3Want/apt 修復)を優先。HARD>床 の間はHARD優先で不変。
@@ -2289,74 +2252,6 @@ object V6NativeOptimizer {
         destroyRepairDayAt(state, schedule, rng.nextInt(p.T), rng)
     }
 
-    /** [soft-aware repair] 割当 i→shift k の per-staff soft(low/high/apt, checker と同一式)を count n で評価。 */
-    internal fun staffCountPenaltyAt(p: Problem, i: Int, k: Int, n: Int): Long {
-        var pen = 0L
-        val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
-        // [3.319.0] low は**担当できるシフトだけ**。`Evaluator.fullEvalParts` も `MirrorCore` の checker も
-        //   元から `p.canDo(i, k)` ガードを持つのに、destroy-repair の marginal cost であるこの関数だけ
-        //   欠けていた。担当外シフトに個人下限が設定されたデータ（UI で下限を入れたあと群の担当を外す等で
-        //   起こりうる）では、実際には存在しない違反を重み90 で数え、候補選択を無駄な方向へ引っ張る。
-        //   最終採否は checker が守るので誤った勤務表は出ないが、有効な候補を取りこぼす。
-        //   実データ3件（golden/real/user）では該当セル0＝潜在バグ。high は n>hi の形で担当外なら n=0 に
-        //   なり発火せず、かつ Evaluator 側もガードを持たない＝既に一致しているので触らない。
-        //   apt は `Problem` 構築時に bucket=canDo でガード済み。
-        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) pen += (lo - n).toLong() * 90L
-        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 45L
-        val t = p.apt[i][k]
-        if (t >= 0) pen += kotlin.math.abs(n - t).toLong()
-        return pen
-    }
-
-    /** [3.267.0/weekly+fair統合、旧3.170.0「focus露出のみ・cost未対応」の解消] weekly(7日周期のシフト
-     *  平準化)の marginal cost。wd は staff のシフト別曜日カウント([K][7]、呼出元が維持)。
-     *  [3.345.0] 休を通常のシフト種として扱うため、勤務/休の二値でなく **oldK→newK のシフト移動** を受ける。
-     *  動くのは oldK と newK の2バケットだけ（oldK==newK は 0）。weeklyDevOfBucket(checkerと同一式)の
-     *  変化のみを計算し、wd 自体は変更しない(コミットは呼出元)。範囲外の値は該当側を寄与ゼロとして扱う。 */
-    internal fun weeklyMarginalAt(wd: Array<IntArray>, bucket: Int, oldK: Int, newK: Int): Long {
-        if (oldK == newK) return 0L
-        var acc = 0L
-        if (oldK in wd.indices) {
-            val b = wd[oldK]
-            val before = weeklyDevOfBucket(b)
-            b[bucket]--
-            acc += (weeklyDevOfBucket(b) - before).toLong()
-            b[bucket]++
-        }
-        if (newK in wd.indices) {
-            val b = wd[newK]
-            val before = weeklyDevOfBucket(b)
-            b[bucket]++
-            acc += (weeklyDevOfBucket(b) - before).toLong()
-            b[bucket]--
-        }
-        return acc
-    }
-
-    /** fair(グループ内公平化)の marginal cost。staff i の shift k 保有回数が delta 変化した際の、群
-     *  g=p.sgrp[i] のシフト k における L1偏差(checkerと同一式)の変化。m<2(公平化対象外)・k が群の
-     *  担当外なら 0（対象外セルは無害にゼロ扱い）。counts/grpTotal は呼出元が維持する S×K・G×K 集計。 */
-    internal fun fairMarginalAt(
-        p: Problem, i: Int, k: Int, delta: Int, counts: Array<IntArray>, grpTotal: Array<IntArray>,
-    ): Long {
-        if (delta == 0 || k !in 0 until p.K) return 0L
-        val g = p.sgrp[i]
-        val mem = p.groupMembers[g]
-        val m = mem.size
-        if (m < 2 || k !in p.bucket[g]) return 0L
-        fun dev(sum: Int): Int {
-            val tgt = Math.round(sum.toDouble() / m).toInt()
-            var d = 0
-            for (x in mem) d += kotlin.math.abs(counts[x][k] - tgt)
-            return d
-        }
-        val before = dev(grpTotal[g][k])
-        counts[i][k] += delta
-        val after = dev(grpTotal[g][k] + delta)
-        counts[i][k] -= delta
-        return (after - before).toLong()
-    }
-
     internal fun destroyRepairDayAt(state: MagiState, schedule: Array<IntArray>, j: Int, rng: Random) {
         val p = cachedProblem(state)
         if (p.T == 0) return
@@ -2417,11 +2312,11 @@ object V6NativeOptimizer {
                 var bestI = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
                 for (i in 0 until p.S) {
                     if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.canDo(i, k)) continue
-                    val delta = staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - staffCountPenaltyAt(p, i, k, cnt[i][k]) +
+                    val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k]) +
                         c41DayMarg(p.sgrp[i], k) +
-                        weeklyMarginalAt(wd[i], bucket, rest, k) +
-                        fairMarginalAt(p, i, rest, -1, cnt, grpTotal) +
-                        fairMarginalAt(p, i, k, 1, cnt, grpTotal)
+                        DestroyRepairMarginalCost.weeklyMarginalAt(wd[i], bucket, rest, k) +
+                        DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, cnt, grpTotal) +
+                        DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, cnt, grpTotal)
                     if (delta < bestDelta) {
                         bestDelta = delta; bestI = i; tied = 1
                     } else if (delta == bestDelta) {
@@ -2487,10 +2382,10 @@ object V6NativeOptimizer {
                 // [3.379.0/同上] need2 単独定義の穴を塞ぐ。`covUCell<=0` は「需要なし」と
                 //   「既に足りている」の両方を同時に表すので、旧2条件をこれ1つで置き換えられる。
                 if (p.covUCell(k, j, cov[j][k]) <= 0) continue
-                val delta = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k]) +
-                    weeklyMarginalAt(wd, bucket, rest, k) +
-                    fairMarginalAt(p, i, rest, -1, counts, grpTotal) +
-                    fairMarginalAt(p, i, k, 1, counts, grpTotal)
+                val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k]) +
+                    DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, rest, k) +
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, counts, grpTotal) +
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts, grpTotal)
                 if (delta < bestDelta) {
                     bestDelta = delta; bestK = k; tied = 1
                 } else if (delta == bestDelta) {
@@ -2537,11 +2432,11 @@ object V6NativeOptimizer {
             var bestK = old; var bestDelta = Long.MAX_VALUE; var tied = 0
             for (k in allowed) {
                 if (k == old) continue
-                val dOld = if (old in 0 until p.K) staffCountPenaltyAt(p, i, old, cntI[old] - 1) - staffCountPenaltyAt(p, i, old, cntI[old]) else 0L
-                val dK = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k])
-                val dWeekly = weeklyMarginalAt(wd, bucket, old, k)
-                val dFair = (if (old in 0 until p.K) fairMarginalAt(p, i, old, -1, counts, grpTotal) else 0L) +
-                    fairMarginalAt(p, i, k, 1, counts, grpTotal)
+                val dOld = if (old in 0 until p.K) DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old] - 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old]) else 0L
+                val dK = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k])
+                val dWeekly = DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, old, k)
+                val dFair = (if (old in 0 until p.K) DestroyRepairMarginalCost.fairMarginalAt(p, i, old, -1, counts, grpTotal) else 0L) +
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts, grpTotal)
                 val delta = dOld + dK + dWeekly + dFair
                 if (delta < bestDelta) {
                     bestDelta = delta; bestK = k; tied = 1
@@ -2571,11 +2466,6 @@ object V6NativeOptimizer {
         repeat(n) { randomAllowedCell(state, out, rng) }
         return out
     }
-
-    /** [3.240.0] destroyRepairStaff(1回で最大T(日数)セル変化)を、destroyRepairDay(1回で最大S(職員数)
-     *  セル変化・covU focusでrepeat(6))と同程度の総攪乱セル数(6*S)に揃えるための反復回数。S>=Tなら
-     *  従来のrepeat(8)相当以上(reps>=6の切り上げ計算)を維持し既存の攪乱強度を落とさない。 */
-    internal fun destroyRepairStaffReps(s: Int, t: Int): Int = max(1, (6 * s + t - 1) / max(1, t))
 
     internal fun rsiGenerateHypothesis(
         state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random,
@@ -2609,10 +2499,10 @@ object V6NativeOptimizer {
             "c42s" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = true, shouldStop = shouldStop) }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
-            //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
+            //   cost(DestroyRepairMarginalCost.staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
             //   apt専用の新規オペレータ不要。ラウンド better() keep-best でゲート＝退化なし。
             // [同根の穴=weekly/fair] 同じ理由で weekly/fair も order に無く一度も focus されていなかった
-            //   （実データ検証: weekly L1偏差合計65(aptの37より大きい)・fair合計11）。staffCountPenaltyAt は
+            //   （実データ検証: weekly L1偏差合計65(aptの37より大きい)・fair合計11）。DestroyRepairMarginalCost.staffCountPenaltyAt は
             //   weekly/fair 未対応(曜日バケット・群平均を持たない)のため厳密な cost-aware 研磨ではないが、
             //   destroyRepairStaff は職員1人の月全体を破壊再構築する汎用オペレータであり、weekly/fair が
             //   支配的なときに専用ラウンドを割り当てるだけでも「total」の無指向な空振りより改善機会が増える。
@@ -2626,7 +2516,7 @@ object V6NativeOptimizer {
             //   この過大摂動を防げない）。destroyRepairDay基準(6回×S人ぶんのセル変化)に総攪乱セル数を
             //   揃えるよう reps を動的計算する（S>=T のデータでは reps>=6 相当まで許容＝挙動退化なし）。
             "low", "high", "c2", "apt", "weekly", "fair" -> {
-                repeat(destroyRepairStaffReps(p.S, p.T)) { destroyRepairStaff(state, out, rng) }
+                repeat(DestroyRepairMarginalCost.destroyRepairStaffReps(p.S, p.T)) { destroyRepairStaff(state, out, rng) }
             }
             // [3.204.0/実機ログ起因=covOがfocusされても直せなかった] covO は markNeed(k,j) で needViolations に
             //   載り、report.violations(セル"i,j"マップ)には現れないため、他の focus 未対応族の else 分岐が
@@ -3029,49 +2919,6 @@ internal fun applyC42Free(
 
     // [3.287.0 keep-best統一] hard→weightedScore→total（単一ソース betterReport へ委譲。MirrorCore.kt 参照）。
     private fun better(a: ViolationReport, b: ViolationReport): Boolean = betterReport(a, b)
-
-    /**
-     * [品質向上] エリート解の Path Relinking（Glover, Laguna & Martí 2000 / Scatter Search）。
-     * 並列ポートフォリオが保持する精鋭解（[lastAlternatives]）と現行最良を「再結合」し、両者の中間に
-     * しばしば存在する、どの単独軌道でも届かない良解を拾う。best を起点に各 alt へ強制マーチ（差分セルを
-     * alt 値へ順次適用）し、経路上の最良中間解を保持。常に best 起点から評価するので**退化しない**。
-     * 早期停止で空いた予算を、頭打ちした同種探索ではなく「別種の探索」に充てて品質を底上げする。
-     */
-    fun elitePathRelink(
-        state: MagiState,
-        best: Array<IntArray>,
-        alternatives: List<Array<IntArray>>,
-        shouldStop: () -> Boolean,
-    ): Pair<Array<IntArray>, ViolationReport> {
-        var bestSched = best.copy2D()
-        var bestRep = UnifiedViolationChecker.check(state, bestSched)
-        if (alternatives.isEmpty()) return bestSched to bestRep
-        for (alt in alternatives) {
-            if (shouldStop()) break
-            val cur = bestSched.copy2D()              // 常に現行最良から再結合（中間最良は別管理＝退化なし）
-            var curRep = UnifiedViolationChecker.check(state, cur)
-            val diffs = ArrayList<Pair<Int, Int>>()
-            for (i in cur.indices) for (j in cur[i].indices) {
-                if (i < alt.size && j < alt[i].size && cur[i][j] != alt[i][j]) diffs.add(i to j)
-            }
-            if (diffs.isEmpty()) continue
-            // 違反セルを先に動かす（インパクト大の組み替えを前倒し）。
-            val vcells = HashSet<Pair<Int, Int>>()
-            for (vkey in curRep.violations.keys) {
-                val parts = vkey.split(',')
-                val ci = parts.getOrNull(0)?.toIntOrNull(); val cj = parts.getOrNull(1)?.toIntOrNull()
-                if (ci != null && cj != null) vcells.add(ci to cj)
-            }
-            diffs.sortBy { if (it in vcells) 0 else 1 }
-            for ((i, j) in diffs) {
-                if (shouldStop()) break
-                cur[i][j] = alt[i][j]                 // alt へ向けた強制マーチ
-                curRep = UnifiedViolationChecker.check(state, cur)
-                if (better(curRep, bestRep)) { bestSched = cur.copy2D(); bestRep = curRep }
-            }
-        }
-        return bestSched to bestRep
-    }
 
     private fun nowMs(): Long = System.nanoTime() / 1_000_000L
     private fun actualSeed(seed: Long): Long = if (seed == 0L) System.nanoTime() else seed
