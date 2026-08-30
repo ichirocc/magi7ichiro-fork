@@ -984,7 +984,7 @@ object V6NativeOptimizer {
                     val focus = when {
                         (rep.breakdown["covU"] ?: 0) > 0 -> "covU"
                         (rep.breakdown["c3n"] ?: 0) > 0 -> "c3n"
-                        else -> maxViolatedFamily(rep)
+                        else -> RsiFocusSelection.maxViolatedFamily(rep)
                     }
                     out = rsiGenerateHypothesis(state, out, rep, focus, rng)
                 }
@@ -1735,7 +1735,7 @@ object V6NativeOptimizer {
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
             val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
-            val focus = maxViolatedFamily(bestReport, focusAvoid, round, rounds)
+            val focus = RsiFocusSelection.maxViolatedFamily(bestReport, focusAvoid, round, rounds)
             if (avoid.isNotEmpty() && avoid != lastLoggedAvoid) {
                 // [3.288.0/スパム対応] 集合が変化したラウンドのみログ（旧: 毎ラウンド同文）。
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
@@ -1800,7 +1800,7 @@ object V6NativeOptimizer {
             //   本当に狙える族が尽きた(pivot=="total" or 件数0)ときだけ従来どおり空転停止する。stuck な SOFT も
             //   HF63 が順次 dynamicAvoid へ入れて focusable から外すため、いずれ pivot 枯渇→終了で自己収束する。
             if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
-                val pivot = maxViolatedFamily(bestReport, avoid, round, rounds)   // avoid=dynamicAvoid＋静的covU床
+                val pivot = RsiFocusSelection.maxViolatedFamily(bestReport, avoid, round, rounds)   // avoid=dynamicAvoid＋静的covU床
                 if (pivot == "total" || (bestReport.breakdown[pivot] ?: 0) == 0) {
                     logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: 狙える族が枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                     break
@@ -1923,7 +1923,7 @@ object V6NativeOptimizer {
                 //   セル（休日体制など P1>P2）まで埋めに行き、既良盤面を壊していた。
                 var miss = p.covUCell(k, j, cov[j][k])
                 while (miss > 0) {
-                    val i = bestStaffForCoverage(p, out, counts, j, k)
+                    val i = CoverageRepairScoring.bestStaffForCoverage(p, out, counts, j, k)
                     if (i < 0) break
                     val old = out[i][j]
                     if (old == k) break
@@ -1948,7 +1948,7 @@ object V6NativeOptimizer {
                 var bestScore = Int.MAX_VALUE
                 for (jj in 0 until p.T) {
                     if (p.wishLocked(i, jj) || out[i][jj] == k) continue
-                    val score = coverageShortageCost(p, out, jj, out[i][jj]) + rng.nextInt(3)
+                    val score = CoverageRepairScoring.coverageShortageCost(p, out, jj, out[i][jj]) + rng.nextInt(3)
                     if (score < bestScore) {
                         bestScore = score
                         bestJ = jj
@@ -2216,34 +2216,6 @@ object V6NativeOptimizer {
         } finally {
             NativeBridge.nativeDestroyProblem(ph)
         }
-    }
-
-    private fun bestStaffForCoverage(p: Problem, schedule: Array<IntArray>, counts: Array<IntArray>, j: Int, k: Int): Int {
-        var bestI = -1
-        var bestScore = Int.MAX_VALUE
-        for (i in 0 until p.S) {
-            if (!p.canDo(i, k)) continue
-            if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
-            val old = schedule[i][j]
-            if (old == k) continue   // [監査#3] 既就業者はスキップ（旧: return で当該(日,シフト)の充填全体が中断していた）
-            val hi = p.rangeHi[i][k]
-            val over = if (hi != Int.MAX_VALUE && counts[i][k] >= hi) 500 else 0
-            val oldNeedCost = coverageShortageCost(p, schedule, j, old)
-            // [監査#12] 符号修正: 旧 `- oldNeedCost` は「外すと不足が生じる職員」ほど優先ドナー化していた
-            //   （最小スコア採用のため減算=優遇）。引き抜きコストとして加算し、休・過剰被覆側を優先する。
-            val score = over + counts[i][k] * 3 + oldNeedCost
-            if (score < bestScore) { bestScore = score; bestI = i }
-        }
-        return bestI
-    }
-
-    private fun coverageShortageCost(p: Problem, schedule: Array<IntArray>, j: Int, k: Int): Int {
-        if (k !in 0 until p.K) return 0
-        var cov = 0
-        for (i in 0 until p.S) if (schedule[i][j] == k) cov++
-        // [N1a] 引き抜きで per-cell 実需要(U)が増える＝不足を生む職員はコスト50（旧: need1のみ基準）。
-        //   ちょうど充足のセル(U=0→1)も保護される点は旧 `cov <= need` と同等。
-        return if (p.covUCell(k, j, cov - 1) > p.covUCell(k, j, cov)) 50 else 0
     }
 
     private fun destroyRepairDay(state: MagiState, schedule: Array<IntArray>, rng: Random) {
@@ -2593,42 +2565,6 @@ private fun applyCovUChains(
      * 確認し、悪化するなら隣接日側の変更ごと巻き戻して次の候補へ（実際に適用したcov[j2]/schedは
      * 必ず復元してから次を試す）。
      */
-    /**
-     * [3.253.0, 実データ検証で判明した「Free」系リペア共通の欠陥を修正] `applyCovOFree`/`applyC41Free`/
-     * `applyC42Free` は従来「移動先/移動元のcovU/covOだけを見て構造的に安全な最初の候補」を採用しており、
-     * 動かす本人自身の他制約(staffRange低/高・apt・c1・c2・weekly・fair等)への影響を一切見ずに移動していた。
-     * 実データ検証(golden_state.json/sample_state_v6.json、ホストJVM実行で独立検証)で、covOは単体実行の
-     * 大半の試行でtotalを悪化(313→325〜351)、c42はgolden 15/15・sample_v6 11/15が悪化——「動かせる」は
-     * 「動かして得」を意味しないことを確認した（ユーザー指摘「大嶋と美幸の違反研磨は適切か」を機に、
-     * AptPolish/RangePolishは既に全候補で実チェッカー+isBetter/betterのkeep-best gateを持つ健全な実装と
-     * 確認済み＝この欠陥はcovO/c41/c41s/c42/c42s専用のFree系のみ）。
-     *
-     * 候補（セル代入の束＝直接移動、または移動＋玉突き連鎖の複合手）を1つずつ実際に一時適用し、
-     * UnifiedViolationChecker で全体評価、baseline(この手を試す直前の盤面)に対して真に改善する
-     * (better()=hard→weighted→total辞書式で厳密改善)候補の中から最良の1件だけを選んでコミットする。
-     * 改善する候補が1つも無ければ何もしない(null)＝そのセルは諦める（安全側・退化不能）。
-     * 実装コストは度外視（ユーザー指示）＝候補ごとにフルcheckを行うため計算量は増えるが、
-     * これらはRSI 1ラウンドにつき1回しか呼ばれない仮説生成器のため許容範囲。
-     */
-    private fun commitBestMove(
-        state: MagiState, sched: Array<IntArray>,
-        baseline: ViolationReport, candidates: List<List<IntArray>>,
-    ): ViolationReport? {
-        var bestOps: List<IntArray>? = null
-        var bestRep: ViolationReport? = null
-        for (ops in candidates) {
-            val saved = IntArray(ops.size) { sched[ops[it][0]][ops[it][1]] }
-            for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
-            val rep = UnifiedViolationChecker.check(state, sched)
-            for (idx in ops.indices) sched[ops[idx][0]][ops[idx][1]] = saved[idx]
-            if (better(rep, baseline) && (bestRep == null || better(rep, bestRep!!))) {
-                bestOps = ops; bestRep = rep
-            }
-        }
-        val ops = bestOps ?: return null
-        for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
-        return bestRep
-    }
 
             // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
         //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
@@ -2668,7 +2604,7 @@ internal fun applyCovOFree(
                         }
                     }
                     if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
                     applied++
                 }
             }
@@ -2737,7 +2673,7 @@ internal fun applyC41Free(
                         }
                     }
                     if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
                     applied++
                 }
                 // 不足(z<l): 群内の他シフト在籍者を引き入れる。
@@ -2757,7 +2693,7 @@ internal fun applyC41Free(
                         if (chain != null) candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)) + chain)
                     }
                     if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
                     applied++
                 }
             }
@@ -2823,7 +2759,7 @@ internal fun applyC42Free(
                     gatherSide(left, j, c.s1, candidates)
                     gatherSide(right, j, c.s2, candidates)
                     if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
                     applied++
                 }
             }
@@ -2831,91 +2767,6 @@ internal fun applyC42Free(
         return applied
     }
 
-    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet(), round: Int = -1, roundsTotal: Int = -1): String {
-        // [実機ログ起因=公平化のズレ] apt(適切回数)を追加。旧orderに無かったため RSI 探索中は一度も
-        //   focus されず、post-processing(applyDayAssignmentPolish)頼みで広く未研磨のまま残っていた
-        //   （実データ検証: apt L1偏差合計37、staffRange低/高はわずか3で規模が逆転）。rsiGenerateHypothesis
-        //   側は既存の destroyRepairStaff(low/high/c2 と同経路、marginal costに apt 込み)へ合流するだけ＝
-        //   新規オペレータ不要。
-        // [同根の穴=weekly/fair] 同じ理由で weekly/fair も未focusだったため追加（実データ検証: weekly=65
-        //   （aptの37より大きい）・fair=11）。destroyRepairStaff は weekly/fair の cost には未対応だが、
-        //   専用ラウンドを割り当てるだけで無指向な"total"空振りより改善機会が増える（詳細はrsiGenerateHypothesis）。
-        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "apt", "weekly", "fair", "c1", "c3", "c3m", "c3mn")
-        // [D1/A1] 解ける HARD 族(groupViol/covU/pref/c3n)は件数に関わらず SOFT より先に focus する。
-        //   旧実装は純・件数最大だったため、単一の c3n=1 が c1=118 等の高頻度 SOFT に埋もれ RSI が一度も HARD を
-        //   狙わない失敗があった。目的関数 better() は辞書式(hard<<total<<weighted)で HARD 支配ゆえ focus も HARD
-        //   優先が整合。avoid(HF63=構造的に充足困難)に入る HARD は「解けない」ため除外し無駄打ちを避ける(残予算は
-        //   下段の SOFT 研磨へ)。この分岐は hard=0 のとき no-op＝全 soft の一般ケースは従来と不変。
-        for (key in order) {
-            if (key !in MirrorKeys.hard || key in avoid) continue
-            if ((report.breakdown[key] ?: 0) > 0) return key
-        }
-        // [3.204.0/実機ログ起因=covOが「件数最大」選択に構造的に勝てない] covO は日×シフトのセル単独違反
-        //   （新設したCoverageDiag診断＝V6PortAnalyzer.diagnoseCoverage の covO 版で判明）のため件数が常に
-        //   一桁台に留まり、c1/c42/c3mn/weekly のような数十件規模の族に下段の「件数最大」選択で恒久的に
-        //   絶対勝てない（実機ログで「動かせる」と診断されたcovOセルが300秒経っても解消されないことを確認）。
-        //   HARDの「件数に関わらず先に狙う」と同じ発想で、covO専用に周期的な保証枠(3ラウンドに1回)を設け、
-        //   count>0かつavoid対象でなければ下段の最大値選択より優先する。他のSOFT族の選択順は完全に不変
-        //   （round<0=呼出元が未対応の旧経路 or この分岐に該当しないラウンドは従来どおり件数最大へフォールバック）。
-        // [3.207.0/実機ログで判明した3.204.0の実効性不足] 典型的な5ラウンドRSIでは round%3==2 の唯一の
-        //   該当ラウンド(0始まりで2番目)が、HF63がc3n/covUをdeprioritizeし終える前(HF63は約3ラウンドの
-        //   停滞を要する)に来てしまい、HARD優先ループがそのラウンドを丸ごと消費して covO 分岐へ到達しない
-        //   （実機ログ: round=3/5 focus=c3n、covOは合計6のまま最後まで不変）。HARDが本当に解けない場合は
-        //   HF63が最終的にdeprioritizeし尽くすため、**RSIフェーズの最終ラウンドでは高確率でavoidが揃っている**
-        //   （実機ログでもround=5/5時点でc3n,covU,c1(E9冷却)が全てavoid/cooldown済）。最終ラウンドも
-        //   保証枠に加え、周期枠が典型的な短いRSIフェーズで丸ごと空振りする問題を解消する
-        //   （roundsTotal<0=呼出元が未対応なら従来どおり無効化＝後方互換）。
-        val finalRound = roundsTotal > 0 && round == roundsTotal - 1
-        // [3.208.0/実機ログで判明したaptの同型の恒久的starvation] 提供された全ログ(7本)を確認したところ、
-        //   apt は常に breakdown 最小級（1または11、他族(c1=87/c42=18/weekly=56等)の一桁〜二桁下）で、
-        //   "focus=apt" は一度も出現しなかった（"focus=weekly" のみが件数最大フォールバックで選ばれ続ける）。
-        //   apt は 3.169.0 で正に「focus されず未研磨」を解消する狙いで order に追加されたが、追加した
-        //   だけでは件数最大選択に構造的に勝てないという covO と全く同じ欠陥を抱えていた（3.169.0時点の
-        //   検証データではapt=37とcovOより大きく問題が露呈しなかったが、実運用データでは apt が最小級に
-        //   落ち着くことが多いと判明）。covOとは別の周期(round%3==1、covOの%3==2と衝突しない)を割当てる。
-        // [3.239.0/実機ログで判明した最終ラウンド枠の固定順バグ] 旧実装は最終ラウンドで常に
-        //   「aptを先にチェック（covOより小さく恒常的に不利なため優先）」という固定順だった。これは
-        //   「aptは常にcovOより小さい」という3.208.0時点の観測（7本のログ全てでapt<covO）に基づく前提
-        //   だったが、この前提自体がデータ依存で普遍的ではない（実機ログで apt=29 > covO=4 という逆転を
-        //   確認。5ラウンドRSI中、covUがHARDとして数ラウンド粘り+周期枠(round%3==2)もHARD優先ループに
-        //   食われ、最終ラウンドはfinalRound分岐に到達するがaptが先にreturnするためcovOには一度も
-        //   到達しなかった＝8/26のcovO過剰1が「動かせる」診断なのに300秒経っても未解消だった根本原因の
-        //   一つ）。最終ラウンドで両方が候補になる場合のみ、実際の件数を比較し「より少ない方
-        //   （より構造的に不利＝件数最大選択に絶対勝てない方）」を優先する。通常ラウンド(round%3==1/2の
-        //   単独枠)は従来どおり衝突しないため無変更。
-        val aptEligible = round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 && (round % 3 == 1 || finalRound)
-        val covOEligible = round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 && (round % 3 == 2 || finalRound)
-        if (aptEligible && covOEligible) {
-            return if ((report.breakdown["covO"] ?: 0) <= (report.breakdown["apt"] ?: 0)) "covO" else "apt"
-        }
-        if (aptEligible) return "apt"
-        if (covOEligible) return "covO"
-        // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
-        // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が
-        //   order に1つも無いと先頭 groupViol=0 が「0 > -1」で当選→hf67ルートがクリーン盤面への no-op 仮説
-        //   ＝1ラウンド(実測~21s)空振りしていた。12シフト実機ログ round=4/5 focus=groupViol(件数0)で確認）。
-        //   該当なしは "total" を返し、rsiGenerateHypothesis の else 分岐＝全違反セル hint の汎用修復
-        //   (destroyRepairViolations, focus 非依存)ラウンドとして時間を有効化する。focus 選択のみ＝スコアリング不変。
-        var best = "total"
-        var bestCount = 0
-        for (key in order) {
-            if (key in avoid) continue
-            val n = report.breakdown[key] ?: 0
-            if (n > bestCount) {
-                bestCount = n
-                best = key
-            }
-        }
-        // [ユーザー明示指示(2026-07-20)「weeklyをaptより優先順位を下げる」] weekly は件数が大きくなりやすく
-        //   (実機ログで41〜65)、apt(同1〜29)より小さくても件数最大選択で恒常的に勝ってしまっていた。
-        //   件数比較でweeklyが選ばれた場合でも、aptに残り(avoid対象でなければ)があれば apt を優先する
-        //   （apt自身の周期枠=aptEligibleが不発だったラウンドのみ到達＝この分岐で初めて効く）。
-        //   apt/weekly以外の族どうしの順位（c1/c3/fair等）は無変更。
-        if (best == "weekly" && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0) {
-            best = "apt"
-        }
-        return best
-    }
 
     // [3.287.0 keep-best統一] hard→weightedScore→total（単一ソース betterReport へ委譲。MirrorCore.kt 参照）。
     private fun better(a: ViolationReport, b: ViolationReport): Boolean = betterReport(a, b)

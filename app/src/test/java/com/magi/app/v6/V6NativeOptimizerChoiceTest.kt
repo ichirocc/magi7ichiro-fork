@@ -99,49 +99,49 @@ class V6NativeOptimizerChoiceTest {
 
     @Test fun maxViolatedFamilyPicksAptWhenDominantSoft() {
         val r = report(mapOf("apt" to 5, "c2" to 1, "covO" to 2))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyStillPrioritizesHardOverApt() {
         // [回帰] apt追加が既存のHARD優先ルール(D1/A1)を壊さないこと。
         val r = report(mapOf("c3n" to 1, "apt" to 100), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyFallsBackToTotalWhenAllZero() {
         // [回帰/E8] 全族0件なら apt/weekly/fair 追加後も従来どおり "total"（件数0族を focus しない）。
         val r = report(emptyMap())
-        assertEquals("total", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("total", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     // [同根の穴=weekly/fair] apt と同じ理由で未focusだった weekly/fair も件数最大なら選ばれること
     //   （実データ検証: weekly L1偏差合計65はaptの37より大きい・fair合計11）。aptが0のときのみ有効。
     @Test fun maxViolatedFamilyPicksWeeklyWhenDominantSoft() {
         val r = report(mapOf("weekly" to 65, "fair" to 11))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     // [ユーザー明示指示(2026-07-20)「weeklyをaptより優先順位を下げる」] weeklyの件数がaptより大きくても、
     //   aptに残りがあれば常にaptを優先する（HARD>SOFTと同型の絶対優先。件数比較には依らない）。
     @Test fun maxViolatedFamilyPrefersAptOverWeeklyEvenWhenWeeklyCountIsHigher() {
         val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyStillPicksWeeklyWhenAptIsZero() {
         val r = report(mapOf("weekly" to 65, "apt" to 0, "fair" to 11))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyAptOverWeeklyRuleRespectsAvoid() {
         // aptがavoid対象(HF63等でdeprioritize済み)なら、従来どおり件数最大のweeklyが選ばれる。
         val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r, avoid = setOf("apt")))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r, avoid = setOf("apt")))
     }
 
     @Test fun maxViolatedFamilyPicksFairWhenDominantSoft() {
         val r = report(mapOf("fair" to 11, "c2" to 1))
-        assertEquals("fair", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("fair", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     // [3.204.0/実機ログ起因] covO は日×シフトのセル単独違反のため件数が常に一桁台に留まり、
@@ -150,28 +150,28 @@ class V6NativeOptimizerChoiceTest {
     // 3ラウンドに1回、count>0のcovOを件数によらず優先する周期的保証枠を固定する。
     @Test fun maxViolatedFamilyGivesCovOPeriodicSlotEvenWhenSmall() {
         val r = report(mapOf("c1" to 87, "covO" to 2))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 5))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 2))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 5))
     }
 
     @Test fun maxViolatedFamilyCovOPeriodicSlotDoesNotFireOnOtherRounds() {
         // [回帰] round%3==2 以外は従来どおり件数最大(c1)が選ばれること。
         val r = report(mapOf("c1" to 87, "covO" to 2))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 0))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r))   // round省略(-1)も従来どおり
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 0))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 1))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r))   // round省略(-1)も従来どおり
     }
 
     @Test fun maxViolatedFamilyStillPrioritizesHardOverCovOPeriodicSlot() {
         // [回帰] covO周期枠の追加がD1/A1のHARD優先ルールを壊さないこと。
         val r = report(mapOf("c3n" to 1, "covO" to 5), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r, round = 2))
     }
 
     @Test fun maxViolatedFamilyCovOPeriodicSlotRespectsAvoid() {
         // [回帰] E9冷却等でcovOがavoidに入っていれば周期枠も発火せず通常選択にフォールバックすること。
         val r = report(mapOf("c1" to 87, "covO" to 2))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, avoid = setOf("covO"), round = 2))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, avoid = setOf("covO"), round = 2))
     }
 
     // [3.207.0/実機ログ起因=3.204.0の周期枠が典型的な5ラウンドRSIで丸ごと空振りしていた] round%3==2 の
@@ -183,21 +183,21 @@ class V6NativeOptimizerChoiceTest {
         val r = report(mapOf("weekly" to 56, "covO" to 6))
         // round=4は5ラウンド構成(roundsTotal=5)の最終ラウンド(0始まり)。4%3=1で周期枠には該当しないが
         // 最終ラウンドとして発火し、件数最大(weekly=56)を上書きしてcovOが選ばれること。
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 4, roundsTotal = 5))
     }
 
     @Test fun maxViolatedFamilyFinalRoundSlotRequiresRoundsTotalToBeProvided() {
         // [回帰] roundsTotal省略(-1、旧経路)では最終ラウンド判定が無効化され従来どおり件数最大に戻ること。
         val r = report(mapOf("weekly" to 56, "covO" to 6))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r, round = 4))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r, round = 4))
     }
 
     @Test fun maxViolatedFamilyFinalRoundSlotStillRespectsHardPriorityAndAvoid() {
         // [回帰] 最終ラウンドの保証枠もHARD優先ルールとavoidを壊さないこと。
         val r1 = report(mapOf("c3n" to 1, "covO" to 6), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r1, round = 4, roundsTotal = 5))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r1, round = 4, roundsTotal = 5))
         val r2 = report(mapOf("weekly" to 56, "covO" to 6))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r2, avoid = setOf("covO"), round = 4, roundsTotal = 5))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r2, avoid = setOf("covO"), round = 4, roundsTotal = 5))
     }
 
     // [3.208.0/提供された全実機ログ(7本)でaptが同型のstarvationを起こしていたことを確認] apt は常に
@@ -205,23 +205,23 @@ class V6NativeOptimizerChoiceTest {
     // 件数最大フォールバックで選ばれ続けていた。covOとは別の周期(round%3==1)と最終ラウンドをaptにも割当てる。
     @Test fun maxViolatedFamilyGivesAptPeriodicSlotEvenWhenSmall() {
         val r = report(mapOf("c1" to 87, "apt" to 1))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 4))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 1))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 4))
     }
 
     @Test fun maxViolatedFamilyAptPeriodicSlotDoesNotFireOnOtherRounds() {
         // [回帰] round%3==1 以外(かつ最終ラウンドでもない)は従来どおり件数最大(c1)が選ばれること。
         val r = report(mapOf("c1" to 87, "apt" to 1))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 0))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r))   // round省略(-1)も従来どおり
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 0))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 2))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r))   // round省略(-1)も従来どおり
     }
 
     @Test fun maxViolatedFamilyAptAndCovOPeriodicSlotsDoNotCollide() {
         // [回帰] apt(round%3==1)とcovO(round%3==2)は別ラウンドに割当てられ、互いを上書きしないこと。
         val r = report(mapOf("c1" to 87, "apt" to 1, "covO" to 6))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 1))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 2))
     }
 
     @Test fun maxViolatedFamilyFinalRoundPrefersAptOverCovOWhenBothPresent() {
@@ -229,7 +229,7 @@ class V6NativeOptimizerChoiceTest {
         // 構造的に勝てない)方であるaptが選ばれる。結果は旧実装(固定でapt優先)と同じだが、判定基準が
         // 「常にapt優先」から「件数が少ない方優先」へ変わったことをこのテスト自体でも明示する。
         val r = report(mapOf("weekly" to 56, "apt" to 1, "covO" to 6))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 4, roundsTotal = 5))
     }
 
     @Test fun maxViolatedFamilyFinalRoundPrefersCovOWhenAptIsLarger() {
@@ -238,15 +238,15 @@ class V6NativeOptimizerChoiceTest {
         // 一度も到達しなかった（8/26のcovO過剰1が「動かせる」診断なのに300秒経っても未解消だった
         // 根本原因の一つ）。新ロジックでは件数が少ない方(covO)を優先する。
         val r = report(mapOf("c1" to 164, "apt" to 29, "covO" to 4))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 4, roundsTotal = 5))
     }
 
     @Test fun maxViolatedFamilyAptSlotStillRespectsHardPriorityAndAvoid() {
         // [回帰] aptの保証枠もHARD優先ルールとavoidを壊さないこと。
         val r1 = report(mapOf("c3n" to 1, "apt" to 1), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r1, round = 1))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r1, round = 1))
         val r2 = report(mapOf("c1" to 87, "apt" to 1))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r2, avoid = setOf("apt"), round = 1))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r2, avoid = setOf("apt"), round = 1))
     }
 
     // [3.204.0] covO は markNeed(k,j) で needViolations に載り report.violations(セル"i,j"マップ)には
