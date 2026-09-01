@@ -74,7 +74,7 @@ class PolishRobustnessTest {
         // 空bucket職員(s1)の行は全列 INF → 旧実装は Hungarian 内で AIOOBE。新実装は null→その日 skip の no-op。
         val s = emptyBucketState()
         val p = Problem(s)
-        val res = V6HotfixPasses.applyDayAssignmentPolish(s, s.schedule.toIntArray2D())
+        val res = DayAssignmentPolish.applyDayAssignmentPolish(s, s.schedule.toIntArray2D())
         val norm = normalizeSchedule(s.schedule.toIntArray2D(), p)
         assertTrue("盤面は不変（全日が実行可能な割当なし=skip）",
             res.newSchedule.indices.all { res.newSchedule[it].contentEquals(norm[it]) })
@@ -100,7 +100,7 @@ class PolishRobustnessTest {
         assertEquals("前提: 99 は -1 に正規化される", -1, normalizeSchedule(sc, p)[0][1])
         val index = C1RepairIndex.build(p, sc)
         assertTrue("不足窓は正しく検出される（クラッシュせず）", C1DeltaPrefilter.hasActionableC1(index))
-        val res = V6HotfixPasses.applyC1IndexChainRepair(s, sc)
+        val res = C1WindowPolish.applyC1IndexChainRepair(s, sc)
         assertTrue("index駆動修復も完走する", res.afterTotal >= 0)
     }
     /**

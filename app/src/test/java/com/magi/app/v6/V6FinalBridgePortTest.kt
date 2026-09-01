@@ -46,12 +46,12 @@ class V6FinalBridgePortTest {
         val best = listOf(listOf(0, 1), listOf(1, 0)).toIntArray2D()
         val alt = listOf(listOf(1, 0), listOf(0, 1)).toIntArray2D()
         val bestRep = UnifiedViolationChecker.check(st, best)
-        val (_, rep) = V6NativeOptimizer.elitePathRelink(st, best, listOf(alt)) { false }
+        val (_, rep) = EliteRelinking.elitePathRelink(st, best, listOf(alt)) { false }
         // 退化しない: 結果は best 以上（hard→weighted→total の辞書順で悪化しない）。
         val notWorse = notWorseThan(rep, bestRep)
         assertTrue(notWorse)
         // 精鋭解が無ければ best 不変。
-        val (_, r2) = V6NativeOptimizer.elitePathRelink(st, best, emptyList()) { false }
+        val (_, r2) = EliteRelinking.elitePathRelink(st, best, emptyList()) { false }
         assertEquals(bestRep.total, r2.total)
     }
 
@@ -72,7 +72,7 @@ class V6FinalBridgePortTest {
     @Test fun dayAssignmentPolishNeverWorsens() {
         val st = sampleState()
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyDayAssignmentPolish(st, st.schedule.toIntArray2D())
+        val r = DayAssignmentPolish.applyDayAssignmentPolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         // 退化しない: hard→weighted→total の辞書順で悪化しない。
         val notWorse = notWorseThan(after, before)
@@ -83,7 +83,7 @@ class V6FinalBridgePortTest {
     @Test fun cyclicSwapPolishNeverWorsens() {
         val st = sampleState()
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyCyclicSwapPolish(st, st.schedule.toIntArray2D())
+        val r = CyclicSwapWeeklyPolish.applyCyclicSwapPolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         val notWorse = notWorseThan(after, before)
         assertTrue(notWorse)
@@ -94,7 +94,7 @@ class V6FinalBridgePortTest {
         // cons1（2日窓に「日」を1回以上）付きの状態でも退化しない＋割当は妥当。
         val st = sampleState().copy(cons1 = listOf(com.magi.app.model.C1Row("2", "日", "1")))
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyC1WindowPolish(st, st.schedule.toIntArray2D())
+        val r = C1WindowPolish.applyC1WindowPolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         val notWorse = notWorseThan(after, before)
         assertTrue(notWorse)
@@ -104,7 +104,7 @@ class V6FinalBridgePortTest {
     @Test fun c3SequencePolishNeverWorsens() {
         val st = sampleState()
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
-        val r = V6HotfixPasses.applyC3SequencePolish(st, st.schedule.toIntArray2D())
+        val r = C3RotationPolish.applyC3SequencePolish(st, st.schedule.toIntArray2D())
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         val notWorse = notWorseThan(after, before)
         assertTrue(notWorse)
@@ -116,8 +116,8 @@ class V6FinalBridgePortTest {
         //   後継へ差し替え。fair/weekly の平準化は主目的(hard→weighted→total)を悪化させない。
         val st = sampleState()
         for (op in listOf<(MagiState, Array<IntArray>) -> Array<IntArray>>(
-            { s, sc -> V6HotfixPasses.applyFairPolish(s, sc).newSchedule },
-            { s, sc -> V6HotfixPasses.applyWeeklyRebalancePolish(s, sc).newSchedule },
+            { s, sc -> AptFairPolish.applyFairPolish(s, sc).newSchedule },
+            { s, sc -> CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(s, sc).newSchedule },
         )) {
             val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
             val after = UnifiedViolationChecker.check(st, op(st, st.schedule.toIntArray2D()))

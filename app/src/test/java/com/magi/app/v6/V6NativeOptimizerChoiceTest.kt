@@ -21,20 +21,20 @@ class V6NativeOptimizerChoiceTest {
         // [3.284.0/外部レビュー=AUTO帯統一] ≤30 V5 / 31-210 RSI / それ以上 PORTFOLIO(適応epoch異種並列)。
         //   旧 31-90=ALNS はアプリ経路(optimizationPlan=RSI→ALNS複合)と食い違う二重分岐だったため、
         //   複合プランの主段= RSI へ寄せて統一（詳細は HypothesisDiversityPolicy.autoAlgorithmForBudget）。
-        assertEquals(V6Algorithm.V5, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 10))
-        assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 60))
-        assertEquals(V6Algorithm.RSI, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 150))
-        assertEquals(V6Algorithm.PORTFOLIO, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.AUTO, 300))
-        assertEquals(V6Algorithm.ALNS, V6NativeOptimizer.chooseAlgorithm(V6Algorithm.ALNS, 10))
+        assertEquals(V6Algorithm.V5, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 10))
+        assertEquals(V6Algorithm.RSI, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 60))
+        assertEquals(V6Algorithm.RSI, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 150))
+        assertEquals(V6Algorithm.PORTFOLIO, SelectionHeuristics.chooseAlgorithm(V6Algorithm.AUTO, 300))
+        assertEquals(V6Algorithm.ALNS, SelectionHeuristics.chooseAlgorithm(V6Algorithm.ALNS, 10))
     }
 
     @Test fun roleProfilesDiversifyWithBaselineFirst() {
         // [HF290 役割分担] W0 は必ず 1.0（ベースライン＝退化防止）、以降は探索(>1)/精製(<1)で多様化。
-        assertEquals(1.0, V6NativeOptimizer.roleExploreFor(0), 1e-9)
-        assertEquals(2.0, V6NativeOptimizer.roleExploreFor(1), 1e-9)   // 探索
-        assertEquals(0.5, V6NativeOptimizer.roleExploreFor(2), 1e-9)   // 精製
-        assertEquals(1.6, V6NativeOptimizer.roleExploreFor(3), 1e-9)
-        assertEquals(0.6, V6NativeOptimizer.roleExploreFor(4), 1e-9)
+        assertEquals(1.0, RoleDiversityHelpers.roleExploreFor(0), 1e-9)
+        assertEquals(2.0, RoleDiversityHelpers.roleExploreFor(1), 1e-9)   // 探索
+        assertEquals(0.5, RoleDiversityHelpers.roleExploreFor(2), 1e-9)   // 精製
+        assertEquals(1.6, RoleDiversityHelpers.roleExploreFor(3), 1e-9)
+        assertEquals(0.6, RoleDiversityHelpers.roleExploreFor(4), 1e-9)
     }
 
     // [3.228.0/ドッグフーディングで発見・修正] 仮説数上限撤廃(3.225.0)でi>=5の仮説が実際に生成される
@@ -42,7 +42,7 @@ class V6NativeOptimizerChoiceTest {
     // ROULETTEへ縮退し、種(seed)以外ベースラインと同一の「クローン仮説」になっていた。i<5は不変
     // （既存テストroleProfilesDiversifyWithBaselineFirstが担保）で、i>=5が実際に多様化することを固定する。
     @Test fun roleProfilesDiversifyBeyondOldFixedArraySize() {
-        val exploreValues = (5..12).map { V6NativeOptimizer.roleExploreFor(it) }
+        val exploreValues = (5..12).map { RoleDiversityHelpers.roleExploreFor(it) }
         // 旧実装のクローン値(=roleExploreFor(0)=1.0)へ縮退していないこと
         assertTrue("i>=5はベースライン(1.0)への縮退でないこと", exploreValues.none { kotlin.math.abs(it - 1.0) < 1e-6 })
         // 互いに異なる値へ分散していること（同じ値の繰り返しでない＝真の多様化）
@@ -51,41 +51,41 @@ class V6NativeOptimizerChoiceTest {
         assertTrue(exploreValues.all { it in 0.35..2.4 })
 
         // accept/opSelectも旧来の一律デフォルト(SA/ROULETTE)への縮退でなく複数モードへ分散していること
-        val acceptModes = (5..10).map { V6NativeOptimizer.roleAcceptFor(it) }.toSet()
+        val acceptModes = (5..10).map { RoleDiversityHelpers.roleAcceptFor(it) }.toSet()
         assertTrue("i>=5のacceptModeが複数種に分散していること(旧: 全てSAに縮退)", acceptModes.size > 1)
-        val opSelectModes = (5..10).map { V6NativeOptimizer.roleOpSelectFor(it) }.toSet()
+        val opSelectModes = (5..10).map { RoleDiversityHelpers.roleOpSelectFor(it) }.toSet()
         assertTrue("i>=5のopSelectModeが複数種に分散していること(旧: 全てROULETTEに縮退)", opSelectModes.size > 1)
     }
 
     @Test fun roleProfilesForIndicesBelowFiveAreUnaffectedByDiversification() {
         // [回帰] i<5の既存分岐(SA/GD/LAM・ROULETTE/THOMPSON)は3.228.0で一切変更していないこと。
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(0))
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(1))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(2))
-        assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
-        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(0))
-        assertEquals(OpSelectMode.THOMPSON, V6NativeOptimizer.roleOpSelectFor(1))
-        assertEquals(OpSelectMode.ROULETTE, V6NativeOptimizer.roleOpSelectFor(2))
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(0))
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(1))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(2))
+        assertEquals(AcceptMode.LAM_ADAPTIVE, RoleDiversityHelpers.roleAcceptFor(3))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(4))
+        assertEquals(OpSelectMode.ROULETTE, RoleDiversityHelpers.roleOpSelectFor(0))
+        assertEquals(OpSelectMode.THOMPSON, RoleDiversityHelpers.roleOpSelectFor(1))
+        assertEquals(OpSelectMode.ROULETTE, RoleDiversityHelpers.roleOpSelectFor(2))
     }
 
     @Test fun greatDelugeLevelDecaysFromInitialToBest() {
         // [論文活用] 時間予定型GD: frac=1(序盤)→initial、frac=0(終盤)→best へ線形降下、外れ値はクランプ。
-        assertEquals(100.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 1.0), 1e-9)
-        assertEquals(10.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 0.0), 1e-9)
-        assertEquals(55.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 0.5), 1e-9)
-        assertEquals(100.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, 2.0), 1e-9)
-        assertEquals(10.0, V6NativeOptimizer.greatDelugeLevel(100.0, 10.0, -1.0), 1e-9)
+        assertEquals(100.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 1.0), 1e-9)
+        assertEquals(10.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 0.0), 1e-9)
+        assertEquals(55.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 0.5), 1e-9)
+        assertEquals(100.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, 2.0), 1e-9)
+        assertEquals(10.0, RoleDiversityHelpers.greatDelugeLevel(100.0, 10.0, -1.0), 1e-9)
     }
 
     @Test fun roleAcceptAssignsGreatDelugeToSomeWorkers() {
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(0))   // W0 ベースライン
-        assertEquals(AcceptMode.SA, V6NativeOptimizer.roleAcceptFor(1))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(2))
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(0))   // W0 ベースライン
+        assertEquals(AcceptMode.SA, RoleDiversityHelpers.roleAcceptFor(1))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(2))
         // [陳腐化修正] W3 は後日 Lam-Delosme 適応冷却(LAM_ADAPTIVE)へ多様化された（roleAcceptFor 実装＋専用コード）。
         //   テストが旧SA期待のまま残り V6 Engine Check が恒常赤だったのを実装に追随。
-        assertEquals(AcceptMode.LAM_ADAPTIVE, V6NativeOptimizer.roleAcceptFor(3))
-        assertEquals(AcceptMode.GREAT_DELUGE, V6NativeOptimizer.roleAcceptFor(4))
+        assertEquals(AcceptMode.LAM_ADAPTIVE, RoleDiversityHelpers.roleAcceptFor(3))
+        assertEquals(AcceptMode.GREAT_DELUGE, RoleDiversityHelpers.roleAcceptFor(4))
     }
 
     // [実機ログ起因=公平化のズレ] apt(適切回数)は旧 order に無く RSI 探索中は一度も focus されなかった
@@ -99,49 +99,49 @@ class V6NativeOptimizerChoiceTest {
 
     @Test fun maxViolatedFamilyPicksAptWhenDominantSoft() {
         val r = report(mapOf("apt" to 5, "c2" to 1, "covO" to 2))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyStillPrioritizesHardOverApt() {
         // [回帰] apt追加が既存のHARD優先ルール(D1/A1)を壊さないこと。
         val r = report(mapOf("c3n" to 1, "apt" to 100), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyFallsBackToTotalWhenAllZero() {
         // [回帰/E8] 全族0件なら apt/weekly/fair 追加後も従来どおり "total"（件数0族を focus しない）。
         val r = report(emptyMap())
-        assertEquals("total", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("total", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     // [同根の穴=weekly/fair] apt と同じ理由で未focusだった weekly/fair も件数最大なら選ばれること
     //   （実データ検証: weekly L1偏差合計65はaptの37より大きい・fair合計11）。aptが0のときのみ有効。
     @Test fun maxViolatedFamilyPicksWeeklyWhenDominantSoft() {
         val r = report(mapOf("weekly" to 65, "fair" to 11))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     // [ユーザー明示指示(2026-07-20)「weeklyをaptより優先順位を下げる」] weeklyの件数がaptより大きくても、
     //   aptに残りがあれば常にaptを優先する（HARD>SOFTと同型の絶対優先。件数比較には依らない）。
     @Test fun maxViolatedFamilyPrefersAptOverWeeklyEvenWhenWeeklyCountIsHigher() {
         val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyStillPicksWeeklyWhenAptIsZero() {
         val r = report(mapOf("weekly" to 65, "apt" to 0, "fair" to 11))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     @Test fun maxViolatedFamilyAptOverWeeklyRuleRespectsAvoid() {
         // aptがavoid対象(HF63等でdeprioritize済み)なら、従来どおり件数最大のweeklyが選ばれる。
         val r = report(mapOf("weekly" to 65, "apt" to 37, "fair" to 11))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r, avoid = setOf("apt")))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r, avoid = setOf("apt")))
     }
 
     @Test fun maxViolatedFamilyPicksFairWhenDominantSoft() {
         val r = report(mapOf("fair" to 11, "c2" to 1))
-        assertEquals("fair", V6NativeOptimizer.maxViolatedFamily(r))
+        assertEquals("fair", RsiFocusSelection.maxViolatedFamily(r))
     }
 
     // [3.204.0/実機ログ起因] covO は日×シフトのセル単独違反のため件数が常に一桁台に留まり、
@@ -150,28 +150,28 @@ class V6NativeOptimizerChoiceTest {
     // 3ラウンドに1回、count>0のcovOを件数によらず優先する周期的保証枠を固定する。
     @Test fun maxViolatedFamilyGivesCovOPeriodicSlotEvenWhenSmall() {
         val r = report(mapOf("c1" to 87, "covO" to 2))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 5))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 2))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 5))
     }
 
     @Test fun maxViolatedFamilyCovOPeriodicSlotDoesNotFireOnOtherRounds() {
         // [回帰] round%3==2 以外は従来どおり件数最大(c1)が選ばれること。
         val r = report(mapOf("c1" to 87, "covO" to 2))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 0))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r))   // round省略(-1)も従来どおり
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 0))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 1))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r))   // round省略(-1)も従来どおり
     }
 
     @Test fun maxViolatedFamilyStillPrioritizesHardOverCovOPeriodicSlot() {
         // [回帰] covO周期枠の追加がD1/A1のHARD優先ルールを壊さないこと。
         val r = report(mapOf("c3n" to 1, "covO" to 5), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r, round = 2))
     }
 
     @Test fun maxViolatedFamilyCovOPeriodicSlotRespectsAvoid() {
         // [回帰] E9冷却等でcovOがavoidに入っていれば周期枠も発火せず通常選択にフォールバックすること。
         val r = report(mapOf("c1" to 87, "covO" to 2))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, avoid = setOf("covO"), round = 2))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, avoid = setOf("covO"), round = 2))
     }
 
     // [3.207.0/実機ログ起因=3.204.0の周期枠が典型的な5ラウンドRSIで丸ごと空振りしていた] round%3==2 の
@@ -183,21 +183,21 @@ class V6NativeOptimizerChoiceTest {
         val r = report(mapOf("weekly" to 56, "covO" to 6))
         // round=4は5ラウンド構成(roundsTotal=5)の最終ラウンド(0始まり)。4%3=1で周期枠には該当しないが
         // 最終ラウンドとして発火し、件数最大(weekly=56)を上書きしてcovOが選ばれること。
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 4, roundsTotal = 5))
     }
 
     @Test fun maxViolatedFamilyFinalRoundSlotRequiresRoundsTotalToBeProvided() {
         // [回帰] roundsTotal省略(-1、旧経路)では最終ラウンド判定が無効化され従来どおり件数最大に戻ること。
         val r = report(mapOf("weekly" to 56, "covO" to 6))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r, round = 4))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r, round = 4))
     }
 
     @Test fun maxViolatedFamilyFinalRoundSlotStillRespectsHardPriorityAndAvoid() {
         // [回帰] 最終ラウンドの保証枠もHARD優先ルールとavoidを壊さないこと。
         val r1 = report(mapOf("c3n" to 1, "covO" to 6), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r1, round = 4, roundsTotal = 5))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r1, round = 4, roundsTotal = 5))
         val r2 = report(mapOf("weekly" to 56, "covO" to 6))
-        assertEquals("weekly", V6NativeOptimizer.maxViolatedFamily(r2, avoid = setOf("covO"), round = 4, roundsTotal = 5))
+        assertEquals("weekly", RsiFocusSelection.maxViolatedFamily(r2, avoid = setOf("covO"), round = 4, roundsTotal = 5))
     }
 
     // [3.208.0/提供された全実機ログ(7本)でaptが同型のstarvationを起こしていたことを確認] apt は常に
@@ -205,23 +205,23 @@ class V6NativeOptimizerChoiceTest {
     // 件数最大フォールバックで選ばれ続けていた。covOとは別の周期(round%3==1)と最終ラウンドをaptにも割当てる。
     @Test fun maxViolatedFamilyGivesAptPeriodicSlotEvenWhenSmall() {
         val r = report(mapOf("c1" to 87, "apt" to 1))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 4))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 1))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 4))
     }
 
     @Test fun maxViolatedFamilyAptPeriodicSlotDoesNotFireOnOtherRounds() {
         // [回帰] round%3==1 以外(かつ最終ラウンドでもない)は従来どおり件数最大(c1)が選ばれること。
         val r = report(mapOf("c1" to 87, "apt" to 1))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 0))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r))   // round省略(-1)も従来どおり
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 0))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r, round = 2))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r))   // round省略(-1)も従来どおり
     }
 
     @Test fun maxViolatedFamilyAptAndCovOPeriodicSlotsDoNotCollide() {
         // [回帰] apt(round%3==1)とcovO(round%3==2)は別ラウンドに割当てられ、互いを上書きしないこと。
         val r = report(mapOf("c1" to 87, "apt" to 1, "covO" to 6))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 1))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 2))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 1))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 2))
     }
 
     @Test fun maxViolatedFamilyFinalRoundPrefersAptOverCovOWhenBothPresent() {
@@ -229,7 +229,7 @@ class V6NativeOptimizerChoiceTest {
         // 構造的に勝てない)方であるaptが選ばれる。結果は旧実装(固定でapt優先)と同じだが、判定基準が
         // 「常にapt優先」から「件数が少ない方優先」へ変わったことをこのテスト自体でも明示する。
         val r = report(mapOf("weekly" to 56, "apt" to 1, "covO" to 6))
-        assertEquals("apt", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+        assertEquals("apt", RsiFocusSelection.maxViolatedFamily(r, round = 4, roundsTotal = 5))
     }
 
     @Test fun maxViolatedFamilyFinalRoundPrefersCovOWhenAptIsLarger() {
@@ -238,15 +238,15 @@ class V6NativeOptimizerChoiceTest {
         // 一度も到達しなかった（8/26のcovO過剰1が「動かせる」診断なのに300秒経っても未解消だった
         // 根本原因の一つ）。新ロジックでは件数が少ない方(covO)を優先する。
         val r = report(mapOf("c1" to 164, "apt" to 29, "covO" to 4))
-        assertEquals("covO", V6NativeOptimizer.maxViolatedFamily(r, round = 4, roundsTotal = 5))
+        assertEquals("covO", RsiFocusSelection.maxViolatedFamily(r, round = 4, roundsTotal = 5))
     }
 
     @Test fun maxViolatedFamilyAptSlotStillRespectsHardPriorityAndAvoid() {
         // [回帰] aptの保証枠もHARD優先ルールとavoidを壊さないこと。
         val r1 = report(mapOf("c3n" to 1, "apt" to 1), hard = 1)
-        assertEquals("c3n", V6NativeOptimizer.maxViolatedFamily(r1, round = 1))
+        assertEquals("c3n", RsiFocusSelection.maxViolatedFamily(r1, round = 1))
         val r2 = report(mapOf("c1" to 87, "apt" to 1))
-        assertEquals("c1", V6NativeOptimizer.maxViolatedFamily(r2, avoid = setOf("apt"), round = 1))
+        assertEquals("c1", RsiFocusSelection.maxViolatedFamily(r2, avoid = setOf("apt"), round = 1))
     }
 
     // [3.204.0] covO は markNeed(k,j) で needViolations に載り report.violations(セル"i,j"マップ)には
@@ -276,7 +276,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["covO"])
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(1))
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["covO"] ?: 0)
@@ -312,7 +312,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["covO"])
         assertEquals("前提: 担当外セルなので groupViol が立っている", 1, before.breakdown["groupViol"])
 
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(1))
         assertEquals("旧実装は実現不能な希望を固定扱いして何もしなかった", 1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("過剰が解消", 0, after.breakdown["covO"] ?: 0)
@@ -325,7 +325,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["covO"])
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(1))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(1))
         assertEquals(0, applied)
         assertEquals(1, sched[0][0])
         assertEquals(1, sched[1][0])
@@ -363,7 +363,7 @@ class V6NativeOptimizerChoiceTest {
         assertTrue("直接移動は両候補とも禁止連続で塞がる前提", p.makesForbiddenRun(sched, 0, 1, 1))
         assertTrue("直接移動は両候補とも禁止連続で塞がる前提", p.makesForbiddenRun(sched, 0, 1, 2))
 
-        val applied = V6NativeOptimizer.applyCovOFree(st, sched, Random(2))
+        val applied = RsiHypothesisOperators.applyCovOFree(st, sched, Random(2))
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["covO"] ?: 0)
@@ -392,13 +392,13 @@ class V6NativeOptimizerChoiceTest {
         )
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
-        val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, "apt", Random(1))
+        val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, "apt", Random(1))
         assertNotNull(out)
         assertEquals(base.size, out.size)
         assertEquals(base[0].size, out[0].size)
         // [smoke] weekly/fair も同じ経路（apt同様、専用オペレータ不要で例外なく完走すること）。
         for (focus in listOf("weekly", "fair")) {
-            val out2 = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            val out2 = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
             assertNotNull(out2)
             assertEquals(base.size, out2.size)
         }
@@ -410,7 +410,7 @@ class V6NativeOptimizerChoiceTest {
         val st = covOState(listOf(listOf(1), listOf(1)))
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
-        val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, "covO", Random(1))
+        val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, "covO", Random(1))
         assertNotNull(out)
         assertEquals(base.size, out.size)
         assertEquals(base[0].size, out[0].size)
@@ -456,7 +456,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals("初期 covO=1（休の過剰1）", 1, before.breakdown["covO"] ?: 0)
 
         for (seed in 1L..5L) {
-            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, before, "covO", Random(seed))
+            val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, before, "covO", Random(seed))
             val after = UnifiedViolationChecker.check(st, out)
             assertEquals("seed=$seed: destroyRepairDayを先に・applyCovOFreeを最後に実行する順序のため" +
                 "hypothesisの最終状態でcovOが解消されていること", 0, after.breakdown["covO"] ?: 0)
@@ -494,7 +494,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["c41"] ?: 0)
@@ -507,7 +507,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["c41"] ?: 0)
@@ -520,7 +520,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c41"] ?: 0)
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertEquals(0, applied)
         assertEquals(1, sched[0][0])
         assertEquals(1, sched[1][0])
@@ -529,7 +529,7 @@ class V6NativeOptimizerChoiceTest {
     @Test fun applyC41FreeIsNoOpWhenRulesEmpty() {
         val st = c41State(listOf(listOf(1), listOf(1)), l = "0", u = "1").copy(cons41 = emptyList())
         val sched = st.schedule.toIntArray2D()
-        assertEquals(0, V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false))
+        assertEquals(0, RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false))
     }
 
     // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開その4] 旧実装は「離脱元/到着先どちらもcovU/covO
@@ -572,7 +572,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["c41"] ?: 0)
         assertEquals(0, before.hard)   // Xはneed1=2をA/Bがちょうど充足＝離脱すると即covU化する構造的にブロックされた局面
 
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("c41超過が解消", 0, after.breakdown["c41"] ?: -1)
@@ -610,7 +610,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["c41"] ?: 0)
         assertEquals(0, before.hard)
 
-        val applied = V6NativeOptimizer.applyC41Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC41Free(st, sched, Random(1), skill = false)
         assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("c41不足が解消", 0, after.breakdown["c41"] ?: -1)
@@ -625,7 +625,7 @@ class V6NativeOptimizerChoiceTest {
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
         for (focus in listOf("c41", "c41s")) {
-            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
             assertNotNull(out)
             assertEquals(base.size, out.size)
             assertEquals(base[0].size, out[0].size)
@@ -657,7 +657,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c42"] ?: 0)
-        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false)
         assertEquals(1, applied)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, after.breakdown["c42"] ?: 0)
@@ -670,7 +670,7 @@ class V6NativeOptimizerChoiceTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, before.breakdown["c42"] ?: 0)
-        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false)
         assertEquals(0, applied)
         assertEquals(1, sched[0][0])
         assertEquals(2, sched[1][0])
@@ -679,7 +679,7 @@ class V6NativeOptimizerChoiceTest {
     @Test fun applyC42FreeIsNoOpWhenRulesEmpty() {
         val st = c42State(listOf(listOf(1), listOf(2))).copy(cons42 = emptyList())
         val sched = st.schedule.toIntArray2D()
-        assertEquals(0, V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false))
+        assertEquals(0, RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false))
     }
 
     // [監査(他の制約は大丈夫か)/玉突き連鎖の横展開] 旧実装（今回新設した直接移動のみ）だと、離脱元シフトが
@@ -712,7 +712,7 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(1, before.breakdown["c42"] ?: 0)
         assertEquals(0, before.hard)   // Xはneed1=1をAがちょうど充足＝離脱すると即covU化する構造的にブロックされた局面
 
-        val applied = V6NativeOptimizer.applyC42Free(st, sched, Random(1), skill = false)
+        val applied = RsiHypothesisOperators.applyC42Free(st, sched, Random(1), skill = false)
         assertTrue("玉突き連鎖を含め何らかの手が採用されている", applied > 0)
         val after = UnifiedViolationChecker.check(st, sched)
         assertEquals("c42が解消", 0, after.breakdown["c42"] ?: -1)
@@ -727,7 +727,7 @@ class V6NativeOptimizerChoiceTest {
         val base = st.schedule.toIntArray2D()
         val rep = UnifiedViolationChecker.check(st, base)
         for (focus in listOf("c42", "c42s")) {
-            val out = V6NativeOptimizer.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
+            val out = RsiHypothesisOperators.rsiGenerateHypothesis(st, base, rep, focus, Random(1))
             assertNotNull(out)
             assertEquals(base.size, out.size)
             assertEquals(base[0].size, out[0].size)
@@ -738,48 +738,48 @@ class V6NativeOptimizerChoiceTest {
     // 各仮説の内部並列度（RSI/RSI++のSAチェーン数・ALNSの多チェーン）へ均等配分する計算のみを固定する
     // 純粋関数テスト（並列実行そのものはJVMユニットテストでは検証しない＝実機ログ/CIビルドで確認）。
     @Test fun perHypothesisWorkersDistributesSurplusEvenly() {
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 1, hypotheses = 5))
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 5, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 1, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 5, hypotheses = 5))
         // 実機ログ実例: workers設定8・仮説5 → 8/5=1(切り捨て)。旧実装は常に1だったのでこの値は不変。
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 8, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 8, hypotheses = 5))
         // workers=16・仮説5 → 16/5=3。旧実装なら5を超えた11ワーカー分が完全に無駄だった。
-        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 16, hypotheses = 5))
+        assertEquals(3, HypothesisPlanning.perHypothesisWorkers(workers = 16, hypotheses = 5))
     }
 
     @Test fun perHypothesisWorkersNeverReturnsLessThanOne() {
-        assertEquals(1, V6NativeOptimizer.perHypothesisWorkers(workers = 0, hypotheses = 5))
+        assertEquals(1, HypothesisPlanning.perHypothesisWorkers(workers = 0, hypotheses = 5))
         // hypotheses=0 は縮退入力（実際は coerceIn(1,5) 済みで到達しない）。内側ガード max(1,hypotheses)=1 に
         //   より 3/1=3 が返る＝「1未満を返さない」性質は満たす（初版の期待値1は誤り→CI失敗で検出・修正）。
-        assertEquals(3, V6NativeOptimizer.perHypothesisWorkers(workers = 3, hypotheses = 0))
+        assertEquals(3, HypothesisPlanning.perHypothesisWorkers(workers = 3, hypotheses = 0))
     }
 
     // [敵対的レビュー3.212.0] hypothesisChainPlan: 余り配分（6〜9帯で余剰が実際に使われる=旧perW床のみの
     //   「無駄にならない」虚偽表示の是正）＋コア数クランプ（壁時計締切下の希釈=品質逆行リスクの回避）。
     @Test fun chainPlanDistributesRemainderToLeadingHypotheses() {
         // 動機となった実機ログ当該ケース: workers=8/8コア → [2,2,2,1,1]（旧perW床は全仮説1で余剰3本廃棄だった）
-        val plan8 = V6NativeOptimizer.hypothesisChainPlan(workers = 8, hypotheses = 5, cores = 8)
+        val plan8 = HypothesisPlanning.hypothesisChainPlan(workers = 8, hypotheses = 5, cores = 8)
         assertEquals(listOf(2, 2, 2, 1, 1), plan8.toList())
         assertEquals(8, plan8.sum())
         // 割り切れるケース: workers=5 → 全仮説1（旧来どおり）
-        assertEquals(listOf(1, 1, 1, 1, 1), V6NativeOptimizer.hypothesisChainPlan(5, 5, 8).toList())
+        assertEquals(listOf(1, 1, 1, 1, 1), HypothesisPlanning.hypothesisChainPlan(5, 5, 8).toList())
     }
 
     @Test fun chainPlanClampsToCoreCount() {
         // workers=16/8コア → 配分総量はコア数8まで（15コルーチン/8スレッドの希釈を作らない）
-        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 8)
+        val plan = HypothesisPlanning.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 8)
         assertEquals(8, plan.sum())
         assertEquals(listOf(2, 2, 2, 1, 1), plan.toList())
         // 16コアなら16本フル配分
-        assertEquals(16, V6NativeOptimizer.hypothesisChainPlan(16, 5, 16).sum())
+        assertEquals(16, HypothesisPlanning.hypothesisChainPlan(16, 5, 16).sum())
     }
 
     @Test fun chainPlanEveryHypothesisGetsAtLeastOneChain() {
         // workers<hypotheses でも各仮説に最低1本（合計は hypotheses を下回らない）
-        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 2, hypotheses = 5, cores = 8)
+        val plan = HypothesisPlanning.hypothesisChainPlan(workers = 2, hypotheses = 5, cores = 8)
         assertEquals(5, plan.size)
         assertTrue(plan.all { it >= 1 })
         // 縮退入力も安全
-        assertTrue(V6NativeOptimizer.hypothesisChainPlan(0, 0, 0).all { it >= 1 })
+        assertTrue(HypothesisPlanning.hypothesisChainPlan(0, 0, 0).all { it >= 1 })
     }
 
     // [敵対的レビュー] cores<hypotheses（低コア端末で5仮説固定）のときは、仕様上の「最低1仮説1本」の
@@ -789,7 +789,7 @@ class V6NativeOptimizerChoiceTest {
     //   合わせて確認=このケースでは各仮説ちょうど1本のみで、コア数超のオーバーサブスクライブを
     //   それ以上増やさない）。
     @Test fun chainPlanFloorsAtHypothesesCountEvenBelowCoreCount() {
-        val plan = V6NativeOptimizer.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 2)
+        val plan = HypothesisPlanning.hypothesisChainPlan(workers = 16, hypotheses = 5, cores = 2)
         assertEquals(5, plan.sum())
         assertEquals(listOf(1, 1, 1, 1, 1), plan.toList())
     }
@@ -797,54 +797,54 @@ class V6NativeOptimizerChoiceTest {
     // [敵対的レビュー修正・#6] V5(高速計算)はhypothesisChainPlanを使わずoptions.workersをそのまま
     //   SAチェーン数へ渡していたため、コア数クランプの恩恵を受けなかった。専用の総並列度クランプを検証。
     @Test fun clampWorkersToCoresLimitsToAvailableCores() {
-        assertEquals(8, V6NativeOptimizer.clampWorkersToCores(workers = 16, cores = 8))
-        assertEquals(16, V6NativeOptimizer.clampWorkersToCores(workers = 16, cores = 16))
-        assertEquals(4, V6NativeOptimizer.clampWorkersToCores(workers = 4, cores = 8))
+        assertEquals(8, HypothesisPlanning.clampWorkersToCores(workers = 16, cores = 8))
+        assertEquals(16, HypothesisPlanning.clampWorkersToCores(workers = 16, cores = 16))
+        assertEquals(4, HypothesisPlanning.clampWorkersToCores(workers = 4, cores = 8))
     }
 
     @Test fun clampWorkersToCoresNeverReturnsLessThanOne() {
-        assertEquals(1, V6NativeOptimizer.clampWorkersToCores(workers = 0, cores = 8))
-        assertEquals(1, V6NativeOptimizer.clampWorkersToCores(workers = 4, cores = 0))
+        assertEquals(1, HypothesisPlanning.clampWorkersToCores(workers = 0, cores = 8))
+        assertEquals(1, HypothesisPlanning.clampWorkersToCores(workers = 4, cores = 0))
     }
 
     // [仮説数上限撤廃・ユーザー指示「仮説数は最低2最大設定値」] 旧 optimize() は
     // options.workers.coerceIn(1, MAX_HYPOTHESES=5) で固定上限だった。hypothesisCount はこの上限を
     // 撤廃し、workers>=2 ならそのまま workers を仮説数として使う（多様性優先）。
     @Test fun hypothesisCountScalesWithWorkersBeyondOldFixedCapOfFive() {
-        assertEquals(8, V6NativeOptimizer.hypothesisCount(8))
-        assertEquals(16, V6NativeOptimizer.hypothesisCount(16))
+        assertEquals(8, HypothesisPlanning.hypothesisCount(8))
+        assertEquals(16, HypothesisPlanning.hypothesisCount(16))
     }
 
     @Test fun hypothesisCountFloorsAtTwoEvenWhenWorkersIsOne() {
         // workers=1 でも最低2仮説の多様探索を保証する（意図的なオーバーサブスクライブ）。
-        assertEquals(2, V6NativeOptimizer.hypothesisCount(1))
-        assertEquals(2, V6NativeOptimizer.hypothesisCount(0))
+        assertEquals(2, HypothesisPlanning.hypothesisCount(1))
+        assertEquals(2, HypothesisPlanning.hypothesisCount(0))
     }
 
     @Test fun hypothesisCountMatchesWorkersInTheOldCapRange() {
         // 旧上限5以下の帯でも従来どおり workers に一致すること（回帰確認）。
-        assertEquals(2, V6NativeOptimizer.hypothesisCount(2))
-        assertEquals(5, V6NativeOptimizer.hypothesisCount(5))
+        assertEquals(2, HypothesisPlanning.hypothesisCount(2))
+        assertEquals(5, HypothesisPlanning.hypothesisCount(5))
     }
 
     // [3.371.0/並列SA本格再有効化] hypothesisSpawnPlan: workers<=cores（大半の端末）では
     // hypothesisChainPlan の旧来どおりの結果と完全一致すること（無変更を固定）。
     @Test fun spawnPlanMatchesLegacyBehaviorWhenWorkersFitsWithinCores() {
-        val (hSpawn8, plan8) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 8, w = 8, cores = 8)
+        val (hSpawn8, plan8) = HypothesisPlanning.hypothesisSpawnPlan(workers = 8, w = 8, cores = 8)
         assertEquals(8, hSpawn8)
-        assertEquals(V6NativeOptimizer.hypothesisChainPlan(8, 8, cores = 8).toList(), plan8.toList())
+        assertEquals(HypothesisPlanning.hypothesisChainPlan(8, 8, cores = 8).toList(), plan8.toList())
         assertTrue("workers<=coresでは常に1本ずつ(旧来と同一)", plan8.all { it == 1 })
 
-        val (hSpawn4, plan4) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 4, w = 4, cores = 8)
+        val (hSpawn4, plan4) = HypothesisPlanning.hypothesisSpawnPlan(workers = 4, w = 4, cores = 8)
         assertEquals(4, hSpawn4)
-        assertEquals(V6NativeOptimizer.hypothesisChainPlan(4, 4, cores = 8).toList(), plan4.toList())
+        assertEquals(HypothesisPlanning.hypothesisChainPlan(4, 4, cores = 8).toList(), plan4.toList())
         assertTrue(plan4.all { it == 1 })
     }
 
     // workers>cores（端末のコア数を超える設定）のときだけ、spawn数をコア数まで絞り、
     // その分を仮説内チェーン数へ配分する（並列SAの本格再有効化）。
     @Test fun spawnPlanRedistributesSurplusAsChainDepthWhenWorkersExceedsCores() {
-        val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 16, w = 16, cores = 4)
+        val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = 16, w = 16, cores = 4)
         assertEquals(4, hSpawn)                 // 希釈を避けコア数まで縮小（1 hypothesis/core）
         assertEquals(4, plan.size)
         assertEquals(16, plan.sum())            // workers予算の合計は不変（コルーチンをコア数超に増やさない）
@@ -855,7 +855,7 @@ class V6NativeOptimizerChoiceTest {
     // workers=2（オーバーサブスクライブ時のhypothesisCount floor）は cores に関わらず
     // 多様性の下限2を割らない＝深さへの転用を行わない（コーナーケースの安全確認）。
     @Test fun spawnPlanNeverDropsBelowTheDiversityFloorOfTwo() {
-        val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 1, w = 2, cores = 1)
+        val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = 1, w = 2, cores = 1)
         assertEquals(2, hSpawn)
         assertEquals(2, plan.size)
         assertTrue(plan.all { it >= 1 })
@@ -873,7 +873,7 @@ class V6NativeOptimizerChoiceTest {
     @Test fun spawnPlanAlwaysMatchesItsPlanLength() {
         // w<2（旧実装が壊れていた領域）を含め、退化入力から通常帯まで不変条件を総当たりで固定する。
         for (w in 0..8) for (cores in 0..8) for (workers in 0..8) {
-            val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = workers, w = w, cores = cores)
+            val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = workers, w = w, cores = cores)
             assertEquals("hSpawn==plan.size (w=$w cores=$cores workers=$workers)", hSpawn, plan.size)
             assertTrue("hSpawn>=1 (w=$w cores=$cores workers=$workers)", hSpawn >= 1)
             // 要求された仮説数を超えて spawn しない（超えると plan と対応が取れなくなる）。
@@ -883,7 +883,7 @@ class V6NativeOptimizerChoiceTest {
     }
 
     @Test fun spawnPlanIsSafeForDegenerateInputs() {
-        val (hSpawn, plan) = V6NativeOptimizer.hypothesisSpawnPlan(workers = 0, w = 0, cores = 0)
+        val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(workers = 0, w = 0, cores = 0)
         assertEquals(hSpawn, plan.size)
         assertTrue(hSpawn >= 1)
         assertTrue(plan.isNotEmpty())
@@ -894,22 +894,22 @@ class V6NativeOptimizerChoiceTest {
     // covU/apt/c1がE9冷却で交互切替を続け全ラウンドtotal不変だった事例。旧1800固定は5000到達に
     // 3回のfocusを要し、round1,3,5(=最終)でようやく成立し振り向け先が残らなかった。
     @Test fun rsiHf63EffortItersReachesThresholdInTwoAttemptsForTypicalRoundBudget() {
-        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
+        val e5 = HypothesisPlanning.rsiHf63EffortIters(5)
         assertTrue("2回のfocusで5000へ到達すること(round1,3で成立しround4,5を振り向けに残せる)", e5 * 2 >= 5000)
         assertTrue("1回の不運なfocusだけでは5000へ到達しない(E9の1R冷却との役割分担を保つ)こと", e5 * 1 < 5000)
     }
 
     @Test fun rsiHf63EffortItersNeverDropsBelowTwoAttempts() {
         // 極小のrounds(2)でも下限2回のfocusは必ず要する。
-        val e2 = V6NativeOptimizer.rsiHf63EffortIters(2)
+        val e2 = HypothesisPlanning.rsiHf63EffortIters(2)
         assertTrue(e2 * 1 < 5000)
         assertTrue(e2 * 2 >= 5000)
     }
 
     @Test fun rsiHf63EffortItersRelaxesForLargerRoundBudgets() {
         // roundsが大きいほど許容attempts回数が増え、effortItersは小さくなる(じっくり粘れる)。
-        val e5 = V6NativeOptimizer.rsiHf63EffortIters(5)
-        val e8 = V6NativeOptimizer.rsiHf63EffortIters(8)
+        val e5 = HypothesisPlanning.rsiHf63EffortIters(5)
+        val e8 = HypothesisPlanning.rsiHf63EffortIters(8)
         assertTrue(e8 <= e5)
     }
 
@@ -961,37 +961,37 @@ class V6NativeOptimizerChoiceTest {
     // S<T では旧固定repeat(8)より小さくなり摂動が弱まる。S>=T では従来以上(>=6)を維持し退化しない。
     @Test fun destroyRepairStaffRepsShrinksWhenDaysExceedStaff() {
         // S=10,T=31: (6*10+30)/31 = 90/31 = 2（切り捨て）。旧固定値8より大幅に小さい。
-        assertEquals(2, V6NativeOptimizer.destroyRepairStaffReps(10, 31))
+        assertEquals(2, DestroyRepairMarginalCost.destroyRepairStaffReps(10, 31))
     }
 
     @Test fun destroyRepairStaffRepsStaysAtOrAboveSixWhenStaffExceedsDays() {
         // S=31,T=10: (6*31+9)/10 = 195/10 = 19。S=10,T=10: (60+9)/10=6。いずれも旧repeat(6)基準以上。
-        assertEquals(19, V6NativeOptimizer.destroyRepairStaffReps(31, 10))
-        assertEquals(6, V6NativeOptimizer.destroyRepairStaffReps(10, 10))
+        assertEquals(19, DestroyRepairMarginalCost.destroyRepairStaffReps(31, 10))
+        assertEquals(6, DestroyRepairMarginalCost.destroyRepairStaffReps(10, 10))
     }
 
     @Test fun destroyRepairStaffRepsNeverReturnsLessThanOne() {
-        assertEquals(1, V6NativeOptimizer.destroyRepairStaffReps(0, 100))
-        assertEquals(6, V6NativeOptimizer.destroyRepairStaffReps(1, 1))
+        assertEquals(1, DestroyRepairMarginalCost.destroyRepairStaffReps(0, 100))
+        assertEquals(6, DestroyRepairMarginalCost.destroyRepairStaffReps(1, 1))
     }
 
     // ---- [3.288.0/ログ強化=回数軸] focus 足跡の連続圧縮 ----
 
     @Test fun compressFocusTrailCollapsesConsecutiveRepeats() {
-        assertEquals("covU×2→c3n", V6NativeOptimizer.compressFocusTrail(listOf("covU", "covU", "c3n")))
-        assertEquals("c1", V6NativeOptimizer.compressFocusTrail(listOf("c1")))
-        assertEquals("", V6NativeOptimizer.compressFocusTrail(emptyList()))
+        assertEquals("covU×2→c3n", RoleDiversityHelpers.compressFocusTrail(listOf("covU", "covU", "c3n")))
+        assertEquals("c1", RoleDiversityHelpers.compressFocusTrail(listOf("c1")))
+        assertEquals("", RoleDiversityHelpers.compressFocusTrail(emptyList()))
     }
 
     @Test fun compressFocusTrailKeepsMarkersInPlaceAndDoesNotMergeThem() {
         // マーカー([..])は圧縮対象にせず、発生位置のまま挟む（同じ族が前後に分かれても別区間として残る）。
         assertEquals(
             "covU×2→[HF63降格:covU]→c3n",
-            V6NativeOptimizer.compressFocusTrail(listOf("covU", "covU", "[HF63降格:covU]", "c3n")),
+            RoleDiversityHelpers.compressFocusTrail(listOf("covU", "covU", "[HF63降格:covU]", "c3n")),
         )
         assertEquals(
             "c1→[HF63降格:covU]→c1",
-            V6NativeOptimizer.compressFocusTrail(listOf("c1", "[HF63降格:covU]", "c1")),
+            RoleDiversityHelpers.compressFocusTrail(listOf("c1", "[HF63降格:covU]", "c1")),
         )
     }
 
@@ -1068,7 +1068,7 @@ class V6NativeOptimizerChoiceTest {
         val p = Problem(canDoState(mapOf("0,2" to Range("2", ""))))
         assertFalse("前提: s0 は Y を担当できない", p.canDo(0, 2))
         assertEquals("担当外の下限は marginal cost に入らない",
-            0L, V6NativeOptimizer.staffCountPenaltyAt(p, 0, 2, 0))
+            0L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 2, 0))
     }
 
     @Test
@@ -1077,14 +1077,14 @@ class V6NativeOptimizerChoiceTest {
         val p = Problem(canDoState(mapOf("0,1" to Range("2", ""))))
         assertTrue("前提: s0 は X を担当できる", p.canDo(0, 1))
         assertEquals("担当可の下限は従来どおり重み90で数える",
-            180L, V6NativeOptimizer.staffCountPenaltyAt(p, 0, 1, 0))
+            180L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 0))
     }
 
     @Test
     fun marginalCostUpperBoundIsUnchanged() {
         // high は担当可否を問わず Evaluator と同じ扱い（両方ガード無しで一致）。X 上限1に対し3回で 2×45=90。
         val p = Problem(canDoState(mapOf("0,1" to Range("", "1"))))
-        assertEquals("上限側は不変", 90L, V6NativeOptimizer.staffCountPenaltyAt(p, 0, 1, 3))
+        assertEquals("上限側は不変", 90L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 3))
     }
 
     // ---- [3.346.1/方針B] 停滞シグナルの確認窓 ------------------------------------------------
@@ -1164,7 +1164,7 @@ class V6NativeOptimizerChoiceTest {
         val st = need2OnlyState()
         assertEquals("前提: need2 単独でも covU が立つ", 1, cachedProblem(st).covUCell(1, 0, 0))
         val sched = arrayOf(intArrayOf(0))
-        V6NativeOptimizer.destroyRepairDayAt(st, sched, 0, Random(1))
+        DestroyRepairOperators.destroyRepairDayAt(st, sched, 0, Random(1))
         assertEquals("need2 単独定義の需要を埋める", 1, sched[0][0])
         assertEquals("covU が解消する", 0, UnifiedViolationChecker.check(st, sched).breakdown["covU"] ?: 0)
     }
@@ -1173,7 +1173,7 @@ class V6NativeOptimizerChoiceTest {
     fun staffRepairFillsDemandDefinedOnlyByNeed2() {
         val st = need2OnlyState()
         val sched = arrayOf(intArrayOf(0))
-        V6NativeOptimizer.destroyRepairStaffAt(st, sched, 0, Random(1))
+        DestroyRepairOperators.destroyRepairStaffAt(st, sched, 0, Random(1))
         assertEquals("need2 単独定義の需要を埋める", 1, sched[0][0])
         assertEquals("covU が解消する", 0, UnifiedViolationChecker.check(st, sched).breakdown["covU"] ?: 0)
     }
@@ -1184,15 +1184,15 @@ class V6NativeOptimizerChoiceTest {
     //         「HARD=0 到達時に残りを即キャンセル」そのもの。この指標なら一目で検出できた。
     @Test
     fun observedOuterParallelismSeparatesHealthyFromSingleLaneRuns() {
-        assertEquals(7.96, V6NativeOptimizer.observedOuterParallelism(2_189_000L, 275_007L), 0.01)
-        assertEquals(0.93, V6NativeOptimizer.observedOuterParallelism(74_000L, 79_593L), 0.01)
+        assertEquals(7.96, HypothesisPlanning.observedOuterParallelism(2_189_000L, 275_007L), 0.01)
+        assertEquals(0.93, HypothesisPlanning.observedOuterParallelism(74_000L, 79_593L), 0.01)
     }
 
     // 0 除算と空サンプルで例外を投げない（診断値なので、壊れるより 0 を返すほうが安全）。
     @Test
     fun observedOuterParallelismIsSafeForEmptyOrZeroDurationSamples() {
-        assertEquals(0.0, V6NativeOptimizer.observedOuterParallelism(0L, 100L), 0.0)
-        assertEquals(0.0, V6NativeOptimizer.observedOuterParallelism(100L, 0L), 0.0)
+        assertEquals(0.0, HypothesisPlanning.observedOuterParallelism(0L, 100L), 0.0)
+        assertEquals(0.0, HypothesisPlanning.observedOuterParallelism(100L, 0L), 0.0)
     }
 
     // [3.409.16/実機ログ 3.409.14] 「探索締切」は締切が stop シグナル経由で届いた正常終了。
@@ -1200,10 +1200,10 @@ class V6NativeOptimizerChoiceTest {
     //   「8/8本が締切前(探索締切8本@275s)」と自己矛盾で報告していた。
     @Test
     fun searchDeadlineExitIsNotCountedAsAnEarlyWorkerExit() {
-        assertFalse("while締切は早期離脱でない", V6NativeOptimizer.isEarlyWorkerExit("締切"))
-        assertFalse("stopシグナル経由の探索締切も正常終了", V6NativeOptimizer.isEarlyWorkerExit("探索締切"))
-        assertTrue("確認窓を通った停滞シグナルは早期離脱", V6NativeOptimizer.isEarlyWorkerExit("停滞シグナル"))
-        assertTrue("例外は早期離脱", V6NativeOptimizer.isEarlyWorkerExit("例外"))
+        assertFalse("while締切は早期離脱でない", HypothesisPlanning.isEarlyWorkerExit("締切"))
+        assertFalse("stopシグナル経由の探索締切も正常終了", HypothesisPlanning.isEarlyWorkerExit("探索締切"))
+        assertTrue("確認窓を通った停滞シグナルは早期離脱", HypothesisPlanning.isEarlyWorkerExit("停滞シグナル"))
+        assertTrue("例外は早期離脱", HypothesisPlanning.isEarlyWorkerExit("例外"))
     }
 
     // [3.409.17] エポック超過の集約行: 空なら null（通常の実行でログを増やさない）・非空なら
@@ -1211,11 +1211,11 @@ class V6NativeOptimizerChoiceTest {
     //   遅いロールを注入しないと踏めないため対象外＝整形だけを固定する（KDoc に明記済み）。
     @Test
     fun epochOverrunLogKeepsRoleNamesAndStaysSilentWhenEmpty() {
-        assertNull(V6NativeOptimizer.epochOverrunLog(emptyList()))
-        val one = V6NativeOptimizer.epochOverrunLog(listOf("W4:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))!!
+        assertNull(HypothesisPlanning.epochOverrunLog(emptyList()))
+        val one = HypothesisPlanning.epochOverrunLog(listOf("W4:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))!!
         assertEquals("W", one.level)
         assertTrue(one.message, one.message.contains("W4:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))
-        val many = V6NativeOptimizer.epochOverrunLog((1..10).map { "W$it:ROLE(q=5s→実60s)" })!!
+        val many = HypothesisPlanning.epochOverrunLog((1..10).map { "W$it:ROLE(q=5s→実60s)" })!!
         assertTrue(many.message, many.message.contains("ほか2件"))
     }
 

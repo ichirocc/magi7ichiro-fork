@@ -42,7 +42,7 @@ class C1RepairOperatorsTest {
     @Test
     fun windowPolishDelegatesIdentically() {
         val s = deficientState(); val sc = s.schedule.toIntArray2D()
-        val direct = V6HotfixPasses.applyC1WindowPolish(s, sc, maxPasses = 3, seed = 0x1C1L)
+        val direct = C1WindowPolish.applyC1WindowPolish(s, sc, maxPasses = 3, seed = 0x1C1L)
         val viaFacade = C1RepairOperators.selfRelocateAndSameDaySwap(s, s.schedule.toIntArray2D(), maxPasses = 3, seed = 0x1C1L)
         assertTrue(same(direct.newSchedule, viaFacade.newSchedule))
         assertEquals(direct.applied, viaFacade.applied)
@@ -61,7 +61,7 @@ class C1RepairOperatorsTest {
     @Test
     fun wideBeamDelegatesIdentically() {
         val s = deficientState()
-        val direct = V6HotfixPasses.applyC1BeamPolish(s, s.schedule.toIntArray2D(), seed = 0x1CBEAL)
+        val direct = C1WindowPolish.applyC1BeamPolish(s, s.schedule.toIntArray2D(), seed = 0x1CBEAL)
         val viaFacade = C1RepairOperators.wideBeam(s, s.schedule.toIntArray2D(), seed = 0x1CBEAL)
         assertTrue(same(direct.newSchedule, viaFacade.newSchedule))
         assertEquals(direct.afterTotal, viaFacade.afterTotal)
@@ -70,7 +70,7 @@ class C1RepairOperatorsTest {
     @Test
     fun exactWindowDelegatesIdentically() {
         val s = deficientState()
-        val direct = V6HotfixPasses.applyC1ExactWindowRepair(s, s.schedule.toIntArray2D())
+        val direct = C1WindowPolish.applyC1ExactWindowRepair(s, s.schedule.toIntArray2D())
         val viaFacade = C1RepairOperators.exactWindow(s, s.schedule.toIntArray2D())
         assertTrue(same(direct.newSchedule, viaFacade.newSchedule))
         assertEquals(direct.afterTotal, viaFacade.afterTotal)
@@ -94,7 +94,7 @@ class C1RepairOperatorsTest {
         val sc = s.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(s, sc)
         assertEquals(1, before.breakdown["c1"])
-        val res = V6HotfixPasses.applyC1IndexChainRepair(s, sc)
+        val res = C1WindowPolish.applyC1IndexChainRepair(s, sc)
         val after = UnifiedViolationChecker.check(s, res.newSchedule)
         assertEquals("c1解消", 0, after.breakdown["c1"])
         assertTrue("HARD非悪化", after.hard <= before.hard)
@@ -121,7 +121,7 @@ class C1RepairOperatorsTest {
         val sc = s.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(s, sc)
         assertTrue("s0がc1不足", (before.breakdown["c1"] ?: 0) >= 1)
-        val res = V6HotfixPasses.applyC1IndexChainRepair(s, sc)
+        val res = C1WindowPolish.applyC1IndexChainRepair(s, sc)
         val after = UnifiedViolationChecker.check(s, res.newSchedule)
         assertTrue("c1改善", (after.breakdown["c1"] ?: 0) < (before.breakdown["c1"] ?: 0))
         assertTrue("HARD非悪化(covU穴を連鎖で埋めた)", after.hard <= before.hard)
@@ -131,14 +131,14 @@ class C1RepairOperatorsTest {
     @Test
     fun indexChainRepairIsNoOpWhenNoC1() {
         val s = st(3, 1, listOf(listOf(1, 1, 1)), listOf(C1Row("2", "X", "1")))
-        val res = V6HotfixPasses.applyC1IndexChainRepair(s, s.schedule.toIntArray2D())
+        val res = C1WindowPolish.applyC1IndexChainRepair(s, s.schedule.toIntArray2D())
         assertEquals(0, res.applied)
     }
 
     @Test
     fun indexChainRepairDelegatesIdentically() {
         val s = deficientState()
-        val direct = V6HotfixPasses.applyC1IndexChainRepair(s, s.schedule.toIntArray2D(), seed = 0x1C1D2L)
+        val direct = C1WindowPolish.applyC1IndexChainRepair(s, s.schedule.toIntArray2D(), seed = 0x1C1D2L)
         val viaFacade = C1RepairOperators.indexChainRepair(s, s.schedule.toIntArray2D(), seed = 0x1C1D2L)
         assertTrue(same(direct.newSchedule, viaFacade.newSchedule))
         assertEquals(direct.applied, viaFacade.applied)
@@ -151,7 +151,7 @@ class C1RepairOperatorsTest {
         val s = st(3, 1, listOf(listOf(1, 1, 1)), listOf(C1Row("2", "X", "1")))
         val p = Problem(s); val sc = s.schedule.toIntArray2D()
         assertFalse(C1RepairOperators.hasActionableC1(p, sc))
-        val res = V6HotfixPasses.applyC1WindowPolish(s, sc, maxPasses = 3)
+        val res = C1WindowPolish.applyC1WindowPolish(s, sc, maxPasses = 3)
         assertEquals("gateがskipする窓研磨は採用0", 0, res.applied)
         assertTrue("盤面は不変(normalize済み入力と一致)", same(res.newSchedule, normalizeSchedule(sc, p)))
     }

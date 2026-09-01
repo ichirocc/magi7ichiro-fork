@@ -65,7 +65,7 @@ class AdaptiveBlockSwapPolishTest {
         // [3.300.0] 旧 applyBlockSwapPolish（同一グループ×15日固定）は削除済み。この盤面は同一グループの
         //   ペアが存在しないため旧パスは手を1つも作れなかった＝ここで確認する改善は新演算子に固有のもの。
         //   別グループ×11日ブロックで両者の下限割れが同時に解消する。
-        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
+        val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
         assertTrue("可変長ブロック交換が採用されたこと", res.applied > 0)
         assertEquals("個人下限割れが解消", 0, after.breakdown["low"] ?: 0)
@@ -94,7 +94,7 @@ class AdaptiveBlockSwapPolishTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals("初期の下限割れ合計(A11+B11)", 22, before.breakdown["low"] ?: 0)
 
-        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
+        val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
         assertTrue("固定日があっても残りの日で交換が成立すること", res.applied > 0)
         assertEquals("希望固定日の A は据え置き(Y のまま)", 2, res.newSchedule[0][5])
@@ -159,11 +159,11 @@ class AdaptiveBlockSwapPolishTest {
         assertEquals("初期の下限割れ合計(3人×11)", 33, UnifiedViolationChecker.check(st, sched).breakdown["low"] ?: 0)
 
         // 2者交換までに制限すると、どの手も担当不可で成立しない。
-        val pairOnly = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D(), maxCycle = 2)
+        val pairOnly = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D(), maxCycle = 2)
         assertEquals("2者交換だけでは到達不能", 0, pairOnly.applied)
 
         // 3者巡回を許すと1手で全員が目標へ収まる。
-        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
+        val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
         assertTrue("3者巡回が採用されたこと", res.applied > 0)
         assertEquals("下限割れが完全に解消", 0, after.breakdown["low"] ?: 0)
@@ -226,10 +226,10 @@ class AdaptiveBlockSwapPolishTest {
         val sched = st.schedule.toIntArray2D()
         assertEquals("初期の下限割れ合計(4人×11)", 44, UnifiedViolationChecker.check(st, sched).breakdown["low"] ?: 0)
 
-        val upToThree = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D(), maxCycle = 3)
+        val upToThree = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D(), maxCycle = 3)
         assertEquals("3者巡回まででは到達不能", 0, upToThree.applied)
 
-        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
+        val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
         assertTrue("4者巡回が採用されたこと", res.applied > 0)
         assertEquals("下限割れが完全に解消", 0, after.breakdown["low"] ?: 0)
@@ -287,7 +287,7 @@ class AdaptiveBlockSwapPolishTest {
         assertEquals("初期は A の Y が下限2に対し0＝下限割れ2", 2, before.breakdown["low"] ?: 0)
         assertEquals("初期の A の休は4（ピン充足）", 4, (0 until 11).count { sched[0][it] == 0 })
 
-        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
+        val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D())
         val after = UnifiedViolationChecker.check(st, res.newSchedule)
         assertTrue("部分集合の交換が採用されたこと", res.applied > 0)
         assertEquals("厳密ピン（A の休4）が保たれること", 4, (0 until 11).count { res.newSchedule[0][it] == 0 })
@@ -304,7 +304,7 @@ class AdaptiveBlockSwapPolishTest {
         val st = crossGroupState()
         // 最初から正しい配置（A=X, B=Y）にしておく。
         val ok = arrayOf(IntArray(11) { 1 }, IntArray(11) { 2 })
-        val res = V6HotfixPasses.applyAdaptiveBlockSwapPolish(st, ok)
+        val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, ok)
         assertEquals("改善手が無ければ採用0", 0, res.applied)
         assertTrue("ログが出ること", res.logs.isNotEmpty())
     }

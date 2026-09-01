@@ -88,55 +88,6 @@ object V6NativeOptimizer {
     private const val GLS_TRIGGER = 200L
     private const val GLS_DECAY_EVERY = 256   // [GLS aging] この kick 数ごとに penalty を減衰し肥大化を防ぐ
 
-    /** [HF290 役割分担移植] 並列仮説の探索/精製プロファイル（温度・摂動の倍率）。
-     *  W0=1.0(ベースライン=退化防止)、以降は探索(>1)/精製(<1)を交互に割当てて portfolio を多様化。
-     *  [仮説数上限撤廃(3.225.0)後のドッグフーディングで発見・3.228.0で修正] この配列は5要素固定のため
-     *  i>=5（3.225.0でworkers設定まで仮説数が増えたことで実際に生成されうる）は全て else 節の
-     *  既定値=roleExploreFor(0)と同値に縮退し、役割分担が完全に無効化されていた（仮説5,6,7…は
-     *  種(seed)以外ベースラインと区別できないクローン＝「多様性を優先する」という3.225.0自身の
-     *  狙いを裏切っていた）。i<5 の既存値は一切変更せず(既存テスト・チューニング結果を保持)、
-     *  i>=5 だけ黄金比の低食い違い列(golden-ratio low-discrepancy sequence)で [0.35, 2.4] へ
-     *  決定的かつ非周期的に写像する（配列を単に延長・循環させるとi=5%5=0で結局ベースラインに
-     *  戻るクローン問題を繰り返すため、周期を持たない生成式を採用）。 */
-    private val ROLE_EXPLORE = doubleArrayOf(1.0, 2.0, 0.5, 1.6, 0.6)
-    internal fun roleExploreFor(i: Int): Double {
-        if (i in ROLE_EXPLORE.indices) return ROLE_EXPLORE[i]
-        val frac = (i * 0.6180339887498949) % 1.0
-        return 0.35 + frac * (2.4 - 0.35)
-    }
-
-    /** [論文活用] 並列仮説で受理戦略を多様化（W0,W1=SA基準 / W2,W4=Great Deluge / W3=Lam適応冷却）。
-     *  W0 は常に SA でベースライン保持＝退化防止。
-     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は else節で一律SAに縮退していた（roleExploreFor と同じ
-     *  クローン問題）ため、GD/LAM/SAを i%3 で巡回させ実際に多様化する。 */
-    internal fun roleAcceptFor(i: Int): AcceptMode = when (i) {
-        2, 4 -> AcceptMode.GREAT_DELUGE
-        3 -> AcceptMode.LAM_ADAPTIVE
-        0, 1 -> AcceptMode.SA
-        else -> when (i % 3) {
-            0 -> AcceptMode.GREAT_DELUGE
-            1 -> AcceptMode.LAM_ADAPTIVE
-            else -> AcceptMode.SA
-        }
-    }
-
-    /** [論文活用] 並列仮説で演算子選択を多様化（W1=Thompson sampling / 他=roulette）。
-     *  W0 は常に roulette でベースライン保持＝退化防止。
-     *  [3.228.0] i<=4 の既存分岐は不変。i>=5 は一律rouletteに縮退していたため、偶奇でTHOMPSON/ROULETTEを
-     *  交互に割当てて多様化する。 */
-    internal fun roleOpSelectFor(i: Int): OpSelectMode = when {
-        i == 1 -> OpSelectMode.THOMPSON
-        i in 0..4 -> OpSelectMode.ROULETTE
-        i % 2 == 1 -> OpSelectMode.THOMPSON
-        else -> OpSelectMode.ROULETTE
-    }
-
-    /** [3.266.0/hypothesis basin diversity] 変更セル数。診断ログとdiversity判定の両方に使う。
-     *  実体は AdaptiveEliteArchive.scheduleDistance（唯一の実装）への委譲。両クラスから同じ距離定義を
-     *  共有し、アルゴリズムの二重実装（DRY違反）を避ける。 */
-    internal fun scheduleDistance(a: Array<IntArray>, b: Array<IntArray>): Int =
-        AdaptiveEliteArchive.scheduleDistance(a, b)
-
     /**
      * [3.266.0/hypothesis basin diversity] 非ベースライン仮説に構造的に異なる吸引域を与える。
      * W0/W4 は現行盤面の完全コピーのまま＝既存の安全フロアは維持される。
@@ -155,16 +106,16 @@ object V6NativeOptimizer {
             (index.toLong() * -0x61c8864680b583ebL))
         repeat(plan.intensity) {
             when (plan.mode) {
-                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
                 HypothesisStartMode.MIXED_REPAIR -> {
-                    if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                    if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
                 }
                 HypothesisStartMode.BASELINE -> Unit
             }
         }
-        if (scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
+        if (RoleDiversityHelpers.scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
         return out
     }
 
@@ -186,12 +137,6 @@ object V6NativeOptimizer {
         }
     }
 
-    /**
-     * 時間予定型 Great Deluge の水位（Burke, Bykov, Newall & Petrovic 2004）。
-     * frac=1(序盤)で initial、frac=0(終盤)で best へ線形降下。候補スコア ≤ 水位 なら受理。
-     */
-    internal fun greatDelugeLevel(initial: Double, best: Double, frac: Double): Double =
-        best + (initial - best) * frac.coerceIn(0.0, 1.0)
 
     // ───────── [3.335.0/外部レビュー P1] 実行ごとの成果物入れ ─────────
     //   `lastAlternatives` などの可変 static は「直近の実行の値」しか持てず、実行が重なると
@@ -246,20 +191,6 @@ object V6NativeOptimizer {
     }
     internal fun clearInfeasible() { synchronized(infeasLock) { lastInfeasibleFamilies = emptySet() } }
 
-    /** [3.288.0/ログ強化=回数軸] focus 足跡の連続圧縮（"c3n,c3n,c1" → "c3n×2→c1"）。マーカー([..])はそのまま挟む。 */
-    internal fun compressFocusTrail(trail: List<String>): String {
-        val out = StringBuilder(); var i = 0
-        while (i < trail.size) {
-            val t = trail[i]
-            if (t.startsWith("[")) { if (out.isNotEmpty()) out.append("→"); out.append(t); i++; continue }
-            var j = i + 1
-            while (j < trail.size && trail[j] == t) j++
-            if (out.isNotEmpty()) out.append("→")
-            out.append(t); if (j - i > 1) out.append("×${j - i}")
-            i = j
-        }
-        return out.toString()
-    }
 
     /** [3.268.0/elite archive fusion] 全epochから圧縮した品質・距離・橋渡しエリート
      *  （最適化後の再結合/Fusion専用、PORTFOLIO実行時のみ非空）。 */
@@ -382,28 +313,28 @@ object V6NativeOptimizer {
         val onProgress: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
             synchronized(progressLock) { onProgressRaw(phase, report, iters, elapsed) }
         }
-        val chosen = chooseAlgorithm(options.algorithm, options.totalBudgetSec)
+        val chosen = SelectionHeuristics.chooseAlgorithm(options.algorithm, options.totalBudgetSec)
         val p = cachedProblem(state)
-        var schedule = hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
+        var schedule = HardRepairCore.hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
         // [N1b] 入口修復(hf67)は better(hard→weighted→total) 改善時のみ採用。既に良好な入力
         //   （前回結果の再最適化など）を破壊し、探索を劣化seedに係留する事故を防ぐ
         //   （運用ログ実例: 入力214 → 修復後HARD4/250 → 275秒が回復に浪費）。hf66(群内正規化)は無条件維持。
         val entryReport = UnifiedViolationChecker.check(state, schedule)
-        val repaired = hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
+        val repaired = HardRepairCore.hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
         val repairedReport = UnifiedViolationChecker.check(state, repaired)
         val hf67Adopted = better(repairedReport, entryReport)
         if (hf67Adopted) schedule = repaired
         val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入力の勤務表を保持
         val entryBoardReport = if (hf67Adopted) repairedReport else entryReport
-        // [仮説数上限撤廃] 旧仕様は「最大MAX_HYPOTHESES(5)仮説」固定で、超過ワーカーは仮説内並列度へ配分
+        // [仮説数上限撤廃] 旧仕様は「最大HypothesisPlanning.MAX_HYPOTHESES(5)仮説」固定で、超過ワーカーは仮説内並列度へ配分
         //   していた。ユーザー指示により固定上限を撤廃し、仮説数(w)をワーカー設定にそのまま連動させる
         //   （多様性>深さ。V5だけは仮説の概念を使わずworkersをそのままSAチェーン数とする＝対象外）。
-        val w = hypothesisCount(options.workers)
-        // [3.371.0/並列SA本格再有効化] 表示はエンジンが実際に使う hypothesisSpawnPlan（runMultiWorker と
+        val w = HypothesisPlanning.hypothesisCount(options.workers)
+        // [3.371.0/並列SA本格再有効化] 表示はエンジンが実際に使う HypothesisPlanning.hypothesisSpawnPlan（runMultiWorker と
         //   同一関数）から導出。PORTFOLIO は runMultiWorker を経由せず各ロールが単一チェーンで走る
         //   （ロール内並列SA=portfolioRoleParallelSa は 3.409.21 の単体 A/B で中立＝削除。
         //   ON は反復数中央値がむしろ低かった＝チェーン分割が希釈になっていた）。
-        val (spawnHyp, plan) = hypothesisSpawnPlan(options.workers, w)
+        val (spawnHyp, plan) = HypothesisPlanning.hypothesisSpawnPlan(options.workers, w)
         val planNote = plan.let { pl ->
             val mn = pl.min(); val mx = pl.max()
             if (mn == mx) "仮説内${mn}並列" else "仮説内${mn}〜${mx}並列"
@@ -452,7 +383,7 @@ object V6NativeOptimizer {
             val preRep = UnifiedViolationChecker.check(state, resultSched)
             if (preRep.hard > 0 && (preRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
                 val cand = resultSched.copy2D()
-                val n = applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL))
+                val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL))
                 if (n > 0) {
                     val candRep = UnifiedViolationChecker.check(state, cand)
                     if (better(candRep, preRep)) {
@@ -491,167 +422,6 @@ object V6NativeOptimizer {
      *  （E9の1-in-2交互を想定しattemptsTarget=ceil((rounds-reserveRounds)/2)、下限2で一度の不運な
      *  1ラウンドだけではdeprioritizeしない=E9のより軽い1R冷却との役割分担を保つ）。純関数として抽出し
      *  ユニットテスト可能にする。 */
-    internal fun rsiHf63EffortIters(rounds: Int, reserveRounds: Int = 2): Int {
-        val attemptsTarget = max(2, (max(0, rounds - reserveRounds) + 1) / 2)
-        return (Hf63Infeasibility.INFEAS_STALL_ITERS + attemptsTarget - 1) / attemptsTarget
-    }
-
-    /** [仮説数上限撤廃・ユーザー指示] かつて仕様§2.2の仮説数固定上限(5)だった定数。optimize() の
-     *  仮説数計算（[hypothesisCount] 参照）はこの値を上限として使わなくなった＝ワーカー設定まで仮説を
-     *  増やす（下限2）。現在は ①ExtraRefine(微小予算5〜25sの追加精製)専用の意図的な小さいキャップ
-     *  （仮説内多チェーンの固定費が小予算を侵食するのを避ける、V6FinalPort参照）②hypothesisChainPlan の
-     *  デフォルト引数、の2用途にのみ残置（名前は歴史的経緯・値の意味は「旧上限」から「小予算時の安全キャップ」
-     *  へ転用）。 */
-    const val MAX_HYPOTHESES = 5
-
-    /** [仮説数上限撤廃・ユーザー指示「仮説数は最低2最大設定値」] 仮説数(w)の実効値。旧 optimize() は
-     *  `options.workers.coerceIn(1, MAX_HYPOTHESES)` で workers>5 分を仮説内並列度へ配分していたが、
-     *  ユーザー指示によりこの固定上限を撤廃し**多様性(仮説数)を優先**する。下限2（workers=1でも最低2仮説の
-     *  多様探索を保証・diversity目的で意図的にworkersを1オーバーサブスクライブする）・上限は無し
-     *  （options.workers自体が上限）。optimize() 本体と V6FinalPort の診断表示(effHypotheses)が両方
-     *  本関数から導出＝独立再計算によるUI/ログの乖離を防ぐ（3.212.0 と同じ設計原則）。 */
-    internal fun hypothesisCount(workers: Int): Int = max(2, workers)
-
-    /** [余剰ワーカー活用] 仮説数(hypotheses)に対し、設定workersのうち何本を各仮説の
-     *  内部並列度（SAチェーン数・ALNS多チェーン）へ均等配分するか。workers<=hypothesesなら1(旧来どおり
-     *  単一チェーン)。余りは切り捨て（例: workers=8,hypotheses=5 → 1本/仮説・workers=16,hypotheses=5 → 3本/仮説）。
-     *  ※均等床の計算のみ。実際の配分は hypothesisChainPlan（余り配分＋コア数クランプ）を使う。
-     *  [仮説数上限撤廃後] 本体の w=hypothesisCount(workers) は workers>=2 で hypotheses==workers となるため
-     *  実運用では常に1（内部並列は事実上不使用）。本関数は ExtraRefine 等 hypotheses<workers な呼出のために残置。 */
-    internal fun perHypothesisWorkers(workers: Int, hypotheses: Int): Int =
-        max(1, workers / max(1, hypotheses))
-
-    /** [敵対的レビュー修正・#6] V5(高速計算)は仮説の概念を使わず options.workers をそのまま
-     *  SaParams.workers(=SAチェーン数)へ渡していたため、hypothesisChainPlan のコア数クランプの
-     *  恩恵を受けず、コア数を超えるCPU-boundコルーチンを壁時計締切下で希釈しうる（例: 8コア機に
-     *  workers=16設定でV5選択→16並列SAチェーンが8コアを奪い合う）。V5専用に総並列度をコア数以内へ
-     *  クランプする（hypothesisChainPlan と異なりV5は「最低1仮説」のような競合する下限が無いため、
-     *  単純にコア数でクランプするだけで良い）。 */
-    internal fun clampWorkersToCores(workers: Int, cores: Int = Runtime.getRuntime().availableProcessors()): Int =
-        max(1, workers).coerceAtMost(max(1, cores))
-
-    /** [3.410.0/E-02] 適応ポートフォリオの実spawn数。**PORTFOLIO だけがコア数クランプを持っていなかった**。
-     *  V5 は [clampWorkersToCores]、runMultiWorker 経路は [hypothesisSpawnPlan] が実コア数まで落とすのに、
-     *  `runAdaptivePortfolio` は `w = hypothesisCount(workers) = max(2, workers)` をそのまま
-     *  `Array(workers){ async(...) }` へ渡していた。設定タブの並列ワーカーは **16 まで上げられる**ので、
-     *  8コア機で16ワーカー＝各エポックが壁時計の量子内で半分しか進まない希釈が**設定画面から作れた**。
-     *  （Dispatchers.Default のスレッド数はコア数で頭打ちなのでスレッド爆発は起きない。害は希釈のみ。）
-     *
-     *  ただし 3.224.0 の「workers まで仮説を増やす」という明示決定と、3.224.0/3.371.0 の「コア数を超えて
-     *  希釈しない」という決定はここで衝突する。PORTFOLIO のロールは常に workers=1（3.409.21 で
-     *  ロール内並列SAを削除済）＝**余剰の行き先が無い**ので、runMultiWorker のような「チェーン深さへ
-     *  回す」再配分ができない。よって希釈側を採る。**既定設定では no-op**（既定 workers=コア数）で、
-     *  効くのは利用者が手でコア数超へ上げたときだけ。多様性の下限2（3.224.0）は割らない。 */
-    internal fun portfolioWorkerCount(w: Int, cores: Int = Runtime.getRuntime().availableProcessors()): Int =
-        max(1, minOf(max(1, w), max(2, cores)))
-
-    /** [敵対的レビュー3.212.0/単一ソース] 仮説ごとのチェーン本数プラン。レビューで確定した2欠陥を修正:
-     *  ①旧 perW=床のみ配分は workers 6〜9（既定上限8＝動機の実機ログ当該ケース）で余り1〜4本を黙って
-     *    廃棄しながらUI/docsが「無駄にならない」と虚偽主張（HF77: コメント≠実装）→ 余りを先頭仮説から
-     *    +1ずつ配分し、主張どおり「5を超えた分は実際に使われる」ようにする。
-     *  ②コア数クランプ無しで workers=16/8コア端末が15 CPU-boundコルーチンを壁時計締切下で希釈し
-     *    「浅い3本のkeep-best < 深い1本」の品質逆行リスク（2.55/2.56のA/B実測原則にも反する）→
-     *    配分総量を min(workers, cores) にクランプ（コア数以内なら挙動は配分の名のとおり）。
-     *  UI注記・診断ログ・エンジン本体が全て本関数から導出＝表示と実挙動の乖離を構造的に防ぐ。
-     *  返り値: 長さ hypotheses の各仮説チェーン本数（各要素>=1・合計=max(hypotheses, min(workers, cores))）。 */
-    internal fun hypothesisChainPlan(
-        workers: Int,
-        hypotheses: Int = MAX_HYPOTHESES,
-        cores: Int = Runtime.getRuntime().availableProcessors(),
-    ): IntArray {
-        val h = max(1, hypotheses)
-        val distributable = max(h, kotlin.math.min(max(1, workers), max(1, cores)))
-        val basePer = distributable / h
-        val remainder = distributable % h
-        return IntArray(h) { i -> basePer + if (i < remainder) 1 else 0 }
-    }
-
-    /** [3.371.0/並列SA本格再有効化] `runMultiWorker` が実際に spawn する仮説コルーチン数と、各仮説の
-     *  内部チェーン本数プランを、診断ログ側とも共有する単一ソース（3.212.0/3.225.0と同じ「表示は実挙動
-     *  から導出」原則）。
-     *
-     *  背景: `w=hypothesisCount(workers)` は workers>=2 のとき常に `w==workers` になる（3.224.0 の
-     *  多様性優先化）。これを [hypothesisChainPlan] の hypotheses へそのまま渡すと
-     *  `distributable=max(w, min(workers,cores))=w` に構造的に一致し、内部チェーン本数（並列SA/ALNS）が
-     *  **コア数に関わらず恒久的に1本**に収束していた（3.211.0/3.212.0で作った「余剰ワーカーを内部並列へ
-     *  配分」する仕組みが 3.224.0 以降、実質死んでいた）。
-     *
-     *  workers<=cores（大半の端末・既定の並列ワーカー設定）ではこの関数は無変更の挙動を返す
-     *  （hSpawn==w のため下記 if に入らず、旧来と完全に同一の spawn 数・plan）。
-     *  workers>cores（端末のコア数を超える設定）のときだけ、spawn する仮説コルーチン数を実コア数まで
-     *  落とし（cores<w の希釈を避ける、V5用 [clampWorkersToCores] と同じ発想）、その分の予算(workers)を
-     *  各仮説の内部チェーン数へ回す（[hypothesisChainPlan] の cores 引数へ options.workers を渡し、
-     *  既定のコア数クランプを迂回して「予算workers・仮説hSpawn本」を素直に配る）。
-     *  workers 予算の合計は不変（コア数を超えてコルーチンを増やさない＝オーバーサブスクライブの新規発生
-     *  なし。3.224.0 で固定された `hypothesisChainPlan(5,5,8)==[1,1,1,1,1]` 等の既存契約は無変更）。
-     *  返り値: (spawn する仮説コルーチン数, 各仮説のチェーン本数プラン=長さそのhSpawn)。 */
-    internal fun hypothesisSpawnPlan(
-        workers: Int,
-        w: Int,
-        cores: Int = Runtime.getRuntime().availableProcessors(),
-    ): Pair<Int, IntArray> {
-        // [3.372.0/レビュー修正] 旧実装は `max(2, min(w, cores))` で、w<2 のとき hSpawn(=2) が w(=1) を
-        //   上回り、plan を w で組んでいたため `plan.size(1) < hSpawn(2)` ＝ runMultiWorker が index する
-        //   不変条件 `hSpawn == plan.size` を破っていた（plan[1] で AIOOBE）。本番の3呼出は全て
-        //   w=hypothesisCount(workers)=max(2,workers)>=2 のため到達しないが、本関数は internal で
-        //   テスト/将来の呼出から届く＝潜在バグ。①hSpawn が w を超えないようにし ②plan を必ず hSpawn で
-        //   組む（hypothesisChainPlan は IntArray(max(1,hypotheses)) を返す＝不変条件が構造的に成立）。
-        //   多様性の下限2は「w>=2 のときだけ意味を持つ」ので min(w, ...) の内側に置く。
-        val hSpawn = max(1, min(w, max(2, cores)))
-        // [テスト容易性] else 分岐も明示的に cores を渡す（渡さないと hypothesisChainPlan の既定引数＝
-        //   実デバイスのコア数へ暗黙フォールバックし、この関数のテストが実行環境依存になる）。
-        //   hSpawn==w のときは hypothesisChainPlan 自体が h==hypotheses に一致し distributable も
-        //   常に h と一致するため（本関数のKDoc参照）、cores を明示的に渡しても渡さなくても結果は同一。
-        val plan = if (hSpawn < w) hypothesisChainPlan(workers, hSpawn, cores = workers)
-            else hypothesisChainPlan(workers, hSpawn, cores = cores)
-        return hSpawn to plan
-    }
-
-    /**
-     * [3.409.4] PORTFOLIO の**外側ワーカー**が壁時計上でどれだけ並行していたかの観測値
-     * （役割別worker秒の合計 ÷ ポートフォリオ本体の経過）。**CPU 使用率でも、仮説内チェーンを
-     * 含む使用コア数でもない。**
-     *
-     * 目的は「8仮説の設定なのに実質1本」で走る片肺化を、入力・端末を跨いだログで一目で見ること。
-     * 実機ログで実際に判別できることを確認済み: 3.402.0 の 2,189s/275.007s = **7.96**（健全）に対し、
-     * 3.370.0 の 74s/79.593s = **0.93**＝同じログの離脱行が
-     * `ワーカー離脱=8/8本が締切前(勝者確定7本@0s…)` で、**3.376.0 で撤廃した「HARD=0 到達時に
-     * 残りを即キャンセルする」機構**そのものだった。つまりこの指標は当時なら即座に検出できた。
-     * そのバグは既に直っているので、前向きの用途は**回帰検出**である。
-     */
-    internal fun observedOuterParallelism(totalWorkerMs: Long, wallElapsedMs: Long): Double =
-        if (totalWorkerMs <= 0L || wallElapsedMs <= 0L) 0.0
-        else totalWorkerMs.toDouble() / wallElapsedMs.toDouble()
-
-    /**
-     * [3.409.16] ワーカーの離脱理由が「締切前の早期離脱」か。
-     * 「締切」=自分の while ループの deadline 到達／「探索締切」=同じ締切（またはキャンセル）が
-     * stopIsFinal() の stop シグナル経由で届いた正常終了＝どちらも早期離脱ではない。
-     * 旧判定（!= "締切" のみ）は、全ワーカーが予算を使い切った正常な実行を
-     * 「ワーカー離脱=8/8本が締切前(探索締切8本@275s)」と自己矛盾で報告していた（3.409.14 実機ログで発覚）。
-     * 早期離脱として数えるのは「停滞シグナル」（confirmStop の確認窓を通った本物の停滞）と「例外」。
-     */
-    internal fun isEarlyWorkerExit(exitReason: String): Boolean =
-        exitReason != "締切" && exitReason != "探索締切"
-
-    /**
-     * [3.409.17/実機ログ 3.409.14] エポック超過（ロールが roleDeadline を5秒超えて走った記録）の
-     * 集約行。空なら null（＝通常の実行ではログを増やさない）。実機で予算300sの実行が474〜959sまで
-     * 超過したのに、どの役割が塞いだかを後から特定できなかった穴を埋める（証拠は W4 epoch3 の
-     * グローバル最良更新が経過474sに出たこと＝ロールが stopRole を数百秒無視した）。
-     * 検出側（nowMs() - roleDeadline > 5s）は epoch ループ内のインライン算術で、遅いロールを
-     * 注入しないと踏めないため単体テストは整形のみ＝検出は次回の実機ログで確認する。
-     */
-    internal fun epochOverrunLog(notes: List<String>): MirrorLog? {
-        if (notes.isEmpty()) return null
-        return MirrorLog(
-            level = "W", tag = "エポック超過",
-            message = "ロールが停止確認(stopRole)を大きく超過: " + notes.take(8).joinToString(",") +
-                (if (notes.size > 8) " ほか${notes.size - 8}件" else "") +
-                "（量子q秒のロールが実N秒走った＝内部で締切を見ない経路がある。役割名から特定する）",
-        )
-    }
-
     private data class AdaptiveWorkerOutcome(
         val elite: Array<IntArray>,
         val report: ViolationReport,
@@ -753,7 +523,7 @@ object V6NativeOptimizer {
         val started = nowMs()
         val deadline = started + budgetSec.coerceAtLeast(1) * 1000L
         val baseSeed = actualSeed(options.seed)
-        val workers = portfolioWorkerCount(w)
+        val workers = HypothesisPlanning.portfolioWorkerCount(w)
         val lock = Any()
         val firstError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
         val hardZeroWinner = java.util.concurrent.atomic.AtomicInteger(-1)
@@ -924,11 +694,11 @@ object V6NativeOptimizer {
                         explore = when (assignment.role) {
                             HypothesisEpochRole.HARD_DEBT_RSI_PLUS,
                             HypothesisEpochRole.LARGE_DESTROY_ALNS,
-                            HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> max(2.0, roleExploreFor(roleIndex))
-                            else -> roleExploreFor(roleIndex)
+                            HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> max(2.0, RoleDiversityHelpers.roleExploreFor(roleIndex))
+                            else -> RoleDiversityHelpers.roleExploreFor(roleIndex)
                         },
-                        accept = roleAcceptFor(roleIndex),
-                        opSelect = roleOpSelectFor(roleIndex),
+                        accept = RoleDiversityHelpers.roleAcceptFor(roleIndex),
+                        opSelect = RoleDiversityHelpers.roleOpSelectFor(roleIndex),
                         tabu = assignment.role != HypothesisEpochRole.BASELINE_REFINE,
                     )
                     val stopRole = {
@@ -1006,7 +776,7 @@ object V6NativeOptimizer {
                     val nearest = synchronized(lock) {
                         var d = Int.MAX_VALUE
                         for (x in 0 until workers) if (x != i) {
-                            d = minOf(d, scheduleDistance(trajectory, sharedTrajectories[x]))
+                            d = minOf(d, RoleDiversityHelpers.scheduleDistance(trajectory, sharedTrajectories[x]))
                         }
                         d
                     }
@@ -1113,7 +883,7 @@ object V6NativeOptimizer {
         }.distinct().size
         val pairDistances = ArrayList<Int>()
         for (i in outcomes.indices) for (j in i + 1 until outcomes.size) {
-            pairDistances.add(scheduleDistance(outcomes[i].elite, outcomes[j].elite))
+            pairDistances.add(RoleDiversityHelpers.scheduleDistance(outcomes[i].elite, outcomes[j].elite))
         }
         val distanceNote = if (pairDistances.isEmpty()) "対象外" else
             "${pairDistances.minOrNull()}..${pairDistances.maxOrNull()}セル" +
@@ -1134,7 +904,7 @@ object V6NativeOptimizer {
         for (o in outcomes) for ((r, ms) in o.roleMillis) roleTotals.merge(r, ms, Long::plus)
         val totalWorkerMs = roleTotals.values.sum().coerceAtLeast(1L)
         // [3.409.4] 外側ワーカーの実効並列度。片肺化（設定8なのに実質1本）を数字1つで検出する。
-        val outerParallelism = observedOuterParallelism(totalWorkerMs, nowMs() - started)
+        val outerParallelism = HypothesisPlanning.observedOuterParallelism(totalWorkerMs, nowMs() - started)
         val budgetNote = roleTotals.entries.sortedByDescending { it.value }.joinToString(" ") { e ->
             "${e.key.name}=${e.value / 1000}s(${e.value * 100 / totalWorkerMs}%)"
         }
@@ -1144,8 +914,8 @@ object V6NativeOptimizer {
         //   旧ログは役割別worker秒を手で足さないと気づけなかった。
         //   [3.346.1] 一瞬のシグナルは confirmStop が見送るので、ここに出る停滞シグナルは
         //   確認窓を通った本物。見送り回数も併記して「何回きわどい発火があったか」を残す。
-        //   [3.409.16] 早期離脱の判定は isEarlyWorkerExit（KDoc参照＝「探索締切」は正常終了）。
-        val earlyExits = outcomes.filter { isEarlyWorkerExit(it.exitReason) }
+        //   [3.409.16] 早期離脱の判定は HypothesisPlanning.isEarlyWorkerExit（KDoc参照＝「探索締切」は正常終了）。
+        val earlyExits = outcomes.filter { HypothesisPlanning.isEarlyWorkerExit(it.exitReason) }
         val survivedTotal = outcomes.sumOf { it.survivedStops }
         val survivedNote = if (survivedTotal == 0) "" else " 停滞見送り計${survivedTotal}回"
         val exitNote = (if (earlyExits.isEmpty()) "ワーカー離脱=全て締切まで実行" else
@@ -1166,7 +936,7 @@ object V6NativeOptimizer {
         )
         // [3.409.17] エポック超過（役割名つき）は専用の [W] 行で出す。ViewModel が予算超過の実行で
         //   この行を操作ログへ写す＝診断ログが次の実行で消えても証拠が生き残る。
-        val overrunLog = listOfNotNull(epochOverrunLog(outcomes.flatMap { it.epochOverruns }))
+        val overrunLog = listOfNotNull(HypothesisPlanning.epochOverrunLog(outcomes.flatMap { it.epochOverruns }))
         val logs = globalLogs + overrunLog + summary
         V6OptimizerResult(
             globalBest,
@@ -1194,17 +964,17 @@ object V6NativeOptimizer {
             HypothesisEpochRole.BASELINE_REFINE -> localTrajectory.copy2D()
             HypothesisEpochRole.ELITE_RELINK -> {
                 val alternatives = peers.asSequence()
-                    .filter { scheduleDistance(globalBest, it) > 0 }
-                    .sortedByDescending { scheduleDistance(globalBest, it) }
+                    .filter { RoleDiversityHelpers.scheduleDistance(globalBest, it) > 0 }
+                    .sortedByDescending { RoleDiversityHelpers.scheduleDistance(globalBest, it) }
                     .take(3).map { it.copy2D() }.toList()
-                val relinked = elitePathRelink(state, globalBest, alternatives, shouldStop).first
-                if (scheduleDistance(globalBest, relinked) > 0) relinked
+                val relinked = EliteRelinking.elitePathRelink(state, globalBest, alternatives, shouldStop).first
+                if (RoleDiversityHelpers.scheduleDistance(globalBest, relinked) > 0) relinked
                 else hypothesisStartFor(state, globalBest, 7, seed)
             }
             HypothesisEpochRole.DAY_BLOCK_ALNS -> globalBest.copy2D().also { out ->
                 if (p.T > 0) {
                     val first = rng.nextInt(p.T)
-                    repeat(n * 2) { x -> destroyRepairDayAt(state, out, (first + x) % p.T, rng) }
+                    repeat(n * 2) { x -> DestroyRepairOperators.destroyRepairDayAt(state, out, (first + x) % p.T, rng) }
                 }
             }
             HypothesisEpochRole.HARD_FAMILY_RSI -> {
@@ -1214,9 +984,9 @@ object V6NativeOptimizer {
                     val focus = when {
                         (rep.breakdown["covU"] ?: 0) > 0 -> "covU"
                         (rep.breakdown["c3n"] ?: 0) > 0 -> "c3n"
-                        else -> maxViolatedFamily(rep)
+                        else -> RsiFocusSelection.maxViolatedFamily(rep)
                     }
-                    out = rsiGenerateHypothesis(state, out, rep, focus, rng)
+                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng)
                 }
                 out
             }
@@ -1225,8 +995,8 @@ object V6NativeOptimizer {
             }
             HypothesisEpochRole.LARGE_DESTROY_ALNS -> globalBest.copy2D().also { out ->
                 repeat(n * 2) {
-                    if (p.T > 0) destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                    if (p.S > 0) destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
+                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
                 }
             }
             HypothesisEpochRole.PERSONAL_RSI -> {
@@ -1240,7 +1010,7 @@ object V6NativeOptimizer {
                         (rep.breakdown["fair"] ?: 0) > 0 -> "fair"
                         else -> "total"
                     }
-                    out = rsiGenerateHypothesis(state, out, rep, focus, rng)
+                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng)
                 }
                 out
             }
@@ -1296,8 +1066,8 @@ object V6NativeOptimizer {
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
         run: suspend (Int, V6OptimizerOptions, (String, ViolationReport?, Long, Long) -> Unit) -> V6OptimizerResult,
     ): V6OptimizerResult = kotlinx.coroutines.supervisorScope {
-        // [3.371.0/並列SA本格再有効化] spawn数×チェーン内訳は hypothesisSpawnPlan（単一ソース）から。
-        val (hSpawn, plan) = hypothesisSpawnPlan(options.workers, w)
+        // [3.371.0/並列SA本格再有効化] spawn数×チェーン内訳は HypothesisPlanning.hypothesisSpawnPlan（単一ソース）から。
+        val (hSpawn, plan) = HypothesisPlanning.hypothesisSpawnPlan(options.workers, w)
         if (hSpawn <= 1) return@supervisorScope run(0, options.copy(workers = plan[0]), onProgress)
         val base = actualSeed(options.seed)
         val completed = java.util.concurrent.atomic.AtomicInteger(0)
@@ -1329,7 +1099,7 @@ object V6NativeOptimizer {
                 if (winner.get() >= 0 && winner.get() != i) return@async null
                 try {
                     // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
-                    run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = roleExploreFor(i), accept = roleAcceptFor(i), opSelect = roleOpSelectFor(i))) { phase, report, iters, elapsed ->
+                    run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = RoleDiversityHelpers.roleExploreFor(i), accept = RoleDiversityHelpers.roleAcceptFor(i), opSelect = RoleDiversityHelpers.roleOpSelectFor(i))) { phase, report, iters, elapsed ->
                         val improved = report != null && improvesShared(report)
                         if (i == 0 || improved) onProgress("仮説${(hSpawn - completed.get()).coerceAtLeast(1)}本探索中 / $phase", report, iters, elapsed)
                         // 絶対評価: 合格ライン(HARD=0)に最初に到達した仮説が、残りを即キャンセル
@@ -1392,43 +1162,6 @@ object V6NativeOptimizer {
         best.copy(phaseLogs = best.phaseLogs + extra + verifyLog, iterations = totalIters)
     }
 
-    /** Roulette-wheel operator selection for the adaptive LNS. */
-    private fun rouletteSelect(weights: DoubleArray, rng: Random): Int {
-        var sum = 0.0
-        for (wgt in weights) sum += wgt
-        if (sum <= 0.0) return rng.nextInt(weights.size)
-        var r = rng.nextDouble() * sum
-        for (i in weights.indices) {
-            r -= weights[i]
-            if (r <= 0.0) return i
-        }
-        return weights.size - 1
-    }
-
-    /** [Thompson sampling] 演算子選択。平滑報酬 opW を事後平均、探索ノイズを反復で減衰させた
-     *  ガウス事後から各演算子の標本を引き、最大の演算子を選ぶ。重み比例(roulette)より停滞しにくく、
-     *  不確実性下での選択が原理的。ノイズσは序盤大きく(探索)→終盤小さく(活用)アニールする。 */
-    private fun thompsonSelect(opW: DoubleArray, iter: Long, rng: Random): Int {
-        val sigma = 0.5 / sqrt(1.0 + iter / 500.0)
-        var bestOp = 0
-        var bestSample = Double.NEGATIVE_INFINITY
-        for (k in opW.indices) {
-            val u1 = rng.nextDouble().coerceIn(1e-9, 1.0)
-            val u2 = rng.nextDouble()
-            val g = sqrt(-2.0 * ln(u1)) * cos(2.0 * PI * u2)   // Box-Muller 標準正規
-            val s = opW[k] + g * sigma
-            if (s > bestSample) { bestSample = s; bestOp = k }
-        }
-        return bestOp
-    }
-
-    fun chooseAlgorithm(requested: V6Algorithm, budgetSec: Int): V6Algorithm {
-        if (requested != V6Algorithm.AUTO) return requested
-        // [3.266.0] 211秒以上は同型RSI++クローン群でなく、ALNS/RSI/RSI++の異種PORTFOLIOを使う
-        //   （HypothesisDiversityPolicy.autoAlgorithmForBudget、旧 portfolioAlgoFor は
-        //   runAdaptivePortfolio への置換で不要化したため削除）。
-        return HypothesisDiversityPolicy.autoAlgorithmForBudget(budgetSec)
-    }
 
     private suspend fun runV5(
         state: MagiState,
@@ -1445,11 +1178,11 @@ object V6NativeOptimizer {
         // [HF290 役割分担] explore 倍率で初期温度を調整（探索=高温/精製=低温）。explore=1.0 は従来と同一。
         val saT0 = (10.0 * options.explore).coerceIn(2.0, 40.0)
         val res = SaOptimizer(p, ev).run(
-            SaParams(t0 = saT0, workers = clampWorkersToCores(options.workers), budgetMs = budgetSec * 1000L, softPolish = options.softPolish, shouldStop = shouldStop, seed = options.seed),
+            SaParams(t0 = saT0, workers = HypothesisPlanning.clampWorkersToCores(options.workers), budgetMs = budgetSec * 1000L, softPolish = options.softPolish, shouldStop = shouldStop, seed = options.seed),
         ) { pr ->
             if (pr.elapsedMs % 1000L < 220L) onProgress("V5 SA", lastReport, pr.totalIters, pr.elapsedMs)
         }
-        val repaired = hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
+        val repaired = HardRepairCore.hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
         var outSched = repaired.schedule
         var report = UnifiedViolationChecker.check(state, outSched)
         // [退化防止番兵 / 実機ログ起因] runAlns(578行)と同じ入力比keep-best。従来 runV5 だけ番兵が無く、SA+修復が
@@ -1675,8 +1408,8 @@ object V6NativeOptimizer {
             coroutineContext.ensureActive()
             // [restart 摂動] 一律 strength=0.18。非線形スケジュール(2.51)は nsp_bench --real の final 品質で
             //   +101% 悪化と実測されたため revert(序盤の大摂動が強い repair 下で良解を壊し最終品質を損なう)。
-            var cur = if (r == 0) globalBest.copy2D() else perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
-            cur = hf67HardRepair(state, cur, rng).schedule
+            var cur = if (r == 0) globalBest.copy2D() else DestroyRepairOperators.perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
+            cur = HardRepairCore.hf67HardRepair(state, cur, rng).schedule
             val deadline = nowMs() + per * 1000L
             // [Stage8b] ネイティブ ALNS チャンクへ委譲。不可 or 番兵発火なら下の従来 Kotlin ループへ。
             val usedNative = nativeProblem != 0L && NativeGate.enabled && runRestartNative(cur, deadline, per, r)
@@ -1713,8 +1446,8 @@ object V6NativeOptimizer {
             }
             while (nowMs() < deadline && !shouldStop()) {
                 coroutineContext.ensureActive()
-                var op = if (options.opSelect == OpSelectMode.THOMPSON) thompsonSelect(opW, iter, rng)
-                         else rouletteSelect(opW, rng)
+                var op = if (options.opSelect == OpSelectMode.THOMPSON) SelectionHeuristics.thompsonSelect(opW, iter, rng)
+                         else SelectionHeuristics.rouletteSelect(opW, rng)
                 // [賢いsoft集中] HARD が最良水準(curHard<=bestHard)に到達したら残り探索を soft 修復へ寄せる。
                 //   HARD=0 なら積極的に(0.30)、HARD>0 の床(構造的に解けない covU/pref/c3n 等)では控えめに(0.15)
                 //   op5(targeted repair=covO/c2/上下限/c41/c41s/c3Want/apt 修復)を優先。HARD>床 の間はHARD優先で不変。
@@ -1729,7 +1462,7 @@ object V6NativeOptimizer {
                 val curHard = curScore / SCORE_HARD_UNIT
                 val gdLevel = if (options.accept == AcceptMode.GREAT_DELUGE) {
                     val frac = ((deadline - nowMs()).toDouble() / max(1.0, per * 1000.0)).coerceIn(0.0, 1.0)
-                    greatDelugeLevel(gdInitial, globalScore.toDouble(), frac)
+                    RoleDiversityHelpers.greatDelugeLevel(gdInitial, globalScore.toDouble(), frac)
                 } else 0.0
                 var reward = 0.2   // default: rejected / no-op
 
@@ -1825,12 +1558,12 @@ object V6NativeOptimizer {
                     val drDay = if (op == 0 && p.T > 0) rng.nextInt(p.T) else -1
                     val drStaff = if (op == 1 && p.S > 0) rng.nextInt(p.S) else -1
                     when (op) {
-                        0 -> if (drDay >= 0) destroyRepairDayAt(state, cand, drDay, rng)
-                        1 -> if (drStaff >= 0) destroyRepairStaffAt(state, cand, drStaff, rng)
-                        else -> destroyRepairViolations(state, cand, curReport, rng)
+                        0 -> if (drDay >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, drDay, rng)
+                        1 -> if (drStaff >= 0) DestroyRepairOperators.destroyRepairStaffAt(state, cand, drStaff, rng)
+                        else -> DestroyRepairOperators.destroyRepairViolations(state, cand, curReport, rng)
                     }
                     // hf67 は hard 違反がある時のみ必要。
-                    val fixed = if (iter % 7L == 0L && curHard > 0L) hf67HardRepair(state, cand, rng).schedule else cand
+                    val fixed = if (iter % 7L == 0L && curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
                     val nDiffs = when {
                         op == 0 && drDay >= 0 && fixed === cand -> {
                             var n = 0
@@ -1975,7 +1708,7 @@ object V6NativeOptimizer {
         //   一度の不運な1ラウンドだけでは deprioritize しない=E9のより軽い1R冷却との役割分担を保つ）。
         //   rounds が大きいほど attemptsTarget も緩み、旧来同様じっくり粘れる。focus 選択のみの変更で
         //   スコアリング不変（keep-best=better()が結果を担保）。
-        val effortIters = rsiHf63EffortIters(rounds)
+        val effortIters = HypothesisPlanning.rsiHf63EffortIters(rounds)
         var lastFocus: String? = null
         for (round in 0 until rounds) {
             if (shouldStop()) break
@@ -2002,7 +1735,7 @@ object V6NativeOptimizer {
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
             val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
-            val focus = maxViolatedFamily(bestReport, focusAvoid, round, rounds)
+            val focus = RsiFocusSelection.maxViolatedFamily(bestReport, focusAvoid, round, rounds)
             if (avoid.isNotEmpty() && avoid != lastLoggedAvoid) {
                 // [3.288.0/スパム対応] 集合が変化したラウンドのみログ（旧: 毎ラウンド同文）。
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
@@ -2016,7 +1749,7 @@ object V6NativeOptimizer {
             focusTrail.add(focus)
             val focusedBefore = bestReport.breakdown[focus] ?: 0
             lastFocus = focus   // [レビュー#5] 次ラウンド頭の HF63 更新へ「このラウンドの投入先」を渡す
-            val hypothesis = rsiGenerateHypothesis(state, best, bestReport, focus, rng, shouldStop)
+            val hypothesis = RsiHypothesisOperators.rsiGenerateHypothesis(state, best, bestReport, focus, rng, shouldStop)
             val phase = if (round % 2 == 0) runAlns(state, hypothesis, options.copy(restarts = 1), per, shouldStop, onProgress) else runV5(state, hypothesis, options, per, shouldStop, onProgress)
             iters += phase.iterations
             var candSched = phase.schedule
@@ -2067,7 +1800,7 @@ object V6NativeOptimizer {
             //   本当に狙える族が尽きた(pivot=="total" or 件数0)ときだけ従来どおり空転停止する。stuck な SOFT も
             //   HF63 が順次 dynamicAvoid へ入れて focusable から外すため、いずれ pivot 枯渇→終了で自己収束する。
             if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
-                val pivot = maxViolatedFamily(bestReport, avoid, round, rounds)   // avoid=dynamicAvoid＋静的covU床
+                val pivot = RsiFocusSelection.maxViolatedFamily(bestReport, avoid, round, rounds)   // avoid=dynamicAvoid＋静的covU床
                 if (pivot == "total" || (bestReport.breakdown[pivot] ?: 0) == 0) {
                     logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: 狙える族が枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                     break
@@ -2082,7 +1815,7 @@ object V6NativeOptimizer {
         // [3.288.0/ログ強化=回数軸] 戦略変更の1行サマリ（focus遷移を連続圧縮）。2手以上あるときだけ出す＝スパムなし。
         if (focusTrail.count { !it.startsWith("[") } >= 2) {
             logs.add(MirrorLog(iter = iters, tag = "戦略変更", message =
-                "RSI focus遷移: ${compressFocusTrail(focusTrail)}" +
+                "RSI focus遷移: ${RoleDiversityHelpers.compressFocusTrail(focusTrail)}" +
                     (if (e9Cooldowns > 0) " / E9冷却${e9Cooldowns}回" else "") +
                     (hf63.infeasibleFamilies().takeIf { it.isNotEmpty() }?.let { " / HF63降格={${it.joinToString(",")}}" } ?: "")))
         }
@@ -2143,96 +1876,6 @@ object V6NativeOptimizer {
             seed.iterations + rsi.iterations + refine.iterations + polish.iterations,
             nowMs() - started,
         )
-    }
-
-    /** [3.428.0/#30] 埋めシフト規則の委譲を直接固定するため internal（本番の可視性要件は private のまま）。 */
-    internal fun hf66DataHardening(state: MagiState, schedule: Array<IntArray>, tag: String): Array<IntArray> {
-        val p = cachedProblem(state)
-        val out = normalizeSchedule(schedule, p)
-        for (i in 0 until p.S) {
-            val allowed = p.allowedShiftsForStaff(i)
-            // [3.428.0/#30] 「担当外セルを何で埋めるか」の規則は `fillShiftIndex` の1箇所に置く
-            //   （3.419.0 で構造編集の3経路を統一したときの取り残し＝ここだけ独自の `?: 0` だった）。
-            //   旧実装との違いは2つ: ①休が担当可なら休を選ぶ（旧は index 最小＝休が先頭でないデータでは
-            //   勤務シフトへ倒れる）②担当可能が空なら 0 でなく休へ倒す。実データ3件は restIdx=0 かつ
-            //   全群が休を担当できるので**挙動は完全に不変**（測って確認済み）。
-            val fallback = fillShiftIndex(allowed, p.restIdx)
-            for (j in 0 until p.T) {
-                val k = out[i][j]
-                if (k !in 0 until p.K || !p.canDo(i, k)) out[i][j] = fallback
-            }
-        }
-        return out
-    }
-
-    private data class RepairResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>)
-
-    private fun hf67HardRepair(state: MagiState, schedule: Array<IntArray>, rng: Random): RepairResult {
-        val p = cachedProblem(state)
-        val out = hf66DataHardening(state, schedule, "hf67")
-        val logs = ArrayList<MirrorLog>()
-        var changed = 0
-
-        // Apply feasible wishes first; infeasible wishes are logged by Sanity, not forced.
-        for (i in 0 until p.S) for (j in 0 until p.T) {
-            val w = p.wish[i][j]
-            if (w in 0 until p.K && p.canDo(i, w) && out[i][j] != w) {
-                out[i][j] = w
-                changed++
-            }
-        }
-
-        repeat(3) {
-            val cov = coverage(p, out)
-            val counts = countMatrix(p, out)
-            for (j in 0 until p.T) for (k in 0 until p.K) {
-                // [N1a] 充填量は per-cell 実需要（#4b: OR/AND）。旧 need1 のみ基準では P2 で救済済みの
-                //   セル（休日体制など P1>P2）まで埋めに行き、既良盤面を壊していた。
-                var miss = p.covUCell(k, j, cov[j][k])
-                while (miss > 0) {
-                    val i = bestStaffForCoverage(p, out, counts, j, k)
-                    if (i < 0) break
-                    val old = out[i][j]
-                    if (old == k) break
-                    out[i][j] = k
-                    cov[j][k]++
-                    if (old in 0 until p.K) cov[j][old]--
-                    changed++
-                    miss--
-                }
-            }
-        }
-
-        // Range lower bounds: fill shortage where possible without touching locked wishes.
-        val counts = countMatrix(p, out)
-        for (i in 0 until p.S) for (k in 0 until p.K) {
-            val lo = p.rangeLo[i][k]
-            if (lo == Int.MIN_VALUE || !p.canDo(i, k)) continue
-            var need = lo - counts[i][k]
-            var guard = 0
-            while (need > 0 && guard++ < p.T) {
-                var bestJ = -1
-                var bestScore = Int.MAX_VALUE
-                for (jj in 0 until p.T) {
-                    if (p.wishLocked(i, jj) || out[i][jj] == k) continue
-                    val score = coverageShortageCost(p, out, jj, out[i][jj]) + rng.nextInt(3)
-                    if (score < bestScore) {
-                        bestScore = score
-                        bestJ = jj
-                    }
-                }
-                if (bestJ < 0) break
-                val j = bestJ
-                val old = out[i][j]
-                out[i][j] = k
-                if (old in 0 until p.K) counts[i][old]--
-                counts[i][k]++
-                changed++
-                need--
-            }
-        }
-        if (changed > 0) logs.add(MirrorLog(tag = "HF67", message = "HardRepair changed=$changed"))
-        return RepairResult(out, logs)
     }
 
     private data class PolishResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>, val iterations: Long)
@@ -2379,10 +2022,10 @@ object V6NativeOptimizer {
                 }
                 else -> {   // copy-based multi-cell destroy/repair (ops 9,10)
                     val cand = cur.copy2D()
-                    val drDay2 = if (rng.nextBoolean()) { destroyRepairViolations(state, cand, bestReport, rng); -1 }
-                                 else { val j = if (p.T > 0) rng.nextInt(p.T) else -1; if (j >= 0) destroyRepairDayAt(state, cand, j, rng); j }
+                    val drDay2 = if (rng.nextBoolean()) { DestroyRepairOperators.destroyRepairViolations(state, cand, bestReport, rng); -1 }
+                                 else { val j = if (p.T > 0) rng.nextInt(p.T) else -1; if (j >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, j, rng); j }
                     // hard-feasible のときは hf67 を省略（DeltaEvaluator が hard 退化を弾く）。
-                    val fixed = if (curHard > 0L) hf67HardRepair(state, cand, rng).schedule else cand
+                    val fixed = if (curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
                     val nDiffs = if (drDay2 >= 0 && fixed === cand) {
                         var n = 0
                         for (i in 0 until p.S) if (cur[i][drDay2] != fixed[i][drDay2]) diffBuf[n++] = i * p.T + drDay2
@@ -2485,823 +2128,8 @@ object V6NativeOptimizer {
         }
     }
 
-    private fun bestStaffForCoverage(p: Problem, schedule: Array<IntArray>, counts: Array<IntArray>, j: Int, k: Int): Int {
-        var bestI = -1
-        var bestScore = Int.MAX_VALUE
-        for (i in 0 until p.S) {
-            if (!p.canDo(i, k)) continue
-            if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
-            val old = schedule[i][j]
-            if (old == k) continue   // [監査#3] 既就業者はスキップ（旧: return で当該(日,シフト)の充填全体が中断していた）
-            val hi = p.rangeHi[i][k]
-            val over = if (hi != Int.MAX_VALUE && counts[i][k] >= hi) 500 else 0
-            val oldNeedCost = coverageShortageCost(p, schedule, j, old)
-            // [監査#12] 符号修正: 旧 `- oldNeedCost` は「外すと不足が生じる職員」ほど優先ドナー化していた
-            //   （最小スコア採用のため減算=優遇）。引き抜きコストとして加算し、休・過剰被覆側を優先する。
-            val score = over + counts[i][k] * 3 + oldNeedCost
-            if (score < bestScore) { bestScore = score; bestI = i }
-        }
-        return bestI
-    }
-
-    private fun coverageShortageCost(p: Problem, schedule: Array<IntArray>, j: Int, k: Int): Int {
-        if (k !in 0 until p.K) return 0
-        var cov = 0
-        for (i in 0 until p.S) if (schedule[i][j] == k) cov++
-        // [N1a] 引き抜きで per-cell 実需要(U)が増える＝不足を生む職員はコスト50（旧: need1のみ基準）。
-        //   ちょうど充足のセル(U=0→1)も保護される点は旧 `cov <= need` と同等。
-        return if (p.covUCell(k, j, cov - 1) > p.covUCell(k, j, cov)) 50 else 0
-    }
-
-    private fun destroyRepairDay(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.T == 0) return
-        destroyRepairDayAt(state, schedule, rng.nextInt(p.T), rng)
-    }
-
-    /** [soft-aware repair] 割当 i→shift k の per-staff soft(low/high/apt, checker と同一式)を count n で評価。 */
-    internal fun staffCountPenaltyAt(p: Problem, i: Int, k: Int, n: Int): Long {
-        var pen = 0L
-        val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
-        // [3.319.0] low は**担当できるシフトだけ**。`Evaluator.fullEvalParts` も `MirrorCore` の checker も
-        //   元から `p.canDo(i, k)` ガードを持つのに、destroy-repair の marginal cost であるこの関数だけ
-        //   欠けていた。担当外シフトに個人下限が設定されたデータ（UI で下限を入れたあと群の担当を外す等で
-        //   起こりうる）では、実際には存在しない違反を重み90 で数え、候補選択を無駄な方向へ引っ張る。
-        //   最終採否は checker が守るので誤った勤務表は出ないが、有効な候補を取りこぼす。
-        //   実データ3件（golden/real/user）では該当セル0＝潜在バグ。high は n>hi の形で担当外なら n=0 に
-        //   なり発火せず、かつ Evaluator 側もガードを持たない＝既に一致しているので触らない。
-        //   apt は `Problem` 構築時に bucket=canDo でガード済み。
-        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) pen += (lo - n).toLong() * 90L
-        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 45L
-        val t = p.apt[i][k]
-        if (t >= 0) pen += kotlin.math.abs(n - t).toLong()
-        return pen
-    }
-
-    /** [3.267.0/weekly+fair統合、旧3.170.0「focus露出のみ・cost未対応」の解消] weekly(7日周期のシフト
-     *  平準化)の marginal cost。wd は staff のシフト別曜日カウント([K][7]、呼出元が維持)。
-     *  [3.345.0] 休を通常のシフト種として扱うため、勤務/休の二値でなく **oldK→newK のシフト移動** を受ける。
-     *  動くのは oldK と newK の2バケットだけ（oldK==newK は 0）。weeklyDevOfBucket(checkerと同一式)の
-     *  変化のみを計算し、wd 自体は変更しない(コミットは呼出元)。範囲外の値は該当側を寄与ゼロとして扱う。 */
-    internal fun weeklyMarginalAt(wd: Array<IntArray>, bucket: Int, oldK: Int, newK: Int): Long {
-        if (oldK == newK) return 0L
-        var acc = 0L
-        if (oldK in wd.indices) {
-            val b = wd[oldK]
-            val before = weeklyDevOfBucket(b)
-            b[bucket]--
-            acc += (weeklyDevOfBucket(b) - before).toLong()
-            b[bucket]++
-        }
-        if (newK in wd.indices) {
-            val b = wd[newK]
-            val before = weeklyDevOfBucket(b)
-            b[bucket]++
-            acc += (weeklyDevOfBucket(b) - before).toLong()
-            b[bucket]--
-        }
-        return acc
-    }
-
-    /** fair(グループ内公平化)の marginal cost。staff i の shift k 保有回数が delta 変化した際の、群
-     *  g=p.sgrp[i] のシフト k における L1偏差(checkerと同一式)の変化。m<2(公平化対象外)・k が群の
-     *  担当外なら 0（対象外セルは無害にゼロ扱い）。counts/grpTotal は呼出元が維持する S×K・G×K 集計。 */
-    internal fun fairMarginalAt(
-        p: Problem, i: Int, k: Int, delta: Int, counts: Array<IntArray>, grpTotal: Array<IntArray>,
-    ): Long {
-        if (delta == 0 || k !in 0 until p.K) return 0L
-        val g = p.sgrp[i]
-        val mem = p.groupMembers[g]
-        val m = mem.size
-        if (m < 2 || k !in p.bucket[g]) return 0L
-        fun dev(sum: Int): Int {
-            val tgt = Math.round(sum.toDouble() / m).toInt()
-            var d = 0
-            for (x in mem) d += kotlin.math.abs(counts[x][k] - tgt)
-            return d
-        }
-        val before = dev(grpTotal[g][k])
-        counts[i][k] += delta
-        val after = dev(grpTotal[g][k] + delta)
-        counts[i][k] -= delta
-        return (after - before).toLong()
-    }
-
-    internal fun destroyRepairDayAt(state: MagiState, schedule: Array<IntArray>, j: Int, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.T == 0) return
-        // [soft-aware destroy-repair / 実測検証 tools/nsp_bench.py] 従来はランダム順で穴を埋めるだけ(soft無視)で、
-        //   等価ベンチでは soft-aware 修復が AUC -24%〜-34% と唯一の大幅改善だった。ここで同じレバーを適用:
-        //   非希望セルを休へ destroy → 各需要を「割当の marginal soft が最小の休スタッフ」で repair。
-        //   休→k のみ移すため被覆穴を新たに作らない。希望固定は保持。受理(SA/isBetter)が最終採否=安全。
-        val rest = restShiftIndex(state)   // [監査#2] 休はindex0固定でなく記号から解決（Level Zero: 全シフト同等・番号非依存）
-        val cnt = Array(p.S) { IntArray(p.K) }
-        for (i in 0 until p.S) for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cnt[i][k]++ }
-        // destroy: 非希望セルを休へ。休を担当できない職員は対象外（群外割当を作らない）。cnt も同期。
-        for (i in 0 until p.S) {
-            if (p.wishLocked(i, j) || !p.canDo(i, rest)) continue
-            val old = schedule[i][j]
-            if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cnt[i][old]--; cnt[i][rest]++ }
-        }
-        val covJ = IntArray(p.K)
-        for (i in 0 until p.S) { val k = schedule[i][j]; if (k in 0 until p.K) covJ[k]++ }
-        // [c41-aware / 実測 tools/nsp_bench.py: 群レンジ(cons41)があると小幅改善・無ければゼロ overhead で無害]
-        //   群の「日次人数レンジ(cons41)」も marginal に加味し、群レンジ(上下限)も同時に研磨する。
-        val hasC41 = p.cons41.isNotEmpty()
-        val grpCnt = if (hasC41) Array(p.G) { IntArray(p.K) } else emptyArray()
-        if (hasC41) for (i in 0 until p.S) { val k = schedule[i][j]; if (k in 0 until p.K) grpCnt[p.sgrp[i]][k]++ }
-        fun c41DayMarg(g: Int, k: Int): Long {
-            if (!hasC41) return 0L
-            var d = 0L
-            for (c in p.cons41) {
-                if (c.groupIdx != g || c.shiftIdx != k) continue
-                val z = grpCnt[g][k]; val z1 = z + 1
-                val before = (if (z < c.l) c.l - z else 0) + (if (z > c.u) z - c.u else 0)
-                val after = (if (z1 < c.l) c.l - z1 else 0) + (if (z1 > c.u) z1 - c.u else 0)
-                d += (after - before).toLong()
-            }
-            return d
-        }
-        // [3.267.0/weekly+fair統合] 群合計(fair, 月間total)と職員別曜日バケット(weekly)を一度だけ構築
-        // （destroy後のschedule基準＝c41のgrpCntと同じ順序）。day j は固定のため bucket は全候補共通。
-        val grpTotal = Array(p.G) { IntArray(p.K) }
-        for (i in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[i]][k] += cnt[i][k]
-        val wd = Array(p.S) { s ->
-            Array(p.K) { IntArray(7) }.also { a ->
-                for (jj in 0 until p.T) { val k2 = schedule[s][jj]; if (k2 in 0 until p.K) a[k2][(p.dow0 + jj) % 7]++ }
-            }
-        }
-        val bucket = (p.dow0 + j) % 7
-        // repair: 各勤務シフトの需要を soft(個人 low/high/apt/weekly/fair ＋ 群レンジ c41)最小の休スタッフで満たす。
-        for (k in 0 until p.K) {
-            if (k == rest) continue   // [監査#2] 休以外の全シフトを対象（旧: k in 1..K-1 の「0=休」前提）
-            // [3.379.0/need1直参照の第4世代] 旧: `p.need1[k][j] <= 0 → continue` で
-            //   **need2 単独定義の需要を丸ごと素通り**していた（need1 未設定は -1）。3.173.0
-            //   (CoverageDiagnosis)・3.309.0(isBalanceable)・3.369.0(初期解生成2つ+findCovOFix)で
-            //   同じ穴を潰したのに、**RSI/ALNS 修復の中核であるこの2関数が取り残されていた**＝
-            //   そのデータでは covU(HARD, 重み8000) を修復オペレータが原理的に埋められない。
-            //   source of truth の `covUCell`（片方定義=その値）へ委譲する。
-            var miss = p.covUCell(k, j, covJ[k])
-            if (miss <= 0) continue
-            while (miss > 0) {
-                var bestI = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
-                for (i in 0 until p.S) {
-                    if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.canDo(i, k)) continue
-                    val delta = staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - staffCountPenaltyAt(p, i, k, cnt[i][k]) +
-                        c41DayMarg(p.sgrp[i], k) +
-                        weeklyMarginalAt(wd[i], bucket, rest, k) +
-                        fairMarginalAt(p, i, rest, -1, cnt, grpTotal) +
-                        fairMarginalAt(p, i, k, 1, cnt, grpTotal)
-                    if (delta < bestDelta) {
-                        bestDelta = delta; bestI = i; tied = 1
-                    } else if (delta == bestDelta) {
-                        tied++
-                        if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestI = i
-                    }
-                }
-                if (bestI < 0) break
-                schedule[bestI][j] = k; cnt[bestI][k]++; cnt[bestI][rest]--; covJ[k]++; miss--
-                if (hasC41) grpCnt[p.sgrp[bestI]][k]++
-                grpTotal[p.sgrp[bestI]][k]++; grpTotal[p.sgrp[bestI]][rest]--
-                wd[bestI][rest][bucket]--; wd[bestI][k][bucket]++
-            }
-        }
-    }
-
-    private fun destroyRepairStaff(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.S == 0) return
-        destroyRepairStaffAt(state, schedule, rng.nextInt(p.S), rng)
-    }
-
-    internal fun destroyRepairStaffAt(state: MagiState, schedule: Array<IntArray>, i: Int, rng: Random) {
-        val p = cachedProblem(state)
-        val allowed = p.allowedShiftsForStaff(i)
-        if (allowed.isEmpty()) return
-        val rest = restShiftIndex(state)   // [監査#2] 休の記号解決
-        if (!p.canDo(i, rest)) return      // 休を担当できない職員は破壊修復の対象外（群外割当を作らない）
-        // [soft-aware staff-DR / 実測 tools/nsp_bench.py --real: staff+viol で実データ final -49.5%]
-        //   非希望セルを休へ destroy → 各日の被覆穴を「staff i の marginal soft 最小のシフト」で repair。
-        //   被覆穴のみ埋める(過剰=covO を作らない)。希望固定は保持。スコアリング不変=Δ×フル無関係。
-        // [3.267.0/weekly+fair統合] fair(群内公平化)は群メンバー全員の月間totalが要るため、counts は
-        // 全職員S×Kで構築する（cntI は counts[i] の別名＝同一配列参照、以降どちらの名前で更新しても
-        // 他方に反映される）。grpTotal(G×K, 群合計)とwd(staff iの曜日別非休日数, 7要素)も一度だけ構築。
-        val counts = Array(p.S) { s ->
-            IntArray(p.K).also { a -> for (jj in 0 until p.T) { val k = schedule[s][jj]; if (k in 0 until p.K) a[k]++ } }
-        }
-        val cntI = counts[i]
-        val grpTotal = Array(p.G) { IntArray(p.K) }
-        for (s in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[s]][k] += counts[s][k]
-        val wd = Array(p.K) { IntArray(7) }
-        for (jj in 0 until p.T) { val k2 = schedule[i][jj]; if (k2 in 0 until p.K) wd[k2][(p.dow0 + jj) % 7]++ }
-        for (j in 0 until p.T) {
-            if (p.wishLocked(i, j)) continue
-            val old = schedule[i][j]
-            if (old != rest && old in 0 until p.K) {
-                schedule[i][j] = rest
-                cntI[old]--; cntI[rest]++
-                grpTotal[p.sgrp[i]][old]--; grpTotal[p.sgrp[i]][rest]++
-                wd[old][(p.dow0 + j) % 7]--; wd[rest][(p.dow0 + j) % 7]++
-            }
-        }
-        // [高速化] 旧: 日×シフトごとに被覆を全職員走査(O(T×K×S))。盤面のうち本関数中に変わるのは staff i の行
-        //   だけなので、被覆を一度だけ数え(O(S×T))、割当のたびに差分更新する(O(T×K))。挙動は再カウントと同一。
-        val cov = Array(p.T) { IntArray(p.K) }
-        for (x in 0 until p.S) for (j in 0 until p.T) { val k2 = schedule[x][j]; if (k2 in 0 until p.K) cov[j][k2]++ }
-        for (j in 0 until p.T) {
-            if (p.wishLocked(i, j) || schedule[i][j] != rest) continue
-            val bucket = (p.dow0 + j) % 7
-            var bestK = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
-            for (k in 0 until p.K) {
-                if (k == rest || !p.canDo(i, k)) continue
-                // [3.379.0/同上] need2 単独定義の穴を塞ぐ。`covUCell<=0` は「需要なし」と
-                //   「既に足りている」の両方を同時に表すので、旧2条件をこれ1つで置き換えられる。
-                if (p.covUCell(k, j, cov[j][k]) <= 0) continue
-                val delta = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k]) +
-                    weeklyMarginalAt(wd, bucket, rest, k) +
-                    fairMarginalAt(p, i, rest, -1, counts, grpTotal) +
-                    fairMarginalAt(p, i, k, 1, counts, grpTotal)
-                if (delta < bestDelta) {
-                    bestDelta = delta; bestK = k; tied = 1
-                } else if (delta == bestDelta) {
-                    tied++
-                    if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestK = k
-                }
-            }
-            if (bestK >= 0) {
-                schedule[i][j] = bestK
-                cntI[bestK]++; cntI[rest]--
-                grpTotal[p.sgrp[i]][bestK]++; grpTotal[p.sgrp[i]][rest]--
-                wd[rest][bucket]--; wd[bestK][bucket]++
-                cov[j][bestK]++; cov[j][rest]--
-            }
-        }
-    }
-
-    private fun destroyRepairViolations(state: MagiState, schedule: Array<IntArray>, report: ViolationReport, rng: Random) {
-        val p = cachedProblem(state)
-        val keys = report.violations.keys.toList()
-        if (keys.isEmpty()) { randomAllowedCell(state, schedule, rng); return }
-        repeat(min(8, keys.size)) {
-            val key = keys[rng.nextInt(keys.size)]
-            val i = key.substringBefore(',').toIntOrNull() ?: return@repeat
-            val j = key.substringAfter(',').toIntOrNull() ?: return@repeat
-            if (i !in 0 until p.S || j !in 0 until p.T || p.wishLocked(i, j)) return@repeat
-            val allowed = p.allowedShiftsForStaff(i)
-            if (allowed.isEmpty()) return@repeat
-            // [soft-aware violations / 実測で実データ final -22.6%] 違反セルを、staff i の現状回数で
-            //   marginal soft(old→k)最小のシフトへ再割当(従来はランダム)。スコアリング不変=Δ×フル無関係。
-            val cntI = IntArray(p.K)
-            for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cntI[k]++ }
-            // [3.267.0/weekly+fair統合] この手専用にwd(staff iの曜日別非休日数)とgrpTotal(群合計, 全職員
-            // スキャン)を構築。件数は最大8回(repeat)に限られ盤面規模も小さいため、毎回の再走査を許容する。
-            val wd = Array(p.K) { IntArray(7) }
-            for (jj in 0 until p.T) { val k2 = schedule[i][jj]; if (k2 in 0 until p.K) wd[k2][(p.dow0 + jj) % 7]++ }
-            val counts = Array(p.S) { s ->
-                IntArray(p.K).also { a -> for (jj in 0 until p.T) { val k = schedule[s][jj]; if (k in 0 until p.K) a[k]++ } }
-            }
-            val grpTotal = Array(p.G) { IntArray(p.K) }
-            for (s in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[s]][k] += counts[s][k]
-            val bucket = (p.dow0 + j) % 7
-            val old = schedule[i][j]
-            var bestK = old; var bestDelta = Long.MAX_VALUE; var tied = 0
-            for (k in allowed) {
-                if (k == old) continue
-                val dOld = if (old in 0 until p.K) staffCountPenaltyAt(p, i, old, cntI[old] - 1) - staffCountPenaltyAt(p, i, old, cntI[old]) else 0L
-                val dK = staffCountPenaltyAt(p, i, k, cntI[k] + 1) - staffCountPenaltyAt(p, i, k, cntI[k])
-                val dWeekly = weeklyMarginalAt(wd, bucket, old, k)
-                val dFair = (if (old in 0 until p.K) fairMarginalAt(p, i, old, -1, counts, grpTotal) else 0L) +
-                    fairMarginalAt(p, i, k, 1, counts, grpTotal)
-                val delta = dOld + dK + dWeekly + dFair
-                if (delta < bestDelta) {
-                    bestDelta = delta; bestK = k; tied = 1
-                } else if (delta == bestDelta) {
-                    tied++
-                    if (HypothesisDiversityPolicy.takeReservoirTie(tied, rng)) bestK = k
-                }
-            }
-            if (bestK != old) schedule[i][j] = bestK
-        }
-    }
-
-    private fun randomAllowedCell(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
-        if (p.S == 0 || p.T == 0) return
-        val i = rng.nextInt(p.S)
-        val j = rng.nextInt(p.T)
-        if (p.wishLocked(i, j)) return
-        val allowed = p.allowedShiftsForStaff(i)
-        if (allowed.isNotEmpty()) schedule[i][j] = allowed[rng.nextInt(allowed.size)]
-    }
-
-    private fun perturb(state: MagiState, base: Array<IntArray>, rng: Random, strength: Double): Array<IntArray> {
-        val p = cachedProblem(state)
-        val out = base.copy2D()
-        val n = max(1, (p.S * p.T * strength).toInt())
-        repeat(n) { randomAllowedCell(state, out, rng) }
-        return out
-    }
-
-    /** [3.240.0] destroyRepairStaff(1回で最大T(日数)セル変化)を、destroyRepairDay(1回で最大S(職員数)
-     *  セル変化・covU focusでrepeat(6))と同程度の総攪乱セル数(6*S)に揃えるための反復回数。S>=Tなら
-     *  従来のrepeat(8)相当以上(reps>=6の切り上げ計算)を維持し既存の攪乱強度を落とさない。 */
-    internal fun destroyRepairStaffReps(s: Int, t: Int): Int = max(1, (6 * s + t - 1) / max(1, t))
-
-    internal fun rsiGenerateHypothesis(
-        state: MagiState, base: Array<IntArray>, report: ViolationReport, focus: String, rng: Random,
-        // [3.313.0] free repair 群へ締切を通す。既定 `{ false }` ＝既存の直接呼出・テストは挙動不変。
-        shouldStop: () -> Boolean = { false },
-    ): Array<IntArray> {
-        val out = base.copy2D()
-        val p = cachedProblem(state)
-        when (focus) {
-            // [E11] covU は「勤務→勤務」の多人数連鎖で充填（既存 destroyRepairDay は休→勤務のみ＝
-            //   候補が過剰シフト/連鎖からしか引けない局面を踏めない）。仮説はラウンド better() でゲート＝退化なし。
-            // [3.241.0/実機ログ起因=専用オペレータの改善がdestroyRepairDayで相殺される順序バグ修正]
-            //   旧実装は「専用free関数→destroyRepairDay×6」の順で、destroyRepairDayのdestroy段階
-            //   （非希望セルを休へ変える）がneed<=0のシフト（covOの主対象＝休等）へは一切repair
-            //   （need>0のシフトのみ埋め戻す設計）が働かないため、直後の専用オペレータの改善を
-            //   ランダムに(31日中6日=無視できない確率で)打ち消してしまっていた（8/26の休過剰1が
-            //   covO focusのラウンドでも解消されなかった実例）。covU/c41/c41sの不足側はrepair段階
-            //   （need>0のシフトを埋める設計）で自動的に再修復されるため実害は薄いが、covO/c42/c42s
-            //   の過剰・違反ペア解消はrepairの対象外で影響が直接的。順序を「destroyRepairDay×6→
-            //   専用free関数」へ統一し、hypothesisの最終状態に専用オペレータの改善が必ず残るようにする。
-            "covU" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyCovUChains(state, out, rng, shouldStop) }
-            // [3.209.0/covOと同型の穴=c41/c41sがfocusされてもdestroyRepairDayのc41DayMargは副次効果でしか
-            //   効かない] markNeed系(needViolations)にしか載らずGLSキック/destroyRepairViolationsのヒントを
-            //   一切持てない点がcovOと同じ。applyC41Freeで群レンジの超過/不足を直接動かす専用オペレータへ。
-            "c41" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = false, shouldStop = shouldStop) }
-            "c41s" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC41Free(state, out, rng, skill = true, shouldStop = shouldStop) }
-            // [3.233.0/c41,c41sと同型の穴] c42/c42sも「動かせるか」を判定する専用オペレータが無く
-            // destroyRepairViolationsの汎用ランダム再割当頼みだった。applyC42Freeで違反ペアの
-            // 片側を直接動かす専用オペレータへ。
-            "c42" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = false, shouldStop = shouldStop) }
-            "c42s" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyC42Free(state, out, rng, skill = true, shouldStop = shouldStop) }
-            // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
-            //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
-            //   cost(staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
-            //   apt専用の新規オペレータ不要。ラウンド better() keep-best でゲート＝退化なし。
-            // [同根の穴=weekly/fair] 同じ理由で weekly/fair も order に無く一度も focus されていなかった
-            //   （実データ検証: weekly L1偏差合計65(aptの37より大きい)・fair合計11）。staffCountPenaltyAt は
-            //   weekly/fair 未対応(曜日バケット・群平均を持たない)のため厳密な cost-aware 研磨ではないが、
-            //   destroyRepairStaff は職員1人の月全体を破壊再構築する汎用オペレータであり、weekly/fair が
-            //   支配的なときに専用ラウンドを割り当てるだけでも「total」の無指向な空振りより改善機会が増える。
-            //   ラウンド better() keep-best でゲート＝退化なし（厳密な cost 統合は将来の拡張候補）。
-            // [3.240.0/実機ログ起因=5ラウンド完全停滞の修正] destroyRepairStaff は「1人を丸ごと非希望日
-            //   全休化→被覆穴のみ埋め直す」という1回で最大T(日数)セルを変える大きな摂動。covU focus の
-            //   destroyRepairDay(1回で最大S(職員数)セル、repeat(6))と揃えるはずが、固定repeat(8)のまま
-            //   だったため、S<T のデータ（実機=10職員/31日）では1ラウンドの総攪乱セル数が数倍に膨らみ、
-            //   60秒/ラウンドのSA/ALNSでは破壊前の解に匹敵する状態まで回復しきれず、5ラウンド全て
-            //   total不変のまま予算を使い切っていた（runV5の入力比番兵はhypothesis自体との比較のため
-            //   この過大摂動を防げない）。destroyRepairDay基準(6回×S人ぶんのセル変化)に総攪乱セル数を
-            //   揃えるよう reps を動的計算する（S>=T のデータでは reps>=6 相当まで許容＝挙動退化なし）。
-            "low", "high", "c2", "apt", "weekly", "fair" -> {
-                repeat(destroyRepairStaffReps(p.S, p.T)) { destroyRepairStaff(state, out, rng) }
-            }
-            // [3.204.0/実機ログ起因=covOがfocusされても直せなかった] covO は markNeed(k,j) で needViolations に
-            //   載り、report.violations(セル"i,j"マップ)には現れないため、他の focus 未対応族の else 分岐が
-            //   使う destroyRepairViolations(report.violations.keys 基準)では covO 専用のヒントが1つも無く、
-            //   focus が回っても実質ランダムな空振りになっていた。covO診断(V6PortAnalyzer.diagnoseCoverage)と
-            //   同じ「動かせるか」判定(希望固定/禁止連続を避け・移動先でcovOを悪化させない)をその場で「実行」する
-            //   専用オペレータ applyCovOFree を新設し、covU chain(applyCovUChains)と対称に配線する。
-            //   [3.241.0] destroyRepairDayを先に(順序バグ修正、上記covUコメント参照)＝covOは特にneed<=0
-            //   シフト(休等)の過剰が主対象でrepair段階の恩恵が皆無のため、この順序修正の効果が最も直接的。
-            "covO" -> { repeat(6) { destroyRepairDay(state, out, rng) }; applyCovOFree(state, out, rng, shouldStop) }
-            // [実機ログ起因] groupViol/pref は hf67 の作用対象(hf66DataHardening=群外修正・希望反映)だが、
-            //   c3n(禁止連続=HARD)は hf67 が一切作用しない(被覆/希望/下限のみ)＝c3n focus のラウンドが no-op 仮説で
-            //   空転していた(実機3実行×計10ラウンドで c3n=1 不変→HF63 が c3n を誤 infeasible 判定)。c3n のセルは
-            //   violations マップに載る(両端2セル)ので、違反セルを直接再割当する destroyRepairViolations(else)へ回す。
-            //   仮説はラウンド単位 better() keep-best でゲート済＝退化なし。
-            "groupViol", "pref" -> {
-                val fixed = hf67HardRepair(state, out, rng).schedule
-                for (i in 0 until p.S) for (j in 0 until p.T) out[i][j] = fixed[i][j]
-            }
-            else -> repeat(12) { destroyRepairViolations(state, out, report, rng) }
-        }
-        return out
-    }
-
-    /**
-     * [E11/多人数ブロック移動] 現盤面の全 covU セルを、同日・多人数の玉突き連鎖（findCovUChain）で
-     * 充填する。sched を in-place 変更し、適用手数を返す。連鎖は同日内交換＝被覆総量保存で、canDo/非wishLocked/
-     * c3n枝刈り済み。最終採否は呼び出し側の keep-best（ラウンド better() or エピローグの checker 照合）が担保。
-     * ユーザー実例（2026-08）: 8/11 モニカ B4→Cｵ（深さ1）／8/17 上條 Cｵ→Cｱ・山本 →Cｵ（深さ2）。
-     */
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-private fun applyCovUChains(
-        state: MagiState, sched: Array<IntArray>, rng: Random,
-        shouldStop: () -> Boolean = { false },
-    ): Int {
-        val p = cachedProblem(state)
-        if (p.S == 0 || p.T == 0) return 0
-        var applied = 0
-        val cnt = IntArray(p.K)
-        for (j in 0 until p.T) {
-            if (shouldStop()) return applied
-            for (k in 0 until p.K) cnt[k] = 0
-            for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
-            for (k in 0 until p.K) {
-                if (p.covUCell(k, j, cnt[k]) <= 0) continue
-                val chain = findCovUChain(p, sched, k, j, rng) ?: continue
-                for (mv in chain) sched[mv[0]][mv[1]] = mv[2]
-                applied++
-                // 同日に複数 covU があり得るので当日カウントを再計算。
-                for (kk in 0 until p.K) cnt[kk] = 0
-                for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cnt[kk]++ }
-            }
-        }
-        return applied
-    }
-
-    /**
-     * [3.204.0/covO専用repair] 人員過剰(covO)セルの在勤者のうち、他シフトへ移しても新たな違反を生まない
-     * （希望固定でない・移すと禁止連続(c3n)を作らない・移動先で covO が悪化しない＝受け皿あり）候補を1人
-     * 見つけて実際に移す。V6PortAnalyzer.diagnoseCoverage の covO 診断（動かせる/玉突き必要/希望固定/
-     * 禁止連続の4分類）と同じ判定を「実行」する版（診断＝読取専用、こちらは探索オペレータ）。
-     * 被覆総量は保存しない（過剰シフトから1人引くだけ＝covOのみ改善方向）。動かせる候補が尽きたセルは
-     * そのまま残す（希望固定/または隣接日調整(下記)を含め本当に動かせない、または玉突きが要る＝本
-     * オペレータの対象外）。sched を in-place 変更し、適用手数を返す。最終採否は呼び出し側の
-     * keep-best が担保＝退化なし。
-     *
-     * [3.226.0/禁止連続の回避=隣接日調整] 移動先が全て禁止連続(c3n)で塞がる場合、即諦めず
-     * `tryFixForbiddenRunViaAdjacentDay`（findCovUChainのcovU側と共通のヘルパー）で隣接日(j-1/j+1)の
-     * 本人の割当を変えてパターンを崩せないか試す。空くシフトのcovU悪化はfindCovUChainで玉突き埋め直し
-     * 済み（ヘルパー内部で完結）。ここでは追加で「隣接日の変更後、移動先mでcovOが悪化しないか」を
-     * 確認し、悪化するなら隣接日側の変更ごと巻き戻して次の候補へ（実際に適用したcov[j2]/schedは
-     * 必ず復元してから次を試す）。
-     */
-    /**
-     * [3.253.0, 実データ検証で判明した「Free」系リペア共通の欠陥を修正] `applyCovOFree`/`applyC41Free`/
-     * `applyC42Free` は従来「移動先/移動元のcovU/covOだけを見て構造的に安全な最初の候補」を採用しており、
-     * 動かす本人自身の他制約(staffRange低/高・apt・c1・c2・weekly・fair等)への影響を一切見ずに移動していた。
-     * 実データ検証(golden_state.json/sample_state_v6.json、ホストJVM実行で独立検証)で、covOは単体実行の
-     * 大半の試行でtotalを悪化(313→325〜351)、c42はgolden 15/15・sample_v6 11/15が悪化——「動かせる」は
-     * 「動かして得」を意味しないことを確認した（ユーザー指摘「大嶋と美幸の違反研磨は適切か」を機に、
-     * AptPolish/RangePolishは既に全候補で実チェッカー+isBetter/betterのkeep-best gateを持つ健全な実装と
-     * 確認済み＝この欠陥はcovO/c41/c41s/c42/c42s専用のFree系のみ）。
-     *
-     * 候補（セル代入の束＝直接移動、または移動＋玉突き連鎖の複合手）を1つずつ実際に一時適用し、
-     * UnifiedViolationChecker で全体評価、baseline(この手を試す直前の盤面)に対して真に改善する
-     * (better()=hard→weighted→total辞書式で厳密改善)候補の中から最良の1件だけを選んでコミットする。
-     * 改善する候補が1つも無ければ何もしない(null)＝そのセルは諦める（安全側・退化不能）。
-     * 実装コストは度外視（ユーザー指示）＝候補ごとにフルcheckを行うため計算量は増えるが、
-     * これらはRSI 1ラウンドにつき1回しか呼ばれない仮説生成器のため許容範囲。
-     */
-    private fun commitBestMove(
-        state: MagiState, sched: Array<IntArray>,
-        baseline: ViolationReport, candidates: List<List<IntArray>>,
-    ): ViolationReport? {
-        var bestOps: List<IntArray>? = null
-        var bestRep: ViolationReport? = null
-        for (ops in candidates) {
-            val saved = IntArray(ops.size) { sched[ops[it][0]][ops[it][1]] }
-            for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
-            val rep = UnifiedViolationChecker.check(state, sched)
-            for (idx in ops.indices) sched[ops[idx][0]][ops[idx][1]] = saved[idx]
-            if (better(rep, baseline) && (bestRep == null || better(rep, bestRep!!))) {
-                bestOps = ops; bestRep = rep
-            }
-        }
-        val ops = bestOps ?: return null
-        for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
-        return bestRep
-    }
-
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-internal fun applyCovOFree(
-        state: MagiState, sched: Array<IntArray>, rng: Random,
-        shouldStop: () -> Boolean = { false },
-    ): Int {
-        val p = cachedProblem(state)
-        if (p.S == 0 || p.T == 0) return 0
-        var applied = 0
-        for (j in 0 until p.T) {
-            if (shouldStop()) return applied
-            for (k in 0 until p.K) {
-                while (true) {
-                    if (shouldStop()) return applied
-                    val cov = IntArray(p.K)
-                    for (i in 0 until p.S) { val kk = sched[i][j]; if (kk in 0 until p.K) cov[kk]++ }
-                    if (p.covOCell(k, j, cov[k]) <= 0) break
-                    val baseline = UnifiedViolationChecker.check(state, sched)
-                    val staffOnK = (0 until p.S).filter { sched[it][j] == k }
-                    val candidates = ArrayList<List<IntArray>>()
-                    for (i in staffOnK) {
-                        // [3.391.0] 生の `wish==k` は**実現不能な希望**（担当できないシフトへの希望）まで
-                        //   固定扱いにしていた。pref は実現可能な希望しか数えない（MirrorCore）ので、
-                        //   その場合ここを動かしても pref は増えず、逆に担当外セル＝groupViol(10000) が消える
-                        //   ＝**必須違反が厳密に減る手を丸ごと捨てていた**。規約の wishLocked へ統一（3.351.0 と同型）。
-                        if (p.wishLocked(i, j) && p.wish[i][j] == k) continue   // 実現可能な本人希望＝動かすとpref未充足化
-                        for (m in p.allowedShiftsForStaff(i).filter { it != k }) {
-                            if (p.makesForbiddenRun(sched, i, j, m)) {
-                                val fix = tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, m, rng) ?: continue
-                                candidates.add(fix + listOf(intArrayOf(i, j, m)))
-                            } else {
-                                candidates.add(listOf(intArrayOf(i, j, m)))
-                            }
-                        }
-                    }
-                    if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
-                    applied++
-                }
-            }
-        }
-        return applied
-    }
-
-    /**
-     * [3.209.0/c41・c41s専用repair] c41/c41s（群×日×シフトの人数レンジ[l,u]違反）は covO/covU と同じく
-     * markNeed(needViolations)にしか載らず report.violations（職員×日マップ）には現れないため、
-     * GLSキック・destroyRepairViolations が一切ヒントを持てず、RSI focus されても
-     * applyCovUChains+destroyRepairDay（covU=シフト単位の不足専用）では群レンジの上限超過・下限割れの
-     * どちらも直接には狙えない（destroyRepairDayAt の c41DayMarg は covU 充填の副次効果でしか働かない）。
-     * covO診断/applyCovOFreeと同じ「動かせるか」判定をこの群レンジにも適用し、超過なら群内在籍者を
-     * 他シフトへ・不足なら群内の他シフト在籍者を引き入れて実際に解消する。skill=false は cons41(sgrp)、
-     * skill=true は cons41s(ssk) を対象にする（DRY化）。希望固定でない・禁止連続(c3n)を作らない・
-     * 移動元/移動先で covU/covO を悪化させない候補のみ動かす。sched を in-place 変更し適用手数を返す。
-     * 最終採否は呼び出し側の keep-best が担保＝退化不能。
-     */
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-internal fun applyC41Free(
-        state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
-        shouldStop: () -> Boolean = { false },
-    ): Int {
-        val p = cachedProblem(state)
-        if (p.S == 0 || p.T == 0) return 0
-        val rules = if (skill) p.cons41s else p.cons41
-        if (rules.isEmpty()) return 0
-        val grp = if (skill) p.ssk else p.sgrp
-        var applied = 0
-        fun groupCount(c: C41, j: Int): Int {
-            var z = 0
-            for (i in 0 until p.S) if (grp[i] == c.groupIdx && sched[i][j] == c.shiftIdx) z++
-            return z
-        }
-        // [3.253.0, commitBestMoveへ全面移行] 旧実装は「離脱元/到着先のcovU/covOが非悪化」を満たす
-        //   最初の候補（見つからなければ玉突き連鎖の最初の候補）で即採用しており、動かす本人自身の
-        //   staffRange/apt/c1/c2/weekly/fair等への影響を一切見ていなかった（実データ検証でcovO/c42の
-        //   同型実装が大半の試行でtotalを悪化させることを確認、詳細はcommitBestMoveのdoc参照）。
-        //   ここでは構造的に安全（希望非固定・禁止連続なし）な候補を直接移動・玉突き連鎖の両方で
-        //   網羅的に集め、commitBestMoveが実チェッカーで全体評価して真に改善する最良の1件だけを選ぶ。
-        for (c in rules) {
-            if (shouldStop()) return applied
-            for (j in 0 until p.T) {
-                if (shouldStop()) return applied
-                // 超過(z>u): 群在籍者を他シフトへ移す。
-                while (groupCount(c, j) > c.u) {
-                    val baseline = UnifiedViolationChecker.check(state, sched)
-                    val onShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] == c.shiftIdx }
-                    val candidates = ArrayList<List<IntArray>>()
-                    for (i in onShift) {
-                        // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。上の applyCovOFree と同型。
-                        if (p.wishLocked(i, j) && p.wish[i][j] == c.shiftIdx) continue   // 実現可能な本人希望＝対象外
-                        for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }) {
-                            if (p.makesForbiddenRun(sched, i, j, m)) continue
-                            candidates.add(listOf(intArrayOf(i, j, m)))
-                            // 玉突き連鎖版（離脱先を先に適用してから探索＝本人がまだ在籍中に見える誤判定を防ぐ既定の作法）。
-                            val oldK = sched[i][j]
-                            sched[i][j] = m
-                            val chain = findCovUChain(p, sched, c.shiftIdx, j, rng, exclude = i)
-                            sched[i][j] = oldK
-                            if (chain != null) candidates.add(listOf(intArrayOf(i, j, m)) + chain)
-                        }
-                    }
-                    if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
-                    applied++
-                }
-                // 不足(z<l): 群内の他シフト在籍者を引き入れる。
-                while (groupCount(c, j) < c.l) {
-                    val baseline = UnifiedViolationChecker.check(state, sched)
-                    val offShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] != c.shiftIdx && p.canDo(it, c.shiftIdx) }
-                    val candidates = ArrayList<List<IntArray>>()
-                    for (i in offShift) {
-                        val old = sched[i][j]
-                        // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。
-                        if (old !in 0 until p.K || (p.wishLocked(i, j) && p.wish[i][j] == old)) continue   // 現シフトが実現可能な本人希望＝対象外
-                        if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
-                        candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)))
-                        sched[i][j] = c.shiftIdx
-                        val chain = findCovUChain(p, sched, old, j, rng, exclude = i)
-                        sched[i][j] = old
-                        if (chain != null) candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)) + chain)
-                    }
-                    if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
-                    applied++
-                }
-            }
-        }
-        return applied
-    }
-
-    /**
-     * [3.233.0/ドッグフーディングで発見・covO(3.204.0)/c41,c41s(3.209.0)と同型の専用repair欠如]
-     * c42(群ペア禁止: 群g1のs1×群g2のs2が同日に同時発生禁止)は`mark(i,j,"c42")`で
-     * report.violations(セルマップ)には載るため destroyRepairViolations の汎用ランダム再割当は
-     * 一応届くが、covU/covO/c41のような「動かせるか(希望固定/禁止連続/被覆悪化を避ける)」を判定して
-     * 実際に動かす専用オペレータが無かった。違反ペア(left∈g1×s1, right∈g2×s2)のどちらか一方を
-     * 実際に他シフトへ動かして崩す。移動先でcovOが悪化しない候補を探し、離脱元でcovUが悪化するなら
-     * findCovUChainで玉突きフォールバック（c41Free(3.209.0)で判明済みの罠=「離脱を先にschedへ適用して
-     * からfindCovUChainを呼ぶ」順序を踏襲。逆順だと本人がまだ在籍中に見え常にnullが返る）。
-     * skill=false は cons42(sgrp)、skill=true は cons42s(ssk) を対象にする（DRY化）。
-     * sched を in-place 変更し適用手数を返す。最終採否は呼び出し側のkeep-best（ラウンドbetter()）が
-     * 担保＝退化不能。
-     */
-            // [3.313.0] 締切/キャンセル確認。これらは違反セル × 候補職員の二重ループの内側で
-        //   フル checker（commitBestMove）と findCovUChain(BFS) を呼ぶ高コストパスで、旧実装は
-        //   停止確認を一切持たなかった（3.161.0 で V6HotfixPasses の研磨パスへ入れた「内側ループ
-        //   でも締切を見る」の対象漏れ）。既定 `{ false }` なので既存の直接呼出＝挙動不変。
-internal fun applyC42Free(
-        state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
-        shouldStop: () -> Boolean = { false },
-    ): Int {
-        val p = cachedProblem(state)
-        if (p.S == 0 || p.T == 0) return 0
-        val rules = if (skill) p.cons42s else p.cons42
-        if (rules.isEmpty()) return 0
-        val grp = if (skill) p.ssk else p.sgrp
-        var applied = 0
-        // [3.253.0, commitBestMoveへ全面移行] 詳細はcommitBestMove/applyC41Freeのdoc参照。
-        //   違反ペアの片側(left=g1×s1 / right=g2×s2)それぞれについて、構造的に安全な直接移動・
-        //   玉突き連鎖の両方の候補を集め、commitBestMoveが実チェッカーで全体評価する。
-        fun gatherSide(candidates: List<Int>, j: Int, fromShift: Int, out: ArrayList<List<IntArray>>) {
-            for (i in candidates) {
-                // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。
-                if (p.wishLocked(i, j) && p.wish[i][j] == fromShift) continue   // 実現可能な本人希望＝対象外
-                for (m in p.allowedShiftsForStaff(i).filter { it != fromShift }) {
-                    if (p.makesForbiddenRun(sched, i, j, m)) continue
-                    out.add(listOf(intArrayOf(i, j, m)))
-                    val oldK = sched[i][j]
-                    sched[i][j] = m
-                    val chain = findCovUChain(p, sched, fromShift, j, rng, exclude = i)
-                    sched[i][j] = oldK
-                    if (chain != null) out.add(listOf(intArrayOf(i, j, m)) + chain)
-                }
-            }
-        }
-        for (c in rules) {
-            if (shouldStop()) return applied
-            for (j in 0 until p.T) {
-                if (shouldStop()) return applied
-                while (true) {
-                    val left = (0 until p.S).filter { grp[it] == c.g1 && sched[it][j] == c.s1 }
-                    val right = (0 until p.S).filter { grp[it] == c.g2 && sched[it][j] == c.s2 }
-                    if (left.isEmpty() || right.isEmpty()) break   // ペアが存在しない＝この日は解消済み
-                    val baseline = UnifiedViolationChecker.check(state, sched)
-                    val candidates = ArrayList<List<IntArray>>()
-                    gatherSide(left, j, c.s1, candidates)
-                    gatherSide(right, j, c.s2, candidates)
-                    if (candidates.isEmpty()) break
-                    if (commitBestMove(state, sched, baseline, candidates) == null) break
-                    applied++
-                }
-            }
-        }
-        return applied
-    }
-
-    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet(), round: Int = -1, roundsTotal: Int = -1): String {
-        // [実機ログ起因=公平化のズレ] apt(適切回数)を追加。旧orderに無かったため RSI 探索中は一度も
-        //   focus されず、post-processing(applyDayAssignmentPolish)頼みで広く未研磨のまま残っていた
-        //   （実データ検証: apt L1偏差合計37、staffRange低/高はわずか3で規模が逆転）。rsiGenerateHypothesis
-        //   側は既存の destroyRepairStaff(low/high/c2 と同経路、marginal costに apt 込み)へ合流するだけ＝
-        //   新規オペレータ不要。
-        // [同根の穴=weekly/fair] 同じ理由で weekly/fair も未focusだったため追加（実データ検証: weekly=65
-        //   （aptの37より大きい）・fair=11）。destroyRepairStaff は weekly/fair の cost には未対応だが、
-        //   専用ラウンドを割り当てるだけで無指向な"total"空振りより改善機会が増える（詳細はrsiGenerateHypothesis）。
-        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "apt", "weekly", "fair", "c1", "c3", "c3m", "c3mn")
-        // [D1/A1] 解ける HARD 族(groupViol/covU/pref/c3n)は件数に関わらず SOFT より先に focus する。
-        //   旧実装は純・件数最大だったため、単一の c3n=1 が c1=118 等の高頻度 SOFT に埋もれ RSI が一度も HARD を
-        //   狙わない失敗があった。目的関数 better() は辞書式(hard<<total<<weighted)で HARD 支配ゆえ focus も HARD
-        //   優先が整合。avoid(HF63=構造的に充足困難)に入る HARD は「解けない」ため除外し無駄打ちを避ける(残予算は
-        //   下段の SOFT 研磨へ)。この分岐は hard=0 のとき no-op＝全 soft の一般ケースは従来と不変。
-        for (key in order) {
-            if (key !in MirrorKeys.hard || key in avoid) continue
-            if ((report.breakdown[key] ?: 0) > 0) return key
-        }
-        // [3.204.0/実機ログ起因=covOが「件数最大」選択に構造的に勝てない] covO は日×シフトのセル単独違反
-        //   （新設したCoverageDiag診断＝V6PortAnalyzer.diagnoseCoverage の covO 版で判明）のため件数が常に
-        //   一桁台に留まり、c1/c42/c3mn/weekly のような数十件規模の族に下段の「件数最大」選択で恒久的に
-        //   絶対勝てない（実機ログで「動かせる」と診断されたcovOセルが300秒経っても解消されないことを確認）。
-        //   HARDの「件数に関わらず先に狙う」と同じ発想で、covO専用に周期的な保証枠(3ラウンドに1回)を設け、
-        //   count>0かつavoid対象でなければ下段の最大値選択より優先する。他のSOFT族の選択順は完全に不変
-        //   （round<0=呼出元が未対応の旧経路 or この分岐に該当しないラウンドは従来どおり件数最大へフォールバック）。
-        // [3.207.0/実機ログで判明した3.204.0の実効性不足] 典型的な5ラウンドRSIでは round%3==2 の唯一の
-        //   該当ラウンド(0始まりで2番目)が、HF63がc3n/covUをdeprioritizeし終える前(HF63は約3ラウンドの
-        //   停滞を要する)に来てしまい、HARD優先ループがそのラウンドを丸ごと消費して covO 分岐へ到達しない
-        //   （実機ログ: round=3/5 focus=c3n、covOは合計6のまま最後まで不変）。HARDが本当に解けない場合は
-        //   HF63が最終的にdeprioritizeし尽くすため、**RSIフェーズの最終ラウンドでは高確率でavoidが揃っている**
-        //   （実機ログでもround=5/5時点でc3n,covU,c1(E9冷却)が全てavoid/cooldown済）。最終ラウンドも
-        //   保証枠に加え、周期枠が典型的な短いRSIフェーズで丸ごと空振りする問題を解消する
-        //   （roundsTotal<0=呼出元が未対応なら従来どおり無効化＝後方互換）。
-        val finalRound = roundsTotal > 0 && round == roundsTotal - 1
-        // [3.208.0/実機ログで判明したaptの同型の恒久的starvation] 提供された全ログ(7本)を確認したところ、
-        //   apt は常に breakdown 最小級（1または11、他族(c1=87/c42=18/weekly=56等)の一桁〜二桁下）で、
-        //   "focus=apt" は一度も出現しなかった（"focus=weekly" のみが件数最大フォールバックで選ばれ続ける）。
-        //   apt は 3.169.0 で正に「focus されず未研磨」を解消する狙いで order に追加されたが、追加した
-        //   だけでは件数最大選択に構造的に勝てないという covO と全く同じ欠陥を抱えていた（3.169.0時点の
-        //   検証データではapt=37とcovOより大きく問題が露呈しなかったが、実運用データでは apt が最小級に
-        //   落ち着くことが多いと判明）。covOとは別の周期(round%3==1、covOの%3==2と衝突しない)を割当てる。
-        // [3.239.0/実機ログで判明した最終ラウンド枠の固定順バグ] 旧実装は最終ラウンドで常に
-        //   「aptを先にチェック（covOより小さく恒常的に不利なため優先）」という固定順だった。これは
-        //   「aptは常にcovOより小さい」という3.208.0時点の観測（7本のログ全てでapt<covO）に基づく前提
-        //   だったが、この前提自体がデータ依存で普遍的ではない（実機ログで apt=29 > covO=4 という逆転を
-        //   確認。5ラウンドRSI中、covUがHARDとして数ラウンド粘り+周期枠(round%3==2)もHARD優先ループに
-        //   食われ、最終ラウンドはfinalRound分岐に到達するがaptが先にreturnするためcovOには一度も
-        //   到達しなかった＝8/26のcovO過剰1が「動かせる」診断なのに300秒経っても未解消だった根本原因の
-        //   一つ）。最終ラウンドで両方が候補になる場合のみ、実際の件数を比較し「より少ない方
-        //   （より構造的に不利＝件数最大選択に絶対勝てない方）」を優先する。通常ラウンド(round%3==1/2の
-        //   単独枠)は従来どおり衝突しないため無変更。
-        val aptEligible = round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 && (round % 3 == 1 || finalRound)
-        val covOEligible = round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 && (round % 3 == 2 || finalRound)
-        if (aptEligible && covOEligible) {
-            return if ((report.breakdown["covO"] ?: 0) <= (report.breakdown["apt"] ?: 0)) "covO" else "apt"
-        }
-        if (aptEligible) return "apt"
-        if (covOEligible) return "covO"
-        // 解ける HARD が無い(全て 0 か avoid)＝以降は SOFT。従来どおり非avoidの族から件数最大を返す。
-        // [E8/実機ログ起因] 件数0の族は focus しない（旧: bestCount=-1 初期化のため、非avoidの正件数族が
-        //   order に1つも無いと先頭 groupViol=0 が「0 > -1」で当選→hf67ルートがクリーン盤面への no-op 仮説
-        //   ＝1ラウンド(実測~21s)空振りしていた。12シフト実機ログ round=4/5 focus=groupViol(件数0)で確認）。
-        //   該当なしは "total" を返し、rsiGenerateHypothesis の else 分岐＝全違反セル hint の汎用修復
-        //   (destroyRepairViolations, focus 非依存)ラウンドとして時間を有効化する。focus 選択のみ＝スコアリング不変。
-        var best = "total"
-        var bestCount = 0
-        for (key in order) {
-            if (key in avoid) continue
-            val n = report.breakdown[key] ?: 0
-            if (n > bestCount) {
-                bestCount = n
-                best = key
-            }
-        }
-        // [ユーザー明示指示(2026-07-20)「weeklyをaptより優先順位を下げる」] weekly は件数が大きくなりやすく
-        //   (実機ログで41〜65)、apt(同1〜29)より小さくても件数最大選択で恒常的に勝ってしまっていた。
-        //   件数比較でweeklyが選ばれた場合でも、aptに残り(avoid対象でなければ)があれば apt を優先する
-        //   （apt自身の周期枠=aptEligibleが不発だったラウンドのみ到達＝この分岐で初めて効く）。
-        //   apt/weekly以外の族どうしの順位（c1/c3/fair等）は無変更。
-        if (best == "weekly" && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0) {
-            best = "apt"
-        }
-        return best
-    }
-
     // [3.287.0 keep-best統一] hard→weightedScore→total（単一ソース betterReport へ委譲。MirrorCore.kt 参照）。
     private fun better(a: ViolationReport, b: ViolationReport): Boolean = betterReport(a, b)
-
-    /**
-     * [品質向上] エリート解の Path Relinking（Glover, Laguna & Martí 2000 / Scatter Search）。
-     * 並列ポートフォリオが保持する精鋭解（[lastAlternatives]）と現行最良を「再結合」し、両者の中間に
-     * しばしば存在する、どの単独軌道でも届かない良解を拾う。best を起点に各 alt へ強制マーチ（差分セルを
-     * alt 値へ順次適用）し、経路上の最良中間解を保持。常に best 起点から評価するので**退化しない**。
-     * 早期停止で空いた予算を、頭打ちした同種探索ではなく「別種の探索」に充てて品質を底上げする。
-     */
-    fun elitePathRelink(
-        state: MagiState,
-        best: Array<IntArray>,
-        alternatives: List<Array<IntArray>>,
-        shouldStop: () -> Boolean,
-    ): Pair<Array<IntArray>, ViolationReport> {
-        var bestSched = best.copy2D()
-        var bestRep = UnifiedViolationChecker.check(state, bestSched)
-        if (alternatives.isEmpty()) return bestSched to bestRep
-        for (alt in alternatives) {
-            if (shouldStop()) break
-            val cur = bestSched.copy2D()              // 常に現行最良から再結合（中間最良は別管理＝退化なし）
-            var curRep = UnifiedViolationChecker.check(state, cur)
-            val diffs = ArrayList<Pair<Int, Int>>()
-            for (i in cur.indices) for (j in cur[i].indices) {
-                if (i < alt.size && j < alt[i].size && cur[i][j] != alt[i][j]) diffs.add(i to j)
-            }
-            if (diffs.isEmpty()) continue
-            // 違反セルを先に動かす（インパクト大の組み替えを前倒し）。
-            val vcells = HashSet<Pair<Int, Int>>()
-            for (vkey in curRep.violations.keys) {
-                val parts = vkey.split(',')
-                val ci = parts.getOrNull(0)?.toIntOrNull(); val cj = parts.getOrNull(1)?.toIntOrNull()
-                if (ci != null && cj != null) vcells.add(ci to cj)
-            }
-            diffs.sortBy { if (it in vcells) 0 else 1 }
-            for ((i, j) in diffs) {
-                if (shouldStop()) break
-                cur[i][j] = alt[i][j]                 // alt へ向けた強制マーチ
-                curRep = UnifiedViolationChecker.check(state, cur)
-                if (better(curRep, bestRep)) { bestSched = cur.copy2D(); bestRep = curRep }
-            }
-        }
-        return bestSched to bestRep
-    }
 
     private fun nowMs(): Long = System.nanoTime() / 1_000_000L
     private fun actualSeed(seed: Long): Long = if (seed == 0L) System.nanoTime() else seed

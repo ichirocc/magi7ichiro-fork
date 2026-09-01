@@ -40,7 +40,7 @@ object V6FinalPort {
         // [3.266.0] 旧RSIPlusから改称。211秒以上はRSI++クローン群でなく、ALNS/RSI/RSI++の異種
         //   非同期適応ポートフォリオ(V6Algorithm.PORTFOLIO)を使う（HypothesisDiversityPolicy.
         //   autoAlgorithmForBudget と同じ閾値・同じ意図。旧実装はここが独立した別ロジックのままで、
-        //   V6NativeOptimizer.chooseAlgorithm側だけを直しても実際のAUTOフローには反映されなかった）。
+        //   SelectionHeuristics.chooseAlgorithm側だけを直しても実際のAUTOフローには反映されなかった）。
         data class Portfolio(val seconds: Int) : OptimizationPlan()
     }
 
@@ -109,7 +109,7 @@ object V6FinalPort {
             s <= 210 -> { val rsi = (s * 2) / 3; OptimizationPlan.RSIThenALNS(rsi, s - rsi, 2) }
             // [3.266.0] 211秒以上は同型RSI++クローン8本でなく、ALNS/RSI/RSI++の異種非同期適応
             //   ポートフォリオ(V6Algorithm.PORTFOLIO)を使う。旧実装はここが一貫してRSIPlusを返すため、
-            //   V6NativeOptimizer.chooseAlgorithm側の同種の変更だけでは実際のAUTOフローに反映されず、
+            //   SelectionHeuristics.chooseAlgorithm側の同種の変更だけでは実際のAUTOフローに反映されず、
             //   本来の狙い（長時間AUTOでの基盤/役割多様化）が発現しない欠陥があった。
             else -> OptimizationPlan.Portfolio(s)
         }
@@ -306,7 +306,7 @@ object V6FinalPort {
         val budgetMs = seconds.toLong() * 1000L
         val hardDeadlineMs = startMs + budgetMs
         // [仮説数上限撤廃・ユーザー指示] 診断ログ表示専用。実際の dispatch は V6NativeOptimizer.optimize()
-        //   内の同名関数呼出が担うため、ここも同じ V6NativeOptimizer.hypothesisCount から導出し独立再計算による
+        //   内の同名関数呼出が担うため、ここも同じ HypothesisPlanning.hypothesisCount から導出し独立再計算による
         //   表示/実挙動の乖離を防ぐ（3.212.0 と同じ設計原則）。
         // [3.372.0/レビュー修正] 旧: hypothesisCount(workers) をそのまま「実効仮説」として印字していたが、
         //   runMultiWorker 経路(ALNS/RSI/RSI_PLUS)は workers>コア数のとき hypothesisSpawnPlan が spawn数を
@@ -314,10 +314,10 @@ object V6FinalPort {
         //   食い違って見えていた（例: workers=16/8コア → V6Dispatcher「実効仮説8」vs TIME「実効仮説16」）。
         //   PORTFOLIO は runMultiWorker を経由せず w 本のロールを spawn するため畳まれない。
         //   V5 は仮説の概念を使わず workers をそのまま SA チェーン数にするため、その旨を表示側で分ける。
-        val plannedHypotheses = V6NativeOptimizer.hypothesisCount(workers)
+        val plannedHypotheses = HypothesisPlanning.hypothesisCount(workers)
         val effHypotheses = when (opts.algorithm) {
             V6Algorithm.ALNS, V6Algorithm.RSI, V6Algorithm.RSI_PLUS ->
-                V6NativeOptimizer.hypothesisSpawnPlan(workers, plannedHypotheses).first
+                HypothesisPlanning.hypothesisSpawnPlan(workers, plannedHypotheses).first
             else -> plannedHypotheses
         }
 
@@ -635,7 +635,7 @@ object V6FinalPort {
                 val extra = V6NativeOptimizer.optimize(
                     state, post.schedule,
                     optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5),
-                        workers = optsR.workers.coerceAtMost(V6NativeOptimizer.MAX_HYPOTHESES)),
+                        workers = optsR.workers.coerceAtMost(HypothesisPlanning.MAX_HYPOTHESES)),
                     extraStop, progressWatch,
                 )
                 // [3.287.0 keep-best統一] hard→weighted→total（betterReport と同順）。

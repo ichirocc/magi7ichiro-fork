@@ -39,7 +39,7 @@ class Hf67DeadlineTest {
         val s = st()
         val sched = s.schedule.map { it.toIntArray() }.toTypedArray()
         // 締切が既に過ぎている → 主スキャンもフォールバック総当たりも走らず即 return（keep-best＝入力維持）。
-        val r = V6HotfixPasses.applyHF67InterStaffSwap(s, sched, maxSwaps = 30, deadlineMs = 0L)
+        val r = HfSwapPolish.applyHF67InterStaffSwap(s, sched, maxSwaps = 30, deadlineMs = 0L)
         assertEquals("締切超過では1手も適用しない", 0, r.swapsApplied)
         assertEquals("フォールバック総当たりも起動しない（rollback=0）", 0, r.swapsRollback)
         assertTrue("盤面は入力(正規化後)と同一",
@@ -52,7 +52,7 @@ class Hf67DeadlineTest {
         val sched = s.schedule.map { it.toIntArray() }.toTypedArray()
         val before = UnifiedViolationChecker.check(s, sched)
         // 既定(deadline=Long.MAX_VALUE)は従来どおり動く＝low/high ペアの改善スワップを見つけられる。
-        val r = V6HotfixPasses.applyHF67InterStaffSwap(s, sched, maxSwaps = 30)
+        val r = HfSwapPolish.applyHF67InterStaffSwap(s, sched, maxSwaps = 30)
         val after = UnifiedViolationChecker.check(s, r.newSchedule)
         assertTrue("従来経路は退化しない", after.total <= before.total)
         assertTrue("この盤面では改善スワップが実際に見つかる", r.swapsApplied > 0)

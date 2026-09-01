@@ -65,7 +65,7 @@ class FlexibleDayFlowTest {
         val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
         assertEquals(5, before.breakdown["groupViol"] ?: 0)
 
-        val result = V6HotfixPasses.applyRangePolish(
+        val result = RangePolish.applyRangePolish(
             st, st.schedule.toIntArray2D(), maxPasses = 1, seed = 1L,
         )
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
@@ -91,7 +91,7 @@ class FlexibleDayFlowTest {
         // 「実現不能な希望はロックにならず、担当不可(groupViol)セルは通常どおり修復される」こと。
         val base = fiveIllegalAaState()
         val st = base.copy(wishes = mapOf("0,0" to 1))
-        val result = V6HotfixPasses.applyRangePolish(
+        val result = RangePolish.applyRangePolish(
             st, st.schedule.toIntArray2D(), maxPasses = 1, seed = 1L,
         )
         assertEquals("実現不能な希望はロックにならずB1へ修復される", 2, result.newSchedule[0][0])
@@ -138,7 +138,7 @@ class FlexibleDayFlowTest {
         assertEquals("初期はDﾃ上限超過(high)が1件", 1, before.breakdown["high"] ?: 0)
         assertEquals("初期は禁止連続なし", 0, before.breakdown["c3n"] ?: 0)
 
-        val result = V6HotfixPasses.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
+        val result = RangePolish.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("Dﾃ超過が解消", 0, after.breakdown["high"] ?: -1)

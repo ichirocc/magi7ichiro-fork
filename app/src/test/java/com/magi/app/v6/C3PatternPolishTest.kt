@@ -59,7 +59,7 @@ class C3PatternPolishTest {
         assertTrue("初期はc3違反(未完成パターン)があること", (before.breakdown["c3"] ?: 0) > 0)
         assertEquals("初期はHARD=0(covU無し、AがXを単独充足)", 0, before.hard)
 
-        val result = V6HotfixPasses.applyC3PatternPolish(st, sched, seed = 1L)
+        val result = C3FamilyPolish.applyC3PatternPolish(st, sched, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("玉突き適用後はc3=0", 0, after.breakdown["c3"] ?: -1)
@@ -72,7 +72,7 @@ class C3PatternPolishTest {
     fun c3PatternPolishIsNoOpWhenNoMultiShiftRules() {
         val st = chainState().copy(cons3 = emptyList())
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyC3PatternPolish(st, sched, seed = 1L)
+        val result = C3FamilyPolish.applyC3PatternPolish(st, sched, seed = 1L)
         assertEquals(0, result.applied)
     }
 
@@ -81,7 +81,7 @@ class C3PatternPolishTest {
         // 単一シフト連(run-deficitモデル)はC3RunPolish(3.215.0)の担当。本パスは何もしない(対象外)。
         val st = chainState().copy(cons3 = listOf(C3Row(listOf("X", "X", "X"))))
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyC3PatternPolish(st, sched, seed = 1L)
+        val result = C3FamilyPolish.applyC3PatternPolish(st, sched, seed = 1L)
         assertEquals(0, result.applied)
     }
 }

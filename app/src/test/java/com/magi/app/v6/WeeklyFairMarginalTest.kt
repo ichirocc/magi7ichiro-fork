@@ -93,13 +93,13 @@ class WeeklyFairMarginalTest {
                 val wd = Array(k) { IntArray(7) }
                 for (jj in 0 until t) { val kk = board[i][jj]; if (kk in 0 until k) wd[kk][(p.dow0 + jj) % 7]++ }
                 val bucket = (p.dow0 + j) % 7
-                val dWeekly = V6NativeOptimizer.weeklyMarginalAt(wd, bucket, old, newK).toDouble()
+                val dWeekly = DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, old, newK).toDouble()
 
                 val counts = Array(s) { ss -> IntArray(k).also { a -> for (jj in 0 until t) { val kk = board[ss][jj]; if (kk in 0 until k) a[kk]++ } } }
                 val grpTotal = Array(p.G) { IntArray(k) }
                 for (ss in 0 until s) for (kk in 0 until k) grpTotal[p.sgrp[ss]][kk] += counts[ss][kk]
-                val dFair = V6NativeOptimizer.fairMarginalAt(p, i, old, -1, counts, grpTotal).toDouble() +
-                    V6NativeOptimizer.fairMarginalAt(p, i, newK, 1, counts, grpTotal).toDouble()
+                val dFair = DestroyRepairMarginalCost.fairMarginalAt(p, i, old, -1, counts, grpTotal).toDouble() +
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, newK, 1, counts, grpTotal).toDouble()
 
                 val myDelta = dOld + dNew + dWeekly + dFair
                 assertEquals(
@@ -115,7 +115,7 @@ class WeeklyFairMarginalTest {
     fun weeklyMarginalAtIsZeroWhenTheShiftDoesNotChange() {
         // [3.345.0] 同じシフトへの「移動」は盤面が動かない＝寄与ゼロ。
         val wd = Array(3) { intArrayOf(1, 1, 1, 1, 1, 1, 1) }
-        assertEquals(0L, V6NativeOptimizer.weeklyMarginalAt(wd, 3, 1, 1))
+        assertEquals(0L, DestroyRepairMarginalCost.weeklyMarginalAt(wd, 3, 1, 1))
     }
 
     @Test
@@ -127,7 +127,7 @@ class WeeklyFairMarginalTest {
             intArrayOf(1, 1, 1, 1, 1, 1, 1),   // 計7・目標 1 → dev=0
         )
         // 0側: 計2・目標0 → dev=2（-1）／1側: 計8・目標 round(8/7)=1 → 月曜2で dev=1（+1）
-        assertEquals(0L, V6NativeOptimizer.weeklyMarginalAt(wd, 0, 0, 1))
+        assertEquals(0L, DestroyRepairMarginalCost.weeklyMarginalAt(wd, 0, 0, 1))
         // 逆向き（1→0）: 0側は月曜4で計4・目標1 → dev=3+... を実測でなく式で確かめるのは別テストの役目。
         // ここでは「呼んでも wd を書き換えない」ことだけ固定する。
         assertEquals(3, wd[0][0]); assertEquals(1, wd[1][0])
@@ -152,6 +152,6 @@ class WeeklyFairMarginalTest {
         val p = cachedProblem(state)
         val counts = Array(3) { IntArray(3) }
         val grpTotal = Array(p.G) { IntArray(3) }
-        assertEquals(0L, V6NativeOptimizer.fairMarginalAt(p, 0, 1, 1, counts, grpTotal))
+        assertEquals(0L, DestroyRepairMarginalCost.fairMarginalAt(p, 0, 1, 1, counts, grpTotal))
     }
 }

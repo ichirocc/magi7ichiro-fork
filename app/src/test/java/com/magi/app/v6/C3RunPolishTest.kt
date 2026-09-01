@@ -60,7 +60,7 @@ class C3RunPolishTest {
         assertTrue("初期はc3(run-deficit)違反があること", (before.breakdown["c3"] ?: 0) > 0)
         assertEquals("初期はHARD=0(covU無し、AがYを単独充足)", 0, before.hard)
 
-        val result = V6HotfixPasses.applyC3RunPolish(st, sched, seed = 1L)
+        val result = C3FamilyPolish.applyC3RunPolish(st, sched, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("玉突き適用後はc3=0", 0, after.breakdown["c3"] ?: -1)
@@ -73,7 +73,7 @@ class C3RunPolishTest {
     fun c3RunPolishIsNoOpWhenNoSingleShiftRules() {
         val st = chainState().copy(cons3 = emptyList())
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyC3RunPolish(st, sched, seed = 1L)
+        val result = C3FamilyPolish.applyC3RunPolish(st, sched, seed = 1L)
         assertEquals(0, result.applied)
     }
 }

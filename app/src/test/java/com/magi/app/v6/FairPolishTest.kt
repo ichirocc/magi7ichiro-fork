@@ -49,7 +49,7 @@ class FairPolishTest {
         assertTrue("初期はfair違反があること", (before.breakdown["fair"] ?: 0) > 0)
         assertEquals("初期HARD=0", 0, before.hard)
 
-        val result = V6HotfixPasses.applyFairPolish(st, sched)
+        val result = AptFairPolish.applyFairPolish(st, sched)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("自己振替後はfair=0", 0, after.breakdown["fair"] ?: -1)
@@ -88,7 +88,7 @@ class FairPolishTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertTrue("初期はfair違反(AとBが鏡像に偏っている)があること", (before.breakdown["fair"] ?: 0) > 0)
 
-        val result = V6HotfixPasses.applyFairPolish(st, sched)
+        val result = AptFairPolish.applyFairPolish(st, sched)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("両者とも独立に解消しfair=0", 0, after.breakdown["fair"] ?: -1)
@@ -139,7 +139,7 @@ class FairPolishTest {
         assertTrue("初期はfair違反があること", (before.breakdown["fair"] ?: 0) > 0)
         assertEquals("初期HARD=0(AがXを単独充足)", 0, before.hard)
 
-        val result = V6HotfixPasses.applyFairPolish(st, sched, seed = 1L)
+        val result = AptFairPolish.applyFairPolish(st, sched, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         // [注記] 自己振替(covU悪化のため全日ブロック)・相互交換(B2希望固定のためブロック)のいずれも
@@ -186,7 +186,7 @@ class FairPolishTest {
         assertEquals("初期fair偏差=8", 8, before.breakdown["fair"] ?: -1)
 
         // maxPasses=1に固定し、1パス内での自己振替の反復可否そのものを検証する。
-        val result = V6HotfixPasses.applyFairPolish(st, sched, maxPasses = 1)
+        val result = AptFairPolish.applyFairPolish(st, sched, maxPasses = 1)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         // [3.345.0] weekly が「職員×シフト×曜日」になり同じ目的関数の中で自己振替と競合するため、
@@ -196,7 +196,7 @@ class FairPolishTest {
         assertTrue("fair は厳密に減る", (after.breakdown["fair"] ?: 99) < (before.breakdown["fair"] ?: 0))
         assertEquals("HARDは悪化しない", 0, after.hard)
         // 反復の継続で最終的には解消しきる（1パスの打ち切りが原因でないことの確認）。
-        val settled = UnifiedViolationChecker.check(st, V6HotfixPasses.applyFairPolish(st, result.newSchedule, maxPasses = 4).newSchedule)
+        val settled = UnifiedViolationChecker.check(st, AptFairPolish.applyFairPolish(st, result.newSchedule, maxPasses = 4).newSchedule)
         assertEquals("パスを重ねれば fair=0 まで解消される", 0, settled.breakdown["fair"] ?: -1)
     }
 
@@ -214,7 +214,7 @@ class FairPolishTest {
         val before = UnifiedViolationChecker.check(st, sched)
         assertEquals("既に均等配置ならfair=0", 0, before.breakdown["fair"] ?: -1)
 
-        val result = V6HotfixPasses.applyFairPolish(st, sched)
+        val result = AptFairPolish.applyFairPolish(st, sched)
         assertEquals(0, result.applied)
     }
 }

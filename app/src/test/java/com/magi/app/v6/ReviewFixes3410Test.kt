@@ -25,24 +25,24 @@ class ReviewFixes3410Test {
     /** 既定（workers==コア数）では **no-op**。ここが崩れると全ユーザーの探索が静かに変わる。 */
     @Test
     fun portfolioWorkerCountIsNoOpWhenWorkersFitsWithinCores() {
-        assertEquals(8, V6NativeOptimizer.portfolioWorkerCount(8, cores = 8))
-        assertEquals(4, V6NativeOptimizer.portfolioWorkerCount(4, cores = 4))
-        assertEquals(2, V6NativeOptimizer.portfolioWorkerCount(2, cores = 8))
+        assertEquals(8, HypothesisPlanning.portfolioWorkerCount(8, cores = 8))
+        assertEquals(4, HypothesisPlanning.portfolioWorkerCount(4, cores = 4))
+        assertEquals(2, HypothesisPlanning.portfolioWorkerCount(2, cores = 8))
     }
 
     /** 設定タブの並列ワーカーは 16 まで上げられる＝8コア機で2倍の希釈が**設定画面から作れた**。 */
     @Test
     fun portfolioWorkerCountClampsOversubscriptionToCores() {
-        assertEquals(8, V6NativeOptimizer.portfolioWorkerCount(16, cores = 8))
-        assertEquals(4, V6NativeOptimizer.portfolioWorkerCount(16, cores = 4))
+        assertEquals(8, HypothesisPlanning.portfolioWorkerCount(16, cores = 8))
+        assertEquals(4, HypothesisPlanning.portfolioWorkerCount(16, cores = 4))
     }
 
     /** 3.224.0 の多様性の下限2（1コア機でも2仮説）は割らない。 */
     @Test
     fun portfolioWorkerCountKeepsTheDiversityFloorOfTwo() {
-        assertEquals(2, V6NativeOptimizer.portfolioWorkerCount(2, cores = 1))
-        assertEquals(2, V6NativeOptimizer.portfolioWorkerCount(16, cores = 1))
-        assertEquals(1, V6NativeOptimizer.portfolioWorkerCount(1, cores = 1))
+        assertEquals(2, HypothesisPlanning.portfolioWorkerCount(2, cores = 1))
+        assertEquals(2, HypothesisPlanning.portfolioWorkerCount(16, cores = 1))
+        assertEquals(1, HypothesisPlanning.portfolioWorkerCount(1, cores = 1))
     }
 
     // ---------- E-15: SaParams の不正値は構築時に落とす ----------

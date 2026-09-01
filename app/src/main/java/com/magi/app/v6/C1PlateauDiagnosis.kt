@@ -6,7 +6,7 @@ package com.magi.app.v6
  *
  * ## なぜ観測ベースなのか（静的証明にしなかった理由）
  * 「休の回数が固定（lo==hi）だから窓不足を直せない」は**証明できない**。窓の不足は
- * 「窓の外にある同じシフトを窓の中へ移す」（[V6HotfixPasses.applyC1WindowPolish] の手R1/R2/R3＝
+ * 「窓の外にある同じシフトを窓の中へ移す」（[C1WindowPolish.applyC1WindowPolish] の手R1/R2/R3＝
  * 回数保存の再配置）でも解消しうるため、回数が動かせないことは即「直せない」を意味しない。
  * よってこの診断は **実際に研磨が候補を作って却下した記録**（観測）だけを根拠にする。
  * 「構造的に不能」とは言わない — 言えるのは「いまの設定のもとで、**試した**手が却下された」までで、
@@ -18,7 +18,7 @@ package com.magi.app.v6
  * 「探索は動いたが採用に至らなかった」層を説明する。
  *
  * ## 観測の出どころ（3.349.0/敵対検証で明記）
- * 却下の記録を作っているのは **`V6HotfixPasses.applyC1WindowPolish` だけ**。同じ後処理の
+ * 却下の記録を作っているのは **`C1WindowPolish.applyC1WindowPolish` だけ**。同じ後処理の
  * C1 index 駆動修復・時系列フロー・広域ビーム・厳密窓修復は c1 を直しにいくが `plateau` を返さない。
  * よって内訳は「c1 を直そうとした全部の手」ではなく「**同日交換・自己再配置・玉突きで試した手**」の
  * 範囲。[C1PlateauCause.NO_CANDIDATE] の文言が「この直し方では」と限定しているのはこのため。
@@ -203,7 +203,7 @@ data class C1PlateauDiagnosis(
     }
 
     companion object {
-        /** 却下理由の名前（[V6HotfixPasses.applyC1WindowPolish] の `recordBlock` が使う文字列と対応）。 */
+        /** 却下理由の名前（[C1WindowPolish.applyC1WindowPolish] の `recordBlock` が使う文字列と対応）。 */
         const val REASON_PIN = "ピン破り"
         const val REASON_SCORE = "不採用"
         const val REASON_NO_CANDIDATE = "候補なし"

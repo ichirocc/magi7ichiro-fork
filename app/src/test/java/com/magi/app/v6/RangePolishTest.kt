@@ -59,7 +59,7 @@ class RangePolishTest {
         assertTrue("初期はhigh違反があること", (before.breakdown["high"] ?: 0) > 0)
         assertEquals("初期はHARD=0(covU無し、AがXを単独充足)", 0, before.hard)
 
-        val result = V6HotfixPasses.applyRangePolish(st, sched, seed = 1L)
+        val result = RangePolish.applyRangePolish(st, sched, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("玉突き適用後はhigh=0", 0, after.breakdown["high"] ?: -1)
@@ -72,7 +72,7 @@ class RangePolishTest {
     fun rangePolishIsNoOpWhenNoStaffRange() {
         val st = highState().copy(staffRange = emptyMap())
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyRangePolish(st, sched, seed = 1L)
+        val result = RangePolish.applyRangePolish(st, sched, seed = 1L)
         assertEquals(0, result.applied)
     }
 
@@ -82,7 +82,7 @@ class RangePolishTest {
     fun rangePolishLogsNoCandidateReasonWhenOnlyChainPartnerIsWishLocked() {
         val st = highState().copy(wishes = mapOf("1,0" to 3, "1,1" to 3))
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyRangePolish(st, sched, seed = 1L)
+        val result = RangePolish.applyRangePolish(st, sched, seed = 1L)
         assertEquals("唯一の候補が希望固定のため採用0回", 0, result.applied)
         val msg = result.logs.first().message
         assertTrue("残存表示に候補なしの理由が出ること: $msg", msg.contains("候補なし"))
@@ -150,7 +150,7 @@ class RangePolishTest {
         assertEquals(1, before.breakdown["high"] ?: 0)
         assertTrue("代用者にはAのlow違反が無い", before.countViolations["1,0"] != "vio-low")
 
-        val result = V6HotfixPasses.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
+        val result = RangePolish.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("high解消", 0, after.breakdown["high"] ?: -1)
@@ -164,7 +164,7 @@ class RangePolishTest {
     fun rangePolishExactDayMatchingRespectsWishLockedBridge() {
         val st = exactDayCycleState(bridgeWishLocked = true)
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
+        val result = RangePolish.applyRangePolish(st, sched, maxPasses = 1, seed = 1L)
 
         assertEquals("循環に必須のbridge2が希望固定なら不採用", 0, result.applied)
         assertEquals(sched.map { it.toList() }, result.newSchedule.map { it.toList() })

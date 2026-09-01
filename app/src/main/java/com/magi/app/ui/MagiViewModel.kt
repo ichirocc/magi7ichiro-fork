@@ -83,13 +83,22 @@ private const val SAVE_NOW_SLOW_MS = 100L
 
 class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val _ui = MutableStateFlow(UiState())
+    // [分割V3] MagiViewModelIo.kt 等の extension ファイルが参照するため internal 化（var の書き込みは本体のみ＝private set）。
+    //   _ui は update も extension 側から呼ぶ（UiState は copy ベースの単方向フローのみ＝書き手の規約は不変）。
+    internal val _ui = MutableStateFlow(UiState())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
-    private var originalJson: String? = null
-    private var state: MagiState? = null
-    private var currentSchedule: Array<IntArray>? = null
-    private var resultSchedule: Array<IntArray>? = null
+    internal var originalJson: String? = null
+        private set
+    // [分割V1] extension ファイル（MagiViewModelConstraints.kt 等）が読むため internal 化。
+    //   書き込みは従来どおり本体の入口（loadAsync/applyStructure/mutateConstraints/undo系）だけ＝private set。
+    internal var state: MagiState? = null
+        private set
+    // [分割V2] extension ファイル（MagiViewModelWs1.kt 等）が読むため internal 化。書き込みは従来どおり本体のみ＝private set。
+    internal var currentSchedule: Array<IntArray>? = null
+        private set
+    internal var resultSchedule: Array<IntArray>? = null
+        private set
     private var job: Job? = null
     private var checkJob: Job? = null
     private var fixJob: Job? = null   // [競合解消] 改善提案探索。連続タップ時に前探索をキャンセルし古い結果で上書きしない
@@ -151,7 +160,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 画面のメッセージで「何の実行中か」を言うための名前。背景 Worker には名前が無いので既定を返す。 */
-    private fun busyWhat(): String = boardJobLabel ?: "バックグラウンド計算"
+    internal fun busyWhat(): String = boardJobLabel ?: "バックグラウンド計算"
 
     /**
      * [3.328.0 → 3.336.0/外部レビュー P1] **編集・実行の可否はここだけを見る**。`ui.running` は
@@ -161,7 +170,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * [3.404.0] 対象は最適化に限らない（[boardJobLabel] 参照）＝関数名は据え置くが意味は
      * 「盤面を丸ごと差し替えるジョブが走っている」。
      */
-    private fun optimizeInFlight(): Boolean =
+    internal fun optimizeInFlight(): Boolean =
         boardJobLabel != null || OptimizationRepository.running.value
 
     // ===== [v2.22] 自動保存・復元（端末内）と「元に戻す」 =====
@@ -234,9 +243,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 番号を持たせて「どの行がどの実行のものか」を機械的に分けられるようにする。
      */
     data class OpLogEntry(val timeMs: Long, val level: String, val message: String, val run: Int = 0)
-    private val opLog = ArrayDeque<OpLogEntry>()
+    internal val opLog = ArrayDeque<OpLogEntry>()
     // 診断ログの「非圧縮・全文」を保持（画面表示は compressDiagLogs で圧縮、出力はこちらの全文を使う）。
-    private var rawDiagLogs: List<String> = emptyList()
+    internal var rawDiagLogs: List<String> = emptyList()
+        private set
     /**
      * [3.379.0/実機ログ起因] **最後に実行したエンジンの診断ログ**（ラベル・時刻つき）。
      *
@@ -248,14 +258,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * エンジン実行のときだけここへ退避し、書き出しでは現在の診断と**別セクション**で併記する。
      */
     /** [3.408.0] `rawDiagLogs` を作った実行の通し番号（0＝実行外の違反チェック等）。書き出しの帰属に使う。 */
-    private var lastDiagSerial = 0
+    internal var lastDiagSerial = 0
+        private set
 
     /** [3.408.0] `lastRunDiagLogs` を作ったエンジン実行の通し番号。 */
-    private var lastRunDiagSerial = 0
+    internal var lastRunDiagSerial = 0
+        private set
 
-    private var lastRunDiagLogs: List<String> = emptyList()
-    private var lastRunDiagLabel: String = ""
-    private var lastRunDiagAtMs: Long = 0L
+    internal var lastRunDiagLogs: List<String> = emptyList()
+        private set
+    internal var lastRunDiagLabel: String = ""
+        private set
+    internal var lastRunDiagAtMs: Long = 0L
+        private set
     private val opLogFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.JAPAN)
 
     /**
@@ -263,7 +278,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * [3.378.0/HF77=コメント≠実装] 旧 KDoc は「最大300件」と書いていたが実装は 1000。
      * 「自分の行がリングから押し出されたのか」を判断する材料なので実装値へ訂正する。
      */
-    private fun logOp(level: String, message: String) {
+    internal fun logOp(level: String, message: String) {
         opLog.addFirst(OpLogEntry(System.currentTimeMillis(), level, message, activeRunSerial))
         while (opLog.size > 1000) opLog.removeLast()
         _ui.update { it.copy(opLog = opLog.map { formatOpLine(it) }) }
@@ -276,9 +291,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // 操作再現用デコード（現stateを参照。staff/shift一覧は操作中に不変）。
-    private fun opNm(i: Int): String = state?.staff?.getOrNull(i)?.name ?: "#$i"
-    private fun opSy(k: Int): String = state?.shifts?.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: "#$k"
-    private fun opDays(days: List<Int>): String = if (days.size <= 10) days.joinToString(",") { "${it + 1}日" } else "${days.size}日分"
+    internal fun opNm(i: Int): String = state?.staff?.getOrNull(i)?.name ?: "#$i"
+    internal fun opSy(k: Int): String = state?.shifts?.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: "#$k"
+    internal fun opDays(days: List<Int>): String = if (days.size <= 10) days.joinToString(",") { "${it + 1}日" } else "${days.size}日分"
 
     init {
         // 起動時: 前回の自動保存があれば復元（無ければ何もしない）
@@ -1755,354 +1770,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun shiftKigouList(): List<String> = state?.shifts?.map { it.kigou } ?: emptyList()
 
-    // ---- ws2: 日別の必要人数（例外） needDay1/needDay2 の疎な上書きを編集 ----
-    data class NeedDayView(val k: Int, val j: Int, val kigou: String, val p1: String, val p2: String)
-
-    fun needDayOverrides(): List<NeedDayView> {
-        val st = state ?: return emptyList()
-        val keys = (st.needDay1.keys + st.needDay2.keys).toSet()
-        return keys.mapNotNull { key ->
-            val parts = key.split(",")
-            if (parts.size != 2) return@mapNotNull null
-            val k = parts[0].toIntOrNull() ?: return@mapNotNull null
-            val j = parts[1].toIntOrNull() ?: return@mapNotNull null
-            NeedDayView(k, j, st.shifts.getOrNull(k)?.kigou ?: k.toString(), st.needDay1[key] ?: "", st.needDay2[key] ?: "")
-        }.sortedWith(compareBy({ it.j }, { it.k }))
-    }
-
-    fun setNeedDay(k: Int, j: Int, p1: String, p2: String) {
-        val st = state ?: return
-        val key = "$k,$j"
-        val nd1 = st.needDay1.toMutableMap()
-        val nd2 = st.needDay2.toMutableMap()
-        if (p1.isBlank()) nd1.remove(key) else nd1[key] = p1.trim()
-        if (p2.isBlank()) nd2.remove(key) else nd2[key] = p2.trim()
-        logOp("I", "需要設定: ${opSy(k)} ${j + 1}日 → P1=${p1.ifBlank { "-" }} P2=${p2.ifBlank { "-" }}")
-        applyStructure(st.copy(needDay1 = nd1, needDay2 = nd2))
-    }
-
-    fun removeNeedDay(k: Int, j: Int) {
-        val st = state ?: return
-        val key = "$k,$j"
-        logOp("I", "需要削除: ${opSy(k)} ${j + 1}日"); applyStructure(st.copy(needDay1 = st.needDay1 - key, needDay2 = st.needDay2 - key))
-    }
-
-    // ---- ws5: 個人別の回数（LimMin/LimMax） staffRange["i,k"]=Range(lo,hi) を編集 ----
-
-    fun setStaffRange(i: Int, k: Int, lo: String, hi: String) {
-        val st = state ?: return
-        val key = "$i,$k"
-        val m = st.staffRange.toMutableMap()
-        if (lo.isBlank() && hi.isBlank()) m.remove(key) else m[key] = Range(lo.trim(), hi.trim())
-        logOp("I", "個人レンジ: ${opNm(i)} ${opSy(k)} → ${if (lo.isBlank() && hi.isBlank()) "削除" else "${lo.ifBlank { "?" }}〜${hi.ifBlank { "?" }}"}")
-        applyStructure(st.copy(staffRange = m))
-    }
-
-    /**
-     * [3.326.0] 回数固定(lo==hi)の幅を1段だけ広げる。**利用者のタップでのみ動く**（HF77: 数値の変更は
-     * 業務判断）。幅の決め打ちを避けるため下限側・上限側を別々に選ばせ、押した内容は操作ログへ残す。
-     * `applyStructure` 経由なので「元に戻す」で戻せる。
-     *
-     * @param loDelta 下限へ足す量（負で緩める）。@param hiDelta 上限へ足す量（正で緩める）。
-     */
-    fun relaxStaffRangePin(i: Int, k: Int, loDelta: Int, hiDelta: Int) {
-        if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は回数を変更できません。終わってから試してください。") }; return }
-        val st = state ?: return
-        val cur = st.staffRange["$i,$k"] ?: return
-        val lo = cur.lo.trim().toIntOrNull() ?: return
-        val hi = cur.hi.trim().toIntOrNull() ?: return
-        val newLo = (lo + loDelta).coerceAtLeast(0)
-        val newHi = (hi + hiDelta).coerceAtLeast(newLo)
-        if (newLo == lo && newHi == hi) return
-        logOp("I", "回数固定を緩和: ${opNm(i)} ${opSy(k)} $lo〜$hi → $newLo〜$newHi（もう一度つくると効果が分かります）")
-        setStaffRange(i, k, newLo.toString(), newHi.toString())
-    }
-
-    fun removeStaffRange(i: Int, k: Int) {
-        val st = state ?: return
-        logOp("I", "個人レンジ削除: ${opNm(i)} ${opSy(k)}"); applyStructure(st.copy(staffRange = st.staffRange - "$i,$k"))
-    }
-
-    // ---- グループ単位の回数（一括）: 既存 staffRange をグループ所属職員に展開する。
-    //   新しい制約種別やスコア評価器の変更は不要（low/high は既に重み90/45で最適化対象）＝退行リスクなし。
-    //   業務担当者が値を入力しボタンで適用する operator ツール（HF77準拠）。 ----
-    fun groupLabels(): List<String> = state?.groups?.map {
-        if (it.kigou.isNotBlank() && it.kigou != it.name) "${it.name}·${it.kigou}" else it.name
-    } ?: emptyList()
-
-    fun groupMemberCount(g: Int): Int = state?.staff?.count { it.groupIdx == g } ?: 0
-
-    /** グループの全メンバーが担当できるシフトの積集合（下限を全員が満たせる範囲に限定し構造的floorを防ぐ）。 */
-    fun allowedShiftsForGroup(g: Int): Set<Int> {
-        val st = state ?: return emptySet()
-        val members = st.staff.indices.filter { st.staff[it].groupIdx == g }
-        if (members.isEmpty()) return emptySet()
-        return members.map { allowedShiftsFor(it).toHashSet() }.reduce { a, b -> a.apply { retainAll(b) } }
-    }
-
-    /** グループ g 所属の全職員に、ws5 個人別[lo,hi](staffRange, low/high 重み90/45=強い境界) を一括設定し、
-     *  さらに ws1 C のグループ別 適切回数(groupShiftApt, apt 重み1=弱い目標) も同時に書く。
-     *  apt は「最低=最高」の単一値のときのみ設定（範囲指定や空欄時はクリア）＝Excelの ws1 C→ws5 展開を1操作で再現。 */
-    fun setGroupRange(g: Int, k: Int, lo: String, hi: String) {
-        val st0 = state ?: return
-        val members = st0.staff.indices.filter { st0.staff[it].groupIdx == g }
-        if (members.isEmpty()) return
-        val loT = lo.trim(); val hiT = hi.trim()
-        if (loT.isBlank() && hiT.isBlank()) return
-        // [共有ws5・スキップ方式] ws5(個人レンジ)へ直接書く。ただし既に個人値が在るメンバーは上書きせず保持する。
-        //   ※同一保存先のため、適用後の値は個人値と区別がつかない→グループ範囲の後からの一括変更は不可
-        //     （変更したい場合は対象のws5を一旦クリアして再適用）。Web/VBAの「ws5のみ」と厳密一致。
-        val m = st0.staffRange.toMutableMap()
-        var wrote = 0; var skipped = 0
-        for (i in members) {
-            val key = "$i,$k"
-            val ex = m[key]
-            if (ex != null && (ex.lo.isNotBlank() || ex.hi.isNotBlank())) { skipped++; continue }
-            m[key] = Range(loT, hiT); wrote++
-        }
-        // ws1 C: グループ別 適切回数（弱い目標）。単一値(最低=最高)のときのみ設定。
-        val aptVal = if (loT == hiT) loT else ""
-        val stNew = Ws1Ops.setGroupApt(st0.copy(staffRange = m), g, k, aptVal)
-        val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
-        logOp("I", "グループ一括: $gname ${opSy(k)} → ws5=${loT.ifBlank { "?" }}〜${hiT.ifBlank { "?" }} (書込${wrote}名/スキップ${skipped}名・既存個人値は保持)")
-        applyStructure(stNew)
-    }
-
-    /** [共有ws5・スキップ方式] グループ既定の解除: 表示中レンジ(lo,hi)と一致するメンバーのws5だけ削除する。
-     *  個人で別値にした職員(レンジが違う)は保持する。サマリの×から呼ぶ。 */
-    fun clearGroupRange(g: Int, k: Int, lo: String, hi: String) {
-        val st0 = state ?: return
-        val members = st0.staff.indices.filter { st0.staff[it].groupIdx == g }
-        if (members.isEmpty()) return
-        val loT = lo.trim(); val hiT = hi.trim()
-        val m = st0.staffRange.toMutableMap()
-        var cleared = 0
-        for (i in members) {
-            val key = "$i,$k"; val r = m[key] ?: continue
-            if (r.lo.trim() == loT && r.hi.trim() == hiT) { m.remove(key); cleared++ }
-        }
-        if (cleared == 0) return
-        val stNew = Ws1Ops.setGroupApt(st0.copy(staffRange = m), g, k, "")
-        val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
-        // [3.409.11] チップ内の小さな✕1回で**N名ぶん**の個人設定が消えるのに、画面には
-        //   チップが1つ消えるだけで、何人ぶん消えたかが出ていなかった（logOp は詳細設定のログ止まり）。
-        //   3.399.0/3.400.0 の「イベントは Snackbar へ」に合わせ、実際の効果を件数つきで返す。
-        notify("$gname「${opSy(k)}」のグループ上下限を解除しました（${cleared}名ぶん・「元に戻す」で戻せます）")
-        applyStructure(stNew)
-    }
-
-    data class GroupRangeView(val g: Int, val k: Int, val groupName: String, val kigou: String, val lo: String, val hi: String, val members: Int, val shared: Int = members)
-
-    /** 「グループ単位の回数」適用済み一覧。グループ全メンバーが同一の非空レンジを持つ (g,k) のみ＝
-     *  一括適用された(個別に変更されていない)グループ上下限を再構成して表示する。×で全員分をクリア。 */
-    fun groupRangeSummary(): List<GroupRangeView> {
-        val st = state ?: return emptyList()
-        val out = mutableListOf<GroupRangeView>()
-        st.groups.forEachIndexed { g, gr ->
-            val members = st.staff.indices.filter { st.staff[it].groupIdx == g }
-            if (members.isEmpty()) return@forEachIndexed
-            st.shifts.forEachIndexed { k, sh ->
-                // [緩和] メンバーの非空レンジを (lo,hi) で集計し、最多共有レンジを代表として出す。完全一致で
-                //   なくても「2名以上が共有」なら表示し N/M名 を添える。これにより一括適用後に一部メンバーを
-                //   個別編集しても、グループ単位のレンジが消えずに残って見える（旧実装は全員一致のみ表示）。
-                val counts = HashMap<Pair<String, String>, Int>()
-                for (i in members) {
-                    val r = st.staffRange["$i,$k"] ?: continue
-                    if (r.lo.isBlank() && r.hi.isBlank()) continue
-                    val key = r.lo to r.hi
-                    counts[key] = (counts[key] ?: 0) + 1
-                }
-                val best = counts.maxByOrNull { it.value }
-                if (best != null && (best.value >= 2 || members.size == 1)) {
-                    out.add(GroupRangeView(g, k, gr.name, sh.kigou, best.key.first, best.key.second, members.size, best.value))
-                }
-            }
-        }
-        return out.sortedWith(compareBy({ it.g }, { it.k }))
-    }
-
-    /** [直せる導線] 集計セル(職員別)の違反詳細用しきい値: 下限/上限(staffRange)・目標(apt実効)。未設定は null。 */
-    fun staffCellLimits(i: Int, k: Int): Triple<Int?, Int?, Int?> {
-        val st = state ?: return Triple(null, null, null)
-        val p = cachedProblem(st)
-        if (i !in 0 until p.S || k !in 0 until p.K) return Triple(null, null, null)
-        val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE || it == 0) null else it }
-        val hi = p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) null else it }
-        val apt = p.apt[i][k].let { if (it < 0) null else it }
-        return Triple(lo, hi, apt)
-    }
-
-    /** [直せる導線] 集計セル(日別)の必要数レンジ lo..hi（need1/need2 の OR）。どちらも未定義なら null。
-     *
-     *  [3.391.0/need1直参照の第5世代] 旧実装は `lo = need1; if (lo < 0) return null` で、
-     *  **need2 だけで需要が定義されたセルを「対象外」として null を返していた**（need1 未設定は -1）。
-     *  エンジンは `Problem.covUCell`（source of truth）の OR 意味論でそこに covU(HARD) を課すのに、
-     *  UI 側だけが「要件なし」と表示していた＝赤いセルをタップしても何も出ない／必要人数カレンダーが
-     *  「未設定」と出る／実働チェックの月間需要が 0 になる。3.173.0・3.309.0・3.369.0・3.379.0 と同根。
-     *
-     *  しきい値は `covUCell`/`covOCell` の選択と厳密に一致させる:
-     *  両方定義なら lo=min・hi=max（小さい方で不足が立ち、大きい方を超えて初めて過剰が立つ）、
-     *  片方だけなら双方その値。**通常データ（need1 <= need2）では旧実装と同じ値**になる。 */
-    fun needCellLimits(k: Int, j: Int): Pair<Int, Int>? {
-        val st = state ?: return null
-        val p = cachedProblem(st)
-        if (k !in 0 until p.K || j !in 0 until p.T) return null
-        val n1 = p.need1[k][j]
-        val n2 = if (p.use2) p.need2[k][j] else -1
-        if (n1 < 0 && n2 < 0) return null
-        val lo = if (n1 >= 0 && n2 >= 0) minOf(n1, n2) else maxOf(n1, n2)
-        val hi = maxOf(n1, n2)
-        return lo to hi
-    }
-
-    /** [回数センター] 個人別の回数(上下限)と適切回数(apt)を職員×シフトで統合した一覧。
-     *  staffRange または apt(実効=担当可＆クランプ後)が効くセルのみ返す。aptEff=実効目標(-1=なし),
-     *  aptRaw=群目標の生値(-1=なし。aptEff と異なればクランプされている)。hasRange=個人別の上下限あり。 */
-    data class CountRuleView(
-        val i: Int, val k: Int, val staffName: String, val kigou: String,
-        val lo: String, val hi: String, val aptEff: Int, val aptRaw: Int, val hasRange: Boolean,
-    )
-
-    fun staffCountRules(): List<CountRuleView> {
-        val st = state ?: return emptyList()
-        // [レビュー#1] 再描画毎に呼ばれるため cachedProblem で Problem 再構築(高コスト)を避ける。
-        val p = cachedProblem(st)
-        val rows = mutableListOf<CountRuleView>()
-        for (i in 0 until p.S) {
-            val g = st.staff.getOrNull(i)?.groupIdx ?: continue
-            for (k in 0 until p.K) {
-                val r = st.staffRange["$i,$k"]
-                val hasRange = r != null && (r.lo.isNotBlank() || r.hi.isNotBlank())
-                val aptEff = p.apt[i][k]
-                if (!hasRange && aptEff < 0) continue
-                val aptRaw = st.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim()?.toIntOrNull() ?: -1
-                rows.add(
-                    CountRuleView(
-                        i, k, st.staff[i].name, st.shifts.getOrNull(k)?.kigou ?: k.toString(),
-                        r?.lo ?: "", r?.hi ?: "", aptEff, if (aptEff >= 0) aptRaw else -1, hasRange,
-                    )
-                )
-            }
-        }
-        return rows.sortedWith(compareBy({ it.i }, { it.k }))
-    }
-
-    // [3.286.0 冗長性B] 旧「回数設定画面」(CountSettingsCard, 2.60〜2.63世代)の集約ビュー
-    //   （shiftRuleBlocks/staffRuleBlocks/setCons41＋GroupRule等のデータ型）は、画面本体の撤去後も
-    //   呼出0のまま残存していた孤児クラスタのため削除（grep で外部参照0を確認済み）。
-
-    // ---- ws3 移植: 希望シフト wishes["i,j"]=シフトindex（採点=pref/hard1。割当やcons3系とは別。UIのみ・モデル/エンジン不変）----
-    data class WishView(val i: Int, val j: Int, val staffName: String, val day: Int, val kigou: String, val k: Int)
-
-    fun wishOverrides(): List<WishView> {
-        val st = state ?: return emptyList()
-        return st.wishes.mapNotNull { (key, k) ->
-            val parts = key.split(",")
-            if (parts.size != 2) return@mapNotNull null
-            val i = parts[0].toIntOrNull() ?: return@mapNotNull null
-            val j = parts[1].toIntOrNull() ?: return@mapNotNull null
-            WishView(i, j, st.staff.getOrNull(i)?.name ?: i.toString(), j + 1, st.shifts.getOrNull(k)?.kigou ?: k.toString(), k)
-        }.sortedWith(compareBy({ it.i }, { it.j }))
-    }
-
-    fun setWish(i: Int, j: Int, k: Int) {
-        val st = state ?: return
-        val m = st.wishes.toMutableMap()
-        m["$i,$j"] = k
-        logOp("I", "希望設定: ${opNm(i)} ${j + 1}日 → ${opSy(k)}")
-        applyStructure(st.copy(wishes = m))
-    }
-
-    fun removeWish(i: Int, j: Int) {
-        val st = state ?: return
-        logOp("I", "希望削除: ${opNm(i)} ${j + 1}日")
-        applyStructure(st.copy(wishes = st.wishes - "$i,$j"))
-    }
-
-    /** [一括] スタッフ(null=全員)×日群に希望 k を一括設定。Undo1回・再チェック1回。 */
-    fun setWishesForDays(staffIdx: Int?, days: List<Int>, k: Int) {
-        val st = state ?: return
-        if (days.isEmpty() || k !in st.shifts.indices) return
-        val m = st.wishes.toMutableMap()
-        val staffRange = if (staffIdx != null) listOf(staffIdx) else st.staff.indices.toList()
-        for (i in staffRange) for (j in days) if (i in st.staff.indices && j in 0 until st.dayCount) m["$i,$j"] = k
-        logOp("I", "希望一括: ${if (staffIdx != null) opNm(staffIdx) else "全員"} ${opDays(days)} → ${opSy(k)}")
-        applyStructure(st.copy(wishes = m))
-    }
-
-    /** [一括] スタッフ(null=全員)×日群の希望を一括削除。 */
-    fun clearWishesForDays(staffIdx: Int?, days: List<Int>) {
-        val st = state ?: return
-        if (days.isEmpty()) return
-        val m = st.wishes.toMutableMap()
-        val staffRange = if (staffIdx != null) listOf(staffIdx) else st.staff.indices.toList()
-        for (i in staffRange) for (j in days) m.remove("$i,$j")
-        if (m.size == st.wishes.size) return
-        logOp("I", "希望クリア: ${if (staffIdx != null) opNm(staffIdx) else "全員"} ${opDays(days)}")
-        applyStructure(st.copy(wishes = m))
-    }
-
-    /** [一括] すべての希望を削除。 */
-    fun clearAllWishes() {
-        val st = state ?: return
-        if (st.wishes.isEmpty()) return
-        logOp("I", "希望全クリア")
-        applyStructure(st.copy(wishes = emptyMap()))
-    }
-
-    // ---- colors: シフトの表示色 shiftColors[kigou]="#rrggbb"（表示専用）----
-    data class ShiftColorView(val kigou: String, val name: String, val hex: String, val custom: Boolean)
-
-    fun shiftColorList(): List<ShiftColorView> {
-        val st = state ?: return emptyList()
-        return st.shifts.mapIndexed { i, sh ->
-            val ov = st.shiftColors[sh.kigou]
-            ShiftColorView(sh.kigou, sh.name, ShiftAppearance.resolveShiftColor(ov, i), !ov.isNullOrBlank())
-        }
-    }
-
-    fun setShiftColor(kigou: String, hex: String) {
-        val st = state ?: return
-        if (kigou.isBlank()) return
-        val m = st.shiftColors.toMutableMap()
-        m[kigou] = hex.trim()
-        applyStructure(st.copy(shiftColors = m))
-    }
-
-    fun resetShiftColor(kigou: String) {
-        val st = state ?: return
-        applyStructure(st.copy(shiftColors = st.shiftColors - kigou))
-    }
-    /** [違反色] 違反セルの枠/マーカー色。予約キー "__vio__" に保存（状態スキーマ非変更）。 */
-    fun setViolationColor(hex: String) {
-        val st = state ?: return; if (hex.isBlank()) return
-        applyStructure(st.copy(shiftColors = st.shiftColors + ("__vio__" to hex.trim())))
-    }
-    fun resetViolationColor() {
-        val st = state ?: return
-        applyStructure(st.copy(shiftColors = st.shiftColors - "__vio__"))
-    }
-    /** [違反色] 要調整(ソフト違反)の枠/マーカー色。予約キー "__vioSoft__"（空=既定の橙）。 */
-    fun setViolationSoftColor(hex: String) {
-        val st = state ?: return; if (hex.isBlank()) return
-        applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioSoft__" to hex.trim())))
-    }
-    fun resetViolationSoftColor() {
-        val st = state ?: return
-        applyStructure(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
-    }
-
-    /** [違反色/族別] 違反種別（族）ごとの個別色。予約キー "__vioFam_<fam>__"（例: __vioFam_c3n__）。
-     *  未設定の族は重大度色（__vio__/__vioSoft__）へフォールバック。 */
-    fun setViolationFamilyColor(fam: String, hex: String) {
-        val st = state ?: return; if (hex.isBlank() || fam.isBlank()) return
-        applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioFam_${fam}__" to hex.trim())))
-    }
-    fun resetViolationFamilyColor(fam: String) {
-        val st = state ?: return
-        applyStructure(st.copy(shiftColors = st.shiftColors - "__vioFam_${fam}__"))
-    }
-
     // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
     fun addReviewMemo(text: String) {
         if (text.isBlank()) return
@@ -2110,198 +1777,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun removeReviewMemo(index: Int) {
         _ui.update { val l = it.reviewMemos; if (index !in l.indices) it else it.copy(reviewMemos = l.filterIndexed { j, _ -> j != index }) }
-    }
-    fun groupKigouList(): List<String> = state?.groups?.map { it.kigou } ?: emptyList()
-
-    /** [冗長除去/データ密度] 1日人数の上下限 [l〜u] を意味で圧縮して短く表す。見出しが「人数(上下限)」の
-     *  文脈を担うので、行は記号のみで足りる。l==u=ちょうどN / 下限のみ=N以上 / 上限のみ=N以下 / 両方=l〜u。 */
-    private fun boundLabel(l: String, u: String): String {
-        val lo = l.ifBlank { null }; val hi = u.ifBlank { null }
-        return when {
-            lo != null && hi != null && lo == hi -> "ちょうど$lo"
-            lo != null && hi != null -> "$lo〜$hi"
-            lo != null -> "$lo 以上"
-            hi != null -> "$hi 以下"
-            else -> "制限なし"
-        }
-    }
-
-    fun constraintFamilies(): List<ConstraintFamilyView> {
-        val st = state ?: return emptyList()
-        fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" -> ").ifEmpty { "(空)" }
-        return listOf(
-            // [用語統一/下流→上流] 節タイトルは違反チップ(breakdownLabels)の語彙を正として一致させる
-            //   （違反を見て設定を直しに来たとき同じ名前で見つかるように）。単位や補足は括弧で添える。
-            ConstraintFamilyView("cons1", "窓の要件（○日間に△回以上）",
-                st.cons1.map { "${it.shiftKigou}   ${it.day1}日で${it.day2}回以上" }),
-            ConstraintFamilyView("cons2", "個人の合計（回数）",
-                st.cons2.map { "${it.shiftKigou}   合計${it.count}回以上" }),
-            ConstraintFamilyView("cons3", "必須の並び", st.cons3.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons3mn", "回避の並び", st.cons3mn.map { seq(it.pattern) }),
-            ConstraintFamilyView("cons41", "群のレンジ（1日の人数の下限〜上限）",
-                st.cons41.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
-            // [3.409.18] 「禁止/不可」はラベルとして実態（最軽量のソフト条件＝他の条件と衝突すると
-            //   真っ先に譲られる）と逆の約束をするため「できるだけ守る」を見出しへ明示（3.405.0 の言葉版）。
-            // [3.427.0] 行タイトルを「吉・休 ✕ 古・休」→「吉の休 ✕ 古の休」（の形）へ。3.409.18 は
-            //   羅列が読めない問題を行下の読み下し文で補ったが、タイトル自体を読める形にすれば
-            //   文は見出しの「同じ日に不可」と全て重複＝行ごとの文を撤去（7行×2行→7行×1行）。
-            ConstraintFamilyView("cons42", "群ペア禁止（同じ日に不可・できるだけ守る）",
-                st.cons42.map { "${it.g1Kigou}の${it.s1Kigou} ✕ ${it.g2Kigou}の${it.s2Kigou}" }),
-        )
-    }
-
-    /** [スキルグループ専用ルール] C41s/C42s。スキルグループ定義の直下に co-locate して表示する。 */
-    fun skillConstraintFamilies(): List<ConstraintFamilyView> {
-        val st = state ?: return emptyList()
-        return listOf(
-            ConstraintFamilyView("cons41s", "スキル群のレンジ（1日の人数の下限〜上限）",
-                st.cons41s.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
-            ConstraintFamilyView("cons42s", "スキル群ペア禁止（同じ日に不可・できるだけ守る）",
-                st.cons42s.map { "${it.g1Kigou}の${it.s1Kigou} ✕ ${it.g2Kigou}の${it.s2Kigou}" }),
-        )
-    }
-
-    fun skillGroupKigouList(): List<String> = state?.skillGroups?.map { it.kigou } ?: emptyList()
-    fun addCons41s(groupKigou: String, shiftKigou: String, l: String, u: String) {
-        val st = state ?: return
-        logOp("I", "制約追加(スキル群回数): $groupKigou $shiftKigou ${l.trim()}〜${u.trim()}"); mutateConstraints(st.copy(cons41s = st.cons41s + C41Row(groupKigou, shiftKigou, l.trim(), u.trim())))
-    }
-    fun addCons42s(g1: String, g2: String, s1: String, s2: String) {
-        val st = state ?: return
-        logOp("I", "制約追加(スキル群組合せ禁止): ${g1}${s1} & ${g2}${s2}"); mutateConstraints(st.copy(cons42s = st.cons42s + C42Row(g1, g2, s1, s2)))
-    }
-
-    fun addCons1(day1: String, shiftKigou: String, day2: String) {
-        val st = state ?: return
-        logOp("I", "制約追加(連勤/休): ${day1.trim()}日に${shiftKigou}${day2.trim()}回以上"); mutateConstraints(st.copy(cons1 = st.cons1 + C1Row(day1.trim(), shiftKigou, day2.trim())))
-    }
-
-    fun addCons2(shiftKigou: String, count: String) {
-        val st = state ?: return
-        logOp("I", "制約追加(cons2): $shiftKigou ${count.trim()}"); mutateConstraints(st.copy(cons2 = st.cons2 + C2Row(shiftKigou, count.trim())))
-    }
-
-    fun addCons41(groupKigou: String, shiftKigou: String, l: String, u: String) {
-        val st = state ?: return
-        logOp("I", "制約追加(群回数): $groupKigou $shiftKigou ${l.trim()}〜${u.trim()}"); mutateConstraints(st.copy(cons41 = st.cons41 + C41Row(groupKigou, shiftKigou, l.trim(), u.trim())))
-    }
-
-    fun addCons42(g1: String, g2: String, s1: String, s2: String) {
-        val st = state ?: return
-        logOp("I", "制約追加(群組合せ禁止): ${g1}${s1} & ${g2}${s2}"); mutateConstraints(st.copy(cons42 = st.cons42 + C42Row(g1, g2, s1, s2)))
-    }
-
-    fun addCons3(family: String, pattern: List<String>) {
-        val st = state ?: return
-        // Level Zero loads cons3 by reading day columns until the first blank (truncate at
-        // first blank, max 5 days), not by removing all blanks. Match that here.
-        val pat = pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5)
-        if (pat.isEmpty()) return
-        logOp("I", "制約追加($family): ${pat.joinToString("→")}")
-        mutateConstraints(
-            when (family) {
-                "cons3" -> st.copy(cons3 = st.cons3 + C3Row(pat))
-                "cons3n" -> st.copy(cons3n = st.cons3n + C3Row(pat))
-                "cons3m" -> st.copy(cons3m = st.cons3m + C3Row(pat))
-                "cons3mn" -> st.copy(cons3mn = st.cons3mn + C3Row(pat))
-                else -> return
-            }
-        )
-    }
-
-    fun removeConstraint(family: String, index: Int) {
-        val st = state ?: return
-        // [3.271.0, 実機ログ起因] index を先に検証する。旧: 検証なしで先にログ→mutate のため、
-        //   リスト縮小後の古い index（連続タップ等）でも「制約削除: cons3mn[7]」の幻ログ＋無駄な
-        //   undo/保存/再検査が走り、実機ログで「2回削除されたのか1回なのか」が判別不能だった
-        //   （without() 自体は no-op なのでデータは壊れない＝ログと副作用だけが嘘をつく状態）。
-        val size = when (family) {
-            "cons1" -> st.cons1.size
-            "cons2" -> st.cons2.size
-            "cons3" -> st.cons3.size
-            "cons3n" -> st.cons3n.size
-            "cons3m" -> st.cons3m.size
-            "cons3mn" -> st.cons3mn.size
-            "cons41" -> st.cons41.size
-            "cons42" -> st.cons42.size
-            "cons41s" -> st.cons41s.size
-            "cons42s" -> st.cons42s.size
-            else -> return
-        }
-        if (index !in 0 until size) {
-            logOp("W", "制約削除を無視: $family[$index] は存在しません（削除済みの行への連続タップ等）")
-            return
-        }
-        logOp("I", "制約削除: $family[$index]")
-        fun <T> List<T>.without(i: Int) = filterIndexed { idx, _ -> idx != i }
-        mutateConstraints(
-            when (family) {
-                "cons1" -> st.copy(cons1 = st.cons1.without(index))
-                "cons2" -> st.copy(cons2 = st.cons2.without(index))
-                "cons3" -> st.copy(cons3 = st.cons3.without(index))
-                "cons3n" -> st.copy(cons3n = st.cons3n.without(index))
-                "cons3m" -> st.copy(cons3m = st.cons3m.without(index))
-                "cons3mn" -> st.copy(cons3mn = st.cons3mn.without(index))
-                "cons41" -> st.copy(cons41 = st.cons41.without(index))
-                "cons42" -> st.copy(cons42 = st.cons42.without(index))
-                "cons41s" -> st.copy(cons41s = st.cons41s.without(index))
-                "cons42s" -> st.copy(cons42s = st.cons42s.without(index))
-                else -> return
-            }
-        )
-    }
-
-    /** [制約編集/実機指摘「登録した制約の変更ができない」] 行の生値（編集ダイアログのプリフィル用）。
-     *  値の並びは追加ダイアログの入力順と同じ:
-     *  cons1=[日数,シフト,回数] / cons2=[シフト,回数] / cons3系=並び(最大5) /
-     *  cons41(s)=[群,シフト,下限,上限] / cons42(s)=[群1,シフト1,群2,シフト2]。 */
-    fun constraintRowValues(family: String, index: Int): List<String>? {
-        val st = state ?: return null
-        return when (family) {
-            "cons1" -> st.cons1.getOrNull(index)?.let { listOf(it.day1, it.shiftKigou, it.day2) }
-            "cons2" -> st.cons2.getOrNull(index)?.let { listOf(it.shiftKigou, it.count) }
-            "cons3" -> st.cons3.getOrNull(index)?.pattern
-            "cons3n" -> st.cons3n.getOrNull(index)?.pattern
-            "cons3m" -> st.cons3m.getOrNull(index)?.pattern
-            "cons3mn" -> st.cons3mn.getOrNull(index)?.pattern
-            "cons41" -> st.cons41.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
-            "cons41s" -> st.cons41s.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
-            "cons42" -> st.cons42.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
-            "cons42s" -> st.cons42s.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
-            else -> null
-        }
-    }
-
-    /** [制約編集] 行を同じ位置で置き換える。values の並びは constraintRowValues と同一。
-     *  cons3系は追加(addCons3)と同じ正規化（先頭から最初の空白まで・最大5）。 */
-    fun updateConstraint(family: String, index: Int, values: List<String>) {
-        val st = state ?: return
-        fun <T> List<T>.replaced(i: Int, v: T) = mapIndexed { idx, e -> if (idx == i) v else e }
-        val v = values.map { it.trim() }
-        fun g(i: Int) = v.getOrElse(i) { "" }
-        val next = when (family) {
-            "cons1" -> { if (index !in st.cons1.indices) return; st.copy(cons1 = st.cons1.replaced(index, C1Row(g(0), g(1), g(2)))) }
-            "cons2" -> { if (index !in st.cons2.indices) return; st.copy(cons2 = st.cons2.replaced(index, C2Row(g(0), g(1)))) }
-            "cons41" -> { if (index !in st.cons41.indices) return; st.copy(cons41 = st.cons41.replaced(index, C41Row(g(0), g(1), g(2), g(3)))) }
-            "cons41s" -> { if (index !in st.cons41s.indices) return; st.copy(cons41s = st.cons41s.replaced(index, C41Row(g(0), g(1), g(2), g(3)))) }
-            "cons42" -> { if (index !in st.cons42.indices) return; st.copy(cons42 = st.cons42.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
-            "cons42s" -> { if (index !in st.cons42s.indices) return; st.copy(cons42s = st.cons42s.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
-            "cons3", "cons3n", "cons3m", "cons3mn" -> {
-                val pat = v.takeWhile { it.isNotEmpty() }.take(5)
-                if (pat.isEmpty()) return
-                when (family) {
-                    "cons3" -> { if (index !in st.cons3.indices) return; st.copy(cons3 = st.cons3.replaced(index, C3Row(pat))) }
-                    "cons3n" -> { if (index !in st.cons3n.indices) return; st.copy(cons3n = st.cons3n.replaced(index, C3Row(pat))) }
-                    "cons3m" -> { if (index !in st.cons3m.indices) return; st.copy(cons3m = st.cons3m.replaced(index, C3Row(pat))) }
-                    else -> { if (index !in st.cons3mn.indices) return; st.copy(cons3mn = st.cons3mn.replaced(index, C3Row(pat))) }
-                }
-            }
-            else -> return
-        }
-        logOp("I", "制約変更: $family[$index] → ${v.filter { it.isNotBlank() }.joinToString(" ")}")
-        mutateConstraints(next)
     }
 
     /** Apply an edited state (constraints changed), then re-run the unified check on the current table. */
@@ -2349,7 +1824,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    private fun mutateConstraints(newState: MagiState?) {
+    internal fun mutateConstraints(newState: MagiState?) {
         val ns = newState ?: return
         if (structuralEditBlocked()) return
         pushUndo()
@@ -2379,7 +1854,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return Ws1View(st.startDate, st.endDate, days, st.use2Patterns, st.shifts, st.groups, st.staff, st.groupShift, st.groupShiftApt)
     }
 
-    private fun applyStructure(ns: MagiState) {
+    internal fun applyStructure(ns: MagiState) {
         if (structuralEditBlocked()) return
         pushUndo()
         state = ns
@@ -2397,7 +1872,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 再構成を確実に伝える）が、この関数だけ取り残されていた。呼出元 `ws1ResetGroupApt`（`AptSection`＝
      * `CountsCard`＝`key(ui.editRev)` 配下）が対象＝同じ穴を踏む。
      */
-    private fun applyStructureWithMessage(ns: MagiState, doneMessage: String) {
+    internal fun applyStructureWithMessage(ns: MagiState, doneMessage: String) {
         if (structuralEditBlocked()) return
         pushUndo()
         state = ns
@@ -2596,7 +2071,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         refreshCheck()
     }
 
-    private fun applyStructure(r: Ws1Result) {
+    internal fun applyStructure(r: Ws1Result) {
         if (structuralEditBlocked()) return
         pushUndo()
         state = r.state
@@ -2610,7 +2085,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Ws1Result(状態+勤務表)を適用し、再チェック後に独自メッセージを表示（スタッフ新規追加など行数変化を伴う取込）。 */
-    private fun applyStructureWithMessage(r: Ws1Result, doneMessage: String) {
+    internal fun applyStructureWithMessage(r: Ws1Result, doneMessage: String) {
         // [3.404.0] 3.328.0 は「編集は必ずこの4入口を通るのでその4つだけを塞ぐ」としたが、**ここだけ
         //   ガードが無かった**。通るのは apt全リセットと職員一覧CSV取込で、後者は `currentSchedule` ごと
         //   差し替えるため、最適化中に到達すると 3.161.0 の「別名共有で編集が消える」クラスに触れる。
@@ -2640,170 +2115,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
-
-    fun ws1EditShift(k: Int, name: String, kigou: String, need1: String, need2: String) {
-        val st = state ?: return
-        if (symbolTaken(st.shifts.map { it.kigou }, kigou, "シフト", exceptIndex = k)) return
-        // [3.416.0] 3.415.0 の R-04 ガード（休シフトの改名禁止）はユーザー方針「休は通常のシフト定義」により
-        //   撤回。改名は他シフトと同じ経路＝renameShiftInConstraints が制約参照を追従させ、「休」記号が
-        //   無くなった場合の帰結（既定シフト解決が先頭へ倒れる）は検査2g が案内する。
-        logOp("I", "シフト編集: ${opSy(k)} → ${name.trim()}(${kigou.trim()}) 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-        applyStructure(Ws1Ops.editShift(st, k, name.trim(), kigou.trim(), need1.trim(), need2.trim()))
-    }
-
-    /** [必要人数カレンダー] シフト既定のneed1/need2だけをその場で編集する（name/kigouは不変）。
-     *  ws1EditShiftの狭い版＝NeedCalendarCardの「基本の必要人数」インライン編集用。 */
-    fun setShiftNeed(k: Int, need1: String, need2: String) {
-        val st = state ?: return
-        val sh = st.shifts.getOrNull(k) ?: return
-        logOp("I", "必要人数編集: ${opSy(k)} → 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-        applyStructure(Ws1Ops.editShift(st, k, sh.name, sh.kigou, need1.trim(), need2.trim()))
-    }
-
-    fun ws1EditGroup(g: Int, name: String, kigou: String) {
-        val st = state ?: return
-        if (symbolTaken(st.groups.map { it.kigou }, kigou, "グループ", exceptIndex = g)) return
-        logOp("I", "グループ編集: [$g] → ${name.trim()}(${kigou.trim()})")
-        applyStructure(Ws1Ops.editGroup(st, g, name.trim(), kigou.trim()))
-    }
-
-    fun ws1EditStaff(i: Int, name: String, groupIdx: Int) {
-        val st = state ?: return
-        logOp("I", "職員編集: ${opNm(i)} → ${name.trim()} / グループ[$groupIdx]")
-        applyStructure(Ws1Ops.editStaff(st, i, name.trim(), groupIdx))
-    }
-
-    fun ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
-        val st = state ?: return
-        logOp("I", "担当可否: グループ[$g] × ${opSy(k)} → ${if (allowed) "担当できる" else "担当しない"}")
-        applyStructure(Ws1Ops.setGroupShift(st, g, k, allowed))
-    }
-
-    /** グループ別シフトの適切回数（1人あたり期間内目標。空欄＝目標なし）を設定。 */
-    fun ws1SetGroupApt(g: Int, k: Int, value: String) {
-        val st = state ?: return
-        logOp("I", "適切回数: グループ[$g] × ${opSy(k)} → ${value.trim().ifBlank { "未設定" }}")
-        applyStructure(Ws1Ops.setGroupApt(st, g, k, value))
-    }
-
-    /**
-     * [apt強制リセット] 適切回数(apt)を全グループ×全シフトで空欄(目標なし)に戻す。
-     * apt由来のソフト違反が消える。担当ON/OFF・回数レンジ・勤務表は不変、表も保持。元に戻すで復帰可。
-     */
-    fun ws1ResetGroupApt() {
-        val st = state ?: return
-        val cleared = st.groupShiftApt.sumOf { row -> row.count { it.trim().isNotEmpty() } }
-        logOp("I", "apt強制リセット: 適切回数を全空欄に（$cleared 件クリア）")
-        applyStructureWithMessage(Ws1Ops.resetGroupApt(st), "適切回数(apt)を全リセットしました（$cleared 件 → 0）")
-    }
-
-    fun ws1SetUse2(on: Boolean) {
-        val st = state ?: return
-        logOp("I", "設定変更: 上限人数(2パターン目) → ${if (on) "使う" else "使わない"}")
-        applyStructure(Ws1Ops.setUse2(st, on))
-    }
-
-    /**
-     * [3.410.0/W-01・W-02] 記号の重複を**入力時に**断る。既存の記号へ改名すると制約行が一括置換されて
-     * 別の行と合流し、改名し直しても戻らない（検査8 が事後に警告するが、そのときには手遅れ）。
-     */
-    private fun symbolTaken(existing: List<String>, kigou: String, what: String, exceptIndex: Int = -1): Boolean {
-        if (!com.magi.app.v6.Ws1Ops.symbolCollides(existing, kigou, exceptIndex)) return false
-        val k = kigou.trim()
-        notify("記号「$k」はすでに別の${what}で使われています（制約の参照が混ざるため、別の記号にしてください）", "W")
-        return true
-    }
-
-    fun ws1AddShift(name: String, kigou: String, need1: String, need2: String) {
-        val st = state ?: return
-        if (kigou.isBlank()) return
-        if (symbolTaken(st.shifts.map { it.kigou }, kigou, "シフト")) return
-        logOp("I", "シフト追加: ${name.trim()}(${kigou.trim()}) 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-        applyStructure(Ws1Ops.addShift(st, name.trim(), kigou.trim(), need1.trim(), need2.trim()))
-    }
-
-    fun ws1AddGroup(name: String, kigou: String) {
-        val st = state ?: return
-        if (kigou.isBlank()) return
-        if (symbolTaken(st.groups.map { it.kigou }, kigou, "グループ")) return
-        logOp("I", "グループ追加: ${name.trim()}(${kigou.trim()})")
-        applyStructure(Ws1Ops.addGroup(st, name.trim(), kigou.trim()))
-    }
-
-    fun ws1AddStaff(name: String, groupIdx: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        logOp("I", "職員追加: ${name.trim()} / グループ[$groupIdx]")
-        applyStructure(Ws1Ops.addStaff(st, sched, name.trim(), groupIdx))
-    }
-
-    fun ws1ResizeDays(newT: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        logOp("I", "期間変更: ${st.dayCount}日 → ${newT}日")
-        applyStructure(Ws1Ops.resizeDays(st, sched, newT))
-    }
-
-    /** [対象月の選択] 開始日を指定年月の1日にし、その月の日数へ整える（endDate/希望/必要人数も追従）。 */
-    fun setMonth(year: Int, month1to12: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        val first = runCatching { java.time.LocalDate.of(year, month1to12, 1) }.getOrNull() ?: return
-        logOp("I", "期間変更: ${year}年${month1to12}月"); applyStructure(Ws1Ops.resizeDays(st.copy(startDate = first.toString()), sched, first.lengthOfMonth()))
-    }
-
-    /** 現在の開始日から相対的に月を移動（-1=前月 / +1=翌月）。開始日が不明なら端末の今月を起点。 */
-    fun shiftMonth(delta: Int) {
-        val base = runCatching { java.time.LocalDate.parse(_ui.value.startDate) }.getOrNull()
-            ?: java.time.LocalDate.now().withDayOfMonth(1)
-        val m = base.withDayOfMonth(1).plusMonths(delta.toLong())
-        setMonth(m.year, m.monthValue)
-    }
-
-    /** [実機指摘] 月末に「来月」の勤務表を作る業務のため、ワンタップは来月が適切。 */
-    fun setNextMonth() {
-        val next = java.time.LocalDate.now().plusMonths(1)
-        setMonth(next.year, next.monthValue)
-    }
-
-    // ---- スキルグループ（年次マスター・新C41s/C42s 専用） -----------------------
-    fun skillGroups(): List<Group> = state?.skillGroups ?: emptyList()
-    fun addSkillGroup(name: String, kigou: String) {
-        val st = state ?: return; if (kigou.isBlank()) return
-        if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分")) return
-        logOp("I", "スキル区分追加: ${name.trim()}(${kigou.trim()})"); applyStructure(st.copy(skillGroups = st.skillGroups + Group(name.trim(), kigou.trim())))
-    }
-    fun editSkillGroup(g: Int, name: String, kigou: String) {
-        val st = state ?: return
-        if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分", exceptIndex = g)) return
-        val old = st.skillGroups.getOrNull(g)?.kigou ?: ""
-        val renamed = st.copy(skillGroups = st.skillGroups.mapIndexed { i, x -> if (i == g) Group(name.trim(), kigou.trim()) else x })
-        logOp("I", "スキル区分編集: [$g] → ${name.trim()}(${kigou.trim()})")
-        // [記号変更の伝播] スキル群記号を変えたら cons41s/cons42s の参照も一括置換(幽霊行防止)
-        applyStructure(Ws1Ops.renameSkillGroupInConstraints(renamed, old, kigou.trim()))
-    }
-    fun removeSkillGroup(g: Int) {
-        val st = state ?: return
-        // [3.330.0] 移行規則は Ws1Ops.removeSkillGroup（担当グループの removeGroup と対）。
-        //   ここに手書きしていた間はホストでテストできなかった。
-        logOp("I", "スキル区分削除: [$g]"); applyStructure(Ws1Ops.removeSkillGroup(st, g))
-    }
-    fun setStaffSkill(i: Int, skillIdx: Int) {
-        val st = state ?: return
-        logOp("I", "スキル割当: ${opNm(i)} → 区分[$skillIdx]"); applyStructure(st.copy(staff = st.staff.mapIndexed { idx, s -> if (idx == i) s.copy(skillIdx = skillIdx) else s }))
-    }
-
-    /** グループを削除できるか（2グループ以上あれば可。所属者がいても先頭グループへ移動して削除）。 */
-    fun ws1CanRemoveGroup(g: Int): Boolean = state?.let { g in it.groups.indices && it.groups.size > 1 } ?: false
-
-    /** グループgの所属人数（削除確認の警告表示用）。 */
-    fun ws1GroupMemberCount(g: Int): Int = state?.staff?.count { it.groupIdx == g } ?: 0
-
-    /** [3.429.0/R-03] 削除確認ダイアログで見せる影響件数（Ws1Ops.shiftRefCount/groupRefCount へ委譲）。
-     *  対象のシフト/グループを参照する制約行数。0 件なら影響なし。 */
-    fun ws1ShiftRefCount(k: Int): Int = state?.let { st -> st.shifts.getOrNull(k)?.let { Ws1Ops.shiftRefCount(st, it.kigou) } } ?: 0
-    fun ws1GroupRefCount(g: Int): Int = state?.let { st -> st.groups.getOrNull(g)?.let { Ws1Ops.groupRefCount(st, it.kigou) } } ?: 0
-    fun ws1SkillGroupRefCount(g: Int): Int = state?.let { st -> st.skillGroups.getOrNull(g)?.let { Ws1Ops.skillGroupRefCount(st, it.kigou) } } ?: 0
 
     /** [窓ハイライト③] セル(i,j)の違反が c1/c3/c3m のとき、その違反が指す窓/連の範囲(開始日..終了日)を返す。
      *  c1=最初に不足している窓 / c3・c3m=複数シフト窓なら未完成パターンの窓、単一シフト連なら連の実範囲。
@@ -2837,234 +2148,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         return null
-    }
-
-    fun ws1RemoveShift(k: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        // [3.416.0/方針「休は通常のシフト定義」] 旧: 休シフトの削除を入口で拒否（3.106.0）。撤廃＝
-        //   休も他シフトと同じ編集規則。削除セルは残りの一覧の「休」（無ければ先頭シフト）へ。
-        logOp("I", "シフト削除: ${opSy(k)}（このシフトのマスは休（無ければ先頭シフト）へ・希望も削除）")
-        applyStructure(Ws1Ops.removeShift(st, sched, k))
-    }
-
-    fun ws1RemoveStaff(i: Int) {
-        val st = state ?: return
-        val sched = currentSchedule ?: return
-        logOp("I", "職員削除: ${opNm(i)}（勤務行・希望・個人の回数も削除）")
-        applyStructure(Ws1Ops.removeStaff(st, sched, i))
-    }
-
-    fun ws1RemoveGroup(g: Int) {
-        val st = state ?: return
-        if (g !in st.groups.indices || st.groups.size <= 1) return
-        // 所属者は先頭グループへ移る＝担当できるシフトが黙って変わるので、人数を必ず記録する。
-        val moved = st.staff.count { it.groupIdx == g }
-        logOp("I", "グループ削除: [$g]" + if (moved > 0) "（所属${moved}名は先頭グループへ移動＝担当できるシフトが変わります）" else "")
-        applyStructure(Ws1Ops.removeGroup(st, g))
-    }
-
-    /** Current JSON to export. ws1 edits -> full serialize; constraint edits -> overwrite cons; else schedule only. */
-    fun exportJson(): String? {
-        val sched = currentSchedule ?: resultSchedule ?: return null
-        val st = state
-        if (_ui.value.structureEdited && st != null) return StateParser.serialize(st, sched)
-        val orig = originalJson ?: return null
-        return if (_ui.value.constraintsEdited && st != null) StateParser.exportWithEdits(orig, st, sched)
-        else StateParser.exportWithSchedule(orig, sched)
-    }
-
-    fun exportCsv(): String? {
-        val st = state ?: return null
-        val sched = currentSchedule ?: return null
-        return ScheduleCsvBridge.build(st, sched)
-    }
-
-    /** コンポーネント別エクスポート（取込種別と対。出力→編集→取込で往復可）。 */
-    fun exportStaffCsv(): String? = state?.let { com.magi.app.v6.StaffCsvIO.build(it) }
-    fun exportWishesCsv(): String? = state?.let { com.magi.app.v6.WishesCsvIO.build(it) }
-    fun exportConstraintsCsv(): String? = state?.let { com.magi.app.v6.ConstraintsCsvIO.build(it) }
-
-    /**
-     * [3.360.0] 書き出したログが「どの版・どの端末で走ったか」を1行で残す。
-     *
-     * 旧ヘッダは出力時刻とデータ規模だけで、**受け取った側がビルドを特定できなかった**
-     * （本セッションでも、アップロードされたログがどの版のものか判定できず解析が止まった。
-     * 外部レポートが古い `.so` を現行ソースの不具合と誤読した件も同根）。
-     *
-     * CPU コア数を出すのは、[V6NativeOptimizer.clampWorkersToCores]（3.224.0）が
-     * 並列ワーカー設定を**黙ってコア数まで切り下げる**ため（設定8でも4本しか走らない実測あり）。
-     * 設定値だけを見ても実際の並列度が読めない。
-     */
-    private fun environmentLine(): String {
-        val ctx = getApplication<Application>()
-        val ver = runCatching {
-            val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
-            // versionName はプラットフォーム型（String!）。マニフェスト由来で実運用では常に入るが、
-            // null をそのまま補間すると「版: null (526)」という無意味な行になるため落とす。
-            "${pi.versionName ?: "?"} (${pi.longVersionCode})"
-        }.getOrDefault("不明")
-        val cores = Runtime.getRuntime().availableProcessors()
-        val nat = if (com.magi.app.v6.NativeBridge.available) {
-            "有効(ABI${com.magi.app.v6.NativeBridge.ABI_VERSION})"
-        } else "無効(.so未ロード)"
-        return "版: $ver ・ ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}" +
-            " ・ Android ${android.os.Build.VERSION.RELEASE}(SDK ${android.os.Build.VERSION.SDK_INT})" +
-            " ・ CPU ${cores}コア(いまの並列ワーカー設定=${_ui.value.workers}) ・ ネイティブ=$nat"
-    }
-
-    /** Operator log as a plain-text file (mirrors the Web "ログ出力"). */
-    /** [3.408.0] 実行の帰属表示。0＝実行外（違反チェック等）。 */
-    private fun runTag(serial: Int): String = if (serial > 0) "実行#$serial" else "実行外"
-
-    fun exportLogs(): String? {
-        val ops = _ui.value.opLog
-        val runsInLog = opLog.map { it.run }.filter { it > 0 }.distinct().sorted()
-        val runSpan = if (runsInLog.isEmpty()) "" else "・実行#${runsInLog.first()}〜#${runsInLog.last()}"
-        // 出力は全文（非圧縮）。画面表示は圧縮版だが、監査用にはロスレスの rawDiagLogs を使う。
-        val logs = rawDiagLogs.ifEmpty { _ui.value.logs }
-        if (ops.isEmpty() && logs.isEmpty()) return null
-        val ts = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss", java.util.Locale.JAPAN).format(java.util.Date())
-        return buildString {
-            append("MAGI ログ (Native)  出力: ").append(ts).append('\n')
-            append(environmentLine()).append('\n')
-            append("状態: ${_ui.value.staff}名/${_ui.value.days}日 ・ 必須=${_ui.value.bestHard} 合計=${_ui.value.totalViolations}\n")
-            append("\n==== 操作ログ（新しい順 ${ops.size}件$runSpan）====\n")
-            ops.forEach { append(it).append('\n') }
-            append("\n==== 診断ログ（${runTag(lastDiagSerial)}の全文 ${logs.size}件）====\n")
-            // [3.408.0] 操作ログは履歴・診断ログは直近1回ぶん。実行が2回以上あるとき、両者を続けて読むと
-            //   前の実行の「グローバル最良更新」と直近の「全体最良更新=0回」が同一実行の矛盾に見える。
-            //   どの行がどの実行かは行頭の #N で分かる、と明示する。
-            if (runsInLog.size > 1) {
-                append("※操作ログは複数回の実行を含みます（行頭 #N）。この診断ログは ${runTag(lastDiagSerial)} のものだけです。\n")
-            }
-            logs.forEach { append(it).append('\n') }
-            // [3.379.0] 最適化のあとに1回でも編集/再チェックすると診断が丸ごと入れ替わるため、
-            //   直近のエンジン実行ぶんを別セクションで必ず残す（同一なら重複させない）。
-            val run = lastRunDiagLogs
-            if (run.isNotEmpty() && run !== logs && run != logs) {
-                val at = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.JAPAN)
-                    .format(java.util.Date(lastRunDiagAtMs))
-                append("\n==== 直近の$lastRunDiagLabel の診断ログ（${runTag(lastRunDiagSerial)}・$at 時点・全文 ${run.size}件）====\n")
-                append("※上の診断ログはその後の編集/再チェックで作り直された最新版です。こちらは実行時のもの。\n")
-                run.forEach { append(it).append('\n') }
-            }
-        }
-    }
-
-    /** 操作ログ・診断ログ・現在の違反サマリを構造化JSONで書き出す（監査用）。 */
-    fun exportLogsJson(): String? {
-        if (_ui.value.opLog.isEmpty() && _ui.value.logs.isEmpty()) return null
-        val o = org.json.JSONObject()
-        o.put("exportedAt", System.currentTimeMillis())
-        o.put("environment", environmentLine())   // [3.360.0] 版・端末・コア数・ネイティブ可否（テキスト版と同一）
-        o.put("staff", _ui.value.staff); o.put("days", _ui.value.days); o.put("shifts", _ui.value.shifts)
-        o.put("hard", _ui.value.bestHard); o.put("soft", _ui.value.bestSoft); o.put("total", _ui.value.totalViolations)
-        o.put("satisfaction", _ui.value.satisfaction)
-        // [N6] satisfaction は 0-100 の進捗スコア（違反減少度: hard>0 で×55系）であり希望充足率ではない。
-        //   外部AI/人間の誤読が実際に発生したため意味を同梱する。
-        o.put("satisfactionMeaning", "0-100の進捗スコア（必須・合計違反の減少度）。希望充足率ではありません")
-        o.put("opLog", org.json.JSONArray().apply { _ui.value.opLog.forEach { put(it) } })
-        o.put("diagLog", org.json.JSONArray().apply { rawDiagLogs.ifEmpty { _ui.value.logs }.forEach { put(it) } })
-        // [3.408.0] 帰属の鍵。opLog の行頭 #N と対応する。これが無いと、複数回実行したあとの書き出しで
-        //   前の実行の「グローバル最良更新」と直近の「全体最良更新=0回」が同一実行の矛盾に見える。
-        o.put("diagRun", lastDiagSerial)
-        o.put("runsInOpLog", org.json.JSONArray().apply { opLog.map { it.run }.filter { it > 0 }.distinct().sorted().forEach { put(it) } })
-        // [3.379.0] テキスト版と同じ理由＝最適化後の編集で diagLog は作り直されるため実行時のぶんも残す。
-        if (lastRunDiagLogs.isNotEmpty()) {
-            o.put("lastRunLabel", lastRunDiagLabel)
-            o.put("lastRunSerial", lastRunDiagSerial)
-            o.put("lastRunAt", lastRunDiagAtMs)
-            o.put("lastRunDiagLog", org.json.JSONArray().apply { lastRunDiagLogs.forEach { put(it) } })
-        }
-        o.put("breakdown", org.json.JSONObject().apply { _ui.value.breakdown.forEach { (k, v) -> put(k, v) } })
-        return o.toString(2)
-    }
-
-    /**
-     * CSV取込の振り分け。病院などの「勤務表テンプレCSV」(ユニット/スタッフ/凡例を含む完全な1ヶ月表) は
-     * 新規データセットとして丸ごと取り込む（[RosterCsvImport]）。それ以外は、既存データへ勤務表だけを
-     * 重ねる従来の取込([importCsv])に回す（既存データが無ければ案内のみ）。
-     */
-    /**
-     * [3.414.0/I-02] CSV取込は**期間を推定して黙って確定していた**（`RosterCsvImport` はタイトルに
-     * 年月が無ければ当年1月、`FlatRosterCsvImport` は曜日行から当年で最初に一致する月・曜日行が
-     * 無ければ当年1月）。期間は勤務表の根幹で、間違っていれば曜日の平準化も日付表示もずれるのに、
-     * 画面には「N名 / M日」しか出ず**推定したことすら伝わらなかった**。何日からとして取り込んだかを
-     * 必ず出す。挙動は不変＝知らせるだけで、違っていれば設定タブで直せる。
-     */
-    private fun periodNote(startDate: String) =
-        "｜期間は「$startDate」から として取り込みました（CSVに年月が無い場合は推定です。設定タブで直せます）"
-
-    fun importCsvSmart(rawText: String) {
-        val text = MojibakeRepair.repair(rawText)
-        if (com.magi.app.v6.RosterCsvImport.detect(text)) {
-            val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text) }.getOrNull()
-            if (st != null) {
-                // 凡例(記号一覧)が無いとシフトが「休」1種のみになり全セルが公休化する。
-                // 取り込まず原因をオペレーターに表示する（Excel保存で凡例が消えるケース）。
-                if (st.shiftCount <= 1) {
-                    _ui.update { it.copy(messageIsError = true, message = "CSV取込失敗: シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧が削除されていないかご確認ください（Excelで開いて保存すると消える場合があります）。元のファイルをそのまま取り込んでください。") }
-                    logOp("W", "勤務表CSV取込 中止: 凡例なし（シフト${st.shiftCount}種のみ→全公休化を防止）")
-                    return
-                }
-                // [3.414.0/I-02] 期間はCSVから読めないことがあり、**推定して黙って確定していた**
-                //   （RosterCsvImport はタイトルに年月が無ければ当年1月、FlatRosterCsvImport は
-                //   曜日行から当年で最初に一致する月／曜日行が無ければ当年1月）。期間は勤務表の根幹で、
-                //   間違っていれば曜日の平準化も日付表示もずれる。**何日から取り込んだかを必ず出す**
-                //   （挙動は不変＝知らせるだけ。違っていれば設定タブで直せる）。
-                logOp("I", "勤務表CSVを新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}")
-                load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate))
-                return
-            }
-            // テンプレらしいが解析不能 → 既存取込にフォールバック（または案内）。
-        }
-        // ユニット列形式（凡例なし: ユニット,No,役職,氏名,1,2,…）の勤務表CSV → 新規データセットとして取込。
-        if (com.magi.app.v6.FlatRosterCsvImport.detect(text)) {
-            val st = runCatching { com.magi.app.v6.FlatRosterCsvImport.parse(text) }.getOrNull()
-            if (st != null) {
-                // [3.414.0/I-02] この形式は**必ず**期間を推定する（曜日行から当年で最初に一致する月・
-                //   曜日行が無ければ当年1月）。何日から取り込んだかを必ず出す（挙動は不変）。
-                logOp("I", "勤務表CSV(ユニット列形式)を新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}（推定）")
-                load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate))
-                return
-            }
-            _ui.update { it.copy(messageIsError = true, message = "CSV取込失敗: ユニット列形式と判定しましたが解析できませんでした。ヘッダ行（ユニット, No, 役職, 氏名, 1, 2, …）と氏名列をご確認ください。") }
-            logOp("W", "勤務表CSV(ユニット列形式)取込 失敗: 解析不能")
-            return
-        }
-        if (state == null) {
-            _ui.update { it.copy(messageIsError = true, message = "このCSVを読み込めませんでした。先に『データを開く』で基本データを読み込むか、勤務表テンプレCSVをご利用ください。") }
-            return
-        }
-        // [3.282.0] 修復済みテキストをそのまま渡す（旧: rawText を渡し importCsv 内で二重に repair＝
-        //   結果は同一だが無駄な再修復と非対称があった）。
-        importCsv(text)
-    }
-
-    /**
-     * 勤務表テンプレCSVを、利用者の選択（勤務表 or 希望シフト）で新規データとして取り込む。
-     *  - asWishes=false: 本表を初期割り当て(勤務表)として読み込む。
-     *  - asWishes=true : 本表をスタッフの希望として読み込み、勤務表は空(全公休)で開始（最適化で尊重）。
-     */
-    fun importRosterAs(rawText: String, asWishes: Boolean) {
-        val text = MojibakeRepair.repair(rawText)
-        val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text, asWishes) }.getOrNull()
-        if (st == null) {
-            _ui.update { it.copy(messageIsError = true, message = "このCSVを読み込めませんでした。形式をご確認ください。") }
-            return
-        }
-        if (st.shiftCount <= 1) {
-            _ui.update { it.copy(messageIsError = true, message = "CSV取込失敗: シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧が削除されていないかご確認ください（Excelで保存すると消える場合があります）。") }
-            logOp("W", "${if (asWishes) "希望シフト" else "勤務表"}CSV取込 中止: 凡例なし（シフト${st.shiftCount}種のみ）")
-            return
-        }
-        val kind = if (asWishes) "希望シフト" else "勤務表"
-        // [3.414.0/I-02] 期間はタイトルの年月から読むが、無ければ当年1月へ黙って落ちていた。
-        //   何日から取り込んだかを必ず出す（挙動は不変＝知らせるだけ）。
-        logOp("I", "${kind}として新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}" +
-            if (asWishes) "（希望${st.wishes.size}件）" else "")
-        load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate))
     }
 
     fun importCsv(rawText: String) {
@@ -3133,109 +2216,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 endBoardJob(boardToken)
             }
         }
-    }
-
-    /** 取込種別を取り違えた可能性の判定: 勤務表(スケジュール)CSVらしいか。 */
-    private fun looksLikeScheduleCsv(t: String): Boolean {
-        val lines = t.split('\n')
-        if (lines.isEmpty()) return false
-        // ScheduleCsvBridge.build のヘッダ「スタッフ \ 日付,…」、または集計ブロック「集計,…」。
-        val head = lines[0].trim()
-        if (head.startsWith("スタッフ") && head.contains("日付")) return true
-        return lines.any { it.trimStart().startsWith("集計,") }
-    }
-
-    /** 希望/制約の取込が0件のとき、別形式CSVの取り違えを推定して利用者向けヒントを返す（無ければ空）。 */
-    private fun componentImportMismatchHint(repairedText: String): String = when {
-        com.magi.app.v6.RosterCsvImport.detect(repairedText) ||
-            com.magi.app.v6.FlatRosterCsvImport.detect(repairedText) ->
-            "これは勤務表全体（テンプレ/ユニット列形式）のCSVのようです。取込種別で『データ全体（新規）』を選んでください。"
-        looksLikeScheduleCsv(repairedText) ->
-            "これは勤務表（スケジュール）CSVのようで、希望・制約は含まれていません。専用CSVを、出力タブの『希望』『制約』ボタンで出して取り込んでください。"
-        else -> ""
-    }
-
-    /** [コンポーネント別取込] スタッフ一覧CSV（氏名,グループ,スキル）。既存は所属群/スキルを更新、未知の氏名は新規追加（勤務表に休の行を追加）。 */
-    fun importStaffCsv(rawText: String) {
-        val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
-        val sched = currentSchedule ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
-        val text = MojibakeRepair.repair(rawText)
-        val res = runCatching { com.magi.app.v6.StaffCsvIO.parseUpsert(text, st, sched) }.getOrNull()
-        if (res == null) {
-            val hint = componentImportMismatchHint(text)
-            val tail = if (hint.isEmpty()) "形式『氏名,グループ,スキル』（1行=1名）をご確認ください。" else hint
-            _ui.update { it.copy(messageIsError = true, message = "職員一覧の取込失敗（追加0・更新0）。$tail") }
-            logOp("W", "職員一覧CSV取込 失敗: 0件")
-            return
-        }
-        val parts = buildList {
-            if (res.added > 0) add("${res.added}名を新規追加")
-            if (res.updated > 0) add("${res.updated}名を更新")
-        }
-        // [3.413.0/I-07] 空でないのに解決できなかった群/スキル記号を必ず知らせる。旧: 新規は先頭
-        //   グループ、既存は現状維持へ黙って落ち、**空欄と誤記が見分けられなかった**。所属グループは
-        //   担当できるシフトを決めるので、誤記が通ると説明のつかない盤面になる。
-        val badG = res.unknownGroups
-        val badS = res.unknownSkills
-        val warn = buildList {
-            if (badG.isNotEmpty()) add("グループ記号 ${badG.entries.take(3).joinToString("・") { "「${it.key}」${it.value}件" }}${if (badG.size > 3) "ほか" else ""}")
-            if (badS.isNotEmpty()) add("スキル記号 ${badS.entries.take(3).joinToString("・") { "「${it.key}」${it.value}件" }}${if (badS.size > 3) "ほか" else ""}")
-        }
-        val tailWarn = if (warn.isEmpty()) "" else
-            "。⚠ 見つからない${warn.joinToString("／")}（新規は先頭グループ・既存は元のまま。記号をご確認ください）"
-        val msg = "職員一覧を取込: " + parts.joinToString("・") + tailWarn
-        logOp(if (warn.isEmpty()) "I" else "W",
-            "職員一覧CSV取込: 追加${res.added} 更新${res.updated}" +
-                (if (badG.isNotEmpty()) " 未知グループ${badG.values.sum()}件" else "") +
-                (if (badS.isNotEmpty()) " 未知スキル${badS.values.sum()}件" else ""))
-        applyStructureWithMessage(com.magi.app.v6.Ws1Result(res.state, res.schedule), msg)
-    }
-
-    /** [コンポーネント別取込] 希望シフトCSV（氏名,日,希望シフト）。氏名一致で希望を全置換。 */
-    fun importWishesCsv(rawText: String) {
-        val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（希望シフトは既存データに重ねます）") }; return }
-        val text = MojibakeRepair.repair(rawText)
-        val res = runCatching { com.magi.app.v6.WishesCsvIO.parse(text, st) }.getOrNull()
-        if (res == null) {
-            val hint = componentImportMismatchHint(text)
-            val tail = if (hint.isEmpty()) "形式は『氏名,日,希望シフト』（例: 古泉 健一,5,休）です。氏名・シフト記号が一致しているかご確認ください。" else hint
-            _ui.update { it.copy(messageIsError = true, message = "希望シフトの取込失敗（取り込める行が0件）。$tail") }
-            logOp("W", "希望シフトCSV取込 失敗: 0件${if (hint.isEmpty()) "" else "（別形式CSVの取り違えの可能性）"}")
-            return
-        }
-        // [3.329.0/外部レビュー H-02] この取込は既存の希望を**全置換**する。中身のある行を1つでも
-        //   解釈できなかったら置換しない（旧: 誤記の行を黙って捨て、1行でも有効なら残りの希望を消していた）。
-        if (res.rejected > 0) {
-            _ui.update { it.copy(messageIsError = false, message = "希望シフトの取込を中止しました（読めない行が${res.rejected}件）。" +
-                "この取込は既存の希望を置き換えるため、全部読めたときだけ実行します。例: ${res.sample}") }
-            logOp("W", "希望シフトCSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: ${res.sample}")
-            return
-        }
-        logOp("I", "希望シフトCSV取込: ${res.accepted}件を反映（全置換）")
-        applyStructureWithMessage(res.state, "希望シフトを取込: ${res.accepted}件を反映（既存の希望は置換）")
-    }
-
-    /** [コンポーネント別取込] 各制約CSV（種別タグ付き）。制約一式＋個人レンジを置換。 */
-    fun importConstraintsCsv(rawText: String) {
-        val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（各制約は既存データに重ねます）") }; return }
-        val text = MojibakeRepair.repair(rawText)
-        val res = runCatching { com.magi.app.v6.ConstraintsCsvIO.parse(text, st) }.getOrNull()
-        if (res == null) {
-            val hint = componentImportMismatchHint(text)
-            val tail = if (hint.isEmpty()) "1列目の種別（連勤/禁止連続/群組合せ禁止/個人レンジ 等）をご確認ください。例: 連勤,5,休,14 ／ 個人レンジ,古泉 健一,A4,6,8" else hint
-            _ui.update { it.copy(messageIsError = true, message = "各制約の取込失敗（取り込める行が0件）。$tail") }
-            logOp("W", "各制約CSV取込 失敗: 0件${if (hint.isEmpty()) "" else "（別形式CSVの取り違えの可能性）"}")
-            return
-        }
-        // [3.329.0/外部レビュー H-02] 制約一式と個人レンジを**全置換**するので、希望と同じ扱いにする。
-        if (res.rejected > 0) {
-            _ui.update { it.copy(messageIsError = false, message = "各制約の取込を中止しました（読めない行が${res.rejected}件）。" +
-                "この取込は既存の制約・個人レンジを置き換えるため、全部読めたときだけ実行します。例: ${res.sample}") }
-            logOp("W", "各制約CSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: ${res.sample}")
-            return
-        }
-        logOp("I", "各制約CSV取込: ${res.accepted}件を反映（制約一式を置換）")
-        applyStructureWithMessage(res.state, "各制約を取込: ${res.accepted}件を反映（既存の制約・個人レンジは置換）")
     }
 
     /**

@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [C1BeamPolish, 外部パッチ受領→2箇所修正のうえ適用] `V6HotfixPasses.applyC1BeamPolish` の検証。
+ * [C1BeamPolish, 外部パッチ受領→2箇所修正のうえ適用] `C1WindowPolish.applyC1BeamPolish` の検証。
  * 盤面はホストJVM(kotlin-compiler-embeddable 2.0.21をGradle配布物から利用)でこの関数自体を実際に
  * コンパイル・実行して確認済み（デフォルトseedでc1=1->0・total=10->9・applied=2、5シード共通の
  * 決定的結果）。実データ検証（golden_state.json/sample_state_v6.json, 全15シード）でも
@@ -55,7 +55,7 @@ class C1BeamPolishTest {
         // [3.345.0] weekly がシフト別になり初期 total の内訳が変わった（旧 10）。盤面自体は不変。
         assertEquals("初期total", 19, before.total)
 
-        val result = V6HotfixPasses.applyC1BeamPolish(st, sched)
+        val result = C1WindowPolish.applyC1BeamPolish(st, sched)
         val after = UnifiedViolationChecker.check(st, result.newSchedule)
 
         assertEquals("広域ビーム研磨後はc1=0", 0, after.breakdown["c1"] ?: -1)
@@ -68,7 +68,7 @@ class C1BeamPolishTest {
     fun c1BeamPolishIsNoOpWhenNoCons1Rules() {
         val st = deficientState().copy(cons1 = emptyList())
         val sched = st.schedule.toIntArray2D()
-        val result = V6HotfixPasses.applyC1BeamPolish(st, sched)
+        val result = C1WindowPolish.applyC1BeamPolish(st, sched)
         assertEquals(0, result.applied)
     }
 
@@ -90,7 +90,7 @@ class C1BeamPolishTest {
         val root = UnifiedViolationChecker.check(st, sched)
         var prev: ViolationReport? = null
         for (ms in listOf(2, 4, 6, 8, 12)) {
-            val r = V6HotfixPasses.applyC1BeamPolish(st, sched, beamWidth = 8, maxSteps = ms, seed = 7L)
+            val r = C1WindowPolish.applyC1BeamPolish(st, sched, beamWidth = 8, maxSteps = ms, seed = 7L)
             val a = UnifiedViolationChecker.check(st, r.newSchedule)
             val p = prev
             if (p != null) {
@@ -113,7 +113,7 @@ class C1BeamPolishTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         for (p in listOf(1, 2, 20, 60)) {
-            val r = V6HotfixPasses.applyC1BeamPolish(st, sched, patience = p)
+            val r = C1WindowPolish.applyC1BeamPolish(st, sched, patience = p)
             val a = UnifiedViolationChecker.check(st, r.newSchedule)
             assertEquals("patience=$p でもc1は解消する", 0, a.breakdown["c1"] ?: -1)
             assertEquals("patience=$p でHARDは不変", before.hard, a.hard)
@@ -129,7 +129,7 @@ class C1BeamPolishTest {
         val sched = st.schedule.toIntArray2D()
         val before = UnifiedViolationChecker.check(st, sched)
         for (seed in 0L until 20L) {
-            val result = V6HotfixPasses.applyC1BeamPolish(st, sched, seed = seed * 97L + 3L)
+            val result = C1WindowPolish.applyC1BeamPolish(st, sched, seed = seed * 97L + 3L)
             val after = UnifiedViolationChecker.check(st, result.newSchedule)
             assertTrue(
                 "seed=$seed: total悪化(before=${before.total}, after=${after.total})は許されない",
