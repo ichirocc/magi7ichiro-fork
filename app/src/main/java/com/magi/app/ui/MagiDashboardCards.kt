@@ -6,7 +6,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,12 +34,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -937,6 +933,11 @@ private data class ConfirmItem(
     //   null=そのカレンダーへの「設定で直す」導線を出さない。
     val wishStaff: Int? = null,
     val needShift: Int? = null,
+    /**
+     * [3.471.0] この項目に重なっている**生の族キー**（`MirrorKeys.all`）。`sub` は複数族を「・」で
+     * 連結した表示ラベルなので突合に使えない（`AnalysisTriageCard` が族ごとに場所を数件だけ出すのに要る）。
+     */
+    val families: List<String> = emptyList(),
 )
 
 /**
@@ -955,7 +956,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         // [④用語統一] 過剰マークは「過剰」（凡例/集計と同語）。[⑥日別ジャンプ] day=j で勤務表の該当日列へ飛べる。
         val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過剰" to 1; else -> "調整" to 1 }
         out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, j, kind * 100000 + j * 100 + k,
-            needShift = if (fam == "covU" || fam == "covO") k else null)
+            needShift = if (fam == "covU" || fam == "covO") k else null, families = listOf(fam))
     }
     // 個人回数: countViolations "i,k" -> vio-low/high/c2/aptLow/aptHigh（職員×シフト）
     for ((key, cls) in ui.countViolations) {
@@ -964,7 +965,8 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         // c2(個人の合計) は方向を持たない単一クラス vio-c2 → 「過」ではなく中立マーク「計」（誤って過剰と表示しない）。
         val (mark, kind) = when (fam) { "low", "aptLow" -> "不足" to 0; "c2" -> "計" to 1; else -> "過剰" to 1 }
         val labelFam = when (fam) { "aptLow", "aptHigh" -> "apt"; else -> fam }
-        out += ConfirmItem(kind, mark, nm(i), "${sym(k)}・${breakdownLabels[labelFam] ?: labelFam}", i, null, kind * 100000 + 40000 + i * 100 + k)
+        out += ConfirmItem(kind, mark, nm(i), "${sym(k)}・${breakdownLabels[labelFam] ?: labelFam}", i, null, kind * 100000 + 40000 + i * 100 + k,
+            families = listOf(labelFam))
     }
     // セル違反: violationCells "i,j" -> vio-pref/groupViol/c3n/c3/c3m/c3mn/c1/c42/c42s（職員×日=実シフト）
     for ((key, cls) in ui.violationCells) {
@@ -981,27 +983,11 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val famsAll = (ui.violationCellFamilies[key] ?: listOf(cls)).map { it.removePrefix("vio-") }
         val sub = famsAll.joinToString("・") { breakdownLabels[it] ?: it }
         out += ConfirmItem(kind, mark, "${nm(i)} ${dayMD(ui.startDate, j)}=$cellSym", sub, i, j, kind * 100000 + 80000 + j * 100 + i,
-            wishStaff = if ("pref" in famsAll) i else null)
+            wishStaff = if ("pref" in famsAll) i else null, families = famsAll)
     }
     return out.sortedWith(compareBy({ it.kind }, { it.order }))
 }
 
-/** [★1] 要確認一覧のフィルタチップ（Surface ベース＝新規 import 不要）。 */
-@Composable
-private fun ConfirmFilterChip(label: String, count: Int, selected: Boolean, onClick: () -> Unit) {
-    val cs = MaterialTheme.colorScheme
-    val bg = if (selected) cs.secondaryContainer else cs.surfaceVariant
-    val fg = if (selected) cs.onSecondaryContainer else cs.onSurfaceVariant
-    Surface(
-        color = bg, shape = MaterialTheme.shapes.small,
-        modifier = Modifier.heightIn(min = 40.dp).clickable { onClick() },
-    ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("$label $count", style = MaterialTheme.typography.labelLarge, color = fg,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-        }
-    }
-}
 
 /** [★1] 要確認一覧の1行（spec confirmCard 同型：マークバッジ＋タイトル＋族＋メタ）。 */
 @Composable
@@ -1049,281 +1035,145 @@ private fun ConfirmRow(
     }
 }
 
+
+
+
 /**
- * [3.459.0/分析タブ統合] 旧 ConfirmListCard/AttentionCardsSection/BreakdownCard の3枚を1枚へ統合。
+ * [3.471.0/分析タブ再構築] 分析タブを**スクロール最小の1画面**にまとめたカード。
  *
- * 3枚はいずれも violationCells/needViolations/countViolations（＋breakdown）という**同じデータ**を
- * 別の切り口（箇所単位一覧／日別・人別集計／族単位集計）で見せるだけで、各々が別のCard・見出し・
- * トグル行を持つため画面が縦に長く、チップ/トグルが繰り返し出て冗長だった（3.195.0時点は「粒度別・
- * 相互補完」と判断していたが、実機スクショで積み重なりが冗長と再確認され本格統合に変更）。
- * ①1つの見出し ②勤務表タブと共有する族フィルタ(E7の6バケツ) ③一覧/日別・人別/内訳を切り替える
- * セグメント、へ集約する。各ビュー固有の絞り込み（一覧の方向チップ・日別人別のトグル・内訳の重大度
- * グループ）は族フィルタと別軸で意味があるため残す（3.397.0「同じ操作は同じ形」＝同じ操作(絞り込み)
- * でも軸が違えば別の形で良い）。
+ * 旧 3枚統合カード（3.459.0）は「一般/プロ」「一覧/日別・人別/内訳」「全部/不足/過剰/窓」「族チップ6種」と
+ * **4層の切り替え**を積み、そのうえで 0 件の項目まで並べていたため縦が極端に伸びていた。
+ * ここでは切り替えを全部やめ、上から下へ流れる1本にする。
  *
- * [ViolationFilterBarの有効活用] 従来「勤務表タブ専用の飾り」だった族フィルタ(`vioEnabled`)を、
- * この統合カードの共有レンズとしても使う＝タブを跨いでも「見ている種類」が一貫する。中身の
- * チップ行は `ViolationBucketChips`（`MagiScheduleViews.kt`）を委譲元と共有し、二重実装しない。
+ * ## 分類は族でなく「データを直さない限り消えるか」（根拠は [analysisTriage] に集約）
+ * 「連勤・並びは自動で直るので手動修正は不要」と族の名前で断定すると、3.263.0 / 3.322.0 / 3.344.0 で
+ * 直してきた楽観バイアスが戻る（c1・c3n はデータ次第で最適化では消せない）。上段へ上げるのは
+ * **必須違反**と、**診断（settingIssues / forbiddenDiag / c1Plateau / coverageDiag）が構造的に残ると
+ * 判定したもの**だけ。中段は「エンジンが挑戦する項目」であって「直さなくてよい」ではない旨を注記する。
  *
- * 「すべて満たしている」の達成表示は**フィルタと無関係に未フィルタの全件**で判定する
- * （3.405.0「形が守れない約束をしない」＝絞り込みでゼロ件に見えるだけを「達成」と偽らない）。
- * 表示のみ・スコアリング不変（読取専用。フィルタは`ui`のコピーを絞るだけでエンジン/重みは無関係）。
+ * ## 同種を畳む
+ * 設定の破綻は「古泉・Dﾃ」「山本・Dﾃ」…と1人1行で伸びていたのを種類ごとの1行へ集約する。
+ * ただし**必須違反だけは場所を最大3件そのまま出す**（どのセルかが分からないと直しに行けない）。
+ *
+ * 表示のみ・読み取り専用＝スコアリング/エンジンは完全に不変。
  */
 @Composable
-internal fun ViolationHubCard(
+internal fun AnalysisTriageCard(
     ui: UiState,
-    vioEnabled: Set<String>,
-    onToggleBucket: (String) -> Unit,
     onFocusStaff: (Int) -> Unit,
     onGoEdit: () -> Unit,
-    proMode: Boolean = false,
-    // [ジャンプ/Web試作の移植] セル違反の項目タップで勤務表タブの該当セルへ移動＋ハイライト。
-    onShowCell: (Int, Int) -> Unit = { i, _ -> onFocusStaff(i) },
-    // [⑥日別ジャンプ] 日×シフト項目（人員/群レンジ）タップで勤務表タブの該当日列へ移動＋日ヘッダをハイライト。
-    onShowDay: (Int) -> Unit = {},
-    // [下流→上流ディープリンク] pref項目→希望シフト登録(該当職員)、covU/covO項目→必要人数カレンダー(該当シフト)へ。
-    onFixWish: (Int) -> Unit = {},
-    onFixNeed: (Int) -> Unit = {},
+    onShowCell: (Int, Int) -> Unit,
+    onShowDay: (Int) -> Unit,
+    onFixWish: (Int) -> Unit,
+    onFixNeed: (Int) -> Unit,
+    onMake: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val issueCount = ui.settingIssues.size
-    val totalItems = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }.size
-    // [外部レビューP1-01, 3.464.0] fair/weekly は場所を持たない集計値のため violationCells/needViolations/
-    //   countViolations（＝confirmItemsの母数）に一切現れない（distLocations経由・内訳ビュー専用）。
-    //   totalItems だけで判定すると fair/weekly のみが残る盤面を「達成」と誤表示しうる。breakdown 全体も見る。
-    val hasBreakdownViolations = ui.breakdown.values.any { it > 0 }
-    if (totalItems == 0 && issueCount == 0 && !hasBreakdownViolations) {
-        // 達成表示（結果があり違反ゼロのときのみ）。データ未読込・実行中は何も出さない。
-        if (ui.schedule.isNotEmpty() && !ui.running) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("違反を確認", style = MaterialTheme.typography.titleMedium)
-                    Text("確認事項はありません（すべての条件を満たしています）。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)   // [監査修正] 成功テキストは AA を満たす tertiary(緑ロール)。MagiAccent.green は text で 3.3:1
+    val (warnBg, warnFg) = magiWarnColors()
+    val t = remember(ui.breakdown, ui.settingIssues, ui.coverageDiag, ui.forbiddenDiag, ui.c1Plateau, ui.hasResult) { analysisTriage(ui) }
+    val items = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
+    var showSummary by rememberSaveable { mutableStateOf(false) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("分析", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Surface(color = if (t.computed) cs.tertiaryContainer else cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
+                    Text(
+                        if (t.computed) "計算済み" else "未計算",
+                        Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (t.computed) cs.onTertiaryContainer else cs.onSurfaceVariant,
+                    )
                 }
             }
-        }
-        return
-    }
-    val filteredUi = remember(ui, vioEnabled) { applyVioFilter(ui, vioEnabled) }
-    var mode by rememberSaveable { mutableIntStateOf(0) }   // 0=一覧 1=日別・人別 2=内訳
-    val locCount = filteredUi.violationCells.size + filteredUi.needViolations.size + filteredUi.countViolations.size
-    val bucketCounts = vioBucketLocCounts(ui)   // 未フィルタの総数＝トグルで隠れている件数も見える
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("違反を確認（${locCount}件）", style = MaterialTheme.typography.titleMedium)
-            if (issueCount > 0) {
-                Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.medium) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("設定の見直し ${issueCount}件（実行前に直せます）", color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                        TextButton(onClick = onGoEdit) { Text("設定へ") }
+
+            if (!t.hasAnything && ui.schedule.isNotEmpty() && !ui.running) {
+                Text("確認事項はありません（すべての条件を満たしています）。",
+                    style = MaterialTheme.typography.bodyMedium, color = cs.tertiary)
+            }
+
+            if (t.blockers.isNotEmpty() || t.issues.isNotEmpty()) {
+                Text("直さないと消えない項目", style = MaterialTheme.typography.titleSmall, color = cs.error)
+                t.blockers.forEach { row ->
+                    TriageRowLine(row, cs.errorContainer, cs.onErrorContainer)
+                    val fam = row.family
+                    if (fam != null && fam in MirrorKeys.hard) {
+                        // 必須違反は「どのセルか」が分からないと直しに行けないので場所を数件だけ出す。
+                        val locs = items.filter { fam in it.families }
+                        locs.take(3).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay, onFixWish, onFixNeed) }
+                        if (locs.size > 3) Text("ほか ${locs.size - 3} 件", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                    }
+                }
+                t.issues.forEach { row ->
+                    Surface(color = warnBg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+                        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
+                                if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            TextButton(onClick = onGoEdit) { Text("設定へ") }
+                        }
                     }
                 }
             }
-            if (bucketCounts.values.any { it > 0 }) {
-                ViolationBucketChips(bucketCounts, vioEnabled, onToggle = onToggleBucket, locCount = locCount, showFocusToggle = false)
+
+            if (t.searching.isNotEmpty()) {
+                Text(
+                    if (t.computed) "計算後に残っている項目" else "エンジンが挑戦する項目（未計算）",
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        t.searching.forEach { row ->
+                            Row {
+                                Text("・${row.label}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${row.count}${row.unit}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                            }
+                        }
+                        Text("※${t.searchNote}", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                    }
+                }
             }
-            MagiSegmentedControl(options = listOf("一覧", "日別・人別", "内訳"), selected = mode, onSelect = { mode = it })
-            when (mode) {
-                0 -> ConfirmListBody(filteredUi, onFocusStaff, proMode, onShowCell, onShowDay, onFixWish, onFixNeed)
-                1 -> AttentionBody(filteredUi, onFocusStaff, onShowDay)
-                else -> BreakdownBody(filteredUi, onFocusStaff, proMode)
+
+            // 0件の族は畳む＝旧実装は「人員0」「希望0」…が画面の半分を占めていた。
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { showSummary = !showSummary },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("制約充足サマリー（正常 ${t.okFamilies.size} / 残り ${t.busyFamilies.size}）",
+                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text(if (showSummary) "閉じる ∧" else "全${t.okFamilies.size + t.busyFamilies.size}項目を展開 ∨",
+                    style = MaterialTheme.typography.labelMedium, color = ensureReadable(cs.surface, MagiAccent.blue))
+            }
+            if (showSummary) {
+                if (t.okFamilies.isNotEmpty()) Text("✔ 正常（${t.okFamilies.size}項目）: " + t.okFamilies.joinToString(" / "),
+                    style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                if (t.busyFamilies.isNotEmpty()) Text("⚠ 残っている（${t.busyFamilies.size}項目）: " + t.busyFamilies.joinToString(" / "),
+                    style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            }
+
+            Button(onClick = onMake, enabled = ui.loaded && !ui.running,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Text("▶ 勤務表をつくる", style = MaterialTheme.typography.titleMedium)
             }
             if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
 
-/** [一覧ビュー本体] 旧 ConfirmListCard の中身。Card/見出しは `ViolationHubCard` が持つ。 */
+/** 上段の1行（族の見出し＋件数＋診断が語った理由）。理由が空なら何も主張しない。 */
 @Composable
-private fun ConfirmListBody(
-    ui: UiState,
-    onFocusStaff: (Int) -> Unit,
-    proMode: Boolean,
-    onShowCell: (Int, Int) -> Unit,
-    onShowDay: (Int) -> Unit,
-    onFixWish: (Int) -> Unit,
-    onFixNeed: (Int) -> Unit,
-) {
-    val cs = MaterialTheme.colorScheme
-    val items = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
-    var filter by rememberSaveable { mutableStateOf(-1) }   // -1=全部 / 0=不足・必須 / 1=過剰・要調整 / 2=窓
-    val counts = intArrayOf(items.count { it.kind == 0 }, items.count { it.kind == 1 }, items.count { it.kind == 2 })
-    // データ変化で選択中フィルタの件数が0になり得る（例: 窓を選択→再最適化で c1 消滅）。その時チップは消えるが
-    // filter は残るため空リスト＋見出しの件数>0 という迷子状態になる。有効フィルタを「件数0なら全部へ戻す」で防ぐ。
-    val effFilter = if (filter in 0..2 && counts[filter] == 0) -1 else filter
-    val shown = items.filter { effFilter < 0 || it.kind == effFilter }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (!proMode) Text("タップで直し方を探します。",
-            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ConfirmFilterChip("全部", items.size, effFilter == -1) { filter = -1 }
-            if (counts[0] > 0) ConfirmFilterChip("不足・必須", counts[0], effFilter == 0) { filter = 0 }
-            // [④用語統一] 「調整」→「要調整」（グリッド凡例・編集シートの重大度語と揃える）。
-            if (counts[1] > 0) ConfirmFilterChip("過剰・要調整", counts[1], effFilter == 1) { filter = 1 }
-            if (counts[2] > 0) ConfirmFilterChip("窓", counts[2], effFilter == 2) { filter = 2 }
-        }
-        if (shown.isEmpty()) {
-            Text("この絞り込みでは確認事項がありません。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-        } else {
-            shown.take(40).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay, onFixWish, onFixNeed) }
-            if (shown.size > 40) Text("ほか ${shown.size - 40} 件（重大な順に表示中）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+private fun TriageRowLine(row: TriageRow, bg: Color, fg: Color) {
+    Surface(color = bg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("${row.label} ${row.count}${row.unit}" + if (row.promoted) "（構造的に残ると判定）" else "",
+                style = MaterialTheme.typography.bodyMedium, color = fg, fontWeight = FontWeight.SemiBold)
+            if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = fg)
         }
     }
 }
 
-/**
- * [日別・人別ビュー本体] 旧 AttentionCardsSection の中身。Card/見出しは `ViolationHubCard` が持つ。
- *  - 人別＝countViolations(職員×シフト)＋violationCells(職員×日)を職員ごとに件数集計。行タップで修復フロー。
- *  - 日別＝needViolations(シフト×日)を日ごとに件数集計。各行に不足/過剰のシフトを併記。行タップで勤務表の該当日へ。
- *  - 「要確認のみ」ON(既定)で違反0の行を隠す＝そのまま triage。表示のみ・スコアリング不変（読取専用）。
- */
-@Composable
-private fun AttentionBody(ui: UiState, onFocusStaff: (Int) -> Unit, onShowDay: (Int) -> Unit) {
-    if (ui.schedule.isEmpty()) return
-    fun nm(i: Int) = ui.staffNames.getOrNull(i) ?: "#$i"
-    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
-    // 人別: countViolations(i,k)=回数, violationCells(i,j)=セル
-    val staffAlerts = HashMap<Int, Int>()
-    val staffShifts = HashMap<Int, LinkedHashSet<String>>()
-    for ((key, cls) in ui.countViolations) {
-        val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull() ?: continue; val k = p.getOrNull(1)?.toIntOrNull() ?: continue
-        staffAlerts[i] = (staffAlerts[i] ?: 0) + 1
-        // c2(個人の合計) は方向を持たない → 「過」を付けず記号のみ（下限割れ/上限超過と混同させない）。
-        val dir = when { cls == "vio-low" || cls == "vio-aptLow" -> "不足"; cls == "vio-c2" -> ""; else -> "過剰" }   // [④用語統一]
-        staffShifts.getOrPut(i) { LinkedHashSet() }.add("${sym(k)}$dir")
-    }
-    for ((key, _) in ui.violationCells) {
-        val i = key.substringBefore(",").toIntOrNull() ?: continue
-        staffAlerts[i] = (staffAlerts[i] ?: 0) + 1
-    }
-    // 日別: needViolations(k,j)=被覆/群レンジ
-    val dayAlerts = HashMap<Int, Int>()
-    val dayShifts = HashMap<Int, LinkedHashSet<String>>()
-    for ((key, cls) in ui.needViolations) {
-        val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
-        dayAlerts[j] = (dayAlerts[j] ?: 0) + 1
-        val dir = when (cls) { "vio-covU" -> "不足"; "vio-covO" -> "過剰"; else -> "群のレンジ" }   // [④用語統一] breakdownLabels の c41系と同語
 
-        dayShifts.getOrPut(j) { LinkedHashSet() }.add("${sym(k)}$dir")
-    }
-    val days = ui.schedule.firstOrNull()?.size ?: 0
-    val staffCount = ui.staffNames.size
-    var mode by rememberSaveable { mutableIntStateOf(0) }        // 0=日別 1=人別
-    var alertOnly by rememberSaveable { mutableStateOf(true) }
-    val cs = MaterialTheme.colorScheme
-    val (warnBg, warnFg) = magiWarnColors()
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("要確認のみ", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Switch(checked = alertOnly, onCheckedChange = { alertOnly = it })
-        }
-        MagiSegmentedControl(options = listOf("日別", "人別"), selected = mode, onSelect = { mode = it })
-        if (mode == 0) {
-            val rows = (0 until days).filter { !alertOnly || (dayAlerts[it] ?: 0) > 0 }
-            if (rows.isEmpty()) {
-                Text(if (alertOnly) "日別の要確認はありません。" else "日がありません。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)   // [監査修正] 成功テキストは AA を満たす tertiary(緑ロール)。MagiAccent.green は text で 3.3:1
-            } else rows.forEach { j ->
-                val ac = dayAlerts[j] ?: 0
-                // [3.402.0] 日別行だけ押せなかった（人別は押せるのに）。行き先は要確認一覧と同じ勤務表の該当日。
-                AttentionRow(title = dayMD(ui.startDate, j), sub = dayShifts[j]?.joinToString("・") ?: "", alerts = ac, warnBg = warnBg, warnFg = warnFg,
-                    onClick = if (ac > 0) ({ onShowDay(j) }) else null, hint = "勤務表→")
-            }
-        } else {
-            val rows = (0 until staffCount).filter { !alertOnly || (staffAlerts[it] ?: 0) > 0 }
-            if (rows.isEmpty()) {
-                Text(if (alertOnly) "人別の要確認はありません。" else "職員がいません。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.tertiary)   // [監査修正] 成功テキストは AA を満たす tertiary(緑ロール)。MagiAccent.green は text で 3.3:1
-            } else rows.forEach { i ->
-                val ac = staffAlerts[i] ?: 0
-                AttentionRow(title = nm(i), sub = staffShifts[i]?.joinToString("・") ?: "", alerts = ac, warnBg = warnBg, warnFg = warnFg, onClick = if (ac > 0) ({ onFocusStaff(i) }) else null)
-            }
-        }
-    }
-}
-
-/** [★3+4] 日別/人別 注意リストの1行。alerts>0 で警告バッジ、onClick!=null でタップ修復可。 */
-@Composable
-private fun AttentionRow(title: String, sub: String, alerts: Int, warnBg: Color, warnFg: Color, onClick: (() -> Unit)?, hint: String = "直し方→") {
-    val cs = MaterialTheme.colorScheme
-    var m = Modifier.fillMaxWidth().heightIn(min = 52.dp)
-    if (onClick != null) m = m.clickable { onClick() }
-    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = m) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (sub.isNotEmpty()) Text(sub, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (alerts > 0) {
-                Surface(color = warnBg, shape = MaterialTheme.shapes.small) {
-                    Text("確認$alerts", color = warnFg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
-                }
-            }
-            if (onClick != null) Text(hint, style = MaterialTheme.typography.labelMedium,
-                color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
-        }
-    }
-}
-
-/** [内訳ビュー本体] 旧 BreakdownCard の中身。Card/見出しは `ViolationHubCard` が持つ。 */
-@Composable
-private fun BreakdownBody(ui: UiState, onFocusStaff: (Int) -> Unit, proMode: Boolean) {
-    val labels = breakdownLabels
-    var criticalOnly by rememberSaveable { mutableStateOf(false) }
-    var expanded by rememberSaveable { mutableStateOf<String?>(null) }
-    // [外部レビューP2-01, 3.464.0] 展開中に族フィルタ(vioEnabled)をOFFにすると、applyVioFilter が
-    //   breakdown からそのキーごと除く（vioEnabled が変われば ui=filteredUi の参照が変わる＝再実行）。
-    //   `expanded` は各族のトグルとは独立の rememberSaveable のため、開いたままだと「場所情報がありません」
-    //   という展開枠だけが残る。ui.breakdown が変わるたびに、開いている族が0件（＝フィルタで隠れた/解消済み）
-    //   なら自動で閉じる。手動で0件チップを開く操作自体は妨げない（この効果は ui.breakdown の参照が
-    //   変わったときだけ走り、タップ操作それ自体では再実行されない）。
-    LaunchedEffect(ui.breakdown) {
-        if (expanded != null && (ui.breakdown[expanded] ?: 0) == 0) expanded = null
-    }
-    val onTapChip: (String) -> Unit = { k -> expanded = if (expanded == k) null else k }
-    val cs = MaterialTheme.colorScheme
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("重大のみ", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-            Switch(checked = criticalOnly, onCheckedChange = { criticalOnly = it })
-        }
-        // [明確性I1] チップの数値は「ペナルティ量」。熟練者向けプロ表示では注記を省く。
-        if (!proMode) {
-            Text("数値は違反の大きさ。タップで場所を表示。",
-                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-        }
-        BreakdownGroup(if (proMode) "必須" else "必須（満たすべき）", listOf("groupViol", "pref", "covU", "c3n"), 2, ui, labels, expanded, onTapChip)
-        if (!criticalOnly) {
-            BreakdownGroup("人数の範囲", listOf("low", "high", "apt"), 1, ui, labels, expanded, onTapChip)
-            BreakdownGroup(if (proMode) "任意" else "任意（できれば）", listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "fair", "weekly"), 0, ui, labels, expanded, onTapChip)
-        }
-        expanded?.let { key ->
-            val locs = breakdownLocations(key, ui)
-            val name = labels[key] ?: key
-            Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("$name の場所（${locs.size}箇所）", style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { expanded = null }) { Text("閉じる") }
-                    }
-                    when {
-                        locs.isEmpty() && ui.running -> Text("実行中です。確定後にここへ場所が表示されます。", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
-                        locs.isEmpty() -> Text("場所情報がありません。", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
-                        else -> {
-                            locs.forEach { (txt, staff) ->
-                                if (staff != null) {
-                                    Text("$txt　→直し方を探す", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer,
-                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { onFocusStaff(staff) })
-                                } else {
-                                    Text(txt, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                                }
-                            }
-                            if (ui.running) Text("※ 実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSecondaryContainer)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 
 @Composable

@@ -355,7 +355,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
     var focusRange by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
     // [E7/3.459.0] 違反 種別フィルタ。旧: 勤務表タブ(1)のブロック内だけの局所状態だったが、分析タブの
-    //   統合カード(ViolationHubCard)とも同じフィルタを共有するため共通スコープへ引き上げた。初期=全ON。
+    //   [3.471.0] 分析タブの統合カードは撤去したので、いまの共有先は勤務表タブのグリッド/集計のみ。初期=全ON。
     //   bitmask(Int)で rememberSaveable 保存（回転/プロセス復元で保持）。表示のみ・スコアリング不変。
     //   ビット i = vioBuckets[i] のON/OFF。
     var vioMask by rememberSaveable { mutableIntStateOf((1 shl vioBuckets.size) - 1) }
@@ -620,46 +620,26 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }
                 }
                 3 -> {
-                    // [N2/⛏11] プロ表示トグルを分析タブ上部に常設（従来は設定タブの外観カード内＝
-                    //   タブ往復が必要だった）。proMode は共有状態なので設定側トグルと同期する。
-                    MagiSegmentedControl(options = listOf("一般", "プロ"), selected = if (proMode) 1 else 0, onSelect = { proMode = it == 1 })
-                    // [スクショ指摘/撤去] 概要ヒーロー（対象人数/対象期間）は読込ステータス行と重複の固定値で
-                    //   トリアージに寄与しないため撤去（ユーザー赤囲い指示）。件数は要確認一覧の見出しが担う。
-                    // [3.459.0/分析タブ統合] 旧・要確認一覧(ConfirmListCard)/日別・人別(AttentionCardsSection)/
-                    //   違反の内訳(BreakdownCard)の3枚は同じ3系統のデータ(violationCells/needViolations/
-                    //   countViolations)を別々の切り口で見せていただけで、常に3枚まとめて縦積みになり
-                    //   「冗長」とユーザーから繰り返し指摘されていた。1枚の ViolationHubCard へ統合し、
-                    //   E7の族フィルタ(vioEnabled、勤務表タブと共有)を「一覧／日別・人別／内訳」の3ビューへ
-                    //   一様に効かせる（旧: フィルタは勤務表タブのグリッド/集計にしか効かず「有効活用」の
-                    //   要望に応えていなかった）。staff 紐付き項目タップで修復フロー(findFixSuggestions)へ。
-                    //   表示のみ・スコア/エンジンは完全に不変。
-                    ViolationHubCard(
-                        ui, vioEnabled, onToggleBucket = onToggleVioBucket,
-                        onFocusStaff = { vm.findFixSuggestions(it) }, onGoEdit = { tab = 2 }, proMode = proMode,
+                    // [3.471.0/分析タブ再構築] 旧構成は「一般/プロ」「一覧/日別・人別/内訳」「全部/不足/過剰/窓」
+                    //   「族チップ6種」の**4層の切り替え**を積んだうえで 0 件の項目まで並べており、縦が極端に
+                    //   伸びていた。切り替えを全部やめて上から下へ流れる1画面（AnalysisTriageCard）に統一する。
+                    //   分類は族の名前でなく「データを直さない限り消えるか」＝既存の診断（settingIssues /
+                    //   forbiddenDiag / c1Plateau / coverageDiag）の結論に従う（族で「手動修正は不要」と
+                    //   断定すると 3.263.0 / 3.322.0 / 3.344.0 で直した楽観バイアスが戻る）。
+                    //   一般/プロ トグルは設定タブ→外観に、族フィルタは勤務表タブに残す＝他タブの機能は壊さない。
+                    AnalysisTriageCard(
+                        ui,
+                        onFocusStaff = { vm.findFixSuggestions(it) },
+                        onGoEdit = { tab = 2 },
                         onShowCell = { i, j -> focusCell = i to j; tab = 1 },
-                        // [⑥日別ジャンプ] 人員/群レンジ(日×シフト)の項目→勤務表タブの該当日列へ（i=-1=日のみ注目）。
                         onShowDay = { j -> focusCell = -1 to j; tab = 1 },
-                        // [下流→上流ディープリンク] pref→希望シフト登録(職員)、covU/covO→必要人数カレンダー(シフト)。編集タブ/月次条件へ。
                         onFixWish = { s -> deepLinkWishStaff = s; editScope = 0; tab = 2 },
                         onFixNeed = { k -> deepLinkNeedShift = k; editScope = 0; tab = 2 },
+                        onMake = { vm.runV6FullOptimize(); tab = 0 },
                     )
-                    // [冗長性/用語][コメント訂正] 開発用の V6 1ヶ月俯瞰(HARD Core/Guard・Apt/Equalize/covU 等の
-                    //   生指標)は「詳細設定(上級者)」ではなく分析タブのプロ表示にのみ一本化済み（冗長性J1、
-                    //   MagiSetupCards.kt 参照。旧コメントは移設先が実態と食い違っていたため訂正）。
-                    // [プロ編集] プロ表示モードのときは数値診断（V6 1ヶ月俯瞰・生指標）を前面に出す。
+                    // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)
-                    // [実機指摘] 重み表（WeightTableCard）は分析タブから設定タブの最適化設定直後へ移動。
-                    // [IA重複解消] BossCard は FixSuggestionCard と同じ提案＋適用を二重描画していたため撤去（下の FixSuggestionCard に一本化）。
-                    // [見直し/IA重複解消] OverviewDashboard(気になる点=総違反リング / 注意の日リング)を撤去。融合カードが上位代替:
-                    //   気になる点(総数)→ヒーロー規模＋要確認一覧ヘッダ件数、注意の日→ViolationHubCard の日別・人別ビュー。
-                    //   「違反総数」の三重表示を D2(HARD三重リング撤去)と同方針で解消。composable 定義は残置=無害。
-                    // [3.286.0 冗長性D] CheckSummaryView（チェック概要=必須違反数の1行）を撤去。必須違反数は
-                    //   ホームの OperatorNextActionCard と要確認一覧見出しで既に2重に提示済みで3重目だった
-                    //   （3.83.0 の維持判断は ConfirmListCard ヒーロー化前。違反ゼロ時の達成表示も
-                    //   ViolationHubCard が持つため喪失情報なし）。
-                    // [★3+4] BottleneckCard(top5テキスト) は日別・人別ビュー(上・全件＋トグル＋タップ修復) が上位互換のため撤去。
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode)
-                    // [3.122.0→3.132系] ColorSettingsView（違反種別の色=族別の色設定）は設定タブのシフトの表示色直後に配置。
                 }
                 else -> {
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
