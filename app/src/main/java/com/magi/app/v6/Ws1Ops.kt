@@ -102,6 +102,34 @@ object Ws1Ops {
     }
 
     /**
+     * [マトリックス一括] 群 g の全シフトを一括で担当ON/OFF（行ヘッダ＝群名のタップ）。
+     * OFF のときも休([restShiftIndex])は残す＝担当可能シフトが1つも無い群は validate が拒否し
+     * （「groupShift[g] に担当可能シフトがありません」）、その群の職員は行ごと groupViol(HARD) になるため
+     * （3.418.0/3.442.0 と同じ理由）。
+     */
+    fun setGroupShiftRow(state: MagiState, g: Int, allowed: Boolean): MagiState {
+        if (g !in state.groupShift.indices) return state
+        val rest = restShiftIndex(state)
+        val grid = state.groupShift.map { it.toMutableList() }.toMutableList()
+        for (k in grid[g].indices) grid[g][k] = if (allowed || k == rest) 1 else 0
+        return state.copy(groupShift = grid)
+    }
+
+    /**
+     * [マトリックス一括] シフト k を全群へ一括で担当ON/OFF（列ヘッダ＝シフト名のタップ）。
+     * 休の列を OFF にする操作は**同じ state を返す**（全群から休が消える＝上と同じ理由）。
+     * 呼出側（ViewModel）は `===` で拒否を検知して理由を案内する。
+     */
+    fun setGroupShiftColumn(state: MagiState, k: Int, allowed: Boolean): MagiState {
+        if (state.groupShift.isEmpty()) return state
+        if (!allowed && k == restShiftIndex(state)) return state
+        if (k < 0 || state.groupShift.any { k >= it.size }) return state
+        val grid = state.groupShift.map { it.toMutableList() }.toMutableList()
+        for (row in grid) row[k] = if (allowed) 1 else 0
+        return state.copy(groupShift = grid)
+    }
+
+    /**
      * グループ別シフトの「適切回数 (groupShiftApt)」を1セル設定。Web版の
      * 「グループ別 担当シフトと適切回数」エディタ相当。1人あたりの期間内目標回数（空欄＝目標なし）。
      * groupShiftApt が未初期化/不揃いでも G×K に正規化してから設定する。

@@ -26,6 +26,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-02（3.476.0＝ユーザー提示案「群×シフトの担当可否を2次元マトリックスへ」を Android と
+Windows11版へ同時実装。行=群・列=シフトの✓/—マトリクス、左列（群名）固定＋右側だけ横スクロール、セル全面（48dp）
+タップで ON/OFF、群名タップで行一括・シフト名タップで列一括。新しい不変条件「休はどの群からも外せない」を
+`Ws1Ops.setGroupShiftRow/Column`＋`Ws1OpsMatrixTest` で固定（担当可能シフトの無い群を作らない＝3.418.0 の再発防止）。
+詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-02（3.475.0＝ユーザー指示「論理的不具合も修正する」を受け、6角度（CSV取込系／入力診断
 V6SanityPort・Problem／後処理研磨／ViewModel状態機械／修復提案・分析／背景実行・最適化入口）へ並列agentを割り
 当て候補38件を実コードで検証、実在30件を修正。重いもの＝C1研磨・手R3が-1セルで`ArrayIndexOutOfBounds`し

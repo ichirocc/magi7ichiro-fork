@@ -2,6 +2,7 @@ package com.magi.app.ui
 
 import com.magi.app.model.Group
 import com.magi.app.v6.Ws1Ops
+import com.magi.app.v6.restShiftIndex
 
 /**
  * [MagiViewModel] の ws1（初期設定＝シフト/グループ/職員/スキル区分/期間の構造編集）コマンド群。
@@ -54,6 +55,28 @@ fun MagiViewModel.ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
     val st = state ?: return
     logOp("I", "担当可否: グループ[$g] × ${opSy(k)} → ${if (allowed) "担当できる" else "担当しない"}")
     applyStructure(Ws1Ops.setGroupShift(st, g, k, allowed))
+}
+
+/** [マトリックス一括] 群 g の全シフトを一括ON/OFF（行ヘッダ＝群名のタップ）。OFF でも休は残る。 */
+fun MagiViewModel.ws1SetGroupShiftRow(g: Int, allowed: Boolean) {
+    val st = state ?: return
+    val name = st.groups.getOrNull(g)?.name ?: "[$g]"
+    logOp("I", "担当可否(一括): グループ $name の全シフト → ${if (allowed) "担当できる" else "担当しない（休は残す）"}")
+    applyStructure(Ws1Ops.setGroupShiftRow(st, g, allowed))
+}
+
+/** [マトリックス一括] シフト k を全群へ一括ON/OFF（列ヘッダ＝シフト名のタップ）。休の列は OFF にできない。 */
+fun MagiViewModel.ws1SetGroupShiftColumn(k: Int, allowed: Boolean) {
+    val st = state ?: return
+    val ns = Ws1Ops.setGroupShiftColumn(st, k, allowed)
+    if (ns === st) {
+        if (!allowed && k == restShiftIndex(st)) {
+            notify("「休」はどのグループからも外せません（担当できるシフトが無い群を作らないため）", "W")
+        }
+        return
+    }
+    logOp("I", "担当可否(一括): ${opSy(k)} を全グループ → ${if (allowed) "担当できる" else "担当しない"}")
+    applyStructure(ns)
 }
 
 /** グループ別シフトの適切回数（1人あたり期間内目標。空欄＝目標なし）を設定。 */
