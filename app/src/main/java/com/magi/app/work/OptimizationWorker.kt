@@ -257,7 +257,10 @@ class OptimizationWorker(
                 } else {
                     if (saved) step("耐久保存")
                     OptimizationRepository.publishResult(
-                        OptimizationRepository.BgResult(res.schedule, res.report, res.phase, inputData.getLong(KEY_RUN_ID, 0L)),
+                        OptimizationRepository.BgResult(
+                            res.schedule, res.report, res.phase, inputData.getLong(KEY_RUN_ID, 0L),
+                            stateKey = com.magi.app.v6.StateFingerprint.of(req.first),   // [3.475.0] 入力の指紋
+                        ),
                     )
                     notifyDone(res.report.hard, res.report.total)
                     step("公開")

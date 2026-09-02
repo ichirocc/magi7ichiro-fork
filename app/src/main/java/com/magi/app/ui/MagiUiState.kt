@@ -24,6 +24,12 @@ data class UiState(
     /** 実行中の**表示**。可否の判定には使わない（[MagiViewModel.optimizeInFlight] が唯一の根拠）。 */
     val running: Boolean = false,
     val hasResult: Boolean = false,
+    /**
+     * [3.475.0/論理監査] エンジン（最適化/仕上げ/下書き/背景）が**この盤面に対して一度でも走ったか**。
+     * [hasResult] は手編集・取込でも true になる「盤面がある」旗なので、分析タブの「計算済み／計算後に
+     * 残っている項目」の判定には使えない（手編集だけで「計算後」と語っていた）。読込・取込で false に戻す。
+     */
+    val engineRan: Boolean = false,
     val bestHard: Long = 0,
     val bestSoft: Long = 0,
     val totalViolations: Int = 0,

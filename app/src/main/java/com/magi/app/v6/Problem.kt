@@ -169,9 +169,13 @@ class Problem(val state: MagiState) {
         }
 
         cons1 = state.cons1.mapNotNull {
-            val d1 = it.day1.toIntOrNull() ?: 0
+            // [3.475.0/論理監査] 数値は trim してから解決する。旧: `" 2 "` のような前後空白つきの値は
+            //   「非空だが解決不能」となり 0/∞ へ黙って倒れていたが、設定ミス検査(badNum)は trim して
+            //   「正常」と見なす＝エンジンと診断が同じ入力を別の値として読んでいた（staffRange/need は
+            //   もともと trim 済み。cons1/cons2/cons41(s) だけ非対称）。
+            val d1 = it.day1.trim().toIntOrNull() ?: 0
             val si = shiftIdxOf(it.shiftKigou)
-            val d2 = it.day2.toIntOrNull() ?: 0
+            val d2 = it.day2.trim().toIntOrNull() ?: 0
             if (d1 > 0 && si >= 0 && d2 > 0) {
                 // [3.412.0/P-04] 行としては解決できるが窓が期間を超える＝チェッカーが無言で飛ばす。
                 //   行は残す（評価の挙動は完全に不変）が、記録して Sanity が理由を案内する。
@@ -181,7 +185,7 @@ class Problem(val state: MagiState) {
         }
         cons2 = state.cons2.mapNotNull {
             val si = shiftIdxOf(it.shiftKigou)
-            val c = it.count.toIntOrNull() ?: 0
+            val c = it.count.trim().toIntOrNull() ?: 0
             if (si >= 0 && c > 0) C2(si, c)
             else { _unresolvedRows.add("個人の合計" to "${mark(it.shiftKigou, si >= 0)} を${it.count}回以上"); null }
         }
@@ -194,8 +198,8 @@ class Problem(val state: MagiState) {
             val si = shiftIdxOf(it.shiftKigou)
             val hasLo = it.l.isNotBlank()
             val hasHi = it.u.isNotBlank()
-            val lo = if (hasLo) it.l.toIntOrNull() ?: 0 else 0
-            val hi = if (hasHi) it.u.toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
+            val lo = if (hasLo) it.l.trim().toIntOrNull() ?: 0 else 0
+            val hi = if (hasHi) it.u.trim().toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
             if (gi >= 0 && si >= 0 && (hasLo || hasHi)) C41(gi, si, lo, hi)
             else {
                 _unresolvedRows.add("群のレンジ" to
@@ -218,8 +222,8 @@ class Problem(val state: MagiState) {
             val gi = skillGroupIdxOf(it.groupKigou)
             val si = shiftIdxOf(it.shiftKigou)
             val hasLo = it.l.isNotBlank(); val hasHi = it.u.isNotBlank()
-            val lo = if (hasLo) it.l.toIntOrNull() ?: 0 else 0
-            val hi = if (hasHi) it.u.toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
+            val lo = if (hasLo) it.l.trim().toIntOrNull() ?: 0 else 0
+            val hi = if (hasHi) it.u.trim().toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
             if (gi >= 0 && si >= 0 && (hasLo || hasHi)) C41(gi, si, lo, hi)
             else {
                 _unresolvedRows.add("スキル群のレンジ" to

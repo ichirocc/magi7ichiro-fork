@@ -140,7 +140,9 @@ private fun hardDetail(
 }
 
 internal fun analysisTriage(ui: UiState): AnalysisTriage {
-    val computed = ui.hasResult
+    // [3.475.0/論理監査] 「計算済み」はエンジンが走った事実で決める。旧: hasResult＝手編集・取込でも true に
+    //   なる「盤面がある」旗を読んでいたため、読み込んで1セル直しただけで「計算後に残っている項目」と語っていた。
+    val computed = ui.engineRan
     val counts = ui.breakdown
     val promoted = promotedSoftFamilies(computed, ui.c1Plateau, ui.coverageDiag)
 

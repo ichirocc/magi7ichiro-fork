@@ -49,6 +49,9 @@ data class SettingIssue(
     val newLo: String? = null,             // ZERO/CLAMP_RANGE_LO: 新しい下限
     val demandShiftIdx: Int? = null,       // CAP_DEMAND: シフトidx
     val demandCap: Int? = null,            // CAP_DEMAND: 担当可能人数（上限）
+    // [3.475.0/論理監査] CAP_DEMAND: 需要が日別例外(needDay1/2)由来のときは、その日の例外を丸める。
+    //   旧: 日を持たずシフト既定だけを丸めていたため、例外由来の診断はボタンを押しても消えなかった。
+    val demandDayIdx: Int? = null,
     // CLAMP_GROUP_RANGE_LO: 群/スキル群のレンジ行。行は List なので index で指すと、診断からタップまでの間に
     //   並びが変わると別の行を壊す。DELETE_DUP_SEQ と同じく**内容一致**で指す（data class の equals）。
     val groupRangeFamily: String? = null,  // "c41" / "c41s"
@@ -335,12 +338,17 @@ object V6SanityPort {
             } else {
                 var seatsHi = 0
                 var hasDemand = false
+                var capKnown = true
                 for (j in 0 until p.T) {
-                    if (!needDefined(p, k, j)) continue   // [3.409.22] need2 単独定義も席として数える
+                    if (!needDefined(p, k, j)) { capKnown = false; continue }   // [3.409.22] need2 単独定義も席として数える
                     hasDemand = true
                     seatsHi += maxOf(effectiveCap(p, k, j), 0)
                 }
                 if (!hasDemand) continue   // 必要人数が1日も設定されていない＝比較対象がない
+                // [3.475.0/論理監査] 未定義の日は「席0」でなく「上限なし」。1日でも未定義なら seatsHi は
+                //   上限として成立しない（検査6 と同じ capKnown ゲート。Ws1Editor の「必ず届きません」も
+                //   この値を読むため、ここで出さないことで誤警告を根元から止める）。
+                if (!capKnown) continue
                 out.add(AptBalance(k, sym, aptSum, seatsHi, isRest = false))
             }
         }
@@ -391,12 +399,13 @@ object V6SanityPort {
 
         // 2b) [監査#8 / Web HF557 A4 の native 移植] 連勤・回数窓制約(cons1)の不能設定
         //   d1>期間: 窓が期間を超え、判定が一度も走らず無言で無効。 d2>d1: 物理的に不可能で全員・全窓が発火し続ける。
+        // [3.475.0/論理監査] day1>T の行は 2m（p.c1OverT）が同じ行を「窓の要件」として案内する。ここでも
+        //   出すと**同じ1行が名前の違う2件**として数えられていた（3.412.0 の検証は該当行を含まないデータ
+        //   だけだった）。2m に一本化し、ここは day2>day1 だけを見る。
         for (c in p.cons1) {
             val sym = state.shifts.getOrNull(c.shiftIdx)?.kigou ?: c.shiftIdx.toString()
             if (c.day1 > p.T) {
-                out.add(SettingIssue(IssueKind.CONSTRAINT, "連勤/休制約「$sym ${c.day1}日で${c.day2}回以上」",
-                    "窓${c.day1}日が期間${p.T}日を超えるため、この制約は一度も判定されません（無言で無効です）",
-                    "制約設定（連勤・回数）で日数を期間${p.T}日以下に直すか、この行を削除してください"))
+                continue
             } else if (c.day2 > c.day1) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "連勤/休制約「$sym ${c.day1}日で${c.day2}回以上」",
                     "${c.day1}日の窓に${c.day2}回は物理的に不可能で、全員・全期間が違反になり続けます",
@@ -417,7 +426,13 @@ object V6SanityPort {
             // [3.409.22] 旧: need1 直読み＝need2 単独定義の需要を 0 と数え、休の供給を過大評価していた
             //   （＝真の壁を見逃す側。false wall は作らないので実害は軽いが値が不正確だった）。
             //   effectiveDemand はセルごとの真の最小＝過大にはならない（3.76.0「false wall を出さない」と両立）。
-            for (k in 0 until p.K) for (j in 0 until p.T) workMinDemand += effectiveDemand(p, k, j)
+            // [3.475.0/論理監査] 担当可能人数を超える需要（埋まらない席＝forcedCovU ぶん）は作業セルを
+            //   消費しないので、その分まで差し引くと休の供給を過小評価して false wall を出す。
+            //   セルごとに min(需要, 担当可能人数) で数える（forcedCovU と同じ定義）。
+            for (k in 0 until p.K) {
+                val capableK = (0 until p.S).count { p.canDo(it, k) }
+                for (j in 0 until p.T) workMinDemand += minOf(effectiveDemand(p, k, j), capableK)
+            }
             for (c in p.cons1) {
                 val si = c.shiftIdx
                 // 退化ケース(窓>期間 / 回数>窓)は 2b が別途案内。ここは通常窓のみ。
@@ -732,7 +747,7 @@ object V6SanityPort {
                     "必要${need}人ですが担当できるのは${capable}人だけです",
                     "担当できる職員を増やすか、必要人数を${capable}人以下に下げてください",
                     action = SettingFixAction.CAP_DEMAND, actionLabel = "必要数を${capable}人に下げる",
-                    demandShiftIdx = k, demandCap = capable))
+                    demandShiftIdx = k, demandCap = capable, demandDayIdx = j))
             }
         }
 
@@ -767,7 +782,10 @@ object V6SanityPort {
             var sumLo = 0
             for (k in 0 until p.K) {
                 val lo = p.rangeLo[i][k]
-                if (lo != Int.MIN_VALUE && lo > 0) sumLo += lo
+                // [3.475.0/論理監査] チェッカーの low は canDo 必須（担当できないシフトの下限は評価上ゼロ＝
+                //   検査4が別途案内する）。合算に含めると「担当可の下限を下げろ」と誤った指示になる。
+                //   restCapacity と同じ canDo ガードに揃える。
+                if (lo != Int.MIN_VALUE && lo > 0 && p.canDo(i, k)) sumLo += lo
             }
             if (sumLo > p.T) {
                 val name = state.staff.getOrNull(i)?.name ?: "#$i"
@@ -781,10 +799,15 @@ object V6SanityPort {
         //    無駄な最適化(数分)を避ける。誤検知を避けるため、明確に矛盾する2ケースのみ（読み取り専用・データ不変）。
         for (k in 0 until p.K) {
             var seatsLo = 0; var seatsHi = 0; var hasDemand = false
+            // [3.475.0/論理監査] 必要人数が未定義の日は「席0」ではなく「上限なし（罰の無い日）」。
+            //   その日を 0 席として seatsHi に合算すると、実際には自由に置けるのに「過剰配置か下限割れが
+            //   必ず出ます」と断定する false positive になる（3.409.23 が 2b-2 に入れた capKnown と同じ穴）。
+            //   1日でも未定義なら seatsHi は上限として使わない（seatsLo は下界なのでそのまま）。
+            var capKnown = true
             for (j in 0 until p.T) {
                 // [3.409.22] 旧: `need1<0 → continue` で need2 単独定義の日を丸ごと落としていた
                 //   （hasDemand も立たず、そのシフトの検査自体が走らなかった）。実効値へ委譲する。
-                if (!needDefined(p, k, j)) continue   // need 未設定の日は対象外
+                if (!needDefined(p, k, j)) { capKnown = false; continue }   // need 未設定の日は対象外
                 hasDemand = true
                 seatsLo += maxOf(effectiveDemand(p, k, j), 0)
                 seatsHi += maxOf(effectiveCap(p, k, j), 0)
@@ -807,7 +830,7 @@ object V6SanityPort {
             //   下限合計80 で**必ず誤警告**が出ていた（休に「1日に何人休んでよいか」の座席は無い）。
             //   3.235.0 で適切回数(6-C)には同じ理由で restCapacity 比較を入れたが、この検査は取り残していた。
             val loCapacity = if (k == p.restIdx) restCapacity(p) else seatsHi
-            if (loSum > loCapacity) {
+            if ((k == p.restIdx || capKnown) && loSum > loCapacity) {
                 out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の回数下限の合計",
                     if (k == p.restIdx)
                         "担当者の下限の合計が${loSum}回ですが、他シフトの個人下限を差し引いた「$sym」の" +
@@ -1130,13 +1153,14 @@ object V6SanityPort {
                 //   おり、**同じ問い「目標は席に収まるか」に2つの診断が違う容量定義で違う答えを出して
                 //   いた**。6-C と同じ seatsHi に揃える（緩い側が正しかった）。
                 var seatsHi = 0
+                var capKnown = true   // [3.475.0] 未定義の日は上限なし＝検査6/aptBalances と同じゲート
                 for (j in 0 until p.T) {
-                    if (!needDefined(p, k, j)) continue   // [3.409.22] need2 単独定義も席として数える
+                    if (!needDefined(p, k, j)) { capKnown = false; continue }   // [3.409.22] need2 単独定義も席として数える
                     seatsHi += maxOf(effectiveCap(p, k, j), 0)
                 }
                 val pull = maxOf(loSum, aptSum)
                 val pullSrc = if (aptSum >= loSum) "適切回数" else "下限"
-                if (seatsHi > 0 && pull > seatsHi) notes.add("供給圧力${pull}(${pullSrc})>置ける上限${seatsHi}")
+                if (capKnown && seatsHi > 0 && pull > seatsHi) notes.add("供給圧力${pull}(${pullSrc})>置ける上限${seatsHi}")
                 // 構造要因(不足): 全担当者に上限があり、その合計が需要未満のときのみ（未設定者は無制限なので除外）。
                 if (demand > 0 && doable > 0 && hiCnt == doable && hiSum < demand) notes.add("全${doable}名の上限計${hiSum}<需要${demand}→構造的に不足")
                 fun cs(sum: Int, c: Int) = if (c == doable) "$sum" else "$sum(${c}/${doable}名)"
@@ -1158,9 +1182,12 @@ object V6SanityPort {
                 val lows = ArrayList<String>(); val highs = ArrayList<String>()
                 var hasBound = false
                 for (i in 0 until p.S) {
-                    if (!p.canDo(i, k)) continue
+                    // [3.475.0/論理監査] チェッカーの high は canDo 非依存（担当不可シフトに手で置かれた
+                    //   セルも上限超過として数える）。旧: ここで担当不可を丸ごと飛ばしていたため、同じログ内で
+                    //   UnifiedCheck が high=1 なのに 0b は「上限超過0名」と出る矛盾があった。low だけ canDo 必須。
+                    val canDo = p.canDo(i, k)
                     val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; val n = cnt[i][k]
-                    if (lo != Int.MIN_VALUE && lo != 0) { hasBound = true; if (n < lo) lows.add("${nm(i)} $n<$lo") }
+                    if (canDo && lo != Int.MIN_VALUE && lo != 0) { hasBound = true; if (n < lo) lows.add("${nm(i)} $n<$lo") }
                     if (hi != Int.MAX_VALUE) {
                         hasBound = true
                         // [代用要員提示/grilling確定=美幸・上條・大島の実例] 上限超過している職員に、

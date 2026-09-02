@@ -79,6 +79,13 @@ private fun parseCsvGuarded(text: String): List<List<String>>? {
 /** 取込で解釈できなかった行の表示用サンプル（先頭60文字）。 */
 private fun rowSample(r: List<String>): String = r.joinToString(",").take(60)
 
+/**
+ * [3.475.0/論理監査] 引用符が閉じていないCSVか。[parseCsvGuarded] は「未閉引用符」と「空データ」を同じ
+ * null で返すため、種類別取込（職員/希望/制約）の呼出側が「取り込める行が0件」と氏名不一致を疑わせる
+ * 案内をしていた。3.413.0/I-08 が断る理由（書式の誤り）を利用者へ届けるための判定口。
+ */
+fun csvHasUnclosedQuote(text: String): Boolean = parseCsvFull(text).unclosedQuote
+
 object RosterCsvImport {
     private const val REST = "休"
 
@@ -94,8 +101,11 @@ object RosterCsvImport {
      *   true=本表セルを「希望シフト」として取り込む：埋まっているセルは wishes["i,j"]=記号 に、勤務表は
      *   全て公休で開始する（最適化で希望を尊重しつつ必要数を満たす）。空セルは希望なし（自由）。
      *   ※元表の明示「休」セルは希望休として wishes に入り、空セル（通常の休み）と区別される。
+     * @param unknownOut [3.475.0/論理監査] 凡例に無い記号（誤字・凡例行の削除）を記号→セル数で返す受け皿。
+     *   旧: そのセルを黙って休（希望取込では希望なし）にしており、3.410.0/I-01 が `ScheduleCsvBridge.parse`
+     *   に入れた「読めない記号は必ず名指しする」がこの経路だけ抜けていた。
      */
-    fun parse(text: String, asWishes: Boolean = false): MagiState? {
+    fun parse(text: String, asWishes: Boolean = false, unknownOut: MutableMap<String, Int>? = null): MagiState? {
         val rows = parseCsvGuarded(text) ?: return null
         fun cell(r: List<String>, idx: Int): String = r.getOrElse(idx) { "" }.trim()
         fun normName(s: String): String = s.replace('　', ' ').trim().replace(Regex("\\s+"), " ")
@@ -172,6 +182,8 @@ object RosterCsvImport {
                             if (k != null) {
                                 days[j] = k
                                 if (asWishes) wishes["$i,$j"] = k   // 埋まっているセル＝希望
+                            } else if (sym.isNotEmpty()) {
+                                unknownOut?.merge(sym, 1, Int::plus)   // [3.475.0] 凡例に無い記号は数えて返す
                             }
                         }
                         // 希望取込時は勤務表を全公休で開始（最適化が希望を尊重して埋める）。
@@ -364,10 +376,16 @@ object ScheduleCsvBridge {
         //   旧: 後勝ちで、制約評価(最初)とCSV取込(最後)が同じ記号を別シフトとして扱っていた。
         val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         val kigouToK = firstWinsMap(state.shifts.size) { state.shifts[it].kigou.trim() }
-        var matched = 0
+        // [3.475.0/論理監査] 一致は**職員単位**で数える（旧: 行単位＝同じ職員の行が2つあると 2 と数え、
+        //   欠けている職員がいても「全員更新」に見えた。値は後勝ちで前の行が黙って上書きされる）。
+        val matchedStaff = HashSet<Int>()
         // [3.410.0/I-01] 未知記号を数える（旧: 黙って読み飛ばしていた）。
         val unknown = LinkedHashMap<String, Int>()
-        var rr = 1
+        // [3.475.0/論理監査] 先頭行はヘッダ「スタッフ \ 日付,…」のときだけ飛ばす（旧: 無条件に rr=1 で、
+        //   ヘッダ無しCSVの先頭職員が黙って落ち「氏名不一致でスキップ」と誤案内していた。
+        //   3.314.0/M-08 が種類別CSVで直したのと同じ穴）。判定は「先頭セルが職員名に解決しない」＝
+        //   csvBody() と同じ考え方（ヘッダの先頭セルが職員名と一致することは実運用上ない）。
+        var rr = if (rows.isNotEmpty() && nameToI[nameMatchKey(rows[0].getOrElse(0) { "" })] == null) 1 else 0
         while (rr < rows.size) {
             val r = rows[rr]
             // build() は勤務表の後に「空行＋『集計』ヘッダ＋職員名で始まる回数行」を出力する。ここで終端しないと
@@ -377,7 +395,7 @@ object ScheduleCsvBridge {
             if (r[0].trim().isNotEmpty()) {
                 val staffIndex = nameToI[nameMatchKey(r[0])]
                 if (staffIndex != null) {
-                    matched++
+                    matchedStaff.add(staffIndex)
                     val last = minOf(p.T, r.size - 1)
                     var j = 0
                     while (j < last) {
@@ -392,9 +410,10 @@ object ScheduleCsvBridge {
             rr++
         }
         val report = UnifiedViolationChecker.check(state, schedule)
+        val matched = matchedStaff.size
         val unknownTotal = unknown.values.sum()
         val unknownTop = unknown.entries.sortedByDescending { it.value }.take(5).map { "${it.key}(${it.value})" }
-        val log = MirrorLog(tag = "CSVImport", message = "CSV取込: staff一致 ${matched}行" +
+        val log = MirrorLog(tag = "CSVImport", message = "CSV取込: staff一致 ${matched}名" +
             if (unknownTotal > 0) " / 読めない記号 ${unknownTotal}セル: ${unknownTop.joinToString("・")}" else "")
         val logs = ArrayList<MirrorLog>()
         logs.add(log)
@@ -605,6 +624,7 @@ object StaffCsvIO {
         val t = if (sched.isNotEmpty()) sched[0].size else state.dayCount
         val extraRows = ArrayList<IntArray>()
         val seenNew = HashMap<String, Int>()
+        val seenExisting = HashSet<Int>()   // [3.475.0] 既存職員は1人1回だけ「更新」に数える
         var updated = 0
         var added = 0
         // [3.413.0/I-07] 空でないのに解決できなかった群/スキル記号を数える。旧実装は `gi ?: 0`（新規＝
@@ -632,7 +652,8 @@ object StaffCsvIO {
             if (existing != null) {
                 val cur = newStaff[existing]
                 newStaff[existing] = cur.copy(groupIdx = gi ?: cur.groupIdx, skillIdx = si ?: cur.skillIdx)
-                updated++
+                // [3.475.0/論理監査] 旧: 同じ既存職員が2行あると updated=2（「2名を更新」）になっていた。
+                if (seenExisting.add(existing)) updated++
             } else {
                 val dup = seenNew[key]
                 if (dup != null) {
@@ -709,7 +730,16 @@ object WishesCsvIO {
                 if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(rowSample(r))
                 continue
             }
-            m["$i,${day - 1}"] = k
+            // [3.475.0/論理監査] 同じ職員×同じ日が2行あるとき、旧: 後勝ちで上書きしつつ n は2件と数えて
+            //   「2件を反映」と言いながら1件しか残らず、食い違う前の行は黙って消えていた。同値の重複は
+            //   1件として数え、値が違う衝突は「読めない行」として置換を止める（全置換の方針＝3.329.0）。
+            val key = "$i,${day - 1}"
+            val prev = m[key]
+            if (prev != null) {
+                if (prev != k) { bad++; if (samples.size < ComponentImport.MAX_SAMPLES) samples.add("重複(値が違う): " + rowSample(r)) }
+                continue
+            }
+            m[key] = k
             n++
         }
         if (n == 0 && bad == 0) return null
@@ -793,7 +823,11 @@ object ConstraintsCsvIO {
                     val k = state.shifts.indexOfFirst { it.kigou.trim() == sym }
                     // [3.329.0/外部レビュー H-02] 氏名・記号が今のデータに無い行は黙って捨てない。
                     //   捨てたまま置換すると、その職員の個人レンジが**消える**。
-                    if (i != null && k >= 0) { ranges["$i,$k"] = Range(c(r, 3), c(r, 4)); n++ } else reject(r)
+                    if (i != null && k >= 0) {
+                        // [3.475.0/論理監査] 同じ職員×シフトの重複行（希望CSVと同じ扱い＝同値は1件、衝突は拒否）。
+                        val key = "$i,$k"; val rng = Range(c(r, 3), c(r, 4)); val prev = ranges[key]
+                        if (prev == null) { ranges[key] = rng; n++ } else if (prev != rng) reject(r)
+                    } else reject(r)
                 }
                 // 未知の種別も黙って捨てない（種別の綴り違いで制約一式が消えるのを防ぐ）。
                 else -> reject(r)

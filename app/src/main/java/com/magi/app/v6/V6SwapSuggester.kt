@@ -138,8 +138,13 @@ object FixSuggester {
             for (i in targetStaff) {
                 if (timeUp()) break
                 val allowed = p.allowedShiftsForStaff(i)
-                // 目標シフト = そのstaffの下限割れシフト ∪ 休(0)。なければ単一マス候補を流用するため全許可。
-                val targets: List<Int> = (shortShift[i]?.toList() ?: emptyList()).let { if (it.isEmpty()) allowed.toList() else it + 0 }.distinct()
+                // 目標シフト = そのstaffの下限割れシフト ∪ 休。なければ単一マス候補を流用するため全許可。
+                // [3.475.0/論理監査] 旧: 休を index 0 決め打ち（`it + 0`）で canDo も見ていなかった。3.416.0 以降
+                //   休は記号で解決される（p.restIdx）ため、休が先頭でないデータでは「休へ戻す」意図が別シフトへ
+                //   化け、群が index0 を担当できないと**担当外シフトを含む提案**を生成し得た（他フェーズは canDo 済）。
+                val targets: List<Int> = (shortShift[i]?.toList() ?: emptyList())
+                    .let { if (it.isEmpty()) allowed.toList() else it + p.restIdx }
+                    .distinct().filter { k -> allowed.contains(k) }
                 val cells = (0 until p.T).filter { !p.wishLocked(i, it) }
                 for (a in cells.indices) {
                     if (timeUp()) break
@@ -344,7 +349,10 @@ object FixSuggester {
             if (!touchesFocusCell(sug)) continue
             val realOps = sug.ops.filter { it.toShift != s[it.staff][it.day] }
             if (realOps.isEmpty()) continue   // 全脚が無変化＝実質no-op（表示する意味がない）
-            val sig = realOps.sortedWith(compareBy({ it.staff }, { it.day })).joinToString("|") { "${it.staff}.${it.toShift}" }
+            // [3.475.0/論理監査] 署名に「日」を含める。旧: staff.toShift だけだったため、同じ職員を同じシフトへ
+            //   動かす**別の日**の手（結果の盤面は別）が同一視され、上位1件以外が黙って消えていた
+            //   （3.202.0 が「範囲外」として残した既知の穴）。V6SwapSuggesterTest.normSig と同じ形。
+            val sig = realOps.sortedWith(compareBy({ it.staff }, { it.day })).joinToString("|") { "${it.staff}.${it.day}.${it.toShift}" }
             if (seen.add(sig)) result.add(sug)
             if (result.size >= maxResults) break
         }
