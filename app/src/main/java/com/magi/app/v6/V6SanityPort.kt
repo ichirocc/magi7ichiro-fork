@@ -141,7 +141,12 @@ object V6SanityPort {
         )
     }
 
-    fun detectImpossibleWishes(state: MagiState, p: Problem = Problem(state)): List<ImpossibleWish> {
+    // [2026-09-02, /code-review 追検証] build/buildViolationDebug(外部レビュー#73)と同じ理由で、
+    //   このファイル内の残り4関数の既定引数もcachedProblem(state)へ統一する。aptBalances(319行)は
+    //   既にこの形だった＝1ファイル内で既定値の作り方が割れていたのを揃える。HfSwapPolish.kt/
+    //   V6FinalPort.kt(379行・structuralHardFloor)が p を渡さず呼んでおり、そこで実際に毎回
+    //   Problem(state)が新規構築されていた（挙動不変・ProblemCacheのメモ化を使うだけ）。
+    fun detectImpossibleWishes(state: MagiState, p: Problem = cachedProblem(state)): List<ImpossibleWish> {
         val out = ArrayList<ImpossibleWish>()
         for ((key, k) in state.wishes) {
             val parts = key.split(',')
@@ -178,7 +183,7 @@ object V6SanityPort {
      *  ため過大検出しない。誤検知ゼロ・読み取り専用・データ不変。 */
     data class ForcedCovU(val shiftIndex: Int, val shiftSymbol: String, val cells: Int, val amount: Int)
 
-    fun forcedCovU(state: MagiState, p: Problem = Problem(state)): List<ForcedCovU> {
+    fun forcedCovU(state: MagiState, p: Problem = cachedProblem(state)): List<ForcedCovU> {
         val out = ArrayList<ForcedCovU>()
         for (k in 0 until p.K) {
             val capable = (0 until p.S).count { i -> p.canDo(i, k) }
@@ -200,7 +205,7 @@ object V6SanityPort {
      *  ・実現不能希望(pref): 監査#11② で HARD 寄与0（対称除外）のため下限に含めない。
      *  ・群外配置(groupViol): 探索は canDo ガードで群外を置かない＋不可能希望は gate 済＝構造下限では常時0。
      *  構造(assignability/need)のみ依存で最適化中に変化しないため一度だけ算出してよい。 */
-    fun structuralHardFloor(state: MagiState, p: Problem = Problem(state)): Int =
+    fun structuralHardFloor(state: MagiState, p: Problem = cachedProblem(state)): Int =
         forcedCovU(state, p).sumOf { it.amount }
 
     /**
@@ -356,7 +361,7 @@ object V6SanityPort {
         return if (l > h) l to h else null
     }
 
-    fun buildGuidance(state: MagiState, p: Problem = Problem(state)): List<SettingIssue> {
+    fun buildGuidance(state: MagiState, p: Problem = cachedProblem(state)): List<SettingIssue> {
         val out = ArrayList<SettingIssue>()
 
         // 1) 希望シフトの設定ミス（担当外・範囲外など）
