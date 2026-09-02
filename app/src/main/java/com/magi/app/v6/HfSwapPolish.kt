@@ -20,7 +20,7 @@ import java.util.Random
  */
 internal object HfSwapPolish {
     fun applyHF67InterStaffSwap(state: MagiState, schedule: Array<IntArray>, maxSwaps: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE): HF67Result {
-        val p = Problem(state)
+        val p = cachedProblem(state)
         var work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
         var current = before
@@ -74,7 +74,7 @@ internal object HfSwapPolish {
             if (current.soft < before.soft) capacity++
         }
         if (swaps == 0 && !outOfTime()) {
-            val improved = localPairwiseStaffSwap(state, work, maxSwaps, { outOfTime() })
+            val improved = localPairwiseStaffSwap(state, p, work, maxSwaps, { outOfTime() })
             work = improved.first
             swaps = improved.second
             rollback = improved.third
@@ -87,7 +87,7 @@ internal object HfSwapPolish {
 
 
     fun applyHF66IntraStaffRedistribution(state: MagiState, schedule: Array<IntArray>, maxMoves: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE): HF66Result {
-        val p = Problem(state)
+        val p = cachedProblem(state)
         var work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work)
         var current = before
@@ -215,8 +215,7 @@ internal object HfSwapPolish {
     }
 
 
-    private fun localPairwiseStaffSwap(state: MagiState, schedule: Array<IntArray>, maxSwaps: Int, shouldStop: () -> Boolean = { false }): Triple<Array<IntArray>, Int, Int> {
-        val p = Problem(state)
+    private fun localPairwiseStaffSwap(state: MagiState, p: Problem, schedule: Array<IntArray>, maxSwaps: Int, shouldStop: () -> Boolean = { false }): Triple<Array<IntArray>, Int, Int> {
         var work = schedule.copy2D()
         var current = UnifiedViolationChecker.check(state, work)
         var applied = 0
@@ -244,7 +243,7 @@ internal object HfSwapPolish {
 
 
     private fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray>): Int {
-        val p = Problem(state)
+        val p = cachedProblem(state)
         val s = normalizeSchedule(schedule, p)
         var n = 0
         for (i in 0 until p.S) for (j in 0 until p.T) {

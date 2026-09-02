@@ -36,24 +36,6 @@ import java.time.LocalDate
  * この末尾の構築部分を一本化する（フォーマット固有の解析ロジックは両 object に残す。
  * 冒頭の前処理の共通化は [parseCsvGuarded] 側で行う）。
  */
-/**
- * [2026-09-02, /code-review 追検証] 上の [buildImportedState] は末尾の [MagiState] 構築だけを
- * 一本化しており、冒頭の前処理（CSV解析→引用符/空データガード）は
- * [RosterCsvImport.parse]/[FlatRosterCsvImport.parse] に一字一句同一のまま残っていた
- * （「共通部分だけを一本化する」というdocの記述と実態がずれていた）。こちらも一本化し、
- * これで両 parse() の共通部分（冒頭の前処理＋末尾の構築）が揃って一本化された状態になる。
- */
-private fun parseCsvGuarded(text: String): List<List<String>>? {
-    // [3.413.0/I-08] 引用符が閉じていないCSVは、開いた引用符以降が1セルへ吸い込まれ**残りの行が
-    //   丸ごと消える**。この経路は勤務表そのものを丸ごと差し替えるので、黙って一部だけ取り込むと
-    //   「なぜこの人の勤務が消えたのか」が説明できない。書式の誤りとして取込を断る。
-    val parsed = parseCsvFull(text)
-    if (parsed.unclosedQuote) return null
-    val rows = parsed.rows
-    if (rows.isEmpty()) return null
-    return rows
-}
-
 private fun buildImportedState(
     start: String, end: String,
     shiftsOut: List<Shift>, groupsOut: List<Group>, staffOut: List<Staff>,
@@ -84,6 +66,18 @@ private fun buildImportedState(
         cons42 = emptyList(),
     )
 }
+
+/** CSV解析＋書式ガード（未閉引用符／空データは取込を断る）。各 CSV 取込 parse() の共通前処理。 */
+private fun parseCsvGuarded(text: String): List<List<String>>? {
+    // [3.413.0/I-08] 引用符が閉じていないCSVは、開いた引用符以降が1セルへ吸い込まれ**残りの行が
+    //   丸ごと消える**。全置換の取込では「消えた」ことが取込結果から分からないので、書式の誤りとして断る。
+    val parsed = parseCsvFull(text)
+    if (parsed.unclosedQuote) return null
+    return parsed.rows.ifEmpty { null }
+}
+
+/** 取込で解釈できなかった行の表示用サンプル（先頭60文字）。 */
+private fun rowSample(r: List<String>): String = r.joinToString(",").take(60)
 
 object RosterCsvImport {
     private const val REST = "休"
@@ -536,8 +530,10 @@ class ComponentImport(
      * 1回の取込結果から1つしか原因が分からず、修正のたびに再アップロードが必要だった。
      * `ScheduleCsvBridge.parse` の `unknownTop`（上位5件保持）と同じ考え方で複数件へ拡張する。
      */
-    val samples: List<String>,
+    samples: List<String>,
 ) {
+    /** 上限は構築時にここで保証する（呼出側の take() に頼らない＝KDocの約束を構造で守る）。 */
+    val samples: List<String> = samples.take(MAX_SAMPLES)
     companion object { const val MAX_SAMPLES = 3 }
 }
 
@@ -557,12 +553,7 @@ object StaffCsvIO {
 
     /** @return Pair(更新後state, 一致件数) または null（解析不能/一致0件）。 */
     fun parse(text: String, state: MagiState): Pair<MagiState, Int>? {
-        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える＝**全置換の取込では
-        //   「消えた」ことが取込結果からは分からない**。書式の誤りとして断る。
-        val parsed0 = parseCsvFull(text)
-        if (parsed0.unclosedQuote) return null
-        val rows = parsed0.rows
-        if (rows.isEmpty()) return null
+        val rows = parseCsvGuarded(text) ?: return null
         val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         val gByK = firstWinsMap(state.groups.size) { state.groups[it].kigou.trim() }
         val skByK = firstWinsMap(state.skillGroups.size) { state.skillGroups[it].kigou.trim() }
@@ -606,12 +597,7 @@ object StaffCsvIO {
      * @return StaffUpsertResult、または null（解析不能/更新0かつ追加0）。
      */
     fun parseUpsert(text: String, state: MagiState, sched: Array<IntArray>): StaffUpsertResult? {
-        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える＝**全置換の取込では
-        //   「消えた」ことが取込結果からは分からない**。書式の誤りとして断る。
-        val parsed0 = parseCsvFull(text)
-        if (parsed0.unclosedQuote) return null
-        val rows = parsed0.rows
-        if (rows.isEmpty()) return null
+        val rows = parseCsvGuarded(text) ?: return null
         val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         val gByK = firstWinsMap(state.groups.size) { state.groups[it].kigou.trim() }
         val skByK = firstWinsMap(state.skillGroups.size) { state.skillGroups[it].kigou.trim() }
@@ -698,12 +684,7 @@ object WishesCsvIO {
 
     /** @return Pair(更新後state, 取込件数) または null（解析不能/0件）。 */
     fun parse(text: String, state: MagiState): ComponentImport? {
-        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える＝**全置換の取込では
-        //   「消えた」ことが取込結果からは分からない**。書式の誤りとして断る。
-        val parsed0 = parseCsvFull(text)
-        if (parsed0.unclosedQuote) return null
-        val rows = parsed0.rows
-        if (rows.isEmpty()) return null
+        val rows = parseCsvGuarded(text) ?: return null
         val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         val symToK = firstWinsMap(state.shifts.size) { state.shifts[it].kigou.trim() }
         val m = LinkedHashMap<String, Int>()
@@ -723,17 +704,16 @@ object WishesCsvIO {
             val k = symToK[sym]
             if (i == null || k == null || day == null || day < 1 || day > state.dayCount) {
                 bad++
-                samples.add(r.joinToString(",").take(60))
+                // [3.474.0] 収集時に止める（CSV は任意ファイル＝行数は業務規模で有界ではないため、
+                //   全件貯めると誤ったファイル選択で拒否行ぶんの String を丸ごと確保してしまう）。
+                if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(rowSample(r))
                 continue
             }
             m["$i,${day - 1}"] = k
             n++
         }
         if (n == 0 && bad == 0) return null
-        // [2026-09-02, /code-review 追検証] 収集時にキャップせず、表示直前の1箇所だけで
-        //   take(MAX_SAMPLES)する（業務規模上限=最大30名/31日なのでbad件を全部貯めても軽い）。
-        //   ConstraintsCsvIO.parseの2箇所と揃え、キャップの実装が複数箇所に分散しないようにする。
-        return ComponentImport(state.copy(wishes = m), n, bad, samples.take(ComponentImport.MAX_SAMPLES))
+        return ComponentImport(state.copy(wishes = m), n, bad, samples)
     }
 }
 
@@ -764,12 +744,7 @@ object ConstraintsCsvIO {
 
     /** @return Pair(更新後state, 取込件数) または null（解析不能/0件）。 */
     fun parse(text: String, state: MagiState): ComponentImport? {
-        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える＝**全置換の取込では
-        //   「消えた」ことが取込結果からは分からない**。書式の誤りとして断る。
-        val parsed0 = parseCsvFull(text)
-        if (parsed0.unclosedQuote) return null
-        val rows = parsed0.rows
-        if (rows.isEmpty()) return null
+        val rows = parseCsvGuarded(text) ?: return null
         val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         fun c(r: List<String>, i: Int) = r.getOrElse(i) { "" }.trim()
         // [3.336.0/外部レビュー P2] 空セルで打ち切るので `MUST連続,A,,B` は ["A"] になり、**B が黙って
@@ -794,11 +769,10 @@ object ConstraintsCsvIO {
         val body = csvBody(rows, "種別")
         var bad = 0
         val samples = ArrayList<String>()
-        // [2026-09-02, /code-review 追検証] キャップせず全件を貯め、表示直前(return)の1箇所だけで
-        //   take(MAX_SAMPLES)する（WishesCsvIO.parseと同じ理由・同じ形）。
         fun reject(r: List<String>) {
             bad++
-            samples.add(r.joinToString(",").take(60))
+            // [3.474.0] 収集時に止める（WishesCsvIO.parse と同じ理由）。
+            if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(rowSample(r))
         }
         for (r in body) {
             if (r.all { it.isBlank() }) continue   // 書式上の空行は無視
@@ -845,9 +819,16 @@ object ConstraintsCsvIO {
             pc.unresolvedRows + pc.c3UnknownShift
         }.getOrDefault(emptyList())
         if (unresolved.isNotEmpty()) {
+            // [3.474.0, /code-review] 評価されない行は when 分岐で n に数えた行そのもの（Problem は
+            //   捨てた行につき1件記録する）＝同じ行を「取込可」と「読めない」の両方に数えていた
+            //   （旧: `連勤,,,` の1行で 取込可1・読めない1）。n から差し引き「読めない」側だけにする。
+            n = (n - unresolved.size).coerceAtLeast(0)
             bad += unresolved.size
-            for (u in unresolved) samples.add("${u.first}「${u.second}」".take(60))
+            for (u in unresolved) {
+                if (samples.size >= ComponentImport.MAX_SAMPLES) break
+                samples.add("${u.first}「${u.second}」".take(60))
+            }
         }
-        return ComponentImport(candidate, n, bad, samples.take(ComponentImport.MAX_SAMPLES))
+        return ComponentImport(candidate, n, bad, samples)
     }
 }

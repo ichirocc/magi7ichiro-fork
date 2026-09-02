@@ -141,11 +141,8 @@ object V6SanityPort {
         )
     }
 
-    // [2026-09-02, /code-review 追検証] build/buildViolationDebug(外部レビュー#73)と同じ理由で、
-    //   このファイル内の残り4関数の既定引数もcachedProblem(state)へ統一する。aptBalances(319行)は
-    //   既にこの形だった＝1ファイル内で既定値の作り方が割れていたのを揃える。HfSwapPolish.kt/
-    //   V6FinalPort.kt(379行・structuralHardFloor)が p を渡さず呼んでおり、そこで実際に毎回
-    //   Problem(state)が新規構築されていた（挙動不変・ProblemCacheのメモ化を使うだけ）。
+    // 既定引数は cachedProblem(state)（build/aptBalances と同じ。p を渡さない呼出＝HfSwapPolish の
+    //   detectHF70Anomalies・V6FinalPort の structuralHardFloor 呼出で Problem を毎回作らないため）。
     fun detectImpossibleWishes(state: MagiState, p: Problem = cachedProblem(state)): List<ImpossibleWish> {
         val out = ArrayList<ImpossibleWish>()
         for ((key, k) in state.wishes) {
