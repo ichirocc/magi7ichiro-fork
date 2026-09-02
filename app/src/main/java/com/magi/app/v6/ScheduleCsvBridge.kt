@@ -29,6 +29,43 @@ import java.time.LocalDate
  * 空セルは「休」に割り当てる（＝勤務指定の無い日＝公休扱い）。担当可否情報は無いため groupShift は
  * 全シフト可(permissive)で取り込み、利用者が後から調整できるようにする。
  */
+/**
+ * [2026-09-02, 外部レビュー#86] [RosterCsvImport]/[FlatRosterCsvImport] が取込末尾で組み立てる
+ * [MagiState] は、担当可否=全可・需要/制約=空で始めるという方針も含めてフィールド単位で完全に
+ * 同一だった（フォーマット固有なのは氏名/日付列のレイアウト・期間推定方法・凡例の有無だけ）。
+ * この共通部分だけを一本化する（フォーマット固有の解析ロジックは両 object に残す）。
+ */
+private fun buildImportedState(
+    start: String, end: String,
+    shiftsOut: List<Shift>, groupsOut: List<Group>, staffOut: List<Staff>,
+    grid: List<IntArray>, wishes: Map<String, Int>,
+): MagiState {
+    val K = shiftsOut.size
+    return MagiState(
+        startDate = start,
+        endDate = end,
+        shifts = shiftsOut,
+        groups = groupsOut,
+        staff = staffOut,
+        use2Patterns = false,
+        groupShift = List(groupsOut.size) { List(K) { 1 } },           // 担当可否不明→全可(後から調整)
+        groupShiftApt = List(groupsOut.size) { List(K) { "" } },
+        schedule = grid.map { it.toList() },
+        wishes = wishes,
+        staffRange = emptyMap(),
+        needDay1 = emptyMap(),   // 必要人数はCSVに無い
+        needDay2 = emptyMap(),
+        cons1 = emptyList(),
+        cons2 = emptyList(),
+        cons3 = emptyList(),
+        cons3n = emptyList(),
+        cons3m = emptyList(),
+        cons3mn = emptyList(),
+        cons41 = emptyList(),
+        cons42 = emptyList(),
+    )
+}
+
 object RosterCsvImport {
     private const val REST = "休"
 
@@ -154,30 +191,8 @@ object RosterCsvImport {
         val start = String.format("%04d-%02d-01", yr, mo)
         val end = runCatching { LocalDate.parse(start).plusDays((T - 1).toLong()).toString() }.getOrDefault(start)
 
-        val K = shiftsOut.size
-        return MagiState(
-            startDate = start,
-            endDate = end,
-            shifts = shiftsOut,
-            groups = groupsOut,
-            staff = staffOut,
-            use2Patterns = false,
-            groupShift = List(groupsOut.size) { List(K) { 1 } },           // 担当可否不明→全可(後から調整)
-            groupShiftApt = List(groupsOut.size) { List(K) { "" } },
-            schedule = grid.map { it.toList() },
-            wishes = wishes,
-            staffRange = emptyMap(),
-            needDay1 = emptyMap(),   // 必要人数はCSVに無い（凡例の日別数値は集計＝需要ではない）
-            needDay2 = emptyMap(),
-            cons1 = emptyList(),
-            cons2 = emptyList(),
-            cons3 = emptyList(),
-            cons3n = emptyList(),
-            cons3m = emptyList(),
-            cons3mn = emptyList(),
-            cons41 = emptyList(),
-            cons42 = emptyList(),
-        )
+        // 必要人数はCSVに無い（凡例の日別数値は集計＝需要ではない）。共通構築は buildImportedState 参照。
+        return buildImportedState(start, end, shiftsOut, groupsOut, staffOut, grid, wishes)
     }
 }
 
@@ -296,30 +311,7 @@ object FlatRosterCsvImport {
         val start = String.format("%04d-%02d-01", yr, mo)
         val end = runCatching { LocalDate.parse(start).plusDays((T - 1).toLong()).toString() }.getOrDefault(start)
 
-        val K = shiftsOut.size
-        return MagiState(
-            startDate = start,
-            endDate = end,
-            shifts = shiftsOut,
-            groups = groupsOut,
-            staff = staffOut,
-            use2Patterns = false,
-            groupShift = List(groupsOut.size) { List(K) { 1 } },
-            groupShiftApt = List(groupsOut.size) { List(K) { "" } },
-            schedule = grid.map { it.toList() },
-            wishes = wishes,
-            staffRange = emptyMap(),
-            needDay1 = emptyMap(),
-            needDay2 = emptyMap(),
-            cons1 = emptyList(),
-            cons2 = emptyList(),
-            cons3 = emptyList(),
-            cons3n = emptyList(),
-            cons3m = emptyList(),
-            cons3mn = emptyList(),
-            cons41 = emptyList(),
-            cons42 = emptyList(),
-        )
+        return buildImportedState(start, end, shiftsOut, groupsOut, staffOut, grid, wishes)
     }
 }
 
@@ -531,9 +523,16 @@ class ComponentImport(
     val state: MagiState,
     val accepted: Int,
     val rejected: Int,
-    /** 解釈できなかった最初の行（利用者へどこが悪いか示すため）。 */
-    val sample: String,
-)
+    /**
+     * 解釈できなかった行の例（最大[MAX_SAMPLES]件、利用者へどこが悪いか示すため）。
+     * [2026-09-02, 外部レビュー#76] 旧実装は最初の1行しか保持せず、複数種類の原因が混在するCSVでは
+     * 1回の取込結果から1つしか原因が分からず、修正のたびに再アップロードが必要だった。
+     * `ScheduleCsvBridge.parse` の `unknownTop`（上位5件保持）と同じ考え方で複数件へ拡張する。
+     */
+    val samples: List<String>,
+) {
+    companion object { const val MAX_SAMPLES = 3 }
+}
 
 object StaffCsvIO {
     fun build(state: MagiState): String {
@@ -706,7 +705,7 @@ object WishesCsvIO {
         //   という間接的な推測で、**未知の職員名で始まるヘッダ無CSVの先頭行を黙って捨てて**いた。
         val body = csvBody(rows, "氏名")
         var bad = 0
-        var sample = ""
+        val samples = ArrayList<String>()
         for (r in body) {
             val name = r.getOrElse(0) { "" }.trim()
             val day = r.getOrElse(1) { "" }.trim().toIntOrNull()
@@ -717,14 +716,14 @@ object WishesCsvIO {
             val k = symToK[sym]
             if (i == null || k == null || day == null || day < 1 || day > state.dayCount) {
                 bad++
-                if (sample.isEmpty()) sample = r.joinToString(",").take(60)
+                if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(r.joinToString(",").take(60))
                 continue
             }
             m["$i,${day - 1}"] = k
             n++
         }
         if (n == 0 && bad == 0) return null
-        return ComponentImport(state.copy(wishes = m), n, bad, sample)
+        return ComponentImport(state.copy(wishes = m), n, bad, samples)
     }
 }
 
@@ -784,10 +783,10 @@ object ConstraintsCsvIO {
         //   照合で、キーワードを増やすたびに取込側も直す必要があった）。
         val body = csvBody(rows, "種別")
         var bad = 0
-        var sample = ""
+        val samples = ArrayList<String>()
         fun reject(r: List<String>) {
             bad++
-            if (sample.isEmpty()) sample = r.joinToString(",").take(60)
+            if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(r.joinToString(",").take(60))
         }
         for (r in body) {
             if (r.all { it.isBlank() }) continue   // 書式上の空行は無視
@@ -835,8 +834,11 @@ object ConstraintsCsvIO {
         }.getOrDefault(emptyList())
         if (unresolved.isNotEmpty()) {
             bad += unresolved.size
-            if (sample.isEmpty()) sample = unresolved.first().let { "${it.first}「${it.second}」" }.take(60)
+            for (u in unresolved) {
+                if (samples.size >= ComponentImport.MAX_SAMPLES) break
+                samples.add("${u.first}「${u.second}」".take(60))
+            }
         }
-        return ComponentImport(candidate, n, bad, sample)
+        return ComponentImport(candidate, n, bad, samples)
     }
 }

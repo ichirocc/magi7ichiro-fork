@@ -297,9 +297,12 @@ fun MagiViewModel.importWishesCsv(rawText: String) {
     // [3.329.0/外部レビュー H-02] この取込は既存の希望を**全置換**する。中身のある行を1つでも
     //   解釈できなかったら置換しない（旧: 誤記の行を黙って捨て、1行でも有効なら残りの希望を消していた）。
     if (res.rejected > 0) {
+        // [2026-09-02, 外部レビュー#76] 例を最大3件まで列挙（旧: 最初の1件だけ）。原因が複数種類
+        //   混在するCSVでも、1回の取込結果から複数の直し所が分かるようにする。
+        val examples = res.samples.joinToString(" ／ ")
         _ui.update { it.copy(messageIsError = false, message = "希望シフトの取込を中止しました（読めない行が${res.rejected}件）。" +
-            "この取込は既存の希望を置き換えるため、全部読めたときだけ実行します。例: ${res.sample}") }
-        logOp("W", "希望シフトCSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: ${res.sample}")
+            "この取込は既存の希望を置き換えるため、全部読めたときだけ実行します。例: $examples") }
+        logOp("W", "希望シフトCSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: $examples")
         return
     }
     logOp("I", "希望シフトCSV取込: ${res.accepted}件を反映（全置換）")
@@ -320,9 +323,11 @@ fun MagiViewModel.importConstraintsCsv(rawText: String) {
     }
     // [3.329.0/外部レビュー H-02] 制約一式と個人レンジを**全置換**するので、希望と同じ扱いにする。
     if (res.rejected > 0) {
+        // [2026-09-02, 外部レビュー#76] 例を最大3件まで列挙（旧: 最初の1件だけ、上のimportWishesCsvと同じ理由）。
+        val examples = res.samples.joinToString(" ／ ")
         _ui.update { it.copy(messageIsError = false, message = "各制約の取込を中止しました（読めない行が${res.rejected}件）。" +
-            "この取込は既存の制約・個人レンジを置き換えるため、全部読めたときだけ実行します。例: ${res.sample}") }
-        logOp("W", "各制約CSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: ${res.sample}")
+            "この取込は既存の制約・個人レンジを置き換えるため、全部読めたときだけ実行します。例: $examples") }
+        logOp("W", "各制約CSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: $examples")
         return
     }
     logOp("I", "各制約CSV取込: ${res.accepted}件を反映（制約一式を置換）")

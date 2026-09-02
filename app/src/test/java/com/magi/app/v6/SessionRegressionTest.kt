@@ -385,7 +385,9 @@ class SessionRegressionTest {
         val r = WishesCsvIO.parse("花子,1,A\n太郎,1,A\n花子,2,Z", st)
         assertEquals("有効行", 1, r!!.accepted)
         assertEquals("読めない行を数える", 2, r.rejected)
-        assertTrue("どこが悪いか示す", r.sample.isNotEmpty())
+        assertTrue("どこが悪いか示す", r.samples.isNotEmpty())
+        // [2026-09-02, 外部レビュー#76] 例は最大3件まで（このケースは誤記2行なので2件とも入るはず）。
+        assertEquals("誤記2行とも例に入る（上限3件以内）", 2, r.samples.size)
         // 全部読める場合は従来どおり置換できる。
         val ok = WishesCsvIO.parse("花子,1,A\n花子,2,休", st)
         assertEquals(0, ok!!.rejected)
