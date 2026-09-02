@@ -79,7 +79,12 @@ data class V6SanityReport(
 
 object V6SanityPort {
     fun build(state: MagiState, schedule: Array<IntArray> = state.schedule.toIntArray2D()): V6SanityReport {
-        val p = Problem(state)
+        // [2026-09-02, 外部レビュー#73] buildGuidance自身は引数で受けたpを使い回すが、その呼び出し元
+        //   であるこの入口がProblem(state)を毎回新規構築していた。analyzeParallel()（MagiViewModel.kt）が
+        //   このbuild/buildViolationDebug/V6PortAnalyzer.analyze/diagnoseCoverage/diagnoseForbiddenRunsを
+        //   同じstateに対して並列実行するため、後者3つが使うcachedProblem(state)と揃え、同一stateなら
+        //   ProblemCacheのメモ化を共有する（挙動は完全に同一、Problem再構築の重複を1回省くだけ）。
+        val p = cachedProblem(state)
         val s = normalizeSchedule(schedule, p)
         val warns = ArrayList<String>()
         val notes = ArrayList<String>()
@@ -1041,7 +1046,8 @@ object V6SanityPort {
      * 読み取り専用（重み・データ不変＝安全）。家族ごと最大件数で打ち切り、ログ肥大を防ぐ。
      */
     fun buildViolationDebug(state: MagiState, schedule: Array<IntArray>, report: ViolationReport): List<String> {
-        val p = Problem(state)
+        // [2026-09-02, 外部レビュー#73] buildと同じ理由でcachedProblemへ統一（挙動不変、重複構築を省く）。
+        val p = cachedProblem(state)
         val s = normalizeSchedule(schedule, p)
         val out = ArrayList<String>()
         // [スパム対策] 各違反家族の詳細列挙の上限。1パターン把握には十分な件数に絞り、長大化を防ぐ

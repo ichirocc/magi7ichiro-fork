@@ -20,8 +20,16 @@ internal object C1TemporalDp {
     data class Rule(val days: Int, val minimum: Int)
 
     data class Candidate(
-        /** targetDays[j] == true なら日jを対象シフトにする。 */
-        val targetDays: BooleanArray,
+        /**
+         * targetDays[j] == true なら日jを対象シフトにする。
+         * [2026-09-02, 外部レビュー#85] 旧実装は `BooleanArray` で、data class の自動生成
+         * equals/hashCode は配列を参照同一性で比較する（構造的に同じ内容でも別インスタンスなら
+         * 不一致・別ハッシュになる）ため、`Candidate` を `==` で比較したり Set/Map のキーに
+         * 使うようになった場合に静かに壊れる潜在的な地雷だった（現時点の呼出し元は全て
+         * インデックスアクセスのみで equals/hashCode は未使用と確認済み）。`List<Boolean>` は
+         * 標準で構造的等価性を持つため、将来の用途を安全にする予防的な型変更（挙動は不変）。
+         */
+        val targetDays: List<Boolean>,
         /** この対象シフトに関する全C1規則の違反窓総数。 */
         val fires: Int,
         /** 変更セル数。回数保存なので常に relocations * 2。 */
@@ -177,7 +185,7 @@ internal object C1TemporalDp {
             }
         }
         val chosen = best ?: return null
-        val targetDays = BooleanArray(t) { day -> ((chosen.bits ushr day) and 1L) != 0L }
+        val targetDays = List(t) { day -> ((chosen.bits ushr day) and 1L) != 0L }
         return Candidate(targetDays, chosen.fires, chosen.changed, bestRelocations)
     }
 
