@@ -33,8 +33,27 @@ import java.time.LocalDate
  * [2026-09-02, 外部レビュー#86] [RosterCsvImport]/[FlatRosterCsvImport] が取込末尾で組み立てる
  * [MagiState] は、担当可否=全可・需要/制約=空で始めるという方針も含めてフィールド単位で完全に
  * 同一だった（フォーマット固有なのは氏名/日付列のレイアウト・期間推定方法・凡例の有無だけ）。
- * この共通部分だけを一本化する（フォーマット固有の解析ロジックは両 object に残す）。
+ * この末尾の構築部分を一本化する（フォーマット固有の解析ロジックは両 object に残す。
+ * 冒頭の前処理の共通化は [parseCsvGuarded] 側で行う）。
  */
+/**
+ * [2026-09-02, /code-review 追検証] 上の [buildImportedState] は末尾の [MagiState] 構築だけを
+ * 一本化しており、冒頭の前処理（CSV解析→引用符/空データガード）は
+ * [RosterCsvImport.parse]/[FlatRosterCsvImport.parse] に一字一句同一のまま残っていた
+ * （「共通部分だけを一本化する」というdocの記述と実態がずれていた）。こちらも一本化し、
+ * これで両 parse() の共通部分（冒頭の前処理＋末尾の構築）が揃って一本化された状態になる。
+ */
+private fun parseCsvGuarded(text: String): List<List<String>>? {
+    // [3.413.0/I-08] 引用符が閉じていないCSVは、開いた引用符以降が1セルへ吸い込まれ**残りの行が
+    //   丸ごと消える**。この経路は勤務表そのものを丸ごと差し替えるので、黙って一部だけ取り込むと
+    //   「なぜこの人の勤務が消えたのか」が説明できない。書式の誤りとして取込を断る。
+    val parsed = parseCsvFull(text)
+    if (parsed.unclosedQuote) return null
+    val rows = parsed.rows
+    if (rows.isEmpty()) return null
+    return rows
+}
+
 private fun buildImportedState(
     start: String, end: String,
     shiftsOut: List<Shift>, groupsOut: List<Group>, staffOut: List<Staff>,
@@ -83,13 +102,7 @@ object RosterCsvImport {
      *   ※元表の明示「休」セルは希望休として wishes に入り、空セル（通常の休み）と区別される。
      */
     fun parse(text: String, asWishes: Boolean = false): MagiState? {
-        val parsed = parseCsvFull(text)
-        // [3.413.0/I-08] 引用符が閉じていないCSVは、開いた引用符以降が1セルへ吸い込まれ**残りの行が
-        //   丸ごと消える**。この経路は勤務表そのものを丸ごと差し替えるので、黙って一部だけ取り込むと
-        //   「なぜこの人の勤務が消えたのか」が説明できない。書式の誤りとして取込を断る。
-        if (parsed.unclosedQuote) return null
-        val rows = parsed.rows
-        if (rows.isEmpty()) return null
+        val rows = parseCsvGuarded(text) ?: return null
         fun cell(r: List<String>, idx: Int): String = r.getOrElse(idx) { "" }.trim()
         fun normName(s: String): String = s.replace('　', ' ').trim().replace(Regex("\\s+"), " ")
 
@@ -218,13 +231,7 @@ object FlatRosterCsvImport {
     }
 
     fun parse(text: String, asWishes: Boolean = false): MagiState? {
-        val parsed = parseCsvFull(text)
-        // [3.413.0/I-08] 引用符が閉じていないCSVは、開いた引用符以降が1セルへ吸い込まれ**残りの行が
-        //   丸ごと消える**。この経路は勤務表そのものを丸ごと差し替えるので、黙って一部だけ取り込むと
-        //   「なぜこの人の勤務が消えたのか」が説明できない。書式の誤りとして取込を断る。
-        if (parsed.unclosedQuote) return null
-        val rows = parsed.rows
-        if (rows.isEmpty()) return null
+        val rows = parseCsvGuarded(text) ?: return null
         fun cell(r: List<String>, i: Int): String = r.getOrElse(i) { "" }.trim()
         fun normName(s: String): String = s.replace('　', ' ').trim().replace(Regex("\\s+"), " ")
 
@@ -716,14 +723,17 @@ object WishesCsvIO {
             val k = symToK[sym]
             if (i == null || k == null || day == null || day < 1 || day > state.dayCount) {
                 bad++
-                if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(r.joinToString(",").take(60))
+                samples.add(r.joinToString(",").take(60))
                 continue
             }
             m["$i,${day - 1}"] = k
             n++
         }
         if (n == 0 && bad == 0) return null
-        return ComponentImport(state.copy(wishes = m), n, bad, samples)
+        // [2026-09-02, /code-review 追検証] 収集時にキャップせず、表示直前の1箇所だけで
+        //   take(MAX_SAMPLES)する（業務規模上限=最大30名/31日なのでbad件を全部貯めても軽い）。
+        //   ConstraintsCsvIO.parseの2箇所と揃え、キャップの実装が複数箇所に分散しないようにする。
+        return ComponentImport(state.copy(wishes = m), n, bad, samples.take(ComponentImport.MAX_SAMPLES))
     }
 }
 
@@ -784,9 +794,11 @@ object ConstraintsCsvIO {
         val body = csvBody(rows, "種別")
         var bad = 0
         val samples = ArrayList<String>()
+        // [2026-09-02, /code-review 追検証] キャップせず全件を貯め、表示直前(return)の1箇所だけで
+        //   take(MAX_SAMPLES)する（WishesCsvIO.parseと同じ理由・同じ形）。
         fun reject(r: List<String>) {
             bad++
-            if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(r.joinToString(",").take(60))
+            samples.add(r.joinToString(",").take(60))
         }
         for (r in body) {
             if (r.all { it.isBlank() }) continue   // 書式上の空行は無視
@@ -834,11 +846,8 @@ object ConstraintsCsvIO {
         }.getOrDefault(emptyList())
         if (unresolved.isNotEmpty()) {
             bad += unresolved.size
-            for (u in unresolved) {
-                if (samples.size >= ComponentImport.MAX_SAMPLES) break
-                samples.add("${u.first}「${u.second}」".take(60))
-            }
+            for (u in unresolved) samples.add("${u.first}「${u.second}」".take(60))
         }
-        return ComponentImport(candidate, n, bad, samples)
+        return ComponentImport(candidate, n, bad, samples.take(ComponentImport.MAX_SAMPLES))
     }
 }
