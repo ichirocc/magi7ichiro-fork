@@ -155,10 +155,24 @@ fun MagiViewModel.exportLogsJson(): String? {
 private fun periodNote(startDate: String) =
     "｜期間は「$startDate」から として取り込みました（CSVに年月が無い場合は推定です。設定タブで直せます）"
 
+/**
+ * [3.475.0/論理監査] テンプレCSVの凡例に無い記号を名指しする。旧: そのセルは黙って休（希望取込では
+ * 希望なし）になり、件数も記号も画面・ログに出なかった（`ScheduleCsvBridge.parse` は 3.410.0/I-01 で
+ * 出すようになっていたが、新規取込の経路だけ抜けていた）。
+ */
+private fun MagiViewModel.rosterUnknownNote(unknown: Map<String, Int>): String {
+    if (unknown.isEmpty()) return ""
+    val cells = unknown.values.sum()
+    val top = unknown.entries.sortedByDescending { it.value }.take(5).joinToString("・") { "${it.key}(${it.value})" }
+    logOp("W", "勤務表CSV取込 凡例に無い記号 ${cells}セル: $top（休として取り込みました）")
+    return "｜⚠ 凡例に無い記号 ${cells}セル（$top）は休として取り込みました"
+}
+
 fun MagiViewModel.importCsvSmart(rawText: String) {
     val text = MojibakeRepair.repair(rawText)
     if (com.magi.app.v6.RosterCsvImport.detect(text)) {
-        val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text) }.getOrNull()
+        val unknownSym = LinkedHashMap<String, Int>()
+        val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text, unknownOut = unknownSym) }.getOrNull()
         if (st != null) {
             // 凡例(記号一覧)が無いとシフトが「休」1種のみになり全セルが公休化する。
             // 取り込まず原因をオペレーターに表示する（Excel保存で凡例が消えるケース）。
@@ -173,7 +187,7 @@ fun MagiViewModel.importCsvSmart(rawText: String) {
             //   間違っていれば曜日の平準化も日付表示もずれる。**何日から取り込んだかを必ず出す**
             //   （挙動は不変＝知らせるだけ。違っていれば設定タブで直せる）。
             logOp("I", "勤務表CSVを新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}")
-            load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate))
+            load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate) + rosterUnknownNote(unknownSym))
             return
         }
         // テンプレらしいが解析不能 → 既存取込にフォールバック（または案内）。
@@ -208,9 +222,11 @@ fun MagiViewModel.importCsvSmart(rawText: String) {
  */
 fun MagiViewModel.importRosterAs(rawText: String, asWishes: Boolean) {
     val text = MojibakeRepair.repair(rawText)
-    val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text, asWishes) }.getOrNull()
+    val unknownSym = LinkedHashMap<String, Int>()
+    val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text, asWishes, unknownOut = unknownSym) }.getOrNull()
     if (st == null) {
-        _ui.update { it.copy(messageIsError = true, message = "このCSVを読み込めませんでした。形式をご確認ください。") }
+        val quote = if (com.magi.app.v6.csvHasUnclosedQuote(text)) "引用符（\"）が閉じていない行があります。" else ""
+        _ui.update { it.copy(messageIsError = true, message = "このCSVを読み込めませんでした。${quote}形式をご確認ください。") }
         return
     }
     if (st.shiftCount <= 1) {
@@ -223,7 +239,7 @@ fun MagiViewModel.importRosterAs(rawText: String, asWishes: Boolean) {
     //   何日から取り込んだかを必ず出す（挙動は不変＝知らせるだけ）。
     logOp("I", "${kind}として新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}" +
         if (asWishes) "（希望${st.wishes.size}件）" else "")
-    load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate))
+    load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate) + rosterUnknownNote(unknownSym))
 }
 
 /** 取込種別を取り違えた可能性の判定: 勤務表(スケジュール)CSVらしいか。 */
@@ -238,6 +254,10 @@ private fun looksLikeScheduleCsv(t: String): Boolean {
 
 /** 希望/制約の取込が0件のとき、別形式CSVの取り違えを推定して利用者向けヒントを返す（無ければ空）。 */
 private fun componentImportMismatchHint(repairedText: String): String = when {
+    // [3.475.0/論理監査] 未閉引用符は「取り込める行が0件」ではなく書式の誤り（3.413.0/I-08 が断る理由）。
+    //   旧: 種類別取込3経路とも氏名/記号の不一致を疑わせる案内しか出せなかった。
+    com.magi.app.v6.csvHasUnclosedQuote(repairedText) ->
+        "引用符（\"）が閉じていない行があります。開いた引用符から後ろが1つのセルに吸い込まれるため、書式を直してから取り込んでください。"
     com.magi.app.v6.RosterCsvImport.detect(repairedText) ||
         com.magi.app.v6.FlatRosterCsvImport.detect(repairedText) ->
         "これは勤務表全体（テンプレ/ユニット列形式）のCSVのようです。取込種別で『データ全体（新規）』を選んでください。"

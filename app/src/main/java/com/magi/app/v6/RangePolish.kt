@@ -394,10 +394,14 @@ internal object RangePolish {
                         work[i][j] = newDay[i]
                     }
                     val rep = UnifiedViolationChecker.check(state, work)
-                    val pinBad = exactPinRegression(p, workBeforeDayMatch, work)
+                    // [3.475.0/論理監査] 素の exactPinRegression では「ピンだけが理由で却下した改善手」が
+                    //   PinBlockAttribution に計上されず、UI の「少なくともN回」が過少だった（同ファイルの
+                    //   tryRelocate/tryPairSwap は blocksImproving 経由で計上済み＝手M/手F だけ非対称）。
+                    val improving = betterReport(rep, bestRep)
+                    val pinBad = improving && pinBlocks.blocksImproving(p, workBeforeDayMatch, work)
                     for (i in 0 until p.S) work[i][j] = tokens[i]
 
-                    if (!betterReport(rep, bestRep) || pinBad) continue
+                    if (!improving || pinBad) continue
                     val oldBest = bestPlan
                     val betterPlan = oldBest == null ||
                         betterReport(rep, oldBest.report) ||
@@ -558,10 +562,12 @@ internal object RangePolish {
                     val extraOld = IntArray(extras.size) { work[extras[it][0]][extras[it][1]] }
                     extras.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work)
-                    val pinBad = exactPinRegression(p, workBeforeFlow, work)
+                    // [3.475.0/論理監査] 手M と同じ理由で blocksImproving 経由に揃える（計上漏れの解消）。
+                    val improving = betterReport(rep, bestRep)
+                    val pinBad = improving && pinBlocks.blocksImproving(p, workBeforeFlow, work)
                     for (idx in extras.indices) work[extras[idx][0]][extras[idx][1]] = extraOld[idx]
                     for (i in 0 until p.S) work[i][j] = oldDay[i]
-                    if (!betterReport(rep, bestRep) || pinBad) continue
+                    if (!improving || pinBad) continue
 
                     val oldBest = bestPlan
                     val betterPlan = oldBest == null ||

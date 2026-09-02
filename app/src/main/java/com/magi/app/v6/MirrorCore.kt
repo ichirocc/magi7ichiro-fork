@@ -622,7 +622,11 @@ fun Problem.allowedShiftsForStaff(staffI: Int): IntArray {
 
 fun normalizeSchedule(schedule: Array<IntArray>, p: Problem): Array<IntArray> = Array(p.S) { i ->
     IntArray(p.T) { j ->
-        val k = schedule.getOrNull(i)?.getOrNull(j) ?: 0
+        // [3.475.0/論理監査] 欠損セル（行が短い／行が無い）は -1（未割当センチネル）。旧: `?: 0` で
+        //   先頭シフト index0 に写しており、休が index0 でないデータでは欠損が**勤務シフトとして**
+        //   被覆・回数に計上された（Problem.kt の「normalizeSchedule は -1 にする」という前提と不一致）。
+        //   範囲外の値と同じ扱い＝checker/countMatrix は -1 を無視し、initialAssignment は休で埋める。
+        val k = schedule.getOrNull(i)?.getOrNull(j) ?: -1
         if (k in 0 until p.K) k else -1
     }
 }

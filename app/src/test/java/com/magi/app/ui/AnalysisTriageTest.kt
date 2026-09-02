@@ -29,7 +29,10 @@ class AnalysisTriageTest {
         c1Plateau: C1PlateauDiagnosis? = null,
         coverage: CoverageDiagnosis? = null,
     ) = UiState(
-        breakdown = breakdown, hasResult = hasResult, settingIssues = issues,
+        // [3.475.0/論理監査] analysisTriage の「計算済み」判定は hasResult でなく engineRan を読む
+        //   （手編集だけで hasResult=true になり「計算後に残っている項目」と誤って語っていたため分離）。
+        //   このテストの hasResult=true は「直後にエンジンが走った」状況を表すので engineRan も揃える。
+        breakdown = breakdown, hasResult = hasResult, engineRan = hasResult, settingIssues = issues,
         c1Plateau = c1Plateau, coverageDiag = coverage,
     )
 

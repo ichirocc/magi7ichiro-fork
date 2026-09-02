@@ -138,6 +138,10 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                         val cands = remember(target.dayIndex, target.shiftIndex, ui.coverageDiag) {
                             vm.shortageFixCandidates(target.dayIndex, target.shiftIndex)
                         }
+                        // [3.475.0/論理監査] 1回押したら再検査（refreshCheck は非同期）が盤面に追いつくまで全候補を
+                        //   無効化する。旧: 候補は押す前の盤面で「抜けても穴が空かない」と判定したものなので、
+                        //   連打すると2人目が既に満たした枠へ入り covO と、抜けた側の covU を同時に作れた。
+                        val pending = remember(ui.schedule) { androidx.compose.runtime.mutableStateOf(false) }
                         if (cands.isEmpty()) {
                             // [3.401.0] 汎用の文言でなく、この枠についての診断そのものを出す
                             //   （なぜ動かせないかは CoverageDiagnosis が既に調べて書いている）。
@@ -145,7 +149,8 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                         } else {
                             cands.take(8).forEach { c ->
                                 Button(
-                                    onClick = { vm.setCell(c.staffIndex, target.dayIndex, target.shiftIndex) },
+                                    onClick = { pending.value = true; vm.setCell(c.staffIndex, target.dayIndex, target.shiftIndex) },
+                                    enabled = !pending.value,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
                                 ) {
                                     val tail = if (c.fromRest) "（休み）" else ""

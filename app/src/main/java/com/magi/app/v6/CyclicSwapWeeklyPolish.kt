@@ -144,8 +144,13 @@ internal object CyclicSwapWeeklyPolish {
             for (i in 0 until p.S) {
                 if (shouldStop()) break
                 val wdAll = wdBucket(i)
+                // [3.475.0/論理監査] 旧: `if (improved || shouldStop()) break`＝pass 全体の旗で抜けていたため、
+                //   最初の採用のあと**残りの職員の x ループが全部飛ばされ**、パスあたり最大1手しか採らなかった
+                //   （maxPasses=2 で計2手。3.345.0 の消去実験「採用1回」はこの上限の現れ）。wdAll が古くなるのは
+                //   採用した職員 i だけなので、抜けるのは**その職員の x ループだけ**にする。
+                var staffImproved = false
                 for (x in 0 until p.K) {
-                    if (improved || shouldStop()) break
+                    if (staffImproved || shouldStop()) break
                     val wd = wdAll[x]
                     if (weeklyDevOfBucket(wd) == 0) continue
                     var sum = 0; for (w in wd) sum += w
@@ -185,7 +190,7 @@ internal object CyclicSwapWeeklyPolish {
                                 val workBeforeRect = work.copy2D()
                                 work[i][j1] = z; work[i][j2] = x; work[ip][j1] = x; work[ip][j2] = y
                                 val rep = UnifiedViolationChecker.check(state, work)
-                                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeRect, work)) { bestRep = rep; applied++; improved = true; done = true; break }
+                                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeRect, work)) { bestRep = rep; applied++; improved = true; staffImproved = true; done = true; break }
                                 work[i][j1] = x; work[i][j2] = y; work[ip][j1] = z; work[ip][j2] = x
                             }
                         }

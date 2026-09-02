@@ -460,6 +460,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.328.0] この結果を後で当ててよいかを判断するための入力の指紋。
         bgStateKey = stateKey(st0)
         bgRunId = runId
+        // [3.475.0/論理監査] keep-best の比較先は「この実行に渡した入力」。旧: resultSchedule（前回の結果）と
+        //   比較していたため、前回結果のあとに手編集した盤面で背景実行すると、入力より悪化さえしていない
+        //   その編集が「前回の結果を維持」の名目で黙って巻き戻された（前景 runV6FullOptimize は元から入力比較）。
+        bgInput = sched0.copy2D()
         OptimizationRepository.request = st0 to sched0.copy2D()
         OptimizationRepository.seconds = _ui.value.budgetSec
         OptimizationRepository.workers = _ui.value.workers
@@ -494,6 +498,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers})")
     }
 
+    /** [3.475.0] 破棄する背景結果の後始末を一箇所に。旧: 「入力が変わった」分岐だけこれを一切せず、
+     *  結果ファイルが残って次回起動時に無関係なデータへ復元されうる穴があった。 */
+    private fun discardBgResult(reason: String) {
+        clearRunMarker()
+        clearBgFiles(reason)
+        OptimizationRepository.request = null
+        OptimizationRepository.publishResult(null)
+    }
+
     private suspend fun applyBgResult(r: OptimizationRepository.BgResult) {
         val st0 = state ?: return
         // [3.328.0/外部レビュー] 背景の結果は「開始時の入力」に対して計算されたもの。実行中に別のデータを
@@ -507,17 +520,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             logOp("W", "バックグラウンド計算の結果を破棄しました（置き換えられた古い実行の結果）")
             return
         }
-        if (bgStateKey != 0L && bgStateKey != stateKey(st0)) {
-            bgStateKey = 0L
-            bgRunId = 0L
+        // [3.475.0/論理監査] `bgStateKey`（インメモリ）はプロセス再起動で 0 に戻り、以後は runId/指紋の両方が
+        //   照合されないまま**いま開いている別データへ**結果が当たり得た。Worker が入力から詰めた
+        //   `r.stateKey`（0=未対応の旧経路）があれば、bgStateKey が 0 でも常にこれと照合する。
+        val mismatch = (bgStateKey != 0L && bgStateKey != stateKey(st0)) ||
+            (bgStateKey == 0L && r.stateKey != 0L && r.stateKey != stateKey(st0))
+        if (mismatch) {
+            bgStateKey = 0L; bgRunId = 0L; bgInput = null
             logOp("W", "バックグラウンド計算の結果を破棄しました（計算中に設定またはデータが変わったため）")
             _ui.update { it.copy(messageIsError = false, running = false, message = "計算中に設定が変わったため、結果は反映しませんでした。もう一度つくってください。") }
+            // [3.475.0] 旧: この分岐だけファイル/公開結果を片付けず、次回起動が古い結果を復元しうる穴だった。
+            discardBgResult("背景結果: 入力が変わったため破棄")
             return
         }
         bgStateKey = 0L
         bgRunId = 0L
-        // [再実行 keep-best] 背景完了結果が前回採用解より悪化なら前回を維持（前景と同じ方針）。
-        val prev = resultSchedule
+        // [3.475.0/論理監査] keep-best の比較先は「この実行の入力」（bgInput）。旧: 前回の結果
+        //   (resultSchedule) と比較していたため、前回結果のあとに手編集した盤面で背景実行すると、
+        //   入力より悪化していないその編集が「前回の結果を維持」の名目で黙って巻き戻された。
+        //   bgInput が無い（プロセス再起動後の復元経路）ときだけ、従来どおり前回の結果と比較する。
+        val prev = bgInput ?: resultSchedule
+        bgInput = null
         if (prev != null) {
             val prevReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, prev) }
             val newHard = r.report.hard.toLong(); val newTotal = r.report.total
@@ -530,16 +553,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 resultSchedule = kept
                 state = st0.withSchedule(kept)
                 autoSave()
-                pushReport(state ?: st0, kept, prevReport) { it.copy(
+                // [3.475.0/論理監査] runLabel を付ける。旧: 背景実行の診断は「実行外」に分類され、
+                //   1回でも手編集すると rawDiagLogs が上書きされて書き出しログから消えていた。
+                pushReport(state ?: st0, kept, prevReport, runLabel = "バックグラウンド最適化") { it.copy(
                     messageIsError = false,
-                    running = false, hasResult = true,
+                    running = false, hasResult = true, engineRan = true,
                     message = "今回(必須$newHard/合計$newTotal)は前回(必須${prevReport.hard}/合計${prevReport.total})より改善せず。前回の結果を維持しました。",
                 ) }
                 logOp("I", "バックグラウンド: 今回 必須$newHard/合計$newTotal は前回 以下に改善せず → 前回を維持")
-                clearRunMarker()
-                clearBgFiles("背景結果: 前回を維持")
-                OptimizationRepository.request = null
-                OptimizationRepository.publishResult(null)
+                discardBgResult("背景結果: 前回を維持")
                 return
             }
         }
@@ -548,9 +570,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = sched
         state = st0.withSchedule(sched)
         autoSave()
-        pushReport(state ?: st0, sched, r.report) { it.copy(
+        pushReport(state ?: st0, sched, r.report, runLabel = "バックグラウンド最適化") { it.copy(
             messageIsError = false,
-            running = false, hasResult = true,
+            running = false, hasResult = true, engineRan = true,
             message = "バックグラウンド最適化 完了: 必須=${r.report.hard} 合計=${r.report.total}",
         ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
@@ -650,7 +672,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         undoStack.addLast(snap)
         while (undoStack.size > 30) undoStack.removeFirst()
         redoStack.clear()   // 新しい操作は redo 履歴を無効化（標準的な undo/redo 挙動）
-        _ui.update { it.copy(canUndo = true, canRedo = false) }
+        // [3.475.0/論理監査] 盤面/設定が変わる操作は必ずここを通る＝改善提案（別の盤面で計算した差分）を
+        //   その場で無効化する。旧: 提案は findFixSuggestions と applyFixSuggestion でしか書き換えられず、
+        //   セル編集・取込・職員削除のあとも古い提案が表示され、適用時に別セル/別職員へ書いていた。
+        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList()) }
     }
 
     private fun clearUndo() {
@@ -772,6 +797,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         //   結果そのものなので resultSchedule/hasResult を立て、上位バーの「未計算」を防ぐ。
                         resultSchedule = if (markResult) lp.schedule.copy2D() else null
                         clearUndo()
+                        // [3.475.0/論理監査] コパイロットの「前回と同じ設定」ヒントは前回のデータの記憶。
+                        //   旧: 別データを開いてもリセットされず、初回の実行なのに「前回と同じ設定です」と
+                        //   出たり、別データの必須違反族を名指ししたりしていた。
+                        lastSettingsSig = null
+                        lastResultHard = -1L
+                        lastTopHardFamily = null
                         autoSave()
                         pushReport(lp.state, lp.schedule, lp.report) {
                             it.copy(
@@ -779,6 +810,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 loaded = true,
                                 running = false,
                                 hasResult = markResult,
+                                engineRan = markResult,   // [3.475.0] bg結果の復元だけ「計算済み」を引き継ぐ
                                 constraintsEdited = false,
                                 structureEdited = false,
                                 staff = lp.state.staffCount,
@@ -996,6 +1028,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     messageIsError = false,
                     running = false,
                     hasResult = true,
+                    engineRan = true,
                     elapsedMs = 0,
                     message = "下書きをつくりました: 必須違反=${res.report.hard} 合計=${res.report.total}",
                 ) }
@@ -1055,6 +1088,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** [3.410.0/U-01] いま待っている背景実行の ID。0=待っていない／プロセス再起動後の復元経路。 */
     private var bgRunId: Long = 0L
+
+    /** [3.475.0] この実行に渡した入力盤面（keep-best の比較元）。プロセス再起動を跨ぐと null（復元経路）。 */
+    private var bgInput: Array<IntArray>? = null
 
     /** 盤面の内容から決まる指紋。S×T が小さい（30×31）ので毎回の計算コストは無視できる。 */
     private fun boardKey(schedule: Array<IntArray>): Long {
@@ -1281,6 +1317,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         messageIsError = false,
                         running = false,
                         hasResult = true,
+                        engineRan = true,
                         message = "今回(必須$newHard/合計$newTotal)は前回(必須$baseHard/合計$baseTotal)より改善しませんでした。前回の結果を維持します。",
                     ) }
                     logOp("I", "再実行: 今回 必須$newHard/合計$newTotal は前回 必須$baseHard/合計$baseTotal 以下に改善せず → 前回を維持")
@@ -1303,12 +1340,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         messageIsError = false,
                         running = false,
                         hasResult = true,
+                        engineRan = true,
                         message = "勤務表ができました: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)",
                     ) }
                     lastResultHard = newHard
                 }
                 lastC1Plateau?.logLines()?.take(4)?.forEach { logOp("W", it.removePrefix("[W] ")) }
-                lastTopHardFamily = if (res.report.hard > 0) topHardFamilyJp(res.report.breakdown) else null
+                // [3.475.0/論理監査] 採用した盤面の族を覚える。旧: 入力維持の分岐でも捨てた盤面（res.report）
+                //   から取っていたため、次回のヒントが「いま表示している勤務表」に無い族を名指しした。
+                val adoptedReport = if (worseThanInput) baseReport else res.report
+                lastTopHardFamily = if (adoptedReport.hard > 0) topHardFamilyJp(adoptedReport.breakdown) else null
                 logOp(if (res.report.hard == 0) "I" else "W", "最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})")
                 // [3.409.17/実機ログ 3.409.14] 予算超過の実行は内訳が診断ログ（次の実行で消える）にしか
                 //   残らず特定不能だった（13実行中5回が474〜959sまで超過したのに、残った診断は最後の
@@ -1357,10 +1398,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             messageIsError = false,
                             running = false,
                             hasResult = true,
+                            engineRan = true,
                             message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
                         ) }
                     }.onFailure { t ->
-                        _ui.update { it.copy(running = false, hasResult = true,
+                        _ui.update { it.copy(running = false, hasResult = true, engineRan = true,
                             messageIsError = false,
                             message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。") }
                         logOp("W", "停止時の診断に失敗: ${t.javaClass.simpleName}: ${t.message}")
@@ -1440,6 +1482,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 resultSchedule = finalSched
                 state = st0.withSchedule(finalSched)
                 val gain = baseReport.total - finalReport.total
+                // [3.475.0/論理監査] 文言は「採用したか（!worse）」で決める。旧: total の増減だけを見ていたため、
+                //   3.287.0 の keep-best が正しく採用する「重み改善・total 増」の盤面を採用しながら
+                //   「これ以上は整いませんでした／増減なし」と語っていた（盤面は変わっている）。
+                val adopted = !worse
                 // [design-review] この関数冒頭の開始メッセージは「自動で整えています…」なのに、完了だけ内部語
                 //   「ソフト研磨」に戻っていた（同じ操作の中で語彙が食い違う＝3.397.0と同型）。
                 //   operator_ux.md §2「最適化する/RunMAGI → 勤務表をつくる/いい感じに整える」に合わせる。
@@ -1447,12 +1493,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     messageIsError = false,
                     running = false,
                     hasResult = true,
-                    message = if (gain > 0)
-                        "整えました: 合計 ${baseReport.total} → ${finalReport.total}（-$gain）必須=${finalReport.hard} (${System.currentTimeMillis() - startMs}ms)"
+                    engineRan = true,
+                    message = if (adopted)
+                        "整えました: 合計 ${baseReport.total} → ${finalReport.total}（${if (gain >= 0) "-$gain" else "+${-gain}"}・重み ${baseReport.weightedScore.toInt()} → ${finalReport.weightedScore.toInt()}）必須=${finalReport.hard} (${System.currentTimeMillis() - startMs}ms)"
                     else
                         "これ以上は整いませんでした（合計=${finalReport.total} 必須=${finalReport.hard}）。残りは構造的要因の可能性。",
                 ) }
-                logOp("I", "ソフト研磨 完了 必須=${finalReport.hard} 合計=${finalReport.total}（${if (gain > 0) "-$gain" else "増減なし"}）")
+                logOp("I", "ソフト研磨 完了 必須=${finalReport.hard} 合計=${finalReport.total}（${if (adopted) "採用: 合計${if (gain >= 0) "-$gain" else "+${-gain}"}・重み${baseReport.weightedScore.toInt()}→${finalReport.weightedScore.toInt()}" else "増減なし"}）")
                 terminalLogged = true
             } catch (e: CancellationException) {
                 // [停止 keep-best] 中断時は直前の確定盤面を保持し表示も整合させる。
@@ -1470,10 +1517,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             messageIsError = false,
                             running = false,
                             hasResult = true,
+                            engineRan = true,
                             message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
                         ) }
                     }.onFailure { t ->
-                        _ui.update { it.copy(running = false, hasResult = true,
+                        _ui.update { it.copy(running = false, hasResult = true, engineRan = true,
                             messageIsError = false,
                             message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。") }
                         logOp("W", "停止時の診断に失敗: ${t.javaClass.simpleName}: ${t.message}")
@@ -1618,6 +1666,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,
+            engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
             message = "希望を反映: ${applied}件$note",
         ) }
@@ -1650,17 +1699,32 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   最適化ジョブの完了時上書きと衝突しうる。
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sch = alternativeScheds.getOrNull(i)?.copy2D() ?: return
+        // [3.475.0/論理監査] 案は計算時のデータの次元（職員数×期間）を持つ。旧: 別データの読込や職員の
+        //   追加/削除のあとも案が残り、採用すると行数の違う盤面が state に入り自動保存され、次回起動で
+        //   validate() に落ちて自動保存が開けなくなった。次元が合わなければ捨てる。
+        if (sch.size != st.staffCount || sch.any { it.size != st.dayCount }) {
+            alternativeScheds = emptyList()
+            _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
+                message = "この案は今のデータ（職員数・期間）と合わないため適用できません。もう一度つくってください") }
+            logOp("W", "他の案 ${i + 1}: 職員数/期間が今のデータと違うため適用せず")
+            return
+        }
         pushUndo()
         currentSchedule = sch
         resultSchedule = sch
         state = st.withSchedule(sch)
         autoSave()
-        viewModelScope.launch {
+        // [3.475.0/論理監査] 再検査は checkJob/checkSeq に乗せる。旧: 独立した launch で順序保証が無く、
+        //   案1→案2 と続けて押すと先の案の報告が後から届いて画面と currentSchedule が食い違った。
+        val seq = ++checkSeq
+        checkJob?.cancel()
+        checkJob = viewModelScope.launch {
             // [3.392.0] 盤面は launch の前に既に差し替わっている。ここが例外で落ちると報告だけ届かず
             //   「盤面は変わったのに違反数は前の案のまま」になるので、必ず理由を残す。
             try {
                 val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(state ?: st, sch) }
-                pushReport(state ?: st, sch, rep) { it.copy(messageIsError = false, hasResult = true, message = "他の案 ${i + 1} を適用") }
+                if (seq != checkSeq) return@launch
+                pushReport(state ?: st, sch, rep) { it.copy(messageIsError = false, hasResult = true, engineRan = true, message = "他の案 ${i + 1} を適用") }
                 logOp("I", "他の案 ${i + 1} を適用 必須=${rep.hard} 合計=${rep.total}")
             } catch (e: CancellationException) {
                 throw e
@@ -1690,6 +1754,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,
+            engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
             message = "${st.staff.getOrNull(i)?.name ?: i} / ${j + 1}日 を ${st.shifts.getOrNull(shift)?.kigou ?: shift} に変更",
         ) }
@@ -1718,6 +1783,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,
+            engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
             message = "${changed}マスを ${st.shifts.getOrNull(shift)?.kigou ?: shift} に一括変更",
         ) }
@@ -1997,14 +2063,38 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val k = issue.demandShiftIdx ?: return
                 val cap = issue.demandCap ?: return
                 val sh = s.shifts.getOrNull(k) ?: return
-                val n1 = sh.need1.trim().toIntOrNull()
-                val n2 = sh.need2.trim().toIntOrNull()
-                val newN1 = if (n1 != null && n1 > cap) cap.toString() else sh.need1
-                val newN2 = if (n2 != null && n2 > cap) cap.toString() else sh.need2
-                if (newN1 == sh.need1 && newN2 == sh.need2) return
-                val list = s.shifts.toMutableList()
-                list[k] = sh.copy(need1 = newN1, need2 = newN2)
-                s.copy(shifts = list)
+                val j = issue.demandDayIdx
+                if (j != null) {
+                    // [3.475.0/論理監査] 需要が日別例外(needDay1/2)由来のときはその日の例外を丸める。
+                    //   旧: 常にシフト既定だけを丸めていたため、例外由来の診断はボタンを押しても消えなかった
+                    //   （既定が cap 以下なら no-op で return、例外は残るので同じ項目が出続けていた）。
+                    val key1 = "$k,$j"; val key2 = "$k,$j"
+                    val ov1 = s.needDay1[key1]?.trim()?.toIntOrNull()
+                    val ov2 = s.needDay2[key2]?.trim()?.toIntOrNull()
+                    var changed = false
+                    val nd1 = if (ov1 != null && ov1 > cap) { changed = true; s.needDay1 + (key1 to cap.toString()) } else s.needDay1
+                    val nd2 = if (ov2 != null && ov2 > cap) { changed = true; s.needDay2 + (key2 to cap.toString()) } else s.needDay2
+                    // 例外が無ければ既定を丸める（従来どおり）。
+                    val n1 = sh.need1.trim().toIntOrNull()
+                    val n2 = sh.need2.trim().toIntOrNull()
+                    if (ov1 == null && n1 != null && n1 > cap) { changed = true }
+                    if (ov2 == null && n2 != null && n2 > cap) { changed = true }
+                    if (!changed) return
+                    val newN1 = if (ov1 == null && n1 != null && n1 > cap) cap.toString() else sh.need1
+                    val newN2 = if (ov2 == null && n2 != null && n2 > cap) cap.toString() else sh.need2
+                    val list = s.shifts.toMutableList()
+                    list[k] = sh.copy(need1 = newN1, need2 = newN2)
+                    s.copy(shifts = list, needDay1 = nd1, needDay2 = nd2)
+                } else {
+                    val n1 = sh.need1.trim().toIntOrNull()
+                    val n2 = sh.need2.trim().toIntOrNull()
+                    val newN1 = if (n1 != null && n1 > cap) cap.toString() else sh.need1
+                    val newN2 = if (n2 != null && n2 > cap) cap.toString() else sh.need2
+                    if (newN1 == sh.need1 && newN2 == sh.need2) return
+                    val list = s.shifts.toMutableList()
+                    list[k] = sh.copy(need1 = newN1, need2 = newN2)
+                    s.copy(shifts = list)
+                }
             }
             SettingFixAction.NONE -> null
         }
@@ -2018,11 +2108,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * [改善提案] 違反を減らす「1手（変更/交換）」を探索して UI に提示する。
      * focusStaff != null のときはそのスタッフが関わる手だけに絞る（違反タップ起点）。重い処理のため非同期。
      */
+    /** [3.475.0/論理監査] 改善提案を計算した盤面/設定の指紋（適用時に照合する。0=未計算）。 */
+    private var fixBoardKey = 0L
+    private var fixStateKey = 0L
+
     fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
         val snap = sched.copy2D()
+        fixBoardKey = boardKey(snap)
+        fixStateKey = stateKey(st)
         // [3.392.0] 旧実装は catch が1つも無く、探索が例外で終わると `fixSearching=true` が**永久に残った**
         //   （「直し方を探す」が探索中のまま戻らない）。3.382.0 が長い4経路で潰した「旗を立てて確実に戻さない」
         //   型の残り。`seq` を持つのは refreshCheck と同じ理由＝`cancel()` は非同期なので、後続の探索が
@@ -2053,8 +2149,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
         if (s.ops.isEmpty()) return
+        // [3.475.0/論理監査] 提案は計算時の盤面/設定に対する差分。旧: 指紋を持たず、その後のセル編集・
+        //   元に戻す・別データ読込・職員削除のあとでも同じ ops をそのまま書き込んでいた（staff/day/toShift が
+        //   別の実体を指す）。一致しなければ適用せず再探索を促す。toShift の上限（K）も未検査だった。
+        if (fixBoardKey != 0L && (fixBoardKey != boardKey(sched) || fixStateKey != stateKey(st))) {
+            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(),
+                message = "勤務表か設定が変わったため、この提案は適用できません。「直し方を探す」をもう一度押してください") }
+            return
+        }
         for (op in s.ops) {
-            if (op.staff !in sched.indices || op.day !in sched[op.staff].indices || op.toShift < 0) return
+            if (op.staff !in sched.indices || op.day !in sched[op.staff].indices || op.toShift !in 0 until st.shiftCount) return
         }
         pushUndo()
         for (op in s.ops) sched[op.staff][op.day] = op.toShift
@@ -2064,6 +2168,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,
+            engineRan = false,   // [3.475.0] 提案の適用は手操作扱い（局所1手のみ、フルの計算ではない）
             schedule = sched.map { it.toList() },
             fixSuggestions = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
             message = "改善手を適用: ${s.label}",
@@ -2137,7 +2242,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val lists = if (cls == "vio-c3") p.cons3 else p.cons3m
                 for (c in lists) {
                     val seq = c.seq
-                    if (seq.size < 2 || seq[0] != k0 || j + seq.size > p.T) continue
+                    if (seq.size < 2 || seq[0] != k0) continue
+                    // [3.475.0/論理監査] チェッカー（checkC3Family）と同じ分岐: 単一シフト連は run-deficit
+                    //   （連の先頭に印）なので**連の実範囲**を返す。旧: 単一連でも先に「窓マッチ」で
+                    //   パターン長の窓を返していたため、連に続く無関係なセルまで強調され、しかも月末で窓が
+                    //   期間を超えるときだけ連の範囲になる＝同じ違反で強調範囲が変わっていた。
+                    if (com.magi.app.v6.C3Run.isSingleShiftSeq(seq)) {
+                        var end = j
+                        while (end + 1 < p.T && sched[i][end + 1] == k0) end++
+                        return j to end
+                    }
+                    if (j + seq.size > p.T) continue
                     var ok = true
                     for (l in 1 until seq.size) if (sched[i][j + l] != seq[l]) { ok = false; break }
                     if (!ok) return j to (j + seq.size - 1)   // 未完成パターン=この窓が違反
@@ -2167,12 +2282,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val res = withContext(Dispatchers.Default) { ScheduleCsvBridge.parse(text, st, sched) }
                 // 取込失敗の明示: 氏名が1件も一致しなければ適用せず、オペレーターに原因を表示する。
                 if (res.matched == 0) {
-                    _ui.update { it.copy(
-                        messageIsError = true,
-                        running = false,
-                        message = "CSV取込失敗: 一致する職員名がありませんでした（0名）。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。",
-                    ) }
-                    logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
+                    // [3.475.0/論理監査] 未閉引用符で残りの行が1セルに吸い込まれたときも matched=0 になるが、
+                    //   旧: quoteWarn は成功経路でしか組み立てず、ここでは「氏名不一致」とだけ案内していた。
+                    val why = if (res.unclosedQuote)
+                        "CSV取込失敗: 引用符（\"）が閉じていない行があり、そこから後ろが1つのセルに吸い込まれています。書式を直してから取り込んでください。"
+                    else
+                        "CSV取込失敗: 一致する職員名がありませんでした（0名）。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。"
+                    _ui.update { it.copy(messageIsError = true, running = false, message = why) }
+                    logOp("W", if (res.unclosedQuote) "CSV取込 失敗: 引用符が閉じていないため取込を中止しました"
+                        else "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
                     return@launch
                 }
                 pushUndo()
@@ -2198,6 +2316,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     messageIsError = res.unknownCells > 0 || res.unclosedQuote,
                     running = false,
                     hasResult = true,
+                    engineRan = false,   // [3.475.0] CSV取込は手操作扱い
                     message = msg,
                 ) }
                 if (res.matched in 1 until total) {

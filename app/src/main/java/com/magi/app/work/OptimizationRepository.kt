@@ -57,6 +57,13 @@ object OptimizationRepository {
          * 素通りする＝ここに識別子を載せて塞ぐ。
          */
         val runId: Long = 0L,
+        /**
+         * [3.475.0/論理監査] これを計算した**入力の指紋**（`StateFingerprint.of`、0=不明）。旧: プロセス再起動後は
+         * ViewModel 側の `bgStateKey`/`bgRunId` が 0 に戻り、識別子も指紋も照合されずに**いま開いている
+         * 別のデータへ**結果が当たり得た（Worker の入力と現在の state の次元が違えば不整合な盤面を保存）。
+         * Worker が入力から計算して載せ、ViewModel は常にこれと現在の state を照合する。
+         */
+        val stateKey: Long = 0L,
     )
 
     /** Input handed to the next worker run. */

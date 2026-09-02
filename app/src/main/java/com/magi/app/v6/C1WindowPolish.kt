@@ -508,7 +508,10 @@ internal object C1WindowPolish {
                 val stillDeficient0 = (0..p.T - d).any { j -> inDeficientC1Window(p, work, i, x, d, n, j) }
                 if (!stillDeficient0) continue
                 val hx = (0 until p.T).filter { work[i][it] == x && movable(i, it) }
-                val ho = (0 until p.T).filter { work[i][it] != x && movable(i, it) }
+                // [3.475.0/論理監査] 手R2 と同じ -1 ガード。normalizeSchedule 由来の -1（範囲外/未割当）が
+                //   `ho` に入ると下の covUCell(a=-1, …) が need1[-1] で ArrayIndexOutOfBounds になり、
+                //   後処理全体が例外で巻き戻って**最適化結果ごと入力へ戻っていた**（R3 だけガードが無かった）。
+                val ho = (0 until p.T).filter { work[i][it] in 0 until p.K && work[i][it] != x && movable(i, it) }
                 if (hx.isEmpty() || ho.isEmpty()) { recordBlock(i, x, ri, C1PlateauDiagnosis.REASON_NO_REPACK); continue }
                 val fires0 = c1RowFires(p, work, i)
                 var bestGain = 0; var bestJx = -1; var bestJo = -1

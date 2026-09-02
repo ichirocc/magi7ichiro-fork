@@ -556,7 +556,9 @@ object V6HotfixPasses {
             val adopted = totalCyc + totalC1 + totalC3 + totalC3r + totalC3mn + totalC3n + totalRange + totalC3run + totalC3pat + totalBlockSwap + totalApt + totalFair
             // [3.278.0/監査修正] CyclicSwap の正当な対象族(c2/c41/c42/c41s/c42s/covO)も対象数に含める
             //   （旧: c42等のみ違反の盤面で採用0のとき誤って「対象なし」と表示していた）。
-            val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn") +
+            // [3.475.0/論理監査] c3n も対象に含める（C3nPolish=3.303.0 はこの塊の中で走り採用数は adopted に
+            //   入るのに、対象数から漏れていた＝c3n だけの盤面で採用0だと「対象なし」と誤表示）。
+            val targets = bd(preSoftRep, "c1") + bd(preSoftRep, "c3") + bd(preSoftRep, "c3m") + bd(preSoftRep, "c3mn") + bd(preSoftRep, "c3n") +
                 bd(preSoftRep, "low") + bd(preSoftRep, "high") + bd(preSoftRep, "apt") + bd(preSoftRep, "fair") +
                 bd(preSoftRep, "c2") + bd(preSoftRep, "c41") + bd(preSoftRep, "c42") +
                 bd(preSoftRep, "c41s") + bd(preSoftRep, "c42s") + bd(preSoftRep, "covO")
