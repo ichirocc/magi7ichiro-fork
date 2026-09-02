@@ -14,6 +14,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.style.TextOverflow
+import com.magi.app.model.Group
+import com.magi.app.model.Shift
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -193,27 +199,19 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
             LoadoutHeader("MATRIX", "担当可否（群 × シフト）")
-            Text("チップで担当できるシフトを切替（✓＝担当可）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // [見やすさ] 横スクロール(12シフトで画面外)をやめ、群ごとに群名を行頭＋チップを FlowRow で折り返す。
-            //   選択中＝塗り＋✓（色だけに依存しない手がかり）、未選択＝外枠。
-            v.groups.forEachIndexed { g, gr ->
-                Spacer(Modifier.height(4.dp))
-                Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    v.shifts.forEachIndexed { k, s ->
-                        val on = v.groupShift.getOrNull(g)?.getOrNull(k) == 1
-                        FilterChip(
-                            selected = on,
-                            enabled = !ui.running,   // [3.409.13] 実行中は applyStructure が必ず拒否＝押せる形は嘘（3.405.0）
-                            onClick = { vm.ws1SetGroupShift(g, k, !on) },
-                            label = { Text(toHankakuKigou(s.kigou), fontFamily = FontFamily.Monospace) },
-                            leadingIcon = if (on) {
-                                { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                            } else null,
-                        )
-                    }
-                }
-            }
+            Text("セルをタップで担当ON/OFF（✓＝担当できる）。群名をタップでその群を一括、シフト名をタップで全グループへ一括。「休」は外せません。",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            // [マトリックス再設計（ユーザー提示案）] 旧: 群ごとに FlowRow でチップを折り返す形（2.66.0）。群とシフトの
+            //   対応が縦に並ばず一目で比較できなかった。行=群・列=シフトの2次元マトリクスへ。左列（群名）は固定、
+            //   右側（シフト名ヘッダ＋セル）だけ横スクロール。セル全面がタップ標的（48dp）。行/列ヘッダのタップで一括。
+            GroupShiftMatrix(
+                groups = v.groups, shifts = v.shifts, groupShift = v.groupShift,
+                enabled = !ui.running,   // [3.409.13] 実行中は applyStructure が必ず拒否＝押せる形は嘘（3.405.0）
+                onCell = { g, k, on -> vm.ws1SetGroupShift(g, k, on) },
+                onRow = { g, on -> vm.ws1SetGroupShiftRow(g, on) },
+                onColumn = { k, on -> vm.ws1SetGroupShiftColumn(k, on) },
+            )
 
             // [③回数へ移動] 適切回数(apt)gridは「回数（1人あたり）」節の CountsCard（AptSection）へ分離した。
 
@@ -518,6 +516,89 @@ private fun AptStepper(label: String, value: String, onChange: (String) -> Unit)
             val c = value.trim().toIntOrNull() ?: -1
             onChange((c + 1).coerceAtLeast(0).toString())
         }, modifier = Modifier.semantics { contentDescription = "$label の適切回数を増やす" }) { Text("＋", fontSize = 16.sp) }
+    }
+}
+
+// ===== 担当可否マトリックス（行=群 × 列=シフト） =====
+// [ユーザー提示の再設計案] 左列（群名）は横スクロールの外＝固定。右側（シフト名ヘッダ＋セル）だけ横スクロール
+//   （両側とも同じ行高で揃える）。セルは全面がタップ標的（48dp、WCAG/Material の下限）。
+//   ON＝主色地＋✓（onPrimary）／OFF＝薄い地＋「—」＝色だけに依存しない手がかり。
+//   行ヘッダ（群名）タップ＝その群を一括（1つでもOFFがあれば全ON、全ONなら全OFF＝休は残る）。
+//   列ヘッダ（シフト名）タップ＝そのシフトを全群へ一括（同じ規則。休の列はOFFにできない＝VMが案内）。
+//   トークン: 角丸は shapes.extraSmall（任意値を使わない）、色は colorScheme のロールのみ（生 hex なし）。
+@Composable
+private fun GroupShiftMatrix(
+    groups: List<Group>,
+    shifts: List<Shift>,
+    groupShift: List<List<Int>>,
+    enabled: Boolean,
+    onCell: (g: Int, k: Int, on: Boolean) -> Unit,
+    onRow: (g: Int, on: Boolean) -> Unit,
+    onColumn: (k: Int, on: Boolean) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val cellH = 48.dp
+    val cellW = 48.dp
+    val nameW = 104.dp
+    val shape = MaterialTheme.shapes.extraSmall
+    val hScroll = rememberScrollState()
+    Row(Modifier.fillMaxWidth()) {
+        // 固定列: 左上の角＋行ヘッダ（群名＝タップで行一括）
+        Column(Modifier.width(nameW)) {
+            Box(Modifier.width(nameW).height(cellH).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
+                Text("群 ＼ シフト", fontSize = 11.sp, color = cs.onSurfaceVariant)
+            }
+            groups.forEachIndexed { g, gr ->
+                val row = groupShift.getOrNull(g).orEmpty()
+                val anyOff = shifts.indices.any { k -> row.getOrNull(k) != 1 }
+                Box(
+                    Modifier.width(nameW).height(cellH).padding(end = 4.dp, top = 1.dp, bottom = 1.dp)
+                        .background(cs.secondaryContainer, shape)
+                        .clickable(enabled = enabled) { onRow(g, anyOff) }
+                        .semantics { contentDescription = "グループ ${gr.name}: タップで全シフトを${if (anyOff) "担当できる" else "担当しない"}に一括" }
+                        .padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Text("${toHankakuKigou(gr.kigou)} ${gr.name}", fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        color = cs.onSecondaryContainer, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        // スクロール側: 列ヘッダ（シフト名＝タップで列一括）＋セル
+        Column(Modifier.horizontalScroll(hScroll)) {
+            Row {
+                shifts.forEachIndexed { k, s ->
+                    val anyOff = groups.indices.any { g -> groupShift.getOrNull(g)?.getOrNull(k) != 1 }
+                    Box(
+                        Modifier.width(cellW).height(cellH).padding(1.dp)
+                            .background(cs.secondaryContainer, shape)
+                            .clickable(enabled = enabled) { onColumn(k, anyOff) }
+                            .semantics { contentDescription = "シフト ${s.kigou}: タップで全グループを${if (anyOff) "担当できる" else "担当しない"}に一括" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(toHankakuKigou(s.kigou), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace, color = cs.onSecondaryContainer)
+                    }
+                }
+            }
+            groups.forEachIndexed { g, gr ->
+                Row {
+                    shifts.forEachIndexed { k, s ->
+                        val on = groupShift.getOrNull(g)?.getOrNull(k) == 1
+                        Box(
+                            Modifier.width(cellW).height(cellH).padding(1.dp)
+                                .background(if (on) cs.primary else cs.surfaceVariant, shape)
+                                .clickable(enabled = enabled) { onCell(g, k, !on) }
+                                .semantics { contentDescription = "${gr.name} × ${s.kigou}: ${if (on) "担当できる" else "担当しない"}" },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(if (on) "✓" else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                                color = if (on) cs.onPrimary else cs.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
