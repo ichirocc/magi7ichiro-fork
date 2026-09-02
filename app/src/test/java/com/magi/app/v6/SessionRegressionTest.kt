@@ -114,7 +114,9 @@ class SessionRegressionTest {
         val st = csvState()
         val empty = ConstraintsCsvIO.parse("連勤,2,休,1\n連勤,,,", st)
         assertNotNull(empty)
-        assertEquals("読める行は従来どおり数える", 2, empty!!.accepted)
+        // [3.474.0, /code-review] 旧: accepted=2（`連勤,,,` を取込可にも数え、2行のCSVで 2+1 と自己矛盾）。
+        //   評価されない行は「読めない」側だけに数える。
+        assertEquals("評価される行だけ数える", 1, empty!!.accepted)
         assertEquals("評価されない行を数える", 1, empty.rejected)
 
         // 群・スキル群も同じ（記号が今のデータに無い＝その行は一切効かない）。
@@ -392,6 +394,23 @@ class SessionRegressionTest {
         val ok = WishesCsvIO.parse("花子,1,A\n花子,2,休", st)
         assertEquals(0, ok!!.rejected)
         assertEquals(2, ok.accepted)
+    }
+
+    @Test fun componentImportSamplesAreCappedAtCollectionTime() {
+        // [3.474.0, /code-review] 3.473.0 でキャップを収集時→返却時へ動かした結果、誤ったCSVを選ぶと
+        //   拒否行ぶんの String を全件貯めていた（CSV は任意ファイル＝30名×31日で有界ではない）。
+        //   収集時に MAX_SAMPLES で止め、ComponentImport 自身も構築時に上限を保証する。
+        val st = csvState()
+        val r = WishesCsvIO.parse((1..10).joinToString("\n") { "存在しない$it,1,A" }, st)
+        assertEquals("拒否件数は全行", 10, r!!.rejected)
+        assertEquals("例は上限まで", ComponentImport.MAX_SAMPLES, r.samples.size)
+        val rc = ConstraintsCsvIO.parse((1..10).joinToString("\n") { "群回数,ZZ$it,A,0,1" }, st)
+        assertEquals(10, rc!!.rejected)
+        assertEquals("評価されない行は取込可に数えない（二重計上の解消）", 0, rc.accepted)
+        assertEquals(ComponentImport.MAX_SAMPLES, rc.samples.size)
+        // クラス自身の保証: 呼出側が上限超のリストを渡しても切り詰められる。
+        val direct = ComponentImport(st, 0, 5, List(5) { "x$it" })
+        assertEquals(ComponentImport.MAX_SAMPLES, direct.samples.size)
     }
 
     @Test fun constraintsImportRejectsUnknownKindInsteadOfWipingEverything() {

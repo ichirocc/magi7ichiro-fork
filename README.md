@@ -26,6 +26,14 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-02（3.474.0＝`/code-review`（8並列finder）で 3.473.0 を自己検証し、実在した9件を全部修正。
+**退行1件**＝CSV取込の「読めない行の例」を収集時にキャップしなくなっていた（CSVは任意ファイル＝30名×31日で有界ではなく、
+誤ったファイル選択で拒否行ぶんの String を全件確保していた）→収集時に `MAX_SAMPLES` で止め、`ComponentImport` 自身が構築時に
+上限を保証する形へ。**既存バグ1件**＝各制約CSVで `Problem` が捨てた行を「取込可」と「読めない」の両方に数えていた
+（`連勤,,,` 1行で 取込可1・読めない1）→「読めない」側だけに。仕上げ漏れ＝`parseCsvGuarded` を残り4取込へ適用・
+KDoc の付き先ズレ・絶対行番号コメント（3.437.0 で禁止済み）・`HfSwapPolish` の `Problem(state)` 4箇所を `cachedProblem` へ。
+前2版（3.472.0＝外部レビュー100件の並列検証で実在4件修正／3.473.0＝`/code-review` 追加改善2件）はこの欄を更新し忘れていた。）
+
 **最終更新**：2026-08-29（CLAUDE.md を「現行ルール（本体, ~300行）」と「版ごとの詳細変更履歴
 （`docs/changelog.md`, ~11,800行）」に分割。動機＝5大ファイル（CLAUDE.md/V6HotfixPasses.kt/
 V6NativeOptimizer.kt/MagiViewModel.kt/magi_native.cpp）が AI コードレビュー時の対話コンテキストを

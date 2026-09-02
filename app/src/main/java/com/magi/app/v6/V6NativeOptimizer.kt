@@ -1686,7 +1686,7 @@ object V6NativeOptimizer {
         //   動的検知(約3ラウンド無改善を要する)を待たず round 0 から即 focus 除外し、RSI の残ラウンドを解ける族
         //   (他HARD/SOFT)へ回す。床=0（構造的不足なし＝HARD=0 到達可能な一般ケース）なら常に no-op＝挙動不変。
         //   focus 選択のみの変更でスコアリング不変（keep-best=better() が結果を担保）＝退化なし・3.74.0 と同方針。
-        val covUFloor = try { V6SanityPort.structuralHardFloor(state, cachedProblem(state)) } catch (_: Exception) { 0 }
+        val covUFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
         var stagnantRounds = 0   // [N4] better() 無改善の連続ラウンド数
         // [E9/状況適応] 直前ラウンドが「完全空振り」(候補不採用＋focus族の件数も不変)だった focus を
         //   次の1ラウンドだけ回避する軽い冷却。同一 focus の同一仮説を3連発する空転(実機: c3n×3R=~63s 無変化、
