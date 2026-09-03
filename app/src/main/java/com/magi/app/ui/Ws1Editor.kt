@@ -9,8 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.clickable
@@ -39,9 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +60,6 @@ import androidx.compose.ui.unit.sp
  * (MagiViewModel.ws1* -> Ws1Ops) and re-runs the check; saving emits the full state.
  * Remove operations are deferred to a later increment.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Ws1Card(ui: UiState, vm: MagiViewModel) {
     val v = vm.ws1() ?: return
@@ -213,7 +208,8 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 onColumn = { k, on -> vm.ws1SetGroupShiftColumn(k, on) },
             )
 
-            // [③回数へ移動] 適切回数(apt)gridは「回数（1人あたり）」節の CountsCard（AptSection）へ分離した。
+            // [③回数へ移動] 適切回数(apt)の編集は「回数（1人あたり）」節の StaffShiftMatrixCard（職員×シフト
+            //   マトリクスのセルタップシート）へ統合済み（旧 AptSection は撤去、StaffShiftMatrix.kt 参照）。
 
         }
     }
@@ -407,117 +403,10 @@ private fun W1Field(label: String, value: String, modifier: Modifier = Modifier,
     )
 }
 
-/**
- * 適切回数のステッパー（記号 −[値]＋）。空欄＝目標なし。0も設定可（空欄→0→1…、0で−→空欄）。
- * [design-review 冗長性] 旧実装はここが自前の `Card` を持ち「目標（1人あたり・やわらかい）」の下に
- * 「1か月で何回くらい…最適化が近づけようとします（必ず守るわけではない）」という段落を置いていた。
- * これは1つ上の `CountsCard`（③統合カード）の共通説明「『目標』は近づけたい回数（やわらかい）」の
- * 言い換えに過ぎず、③の中で同じ「やわらかい／かたい」の説明が3回（共通説明＋本節＋StaffRangeSection）
- * 積み重なっていた（3.129.0/3.396.0 の「同じ情報を二重に出さない」原則）。ここでしか言っていない具体
- * （空欄＝目標なし・担当ONの勤務にだけ設定可）だけを残す。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun AptSection(ui: UiState, vm: MagiViewModel) {
-    val v = vm.ws1() ?: return
-    var confirmResetApt by remember { mutableStateOf(false) }
-    Column {
-            Text("目標（やわらかい）", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text("空欄＝目標なし。担当ONの勤務にだけ設定できます。",
-                fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            // [目標の検算をその場で] 目標の合計がそれを受け止められる上限を超えていると、何をしても
-            //   目標割れか過剰配置が必ず出る。判定は V6SanityPort.aptBalances（設定ミス診断の検査6-C と
-            //   同じ単一ソース・盤面不要）。診断カードはホーム/分析タブにあり、目標を入力している最中は
-            //   見えないため、ここで直接示して「入れた瞬間に気づける」ようにする。
-            val overloaded = remember(ui.editRev, ui.structureEdited) { vm.aptBalances().filter { it.overloaded } }
-            if (overloaded.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Surface(color = MaterialTheme.colorScheme.errorContainer, shape = MaterialTheme.shapes.medium) {
-                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("この目標は達成できません", fontSize = 14.sp, fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer)
-                        overloaded.forEach { b ->
-                            Text(
-                                "${toHankakuKigou(b.kigou)}：目標の合計 ${b.aptSum}回 に対し、" +
-                                    (if (b.isRest) "休める日数の上限は ${b.capacity}日" else "必要人数の合計は ${b.capacity}回") +
-                                    "。${b.shortfall}回ぶんは必ず届きません。",
-                                fontSize = 14.sp, color = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                            Text(
-                                if (b.isRest)
-                                    "→ ${toHankakuKigou(b.kigou)}の目標を下げるか、ほかの勤務の回数の下限を見直してください。"
-                                else
-                                    "→ ${toHankakuKigou(b.kigou)}の目標を下げるか、必要人数を増やしてください。",
-                                fontSize = 13.sp, color = MaterialTheme.colorScheme.onErrorContainer,
-                            )
-                        }
-                    }
-                }
-            }
-            if (v.groups.isNotEmpty()) {
-                val aptSet = v.groupShiftApt.sumOf { row -> row.count { it.trim().isNotEmpty() } }
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DeleteRowButton(onClick = { confirmResetApt = true }, enabled = aptSet > 0, text = "目標を全リセット")
-                    Text(if (aptSet > 0) "設定中 $aptSet 件" else "設定なし",
-                        fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            v.groups.forEachIndexed { g, gr ->
-                val onShifts = v.shifts.indices.filter { v.groupShift.getOrNull(g)?.getOrNull(it) == 1 }
-                if (onShifts.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        onShifts.forEach { k ->
-                            val apt = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
-                            AptStepper(label = toHankakuKigou(v.shifts[k].kigou), value = apt,
-                                onChange = { vm.ws1SetGroupApt(g, k, it) })
-                        }
-                    }
-                }
-            }
-        }
-
-    if (confirmResetApt) {
-        AlertDialog(
-            onDismissRequest = { confirmResetApt = false },
-            title = { Text("目標を全リセット") },
-            text = {
-                Text(
-                    "全グループ×全シフトの「目標」を空欄（目標なし）に戻します。\n" +
-                        "・目標由来のやわらかい違反は消えます\n" +
-                        "・担当ON/OFF・回数の下限上限・勤務表は変わりません\n" +
-                        "・「元に戻す」で復帰できます\n実行しますか？",
-                    fontSize = 14.sp,
-                )
-            },
-            confirmButton = {
-                DialogDangerButton("全リセット", onClick = { vm.ws1ResetGroupApt(); confirmResetApt = false })
-            },
-            dismissButton = { DialogDismissButton(onClick = { confirmResetApt = false }) },
-        )
-    }
-}
-
-@Composable
-private fun AptStepper(label: String, value: String, onChange: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 6.dp)) {
-        Text(label, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-        TextButton(onClick = {
-            // [ゼロ設定] 0を許可（従来は「1未満→空欄」で目標0が設定できなかった）。空欄→0 / 0→空欄 / N→N-1。
-            val c = value.trim().toIntOrNull()
-            onChange(when { c == null -> "0"; c <= 0 -> ""; else -> (c - 1).toString() })
-        }, modifier = Modifier.semantics { contentDescription = "$label の適切回数を減らす" }) { Text("−", fontSize = 16.sp) }
-        Text(value.ifBlank { "—" }, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
-            modifier = Modifier.width(22.dp), color = MaterialTheme.colorScheme.onSurface)
-        TextButton(onClick = {
-            val c = value.trim().toIntOrNull() ?: -1
-            onChange((c + 1).coerceAtLeast(0).toString())
-        }, modifier = Modifier.semantics { contentDescription = "$label の適切回数を増やす" }) { Text("＋", fontSize = 16.sp) }
-    }
-}
+// [ユーザー提示の再設計案] `AptSection`（群×シフトの目標グリッド）は撤去し、目標編集は
+//   `StaffShiftMatrixCard`（`StaffShiftMatrix.kt`）のセルタップシートへ統合した
+//   （担当可否・目標・上下限・実績を1グリッドで見て編集する。理由・過剰警告(aptBalances)の
+//   移設先は `StaffShiftMatrix.kt` のクラスKDoc参照）。
 
 // ===== 担当可否マトリックス（行=群 × 列=シフト） =====
 // [ユーザー提示の再設計案] 左列（群名）は横スクロールの外＝固定。右側（シフト名ヘッダ＋セル）だけ横スクロール

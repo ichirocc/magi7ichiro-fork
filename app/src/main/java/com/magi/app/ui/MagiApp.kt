@@ -505,8 +505,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     // [3.194.0 情報の冗長性検証] 「不一致だけ抽出」（MismatchExtractCard）を撤去。
-                    //   TallyCard(職員別/日別)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
+                    //   TallyCard(日別集計)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
                     //   内容が重複しており、しかも apt(適切回数)由来の違反を含まず新しい表示より不完全だった。
+                    //   [StaffShiftMatrix統合] 職員別の集計・違反表示は編集タブ「回数マトリクス」
+                    //   （StaffShiftMatrixCard, StaffShiftMatrix.kt）へ統合済み。TallyCardは日別のみ。
                     OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
                         Text("希望シフトの一括操作")
                     }

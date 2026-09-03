@@ -11,29 +11,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.InputChip
-import androidx.compose.material3.InputChipDefaults
 import com.magi.app.v6.V6SanityPort
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,13 +41,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * [design-review 冗長性=③統合] 旧実装は `AptCard`/`StaffRangeCard`/`GroupRangeCard` が別々の `Card` で
- * 縦に3枚並んでいた（見出し「③ 回数（1人あたり）★統合」自体は3.286.0 で機能を統合済みだったが、見た目は
- * まだ3つの箱＋各箱がほぼ同じ「やわらかい目標／かたい下限上限／グループ一括」を少しずつ言い換えて
- * 説明していた＝3.129.0/3.396.0/3.427.0 が④⑤で行った「重複説明の削除」の対象が③だけ残っていた）。
- * 3つを1枚のカードへ統合し、共通の説明はここで1回だけ言う。各節（[AptSection]/[StaffRangeSection]/
- * [GroupRangeSection]）はここでしか言っていない具体だけを残す。ロジック・ViewModel API は完全に不変
- * （3つの呼び出し元がここへ1本化されただけ）。
+ * [ユーザー提示の再設計案=③統合の再構成] 旧実装は `AptSection`(群×シフトの目標グリッド)・
+ * `StaffRangeSection`(職員別チップ一覧)・`GroupRangeSection`(一括適用)が縦に3段並んでいた
+ * （3.286.0でカードは1枚に統合済みだったが、同じ職員×シフトの情報が2段に分かれたままだった）。
+ * `AptSection`/`StaffRangeSection`は [StaffShiftMatrixCard]（`StaffShiftMatrix.kt`）の
+ * 職員×シフトマトリクスへ統合して撤去した（担当可否・目標・上下限・実績を1グリッドで見て
+ * セルタップで編集する）。`GroupRangeSection`（グループ一括適用）はこの再設計の対象外のため維持。
  */
 @Composable
 fun CountsCard(ui: UiState, vm: MagiViewModel) {
@@ -64,177 +58,16 @@ fun CountsCard(ui: UiState, vm: MagiViewModel) {
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            AptSection(ui, vm)
-            Divider(Modifier.padding(vertical = 8.dp))
-            StaffRangeSection(ui, vm)
-            Divider(Modifier.padding(vertical = 8.dp))
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    StaffShiftMatrixCard(ui, vm)
+    Spacer(Modifier.height(8.dp))
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
             GroupRangeSection(ui, vm)
         }
     }
-}
-
-/**
- * ws5 移植: 個人別の回数（上下限 = LimMin/LimMax）。
- * staffRange["i,k"] = Range(lo, hi) を編集する。空＝制限なし。
- * モデル(staffRange)・エンジン(ct)は既存のため不変、UI のみ追加。
- * [design-review 冗長性] 旧見出し文（「各職員が各シフトを…実効値を1か所で確認できます」）は、
- * この節が③統合カード内で apt/GroupRange と並んで表示されるようになった時点で自明になった
- * （見出し・並びそのものが「上下限と目標を並べて見る節」だと語る＝3.396.0）。短い太字見出しへ差し替え、
- * チップの表記（「目標A→B」の丸め・色の意味）という**ここでしか説明されない**情報だけ残す。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun StaffRangeSection(ui: UiState, vm: MagiViewModel) {
-    var dialog by remember { mutableStateOf<StaffRangeEdit?>(null) }
-    val rows = vm.staffCountRules()
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("下限・上限（かたい）", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "「目標」=適切回数（A→Bは個人上下限で丸め）・「今」=現在の回数。色=不足/超過。",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (rows.isEmpty()) {
-                Text(
-                    "（設定なし）",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                // [統合] スタッフ単位に集約し、上下限(個人別)と適切回数(群目標)を同じチップ列に密に一覧。
-                //   個人別の上下限ありはタップ＝編集 / ×＝削除。適切回数のみのセルもタップで個人別上下限を追加可能。
-                rows.groupBy { it.i }.forEach { (_, list) ->
-                    Text(list.first().staffName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        list.forEach { r ->
-                            // 「今◯」= 現在の回数（編集中スケジュール）。過不足は countViolations で色分け。
-                            val now = ui.schedule.getOrNull(r.i)?.count { it == r.k } ?: 0
-                            val vio = ui.countViolations["${r.i},${r.k}"]
-                            val range = when {
-                                r.lo.isNotBlank() && r.hi.isNotBlank() -> "${r.lo}–${r.hi}"
-                                r.hi.isNotBlank() -> "≤${r.hi}"
-                                r.lo.isNotBlank() -> "≥${r.lo}"
-                                else -> ""
-                            }
-                            val target = when {
-                                r.aptEff < 0 -> ""
-                                r.aptRaw >= 0 && r.aptRaw != r.aptEff -> "目標${r.aptRaw}→${r.aptEff}"
-                                else -> "目標${r.aptEff}"
-                            }
-                            val lab = buildList {
-                                add(r.kigou)
-                                if (range.isNotBlank()) add(range)
-                                if (target.isNotBlank()) add(target)
-                                add("・今$now")
-                            }.joinToString(" ")
-                            // [監査C2] 違反色トークンに追従（グリッド/集計と同じ色言語。旧: 赤/橙の直書き）。
-                            val lowC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.red
-                            val highC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-                            val chipColors = when (vio) {
-                                "vio-low", "vio-aptLow" -> InputChipDefaults.inputChipColors(containerColor = lowC.copy(alpha = 0.30f))
-                                "vio-high", "vio-aptHigh" -> InputChipDefaults.inputChipColors(containerColor = highC.copy(alpha = 0.36f))
-                                else -> InputChipDefaults.inputChipColors()
-                            }
-                            InputChip(
-                                selected = false,
-                                enabled = !ui.running,
-                                onClick = { dialog = StaffRangeEdit(r.i, r.k, r.lo, r.hi) },
-                                label = { Text(lab) },
-                                colors = chipColors,
-                                // 適切回数のみ（個人別の上下限なし）のチップは削除対象が無いので × を出さない。
-                                trailingIcon = if (r.hasRange) {
-                                    {
-                                        Icon(Icons.Filled.Close, contentDescription = "削除",
-                                            modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.removeStaffRange(r.i, r.k) }.padding(7.dp))
-                                    }
-                                } else null,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(2.dp))
-                }
-            }
-            AddRowButton("上下限を追加", onClick = { dialog = StaffRangeEdit(0, 0, "", "") }, enabled = ui.loaded && !ui.running)
-    }
-    dialog?.let { d ->
-        StaffRangeDialog(
-            init = d,
-            staff = ui.staffNames,
-            shifts = vm.shiftKigouList(),
-            allowedFor = { idx -> vm.allowedShiftsFor(idx).toHashSet() },
-            onApply = { i, k, lo, hi -> vm.setStaffRange(i, k, lo, hi); dialog = null },
-            onClose = { dialog = null },
-        )
-    }
-}
-
-internal data class StaffRangeEdit(val i: Int, val k: Int, val lo: String, val hi: String)
-
-@Composable
-internal fun StaffRangeDialog(
-    init: StaffRangeEdit,
-    staff: List<String>,
-    shifts: List<String>,
-    allowedFor: (Int) -> Set<Int>,
-    onApply: (Int, Int, String, String) -> Unit,
-    onClose: () -> Unit,
-) {
-    var i by remember { mutableStateOf(init.i) }
-    var k by remember { mutableStateOf(init.k) }
-    var lo by remember { mutableStateOf(init.lo) }
-    var hi by remember { mutableStateOf(init.hi) }
-    var openS by remember { mutableStateOf(false) }
-    var openK by remember { mutableStateOf(false) }
-    // [3.403.0] 下限>上限。事後診断(V6SanityPort 検査4)は「下限をNに下げる」ワンタップまで出していたが、
-    //   画面はそのまま確定でき、直した直後にまた同じ入力ができた＝入力時に止める（A6 の担当外シフト除外と同じ二重防御）。
-    val bad = V6SanityPort.rangeOrderConflict(lo, hi) != null
-    val ok = i in staff.indices && k in shifts.indices && (lo.isNotBlank() || hi.isNotBlank()) && !bad
-    AlertDialog(
-        onDismissRequest = onClose,
-        confirmButton = {
-            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(i, k, lo.trim(), hi.trim()) })
-        },
-        dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { DialogHeader("個人別の回数", onClose) },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("職員", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Box {
-                    OutlinedButton(onClick = { openS = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(staff.getOrNull(i) ?: "(選択)")
-                    }
-                    DropdownMenu(expanded = openS, onDismissRequest = { openS = false }) {
-                        staff.forEachIndexed { idx, n ->
-                            DropdownMenuItem(text = { Text(n) }, onClick = { i = idx; openS = false })
-                        }
-                    }
-                }
-                Text("シフト", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Box {
-                    OutlinedButton(onClick = { openK = true }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(shifts.getOrNull(k) ?: "(選択)")
-                    }
-                    DropdownMenu(expanded = openK, onDismissRequest = { openK = false }) {
-                        // [A6] 選択中スタッフが担当できるシフトのみ表示（担当不可シフトに下限を付ける矛盾を防ぐ。
-                        //   guidance も事後検出するが、ここで入力時に防止して二重防御）。
-                        val allowed = allowedFor(i)
-                        shifts.forEachIndexed { idx, kg ->
-                            if (idx in allowed) DropdownMenuItem(text = { Text(kg) }, onClick = { k = idx; openK = false })
-                        }
-                    }
-                }
-                Column(if (bad) Modifier.border(1.dp, MaterialTheme.colorScheme.error, MaterialTheme.shapes.medium) else Modifier) {
-                    NumberStepper("下限", lo, { lo = it }, min = 0, blankLabel = "なし")
-                    NumberStepper("上限", hi, { hi = it }, min = 0, blankLabel = "なし")
-                }
-                if (bad) {
-                    Text(RANGE_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-                } else if (lo.isBlank() && hi.isBlank()) {
-                    Text(RANGE_REQUIRED_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        },
-    )
 }
 
 // ---- グループ単位の回数（一括）: 選んだグループの全職員に同じ上下限を設定する。

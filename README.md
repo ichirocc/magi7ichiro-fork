@@ -26,6 +26,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-03（3.477.0＝ユーザー提示案「担当可否・目標設定・実績」統合マトリクスを grilling で
+7点確定のうえ実装（Android）。`CountsCard`内の`AptSection`（群×シフトの目標グリッド）と`StaffRangeSection`
+（職員別チップ一覧）を`StaffShiftMatrixCard`（`StaffShiftMatrix.kt`）へ統合・撤去。職員×シフトの1マトリクスで
+担当可否(—)・実績・目標(apt,薄色)・個人上下限(staffRange,濃色)を一望し、セルタップで群目標／個人上下限を編集。
+色は既存M6統一2色(不足=赤系/超過=橙系)のまま、個人単位のapt上書きという新機能は作らず既存代用(lo=hi固定)に
+一本化。`TallyCard`の「職員別」モードも本統合で完全撤去し「日別」のみへ。詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-02（3.476.0＝ユーザー提示案「群×シフトの担当可否を2次元マトリックスへ」を Android と
 Windows11版へ同時実装。行=群・列=シフトの✓/—マトリクス、左列（群名）固定＋右側だけ横スクロール、セル全面（48dp）
 タップで ON/OFF、群名タップで行一括・シフト名タップで列一括。新しい不変条件「休はどの群からも外せない」を
