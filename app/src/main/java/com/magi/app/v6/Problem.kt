@@ -181,7 +181,7 @@ class Problem(val state: MagiState) {
                 //   行は残す（評価の挙動は完全に不変）が、記録して Sanity が理由を案内する。
                 if (d1 > T) _c1OverT.add("${it.shiftKigou} を${d1}日で${d2}回以上")
                 C1(d1, si, d2)
-            } else { _unresolvedRows.add("窓の要件" to "${mark(it.shiftKigou, si >= 0)} を${it.day1}日で${it.day2}回以上"); null }
+            } else { _unresolvedRows.add("期間の制約" to "${mark(it.shiftKigou, si >= 0)} を${it.day1}日で${it.day2}回以上"); null }
         }
         cons2 = state.cons2.mapNotNull {
             val si = shiftIdxOf(it.shiftKigou)

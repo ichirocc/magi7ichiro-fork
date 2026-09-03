@@ -447,6 +447,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
                         onSetup = { tab = 2 },
                     )
+                    // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
+                    // 1手を先に見せる（grilling決定#2）。
+                    SmartActionCard(ui, vm)
+                    // [3.480.0] 旧: 画面最下部にボタン列で配置していたが、比較検討は「処方箋」の一部として
+                    // 完成度バーの近くで即決できるほうが良い（grilling決定#4）。セグメントタブへ差替え済み。
+                    AlternativesCard(ui, onApply = { vm.applyAlternative(it) })
                     LiveScheduleCard(ui)
                     // [冗長性削減] StatusHero(状態三重表示) / SummaryCard(統計は「ようす」と重複＋開発用語) /
                     //   QuickActionGrid(下部ナビと4/6重複) は home から除外。詳細統計は「ようす」タブへ集約。
@@ -460,11 +466,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.325.0] 回数固定の横断集計は c1 固有でないので独立カードへ分離（c1=0 でも出る）。
                     PinFixedImpactCard(ui, onGoEdit = { tab = 2; editScope = 2 },
                         onRelax = { i, k, loD, hiD -> vm.relaxStaffRangePin(i, k, loD, hiD) })
-                    SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) }, onGoEdit = { tab = 2 })
+                    SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) }, onGoEdit = { tab = 2 },
+                        onClearWishes = { vm.clearOutOfScopeWishes() })
                     // [スクショ指摘/撤去] 「ほかの作り方」カード（速くつくる/かんたんに/閉じても大丈夫）は
                     //   主導線（思考誘導カード＋下部バー）と重複し、実行中は全ボタン無効の死に領域だった
                     //   （ユーザー赤囲い指示）。唯一固有のバックグラウンド実行は設定タブ「最適化設定」へ移設。
-                    AlternativesCard(ui, onApply = { vm.applyAlternative(it) })
                 }
                 1 -> {
                     val openEditor: (Int, Int) -> Unit = { i, j ->
@@ -697,7 +703,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             )
         }
         if (guidedFix) {
-            GuidedFixDialog(ui, vm, onDismiss = { guidedFix = false }, onRerun = { guidedFix = false; vm.runV6FullOptimize() })
+            GuidedFixDialog(ui, vm, onDismiss = { guidedFix = false })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(

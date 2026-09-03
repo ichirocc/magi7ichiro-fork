@@ -13,6 +13,7 @@ import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.V6PortAnalyzer
 import com.magi.app.v6.SettingIssue
 import com.magi.app.v6.SettingFixAction
+import com.magi.app.v6.IssueKind
 import com.magi.app.v6.FixSuggester
 import com.magi.app.v6.FixSuggestion
 import com.magi.app.v6.V6PortReport
@@ -2102,6 +2103,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             logOp("I", "設定ミスの修正を適用: ${issue.action} @ ${issue.where}")
             applyStructure(ns)
         }
+    }
+
+    /**
+     * [3.480.0 ホームAIリデザイン] 「担当外の希望」を一括クリア。SettingIssuesCard の一括ボタン用。
+     * [IssueKind.WISH かつ REMOVE_WISH] の行だけを対象にする（他種別は行ごとにデータの形が違い一括の
+     * 意味が薄いため対象外＝ユーザー提示案の「担当外の希望を一括クリア」という限定範囲に忠実）。
+     * applySettingFix を件数ぶん繰り返し呼ぶと undo が件数ぶん積み・再検査(refreshCheck)も件数ぶん
+     * 走ってしまうため、1回の state 差し替え・1回の undo・1回の再検査へまとめる。
+     */
+    fun clearOutOfScopeWishes() {
+        val s = state ?: return
+        val keys = ui.value.settingIssues
+            .filter { it.kind == IssueKind.WISH && it.action == SettingFixAction.REMOVE_WISH }
+            .mapNotNull { it.wishKey }
+        if (keys.isEmpty()) return
+        logOp("I", "担当外の希望を一括クリア: ${keys.size}件")
+        applyStructure(s.copy(wishes = s.wishes - keys.toSet()))
     }
 
     /**

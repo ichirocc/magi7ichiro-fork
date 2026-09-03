@@ -88,19 +88,19 @@ data class C1PlateauEntry(
             //   「試した手のうち多くが回数固定で却下された」ことまでで、全空間の主張はできない。
             //   緩め幅の優劣は実測でデータによって逆転したので幅を決め打ちしない（HF77 と整合）。
             "試した直し方の多くが、回数を固定している（下限＝上限）ために却下されています。" +
-                "この職員の回数の幅を見直すか、窓の要件を下げると通る可能性があります。"
+                "この職員の回数の幅を見直すか、期間の制約を下げると通る可能性があります。"
         C1PlateauCause.SCORE_TRADEOFF -> {
             val fam = topScoreCulprits.firstOrNull()?.first
             val famTxt = if (fam == null) "他の条件" else "「${labelOf(fam)}」"
             "直し方は見つかりましたが、${famTxt}が悪化するため採用されていません。" +
-                "${famTxt}の設定を緩めるか、窓の要件を下げてください。"
+                "${famTxt}の設定を緩めるか、期間の制約を下げてください。"
         }
         C1PlateauCause.NO_CANDIDATE ->
             // [3.327.0/外部レビュー] 観測できたのは「**この直し方（同日交換・玉突き・自己再配置）が**
             //   候補を1件も作れなかった」ことまで。他の研磨パスや探索本体はここを観測していないので、
             //   「相手が居ない」と言い切らない（3.263.0 で covU 側を正直化したのと同じ理由）。
             "この直し方では入れ替え相手が見つかりませんでした（別の直し方までは確かめていません）。" +
-                "このシフトを担当できる職員を増やすか、窓の要件を下げると通る可能性があります。"
+                "このシフトを担当できる職員を増やすか、期間の制約を下げると通る可能性があります。"
     }
 }
 
@@ -181,10 +181,10 @@ data class C1PlateauDiagnosis(
 
     fun logLines(): List<String> {
         if (causeUnknown) return listOf(
-            "[W] C1Plateau: 窓の要件(c1) ${remainingC1}件が残存 — 却下の観測がなく原因未確定")
+            "[W] C1Plateau: 期間の制約(c1) ${remainingC1}件が残存 — 却下の観測がなく原因未確定")
         if (!hasEntries) return emptyList()
         val out = ArrayList<String>()
-        out.add("[W] C1Plateau: 窓の要件(c1) ${remainingC1}件が残存 — 直せなかった理由の内訳")
+        out.add("[W] C1Plateau: 期間の制約(c1) ${remainingC1}件が残存 — 直せなかった理由の内訳")
         for (e in entries.take(8)) {
             val causeTxt = when (e.cause) {
                 C1PlateauCause.PIN_CONSTRAINED -> "回数固定で却下"

@@ -217,7 +217,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var d1 by remember { mutableStateOf(init?.getOrNull(0) ?: "") }
             var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var d2 by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
-            Shell("窓の要件$mode", okLabel, onClose, { commit(listOf(d1, sk, d2)) { vm.addCons1(d1, sk, d2) } },
+            Shell("期間の制約$mode", okLabel, onClose, { commit(listOf(d1, sk, d2)) { vm.addCons1(d1, sk, d2) } },
                 d1.isNotBlank() && sk.isNotBlank() && d2.isNotBlank()) {
                 NumField("何日間", d1) { d1 = it }
                 Picker("シフト", shifts, sk) { sk = it }

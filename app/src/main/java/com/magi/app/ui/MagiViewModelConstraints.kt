@@ -40,7 +40,7 @@ fun MagiViewModel.constraintFamilies(): List<ConstraintFamilyView> {
     return listOf(
         // [用語統一/下流→上流] 節タイトルは違反チップ(breakdownLabels)の語彙を正として一致させる
         //   （違反を見て設定を直しに来たとき同じ名前で見つかるように）。単位や補足は括弧で添える。
-        ConstraintFamilyView("cons1", "窓の要件（○日間に△回以上）",
+        ConstraintFamilyView("cons1", "期間の制約（○日間で○回など）",
             st.cons1.map { "${it.shiftKigou}   ${it.day1}日で${it.day2}回以上" }),
         ConstraintFamilyView("cons2", "個人の合計（回数）",
             st.cons2.map { "${it.shiftKigou}   合計${it.count}回以上" }),
