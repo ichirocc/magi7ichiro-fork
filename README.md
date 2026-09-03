@@ -26,6 +26,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-03（3.479.0＝実機スクショ提示「職員と日付の集計タブも追加する」を受け、勤務表
+タブの「シフト集計」カード(`TallyCard`)に3.477.0で撤去した職員別/日別の切替を復活。3.477.0直前の
+実装をそのまま復元（追加コメント以外diffゼロ）し、編集タブの`StaffShiftMatrixCard`（担当可否・目標
+編集専用）とは役割を分けて併存させた（`TallyCard`職員別＝確認専用）。表示のみ・エンジン/スコアリング
+は完全に不変。詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-03（3.478.0＝ユーザー指示「MagiThemeのFontSize/Typographyトークン適用」を
 grillingで5点確定のうえ実装。`ui/`配下9ファイルのハードコード`fontSize = N.sp`63件を
 `MaterialTheme.typography.*`へ置換（うち12sp多数は`docs/magi_design_system.md`明文の14sp下限を
