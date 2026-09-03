@@ -6,6 +6,7 @@ import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
 import com.magi.app.ui.MagiViewModel.ConstraintFamilyView
+import kotlinx.coroutines.flow.update
 
 /**
  * [MagiViewModel] の制約CRUD（cons1/cons2/cons3系4種/cons41(s)/cons42(s) の一覧・追加・変更・削除）。
@@ -101,12 +102,48 @@ fun MagiViewModel.addCons42(g1: String, g2: String, s1: String, s2: String) {
     logOp("I", "制約追加(群組合せ禁止): ${g1}${s1} & ${g2}${s2}"); mutateConstraints(st.copy(cons42 = st.cons42 + C42Row(g1, g2, s1, s2)))
 }
 
+/** 並び4族の日本語名（ConstraintDialog の見出しと同じ語彙）。 */
+internal fun seqFamilyJp(family: String): String = when (family) {
+    "cons3" -> "必須の並び"; "cons3n" -> "禁止の並び"; "cons3m" -> "推奨の並び"; "cons3mn" -> "回避の並び"; else -> family
+}
+
+/**
+ * [3.482.0 入口ガード] 同じ並びが既に登録されていれば、その族の日本語名を返す（無ければ null）。
+ * 旧: 追加/変更のどちらにも重複検出が無く、見本データの `Dﾃ→A4` が禁止の並びに2行入ったまま
+ * 事後診断（V6SanityPort の DELETE_DUP_SEQ）が「重複を1つ削除」を提案するだけだった＝入口で止める。
+ * 族をまたぐ同一の並び（例: 禁止と回避に同じ `Cｵ→Aｱ`）も返す。HARD の禁止と SOFT の回避を同じ並びへ
+ * 二重掛けしても評価は禁止側が支配し回避側は無意味＝登録の意図と違う可能性が高いので、事後診断
+ * （族内しか見ない `collectDuplicateSeq`）より一段厳しく入口で知らせる。
+ * 正規化は addCons3 と同じ（先頭から最初の空白まで・最大5）。`excludeIndex` は変更時に自分自身を除く。
+ */
+fun MagiViewModel.seqDuplicateOf(family: String, pattern: List<String>, excludeIndex: Int? = null): String? {
+    val st = state ?: return null
+    val key = pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5).joinToString("→")
+    if (key.isBlank()) return null
+    val fams = listOf("cons3" to st.cons3, "cons3n" to st.cons3n, "cons3m" to st.cons3m, "cons3mn" to st.cons3mn)
+    for ((fam, rows) in fams) {
+        rows.forEachIndexed { idx, r ->
+            if (fam == family && idx == excludeIndex) return@forEachIndexed
+            val k = r.pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5).joinToString("→")
+            if (k == key) return seqFamilyJp(fam)
+        }
+    }
+    return null
+}
+
 fun MagiViewModel.addCons3(family: String, pattern: List<String>) {
     val st = state ?: return
     // Level Zero loads cons3 by reading day columns until the first blank (truncate at
     // first blank, max 5 days), not by removing all blanks. Match that here.
     val pat = pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5)
     if (pat.isEmpty()) return
+    // [3.482.0 入口ガード] 画面（ConstraintDialog）でも同じ判定で OK を無効化しているが、VM 側でも止める
+    //   （CSV 取込など画面を通らない経路は従来どおり事後診断に任せる＝ここは画面経由の追加だけ）。
+    seqDuplicateOf(family, pat)?.let { dupFam ->
+        logOp("W", "制約追加を無視($family): ${pat.joinToString("→")} は「$dupFam」に登録済み")
+        _ui.update { it.copy(messageIsError = true, message = "同じ並び「${pat.joinToString("→")}」は「$dupFam」に登録済みです") }
+        return
+    }
     logOp("I", "制約追加($family): ${pat.joinToString("→")}")
     mutateConstraints(
         when (family) {
@@ -199,6 +236,12 @@ fun MagiViewModel.updateConstraint(family: String, index: Int, values: List<Stri
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
             val pat = v.takeWhile { it.isNotEmpty() }.take(5)
             if (pat.isEmpty()) return
+            // [3.482.0 入口ガード] 変更後の並びが他の行（自分自身は除く）と同じなら止める（addCons3 と同じ）。
+            seqDuplicateOf(family, pat, excludeIndex = index)?.let { dupFam ->
+                logOp("W", "制約変更を無視($family[$index]): ${pat.joinToString("→")} は「$dupFam」に登録済み")
+                _ui.update { it.copy(messageIsError = true, message = "同じ並び「${pat.joinToString("→")}」は「$dupFam」に登録済みです") }
+                return
+            }
             when (family) {
                 "cons3" -> { if (index !in st.cons3.indices) return; st.copy(cons3 = st.cons3.replaced(index, C3Row(pat))) }
                 "cons3n" -> { if (index !in st.cons3n.indices) return; st.copy(cons3n = st.cons3n.replaced(index, C3Row(pat))) }

@@ -550,7 +550,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     Text(
                         when (editScope) {
                             0 -> "翌月だけの条件：希望・必要人数・例外（毎月ここから）"
-                            1 -> "入退職・所属・資格スキル・個人の回数（随時変更）"
+                            // [3.482.0] 「個人の回数」は 3.286.0 で③へ一本化済み＝説明が実態より広かった。職員の属性だけに。
+                            1 -> "入退職・所属・資格スキル（随時変更）。職員の一覧はここだけ"
                             else -> "毎月は変えない土台：シフト・ルール・人数（制度変更時のみ）"
                         },
                         style = MaterialTheme.typography.labelMedium,
@@ -559,7 +560,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     when (editScope) {
                         0 -> {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
-                            MonthlyChecklistCard(ui, vm, onMake = { vm.runV6FullOptimize(); tab = 0 }, onOpenWish = openWish)
+                            // [3.482.0 導線重複] 作成ボタンは固定フッター（BottomCommandBar）に一本化＝カードは確認だけ。
+                            MonthlyChecklistCard(ui, vm, onOpenWish = openWish)
                             MonthPickerCard(ui, vm)
                             // [3.190.0 横展開・検討のうえ対象外] WishCard/NeedCalendarCard は選択中の職員/シフト
                             //   (i/k・remember)を保持したまま複数回編集する設計のため、key(ui.editRev)で包むと
@@ -595,9 +597,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             //   Ws1Card=use2トグル・担当可否チップ／SkillGroupCard=スキル割当ボタン／
                             //   ConstraintsCard(s)=行タップ編集後の一覧表示、がいずれも生の vm 読取で
                             //   即時反映を期待する箇所のため key(ui.editRev) で編集ごとに確実に作り直す）。
-                            CollapsibleSection("① シフト・グループ・職員", "yr_ws1", initiallyExpanded = true) {
+                            // [3.482.0 編集タブ簡素化] 職員の一覧・入退職は「職員管理」ドアへ一本化（Ws1Card の職員節を撤去）。
+                            CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("勤務の種類・グループ・職員と、群×勤務の担当可否を決めます。")
+                                    SectionNote("勤務の種類・グループと、群×勤務の担当可否を決めます。職員の入退職・所属は「職員管理」へ。")
                                     key(ui.editRev) { Ws1Card(ui, vm) }
                                 }
                             }

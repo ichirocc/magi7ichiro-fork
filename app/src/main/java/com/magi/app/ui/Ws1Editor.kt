@@ -68,14 +68,14 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            LoadoutHeader("LOADOUT", "装備BOX — マスター設定")
+            SectionHeader("マスター設定")
             Spacer(Modifier.height(6.dp))
             Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary)
 
             // --- period ---
             Spacer(Modifier.height(10.dp))
-            LoadoutHeader("PERIOD", "期間／対象月")
+            SectionHeader("期間／対象月")
             Text("${v.startDate} 〜 ${v.endDate}", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -92,7 +92,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
-            LoadoutHeader("ARSENAL", "装備／シフト種別 (${v.shifts.size})")
+            SectionHeader("シフト種別 (${v.shifts.size})")
             Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.shifts.forEachIndexed { k, s ->
                 // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
@@ -128,7 +128,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- groups ---
             Spacer(Modifier.height(8.dp))
-            LoadoutHeader("SQUAD", "班／グループ (${v.groups.size})")
+            SectionHeader("グループ (${v.groups.size})")
             Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [不具合報告「グループが削除出来ない」対応] 残り1グループの場合、削除ボタンが理由の説明なく
             //   消えるだけだった（担当可否の分類が無くなるため意図的に不可）。理由を明示。
@@ -161,39 +161,15 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             AddRowButton("グループ追加", onClick = { dialog = Ws1Dialog.AddGroup }, enabled = !ui.running)
             Divider()
 
-            // --- staff ---
-            Spacer(Modifier.height(8.dp))
-            LoadoutHeader("PARTY", "仲間／職員 (${v.staff.size})")
-            Text("編集で改名・所属グループの変更。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            v.staff.forEachIndexed { i, st ->
-                val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
-                // [押下明示O4] 行タップで編集（シフト/グループ行と統一）。
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("${st.name}  [グループ $gk]", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
-                    EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) }, enabled = !ui.running)
-                    if (v.staff.size > 1) {
-                        Spacer(Modifier.width(6.dp))
-                        DeleteRowButton(onClick = {
-                            // [design-review] 職員管理ドア（StaffManageCard）の同じ削除操作（vm.ws1RemoveStaff）は
-                            //   「この職員の勤務・希望も消えます」と最も重要な結果を警告しているのに、こちらの
-                            //   ドアからは同じ操作なのにその警告が無かった（同じ操作は同じ形に＝3.397.0）。
-                            dialog = Ws1Dialog.ConfirmDelete("staff", i, st.name, "この職員の勤務・希望も消えます。")
-                        }, enabled = !ui.running)
-                    }
-                }
-            }
-            // [3.409.11] 同上（残り1職員のときも無言で消えていた）。
-            if (v.staff.size <= 1) {
-                Text("最後の1名は削除できません（勤務表の行が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-            }
-            AddRowButton("職員追加", onClick = { dialog = Ws1Dialog.AddStaff }, enabled = !ui.running)
-            AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddStaff }, enabled = !ui.running)   // [⛏12]
-            Divider()
+            // [3.482.0 編集タブ簡素化] 旧「職員」節（氏名/所属の一覧・追加・一括追加・削除）は撤去し、
+            //   職員管理ドア（StaffManageCard）へ一本化した。3.114.0 は「同一 vm API の別ビュー・併存」を選び
+            //   3.286.0 も「維持」と判断していたが、実機スクショで「同じ画面が2か所」と指摘され、grilling で
+            //   一本化を選択。一括追加（BulkAddDialog）は職員管理側へ移設。年間マスター①はシフト・グループ・
+            //   担当可否の「土台」だけを扱う。
 
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
-            LoadoutHeader("MATRIX", "担当可否（群 × シフト）")
+            SectionHeader("担当可否（群 × シフト）")
             Text("セルをタップで担当ON/OFF（✓＝担当できる）。群名をタップでその群を一括、シフト名をタップで全グループへ一括。「休」は外せません。",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
@@ -223,14 +199,8 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             { n, kg -> vm.ws1EditGroup(d.g, n, kg); dialog = null }, { dialog = null })
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> vm.ws1AddGroup(n, kg); dialog = null }, { dialog = null })
-        is Ws1Dialog.EditStaff -> StaffDialog("職員編集", d.name, d.groupIdx, v.groups.map { toHankakuKigou(it.kigou) },
-            { n, gi -> vm.ws1EditStaff(d.i, n, gi); dialog = null }, { dialog = null })
-        Ws1Dialog.AddStaff -> StaffDialog("職員追加", "", 0, v.groups.map { toHankakuKigou(it.kigou) },
-            { n, gi -> vm.ws1AddStaff(n, gi); dialog = null }, { dialog = null })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
             { lines, _ -> lines.forEach { vm.ws1AddShift(it, it, "", "") }; dialog = null }, { dialog = null })
-        Ws1Dialog.BulkAddStaff -> BulkAddDialog("職員を一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。", v.groups.map { toHankakuKigou(it.kigou) },
-            { lines, gi -> lines.forEach { vm.ws1AddStaff(it, gi) }; dialog = null }, { dialog = null })
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
             confirmButton = {
@@ -238,7 +208,6 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                     when (d.kind) {
                         "shift" -> vm.ws1RemoveShift(d.index)
                         "group" -> vm.ws1RemoveGroup(d.index)
-                        "staff" -> vm.ws1RemoveStaff(d.index)
                     }
                     dialog = null
                 })
@@ -258,10 +227,7 @@ private sealed interface Ws1Dialog {
     object AddShift : Ws1Dialog
     data class EditGroup(val g: Int, val name: String, val kigou: String) : Ws1Dialog
     object AddGroup : Ws1Dialog
-    data class EditStaff(val i: Int, val name: String, val groupIdx: Int) : Ws1Dialog
-    object AddStaff : Ws1Dialog
     object BulkAddShift : Ws1Dialog
-    object BulkAddStaff : Ws1Dialog
     data class ConfirmDelete(val kind: String, val index: Int, val label: String, val note: String = "") : Ws1Dialog
 }
 
@@ -335,7 +301,7 @@ internal fun StaffDialog(
  * ws1AddStaff/ws1AddShift をループ呼びするだけ＝ロジックは不変。
  */
 @Composable
-private fun BulkAddDialog(
+internal fun BulkAddDialog(
     title: String, hint: String, groups: List<String>?,
     onApply: (List<String>, Int) -> Unit, onClose: () -> Unit,
 ) {
@@ -491,12 +457,11 @@ private fun GroupShiftMatrix(
     }
 }
 
-// ===== 装備BOX(LOADOUT) セクション識別見出し =====
-// HUDコンセプトの二段見出し(英コードネーム — 日本語)を踏襲。マスター設定を1枚に統合した識別子。
+// ===== セクション見出し =====
+// [3.482.0 用語統一] 旧: 3.45.0 で移植した HUD 流の二段見出し（LOADOUT/ARSENAL/SQUAD/PARTY/MATRIX/PERIOD ＋ 日本語）。
+//   FPS/RPG 風の英語コードネームは勤務表アプリの語彙でなく、operator_ux「専門用語を使わない」とも
+//   整合しない（ユーザー指示「ゲーム用語と数理用語の混在。勤務表アプリ用語統一する」）。日本語の見出しだけにする。
 @Composable
-private fun LoadoutHeader(code: String, jp: String) {
-    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(code, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary)
-        Text(jp, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-    }
+private fun SectionHeader(jp: String) {
+    Text(jp, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
 }

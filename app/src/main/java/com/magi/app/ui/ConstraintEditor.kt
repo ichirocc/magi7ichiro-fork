@@ -16,12 +16,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
 import com.magi.app.v6.V6SanityPort
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -53,7 +59,8 @@ fun ConstraintsCard(
     title: String = "ルールの編集（勤務の並び・回数）",
     keys: Set<String>? = null,
 ) {
-    var addFamily by remember { mutableStateOf<String?>(null) }
+    // [3.482.0] 追加ダイアログの対象 (族, 1番目のプリセット)。並び族の「○○の次を追加」は起点をプリセットして開く。
+    var addTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
     // [制約編集] 行タップで既存行を変更（追加ダイアログのプリフィル版）。実機指摘「登録した制約の変更ができない」。
     var editTarget by remember { mutableStateOf<Pair<String, Int>?>(null) }
     // [発見性] keys 指定時はその family だけ描画。群の C41/C42 を専用節に分けて見つけやすくするため。
@@ -69,6 +76,13 @@ fun ConstraintsCard(
                 Text(fam.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 if (fam.rows.isEmpty()) {
                     Text("(なし)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (fam.key.startsWith("cons3")) {
+                    // [3.482.0 編集タブ簡素化] 並び4族は「起点シフトごとのチップ」に集約（見本データは禁止11行のうち
+                    //   Dﾃ起点が7行＝1行ずつの縦積みでは重複に気づけなかった）。データは従来の C3Row のまま＝表示の集約のみ。
+                    SeqFamilyGrouped(fam, vm, enabled = !ui.running,
+                        onEdit = { idx -> editTarget = fam.key to idx },
+                        onDelete = { idx -> vm.removeConstraint(fam.key, idx) },
+                        onAddWith = { first -> addTarget = fam.key to first })
                 } else {
                     fam.rows.forEachIndexed { idx, row ->
                         ConstraintRow(row, enabled = !ui.running,
@@ -76,15 +90,64 @@ fun ConstraintsCard(
                             onDelete = { vm.removeConstraint(fam.key, idx) })
                     }
                 }
-                AddRowButton("追加", onClick = { addFamily = fam.key }, enabled = !ui.running)
+                AddRowButton("追加", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
                 Divider()
             }
         }
     }
 
-    val fam = addFamily
-    if (fam != null) ConstraintDialog(fam, vm, onClose = { addFamily = null })
+    addTarget?.let { (fam, first) -> ConstraintDialog(fam, vm, presetFirst = first, onClose = { addTarget = null }) }
     editTarget?.let { (k, i) -> ConstraintDialog(k, vm, editIndex = i, onClose = { editTarget = null }) }
+}
+
+/**
+ * [3.482.0 編集タブ簡素化] 並び族（必須/禁止/推奨/回避）を**起点シフトごと**にまとめて表示する。
+ * 「【Dﾃ の次の日】 [B4 ×][A4 ×]… ＋追加」の形＝ユーザー提示案の画面2。
+ * - 2連（起点→次）はチップ。タップ=変更、× =削除（どちらも従来の行操作と同じ vm API）。
+ * - 3連以上と1つだけの並びは従来の行表示のまま（チップで表せない）。起点の見出しの下に並べる。
+ * - 「＋ ○○の次を追加」は追加ダイアログを起点プリセットで開く（ダイアログ側の重複ガードが効く）。
+ * データは `C3Row` のまま（表示の集約だけ）。族の見出し・詳しい説明・削除確認の意味論も不変。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SeqFamilyGrouped(
+    fam: MagiViewModel.ConstraintFamilyView, vm: MagiViewModel, enabled: Boolean,
+    onEdit: (Int) -> Unit, onDelete: (Int) -> Unit, onAddWith: (String) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    // 行の生パターン（追加ダイアログと同じ正規化=先頭から最初の空白まで・最大5）。
+    val pats = fam.rows.indices.map { idx ->
+        (vm.constraintRowValues(fam.key, idx) ?: emptyList()).map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5)
+    }
+    val firsts = pats.mapNotNull { it.firstOrNull() }.distinct()
+    for (first in firsts) {
+        Spacer(Modifier.height(4.dp))
+        Text("【$first の次の日】", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
+        val idxs = pats.indices.filter { pats[it].firstOrNull() == first }
+        val pairIdxs = idxs.filter { pats[it].size == 2 }
+        val otherIdxs = idxs.filter { pats[it].size != 2 }
+        if (pairIdxs.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (idx in pairIdxs) {
+                    val next = pats[idx][1]
+                    InputChip(
+                        selected = false, enabled = enabled,
+                        onClick = { onEdit(idx) },
+                        label = { Text(next) },
+                        trailingIcon = {
+                            // [a11y] 削除は × の onClick で。チップ本体のタップは変更（行操作と同じ2操作を保つ）。
+                            Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除",
+                                modifier = Modifier.clickable(enabled = enabled) { onDelete(idx) })
+                        },
+                    )
+                }
+            }
+        }
+        for (idx in otherIdxs) {
+            ConstraintRow(fam.rows[idx], enabled = enabled, onEdit = { onEdit(idx) }, onDelete = { onDelete(idx) })
+        }
+        AddRowButton("＋ $first の次を追加", onClick = { onAddWith(first) }, enabled = enabled)
+    }
 }
 
 /**
@@ -198,7 +261,7 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
 
 /** 追加・変更を兼ねる制約ダイアログ。editIndex 指定時は既存行の値をプリフィルし、確定で同じ位置を置換。 */
 @Composable
-private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? = null, onClose: () -> Unit) {
+private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? = null, presetFirst: String? = null, onClose: () -> Unit) {
     val shifts = vm.shiftKigouList()
     val groups = vm.groupKigouList()
     val skills = vm.skillGroupKigouList()
@@ -296,20 +359,23 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             }
         }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
-            var a by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
+            // [3.482.0] 「○○の次を追加」から開いたときは1番目を起点でプリセット（editIndex と排他）。
+            var a by remember { mutableStateOf(init?.getOrNull(0) ?: presetFirst ?: shifts.firstOrNull() ?: "") }
             var b by remember { mutableStateOf(init?.getOrNull(1) ?: "") }
             var c by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
             var d by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
             var e by remember { mutableStateOf(init?.getOrNull(4) ?: "") }
-            val kind = when (family) {
-                "cons3n" -> "禁止の並び"
-                "cons3m" -> "推奨の並び"
-                "cons3mn" -> "回避の並び"
-                else -> "必須の並び"
-            }
-            Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { vm.addCons3(family, listOf(a, b, c, d, e)) } }, a.isNotBlank()) {
+            val kind = seqFamilyJp(family)
+            // [3.482.0 入口ガード] 同じ並びが既にあれば OK を無効化し、どの族に登録済みかを枠の下で言う
+            //   （族をまたぐ同一の並びも対象＝禁止と回避に同じ並びを二重掛けしても回避側は無意味）。
+            val dupFam = vm.seqDuplicateOf(family, listOf(a, b, c, d, e), excludeIndex = editIndex)
+            Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { vm.addCons3(family, listOf(a, b, c, d, e)) } },
+                a.isNotBlank() && dupFam == null) {
                 Text("並び (上から順・最大5連日 / 空=ここで終了)", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (dupFam != null) {
+                    Text("この並びは「$dupFam」に登録済みです。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                }
                 Picker("1番目", shifts, a) { a = it }
                 Picker("2番目", shiftsOpt, b) { b = it }
                 Picker("3番目", shiftsOpt, c) { c = it }

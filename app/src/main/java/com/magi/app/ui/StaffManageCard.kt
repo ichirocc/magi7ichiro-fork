@@ -42,6 +42,8 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
     var edit by remember { mutableStateOf<Triple<Int, String, Int>?>(null) }   // (i, name, groupIdx)
     var addOpen by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<Int?>(null) }
+    // [3.482.0 編集タブ簡素化] 一括追加は年間マスター①の職員節（撤去）から移設。職員の一覧・入退職はこのドアだけ。
+    var bulkOpen by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("職員一覧（${v.staff.size}名）", style = MaterialTheme.typography.titleMedium)
@@ -83,7 +85,13 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                 Text("最後の1名は削除できません（勤務表の行が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
             AddRowButton("入職（職員追加）", onClick = { addOpen = true }, enabled = ui.loaded && !ui.running)
+            AddRowButton("一括追加（改行区切り）", onClick = { bulkOpen = true }, enabled = ui.loaded && !ui.running)
         }
+    }
+    if (bulkOpen) {
+        BulkAddDialog("職員を一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。",
+            v.groups.map { toHankakuKigou(it.kigou) },
+            { lines, gi -> lines.forEach { vm.ws1AddStaff(it, gi) }; bulkOpen = false }, { bulkOpen = false })
     }
     edit?.let { (i, nm, gi0) ->
         StaffDialog("職員の編集（改名・所属）", nm, gi0, v.groups.map { toHankakuKigou(it.kigou) },

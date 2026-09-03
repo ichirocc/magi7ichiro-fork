@@ -206,31 +206,46 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
 /** 1セルの表示内容（表示専用。判定はすべて呼出側=既存 checker/staffCellLimits 由来）。 */
 private data class MatrixCell(
     val text: String, val bg: Color, val fg: Color, val bold: Boolean, val bordered: Boolean, val cd: String?,
+    /** [3.482.0] 2行目（上下限/目標）。1行目は現在値だけにして 68dp のセルで切れないようにする。 */
+    val sub: String? = null,
 )
 
+/**
+ * [3.482.0 文字欠け修正] 旧: `▲11[10-10]`（10文字）を 68dp・14sp・maxLines=1・overflow 未指定（Clip）で
+ * 描いていたため、実機で `▲11[10-1` のように**無警告で切れて**判読不能だった。さらに `boundStr(null, 0)` が
+ * `--0`（ハイフンが区切りと欠測を兼ねる）を返し、`▲1[--0]` という暗号になっていた。
+ * 1行目＝現在値（▲/▼付き・最大3〜4文字）、2行目＝上下限（`10〜10`／`〜0`／`4〜`／`=5`）または目標（`目標5`）。
+ * 判定・色・読み上げ文（cd）は不変＝表示の分割だけ。
+ */
 private fun matrixCell(
     allowed: Boolean, count: Int, limits: Triple<Int?, Int?, Int?>, vio: String?, isRest: Boolean,
     shortC: Color, overC: Color, cs: ColorScheme,
 ): MatrixCell {
     val (lo, hi, apt) = limits
     if (!allowed) return MatrixCell("—", cs.surfaceVariant.copy(alpha = 0.35f), cs.onSurfaceVariant, false, false, null)
-    fun boundStr(lo2: Int?, hi2: Int?) = "${lo2 ?: "-"}-${hi2 ?: "-"}"
+    fun range(lo2: Int?, hi2: Int?): String = when {
+        lo2 != null && hi2 != null && lo2 == hi2 -> "=$lo2"
+        lo2 != null && hi2 != null -> "$lo2〜$hi2"
+        lo2 != null -> "$lo2〜"
+        hi2 != null -> "〜$hi2"
+        else -> ""
+    }
     return when (vio) {
-        "vio-low" -> MatrixCell("▼$count[${boundStr(lo, hi)}]", shortC.copy(alpha = 0.45f), cs.onSurface, true, false,
-            "下限${lo ?: 0}回に対し現在${count}回・不足")
-        "vio-high" -> MatrixCell("▲$count[${boundStr(lo, hi)}]", overC.copy(alpha = 0.50f), cs.onSurface, true, false,
-            "上限${hi ?: 0}回に対し現在${count}回・超過")
+        "vio-low" -> MatrixCell("▼$count", shortC.copy(alpha = 0.45f), cs.onSurface, true, false,
+            "下限${lo ?: 0}回に対し現在${count}回・不足", sub = range(lo, hi))
+        "vio-high" -> MatrixCell("▲$count", overC.copy(alpha = 0.50f), cs.onSurface, true, false,
+            "上限${hi ?: 0}回に対し現在${count}回・超過", sub = range(lo, hi))
         "vio-aptLow" -> {
             val bg = if (isRest) MagiAccent.orange.copy(alpha = 0.28f) else shortC.copy(alpha = 0.22f)
-            MatrixCell("▼$count/${apt ?: count}", bg, cs.onSurface, false, false, "目標${apt ?: 0}回に対し現在${count}回・未達")
+            MatrixCell("▼$count", bg, cs.onSurface, false, false, "目標${apt ?: 0}回に対し現在${count}回・未達", sub = "目標${apt ?: count}")
         }
         "vio-aptHigh" -> {
             val bg = if (isRest) MagiAccent.orange.copy(alpha = 0.28f) else overC.copy(alpha = 0.22f)
-            MatrixCell("▲$count/${apt ?: count}", bg, cs.onSurface, false, false, "目標${apt ?: 0}回に対し現在${count}回・超過")
+            MatrixCell("▲$count", bg, cs.onSurface, false, false, "目標${apt ?: 0}回に対し現在${count}回・超過", sub = "目標${apt ?: count}")
         }
         null -> when {
-            lo != null || hi != null -> MatrixCell("$count[${boundStr(lo, hi)}]", Color.Transparent, cs.onSurface, false, true, null)
-            apt != null -> MatrixCell("$count/$apt", Color.Transparent, cs.onSurface, false, false, null)
+            lo != null || hi != null -> MatrixCell("$count", Color.Transparent, cs.onSurface, false, true, null, sub = range(lo, hi))
+            apt != null -> MatrixCell("$count", Color.Transparent, cs.onSurface, false, false, null, sub = "目標$apt")
             else -> MatrixCell("$count", Color.Transparent, cs.onSurfaceVariant, false, false, null)
         }
         // c2 等の想定外クラス（稀）: 方向不明の軽い注意のみ。詳細はシートで確認。
@@ -265,8 +280,15 @@ private fun MatrixDataCell(
                 .then(if (cell.cd != null) Modifier.semantics { contentDescription = cell.cd } else Modifier),
             contentAlignment = Alignment.Center,
         ) {
-            Text(cell.text, style = MaterialTheme.typography.bodySmall, fontWeight = if (cell.bold) FontWeight.Bold else FontWeight.Normal,
-                color = cell.fg, maxLines = 1)
+            // [3.482.0] 2行構成＋省略記号。旧は1行・overflow 未指定（Clip）で長い文字列が無警告で切れていた。
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(cell.text, style = MaterialTheme.typography.bodySmall, fontWeight = if (cell.bold) FontWeight.Bold else FontWeight.Normal,
+                    color = cell.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (cell.sub != null && cell.sub.isNotBlank()) {
+                    Text(cell.sub, style = MaterialTheme.typography.labelSmall, color = cell.fg.copy(alpha = 0.8f),
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }
