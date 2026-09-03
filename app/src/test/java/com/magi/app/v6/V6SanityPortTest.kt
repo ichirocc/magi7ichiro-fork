@@ -94,13 +94,13 @@ class V6SanityPortTest {
         //   期間6日に「Aを10日で2回以上」と入れると評価もされず画面にも何も出なかった。
         //   連続パターン(検査2d)は同じ状況を案内するのに、窓の要件だけ取り残されていた。
         val over = V6SanityPort.buildGuidance(windowState("1", listOf(com.magi.app.model.C1Row("10", "A", "2"))))
-            .filter { it.where.contains("窓の要件") }
+            .filter { it.where.contains("期間の制約") }
         assertTrue("期間を超える窓は理由が案内される", over.isNotEmpty())
         assertTrue("評価されない旨を言う", over.any { it.problem.contains("評価されません") })
 
         // 期間内の窓は従来どおり何も出さない（誤検知しない）。
         val within = V6SanityPort.buildGuidance(windowState("1", listOf(com.magi.app.model.C1Row("3", "A", "2"))))
-            .filter { it.where.contains("窓の要件") }
+            .filter { it.where.contains("期間の制約") }
         assertTrue("期間内の窓では出さない", within.isEmpty())
     }
 
@@ -556,8 +556,8 @@ class V6SanityPortTest {
         val st = unresolvedState(cons1 = listOf(com.magi.app.model.C1Row("3", "NIGHT", "1")))
         assertTrue("前提: この行は評価対象から外れる", Problem(st).cons1.isEmpty())
         val rep = V6SanityPort.buildGuidance(st)
-        assertTrue("窓の要件の未解決行が案内されること",
-            rep.any { it.where.contains("窓の要件") && it.where.contains("〈NIGHT〉") })
+        assertTrue("期間の制約の未解決行が案内されること",
+            rep.any { it.where.contains("期間の制約") && it.where.contains("〈NIGHT〉") })
     }
 
     @Test fun unknownGroupInPairBanIsReported() {

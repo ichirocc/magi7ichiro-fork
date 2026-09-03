@@ -53,7 +53,7 @@ class AnalysisTriageTest {
         val t = analysisTriage(ui(breakdown = mapOf("c1" to 6, "c3" to 97, "weekly" to 186)))
         assertFalse(t.computed)
         assertTrue("実行前に壁と決めつけない", t.blockers.isEmpty())
-        assertEquals(setOf("窓の要件", "必須の並び", "曜日の偏り"), t.searching.map { it.label }.toSet())
+        assertEquals(setOf("期間の制約", "必須の並び", "曜日の偏り"), t.searching.map { it.label }.toSet())
         assertTrue("断定しない注記が出る", t.searchNote.contains("計算後も残る場合があります"))
     }
 
@@ -63,14 +63,14 @@ class AnalysisTriageTest {
      */
     @Test fun c1MovesToBlockersOnlyWhenThePlateauDiagnosisObservedSomething() {
         val observed = analysisTriage(ui(mapOf("c1" to 6), hasResult = true, c1Plateau = plateau(true)))
-        assertEquals(listOf("窓の要件"), observed.blockers.map { it.label })
+        assertEquals(listOf("期間の制約"), observed.blockers.map { it.label })
         assertTrue(observed.blockers.single().promoted)
         assertTrue("診断が語った理由をそのまま出す", observed.blockers.single().detail.contains("回数を固定"))
         assertTrue(observed.searching.isEmpty())
 
         val unknown = analysisTriage(ui(mapOf("c1" to 6), hasResult = true, c1Plateau = plateau(false)))
         assertTrue("観測が無いなら理由を語らない＝壁にしない", unknown.blockers.isEmpty())
-        assertEquals(listOf("窓の要件"), unknown.searching.map { it.label })
+        assertEquals(listOf("期間の制約"), unknown.searching.map { it.label })
     }
 
     /** 必須違反は診断の有無に関わらず常に上段。理由が無いときは何も主張しない（空文字）。 */
@@ -97,14 +97,14 @@ class AnalysisTriageTest {
     @Test fun distributionFamiliesUsePointsNotCounts() {
         val t = analysisTriage(ui(mapOf("weekly" to 186, "c1" to 6)))
         assertEquals("pt", t.searching.first { it.label == "曜日の偏り" }.unit)
-        assertEquals("件", t.searching.first { it.label == "窓の要件" }.unit)
+        assertEquals("件", t.searching.first { it.label == "期間の制約" }.unit)
     }
 
     /** 0件の族はサマリー側へ回してゼロサプレッションする（19族すべてがどちらかに入る）。 */
     @Test fun zeroCountFamiliesGoToTheCollapsedSummary() {
         val t = analysisTriage(ui(mapOf("c1" to 6)))
         assertEquals(19, t.okFamilies.size + t.busyFamilies.size)
-        assertEquals(listOf("窓の要件"), t.busyFamilies)
+        assertEquals(listOf("期間の制約"), t.busyFamilies)
         assertTrue("人員不足は0件なので正常側", "人員不足" in t.okFamilies)
     }
 
