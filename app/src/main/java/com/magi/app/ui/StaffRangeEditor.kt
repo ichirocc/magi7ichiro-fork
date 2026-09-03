@@ -38,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * [ユーザー提示の再設計案=③統合の再構成] 旧実装は `AptSection`(群×シフトの目標グリッド)・
@@ -77,7 +76,7 @@ fun CountsCard(ui: UiState, vm: MagiViewModel) {
 internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
     var dialog by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("グループ一括設定", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("グループ一括設定", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             Text(
                 "選んだグループ全員に同じ上下限を一度に設定します（個人設定済みは保持）。",
                 style = MaterialTheme.typography.labelMedium,
