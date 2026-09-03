@@ -541,7 +541,7 @@ object V6SanityPort {
         //   `c.day1 > p.T` で無言に飛ばすため、評価もされず画面にも何も出ない状態だった。
         //   連続パターン(2d)と同じ形で理由を案内する。read-only・評価不変。
         for (row in p.c1OverT) {
-            out.add(SettingIssue(IssueKind.CONSTRAINT, "窓の要件「$row」",
+            out.add(SettingIssue(IssueKind.CONSTRAINT, "期間の制約「$row」",
                 "窓の日数が期間${p.T}日を超えるため、この決まりは評価されません（今の勤務表では常に無視されます）",
                 "窓の日数を${p.T}日以下にするか、この行を削除してください"))
         }

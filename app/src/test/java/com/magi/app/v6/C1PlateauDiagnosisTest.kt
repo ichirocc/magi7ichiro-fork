@@ -145,7 +145,7 @@ class C1PlateauDiagnosisTest {
             Triple(1, 1, 0) to mapOf(C1PlateauDiagnosis.REASON_PIN to 40),
         ))
         assertEquals(1, d.entries.first().staff)
-        assertTrue("ログ先頭は残存件数を名乗る", d.logLines().first().contains("窓の要件"))
+        assertTrue("ログ先頭は残存件数を名乗る", d.logLines().first().contains("期間の制約"))
     }
 
     // --- [3.331.0/実機ログ] 巡ごとの観測を合算する ---

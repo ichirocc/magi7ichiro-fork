@@ -226,7 +226,7 @@ object V6FinalPort {
         if (!gate.allowed) error(gate.message)
         val busy = buildBusyDetail(state, "初期解を作成中", mapOf(
             "subtitle" to "初期解を作成中",
-            "phaseDesc" to "希望シフトとC1(窓の要件)を優先し、次に必要人数・個人下限を考慮しています",
+            "phaseDesc" to "希望シフトとC1(期間の制約)を優先し、次に必要人数・個人下限を考慮しています",
             "expectedSec" to "< 1 秒",
             "estimatedIter" to "~800 回",
         ))

@@ -26,6 +26,15 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-03（3.480.0＝ユーザー提示の詳細なホーム画面リデザイン案（ASCIIモックアップ付き）を
+grilling で5点確定のうえ実装。①診断文（却下N件等）を文言そのままに既定折りたたみへ（`DiagDetailToggle`
+新設） ②分析タブの`FixSuggester`を再利用した「AIの解決提案」カード(`SmartActionCard`)を新設し先頭候補を
+自動探索・即適用可能に ③「もう一度つくる」の重複3箇所→固定フッター1箇所へ集約 ④「他の案」をボタン列→
+`MagiSegmentedControl`のタブへ、位置もホーム上部へ移動（タップ＝即時反映） ⑤「窓の要件」表記を全17箇所
+「期間の制約（○日間で○回など）」へ統一。`SettingIssuesCard`に「担当外の希望を一括クリア」ボタン
+（`vm.clearOutOfScopeWishes()`新設）も追加。表示・導線の再構成のみ＝エンジン/スコアリングは完全に不変。
+詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-03（3.479.0＝実機スクショ提示「職員と日付の集計タブも追加する」を受け、勤務表
 タブの「シフト集計」カード(`TallyCard`)に3.477.0で撤去した職員別/日別の切替を復活。3.477.0直前の
 実装をそのまま復元（追加コメント以外diffゼロ）し、編集タブの`StaffShiftMatrixCard`（担当可否・目標
