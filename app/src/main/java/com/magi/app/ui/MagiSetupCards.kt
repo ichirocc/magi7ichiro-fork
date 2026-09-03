@@ -164,7 +164,9 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, editScope: Int = -1,
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
                 c.wishes == 0 -> "次に『希望シフト』を登録すると できあがり度 が上がります。"
-                else -> "準備OK。ホームの『勤務表をつくる』で勤務表を作成しましょう。"
+                // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
+                //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
+                else -> "準備OK。画面下の『勤務表をつくる』で作成できます。"
             }
             Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                 Text("次の一手: $next", color = cs.onSecondaryContainer,
@@ -369,7 +371,7 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
  * 例外件数は D6 に従い、明示的な例外リストを持つ「日別必要人数の例外」のみを数える。
  */
 @Composable
-internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> Unit, onOpenWish: (() -> Unit)? = null) {
+internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onOpenWish: (() -> Unit)? = null) {
     if (!ui.loaded) return
     val staffN = ui.staffNames.size
     val wishStaff = remember(ui.wishes, staffN) {
@@ -386,10 +388,9 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onMake: () -> 
             ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0, onClick = onOpenWish)
             ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
             ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件（ホームに詳細）", ok = issues == 0)
-            Button(onClick = onMake, enabled = ui.loaded && !ui.running,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text("▶ 勤務表をつくる", style = MaterialTheme.typography.titleMedium)
-            }
+            // [3.482.0 導線重複] 旧「▶ 勤務表をつくる」ボタンは撤去。同じ画面の固定フッター（BottomCommandBar）に
+            //   常設の同名ボタンがあり、1画面に作成導線が3つ（案内文・このボタン・フッター）並んでいた。
+            //   3.480.0 の「フッターに一本化」をホームだけでなく編集タブにも適用する。
         }
     }
 }
