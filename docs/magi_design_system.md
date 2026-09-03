@@ -278,6 +278,9 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 `LiveScheduleCard`(実行中の途中経過) → `CopilotCard`(満足度ゲージ) → `CoverageDiagnosisCard` →
 `ForbiddenRunDiagnosisCard` → `C1PlateauCard` → `PinFixedImpactCard` → `SettingIssuesCard` →
 `AlternativesCard`。
+[3.483.0] 解消度の括弧は4分岐（必須>0「必須 残りN件」／人手不足「残りN日」／必須0で調整あり「必須は解消・調整N件」／「解消済み」）、
+実行中は解消度行を出さず進捗行だけ。人手不足なしの狩猟では「なおすのを手伝って」の大ボタンを出さない（AI提案に一本化）。
+`AlternativesCard` はセグメントの下に全案の要約を常時列挙。
 > 旧記述の `StatusHero` / `SummaryCard` / `ActionCard` / `QuickActionGrid` は**いずれも存在しない**
 > （3.112.0 の冗長性削減で撤去。MagiApp.kt の該当箇所に撤去理由がコメントで残っている）。
 
@@ -287,14 +290,15 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 までをひと目で提示し、下部コマンドバーの「最適化する」へ親指誘導。
 
 ### 5.2 勤務表 ✅
-`WishApplyCard` → `ViolationFilterBar`(種別フィルタ＋集中モード) → `SearchLegendBar`(検索・凡例) →
-`ScheduleGrid`(`MagiFlatGrid`) → `TallyCard`(職員別/日別を `MagiSegmentedControl` で切替。編集タブ
+`ViolationFilterBar`(種別フィルタ＋集中モード・見出しに「要確認 Nか所」) → `SearchLegendBar`(検索・凡例) →
+`ScheduleGrid`(`MagiFlatGrid`) → `WishApplyCard`(3.483.0 でグリッド下へ) → `TallyCard`(**既定は折りたたみ**・3.483.0。職員別/日別を `MagiSegmentedControl` で切替。編集タブ
 「回数（1人あたり）」の `StaffShiftMatrixCard` は目標(apt)編集も兼ねる別ビューとして併存)。
 セル編集は `ShiftPickerSheet`(親指ゾーンの大タイル)。シフト色は §1.3。
 [3.481.0] **日ヘッダは縦スクロールで画面上端に留まる**（`MagiFlatGrid` のヘッダ行を本体と `hScroll` 共有の独立行にし、
 ビューポート上端との差分だけ `graphicsLayer` で平行移動）。**週送り(前週/次週)と違反ナビ(＜前の違反/次の違反＞)は
 `Scaffold` 下部バー（`ScheduleNavBar`、勤務表タブ表示中のみ・`BottomCommandBar` の直上）に常駐**＝スクロール位置に
-関係なく親指で押せる（3.444.0 の「グリッド下」配置から引き上げ。状態は `ScheduleNavState`）。
+関係なく親指で押せる（3.444.0 の「グリッド下」配置から引き上げ。状態は `ScheduleNavState`）。[3.483.0] ナビ行は**1段**
+（[◀週][週▶] 「M月 第n/N週 ・ 違反 k/31日」 [◀違反][違反▶]）。
 違反は**3段階の非色手がかり**（必須=実線 / 重いソフト=破線 / 軽いソフト=右上の角マーク・3.99.0）＋
 凡例 `ViolationLegend`。セル幅は「1週間(7日)が名前列と同時に収まる」よう動的計算（3.100.0）。
 > 旧記述の**表示切替セグメント(7日/カレンダー/1ヶ月)と `MagiCalendarMonthView`/`DayShiftCell`/
@@ -312,6 +316,11 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 ⑤の並び4族は**起点シフトごとのチップ**（`SeqFamilyGrouped`＝「【Dﾃ の次の日】[B4 ×][A4 ×]… ＋追加」）で集約表示し、同じ並びの重複は追加/変更ダイアログの入口で拒否（族をまたぐ同一の並びも）。
 「勤務表をつくる」の作成導線は固定フッター（`BottomCommandBar`）の1か所（月次チェックリストのボタンと「ホームで作成」の案内文は撤去）。
 ③の回数マトリクスのセルは**2行**（1行目=現在値、2行目=上下限 `10〜10`／`〜0`／`=5` または `目標5`）＋省略記号。
+[3.483.0] `SetupGuideCard`（初期設定の手順）は月次条件では「次の一手」だけ。月次チェックリストの入力診断は行タップでその場に展開。
+①の期間節は「期間の日数（月単位以外の特殊な期間用）」（対象の月は月次条件の「対象の月」）。担当可否は「群 × シフト：担当できるか」、
+回数マトリクスは「職員 × シフト：月に何回か」の副題で区別し、警告は「目標の合計N回 ＞ 上限M回」の1式・フッター左列に「計 実績/目標」。
+⑤の並び見出しは族で出し分け（「【X の次の日に禁止／必須（どれか）／推奨／は避ける】」）、末尾は「新しい起点で追加」。
+職員管理のスキル▼は2行目（グループの横）。
 
 ![ダイアログ](screens/05_dialog.png)
 
@@ -320,7 +329,8 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 `BreakdownCard`の3枚を統合。①見出し＋設定見直し件数 ②勤務表タブと共有するE7族フィルタ(6バケツ) ③一覧／
 日別・人別／内訳の3ビューを切り替えるセグメント。各ビューの中身は`ConfirmListBody`(箇所単位・重大度リスト)/
 `AttentionBody`(日別・人別＋「要確認のみ」トグル)/`BreakdownBody`(**違反内訳=全19種/100%**・fair/weekly含む・
-「重大のみ」トグル)へロジック不変で分割）/ `FixSuggestionCard`(1手提案)。プロ時のみ `V6DashboardCard`。
+「重大のみ」トグル)へロジック不変で分割）/ `FixSuggestionCard`(1手提案。3.483.0: 結果あり＆必須>0なら自動で探索＝ホームと同じ挙動)。
+プロ時のみ `V6DashboardCard`。[3.483.0] `AnalysisTriageCard` 末尾の「▶ 勤務表をつくる」は撤去（固定フッターに一本化）。
 > 旧記述の `OverviewDashboard` / `CheckSummaryView` / `BottleneckCard` は**いずれも撤去済み**
 > （3.83.0・3.286.0・3.103.1。`AttentionCardsSection` と `ConfirmListCard` が上位互換だったが、
 > その2枚と`BreakdownCard`も3.459.0で`ViolationHubCard`へ統合済み）。
@@ -328,7 +338,7 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 
 ### 5.5 設定 ✅
 外観(`AppearanceCard`：片手モード ＋ かんたん/プロ。**テーマ選択は D8/3.121.0 で撤去し UD 固定**) /
-シフトの表示色(`ShiftColorCard`) / 違反種別の色(`ColorSettingsView`) / 直す優先順位(`WeightTableCard`) /
+シフトの表示色(`ShiftColorCard`) / 違反種別の色(`ColorSettingsView`。3.483.0: 基準色2チップを常時、19種の族別チップは既定で折りたたみ) / 直す優先順位(`WeightTableCard`) /
 **最適化設定**(`SettingsCard`：並列・時間予算・計算方式・仕上げ最適化・版表示) /
 データ(`DataActionsCard`：JSON/CSV入出力・コンポーネント別出力) /
 詳細設定(`AdvancedSettingsSection`・折りたたみ・既定=閉：並列ワーカー/ネイティブ加速/Kotlin照合/

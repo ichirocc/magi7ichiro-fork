@@ -505,10 +505,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     var focusMode by rememberSaveable { mutableStateOf(false) }
                     // [画面修正版 ②] 検索・凡例（折りたたみ）。検索=職員名で該当グリッド行を強調（回転/復元で保持）。
                     var searchQuery by rememberSaveable { mutableStateOf("") }
-                    WishApplyCard(ui, onApply = {
-                        val oos = vm.wishOutOfScopeCount()
-                        if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
-                    })
+                    // [3.483.0 S-2] 「希望シフトを反映」カードはグリッドの上からグリッドの下（希望の一括操作の隣）へ。
+                    //   タブを開いた瞬間に表が見えるように（希望まわりの2操作を1か所に）。
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
                     val vioLocCount = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
@@ -531,6 +529,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   一本化する形で一度撤去したが、勤務表タブから編集タブへ往復せず確認したいという
                     //   実機要望を受け、シフト集計カード内トグルとして復活させた（両者は併存。
                     //   StaffShiftMatrixCardは目標(apt)編集も兼ねる分、役割が広い）。
+                    // [3.483.0 S-2] 希望まわりの2操作（反映／一括）をグリッド下の1か所に。
+                    WishApplyCard(ui, onApply = {
+                        val oos = vm.wishOutOfScopeCount()
+                        if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
+                    })
                     OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
                         Text("希望シフトの一括操作")
                     }
@@ -662,7 +665,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowDay = { j -> focusCell = -1 to j; tab = 1 },
                         onFixWish = { s -> deepLinkWishStaff = s; editScope = 0; tab = 2 },
                         onFixNeed = { k -> deepLinkNeedShift = k; editScope = 0; tab = 2 },
-                        onMake = { vm.runV6FullOptimize(); tab = 0 },
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)

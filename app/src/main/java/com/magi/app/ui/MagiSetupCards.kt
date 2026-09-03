@@ -157,10 +157,15 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, editScope: Int = -1,
                 GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0, onClick = onOpenWish)
                 GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
             }
-            Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
-            GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
-            GuideRow("⑤ 個人の回数範囲", "${c.ranges}件", true)
+            // [3.483.0 E-1] 月次条件(editScope==0)では年間マスターの行も隠し「次の一手」だけにする
+            //   （直下の MonthlyChecklistCard と同じ職員/シフト件数を二重に見せていた）。
+            if (editScope != 0) {
+                Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
+                GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
+                // [3.483.0 E-2] 旧「⑤ 個人の回数範囲」＝①〜④が無いのに⑤だけ残っていた番号の取り残し。
+                GuideRow("個人の回数範囲", "${c.ranges}件", true)
+            }
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
                 c.wishes == 0 -> "次に『希望シフト』を登録すると できあがり度 が上がります。"
@@ -380,6 +385,8 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onOpenWish: ((
     val needExceptions = vm.needDayOverrides().size
     val needStdOk = vm.ws1()?.shifts?.any { it.need1.isNotBlank() } == true
     val issues = ui.settingIssues.size
+    // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
+    var issuesOpen by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
@@ -387,7 +394,17 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onOpenWish: ((
             // [見つけやすさ改善] タップで希望シフト登録へ直行（SetupGuideCardと同じ入口を共有）。
             ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0, onClick = onOpenWish)
             ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
-            ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件（ホームに詳細）", ok = issues == 0)
+            ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件" + (if (issuesOpen) " ▾" else " ▸"), ok = issues == 0,
+                onClick = if (issues > 0) ({ issuesOpen = !issuesOpen }) else null)
+            if (issuesOpen && issues > 0) {
+                val cs = MaterialTheme.colorScheme
+                ui.settingIssues.take(6).forEach { iss ->
+                    Text("・${iss.where}：${iss.problem}", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 12.dp))
+                }
+                if (issues > 6) Text("ほか${issues - 6}件（ホームの設定見直しに全件）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp))
+            }
             // [3.482.0 導線重複] 旧「▶ 勤務表をつくる」ボタンは撤去。同じ画面の固定フッター（BottomCommandBar）に
             //   常設の同名ボタンがあり、1画面に作成導線が3つ（案内文・このボタン・フッター）並んでいた。
             //   3.480.0 の「フッターに一本化」をホームだけでなく編集タブにも適用する。
@@ -608,7 +625,7 @@ internal fun DataActionsCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存") }
-                OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("問題がないか調べる") }
+                OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("いま診断し直す") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onOpenCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSV取込") }
@@ -653,6 +670,9 @@ internal fun AppearanceCard(
             // [プロ編集] 表示モード。プロ＝数値診断（生指標）を前面に。今後さらに高密度編集を拡張予定。
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
             MagiSegmentedControl(options = listOf("かんたん", "プロ"), selected = if (proMode) 1 else 0, onSelect = { onProMode(it == 1) })
+            // [3.483.0 C-3] 何が変わるかを1行で（旧: 無説明のトグル）。
+            Text("プロ＝分析の生指標カードと、勤務表の「まとめて割当」を表示します。",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

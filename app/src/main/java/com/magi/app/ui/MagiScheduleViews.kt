@@ -10,6 +10,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -321,8 +322,8 @@ internal fun ShiftPickerSheet(
                         if (mode == 0) {
                             if (k == current) noteParts.add("現在") else if (k == wish) noteParts.add("希望")
                             when (ui.needViolations["$k,$j"]) {
-                                "vio-covU" -> noteParts.add("不足解消")
-                                "vio-covO" -> { noteParts.add("超過"); noteWarn = true }
+                                "vio-covU" -> noteParts.add("当日の不足を解消")  // [3.483.0 M-1] 旧「不足解消」＝何の不足か読めなかった
+                                "vio-covO" -> { noteParts.add("当日は人員超過"); noteWarn = true }
                             }
                         }
                         val note = noteParts.joinToString("・")
@@ -431,7 +432,9 @@ internal fun ViolationBucketChips(bucketCounts: Map<String, Int>, enabled: Set<S
     val counts = bucketCounts
     Row(verticalAlignment = Alignment.CenterVertically) {
         // [画面修正版 ③] 「要確認 N件」= 違反ロケーション数（族fire数でなく作成者が見るべきセル数）。
-        Text(if (locCount >= 0) "違反フィルタ（種別）・要確認 ${locCount}件" else "違反フィルタ（種別）",
+        // [3.483.0 S-1] 上部バッジ「必須違反 N」・不足バナー「B4 29日」・下部「違反のある日」と数字が並ぶため、
+        //   ここは単位を「か所」（セル/日/回数の実箇所数）と明示して混同を防ぐ。
+        Text(if (locCount >= 0) "違反フィルタ（種別）・要確認 ${locCount}か所" else "違反フィルタ（種別）",
             style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
         if (enabled != allVioBucketKeys) {
             TextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
@@ -677,51 +680,57 @@ internal fun ScheduleNavBar(ui: UiState, nav: ScheduleNavState) {
             weeks.indexOfFirst { d <= it.last() }.let { if (it < 0) (weeks.size - 1).coerceAtLeast(0) else it }
         }
     }
+    // [3.483.0 S-3] 旧: 週送り行＋違反ナビ行の2段（約110dp）。下部固定領域が最大4段になっていたため1段に
+    //   まとめる（左＝週送り2ボタン／中央＝週と違反日のラベル／右＝違反ナビ2ボタン）。ボタン高は 48dp を維持。
+    // [3.483.0 S-1] 違反日は「12/31日」の形で母数を付け、他の「N」（必須件数・か所・シフト別日数）と区別する。
+    val wk = weeks.getOrNull(curWeek)
+    val weekLabel = if (weeks.size > 1 && wk != null && wk.isNotEmpty()) runCatching {
+        // [レイアウト刷新] 月をまたぐ勤務表でも表示中の週の実際の年月（=週初日基準）を出す。
+        val d0 = LocalDate.parse(ui.startDate).plusDays(wk.first().toLong())
+        "${d0.monthValue}月 第${curWeek + 1}/${weeks.size}週"
+    }.getOrDefault("第${curWeek + 1}/${weeks.size}週") else ""
+    val navIdx = nav.navIdx
+    val vioLabel = when {
+        vioDays.isEmpty() -> ""
+        navIdx < 0 -> "違反 ${vioDays.size}/${ui.days}日"
+        else -> "違反日 ${navIdx + 1}/${vioDays.size}"
+    }
+    fun jumpTo(n: Int) {
+        val d = vioDays.getOrNull(n) ?: return
+        nav.navIdx = n
+        nav.navFlash = -1 to d
+        scope.launch { nav.hScroll.animateScrollTo((d * nav.cellWpx).coerceAtLeast(0)) }
+    }
     Surface(color = cs.surfaceContainer, tonalElevation = 2.dp) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // [週ページング＋横スクロール併用] 前週/次週 は hScroll を1週ぶんジャンプ（列は隠さない＝自由スクロールと併用）。
             if (weeks.size > 1) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
-                        enabled = curWeek > 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("← 前週") }
-                    val wk = weeks.getOrNull(curWeek)
-                    // [レイアウト刷新] モックアップに合わせ「年月」を先頭に付す。月をまたぐ勤務表でも表示中の週の
-                    //   実際の年月（=週初日基準）を出す＝常に startDate の月を出すと月またぎで誤表示するため。
-                    val ymPrefix = if (wk != null && wk.isNotEmpty()) runCatching {
-                        val d0 = LocalDate.parse(ui.startDate).plusDays(wk.first().toLong())
-                        "${d0.year}年${d0.monthValue}月 "
-                    }.getOrDefault("") else ""
-                    val label = if (wk != null && wk.isNotEmpty()) "${ymPrefix}第${curWeek + 1}/${weeks.size}週（${wk.first() + 1}〜${wk.last() + 1}日）" else "第${curWeek + 1}週"
-                    Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
-                        modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1)
-                    OutlinedButton(
-                        onClick = { val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
-                        enabled = curWeek < weeks.size - 1, modifier = Modifier.heightIn(min = 48.dp)) { Text("次週 →") }
-                }
+                OutlinedButton(
+                    onClick = { val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
+                    enabled = curWeek > 0, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "前の週へ" },
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                ) { Text("◀週") }
+                OutlinedButton(
+                    onClick = { val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
+                    enabled = curWeek < weeks.size - 1, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "次の週へ" },
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                ) { Text("週▶") }
             }
+            Text(listOf(weekLabel, vioLabel).filter { it.isNotBlank() }.joinToString(" ・ "),
+                style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
+                modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
             // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
             //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
             if (vioDays.isNotEmpty()) {
-                val navIdx = nav.navIdx
-                fun jumpTo(n: Int) {
-                    val d = vioDays.getOrNull(n) ?: return
-                    nav.navIdx = n
-                    nav.navFlash = -1 to d
-                    scope.launch { nav.hScroll.animateScrollTo((d * nav.cellWpx).coerceAtLeast(0)) }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
-                        modifier = Modifier.heightIn(min = 48.dp)) { Text("＜ 前の違反") }
-                    Text(if (navIdx < 0) "違反のある日 ${vioDays.size}日" else "違反日 ${navIdx + 1}/${vioDays.size}",
-                        style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
-                        modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1)
-                    OutlinedButton(onClick = { jumpTo(if (navIdx < 0) 0 else (navIdx + 1) % vioDays.size) },
-                        modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ＞") }
-                }
+                OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "前の違反の日へ" },
+                    contentPadding = PaddingValues(horizontal = 10.dp)) { Text("◀違反") }
+                OutlinedButton(onClick = { jumpTo(if (navIdx < 0) 0 else (navIdx + 1) % vioDays.size) },
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "次の違反の日へ" },
+                    contentPadding = PaddingValues(horizontal = 10.dp)) { Text("違反▶") }
             }
         }
     }
@@ -1174,6 +1183,9 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
+    // [3.483.0 S-4] 既定は折りたたみ。勤務表タブは「グリッドが主・集計は補助」（画面が縦に長く
+    //   ヘッダ固定(3.481.0)の恩恵が集計まで届かない実機所見）。開閉は回転/復元でも保持。
+    var open by rememberSaveable { mutableStateOf(false) }
     // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
     //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
     val periodLabel = remember(ui.startDate, ui.days) {
@@ -1186,7 +1198,15 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("シフト集計", style = MaterialTheme.typography.titleMedium)
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { open = !open }
+                    .semantics { contentDescription = if (open) "シフト集計を閉じる" else "シフト集計を開く" },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("シフト集計", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                Text(if (open) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+            }
+            if (open) {
             Spacer(Modifier.height(8.dp))
             MagiSegmentedControl(options = listOf("職員別", "日別"), selected = mode, onSelect = { mode = it })
             Spacer(Modifier.height(8.dp))
@@ -1298,6 +1318,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                     }
                 }
             }
+            }   // if (open)
             detail?.let { d ->
                 AlertDialog(
                     onDismissRequest = { detail = null },

@@ -75,7 +75,10 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- period ---
             Spacer(Modifier.height(10.dp))
-            SectionHeader("期間／対象月")
+            // [3.483.0 E-5] 旧「期間／対象月」＝対象の月は月次条件の「対象の月」で選ぶため、ここは日数だけ。
+            SectionHeader("期間の日数（月単位以外の特殊な期間用）")
+            Text("対象の月は「月次条件」の『対象の月』で選びます。", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${v.startDate} 〜 ${v.endDate}", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -99,7 +102,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("${toHankakuKigou(s.kigou)}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
+                    // [3.483.0 E-6] 旧「(最低 -人 / 上限 -人)」＝未設定でも括弧が並び1行が長かった。設定時だけ短く添える。
+                    val needLabel = when {
+                        s.need1.isBlank() && s.need2.isBlank() -> ""
+                        s.need2.isBlank() -> "  必要 ${s.need1}人"
+                        else -> "  必要 ${s.need1.ifBlank { "-" }}〜${s.need2}人"
+                    }
+                    Text("${toHankakuKigou(s.kigou)}  ${s.name}$needLabel",
                         style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) }, enabled = !ui.running)
                     if (v.shifts.size > 1) {
@@ -169,7 +178,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
-            SectionHeader("担当可否（群 × シフト）")
+            SectionHeader("担当可否（群 × シフト：担当できるか）")   // [3.483.0 E-7] 回数マトリクスと軸が同じため副題で区別
             Text("セルをタップで担当ON/OFF（✓＝担当できる）。群名をタップでその群を一括、シフト名をタップで全グループへ一括。「休」は外せません。",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
