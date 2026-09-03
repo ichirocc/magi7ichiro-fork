@@ -291,6 +291,10 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 `ScheduleGrid`(`MagiFlatGrid`) → `TallyCard`(職員別/日別を `MagiSegmentedControl` で切替。編集タブ
 「回数（1人あたり）」の `StaffShiftMatrixCard` は目標(apt)編集も兼ねる別ビューとして併存)。
 セル編集は `ShiftPickerSheet`(親指ゾーンの大タイル)。シフト色は §1.3。
+[3.481.0] **日ヘッダは縦スクロールで画面上端に留まる**（`MagiFlatGrid` のヘッダ行を本体と `hScroll` 共有の独立行にし、
+ビューポート上端との差分だけ `graphicsLayer` で平行移動）。**週送り(前週/次週)と違反ナビ(＜前の違反/次の違反＞)は
+`Scaffold` 下部バー（`ScheduleNavBar`、勤務表タブ表示中のみ・`BottomCommandBar` の直上）に常駐**＝スクロール位置に
+関係なく親指で押せる（3.444.0 の「グリッド下」配置から引き上げ。状態は `ScheduleNavState`）。
 違反は**3段階の非色手がかり**（必須=実線 / 重いソフト=破線 / 軽いソフト=右上の角マーク・3.99.0）＋
 凡例 `ViolationLegend`。セル幅は「1週間(7日)が名前列と同時に収まる」よう動的計算（3.100.0）。
 > 旧記述の**表示切替セグメント(7日/カレンダー/1ヶ月)と `MagiCalendarMonthView`/`DayShiftCell`/

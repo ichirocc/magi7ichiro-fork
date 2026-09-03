@@ -112,6 +112,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
 /**
@@ -519,6 +526,10 @@ internal fun ScheduleGrid(
     focusMode: Boolean = false,                  // [集中モード] 違反・未反映希望以外のセルを淡色化
     canDo: (Int, Int) -> Boolean = { _, _ -> true },   // [矛盾なく選択] 一括割当の担当可否（(職員i, シフトk)）
     plainCellBorder: Boolean = false,   // [外観] 違反の無いセルにも1dp輪郭を付けるか（既定=付けない）
+    // [3.481.0 勤務表タブ再設計②] 週送り/違反ナビの共有状態。ボタン列は Scaffold 下部の ScheduleNavBar が描く。
+    nav: ScheduleNavState = rememberScheduleNavState(),
+    // [3.481.0 勤務表タブ再設計①] 縦スクロールのビューポート上端（root座標px）。負なら日ヘッダ固定なし。
+    stickyTopPx: Float = -1f,
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -527,8 +538,7 @@ internal fun ScheduleGrid(
     //   現在週は左端可視日から導出＝自由スクロールにも追従（トグルで列を隠さない）。
     val allDays = ui.days.coerceAtLeast(1)
     val weeks = remember(ui.startDate, allDays) { mondayWeeks(ui.startDate, allDays) }
-    val hScroll = rememberScrollState()
-    val scrollScope = rememberCoroutineScope()
+    val hScroll = nav.hScroll
     // [E7] グリッドのセル違反は共有フィルタ(vioEnabled)で表示/非表示（[Set化] visibleCellVio で判定）。
     Card(Modifier.fillMaxWidth()) {
         BoxWithConstraints {
@@ -538,13 +548,11 @@ internal fun ScheduleGrid(
         //   週ページングのスクロール量(cellWpx)も同じ値から計算＝ジャンプ位置は常にグリッドと整合。
         val gridCellW = ((this.maxWidth - 32.dp - 80.dp) / 7).coerceIn(36.dp, 48.dp)   // 32=Column水平padding, 80=名前列
         val cellWpx = with(LocalDensity.current) { gridCellW.roundToPx() }
-        // derivedStateOf: hScroll.value を読むのはこの派生値の中だけ＝スクロールで再構成するのは週ラベル等の読者のみ
-        //   （グリッド本体は curWeek を読まないので再構成されない＝スクロール性能を保つ）。
-        val curWeek by remember(weeks, cellWpx) {
-            derivedStateOf {
-                val d = if (cellWpx > 0) hScroll.value / cellWpx else 0
-                weeks.indexOfFirst { d <= it.last() }.let { if (it < 0) (weeks.size - 1).coerceAtLeast(0) else it }
-            }
+        // [3.481.0] 現在週の導出と週ラベルは ScheduleNavBar（Scaffold 下部）へ移動。ここはバーが必要とする
+        //   セル幅(px)と週分割を共有状態へ書くだけ（SideEffect＝この合成が確定してから書く＝描画中の書換なし）。
+        SideEffect {
+            nav.cellWpx = cellWpx
+            if (nav.weeks != weeks) nav.weeks = weeks
         }
         // [ジャンプ] 注目セルの日列へスクロールし、約2.5秒後にハイライトを解除（表示のみ）。
         LaunchedEffect(focusCell) {
@@ -592,10 +600,10 @@ internal fun ScheduleGrid(
             //   長大な棒読みは読めない・押せないで「人間に見やすい」の逆＝MismatchExtractCard撤去(3.194.0)と同型の
             //   貼り紙を撤去し、グリッド自体の違反枠と違反ナビに一本化。表示のみ・スコアリング不変。
             // [②] 凡例は上部「検索・凡例」折りたたみへ集約したためグリッド内からは撤去（重複回避）。
-            // [3.444.0 サムゾーン] 週送り/違反ジャンプのボタン列はグリッドの「下」（画面下部寄り）へ移動し、
-            //   片手操作で押しやすくする（AskUserQuestion でユーザーが明示選択）。状態(vioDays/navFlash)は
-            //   MagiFlatGrid の focusCell が参照するため、グリッドより前に据え置く＝新規stateは増やさず
-            //   同一Column内での並べ替えのみ（Scaffold側へのstate引き上げより低リスク）。
+            // [3.444.0 サムゾーン→3.481.0] 週送り/違反ジャンプのボタン列は 3.444.0 でグリッドの「下」へ並べ替え
+            //   （Scaffold 側への state 引き上げは高リスクとして保留）。3.481.0 でその保留分を実施し、ボタン列は
+            //   Scaffold 下部の ScheduleNavBar へ、状態は ScheduleNavState（MagiApp が remember）へ移した。
+            //   ここでは違反日リストを計算して共有状態へ書き、navFlash を focusCell の代替として読むだけ。
             // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
             //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
             val vioDays = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, vioEnabled) {
@@ -608,18 +616,77 @@ internal fun ScheduleGrid(
                 }
                 days.toList()
             }
-            var navFlash by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+            // [3.481.0 勤務表タブ再設計②] 違反日リストは共有状態へ（変わったときだけ書き、巡回位置を先頭へ戻す）。
+            //   前週/次週・＜前の違反/次の違反＞ のボタン列は ScheduleNavBar（Scaffold 下部＝スクロール位置に
+            //   関係なく親指で押せる真の下部固定）へ移動。3.444.0 が高リスクとして保留した引き上げの実施。
+            SideEffect {
+                if (nav.vioDays != vioDays) { nav.vioDays = vioDays; nav.navIdx = -1 }
+            }
+            val navFlash = nav.navFlash
             LaunchedEffect(navFlash) {
-                if (navFlash != null) { kotlinx.coroutines.delay(2_500); navFlash = null }
+                if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
+        }
+        }
+    }
+}
+
+/**
+ * [3.481.0 勤務表タブ再設計②] 週送り／違反ナビの状態を、Scaffold 下部の [ScheduleNavBar] と [ScheduleGrid] で
+ * 共有する箱。3.444.0 は「グリッドの下」への並べ替え（同一 Column 内）を選び、Scaffold.bottomBar への
+ * 引き上げは高リスクとして保留していた。今回はその保留分＝スクロール位置に関係なく親指で押せる真の下部固定。
+ * hScroll を共有し、グリッド側が測ったセル幅(px)・週分割・違反日を書き込み、バー側が読む。
+ * MagiApp が remember する（タブを切り替えても横スクロール位置と巡回位置が残る＝従来の rememberScrollState と同じ寿命）。
+ */
+@Stable
+internal class ScheduleNavState(val hScroll: ScrollState) {
+    var cellWpx by mutableIntStateOf(0)
+    var weeks by mutableStateOf<List<List<Int>>>(emptyList())
+    var vioDays by mutableStateOf<List<Int>>(emptyList())
+    /** 違反ナビのジャンプ先（(-1, 日)＝日ヘッダのみ注目の番兵）。ScheduleGrid が focusCell の代替として読む。 */
+    var navFlash by mutableStateOf<Pair<Int, Int>?>(null)
+    var navIdx by mutableIntStateOf(-1)
+}
+
+@Composable
+internal fun rememberScheduleNavState(): ScheduleNavState {
+    val hScroll = rememberScrollState()
+    return remember(hScroll) { ScheduleNavState(hScroll) }
+}
+
+/**
+ * [3.481.0 勤務表タブ再設計②] 前週/次週 と ＜前の違反/次の違反＞ のボタン列。ScheduleGrid の下にあったものを
+ * 文言・挙動そのままに Scaffold の下部バー（BottomCommandBar の直上・勤務表タブ表示中のみ）へ移した。
+ * 週も違反日も無いときは何も描かない（高さ0）。
+ */
+@Composable
+internal fun ScheduleNavBar(ui: UiState, nav: ScheduleNavState) {
+    val cs = MaterialTheme.colorScheme
+    val weeks = nav.weeks
+    val vioDays = nav.vioDays
+    if (weeks.size <= 1 && vioDays.isEmpty()) return
+    val scope = rememberCoroutineScope()
+    // derivedStateOf: hScroll.value を読むのはこの派生値の中だけ＝スクロールで再構成するのは週ラベルの読者のみ。
+    val curWeek by remember(weeks, nav) {
+        derivedStateOf {
+            val px = nav.cellWpx
+            val d = if (px > 0) nav.hScroll.value / px else 0
+            weeks.indexOfFirst { d <= it.last() }.let { if (it < 0) (weeks.size - 1).coerceAtLeast(0) else it }
+        }
+    }
+    Surface(color = cs.surfaceContainer, tonalElevation = 2.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             // [週ページング＋横スクロール併用] 前週/次週 は hScroll を1週ぶんジャンプ（列は隠さない＝自由スクロールと併用）。
             if (weeks.size > 1) {
-                Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(
-                        onClick = { val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scrollScope.launch { hScroll.animateScrollTo(t * cellWpx) } },
+                        onClick = { val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
                         enabled = curWeek > 0, modifier = Modifier.heightIn(min = 48.dp)) { Text("← 前週") }
                     val wk = weeks.getOrNull(curWeek)
                     // [レイアウト刷新] モックアップに合わせ「年月」を先頭に付す。月をまたぐ勤務表でも表示中の週の
@@ -632,19 +699,20 @@ internal fun ScheduleGrid(
                     Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
                         modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1)
                     OutlinedButton(
-                        onClick = { val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scrollScope.launch { hScroll.animateScrollTo(t * cellWpx) } },
+                        onClick = { val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
                         enabled = curWeek < weeks.size - 1, modifier = Modifier.heightIn(min = 48.dp)) { Text("次週 →") }
                 }
             }
+            // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
+            //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
             if (vioDays.isNotEmpty()) {
-                var navIdx by remember(vioDays) { mutableIntStateOf(-1) }
+                val navIdx = nav.navIdx
                 fun jumpTo(n: Int) {
-                    navIdx = n
-                    val d = vioDays[n]
-                    navFlash = -1 to d
-                    scrollScope.launch { hScroll.animateScrollTo((d * cellWpx).coerceAtLeast(0)) }
+                    val d = vioDays.getOrNull(n) ?: return
+                    nav.navIdx = n
+                    nav.navFlash = -1 to d
+                    scope.launch { nav.hScroll.animateScrollTo((d * nav.cellWpx).coerceAtLeast(0)) }
                 }
-                Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("＜ 前の違反") }
@@ -655,8 +723,6 @@ internal fun ScheduleGrid(
                         modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ＞") }
                 }
             }
-            if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
-        }
         }
     }
 }
@@ -1351,7 +1417,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false) {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1431,6 +1497,56 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
     // [7日間表示] cellW は ScheduleGrid が「1週間が収まる幅」を動的計算して注入（既定48dp=単独利用時）。
     val nameW = 80.dp; val cellH = 48.dp; val headH = 72.dp
+    // [3.481.0 勤務表タブ再設計①] 日ヘッダの固定。旧: 日ごとの Column の先頭にヘッダセルがあり、タブ全体の
+    //   縦スクロールでヘッダが画面外へ消えると（30名×48dp=1440dp の下段）何日の列か分からなくなっていた
+    //   （タップ時の行列クロスハイライトだけが頼り）。ヘッダを独立した Row にし、本体と同じ hScroll を共有
+    //   （横は同期）したうえで、ビューポート上端(stickyTopPx)より上へ出ようとする分だけ graphicsLayer で
+    //   下へ平行移動＝本体の下端まで追従して留まる。graphicsLayer 内で state を読むので再合成は起きない。
+    //   位置は「本体の上端 − ヘッダ高」から求める（平行移動しているヘッダ自身は測らない）。
+    val headHpx = with(LocalDensity.current) { headH.toPx() }
+    var bodyTopPx by remember { mutableFloatStateOf(0f) }
+    var bodyHpx by remember { mutableFloatStateOf(0f) }
+    val headerBg = CardDefaults.cardColors().containerColor
+    @Composable
+    fun DayHeader(d: Int) {
+        val dow = (sdow + d) % 7
+        // [レイアウト刷新/祝日色] 祝日法に基づく祝日（外部データ, JapanHolidays.kt）は日本の
+        //   慣行どおり日曜と同じ扱い（色も意味も同一）＝曜日を問わず適用（平日祝日も対象）。
+        val isHolidayCol = holidayName[d] != null
+        // [UD監査] 今日マーカーの緑(3.4:1)は白地で不足→ tertiary(濃緑ロール)へ。
+        // [3.125.0と同型] 淡い塗り(α0.14)上の生アクセント文字はコントラスト不足になりうるため、
+        //   実効背景（cs.surfaceへ合成後）に対して ensureReadable で保証する。
+        val headerTintColor = when { isHolidayCol || dow == 6 -> MagiAccent.red; dow == 5 -> MagiAccent.blue; else -> null }
+        val headerTint = headerTintColor?.copy(alpha = 0.14f)?.compositeOver(cs.surface)
+        val dcol = when {
+            d == todayIdx -> cs.tertiary
+            headerTintColor != null -> ensureReadable(headerTint ?: cs.surface, headerTintColor)
+            else -> cs.onSurfaceVariant
+        }
+        val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
+        // [⑥日別ジャンプ／列クロスハイライト] 要確認一覧の日別項目(人員/群レンジ)から来たとき、または
+        //   このセル列を最近タップしたとき、日ヘッダを primary 枠で注目表示
+        //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。
+        val dayFocused = (focusCell != null && focusCell.first < 0 && focusCell.second == d) ||
+            (tapped?.second == d)
+        Column(Modifier.width(cellW).height(headH)
+            // [祝日色] 今日マーカーの日はテキスト色のみで示す（背景タグは重ねない＝混同回避）。
+            .then(if (d != todayIdx && headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
+            .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
+            // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
+            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${d + 1}日 ${weekdayJa[dow]}曜日 ${holidayName[d]}" } else Modifier),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+            // [a11y] 荷重情報の「▼N」は別行の赤字バッジに分離（曜日と混ざって潰れないように）。
+            Text(weekdayJa[dow], fontSize = headFontSize, color = dcol, maxLines = 1)
+            // [E7] 「▼N」(人員不足)は covU 由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
+            // [悲観検証P2+P7] 旧「不足N」(4文字)はフォント拡大時に38dp列からクリップ。集計凡例と
+            //   同語彙の「▼N」(2-3文字)へ短縮し、サイズも列幅フィット(dp→sp)に。
+            if (dayShort[d] > 0 && "need" in vioEnabled) Text("▼${dayShort[d]}", fontSize = headFontSize, color = cs.error, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (hc != null) Box(Modifier.width(cellW - 10.dp).height(2.5.dp).background(hc, RoundedCornerShape(2.dp)))
+            else Spacer(Modifier.height(2.5.dp))
+        }
+    }
     Column {
         // [P7/実務者向け短文化] スクロール・週送り・土日/祝日色・休の淡色は操作/見た目から自明のため説明しない
         //   （日本のカレンダーの慣行＝赤=日曜/祝日・青=土曜 をシフト作成者は既に知っている前提）。
@@ -1439,11 +1555,30 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
         Text("タップで修正。凡例（枠・バッジの見方）は「検索・凡例」へ。",
             style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
-        Row {
-            Column {
-                Box(Modifier.width(nameW).height(headH), contentAlignment = Alignment.CenterStart) {
-                    Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        // [3.481.0] 固定ヘッダ行（名前列の見出し＋日ヘッダ）。zIndex で本体の上に描き、背景をカード色で塗る
+        //   （透過だと下を通るセルが透けて読めない）。
+        Row(
+            Modifier
+                .zIndex(1f)
+                .graphicsLayer {
+                    translationY = if (stickyTopPx >= 0f && bodyHpx > headHpx) {
+                        (stickyTopPx - (bodyTopPx - headHpx)).coerceIn(0f, bodyHpx - headHpx)
+                    } else 0f
                 }
+                .background(headerBg),
+        ) {
+            Box(Modifier.width(nameW).height(headH), contentAlignment = Alignment.CenterStart) {
+                Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            }
+            Row(Modifier.horizontalScroll(hScroll)) {
+                for (d in 0 until days) DayHeader(d)
+            }
+        }
+        Row(Modifier.onGloballyPositioned { c ->
+            bodyTopPx = c.positionInRoot().y
+            bodyHpx = c.size.height.toFloat()
+        }) {
+            Column {
                 for (i in 0 until staffCount) {
                     // [行クロスハイライト] このセル行が最近タップされた対象なら淡い primary 背景で強調。
                     val rowTapped = tapped?.first == i
@@ -1465,44 +1600,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
             }
             Row(Modifier.horizontalScroll(hScroll)) {
                 for (d in 0 until days) {
-                    val dow = (sdow + d) % 7
-                    // [レイアウト刷新/祝日色] 祝日法に基づく祝日（外部データ, JapanHolidays.kt）は日本の
-                    //   慣行どおり日曜と同じ扱い（色も意味も同一）＝曜日を問わず適用（平日祝日も対象）。
-                    val isHolidayCol = holidayName[d] != null
-                    // [UD監査] 今日マーカーの緑(3.4:1)は白地で不足→ tertiary(濃緑ロール)へ。
-                    // [3.125.0と同型] 淡い塗り(α0.14)上の生アクセント文字はコントラスト不足になりうるため、
-                    //   実効背景（cs.surfaceへ合成後）に対して ensureReadable で保証する。
-                    val headerTintColor = when { isHolidayCol || dow == 6 -> MagiAccent.red; dow == 5 -> MagiAccent.blue; else -> null }
-                    val headerBg = headerTintColor?.copy(alpha = 0.14f)?.compositeOver(cs.surface)
-                    val dcol = when {
-                        d == todayIdx -> cs.tertiary
-                        headerTintColor != null -> ensureReadable(headerBg ?: cs.surface, headerTintColor)
-                        else -> cs.onSurfaceVariant
-                    }
-                    val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
-                    // [⑥日別ジャンプ／列クロスハイライト] 要確認一覧の日別項目(人員/群レンジ)から来たとき、または
-                    //   このセル列を最近タップしたとき、日ヘッダを primary 枠で注目表示
-                    //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。
-                    val dayFocused = (focusCell != null && focusCell.first < 0 && focusCell.second == d) ||
-                        (tapped?.second == d)
+                    // [3.481.0] 日ヘッダは上の固定行（DayHeader）へ移動。ここは本体セルだけ。
                     Column {
-                        Column(Modifier.width(cellW).height(headH)
-                            // [祝日色] 今日マーカーの日はテキスト色のみで示す（背景タグは重ねない＝混同回避）。
-                            .then(if (d != todayIdx && headerBg != null) Modifier.background(headerBg, RoundedCornerShape(6.dp)) else Modifier)
-                            .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
-                            // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
-                            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${d + 1}日 ${weekdayJa[dow]}曜日 ${holidayName[d]}" } else Modifier),
-                            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                            // [a11y] 荷重情報の「▼N」は別行の赤字バッジに分離（曜日と混ざって潰れないように）。
-                            Text(weekdayJa[dow], fontSize = headFontSize, color = dcol, maxLines = 1)
-                            // [E7] 「▼N」(人員不足)は covU 由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
-                            // [悲観検証P2+P7] 旧「不足N」(4文字)はフォント拡大時に38dp列からクリップ。集計凡例と
-                            //   同語彙の「▼N」(2-3文字)へ短縮し、サイズも列幅フィット(dp→sp)に。
-                            if (dayShort[d] > 0 && "need" in vioEnabled) Text("▼${dayShort[d]}", fontSize = headFontSize, color = cs.error, fontWeight = FontWeight.Bold, maxLines = 1)
-                            if (hc != null) Box(Modifier.width(cellW - 10.dp).height(2.5.dp).background(hc, RoundedCornerShape(2.dp)))
-                            else Spacer(Modifier.height(2.5.dp))
-                        }
                         for (i in 0 until staffCount) {
                             val k = ui.schedule.getOrNull(i)?.getOrNull(d) ?: -1
                             val rawBg = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
