@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -106,6 +107,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 
 /**
  * CSVのバイト列を文字列へ復号する。妥当な UTF-8 ならそれを採用し、そうでなければ日本の Excel CSV で
@@ -153,6 +156,10 @@ internal fun decodeCsvBytes(bytes: ByteArray): String {
 @Composable
 fun MagiApp(vm: MagiViewModel = viewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
+    // [3.481.0 勤務表タブ再設計] 週送り/違反ナビの共有状態（Scaffold 下部バー ⇄ ScheduleGrid）と、
+    //   日ヘッダ固定に使う縦スクロールのビューポート上端（root座標px。未測定=-1）。
+    val schedNav = rememberScheduleNavState()
+    var viewportTopPx by remember { mutableFloatStateOf(-1f) }
     // [保存] バックグラウンド遷移(ON_STOP/ON_PAUSE)で保留中の編集を即時永続化する。
     //   制約編集などはデバウンス保存のため、即背景化→プロセス破棄だと失われ得る。その保険。
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -400,6 +407,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }) },
         bottomBar = {
             Column {
+                // [3.481.0 勤務表タブ再設計②] 週送り/違反ナビを勤務表タブ表示中だけ下部バーへ常駐
+                //   （スクロール位置に関係なく親指で押せる。3.444.0 で保留した Scaffold 側への引き上げ）。
+                if (ui.loaded && tab == 1) ScheduleNavBar(ui, schedNav)
                 if (ui.loaded) BottomCommandBar(ui, vm)
                 MagiBottomNav(tab) { tab = it }
             }
@@ -423,6 +433,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 .padding(pad)
                 .padding(horizontal = 16.dp)
                 .padding(top = if (oneHand) 120.dp else 0.dp) // 片手モード: 内容を親指の届く下方へ
+                // [3.481.0] verticalScroll より外側（＝スクロールで動かないビューポート側）の座標を測る。
+                //   勤務表グリッドの日ヘッダは、この上端より上へ出る分だけ下へ平行移動して画面に留まる。
+                .onGloballyPositioned { viewportTopPx = it.positionInRoot().y }
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
@@ -506,7 +519,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ScheduleGrid(ui, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
-                        canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) }, plainCellBorder = plainCellBorder)
+                        canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) }, plainCellBorder = plainCellBorder,
+                        nav = schedNav, stickyTopPx = viewportTopPx)
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)

@@ -26,6 +26,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-03（3.481.0＝勤務表タブの再設計（Claude起案・grillingで「任せる」＝推奨2項目のみ実施）。
+①日ヘッダの固定＝縦スクロールで日付行が画面上端に留まる（`MagiFlatGrid` のヘッダを独立行にして本体と `hScroll`
+を共有し、ビューポート上端との差分だけ `graphicsLayer` で平行移動） ②週送り/違反ナビを `Scaffold` 下部バーへ
+常駐（3.444.0 で保留した state 引き上げを `ScheduleNavState`/`ScheduleNavBar` として実施）。確定済み決定
+（違反枠3段階・希望バッジ・集計の位置・違反フィルタ可視・E5/D7/D4）には触れていない。表示・導線のみ＝
+エンジン/スコアリングは完全に不変。詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-03（3.480.0＝ユーザー提示の詳細なホーム画面リデザイン案（ASCIIモックアップ付き）を
 grilling で5点確定のうえ実装。①診断文（却下N件等）を文言そのままに既定折りたたみへ（`DiagDetailToggle`
 新設） ②分析タブの`FixSuggester`を再利用した「AIの解決提案」カード(`SmartActionCard`)を新設し先頭候補を
