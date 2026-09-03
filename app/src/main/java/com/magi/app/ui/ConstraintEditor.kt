@@ -39,7 +39,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * ws3-5 constraint editor, rendered as a card in the single-scroll layout. Adding or
@@ -67,9 +66,9 @@ fun ConstraintsCard(
             families.forEachIndexed { fi, fam ->
                 if (fi > 0) Spacer(Modifier.height(6.dp))
                 Spacer(Modifier.height(8.dp))
-                Text(fam.title, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(fam.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 if (fam.rows.isEmpty()) {
-                    Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("(なし)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     fam.rows.forEachIndexed { idx, row ->
                         ConstraintRow(row, enabled = !ui.running,
@@ -106,19 +105,19 @@ private fun ConstraintHelpExpander(families: List<MagiViewModel.ConstraintFamily
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(if (open) "ⓘ 詳しい説明を閉じる" else "ⓘ 詳しい説明（それぞれの条件の意味）",
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
         if (open) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 families.forEach { fam ->
                     constraintHelp[fam.key]?.let { body ->
                         Column {
-                            Text(fam.title, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(body, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(fam.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Text(body, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
-                Text(CONSTRAINT_HELP_FOOTER, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(CONSTRAINT_HELP_FOOTER, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -146,7 +145,7 @@ private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onD
             .heightIn(min = 48.dp)
             .wrapContentHeight(Alignment.CenterVertically)
             .padding(horizontal = 4.dp)) {
-            Text(row, fontSize = 12.sp)
+            Text(row, style = MaterialTheme.typography.labelSmall)
         }
         EditRowButton(onClick = onEdit, enabled = enabled)
         Spacer(Modifier.width(6.dp))
@@ -166,19 +165,19 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
             // [3.427.0] 旧文は続けて「スキル群のレンジ（…）と、スキル群ペア禁止（…）を設定します」と
             //   列挙していたが、直下の族見出し2行と完全な重複＝カードの識別に要る1文だけ残す。
             Text("上の「スキルグループ」に対する専用ルールです。",
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             if (vm.skillGroupKigouList().isEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text("先に上で「スキルグループ」を追加すると設定できます。",
-                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 ConstraintHelpExpander(families)
                 families.forEachIndexed { fi, fam ->
                     if (fi > 0) Spacer(Modifier.height(6.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text(fam.title, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(fam.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     if (fam.rows.isEmpty()) {
-                        Text("(なし)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("(なし)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         fam.rows.forEachIndexed { idx, row ->
                             ConstraintRow(row, enabled = !ui.running,
@@ -309,7 +308,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
                 else -> "必須の並び"
             }
             Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { vm.addCons3(family, listOf(a, b, c, d, e)) } }, a.isNotBlank()) {
-                Text("並び (上から順・最大5連日 / 空=ここで終了)", fontSize = 12.sp,
+                Text("並び (上から順・最大5連日 / 空=ここで終了)", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Picker("1番目", shifts, a) { a = it }
                 Picker("2番目", shiftsOpt, b) { b = it }
@@ -350,7 +349,7 @@ private fun NumField(label: String, value: String, modifier: Modifier = Modifier
     OutlinedTextField(
         value = value,
         onValueChange = { onChange(it.filter { c -> c.isDigit() }) },
-        label = { Text(label, fontSize = 12.sp) },
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
         singleLine = true,
         // [3.403.0] 入力エラーは枠の色そのもので示す（OutlinedTextField の組み込み）。説明文で補わない。
         isError = isError,
@@ -364,7 +363,7 @@ private fun NumField(label: String, value: String, modifier: Modifier = Modifier
 private fun Picker(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Column {
-        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Box {
             OutlinedButton(onClick = { open = true }) {
                 Text(if (selected.isBlank()) "(なし)" else selected)

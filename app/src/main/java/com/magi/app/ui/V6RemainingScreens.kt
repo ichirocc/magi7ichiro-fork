@@ -19,7 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.ShiftAppearance
 
@@ -35,7 +34,7 @@ fun SectionSegment(title: String, subtitle: String? = null, content: @Composable
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text(title, fontWeight = FontWeight.Bold)
-            if (subtitle != null) Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
             content()
         }
@@ -83,7 +82,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
             }
         }
         Spacer(Modifier.height(12.dp))
-        Text("未設定の種別に効く基準色", fontSize = 12.sp, color = cs.onSurfaceVariant)
+        Text("未設定の種別に効く基準色", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ColorChip(hex = baseHard, label = "必須", custom = ui.violationColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__hard__" }

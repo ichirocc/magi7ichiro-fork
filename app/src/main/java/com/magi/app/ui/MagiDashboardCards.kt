@@ -57,7 +57,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.magi.app.v6.V6PortReport
@@ -159,7 +158,7 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                                         textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            Text("入れたら「元に戻す」でいつでも取り消せます。", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                            Text("入れたら「元に戻す」でいつでも取り消せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                     }
                     infeasible.isNotEmpty() -> {
@@ -168,7 +167,7 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                             Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text("人を増やすか、担当できるシフトや希望を見直すと直せます。", fontSize = 12.sp, color = cs.onSurfaceVariant)
+                        Text("人を増やすか、担当できるシフトや希望を見直すと直せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     blocked.isNotEmpty() -> {
                         // [3.401.0] 「動かせる人がいる」枠が無くなったが、埋まっていない枠は残っている状態。
@@ -179,7 +178,7 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Text("もう一度つくっても、この日は同じ結果になります。希望を1件調整するか、担当できるシフトを増やしてください（編集タブ＞月次条件）。",
-                            fontSize = 12.sp, color = cs.onSurfaceVariant)
+                            style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     else -> {
                         Text("人手が足りない日はなくなりました。仕上げにもう一度つくると全体が整います。")
@@ -758,7 +757,7 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             Text("V6 1ヶ月俯瞰", fontWeight = FontWeight.Bold)
             Text(
                 "人員の穴・負荷の偏り・入力ミスを勤務表から直接集計します。",
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(14.dp))
@@ -798,13 +797,13 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             Text(
                 "Apt=${"%.2f".format(v6.aptPenalty)} / Equalize=${"%.2f".format(v6.equPenalty)} / Demand=${v6.demand} / covU=${v6.covU}",
                 fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (v6.sanityWarnings.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 v6.sanityWarnings.take(3).forEach {
-                    Text("⚠ $it", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                    Text("⚠ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                 }
             }
             // [3.286.0 冗長性C] 負荷プロフィール（staffProfiles top5）は AttentionCardsSection（人別リスト）が

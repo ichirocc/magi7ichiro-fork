@@ -18,6 +18,8 @@ Compose/Kotlin をコンパイルせずに grep 相当で検出（サンドボ�
     P6 message severity  : message を書くのに messageIsError を書かない copy(…)
     P7 二重エンコード      : UTF-8 を Latin-1 として読んだ内容を保存した文字化け（追跡中の全テキスト）
     P8 DS の ✅ 誤表示     : magi_design_system.md が「実装済(✅)」と書いた共通コンポーネントの実在確認
+    P11 fontSize 直書き   : ui/*.kt の fontSize = N.sp 直書き（一次ソースは MainActivity の
+                            Typography。MaterialTheme.typography.* へ寄せる。baseline 監視）
 """
 import os
 import re
@@ -459,6 +461,33 @@ def find_p10():
     return hits
 
 
+# [3.478.0] P11: fontSize = N.sp の直書き（ラチェット）。
+#   一次ソースは `MainActivity.MagiTheme` の Typography（displaySmall〜labelSmall の11段）。
+#   直書きは①スケール変更（本文/ラベル層の底上げ等）に追従しない ②`docs/magi_design_system.md` が
+#   明文化する「labelSmall 14 Medium＝チップ・凡例・補足の下限」のようなアクセシビリティ方針を
+#   個々のTextが黙って下回りうる（実測: 69箇所中の大半が12sp＝14sp下限を下回っていた）。
+#   MagiThemeのFontSize/Typographyトークン適用（3.478.0, grillingで5点確定）で69件を
+#   `style = MaterialTheme.typography.*` へ置換した残り＝**密なグリッドUI等の意図的な例外**だけを
+#   baseline として残す（群×シフト担当可否マトリクスのヘッダ/セル密表示・並列数±ステッパー等。
+#   一般的なタイポスケールを適用するとレイアウトが壊れる/操作性が落ちる箇所）。
+#   `letterSpacing = N.sp` は対象外（フォントサイズでなく字間なので誤検出しない）。
+P11_BASELINE = 6
+RE_P11_FONTSIZE = re.compile(r"\bfontSize\s*=\s*\d+\.sp\b")
+
+
+def find_p11():
+    """ui/*.kt の fontSize = N.sp 直書き。"""
+    hits = []
+    for path in ui_files():
+        rel = os.path.relpath(path, ROOT)
+        with open(path, encoding="utf-8") as fh:
+            for n, line in enumerate(fh, 1):
+                code = line.split("//", 1)[0]
+                if RE_P11_FONTSIZE.search(code):
+                    hits.append(f"{rel}:{n}")
+    return hits
+
+
 def main():
     strict = "--strict" in sys.argv
     findings = scan()
@@ -468,6 +497,7 @@ def main():
     findings["P8"] = find_p8()
     findings["P9"] = find_p9()
     findings["P10"] = find_p10()
+    findings["P11"] = find_p11()
     labels = {
         "P1": "純黒本文/背景 (Color.Black / 0xFF000000)",
         "P2": "生 hex 直書き (Color(0x……)) ※MagiTokens.kt 除く=baseline監視",
@@ -479,10 +509,11 @@ def main():
         "P8": "magi_design_system.md の ✅（実装済）と実装の食い違い",
         "P9": "beginBoardJob と finally の endBoardJob が対になっていない（読み取り専用に固着）",
         "P10": "シフト記号を文字列リテラルと比較（記号の字面で分岐＝別の記号の職場では黙って効かない）※baseline監視",
+        "P11": "fontSize 直書き（MaterialTheme.typography.* に寄せる）※baseline監視",
     }
     total = sum(len(v) for v in findings.values())
     print("=== MAGI design lint (docs/DESIGN.md P1-P4) ===")
-    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10"):
+    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11"):
         hits = findings[key]
         print(f"\n[{key}] {labels[key]}: {len(hits)} 件")
         for h in hits[:40]:
@@ -506,8 +537,9 @@ def main():
         "P2": "色は MagiTokens.kt / MagiTheme の colorScheme ",
         "P4": "角丸は MagiTheme の Shapes(small/medium/large) ",
         "P10": "勤務シフトの意味は外部データ（担当可否・必要人数・個人レンジ・希望・制約）から決めて ",
+        "P11": "文字サイズは MaterialTheme.typography.*（displaySmall〜labelSmall）へ寄せて ",
     }
-    for key, base in (("P2", P2_BASELINE), ("P4", P4_BASELINE), ("P10", P10_BASELINE)):
+    for key, base in (("P2", P2_BASELINE), ("P4", P4_BASELINE), ("P10", P10_BASELINE), ("P11", P11_BASELINE)):
         n = len(findings[key])
         if n > base:
             blockers.append(

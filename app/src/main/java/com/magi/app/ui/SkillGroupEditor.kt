@@ -32,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /**
  * [スキルグループ新設・年次マスター] ユニットグループとは別の第2分類を編集する。担当可否には影響せず、
@@ -55,21 +54,21 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
             //   自体は正しい。ただし「いま効いているか」は画面が言わないと分からない（実機で
             //   「グループ分けは正しいか?」と聞き返された＝ルール0本で何にも効いていない状態が不可視だった）。
             Text("担当シフトには影響しない、勤務グループとは別の分類です（1人1スキル）。スキル群のルール（レンジ／ペア禁止）だけがこの分類を使います。",
-                fontSize = 12.sp, color = cs.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             if (skills.isNotEmpty()) {
                 val skillRules = vm.skillConstraintFamilies().sumOf { it.rows.size }
                 if (skillRules == 0) {
                     Text("いまはスキル群のルールが1件も無いため、この分類は勤務表に影響しません（分類を置いておくこと自体は問題ありません）。ルールはこの下の専用ルール欄で作れます。",
-                        fontSize = 12.sp, color = cs.onSurfaceVariant)
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 } else {
                     Text("スキル群のルール ${skillRules}件がこの分類を使っています。",
-                        fontSize = 12.sp, color = cs.onSurfaceVariant)
+                        style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
             }
 
             skills.forEachIndexed { g, sg ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${sg.kigou}  ${sg.name}", fontSize = 12.sp, modifier = Modifier.weight(1f))
+                    Text("${sg.kigou}  ${sg.name}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = SkillDlg.Edit(g, sg.name, sg.kigou) }, enabled = !ui.running)
                     Spacer(Modifier.width(6.dp))
                     DeleteRowButton(onClick = { confirmDelete = g }, enabled = !ui.running)
@@ -83,7 +82,7 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
                 Text("職員のスキル割当", style = MaterialTheme.typography.titleSmall)
                 staff.forEachIndexed { i, st ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text(st.name, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(st.name, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                         var open by remember { mutableStateOf(false) }
                         Box {
                             OutlinedButton(onClick = { open = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {

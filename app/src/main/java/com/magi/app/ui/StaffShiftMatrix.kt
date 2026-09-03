@@ -42,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.magi.app.v6.V6SanityPort
 import kotlinx.coroutines.launch
 
@@ -195,7 +194,7 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
                         "・目標由来のやわらかい違反は消えます\n" +
                         "・担当ON/OFF・回数の下限上限・勤務表は変わりません\n" +
                         "・「元に戻す」で復帰できます\n実行しますか？",
-                    fontSize = 14.sp,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             },
             confirmButton = { DialogDangerButton("全リセット", onClick = { vm.ws1ResetGroupApt(); confirmResetApt = false }) },

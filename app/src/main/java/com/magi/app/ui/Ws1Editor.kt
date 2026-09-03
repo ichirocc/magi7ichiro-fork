@@ -70,13 +70,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
         Column(Modifier.padding(16.dp)) {
             LoadoutHeader("LOADOUT", "装備BOX — マスター設定")
             Spacer(Modifier.height(6.dp))
-            Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", fontSize = 14.sp,
+            Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary)
 
             // --- period ---
             Spacer(Modifier.height(10.dp))
             LoadoutHeader("PERIOD", "期間／対象月")
-            Text("${v.startDate} 〜 ${v.endDate}", fontSize = 14.sp,
+            Text("${v.startDate} 〜 ${v.endDate}", style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 W1Field("日数(1-31)", daysText, Modifier.width(130.dp)) { daysText = it }
@@ -85,7 +85,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- use2 ---
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                 Switch(checked = v.use2, onCheckedChange = { vm.ws1SetUse2(it) })
             }
             Divider()
@@ -100,7 +100,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}  (最低 ${s.need1.ifBlank { "-" }}人 / 上限 ${s.need2.ifBlank { "-" }}人)",
-                        fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) }, enabled = !ui.running)
                     if (v.shifts.size > 1) {
                         Spacer(Modifier.width(6.dp))
@@ -120,7 +120,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // [3.409.11] 残り1シフトのとき削除ボタンが**理由の説明なく消える**（3.400.0 でグループには
             //   理由を付けたが、シフトと職員は対象漏れだった）。同じ形で理由を出す。
             if (v.shifts.size <= 1) {
-                Text("最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                Text("最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
             AddRowButton("シフト追加", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
             AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
@@ -134,13 +134,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             //   消えるだけだった（担当可否の分類が無くなるため意図的に不可）。理由を明示。
             //   ※旧記述が引き合いに出していた「休シフトの削除不可」は 3.416.0 の方針（休は通常のシフト定義）で撤廃済み。
             if (v.groups.size <= 1) {
-                Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
             v.groups.forEachIndexed { g, gr ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) }, enabled = !ui.running)
                     if (vm.ws1CanRemoveGroup(g)) {
                         val members = vm.ws1GroupMemberCount(g)
@@ -170,7 +170,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 // [押下明示O4] 行タップで編集（シフト/グループ行と統一）。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) },
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("${st.name}  [グループ $gk]", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    Text("${st.name}  [グループ $gk]", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditStaff(i, st.name, st.groupIdx) }, enabled = !ui.running)
                     if (v.staff.size > 1) {
                         Spacer(Modifier.width(6.dp))
@@ -185,7 +185,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             }
             // [3.409.11] 同上（残り1職員のときも無言で消えていた）。
             if (v.staff.size <= 1) {
-                Text("最後の1名は削除できません（勤務表の行が無くなるため）。", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                Text("最後の1名は削除できません（勤務表の行が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             }
             AddRowButton("職員追加", onClick = { dialog = Ws1Dialog.AddStaff }, enabled = !ui.running)
             AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddStaff }, enabled = !ui.running)   // [⛏12]
@@ -311,11 +311,11 @@ internal fun StaffDialog(
     W1Shell(title, onClose, { onOk(name, gi) }, name.isNotBlank() && groupKigou.isNotEmpty()) {
         W1Text("名称", name) { name = it }
         var open by remember { mutableStateOf(false) }
-        Text("グループ", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("グループ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (groupKigou.isEmpty()) {
             // [A7] 鶏卵問題の誘導：グループが無いとスタッフの所属先が決められない（OKは無効）。
             Text("先に「グループ」を追加してください。職員はグループに所属します。",
-                fontSize = 14.sp, color = MaterialTheme.colorScheme.error)
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         } else {
             OutlinedButton(onClick = { open = true }) { Text(groupKigou.getOrNull(gi) ?: "(なし)") }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -345,16 +345,16 @@ private fun BulkAddDialog(
     val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
     val groupOk = groups == null || groups.isNotEmpty()
     W1Shell(title, onClose, { onApply(lines, gi) }, lines.isNotEmpty() && groupOk) {
-        Text(hint, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
             value = text, onValueChange = { text = it }, singleLine = false, minLines = 3,
-            label = { Text("1行に1件", fontSize = 14.sp) }, modifier = Modifier.fillMaxWidth(),
+            label = { Text("1行に1件", style = MaterialTheme.typography.labelSmall) }, modifier = Modifier.fillMaxWidth(),
         )
         if (groups != null) {
             if (groups.isEmpty()) {
-                Text("先に「グループ」を追加してください。", fontSize = 14.sp, color = MaterialTheme.colorScheme.error)
+                Text("先に「グループ」を追加してください。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
             } else {
-                Text("既定のグループ", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("既定のグループ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(onClick = { open = true }) { Text(groups.getOrNull(gi) ?: "(なし)") }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                     groups.forEachIndexed { idx, kg ->
@@ -364,7 +364,7 @@ private fun BulkAddDialog(
                 }
             }
         }
-        if (lines.isNotEmpty()) Text("追加: ${lines.size}件", fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+        if (lines.isNotEmpty()) Text("追加: ${lines.size}件", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -390,7 +390,7 @@ private fun W1Shell(
 @Composable
 private fun W1Text(label: String, value: String, onChange: (String) -> Unit) {
     OutlinedTextField(value = value, onValueChange = onChange, singleLine = true,
-        label = { Text(label, fontSize = 14.sp) }, modifier = Modifier.fillMaxWidth())
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) }, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
@@ -398,7 +398,7 @@ private fun W1Field(label: String, value: String, modifier: Modifier = Modifier,
     OutlinedTextField(
         value = value,
         onValueChange = { onChange(it.filter { c -> c.isDigit() }) },
-        label = { Text(label, fontSize = 14.sp) }, singleLine = true, modifier = modifier, isError = isError,
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) }, singleLine = true, modifier = modifier, isError = isError,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
     )
 }
@@ -496,7 +496,7 @@ private fun GroupShiftMatrix(
 @Composable
 private fun LoadoutHeader(code: String, jp: String) {
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(code, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary)
-        Text(jp, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text(code, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary)
+        Text(jp, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
