@@ -948,6 +948,7 @@ cons1=[5日窓休≥1, 14日窓休≥4, 14日窓Dﾃ≥2]。桒澤美幸・大�
 本文の引き方: `grep -n '（3.409.21' docs/history/3.4xx.md` のように版数で引き、その節を読む。
 見出しは原文のまま（版数・補足・ユーザー指示の引用を落とさない）。
 
+- シフト集計カードに職員別/日別の切替を復活＝3.477.0で撤去した機能を実機要望で再統合（3.479.0, ユーザー指示・grillingで1点確認）  → `docs/history/3.4xx.md`
 - MagiThemeのFontSize/Typographyトークン適用＝ハードコードfontSize 63件をMaterialTheme.typography.*へ・design_lint P11新設（3.478.0, ユーザー指示・grillingで5点確定）  → `docs/history/3.4xx.md`
 - 担当可否・目標・上下限・実績を職員×シフトの1マトリクスへ統合＝AptSection/StaffRangeSectionを撤去（3.477.0, ユーザー提示案・grillingで7点確定）  → `docs/history/3.4xx.md`
 - 群×シフト担当可否を2次元マトリックスへ再設計＝固定ヘッダ・セル全面タップ・行/列一括（3.476.0, ユーザー提示案・Windows11版と同時対応）  → `docs/history/3.4xx.md`
