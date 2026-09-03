@@ -1087,16 +1087,11 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     val cs = MaterialTheme.colorScheme
     // [直せる導線] 違反セルをタップ→原因(必要/下限/上限/目標 と現在)を数字で提示し「直し方を探す」へ。
     var detail by remember { mutableStateOf<TallyDetailUi?>(null) }
-    // 職員別: perStaff[i][k] = スタッフ i がシフト k を担当した回数
-    val perStaff = remember(ui.schedule, k) {
-        Array(s) { i -> IntArray(k).also { c -> ui.schedule[i].forEach { v -> if (v in 0 until k) c[v]++ } } }
-    }
     // 日別: perDay[j][k] = 日 j にシフト k へ配置された人数
     val perDay = remember(ui.schedule, k, t) {
         Array(t) { j -> IntArray(k).also { c -> for (i in 0 until s) { val v = ui.schedule[i].getOrNull(j) ?: -1; if (v in 0 until k) c[v]++ } } }
     }
-    // 違反ハイライト色（Excel版の色分けに対応）: 不足=赤 / 過剰=橙。
-    // 職員別は countViolations["i,k"](vio-low/vio-high=人数範囲)、日別は needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
+    // 違反ハイライト色（Excel版の色分けに対応）: 不足=赤 / 過剰=橙。needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
     // [M6統一] 不足=vioColor(ユーザー設定色に連動・既定 赤)、超過=橙。グリッド/ヒートバーと同じ2色言語。
     val critC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.red
     // [M2] 塗り飽和度を上げ暗テーマ・屋外グレアでの視認性を確保（0.30/0.36→0.45/0.50）。
@@ -1104,7 +1099,6 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     val shortBg = critC.copy(alpha = 0.45f)
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
-    var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
     // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
     //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
     val periodLabel = remember(ui.startDate, ui.days) {
@@ -1119,111 +1113,52 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
         Column(Modifier.padding(16.dp)) {
             Text("シフト集計", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            MagiSegmentedControl(options = listOf("職員別", "日別"), selected = mode, onSelect = { mode = it })
-            Spacer(Modifier.height(8.dp))
             periodLabel?.let {
                 Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 Spacer(Modifier.height(8.dp))
             }
-            if (mode == 0) {
-                // [3.397.0 形が語る] 「ⓘ タップで内訳と直し方」の貼り紙は剥がした。押せるセル（違反セル）は
-                //   右端の「›」が形で示す＝このアプリが行で使ってきた「›＝押せる」と同じ語彙。
-                // [一括修正] 職員別の赤/橙は low/high(上下限)だけでなく aptLow/aptHigh(適切回数=目標)も同色マーク
-                //   のため、凡例に「目標」を含める（旧「上限超過」だけでは 美幸B4=目標超過 の橙が読めなかった）。
-                TallyLegend(shortBg, overBg)
-                Spacer(Modifier.height(8.dp))
-                val labW = 100.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 集計セル 40x34 -> 48x48（違反セルはタップ可のため）
-                Row {
-                    Column {
-                        TallyBox(labW, rh, cs.surfaceVariant, false) {
-                            Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
-                        }
-                        for (i in 0 until s) TallyBox(labW, rh, cs.surfaceVariant, true) {
-                            val nm = ui.staffNames.getOrNull(i) ?: "$i"
-                            val gp = ui.staffGroupSymbols.getOrNull(i) ?: ""
-                            Text(if (gp.isBlank()) nm else "$nm·$gp", style = MaterialTheme.typography.bodySmall,
-                                color = cs.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        // [D1] 期間合計の見出し（勤務表グリッドの「シフト別の合計」をここへ一本化）。
-                        TallyBox(labW, rh, cs.surfaceVariant, true) {
-                            Text("計（期間）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
-                        }
+            // [3.396.0] 「左右スワイプで他の日」は剥がした。列は 84dp + 48dp×31日 = 1572dp あり、
+            //   どの対象端末（幅390dp以上=D4）でも**右端が必ず見切れる**＝横に続くことは形が語っている。
+            // [3.397.0] 「タップで内訳」も剥がした（押せるセルは右端の「›」が形で示す）。
+            TallyLegend(shortBg, overBg)
+            Spacer(Modifier.height(8.dp))
+            val labW = 84.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 日別集計セル 34x34 -> 48x48
+            Row {
+                Column {
+                    TallyBox(labW, rh, cs.surfaceVariant, false) {
+                        Text("シフト", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                     }
-                    Row(Modifier.horizontalScroll(rememberScrollState())) {
-                        for (kk in 0 until k) Column {
-                            val bg = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
-                            val fg = ensureReadable(bg, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
-                            TallyBox(cw, rh, bg, false) {
-                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
-                            }
-                            for (i in 0 until s) {
-                                val v = perStaff[i][kk]
-                                // [E7] 回数(low/high/apt/c2)バケツOFF時はこのセルの違反表示を抑止（値は表示・色/枠だけ消す）。
-                                val vio = ui.countViolations["$i,$kk"]?.takeIf { vioVisible(it, vioEnabled) }
-                                // [レイアウト/実機指摘] 0セルは旧 cs.surface(UDで真っ白)＝表に白い穴が空いて見えた。
-                                //   淡い同系色に沈めて「数字のあるセルが浮かぶ」市松を解消。
-                                val cbg = when (vio) { "vio-low", "vio-aptLow" -> shortBg; "vio-high", "vio-aptHigh" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
-                                // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
-                                val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
-                                val cellCd = if (vio != null) {
-                                    val dir = when (vio) { "vio-low", "vio-aptLow" -> "不足"; else -> "超過" }
-                                    "${ui.staffNames.getOrNull(i) ?: i} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}回 $dir・タップで詳細"
-                                } else null
-                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null, cd = cellCd) {
-                                    if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                                }
-                            }
-                            // [D1] シフト別の期間合計（列合計）。グリッドの重複行を廃止しここへ集約。
-                            TallyBox(cw, rh, cs.surfaceVariant, false) {
-                                Text("${(0 until s).sumOf { perStaff[it][kk] }}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
-                            }
+                    for (kk in 0 until k) {
+                        // [レイアウト/実機指摘] 全日0のシフト行（未使用シフト）はラベルも淡色に沈め、
+                        //   使っている行の模様を浮かび上がらせる（行は消さない＝存在は読める）。
+                        val rowZero = (0 until t).all { perDay[it][kk] == 0 }
+                        val bg0 = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
+                        val bg = if (rowZero) bg0.copy(alpha = 0.35f) else bg0
+                        val fg = if (rowZero) cs.onSurfaceVariant else ensureReadable(bg0, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
+                        TallyBox(labW, rh, bg, true) {
+                            Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.bodySmall, fontWeight = if (rowZero) FontWeight.Normal else FontWeight.Bold, color = fg, maxLines = 1)
                         }
                     }
                 }
-            } else {
-                // [3.396.0] 「左右スワイプで他の日」は剥がした。列は 84dp + 48dp×31日 = 1572dp あり、
-                //   どの対象端末（幅390dp以上=D4）でも**右端が必ず見切れる**＝横に続くことは形が語っている。
-                // [3.397.0] 「タップで内訳」も剥がした（押せるセルは右端の「›」が形で示す）。
-                TallyLegend(shortBg, overBg)
-                Spacer(Modifier.height(8.dp))
-                val labW = 84.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 日別集計セル 34x34 -> 48x48
-                Row {
-                    Column {
-                        TallyBox(labW, rh, cs.surfaceVariant, false) {
-                            Text("シフト", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                    for (j in 0 until t) Column {
+                        TallyBox(cw, rh, cs.surfaceVariant, false) {
+                            Text("${j + 1}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                         }
                         for (kk in 0 until k) {
-                            // [レイアウト/実機指摘] 全日0のシフト行（未使用シフト）はラベルも淡色に沈め、
-                            //   使っている行の模様を浮かび上がらせる（行は消さない＝存在は読める）。
-                            val rowZero = (0 until t).all { perDay[it][kk] == 0 }
-                            val bg0 = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
-                            val bg = if (rowZero) bg0.copy(alpha = 0.35f) else bg0
-                            val fg = if (rowZero) cs.onSurfaceVariant else ensureReadable(bg0, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
-                            TallyBox(labW, rh, bg, true) {
-                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.bodySmall, fontWeight = if (rowZero) FontWeight.Normal else FontWeight.Bold, color = fg, maxLines = 1)
-                            }
-                        }
-                    }
-                    Row(Modifier.horizontalScroll(rememberScrollState())) {
-                        for (j in 0 until t) Column {
-                            TallyBox(cw, rh, cs.surfaceVariant, false) {
-                                Text("${j + 1}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
-                            }
-                            for (kk in 0 until k) {
-                                val v = perDay[j][kk]
-                                // [E7] 人員(covU/covO)バケツOFF時はこの日セルの違反表示を抑止（値は表示・色/枠だけ消す）。
-                                val vio = ui.needViolations["$kk,$j"]?.takeIf { vioVisible(it, vioEnabled) }
-                                // [レイアウト/実機指摘] 0セルは白い穴に見えるため淡色へ（職員別と同じ）。
-                                val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
-                                // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
-                                val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
-                                val cellCd = if (vio != null) {
-                                    val dir = if (vio == "vio-covU") "人員不足" else "人員過剰"
-                                    "${j + 1}日 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
-                                } else null
-                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null, cd = cellCd) {
-                                    if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-                                }
+                            val v = perDay[j][kk]
+                            // [E7] 人員(covU/covO)バケツOFF時はこの日セルの違反表示を抑止（値は表示・色/枠だけ消す）。
+                            val vio = ui.needViolations["$kk,$j"]?.takeIf { vioVisible(it, vioEnabled) }
+                            // [レイアウト/実機指摘] 0セルは白い穴に見えるため淡色へ（職員別と同じ）。
+                            val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
+                            // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
+                            val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
+                            val cellCd = if (vio != null) {
+                                val dir = if (vio == "vio-covU") "人員不足" else "人員過剰"
+                                "${j + 1}日 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
+                            } else null
+                            TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null, cd = cellCd) {
+                                if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                             }
                         }
                     }
@@ -1250,22 +1185,6 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
 
 /** [直せる導線] 集計セルの違反詳細。focus=直す対象スタッフ(日別はnull=全体探索)。 */
 private data class TallyDetailUi(val title: String, val lines: List<String>, val focus: Int?, val shift: Int? = null)
-
-/** 職員別セル(i,k): 現在回数と 下限/上限/目標 の差を数字で。 */
-private fun staffViolDetail(vm: MagiViewModel, ui: UiState, i: Int, k: Int, count: Int, vio: String): TallyDetailUi {
-    val (lo, hi, apt) = vm.staffCellLimits(i, k)
-    val name = ui.staffNames.getOrNull(i) ?: "$i"
-    val sym = ui.shiftSymbols.getOrNull(k) ?: "$k"
-    val lines = ArrayList<String>()
-    lines += "現在 ${count}回"
-    when (vio) {
-        "vio-low" -> if (lo != null) lines += "下限 ${lo}回 → ${(lo - count).coerceAtLeast(0)}回 不足"
-        "vio-high" -> if (hi != null) lines += "上限 ${hi}回 → ${(count - hi).coerceAtLeast(0)}回 超過"
-        "vio-aptLow" -> if (apt != null) lines += "目標 ${apt}回 → ${(apt - count).coerceAtLeast(0)}回 不足"
-        "vio-aptHigh" -> if (apt != null) lines += "目標 ${apt}回 → ${(count - apt).coerceAtLeast(0)}回 超過"
-    }
-    return TallyDetailUi("$name ・ $sym", lines, i, k)
-}
 
 /** 日別セル(k,j): 現在人数と 必要数レンジ の差を数字で。 */
 private fun dayViolDetail(vm: MagiViewModel, ui: UiState, k: Int, j: Int, count: Int, vio: String): TallyDetailUi {

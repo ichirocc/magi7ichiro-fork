@@ -288,7 +288,8 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 
 ### 5.2 勤務表 ✅
 `WishApplyCard` → `ViolationFilterBar`(種別フィルタ＋集中モード) → `SearchLegendBar`(検索・凡例) →
-`ScheduleGrid`(`MagiFlatGrid`) → `TallyCard`(職員別/日別を `MagiSegmentedControl` で切替)。
+`ScheduleGrid`(`MagiFlatGrid`) → `TallyCard`(日別集計。職員別の集計・違反表示は編集タブ「回数（1人あたり）」の
+`StaffShiftMatrixCard` へ統合済み)。
 セル編集は `ShiftPickerSheet`(親指ゾーンの大タイル)。シフト色は §1.3。
 違反は**3段階の非色手がかり**（必須=実線 / 重いソフト=破線 / 軽いソフト=右上の角マーク・3.99.0）＋
 凡例 `ViolationLegend`。セル幅は「1週間(7日)が名前列と同時に収まる」よう動的計算（3.100.0）。
