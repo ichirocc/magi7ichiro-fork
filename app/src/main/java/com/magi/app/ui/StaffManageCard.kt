@@ -54,24 +54,30 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                         .clickable(enabled = !ui.running) { edit = Triple(i, st.name, st.groupIdx) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // [3.483.0 E-4] 旧: 名前列＋スキル▼＋編集＋削除が1行に並び、名前が押し潰されていた。
+                    //   スキル▼はグループと同じ「所属」の情報なので2行目に移し、右端は編集/削除だけにする。
                     Column(Modifier.weight(1f)) {
                         Text(st.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text("グループ $gk", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-                    }
-                    if (skills.isNotEmpty()) {
-                        var open by remember { mutableStateOf(false) }
-                        Box {
-                            OutlinedButton(onClick = { open = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
-                                Text(skills.getOrNull(st.skillIdx)?.kigou ?: "(なし)")
-                            }
-                            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                                DropdownMenuItem(text = { Text("(なし)") }, onClick = { vm.setStaffSkill(i, -1); open = false })
-                                skills.forEachIndexed { gi, sg ->
-                                    DropdownMenuItem(text = { Text("${sg.kigou}  ${sg.name}") }, onClick = { vm.setStaffSkill(i, gi); open = false })
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("グループ $gk", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                            if (skills.isNotEmpty()) {
+                                Spacer(Modifier.width(10.dp))
+                                Text("スキル", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                                Spacer(Modifier.width(4.dp))
+                                var open by remember { mutableStateOf(false) }
+                                Box {
+                                    OutlinedButton(onClick = { open = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
+                                        Text(skills.getOrNull(st.skillIdx)?.kigou ?: "(なし)")
+                                    }
+                                    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                                        DropdownMenuItem(text = { Text("(なし)") }, onClick = { vm.setStaffSkill(i, -1); open = false })
+                                        skills.forEachIndexed { gi, sg ->
+                                            DropdownMenuItem(text = { Text("${sg.kigou}  ${sg.name}") }, onClick = { vm.setStaffSkill(i, gi); open = false })
+                                        }
+                                    }
                                 }
                             }
                         }
-                        Spacer(Modifier.width(6.dp))
                     }
                     EditRowButton(onClick = { edit = Triple(i, st.name, st.groupIdx) }, enabled = !ui.running)
                     if (v.staff.size > 1) {

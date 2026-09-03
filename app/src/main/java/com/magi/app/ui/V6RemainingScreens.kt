@@ -3,7 +3,10 @@ package com.magi.app.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +18,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -62,7 +67,26 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
         // 基準色の実効値（未設定なら既定＝必須は UD 赤 / 要調整はアンバー。ピッカーの defaultHex と同値）。
         val baseHard = ui.violationColorHex.ifBlank { "#BA1A1A" }
         val baseSoft = ui.violationSoftColorHex.ifBlank { "#E08A1E" }
+        // [3.483.0 C-1] 基準色2チップを先頭に常時表示し、19種の族別チップは既定で折りたたむ
+        //   （設定タブの大半を1節が占めていた実機所見。個別設定の入口は開閉行で残す）。
+        Text("未設定の種別に効く基準色", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ColorChip(hex = baseHard, label = "必須", custom = ui.violationColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__hard__" }
+            ColorChip(hex = baseSoft, label = "要調整", custom = ui.violationSoftColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__soft__" }
+        }
+        Spacer(Modifier.height(12.dp))
+        var famOpen by rememberSaveable { mutableStateOf(false) }
+        val customN = MirrorKeys.all.count { ui.violationFamilyColorHex[it]?.isNotBlank() == true }
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { famOpen = !famOpen },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("種別ごとに個別の色（${MirrorKeys.all.size}種" + (if (customN > 0) "・個別設定${customN}件" else "") + "）",
+                style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+            Text(if (famOpen) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = cs.primary)
+        }
+        if (famOpen) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MirrorKeys.all.forEach { key ->
                 val sev = ShiftAppearance.severityFromVioKey(key)
                 // [色覚/日本語化] 色に依らない文字バックアップ。英語enum(CRITICAL/…)ではなく日本語の重大度語で示す。
@@ -80,13 +104,6 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 val label = "${breakdownLabels[key] ?: key}（$sevJp）" + (if (count > 0) " ${count}件" else "")
                 ColorChip(hex = hex, label = label, custom = famHex != null, enabled = !ui.running) { pickFam = key }
             }
-        }
-        Spacer(Modifier.height(12.dp))
-        Text("未設定の種別に効く基準色", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-        Spacer(Modifier.height(6.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            ColorChip(hex = baseHard, label = "必須", custom = ui.violationColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__hard__" }
-            ColorChip(hex = baseSoft, label = "要調整", custom = ui.violationSoftColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__soft__" }
         }
     }
     pickFam?.let { pf ->

@@ -250,7 +250,10 @@ internal fun OperatorNextActionCard(
                 ?: "必須違反が ${ui.bestHard}件 残っています。"),
             // [3.480.0 ホームAIリデザイン] 補助ボタン「もう一度つくる」は固定フッターと重複のため撤去
             // （grilling決定#3）。この状態の主導線は「なおすのを手伝って」1つに絞る。
-            "なおすのを手伝って", onFix, true, null, {})
+            // [3.483.0 H-1] 人手不足が無い狩猟では、この大ボタンは分析タブへ飛んで同じ探索を起動するだけ
+            //   ＝直下の「AIの解決提案」と同じ結果を別画面で見せる冗長。不足があるとき（GuidedFix＝
+            //   代用要員のピッカーという別機能）だけ出す。
+            "なおすのを手伝って", onFix, !ui.coverageDiag?.shortfalls.isNullOrEmpty(), null, {})
     }
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
@@ -273,20 +276,26 @@ internal fun OperatorNextActionCard(
             // 常時2行表示していた。grilling決定#1のとおり文言（正直さ）は変えず、①前向きな言い回し
             // 「解消度：N%（残りM件）」＋バーへ統合 ②注記は既定折りたたみ（ConstraintHelpExpander と
             // 同じ開閉パターン）にして、常時見えるのは進捗バー1本だけにする。
+            // [3.483.0 H-2] 旧: 必須0なら一律「解消済み」だが、解消度は調整（ソフト）違反が残ると 100% に
+            //   ならない（40+比率×60）＝「78%（解消済み）」という自己矛盾。必須0のときは残りの単位を調整件数へ。
             val remainingLabel = when {
-                ui.bestHard > 0L -> "残り${ui.bestHard}件"
+                ui.bestHard > 0L -> "必須 残り${ui.bestHard}件"
                 shortDays > 0 -> "残り${shortDays}日"
+                ui.bestSoft > 0L -> "必須は解消・調整 ${ui.bestSoft}件"
                 else -> "解消済み"
             }
-            Text(
-                "解消度：${ui.satisfaction}%（${remainingLabel}）",
-                style = MaterialTheme.typography.bodyMedium, color = plan.fg, fontWeight = FontWeight.Bold,
-            )
-            LinearProgressIndicator(
-                progress = { ui.satisfaction.coerceIn(0, 100) / 100f },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 8.dp),
-                color = plan.fg, trackColor = plan.fg.copy(alpha = 0.2f),
-            )
+            // [3.483.0 H-5] 実行中は直下の進捗行（progressSummary）が同じ残数を出すため、解消度の行とバーは出さない。
+            if (!ui.running) {
+                Text(
+                    "解消度：${ui.satisfaction}%（${remainingLabel}）",
+                    style = MaterialTheme.typography.bodyMedium, color = plan.fg, fontWeight = FontWeight.Bold,
+                )
+                LinearProgressIndicator(
+                    progress = { ui.satisfaction.coerceIn(0, 100) / 100f },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 8.dp),
+                    color = plan.fg, trackColor = plan.fg.copy(alpha = 0.2f),
+                )
+            }
             if (!ui.running && ui.hasResult) {
                 var detailOpen by remember { mutableStateOf(false) }
                 Row(
@@ -338,8 +347,9 @@ internal fun OperatorNextActionCard(
             // 一度使うと二度と初期解生成へ戻れなかった。小さな常設リンクとして独立させ、実行中以外は
             // 常に再生成できるようにする（元に戻すで取消可能・破壊的でない）。
             if (!ui.running && ui.hasResult) {
+                // [3.483.0 H-4] 押すと今の結果を捨てて初期解へ戻る操作なので、その結果と戻し方を文言に含める。
                 TextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) {
-                    Text("下書きを作り直す（希望と期間の制約を先に埋め直す）")
+                    Text("下書きから作り直す（今の結果は「元に戻す」で戻せます）")
                 }
             }
         }
@@ -1175,7 +1185,9 @@ private fun ConfirmRow(
             when {
                 ws != null -> TextButton(onClick = { onFixWish(ws) }) { Text("設定で直す") }
                 ns != null -> TextButton(onClick = { onFixNeed(ns) }) { Text("設定で直す") }
-                clickable -> Text(if (dayOnly) "勤務表→" else "直し方→", style = MaterialTheme.typography.labelMedium,
+                // [3.483.0 A-3] 「直し方→」は同じタブ内の下のカード（改善の提案）で探索が始まるだけ＝別画面へ
+                //   飛ぶように読めた。動作をそのまま言う。
+                clickable -> Text(if (dayOnly) "勤務表→" else "直し方を探す", style = MaterialTheme.typography.labelMedium,
                     color = ensureReadable(cs.surfaceVariant, MagiAccent.blue))
             }
         }
@@ -1213,7 +1225,6 @@ internal fun AnalysisTriageCard(
     onShowDay: (Int) -> Unit,
     onFixWish: (Int) -> Unit,
     onFixNeed: (Int) -> Unit,
-    onMake: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
@@ -1299,10 +1310,8 @@ internal fun AnalysisTriageCard(
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
 
-            Button(onClick = onMake, enabled = ui.loaded && !ui.running,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
-                Text("▶ 勤務表をつくる", style = MaterialTheme.typography.titleMedium)
-            }
+            // [3.483.0 A-1] 旧「▶ 勤務表をつくる」ボタンは撤去。固定フッター（BottomCommandBar）の同名ボタンと重複
+            //   （3.480.0 ホーム／3.482.0 編集タブで「フッターに一本化」した方針の取り残し）。
             if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
@@ -1397,6 +1406,13 @@ private fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compos
 @Composable
 internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.magi.app.v6.FixSuggestion) -> Unit, proMode: Boolean = false) {
     val cs = MaterialTheme.colorScheme
+    // [3.483.0 A-2] ホームの「AIの解決提案」は必須違反が残っていれば自動で探すのに、ここは「探す」を押すまで空
+    //   ＝同じエンジンで挙動が違った。同じ条件（結果あり・必須>0・未探索）で自動探索を共有する。
+    //   ソフトだけの盤面は従来どおり手動（探索コストに見合う候補が少ない）。
+    LaunchedEffect(ui.schedule, ui.bestHard) {
+        if (ui.hasResult && ui.bestHard > 0L && !ui.running && !ui.fixSearching &&
+            ui.fixSuggestions.isEmpty() && ui.fixFocusName.isBlank()) onSearch()
+    }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1461,9 +1477,12 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
                 selected = selected,
                 onSelect = { i -> selected = i; onApply(i) },
             )
-            if (selected in ui.alternatives.indices) {
-                Text(ui.alternatives[selected], style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // [3.483.0 H-3] タップ＝即反映なので「見てから選ぶ」ために全案の要約（必須/合計）を常時出す。
+            //   反映済みの案は太字。
+            ui.alternatives.forEachIndexed { i, s ->
+                Text(s, style = MaterialTheme.typography.bodySmall,
+                    fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (i == selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

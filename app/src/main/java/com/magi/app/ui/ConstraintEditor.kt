@@ -90,7 +90,8 @@ fun ConstraintsCard(
                             onDelete = { vm.removeConstraint(fam.key, idx) })
                     }
                 }
-                AddRowButton("追加", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
+                // [3.483.0 E-10] 並び系は起点チップごとに「＋」があるため、末尾の「追加」は「新しい起点で追加」と区別。
+                AddRowButton(if (fam.key.startsWith("cons3")) "新しい起点で追加" else "追加", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
                 Divider()
             }
         }
@@ -122,7 +123,15 @@ private fun SeqFamilyGrouped(
     val firsts = pats.mapNotNull { it.firstOrNull() }.distinct()
     for (first in firsts) {
         Spacer(Modifier.height(4.dp))
-        Text("【$first の次の日】", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
+        // [3.483.0 E-11] 見出しに族の意味（禁止/必須/推奨/回避）を含める。旧「【X の次の日】」は4族で同文だった。
+        val heading = when (fam.key) {
+            "cons3n" -> "【$first の次の日に禁止】"
+            "cons3" -> "【$first の次の日に必須（どれか）】"
+            "cons3m" -> "【$first の次の日に推奨】"
+            "cons3mn" -> "【$first の次の日は避ける】"
+            else -> "【$first の次の日】"
+        }
+        Text(heading, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
         val idxs = pats.indices.filter { pats[it].firstOrNull() == first }
         val pairIdxs = idxs.filter { pats[it].size == 2 }
         val otherIdxs = idxs.filter { pats[it].size != 2 }

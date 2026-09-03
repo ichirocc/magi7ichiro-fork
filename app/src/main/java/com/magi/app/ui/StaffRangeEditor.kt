@@ -49,17 +49,8 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 fun CountsCard(ui: UiState, vm: MagiViewModel) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "1人がその勤務へ1か月に何回入るかを調整します。『目標』は近づけたい回数（やわらかい）、" +
-                    "『下限/上限』は必ず守る回数（かたい）。",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-    Spacer(Modifier.height(8.dp))
+    // [3.483.0 E-8] 旧: 説明文だけのカードが先頭にあった。同じ説明（目標＝やわらかい／上下限＝かたい）は
+    //   StaffShiftMatrixCard の見出し直下にもあり二重だったので、こちらを撤去。
     StaffShiftMatrixCard(ui, vm)
     Spacer(Modifier.height(8.dp))
     Card(Modifier.fillMaxWidth()) {

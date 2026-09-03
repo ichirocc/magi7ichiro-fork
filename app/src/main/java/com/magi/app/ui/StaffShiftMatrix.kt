@@ -97,7 +97,7 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("回数マトリクス（職員 × シフト）", style = MaterialTheme.typography.titleMedium)
+            Text("回数マトリクス（職員 × シフト：月に何回か）", style = MaterialTheme.typography.titleMedium)   // [3.483.0 E-7]
             Text(
                 "セルをタップで目標・上下限を編集。「—」＝担当不可（担当可否は①で変更）。" +
                     "薄色＝目標(やわらかい)のズレ、濃色＝個人の上下限(かたい)の逸脱。",
@@ -110,8 +110,9 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
                         if (col >= 0) scope.launch { hScroll.animateScrollTo((labelW.value.toInt() + col * cellW.value.toInt()).coerceAtLeast(0)) }
                     }) {
                     Text(
-                        "⚠ ${toHankakuKigou(worst.kigou)}：目標の合計${worst.aptSum}回 に対し、" +
-                            (if (worst.isRest) "休める日数の上限は${worst.capacity}日" else "必要人数の合計は${worst.capacity}回") +
+                        // [3.483.0 E-9] 旧「…に対し、…は…回（…）」の3段構文を「目標 ＞ 上限」の1式へ。
+                        "⚠ ${toHankakuKigou(worst.kigou)}：目標の合計${worst.aptSum}回 ＞ " +
+                            (if (worst.isRest) "休める日数の上限${worst.capacity}日" else "必要人数の合計${worst.capacity}回") +
                             "（${worst.shortfall}回ぶんは必ず届きません）。タップでその列へ",
                         style = MaterialTheme.typography.labelMedium, color = cs.onErrorContainer,
                         modifier = Modifier.padding(10.dp),
@@ -134,6 +135,10 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
                             Text("${v.staff[i].name}（${gr?.kigou?.let { toHankakuKigou(it) } ?: "?"}）",
                                 style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
+                    }
+                    // [3.483.0 E-9] フッター行の見出し。旧: 右側の「実績/目標」数字列だけで、左列に何の行か無かった。
+                    MatrixHeaderCell(labelW, rowH, cs.surfaceVariant, alignStart = true) {
+                        Text("計 実績/目標", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     }
                 }
                 Column(Modifier.horizontalScroll(hScroll)) {
