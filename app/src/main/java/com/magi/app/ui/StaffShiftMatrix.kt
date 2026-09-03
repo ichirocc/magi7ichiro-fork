@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -272,6 +273,7 @@ private fun MatrixDataCell(
 }
 
 /** セルタップの編集シート。①群の目標(apt、全員に影響) ②個人の上下限(staffRange) の2系統のみ提供する。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: MagiViewModel.Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
