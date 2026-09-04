@@ -475,7 +475,7 @@ object V6NativeOptimizer {
      * 追加も窓1回ぶん。締切超過とキャンセルは単調なので即座に true を返す。
      *
      * `deadline` は [nowMs]（`System.nanoTime()` 系の単調時計）と同じ物差しで渡すこと。
-     * 壁時計（`EngineClock.nowMs()`）を混ぜると別の原点になり、締切超過を検出できない。
+     * 壁時計（`System.currentTimeMillis()`）を混ぜると別の原点になり、締切超過を検出できない。
      */
     internal suspend fun confirmStop(
         shouldStop: () -> Boolean,
@@ -1060,7 +1060,7 @@ object V6NativeOptimizer {
      *  - 相対評価: if none passes by the deadline, the lowest-penalty hypothesis is adopted.
      * Worker 0's progress is forwarded, prefixed with the number of hypotheses still running.
      */
-    private suspend fun runMultiWorker(
+    internal suspend fun runMultiWorker(
         w: Int,
         options: V6OptimizerOptions,
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
@@ -1095,8 +1095,10 @@ object V6NativeOptimizer {
         val jobs = arrayOfNulls<kotlinx.coroutines.Deferred<V6OptimizerResult?>>(hSpawn)
         for (i in 0 until hSpawn) {
             jobs[i] = async(Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.LAZY) {
-                // 開始時点で既に勝者が確定していれば(まれな競合)何もせず抜ける。
-                if (winner.get() >= 0 && winner.get() != i) return@async null
+                // [3.491.0/外部レビュー第7弾] 旧: 「開始時点で既に勝者が確定していれば何もせず抜ける」
+                //   事前チェックが残っていた。3.376.0 で「HARD=0 到達で残りを即キャンセル」を撤廃し
+                //   winner を記録専用にしたのに、この1行だけが**仮説の起動を黙って省く**経路として生き残り、
+                //   スレッドプールの起動順しだいで仕様（全本継続）と違う本数しか走らなかった。撤去。
                 try {
                     // [HF290 役割分担＋論文活用] 各仮説に探索/精製プロファイル＋受理基準(SA/GD)を割当て多様化（W0=ベースライン）。
                     run(i, options.copy(workers = plan[i], seed = base + (i + 1) * 0x9E3779B1L, explore = RoleDiversityHelpers.roleExploreFor(i), accept = RoleDiversityHelpers.roleAcceptFor(i), opSelect = RoleDiversityHelpers.roleOpSelectFor(i))) { phase, report, iters, elapsed ->

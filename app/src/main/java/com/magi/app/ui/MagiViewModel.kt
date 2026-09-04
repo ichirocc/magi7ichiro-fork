@@ -318,8 +318,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             // [3.406.0/B-02] **読めることを確かめてから**共有ファイルを消す。旧: 解析前に clearFiles して
             //   いたため、完了結果が壊れていると復元に使えたはずの入力・途中最良・マーカーまで同時に失い、
             //   利用者は何も取り戻せなかった。解析できなければ結果だけ捨てて、下の中断/途中結果の経路へ落とす。
+            // [3.491.0] 解析できるだけでなく**読込の検証（validate）も通る**ことを確かめる。旧: parse 成功
+            //   だけで共有ファイルを消していたため、3.488.0 で validate が厳格化（startDate 不正の拒否）
+            //   されて以降、「読めるが validate で落ちる」結果を消してから loadAsync が失敗し、
+            //   入力・途中最良まで失う経路が復活していた（3.406.0/B-02 の再発）。
             val resultUsable = !resultTxt.isNullOrBlank() &&
-                withContext(Dispatchers.Default) { runCatching { StateParser.parse(resultTxt) }.isSuccess }
+                withContext(Dispatchers.Default) {
+                    runCatching { validate(Ws1Ops.normalizeEndDate(StateParser.parse(resultTxt))) == null }.getOrDefault(false)
+                }
             if (!resultTxt.isNullOrBlank() && !resultUsable) {
                 logOp("W", "前回のバックグラウンド最適化の完了結果が壊れていて読めませんでした（入力と途中結果は残してあります）")
                 runCatching { OptimizationWorker.resultFile(getApplication()).delete() }
@@ -777,6 +783,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 if (repaired) logOp("W", "文字化け（二重エンコード）を自動修復して読み込みました。元のファイル自体は修復されません（「データを保存」で保存し直すと次回からこの警告は出ません）")
                 var endDateFixedFrom: String? = null   // [3.486.0] endDate を日数に合わせて補正したときの旧値
+                var normalizedOnLoad = false          // [3.491.0] 読込時の正規化で state が差し替わったか
                 val loaded = withContext(Dispatchers.Default) {
                     val parsed = StateParser.parse(json)
                     // [3.486.0] endDate と日数の食い違いは検証を通り抜けていた＝日数を正として endDate を揃える。
@@ -785,6 +792,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     validate(st0)?.let { return@withContext Result.failure<LoadedProblem>(IllegalArgumentException(it)) }
                     // [3.488.0] 検証を通ったあとで groupShiftApt を G×K に揃える（空配列・行不足は空欄＝目標なし）。
                     val st = Ws1Ops.normalizeGroupShiftApt(st0)
+                    normalizedOnLoad = st !== parsed
                     val p = Problem(st)
                     val init = p.initialAssignment()
                     val report = UnifiedViolationChecker.check(st, init)
@@ -807,7 +815,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         val prevSaved = if (prevJson == null) false else withContext(Dispatchers.IO) {
                             runCatching { writeFileAtomically(prevBackupFile, prevJson) }.getOrDefault(false)
                         }
-                        originalJson = json
+                        // [3.491.0/自己見直し] 旧: 正規化（endDate 補正・groupShiftApt の G×K 化）をしても
+                        //   originalJson は**生のファイル**のままで、structureEdited=false の exportJson は
+                        //   その生 JSON に schedule だけ差し込んで返す＝直後の autoSave も「データを保存」も
+                        //   補正前の endDate を書き戻し、警告文の「保存し直すと次回から出ません」が嘘だった
+                        //   （構造編集をしない限り毎回の起動で同じ警告）。正規化したときだけ、正規化後の
+                        //   state を serialize したものを原本にする（extras は serialize が写す）。
+                        originalJson = if (normalizedOnLoad) StateParser.serialize(lp.state, lp.schedule) else json
                         state = lp.state.withSchedule(lp.schedule)
                         currentSchedule = lp.schedule.copy2D()
                         // [bg復元] markResult=true は「バックグラウンド最適化の結果 JSON」の読込。schedule が

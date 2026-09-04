@@ -3,6 +3,7 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 
 /**
@@ -983,6 +984,12 @@ object V6FinalPort {
         //   エンジン内部のこの2経路が残っていた）。盤面が一致するときだけ診断を通す。
         //   ログ（post.report.logs）は「その実行で何が起きたか」の記録なので落とさない。
         val postForResult = post.takeIf { finalSched.contentDeepEquals(it.schedule) }
+        // [3.491.0/外部レビュー第7弾] 停止は**必ず例外で**返す（呼出側の ViewModel は CancellationException で
+        //   「直前の勤務表を保持」へ分岐する）。各段は `!isActive` を締切と同列の「止まる条件」にしているため
+        //   ここまでは keep-best の盤面を持って来られるが、外側の `withContext(Dispatchers.Default)` が完了時に
+        //   親のキャンセルを見て自分で投げるので、実効上は元から例外で返っていた（StopSemanticsTest の変異検証で
+        //   確認）。この1行は契約を読める場所に明示する保険＝挙動は不変。実在した非対称は Windows 版だった。
+        ensureActive()
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, postForResult,
             alternatives = chained.alternatives)
     }

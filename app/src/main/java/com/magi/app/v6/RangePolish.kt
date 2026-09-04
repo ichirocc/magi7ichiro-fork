@@ -717,17 +717,25 @@ internal object RangePolish {
                 val k = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
                 val reasons = blockStats[i to k]
                 val top = reasons?.maxByOrNull { it.value } ?: return@mapNotNull label(i, k)
-                // [不採用の主因, 3.302.0] C1Polish と同型。「不採用」のときだけ主因族を上位2件併記。
-                val culprits = if (top.key != "不採用") "" else
-                    culpritStats[i to k]?.entries?.sortedByDescending { it.value }?.take(2)
-                        ?.joinToString(" ") { "${it.key}:${it.value}" }
-                        ?.let { if (it.isEmpty()) "" else " 主因 $it" } ?: ""
+                // [不採用の主因, 3.302.0] C1Polish と同型。「不採用」があれば主因族を上位2件併記。
+                // [3.491.0/実機ログ起因] 旧: 主因は top が「不採用」のときだけ出していた。実データ（2026-10）で
+                //   「古泉 健一 休(希望固定×30: …)」とだけ出て、**本当の壁＝不採用18手の主因 c1（窓の要件）**が
+                //   ログから読めなかった（希望固定は 5日×6シフト=30 の延べ数で最多になっただけ）。
+                //   最多理由の後ろに残りの理由も件数つきで並べ、不採用の主因は top に関わらず出す。
+                val culprits = culpritStats[i to k]?.entries?.sortedByDescending { it.value }?.take(2)
+                    ?.joinToString(" ") { "${it.key}:${it.value}" }
+                    ?.let { if (it.isEmpty()) "" else " 主因 $it" } ?: ""
                 // [3.358.0] 日で決まる理由（希望固定・禁止連続）は実日付を出す＝そのまま直しに行ける。
                 val days = blockDays[i to k]?.get(top.key)?.sorted().orEmpty()
                 val dayTxt = if (days.isEmpty()) "" else
                     ": " + days.take(6).joinToString("・") { dayLabel(it) } +
                         (if (days.size > 6) "ほか${days.size - 6}日" else "")
-                "${label(i, k)}(${top.key}×${top.value}$dayTxt$culprits)"
+                val rest = reasons.entries.filter { it.key != top.key }.sortedByDescending { it.value }
+                    .joinToString("") { r ->
+                        "・${r.key}×${r.value}" + (if (r.key == "不採用") culprits else "")
+                    }
+                val topCulprit = if (top.key == "不採用") culprits else ""
+                "${label(i, k)}(${top.key}×${top.value}$dayTxt$topCulprit$rest)"
             }
         val rangeCombSummary = rangeCombStats.summary()
         val logs = listOf(MirrorLog(tag = "RangePolish",

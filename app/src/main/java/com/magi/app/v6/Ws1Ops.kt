@@ -307,8 +307,9 @@ object Ws1Ops {
         else "startDate が日付として読めません（YYYY-MM-DD 形式で指定してください: \"${state.startDate}\"）"
 
     /**
-     * [3.488.0] `groupShiftApt` を G×K に揃える（読込時の正規化）。空配列・行不足・列不足（旧形式）は
-     * 空欄＝目標なしで埋め、余分な列は落とす。既に G×K なら同じ state を返す。読む側（[Problem] は
+     * [3.488.0] `groupShiftApt` を G×K に揃える（読込時の正規化）。空配列・行不足は空欄＝目標なしで埋め、
+     * 余分な列は落とす。列不足の行も同じ規則で埋めるが、読込経路では先に validate が拒否するため
+     * 実際に通るのは空配列・行不足だけ（3.491.0 で注記）。既に G×K なら同じ state を返す。読む側（[Problem] は
      * `getOrNull`）は添字を守っているが、境界を1か所に寄せて以後の読み手が同じ穴を踏まないようにする。
      */
     fun normalizeGroupShiftApt(state: MagiState): MagiState {

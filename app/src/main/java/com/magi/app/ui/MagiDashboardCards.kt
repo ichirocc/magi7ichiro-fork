@@ -485,7 +485,7 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
  */
 
 @Composable
-internal fun CoverageDiagnosisCard(ui: UiState) {
+internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit = { _, _ -> }) {
     val diag = ui.coverageDiag ?: return
     if (!diag.hasShortage && !diag.hasSurplus) return
     val cs = MaterialTheme.colorScheme
@@ -561,6 +561,14 @@ internal fun CoverageDiagnosisCard(ui: UiState) {
                             val famJp = s.blockedFamily?.let { breakdownLabels[it] ?: it }
                             Text(s.reason + (famJp?.let { "（主因: $it）" } ?: ""),
                                 color = cs.onSecondaryContainer, style = MaterialTheme.typography.bodySmall)
+                            // [3.492.0] 「希望固定N人」の中身を名指しし、その場で希望を取り消せる（データ修正の導線）。
+                            for (i in s.pinnedStaff) {
+                                OutlinedButton(
+                                    onClick = { onCancelWish(i, s.dayIndex) },
+                                    enabled = !ui.running,
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の希望（${s.shiftSymbol}）を取り消す", color = cs.error) }
+                            }
                         }
                     }
                 }
