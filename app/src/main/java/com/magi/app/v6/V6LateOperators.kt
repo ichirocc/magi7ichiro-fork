@@ -65,7 +65,7 @@ object V6LateOperators {
         val sched = schedule.copy2D()
         val logs = ArrayList<MirrorLog>()
         var cur = report
-        fun timeUp() = System.currentTimeMillis() >= deadlineMs
+        fun timeUp() = EngineClock.nowMs() >= deadlineMs
         fun lim(r: ViolationReport): Int =
             200 * (r.breakdown["high"] ?: 0) + 120 * (r.breakdown["low"] ?: 0)
         fun c1(r: ViolationReport): Int = r.breakdown["c1"] ?: 0

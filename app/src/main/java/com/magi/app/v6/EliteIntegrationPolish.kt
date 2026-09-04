@@ -380,7 +380,7 @@ internal object EliteIntegrationPolish {
     }
 
     private fun stopped(shouldStop: () -> Boolean, deadlineMs: Long): Boolean =
-        shouldStop() || System.currentTimeMillis() >= deadlineMs
+        shouldStop() || EngineClock.nowMs() >= deadlineMs
 
     private fun better(a: ViolationReport, b: ViolationReport): Boolean =
         AdaptiveEliteArchive.better(a, b)

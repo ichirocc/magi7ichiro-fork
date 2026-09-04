@@ -37,14 +37,14 @@ class StopPropagationTest {
             V6Algorithm.RSI_PLUS, V6Algorithm.PORTFOLIO,
         )
         for (alg in algorithms) {
-            val t0 = System.currentTimeMillis()
+            val t0 = EngineClock.nowMs()
             val res = V6NativeOptimizer.optimize(
                 st,
                 Array(initial.size) { initial[it].clone() },
                 V6OptimizerOptions(algorithm = alg, totalBudgetSec = 30, workers = 4, seed = 12345L),
                 shouldStop = { true },
             )
-            val elapsed = System.currentTimeMillis() - t0
+            val elapsed = EngineClock.nowMs() - t0
             assertTrue("$alg が停止信号を無視した（${elapsed}ms）", elapsed < 5_000)
 
             // 次元の保存（返る盤面が入力と同じ形）

@@ -475,7 +475,7 @@ object V6NativeOptimizer {
      * 追加も窓1回ぶん。締切超過とキャンセルは単調なので即座に true を返す。
      *
      * `deadline` は [nowMs]（`System.nanoTime()` 系の単調時計）と同じ物差しで渡すこと。
-     * 壁時計（`System.currentTimeMillis()`）を混ぜると別の原点になり、締切超過を検出できない。
+     * 壁時計（`EngineClock.nowMs()`）を混ぜると別の原点になり、締切超過を検出できない。
      */
     internal suspend fun confirmStop(
         shouldStop: () -> Boolean,

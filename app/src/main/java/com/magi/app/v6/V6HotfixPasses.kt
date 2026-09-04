@@ -256,7 +256,7 @@ object V6HotfixPasses {
     ): V6PostOptimizationResult {
         var work = schedule.copy2D()
         val logs = ArrayList<MirrorLog>()
-        val t0 = System.currentTimeMillis()
+        val t0 = EngineClock.nowMs()
         // [3.339.0/敵対レビュー A4] パスごとの消費 ms。3.269.0 の区間分割（HF80/HF67/HF66/巡回研磨/
         //   共同LNS×2）は「巡回研磨」が18パスの合計で、**どのパスが時間を食っているかが見えなかった**。
         //   実測（後処理研磨のみ）: golden は C1共同LNS 8.0s(42%)・C1広域ビーム 4.7s(25%)・
@@ -265,35 +265,35 @@ object V6HotfixPasses {
         val passMs = LinkedHashMap<String, Long>()
 
         onPhase("後処理 HF80 戦略的振動")
-        val t80 = System.currentTimeMillis()
-        val __t0 = System.currentTimeMillis()
+        val t80 = EngineClock.nowMs()
+        val __t0 = EngineClock.nowMs()
         val r80 = applyHF80StrategicOscillation(state, work, maxCycles = 3, seed = seed xor 0x80L, shouldStop = shouldStop)
-        passMs.merge("HF80StrategicOscillation", System.currentTimeMillis() - __t0) { a, b -> a + b }
+        passMs.merge("HF80StrategicOscillation", EngineClock.nowMs() - __t0) { a, b -> a + b }
         work = r80.newSchedule.copy2D()
         logs.addAll(r80.logs)
 
         onPhase("後処理 HF67 職員間スワップ")
-        val t67 = System.currentTimeMillis()
+        val t67 = EngineClock.nowMs()
         // [3.282.0] HF66 と同型の専用上限（残り予算の半分・絶対上限3s）。実機実測は数十ms＝通常は無影響で、
         //   大規模データでのフォールバック総当たり暴走だけを防ぐ保険。
         val hf67Cap = ((deadlineMs - t67).coerceAtLeast(0L) / 2).coerceAtMost(3_000L)
-        val __t1 = System.currentTimeMillis()
+        val __t1 = EngineClock.nowMs()
         val r67 = HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = 30, shouldStop = shouldStop, deadlineMs = t67 + hf67Cap)
-        passMs.merge("HF67InterStaffSwap", System.currentTimeMillis() - __t1) { a, b -> a + b }
+        passMs.merge("HF67InterStaffSwap", EngineClock.nowMs() - __t1) { a, b -> a + b }
         work = r67.newSchedule.copy2D()
         logs.addAll(r67.logs)
 
         onPhase("後処理 HF66 職員内再配分")
-        val t66 = System.currentTimeMillis()
+        val t66 = EngineClock.nowMs()
         // [残予算ガード] HF66 は手ごとに全候補をフル check する高コストパス。残予算の半分まで(残り半分を
         //   後段の研磨群へ確保)＋絶対上限6sで打ち切り、暴走で後続パスを予算超過で打ち切らせない。
         val hf66Cap = ((deadlineMs - t66).coerceAtLeast(0L) / 2).coerceAtMost(6_000L)
-        val __t2 = System.currentTimeMillis()
+        val __t2 = EngineClock.nowMs()
         val r66 = HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = 30, shouldStop = shouldStop, deadlineMs = t66 + hf66Cap)
-        passMs.merge("HF66IntraStaffRedistribution", System.currentTimeMillis() - __t2) { a, b -> a + b }
+        passMs.merge("HF66IntraStaffRedistribution", EngineClock.nowMs() - __t2) { a, b -> a + b }
         work = r66.newSchedule.copy2D()
         logs.addAll(r66.logs)
-        val t66Done = System.currentTimeMillis()
+        val t66Done = EngineClock.nowMs()
 
         // [3.271.0, 実機ログ2本連続で実証された飢餓の解消] 巡回研磨クラスタ（厳密日割当〜曜日平準化）は
         //   自身の締切を持たず shouldStop（全体予算）だけで走るため、探索フェーズが予算を使い切る実運用
@@ -306,16 +306,16 @@ object V6HotfixPasses {
         val jointLnsReserve = if (deadlineMs == Long.MAX_VALUE) 0L
             else ((deadlineMs - t66Done).coerceAtLeast(0L) / 2).coerceAtMost(14_000L)
         val clusterDeadline = if (deadlineMs == Long.MAX_VALUE) Long.MAX_VALUE else deadlineMs - jointLnsReserve
-        val clusterStop: () -> Boolean = { shouldStop() || System.currentTimeMillis() >= clusterDeadline }
+        val clusterStop: () -> Boolean = { shouldStop() || EngineClock.nowMs() >= clusterDeadline }
 
         // [3.326.0] 全研磨パス横断で「回数固定だけが却下した候補試行」を対象別に合算する
         //   （isBetter は採用を認めていた手＝緩めれば通ったはずの手）。最初の使用より前で宣言する。
         val pinBlocksAll = PinBlockAttribution()
 
         onPhase("後処理 厳密日割当")
-        val __t3 = System.currentTimeMillis()
+        val __t3 = EngineClock.nowMs()
         val rAsg = DayAssignmentPolish.applyDayAssignmentPolish(state, work, shouldStop = clusterStop)
-        passMs.merge("DayAssignmentPolish", System.currentTimeMillis() - __t3) { a, b -> a + b }
+        passMs.merge("DayAssignmentPolish", EngineClock.nowMs() - __t3) { a, b -> a + b }
         rAsg.pinBlocks?.let { pinBlocksAll.merge(it) }
         work = rAsg.newSchedule.copy2D()
         logs.addAll(rAsg.logs)
@@ -339,9 +339,9 @@ object V6HotfixPasses {
             var roundApplied = 0
 
             onPhase("後処理 循環交換(k=2,3) [巡${round + 1}]")
-            val __t4 = System.currentTimeMillis()
+            val __t4 = EngineClock.nowMs()
             val rCyc = CyclicSwapWeeklyPolish.applyCyclicSwapPolish(state, work, maxPasses = 4, shouldStop = clusterStop)
-            passMs.merge("CyclicSwapPolish", System.currentTimeMillis() - __t4) { a, b -> a + b }
+            passMs.merge("CyclicSwapPolish", EngineClock.nowMs() - __t4) { a, b -> a + b }
             rCyc.pinBlocks?.let { pinBlocksAll.merge(it) }
             work = rCyc.newSchedule.copy2D(); totalCyc += rCyc.applied; roundApplied += rCyc.applied
             if (round == 0) logs.addAll(rCyc.logs)
@@ -354,9 +354,9 @@ object V6HotfixPasses {
             val c1Index = C1RepairIndex.build(pC1, work)
             if (C1DeltaPrefilter.hasActionableC1(c1Index)) {
                 onPhase("後処理 期間要件(c1)研磨 [巡${round + 1}]")
-                val __t5 = System.currentTimeMillis()
+                val __t5 = EngineClock.nowMs()
                 val rC1 = C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0x1C1L, round))
-                passMs.merge("C1同日交換", System.currentTimeMillis() - __t5) { a, b -> a + b }
+                passMs.merge("C1同日交換", EngineClock.nowMs() - __t5) { a, b -> a + b }
                 work = rC1.newSchedule.copy2D(); totalC1 += rC1.applied; roundApplied += rC1.applied
                 if (round == 0) logs.addAll(rC1.logs)
                 // [構造化診断, 3.322.0] 巡ごとに上書きし最後の巡のものを残す（最終盤面に一番近い）。
@@ -370,9 +370,9 @@ object V6HotfixPasses {
                 //   C1DeltaPrefilter を実駆動する経路。厳密c1アンカー＝不足窓ゼロで no-op のため本ゲート内に配置。
                 //   生成する手は既存手B/beam/exactと重複しうるが keep-best で無害（退化不能）。
                 onPhase("後処理 期間要件(c1)index駆動修復 [巡${round + 1}]")
-                val __t6 = System.currentTimeMillis()
+                val __t6 = EngineClock.nowMs()
                 val rC1idx = C1RepairOperators.indexChainRepair(state, work, shouldStop = clusterStop, seed = roundSeed(seed, 0x1C1D2L, round))
-                passMs.merge("C1索引修復", System.currentTimeMillis() - __t6) { a, b -> a + b }
+                passMs.merge("C1索引修復", EngineClock.nowMs() - __t6) { a, b -> a + b }
                 rC1idx.pinBlocks?.let { pinBlocksAll.merge(it) }
                 work = rC1idx.newSchedule.copy2D(); totalC1 += rC1idx.applied; roundApplied += rC1idx.applied
                 if (round == 0) logs.addAll(rC1idx.logs)
@@ -400,12 +400,12 @@ object V6HotfixPasses {
             // CombinatorialRepair(3.249.0)はC1Window/C3mn/Range/Apt/Fairの内部augmentationで
             // C1系の別パスではないため対象外(廃止候補にはしない)。
             onPhase("後処理 期間要件(c1)時系列DP+ジョイント再割当研磨 [巡${round + 1}]")
-            val __t7 = System.currentTimeMillis()
+            val __t7 = EngineClock.nowMs()
             val rC1flow = C1RepairOperators.temporalFlow(
                 state, work, maxPasses = 2, maxRelocations = 4, trials = 4,
                 shouldStop = clusterStop, seed = roundSeed(seed, 0xC1F10L, round),
             )
-            passMs.merge("C1時系列フロー", System.currentTimeMillis() - __t7) { a, b -> a + b }
+            passMs.merge("C1時系列フロー", EngineClock.nowMs() - __t7) { a, b -> a + b }
             work = rC1flow.newSchedule.copy2D(); totalC1 += rC1flow.applied; roundApplied += rC1flow.applied
             rC1flow.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rC1flow.logs)
@@ -415,9 +415,9 @@ object V6HotfixPasses {
             // sample_state_v6.json)の両方・全15シードでtotalが真に改善することを確認済み(applyC1BeamPolish
             // のdocを参照)。BeamC1PolishV2で見つからない残差にも届く可能性があるため直後に配線。
             onPhase("後処理 期間要件(c1)広域ビーム研磨 [巡${round + 1}]")
-            val __t8 = System.currentTimeMillis()
+            val __t8 = EngineClock.nowMs()
             val rC1wide = C1RepairOperators.wideBeam(state, work, shouldStop = clusterStop, seed = roundSeed(seed, 0xC1BEAL, round))
-            passMs.merge("C1広域ビーム", System.currentTimeMillis() - __t8) { a, b -> a + b }
+            passMs.merge("C1広域ビーム", EngineClock.nowMs() - __t8) { a, b -> a + b }
             work = rC1wide.newSchedule.copy2D(); totalC1 += rC1wide.applied; roundApplied += rC1wide.applied
             // [3.409.9] 広域ビームは `PinBlockAttribution` を作って返すのに、ここだけ合流を書き忘れていた
             //   （他20サイトは全て merge 済み＝**この1つだけ**が終端の「回数の固定について」から抜けていた）。
@@ -428,17 +428,17 @@ object V6HotfixPasses {
             //   窓スコープの coverage保存 permutation 厳密探索で拾う（純Kotlin・依存ゼロ）。A1=解析駆動
             //   ディスパッチ: 証明された解消不能スパン(exhaustive && min==base)を memo で二度解かない。
             onPhase("後処理 期間要件(c1)厳密窓修復 [巡${round + 1}]")
-            val __t9 = System.currentTimeMillis()
+            val __t9 = EngineClock.nowMs()
             val rC1exact = C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop)
-            passMs.merge("C1厳密窓", System.currentTimeMillis() - __t9) { a, b -> a + b }
+            passMs.merge("C1厳密窓", EngineClock.nowMs() - __t9) { a, b -> a + b }
             work = rC1exact.newSchedule.copy2D(); totalC1 += rC1exact.applied; roundApplied += rC1exact.applied
             rC1exact.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rC1exact.logs)
 
             onPhase("後処理 連続規則(c3系)研磨 [巡${round + 1}]")
-            val __t10 = System.currentTimeMillis()
+            val __t10 = EngineClock.nowMs()
             val rC3 = C3RotationPolish.applyC3SequencePolish(state, work, maxPasses = 3, shouldStop = clusterStop)
-            passMs.merge("C3SequencePolish", System.currentTimeMillis() - __t10) { a, b -> a + b }
+            passMs.merge("C3SequencePolish", EngineClock.nowMs() - __t10) { a, b -> a + b }
             rC3.pinBlocks?.let { pinBlocksAll.merge(it) }
             work = rC3.newSchedule.copy2D(); totalC3 += rC3.applied; roundApplied += rC3.applied
             if (round == 0) logs.addAll(rC3.logs)
@@ -451,9 +451,9 @@ object V6HotfixPasses {
             //   c3 違反が無ければ applyBlockRotationPolish 自身がアンカー0で即 return する＝追加コストなし。
             if (rC3.applied == 0 || round == maxRounds - 1) {
                 onPhase("後処理 連続規則(c3系)3者回転研磨 [巡${round + 1}]")
-                val __t11 = System.currentTimeMillis()
+                val __t11 = EngineClock.nowMs()
                 val rC3r = C3RotationPolish.applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = 2, shouldStop = clusterStop)
-                passMs.merge("BlockRotationPolish", System.currentTimeMillis() - __t11) { a, b -> a + b }
+                passMs.merge("BlockRotationPolish", EngineClock.nowMs() - __t11) { a, b -> a + b }
                 rC3r.pinBlocks?.let { pinBlocksAll.merge(it) }
                 work = rC3r.newSchedule.copy2D(); totalC3r += rC3r.applied; roundApplied += rC3r.applied
                 if (round == 0) logs.addAll(rC3r.logs)
@@ -462,9 +462,9 @@ object V6HotfixPasses {
             // [C3mnPolish・玉突き連鎖の横展開] cons3n(HARD)で直接候補が全滅する局面向けに findCovUChain
             //   をc3mn(回避,SOFT)専用に反映（grilling 2026-07-19、金沢勇輝のDﾃ4連続実例）。
             onPhase("後処理 回避パターン(c3mn)玉突き研磨 [巡${round + 1}]")
-            val __t12 = System.currentTimeMillis()
+            val __t12 = EngineClock.nowMs()
             val rC3mn = C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xC3AL, round))
-            passMs.merge("C3mnPolish", System.currentTimeMillis() - __t12) { a, b -> a + b }
+            passMs.merge("C3mnPolish", EngineClock.nowMs() - __t12) { a, b -> a + b }
             work = rC3mn.newSchedule.copy2D(); totalC3mn += rC3mn.applied; roundApplied += rC3mn.applied
             rC3mn.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rC3mn.logs)
@@ -472,9 +472,9 @@ object V6HotfixPasses {
             // [C3nPolish, 3.303.0] 禁止連続(c3n, HARD)を、違反パターンが**またぐ全日**（前日・当日・翌日）を
             //   候補にして崩す。当日1セルしか触らない既存機構では3連の先頭に構造的に届かなかった。
             onPhase("後処理 禁止連続(c3n)研磨 [巡${round + 1}]")
-            val __t13 = System.currentTimeMillis()
+            val __t13 = EngineClock.nowMs()
             val rC3n = C3FamilyPolish.applyC3nPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xC3EL, round))
-            passMs.merge("C3nPolish", System.currentTimeMillis() - __t13) { a, b -> a + b }
+            passMs.merge("C3nPolish", EngineClock.nowMs() - __t13) { a, b -> a + b }
             work = rC3n.newSchedule.copy2D(); totalC3n += rC3n.applied; roundApplied += rC3n.applied
             rC3n.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rC3n.logs)
@@ -483,9 +483,9 @@ object V6HotfixPasses {
             //   局面(担当可能シフトが極端に少ない職員等)向けに findCovUChain で研磨（grilling不要・
             //   C3mnPolishと同型のためユーザー承認のうえ直接実装、桒澤美幸のAｱ超過実例）。
             onPhase("後処理 個人回数(low/high)玉突き研磨 [巡${round + 1}]")
-            val __t14 = System.currentTimeMillis()
+            val __t14 = EngineClock.nowMs()
             val rRange = RangePolish.applyRangePolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0x8A9EL, round))
-            passMs.merge("RangePolish", System.currentTimeMillis() - __t14) { a, b -> a + b }
+            passMs.merge("RangePolish", EngineClock.nowMs() - __t14) { a, b -> a + b }
             work = rRange.newSchedule.copy2D(); totalRange += rRange.applied; roundApplied += rRange.applied
             rRange.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rRange.logs)
@@ -494,9 +494,9 @@ object V6HotfixPasses {
             //   相互交換の相手が構造的に存在しない局面向けに findCovUChain で研磨（grilling不要・
             //   C3mnPolish/RangePolishと同型のためユーザー承認のうえ直接実装）。
             onPhase("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨 [巡${round + 1}]")
-            val __t15 = System.currentTimeMillis()
+            val __t15 = EngineClock.nowMs()
             val rC3run = C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xC3A2L, round))
-            passMs.merge("C3RunPolish", System.currentTimeMillis() - __t15) { a, b -> a + b }
+            passMs.merge("C3RunPolish", EngineClock.nowMs() - __t15) { a, b -> a + b }
             work = rC3run.newSchedule.copy2D(); totalC3run += rC3run.applied; roundApplied += rC3run.applied
             rC3run.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rC3run.logs)
@@ -504,9 +504,9 @@ object V6HotfixPasses {
             // [C3PatternPolish・玉突き連鎖の横展開その4] 複数シフトc3/c3mパターン(非single-shift)を、
             //   交換相手が構造的に存在しない局面向けに findCovUChain で研磨（棚卸し監査で発見、ユーザー承認）。
             onPhase("後処理 連続規則(c3/c3m複数シフトパターン)玉突き研磨 [巡${round + 1}]")
-            val __t16 = System.currentTimeMillis()
+            val __t16 = EngineClock.nowMs()
             val rC3pat = C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xC3B4L, round))
-            passMs.merge("C3PatternPolish", System.currentTimeMillis() - __t16) { a, b -> a + b }
+            passMs.merge("C3PatternPolish", EngineClock.nowMs() - __t16) { a, b -> a + b }
             work = rC3pat.newSchedule.copy2D(); totalC3pat += rC3pat.applied; roundApplied += rC3pat.applied
             rC3pat.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rC3pat.logs)
@@ -515,11 +515,11 @@ object V6HotfixPasses {
             //   非等間隔ポートフォリオへ拡張。同群に限らず、ブロック内の全セルを相互に担当可能な他者も
             //   候補にし、希望固定・厳密ピン・正式スコアの全ガードを通過した最良の1手だけを採用する。
             onPhase("後処理 長期ブロック丸ごと交換(11/13/17/19/23/28日) [巡${round + 1}]")
-            val __t17 = System.currentTimeMillis()
+            val __t17 = EngineClock.nowMs()
             val rBlockSwap = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
                 state, work, maxPasses = 2, candidatesPerLength = 8, maxEvaluations = 48, shouldStop = clusterStop,
             )
-            passMs.merge("AdaptiveBlockSwapPolish", System.currentTimeMillis() - __t17) { a, b -> a + b }
+            passMs.merge("AdaptiveBlockSwapPolish", EngineClock.nowMs() - __t17) { a, b -> a + b }
             rBlockSwap.pinBlocks?.let { pinBlocksAll.merge(it) }
             work = rBlockSwap.newSchedule.copy2D(); totalBlockSwap += rBlockSwap.applied; roundApplied += rBlockSwap.applied
             if (round == 0) logs.addAll(rBlockSwap.logs)
@@ -527,9 +527,9 @@ object V6HotfixPasses {
             // [AptPolish・適切回数(apt)専用研磨] 自己振替→同一グループ相互交換→玉突きチェーンの順で
             //   apt(重み1)違反を専用に研磨（grilling 2026-07-19、大島愛の休/Pｼ実例）。
             onPhase("後処理 適切回数(apt)研磨 [巡${round + 1}]")
-            val __t18 = System.currentTimeMillis()
+            val __t18 = EngineClock.nowMs()
             val rApt = AptFairPolish.applyAptPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xA97L, round))
-            passMs.merge("AptPolish", System.currentTimeMillis() - __t18) { a, b -> a + b }
+            passMs.merge("AptPolish", EngineClock.nowMs() - __t18) { a, b -> a + b }
             work = rApt.newSchedule.copy2D(); totalApt += rApt.applied; roundApplied += rApt.applied
             rApt.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rApt.logs)
@@ -537,9 +537,9 @@ object V6HotfixPasses {
             // [FairPolish・グループ内公平化(fair)専用研磨] 棚卸し(c42/c42s以外の「動かせるか」欠如監査)で
             //   発見。AptPolishと同型の3段構成（自己振替→同一グループ相互交換→玉突きチェーン）。
             onPhase("後処理 グループ内公平化(fair)玉突き研磨 [巡${round + 1}]")
-            val __t19 = System.currentTimeMillis()
+            val __t19 = EngineClock.nowMs()
             val rFair = AptFairPolish.applyFairPolish(state, work, maxPasses = 3, shouldStop = clusterStop, seed = roundSeed(seed, 0xFA12L, round))
-            passMs.merge("FairPolish", System.currentTimeMillis() - __t19) { a, b -> a + b }
+            passMs.merge("FairPolish", EngineClock.nowMs() - __t19) { a, b -> a + b }
             work = rFair.newSchedule.copy2D(); totalFair += rFair.applied; roundApplied += rFair.applied
             rFair.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rFair.logs)
@@ -588,9 +588,9 @@ object V6HotfixPasses {
         //   勤務/休が不変）ため、被覆保存の2職員×2日 長方形交換で「過剰曜日→過少曜日」へ勤務を移す。実目的関数
         //   isBetter で採否＝退化なし。下の equalize 系(分散指標)より先に L1 指向のこのパスを走らせる。
         onPhase("後処理 曜日平準化(長方形交換)")
-        val __t20 = System.currentTimeMillis()
+        val __t20 = EngineClock.nowMs()
         val rWrb = CyclicSwapWeeklyPolish.applyWeeklyRebalancePolish(state, work, maxPasses = 2, shouldStop = clusterStop)
-        passMs.merge("WeeklyRebalancePolish", System.currentTimeMillis() - __t20) { a, b -> a + b }
+        passMs.merge("WeeklyRebalancePolish", EngineClock.nowMs() - __t20) { a, b -> a + b }
         rWrb.pinBlocks?.let { pinBlocksAll.merge(it) }
         work = rWrb.newSchedule.copy2D()
         logs.addAll(rWrb.logs)
@@ -599,9 +599,9 @@ object V6HotfixPasses {
         //   ごとの最小費用割当(Hungarian＝凸最適化)で weekly/range/apt 同時最適に再配置し、不動点まで巡回する。
         //   rectangle(クロス日)と AO(同日内)は相補的＝両方走らせて weekly の取りこぼしを二方向から詰める。keep-best。
         onPhase("後処理 交互最適化(日ブロック割当)")
-        val __t21 = System.currentTimeMillis()
+        val __t21 = EngineClock.nowMs()
         val rAlt = DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = 4, shouldStop = clusterStop)
-        passMs.merge("AlternatingSoftPolish", System.currentTimeMillis() - __t21) { a, b -> a + b }
+        passMs.merge("AlternatingSoftPolish", EngineClock.nowMs() - __t21) { a, b -> a + b }
         rAlt.pinBlocks?.let { pinBlocksAll.merge(it) }
         work = rAlt.newSchedule.copy2D()
         logs.addAll(rAlt.logs)
@@ -634,14 +634,14 @@ object V6HotfixPasses {
         //   値)へ先にクランプしてから按分する。残0なら各パスのmaxMillis<=0ガードにより即スキップ
         //   (explicitly無効)される。
         onPhase("後処理 期間要件(c1)共同LNS")
-        val tC1Lns = System.currentTimeMillis()
+        val tC1Lns = EngineClock.nowMs()
         val remainingForC1Lns = (deadlineMs - tC1Lns).coerceAtLeast(0L).coerceAtMost(100_000L)
         val c1LnsCap = (remainingForC1Lns * 8_000L / 14_000L).coerceAtMost(8_000L)
-        val __t22 = System.currentTimeMillis()
+        val __t22 = EngineClock.nowMs()
         val rC1Lns = C1RepairOperators.jointLns(
             state, work, config = C1JointLnsPolish.Config(maxMillis = c1LnsCap), shouldStop = shouldStop,
         )
-        passMs.merge("C1共同LNS", System.currentTimeMillis() - __t22) { a, b -> a + b }
+        passMs.merge("C1共同LNS", EngineClock.nowMs() - __t22) { a, b -> a + b }
         work = rC1Lns.newSchedule.copy2D()
         // [3.350.0/敵対検証] 最終LNS 2パスのピン却下が pinBlocksAll へ合流していなかった
         //   （旧: この2パスは PinBlockAttribution を作らず pinBlocks が常に null だった）。
@@ -649,18 +649,18 @@ object V6HotfixPasses {
         logs.addAll(rC1Lns.logs)
 
         onPhase("後処理 個人回数/適切回数 共同LNS")
-        val tPersonalLns = System.currentTimeMillis()
+        val tPersonalLns = EngineClock.nowMs()
         val personalLnsCap = (deadlineMs - tPersonalLns).coerceAtLeast(0L).coerceAtMost(6_000L)
-        val __t23 = System.currentTimeMillis()
+        val __t23 = EngineClock.nowMs()
         val rPersonalLns = PersonalBalanceJointLnsPolish.apply(
             state, work, config = PersonalBalanceJointLnsPolish.Config(maxMillis = personalLnsCap), shouldStop = shouldStop,
         )
-        passMs.merge("個人回数共同LNS", System.currentTimeMillis() - __t23) { a, b -> a + b }
+        passMs.merge("個人回数共同LNS", EngineClock.nowMs() - __t23) { a, b -> a + b }
         work = rPersonalLns.newSchedule.copy2D()
         rPersonalLns.pinBlocks?.let { pinBlocksAll.merge(it) }
         logs.addAll(rPersonalLns.logs)
 
-        val tHf = System.currentTimeMillis()
+        val tHf = EngineClock.nowMs()
         if (shouldStop()) {
             // [3.278.0/文言修正] この時点で残るのは最終検査(HF70)のみ＝「残りパスの打ち切り」は各パス内部の
             //   shouldStop で既に済んでいる事実に合わせる。
@@ -672,7 +672,7 @@ object V6HotfixPasses {
         val r70 = HfSwapPolish.detectHF70Anomalies(state, work, algoName, report)
         logs.addAll(r70.logs)
 
-        val tEnd = System.currentTimeMillis()
+        val tEnd = EngineClock.nowMs()
         // [ログ精度修正] 旧表記は t66〜tHf の間(=HF66本体＋厳密日割当＋巡回研磨4巡＋曜日/交互研磨＋
         //   C1/個人共同LNS＝パイプライン成長で大半を占めるようになった区間)を丸ごと「HF66」と誤表示していた
         //   （HF66自身は t66+hf66Cap で内部上限≤6s に自己制限済みのため、実際にそれ以上かかっていたのは

@@ -1106,10 +1106,10 @@ class V6NativeOptimizerChoiceTest {
     @Test
     fun persistentStopSignalIsConfirmed() = runBlocking {
         // 常に真＝本物の停滞。確認窓ぶん待ってから真を返す（従来どおり離脱する）。
-        val t0 = System.currentTimeMillis()
+        val t0 = EngineClock.nowMs()
         assertTrue("続くシグナルは本物と判定する",
             V6NativeOptimizer.confirmStop({ true }, deadline = Long.MAX_VALUE, stopIsFinal = { false }))
-        val waited = System.currentTimeMillis() - t0
+        val waited = EngineClock.nowMs() - t0
         assertTrue("確認窓のあいだ待ってから確定する（実測 ${waited}ms）",
             waited >= V6NativeOptimizer.STOP_CONFIRM_MS / 2)
     }
@@ -1119,20 +1119,20 @@ class V6NativeOptimizerChoiceTest {
         // 締切超過は単調＝待たずに確定する（確認窓で早期終了の効きを削らない）。
         // deadline は nowMs()（nanoTime 系の単調時計）と同じ物差しなので、
         // 「必ず過ぎている値」として 0 を渡す（壁時計を混ぜると別の物差しになる）。
-        val t0 = System.currentTimeMillis()
+        val t0 = EngineClock.nowMs()
         assertTrue("締切超過は即確定",
             V6NativeOptimizer.confirmStop({ true }, deadline = 0L, stopIsFinal = { false }))
-        assertTrue("待たない", System.currentTimeMillis() - t0 < 1_000L)
+        assertTrue("待たない", EngineClock.nowMs() - t0 < 1_000L)
     }
 
     @Test
     fun finalStopIsConfirmedWithoutWaiting() = runBlocking {
         // 探索締切・キャンセルは単調＝確認窓を回さずに即確定する。旧実装（stopIsFinal 無し）は
         // ここでも5秒待ち、探索が締切を超えて後処理予約を食っていた（実測 探索109.99s→114.998s）。
-        val t0 = System.currentTimeMillis()
+        val t0 = EngineClock.nowMs()
         assertTrue("単調な停止は即確定",
             V6NativeOptimizer.confirmStop({ true }, deadline = Long.MAX_VALUE, stopIsFinal = { true }))
-        assertTrue("待たない", System.currentTimeMillis() - t0 < 1_000L)
+        assertTrue("待たない", EngineClock.nowMs() - t0 < 1_000L)
     }
 
     /**

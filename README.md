@@ -27,6 +27,10 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-04（3.490.0＝レビュー第6弾。エンジン内の締切・経過・停滞判定（v6 の 87 箇所）を壁時計から
+単調時計 `EngineClock.nowMs()`（`System.nanoTime`）へ（旧: NTP 補正・時刻変更・スリープ復帰で予算判定が前後した）。
+ログの実時刻だけ壁時計のまま。採否・スコアリング不変。Windows のタブ再購読は `-MAGI_PC` 側で修正。）
+
 **最終更新**：2026-09-04（3.489.0＝実機報告「個人の下限をゼロに出来ない」。`staffCellLimits` が下限 0 を未設定扱いにして
 表示だけ落としていた（エンジンは保持）。明示した 0 を 0 として返す。表示のみ・スコアリング不変。）
 

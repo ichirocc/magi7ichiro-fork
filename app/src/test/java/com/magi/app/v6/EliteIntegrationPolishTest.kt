@@ -114,7 +114,7 @@ class EliteIntegrationPolishTest {
                 elite(st, b, HypothesisEpochRole.PERSONAL_RSI, bridge = false),
             ),
             shouldStop = { false },
-            deadlineMs = System.currentTimeMillis() + 3_000L,
+            deadlineMs = EngineClock.nowMs() + 3_000L,
             config = EliteIntegrationPolish.Config(maxPairs = 0, maxFusionGroups = 4, maxFusionCells = 4),
         )
         val after = UnifiedViolationChecker.check(st, result.schedule)
@@ -137,7 +137,7 @@ class EliteIntegrationPolishTest {
             st, root,
             listOf(elite(st, bridge, HypothesisEpochRole.HARD_DEBT_RSI_PLUS, bridge = true)),
             shouldStop = { false },
-            deadlineMs = System.currentTimeMillis() + 1_000L,
+            deadlineMs = EngineClock.nowMs() + 1_000L,
         )
         for (i in root.indices) assertTrue(root[i].contentEquals(result.schedule[i]))
     }
@@ -154,7 +154,7 @@ class EliteIntegrationPolishTest {
             st, root,
             listOf(AdaptiveElite(worse, fakePerfect, HypothesisEpochRole.DAY_BLOCK_ALNS, 1, 1, false)),
             shouldStop = { false },
-            deadlineMs = System.currentTimeMillis() + 1_000L,
+            deadlineMs = EngineClock.nowMs() + 1_000L,
         )
         for (i in root.indices) assertTrue(root[i].contentEquals(result.schedule[i]))
     }
@@ -172,7 +172,7 @@ class EliteIntegrationPolishTest {
             st, root,
             listOf(elite(st, candidate, HypothesisEpochRole.PERSONAL_RSI, bridge = false)),
             shouldStop = { false },
-            deadlineMs = System.currentTimeMillis() + 1_000L,
+            deadlineMs = EngineClock.nowMs() + 1_000L,
         )
         for (i in root.indices) assertTrue(root[i].contentEquals(result.schedule[i]))
     }
@@ -244,7 +244,7 @@ class EliteIntegrationPolishTest {
                 elite(st, root.copy2D(), HypothesisEpochRole.HARD_DEBT_RSI_PLUS, bridge = false),
             ),
             shouldStop = { false },
-            deadlineMs = System.currentTimeMillis() + 3_000L,
+            deadlineMs = EngineClock.nowMs() + 3_000L,
         )
         assertEquals("使えた素材は0件", 0, result.elitesUsed)
         assertEquals("ログを1行返す", 1, result.logs.size)
@@ -261,7 +261,7 @@ class EliteIntegrationPolishTest {
         val root = st.schedule.toIntArray2D()
         val result = EliteIntegrationPolish.apply(
             st, root, elites = emptyList(),
-            shouldStop = { false }, deadlineMs = System.currentTimeMillis() + 3_000L,
+            shouldStop = { false }, deadlineMs = EngineClock.nowMs() + 3_000L,
         )
         assertEquals(0, result.elitesUsed)
         assertTrue("素材ゼロのときは無言", result.logs.isEmpty())

@@ -67,7 +67,7 @@ class V6LateOperatorsTest {
 
         val res = V6LateOperators.improve(
             state, sched, pre, Random(7),
-            System.currentTimeMillis() + 3000, rectTry = 60, blkTry = 60,
+            EngineClock.nowMs() + 3000, rectTry = 60, blkTry = 60,
         )
 
         // (3) 入力不変
