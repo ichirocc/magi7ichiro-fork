@@ -334,7 +334,7 @@ object V6HotfixPasses {
         val pC1 = Problem(state)
         var round = 0
         var c1Plateau: C1PlateauDiagnosis? = null
-        var totalCyc = 0; var totalC1 = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalC3n = 0; var totalRange = 0; var totalC3run = 0; var totalC3pat = 0; var totalNightSwap = 0; var totalBlockSwap = 0; var totalApt = 0; var totalFair = 0
+        var totalCyc = 0; var totalC1 = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalC3n = 0; var totalRange = 0; var totalC3run = 0; var totalC3pat = 0; var totalRunSwap = 0; var totalBlockSwap = 0; var totalApt = 0; var totalFair = 0
         while (round < maxRounds && !clusterStop()) {
             var roundApplied = 0
 
@@ -511,16 +511,16 @@ object V6HotfixPasses {
             rC3pat.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rC3pat.logs)
 
-            // [NightRunSwapPolish・夜勤連交換, 3.493.0] 前日=夜勤×翌日=希望固定に挟まれたセルの違反を、夜勤の連を
-            //   他職員の同じ長さの連と窓ごと交換して解く（1セル付替え・同日入替では前日の夜勤が動かず全部却下される穴）。
-            //   実データでは改善手0＝ユーザー判断で keep-best 前提に導入（効かないデータでは採用0・無害）。
-            onPhase("後処理 夜勤連交換研磨 [巡${round + 1}]")
+            // [RunSwapPolish・連交換, 3.494.0（3.493.0 の夜勤前提を撤廃した汎用版）] 違反に隣接する同一シフトの連を
+            //   他職員の同じ長さの連と窓ごと交換して解く（1セル付替え・同日入替では隣の連が動かず全部却下される穴）。
+            //   シフトの種類は問わない。実データでは改善手0＝keep-best 前提（効かないデータでは採用0・無害）。
+            onPhase("後処理 連交換研磨 [巡${round + 1}]")
             val __t16b = EngineClock.nowMs()
-            val rNight = NightRunSwapPolish.applyNightRunSwapPolish(state, work, maxPasses = 2, maxEvaluations = 400, shouldStop = clusterStop)
-            passMs.merge("NightRunSwapPolish", EngineClock.nowMs() - __t16b) { a, b -> a + b }
-            work = rNight.newSchedule.copy2D(); totalNightSwap += rNight.applied; roundApplied += rNight.applied
-            rNight.pinBlocks?.let { pinBlocksAll.merge(it) }
-            if (round == 0) logs.addAll(rNight.logs)
+            val rRunSwap = RunSwapPolish.applyRunSwapPolish(state, work, maxPasses = 2, maxEvaluations = 600, shouldStop = clusterStop)
+            passMs.merge("RunSwapPolish", EngineClock.nowMs() - __t16b) { a, b -> a + b }
+            work = rRunSwap.newSchedule.copy2D(); totalRunSwap += rRunSwap.applied; roundApplied += rRunSwap.applied
+            rRunSwap.pinBlocks?.let { pinBlocksAll.merge(it) }
+            if (round == 0) logs.addAll(rRunSwap.logs)
 
             // [AdaptiveBlockSwap・長期ブロック丸ごと2人交換] 15日固定の旧手を、11/13/17/19/23/28日の
             //   非等間隔ポートフォリオへ拡張。同群に限らず、ブロック内の全セルを相互に担当可能な他者も
@@ -564,7 +564,7 @@ object V6HotfixPasses {
         run {
             val softAfter = UnifiedViolationChecker.check(state, work)
             fun bd(r: ViolationReport, k: String) = r.breakdown[k] ?: 0
-            val adopted = totalCyc + totalC1 + totalC3 + totalC3r + totalC3mn + totalC3n + totalRange + totalC3run + totalC3pat + totalNightSwap + totalBlockSwap + totalApt + totalFair
+            val adopted = totalCyc + totalC1 + totalC3 + totalC3r + totalC3mn + totalC3n + totalRange + totalC3run + totalC3pat + totalRunSwap + totalBlockSwap + totalApt + totalFair
             // [3.278.0/監査修正] CyclicSwap の正当な対象族(c2/c41/c42/c41s/c42s/covO)も対象数に含める
             //   （旧: c42等のみ違反の盤面で採用0のとき誤って「対象なし」と表示していた）。
             // [3.475.0/論理監査] c3n も対象に含める（C3nPolish=3.303.0 はこの塊の中で走り採用数は adopted に
@@ -592,7 +592,7 @@ object V6HotfixPasses {
                     " / apt ${bd(preSoftRep, "apt")}->${bd(softAfter, "apt")}" +
                     " / fair ${bd(preSoftRep, "fair")}->${bd(softAfter, "fair")}" +
                     " | HARD $hardNote / total ${preSoftRep.total}->${softAfter.total}" +
-                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} c3n:${totalC3n} range玉突き:${totalRange} c3run玉突き:${totalC3run} c3pattern玉突き:${totalC3pat} 夜勤連交換:${totalNightSwap} ブロック交換:${totalBlockSwap} apt玉突き:${totalApt} fair玉突き:${totalFair})"))
+                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} c3n:${totalC3n} range玉突き:${totalRange} c3run玉突き:${totalC3run} c3pattern玉突き:${totalC3pat} 連交換:${totalRunSwap} ブロック交換:${totalBlockSwap} apt玉突き:${totalApt} fair玉突き:${totalFair})"))
         }
 
         // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の
