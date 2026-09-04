@@ -276,7 +276,7 @@ object V6HotfixPasses {
         val t67 = EngineClock.nowMs()
         // [3.282.0] HF66 と同型の専用上限（残り予算の半分・絶対上限3s）。実機実測は数十ms＝通常は無影響で、
         //   大規模データでのフォールバック総当たり暴走だけを防ぐ保険。
-        val hf67Cap = ((deadlineMs - t67).coerceAtLeast(0L) / 2).coerceAtMost(3_000L)
+        val hf67Cap = (EngineClock.remainingMs(deadlineMs, t67) / 2).coerceAtMost(3_000L)
         val __t1 = EngineClock.nowMs()
         val r67 = HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = 30, shouldStop = shouldStop, deadlineMs = t67 + hf67Cap)
         passMs.merge("HF67InterStaffSwap", EngineClock.nowMs() - __t1) { a, b -> a + b }
@@ -287,7 +287,7 @@ object V6HotfixPasses {
         val t66 = EngineClock.nowMs()
         // [残予算ガード] HF66 は手ごとに全候補をフル check する高コストパス。残予算の半分まで(残り半分を
         //   後段の研磨群へ確保)＋絶対上限6sで打ち切り、暴走で後続パスを予算超過で打ち切らせない。
-        val hf66Cap = ((deadlineMs - t66).coerceAtLeast(0L) / 2).coerceAtMost(6_000L)
+        val hf66Cap = (EngineClock.remainingMs(deadlineMs, t66) / 2).coerceAtMost(6_000L)
         val __t2 = EngineClock.nowMs()
         val r66 = HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = 30, shouldStop = shouldStop, deadlineMs = t66 + hf66Cap)
         passMs.merge("HF66IntraStaffRedistribution", EngineClock.nowMs() - __t2) { a, b -> a + b }
@@ -635,7 +635,7 @@ object V6HotfixPasses {
         //   (explicitly無効)される。
         onPhase("後処理 期間要件(c1)共同LNS")
         val tC1Lns = EngineClock.nowMs()
-        val remainingForC1Lns = (deadlineMs - tC1Lns).coerceAtLeast(0L).coerceAtMost(100_000L)
+        val remainingForC1Lns = EngineClock.remainingMs(deadlineMs, tC1Lns).coerceAtMost(100_000L)
         val c1LnsCap = (remainingForC1Lns * 8_000L / 14_000L).coerceAtMost(8_000L)
         val __t22 = EngineClock.nowMs()
         val rC1Lns = C1RepairOperators.jointLns(
@@ -650,7 +650,7 @@ object V6HotfixPasses {
 
         onPhase("後処理 個人回数/適切回数 共同LNS")
         val tPersonalLns = EngineClock.nowMs()
-        val personalLnsCap = (deadlineMs - tPersonalLns).coerceAtLeast(0L).coerceAtMost(6_000L)
+        val personalLnsCap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(6_000L)
         val __t23 = EngineClock.nowMs()
         val rPersonalLns = PersonalBalanceJointLnsPolish.apply(
             state, work, config = PersonalBalanceJointLnsPolish.Config(maxMillis = personalLnsCap), shouldStop = shouldStop,
