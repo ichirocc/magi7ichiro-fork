@@ -549,7 +549,11 @@ internal fun ScheduleGrid(
         //   多くの端末で6日強しか見えず週の模様が切れていた）。36dp未満は記号(2文字15sp)の可読性が崩れるため
         //   下限36dp（極端に狭い端末のみ7日未満に妥協）、48dp超は広げない（広い端末はより多くの日が見える）。
         //   週ページングのスクロール量(cellWpx)も同じ値から計算＝ジャンプ位置は常にグリッドと整合。
-        val gridCellW = ((this.maxWidth - 32.dp - 80.dp) / 7).coerceIn(36.dp, 48.dp)   // 32=Column水平padding, 80=名前列
+        // [3.497.0/ユーザー指示「OPPO A5 5G(Android16)も動作できるようにする」] 720×1604 の HD+ 端末は横幅 360dp 帯＝
+        //   名前列80dp＋36dp床×7日=332dp が内容幅 328dp に収まらず「7日表示が6日止まり」だった（D4 で対象外としていた帯）。
+        //   幅 390dp 未満では名前列を 56dp に詰めて 7日を成立させる（(360-32-56)/7=38dp）。390dp 以上は従来どおり 80dp。
+        val gridNameW = if (this.maxWidth < 390.dp) 56.dp else 80.dp
+        val gridCellW = ((this.maxWidth - 32.dp - gridNameW) / 7).coerceIn(36.dp, 48.dp)   // 32=Column水平padding
         val cellWpx = with(LocalDensity.current) { gridCellW.roundToPx() }
         // [3.481.0] 現在週の導出と週ラベルは ScheduleNavBar（Scaffold 下部）へ移動。ここはバーが必要とする
         //   セル幅(px)と週分割を共有状態へ書くだけ（SideEffect＝この合成が確定してから書く＝描画中の書換なし）。
@@ -630,7 +634,7 @@ internal fun ScheduleGrid(
                 if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
@@ -1465,7 +1469,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f) {
+internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1544,7 +1548,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [レイアウト整合] headH は 日番号+曜日+不足+下線 の3行分。端末フォント拡大(≥1.3x)でも下線/数字が欠けないよう 72dp。
     //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
     // [7日間表示] cellW は ScheduleGrid が「1週間が収まる幅」を動的計算して注入（既定48dp=単独利用時）。
-    val nameW = 80.dp; val cellH = 48.dp; val headH = 72.dp
+    val cellH = 48.dp; val headH = 72.dp   // nameW は引数（幅 390dp 未満の端末では 56dp、3.497.0）
     // [3.481.0 勤務表タブ再設計①] 日ヘッダの固定。旧: 日ごとの Column の先頭にヘッダセルがあり、タブ全体の
     //   縦スクロールでヘッダが画面外へ消えると（30名×48dp=1440dp の下段）何日の列か分からなくなっていた
     //   （タップ時の行列クロスハイライトだけが頼り）。ヘッダを独立した Row にし、本体と同じ hScroll を共有
