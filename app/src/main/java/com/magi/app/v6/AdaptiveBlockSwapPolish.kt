@@ -2,6 +2,7 @@ package com.magi.app.v6
 
 import com.magi.app.model.MagiState
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -17,6 +18,32 @@ import kotlin.math.min
  * 構築・参照する。`PolishGate`/`TuningTelemetry`/`MirrorKeys`/`C1DeltaPrefilter` はいずれも
  * 別のトップレベル宣言（`V6HotfixPasses`の外側 or 別ファイル）のため完全修飾不要。
  */
+/**
+ * [3.495.0/ユーザー提示の設計] ブロック交換の窓の扱い。
+ * - [PARTIAL_MOVABLE_DAYS]: 従来（3.291.0）。希望固定・担当不可の日は窓から据え置き、動く日だけ交換する。
+ * - [STRICT_WHOLE_WINDOW]: 窓内の全セルを一括交換する。1日でも交換不能なら窓全体を不成立にする＝厳密な「連の交換」。
+ *   違反アンカー（セル違反・回数超過/不足・連続規則・週偏り）に接する可変長の窓だけを生成する。
+ */
+enum class WindowMode { PARTIAL_MOVABLE_DAYS, STRICT_WHOLE_WINDOW }
+
+/** 回数違反の向き（超過＝対象シフトを減らしたい／不足＝増やしたい）。 */
+enum class CountDirection { HIGH, LOW }
+
+/**
+ * [3.495.0] 違反アンカー。窓の生成起点。
+ * - セル違反: [day]＝違反セルの日（連続規則は違反区間の両端も別アンカーとして積む）。
+ * - 回数違反: [shift]＋[direction]。超過は対象職員が [shift] に入っている日、不足は「他職員が [shift]、対象職員は
+ *   [shift] 以外」の交換可能な日を逆引きして [day] に置く。
+ * - 週偏り: [day]=null（長さ7の窓を全開始位置で生成）。
+ */
+data class ViolationAnchor(
+    val staff: Int,
+    val day: Int?,
+    val shift: Int?,
+    val direction: CountDirection?,
+    val families: Set<String>,
+)
+
 internal object AdaptiveBlockSwapPolish {
     /**
      * 長期ブロック交換の候補長。月次勤務表で「局所交換では越えにくい」谷を越えるための
@@ -88,7 +115,18 @@ internal object AdaptiveBlockSwapPolish {
          */
         filterC3nIncrease: Boolean = PolishGate.filterC3nIncrease,
         shouldStop: () -> Boolean = { false },
+        /**
+         * [3.495.0] 窓の扱い。[WindowMode.STRICT_WHOLE_WINDOW] は違反アンカー型・可変長窓の一括交換
+         * （[applyStrictWholeWindow]）へ委譲する。既定は従来どおり [WindowMode.PARTIAL_MOVABLE_DAYS]＝挙動不変。
+         */
+        mode: WindowMode = WindowMode.PARTIAL_MOVABLE_DAYS,
+        /** STRICT 用: 通常の最大窓長（既定 7）と、長い連続違反があるときだけ許す上限（既定 14）。 */
+        strictMaxLen: Int = 7,
+        strictLongLen: Int = 14,
     ): V6HotfixPasses.CyclicSwapResult {
+        if (mode == WindowMode.STRICT_WHOLE_WINDOW) {
+            return applyStrictWholeWindow(state, schedule, maxPasses, maxEvaluations, strictMaxLen, strictLongLen, shouldStop)
+        }
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -561,6 +599,277 @@ internal object AdaptiveBlockSwapPolish {
                     rejectReasons.entries.sortedByDescending { it.value }.joinToString(" ") { "${it.key}${it.value}" }) +
                 (if (rejectCulprits.isEmpty()) "" else " (悪化の主因 " +
                     rejectCulprits.entries.sortedByDescending { it.value }.take(4).joinToString(" ") { "${it.key}:${it.value}" } + ")") +
+                (if (selectedLabels.isNotEmpty()) " 対象: ${selectedLabels.joinToString(", ")}" else "")))
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+    }
+
+    /** range/apt の見積り（候補の順位付け専用・採否は正式 checker）。既存 [applyAdaptiveBlockSwapPolish] のローカル版と同式。 */
+    private fun personalPenalty(p: Problem, staff: Int, shift: Int, count: Int): Long {
+        var out = 0L
+        val lo = p.rangeLo[staff][shift]
+        val hi = p.rangeHi[staff][shift]
+        if (lo != Int.MIN_VALUE && count < lo) out += (lo - count).toLong() * 90L
+        if (hi != Int.MAX_VALUE && count > hi) out += (count - hi).toLong() * 45L
+        val apt = p.apt[staff][shift]
+        if (apt >= 0) out += abs(count - apt).toLong()
+        return out
+    }
+
+    /**
+     * [3.495.0/ユーザー提示の設計「違反アンカー型・可変長ウィンドウ交換」] STRICT_WHOLE_WINDOW の本体。
+     *
+     * 基本操作＝職員 a, b・開始日 s・長さ L について**同じ日付範囲**を丸ごと交換する（`a[s..s+L) ↔ b[s..s+L)`）。
+     * 同じ日付どうしなので日別のシフト人数は完全に保存される。所属群が違うと群別人数は変わるため、同一 sgrp/ssk の
+     * 相手を第1層、それ以外を第2層（優先度ペナルティ）にする。
+     *
+     * 1. 違反アンカー: セル違反（`cellFamilies`）の日／回数超過・適正超過は対象シフトに入っている全日／回数不足・
+     *    適正不足は「他職員が k、対象職員が k 以外」の交換可能な日を逆引き／連続・パターン違反は違反セルに加え
+     *    違反区間の両端／週偏り（`distLocations["weekly"]`）は長さ7の窓を全開始位置で。
+     * 2. アンカー日 j を含む窓（start ∈ (j-L+1)..j）と、j に接する窓（末尾が j-1／先頭が j+1）。L は 1..Lmax（=min(7,T)）
+     *    ＋同一シフト連の実長＋違反パターン長＋7＋c1 の窓長。長い連続違反（連長 > Lmax）があるときだけ最大 14 へ拡張。
+     * 3. 窓全体の成立条件: 全日について両者とも希望固定でなく、相互に担当可、無効値を含まない、窓が完全一致でない。
+     *    さらに満たされている厳密回数固定（lo==hi）が動かない（シフト別ヒストグラム delta で判定）。同じ候補は
+     *    正規化キー (min(a,b), max(a,b), start, L) で1回だけ。
+     * 4. 安価な優先度: 1e6×HARD改善見積り（両行の c3n fire 差）＋1e5×アンカー違反改善＋1e4×回数違反改善（改善する
+     *    (職員,シフト) 数 − 悪化する数）＋16×職員違反圧力 −10×変更セル数 −群不一致ペナルティ。
+     * 5. 正式採否は既存と同一: 窓交換→フル checker→`exactPinRegression` でなく `betterReport`（HARD→weighted→total）
+     *    なら候補。**pass ごとに最良の1手だけ採用**し、採用後にアンカーと回数を再計算する。
+     */
+    private fun applyStrictWholeWindow(
+        state: MagiState,
+        schedule: Array<IntArray>,
+        maxPasses: Int,
+        maxEvaluations: Int,
+        maxLen: Int,
+        longLen: Int,
+        shouldStop: () -> Boolean,
+    ): V6HotfixPasses.CyclicSwapResult {
+        val pinBlocks = PinBlockAttribution()
+        val p = Problem(state)
+        val work = normalizeSchedule(schedule, p)
+        val before = UnifiedViolationChecker.check(state, work)
+        var bestRep = before
+        if (p.S < 2 || p.T < 1 || maxPasses <= 0 || maxEvaluations <= 0) {
+            return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
+                listOf(MirrorLog(tag = "AnchoredWindowSwap", message = "違反アンカー窓交換: 職員ペアなし=スキップ")))
+        }
+        val lMax = min(maxLen.coerceAtLeast(1), p.T)
+        val lLong = min(longLen.coerceAtLeast(lMax), p.T)
+        val ruleLens = HashSet<Int>()
+        for (c in p.cons1) if (c.day1 in 1..lLong) ruleLens.add(c.day1)
+        for (list in listOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)) for (c in list) if (c.seq.size in 1..lLong) ruleLens.add(c.seq.size)
+        if (7 <= p.T) ruleLens.add(7)
+        fun name(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
+        fun runOf(i: Int, j: Int): IntRange {
+            val n = work[i][j]; var a = j; var b = j
+            while (a > 0 && work[i][a - 1] == n) a--
+            while (b < p.T - 1 && work[i][b + 1] == n) b++
+            return a..b
+        }
+        fun sameGroup(a: Int, b: Int) = p.sgrp[a] == p.sgrp[b] && p.ssk[a] == p.ssk[b]
+
+        data class Candidate(val a: Int, val b: Int, val start: Int, val length: Int, val priority: Long, val changed: Int, val sameGroup: Boolean)
+        fun swap(c: Candidate) {
+            for (d in c.start until c.start + c.length) { val t = work[c.a][d]; work[c.a][d] = work[c.b][d]; work[c.b][d] = t }
+        }
+
+        var applied = 0; var evaluated = 0; var built = 0; var windowsTried = 0; var pinDropped = 0; var anchorsTotal = 0
+        val rejectReasons = LinkedHashMap<String, Int>()
+        val rejectCulprits = LinkedHashMap<String, Int>()
+        val selectedLabels = ArrayList<String>()
+        var pass = 0
+        while (pass < maxPasses && !shouldStop()) {
+            val rep = bestRep
+            val counts = countMatrix(p, work)
+            // 職員違反圧力（既存 staffPressure と同式）。
+            val pressure = LongArray(p.S)
+            fun addPressure(key: String, cls: String) {
+                val i = key.substringBefore(',').toIntOrNull() ?: return
+                if (i in 0 until p.S) pressure[i] += MirrorKeys.weightOf(cls.removePrefix("vio-")).toLong().coerceAtLeast(1L)
+            }
+            rep.violations.forEach { (k, c) -> addPressure(k, c) }
+            rep.countViolations.forEach { (k, c) -> addPressure(k, c) }
+            rep.distLocations.forEach { (fam, rows) -> val w = MirrorKeys.weightOf(fam).toLong().coerceAtLeast(1L); for (r in rows) r.firstOrNull()?.let { if (it in 0 until p.S) pressure[it] += w } }
+
+            // 1) 違反アンカー
+            val anchors = ArrayList<ViolationAnchor>()
+            for ((key, fams) in rep.cellFamilies) {
+                val i = key.substringBefore(',').toIntOrNull() ?: continue
+                val j = key.substringAfter(',').toIntOrNull() ?: continue
+                if (i !in 0 until p.S || j !in 0 until p.T) continue
+                val fs = fams.toSet()
+                anchors.add(ViolationAnchor(i, j, null, null, fs))
+                // 連続・パターン違反は違反区間（同一シフト連）の両端も起点にする。
+                if (fs.any { it.startsWith("vio-c3") || it == "vio-c1" } && work[i][j] in 0 until p.K) {
+                    val r = runOf(i, j)
+                    if (r.first != j) anchors.add(ViolationAnchor(i, r.first, null, null, fs))
+                    if (r.last != j) anchors.add(ViolationAnchor(i, r.last, null, null, fs))
+                }
+            }
+            for ((key, cls) in rep.countViolations) {
+                val i = key.substringBefore(',').toIntOrNull() ?: continue
+                val k = key.substringAfter(',').toIntOrNull() ?: continue
+                if (i !in 0 until p.S || k !in 0 until p.K) continue
+                val dir = when (cls) { "vio-high", "vio-aptHigh" -> CountDirection.HIGH; "vio-low", "vio-aptLow" -> CountDirection.LOW; else -> null } ?: continue
+                val fs = setOf(cls)
+                if (dir == CountDirection.HIGH) {
+                    for (d in 0 until p.T) if (work[i][d] == k) anchors.add(ViolationAnchor(i, d, k, dir, fs))
+                } else {
+                    // 不足: 他職員が k を持ち、対象職員は k 以外で希望固定でない日を逆引き。
+                    for (d in 0 until p.T) {
+                        if (work[i][d] == k || p.wishLocked(i, d)) continue
+                        var any = false
+                        for (b in 0 until p.S) if (b != i && work[b][d] == k && !p.wishLocked(b, d)) { any = true; break }
+                        if (any) anchors.add(ViolationAnchor(i, d, k, dir, fs))
+                    }
+                }
+            }
+            rep.distLocations["weekly"]?.forEach { row ->
+                val i = row.firstOrNull() ?: return@forEach
+                if (i in 0 until p.S && 7 <= p.T) anchors.add(ViolationAnchor(i, null, null, null, setOf("weekly")))
+            }
+            if (anchors.isEmpty()) break
+            anchorsTotal += anchors.size
+
+            // 2) 窓の生成（アンカーごとに (start, L) の集合）＋ 3) 相手の方向付け・成立条件・優先度
+            val seen = HashSet<Long>()
+            val candidates = ArrayList<Candidate>()
+            val delta = IntArray(p.K)
+            fun tryWindow(anc: ViolationAnchor, start: Int, length: Int) {
+                if (start < 0 || length < 1 || start + length > p.T) return
+                val a = anc.staff
+                val k = anc.shift
+                windowsTried++
+                for (b in 0 until p.S) {
+                    if (b == a) continue
+                    val key = (min(a, b).toLong() shl 48) or (max(a, b).toLong() shl 32) or (start.toLong() shl 16) or length.toLong()
+                    if (!seen.add(key)) continue
+                    // 回数違反は方向付け: 超過なら窓内で k が減る相手、不足なら増える相手だけ。
+                    if (k != null && anc.direction != null) {
+                        var ca = 0; var cb = 0
+                        for (d in start until start + length) { if (work[a][d] == k) ca++; if (work[b][d] == k) cb++ }
+                        if (anc.direction == CountDirection.HIGH && cb >= ca) continue
+                        if (anc.direction == CountDirection.LOW && cb <= ca) continue
+                    }
+                    // 窓全体の成立条件（1日でも不成立なら窓ごと棄却＝部分交換しない）。
+                    var ok = true; var changed = 0
+                    java.util.Arrays.fill(delta, 0)
+                    for (d in start until start + length) {
+                        val ka = work[a][d]; val kb = work[b][d]
+                        if (ka !in 0 until p.K || kb !in 0 until p.K) { ok = false; break }
+                        if (p.wishLocked(a, d) || p.wishLocked(b, d)) { ok = false; break }
+                        if (!p.canDo(a, kb) || !p.canDo(b, ka)) { ok = false; break }
+                        if (ka != kb) { changed++; delta[kb]++; delta[ka]-- }
+                    }
+                    if (!ok || changed == 0) continue
+                    // 満たされている厳密回数固定 (lo==hi==count) は動かさない（ヒストグラム判定）。
+                    var pinned = false
+                    for (kk in 0 until p.K) {
+                        if (delta[kk] == 0) continue
+                        for (st in intArrayOf(a, b)) {
+                            val lo = p.rangeLo[st][kk]
+                            if (lo != Int.MIN_VALUE && lo == p.rangeHi[st][kk] && counts[st][kk] == lo) { pinned = true; break }
+                        }
+                        if (pinned) break
+                    }
+                    if (pinned) { pinDropped++; continue }
+                    // 4) 安価な優先度
+                    var hardGain = 0L
+                    if (p.cons3n.isNotEmpty()) {
+                        val ra = work[a].copyOf(); val rb = work[b].copyOf()
+                        val beforeF = C1DeltaPrefilter.staffC3nFires(p, ra) + C1DeltaPrefilter.staffC3nFires(p, rb)
+                        for (d in start until start + length) { val t = ra[d]; ra[d] = rb[d]; rb[d] = t }
+                        val afterF = C1DeltaPrefilter.staffC3nFires(p, ra) + C1DeltaPrefilter.staffC3nFires(p, rb)
+                        hardGain = (beforeF - afterF).toLong()
+                    }
+                    var anchorGain = 0L
+                    if (k != null && anc.direction != null) {
+                        val b0 = personalPenalty(p, a, k, counts[a][k]); val a0 = personalPenalty(p, a, k, counts[a][k] + delta[k])
+                        anchorGain = if (a0 < b0) 1L else if (a0 > b0) -1L else 0L
+                    } else if (anc.day != null && anc.day in start until start + length) {
+                        anchorGain = if (work[a][anc.day] != work[b][anc.day]) 1L else 0L
+                    }
+                    var countGain = 0L
+                    for (kk in 0 until p.K) {
+                        if (delta[kk] == 0) continue
+                        val ga = personalPenalty(p, a, kk, counts[a][kk]) - personalPenalty(p, a, kk, counts[a][kk] + delta[kk])
+                        val gb = personalPenalty(p, b, kk, counts[b][kk]) - personalPenalty(p, b, kk, counts[b][kk] - delta[kk])
+                        countGain += (if (ga > 0) 1 else if (ga < 0) -1 else 0) + (if (gb > 0) 1 else if (gb < 0) -1 else 0)
+                    }
+                    val same = sameGroup(a, b)
+                    val priority = hardGain * 1_000_000L + anchorGain * 100_000L + countGain * 10_000L +
+                        (pressure[a] + pressure[b]) * 16L - changed * 10L - (if (same) 0L else 20_000L)
+                    candidates.add(Candidate(a, b, start, length, priority, changed, same))
+                    built++
+                }
+            }
+            for (anc in anchors) {
+                if (shouldStop()) break
+                val lens = HashSet<Int>()
+                if (anc.day == null) { lens.add(7) } else {
+                    for (l in 1..lMax) lens.add(l)
+                    lens.addAll(ruleLens)
+                    if (work[anc.staff][anc.day] in 0 until p.K) {
+                        val rl = runOf(anc.staff, anc.day).count()
+                        if (rl <= lLong) lens.add(rl)   // 長い連続違反があるときだけ 14 まで拡張
+                    }
+                }
+                for (l in lens) {
+                    if (l < 1 || l > p.T) continue
+                    if (anc.day == null) { for (st in 0..(p.T - l)) tryWindow(anc, st, l); continue }
+                    val j = anc.day
+                    for (st in (j - l + 1)..j) tryWindow(anc, st, l)
+                    tryWindow(anc, j - l, l)      // 末尾が j-1（アンカーに接する連）
+                    tryWindow(anc, j + 1, l)      // 先頭が j+1
+                }
+            }
+            if (candidates.isEmpty()) break
+            candidates.sortWith(compareByDescending<Candidate> { it.priority }.thenByDescending { it.changed }.thenBy { it.start }.thenBy { it.a }.thenBy { it.b })
+
+            // 5) 正式評価: pass 内の最良1手だけ採用
+            val base = work.copy2D()
+            var chosen: Candidate? = null
+            var chosenRep: ViolationReport? = null
+            var checkedThisPass = 0
+            for (c in candidates) {
+                if (shouldStop() || checkedThisPass >= maxEvaluations) break
+                swap(c)
+                val r = UnifiedViolationChecker.check(state, work)
+                val pinRegression = exactPinRegression(p, base, work)
+                if (pinRegression && betterReport(r, bestRep)) pinBlocks.record(p, base, work)
+                swap(c)
+                checkedThisPass++; evaluated++
+                if (!pinRegression && betterReport(r, bestRep) && (chosenRep == null || betterReport(r, chosenRep!!))) {
+                    chosen = c; chosenRep = r
+                } else {
+                    val why = when {
+                        pinRegression -> "ピン破り"
+                        r.hard > bestRep.hard -> "必須増"
+                        r.hard < bestRep.hard -> "採用手に劣後"
+                        r.weightedScore > bestRep.weightedScore -> "重み悪化"
+                        r.weightedScore < bestRep.weightedScore -> "採用手に劣後"
+                        r.total < bestRep.total -> "採用手に劣後"
+                        r.total > bestRep.total -> "件数悪化"
+                        else -> "同値"
+                    }
+                    rejectReasons[why] = (rejectReasons[why] ?: 0) + 1
+                    if (why == "重み悪化" || why == "必須増") worstWorsenedFamily(r, bestRep)?.let { rejectCulprits[it] = (rejectCulprits[it] ?: 0) + 1 }
+                }
+            }
+            val accepted = chosen ?: break
+            swap(accepted)
+            bestRep = chosenRep ?: break
+            applied++
+            selectedLabels.add("${accepted.length}日:${name(accepted.a)}↔${name(accepted.b)} ${accepted.start + 1}〜${accepted.start + accepted.length}日(${accepted.changed}セル${if (accepted.sameGroup) "" else "・群違い"})")
+            pass++
+        }
+        val logs = listOf(MirrorLog(tag = "AnchoredWindowSwap",
+            message = "違反アンカー窓交換[窓1〜${lMax}日(連続違反は〜${lLong})・窓全体を一括]: total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard}" +
+                " score ${before.weightedScore.toLong()}->${bestRep.weightedScore.toLong()} 採用${applied}回" +
+                " アンカー${anchorsTotal}件 窓${windowsTried}件 実候補${built}件(厳密固定で除外${pinDropped})/正式評価${evaluated}件" +
+                (if (applied == 0 && anchorsTotal > 0) " [頭打ち=改善手なし]" else "") +
+                (if (rejectReasons.isEmpty()) "" else " 不採用内訳: " + rejectReasons.entries.sortedByDescending { it.value }.joinToString(" ") { "${it.key}${it.value}" }) +
+                (if (rejectCulprits.isEmpty()) "" else " (悪化の主因 " + rejectCulprits.entries.sortedByDescending { it.value }.take(4).joinToString(" ") { "${it.key}:${it.value}" } + ")") +
                 (if (selectedLabels.isNotEmpty()) " 対象: ${selectedLabels.joinToString(", ")}" else "")))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
     }

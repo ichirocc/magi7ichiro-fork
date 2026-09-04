@@ -955,6 +955,7 @@ cons1=[5日窓休≥1, 14日窓休≥4, 14日窓Dﾃ≥2]。桒澤美幸・大�
 - 読込時に endDate を日数へ正規化＋Android Lint を CI で実行＋失敗ログ条件（3.486.0, レビュー第3弾＝総括12件の検証）  → `docs/history/3.4xx.md`
 - 自動保存の世代逆転を塞ぐ（3.485.0, Windows 版レビュー第2弾3件の検証＝Android 側は1件が該当）  → `docs/history/3.4xx.md`
 - 担当可否の単一セルでも「休」を外せないようにする（3.484.0, Windows 版レビュー指摘の兄弟バグ）  → `docs/history/3.4xx.md`
+- 違反アンカー型・可変長ウィンドウ交換＝AdaptiveBlockSwap に STRICT_WHOLE_WINDOW モードを追加（3.495.0, ユーザー提示の設計。RunSwapPolish を置換）  → `docs/history/3.4xx.md`
 - 連交換研磨を汎用化＝夜勤前提を撤廃（3.494.0, ユーザー指示「特定のシフトを特別扱いしない」。RunSwapPolish が NightRunSwapPolish を置換）  → `docs/history/3.4xx.md`
 - 夜勤連交換研磨（NightRunSwapPolish）を新設（3.493.0, ユーザー指示「夜勤を他職員と交換する違反研磨」。計測で改善手0を示したうえで「keep-best で入れる」を選択）  → `docs/history/3.4xx.md`
 - 人員過剰の「希望固定N人」を名指しして、その場で希望を取り消せるようにする（3.492.0, 実機指摘「データ修正のサポートが無い」）  → `docs/history/3.4xx.md`
