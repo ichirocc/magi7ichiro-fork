@@ -27,6 +27,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-04（3.489.0＝実機報告「個人の下限をゼロに出来ない」。`staffCellLimits` が下限 0 を未設定扱いにして
+表示だけ落としていた（エンジンは保持）。明示した 0 を 0 として返す。表示のみ・スコアリング不変。）
+
+**最終更新**：2026-09-04（3.488.0＝レビュー第5弾。読めない `startDate` を読込で拒否（旧: 受理して `Problem.dow0` が黙って
+日曜へ落ち、曜日平準化・曜日単位の修復が実際のカレンダーと食い違った）。`groupShiftApt` を読込の検証後に G×K へ正規化
+（読む側は既に添字を守っていたが境界を1か所へ）。詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-04（3.487.0＝レビュー第4弾の新規2件。原子置換（`writeFileAtomically`）が rename 失敗で直接書きへ落ちる前に
 所有権（`commitGuard`）を再確認（旧: 稀な経路で古い writer が target を書けた）。`cleanup-artifacts.yml` は1件も消せなければ
 ジョブを失敗に。Actions の SHA 固定は方針事項として記録のみ。詳細は `docs/history/3.4xx.md`。）

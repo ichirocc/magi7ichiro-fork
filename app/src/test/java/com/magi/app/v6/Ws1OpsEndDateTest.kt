@@ -30,6 +30,25 @@ class Ws1OpsEndDateTest {
         assertEquals("2026-08-31", Ws1Ops.normalizeEndDate(state("2026-08-01", "", 31)).endDate)
     }
 
+    @Test fun startDateErrorRejectsUnparsableDates() {
+        // [3.488.0] 旧: 受理して Problem.dow0 が黙って日曜（0）へ落ちていた。
+        assertEquals(null, Ws1Ops.startDateError(state("2026-07-01", "2026-07-03", 3)))
+        for (bad in listOf("invalid", "", "2026/07/01", "2026-13-01")) {
+            assertEquals("受理してはいけない: '$bad'", true, Ws1Ops.startDateError(state(bad, "", 3)) != null)
+        }
+    }
+
+    @Test fun groupShiftAptIsNormalizedToGroupsByShifts() {
+        // [3.488.0] 空配列・行不足（旧形式）を G×K の空欄へ。既に G×K なら同じ state。
+        val st = state("2026-07-01", "2026-07-03", 3)   // 1群 × 2シフト
+        val empty = st.copy(groupShiftApt = emptyList())
+        assertEquals(listOf(listOf("", "")), Ws1Ops.normalizeGroupShiftApt(empty).groupShiftApt)
+        val longer = st.copy(groupShiftApt = listOf(listOf("1", "2", "9")))
+        assertEquals("余分な列は落とす", listOf(listOf("1", "2")), Ws1Ops.normalizeGroupShiftApt(longer).groupShiftApt)
+        val exact = st.copy(groupShiftApt = listOf(listOf("", "4")))
+        assertSame(exact, Ws1Ops.normalizeGroupShiftApt(exact))
+    }
+
     @Test fun consistentOrUnparsableStateIsReturnedAsIs() {
         val ok = state("2026-07-01", "2026-07-03", days = 3)
         assertSame(ok, Ws1Ops.normalizeEndDate(ok))

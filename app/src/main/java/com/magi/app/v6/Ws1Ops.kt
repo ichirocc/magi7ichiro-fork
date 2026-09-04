@@ -297,6 +297,27 @@ object Ws1Ops {
         return if (state.endDate == expected) state else state.copy(endDate = expected)
     }
 
+    /**
+     * [3.488.0] `startDate` が `YYYY-MM-DD` として読めなければ理由を返す（読込検証用）。
+     * 旧: 検証していなかったため、読めない日付でも読込でき、[Problem.dow0] が黙って 0（日曜）へ落ちて
+     * 曜日平準化・曜日単位の修復・違反評価が実際のカレンダーと食い違っていた。
+     */
+    fun startDateError(state: MagiState): String? =
+        if (runCatching { LocalDate.parse(state.startDate) }.isSuccess) null
+        else "startDate が日付として読めません（YYYY-MM-DD 形式で指定してください: \"${state.startDate}\"）"
+
+    /**
+     * [3.488.0] `groupShiftApt` を G×K に揃える（読込時の正規化）。空配列・行不足・列不足（旧形式）は
+     * 空欄＝目標なしで埋め、余分な列は落とす。既に G×K なら同じ state を返す。読む側（[Problem] は
+     * `getOrNull`）は添字を守っているが、境界を1か所に寄せて以後の読み手が同じ穴を踏まないようにする。
+     */
+    fun normalizeGroupShiftApt(state: MagiState): MagiState {
+        val g = state.groupCount; val k = state.shiftCount
+        if (state.groupShiftApt.size == g && state.groupShiftApt.all { it.size == k }) return state
+        val grid = List(g) { gi -> val row = state.groupShiftApt.getOrNull(gi); List(k) { kk -> row?.getOrNull(kk) ?: "" } }
+        return state.copy(groupShiftApt = grid)
+    }
+
     // ---- period resize -------------------------------------------------------
 
     /** Resize the period to [newT] days: schedule columns padded with 休 or truncated;
