@@ -137,6 +137,33 @@ class RunFilesTest {
     }
 
     @Test
+    fun theGuardIsReEvaluatedBeforeTheNonAtomicFallbackWrites() {
+        // [3.487.0/レビュー指摘] rename に失敗して直接書きへ落ちるとき、所有権をもう一度確認する。
+        //   旧: 最初の確認のあと所有権が移っていても古い writer が target を書けた。
+        val f = files()
+        val target = File(tmp.root, "out.json")
+        target.writeText("先行実行の結果")
+        var calls = 0
+        var nonAtomic = false
+        val ok = f.writeAtomically(target, "置き換えられた実行の結果",
+            onNonAtomic = { nonAtomic = true },
+            commitGuard = { calls++; calls == 1 },          // 1回目=所有、2回目=所有権を失った
+            rename = { _, _ -> false })                       // rename が使えない環境を再現
+        assertFalse(ok)
+        assertEquals("直接書きの前に再確認していない", 2, calls)
+        assertFalse("再確認で諦めたのに onNonAtomic が呼ばれた", nonAtomic)
+        assertEquals("所有権を失った writer が target を書いた", "先行実行の結果", target.readText())
+        assertNull("一時ファイルが残っている", tmp.root.listFiles()!!.firstOrNull { it.name.endsWith(".tmp") })
+
+        // 所有権が続いていれば従来どおり直接書きへ落ち、諦めたことを知らせる。
+        calls = 0
+        assertTrue(f.writeAtomically(target, "新しい結果", onNonAtomic = { nonAtomic = true },
+            commitGuard = { calls++; true }, rename = { _, _ -> false }))
+        assertTrue(nonAtomic)
+        assertEquals("新しい結果", target.readText())
+    }
+
+    @Test
     fun commitGuardIsEvaluatedOnceAfterTheTemporaryFileIsWritten() {
         // ガードを直列化より前に戻すと TOCTOU の窓が ms 級へ広がる。呼ばれる回数と順序を固定しておく。
         val f = files()

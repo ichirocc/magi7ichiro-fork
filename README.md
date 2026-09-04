@@ -27,6 +27,10 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-04（3.487.0＝レビュー第4弾の新規2件。原子置換（`writeFileAtomically`）が rename 失敗で直接書きへ落ちる前に
+所有権（`commitGuard`）を再確認（旧: 稀な経路で古い writer が target を書けた）。`cleanup-artifacts.yml` は1件も消せなければ
+ジョブを失敗に。Actions の SHA 固定は方針事項として記録のみ。詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-04（3.486.0＝レビュー第3弾（総括12件）の検証。新規は3件: 読込時に `endDate` を日数へ正規化
 （`Ws1Ops.normalizeEndDate`、矛盾は警告ログ）／CI で Android Lint を報告専用に実行（旧: 一度も走っていなかった）／
 ビルド失敗ログの保存条件を修正。⑧〜⑪（広い catch・largeHeap・デバッグ鍵・成果物全削除）は記録された意図的判断のため
