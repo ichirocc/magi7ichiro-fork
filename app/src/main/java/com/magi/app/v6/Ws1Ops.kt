@@ -93,8 +93,15 @@ object Ws1Ops {
         return state.copy(staff = sl)
     }
 
+    /**
+     * 群 g × シフト k の担当可否を1セル設定。**休の列を OFF にする操作は同じ state を返す**
+     * （[setGroupShiftColumn] と同じ拒否契約＝呼出側は `===` で検知して案内する）。
+     * [3.484.0] 行/列一括だけが休を守り単一セルは素通しだった＝画面の「休は外せません」と食い違い、
+     * 休しか担当できない群で「担当可能シフトが無い群」を作れていた（Windows 版レビュー指摘の兄弟バグ）。
+     */
     fun setGroupShift(state: MagiState, g: Int, k: Int, allowed: Boolean): MagiState {
         if (g !in state.groupShift.indices) return state
+        if (!allowed && k == restShiftIndex(state)) return state
         val grid = state.groupShift.map { it.toMutableList() }.toMutableList()
         if (k !in grid[g].indices) return state
         grid[g][k] = if (allowed) 1 else 0
