@@ -302,7 +302,7 @@ object V6FinalPort {
         // 後処理は元々 deadline も progress も持たず、optimize が予算を使い切った後も走り続け、
         // 合計が予算を大きく超過していた(実機44分。当時の上限は600s)。ここで全体に hardDeadline を張り、
         // coroutine キャンセル(計算を止める)と束ねて後処理へ伝播する。
-        val startMs = System.currentTimeMillis()
+        val startMs = EngineClock.nowMs()
         val budgetMs = seconds.toLong() * 1000L
         val hardDeadlineMs = startMs + budgetMs
         // [仮説数上限撤廃・ユーザー指示] 診断ログ表示専用。実際の dispatch は V6NativeOptimizer.optimize()
@@ -433,7 +433,7 @@ object V6FinalPort {
                 observedIters.addAndGet(if (iters >= prevIt) iters - prevIt else iters)
                 itersByPhase[phase] = iters
                 val base = phase.substringAfter("/ ").trim().ifEmpty { phase }   // 「仮説N本探索中 / 」接頭辞を除去
-                if (base != lastPhase) { lastPhase = base; lastPhaseChangeMs.set(System.currentTimeMillis()) }
+                if (base != lastPhase) { lastPhase = base; lastPhaseChangeMs.set(EngineClock.nowMs()) }
                 if (report != null) {
                     val h = report.hard; val t = report.total; val wgt = report.weightedScore
                     val bh = bestHard.get()
@@ -444,7 +444,7 @@ object V6FinalPort {
                     //   早期終了が構造的に発火しなくなる（＝許容誤差がある方が正しい）。採否は betterReport が担う。
                     val improved = h < bh || (h == bh && wgt < bWeighted - 1e-6) || (h == bh && wgt <= bWeighted + 1e-6 && t < bTotal)
                     if (improved) {
-                        bestHard.set(h); bTotal = t; bWeighted = wgt; lastBestImproveMs.set(System.currentTimeMillis())
+                        bestHard.set(h); bTotal = t; bWeighted = wgt; lastBestImproveMs.set(EngineClock.nowMs())
                         lastBestImproveIters.set(observedIters.get())   // [3.375.0] 最終改善時点の反復数
                         // [3.346.0/実機ログ] 停滞ラッチを解除する。shouldStop は**単調でない**（改善が届けば
                         //   条件は偽に戻り、探索はそのまま締切まで走る）のに、旧実装は一度立った
@@ -494,7 +494,7 @@ object V6FinalPort {
             c3nWallResult.get()
         }
         val shouldStop = {
-            val now = System.currentTimeMillis()
+            val now = EngineClock.nowMs()
             // [賢い早期脱出] bestHard が「解消不能な下限(hardFloor=構造的covU)」以下＝解けるHARDは出し切った状態。
             //   この時点で残るのは構造的に埋まらない covU 席のみなので、HARD=0 と同様に短い猶予で頭打ち終了。
             //   ただし非covU HARD(groupViol/pref/c3n=解ける可能性あり)が残る間は long stall で粘る（214行の設計意図）。
@@ -525,20 +525,20 @@ object V6FinalPort {
         //   ポートフォリオは後者だけを確認窓で再確認する（一瞬のシグナルで片肺運転にしないため）。
         //   締切側でこれを返さないと、探索締切のたびに全ワーカーが確認窓ぶん待って後処理予約を食う
         //   （実測: 探索109.99s→114.998s・後処理8.48s→4.95s）。
-        val stopIsFinal = { System.currentTimeMillis() >= searchDeadlineMs || !isActive }
+        val stopIsFinal = { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         // 後処理(runPostOptimization)用の別締切。stall では止めず予約枠 hardDeadlineMs まで使える。
-        val postShouldStop = { System.currentTimeMillis() >= hardDeadlineMs || !isActive }
+        val postShouldStop = { EngineClock.nowMs() >= hardDeadlineMs || !isActive }
 
-        val tFirst0 = System.currentTimeMillis()
+        val tFirst0 = EngineClock.nowMs()
         val first = V6NativeOptimizer.optimize(state, schedule, optsR, shouldStop, progressWatch, stopIsFinal)
-        val tFirst1 = System.currentTimeMillis()
+        val tFirst1 = EngineClock.nowMs()
         // [review #5] RSIThenALNS は RSI(first)→ALNS(chained) を同一予算内で直列実行する。各段は
         //   postPolish=false（optsR で統一）なので段内 polish は走らない。最終 polish は段ではなく
         //   下流の runPostOptimization() に一度だけ集約しているため、ここでの二重 polish は意図的に無い。
         val chained = if (requestedAlgorithm == V6Algorithm.AUTO && plan is OptimizationPlan.RSIThenALNS && !shouldStop()) {
             V6NativeOptimizer.optimize(state, first.schedule, optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = plan.alnsSec), shouldStop, progressWatch, stopIsFinal)
         } else first
-        val tChain1 = System.currentTimeMillis()
+        val tChain1 = EngineClock.nowMs()
         // [3.377.0/実機ログ起因] 停滞ウォッチドッグの遠隔測定は**探索フェーズの話**なのに、ログは
         //   `lastBestImproveMs` を出力時（後処理・追加精製のあと）に読んでいた。ExtraRefine(3.102.0)の
         //   改善も `progressWatch` を通るので lastBestImproveMs は tChain1 より後へ進み、
@@ -558,9 +558,9 @@ object V6FinalPort {
         val integrationBudgetMs = (budgetMs / 20).coerceIn(6_000L, 16_000L)
         // [監査修正を継承] 旧relinkと同じ理由でintegrationもhardDeadlineMs-postReserveMs/2で止め、
         //   後処理(fair/weekly/c41s 研磨)へ予約枠の半分を必ず残す（両者 keep-best＝退化なし）。
-        val integrationDeadline = minOf(hardDeadlineMs - postReserveMs / 2, System.currentTimeMillis() + integrationBudgetMs)
-            .coerceAtLeast(System.currentTimeMillis())
-        val integrationStop = { System.currentTimeMillis() >= integrationDeadline || !isActive }
+        val integrationDeadline = minOf(hardDeadlineMs - postReserveMs / 2, EngineClock.nowMs() + integrationBudgetMs)
+            .coerceAtLeast(EngineClock.nowMs())
+        val integrationStop = { EngineClock.nowMs() >= integrationDeadline || !isActive }
         // [3.335.0/外部レビュー P1] 可変 static でなく**この実行の返り値**から読む（実行が重なっても
         //   別の実行の値を拾わない）。読む対象は従来どおり最後の段（RSIThenALNS なら ALNS 段）。
         val archivedElites = chained.fusionElites
@@ -583,15 +583,15 @@ object V6FinalPort {
             shouldStop = integrationStop,
             deadlineMs = integrationDeadline,
         )
-        val tIntegration1 = System.currentTimeMillis()
+        val tIntegration1 = EngineClock.nowMs()
 
         val post = V6HotfixPasses.runPostOptimization(
             state, integrated.schedule, label.tech,
             shouldStop = postShouldStop,
-            onPhase = { phase -> progressWatch(phase, null, System.currentTimeMillis() - startMs, budgetMs) },
+            onPhase = { phase -> progressWatch(phase, null, EngineClock.nowMs() - startMs, budgetMs) },
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
         )
-        val tPost1 = System.currentTimeMillis()
+        val tPost1 = EngineClock.nowMs()
         // [高精度化/予算残の活用] 後処理予約枠(budget/12, 8〜25s)は後処理が早期にフィックスポイント到達すると
         //   大半が未使用のまま返っていた(実機: 予約25s中 実使用0.45s＝約24.5s廃棄)。残り5s以上かつ違反が残る場合、
         //   最終盤面を起点に keep-best の追加精製(ALNS)へ回す。runAlns は入力比番兵つき＝結果は post 以上を保証。
@@ -625,7 +625,7 @@ object V6FinalPort {
             }
             if (extraMs >= 5_000 && canExtra) {
                 val extraDeadline = tPost1 + extraMs
-                val extraStop = { System.currentTimeMillis() >= extraDeadline || !isActive }
+                val extraStop = { EngineClock.nowMs() >= extraDeadline || !isActive }
                 // [3.335.0] 「他の案」は `chained.alternatives`（この実行の返り値）で保持済みなので、
                 //   追加精製が static を上書きしても失われない＝旧来の退避/復元は不要になった。
                 // [敵対的レビュー3.212.0、仮説数上限撤廃後も維持] 微小予算(5〜25s)の追加精製は本走行と異なり
@@ -661,7 +661,7 @@ object V6FinalPort {
                 }
             }
         }
-        val tExtra1 = System.currentTimeMillis()
+        val tExtra1 = EngineClock.nowMs()
         val overBudget = tExtra1 - startMs > budgetMs
         val timingLog = MirrorLog(
             level = if (overBudget) "W" else "I",

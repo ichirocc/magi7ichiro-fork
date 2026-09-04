@@ -79,7 +79,7 @@ class EliteIntegrationRandomSafetyTest {
                 )
             }
             val out = EliteIntegrationPolish.apply(
-                state, root, elites, { false }, System.currentTimeMillis() + 500L,
+                state, root, elites, { false }, EngineClock.nowMs() + 500L,
                 EliteIntegrationPolish.Config(maxPairs = 4, maxFusionGroups = 4, maxFusionCells = 8, beamWidth = 8),
             )
             val checked = UnifiedViolationChecker.check(state, out.schedule)

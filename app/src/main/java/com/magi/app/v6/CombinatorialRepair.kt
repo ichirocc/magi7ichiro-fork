@@ -97,7 +97,7 @@ internal object CombinatorialRepair {
         p: Problem? = null,
     ): ViolationReport {
         rejected.forEach(stats::onFeed)
-        val t0 = System.currentTimeMillis()   // [3.375.0] 結合探索に費やした時間（summary で出す）
+        val t0 = EngineClock.nowMs()   // [3.375.0] 結合探索に費やした時間（summary で出す）
         var bestRep = bestRepIn
         val pool = rejected.toMutableList()
         var misses = 0
@@ -151,7 +151,7 @@ internal object CombinatorialRepair {
             if (lbl.isNotBlank()) stats.acceptedLabels.add(lbl)
             for (idx in acceptedIdx.sortedDescending()) pool.removeAt(idx)
         }
-        stats.elapsedMs += System.currentTimeMillis() - t0
+        stats.elapsedMs += EngineClock.nowMs() - t0
         return bestRep
     }
 

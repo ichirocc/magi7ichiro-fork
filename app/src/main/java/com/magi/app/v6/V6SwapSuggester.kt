@@ -65,9 +65,9 @@ object FixSuggester {
         }
 
         val found = ArrayList<Quad>()
-        val start = System.currentTimeMillis()
+        val start = EngineClock.nowMs()
         var evals = 0
-        fun timeUp() = System.currentTimeMillis() - start > deadlineMs
+        fun timeUp() = EngineClock.nowMs() - start > deadlineMs
 
         // ops をその場で適用→評価→復元（割当を作らず高速）。改善なら候補に追加。
         fun tryOps(kind: FixKind, ops: List<FixCell>, label: String) {

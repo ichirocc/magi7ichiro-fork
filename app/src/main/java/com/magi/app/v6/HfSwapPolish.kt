@@ -32,7 +32,7 @@ internal object HfSwapPolish {
         //   （2.65.0/3.161.0 の確立方針）を持つのに、HF67 だけ手ごとの shouldStop のみ＝候補ごとフル check の
         //   内側スキャン（k×lows×highs）とフォールバック（全ペア×全日の総当たり=実機で rollback=264 の正体）が
         //   締切後も走り切る非対称だった。同型の締切確認を追加（keep-best のため途中中断でも退化なし）。
-        fun outOfTime() = shouldStop() || System.currentTimeMillis() >= deadlineMs
+        fun outOfTime() = shouldStop() || EngineClock.nowMs() >= deadlineMs
 
         while (swaps < maxSwaps) {
             if (outOfTime()) break
@@ -99,7 +99,7 @@ internal object HfSwapPolish {
         //   スキャンは候補ごとにフル check するため高コスト。手ごとだけでなく内側ループでも締切を確認し、
         //   締切後に1手分のスキャンを走り切って後段の研磨パスを押し出す(=予算超過で打ち切らせる)のを防ぐ。
         //   keep-best のため途中中断しても解は退化しない(採用は isBetter な bestMove のみ)。
-        fun outOfTime() = shouldStop() || System.currentTimeMillis() >= deadlineMs
+        fun outOfTime() = shouldStop() || EngineClock.nowMs() >= deadlineMs
 
         while (moves < maxMoves) {
             if (outOfTime()) break
