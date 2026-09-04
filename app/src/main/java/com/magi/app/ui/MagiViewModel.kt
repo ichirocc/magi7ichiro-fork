@@ -180,6 +180,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private val prevBackupFile get() = getApplication<Application>().filesDir.resolve("magi_prev_before_open.json")
     private var hydrated = false           // 復元完了前の自動保存を抑止（Web HF514 と同思想）
     private var saveJob: Job? = null
+    // [3.485.0] 保存の世代（main で採番）と、古い世代の書き込みを捨てるゲート（SaveGate の KDoc 参照）。
+    private var saveGen = 0
+    private val saveGate = com.magi.app.work.SaveGate()
     private data class UndoSnap(val st: MagiState, val sched: Array<IntArray>)
     private val undoStack = ArrayDeque<UndoSnap>()
     private val redoStack = ArrayDeque<UndoSnap>()   // [Web反映] undo で退避→redo で復元（手動修正ループ）
@@ -600,12 +603,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             kotlinx.coroutines.delay(1200)
+            val gen = ++saveGen   // main で採番＝exportJson の時点の状態順
             val json = exportJson() ?: return@launch
             val ok = withContext(Dispatchers.IO) {
-                runCatching {
-                    com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
-                }.getOrDefault(false)
-            }
+                saveGate.writeIfLatest(gen) {
+                    runCatching {
+                        com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
+                    }.getOrDefault(false)
+                }
+            } ?: return@launch   // より新しい世代が先に書かれた＝この世代は捨てる（通知しない）
             reportNonAtomicSave()   // [3.428.0/#7] 記録は **main へ戻ってから**（下の KDoc 参照）
             reportAutoSave(ok)
         }
@@ -654,12 +660,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (!hydrated) return
         saveJob?.cancel()
         val t0 = System.nanoTime()
+        val gen = ++saveGen
         val json = exportJson() ?: return
         // [3.410.0/U-03] 即時保存も同じ扱い（原子書き込み＋失敗の通知）。
         // saveNow は同期（main）なので旗を立てたその場で記録して構わない。
-        val ok = runCatching {
-            com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
-        }.getOrDefault(false)
+        // [3.485.0] 走行中の自動保存とはゲートのロックで直列化（同期呼出しの世代は常に最新＝捨てられない）。
+        val ok = saveGate.writeIfLatest(gen) {
+            runCatching {
+                com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
+            }.getOrDefault(false)
+        } ?: true
         reportNonAtomicSave()
         reportAutoSave(ok)
         // [賢い修正・saveNowメインスレッドI/O] 意図的な同期I/O（上記 SAVE_NOW_SLOW_MS の KDoc参照）を
