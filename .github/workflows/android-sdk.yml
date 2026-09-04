@@ -66,6 +66,7 @@ jobs:
         run: gradle --version
 
       - name: Build debug and release APKs
+        id: build
         shell: bash
         run: |
           set +e
@@ -73,6 +74,19 @@ jobs:
           code=$?
           cat build-debug.log
           echo "$code" > build-exit-code.txt
+          # [3.486.0] このステップは常に成功扱い（set +e）なので、後段の `if: failure()` は真にならない。
+          #   終了コードを出力にして後段の条件に使う（-MAGI_PC 側 2026-09-04 の修正と同じ）。
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+      # [レビュー指摘 2026-09-04] Android Lint が CI で一度も走っていなかった（build.gradle.kts は
+      #   abortOnError=false・checkReleaseBuilds=false のため assemble では実行されず、下の
+      #   「Upload lint reports」は生成元の無い空振り）。ビルドと独立に lintDebug を走らせて報告だけ残す
+      #   （abortOnError=false のまま＝赤くはしない。閾値は build.gradle.kts の lint ブロックで決める）。
+      - name: Android Lint (report only)
+        if: ${{ always() && steps.build.outputs.code == '0' }}
+        shell: bash
+        continue-on-error: true
+        run: gradle lintDebug --stacktrace > lint-debug.log 2>&1 || true; tail -40 lint-debug.log
 
       - name: Show build error summary
         if: ${{ always() }}
@@ -93,7 +107,8 @@ jobs:
       - name: Upload build log (on failure only)
         uses: actions/upload-artifact@v4
         continue-on-error: true
-        if: ${{ failure() }}
+        # 旧: `failure()`＝ビルドステップが成功扱いのため常に偽で、失敗ログが一度も保存されなかった。
+        if: ${{ always() && steps.build.outputs.code != '0' }}
         with:
           name: build-debug-log
           path: build-debug.log
