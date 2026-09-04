@@ -8,6 +8,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -855,6 +858,10 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
     // 一本指: 主要操作を画面下部に全幅・大ボタン(60dp)で常設。指の届く範囲で押し外しにくい。文脈で 停止/作成/最適化。
     // [DESIGN.md P3] 重い影(8dp)を廃し、surfaceContainer トーン＋軽い影(2dp)で本文から分離（melta-ui: 影より境界/トーン）。
     Surface(color = cs.surfaceContainer, tonalElevation = 2.dp, shadowElevation = 2.dp) {
+        BoxWithConstraints {
+        // [3.497.0/360dp 帯] 幅 390dp 未満で「元に戻す」「やり直し」が両方出ると主ボタンが 116dp まで潰れて
+        //   ラベルが省略されるため、狭い端末では補助2ボタンをアイコンだけにする（読み上げは従来どおり）。
+        val narrow = this.maxWidth < 390.dp
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -863,7 +870,8 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 OutlinedButton(
                     onClick = { vm.undo() },
                     modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "直前の操作を元に戻す" },
-                ) { Text("元に戻す") }
+                    contentPadding = if (narrow) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding,
+                ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) else Text("元に戻す") }
                 Spacer(Modifier.width(10.dp))
             }
             // [Web反映] やり直し（手動修正ループ）。元に戻した直後だけ出す。
@@ -871,7 +879,8 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 OutlinedButton(
                     onClick = { vm.redo() },
                     modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
-                ) { Text("やり直し") }
+                    contentPadding = if (narrow) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding,
+                ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) else Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
             when {
@@ -906,6 +915,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                     Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
+        }
         }
     }
 }
