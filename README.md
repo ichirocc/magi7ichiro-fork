@@ -27,6 +27,9 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-04（3.483.1＝docs のみ。全7画面＋表紙の静的モックアップを Claude Design のキャンバスに起こし、
+作業ファイルを `docs/screens/mockups/` へ格納（README に対応表・更新手順）。コード変更なし。詳細は `docs/history/3.4xx.md`。）
+
 **最終更新**：2026-09-03（3.483.0＝画面棚卸し `docs/screen_inventory_textart.md` の所見20件を全部修正（ユーザー指示
 「すべて修正する」）。ホーム: 解消度の括弧を4分岐（必須0で調整が残るとき「必須は解消・調整N件」＝3.480.0 の退行を修正）・
 実行中は進捗行だけ・人手不足なしの狩猟では大ボタンを出さない・他の案の要約を常時列挙。分析: 末尾の作成ボタンを撤去し
