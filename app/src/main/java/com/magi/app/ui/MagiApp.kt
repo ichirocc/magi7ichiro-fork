@@ -470,7 +470,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [冗長性削減] StatusHero(状態三重表示) / SummaryCard(統計は「ようす」と重複＋開発用語) /
                     //   QuickActionGrid(下部ナビと4/6重複) は home から除外。詳細統計は「ようす」タブへ集約。
                     CopilotCard(ui, onGoEdit = { tab = 2 }, onSoftPolish = { vm.runSoftPolish() })
-                    CoverageDiagnosisCard(ui)
+                    CoverageDiagnosisCard(ui, onCancelWish = { i, j -> vm.removeWish(i, j) })
                     // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（CoverageDiag の c3n 版・c3n=0 なら非表示）。
                     ForbiddenRunDiagnosisCard(ui, onRelaxRule = { vm.relaxForbiddenRule(it) })
                     // [3.322.0] 窓の要件(c1)が直せなかった理由（直近の最適化での却下記録。残存なしなら非表示）。

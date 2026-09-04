@@ -90,6 +90,12 @@ data class CoverageSurplus(
     val blockedFamily: String? = null,
     /** この枠の在勤者中、他シフトへ動かせる／動かせない内訳と理由。 */
     val reason: String,
+    /**
+     * [3.492.0] この枠を**本人希望で固定**している在勤者（`wishLocked` かつ希望＝このシフト）。reason の
+     * 「希望固定N人」の N の中身。画面はここから「誰の希望を取り消せば解消に近づくか」を名指しして、
+     * その場で希望を取り消す導線を出す（旧: 人数しか出ず、データ修正のサポートが無かった）。
+     */
+    val pinnedStaff: List<Int> = emptyList(),
 )
 
 /** covU(人員不足)の原因診断。どの枠が「数学的に充足不可」か「充足可能だが未到達」かを切り分ける。 */
@@ -373,6 +379,7 @@ object V6PortAnalyzer {
                 totalSurplus += excess
                 val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                 var pinned = 0; var forbid = 0; var cascade = 0; var free = 0
+                val pinnedIdx = ArrayList<Int>()
                 // [3.406.0] 構造的に動かせる(free)ことと、最適化が採ることは別。covO は最も軽い族(重み1.0)で、
                 //   移動先で他の族が1点でも悪化すると betterReport に負ける——**すぐ上のコメント自身が
                 //   「動かせるのに動いていない」ことの説明にはならないと書いているのに、下の hint は
@@ -387,7 +394,7 @@ object V6PortAnalyzer {
                     if (norm[i][j] != k) continue   // このシフトの在勤者だけが移動候補
                     // [3.391.0] 実現不能な希望は凍結しない＝「希望固定で動かせない」と案内するのは誤り
                     //   （むしろ動かすと担当外セル=groupViol も同時に消える）。wishLocked へ統一。
-                    if (p.wishLocked(i, j) && p.wish[i][j] == k) { pinned++; continue }   // 実現可能な本人希望＝動かすとpref化
+                    if (p.wishLocked(i, j) && p.wish[i][j] == k) { pinned++; pinnedIdx.add(i); continue }   // 実現可能な本人希望＝動かすとpref化
                     val alts = p.allowedShiftsForStaff(i).filter { it != k }
                     if (alts.isEmpty()) { forbid++; continue }      // 担当可能な代替シフトが無い
                     var hasRoom = false; var blockedByC3n = true
@@ -430,7 +437,8 @@ object V6PortAnalyzer {
                 surplusList.add(
                     CoverageSurplus(j, dayLabel(state.startDate, j), k, sym, need, got, excess,
                         blockedFamily = if (freeImproving == 0 && probedAny) famHits.maxByOrNull { it.value }?.key else null,
-                        reason = "在勤者中 動かせる${free}人・玉突き必要${cascade}人・希望固定${pinned}人・禁止連続${forbid}人。$hint")
+                        reason = "在勤者中 動かせる${free}人・玉突き必要${cascade}人・希望固定${pinned}人・禁止連続${forbid}人。$hint",
+                        pinnedStaff = pinnedIdx)
                 )
             }
         }

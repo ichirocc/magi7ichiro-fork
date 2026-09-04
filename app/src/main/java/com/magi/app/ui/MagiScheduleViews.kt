@@ -1326,6 +1326,19 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            // [3.492.0] データ修正の導線: 希望で固定している在勤者ごとに「希望を取り消す」。
+                            //   実行中は編集不可（他の編集入口と同じ）。取り消しは Undo 可（applyStructure 経由）。
+                            val dj = d.day
+                            if (dj != null && d.pinned.isNotEmpty()) {
+                                Spacer(Modifier.height(4.dp))
+                                for (i in d.pinned) {
+                                    OutlinedButton(
+                                        onClick = { detail = null; vm.removeWish(i, dj) },
+                                        enabled = !ui.running,
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の希望を取り消す", color = cs.error) }
+                                }
+                            }
                         }
                     },
                     confirmButton = {
@@ -1339,7 +1352,11 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
 }
 
 /** [直せる導線] 集計セルの違反詳細。focus=直す対象スタッフ(日別はnull=全体探索)。 */
-private data class TallyDetailUi(val title: String, val lines: List<String>, val focus: Int?, val shift: Int? = null)
+private data class TallyDetailUi(
+    val title: String, val lines: List<String>, val focus: Int?, val shift: Int? = null,
+    /** [3.492.0] 日別セルの日と、その枠を本人希望で固定している在勤者（人員過剰のとき）。 */
+    val day: Int? = null, val pinned: List<Int> = emptyList(),
+)
 
 /** 職員別セル(i,k): 現在回数と 下限/上限/目標 の差を数字で。 */
 private fun staffViolDetail(vm: MagiViewModel, ui: UiState, i: Int, k: Int, count: Int, vio: String): TallyDetailUi {
@@ -1370,7 +1387,17 @@ private fun dayViolDetail(vm: MagiViewModel, ui: UiState, k: Int, j: Int, count:
             "vio-covO" -> lines += "適正 ${hi}人 → ${(count - hi).coerceAtLeast(0)}人 過剰"
         }
     }
-    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null, k)
+    // [3.492.0/実機指摘「12日は希望Aｱが2人いる原因です。データ修正のサポートが無い」] 人員過剰の枠で、
+    //   その枠を本人希望で固定している在勤者を名指しする（診断 CoverageDiag と同じ判定＝配置済み＆希望一致）。
+    //   ダイアログはこの一覧から希望をその場で取り消せる。
+    val pinned = if (vio == "vio-covO") ui.schedule.indices.filter { i ->
+        ui.schedule[i].getOrNull(j) == k && ui.wishes["$i,$j"] == k
+    } else emptyList()
+    if (pinned.isNotEmpty()) {
+        lines += "希望で固定: " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } +
+            "（必須の希望どうしが同じ日に重なり、どちらかの希望を取り消さない限り過剰は残ります）"
+    }
+    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null, k, day = j, pinned = pinned)
 }
 
 private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else hexToColor(hex)

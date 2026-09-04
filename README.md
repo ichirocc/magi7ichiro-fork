@@ -27,6 +27,10 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-04（3.492.0＝実機指摘「データ修正のサポートが無い」。人員過剰の枠を本人希望で固定している在勤者を
+名指しし（`CoverageSurplus.pinnedStaff`）、シフト集計の過剰セルのダイアログとホームの過剰診断カードから「◯◯ の希望を
+取り消す」で希望をその場で取り消せるように。表示・導線のみ・スコアリング不変。）
+
 **最終更新**：2026-09-04（3.491.0＝レビュー第7弾＋自己見直し。並列仮説の「既に勝者がいれば起動しない」事前チェックを撤去
 （全本継続の仕様どおりに）、停止を例外で返す契約を `ensureActive()` とテストで明示（Android は `withContext` の完了時チェックで元から
 成立＝レビューの指摘は Windows のみ実在）、読込時の endDate/groupShiftApt 正規化を保存にも反映、起動時の結果ファイル判定に validate、
