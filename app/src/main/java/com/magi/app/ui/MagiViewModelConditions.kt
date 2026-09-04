@@ -192,7 +192,11 @@ fun MagiViewModel.staffCellLimits(i: Int, k: Int): Triple<Int?, Int?, Int?> {
     val st = state ?: return Triple(null, null, null)
     val p = cachedProblem(st)
     if (i !in 0 until p.S || k !in 0 until p.K) return Triple(null, null, null)
-    val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE || it == 0) null else it }
+    // [3.489.0/実機報告「個人の下限をゼロに出来ない」] 旧: `it == 0` も未設定扱いにしていたため、下限を 0 に
+    //   設定して適用しても再表示が「なし」に戻り、表も「〜0」（=0 の固定表示にならない）で、利用者には
+    //   「設定できない」に見えた。エンジンは lo=0 を保持しており（Problem.rangeLo=0、lo==hi の固定も成立）、
+    //   落としていたのは表示だけ。明示した 0 は 0 として返す（未設定＝MIN_VALUE のみ null）。
+    val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE) null else it }
     val hi = p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) null else it }
     val apt = p.apt[i][k].let { if (it < 0) null else it }
     return Triple(lo, hi, apt)
