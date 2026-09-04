@@ -334,7 +334,7 @@ object V6HotfixPasses {
         val pC1 = Problem(state)
         var round = 0
         var c1Plateau: C1PlateauDiagnosis? = null
-        var totalCyc = 0; var totalC1 = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalC3n = 0; var totalRange = 0; var totalC3run = 0; var totalC3pat = 0; var totalAnchorSwap = 0; var totalBlockSwap = 0; var totalApt = 0; var totalFair = 0
+        var totalCyc = 0; var totalC1 = 0; var totalC3 = 0; var totalC3r = 0; var totalC3mn = 0; var totalC3n = 0; var totalRange = 0; var totalC3run = 0; var totalC3pat = 0; var totalAnchorSwap = 0; var totalWishIsland = 0; var totalBlockSwap = 0; var totalApt = 0; var totalFair = 0
         while (round < maxRounds && !clusterStop()) {
             var roundApplied = 0
 
@@ -525,6 +525,17 @@ object V6HotfixPasses {
             rAnchor.pinBlocks?.let { pinBlocksAll.merge(it) }
             if (round == 0) logs.addAll(rAnchor.logs)
 
+            // [希望島研磨, 3.496.0（ユーザー提示の確定仕様）] 実現可能な希望日を固定アンカーに、影響範囲が重なる希望を島へ統合し、
+            //   周辺に違反がある島だけ起動。同日交換→窓交換→両翼交換→必要時のみ3者巡回。希望周辺も全体も改善する手だけ採用、
+            //   停滞時のみ短いビームで中立手を許す。最終結果は開始盤面より改善（keep-best）。当月 0 until T 内で完結。
+            onPhase("後処理 希望島研磨 [巡${round + 1}]")
+            val __t16c = EngineClock.nowMs()
+            val rWish = WishIslandPolish.applyWishIslandPolish(state, work, maxPasses = 3, maxEvaluations = 120, shouldStop = clusterStop)
+            passMs.merge("WishIslandPolish", EngineClock.nowMs() - __t16c) { a, b -> a + b }
+            work = rWish.newSchedule.copy2D(); totalWishIsland += rWish.applied; roundApplied += rWish.applied
+            rWish.pinBlocks?.let { pinBlocksAll.merge(it) }
+            if (round == 0) logs.addAll(rWish.logs)
+
             // [AdaptiveBlockSwap・長期ブロック丸ごと2人交換] 15日固定の旧手を、11/13/17/19/23/28日の
             //   非等間隔ポートフォリオへ拡張。同群に限らず、ブロック内の全セルを相互に担当可能な他者も
             //   候補にし、希望固定・厳密ピン・正式スコアの全ガードを通過した最良の1手だけを採用する。
@@ -567,7 +578,7 @@ object V6HotfixPasses {
         run {
             val softAfter = UnifiedViolationChecker.check(state, work)
             fun bd(r: ViolationReport, k: String) = r.breakdown[k] ?: 0
-            val adopted = totalCyc + totalC1 + totalC3 + totalC3r + totalC3mn + totalC3n + totalRange + totalC3run + totalC3pat + totalAnchorSwap + totalBlockSwap + totalApt + totalFair
+            val adopted = totalCyc + totalC1 + totalC3 + totalC3r + totalC3mn + totalC3n + totalRange + totalC3run + totalC3pat + totalAnchorSwap + totalWishIsland + totalBlockSwap + totalApt + totalFair
             // [3.278.0/監査修正] CyclicSwap の正当な対象族(c2/c41/c42/c41s/c42s/covO)も対象数に含める
             //   （旧: c42等のみ違反の盤面で採用0のとき誤って「対象なし」と表示していた）。
             // [3.475.0/論理監査] c3n も対象に含める（C3nPolish=3.303.0 はこの塊の中で走り採用数は adopted に
@@ -595,7 +606,7 @@ object V6HotfixPasses {
                     " / apt ${bd(preSoftRep, "apt")}->${bd(softAfter, "apt")}" +
                     " / fair ${bd(preSoftRep, "fair")}->${bd(softAfter, "fair")}" +
                     " | HARD $hardNote / total ${preSoftRep.total}->${softAfter.total}" +
-                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} c3n:${totalC3n} range玉突き:${totalRange} c3run玉突き:${totalC3run} c3pattern玉突き:${totalC3pat} アンカー窓交換:${totalAnchorSwap} ブロック交換:${totalBlockSwap} apt玉突き:${totalApt} fair玉突き:${totalFair})"))
+                    " (採用内訳 循環:${totalCyc} c1:${totalC1} c3:${totalC3} c3回転:${totalC3r} c3mn玉突き:${totalC3mn} c3n:${totalC3n} range玉突き:${totalRange} c3run玉突き:${totalC3run} c3pattern玉突き:${totalC3pat} アンカー窓交換:${totalAnchorSwap} 希望島:${totalWishIsland} ブロック交換:${totalBlockSwap} apt玉突き:${totalApt} fair玉突き:${totalFair})"))
         }
 
         // [weekly 研磨の穴を埋める] 曜日平準化(weekly)は同日2者スワップでは動かせない（勤務↔勤務は曜日別の

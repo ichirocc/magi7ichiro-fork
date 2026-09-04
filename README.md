@@ -27,6 +27,10 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-04（3.496.0＝希望島研磨 `WishIslandPolish` を新設（ユーザー提示の確定仕様）。実現可能な希望日を固定
+アンカーに、影響範囲が重なる希望を島へ統合し、周辺に違反がある島だけ起動。同日→窓→両翼→必要時のみ3者巡回、希望周辺も
+全体も改善する手だけ採用、停滞時のみ短いビームで中立手。最終結果は開始盤面より改善（keep-best）。Windows 版も同時。）
+
 **最終更新**：2026-09-04（3.495.0＝ユーザー提示の設計「違反アンカー型・可変長ウィンドウ交換」を `AdaptiveBlockSwapPolish` の
 `WindowMode.STRICT_WHOLE_WINDOW` として実装（3.494.0 の RunSwapPolish は削除）。違反セル／回数超過・不足（逆引き）／連続規則／
 週偏りをアンカーに、接する可変長の窓を同じ日付範囲で他職員と一括交換。安価な優先度で絞り正式 checker の keep-best で
