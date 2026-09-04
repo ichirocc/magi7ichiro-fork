@@ -99,8 +99,9 @@ internal class RunFiles(private val dir: File) {
         target: File,
         text: String,
         onNonAtomic: () -> Unit = {},
-        commitGuard: () -> Boolean = { true },
-    ): Boolean = writeFileAtomically(target, text, onNonAtomic, commitGuard)
+        rename: (File, File) -> Boolean = { from, to -> from.renameTo(to) },
+        commitGuard: () -> Boolean = { true },   // 末尾＝呼出側の trailing lambda はこれまでどおり commitGuard に束縛される
+    ): Boolean = writeFileAtomically(target, text, onNonAtomic, rename, commitGuard)
 }
 
 /**
@@ -117,7 +118,8 @@ internal fun writeFileAtomically(
     target: File,
     text: String,
     onNonAtomic: () -> Unit = {},
-    commitGuard: () -> Boolean = { true },
+    rename: (File, File) -> Boolean = { from, to -> from.renameTo(to) },   // [3.487.0] テストから rename 失敗を再現するための注入点
+    commitGuard: () -> Boolean = { true },   // 末尾＝trailing lambda は従来どおり commitGuard
 ): Boolean {
     val tmp = File(target.parentFile, target.name + ".t" + atomicWriteSeq.incrementAndGet() + ".tmp")
     try {
@@ -126,7 +128,13 @@ internal fun writeFileAtomically(
         // rename が使えない環境（別ファイルシステム跨ぎ等）では原子性を諦めて直接書く＝最善努力。
         // [3.428.0/#7] 諦めたことは呼出側へ知らせる。この経路で書いている間に落ちると壊れたファイルが
         //   残り、起動時の復元が「結果も再開手段も両方失う」形になりうる（原子置換を入れた動機そのもの）。
-        if (!tmp.renameTo(target)) { onNonAtomic(); target.writeText(text) }
+        if (!rename(tmp, target)) {
+            // [3.487.0/レビュー指摘] 直接書きへ落ちる前に所有権（commitGuard）をもう一度確認する。旧: 最初の確認
+            //   から直接書きまでの間に所有権が移っていても古い writer が target を書けた（rename 失敗と所有権の
+            //   移動が重なる稀な経路）。再確認で窓は狭まるが零にはならない＝run 別ファイル名(3.410.0/B-05)と併用。
+            if (!commitGuard()) return false
+            onNonAtomic(); target.writeText(text)
+        }
         return true
     } finally {
         // 成功時の rename 後は既に消えている。失敗・ガード偽・例外のいずれでも残骸を残さない。
