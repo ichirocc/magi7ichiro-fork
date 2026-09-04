@@ -281,6 +281,22 @@ object Ws1Ops {
         return Ws1Result(withSchedule(ns, newSched), newSched)
     }
 
+    // ---- period consistency ----------------------------------------------------
+
+    /**
+     * [3.486.0] `endDate` を `startDate + 日数 - 1` に揃える（読込時の正規化）。
+     * 構造検証は勤務表の行列サイズしか見ず、`endDate` が日数と食い違うファイルもそのまま通っていた
+     * （エンジンは startDate + 日 index で動くので評価は変わらないが、設定画面・ログ・CSV の期間表示が矛盾する）。
+     * `startDate` が日付として読めない／日数が 0 のときは触らない（検証側が別途拒否する）。
+     */
+    fun normalizeEndDate(state: MagiState): MagiState {
+        if (state.dayCount <= 0) return state
+        val expected = runCatching {
+            LocalDate.parse(state.startDate).plusDays((state.dayCount - 1).toLong()).toString()
+        }.getOrNull() ?: return state
+        return if (state.endDate == expected) state else state.copy(endDate = expected)
+    }
+
     // ---- period resize -------------------------------------------------------
 
     /** Resize the period to [newT] days: schedule columns padded with 休 or truncated;

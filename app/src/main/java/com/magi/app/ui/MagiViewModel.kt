@@ -776,8 +776,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             try {
                 if (repaired) logOp("W", "文字化け（二重エンコード）を自動修復して読み込みました。元のファイル自体は修復されません（「データを保存」で保存し直すと次回からこの警告は出ません）")
+                var endDateFixedFrom: String? = null   // [3.486.0] endDate を日数に合わせて補正したときの旧値
                 val loaded = withContext(Dispatchers.Default) {
-                    val st = StateParser.parse(json)
+                    val parsed = StateParser.parse(json)
+                    // [3.486.0] endDate と日数の食い違いは検証を通り抜けていた＝日数を正として endDate を揃える。
+                    val st = Ws1Ops.normalizeEndDate(parsed)
+                    if (st.endDate != parsed.endDate) endDateFixedFrom = parsed.endDate
                     validate(st)?.let { return@withContext Result.failure<LoadedProblem>(IllegalArgumentException(it)) }
                     val p = Problem(st)
                     val init = p.initialAssignment()
@@ -815,6 +819,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         lastResultHard = -1L
                         lastTopHardFamily = null
                         autoSave()
+                        endDateFixedFrom?.let {
+                            logOp("W", "期間の終了日（endDate）が日数と合っていなかったため補正しました（$it → ${lp.state.endDate}）。「データを保存」で保存し直すと次回からこの警告は出ません")
+                        }
                         pushReport(lp.state, lp.schedule, lp.report) {
                             it.copy(
                                 messageIsError = false,
