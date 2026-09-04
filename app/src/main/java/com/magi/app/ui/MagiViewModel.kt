@@ -780,9 +780,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val loaded = withContext(Dispatchers.Default) {
                     val parsed = StateParser.parse(json)
                     // [3.486.0] endDate と日数の食い違いは検証を通り抜けていた＝日数を正として endDate を揃える。
-                    val st = Ws1Ops.normalizeEndDate(parsed)
-                    if (st.endDate != parsed.endDate) endDateFixedFrom = parsed.endDate
-                    validate(st)?.let { return@withContext Result.failure<LoadedProblem>(IllegalArgumentException(it)) }
+                    val st0 = Ws1Ops.normalizeEndDate(parsed)
+                    if (st0.endDate != parsed.endDate) endDateFixedFrom = parsed.endDate
+                    validate(st0)?.let { return@withContext Result.failure<LoadedProblem>(IllegalArgumentException(it)) }
+                    // [3.488.0] 検証を通ったあとで groupShiftApt を G×K に揃える（空配列・行不足は空欄＝目標なし）。
+                    val st = Ws1Ops.normalizeGroupShiftApt(st0)
                     val p = Problem(st)
                     val init = p.initialAssignment()
                     val report = UnifiedViolationChecker.check(st, init)
@@ -894,6 +896,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** Returns a human-readable error message if the state is structurally invalid, else null. */
     private fun validate(st: MagiState): String? {
         if (st.staffCount == 0) return "staff が空です"
+        // [3.488.0] 読めない startDate を受理すると Problem.dow0 が黙って日曜へ落ちる（Ws1Ops.startDateError の KDoc）。
+        Ws1Ops.startDateError(st)?.let { return it }
         if (st.dayCount == 0) return "schedule が空です"
         if (st.shiftCount == 0) return "shifts が空です"
         if (st.groupCount == 0) return "groups が空です"
