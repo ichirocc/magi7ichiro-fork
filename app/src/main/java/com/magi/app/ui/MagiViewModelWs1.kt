@@ -53,8 +53,16 @@ fun MagiViewModel.ws1EditStaff(i: Int, name: String, groupIdx: Int) {
 
 fun MagiViewModel.ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
     val st = state ?: return
+    val ns = Ws1Ops.setGroupShift(st, g, k, allowed)
+    if (ns === st) {
+        // [3.484.0] 単一セルでも休は外せない（列一括と同じ理由・同じ案内）。
+        if (!allowed && k == restShiftIndex(st)) {
+            notify("「休」はどのグループからも外せません（担当できるシフトが無い群を作らないため）", "W")
+        }
+        return
+    }
     logOp("I", "担当可否: グループ[$g] × ${opSy(k)} → ${if (allowed) "担当できる" else "担当しない"}")
-    applyStructure(Ws1Ops.setGroupShift(st, g, k, allowed))
+    applyStructure(ns)
 }
 
 /** [マトリックス一括] 群 g の全シフトを一括ON/OFF（行ヘッダ＝群名のタップ）。OFF でも休は残る。 */

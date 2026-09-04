@@ -45,6 +45,18 @@ class Ws1OpsMatrixTest {
         assertSame("範囲外は何もしない", st, Ws1Ops.setGroupShiftRow(st, 5, true))
     }
 
+    @Test fun singleCellRefusesTurningRestOff() {
+        // [3.484.0] 行/列一括だけが休を守り、単一セルは素通しだった（Windows 版レビュー指摘の兄弟バグ）。
+        val st = state()
+        assertSame(st, Ws1Ops.setGroupShift(st, 0, 0, false))   // 休(index0) を OFF → 同じ state（拒否）
+        assertSame(st, Ws1Ops.setGroupShift(st, 1, 0, false))
+        val on = Ws1Ops.setGroupShift(st, 0, 1, true)            // 休以外は従来どおり
+        assertEquals(1, on.groupShift[0][1])
+        val off = Ws1Ops.setGroupShift(on, 0, 2, false)
+        assertEquals(0, off.groupShift[0][2])
+        assertEquals(1, Ws1Ops.setGroupShift(st, 0, 0, true).groupShift[0][0])   // 休を ON は常に可
+    }
+
     @Test fun columnBulkAppliesToAllGroupsAndRefusesTurningRestOff() {
         val st = state()
         val on = Ws1Ops.setGroupShiftColumn(st, 2, true)
