@@ -308,4 +308,48 @@ class AdaptiveBlockSwapPolishTest {
         assertEquals("改善手が無ければ採用0", 0, res.applied)
         assertTrue("ログが出ること", res.logs.isNotEmpty())
     }
+
+    /**
+     * [3.499.0 自律レビュー] 従来シグネチャと Params オブジェクトの API は同じ結果を返す（両モード）。
+     * Session 化・共通部品化（KeepBest/RejectStats/staffPressure/PersonalPenalty）で採否が変わっていないことを固定する。
+     */
+    @Test
+    fun paramsObjectApiMatchesLegacySignatureInBothModes() {
+        val st = pinnedRestState()
+        val sched = st.schedule.toIntArray2D()
+        val legacyCyclic = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D(), maxPasses = 2, candidatesPerLength = 8, maxEvaluations = 48)
+        val paramsCyclic = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, sched.copy2D(), AdaptiveBlockSwapPolish.CyclicParams())
+        assertTrue("巡回交換: 盤面一致", legacyCyclic.newSchedule.contentDeepEquals(paramsCyclic.newSchedule))
+        assertEquals("巡回交換: 採用数一致", legacyCyclic.applied, paramsCyclic.applied)
+        assertEquals("巡回交換: ログ一致", legacyCyclic.logs.map { it.message }, paramsCyclic.logs.map { it.message })
+
+        val legacyStrict = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+            st, sched.copy2D(), mode = WindowMode.STRICT_WHOLE_WINDOW, maxPasses = 3, maxEvaluations = 48,
+        )
+        val paramsStrict = AdaptiveBlockSwapPolish.applyStrictWholeWindow(st, sched.copy2D(), AdaptiveBlockSwapPolish.StrictParams(maxPasses = 3, maxEvaluations = 48))
+        assertTrue("厳密窓交換: 盤面一致", legacyStrict.newSchedule.contentDeepEquals(paramsStrict.newSchedule))
+        assertEquals("厳密窓交換: 採用数一致", legacyStrict.applied, paramsStrict.applied)
+        assertEquals("厳密窓交換: ログ一致", legacyStrict.logs.map { it.message }, paramsStrict.logs.map { it.message })
+    }
+
+    /** [3.499.0] 退化した探索幅（窓長 0・負の上限・巡回人数の上限超え・ピン枠 0）でも落ちず、keep-best で悪化しない。 */
+    @Test
+    fun degenerateParamsDoNotCrashAndNeverWorsenTheBoard() {
+        val st = pinnedRestState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        val strict = AdaptiveBlockSwapPolish.applyStrictWholeWindow(
+            st, sched.copy2D(), AdaptiveBlockSwapPolish.StrictParams(maxPasses = 1, maxEvaluations = 1, maxLen = 0, longLen = -5),
+        )
+        val cyclic = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+            st, sched.copy2D(),
+            AdaptiveBlockSwapPolish.CyclicParams(blockLens = intArrayOf(0, 11, 99), maxCycle = 100, maxPinSlots = 0, stageOneWidthFactor = 1),
+        )
+        for (r in listOf(strict, cyclic)) {
+            val after = UnifiedViolationChecker.check(st, r.newSchedule)
+            assertTrue("HARD が増えない", after.hard <= before.hard)
+            assertTrue("重み付きスコアが増えない", after.weightedScore <= before.weightedScore)
+            assertTrue("ログが出る", r.logs.isNotEmpty())
+        }
+    }
 }
