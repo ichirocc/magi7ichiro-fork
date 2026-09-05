@@ -21,11 +21,17 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
-| [`docs/history/`](./docs/history/) | **作業記録の本文**（版数付き354節・版数でバケツ分け: `2.x` / `3.0xx` / `3.1xx` / `3.2xx` / `3.3xx` / `3.4xx`）。`CLAUDE.md` 末尾の索引で当たりを付けてから `grep` で引く。毎ターン自動では読み込まれない＝過去に測って否決した案・同型のバグ・決定記録を再発させないため、同じ領域を触る前に索引を必ず確認する |
+| [`docs/history/`](./docs/history/) | **作業記録の本文**（版数付き約360節・版数でバケツ分け: `2.x` / `3.0xx` / `3.1xx` / `3.2xx` / `3.3xx` / `3.4xx`）。見出し一覧は [`INDEX.md`](./docs/history/INDEX.md)、話題別の叙述（ネイティブ加速・停滞脱出・ドッグフーディング等）は [`topics.md`](./docs/history/topics.md)（3.497.3 で `CLAUDE.md` 本体から分離）。`grep -n 'キーワード' docs/history/INDEX.md` で当たりを付けてから版数で引く。毎ターン自動では読み込まれない＝過去に測って否決した案・同型のバグ・決定記録を再発させないため、同じ領域を触る前に INDEX.md を必ず確認する |
 | [`docs/screen_inventory_textart.md`](./docs/screen_inventory_textart.md) | **画面棚卸し＋テキストアートのドッグフーディング検証**（3.482.0 時点。タブ5／画面12／モーダル30／Activity2 の集計と、全画面の再現図＋所見20件の優先表。UI を触る前の現状確認と、次の改善候補の一次ソース） |
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-09-05（3.497.3＝CLAUDE.md の常時読み込み分を 190KB→39KB（約 5.8 万→1.2 万トークン）へ。作業記録の索引を `docs/history/INDEX.md`、話題別の版数付き叙述を `docs/history/topics.md` へ移し、本体には恒久の事実だけを残した。docs のみ）
+
+**最終更新**：2026-09-05（3.497.2＝ナレッジグラフ4ツールを実測し Serena（LSP）だけ `.mcp.json` で試験導入。グラフ系は Kotlin の呼び出し解決が0件のため見送り。docs/設定のみ）
+
+**最終更新**：2026-09-05（3.497.1＝追加コメントの点検を手順化。`comment-check` スキルと `tools/comment_ratio.py` を新設し、コミット前に追加したコメント行を抽出して1行ずつ判定する。docs/tools のみ・アプリ本体は不変）
 
 **最終更新**：2026-09-04（3.497.0＝OPPO A5 5G（Android 16・720×1604＝360dp 帯）を対象に追加。幅 390dp 未満では勤務表の
 名前列を 56dp に詰めて7日表示を成立させ、下部バーの「元に戻す」「やり直し」をアイコン化。390dp 以上は不変。minSdk=36 のまま。）
