@@ -27,6 +27,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-05（3.498.0＝希望島研磨 `WishIslandPolish` を監査基準7項目でレビューして再構成。候補の遅延生成（1島あたり最大1万件の事前生成を撤廃）、`Session` クラス化、`Params` への集約、途中で不活性になった島の評価スキップ。4 fixture×3 予算の盤面ハッシュが改修前と一致＝採否の意味論は不変。C# 側も同時。エンジン挙動・重み不変）
+
 **最終更新**：2026-09-05（3.497.3＝CLAUDE.md の常時読み込み分を 190KB→39KB（約 5.8 万→1.2 万トークン）へ。作業記録の索引を `docs/history/INDEX.md`、話題別の版数付き叙述を `docs/history/topics.md` へ移し、本体には恒久の事実だけを残した。docs のみ）
 
 **最終更新**：2026-09-05（3.497.2＝ナレッジグラフ4ツールを実測し Serena（LSP）だけ `.mcp.json` で試験導入。グラフ系は Kotlin の呼び出し解決が0件のため見送り。docs/設定のみ）

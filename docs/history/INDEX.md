@@ -8,6 +8,7 @@
 本文の引き方: `grep -n '（3.409.21' docs/history/3.4xx.md` のように版数で引き、その節を読む。
 見出しは原文のまま（版数・補足・ユーザー指示の引用を落とさない）。
 
+- 希望島研磨（WishIslandPolish）の自律レビュー＆リファクタ＝候補の遅延生成・Session 化・パラメータ集約・不活性島の評価スキップ（3.498.0, ユーザー指示「自律レビュー＆リファクタリングループ」、fixture 12 ケースで盤面一致を確認、C# も同時）  → `docs/history/3.4xx.md`
 - CLAUDE.md の常時読み込み分を 5.8 万→1.2 万トークンへ＝索引と話題別叙述を docs/history へ（3.497.3, docs のみ, ユーザー提示の記事2本→ AskUserQuestion で「索引と叙述節を全部 docs へ」を選択）  → `docs/history/3.4xx.md`
 - ナレッジグラフ4ツールを実測して Serena だけ試験導入（3.497.2, docs/設定のみ, ユーザー提示の記事「トークン2000分の1——オントロジー×ナレッジグラフで Claude Code の推測を消す」→ AskUserQuestion で「Serena だけ」を選択）  → `docs/history/3.4xx.md`
 - 追加コメントの点検を手順化＝comment-check スキルと tools/comment_ratio.py（3.497.1, docs/tools のみ, ユーザー提示の記事「ルールではなく skill に指示を書くことで、Claude のコメントを減らせた」）  → `docs/history/3.4xx.md`
