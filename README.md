@@ -27,6 +27,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-05（3.497.1＝追加コメントの点検を手順化。`comment-check` スキルと `tools/comment_ratio.py` を新設し、コミット前に追加したコメント行を抽出して1行ずつ判定する。docs/tools のみ・アプリ本体は不変）
+
 **最終更新**：2026-09-04（3.497.0＝OPPO A5 5G（Android 16・720×1604＝360dp 帯）を対象に追加。幅 390dp 未満では勤務表の
 名前列を 56dp に詰めて7日表示を成立させ、下部バーの「元に戻す」「やり直し」をアイコン化。390dp 以上は不変。minSdk=36 のまま。）
 

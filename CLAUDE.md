@@ -28,7 +28,9 @@
 - **タスク着手前にスキル一覧を確認し、該当スキルを Skill ツールで自動起動する**（superpowers流）:
   新機能/設計→brainstorming・計画深掘り→dig・実装/バグ修正→test-driven-development・
   バグ調査→systematic-debugging・完了宣言前→verification-before-completion・
-  複数ステップ計画→writing-plans→executing-plans/subagent-driven-development・文章推敲→writing-clearly-and-concisely
+  複数ステップ計画→writing-plans→executing-plans/subagent-driven-development・文章推敲→writing-clearly-and-concisely・
+  **コミット前→comment-check**（`.claude/skills/comment-check`＝追加したコメント行を `tools/comment_ratio.py` で抽出し
+  1行ずつ残す/移す/消す/縮めるを判定。ルールでなく手順にしないと効かない、という計測結果に基づく。3.497.1）
 - **genshijin 常時起動（通常レベル）**: 全応答を圧縮体（敬語なし・体言止め・助詞省略可）で書く。
   技術用語/コード識別子は正確維持。破壊的操作警告・セキュリティ説明のみ Auto-Clarity で通常日本語。
   解除は「原始人やめて」「通常モード」の明示指示のみ。
@@ -951,6 +953,7 @@ cons1=[5日窓休≥1, 14日窓休≥4, 14日窓Dﾃ≥2]。桒澤美幸・大�
 本文の引き方: `grep -n '（3.409.21' docs/history/3.4xx.md` のように版数で引き、その節を読む。
 見出しは原文のまま（版数・補足・ユーザー指示の引用を落とさない）。
 
+- 追加コメントの点検を手順化＝comment-check スキルと tools/comment_ratio.py（3.497.1, docs/tools のみ, ユーザー提示の記事「ルールではなく skill に指示を書くことで、Claude のコメントを減らせた」）  → `docs/history/3.4xx.md`
 - エンジンの締切・経過・停滞判定を単調時計へ（3.490.0, レビュー第6弾＝Android 側は1件が該当）  → `docs/history/3.4xx.md`
 - 個人の下限を 0 に設定できなかった（3.489.0, 実機報告「設定出来ない」→「個人の下限をゼロに出来ない」）  → `docs/history/3.4xx.md`
 - 読めない startDate を読込で拒否＋groupShiftApt を読込で G×K に正規化（3.488.0, レビュー第5弾）  → `docs/history/3.4xx.md`
