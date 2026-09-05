@@ -50,6 +50,20 @@
   ※`~/.claude/skills/` に前セッションの手動コピー版（genshijin/dig/superpowers系16件）が残存＝プラグインと
   重複するが無害（一覧ノイズのみ）。掃除する場合はセッション開始直後にバックアップ退避してから削除。
 
+## ツール選択ルール（Serena 試験導入・3.497.2）
+`.mcp.json` に Serena（言語サーバー経由のシンボル検索）を登録した。使い分け:
+
+| 質問の種類 | 使うもの |
+|---|---|
+| **シンボル名が分かっている**定義元・参照先・実装クラス・行番号（「betterReport の呼び出し元は？」「WindowMode を実装/使用しているのは？」） | Serena `find_symbol` → `find_referencing_symbols` / `find_implementations` |
+| シンボル単位の置換（関数本体の差替え・改名） | Serena `replace_symbol_body` / `rename_symbol`（エンジン層のみ。UI 層は従来どおり Edit） |
+| 意味・目的での検索（「人員不足を埋める処理は？」）・文言・docs・ログ | **Grep / Glob / Read**（実測でグラフ系の意味検索は外れが多く、Serena は名前が要る） |
+
+- セッション開始時に `/mcp` に serena が無ければ従来どおり Grep で進める（このリモート環境で `.mcp.json` が
+  読まれるかは 3.497.2 時点で未検証）。初回呼出は言語サーバー起動で約35秒（索引済み）・索引なしなら約90秒、以後は1秒前後。
+- 参照一覧は大きい（betterReport で 51KB）ので、参照が多いシンボルは Grep のほうが安い。
+- ナレッジグラフ系（code-review-graph / Graphify）は Kotlin の呼び出し解決が0件だったため**入れない**（計測は 3.497.2）。
+
 ## プロジェクト概要
 看護師/スタッフのシフト表を最適化する Android ネイティブアプリ（Kotlin + Jetpack Compose）。
 VBA/Web 版から移植した「MAGI V6」最適化エンジン（SA + ALNS + Tabu + GLS + LNS + VNS + LAHC +
@@ -953,6 +967,7 @@ cons1=[5日窓休≥1, 14日窓休≥4, 14日窓Dﾃ≥2]。桒澤美幸・大�
 本文の引き方: `grep -n '（3.409.21' docs/history/3.4xx.md` のように版数で引き、その節を読む。
 見出しは原文のまま（版数・補足・ユーザー指示の引用を落とさない）。
 
+- ナレッジグラフ4ツールを実測して Serena だけ試験導入（3.497.2, docs/設定のみ, ユーザー提示の記事「トークン2000分の1——オントロジー×ナレッジグラフで Claude Code の推測を消す」→ AskUserQuestion で「Serena だけ」を選択）  → `docs/history/3.4xx.md`
 - 追加コメントの点検を手順化＝comment-check スキルと tools/comment_ratio.py（3.497.1, docs/tools のみ, ユーザー提示の記事「ルールではなく skill に指示を書くことで、Claude のコメントを減らせた」）  → `docs/history/3.4xx.md`
 - エンジンの締切・経過・停滞判定を単調時計へ（3.490.0, レビュー第6弾＝Android 側は1件が該当）  → `docs/history/3.4xx.md`
 - 個人の下限を 0 に設定できなかった（3.489.0, 実機報告「設定出来ない」→「個人の下限をゼロに出来ない」）  → `docs/history/3.4xx.md`

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v uvx >/dev/null 2>&1 && (nohup uvx --python 3.13 --from serena-agent==1.6.0 serena project index >/dev/null 2>&1 &) ; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
