@@ -22,7 +22,7 @@ import com.magi.app.model.MagiState
  * （悪化する組合せは採用されない。最悪ケースは「見つからず終わる」だけ＝既存の単独手の結果より
  * 悪化することはない）。
  */
-internal object CombinatorialRepair {
+object CombinatorialRepair {
     /**
      * 単独では isBetter に拒否された1候補。ops=[staff,day,newShift]の差分列（適用順・巻き戻し済み）。
      * hint は捕捉時点の表示名（例「桒澤美幸(Aｱ)」）。ops先頭からの逆算は対象(staff,違反シフト)と
@@ -95,6 +95,8 @@ internal object CombinatorialRepair {
         stats: Stats = Stats(),
         label: (Candidate) -> String = { it.hint },
         p: Problem? = null,
+        /** [Iteration 2] 結合に使われず残った候補の受け皿（後処理チェーン全体の違反連結成分修復へ回す）。 */
+        leftover: MutableList<Candidate>? = null,
     ): ViolationReport {
         rejected.forEach(stats::onFeed)
         val t0 = EngineClock.nowMs()   // [3.375.0] 結合探索に費やした時間（summary で出す）
@@ -158,6 +160,7 @@ internal object CombinatorialRepair {
             for (idx in acceptedIdx.sortedDescending()) pool.removeAt(idx)
         }
         stats.elapsedMs += EngineClock.nowMs() - t0
+        leftover?.addAll(pool)
         return bestRep
     }
 

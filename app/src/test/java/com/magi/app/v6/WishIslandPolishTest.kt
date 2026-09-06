@@ -149,4 +149,35 @@ class WishIslandPolishTest {
         assertEquals(1, WishIslandPolish.beamCandidateLimit(2, 6, 0))
         assertEquals(1, WishIslandPolish.beamCandidateLimit(0, 0, -3))
     }
+
+    /** 月初の希望日には左翼が無いので両翼交換は生成されず、全候補の日は 0..T-1 に収まる（月跨ぎなし）。 */
+    @Test
+    fun wishOnTheFirstDayGeneratesNoWingMovesAndStaysInsideTheMonth() {
+        val s = base(listOf(listOf(1, 1, 1, 1, 1, 1), listOf(0, 0, 0, 0, 0, 0), listOf(0, 0, 0, 0, 0, 0)), mapOf("0,0" to 1), emptyMap())
+        val moves = WishIslandPolish.enumerateMovesForTest(s, s.schedule.toIntArray2D())
+        assertTrue("同日か窓の候補はある", moves.isNotEmpty())
+        assertTrue("両翼なし", moves.none { it.first == "両翼" })
+        assertTrue("日が 0..5 に収まる", moves.all { (_, cells) -> (1 until cells.size step 3).all { cells[it] in 0..5 } })
+        assertTrue("希望セル(0,0)は触らない", moves.none { (_, cells) -> (0 until cells.size step 3).any { cells[it] == 0 && cells[it + 1] == 0 } })
+    }
+
+    /** 月末の希望日には右翼が無いので両翼交換は生成されない。 */
+    @Test
+    fun wishOnTheLastDayGeneratesNoWingMoves() {
+        val s = base(listOf(listOf(1, 1, 1, 1, 1, 1), listOf(0, 0, 0, 0, 0, 0), listOf(0, 0, 0, 0, 0, 0)), mapOf("0,5" to 1), emptyMap())
+        val moves = WishIslandPolish.enumerateMovesForTest(s, s.schedule.toIntArray2D())
+        assertTrue(moves.isNotEmpty())
+        assertTrue("両翼なし", moves.none { it.first == "両翼" })
+        assertTrue(moves.all { (_, cells) -> (1 until cells.size step 3).all { cells[it] in 0..5 } })
+        assertTrue(moves.none { (_, cells) -> (0 until cells.size step 3).any { cells[it] == 0 && cells[it + 1] == 5 } })
+    }
+
+    /** 対照: 月の中の希望日なら両翼交換が生成される（境界の 2 テストが「両翼が常に無い」ことで通っていないことの確認）。 */
+    @Test
+    fun wishInTheMiddleGeneratesWingMoves() {
+        val s = base(listOf(listOf(1, 1, 1, 1, 1, 1), listOf(0, 0, 0, 0, 0, 0), listOf(0, 0, 0, 0, 0, 0)), mapOf("0,2" to 1), emptyMap())
+        val moves = WishIslandPolish.enumerateMovesForTest(s, s.schedule.toIntArray2D())
+        assertTrue("両翼あり", moves.any { it.first == "両翼" })
+        assertTrue(moves.all { (_, cells) -> (1 until cells.size step 3).all { cells[it] in 0..5 } })
+    }
 }

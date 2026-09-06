@@ -702,9 +702,10 @@ internal object RangePolish {
         }
         // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames より前に実行し、結合で解消した箇所が
         //   「残存」に残らないようにする。
+        val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val rangeCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = rangeCombStats, p = p,
+            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = rangeCombStats, p = p, leftover = rejectedOut,
         )
         applied += rangeCombStats.combosAccepted
         // [ログから職員が分かるように・頭打ちの理由を可視化] 研磨後もなお残っている(staff,shift)を、
@@ -745,7 +746,7 @@ internal object RangePolish {
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (rangeCombSummary.isNotEmpty()) " / $rangeCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
     }
 
 

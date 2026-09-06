@@ -106,9 +106,10 @@ internal object C3FamilyPolish {
         }
         // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames より前に実行し、結合で解消した箇所が
         //   「残存」に残らないようにする。
+        val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val c3mnCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c3mnCombStats, p = p,
+            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c3mnCombStats, p = p, leftover = rejectedOut,
         )
         applied += c3mnCombStats.combosAccepted
         val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3mn")
@@ -119,7 +120,7 @@ internal object C3FamilyPolish {
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (c3mnCombSummary.isNotEmpty()) " / $c3mnCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
     }
 
 
@@ -249,9 +250,10 @@ internal object C3FamilyPolish {
             pass++
             if (!improved) break
         }
+        val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val c3nCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c3nCombStats, p = p,
+            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c3nCombStats, p = p, leftover = rejectedOut,
         )
         applied += c3nCombStats.combosAccepted
         val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3n")
@@ -265,7 +267,7 @@ internal object C3FamilyPolish {
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (c3nCombSummary.isNotEmpty()) " / $c3nCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
     }
 
 

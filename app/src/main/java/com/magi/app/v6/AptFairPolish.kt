@@ -225,9 +225,10 @@ internal object AptFairPolish {
         }
         // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames より前に実行し、結合で解消した箇所が
         //   「残存」に残らないようにする。
+        val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val aptCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = aptCombStats, p = p,
+            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = aptCombStats, p = p, leftover = rejectedOut,
         )
         applied += aptCombStats.combosAccepted
         val stuckNames = bestRep.countViolations.entries
@@ -246,7 +247,7 @@ internal object AptFairPolish {
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (aptCombSummary.isNotEmpty()) " / $aptCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
     }
 
 
@@ -462,9 +463,10 @@ internal object AptFairPolish {
         }
         // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames(distLocations由来)より前に実行する。
         //   結合でwork/bestRepが変わってもdistLocationsはbestRep自身から再取得するため自動整合。
+        val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val fairCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = fairCombStats, p = p,
+            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = fairCombStats, p = p, leftover = rejectedOut,
         )
         applied += fairCombStats.combosAccepted
         // [AptPolishと同型] work は毎手の成功時のみコミットしbestRepと同期を保つ（失敗時は必ず巻き戻し）
@@ -482,7 +484,7 @@ internal object AptFairPolish {
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (fairCombSummary.isNotEmpty()) " / $fairCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
     }
 
 
