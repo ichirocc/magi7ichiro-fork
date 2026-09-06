@@ -708,7 +708,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         snapNow()?.let { redoStack.addLast(it) }   // [Web反映] 現在をやり直し用に退避
         state = snap.st
         currentSchedule = Array(snap.sched.size) { snap.sched[it].clone() }
-        _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true, message = "1つ前に戻しました") }
+        // [3.500.1/外部レビュー] 元に戻すは手操作＝「計算済み」ではない。前の結果盤面と改善提案はこの盤面とは別の実体なので外す
+        //   （提案は 3.475.0 の指紋照合でも弾かれるが、画面に古い候補を残さない）。
+        resultSchedule = null
+        _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
+            engineRan = false, fixSuggestions = emptyList(), message = "1つ前に戻しました") }
         logOp("I", "元に戻す")
         refreshCheck()
         autoSave()
@@ -721,7 +725,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         snapNow()?.let { undoStack.addLast(it) }
         state = snap.st
         currentSchedule = Array(snap.sched.size) { snap.sched[it].clone() }
-        _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(), message = "やり直しました") }
+        resultSchedule = null   // [3.500.1] undo() と同じ理由
+        _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
+            engineRan = false, fixSuggestions = emptyList(), message = "やり直しました") }
         logOp("I", "やり直し")
         refreshCheck()
         autoSave()
@@ -1772,6 +1778,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Set a specific shift in a cell (bottom-sheet picker). */
+    /**
+     * [3.500.2/外部レビュー] 盤面に書けるシフト index か（-1＝未割当は可、それ以外は 0 until shiftCount）。setCell/setCells の共通ガード。
+     * 旧: 上限を見ておらず、古い UI イベントからの範囲外 index が自動保存まで通り、再検査で初めて失敗していた。
+     */
+    private fun rejectUnknownShift(st: MagiState, shift: Int): Boolean {
+        if (shift >= -1 && shift < st.shiftCount) return false
+        _ui.update { it.copy(messageIsError = true, message = "選択したシフトは現在の設定に存在しません") }
+        return true
+    }
+
     fun setCell(i: Int, j: Int, shift: Int) {
         val st = state ?: return
         // [監査(未レビュー領域再監査) 実バグ修正] running中は currentSchedule が最適化ジョブの sched0 と
@@ -1781,6 +1797,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
         if (i !in sched.indices || j !in sched[i].indices) return
+        if (rejectUnknownShift(st, shift)) return
         if (sched[i][j] == shift) return
         pushUndo()
         sched[i][j] = shift
@@ -1803,6 +1820,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
+        if (rejectUnknownShift(st, shift)) return
         var changed = 0
         var first = true
         for ((i, j) in cells) {
