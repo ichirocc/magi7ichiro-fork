@@ -228,11 +228,28 @@ data class ForbiddenRunDiagnosis(
 
 object V6PortAnalyzer {
     /**
+     * [3.503.0] 診断が探索本体の関数を「実際に試す」ときの回数・予算。値は従来どおり（HF77: 変えていない）。
+     * 8 seed は rng 順（候補の並べ替え）に依存する網羅性の揺らぎを吸収する数で、実データ 200 seed 総当たりの
+     * 結果と一致した最小の実用値（3.263.0）。過剰プローブ 240 は checker 約 72µs（3.395.0）で数 ms に収まる上限。
+     */
+    private object Probe {
+        const val CHAIN_SEEDS = 8
+        const val SURPLUS_PROBE_BUDGET = 240
+        const val ADJACENT_SEED = 7L
+        const val MIN_RELAX_CANDIDATES = 2
+    }
+
+    /** `findCovUChain`（探索本体と同一関数）を [Probe.CHAIN_SEEDS] 通りの rng 順で試し、1 つでも成立すれば真。 */
+    private fun chainFills(p: Problem, board: Array<IntArray>, k: Int, j: Int, exclude: Int = -1): Boolean =
+        (0 until Probe.CHAIN_SEEDS).any { seed -> findCovUChain(p, board, k, j, java.util.Random(seed.toLong()), exclude = exclude) != null }
+
+    /**
      * 人員不足(covU)の枠ごとの原因診断。エンジンは変更せず、現在の解だけを読み取り、
      * 各不足枠について「担当可能な職員の最大数(capacity)」を数え、必要数に届くかで判定する。
      *  - capacity < need → INFEASIBLE（どう割り当ててもこの枠は埋まらない＝データ上充足不可）
      *  - capacity >= need → FIXABLE（枠は足りる。他シフトに就いている人を移せば理論上は解消し得るが、
      *    並び/回数などの制約に阻まれ最適化が未到達）
+     * [3.503.0] 不足（[diagnoseShortfalls]）・緩和案（[buildRelaxations]）・過剰（[diagnoseSurpluses]）に分割。出力は不変。
      */
     fun diagnoseCoverage(
         state: MagiState,
@@ -242,6 +259,17 @@ object V6PortAnalyzer {
         val p = cachedProblem(state)
         val norm = normalizeSchedule(schedule, p)
         val cov = coverage(p, norm)
+        val shortfalls = diagnoseShortfalls(state, p, norm, cov)
+        val relaxations = buildRelaxations(state, p, norm, shortfalls.list)
+        val surplus = diagnoseSurpluses(state, p, norm, cov, report)
+        return CoverageDiagnosis(shortfalls.total, shortfalls.infeasible, shortfalls.fixable, shortfalls.list, relaxations, surplus.total, surplus.list)
+    }
+
+    private class Shortfalls(val list: List<CoverageShortfall>, val total: Int, val infeasible: Int, val fixable: Int)
+    private class Surpluses(val list: List<CoverageSurplus>, val total: Int)
+
+    /** 不足枠ごとに capacity と「なぜ今動かせないか」の 5 分類（在勤/空き番/玉突き/希望固定/禁止連続）。INFEASIBLE→miss 降順。 */
+    private fun diagnoseShortfalls(state: MagiState, p: Problem, norm: Array<IntArray>, cov: Array<IntArray>): Shortfalls {
         // [なぜ埋まらないか / 三連・五連など任意長対応] 職員 i を日 j にシフト newK へ動かすと
         //   禁止連続(c3n)を作るか。Problem.makesForbiddenRun が任意長ルールを一般判定する。
         fun c3nAt(i: Int, j: Int, newK: Int): Boolean = p.makesForbiddenRun(norm, i, j, newK)
@@ -284,19 +312,16 @@ object V6PortAnalyzer {
                     //   玉突き=引くと別のcovU / 希望固定=本人の希望で固定 / 禁止連続=移すと c3n。読取専用・スコア不変。
                     //   [敵対的レビュー修正] already を明示計上し free+cascade+pinned+forbid+already==capacity を
                     //   保証（旧: already を素通り=capacity と内訳合計が一致せず表示が混乱を招いた）。
-                    var already = 0; var free = 0; var cascade = 0; var pinned = 0; var forbid = 0
+                    // 「希望固定」は上の事前フィルタ（別シフトへの実現可能な希望＝capacity 対象外）で既に除外済み＝ここでは常に 0。
+                    //   希望と移動先が一致する候補は「固定」でなく最良の候補（pref も同時に消える）なので free/cascade へ委ねる。
+                    val pinned = 0
+                    var already = 0; var free = 0; var cascade = 0; var forbid = 0
                     for (i in 0 until p.S) {
                         if (!p.canDo(i, k)) continue
                         val m = norm[i][j]
                         // [3.391.0] 上の capacity と同じ事前フィルタ＝同じ条件に揃える（wishLocked）。
                         if (p.wishLocked(i, j) && p.wish[i][j] != k) continue   // 実現可能な希望が別シフト=capacity 対象外
                         if (m == k) { already++; continue }                    // 既にこのシフト=移す対象でない
-                        // [監査(未レビュー領域再監査) 実バグ修正] p.wishLocked(i,j) は「希望が設定されている」の
-                        //   意味だが、上の事前フィルタ(127-128行目)で w!=k の候補は既に除外済み＝ここに残る
-                        //   wishLocked==true は必ず wish==k（=まさにこのシフトへの希望）。希望と移動先が一致する
-                        //   候補を「固定されていて動かせない」と分類するのは意味が逆転している（むしろ動かすと
-                        //   希望未充足(pref)も同時に解消できる最良の候補）。他シフトへの希望固定は既に対象外
-                        //   なので、本関数では「希望固定」で除外すべき候補は存在せず、free/cascade判定へ委ねる。
                         if (c3nAt(i, j, k)) { forbid++; continue }
                         // m から1人引くと covU が増える=玉突き（多人数入替=連鎖でしか解けない）。
                         if (m in 0 until p.K && p.covUCell(m, j, cov[j][m] - 1) > p.covUCell(m, j, cov[j][m])) cascade++ else free++
@@ -309,12 +334,8 @@ object V6PortAnalyzer {
                     // 破ってまでcovUを直す手はisBetterが正しく却下する＝バグではない）。診断が
                     // 「玉突きが必要」と楽観的に言うだけでは、この壁を「もっと粘れば直る」との
                     // 誤解を招くため、findCovUChain（探索本体と同一の関数）で実在を確認してから
-                    // 案内を出し分ける。複数seedを試すのは、rng順（候補の並べ替え）に依存する
-                    // 網羅性の揺らぎを吸収し安定した判定にするため（実データで200 seed総当たりし
-                    // 全て不成立だった局面を確認済み・8 seedは診断呼出コストとのバランス）。
-                    val chainVerified = cascade > 0 && (0 until 8).any { seed ->
-                        findCovUChain(p, norm, k, j, java.util.Random(seed.toLong())) != null
-                    }
+                    // 案内を出し分ける。
+                    val chainVerified = cascade > 0 && chainFills(p, norm, k, j)
                     blockedNow = free == 0 && !(cascade > 0 && chainVerified)
                     val hint = when {
                         free > 0 -> "空き番${free}人を${sym}へ移せば充足（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
@@ -335,41 +356,51 @@ object V6PortAnalyzer {
             compareByDescending<CoverageShortfall> { it.verdict == CoverageVerdict.INFEASIBLE }
                 .thenByDescending { it.miss }
         )
-        // [緩和案/IIS] 構造的に充足不可なシフトについて、担当追加(クロストレーニング)で解ける見込みを提示する。
-        //   候補は未活用(需要のあるシフトへの稼働が少ない)職員を優先。これは担当追加の「提案」であって
-        //   データは一切変更しない（採否は業務担当者が判断）。HF77準拠。
+        return Shortfalls(list, total, infeasible, fixable)
+    }
+
+    /**
+     * [緩和案/IIS] 構造的に充足不可なシフトについて、担当追加(クロストレーニング)で解ける見込みを提示する。
+     * 候補は未活用(需要のあるシフトへの稼働が少ない)職員を優先。これは担当追加の「提案」であって
+     * データは一切変更しない（採否は業務担当者が判断）。HF77準拠。
+     */
+    private fun buildRelaxations(state: MagiState, p: Problem, norm: Array<IntArray>, shortfalls: List<CoverageShortfall>): List<String> {
         val relaxations = ArrayList<String>()
-        run {
-            // [同根修正] need1 単独判定だと need2 単独定義シフトの需要を見落とす（上の miss 計算と同じ穴）。
-            val demandShifts = (0 until p.K).filter { kk ->
-                (0 until p.T).any { jj -> p.need1[kk][jj] > 0 || (p.use2 && p.need2[kk][jj] > 0) }
-            }.toSet()
-            fun demandLoad(i: Int): Int = (0 until p.T).count { jj -> norm[i][jj] in demandShifts }
-            val infeasByShift = list.filter { it.verdict == CoverageVerdict.INFEASIBLE }
-                .groupBy { it.shiftIndex }
-                .mapValues { e -> e.value.maxOf { it.miss } }
-            for ((k, peakMiss) in infeasByShift.entries.sortedByDescending { it.value }) {
-                val sym = state.shifts.getOrNull(k)?.kigou ?: "$k"
-                val cands = (0 until p.S).filter { !p.canDo(it, k) }
-                    .sortedBy { demandLoad(it) }
-                    .take((peakMiss + 1).coerceAtLeast(2))
-                    .map { state.staff.getOrNull(it)?.name ?: "#$it" }
-                if (cands.isNotEmpty()) {
-                    relaxations.add("「$sym」は担当可能者が不足（ピーク不足${peakMiss}人）。$sym を ${cands.joinToString("・")}（稼働が少なめ）に担当追加すると解消に近づきます")
-                }
+        // [同根修正] need1 単独判定だと need2 単独定義シフトの需要を見落とす（上の miss 計算と同じ穴）。
+        val demandShifts = (0 until p.K).filter { kk ->
+            (0 until p.T).any { jj -> p.need1[kk][jj] > 0 || (p.use2 && p.need2[kk][jj] > 0) }
+        }.toSet()
+        fun demandLoad(i: Int): Int = (0 until p.T).count { jj -> norm[i][jj] in demandShifts }
+        val infeasByShift = shortfalls.filter { it.verdict == CoverageVerdict.INFEASIBLE }
+            .groupBy { it.shiftIndex }
+            .mapValues { e -> e.value.maxOf { it.miss } }
+        for ((k, peakMiss) in infeasByShift.entries.sortedByDescending { it.value }) {
+            val sym = state.shifts.getOrNull(k)?.kigou ?: "$k"
+            val cands = (0 until p.S).filter { !p.canDo(it, k) }
+                .sortedBy { demandLoad(it) }
+                .take((peakMiss + 1).coerceAtLeast(Probe.MIN_RELAX_CANDIDATES))
+                .map { state.staff.getOrNull(it)?.name ?: "#$it" }
+            if (cands.isNotEmpty()) {
+                relaxations.add("「$sym」は担当可能者が不足（ピーク不足${peakMiss}人）。$sym を ${cands.joinToString("・")}（稼働が少なめ）に担当追加すると解消に近づきます")
             }
         }
-        // [人員過剰(covO)の「なぜ減らないか」診断] covU診断(空き番/玉突き/希望固定/禁止連続)の対。
-        //   在勤者を他シフトへ動かせば消えるはずの過剰が、なぜ最適化で解消されないかを枠ごとに示す。
-        //   covO は全19族中もっとも軽い(重み1.0)ため、動かした先で他の族が1点でも悪化すると
-        //   isBetter に負けて採用されない＝件数自体は「動かせるか」の構造診断であり、
-        //   「動かせるのに動いていない」ことの説明にはならない点に注意（読取専用・スコア不変）。
+        return relaxations
+    }
+
+    /**
+     * [人員過剰(covO)の「なぜ減らないか」診断] covU診断(空き番/玉突き/希望固定/禁止連続)の対。
+     * 在勤者を他シフトへ動かせば消えるはずの過剰が、なぜ最適化で解消されないかを枠ごとに示す。
+     * covO は全19族中もっとも軽い(重み1.0)ため、動かした先で他の族が1点でも悪化すると
+     * isBetter に負けて採用されない＝件数自体は「動かせるか」の構造診断であり、
+     * 「動かせるのに動いていない」ことの説明にはならない点に注意（読取専用・スコア不変）。
+     * [3.406.0] だから「動かせる」と言う前に、同じ目的関数で実際に 1 手試す（予算 [Probe.SURPLUS_PROBE_BUDGET]）。
+     */
+    private fun diagnoseSurpluses(state: MagiState, p: Problem, norm: Array<IntArray>, cov: Array<IntArray>, report: ViolationReport): Surpluses {
+        fun c3nAt(i: Int, j: Int, newK: Int): Boolean = p.makesForbiddenRun(norm, i, j, newK)
         val surplusList = ArrayList<CoverageSurplus>()
         var totalSurplus = 0
-        // [3.406.0] 「動かせる」を目的関数で実際に試すための作業盤面と予算。checker は約72µs(3.395.0)なので
-        //   実データ規模（過剰11枠×候補数人）なら数msに収まるが、上限を切って UI の再チェックを重くしない。
         val probe = norm.copy2D()
-        var probeBudget = 240
+        var probeBudget = Probe.SURPLUS_PROBE_BUDGET
         for (j in 0 until p.T) {
             for (k in 0 until p.K) {
                 val got = cov[j][k]
@@ -380,13 +411,9 @@ object V6PortAnalyzer {
                 val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                 var pinned = 0; var forbid = 0; var cascade = 0; var free = 0
                 val pinnedIdx = ArrayList<Int>()
-                // [3.406.0] 構造的に動かせる(free)ことと、最適化が採ることは別。covO は最も軽い族(重み1.0)で、
-                //   移動先で他の族が1点でも悪化すると betterReport に負ける——**すぐ上のコメント自身が
-                //   「動かせるのに動いていない」ことの説明にはならないと書いているのに、下の hint は
-                //   「最適化が未到達＝『直し方を探す』で解消可」と断言していた**（3.401.0 の GuidedFix、
-                //   3.344.0 の covU 側と同じ「診断が守れない約束をする」型）。実機ログ(2026-08-19)では
-                //   covO 焦点の修復が275秒走ってなお 8件が残り、断言が実測に裏切られている。
-                //   そこで**同じ目的関数で実際に1手試してから**言う。
+                // [3.406.0] 構造的に動かせる(free)ことと、最適化が採ることは別。実機ログ(2026-08-19)では covO 焦点の修復が
+                //   275秒走ってなお 8件が残り、「『直し方を探す』で解消可」という断言が実測に裏切られていた
+                //   （3.401.0 の GuidedFix、3.344.0 の covU 側と同じ「診断が守れない約束をする」型）。
                 var freeImproving = 0
                 var probedAny = false
                 val famHits = HashMap<String, Int>()   // 「主因」＝試した手のうち最も多く最重悪化を出した族
@@ -443,7 +470,7 @@ object V6PortAnalyzer {
             }
         }
         surplusList.sortByDescending { it.excess }
-        return CoverageDiagnosis(total, infeasible, fixable, list, relaxations, totalSurplus, surplusList)
+        return Surpluses(surplusList, totalSurplus)
     }
 
     /**
@@ -563,9 +590,7 @@ object V6PortAnalyzer {
         // 離脱で (cur, j) に covU 穴が空くか。空くなら findCovUChain（探索本体と同一関数）で埋まるか実証する。
         val cnt = if (cur in 0 until p.K) cov[j][cur] else 0
         val departureHole = cur in 0 until p.K && p.covUCell(cur, j, cnt - 1) > p.covUCell(cur, j, cnt)
-        fun chainFills(board: Array<IntArray>): Boolean = (0 until 8).any { seed ->
-            findCovUChain(p, board, cur, j, java.util.Random(seed.toLong()), exclude = i) != null
-        }
+        fun chainFills(board: Array<IntArray>): Boolean = chainFills(p, board, cur, j, exclude = i)
         var c3nBlocked = 0
         var noReceiver = 0
         var prefBlocked = 0   // c3n は減るが、希望を破る代金（pref +1）を払えない代替の数
@@ -599,7 +624,7 @@ object V6PortAnalyzer {
                 // この代替は新たな禁止連続を作る → 隣接日調整（探索本体と同一関数）で崩せるか実証。
                 if (adjOk == null && chainOk == null) {
                     val tmp = Array(p.S) { norm[it].clone() }
-                    val extra = tryFixForbiddenRunViaAdjacentDay(p, tmp, i, j, m, java.util.Random(7L))
+                    val extra = tryFixForbiddenRunViaAdjacentDay(p, tmp, i, j, m, java.util.Random(Probe.ADJACENT_SEED))
                     if (extra != null) {
                         // 隣接日の手＋本セルの変更を適用し、本セルの離脱穴が残るなら連鎖で埋まるかまで確認。
                         for (mv in extra) tmp[mv[0]][mv[1]] = mv[2]
@@ -826,17 +851,7 @@ object V6PortAnalyzer {
                     val dev = counts[i][k].toDouble() - target
                     raw += dev * dev + abs(dev) * 2.0
                 } else {
-                    var sum = 0
-                    for (i in mem) sum += counts[i][k]
-                    val mean = sum.toDouble() / mem.size.toDouble()
-                    var varSum = 0.0
-                    var maxDev = 0.0
-                    for (i in mem) {
-                        val d = counts[i][k].toDouble() - mean
-                        varSum += d * d
-                        maxDev = max(maxDev, abs(d))
-                    }
-                    raw += varSum + maxDev * 2.0
+                    raw += spreadTerm(mem) { i -> counts[i][k] }
                 }
             }
         }
@@ -856,23 +871,28 @@ object V6PortAnalyzer {
             for (dow in 0 until 7) {
                 for (k in 0 until p.K) {
                     if (gs.getOrNull(k) != 1) continue
-                    var sum = 0
-                    for (i in mem) sum += dowCnt[i][dow][k]
-                    val mean = sum.toDouble() / mem.size.toDouble()
-                    var varSum = 0.0
-                    var maxDev = 0.0
-                    for (i in mem) {
-                        val d = dowCnt[i][dow][k].toDouble() - mean
-                        varSum += d * d
-                        maxDev = max(maxDev, abs(d))
-                    }
-                    raw += varSum + maxDev * 2.0
+                    raw += spreadTerm(mem) { i -> dowCnt[i][dow][k] }
                 }
             }
         }
         val hard = (breakdown["groupViol"] ?: 0) + (breakdown["c3n"] ?: 0) + (breakdown["covU"] ?: 0) + (breakdown["pref"] ?: 0)
         val psi = max(0.2, 1.0 / (1.0 + 10.0 * hard.toDouble()))
         return raw * psi
+    }
+
+    /** 群メンバー間の散らばり: 平均からの二乗偏差和＋最大絶対偏差×2（V6 equalization の項。[3.503.0] 2 か所の複製を統合）。 */
+    private inline fun spreadTerm(mem: List<Int>, value: (Int) -> Int): Double {
+        var sum = 0
+        for (i in mem) sum += value(i)
+        val mean = sum.toDouble() / mem.size.toDouble()
+        var varSum = 0.0
+        var maxDev = 0.0
+        for (i in mem) {
+            val d = value(i).toDouble() - mean
+            varSum += d * d
+            maxDev = max(maxDev, abs(d))
+        }
+        return varSum + maxDev * 2.0
     }
 
     private fun explicitTarget(p: Problem, i: Int, k: Int): Double? {
@@ -899,9 +919,7 @@ object V6PortAnalyzer {
 
         var badWish = 0
         for ((key, k) in state.wishes) {
-            val parts = key.split(',')
-            val i = parts.getOrNull(0)?.toIntOrNull()
-            val j = parts.getOrNull(1)?.toIntOrNull()
+            val (i, j) = parseKeyPair(key)
             if (i == null || j == null || i !in 0 until p.S || j !in 0 until p.T || k !in 0 until p.K) {
                 badWish++
             } else if (!p.canDo(i, k)) {
@@ -912,9 +930,7 @@ object V6PortAnalyzer {
 
         var badRange = 0
         for ((key, r) in state.staffRange) {
-            val parts = key.split(',')
-            val i = parts.getOrNull(0)?.toIntOrNull()
-            val k = parts.getOrNull(1)?.toIntOrNull()
+            val (i, k) = parseKeyPair(key)
             val lo = r.lo.trim().toIntOrNull()
             val hi = r.hi.trim().toIntOrNull()
             if (i == null || k == null || i !in 0 until p.S || k !in 0 until p.K) badRange++
@@ -926,6 +942,12 @@ object V6PortAnalyzer {
         if (dup > 0) warns.add("連続パターン制約の重複定義が ${dup} 件あります")
         if (state.cons41.isEmpty()) warns.add("cons41 が未設定です（グループ別人数範囲を使う場合は確認）")
         return warns
+    }
+
+    /** "i,j" 形式のキーを 2 つの Int? に分解する（欠け・非数は null。[3.503.0] wishes/staffRange の重複を統合）。 */
+    private fun parseKeyPair(key: String): Pair<Int?, Int?> {
+        val parts = key.split(',')
+        return Pair(parts.getOrNull(0)?.toIntOrNull(), parts.getOrNull(1)?.toIntOrNull())
     }
 
     private fun sanityNotes(state: MagiState): List<String> {
