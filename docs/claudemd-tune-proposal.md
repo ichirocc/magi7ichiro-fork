@@ -1,5 +1,9 @@
 # CLAUDE.md 見直し提案（Claude 5 世代向け・記事の 7 ステップ, 3.505.8）
 
+> **手順 7（反映）は 3.505.9 で実施済み**（ユーザー「次」）。前後の棚卸し: 376 行／42,470 文字／強い語 18 行 → 84 行／約 10,500 文字／強い語 1 行。
+> 移した本文は `docs/environment.md`・`docs/backlog.md`・`docs/architecture.md`（主要ファイル）・`docs/history/topics.md`（恒久の事実）・
+> `.claude/rules/weights.md`。versionCode の規則は本人判断が無いので従来どおり（毎コミット加算）。
+
 > 出典: nogataka「CLAUDE.md をそろそろ見直す時期かも」（Qiita, 2026-09-05）の手順 1〜6。**本人の承認なしに構造は変えない**。
 > このコミットで先に直したのは「実装・環境と食い違う事実」だけ（重み c1/c3mn 30・covO 5、fork のリポジトリ名、ホスト JVM で
 > エンジンをビルドできること、消えた `/tmp/cellfix.py`）＝CLAUDE.md 自身の「stale 化させない」規則に従った訂正。

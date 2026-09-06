@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- CLAUDE.md を Claude 5 世代向けに見直し＝376 行→84 行（手順・履歴・バックログを docs/environment.md・docs/backlog.md・architecture.md・topics.md へ移動、重み規約を .claude/rules/weights.md へ、禁止形を判断基準へ）（3.505.9）  → `docs/history/3.4xx.md`
 - CLAUDE.md の見直し提案（記事の 7 ステップ、docs/claudemd-tune-proposal.md＝承認待ち）と事実の訂正（重み c1/c3mn 30・covO 5、fork 名、ホスト JVM でビルド可、検証ハーネス節）（3.505.8）  → `docs/history/3.4xx.md`
 - SUDO モデル（docs/sudo_model.md）を実装と再照合＝重み c1/c3mn 30・covO 5、O の実測 5015、欠損セル -1、S に Windows 版、D に拒否候補の再利用（3.505.7）  → `docs/history/3.4xx.md`
 - 自律改善ループ Iteration 5 第一弾実装＝起点生成に同長区間交換と同日 3 職員巡回、最終段の予算を残り時間で 4 倍。実データ 4/4 盤面同一。ベンチ中（3.505.6）  → `docs/history/3.4xx.md`
