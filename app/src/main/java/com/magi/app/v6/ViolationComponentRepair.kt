@@ -57,8 +57,10 @@ object ViolationComponentRepair {
         val maxPatchesPerAnchor: Int = 40,
         /** [Iteration 4] 起点から直接候補を作る（拒否候補に依存しない）。起点ごと・全体の上限。 */
         val generateFromAnchors: Boolean = true,
-        val maxGeneratedPerAnchor: Int = 24,
-        val maxGenerated: Int = 240,
+        val maxGeneratedPerAnchor: Int = 40,
+        val maxGenerated: Int = 400,
+        /** [Iteration 5] セル違反の起点で作る同長区間交換の最大長（制約の窓長から決めた半径をこれで頭打ち）。 */
+        val maxWindowLength: Int = 7,
     )
 
     /** 盤面差分。`ops` は [職員, 日, 新シフト] の並び（[CombinatorialRepair.Candidate.ops] と同じ形）。 */
@@ -295,6 +297,13 @@ object ViolationComponentRepair {
         }
 
         /** 起点から直接作る候補（半径 1）: セル違反＝別シフトへの変更と同日 2 者交換、人数不足/過剰＝その日の単セル変更、回数違反＝その職員の日で足す/休へ戻す。 */
+        // 影響半径: c1 の窓長・c3 系パターン長の最大 −1（最低 1）。区間交換の最大長はこれを maxWindowLength で頭打ち。
+        val reach = run {
+            var r = 1
+            for (c in p.cons1) r = maxOf(r, c.day1 - 1)
+            for (list in listOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)) for (c in list) r = maxOf(r, c.seq.size - 1)
+            minOf(r, params.maxWindowLength, maxOf(1, p.T - 1))
+        }
         fun generateFor(a: Anchor, sink: MutableList<Patch>, seenSig: MutableSet<String>) {
             var made = 0
             fun add(ops: List<IntArray>, hint: String) {
@@ -314,10 +323,34 @@ object ViolationComponentRepair {
                 if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.canDo(x, ky) || !p.canDo(y, kx)) return
                 add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx)), "${staffName(x)}↔${staffName(y)} ${j + 1}日")
             }
+            fun window(x: Int, y: Int, s0: Int, s1: Int) {
+                if (x == y) return
+                var changes = false
+                for (d in s0..s1) {
+                    val kx = work[x][d]; val ky = work[y][d]
+                    if (p.wishLocked(x, d) || p.wishLocked(y, d) || !p.canDo(x, ky) || !p.canDo(y, kx)) return
+                    if (kx != ky) changes = true
+                }
+                if (!changes) return
+                val ops = ArrayList<IntArray>(2 * (s1 - s0 + 1))
+                for (d in s0..s1) { ops.add(intArrayOf(x, d, work[y][d])); ops.add(intArrayOf(y, d, work[x][d])) }
+                add(ops, "${staffName(x)}↔${staffName(y)} ${s0 + 1}〜${s1 + 1}日")
+            }
+            fun rotate3(x: Int, y: Int, z: Int, j: Int) {
+                if (x == y || y == z || x == z) return
+                val kx = work[x][j]; val ky = work[y][j]; val kz = work[z][j]
+                if (kx == ky || ky == kz || kx == kz) return
+                if (p.wishLocked(x, j) || p.wishLocked(y, j) || p.wishLocked(z, j)) return
+                if (!p.canDo(x, ky) || !p.canDo(y, kz) || !p.canDo(z, kx)) return
+                add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kz), intArrayOf(z, j, kx)), "${staffName(x)}→${staffName(y)}→${staffName(z)} ${j + 1}日")
+            }
             when {
                 a.staff >= 0 && a.day >= 0 -> {
                     for (k2 in p.allowedShiftsForStaff(a.staff)) single(a.staff, a.day, k2)
                     for (b in 0 until p.S) swap(a.staff, b, a.day)
+                    // [Iteration 5] 半径 2 以上: 起点の日を含む同長区間交換（長さは制約の窓長まで）と、同日の 3 職員巡回。
+                    for (len in 2..minOf(reach, p.T)) for (b in 0 until p.S) for (s0 in maxOf(0, a.day - len + 1)..minOf(p.T - len, a.day)) window(a.staff, b, s0, s0 + len - 1)
+                    for (b in 0 until p.S) for (c in 0 until p.S) rotate3(a.staff, b, c, a.day)
                 }
                 a.staff < 0 -> when (a.family) {
                     "covU" -> for (i in 0 until p.S) single(i, a.day, a.shift)

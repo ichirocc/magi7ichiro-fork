@@ -441,8 +441,13 @@ object V6HotfixPasses {
         })
 
         if (params.componentRepairEnabled && params.componentRepairFinal && !shouldStop()) {
+            // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
+            val remainingFinal = EngineClock.remainingMs(deadlineMs)
+            val base = params.componentRepair
+            val finalParams = if (remainingFinal >= 2_000L) base.copy(maxEstimates = base.maxEstimates * 4, maxEvaluations = base.maxEvaluations * 5 / 2) else base
+            val finalStop: () -> Boolean = { shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L }
             chain.adopt(chain.timed("後処理 違反起点修復(最終)", "ComponentRepair") { work ->
-                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), params.componentRepair, shouldStop = shouldStop)
+                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), finalParams, shouldStop = finalStop)
             })
             chain.rejectedPool.clear()
         }
