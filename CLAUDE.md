@@ -335,8 +335,8 @@ cons1=[5日窓休≥1, 14日窓休≥4, 14日窓Dﾃ≥2]。桒澤美幸・大�
    ため通常は恒真＝挙動不変、不整合時のみ status=1 で Kotlin 退化。ホスト parity harness で compile+mismatch=0 確認）。
 
 9. **[探索動学・要計測] 希望島研磨（3.496.0）への外部レビュー指摘 4 件**（3.500.1 で登録。詳細は `docs/history/3.4xx.md`「外部レビュー…の Android 同期（3.500.1）」）:
-   (a) 島ごとの評価枠を同日候補が先に使い切り窓・両翼・巡回が飢餓になる（種別ごとの枠分割 or 安価な差分評価で混合）、
-   (b) `makesForbiddenRun` の事前枝刈りが禁止連続を**減らす**手まで落とす（増分判定へ）、(c) ビームの `expandNode` が
+   ~~(a) 島ごとの評価枠を同日候補が先に使い切り窓・両翼・巡回が飢餓になる~~ **→ 3.501.0 で交互評価＋巡回 25% 確保（ユーザー指示・計測は history）**、
+   ~~(b) `makesForbiddenRun` の事前枝刈りが禁止連続を**減らす**手まで落とす~~ **→ 3.501.0 で増分判定へ**、(c) ビームの `expandNode` が
    列挙順の先頭 `beamWidth*beamBranchFactor` 件だけを並べ替える（小容量の優先度キューへ）、(d) `clearOutOfScopeWishes` が
    非同期診断の `settingIssues` を根拠にする（`Problem.canDo` から再判定へ。C# は変更済み）。Kotlin が正なので **Android 側で
    PostProbe/`nsp_bench` の A/B を添えて先に変え、C# は後追いで同期**（C# 単独では変えない＝パリティ維持）。
