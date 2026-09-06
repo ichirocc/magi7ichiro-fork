@@ -52,12 +52,14 @@ class Problem(val state: MagiState) {
     /** groupMembers[g] = 群gに属する staff index。グループ内公平化(fair)で群メンバー間の回数偏差を均すのに使う。 */
     val groupMembers: Array<IntArray> = Array(G) { g -> (0 until S).filter { sgrp[it] == g }.toIntArray() }
 
-    /** Staff indices that may take a given shift (used by block-fill moves). */
-    val staffForShift: Array<IntArray> = Array(K) { k ->
-        // [3.410.0/P-06] 旧: `state.staff[i].groupIdx` の**直読み**で、`sgrp` のクランプを迂回していた
-        //   （範囲外 groupIdx でここだけ AIOOBE）。群の解決は必ず `sgrp` を通す＝単一ソース。
-        (0 until S).filter { i -> bucket[sgrp[i]].contains(k) }.toIntArray()
-    }
+    /** Staff indices the optimizer may give a shift to (used by block-fill moves). [3.507.0] 置ける職員＝`placeable`
+     *  （担当可かつ個人上限 0 でない）。群の解決は必ず `sgrp` を通す＝単一ソース（3.410.0/P-06）。init で range 解決後に埋める。 */
+    val staffForShift: Array<IntArray>
+
+    /** [3.507.0] 最適化器が置いてよいシフト（職員別）＝担当可（bucket）から個人上限 0（休を除く）を外したもの。評価・表示は canDo のまま
+     *  （候補生成・入口 hf66・最終番兵の基準だけが見る。希望固定は wishLocked が優先。経緯は history 3.507.0）。 */
+    val placeable: Array<IntArray>
+    val placeableHas: Array<BooleanArray>
 
     /** wish[i][j] = desired shift index, or -1. */
     val wish: Array<IntArray> = Array(S) { IntArray(T) { -1 } }
@@ -148,6 +150,13 @@ class Problem(val state: MagiState) {
                 r.hi.trim().toIntOrNull()?.let { rangeHi[i][k] = it }
             }
         }
+
+        placeableHas = Array(S) { i ->
+            val b = bucket.getOrNull(sgrp[i])
+            BooleanArray(K) { k -> b?.contains(k) == true && !(rangeHi[i][k] == 0 && k != restIdx) }
+        }
+        placeable = Array(S) { i -> (0 until K).filter { placeableHas[i][it] }.toIntArray() }
+        staffForShift = Array(K) { k -> (0 until S).filter { i -> placeableHas[i][k] }.toIntArray() }
 
         // 適切回数（双方向目標）: state.groupShiftApt[群][シフト] を個人別 apt[i][k] へ展開（群単位＝同群全員に同一目標）。
         // 担当ONシフトのみ（bucket=canDo）有効化し、担当不可シフトの幻のapt偏差を除外する。
@@ -352,7 +361,7 @@ class Problem(val state: MagiState) {
     }
 
     fun initialAssignment(): Array<IntArray> = Array(S) { i ->
-        val b = bucket[sgrp[i]]
+        val b = placeable[i]   // [3.507.0] 穴埋めは置けるシフトから。希望の反映は canDo 基準（wishLocked と同じ）
         IntArray(T) { j ->
             // [3.419.0] 旧: 欠損セル（行が短い・行が無い）を `?: 0` でハードコードの index 0 にしていた。
             //   0 は合法値なので下の範囲チェックを素通りし、**勤務シフトへ黙って化ける**。3.410.0 が
@@ -360,7 +369,7 @@ class Problem(val state: MagiState) {
             //   下の穴埋めに合流させる。
             var k = state.schedule.getOrNull(i)?.getOrNull(j) ?: -1
             val w = wish[i][j]
-            if (w >= 0 && b.contains(w)) k = w
+            if (w >= 0 && canDo(i, w)) k = w
             // [3.410.0/P-01] 旧: 範囲外セルをハードコードの 0 へ寄せていた。0 が休とは限らない
             //   （休が先頭でないデータでは**勤務シフトへ化ける**）。
             // [3.419.0] さらに、寄せ先の `restIdx` を**この職員が担当できるか見ていなかった**＝

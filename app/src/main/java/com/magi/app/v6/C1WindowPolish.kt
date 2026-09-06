@@ -365,7 +365,7 @@ internal object C1WindowPolish {
                         val workBeforeDay = work.copy2D()
                         var done = false
                         for (i2 in 0 until p.S) {
-                            if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.canDo(i2, a)) continue
+                            if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a)) continue
                             work[i][j] = x; work[i2][j] = a                 // 同日スワップ（被覆不変）
                             val rep = UnifiedViolationChecker.check(state, work)
                             val pinBadA = exactPinRegression(p, workBeforeDay, work)
@@ -401,7 +401,7 @@ internal object C1WindowPolish {
                                 if (i2 == i) continue
                                 if (work[i2][j1] != a || work[i2][j] != x) continue      // 完全鏡像の相手のみ
                                 if (!movable(i2, j1) || !movable(i2, j)) continue
-                                if (!p.canDo(i, x) || !p.canDo(i2, a)) continue           // 構造上恒真・規律として明示
+                                if (!p.mayPlace(i, x) || !p.mayPlace(i2, a)) continue           // 構造上恒真・規律として明示
                                 work[i][j1] = a; work[i][j] = x; work[i2][j1] = x; work[i2][j] = a
                                 val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x) ||
                                     p.makesForbiddenRun(work, i2, j1, x) || p.makesForbiddenRun(work, i2, j, a)
@@ -719,7 +719,7 @@ internal object C1WindowPolish {
             val w = Array(base.size) { base[it].copyOf() }
             val a0 = w[i][j]
             for (i2 in 0 until p.S) {
-                if (i2 == i || w[i2][j] != x || !movable(i2, j) || !p.canDo(i2, a0)) continue
+                if (i2 == i || w[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a0)) continue
                 w[i][j] = x; w[i2][j] = a0
                 return w
             }

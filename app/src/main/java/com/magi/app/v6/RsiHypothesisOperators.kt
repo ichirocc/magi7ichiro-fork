@@ -272,7 +272,7 @@ internal object RsiHypothesisOperators {
                 // 不足(z<l): 群内の他シフト在籍者を引き入れる。
                 while (groupCount(c, j) < c.l) {
                     val baseline = UnifiedViolationChecker.check(state, sched)
-                    val offShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] != c.shiftIdx && p.canDo(it, c.shiftIdx) }
+                    val offShift = (0 until p.S).filter { grp[it] == c.groupIdx && sched[it][j] != c.shiftIdx && p.mayPlace(it, c.shiftIdx) }
                     val candidates = ArrayList<List<IntArray>>()
                     for (i in offShift) {
                         val old = sched[i][j]

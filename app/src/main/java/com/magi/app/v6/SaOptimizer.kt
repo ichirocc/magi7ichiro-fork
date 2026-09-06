@@ -304,7 +304,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             var tries = 0
             while (problem.wishLocked(i, j) && tries < 4) { j = rng.nextInt(t); tries++ }
             if (problem.wishLocked(i, j)) return@repeat
-            val b = problem.bucket[problem.sgrp[i]]
+            val b = problem.allowedShiftsForStaff(i)
             if (b.isNotEmpty()) cur[i * t + j] = b[rng.nextInt(b.size)]
         }
     }
@@ -335,7 +335,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         }
         fun revert() { var k = bn - 1; while (k >= 0) { de.apply(bi[k], bj[k], bOld[k]); k-- }; bn = 0 }
         fun randShiftFor(i: Int): Int {
-            val b = problem.bucket[problem.sgrp[i]]
+            val b = problem.allowedShiftsForStaff(i)
             return if (b.isEmpty()) de.at(i, 0) else b[rng.nextInt(b.size)]
         }
         // [3.334.0] 近傍は**実現可能な希望が入ったセルを触らない**。後処理研磨の全パスと C++ の修復
@@ -350,7 +350,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             var tries = 0
             while (locked(i, j) && tries < 4) { j = rng.nextInt(T); tries++ }
             if (locked(i, j)) return
-            val b = problem.bucket[problem.sgrp[i]]
+            val b = problem.allowedShiftsForStaff(i)
             if (b.isEmpty()) return
             applyCell(i, j, b[rng.nextInt(b.size)])
         }

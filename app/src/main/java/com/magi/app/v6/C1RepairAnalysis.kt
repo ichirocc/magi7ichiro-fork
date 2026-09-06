@@ -167,7 +167,7 @@ object C1RepairAnalysis {
         //   あとも「探索し尽くした」と主張しており、真部分集合しか見ていないのに壁を証明していた。
         var truncated = false
         for (i in 0 until p.S) {
-            if (i in mSet || !p.canDo(i, v.shift)) continue
+            if (i in mSet || !p.mayPlace(i, v.shift)) continue
             if (mSet.size >= cfg.maxInvolvedStaff) { truncated = true; break }
             mSet.add(i)
         }
@@ -310,7 +310,7 @@ object C1RepairAnalysis {
                     if (used[si]) continue
                     val sh = multiset[si]
                     if (tried[sh + 1]) continue
-                    if (!p.canDo(i, sh)) continue
+                    if (!p.mayPlace(i, sh)) continue
                     if (wl >= 0 && sh != wl) continue
                     if (mi == 0 && branchCount >= cfg.perDayBranchCap) { budgetHit = true; break }
                     tried[sh + 1] = true

@@ -127,7 +127,7 @@ internal object C1TemporalFlowPolish {
                     val changed = newK != oldK
                     if (changed) {
                         // [3.417.0] 記号「希」を割当先から外すガードを撤去（詳細は V6HotfixPasses の同種箇所）。
-                        if (p.wishLocked(i, j) || !p.canDo(i, newK)) continue
+                        if (p.wishLocked(i, j) || !p.mayPlace(i, newK)) continue
                         board[i][j] = newK
                         val bad = p.makesForbiddenRun(board, i, j, newK)
                         board[i][j] = oldK

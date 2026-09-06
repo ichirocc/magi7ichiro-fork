@@ -51,7 +51,7 @@ internal object DestroyRepairOperators {
         for (i in 0 until p.S) for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cnt[i][k]++ }
         // destroy: 非希望セルを休へ。休を担当できない職員は対象外（群外割当を作らない）。cnt も同期。
         for (i in 0 until p.S) {
-            if (p.wishLocked(i, j) || !p.canDo(i, rest)) continue
+            if (p.wishLocked(i, j) || !p.mayPlace(i, rest)) continue
             val old = schedule[i][j]
             if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cnt[i][old]--; cnt[i][rest]++ }
         }
@@ -98,7 +98,7 @@ internal object DestroyRepairOperators {
             while (miss > 0) {
                 var bestI = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
                 for (i in 0 until p.S) {
-                    if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.canDo(i, k)) continue
+                    if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.mayPlace(i, k)) continue
                     val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k]) +
                         c41DayMarg(p.sgrp[i], k) +
                         DestroyRepairMarginalCost.weeklyMarginalAt(wd[i], bucket, rest, k) +
@@ -133,7 +133,7 @@ internal object DestroyRepairOperators {
         val allowed = p.allowedShiftsForStaff(i)
         if (allowed.isEmpty()) return
         val rest = restShiftIndex(state)   // [監査#2] 休の記号解決
-        if (!p.canDo(i, rest)) return      // 休を担当できない職員は破壊修復の対象外（群外割当を作らない）
+        if (!p.mayPlace(i, rest)) return      // 休を担当できない職員は破壊修復の対象外（群外割当を作らない）
         // [soft-aware staff-DR / 実測 tools/nsp_bench.py --real: staff+viol で実データ final -49.5%]
         //   非希望セルを休へ destroy → 各日の被覆穴を「staff i の marginal soft 最小のシフト」で repair。
         //   被覆穴のみ埋める(過剰=covO を作らない)。希望固定は保持。スコアリング不変=Δ×フル無関係。
@@ -167,7 +167,7 @@ internal object DestroyRepairOperators {
             val bucket = (p.dow0 + j) % 7
             var bestK = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
             for (k in 0 until p.K) {
-                if (k == rest || !p.canDo(i, k)) continue
+                if (k == rest || !p.mayPlace(i, k)) continue
                 // [3.379.0/同上] need2 単独定義の穴を塞ぐ。`covUCell<=0` は「需要なし」と
                 //   「既に足りている」の両方を同時に表すので、旧2条件をこれ1つで置き換えられる。
                 if (p.covUCell(k, j, cov[j][k]) <= 0) continue

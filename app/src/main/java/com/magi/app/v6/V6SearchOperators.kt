@@ -31,7 +31,7 @@ internal fun findCovOFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
     for (ii in 0 until p.S) if (eval.at(ii, j) == overK && !p.wishLocked(ii, j)) { if (pickW-- == 0) { i = ii; break } }
     var bestNw = -1; var bestDef = Int.MIN_VALUE
     for (k in 0 until p.K) {
-        if (k == overK || !p.canDo(i, k)) continue
+        if (k == overK || !p.mayPlace(i, k)) continue
         val def = p.covUCell(k, j, eval.countOnDay(k, j))
         if (def > bestDef) { bestDef = def; bestNw = k }
     }
@@ -42,10 +42,10 @@ internal fun findC2Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray?
     if (p.cons2.isEmpty()) return null
     val c = p.cons2[rng.nextInt(p.cons2.size)]
     var dCnt = 0
-    for (i in 0 until p.S) { if (!p.canDo(i, c.shiftIdx)) continue; if (eval.countForStaff(i, c.shiftIdx) < c.count) dCnt++ }
+    for (i in 0 until p.S) { if (!p.mayPlace(i, c.shiftIdx)) continue; if (eval.countForStaff(i, c.shiftIdx) < c.count) dCnt++ }
     if (dCnt == 0) return null
     var pickI = rng.nextInt(dCnt); var stf = 0
-    for (i in 0 until p.S) { if (!p.canDo(i, c.shiftIdx)) continue; if (eval.countForStaff(i, c.shiftIdx) < c.count) { if (pickI-- == 0) { stf = i; break } } }
+    for (i in 0 until p.S) { if (!p.mayPlace(i, c.shiftIdx)) continue; if (eval.countForStaff(i, c.shiftIdx) < c.count) { if (pickI-- == 0) { stf = i; break } } }
     var dayCnt = 0
     for (j in 0 until p.T) if (eval.at(stf, j) != c.shiftIdx && !p.wishLocked(stf, j)) dayCnt++
     if (dayCnt == 0) return null
@@ -56,10 +56,10 @@ internal fun findC2Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray?
 
 internal fun findRangeLowFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? {
     var cCnt = 0
-    for (i in 0 until p.S) for (k in 0 until p.K) { val lo = p.rangeLo[i][k]; if (lo == Int.MIN_VALUE || !p.canDo(i, k)) continue; if (eval.countForStaff(i, k) < lo) cCnt++ }
+    for (i in 0 until p.S) for (k in 0 until p.K) { val lo = p.rangeLo[i][k]; if (lo == Int.MIN_VALUE || !p.mayPlace(i, k)) continue; if (eval.countForStaff(i, k) < lo) cCnt++ }
     if (cCnt == 0) return null
     var pickC = rng.nextInt(cCnt); var rlI = 0; var rlK = 0
-    outer@ for (i in 0 until p.S) for (k in 0 until p.K) { val lo = p.rangeLo[i][k]; if (lo == Int.MIN_VALUE || !p.canDo(i, k)) continue; if (eval.countForStaff(i, k) < lo) { if (pickC-- == 0) { rlI = i; rlK = k; break@outer } } }
+    outer@ for (i in 0 until p.S) for (k in 0 until p.K) { val lo = p.rangeLo[i][k]; if (lo == Int.MIN_VALUE || !p.mayPlace(i, k)) continue; if (eval.countForStaff(i, k) < lo) { if (pickC-- == 0) { rlI = i; rlK = k; break@outer } } }
     var dayCnt = 0
     for (j in 0 until p.T) if (eval.at(rlI, j) != rlK && !p.wishLocked(rlI, j)) dayCnt++
     if (dayCnt == 0) return null
@@ -90,10 +90,10 @@ internal fun findC41Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray
         }
         cnt < c.l -> {
             var aCnt = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) aCnt++
+            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) aCnt++
             if (aCnt == 0) return null
             var pickA = rng.nextInt(aCnt); var ai = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
+            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
             intArrayOf(ai, j, c.shiftIdx)
         }
         else -> null
@@ -123,10 +123,10 @@ internal fun findC41sFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
         }
         cnt < c.l -> {
             var aCnt = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) aCnt++
+            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) aCnt++
             if (aCnt == 0) return null
             var pickA = rng.nextInt(aCnt); var ai = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.canDo(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
+            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
             intArrayOf(ai, j, c.shiftIdx)
         }
         else -> null
@@ -174,7 +174,7 @@ internal fun findC3WantFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntAr
                 }
                 if (miss == 1 && missL >= 0) {
                     val ml = j + missL
-                    if (!p.wishLocked(i, ml) && p.canDo(i, seq[missL])) return intArrayOf(i, ml, seq[missL])
+                    if (!p.wishLocked(i, ml) && p.mayPlace(i, seq[missL])) return intArrayOf(i, ml, seq[missL])
                 }
             }
             j++
@@ -412,7 +412,7 @@ internal fun findCovUChain(
             if (i == exclude) continue   // [C1×E11] 呼出元が別途動かした職員を連鎖の候補から除外（無効な回帰手を防ぐ）
             val m = sched[i][j]
             if (m !in 0 until p.K || m == fillShift) continue
-            if (!p.canDo(i, fillShift) || p.wishLocked(i, j)) continue
+            if (!p.mayPlace(i, fillShift) || p.wishLocked(i, j)) continue
             var q = prev; var used = false
             while (q != null) { if (q.staff == i) { used = true; break }; q = q.prev }
             if (used) continue

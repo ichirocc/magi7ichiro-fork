@@ -613,12 +613,18 @@ fun Problem.wishLocked(i: Int, j: Int): Boolean {
     return w >= 0 && canDo(i, w)
 }
 
-fun Problem.allowedShiftsForStaff(staffI: Int): IntArray {
-    // canDo と整合: 群bucketをそのまま返す（空＝担当可能シフトなし）。全呼び出し側は空配列を
-    // ガード済み。旧実装は空bucketで全Kにフォールバックし canDo(=false) と矛盾していた（潜在バグ）。
-    // 実データ（各群に担当シフト定義あり=非空）では挙動不変。
-    return bucket.getOrNull(sgrp.getOrNull(staffI) ?: -1) ?: IntArray(0)
+/** [3.507.0] 最適化器が (i,k) を置いてよいか＝担当可かつ個人上限 0 でない（休は除外しない）。評価・表示は canDo。 */
+fun Problem.mayPlace(staffI: Int, shiftK: Int): Boolean {
+    if (staffI !in 0 until S || shiftK !in 0 until K) return false
+    return placeableHas[staffI][shiftK]
 }
+
+/** 最適化器の候補生成用＝置けるシフト（`placeable`）。空＝置けるシフトなし。全呼び出し側は空配列をガード済み。
+ *  [3.507.0] 旧: 群 bucket そのもの。担当可否そのもの（UI の選択肢・診断）は `canDoShiftsForStaff`。 */
+fun Problem.allowedShiftsForStaff(staffI: Int): IntArray = placeable.getOrNull(staffI) ?: IntArray(0)
+
+/** 担当できるシフト（群 bucket＝canDo と同値）。UI の選択肢と設定診断が使う。 */
+fun Problem.canDoShiftsForStaff(staffI: Int): IntArray = bucket.getOrNull(sgrp.getOrNull(staffI) ?: -1) ?: IntArray(0)
 
 fun normalizeSchedule(schedule: Array<IntArray>, p: Problem): Array<IntArray> = Array(p.S) { i ->
     IntArray(p.T) { j ->

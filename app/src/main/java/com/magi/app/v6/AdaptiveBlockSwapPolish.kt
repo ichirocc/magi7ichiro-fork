@@ -505,7 +505,7 @@ internal object AdaptiveBlockSwapPolish {
                         val a = work[u][j]
                         val b = work[v][j]
                         if (a == b || a !in 0 until p.K || b !in 0 until p.K) continue
-                        if (!p.canDo(u, b)) continue
+                        if (!p.mayPlace(u, b)) continue
                         delta[a]--; delta[b]++; any = true
                     }
                     if (!any) continue
@@ -572,7 +572,7 @@ internal object AdaptiveBlockSwapPolish {
                 for (t in 0 until n) {
                     val incoming = vals[(t + 1) % n]
                     if (incoming != vals[t]) changes = true
-                    if (!p.canDo(cycle[t], incoming)) { ok = false; break }
+                    if (!p.mayPlace(cycle[t], incoming)) { ok = false; break }
                 }
                 if (!ok || !changes) continue
                 swapDays.add(j)
@@ -910,7 +910,7 @@ internal object AdaptiveBlockSwapPolish {
                 val ka = work[a][d]; val kb = work[b][d]
                 if (ka !in 0 until p.K || kb !in 0 until p.K) return null
                 if (p.wishLocked(a, d) || p.wishLocked(b, d)) return null
-                if (!p.canDo(a, kb) || !p.canDo(b, ka)) return null
+                if (!p.mayPlace(a, kb) || !p.mayPlace(b, ka)) return null
                 if (ka != kb) { changed++; delta[kb]++; delta[ka]-- }
             }
             if (changed == 0) return null

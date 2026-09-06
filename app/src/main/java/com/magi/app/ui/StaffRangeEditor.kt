@@ -108,7 +108,11 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
             shifts = vm.shiftKigouList(),
             allowedFor = { g -> vm.allowedShiftsForGroup(g) },
             memberCount = { g -> vm.groupMemberCount(g) },
-            onApply = { g, k, lo, hi -> vm.setGroupRange(g, k, lo, hi); dialog = false },
+            rangeCount = { g, k -> vm.groupRangeMemberCount(g, k) },
+            onApply = { g, k, lo, hi ->
+                if (lo.isBlank() && hi.isBlank()) vm.clearGroupRangeAll(g, k) else vm.setGroupRange(g, k, lo, hi)
+                dialog = false
+            },
             onClose = { dialog = false },
         )
     }
@@ -120,6 +124,7 @@ internal fun GroupRangeDialog(
     shifts: List<String>,
     allowedFor: (Int) -> Set<Int>,
     memberCount: (Int) -> Int,
+    rangeCount: (Int, Int) -> Int,
     onApply: (Int, Int, String, String) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -131,7 +136,10 @@ internal fun GroupRangeDialog(
     var openK by remember { mutableStateOf(false) }
     val allowed = allowedFor(g)
     val bad = V6SanityPort.rangeOrderConflict(lo, hi) != null   // [3.403.0] 個人別と同じ（全員へ一括適用するぶん影響は大きい）
-    val ok = g in groups.indices && k in allowed && (lo.isNotBlank() || hi.isNotBlank()) && !bad
+    val blank = lo.isBlank() && hi.isBlank()
+    val existing = if (g in groups.indices && k in allowed) rangeCount(g, k) else 0
+    // [3.506.0] 両方「なし」は「全員ぶん解除」として適用できる（解除対象がある場合のみ）。
+    val ok = g in groups.indices && k in allowed && !bad && (!blank || existing > 0)
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = {
@@ -169,10 +177,12 @@ internal fun GroupRangeDialog(
                 }
                 if (bad) {
                     Text(RANGE_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-                } else if (lo.isBlank() && hi.isBlank()) {
+                } else if (blank && existing > 0) {
+                    Text("このまま適用すると、${existing}名の個人上下限を「なし」に戻します（適切回数も空になります）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (blank) {
                     Text(RANGE_REQUIRED_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（既存の個人設定は上書き）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（個人で設定済みの人は保持）。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )

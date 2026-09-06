@@ -54,9 +54,7 @@ static void finalizeProblem(MagiProblem& p) {
     for (int i = 0; i < p.S; i++) { int g = p.sgrp[i]; if (g >= 0 && g < p.G) p.members[g].push_back(i); }
     p.bucketHas.assign((size_t)p.G * p.K, 0);
     for (int g = 0; g < p.G; g++) for (int k : p.bucket[g]) if (k >= 0 && k < p.K) p.bucketHas[(size_t)g * p.K + k] = 1;
-    p.staffForShift.assign((size_t)p.K, {});
-    for (int i = 0; i < p.S; i++) { int g = p.sgrp[i]; if (g < 0 || g >= p.G) continue;
-        for (int k : p.bucket[g]) if (k >= 0 && k < p.K) p.staffForShift[k].push_back(i); }
+    p.buildPlacementTables();   // allowed / staffForShift（3.507.0: 個人上限 0 を除いた置けるシフト）
 }
 
 static C3r mkC3(std::initializer_list<int> seq) {

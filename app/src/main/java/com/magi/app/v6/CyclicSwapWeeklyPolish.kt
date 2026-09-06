@@ -50,7 +50,7 @@ internal object CyclicSwapWeeklyPolish {
                     for (b in a + 1 until p.S) {
                         if (!movable(b, j)) continue
                         val sa = work[a][j]; val sb = work[b][j]
-                        if (sa == sb || !p.canDo(a, sb) || !p.canDo(b, sa)) continue
+                        if (sa == sb || !p.mayPlace(a, sb) || !p.mayPlace(b, sa)) continue
                         // [厳密ピン保護] 異なるシフト同士の同日交換はa/bの自身のシフト回数を変えるため、
                         //   staffRange厳密ピン(lo==hi)を新たに崩す候補は不採用にする（keep-best/重み不変）。
                         val workBeforeSwap2 = work.copy2D()
@@ -72,7 +72,7 @@ internal object CyclicSwapWeeklyPolish {
                             val sa = work[a][j]; val sb = work[b][j]; val sc = work[c][j]
                             if (sa == sb && sb == sc) continue
                             // a←sb, b←sc, c←sa（feasibleなら適用→評価→不採用なら巻き戻し）
-                            if (p.canDo(a, sb) && p.canDo(b, sc) && p.canDo(c, sa)) {
+                            if (p.mayPlace(a, sb) && p.mayPlace(b, sc) && p.mayPlace(c, sa)) {
                                 val workBeforeRotate3 = work.copy2D()
                                 work[a][j] = sb; work[b][j] = sc; work[c][j] = sa
                                 val rep = UnifiedViolationChecker.check(state, work)
@@ -181,7 +181,7 @@ internal object CyclicSwapWeeklyPolish {
                                 if (work[ip][j2] != x) continue
                                 val z = work[ip][j1]
                                 if (z == x || z !in 0 until p.K) continue
-                                if (!p.canDo(i, z) || !p.canDo(ip, y)) continue
+                                if (!p.mayPlace(i, z) || !p.mayPlace(ip, y)) continue
                                 // 長方形交換を適用（被覆保存）→ フル評価 → 改善時のみ採用、不採用なら完全巻き戻し。
                                 // [監査で発見・3.270.0] isBetter は hard→weightedScore→total の辞書式のため、
                                 //   raw total が改善してもweightedScoreが悪化する組合せ(重い厳密ピン破りを軽い

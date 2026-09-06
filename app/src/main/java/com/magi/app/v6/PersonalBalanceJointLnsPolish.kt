@@ -266,7 +266,7 @@ internal object PersonalBalanceJointLnsPolish {
 
     /** 希望固定・担当可否・range/aptだけを使う、職員単位の厳密count下限。 */
     internal fun staffLowerBound(p: Problem, staff: Int): Int {
-        val allowed = (0 until p.K).filter { p.canDo(staff, it) }
+        val allowed = (0 until p.K).filter { p.mayPlace(staff, it) }
         if (allowed.isEmpty()) return 0
         val forced = IntArray(p.K)
         var fixed = 0
@@ -342,7 +342,7 @@ internal object PersonalBalanceJointLnsPolish {
                 val old = schedule[i][j]
                 if (old !in 0 until p.K) continue
                 for (target in 0 until p.K) {
-                    if (target == old || !p.canDo(i, target)) continue
+                    if (target == old || !p.mayPlace(i, target)) continue
                     counts[i][old]--
                     counts[i][target]++
                     val after = countPenalty(p, i, counts[i])
@@ -408,13 +408,13 @@ internal object PersonalBalanceJointLnsPolish {
         val j = goal.day
         val target = goal.target
         val old = base[i][j]
-        if (old == target || p.wishLocked(i, j) || !p.canDo(i, target)) return emptyList()
+        if (old == target || p.wishLocked(i, j) || !p.mayPlace(i, target)) return emptyList()
         val out = ArrayList<Candidate>()
 
         // 同日1対1交換。coverageを完全保存するため最優先。
         val donors = (0 until p.S).shuffled(rng)
         for (d in donors) {
-            if (d == i || base[d][j] != target || p.wishLocked(d, j) || !p.canDo(d, old)) continue
+            if (d == i || base[d][j] != target || p.wishLocked(d, j) || !p.mayPlace(d, old)) continue
             val w = base.copy2D()
             w[i][j] = target
             w[d][j] = old
@@ -459,7 +459,7 @@ internal object PersonalBalanceJointLnsPolish {
 
         // 本人の別日targetと自己交換。月間回数は不変だが、下限内移替やc1/c3/weeklyの副作用改善に使う。
         for (d2 in (0 until p.T).shuffled(rng)) {
-            if (d2 == j || base[i][d2] != target || p.wishLocked(i, d2) || !p.canDo(i, old)) continue
+            if (d2 == j || base[i][d2] != target || p.wishLocked(i, d2) || !p.mayPlace(i, old)) continue
             val w = base.copy2D()
             w[i][j] = target
             w[i][d2] = old
@@ -472,7 +472,7 @@ internal object PersonalBalanceJointLnsPolish {
         if (out.size < limit) {
             outer@ for (d in donors) for (d2 in (0 until p.T).shuffled(rng)) {
                 if (d == i && d2 == j) continue
-                if (base[d][d2] != target || p.wishLocked(d, d2) || !p.canDo(d, old)) continue
+                if (base[d][d2] != target || p.wishLocked(d, d2) || !p.mayPlace(d, old)) continue
                 val w = base.copy2D()
                 w[i][j] = target
                 w[d][d2] = old

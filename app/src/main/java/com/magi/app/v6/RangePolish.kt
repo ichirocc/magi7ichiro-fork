@@ -248,7 +248,7 @@ internal object RangePolish {
                 if (work[hi][j] != k || !movable(hi, j) || !movable(lo, j)) continue
                 val loK = work[lo][j]
                 if (loK == k || loK !in 0 until p.K) continue
-                if (!p.canDo(hi, loK) || !p.canDo(lo, k)) continue
+                if (!p.mayPlace(hi, loK) || !p.mayPlace(lo, k)) continue
                 if (p.makesForbiddenRun(work, hi, j, loK) || p.makesForbiddenRun(work, lo, j, k)) continue
                 val workBeforeSwap = work.copy2D()
                 work[hi][j] = loK; work[lo][j] = k
@@ -335,7 +335,7 @@ internal object RangePolish {
                     r != hi &&
                         work[r][j] != k &&
                         movable(r, j) &&
-                        p.canDo(r, k) &&
+                        p.mayPlace(r, k) &&
                         receiverRoom(r) > 0
                 }
                 if (rawReceivers.isEmpty()) continue
@@ -370,7 +370,7 @@ internal object RangePolish {
                                 //     「希」生成は 0 件（この職場では休が lo==hi の厳密ピンで9/10名固定＋勤務側に需要があり、
                                 //     「希望外の希」はデータ側の制約が既に禁じている＝中立な仕組みが機能している）。
                                 //   ③**別の職場では黙って効かない**: 記号が「希望」「W」等なら同じ意図でも一切適用されない。
-                                if (!movable(i, j) || !p.canDo(i, newK)) continue
+                                if (!movable(i, j) || !p.mayPlace(i, newK)) continue
                                 work[i][j] = newK
                                 val badRun = p.makesForbiddenRun(work, i, j, newK)
                                 work[i][j] = oldK
@@ -512,7 +512,7 @@ internal object RangePolish {
                             val changed = newK != oldK
                             if (changed) {
                                 // [3.417.0] 記号「希」を割当先から外すガードを撤去（根拠は手M側の同種箇所に記載）。
-                                if (!movable(i, j) || !p.canDo(i, newK)) continue
+                                if (!movable(i, j) || !p.mayPlace(i, newK)) continue
                                 work[i][j] = newK
                                 val badRun = p.makesForbiddenRun(work, i, j, newK)
                                 work[i][j] = oldK
@@ -523,7 +523,7 @@ internal object RangePolish {
                                     }
                                     if (fix.isEmpty()) continue
                                 }
-                            } else if (i == victim && !p.canDo(i, newK)) {
+                            } else if (i == victim && !p.mayPlace(i, newK)) {
                                 // groupViol対象をそのまま残す辺は禁止。他職員の固定済み不正セルは
                                 // この1手の実行可能性を壊さないため現状維持だけ許す。
                                 continue
@@ -604,11 +604,11 @@ internal object RangePolish {
             val groupTargets = ArrayList<Triple<Int, Int, Int>>()
             for (i in 0 until p.S) for (j in 0 until p.T) {
                 val k = work[i][j]
-                if (k in 0 until p.K && !p.canDo(i, k)) groupTargets.add(Triple(i, j, k))
+                if (k in 0 until p.K && !p.mayPlace(i, k)) groupTargets.add(Triple(i, j, k))
             }
             for ((i, j, k) in groupTargets) {
                 if (shouldStop()) break
-                if (work[i][j] != k || p.canDo(i, k)) continue
+                if (work[i][j] != k || p.mayPlace(i, k)) continue
                 val target = i to k
                 if (!movable(i, j)) {
                     recordBlock(target, "担当不可セルが希望/管理者固定")
@@ -678,7 +678,7 @@ internal object RangePolish {
             // LOW(不足): shift k を保有していない日のうち1日をshift kへ動かす。
             for ((i, k) in lowTargets) {
                 if (shouldStop()) break
-                if (!p.canDo(i, k)) continue
+                if (!p.mayPlace(i, k)) continue
                 val target = i to k
                 var done = false
                 // [複数ターゲット同時解決] まず同一シフトkのhigh(超過)職員との直接ペアスワップを試す
