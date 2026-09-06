@@ -27,6 +27,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-05（3.499.0＝可変長ブロック交換 `AdaptiveBlockSwapPolish` を監査基準7項目でレビューして再構成。`CyclicSession`／`StrictSession` 化、採否・不採用分類・職員圧力・回数見積りの共通化、`Priority`/`Params` 集約、厳密窓交換の重複排除を方向フィルタの後へ（旧実装が捨てていた窓が回復）。4 fixture×6 条件の盤面ハッシュが改修前と一致＝採否の意味論は不変。C# は Step B と重み出典を同時。エンジン挙動・重み不変）
+
 **最終更新**：2026-09-05（3.497.3＝CLAUDE.md の常時読み込み分を 190KB→39KB（約 5.8 万→1.2 万トークン）へ。作業記録の索引を `docs/history/INDEX.md`、話題別の版数付き叙述を `docs/history/topics.md` へ移し、本体には恒久の事実だけを残した。docs のみ）
 
 **最終更新**：2026-09-05（3.497.2＝ナレッジグラフ4ツールを実測し Serena（LSP）だけ `.mcp.json` で試験導入。グラフ系は Kotlin の呼び出し解決が0件のため見送り。docs/設定のみ）
