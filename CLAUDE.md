@@ -82,7 +82,7 @@ PathRelinking + ChainSwap + 適応的オペレータ重み + RSI++ 等）を内�
 - パッケージ/applicationId: `com.magi.app`（namespace も同じ）
 - minSdk=36 (Android 16+), compileSdk/targetSdk=36, java.time ネイティブ可, NDK/desugaring 不使用
   （※Android 17 会話バブル対応済。compileSdk は 36 のまま。**API 37 の platform SDK は 3.409.12 で stable 公開を確認済み**＝バブル対応(2026-07-15)/3.373.0 の「未公開」は解消。移行手順は下記セクション参照）
-- リポジトリ: `ichirocc/magi7ichiro`（public）
+- リポジトリ: `ichirocc/magi7ichiro-fork`（作業用 fork。upstream は `ichirocc/magi7ichiro`）
 - UI 制約: **片手一本指**（ドラッグ不可）、**最小デザイン**（冗長な安全表示はエンジン側に持たせ、操作画面は効率優先）
 - 全作業・UI 文言は日本語
 - **デザイン憲法＝[`docs/DESIGN.md`](./docs/DESIGN.md)**（melta-ui 流の AI-Ready 設計）。トークン一次ソース＝`MainActivity.MagiTheme`
@@ -90,14 +90,14 @@ PathRelinking + ChainSwap + 適応的オペレータ重み + RSI++ 等）を内�
   色/角丸/影を変えるときは DESIGN.md の原則（純黒不使用・重い影不使用・任意値禁止・スコア不変）に従う。
 
 ## ビルド/検証（重要）
-**このサンドボックスは Android も素の Kotlin もコンパイル不可。** Kotlin の検証は GitHub Actions
-"Release Build" ワークフロー（`gradle assembleRelease`）でのみ行う。lint は走らない/警告errorなし。
-Claude Code 環境に Android SDK があれば直接 `./gradlew assembleRelease` でビルド可。無ければ CI を使う。
+**Android のビルドはこのサンドボックスでは不可**（GitHub Actions "Release Build"／"Android SDK" ワークフローで行う）。
+**エンジン層（`v6/`・`model/`）と JUnit テストはホスト JVM で回せる**: `tools/host/hosttest.sh`（kotlin-compiler-embeddable で
+コンパイルし全テスト実行、約 1 分。出力先は `MAGI_HOST_OUT` で変えられる＝ベンチ中の共有ビルドを汚さない）。UI 層（Compose）は不可。
 
 - **アルゴリズム検証は python3** で行う（後述の検証ハーネス）。コンパイル不可でもロジックはPythonで等価確認できる。
 - CI ログ本体は results-receiver.actions.githubusercontent.com 上にあり取得不可。**コンパイルエラーは
   目視＋静的チェック（波括弧balance・フィールド名照合）で発見**する。`view`/`grep` を駆使。
-- CI 監視 API: `api.github.com/repos/ichirocc/magi7ichiro/actions/runs`（name=='Release Build',
+- CI 監視 API: `api.github.com/repos/ichirocc/magi7ichiro-fork/actions/runs`（name=='Release Build',
   head_branch でフィルタ）。status は `/actions/runs/{id}`、artifacts は `/actions/runs/{id}/artifacts`、
   失敗stepは `/actions/runs/{id}/jobs`。ビルド ~4-5分 → debug-key APK ~10.9MB。
 - 変更ごとに versionCode++ と versionName 更新（`app/build.gradle.kts`）。タグ `vX.Y.Z-...` を push。
@@ -133,18 +133,17 @@ UI は `app/src/main/java/com/magi/app/ui/`:
 - `MagiDashboardCards.kt` — `BreakdownCard`, `FixSuggestionCard` 等。`MagiTokens.kt` — `MagiAccent`(色)。
 
 ## 制約ファミリーと意味（confirmed）
-- **c1**（窓制約, SOFT, 重み4）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
+- **c1**（窓制約, SOFT, 重み30）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
   **担当不可スタッフは対象外（canDoガード）**。構造上単一シフトのみ（複数種類変種なし）。
 - **c2**（職員別合計, SOFT, 重み1）。
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
   - c3 = MUST/want（SOFT, 重み3）, c3m = Want（SOFT, 重み2）— **非forbidden**。
-  - c3n = FORBIDDEN（HARD, 重み7000）, c3mn = Hate（SOFT, 重み12）— **forbidden**。
+  - c3n = FORBIDDEN（HARD, 重み7000）, c3mn = Hate（SOFT, 重み30）— **forbidden**。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
     それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。
 - **c41/c42/c41s/c42s**（群/日 範囲・スキル群変種, SOFT, 重み1）。
-- **covU**（人員不足, HARD, 重み8000）/ **covO**（人員過剰, SOFT, 重み1.0）。被覆は同日のみ（夜勤繰越なし）。
-  ※ covO 重みは 0.5→1.0 に統一（2026-07-13, HF77 明示指示）。旧: 最適化器(Evaluator/Delta/C++)=amount×1.0 に対し
-  チェッカー weightedScore のみ×0.5 で factor-2 乖離（族寄与≠weightedScore寄与）。「最適化器を正」として 1.0 で一致。
+- **covU**（人員不足, HARD, 重み8000）/ **covO**（人員過剰, SOFT, 重み5.0）。被覆は同日のみ（夜勤繰越なし）。
+  ※ covO 重みは 0.5→1.0（2026-07-13）→5.0（2026-08-27）、いずれも HF77 明示指示。最適化器とチェッカーは同じ値。
   need1=P1, need2=P2。lo=need1, hi=(use2 && need2>=0 ? need2 : need1)。MIN/OR条件は2世代前からの意図的設計。
 - **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み90/45。amount計上）。
 - **apt**（適切回数=`groupShiftApt[群][シフト]` の**群単位双方向目標**, SOFT, 重み1, L1偏差`|回数-目標|`）。
@@ -165,7 +164,7 @@ UI は `app/src/main/java/com/magi/app/ui/`:
 - **pref**（希望シフト未充足, HARD, 重み9000）/ **groupViol**（群外シフト, HARD, 重み10000）。
 
 weightedScore 階層: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) > high(45) >
-c3mn(30)=c1(30) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly/covO(1)。（covO は 2026-07-13 に 0.5→1.0 統一。
+c3mn(30)=c1(30) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。（covO は 0.5→1.0→**5.0**、
 c1 は 4→5→15→**30**、c3mn は 12→15→**30**＝いずれも HF77 明示指示。この行が stale だと監査が誤誘導されるので、
 重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・`magi_native.cpp` の
 5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md` と**同じコミットで**揃える）
@@ -253,12 +252,12 @@ c1 は 4→5→15→**30**、c3mn は 12→15→**30**＝いずれも HF77 明�
 
 > **決定記録（E5, 月全体の俯瞰）**: ユーザーの明示 go まで保留。着手も再提案もしない（詳細は「バックログ / 未対応」#5）。
 
-## 検証ハーネス（Python）
-`/tmp/cellfix.py`（サンドボックス内）が state を読み `sched, names, sym, S, T, K, canDo, locked` と
-`violations(sc)`（covU/covO/low/high）を提供。`exec(open('/tmp/cellfix.py').read().split('base=violations')[0])`
-で再利用。state JSON（`/mnt/user-data/uploads/magi_state_*.json`）: 10職員/31日/12シフト/2026-07。
-シフト index: 0:休 1:Pｼ 2:Dﾃ 3:A4 4:Aｱ 5:Pﾅ 6:Cｵ 7:Cｱ 8:B4 9:有 10:Cｳ 11:B1。
-cons1=[5日窓休≥1, 14日窓休≥4, 14日窓Dﾃ≥2]。桒澤美幸・大島愛はDﾃ不可。
+## 検証ハーネス
+- **単体・同値**: `tools/host/hosttest.sh`（上記）。探索の A/B は `app/src/test/resources` の実データ 4 件（golden / sample_v6 /
+  blocked_covu / sept2026）に対する probe（研磨 1 本＝WishProbe 系、後処理全体＝PostProbe 系）で「最終盤面のハッシュ」を比較する。
+- **ループのベンチ**: `tools/loop/`（`run_bench.sh` → 30 合成＋4 実データ × 10 seed × 新旧 2 腕 → CSV、`gate.py` で辞書式ゲート判定）。
+  結果は `tools/loop/results/iterN.csv`、判定と考察は `docs/history/`。
+- 旧記述の `/tmp/cellfix.py`（Python の違反検査）はサンドボックスと共に消えた＝使わない。
 
 ## ドッグフーディング・後処理研磨・回数設定UI＝恒久の事実
 
