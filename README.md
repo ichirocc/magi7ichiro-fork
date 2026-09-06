@@ -20,12 +20,14 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
-| [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
+| [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（3.505.7 で再照合）（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
 | [`docs/history/`](./docs/history/) | **作業記録の本文**（版数付き約360節・版数でバケツ分け: `2.x` / `3.0xx` / `3.1xx` / `3.2xx` / `3.3xx` / `3.4xx`）。見出し一覧は [`INDEX.md`](./docs/history/INDEX.md)、話題別の叙述（ネイティブ加速・停滞脱出・ドッグフーディング等）は [`topics.md`](./docs/history/topics.md)（3.497.3 で `CLAUDE.md` 本体から分離）。`grep -n 'キーワード' docs/history/INDEX.md` で当たりを付けてから版数で引く。毎ターン自動では読み込まれない＝過去に測って否決した案・同型のバグ・決定記録を再発させないため、同じ領域を触る前に INDEX.md を必ず確認する |
 | [`docs/screen_inventory_textart.md`](./docs/screen_inventory_textart.md) | **画面棚卸し＋テキストアートのドッグフーディング検証**（3.482.0 時点。タブ5／画面12／モーダル30／Activity2 の集計と、全画面の再現図＋所見20件の優先表。UI を触る前の現状確認と、次の改善候補の一次ソース） |
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-09-06（3.505.7＝SUDO モデルを実装と再照合。重み c1/c3mn 30・covO 5、O の実測 5015、欠損セル -1、S に Windows 版、D に拒否候補の再利用。コード変更なし）
 
 **最終更新**：2026-09-06（3.505.6＝ループ Iteration 5 第一弾。起点生成に同長区間交換・同日 3 職員巡回、最終段の予算を残り時間で拡張。実データ 4/4 盤面同一。ベンチ中。重み不変）
 
