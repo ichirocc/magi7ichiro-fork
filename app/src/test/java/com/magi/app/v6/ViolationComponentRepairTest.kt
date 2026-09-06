@@ -137,4 +137,30 @@ class ViolationComponentRepairTest {
         assertTrue(r.report.hard <= before.hard)
         assertTrue(!betterReport(before, r.report))
     }
+
+    /** [Iteration 3] 単独で厳密ピン（lo==hi）を崩す候補は、同じ集合に逆向きの相方が無ければ最初から外す（推定予算を有効な枝へ）。 */
+    @Test
+    fun lonePinBreakersAreDroppedBeforeTheSearch() {
+        val st = combineTwoRejectedState().let { s -> s.copy(staffRange = s.staffRange + ("1,2" to Range("1", "1"))) }   // Y の Qres を 1 回に固定
+        val work = st.schedule.map { it.toIntArray() }.toTypedArray()
+        val lone = CombinatorialRepair.Candidate(listOf(intArrayOf(1, 0, 3)), "range", "Y→D")     // Qres 1→0＝ピンを崩す。相方なし
+        val other = CombinatorialRepair.Candidate(listOf(intArrayOf(0, 0, 2)), "apt", "X→Qres")   // ピンには触れない
+        val r = ViolationComponentRepair.repair(st, work, listOf(lone, other))
+        assertTrue(r.logs.first().message, r.logs.first().message.contains("相方なし除外1"))
+        assertEquals(2, r.newSchedule[1][0])   // Y の Qres は動いていない
+    }
+
+    /** [Iteration 3] 構造的に埋められない人員不足（covU）の起点は末尾へ回す（解ける HARD を先に）。 */
+    @Test
+    fun infeasibleCoverageAnchorsAreOrderedLast() {
+        val a = ViolationComponentRepair.Anchor(true, "covU", -1, 3, shift = 1)
+        val b = ViolationComponentRepair.Anchor(true, "covU", -1, 5, shift = 1)
+        val rep = ViolationReport(
+            violations = emptyMap(), needViolations = linkedMapOf("1,3" to "vio-covU", "1,5" to "vio-covU"), countViolations = emptyMap(),
+            breakdown = emptyMap(), total = 2, hard = 2, soft = 0, weightedScore = 16000.0,
+        )
+        val ordered = ViolationComponentRepair.anchors(rep, infeasible = setOf(1 * 1000L + 3))
+        assertEquals(listOf(5, 3), ordered.map { it.day })
+        assertTrue(a.hard && b.hard)
+    }
 }

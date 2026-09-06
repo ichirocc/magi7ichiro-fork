@@ -75,7 +75,7 @@ object ViolationComponentRepair {
     }
 
     /** 違反の起点。セル違反は (staff, day)、回数違反は staff、人数違反は day を範囲に持つ。 */
-    internal class Anchor(val hard: Boolean, val family: String, val staff: Int, val day: Int) {
+    internal class Anchor(val hard: Boolean, val family: String, val staff: Int, val day: Int, val shift: Int = -1) {
         fun touches(pt: Patch): Boolean = when {
             staff >= 0 && day >= 0 -> pt.cellKeys.contains(staff * 100_000L + day)
             staff >= 0 -> pt.staff.contains(staff)
@@ -91,13 +91,18 @@ object ViolationComponentRepair {
         return a to b
     }
 
-    /** 起点の並び: HARD のセル・人数違反 → 回数違反 → SOFT のセル・人数違反（同種はキー順で決定的）。 */
-    internal fun anchors(report: ViolationReport): List<Anchor> {
+    /**
+     * 起点の並び: HARD のセル・人数違反 → 回数違反 → SOFT のセル・人数違反（同種はキー順で決定的）。
+     * 構造的に埋められない人員不足 [infeasible] は末尾＝起点の上限（maxAnchors）を「解ける HARD」に使う。
+     */
+    internal fun anchors(report: ViolationReport, infeasible: Set<Long> = emptySet()): List<Anchor> {
         fun fam(cls: String) = cls.removePrefix("vio-")
         val cells = report.violations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), i, j) } }
-        val needs = report.needViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (_, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), -1, j) } }
+        val needs = report.needViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (sh, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), -1, j, sh) } }
         val counts = report.countViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, _) -> Anchor(false, fam(cls), i, -1) } }
-        return (cells + needs).filter { it.hard } + counts + (cells + needs).filter { !it.hard }
+        val hardOnes = (cells + needs).filter { it.hard }
+        val (blocked, solvable) = hardOnes.partition { it.family == "covU" && (it.shift * 1000L + it.day) in infeasible }
+        return solvable + counts + (cells + needs).filter { !it.hard } + blocked
     }
 
     /** 起点ごとの探索集合＝主候補（起点を触る）＋助候補（主と職員か日を共有）。主候補が無い起点は除く。 */
@@ -148,9 +153,47 @@ object ViolationComponentRepair {
 
         val delta = DeltaEvaluator(p)
         delta.reset(work)
+        // [Iteration 3] 構造的に埋められない人員不足の枠（担当できる人数 < 必要数）。起点の順位を下げるだけで、候補は除かない。
+        val infeasibleSlots: Set<Long> = runCatching {
+            V6PortAnalyzer.diagnoseCoverage(state, work, bestRep).shortfalls
+                .filter { it.verdict == CoverageVerdict.INFEASIBLE }.map { it.shiftIndex * 1000L + it.dayIndex }.toSet()
+        }.getOrDefault(emptySet())
         // 厳密ピン（lo==hi）の (職員, シフト)。推定段階で「新たに崩す」枝を落とすために使う（exactPinRegression と同じ判定）。
         val pinned = Array(p.S) { i -> (0 until p.K).filter { k -> val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; lo != Int.MIN_VALUE && hi != Int.MAX_VALUE && lo == hi }.toIntArray() }
         var estimates = 0; var evaluations = 0; var anchorsTried = 0; var prunedPin = 0
+        val prunedLone = HashSet<Int>()   // 起点集合ごとに判定するので、同じ候補は 1 回だけ数える
+
+        /** 候補が (職員, シフト) の回数をどれだけ動かすか（現盤面基準）。ピンを崩す候補と、それを戻せる相方の判定に使う。 */
+        fun countDelta(pt: Patch): Map<Long, Int> {
+            val d = HashMap<Long, Int>()
+            for (op in pt.ops) {
+                val old = work[op[0]][op[1]]
+                if (old == op[2]) continue
+                d.merge(op[0] * 1000L + old, -1, Int::plus)
+                d.merge(op[0] * 1000L + op[2], 1, Int::plus)
+            }
+            return d
+        }
+        val deltas = patches.map { countDelta(it) }
+        /** 候補が単独で新たに崩す厳密ピンの鍵（崩さなければ空）。 */
+        fun brokenPins(idx: Int): List<Long> {
+            val out = ArrayList<Long>()
+            for ((key, dv) in deltas[idx]) {
+                val i = (key / 1000L).toInt(); val k = (key % 1000L).toInt()
+                if (k !in pinned[i]) continue
+                val lo = p.rangeLo[i][k]; val before = delta.countForStaff(i, k)
+                if (kotlin.math.abs(before + dv - lo) > kotlin.math.abs(before - lo)) out.add(key)
+            }
+            return out
+        }
+        /** 単独で厳密ピンを崩す候補は、同じ集合に逆向きの相方（セルが重ならない）が無ければ外す＝相方が居れば束ねて戻せるので残す。 */
+        fun dropLonePinBreakers(ids: List<Int>): List<Int> = ids.filter { idx ->
+            val broken = brokenPins(idx)
+            broken.isEmpty() || broken.all { key ->
+                val sign = deltas[idx][key] ?: 0
+                ids.any { other -> other != idx && (deltas[other][key] ?: 0) * sign < 0 && !patches[other].overlaps(patches[idx]) }
+            }.also { keep -> if (!keep) prunedLone.add(idx) }
+        }
         val acceptedLabels = ArrayList<String>()
         val rejectReasons = LinkedHashMap<String, Int>()
 
@@ -250,8 +293,8 @@ object ViolationComponentRepair {
         val used = HashSet<Int>()
         var anchorCount = 0; var maxSet = 0
         outer@ while (!shouldStop() && evaluations < params.maxEvaluations && estimates < params.maxEstimates) {
-            val sets = anchorSets(anchors(bestRep), patches, params.maxPatchesPerAnchor)
-                .map { (a, ids) -> a to ids.filter { it !in used } }.filter { it.second.isNotEmpty() }
+            val sets = anchorSets(anchors(bestRep, infeasibleSlots), patches, params.maxPatchesPerAnchor)
+                .map { (a, ids) -> a to dropLonePinBreakers(ids.filter { it !in used }) }.filter { it.second.isNotEmpty() }
             anchorCount = sets.size
             var committed = false
             for ((anchor, ids) in sets.take(params.maxAnchors)) {
@@ -273,7 +316,7 @@ object ViolationComponentRepair {
         for (pt in patches) mech.merge(pt.mechanism, 1, Int::plus)
         return done(
             "候補${patches.size}件(" + mech.entries.joinToString(" ") { "${it.key}×${it.value}" } + ") 起点${anchorCount}件(探索${anchorsTried}件・最大${maxSet}候補)" +
-                " 推定${estimates}回(ピン枝刈り${prunedPin}) 正式評価${evaluations}回 採用${applied}件" +
+                " 推定${estimates}回(ピン枝刈り${prunedPin}・相方なし除外${prunedLone.size}) 正式評価${evaluations}回 採用${applied}件" +
                 (if (acceptedLabels.isNotEmpty()) "[" + acceptedLabels.joinToString(", ") + "]" else "") +
                 (if (rejectReasons.isNotEmpty()) " 不採用(" + rejectReasons.entries.joinToString(" ") { "${it.key}:${it.value}" } + ")" else "") +
                 " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} score ${before.weightedScore.toLong()}->${bestRep.weightedScore.toLong()}",

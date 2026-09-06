@@ -27,6 +27,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-06（3.505.2＝ループ Iteration 3 第一弾。相方なしピン破りの事前除外と構造的に埋められない covU 起点の後回し。実データ 4/4 盤面同一・推定回数は最大 1/2。ベンチ中。重み不変）
+
 **最終更新**：2026-09-06（3.505.1＝ループ Iteration 2 報告。違反起点のトランザクション修復は必須退行 0・新良 68/同等 249/旧良 23・速度 -3%＝10% ゲート不合格→§6 ハイブリッド併用として既定 ON。C# 同期。重み不変）
 
 **最終更新**：2026-09-06（3.505.0＝Iteration 2 第一弾 `ViolationComponentRepair`（各パスの拒否候補を違反起点のトランザクションに束ねる。既定 OFF、ベンチ中）。sample_v6 で HARD 9→8。外部ドッグフーディング 4 件を反映。重み不変）
