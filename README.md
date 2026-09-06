@@ -27,6 +27,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-06（3.500.2＝外部レビュー第3・4段の同期。`setCell`/`setCells` にシフト index の上限検査（-1 は未割当として可）。案内付き修正の連打防止の同型をバックログ #10 へ。エンジン・重み不変）
+
 **最終更新**：2026-09-06（3.500.1＝-MAGI_PC 側の外部レビュー 2 段を Android に同期。`undo()`/`redo()` で `engineRan=false`・改善提案を破棄・`resultSchedule=null`（手操作＝計算済みでない）。希望島研磨への探索動学の指摘 4 件はバックログ #9 に登録（計測してから）。エンジン・重み不変）
 
 **最終更新**：2026-09-06（3.500.0＝後処理オーケストレータ `runPostOptimization` を監査基準7項目でレビューして再構成。`PostChain` ランナー（採用・ピン帰属の合流・ログ・計時を 1 経路に＝合流の書き忘れを構造的に防ぐ）、`PostOptimizationParams`/`SeedTag` 集約、クラスタ・検証ログ・診断の分離。4 実データの最終盤面が改修前と一致＝採否の意味論は不変。エンジン挙動・重み不変）

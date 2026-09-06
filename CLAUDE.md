@@ -341,6 +341,11 @@ cons1=[5日窓休≥1, 14日窓休≥4, 14日窓Dﾃ≥2]。桒澤美幸・大�
    非同期診断の `settingIssues` を根拠にする（`Problem.canDo` から再判定へ。C# は変更済み）。Kotlin が正なので **Android 側で
    PostProbe/`nsp_bench` の A/B を添えて先に変え、C# は後追いで同期**（C# 単独では変えない＝パリティ維持）。
 
+10. **[UI・同型] 「なおすのを手伝って」の連打防止が盤面の変更で解除される**（3.500.2 で登録。-MAGI_PC 側の外部レビュー第3段）。
+   `GuidedFixDialog` の `pending = remember(ui.schedule)` は setCell 直後の schedule 変化でリセットされるが、`coverageDiag` の再検査はまだ
+   終わっていない＝古い診断の候補が再有効化され、素早い2回操作で covO と covU を同時に作れる。C# は `UiState.CheckRev`（`makeUi` ごとの検査世代）
+   を追加し「押下時より新しい世代の反映」でだけ解除する形に直した（`GuidedFixFlow`）。Android も同じ形（UiState に検査世代を足す）で直す。
+
 ## スキル / 作業の進め方
 - 画面（`ui/` の Composable）を実装・改修したら **design-review**（`.claude/skills/design-review/SKILL.md`）で
   規約からの逸脱をレビューする。**`/code-review`（正しさのバグ）とは対象も根拠も違う**＝こちらは

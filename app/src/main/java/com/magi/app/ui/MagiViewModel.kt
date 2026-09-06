@@ -1778,6 +1778,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Set a specific shift in a cell (bottom-sheet picker). */
+    /**
+     * [3.500.2/外部レビュー] 盤面に書けるシフト index か（-1＝未割当は可、それ以外は 0 until shiftCount）。setCell/setCells の共通ガード。
+     * 旧: 上限を見ておらず、古い UI イベントからの範囲外 index が自動保存まで通り、再検査で初めて失敗していた。
+     */
+    private fun rejectUnknownShift(st: MagiState, shift: Int): Boolean {
+        if (shift >= -1 && shift < st.shiftCount) return false
+        _ui.update { it.copy(messageIsError = true, message = "選択したシフトは現在の設定に存在しません") }
+        return true
+    }
+
     fun setCell(i: Int, j: Int, shift: Int) {
         val st = state ?: return
         // [監査(未レビュー領域再監査) 実バグ修正] running中は currentSchedule が最適化ジョブの sched0 と
@@ -1787,6 +1797,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
         if (i !in sched.indices || j !in sched[i].indices) return
+        if (rejectUnknownShift(st, shift)) return
         if (sched[i][j] == shift) return
         pushUndo()
         sched[i][j] = shift
@@ -1809,6 +1820,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
+        if (rejectUnknownShift(st, shift)) return
         var changed = 0
         var first = true
         for ((i, j) in cells) {
