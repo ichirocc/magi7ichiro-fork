@@ -31,7 +31,7 @@ internal object WishIslandPolish {
         val beamDepth: Int = 3,
         /** 起動した島 1 つに保証する評価数。同日交換の候補を数手は試せる量として 8。 */
         val minIslandBudget: Int = 8,
-        /** ビーム 1 ノードあたり保持する中立手の上限（幅の倍率）。中立手は無数にあるので打ち切りが要る。 */
+        /** ビーム 1 段で保持する中立手の上限（幅の倍率。残り予算で頭打ち＝`beamCandidateLimit`）。中立手は無数にあるので打ち切りが要る。 */
         val beamBranchFactor: Int = 6,
         /** ログに名前を出す残存職員の上限。 */
         val stuckNamesShown: Int = 8,
@@ -310,8 +310,7 @@ internal object WishIslandPolish {
          * ビームの候補: 島ごとに（同日・窓・両翼）を 1 手ずつ交互に並べ、さらに島どうしも交互に巡回する
          * （連結順だと先頭の島と同日候補が走査枠を独占し両翼が出ない。計測は docs/history 3.504.0）。
          */
-        private fun beamMoves(active: List<Island>): Sequence<Move> =
-            interleave(*active.map { isl -> interleave(sameDayMoves(isl), windowMoves(isl), wingMoves(isl)) }.toTypedArray())
+        private fun beamMoves(active: List<Island>): Sequence<Move> = interleave(*active.map { islandMoves(it) }.toTypedArray())
 
         // ---- 評価 ----
         private class Chosen(val move: Move, val rep: ViolationReport)
@@ -392,9 +391,8 @@ internal object WishIslandPolish {
         }
 
         /**
-         * [3.502.0/バックログ#9(c)] 旧: 中立手を列挙順に `limit` 件集めたところで打ち切ってから並べ替えていた＝上位候補が列挙順
-         * （同日→窓、所属→手の大きさ→島）に依存した。いまは `limit × BEAM_SCAN_FACTOR` 件まで走査し、良い順に `limit` 件だけ保持する
-         * （小容量の順位付きバッファ。評価は 1 手 1 回のまま＝予算の上限は据え置き）。
+         * 1 ノードの展開: `nodeLimit × BEAM_SCAN_FACTOR` 手まで正式評価し（枝刈りした手は数えない）、段全体で共有する [next] に
+         * 良い順で `depthLimit` 件だけ保持する（3.502.0: 列挙順の先頭で打ち切らない／3.504.0: 走査枠はノードごと、保持数は段ごと）。
          */
         private fun expandNode(node: Node, next: MutableList<Node>, nodeLimit: Int, depthLimit: Int) {
             restore(node.board)
@@ -403,12 +401,11 @@ internal object WishIslandPolish {
             var scanned = 0
             for (m in beamMoves(active)) {
                 if (!budgetLeft() || scanned >= scanLimit) break
-                scanned++
                 if (increasesForbidden(m)) { prunedC3n++; continue }
                 val old = apply(m)
                 try {
                     val rep = UnifiedViolationChecker.check(state, work)
-                    evaluated++; beamEvaluated++
+                    evaluated++; beamEvaluated++; scanned++
                     val neutral = !betterReport(node.rep, rep) && !exactPinRegression(p, node.board, work)
                     if (neutral) keepBest(next, Node(work.copy2D(), rep), depthLimit)
                 } finally { undo(m, old) }
