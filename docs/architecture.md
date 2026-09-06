@@ -126,3 +126,34 @@ ViewModel ハブ
 - `Hf63Infeasibility` は呼び手が自己テストのみで実質死蔵（Web 側と同様）。
 - 関係は import / 参照に基づくが、実行時の動的呼び出しの一部は含まれない場合がある。
 - 関連ドキュメント: 画面挙動＝`screen_spec.md`、デザイン基盤＝`magi_design_system.md`、エンジン移植＝`v6_engine_native_port.md`。
+
+## 主要ファイルと役割（CLAUDE.md から移設, 3.505.9）
+
+エンジンは `app/src/main/java/com/magi/app/v6/`:
+- `MirrorCore.kt` — **`UnifiedViolationChecker`（UIの違反表示・提案の基準＝source of truth）**。
+  `check(state, schedule) -> ViolationReport{violations, needViolations, countViolations, breakdown, hard, total, weightedScore}`。
+  `Problem`（`cachedProblem(state)`）, `canDo(i,k)`, `allowedShiftsForStaff(i)`, `countMatrix`, `coverage`,
+  `normalizeSchedule`。`MirrorKeys`（hard/soft/all のキー分割）と weightedScore の重み定義もここ。
+- `Evaluator.kt` / `DeltaEvaluator.kt` — **最適化器の目的関数**（SA の受理判定）。`Evaluator(p)`（3.393.0 で `c3RunMode` は撤去＝単一シフト連は常に run-deficit）。
+  Delta は差分評価。`SaOptimizer` が Delta×Full の整合チェック（安全網）を行うため**両者は常に一致させる**。
+- `C3Run.kt` — `isSingleShiftSeq(seq)`, `rowDeficit(a,i,k,L)`（単一シフト連の不足評価）。
+- `V6FinalPort.kt` — `handleOptimize`（最適化オーケストレーション）, `handleCheck`（UnifiedViolationChecker）。
+  最終番兵 `checkResultWorse`（入力より悪化したら入力へ復帰）。
+- `V6NativeOptimizer.kt`/`V6HotfixPasses.kt`/`V6LateOperators.kt`/`V6SearchOperators.kt` — 探索本体・各オペレータ。
+- `ViolationComponentRepair.kt` — **違反起点のトランザクション修復**（Iteration 2 第一弾, 3.505.0）。各研磨パスが単独で不採用にした候補
+  （`CombinatorialRepair.Candidate`＝`CyclicSwapResult.rejectedCandidates` で巡ごとに集める）を、違反（セル/回数/人数）を起点に
+  「主候補＋職員か日を共有する助候補」へ絞り、`DeltaEvaluator` の推定＋厳密ピンの事前枝刈りでビーム、commit は正式チェッカーの
+  `betterReport`。3.505.4 から起点からの候補生成（半径 1）を**共同 LNS の後の最終段**でだけ行う（`componentRepairFinal`。巡の中で行うと
+  単セル covU 修正が LNS の余地を先に使い実データで HARD 退行）。`PostOptimizationParams.componentRepairEnabled`（3.505.1 で**既定 ON**＝Iteration 2 のベンチで必須退行 0・新良 68/同等 249/旧良 23、
+  10% ゲートは未達なので §6 のハイブリッド併用として温存。数値は `docs/history/3.4xx.md`）。
+- `V6SwapSuggester.kt` — **`FixSuggester.suggest(...)`**（ユーザー向け修復提案。7種の手を探索）。
+- `Problem.kt` — `C1(day1,shiftIdx,day2)` 等の制約データ型。
+
+UI は `app/src/main/java/com/magi/app/ui/`:
+- `MagiApp.kt` — タブ: 0=ようす(ダッシュボード), 1=勤務表(編集+集計), 2=設定, 3=詳細, else=外観/データ。
+- `MagiViewModel.kt` — 状態管理。`findFixSuggestions`/`applyFixSuggestion`、`refreshCheck`(currentSchedule検査)。
+  ジョブ: `job`/`checkJob`/`fixJob`（連続タップ競合回避）。
+- `MagiUiState.kt` — `schedule`, `staffNames`, `staffGroupSymbols`, `shiftSymbols`, `countViolations("i,k")`,
+  `needViolations("k,j")`, `resultSchedule`, `breakdown` 等。
+- `MagiScheduleViews.kt` — `ScheduleGrid`, `StaffCalendarCard`, **`TallyCard`（シフト集計：職員別/日別＋違反ハイライト）**。
+- `MagiDashboardCards.kt` — `BreakdownCard`, `FixSuggestionCard` 等。`MagiTokens.kt` — `MagiAccent`(色)。

@@ -655,3 +655,77 @@
   偏り職員を収集→UiState→`breakdownLocations` が「職員（曜日の偏り N）」「職員 「シフト」（偏り N）」で整形・タップで
   当該職員へフォーカス。**内訳パネルのみに表示（グリッド不変＝飽和回避）・スコアリング不変**。配線=MirrorCore→
   ViolationReport→UiState→makeUi→breakdownLocations（表示専用フィールド追加、既存構築は全て named 引数＋デフォルトで非破壊）。
+
+# CLAUDE.md から移設した恒久の事実（3.505.9）
+
+## 目的関数の統一（完了。乖離と解消の表）
+**最適化器（Evaluator/Delta）とUI/提案（UnifiedViolationChecker）が乖離していた目的関数を統一した。**
+原則: **チェッカーを source of truth とし、より正確なモデルへ両者を寄せる**。重みは線形集約点で適用し
+Δ×フル整合を維持（`soft = sc*W + ..., sc += dC ⇒ soft_new = soft_old + dC*W`）。
+
+| 乖離 | 解消 | コミット |
+|---|---|---|
+| (a) covO 最適化器で無罰則 | 最適化器 soft に追加 | 2.28.0 |
+| (a') covO 最適化器×1.0 vs チェッカー weightedScore×0.5 の factor-2 乖離 | チェッカーも×1.0 に統一（最適化器を正） | 2026-07-13 |
+| (b) range(low/high) 最適化器が表示HARD | 最適化器 soft化＋重み90/45 | 2.28.0 |
+| (c) c3/c3m 単一シフト連: 窓 vs run-deficit（方向相違） | チェッカーも run-deficit化 | 2.31.0 |
+| (c) c3/c3m 複数シフト連: +D vs +1, フラット vs 重み | #fire＋重み3/2/12 | 2.32.0 |
+| c3n/c3mn | forbidden は両側窓マッチ#fire・c3mn×12 で既に一致 | (2.32.0で副次的) |
+| (a) c1: canDoガード無/+d1/フラット | canDoガード＋#fire＋重み4 | 2.35.0 |
+| apt(適切回数): 目的関数/チェッカー双方に未統合（事実上死に機能） | 3者にL1偏差×1で統合・双方向目標・違反表示 | 2.36.0 |
+| fair(グループ内公平化): 後処理polishのみ＝目的関数外の「整え」 | 3者にL1偏差×1で統合（群×シフトの round(平均) 偏差） | 2.37.0 |
+| c41s/c42s: 違反は研磨・検出済みだが内訳UIに列挙漏れ | breakdownLabels/BreakdownGroupに追加し表示 | 2.37.0 |
+| weekly(7日周期(曜日)平準化): 後処理polish(分散)のみ＝目的関数外の「整え」 | 3者にL1偏差×1で統合（職員×曜日の round(勤務日/7) 偏差、`weeklyDevOfBucket`共通ソース） | 3.72.0 |
+
+検証はすべて Python で「最適化器の族寄与 == チェッカー weightedScore 寄与」「soft<<1e6（hardゲート安全）」
+「Δ==フル」を確認済み。
+
+## ユーザー向け機能（FixSuggester・TallyCard）
+- **FixSuggester**（`V6SwapSuggester.kt`）: 7種の手（単一変更/同日交換/複数変更/連鎖/再最適化窓/3人交換/別日交換）を
+  deadline内で探索、(deltaHard, deltaTotal, deltaWeighted) でランク、kind+ops署名で重複排除。
+  UI: `FixSuggestionCard`（kindチップ＋差分＋適用ボタン）、`BreakdownCard` から「直し方を探す」。
+- **TallyCard**（`MagiScheduleViews.kt`、タブ1の勤務表表下）: 職員別（職員×シフト回数）と日別（シフト×日 人数）。
+  **違反ハイライト**: 職員別=countViolations(vio-low赤/vio-high橙)、日別=needViolations(vio-covU赤/vio-covO橙)。
+  ~~注: 読取モードで `gridUi.schedule=resultSchedule` に差し替わるため、編集後に読取へ切替えた場合のみ
+  集計値と違反マップがズレ得る~~ **→ 3.96.0 で解消（backlog#1 完了）**: UiState に result専用マップ
+  (`resultViolationCells/resultNeedViolations/resultCountViolations`, null=未計算→現行へフォールバック) を追加。
+  `makeUi` が `schedule.contentDeepEquals(resultSchedule)` の検査時に report から一元充填（resultSchedule 更新サイトは
+  全て makeUi(schedule==result, 対応report) を通ることを確認済）。`commitEditingToResult` は現行マップを引き継ぎ
+  （refreshCheck 進行中でも完了時 makeUi が自己修復）。読取モードの gridUi は schedule と3マップを同時に差し替え。
+  表示のみ・スコアリング不変。
+
+## ドッグフーディング・後処理研磨・回数設定UI（恒久の事実）
+
+- 同日2者スワップで直せる単日族（c2/c41/c42/c41s/c42s）は **CyclicSwap が isBetter で既に研磨**＝専用パスは冗長（2.49.0 で撤去）。
+  探索側の focus 順に c41s/c42s を登録済み（2.46.0）。ソフト研磨は 3.94.0 の網羅 A/B で**構造的下限**と確認済み
+  （in-loop の追加レバーはすべて不整合か有害。候補生成 proxy `rangePen` は 90/45 で目的関数と整合）。
+- 回数設定UI: 第1〜2段（現状回数「今◯」＋apt 実効目標の併記、`staffCountRules()`）は完了。**第3段（need/c41 と apt/low-high/c2/c1 の
+  軸ハブ分離）は未着手＝`ConstraintsCard` 分割を伴う大改修で別途着手**。
+- 表示・導線の版数付き記録（2.61〜3.149）は `docs/history/topics.md`「ドッグフーディング改善」「後処理研磨の族カバレッジ」。
+
+## ネイティブ加速（恒久の事実の要約）
+
+- **Kotlin が正、C++（`app/src/main/cpp/magi_native.cpp`）は同値の高速版**。評価器・SA PhaseA・LAHC PhaseB・ALNS チャンク・
+  修復群（hf67 含む）・HF80 研磨チャンクがネイティブ。RSI 制御層・V6LateOperators・後処理チェーンはチェッカー依存の軽量層で
+  **意図的に Kotlin のまま**（移植しないと確定＝3.153.0）。
+- **2層番兵**: ①チャンク末尾の C++ 自己整合 ②best 更新チャンクを Kotlin `Evaluator.fullEval` と Long== 照合。どちらか発火で
+  `NativeGate` が閉じそのプロセスは Kotlin へ退化（クラッシュさせない）。番兵の全体計算は正しさの根幹＝削らない（3.154.0）。
+- 設定トグル「ネイティブ加速（C++）」（既定ON）と「照合トグル」（既定ON）。`.so` ロード失敗時は `NativeBridge.available=false`
+  で全経路 Kotlin。JVM テストは常に Kotlin 経路。
+- **パリティは CI が守る**: `.github/workflows/native-parity.yml`（`tools/native/host_parity_bench.cpp`＋言語跨ぎ期待値
+  `golden_eval_expected.txt`、実データ3形状）。`Evaluator.kt`/`MirrorCore.kt`/`DeltaEvaluator.kt` を変えたら
+  `magi_native.cpp` も同じコミットで（バックログ #6）。
+- 経緯（Stage1〜13・第2期・第3期・3.135〜3.077 の版数付き記録）は `docs/history/topics.md`「ネイティブ加速」。
+
+## 停滞脱出（恒久の事実の要約）
+
+- **探索動学の変更は `tools/nsp_bench.py` で A/B してから採否**。指標は AUC（速度）でなく **final（最終品質）**（実データで両者は
+  乖離した）。便益が測れない／負なら入れない。
+- 採用済み: soft-aware destroy-repair 3種（day/staff/violations, `staffCountPenaltyAt`＝Evaluator と同一式）＋c41-aware（2.57〜2.59）、
+  RSI focus は「解ける HARD 族を先に」（3.74.0）＋静的 covU 床の除外（3.95.0、N4 早期脱出は `dynamicAvoid` のみでゲート）＋
+  c3n は `destroyRepairViolations` へ（3.101.0）＋件数0の族を focus しない／空振り focus の1R冷却／HF80 の停滞早期終了（3.150.0）、
+  `runV5` の入力比番兵（3.97.0）、ExtraRefine は後処理予約枠でキャップ（3.102.x）。
+- **測って否決（再提案は計測つきで）**: 戦略的振動、nonlinear restart、GLS のパラメータスイープ、targeted-perturb、big-destroy、
+  softFocusProb の変更。GLS aging は中立で温存。
+- 経緯と数値は `docs/history/topics.md`「停滞脱出の改善」。
+
