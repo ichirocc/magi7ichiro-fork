@@ -261,10 +261,15 @@ internal object AdaptiveBlockSwapPolish {
             for (candidate in candidates) {
                 if (shouldStop() || checkedThisPass >= maxEvaluations) break
                 apply(candidate)
-                val report = UnifiedViolationChecker.check(state, work)
-                val pinRegression = exactPinRegression(p, base, work)
-                if (pinRegression && betterReport(report, bestRep)) pinBlocks.record(p, base, work)
-                revert(candidate)
+                val report: ViolationReport
+                val pinRegression: Boolean
+                try {
+                    report = UnifiedViolationChecker.check(state, work)
+                    pinRegression = exactPinRegression(p, base, work)
+                    if (pinRegression && betterReport(report, bestRep)) pinBlocks.record(p, base, work)
+                } finally {
+                    revert(candidate)   // 正式評価中に例外が起きても、試行中の交換を呼出元の盤面へ残さない。
+                }
                 checkedThisPass++
                 evaluated++
                 val currentBest = chosenRep

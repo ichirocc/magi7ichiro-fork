@@ -31,7 +31,7 @@ internal object WishIslandPolish {
         val beamDepth: Int = 3,
         /** 起動した島 1 つに保証する評価数。同日交換の候補を数手は試せる量として 8。 */
         val minIslandBudget: Int = 8,
-        /** ビーム 1 ノードあたり保持する中立手の上限（幅の倍率）。中立手は無数にあるので打ち切りが要る。 */
+        /** ビーム 1 段で保持する中立手の上限（幅の倍率。残り予算で頭打ち＝`beamCandidateLimit`）。中立手は無数にあるので打ち切りが要る。 */
         val beamBranchFactor: Int = 6,
         /** ログに名前を出す残存職員の上限。 */
         val stuckNamesShown: Int = 8,
@@ -51,6 +51,10 @@ internal object WishIslandPolish {
 
     /** ビーム 1 段で走査する中立手の上限＝保持数の何倍か（[3.502.0]）。評価予算はこれとは別に `maxEvaluations` で頭打ち。 */
     private const val BEAM_SCAN_FACTOR = 2
+
+    /** ビーム 1 段で保持する候補数＝幅×分岐を残り予算で頭打ち（いずれも 1 以上に丸める）。 */
+    internal fun beamCandidateLimit(width: Int, branchFactor: Int, remainingEvaluations: Int): Int =
+        min(max(width, 1).toLong() * max(branchFactor, 1), max(remainingEvaluations, 1).toLong()).toInt()
 
     private enum class MoveKind(val label: String) { SAME_DAY("同日"), WINDOW("窓"), WINGS("両翼"), ROTATE3("巡回") }
 
@@ -178,17 +182,18 @@ internal object WishIslandPolish {
                 t += 3
             }
             val old = apply(m)
-            t = 0
-            while (t < m.cells.size) {
-                val i = m.cells[t]
-                var seen = false
-                var u = 0
-                while (u < t) { if (m.cells[u] == i) { seen = true; break }; u += 3 }
-                if (!seen) after += C1DeltaPrefilter.staffC3nFires(p, work[i])
-                t += 3
-            }
-            undo(m, old)
-            return after > before
+            try {
+                t = 0
+                while (t < m.cells.size) {
+                    val i = m.cells[t]
+                    var seen = false
+                    var u = 0
+                    while (u < t) { if (m.cells[u] == i) { seen = true; break }; u += 3 }
+                    if (!seen) after += C1DeltaPrefilter.staffC3nFires(p, work[i])
+                    t += 3
+                }
+                return after > before
+            } finally { undo(m, old) }
         }
 
         // ---- 候補生成（遅延・評価順＝手の種類 → 同じ所属 → 小さい手） ----
@@ -301,12 +306,11 @@ internal object WishIslandPolish {
             }
         }
 
-        /** ビームの候補: 起動中の全島の 同日 → 窓（種類 → 所属 → 手の大きさ → 島の順）。 */
-        private fun beamMoves(active: List<Island>): Sequence<Move> = sequence {
-            for (sg in booleanArrayOf(true, false)) for (isl in active) yieldAll(sameDayMoves(isl, sg))
-            val maxLen = active.maxOfOrNull { it.zoneTo - it.zoneFrom + 1 } ?: 0
-            for (sg in booleanArrayOf(true, false)) for (len in 2..maxLen) for (isl in active) yieldAll(windowMoves(isl, sg, len))
-        }
+        /**
+         * ビームの候補: 島ごとに（同日・窓・両翼）を 1 手ずつ交互に並べ、さらに島どうしも交互に巡回する
+         * （連結順だと先頭の島と同日候補が走査枠を独占し両翼が出ない。計測は docs/history 3.504.0）。
+         */
+        private fun beamMoves(active: List<Island>): Sequence<Move> = interleave(*active.map { islandMoves(it) }.toTypedArray())
 
         // ---- 評価 ----
         private class Chosen(val move: Move, val rep: ViolationReport)
@@ -320,12 +324,16 @@ internal object WishIslandPolish {
                 if (increasesForbidden(m)) { prunedC3n++; continue }
                 islandUsed++; evaluated++
                 val old = apply(m)
-                val rep = UnifiedViolationChecker.check(state, work)
-                val improves = betterReport(rep, bestRep)
-                val pinBad = improves && exactPinRegression(p, base, work)
-                if (pinBad) pinBlocks.record(p, base, work)
-                val accept = improves && !pinBad && localScore(rep, isl) < localBefore
-                undo(m, old)
+                val rep: ViolationReport
+                val pinBad: Boolean
+                val accept: Boolean
+                try {
+                    rep = UnifiedViolationChecker.check(state, work)
+                    val improves = betterReport(rep, bestRep)
+                    pinBad = improves && exactPinRegression(p, base, work)
+                    if (pinBad) pinBlocks.record(p, base, work)
+                    accept = improves && !pinBad && localScore(rep, isl) < localBefore
+                } finally { undo(m, old) }   // 評価器・ピン検査のどこで例外になっても試行手を盤面に残さない。
                 if (!accept) { rejectCulprits.record(rep, bestRep, pinBad); continue }
                 val cur = chosen
                 if (cur == null || betterReport(rep, cur.rep)) chosen = Chosen(m, rep)
@@ -363,7 +371,11 @@ internal object WishIslandPolish {
             for (depth in 0 until prm.beamDepth) {
                 if (!budgetLeft()) break
                 val next = ArrayList<Node>()
-                for (node in frontier) expandNode(node, next)
+                // [3.504.0] 段の保持数は残り予算で頭打ちにし、走査枠は先頭ノードだけでなく frontier の各ノードへ均等に配る。
+                val remaining = max(prm.maxEvaluations - evaluated, 0)
+                val depthLimit = beamCandidateLimit(prm.beamWidth, prm.beamBranchFactor, remaining)
+                val perNodeLimit = max(1, depthLimit / frontier.size)
+                for (node in frontier) { if (!budgetLeft()) break; expandNode(node, next, perNodeLimit, depthLimit) }
                 if (next.isEmpty()) break
                 next.sortWith { x, y -> reportComparator.compare(x.rep, y.rep) }
                 frontier = next.take(prm.beamWidth)
@@ -379,25 +391,24 @@ internal object WishIslandPolish {
         }
 
         /**
-         * [3.502.0/バックログ#9(c)] 旧: 中立手を列挙順に `limit` 件集めたところで打ち切ってから並べ替えていた＝上位候補が列挙順
-         * （同日→窓、所属→手の大きさ→島）に依存した。いまは `limit × BEAM_SCAN_FACTOR` 件まで走査し、良い順に `limit` 件だけ保持する
-         * （小容量の順位付きバッファ。評価は 1 手 1 回のまま＝予算の上限は据え置き）。
+         * 1 ノードの展開: `nodeLimit × BEAM_SCAN_FACTOR` 手まで正式評価し（枝刈りした手は数えない）、段全体で共有する [next] に
+         * 良い順で `depthLimit` 件だけ保持する（3.502.0: 列挙順の先頭で打ち切らない／3.504.0: 走査枠はノードごと、保持数は段ごと）。
          */
-        private fun expandNode(node: Node, next: MutableList<Node>) {
+        private fun expandNode(node: Node, next: MutableList<Node>, nodeLimit: Int, depthLimit: Int) {
             restore(node.board)
             val active = islands.filter { localScore(node.rep, it) > 0L }
-            val limit = prm.beamWidth * prm.beamBranchFactor
-            val scanLimit = limit * BEAM_SCAN_FACTOR
+            val scanLimit = nodeLimit * BEAM_SCAN_FACTOR
             var scanned = 0
             for (m in beamMoves(active)) {
                 if (!budgetLeft() || scanned >= scanLimit) break
                 if (increasesForbidden(m)) { prunedC3n++; continue }
                 val old = apply(m)
-                val rep = UnifiedViolationChecker.check(state, work)
-                evaluated++; beamEvaluated++; scanned++
-                val neutral = !betterReport(node.rep, rep) && !exactPinRegression(p, node.board, work)
-                if (neutral) keepBest(next, Node(work.copy2D(), rep), limit)
-                undo(m, old)
+                try {
+                    val rep = UnifiedViolationChecker.check(state, work)
+                    evaluated++; beamEvaluated++; scanned++
+                    val neutral = !betterReport(node.rep, rep) && !exactPinRegression(p, node.board, work)
+                    if (neutral) keepBest(next, Node(work.copy2D(), rep), depthLimit)
+                } finally { undo(m, old) }
             }
         }
 
