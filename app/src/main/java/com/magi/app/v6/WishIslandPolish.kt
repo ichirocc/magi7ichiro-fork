@@ -49,6 +49,9 @@ internal object WishIslandPolish {
         state: MagiState, schedule: Array<IntArray>, params: Params, shouldStop: () -> Boolean = { false },
     ): V6HotfixPasses.CyclicSwapResult = Session(state, schedule, params, shouldStop).run()
 
+    /** ビーム 1 段で走査する中立手の上限＝保持数の何倍か（[3.502.0]）。評価予算はこれとは別に `maxEvaluations` で頭打ち。 */
+    private const val BEAM_SCAN_FACTOR = 2
+
     private enum class MoveKind(val label: String) { SAME_DAY("同日"), WINDOW("窓"), WINGS("両翼"), ROTATE3("巡回") }
 
     /** 1手＝(職員, 日, 新しい値) の三つ組の並び。適用と巻き戻しが同じ形でできる。 */
@@ -375,20 +378,36 @@ internal object WishIslandPolish {
             return true
         }
 
+        /**
+         * [3.502.0/バックログ#9(c)] 旧: 中立手を列挙順に `limit` 件集めたところで打ち切ってから並べ替えていた＝上位候補が列挙順
+         * （同日→窓、所属→手の大きさ→島）に依存した。いまは `limit × BEAM_SCAN_FACTOR` 件まで走査し、良い順に `limit` 件だけ保持する
+         * （小容量の順位付きバッファ。評価は 1 手 1 回のまま＝予算の上限は据え置き）。
+         */
         private fun expandNode(node: Node, next: MutableList<Node>) {
             restore(node.board)
             val active = islands.filter { localScore(node.rep, it) > 0L }
             val limit = prm.beamWidth * prm.beamBranchFactor
+            val scanLimit = limit * BEAM_SCAN_FACTOR
+            var scanned = 0
             for (m in beamMoves(active)) {
-                if (!budgetLeft() || next.size >= limit) break
+                if (!budgetLeft() || scanned >= scanLimit) break
                 if (increasesForbidden(m)) { prunedC3n++; continue }
                 val old = apply(m)
                 val rep = UnifiedViolationChecker.check(state, work)
-                evaluated++; beamEvaluated++
+                evaluated++; beamEvaluated++; scanned++
                 val neutral = !betterReport(node.rep, rep) && !exactPinRegression(p, node.board, work)
-                if (neutral) next.add(Node(work.copy2D(), rep))
+                if (neutral) keepBest(next, Node(work.copy2D(), rep), limit)
                 undo(m, old)
             }
+        }
+
+        /** [next] を良い順に保ったまま [node] を挿入し、[limit] 件を超えた末尾（最も悪い手）を落とす。 */
+        private fun keepBest(next: MutableList<Node>, node: Node, limit: Int) {
+            var pos = next.size
+            while (pos > 0 && reportComparator.compare(node.rep, next[pos - 1].rep) < 0) pos--
+            if (pos >= limit) return
+            next.add(pos, node)
+            if (next.size > limit) next.removeAt(next.size - 1)
         }
 
         private fun restore(board: Array<IntArray>) { for (s in 0 until S) System.arraycopy(board[s], 0, work[s], 0, T) }
