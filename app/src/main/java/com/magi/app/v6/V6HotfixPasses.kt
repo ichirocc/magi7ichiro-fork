@@ -284,6 +284,9 @@ object V6HotfixPasses {
         val personalLnsMaxMs: Long = 6_000L,
         val remainingClampMs: Long = 100_000L,
         val passLogTopN: Int = 8,
+        /** [Iteration 2] 各パスの拒否候補を巡の末尾で違反起点のトランザクションに束ねる（ViolationComponentRepair）。A/B 合格まで既定 OFF。 */
+        val componentRepairEnabled: Boolean = false,
+        val componentRepair: ViolationComponentRepair.Params = ViolationComponentRepair.Params(),
     )
 
     /** 巡ごとの乱数列を分けるためのパス別タグ（[roundSeed]）。値は 3.499.0 以前の手書き値と同じ＝乱数列不変。 */
@@ -305,7 +308,7 @@ object V6HotfixPasses {
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
     private val adoptionKeys = listOf(
         "循環", "c1", "c3", "c3回転", "c3mn玉突き", "c3n", "range玉突き", "c3run玉突き", "c3pattern玉突き",
-        "アンカー窓交換", "希望島", "ブロック交換", "apt玉突き", "fair玉突き",
+        "アンカー窓交換", "希望島", "ブロック交換", "apt玉突き", "fair玉突き", "成分修復",
     )
 
     /** SoftPolishVerify で「対象」に数える族（3.278.0 で CyclicSwap の対象族、3.475.0 で c3n を追加）。 */
@@ -323,6 +326,8 @@ object V6HotfixPasses {
         val logs = ArrayList<MirrorLog>()
         val passMs = LinkedHashMap<String, Long>()
         val pinBlocksAll = PinBlockAttribution()
+        /** [Iteration 2] 巡の中で各パスが残した拒否候補。巡の末尾で違反連結成分修復へ渡して空にする。 */
+        val rejectedPool = ArrayList<CombinatorialRepair.Candidate>()
 
         /** フェーズ名を UI へ通知し、所要 ms を [key] に累算しながら [block] を実行する。 */
         fun <R> timed(phase: String, key: String, block: (Array<IntArray>) -> R): R {
@@ -336,6 +341,7 @@ object V6HotfixPasses {
         /** 結果を盤面へ反映し、ピン帰属を合流させ、[keepLogs] のときだけログを積む。採用数を返す。 */
         fun adopt(r: CyclicSwapResult, keepLogs: Boolean = true): Int {
             r.pinBlocks?.let { pinBlocksAll.merge(it) }
+            rejectedPool.addAll(r.rejectedCandidates)
             work = r.newSchedule.copy2D()
             if (keepLogs) logs.addAll(r.logs)
             return r.applied
@@ -575,6 +581,13 @@ object V6HotfixPasses {
             take("fair玉突き", chain.timed("後処理 グループ内公平化(fair)玉突き研磨$tag", "FairPolish") { work ->
                 AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round))
             })
+            // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
+            val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()
+            if (params.componentRepairEnabled && pool.size >= 2) {
+                take("成分修復", chain.timed("後処理 違反連結成分修復$tag", "ComponentRepair") { work ->
+                    ViolationComponentRepair.repair(state, work, pool, params.componentRepair, shouldStop = clusterStop)
+                })
+            }
 
             round++
             if (roundApplied == 0) break   // この巡で 1 手も採用なし＝joint 局所最適に到達
@@ -698,6 +711,8 @@ object V6HotfixPasses {
         val observedPinBlockedAttempts: Int = 0,
         /** [3.326.0] どのピン(職員,シフト)が何回止めたか。緩和対象の提示に使う。 */
         val pinBlocks: PinBlockAttribution? = null,
+        /** [Iteration 2] このパスが単独では不採用にし、結合にも使わなかった候補（違反連結成分修復の材料）。 */
+        val rejectedCandidates: List<CombinatorialRepair.Candidate> = emptyList(),
     )
 
     /**

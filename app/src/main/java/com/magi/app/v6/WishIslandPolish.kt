@@ -37,6 +37,10 @@ internal object WishIslandPolish {
         val stuckNamesShown: Int = 8,
     )
 
+    /** テスト用: 各島の通常候補（同日・窓・両翼）を (種類, セル列) で列挙する。月初・月末で両翼が出ないこと等を固定する。 */
+    internal fun enumerateMovesForTest(state: MagiState, schedule: Array<IntArray>): List<Pair<String, IntArray>> =
+        Session(state, schedule, Params(), { false }).movesForTest()
+
     /** 既存の呼出側・テストとの互換入口。 */
     fun applyWishIslandPolish(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, maxEvaluations: Int = 120,
@@ -312,6 +316,8 @@ internal object WishIslandPolish {
          */
         private fun beamMoves(active: List<Island>): Sequence<Move> = interleave(*active.map { islandMoves(it) }.toTypedArray())
 
+        fun movesForTest(): List<Pair<String, IntArray>> = islands.flatMap { isl -> islandMoves(isl).map { it.kind.label to it.cells }.toList() }
+
         // ---- 評価 ----
         private class Chosen(val move: Move, val rep: ViolationReport)
 
@@ -375,7 +381,8 @@ internal object WishIslandPolish {
                 val remaining = max(prm.maxEvaluations - evaluated, 0)
                 val depthLimit = beamCandidateLimit(prm.beamWidth, prm.beamBranchFactor, remaining)
                 val perNodeLimit = max(1, depthLimit / frontier.size)
-                for (node in frontier) { if (!budgetLeft()) break; expandNode(node, next, perNodeLimit, depthLimit) }
+                val seenBoards = HashSet<BoardKey>()   // 別の交換列から同じ盤面へ着いた候補で幅と予算を重複消費しない
+                for (node in frontier) { if (!budgetLeft()) break; expandNode(node, next, perNodeLimit, depthLimit, seenBoards) }
                 if (next.isEmpty()) break
                 next.sortWith { x, y -> reportComparator.compare(x.rep, y.rep) }
                 frontier = next.take(prm.beamWidth)
@@ -394,7 +401,7 @@ internal object WishIslandPolish {
          * 1 ノードの展開: `nodeLimit × BEAM_SCAN_FACTOR` 手まで正式評価し（枝刈りした手は数えない）、段全体で共有する [next] に
          * 良い順で `depthLimit` 件だけ保持する（3.502.0: 列挙順の先頭で打ち切らない／3.504.0: 走査枠はノードごと、保持数は段ごと）。
          */
-        private fun expandNode(node: Node, next: MutableList<Node>, nodeLimit: Int, depthLimit: Int) {
+        private fun expandNode(node: Node, next: MutableList<Node>, nodeLimit: Int, depthLimit: Int, seenBoards: MutableSet<BoardKey>) {
             restore(node.board)
             val active = islands.filter { localScore(node.rep, it) > 0L }
             val scanLimit = nodeLimit * BEAM_SCAN_FACTOR
@@ -407,7 +414,7 @@ internal object WishIslandPolish {
                     val rep = UnifiedViolationChecker.check(state, work)
                     evaluated++; beamEvaluated++; scanned++
                     val neutral = !betterReport(node.rep, rep) && !exactPinRegression(p, node.board, work)
-                    if (neutral) keepBest(next, Node(work.copy2D(), rep), depthLimit)
+                    if (neutral) { val key = BoardKey(work.copy2D()); if (seenBoards.add(key)) keepBest(next, Node(key.work, rep), depthLimit) }
                 } finally { undo(m, old) }
             }
         }

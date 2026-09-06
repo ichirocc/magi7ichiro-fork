@@ -89,8 +89,9 @@ fun main(args: Array<String>) {
     val pools = ManagementFactory.getMemoryPoolMXBeans().filter { it.type == MemoryType.HEAP }
     fun peakHeap(): Long = pools.sumOf { it.peakUsage?.used ?: 0L }
     fun resetPeak() = pools.forEach { it.resetPeakUsage() }
-    val oldP = V6HotfixPasses.PostOptimizationParams(anchorWindowPasses = 0, wishIslandPasses = 0)
-    val newP = V6HotfixPasses.PostOptimizationParams()
+    // Iteration 2: 旧＝現行チェーン（3.504.x）、新＝巡末尾に違反連結成分修復を足したもの。
+    val oldP = V6HotfixPasses.PostOptimizationParams()
+    val newP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true)
     val w = out.bufferedWriter()
     w.write("case,size,cat,seed,arm,ms,timeout,exception,oob,mismatch,hard,hardW,softW,wishRate,changed,total,weighted,peakMB,hash,repro\n")
     // ウォームアップ

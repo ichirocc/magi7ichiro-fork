@@ -554,9 +554,10 @@ internal object C1WindowPolish {
         // [汎用玉突き結合フレームワーク, 3.249.0] 単独では不採用だった候補群を2〜4件束ねて再挑戦
         //   （grilling確定・c1/range/c3mn/apt/fair横断の共通ヘルパ）。stuckNames より前に実行し、
         //   結合で解消した箇所が「残存」に残らないようにする。
+        val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val c1CombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c1CombStats, p = p,
+            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c1CombStats, p = p, leftover = rejectedOut,
         )
         applied += c1CombStats.combosAccepted
         // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手B(直接移動+玉突き)が最終的に失敗した
@@ -603,7 +604,7 @@ internal object C1WindowPolish {
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (c1CombSummary.isNotEmpty()) " / $c1CombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, plateau, pinBlocks.attempts, pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, plateau, pinBlocks.attempts, pinBlocks, rejectedCandidates = rejectedOut)
     }
 
     /**
@@ -698,13 +699,6 @@ internal object C1WindowPolish {
         }
 
         data class Beam(val work: Array<IntArray>, val rep: com.magi.app.v6.ViolationReport, val applied: Int)
-
-        /** ビーム各段の重複排除の鍵: 盤面ハッシュを一次キーに、衝突時だけ全セル比較（distinctBy は最初の出現順を保つ＝並びも不変）。 */
-        class BoardKey(val work: Array<IntArray>) {
-            private val h = AdaptiveEliteArchive.scheduleHash(work)
-            override fun hashCode(): Int = (h xor (h ushr 32)).toInt()
-            override fun equals(other: Any?): Boolean = other is BoardKey && h == other.h && AdaptiveEliteArchive.sameSchedule(work, other.work)
-        }
 
         fun rebuildTargets(work: Array<IntArray>): List<Triple<Int, Int, Int>> {
             val out = ArrayList<Triple<Int, Int, Int>>()
