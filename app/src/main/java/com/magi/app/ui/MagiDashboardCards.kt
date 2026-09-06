@@ -141,7 +141,10 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                         // [3.475.0/論理監査] 1回押したら再検査（refreshCheck は非同期）が盤面に追いつくまで全候補を
                         //   無効化する。旧: 候補は押す前の盤面で「抜けても穴が空かない」と判定したものなので、
                         //   連打すると2人目が既に満たした枠へ入り covO と、抜けた側の covU を同時に作れた。
-                        val pending = remember(ui.schedule) { androidx.compose.runtime.mutableStateOf(false) }
+                        // [3.502.0/バックログ#10] 解除の合図は schedule の変化でなく検査世代（ui.checkRev）。旧: remember(ui.schedule) は
+                        //   setCell 直後の schedule 変化でリセットされ、coverageDiag が古いまま候補が再有効化されていた。
+                        val pressedRev = remember { androidx.compose.runtime.mutableStateOf(-1L) }
+                        val pending = pressedRev.value >= 0L && ui.checkRev <= pressedRev.value
                         if (cands.isEmpty()) {
                             // [3.401.0] 汎用の文言でなく、この枠についての診断そのものを出す
                             //   （なぜ動かせないかは CoverageDiagnosis が既に調べて書いている）。
@@ -149,8 +152,8 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                         } else {
                             cands.take(8).forEach { c ->
                                 Button(
-                                    onClick = { pending.value = true; vm.setCell(c.staffIndex, target.dayIndex, target.shiftIndex) },
-                                    enabled = !pending.value,
+                                    onClick = { pressedRev.value = ui.checkRev; vm.setCell(c.staffIndex, target.dayIndex, target.shiftIndex) },
+                                    enabled = !pending,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
                                 ) {
                                     val tail = if (c.fromRest) "（休み）" else ""
@@ -159,7 +162,8 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                                         textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            Text("入れたら「元に戻す」でいつでも取り消せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(if (pending) "再検査中…（結果が反映されるまで候補は押せません）" else "入れたら「元に戻す」でいつでも取り消せます。",
+                                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                     }
                     infeasible.isNotEmpty() -> {

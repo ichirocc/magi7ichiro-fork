@@ -30,6 +30,12 @@ data class UiState(
      * 残っている項目」の判定には使えない（手編集だけで「計算後」と語っていた）。読込・取込で false に戻す。
      */
     val engineRan: Boolean = false,
+    /**
+     * [3.502.0/バックログ#10] 表示中の検査結果の世代。makeUi（検査完了・最適化完了など報告の反映）のたびに増える。
+     * 「押したあとの再検査が盤面に追いついたか」を schedule の変化でなくこの世代で判定する（schedule は setCell 直後に
+     * 変わるが coverageDiag はまだ古い＝そこで候補を再有効化すると連打で covO/covU を同時に作れる）。
+     */
+    val checkRev: Long = 0,
     val bestHard: Long = 0,
     val bestSoft: Long = 0,
     val totalViolations: Int = 0,

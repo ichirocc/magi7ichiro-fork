@@ -2167,12 +2167,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun clearOutOfScopeWishes() {
         val s = state ?: return
-        val keys = ui.value.settingIssues
-            .filter { it.kind == IssueKind.WISH && it.action == SettingFixAction.REMOVE_WISH }
-            .mapNotNull { it.wishKey }
+        // [3.502.0/バックログ#9(d)] 対象はいまの設定で担当できないシフトへの希望（Problem.canDo＝wishOutOfScopeCount と同じ判定）。
+        //   旧: 非同期の診断(settingIssues)に残るキーを消していた＝設定変更直後は古い診断で、いまは担当可能な希望まで消し得た。
+        val p = Problem(s)
+        val keys = s.wishes.entries.filter { (key, k) ->
+            val i = key.substringBefore(",").toIntOrNull() ?: return@filter false
+            i in 0 until p.S && k in 0 until p.K && !p.canDo(i, k)
+        }.map { it.key }.toSet()
         if (keys.isEmpty()) return
         logOp("I", "担当外の希望を一括クリア: ${keys.size}件")
-        applyStructure(s.copy(wishes = s.wishes - keys.toSet()))
+        applyStructure(s.copy(wishes = s.wishes - keys))
     }
 
     /**
@@ -2595,6 +2599,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             totalViolations = report.total,
             weightedScore = report.weightedScore,
             breakdown = emptyBreakdown + report.breakdown,
+            checkRev = base.checkRev + 1,
             violationCells = report.violations,
             needViolations = report.needViolations,
             countViolations = report.countViolations,
