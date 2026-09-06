@@ -132,7 +132,8 @@ ViewModel ハブ
 エンジンは `app/src/main/java/com/magi/app/v6/`:
 - `MirrorCore.kt` — **`UnifiedViolationChecker`（UIの違反表示・提案の基準＝source of truth）**。
   `check(state, schedule) -> ViolationReport{violations, needViolations, countViolations, breakdown, hard, total, weightedScore}`。
-  `Problem`（`cachedProblem(state)`）, `canDo(i,k)`, `allowedShiftsForStaff(i)`, `countMatrix`, `coverage`,
+  `Problem`（`cachedProblem(state)`）, `canDo(i,k)`（担当可否＝評価・表示）, `mayPlace(i,k)`／`allowedShiftsForStaff(i)`（最適化器が置けるか＝
+  担当可から個人上限 0 を除く。3.507.0）, `canDoShiftsForStaff(i)`（UI の選択肢）, `countMatrix`, `coverage`,
   `normalizeSchedule`。`MirrorKeys`（hard/soft/all のキー分割）と weightedScore の重み定義もここ。
 - `Evaluator.kt` / `DeltaEvaluator.kt` — **最適化器の目的関数**（SA の受理判定）。`Evaluator(p)`（3.393.0 で `c3RunMode` は撤去＝単一シフト連は常に run-deficit）。
   Delta は差分評価。`SaOptimizer` が Delta×Full の整合チェック（安全網）を行うため**両者は常に一致させる**。

@@ -291,7 +291,7 @@ object V6PortAnalyzer {
                 total += miss
                 var capacity = 0
                 for (i in 0 until p.S) {
-                    if (!p.canDo(i, k)) continue
+                    if (!p.mayPlace(i, k)) continue
                     // [3.391.0] 生の `w != k` は**実現不能な希望**（担当できないシフトへの希望）まで
                     //   「別シフトへ固定」として capacity から外していた。実現不能な希望は凍結しない
                     //   （wishLocked の規約）ので、その職員はこの枠へ回せる。過小な capacity は
@@ -317,7 +317,7 @@ object V6PortAnalyzer {
                     val pinned = 0
                     var already = 0; var free = 0; var cascade = 0; var forbid = 0
                     for (i in 0 until p.S) {
-                        if (!p.canDo(i, k)) continue
+                        if (!p.mayPlace(i, k)) continue
                         val m = norm[i][j]
                         // [3.391.0] 上の capacity と同じ事前フィルタ＝同じ条件に揃える（wishLocked）。
                         if (p.wishLocked(i, j) && p.wish[i][j] != k) continue   // 実現可能な希望が別シフト=capacity 対象外

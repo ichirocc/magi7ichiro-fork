@@ -314,13 +314,13 @@ object ViolationComponentRepair {
             fun staffName(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
             fun kig(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "#$k"
             fun single(i: Int, j: Int, k2: Int) {
-                if (k2 !in 0 until p.K || k2 == work[i][j] || p.wishLocked(i, j) || !p.canDo(i, k2)) return
+                if (k2 !in 0 until p.K || k2 == work[i][j] || p.wishLocked(i, j) || !p.mayPlace(i, k2)) return
                 add(listOf(intArrayOf(i, j, k2)), "${staffName(i)} ${j + 1}日→${kig(k2)}")
             }
             fun swap(x: Int, y: Int, j: Int) {
                 if (x == y) return
                 val kx = work[x][j]; val ky = work[y][j]
-                if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.canDo(x, ky) || !p.canDo(y, kx)) return
+                if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.mayPlace(x, ky) || !p.mayPlace(y, kx)) return
                 add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx)), "${staffName(x)}↔${staffName(y)} ${j + 1}日")
             }
             fun window(x: Int, y: Int, s0: Int, s1: Int) {
@@ -328,7 +328,7 @@ object ViolationComponentRepair {
                 var changes = false
                 for (d in s0..s1) {
                     val kx = work[x][d]; val ky = work[y][d]
-                    if (p.wishLocked(x, d) || p.wishLocked(y, d) || !p.canDo(x, ky) || !p.canDo(y, kx)) return
+                    if (p.wishLocked(x, d) || p.wishLocked(y, d) || !p.mayPlace(x, ky) || !p.mayPlace(y, kx)) return
                     if (kx != ky) changes = true
                 }
                 if (!changes) return
@@ -341,7 +341,7 @@ object ViolationComponentRepair {
                 val kx = work[x][j]; val ky = work[y][j]; val kz = work[z][j]
                 if (kx == ky || ky == kz || kx == kz) return
                 if (p.wishLocked(x, j) || p.wishLocked(y, j) || p.wishLocked(z, j)) return
-                if (!p.canDo(x, ky) || !p.canDo(y, kz) || !p.canDo(z, kx)) return
+                if (!p.mayPlace(x, ky) || !p.mayPlace(y, kz) || !p.mayPlace(z, kx)) return
                 add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kz), intArrayOf(z, j, kx)), "${staffName(x)}→${staffName(y)}→${staffName(z)} ${j + 1}日")
             }
             when {

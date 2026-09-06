@@ -38,12 +38,30 @@ internal object HardRepairCore {
             val fallback = fillShiftIndex(allowed, p.restIdx)
             for (j in 0 until p.T) {
                 val k = out[i][j]
-                if (k !in 0 until p.K || !p.canDo(i, k)) out[i][j] = fallback
+                // [3.507.0] 個人上限 0 のセル（希望でそのシフトに固定されたものは除く）も入口で外す＝探索は置き直しから始める。
+                val capped = k in 0 until p.K && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.wish[i][j] == k)
+                if (k !in 0 until p.K || !p.canDo(i, k) || capped) out[i][j] = fallback
             }
         }
         return out
     }
 
+
+    /** [3.507.0] 個人上限 0 のセル（希望固定を除く）だけを置けるシフトへ戻した盤面と、その件数。最終番兵の「入力」基準に使う
+     *  （群外セルは触らない＝従来の基準のまま）。 */
+    internal fun clearCappedCells(state: MagiState, schedule: Array<IntArray>): Pair<Array<IntArray>, Int> {
+        val p = cachedProblem(state)
+        val out = schedule.copy2D()
+        var n = 0
+        for (i in 0 until p.S) {
+            val fallback = fillShiftIndex(p.allowedShiftsForStaff(i), p.restIdx)
+            for (j in 0 until p.T) {
+                val k = out[i][j]
+                if (k in 0 until p.K && p.canDo(i, k) && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.wish[i][j] == k)) { out[i][j] = fallback; n++ }
+            }
+        }
+        return out to n
+    }
 
     internal data class RepairResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>)
 
@@ -88,7 +106,7 @@ internal object HardRepairCore {
         val counts = countMatrix(p, out)
         for (i in 0 until p.S) for (k in 0 until p.K) {
             val lo = p.rangeLo[i][k]
-            if (lo == Int.MIN_VALUE || !p.canDo(i, k)) continue
+            if (lo == Int.MIN_VALUE || !p.mayPlace(i, k)) continue
             var need = lo - counts[i][k]
             var guard = 0
             while (need > 0 && guard++ < p.T) {

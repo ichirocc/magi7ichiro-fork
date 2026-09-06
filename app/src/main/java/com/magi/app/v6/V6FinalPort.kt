@@ -278,7 +278,12 @@ object V6FinalPort {
         // [最終番兵用] 入力の評価を保持。万一パイプラインが入力より悪い結果を出した場合に復帰する（多重防御）。
         val baseProblem = cachedProblem(state)
         val normInput = normalizeSchedule(schedule, baseProblem)
-        val inputReport = UnifiedViolationChecker.check(state, normInput)
+        // [3.507.0] 番兵の基準は「個人上限 0 のセルを外した入力」。上限 0 のセルは最適化器が置かない（mayPlace）ので、
+        //   生の入力（上限超過 45 のまま）と比べると、外した代償のぶん結果が「悪化」に見えて入力へ戻ってしまう。
+        val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput)
+        val inputReport = UnifiedViolationChecker.check(state, cappedInput)
+        val cappedLog = if (cappedCount > 0) listOf(MirrorLog(tag = "CapZero",
+            message = "個人上限 0 のセル ${cappedCount} 件を最適化の対象外として置き直しから開始（設定どおり 0 にする。表示・重みは不変）")) else emptyList()
         val label = getAlgorithmLabel(seconds)
         val plan = optimizationPlan(seconds)
         val busy = buildBusyDetail(state, label.name, mapOf(
@@ -976,7 +981,7 @@ object V6FinalPort {
         }
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（normInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」

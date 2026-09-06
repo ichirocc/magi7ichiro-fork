@@ -218,7 +218,7 @@ object ConstraintMus {
         val staffMatch = IntArray(p.S) { -1 }   // staff -> slot
         val slotMatch = IntArray(slots.size) { -1 }
         fun canServe(i: Int, shift: Int): Boolean {
-            if (!p.canDo(i, shift)) return false
+            if (!p.mayPlace(i, shift)) return false
             val pin = pinned[i] ?: return true
             return pin == shift
         }

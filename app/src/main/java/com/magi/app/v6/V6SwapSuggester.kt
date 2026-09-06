@@ -126,7 +126,7 @@ object FixSuggester {
                     if (timeUp()) break
                     if (p.wishLocked(i, j) || p.wishLocked(i2, j)) continue
                     val a = s[i][j]; val b = s[i2][j]
-                    if (a == b || !p.canDo(i, b) || !p.canDo(i2, a)) continue
+                    if (a == b || !p.mayPlace(i, b) || !p.mayPlace(i2, a)) continue
                     tryOps(FixKind.SWAP, listOf(FixCell(i, j, b), FixCell(i2, j, a)),
                         "${nm(i)} 「${sym(a)}」 ↔ ${nm(i2)} 「${sym(b)}」（${dlab(j)}）")
                 }
@@ -281,7 +281,7 @@ object FixSuggester {
                             val sa = s[a][j]; val sb = s[b][j]; val sc = s[c][j]
                             if (sa == sb && sb == sc) continue
                             // 巡回: a<-sb, b<-sc, c<-sa
-                            if (!p.canDo(a, sb) || !p.canDo(b, sc) || !p.canDo(c, sa)) continue
+                            if (!p.mayPlace(a, sb) || !p.mayPlace(b, sc) || !p.mayPlace(c, sa)) continue
                             tryOps(FixKind.SWAP_MULTI, listOf(FixCell(a, j, sb), FixCell(b, j, sc), FixCell(c, j, sa)),
                                 "（3人）${nm(a)}・${nm(b)}・${nm(c)} を ${dlab(j)} で入替")
                         }
@@ -308,7 +308,7 @@ object FixSuggester {
                         if (j2 == j1 && i2 == i1) continue
                         if (p.wishLocked(i2, j2) || timeUp()) continue
                         val b = s[i2][j2]
-                        if (a == b || !p.canDo(i1, b) || !p.canDo(i2, a)) continue
+                        if (a == b || !p.mayPlace(i1, b) || !p.mayPlace(i2, a)) continue
                         val label = if (i1 == i2)
                             "${nm(i1)} ${dlab(j1)}「${sym(a)}」 ↔ ${dlab(j2)}「${sym(b)}」（別日）"
                         else

@@ -62,7 +62,7 @@ internal object C3RotationPolish {
                             if ((0 until w).any { !movable(i2, j + it) }) continue
                             var feasible = true; var same = true
                             for (t in 0 until w) {
-                                if (!p.canDo(i, work[i2][j + t]) || !p.canDo(i2, work[i][j + t])) { feasible = false; break }
+                                if (!p.mayPlace(i, work[i2][j + t]) || !p.mayPlace(i2, work[i][j + t])) { feasible = false; break }
                                 if (work[i][j + t] != work[i2][j + t]) same = false
                             }
                             if (!feasible || same) continue
@@ -159,7 +159,7 @@ internal object C3RotationPolish {
                                 // 回転 ai<-bi, bi<-ci, ci<-ai が各日で担当可能か。
                                 var feasible = true
                                 for (t in 0 until w) {
-                                    if (!p.canDo(ai, work[bi][j + t]) || !p.canDo(bi, work[ci][j + t]) || !p.canDo(ci, work[ai][j + t])) { feasible = false; break }
+                                    if (!p.mayPlace(ai, work[bi][j + t]) || !p.mayPlace(bi, work[ci][j + t]) || !p.mayPlace(ci, work[ai][j + t])) { feasible = false; break }
                                 }
                                 if (!feasible) continue
                                 val sa = IntArray(w) { work[ai][j + it] }

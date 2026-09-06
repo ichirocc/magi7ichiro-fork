@@ -202,7 +202,7 @@ internal object HfSwapPolish {
         val toDays = ArrayList<Int>()
         for (j in 0 until p.T) {
             if (schedule[from][j] == shift && !p.wishLocked(from, j)) fromDays.add(j)
-            if (schedule[to][j] != shift && !p.wishLocked(to, j) && p.canDo(to, shift) && p.canDo(from, schedule[to][j])) toDays.add(j)
+            if (schedule[to][j] != shift && !p.wishLocked(to, j) && p.mayPlace(to, shift) && p.mayPlace(from, schedule[to][j])) toDays.add(j)
         }
         for (jf in fromDays) for (jt in toDays) {
             val cand = schedule.copy2D()
@@ -225,7 +225,7 @@ internal object HfSwapPolish {
             if (p.wishLocked(i, j) || p.wishLocked(i2, j)) continue
             val a = work[i][j]
             val b = work[i2][j]
-            if (a == b || !p.canDo(i, b) || !p.canDo(i2, a)) continue
+            if (a == b || !p.mayPlace(i, b) || !p.mayPlace(i2, a)) continue
             val cand = work.copy2D()
             cand[i][j] = b
             cand[i2][j] = a

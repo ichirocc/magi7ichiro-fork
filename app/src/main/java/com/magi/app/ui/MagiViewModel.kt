@@ -29,7 +29,7 @@ import com.magi.app.v6.V6SanityReport
 import com.magi.app.v6.Hf63Infeasibility
 import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.Ws1Result
-import com.magi.app.v6.allowedShiftsForStaff
+import com.magi.app.v6.canDoShiftsForStaff
 import com.magi.app.v6.canDo
 import com.magi.app.v6.copy2D
 import com.magi.app.v6.toIntArray2D
@@ -1639,10 +1639,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   canDo ラムダ等、Compose の合成/再合成から O(職員数) 回呼ばれる。旧実装は呼び出し毎に
     //   Problem(st) を新規構築し（canDo/range/apt/wish 行列を毎回再割当）メインスレッドを浪費していた。
     //   Problem は state の純粋関数のため、state 参照で識別する ProblemCache のヒットに置換して等価かつ
-    //   スコアリング不変（allowedShiftsForStaff は bucket を返す読み取り専用）。
+    //   スコアリング不変（canDoShiftsForStaff は bucket を返す読み取り専用）。
     fun allowedShiftsFor(i: Int): IntArray {
         val st = state ?: return IntArray(0)
-        return cachedProblem(st).allowedShiftsForStaff(i)
+        return cachedProblem(st).canDoShiftsForStaff(i)   // [3.507.0] UI は担当可否そのもの（上限 0 は最適化器だけが除外）
     }
 
     /** 入力ガイド（月次/年次の入力手順）用の各項目の件数。 */

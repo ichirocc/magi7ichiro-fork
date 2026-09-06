@@ -251,6 +251,7 @@ classDiagram
     +rangeLo/rangeHi/apt: Array~IntArray~
     +c3OverT/c3UnknownShift/unresolvedRows
     +canDo(i,k) Boolean
+    +mayPlace(i,k) Boolean
     +wishLocked(i,j) Boolean
     +covUCell(k,j,got) Int
   }
@@ -364,6 +365,7 @@ groupViol 10000 > pref 9000 > covU 8000 > c3n 7000 > low 90 > high 45
   ＝**表示件数と breakdown 件数が食い違うのはこのため**。
 - **pref は実現可能な希望のみ**計上（`canDo(i,w) && s[i][j] != w`）。担当不可への希望は充足しようがないので
   対称除外し、`impossibleWishCount` として別に案内する。
+- **`mayPlace(i,k) = canDo(i,k) && !(rangeHi==0 && k!=restIdx)`**（3.507.0）— 最適化器の候補生成・入口 hf66・最終番兵の基準だけが見る。評価は canDo のまま＝上限 0 に置かれていれば high 45。
 - **`wishLocked(i,j) = wish>=0 && canDo(i,wish)`** — 実現不能な希望はロックしない（凍結すると座礁する）。
 - **fair**：群 × 担当ONシフトごとに、メンバー回数の `round(平均)` からの L1 偏差和。**m<2 の群は対象外**。
 - **weekly**：職員 × **シフト**ごとに、曜日別カウントの `round(そのシフトの回数/7)` からの L1 偏差和。

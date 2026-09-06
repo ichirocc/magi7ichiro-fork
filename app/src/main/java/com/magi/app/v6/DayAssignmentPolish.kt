@@ -57,7 +57,7 @@ internal object DayAssignmentPolish {
                 val i = free[r]
                 LongArray(n) { c ->
                     val k = slots[c]
-                    if (k !in 0 until p.K || !p.canDo(i, k)) MinCostAssignment.INF
+                    if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
                     else {
                         val x0 = counts[i][k] - (if (work[i][j] == k) 1 else 0)   // この日を除いた現状カウント
                         val x1 = x0 + 1                                            // k を割当てた後
@@ -149,7 +149,7 @@ internal object DayAssignmentPolish {
                     val i = free[r]
                     LongArray(n) { c ->
                         val k = slots[c]
-                        if (k !in 0 until p.K || !p.canDo(i, k)) MinCostAssignment.INF
+                        if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
                         else {
                             val x0 = counts[i][k] - (if (work[i][j] == k) 1 else 0)   // この日を除いた現状カウント
                             val x1 = x0 + 1

@@ -214,7 +214,7 @@ internal object EliteIntegrationPolish {
             if (stopped(shouldStop, deadlineMs)) break
             val k = target.schedule[i][j]
             if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
-            if (!p.canDo(i, k)) continue
+            if (!p.mayPlace(i, k)) continue
             current[i][j] = k
             val report = UnifiedViolationChecker.check(state, current)
             if (better(report, bestReport) && !exactPinRegression(p, rootSchedule, current)) {
@@ -272,7 +272,7 @@ internal object EliteIntegrationPolish {
             for (node in beam) {
                 for (k in values) {
                     if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
-                    if (!p.canDo(i, k)) continue
+                    if (!p.mayPlace(i, k)) continue
                     val changed = if (node.schedule[i][j] == k) node.changed else node.changed + 1
                     val schedule = node.schedule.copy2D()
                     schedule[i][j] = k

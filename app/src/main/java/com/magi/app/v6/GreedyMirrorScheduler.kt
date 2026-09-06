@@ -82,7 +82,7 @@ object GreedyMirrorScheduler {
                     var bestI = -1
                     var bestPenalty = Int.MAX_VALUE
                     for (i in 0 until p.S) {
-                        if (schedule[i][j] >= 0 || !p.canDo(i, k)) continue
+                        if (schedule[i][j] >= 0 || !p.mayPlace(i, k)) continue
                         val hi = p.rangeHi[i][k]
                         val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
                         val penalty = (if (over) 1000 else 0) + counts[i][k] * 2

@@ -61,7 +61,7 @@ object SmartInitialScheduler {
         for (x in rulesByShift.keys.sorted()) {
             val rules = rulesByShift.getValue(x)
             for (i in 0 until p.S) {
-                if (!p.canDo(i, x)) continue
+                if (!p.mayPlace(i, x)) continue
                 val forced = IntArray(p.T) { j ->
                     when (schedule[i][j]) { -1 -> -1; x -> 1; else -> 0 }
                 }
@@ -96,7 +96,7 @@ object SmartInitialScheduler {
                     var bestI = -1
                     var bestPenalty = Int.MAX_VALUE
                     for (i in 0 until p.S) {
-                        if (schedule[i][j] >= 0 || !p.canDo(i, k)) continue
+                        if (schedule[i][j] >= 0 || !p.mayPlace(i, k)) continue
                         val hi = p.rangeHi[i][k]
                         val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
                         val penalty = (if (over) 1000 else 0) + counts[i][k] * 2

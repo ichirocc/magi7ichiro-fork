@@ -127,11 +127,28 @@ struct MagiProblem {
     std::vector<std::vector<int>> bucket;    // G: 群の担当ONシフト
     std::vector<std::vector<int>> members;   // G: 群のメンバー（sgrp から導出）
     std::vector<uint8_t> bucketHas;          // G*K: 群 g がシフト k を担当できるか（fair 用）
-    std::vector<std::vector<int>> staffForShift;  // K: シフト k を担当できる職員（opBlockFill 用）
+    std::vector<std::vector<int>> staffForShift;  // K: シフト k を置ける職員（opBlockFill 用、allowed から導出）
+    std::vector<std::vector<int>> allowed;        // S: 職員 i に置けるシフト（canDo かつ個人上限 0 でない。3.507.0）
 
     inline bool cd(int i, int k) const {
         if (i < 0 || i >= S || k < 0 || k >= K) return false;
         return canDo[(size_t)i * K + k] != 0;
+    }
+    // [3.507.0] 候補生成用: 担当可かつ個人上限 0 でない（休は除外しない）。評価は cd のまま（Kotlin Problem.mayPlace と同値）。
+    inline bool pl(int i, int k) const {
+        if (!cd(i, k)) return false;
+        const size_t idx = (size_t)i * K + k;
+        return !(idx < rangeHi.size() && rangeHi[idx] == 0 && k != restIdx);
+    }
+    // 置けるシフト（allowed）と置ける職員（staffForShift）を bucket/rangeHi から作る。JNI 復号とホストハーネスで共用。
+    void buildPlacementTables() {
+        allowed.assign((size_t)S, {});
+        staffForShift.assign((size_t)K, {});
+        for (int i = 0; i < S; i++) {
+            int g = sgrp[i];
+            if (g < 0 || g >= G) continue;
+            for (int k : bucket[g]) if (k >= 0 && k < K && pl(i, k)) { allowed[i].push_back(k); staffForShift[k].push_back(i); }
+        }
     }
     // Problem.covUCell / covOCell と同式（per-cell OR/AND, #4b）。
     inline int covUCell(int k, int j, int got) const {
@@ -755,14 +772,14 @@ void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn
         bn = 0;
     };
     auto randShiftFor = [&](int i) -> int {
-        const auto& b = p.bucket[p.sgrp[i]];
+        const auto& b = p.allowed[i];
         return b.empty() ? st.a[(size_t)i * T] : b[st.nextInt((int)b.size())];
     };
     auto opSingle = [&]() {
         int i = st.nextInt(S), j = st.nextInt(T);
         for (int tries = 0; tries < 4 && wishLockedN(p, i, j); tries++) j = st.nextInt(T);
         if (wishLockedN(p, i, j)) return;
-        const auto& b = p.bucket[p.sgrp[i]];
+        const auto& b = p.allowed[i];
         if (b.empty()) return;
         applyCell(i, j, b[st.nextInt((int)b.size())]);
     };
@@ -905,14 +922,14 @@ void runLahcChunk(LahcState& s, int iters, long long out[5]) {
         bn = 0;
     };
     auto randShiftFor = [&](int i) -> int {
-        const auto& b = p.bucket[p.sgrp[i]];
+        const auto& b = p.allowed[i];
         return b.empty() ? st.a[(size_t)i * T] : b[st.nextInt((int)b.size())];
     };
     auto opSingle = [&]() {
         int i = st.nextInt(S), j = st.nextInt(T);
         for (int tries = 0; tries < 4 && wishLockedN(p, i, j); tries++) j = st.nextInt(T);
         if (wishLockedN(p, i, j)) return;
-        const auto& b = p.bucket[p.sgrp[i]];
+        const auto& b = p.allowed[i];
         if (b.empty()) return;
         applyCell(i, j, b[st.nextInt((int)b.size())]);
     };
@@ -1250,7 +1267,7 @@ void randomAllowedCellN(const MagiProblem& p, int* a, std::mt19937_64& rng) {
     if (p.S == 0 || p.T == 0) return;
     int i = rnInt(rng, p.S), j = rnInt(rng, p.T);
     if (wishLockedN(p, i, j)) return;
-    const auto& allowed = p.bucket[p.sgrp[i]];
+    const auto& allowed = p.allowed[i];
     if (!allowed.empty()) a[(size_t)i * p.T + j] = allowed[rnInt(rng, (int)allowed.size())];
 }
 
@@ -1266,7 +1283,7 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
         if (k >= 0 && k < K) cnt[(size_t)i * K + k]++;
     }
     for (int i = 0; i < S; i++) {
-        if (wishLockedN(p, i, j) || !p.cd(i, rest)) continue;
+        if (wishLockedN(p, i, j) || !p.pl(i, rest)) continue;
         int old = a[(size_t)i * T + j];
         if (old != rest && old >= 0 && old < K) { a[(size_t)i * T + j] = rest; cnt[(size_t)i * K + old]--; cnt[(size_t)i * K + rest]++; }
     }
@@ -1311,7 +1328,7 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
             int bestI = -1, tied = 0;
             long long bestDelta = INT64_MAX;
             for (int i = 0; i < S; i++) {
-                if (a[(size_t)i * T + j] != rest || wishLockedN(p, i, j) || !p.cd(i, k)) continue;
+                if (a[(size_t)i * T + j] != rest || wishLockedN(p, i, j) || !p.pl(i, k)) continue;
                 long long delta = staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k] + 1)
                     - staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k]) + c41DayMarg(p.sgrp[i], k)
                     + weeklyMarginalN(&wd[((size_t)i * K) * 7], K, bucket, rest, k)
@@ -1337,8 +1354,8 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
 //   [3.409.22] Kotlin destroyRepairStaffAt と費用の族・covUCell 委譲・タイブレークを一致させた。
 void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64& rng) {
     const int S = p.S, T = p.T, K = p.K, rest = p.restIdx;
-    const auto& allowed = p.bucket[p.sgrp[i]];
-    if (allowed.empty() || rest < 0 || rest >= K || !p.cd(i, rest)) return;
+    const auto& allowed = p.allowed[i];
+    if (allowed.empty() || rest < 0 || rest >= K || !p.pl(i, rest)) return;
     std::vector<int> cntI(K, 0);
     for (int jj = 0; jj < T; jj++) { int k = a[(size_t)i * T + jj]; if (k >= 0 && k < K) cntI[k]++; }
     for (int j = 0; j < T; j++) {
@@ -1371,7 +1388,7 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
         int bestK = -1, tied = 0;
         long long bestDelta = INT64_MAX;
         for (int k = 0; k < K; k++) {
-            if (k == rest || !p.cd(i, k)) continue;
+            if (k == rest || !p.pl(i, k)) continue;
             // [3.409.22] 同上（Kotlin destroyRepairStaffAt は 3.379.0 で covUCell へ委譲済み）。
             //   旧2条件（need<=0 / 充足済み）は「残る不足が無い」の1条件に畳まれる。
             if (p.covUCell(k, j, cov[(size_t)j * K + k]) <= 0) continue;
@@ -1405,7 +1422,7 @@ void destroyRepairViolationsN(const MagiProblem& p, int* a, const std::vector<in
         int flat = cells[rnInt(rng, (int)cells.size())];
         int i = flat / T, j = flat % T;
         if (i < 0 || i >= p.S || j < 0 || j >= T || wishLockedN(p, i, j)) continue;
-        const auto& allowed = p.bucket[p.sgrp[i]];
+        const auto& allowed = p.allowed[i];
         if (allowed.empty()) continue;
         std::vector<int> cntI(K, 0);
         for (int jj = 0; jj < T; jj++) { int k = a[(size_t)i * T + jj]; if (k >= 0 && k < K) cntI[k]++; }
@@ -1470,7 +1487,7 @@ Fix findCovOFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) 
     for (int ii = 0; ii < S; ii++) if (st.a[(size_t)ii * T + j] == overK && !wishLockedN(p, ii, j)) { if (pickW-- == 0) { sel = ii; break; } }
     int bestNw = -1, bestDef = INT32_MIN;
     for (int k = 0; k < K; k++) {
-        if (k == overK || !p.cd(sel, k)) continue;
+        if (k == overK || !p.pl(sel, k)) continue;
         // [3.409.22] 移動先の不足推定も同様に covUCell へ（Kotlin findCovOFix と同式）。
         int def = p.covUCell(k, j, st.dsn[(size_t)j * K + k]);
         if (def > bestDef) { bestDef = def; bestNw = k; }
@@ -1483,10 +1500,10 @@ Fix findC2FixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
     if (p.cons2.empty()) return {};
     const auto& c = p.cons2[rnInt(rng, (int)p.cons2.size())];
     int dCnt = 0;
-    for (int i = 0; i < S; i++) { if (!p.cd(i, c.si)) continue; if (st.ssn[(size_t)i * K + c.si] < c.c) dCnt++; }
+    for (int i = 0; i < S; i++) { if (!p.pl(i, c.si)) continue; if (st.ssn[(size_t)i * K + c.si] < c.c) dCnt++; }
     if (dCnt == 0) return {};
     int pickI = rnInt(rng, dCnt), stf = 0;
-    for (int i = 0; i < S; i++) { if (!p.cd(i, c.si)) continue; if (st.ssn[(size_t)i * K + c.si] < c.c) { if (pickI-- == 0) { stf = i; break; } } }
+    for (int i = 0; i < S; i++) { if (!p.pl(i, c.si)) continue; if (st.ssn[(size_t)i * K + c.si] < c.c) { if (pickI-- == 0) { stf = i; break; } } }
     int dayCnt = 0;
     for (int j = 0; j < T; j++) if (st.a[(size_t)stf * T + j] != c.si && !wishLockedN(p, stf, j)) dayCnt++;
     if (dayCnt == 0) return {};
@@ -1500,7 +1517,7 @@ Fix findRangeLowFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& r
     int cCnt = 0;
     for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) {
         int lo = p.rangeLo[(size_t)i * K + k];
-        if (lo == INT32_MIN || !p.cd(i, k)) continue;
+        if (lo == INT32_MIN || !p.pl(i, k)) continue;
         if (st.ssn[(size_t)i * K + k] < lo) cCnt++;
     }
     if (cCnt == 0) return {};
@@ -1508,7 +1525,7 @@ Fix findRangeLowFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& r
     bool done = false;
     for (int i = 0; i < S && !done; i++) for (int k = 0; k < K && !done; k++) {
         int lo = p.rangeLo[(size_t)i * K + k];
-        if (lo == INT32_MIN || !p.cd(i, k)) continue;
+        if (lo == INT32_MIN || !p.pl(i, k)) continue;
         if (st.ssn[(size_t)i * K + k] < lo) { if (pickC-- == 0) { rlI = i; rlK = k; done = true; } }
     }
     int dayCnt = 0;
@@ -1540,7 +1557,7 @@ Fix findRangeHighFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& 
     if (dayCnt == 0) return {};
     int pickJ = rnInt(rng, dayCnt), day = 0;
     for (int j = 0; j < T; j++) if (st.a[(size_t)rhI * T + j] == rhK && !wishLockedN(p, rhI, j)) { if (pickJ-- == 0) { day = j; break; } }
-    const auto& allowed = p.bucket[p.sgrp[rhI]];
+    const auto& allowed = p.allowed[rhI];
     int oCnt = 0;
     for (int ak : allowed) if (ak != rhK) oCnt++;
     if (oCnt == 0) return {};
@@ -1564,7 +1581,7 @@ Fix findC41FamFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng
         if (wCnt == 0) return {};
         int pickW = rnInt(rng, wCnt), ci = 0;
         for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] == c.s && !wishLockedN(p, i, j)) { if (pickW-- == 0) { ci = i; break; } }
-        const auto& allowed = p.bucket[p.sgrp[ci]];
+        const auto& allowed = p.allowed[ci];
         int oCnt = 0;
         for (int ak : allowed) if (ak != c.s) oCnt++;
         if (oCnt == 0) return {};
@@ -1574,10 +1591,10 @@ Fix findC41FamFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng
     }
     if (cnt < c.l) {
         int aCnt = 0;
-        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] != c.s && !wishLockedN(p, i, j) && p.cd(i, c.s)) aCnt++;
+        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] != c.s && !wishLockedN(p, i, j) && p.pl(i, c.s)) aCnt++;
         if (aCnt == 0) return {};
         int pickA = rnInt(rng, aCnt), ai = 0;
-        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] != c.s && !wishLockedN(p, i, j) && p.cd(i, c.s)) { if (pickA-- == 0) { ai = i; break; } }
+        for (int i = 0; i < S; i++) if (grp[i] == c.g && st.a[(size_t)i * T + j] != c.s && !wishLockedN(p, i, j) && p.pl(i, c.s)) { if (pickA-- == 0) { ai = i; break; } }
         return Fix{ai, j, c.s};
     }
     return {};
@@ -1605,7 +1622,7 @@ Fix findC3WantFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng
                 }
                 if (miss == 1 && missL >= 0) {
                     int ml = j + missL;
-                    if (!wishLockedN(p, i, ml) && p.cd(i, c.seq[missL])) return Fix{i, ml, c.seq[missL]};
+                    if (!wishLockedN(p, i, ml) && p.pl(i, c.seq[missL])) return Fix{i, ml, c.seq[missL]};
                 }
             }
         }
@@ -1620,7 +1637,7 @@ Fix findAptFixN(const MagiProblem& p, const SaChunk& st, std::mt19937_64& rng) {
     for (int i = 0; i < S; i++) order[i] = i;
     for (int i = S - 1; i >= 1; i--) { int j = rnInt(rng, i + 1); std::swap(order[i], order[j]); }
     for (int i : order) {
-        const auto& allowed = p.bucket[p.sgrp[i]];
+        const auto& allowed = p.allowed[i];
         if (allowed.empty()) continue;
         int kOver = -1, kUnder = -1;
         for (int k = 0; k < K; k++) {
@@ -1681,7 +1698,7 @@ inline int coverageShortageCostN(const MagiProblem& p, const int* a, int j, int 
 inline int bestStaffForCoverageN(const MagiProblem& p, const int* a, const std::vector<int>& counts, int j, int k) {
     int bestI = -1, bestScore = INT32_MAX;
     for (int i = 0; i < p.S; i++) {
-        if (!p.cd(i, k)) continue;
+        if (!p.pl(i, k)) continue;
         if (wishLockedN(p, i, j) && p.wish[(size_t)i * p.T + j] != k) continue;
         int old = a[(size_t)i * p.T + j];
         if (old == k) continue;
@@ -1698,7 +1715,7 @@ int hf67HardRepairN(const MagiProblem& p, int* a, std::mt19937_64& rng) {
     int changed = 0;
     // hf66DataHardening: 範囲外・担当外セルを先頭の担当可シフト（無ければ0）へ。
     for (int i = 0; i < S; i++) {
-        const auto& allowed = p.bucket[p.sgrp[i]];
+        const auto& allowed = p.allowed[i];
         int fallback = allowed.empty() ? 0 : allowed[0];
         for (int j = 0; j < T; j++) {
             int k = a[(size_t)i * T + j];
@@ -1739,7 +1756,7 @@ int hf67HardRepairN(const MagiProblem& p, int* a, std::mt19937_64& rng) {
     }
     for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) {
         int lo = p.rangeLo[(size_t)i * K + k];
-        if (lo == INT32_MIN || !p.cd(i, k)) continue;
+        if (lo == INT32_MIN || !p.pl(i, k)) continue;
         int need = lo - counts[(size_t)i * K + k];
         int guard = 0;
         while (need > 0 && guard++ < T) {
@@ -1885,7 +1902,7 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
             } else if (op == 4 && S > 0 && T > 0) {     // randomAllowedCell
                 int i = rnInt(rng, S), j = rnInt(rng, T);
                 if (!wishLockedN(p, i, j)) {
-                    const auto& allowed = p.bucket[p.sgrp[i]];
+                    const auto& allowed = p.allowed[i];
                     if (!allowed.empty()) {
                         int oldK = st.a[(size_t)i * T + j];
                         int nw = allowed[rnInt(rng, (int)allowed.size())];
@@ -1914,7 +1931,7 @@ void runAlnsChunk(AlnsState& s, int iters, double frac, long long out[6]) {
                 if (i2 == i1) i2 = (i2 + 1) % S;
                 if (!wishLockedN(p, i1, j) && !wishLockedN(p, i2, j)) {
                     int k1 = st.a[(size_t)i1 * T + j], k2 = st.a[(size_t)i2 * T + j];
-                    if (k1 != k2 && p.cd(i1, k2) && p.cd(i2, k1)) {
+                    if (k1 != k2 && p.pl(i1, k2) && p.pl(i2, k1)) {
                         st.deltaApply(i1, j, k2); st.deltaApply(i2, j, k1);
                         c0i = i1; c0j = j; c0old = k1; c1i = i2; c1j = j; c1old = k2;
                         moveAug = s.gls.moveAug(i1, j, k1, k2) + s.gls.moveAug(i2, j, k2, k1);
@@ -2114,7 +2131,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
                 if (i2 == i1) i2 = (i2 + 1) % S;
                 if (!wishLockedN(p, i1, j) && !wishLockedN(p, i2, j)) {
                     int k1 = st.a[(size_t)i1 * T + j], k2 = st.a[(size_t)i2 * T + j];
-                    if (k1 != k2 && p.cd(i1, k2) && p.cd(i2, k1)) {
+                    if (k1 != k2 && p.pl(i1, k2) && p.pl(i2, k1)) {
                         st.deltaApply(i1, j, k2); st.deltaApply(i2, j, k1);
                         c0i = i1; c0j = j; c0old = k1; c1i = i2; c1j = j; c1old = k2; moved = true;
                     }
@@ -2508,12 +2525,8 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     // fair の O(1) 判定用と opBlockFill 用の導出テーブル。
     p->bucketHas.assign((size_t)G * K, 0);
     for (int g = 0; g < G; g++) for (int k : p->bucket[g]) if (k >= 0 && k < K) p->bucketHas[(size_t)g * K + k] = 1;
-    p->staffForShift.resize((size_t)K);
-    for (int i = 0; i < S; i++) {
-        int g = p->sgrp[i];
-        if (g < 0 || g >= G) continue;
-        for (int k : p->bucket[g]) if (k >= 0 && k < K) p->staffForShift[k].push_back(i);
-    }
+    // [3.507.0] 置けるシフト（bucket から個人上限 0 を除く）。候補生成はこちら、評価は canDo/bucket のまま。
+    p->buildPlacementTables();
 
     return reinterpret_cast<jlong>(p);
 }

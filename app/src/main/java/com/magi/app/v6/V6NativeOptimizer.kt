@@ -1524,7 +1524,7 @@ object V6NativeOptimizer {
                             if (i2 == i1) i2 = (i2 + 1) % p.S
                             if (!p.wishLocked(i1, j) && !p.wishLocked(i2, j)) {
                                 val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
-                                if (k1 != k2 && p.canDo(i1, k2) && p.canDo(i2, k1)) {
+                                if (k1 != k2 && p.mayPlace(i1, k2) && p.mayPlace(i2, k1)) {
                                     eval.apply(i1, j, k2); eval.apply(i2, j, k1)
                                     c0i = i1; c0j = j; c0old = k1; c1i = i2; c1j = j; c1old = k2
                                     moveAug = glsMoveAug(gls, i1, j, k1, k2) + glsMoveAug(gls, i2, j, k2, k1)
@@ -1997,7 +1997,7 @@ object V6NativeOptimizer {
                         if (i2 == i1) i2 = (i2 + 1) % p.S
                         if (!p.wishLocked(i1, j) && !p.wishLocked(i2, j)) {
                             val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
-                            if (k1 != k2 && p.canDo(i1, k2) && p.canDo(i2, k1)) {
+                            if (k1 != k2 && p.mayPlace(i1, k2) && p.mayPlace(i2, k1)) {
                                 eval.apply(i1, j, k2); eval.apply(i2, j, k1)
                                 val ns = eval.score()
                                 if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {

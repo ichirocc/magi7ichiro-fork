@@ -591,7 +591,7 @@ internal object C1JointLnsPolish {
 
     private fun allowed(p: Problem, staff: Int, day: Int, shift: Int): Boolean {
         val wish = p.wish[staff][day]
-        return if (p.wishLocked(staff, day)) wish == shift else p.canDo(staff, shift)
+        return if (p.wishLocked(staff, day)) wish == shift else p.mayPlace(staff, shift)
     }
 
     private fun selectBeam(

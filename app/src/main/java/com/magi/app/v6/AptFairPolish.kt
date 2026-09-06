@@ -181,7 +181,7 @@ internal object AptFairPolish {
                 //   予算超過で後続パスが打ち切られると大きな乖離が残存し続けていた）。
                 for (k2 in 0 until p.K) {
                     if (shouldStop()) break
-                    if (k2 == k || !p.canDo(i, k2)) continue
+                    if (k2 == k || !p.mayPlace(i, k2)) continue
                     if (lowTargets.none { it.first == i && it.second == k2 }) continue
                     while (trySelfSwap(i, k, k2)) { improved = true; done = true }
                 }
@@ -211,7 +211,7 @@ internal object AptFairPolish {
             // 単独aptLow(自己振替/相互交換で解消しなかった残り)を玉突きチェーンで埋める。
             for ((i, k) in lowTargets) {
                 if (shouldStop()) break
-                if (!p.canDo(i, k)) continue
+                if (!p.mayPlace(i, k)) continue
                 var done = false
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break
@@ -340,7 +340,7 @@ internal object AptFairPolish {
                 val a = work[i][j]; val b = work[i2][j]
                 if (a != sharedK || b == sharedK) continue
                 if (!movable(i, j) || !movable(i2, j)) continue
-                if (!p.canDo(i, b) || !p.canDo(i2, a)) continue
+                if (!p.mayPlace(i, b) || !p.mayPlace(i2, a)) continue
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
                 val workBefore = work.copy2D()
                 work[i][j] = b; work[i2][j] = a
@@ -419,7 +419,7 @@ internal object AptFairPolish {
                 //   (fromK,toK)ペアで解消するまで反復。isBetterが認める限り繰り返して安全）。
                 for (k2 in 0 until p.K) {
                     if (shouldStop()) break
-                    if (k2 == k || !p.canDo(i, k2)) continue
+                    if (k2 == k || !p.mayPlace(i, k2)) continue
                     if (lowTargets.none { it.first == i && it.second == k2 }) continue
                     while (trySelfSwap(i, k, k2)) { improved = true; done = true }
                 }
@@ -449,7 +449,7 @@ internal object AptFairPolish {
             // 単独fairLow(自己振替/相互交換で解消しなかった残り)を玉突きチェーンで埋める。
             for ((i, k) in lowTargets) {
                 if (shouldStop()) break
-                if (!p.canDo(i, k)) continue
+                if (!p.mayPlace(i, k)) continue
                 var done = false
                 for (j in 0 until p.T) {
                     if (done || shouldStop()) break

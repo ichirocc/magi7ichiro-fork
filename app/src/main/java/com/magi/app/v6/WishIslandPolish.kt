@@ -205,7 +205,7 @@ internal object WishIslandPolish {
             val ka = work[a][d]; val kb = work[b][d]
             if (ka !in 0 until K || kb !in 0 until K) return false
             if (locked(a, d) || locked(b, d)) return false
-            return p.canDo(a, kb) && p.canDo(b, ka)
+            return p.mayPlace(a, kb) && p.mayPlace(b, ka)
         }
 
         /** 窓 [s0..s1] を a と b で丸ごと交換できて、かつ何かが変わるとき真。 */
@@ -282,10 +282,10 @@ internal object WishIslandPolish {
             val a = isl.staff; val ka = work[a][d]
             for (b in 0 until S) {
                 if (b == a || locked(b, d)) continue
-                val kb = work[b][d]; if (kb !in 0 until K || !p.canDo(a, kb)) continue
+                val kb = work[b][d]; if (kb !in 0 until K || !p.mayPlace(a, kb)) continue
                 for (c in 0 until S) {
                     if (c == a || c == b || locked(c, d)) continue
-                    val kc = work[c][d]; if (kc !in 0 until K || !p.canDo(b, kc) || !p.canDo(c, ka)) continue
+                    val kc = work[c][d]; if (kc !in 0 until K || !p.mayPlace(b, kc) || !p.mayPlace(c, ka)) continue
                     if (ka == kb && kb == kc) continue
                     if ((sameGroup(a, b) && sameGroup(b, c)) != sg) continue
                     yield(Move(MoveKind.ROTATE3, intArrayOf(a, d, kb, b, d, kc, c, d, ka), sg))
