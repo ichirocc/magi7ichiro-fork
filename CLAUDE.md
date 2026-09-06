@@ -117,7 +117,8 @@ Claude Code 環境に Android SDK があれば直接 `./gradlew assembleRelease`
 - `ViolationComponentRepair.kt` — **違反起点のトランザクション修復**（Iteration 2 第一弾, 3.505.0）。各研磨パスが単独で不採用にした候補
   （`CombinatorialRepair.Candidate`＝`CyclicSwapResult.rejectedCandidates` で巡ごとに集める）を、違反（セル/回数/人数）を起点に
   「主候補＋職員か日を共有する助候補」へ絞り、`DeltaEvaluator` の推定＋厳密ピンの事前枝刈りでビーム、commit は正式チェッカーの
-  `betterReport`。`PostOptimizationParams.componentRepairEnabled`（3.505.1 で**既定 ON**＝Iteration 2 のベンチで必須退行 0・新良 68/同等 249/旧良 23、
+  `betterReport`。3.505.4 から起点からの候補生成（半径 1）を**共同 LNS の後の最終段**でだけ行う（`componentRepairFinal`。巡の中で行うと
+  単セル covU 修正が LNS の余地を先に使い実データで HARD 退行）。`PostOptimizationParams.componentRepairEnabled`（3.505.1 で**既定 ON**＝Iteration 2 のベンチで必須退行 0・新良 68/同等 249/旧良 23、
   10% ゲートは未達なので §6 のハイブリッド併用として温存。数値は `docs/history/3.4xx.md`）。
 - `V6SwapSuggester.kt` — **`FixSuggester.suggest(...)`**（ユーザー向け修復提案。7種の手を探索）。
 - `Problem.kt` — `C1(day1,shiftIdx,day2)` 等の制約データ型。

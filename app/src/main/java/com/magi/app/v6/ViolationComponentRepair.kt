@@ -55,6 +55,10 @@ object ViolationComponentRepair {
         val maxAnchors: Int = 24,
         /** 1 起点あたり探索に入れる候補数（主候補を先に、助候補を後に詰める）。 */
         val maxPatchesPerAnchor: Int = 40,
+        /** [Iteration 4] 起点から直接候補を作る（拒否候補に依存しない）。起点ごと・全体の上限。 */
+        val generateFromAnchors: Boolean = true,
+        val maxGeneratedPerAnchor: Int = 24,
+        val maxGenerated: Int = 240,
     )
 
     /** 盤面差分。`ops` は [職員, 日, 新シフト] の並び（[CombinatorialRepair.Candidate.ops] と同じ形）。 */
@@ -99,7 +103,7 @@ object ViolationComponentRepair {
         fun fam(cls: String) = cls.removePrefix("vio-")
         val cells = report.violations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), i, j) } }
         val needs = report.needViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (sh, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), -1, j, sh) } }
-        val counts = report.countViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, _) -> Anchor(false, fam(cls), i, -1) } }
+        val counts = report.countViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, sh) -> Anchor(false, fam(cls), i, -1, sh) } }
         val hardOnes = (cells + needs).filter { it.hard }
         val (blocked, solvable) = hardOnes.partition { it.family == "covU" && (it.shift * 1000L + it.day) in infeasible }
         return solvable + counts + (cells + needs).filter { !it.hard } + blocked
@@ -136,7 +140,7 @@ object ViolationComponentRepair {
             work, before.total, bestRep.total, applied, listOf(MirrorLog(tag = "ComponentRepair", message = "違反連結成分修復: $message")),
             observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks,
         )
-        if (pool.size < 2) return done("候補${pool.size}件=スキップ")
+        if (pool.size < 2 && !params.generateFromAnchors) return done("候補${pool.size}件=スキップ")
         if (work.any { row -> row.any { it !in 0 until p.K } }) return done("未割当セルあり=スキップ")
 
         // 候補→差分。現盤面で no-op のもの・範囲外のもの・同一差分は落とす。
@@ -149,7 +153,8 @@ object ViolationComponentRepair {
             val pt = Patch(c.ops, c.mechanism, c.hint)
             if (seen.add(pt.signature)) patches.add(pt)
         }
-        if (patches.size < 2) return done("有効候補${patches.size}件=スキップ")
+        val poolCount = patches.size
+        if (poolCount < 2 && !params.generateFromAnchors) return done("有効候補${poolCount}件=スキップ")
 
         val delta = DeltaEvaluator(p)
         delta.reset(work)
@@ -174,7 +179,7 @@ object ViolationComponentRepair {
             }
             return d
         }
-        val deltas = patches.map { countDelta(it) }
+        var deltas = patches.map { countDelta(it) }
         /** 候補が単独で新たに崩す厳密ピンの鍵（崩さなければ空）。 */
         fun brokenPins(idx: Int): List<Long> {
             val out = ArrayList<Long>()
@@ -289,11 +294,56 @@ object ViolationComponentRepair {
             return null
         }
 
-        // 起点（違反）ごとに探索し、採用があれば盤面が変わるので起点を作り直す。1 周して採用が無ければ終わり。
+        /** 起点から直接作る候補（半径 1）: セル違反＝別シフトへの変更と同日 2 者交換、人数不足/過剰＝その日の単セル変更、回数違反＝その職員の日で足す/休へ戻す。 */
+        fun generateFor(a: Anchor, sink: MutableList<Patch>, seenSig: MutableSet<String>) {
+            var made = 0
+            fun add(ops: List<IntArray>, hint: String) {
+                if (made >= params.maxGeneratedPerAnchor) return
+                val pt = Patch(ops, "起点生成", hint)
+                if (seenSig.add(pt.signature)) { sink.add(pt); made++ }
+            }
+            fun staffName(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
+            fun kig(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "#$k"
+            fun single(i: Int, j: Int, k2: Int) {
+                if (k2 !in 0 until p.K || k2 == work[i][j] || p.wishLocked(i, j) || !p.canDo(i, k2)) return
+                add(listOf(intArrayOf(i, j, k2)), "${staffName(i)} ${j + 1}日→${kig(k2)}")
+            }
+            fun swap(x: Int, y: Int, j: Int) {
+                if (x == y) return
+                val kx = work[x][j]; val ky = work[y][j]
+                if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.canDo(x, ky) || !p.canDo(y, kx)) return
+                add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx)), "${staffName(x)}↔${staffName(y)} ${j + 1}日")
+            }
+            when {
+                a.staff >= 0 && a.day >= 0 -> {
+                    for (k2 in p.allowedShiftsForStaff(a.staff)) single(a.staff, a.day, k2)
+                    for (b in 0 until p.S) swap(a.staff, b, a.day)
+                }
+                a.staff < 0 -> when (a.family) {
+                    "covU" -> for (i in 0 until p.S) single(i, a.day, a.shift)
+                    "covO" -> for (i in 0 until p.S) if (work[i][a.day] == a.shift) single(i, a.day, p.restIdx)
+                }
+                else -> when {
+                    a.family.endsWith("low", ignoreCase = true) -> for (j in 0 until p.T) single(a.staff, j, a.shift)
+                    a.family.endsWith("high", ignoreCase = true) -> for (j in 0 until p.T) if (work[a.staff][j] == a.shift) single(a.staff, j, p.restIdx)
+                }
+            }
+        }
+
+        // 起点（違反）ごとに探索し、採用があれば盤面が変わるので起点（と起点生成の候補）を作り直す。1 周して採用が無ければ終わり。
         val used = HashSet<Int>()
-        var anchorCount = 0; var maxSet = 0
+        var anchorCount = 0; var maxSet = 0; var generatedTotal = 0
         outer@ while (!shouldStop() && evaluations < params.maxEvaluations && estimates < params.maxEstimates) {
-            val sets = anchorSets(anchors(bestRep, infeasibleSlots), patches, params.maxPatchesPerAnchor)
+            val currentAnchors = anchors(bestRep, infeasibleSlots)
+            while (patches.size > poolCount) patches.removeAt(patches.size - 1)
+            if (params.generateFromAnchors) {
+                val sig = HashSet<String>(); for (pt in patches) sig.add(pt.signature)
+                for (a in currentAnchors.take(params.maxAnchors)) { if (patches.size - poolCount >= params.maxGenerated) break; generateFor(a, patches, sig) }
+                generatedTotal = maxOf(generatedTotal, patches.size - poolCount)
+                deltas = patches.map { countDelta(it) }
+            }
+            if (patches.size < 1) break
+            val sets = anchorSets(currentAnchors, patches, params.maxPatchesPerAnchor)
                 .map { (a, ids) -> a to dropLonePinBreakers(ids.filter { it !in used }) }.filter { it.second.isNotEmpty() }
             anchorCount = sets.size
             var committed = false
@@ -304,7 +354,7 @@ object ViolationComponentRepair {
                 for (id in chosen) for (op in patches[id].ops) {
                     if (work[op[0]][op[1]] != op[2]) { work[op[0]][op[1]] = op[2]; delta.apply(op[0], op[1], op[2]) }
                 }
-                bestRep = rep; applied++; used.addAll(chosen.toList())
+                bestRep = rep; applied++; used.addAll(chosen.filter { it < poolCount })   // 起点生成の候補は毎周作り直す
                 acceptedLabels.add(anchor.label + ": " + chosen.joinToString("+") { patches[it].hint.ifBlank { patches[it].mechanism } } + "(k=${chosen.size})")
                 committed = true
                 continue@outer
@@ -313,9 +363,9 @@ object ViolationComponentRepair {
         }
 
         val mech = LinkedHashMap<String, Int>()
-        for (pt in patches) mech.merge(pt.mechanism, 1, Int::plus)
+        for (pt in patches.take(poolCount)) mech.merge(pt.mechanism, 1, Int::plus)
         return done(
-            "候補${patches.size}件(" + mech.entries.joinToString(" ") { "${it.key}×${it.value}" } + ") 起点${anchorCount}件(探索${anchorsTried}件・最大${maxSet}候補)" +
+            "候補${poolCount}件(" + mech.entries.joinToString(" ") { "${it.key}×${it.value}" } + ")+起点生成${generatedTotal}件 起点${anchorCount}件(探索${anchorsTried}件・最大${maxSet}候補)" +
                 " 推定${estimates}回(ピン枝刈り${prunedPin}・相方なし除外${prunedLone.size}) 正式評価${evaluations}回 採用${applied}件" +
                 (if (acceptedLabels.isNotEmpty()) "[" + acceptedLabels.joinToString(", ") + "]" else "") +
                 (if (rejectReasons.isNotEmpty()) " 不採用(" + rejectReasons.entries.joinToString(" ") { "${it.key}:${it.value}" } + ")" else "") +

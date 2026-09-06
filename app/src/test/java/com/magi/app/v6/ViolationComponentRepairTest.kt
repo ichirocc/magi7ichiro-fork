@@ -51,7 +51,8 @@ class ViolationComponentRepairTest {
             val w = work.map { it.clone() }.toTypedArray(); w[0][0] = 2
             assertFalse("単独は不採用(タイ)", isBetterLocal(UnifiedViolationChecker.check(st, w), before))
         }
-        val r = ViolationComponentRepair.repair(st, work, listOf(candX, candY))
+        // 拒否候補の結合だけを見る（起点生成は別テスト）。
+        val r = ViolationComponentRepair.repair(st, work, listOf(candX, candY), ViolationComponentRepair.Params(generateFromAnchors = false))
         val after = UnifiedViolationChecker.check(st, r.newSchedule)
         assertEquals(1, r.applied)
         assertEquals(0, after.breakdown["apt"] ?: -1)
@@ -72,7 +73,7 @@ class ViolationComponentRepairTest {
             CombinatorialRepair.Candidate(listOf(intArrayOf(0, 0, 3)), "a", "X→D"),
             CombinatorialRepair.Candidate(listOf(intArrayOf(2, 0, 3)), "c", "W1→D"),
         )
-        val r = ViolationComponentRepair.repair(st, work, bad)
+        val r = ViolationComponentRepair.repair(st, work, bad, ViolationComponentRepair.Params(generateFromAnchors = false))
         assertEquals(0, r.applied)
         for (i in snapshot.indices) assertTrue(snapshot[i].contentEquals(r.newSchedule[i]))
         assertEquals(r.beforeTotal, r.afterTotal)
@@ -162,5 +163,29 @@ class ViolationComponentRepairTest {
         val ordered = ViolationComponentRepair.anchors(rep, infeasible = setOf(1 * 1000L + 3))
         assertEquals(listOf(5, 3), ordered.map { it.day })
         assertTrue(a.hard && b.hard)
+    }
+
+    /** [Iteration 4] 拒否候補が無くても、起点（人員不足）から作った単セル候補で直せる。 */
+    @Test
+    fun generatesCandidatesFromAnchorsWhenThePoolIsEmpty() {
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-01",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "")), groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("甲", 0), Staff("乙", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(0), listOf(0)), wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val work = st.schedule.map { it.toIntArray() }.toTypedArray()
+        assertEquals(1, UnifiedViolationChecker.check(st, work).hard)
+        val r = ViolationComponentRepair.repair(st, work, emptyList())
+        assertEquals(r.logs.first().message, 1, r.applied)
+        assertEquals(0, UnifiedViolationChecker.check(st, r.newSchedule).hard)
+        assertTrue(r.logs.first().message.contains("起点生成"))
+        // 生成を切ると候補が無いので何もしない
+        val off = ViolationComponentRepair.repair(st, work, emptyList(), ViolationComponentRepair.Params(generateFromAnchors = false))
+        assertEquals(0, off.applied)
     }
 }

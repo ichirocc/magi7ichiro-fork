@@ -287,6 +287,8 @@ object V6HotfixPasses {
         /** [Iteration 2] 各パスの拒否候補を巡の末尾で違反起点のトランザクションに束ねる（ViolationComponentRepair）。3.505.1 でハイブリッド併用＝既定 ON。 */
         val componentRepairEnabled: Boolean = true,
         val componentRepair: ViolationComponentRepair.Params = ViolationComponentRepair.Params(),
+        /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
+        val componentRepairFinal: Boolean = true,
     )
 
     /** 巡ごとの乱数列を分けるためのパス別タグ（[roundSeed]）。値は 3.499.0 以前の手書き値と同じ＝乱数列不変。 */
@@ -438,6 +440,13 @@ object V6HotfixPasses {
             PersonalBalanceJointLnsPolish.apply(state, work, config = PersonalBalanceJointLnsPolish.Config(maxMillis = cap), shouldStop = shouldStop)
         })
 
+        if (params.componentRepairEnabled && params.componentRepairFinal && !shouldStop()) {
+            chain.adopt(chain.timed("後処理 違反起点修復(最終)", "ComponentRepair") { work ->
+                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), params.componentRepair, shouldStop = shouldStop)
+            })
+            chain.rejectedPool.clear()
+        }
+
         val tHf = EngineClock.nowMs()
         if (shouldStop()) {
             chain.logs.add(MirrorLog(level = "W", tag = "POST", message = "予算超過のため後処理は締切で短縮されました(各パスは内部で打ち切り済み・以降は最終検査のみ)"))
@@ -585,7 +594,7 @@ object V6HotfixPasses {
             val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()
             if (params.componentRepairEnabled && pool.size >= 2) {
                 take("成分修復", chain.timed("後処理 違反連結成分修復$tag", "ComponentRepair") { work ->
-                    ViolationComponentRepair.repair(state, work, pool, params.componentRepair, shouldStop = clusterStop)
+                    ViolationComponentRepair.repair(state, work, pool, params.componentRepair.copy(generateFromAnchors = false), shouldStop = clusterStop)
                 })
             }
 
