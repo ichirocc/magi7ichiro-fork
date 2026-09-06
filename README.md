@@ -30,6 +30,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-06（3.506.0＝「グループ単位の回数」で下限・上限とも「なし」を適用できる（グループ全員ぶんの個人上下限を解除）。実機報告「なし 設定出来ない」。表示・編集のみ・スコア不変）
+
 **最終更新**：2026-09-06（3.505.9＝CLAUDE.md を Claude 5 世代向けに見直し。376 行→84 行。手順と履歴は `docs/environment.md`・`docs/backlog.md`・`docs/architecture.md`・`docs/history/topics.md` へ、重み規約は `.claude/rules/weights.md` へ。コード変更なし）
 
 **最終更新**：2026-09-06（3.505.8＝CLAUDE.md の見直し提案 `docs/claudemd-tune-proposal.md`（承認待ち）と、CLAUDE.md の事実訂正（重み c1/c3mn 30・covO 5・fork 名・ホスト JVM ビルド・検証ハーネス）。コード変更なし）

@@ -157,6 +157,28 @@ fun MagiViewModel.clearGroupRange(g: Int, k: Int, lo: String, hi: String) {
     applyStructure(stNew)
 }
 
+/** [3.506.0] 「グループ単位の回数」で両方「なし」を適用＝グループ全員の (i,k) 個人上下限を値に関係なく解除し、群の適切回数も空にする
+ *  （サマリの✕は同一レンジのメンバーしか消せない。経緯は history 3.506.0）。 */
+fun MagiViewModel.clearGroupRangeAll(g: Int, k: Int) {
+    val st0 = state ?: return
+    val members = st0.staff.indices.filter { st0.staff[it].groupIdx == g }
+    if (members.isEmpty()) return
+    val m = st0.staffRange.toMutableMap()
+    var cleared = 0
+    for (i in members) if (m.remove("$i,$k") != null) cleared++
+    val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
+    if (cleared == 0) { notify("$gname「${opSy(k)}」に解除する個人上下限はありません"); return }
+    val stNew = Ws1Ops.setGroupApt(st0.copy(staffRange = m), g, k, "")
+    notify("$gname「${opSy(k)}」の個人上下限を全員ぶん「なし」にしました（${cleared}名ぶん・「元に戻す」で戻せます）")
+    applyStructure(stNew)
+}
+
+/** グループ g のメンバーのうち (i,k) に個人上下限（非空）を持つ人数。ダイアログの「なし」適用可否と件数表示に使う。 */
+fun MagiViewModel.groupRangeMemberCount(g: Int, k: Int): Int {
+    val st = state ?: return 0
+    return st.staff.indices.count { st.staff[it].groupIdx == g && st.staffRange["$it,$k"]?.let { r -> r.lo.isNotBlank() || r.hi.isNotBlank() } == true }
+}
+
 data class GroupRangeView(val g: Int, val k: Int, val groupName: String, val kigou: String, val lo: String, val hi: String, val members: Int, val shared: Int = members)
 
 /** 「グループ単位の回数」適用済み一覧。グループ全メンバーが同一の非空レンジを持つ (g,k) のみ＝
