@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 自律改善ループ Iteration 5 報告＝半径拡大＋最終段予算で新良 153/同等 179/旧良 8・必須が減った試行 62（最大 -38）・増 1・品質 +1.72%（大規模の充足不能 +11.5%）・速度 -2.3%・再現性 34/34。退行ゼロ合格、10% ゲート未達。次は決定的予算のベンチと生成候補の質（3.506.1）  → `docs/history/3.4xx.md`
 - 「グループ単位の回数」で下限・上限とも「なし」を適用＝グループ全員ぶんの個人上下限を解除（`clearGroupRangeAll`、実機報告「なし 設定出来ない」）（3.506.0）  → `docs/history/3.4xx.md`
 - CLAUDE.md を Claude 5 世代向けに見直し＝376 行→84 行（手順・履歴・バックログを docs/environment.md・docs/backlog.md・architecture.md・topics.md へ移動、重み規約を .claude/rules/weights.md へ、禁止形を判断基準へ）（3.505.9）  → `docs/history/3.4xx.md`
 - CLAUDE.md の見直し提案（記事の 7 ステップ、docs/claudemd-tune-proposal.md＝承認待ち）と事実の訂正（重み c1/c3mn 30・covO 5、fork 名、ホスト JVM でビルド可、検証ハーネス節）（3.505.8）  → `docs/history/3.4xx.md`
