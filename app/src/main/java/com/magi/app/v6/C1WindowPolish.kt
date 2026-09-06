@@ -699,6 +699,13 @@ internal object C1WindowPolish {
 
         data class Beam(val work: Array<IntArray>, val rep: com.magi.app.v6.ViolationReport, val applied: Int)
 
+        /** ビーム各段の重複排除の鍵: 盤面ハッシュを一次キーに、衝突時だけ全セル比較（distinctBy は最初の出現順を保つ＝並びも不変）。 */
+        class BoardKey(val work: Array<IntArray>) {
+            private val h = AdaptiveEliteArchive.scheduleHash(work)
+            override fun hashCode(): Int = (h xor (h ushr 32)).toInt()
+            override fun equals(other: Any?): Boolean = other is BoardKey && h == other.h && AdaptiveEliteArchive.sameSchedule(work, other.work)
+        }
+
         fun rebuildTargets(work: Array<IntArray>): List<Triple<Int, Int, Int>> {
             val out = ArrayList<Triple<Int, Int, Int>>()
             for ((ci, c) in p.cons1.withIndex()) {
@@ -755,7 +762,7 @@ internal object C1WindowPolish {
             }
             if (!anyExpanded) break
             beam = nextCandidates
-                .distinctBy { cand -> cand.work.joinToString("|") { row -> row.joinToString(",") } }
+                .distinctBy { cand -> BoardKey(cand.work) }
                 .sortedWith(compareBy(reportComparator) { it.rep })
                 .take(beamWidth)
             // sortedWith 済みなので先頭がこのステップの最小。最良を更新できなければ停滞を数える。

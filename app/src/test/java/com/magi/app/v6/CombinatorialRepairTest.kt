@@ -189,4 +189,25 @@ class CombinatorialRepairTest {
         assertEquals("maxStagnantTries通りで打ち切り(45通り網羅しない)", 3, stats.combosTried)
         assertEquals("盤面は不変", before, after)
     }
+
+    // isBetter（呼び出し側から注入される判定）が例外を投げても、試行中の組合せを盤面に残さない。
+    // 旧は「適用→評価→巻き戻し」が直列で、評価の途中で例外が出ると work に組合せが残ったまま伝播した。
+    @Test
+    fun combineAndApplyRestoresBoardWhenEvaluationThrows() {
+        val st = combineTwoRejectedState()
+        val work = st.schedule.toIntArray2D()
+        val snapshot = work.map { it.clone() }.toTypedArray()
+        val before = UnifiedViolationChecker.check(st, work)
+        val candX = CombinatorialRepair.Candidate(listOf(intArrayOf(0, 0, 2)), "test", "X")
+        val candY = CombinatorialRepair.Candidate(listOf(intArrayOf(1, 0, 3)), "test", "Y")
+
+        var thrown = false
+        try {
+            CombinatorialRepair.combineAndApply(st, work, before, listOf(candX, candY), { _, _ -> throw IllegalStateException("evaluator failed") })
+        } catch (e: IllegalStateException) {
+            thrown = true
+        }
+        assertTrue("例外は呼び出し元へ伝播する", thrown)
+        for (i in work.indices) assertTrue("行 $i が巻き戻されている", snapshot[i].contentEquals(work[i]))
+    }
 }

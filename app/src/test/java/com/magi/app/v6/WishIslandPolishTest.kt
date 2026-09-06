@@ -140,4 +140,13 @@ class WishIslandPolishTest {
         assertEquals(0, r0.applied)
         assertFalse(r0.logs.first().message.contains("採用1"))
     }
+
+    /** ビーム 1 段の保持数は幅×分岐を残り予算で頭打ちにし、0 以下の入力は 1 に丸める（3.504.0）。 */
+    @Test
+    fun beamCandidateLimitIsCappedByRemainingBudgetAndNeverBelowOne() {
+        assertEquals(12, WishIslandPolish.beamCandidateLimit(2, 6, 400))
+        assertEquals(5, WishIslandPolish.beamCandidateLimit(2, 6, 5))
+        assertEquals(1, WishIslandPolish.beamCandidateLimit(2, 6, 0))
+        assertEquals(1, WishIslandPolish.beamCandidateLimit(0, 0, -3))
+    }
 }
