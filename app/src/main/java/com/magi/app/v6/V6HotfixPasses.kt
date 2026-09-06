@@ -284,8 +284,8 @@ object V6HotfixPasses {
         val personalLnsMaxMs: Long = 6_000L,
         val remainingClampMs: Long = 100_000L,
         val passLogTopN: Int = 8,
-        /** [Iteration 2] 各パスの拒否候補を巡の末尾で違反起点のトランザクションに束ねる（ViolationComponentRepair）。A/B 合格まで既定 OFF。 */
-        val componentRepairEnabled: Boolean = false,
+        /** [Iteration 2] 各パスの拒否候補を巡の末尾で違反起点のトランザクションに束ねる（ViolationComponentRepair）。3.505.1 でハイブリッド併用＝既定 ON。 */
+        val componentRepairEnabled: Boolean = true,
         val componentRepair: ViolationComponentRepair.Params = ViolationComponentRepair.Params(),
     )
 
