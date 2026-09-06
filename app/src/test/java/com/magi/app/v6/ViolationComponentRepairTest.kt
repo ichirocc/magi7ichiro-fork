@@ -188,4 +188,26 @@ class ViolationComponentRepairTest {
         val off = ViolationComponentRepair.repair(st, work, emptyList(), ViolationComponentRepair.Params(generateFromAnchors = false))
         assertEquals(0, off.applied)
     }
+
+    /** [Iteration 6] 厳密ピン（lo==hi）を単独で崩す単セル候補は生成しない＝推定でピン枝刈りされる無駄弾が出ない。
+     *  甲は A 1〜1 固定で 1 日目に A。3 日目の人員不足に対して甲の単セル（A 2 回）は作らず、行内の入替（1 日目⇄3 日目）に置き換える。乙の単セルで直る。 */
+    @Test
+    fun pinBreakingSinglesAreReplacedByRowSwapsAtGeneration() {
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-03",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "")), groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("甲", 0), Staff("乙", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1, 0, 0), listOf(0, 1, 0)), wishes = emptyMap(), staffRange = mapOf("0,1" to Range("1", "1")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val work = st.schedule.map { it.toIntArray() }.toTypedArray()
+        val r = ViolationComponentRepair.repair(st, work, emptyList())
+        val msg = r.logs.first().message
+        assertTrue(msg, msg.contains("ピン枝刈り0"))
+        assertEquals(msg, 0, UnifiedViolationChecker.check(st, r.newSchedule).hard)
+        assertEquals("甲の A は固定 1 回のまま", 1, r.newSchedule[0].count { it == 1 })
+    }
 }
