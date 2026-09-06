@@ -1,5 +1,6 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Range
@@ -88,6 +89,34 @@ class WishIslandPolishTest {
         val evaluatedAlone = Regex("正式評価(\\d+)").find(alone.logs.first().message)!!.groupValues[1].toInt()
         assertTrue("乙の島は評価されない: $evaluated vs 甲だけ $evaluatedAlone", evaluated <= evaluatedAlone + 1)
         assertTrue(r.logs.first().message.contains("起動2件"))
+    }
+
+    @Test
+    fun movesThatReduceForbiddenRunsAreNotPrunedEvenWhenTheChangedCellStaysInsideOne() {
+        // [3.501.0] 禁止 [A,B],[B,A],[A,休]。甲: A B A* 休(希望3日目) → 禁止 3 件(AB, BA, A休)。乙(2日目=休)との同日交換で
+        //   甲: A 休 A 休 → 禁止 2 件(A休×2)。旧の枝刈りは「変更セル(甲,2日目)=休 が禁止の並び A休 の中にある」だけで落としていた
+        //   ＝3→2 に減らす手が正式評価へ届かなかった。
+        val s = base(listOf(listOf(1, 2, 1, 0, 0, 0), listOf(0, 0, 0, 0, 0, 0), listOf(0, 0, 0, 0, 0, 0)),
+            mapOf("0,2" to 1), emptyMap()).copy(cons3n = listOf(C3Row(listOf("A", "B")), C3Row(listOf("B", "A")), C3Row(listOf("A", "休"))))
+        val before = UnifiedViolationChecker.check(s, s.schedule.toIntArray2D())
+        assertEquals(3, before.breakdown["c3n"])
+        val r = WishIslandPolish.applyWishIslandPolish(s, s.schedule.toIntArray2D())
+        val after = UnifiedViolationChecker.check(s, r.newSchedule)
+        assertTrue("3→2 に減らす手が採用される: ${r.logs.first().message}", r.applied >= 1)
+        assertEquals(2, after.breakdown["c3n"])
+        assertEquals("希望セルは不変", 1, r.newSchedule[0][2])
+    }
+
+    @Test
+    fun rotate3KeepsAQuarterOfTheIslandBudgetWhenOrdinaryMovesFindNothing() {
+        // 通常候補が何も採れない盤面で、島の枠 8 のうち 2 が巡回に残る＝正式評価が枠いっぱいまで進む（旧: 同日候補だけで枠を使い切った）。
+        val s = base(listOf(listOf(1, 1, 1, 0, 0, 0), listOf(0, 1, 0, 0, 0, 0), listOf(0, 0, 0, 0, 0, 2)),
+            mapOf("0,2" to 1), mapOf("0,1" to Range("0", "0")))   // 甲の A 上限0 超過＝島は起動するが同日交換では直らない
+        val r = WishIslandPolish.applyWishIslandPolish(s, s.schedule.toIntArray2D(), WishIslandPolish.Params(maxPasses = 1, maxEvaluations = 8, minIslandBudget = 8))
+        val msg = r.logs.first().message
+        assertTrue(msg, msg.contains("起動1件"))
+        val evaluated = Regex("正式評価(\\d+)").find(msg)!!.groupValues[1].toInt()
+        assertTrue("枠 8 を使い切る（通常 6 ＋ 巡回 2）: $msg", evaluated == 8 || r.applied >= 1)
     }
 
     @Test

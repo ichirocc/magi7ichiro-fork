@@ -157,19 +157,35 @@ internal object WishIslandPolish {
             while (t < m.cells.size) { work[m.cells[t]][m.cells[t + 1]] = old[t / 3]; t += 3 }
         }
 
-        /** 変更セルのどれかが禁止の並び（cons3n）を作るなら正式評価の前に落とす（チェッカーが最終判定＝見逃しは無害）。 */
-        private fun makesForbidden(m: Move): Boolean {
+        /**
+         * 変更する職員の禁止の並び（cons3n）の件数が増えるなら正式評価の前に落とす（チェッカーが最終判定＝見逃しは無害）。
+         * [3.501.0] 旧: 変更セルに禁止の並びが 1 つでも残れば落としていた＝「2件→1件」に減らす手まで正式評価へ届かなかった。
+         * `AdaptiveBlockSwapPolish.c3nFiresIncrease` と同じ増分判定（`C1DeltaPrefilter.staffC3nFires`＝チェッカーと同一意味論）。
+         */
+        private fun increasesForbidden(m: Move): Boolean {
             if (p.cons3n.isEmpty()) return false
-            val old = apply(m)
-            var bad = false
+            var before = 0; var after = 0
             var t = 0
-            while (t < m.cells.size && !bad) {
-                val i = m.cells[t]; val d = m.cells[t + 1]
-                if (p.makesForbiddenRun(work, i, d, work[i][d])) bad = true
+            while (t < m.cells.size) {
+                val i = m.cells[t]
+                var seen = false
+                var u = 0
+                while (u < t) { if (m.cells[u] == i) { seen = true; break }; u += 3 }
+                if (!seen) before += C1DeltaPrefilter.staffC3nFires(p, work[i])
+                t += 3
+            }
+            val old = apply(m)
+            t = 0
+            while (t < m.cells.size) {
+                val i = m.cells[t]
+                var seen = false
+                var u = 0
+                while (u < t) { if (m.cells[u] == i) { seen = true; break }; u += 3 }
+                if (!seen) after += C1DeltaPrefilter.staffC3nFires(p, work[i])
                 t += 3
             }
             undo(m, old)
-            return bad
+            return after > before
         }
 
         // ---- 候補生成（遅延・評価順＝手の種類 → 同じ所属 → 小さい手） ----
@@ -268,8 +284,19 @@ internal object WishIslandPolish {
         private fun sameDayMoves(isl: Island): Sequence<Move> = sequence { for (sg in booleanArrayOf(true, false)) yieldAll(sameDayMoves(isl, sg)) }
         private fun rotate3Moves(isl: Island): Sequence<Move> = sequence { for (sg in booleanArrayOf(true, false)) yieldAll(rotate3Moves(isl, sg)) }
 
-        /** 通常 pass の候補: 同日 → 窓 → 両翼（巡回は採用 0 のときだけ別途）。 */
-        private fun islandMoves(isl: Island): Sequence<Move> = sameDayMoves(isl) + windowMoves(isl) + wingMoves(isl)
+        /**
+         * 通常 pass の候補: 同日・窓・両翼を 1 手ずつ交互に（巡回は採用 0 のときだけ別途）。
+         * [3.501.0] 旧: 同日 → 窓 → 両翼の連結で、島の枠を同日候補（30名×範囲日数）が先に使い切り、窓・両翼が評価されなかった。
+         */
+        private fun islandMoves(isl: Island): Sequence<Move> = interleave(sameDayMoves(isl), windowMoves(isl), wingMoves(isl))
+
+        private fun interleave(vararg seqs: Sequence<Move>): Sequence<Move> = sequence {
+            val its = seqs.map { it.iterator() }.toMutableList()
+            while (its.isNotEmpty()) {
+                val cursor = its.iterator()
+                while (cursor.hasNext()) { val x = cursor.next(); if (x.hasNext()) yield(x.next()) else cursor.remove() }
+            }
+        }
 
         /** ビームの候補: 起動中の全島の 同日 → 窓（種類 → 所属 → 手の大きさ → 島の順）。 */
         private fun beamMoves(active: List<Island>): Sequence<Move> = sequence {
@@ -287,7 +314,7 @@ internal object WishIslandPolish {
             val base = work.copy2D()
             for (m in moves) {
                 if (!budgetLeft() || islandUsed >= budget) break
-                if (makesForbidden(m)) { prunedC3n++; continue }
+                if (increasesForbidden(m)) { prunedC3n++; continue }
                 islandUsed++; evaluated++
                 val old = apply(m)
                 val rep = UnifiedViolationChecker.check(state, work)
@@ -313,8 +340,10 @@ internal object WishIslandPolish {
                 val localBefore = localScore(bestRep, isl)
                 if (localBefore == 0L) continue
                 islandUsed = 0
-                var chosen = pickBest(isl, islandMoves(isl), islandBudget, localBefore)
-                if (chosen == null) chosen = pickBest(isl, rotate3Moves(isl), islandBudget, localBefore)   // 巡回は必要時のみ
+                // [3.501.0] 島の枠の 25% を 3 職員巡回に確保する（通常候補は 75% まで）。巡回は採用 0 のときだけ（残り枠を全部使える）。
+                val mainBudget = islandBudget - islandBudget / 4
+                var chosen = pickBest(isl, islandMoves(isl), mainBudget, localBefore)
+                if (chosen == null) chosen = pickBest(isl, rotate3Moves(isl), islandBudget, localBefore)
                 if (chosen == null) { stuck.add(name(isl.staff)); continue }
                 apply(chosen.move); bestRep = chosen.rep; applied++; passApplied++
                 byKind.merge(chosen.move.kind.label, 1, Int::plus)
@@ -352,7 +381,7 @@ internal object WishIslandPolish {
             val limit = prm.beamWidth * prm.beamBranchFactor
             for (m in beamMoves(active)) {
                 if (!budgetLeft() || next.size >= limit) break
-                if (makesForbidden(m)) { prunedC3n++; continue }
+                if (increasesForbidden(m)) { prunedC3n++; continue }
                 val old = apply(m)
                 val rep = UnifiedViolationChecker.check(state, work)
                 evaluated++; beamEvaluated++
