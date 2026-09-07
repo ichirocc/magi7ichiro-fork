@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 机上評価: C3「選択日ペア交換」／C1「連結成分・選択日交換」（ユーザー設計案、実装せず）＝机上例はペア交換限定でのみ局所障壁、既存 C3Sequence が c3n 単独違反者を起点にしない隙間を発見。実データ 4 件の最終盤面に残る 2 職員×≤3 日交換の改善手は golden −2.9%（非連続 2〜3 日、c3mn）・他 ≤0.2%。推奨: C3 版のみ最終段の低予算パスとして測る、C1 版は見送り（3.507.9 補遺）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第9段 V6SearchOperators＝2 パス乱択 12 箇所を pickUniform へ、findC41Fix/findC41sFix を findGroupRangeFix に統合、厳密ピン判定を共有、隣接日修正の不変量計算をループ外へ。seed 固定プローブ 72/72 一致、find*Fix の検査 6 件追加（3.507.9）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第8段 CSV 層 ScheduleCsvBridge＝4 実データで parse(build) の完全再現を固定（勤務表/職員/希望/制約、エスケープ文字含む）。数値でない個人レンジは取込で弾かず Sanity 2h に任せる決定を検査で固定。C# の 3.474.0/3.475.0 未同期 5 点を同日同期（3.507.8）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第7段 V6LateOperators＝improve（400 行）を LateSession＋chainSwap3/4・rectSwap2・c1BlockN へ（RNG の呼び出し順を保持）、RectSwap の違反者抽出を baseViolators に統一、isBalanceable をシフト別に記憶。seed 固定・締切遠方で 48/48 一致（3.507.7）  → `docs/history/3.4xx.md`
