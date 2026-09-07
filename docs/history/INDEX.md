@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 自律レビュー＆リファクタ第9段 V6SearchOperators＝2 パス乱択 12 箇所を pickUniform へ、findC41Fix/findC41sFix を findGroupRangeFix に統合、厳密ピン判定を共有、隣接日修正の不変量計算をループ外へ。seed 固定プローブ 72/72 一致、find*Fix の検査 6 件追加（3.507.9）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第8段 CSV 層 ScheduleCsvBridge＝4 実データで parse(build) の完全再現を固定（勤務表/職員/希望/制約、エスケープ文字含む）。数値でない個人レンジは取込で弾かず Sanity 2h に任せる決定を検査で固定。C# の 3.474.0/3.475.0 未同期 5 点を同日同期（3.507.8）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第7段 V6LateOperators＝improve（400 行）を LateSession＋chainSwap3/4・rectSwap2・c1BlockN へ（RNG の呼び出し順を保持）、RectSwap の違反者抽出を baseViolators に統一、isBalanceable をシフト別に記憶。seed 固定・締切遠方で 48/48 一致（3.507.7）  → `docs/history/3.4xx.md`
 - 自律改善ループ Iteration 7 報告＝決定的モードで再現性 34/34（VM 再起動で JVM が 2 回消え、再開可能にした続きも同一盤面）・新良 179/同等 150/旧良 11・品質 +1.81%・必須が減った試行 61。タイムアウト 19 行は c25/c26（予算を無視する設計の名目超え）。ベンチの再開（済み行を飛ばして追記）と grep の行バッファ（3.507.6）  → `docs/history/3.4xx.md`
