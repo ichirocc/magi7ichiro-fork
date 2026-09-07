@@ -61,10 +61,25 @@ object V6LateOperators {
         rectTry: Int = 12,
         blkTry: Int = 8,
     ): LateImproveResult {
-        val p = cachedProblem(state)
-        val sched = schedule.copy2D()
+        val session = LateSession(state, cachedProblem(state), schedule.copy2D(), report, rng, deadlineMs)
+        session.chainSwap3(chainTry3)
+        session.chainSwap4(chainTry4)
+        if (rectEnabled) session.rectSwap2(rectTry)
+        if (rectEnabled) session.c1BlockN(blkTry)
+        return session.result()
+    }
+
+    /** [3.507.6/レビュー第7段] 1 回の後期演算。盤面 [sched] を 4 演算子が順に触り、採否は gate/gateW（keep-best）。RNG の呼び出し順は分割前と同じ。 */
+    private class LateSession(
+        val state: MagiState, val p: Problem, val sched: Array<IntArray>, report: ViolationReport,
+        val rng: Random, val deadlineMs: Long,
+    ) {
         val logs = ArrayList<MirrorLog>()
         var cur = report
+        var rect = 0
+        var blkN = 0
+        var chain3 = 0
+        var chain4 = 0
         fun timeUp() = EngineClock.nowMs() >= deadlineMs
         fun lim(r: ViolationReport): Int =
             200 * (r.breakdown["high"] ?: 0) + 120 * (r.breakdown["low"] ?: 0)
@@ -97,12 +112,6 @@ object V6LateOperators {
             return false
         }
 
-        var rect = 0
-        var blkN = 0
-
-        var chain3 = 0
-        var chain4 = 0
-
         // ── 共有ヘルパ(ChainSwap3/4) ──
         val sN = p.S
         val tN = p.T
@@ -128,7 +137,9 @@ object V6LateOperators {
         //   Problem.makesForbiddenRun が任意長ルール(旧: 長さ2の禁止連続のみ)を一般判定する。
         fun c3nHit(i: Int, j: Int, newK: Int): Boolean = p.makesForbiddenRun(sched, i, j, newK)
         // [HF411 Level Zero準拠] 平準化対象シフト: need定義済み かつ 担当可能2名以上(番号非依存=全シフト同等)
-        fun isBalanceable(bk: Int): Boolean {
+        private val balanceableMemo = HashMap<Int, Boolean>()
+        fun isBalanceable(bk: Int): Boolean = balanceableMemo.getOrPut(bk) { computeBalanceable(bk) }
+        private fun computeBalanceable(bk: Int): Boolean {
             if (bk !in 0 until kN) return false
             // [3.309.0] 旧実装は生 state の need1 / needDay1 しか見ず、**P2 だけで需要が定義された
             //   シフトを「需要なし」と判定**して Chain 系の候補から丸ごと外していた（3.173.0 で
@@ -157,304 +168,305 @@ object V6LateOperators {
             return false
         }
 
-        // ───────── ChainSwap3 [HF354-358] 3者同日循環 ─────────
-        run {
-            val ssn = ssnOf(sched)
-            val violators = baseViolators(ssn)
-            // [HF356] c3単発(必須2連続の孤立が3件以上)のスタッフを追加
-            val c3Mand = p.cons3.filter { it.seq.size == 2 && it.seq[0] == it.seq[1] }.map { it.seq[0] }
-            if (c3Mand.isNotEmpty()) {
-                val vset = violators.toHashSet()
-                for (i in 0 until sN) {
-                    if (vset.contains(i)) continue
-                    var iso = 0
-                    for (mk in c3Mand) for (j in 0 until tN) {
-                        if (sched[i][j] != mk) continue
-                        val prevSame = j > 0 && sched[i][j - 1] == mk
-                        val nextSame = j < tN - 1 && sched[i][j + 1] == mk
-                        if (!prevSame && !nextSame) iso++
-                    }
-                    if (iso >= 3) violators.add(i)
-                }
-            }
-            // [HF357] 曜日偏在(労働シフトの曜日σ>1.0)のスタッフを追加
+        fun result() = LateImproveResult(sched, cur, chain3, chain4, rect, blkN, logs)
+
+        fun chainSwap3(chainTry3: Int) {
+            // ───────── ChainSwap3 [HF354-358] 3者同日循環 ─────────
             run {
-                val dow0 = runCatching { LocalDate.parse(state.startDate).dayOfWeek.value % 7 }.getOrDefault(0)
-                val vset = violators.toHashSet()
-                for (i in 0 until sN) {
-                    if (vset.contains(i)) continue
-                    val wd = IntArray(7)
-                    for (j in 0 until tN) {
-                        val kk = sched[i][j]
-                        if (kk in 0 until kN && isBalanceable(kk)) wd[(dow0 + j) % 7]++
-                    }
-                    val avg = wd.sum() / 7.0
-                    var vs = 0.0
-                    for (x in wd) vs += (x - avg) * (x - avg)
-                    if (Math.sqrt(vs / 7.0) > 1.0) violators.add(i)
-                }
-            }
-            // [HF358] シフト集中(担当可能者間σ>0.8 で平均から1σ超)のスタッフを追加
-            run {
-                val vset = violators.toHashSet()
-                for (kk in 0 until kN) {
-                    if (!isBalanceable(kk)) continue
-                    val elig = ArrayList<Pair<Int, Int>>()
-                    for (i in 0 until sN) if (alw[i].contains(kk)) elig.add(i to ssn[i][kk])
-                    if (elig.size < 2) continue
-                    val avg = elig.sumOf { it.second } / elig.size.toDouble()
-                    var vs = 0.0
-                    for ((_, c) in elig) vs += (c - avg) * (c - avg)
-                    val std = Math.sqrt(vs / elig.size)
-                    if (std <= 0.8) continue
-                    for ((i, c) in elig) {
+                val ssn = ssnOf(sched)
+                val violators = baseViolators(ssn)
+                // [HF356] c3単発(必須2連続の孤立が3件以上)のスタッフを追加
+                val c3Mand = p.cons3.filter { it.seq.size == 2 && it.seq[0] == it.seq[1] }.map { it.seq[0] }
+                if (c3Mand.isNotEmpty()) {
+                    val vset = violators.toHashSet()
+                    for (i in 0 until sN) {
                         if (vset.contains(i)) continue
-                        if (Math.abs(c - avg) > std) { violators.add(i); vset.add(i) }
+                        var iso = 0
+                        for (mk in c3Mand) for (j in 0 until tN) {
+                            if (sched[i][j] != mk) continue
+                            val prevSame = j > 0 && sched[i][j - 1] == mk
+                            val nextSame = j < tN - 1 && sched[i][j + 1] == mk
+                            if (!prevSame && !nextSame) iso++
+                        }
+                        if (iso >= 3) violators.add(i)
                     }
                 }
-            }
-            var tr = 0
-            while (tr < chainTry3) {
-                tr++
-                if (timeUp()) break
-                // [HF355] 3段階選択: 違反2+経由1(前半50%) / 違反1(〜80%) / 全ランダム(残り)
-                val i1: Int; val i2: Int; val i3: Int
-                if (violators.size >= 2 && tr <= (chainTry3 * 0.5).toInt()) {
-                    val a = rng.nextInt(violators.size)
-                    var b = rng.nextInt(violators.size)
-                    if (b == a) b = (b + 1) % violators.size
-                    i1 = violators[a]; i3 = violators[b]; i2 = rng.nextInt(sN)
-                } else if (violators.isNotEmpty() && tr <= (chainTry3 * 0.8).toInt()) {
-                    i1 = violators[rng.nextInt(violators.size)]; i2 = rng.nextInt(sN); i3 = rng.nextInt(sN)
-                } else {
-                    i1 = rng.nextInt(sN); i2 = rng.nextInt(sN); i3 = rng.nextInt(sN)
-                }
-                val j = rng.nextInt(tN)
-                if (i1 == i2 || i2 == i3 || i1 == i3) continue
-                val k1 = sched[i1][j]; val k2 = sched[i2][j]; val k3 = sched[i3][j]
-                if (k1 < 0 || k2 < 0 || k3 < 0) continue
-                if (k1 == k2 || k2 == k3 || k1 == k3) continue
-                if (!alw[i1].contains(k2) || !alw[i2].contains(k3) || !alw[i3].contains(k1)) continue
-                if (p.wishLocked(i1, j) || p.wishLocked(i2, j) || p.wishLocked(i3, j)) continue
-                if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k1)) continue
-                sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k1
-                if (gateW()) chain3++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3 }
-            }
-        }
-
-        // ───────── ChainSwap4 [HF360] 4者同日循環(3-wayの補完) ─────────
-        run {
-            val violators = baseViolators(ssnOf(sched))
-            var tr = 0
-            while (tr < chainTry4) {
-                tr++
-                if (timeUp()) break
-                val i1: Int; val i2: Int; val i3: Int; val i4: Int
-                if (violators.size >= 2 && tr <= (chainTry4 * 0.7).toInt()) {
-                    val a = rng.nextInt(violators.size)
-                    var b = rng.nextInt(violators.size)
-                    if (b == a) b = (b + 1) % violators.size
-                    i1 = violators[a]; i3 = violators[b]; i2 = rng.nextInt(sN); i4 = rng.nextInt(sN)
-                } else {
-                    i1 = rng.nextInt(sN); i2 = rng.nextInt(sN); i3 = rng.nextInt(sN); i4 = rng.nextInt(sN)
-                }
-                val j = rng.nextInt(tN)
-                if (setOf(i1, i2, i3, i4).size < 4) continue
-                val k1 = sched[i1][j]; val k2 = sched[i2][j]; val k3 = sched[i3][j]; val k4 = sched[i4][j]
-                if (k1 < 0 || k2 < 0 || k3 < 0 || k4 < 0) continue
-                if (setOf(k1, k2, k3, k4).size < 4) continue
-                if (!alw[i1].contains(k2) || !alw[i2].contains(k3) || !alw[i3].contains(k4) || !alw[i4].contains(k1)) continue
-                if (p.wishLocked(i1, j) || p.wishLocked(i2, j) ||
-                    p.wishLocked(i3, j) || p.wishLocked(i4, j)) continue
-                if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k4) || c3nHit(i4, j, k1)) continue
-                sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k4; sched[i4][j] = k1
-                if (gateW()) chain4++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3; sched[i4][j] = k4 }
-            }
-        }
-
-        // ───────── RectSwap2 [HF528+540] ─────────
-        if (rectEnabled) run {
-            val s = p.S
-            val t = p.T
-            val k = p.K
-            // 個人別回数の現況(Web ssnR 相当)と違反者(Web 同様、ループ前に一度だけ算出)
-            val ssn = Array(s) { IntArray(k) }
-            for (i in 0 until s) for (j in 0 until t) {
-                val kk = sched[i][j]
-                if (kk in 0 until k) ssn[i][kk]++
-            }
-            val violators = ArrayList<Int>()
-            for (i in 0 until s) {
-                var bad = false
-                for (kk in 0 until k) {
-                    if (ssn[i][kk] < p.rangeLo[i][kk] || ssn[i][kk] > p.rangeHi[i][kk]) { bad = true; break }
-                }
-                if (bad) violators.add(i)
-            }
-            var tr = 0
-            while (tr < rectTry) {
-                tr++
-                if (timeUp()) break
-                val i1 = if (violators.isNotEmpty() && tr <= (rectTry * 0.7).toInt())
-                    violators[rng.nextInt(violators.size)] else rng.nextInt(s)
-                // [HF540] ドナー狙い撃ち
-                var i2 = -1
-                var dJd = -1
-                if (violators.contains(i1) && rng.nextDouble() < 0.7) {
-                    var dKd = -1
-                    for (kk in 0 until k) if (ssn[i1][kk] < p.rangeLo[i1][kk]) { dKd = kk; break }
-                    if (dKd >= 0) {
-                        var bestC = -1
-                        val st0 = rng.nextInt(s)
-                        for (o in 0 until s) {
-                            val c2 = (st0 + o) % s
-                            if (c2 == i1) continue
-                            if (ssn[c2][dKd] > bestC) { bestC = ssn[c2][dKd]; i2 = c2 }
+                // [HF357] 曜日偏在(労働シフトの曜日σ>1.0)のスタッフを追加
+                run {
+                    val dow0 = runCatching { LocalDate.parse(state.startDate).dayOfWeek.value % 7 }.getOrDefault(0)
+                    val vset = violators.toHashSet()
+                    for (i in 0 until sN) {
+                        if (vset.contains(i)) continue
+                        val wd = IntArray(7)
+                        for (j in 0 until tN) {
+                            val kk = sched[i][j]
+                            if (kk in 0 until kN && isBalanceable(kk)) wd[(dow0 + j) % 7]++
                         }
-                        if (i2 >= 0 && bestC > 0) {
-                            val dds = ArrayList<Int>()
-                            for (j in 0 until t) if (sched[i2][j] == dKd && sched[i1][j] != dKd) dds.add(j)
-                            dJd = if (dds.isNotEmpty()) dds[rng.nextInt(dds.size)] else -1
-                        }
-                        if (dJd < 0) i2 = -1
+                        val avg = wd.sum() / 7.0
+                        var vs = 0.0
+                        for (x in wd) vs += (x - avg) * (x - avg)
+                        if (Math.sqrt(vs / 7.0) > 1.0) violators.add(i)
                     }
                 }
-                val dMode = i2 >= 0
-                if (!dMode) i2 = rng.nextInt(s)
-                if (i1 == i2) continue
-                val len = 2 + rng.nextInt(4) // 2..5日
-                val j1 = if (dMode) {
-                    val off = rng.nextInt(len)
-                    (dJd - off).coerceIn(0, maxOf(0, t - len))
-                } else rng.nextInt(maxOf(1, t - len + 1))
-                val j2 = minOf(t - 1, j1 + len - 1)
-                val b1 = p.allowedShiftsForStaff(i1)
-                val b2 = p.allowedShiftsForStaff(i2)
-                var ok = true
-                var anyDiff = false
-                val ks1 = IntArray(j2 - j1 + 1)
-                val ks2 = IntArray(j2 - j1 + 1)
-                var x = 0
-                var j = j1
-                while (j <= j2) {
-                    if (p.wishLocked(i1, j) || p.wishLocked(i2, j)) { ok = false; break } // 希望(pref=HARD)破壊回避
-                    val k1 = sched[i1][j]
-                    val k2 = sched[i2][j]
-                    if (k1 < 0 || k2 < 0) { ok = false; break }
-                    if (k1 != k2) anyDiff = true
-                    if (!b1.contains(k2) || !b2.contains(k1)) { ok = false; break } // 群互換(双方向)
-                    ks1[x] = k1; ks2[x] = k2
-                    x++; j++
+                // [HF358] シフト集中(担当可能者間σ>0.8 で平均から1σ超)のスタッフを追加
+                run {
+                    val vset = violators.toHashSet()
+                    for (kk in 0 until kN) {
+                        if (!isBalanceable(kk)) continue
+                        val elig = ArrayList<Pair<Int, Int>>()
+                        for (i in 0 until sN) if (alw[i].contains(kk)) elig.add(i to ssn[i][kk])
+                        if (elig.size < 2) continue
+                        val avg = elig.sumOf { it.second } / elig.size.toDouble()
+                        var vs = 0.0
+                        for ((_, c) in elig) vs += (c - avg) * (c - avg)
+                        val std = Math.sqrt(vs / elig.size)
+                        if (std <= 0.8) continue
+                        for ((i, c) in elig) {
+                            if (vset.contains(i)) continue
+                            if (Math.abs(c - avg) > std) { violators.add(i); vset.add(i) }
+                        }
+                    }
                 }
-                if (!ok || !anyDiff) continue
-                // 適用(同日内交換=被覆保存)
-                x = 0; j = j1
-                while (j <= j2) { sched[i1][j] = ks2[x]; sched[i2][j] = ks1[x]; x++; j++ }
-                if (gate("RectSwap2", "矩形交換採用${if (dMode) "(D)" else ""} i=$i1<->$i2 j=[$j1..$j2]")) {
-                    rect++
-                } else { // revert
-                    x = 0; j = j1
-                    while (j <= j2) { sched[i1][j] = ks1[x]; sched[i2][j] = ks2[x]; x++; j++ }
-                }
-            }
-        }
-
-        // ───────── C1BlockN [HF541 = VBA HF219] ─────────
-        if (rectEnabled) run {
-            val rules = p.cons1
-            if (rules.isNotEmpty()) {
-                val s = p.S
-                val t = p.T
                 var tr = 0
-                while (tr < blkTry) {
+                while (tr < chainTry3) {
                     tr++
                     if (timeUp()) break
-                    val c = rules[rng.nextInt(rules.size)]
-                    val kd = c.shiftIdx
-                    val days = c.day1
-                    val need = c.day2
-                    if (days < 2 || need <= 0 || days > t) continue
-                    val i1 = rng.nextInt(s)
-                    if (!p.allowedShiftsForStaff(i1).contains(kd)) continue
-                    // 違反窓を1つ探す(ランダム起点巡回)
-                    val wN = t - days + 1
-                    val w0 = rng.nextInt(maxOf(1, wN))
-                    var w = -1
-                    var have = 0
-                    for (o in 0 until wN) {
-                        val ws = (w0 + o) % wN
-                        var cnt = 0
-                        for (j in ws until ws + days) if (sched[i1][j] == kd) cnt++
-                        if (cnt < need) { w = ws; have = cnt; break }
+                    // [HF355] 3段階選択: 違反2+経由1(前半50%) / 違反1(〜80%) / 全ランダム(残り)
+                    val i1: Int; val i2: Int; val i3: Int
+                    if (violators.size >= 2 && tr <= (chainTry3 * 0.5).toInt()) {
+                        val a = rng.nextInt(violators.size)
+                        var b = rng.nextInt(violators.size)
+                        if (b == a) b = (b + 1) % violators.size
+                        i1 = violators[a]; i3 = violators[b]; i2 = rng.nextInt(sN)
+                    } else if (violators.isNotEmpty() && tr <= (chainTry3 * 0.8).toInt()) {
+                        i1 = violators[rng.nextInt(violators.size)]; i2 = rng.nextInt(sN); i3 = rng.nextInt(sN)
+                    } else {
+                        i1 = rng.nextInt(sN); i2 = rng.nextInt(sN); i3 = rng.nextInt(sN)
                     }
-                    if (w < 0) continue
-                    val blen = minOf(need - have, 5)
-                    if (blen < 1) continue
-                    // 窓内の連続 blen 日(i1 が非kd かつ 希望なし)
-                    var j1 = -1
-                    for (s0 in w..(w + days - blen)) {
-                        var okc = true
-                        for (d in 0 until blen) {
-                            val j = s0 + d
-                            if (p.wishLocked(i1, j) || sched[i1][j] == kd) { okc = false; break }
-                        }
-                        if (okc) { j1 = s0; break }
+                    val j = rng.nextInt(tN)
+                    if (i1 == i2 || i2 == i3 || i1 == i3) continue
+                    val k1 = sched[i1][j]; val k2 = sched[i2][j]; val k3 = sched[i3][j]
+                    if (k1 < 0 || k2 < 0 || k3 < 0) continue
+                    if (k1 == k2 || k2 == k3 || k1 == k3) continue
+                    if (!alw[i1].contains(k2) || !alw[i2].contains(k3) || !alw[i3].contains(k1)) continue
+                    if (p.wishLocked(i1, j) || p.wishLocked(i2, j) || p.wishLocked(i3, j)) continue
+                    if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k1)) continue
+                    sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k1
+                    if (gateW()) chain3++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3 }
+                }
+            }
+        }
+
+        fun chainSwap4(chainTry4: Int) {
+            // ───────── ChainSwap4 [HF360] 4者同日循環(3-wayの補完) ─────────
+            run {
+                val violators = baseViolators(ssnOf(sched))
+                var tr = 0
+                while (tr < chainTry4) {
+                    tr++
+                    if (timeUp()) break
+                    val i1: Int; val i2: Int; val i3: Int; val i4: Int
+                    if (violators.size >= 2 && tr <= (chainTry4 * 0.7).toInt()) {
+                        val a = rng.nextInt(violators.size)
+                        var b = rng.nextInt(violators.size)
+                        if (b == a) b = (b + 1) % violators.size
+                        i1 = violators[a]; i3 = violators[b]; i2 = rng.nextInt(sN); i4 = rng.nextInt(sN)
+                    } else {
+                        i1 = rng.nextInt(sN); i2 = rng.nextInt(sN); i3 = rng.nextInt(sN); i4 = rng.nextInt(sN)
                     }
-                    if (j1 < 0) continue
-                    // 各日のドナー貪欲選択(既選択優先 → 新規は kd 総保持数最多)
-                    val oldKs = IntArray(blen)
-                    val donors = IntArray(blen)
-                    val used = ArrayList<Int>()
-                    var fail = false
-                    for (d in 0 until blen) {
-                        val j = j1 + d
-                        val k1 = sched[i1][j]
-                        if (k1 < 0) { fail = true; break }
-                        var pick = -1
-                        for (u in used) {
-                            if (sched[u][j] == kd && !p.wishLocked(u, j) &&
-                                p.allowedShiftsForStaff(u).contains(k1)
-                            ) { pick = u; break }
-                        }
-                        if (pick < 0) {
-                            if (used.size >= 5) { fail = true; break }
+                    val j = rng.nextInt(tN)
+                    if (setOf(i1, i2, i3, i4).size < 4) continue
+                    val k1 = sched[i1][j]; val k2 = sched[i2][j]; val k3 = sched[i3][j]; val k4 = sched[i4][j]
+                    if (k1 < 0 || k2 < 0 || k3 < 0 || k4 < 0) continue
+                    if (setOf(k1, k2, k3, k4).size < 4) continue
+                    if (!alw[i1].contains(k2) || !alw[i2].contains(k3) || !alw[i3].contains(k4) || !alw[i4].contains(k1)) continue
+                    if (p.wishLocked(i1, j) || p.wishLocked(i2, j) ||
+                        p.wishLocked(i3, j) || p.wishLocked(i4, j)) continue
+                    if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k4) || c3nHit(i4, j, k1)) continue
+                    sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k4; sched[i4][j] = k1
+                    if (gateW()) chain4++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3; sched[i4][j] = k4 }
+                }
+            }
+        }
+
+        fun rectSwap2(rectTry: Int) {
+            // ───────── RectSwap2 [HF528+540] ─────────
+            run {
+                val s = p.S
+                val t = p.T
+                val k = p.K
+                // 個人別回数の現況(Web ssnR 相当)と違反者(Web 同様、ループ前に一度だけ算出)
+                val ssn = Array(s) { IntArray(k) }
+                for (i in 0 until s) for (j in 0 until t) {
+                    val kk = sched[i][j]
+                    if (kk in 0 until k) ssn[i][kk]++
+                }
+                val violators = baseViolators(ssn)   // [3.507.6] ChainSwap と同じ判定（旧: 同じループの複製）
+                var tr = 0
+                while (tr < rectTry) {
+                    tr++
+                    if (timeUp()) break
+                    val i1 = if (violators.isNotEmpty() && tr <= (rectTry * 0.7).toInt())
+                        violators[rng.nextInt(violators.size)] else rng.nextInt(s)
+                    // [HF540] ドナー狙い撃ち
+                    var i2 = -1
+                    var dJd = -1
+                    if (violators.contains(i1) && rng.nextDouble() < 0.7) {
+                        var dKd = -1
+                        for (kk in 0 until k) if (ssn[i1][kk] < p.rangeLo[i1][kk]) { dKd = kk; break }
+                        if (dKd >= 0) {
                             var bestC = -1
                             val st0 = rng.nextInt(s)
                             for (o in 0 until s) {
                                 val c2 = (st0 + o) % s
-                                if (c2 == i1 || used.contains(c2)) continue
-                                if (sched[c2][j] != kd) continue
-                                if (p.wishLocked(c2, j)) continue
-                                if (!p.allowedShiftsForStaff(c2).contains(k1)) continue
-                                var cnt2 = 0
-                                for (jj in 0 until t) if (sched[c2][jj] == kd) cnt2++
-                                if (cnt2 > bestC) { bestC = cnt2; pick = c2 }
+                                if (c2 == i1) continue
+                                if (ssn[c2][dKd] > bestC) { bestC = ssn[c2][dKd]; i2 = c2 }
                             }
-                            if (pick >= 0) used.add(pick)
+                            if (i2 >= 0 && bestC > 0) {
+                                val dds = ArrayList<Int>()
+                                for (j in 0 until t) if (sched[i2][j] == dKd && sched[i1][j] != dKd) dds.add(j)
+                                dJd = if (dds.isNotEmpty()) dds[rng.nextInt(dds.size)] else -1
+                            }
+                            if (dJd < 0) i2 = -1
                         }
-                        if (pick < 0) { fail = true; break }
-                        oldKs[d] = k1; donors[d] = pick
                     }
-                    if (fail) continue
-                    // 一括適用(i1: oldK->kd / donor: kd->oldK = 同日交換で被覆保存)
-                    for (d in 0 until blen) {
-                        val j = j1 + d
-                        sched[i1][j] = kd
-                        sched[donors[d]][j] = oldKs[d]
+                    val dMode = i2 >= 0
+                    if (!dMode) i2 = rng.nextInt(s)
+                    if (i1 == i2) continue
+                    val len = 2 + rng.nextInt(4) // 2..5日
+                    val j1 = if (dMode) {
+                        val off = rng.nextInt(len)
+                        (dJd - off).coerceIn(0, maxOf(0, t - len))
+                    } else rng.nextInt(maxOf(1, t - len + 1))
+                    val j2 = minOf(t - 1, j1 + len - 1)
+                    val b1 = p.allowedShiftsForStaff(i1)
+                    val b2 = p.allowedShiftsForStaff(i2)
+                    var ok = true
+                    var anyDiff = false
+                    val ks1 = IntArray(j2 - j1 + 1)
+                    val ks2 = IntArray(j2 - j1 + 1)
+                    var x = 0
+                    var j = j1
+                    while (j <= j2) {
+                        if (p.wishLocked(i1, j) || p.wishLocked(i2, j)) { ok = false; break } // 希望(pref=HARD)破壊回避
+                        val k1 = sched[i1][j]
+                        val k2 = sched[i2][j]
+                        if (k1 < 0 || k2 < 0) { ok = false; break }
+                        if (k1 != k2) anyDiff = true
+                        if (!b1.contains(k2) || !b2.contains(k1)) { ok = false; break } // 群互換(双方向)
+                        ks1[x] = k1; ks2[x] = k2
+                        x++; j++
                     }
-                    if (gate("C1BlockN", "N者間採用 i=$i1 kd=$kd j=[$j1..${j1 + blen - 1}] 者=${used.size + 1}")) {
-                        blkN++
+                    if (!ok || !anyDiff) continue
+                    // 適用(同日内交換=被覆保存)
+                    x = 0; j = j1
+                    while (j <= j2) { sched[i1][j] = ks2[x]; sched[i2][j] = ks1[x]; x++; j++ }
+                    if (gate("RectSwap2", "矩形交換採用${if (dMode) "(D)" else ""} i=$i1<->$i2 j=[$j1..$j2]")) {
+                        rect++
                     } else { // revert
-                        for (d in 0 until blen) {
-                            val j = j1 + d
-                            sched[i1][j] = oldKs[d]
-                            sched[donors[d]][j] = kd
-                        }
+                        x = 0; j = j1
+                        while (j <= j2) { sched[i1][j] = ks1[x]; sched[i2][j] = ks2[x]; x++; j++ }
                     }
                 }
             }
         }
 
-        return LateImproveResult(sched, cur, chain3, chain4, rect, blkN, logs)
+        fun c1BlockN(blkTry: Int) {
+            // ───────── C1BlockN [HF541 = VBA HF219] ─────────
+            run {
+                val rules = p.cons1
+                if (rules.isNotEmpty()) {
+                    val s = p.S
+                    val t = p.T
+                    var tr = 0
+                    while (tr < blkTry) {
+                        tr++
+                        if (timeUp()) break
+                        val c = rules[rng.nextInt(rules.size)]
+                        val kd = c.shiftIdx
+                        val days = c.day1
+                        val need = c.day2
+                        if (days < 2 || need <= 0 || days > t) continue
+                        val i1 = rng.nextInt(s)
+                        if (!p.allowedShiftsForStaff(i1).contains(kd)) continue
+                        // 違反窓を1つ探す(ランダム起点巡回)
+                        val wN = t - days + 1
+                        val w0 = rng.nextInt(maxOf(1, wN))
+                        var w = -1
+                        var have = 0
+                        for (o in 0 until wN) {
+                            val ws = (w0 + o) % wN
+                            var cnt = 0
+                            for (j in ws until ws + days) if (sched[i1][j] == kd) cnt++
+                            if (cnt < need) { w = ws; have = cnt; break }
+                        }
+                        if (w < 0) continue
+                        val blen = minOf(need - have, 5)
+                        if (blen < 1) continue
+                        // 窓内の連続 blen 日(i1 が非kd かつ 希望なし)
+                        var j1 = -1
+                        for (s0 in w..(w + days - blen)) {
+                            var okc = true
+                            for (d in 0 until blen) {
+                                val j = s0 + d
+                                if (p.wishLocked(i1, j) || sched[i1][j] == kd) { okc = false; break }
+                            }
+                            if (okc) { j1 = s0; break }
+                        }
+                        if (j1 < 0) continue
+                        // 各日のドナー貪欲選択(既選択優先 → 新規は kd 総保持数最多)
+                        val oldKs = IntArray(blen)
+                        val donors = IntArray(blen)
+                        val used = ArrayList<Int>()
+                        var fail = false
+                        for (d in 0 until blen) {
+                            val j = j1 + d
+                            val k1 = sched[i1][j]
+                            if (k1 < 0) { fail = true; break }
+                            var pick = -1
+                            for (u in used) {
+                                if (sched[u][j] == kd && !p.wishLocked(u, j) &&
+                                    p.allowedShiftsForStaff(u).contains(k1)
+                                ) { pick = u; break }
+                            }
+                            if (pick < 0) {
+                                if (used.size >= 5) { fail = true; break }
+                                var bestC = -1
+                                val st0 = rng.nextInt(s)
+                                for (o in 0 until s) {
+                                    val c2 = (st0 + o) % s
+                                    if (c2 == i1 || used.contains(c2)) continue
+                                    if (sched[c2][j] != kd) continue
+                                    if (p.wishLocked(c2, j)) continue
+                                    if (!p.allowedShiftsForStaff(c2).contains(k1)) continue
+                                    var cnt2 = 0
+                                    for (jj in 0 until t) if (sched[c2][jj] == kd) cnt2++
+                                    if (cnt2 > bestC) { bestC = cnt2; pick = c2 }
+                                }
+                                if (pick >= 0) used.add(pick)
+                            }
+                            if (pick < 0) { fail = true; break }
+                            oldKs[d] = k1; donors[d] = pick
+                        }
+                        if (fail) continue
+                        // 一括適用(i1: oldK->kd / donor: kd->oldK = 同日交換で被覆保存)
+                        for (d in 0 until blen) {
+                            val j = j1 + d
+                            sched[i1][j] = kd
+                            sched[donors[d]][j] = oldKs[d]
+                        }
+                        if (gate("C1BlockN", "N者間採用 i=$i1 kd=$kd j=[$j1..${j1 + blen - 1}] 者=${used.size + 1}")) {
+                            blkN++
+                        } else { // revert
+                            for (d in 0 until blen) {
+                                val j = j1 + d
+                                sched[i1][j] = oldKs[d]
+                                sched[donors[d]][j] = kd
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
