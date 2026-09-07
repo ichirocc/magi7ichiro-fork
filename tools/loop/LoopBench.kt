@@ -94,8 +94,13 @@ fun main(args: Array<String>) {
     val det = System.getenv("MAGI_BENCH_DETERMINISTIC") == "1"
     val oldP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det)
     val newP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
-    val w = out.bufferedWriter()
-    w.write("case,size,cat,seed,arm,ms,timeout,exception,oob,mismatch,hard,hardW,softW,wishRate,changed,total,weighted,peakMB,hash,repro\n")
+    // [3.507.6] 再開可能: 既存 CSV の (case,seed,arm) を読み、済みの行は飛ばして追記する（VM 再起動で JVM が消えても続きから）。
+    val done = HashSet<String>()
+    if (out.exists()) out.readLines().drop(1).forEach { l -> val c = l.split(","); if (c.size > 4) done.add(c[0] + "|" + c[3] + "|" + c[4]) }
+    val fresh = !out.exists() || done.isEmpty()
+    val w = java.io.FileWriter(out, !fresh).buffered()
+    if (fresh) w.write("case,size,cat,seed,arm,ms,timeout,exception,oob,mismatch,hard,hardW,softW,wishRate,changed,total,weighted,peakMB,hash,repro\n")
+    if (done.isNotEmpty()) System.err.println("resume: ${done.size} rows already done")
     // ウォームアップ
     run { val c = cases[0]; val init = initialFor(c)
         repeat(2) { V6HotfixPasses.runPostOptimization(c.state, init.copy2D(), "warm", seed = 1L, deadlineMs = EngineClock.nowMs() + c.budgetMs, params = newP) } }
@@ -108,6 +113,7 @@ fun main(args: Array<String>) {
         val wishN = st.wishes.size
         for (seed in 0 until seeds) {
             for ((arm, prm) in listOf("old" to oldP, "new" to newP)) {
+                if ("${sp.id}|$seed|$arm" in done) continue
                 fun once(): List<Any> {
                     resetPeak(); System.gc()
                     val t0 = System.nanoTime()

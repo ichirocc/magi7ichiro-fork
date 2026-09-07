@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 自律改善ループ Iteration 7 報告＝決定的モードで再現性 34/34（VM 再起動で JVM が 2 回消え、再開可能にした続きも同一盤面）・新良 179/同等 150/旧良 11・品質 +1.81%・必須が減った試行 61。タイムアウト 19 行は c25/c26（予算を無視する設計の名目超え）。ベンチの再開（済み行を飛ばして追記）と grep の行バッファ（3.507.6）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第6段 V6SanityPort＝buildGuidance（689 行）/buildViolationDebug（316 行）を GuidanceBuilder/DebugBuilder のメソッドへ機械分割、表示上限を Guidance に集約。「担当できる人数」を placeableFor（mayPlace＋その日の希望固定）で数える（forcedCovU/構造 HARD 下限/検査 3/c1 作業需要/代用可）＝3.507.0 の取り残し。設定ミス 24/24・違反詳細 20/24 一致（4 件は代用可の意図した減少）（3.507.5）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第5段 V6SwapSuggester＝FixSuggester を Session 化（7 フェーズを関数へ、上限を Limits に集約）、連鎖に mayPlace ガード、再最適化の冗長評価と別日交換の同日重複列挙を撤去。4 実データ × 5 設定で提案一覧 20/20 一致。C# のドリフト 2 件（休 index 0・署名に日なし）を修正（3.507.4）  → `docs/history/3.4xx.md`
 - 自律改善ループ Iteration 7 第一弾＝後処理の決定的モード（`deterministic`: hf67/hf66 の ms キャップ・巡回クラスタの締切・共同 LNS の maxMillis/patience・最終段の残り時間判定を回数上限へ。C1 90,000・個人 60,000 で時間モードと 4/4 同一盤面、2 回とも再現）。実機は既定 OFF。ベンチ iter7 走行中（3.507.3）  → `docs/history/3.4xx.md`
