@@ -69,4 +69,24 @@ class V6SwapSuggesterTest {
         }
         assertEquals("低/高を同時に解消する同日スワップは重複なく1件のみ", 1, fullFix.size)
     }
+
+    /** [3.507.4] 下限割れ（lo=1）でも上限 0 のシフトは連鎖でも置かない＝最適化器（mayPlace）と同じ。単一変更は allowedShiftsForStaff で元から除外。 */
+    @Test
+    fun chainDoesNotPlaceShiftsWithZeroCap() {
+        val st = com.magi.app.model.MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-03",
+            shifts = listOf(com.magi.app.model.Shift("休", "休", "", ""), com.magi.app.model.Shift("A", "A", "", "")),
+            groups = listOf(com.magi.app.model.Group("G", "G")), staff = listOf(com.magi.app.model.Staff("X", 0), com.magi.app.model.Staff("Y", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(0, 0, 0), listOf(1, 1, 0)), wishes = emptyMap(),
+            staffRange = mapOf("0,1" to com.magi.app.model.Range("2", "0")),   // X の A: 下限 2・上限 0（矛盾した設定）
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
+        assertTrue(UnifiedViolationChecker.check(st, sched).countViolations.containsKey("0,1"))
+        val results = FixSuggester.suggest(st, sched, maxResults = 20, deadlineMs = 4000L)
+        assertTrue(results.map { it.label }.toString(), results.none { r -> r.ops.any { it.staff == 0 && it.toShift == 1 } })
+    }
 }
