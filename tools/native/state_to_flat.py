@@ -165,6 +165,23 @@ def main():
                 t = rlo
             if rhi != INT32_MAX and t > rhi:
                 t = rhi
+            # [3.508.0] 到達範囲クランプ — Problem.apt と同式（希望固定込みの実効下限/上限の他シフト合計）
+            def wish_cnt(kk):
+                return sum(1 for j in range(T) if wish[i * T + j] == kk and kk in can_k)
+            def eff_lo(kk):
+                lo2 = 0 if range_lo[i * K + kk] == INT32_MIN else range_lo[i * K + kk]
+                return max(lo2, wish_cnt(kk))
+            def eff_hi(kk):
+                placeable = kk in can_k and not (range_hi[i * K + kk] == 0 and kk != rest_idx)
+                hi2 = (T if range_hi[i * K + kk] == INT32_MAX else range_hi[i * K + kk]) if placeable else 0
+                return max(hi2, wish_cnt(kk))
+            sum_hi = sum(eff_hi(k2) for k2 in range(K) if k2 != k)
+            sum_lo = sum(eff_lo(k2) for k2 in range(K) if k2 != k)
+            reach_lo = max(T - sum_hi, wish_cnt(k), 0 if rlo == INT32_MIN else rlo)
+            reach_hi = min(T - sum_lo, T if rhi == INT32_MAX else rhi)
+            if reach_lo <= reach_hi:
+                t = max(t, reach_lo)
+                t = min(t, reach_hi)
             apt[i * K + k] = t
 
     # cons blob（NativeEval.createHandle と同順）

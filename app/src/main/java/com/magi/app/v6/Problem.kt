@@ -75,6 +75,9 @@ class Problem(val state: MagiState) {
     /** apt[i][k] = 適切回数（群単位の双方向目標 groupShiftApt[群][シフト]）, or -1 when unset.
      *  担当可能(canDo=bucket)なシフトのみ展開し、解消不能な幻のapt偏差を作らない（c1 と同じ方針）。 */
     val apt: Array<IntArray>
+    /** [3.508.0] 群目標を個人 [lo,hi] でだけクランプした値（到達範囲クランプ前）。設定ミス診断が「設定した目標が
+     *  構造的に届かない」ことを言い続けるために読む。評価・最適化は [apt]（実効目標）だけを見る。 */
+    val aptRaw: Array<IntArray>
 
     val cons1: List<C1>
     val cons2: List<C2>
@@ -161,6 +164,13 @@ class Problem(val state: MagiState) {
         // 適切回数（双方向目標）: state.groupShiftApt[群][シフト] を個人別 apt[i][k] へ展開（群単位＝同群全員に同一目標）。
         // 担当ONシフトのみ（bucket=canDo）有効化し、担当不可シフトの幻のapt偏差を除外する。
         apt = Array(S) { IntArray(K) { -1 } }
+        aptRaw = Array(S) { IntArray(K) { -1 } }
+        // [3.508.0] 職員×シフトの実効下限/上限（希望固定込み）。下限 = max(lo, 希望固定数)。上限 = 置けるなら
+        //   (hi か T)、置けない（担当外・上限 0）なら希望固定数だけ。他シフトの合計から「このシフトに必ず来る日数」
+        //   ＝到達下限 T−Σ他の上限 と、到達上限 T−Σ他の下限 が決まる。
+        val wishCnt = Array(S) { i -> IntArray(K).also { c -> for (j in 0 until T) { val w = wish[i][j]; if (w in 0 until K && canDo(i, w)) c[w]++ } } }
+        fun effLo(i: Int, k: Int): Int = maxOf(if (rangeLo[i][k] == Int.MIN_VALUE) 0 else rangeLo[i][k], wishCnt[i][k])
+        fun effHi(i: Int, k: Int): Int = maxOf(if (placeableHas[i][k]) (if (rangeHi[i][k] == Int.MAX_VALUE) T else rangeHi[i][k]) else 0, wishCnt[i][k])
         for (i in 0 until S) {
             val g = sgrp[i]
             val row = state.groupShiftApt.getOrNull(g) ?: continue
@@ -173,6 +183,14 @@ class Problem(val state: MagiState) {
                 val rlo = rangeLo[i][k]; val rhi = rangeHi[i][k]
                 if (rlo != Int.MIN_VALUE && t < rlo) t = rlo
                 if (rhi != Int.MAX_VALUE && t > rhi) t = rhi
+                aptRaw[i][k] = t
+                // [3.508.0] さらに到達範囲へ収める（例: 休 10〜10・有 1〜1 で他が上限 0 なら残り 20 日は必ず B4＝群目標 1 は
+                //   解消不能）。個人 [lo,hi] と矛盾するときは個人設定を優先して従来どおり。
+                var sumHi = 0; var sumLo = 0
+                for (k2 in 0 until K) if (k2 != k) { sumHi += effHi(i, k2); sumLo += effLo(i, k2) }
+                val reachLo = maxOf(T - sumHi, wishCnt[i][k], if (rlo == Int.MIN_VALUE) 0 else rlo)
+                val reachHi = minOf(T - sumLo, if (rhi == Int.MAX_VALUE) T else rhi)
+                if (reachLo <= reachHi) { if (t < reachLo) t = reachLo; if (t > reachHi) t = reachHi }
                 apt[i][k] = t
             }
         }

@@ -1,2 +1,2 @@
 hard=15
-soft=950
+soft=931

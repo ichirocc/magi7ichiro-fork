@@ -335,7 +335,7 @@ private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: MagiViewModel
             Text("群の目標（$groupName 全員に適用）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             AptStepperRow(label = toHankakuKigou(kigou), value = raw, onChange = { vm.ws1SetGroupApt(g, k, it) })
             if (apt != null && raw.trim().toIntOrNull() != apt) {
-                Text("個人の上下限で ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("この職員の上下限・希望・置けるシフトから ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(4.dp))
             Text("個人の下限・上限（このシフトだけ）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
