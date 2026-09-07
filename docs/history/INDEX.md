@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 自律レビュー＆リファクタ第10段 V6HotfixPasses 各パス内部＝HF80 の localBestImprovement を「その場で 1 セル書き換え→不採用なら戻す」に（試行ごとの盤面コピーを撤去、Problem/Evaluator は入口で 1 回）、runPolishCluster は cachedProblem。seed 固定プローブ 48/48 一致、HF80 の検査 3 件追加。エンジン層の精読は一巡、残りは UI 層（3.508.1）  → `docs/history/3.4xx.md`
 - 適切回数（apt）の群目標を「構造的に到達できる範囲」へクランプ＝桒澤 B4「目標 1／現在 17」の幻の超過の恒久対策（到達下限 T−Σ他シフト実効上限・希望固定込み、個人 [lo,hi] 優先）。評価は実効目標 apt、診断 6b/6d/6-C は設定値 aptRaw。実データで動くのは 9 組のみ、期待値 3 ファイル更新・C++ MATCH・C# 同期（3.508.0）  → `docs/history/3.4xx.md`
 - 机上評価: C3「選択日ペア交換」／C1「連結成分・選択日交換」（ユーザー設計案、実装せず）＝机上例はペア交換限定でのみ局所障壁、既存 C3Sequence が c3n 単独違反者を起点にしない隙間を発見。実データ 4 件の最終盤面に残る 2 職員×≤3 日交換の改善手は golden −2.9%（非連続 2〜3 日、c3mn）・他 ≤0.2%。推奨: C3 版のみ最終段の低予算パスとして測る、C1 版は見送り（3.507.9 補遺）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第9段 V6SearchOperators＝2 パス乱択 12 箇所を pickUniform へ、findC41Fix/findC41sFix を findGroupRangeFix に統合、厳密ピン判定を共有、隣接日修正の不変量計算をループ外へ。seed 固定プローブ 72/72 一致、find*Fix の検査 6 件追加（3.507.9）  → `docs/history/3.4xx.md`

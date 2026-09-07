@@ -512,7 +512,7 @@ object V6HotfixPasses {
     ): ClusterOutcome {
         val adopted = LinkedHashMap<String, Int>().also { m -> for (k in adoptionKeys) m[k] = 0 }
         val c3Anchor = setOf("vio-c3", "vio-c3m", "vio-c3mn")
-        val pC1 = Problem(state)   // state の純関数＝巡回間で不変（C1DeltaPrefilter のゲート用）
+        val pC1 = cachedProblem(state)   // state の純関数＝巡回間で不変（C1DeltaPrefilter のゲート用）
         var c1Plateau: C1PlateauDiagnosis? = null
         var round = 0
         while (round < params.maxRounds && !clusterStop()) {
@@ -673,6 +673,7 @@ object V6HotfixPasses {
         shouldStop: () -> Boolean = { false },
     ): HF80Result {
         val p = Problem(state)
+        val ev = Evaluator(p)   // 内側探索用（サイクルごとに作り直さない）
         val rng = Random(seed)
         val before = UnifiedViolationChecker.check(state, schedule)
         var best = normalizeSchedule(schedule, p)
@@ -700,7 +701,7 @@ object V6HotfixPasses {
                 }
                 t++
             }
-            val polished = localBestImprovement(state, cand, 250 + cycle * 120, rng, shouldStop)
+            val polished = localBestImprovement(p, ev, cand, 250 + cycle * 120, rng, shouldStop)
             val rep = UnifiedViolationChecker.check(state, polished)
             usedCycles = cycle + 1
             if (isBetter(rep, bestReport)) {
@@ -767,27 +768,27 @@ object V6HotfixPasses {
      * sample_v6 9/336/73828.0/c1 4・blocked_covu 4/311/34149.0/c1 52＝いずれも既存の記録済みベースラインと
      * 一致）。tie-break差は理論上の懸念に留まり、この3データセットでは実際の探索経路に一切影響しなかった。
      */
-    private fun localBestImprovement(state: MagiState, schedule: Array<IntArray>, tries: Int, rng: Random, shouldStop: () -> Boolean = { false }): Array<IntArray> {
-        val p = Problem(state)
-        val ev = Evaluator(p)
-        var best = schedule.copy2D()
+    private fun localBestImprovement(p: Problem, ev: Evaluator, schedule: Array<IntArray>, tries: Int, rng: Random, shouldStop: () -> Boolean = { false }): Array<IntArray> {
+        // 1 セルをその場で書き換えて評価し、改善しなければ戻す（盤面のコピーは入口の 1 回だけ）。
+        //   同じ値への書き換えは評価しても同点＝不採用なので飛ばす。乱数の消費順は変えない。
+        val best = schedule.copy2D()
         var bestScore = ev.fullEval(best)
         var t = 0
         val maxTry = max(0, tries)
         while (t < maxTry) {
             if (shouldStop()) break
             if (p.S > 0 && p.T > 0) {
-                val cand = best.copy2D()
                 val i = rng.nextInt(p.S)
                 val j = rng.nextInt(p.T)
                 if (!p.wishLocked(i, j)) {
                     val allowed = p.allowedShiftsForStaff(i)
                     if (allowed.isNotEmpty()) {
-                        cand[i][j] = allowed[rng.nextInt(allowed.size)]
-                        val score = ev.fullEval(cand)
-                        if (score < bestScore) {
-                            best = cand
-                            bestScore = score
+                        val nw = allowed[rng.nextInt(allowed.size)]
+                        val old = best[i][j]
+                        if (nw != old) {
+                            best[i][j] = nw
+                            val score = ev.fullEval(best)
+                            if (score < bestScore) bestScore = score else best[i][j] = old
                         }
                     }
                 }
