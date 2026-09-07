@@ -12,3 +12,8 @@
   仕様 §4 のゲート（退行ゼロ／品質 ≥10%／速度 ≥10%／安定性）を判定する。
 
 結果と判定は `docs/history/3.4xx.md`「自律改善ループ Iteration 1」を参照（`results/iter1.csv` が生データ）。
+
+- **機能同等性（§4 の 14 機能）**は `app/src/test/java/com/magi/app/v6/LoopFeatureRegressionTest.kt`（C# は `LoopFeatureRegressionTest.cs`）で
+  計測する（3.507.2）。各機能を最小盤面で作り、後処理チェーンを旧腕（`componentRepairEnabled=false`）と新腕（true）の両方で走らせて
+  不変条件（人員不足/超過修復・個人上下限・群回数・禁止連・希望固定・希望日前後・同長区間交換・循環交換・担当可・スキル群・Undo・停止・
+  月境界・月内完結）を検査する。`tools/host/hosttest.sh` で走る（14 本×2 腕、各 4 秒締切）。

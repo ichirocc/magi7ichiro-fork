@@ -313,15 +313,45 @@ object ViolationComponentRepair {
             }
             fun staffName(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
             fun kig(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "#$k"
+            // [Iteration 6] 厳密ピン（lo==hi）を単独で崩す候補は推定で必ず落ちる（Iteration 5 の実測: 推定 3959 回中ピン枝刈り 1665）。
+            //   生成の時点で「同じ職員の別の日で回数を戻す」相方を付けた形にし、無駄弾を出さない。
+            fun breaksPin(i: Int, from: Int, to: Int): Boolean {
+                for (k in pinned[i]) {
+                    val dv = (if (k == to) 1 else 0) - (if (k == from) 1 else 0)
+                    if (dv == 0) continue
+                    val lo = p.rangeLo[i][k]; val before = delta.countForStaff(i, k)
+                    if (kotlin.math.abs(before + dv - lo) > kotlin.math.abs(before - lo)) return true
+                }
+                return false
+            }
+            /** j に近い日から順に走査する（c1 の窓・c3 の並びに効く局所の手を優先）。 */
+            fun daysNear(j: Int): Sequence<Int> = sequence { for (r in 1 until p.T) { if (j - r >= 0) yield(j - r); if (j + r < p.T) yield(j + r) } }
             fun single(i: Int, j: Int, k2: Int) {
                 if (k2 !in 0 until p.K || k2 == work[i][j] || p.wishLocked(i, j) || !p.mayPlace(i, k2)) return
-                add(listOf(intArrayOf(i, j, k2)), "${staffName(i)} ${j + 1}日→${kig(k2)}")
+                val old = work[i][j]
+                if (!breaksPin(i, old, k2)) { add(listOf(intArrayOf(i, j, k2)), "${staffName(i)} ${j + 1}日→${kig(k2)}"); return }
+                // 行内の入替（j を k2 に、別の日 d の k2 を old に）＝職員 i の回数は不変。近い日から最大 3 本。
+                var made2 = 0
+                for (d in daysNear(j)) {
+                    if (made2 >= 3) break
+                    if (work[i][d] != k2 || p.wishLocked(i, d) || !p.mayPlace(i, old)) continue
+                    add(listOf(intArrayOf(i, j, k2), intArrayOf(i, d, old)), "${staffName(i)} ${j + 1}日⇄${d + 1}日")
+                    made2++
+                }
             }
             fun swap(x: Int, y: Int, j: Int) {
                 if (x == y) return
                 val kx = work[x][j]; val ky = work[y][j]
                 if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.mayPlace(x, ky) || !p.mayPlace(y, kx)) return
-                add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx)), "${staffName(x)}↔${staffName(y)} ${j + 1}日")
+                if (!breaksPin(x, kx, ky) && !breaksPin(y, ky, kx)) { add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx)), "${staffName(x)}↔${staffName(y)} ${j + 1}日"); return }
+                // 2 日の交換（j で入れ替え、逆の並びの日 d で戻す）＝両者の回数は不変。近い日から最大 2 本。
+                var made2 = 0
+                for (d in daysNear(j)) {
+                    if (made2 >= 2) break
+                    if (work[x][d] != ky || work[y][d] != kx || p.wishLocked(x, d) || p.wishLocked(y, d)) continue
+                    add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx), intArrayOf(x, d, kx), intArrayOf(y, d, ky)), "${staffName(x)}↔${staffName(y)} ${j + 1}日/${d + 1}日")
+                    made2++
+                }
             }
             fun window(x: Int, y: Int, s0: Int, s1: Int) {
                 if (x == y) return
