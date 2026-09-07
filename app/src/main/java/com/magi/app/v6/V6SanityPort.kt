@@ -634,14 +634,15 @@ object V6SanityPort {
             //   `Int.MIN_VALUE`/`MAX_VALUE` のまま、必要人数は `?: -1`＝要件なし）。
             //   **空欄＝未設定は正しい仕様**なので対象にせず、
             //   「空でないのに数値でない」ものだけを出す（弱い問題を解いて成功扱いになるのを防ぐ）。
-            fun badNum(v: String): Boolean = v.isNotBlank() && v.trim().toIntOrNull() == null
+            // [3.509.1] 負数も対象（Problem は負数を未設定として捨てる＝空欄と同じ扱いになる）。
+            fun badNum(v: String): Boolean = v.isNotBlank() && (v.trim().toIntOrNull() ?: -1) < 0
             for ((key, r) in state.staffRange) {
                 if (!badNum(r.lo) && !badNum(r.hi)) continue
                 val idx = key.split(",")
                 val nm = idx.getOrNull(0)?.toIntOrNull()?.let { state.staff.getOrNull(it)?.name } ?: key
                 val sy = idx.getOrNull(1)?.toIntOrNull()?.let { state.shifts.getOrNull(it)?.kigou } ?: ""
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "個人の回数「$nm $sy」",
-                    "下限「${r.lo}」上限「${r.hi}」に数値でない値があります。その側は**制限なし**として" +
+                    "下限「${r.lo}」上限「${r.hi}」に数値でない値または負の値があります。その側は**制限なし**として" +
                         "扱われるため、意図より弱い条件で計算されます",
                     "個人の回数で数値を入れ直すか、制限しないなら空欄にしてください"))
             }

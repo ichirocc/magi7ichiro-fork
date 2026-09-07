@@ -1618,6 +1618,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             //   それらのコルーチンは running/fixSearching を戻す機会がなく実行中表示が固着していた。
             //   最適化ジョブ(job)自身は CancellationException 側で keep-best と running=false を行うため、
             //   ここでの即時リセットは冪等（後からジョブ側の確定メッセージが上書きする）。
+            val wasFixSearching = _ui.value.fixSearching   // リセット前に取る（下の対象判定用）
             _ui.update { it.copy(messageIsError = false, running = false, fixSearching = false, message = "停止しました") }
             // [3.383.0/ユーザー指示「検証できないと見送った項目をログ強化」] **前景の停止だけログが無かった**
             //   （背景は「バックグラウンド最適化を停止」を出していた＝非対称）。3.381.0 で「4件の異常終了は
@@ -1626,7 +1627,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             //   何を止めたかも区別する（最適化なのか、違反チェック/改善探索だけなのかで意味が全く違う）。
             val what = buildList {
                 boardJobLabel?.let { add(it) }   // [3.404.0] 何のジョブかを名前で言う（旧: 一律「計算」）
-                if (_ui.value.fixSearching) add("改善探索")
+                if (wasFixSearching) add("改善探索")
                 if (isEmpty()) add("違反チェック")
             }.joinToString("・")
             logOp("I", "停止を押しました（対象: $what）")

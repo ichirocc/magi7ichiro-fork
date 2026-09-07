@@ -139,3 +139,30 @@ class NonNumericStaffRangeImportTest {
         assertFalse(issues.any { it.where.contains("個人の回数「${st.staff[2].name} $sym」") })
     }
 }
+
+/** 勤務表CSVのヘッダ判定は構造で決める（先頭が未知の職員名なだけの行をヘッダ扱いしない）。 */
+class ScheduleCsvHeaderTest {
+    private fun load(): MagiState {
+        val json = javaClass.getResourceAsStream("/golden_state.json")!!.bufferedReader().readText()
+        return StateParser.parse(json)!!
+    }
+
+    @Test fun unknownFirstStaffRowIsNotTreatedAsHeader() {
+        val st = load()
+        val p = Problem(st)
+        val base = Array(st.staffCount) { IntArray(st.dayCount) { -1 } }
+        val sym = st.shifts[1].kigou
+        val known = st.staff[0].name
+        val row = { name: String -> name + "," + List(st.dayCount) { sym }.joinToString(",") }
+        // 先頭が誤記の職員名 → その行はデータ行（一致なし）として扱われ、2 行目の既知職員は取り込まれる
+        val r = ScheduleCsvBridge.parse(row("誰か") + "\n" + row(known) + "\n", st, base)
+        assertEquals(1, r.matched); assertEquals(1, r.schedule[0][0])
+        // build() のヘッダと、日付だけの行はヘッダとして飛ばす
+        val header = "スタッフ \\ 日付," + (1..st.dayCount).joinToString(",")
+        assertEquals(1, ScheduleCsvBridge.parse(header + "\n" + row(known) + "\n", st, base).matched)
+        val dates = "," + (1..st.dayCount).joinToString(",") { "2026/06/$it" }
+        assertEquals(1, ScheduleCsvBridge.parse(dates + "\n" + row(known) + "\n", st, base).matched)
+        assertEquals(p.T, r.schedule[0].size)
+    }
+}
+

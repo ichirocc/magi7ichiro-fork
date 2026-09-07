@@ -385,7 +385,8 @@ object ScheduleCsvBridge {
         //   ヘッダ無しCSVの先頭職員が黙って落ち「氏名不一致でスキップ」と誤案内していた。
         //   3.314.0/M-08 が種類別CSVで直したのと同じ穴）。判定は「先頭セルが職員名に解決しない」＝
         //   csvBody() と同じ考え方（ヘッダの先頭セルが職員名と一致することは実運用上ない）。
-        var rr = if (rows.isNotEmpty() && nameToI[nameMatchKey(rows[0].getOrElse(0) { "" })] == null) 1 else 0
+        // [3.509.1] ヘッダは build() の見出し語か 2 列目以降が日付列のときだけ（先頭が職員名に解決しないだけでは飛ばさない＝氏名誤記の行を落とさない）。
+        var rr = if (rows.isNotEmpty() && nameToI[nameMatchKey(rows[0].getOrElse(0) { "" })] == null && looksLikeHeaderRow(rows[0])) 1 else 0
         while (rr < rows.size) {
             val r = rows[rr]
             // build() は勤務表の後に「空行＋『集計』ヘッダ＋職員名で始まる回数行」を出力する。ここで終端しないと
@@ -424,6 +425,14 @@ object ScheduleCsvBridge {
             unclosedQuote = parsedAll.unclosedQuote,
         )
     }
+}
+
+/** 勤務表CSVのヘッダ行か: 先頭セルが「スタッフ」を含むか、2 列目以降の非空セルがすべて日付列（数字・日付書式）。 */
+private fun looksLikeHeaderRow(row: List<String>): Boolean {
+    val head = row.getOrElse(0) { "" }.trim()
+    if (head.contains("スタッフ") || head.contains("日付") || head.contains("氏名")) return true
+    val rest = row.drop(1).map { it.trim() }.filter { it.isNotEmpty() }
+    return rest.isNotEmpty() && rest.all { c -> c.all { it.isDigit() || it == '/' || it == '-' || it == '.' } }
 }
 
 private fun appendCsvRow(out: StringBuilder, values: List<String>) {

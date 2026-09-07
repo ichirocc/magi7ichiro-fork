@@ -332,7 +332,7 @@ private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: MagiViewModel
                 }
             }
             val raw = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
-            Text("群の目標（$groupName 全員に適用）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text("群の目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             AptStepperRow(label = toHankakuKigou(kigou), value = raw, onChange = { vm.ws1SetGroupApt(g, k, it) })
             if (hasRange && raw.trim().toIntOrNull() != null) {
                 Text("この職員・シフトは個人の下限・上限を優先するため、群の目標は適用されません", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
