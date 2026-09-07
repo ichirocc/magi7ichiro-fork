@@ -29,12 +29,21 @@ data class FixSuggestion(
 )
 
 /**
- * 違反を減らす「1手」を列挙する。最適化エンジンと同じ評価（canDo 可否・希望ロック保護・
+ * 違反を減らす「1手」を列挙する。最適化エンジンと同じ評価（mayPlace 可否・希望ロック保護・
  * UnifiedViolationChecker による被覆込み (hard,weighted,total) 辞書式改善）。CHANGE / CHANGE_MULTI /
  * SWAP / SWAP_XDAY / SWAP_MULTI / CHAIN / WINDOW を統合し、効果順・同型重複排除で返す。読取専用。
  * 高コストな手（複数マス・別日・3人）は違反箇所にターゲットし、締切（deadlineMs）で打ち切る賢い探索。
  */
 object FixSuggester {
+    /** 探索の上限（3.507.4 で集約。値は 2.4x 系からの据え置き）。 */
+    internal object Limits {
+        const val CHAIN_ROUNDS = 3          // 連鎖で積み上げる最大コマ数
+        const val WINDOW_STAFF = 4          // 再最適化で同時に動かす最大人数
+        const val WINDOW_COMBOS = 20_000L   // 再最適化 1 日あたりの総当たり上限（超えれば人数を減らす）
+        const val WINDOW_DAYS = 5           // 再最適化する最大日数
+        const val PACK = 1000               // (staff, day) を staff*PACK+day で詰める（T<=31 の前提）
+    }
+
     fun suggest(
         state: MagiState,
         schedule: Array<IntArray>,
@@ -45,16 +54,52 @@ object FixSuggester {
     ): List<FixSuggestion> {
         val p = Problem(state)
         if (p.S < 1 || p.T < 1) return emptyList()
-        val s = normalizeSchedule(schedule, p)
-        val base = UnifiedViolationChecker.check(state, s)
+        return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs).run(maxResults)
+    }
 
-        fun nm(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
-        fun sym(k: Int) = if (k >= 0) (state.shifts.getOrNull(k)?.kigou ?: "$k") else "—"
-        fun dlab(j: Int): String = try {
+    private class Quad(val sug: FixSuggestion, val dHard: Int, val dTotal: Int, val dWeighted: Double)
+
+    /** 1 回の提案探索。盤面 [s] は各手を適用→評価→復元するので、フェーズ間で常に入力（正規化後）に一致する。 */
+    private class Session(
+        private val state: MagiState, private val p: Problem, private val s: Array<IntArray>,
+        private val focus: Int?, private val focusShift: Int?, private val deadlineMs: Long,
+    ) {
+        private val base = UnifiedViolationChecker.check(state, s)
+        private val found = ArrayList<Quad>()
+        private val start = EngineClock.nowMs()
+
+        // 違反に関与する staff / day / shift のターゲット集合。
+        private val countHot = HashSet<Int>()                  // 回数違反(low/high)のある staff
+        private val shortShift = HashMap<Int, MutableSet<Int>>()  // staff -> 下限割れのシフト集合
+        private val hotCells = ArrayList<Int>()                // staff*PACK+day（セル違反）
+        private val hotDays = HashSet<Int>()
+
+        init {
+            for ((key, cls) in base.countViolations) {
+                val (i, k) = parseKey(key) ?: continue
+                countHot.add(i)
+                if (cls == "vio-low") shortShift.getOrPut(i) { HashSet() }.add(k)
+            }
+            for (key in base.violations.keys) {
+                val (i, j) = parseKey(key) ?: continue
+                hotCells.add(i * Limits.PACK + j); hotDays.add(j)
+            }
+            for (key in base.needViolations.keys) parseKey(key)?.let { hotDays.add(it.second) }
+        }
+
+        private fun parseKey(key: String): Pair<Int, Int>? {
+            val pp = key.split(",")
+            val a = pp.getOrNull(0)?.toIntOrNull() ?: return null
+            val b = pp.getOrNull(1)?.toIntOrNull() ?: return null
+            return a to b
+        }
+        private fun nm(i: Int) = state.staff.getOrNull(i)?.name ?: "#$i"
+        private fun sym(k: Int) = if (k >= 0) (state.shifts.getOrNull(k)?.kigou ?: "$k") else "—"
+        private fun dlab(j: Int): String = try {
             val d = java.time.LocalDate.parse(state.startDate).plusDays(j.toLong())
             "${d.monthValue}/${d.dayOfMonth}"
         } catch (e: Exception) { "${j + 1}日" }
-        fun diffOf(rep: ViolationReport): List<Pair<String, Int>> {
+        private fun diffOf(rep: ViolationReport): List<Pair<String, Int>> {
             val out = ArrayList<Pair<String, Int>>()
             for (k in (base.breakdown.keys + rep.breakdown.keys)) {
                 val d = (rep.breakdown[k] ?: 0) - (base.breakdown[k] ?: 0)
@@ -63,48 +108,43 @@ object FixSuggester {
             out.sortBy { it.second }
             return out
         }
+        private fun timeUp() = EngineClock.nowMs() - start > deadlineMs
+        private fun inFocus(i: Int) = focus == null || i == focus
+        private fun pairFocus(i: Int, i2: Int) = focus == null || i == focus || i2 == focus
+        private fun targetStaff(): List<Int> = if (focus != null) listOf(focus) else countHot.toList()
+        private fun targetDays(): List<Int> = if (focus != null) (0 until p.T).toList() else hotDays.toList()
 
-        val found = ArrayList<Quad>()
-        val start = EngineClock.nowMs()
-        var evals = 0
-        fun timeUp() = EngineClock.nowMs() - start > deadlineMs
-
-        // ops をその場で適用→評価→復元（割当を作らず高速）。改善なら候補に追加。
-        fun tryOps(kind: FixKind, ops: List<FixCell>, label: String) {
+        /** [ops] を当てた盤面の report（必ず元へ戻す）。 */
+        private fun evalOps(ops: List<FixCell>): ViolationReport {
             val saved = IntArray(ops.size) { s[ops[it].staff][ops[it].day] }
             for (op in ops) s[op.staff][op.day] = op.toShift
             val rep = UnifiedViolationChecker.check(state, s)
-            evals++
             for (idx in ops.indices) s[ops[idx].staff][ops[idx].day] = saved[idx]
-            val better = betterReport(rep, base)
-            if (better) {
-                found.add(Quad(FixSuggestion(kind, ops, label, rep.hard - base.hard, rep.total - base.total, diffOf(rep)),
-                    rep.hard - base.hard, rep.total - base.total, rep.weightedScore - base.weightedScore))
-            }
+            return rep
+        }
+        private fun record(kind: FixKind, ops: List<FixCell>, label: String, rep: ViolationReport) {
+            found.add(Quad(FixSuggestion(kind, ops, label, rep.hard - base.hard, rep.total - base.total, diffOf(rep)),
+                rep.hard - base.hard, rep.total - base.total, rep.weightedScore - base.weightedScore))
+        }
+        /** ops をその場で適用→評価→復元。base より良ければ候補に追加。 */
+        private fun tryOps(kind: FixKind, ops: List<FixCell>, label: String) {
+            val rep = evalOps(ops)
+            if (betterReport(rep, base)) record(kind, ops, label, rep)
         }
 
-        val focus = focusStaff
-        fun inFocus(i: Int) = focus == null || i == focus
-        fun pairFocus(i: Int, i2: Int) = focus == null || i == focus || i2 == focus
-
-        // 違反に関与する staff / day / shift をターゲット集合として抽出。
-        val countHot = HashSet<Int>()                  // 回数違反(low/high)のあるstaff
-        val shortShift = HashMap<Int, MutableSet<Int>>()  // staff -> 下限割れのシフト集合
-        for ((key, cls) in base.countViolations) {
-            val pp = key.split(","); val i = pp.getOrNull(0)?.toIntOrNull() ?: continue; val k = pp.getOrNull(1)?.toIntOrNull() ?: continue
-            countHot.add(i)
-            if (cls == "vio-low") shortShift.getOrPut(i) { HashSet() }.add(k)
+        fun run(maxResults: Int): List<FixSuggestion> {
+            singleChanges()
+            sameDaySwaps()
+            multiChanges()
+            chains()
+            windows()
+            rotations3()
+            crossDaySwaps()
+            return collect(maxResults)
         }
-        val hotCells = ArrayList<Int>()                // pack i*1000+j（セル違反）
-        val hotDays = HashSet<Int>()
-        for (key in base.violations.keys) {
-            val pp = key.split(","); val i = pp.getOrNull(0)?.toIntOrNull() ?: continue; val j = pp.getOrNull(1)?.toIntOrNull() ?: continue
-            hotCells.add(i * 1000 + j); hotDays.add(j)
-        }
-        for (key in base.needViolations.keys) key.split(",").getOrNull(1)?.toIntOrNull()?.let { hotDays.add(it) }
 
-        // ---- Phase 1: 単一マス変更（広く）----
-        run {
+        /** Phase 1: 単一マス変更（広く）。 */
+        private fun singleChanges() {
             for (i in 0 until p.S) {
                 if (!inFocus(i)) continue
                 val allowed = p.allowedShiftsForStaff(i)
@@ -118,8 +158,9 @@ object FixSuggester {
                 }
             }
         }
-        // ---- Phase 2: 同日2人交換 ----
-        run {
+
+        /** Phase 2: 同日 2 人交換。 */
+        private fun sameDaySwaps() {
             for (i in 0 until p.S) for (i2 in i + 1 until p.S) {
                 if (!pairFocus(i, i2)) continue
                 for (j in 0 until p.T) {
@@ -132,16 +173,13 @@ object FixSuggester {
                 }
             }
         }
-        // ---- Phase 3: 複数マス変更（同一スタッフ・下限割れ当事者にターゲット）----
-        run {
-            val targetStaff = if (focus != null) listOf(focus) else countHot.toList()
-            for (i in targetStaff) {
+
+        /** Phase 3: 同一スタッフの 2 マス同時変更（下限割れ当事者にターゲット）。 */
+        private fun multiChanges() {
+            for (i in targetStaff()) {
                 if (timeUp()) break
                 val allowed = p.allowedShiftsForStaff(i)
-                // 目標シフト = そのstaffの下限割れシフト ∪ 休。なければ単一マス候補を流用するため全許可。
-                // [3.475.0/論理監査] 旧: 休を index 0 決め打ち（`it + 0`）で canDo も見ていなかった。3.416.0 以降
-                //   休は記号で解決される（p.restIdx）ため、休が先頭でないデータでは「休へ戻す」意図が別シフトへ
-                //   化け、群が index0 を担当できないと**担当外シフトを含む提案**を生成し得た（他フェーズは canDo 済）。
+                // 目標シフト = そのstaffの下限割れシフト ∪ 休（記号で解決した restIdx）。なければ置けるシフト全部。
                 val targets: List<Int> = (shortShift[i]?.toList() ?: emptyList())
                     .let { if (it.isEmpty()) allowed.toList() else it + p.restIdx }
                     .distinct().filter { k -> allowed.contains(k) }
@@ -163,121 +201,96 @@ object FixSuggester {
                 }
             }
         }
-        // ---- Phase 6: エジェクションチェーン（不足シフトを貪欲に最大3コマ充足。文書§2 玉突き）----
-        run {
-            val chainStaff = if (focus != null) listOf(focus) else countHot.toList()
-            for (i in chainStaff) {
+
+        /** Phase 6: エジェクションチェーン（不足シフトを貪欲に最大 CHAIN_ROUNDS コマ充足。文書§2 玉突き）。 */
+        private fun chains() {
+            for (i in targetStaff()) {
                 if (timeUp()) break
                 val shorts = shortShift[i] ?: continue
                 for (x in shorts) {
                     if (timeUp()) break
+                    if (!p.mayPlace(i, x)) continue   // [3.507.4] 上限 0 のシフトは最適化器と同じく置かない
                     val picked = ArrayList<FixCell>()
                     val applied = ArrayList<Pair<Int, Int>>()   // (day, savedShift) 復元用
-                    var rounds = 0
-                    while (rounds < 3 && !timeUp()) {
+                    while (picked.size < Limits.CHAIN_ROUNDS && !timeUp()) {
                         // 現在の積み上げ盤面のスコアを基準に、x へ変えて更に改善する可動コマを1つ選ぶ（単調改善を保証）
-                        val curRep = UnifiedViolationChecker.check(state, s); evals++
+                        var bestRep = UnifiedViolationChecker.check(state, s)
                         var bestJ = -1; var bestSaved = -1
-                        var bestRep: ViolationReport? = curRep
-                        var improved = false
                         for (j in 0 until p.T) {
                             if (p.wishLocked(i, j)) continue
                             val a = s[i][j]
                             if (a == x) continue
                             s[i][j] = x
-                            val rep = UnifiedViolationChecker.check(state, s); evals++
+                            val rep = UnifiedViolationChecker.check(state, s)
                             s[i][j] = a
-                            // [3.336.0] 3キーを手書きで写さず `betterReport` を呼ぶ（写した瞬間、次に本体が
-                            //   変わったときここだけ取り残される＝教訓#28）。比較用に最良の report を持つ。
-                            val take = bestRep == null || betterReport(rep, bestRep!!)
-                            if (take) { improved = true; bestRep = rep; bestJ = j; bestSaved = a }
+                            if (betterReport(rep, bestRep)) { bestRep = rep; bestJ = j; bestSaved = a }
                         }
-                        if (!improved || bestJ < 0) break
-                        s[i][bestJ] = x; picked.add(FixCell(i, bestJ, x)); applied.add(bestJ to bestSaved); rounds++
+                        if (bestJ < 0) break
+                        s[i][bestJ] = x; picked.add(FixCell(i, bestJ, x)); applied.add(bestJ to bestSaved)
                     }
                     for ((j, sv) in applied) s[i][j] = sv   // 復元
                     // 2コマ以上のときだけ採用（1コマは単一変更で既出）。base 改善を再確認。
-                    if (picked.size >= 2) {
-                        val saved = IntArray(picked.size) { s[picked[it].staff][picked[it].day] }
-                        for (op in picked) s[op.staff][op.day] = op.toShift
-                        val rep = UnifiedViolationChecker.check(state, s); evals++
-                        for (idx in picked.indices) s[picked[idx].staff][picked[idx].day] = saved[idx]
-                        val better = betterReport(rep, base)
-                        if (better) found.add(Quad(FixSuggestion(FixKind.CHAIN, picked.toList(),
-                            "（連鎖）${nm(i)} の「${sym(x)}」不足を${picked.size}コマ補充", rep.hard - base.hard, rep.total - base.total, diffOf(rep)),
-                            rep.hard - base.hard, rep.total - base.total, rep.weightedScore - base.weightedScore))
-                    }
+                    if (picked.size >= 2) tryOps(FixKind.CHAIN, picked.toList(), "（連鎖）${nm(i)} の「${sym(x)}」不足を${picked.size}コマ補充")
                 }
             }
         }
-        // ---- Phase 7: ミニ再最適化（1日×最大4名を総当たりで最適割当。文書§4 マスヒューリスティクスのミニ版）----
-        run {
-            val wDays = if (focus != null) (0 until p.T).toList() else hotDays.toList()
+
+        /** Phase 7: ミニ再最適化（1 日 × 最大 WINDOW_STAFF 名を総当たりで最適割当。文書§4 マスヒューリスティクスのミニ版）。 */
+        private fun windows() {
             var windows = 0
-            for (j in wDays) {
-                if (timeUp() || windows >= 5) break
+            for (j in targetDays()) {
+                if (timeUp() || windows >= Limits.WINDOW_DAYS) break
                 val movable = (0 until p.S).filter { !p.wishLocked(it, j) }
                 if (movable.size < 2) continue
-                // 違反関与(countHot)を優先、focus があれば先頭に。最大4名。
+                // 違反関与(countHot)を優先、focus があれば先頭に。
                 val ranked = movable.sortedByDescending { it in countHot }
                 val chosen0 = if (focus != null) (ranked.filter { it == focus } + ranked.filter { it != focus }) else ranked
-                var n = minOf(4, chosen0.size)
-                val cells0 = chosen0.take(4)
+                var n = minOf(Limits.WINDOW_STAFF, chosen0.size)
+                val cells0 = chosen0.take(Limits.WINDOW_STAFF)
                 val opts0 = cells0.map { p.allowedShiftsForStaff(it).toList() }
                 fun combos(m: Int): Long { var c = 1L; for (t in 0 until m) c *= opts0[t].size; return c }
-                while (n > 2 && combos(n) > 20000L) n--
-                if (n < 2 || combos(n) > 20000L) continue
+                while (n > 2 && combos(n) > Limits.WINDOW_COMBOS) n--
+                if (n < 2 || combos(n) > Limits.WINDOW_COMBOS) continue
                 val cells = cells0.take(n)
                 val cellOpts = opts0.take(n)
                 val cur = IntArray(n) { s[cells[it]][j] }
                 windows++
                 val sizes = IntArray(n) { cellOpts[it].size }
                 val idx = IntArray(n)
-                var bestComboRep: ViolationReport? = null   // [3.336.0] 3キー手書き→betterReport 委譲
+                var bestComboRep: ViolationReport? = null
                 var bestCombo: IntArray? = null
                 while (true) {
                     for (c in 0 until n) s[cells[c]][j] = cellOpts[c][idx[c]]
-                    val rep = UnifiedViolationChecker.check(state, s); evals++
-                    val better = betterReport(rep, base)
-                    if (better) {
-                        val take = bestComboRep == null || betterReport(rep, bestComboRep!!)
-                        if (take) { bestComboRep = rep; bestCombo = IntArray(n) { cellOpts[it][idx[it]] } }
+                    val rep = UnifiedViolationChecker.check(state, s)
+                    if (betterReport(rep, base) && (bestComboRep == null || betterReport(rep, bestComboRep))) {
+                        bestComboRep = rep; bestCombo = IntArray(n) { cellOpts[it][idx[it]] }
                     }
                     var c = 0
                     while (c < n) { idx[c]++; if (idx[c] < sizes[c]) break; idx[c] = 0; c++ }
                     if (c == n || timeUp()) break
                 }
                 for (c in 0 until n) s[cells[c]][j] = cur[c]   // 復元
-                val bc = bestCombo
-                if (bestComboRep != null && bc != null) {
-                    val ops = ArrayList<FixCell>()
-                    for (c in 0 until n) if (bc[c] != cur[c]) ops.add(FixCell(cells[c], j, bc[c]))
-                    if (ops.size >= 2) {
-                        for (op in ops) s[op.staff][op.day] = op.toShift
-                        val rep = UnifiedViolationChecker.check(state, s); evals++
-                        for (op in ops) s[op.staff][op.day] = cur[cells.indexOf(op.staff)]
-                        found.add(Quad(FixSuggestion(FixKind.WINDOW, ops.toList(),
-                            "（再最適化）${dlab(j)} の${ops.size}名を最適割当", rep.hard - base.hard, rep.total - base.total, diffOf(rep)),
-                            rep.hard - base.hard, rep.total - base.total, rep.weightedScore - base.weightedScore))
-                    }
+                val bc = bestCombo; val rep = bestComboRep
+                if (rep != null && bc != null) {
+                    val ops = (0 until n).filter { bc[it] != cur[it] }.map { FixCell(cells[it], j, bc[it]) }
+                    // 最良組合せの report をそのまま使う（旧: 同じ盤面を作り直してもう 1 回評価していた）。
+                    if (ops.size >= 2) record(FixKind.WINDOW, ops, "（再最適化）${dlab(j)} の${ops.size}名を最適割当", rep)
                 }
             }
         }
-        // ---- Phase 4: 同日3人巡回交換（被覆不変・違反日にターゲット）----
-        run {
-            val days3 = if (focus != null) (0 until p.T).toList() else hotDays.toList()
-            for (j in days3) {
+
+        /** Phase 4: 同日 3 人巡回交換（被覆不変・違反日にターゲット）。a を最小に固定して重複列挙を避ける。 */
+        private fun rotations3() {
+            for (j in targetDays()) {
                 if (timeUp()) break
                 for (a in 0 until p.S) {
                     if (timeUp()) break
                     if (p.wishLocked(a, j)) continue
-                    for (b in 0 until p.S) {
-                        if (b == a || p.wishLocked(b, j)) continue
-                        for (c in 0 until p.S) {
-                            if (c == a || c == b || p.wishLocked(c, j) || timeUp()) continue
+                    for (b in a + 1 until p.S) {
+                        if (p.wishLocked(b, j)) continue
+                        for (c in a + 1 until p.S) {
+                            if (c == b || p.wishLocked(c, j) || timeUp()) continue
                             if (focus != null && a != focus && b != focus && c != focus) continue
-                            // 重複列挙を避けるため a を最小に固定
-                            if (a > b || a > c) continue
                             val sa = s[a][j]; val sb = s[b][j]; val sc = s[c][j]
                             if (sa == sb && sb == sc) continue
                             // 巡回: a<-sb, b<-sc, c<-sa
@@ -289,23 +302,22 @@ object FixSuggester {
                 }
             }
         }
-        // ---- Phase 5: 別日交換（違反関与セルを起点）----
-        run {
-            val anchors = ArrayList<Int>()
-            anchors.addAll(hotCells)
-            val anchorStaff = if (focus != null) listOf(focus) else countHot.toList()
-            for (i in anchorStaff) for (j in 0 until p.T) if (!p.wishLocked(i, j)) anchors.add(i * 1000 + j)
+
+        /** Phase 5: 別日交換（違反関与セルを起点）。同日は Phase 2 が網羅済みなので飛ばす。 */
+        private fun crossDaySwaps() {
+            val anchors = ArrayList<Int>(hotCells)
+            for (i in targetStaff()) for (j in 0 until p.T) if (!p.wishLocked(i, j)) anchors.add(i * Limits.PACK + j)
             val seenAnchor = HashSet<Int>()
             for (packed in anchors) {
                 if (!seenAnchor.add(packed) || timeUp()) continue
-                val i1 = packed / 1000; val j1 = packed % 1000
+                val i1 = packed / Limits.PACK; val j1 = packed % Limits.PACK
                 if (i1 !in 0 until p.S || j1 !in 0 until p.T || p.wishLocked(i1, j1)) continue
                 val a = s[i1][j1]
                 for (i2 in 0 until p.S) {
                     if (timeUp()) break
                     if (focus != null && i1 != focus && i2 != focus) continue
                     for (j2 in 0 until p.T) {
-                        if (j2 == j1 && i2 == i1) continue
+                        if (j2 == j1) continue
                         if (p.wishLocked(i2, j2) || timeUp()) continue
                         val b = s[i2][j2]
                         if (a == b || !p.mayPlace(i1, b) || !p.mayPlace(i2, a)) continue
@@ -319,45 +331,34 @@ object FixSuggester {
             }
         }
 
-        // 効果順（必須減 > 合計減 > 重み減）。同型の手は1つに絞り多様性確保。
-        found.sortWith(compareBy({ it.dHard }, { it.dWeighted }, { it.dTotal }))  // [3.287.0 keep-best統一] hard→weighted→total
-        // [セル限定] focusShift 指定時、押したセル(focus職員×focusシフト)に効く手だけに絞る。
-        //   そのセルからシフトを移す(原状=focusShift)か、そのシフトへ移す(toShift=focusShift)手を採用。
-        val fShift = focusShift
-        fun touchesFocusCell(sug: FixSuggestion): Boolean {
-            if (fShift == null) return true
-            return sug.ops.any { c ->
-                if (focusStaff != null && c.staff != focusStaff) return@any false
-                if (c.toShift == fShift) return@any true
-                val row = s.getOrNull(c.staff) ?: return@any false
-                c.day in row.indices && row[c.day] == fShift
+        /** 効果順（hard→weighted→total＝betterReport と同順）に並べ、セル限定と盤面変化の実体による重複排除で絞る。 */
+        private fun collect(maxResults: Int): List<FixSuggestion> {
+            found.sortWith(compareBy({ it.dHard }, { it.dWeighted }, { it.dTotal }))
+            val fShift = focusShift
+            // [セル限定] 押したセル(focus職員×focusシフト)からシフトを移す手か、そのシフトへ移す手だけ。
+            fun touchesFocusCell(sug: FixSuggestion): Boolean {
+                if (fShift == null) return true
+                return sug.ops.any { c ->
+                    if (focus != null && c.staff != focus) return@any false
+                    if (c.toShift == fShift) return@any true
+                    val row = s.getOrNull(c.staff) ?: return@any false
+                    c.day in row.indices && row[c.day] == fShift
+                }
             }
+            // 署名＝無変化の脚を除いた (staff, day, toShift) の正規順。kind や ops の列挙順に依らず「最終的にどのセルが
+            // どの値になるか」で重複を判定する（経緯は history 3.202.0/3.475.0）。s はこの時点で入力盤面に一致している。
+            val seen = HashSet<String>()
+            val result = ArrayList<FixSuggestion>()
+            for (q in found) {
+                val sug = q.sug
+                if (!touchesFocusCell(sug)) continue
+                val realOps = sug.ops.filter { it.toShift != s[it.staff][it.day] }
+                if (realOps.isEmpty()) continue
+                val sig = realOps.sortedWith(compareBy({ it.staff }, { it.day })).joinToString("|") { "${it.staff}.${it.day}.${it.toShift}" }
+                if (seen.add(sig)) result.add(sug)
+                if (result.size >= maxResults) break
+            }
+            return result
         }
-        // [重複排除の頑健化] 旧署名(kind名+ops列挙順)は3種の見落としで実質同一の盤面変化を複数回
-        // 表示していた: ①SWAP_XDAY は起点(i1,j1)/(i2,j2)どちらから見るかで ops が逆順生成され別署名化
-        // ②同日の SWAP と kind違いなだけの SWAP_XDAY（Phase5 は j2==j1 も除外していない＝「別日」ラベルが
-        // 実は同日）③SWAP_MULTI の退化3巡回(1脚が無変化=実質2人交換)や CHAIN(同一shiftへの2コマ)が
-        // CHANGE_MULTI 等と同じ盤面変化になり得る、のいずれも kind をまたいで重複表示されていた。
-        // ここに至る時点で s は Phase1-7 の全 tryOps が適用→復元を徹底しているため元の(normalize後)
-        // 盤面に一致する＝「toShift==sの現在値」は実質no-opの脚と判定できる。no-op脚を除外し、
-        // 残りを (staff,day) で正規化した順序で署名化することで、kind やops列挙順に依らず
-        // 「最終的にどのセルがどの値になるか」という盤面変化の実体だけで重複を判定する。
-        val seen = HashSet<String>()
-        val result = ArrayList<FixSuggestion>()
-        for (q in found) {
-            val sug = q.sug
-            if (!touchesFocusCell(sug)) continue
-            val realOps = sug.ops.filter { it.toShift != s[it.staff][it.day] }
-            if (realOps.isEmpty()) continue   // 全脚が無変化＝実質no-op（表示する意味がない）
-            // [3.475.0/論理監査] 署名に「日」を含める。旧: staff.toShift だけだったため、同じ職員を同じシフトへ
-            //   動かす**別の日**の手（結果の盤面は別）が同一視され、上位1件以外が黙って消えていた
-            //   （3.202.0 が「範囲外」として残した既知の穴）。V6SwapSuggesterTest.normSig と同じ形。
-            val sig = realOps.sortedWith(compareBy({ it.staff }, { it.day })).joinToString("|") { "${it.staff}.${it.day}.${it.toShift}" }
-            if (seen.add(sig)) result.add(sug)
-            if (result.size >= maxResults) break
-        }
-        return result
     }
-
-    private class Quad(val sug: FixSuggestion, val dHard: Int, val dTotal: Int, val dWeighted: Double)
 }

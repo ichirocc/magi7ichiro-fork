@@ -938,4 +938,30 @@ class V6SanityPortTest {
         assertTrue("covU 単独を不可避と断定しない", !issue.problem.contains("席を埋めきれず人員不足になります"))
         assertTrue("和の下界として両方を名指しする", issue.problem.contains("人員不足と上限超過"))
     }
+
+    /** [3.507.5] 「担当できる人数」は最適化器が置ける人数（mayPlace）＋その日の希望固定で数える。上限 0 の職員は数えない。 */
+    @Test
+    fun capacityCountsPlaceableStaffAndWishPinnedCells() {
+        fun st(wishes: Map<String, Int>) = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-03",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "2", "")), groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("X", 0), Staff("Y", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(0, 0, 0), listOf(0, 0, 0)), wishes = wishes,
+            staffRange = mapOf("0,1" to Range("0", "0")),   // X の A は上限 0＝最適化器は置かない
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val plain = st(emptyMap())
+        // 需要 2/日 に対し置けるのは Y だけ＝毎日 1 不足が確定（旧: canDo で 2 名と数え 0 だった）
+        assertEquals(3, V6SanityPort.structuralHardFloor(plain))
+        val demand = V6SanityPort.buildGuidance(plain).filter { it.action == SettingFixAction.CAP_DEMAND }
+        assertEquals(3, demand.size)
+        assertTrue(demand.first().problem, demand.first().problem.contains("担当できるのは1人"))
+        assertEquals(1, demand.first().demandCap)
+        // X の 1 日目の希望が A なら、その日は X も置かれる＝不足は 2 日ぶん
+        val wished = st(mapOf("0,0" to 1))
+        assertEquals(2, V6SanityPort.structuralHardFloor(wished))
+    }
 }

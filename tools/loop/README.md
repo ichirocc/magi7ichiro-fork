@@ -13,6 +13,8 @@
 
 結果と判定は `docs/history/3.4xx.md`「自律改善ループ Iteration 1」を参照（`results/iter1.csv` が生データ）。
 
+- **再開（3.507.6）**: 出力 CSV が既にあれば済みの (case,seed,arm) を飛ばして追記する＝同じコマンドで続きから走る。このサンドボックスは
+  セッションが無操作だと VM が止まりバックグラウンドの JVM が消えるので、長いベンチは前景の待機（10 分ずつ）で見守るか、再開前提で回す。
 - **決定的モード（3.507.3）**: `MAGI_BENCH_DETERMINISTIC=1 tools/loop/run_bench.sh …` で両腕とも `PostOptimizationParams.deterministic=true`
   （ms キャップ・締切・残り時間の判定を回数上限へ。共同 LNS は `maxEvaluations`＝C1 90,000・個人 60,000）。同じ入力・seed なら同じ盤面＝
   `repro` 列が他ジョブの負荷に依存しない。実機は既定 OFF（予算を使い切る）。
