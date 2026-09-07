@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 自律レビュー＆リファクタ第6段 V6SanityPort＝buildGuidance（689 行）/buildViolationDebug（316 行）を GuidanceBuilder/DebugBuilder のメソッドへ機械分割、表示上限を Guidance に集約。「担当できる人数」を placeableFor（mayPlace＋その日の希望固定）で数える（forcedCovU/構造 HARD 下限/検査 3/c1 作業需要/代用可）＝3.507.0 の取り残し。設定ミス 24/24・違反詳細 20/24 一致（4 件は代用可の意図した減少）（3.507.5）  → `docs/history/3.4xx.md`
 - 自律レビュー＆リファクタ第5段 V6SwapSuggester＝FixSuggester を Session 化（7 フェーズを関数へ、上限を Limits に集約）、連鎖に mayPlace ガード、再最適化の冗長評価と別日交換の同日重複列挙を撤去。4 実データ × 5 設定で提案一覧 20/20 一致。C# のドリフト 2 件（休 index 0・署名に日なし）を修正（3.507.4）  → `docs/history/3.4xx.md`
 - 自律改善ループ Iteration 7 第一弾＝後処理の決定的モード（`deterministic`: hf67/hf66 の ms キャップ・巡回クラスタの締切・共同 LNS の maxMillis/patience・最終段の残り時間判定を回数上限へ。C1 90,000・個人 60,000 で時間モードと 4/4 同一盤面、2 回とも再現）。実機は既定 OFF。ベンチ iter7 走行中（3.507.3）  → `docs/history/3.4xx.md`
 - 自律改善ループ Iteration 6 報告＝ピン対応生成で新良 163/同等 169/旧良 8・必須が減った試行 64（最大 -38）・品質 +1.84%（大規模の充足不能 +11.3%・中規模 dense +2.2%）・速度 -3.1%。退行ゼロ合格、10% ゲート未達。再現性 32/34 は同時実行の CPU 競合。§4 の 14 機能回帰スイート `LoopFeatureRegressionTest` を新設し機能同等性 14/14 を初めて計測（3.507.2）  → `docs/history/3.4xx.md`
