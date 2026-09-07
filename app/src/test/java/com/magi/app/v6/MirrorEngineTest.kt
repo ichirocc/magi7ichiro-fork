@@ -123,16 +123,16 @@ class MirrorEngineTest {
     }
 
     /**
-     * [3.353.0] apt(重み1.0)が low(90)/high(45)と同じ (職員,シフト) に重なると countViolations から消える。
-     * 実データ3件でも golden 5件・real 8件・user 1件がこの形で隠れていた。
+     * [3.509.0/決定 D9] 個人の下限・上限がある (職員,シフト) には群目標を適用しない＝同じセルに low/high と apt が
+     * 二重計上されない。同じ群の個人設定が無い職員には群目標が残る。
      */
     @Test
-    fun countFamiliesKeepsAptWhenItOverlapsWithHeavierRangeViolation() {
+    fun personalRangeDisablesTheGroupTargetWithoutDoubleCounting() {
         val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
         val groups = listOf(Group("G0", "G0"))
-        val staff = listOf(Staff("s0", 0))
-        // X を1回だけ勤務: 個人下限3(low)と 適切回数目標3(aptLow) が同じ (staff0, X) で同時に発火する。
-        val schedule = listOf(listOf(1, 0, 0, 0))
+        val staff = listOf(Staff("s0", 0), Staff("s1", 0))
+        // 両名とも X を 1 回だけ勤務。s0 は個人下限 3（low）、s1 は個人設定なし。群目標 X=3。
+        val schedule = listOf(listOf(1, 0, 0, 0), listOf(1, 0, 0, 0))
         val st = MagiState(
             startDate = "2025-01-01", endDate = "2025-01-04",
             shifts = shifts, groups = groups, staff = staff,
@@ -148,10 +148,12 @@ class MirrorEngineTest {
             cons41 = emptyList(), cons42 = emptyList(),
         )
         val report = UnifiedViolationChecker.check(st)
-        assertEquals(2, report.breakdown["low"])      // lo(3) - got(1)
-        assertEquals(2, report.breakdown["apt"])      // |1 - 3|
+        assertEquals(2, report.breakdown["low"])      // s0: lo(3) - got(1)
+        assertEquals(2, report.breakdown["apt"])      // s1 だけ: |1 - 3|
         assertEquals("vio-low", report.countViolations["0,1"])
-        assertEquals(listOf("vio-low", "vio-aptLow"), report.countFamilies["0,1"])
+        assertEquals(listOf("vio-low"), report.countFamilies["0,1"])       // apt は残らない
+        assertEquals("vio-aptLow", report.countViolations["1,1"])
+        assertEquals(listOf("vio-aptLow"), report.countFamilies["1,1"])
     }
 
     /**

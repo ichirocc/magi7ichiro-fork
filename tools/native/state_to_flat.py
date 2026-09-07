@@ -159,12 +159,9 @@ def main():
             t = to_int_or_none(row[k]) if k < len(row) else None
             if t is None or t < 0 or k not in can_k:
                 continue
-            rlo = range_lo[i * K + k]
-            rhi = range_hi[i * K + k]
-            if rlo != INT32_MIN and t < rlo:
-                t = rlo
-            if rhi != INT32_MAX and t > rhi:
-                t = rhi
+            # [3.509.0/決定 D9] 個人の下限または上限がある組には群目標を適用しない — Problem.apt
+            if range_lo[i * K + k] != INT32_MIN or range_hi[i * K + k] != INT32_MAX:
+                continue
             # [3.508.0] 到達範囲クランプ — Problem.apt と同式（希望固定込みの実効下限/上限の他シフト合計）
             def wish_cnt(kk):
                 return sum(1 for j in range(T) if wish[i * T + j] == kk and kk in can_k)
@@ -177,8 +174,8 @@ def main():
                 return max(hi2, wish_cnt(kk))
             sum_hi = sum(eff_hi(k2) for k2 in range(K) if k2 != k)
             sum_lo = sum(eff_lo(k2) for k2 in range(K) if k2 != k)
-            reach_lo = max(T - sum_hi, wish_cnt(k), 0 if rlo == INT32_MIN else rlo)
-            reach_hi = min(T - sum_lo, T if rhi == INT32_MAX else rhi)
+            reach_lo = max(T - sum_hi, wish_cnt(k))
+            reach_hi = T - sum_lo
             if reach_lo <= reach_hi:
                 t = max(t, reach_lo)
                 t = min(t, reach_hi)
