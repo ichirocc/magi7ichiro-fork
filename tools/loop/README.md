@@ -13,6 +13,9 @@
 
 結果と判定は `docs/history/3.4xx.md`「自律改善ループ Iteration 1」を参照（`results/iter1.csv` が生データ）。
 
+- **決定的モード（3.507.3）**: `MAGI_BENCH_DETERMINISTIC=1 tools/loop/run_bench.sh …` で両腕とも `PostOptimizationParams.deterministic=true`
+  （ms キャップ・締切・残り時間の判定を回数上限へ。共同 LNS は `maxEvaluations`＝C1 90,000・個人 60,000）。同じ入力・seed なら同じ盤面＝
+  `repro` 列が他ジョブの負荷に依存しない。実機は既定 OFF（予算を使い切る）。
 - **機能同等性（§4 の 14 機能）**は `app/src/test/java/com/magi/app/v6/LoopFeatureRegressionTest.kt`（C# は `LoopFeatureRegressionTest.cs`）で
   計測する（3.507.2）。各機能を最小盤面で作り、後処理チェーンを旧腕（`componentRepairEnabled=false`）と新腕（true）の両方で走らせて
   不変条件（人員不足/超過修復・個人上下限・群回数・禁止連・希望固定・希望日前後・同長区間交換・循環交換・担当可・スキル群・Undo・停止・

@@ -52,6 +52,8 @@ internal object C1JointLnsPolish {
         val maxMillis: Long = 8_000L,
         /** 最良がこの時間更新されなければ打ち切る（0以下＝無効）。既定の根拠はクラスの KDoc。 */
         val patienceMs: Long = 4_000L,
+        /** [Iteration 7] 正式評価の回数上限（0＝無効）。決定的モードでは時間でなくこれで止める＝同じ入力・seed なら同じ盤面。 */
+        val maxEvaluations: Int = 0,
     )
 
     private enum class GoalKind { C1, TEMPORAL, COVERAGE, RANGE_LOW }
@@ -130,7 +132,9 @@ internal object C1JointLnsPolish {
         var lastImproveNs = System.nanoTime()
         val patienceNs = if (config.patienceMs > 0L) config.patienceMs * 1_000_000L else Long.MAX_VALUE
         fun stalled(): Boolean = patienceNs != Long.MAX_VALUE && System.nanoTime() - lastImproveNs >= patienceNs
-        fun stopped(): Boolean = shouldStop() || System.nanoTime() >= deadline || stalled()
+        var evaluations = 0
+        fun evalCapped(): Boolean = config.maxEvaluations > 0 && evaluations >= config.maxEvaluations
+        fun stopped(): Boolean = shouldStop() || System.nanoTime() >= deadline || stalled() || evalCapped()
 
         val lowerBound = structuralC1LowerBound(p)
         val improvable = (rootC1 - lowerBound).coerceAtLeast(0)
@@ -174,7 +178,7 @@ internal object C1JointLnsPolish {
                             if (stopped()) break
                             val next = parent.schedule.copy2D()
                             if (!applyMove(next, move)) continue
-                            generated++
+                            generated++; evaluations++
                             val report = UnifiedViolationChecker.check(state, next)
                             val c1 = report.breakdown["c1"] ?: 0
                             val overHard = report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0)
@@ -238,6 +242,7 @@ internal object C1JointLnsPolish {
         val stopReason = when {
             chosenC1 <= lowerBound -> "構造下限到達"
             shouldStop() -> "外部停止"
+            evalCapped() -> "評価回数上限${config.maxEvaluations}"
             System.nanoTime() >= deadline -> "期限"
             stalled() -> "最良が${config.patienceMs}ms更新されず打ち切り"
             else -> "探索停滞"
