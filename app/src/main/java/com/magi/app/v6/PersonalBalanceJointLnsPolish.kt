@@ -31,6 +31,8 @@ internal object PersonalBalanceJointLnsPolish {
         val totalDebt: Int = 16,
         val personalDebt: Int = 4,
         val maxMillis: Long = 6_000L,
+        /** [Iteration 7] 正式評価の回数上限（0＝無効）。決定的モードでは時間でなくこれで止める。 */
+        val maxEvaluations: Int = 0,
     )
 
     private data class Goal(
@@ -85,7 +87,9 @@ internal object PersonalBalanceJointLnsPolish {
         val rootFocus = focus.sumOf { rootPersonal[it] }
         val budgetMillis = config.maxMillis.coerceAtMost(60_000L)
         val deadline = System.nanoTime() + budgetMillis * 1_000_000L
-        fun stopped(): Boolean = shouldStop() || System.nanoTime() >= deadline
+        var evaluations = 0
+        fun evalCapped(): Boolean = config.maxEvaluations > 0 && evaluations >= config.maxEvaluations
+        fun stopped(): Boolean = shouldStop() || System.nanoTime() >= deadline || evalCapped()
 
         val root = Node(rootSchedule.copy2D(), rootReport, rootPersonal, rootFocus, emptyList(), 0)
         var best = root
@@ -121,7 +125,7 @@ internal object PersonalBalanceJointLnsPolish {
                         )
                         for (candidate in variants) {
                             if (stopped()) break
-                            generated++
+                            generated++; evaluations++
                             val report = UnifiedViolationChecker.check(state, candidate.schedule)
                             val personal = personalPenaltyByStaff(p, candidate.schedule)
                             val focusTotal = focus.sumOf { personal[it] }
@@ -180,6 +184,7 @@ internal object PersonalBalanceJointLnsPolish {
         val reason = when {
             valid && focus.all { chosenPersonal[it] <= lower[it] } -> "個人構造下限到達"
             shouldStop() -> "外部停止"
+            evalCapped() -> "評価回数上限${config.maxEvaluations}"
             System.nanoTime() >= deadline -> "期限"
             else -> "探索停滞"
         }

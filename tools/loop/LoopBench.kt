@@ -90,8 +90,10 @@ fun main(args: Array<String>) {
     fun peakHeap(): Long = pools.sumOf { it.peakUsage?.used ?: 0L }
     fun resetPeak() = pools.forEach { it.resetPeakUsage() }
     // Iteration 2: 旧＝3.504.x のチェーン（成分修復なし）、新＝巡末尾に違反起点のトランザクション修復を足したもの（3.505.1 で既定）。
-    val oldP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false)
-    val newP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true)
+    // [Iteration 7] MAGI_BENCH_DETERMINISTIC=1 で両腕とも決定的モード（回数上限で止める＝再現性を仕様にする）。
+    val det = System.getenv("MAGI_BENCH_DETERMINISTIC") == "1"
+    val oldP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det)
+    val newP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     val w = out.bufferedWriter()
     w.write("case,size,cat,seed,arm,ms,timeout,exception,oob,mismatch,hard,hardW,softW,wishRate,changed,total,weighted,peakMB,hash,repro\n")
     // ウォームアップ

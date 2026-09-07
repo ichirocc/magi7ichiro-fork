@@ -30,6 +30,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-07（3.507.3＝ループ Iteration 7 第一弾。後処理の決定的モード（`PostOptimizationParams.deterministic`＝ms キャップ・締切・残り時間の判定を回数上限へ。共同 LNS 2 種に `maxEvaluations`）。実データ 4 件で時間モードと同一盤面かつ 2 回とも再現。実機は既定 OFF＝挙動不変。ベンチ iter7 走行中）
+
 **最終更新**：2026-09-07（3.507.2＝ループ Iteration 6 報告（新良 163/同等 169/旧良 8・品質 +1.84%・必須が減った試行 64）＋仕様 §4「機能同等性」の 14 機能回帰スイート `LoopFeatureRegressionTest`（旧腕・新腕の両方で不変条件を検査、14/14）。コード変更なし）
 
 **最終更新**：2026-09-06（3.507.1＝ループ Iteration 6 第一弾。起点生成でピン（lo=hi）を単独で崩す単セル・同日交換を、同じ職員の別の日で回数を戻す行内入替・2 日交換に置き換え。4 フィクスチャで退行なし、sample_v6 は採用 3→9・total 337→332。ベンチ iter6 走行中）
