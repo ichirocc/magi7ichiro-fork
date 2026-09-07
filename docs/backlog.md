@@ -3,7 +3,7 @@
 > 完了した項目は打消し線のまま残す（同型の課題を二度登録しないため）。開いている項目の要約は CLAUDE.md にある。
 
 1. ~~TallyCard の読取/編集モード完全整合（result専用検査結果の plumbing）~~ **→ 3.96.0 で完了**（ユーザー向け機能の TallyCard 項参照）。
-2. 未レビュー領域の精読: ~~`V6LateOperators`~~（3.507.7）/~~`V6SearchOperators`~~（3.507.9）/~~`V6HotfixPasses` 各パス内部~~（3.508.1）, ~~CSV~~（3.507.8）/UI 層。**（3.508.1）** エンジン層は一巡、残りは UI 層。 `V6PortAnalyzer`（3.503.0）・`V6SwapSuggester`（3.507.4）・`V6SanityPort`（3.507.5）・`V6LateOperators`（3.507.7）は一巡。
+2. 未レビュー領域の精読: ~~`V6LateOperators`~~（3.507.7）/~~`V6SearchOperators`~~（3.507.9）/~~`V6HotfixPasses` 各パス内部~~（3.508.1）, ~~CSV~~（3.507.8）/UI 層（3.508.2 でエンジン契約との接点は確認済み。全面精読は実機ビルドが要るので保留）。**（3.508.2）** `V6PortAnalyzer`（3.503.0）・`V6SwapSuggester`（3.507.4）・`V6SanityPort`（3.507.5）・`V6LateOperators`（3.507.7）は一巡。
    **(3.84.0, 並列監査で一巡＝`docs/history/3.0xx.md`)**。※`V6WebCompat` は 3.393.0 に撤去済み（Web 版は存在しない）。
 3. ~~C++/NDK 移植は**不要**の結論（純Kotlin＋被覆対応Δ評価で十分高速）~~ **→ 撤回（3.136〜／第2期・第3期でネイティブ加速＝
    C++フル評価器＋SA/LAHC/ALNS/Polishチャンク＋JNI＋実行時パリティを実装。監査指摘は下記6/7）**。エンジンは ALNS/Destroy-Repair/

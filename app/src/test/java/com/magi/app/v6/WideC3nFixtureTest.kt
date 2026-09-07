@@ -36,8 +36,8 @@ class WideC3nFixtureTest {
         val sched = Array(st.schedule.size) { i -> st.schedule[i].toIntArray() }
         val rep = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, rep.hard)
-        assertEquals(423, rep.total)   // [3.508.0] apt の到達範囲クランプで職員E/H の目標が動いたぶん
-        assertEquals(3220.0, rep.weightedScore, 1e-9)
+        assertEquals(413, rep.total)   // [3.509.0] 個人設定がある組は群目標を適用しない（D9）
+        assertEquals(3210.0, rep.weightedScore, 1e-9)
     }
 
     @Test

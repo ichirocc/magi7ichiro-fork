@@ -31,6 +31,7 @@ import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.Ws1Result
 import com.magi.app.v6.canDoShiftsForStaff
 import com.magi.app.v6.canDo
+import com.magi.app.v6.mayPlace
 import com.magi.app.v6.copy2D
 import com.magi.app.v6.toIntArray2D
 import com.magi.app.v6.withSchedule
@@ -1856,7 +1857,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val out = ArrayList<FixCandidate>()
         for (i in 0 until p.S) {
             if (i !in sched.indices || dayIndex !in sched[i].indices) continue
-            if (!p.canDo(i, shiftIndex)) continue            // 担当できないシフトは出さない
+            // 担当できない・上限 0 のシフトは出さない（最適化器・FixSuggester・Sanity 代用要員と同じ mayPlace 基準）。
+            if (!p.mayPlace(i, shiftIndex)) continue
             if (sched[i][dayIndex] == shiftIndex) continue   // すでにそのシフト
             // [監査A5] 実現可能な希望のみ固定扱い（#11①整合: 不可能希望のセルはエンジン同様に可動）。
             if (p.wishLocked(i, dayIndex) && p.wish[i][dayIndex] != shiftIndex) continue

@@ -75,8 +75,8 @@ class Problem(val state: MagiState) {
     /** apt[i][k] = 適切回数（群単位の双方向目標 groupShiftApt[群][シフト]）, or -1 when unset.
      *  担当可能(canDo=bucket)なシフトのみ展開し、解消不能な幻のapt偏差を作らない（c1 と同じ方針）。 */
     val apt: Array<IntArray>
-    /** [3.508.0] 群目標を個人 [lo,hi] でだけクランプした値（到達範囲クランプ前）。設定ミス診断が「設定した目標が
-     *  構造的に届かない」ことを言い続けるために読む。評価・最適化は [apt]（実効目標）だけを見る。 */
+    /** [3.508.0] 群目標の設定値（到達範囲クランプ前。個人設定がある組は [apt] と同じく -1）。設定ミス診断が
+     *  「設定した目標が構造的に届かない」ことを言い続けるために読む。評価・最適化は [apt]（実効目標）だけを見る。 */
     val aptRaw: Array<IntArray>
 
     val cons1: List<C1>
@@ -178,18 +178,14 @@ class Problem(val state: MagiState) {
             for (k in 0 until K) {
                 var t = row.getOrNull(k)?.trim()?.toIntOrNull() ?: continue
                 if (t < 0 || canK?.contains(k) != true) continue
-                // [整合] 個人別回数(staffRange=LimMin/LimMax)の[lo,hi]外の群目標は到達不能。範囲端にクランプし、
-                // staffRangeで固定/制限された職員に解消不能な幻のapt違反が出るのを防ぐ（例: Dﾃを2-2固定の職員に群目標10）。
-                val rlo = rangeLo[i][k]; val rhi = rangeHi[i][k]
-                if (rlo != Int.MIN_VALUE && t < rlo) t = rlo
-                if (rhi != Int.MAX_VALUE && t > rhi) t = rhi
+                // [3.509.0/決定 D9] 個人の下限または上限が入っている組には群目標を適用しない（空欄だけのキーは未設定と同じ）。
+                if (rangeLo[i][k] != Int.MIN_VALUE || rangeHi[i][k] != Int.MAX_VALUE) continue
                 aptRaw[i][k] = t
-                // [3.508.0] さらに到達範囲へ収める（例: 休 10〜10・有 1〜1 で他が上限 0 なら残り 20 日は必ず B4＝群目標 1 は
-                //   解消不能）。個人 [lo,hi] と矛盾するときは個人設定を優先して従来どおり。
+                // [3.508.0] 到達範囲へ収める（例: 休の希望固定 15 日の職員に 休 目標 10 は届かない → 15）。
                 var sumHi = 0; var sumLo = 0
                 for (k2 in 0 until K) if (k2 != k) { sumHi += effHi(i, k2); sumLo += effLo(i, k2) }
-                val reachLo = maxOf(T - sumHi, wishCnt[i][k], if (rlo == Int.MIN_VALUE) 0 else rlo)
-                val reachHi = minOf(T - sumLo, if (rhi == Int.MAX_VALUE) T else rhi)
+                val reachLo = maxOf(T - sumHi, wishCnt[i][k])
+                val reachHi = T - sumLo
                 if (reachLo <= reachHi) { if (t < reachLo) t = reachLo; if (t > reachHi) t = reachHi }
                 apt[i][k] = t
             }
