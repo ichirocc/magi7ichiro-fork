@@ -327,7 +327,7 @@ object V6SanityPort {
             var anyApt = false
             for (i in 0 until p.S) {
                 if (!p.canDo(i, k)) continue
-                val a = p.apt[i][k]
+                val a = p.aptRaw[i][k]   // [3.508.0] 設定した目標を検算する（実効目標 apt は到達範囲へ丸め済み）
                 if (a >= 0) { aptSum += a; anyApt = true }
             }
             if (!anyApt) continue   // 目標が1つも設定されていないシフトは検算対象外
@@ -923,7 +923,9 @@ object V6SanityPort {
             for (i in 0 until p.S) {
                 val name = nameOf(i)
                 for (k in 0 until p.K) {
-                    val t = p.apt[i][k]
+                    // [3.508.0] 設定した目標(aptRaw)で判定する。実効目標(apt)は到達下限へ切り上げ済みなので
+                    //   違反としては出ないが、設定が届かないことは言い続ける（直すのはデータ側）。
+                    val t = p.aptRaw[i][k]
                     if (t < 0 || !p.canDo(i, k)) continue
                     val otherHiSum = otherShiftCapSum(p, i, k)
                     val forcedMin = p.T - otherHiSum
@@ -931,7 +933,7 @@ object V6SanityPort {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」適切回数",
                             "担当できるシフトの構成上、他の担当シフトの個人上限（合計${otherHiSum}回）を守る限り「$sym」は最低${forcedMin}回になります（${p.T}日を埋めきれないぶんが必ず回ってくる）。" +
-                                "適切回数${t}回との差${forcedMin - t}回は、個人上限を破って別のシフトへ逃がさない限り消えません（上限超過は上限違反として同じだけ残ります）",
+                                "設定の適切回数${t}回には届かないため、計算では${p.apt[i][k]}回を目標として扱っています（差${forcedMin - t}回は違反には出ません）",
                             "「$sym」の適切回数を${forcedMin}回以上にするか空欄にする、または他シフトの担当・上限を見直してください"))
                     }
                 }
@@ -950,7 +952,7 @@ object V6SanityPort {
             for (i in 0 until p.S) {
                 val name = nameOf(i)
                 for (k in 0 until p.K) {
-                    val t = p.apt[i][k]
+                    val t = p.aptRaw[i][k]   // [3.508.0] 6b と同じく設定した目標で判定
                     if (t < 0 || !p.canDo(i, k)) continue
                     var wished = 0
                     for (j in 0 until p.T) if (p.wishLocked(i, j) && p.wish[i][j] == k) wished++
@@ -958,7 +960,7 @@ object V6SanityPort {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」適切回数と希望",
                             "「$sym」の希望が${wished}件あり、適切回数の目標${t}回を超えています。希望どおりに配置する限り" +
-                                "「$sym」は必ず${wished}回以上になるため、差${wished - t}回ぶんの超過は最適化では消せません",
+                                "「$sym」は必ず${wished}回以上になります。計算では${p.apt[i][k]}回を目標として扱うため差${wished - t}回は違反には出ませんが、設定の目標には届きません",
                             "「$sym」の適切回数を${wished}回以上にするか、${name}さんの「$sym」の希望を${wished - t}件減らしてください"))
                     }
                 }

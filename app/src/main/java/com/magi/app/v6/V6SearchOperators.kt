@@ -12,6 +12,23 @@ import kotlin.math.max
 // 集合構築は 2 パス（個数を数えてから N 番目を選ぶ）で ArrayList/filter を排し GC 圧を下げる。
 // ALNS の直接評価アームから eval+cur へ copy2D なしで適用される。
 
+/** 「条件を満たす index を数えてから、その N 番目を一様に選ぶ」2 パス走査。該当が無ければ -1。
+ *  rng の消費は該当が 1 件以上あるときの `nextInt(cnt)` 1 回だけ＝呼び出し側の乱数列は従来と同じ。 */
+private inline fun pickUniform(n: Int, rng: Random, pred: (Int) -> Boolean): Int {
+    var cnt = 0
+    for (x in 0 until n) if (pred(x)) cnt++
+    if (cnt == 0) return -1
+    var pick = rng.nextInt(cnt)
+    for (x in 0 until n) if (pred(x)) { if (pick-- == 0) return x }
+    return -1
+}
+
+/** [pickUniform] の値版: `values` のうち `pred` を満たす要素から一様に 1 つ選ぶ（無ければ -1）。 */
+private inline fun pickUniformValue(values: IntArray, rng: Random, pred: (Int) -> Boolean): Int {
+    val idx = pickUniform(values.size, rng) { pred(values[it]) }
+    return if (idx < 0) -1 else values[idx]
+}
+
 // [need2単独定義セル見落とし修正] 過剰スキャン/移動先の不足推定をともに p.covOCell/covUCell
 //   (need1・need2のOR、source of truth)へ統一。旧実装はneed1のみで、need1未設定・need2のみで
 //   定義されたシフトの過剰/不足を見落としていた（3.173.0のCoverageDiagnosis修正と同根）。
@@ -24,11 +41,8 @@ internal fun findCovOFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
         if (over > maxOver) { maxOver = over; overK = k }
     }
     if (overK < 0) return null
-    var wCnt = 0
-    for (i in 0 until p.S) if (eval.at(i, j) == overK && !p.wishLocked(i, j)) wCnt++
-    if (wCnt == 0) return null
-    var pickW = rng.nextInt(wCnt); var i = 0
-    for (ii in 0 until p.S) if (eval.at(ii, j) == overK && !p.wishLocked(ii, j)) { if (pickW-- == 0) { i = ii; break } }
+    val i = pickUniform(p.S, rng) { eval.at(it, j) == overK && !p.wishLocked(it, j) }
+    if (i < 0) return null
     var bestNw = -1; var bestDef = Int.MIN_VALUE
     for (k in 0 until p.K) {
         if (k == overK || !p.mayPlace(i, k)) continue
@@ -41,92 +55,54 @@ internal fun findCovOFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
 internal fun findC2Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? {
     if (p.cons2.isEmpty()) return null
     val c = p.cons2[rng.nextInt(p.cons2.size)]
-    var dCnt = 0
-    for (i in 0 until p.S) { if (!p.mayPlace(i, c.shiftIdx)) continue; if (eval.countForStaff(i, c.shiftIdx) < c.count) dCnt++ }
-    if (dCnt == 0) return null
-    var pickI = rng.nextInt(dCnt); var stf = 0
-    for (i in 0 until p.S) { if (!p.mayPlace(i, c.shiftIdx)) continue; if (eval.countForStaff(i, c.shiftIdx) < c.count) { if (pickI-- == 0) { stf = i; break } } }
-    var dayCnt = 0
-    for (j in 0 until p.T) if (eval.at(stf, j) != c.shiftIdx && !p.wishLocked(stf, j)) dayCnt++
-    if (dayCnt == 0) return null
-    var pickJ = rng.nextInt(dayCnt); var day = 0
-    for (j in 0 until p.T) if (eval.at(stf, j) != c.shiftIdx && !p.wishLocked(stf, j)) { if (pickJ-- == 0) { day = j; break } }
+    val stf = pickUniform(p.S, rng) { p.mayPlace(it, c.shiftIdx) && eval.countForStaff(it, c.shiftIdx) < c.count }
+    if (stf < 0) return null
+    val day = pickUniform(p.T, rng) { eval.at(stf, it) != c.shiftIdx && !p.wishLocked(stf, it) }
+    if (day < 0) return null
     return intArrayOf(stf, day, c.shiftIdx)
 }
 
 internal fun findRangeLowFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? {
-    var cCnt = 0
-    for (i in 0 until p.S) for (k in 0 until p.K) { val lo = p.rangeLo[i][k]; if (lo == Int.MIN_VALUE || !p.mayPlace(i, k)) continue; if (eval.countForStaff(i, k) < lo) cCnt++ }
-    if (cCnt == 0) return null
-    var pickC = rng.nextInt(cCnt); var rlI = 0; var rlK = 0
-    outer@ for (i in 0 until p.S) for (k in 0 until p.K) { val lo = p.rangeLo[i][k]; if (lo == Int.MIN_VALUE || !p.mayPlace(i, k)) continue; if (eval.countForStaff(i, k) < lo) { if (pickC-- == 0) { rlI = i; rlK = k; break@outer } } }
-    var dayCnt = 0
-    for (j in 0 until p.T) if (eval.at(rlI, j) != rlK && !p.wishLocked(rlI, j)) dayCnt++
-    if (dayCnt == 0) return null
-    var pickJ = rng.nextInt(dayCnt); var day = 0
-    for (j in 0 until p.T) if (eval.at(rlI, j) != rlK && !p.wishLocked(rlI, j)) { if (pickJ-- == 0) { day = j; break } }
+    // (i, k) は i*K+k に平坦化＝走査順は i 優先で従来の二重ループと同じ。
+    val cell = pickUniform(p.S * p.K, rng) { x ->
+        val i = x / p.K; val k = x % p.K; val lo = p.rangeLo[i][k]
+        lo != Int.MIN_VALUE && p.mayPlace(i, k) && eval.countForStaff(i, k) < lo
+    }
+    if (cell < 0) return null
+    val rlI = cell / p.K; val rlK = cell % p.K
+    val day = pickUniform(p.T, rng) { eval.at(rlI, it) != rlK && !p.wishLocked(rlI, it) }
+    if (day < 0) return null
     return intArrayOf(rlI, day, rlK)
 }
 
-internal fun findC41Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? {
-    if (p.cons41.isEmpty() || p.T == 0) return null
-    val c = p.cons41[rng.nextInt(p.cons41.size)]
-    val j = rng.nextInt(p.T)
-    var cnt = 0
-    for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx) cnt++
-    return when {
-        cnt > c.u -> {
-            var wCnt = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) wCnt++
-            if (wCnt == 0) return null
-            var pickW = rng.nextInt(wCnt); var ci = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) { if (pickW-- == 0) { ci = i; break } }
-            val allowed41 = p.allowedShiftsForStaff(ci)
-            var oCnt = 0; for (ak in allowed41) if (ak != c.shiftIdx) oCnt++
-            if (oCnt == 0) return null
-            var pickK = rng.nextInt(oCnt); var nwK = 0
-            for (ak in allowed41) if (ak != c.shiftIdx) { if (pickK-- == 0) { nwK = ak; break } }
-            intArrayOf(ci, j, nwK)
-        }
-        cnt < c.l -> {
-            var aCnt = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) aCnt++
-            if (aCnt == 0) return null
-            var pickA = rng.nextInt(aCnt); var ai = 0
-            for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
-            intArrayOf(ai, j, c.shiftIdx)
-        }
-        else -> null
-    }
-}
+internal fun findC41Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? =
+    findGroupRangeFix(p, eval, rng, p.sgrp, p.cons41)
 
-/** c41 のスキルグループ版（ssk + cons41s）。形は findC41Fix と同一。 */
-internal fun findC41sFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? {
-    if (p.cons41s.isEmpty() || p.T == 0) return null
-    val c = p.cons41s[rng.nextInt(p.cons41s.size)]
+/** c41 のスキルグループ版（ssk + cons41s）。 */
+internal fun findC41sFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? =
+    findGroupRangeFix(p, eval, rng, p.ssk, p.cons41s)
+
+/** 群/スキル群レンジ（c41/c41s）の 1 セル修正。乱択した行と日について、群内の在勤数が上限超なら 1 人を
+ *  担当可の別シフトへ、下限未満なら群内の 1 人をそのシフトへ。`member[i]` が職員 i の所属。 */
+private fun findGroupRangeFix(p: Problem, eval: DeltaEvaluator, rng: Random, member: IntArray, rows: List<C41>): IntArray? {
+    if (rows.isEmpty() || p.T == 0) return null
+    val c = rows[rng.nextInt(rows.size)]
     val j = rng.nextInt(p.T)
     var cnt = 0
-    for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx) cnt++
+    for (i in 0 until p.S) if (member[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx) cnt++
     return when {
         cnt > c.u -> {
-            var wCnt = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) wCnt++
-            if (wCnt == 0) return null
-            var pickW = rng.nextInt(wCnt); var ci = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) == c.shiftIdx && !p.wishLocked(i, j)) { if (pickW-- == 0) { ci = i; break } }
-            val allowed41 = p.allowedShiftsForStaff(ci)
-            var oCnt = 0; for (ak in allowed41) if (ak != c.shiftIdx) oCnt++
-            if (oCnt == 0) return null
-            var pickK = rng.nextInt(oCnt); var nwK = 0
-            for (ak in allowed41) if (ak != c.shiftIdx) { if (pickK-- == 0) { nwK = ak; break } }
+            val ci = pickUniform(p.S, rng) { member[it] == c.groupIdx && eval.at(it, j) == c.shiftIdx && !p.wishLocked(it, j) }
+            if (ci < 0) return null
+            val nwK = pickUniformValue(p.allowedShiftsForStaff(ci), rng) { it != c.shiftIdx }
+            if (nwK < 0) return null
             intArrayOf(ci, j, nwK)
         }
         cnt < c.l -> {
-            var aCnt = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) aCnt++
-            if (aCnt == 0) return null
-            var pickA = rng.nextInt(aCnt); var ai = 0
-            for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && eval.at(i, j) != c.shiftIdx && !p.wishLocked(i, j) && p.mayPlace(i, c.shiftIdx)) { if (pickA-- == 0) { ai = i; break } }
+            val ai = pickUniform(p.S, rng) {
+                member[it] == c.groupIdx && eval.at(it, j) != c.shiftIdx && !p.wishLocked(it, j) && p.mayPlace(it, c.shiftIdx)
+            }
+            if (ai < 0) return null
             intArrayOf(ai, j, c.shiftIdx)
         }
         else -> null
@@ -134,21 +110,16 @@ internal fun findC41sFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
 }
 
 internal fun findRangeHighFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray? {
-    var cCnt = 0
-    for (i in 0 until p.S) for (k in 0 until p.K) { val hi = p.rangeHi[i][k]; if (hi == Int.MAX_VALUE) continue; if (eval.countForStaff(i, k) > hi) cCnt++ }
-    if (cCnt == 0) return null
-    var pickC = rng.nextInt(cCnt); var rhI = 0; var rhK = 0
-    outer@ for (i in 0 until p.S) for (k in 0 until p.K) { val hi = p.rangeHi[i][k]; if (hi == Int.MAX_VALUE) continue; if (eval.countForStaff(i, k) > hi) { if (pickC-- == 0) { rhI = i; rhK = k; break@outer } } }
-    var dayCnt = 0
-    for (j in 0 until p.T) if (eval.at(rhI, j) == rhK && !p.wishLocked(rhI, j)) dayCnt++
-    if (dayCnt == 0) return null
-    var pickJ = rng.nextInt(dayCnt); var day = 0
-    for (j in 0 until p.T) if (eval.at(rhI, j) == rhK && !p.wishLocked(rhI, j)) { if (pickJ-- == 0) { day = j; break } }
-    val allowed = p.allowedShiftsForStaff(rhI)
-    var oCnt = 0; for (ak in allowed) if (ak != rhK) oCnt++
-    if (oCnt == 0) return null
-    var pickK = rng.nextInt(oCnt); var nwK = 0
-    for (ak in allowed) if (ak != rhK) { if (pickK-- == 0) { nwK = ak; break } }
+    val cell = pickUniform(p.S * p.K, rng) { x ->
+        val i = x / p.K; val k = x % p.K; val hi = p.rangeHi[i][k]
+        hi != Int.MAX_VALUE && eval.countForStaff(i, k) > hi
+    }
+    if (cell < 0) return null
+    val rhI = cell / p.K; val rhK = cell % p.K
+    val day = pickUniform(p.T, rng) { eval.at(rhI, it) == rhK && !p.wishLocked(rhI, it) }
+    if (day < 0) return null
+    val nwK = pickUniformValue(p.allowedShiftsForStaff(rhI), rng) { it != rhK }
+    if (nwK < 0) return null
     return intArrayOf(rhI, day, nwK)
 }
 
@@ -312,13 +283,11 @@ internal fun tryFixForbiddenRunViaAdjacentDay(
         if (j2 !in 0 until p.T || p.wishLocked(i, j2)) continue
         val oldJ2 = sched[i][j2]
         if (oldJ2 !in 0 until p.K) continue
-        // 候補シフト: 担当可能シフトを順に試す。
-        // [3.345.0] 休は通常のシフト種の一つ＝先頭に置く優先をやめた（旧: 休を第一候補にしていた）。
-        //   実データ3件の後処理研磨で最終盤面がバイト一致＝この優先は実質不活性だった。
-        val altOrder = ArrayList<Int>()
-        for (s in p.allowedShiftsForStaff(i)) if (s != oldJ2) altOrder.add(s)
-        for (alt in altOrder) {
-            val cntBefore = (0 until p.S).count { sched[it][j2] == oldJ2 }
+        // 候補シフト: 担当可能シフトを順に試す（休も通常のシフト種の一つ＝先頭優先はしない）。
+        var cntBefore = 0
+        for (x in 0 until p.S) if (sched[x][j2] == oldJ2) cntBefore++
+        for (alt in p.allowedShiftsForStaff(i)) {
+            if (alt == oldJ2) continue
             sched[i][j2] = alt   // [一時変更] 下の判定後に必ず復元する
             val jOk = !p.makesForbiddenRun(sched, i, j, fillShift)
             val j2Ok = !p.makesForbiddenRun(sched, i, j2, alt)
@@ -649,21 +618,22 @@ internal class RejectCulpritStats {
  */
 internal fun exactPinOffenders(p: Problem, before: Array<IntArray>, after: Array<IntArray>): List<IntArray> {
     val out = ArrayList<IntArray>(2)
-    for (i in 0 until p.S) {
-        for (k in 0 until p.K) {
-            val lo = p.rangeLo[i][k]
-            val hi = p.rangeHi[i][k]
-            if (lo == Int.MIN_VALUE || hi == Int.MAX_VALUE || lo != hi) continue
-            var beforeCnt = 0
-            var afterCnt = 0
-            for (j in 0 until p.T) {
-                if (before[i][j] == k) beforeCnt++
-                if (after[i][j] == k) afterCnt++
-            }
-            if (kotlin.math.abs(afterCnt - lo) > kotlin.math.abs(beforeCnt - lo)) out.add(intArrayOf(i, k))
-        }
-    }
+    for (i in 0 until p.S) for (k in 0 until p.K) if (exactPinDrifted(p, before, after, i, k)) out.add(intArrayOf(i, k))
     return out
+}
+
+/** (職員 i, シフト k) が厳密ピン(lo==hi)で、after の回数が before より目標 lo から遠いか。ピンでなければ false。 */
+private fun exactPinDrifted(p: Problem, before: Array<IntArray>, after: Array<IntArray>, i: Int, k: Int): Boolean {
+    val lo = p.rangeLo[i][k]
+    val hi = p.rangeHi[i][k]
+    if (lo == Int.MIN_VALUE || hi == Int.MAX_VALUE || lo != hi) return false
+    var beforeCnt = 0
+    var afterCnt = 0
+    for (j in 0 until p.T) {
+        if (before[i][j] == k) beforeCnt++
+        if (after[i][j] == k) afterCnt++
+    }
+    return kotlin.math.abs(afterCnt - lo) > kotlin.math.abs(beforeCnt - lo)
 }
 
 /**
@@ -719,19 +689,6 @@ class PinBlockAttribution {
 }
 
 internal fun exactPinRegression(p: Problem, before: Array<IntArray>, after: Array<IntArray>): Boolean {
-    for (i in 0 until p.S) {
-        for (k in 0 until p.K) {
-            val lo = p.rangeLo[i][k]
-            val hi = p.rangeHi[i][k]
-            if (lo == Int.MIN_VALUE || hi == Int.MAX_VALUE || lo != hi) continue
-            var beforeCnt = 0
-            var afterCnt = 0
-            for (j in 0 until p.T) {
-                if (before[i][j] == k) beforeCnt++
-                if (after[i][j] == k) afterCnt++
-            }
-            if (kotlin.math.abs(afterCnt - lo) > kotlin.math.abs(beforeCnt - lo)) return true
-        }
-    }
+    for (i in 0 until p.S) for (k in 0 until p.K) if (exactPinDrifted(p, before, after, i, k)) return true
     return false
 }

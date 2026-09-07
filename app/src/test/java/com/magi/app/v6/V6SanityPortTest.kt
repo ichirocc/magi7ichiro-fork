@@ -743,7 +743,10 @@ class V6SanityPortTest {
         )
         val p = Problem(st)
         assertEquals(11, V6SanityPort.otherShiftCapSum(p, 0, 1))   // 休10 + 有1
-        assertEquals(19, V6SanityPort.structuralPersonalFloor(p))  // (31-11) - 目標1
+        // 実効目標は到達下限 20 へ切り上がる（設定の 1 は aptRaw に残り 6b が案内）ので apt+high の構造下限は 0。
+        assertEquals(1, p.aptRaw[0][1]); assertEquals(20, p.apt[0][1])
+        assertEquals(0, V6SanityPort.structuralPersonalFloor(p))
+        assertTrue(V6SanityPort.buildGuidance(st).any { it.where.contains("「B4」適切回数") && it.problem.contains("計算では20回") })
     }
 
     /** 他シフトに上限未設定が1つでもあれば下界は立たない（6b/6c と同じ保守的判定）。 */
