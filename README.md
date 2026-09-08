@@ -31,6 +31,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-08（3.510.2＝iter8: C3 選択日ペア交換は品質 +0.04%（実データのみ）でゲート不合格→既定 OFF 維持。次の腕「共同 LNS の短い試行→採用時だけ本予算」を実装し iter9 で測定）
+
 **最終更新**：2026-09-08（3.510.0＝C3「選択日ペア交換」を最終段の低予算パスとして実装（既定 OFF、`tools/loop` iter8 で採否）。外部の重み・時間配分分析は backlog #14 に登録）
 
 **最終更新**：2026-09-08（3.509.5＝研磨パス共通の採用ゲート `adoptionGate` へ 18 箇所を統一（backlog #13(b)）。挙動不変、後処理 4/4 一致）
