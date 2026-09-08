@@ -1,6 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
-- iter12 結果: 長期ブロック交換の動的長 dynamicBlockLengths は170ペアで新良0／同等169／旧良1（大・充足不能ケースで必須+1）＝ゲート不合格、既定OFF維持。単一パスのkeep-bestはチェーン全体のkeep-bestを保証しない経路依存の一例（3.511.0 追記）  → `docs/history/3.4xx.md`
+- C2（個人合計）専用研磨パス C2Polish: 不足日をまとめて一括適用・1回だけ判定（c2は二値フラグのため1件ずつでは同点却下される）。T=5の小盤面ではweeklyの悪化で相殺される教訓、T=31で解消。既定OFFのhash 4/4不変、iter15で採否（3.511.3, backlog #12(b)）  → `docs/history/3.4xx.md`\n- iter12 結果: 長期ブロック交換の動的長 dynamicBlockLengths は170ペアで新良0／同等169／旧良1（大・充足不能ケースで必須+1）＝ゲート不合格、既定OFF維持。単一パスのkeep-bestはチェーン全体のkeep-bestを保証しない経路依存の一例（3.511.0 追記）  → `docs/history/3.4xx.md`
 - 循環交換の k=4,5 拡張（既存 k=2,3 全列挙はそのまま、4/5人はランダム試行で追加。全列挙は組合せ爆発するため避けた）。4職員の環で2/3職員では届かない改善を固定するテスト追加。既定OFFのhash 4/4不変、iter14で採否（3.511.2, backlog #12(b)/#13(e)）  → `docs/history/3.4xx.md`
 - 停滞時の探索幅拡大 StallEscalationConfig（巡回研磨クラスタが1巡も採用0のときだけ共同LNS/成分修復の幅を2倍で1回だけ再試行）。既定OFFのhash 4/4不変、iter13で採否（3.511.1, backlog #12(b)/#13(a)）  → `docs/history/3.4xx.md`
 - 長期ブロック交換の候補長を動的化 dynamicBlockLengths（違反窓長・禁止連長・希望島半径・当月日数から導出、固定28が2月以外で当月まるごとに届かない穴を修正）。既定OFFのhash 4/4不変、iter12で採否（3.511.0, backlog #14(c)）  → `docs/history/3.4xx.md`

@@ -262,6 +262,9 @@ object V6HotfixPasses {
          *  4/5 にすると k=4,5 の循環をランダム試行で追加する（backlog #12(b)/#13(e)）。既定 OFF。 */
         val cyclicSwapMaxK: Int = 3,
         val cyclicSwapKTrialsPerDay: Int = 20,
+        /** [3.511.3/測定中] 個人合計(c2)専用研磨（backlog #12(b)）。既定 OFF。 */
+        val c2PolishEnabled: Boolean = false,
+        val c2Passes: Int = 3,
         val c1WindowPasses: Int = 3,
         val c1FlowPasses: Int = 2,
         val c1FlowRelocations: Int = 4,
@@ -350,7 +353,7 @@ object V6HotfixPasses {
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
     private val adoptionKeys = listOf(
         "循環", "c1", "c3", "c3回転", "c3mn玉突き", "c3n", "range玉突き", "c3run玉突き", "c3pattern玉突き",
-        "アンカー窓交換", "希望島", "ブロック交換", "apt玉突き", "fair玉突き", "成分修復",
+        "アンカー窓交換", "希望島", "ブロック交換", "c2玉突き", "apt玉突き", "fair玉突き", "成分修復",
     )
 
     /** SoftPolishVerify で「対象」に数える族（3.278.0 で CyclicSwap の対象族、3.475.0 で c3n を追加）。 */
@@ -693,6 +696,11 @@ object V6HotfixPasses {
                     shouldStop = clusterStop,
                 )
             })
+            if (params.c2PolishEnabled) {
+                take("c2玉突き", chain.timed("後処理 個人合計(c2)研磨$tag", "C2Polish") { work ->
+                    C2Polish.applyC2Polish(state, work, maxPasses = params.c2Passes, shouldStop = clusterStop)
+                })
+            }
             take("apt玉突き", chain.timed("後処理 適切回数(apt)研磨$tag", "AptPolish") { work ->
                 AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round))
             })
