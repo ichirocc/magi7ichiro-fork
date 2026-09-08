@@ -310,6 +310,10 @@ object V6HotfixPasses {
         /** [3.510.0/測定中] 最終段の「連続規則 選択日ペア交換」（C3PairMaskPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
         val c3PairMaskEnabled: Boolean = false,
         val c3PairMaskEvaluations: Int = 3_000,
+        /** [測定中] 最終段の「c3n(禁止連続) 前後余白込みLNS」（C3nMarginLnsPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
+        val c3nMarginLnsEnabled: Boolean = false,
+        val c3nMarginLnsMarginDays: Int = 2,
+        val c3nMarginLnsEvaluations: Int = 3_000,
         /** [3.510.2/測定中] 共同 LNS を「短い試行→採用があったときだけ本予算で続行」にする（backlog #14(a)）。既定 OFF。 */
         val lnsAdaptive: Boolean = false,
         val c1LnsFirstEvaluations: Int = 20_000,
@@ -354,6 +358,7 @@ object V6HotfixPasses {
         const val FAIR = 0xFA12L
         const val C3PAIR = 0xC3AA1L
         const val CYCLIC_N = 0xC1C54L
+        const val C3N_MARGIN = 0xC3E9L
     }
 
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
@@ -534,6 +539,15 @@ object V6HotfixPasses {
             val pairStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
             chain.adopt(chain.timed("後処理 連続規則(c3系)選択日ペア交換(最終)", "C3PairMask") { work ->
                 C3PairMaskPolish.apply(state, work, maxEvaluations = params.c3PairMaskEvaluations, shouldStop = pairStop, seed = seed xor SeedTag.C3PAIR)
+            })
+        }
+
+        if (params.c3nMarginLnsEnabled && !shouldStop()) {
+            // [測定中] 共同 LNS の後・成分修復の前。c3n(禁止連続)のパターン日+前後余白を複数セル同時に
+            //   destroy-rebuildして、1セル付け替え(C3nPolish)が構造的に届かない局面を拾う。
+            val marginStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+            chain.adopt(chain.timed("後処理 c3n禁止連続(前後余白込みLNS・最終)", "C3nMarginLNS") { work ->
+                C3nMarginLnsPolish.apply(state, work, marginDays = params.c3nMarginLnsMarginDays, maxEvaluations = params.c3nMarginLnsEvaluations, shouldStop = marginStop, seed = seed xor SeedTag.C3N_MARGIN)
             })
         }
 
