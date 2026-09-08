@@ -3,12 +3,8 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 import java.util.Random
 
-/**
- * [3.510.0/測定中] 連続規則（c3/c3n/c3m/c3mn）違反の職員と相手職員のあいだで、**連続でなくてよい 1〜3 日**の割当を
- * 一括交換する研磨。同日の交換なので日別の人数は不変（covU/covO/需要を構造的に保つ）。候補は違反セルの日を必ず含み、
- * 1 日→2 日→3 日の順、違反職員×相手のラウンドロビンで評価枠を配る。採用は c3 系の加重違反が減り、かつ共通ゲート
- * （正式比較で改善・厳密ピン不変）を通るときだけ。同じ (職員対, 日集合) は 1 回しか評価しない。
- */
+/** 連続規則（c3 系）違反の職員と相手のあいだで、**連続でなくてよい 1〜3 日**の割当を同日交換する研磨（日別人数は不変）。
+ *  候補は違反日を含み 1→2→3 日の順に対ごとのラウンドロビンで評価。採用は c3 系加重が減り共通ゲートを通るときだけ。 */
 internal object C3PairMaskPolish {
     private val c3Fams = listOf("c3", "c3n", "c3m", "c3mn")
     private val c3Marks = setOf("vio-c3", "vio-c3n", "vio-c3m", "vio-c3mn")

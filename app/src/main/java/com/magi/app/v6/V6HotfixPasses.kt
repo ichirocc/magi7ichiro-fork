@@ -297,6 +297,15 @@ object V6HotfixPasses {
         /** [3.510.0/測定中] 最終段の「連続規則 選択日ペア交換」（C3PairMaskPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
         val c3PairMaskEnabled: Boolean = false,
         val c3PairMaskEvaluations: Int = 3_000,
+        /** [3.510.2/測定中] 共同 LNS を「短い試行→採用があったときだけ本予算で続行」にする（backlog #14(a)）。既定 OFF。 */
+        val lnsAdaptive: Boolean = false,
+        val c1LnsFirstEvaluations: Int = 20_000,
+        val personalLnsFirstEvaluations: Int = 15_000,
+        val c1LnsFirstMs: Long = 1_500L,
+        val personalLnsFirstMs: Long = 1_500L,
+        /** [3.510.4/測定中] 共同 LNS の中間ノードの一時負債を件数でなく重み（負債 ≤ クレジット×係数）で絞る（backlog #15(f)）。既定 OFF。 */
+        val lnsWeightDebt: Boolean = false,
+        val lnsDebtFactor: Double = 2.0,
     )
 
     /** 巡ごとの乱数列を分けるためのパス別タグ（[roundSeed]）。値は 3.499.0 以前の手書き値と同じ＝乱数列不変。 */
@@ -390,6 +399,7 @@ object V6HotfixPasses {
     ): V6PostOptimizationResult {
         val chain = PostChain(onPhase, schedule)
         val t0 = EngineClock.nowMs()
+        val report0 = UnifiedViolationChecker.check(state, schedule)
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
             applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop)
@@ -441,16 +451,35 @@ object V6HotfixPasses {
         chain.adopt(chain.timed("後処理 期間要件(c1)共同LNS", "C1共同LNS") { work ->
             val remaining = EngineClock.remainingMs(deadlineMs, tC1Lns).coerceAtMost(params.remainingClampMs)
             val cap = if (lnsTotal <= 0L) 0L else (remaining * params.c1LnsMaxMs / lnsTotal).coerceAtMost(params.c1LnsMaxMs)
-            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
-                else C1JointLnsPolish.Config(maxMillis = cap)
-            C1RepairOperators.jointLns(state, work, config = cfg, shouldStop = shouldStop)
+            val debtFactor = if (params.lnsWeightDebt) params.lnsDebtFactor else 0.0
+            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations, debtFactor = debtFactor)
+                else C1JointLnsPolish.Config(maxMillis = cap, debtFactor = debtFactor)
+            if (!params.lnsAdaptive) C1RepairOperators.jointLns(state, work, config = cfg, shouldStop = shouldStop)
+            else {
+                // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
+                val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
+                val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop)
+                if (r1.applied == 0) r1 else {
+                    val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
+                    r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
+                }
+            }
         })
         val tPersonalLns = EngineClock.nowMs()
         chain.adopt(chain.timed("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS") { work ->
             val cap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(params.personalLnsMaxMs)
-            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
-                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
-            PersonalBalanceJointLnsPolish.apply(state, work, config = cfg, shouldStop = shouldStop)
+            val debtFactor = if (params.lnsWeightDebt) params.lnsDebtFactor else 0.0
+            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations, debtFactor = debtFactor)
+                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap, debtFactor = debtFactor)
+            if (!params.lnsAdaptive) PersonalBalanceJointLnsPolish.apply(state, work, config = cfg, shouldStop = shouldStop)
+            else {
+                val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
+                val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop)
+                if (r1.applied == 0) r1 else {
+                    val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop)
+                    r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
+                }
+            }
         })
 
         if (params.c3PairMaskEnabled && !shouldStop()) {
@@ -497,6 +526,8 @@ object V6HotfixPasses {
                 message = "後処理パス別 計${sum}ms: " + chain.passMs.entries.sortedByDescending { it.value }
                     .take(params.passLogTopN).joinToString(" ") { "${it.key}=${it.value}ms(${it.value * 100 / sum}%)" }))
         }
+
+        chain.logs.add(MirrorLog(level = "I", tag = "POST", message = "後処理 収支: " + ChangeSummary.familyLine(ChangeSummary.familyDeltas(report0, report))))
 
         val plateauOut = finalC1Plateau(state, work, report, cluster.c1Plateau)
         val allLogs = ArrayList<MirrorLog>(chain.logs)

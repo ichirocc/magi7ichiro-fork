@@ -61,6 +61,9 @@ object ViolationComponentRepair {
         val maxGenerated: Int = 400,
         /** [Iteration 5] セル違反の起点で作る同長区間交換の最大長（制約の窓長から決めた半径をこれで頭打ち）。 */
         val maxWindowLength: Int = 7,
+        /** [3.510.5/測定中] 設計 v3: 起点の族の 重み×現在量×係数 を SOFT 一時負債の予算にし、HARD 悪化と予算超えの枝をビームから外す（[ConstraintRepairInference]）。既定 OFF。 */
+        val debtExploration: Boolean = false,
+        val temporaryDebtFactor: Double = 2.0,
     )
 
     /** 盤面差分。`ops` は [職員, 日, 新シフト] の並び（[CombinatorialRepair.Candidate.ops] と同じ形）。 */
@@ -167,7 +170,7 @@ object ViolationComponentRepair {
         }.getOrDefault(emptySet())
         // 厳密ピン（lo==hi）の (職員, シフト)。推定段階で「新たに崩す」枝を落とすために使う（exactPinRegression と同じ判定）。
         val pinned = Array(p.S) { i -> (0 until p.K).filter { k -> val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]; lo != Int.MIN_VALUE && hi != Int.MAX_VALUE && lo == hi }.toIntArray() }
-        var estimates = 0; var evaluations = 0; var anchorsTried = 0; var prunedPin = 0
+        var estimates = 0; var evaluations = 0; var anchorsTried = 0; var prunedPin = 0; var prunedDebt = 0
         val prunedLone = HashSet<Int>()   // 起点集合ごとに判定するので、同じ候補は 1 回だけ数える
 
         /** 候補が (職員, シフト) の回数をどれだけ動かすか（現盤面基準）。ピンを崩す候補と、それを戻せる相方の判定に使う。 */
@@ -238,10 +241,17 @@ object ViolationComponentRepair {
         }
 
         /** 成分 [remaining] の中で最浅の深さで見つかる「正式評価で改善する」トランザクション。無ければ null。 */
-        fun search(remaining: List<Int>): Pair<IntArray, ViolationReport>? {
+        fun search(anchor: Anchor, remaining: List<Int>): Pair<IntArray, ViolationReport>? {
             val baseEst = delta.score()
             val base = work.copy2D()
-            var frontier = remaining.map { Node(intArrayOf(it), estimate(intArrayOf(it))) }.filter { it.est != Long.MAX_VALUE }.sortedWith(nodeOrder).take(params.beamWidth)
+            val allowance = if (!params.debtExploration) Long.MAX_VALUE
+                else ConstraintRepairInference.temporarySoftDebtAllowance(bestRep, anchor.family, temporaryDebtFactor = params.temporaryDebtFactor)
+            fun explorable(est: Long): Boolean {
+                if (est == Long.MAX_VALUE) return false
+                if (!params.debtExploration) return true
+                return ConstraintRepairInference.mayExplore(baseEst, est, allowance).also { if (!it) prunedDebt++ }
+            }
+            var frontier = remaining.map { Node(intArrayOf(it), estimate(intArrayOf(it))) }.filter { explorable(it.est) }.sortedWith(nodeOrder).take(params.beamWidth)
             var depth = 1
             while (frontier.isNotEmpty()) {
                 var best: Pair<IntArray, ViolationReport>? = null
@@ -287,7 +297,7 @@ object ViolationComponentRepair {
                         if (estimates >= params.maxEstimates) break
                         val ids = node.ids + j
                         val est = estimate(ids)
-                        if (est != Long.MAX_VALUE) next.add(Node(ids, est))
+                        if (explorable(est)) next.add(Node(ids, est))
                     }
                 }
                 frontier = next.sortedWith(nodeOrder).take(params.beamWidth)
@@ -413,7 +423,7 @@ object ViolationComponentRepair {
             for ((anchor, ids) in sets.take(params.maxAnchors)) {
                 if (shouldStop() || evaluations >= params.maxEvaluations || estimates >= params.maxEstimates) break
                 anchorsTried++; maxSet = maxOf(maxSet, ids.size)
-                val (chosen, rep) = search(ids) ?: continue
+                val (chosen, rep) = search(anchor, ids) ?: continue
                 for (id in chosen) for (op in patches[id].ops) {
                     if (work[op[0]][op[1]] != op[2]) { work[op[0]][op[1]] = op[2]; delta.apply(op[0], op[1], op[2]) }
                 }
@@ -429,7 +439,7 @@ object ViolationComponentRepair {
         for (pt in patches.take(poolCount)) mech.merge(pt.mechanism, 1, Int::plus)
         return done(
             "候補${poolCount}件(" + mech.entries.joinToString(" ") { "${it.key}×${it.value}" } + ")+起点生成${generatedTotal}件 起点${anchorCount}件(探索${anchorsTried}件・最大${maxSet}候補)" +
-                " 推定${estimates}回(ピン枝刈り${prunedPin}・相方なし除外${prunedLone.size}) 正式評価${evaluations}回 採用${applied}件" +
+                " 推定${estimates}回(ピン枝刈り${prunedPin}・相方なし除外${prunedLone.size}${if (params.debtExploration) "・包絡外$prunedDebt" else ""}) 正式評価${evaluations}回 採用${applied}件" +
                 (if (acceptedLabels.isNotEmpty()) "[" + acceptedLabels.joinToString(", ") + "]" else "") +
                 (if (rejectReasons.isNotEmpty()) " 不採用(" + rejectReasons.entries.joinToString(" ") { "${it.key}:${it.value}" } + ")" else "") +
                 " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} score ${before.weightedScore.toLong()}->${bestRep.weightedScore.toLong()}",
