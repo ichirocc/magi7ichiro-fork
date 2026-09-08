@@ -149,8 +149,10 @@ class Problem(val state: MagiState) {
             val i = p.getOrNull(0)?.toIntOrNull() ?: continue
             val k = p.getOrNull(1)?.toIntOrNull() ?: continue
             if (i in 0 until S && k in 0 until K) {
-                r.lo.trim().toIntOrNull()?.let { rangeLo[i][k] = it }
-                r.hi.trim().toIntOrNull()?.let { rangeHi[i][k] = it }
+                // [3.509.1] 負数は未設定扱い（下限 -1 は無制限、上限 -1 は全回数が違反＝どちらも意図ではありえず、
+                //   D9 の「個人設定あり」にも数えない。Sanity 2h が案内する）。
+                r.lo.trim().toIntOrNull()?.takeIf { it >= 0 }?.let { rangeLo[i][k] = it }
+                r.hi.trim().toIntOrNull()?.takeIf { it >= 0 }?.let { rangeHi[i][k] = it }
             }
         }
 

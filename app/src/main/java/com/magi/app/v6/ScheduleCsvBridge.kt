@@ -385,7 +385,8 @@ object ScheduleCsvBridge {
         //   ヘッダ無しCSVの先頭職員が黙って落ち「氏名不一致でスキップ」と誤案内していた。
         //   3.314.0/M-08 が種類別CSVで直したのと同じ穴）。判定は「先頭セルが職員名に解決しない」＝
         //   csvBody() と同じ考え方（ヘッダの先頭セルが職員名と一致することは実運用上ない）。
-        var rr = if (rows.isNotEmpty() && nameToI[nameMatchKey(rows[0].getOrElse(0) { "" })] == null) 1 else 0
+        // [3.509.1] ヘッダは build() の見出し語か 2 列目以降が日付列のときだけ（先頭が職員名に解決しないだけでは飛ばさない＝氏名誤記の行を落とさない）。
+        var rr = if (rows.isNotEmpty() && nameToI[nameMatchKey(rows[0].getOrElse(0) { "" })] == null && looksLikeHeaderRow(rows[0])) 1 else 0
         while (rr < rows.size) {
             val r = rows[rr]
             // build() は勤務表の後に「空行＋『集計』ヘッダ＋職員名で始まる回数行」を出力する。ここで終端しないと
@@ -424,6 +425,14 @@ object ScheduleCsvBridge {
             unclosedQuote = parsedAll.unclosedQuote,
         )
     }
+}
+
+/** 勤務表CSVのヘッダ行か: 先頭セルが「スタッフ」を含むか、2 列目以降の非空セルがすべて日付列（数字・日付書式）。 */
+private fun looksLikeHeaderRow(row: List<String>): Boolean {
+    val head = row.getOrElse(0) { "" }.trim()
+    if (head.contains("スタッフ") || head.contains("日付") || head.contains("氏名")) return true
+    val rest = row.drop(1).map { it.trim() }.filter { it.isNotEmpty() }
+    return rest.isNotEmpty() && rest.all { c -> c.all { it.isDigit() || it == '/' || it == '-' || it == '.' } }
 }
 
 private fun appendCsvRow(out: StringBuilder, values: List<String>) {
@@ -823,7 +832,13 @@ object ConstraintsCsvIO {
                     val k = state.shifts.indexOfFirst { it.kigou.trim() == sym }
                     // [3.329.0/外部レビュー H-02] 氏名・記号が今のデータに無い行は黙って捨てない。
                     //   捨てたまま置換すると、その職員の個人レンジが**消える**。
-                    if (i != null && k >= 0) {
+                    // [3.509.3] 下限/上限は空欄か 0 以上の整数、両方あれば下限≤上限。Problem は負数・非数値を未設定として
+                    //   捨てるので、ここで受理すると「評価されない行で置換」になる（3.333.0 と同じ穴）。
+                    val loV = c(r, 3); val hiV = c(r, 4)
+                    val loN = loV.toIntOrNull(); val hiN = hiV.toIntOrNull()
+                    val numOk = (loV.isEmpty() || (loN != null && loN >= 0)) && (hiV.isEmpty() || (hiN != null && hiN >= 0)) &&
+                        (loN == null || hiN == null || loN <= hiN)
+                    if (i != null && k >= 0 && numOk) {
                         // [3.475.0/論理監査] 同じ職員×シフトの重複行（希望CSVと同じ扱い＝同値は1件、衝突は拒否）。
                         val key = "$i,$k"; val rng = Range(c(r, 3), c(r, 4)); val prev = ranges[key]
                         if (prev == null) { ranges[key] = rng; n++ } else if (prev != rng) reject(r)

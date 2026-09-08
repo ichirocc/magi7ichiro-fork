@@ -88,6 +88,10 @@
 
 ---
 
+- **#53 「同期した」と書いても機械検査が無ければ漏れる**（3.509.1）: Kotlin と C# の `Problem.apt` は 3.508.0 の直後に別セッションの
+  仕様変更で食い違いかけた。fixture と言語跨ぎ期待値ファイルを両リポジトリの CI で同じ数値に固定する（Kotlin `NativeParityFixtureTest`／
+  C++ harness／C# `CrossLanguageFixtureTest`）。評価器・`Problem` の展開を変えたら期待値を更新し 3 実装で回す。
+
 ## 3. 測り方
 
 - **1回の計測で A/B を判定しない。** 3回以上回して分布で見る。JointLNS は壁時計予算で動くので

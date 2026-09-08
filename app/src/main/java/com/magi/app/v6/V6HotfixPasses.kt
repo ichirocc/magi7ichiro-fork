@@ -631,7 +631,7 @@ object V6HotfixPasses {
         val verdict = when {
             adoptedTotal > 0 -> "有効(採用${adoptedTotal}手)"
             targets == 0 -> "対象なし"
-            else -> "頭打ち(採用0=改善手なし・正常)"
+            else -> "頭打ち(採用0=現在の探索範囲では改善手なし)"
         }
         val hardNote = if (softAfter.hard == preSoftRep.hard) "不変" else "変化${preSoftRep.hard}->${softAfter.hard}!"
         return MirrorLog(tag = "SoftPolishVerify", message =

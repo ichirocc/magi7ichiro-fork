@@ -21,6 +21,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
+| [`docs/automation.md`](./docs/automation.md) | **自動化方針と実装の対応**（済／部分／未、採用ゲート・探索段階・必須修正 10 項目） |
 | [`docs/backlog.md`](./docs/backlog.md) | **バックログ / 未対応**（完了項目は打消し線で保持。CLAUDE.md から移設） |
 | [`docs/claudemd-tune-proposal.md`](./docs/claudemd-tune-proposal.md) | **CLAUDE.md 見直し提案**（棚卸し・削除/書き直し/移動/残す/矛盾の表と全文案。承認待ち） |
 | [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（3.505.7 で再照合）（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
@@ -29,6 +30,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-09-08（3.509.3＝自動化方針（ユーザー提示）を `docs/automation.md` に実装との対応表として固定。CSV の個人レンジ行は非負整数・下限≤上限だけ受理）
+
+**最終更新**：2026-09-07（3.509.2＝日割当研磨の apt 目標を `Problem.apt`（実効目標）へ統一。外部レビューの評価定義・探索動学・UX 提案は backlog #12 に集約（決定・測定待ち））
+
+**最終更新**：2026-09-07（3.509.1＝外部レビュー一覧の仕分けと修正。負数の個人回数を未設定扱い（D9 に数えない）、CSV ヘッダ判定を構造で、停止ログの到達不能分岐、「群の目標（個人設定がない職員に適用）」。C# は CSV 例の複数表示・クイック解決の入力欄同期・言語跨ぎ契約テストを追加）
 
 **最終更新**：2026-09-07（3.509.0＝決定 D9「個人の下限/上限がある (職員,シフト) には群目標（apt）を適用しない」（ユーザー再指示）。個人設定のある組の違反は low/high だけで apt と二重計上しない。3.508.2＝UI 層の接点レビュー（「なおすのを手伝って」の候補を mayPlace へ））
 

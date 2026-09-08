@@ -40,11 +40,9 @@ internal object DayAssignmentPolish {
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
-        // 適切回数(apt)目標: state.groupShiftApt[群][シフト] の整数（空=なし）。
-        fun aptTarget(i: Int, k: Int): Int? {
-            val g = state.staff.getOrNull(i)?.groupIdx ?: return null
-            return state.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim()?.toIntOrNull()
-        }
+        // [3.509.2] 適切回数(apt)目標は Problem.apt（実効目標＝担当可ゲート・到達クランプ・D9 の個人設定除外込み）。
+        //   生の群目標を読むと、チェッカーが持たない目標へ向けた費用行列になる。
+        fun aptTarget(i: Int, k: Int): Int? = p.apt[i][k].takeIf { it >= 0 }
         fun cnt(): Array<IntArray> = countMatrix(p, work)
         var counts = cnt()
         for (j in 0 until p.T) {
@@ -119,10 +117,7 @@ internal object DayAssignmentPolish {
         val before = UnifiedViolationChecker.check(state, work)
         var bestRep = before
         var applied = 0
-        fun aptTarget(i: Int, k: Int): Int? {
-            val g = state.staff.getOrNull(i)?.groupIdx ?: return null
-            return state.groupShiftApt.getOrNull(g)?.getOrNull(k)?.trim()?.toIntOrNull()
-        }
+        fun aptTarget(i: Int, k: Int): Int? = p.apt[i][k].takeIf { it >= 0 }   // [3.509.2] 上と同じく実効目標
         // [3.345.0] weekly の wd バケットは職員×**シフト**×曜日（休も1シフト＝特別扱いしない）。
         //   目標は weeklyDevOfBucket が内部で round(そのシフトの回数/7) として持つ。被覆保存の再配置ごとに更新。
         fun wdOf(i: Int): Array<IntArray> {

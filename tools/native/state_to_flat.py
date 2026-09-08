@@ -141,6 +141,9 @@ def main():
             continue
         lo = to_int_or_none(r.get("lo"))
         hi = to_int_or_none(r.get("hi"))
+        # [3.509.1] 負数は未設定扱い — Problem.rangeLo/Hi
+        lo = lo if lo is not None and lo >= 0 else None
+        hi = hi if hi is not None and hi >= 0 else None
         if lo is not None:
             range_lo[i * K + k] = lo
         if hi is not None:
