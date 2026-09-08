@@ -258,6 +258,10 @@ object V6HotfixPasses {
         val jointLnsReserveMaxMs: Long = 14_000L,
         val maxRounds: Int = 4,
         val cyclicSwapPasses: Int = 4,
+        /** [3.511.2/測定中] 循環交換(CyclicSwapPolish)の最大人数。既定 3=既存 k=2,3 の全列挙のみ（挙動不変）。
+         *  4/5 にすると k=4,5 の循環をランダム試行で追加する（backlog #12(b)/#13(e)）。既定 OFF。 */
+        val cyclicSwapMaxK: Int = 3,
+        val cyclicSwapKTrialsPerDay: Int = 20,
         val c1WindowPasses: Int = 3,
         val c1FlowPasses: Int = 2,
         val c1FlowRelocations: Int = 4,
@@ -340,6 +344,7 @@ object V6HotfixPasses {
         const val APT = 0xA97L
         const val FAIR = 0xFA12L
         const val C3PAIR = 0xC3AA1L
+        const val CYCLIC_N = 0xC1C54L
     }
 
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
@@ -608,7 +613,11 @@ object V6HotfixPasses {
             }
 
             take("循環", chain.timed("後処理 循環交換(k=2,3)$tag", "CyclicSwapPolish") { work ->
-                CyclicSwapWeeklyPolish.applyCyclicSwapPolish(state, work, maxPasses = params.cyclicSwapPasses, shouldStop = clusterStop)
+                CyclicSwapWeeklyPolish.applyCyclicSwapPolish(
+                    state, work, maxPasses = params.cyclicSwapPasses, maxK = params.cyclicSwapMaxK,
+                    kTrialsPerDay = params.cyclicSwapKTrialsPerDay, seed = roundSeed(seed, SeedTag.CYCLIC_N, round),
+                    shouldStop = clusterStop,
+                )
             })
 
             // c1 違反セルに厳密アンカーする 2 op は、不足窓が無ければ必ず no-op＝C1DeltaPrefilter で 1 回判定して飛ばす（3.275.0/3.276.0）。
