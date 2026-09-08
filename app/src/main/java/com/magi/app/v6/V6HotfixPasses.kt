@@ -396,6 +396,7 @@ object V6HotfixPasses {
     ): V6PostOptimizationResult {
         val chain = PostChain(onPhase, schedule)
         val t0 = EngineClock.nowMs()
+        val report0 = UnifiedViolationChecker.check(state, schedule)
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
             applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop)
@@ -520,6 +521,8 @@ object V6HotfixPasses {
                 message = "後処理パス別 計${sum}ms: " + chain.passMs.entries.sortedByDescending { it.value }
                     .take(params.passLogTopN).joinToString(" ") { "${it.key}=${it.value}ms(${it.value * 100 / sum}%)" }))
         }
+
+        chain.logs.add(MirrorLog(level = "I", tag = "POST", message = "後処理 収支: " + ChangeSummary.familyLine(ChangeSummary.familyDeltas(report0, report))))
 
         val plateauOut = finalC1Plateau(state, work, report, cluster.c1Plateau)
         val allLogs = ArrayList<MirrorLog>(chain.logs)

@@ -584,7 +584,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         pushReport(state ?: st0, sched, r.report, runLabel = "バックグラウンド最適化") { it.copy(
             messageIsError = false,
             running = false, hasResult = true, engineRan = true,
-            runSummary = prev?.let { com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report).line() },
+            runSummary = prev?.let { runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report)) },
             message = "バックグラウンド最適化 完了: 必須=${r.report.hard} 合計=${r.report.total}",
         ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
@@ -1385,7 +1385,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         running = false,
                         hasResult = true,
                         engineRan = true,
-                        runSummary = com.magi.app.v6.ChangeSummary.of(st0, sched0, res.schedule, res.report).line(),
+                        runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, res.schedule, res.report, baseReport)),
                         message = "勤務表ができました: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)",
                     ) }
                     lastResultHard = newHard
@@ -1539,7 +1539,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     running = false,
                     hasResult = true,
                     engineRan = true,
-                    runSummary = com.magi.app.v6.ChangeSummary.of(st0, sched0, finalSched, finalReport).line(),
+                    runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, finalSched, finalReport, baseReport)),
                     message = if (adopted)
                         "整えました: 合計 ${baseReport.total} → ${finalReport.total}（${if (gain >= 0) "-$gain" else "+${-gain}"}・重み ${baseReport.weightedScore.toInt()} → ${finalReport.weightedScore.toInt()}）必須=${finalReport.hard} (${System.currentTimeMillis() - startMs}ms)"
                     else
@@ -2680,3 +2680,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 private fun Int.floorMod(m: Int): Int = ((this % m) + m) % m
+
+/** 完了カードの前後比較 2 行（変更量／族別の改善・悪化）。 */
+private fun runSummaryOf(s: com.magi.app.v6.ChangeSummary): String = s.line() + "\n" + s.familyLine { breakdownLabels[it] ?: it }
