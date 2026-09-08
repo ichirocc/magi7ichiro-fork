@@ -31,7 +31,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
-**最終更新**：2026-09-08（3.511.3＝C2専用研磨パス C2Polish を実装（iter15 で採否）。3.511.2 循環交換 k=4,5 拡張は iter14 で不合格（必須退行0だが品質・速度10%未達、既定OFF維持）。3.511.1/3.511.0 は不合格・既定OFF維持。lnsAdaptive の既定 ON は判断待ち）
+**最終更新**：2026-09-08（3.511.3＝C2専用研磨パス C2Polish は iter15 で全170ペア無変化（合成ケースが不足2以上を作れておらず検証不能、既定OFF維持）。3.511.2 循環交換 k=4,5 拡張は iter14 で不合格（必須退行0だが品質・速度10%未達、既定OFF維持）。3.511.1/3.511.0 は不合格・既定OFF維持。lnsAdaptive の既定 ON は判断待ち）
 
 **最終更新**：2026-09-08（3.510.0＝C3「選択日ペア交換」を最終段の低予算パスとして実装（既定 OFF、`tools/loop` iter8 で採否）。外部の重み・時間配分分析は backlog #14 に登録）
 
