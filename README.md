@@ -31,7 +31,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
-**最終更新**：2026-09-08（3.510.4＝共同 LNS の一時負債を重みで絞る `WeightDebt` を opt-in 実装、iter10 で採否。3.510.3 族別 Credit/Debt の可視化。台帳設計 v1/v2 の机上評価は history 補遺、lnsAdaptive の既定 ON は判断待ち）
+**最終更新**：2026-09-08（3.510.5＝違反連結成分修復の一時負債予算 `ConstraintRepairInference` を opt-in 実装（iter11 で採否）。3.510.4 共同 LNS の `WeightDebt`（iter10 実行中）。lnsAdaptive の既定 ON は判断待ち）
 
 **最終更新**：2026-09-08（3.510.0＝C3「選択日ペア交換」を最終段の低予算パスとして実装（既定 OFF、`tools/loop` iter8 で採否）。外部の重み・時間配分分析は backlog #14 に登録）
 

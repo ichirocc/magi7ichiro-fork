@@ -86,3 +86,5 @@
     設計 v2（3.510.3 補遺）: (f) 中間探索の件数 debt（C1/個人共同 LNS の totalDebt/c1Debt/personalDebt）を重み基準（負債 ≤ クレジット×係数）へ＝3.510.4 `WeightDebt` opt-in 実装、iter10 で採否／
     (g) 凸型負債 W×D(D+1)/2（族単位で採用 31 件中 1 件却下、職員集中は未計測）＝採用基準の追加、opt-in＋計測／(h) 族別予算 Priority=W×違反量＝HARD 残存盤面で SOFT が 0 になるので下限つきで計測／
     (i) 設定由来倍率（明示個人 ×3）は不要（D9 で群目標を置換済み、チェッカーとずれる）／(j) WeightProfile は重みが設定化されるまで不要。
+    仕様 v3（3.510.5）: (k) 成分修復の一時負債予算 `ConstraintRepairInference`＝opt-in 実装、iter11 で採否／(l) 同点処理「変更セル数」の段＝採用基準の追加（決定待ち）／
+    (m) C# `ConstraintRepairInference` は origin/main に無い＝push 後に Kotlin と突き合わせる。
