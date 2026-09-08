@@ -88,3 +88,9 @@
     (i) 設定由来倍率（明示個人 ×3）は不要（D9 で群目標を置換済み、チェッカーとずれる）／(j) WeightProfile は重みが設定化されるまで不要。
     仕様 v3（3.510.5）: (k) 成分修復の一時負債予算 `ConstraintRepairInference`＝opt-in 実装、iter11 で新良 8・旧良 12・実データ全件同一＝**不合格、既定 OFF 維持**／(l) 同点処理「変更セル数」の段＝採用基準の追加（決定待ち）／
     (m) C# `ConstraintRepairInference` は origin/main に無い＝push 後に Kotlin と突き合わせる。
+16. **[探索動学・実機影響は無し・決定待ち] RSI_PLUS のフェーズ予算按分に35秒の暗黙下限**（3.511.4 `BudgetOverrunTest` で発見）。
+    `runRsiPlus`（V6NativeOptimizer.kt）は Seed/Hypothesis/Refine/Polish の4フェーズへ `max(10, budgetSec*0.2)`/`max(10, budgetSec*0.35)`/
+    `max(10, budgetSec*0.3)`/`max(5, 残り)` で予算を按分し、budgetSec<50 ではほぼ常に 10+10+10+5=35秒が下限になる（1秒予算でも実測36秒）。
+    production の予算（後処理予約25秒を含め常に数十秒〜300秒、backlog #14(g) の実要件「300秒→305秒以内」も無傷）では発生しないため
+    実害は無いが、将来 UI から短い予算（プレビュー・クイック実行等）でRSI_PLUSを呼ぶ機能を足す場合は踏む。フェーズ下限を
+    budgetSec に応じて緩めるかは探索動学の変更＝明示指示があれば。現状は放置で良い（実機で踏む経路が無い）。
