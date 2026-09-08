@@ -60,6 +60,9 @@ internal object C1WindowPolish {
         schedule: Array<IntArray>,
         cfg: C1RepairAnalysis.Config = C1RepairAnalysis.Config(),
         shouldStop: () -> Boolean = { false },
+        // [C1 重複窓の連結成分化/測定中] 既定 false = 旧経路そのまま（1件の違反を起点にパディング）。
+        //   true にすると analyze() の代わりに components() で近接・重複窓を束ね、solveComponent へ渡す。
+        useComponents: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
@@ -82,6 +85,12 @@ internal object C1WindowPolish {
             for (d in days) for (i in 0 until p.S) sb.append(work[i][d]).append(',')
             return sb.toString()
         }
+        // [C1 重複窓の連結成分化/測定中] components() 経路用（単一 shift を持たないため comp.start/end で束ねる）。
+        fun compSpanKey(staff: Int, start: Int, end: Int, days: List<Int>): String {
+            val sb = StringBuilder().append(staff).append('|').append(start).append('|').append(end).append('|')
+            for (d in days) for (i in 0 until p.S) sb.append(work[i][d]).append(',')
+            return sb.toString()
+        }
         // 焦点ごとに1回だけ厳密探索する。
         // [3.314.0] キーを (職員, シフト) → **(職員, シフト, スパン開始)** へ。旧実装は同一職員・同一
         //   シフトなら最初の1窓しか探索せず、コメントの「多数窓は1スパンに束ねられる」はスパン幅
@@ -89,20 +98,14 @@ internal object C1WindowPolish {
         //   みなされ、探索されないままスキップ**されていた。同一スパンの重複は下の deadSpans（スパン
         //   内容ハッシュ）が引き続き弾き、走査全体は先頭の shouldStop() で予算内に収まる。
         val seenFocus = HashSet<String>()
-        for (v in C1RepairAnalysis.analyze(p, work)) {
-            if (shouldStop()) break
-            val span = minOf(cfg.maxWindowDays, p.T)
-            val startD = v.start.coerceAtMost(p.T - span).coerceAtLeast(0)
-            if (!seenFocus.add("${v.staff}|${v.shift}|$startD")) continue
-            val days = (startD until startD + span).toList()
-            val key = spanKey(v.staff, v.shift, days)
-            if (key in deadSpans) continue
-            val res = C1RepairAnalysis.solveWindow(p, work, v, cfg)
+        // [C1 重複窓の連結成分化/測定中] 探索結果(patch)の採否だけを共通化する（analyze/components どちら
+        //   経由でも adopt-or-reject の意味論を完全に揃える＝分岐で挙動が分かれるのはループの起点だけ）。
+        fun applyResult(res: C1RepairAnalysis.ExactResult, key: String) {
             solved++
             if (res.patch == null) {
                 // 改善候補なし。exhaustive なら「coverage保存では解消不能」と証明済み＝memo。
                 if (res.exhaustive) { deadSpans.add(key); provenWalls++ }
-                continue
+                return
             }
             val workBefore = work.copy2D()
             for (op in res.patch) work[op[0]][op[1]] = op[2]
@@ -117,6 +120,33 @@ internal object C1WindowPolish {
             } else {
                 rejectCulprits.record(rep, bestRep, pinBad)
                 for (mi in work.indices) work[mi] = workBefore[mi]
+            }
+        }
+        if (useComponents) {
+            // [C1 重複窓の連結成分化/測定中] 重複除去キーは comp.staff/comp.start/comp.end（analyze 経路の
+            //   staff/shift/startD の代わり）。components() は同一 staff 内で重ならない区間しか作らないため
+            //   本来は不要な保険だが、他パスと同じ「起点ごとに1回」の形を揃えておく。
+            val seenComp = HashSet<String>()
+            for (comp in C1RepairAnalysis.components(p, work, cfg)) {
+                if (shouldStop()) break
+                if (!seenComp.add("${comp.staff}|${comp.start}|${comp.end}")) continue
+                val span = minOf(cfg.maxWindowDays, p.T)
+                val startD = comp.start.coerceAtMost(p.T - span).coerceAtLeast(0)
+                val days = (startD until startD + span).toList()
+                val key = compSpanKey(comp.staff, comp.start, comp.end, days)
+                if (key in deadSpans) continue
+                applyResult(C1RepairAnalysis.solveComponent(p, work, comp, cfg), key)
+            }
+        } else {
+            for (v in C1RepairAnalysis.analyze(p, work)) {
+                if (shouldStop()) break
+                val span = minOf(cfg.maxWindowDays, p.T)
+                val startD = v.start.coerceAtMost(p.T - span).coerceAtLeast(0)
+                if (!seenFocus.add("${v.staff}|${v.shift}|$startD")) continue
+                val days = (startD until startD + span).toList()
+                val key = spanKey(v.staff, v.shift, days)
+                if (key in deadSpans) continue
+                applyResult(C1RepairAnalysis.solveWindow(p, work, v, cfg), key)
             }
         }
         val c1b = before.breakdown["c1"] ?: 0

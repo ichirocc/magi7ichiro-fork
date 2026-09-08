@@ -96,14 +96,20 @@ fun main(args: Array<String>) {
     val feature = System.getenv("MAGI_BENCH_FEATURE") ?: ""
     val (oldP, newP) = when (feature) {
         "c3pair" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3PairMaskEnabled = true)
+        "c3nmargin" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsEnabled = true)
         "lnsadaptive" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true)
         "weightdebt" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsWeightDebt = true)
         "debtexplore" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true))
+        "familypriority" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to
+            V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true))
         "dynamicblocklens" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, useDynamicBlockLens = true)
         "stallwiden" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true, stallEscalation = V6HotfixPasses.StallEscalationConfig(enabled = true))
         "cyclicn" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, cyclicSwapMaxK = 5)
         "c2polish" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishEnabled = true)
+        "c41flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c41FlowPolishEnabled = true)
+        "c42flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishEnabled = true)
+        "c1component" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepair = true)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")

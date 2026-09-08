@@ -64,6 +64,8 @@ object ViolationComponentRepair {
         /** [3.510.5/測定中] 設計 v3: 起点の族の 重み×現在量×係数 を SOFT 一時負債の予算にし、HARD 悪化と予算超えの枝をビームから外す（[ConstraintRepairInference]）。既定 OFF。 */
         val debtExploration: Boolean = false,
         val temporaryDebtFactor: Double = 2.0,
+        /** [測定中] セグメント内（解けるHARD／回数+SOFTセル／blocked）を 件数×重み×族の成功率 で降順に並べ替える。既定 OFF。 */
+        val familyPriorityScoring: Boolean = false,
     )
 
     /** 盤面差分。`ops` は [職員, 日, 新シフト] の並び（[CombinatorialRepair.Candidate.ops] と同じ形）。 */
@@ -103,15 +105,26 @@ object ViolationComponentRepair {
     /**
      * 起点の並び: HARD のセル・人数違反 → 回数違反 → SOFT のセル・人数違反（同種はキー順で決定的）。
      * 構造的に埋められない人員不足 [infeasible] は末尾＝起点の上限（maxAnchors）を「解ける HARD」に使う。
+     * [familyScore] を渡すとセグメント内（solvable/counts/soft/blocked それぞれの内部）だけを降順に並べ替える
+     * （セグメントの境界＝「解ける HARD 優先→SOFT→blocked」は死守。同点は元のキー順で安定）。
      */
-    internal fun anchors(report: ViolationReport, infeasible: Set<Long> = emptySet()): List<Anchor> {
+    internal fun anchors(
+        report: ViolationReport, infeasible: Set<Long> = emptySet(),
+        familyScore: ((Anchor) -> Double)? = null,
+    ): List<Anchor> {
         fun fam(cls: String) = cls.removePrefix("vio-")
         val cells = report.violations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), i, j) } }
         val needs = report.needViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (sh, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), -1, j, sh) } }
         val counts = report.countViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, sh) -> Anchor(false, fam(cls), i, -1, sh) } }
         val hardOnes = (cells + needs).filter { it.hard }
         val (blocked, solvable) = hardOnes.partition { it.family == "covU" && (it.shift * 1000L + it.day) in infeasible }
-        return solvable + counts + (cells + needs).filter { !it.hard } + blocked
+        fun ordered(list: List<Anchor>): List<Anchor> {
+            val f = familyScore ?: return list
+            return list.withIndex()
+                .sortedWith(compareByDescending<IndexedValue<Anchor>> { f(it.value) }.thenBy { it.index })
+                .map { it.value }
+        }
+        return ordered(solvable) + ordered(counts) + ordered((cells + needs).filter { !it.hard }) + ordered(blocked)
     }
 
     /** 起点ごとの探索集合＝主候補（起点を触る）＋助候補（主と職員か日を共有）。主候補が無い起点は除く。 */
@@ -406,8 +419,13 @@ object ViolationComponentRepair {
         // 起点（違反）ごとに探索し、採用があれば盤面が変わるので起点（と起点生成の候補）を作り直す。1 周して採用が無ければ終わり。
         val used = HashSet<Int>()
         var anchorCount = 0; var maxSet = 0; var generatedTotal = 0
+        // familyPriorityScoring 用: 1 回の repair() 呼出に閉じたスコープ（呼出をまたいだ永続化はしない）。
+        val triedByFamily = HashMap<String, Int>()
+        val committedByFamily = HashMap<String, Int>()
+        val familyScoreFn: ((Anchor) -> Double)? = if (!params.familyPriorityScoring) null
+            else { a -> ConstraintRepairInference.familyPriorityScore(bestRep, a.family, triedByFamily[a.family] ?: 0, committedByFamily[a.family] ?: 0) }
         outer@ while (!shouldStop() && evaluations < params.maxEvaluations && estimates < params.maxEstimates) {
-            val currentAnchors = anchors(bestRep, infeasibleSlots)
+            val currentAnchors = anchors(bestRep, infeasibleSlots, familyScoreFn)
             while (patches.size > poolCount) patches.removeAt(patches.size - 1)
             if (params.generateFromAnchors) {
                 val sig = HashSet<String>(); for (pt in patches) sig.add(pt.signature)
@@ -423,7 +441,9 @@ object ViolationComponentRepair {
             for ((anchor, ids) in sets.take(params.maxAnchors)) {
                 if (shouldStop() || evaluations >= params.maxEvaluations || estimates >= params.maxEstimates) break
                 anchorsTried++; maxSet = maxOf(maxSet, ids.size)
+                triedByFamily.merge(anchor.family, 1, Int::plus)
                 val (chosen, rep) = search(anchor, ids) ?: continue
+                committedByFamily.merge(anchor.family, 1, Int::plus)
                 for (id in chosen) for (op in patches[id].ops) {
                     if (work[op[0]][op[1]] != op[2]) { work[op[0]][op[1]] = op[2]; delta.apply(op[0], op[1], op[2]) }
                 }

@@ -265,6 +265,12 @@ object V6HotfixPasses {
         /** [3.511.3/測定中] 個人合計(c2)専用研磨（backlog #12(b)）。既定 OFF。 */
         val c2PolishEnabled: Boolean = false,
         val c2Passes: Int = 3,
+        /** [3.511.5/測定中] 群/日レンジ(c41/c41s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
+        val c41FlowPolishEnabled: Boolean = false,
+        val c41FlowPasses: Int = 3,
+        /** [3.511.7/測定中] 群ペア禁止(c42/c42s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
+        val c42FlowPolishEnabled: Boolean = false,
+        val c42FlowPasses: Int = 3,
         val c1WindowPasses: Int = 3,
         val c1FlowPasses: Int = 2,
         val c1FlowRelocations: Int = 4,
@@ -304,6 +310,10 @@ object V6HotfixPasses {
         /** [3.510.0/測定中] 最終段の「連続規則 選択日ペア交換」（C3PairMaskPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
         val c3PairMaskEnabled: Boolean = false,
         val c3PairMaskEvaluations: Int = 3_000,
+        /** [測定中] 最終段の「c3n(禁止連続) 前後余白込みLNS」（C3nMarginLnsPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
+        val c3nMarginLnsEnabled: Boolean = false,
+        val c3nMarginLnsMarginDays: Int = 2,
+        val c3nMarginLnsEvaluations: Int = 3_000,
         /** [3.510.2/測定中] 共同 LNS を「短い試行→採用があったときだけ本予算で続行」にする（backlog #14(a)）。既定 OFF。 */
         val lnsAdaptive: Boolean = false,
         val c1LnsFirstEvaluations: Int = 20_000,
@@ -320,6 +330,9 @@ object V6HotfixPasses {
          *  もう1回だけ幅（対象人数/goal数）を広げて試し、成分修復の最終段も窓長・起点数を広げる（backlog #12(b)/#13(a)）。
          *  巡回研磨クラスタの round loop 自体（LNS前）は変えない＝3.505.4で否決済みの領域（巡の中の起点生成拡大）は再度触らない。既定 OFF。 */
         val stallEscalation: StallEscalationConfig = StallEscalationConfig(),
+        /** [C1 重複窓の連結成分化/測定中] 厳密窓修復(C1ExactRepair)の起点を、1件の違反でなく近接・重複窓を
+         *  束ねた連結成分にする（backlog「C1 重複窓の連結成分化」）。既定 OFF＝挙動不変。 */
+        val c1ComponentRepair: Boolean = false,
     )
 
     /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
@@ -348,12 +361,13 @@ object V6HotfixPasses {
         const val FAIR = 0xFA12L
         const val C3PAIR = 0xC3AA1L
         const val CYCLIC_N = 0xC1C54L
+        const val C3N_MARGIN = 0xC3E9L
     }
 
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
     private val adoptionKeys = listOf(
         "循環", "c1", "c3", "c3回転", "c3mn玉突き", "c3n", "range玉突き", "c3run玉突き", "c3pattern玉突き",
-        "アンカー窓交換", "希望島", "ブロック交換", "c2玉突き", "apt玉突き", "fair玉突き", "成分修復",
+        "アンカー窓交換", "希望島", "ブロック交換", "c2玉突き", "c41フロー", "c42フロー", "apt玉突き", "fair玉突き", "成分修復",
     )
 
     /** SoftPolishVerify で「対象」に数える族（3.278.0 で CyclicSwap の対象族、3.475.0 で c3n を追加）。 */
@@ -531,6 +545,15 @@ object V6HotfixPasses {
             })
         }
 
+        if (params.c3nMarginLnsEnabled && !shouldStop()) {
+            // [測定中] 共同 LNS の後・成分修復の前。c3n(禁止連続)のパターン日+前後余白を複数セル同時に
+            //   destroy-rebuildして、1セル付け替え(C3nPolish)が構造的に届かない局面を拾う。
+            val marginStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+            chain.adopt(chain.timed("後処理 c3n禁止連続(前後余白込みLNS・最終)", "C3nMarginLNS") { work ->
+                C3nMarginLnsPolish.apply(state, work, marginDays = params.c3nMarginLnsMarginDays, maxEvaluations = params.c3nMarginLnsEvaluations, shouldStop = marginStop, seed = seed xor SeedTag.C3N_MARGIN)
+            })
+        }
+
         if (params.componentRepairEnabled && params.componentRepairFinal && !shouldStop()) {
             // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
             val remainingFinal = EngineClock.remainingMs(deadlineMs)
@@ -647,7 +670,7 @@ object V6HotfixPasses {
             })
             // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
             take("c1", chain.timed("後処理 期間要件(c1)厳密窓修復$tag", "C1厳密窓") { work ->
-                C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop)
+                C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop, useComponents = params.c1ComponentRepair)
             })
 
             val rC3 = chain.timed("後処理 連続規則(c3系)研磨$tag", "C3SequencePolish") { work ->
@@ -669,6 +692,11 @@ object V6HotfixPasses {
             take("range玉突き", chain.timed("後処理 個人回数(low/high)玉突き研磨$tag", "RangePolish") { work ->
                 RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round))
             })
+            if (params.c41FlowPolishEnabled) {
+                take("c41フロー", chain.timed("後処理 群/日レンジ(c41/c41s)フロー研磨$tag", "C41FlowPolish") { work ->
+                    C41FlowPolish.applyC41FlowPolish(state, work, maxPasses = params.c41FlowPasses, shouldStop = clusterStop)
+                })
+            }
             take("c3run玉突き", chain.timed("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨$tag", "C3RunPolish") { work ->
                 C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round))
             })
@@ -699,6 +727,11 @@ object V6HotfixPasses {
             if (params.c2PolishEnabled) {
                 take("c2玉突き", chain.timed("後処理 個人合計(c2)研磨$tag", "C2Polish") { work ->
                     C2Polish.applyC2Polish(state, work, maxPasses = params.c2Passes, shouldStop = clusterStop)
+                })
+            }
+            if (params.c42FlowPolishEnabled) {
+                take("c42フロー", chain.timed("後処理 群ペア禁止(c42/c42s)フロー研磨$tag", "C42FlowPolish") { work ->
+                    C42FlowPolish.applyC42FlowPolish(state, work, maxPasses = params.c42FlowPasses, shouldStop = clusterStop)
                 })
             }
             take("apt玉突き", chain.timed("後処理 適切回数(apt)研磨$tag", "AptPolish") { work ->

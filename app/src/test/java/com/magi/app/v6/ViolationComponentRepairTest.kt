@@ -189,6 +189,35 @@ class ViolationComponentRepairTest {
         assertEquals(0, off.applied)
     }
 
+    /** [族選択] familyScore を渡すとセグメント内だけ降順に並び替わる。同点は元のキー順（安定）。 */
+    @Test
+    fun familyScoreOrdersWithinSegmentByScoreDescendingWithStableTiesOnKeyOrder() {
+        val rep = ViolationReport(
+            violations = linkedMapOf("0,0" to "vio-c2", "0,1" to "vio-low", "0,2" to "vio-c2"),
+            needViolations = emptyMap(), countViolations = emptyMap(),
+            breakdown = emptyMap(), total = 3, hard = 0, soft = 3, weightedScore = 0.0,
+        )
+        val score: (ViolationComponentRepair.Anchor) -> Double = { a -> if (a.family == "low") 90.0 else 1.0 }
+        val ordered = ViolationComponentRepair.anchors(rep, familyScore = score)
+        assertEquals(listOf("low", "c2", "c2"), ordered.map { it.family })
+        assertEquals(listOf(0 to 1, 0 to 0, 0 to 2), ordered.map { it.staff to it.day })
+    }
+
+    /** [族選択] 「解ける HARD 優先 → SOFT → blocked」のセグメント境界は familyScore の値に関わらず死守する（不変条件）。 */
+    @Test
+    fun hardSegmentNeverOvertakesSoftSegmentEvenWithHighFamilyScores() {
+        val rep = ViolationReport(
+            violations = linkedMapOf("0,0" to "vio-low", "0,1" to "vio-low", "0,2" to "vio-covU"),
+            needViolations = emptyMap(), countViolations = emptyMap(),
+            breakdown = emptyMap(), total = 3, hard = 1, soft = 2, weightedScore = 0.0,
+        )
+        val score: (ViolationComponentRepair.Anchor) -> Double = { a -> if (a.family == "low") 1_000_000.0 else 1.0 }
+        val ordered = ViolationComponentRepair.anchors(rep, familyScore = score)
+        assertTrue("HARD(covU)が先頭のまま", ordered.first().hard)
+        assertEquals("covU", ordered.first().family)
+        assertEquals(listOf("covU", "low", "low"), ordered.map { it.family })
+    }
+
     /** [Iteration 6] 厳密ピン（lo==hi）を単独で崩す単セル候補は生成しない＝推定でピン枝刈りされる無駄弾が出ない。
      *  甲は A 1〜1 固定で 1 日目に A。3 日目の人員不足に対して甲の単セル（A 2 回）は作らず、行内の入替（1 日目⇄3 日目）に置き換える。乙の単セルで直る。 */
     @Test
