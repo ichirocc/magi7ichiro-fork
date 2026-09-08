@@ -352,4 +352,38 @@ class AdaptiveBlockSwapPolishTest {
             assertTrue("ログが出る", r.logs.isNotEmpty())
         }
     }
+
+    /** [3.511.0] 30 日月は固定長(11/13/17/19/23/28)のどれとも一致しないため「当月まるごと」が一度も試されない穴を、
+     *  動的長(backlog #14(c))が [Problem.T] を足して塞ぐことを確認する。 */
+    private fun thirtyDayState(): MagiState {
+        val shifts = listOf(Shift("休み", "休", "", ""), Shift("X", "X", "1", "1"))
+        val staff = listOf(Staff("A", 0), Staff("B", 0))
+        return MagiState(
+            startDate = "2026-04-01", endDate = "2026-04-30",
+            shifts = shifts, groups = listOf(Group("G0", "G0")), staff = staff, use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(List(30) { 0 }, List(30) { 0 }),
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+    }
+
+    @Test
+    fun dynamicBlockLensAddsTheWholeMonthLengthThatFixedListsNeverReach() {
+        val st = thirtyDayState()
+        val sched = st.schedule.toIntArray2D()
+        val fixed = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+            st, sched.copy2D(), AdaptiveBlockSwapPolish.CyclicParams(maxEvaluations = 1),
+        )
+        val dynamic = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
+            st, sched.copy2D(), AdaptiveBlockSwapPolish.CyclicParams(maxEvaluations = 1, useDynamicBlockLens = true),
+        )
+        val fixedLens = fixed.logs.first { it.tag == "AdaptiveBlockSwap" }.message.substringAfter("[").substringBefore("日")
+        val dynamicLens = dynamic.logs.first { it.tag == "AdaptiveBlockSwap" }.message.substringAfter("[").substringBefore("日")
+        assertTrue("既定(固定長のみ)は30日を含まない: $fixedLens", "30" !in fixedLens.split("/"))
+        assertTrue("動的長は30日(当月まるごと)を含む: $dynamicLens", "30" in dynamicLens.split("/"))
+    }
 }

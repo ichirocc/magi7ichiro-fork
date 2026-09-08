@@ -1,6 +1,7 @@
 package com.magi.app.v6
 
 import com.magi.app.model.MagiState
+import java.util.Random
 
 /**
  * 被覆保存の同日/曜日間セル交換2パス。[V6HotfixPasses] から抽出
@@ -22,7 +23,17 @@ internal object CyclicSwapWeeklyPolish {
      * 改善時のみ採用（keep-best＝退化なし）。日内Hungarian(range/apt最適)が触れない c3 を狙う。
      * 注: 提案サイクルは必ず実チェックで検証してから採用するため、サイクル生成が不完全でも悪化しない。
      */
-    fun applyCyclicSwapPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 4, shouldStop: () -> Boolean = { false }): V6HotfixPasses.CyclicSwapResult {
+    fun applyCyclicSwapPolish(
+        state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 4,
+        /** [3.511.2/測定中] k=3 の先の循環人数の上限。既定 3=k=2,3 の全列挙のみ（挙動不変）。4/5 にすると
+         *  k=4,5 の循環を全列挙でなくランダム試行（[kTrialsPerDay]）で追加する（backlog #12(b)/#13(e)）。
+         *  全列挙は S=30 で k=5 なら 1 日あたり C(30,5)=142,506 通り×4 方向と組合せ爆発するため避ける。 */
+        maxK: Int = 3,
+        /** [3.511.2/測定中] maxK>=4 のときだけ使う、1 日・1 k 値あたりのランダム試行数上限。 */
+        kTrialsPerDay: Int = 20,
+        seed: Long = 0L,
+        shouldStop: () -> Boolean = { false },
+    ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state)
@@ -35,6 +46,7 @@ internal object CyclicSwapWeeklyPolish {
         //   同型のバグ）。実現不能な希望はpref計上上も定数=動かして良い＝canDoガード込みの
         //   wishLocked が正しい判定。安全側（isBetter/checkerが最終ゲート）で候補が広がるのみ。
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
+        val rng = if (maxK >= 4) Random(seed) else null
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -82,12 +94,31 @@ internal object CyclicSwapWeeklyPolish {
                         }
                     }
                 }
+                // --- k=4,5: N職員ローテーション（同日・被覆不変、全列挙は組合せ爆発するのでランダム試行） ---
+                if (rng != null) for (k in 4..maxK) {
+                    if (shouldStop()) break
+                    var trial = 0
+                    while (trial < kTrialsPerDay) {
+                        trial++
+                        if (shouldStop()) break
+                        val idx = IntArray(k) { rng.nextInt(p.S) }
+                        if (idx.toHashSet().size < k || idx.any { !movable(it, j) }) continue
+                        val vals = IntArray(k) { work[idx[it]][j] }
+                        if (vals.toHashSet().size < k) continue
+                        if ((0 until k).any { !p.mayPlace(idx[it], vals[(it + 1) % k]) }) continue
+                        val workBeforeRotateN = work.copy2D()
+                        for (t in 0 until k) work[idx[t]][j] = vals[(t + 1) % k]
+                        val rep = UnifiedViolationChecker.check(state, work)
+                        if (adoptionGate(p, workBeforeRotateN, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
+                        else for (t in 0 until k) work[idx[t]][j] = vals[t]
+                    }
+                }
             }
             pass++
             if (!improved) break
         }
         val logs = listOf(MirrorLog(tag = "CyclicSwap",
-            message = "循環交換(k=2,3)研磨: total ${before.total}->${bestRep.total} 採用${applied}回"))
+            message = "循環交換(k=2,3${if (maxK >= 4) ",4.." + maxK else ""})研磨: total ${before.total}->${bestRep.total} 採用${applied}回"))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
     }
 

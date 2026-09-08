@@ -71,4 +71,26 @@ class V6PostOptimizationParamsTest {
         assertTrue("SoftPolishVerify 行が出る（0 巡でも集約行は必ず出す）", r.logs.any { it.tag == "SoftPolishVerify" })
         assertTrue("タイミング行が出る", r.logs.any { it.tag == "POST" })
     }
+
+    /** [3.511.1] maxRounds=0＝巡回研磨クラスタが必ず停滞（totalApplied=0）。停滞拡大が既定 OFF なら legacy と一致し、
+     *  ON でも落ちず keep-best（既存 3 パスが内部で betterReport を通す構造は不変＝広げても悪化しない）ことを固定する。 */
+    @Test
+    fun stallEscalationOnlyWidensWhenTheClusterStalledAndNeverWorsensTheBoard() {
+        val st = pinnedState()
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        val base = V6HotfixPasses.PostOptimizationParams(deterministic = true, maxRounds = 0, lnsAdaptive = true)
+        val off = V6HotfixPasses.runPostOptimization(st, sched.copy2D(), "t", seed = 7L, params = base)
+        val on = V6HotfixPasses.runPostOptimization(
+            st, sched.copy2D(), "t", seed = 7L,
+            params = base.copy(stallEscalation = V6HotfixPasses.StallEscalationConfig(enabled = true)),
+        )
+        assertTrue("既定 OFF は legacy と一致", off.schedule.contentDeepEquals(
+            V6HotfixPasses.runPostOptimization(st, sched.copy2D(), "t", seed = 7L, params = base.copy(stallEscalation = V6HotfixPasses.StallEscalationConfig(enabled = false))).schedule,
+        ))
+        for (r in listOf(off, on)) {
+            assertTrue("HARD が増えない", r.report.hard <= before.hard)
+            assertTrue("重み付きスコアが増えない", r.report.weightedScore <= before.weightedScore)
+        }
+    }
 }
