@@ -30,6 +30,8 @@ internal object PersonalBalanceJointLnsPolish {
         val hardDebt: Int = 1,
         val totalDebt: Int = 16,
         val personalDebt: Int = 4,
+        /** [3.510.4/測定中] 0 より大きいと totalDebt/personalDebt の代わりに重み基準（[WeightDebt]）で中間ノードを絞る。 */
+        val debtFactor: Double = 0.0,
         val maxMillis: Long = 6_000L,
         /** [Iteration 7] 正式評価の回数上限（0＝無効）。決定的モードでは時間でなくこれで止める。 */
         val maxEvaluations: Int = 0,
@@ -129,10 +131,10 @@ internal object PersonalBalanceJointLnsPolish {
                             val report = UnifiedViolationChecker.check(state, candidate.schedule)
                             val personal = personalPenaltyByStaff(p, candidate.schedule)
                             val focusTotal = focus.sumOf { personal[it] }
-                            if (report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0) ||
-                                report.total > rootReport.total + config.totalDebt.coerceAtLeast(0) ||
-                                focusTotal > rootFocus + config.personalDebt.coerceAtLeast(0)
-                            ) {
+                            val overDebt = if (config.debtFactor > 0.0) !WeightDebt.within(rootReport, report, config.debtFactor)
+                                else report.total > rootReport.total + config.totalDebt.coerceAtLeast(0) ||
+                                    focusTotal > rootFocus + config.personalDebt.coerceAtLeast(0)
+                            if (report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0) || overDebt) {
                                 debtRejected++
                                 continue
                             }

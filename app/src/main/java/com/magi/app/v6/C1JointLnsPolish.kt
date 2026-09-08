@@ -49,6 +49,8 @@ internal object C1JointLnsPolish {
         val hardDebt: Int = 1,
         val totalDebt: Int = 12,
         val c1Debt: Int = 4,
+        /** [3.510.4/測定中] 0 より大きいと totalDebt/c1Debt の代わりに重み基準（[WeightDebt]: 負債 ≤ クレジット×係数）で中間ノードを絞る。 */
+        val debtFactor: Double = 0.0,
         val maxMillis: Long = 8_000L,
         /** 最良がこの時間更新されなければ打ち切る（0以下＝無効）。既定の根拠はクラスの KDoc。 */
         val patienceMs: Long = 4_000L,
@@ -182,8 +184,10 @@ internal object C1JointLnsPolish {
                             val report = UnifiedViolationChecker.check(state, next)
                             val c1 = report.breakdown["c1"] ?: 0
                             val overHard = report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0)
-                            val overTotal = report.total > rootReport.total + config.totalDebt.coerceAtLeast(0)
-                            val overC1 = c1 > rootC1 + config.c1Debt.coerceAtLeast(0)
+                            val weightDebt = config.debtFactor > 0.0
+                            val overTotal = if (weightDebt) !WeightDebt.within(rootReport, report, config.debtFactor)
+                                else report.total > rootReport.total + config.totalDebt.coerceAtLeast(0)
+                            val overC1 = !weightDebt && c1 > rootC1 + config.c1Debt.coerceAtLeast(0)
                             if (overHard || overTotal || overC1) {
                                 debtRejected++
                                 when {
@@ -253,7 +257,7 @@ internal object C1JointLnsPolish {
                 " / total ${rootReport.total}->${chosenReport.total} HARD ${rootReport.hard}->${chosenReport.hard}" +
                 " 採用${if (valid) 1 else 0}束 手数${if (valid) best.path.size else 0}" +
                 " restart$restartsDone 展開$expanded 候補$generated debt除外$debtRejected" +
-                (if (debtRejected == 0) "" else "(必須$debtHard 合計$debtTotal c1 $debtC1" +
+                (if (debtRejected == 0) "" else "(必須$debtHard ${if (config.debtFactor > 0.0) "重み" else "合計"}$debtTotal c1 $debtC1" +
                     (if (debtCulprits.isEmpty()) "" else " 必須の主因 " +
                         debtCulprits.entries.sortedByDescending { it.value }.take(2)
                             .joinToString(" ") { "${it.key}:${it.value}" }) + ")") +
