@@ -60,6 +60,43 @@ object C1RepairAnalysis {
     data class CoverageNeutralWall(val staff: Int, val shift: Int, val start: Int, val windowDays: Int)
 
     /**
+     * [C1 重複窓の連結成分] 同一職員の cons1 窓のうち区間が重なり合うもの一式（≥1件）。
+     * `solveWindow` の「1件の違反だけを起点にパディング」を、近接・重複する窓もまとめて1回の
+     * 厳密探索へ渡せるよう一般化するための単位（[start, end) は併合後の区間）。
+     */
+    data class WindowComponent(
+        val members: List<C1WindowViolation>,
+        val staff: Int,
+        val start: Int,
+        val end: Int,
+    )
+
+    /**
+     * `analyze()` の出力を同一 staff 内の区間重なりでグラフ化し連結成分へ分割する（staff をまたぐ
+     * エッジは張らない＝職員間は常に独立）。`cfg.maxWindowDays` を超える手前で併合を止める
+     * （`solveComponent` の span がこの上限内に収まる前提を守るため）。
+     */
+    fun components(p: Problem, schedule: Array<IntArray>, cfg: Config = Config()): List<WindowComponent> {
+        val byStaff = analyze(p, schedule).groupBy { it.staff }
+        val out = ArrayList<WindowComponent>()
+        for ((staff, vs) in byStaff) {
+            val sorted = vs.sortedBy { it.start }
+            var idx = 0
+            while (idx < sorted.size) {
+                var start = sorted[idx].start; var end = start + sorted[idx].windowDays
+                val members = arrayListOf(sorted[idx]); var k = idx + 1
+                while (k < sorted.size && sorted[k].start < end) {
+                    val newEnd = maxOf(end, sorted[k].start + sorted[k].windowDays)
+                    if (newEnd - start > cfg.maxWindowDays) break
+                    end = newEnd; members.add(sorted[k]); k++
+                }
+                out.add(WindowComponent(members, staff, start, end)); idx = k
+            }
+        }
+        return out
+    }
+
+    /**
      * A4: 不足窓のうち、厳密探索で「exhaustive かつ焦点職員の残c1>0」＝どう入れ替えても解消不能と
      * 証明されたものだけを返す（node予算超過=未証明は含めない＝誤検知ゼロ）。2b-2/MUS が扱わない
      * 「実際のトークン希少性を全職員横断で厳密に勘定した」構造的不能の証明。
@@ -145,20 +182,32 @@ object C1RepairAnalysis {
     // ---- A2/A3: 窓スコープ厳密探索（coverage保存 permutation の分枝限定） -----------------------
 
     /** 1つの不足窓を起点に、窓を含む日スパンをまたぐ coverage保存 permutation で joint c1 を最小化する。 */
-    fun solveWindow(p: Problem, schedule: Array<IntArray>, v: C1WindowViolation, cfg: Config = Config()): ExactResult {
+    fun solveWindow(p: Problem, schedule: Array<IntArray>, v: C1WindowViolation, cfg: Config = Config()): ExactResult =
+        solveComponent(p, schedule, WindowComponent(listOf(v), v.staff, v.start, v.start + v.windowDays), cfg)
+
+    /**
+     * `solveWindow` の一般化: 起点を単一の違反 `v` でなく、近接・重複する複数窓をまとめた
+     * [WindowComponent] にする（同一職員の窓が重なるのに片方だけを起点にすると別窓の違反が探索から
+     * 漏れ、`exhaustive` の証明が偽陽性になりうるため）。`comp.members` が1件のときは `solveWindow`
+     * と完全に同じ結果を返す。
+     */
+    fun solveComponent(p: Problem, schedule: Array<IntArray>, comp: WindowComponent, cfg: Config = Config()): ExactResult {
         val s = normalizeSchedule(schedule, p)
-        // [多日連動] days は単一窓幅でなく、窓を含む maxWindowDays 幅の連続スパン。狭いと「別日で連動して
-        //   初めて解ける」多職員手（同日swapの合成では到達不能）を表現できないため（実測でこの拡張が必須）。
+        // [多日連動] days は単一窓幅でなく、成分区間を含む maxWindowDays 幅の連続スパン。狭いと「別日で
+        //   連動して初めて解ける」多職員手（同日swapの合成では到達不能）を表現できないため（実測でこの
+        //   拡張が必須）。components() は併合区間幅を maxWindowDays 以内に保証するため、成分の開始位置を
+        //   単一窓と同じ式でアンカーすれば span は常に comp.end まで届く。
         val span = minOf(cfg.maxWindowDays, p.T)
-        val startD = v.start.coerceAtMost(p.T - span).coerceAtLeast(0)
+        val startD = comp.start.coerceAtMost(p.T - span).coerceAtLeast(0)
         val days = (startD until startD + span).toList()
 
-        // 関与職員 M = i0 ∪ スパン内で shift x を持つ職員（cap 内）。coverage保存はこの M の日別多重集合を
-        //   M 内で並べ替えることで担保（M外・スパン外は固定）。
+        // 関与職員 M = i0 ∪ スパン内で成分内いずれかの shift を持つ職員（cap 内）。coverage保存はこの M の
+        //   日別多重集合を M 内で並べ替えることで担保（M外・スパン外は固定）。
+        val shiftsInComp = comp.members.map { it.shift }.toSet()
         val mSet = LinkedHashSet<Int>()
-        mSet.add(v.staff)
-        for (d in days) for (i in 0 until p.S) if (s[i][d] == v.shift && i != v.staff) mSet.add(i)
-        // 余力: x を担当できる職員を加える（3者以上の連動を可能に）。
+        mSet.add(comp.staff)
+        for (d in days) for (i in 0 until p.S) if (i != comp.staff && s[i][d] in shiftsInComp) mSet.add(i)
+        // 余力: 成分内いずれかの shift を担当できる職員を加える（3者以上の連動を可能に）。
         // [3.314.0] 旧実装は `p.sgrp[i] == p.sgrp[v.staff]` の**同群限定**で、別群を経由する3者循環を
         //   見落としたまま exhaustive=true ＝「証明済み壁」を名乗っていた。coverage 保存の並べ替えが
         //   要求するのは受け手の canDo だけで、DFS の place() は配置ごとに `p.canDo(i, sh)` を検査する
@@ -167,7 +216,7 @@ object C1RepairAnalysis {
         //   あとも「探索し尽くした」と主張しており、真部分集合しか見ていないのに壁を証明していた。
         var truncated = false
         for (i in 0 until p.S) {
-            if (i in mSet || !p.mayPlace(i, v.shift)) continue
+            if (i in mSet || shiftsInComp.none { p.mayPlace(i, it) }) continue
             if (mSet.size >= cfg.maxInvolvedStaff) { truncated = true; break }
             mSet.add(i)
         }
@@ -199,19 +248,24 @@ object C1RepairAnalysis {
             return total
         }
         val baseline = jointC1()
-        // [3.279.0/外部レビューC1-03] 焦点職員 i0 の**対象窓（v.start〜v.start+v.windowDays）だけ**の残 fire。
+        // [3.279.0/外部レビューC1-03] 焦点職員 i0 の**成分の各メンバー窓だけ**の残 fire 合計。
         //   旧: 全ルール×全窓の残数＝対象窓が解消可能でも別窓が残るだけで「この窓は壁」と誤認していた。
-        val fi = m.indexOf(v.staff)
+        //   単一メンバーのときは 0/1 のままで旧実装と完全一致（メンバーが増えると 0..members.size に拡張）。
+        val fi = m.indexOf(comp.staff)
         fun focusResidualOf(arr: Array<IntArray>): Int {
-            // [3.279.1] fi<0 は現行構造では到達不能（m は v.staff を先頭に構築される）。将来 m の構築が
+            // [3.279.1] fi<0 は現行構造では到達不能（m は comp.staff を先頭に構築される）。将来 m の構築が
             //   変わった場合に焦点残を誤らせない防御として残置（0=「壁と主張しない」安全側）。
             if (fi < 0) return 0
-            var z = 0
-            for (l in 0 until v.windowDays) {
-                val d = v.start + l
-                if (d in 0 until p.T && arr[fi][d] == v.shift) z++
+            var total = 0
+            for (member in comp.members) {
+                var z = 0
+                for (l in 0 until member.windowDays) {
+                    val d = member.start + l
+                    if (d in 0 until p.T && arr[fi][d] == member.shift) z++
+                }
+                if (z < member.required) total++
             }
-            return if (z < v.required) 1 else 0
+            return total
         }
         if (baseline == 0) return ExactResult(0, 0, null, true, 0)
 
@@ -286,7 +340,7 @@ object C1RepairAnalysis {
                 val idx = (0 until multiset.size).sortedWith(compareByDescending { si ->
                     val sh = multiset[si]
                     var pri = 0
-                    if (m[mi] == v.staff && sh == v.shift) pri += 100
+                    if (m[mi] == comp.staff && sh in shiftsInComp) pri += 100
                     if (sh == s[m[mi]][d]) pri += 10       // 現状維持
                     pri
                 }).toIntArray()

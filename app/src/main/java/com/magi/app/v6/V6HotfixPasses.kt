@@ -330,6 +330,9 @@ object V6HotfixPasses {
          *  もう1回だけ幅（対象人数/goal数）を広げて試し、成分修復の最終段も窓長・起点数を広げる（backlog #12(b)/#13(a)）。
          *  巡回研磨クラスタの round loop 自体（LNS前）は変えない＝3.505.4で否決済みの領域（巡の中の起点生成拡大）は再度触らない。既定 OFF。 */
         val stallEscalation: StallEscalationConfig = StallEscalationConfig(),
+        /** [C1 重複窓の連結成分化/測定中] 厳密窓修復(C1ExactRepair)の起点を、1件の違反でなく近接・重複窓を
+         *  束ねた連結成分にする（backlog「C1 重複窓の連結成分化」）。既定 OFF＝挙動不変。 */
+        val c1ComponentRepair: Boolean = false,
     )
 
     /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
@@ -667,7 +670,7 @@ object V6HotfixPasses {
             })
             // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
             take("c1", chain.timed("後処理 期間要件(c1)厳密窓修復$tag", "C1厳密窓") { work ->
-                C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop)
+                C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop, useComponents = params.c1ComponentRepair)
             })
 
             val rC3 = chain.timed("後処理 連続規則(c3系)研磨$tag", "C3SequencePolish") { work ->

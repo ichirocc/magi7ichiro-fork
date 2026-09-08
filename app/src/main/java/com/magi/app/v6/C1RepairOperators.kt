@@ -57,9 +57,9 @@ internal object C1RepairOperators {
     /** 厳密窓修復（coverage保存 permutation の分枝限定探索）。 */
     fun exactWindow(
         state: MagiState, schedule: Array<IntArray>, cfg: C1RepairAnalysis.Config = C1RepairAnalysis.Config(),
-        shouldStop: () -> Boolean = { false },
+        shouldStop: () -> Boolean = { false }, useComponents: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1ExactWindowRepair(state, schedule, cfg, shouldStop)
+        C1WindowPolish.applyC1ExactWindowRepair(state, schedule, cfg, shouldStop, useComponents)
 
     /** [3.276.0] index駆動の候補生成＋prefilter選別＋玉突き連鎖のC1修復（Index/Prefilterを実駆動する経路）。 */
     fun indexChainRepair(
