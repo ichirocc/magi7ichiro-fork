@@ -265,6 +265,9 @@ object V6HotfixPasses {
         /** [3.511.3/測定中] 個人合計(c2)専用研磨（backlog #12(b)）。既定 OFF。 */
         val c2PolishEnabled: Boolean = false,
         val c2Passes: Int = 3,
+        /** [3.511.5/測定中] 群/日レンジ(c41/c41s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
+        val c41FlowPolishEnabled: Boolean = false,
+        val c41FlowPasses: Int = 3,
         val c1WindowPasses: Int = 3,
         val c1FlowPasses: Int = 2,
         val c1FlowRelocations: Int = 4,
@@ -353,7 +356,7 @@ object V6HotfixPasses {
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
     private val adoptionKeys = listOf(
         "循環", "c1", "c3", "c3回転", "c3mn玉突き", "c3n", "range玉突き", "c3run玉突き", "c3pattern玉突き",
-        "アンカー窓交換", "希望島", "ブロック交換", "c2玉突き", "apt玉突き", "fair玉突き", "成分修復",
+        "アンカー窓交換", "希望島", "ブロック交換", "c2玉突き", "c41フロー", "apt玉突き", "fair玉突き", "成分修復",
     )
 
     /** SoftPolishVerify で「対象」に数える族（3.278.0 で CyclicSwap の対象族、3.475.0 で c3n を追加）。 */
@@ -669,6 +672,11 @@ object V6HotfixPasses {
             take("range玉突き", chain.timed("後処理 個人回数(low/high)玉突き研磨$tag", "RangePolish") { work ->
                 RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round))
             })
+            if (params.c41FlowPolishEnabled) {
+                take("c41フロー", chain.timed("後処理 群/日レンジ(c41/c41s)フロー研磨$tag", "C41FlowPolish") { work ->
+                    C41FlowPolish.applyC41FlowPolish(state, work, maxPasses = params.c41FlowPasses, shouldStop = clusterStop)
+                })
+            }
             take("c3run玉突き", chain.timed("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨$tag", "C3RunPolish") { work ->
                 C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round))
             })
