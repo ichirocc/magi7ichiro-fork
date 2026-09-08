@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 族選択を件数×重み×改善可能性へ familyPriorityScore（ViolationComponentRepair.anchors、セグメント内のみソート、HARD優先の境界は死守）。既定OFFのhash 4/4不変、iter17で採否（3.511.6, backlog #12(b)）  → `docs/history/3.4xx.md`
 - C41/C41s専用 min-cost-flow研磨 C41FlowPolish: FlexibleDayFlowを群内サブセットへ再利用。二値指標の生差分は非凸でMCMFが誤って先取りする発見（RangePolish型の凸誘導コストへ置換して解消）。既定OFFのhash 4/4不変、iter16で採否（3.511.5, backlog #12(b)）  → `docs/history/3.4xx.md`
 - 予算超過の回帰試験 BudgetOverrunTest（自然満了3秒枠・外部停止5秒以内・例外ワーカー2秒以内）を追加。RSI_PLUS のフェーズ予算按分に35秒下限を発見（極小予算のみ、production の300秒規模では無傷）＝記録のみ、探索コードは無変更（3.511.4, backlog #14(g)）  → `docs/history/3.4xx.md`
 - iter15 結果: C2Polish は170ペア全件で完全に無変化（合成ケースのcons2は不足最大1件でバッチ化の優位性を試せていない、実データでも自己変換だけでは届かない残りのみ）＝ゲート不合格、既定OFF維持。教訓: 無変化=検証不能、deficit≥2のケースが必要（3.511.3 追記）  → `docs/history/3.4xx.md`
