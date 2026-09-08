@@ -25,4 +25,17 @@ internal object ConstraintRepairInference {
         if (candHard != baseHard) return candHard < baseHard
         return candidateScore - baseScore <= maxOf(0L, softDebtAllowance)
     }
+
+    /** 族 [family] の起点をどれだけ先に試すか: 現在量 × 重み × その族の直近成功率（Laplace 平滑化。乱数・外部依存なし）。 */
+    internal fun familyPriorityScore(
+        report: ViolationReport, family: String,
+        tried: Int, committed: Int,
+        weightOf: (String) -> Double = MirrorKeys::weightOf,
+    ): Double {
+        val count = (report.breakdown[family] ?: 0).toDouble()
+        if (count <= 0.0) return 0.0
+        val w = weightOf(family)
+        val successRate = (committed + 1.0) / (tried + 1.0)
+        return count * w * successRate
+    }
 }
