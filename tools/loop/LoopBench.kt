@@ -92,8 +92,13 @@ fun main(args: Array<String>) {
     // Iteration 2: 旧＝3.504.x のチェーン（成分修復なし）、新＝巡末尾に違反起点のトランザクション修復を足したもの（3.505.1 で既定）。
     // [Iteration 7] MAGI_BENCH_DETERMINISTIC=1 で両腕とも決定的モード（回数上限で止める＝再現性を仕様にする）。
     val det = System.getenv("MAGI_BENCH_DETERMINISTIC") == "1"
-    val oldP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det)
-    val newP = V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
+    // [3.510.0] MAGI_BENCH_FEATURE で比較する機能を選ぶ。既定（未設定）は Iteration 2 以来の「成分修復の有無」。
+    val feature = System.getenv("MAGI_BENCH_FEATURE") ?: ""
+    val (oldP, newP) = when (feature) {
+        "c3pair" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3PairMaskEnabled = true)
+        else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
+    }
+    System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
     // [3.507.6] 再開可能: 既存 CSV の (case,seed,arm) を読み、済みの行は飛ばして追記する（VM 再起動で JVM が消えても続きから）。
     val done = HashSet<String>()
     if (out.exists()) out.readLines().drop(1).forEach { l -> val c = l.split(","); if (c.size > 4) done.add(c[0] + "|" + c[3] + "|" + c[4]) }

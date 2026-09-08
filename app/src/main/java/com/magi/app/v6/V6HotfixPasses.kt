@@ -294,6 +294,9 @@ object V6HotfixPasses {
         val deterministic: Boolean = false,
         val c1LnsMaxEvaluations: Int = 90_000,
         val personalLnsMaxEvaluations: Int = 60_000,
+        /** [3.510.0/測定中] 最終段の「連続規則 選択日ペア交換」（C3PairMaskPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
+        val c3PairMaskEnabled: Boolean = false,
+        val c3PairMaskEvaluations: Int = 3_000,
     )
 
     /** 巡ごとの乱数列を分けるためのパス別タグ（[roundSeed]）。値は 3.499.0 以前の手書き値と同じ＝乱数列不変。 */
@@ -310,6 +313,7 @@ object V6HotfixPasses {
         const val C3PATTERN = 0xC3B4L
         const val APT = 0xA97L
         const val FAIR = 0xFA12L
+        const val C3PAIR = 0xC3AA1L
     }
 
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
@@ -448,6 +452,14 @@ object V6HotfixPasses {
                 else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
             PersonalBalanceJointLnsPolish.apply(state, work, config = cfg, shouldStop = shouldStop)
         })
+
+        if (params.c3PairMaskEnabled && !shouldStop()) {
+            // [3.510.0/測定中] 共同 LNS の後・成分修復の前。連続でない 1〜3 日の同日交換で c3 系の取り残しを拾う。
+            val pairStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+            chain.adopt(chain.timed("後処理 連続規則(c3系)選択日ペア交換(最終)", "C3PairMask") { work ->
+                C3PairMaskPolish.apply(state, work, maxEvaluations = params.c3PairMaskEvaluations, shouldStop = pairStop, seed = seed xor SeedTag.C3PAIR)
+            })
+        }
 
         if (params.componentRepairEnabled && params.componentRepairFinal && !shouldStop()) {
             // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
