@@ -83,3 +83,6 @@
     ~~(a) 族別 Credit/Debt を採用ログ・完了表示（`ChangeSummary`）へ出す＝判定不変の可視化~~（3.510.3）／(b) 件数倍率上限（≤3/≤1/≤2）と Total 厳密改善＝採用基準の追加。
     実データの採用 31 件中 12 件を却下するので**入れない推奨**。入れるなら明示 go＋weekly/fair/apt を対象外＋opt-in で `tools/loop`／
     (c) 明示個人範囲の最終悪化禁止＝現行採用に影響 0。HARD 扱いにする決定があれば／(d) 一時 HARD 負債の禁止＝既存 `C1JointLnsPolish.hardDebt=1` の撤去（要計測）／(e) C2/C41 不足量評価＝#12(a)。
+    設計 v2（3.510.3 補遺）: (f) 中間探索の件数 debt（C1/個人共同 LNS の hardDebt/totalDebt/c1Debt）を重み基準（TemporaryDebt ≤ Credit×係数）へ＝opt-in で iter10 候補／
+    (g) 凸型負債 W×D(D+1)/2（族単位で採用 31 件中 1 件却下、職員集中は未計測）＝採用基準の追加、opt-in＋計測／(h) 族別予算 Priority=W×違反量＝HARD 残存盤面で SOFT が 0 になるので下限つきで計測／
+    (i) 設定由来倍率（明示個人 ×3）は不要（D9 で群目標を置換済み、チェッカーとずれる）／(j) WeightProfile は重みが設定化されるまで不要。
