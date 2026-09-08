@@ -31,6 +31,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-08（3.509.5＝研磨パス共通の採用ゲート `adoptionGate` へ 18 箇所を統一（backlog #13(b)）。挙動不変、後処理 4/4 一致）
+
 **最終更新**：2026-09-08（3.509.4＝改善提案の適用直前に仮盤面で完全再評価する `FixApplyGate`（改善しない・固定を崩す提案は見送り）、完了カードに変更人数・セル数・希望充足・個人回数の 1 行。自動化 UX 評価 7 項目の対応は `docs/automation.md` §6）
 
 **最終更新**：2026-09-08（3.509.3＝自動化方針（ユーザー提示）を `docs/automation.md` に実装との対応表として固定。CSV の個人レンジ行は非負整数・下限≤上限だけ受理）

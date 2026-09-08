@@ -476,7 +476,7 @@ internal object C3FamilyPolish {
                     work[i][j] = alt
                     if (!needsChain) {
                         val rep = UnifiedViolationChecker.check(state, work)
-                        if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforePattern, work)) { bestRep = rep; applied++; improved = true; done = true }
+                        if (adoptionGate(p, workBeforePattern, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; done = true }
                         else work[i][j] = curK
                         continue
                     }

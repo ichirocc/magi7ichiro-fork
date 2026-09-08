@@ -79,7 +79,7 @@ internal object C3RotationPolish {
                                 if (preObjective != null && !postObjective.isBetterThan(preObjective)) { for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }; skipped++; continue }
                             }
                             val rep = UnifiedViolationChecker.check(state, work)
-                            if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeBlock, work)) { bestRep = rep; applied++; improved = true }
+                            if (adoptionGate(p, workBeforeBlock, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                             else for (t in 0 until w) { val tmp = work[i][j + t]; work[i][j + t] = work[i2][j + t]; work[i2][j + t] = tmp }   // 巻き戻し
                         }
                     }
@@ -181,7 +181,7 @@ internal object C3RotationPolish {
                                     if (preObjective != null && !postObjective.isBetterThan(preObjective)) { for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }; skipped++; continue }
                                 }
                                 val rep = UnifiedViolationChecker.check(state, work)
-                                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeRotate, work)) { bestRep = rep; applied++; improved = true }
+                                if (adoptionGate(p, workBeforeRotate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                                 else for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }   // 巻き戻し
                             }
                         }

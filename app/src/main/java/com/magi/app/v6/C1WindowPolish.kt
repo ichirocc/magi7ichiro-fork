@@ -198,7 +198,7 @@ internal object C1WindowPolish {
                     trial[staff][d] = shift
                     // (a) 直接移動のみで改善（旧シフトに余裕がある場合）。
                     val repDirect = UnifiedViolationChecker.check(state, trial)
-                    if (betterReport(repDirect, bestRep) && !pinBlocks.blocksImproving(p, work, trial)) {
+                    if (adoptionGate(p, work, trial, repDirect, bestRep, pinBlocks).accepted) {
                         work = trial; bestRep = repDirect; applied++; adopted = true; break@windowLoop
                     }
                     // (b) 旧シフトを抜いて covU 穴が空くなら玉突き連鎖で埋め直す（exclude=本人で自己選択防止）。
@@ -208,7 +208,7 @@ internal object C1WindowPolish {
                         if (chain != null) {
                             for (mv in chain) trial[mv[0]][mv[1]] = mv[2]
                             val repChain = UnifiedViolationChecker.check(state, trial)
-                            if (betterReport(repChain, bestRep) && !pinBlocks.blocksImproving(p, work, trial)) {
+                            if (adoptionGate(p, work, trial, repChain, bestRep, pinBlocks).accepted) {
                                 work = trial; bestRep = repChain; applied++; chainUsed++; adopted = true; break@windowLoop
                             }
                         }
@@ -461,7 +461,7 @@ internal object C1WindowPolish {
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
                         chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                         val rep = UnifiedViolationChecker.check(state, work)
-                        if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeDay, work)) {
+                        if (adoptionGate(p, workBeforeDay, work, rep, bestRep, pinBlocks).accepted) {
                             bestRep = rep; applied++; improved = true
                             donorsCache = null
                         } else {
@@ -791,7 +791,7 @@ internal object C1WindowPolish {
             ?: Beam(work0, before, 0)
         // [厳密ピン保護] ビーム探索の手A/玉突きも i の自身のシフト回数を変えうるため、根(work0)と比較し
         //   staffRange厳密ピン(lo==hi)を崩す最終候補は不採用にする（keep-best/重みは不変・追加ガードのみ）。
-        val best = if (betterReport(candidate.rep, before) && !pinBlocks.blocksImproving(p, work0, candidate.work)) candidate else Beam(work0, before, 0)
+        val best = if (adoptionGate(p, work0, candidate.work, candidate.rep, before, pinBlocks).accepted) candidate else Beam(work0, before, 0)
         val logs = listOf(MirrorLog(tag = "C1BeamPolish",
             message = "期間要件(c1)研磨[ビーム K=$beamWidth steps=$step/${EngineClock.nowMs() - beamT0}ms" +
                 (if (stagnant >= patience) "/最良が${patience}手更新されず打ち切り" else "") + "]: " +

@@ -688,6 +688,18 @@ class PinBlockAttribution {
     val isEmpty: Boolean get() = attempts == 0
 }
 
+/** 研磨パス共通の採用ゲート。採用＝正式比較 `betterReport` で改善し、かつ厳密ピン(lo==hi)を目標から遠ざけない。
+ *  ピン判定は改善したときだけ行う（`pinBlocks` があれば `blocksImproving` で試行を記録）。 */
+internal class Adoption(val better: Boolean, val pinBad: Boolean) { val accepted: Boolean get() = better && !pinBad }
+
+internal fun adoptionGate(
+    p: Problem, before: Array<IntArray>, after: Array<IntArray>, rep: ViolationReport, best: ViolationReport, pinBlocks: PinBlockAttribution? = null,
+): Adoption {
+    if (!betterReport(rep, best)) return Adoption(false, false)
+    val pinBad = pinBlocks?.blocksImproving(p, before, after) ?: exactPinRegression(p, before, after)
+    return Adoption(true, pinBad)
+}
+
 internal fun exactPinRegression(p: Problem, before: Array<IntArray>, after: Array<IntArray>): Boolean {
     for (i in 0 until p.S) for (k in 0 until p.K) if (exactPinDrifted(p, before, after, i, k)) return true
     return false

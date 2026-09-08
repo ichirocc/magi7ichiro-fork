@@ -87,7 +87,7 @@ internal object DayAssignmentPolish {
             val rep = UnifiedViolationChecker.check(state, cand)
             // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
             //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
-            if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, work, cand)) { work = cand; bestRep = rep; counts = cnt(); applied++ }
+            if (adoptionGate(p, work, cand, rep, bestRep, pinBlocks).accepted) { work = cand; bestRep = rep; counts = cnt(); applied++ }
         }
         val logs = listOf(MirrorLog(tag = "DayAssign",
             message = "日ごと厳密割当: total ${before.total}->${bestRep.total} 採用${applied}日"))
@@ -184,7 +184,7 @@ internal object DayAssignmentPolish {
                 val rep = UnifiedViolationChecker.check(state, cand)
                 // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
                 //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
-                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, work, cand)) {
+                if (adoptionGate(p, work, cand, rep, bestRep, pinBlocks).accepted) {
                     work = cand; bestRep = rep; counts = cnt()
                     wd = Array(p.S) { wdOf(it) }
                     applied++; changedInSweep = true

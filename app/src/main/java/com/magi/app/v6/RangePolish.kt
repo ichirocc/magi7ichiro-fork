@@ -208,7 +208,7 @@ internal object RangePolish {
             work[i][j] = toK
             if (!needsChain) {
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
+                if (adoptionGate(p, workBeforeRelocate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(
                     listOf(intArrayOf(i, j, toK)), "tryRelocate", label(target.first, target.second)))
@@ -223,7 +223,7 @@ internal object RangePolish {
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work)
-            if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeRelocate, work)) { bestRep = rep; applied++; return true }
+            if (adoptionGate(p, workBeforeRelocate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
             combinable.add(CombinatorialRepair.Candidate(
@@ -253,7 +253,7 @@ internal object RangePolish {
                 val workBeforeSwap = work.copy2D()
                 work[hi][j] = loK; work[lo][j] = k
                 val rep = UnifiedViolationChecker.check(state, work)
-                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeSwap, work)) { bestRep = rep; applied++; return true }
+                if (adoptionGate(p, workBeforeSwap, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
                 work[hi][j] = k; work[lo][j] = loK
             }
             return false
@@ -397,8 +397,8 @@ internal object RangePolish {
                     // [3.475.0/論理監査] 素の exactPinRegression では「ピンだけが理由で却下した改善手」が
                     //   PinBlockAttribution に計上されず、UI の「少なくともN回」が過少だった（同ファイルの
                     //   tryRelocate/tryPairSwap は blocksImproving 経由で計上済み＝手M/手F だけ非対称）。
-                    val improving = betterReport(rep, bestRep)
-                    val pinBad = improving && pinBlocks.blocksImproving(p, workBeforeDayMatch, work)
+                    val gateM = adoptionGate(p, workBeforeDayMatch, work, rep, bestRep, pinBlocks)
+                    val improving = gateM.better; val pinBad = gateM.pinBad
                     for (i in 0 until p.S) work[i][j] = tokens[i]
 
                     if (!improving || pinBad) continue
@@ -563,8 +563,8 @@ internal object RangePolish {
                     extras.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work)
                     // [3.475.0/論理監査] 手M と同じ理由で blocksImproving 経由に揃える（計上漏れの解消）。
-                    val improving = betterReport(rep, bestRep)
-                    val pinBad = improving && pinBlocks.blocksImproving(p, workBeforeFlow, work)
+                    val gateF = adoptionGate(p, workBeforeFlow, work, rep, bestRep, pinBlocks)
+                    val improving = gateF.better; val pinBad = gateF.pinBad
                     for (idx in extras.indices) work[extras[idx][0]][extras[idx][1]] = extraOld[idx]
                     for (i in 0 until p.S) work[i][j] = oldDay[i]
                     if (!improving || pinBad) continue
