@@ -38,6 +38,8 @@ data class UiState(
     val checkRev: Long = 0,
     val bestHard: Long = 0,
     val bestSoft: Long = 0,
+    /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。 */
+    val runSummary: String? = null,
     val totalViolations: Int = 0,
     val weightedScore: Double = 0.0,
     val breakdown: Map<String, Int> = emptyBreakdown,

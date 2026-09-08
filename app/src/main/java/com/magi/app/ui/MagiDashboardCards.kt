@@ -242,7 +242,8 @@ internal fun OperatorNextActionCard(
             "② ボタンひとつで、勤務表を作ります。",
             "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial)
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
-            "③ できました！ そのまま配れます。",
+            // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
+            "③ できました！ そのまま配れます。" + (ui.runSummary?.let { "\n$it" } ?: ""),
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),

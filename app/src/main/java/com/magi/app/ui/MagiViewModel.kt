@@ -584,6 +584,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         pushReport(state ?: st0, sched, r.report, runLabel = "バックグラウンド最適化") { it.copy(
             messageIsError = false,
             running = false, hasResult = true, engineRan = true,
+            runSummary = prev?.let { com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report).line() },
             message = "バックグラウンド最適化 完了: 必須=${r.report.hard} 合計=${r.report.total}",
         ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
@@ -1384,6 +1385,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         running = false,
                         hasResult = true,
                         engineRan = true,
+                        runSummary = com.magi.app.v6.ChangeSummary.of(st0, sched0, res.schedule, res.report).line(),
                         message = "勤務表ができました: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)",
                     ) }
                     lastResultHard = newHard
@@ -1537,6 +1539,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     running = false,
                     hasResult = true,
                     engineRan = true,
+                    runSummary = com.magi.app.v6.ChangeSummary.of(st0, sched0, finalSched, finalReport).line(),
                     message = if (adopted)
                         "整えました: 合計 ${baseReport.total} → ${finalReport.total}（${if (gain >= 0) "-$gain" else "+${-gain}"}・重み ${baseReport.weightedScore.toInt()} → ${finalReport.weightedScore.toInt()}）必須=${finalReport.hard} (${System.currentTimeMillis() - startMs}ms)"
                     else
@@ -2235,21 +2238,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 message = "勤務表か設定が変わったため、この提案は適用できません。「直し方を探す」をもう一度押してください") }
             return
         }
-        for (op in s.ops) {
-            if (op.staff !in sched.indices || op.day !in sched[op.staff].indices || op.toShift !in 0 until st.shiftCount) return
+        // [3.509.4/自動化方針] 適用直前に仮盤面で完全再評価し、辞書式で改善しない・固定を崩す提案は反映しない。
+        val gate = com.magi.app.v6.FixApplyGate.apply(st, sched, s.ops)
+        if (gate !is com.magi.app.v6.FixApplyGate.Outcome.Applied) {
+            val why = (gate as com.magi.app.v6.FixApplyGate.Outcome.Rejected).reason
+            logOp("W", "改善手を見送り: ${s.label}（$why）")
+            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(),
+                message = "この提案は見送りました（$why）。「直し方を探す」で探し直してください") }
+            return
         }
         pushUndo()
-        for (op in s.ops) sched[op.staff][op.day] = op.toShift
-        currentSchedule = sched
-        state = st.withSchedule(sched)
+        val applied = gate.schedule
+        currentSchedule = applied
+        state = st.withSchedule(applied)
         autoSave()
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,
             engineRan = false,   // [3.475.0] 提案の適用は手操作扱い（局所1手のみ、フルの計算ではない）
-            schedule = sched.map { it.toList() },
+            schedule = applied.map { it.toList() },
             fixSuggestions = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
-            message = "改善手を適用: ${s.label}",
+            message = "改善手を適用: ${s.label}（必須 ${gate.before.hard}→${gate.after.hard}・合計 ${gate.before.total}→${gate.after.total}）",
         ) }
         refreshCheck()
     }

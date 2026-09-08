@@ -56,7 +56,7 @@ internal object CyclicSwapWeeklyPolish {
                         val workBeforeSwap2 = work.copy2D()
                         work[a][j] = sb; work[b][j] = sa
                         val rep = UnifiedViolationChecker.check(state, work)
-                        if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeSwap2, work)) { bestRep = rep; applied++; improved = true }
+                        if (adoptionGate(p, workBeforeSwap2, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                         else { work[a][j] = sa; work[b][j] = sb }
                     }
                 }
@@ -76,7 +76,7 @@ internal object CyclicSwapWeeklyPolish {
                                 val workBeforeRotate3 = work.copy2D()
                                 work[a][j] = sb; work[b][j] = sc; work[c][j] = sa
                                 val rep = UnifiedViolationChecker.check(state, work)
-                                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeRotate3, work)) { bestRep = rep; applied++; improved = true; continue }
+                                if (adoptionGate(p, workBeforeRotate3, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; continue }
                                 work[a][j] = sa; work[b][j] = sb; work[c][j] = sc
                             }
                         }
@@ -190,7 +190,7 @@ internal object CyclicSwapWeeklyPolish {
                                 val workBeforeRect = work.copy2D()
                                 work[i][j1] = z; work[i][j2] = x; work[ip][j1] = x; work[ip][j2] = y
                                 val rep = UnifiedViolationChecker.check(state, work)
-                                if (betterReport(rep, bestRep) && !pinBlocks.blocksImproving(p, workBeforeRect, work)) { bestRep = rep; applied++; improved = true; staffImproved = true; done = true; break }
+                                if (adoptionGate(p, workBeforeRect, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; staffImproved = true; done = true; break }
                                 work[i][j1] = x; work[i][j2] = y; work[ip][j1] = z; work[ip][j2] = x
                             }
                         }

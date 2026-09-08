@@ -169,10 +169,10 @@ internal object C1TemporalFlowPolish {
             // [3.356.0/実機ログ起因] 旧ログは「DP候補12 flow失敗0 採用0回」までで、12件が
             //   ①行のc1が減らない ②目的関数に負けた ③厳密ピンを崩す のどれで落ちたかが読めなかった。
             //   判定の順序は変えず（better → ピン）、落ちた理由だけを数える。
-            val ok = better(rep, bestRep)
             // [厳密ピン保護] 他職員のジョイント再割当(FlexibleDayFlow)がstaffRange厳密ピンを崩す
             // 副作用は、total/weightedScoreが改善してもここで拒否する（keep-best不変・追加ガードのみ）。
-            val pinBad = ok && pinBlocks.blocksImproving(p, work, trialWork)
+            val gate = adoptionGate(p, work, trialWork, rep, bestRep, pinBlocks)
+            val ok = gate.better; val pinBad = gate.pinBad
             if (!ok || pinBad) { rejects.record(rep, bestRep, pinBad); return null }
             return Plan(trialWork, rep, i, x, candidate.relocations, changedDays.size)
         }
