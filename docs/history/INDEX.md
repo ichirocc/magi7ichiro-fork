@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- iter11 結果: 成分修復の一時負債予算 ConstraintRepairInference は 170 ペアで新良 8／同等 150／旧良 12、実データ 20 ペア全件同一、充足不能ケースで必須 ±（増 6・減 4）＝ゲート不合格、既定 OFF 維持（3.510.5 追記）  → `docs/history/3.4xx.md`
 - iter10 結果: 共同 LNS の WeightDebt は 170 ペアで新良 0／同等 155／旧良 15、必須 8→10 が 1 件、品質 −0.16%＝ゲート不合格、既定 OFF 維持（3.510.4 追記）  → `docs/history/3.4xx.md`
 - 違反連結成分修復の一時負債予算 ConstraintRepairInference（起点の族の 重み×現在量×2.0 を SOFT 負債の上限、HARD 悪化の枝は外す）を opt-in 実装。前提訂正: 既存ビームは悪化ノードも展開していた。4 実データ最終盤面 4/4 同一・推定 40〜70% 減＝iter11 で採否（3.510.5, ユーザー仕様 v3）  → `docs/history/3.4xx.md`
 - 共同 LNS の一時負債を重みで絞る WeightDebt（負債 ≤ クレジット×2.0、HARD は件数予算のまま）を opt-in 実装。4 実データ: 2 件同一盤面で 26〜30% 速く、sample_v6 重み −480、sept2026 +5＝iter10 で採否（3.510.4, backlog #15(f)）  → `docs/history/3.4xx.md`
