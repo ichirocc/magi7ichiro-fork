@@ -77,7 +77,33 @@ internal object AdaptiveBlockSwapPolish {
         val filterC3nIncrease: Boolean = PolishGate.filterC3nIncrease,
         val stageOneWidthFactor: Int = 8,
         val maxPinSlots: Int = 31,
+        /** [3.511.0/測定中] true なら [blockLens] の前に、違反窓長(c1)・禁止連長(c3n)・希望島半径・当月日数から
+         *  導出した長さ（[dynamicBlockLengths]）を差し込む（重複除去、先頭優先＝評価枠を先取り）。既定 OFF＝固定長のみ（挙動不変）。
+         *  backlog #14(c): 固定 28 は 2 月以外（T=29〜31）では一度も「当月まるごと」に届かない穴を、動的候補の `p.T` が塞ぐ。 */
+        val useDynamicBlockLens: Boolean = false,
+        /** [3.511.0/測定中] 動的長を足したあとの候補長総数の上限（bucketCount＝候補長×巡回人数幅の膨張を抑える）。 */
+        val maxTotalBlockLens: Int = adaptiveBlockLengths.size + 3,
     )
+
+    /**
+     * [3.511.0/測定中] 動的長の候補（backlog #14(c)）。StrictSession（[WindowMode.STRICT_WHOLE_WINDOW]）は既に
+     * `ruleLens`＋`1..maxLen`＋長連続違反時の `longLen` で動的に窓長を出しており対象外＝これは CyclicSession 用。
+     * 局所（既定 7 日以下＝ [WishIslandPolish] や StrictSession の既定 `maxLen` と同じ境目）は演算子の役割が重複するため除く。
+     */
+    private fun dynamicBlockLengths(p: Problem): List<Int> {
+        val localCutoff = 7
+        val out = LinkedHashSet<Int>()
+        for (c in p.cons1) if (c.day1 > localCutoff) out.add(c.day1)
+        for (c in p.cons3n) if (c.seq.size > localCutoff) out.add(c.seq.size)
+        // 希望島半径の式は WishIslandPolish.Session.computeReach() と同一（c1.day1・c3系.seq.size の max−1）。
+        var reach = 1
+        for (c in p.cons1) reach = maxOf(reach, c.day1 - 1)
+        for (list in listOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)) for (c in list) reach = maxOf(reach, c.seq.size - 1)
+        val span = 2 * reach + 1
+        if (span > localCutoff) out.add(span)
+        out.add(p.T)   // 「当月まるごと」＝固定28は2月以外(T=29〜31)では一度も一致しない
+        return out.filter { it in (localCutoff + 1)..p.T }.sorted()
+    }
 
     /**
      * 厳密窓交換（[WindowMode.STRICT_WHOLE_WINDOW]）の探索幅。
@@ -327,7 +353,13 @@ internal object AdaptiveBlockSwapPolish {
         private val pinBlocks = PinBlockAttribution()
         private val rejects = RejectStats()
         private val keepBest = KeepBest(state, p, work, params.maxEvaluations, shouldStop, pinBlocks, rejects)
-        private val lengths = params.blockLens.asSequence().filter { it in 1..p.T }.distinct().sorted().toList()
+        private val lengths = run {
+            val dyn = if (params.useDynamicBlockLens) dynamicBlockLengths(p) else emptyList()
+            val fixed = params.blockLens.asSequence().filter { it in 1..p.T }.distinct().sorted().toList()
+            // 動的候補を先頭に置く＝buildRanked のラウンドロビンで評価枠を先取りさせる（「動的候補を優先、固定長は
+            //   fallback」の実装はここだけで足りる。優先度スコア[Priority]をいじる必要は無い）。
+            (dyn.filterNot { it in fixed } + fixed).distinct().take(params.maxTotalBlockLens)
+        }
         private val cycleCap = params.maxCycle.coerceAtLeast(2).coerceAtMost(MAX_PACKED_CYCLE)
         /** プールは (ブロック長 × 巡回人数 2..cycleCap) ごと。 */
         private val bucketW = (cycleCap - 1).coerceAtLeast(1)

@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 停滞時の探索幅拡大 StallEscalationConfig（巡回研磨クラスタが1巡も採用0のときだけ共同LNS/成分修復の幅を2倍で1回だけ再試行）。既定OFFのhash 4/4不変、iter13で採否（3.511.1, backlog #12(b)/#13(a)）  → `docs/history/3.4xx.md`
+- 長期ブロック交換の候補長を動的化 dynamicBlockLengths（違反窓長・禁止連長・希望島半径・当月日数から導出、固定28が2月以外で当月まるごとに届かない穴を修正）。既定OFFのhash 4/4不変、iter12で採否（3.511.0, backlog #14(c)）  → `docs/history/3.4xx.md`
 - iter11 結果: 成分修復の一時負債予算 ConstraintRepairInference は 170 ペアで新良 8／同等 150／旧良 12、実データ 20 ペア全件同一、充足不能ケースで必須 ±（増 6・減 4）＝ゲート不合格、既定 OFF 維持（3.510.5 追記）  → `docs/history/3.4xx.md`
 - iter10 結果: 共同 LNS の WeightDebt は 170 ペアで新良 0／同等 155／旧良 15、必須 8→10 が 1 件、品質 −0.16%＝ゲート不合格、既定 OFF 維持（3.510.4 追記）  → `docs/history/3.4xx.md`
 - 違反連結成分修復の一時負債予算 ConstraintRepairInference（起点の族の 重み×現在量×2.0 を SOFT 負債の上限、HARD 悪化の枝は外す）を opt-in 実装。前提訂正: 既存ビームは悪化ノードも展開していた。4 実データ最終盤面 4/4 同一・推定 40〜70% 減＝iter11 で採否（3.510.5, ユーザー仕様 v3）  → `docs/history/3.4xx.md`
