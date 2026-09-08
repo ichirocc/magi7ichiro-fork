@@ -832,7 +832,13 @@ object ConstraintsCsvIO {
                     val k = state.shifts.indexOfFirst { it.kigou.trim() == sym }
                     // [3.329.0/外部レビュー H-02] 氏名・記号が今のデータに無い行は黙って捨てない。
                     //   捨てたまま置換すると、その職員の個人レンジが**消える**。
-                    if (i != null && k >= 0) {
+                    // [3.509.3] 下限/上限は空欄か 0 以上の整数、両方あれば下限≤上限。Problem は負数・非数値を未設定として
+                    //   捨てるので、ここで受理すると「評価されない行で置換」になる（3.333.0 と同じ穴）。
+                    val loV = c(r, 3); val hiV = c(r, 4)
+                    val loN = loV.toIntOrNull(); val hiN = hiV.toIntOrNull()
+                    val numOk = (loV.isEmpty() || (loN != null && loN >= 0)) && (hiV.isEmpty() || (hiN != null && hiN >= 0)) &&
+                        (loN == null || hiN == null || loN <= hiN)
+                    if (i != null && k >= 0 && numOk) {
                         // [3.475.0/論理監査] 同じ職員×シフトの重複行（希望CSVと同じ扱い＝同値は1件、衝突は拒否）。
                         val key = "$i,$k"; val rng = Range(c(r, 3), c(r, 4)); val prev = ranges[key]
                         if (prev == null) { ranges[key] = rng; n++ } else if (prev != rng) reject(r)

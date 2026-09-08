@@ -118,24 +118,21 @@ class CsvRoundTripTest {
     }
 }
 
-/** 数値でない個人レンジは取込で弾かず（判定は Problem が単一ソース＝fail-open）、取込後に Sanity 2h が案内する。
- *  空欄＝未設定は正しい仕様なので案内しない。 */
+/** 空欄だけの個人レンジ（未設定）は取込で受理し、Sanity は案内しない。数値でない値は 3.509.3 から取込で拒否する（`StaffRangeCsvValidationTest`）。 */
 class NonNumericStaffRangeImportTest {
     private fun load(): MagiState {
         val json = javaClass.getResourceAsStream("/golden_state.json")!!.bufferedReader().readText()
         return StateParser.parse(json)!!
     }
 
-    @Test fun nonNumericRangeIsAcceptedThenReportedBySanity() {
+    @Test fun blankRangeIsAcceptedAndNotReported() {
         val st = load().copy(staffRange = mapOf("0,3" to Range("1", "2")))
-        val name = st.staff[1].name; val sym = st.shifts[3].kigou
-        val csv = ConstraintsCsvIO.build(st) + "個人レンジ,$name,$sym,多め,\n個人レンジ,${st.staff[2].name},$sym,,\n"
+        val sym = st.shifts[3].kigou
+        val csv = ConstraintsCsvIO.build(st) + "個人レンジ,${st.staff[2].name},$sym,,\n"
         val r = ConstraintsCsvIO.parse(csv, st)!!
         assertEquals(0, r.rejected)
-        assertEquals(Range("多め", ""), r.state.staffRange["1,3"])
-        assertEquals(Int.MIN_VALUE, Problem(r.state).rangeLo[1][3])
+        assertEquals(Range("", ""), r.state.staffRange["2,3"])
         val issues = V6SanityPort.buildGuidance(r.state)
-        assertEquals(1, issues.count { it.problem.contains("数値でない") && it.where.contains("個人の回数「$name $sym」") })
         assertFalse(issues.any { it.where.contains("個人の回数「${st.staff[2].name} $sym」") })
     }
 }
@@ -163,6 +160,28 @@ class ScheduleCsvHeaderTest {
         val dates = "," + (1..st.dayCount).joinToString(",") { "2026/06/$it" }
         assertEquals(1, ScheduleCsvBridge.parse(dates + "\n" + row(known) + "\n", st, base).matched)
         assertEquals(p.T, r.schedule[0].size)
+    }
+}
+
+/** 制約CSVの個人レンジ行は「空欄か 0 以上の整数、下限≤上限」だけを受理する（Problem が捨てる値で置換しない）。 */
+class StaffRangeCsvValidationTest {
+    private fun load(): MagiState {
+        val json = javaClass.getResourceAsStream("/golden_state.json")!!.bufferedReader().readText()
+        return StateParser.parse(json)!!
+    }
+
+    @Test fun invalidRangeRowsAreRejected() {
+        val st = load().copy(staffRange = emptyMap())
+        val name = st.staff[0].name; val sym = st.shifts[3].kigou
+        fun rejected(cells: String) = ConstraintsCsvIO.parse("個人レンジ,$name,$sym,$cells", st)!!.rejected
+        assertEquals(1, rejected("abc,"))     // 数値でない
+        assertEquals(1, rejected("-1,"))      // 負数
+        assertEquals(1, rejected(",-2"))
+        assertEquals(1, rejected("5,2"))      // 下限 > 上限
+        assertEquals(0, rejected("2,5"))
+        assertEquals(0, rejected(",3"))
+        assertEquals(0, rejected("0,0"))
+        assertEquals(0, rejected("１,２"))    // 全角数字は数値として読める
     }
 }
 
