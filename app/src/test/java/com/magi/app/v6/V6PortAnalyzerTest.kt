@@ -240,6 +240,66 @@ class V6PortAnalyzerTest {
         assertTrue(sp.reason.contains("希望"))
     }
 
+    /** [3.515.0] 同日1手はs0のA下限(1〜1)を割るため改善しないが、別日への付け替え
+     *  （day0 A→休・day1 休→Aを同時に）ならA回数を保ったまま解消できる＝deepSurplus=trueのときだけ
+     *  FixSuggesterがこれを見つけることを固定する。 */
+    @Test
+    fun diagnoseCoverageDeepSurplusFindsCrossDayRelocationSameDayMissed() {
+        val st = MagiState(
+            startDate = "2025-12-01",
+            endDate = "2025-12-02",
+            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "1")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1, 0), listOf(1, 0)),   // day0: s0=A,s1=A(過剰1) / day1: 二人とも休(Aが不足1)
+            wishes = emptyMap(),
+            // 両者ともAは月合計ちょうど1回＝同日1手（相方だけ休へ動かす）はどちらを選んでも低下側の下限を割る。
+            staffRange = mapOf("0,1" to Range("1", "1"), "1,1" to Range("1", "1")),
+            needDay1 = emptyMap(),
+            needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val shallow = V6PortAnalyzer.diagnoseCoverage(st, deepSurplus = false).surpluses.single()
+        assertTrue("同日1手のみでは改善なしと正しく判定", shallow.reason.contains("最適化は採用しません"))
+        assertFalse(shallow.reason.contains("解消できます"))
+
+        val deep = V6PortAnalyzer.diagnoseCoverage(st, deepSurplus = true).surpluses.single()
+        assertTrue("別日の付け替えで見つかる改善を案内する", deep.reason.contains("他の職員や別日と組み合わせれば"))
+        assertTrue(deep.reason.contains("解消できます"))
+    }
+
+    /** [3.515.0] includeSurplus=false は過剰(covO)診断を丸ごと省く（ViolationComponentRepair等、
+     *  shortfallsしか読まない内部呼出の無駄を無くすためのゲート）。 */
+    @Test
+    fun diagnoseCoverageIncludeSurplusFalseSkipsSurplusComputation() {
+        val st = MagiState(
+            startDate = "2025-12-01",
+            endDate = "2025-12-01",
+            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1), listOf(1)),
+            wishes = emptyMap(),
+            staffRange = emptyMap(),
+            needDay1 = emptyMap(),
+            needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val withSurplus = V6PortAnalyzer.diagnoseCoverage(st, includeSurplus = true)
+        assertEquals(1, withSurplus.totalSurplus)
+        val without = V6PortAnalyzer.diagnoseCoverage(st, includeSurplus = false)
+        assertEquals(0, without.totalSurplus)
+        assertTrue(without.surpluses.isEmpty())
+    }
+
     // ==== [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断 ====
 
     private fun forbiddenState(

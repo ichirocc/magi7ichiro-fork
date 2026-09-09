@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- covO「なぜ減らないか」診断（V6PortAnalyzer.diagnoseSurpluses）を複数職員・別日の組合せまで探すよう拡張（ユーザー指示「複数の職員および過去未来の日も押し出し可能できるように」、既存のFixSuggester「直し方を探す」を再利用、実データでは今回の5件とも解なし＝low/high重み差による構造的トレードオフと確定。副次的にViolationComponentRepair/V6FinalPortの無駄なsurplus計算をincludeSurplus=falseで除去、deepSurplusは最適化完了直後のみtrueにしライブ編集診断への影響を回避）（3.515.0）  → `docs/history/3.4xx.md`
 - combineExhaustPairs・lnsAdaptiveをUIの詳細設定からON/OFFできるように（ユーザー指示「フラグのOn,Offはユーザーが選択できるように」、不合格判定で凍結中のdebtLaneSlots等は対象外）＋シフト集計カードの既定開閉を展開へ戻す（3.483.0 S-4の反転、ユーザー指示「シフト集計は開く。閉じない」）（3.514.0）  → `docs/history/3.4xx.md`
 - 最終番兵の復帰盤面バグを修正（handleOptimizeで番兵発火時にfinalSchedをcappedInputでなくnormInputへ戻していたため、finalReportは「上限0のセル除外済み」の集計を返すのに実際に返す盤面には元の上限0割当が残る食い違いが起き得た。実機報告「大島愛のDﾃが上限0なのに1件割当」から発見。sentinelScheduleへ抽出しユニットテスト、C#同日同期）（3.513.0）  → `docs/history/3.4xx.md`
 - CombinatorialRepair.combineAndApplyのmaxStagnantTries固定200回を実機報告から緩和（プール56件でもC(56,2)=1540通りある2人組交換のうち13%しか試さず打ち切っていた。exhaustPairs/pairCap追加、既定OFF・opt-in、6箇所の研磨パスへ配線、未計測）（3.512.6）  → `docs/history/3.4xx.md`

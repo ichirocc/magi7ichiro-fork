@@ -2542,13 +2542,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         st: MagiState,
         schedule: Array<IntArray>,
         report: ViolationReport,
+        /** [3.515.0] trueなら人員過剰(covO)の「なぜ減らないか」診断を、他の職員・別日との組合せまで
+         *  深追いする（FixSuggesterを使うため数秒かかりうる）。呼び出し元のpushReportがrunLabel!=null
+         *  （最適化完了直後）のときだけtrueにする＝編集のたびに走るライブ診断は既定どおり軽いまま。 */
+        deepCovODiag: Boolean = false,
     ): Analysis = coroutineScope {
         val v6D       = async(Dispatchers.Default) { V6PortAnalyzer.analyze(st, schedule, report) }
         val sanityD   = async(Dispatchers.Default) { V6SanityPort.build(st, schedule) }
         // 人員不足(covU)または人員過剰(covO)が残る場合のみ原因診断（どの日/シフトが「充足不可」か
         // 「未到達」か／過剰がなぜ動かせないか）を算出しログに残す。
         val coverageD = async(Dispatchers.Default) {
-            V6PortAnalyzer.diagnoseCoverage(st, schedule, report).takeIf { it.hasShortage || it.hasSurplus }
+            V6PortAnalyzer.diagnoseCoverage(st, schedule, report, deepSurplus = deepCovODiag).takeIf { it.hasShortage || it.hasSurplus }
         }
         // [3.280.0] 禁止連続(c3n)が残る場合のみ「なぜ崩せないか」診断（CoverageDiag の c3n 版）。
         val forbiddenD = async(Dispatchers.Default) {
@@ -2591,8 +2595,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         transform: (UiState) -> UiState = { it },
     ) {
         val analysis =
-            if (nonCancellable) withContext(NonCancellable) { analyzeParallel(st, schedule, report) }
-            else analyzeParallel(st, schedule, report)
+            if (nonCancellable) withContext(NonCancellable) { analyzeParallel(st, schedule, report, deepCovODiag = runLabel != null) }
+            else analyzeParallel(st, schedule, report, deepCovODiag = runLabel != null)
         rawDiagLogs = analysis.rawDiagLogs
         lastDiagSerial = activeRunSerial
         if (runLabel != null) {
