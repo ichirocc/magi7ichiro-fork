@@ -147,7 +147,7 @@ internal object RangePolish {
      * 空く/埋まる側の被覆(covUCell)が悪化する場合は`findCovUChain`で玉突き修復する（C1Polish手B/
      * C3mnPolishと同一パターン）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。
      */
-    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -706,6 +706,7 @@ internal object RangePolish {
         val rangeCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
             state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = rangeCombStats, p = p, leftover = rejectedOut,
+            exhaustPairs = combineExhaustPairs,
         )
         applied += rangeCombStats.combosAccepted
         // [ログから職員が分かるように・頭打ちの理由を可視化] 研磨後もなお残っている(staff,shift)を、

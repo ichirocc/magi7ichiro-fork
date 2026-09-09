@@ -287,7 +287,7 @@ internal object C1WindowPolish {
      * 採否は既存と同じ betterReport(hard→weighted→total) の keep-best のみ＝退化不能・HF77非該当（重み不変）。
      * add-fixable（追加が唯一の解の局面）は既存手A/Bの担当のまま＝手クラスが互いに素で冗長を作らない。
      */
-    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -590,6 +590,7 @@ internal object C1WindowPolish {
         val c1CombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
             state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c1CombStats, p = p, leftover = rejectedOut,
+            exhaustPairs = combineExhaustPairs,
         )
         applied += c1CombStats.combosAccepted
         // [頭打ちの理由を可視化/RangePolish=3.222.0と同型] 手B(直接移動+玉突き)が最終的に失敗した

@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 最終番兵の復帰盤面バグを修正（handleOptimizeで番兵発火時にfinalSchedをcappedInputでなくnormInputへ戻していたため、finalReportは「上限0のセル除外済み」の集計を返すのに実際に返す盤面には元の上限0割当が残る食い違いが起き得た。実機報告「大島愛のDﾃが上限0なのに1件割当」から発見。sentinelScheduleへ抽出しユニットテスト、C#同日同期）（3.513.0）  → `docs/history/3.4xx.md`
+- CombinatorialRepair.combineAndApplyのmaxStagnantTries固定200回を実機報告から緩和（プール56件でもC(56,2)=1540通りある2人組交換のうち13%しか試さず打ち切っていた。exhaustPairs/pairCap追加、既定OFF・opt-in、6箇所の研磨パスへ配線、未計測）（3.512.6）  → `docs/history/3.4xx.md`
 - LiveScheduleCard「状態遷移」の変化件数が実機で常に0固定だった実機バグを修正（remember(cur)の計算ラムダ内でprevHolder[0]=curを書いていたため、Composeの「破棄コンポジションでも複数回呼ばれうる」契約に反し副作用が破棄回で先に効いてしまっていた。書き込みをSideEffectへ分離）（3.512.5）  → `docs/history/3.4xx.md`
 - iter22/23 結果（分離条件）: debtLaneSlots（新良8/同等135/旧良27、品質-0.18%）・bestOfK（新良15/同等138/旧良17、品質-0.17%、必須増12件はlarge-infeasibleに集中）はいずれも不合格。ユーザー判断で検証・追加実装を中止、既定OFFのまま凍結（WeightDebt/ConstraintRepairInference/familyPriorityScoreに続く同系統4度目・5度目の不合格）（3.512.4）  → `docs/history/3.4xx.md`
 - debtLaneSlots/bestOfK: trimFrontierのビーム縮小バグ修正（負債候補0件でも非負債候補の枠がbeamWidth-debtLaneSlotsに固定され純粋な退行を起こしうる構造をユーザーの机上テストで発見）＋LoopBenchのdebtlane/bestofkフラグをレバー単体で分離測定できる条件へ修正。旧iter22/23は交絡した参考値のまま保存し採否判定には不使用。host JVM 全721テストgreen（3.512.3）  → `docs/history/3.4xx.md`

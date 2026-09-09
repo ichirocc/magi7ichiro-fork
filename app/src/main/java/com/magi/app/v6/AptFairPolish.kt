@@ -41,7 +41,7 @@ internal object AptFairPolish {
      * 採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定(movable)・禁止連続
      * (makesForbiddenRun)を事前ガード。
      */
-    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -229,6 +229,7 @@ internal object AptFairPolish {
         val aptCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
             state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = aptCombStats, p = p, leftover = rejectedOut,
+            exhaustPairs = combineExhaustPairs,
         )
         applied += aptCombStats.combosAccepted
         val stuckNames = bestRep.countViolations.entries
@@ -267,7 +268,7 @@ internal object AptFairPolish {
      * 拒否するだけ）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定
      * (movable)・禁止連続(makesForbiddenRun)を事前ガード。
      */
-    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -467,6 +468,7 @@ internal object AptFairPolish {
         val fairCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
             state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = fairCombStats, p = p, leftover = rejectedOut,
+            exhaustPairs = combineExhaustPairs,
         )
         applied += fairCombStats.combosAccepted
         // [AptPolishと同型] work は毎手の成功時のみコミットしbestRepと同期を保つ（失敗時は必ず巻き戻し）
