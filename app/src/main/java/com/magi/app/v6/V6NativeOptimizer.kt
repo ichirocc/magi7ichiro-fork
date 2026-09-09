@@ -62,6 +62,8 @@ data class V6OptimizerOptions(
     /** 局所移動に短期Tabu記憶を適用（直近変更セルの即時復帰を tenure 期間禁止。global最良更新時はアスピレーションで解禁）。
      *  並列仮説の一部にのみ割当て（W0はOFFでベースライン保持）。destroy/repair等の大近傍手は対象外。 */
     val tabu: Boolean = false,
+    /** [backlog #12(a)・実験段階] c2/c41/c41sを二値でなく不足量/距離量で評価する（既定false=挙動不変）。 */
+    val quantitativeRangeEval: Boolean = false,
 )
 
 data class V6OptimizerResult(
@@ -97,11 +99,12 @@ object V6NativeOptimizer {
         base: Array<IntArray>,
         index: Int,
         seed: Long,
+        quantitativeRangeEval: Boolean = false,
     ): Array<IntArray> {
         val out = base.copy2D()
         val plan = HypothesisDiversityPolicy.startPlanFor(index)
         if (plan.mode == HypothesisStartMode.BASELINE) return out
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val rng = Random(actualSeed(seed) xor 0xD1A5EEDL xor
             (index.toLong() * -0x61c8864680b583ebL))
         repeat(plan.intensity) {
@@ -314,14 +317,14 @@ object V6NativeOptimizer {
             synchronized(progressLock) { onProgressRaw(phase, report, iters, elapsed) }
         }
         val chosen = SelectionHeuristics.chooseAlgorithm(options.algorithm, options.totalBudgetSec)
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, options.quantitativeRangeEval)
         var schedule = HardRepairCore.hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
         // [N1b] 入口修復(hf67)は better(hard→weighted→total) 改善時のみ採用。既に良好な入力
         //   （前回結果の再最適化など）を破壊し、探索を劣化seedに係留する事故を防ぐ
         //   （運用ログ実例: 入力214 → 修復後HARD4/250 → 275秒が回復に浪費）。hf66(群内正規化)は無条件維持。
-        val entryReport = UnifiedViolationChecker.check(state, schedule)
+        val entryReport = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = options.quantitativeRangeEval)
         val repaired = HardRepairCore.hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
-        val repairedReport = UnifiedViolationChecker.check(state, repaired)
+        val repairedReport = UnifiedViolationChecker.check(state, repaired, quantitativeRangeEval = options.quantitativeRangeEval)
         val hf67Adopted = better(repairedReport, entryReport)
         if (hf67Adopted) schedule = repaired
         val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入力の勤務表を保持
@@ -360,13 +363,13 @@ object V6NativeOptimizer {
             //   （W0/W4のみ現行盤面のコピー=安全フロア維持）。旧実装は全仮説が同一盤面から出発しており、
             //   探索経路が異なっても頻繁に同じ吸引域へ収束していた（実データで8仮説→相異なる解1件を確認）。
             V6Algorithm.ALNS -> runMultiWorker(w, options, onProgress) { i, o, prog ->
-                runAlns(state, hypothesisStartFor(state, schedule, i, o.seed), o, full, shouldStop, prog)
+                runAlns(state, hypothesisStartFor(state, schedule, i, o.seed, o.quantitativeRangeEval), o, full, shouldStop, prog)
             }
             V6Algorithm.RSI -> runMultiWorker(w, options, onProgress) { i, o, prog ->
-                runRsi(state, hypothesisStartFor(state, schedule, i, o.seed), o, full, shouldStop, prog)
+                runRsi(state, hypothesisStartFor(state, schedule, i, o.seed, o.quantitativeRangeEval), o, full, shouldStop, prog)
             }
             V6Algorithm.RSI_PLUS -> runMultiWorker(w, options, onProgress) { i, o, prog ->
-                runRsiPlus(state, hypothesisStartFor(state, schedule, i, o.seed), o, full, shouldStop, prog)
+                runRsiPlus(state, hypothesisStartFor(state, schedule, i, o.seed, o.quantitativeRangeEval), o, full, shouldStop, prog)
             }
             // [3.267.0/adaptive hypothesis epochs] 1回起動して終了を待つ旧協力ポートフォリオ（各仮説に
             //   異なる方式を割当て keep-best で最良採用）では、入口を多様化しても収束後は同じ吸引域へ
@@ -380,12 +383,12 @@ object V6NativeOptimizer {
         //   しなかった経路でも走る保険）。keep-best 照合＝退化不能。ユーザー実例(8/11・8/17)の詰み局面を解く。
         var resultSched = result.schedule
         run {
-            val preRep = UnifiedViolationChecker.check(state, resultSched)
+            val preRep = UnifiedViolationChecker.check(state, resultSched, quantitativeRangeEval = options.quantitativeRangeEval)
             if (preRep.hard > 0 && (preRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
                 val cand = resultSched.copy2D()
                 val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL))
                 if (n > 0) {
-                    val candRep = UnifiedViolationChecker.check(state, cand)
+                    val candRep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval = options.quantitativeRangeEval)
                     if (better(candRep, preRep)) {
                         resultSched = cand
                         logs = logs + MirrorLog(tag = "ChainFill",
@@ -396,9 +399,9 @@ object V6NativeOptimizer {
         }
         // [review #3] Final epilogue polish only when the caller isn't running its own post chain.
         val polished = if (options.postPolish && !shouldStop())
-            hf80PostPolish(state, resultSched, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop)
+            hf80PostPolish(state, resultSched, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop, options.quantitativeRangeEval)
         else PolishResult(resultSched, emptyList(), 0)
-        val finalReport = UnifiedViolationChecker.check(state, polished.schedule)
+        val finalReport = UnifiedViolationChecker.check(state, polished.schedule, quantitativeRangeEval = options.quantitativeRangeEval)
         logs = logs + polished.logs + MirrorLog(
             tag = "V6Dispatcher",
             message = "完了 algorithm=$chosen HARD=${finalReport.hard} total=${finalReport.total} elapsed=${nowMs() - started}ms",
@@ -534,10 +537,10 @@ object V6NativeOptimizer {
         val globalImproves = java.util.concurrent.atomic.AtomicInteger(0)
         val archive = AdaptiveEliteArchive()
 
-        val sharedTrajectories = Array(workers) { i -> hypothesisStartFor(state, entry, i, baseSeed) }
-        val initialReports = Array(workers) { i -> UnifiedViolationChecker.check(state, sharedTrajectories[i]) }
+        val sharedTrajectories = Array(workers) { i -> hypothesisStartFor(state, entry, i, baseSeed, options.quantitativeRangeEval) }
+        val initialReports = Array(workers) { i -> UnifiedViolationChecker.check(state, sharedTrajectories[i], quantitativeRangeEval = options.quantitativeRangeEval) }
         var globalBest = entry.copy2D()
-        var globalReport = UnifiedViolationChecker.check(state, globalBest)
+        var globalReport = UnifiedViolationChecker.check(state, globalBest, quantitativeRangeEval = options.quantitativeRangeEval)
         var globalLogs: List<MirrorLog> = emptyList()
         archive.register(
             entry, globalReport, HypothesisEpochRole.BASELINE_REFINE, worker = 0, epoch = 0, bridge = false,
@@ -646,8 +649,9 @@ object V6NativeOptimizer {
                         assignment = assignment,
                         seed = roleSeed,
                         shouldStop = shouldStop,
+                        quantitativeRangeEval = options.quantitativeRangeEval,
                     )
-                    val startReport = UnifiedViolationChecker.check(state, start)
+                    val startReport = UnifiedViolationChecker.check(state, start, quantitativeRangeEval = options.quantitativeRangeEval)
                     archive.register(
                         start, startReport, assignment.role, i, epoch,
                         bridge = startReport.hard == snapshot.second.hard + 1,
@@ -956,8 +960,9 @@ object V6NativeOptimizer {
         assignment: HypothesisEpochAssignment,
         seed: Long,
         shouldStop: () -> Boolean,
+        quantitativeRangeEval: Boolean = false,
     ): Array<IntArray> {
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val rng = Random(seed)
         val n = max(1, assignment.intensity)
         return when (assignment.role) {
@@ -969,7 +974,7 @@ object V6NativeOptimizer {
                     .take(3).map { it.copy2D() }.toList()
                 val relinked = EliteRelinking.elitePathRelink(state, globalBest, alternatives, shouldStop).first
                 if (RoleDiversityHelpers.scheduleDistance(globalBest, relinked) > 0) relinked
-                else hypothesisStartFor(state, globalBest, 7, seed)
+                else hypothesisStartFor(state, globalBest, 7, seed, quantitativeRangeEval)
             }
             HypothesisEpochRole.DAY_BLOCK_ALNS -> globalBest.copy2D().also { out ->
                 if (p.T > 0) {
@@ -980,7 +985,7 @@ object V6NativeOptimizer {
             HypothesisEpochRole.HARD_FAMILY_RSI -> {
                 var out = globalBest.copy2D()
                 repeat(n) {
-                    val rep = UnifiedViolationChecker.check(state, out)
+                    val rep = UnifiedViolationChecker.check(state, out, quantitativeRangeEval = quantitativeRangeEval)
                     val focus = when {
                         (rep.breakdown["covU"] ?: 0) > 0 -> "covU"
                         (rep.breakdown["c3n"] ?: 0) > 0 -> "c3n"
@@ -1002,7 +1007,7 @@ object V6NativeOptimizer {
             HypothesisEpochRole.PERSONAL_RSI -> {
                 var out = globalBest.copy2D()
                 repeat(n) {
-                    val rep = UnifiedViolationChecker.check(state, out)
+                    val rep = UnifiedViolationChecker.check(state, out, quantitativeRangeEval = quantitativeRangeEval)
                     val focus = when {
                         (rep.breakdown["apt"] ?: 0) > 0 -> "apt"
                         (rep.breakdown["high"] ?: 0) > 0 -> "high"
@@ -1174,7 +1179,7 @@ object V6NativeOptimizer {
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
     ): V6OptimizerResult {
         val t0 = nowMs()
-        val p = Problem(state.withSchedule(initial))
+        val p = Problem(state.withSchedule(initial), options.quantitativeRangeEval)
         val ev = Evaluator(p)
         var lastReport: ViolationReport? = null
         // [HF290 役割分担] explore 倍率で初期温度を調整（探索=高温/精製=低温）。explore=1.0 は従来と同一。
@@ -1186,7 +1191,7 @@ object V6NativeOptimizer {
         }
         val repaired = HardRepairCore.hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
         var outSched = repaired.schedule
-        var report = UnifiedViolationChecker.check(state, outSched)
+        var report = UnifiedViolationChecker.check(state, outSched, quantitativeRangeEval = options.quantitativeRangeEval)
         // [退化防止番兵 / 実機ログ起因] runAlns(578行)と同じ入力比keep-best。従来 runV5 だけ番兵が無く、SA+修復が
         //   入力より悪化した結果をそのまま返していた。RSI++ は Phase1 Seed に runV5 を使い、以降の各段は前段比
         //   keep-best のため、Phase1 の劣化(実測: 入力HARD=1/195 → Seed HARD=2/229)が全チェーンへ伝播し、
@@ -1194,7 +1199,7 @@ object V6NativeOptimizer {
         //   することで以降の全フェーズが「入力以上」から積み上がる。SA が入力より良い解を見つけた場合は素通し
         //   ＝多様化は維持。スコアリング不変(選択のみ・better()=hard→weighted→total)。
         val baseSched = normalizeSchedule(initial, p)
-        val baseReport = UnifiedViolationChecker.check(state, baseSched)
+        val baseReport = UnifiedViolationChecker.check(state, baseSched, quantitativeRangeEval = options.quantitativeRangeEval)
         val keptInput = better(baseReport, report)
         if (keptInput) { outSched = baseSched; report = baseReport }
         lastReport = report
@@ -1317,11 +1322,11 @@ object V6NativeOptimizer {
     ): V6OptimizerResult {
         val started = nowMs()
         val rng = Random(actualSeed(options.seed) xor 0xA17A5L)
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, options.quantitativeRangeEval)
         val restarts = max(1, options.restarts)
         val per = max(1, budgetSec / restarts)
         var globalBest = normalizeSchedule(initial, p)
-        var globalReport = UnifiedViolationChecker.check(state, globalBest)
+        var globalReport = UnifiedViolationChecker.check(state, globalBest, quantitativeRangeEval = options.quantitativeRangeEval)
         // [退化防止] hot-loop は生スコア(DeltaEvaluator)で最良を追うが、生スコアと weightedScore は
         // 目的が異なる（range は生スコアで hard、weightedScore で soft）。最終結果が入力(best)より
         // hard→weighted→total の辞書順で悪化しないよう、開始時の盤面を baseline として保持し最後に番兵比較する。
@@ -1367,7 +1372,7 @@ object V6NativeOptimizer {
                 val mySlot = runSlot()   // [3.335.0] 非 suspend なローカル関数からは取れないので先に捕まえる
                 fun syncReport() {
                     if (reportStale) {
-                        globalReport = UnifiedViolationChecker.check(state, globalBest)
+                        globalReport = UnifiedViolationChecker.check(state, globalBest, quantitativeRangeEval = options.quantitativeRangeEval)
                         if (ownsStatics(mySlot)) publishLiveBest(globalReport, globalBest)
                         reportStale = false
                     }
@@ -1416,7 +1421,7 @@ object V6NativeOptimizer {
             // [Stage8b] ネイティブ ALNS チャンクへ委譲。不可 or 番兵発火なら下の従来 Kotlin ループへ。
             val usedNative = nativeProblem != 0L && NativeGate.enabled && runRestartNative(cur, deadline, per, r)
             if (!usedNative) {
-            var curReport = UnifiedViolationChecker.check(state, cur)
+            var curReport = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = options.quantitativeRangeEval)
             eval.reset(cur)
             var curScore = eval.score()
             // [監査(未レビュー領域再監査) HF77修正] 旧コメント「再構築は restart 毎のみ」は実装と不一致だった。
@@ -1543,7 +1548,7 @@ object V6NativeOptimizer {
                             curScore = ns; curAug += moveAug
                             if (ns < globalScore) {
                                 globalBest = cur.copy2D(); globalScore = ns
-                                globalReport = UnifiedViolationChecker.check(state, cur)
+                                globalReport = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = options.quantitativeRangeEval)
                                 lastImproveIter = itersTotal
                                 reward = 4.0
                             } else reward = if (improvedCur) 2.0 else 1.0
@@ -1596,7 +1601,7 @@ object V6NativeOptimizer {
                         curScore = ns; curAug += moveAug
                         if (ns < globalScore) {
                             globalBest = fixed.copy2D(); globalScore = ns
-                            globalReport = UnifiedViolationChecker.check(state, fixed)
+                            globalReport = UnifiedViolationChecker.check(state, fixed, quantitativeRangeEval = options.quantitativeRangeEval)
                             lastImproveIter = itersTotal
                             reward = 4.0
                         } else reward = if (improvedCur) 2.0 else 1.0
@@ -1625,7 +1630,7 @@ object V6NativeOptimizer {
                     }
                 }
                 // destroyRepairViolations 用に curReport を周期更新（hint の鮮度確保）。
-                if (iter % 200L == 0L) curReport = UnifiedViolationChecker.check(state, cur)
+                if (iter % 200L == 0L) curReport = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = options.quantitativeRangeEval)
                 if (++sinceUpdate >= 64) {
                     for (k in opW.indices) {
                         if (opCnt[k] > 0) opW[k] = (0.8 * opW[k] + 0.2 * (opScore[k] / opCnt[k])).coerceAtLeast(0.05)
@@ -1662,8 +1667,8 @@ object V6NativeOptimizer {
     ): V6OptimizerResult {
         val started = nowMs()
         val rng = Random(actualSeed(options.seed) xor 0x451L)
-        var best = normalizeSchedule(initial, cachedProblem(state))
-        var bestReport = UnifiedViolationChecker.check(state, best)
+        var best = normalizeSchedule(initial, cachedProblem(state, options.quantitativeRangeEval))
+        var bestReport = UnifiedViolationChecker.check(state, best, quantitativeRangeEval = options.quantitativeRangeEval)
         var iters = 0L
         val rounds = max(2, min(8, budgetSec / 30 + 2))
         val per = max(1, budgetSec / rounds)
@@ -1867,8 +1872,8 @@ object V6NativeOptimizer {
                 }
             }
         }
-        val polish = hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, shouldStop)
-        val report = UnifiedViolationChecker.check(state, polish.schedule)
+        val polish = hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, shouldStop, options.quantitativeRangeEval)
+        val report = UnifiedViolationChecker.check(state, polish.schedule, quantitativeRangeEval = options.quantitativeRangeEval)
         logs.add(MirrorLog(tag = "RSIPlus", message = "Phase3/4 Refine+Polish: HARD=${report.hard} total=${report.total}"))
         return V6OptimizerResult(
             polish.schedule,
@@ -1893,7 +1898,8 @@ object V6NativeOptimizer {
         seconds: Int,
         seed: Long = 0x50F11L,
         shouldStop: () -> Boolean = { false },
-    ): Array<IntArray> = hf80PostPolish(state, schedule, max(1, seconds), seed, shouldStop).schedule
+        quantitativeRangeEval: Boolean = false,
+    ): Array<IntArray> = hf80PostPolish(state, schedule, max(1, seconds), seed, shouldStop, quantitativeRangeEval).schedule
 
     /**
      * 最終研磨フェーズ。[差分化移植] DeltaEvaluator を生スコア源にして直接評価で回す
@@ -1903,12 +1909,15 @@ object V6NativeOptimizer {
      * 不変条件: eval.at(i,j) == cur[i][j]。生スコアと weightedScore は目的が異なるため、
      * 入力(best)を baseline として保持し最後に番兵比較して退化を防ぐ。
      */
-    private suspend fun hf80PostPolish(state: MagiState, initial: Array<IntArray>, seconds: Int, seed: Long, shouldStop: () -> Boolean = { false }): PolishResult {
+    private suspend fun hf80PostPolish(
+        state: MagiState, initial: Array<IntArray>, seconds: Int, seed: Long,
+        shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false,
+    ): PolishResult {
         val started = nowMs()
         val rng = Random(seed)
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, quantitativeRangeEval)
         var best = initial.copy2D()
-        var bestReport = UnifiedViolationChecker.check(state, best)
+        var bestReport = UnifiedViolationChecker.check(state, best, quantitativeRangeEval = quantitativeRangeEval)
         val baseSched = best          // 入力スナップショット（best は改善時に別配列へ差し替わる）
         val baseReport = bestReport
         var iters = 0L
@@ -1924,7 +1933,7 @@ object V6NativeOptimizer {
         //   残り時間を続行する（NativeGate は閉鎖済み＝以後の実行は全て Kotlin）。
         val nat = runPolishChunksNative(p, best, deadline, stallMs, seed, shouldStop)
         iters += nat.iters
-        nat.best?.let { best = it; bestReport = UnifiedViolationChecker.check(state, it) }
+        nat.best?.let { best = it; bestReport = UnifiedViolationChecker.check(state, it, quantitativeRangeEval = quantitativeRangeEval) }
         if (nat.stalled) stalled = true
         if (nat.completed) {
             if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
@@ -1965,7 +1974,7 @@ object V6NativeOptimizer {
                                     val ns = eval.score()
                                     if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                         cur[i][j] = nw; curScore = ns
-                                        if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
+                                        if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval) }
                                     } else eval.apply(i, j, oldK)
                                 }
                             }
@@ -1984,7 +1993,7 @@ object V6NativeOptimizer {
                                 val ns = eval.score()
                                 if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                     cur[i][ja] = kb; cur[i][jb] = ka; curScore = ns
-                                    if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
+                                    if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval) }
                                 } else { eval.apply(i, ja, ka); eval.apply(i, jb, kb) }
                             }
                         }
@@ -2002,7 +2011,7 @@ object V6NativeOptimizer {
                                 val ns = eval.score()
                                 if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                     cur[i1][j] = k2; cur[i2][j] = k1; curScore = ns
-                                    if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
+                                    if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval) }
                                 } else { eval.apply(i1, j, k1); eval.apply(i2, j, k2) }
                             }
                         }
@@ -2017,7 +2026,7 @@ object V6NativeOptimizer {
                             val ns = eval.score()
                             if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                                 cur[fix[0]][fix[1]] = fix[2]; curScore = ns
-                                if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur) }
+                                if (betterScore(ns, bestScore)) { best = cur.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval) }
                             } else eval.apply(fix[0], fix[1], oldK)
                         }
                     }
@@ -2039,7 +2048,7 @@ object V6NativeOptimizer {
                     val ns = eval.score()
                     if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                         cur = fixed; curScore = ns
-                        if (betterScore(ns, bestScore)) { best = fixed.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, fixed) }
+                        if (betterScore(ns, bestScore)) { best = fixed.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, fixed, quantitativeRangeEval = quantitativeRangeEval) }
                     } else {
                         for (idx in 0 until nDiffs) {
                             val flat = diffBuf[idx]; eval.apply(flat / p.T, flat % p.T, cur[flat / p.T][flat % p.T])
