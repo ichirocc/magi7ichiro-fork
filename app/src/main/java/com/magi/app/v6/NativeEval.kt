@@ -10,7 +10,7 @@ object NativeEval {
     fun createHandle(p: Problem): Long {
         if (!NativeBridge.available) return 0L
         val s = p.S; val t = p.T; val k = p.K; val g = p.G
-        val meta = intArrayOf(s, t, k, g, p.restIdx, p.dow0, if (p.use2) 1 else 0)
+        val meta = intArrayOf(s, t, k, g, p.restIdx, p.dow0, if (p.use2) 1 else 0, if (p.quantitativeRangeEval) 1 else 0)
         val staff = IntArray(2 * s) { if (it < s) p.sgrp[it] else p.ssk[it - s] }
         val canDo = IntArray(s * k)
         for (i in 0 until s) for (kk in 0 until k) canDo[i * k + kk] = if (p.canDo(i, kk)) 1 else 0
