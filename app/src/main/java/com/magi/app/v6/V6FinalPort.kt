@@ -575,7 +575,7 @@ object V6FinalPort {
             chained.alternatives.mapIndexed { index, sched ->
                 AdaptiveElite(
                     schedule = sched.copy2D(),
-                    report = UnifiedViolationChecker.check(state, sched),
+                    report = UnifiedViolationChecker.check(state, sched, quantitativeRangeEval = quantitativeRangeEval),
                     role = HypothesisEpochRole.ELITE_RELINK,
                     worker = index,
                     epoch = 0,
