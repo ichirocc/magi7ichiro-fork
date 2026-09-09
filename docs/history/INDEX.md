@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- iter22/23 結果（分離条件）: debtLaneSlots（新良8/同等135/旧良27、品質-0.18%）・bestOfK（新良15/同等138/旧良17、品質-0.17%、必須増12件はlarge-infeasibleに集中）はいずれも不合格。ユーザー判断で検証・追加実装を中止、既定OFFのまま凍結（WeightDebt/ConstraintRepairInference/familyPriorityScoreに続く同系統4度目・5度目の不合格）（3.512.4）  → `docs/history/3.4xx.md`
 - debtLaneSlots/bestOfK: trimFrontierのビーム縮小バグ修正（負債候補0件でも非負債候補の枠がbeamWidth-debtLaneSlotsに固定され純粋な退行を起こしうる構造をユーザーの机上テストで発見）＋LoopBenchのdebtlane/bestofkフラグをレバー単体で分離測定できる条件へ修正。旧iter22/23は交絡した参考値のまま保存し採否判定には不使用。host JVM 全721テストgreen（3.512.3）  → `docs/history/3.4xx.md`
 - iter21 結果: quantitativeRangeEval（C2/C41/C41sの量的評価、backlog #12(a)）は170ペアで新良5/同等153/旧良12、品質±0.00%・速度-1.1%とも不合格、必須件数が増えた試行6件はlarge-infeasibleカテゴリのみ（他15分類は完全無風）＝ゲート不合格、既定OFF維持（3.512.2 追記）  → `docs/history/3.4xx.md`
 - V6FinalPort.handleOptimizeのトレーリングラムダ誤束縛を修正（backlog #12(a)でonProgressの後にquantitativeRangeEvalを追加したため本番呼出2箇所がAndroidビルドだけ壊れていた、EliteRelinkingで一度踏んだのと同じ罠の再発、host JVMでは検出不能=v6-engine-checkで発覚）。回帰テスト追加、host JVM 718テストgreen（3.512.1, backlog #12(a)）  → `docs/history/3.4xx.md`
