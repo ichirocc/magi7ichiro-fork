@@ -31,6 +31,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-09（3.515.1＝3.515.0への外部レビュー(/code-review)指摘2件を修正。(1)FixSuggesterのfocusShiftは日を指定できず別日の改善がこのセルの解消として誤カウントされ得た点を、返った手が実際にday j自体を動かすか確認するよう修正。(2)covO深追いが最適化完了直後の編集ロック解除・経過時間表示を最大8秒巻き込んでいた点を、pushReportを待たせない別ジョブ(deepCovODiagFollowUp)へ分離して修正）
+
 **最終更新**：2026-09-09（3.515.0＝covOの「なぜ減らないか」診断を複数職員・別日の組合せまで探すよう拡張（ユーザー指示。既存のFixSuggester「直し方を探す」を再利用。実データでは今回の5件とも解なしと確定＝low/high重み差による構造的トレードオフ）。副次的にViolationComponentRepair/V6FinalPortの無駄なsurplus計算を除去、深追いは最適化完了直後のみでライブ編集診断には影響しない設計）
 
 **最終更新**：2026-09-09（3.514.0＝combineExhaustPairs・lnsAdaptiveをUIの「詳細設定」からON/OFFできるように（ユーザー指示。不合格判定で凍結中のdebtLaneSlots等は対象外）。シフト集計カードの既定開閉を展開へ戻す（3.483.0 S-4を反転、ユーザー指示「シフト集計は開く。閉じない」））
