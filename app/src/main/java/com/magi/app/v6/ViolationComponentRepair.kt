@@ -64,8 +64,22 @@ object ViolationComponentRepair {
         /** [3.510.5/測定中] 設計 v3: 起点の族の 重み×現在量×係数 を SOFT 一時負債の予算にし、HARD 悪化と予算超えの枝をビームから外す（[ConstraintRepairInference]）。既定 OFF。 */
         val debtExploration: Boolean = false,
         val temporaryDebtFactor: Double = 2.0,
+        /** [測定中/二車線ビーム] debtExploration 時、ビーム幅のうち何枠を負債候補(est>baseEst)専用に予約するか。
+         *  0=予約なし（従来どおり est 昇順の単一トリムで、負債候補は非負債候補に埋もれて落選し得る）。
+         *  iter11(ConstraintRepairInference)が無差別だった一因として、explorable()は予算内かどうかしか見ず、
+         *  その後のビームトリムは est 昇順の単一ソートのため「悪化しない候補が8件以上あれば負債候補は
+         *  一切生き残れない」という構造上の飢餓が起きうる（未検証の仮説。debtExploration=false では無効）。 */
+        val debtLaneSlots: Int = 0,
         /** [測定中] セグメント内（解けるHARD／回数+SOFTセル／blocked）を 件数×重み×族の成功率 で降順に並べ替える。既定 OFF。 */
         val familyPriorityScoring: Boolean = false,
+        /** [測定中/bestOfK] 1 周あたり起点を最大何件 search() して結果を比較するか。既定 1=従来どおり
+         *  「最初に成功した起点をすぐ採用して次周へ」（起点の並び順に結果が依存する）。2 以上にすると、
+         *  複数の起点候補を実際に search() し、betterReport で客観的に最良の一つだけを採用する
+         *  （順序非依存になる代わり search() 呼出が増える）。search() は差分を当てて戻すだけで
+         *  盤面(work)/delta を変更しない（副作用なし）ので複数回呼んでも安全。
+         *  iter17(familyPriorityScore) が無差別だった一因＝「並べ替えても greedy な早期採用のままでは
+         *  順序依存のノイズに埋もれる」という未検証の仮説の検証用（familyPriorityScoring=false でも独立して使える）。 */
+        val bestOfK: Int = 1,
     )
 
     /** 盤面差分。`ops` は [職員, 日, 新シフト] の並び（[CombinatorialRepair.Candidate.ops] と同じ形）。 */
@@ -253,6 +267,15 @@ object ViolationComponentRepair {
             for (t in 0 until n) { val d = a.ids[t].compareTo(b.ids[t]); if (d != 0) return@Comparator d }
             a.ids.size.compareTo(b.ids.size)
         }
+        /** [測定中/二車線ビーム] debtExploration && debtLaneSlots>0 のときだけ、負債候補(est>baseEst)を
+         *  非負債候補と別枠でトリムする（互いを競わせない）。それ以外は従来どおりの単一トリム。 */
+        fun trimFrontier(candidates: List<Node>, baseEst: Long): List<Node> {
+            if (!params.debtExploration || params.debtLaneSlots <= 0) return candidates.sortedWith(nodeOrder).take(params.beamWidth)
+            val debtCap = params.debtLaneSlots.coerceAtMost(params.beamWidth)
+            val normalCap = params.beamWidth - debtCap
+            val (debtNodes, normalNodes) = candidates.partition { it.est > baseEst }
+            return normalNodes.sortedWith(nodeOrder).take(normalCap) + debtNodes.sortedWith(nodeOrder).take(debtCap)
+        }
 
         /** 成分 [remaining] の中で最浅の深さで見つかる「正式評価で改善する」トランザクション。無ければ null。 */
         fun search(anchor: Anchor, remaining: List<Int>): Pair<IntArray, ViolationReport>? {
@@ -265,7 +288,7 @@ object ViolationComponentRepair {
                 if (!params.debtExploration) return true
                 return ConstraintRepairInference.mayExplore(baseEst, est, allowance).also { if (!it) prunedDebt++ }
             }
-            var frontier = remaining.map { Node(intArrayOf(it), estimate(intArrayOf(it))) }.filter { explorable(it.est) }.sortedWith(nodeOrder).take(params.beamWidth)
+            var frontier = trimFrontier(remaining.map { Node(intArrayOf(it), estimate(intArrayOf(it))) }.filter { explorable(it.est) }, baseEst)
             var depth = 1
             while (frontier.isNotEmpty()) {
                 var best: Pair<IntArray, ViolationReport>? = null
@@ -314,7 +337,7 @@ object ViolationComponentRepair {
                         if (explorable(est)) next.add(Node(ids, est))
                     }
                 }
-                frontier = next.sortedWith(nodeOrder).take(params.beamWidth)
+                frontier = trimFrontier(next, baseEst)
                 depth++
             }
             return null
@@ -425,6 +448,7 @@ object ViolationComponentRepair {
         val committedByFamily = HashMap<String, Int>()
         val familyScoreFn: ((Anchor) -> Double)? = if (!params.familyPriorityScoring) null
             else { a -> ConstraintRepairInference.familyPriorityScore(bestRep, a.family, triedByFamily[a.family] ?: 0, committedByFamily[a.family] ?: 0) }
+        class Found(val anchor: Anchor, val chosen: IntArray, val rep: ViolationReport)
         outer@ while (!shouldStop() && evaluations < params.maxEvaluations && estimates < params.maxEstimates) {
             val currentAnchors = anchors(bestRep, infeasibleSlots, familyScoreFn)
             while (patches.size > poolCount) patches.removeAt(patches.size - 1)
@@ -439,17 +463,25 @@ object ViolationComponentRepair {
                 .map { (a, ids) -> a to dropLonePinBreakers(ids.filter { it !in used }) }.filter { it.second.isNotEmpty() }
             anchorCount = sets.size
             var committed = false
+            // bestOfK<=1: 従来どおり最初に成功した起点で即採用。bestOfK>=2: 最大 bestOfK 件を実際に search() し、
+            // betterReport で客観的に最良の一つだけを採用する（順序非依存。search() は副作用なし＝複数回呼んでも安全）。
+            val found = ArrayList<Found>()
             for ((anchor, ids) in sets.take(params.maxAnchors)) {
                 if (shouldStop() || evaluations >= params.maxEvaluations || estimates >= params.maxEstimates) break
                 anchorsTried++; maxSet = maxOf(maxSet, ids.size)
                 triedByFamily.merge(anchor.family, 1, Int::plus)
                 val (chosen, rep) = search(anchor, ids) ?: continue
-                committedByFamily.merge(anchor.family, 1, Int::plus)
-                for (id in chosen) for (op in patches[id].ops) {
+                found.add(Found(anchor, chosen, rep))
+                if (found.size >= maxOf(1, params.bestOfK)) break
+            }
+            if (found.isNotEmpty()) {
+                val best = found.reduce { a, b -> if (betterReport(b.rep, a.rep)) b else a }
+                committedByFamily.merge(best.anchor.family, 1, Int::plus)
+                for (id in best.chosen) for (op in patches[id].ops) {
                     if (work[op[0]][op[1]] != op[2]) { work[op[0]][op[1]] = op[2]; delta.apply(op[0], op[1], op[2]) }
                 }
-                bestRep = rep; applied++; used.addAll(chosen.filter { it < poolCount })   // 起点生成の候補は毎周作り直す
-                acceptedLabels.add(anchor.label + ": " + chosen.joinToString("+") { patches[it].hint.ifBlank { patches[it].mechanism } } + "(k=${chosen.size})")
+                bestRep = best.rep; applied++; used.addAll(best.chosen.filter { it < poolCount })   // 起点生成の候補は毎周作り直す
+                acceptedLabels.add(best.anchor.label + ": " + best.chosen.joinToString("+") { patches[it].hint.ifBlank { patches[it].mechanism } } + "(k=${best.chosen.size})")
                 committed = true
                 continue@outer
             }

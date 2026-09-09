@@ -85,6 +85,23 @@ class ZeroCapExclusionTest {
         assertFalse("外した入力を基準にするので番兵は発火しない", res.logs.any { it.tag == "Sentinel" })
     }
 
+    /** [3.512.1/回帰] `handleOptimize` は本番2箇所（MagiViewModel/OptimizationWorker）から
+     *  `onProgress` を**末尾の名前なしトレーリングラムダ**で渡される。`quantitativeRangeEval`
+     *  （backlog #12(a)）を `onProgress` の**後**に追加していたため、トレーリングラムダが
+     *  `quantitativeRangeEval`（Boolean）へ誤束縛され Android ビルドだけが壊れていた
+     *  （host JVM は UI 層を含まないため検出不能だった＝v6-engine-check で発覚）。
+     *  同じ呼出形をホストで固定し、次に同じ順序ミスが起きたらここでコンパイルが落ちる。 */
+    @Test
+    fun handleOptimizeAcceptsOnProgressAsTrailingLambdaLikeProductionCallers() = runBlocking {
+        val s = state()
+        var progressCalls = 0
+        val res = V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true) { phase, _, _, _ ->
+            if (phase.isNotEmpty()) progressCalls++
+        }
+        assertTrue("onProgressがString/ViolationReport?/Long/Longとして正しく呼ばれる", progressCalls > 0)
+        assertEquals(0, res.report.hard)
+    }
+
     @Test
     fun wishForCappedShiftStaysPinnedAndIsTheOnlyPlacement() = runBlocking {
         val s = state(wishes = mapOf("0,1" to 1))
