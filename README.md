@@ -31,6 +31,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-09（3.512.3＝ユーザーの机上テストで`trimFrontier`のビーム縮小バグを発見・修正（負債候補0件でも非負債候補の枠がbeamWidth-debtLaneSlotsに固定され純粋な退行を起こしうる構造）。`LoopBench`の`debtlane`/`bestofk`フラグをレバー単体で分離測定できる条件へ修正、旧測定値は交絡した参考値として保存・採否判定には不使用）
+
 **最終更新**：2026-09-09（3.512.2＝quantitativeRangeEval（C2/C41/C41sの量的評価、backlog #12(a)）はiter21で**不合格**（170ペア新良5/同等153/旧良12、品質±0.00%・速度-1.1%とも不合格、必須件数が増えた試行6件はlarge-infeasibleカテゴリのみ）・既定OFF維持）
 
 **最終更新**：2026-09-09（3.512.1＝`V6FinalPort.handleOptimize`のトレーリングラムダ誤束縛を修正。backlog #12(a)で`quantitativeRangeEval`を`onProgress`の後に追加したため本番呼出2箇所（MagiViewModel/OptimizationWorker）がAndroidビルドだけ壊れていた（`EliteRelinking`で一度踏んだのと同じ罠の再発、host JVMでは検出不能でCIで発覚）。回帰テスト追加）

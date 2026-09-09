@@ -111,9 +111,12 @@ fun main(args: Array<String>) {
         "c42flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishEnabled = true)
         "c1component" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepair = true)
         "quantrange" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, quantitativeRangeEval = true)
-        "debtlane" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to
+        // [3.512.3] debtExploration/familyPriorityScoring は旧腕にも入れて固定する＝debtlane/bestofk単体のレバーだけを
+        //   分離して測る（旧: debtExploration=false vs 新: debtExploration=true+debtLaneSlots=2 だと、iter11で
+        //   既に不合格判定済みのdebtExploration自体の効果と混ざり、debtLaneSlotsという新レバー単体の効果を測れない）。
+        "debtlane" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 0)) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2))
-        "bestofk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to
+        "bestofk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true, bestOfK = 1)) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true, bestOfK = 3))
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
