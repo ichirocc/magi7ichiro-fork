@@ -217,7 +217,7 @@ object ViolationComponentRepair {
         delta.reset(work)
         // [Iteration 3] 構造的に埋められない人員不足の枠（担当できる人数 < 必要数）。起点の順位を下げるだけで、候補は除かない。
         val infeasibleSlots: Set<Long> = runCatching {
-            V6PortAnalyzer.diagnoseCoverage(state, work, bestRep).shortfalls
+            V6PortAnalyzer.diagnoseCoverage(state, work, bestRep, includeSurplus = false).shortfalls
                 .filter { it.verdict == CoverageVerdict.INFEASIBLE }.map { it.shiftIndex * 1000L + it.dayIndex }.toSet()
         }.getOrDefault(emptySet())
         // 厳密ピン（lo==hi）の (職員, シフト)。推定段階で「新たに崩す」枝を落とすために使う（exactPinRegression と同じ判定）。

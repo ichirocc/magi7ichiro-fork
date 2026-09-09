@@ -872,7 +872,7 @@ object V6FinalPort {
             val covUNow = bd["covU"] ?: 0
             val covUFloor = if (hardFloor > 0 && covUNow in 1..hardFloor) covUNow else 0
             val covUBlocked = if (covUNow <= 0) 0 else runCatching {
-                covUBlockedAmount(V6PortAnalyzer.diagnoseCoverage(state, finalSched, finalReport))
+                covUBlockedAmount(V6PortAnalyzer.diagnoseCoverage(state, finalSched, finalReport, includeSurplus = false))
             }.getOrDefault(0)
             val covUWall = covUStructuralWall(covUNow, hardFloor, covUBlocked)
             for (key in MirrorKeys.all) {

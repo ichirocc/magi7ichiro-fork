@@ -237,6 +237,12 @@ object V6PortAnalyzer {
         const val SURPLUS_PROBE_BUDGET = 240
         const val ADJACENT_SEED = 7L
         const val MIN_RELAX_CANDIDATES = 2
+        /** [3.515.0] deepSurplus=true 時、FixSuggester（複数職員・別日を含む7種の手）へ回す時間の合計上限。
+         *  実測（実データ4件・S=11/T=31）: 1呼出あたり完走で900〜1700ms。呼び出し元はrunLabel!=null
+         *  （最適化完了直後）でだけ deepSurplus=true にするため、この秒数は編集操作の応答性には掛からない。 */
+        const val SURPLUS_DEEP_BUDGET_MS = 8000L
+        /** 1呼出あたりの上限（総予算を早い者勝ちで使い切らせない）。 */
+        const val SURPLUS_DEEP_PER_CALL_MS = 2000L
     }
 
     /** `findCovUChain`（探索本体と同一関数）を [Probe.CHAIN_SEEDS] 通りの rng 順で試し、1 つでも成立すれば真。 */
@@ -256,13 +262,19 @@ object V6PortAnalyzer {
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
         report: ViolationReport = UnifiedViolationChecker.check(state, schedule),
         quantitativeRangeEval: Boolean = false,
+        /** [3.515.0] surplus(covO)診断は他2呼出元（ViolationComponentRepair・V6FinalPortの残存分析）が
+         *  shortfalls しか読まないのに毎回計算していた無駄。falseで丸ごと省く（既定trueで挙動不変）。 */
+        includeSurplus: Boolean = true,
+        /** [3.515.0] trueなら同日1手で改善しない在勤者を、他の職員・別日との組合せまでFixSuggesterで
+         *  深追いする（数秒かかりうるためライブ診断では既定false、経緯: history 3.515.0）。 */
+        deepSurplus: Boolean = false,
     ): CoverageDiagnosis {
         val p = cachedProblem(state, quantitativeRangeEval)
         val norm = normalizeSchedule(schedule, p)
         val cov = coverage(p, norm)
         val shortfalls = diagnoseShortfalls(state, p, norm, cov)
         val relaxations = buildRelaxations(state, p, norm, shortfalls.list)
-        val surplus = diagnoseSurpluses(state, p, norm, cov, report)
+        val surplus = if (includeSurplus) diagnoseSurpluses(state, p, norm, cov, report, deepSurplus) else Surpluses(emptyList(), 0)
         return CoverageDiagnosis(shortfalls.total, shortfalls.infeasible, shortfalls.fixable, shortfalls.list, relaxations, surplus.total, surplus.list)
     }
 
@@ -395,13 +407,19 @@ object V6PortAnalyzer {
      * isBetter に負けて採用されない＝件数自体は「動かせるか」の構造診断であり、
      * 「動かせるのに動いていない」ことの説明にはならない点に注意（読取専用・スコア不変）。
      * [3.406.0] だから「動かせる」と言う前に、同じ目的関数で実際に 1 手試す（予算 [Probe.SURPLUS_PROBE_BUDGET]）。
+     * [3.515.0] 同日1手で改善しない在勤者は、`deepSurplus=true` のときだけ [FixSuggester]（「直し方を探す」
+     * と同一の探索＝他の職員との交換・別日への自己付け替え等）まで追加で試す（経緯: history 3.515.0）。
      */
-    private fun diagnoseSurpluses(state: MagiState, p: Problem, norm: Array<IntArray>, cov: Array<IntArray>, report: ViolationReport): Surpluses {
+    private fun diagnoseSurpluses(
+        state: MagiState, p: Problem, norm: Array<IntArray>, cov: Array<IntArray>, report: ViolationReport,
+        deepSurplus: Boolean = false,
+    ): Surpluses {
         fun c3nAt(i: Int, j: Int, newK: Int): Boolean = p.makesForbiddenRun(norm, i, j, newK)
         val surplusList = ArrayList<CoverageSurplus>()
         var totalSurplus = 0
         val probe = norm.copy2D()
         var probeBudget = Probe.SURPLUS_PROBE_BUDGET
+        var deepBudgetMs = if (deepSurplus) Probe.SURPLUS_DEEP_BUDGET_MS else 0L
         for (j in 0 until p.T) {
             for (k in 0 until p.K) {
                 val got = cov[j][k]
@@ -416,6 +434,8 @@ object V6PortAnalyzer {
                 //   275秒走ってなお 8件が残り、「『直し方を探す』で解消可」という断言が実測に裏切られていた
                 //   （3.401.0 の GuidedFix、3.344.0 の covU 側と同じ「診断が守れない約束をする」型）。
                 var freeImproving = 0
+                var deepImproving = 0
+                var deepTried = false
                 var probedAny = false
                 val famHits = HashMap<String, Int>()   // 「主因」＝試した手のうち最も多く最重悪化を出した族
                 for (i in 0 until p.S) {
@@ -436,6 +456,7 @@ object V6PortAnalyzer {
                         hasRoom -> {
                             free++
                             // 実際に1人動かして目的関数が改善するかを、最適化と同じ betterReport で確かめる。
+                            var improvedHere = false
                             for (m in alts) {
                                 if (probeBudget <= 0) break
                                 if (c3nAt(i, j, m)) continue
@@ -445,8 +466,17 @@ object V6PortAnalyzer {
                                 probe[i][j] = m
                                 val after = UnifiedViolationChecker.check(state, probe, quantitativeRangeEval = p.quantitativeRangeEval)
                                 probe[i][j] = k
-                                if (betterReport(after, report)) { freeImproving++; break }
+                                if (betterReport(after, report)) { freeImproving++; improvedHere = true; break }
                                 worstWorsenedFamily(after, report)?.let { famHits[it] = (famHits[it] ?: 0) + 1 }
+                            }
+                            // [3.515.0] 同日1手で負けた在勤者だけ深追い（他の職員・別日を含む7種の手）。
+                            if (!improvedHere && deepBudgetMs > 0) {
+                                deepTried = true
+                                val callBudget = minOf(deepBudgetMs, Probe.SURPLUS_DEEP_PER_CALL_MS)
+                                val t0 = EngineClock.nowMs()
+                                val deep = FixSuggester.suggest(state, norm, focusStaff = i, focusShift = k, maxResults = 1, deadlineMs = callBudget)
+                                deepBudgetMs -= (EngineClock.nowMs() - t0)
+                                if (deep.isNotEmpty()) deepImproving++
                             }
                         }
                         !blockedByC3n -> cascade++   // 代替はあるが、どこも受け皿がない＝玉突きが必要
@@ -456,6 +486,11 @@ object V6PortAnalyzer {
                 val hint = when {
                     // 実際に試して改善した＝『直し方を探す』も同じ手を見つける。ここでだけ断言してよい。
                     freeImproving > 0 -> "在勤${freeImproving}人は他シフトへ移すだけで全体が良くなります（勤務表でこのセルの『直し方を探す』で解消できます）"
+                    // [3.515.0] 同日1手は無いが、他の職員や別日との組合せなら『直し方を探す』が同じ手を見つける。
+                    deepImproving > 0 -> "在勤者を1人だけ動かす手はありませんが、他の職員や別日と組み合わせれば全体が良くなります" +
+                        "（勤務表でこのセルの『直し方を探す』で解消できます）"
+                    free > 0 && probedAny && deepTried -> "移せる先はありますが、1人で動かす手・他の職員や別日との組合せもどれも他の条件を悪化させるため最適化は採用しません" +
+                        "（この過剰を減らすには、その条件を緩めるか、過剰を受け入れる必要があります）"
                     free > 0 && probedAny -> "移せる先はありますが、1人動かす手はどれも他の条件を悪化させるため最適化は採用しません" +
                         "（この過剰を減らすには、その条件を緩めるか、過剰を受け入れる必要があります）"
                     free > 0 -> "移せる先はありますが、目的関数での確認は打ち切りました（枠が多いため）"
@@ -464,7 +499,7 @@ object V6PortAnalyzer {
                 }
                 surplusList.add(
                     CoverageSurplus(j, dayLabel(state.startDate, j), k, sym, need, got, excess,
-                        blockedFamily = if (freeImproving == 0 && probedAny) famHits.maxByOrNull { it.value }?.key else null,
+                        blockedFamily = if (freeImproving == 0 && deepImproving == 0 && probedAny) famHits.maxByOrNull { it.value }?.key else null,
                         reason = "在勤者中 動かせる${free}人・玉突き必要${cascade}人・希望固定${pinned}人・禁止連続${forbid}人。$hint",
                         pinnedStaff = pinnedIdx)
                 )
