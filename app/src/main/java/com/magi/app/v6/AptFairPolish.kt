@@ -41,12 +41,12 @@ internal object AptFairPolish {
      * 採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定(movable)・禁止連続
      * (makesForbiddenRun)を事前ガード。
      */
-    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L): V6HotfixPasses.CyclicSwapResult {
+    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         val rng = Random(seed)
@@ -75,7 +75,7 @@ internal object AptFairPolish {
         fun applyAndCheck(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
             val workBefore = work.copy2D()
             work[i][j] = toK
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBefore, work)
             if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
             if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -109,7 +109,7 @@ internal object AptFairPolish {
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
                 val workBefore = work.copy2D()
                 work[i][j] = b; work[i2][j] = a
-                val rep = UnifiedViolationChecker.check(state, work)
+                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBefore, work)
                 if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
                 if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -128,7 +128,7 @@ internal object AptFairPolish {
             val workBeforeRelocate = work.copy2D()
             work[i][j] = toK
             if (!needsChain) {
-                val rep = UnifiedViolationChecker.check(state, work)
+                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBeforeRelocate, work)
                 if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
                 if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -142,7 +142,7 @@ internal object AptFairPolish {
             if (chain == null) { work[i][j] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBeforeRelocate, work)
             if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
             if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -157,7 +157,7 @@ internal object AptFairPolish {
         while (pass < maxPasses) {
             if (shouldStop()) break
             var improved = false
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val highTargets = ArrayList<Pair<Int, Int>>()
             val lowTargets = ArrayList<Pair<Int, Int>>()
             for ((key, cls) in rep0.countViolations) {
@@ -267,12 +267,12 @@ internal object AptFairPolish {
      * 拒否するだけ）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定
      * (movable)・禁止連続(makesForbiddenRun)を事前ガード。
      */
-    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L): V6HotfixPasses.CyclicSwapResult {
+    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         val rng = Random(seed)
@@ -309,7 +309,7 @@ internal object AptFairPolish {
         fun applyAndCheck(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
             val workBefore = work.copy2D()
             work[i][j] = toK
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBefore, work)
             if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
             if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -344,7 +344,7 @@ internal object AptFairPolish {
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
                 val workBefore = work.copy2D()
                 work[i][j] = b; work[i2][j] = a
-                val rep = UnifiedViolationChecker.check(state, work)
+                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBefore, work)
                 if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
                 if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -363,7 +363,7 @@ internal object AptFairPolish {
             val workBeforeRelocate = work.copy2D()
             work[i][j] = toK
             if (!needsChain) {
-                val rep = UnifiedViolationChecker.check(state, work)
+                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBeforeRelocate, work)
                 if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
                 if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -377,7 +377,7 @@ internal object AptFairPolish {
             if (chain == null) { work[i][j] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBeforeRelocate, work)
             if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
             if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -392,7 +392,7 @@ internal object AptFairPolish {
         while (pass < maxPasses) {
             if (shouldStop()) break
             var improved = false
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val locs = rep0.distLocations["fair"].orEmpty()
             if (locs.isEmpty()) break
             val counts = countMatrix(p, work)

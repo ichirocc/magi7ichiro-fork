@@ -255,8 +255,9 @@ object V6PortAnalyzer {
         state: MagiState,
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
         report: ViolationReport = UnifiedViolationChecker.check(state, schedule),
+        quantitativeRangeEval: Boolean = false,
     ): CoverageDiagnosis {
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val norm = normalizeSchedule(schedule, p)
         val cov = coverage(p, norm)
         val shortfalls = diagnoseShortfalls(state, p, norm, cov)
@@ -442,7 +443,7 @@ object V6PortAnalyzer {
                                 probeBudget--
                                 probedAny = true
                                 probe[i][j] = m
-                                val after = UnifiedViolationChecker.check(state, probe)
+                                val after = UnifiedViolationChecker.check(state, probe, quantitativeRangeEval = p.quantitativeRangeEval)
                                 probe[i][j] = k
                                 if (betterReport(after, report)) { freeImproving++; break }
                                 worstWorsenedFamily(after, report)?.let { famHits[it] = (famHits[it] ?: 0) + 1 }

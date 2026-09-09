@@ -18,12 +18,12 @@ import java.util.Random
  * [V6HotfixPasses] に残置される共有返り型のため、ここからは完全修飾で構築する。
  */
 internal object C3FamilyPolish {
-    fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         if (p.cons3mn.isEmpty()) {
@@ -41,7 +41,7 @@ internal object C3FamilyPolish {
         while (pass < maxPasses) {
             if (shouldStop()) break
             var improved = false
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val anchors = ArrayList<Pair<Int, Int>>()
             for ((key, fams) in rep0.cellFamilies) {
                 if ("vio-c3mn" !in fams) continue
@@ -70,7 +70,7 @@ internal object C3FamilyPolish {
                     val workBeforeMove = work.copy2D()
                     work[i][j] = alt
                     if (!needsChain) {
-                        val rep = UnifiedViolationChecker.check(state, work)
+                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                         val pinBad = exactPinRegression(p, workBeforeMove, work)
                         if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeMove, work)
                         if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; improved = true; done = true }
@@ -88,7 +88,7 @@ internal object C3FamilyPolish {
                     if (chain == null) { work[i][j] = curK; continue }
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                     chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-                    val rep = UnifiedViolationChecker.check(state, work)
+                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                     val pinBad = exactPinRegression(p, workBeforeMove, work)
                     if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeMove, work)
                     if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; improved = true; done = true }
@@ -141,12 +141,12 @@ internal object C3FamilyPolish {
      * 最終採否は checker + isBetter + exactPinRegression が担保する。
      * 崩した先で被覆が悪化するなら `findCovUChain` の玉突き連鎖で埋め直すのは既存パスと同じ。
      */
-    fun applyC3nPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3EL): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3nPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3EL, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         if (p.cons3n.isEmpty()) {
@@ -169,7 +169,7 @@ internal object C3FamilyPolish {
         while (pass < maxPasses) {
             if (shouldStop()) break
             var improved = false
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             // アンカー = c3n 違反セル。cellFamilies を使うのは violations(最重1クラス)だと同一セルに
             //   より重い族が乗ったとき取りこぼすため（3.205.0 の anchor-shadowing と同じ理由）。
             val anchors = ArrayList<Pair<Int, Int>>()
@@ -214,7 +214,7 @@ internal object C3FamilyPolish {
                         val hint = "${state.staff.getOrNull(i)?.name ?: "#$i"}(${state.shifts.getOrNull(curK)?.kigou ?: curK})"
                         if (!needsChain) {
                             evaluated++
-                            val rep = UnifiedViolationChecker.check(state, work)
+                            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                             val pinBad = exactPinRegression(p, workBeforeMove, work)
                             if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeMove, work)
                             if (betterReport(rep, bestRep) && !pinBad) {
@@ -233,7 +233,7 @@ internal object C3FamilyPolish {
                         val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                         chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                         evaluated++
-                        val rep = UnifiedViolationChecker.check(state, work)
+                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                         val pinBad = exactPinRegression(p, workBeforeMove, work)
                         if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeMove, work)
                         if (betterReport(rep, bestRep) && !pinBad) {
@@ -289,12 +289,12 @@ internal object C3FamilyPolish {
      * または runEnd+1)を該当シフトへ拡張する。拡張元シフトの被覆が悪化する場合は`findCovUChain`
      * （C1Polish/C3mnPolish/RangePolishと同一パターン）で玉突き修復。採否はisBetter keep-best＝退化不能。
      */
-    fun applyC3RunPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3A2L): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3RunPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3A2L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         data class RunRule(val k: Int, val len: Int)
@@ -321,7 +321,7 @@ internal object C3FamilyPolish {
             val workBeforeExtend = work.copy2D()
             work[i][extDay] = toK
             if (!needsChain) {
-                val rep = UnifiedViolationChecker.check(state, work)
+                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBeforeExtend, work)
                 if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeExtend, work)
                 if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -334,7 +334,7 @@ internal object C3FamilyPolish {
             if (chain == null) { work[i][extDay] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBeforeExtend, work)
             if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeExtend, work)
             if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
@@ -348,7 +348,7 @@ internal object C3FamilyPolish {
         while (pass < maxPasses) {
             if (shouldStop()) break
             var improved = false
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val anchors = ArrayList<Pair<Int, Int>>()
             for ((key, fams) in rep0.cellFamilies) {
                 if ("vio-c3" !in fams && "vio-c3m" !in fams) continue
@@ -409,12 +409,12 @@ internal object C3FamilyPolish {
      * findCovUChain玉突き」パターンをそのまま適用する。採否はisBetter(hard→weighted→total)
      * keep-best＝退化不能。
      */
-    fun applyC3PatternPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3B4L): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3PatternPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3B4L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         val rules = ArrayList<C3>()
@@ -475,7 +475,7 @@ internal object C3FamilyPolish {
                     val workBeforePattern = work.copy2D()
                     work[i][j] = alt
                     if (!needsChain) {
-                        val rep = UnifiedViolationChecker.check(state, work)
+                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                         if (adoptionGate(p, workBeforePattern, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true; done = true }
                         else work[i][j] = curK
                         continue
@@ -486,7 +486,7 @@ internal object C3FamilyPolish {
                     if (chain == null) { work[i][j] = curK; continue }
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                     chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-                    val rep = UnifiedViolationChecker.check(state, work)
+                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                     val pinBad = exactPinRegression(p, workBeforePattern, work)
                     if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforePattern, work)
                     if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; improved = true; done = true }

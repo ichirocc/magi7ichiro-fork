@@ -132,7 +132,7 @@ object CombinatorialRepair {
                             //   ピン破りの組合せぶんだけ checker 呼び出しが減る（実データではプールの大半が
                             //   ピン破り＝AptPolish 69/71・FairPolish 20/20）。
                             val pinBad = p != null && exactPinRegression(p, workBeforeCombo, work)
-                            rep = if (pinBad) null else UnifiedViolationChecker.check(state, work)
+                            rep = if (pinBad) null else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = p?.quantitativeRangeEval ?: false)
                             ok = rep != null && isBetter(rep, bestRep)
                         } finally {
                             // 評価器・ピン検査・isBetter のどこで例外になっても試行手を残さない。

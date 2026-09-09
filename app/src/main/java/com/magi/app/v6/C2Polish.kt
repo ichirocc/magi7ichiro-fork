@@ -17,11 +17,11 @@ import com.magi.app.model.MagiState
  * （まず最小差分で測る＝過剰実装を避ける。要るかは `tools/loop` の結果を見てから）。
  */
 internal object C2Polish {
-    fun applyC2Polish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }): V6HotfixPasses.CyclicSwapResult {
+    fun applyC2Polish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         // [3.270.0 と同型] wishLocked は canDo ガード込みで「動かせるか」を正しく判定する。
@@ -48,7 +48,7 @@ internal object C2Polish {
             if (days.size < deficit) return false
             val workBefore = work.copy2D()
             for (j in days) work[i][j] = shiftIdx
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBefore, work)
             if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
             if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }

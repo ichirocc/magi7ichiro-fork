@@ -109,11 +109,22 @@ struct C42r { int g1, s1, g2, s2; };
 static inline long long c42PairCount(bool sameSet, long long n1, long long n2) {
     return sameSet ? n1 * (n1 - 1) / 2 : n1 * n2;
 }
+// [backlog #12(a)・実験段階] Kotlin の c2Amount(Evaluator.kt) と同一の式。quantitativeRangeEval が
+//   true のときだけ、二値(#件)の代わりにこの不足量を使う。既定は呼ばない。
+static inline long long c2Amount(long long z, long long count) {
+    return z < count ? (count - z) : 0;
+}
+// [backlog #12(a)・実験段階] Kotlin の rangeDistance(Evaluator.kt) と同一の式。用途は c2Amount と同じ。
+static inline long long rangeDistance(long long z, long long l, long long u) {
+    return (z < l ? (l - z) : 0) + (z > u ? (z - u) : 0);
+}
 struct C3r { std::vector<int> seq; bool singleRun; };
 
 struct MagiProblem {
     int S = 0, T = 0, K = 0, G = 0, restIdx = 0, dow0 = 0;
     bool use2 = false;
+    // [backlog #12(a)・実験段階] Kotlin Problem.quantitativeRangeEval と同義。既定false=挙動不変。
+    bool quantitativeRangeEval = false;
     std::vector<int> sgrp, ssk;              // S
     std::vector<uint8_t> canDo;              // S*K
     std::vector<int> wish;                   // S*T (-1 = none)
@@ -289,7 +300,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
             const int* row = a + (size_t)i * T;
             int z = 0;
             for (int j = 0; j < T; j++) if (row[j] == c.si) z++;
-            if (z < c.c) soft += 1;
+            soft += p.quantitativeRangeEval ? c2Amount(z, c.c) : (z < c.c ? 1 : 0);
         }
     }
 
@@ -298,7 +309,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
         for (int j = 0; j < T; j++) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            if (z < c.l || c.u < z) soft += 1;
+            soft += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
         }
     }
     for (const auto& c : p.cons42) {
@@ -318,7 +329,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
         for (int j = 0; j < T; j++) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            if (z < c.l || c.u < z) soft += 1;
+            soft += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
         }
     }
     for (const auto& c : p.cons42s) {
@@ -538,7 +549,8 @@ struct SaChunk {
         long long v = 0;
         for (const auto& c : p.cons2) {
             if (!p.cd(i, c.si)) continue;
-            if (ssn[(size_t)i * K + c.si] < c.c) v += 1;
+            long long z = ssn[(size_t)i * K + c.si];
+            v += p.quantitativeRangeEval ? c2Amount(z, c.c) : (z < c.c ? 1 : 0);
         }
         return v;
     }
@@ -636,7 +648,7 @@ struct SaChunk {
             const uint64_t* dm = &dayShiftMask[(size_t)j * K];
             for (const auto& c : p.cons41) {
                 int z = __builtin_popcountll(dm[c.s] & grpMask[(size_t)c.g]);
-                if (z < c.l || c.u < z) v += 1;
+                v += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
             }
             for (const auto& c : p.cons42) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & grpMask[(size_t)c.g1]);
@@ -645,7 +657,7 @@ struct SaChunk {
             }
             for (const auto& c : p.cons41s) {
                 int z = __builtin_popcountll(dm[c.s] & sskMask[(size_t)c.g]);
-                if (z < c.l || c.u < z) v += 1;
+                v += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
             }
             for (const auto& c : p.cons42s) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & sskMask[(size_t)c.g1]);
@@ -657,7 +669,7 @@ struct SaChunk {
         for (const auto& c : p.cons41) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            if (z < c.l || c.u < z) v += 1;
+            v += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
         }
         for (const auto& c : p.cons42) {
             long long n1 = 0, n2 = 0;
@@ -671,7 +683,7 @@ struct SaChunk {
         for (const auto& c : p.cons41s) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            if (z < c.l || c.u < z) v += 1;
+            v += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
         }
         for (const auto& c : p.cons42s) {
             long long n1 = 0, n2 = 0;
@@ -2394,6 +2406,8 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     auto* p = new MagiProblem();
     p->S = meta[0]; p->T = meta[1]; p->K = meta[2]; p->G = meta[3];
     p->restIdx = meta[4]; p->dow0 = meta[5]; p->use2 = meta[6] != 0;
+    // [backlog #12(a)・実験段階] 旧レイアウト(7要素)との互換のため、8要素目が無ければ既定false。
+    p->quantitativeRangeEval = meta.size() >= 8 && meta[7] != 0;
     const int S = p->S, T = p->T, K = p->K, G = p->G;
     if (S <= 0 || T <= 0 || K <= 0 || G < 0) { delete p; return 0; }
 

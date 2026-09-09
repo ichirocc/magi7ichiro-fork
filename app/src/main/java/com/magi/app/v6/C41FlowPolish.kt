@@ -16,11 +16,12 @@ import com.magi.app.model.MagiState
 internal object C41FlowPolish {
     fun applyC41FlowPolish(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false },
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
@@ -76,7 +77,7 @@ internal object C41FlowPolish {
                     if (solved.assignment.indices.all { solved.assignment[it] == oldDay[it] }) continue
                     val workBefore = work.copy2D()
                     for (idx in movableMembers.indices) work[movableMembers[idx]][j] = solved.assignment[idx]
-                    val rep = UnifiedViolationChecker.check(state, work)
+                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                     val gate = adoptionGate(p, workBefore, work, rep, bestRep, pinBlocks)
                     if (gate.accepted) { bestRep = rep; applied++; improvedAny = true }
                     else for (idx in movableMembers.indices) work[movableMembers[idx]][j] = oldDay[idx]

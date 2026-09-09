@@ -36,10 +36,11 @@ internal object C1TemporalFlowPolish {
         trials: Int = 4,
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xC1F10FL,
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         var rowNoGain = 0                       // 行の c1 が減らず候補にならなかった数
@@ -165,7 +166,7 @@ internal object C1TemporalFlowPolish {
             }
             val newRowFires = rowC1Fires(trialWork, i)
             if (newRowFires >= rowC1Fires(work, i)) { rowNoGain++; return null }
-            val rep = UnifiedViolationChecker.check(state, trialWork)
+            val rep = UnifiedViolationChecker.check(state, trialWork, quantitativeRangeEval = quantitativeRangeEval)
             // [3.356.0/実機ログ起因] 旧ログは「DP候補12 flow失敗0 採用0回」までで、12件が
             //   ①行のc1が減らない ②目的関数に負けた ③厳密ピンを崩す のどれで落ちたかが読めなかった。
             //   判定の順序は変えず（better → ピン）、落ちた理由だけを数える。

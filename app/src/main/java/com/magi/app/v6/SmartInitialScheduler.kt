@@ -21,9 +21,9 @@ import kotlin.math.max
 object SmartInitialScheduler {
     private data class C1Rule(val days: Int, val minimum: Int)
 
-    fun generate(state: MagiState, seed: Long = 0x517A2L): ScheduleRunResult {
+    fun generate(state: MagiState, seed: Long = 0x517A2L, quantitativeRangeEval: Boolean = false): ScheduleRunResult {
         val t0 = System.nanoTime()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
         val restK = restShiftIndex(state)
         // [3.261.0, ユーザー実機報告「初期解生成後にC1違反になる/何度も出来ない」で判明した実バグ修正]
@@ -154,7 +154,7 @@ object SmartInitialScheduler {
             }
         }
 
-        val report = UnifiedViolationChecker.check(state, schedule)
+        val report = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval)
         val elapsedMs = ((System.nanoTime() - t0) / 1_000_000L)
         val log = MirrorLog(
             tag = "SmartInitial",

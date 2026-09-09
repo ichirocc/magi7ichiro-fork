@@ -63,12 +63,13 @@ internal object C1WindowPolish {
         // [C1 重複窓の連結成分化/測定中] 既定 false = 旧経路そのまま（1件の違反を起点にパディング）。
         //   true にすると analyze() の代わりに components() で近接・重複窓を束ね、solveComponent へ渡す。
         useComponents: Boolean = false,
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         var solved = 0
@@ -109,7 +110,7 @@ internal object C1WindowPolish {
             }
             val workBefore = work.copy2D()
             for (op in res.patch) work[op[0]][op[1]] = op[2]
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             // [3.321.0] このパスだけ却下理由をまったく残しておらず、ログは applied==0 のとき
             //   一律「頭打ち=改善手なし」としか言えなかった（patch が出て却下されても同じ文言）。
             //   他の研磨パスと同じ RejectCulpritStats で分類する。
@@ -181,12 +182,13 @@ internal object C1WindowPolish {
     fun applyC1IndexChainRepair(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L,
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         if (p.cons1.isEmpty() || (before.breakdown["c1"] ?: 0) == 0) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
                 listOf(MirrorLog(tag = "C1IndexRepair", message = "c1対象なし=スキップ")))
@@ -227,7 +229,7 @@ internal object C1WindowPolish {
                     val trial = work.copy2D()
                     trial[staff][d] = shift
                     // (a) 直接移動のみで改善（旧シフトに余裕がある場合）。
-                    val repDirect = UnifiedViolationChecker.check(state, trial)
+                    val repDirect = UnifiedViolationChecker.check(state, trial, quantitativeRangeEval)
                     if (adoptionGate(p, work, trial, repDirect, bestRep, pinBlocks).accepted) {
                         work = trial; bestRep = repDirect; applied++; adopted = true; break@windowLoop
                     }
@@ -237,7 +239,7 @@ internal object C1WindowPolish {
                         val chain = findCovUChain(p, trial, old, d, rng, exclude = staff)
                         if (chain != null) {
                             for (mv in chain) trial[mv[0]][mv[1]] = mv[2]
-                            val repChain = UnifiedViolationChecker.check(state, trial)
+                            val repChain = UnifiedViolationChecker.check(state, trial, quantitativeRangeEval)
                             if (adoptionGate(p, work, trial, repChain, bestRep, pinBlocks).accepted) {
                                 work = trial; bestRep = repChain; applied++; chainUsed++; adopted = true; break@windowLoop
                             }
@@ -285,12 +287,12 @@ internal object C1WindowPolish {
      * 採否は既存と同じ betterReport(hard→weighted→total) の keep-best のみ＝退化不能・HF77非該当（重み不変）。
      * add-fixable（追加が唯一の解の局面）は既存手A/Bの担当のまま＝手クラスが互いに素で冗長を作らない。
      */
-    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L): V6HotfixPasses.CyclicSwapResult {
+    fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         var aRect = 0; var aSelf = 0
@@ -352,7 +354,7 @@ internal object C1WindowPolish {
             //   1セル=重み降順の全クラスリスト、weight-priorityで discard しない）に切替えれば漏れなく検出
             //   できる。起点集合が広がるだけ(既存の起点は cellFamilies にも必ず含まれる=violationsの
             //   最重クラスはcellFamiliesの先頭要素と同一)なので後方互換・退化なし。
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val anchorStaff = HashSet<Int>()
             for ((key, fams) in rep0.cellFamilies) {
                 if ("vio-c1" in fams) anchorStaff.add(key.substringBefore(",").toIntOrNull() ?: continue)
@@ -397,7 +399,7 @@ internal object C1WindowPolish {
                         for (i2 in 0 until p.S) {
                             if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a)) continue
                             work[i][j] = x; work[i2][j] = a                 // 同日スワップ（被覆不変）
-                            val rep = UnifiedViolationChecker.check(state, work)
+                            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                             val pinBadA = exactPinRegression(p, workBeforeDay, work)
                             if (pinBadA && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeDay, work)
                             if (betterReport(rep, bestRep) && !pinBadA) {
@@ -436,7 +438,7 @@ internal object C1WindowPolish {
                                 val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x) ||
                                     p.makesForbiddenRun(work, i2, j1, x) || p.makesForbiddenRun(work, i2, j, a)
                                 if (!bad3n) {
-                                    val rep = UnifiedViolationChecker.check(state, work)
+                                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                                     if (betterReport(rep, bestRep)) {
                                         bestRep = rep; applied++; aRect++; improved = true; done = true
                                         donorsCache = null
@@ -469,7 +471,7 @@ internal object C1WindowPolish {
                                 work[i][j1] = a; work[i][j] = x
                                 val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x)
                                 if (!bad3n) {
-                                    val rep = UnifiedViolationChecker.check(state, work)
+                                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                                     if (betterReport(rep, bestRep)) {
                                         bestRep = rep; applied++; aSelf++; improved = true; done = true; donorsCache = null
                                     }
@@ -490,7 +492,7 @@ internal object C1WindowPolish {
                             c1Pref = { s2, sh, dy -> c1Deficient(s2, sh, dy) })
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
                         chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-                        val rep = UnifiedViolationChecker.check(state, work)
+                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                         if (adoptionGate(p, workBeforeDay, work, rep, bestRep, pinBlocks).accepted) {
                             bestRep = rep; applied++; improved = true
                             donorsCache = null
@@ -566,7 +568,7 @@ internal object C1WindowPolish {
                 if (bestGain > 0) {
                     val a = work[i][bestJo]
                     work[i][bestJx] = a; work[i][bestJo] = x
-                    val rep = UnifiedViolationChecker.check(state, work)
+                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                     if (betterReport(rep, bestRep)) {
                         bestRep = rep; applied++; aRepack++
                     } else {
@@ -701,6 +703,7 @@ internal object C1WindowPolish {
     fun applyC1BeamPolish(
         state: MagiState, schedule: Array<IntArray>, beamWidth: Int = 16, maxSteps: Int = 60,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL, patience: Int = 20,
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         // [3.375.0/ユーザー指示「停滞脱出のログにイテ回数と時間を出す」] 停滞打ち切りの所要時間。
         //   旧: 「steps=22/最良が20手更新されず打ち切り」と手数だけで、その空振りが一瞬なのか
@@ -708,9 +711,9 @@ internal object C1WindowPolish {
         val beamT0 = EngineClock.nowMs()
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work0 = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work0)
+        val before = UnifiedViolationChecker.check(state, work0, quantitativeRangeEval)
         if (p.cons1.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work0, before.total, before.total, 0,
                 listOf(MirrorLog(tag = "C1BeamPolish", message = "cons1なし=スキップ")))
@@ -778,7 +781,7 @@ internal object C1WindowPolish {
                     if (shouldStop()) break
                     val x = p.cons1[ci].shiftIdx
                     val w2 = tryOneMove(b.work, i, j, x) ?: continue
-                    val rep2 = UnifiedViolationChecker.check(state, w2)
+                    val rep2 = UnifiedViolationChecker.check(state, w2, quantitativeRangeEval)
                     if (rep2.hard > before.hard) continue
                     nextCandidates.add(Beam(w2, rep2, b.applied + 1))
                     anyExpanded = true

@@ -71,10 +71,11 @@ internal object PersonalBalanceJointLnsPolish {
         config: Config = Config(),
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xA97B4L,
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val rootSchedule = normalizeSchedule(schedule, p)
-        val rootReport = UnifiedViolationChecker.check(state, rootSchedule)
+        val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
         if (p.S <= 0 || p.T <= 0 || p.K <= 0) return noOp(rootSchedule, rootReport, "対象なし")
         if (config.beamWidth <= 0 || config.maxDepth <= 0 || config.maxRestarts <= 0 ||
             config.maxFocusStaff <= 0 || config.maxGoals <= 0 || config.maxVariantsPerGoal <= 0 ||
@@ -128,7 +129,7 @@ internal object PersonalBalanceJointLnsPolish {
                         for (candidate in variants) {
                             if (stopped()) break
                             generated++; evaluations++
-                            val report = UnifiedViolationChecker.check(state, candidate.schedule)
+                            val report = UnifiedViolationChecker.check(state, candidate.schedule, quantitativeRangeEval = quantitativeRangeEval)
                             val personal = personalPenaltyByStaff(p, candidate.schedule)
                             val focusTotal = focus.sumOf { personal[it] }
                             val overDebt = if (config.debtFactor > 0.0) !WeightDebt.within(rootReport, report, config.debtFactor)
@@ -162,7 +163,7 @@ internal object PersonalBalanceJointLnsPolish {
             }
         }
 
-        val checked = UnifiedViolationChecker.check(state, best.schedule)
+        val checked = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
         val checkedPersonal = personalPenaltyByStaff(p, best.schedule)
         // [receiving-code-review] focusTotal は「悪化させない(<=)」まで緩和。以前は狭義減少(<)を
         // 要求しており、docstring が明記する「下限到達済みの違反は、同じ下限値の別配置が正式目的

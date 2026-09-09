@@ -147,12 +147,12 @@ internal object RangePolish {
      * 空く/埋まる側の被覆(covUCell)が悪化する場合は`findCovUChain`で玉突き修復する（C1Polish手B/
      * C3mnPolishと同一パターン）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。
      */
-    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL): V6HotfixPasses.CyclicSwapResult {
+    fun applyRangePolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x8A9EL, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         val rng = Random(seed)
@@ -207,7 +207,7 @@ internal object RangePolish {
             val workBeforeRelocate = work.copy2D()
             work[i][j] = toK
             if (!needsChain) {
-                val rep = UnifiedViolationChecker.check(state, work)
+                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                 if (adoptionGate(p, workBeforeRelocate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(
@@ -222,7 +222,7 @@ internal object RangePolish {
             val usedAvoided = chain.any { mv -> exceedsOwnRangeHi(p, work, mv[0], mv[2]) }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-            val rep = UnifiedViolationChecker.check(state, work)
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             if (adoptionGate(p, workBeforeRelocate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
@@ -252,7 +252,7 @@ internal object RangePolish {
                 if (p.makesForbiddenRun(work, hi, j, loK) || p.makesForbiddenRun(work, lo, j, k)) continue
                 val workBeforeSwap = work.copy2D()
                 work[hi][j] = loK; work[lo][j] = k
-                val rep = UnifiedViolationChecker.check(state, work)
+                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                 if (adoptionGate(p, workBeforeSwap, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; return true }
                 work[hi][j] = k; work[lo][j] = loK
             }
@@ -393,7 +393,7 @@ internal object RangePolish {
                         heuristic += cost[i][assignment[i]]
                         work[i][j] = newDay[i]
                     }
-                    val rep = UnifiedViolationChecker.check(state, work)
+                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                     // [3.475.0/論理監査] 素の exactPinRegression では「ピンだけが理由で却下した改善手」が
                     //   PinBlockAttribution に計上されず、UI の「少なくともN回」が過少だった（同ファイルの
                     //   tryRelocate/tryPairSwap は blocksImproving 経由で計上済み＝手M/手F だけ非対称）。
@@ -561,7 +561,7 @@ internal object RangePolish {
                     }
                     val extraOld = IntArray(extras.size) { work[extras[it][0]][extras[it][1]] }
                     extras.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
-                    val rep = UnifiedViolationChecker.check(state, work)
+                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                     // [3.475.0/論理監査] 手M と同じ理由で blocksImproving 経由に揃える（計上漏れの解消）。
                     val gateF = adoptionGate(p, workBeforeFlow, work, rep, bestRep, pinBlocks)
                     val improving = gateF.better; val pinBad = gateF.pinBad
@@ -622,7 +622,7 @@ internal object RangePolish {
 
             // [3.278.0/監査修正] pass 0 でも直前の groupTargets ループ(手F)が盤面を変更済み(improved)なら
             //   before は陳腐＝解消済みターゲットへの空振り・新規違反の見落としを防ぐため再検査する。
-            val rep0 = if (pass == 0 && !improved) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0 && !improved) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val highTargets = ArrayList<Pair<Int, Int>>()
             val lowTargets = ArrayList<Pair<Int, Int>>()
             for ((key, cls) in rep0.countViolations) {

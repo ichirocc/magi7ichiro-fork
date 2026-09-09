@@ -97,10 +97,11 @@ internal object C1JointLnsPolish {
         config: Config = Config(),
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xC1A11L,
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val rootSchedule = normalizeSchedule(schedule, p)
-        val rootReport = UnifiedViolationChecker.check(state, rootSchedule)
+        val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
         val rootC1 = rootReport.breakdown["c1"] ?: 0
         if (p.cons1.isEmpty() || rootC1 <= 0 || p.T <= 0 || p.S <= 0) {
             return V6HotfixPasses.CyclicSwapResult(
@@ -181,7 +182,7 @@ internal object C1JointLnsPolish {
                             val next = parent.schedule.copy2D()
                             if (!applyMove(next, move)) continue
                             generated++; evaluations++
-                            val report = UnifiedViolationChecker.check(state, next)
+                            val report = UnifiedViolationChecker.check(state, next, quantitativeRangeEval = quantitativeRangeEval)
                             val c1 = report.breakdown["c1"] ?: 0
                             val overHard = report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0)
                             val weightDebt = config.debtFactor > 0.0
@@ -229,7 +230,7 @@ internal object C1JointLnsPolish {
         }
 
         // Defensive re-check. A shared-array bug or future operator mistake can never escape this gate.
-        val finalReport = UnifiedViolationChecker.check(state, best.schedule)
+        val finalReport = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
         val finalC1 = finalReport.breakdown["c1"] ?: 0
         val valid = best !== root && finalC1 < rootC1 && better(finalReport, rootReport) &&
             !pinBlocks.blocksImproving(p, rootSchedule, best.schedule)

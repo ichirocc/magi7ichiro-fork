@@ -13,12 +13,12 @@ internal object C3PairMaskPolish {
 
     fun apply(
         state: MagiState, schedule: Array<IntArray>, maxEvaluations: Int = 3_000, window: Int = 7,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AA1L,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AA1L, quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         val tag = "C3PairMask"
@@ -78,7 +78,7 @@ internal object C3PairMaskPolish {
                         val workBefore = work.copy2D()
                         swap(pr.i, pr.i2, days)
                         evaluated++
-                        val rep = UnifiedViolationChecker.check(state, work)
+                        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                         val gate = if (c3Weighted(rep) < c3Weighted(bestRep)) adoptionGate(p, workBefore, work, rep, bestRep, pinBlocks) else Adoption(false, false)
                         if (gate.accepted) {
                             bestRep = rep; applied++; adoptedBySize[size]++; improved = true

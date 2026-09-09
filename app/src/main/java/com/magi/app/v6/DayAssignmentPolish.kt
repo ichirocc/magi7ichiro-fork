@@ -32,12 +32,15 @@ internal object DayAssignmentPolish {
      * **厳密再割当**（Hungarian）。乱択でなく日内最適の候補を作り、全体が改善した日だけ採用（keep-best＝退化なし）。
      * 連続規則・希望・平準化など列横断の相互作用は採用判定(UnifiedViolationChecker)で担保する。
      */
-    fun applyDayAssignmentPolish(state: MagiState, schedule: Array<IntArray>, shouldStop: () -> Boolean = { false }): DayAssignResult {
+    fun applyDayAssignmentPolish(
+        state: MagiState, schedule: Array<IntArray>, shouldStop: () -> Boolean = { false },
+        quantitativeRangeEval: Boolean = false,
+    ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         // [3.509.2] 適切回数(apt)目標は Problem.apt（実効目標＝担当可ゲート・到達クランプ・D9 の個人設定除外込み）。
@@ -84,7 +87,7 @@ internal object DayAssignmentPolish {
                 if (cand[i][j] != k) { cand[i][j] = k; changed = true }
             }
             if (!changed) continue
-            val rep = UnifiedViolationChecker.check(state, cand)
+            val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
             // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
             //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
             if (adoptionGate(p, work, cand, rep, bestRep, pinBlocks).accepted) { work = cand; bestRep = rep; counts = cnt(); applied++ }
@@ -109,12 +112,15 @@ internal object DayAssignmentPolish {
      * 採否は実目的関数 isBetter（hard→weighted→total, keep-best）＝退化なし。fair 等の他 soft は isBetter が担保する
      * （費用に無い族も採用判定で悪化しないことを保証）。純 Kotlin 後処理＝ネイティブ hot-path 非干渉（parity 影響なし）。
      */
-    fun applyAlternatingSoftPolish(state: MagiState, schedule: Array<IntArray>, maxSweeps: Int = 4, shouldStop: () -> Boolean = { false }): DayAssignResult {
+    fun applyAlternatingSoftPolish(
+        state: MagiState, schedule: Array<IntArray>, maxSweeps: Int = 4, shouldStop: () -> Boolean = { false },
+        quantitativeRangeEval: Boolean = false,
+    ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         fun aptTarget(i: Int, k: Int): Int? = p.apt[i][k].takeIf { it >= 0 }   // [3.509.2] 上と同じく実効目標
@@ -181,7 +187,7 @@ internal object DayAssignmentPolish {
                     if (cand[i][j] != k) { cand[i][j] = k; changed = true }
                 }
                 if (!changed) continue
-                val rep = UnifiedViolationChecker.check(state, cand)
+                val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
                 // [厳密ピン保護] 日ブロック内Hungarian再割当は複数職員の回数を同時に変えうるため、
                 //   staffRange厳密ピン(lo==hi)を新たに崩す日案は不採用にする（keep-best/重みは不変）。
                 if (adoptionGate(p, work, cand, rep, bestRep, pinBlocks).accepted) {
