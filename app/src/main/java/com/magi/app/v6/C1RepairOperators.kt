@@ -36,42 +36,42 @@ internal object C1RepairOperators {
     /** 自己内移設 + 同日 coverage保存 swap/permutation（手A/R1/R2/R3）。 */
     fun selfRelocateAndSameDaySwap(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed)
+        C1WindowPolish.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed, quantitativeRangeEval)
 
     /** Temporal DP + FlexibleDayFlow。 */
     fun temporalFlow(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2, maxRelocations: Int = 4,
-        trials: Int = 4, shouldStop: () -> Boolean = { false }, seed: Long = 0xC1F10FL,
+        trials: Int = 4, shouldStop: () -> Boolean = { false }, seed: Long = 0xC1F10FL, quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1TemporalFlowPolish.apply(state, schedule, maxPasses, maxRelocations, trials, shouldStop, seed)
+        C1TemporalFlowPolish.apply(state, schedule, maxPasses, maxRelocations, trials, shouldStop, seed, quantitativeRangeEval)
 
     /** 広域時空間ビーム。 */
     fun wideBeam(
         state: MagiState, schedule: Array<IntArray>, beamWidth: Int = 16, maxSteps: Int = 60,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1CBEAL, quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1BeamPolish(state, schedule, beamWidth, maxSteps, shouldStop, seed)
+        C1WindowPolish.applyC1BeamPolish(state, schedule, beamWidth, maxSteps, shouldStop, seed, quantitativeRangeEval = quantitativeRangeEval)
 
     /** 厳密窓修復（coverage保存 permutation の分枝限定探索）。 */
     fun exactWindow(
         state: MagiState, schedule: Array<IntArray>, cfg: C1RepairAnalysis.Config = C1RepairAnalysis.Config(),
-        shouldStop: () -> Boolean = { false }, useComponents: Boolean = false,
+        shouldStop: () -> Boolean = { false }, useComponents: Boolean = false, quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1ExactWindowRepair(state, schedule, cfg, shouldStop, useComponents)
+        C1WindowPolish.applyC1ExactWindowRepair(state, schedule, cfg, shouldStop, useComponents, quantitativeRangeEval)
 
     /** [3.276.0] index駆動の候補生成＋prefilter選別＋玉突き連鎖のC1修復（Index/Prefilterを実駆動する経路）。 */
     fun indexChainRepair(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 2,
-        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1D2L, quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1IndexChainRepair(state, schedule, maxPasses, shouldStop, seed)
+        C1WindowPolish.applyC1IndexChainRepair(state, schedule, maxPasses, shouldStop, seed, quantitativeRangeEval)
 
     /** Joint LNS（c1 + covU/range-low を同一 goal pool で）。 */
     fun jointLns(
         state: MagiState, schedule: Array<IntArray>, config: C1JointLnsPolish.Config = C1JointLnsPolish.Config(),
-        shouldStop: () -> Boolean = { false }, seed: Long = 0xC1A11L,
+        shouldStop: () -> Boolean = { false }, seed: Long = 0xC1A11L, quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1JointLnsPolish.apply(state, schedule, config, shouldStop, seed)
+        C1JointLnsPolish.apply(state, schedule, config, shouldStop, seed, quantitativeRangeEval)
 }
