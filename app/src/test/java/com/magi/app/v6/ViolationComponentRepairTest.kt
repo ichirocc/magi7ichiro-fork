@@ -155,6 +155,44 @@ class ViolationComponentRepairTest {
         assertTrue(!betterReport(before, r.report))
     }
 
+    /** [3.512.3/バグ修正] trimFrontier: 負債枠(debtLaneSlots)は予約であって専有ではない＝負債候補が
+     *  debtCap 未満（0件含む）のときは、余った枠を非負債候補へ返す。修正前は非負債候補の枠が
+     *  beamWidth-debtCap に固定され、負債候補が無くてもビーム幅が実質縮小していた（純粋な退行）。 */
+    @Test
+    fun trimFrontierReturnsUnusedDebtSlotsToNormalCandidates() {
+        val params = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2, beamWidth = 8)
+        // baseEst=100。非負債候補(est<=100)を10件、負債候補(est>100)は0件。
+        val normals = (0 until 10).map { ViolationComponentRepair.Node(intArrayOf(it), 100L - it) }
+        val trimmed = ViolationComponentRepair.trimFrontier(normals, baseEst = 100L, params = params)
+        assertEquals("負債候補0件なら非負債候補がbeamWidth全体を使う（6件に縮小しない）", 8, trimmed.size)
+        assertTrue("非負債候補のみ", trimmed.all { it.est <= 100L })
+    }
+
+    /** [3.512.3] 負債候補が debtCap 以上あるときは、従来どおり非負債候補は beamWidth-debtCap 件に絞られる。 */
+    @Test
+    fun trimFrontierCapsNormalCandidatesWhenDebtCandidatesFillTheirSlots() {
+        val params = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2, beamWidth = 8)
+        val normals = (0 until 10).map { ViolationComponentRepair.Node(intArrayOf(it), 100L - it) }
+        val debts = (0 until 5).map { ViolationComponentRepair.Node(intArrayOf(100 + it), 101L + it) }
+        val trimmed = ViolationComponentRepair.trimFrontier(normals + debts, baseEst = 100L, params = params)
+        assertEquals(8, trimmed.size)
+        assertEquals("負債候補は予約枠2件まで", 2, trimmed.count { it.est > 100L })
+        assertEquals("非負債候補はbeamWidth-debtCap=6件まで", 6, trimmed.count { it.est <= 100L })
+    }
+
+    /** [3.512.3] トリム後は est 昇順（同点は ids 辞書式）に再整列される＝負債候補が混ざっても
+     *  search() の展開順（評価予算切れの打ち切り基準）が壊れない。 */
+    @Test
+    fun trimFrontierReturnsResultSortedByNodeOrderEvenWhenDebtSlotsAreUsed() {
+        val params = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2, beamWidth = 4)
+        val nodes = listOf(
+            ViolationComponentRepair.Node(intArrayOf(3), 99L), ViolationComponentRepair.Node(intArrayOf(1), 105L),
+            ViolationComponentRepair.Node(intArrayOf(2), 100L), ViolationComponentRepair.Node(intArrayOf(4), 101L),
+        )
+        val trimmed = ViolationComponentRepair.trimFrontier(nodes, baseEst = 100L, params = params)
+        assertEquals(listOf(99L, 100L, 101L, 105L), trimmed.map { it.est })
+    }
+
     /** [測定中/bestOfK] bestOfK>=2 でも既存の不変条件（退行しない・例外を出さない）が保たれる。
      *  効果自体（順序非依存の採用が iter17 の無効さを覆すか）は tools/loop で測る。 */
     @Test
