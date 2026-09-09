@@ -32,15 +32,15 @@ import kotlin.math.min
  * 本抽出で private から internal へ昇格）。
  */
 internal object DestroyRepairOperators {
-    internal fun destroyRepairDay(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
+    internal fun destroyRepairDay(state: MagiState, schedule: Array<IntArray>, rng: Random, quantitativeRangeEval: Boolean = false) {
+        val p = cachedProblem(state, quantitativeRangeEval)
         if (p.T == 0) return
-        destroyRepairDayAt(state, schedule, rng.nextInt(p.T), rng)
+        destroyRepairDayAt(state, schedule, rng.nextInt(p.T), rng, quantitativeRangeEval)
     }
 
 
-    internal fun destroyRepairDayAt(state: MagiState, schedule: Array<IntArray>, j: Int, rng: Random) {
-        val p = cachedProblem(state)
+    internal fun destroyRepairDayAt(state: MagiState, schedule: Array<IntArray>, j: Int, rng: Random, quantitativeRangeEval: Boolean = false) {
+        val p = cachedProblem(state, quantitativeRangeEval)
         if (p.T == 0) return
         // [soft-aware destroy-repair / 実測検証 tools/nsp_bench.py] 従来はランダム順で穴を埋めるだけ(soft無視)で、
         //   等価ベンチでは soft-aware 修復が AUC -24%〜-34% と唯一の大幅改善だった。ここで同じレバーを適用:
@@ -121,15 +121,15 @@ internal object DestroyRepairOperators {
     }
 
 
-    internal fun destroyRepairStaff(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
+    internal fun destroyRepairStaff(state: MagiState, schedule: Array<IntArray>, rng: Random, quantitativeRangeEval: Boolean = false) {
+        val p = cachedProblem(state, quantitativeRangeEval)
         if (p.S == 0) return
-        destroyRepairStaffAt(state, schedule, rng.nextInt(p.S), rng)
+        destroyRepairStaffAt(state, schedule, rng.nextInt(p.S), rng, quantitativeRangeEval)
     }
 
 
-    internal fun destroyRepairStaffAt(state: MagiState, schedule: Array<IntArray>, i: Int, rng: Random) {
-        val p = cachedProblem(state)
+    internal fun destroyRepairStaffAt(state: MagiState, schedule: Array<IntArray>, i: Int, rng: Random, quantitativeRangeEval: Boolean = false) {
+        val p = cachedProblem(state, quantitativeRangeEval)
         val allowed = p.allowedShiftsForStaff(i)
         if (allowed.isEmpty()) return
         val rest = restShiftIndex(state)   // [監査#2] 休の記号解決
@@ -193,10 +193,10 @@ internal object DestroyRepairOperators {
     }
 
 
-    internal fun destroyRepairViolations(state: MagiState, schedule: Array<IntArray>, report: ViolationReport, rng: Random) {
-        val p = cachedProblem(state)
+    internal fun destroyRepairViolations(state: MagiState, schedule: Array<IntArray>, report: ViolationReport, rng: Random, quantitativeRangeEval: Boolean = false) {
+        val p = cachedProblem(state, quantitativeRangeEval)
         val keys = report.violations.keys.toList()
-        if (keys.isEmpty()) { randomAllowedCell(state, schedule, rng); return }
+        if (keys.isEmpty()) { randomAllowedCell(state, schedule, rng, quantitativeRangeEval); return }
         repeat(min(8, keys.size)) {
             val key = keys[rng.nextInt(keys.size)]
             val i = key.substringBefore(',').toIntOrNull() ?: return@repeat
@@ -240,8 +240,8 @@ internal object DestroyRepairOperators {
     }
 
 
-    private fun randomAllowedCell(state: MagiState, schedule: Array<IntArray>, rng: Random) {
-        val p = cachedProblem(state)
+    private fun randomAllowedCell(state: MagiState, schedule: Array<IntArray>, rng: Random, quantitativeRangeEval: Boolean = false) {
+        val p = cachedProblem(state, quantitativeRangeEval)
         if (p.S == 0 || p.T == 0) return
         val i = rng.nextInt(p.S)
         val j = rng.nextInt(p.T)
@@ -251,11 +251,11 @@ internal object DestroyRepairOperators {
     }
 
 
-    internal fun perturb(state: MagiState, base: Array<IntArray>, rng: Random, strength: Double): Array<IntArray> {
-        val p = cachedProblem(state)
+    internal fun perturb(state: MagiState, base: Array<IntArray>, rng: Random, strength: Double, quantitativeRangeEval: Boolean = false): Array<IntArray> {
+        val p = cachedProblem(state, quantitativeRangeEval)
         val out = base.copy2D()
         val n = max(1, (p.S * p.T * strength).toInt())
-        repeat(n) { randomAllowedCell(state, out, rng) }
+        repeat(n) { randomAllowedCell(state, out, rng, quantitativeRangeEval) }
         return out
     }
 
