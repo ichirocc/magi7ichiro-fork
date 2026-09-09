@@ -200,7 +200,7 @@ internal object RsiHypothesisOperators {
                         }
                     }
                     if (candidates.isEmpty()) break
-                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates, quantitativeRangeEval) == null) break
                     applied++
                 }
             }
@@ -270,7 +270,7 @@ internal object RsiHypothesisOperators {
                         }
                     }
                     if (candidates.isEmpty()) break
-                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates, quantitativeRangeEval) == null) break
                     applied++
                 }
                 // 不足(z<l): 群内の他シフト在籍者を引き入れる。
@@ -290,7 +290,7 @@ internal object RsiHypothesisOperators {
                         if (chain != null) candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)) + chain)
                     }
                     if (candidates.isEmpty()) break
-                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates, quantitativeRangeEval) == null) break
                     applied++
                 }
             }
@@ -357,7 +357,7 @@ internal object RsiHypothesisOperators {
                     gatherSide(left, j, c.s1, candidates)
                     gatherSide(right, j, c.s2, candidates)
                     if (candidates.isEmpty()) break
-                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates) == null) break
+                    if (CandidateCommit.commitBestMove(state, sched, baseline, candidates, quantitativeRangeEval) == null) break
                     applied++
                 }
             }

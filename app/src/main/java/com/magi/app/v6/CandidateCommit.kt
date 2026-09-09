@@ -52,13 +52,14 @@ internal object CandidateCommit {
     internal fun commitBestMove(
         state: MagiState, sched: Array<IntArray>,
         baseline: ViolationReport, candidates: List<List<IntArray>>,
+        quantitativeRangeEval: Boolean = false,
     ): ViolationReport? {
         var bestOps: List<IntArray>? = null
         var bestRep: ViolationReport? = null
         for (ops in candidates) {
             val saved = IntArray(ops.size) { sched[ops[it][0]][ops[it][1]] }
             for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
-            val rep = UnifiedViolationChecker.check(state, sched)
+            val rep = UnifiedViolationChecker.check(state, sched, quantitativeRangeEval = quantitativeRangeEval)
             for (idx in ops.indices) sched[ops[idx][0]][ops[idx][1]] = saved[idx]
             if (betterReport(rep, baseline) && (bestRep == null || betterReport(rep, bestRep!!))) {
                 bestOps = ops; bestRep = rep

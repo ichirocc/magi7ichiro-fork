@@ -259,6 +259,7 @@ object V6FinalPort {
         requestedAlgorithm: V6Algorithm = V6Algorithm.AUTO,
         allowImpossible: Boolean = false,
         onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
+        quantitativeRangeEval: Boolean = false,
     ): ActionResult = withContext(Dispatchers.Default) {
         // [3.388.0/外部レビュー] 計測は**この1回の「つくる」ぶん**。旧実装は optimize() の入口で
         //   落としていたため、AUTO の 31〜210秒帯（RSI → ALNS → ExtraRefine で optimize() を最大3回）では
@@ -276,12 +277,12 @@ object V6FinalPort {
         val gate = confirmDespiteImpossibleWishes(state, allowImpossible)
         if (!gate.allowed) error(gate.message)
         // [最終番兵用] 入力の評価を保持。万一パイプラインが入力より悪い結果を出した場合に復帰する（多重防御）。
-        val baseProblem = cachedProblem(state)
+        val baseProblem = cachedProblem(state, quantitativeRangeEval)
         val normInput = normalizeSchedule(schedule, baseProblem)
         // [3.507.0] 番兵の基準は「個人上限 0 のセルを外した入力」。上限 0 のセルは最適化器が置かない（mayPlace）ので、
         //   生の入力（上限超過 45 のまま）と比べると、外した代償のぶん結果が「悪化」に見えて入力へ戻ってしまう。
-        val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput)
-        val inputReport = UnifiedViolationChecker.check(state, cappedInput)
+        val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput, quantitativeRangeEval)
+        val inputReport = UnifiedViolationChecker.check(state, cappedInput, quantitativeRangeEval = quantitativeRangeEval)
         val cappedLog = if (cappedCount > 0) listOf(MirrorLog(tag = "CapZero",
             message = "個人上限 0 のセル ${cappedCount} 件を最適化の対象外として置き直しから開始（設定どおり 0 にする。表示・重みは不変）")) else emptyList()
         val label = getAlgorithmLabel(seconds)
@@ -296,12 +297,12 @@ object V6FinalPort {
         // full requested budget. AUTO keeps the time-budget-based plan. [review #3] postPolish=false
         // so optimize() does NOT polish internally — the single post chain below owns polishing.
         val opts = if (requestedAlgorithm != V6Algorithm.AUTO) {
-            V6OptimizerOptions(requestedAlgorithm, seconds.coerceAtLeast(1), workers, softPolish, restarts = 2, postPolish = false)
+            V6OptimizerOptions(requestedAlgorithm, seconds.coerceAtLeast(1), workers, softPolish, restarts = 2, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
         } else when (plan) {
-            is OptimizationPlan.V5 -> V6OptimizerOptions(V6Algorithm.V5, plan.seconds, workers, softPolish, restarts = 1, postPolish = false)
-            is OptimizationPlan.ALNS -> V6OptimizerOptions(V6Algorithm.ALNS, plan.seconds, workers, softPolish, restarts = plan.restarts, postPolish = false)
-            is OptimizationPlan.RSIThenALNS -> V6OptimizerOptions(V6Algorithm.RSI, plan.rsiSec, workers, softPolish, restarts = plan.alnsRestarts, postPolish = false)
-            is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false)
+            is OptimizationPlan.V5 -> V6OptimizerOptions(V6Algorithm.V5, plan.seconds, workers, softPolish, restarts = 1, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
+            is OptimizationPlan.ALNS -> V6OptimizerOptions(V6Algorithm.ALNS, plan.seconds, workers, softPolish, restarts = plan.restarts, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
+            is OptimizationPlan.RSIThenALNS -> V6OptimizerOptions(V6Algorithm.RSI, plan.rsiSec, workers, softPolish, restarts = plan.alnsRestarts, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
+            is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
         }
         val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true))   // [HF532移植] optFlags.rectSwap 既定ON
         // [review: 予算一本化] optimize() + runPostOptimization() を一つの予算で管理する。
@@ -596,6 +597,7 @@ object V6FinalPort {
             shouldStop = postShouldStop,
             onPhase = { phase -> progressWatch(phase, null, EngineClock.nowMs() - startMs, budgetMs) },
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
+            params = V6HotfixPasses.PostOptimizationParams(quantitativeRangeEval = quantitativeRangeEval),
         )
         val tPost1 = EngineClock.nowMs()
         // [高精度化/予算残の活用] 後処理予約枠(budget/12, 8〜25s)は後処理が早期にフィックスポイント到達すると

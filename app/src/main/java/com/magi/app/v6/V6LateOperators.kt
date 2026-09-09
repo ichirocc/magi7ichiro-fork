@@ -60,8 +60,9 @@ object V6LateOperators {
         chainTry4: Int = 12,
         rectTry: Int = 12,
         blkTry: Int = 8,
+        quantitativeRangeEval: Boolean = false,
     ): LateImproveResult {
-        val session = LateSession(state, cachedProblem(state), schedule.copy2D(), report, rng, deadlineMs)
+        val session = LateSession(state, cachedProblem(state, quantitativeRangeEval), schedule.copy2D(), report, rng, deadlineMs)
         session.chainSwap3(chainTry3)
         session.chainSwap4(chainTry4)
         if (rectEnabled) session.rectSwap2(rectTry)
@@ -86,7 +87,7 @@ object V6LateOperators {
         fun c1(r: ViolationReport): Int = r.breakdown["c1"] ?: 0
         // 採否ゲート [HF537]: 採用なら cur 更新 + ログ。不採用なら false(呼び元で revert)。
         fun gate(tag: String, detail: String): Boolean {
-            val nv = UnifiedViolationChecker.check(state, sched)
+            val nv = UnifiedViolationChecker.check(state, sched, quantitativeRangeEval = p.quantitativeRangeEval)
             // [3.287.0 keep-best統一→3.335.0 委譲] 判定は `betterReport`（hard→weightedScore→total）へ。
             //   3.287.0 は第2キーだけ weightedScore へ寄せて**第3キー total へ落ちる分岐を書き忘れて**おり、
             //   weighted 同値・total 改善の候補（例: c1×1 と c42×30 は weighted 30 で同値・total は29違う。
@@ -162,7 +163,7 @@ object V6LateOperators {
         //   下がったときに静かに壊れる罠を残さない）。[3.335.0] 判定は `betterReport` へ委譲＝第3キー total
         //   まで見る（3.309.0 は hard→weightedScore を手書きで複製しており total へ落ちなかった）。
         fun gateW(): Boolean {
-            val nv = UnifiedViolationChecker.check(state, sched)
+            val nv = UnifiedViolationChecker.check(state, sched, quantitativeRangeEval = p.quantitativeRangeEval)
             val ok = betterReport(nv, cur)   // [3.335.0] gate と同じく betterReport へ委譲（第3キー total まで見る）
             if (ok) { cur = nv; return true }
             return false
