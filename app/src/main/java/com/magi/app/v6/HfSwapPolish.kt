@@ -19,10 +19,13 @@ import java.util.Random
  * 共有）は [V6HotfixPasses] 側に残置し、ここからは完全修飾で参照する（写しを作らず単一ソースを維持）。
  */
 internal object HfSwapPolish {
-    fun applyHF67InterStaffSwap(state: MagiState, schedule: Array<IntArray>, maxSwaps: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE): HF67Result {
-        val p = cachedProblem(state)
+    fun applyHF67InterStaffSwap(
+        state: MagiState, schedule: Array<IntArray>, maxSwaps: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE,
+        quantitativeRangeEval: Boolean = false,
+    ): HF67Result {
+        val p = cachedProblem(state, quantitativeRangeEval)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var current = before
         var swaps = 0
         var shortage = 0
@@ -52,7 +55,7 @@ internal object HfSwapPolish {
                     for (from in highs) {
                         if (to == from) continue
                         val cand = trySwapShiftBetweenStaff(p, work, from, to, k) ?: continue
-                        val rep = UnifiedViolationChecker.check(state, cand.first)
+                        val rep = UnifiedViolationChecker.check(state, cand.first, quantitativeRangeEval)
                         val ref = bestReport ?: current
                         if (betterReport(rep, ref)) {
                             best = cand.second
@@ -74,11 +77,11 @@ internal object HfSwapPolish {
             if (current.soft < before.soft) capacity++
         }
         if (swaps == 0 && !outOfTime()) {
-            val improved = localPairwiseStaffSwap(state, p, work, maxSwaps, { outOfTime() })
+            val improved = localPairwiseStaffSwap(state, p, work, maxSwaps, { outOfTime() }, quantitativeRangeEval)
             work = improved.first
             swaps = improved.second
             rollback = improved.third
-            current = UnifiedViolationChecker.check(state, work)
+            current = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             capacity = swaps
         }
         val logs = listOf(MirrorLog(tag = "HF67", message = "inter-staff swap applied=$swaps rollback=$rollback total ${before.total}->${current.total}"))
@@ -86,10 +89,13 @@ internal object HfSwapPolish {
     }
 
 
-    fun applyHF66IntraStaffRedistribution(state: MagiState, schedule: Array<IntArray>, maxMoves: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE): HF66Result {
-        val p = cachedProblem(state)
+    fun applyHF66IntraStaffRedistribution(
+        state: MagiState, schedule: Array<IntArray>, maxMoves: Int = 30, shouldStop: () -> Boolean = { false }, deadlineMs: Long = Long.MAX_VALUE,
+        quantitativeRangeEval: Boolean = false,
+    ): HF66Result {
+        val p = cachedProblem(state, quantitativeRangeEval)
         var work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var current = before
         var moves = 0
         var shortageMoves = 0
@@ -120,7 +126,7 @@ internal object HfSwapPolish {
                         if (work[i][j] != give || p.wishLocked(i, j)) continue
                         val cand = work.copy2D()
                         cand[i][j] = want
-                        val rep = UnifiedViolationChecker.check(state, cand)
+                        val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
                         if (betterReport(rep, bestReport ?: current)) {
                             bestMove = MoveCandidate(i, j, give, want)
                             bestReport = rep
@@ -130,7 +136,7 @@ internal object HfSwapPolish {
             }
             val mv = bestMove ?: break
             work[mv.staff][mv.day] = mv.toShift
-            current = bestReport ?: UnifiedViolationChecker.check(state, work)
+            current = bestReport ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             moves++
             shortageMoves++
             if (current.soft < before.soft) capacityMoves++
@@ -150,7 +156,7 @@ internal object HfSwapPolish {
                             val old = cand[i][j]
                             cand[i][j] = allowed[rng.nextInt(allowed.size)]
                             if (cand[i][j] != old) {
-                                val rep = UnifiedViolationChecker.check(state, cand)
+                                val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
                                 if (betterReport(rep, current)) {
                                     work = cand
                                     current = rep
@@ -176,8 +182,9 @@ internal object HfSwapPolish {
         schedule: Array<IntArray>,
         algoName: String,
         report: ViolationReport = UnifiedViolationChecker.check(state, schedule),
+        quantitativeRangeEval: Boolean = false,
     ): HF70Result {
-        val invalid = invalidAssignmentCount(state, schedule)
+        val invalid = invalidAssignmentCount(state, schedule, quantitativeRangeEval)
         val impossible = V6SanityPort.detectImpossibleWishes(state).size
         val hardCore = report.hard - (report.breakdown["pref"] ?: 0)
         val issues = ArrayList<String>()
@@ -215,9 +222,12 @@ internal object HfSwapPolish {
     }
 
 
-    private fun localPairwiseStaffSwap(state: MagiState, p: Problem, schedule: Array<IntArray>, maxSwaps: Int, shouldStop: () -> Boolean = { false }): Triple<Array<IntArray>, Int, Int> {
+    private fun localPairwiseStaffSwap(
+        state: MagiState, p: Problem, schedule: Array<IntArray>, maxSwaps: Int, shouldStop: () -> Boolean = { false },
+        quantitativeRangeEval: Boolean = false,
+    ): Triple<Array<IntArray>, Int, Int> {
         var work = schedule.copy2D()
-        var current = UnifiedViolationChecker.check(state, work)
+        var current = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var applied = 0
         var rollback = 0
         loop@ for (i in 0 until p.S) for (i2 in i + 1 until p.S) for (j in 0 until p.T) {
@@ -229,7 +239,7 @@ internal object HfSwapPolish {
             val cand = work.copy2D()
             cand[i][j] = b
             cand[i2][j] = a
-            val rep = UnifiedViolationChecker.check(state, cand)
+            val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
             if (betterReport(rep, current)) {
                 work = cand
                 current = rep
@@ -242,8 +252,8 @@ internal object HfSwapPolish {
     }
 
 
-    private fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray>): Int {
-        val p = cachedProblem(state)
+    private fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray>, quantitativeRangeEval: Boolean = false): Int {
+        val p = cachedProblem(state, quantitativeRangeEval)
         val s = normalizeSchedule(schedule, p)
         var n = 0
         for (i in 0 until p.S) for (j in 0 until p.T) {
