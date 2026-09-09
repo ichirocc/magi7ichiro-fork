@@ -36,14 +36,15 @@ internal object EliteRelinking {
         best: Array<IntArray>,
         alternatives: List<Array<IntArray>>,
         shouldStop: () -> Boolean,
+        quantitativeRangeEval: Boolean = false,
     ): Pair<Array<IntArray>, ViolationReport> {
         var bestSched = best.copy2D()
-        var bestRep = UnifiedViolationChecker.check(state, bestSched)
+        var bestRep = UnifiedViolationChecker.check(state, bestSched, quantitativeRangeEval = quantitativeRangeEval)
         if (alternatives.isEmpty()) return bestSched to bestRep
         for (alt in alternatives) {
             if (shouldStop()) break
             val cur = bestSched.copy2D()              // 常に現行最良から再結合（中間最良は別管理＝退化なし）
-            var curRep = UnifiedViolationChecker.check(state, cur)
+            var curRep = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval)
             val diffs = ArrayList<Pair<Int, Int>>()
             for (i in cur.indices) for (j in cur[i].indices) {
                 if (i < alt.size && j < alt[i].size && cur[i][j] != alt[i][j]) diffs.add(i to j)
@@ -60,7 +61,7 @@ internal object EliteRelinking {
             for ((i, j) in diffs) {
                 if (shouldStop()) break
                 cur[i][j] = alt[i][j]                 // alt へ向けた強制マーチ
-                curRep = UnifiedViolationChecker.check(state, cur)
+                curRep = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval)
                 if (betterReport(curRep, bestRep)) { bestSched = cur.copy2D(); bestRep = curRep }
             }
         }
