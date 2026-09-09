@@ -139,6 +139,38 @@ class ViolationComponentRepairTest {
         assertTrue(!betterReport(before, r.report))
     }
 
+    /** [測定中/二車線ビーム] debtExploration有効時、debtLaneSlotsを設定しても既存の不変条件（退行しない・
+     *  例外を出さない）が保たれる。効果自体（負債候補が飢餓せず生き残るか）はtools/loopで測る。 */
+    @Test
+    fun debtLaneSlotsRunsWithoutRegressionWhenDebtExplorationEnabled() {
+        val st = combineTwoRejectedState()
+        val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
+        val before = UnifiedViolationChecker.check(st, sched)
+        val params = V6HotfixPasses.PostOptimizationParams(
+            componentRepairEnabled = true, maxRounds = 1,
+            componentRepair = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2),
+        )
+        val r = V6HotfixPasses.runPostOptimization(st, sched.map { it.clone() }.toTypedArray(), "t", seed = 7L, params = params)
+        assertTrue(r.report.hard <= before.hard)
+        assertTrue(!betterReport(before, r.report))
+    }
+
+    /** [測定中/bestOfK] bestOfK>=2 でも既存の不変条件（退行しない・例外を出さない）が保たれる。
+     *  効果自体（順序非依存の採用が iter17 の無効さを覆すか）は tools/loop で測る。 */
+    @Test
+    fun bestOfKRunsWithoutRegressionAndPicksAnObjectivelyBetterResult() {
+        val st = combineTwoRejectedState()
+        val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
+        val before = UnifiedViolationChecker.check(st, sched)
+        val params = V6HotfixPasses.PostOptimizationParams(
+            componentRepairEnabled = true, maxRounds = 1,
+            componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true, bestOfK = 3),
+        )
+        val r = V6HotfixPasses.runPostOptimization(st, sched.map { it.clone() }.toTypedArray(), "t", seed = 7L, params = params)
+        assertTrue(r.report.hard <= before.hard)
+        assertTrue(!betterReport(before, r.report))
+    }
+
     /** [Iteration 3] 単独で厳密ピン（lo==hi）を崩す候補は、同じ集合に逆向きの相方が無ければ最初から外す（推定予算を有効な枝へ）。 */
     @Test
     fun lonePinBreakersAreDroppedBeforeTheSearch() {

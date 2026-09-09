@@ -111,6 +111,10 @@ fun main(args: Array<String>) {
         "c42flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishEnabled = true)
         "c1component" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepair = true)
         "quantrange" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, quantitativeRangeEval = true)
+        "debtlane" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to
+            V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2))
+        "bestofk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to
+            V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true, bestOfK = 3))
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
