@@ -24,6 +24,14 @@ const val SCORE_HARD_UNIT = 1_000_000_000L
 internal fun c42PairCount(sameSet: Boolean, n1: Int, n2: Int): Long =
     if (sameSet) n1.toLong() * (n1 - 1) / 2 else n1.toLong() * n2
 
+/** [backlog #12(a)・実験段階] c2 の量的評価（不足量）。`Problem.quantitativeRangeEval` が true のときだけ、
+ *  チェッカー・評価器・Δ評価器・C++ の共通ソースとしてこの関数を使う（既定は二値のまま呼ばない）。 */
+internal fun c2Amount(z: Int, count: Int): Long = if (z < count) (count - z).toLong() else 0L
+
+/** [backlog #12(a)・実験段階] c41/c41s の量的評価（[l,u] からの距離）。用途は [c2Amount] と同じ。 */
+internal fun rangeDistance(z: Int, l: Int, u: Int): Long =
+    (if (z < l) (l - z).toLong() else 0L) + (if (z > u) (z - u).toLong() else 0L)
+
 /**
  * Faithful port of the Web worker's `fullEval`.
  *
@@ -89,7 +97,7 @@ class Evaluator(private val p: Problem) {
                 if (!p.canDo(i, c.shiftIdx)) continue   // [監査#5] 担当不可の職員は対象外（チェッカーと同一条件）
                 var z = 0
                 for (j in 0 until T) if (a[i][j] == c.shiftIdx) z++
-                if (z < c.count) soft += 1
+                soft += if (p.quantitativeRangeEval) c2Amount(z, c.count) else if (z < c.count) 1L else 0L
             }
         }
 
@@ -98,7 +106,7 @@ class Evaluator(private val p: Problem) {
             for (j in 0 until T) {
                 var z = 0
                 for (i in 0 until S) if (p.sgrp[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
-                if (z < c.l || c.u < z) soft += 1
+                soft += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
             }
         }
 
@@ -119,7 +127,7 @@ class Evaluator(private val p: Problem) {
             for (j in 0 until T) {
                 var z = 0
                 for (i in 0 until S) if (p.ssk[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
-                if (z < c.l || c.u < z) soft += 1
+                soft += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
             }
         }
         for (c in p.cons42s) {

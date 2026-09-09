@@ -178,9 +178,13 @@ object UnifiedViolationChecker {
         "aptLow" to "vio-aptLow", "aptHigh" to "vio-aptHigh",
     )
 
-    fun check(state: MagiState, schedule: Array<IntArray> = state.schedule.toIntArray2D()): ViolationReport {
+    fun check(
+        state: MagiState,
+        schedule: Array<IntArray> = state.schedule.toIntArray2D(),
+        quantitativeRangeEval: Boolean = false,
+    ): ViolationReport {
         val t0 = System.nanoTime()
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val s = normalizeSchedule(schedule, p)
         // [3.395.0/高速化] 集計は添字加算の IntArray で行い、最後に `MirrorKeys.all` の順で Map へ起こす
         //   （返り値の中身と順序は従来と完全に同じ）。`inc` に渡すキーは全て `MirrorKeys.all` にある
@@ -271,7 +275,10 @@ object UnifiedViolationChecker {
         for (c in p.cons2) {
             for (i in 0 until p.S) {
                 if (!p.canDo(i, c.shiftIdx)) continue
-                if (counts[i][c.shiftIdx] < c.count) {
+                if (p.quantitativeRangeEval) {
+                    val amt = c2Amount(counts[i][c.shiftIdx], c.count)
+                    if (amt > 0) { inc("c2", amt.toInt()); markCount(i, c.shiftIdx, "c2") }
+                } else if (counts[i][c.shiftIdx] < c.count) {
                     inc("c2")
                     markCount(i, c.shiftIdx, "c2")
                 }
@@ -282,7 +289,10 @@ object UnifiedViolationChecker {
             for (j in 0 until p.T) {
                 var z = 0
                 for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && cellIs(i, j, c.shiftIdx)) z++
-                if (z < c.l || z > c.u) {
+                if (p.quantitativeRangeEval) {
+                    val amt = rangeDistance(z, c.l, c.u)
+                    if (amt > 0) { inc("c41", amt.toInt()); markNeed(c.shiftIdx, j, "c41") }
+                } else if (z < c.l || z > c.u) {
                     inc("c41")
                     markNeed(c.shiftIdx, j, "c41")
                 }
@@ -323,7 +333,10 @@ object UnifiedViolationChecker {
             for (j in 0 until p.T) {
                 var z = 0
                 for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && cellIs(i, j, c.shiftIdx)) z++
-                if (z < c.l || z > c.u) { inc("c41s"); markNeed(c.shiftIdx, j, "c41s") }
+                if (p.quantitativeRangeEval) {
+                    val amt = rangeDistance(z, c.l, c.u)
+                    if (amt > 0) { inc("c41s", amt.toInt()); markNeed(c.shiftIdx, j, "c41s") }
+                } else if (z < c.l || z > c.u) { inc("c41s"); markNeed(c.shiftIdx, j, "c41s") }
             }
         }
         for (c in p.cons42s) {
@@ -683,17 +696,19 @@ fun countMatrix(p: Problem, schedule: Array<IntArray>): Array<IntArray> {
  * （fg の refreshCheck と bg 最適化が同一プロセスで重なると到達 → 誤スコア/AIOOBE）。
  */
 private object ProblemCache {
-    private class Entry(val key: MagiState, val value: Problem)
+    // [backlog #12(a)・実験段階] quantitativeRangeEval は Problem の内容を変えるので、
+    //   キーへ含めないと同一state・別フラグの2要求が誤って同じインスタンスを共有してしまう。
+    private class Entry(val key: MagiState, val flag: Boolean, val value: Problem)
     @Volatile private var entry: Entry? = null
-    fun get(state: MagiState): Problem {
+    fun get(state: MagiState, quantitativeRangeEval: Boolean): Problem {
         val e = entry
-        if (e != null && e.key === state) return e.value
-        val np = Problem(state)
-        entry = Entry(state, np)   // 単一参照の公開はアトミック。race時の重複生成は等価で無害。
+        if (e != null && e.key === state && e.flag == quantitativeRangeEval) return e.value
+        val np = Problem(state, quantitativeRangeEval)
+        entry = Entry(state, quantitativeRangeEval, np)   // 単一参照の公開はアトミック。race時の重複生成は等価で無害。
         return np
     }
 }
-fun cachedProblem(state: MagiState): Problem = ProblemCache.get(state)
+fun cachedProblem(state: MagiState, quantitativeRangeEval: Boolean = false): Problem = ProblemCache.get(state, quantitativeRangeEval)
 
 fun coverage(p: Problem, schedule: Array<IntArray>): Array<IntArray> {
     val out = Array(p.T) { IntArray(p.K) }

@@ -13,7 +13,9 @@ class C42(@JvmField val g1: Int, @JvmField val s1: Int, @JvmField val g2: Int, @
  * Immutable, index-resolved view of a [MagiState] ready for fast evaluation.
  * Faithfully mirrors the Web worker's prelude + resolveConstraints().
  */
-class Problem(val state: MagiState) {
+/** [backlog #12(a)・実験段階] c2/c41/c41sを二値(違反ルール件数)でなく不足量/距離量で評価するモード。
+ *  既定falseは全既存呼出元と挙動不変。trueは`c2Amount`/`rangeDistance`（Evaluator.kt）を使う。 */
+class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) {
     val S = state.staffCount
     val T = state.dayCount
     val K = state.shiftCount
