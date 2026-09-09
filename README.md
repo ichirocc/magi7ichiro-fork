@@ -31,6 +31,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-09（3.512.1＝`V6FinalPort.handleOptimize`のトレーリングラムダ誤束縛を修正。backlog #12(a)で`quantitativeRangeEval`を`onProgress`の後に追加したため本番呼出2箇所（MagiViewModel/OptimizationWorker）がAndroidビルドだけ壊れていた（`EliteRelinking`で一度踏んだのと同じ罠の再発、host JVMでは検出不能でCIで発覚）。回帰テスト追加）
+
 **最終更新**：2026-09-09（3.512.0＝ユーザー提示「適応型制約違反研磨エンジン 完全統合実装仕様」v2.1の核（二車線ビーム`debtLaneSlots`・族優先度の順序非依存化`bestOfK`）を既存コードの構造的欠陥として実装。重い機構（結合度負債テンソル・Restless Bandit・並列トランザクション）は仕様書§20の解除条件未達のため見送り。既定OFF・未計測）
 
 **最終更新**：2026-09-09（3.511.9＝C1重複窓の連結成分化 `C1RepairAnalysis.solveComponent` はiter20で**全170ペア新旧同等**（検証不能）・既定OFF維持。3.511.8 C3n前後余白込みLNS `C3nMarginLnsPolish` はiter19で**不合格**（ほぼ無風）・既定OFF維持。3.511.7 c42/c42s専用min-cost-flow研磨 `C42FlowPolish` はiter18で**全170ペア新旧同等**（検証不能）・既定OFF維持。3.511.6 族選択を件数×重み×改善可能性へ familyPriorityScore はiter17で**不合格**・既定OFF維持。3.511.5 C41/C41s専用 min-cost-flow研磨はiter16で**不合格**・既定OFF維持。3.511.4 予算超過回帰試験でRSI_PLUSの35秒下限を発見・記録。3.511.3/3.511.2/3.511.1/3.511.0 は不合格・既定OFF維持。lnsAdaptive の既定 ON は判断待ち）

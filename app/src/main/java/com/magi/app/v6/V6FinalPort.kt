@@ -258,8 +258,8 @@ object V6FinalPort {
         softPolish: Boolean = false,
         requestedAlgorithm: V6Algorithm = V6Algorithm.AUTO,
         allowImpossible: Boolean = false,
-        onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
         quantitativeRangeEval: Boolean = false,
+        onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
     ): ActionResult = withContext(Dispatchers.Default) {
         // [3.388.0/外部レビュー] 計測は**この1回の「つくる」ぶん**。旧実装は optimize() の入口で
         //   落としていたため、AUTO の 31〜210秒帯（RSI → ALNS → ExtraRefine で optimize() を最大3回）では
