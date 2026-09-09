@@ -31,6 +31,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-09（3.514.0＝combineExhaustPairs・lnsAdaptiveをUIの「詳細設定」からON/OFFできるように（ユーザー指示。不合格判定で凍結中のdebtLaneSlots等は対象外）。シフト集計カードの既定開閉を展開へ戻す（3.483.0 S-4を反転、ユーザー指示「シフト集計は開く。閉じない」））
+
 **最終更新**：2026-09-09（3.513.0＝最終番兵の復帰盤面バグを修正。`handleOptimize`は番兵発火時に`finalSched`を`cappedInput`（`inputReport`と同じ、上限0のセルを外した盤面）でなく`normInput`（外す前の生入力）へ戻していたため、reportは違反なしと言うのに実際の盤面には上限0の割当が残る食い違いが起き得た。実機報告「大島愛のDﾃが上限0なのに1件割当」の調査で発見。`sentinelSchedule`へ抽出しユニットテスト、C#（`-MAGI_PC`）へ同日同期）
 
 **最終更新**：2026-09-09（3.512.6＝実機報告（荒井克枝の休超過）から`CombinatorialRepair.combineAndApply`の固定`maxStagnantTries=200`回を調査。プール56件でも`C(56,2)=1540`通りの2人組交換があるのに約13%しか試さず打ち切っていた構造を発見し、`exhaustPairs`/`pairCap`でフルペア空間まで探索できるopt-inを実装（既定OFF、6箇所の研磨パスへ配線、`tools/loop`で採否測定予定）

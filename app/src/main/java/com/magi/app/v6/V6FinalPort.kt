@@ -597,7 +597,13 @@ object V6FinalPort {
             shouldStop = postShouldStop,
             onPhase = { phase -> progressWatch(phase, null, EngineClock.nowMs() - startMs, budgetMs) },
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
-            params = V6HotfixPasses.PostOptimizationParams(quantitativeRangeEval = quantitativeRangeEval),
+            // [3.514.0/UIトグル化] combineExhaustPairs/lnsAdaptive は PolishGate 経由（呼び出し鎖に
+            //   引数を通さず届ける、c3n系トグルと同じ形）。
+            params = V6HotfixPasses.PostOptimizationParams(
+                quantitativeRangeEval = quantitativeRangeEval,
+                combineExhaustPairs = PolishGate.combineExhaustPairs,
+                lnsAdaptive = PolishGate.lnsAdaptive,
+            ),
         )
         val tPost1 = EngineClock.nowMs()
         // [高精度化/予算残の活用] 後処理予約枠(budget/12, 8〜25s)は後処理が早期にフィックスポイント到達すると

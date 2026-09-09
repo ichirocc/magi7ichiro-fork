@@ -157,6 +157,12 @@ object PolishGate {
      * （2.55.0/2.56.0/3.310.1/3.341.1 の規律）。
      */
     @Volatile var normalStallFraction: Double = 0.9
+
+    /** [3.514.0/UIトグル化] `combineAndApply`のexhaustPairs（経緯: history 3.512.6）。既定OFF・未計測。 */
+    @Volatile var combineExhaustPairs: Boolean = false
+
+    /** [3.514.0/UIトグル化] C1共同LNS・個人共同LNSのlnsAdaptive（経緯: history 3.510.2 iter9）。既定OFF。 */
+    @Volatile var lnsAdaptive: Boolean = false
 }
 
 /**
@@ -221,7 +227,9 @@ object TuningTelemetry {
             " / Kotlin照合=" + eff(parityOn, parityChecks.get(), "回") +
             " / 禁止連続の事前フィルタ=" + eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の無駄な検査を省略・勤務表は不変") +
             " / 禁止連続の崩し範囲=" + wide +
-            " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替")
+            " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替") +
+            " / 結合探索を粘り強く=" + (if (PolishGate.combineExhaustPairs) "ON" else "OFF") +
+            " / 一括見直しの自動調整=" + (if (PolishGate.lnsAdaptive) "ON" else "OFF")
     }
 }
 

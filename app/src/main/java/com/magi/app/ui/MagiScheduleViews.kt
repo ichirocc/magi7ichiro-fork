@@ -1189,9 +1189,9 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
-    // [3.483.0 S-4] 既定は折りたたみ。勤務表タブは「グリッドが主・集計は補助」（画面が縦に長く
-    //   ヘッダ固定(3.481.0)の恩恵が集計まで届かない実機所見）。開閉は回転/復元でも保持。
-    var open by rememberSaveable { mutableStateOf(false) }
+    // [3.514.0/ユーザー指示「シフト集計は開く。閉じない」] 既定を展開へ戻す（3.483.0 S-4の「既定は
+    //   折りたたみ」を反転）。開閉トグル自体は残す（手動で閉じたい場合のため）。開閉は回転/復元でも保持。
+    var open by rememberSaveable { mutableStateOf(true) }
     // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
     //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
     val periodLabel = remember(ui.startDate, ui.days) {
