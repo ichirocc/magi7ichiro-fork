@@ -2,7 +2,8 @@
 
 - C1重複窓の連結成分化 C1RepairAnalysis.solveComponent（同一職員の複数cons1窓を区間重なりでグラフ化し連結成分へ分割、休/夜2ルール重複でsolveWindowが後の窓を解けなくなる局面を解消）。既定OFFのhash 4/4不変、計測待ち（3.511.9, backlog #12(b)）  → `docs/history/3.4xx.md`
 - C3n（禁止連続）の前後余白込みLNS C3nMarginLnsPolish（違反パターン日+前後marginDaysを複数セル同時destroy-rebuild、1セル付け替えが届かない局面を拾う）。既定OFFのhash 4/4不変、計測待ち（3.511.8, backlog #12(b)）  → `docs/history/3.4xx.md`
-- c42/c42s（群ペア禁止）専用 min-cost-flow研磨 C42FlowPolish（c42PairCountは真に凸のためc41のような誘導コスト置換は不要、片側固定ヤコビ近似＋対称2試行）。既定OFFのhash 4/4不変、iter18で採否（3.511.7, backlog #12(b)）  → `docs/history/3.4xx.md`
+- iter18 結果: C42FlowPolishは170ペア全件で新旧同等（合成ケースにc42違反の仕込みが無く検証不能、C2Polish/iter15と同型）＝ゲート不合格、既定OFF維持（3.511.7 追記）  → `docs/history/3.4xx.md`
+- c42/c42s（群ペア禁止）専用 min-cost-flow研磨 C42FlowPolish（c42PairCountは真に凸のためc41のような誘導コスト置換は不要、片側固定ヤコビ近似＋対称2試行）。既定OFFのhash 4/4不変、iter18で不合格・既定OFF維持（3.511.7, backlog #12(b)）  → `docs/history/3.4xx.md`
 - iter17 結果: familyPriorityScore は170ペアで新良10／同等143／旧良17＝品質−0.26%、必須が増えた試行9件・個別10%超退行2件＝ゲート不合格、既定OFF維持（3.511.6 追記）  → `docs/history/3.4xx.md`
 - 族選択を件数×重み×改善可能性へ familyPriorityScore（ViolationComponentRepair.anchors、セグメント内のみソート、HARD優先の境界は死守）。既定OFFのhash 4/4不変、iter17で不合格・既定OFF維持（3.511.6, backlog #12(b)）  → `docs/history/3.4xx.md`
 - iter16 結果: C41FlowPolish は170ペアで新良21／同等143／旧良6＝品質+0.14%・速度+1.1%とも10%未達、必須が増えた試行2件＝ゲート不合格、既定OFF維持（3.511.5 追記）  → `docs/history/3.4xx.md`
