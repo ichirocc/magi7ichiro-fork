@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- iter21 結果: quantitativeRangeEval（C2/C41/C41sの量的評価、backlog #12(a)）は170ペアで新良5/同等153/旧良12、品質±0.00%・速度-1.1%とも不合格、必須件数が増えた試行6件はlarge-infeasibleカテゴリのみ（他15分類は完全無風）＝ゲート不合格、既定OFF維持（3.512.2 追記）  → `docs/history/3.4xx.md`
 - V6FinalPort.handleOptimizeのトレーリングラムダ誤束縛を修正（backlog #12(a)でonProgressの後にquantitativeRangeEvalを追加したため本番呼出2箇所がAndroidビルドだけ壊れていた、EliteRelinkingで一度踏んだのと同じ罠の再発、host JVMでは検出不能=v6-engine-checkで発覚）。回帰テスト追加、host JVM 718テストgreen（3.512.1, backlog #12(a)）  → `docs/history/3.4xx.md`
 - 違反連結成分修復の二車線ビーム debtLaneSlots と族優先度の順序非依存化 bestOfK（ユーザー提示「適応型制約違反研磨エンジン 完全統合実装仕様」v2.1の核だけを既存コードの構造的欠陥として取り出した実装、重い機構=結合度負債テンソル・Restless Bandit・並列トランザクションは§20の解除条件未達のため見送り）。既定OFF・未計測、host JVM 717テストgreen（3.512.0, backlog #12(b)/#15）  → `docs/history/3.4xx.md`
 - iter20 結果: C1RepairAnalysis.solveComponentは170ペア全件で新旧同等（合成ケースに複数cons1窓の近接局面が無く検証不能、c42flow/iter18と同型）＝ゲート不合格、既定OFF維持（3.511.9 追記）  → `docs/history/3.4xx.md`
