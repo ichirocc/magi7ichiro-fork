@@ -18,11 +18,12 @@ internal object C3nMarginLnsPolish {
         maxPasses: Int = 3,
         shouldStop: () -> Boolean = { false },
         seed: Long = 0xC3E9L,
+        quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
         val pinBlocks = PinBlockAttribution()
-        val p = Problem(state)
+        val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
-        val before = UnifiedViolationChecker.check(state, work)
+        val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
         var bestRep = before
         var applied = 0
         val tag = "C3nMarginLNS"
@@ -39,7 +40,7 @@ internal object C3nMarginLnsPolish {
         while (pass < maxPasses && evaluated < maxEvaluations) {
             if (shouldStop()) break
             var improved = false
-            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work)
+            val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val anchors = ArrayList<Pair<Int, Int>>()
             for ((key, fams) in rep0.cellFamilies) {
                 if ("vio-c3n" !in fams) continue
@@ -119,7 +120,7 @@ internal object C3nMarginLnsPolish {
                         continue
                     }
                     evaluated++
-                    val rep = UnifiedViolationChecker.check(state, work)
+                    val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                     val gate = adoptionGate(p, workBefore, work, rep, bestRep, pinBlocks)
                     if (gate.accepted) {
                         bestRep = rep; applied++; improved = true; acceptedHere = true
