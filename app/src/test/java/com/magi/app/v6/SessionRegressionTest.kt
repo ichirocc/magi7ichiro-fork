@@ -44,6 +44,17 @@ class SessionRegressionTest {
         assertNull(V6FinalPort.checkResultWorse(null, rep(9, 99, 999.0)))
     }
 
+    // ---- sentinelSchedule: [3.513.0] 番兵発火時の復帰盤面は inputReport と同じ cappedInput でなければならない ----
+
+    @Test fun sentinelSchedule_fallsBackToCappedInputNotRawInput() {
+        val cappedInput = arrayOf(intArrayOf(0, 0, 0))   // 個人上限 0 のセルを外した盤面（inputReport の基準）
+        val refSched = arrayOf(intArrayOf(1, 1, 1))
+        // 発火時: refSched でなく cappedInput を返す（旧実装は上限 0 を外す前の生入力へ戻していたバグ）
+        assertEquals(listOf(0, 0, 0), V6FinalPort.sentinelSchedule("HARDが悪化しました", cappedInput, refSched)[0].toList())
+        // 非発火時: refSched（パイプラインの結果）をそのまま返す
+        assertEquals(listOf(1, 1, 1), V6FinalPort.sentinelSchedule(null, cappedInput, refSched)[0].toList())
+    }
+
     // ---- 検査6b: 担当={休,B4,有}・休10-10・有1-1・31日 → B4 は最低20回＝目標1は達成不能 ----
 
     private fun aptState(restCapped: Boolean) = MagiState(

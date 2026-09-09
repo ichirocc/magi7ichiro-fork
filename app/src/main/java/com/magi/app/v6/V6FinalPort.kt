@@ -597,7 +597,13 @@ object V6FinalPort {
             shouldStop = postShouldStop,
             onPhase = { phase -> progressWatch(phase, null, EngineClock.nowMs() - startMs, budgetMs) },
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
-            params = V6HotfixPasses.PostOptimizationParams(quantitativeRangeEval = quantitativeRangeEval),
+            // [3.514.0/UIトグル化] combineExhaustPairs/lnsAdaptive は PolishGate 経由（呼び出し鎖に
+            //   引数を通さず届ける、c3n系トグルと同じ形）。
+            params = V6HotfixPasses.PostOptimizationParams(
+                quantitativeRangeEval = quantitativeRangeEval,
+                combineExhaustPairs = PolishGate.combineExhaustPairs,
+                lnsAdaptive = PolishGate.lnsAdaptive,
+            ),
         )
         val tPost1 = EngineClock.nowMs()
         // [高精度化/予算残の活用] 後処理予約枠(budget/12, 8〜25s)は後処理が早期にフィックスポイント到達すると
@@ -764,8 +770,9 @@ object V6FinalPort {
         )) else emptyList()
         // [最終番兵/多重防御] 全段 keep-best のため通常は発火しないが、万一パイプラインが入力より
         // 悪い結果を返した場合は入力を採用し退化を防ぐ（checkResultWorse をここで配線）。
+        // [3.513.0/バグ修正] 復帰先は inputReport と同じ盤面 cappedInput（経緯: history 3.513.0）。
         val regression = checkResultWorse(inputReport, refReport)
-        val finalSched = if (regression != null) normInput else refSched
+        val finalSched = sentinelSchedule(regression, cappedInput, refSched)
         val finalReport = if (regression != null) inputReport else refReport
         val sentinelLog = if (regression != null) listOf(
             MirrorLog(
@@ -986,7 +993,7 @@ object V6FinalPort {
         val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
-        //   最終番兵で入力へ戻る（normInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」
+        //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」
         //   として**別の盤面の観測**を見せてしまう（3.324.0 で ViewModel 側の keep-best 分岐は塞いだが、
         //   エンジン内部のこの2経路が残っていた）。盤面が一致するときだけ診断を通す。
         //   ログ（post.report.logs）は「その実行で何が起きたか」の記録なので落とさない。
@@ -1030,6 +1037,10 @@ object V6FinalPort {
         n < 100_000_000 -> "%,d万回".format(n / 10_000)
         else -> "%,d億回".format(n / 100_000_000)
     }
+
+    /** [3.513.0] 番兵発火時の復帰盤面は `inputReport` と同じ `cappedInput` に揃える（旧実装のバグ、経緯: history 3.513.0）。 */
+    internal fun sentinelSchedule(regression: String?, cappedInput: Array<IntArray>, refSched: Array<IntArray>): Array<IntArray> =
+        if (regression != null) cappedInput else refSched
 
     fun checkResultWorse(before: ViolationReport?, after: ViolationReport): String? {
         if (before == null) return null

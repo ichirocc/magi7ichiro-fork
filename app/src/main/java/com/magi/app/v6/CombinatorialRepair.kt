@@ -97,6 +97,10 @@ object CombinatorialRepair {
         p: Problem? = null,
         /** [Iteration 2] 結合に使われず残った候補の受け皿（後処理チェーン全体の違反連結成分修復へ回す）。 */
         leftover: MutableList<Candidate>? = null,
+        /** [測定中/3.512.6] true なら2人組(k=2)の全組合せぶん（`pairCap` 上限）は連続不採用でも
+         *  打ち切らない。isBetter ゲートは不変＝退化なし、増えるのは試す回数のみ（経緯: history 3.512.6）。 */
+        exhaustPairs: Boolean = false,
+        pairCap: Int = 5_000,
     ): ViolationReport {
         rejected.forEach(stats::onFeed)
         val t0 = EngineClock.nowMs()   // [3.375.0] 結合探索に費やした時間（summary で出す）
@@ -111,6 +115,8 @@ object CombinatorialRepair {
             //   旧は組合せごとに copy2D() していた（同じ内容を最大200回作り直していた）。
             val workBeforeCombo = if (p != null) work.copy2D() else emptyArray()
             val upperK = minOf(maxK, pool.size)
+            val effectiveMaxStagnantTries = if (!exhaustPairs) maxStagnantTries
+                else maxOf(maxStagnantTries, minOf(pool.size.toLong() * (pool.size - 1) / 2, pairCap.toLong()).toInt())
             searchK@ for (k in 2..upperK) {
                 val combo = IntArray(k) { it }
                 while (true) {
@@ -145,7 +151,7 @@ object CombinatorialRepair {
                         }
                     }
                     misses++
-                    if (misses >= maxStagnantTries) { stats.stagnantExit = true; break@searchK }
+                    if (misses >= effectiveMaxStagnantTries) { stats.stagnantExit = true; break@searchK }
                     if (!nextCombination(combo, pool.size)) break
                 }
             }

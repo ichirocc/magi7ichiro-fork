@@ -37,8 +37,9 @@ internal object C1RepairOperators {
     fun selfRelocateAndSameDaySwap(
         state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3,
         shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, quantitativeRangeEval: Boolean = false,
+        combineExhaustPairs: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult =
-        C1WindowPolish.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed, quantitativeRangeEval)
+        C1WindowPolish.applyC1WindowPolish(state, schedule, maxPasses, shouldStop, seed, quantitativeRangeEval, combineExhaustPairs)
 
     /** Temporal DP + FlexibleDayFlow。 */
     fun temporalFlow(

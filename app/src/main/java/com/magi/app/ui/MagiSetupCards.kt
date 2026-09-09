@@ -350,6 +350,23 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             Spacer(Modifier.width(8.dp))
             Text("仕上げ最適化", style = MaterialTheme.typography.labelSmall)
         }
+        // [3.514.0] combineExhaustPairs・lnsAdaptiveはisBetterゲート不変=退化しない安全な変更のみUI化。
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("職員どうしの交換探索を粘り強く")
+                Text("2人一組の入れ替えを、通常より多くの組合せまで試します。結果が悪化することはありませんが、時間がかかる場合があります。",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.combineExhaustPairs, onCheckedChange = { vm.setCombineExhaustPairs(it) }, enabled = !ui.running)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("一括見直しの時間配分を自動調整")
+                Text("個人回数・期間の一括見直しにかける時間を、改善が続く間だけ延ばします。結果が悪化することはありませんが、速度はデータにより変わります。",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.lnsAdaptive, onCheckedChange = { vm.setLnsAdaptive(it) }, enabled = !ui.running)
+        }
     }
 }
 

@@ -31,6 +31,16 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-09（3.514.0＝combineExhaustPairs・lnsAdaptiveをUIの「詳細設定」からON/OFFできるように（ユーザー指示。不合格判定で凍結中のdebtLaneSlots等は対象外）。シフト集計カードの既定開閉を展開へ戻す（3.483.0 S-4を反転、ユーザー指示「シフト集計は開く。閉じない」））
+
+**最終更新**：2026-09-09（3.513.0＝最終番兵の復帰盤面バグを修正。`handleOptimize`は番兵発火時に`finalSched`を`cappedInput`（`inputReport`と同じ、上限0のセルを外した盤面）でなく`normInput`（外す前の生入力）へ戻していたため、reportは違反なしと言うのに実際の盤面には上限0の割当が残る食い違いが起き得た。実機報告「大島愛のDﾃが上限0なのに1件割当」の調査で発見。`sentinelSchedule`へ抽出しユニットテスト、C#（`-MAGI_PC`）へ同日同期）
+
+**最終更新**：2026-09-09（3.512.6＝実機報告（荒井克枝の休超過）から`CombinatorialRepair.combineAndApply`の固定`maxStagnantTries=200`回を調査。プール56件でも`C(56,2)=1540`通りの2人組交換があるのに約13%しか試さず打ち切っていた構造を発見し、`exhaustPairs`/`pairCap`でフルペア空間まで探索できるopt-inを実装（既定OFF、6箇所の研磨パスへ配線、`tools/loop`で採否測定予定）
+
+**最終更新**：2026-09-09（3.512.5＝`LiveScheduleCard`「状態遷移」の変化件数が実機で常に0固定だったバグを修正（実機報告: 探索中16回の最良更新があっても表示は0のまま。原因はremember計算ラムダ内の副作用がComposeの破棄コンポジション契約に反していたこと。書き込みをSideEffectへ分離）
+
+**最終更新**：2026-09-09（3.512.4＝debtLaneSlots・bestOfKの分離条件iter22/23はいずれも**不合格**（debtLaneSlots: 新良8/同等135/旧良27・品質-0.18%、bestOfK: 新良15/同等138/旧良17・品質-0.17%、必須増はlarge-infeasibleに集中）。ユーザー判断で検証・追加実装を中止、既定OFFのまま凍結。WeightDebt/ConstraintRepairInference/familyPriorityScoreに続く同系統4・5度目の不合格）
+
 **最終更新**：2026-09-09（3.512.3＝ユーザーの机上テストで`trimFrontier`のビーム縮小バグを発見・修正（負債候補0件でも非負債候補の枠がbeamWidth-debtLaneSlotsに固定され純粋な退行を起こしうる構造）。`LoopBench`の`debtlane`/`bestofk`フラグをレバー単体で分離測定できる条件へ修正、旧測定値は交絡した参考値として保存・採否判定には不使用）
 
 **最終更新**：2026-09-09（3.512.2＝quantitativeRangeEval（C2/C41/C41sの量的評価、backlog #12(a)）はiter21で**不合格**（170ペア新良5/同等153/旧良12、品質±0.00%・速度-1.1%とも不合格、必須件数が増えた試行6件はlarge-infeasibleカテゴリのみ）・既定OFF維持）

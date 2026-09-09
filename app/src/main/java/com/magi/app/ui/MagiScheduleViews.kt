@@ -172,6 +172,8 @@ internal fun LiveScheduleCard(ui: UiState) {
             //   既出のため、ここでの再表示は削除（同一文字列が直列2回並んでいた）。
             val cur = ui.liveSchedule
             // 変化セル検出: 前回スナップショットとの差分。holder(非state)で保持し再合成ループを避ける。
+            // [3.512.5] remember(cur) の計算ラムダは破棄コンポジションでも呼ばれうる（Compose公式の明示注意）
+            //   ＝副作用禁止。prevHolder への書き込みはコンポジション確定後にのみ走る SideEffect 側に置く。
             val prevHolder = remember { arrayOfNulls<List<List<Int>>>(1) }
             val changed = remember(cur) {
                 val set = HashSet<Int>()
@@ -182,9 +184,9 @@ internal fun LiveScheduleCard(ui: UiState) {
                         if (a.size == b.size) for (j in b.indices) if (a[j] != b[j]) set.add(i * 100000 + j)
                     }
                 }
-                prevHolder[0] = cur
                 set
             }
+            SideEffect { prevHolder[0] = cur }
             TextButton(onClick = { show = !show }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(if (show) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = null, modifier = Modifier.padding(end = 4.dp))
@@ -1187,9 +1189,9 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
-    // [3.483.0 S-4] 既定は折りたたみ。勤務表タブは「グリッドが主・集計は補助」（画面が縦に長く
-    //   ヘッダ固定(3.481.0)の恩恵が集計まで届かない実機所見）。開閉は回転/復元でも保持。
-    var open by rememberSaveable { mutableStateOf(false) }
+    // [3.514.0/ユーザー指示「シフト集計は開く。閉じない」] 既定を展開へ戻す（3.483.0 S-4の「既定は
+    //   折りたたみ」を反転）。開閉トグル自体は残す（手動で閉じたい場合のため）。開閉は回転/復元でも保持。
+    var open by rememberSaveable { mutableStateOf(true) }
     // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
     //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
     val periodLabel = remember(ui.startDate, ui.days) {

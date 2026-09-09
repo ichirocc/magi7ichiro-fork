@@ -998,6 +998,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 
+    /**
+     * [3.514.0] 職員2人の同日シフト交換探索を、既定の連続不採用200回で打ち切らず、
+     * 2人組の全組合せぶん（`CombinatorialRepair.combineAndApply`のexhaustPairs、上限5000通り）まで試す。
+     * isBetterゲートは不変のため退化はしない＝安全。効果は未計測（`tools/loop`で別途測定中、既定OFF）。
+     */
+    fun setCombineExhaustPairs(on: Boolean) {
+        com.magi.app.v6.PolishGate.combineExhaustPairs = on
+        _ui.update { it.copy(combineExhaustPairs = on) }
+        logOp("I", "設定変更: 結合探索を粘り強く → ${if (on) "ON" else "OFF"}")
+    }
+
+    /**
+     * [3.514.0] 個人回数・期間の一括見直し（共同LNS）を「短時間試行→改善時だけ拡張」にする。
+     * iter9実測: 退行0・品質±0・速度はデータにより変わる（平均+10%/実データ−23%）。
+     */
+    fun setLnsAdaptive(on: Boolean) {
+        com.magi.app.v6.PolishGate.lnsAdaptive = on
+        _ui.update { it.copy(lnsAdaptive = on) }
+        logOp("I", "設定変更: 一括見直しの自動調整 → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }

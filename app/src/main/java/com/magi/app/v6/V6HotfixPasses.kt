@@ -157,6 +157,12 @@ object PolishGate {
      * （2.55.0/2.56.0/3.310.1/3.341.1 の規律）。
      */
     @Volatile var normalStallFraction: Double = 0.9
+
+    /** [3.514.0/UIトグル化] `combineAndApply`のexhaustPairs（経緯: history 3.512.6）。既定OFF・未計測。 */
+    @Volatile var combineExhaustPairs: Boolean = false
+
+    /** [3.514.0/UIトグル化] C1共同LNS・個人共同LNSのlnsAdaptive（経緯: history 3.510.2 iter9）。既定OFF。 */
+    @Volatile var lnsAdaptive: Boolean = false
 }
 
 /**
@@ -221,7 +227,9 @@ object TuningTelemetry {
             " / Kotlin照合=" + eff(parityOn, parityChecks.get(), "回") +
             " / 禁止連続の事前フィルタ=" + eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の無駄な検査を省略・勤務表は不変") +
             " / 禁止連続の崩し範囲=" + wide +
-            " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替")
+            " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替") +
+            " / 結合探索を粘り強く=" + (if (PolishGate.combineExhaustPairs) "ON" else "OFF") +
+            " / 一括見直しの自動調整=" + (if (PolishGate.lnsAdaptive) "ON" else "OFF")
     }
 }
 
@@ -336,6 +344,9 @@ object V6HotfixPasses {
         /** [backlog #12(a)・実験段階] c2/c41/c41sを二値でなく不足量/距離量で評価する（既定false=挙動不変）。
          *  全Polishパス・checker呼出へ明示伝播（Stage2）。 */
         val quantitativeRangeEval: Boolean = false,
+        /** [測定中/3.512.6] `CombinatorialRepair.combineAndApply` の2人組(k=2)探索を既定の連続不採用200回より
+         *  多くても打ち切らず試す（経緯: history 3.512.6）。既定false=挙動不変。 */
+        val combineExhaustPairs: Boolean = false,
     )
 
     /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
@@ -652,7 +663,7 @@ object V6HotfixPasses {
             // c1 違反セルに厳密アンカーする 2 op は、不足窓が無ければ必ず no-op＝C1DeltaPrefilter で 1 回判定して飛ばす（3.275.0/3.276.0）。
             if (C1DeltaPrefilter.hasActionableC1(C1RepairIndex.build(pC1, chain.work))) {
                 val rC1 = chain.timed("後処理 期間要件(c1)研磨$tag", "C1同日交換") { work ->
-                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), quantitativeRangeEval = params.quantitativeRangeEval)
+                    C1RepairOperators.selfRelocateAndSameDaySwap(state, work, maxPasses = params.c1WindowPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_WINDOW, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
                 }
                 take("c1", rC1)
                 // 構造化診断は巡ごとに合算（3.331.0。最後の巡だけだと観測が減る）。末尾で最終盤面に対して再フィルタする。
@@ -687,13 +698,13 @@ object V6HotfixPasses {
                 })
             }
             take("c3mn玉突き", chain.timed("後処理 回避パターン(c3mn)玉突き研磨$tag", "C3mnPolish") { work ->
-                C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3MN, round), quantitativeRangeEval = params.quantitativeRangeEval)
+                C3FamilyPolish.applyC3mnPolish(state, work, maxPasses = params.c3mnPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3MN, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
             })
             take("c3n", chain.timed("後処理 禁止連続(c3n)研磨$tag", "C3nPolish") { work ->
-                C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3N, round), quantitativeRangeEval = params.quantitativeRangeEval)
+                C3FamilyPolish.applyC3nPolish(state, work, maxPasses = params.c3nPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3N, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
             })
             take("range玉突き", chain.timed("後処理 個人回数(low/high)玉突き研磨$tag", "RangePolish") { work ->
-                RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), quantitativeRangeEval = params.quantitativeRangeEval)
+                RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
             })
             if (params.c41FlowPolishEnabled) {
                 take("c41フロー", chain.timed("後処理 群/日レンジ(c41/c41s)フロー研磨$tag", "C41FlowPolish") { work ->
@@ -738,10 +749,10 @@ object V6HotfixPasses {
                 })
             }
             take("apt玉突き", chain.timed("後処理 適切回数(apt)研磨$tag", "AptPolish") { work ->
-                AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), quantitativeRangeEval = params.quantitativeRangeEval)
+                AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
             })
             take("fair玉突き", chain.timed("後処理 グループ内公平化(fair)玉突き研磨$tag", "FairPolish") { work ->
-                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), quantitativeRangeEval = params.quantitativeRangeEval)
+                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
             })
             // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
             val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()

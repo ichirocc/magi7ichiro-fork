@@ -190,6 +190,46 @@ class CombinatorialRepairTest {
         assertEquals("盤面は不変", before, after)
     }
 
+    // [3.512.6] 上のcombineAndApplyGivesUpEarlyAfterConsecutiveMissesと同じ10件重複プール
+    //   （C(10,2)=45通り）で、exhaustPairs=true なら maxStagnantTries=3 のままでも45通り全部試す。
+    @Test
+    fun combineAndApplyExhaustPairsExploresFullPairwiseSpaceInsteadOfStoppingEarly() {
+        val st = combineTwoRejectedState()
+        val work = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, work)
+
+        val dupes = (0 until 10).map { CombinatorialRepair.Candidate(listOf(intArrayOf(0, 0, 1)), "dup") }
+
+        val stats = CombinatorialRepair.Stats()
+        val after = CombinatorialRepair.combineAndApply(
+            st, work, before, dupes, ::isBetterLocal, maxStagnantTries = 3, exhaustPairs = true, stats = stats,
+        )
+
+        assertEquals("C(10,2)=45通り全部を試す(既定3で早期終了しない)", 45, stats.combosTried)
+        assertTrue("45通り使い切った時点では停滞終了フラグは立つ", stats.stagnantExit)
+        assertEquals("採用0件(全て同一セルで重複)", 0, stats.combosAccepted)
+        assertEquals("盤面は不変", before, after)
+    }
+
+    // exhaustPairs=true でも、既存の「単独では不採用だが結合で採用」の経路は変わらず動く
+    // （新パラメータが通常の採用ロジックを壊していないことの回帰確認）。
+    @Test
+    fun combineAndApplyExhaustPairsStillAcceptsAWinningComboNormally() {
+        val st = combineTwoRejectedState()
+        val work = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, work)
+        val candX = CombinatorialRepair.Candidate(listOf(intArrayOf(0, 0, 2)), "test", "X")
+        val candY = CombinatorialRepair.Candidate(listOf(intArrayOf(1, 0, 3)), "test", "Y")
+
+        val stats = CombinatorialRepair.Stats()
+        val after = CombinatorialRepair.combineAndApply(
+            st, work, before, listOf(candX, candY), ::isBetterLocal, exhaustPairs = true, stats = stats,
+        )
+
+        assertEquals("結合後はapt=0", 0, after.breakdown["apt"] ?: -1)
+        assertEquals(1, stats.combosAccepted)
+    }
+
     // isBetter（呼び出し側から注入される判定）が例外を投げても、試行中の組合せを盤面に残さない。
     // 旧は「適用→評価→巻き戻し」が直列で、評価の途中で例外が出ると work に組合せが残ったまま伝播した。
     @Test

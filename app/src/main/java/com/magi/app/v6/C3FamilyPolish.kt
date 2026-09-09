@@ -18,7 +18,7 @@ import java.util.Random
  * [V6HotfixPasses] に残置される共有返り型のため、ここからは完全修飾で構築する。
  */
 internal object C3FamilyPolish {
-    fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3mnPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3AL, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -110,6 +110,7 @@ internal object C3FamilyPolish {
         val c3mnCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
             state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c3mnCombStats, p = p, leftover = rejectedOut,
+            exhaustPairs = combineExhaustPairs,
         )
         applied += c3mnCombStats.combosAccepted
         val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3mn")
@@ -141,7 +142,7 @@ internal object C3FamilyPolish {
      * 最終採否は checker + isBetter + exactPinRegression が担保する。
      * 崩した先で被覆が悪化するなら `findCovUChain` の玉突き連鎖で埋め直すのは既存パスと同じ。
      */
-    fun applyC3nPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3EL, quantitativeRangeEval: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyC3nPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xC3EL, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -254,6 +255,7 @@ internal object C3FamilyPolish {
         val c3nCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
             state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = c3nCombStats, p = p, leftover = rejectedOut,
+            exhaustPairs = combineExhaustPairs,
         )
         applied += c3nCombStats.combosAccepted
         val stuckNames = stuckStaffNames(state, bestRep.cellFamilies, "vio-c3n")
