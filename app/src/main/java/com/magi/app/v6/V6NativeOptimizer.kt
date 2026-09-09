@@ -109,11 +109,11 @@ object V6NativeOptimizer {
             (index.toLong() * -0x61c8864680b583ebL))
         repeat(plan.intensity) {
             when (plan.mode) {
-                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                HypothesisStartMode.DAY_REPAIR -> if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng, quantitativeRangeEval)
+                HypothesisStartMode.STAFF_REPAIR -> if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng, quantitativeRangeEval)
                 HypothesisStartMode.MIXED_REPAIR -> {
-                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng, quantitativeRangeEval)
+                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng, quantitativeRangeEval)
                 }
                 HypothesisStartMode.BASELINE -> Unit
             }
@@ -318,12 +318,12 @@ object V6NativeOptimizer {
         }
         val chosen = SelectionHeuristics.chooseAlgorithm(options.algorithm, options.totalBudgetSec)
         val p = cachedProblem(state, options.quantitativeRangeEval)
-        var schedule = HardRepairCore.hf66DataHardening(state, normalizeSchedule(initial, p), "pre")
+        var schedule = HardRepairCore.hf66DataHardening(state, normalizeSchedule(initial, p), "pre", options.quantitativeRangeEval)
         // [N1b] 入口修復(hf67)は better(hard→weighted→total) 改善時のみ採用。既に良好な入力
         //   （前回結果の再最適化など）を破壊し、探索を劣化seedに係留する事故を防ぐ
         //   （運用ログ実例: 入力214 → 修復後HARD4/250 → 275秒が回復に浪費）。hf66(群内正規化)は無条件維持。
         val entryReport = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = options.quantitativeRangeEval)
-        val repaired = HardRepairCore.hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L)).schedule
+        val repaired = HardRepairCore.hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L), options.quantitativeRangeEval).schedule
         val repairedReport = UnifiedViolationChecker.check(state, repaired, quantitativeRangeEval = options.quantitativeRangeEval)
         val hf67Adopted = better(repairedReport, entryReport)
         if (hf67Adopted) schedule = repaired
@@ -386,7 +386,7 @@ object V6NativeOptimizer {
             val preRep = UnifiedViolationChecker.check(state, resultSched, quantitativeRangeEval = options.quantitativeRangeEval)
             if (preRep.hard > 0 && (preRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
                 val cand = resultSched.copy2D()
-                val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL))
+                val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL), quantitativeRangeEval = options.quantitativeRangeEval)
                 if (n > 0) {
                     val candRep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval = options.quantitativeRangeEval)
                     if (better(candRep, preRep)) {
@@ -972,14 +972,14 @@ object V6NativeOptimizer {
                     .filter { RoleDiversityHelpers.scheduleDistance(globalBest, it) > 0 }
                     .sortedByDescending { RoleDiversityHelpers.scheduleDistance(globalBest, it) }
                     .take(3).map { it.copy2D() }.toList()
-                val relinked = EliteRelinking.elitePathRelink(state, globalBest, alternatives, shouldStop).first
+                val relinked = EliteRelinking.elitePathRelink(state, globalBest, alternatives, shouldStop, quantitativeRangeEval).first
                 if (RoleDiversityHelpers.scheduleDistance(globalBest, relinked) > 0) relinked
                 else hypothesisStartFor(state, globalBest, 7, seed, quantitativeRangeEval)
             }
             HypothesisEpochRole.DAY_BLOCK_ALNS -> globalBest.copy2D().also { out ->
                 if (p.T > 0) {
                     val first = rng.nextInt(p.T)
-                    repeat(n * 2) { x -> DestroyRepairOperators.destroyRepairDayAt(state, out, (first + x) % p.T, rng) }
+                    repeat(n * 2) { x -> DestroyRepairOperators.destroyRepairDayAt(state, out, (first + x) % p.T, rng, quantitativeRangeEval) }
                 }
             }
             HypothesisEpochRole.HARD_FAMILY_RSI -> {
@@ -991,7 +991,7 @@ object V6NativeOptimizer {
                         (rep.breakdown["c3n"] ?: 0) > 0 -> "c3n"
                         else -> RsiFocusSelection.maxViolatedFamily(rep)
                     }
-                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng)
+                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng, quantitativeRangeEval = quantitativeRangeEval)
                 }
                 out
             }
@@ -1000,8 +1000,8 @@ object V6NativeOptimizer {
             }
             HypothesisEpochRole.LARGE_DESTROY_ALNS -> globalBest.copy2D().also { out ->
                 repeat(n * 2) {
-                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng)
-                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng)
+                    if (p.T > 0) DestroyRepairOperators.destroyRepairDayAt(state, out, rng.nextInt(p.T), rng, quantitativeRangeEval)
+                    if (p.S > 0) DestroyRepairOperators.destroyRepairStaffAt(state, out, rng.nextInt(p.S), rng, quantitativeRangeEval)
                 }
             }
             HypothesisEpochRole.PERSONAL_RSI -> {
@@ -1015,7 +1015,7 @@ object V6NativeOptimizer {
                         (rep.breakdown["fair"] ?: 0) > 0 -> "fair"
                         else -> "total"
                     }
-                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng)
+                    out = RsiHypothesisOperators.rsiGenerateHypothesis(state, out, rep, focus, rng, quantitativeRangeEval = quantitativeRangeEval)
                 }
                 out
             }
@@ -1189,7 +1189,7 @@ object V6NativeOptimizer {
         ) { pr ->
             if (pr.elapsedMs % 1000L < 220L) onProgress("V5 SA", lastReport, pr.totalIters, pr.elapsedMs)
         }
-        val repaired = HardRepairCore.hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L))
+        val repaired = HardRepairCore.hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L), options.quantitativeRangeEval)
         var outSched = repaired.schedule
         var report = UnifiedViolationChecker.check(state, outSched, quantitativeRangeEval = options.quantitativeRangeEval)
         // [退化防止番兵 / 実機ログ起因] runAlns(578行)と同じ入力比keep-best。従来 runV5 だけ番兵が無く、SA+修復が
@@ -1415,8 +1415,8 @@ object V6NativeOptimizer {
             coroutineContext.ensureActive()
             // [restart 摂動] 一律 strength=0.18。非線形スケジュール(2.51)は nsp_bench --real の final 品質で
             //   +101% 悪化と実測されたため revert(序盤の大摂動が強い repair 下で良解を壊し最終品質を損なう)。
-            var cur = if (r == 0) globalBest.copy2D() else DestroyRepairOperators.perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6))
-            cur = HardRepairCore.hf67HardRepair(state, cur, rng).schedule
+            var cur = if (r == 0) globalBest.copy2D() else DestroyRepairOperators.perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6), quantitativeRangeEval = options.quantitativeRangeEval)
+            cur = HardRepairCore.hf67HardRepair(state, cur, rng, options.quantitativeRangeEval).schedule
             val deadline = nowMs() + per * 1000L
             // [Stage8b] ネイティブ ALNS チャンクへ委譲。不可 or 番兵発火なら下の従来 Kotlin ループへ。
             val usedNative = nativeProblem != 0L && NativeGate.enabled && runRestartNative(cur, deadline, per, r)
@@ -1565,12 +1565,12 @@ object V6NativeOptimizer {
                     val drDay = if (op == 0 && p.T > 0) rng.nextInt(p.T) else -1
                     val drStaff = if (op == 1 && p.S > 0) rng.nextInt(p.S) else -1
                     when (op) {
-                        0 -> if (drDay >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, drDay, rng)
-                        1 -> if (drStaff >= 0) DestroyRepairOperators.destroyRepairStaffAt(state, cand, drStaff, rng)
-                        else -> DestroyRepairOperators.destroyRepairViolations(state, cand, curReport, rng)
+                        0 -> if (drDay >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, drDay, rng, options.quantitativeRangeEval)
+                        1 -> if (drStaff >= 0) DestroyRepairOperators.destroyRepairStaffAt(state, cand, drStaff, rng, options.quantitativeRangeEval)
+                        else -> DestroyRepairOperators.destroyRepairViolations(state, cand, curReport, rng, options.quantitativeRangeEval)
                     }
                     // hf67 は hard 違反がある時のみ必要。
-                    val fixed = if (iter % 7L == 0L && curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
+                    val fixed = if (iter % 7L == 0L && curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng, options.quantitativeRangeEval).schedule else cand
                     val nDiffs = when {
                         op == 0 && drDay >= 0 && fixed === cand -> {
                             var n = 0
@@ -1756,7 +1756,7 @@ object V6NativeOptimizer {
             focusTrail.add(focus)
             val focusedBefore = bestReport.breakdown[focus] ?: 0
             lastFocus = focus   // [レビュー#5] 次ラウンド頭の HF63 更新へ「このラウンドの投入先」を渡す
-            val hypothesis = RsiHypothesisOperators.rsiGenerateHypothesis(state, best, bestReport, focus, rng, shouldStop)
+            val hypothesis = RsiHypothesisOperators.rsiGenerateHypothesis(state, best, bestReport, focus, rng, shouldStop, options.quantitativeRangeEval)
             val phase = if (round % 2 == 0) runAlns(state, hypothesis, options.copy(restarts = 1), per, shouldStop, onProgress) else runV5(state, hypothesis, options, per, shouldStop, onProgress)
             iters += phase.iterations
             var candSched = phase.schedule
@@ -2033,10 +2033,10 @@ object V6NativeOptimizer {
                 }
                 else -> {   // copy-based multi-cell destroy/repair (ops 9,10)
                     val cand = cur.copy2D()
-                    val drDay2 = if (rng.nextBoolean()) { DestroyRepairOperators.destroyRepairViolations(state, cand, bestReport, rng); -1 }
-                                 else { val j = if (p.T > 0) rng.nextInt(p.T) else -1; if (j >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, j, rng); j }
+                    val drDay2 = if (rng.nextBoolean()) { DestroyRepairOperators.destroyRepairViolations(state, cand, bestReport, rng, quantitativeRangeEval); -1 }
+                                 else { val j = if (p.T > 0) rng.nextInt(p.T) else -1; if (j >= 0) DestroyRepairOperators.destroyRepairDayAt(state, cand, j, rng, quantitativeRangeEval); j }
                     // hard-feasible のときは hf67 を省略（DeltaEvaluator が hard 退化を弾く）。
-                    val fixed = if (curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng).schedule else cand
+                    val fixed = if (curHard > 0L) HardRepairCore.hf67HardRepair(state, cand, rng, quantitativeRangeEval).schedule else cand
                     val nDiffs = if (drDay2 >= 0 && fixed === cand) {
                         var n = 0
                         for (i in 0 until p.S) if (cur[i][drDay2] != fixed[i][drDay2]) diffBuf[n++] = i * p.T + drDay2
