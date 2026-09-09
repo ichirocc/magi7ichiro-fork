@@ -172,6 +172,8 @@ internal fun LiveScheduleCard(ui: UiState) {
             //   既出のため、ここでの再表示は削除（同一文字列が直列2回並んでいた）。
             val cur = ui.liveSchedule
             // 変化セル検出: 前回スナップショットとの差分。holder(非state)で保持し再合成ループを避ける。
+            // [3.512.5] remember(cur) の計算ラムダは破棄コンポジションでも呼ばれうる（Compose公式の明示注意）
+            //   ＝副作用禁止。prevHolder への書き込みはコンポジション確定後にのみ走る SideEffect 側に置く。
             val prevHolder = remember { arrayOfNulls<List<List<Int>>>(1) }
             val changed = remember(cur) {
                 val set = HashSet<Int>()
@@ -182,9 +184,9 @@ internal fun LiveScheduleCard(ui: UiState) {
                         if (a.size == b.size) for (j in b.indices) if (a[j] != b[j]) set.add(i * 100000 + j)
                     }
                 }
-                prevHolder[0] = cur
                 set
             }
+            SideEffect { prevHolder[0] = cur }
             TextButton(onClick = { show = !show }, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(if (show) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
                     contentDescription = null, modifier = Modifier.padding(end = 4.dp))
