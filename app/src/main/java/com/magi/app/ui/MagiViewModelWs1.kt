@@ -1,6 +1,7 @@
 package com.magi.app.ui
 
 import com.magi.app.model.Group
+import com.magi.app.toHankakuKigou
 import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.restShiftIndex
 
@@ -239,14 +240,34 @@ fun MagiViewModel.ws1MoveStaff(i: Int, dir: Int) {
     applyStructure(r)
 }
 
-/** [3.515.3] シフト種別の並び替え（dir=-1 上へ / +1 下へ）。端では何もしない。 */
-fun MagiViewModel.ws1MoveShift(k: Int, dir: Int) {
-    val st = state ?: return
-    val sched = currentSchedule ?: return
-    val r = Ws1Ops.moveShift(st, sched, k, dir)
-    if (r.state === st) return
-    logOp("I", "シフトの並び替え: ${opSy(k)} を${if (dir < 0) "上" else "下"}へ")
+/** [3.515.6/ドラッグ&ドロップ] シフト種別を任意位置へ移動。行のドラッグを離した瞬間に1回だけ呼ぶ想定
+ *  （3.515.3の隣接swap `Ws1Ops.moveShift` を from→to の方向へ内部で繰り返し適用し、検査・ログ・undo
+ *  チェックポイントは最後に1回だけにする＝ドラッグ中に何度も検査が走るのを避ける）。 */
+fun MagiViewModel.ws1MoveShiftTo(from: Int, to: Int) {
+    val st0 = state ?: return
+    val sched0 = currentSchedule ?: return
+    if (from == to || from !in st0.shifts.indices || to !in st0.shifts.indices) return
+    val name = opSy(from)
+    val dir = if (to > from) 1 else -1
+    var r = Ws1Ops.moveShift(st0, sched0, from, dir)
+    var pos = from + dir
+    while (pos != to) { r = Ws1Ops.moveShift(r.state, r.schedule, pos, dir); pos += dir }
+    logOp("I", "シフトの並び替え: $name を${from + 1}→${to + 1}番目へ")
     applyStructure(r)
+}
+
+/** [3.515.6] グループを任意位置へ移動。[ws1MoveShiftTo] と同じ理由・同じ形。`Ws1Ops.moveGroup` は
+ *  schedule を返さないため `MagiState` 版の `applyStructure`（`ws1RemoveGroup` と同じ）を使う。 */
+fun MagiViewModel.ws1MoveGroupTo(from: Int, to: Int) {
+    val st0 = state ?: return
+    if (from == to || from !in st0.groups.indices || to !in st0.groups.indices) return
+    val name = st0.groups.getOrNull(from)?.let { toHankakuKigou(it.kigou) } ?: "#$from"
+    val dir = if (to > from) 1 else -1
+    var ns = Ws1Ops.moveGroup(st0, from, dir)
+    var pos = from + dir
+    while (pos != to) { ns = Ws1Ops.moveGroup(ns, pos, dir); pos += dir }
+    logOp("I", "グループの並び替え: $name を${from + 1}→${to + 1}番目へ")
+    applyStructure(ns)
 }
 
 fun MagiViewModel.ws1RemoveGroup(g: Int) {

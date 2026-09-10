@@ -454,6 +454,25 @@ object Ws1Ops {
         return Ws1Result(withSchedule(ns, arr), arr)
     }
 
+    /** [3.515.6] グループ [g] を隣（[g]+[dir]）と入れ替える。担当可否・群目標の行（軸 g）、職員の所属
+     *  (`groupIdx`) が追従。勤務表・希望は無変化＝[moveStaff]/[moveShift] と違い MagiState を返す（[removeGroup] と同形）。 */
+    fun moveGroup(state: MagiState, g: Int, dir: Int): MagiState {
+        val g2 = g + dir
+        if (g !in state.groups.indices || g2 !in state.groups.indices || g == g2) return state
+        val groups = state.groups.toMutableList().also { val t = it[g]; it[g] = it[g2]; it[g2] = t }
+        val groupShift = state.groupShift.toMutableList().also {
+            if (g < it.size && g2 < it.size) { val t = it[g]; it[g] = it[g2]; it[g2] = t }
+        }
+        val groupShiftApt = if (state.groupShiftApt.isEmpty()) state.groupShiftApt
+        else state.groupShiftApt.toMutableList().also {
+            if (g < it.size && g2 < it.size) { val t = it[g]; it[g] = it[g2]; it[g2] = t }
+        }
+        val staff = state.staff.map { s ->
+            when (s.groupIdx) { g -> s.copy(groupIdx = g2); g2 -> s.copy(groupIdx = g); else -> s }
+        }
+        return state.copy(groups = groups, groupShift = groupShift, groupShiftApt = groupShiftApt, staff = staff)
+    }
+
     /** Remove staff [i]: drop the staff and its schedule row; wishes/staffRange (axis i)
      *  re-indexed. No-op if only one staff remains. */
     fun removeStaff(state: MagiState, sched: Array<IntArray>, i: Int): Ws1Result {

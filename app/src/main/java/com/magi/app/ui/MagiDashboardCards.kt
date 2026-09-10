@@ -383,7 +383,7 @@ private fun DiagDetailToggle(
             if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
             contentDescription = null, tint = tint, modifier = Modifier.size(16.dp),
         )
-        Text(if (open) openText else closedText, style = MaterialTheme.typography.labelSmall, color = tint)
+        Text(if (open) openText else closedText, style = MaterialTheme.typography.bodySmall, color = tint)
     }
 }
 
@@ -548,7 +548,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                 Text("・$r", color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodySmall)
                             }
                             Text("※ 担当追加の提案です。設定変更は行いません（採否はご判断ください）。",
-                                color = cs.onTertiaryContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.labelSmall)
+                                color = cs.onTertiaryContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -963,13 +963,13 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             Text(
                 "Apt=${"%.2f".format(v6.aptPenalty)} / Equalize=${"%.2f".format(v6.equPenalty)} / Demand=${v6.demand} / covU=${v6.covU}",
                 fontFamily = FontFamily.Monospace,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (v6.sanityWarnings.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 v6.sanityWarnings.take(3).forEach {
-                    Text("⚠ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                    Text("⚠ $it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             }
             // [3.286.0 冗長性C] 負荷プロフィール（staffProfiles top5）は AttentionCardsSection（人別リスト）が
@@ -998,14 +998,14 @@ internal fun WeightTableCard() {
             //   （日本語が既に同じことを言っている＝operator_ux「英字符号を画面に出さない」）。
             Text("直す優先順位", fontWeight = FontWeight.Bold)
             Text("上にあるものから先に直します。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("絶対に守る", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("絶対に守る", style = MaterialTheme.typography.titleSmall)
             hard.forEach { (k, w) ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(breakdownLabels[k] ?: k, modifier = Modifier.weight(1f))
                     Text("×${fmt(w)}", fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.error)
                 }
             }
-            Text("できれば守る", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("できれば守る", style = MaterialTheme.typography.titleSmall)
             soft.forEach { (k, w) ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(breakdownLabels[k] ?: k, modifier = Modifier.weight(1f))
@@ -1272,7 +1272,7 @@ internal fun AnalysisTriageCard(
                         // 必須違反は「どのセルか」が分からないと直しに行けないので場所を数件だけ出す。
                         val locs = items.filter { fam in it.families }
                         locs.take(3).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay, onFixWish, onFixNeed) }
-                        if (locs.size > 3) Text("ほか ${locs.size - 3} 件", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                        if (locs.size > 3) Text("ほか ${locs.size - 3} 件", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
                 t.issues.forEach { row ->
@@ -1301,7 +1301,7 @@ internal fun AnalysisTriageCard(
                                 Text("${row.count}${row.unit}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                             }
                         }
-                        Text("※${t.searchNote}", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                        Text("※${t.searchNote}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
             }
@@ -1325,7 +1325,7 @@ internal fun AnalysisTriageCard(
 
             // [3.483.0 A-1] 旧「▶ 勤務表をつくる」ボタンは撤去。固定フッター（BottomCommandBar）の同名ボタンと重複
             //   （3.480.0 ホーム／3.482.0 編集タブで「フッターに一本化」した方針の取り残し）。
-            if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
 }

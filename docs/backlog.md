@@ -109,7 +109,6 @@
     production の予算（後処理予約25秒を含め常に数十秒〜300秒、backlog #14(g) の実要件「300秒→305秒以内」も無傷）では発生しないため
     実害は無いが、将来 UI から短い予算（プレビュー・クイック実行等）でRSI_PLUSを呼ぶ機能を足す場合は踏む。フェーズ下限を
     budgetSec に応じて緩めるかは探索動学の変更＝明示指示があれば。現状は放置で良い（実機で踏む経路が無い）。
-17. **[表示のみ] 設定タブ・勤務表タブの文字サイズ階層**（3.515.4 の続き）。編集タブは `docs/DESIGN.md` §3.3 の階層
-    （章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label=部品ラベル・チップのみ）へ揃えたが、
-    `MagiSetupCards.kt`（labelSmall 19箇所）・`MagiScheduleViews.kt`（同12箇所）・`MagiDashboardCards.kt`（同7箇所）は未着手。
-    同じ規則で1ファイルずつ（見出しを label+太字で代用している箇所と、説明文と一覧行が同じ label 層になっている箇所を直す）。
+17. ~~**[表示のみ] 設定タブ・勤務表タブの文字サイズ階層**（3.515.4 の続き）~~ **→ 3.515.5 で完了**。
+    `MagiSetupCards.kt`・`MagiScheduleViews.kt`・`MagiDashboardCards.kt`を`docs/DESIGN.md` §3.3の階層
+    （章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label=部品ラベル・チップ・凡例のみ）へ統一。
