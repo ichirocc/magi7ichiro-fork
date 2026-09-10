@@ -402,6 +402,58 @@ object Ws1Ops {
         return Ws1Result(withSchedule(ns, newSched), newSched)
     }
 
+    /** "a,b" キーの片方の軸で index [x] と [y] を入れ替える（[reindexKeys] の並び替え版）。 */
+    private fun <V> swapKeys(m: Map<String, V>, axis: Int, x: Int, y: Int): Map<String, V> {
+        val out = LinkedHashMap<String, V>()
+        for ((key, v) in m) {
+            val parts = key.split(",")
+            val a = parts.getOrNull(0)?.toIntOrNull() ?: continue
+            val b = parts.getOrNull(1)?.toIntOrNull() ?: continue
+            val idx = swapIdx(if (axis == 0) a else b, x, y)
+            out[if (axis == 0) "$idx,$b" else "$a,$idx"] = v
+        }
+        return out
+    }
+
+    private fun swapIdx(v: Int, x: Int, y: Int): Int = when (v) { x -> y; y -> x; else -> v }
+
+    /** [3.515.3] 職員 [i] を隣（[i]+[dir]）と入れ替える。勤務行・希望・個人の回数（軸 i）が追従。
+     *  範囲外は同じ state を返す（呼出側は === で no-op を検知）。 */
+    fun moveStaff(state: MagiState, sched: Array<IntArray>, i: Int, dir: Int): Ws1Result {
+        val j = i + dir
+        if (i !in state.staff.indices || j !in state.staff.indices || i == j) return Ws1Result(state, sched)
+        val staff = state.staff.toMutableList().also { val t = it[i]; it[i] = it[j]; it[j] = t }
+        val arr = copyGrid(sched).also { if (i < it.size && j < it.size) { val t = it[i]; it[i] = it[j]; it[j] = t } }
+        val ns = state.copy(
+            staff = staff,
+            wishes = swapKeys(state.wishes, 0, i, j),
+            staffRange = swapKeys(state.staffRange, 0, i, j),
+        )
+        return Ws1Result(withSchedule(ns, arr), arr)
+    }
+
+    /** [3.515.3] シフト [k] を隣（[k]+[dir]）と入れ替える。担当可否・群目標の列、勤務表/希望の値、
+     *  個人の回数（軸 k）、日別必要人数（軸 k）が追従。記号で参照するもの（制約行・表示色・休の解決）は不変。 */
+    fun moveShift(state: MagiState, sched: Array<IntArray>, k: Int, dir: Int): Ws1Result {
+        val k2 = k + dir
+        if (k !in state.shifts.indices || k2 !in state.shifts.indices || k == k2) return Ws1Result(state, sched)
+        val shifts = state.shifts.toMutableList().also { val t = it[k]; it[k] = it[k2]; it[k2] = t }
+        fun <T> swapCols(rows: List<List<T>>): List<List<T>> = rows.map { row ->
+            if (k < row.size && k2 < row.size) row.toMutableList().also { val t = it[k]; it[k] = it[k2]; it[k2] = t } else row
+        }
+        val arr = Array(sched.size) { r -> IntArray(sched[r].size) { c -> swapIdx(sched[r][c], k, k2) } }
+        val wishes = LinkedHashMap<String, Int>()
+        for ((key, v) in state.wishes) wishes[key] = swapIdx(v, k, k2)
+        val ns = state.copy(
+            shifts = shifts, groupShift = swapCols(state.groupShift), groupShiftApt = swapCols(state.groupShiftApt),
+            wishes = wishes,
+            needDay1 = swapKeys(state.needDay1, 0, k, k2),
+            needDay2 = swapKeys(state.needDay2, 0, k, k2),
+            staffRange = swapKeys(state.staffRange, 1, k, k2),
+        )
+        return Ws1Result(withSchedule(ns, arr), arr)
+    }
+
     /** Remove staff [i]: drop the staff and its schedule row; wishes/staffRange (axis i)
      *  re-indexed. No-op if only one staff remains. */
     fun removeStaff(state: MagiState, sched: Array<IntArray>, i: Int): Ws1Result {

@@ -48,10 +48,14 @@ import androidx.compose.ui.unit.dp
  * セルタップで編集する）。`GroupRangeSection`（グループ一括適用）はこの再設計の対象外のため維持。
  */
 @Composable
-fun CountsCard(ui: UiState, vm: MagiViewModel) {
+fun CountsCard(
+    ui: UiState, vm: MagiViewModel,
+    /** [実機バグ修正] 呼び出し元がkey(ui.editRev)の外で保持する（詳細はStaffShiftMatrixCardのdoc）。 */
+    sheetCell: Pair<Int, Int>?, onSheetCellChange: (Pair<Int, Int>?) -> Unit,
+) {
     // [3.483.0 E-8] 旧: 説明文だけのカードが先頭にあった。同じ説明（目標＝やわらかい／上下限＝かたい）は
     //   StaffShiftMatrixCard の見出し直下にもあり二重だったので、こちらを撤去。
-    StaffShiftMatrixCard(ui, vm)
+    StaffShiftMatrixCard(ui, vm, sheetCell, onSheetCellChange)
     Spacer(Modifier.height(8.dp))
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -67,7 +71,7 @@ fun CountsCard(ui: UiState, vm: MagiViewModel) {
 internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
     var dialog by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("グループ一括設定", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("グループ一括設定", style = MaterialTheme.typography.titleSmall)
             Text(
                 "選んだグループ全員に同じ上下限を一度に設定します（個人設定済みは保持）。",
                 style = MaterialTheme.typography.labelMedium,
@@ -78,7 +82,7 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
             val applied = vm.groupRangeSummary()
             if (applied.isNotEmpty()) {
                 Text("適用中のグループ上下限（${applied.size}件・個人の回数にも展開済み）",
-                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     applied.forEach { gr ->
                         val rangeLab = when {
@@ -182,7 +186,7 @@ internal fun GroupRangeDialog(
                 } else if (blank) {
                     Text(RANGE_REQUIRED_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（個人で設定済みの人は保持）。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（個人で設定済みの人は保持）。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )

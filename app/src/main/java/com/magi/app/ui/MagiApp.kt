@@ -192,6 +192,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // [下流→上流ディープリンク] 要確認一覧「設定で直す」→ 該当職員/シフトを事前選択して開く（-1=無し・消費で戻す）。
     var deepLinkWishStaff by rememberSaveable { mutableStateOf(-1) }
     var deepLinkNeedShift by rememberSaveable { mutableStateOf(-1) }
+    // [実機バグ修正] CountsCard(③回数)のセルタップシート開閉。key(ui.editRev)の外に置く（573行目コメントと同じ理由）。
+    var countsSheetCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
     var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
@@ -625,7 +627,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                 //   遅れる）。CollapsibleSection の content ラムダが ui/vm を捕捉するため
                                 //   スキップ判定が絡み再構成が伝播しないケースがある。key(ui.editRev) で
                                 //   editRev 変化ごとに確実に作り直す（タブ往復と同じ効果）。
-                                key(ui.editRev) { CountsCard(ui, vm) }
+                                // [実機バグ修正] countsSheetCell は上のWishCard/NeedCalendarCardと同じ理由
+                                //   （572行目）でkey(ui.editRev)の外に置く（群の目標+/-自体がeditRevを増やすため）。
+                                key(ui.editRev) { CountsCard(ui, vm, sheetCell = countsSheetCell, onSheetCellChange = { countsSheetCell = it }) }
                             }
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
                             CollapsibleSection("④ 人数と組み合わせ", "yr_headcount") {

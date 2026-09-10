@@ -67,7 +67,13 @@ import kotlinx.coroutines.launch
  * 提供する（= 個人ごとに違う目標が欲しければ上下限を lo=hi で固定する、という既存の代用手段に一本化）。
  */
 @Composable
-internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
+internal fun StaffShiftMatrixCard(
+    ui: UiState, vm: MagiViewModel,
+    /** [実機バグ修正] セルタップシートの開閉状態。呼び出し元(MagiApp.kt)が`key(ui.editRev)`の**外**で
+     *  保持する。群の目標の+/-自体が`ws1SetGroupApt`経由でeditRevを増やし、key配下のrememberだと
+     *  シートが自分の操作のたびに閉じていた（経緯: history 3.515.2）。 */
+    sheetCell: Pair<Int, Int>?, onSheetCellChange: (Pair<Int, Int>?) -> Unit,
+) {
     val v = vm.ws1() ?: return
     val cs = MaterialTheme.colorScheme
     val K = v.shifts.size
@@ -83,7 +89,6 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
         Array(S) { i -> IntArray(K).also { c -> ui.schedule.getOrNull(i)?.forEach { kk -> if (kk in 0 until K) c[kk]++ } } }
     }
 
-    var sheetCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var confirmResetApt by remember { mutableStateOf(false) }
     val hScroll = rememberScrollState()
     val scope = rememberCoroutineScope()
@@ -159,7 +164,7 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
                                     limits = vm.staffCellLimits(i, k), vio = ui.countViolations["$i,$k"],
                                     isRest = k == restIdx, shortC = shortC, overC = overC, cs = cs,
                                 )
-                                MatrixDataCell(cellW, rowH, cell) { if (k in allowed) sheetCell = i to k }
+                                MatrixDataCell(cellW, rowH, cell) { if (k in allowed) onSheetCellChange(i to k) }
                             }
                         }
                     }
@@ -187,7 +192,7 @@ internal fun StaffShiftMatrixCard(ui: UiState, vm: MagiViewModel) {
     }
 
     sheetCell?.let { (i, k) ->
-        StaffShiftCellSheet(ui, vm, v, i, k, onDismiss = { sheetCell = null })
+        StaffShiftCellSheet(ui, vm, v, i, k, onDismiss = { onSheetCellChange(null) })
     }
     if (confirmResetApt) {
         AlertDialog(

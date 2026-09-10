@@ -68,7 +68,7 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
 
             skills.forEachIndexed { g, sg ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${sg.kigou}  ${sg.name}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                    Text("${sg.kigou}  ${sg.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = SkillDlg.Edit(g, sg.name, sg.kigou) }, enabled = !ui.running)
                     Spacer(Modifier.width(6.dp))
                     DeleteRowButton(onClick = { confirmDelete = g }, enabled = !ui.running)

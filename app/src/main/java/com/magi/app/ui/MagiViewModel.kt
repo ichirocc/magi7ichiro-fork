@@ -2542,17 +2542,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         st: MagiState,
         schedule: Array<IntArray>,
         report: ViolationReport,
-        /** [3.515.0] trueなら人員過剰(covO)の「なぜ減らないか」診断を、他の職員・別日との組合せまで
-         *  深追いする（FixSuggesterを使うため数秒かかりうる）。呼び出し元のpushReportがrunLabel!=null
-         *  （最適化完了直後）のときだけtrueにする＝編集のたびに走るライブ診断は既定どおり軽いまま。 */
-        deepCovODiag: Boolean = false,
     ): Analysis = coroutineScope {
         val v6D       = async(Dispatchers.Default) { V6PortAnalyzer.analyze(st, schedule, report) }
         val sanityD   = async(Dispatchers.Default) { V6SanityPort.build(st, schedule) }
         // 人員不足(covU)または人員過剰(covO)が残る場合のみ原因診断（どの日/シフトが「充足不可」か
         // 「未到達」か／過剰がなぜ動かせないか）を算出しログに残す。
+        // [3.515.1] covOの深追い(FixSuggester)はここでは行わない＝pushReportが完了後に別ジョブで行う
+        // （3.515.0のregression: ここに混ぜるとedit-lock解除と経過時間表示が深追い終了まで遅れていた）。
         val coverageD = async(Dispatchers.Default) {
-            V6PortAnalyzer.diagnoseCoverage(st, schedule, report, deepSurplus = deepCovODiag).takeIf { it.hasShortage || it.hasSurplus }
+            V6PortAnalyzer.diagnoseCoverage(st, schedule, report).takeIf { it.hasShortage || it.hasSurplus }
         }
         // [3.280.0] 禁止連続(c3n)が残る場合のみ「なぜ崩せないか」診断（CoverageDiag の c3n 版）。
         val forbiddenD = async(Dispatchers.Default) {
@@ -2595,8 +2593,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         transform: (UiState) -> UiState = { it },
     ) {
         val analysis =
-            if (nonCancellable) withContext(NonCancellable) { analyzeParallel(st, schedule, report, deepCovODiag = runLabel != null) }
-            else analyzeParallel(st, schedule, report, deepCovODiag = runLabel != null)
+            if (nonCancellable) withContext(NonCancellable) { analyzeParallel(st, schedule, report) }
+            else analyzeParallel(st, schedule, report)
         rawDiagLogs = analysis.rawDiagLogs
         lastDiagSerial = activeRunSerial
         if (runLabel != null) {
@@ -2606,6 +2604,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             lastRunDiagSerial = activeRunSerial
         }
         _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)) }
+        deepCovODiagFollowUp(st, schedule, report, runLabel)
+    }
+
+    /** [3.515.1] covOの深追い(FixSuggester)をpushReport本体を待たせない別ジョブで行う（経緯: history
+     *  3.515.1）。盤面/設定が変わっていれば結果は捨てる（[boardKey]/[stateKey]）。rawDiagLogsは更新しない。 */
+    private fun deepCovODiagFollowUp(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, runLabel: String?) {
+        if (runLabel == null || (report.breakdown["covO"] ?: 0) <= 0) return
+        val bKey = boardKey(schedule); val sKey = stateKey(st)
+        viewModelScope.launch(Dispatchers.Default) {
+            val deep = runCatching { V6PortAnalyzer.diagnoseCoverage(st, schedule, report, deepSurplus = true) }.getOrNull() ?: return@launch
+            withContext(Dispatchers.Main) {
+                if (currentSchedule?.let { boardKey(it) } == bKey && state?.let { stateKey(it) } == sKey) {
+                    _ui.update { it.copy(coverageDiag = deep.takeIf { d -> d.hasShortage || d.hasSurplus }) }
+                }
+            }
+        }
     }
 
     private fun makeUi(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, analysis: Analysis, base: UiState): UiState {

@@ -59,10 +59,10 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                     Column(Modifier.weight(1f)) {
                         Text(st.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("グループ $gk", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                            Text("グループ $gk", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                             if (skills.isNotEmpty()) {
                                 Spacer(Modifier.width(10.dp))
-                                Text("スキル", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                                Text("スキル", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                 Spacer(Modifier.width(4.dp))
                                 var open by remember { mutableStateOf(false) }
                                 Box {
@@ -79,6 +79,10 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                             }
                         }
                     }
+                    // [3.515.3] 並び替え＝勤務表の行順にそのまま反映（経緯: history 3.515.3）。
+                    MoveRowButtons(canUp = i > 0, canDown = i < v.staff.size - 1,
+                        onUp = { vm.ws1MoveStaff(i, -1) }, onDown = { vm.ws1MoveStaff(i, +1) }, enabled = !ui.running)
+                    Spacer(Modifier.width(6.dp))
                     EditRowButton(onClick = { edit = Triple(i, st.name, st.groupIdx) }, enabled = !ui.running)
                     if (v.staff.size > 1) {
                         Spacer(Modifier.width(6.dp))
@@ -88,7 +92,7 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
             }
             // [3.409.11] 残り1名のとき削除ボタンが理由なく消える（年間マスター側と同じ対象漏れ）。
             if (v.staff.size <= 1) {
-                Text("最後の1名は削除できません（勤務表の行が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                Text("最後の1名は削除できません（勤務表の行が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             AddRowButton("入職（職員追加）", onClick = { addOpen = true }, enabled = ui.loaded && !ui.running)
             AddRowButton("一括追加（改行区切り）", onClick = { bulkOpen = true }, enabled = ui.loaded && !ui.running)

@@ -229,6 +229,26 @@ fun MagiViewModel.ws1RemoveStaff(i: Int) {
     applyStructure(Ws1Ops.removeStaff(st, sched, i))
 }
 
+/** [3.515.3] 職員の並び替え（dir=-1 上へ / +1 下へ）。端では何もしない。 */
+fun MagiViewModel.ws1MoveStaff(i: Int, dir: Int) {
+    val st = state ?: return
+    val sched = currentSchedule ?: return
+    val r = Ws1Ops.moveStaff(st, sched, i, dir)
+    if (r.state === st) return
+    logOp("I", "職員の並び替え: ${opNm(i)} を${if (dir < 0) "上" else "下"}へ")
+    applyStructure(r)
+}
+
+/** [3.515.3] シフト種別の並び替え（dir=-1 上へ / +1 下へ）。端では何もしない。 */
+fun MagiViewModel.ws1MoveShift(k: Int, dir: Int) {
+    val st = state ?: return
+    val sched = currentSchedule ?: return
+    val r = Ws1Ops.moveShift(st, sched, k, dir)
+    if (r.state === st) return
+    logOp("I", "シフトの並び替え: ${opSy(k)} を${if (dir < 0) "上" else "下"}へ")
+    applyStructure(r)
+}
+
 fun MagiViewModel.ws1RemoveGroup(g: Int) {
     val st = state ?: return
     if (g !in st.groups.indices || st.groups.size <= 1) return

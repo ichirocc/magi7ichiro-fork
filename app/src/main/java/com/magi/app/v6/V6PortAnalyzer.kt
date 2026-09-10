@@ -238,8 +238,8 @@ object V6PortAnalyzer {
         const val ADJACENT_SEED = 7L
         const val MIN_RELAX_CANDIDATES = 2
         /** [3.515.0] deepSurplus=true 時、FixSuggester（複数職員・別日を含む7種の手）へ回す時間の合計上限。
-         *  実測（実データ4件・S=11/T=31）: 1呼出あたり完走で900〜1700ms。呼び出し元はrunLabel!=null
-         *  （最適化完了直後）でだけ deepSurplus=true にするため、この秒数は編集操作の応答性には掛からない。 */
+         *  実測（実データ4件・S=11/T=31）: 1呼出あたり完走で900〜1700ms。呼び出し元は編集ロック解除後の
+         *  別ジョブとして呼ぶため応答性には掛からない（`MagiViewModel.deepCovODiagFollowUp`、経緯: history 3.515.1）。 */
         const val SURPLUS_DEEP_BUDGET_MS = 8000L
         /** 1呼出あたりの上限（総予算を早い者勝ちで使い切らせない）。 */
         const val SURPLUS_DEEP_PER_CALL_MS = 2000L
@@ -474,9 +474,11 @@ object V6PortAnalyzer {
                                 deepTried = true
                                 val callBudget = minOf(deepBudgetMs, Probe.SURPLUS_DEEP_PER_CALL_MS)
                                 val t0 = EngineClock.nowMs()
-                                val deep = FixSuggester.suggest(state, norm, focusStaff = i, focusShift = k, maxResults = 1, deadlineMs = callBudget)
+                                // [3.515.1/バグ修正] FixSuggester のfocusShiftは日を指定できない（TallyCard向けの
+                                //   月単位の意味論）ため、返った手が実際にday j自体を動かすかをここで確認する。
+                                val deep = FixSuggester.suggest(state, norm, focusStaff = i, focusShift = k, maxResults = 8, deadlineMs = callBudget)
                                 deepBudgetMs -= (EngineClock.nowMs() - t0)
-                                if (deep.isNotEmpty()) deepImproving++
+                                if (deep.any { sug -> sug.ops.any { it.staff == i && it.day == j } }) deepImproving++
                             }
                         }
                         !blockedByC3n -> cascade++   // 代替はあるが、どこも受け皿がない＝玉突きが必要
@@ -489,10 +491,15 @@ object V6PortAnalyzer {
                     // [3.515.0] 同日1手は無いが、他の職員や別日との組合せなら『直し方を探す』が同じ手を見つける。
                     deepImproving > 0 -> "在勤者を1人だけ動かす手はありませんが、他の職員や別日と組み合わせれば全体が良くなります" +
                         "（勤務表でこのセルの『直し方を探す』で解消できます）"
-                    free > 0 && probedAny && deepTried -> "移せる先はありますが、1人で動かす手・他の職員や別日との組合せもどれも他の条件を悪化させるため最適化は採用しません" +
-                        "（この過剰を減らすには、その条件を緩めるか、過剰を受け入れる必要があります）"
-                    free > 0 && probedAny -> "移せる先はありますが、1人動かす手はどれも他の条件を悪化させるため最適化は採用しません" +
-                        "（この過剰を減らすには、その条件を緩めるか、過剰を受け入れる必要があります）"
+                    // [3.515.1/バグ修正] probedAny=false（同日1手の予算 SURPLUS_PROBE_BUDGET を使い切って
+                    //   未試行）でも deepTried=true（深追いは別予算で実施済み）なら「確認は打ち切った」と
+                    //   言うのは誤り＝実際に試した範囲をそのまま案内する。
+                    free > 0 && (probedAny || deepTried) -> {
+                        val tried = if (probedAny && deepTried) "1人で動かす手・他の職員や別日との組合せも"
+                            else if (deepTried) "他の職員や別日との組合せも" else "1人動かす手は"
+                        "移せる先はありますが、${tried}どれも他の条件を悪化させるため最適化は採用しません" +
+                            "（この過剰を減らすには、その条件を緩めるか、過剰を受け入れる必要があります）"
+                    }
                     free > 0 -> "移せる先はありますが、目的関数での確認は打ち切りました（枠が多いため）"
                     cascade > 0 -> "移動先はどこも定員一杯で、過剰シフトからの多人数入替（玉突き）が必要"
                     else -> "在籍者は希望固定/禁止連続で動かせず、希望を1件調整するか担当を減らすと解消に近づく"

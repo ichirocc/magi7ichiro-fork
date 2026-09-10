@@ -93,6 +93,15 @@ class AnalysisTriageTest {
         assertTrue("先頭2名＋ほか", t.issues.first().detail.contains("ほか"))
     }
 
+    /** [3.515.2] 1件だけの種類は場所を切り詰めず理由まで出す（重複登録の警告が勤務表の違反に見えないように）。 */
+    @Test fun singleIssueShowsFullWhereAndProblem() {
+        val issues = listOf(
+            SettingIssue(IssueKind.CONSTRAINT, "連続パターン「Dﾃ→A4」(禁止の並び)", "同じパターンが2重に登録されています", "…"),
+        )
+        val row = analysisTriage(ui(issues = issues)).issues.single()
+        assertEquals("連続パターン「Dﾃ→A4」(禁止の並び) — 同じパターンが2重に登録されています", row.detail)
+    }
+
     /** weekly/fair は L1 偏差なので「件」でなく「pt」。186件と読ませない。 */
     @Test fun distributionFamiliesUsePointsNotCounts() {
         val t = analysisTriage(ui(mapOf("weekly" to 186, "c1" to 6)))
