@@ -218,14 +218,14 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
             }
             Spacer(Modifier.height(10.dp))
-            Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [3.192.0 情報不足の解消] 「おまかせ」選択中は実際に動く方式が計算の制限時間から自動決定される
             // （V6FinalPort.optimizationPlan/getAlgorithmLabelと同一ロジック）が、画面には「おまかせ」としか
             // 出ず、今の時間設定で何が動くか見えなかった。現在の budgetSec での解決結果を併記する（表示のみ）。
             if (ui.v6Algorithm == V6Algorithm.AUTO) {
                 val resolved = V6FinalPort.getAlgorithmLabel(ui.budgetSec)
                 Text("→ 今の設定(${ui.budgetSec}秒)では ${resolved.icon} ${resolved.name}（${resolved.desc}）が動きます",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 V6Algorithm.values().forEach { alg ->
@@ -253,7 +253,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     "${pi.versionName} (${pi.longVersionCode})"
                 }.getOrDefault("不明")
             }
-            Text("バージョン: $versionLabel", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("バージョン: $versionLabel", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -290,14 +290,14 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             Text(
                 "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値をそのままSAチェーン数に使います。" +
                     "それ以外の方式では設定値がそのまま並列に探索する仮説（案）の数（${hyp}）になります。$overNote",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("ネイティブ加速（C++）")
                 Text("計算の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.nativeAccel, onCheckedChange = { vm.setNativeAccel(it) }, enabled = !ui.running)
         }
@@ -309,7 +309,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                         "高速版の結果を毎回Kotlin実装で検証。不一致なら自動で従来方式に戻ります（推奨・既定）。"
                     else
                         "⚠ 検証せず高速版の結果をそのまま採用します（速度重視の検証/ベンチ用）。誤った勤務表が表示される可能性があります。",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                 )
             }
@@ -320,7 +320,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                 Text("禁止連続の事前フィルタ")
                 Text("期間まるごとの入れ替えを試すとき、禁止の並びを新しく作る案を最初から候補にしません。" +
                     "できあがる勤務表は同じで（そういう案は最後に必ず却下されるため）、無駄な検査を省くぶんだけ速くなります。",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.blockSwapC3nFilter, onCheckedChange = { vm.setBlockSwapC3nFilter(it) }, enabled = !ui.running)
         }
@@ -333,7 +333,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                             "できあがる勤務表が良くなるとは限りません（データによっては悪くなります）。"
                     else
                         "禁止の並びを崩すとき、前後1日だけを動かします。",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.bodySmall,
                     color = if (ui.wideC3nBreak) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -348,14 +348,14 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                 enabled = !ui.running,
             )
             Spacer(Modifier.width(8.dp))
-            Text("仕上げ最適化", style = MaterialTheme.typography.labelSmall)
+            Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
         // [3.514.0] combineExhaustPairs・lnsAdaptiveはisBetterゲート不変=退化しない安全な変更のみUI化。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("職員どうしの交換探索を粘り強く")
                 Text("2人一組の入れ替えを、通常より多くの組合せまで試します。結果が悪化することはありませんが、時間がかかる場合があります。",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.combineExhaustPairs, onCheckedChange = { vm.setCombineExhaustPairs(it) }, enabled = !ui.running)
         }
@@ -363,7 +363,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             Column(Modifier.weight(1f)) {
                 Text("一括見直しの時間配分を自動調整")
                 Text("個人回数・期間の一括見直しにかける時間を、改善が続く間だけ延ばします。結果が悪化することはありませんが、速度はデータにより変わります。",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.lnsAdaptive, onCheckedChange = { vm.setLnsAdaptive(it) }, enabled = !ui.running)
         }
@@ -416,10 +416,10 @@ internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onOpenWish: ((
             if (issuesOpen && issues > 0) {
                 val cs = MaterialTheme.colorScheme
                 ui.settingIssues.take(6).forEach { iss ->
-                    Text("・${iss.where}：${iss.problem}", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                    Text("・${iss.where}：${iss.problem}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(start = 12.dp))
                 }
-                if (issues > 6) Text("ほか${issues - 6}件（ホームの設定見直しに全件）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant,
+                if (issues > 6) Text("ほか${issues - 6}件（ホームの設定見直しに全件）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
                     modifier = Modifier.padding(start = 12.dp))
             }
             // [3.482.0 導線重複] 旧「▶ 勤務表をつくる」ボタンは撤去。同じ画面の固定フッター（BottomCommandBar）に
@@ -590,9 +590,9 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
                 OutlinedButton(onClick = onExportJson, enabled = hasAny, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("JSON出力") }
             }
             // 操作ログ（監査・新しい順）
-            Text("操作ログ（新しい順 ${ui.opLog.size}件）", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+            Text("操作ログ（新しい順 ${ui.opLog.size}件）", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
             if (ui.opLog.isEmpty()) {
-                Text("操作履歴なし", color = cs.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                Text("操作履歴なし", color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             } else {
                 Box(
                     Modifier.fillMaxWidth().heightIn(max = 220.dp)
@@ -601,7 +601,7 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         ui.opLog.take(60).forEach { line ->
                             val warn = line.contains("[W]") || line.contains("[E]")
-                            Text(line, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall,
+                            Text(line, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall,
                                 color = if (warn) cs.error else cs.onSurface)
                         }
                     }
@@ -609,9 +609,9 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
             }
             // 診断ログ（エンジン）
             if (ui.logs.isNotEmpty()) {
-                Text("診断ログ", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
+                Text("診断ログ", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
                 ui.logs.take(6).forEach {
-                    Text(it, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(it, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -675,21 +675,21 @@ internal fun AppearanceCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = oneHand, onCheckedChange = onOneHand)
                 Spacer(Modifier.width(8.dp))
-                Text("片手モード", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                Text("片手モード", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }
             // [通常セルの枠線] 違反の無いセルに常時1dp輪郭を付けるか（既定=付けない）。付けると同色が
             //   並ぶセル同士の境目が分かりやすくなる一方、格子全体が線で埋まり違反枠が目立ちにくくなる。
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = plainCellBorder, onCheckedChange = onPlainCellBorder)
                 Spacer(Modifier.width(8.dp))
-                Text("勤務表の通常セルに枠線を表示", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                Text("勤務表の通常セルに枠線を表示", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }
             // [プロ編集] 表示モード。プロ＝数値診断（生指標）を前面に。今後さらに高密度編集を拡張予定。
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
             MagiSegmentedControl(options = listOf("かんたん", "プロ"), selected = if (proMode) 1 else 0, onSelect = { onProMode(it == 1) })
             // [3.483.0 C-3] 何が変わるかを1行で（旧: 無説明のトグル）。
             Text("プロ＝分析の生指標カードと、勤務表の「まとめて割当」を表示します。",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

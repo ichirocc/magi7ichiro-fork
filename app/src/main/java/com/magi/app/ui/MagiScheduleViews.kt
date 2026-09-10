@@ -193,7 +193,7 @@ internal fun LiveScheduleCard(ui: UiState) {
                 Text(if (show) "途中経過を隠す" else "途中経過を見る")
             }
             if (show) {
-                Text("状態遷移  赤枠＝今回変化 (${changed.size})", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Text("状態遷移  赤枠＝今回変化 (${changed.size})", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 Column(
                     Modifier.horizontalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -456,7 +456,7 @@ internal fun ViolationBucketChips(bucketCounts: Map<String, Int>, enabled: Set<S
         // [3.483.0 S-1] 上部バッジ「必須違反 N」・不足バナー「B4 29日」・下部「違反のある日」と数字が並ぶため、
         //   ここは単位を「か所」（セル/日/回数の実箇所数）と明示して混同を防ぐ。
         Text(if (locCount >= 0) "違反フィルタ（種別）・要確認 ${locCount}か所" else "違反フィルタ（種別）",
-            style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+            style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
         if (enabled != allVioBucketKeys) {
             TextButton(onClick = { vioBuckets.forEach { if (it.key !in enabled) onToggle(it.key) } }) {
                 Text("すべて表示", style = MaterialTheme.typography.labelLarge)
@@ -518,7 +518,7 @@ internal fun SearchLegendBar(ui: UiState, query: String, onQuery: (String) -> Un
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { open = !open }) {
                 Text("検索・凡例" + (if (!open && query.isNotBlank()) "（検索中: $query）" else ""),
-                    style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                 Text(if (open) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             }
             if (open) {
@@ -1000,7 +1000,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                 }
             }
             Text("※ 期間全体×全職員の「希望なし」は全削除（確認あり）。元に戻すで取消可。",
-                style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
     if (showStaff) {
@@ -1136,7 +1136,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                     else -> "この${cellCount}マスに一括割当"
                 })
             }
-            Text("※ 選択したマスを上書きします。元に戻すで取消可。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("※ 選択したマスを上書きします。元に戻すで取消可。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
     if (showStaff) {

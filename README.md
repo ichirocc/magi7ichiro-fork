@@ -31,6 +31,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-10（3.515.5＝backlog #17。設定・勤務表タブ（MagiSetupCards/MagiDashboardCards/MagiScheduleViews）
+の文字サイズも3.515.4と同じ意味階層（章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall）へ統一。
+凡例・バッジ相当（違反の凡例・シフト集計の▼▲凡例・セル内の「現在」「超過」等の小さな注記）はlabel*のまま据え置き。
+design_lint hard 0件・追加コメント0行。これでbacklog #17は完了）
+
 **最終更新**：2026-09-10（3.515.4＝編集タブの文字サイズを意味階層に揃える（実機報告「フォントサイズがバラツキある」）。
 節見出しを label+太字、説明も一覧の行も labelSmall で書いていたため全部14sp＝ボタン(16sp)より見出しが小さい逆転。
 章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label は部品ラベル・チップのみ、に統一し

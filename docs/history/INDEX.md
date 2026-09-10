@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- 設定・勤務表タブの文字サイズを意味階層に揃える（backlog #17、3.515.4の続き）: MagiSetupCards/MagiDashboardCards/
+  MagiScheduleViewsのlabelSmall・label+太字見出しを章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall
+  へ統一。凡例・バッジ相当（ViolationLegend/TallyLegend/セル内注記）はlabel*のまま据え置き（3.515.5）  → `docs/history/3.4xx.md`
 - 編集タブの文字サイズを意味階層に揃える: 節見出しがlabel+太字・説明も行もlabelSmallで全部14sp＝ボタンより見出しが
   小さい逆転を、章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label=部品ラベル・チップのみに
   統一（DESIGN.md §3.3に規則を明文化。設定・勤務表タブは backlog）（3.515.4）  → `docs/history/3.4xx.md`
