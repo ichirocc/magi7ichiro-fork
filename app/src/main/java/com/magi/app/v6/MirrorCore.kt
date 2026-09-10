@@ -31,7 +31,7 @@ data class ViolationReport(
     val cellFamilies: Map<String, List<String>> = emptyMap(),
     /**
      * [3.353.0] 回数キー("i,k")に重なった全違反クラスを重み降順で保持（`countViolations` は最重1クラス＝
-     * 後方互換のまま）。`cellFamilies` の回数空間版。低い重みの族（apt・c2）が重い族（low 90/high 45）と
+     * 後方互換のまま）。`cellFamilies` の回数空間版。低い重みの族（apt・c2）が重い族（low 90/high 25）と
      * 同じ (職員,シフト) に重なると `countViolations` から消え、診断に一切現れなかった
      * （実機ログ: 内訳 c2=1 なのに詳細行が無く、apt=29 に対し表示は7箇所ぶんしか無い）。表示のみ。
      */
@@ -122,10 +122,12 @@ object MirrorKeys {
     //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
     val weights: Map<String, Double> = linkedMapOf(
         "groupViol" to 10000.0, "pref" to 9000.0, "covU" to 8000.0, "c3n" to 7000.0,
-        "low" to 90.0, "high" to 45.0,
+        "low" to 90.0, "high" to 25.0,
         // [HF77明示数値指示] 回避の並び(c3mn)=30・窓の要件(c1)=30。経緯: 3.249.0 で c3mn 12→15・c1 4→5、
         //   3.253.0 で c1 5→15、3.409.24 で両方 15→30。**現在値はどちらも 30**（この行が stale だと監査が
         //   誤誘導される。実際 3.389.0 まで「c1=5」、3.428.0 まで「15」と書いた旧コメントが残っていた）。
+        //   high(上限超過)は 45→25（2026-09-10、HF77明示指示。表示順で人員過剰(covO=5)と期間の制約/
+        //   回避の並び(c1/c3mn=30)の間に来るようにするため）。
         // **ここを変えたら `Evaluator.fullEvalParts` のリテラルと C++ も同時に変える**。
         //   Kotlin 側のずれは `ObjectiveParityTest`、C++ 側は native-parity CI が捕まえる。
         "c3mn" to 30.0, "c1" to 30.0, "c3" to 3.0, "c3m" to 2.0,
@@ -389,7 +391,7 @@ object UnifiedViolationChecker {
                     markCount(i, k, "high")
                 }
                 // [統一apt] 適切回数(群単位の双方向目標)。SOFT・重み1・L1偏差|n-t|。担当可シフトのみ(apt 構築時に canDo ガード済)。
-                // セル着色は range(low/high, 重み90/45)を優先し、markCount の重み優先ガードにより低優先の
+                // セル着色は range(low/high, 重み90/25)を優先し、markCount の重み優先ガードにより低優先の
                 // apt 色(不足=赤/超過=橙)は既存マークを上書きしない（手動 containsKey ガードは markCount 側の
                 // 重み優先に統合済みのため撤去）。
                 val t = p.apt[i][k]

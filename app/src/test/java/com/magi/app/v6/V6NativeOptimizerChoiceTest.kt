@@ -1043,7 +1043,7 @@ class V6NativeOptimizerChoiceTest {
     // ---- [3.319.0] destroy-repair の marginal cost を目的関数と揃える -------------------------
     //
     // `staffCountPenaltyAt` は候補選択の marginal cost で、`Evaluator.fullEvalParts` と同じ族
-    // （low 90 / high 45 / apt 1）を見る。ところが low だけ `p.canDo` ガードが無く、担当外シフトに
+    // （low 90 / high 25 / apt 1）を見る。ところが low だけ `p.canDo` ガードが無く、担当外シフトに
     // 個人下限が設定されたデータで「実際には存在しない違反」を重み90 で数えていた。
 
     /** 2職員×2日・シフト {休, X, Y}。G0 は {休, X} のみ担当可＝Y は担当外。 */
@@ -1082,9 +1082,9 @@ class V6NativeOptimizerChoiceTest {
 
     @Test
     fun marginalCostUpperBoundIsUnchanged() {
-        // high は担当可否を問わず Evaluator と同じ扱い（両方ガード無しで一致）。X 上限1に対し3回で 2×45=90。
+        // high は担当可否を問わず Evaluator と同じ扱い（両方ガード無しで一致）。X 上限1に対し3回で 2×25=50。
         val p = Problem(canDoState(mapOf("0,1" to Range("", "1"))))
-        assertEquals("上限側は不変", 90L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 3))
+        assertEquals("上限側は不変", 50L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 3))
     }
 
     // ---- [3.346.1/方針B] 停滞シグナルの確認窓 ------------------------------------------------

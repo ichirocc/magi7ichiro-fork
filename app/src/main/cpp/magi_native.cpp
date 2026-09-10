@@ -373,14 +373,14 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
         }
     }
 
-    // range low(90)/high(45) ＋ apt（L1偏差×1）
+    // range low(90)/high(25) ＋ apt（L1偏差×1）
     for (int i = 0; i < S; i++) {
         for (int k = 0; k < K; k++) {
             int lo = p.rangeLo[(size_t)i * K + k];
             int hi = p.rangeHi[(size_t)i * K + k];
             int n = ssn[(size_t)i * K + k];
             if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) soft += (long long)(lo - n) * 90;
-            if (hi != INT32_MAX && n > hi) soft += (long long)(n - hi) * 45;
+            if (hi != INT32_MAX && n > hi) soft += (long long)(n - hi) * 25;
             int t = p.apt[(size_t)i * K + k];
             if (t >= 0) soft += std::llabs((long long)n - t);
         }
@@ -618,7 +618,7 @@ struct SaChunk {
         int hi = p.rangeHi[(size_t)i * K + k];
         int n = ssn[(size_t)i * K + k];
         if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) v += (long long)(lo - n) * 90;
-        if (hi != INT32_MAX && n > hi) v += (long long)(n - hi) * 45;
+        if (hi != INT32_MAX && n > hi) v += (long long)(n - hi) * 25;
         int t = p.apt[(size_t)i * K + k];
         if (t >= 0) v += std::llabs((long long)n - t);
         return v;
@@ -1204,7 +1204,7 @@ inline bool glsAcceptN(long long ns, long long curScore, double moveAug, double 
 // （乱数系列は別物＝経路一致は狙わない。採否は呼び出し側の受理と番兵が担保）。
 
 inline int rnInt(std::mt19937_64& rng, int bound) { return (int)(rng() % (uint64_t)bound); }
-// staffCountPenaltyAt と同式（低90/高45/apt L1、n=回数）。
+// staffCountPenaltyAt と同式（低90/高25/apt L1、n=回数）。
 // [3.409.22] Kotlin `weeklyMarginalAt`/`fairMarginalAt`(3.267.0) と
 //   `HypothesisDiversityPolicy.takeReservoirTie`(3.266.0) の C++ ミラー。
 //   Kotlin の destroy-repair はこの3つを候補順位へ織り込むのに、C++ ミラーは
@@ -1269,7 +1269,7 @@ inline long long staffCountPenaltyAtN(const MagiProblem& p, int i, int k, int n)
     long long pen = 0;
     int lo = p.rangeLo[(size_t)i * p.K + k], hi = p.rangeHi[(size_t)i * p.K + k];
     if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) pen += (long long)(lo - n) * 90;
-    if (hi != INT32_MAX && n > hi) pen += (long long)(n - hi) * 45;
+    if (hi != INT32_MAX && n > hi) pen += (long long)(n - hi) * 25;
     int t = p.apt[(size_t)i * p.K + k];
     if (t >= 0) pen += std::llabs((long long)n - t);
     return pen;

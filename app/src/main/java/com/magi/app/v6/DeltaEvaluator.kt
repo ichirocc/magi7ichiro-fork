@@ -405,11 +405,11 @@ class DeltaEvaluator(private val p: Problem) {
     private fun viol01(b: Boolean): Long = if (b) 1L else 0L
 
     private fun rangeViol(i: Int, k: Int, n: Int): Long {
-        // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×90 / high=amount×45。
+        // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×90 / high=amount×25。
         val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
         var v = 0L
         if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) v += (lo - n).toLong() * 90L
-        if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * 45L
+        if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * 25L
         return v
     }
 

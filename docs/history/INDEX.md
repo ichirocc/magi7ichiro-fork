@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- HF77明示指示で上限超過(high)の重みを45→25に変更（設定タブの重み表で「上限超過を人員過剰と期間の制約の
+  間に移動する」→数値指示25）。Evaluator/DeltaEvaluator/destroy-repair系polish(4ファイル)/`magi_native.cpp`
+  （評価器+SaChunk+コメント）・言語跨ぎ期待値(Kotlin/C#)・テスト内重複リテラル(逆順パターン含む)を同期。
+  `severityFromVioKey`/`heavySoftFamilies`のHIGH→WARN降格、`C1WindowPolish`関連テストの前提再設計を伴う
+  （3.516.0）  → `docs/history/3.4xx.md`
 - 編集タブ「シフト種別」「グループ」を行デザイン刷新＋ドラッグ&ドロップ並び替えへ（ユーザー提示モックアップ・
   grilling5問）: ▲/▼(3.515.3)から長押しドラッグへ（片手一本指の既定をこの2箇所限定で明示的に上書き）、削除は
   行から編集シートの中へ、グループの並び替えは新規実装（Ws1Ops.moveGroup）。TalkBackでは操作不可な既知の制約を開示（3.515.6）  → `docs/history/3.4xx.md`

@@ -31,6 +31,16 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-10（3.516.0＝HF77明示指示で上限超過(high)の重みを45→25に変更（業務担当者が
+「上限超過を人員過剰と期間の制約の間に移動する」→数値指示で25を選択）。`MirrorKeys.weights`を起点に
+Evaluator/DeltaEvaluator/destroy-repair系polish/`magi_native.cpp`（評価器+SaChunk+コメント）・
+言語跨ぎ期待値ファイル（Kotlin/C#双方）・テスト内重複リテラル（逆順`45L * x`パターンも含む）を同期。
+`ShiftAppearance.severityFromVioKey`と`heavySoftFamilies`はhigh(25)がc1/c3mn(30)を下回ったため
+HIGH→WARN・破線枠対象外へ変更（表示強度＝重み階層の既存原則に従う、AskUserQuestionで確認）。
+C1WindowPolish（Kotlin/C#）の「X追加は必ずisBetterに棄却される」という手R1/R2追加の根拠コメントが
+単窓局面で不成立になり、`C1RelocationPolishTest`/`V6HotfixPassesC1WindowTest`の対応テストを再設計。
+C#（-MAGI_PC）は同日同期）
+
 **最終更新**：2026-09-10（3.515.6＝ユーザー提示モックアップを起点にgrillingで5問詰め、編集タブ「シフト種別」
 「グループ」の行デザインを刷新。▲/▼(3.515.3)を長押しドラッグへ（片手一本指の既定をこの2箇所限定で明示的に
 上書き・CLAUDE.md/docs/design.mdに例外を明記）、削除ボタンは行から編集シートの中へ、グループの並び替えは

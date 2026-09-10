@@ -40,7 +40,7 @@ internal fun rangeDistance(z: Int, l: Int, u: Int): Long =
  *           + groupViol (担当できないシフトに就いているセル。3.318.0 でチェッカーの MirrorKeys.hard と揃えた)
  *   soft  = c1 (window) + c2 (per-staff total) + c41 (group/day range)
  *           + c42 (group pair conflict) + c41s/c42s (skill-group変種) + c3 (want seq) + c3m + c3mn
- *           + [統一a/b] low/high (range, amount×90/45) + covO (over-coverage, amount×5, 2026-08-27 HF77明示指示)
+ *           + [統一a/b] low/high (range, amount×90/25) + covO (over-coverage, amount×5, 2026-08-27 HF77明示指示)
  *   ※ range と covO は UnifiedViolationChecker と同分類(SOFT)。重みは MirrorKeys.weights が単一の真実
  *     （hard1 は ×SCORE_HARD_UNIT で常に優先）。
  *
@@ -162,7 +162,7 @@ class Evaluator(private val p: Problem) {
             if (k in 0 until K && !p.canDo(i, k)) hard1 += 1
         }
 
-        // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low=90/high=45)・
+        // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low=90/high=25)・
         // 同じガード(lo!=0, low は canDo 必須)。旧実装は hard2(=表示HARD) として +1 計上していた。
         val ssn = Array(S) { IntArray(K) }
         // [レビュー#7 3.213.0] normalizeSchedule は不正セルを -1 に写像する（MirrorCore:476）。
@@ -173,7 +173,7 @@ class Evaluator(private val p: Problem) {
             val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
             val n = ssn[i][k]
             if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) soft += (lo - n).toLong() * 90L
-            if (hi != Int.MAX_VALUE && n > hi) soft += (n - hi).toLong() * 45L
+            if (hi != Int.MAX_VALUE && n > hi) soft += (n - hi).toLong() * 25L
             // [統一apt] 適切回数(双方向目標) SOFT・重み1・L1偏差|n-t|。UnifiedViolationChecker の "apt" と一致。
             val t = p.apt[i][k]
             if (t >= 0) soft += kotlin.math.abs(n - t).toLong()

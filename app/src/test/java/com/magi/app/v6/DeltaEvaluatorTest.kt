@@ -199,7 +199,7 @@ class DeltaEvaluatorTest {
      *
      * ここでは `DeltaEvaluator` の running per-family（[DeltaEvaluator.familyRaw]）を、真の source of
      * truth である `UnifiedViolationChecker.check(...).breakdown` と**1キーずつ**突き合わせる
-     * （low/high は `rangeWeighted()` を breakdown["low"]*90+breakdown["high"]*45 と比較）。
+     * （low/high は `rangeWeighted()` を breakdown["low"]*90+breakdown["high"]*25 と比較）。
      * checker は Evaluator よりコストが重いため反復数は 3,000（既存の20,000より少ないが、初期状態1回＋
      * 単一移動3,000回で全19族中18族の実発火を確認済み＝十分な網羅）。
      */
@@ -228,7 +228,7 @@ class DeltaEvaluatorTest {
             assertEquals("$label: family=high", wantHigh, gotHigh)
             // フル再計算(rangeRaw)と差分維持(hct)の増分整合性。両者のドリフトはここで落ちる。
             assertEquals("$label: low/high weighted (rangeRaw vs 差分維持のhct)",
-                gotLow * 90L + gotHigh * 45L, de.rangeWeighted())
+                gotLow * 90L + gotHigh * 25L, de.rangeWeighted())
             // [同] 旧実装は片方だけ非ゼロでも両方を「発火」に数えており、下の網羅チェックが実際より
             //   甘くなっていた。各族が自分で非ゼロになったときだけ数える。
             if (wantLow != 0L) everNonZero.add("low")

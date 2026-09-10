@@ -190,7 +190,7 @@ internal object AdaptiveBlockSwapPolish {
     // ===== 両モード共通の部品 =====
 
     /**
-     * range/apt の見積り（候補の順位付け専用・採否は正式 checker）。重みは [MirrorKeys] の low/high（90/45）を引く＝
+     * range/apt の見積り（候補の順位付け専用・採否は正式 checker）。重みは [MirrorKeys] の low/high（90/25）を引く＝
      * 重みを変えたときにここだけ古い値で残る事故を防ぐ（apt は L1 偏差×1）。
      */
     private class PersonalPenalty(private val p: Problem) {

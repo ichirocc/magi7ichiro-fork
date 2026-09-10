@@ -90,7 +90,7 @@ fun MagiViewModel.removeStaffRange(i: Int, k: Int) {
 }
 
 // ---- グループ単位の回数（一括）: 既存 staffRange をグループ所属職員に展開する。
-//   新しい制約種別やスコア評価器の変更は不要（low/high は既に重み90/45で最適化対象）＝退行リスクなし。
+//   新しい制約種別やスコア評価器の変更は不要（low/high は既に重み90/25で最適化対象）＝退行リスクなし。
 //   業務担当者が値を入力しボタンで適用する operator ツール（HF77準拠）。 ----
 fun MagiViewModel.groupLabels(): List<String> = state?.groups?.map {
     if (it.kigou.isNotBlank() && it.kigou != it.name) "${it.name}·${it.kigou}" else it.name
@@ -106,7 +106,7 @@ fun MagiViewModel.allowedShiftsForGroup(g: Int): Set<Int> {
     return members.map { allowedShiftsFor(it).toHashSet() }.reduce { a, b -> a.apply { retainAll(b) } }
 }
 
-/** グループ g 所属の全職員に、ws5 個人別[lo,hi](staffRange, low/high 重み90/45=強い境界) を一括設定し、
+/** グループ g 所属の全職員に、ws5 個人別[lo,hi](staffRange, low/high 重み90/25=強い境界) を一括設定し、
  *  さらに ws1 C のグループ別 適切回数(groupShiftApt, apt 重み1=弱い目標) も同時に書く。
  *  apt は「最低=最高」の単一値のときのみ設定（範囲指定や空欄時はクリア）＝Excelの ws1 C→ws5 展開を1操作で再現。 */
 fun MagiViewModel.setGroupRange(g: Int, k: Int, lo: String, hi: String) {
