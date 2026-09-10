@@ -12,11 +12,13 @@ import org.junit.Test
 class ShiftAppearanceTest {
 
     @Test fun severityFollowsTheWeightHierarchy() {
-        // HARD 4族は CRITICAL、重いソフト(low90/high45/c3mn15)は HIGH、整え(fair/weekly)は INFO。
+        // HARD 4族は CRITICAL、重いソフト(low90/c3mn30)は HIGH、整え(fair/weekly)は INFO。
+        // [2026-09-10] high は 45→25(HF77) で c1/c3mn(30) を下回り HIGH→WARN へ降格。
         for (k in listOf("groupViol", "covU", "pref", "c3n")) assertEquals(k, "CRITICAL", ShiftAppearance.severityFromVioKey(k))
-        for (k in listOf("low", "high", "c3mn")) assertEquals(k, "HIGH", ShiftAppearance.severityFromVioKey(k))
+        for (k in listOf("low", "c3mn")) assertEquals(k, "HIGH", ShiftAppearance.severityFromVioKey(k))
         for (k in listOf("fair", "weekly")) assertEquals(k, "INFO", ShiftAppearance.severityFromVioKey(k))
         assertEquals("WARN", ShiftAppearance.severityFromVioKey("c1"))
+        assertEquals("WARN", ShiftAppearance.severityFromVioKey("high"))
         // 表示側は "vio-" 接頭辞つきのクラス名で引く。
         assertEquals("CRITICAL", ShiftAppearance.severityFromVioKey("vio-covU"))
         // 未知キーは INFO へ倒す（新族を足しても画面が落ちない）。

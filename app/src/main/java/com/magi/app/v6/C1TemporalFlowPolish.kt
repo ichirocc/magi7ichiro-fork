@@ -109,7 +109,7 @@ internal object C1TemporalFlowPolish {
                     }
                     val lo = p.rangeLo[i][kk]; val hi = p.rangeHi[i][kk]
                     if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * 90L
-                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 45L
+                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 25L
                     val a = p.apt[i][kk]
                     if (a >= 0) out += kotlin.math.abs(c - a).toLong()
                 }

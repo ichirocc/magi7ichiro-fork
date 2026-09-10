@@ -65,12 +65,12 @@ internal object DayAssignmentPolish {
                         val lo = p.rangeLo[i][k]
                         val hi = V6HotfixPasses.effectiveHi(p, i, k)
                         // [ソフト研磨・候補生成の重み整合] 従来の rangePen は low/high を 3/3 の擬似重みで評価していたが、
-                        //   真の目的関数(Evaluator / staffCountPenaltyAt / UnifiedViolationChecker)は low=90・high=45・apt=1。
+                        //   真の目的関数(Evaluator / staffCountPenaltyAt / UnifiedViolationChecker)は low=90・high=25・apt=1。
                         //   proxy が重い low/high を apt(重み1)と同格(3対1)に扱うと Hungarian が「軽い apt を直すため重い
                         //   low/high を犠牲にする」候補を生みやすく、良候補を生み損ねる(CLAUDE.md 既知・測定待ち)。
-                        //   proxy を目的関数と同一の 90/45/1 に整合させ、生成候補を真の目的へ寄せる。採否は従来どおり
+                        //   proxy を目的関数と同一の 90/25/1 に整合させ、生成候補を真の目的へ寄せる。採否は従来どおり
                         //   keep-best(isBetter@UnifiedViolationChecker)が担うため退化なし＝スコアリング不変。
-                        fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 90L * maxOf(0, lo - x) else 0L) + 45L * maxOf(0, x - hi)
+                        fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 90L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
                         var cost = rangePen(x1) - rangePen(x0)                     // range の限界費用
                         val t = aptTarget(i, k)
                         if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong()  // apt の限界費用
@@ -101,7 +101,7 @@ internal object DayAssignmentPolish {
     /**
      * [ソフト研磨・交互最適化(Alternating Optimization / 交代最適化)] 全変数を同時に解かず「1ブロックずつ順に最適化
      * して巡回する」座標降下法（block coordinate descent）をソフト制約研磨に導入する新アルゴリズム。ブロック＝各日(列):
-     * その日の (シフト人数=被覆) を固定したまま、希望未固定(wish<0)の職員を「個人別回数(range 90/45)・適切回数(apt 1)・
+     * その日の (シフト人数=被覆) を固定したまま、希望未固定(wish<0)の職員を「個人別回数(range 90/25)・適切回数(apt 1)・
      * **曜日平準化(weekly 1)**」の限界費用が最小になるよう **最小費用割当(Hungarian＝割当LP＝凸最適化)** で最適再配置し、
      * 日 j を 0..T-1 と巡回して 1スイープで1日も変化しなくなるまで（＝座標降下の不動点）反復する。
      *
@@ -156,8 +156,8 @@ internal object DayAssignmentPolish {
                             val x1 = x0 + 1
                             val lo = p.rangeLo[i][k]
                             val hi = V6HotfixPasses.effectiveHi(p, i, k)
-                            // range/apt は applyDayAssignmentPolish と同一の目的関数整合 proxy（90/45/1）。
-                            fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 90L * maxOf(0, lo - x) else 0L) + 45L * maxOf(0, x - hi)
+                            // range/apt は applyDayAssignmentPolish と同一の目的関数整合 proxy（90/25/1）。
+                            fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 90L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
                             var cost = rangePen(x1) - rangePen(x0)
                             val t = aptTarget(i, k)
                             if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong()

@@ -119,7 +119,7 @@ internal object RangePolish {
 
 
     /**
-     * [RangePolish・玉突き連鎖の横展開その2] 個人別回数(staffRange low/high, SOFT重み90/45)専用の研磨パス。
+     * [RangePolish・玉突き連鎖の横展開その2] 個人別回数(staffRange low/high, SOFT重み90/25)専用の研磨パス。
      * 動機（桒澤美幸の実例, 実機ログ2026-07-19）: 担当可能シフトが「休/Aｱ/B1」のみで、休=10/10固定・
      * Aｱ上限2の職員が、実際にはAｱ=6(超過4)・休=12(超過2)のまま残っていた。彼女はB1担当が全職員中唯一
      * のため、既存のCyclicSwap/HF67(同日に相手シフトを持つ相手との交換が前提)では交換相手が構造的に
@@ -282,7 +282,7 @@ internal object RangePolish {
                 val lo = p.rangeLo[i][kk]
                 val hiLim = p.rangeHi[i][kk]
                 if (lo != Int.MIN_VALUE && count < lo) out += (lo - count).toLong() * 90L
-                if (hiLim != Int.MAX_VALUE && count > hiLim) out += (count - hiLim).toLong() * 45L
+                if (hiLim != Int.MAX_VALUE && count > hiLim) out += (count - hiLim).toLong() * 25L
                 return out
             }
 
@@ -469,7 +469,7 @@ internal object RangePolish {
                     val lo = p.rangeLo[i][kk]
                     val hi = p.rangeHi[i][kk]
                     if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * 90L
-                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 45L
+                    if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 25L
                     val a = p.apt[i][kk]
                     if (a >= 0) out += kotlin.math.abs(c - a).toLong()
                 }

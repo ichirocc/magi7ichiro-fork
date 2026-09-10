@@ -38,7 +38,7 @@ internal object DestroyRepairMarginalCost {
         //   なり発火せず、かつ Evaluator 側もガードを持たない＝既に一致しているので触らない。
         //   apt は `Problem` 構築時に bucket=canDo でガード済み。
         if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) pen += (lo - n).toLong() * 90L
-        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 45L
+        if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 25L
         val t = p.apt[i][k]
         if (t >= 0) pen += kotlin.math.abs(n - t).toLong()
         return pen

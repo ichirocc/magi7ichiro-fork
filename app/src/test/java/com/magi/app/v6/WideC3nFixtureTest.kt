@@ -20,6 +20,8 @@ import org.junit.Test
  * （hard=0 total=435 weighted=3140.0＝covO重み1.0 時点の値）。
  * [2026-08-27] covO 1.0→5.0（HF77明示指示）。covO 23件ぶん weighted +92（=23*(5-1)）＝3140.0→3232.0。
  *   hard/total は covO が SOFT のみのため不変。
+ * [2026-09-10] high 45→25（HF77明示指示）。以後は checker の実測値をそのまま固定
+ *   （hard/total は high が SOFT のみのため不変、weighted のみホスト実行で再計測して更新）。
  */
 class WideC3nFixtureTest {
     private fun load() = StateParser.parse(
@@ -37,7 +39,7 @@ class WideC3nFixtureTest {
         val rep = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, rep.hard)
         assertEquals(413, rep.total)   // [3.509.0] 個人設定がある組は群目標を適用しない（D9）
-        assertEquals(3210.0, rep.weightedScore, 1e-9)
+        assertEquals(3050.0, rep.weightedScore, 1e-9)
     }
 
     @Test

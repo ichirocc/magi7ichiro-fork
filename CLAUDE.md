@@ -43,8 +43,8 @@
 - **covU**（人員不足, HARD, 重み8000）/ **covO**（人員過剰, SOFT, 重み5.0）。被覆は同日のみ（夜勤繰越なし）。
   ※ covO 重みは 0.5→1.0（2026-07-13）→5.0（2026-08-27）、いずれも HF77 明示指示。最適化器とチェッカーは同じ値。
   need1=P1, need2=P2。lo=need1, hi=(use2 && need2>=0 ? need2 : need1)。MIN/OR条件は2世代前からの意図的設計。
-- **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み90/45。amount計上）。
-  **上限 0（hi=0、休を除く）は最適化器が置かない**（`Problem.mayPlace`＝候補生成・入口 hf66・最終番兵の基準。評価・表示は high 45 のまま、
+- **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み90/25。amount計上）。
+  **上限 0（hi=0、休を除く）は最適化器が置かない**（`Problem.mayPlace`＝候補生成・入口 hf66・最終番兵の基準。評価・表示は high 25 のまま、
   希望固定は優先。3.507.0 ユーザー決定「最適化器だけ除外、表示は今のまま」）。
 - **apt**（適切回数=`groupShiftApt[群][シフト]` の**群単位双方向目標**, SOFT, 重み1, L1偏差`|回数-目標|`）。
   担当可シフトのみ有効（`Problem.apt` 構築時に bucket=canDo ガード）。不足=赤(vio-aptLow)/超過=橙(vio-aptHigh)。
@@ -61,9 +61,9 @@
   Evaluator/Delta/チェッカー3者に統合（fairと同型）。UI内訳では「曜日の偏り」チップに件数表示（場所マップは無し）。
 - **pref**（希望シフト未充足, HARD, 重み9000）/ **groupViol**（群外シフト, HARD, 重み10000）。
 
-weightedScore 階層: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) > high(45) >
-c3mn(30)=c1(30) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。（covO は 0.5→1.0→**5.0**、
-c1 は 4→5→15→**30**、c3mn は 12→15→**30**＝いずれも HF77 明示指示。この行が stale だと監査が誤誘導されるので、
+weightedScore 階層: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) >
+c3mn(30)=c1(30) > high(25) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。（covO は 0.5→1.0→**5.0**、
+c1 は 4→5→15→**30**、c3mn は 12→15→**30**、high は 45→**25**＝いずれも HF77 明示指示。この行が stale だと監査が誤誘導されるので、
 重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・`magi_native.cpp` の
 5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md` と**同じコミットで**揃える）
 
