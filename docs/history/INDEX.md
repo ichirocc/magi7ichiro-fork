@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- 編集タブの文字サイズを意味階層に揃える: 節見出しがlabel+太字・説明も行もlabelSmallで全部14sp＝ボタンより見出しが
+  小さい逆転を、章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label=部品ラベル・チップのみに
+  統一（DESIGN.md §3.3に規則を明文化。設定・勤務表タブは backlog）（3.515.4）  → `docs/history/3.4xx.md`
 - 職員・シフト種別の並び替え（▲/▼）を追加: Ws1Ops.moveStaff/moveShift（removeStaff/removeShiftと同じ index 付け替え、
   記号参照は不変、端は no-op）＋Affordance.MoveRowButtons（片手一本指＝ドラッグなし）。Ws1OpsMoveTest 4件。
   C#同期は別途（3.515.3）  → `docs/history/3.4xx.md`

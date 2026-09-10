@@ -70,16 +70,16 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
         Column(Modifier.padding(16.dp)) {
             SectionHeader("マスター設定")
             Spacer(Modifier.height(6.dp))
-            Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", style = MaterialTheme.typography.labelSmall,
+            Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary)
 
             // --- period ---
             Spacer(Modifier.height(10.dp))
             // [3.483.0 E-5] 旧「期間／対象月」＝対象の月は月次条件の「対象の月」で選ぶため、ここは日数だけ。
             SectionHeader("期間の日数（月単位以外の特殊な期間用）")
-            Text("対象の月は「月次条件」の『対象の月』で選びます。", style = MaterialTheme.typography.labelSmall,
+            Text("対象の月は「月次条件」の『対象の月』で選びます。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("${v.startDate} 〜 ${v.endDate}", style = MaterialTheme.typography.labelSmall,
+            Text("${v.startDate} 〜 ${v.endDate}", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 W1Field("日数(1-31)", daysText, Modifier.width(130.dp)) { daysText = it }
@@ -88,7 +88,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- use2 ---
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                 Switch(checked = v.use2, onCheckedChange = { vm.ws1SetUse2(it) })
             }
             Divider()
@@ -96,7 +96,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
             SectionHeader("シフト種別 (${v.shifts.size})")
-            Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             v.shifts.forEachIndexed { k, s ->
                 // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
                 //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
@@ -109,7 +109,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                         else -> "  必要 ${s.need1.ifBlank { "-" }}〜${s.need2}人"
                     }
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}$needLabel",
-                        style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                        style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     // [3.515.3] 並び替え＝集計・凡例・ピッカーの順に反映（経緯: history 3.515.3）。
                     MoveRowButtons(canUp = k > 0, canDown = k < v.shifts.size - 1,
                         onUp = { vm.ws1MoveShift(k, -1) }, onDown = { vm.ws1MoveShift(k, +1) }, enabled = !ui.running)
@@ -133,7 +133,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // [3.409.11] 残り1シフトのとき削除ボタンが**理由の説明なく消える**（3.400.0 でグループには
             //   理由を付けたが、シフトと職員は対象漏れだった）。同じ形で理由を出す。
             if (v.shifts.size <= 1) {
-                Text("最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                Text("最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             AddRowButton("シフト追加", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
             AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
@@ -142,18 +142,18 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- groups ---
             Spacer(Modifier.height(8.dp))
             SectionHeader("グループ (${v.groups.size})")
-            Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [不具合報告「グループが削除出来ない」対応] 残り1グループの場合、削除ボタンが理由の説明なく
             //   消えるだけだった（担当可否の分類が無くなるため意図的に不可）。理由を明示。
             //   ※旧記述が引き合いに出していた「休シフトの削除不可」は 3.416.0 の方針（休は通常のシフト定義）で撤廃済み。
             if (v.groups.size <= 1) {
-                Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             v.groups.forEachIndexed { g, gr ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                    Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) }, enabled = !ui.running)
                     if (vm.ws1CanRemoveGroup(g)) {
                         val members = vm.ws1GroupMemberCount(g)
@@ -184,7 +184,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             Spacer(Modifier.height(8.dp))
             SectionHeader("担当可否（群 × シフト：担当できるか）")   // [3.483.0 E-7] 回数マトリクスと軸が同じため副題で区別
             Text("セルをタップで担当ON/OFF（✓＝担当できる）。群名をタップでその群を一括、シフト名をタップで全グループへ一括。「休」は外せません。",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
             // [マトリックス再設計（ユーザー提示案）] 旧: 群ごとに FlowRow でチップを折り返す形（2.66.0）。群とシフトの
             //   対応が縦に並ばず一目で比較できなかった。行=群・列=シフトの2次元マトリクスへ。左列（群名）は固定、
@@ -290,11 +290,11 @@ internal fun StaffDialog(
     W1Shell(title, onClose, { onOk(name, gi) }, name.isNotBlank() && groupKigou.isNotEmpty()) {
         W1Text("名称", name) { name = it }
         var open by remember { mutableStateOf(false) }
-        Text("グループ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("グループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (groupKigou.isEmpty()) {
             // [A7] 鶏卵問題の誘導：グループが無いとスタッフの所属先が決められない（OKは無効）。
             Text("先に「グループ」を追加してください。職員はグループに所属します。",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         } else {
             OutlinedButton(onClick = { open = true }) { Text(groupKigou.getOrNull(gi) ?: "(なし)") }
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -324,16 +324,16 @@ internal fun BulkAddDialog(
     val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
     val groupOk = groups == null || groups.isNotEmpty()
     W1Shell(title, onClose, { onApply(lines, gi) }, lines.isNotEmpty() && groupOk) {
-        Text(hint, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
             value = text, onValueChange = { text = it }, singleLine = false, minLines = 3,
             label = { Text("1行に1件", style = MaterialTheme.typography.labelSmall) }, modifier = Modifier.fillMaxWidth(),
         )
         if (groups != null) {
             if (groups.isEmpty()) {
-                Text("先に「グループ」を追加してください。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                Text("先に「グループ」を追加してください。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             } else {
-                Text("既定のグループ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("既定のグループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedButton(onClick = { open = true }) { Text(groups.getOrNull(gi) ?: "(なし)") }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                     groups.forEachIndexed { idx, kg ->
@@ -343,7 +343,7 @@ internal fun BulkAddDialog(
                 }
             }
         }
-        if (lines.isNotEmpty()) Text("追加: ${lines.size}件", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        if (lines.isNotEmpty()) Text("追加: ${lines.size}件", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -475,6 +475,7 @@ private fun GroupShiftMatrix(
 //   FPS/RPG 風の英語コードネームは勤務表アプリの語彙でなく、operator_ux「専門用語を使わない」とも
 //   整合しない（ユーザー指示「ゲーム用語と数理用語の混在。勤務表アプリ用語統一する」）。日本語の見出しだけにする。
 @Composable
+// [3.515.4] 節見出しは title 層（DESIGN.md §3.3: title=見出し／body=本文／label=部品ラベル・チップ・凡例）。
 private fun SectionHeader(jp: String) {
-    Text(jp, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+    Text(jp, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
 }

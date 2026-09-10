@@ -31,6 +31,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-10（3.515.4＝編集タブの文字サイズを意味階層に揃える（実機報告「フォントサイズがバラツキある」）。
+節見出しを label+太字、説明も一覧の行も labelSmall で書いていたため全部14sp＝ボタン(16sp)より見出しが小さい逆転。
+章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label は部品ラベル・チップのみ、に統一し
+DESIGN.md §3.3 へ規則を明文化。対象は編集タブ5ファイル、設定・勤務表タブは同規則で別途）
+
 **最終更新**：2026-09-10（3.515.3＝職員・シフト種別の並び替え（▲/▼）を追加（実機報告）。Ws1Ops.moveStaff/moveShift
 は removeStaff/removeShift と同じ index 付け替え（勤務表・希望・個人の回数・日別必要人数・担当可否・群目標が追従、
 記号参照の制約行・表示色は不変、端は no-op）。片手一本指のため Affordance.MoveRowButtons の2ボタン。

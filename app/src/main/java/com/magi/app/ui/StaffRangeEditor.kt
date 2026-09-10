@@ -71,7 +71,7 @@ fun CountsCard(
 internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
     var dialog by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("グループ一括設定", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("グループ一括設定", style = MaterialTheme.typography.titleSmall)
             Text(
                 "選んだグループ全員に同じ上下限を一度に設定します（個人設定済みは保持）。",
                 style = MaterialTheme.typography.labelMedium,
@@ -82,7 +82,7 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
             val applied = vm.groupRangeSummary()
             if (applied.isNotEmpty()) {
                 Text("適用中のグループ上下限（${applied.size}件・個人の回数にも展開済み）",
-                    style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     applied.forEach { gr ->
                         val rangeLab = when {
@@ -186,7 +186,7 @@ internal fun GroupRangeDialog(
                 } else if (blank) {
                     Text(RANGE_REQUIRED_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（個人で設定済みの人は保持）。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（個人で設定済みの人は保持）。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )

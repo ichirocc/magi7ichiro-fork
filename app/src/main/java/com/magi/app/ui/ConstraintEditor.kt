@@ -73,9 +73,9 @@ fun ConstraintsCard(
             families.forEachIndexed { fi, fam ->
                 if (fi > 0) Spacer(Modifier.height(6.dp))
                 Spacer(Modifier.height(8.dp))
-                Text(fam.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text(fam.title, style = MaterialTheme.typography.titleSmall)
                 if (fam.rows.isEmpty()) {
-                    Text("(なし)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("(なし)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else if (fam.key.startsWith("cons3")) {
                     // [3.482.0 編集タブ簡素化] 並び4族は「起点シフトごとのチップ」に集約（見本データは禁止11行のうち
                     //   Dﾃ起点が7行＝1行ずつの縦積みでは重複に気づけなかった）。データは従来の C3Row のまま＝表示の集約のみ。
@@ -131,7 +131,8 @@ private fun SeqFamilyGrouped(
             "cons3mn" -> "【$first の次の日は避ける】"
             else -> "【$first の次の日】"
         }
-        Text(heading, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
+        // [3.515.4] 族見出し(titleSmall)の下位＝本文サイズの太字。label 層は部品ラベル/チップ用（DESIGN.md §3.3）。
+        Text(heading, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
         val idxs = pats.indices.filter { pats[it].firstOrNull() == first }
         val pairIdxs = idxs.filter { pats[it].size == 2 }
         val otherIdxs = idxs.filter { pats[it].size != 2 }
@@ -177,19 +178,19 @@ private fun ConstraintHelpExpander(families: List<MagiViewModel.ConstraintFamily
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(if (open) "ⓘ 詳しい説明を閉じる" else "ⓘ 詳しい説明（それぞれの条件の意味）",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
         if (open) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 families.forEach { fam ->
                     constraintHelp[fam.key]?.let { body ->
                         Column {
-                            Text(fam.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Text(body, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(fam.title, style = MaterialTheme.typography.titleSmall)
+                            Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
-                Text(CONSTRAINT_HELP_FOOTER, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(CONSTRAINT_HELP_FOOTER, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -217,7 +218,7 @@ private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onD
             .heightIn(min = 48.dp)
             .wrapContentHeight(Alignment.CenterVertically)
             .padding(horizontal = 4.dp)) {
-            Text(row, style = MaterialTheme.typography.labelSmall)
+            Text(row, style = MaterialTheme.typography.bodyMedium)
         }
         EditRowButton(onClick = onEdit, enabled = enabled)
         Spacer(Modifier.width(6.dp))
@@ -237,19 +238,19 @@ fun SkillConstraintsCard(ui: UiState, vm: MagiViewModel) {
             // [3.427.0] 旧文は続けて「スキル群のレンジ（…）と、スキル群ペア禁止（…）を設定します」と
             //   列挙していたが、直下の族見出し2行と完全な重複＝カードの識別に要る1文だけ残す。
             Text("上の「スキルグループ」に対する専用ルールです。",
-                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             if (vm.skillGroupKigouList().isEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text("先に上で「スキルグループ」を追加すると設定できます。",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 ConstraintHelpExpander(families)
                 families.forEachIndexed { fi, fam ->
                     if (fi > 0) Spacer(Modifier.height(6.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text(fam.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(fam.title, style = MaterialTheme.typography.titleSmall)
                     if (fam.rows.isEmpty()) {
-                        Text("(なし)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("(なし)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         fam.rows.forEachIndexed { idx, row ->
                             ConstraintRow(row, enabled = !ui.running,
@@ -380,7 +381,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             val dupFam = vm.seqDuplicateOf(family, listOf(a, b, c, d, e), excludeIndex = editIndex)
             Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { vm.addCons3(family, listOf(a, b, c, d, e)) } },
                 a.isNotBlank() && dupFam == null) {
-                Text("並び (上から順・最大5連日 / 空=ここで終了)", style = MaterialTheme.typography.labelSmall,
+                Text("並び (上から順・最大5連日 / 空=ここで終了)", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (dupFam != null) {
                     Text("この並びは「$dupFam」に登録済みです。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
@@ -438,7 +439,7 @@ private fun NumField(label: String, value: String, modifier: Modifier = Modifier
 private fun Picker(label: String, options: List<String>, selected: String, onSelect: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Column {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Box {
             OutlinedButton(onClick = { open = true }) {
                 Text(if (selected.isBlank()) "(なし)" else selected)

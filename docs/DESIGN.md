@@ -56,6 +56,11 @@ UD（高コントラスト, `mode=3`）＝白地＋黒境界＋濃色ロール�
 ### 3.3 タイポ（`MagiTheme` Typography）
 見出し静か・本文底上げ（最小 14sp）・数値最大。`sp` はシステム文字サイズに追従。
 `display/headline`＝数値ヒーロー、`title`＝カード見出し、`body`＝説明、`label`＝チップ/凡例。
+**編集カード内の階層は意味で決める**（3.515.4、実機報告「フォントサイズがバラツキある」）:
+章（カード見出し）＝`titleMedium` ／ 節（カード内の節・族の見出し）＝`titleSmall` ／
+本文・一覧の行・切替の名前＝`bodyMedium` ／ 補足説明・注意書き＝`bodySmall`（色は `onSurfaceVariant`/`error`）／
+`label*` は部品のラベル（入力欄・ピッカーの見出し）・チップ・凡例だけ。見出しを `label*`＋太字で代用しない
+（全部 14sp になり、ボタン(16sp)より見出しが小さい逆転が起きる）。
 
 ### 3.4 角丸（`MagiTheme` Shapes）
 `extraSmall 10 / small 12 / medium 14 / large 18 / extraLarge 24`（dp）。**任意 dp の角丸を新規に使わない**。
