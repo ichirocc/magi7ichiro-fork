@@ -31,6 +31,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-10（3.515.6＝ユーザー提示モックアップを起点にgrillingで5問詰め、編集タブ「シフト種別」
+「グループ」の行デザインを刷新。▲/▼(3.515.3)を長押しドラッグへ（片手一本指の既定をこの2箇所限定で明示的に
+上書き・CLAUDE.md/docs/design.mdに例外を明記）、削除ボタンは行から編集シートの中へ、グループの並び替えは
+新規実装（`Ws1Ops.moveGroup`）。TalkBackでは操作不可な既知の制約を開示。UI層のためCIで最終確認）
+
 **最終更新**：2026-09-10（3.515.5＝backlog #17。設定・勤務表タブ（MagiSetupCards/MagiDashboardCards/MagiScheduleViews）
 の文字サイズも3.515.4と同じ意味階層（章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall）へ統一。
 凡例・バッジ相当（違反の凡例・シフト集計の▼▲凡例・セル内の「現在」「超過」等の小さな注記）はlabel*のまま据え置き。

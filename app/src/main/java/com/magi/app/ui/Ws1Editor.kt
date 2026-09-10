@@ -24,8 +24,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
@@ -40,11 +42,16 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
@@ -52,6 +59,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 
 /**
  * ws1 (初期設定) editor card. Edits the problem definition: period length (days),
@@ -96,12 +105,17 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- shifts ---
             Spacer(Modifier.height(8.dp))
             SectionHeader("シフト種別 (${v.shifts.size})")
-            Text("編集で記号・名前・必要人数を変更（勤務表と制約にも反映）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            v.shifts.forEachIndexed { k, s ->
+            Text("タップで編集、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。必要人数を変更（勤務表と制約にも反映）。",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // [3.515.6/ドラッグ&ドロップ・ユーザー指示] ▲/▼(3.515.3)から並び替えを行内ドラッグへ変更。
+            //   削除は行から編集シートの中へ移した（行はタップ＝編集・ハンドル長押し＝並び替えの2導線に整理）。
+            ReorderableRows(items = v.shifts, enabled = !ui.running, onMove = { from, to -> vm.ws1MoveShiftTo(from, to) }) { k, s, dragHandle ->
                 // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
                 //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
                     verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(48.dp).padding(12.dp).then(dragHandle))
                     // [3.483.0 E-6] 旧「(最低 -人 / 上限 -人)」＝未設定でも括弧が並び1行が長かった。設定時だけ短く添える。
                     val needLabel = when {
                         s.need1.isBlank() && s.need2.isBlank() -> ""
@@ -110,24 +124,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                     }
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}$needLabel",
                         style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    // [3.515.3] 並び替え＝集計・凡例・ピッカーの順に反映（経緯: history 3.515.3）。
-                    MoveRowButtons(canUp = k > 0, canDown = k < v.shifts.size - 1,
-                        onUp = { vm.ws1MoveShift(k, -1) }, onDown = { vm.ws1MoveShift(k, +1) }, enabled = !ui.running)
-                    Spacer(Modifier.width(6.dp))
-                    EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) }, enabled = !ui.running)
-                    if (v.shifts.size > 1) {
-                        Spacer(Modifier.width(6.dp))
-                        DeleteRowButton(onClick = {
-                            // [3.429.0/R-03] 削除する前に、参照している制約の件数を見せる（削除自体は
-                            //   従来どおり進められる＝止めるのではなく、確認ダイアログを情報つきにする）。
-                            // [design-review] 参照件数は独立の文（note）として渡す。旧実装はラベルの
-                            //   括弧内に詰め込んでおり、スキルグループ側（別文として表示）と表現が
-                            //   食い違っていた（同じ操作は同じ形にする＝3.397.0）。
-                            val refs = vm.ws1ShiftRefCount(k)
-                            val note = if (refs > 0) "このシフトを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
-                            dialog = Ws1Dialog.ConfirmDelete("shift", k, "シフト ${toHankakuKigou(s.kigou)}", note)
-                        }, enabled = !ui.running)
-                    }
+                    Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             // [3.409.11] 残り1シフトのとき削除ボタンが**理由の説明なく消える**（3.400.0 でグループには
@@ -142,33 +139,22 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             // --- groups ---
             Spacer(Modifier.height(8.dp))
             SectionHeader("グループ (${v.groups.size})")
-            Text("編集で改名。削除すると所属者は先頭グループへ移動。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("タップで改名、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。削除すると所属者は先頭グループへ移動。",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [不具合報告「グループが削除出来ない」対応] 残り1グループの場合、削除ボタンが理由の説明なく
             //   消えるだけだった（担当可否の分類が無くなるため意図的に不可）。理由を明示。
             //   ※旧記述が引き合いに出していた「休シフトの削除不可」は 3.416.0 の方針（休は通常のシフト定義）で撤廃済み。
             if (v.groups.size <= 1) {
                 Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
-            v.groups.forEachIndexed { g, gr ->
+            ReorderableRows(items = v.groups, enabled = !ui.running, onMove = { from, to -> vm.ws1MoveGroupTo(from, to) }) { g, gr, dragHandle ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
                     verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(48.dp).padding(12.dp).then(dragHandle))
                     Text("${toHankakuKigou(gr.kigou)}  ${gr.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    EditRowButton(onClick = { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) }, enabled = !ui.running)
-                    if (vm.ws1CanRemoveGroup(g)) {
-                        val members = vm.ws1GroupMemberCount(g)
-                        Spacer(Modifier.width(6.dp))
-                        DeleteRowButton(onClick = {
-                            // [3.429.0/R-03] 所属者移動に加え、参照している制約の件数も見せる。
-                            // [design-review] 参照件数は独立の文（note）として渡す。旧実装は所属者移動の
-                            //   短い注記と参照件数の完全な文を同じ括弧に詰め込んでおり、文が積み重なって
-                            //   読みにくかった（括弧の中に文を入れない）。
-                            val refs = vm.ws1GroupRefCount(g)
-                            val note = if (refs > 0) "このグループを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
-                            val label = "グループ ${toHankakuKigou(gr.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
-                            dialog = Ws1Dialog.ConfirmDelete("group", g, label, note)
-                        }, enabled = !ui.running)
-                    }
+                    Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             AddRowButton("グループ追加", onClick = { dialog = Ws1Dialog.AddGroup }, enabled = !ui.running)
@@ -204,12 +190,29 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
     }
 
     when (val d = dialog) {
+        // [3.515.6] 削除の入口は行から編集シートの中へ（ユーザー指示）。参照件数の確認は従来どおり
+        //   ConfirmDelete を経由する（安全確認は不変、経由の場所だけ変える）。
         is Ws1Dialog.EditShift -> ShiftDialog("シフト編集", d.name, d.kigou, d.need1, d.need2,
-            { n, kg, n1, n2 -> vm.ws1EditShift(d.k, n, kg, n1, n2); dialog = null }, { dialog = null })
+            { n, kg, n1, n2 -> vm.ws1EditShift(d.k, n, kg, n1, n2); dialog = null }, { dialog = null },
+            onDelete = if (v.shifts.size > 1) ({
+                // [3.429.0/R-03] 削除する前に、参照している制約の件数を見せる（削除自体は
+                //   従来どおり進められる＝止めるのではなく、確認ダイアログを情報つきにする）。
+                val refs = vm.ws1ShiftRefCount(d.k)
+                val note = if (refs > 0) "このシフトを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
+                dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note)
+            }) else null)
         Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "",
             { n, kg, n1, n2 -> vm.ws1AddShift(n, kg, n1, n2); dialog = null }, { dialog = null })
         is Ws1Dialog.EditGroup -> GroupDialog("グループ編集", d.name, d.kigou,
-            { n, kg -> vm.ws1EditGroup(d.g, n, kg); dialog = null }, { dialog = null })
+            { n, kg -> vm.ws1EditGroup(d.g, n, kg); dialog = null }, { dialog = null },
+            onDelete = if (vm.ws1CanRemoveGroup(d.g)) ({
+                // [3.429.0/R-03] 所属者移動に加え、参照している制約の件数も見せる。
+                val members = vm.ws1GroupMemberCount(d.g)
+                val refs = vm.ws1GroupRefCount(d.g)
+                val note = if (refs > 0) "このグループを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
+                val label = "グループ ${toHankakuKigou(d.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
+                dialog = Ws1Dialog.ConfirmDelete("group", d.g, label, note)
+            }) else null)
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> vm.ws1AddGroup(n, kg); dialog = null }, { dialog = null })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
@@ -235,6 +238,48 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
     }
 }
 
+/** [3.515.6] ドラッグハンドルの説明文に埋め込む記号。実際のアイコンは [Icons.Filled.DragHandle]。 */
+private const val DRAG_HANDLE_GLYPH = "≡"
+
+/** [3.515.6] 一覧行を長押し+ドラッグで並び替える（片手一本指の既定からの明示的な例外。経緯: history 3.515.6）。
+ *  掴んだ行だけを指に追従させ、離した位置を行の高さで割った目標位置で [onMove] を1回だけ呼ぶ。 */
+@Composable
+private fun <T> ReorderableRows(
+    items: List<T>,
+    enabled: Boolean,
+    onMove: (from: Int, to: Int) -> Unit,
+    row: @Composable (index: Int, item: T, dragHandle: Modifier) -> Unit,
+) {
+    var rowHeightPx by remember { mutableFloatStateOf(0f) }
+    var draggingIndex by remember { mutableIntStateOf(-1) }
+    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    Column {
+        items.forEachIndexed { idx, item ->
+            val dragging = draggingIndex == idx
+            val dragHandle = if (!enabled) Modifier else Modifier.pointerInput(items.size) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { draggingIndex = idx; dragOffsetPx = 0f },
+                    onDragEnd = {
+                        val from = draggingIndex
+                        if (from in items.indices && rowHeightPx > 0f) {
+                            val to = (from + (dragOffsetPx / rowHeightPx).roundToInt()).coerceIn(0, items.size - 1)
+                            if (to != from) onMove(from, to)
+                        }
+                        draggingIndex = -1; dragOffsetPx = 0f
+                    },
+                    onDragCancel = { draggingIndex = -1; dragOffsetPx = 0f },
+                ) { change, dragAmount -> change.consume(); dragOffsetPx += dragAmount.y }
+            }
+            Box(
+                Modifier.fillMaxWidth()
+                    .onGloballyPositioned { c -> if (rowHeightPx == 0f) rowHeightPx = c.size.height.toFloat() }
+                    .graphicsLayer { translationY = if (dragging) dragOffsetPx else 0f }
+                    .zIndex(if (dragging) 1f else 0f),
+            ) { row(idx, item, dragHandle) }
+        }
+    }
+}
+
 private sealed interface Ws1Dialog {
     data class EditShift(val k: Int, val name: String, val kigou: String, val need1: String, val need2: String) : Ws1Dialog
     object AddShift : Ws1Dialog
@@ -248,6 +293,8 @@ private sealed interface Ws1Dialog {
 private fun ShiftDialog(
     title: String, name0: String, kigou0: String, need10: String, need20: String,
     onOk: (String, String, String, String) -> Unit, onClose: () -> Unit,
+    // [3.515.6] 削除の入口（行から移設）。編集時のみ渡す＝追加時はnullで非表示。
+    onDelete: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(name0) }
     var kigou by remember { mutableStateOf(kigou0) }
@@ -264,6 +311,7 @@ private fun ShiftDialog(
             W1Field("上限人数(2パターン時)", need2, Modifier.weight(1f), isError = bad) { need2 = it }
         }
         if (bad) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+        if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このシフトを削除")
     }
 }
 
@@ -271,12 +319,15 @@ private fun ShiftDialog(
 private fun GroupDialog(
     title: String, name0: String, kigou0: String,
     onOk: (String, String) -> Unit, onClose: () -> Unit,
+    // [3.515.6] 削除の入口（行から移設）。編集時のみ渡す＝追加時はnullで非表示。
+    onDelete: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(name0) }
     var kigou by remember { mutableStateOf(kigou0) }
     W1Shell(title, onClose, { onOk(name, kigou) }, kigou.isNotBlank()) {
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
+        if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このグループを削除")
     }
 }
 

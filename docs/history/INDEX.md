@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- 編集タブ「シフト種別」「グループ」を行デザイン刷新＋ドラッグ&ドロップ並び替えへ（ユーザー提示モックアップ・
+  grilling5問）: ▲/▼(3.515.3)から長押しドラッグへ（片手一本指の既定をこの2箇所限定で明示的に上書き）、削除は
+  行から編集シートの中へ、グループの並び替えは新規実装（Ws1Ops.moveGroup）。TalkBackでは操作不可な既知の制約を開示（3.515.6）  → `docs/history/3.4xx.md`
 - 設定・勤務表タブの文字サイズを意味階層に揃える（backlog #17、3.515.4の続き）: MagiSetupCards/MagiDashboardCards/
   MagiScheduleViewsのlabelSmall・label+太字見出しを章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall
   へ統一。凡例・バッジ相当（ViolationLegend/TallyLegend/セル内注記）はlabel*のまま据え置き（3.515.5）  → `docs/history/3.4xx.md`

@@ -10,9 +10,10 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 /**
- * [3.515.3] 職員／シフト種別の並び替え（[Ws1Ops.moveStaff] / [Ws1Ops.moveShift]）。
- * 不変条件は「index で保存しているもの（勤務表・希望・個人の回数・日別必要人数・担当可否・群目標）が
- * 全部追従し、記号で参照するもの（制約行・表示色）は触らない」こと。端の並び替えは同じ state を返す。
+ * [3.515.3] 職員／シフト種別、[3.515.6] グループの並び替え（[Ws1Ops.moveStaff] / [Ws1Ops.moveShift] /
+ * [Ws1Ops.moveGroup]）。不変条件は「index で保存しているもの（勤務表・希望・個人の回数・日別必要人数・
+ * 担当可否・群目標・職員の所属）が全部追従し、記号で参照するもの（制約行・表示色）は触らない」こと。
+ * 端の並び替えは同じ state を返す。
  */
 class Ws1OpsMoveTest {
 
@@ -84,5 +85,27 @@ class Ws1OpsMoveTest {
         val g = grid(st)
         assertSame(st, Ws1Ops.moveShift(st, g, 0, -1).state)
         assertSame(st, Ws1Ops.moveShift(st, g, 2, +1).state)
+    }
+
+    @Test fun moveGroupSwapsRowsAndStaffGroupIdxButNotScheduleOrWishes() {
+        val st = state()
+        val ns = Ws1Ops.moveGroup(st, 0, +1)   // G0(0) <-> G1(1)
+        assertEquals(listOf("G1", "G0"), ns.groups.map { it.name })
+        assertEquals(listOf(listOf(1, 0, 1), listOf(1, 1, 0)), ns.groupShift)
+        assertEquals(listOf(listOf("", "", "4"), listOf("", "3", "")), ns.groupShiftApt)
+        assertEquals("所属していた群番号が追従", listOf(1, 0, 1), ns.staff.map { it.groupIdx })
+        assertEquals("skillIdx は無関係", listOf(1, -1, 0), ns.staff.map { it.skillIdx })
+        assertEquals("勤務表・希望は職員行基準のため無変化", st.schedule, ns.schedule)
+        assertEquals(st.wishes, ns.wishes)
+        assertEquals(st.staffRange, ns.staffRange)
+        assertEquals("記号参照は不変", st.cons3n, ns.cons3n)
+        val back = Ws1Ops.moveGroup(ns, 1, -1)
+        assertEquals(st, back)
+    }
+
+    @Test fun moveGroupAtTheEdgeIsANoOp() {
+        val st = state()
+        assertSame(st, Ws1Ops.moveGroup(st, 0, -1))
+        assertSame(st, Ws1Ops.moveGroup(st, 1, +1))
     }
 }
