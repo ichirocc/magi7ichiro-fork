@@ -116,16 +116,17 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 kigou = "必須違反（基準色）",
                 currentHex = ui.violationColorHex,
                 defaultHex = "#BA1A1A",
-                onPick = { hex -> vm.setViolationColor(hex); pickFam = null },
-                onReset = { vm.resetViolationColor(); pickFam = null },
+                // [実機バグ修正] 選ぶ・既定に戻すで閉じない（ShiftColorCard と同じ。経緯: history 3.515.2）。
+                onPick = { hex -> vm.setViolationColor(hex) },
+                onReset = { vm.resetViolationColor() },
                 onClose = { pickFam = null },
             )
             "__soft__" -> ColorPickerDialog(
                 kigou = "要調整（基準色）",
                 currentHex = ui.violationSoftColorHex,
                 defaultHex = "#E08A1E",
-                onPick = { hex -> vm.setViolationSoftColor(hex); pickFam = null },
-                onReset = { vm.resetViolationSoftColor(); pickFam = null },
+                onPick = { hex -> vm.setViolationSoftColor(hex) },
+                onReset = { vm.resetViolationSoftColor() },
                 onClose = { pickFam = null },
             )
             else -> ColorPickerDialog(
@@ -136,8 +137,8 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                     "HIGH", "WARN" -> softHex
                     else -> "#8A979B"   // INFO(灰)
                 },
-                onPick = { hex -> vm.setViolationFamilyColor(pf, hex); pickFam = null },
-                onReset = { vm.resetViolationFamilyColor(pf); pickFam = null },
+                onPick = { hex -> vm.setViolationFamilyColor(pf, hex) },
+                onReset = { vm.resetViolationFamilyColor(pf) },
                 onClose = { pickFam = null },
             )
         }

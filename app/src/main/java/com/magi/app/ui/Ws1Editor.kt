@@ -110,6 +110,10 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                     }
                     Text("${toHankakuKigou(s.kigou)}  ${s.name}$needLabel",
                         style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
+                    // [3.515.3] 並び替え＝集計・凡例・ピッカーの順に反映（経緯: history 3.515.3）。
+                    MoveRowButtons(canUp = k > 0, canDown = k < v.shifts.size - 1,
+                        onUp = { vm.ws1MoveShift(k, -1) }, onDown = { vm.ws1MoveShift(k, +1) }, enabled = !ui.running)
+                    Spacer(Modifier.width(6.dp))
                     EditRowButton(onClick = { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) }, enabled = !ui.running)
                     if (v.shifts.size > 1) {
                         Spacer(Modifier.width(6.dp))

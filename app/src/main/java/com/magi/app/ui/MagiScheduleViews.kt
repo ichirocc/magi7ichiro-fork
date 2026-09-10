@@ -265,6 +265,25 @@ internal fun ShiftPickerSheet(
                             style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                             color = resolvedVioColor(ui, vioCls, vioHardC, vioSoftC))
                     }
+                    // [実機バグ修正] covU/covOはneedViolations["k,j"](シフト×日)にあり、上のcellVioClasses
+                    //   （職員×日）には出ないため、この日のこのシフトが人員不足/過剰でも理由が出なかった
+                    //   （経緯: history 3.515.2）。現在の割当シフトぶんだけ追加で見る。
+                    if (current >= 0) ui.needViolations["$current,$j"]?.let { needCls ->
+                        val fam = needCls.removePrefix("vio-")
+                        val hard = isHardCellViolation(needCls)
+                        val limits = vm.needCellLimits(current, j)
+                        val countNow = ui.schedule.count { it.getOrNull(j) == current }
+                        val detail = limits?.let { (lo, hi) ->
+                            when (needCls) {
+                                "vio-covU" -> "必要${lo}人 → ${(lo - countNow).coerceAtLeast(0)}人不足"
+                                "vio-covO" -> "適正${hi}人 → ${(countNow - hi).coerceAtLeast(0)}人過剰"
+                                else -> null
+                            }
+                        }
+                        Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam) + (detail?.let { "（$it）" } ?: ""),
+                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                            color = resolvedVioColor(ui, needCls, vioHardC, vioSoftC))
+                    }
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"
                         else "希望  ${sym(wish)}" + (if (wish == current) "（反映済）" else "（未反映）")
@@ -1345,6 +1364,19 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                                     ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の希望を取り消す", color = cs.error) }
                                 }
                             }
+                            // [実機バグ修正] 希望で固定していない在勤者にも1人にしぼった「直し方を探す」への導線を足す。
+                            val sh = d.shift
+                            if (dj != null && sh != null) {
+                                val movable = d.assigned.filterNot { it in d.pinned }
+                                if (movable.isNotEmpty()) Spacer(Modifier.height(4.dp))
+                                for (i in movable) {
+                                    OutlinedButton(
+                                        onClick = { detail = null; onFix(i, sh) },
+                                        enabled = !ui.running,
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の直し方を探す") }
+                                }
+                            }
                         }
                     },
                     confirmButton = {
@@ -1362,6 +1394,8 @@ private data class TallyDetailUi(
     val title: String, val lines: List<String>, val focus: Int?, val shift: Int? = null,
     /** [3.492.0] 日別セルの日と、その枠を本人希望で固定している在勤者（人員過剰のとき）。 */
     val day: Int? = null, val pinned: List<Int> = emptyList(),
+    /** [実機バグ修正] 人員過剰の枠に現在入っている全員（希望固定分も含む。経緯: history 3.515.2）。 */
+    val assigned: List<Int> = emptyList(),
 )
 
 /** 職員別セル(i,k): 現在回数と 下限/上限/目標 の差を数字で。 */
@@ -1396,14 +1430,21 @@ private fun dayViolDetail(vm: MagiViewModel, ui: UiState, k: Int, j: Int, count:
     // [3.492.0/実機指摘「12日は希望Aｱが2人いる原因です。データ修正のサポートが無い」] 人員過剰の枠で、
     //   その枠を本人希望で固定している在勤者を名指しする（診断 CoverageDiag と同じ判定＝配置済み＆希望一致）。
     //   ダイアログはこの一覧から希望をその場で取り消せる。
-    val pinned = if (vio == "vio-covO") ui.schedule.indices.filter { i ->
-        ui.schedule[i].getOrNull(j) == k && ui.wishes["$i,$j"] == k
-    } else emptyList()
+    val assigned = if (vio == "vio-covO") ui.schedule.indices.filter { i -> ui.schedule[i].getOrNull(j) == k } else emptyList()
+    val pinned = assigned.filter { i -> ui.wishes["$i,$j"] == k }
+    // [実機バグ修正] 旧実装は希望で固定している在勤者「だけ」を名指ししていた。まず在勤者を全員列挙する
+    //   （経緯: history 3.515.2）。既存の「希望で固定」注記はそのまま残す。
+    if (assigned.isNotEmpty()) {
+        lines += "在勤: " + assigned.joinToString("・") { i ->
+            val nm = ui.staffNames.getOrNull(i) ?: "#$i"
+            if (i in pinned) "$nm（希望固定）" else nm
+        }
+    }
     if (pinned.isNotEmpty()) {
         lines += "希望で固定: " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } +
             "（必須の希望どうしが同じ日に重なり、どちらかの希望を取り消さない限り過剰は残ります）"
     }
-    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null, k, day = j, pinned = pinned)
+    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null, k, day = j, pinned = pinned, assigned = assigned)
 }
 
 private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else hexToColor(hex)
@@ -1536,8 +1577,21 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     //   記号が誤読になる（Dﾃ→D）のを防ぐ。可読の代替は contentDescription と編集シート（通常どおり拡大）。
     val symFontSize = with(LocalDensity.current) { minOf(cellW * 0.40f, 15.dp).toSp() }
     val headFontSize = with(LocalDensity.current) { 12.dp.toSp() }   // 曜日/▼N も同方針で列幅フィット
-    val dayVioH = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 1 } } }
-    val dayVioS = remember(vioKind) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] >= 2 } } }
+    // [実機バグ修正] covO/covUはneedViolations["k,j"](シフト×日)に立ち、職員セル(violationCells)には
+    //   立たないため、dayVioH/dayVioSがそれだけ見ていると曜日ヘッダの下線が付かない日があった。下の
+    //   違反ナビ`vioDays`（617行目付近）と同じく両マップを合算する（経緯: history 3.515.2）。
+    val needVioByDay = remember(ui.needViolations, vioEnabled, days) {
+        val hard = IntArray(days); val soft = IntArray(days)
+        for ((key, cls) in ui.needViolations) {
+            if (!vioVisible(cls, vioEnabled)) continue
+            val d = key.substringAfter(",").toIntOrNull() ?: continue
+            if (d !in 0 until days) continue
+            if (isHardCellViolation(cls)) hard[d]++ else soft[d]++
+        }
+        hard to soft
+    }
+    val dayVioH = remember(vioKind, needVioByDay) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 1 } + needVioByDay.first[d] } }
+    val dayVioS = remember(vioKind, needVioByDay) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] >= 2 } + needVioByDay.second[d] } }
     val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
     // [3.444.0 行列クロスハイライト] セルをタップすると対象の「職員名」と「日付」を約2.5秒強調＝
     //   広いグリッドでどの行/列を触ったか見失いにくくする（読み間違い防止。ユーザー提示の改善案③）。

@@ -154,8 +154,9 @@ fun ShiftColorCard(
         ColorPickerDialog(
             kigou = kg,
             currentHex = current?.hex ?: "",
-            onPick = { hex -> vm.setShiftColor(kg, hex); target = null },
-            onReset = { vm.resetShiftColor(kg); target = null },
+            // [実機バグ修正] 選ぶ・既定に戻すで閉じない（「閉じる」/×だけで閉じる。経緯: history 3.515.2）。
+            onPick = { hex -> vm.setShiftColor(kg, hex) },
+            onReset = { vm.resetShiftColor(kg) },
             onClose = { target = null },
         )
     }

@@ -31,6 +31,19 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-10（3.515.3＝職員・シフト種別の並び替え（▲/▼）を追加（実機報告）。Ws1Ops.moveStaff/moveShift
+は removeStaff/removeShift と同じ index 付け替え（勤務表・希望・個人の回数・日別必要人数・担当可否・群目標が追従、
+記号参照の制約行・表示色は不変、端は no-op）。片手一本指のため Affordance.MoveRowButtons の2ボタン。
+Ws1OpsMoveTest 4件、host 731テストgreen。C#（-MAGI_PC）同期は別途）
+
+**最終更新**：2026-09-10（3.515.2＝実機報告6件を修正。(1)群の目標ステッパーの+/-がセルタップシートを閉じる
+（key(ui.editRev)配下のremember破棄。シート開閉状態をMagiApp.kt側へ引き上げ）、(2)曜日ヘッダの下線が
+needViolations(シフト×日)のみの違反日に付かない、(3)covOセル詳細で希望固定していない在勤者が表示・
+操作できない（在勤者一覧＋個別「直し方を探す」を追加）、(4)違反ナビでジャンプしたセルをShiftPickerSheetで
+タップしても理由が出ないケースがある（(2)(4)はneedViolations未合算という同根）、(5)色ピッカーが選ぶと閉じる
+（4呼出元とも「閉じる」/×だけで閉じるように）、(6)分析タブの設定警告（cons3n重複「Dﾃ→A4」）が18文字で
+切れて勤務表の違反に見える（1件のときは場所＋理由を全文表示）。UI層はCIで最終確認、(6)はhost 727テストgreen）
+
 **最終更新**：2026-09-09（3.515.1＝3.515.0への外部レビュー(/code-review)指摘2件を修正。(1)FixSuggesterのfocusShiftは日を指定できず別日の改善がこのセルの解消として誤カウントされ得た点を、返った手が実際にday j自体を動かすか確認するよう修正。(2)covO深追いが最適化完了直後の編集ロック解除・経過時間表示を最大8秒巻き込んでいた点を、pushReportを待たせない別ジョブ(deepCovODiagFollowUp)へ分離して修正）
 
 **最終更新**：2026-09-09（3.515.0＝covOの「なぜ減らないか」診断を複数職員・別日の組合せまで探すよう拡張（ユーザー指示。既存のFixSuggester「直し方を探す」を再利用。実データでは今回の5件とも解なしと確定＝low/high重み差による構造的トレードオフ）。副次的にViolationComponentRepair/V6FinalPortの無駄なsurplus計算を除去、深追いは最適化完了直後のみでライブ編集診断には影響しない設計）

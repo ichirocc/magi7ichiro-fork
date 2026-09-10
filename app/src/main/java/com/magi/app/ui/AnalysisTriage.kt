@@ -84,13 +84,19 @@ private fun issueKindLabel(kind: IssueKind) = when (kind) {
 private fun aggregateIssues(issues: List<SettingIssue>): List<TriageRow> =
     issues.groupBy { it.kind }
         .map { (kind, list) ->
-            val heads = list.take(2).joinToString("/") { it.where.take(18) }
-            val more = if (list.size > 2) " ほか" else ""
+            // [実機バグ修正] 1件だけの種類は場所を切り詰めず理由(problem)まで出す。場所だけを18文字で切ると
+            //   設定の重複警告が勤務表の違反に読めた（経緯: history 3.515.2）。
+            val detail = if (list.size == 1) {
+                val s = list.single()
+                if (s.problem.isBlank()) s.where else "${s.where} — ${s.problem}"
+            } else {
+                list.take(2).joinToString("/") { it.where.take(18) } + (if (list.size > 2) " ほか" else "")
+            }
             TriageRow(
                 label = issueKindLabel(kind),
                 count = list.size,
                 unit = "件",
-                detail = heads + more,
+                detail = detail,
             )
         }
         .sortedByDescending { it.count }

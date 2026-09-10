@@ -1,5 +1,14 @@
 # 作業記録の索引（見出し一覧）
 
+- 職員・シフト種別の並び替え（▲/▼）を追加: Ws1Ops.moveStaff/moveShift（removeStaff/removeShiftと同じ index 付け替え、
+  記号参照は不変、端は no-op）＋Affordance.MoveRowButtons（片手一本指＝ドラッグなし）。Ws1OpsMoveTest 4件。
+  C#同期は別途（3.515.3）  → `docs/history/3.4xx.md`
+- 実機報告6件を修正: (1)群の目標ステッパーの+/-がセルタップシートを閉じる（key(ui.editRev)配下のremember破棄）、
+  (2)曜日ヘッダの下線がneedViolations(シフト×日)のみの違反日に付かない、(3)covOセル詳細で希望固定してない
+  在勤者が表示・操作できない、(4)違反ナビでジャンプしたセルをタップしても理由が出ないケースがある
+  （(2)(4)はneedViolations未合算という同根）、(5)色ピッカーが選ぶと閉じる（4呼出元のonPickが明示的に閉じていた）、
+  (6)分析タブの設定警告（cons3n重複「Dﾃ→A4」）が18文字で切れて勤務表の違反に見える（1件のときは場所＋理由を全文表示）
+  （3.515.2）  → `docs/history/3.4xx.md`
 - 3.515.0の外部レビュー指摘2件を修正: (1)FixSuggesterのfocusShiftは日を指定できず、別日の改善がこのセルの解消として誤カウントされ得た＝返った手が実際にday j自体を動かすか確認するよう修正、(2)covO深追いがpushReport本体（編集ロック解除・経過時間表示）を最大8秒巻き込んでいた＝deepCovODiagFollowUpとして別ジョブ化しpushReportを待たせない設計に修正（3.515.1）  → `docs/history/3.4xx.md`
 - covO「なぜ減らないか」診断（V6PortAnalyzer.diagnoseSurpluses）を複数職員・別日の組合せまで探すよう拡張（ユーザー指示「複数の職員および過去未来の日も押し出し可能できるように」、既存のFixSuggester「直し方を探す」を再利用、実データでは今回の5件とも解なし＝low/high重み差による構造的トレードオフと確定。副次的にViolationComponentRepair/V6FinalPortの無駄なsurplus計算をincludeSurplus=falseで除去、deepSurplusは最適化完了直後のみtrueにしライブ編集診断への影響を回避）（3.515.0）  → `docs/history/3.4xx.md`
 - combineExhaustPairs・lnsAdaptiveをUIの詳細設定からON/OFFできるように（ユーザー指示「フラグのOn,Offはユーザーが選択できるように」、不合格判定で凍結中のdebtLaneSlots等は対象外）＋シフト集計カードの既定開閉を展開へ戻す（3.483.0 S-4の反転、ユーザー指示「シフト集計は開く。閉じない」）（3.514.0）  → `docs/history/3.4xx.md`

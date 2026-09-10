@@ -22,6 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 // [校正] テキストリンク状の操作を「用途別に強調を最適化したボタン」へ統一する共有部品。
@@ -56,6 +58,20 @@ fun DeleteRowButton(onClick: () -> Unit, enabled: Boolean = true, text: String =
         modifier = Modifier.heightIn(min = 48.dp),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
     ) { Text(text) }
+}
+
+/** [3.515.3] 一覧行の並び替え「▲/▼」: 片手一本指（ドラッグ不可）なので隣と入れ替える2ボタン。端は無効。 */
+@Composable
+fun MoveRowButtons(canUp: Boolean, canDown: Boolean, onUp: () -> Unit, onDown: () -> Unit, enabled: Boolean = true) {
+    OutlinedButton(
+        onClick = onUp, enabled = enabled && canUp, contentPadding = CompactPad,
+        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "上へ" },
+    ) { Text("▲") }
+    Spacer(Modifier.width(4.dp))
+    OutlinedButton(
+        onClick = onDown, enabled = enabled && canDown, contentPadding = CompactPad,
+        modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "下へ" },
+    ) { Text("▼") }
 }
 
 /** フォーム系ダイアログの統一ヘッダー: タイトル＋右上に閉じる(✕)。閉じる操作を画面上部にも置き発見性を上げる。 */

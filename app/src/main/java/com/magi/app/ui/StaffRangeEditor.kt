@@ -48,10 +48,14 @@ import androidx.compose.ui.unit.dp
  * セルタップで編集する）。`GroupRangeSection`（グループ一括適用）はこの再設計の対象外のため維持。
  */
 @Composable
-fun CountsCard(ui: UiState, vm: MagiViewModel) {
+fun CountsCard(
+    ui: UiState, vm: MagiViewModel,
+    /** [実機バグ修正] 呼び出し元がkey(ui.editRev)の外で保持する（詳細はStaffShiftMatrixCardのdoc）。 */
+    sheetCell: Pair<Int, Int>?, onSheetCellChange: (Pair<Int, Int>?) -> Unit,
+) {
     // [3.483.0 E-8] 旧: 説明文だけのカードが先頭にあった。同じ説明（目標＝やわらかい／上下限＝かたい）は
     //   StaffShiftMatrixCard の見出し直下にもあり二重だったので、こちらを撤去。
-    StaffShiftMatrixCard(ui, vm)
+    StaffShiftMatrixCard(ui, vm, sheetCell, onSheetCellChange)
     Spacer(Modifier.height(8.dp))
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {

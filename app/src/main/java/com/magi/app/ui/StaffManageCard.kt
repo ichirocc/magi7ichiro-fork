@@ -79,6 +79,10 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                             }
                         }
                     }
+                    // [3.515.3] 並び替え＝勤務表の行順にそのまま反映（経緯: history 3.515.3）。
+                    MoveRowButtons(canUp = i > 0, canDown = i < v.staff.size - 1,
+                        onUp = { vm.ws1MoveStaff(i, -1) }, onDown = { vm.ws1MoveStaff(i, +1) }, enabled = !ui.running)
+                    Spacer(Modifier.width(6.dp))
                     EditRowButton(onClick = { edit = Triple(i, st.name, st.groupIdx) }, enabled = !ui.running)
                     if (v.staff.size > 1) {
                         Spacer(Modifier.width(6.dp))
