@@ -31,19 +31,27 @@ class HypothesisEpochPolicyTest {
 
     @Test
     fun sixEscapeWorkersRotateAcrossAllEscapeRoles() {
-        val expected = setOf(
-            HypothesisEpochRole.DAY_BLOCK_ALNS,
-            HypothesisEpochRole.HARD_FAMILY_RSI,
-            HypothesisEpochRole.HARD_DEBT_RSI_PLUS,
-            HypothesisEpochRole.LARGE_DESTROY_ALNS,
-            HypothesisEpochRole.PERSONAL_RSI,
-            HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS,
-        )
-        for (slot in listOf(1, 2, 3, 5, 6, 7)) {
-            val roles = (0 until 6).map {
-                AdaptiveHypothesisEpochPolicy.assignmentFor(slot, it).role
-            }.toSet()
-            assertEquals("W$slot must visit every escape role", expected, roles)
+        // [3.519.0] personSwapKick の既定がtrueになったため、この検査（元来の6役割ローテーションの
+        // 不変条件）はゲートを明示offへ固定して検査する。
+        val original = PolishGate.personSwapKick
+        PolishGate.personSwapKick = false
+        try {
+            val expected = setOf(
+                HypothesisEpochRole.DAY_BLOCK_ALNS,
+                HypothesisEpochRole.HARD_FAMILY_RSI,
+                HypothesisEpochRole.HARD_DEBT_RSI_PLUS,
+                HypothesisEpochRole.LARGE_DESTROY_ALNS,
+                HypothesisEpochRole.PERSONAL_RSI,
+                HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS,
+            )
+            for (slot in listOf(1, 2, 3, 5, 6, 7)) {
+                val roles = (0 until 6).map {
+                    AdaptiveHypothesisEpochPolicy.assignmentFor(slot, it).role
+                }.toSet()
+                assertEquals("W$slot must visit every escape role", expected, roles)
+            }
+        } finally {
+            PolishGate.personSwapKick = original
         }
     }
 
@@ -159,5 +167,74 @@ class HypothesisEpochPolicyTest {
             val seq = (0..6).map { AdaptiveHypothesisEpochPolicy.assignmentFor(slot, it).role }
             for (r in 1..6) assertNotEquals(seq[r - 1], seq[r])
         }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // [3.517.0] PERSON_SWAP_ILS（`PolishGate.personSwapKick` gate）
+    // ---------------------------------------------------------------------------------------
+
+    @Test
+    fun personSwapKickRoleNeverAppearsWhenGateIsOff() {
+        // [3.519.0] 既定がtrueへ昇格したため、この検査自体がゲートを明示offへ強制する
+        // （既定値をアサートするのではなく、off時の不変条件そのものを検査する）。
+        val original = PolishGate.personSwapKick
+        PolishGate.personSwapKick = false
+        try {
+            for (slot in listOf(1, 2, 3, 5, 6, 7)) {
+                for (r in 0..20) {
+                    assertNotEquals(
+                        HypothesisEpochRole.PERSON_SWAP_ILS,
+                        AdaptiveHypothesisEpochPolicy.assignmentFor(slot, r).role,
+                    )
+                }
+            }
+            // ゲートOFF時は既存の6要素ローテーションのままビット単位で不変（回帰の固定）。
+            val expected = setOf(
+                HypothesisEpochRole.DAY_BLOCK_ALNS,
+                HypothesisEpochRole.HARD_FAMILY_RSI,
+                HypothesisEpochRole.HARD_DEBT_RSI_PLUS,
+                HypothesisEpochRole.LARGE_DESTROY_ALNS,
+                HypothesisEpochRole.PERSONAL_RSI,
+                HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS,
+            )
+            for (slot in listOf(1, 2, 3, 5, 6, 7)) {
+                val roles = (0 until 6).map { AdaptiveHypothesisEpochPolicy.assignmentFor(slot, it).role }.toSet()
+                assertEquals(expected, roles)
+            }
+        } finally {
+            PolishGate.personSwapKick = original
+        }
+    }
+
+    @Test
+    fun personSwapKickRoleJoinsRotationWhenGateIsOn() {
+        val original = PolishGate.personSwapKick
+        PolishGate.personSwapKick = true
+        try {
+            val seen = HashSet<HypothesisEpochRole>()
+            for (r in 0..20) seen.add(AdaptiveHypothesisEpochPolicy.assignmentFor(1, r).role)
+            assertTrue("ゲートONで7要素ローテーションに加わる", seen.contains(HypothesisEpochRole.PERSON_SWAP_ILS))
+        } finally {
+            PolishGate.personSwapKick = original
+        }
+    }
+
+    @Test
+    fun personSwapKickMapsToRsiPlusWithBigEscapeQuantum() {
+        assertEquals(V6Algorithm.RSI_PLUS, AdaptiveHypothesisEpochPolicy.algorithmFor(HypothesisEpochRole.PERSON_SWAP_ILS))
+        val assignment = HypothesisEpochAssignment(HypothesisEpochRole.PERSON_SWAP_ILS, V6Algorithm.RSI_PLUS, intensity = 1)
+        assertEquals(
+            AdaptiveHypothesisEpochPolicy.RSI_PLUS_BASE_QUANTUM_SEC,
+            AdaptiveHypothesisEpochPolicy.quantumSeconds(assignment, improvedPreviousEpoch = false, remainingSeconds = 999),
+        )
+    }
+
+    @Test
+    fun personSwapKickBaseIntensityIsOnePairAndGrowsWithStagnation() {
+        assertEquals(1, AdaptiveHypothesisEpochPolicy.intensityFor(HypothesisEpochRole.PERSON_SWAP_ILS, 0))
+        assertTrue(
+            AdaptiveHypothesisEpochPolicy.intensityFor(HypothesisEpochRole.PERSON_SWAP_ILS, 6) >
+                AdaptiveHypothesisEpochPolicy.intensityFor(HypothesisEpochRole.PERSON_SWAP_ILS, 0),
+        )
     }
 }

@@ -973,7 +973,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * [3.298.0 配線] ブロック巡回交換の c3n 事前フィルタ ON/OFF（既定OFF＝捨てない）。
+     * [3.298.0 配線] ブロック巡回交換の c3n 事前フィルタ ON/OFF（既定 **ON**、3.518.0）。
      * c3n は HARD なので増える候補は `isBetter` が必ず却下する＝**採用結果は ON/OFF で変わらない**
      * （3.296.0 の A/B 実測で最終盤面・採用数の完全一致を確認済み）。ON は「詰んだ候補へフル checker を
      * 呼ばない」ぶんの節約だけで、評価枠を soft 判定まで進める候補へ回せる。

@@ -1,5 +1,20 @@
 # 作業記録の索引（見出し一覧）
 
+- 未計測だった2件のAB結果: combineExhaustPairsはiter24（170ペア）でlarge/infeasibleの1ペアに必須件数増を
+  確認し既定OFFで確定（再提案しない）。personSwapKick(3.517.0)は新規ハーネスPersonSwapBench.ktで実データ
+  4件×5seed×フルoptimize(PORTFOLIO)を実施し全20ペアで必須退行ゼロ・4フィクスチャ全てで負け越しなしを
+  確認、既定trueへ昇格。ユーザー向け説明文の「結果は悪化しない」という不正確な記述も訂正（3.519.0）
+  → `docs/history/3.4xx.md`
+- 既定OFFの全トグルを棚卸し・4分類（既存測定で判断可／既に決着済み＝再測定しない／未計測／新機能）し、
+  `filterC3nIncrease`（ON/OFFで最終盤面完全一致・速度のみ）と`lnsAdaptive`（iter9で品質±0・速度実データ-23%、
+  既存結論「推奨ON」）を既定trueへ昇格。`PolishGate`とUiStateの既定乖離（表示と実態の不一致）を発見・修正。
+  C#（-magi_pc）もFilterC3nIncreaseを同時昇格・dotnet test green（3.518.0）  → `docs/history/3.4xx.md`
+- PORTFOLIO の新役割 PERSON_SWAP_ILS（全月入替→再最適化のILS摂動、grilling4問）を既定OFFで実装。
+  同群2名の1ヶ月分割当を丸ごと交換→RSI+でフル再最適化。fair は交換不変（分析的に証明済み）で、
+  改善は c1/c3/high 等の局所解構造が変わることで生じる（実データprobeで weightedScore 9831→9605
+  を確認済み）。ペア選定はfair負担の大きい職員優先のヒューリスティック。`PolishGate.personSwapKick`
+  既定false＝OFF時は既存6役割ローテーションがビット単位で不変。`tools/loop`の正式A/Bは未着手
+  （3.517.0）  → `docs/history/3.4xx.md`
 - HF77明示指示で上限超過(high)の重みを45→25に変更（設定タブの重み表で「上限超過を人員過剰と期間の制約の
   間に移動する」→数値指示25）。Evaluator/DeltaEvaluator/destroy-repair系polish(4ファイル)/`magi_native.cpp`
   （評価器+SaChunk+コメント）・言語跨ぎ期待値(Kotlin/C#)・テスト内重複リテラル(逆順パターン含む)を同期。

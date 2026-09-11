@@ -31,6 +31,43 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-11（3.519.0＝3.518.0で未計測のまま残した2件のAB結果。`combineExhaustPairs`は
+`tools/loop`の正式A/B（iter24、170ペア）でlarge/infeasibleの1ペアに必須件数増(119→120)を確認＝
+退行ゼロを満たさず既定OFFで確定（再提案しない）。品質改善もほぼ無く速度はむしろ遅い。
+`personSwapKick`(3.517.0)は新規ハーネス`PersonSwapBench.kt`（実データ4件×5seed×フルoptimize(PORTFOLIO)、
+CLAUDE.mdが認める代替A/B手法）で全20ペア必須退行ゼロ・4フィクスチャ全てで負け越しなしを確認し
+既定trueへ昇格（golden平均-2.1%改善など。3.517.0の手動probe-2.3%より幅が小さいのは同時昇格した
+lnsAdaptiveと改善余地が一部重なるため）。既存テストのゲート既定値依存も発見して修正
+（`sixEscapeWorkersRotateAcrossAllEscapeRoles`等）。ユーザー向け設定説明文「結果は悪化しない」の
+不正確な記述も訂正（個々の手はisBetterゲートで悪化しないが、探索経路が変わり最終盤面が別の局所解に
+着地し得るため）。ホストJVM 739件green）
+
+**最終更新**：2026-09-11（3.518.0＝ユーザー指示「すべての既定OFFの処理をAB評価しメリットあれば既定Onに」に対応。
+既定OFFの全トグル（`PolishGate`の`@Volatile var`・`PostOptimizationParams`・`ViolationComponentRepair.Params`）
+を棚卸しし4分類: (1)既存測定だけで即判断できる`filterC3nIncrease`（3.296.0/3.298.0でON/OFF最終盤面完全一致・
+速度のみの純増）と`lnsAdaptive`（iter9で必須退行0・品質±0・速度実データ-23%〜大規模-32%、当時の結論
+「既定ONはユーザー判断待ち、推奨ON」が今回の指示で確定）は既定trueへ昇格、(2)`wideC3nBreakDays`/
+`c3PairMaskEnabled`/`lnsWeightDebt`等17件は既に具体的な悪化例つきで決着済み＝CLAUDE.mdの「決定記録は
+再提案しない」規律により再測定せず据え置き、(3)`combineExhaustPairs`は一度も測定されておらず、
+(4)`personSwapKick`（3.517.0の新機能）も未測定＝(3)(4)は別途A/B実施。昇格2件は`PolishGate`とUI状態
+（`MagiUiState`/C#`UiState`）の既定が乖離すると「表示はOFFなのに実際はON」になる不整合を発見し両方修正。
+C#（-magi_pc）も`FilterC3nIncrease`を同時昇格（`lnsAdaptive`はC#未移植の既知ギャップ）。
+ホストJVM 739件・C# 1278件（838+440）green）
+
+**最終更新**：2026-09-11（3.517.0＝ユーザー指示「全月入替かつ再最適化の新しいアルゴリズムを賢く深く
+高速化対応で作成する」に対応。既存 AdaptivePortfolio（`V6NativeOptimizer.kt`/
+`AdaptiveHypothesisEpochPolicy.kt`）へ新役割`PERSON_SWAP_ILS`を追加（grilling4問で実装場所・
+ペア選定・再最適化の深さ・既定ON/OFFを詰め、全問推奨どおり採用）。同群2名の1ヶ月分割当を丸ごと
+交換してからRSI+でフル再最適化するILS摂動＝実データ1件の手動probeでweightedScore 9831→9605
+（-2.3%）を確認済みの技術を恒久機能化。fairはグループ内回数集合が変わらないため交換不変（分析的に
+証明済み）、改善はc1/c3/high等の局所解構造が変わることで生じる。`PolishGate.personSwapKick`は
+既定false＝ゲートOFF時は既存6役割の固定ローテーションがビット単位で不変（`HypothesisEpochPolicyTest`
+に固定）。ペア選定は全ペア総当たりでなく`MirrorCore.kt`のfair計算と同一式でfair負担が大きい職員を
+優先するヒューリスティック（新規`internal fun personSwapKick`、`PersonSwapKickTest.kt`で固定）。
+Kotlinのみの変更（探索オーケストレーションであり評価器/重み変更ではないためC++/C#移植義務の対象外）。
+`tools/loop`の合成30ケース+実データ4件による正式A/Bは未着手＝それまで既定OFFのまま
+（`docs/algorithm_portfolio.md`「実装済みだが既定OFF」に記載）。ホストJVM 739件green）
+
 **最終更新**：2026-09-10（3.516.0＝HF77明示指示で上限超過(high)の重みを45→25に変更（業務担当者が
 「上限超過を人員過剰と期間の制約の間に移動する」→数値指示で25を選択）。`MirrorKeys.weights`を起点に
 Evaluator/DeltaEvaluator/destroy-repair系polish/`magi_native.cpp`（評価器+SaChunk+コメント）・

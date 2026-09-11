@@ -10,6 +10,12 @@ internal enum class HypothesisEpochRole {
     LARGE_DESTROY_ALNS,
     PERSONAL_RSI,
     MAX_DISTANCE_RSI_PLUS,
+
+    /**
+     * [3.517.0] 同群2名の1ヶ月分割当を丸ごと交換するILS摂動＝fairは交換不変だが他族の局所解構造を
+     * 変える（経緯: `docs/history/3.4xx.md` 3.517.0）。`PolishGate.personSwapKick` が false の間は出現しない。
+     */
+    PERSON_SWAP_ILS,
 }
 
 // [3.278.0/デッドコード除去] safetyFloor フィールドは計算されるだけで本番で一度も読まれなかった
@@ -44,6 +50,14 @@ internal object AdaptiveHypothesisEpochPolicy {
         HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS,
     )
 
+    // [3.517.0] PolishGate.personSwapKick が true(3.519.0で既定化)のときだけ使う7要素版。false時は
+    // escapeRoles(6要素)がそのまま使われ続けるので、baseEscapeOffset/reassignmentsの剰余算術は
+    // フラグOFF時ビット単位で不変。
+    private val escapeRolesWithSwap = escapeRoles + HypothesisEpochRole.PERSON_SWAP_ILS
+
+    private fun currentEscapeRoles(): Array<HypothesisEpochRole> =
+        if (PolishGate.personSwapKick) escapeRolesWithSwap else escapeRoles
+
     private fun baseEscapeOffset(index: Int): Int = when (Math.floorMod(index, 8)) {
         1 -> 0
         2 -> 1
@@ -56,11 +70,12 @@ internal object AdaptiveHypothesisEpochPolicy {
 
     fun assignmentFor(index: Int, reassignments: Int): HypothesisEpochAssignment {
         val slot = Math.floorMod(index, 8)
+        val roles = currentEscapeRoles()
         val role = when {
             slot == 0 -> HypothesisEpochRole.BASELINE_REFINE
             slot == 4 && reassignments == 0 -> HypothesisEpochRole.BASELINE_REFINE
             slot == 4 -> HypothesisEpochRole.ELITE_RELINK
-            else -> escapeRoles[Math.floorMod(baseEscapeOffset(slot) + reassignments, escapeRoles.size)]
+            else -> roles[Math.floorMod(baseEscapeOffset(slot) + reassignments, roles.size)]
         }
         return HypothesisEpochAssignment(
             role = role,
@@ -79,7 +94,8 @@ internal object AdaptiveHypothesisEpochPolicy {
         HypothesisEpochRole.BASELINE_REFINE,
         HypothesisEpochRole.ELITE_RELINK,
         HypothesisEpochRole.HARD_DEBT_RSI_PLUS,
-        HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> V6Algorithm.RSI_PLUS
+        HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS,
+        HypothesisEpochRole.PERSON_SWAP_ILS -> V6Algorithm.RSI_PLUS
     }
 
     /**
@@ -106,6 +122,8 @@ internal object AdaptiveHypothesisEpochPolicy {
             HypothesisEpochRole.HARD_DEBT_RSI_PLUS -> 2
             HypothesisEpochRole.LARGE_DESTROY_ALNS,
             HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> 3
+            // [3.517.0] intensity=交換するペア数。
+            HypothesisEpochRole.PERSON_SWAP_ILS -> 1
         }
         return base + growth
     }

@@ -350,11 +350,14 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             Spacer(Modifier.width(8.dp))
             Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
-        // [3.514.0] combineExhaustPairs・lnsAdaptiveはisBetterゲート不変=退化しない安全な変更のみUI化。
+        // [3.514.0/3.519.0訂正] 個々の手はisBetterゲートを通るが、探索経路が変わるため最終盤面が
+        // 別の局所解に着地することがあり「結果は絶対に悪化しない」は正確でなかった（iter24計測で
+        // combineExhaustPairsに退行1件を確認して訂正）。lnsAdaptiveは既定ON（3.518.0）、
+        // combineExhaustPairsは既定OFFで確定（3.519.0、根拠は docs/algorithm_portfolio.md）。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("職員どうしの交換探索を粘り強く")
-                Text("2人一組の入れ替えを、通常より多くの組合せまで試します。結果が悪化することはありませんが、時間がかかる場合があります。",
+                Text("2人一組の入れ替えを、通常より多くの組合せまで試します。ごくまれに結果が変わることがあり、時間もかかるため既定はOFFです。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.combineExhaustPairs, onCheckedChange = { vm.setCombineExhaustPairs(it) }, enabled = !ui.running)
@@ -362,7 +365,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("一括見直しの時間配分を自動調整")
-                Text("個人回数・期間の一括見直しにかける時間を、改善が続く間だけ延ばします。結果が悪化することはありませんが、速度はデータにより変わります。",
+                Text("個人回数・期間の一括見直しにかける時間を、改善が続く間だけ延ばします。ほとんどの場合は結果を変えずに高速化します（既定ON）。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.lnsAdaptive, onCheckedChange = { vm.setLnsAdaptive(it) }, enabled = !ui.running)

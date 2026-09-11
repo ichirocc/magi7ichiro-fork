@@ -1022,6 +1022,9 @@ object V6NativeOptimizer {
             HypothesisEpochRole.MAX_DISTANCE_RSI_PLUS -> globalBest.copy2D().also { out ->
                 forceMaxDistanceKick(p, out, peers, rng, 3 + n)
             }
+            HypothesisEpochRole.PERSON_SWAP_ILS -> globalBest.copy2D().also { out ->
+                personSwapKick(p, out, rng, n)
+            }
         }
     }
 
@@ -1054,6 +1057,60 @@ object V6NativeOptimizer {
             }
             if (bestK >= 0) { out[i][j] = bestK; changed++ }
         }
+    }
+
+    /**
+     * [3.517.0] PERSON_SWAP_ILS: 同群2名の1ヶ月分割当を丸ごと交換するILS摂動。交換相手は全ペア
+     * 総当たりでなく「fair 負担が大きい職員」優先（経緯・実証データは `docs/history/3.4xx.md` 3.517.0）。
+     */
+    internal fun personSwapKick(p: Problem, out: Array<IntArray>, rng: Random, pairs: Int) {
+        if (p.S < 2 || p.T == 0) return
+        val counts = Array(p.S) { IntArray(p.K) }
+        for (i in 0 until p.S) for (j in 0 until p.T) {
+            val k = out[i][j]
+            if (k in 0 until p.K) counts[i][k]++
+        }
+        // MirrorCore.kt のfair計算と同一式（群×担当ONシフトごとに round(平均) からのL1偏差）で
+        // 職員ごとの負担を集計する。
+        val burden = DoubleArray(p.S)
+        for (g in 0 until p.G) {
+            val mem = p.groupMembers[g]
+            if (mem.size < 2) continue
+            for (k in p.bucket[g]) {
+                var sum = 0
+                for (x in mem) sum += counts[x][k]
+                val tgt = Math.round(sum.toDouble() / mem.size).toInt()
+                for (x in mem) burden[x] += kotlin.math.abs(counts[x][k] - tgt)
+            }
+        }
+        val swapped = BooleanArray(p.S)
+        var done = 0
+        var attempts = 0
+        while (done < pairs && attempts++ < max(32, p.S * 4)) {
+            val a = weightedBurdenPick(burden, swapped, rng) ?: break
+            val g = p.sgrp[a]
+            val candidates = p.groupMembers[g].filter { it != a && !swapped[it] }
+            if (candidates.isEmpty()) { swapped[a] = true; continue }
+            val b = candidates.maxByOrNull { burden[it] } ?: continue
+            for (j in 0 until p.T) {
+                val tmp = out[a][j]; out[a][j] = out[b][j]; out[b][j] = tmp
+            }
+            swapped[a] = true; swapped[b] = true
+            done++
+        }
+    }
+
+    private fun weightedBurdenPick(burden: DoubleArray, excluded: BooleanArray, rng: Random): Int? {
+        val candidates = burden.indices.filter { !excluded[it] }
+        if (candidates.isEmpty()) return null
+        val total = candidates.sumOf { burden[it] }
+        if (total <= 0.0) return candidates[rng.nextInt(candidates.size)]
+        var r = rng.nextDouble() * total
+        for (i in candidates) {
+            r -= burden[i]
+            if (r <= 0.0) return i
+        }
+        return candidates.last()
     }
 
     /**

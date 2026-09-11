@@ -64,11 +64,13 @@ data class UiState(
     val budgetSec: Int = 300,
     val nativeAccel: Boolean = true,           // [Stage4] C++ネイティブ加速（SAチャンク）のユーザートグル
     val nativeParity: Boolean = true,          // [照合トグル] Kotlinパリティ照合。OFF=純ネイティブ(検証/ベンチ用・誤結果の可能性)
-    val blockSwapC3nFilter: Boolean = false,    // [3.298.0] ブロック巡回交換で c3n が増える候補を候補生成段階で捨てるか。採用結果は不変・評価枠の節約のみ
+    val blockSwapC3nFilter: Boolean = true,     // [3.298.0/3.518.0] ブロック巡回交換で c3n が増える候補を候補生成段階で捨てるか。採用結果は不変・評価枠の節約のみ＝既定ON
     val wideC3nBreak: Boolean = false,          // [3.304.0] 禁止連続を崩す日を j±1 から違反パターン全域へ広げるか。既定OFF（実データで利得が一貫しない）
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）
-    val combineExhaustPairs: Boolean = false,   // [3.514.0] 職員2人の交換探索を打ち切らず粘り強く試すか。既定OFF・未計測（isBetterゲート不変で退化なし）
-    val lnsAdaptive: Boolean = false,           // [3.514.0] 個人回数・期間の一括見直しの時間配分を自動調整するか。既定OFF（iter9: 品質±0・速度はデータ依存）
+    val combineExhaustPairs: Boolean = false,   // [3.514.0] 職員2人の交換探索を打ち切らず粘り強く試すか。既定OFFで確定（3.519.0、iter24＝170ペアで
+                                                 // 必須退行1件・速度-5.6%平均のため不合格。候補ごとのisBetterゲートは個々の手を悪化させないが、
+                                                 // 探索経路が変わることで最終盤面が別の局所解に着地し得る＝旧「退化なし」の記述は誤りだったため訂正）
+    val lnsAdaptive: Boolean = true,            // [3.514.0/3.518.0] 個人回数・期間の一括見直しの時間配分を自動調整するか。既定ON（iter9: 品質±0・速度は実データ-23%〜-32%）
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),
