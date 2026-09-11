@@ -163,6 +163,13 @@ object PolishGate {
 
     /** [3.514.0/UIトグル化] C1共同LNS・個人共同LNSのlnsAdaptive（経緯: history 3.510.2 iter9）。既定OFF。 */
     @Volatile var lnsAdaptive: Boolean = false
+
+    /**
+     * [3.517.0] AdaptivePortfolio の新ロール `PERSON_SWAP_ILS`（全月入替→再最適化のILS摂動）を
+     * 役割ローテーションに含めるか。既定 **false**＝OFF時は `escapeRoles`（固定6要素）が不変で、
+     * 既存の挙動はビット単位で変わらない。根拠・A/B計画は `docs/algorithm_portfolio.md` 参照。
+     */
+    @Volatile var personSwapKick: Boolean = false
 }
 
 /**

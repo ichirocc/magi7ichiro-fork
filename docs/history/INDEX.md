@@ -1,5 +1,11 @@
 # 作業記録の索引（見出し一覧）
 
+- PORTFOLIO の新役割 PERSON_SWAP_ILS（全月入替→再最適化のILS摂動、grilling4問）を既定OFFで実装。
+  同群2名の1ヶ月分割当を丸ごと交換→RSI+でフル再最適化。fair は交換不変（分析的に証明済み）で、
+  改善は c1/c3/high 等の局所解構造が変わることで生じる（実データprobeで weightedScore 9831→9605
+  を確認済み）。ペア選定はfair負担の大きい職員優先のヒューリスティック。`PolishGate.personSwapKick`
+  既定false＝OFF時は既存6役割ローテーションがビット単位で不変。`tools/loop`の正式A/Bは未着手
+  （3.517.0）  → `docs/history/3.4xx.md`
 - HF77明示指示で上限超過(high)の重みを45→25に変更（設定タブの重み表で「上限超過を人員過剰と期間の制約の
   間に移動する」→数値指示25）。Evaluator/DeltaEvaluator/destroy-repair系polish(4ファイル)/`magi_native.cpp`
   （評価器+SaChunk+コメント）・言語跨ぎ期待値(Kotlin/C#)・テスト内重複リテラル(逆順パターン含む)を同期。

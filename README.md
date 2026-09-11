@@ -31,6 +31,20 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-11（3.517.0＝ユーザー指示「全月入替かつ再最適化の新しいアルゴリズムを賢く深く
+高速化対応で作成する」に対応。既存 AdaptivePortfolio（`V6NativeOptimizer.kt`/
+`AdaptiveHypothesisEpochPolicy.kt`）へ新役割`PERSON_SWAP_ILS`を追加（grilling4問で実装場所・
+ペア選定・再最適化の深さ・既定ON/OFFを詰め、全問推奨どおり採用）。同群2名の1ヶ月分割当を丸ごと
+交換してからRSI+でフル再最適化するILS摂動＝実データ1件の手動probeでweightedScore 9831→9605
+（-2.3%）を確認済みの技術を恒久機能化。fairはグループ内回数集合が変わらないため交換不変（分析的に
+証明済み）、改善はc1/c3/high等の局所解構造が変わることで生じる。`PolishGate.personSwapKick`は
+既定false＝ゲートOFF時は既存6役割の固定ローテーションがビット単位で不変（`HypothesisEpochPolicyTest`
+に固定）。ペア選定は全ペア総当たりでなく`MirrorCore.kt`のfair計算と同一式でfair負担が大きい職員を
+優先するヒューリスティック（新規`internal fun personSwapKick`、`PersonSwapKickTest.kt`で固定）。
+Kotlinのみの変更（探索オーケストレーションであり評価器/重み変更ではないためC++/C#移植義務の対象外）。
+`tools/loop`の合成30ケース+実データ4件による正式A/Bは未着手＝それまで既定OFFのまま
+（`docs/algorithm_portfolio.md`「実装済みだが既定OFF」に記載）。ホストJVM 739件green）
+
 **最終更新**：2026-09-10（3.516.0＝HF77明示指示で上限超過(high)の重みを45→25に変更（業務担当者が
 「上限超過を人員過剰と期間の制約の間に移動する」→数値指示で25を選択）。`MirrorKeys.weights`を起点に
 Evaluator/DeltaEvaluator/destroy-repair系polish/`magi_native.cpp`（評価器+SaChunk+コメント）・
