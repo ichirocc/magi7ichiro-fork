@@ -35,7 +35,13 @@ class ViolationComponentRepairTest {
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
-            cons41 = listOf(C41Row("G0", "Qres", "1", "1")), cons42 = emptyList(),
+            // [3.522.0] apt重み1→4でX/Y単独移動が「タイ」でなくなったため、c41行を4重複させ
+            //   1違反=4件計上にして単独では確実に悪化するよう調整（CombinatorialRepairTestと同型）。
+            cons41 = listOf(
+                C41Row("G0", "Qres", "1", "1"), C41Row("G0", "Qres", "1", "1"),
+                C41Row("G0", "Qres", "1", "1"), C41Row("G0", "Qres", "1", "1"),
+            ),
+            cons42 = emptyList(),
         )
     }
 

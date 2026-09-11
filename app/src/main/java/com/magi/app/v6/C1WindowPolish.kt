@@ -215,6 +215,10 @@ internal object C1WindowPolish {
                 val staff = w.staff; val shift = w.shift
                 val cands = (w.start until w.start + w.windowDays)
                     .filter { d ->
+                        // [厳密ピン保護/3.522.0] 希望固定日は候補から除外。screenCellのdelta合算は
+                        // pref+1が他族-1と相殺してNEUTRALになり得る＝checker委任のadoptionGateも
+                        // wishLockedを見ないため、生成側でここを塞がないと希望固定セルが動きうる。
+                        if (p.wishLocked(staff, d)) { if (work[staff][d] != shift) screened++; return@filter false }
                         val neutral = C1DeltaPrefilter.screenCell(p, work, staff, d, shift) == C1DeltaPrefilter.Verdict.NEUTRAL
                         if (!neutral && work[staff][d] != shift) screened++
                         neutral
