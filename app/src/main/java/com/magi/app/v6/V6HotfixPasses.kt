@@ -159,7 +159,12 @@ object PolishGate {
      */
     @Volatile var normalStallFraction: Double = 0.9
 
-    /** [3.514.0/UIトグル化] `combineAndApply`のexhaustPairs（経緯: history 3.512.6）。既定OFF・未計測。 */
+    /**
+     * [3.514.0/UIトグル化] `combineAndApply`のexhaustPairs（経緯: history 3.512.6）。既定OFFで確定
+     * （3.519.0、iter24＝170ペア。速度が平均-5.6%/中央値-26.3%と遅くなるのに品質改善は中央値0%、
+     * かつ large/infeasible の1ペアで必須件数が119→120へ増加＝退行ゼロを満たさず不合格。
+     * 詳細は `docs/algorithm_portfolio.md`「実装済みだが既定OFF」参照）。
+     */
     @Volatile var combineExhaustPairs: Boolean = false
 
     /**
@@ -170,10 +175,10 @@ object PolishGate {
 
     /**
      * [3.517.0] AdaptivePortfolio の新ロール `PERSON_SWAP_ILS`（全月入替→再最適化のILS摂動）を
-     * 役割ローテーションに含めるか。既定 **false**＝OFF時は `escapeRoles`（固定6要素）が不変で、
-     * 既存の挙動はビット単位で変わらない。根拠・A/B計画は `docs/algorithm_portfolio.md` 参照。
+     * 役割ローテーションに含めるか。既定 **true**（3.519.0で確定。実データ4件×5seedで必須退行0件・
+     * 全4件で品質が同等以上。根拠は `docs/algorithm_portfolio.md`「既定ONへ昇格」参照）。
      */
-    @Volatile var personSwapKick: Boolean = false
+    @Volatile var personSwapKick: Boolean = true
 }
 
 /**

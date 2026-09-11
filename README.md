@@ -31,6 +31,17 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-11（3.519.0＝3.518.0で未計測のまま残した2件のAB結果。`combineExhaustPairs`は
+`tools/loop`の正式A/B（iter24、170ペア）でlarge/infeasibleの1ペアに必須件数増(119→120)を確認＝
+退行ゼロを満たさず既定OFFで確定（再提案しない）。品質改善もほぼ無く速度はむしろ遅い。
+`personSwapKick`(3.517.0)は新規ハーネス`PersonSwapBench.kt`（実データ4件×5seed×フルoptimize(PORTFOLIO)、
+CLAUDE.mdが認める代替A/B手法）で全20ペア必須退行ゼロ・4フィクスチャ全てで負け越しなしを確認し
+既定trueへ昇格（golden平均-2.1%改善など。3.517.0の手動probe-2.3%より幅が小さいのは同時昇格した
+lnsAdaptiveと改善余地が一部重なるため）。既存テストのゲート既定値依存も発見して修正
+（`sixEscapeWorkersRotateAcrossAllEscapeRoles`等）。ユーザー向け設定説明文「結果は悪化しない」の
+不正確な記述も訂正（個々の手はisBetterゲートで悪化しないが、探索経路が変わり最終盤面が別の局所解に
+着地し得るため）。ホストJVM 739件green）
+
 **最終更新**：2026-09-11（3.518.0＝ユーザー指示「すべての既定OFFの処理をAB評価しメリットあれば既定Onに」に対応。
 既定OFFの全トグル（`PolishGate`の`@Volatile var`・`PostOptimizationParams`・`ViolationComponentRepair.Params`）
 を棚卸しし4分類: (1)既存測定だけで即判断できる`filterC3nIncrease`（3.296.0/3.298.0でON/OFF最終盤面完全一致・

@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- 未計測だった2件のAB結果: combineExhaustPairsはiter24（170ペア）でlarge/infeasibleの1ペアに必須件数増を
+  確認し既定OFFで確定（再提案しない）。personSwapKick(3.517.0)は新規ハーネスPersonSwapBench.ktで実データ
+  4件×5seed×フルoptimize(PORTFOLIO)を実施し全20ペアで必須退行ゼロ・4フィクスチャ全てで負け越しなしを
+  確認、既定trueへ昇格。ユーザー向け説明文の「結果は悪化しない」という不正確な記述も訂正（3.519.0）
+  → `docs/history/3.4xx.md`
 - 既定OFFの全トグルを棚卸し・4分類（既存測定で判断可／既に決着済み＝再測定しない／未計測／新機能）し、
   `filterC3nIncrease`（ON/OFFで最終盤面完全一致・速度のみ）と`lnsAdaptive`（iter9で品質±0・速度実データ-23%、
   既存結論「推奨ON」）を既定trueへ昇格。`PolishGate`とUiStateの既定乖離（表示と実態の不一致）を発見・修正。
