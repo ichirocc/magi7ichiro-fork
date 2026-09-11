@@ -243,7 +243,7 @@ internal fun OperatorNextActionCard(
             "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial)
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
-            "③ できました！ そのまま配れます。" + (ui.runSummary?.let { "\n$it" } ?: ""),
+            "③ 完成しました。そのまま配れます。" + (ui.runSummary?.let { "\n$it" } ?: ""),
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
@@ -251,7 +251,7 @@ internal fun OperatorNextActionCard(
         else -> OpNextPlan(amber, onAmber,
             // [監査#1] 人手不足ゼロでも必須違反(希望/禁止連続/群)で此処に来る。不足が無いのに
             //   「人手が足りない」と告げる誤診断を排し、実態（必須違反の残数）を言う。
-            "もう少しです。" + (worstDay?.let { "$it が人手不足です。" }
+            (worstDay?.let { "$it が人手不足です。" }
                 ?: "必須違反が ${ui.bestHard}件 残っています。"),
             // [3.480.0 ホームAIリデザイン] 補助ボタン「もう一度つくる」は固定フッターと重複のため撤去
             // （grilling決定#3）。この状態の主導線は「なおすのを手伝って」1つに絞る。
@@ -263,13 +263,15 @@ internal fun OperatorNextActionCard(
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            // [HUD段2] フェーズ名バッジ（探索/完成/狩猟）。既存の状態分岐に名前を与えるだけ。
-            //   未最適化→探索 / HARD=0→完成 / HARD>0(infeasible含む)→狩猟。実行中は非表示（カードが別表示）。
+            // [HUD段2] フェーズ名バッジ（探索/完成/未完成）。既存の状態分岐に名前を与えるだけ。
+            //   未最適化→探索 / HARD=0→完成 / HARD>0(infeasible含む)→未完成。実行中は非表示（カードが別表示）。
+            //   [UX改善/ユーザー指示「ゲーム要素廃止」] 旧「狩猟」はRPG風の演出語のため、完成の対語である
+            //   平易な語へ変更（docs/screen_spec.mdが既に記録する「TapGame等の非採用」の徹底）。
             if (!ui.running) {
                 val (phName, phColor) = when {
                     !ui.hasResult -> "探索" to MagiAccent.blue
                     ui.bestHard == 0L -> "完成" to MagiAccent.green
-                    else -> "狩猟" to MagiAccent.orange
+                    else -> "未完成" to MagiAccent.orange
                 }
                 Box(Modifier.background(phColor, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
                     // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
@@ -714,7 +716,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
             if (detailOpen) {
                 // [3.324.0→3.328.0] 断定を外す。3.326.0 で内訳は**決まりごと**に分けたので、
                 //   「まとめて数えている」という 3.324.0 当時の注記はもう実態と合わない。
-                Text("※ 直近の計算で試した直し方の記録です。期間の制約は職員・シフト・決まりごとに分けています" +
+                Text("※ 直近の最適化で試した直し方の記録です。期間の制約は職員・シフト・決まりごとに分けています" +
                     "（同じ決まりの中に複数の期間がある場合はまとめて数えています）。",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             }
@@ -790,7 +792,7 @@ internal fun PinFixedImpactCard(
     var detailOpen by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("回数の固定が計算に与えた影響", style = MaterialTheme.typography.titleMedium)
+            Text("回数の固定が最適化に与えた影響", style = MaterialTheme.typography.titleMedium)
             Text("回数を固定していることだけが理由で見送られた試行が、少なくとも $attempts 回ありました。" +
                 "これらは他の条件では採用できる手でした。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -937,10 +939,10 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
                     sub = "必要人数 ${v6.demand} のうち満たせた割合",
                     accent = tint,
                 )
-                // [D3-full案A] 「できあがり度(全体の完成度)」と「人員充足率(人員の一側面)」は別指標。
+                // [D3-full案A] 「解消度(全体の完成度)」と「人員充足率(人員の一側面)」は別指標。
                 //   役割の違いを明示し、片方を他方の内訳と誤認させない(架空分解を避ける)。
                 Text(
-                    "※全体の完成度は「できあがり度」（ホーム）で確認。ここは人員の充足のみ。",
+                    "※全体の完成度は「解消度」（ホーム）で確認。ここは人員の充足のみ。",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
