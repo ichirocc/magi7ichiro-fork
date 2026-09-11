@@ -31,47 +31,54 @@
 - この repo に入っているスキルは `.claude/skills/` の 3 つ。無いスキル名を前提にしない。
 
 ## 制約ファミリーと重み（実装＝`MirrorKeys.weights` が正）
-- **c1**（窓制約, SOFT, 重み30）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
+- **c1**（窓制約, SOFT, 重み50）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
   **担当不可スタッフは対象外（canDoガード）**。構造上単一シフトのみ（複数種類変種なし）。
-- **c2**（職員別合計, SOFT, 重み1）。
+- **c2**（職員別合計, SOFT, 重み4）。
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
-  - c3 = MUST/want（SOFT, 重み3）, c3m = Want（SOFT, 重み2）— **非forbidden**。
-  - c3n = FORBIDDEN（HARD, 重み7000）, c3mn = Hate（SOFT, 重み30）— **forbidden**。
+  - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み10）— **非forbidden**。
+  - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み90）— **forbidden**。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
     それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。
-- **c41/c42/c41s/c42s**（群/日 範囲・スキル群変種, SOFT, 重み1）。
-- **covU**（人員不足, HARD, 重み8000）/ **covO**（人員過剰, SOFT, 重み5.0）。被覆は同日のみ（夜勤繰越なし）。
-  ※ covO 重みは 0.5→1.0（2026-07-13）→5.0（2026-08-27）、いずれも HF77 明示指示。最適化器とチェッカーは同じ値。
+- **c41/c42**（群/日 範囲, SOFT, 重み1）／**c41s/c42s**（スキル群変種, SOFT, 重み6）。
+- **covU**（人員不足, HARD, 重み10000）/ **covO**（人員過剰, SOFT, 重み10）。被覆は同日のみ（夜勤繰越なし）。
+  ※ covO 重みは 0.5→1.0（2026-07-13）→5.0（2026-08-27）→10（3.522.0、全面見直し＋SOFT中「上限超過(high)>人員過剰(covO)」
+  指示）、いずれも HF77 明示指示。最適化器とチェッカーは同じ値。
   need1=P1, need2=P2。lo=need1, hi=(use2 && need2>=0 ? need2 : need1)。MIN/OR条件は2世代前からの意図的設計。
-- **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み90/25。amount計上）。
+- **low/high**（staffRange=各職員の各シフト回数の下限/上限, SOFT, 重み120/25。amount計上）。
   **上限 0（hi=0、休を除く）は最適化器が置かない**（`Problem.mayPlace`＝候補生成・入口 hf66・最終番兵の基準。評価・表示は high 25 のまま、
   希望固定は優先。3.507.0 ユーザー決定「最適化器だけ除外、表示は今のまま」）。
-- **apt**（適切回数=`groupShiftApt[群][シフト]` の**群単位双方向目標**, SOFT, 重み1, L1偏差`|回数-目標|`）。
+- **apt**（適切回数=`groupShiftApt[群][シフト]` の**群単位双方向目標**, SOFT, 重み4, L1偏差`|回数-目標|`）。
   担当可シフトのみ有効（`Problem.apt` 構築時に bucket=canDo ガード）。不足=赤(vio-aptLow)/超過=橙(vio-aptHigh)。
   **個人の下限または上限が入っている (職員,シフト) には群目標を適用しない（決定 D9, 3.509.0。空欄だけのキーは未設定扱い）。**
   適用される組は「構造的に到達できる範囲」へクランプ（3.508.0: 到達下限 = T − Σ他の置けるシフトの実効上限、到達上限 = T − Σ他シフトの実効下限、
   実効値は希望固定込み。例: 休の希望固定 15 日の職員に 休 目標 10 → 15）。評価は実効目標 `Problem.apt`（個人設定あり＝-1）、
   設定ミス診断 6b/6d/6-C は設定値 `Problem.aptRaw` を読む。低/高(staffRange) とは別系統（LimMin/LimMax は別画面 ws5）。
-- **fair**（グループ内公平化, SOFT, 重み1, L1偏差）。群×担当ONシフト(`bucket[g]`)ごとに、メンバー回数の
+  上限超過(high)がapt/fairの同時解消を阻む例＝B1のaptHigh（3.522.0、docs/history/3.4xx.md）。
+- **fair**（グループ内公平化, SOFT, 重み2, L1偏差）。群×担当ONシフト(`bucket[g]`)ごとに、メンバー回数の
   `round(平均)` からの L1 偏差和。同群の職員間で各シフト回数を均す。`Problem.groupMembers` 使用、m<2の群は対象外。
   目的関数(Evaluator/Delta)/チェッカー3者に統合。UI内訳チップには出さない（常時非ゼロになりやすいため weightedScore/total のみ算入）。
-- **weekly**（7日周期(曜日)シフト平準化, SOFT, 重み1, L1偏差）。職員ごとに勤務日(非休)の**曜日別カウント**の
+- **weekly**（7日周期(曜日)シフト平準化, SOFT, 重み2, L1偏差）。職員ごとに勤務日(非休)の**曜日別カウント**の
   `round(勤務日数/7)` からの L1 偏差和。weekday(j)=`(dow0+j)%7`（`Problem.dow0`=startDate曜日オフセット %7 /
   `Problem.restIdx`=休index）。「毎週おなじ曜日に偏る」を均す。共通ソース=`weeklyDevOfBucket(wd[7])`。
   Evaluator/Delta/チェッカー3者に統合（fairと同型）。UI内訳では「曜日の偏り」チップに件数表示（場所マップは無し）。
-- **pref**（希望シフト未充足, HARD, 重み9000）/ **groupViol**（群外シフト, HARD, 重み10000）。
+- **pref**（希望シフト未充足, HARD, 重み8000）/ **groupViol**（群外シフト, HARD, 重み11000）。
 
-weightedScore 階層: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) >
-c3mn(30)=c1(30) > high(25) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。（covO は 0.5→1.0→**5.0**、
-c1 は 4→5→15→**30**、c3mn は 12→15→**30**、high は 45→**25**＝いずれも HF77 明示指示。この行が stale だと監査が誤誘導されるので、
-重みを変えたら `MirrorKeys.weights`・`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・`magi_native.cpp` の
+weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000) > pref(8000) > low(120) >
+c3mn(90) > c1(50) > high(25) > c3(15) > c3m(10)=covO(10) > c41s(6)=c42s(6) > c2(4)=apt(4) >
+fair(2)=weekly(2) > c41(1)=c42(1)。（3.522.0で全面見直し＝tools/loop 34ケース×10seedの
+baseline対比ベンチマークで決定。旧: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) >
+c3mn(30)=c1(30) > high(25) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。
+covO は 0.5→1.0→5.0→**10**、c1 は 4→5→15→30→**50**、c3mn は 12→15→30→**90**、high は 45→25で不変＝
+いずれも HF77 明示指示。この行が stale だと監査が誤誘導されるので、重みを変えたら `MirrorKeys.weights`・
+`Evaluator.fullEvalParts`・`DeltaEvaluator` の集約式・destroy-repair/polish系4ファイル・`magi_native.cpp` の
 5箇所・言語跨ぎ期待値3ファイル・`docs/business-logic.md` と**同じコミットで**揃える）
 
 ## 実行前に確認を取る操作／変えない決定
 - **HF77**: パラメータ・重み・データ値の変更は**業務担当者の明示数値指示＋1 件ずつ**のみ。コメントの主張と実装を grep で照合する。
   「賢く統一/改善する」等の明示指示は、目的関数統一における重み変更の承認とみなす。
 - **決定記録（再提案しない。明示の数値指示・go があった場合のみ）**:
-  D3 apt/weekly/fair の重みは各 1（2026-08-02 再確認）／ D4 360dp 帯は対象外、ただし OPPO A5 5G は 3.497.0 で対象（幅 390dp 未満だけ名前列 56dp）／
+  D3 apt/weekly/fair の重みは各 1（2026-08-02 再確認、**3.522.0 で apt=4・weekly=2・fair=2 へ改定＝全面見直しのHF77明示指示。
+  再確認しない＝この行が最新**）／ D4 360dp 帯は対象外、ただし OPPO A5 5G は 3.497.0 で対象（幅 390dp 未満だけ名前列 56dp）／
   D5 年度末モード（年間積算 5 項目）は実装不要／ D6 標準値 vs 月別例外の差分表示は実装不要（例外は needDay のみ数える）／
   D7 読取（結果）モードは不要＝勤務表タブは直接編集の 1 本／ D8 外観は UD 固定／ E5 月全体の俯瞰は明示 go まで保留。
   D9 個人の下限/上限がある (職員,シフト) には群目標（apt）を適用しない＝個人設定だけを適用（2026-09-07 ユーザー再指示、3.509.0）。

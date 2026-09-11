@@ -281,7 +281,8 @@ internal object RangePolish {
                 var out = 0L
                 val lo = p.rangeLo[i][kk]
                 val hiLim = p.rangeHi[i][kk]
-                if (lo != Int.MIN_VALUE && count < lo) out += (lo - count).toLong() * 90L
+                // [3.522.0] low 90→120。
+                if (lo != Int.MIN_VALUE && count < lo) out += (lo - count).toLong() * 120L
                 if (hiLim != Int.MAX_VALUE && count > hiLim) out += (count - hiLim).toLong() * 25L
                 return out
             }
@@ -296,7 +297,7 @@ internal object RangePolish {
                     }
                     out += rangePenalty(i, kk, c)
                     val apt = p.apt[i][kk]
-                    if (apt >= 0) out += (if (c >= apt) c - apt else apt - c).toLong()
+                    if (apt >= 0) out += (if (c >= apt) c - apt else apt - c).toLong() * 4L  // [3.522.0] apt 1→4
                 }
                 // 同品質なら短い循環を優先し、不要な大規模入替えを避ける。
                 if (newK != oldK) out += 2L
@@ -468,18 +469,19 @@ internal object RangePolish {
                     }
                     val lo = p.rangeLo[i][kk]
                     val hi = p.rangeHi[i][kk]
-                    if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * 90L
+                    // [3.522.0] low 90→120, apt 1→4。
+                    if (lo != Int.MIN_VALUE && c < lo) out += (lo - c).toLong() * 120L
                     if (hi != Int.MAX_VALUE && c > hi) out += (c - hi).toLong() * 25L
                     val a = p.apt[i][kk]
-                    if (a >= 0) out += kotlin.math.abs(c - a).toLong()
+                    if (a >= 0) out += kotlin.math.abs(c - a).toLong() * 4L
                 }
                 if (newK != oldK) out += 2L
                 return out
             }
 
+            // [3.522.0] covU 8000→10000, covO 5→10。MirrorKeys の重み階層と整合させた限界費用のため同時に変更。
             fun dayPenalty(k: Int, j: Int, q: Int): Long =
-                // [HF77明示指示 2026-08-27] covO 重み 1→5。MirrorKeys の重み階層と整合させた限界費用のため同時に変更。
-                p.covUCell(k, j, q).toLong() * 8000L + p.covOCell(k, j, q).toLong() * 5L
+                p.covUCell(k, j, q).toLong() * 10000L + p.covOCell(k, j, q).toLong() * 10L
 
             data class FlowPlan(
                 val day: Int,

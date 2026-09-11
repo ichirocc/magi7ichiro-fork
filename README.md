@@ -31,6 +31,33 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-11（3.522.0＝重み表の全面見直し（HF77明示指示）。tools/loop 34ケース×10seedの
+baseline対比ベンチマークで決定: groupViol/covU/c3n/pref(HARD)を11000/10000/9000/8000へ再配分、
+low/c1/c3/c3m/c3mn/c2/c41s/c42s を90/30/3/2/30/1/1/1→120/50/15/10/90/4/6/6 に、apt/fair/weeklyを
+1→4/2/2に、covOを5→10へ引き上げ（SOFT中「上限超過(high)>人員過剰(covO)」の優先順位をoutcomeレベルでも
+保つため。high違反+42%→+3.4%まで解消・covUは3配分中最良を維持）。`MirrorKeys.weights`・
+`Evaluator.fullEvalParts`・`DeltaEvaluator`・destroy-repair/polish系4ファイル・`magi_native.cpp`5箇所を
+同時更新、詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-11（3.521.0＝設定ミス診断に検査6e追加。実機ログ調査で「希望件数(wishes)が
+個人上限(staffRange.hi)を超過」（例: 古泉 健一「有給」上限0・希望10件、荒井克枝「Cｵ」上限0・希望10件）
+というどの既存診断でも検出されていなかったパターンを確認。希望固定セルはLevel Zero不変条件で動かせない
+ため上限超過は解消不能＝不具合ではなく設定ミス。既存の6d（apt版）と同型の判定を`staffRange.hi`に対して
+`V6SanityPort.forcedCountIssues`へ追加（grillingでスコープ確定・読み取り専用、詳細は
+`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-11（3.520.0＝ユーザー指示「UIの用語統一。ゲーム要素廃止。」に3段階UXプロセス
+（①現状把握→②改善検討→③実施検証）で対応。フェーズ名バッジ「狩猟」→「未完成」、感嘆符/進捗を煽る
+前置き（「できました！」「もう少しです。」）を平易な文へ、旧語「できあがり度」の残存2箇所を正式語
+「解消度」（3.480.0で改称済み）へ統一。「最適化」vs「計算」の混在（`MagiViewModel.kt`だけで10箇所超）を
+「最適化を実行したか」という同一概念に絞って統一（違反数の再評価・分析タブ個別項目のcomputedフラグ等
+別概念の「計算」は残置）。「要調整」vs「ソフト違反」・「職員」vs「スタッフ」・「勤務表」vs「シフト表」は
+調査の結果ほぼ統一済みと判明し対象外。既存の用語集`docs/operator_ux.md`§2が実装より古い旧語を記載していた
+ため実装に合わせて修正（`docs/power_user_ux.md`・`docs/magi_design_system.md`・`docs/screen_spec.md`も）。
+史料（changelog/history/archive）は不変。C#（-magi_pc）も同時に全箇所同期。ホストJVM 739件・C# green
+（`MagiViewModel.kt`等UI層の大半はhosttest.shのコンパイル対象外＝実機/CI確認が必要、C#の`.xaml`/
+`.xaml.cs`編集も同様に未確認）
+
 **最終更新**：2026-09-11（3.519.0＝3.518.0で未計測のまま残した2件のAB結果。`combineExhaustPairs`は
 `tools/loop`の正式A/B（iter24、170ペア）でlarge/infeasibleの1ペアに必須件数増(119→120)を確認＝
 退行ゼロを満たさず既定OFFで確定（再提案しない）。品質改善もほぼ無く速度はむしろ遅い。

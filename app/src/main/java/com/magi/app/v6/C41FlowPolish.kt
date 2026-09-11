@@ -25,7 +25,7 @@ internal object C41FlowPolish {
         var bestRep = before
         var applied = 0
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
-        fun dayPenalty(k: Int, j: Int, q: Int): Long = p.covUCell(k, j, q).toLong() * 8000L + p.covOCell(k, j, q).toLong() * 5L
+        fun dayPenalty(k: Int, j: Int, q: Int): Long = p.covUCell(k, j, q).toLong() * 10000L + p.covOCell(k, j, q).toLong() * 10L  // [3.522.0]
         // [発見] c41 の真の評価は二値（[l,u]を外れたら+1、幅に依らない）＝非凸。MCMFの並列辺トリックは
         //   限界費用が非減少（凸）でないと「q番目の枠」の意味が壊れ、達成前に達成後の得点を先取りする
         //   （実測: 生の二値差分をそのまま使うと2人目の恩恵を1人だけの状態に誤帰属し、常に採用0になった）。

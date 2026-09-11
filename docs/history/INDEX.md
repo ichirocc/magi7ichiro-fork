@@ -1,5 +1,26 @@
 # 作業記録の索引（見出し一覧）
 
+- 重み表の全面見直し（3.522.0、HF77明示指示）。tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定:
+  groupViol/covU/c3n/pref(HARD)を10000/8000/7000/9000→11000/10000/9000/8000へ再配分、
+  low/c1/c3/c3m/c3mn/c2/c41s/c42s を90/30/3/2/30/1/1/1→120/50/15/10/90/4/6/6、apt/fair/weeklyを1→4/2/2、
+  covOを5→10へ（SOFT中「上限超過(high)>人員過剰(covO)」をoutcomeレベルでも保つため。high違反+42%→+3.4%まで
+  解消・covUは3配分中最良を維持）。B1のaptHigh違反群(古泉/山本/佐藤)がapt/fair同重みの綱引きで解消不能
+  だった実機ログを受けapt=4に改定（D3再改定）。副産物として`DestroyRepairMarginalCost.fairMarginalAt`が
+  fair重みを内部適用していなかった潜在ギャップ(旧重み1では無害)を発見・修正。`MirrorKeys.weights`・
+  `Evaluator.fullEvalParts`・`DeltaEvaluator`・destroy-repair/polish系4ファイル・`magi_native.cpp`5箇所
+  → `docs/history/3.4xx.md`
+- 設定ミス診断に検査6e追加: 希望件数>個人上限（grilling確定）。実機ログで「古泉 健一の有給（上限0・
+  希望10件）」「荒井克枝のCｵ（上限0・希望10件）」がhigh違反として最適化後も残り続ける事象を調査し、
+  希望固定(wishLocked)セルは最適化器のどのパスも動かさないため上限超過は解消不能と判明（不具合ではなく
+  設定ミス）。6d（apt版）と同型の判定を`staffRange.hi`に追加、`V6SanityPort.forcedCountIssues`（3.521.0）
+  → `docs/history/3.4xx.md`
+- UX改善: UI用語統一・ゲーム要素廃止（ユーザー指示、STEP①現状把握→②改善検討→③実施検証）。
+  フェーズ名バッジ「狩猟」→「未完成」、感嘆符/煽り表現を平易な文へ、「できあがり度」の残存2箇所を
+  「解消度」（3.480.0で改称済みの正式語）へ統一。「最適化」vs「計算」の混在を「最適化を実行したか」の
+  概念に絞って統一（別概念の「計算」＝違反数の再評価等は残す）。Kotlin/C#両実装＋
+  `docs/operator_ux.md`等の用語集docsを同時更新（docsは実装より古い旧語「できあがり度」「守れていない約束」
+  「できれば直したい点」を含んでいたため実装に合わせて修正）。史料（changelog/history/archive）は不変
+  （3.520.0）  → `docs/history/3.4xx.md`
 - 未計測だった2件のAB結果: combineExhaustPairsはiter24（170ペア）でlarge/infeasibleの1ペアに必須件数増を
   確認し既定OFFで確定（再提案しない）。personSwapKick(3.517.0)は新規ハーネスPersonSwapBench.ktで実データ
   4件×5seed×フルoptimize(PORTFOLIO)を実施し全20ペアで必須退行ゼロ・4フィクスチャ全てで負け越しなしを

@@ -15,10 +15,10 @@ class WeightDebtTest {
 
     @Test fun creditCountsEveryFamilyAndDebtOnlySoftOnes() {
         val root = report("c1" to 3, "covU" to 1, "weekly" to 2)
-        val node = report("c1" to 2, "covU" to 2, "weekly" to 5, "c3" to 1)   // c1 -1 (credit 30), covU +1 (HARD=件数予算の担当), weekly +3, c3 +1
+        val node = report("c1" to 2, "covU" to 2, "weekly" to 5, "c3" to 1)   // c1 -1 (credit 50), covU +1 (HARD=件数予算の担当), weekly +3 (debt 6), c3 +1 (debt 15)
         val cd = WeightDebt.of(root, node)
-        assertEquals(30.0, cd.credit, 0.0)
-        assertEquals(6.0, cd.debt, 0.0)
+        assertEquals(50.0, cd.credit, 0.0)
+        assertEquals(21.0, cd.debt, 0.0)
         assertTrue(WeightDebt.within(root, node, 2.0))
         assertFalse(WeightDebt.within(root, node, 0.1))
     }

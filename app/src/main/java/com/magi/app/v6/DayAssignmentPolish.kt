@@ -64,16 +64,13 @@ internal object DayAssignmentPolish {
                         val x1 = x0 + 1                                            // k を割当てた後
                         val lo = p.rangeLo[i][k]
                         val hi = V6HotfixPasses.effectiveHi(p, i, k)
-                        // [ソフト研磨・候補生成の重み整合] 従来の rangePen は low/high を 3/3 の擬似重みで評価していたが、
-                        //   真の目的関数(Evaluator / staffCountPenaltyAt / UnifiedViolationChecker)は low=90・high=25・apt=1。
-                        //   proxy が重い low/high を apt(重み1)と同格(3対1)に扱うと Hungarian が「軽い apt を直すため重い
-                        //   low/high を犠牲にする」候補を生みやすく、良候補を生み損ねる(CLAUDE.md 既知・測定待ち)。
-                        //   proxy を目的関数と同一の 90/25/1 に整合させ、生成候補を真の目的へ寄せる。採否は従来どおり
-                        //   keep-best(isBetter@UnifiedViolationChecker)が担うため退化なし＝スコアリング不変。
-                        fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 90L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
+                        // [ソフト研磨・候補生成の重み整合] proxy は目的関数(Evaluator / staffCountPenaltyAt /
+                        //   UnifiedViolationChecker)と同一の重みに整合させ、生成候補を真の目的へ寄せる（CLAUDE.md既知）。
+                        //   [3.522.0] low 90→120, apt 1→4。採否は従来どおり keep-best(isBetter)が担うため退化なし。
+                        fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 120L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
                         var cost = rangePen(x1) - rangePen(x0)                     // range の限界費用
                         val t = aptTarget(i, k)
-                        if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong()  // apt の限界費用
+                        if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong() * 4L  // apt の限界費用
                         cost
                     }
                 }
@@ -101,8 +98,8 @@ internal object DayAssignmentPolish {
     /**
      * [ソフト研磨・交互最適化(Alternating Optimization / 交代最適化)] 全変数を同時に解かず「1ブロックずつ順に最適化
      * して巡回する」座標降下法（block coordinate descent）をソフト制約研磨に導入する新アルゴリズム。ブロック＝各日(列):
-     * その日の (シフト人数=被覆) を固定したまま、希望未固定(wish<0)の職員を「個人別回数(range 90/25)・適切回数(apt 1)・
-     * **曜日平準化(weekly 1)**」の限界費用が最小になるよう **最小費用割当(Hungarian＝割当LP＝凸最適化)** で最適再配置し、
+     * その日の (シフト人数=被覆) を固定したまま、希望未固定(wish<0)の職員を「個人別回数(range 120/25)・適切回数(apt 4)・
+     * **曜日平準化(weekly 2)**」の限界費用が最小になるよう **最小費用割当(Hungarian＝割当LP＝凸最適化)** で最適再配置し、
      * 日 j を 0..T-1 と巡回して 1スイープで1日も変化しなくなるまで（＝座標降下の不動点）反復する。
      *
      * 既存 `applyDayAssignmentPolish`（range/apt のみ・単発）を、①weekly を費用に含め ②反復収束（交互）まで一般化した
@@ -156,13 +153,13 @@ internal object DayAssignmentPolish {
                             val x1 = x0 + 1
                             val lo = p.rangeLo[i][k]
                             val hi = V6HotfixPasses.effectiveHi(p, i, k)
-                            // range/apt は applyDayAssignmentPolish と同一の目的関数整合 proxy（90/25/1）。
-                            fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 90L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
+                            // range/apt は applyDayAssignmentPolish と同一の目的関数整合 proxy。[3.522.0] low/apt/weekly 90/1/1→120/4/2。
+                            fun rangePen(x: Int) = (if (lo != Int.MIN_VALUE) 120L * maxOf(0, lo - x) else 0L) + 25L * maxOf(0, x - hi)
                             var cost = rangePen(x1) - rangePen(x0)
                             val t = aptTarget(i, k)
-                            if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong()
+                            if (t != null) cost += (kotlin.math.abs(x1 - t) - kotlin.math.abs(x0 - t)).toLong() * 4L
                             // [3.345.0] weekly 限界費用: 当日を k にしたときの、職員 i の**シフト k の**曜日
-                            //   バケットの L1 偏差変化（重み1）。当日の元シフトを失う項は行(i)ごとの定数＝
+                            //   バケットの L1 偏差変化。当日の元シフトを失う項は行(i)ごとの定数＝
                             //   割当の argmin を変えないため省く（列ごとに効く項だけを費用に入れる）。
                             run {
                                 val b = wd[i][k]
@@ -172,7 +169,7 @@ internal object DayAssignmentPolish {
                                 b[wdj] += 1
                                 val devAfter = weeklyDevOfBucket(b)
                                 b[wdj] += had - 1                              // 復元
-                                cost += (devAfter - devBefore).toLong()
+                                cost += (devAfter - devBefore).toLong() * 2L
                             }
                             cost
                         }

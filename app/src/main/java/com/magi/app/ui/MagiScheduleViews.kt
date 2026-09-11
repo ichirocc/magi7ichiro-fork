@@ -998,7 +998,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
                     }
                 }, enabled = picked in ui.shiftSymbols.indices && targetDays.isNotEmpty() && !ui.running,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text(if (ui.running) "計算中は変更できません" else "適用（${targetDays.size}件）")
+                    Text(if (ui.running) "最適化中は変更できません" else "適用（${targetDays.size}件）")
                 }
             }
             Text("※ 期間全体×全職員の「希望なし」は全削除（確認あり）。元に戻すで取消可。",
@@ -1132,7 +1132,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                 // [矛盾なく選択] 押せない理由をボタン自身が語る（灰色の理由が見えない矛盾を解消）。
                 // [監査#1] 実行中は適用不可（最適化完了時に上書きされ黙って消えるため）。
                 Text(when {
-                    ui.running -> "計算中は変更できません"
+                    ui.running -> "最適化中は変更できません"
                     picked !in ui.shiftSymbols.indices -> "まずシフトを選んでください"
                     cellCount == 0 -> "対象がありません（担当できる職員なし）"
                     else -> "この${cellCount}マスに一括割当"

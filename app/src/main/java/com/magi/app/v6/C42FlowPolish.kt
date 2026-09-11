@@ -24,7 +24,7 @@ internal object C42FlowPolish {
         var bestRep = before
         var applied = 0
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
-        fun dayPenalty(k: Int, j: Int, q: Int): Long = p.covUCell(k, j, q).toLong() * 8000L + p.covOCell(k, j, q).toLong() * 5L
+        fun dayPenalty(k: Int, j: Int, q: Int): Long = p.covUCell(k, j, q).toLong() * 10000L + p.covOCell(k, j, q).toLong() * 10L  // [3.522.0]
 
         /** 片側(g1側 or g2側)の候補解。`board`はその日(j)だけ書き換えた盤面全体（未採用ならそのまま捨てる）。 */
         class Candidate(val board: Array<IntArray>, val rep: ViolationReport)

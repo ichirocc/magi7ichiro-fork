@@ -168,7 +168,7 @@ internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, editScope: Int = -1,
             }
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
-                c.wishes == 0 -> "次に『希望シフト』を登録すると できあがり度 が上がります。"
+                c.wishes == 0 -> "次に『希望シフト』を登録すると 解消度 が上がります。"
                 // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
                 //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
                 else -> "準備OK。画面下の『勤務表をつくる』で作成できます。"
@@ -208,7 +208,7 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text("計算の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒")
+            Text("最適化の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.setBudget((ui.budgetSec - 60).coerceAtLeast(10)) },
                     enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.height(48.dp)) { Text("− 60秒") }
@@ -218,8 +218,8 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
             }
             Spacer(Modifier.height(10.dp))
-            Text("計算方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // [3.192.0 情報不足の解消] 「おまかせ」選択中は実際に動く方式が計算の制限時間から自動決定される
+            Text("最適化方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // [3.192.0 情報不足の解消] 「おまかせ」選択中は実際に動く方式が最適化の制限時間から自動決定される
             // （V6FinalPort.optimizationPlan/getAlgorithmLabelと同一ロジック）が、画面には「おまかせ」としか
             // 出ず、今の時間設定で何が動くか見えなかった。現在の budgetSec での解決結果を併記する（表示のみ）。
             if (ui.v6Algorithm == V6Algorithm.AUTO) {
@@ -263,14 +263,14 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
 @Composable
 private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("並列ワーカー（同時に計算する数）: ${ui.workers}")
+        Text("並列ワーカー（同時に最適化する数）: ${ui.workers}")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { vm.setWorkers((ui.workers - 1).coerceAtLeast(1)) },
-                enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を減らす" }) { Text("−", fontSize = 20.sp) }
+                enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に最適化する数を減らす" }) { Text("−", fontSize = 20.sp) }
             Text("${ui.workers}", style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
             Button(onClick = { vm.setWorkers((ui.workers + 1).coerceAtMost(16)) },
-                enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時計算数を増やす" }) { Text("＋", fontSize = 20.sp) }
+                enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に最適化する数を増やす" }) { Text("＋", fontSize = 20.sp) }
         }
         // [仮説数上限撤廃・ユーザー指示] 旧: 仮説数は5固定・超過ワーカーは仮説内並列度へ配分。
         //   現在は設定値がそのまま並列に探索する仮説（案）の数になる（下限2、上限=設定値自体）。
@@ -296,7 +296,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("ネイティブ加速（C++）")
-                Text("計算の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
+                Text("最適化の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.nativeAccel, onCheckedChange = { vm.setNativeAccel(it) }, enabled = !ui.running)

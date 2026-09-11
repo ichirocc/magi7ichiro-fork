@@ -29,13 +29,13 @@ class ChangeSummaryTest {
         assertEquals(false, s.rangeAllOk)
         assertEquals("変更 2人・4セル／希望 2/2／個人回数 範囲外あり", s.line())
         assertEquals(-1, s.familyDeltas["pref"]); assertEquals(1, s.familyDeltas["high"])   // s0 の希望が通り、s2 が上限超過
-        assertEquals("改善 pref -1（重み 9000）", s.familyLine().substringBefore("／"))
+        assertEquals("改善 pref -1（重み 8000）", s.familyLine().substringBefore("／"))
         assertTrue(s.familyLine { if (it == "high") "上限超過" else it }.substringAfter("／").startsWith("悪化 上限超過 +1・"))   // 重み 45 が先頭、fair/weekly が続く
     }
 
     @Test fun familyLineOrdersByWeightedImpactAndReportsEmptySides() {
         val line = ChangeSummary.familyLine(mapOf("weekly" to 3, "c1" to -1, "c3mn" to -2, "fair" to 4))
-        assertEquals("改善 c3mn -2・c1 -1（重み 90）／悪化 fair +4・weekly +3（重み 7）", line)
+        assertEquals("改善 c3mn -2・c1 -1（重み 230）／悪化 fair +4・weekly +3（重み 14）", line)
         assertEquals("改善 なし／悪化 なし", ChangeSummary.familyLine(emptyMap()))
     }
 }

@@ -15,7 +15,7 @@ class ConstraintRepairInferenceTest {
 
     @Test fun allowanceFollowsTheWeightNotAConstant() {
         val rep = report("c1" to 3)
-        assertEquals(180L, ConstraintRepairInference.temporarySoftDebtAllowance(rep, "c1"))   // 30 × 3 × 2.0
+        assertEquals(300L, ConstraintRepairInference.temporarySoftDebtAllowance(rep, "c1"))   // [3.522.0] c1=50 × 3 × 2.0
         assertEquals(240L, ConstraintRepairInference.temporarySoftDebtAllowance(rep, "c1", weightOf = { 40.0 }))
         assertEquals(0L, ConstraintRepairInference.temporarySoftDebtAllowance(report("covU" to 3), "covU"))   // HARD 族に予算なし
         assertEquals(0L, ConstraintRepairInference.temporarySoftDebtAllowance(rep, "c1", weightOf = { Double.NaN }))

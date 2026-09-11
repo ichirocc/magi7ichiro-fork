@@ -218,17 +218,17 @@ class DeltaEvaluatorTest {
                 assertEquals("$label: family=$fam", want, raw)
                 if (raw != 0L) everNonZero.add(fam)
             }
-            // [3.372.0/レビュー修正] low/high は `90a+45b` に畳むと単射でない（low=1,high=0 と
-            //   low=0,high=2 がどちらも90）ため、旧実装は「lowを1件見落としてhighを2件過剰に数える」型の
+            // [3.372.0/レビュー修正] low/high を `120a+25b` に畳むと単射でない（異なる(low,high)の組が
+            //   同じ加重和になり得る）ため、旧実装は「lowを1件見落としてhighを過剰に数える」型の
             //   取り違えを通してしまい、この族だけ完全差分になっていなかった。生 amount で個別に突合する。
             val wantLow = (report.breakdown["low"] ?: 0).toLong()
             val wantHigh = (report.breakdown["high"] ?: 0).toLong()
             val (gotLow, gotHigh) = de.rangeRaw()
             assertEquals("$label: family=low", wantLow, gotLow)
             assertEquals("$label: family=high", wantHigh, gotHigh)
-            // フル再計算(rangeRaw)と差分維持(hct)の増分整合性。両者のドリフトはここで落ちる。
+            // フル再計算(rangeRaw)と差分維持(hct)の増分整合性。両者のドリフトはここで落ちる。[3.522.0] low 90→120。
             assertEquals("$label: low/high weighted (rangeRaw vs 差分維持のhct)",
-                gotLow * 90L + gotHigh * 25L, de.rangeWeighted())
+                gotLow * 120L + gotHigh * 25L, de.rangeWeighted())
             // [同] 旧実装は片方だけ非ゼロでも両方を「発火」に数えており、下の網羅チェックが実際より
             //   甘くなっていた。各族が自分で非ゼロになったときだけ数える。
             if (wantLow != 0L) everNonZero.add("low")

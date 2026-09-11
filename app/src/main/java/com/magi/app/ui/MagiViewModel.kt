@@ -162,7 +162,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 画面のメッセージで「何の実行中か」を言うための名前。背景 Worker には名前が無いので既定を返す。 */
-    internal fun busyWhat(): String = boardJobLabel ?: "バックグラウンド計算"
+    internal fun busyWhat(): String = boardJobLabel ?: "バックグラウンド最適化"
 
     /**
      * [3.328.0 → 3.336.0/外部レビュー P1] **編集・実行の可否はここだけを見る**。`ui.running` は
@@ -351,22 +351,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     }.getOrDefault(false)
                 }
                 if (bgActive) {
-                    _ui.update { it.copy(messageIsError = false, running = true, message = "バックグラウンド計算を継続中…（完了時に自動反映）") }
+                    _ui.update { it.copy(messageIsError = false, running = true, message = "バックグラウンド最適化を継続中…（完了時に自動反映）") }
                     if (state == null && !txt.isNullOrBlank()) loadAsync(txt, fromRestore = true)
                     logOp("I", "バックグラウンド最適化の継続を検知（進捗を購読）")
                 } else {
                 if (marker != null) {
                     val hasSnap = !snapTxt.isNullOrBlank()
                     val info = if (hasSnap)
-                        "前回の計算は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。"
+                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。"
                     else runCatching {
                         val o = org.json.JSONObject(marker)
                         val modeJp = if (o.optString("mode") == "bg") "バックグラウンド" else ""
-                        "前回の${modeJp}計算は完了前に中断されました。入力は自動保存済みです。もう一度実行できます。"
-                    }.getOrNull() ?: "前回の計算は完了前に中断されました。入力は自動保存済みです。"
+                        "前回の${modeJp}最適化は完了前に中断されました。入力は自動保存済みです。もう一度実行できます。"
+                    }.getOrNull() ?: "前回の最適化は完了前に中断されました。入力は自動保存済みです。"
                     _ui.update { it.copy(interruptedRun = true, interruptedInfo = info) }
                     clearRunMarker()
-                    logOp("W", if (hasSnap) "前回の中断を検知（途中結果あり＝再開可）" else "前回の計算の中断を検知しました（入力は復元済み）")
+                    logOp("W", if (hasSnap) "前回の中断を検知（途中結果あり＝再開可）" else "前回の最適化の中断を検知しました（入力は復元済み）")
                 }
                 if (state == null) {
                     // 途中最良解を優先して復元（無ければ自動保存の入力）。
@@ -431,7 +431,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun runInBackground() {
         val st0 = state ?: return
         val sched0 = currentSchedule ?: return
-        if (runBlockedByInFlight("バックグラウンド計算の開始")) return
+        if (runBlockedByInFlight("バックグラウンド最適化の開始")) return
         if (!ensureValidForRun(st0, sched0)) return
         pushUndo()
         OptimizationRepository.clear()
@@ -451,7 +451,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 所有権を確立してから旧途中状態を掃除する（Worker が開始時に再保存する）。
         //   [3.410.0/B-06] 消し残りは黙って捨てず記録する（残ると次回起動が古い状態を掴む）。
         if (markerOk) {
-            clearBgFiles("背景計算の開始（旧途中状態の掃除）", keepRunId = true)
+            clearBgFiles("背景最適化の開始（旧途中状態の掃除）", keepRunId = true)
         }
         // [外部レビュー P1-01] 旧: 素の `writeText`＝非原子。書き込み途中でプロセスが kill されると
         //   `magi_bg_input.json` が壊れた JSON のまま残り、旧ファイルは開始前に既に消してあるため
@@ -464,8 +464,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             )
         }.getOrDefault(false)
         if (!markerOk || !inputOk) {
-            clearBgFiles("背景計算の開始に失敗")
-            notify("バックグラウンド計算を開始できませんでした（端末の空き容量をご確認ください）", "W")
+            clearBgFiles("背景最適化の開始に失敗")
+            notify("バックグラウンド最適化を開始できませんでした（端末の空き容量をご確認ください）", "W")
             return
         }
         // [3.328.0] この結果を後で当ててよいかを判断するための入力の指紋。
@@ -500,8 +500,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             OptimizationRepository.request = null
             bgStateKey = 0L
             bgRunId = 0L
-            clearBgFiles("バックグラウンド計算の投入に失敗")
-            notify("バックグラウンド計算を開始できませんでした（端末の状態をご確認ください）", "W")
+            clearBgFiles("バックグラウンド最適化の投入に失敗")
+            notify("バックグラウンド最適化を開始できませんでした（端末の状態をご確認ください）", "W")
             return
         }
         _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "バックグラウンドで最適化を開始しました（完了時に通知）") }
@@ -528,7 +528,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   置き換えられた古い実行が完了間際に publish した結果を通してしまう。r.runId==0 は識別子を
         //   持たない経路（プロセス再起動後のファイル復元）＝従来どおり通す。
         if (bgRunId != 0L && r.runId != 0L && r.runId != bgRunId) {
-            logOp("W", "バックグラウンド計算の結果を破棄しました（置き換えられた古い実行の結果）")
+            logOp("W", "バックグラウンド最適化の結果を破棄しました（置き換えられた古い実行の結果）")
             return
         }
         // [3.475.0/論理監査] `bgStateKey`（インメモリ）はプロセス再起動で 0 に戻り、以後は runId/指紋の両方が
@@ -538,8 +538,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             (bgStateKey == 0L && r.stateKey != 0L && r.stateKey != stateKey(st0))
         if (mismatch) {
             bgStateKey = 0L; bgRunId = 0L; bgInput = null
-            logOp("W", "バックグラウンド計算の結果を破棄しました（計算中に設定またはデータが変わったため）")
-            _ui.update { it.copy(messageIsError = false, running = false, message = "計算中に設定が変わったため、結果は反映しませんでした。もう一度つくってください。") }
+            logOp("W", "バックグラウンド最適化の結果を破棄しました（最適化中に設定またはデータが変わったため）")
+            _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に設定が変わったため、結果は反映しませんでした。もう一度つくってください。") }
             // [3.475.0] 旧: この分岐だけファイル/公開結果を片付けず、次回起動が古い結果を復元しうる穴だった。
             discardBgResult("背景結果: 入力が変わったため破棄")
             return
@@ -1072,7 +1072,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   別名共有クラス）が起きていた（実機ログ 19:56:41 最適化開始→19:56:48 初期解生成完了 で実証）。
         //   runV6FullOptimize/start/runSoftPolish と同じガードに統一（3.161.0 のセル編集ガードと同方針）。
         if (optimizeInFlight()) {
-            _ui.update { it.copy(messageIsError = false, message = "計算の実行中は下書きをつくれません（完了または「やめる」の後にどうぞ）") }
+            _ui.update { it.copy(messageIsError = false, message = "最適化の実行中は下書きをつくれません（完了または「やめる」の後にどうぞ）") }
             return
         }
         if (!ensureValidForRun(st, sched)) return
@@ -1634,8 +1634,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             //   置き換えで打ち切られた旧実行はここを通らない（`stop()` はユーザー操作のみ）＝
             //   新しい実行の running を落とす経路にはならない。
             OptimizationRepository.setRunning(false)
-            clearBgFiles("停止（背景計算の中断）")
-            _ui.update { it.copy(messageIsError = false, running = false, message = "停止しました（バックグラウンド計算を中断）") }
+            clearBgFiles("停止（背景最適化の中断）")
+            _ui.update { it.copy(messageIsError = false, running = false, message = "停止しました（バックグラウンド最適化を中断）") }
             logOp("I", "バックグラウンド最適化を停止")
         } else if (_ui.value.running || _ui.value.fixSearching) {
             // [3.284.0/外部レビューHigh③] 前景の違反チェック(checkJob)/改善探索(fixJob)を停止した場合、

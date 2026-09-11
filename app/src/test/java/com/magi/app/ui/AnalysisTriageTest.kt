@@ -54,7 +54,7 @@ class AnalysisTriageTest {
         assertFalse(t.computed)
         assertTrue("実行前に壁と決めつけない", t.blockers.isEmpty())
         assertEquals(setOf("期間の制約", "必須の並び", "曜日の偏り"), t.searching.map { it.label }.toSet())
-        assertTrue("断定しない注記が出る", t.searchNote.contains("計算後も残る場合があります"))
+        assertTrue("断定しない注記が出る", t.searchNote.contains("最適化後も残る場合があります"))
     }
 
     /**

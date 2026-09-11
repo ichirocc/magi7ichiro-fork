@@ -955,7 +955,7 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("前回の計算は中断されました", style = MaterialTheme.typography.titleMedium)
+            Text("前回の最適化は中断されました", style = MaterialTheme.typography.titleMedium)
             Text(ui.interruptedInfo ?: "入力は自動保存済みです。もう一度実行できます。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

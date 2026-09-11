@@ -993,6 +993,26 @@ object V6SanityPort {
                     }
                 }
             }
+
+            // 6e) [grilling確定・希望件数>個人上限] 6dのapt版と同型。希望どおりに置かれるセルは
+            //    Level Zero(wishLocked)で絶対に動かせないため、希望件数が個人上限を超えていれば
+            //    上限超過(high)は解消できない（3.521.0、詳細は docs/history/3.4xx.md）。読み取り専用。
+            for (i in 0 until p.S) {
+                val name = nameOf(i)
+                for (k in 0 until p.K) {
+                    val hi = p.rangeHi[i][k]
+                    if (hi == Int.MAX_VALUE || !p.canDo(i, k)) continue
+                    var wished = 0
+                    for (j in 0 until p.T) if (p.wishLocked(i, j) && p.wish[i][j] == k) wished++
+                    if (wished > hi) {
+                        val sym = symOf(k)
+                        out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と希望の衝突",
+                            "「$sym」の希望が${wished}件あり、個人上限${hi}回を超えています。希望どおりに配置する限り" +
+                                "「$sym」は必ず${wished}回以上になるため、上限超過は解消できません",
+                            "${name}さんの「$sym」個人上限を${wished}回以上に上げるか、「$sym」の希望を${wished - hi}件減らしてください"))
+                    }
+                }
+            }
         }
 
         fun forcedCovUIssues() {
