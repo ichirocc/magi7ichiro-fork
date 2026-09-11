@@ -31,6 +31,18 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-11（3.518.0＝ユーザー指示「すべての既定OFFの処理をAB評価しメリットあれば既定Onに」に対応。
+既定OFFの全トグル（`PolishGate`の`@Volatile var`・`PostOptimizationParams`・`ViolationComponentRepair.Params`）
+を棚卸しし4分類: (1)既存測定だけで即判断できる`filterC3nIncrease`（3.296.0/3.298.0でON/OFF最終盤面完全一致・
+速度のみの純増）と`lnsAdaptive`（iter9で必須退行0・品質±0・速度実データ-23%〜大規模-32%、当時の結論
+「既定ONはユーザー判断待ち、推奨ON」が今回の指示で確定）は既定trueへ昇格、(2)`wideC3nBreakDays`/
+`c3PairMaskEnabled`/`lnsWeightDebt`等17件は既に具体的な悪化例つきで決着済み＝CLAUDE.mdの「決定記録は
+再提案しない」規律により再測定せず据え置き、(3)`combineExhaustPairs`は一度も測定されておらず、
+(4)`personSwapKick`（3.517.0の新機能）も未測定＝(3)(4)は別途A/B実施。昇格2件は`PolishGate`とUI状態
+（`MagiUiState`/C#`UiState`）の既定が乖離すると「表示はOFFなのに実際はON」になる不整合を発見し両方修正。
+C#（-magi_pc）も`FilterC3nIncrease`を同時昇格（`lnsAdaptive`はC#未移植の既知ギャップ）。
+ホストJVM 739件・C# 1278件（838+440）green）
+
 **最終更新**：2026-09-11（3.517.0＝ユーザー指示「全月入替かつ再最適化の新しいアルゴリズムを賢く深く
 高速化対応で作成する」に対応。既存 AdaptivePortfolio（`V6NativeOptimizer.kt`/
 `AdaptiveHypothesisEpochPolicy.kt`）へ新役割`PERSON_SWAP_ILS`を追加（grilling4問で実装場所・

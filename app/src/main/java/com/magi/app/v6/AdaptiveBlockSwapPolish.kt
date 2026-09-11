@@ -59,8 +59,8 @@ internal object AdaptiveBlockSwapPolish {
      *   DFS 分岐上限（共通予算にすると後ろのブロックが一切探索されない。実測で DFS は 88万件/77ms＝ボトルネックでない）。
      * - [maxCycle] は 2..8 に丸める（巡回の署名を 8bit×人数で Long に詰めるため。既定 5＝到達しない防御、3.469.0）。
      * - [filterC3nIncrease]: 禁止連続(c3n)が正味増える候補を候補生成の段階で捨てるか。既定は
-     *   [PolishGate.filterC3nIncrease]（設定タブの詳細トグル・既定 false）。c3n は HARD なので増える候補は最終的に
-     *   `isBetter` が必ず却下する＝true/false で採用結果は変わらず、true は詰んだ候補へ checker を呼ばない節約だけ。
+     *   [PolishGate.filterC3nIncrease]（設定タブの詳細トグル・既定 **true**、3.518.0）。c3n は HARD なので増える候補は
+     *   最終的に `isBetter` が必ず却下する＝true/false で採用結果は変わらず、true は詰んだ候補へ checker を呼ばない節約だけ。
      * - [stageOneWidthFactor]: 見積りキーだけで選別する第1段プールの幅＝`candidatesPerLength × この係数`。
      *   見積り上位が実候補化で落ちる（交換成立日が1日以下）ことは巡回人数が増えるほど起きやすく、幅が狭いと
      *   その下の成立候補まで失うため段②より広く取る（3.291.0 実測で 8）。

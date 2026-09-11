@@ -118,14 +118,15 @@ object PolishGate {
     //   hard 中央値はどちらも全データセットで不変。docs/algorithm_portfolio.md「廃止・統合済み」参照。
 
     /**
-     * ブロック巡回交換で、禁止連続(c3n)が正味増える候補を**候補生成の段階で**捨てるか。既定 false。
+     * ブロック巡回交換で、禁止連続(c3n)が正味増える候補を**候補生成の段階で**捨てるか。既定 **true**
+     * （3.518.0で確定。ON/OFFで採用結果は変わらないため新規A/Bは不要＝既存測定を適用）。
      *
      * c3n は HARD なので増える候補は最終的に `isBetter` が必ず却下する＝ON/OFF で**採用結果は変わらない**
      * （3.296.0 の A/B 実測で最終盤面・採用数が完全一致することを確認済み）。ON にすると構造的に詰んだ
      * 候補へフル checker を呼ばなくなり、評価枠を soft 判定まで進める候補へ回せる
      * （実測: 正式評価 48→14〜38 件）。
      */
-    @Volatile var filterC3nIncrease: Boolean = false
+    @Volatile var filterC3nIncrease: Boolean = true
 
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
@@ -161,8 +162,11 @@ object PolishGate {
     /** [3.514.0/UIトグル化] `combineAndApply`のexhaustPairs（経緯: history 3.512.6）。既定OFF・未計測。 */
     @Volatile var combineExhaustPairs: Boolean = false
 
-    /** [3.514.0/UIトグル化] C1共同LNS・個人共同LNSのlnsAdaptive（経緯: history 3.510.2 iter9）。既定OFF。 */
-    @Volatile var lnsAdaptive: Boolean = false
+    /**
+     * [3.514.0/UIトグル化] C1共同LNS・個人共同LNSのlnsAdaptive（経緯: history 3.510.2 iter9）。
+     * 既定 **true**（3.518.0で確定。根拠・数値は `docs/algorithm_portfolio.md`「既定ONへ昇格」参照）。
+     */
+    @Volatile var lnsAdaptive: Boolean = true
 
     /**
      * [3.517.0] AdaptivePortfolio の新ロール `PERSON_SWAP_ILS`（全月入替→再最適化のILS摂動）を

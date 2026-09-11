@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- 既定OFFの全トグルを棚卸し・4分類（既存測定で判断可／既に決着済み＝再測定しない／未計測／新機能）し、
+  `filterC3nIncrease`（ON/OFFで最終盤面完全一致・速度のみ）と`lnsAdaptive`（iter9で品質±0・速度実データ-23%、
+  既存結論「推奨ON」）を既定trueへ昇格。`PolishGate`とUiStateの既定乖離（表示と実態の不一致）を発見・修正。
+  C#（-magi_pc）もFilterC3nIncreaseを同時昇格・dotnet test green（3.518.0）  → `docs/history/3.4xx.md`
 - PORTFOLIO の新役割 PERSON_SWAP_ILS（全月入替→再最適化のILS摂動、grilling4問）を既定OFFで実装。
   同群2名の1ヶ月分割当を丸ごと交換→RSI+でフル再最適化。fair は交換不変（分析的に証明済み）で、
   改善は c1/c3/high 等の局所解構造が変わることで生じる（実データprobeで weightedScore 9831→9605
