@@ -97,7 +97,7 @@ class DeltaEvaluator(private val p: Problem) {
      * `score()`(soft集約) は各フィールドへ重みを乗じて合算するため、**総和が一致しても族ごとの誤差が
      * 相殺されて隠れる余地がある**（例: c1(重み30)とc3mn(重み30)が同じ重みを持つため、片方+1・もう片方-1
      * の誤りは総和では検出できない。c2/c41/c42/c41s/c42s/apt/fair/weekly も全て重み1で同じ穴を持つ。
-     * covO は重み5＝上記2組とは別の値だが、この関数は生カウントを個別に突き合わせるため重みの値自体には
+     * covO は重み10＝上記2組とは別の値だが、この関数は生カウントを個別に突き合わせるため重みの値自体には
      * 依存しない）。
      * このマップは checker の `breakdown` と**1キーずつ**突き合わせる per-family パリティ検証のために
      * 存在する（`DeltaEvaluatorTest` 参照）。low/high だけは [rangeWeighted] を参照（下記）。
@@ -110,22 +110,22 @@ class DeltaEvaluator(private val p: Problem) {
     )
 
     /**
-     * [3.371.0/soft全族の完全差分] `hct` は low(重み90)/high(重み45) を**その場で重み適用済み**の1つの
+     * [3.371.0/soft全族の完全差分] `hct` は low(重み120)/high(重み25) を**その場で重み適用済み**の1つの
      * running total へ合算している（`rangeViol` 参照）。checker の `breakdown["low"]`/`breakdown["high"]`
      * は生カウント(UNweighted)なので、単体では直接比較できない。検証は
-     * `breakdown["low"]*90 + breakdown["high"]*45 == rangeWeighted()` の形で行う。
+     * `breakdown["low"]*120 + breakdown["high"]*25 == rangeWeighted()` の形で行う。
      */
     internal fun rangeWeighted(): Long = hct
 
     /**
      * [3.372.0/レビュー修正] low/high を**別々の生 amount** で返す（検証専用・O(S×K) のフル再計算）。
-     * `rangeWeighted()` だけだと `90a+45b` が単射でない（low=1,high=0 と low=0,high=2 がどちらも90）ため、
-     * 「low を1件見落として high を2件過剰に数える」型の取り違えを検出できない＝soft全族の完全差分という
+     * `rangeWeighted()` だけだと `120a+25b` が単射でない（異なる(low,high)の組が同じ加重和になり得る）ため、
+     * 「low を1件見落として high を過剰に数える」型の取り違えを検出できない＝soft全族の完全差分という
      * 主張が low/high についてだけ成立していなかった。
      *
      * ホットパスの [rangeViol] は重み適用済みの1本(`hct`)で持つ設計（性能上の意図的な選択）なので、
      * ここは同じ述語を書き下したフル再計算にしてある。両者のドリフトは、テストが
-     * `rangeRaw().first*90 + rangeRaw().second*45 == rangeWeighted()` を毎手つき合わせることで検出する
+     * `rangeRaw().first*120 + rangeRaw().second*25 == rangeWeighted()` を毎手つき合わせることで検出する
      * （左辺=フル再計算・右辺=差分維持なので、この等式は同時に増分整合性の検査にもなる）。
      */
     internal fun rangeRaw(): Pair<Long, Long> {
@@ -151,13 +151,9 @@ class DeltaEvaluator(private val p: Problem) {
     private fun scoreFrom(cu: Long): Long {
         val h1 = hc3n + cu + hpref + hGrpV
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
-        // [統一c] c3/c3m/c3mn に checker 重み(3/2/30)を適用（sc3等は #fire/run-deficit の生カウント）。
-        // [統一c1] c1 にも checker 重み(30)を適用（sc1 は #fire 生カウント、canDoガード済）。
-        // [統一apt/fair/weekly] sApt(適切回数) sFair(群内公平化) sWeekly(曜日平準化) を SOFT に含める（共に重み1）。
-        // [HF77明示数値指示] c1: 4→5(2026-07-20)→15(2026-07-21)→30(3.409.24)。c3mn: 12→15(2026-07-20)→30(3.409.24)。
-        //   covO: 1→5(2026-08-27)。
-        //   [外部レビューM2] 上3行のコメントは長らく旧値(15)のまま残っていた＝実装(下の * 30)は常に正しい。
-        val soft = sc1 * 30 + sc2 + sc41 + sc42 + sc41s + sc42s + sc3 * 3 + sc3m * 2 + sc3mn * 30 + hct + sApt + sFair + sWeekly + scovO * 5
+        // [統一c/c1/apt/fair/weekly] sc1/sc3/sc3m/sc3mn/sApt/sFair/sWeekly に checker 重みを適用
+        //   （各カウンタ自体は #fire/run-deficit/L1偏差の生カウント）。[3.522.0/全面見直し、docs/history/3.4xx.md]。
+        val soft = sc1 * 50 + sc2 * 4 + sc41 + sc42 + sc41s * 6 + sc42s * 6 + sc3 * 15 + sc3m * 10 + sc3mn * 90 + hct + sApt * 4 + sFair * 2 + sWeekly * 2 + scovO * 10
         return h1 * SCORE_HARD_UNIT + soft
     }
 
@@ -348,10 +344,8 @@ class DeltaEvaluator(private val p: Problem) {
 
         // [統一b] dCt(range) は SOFT へ移動（hard から除外）。
         val dHard = dC3n + (nCovU - covUTot) + dPref + dGrpV
-        // [統一c] c3/c3m/c3mn の delta にも checker 重み(3/2/15)を適用（full soft と同一係数）。
-        // [統一c1] c1 の delta にも ×15。[HF77明示数値指示(2026-07-20)] c1=4→5・c3mn=12→15。
-        // [HF77明示数値指示(2026-07-21)] c1=5→15 に変更。
-        val dSoft = dC1 * 30 + dC2 + dC41 + dC42 + dC41s + dC42s + dC3 * 3 + dC3m * 2 + dC3mn * 30 + dCt + dApt + dFair + dWeekly + dCovO
+        // [3.522.0] scoreFrom と同一係数（全面見直し、経緯はdocs/history/3.4xx.md）。
+        val dSoft = dC1 * 50 + dC2 * 4 + dC41 + dC42 + dC41s * 6 + dC42s * 6 + dC3 * 15 + dC3m * 10 + dC3mn * 90 + dCt + dApt * 4 + dFair * 2 + dWeekly * 2 + dCovO * 10
         return score() + dHard * SCORE_HARD_UNIT + dSoft
     }
 
@@ -405,10 +399,10 @@ class DeltaEvaluator(private val p: Problem) {
     private fun viol01(b: Boolean): Long = if (b) 1L else 0L
 
     private fun rangeViol(i: Int, k: Int, n: Int): Long {
-        // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×90 / high=amount×25。
+        // [統一b] UnifiedViolationChecker と同分類(SOFT)・同重み: low(lo!=0, canDo必須)=amount×120 / high=amount×25。[3.522.0] low 90→120。
         val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
         var v = 0L
-        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) v += (lo - n).toLong() * 90L
+        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) v += (lo - n).toLong() * 120L
         if (hi != Int.MAX_VALUE && n > hi) v += (n - hi).toLong() * 25L
         return v
     }

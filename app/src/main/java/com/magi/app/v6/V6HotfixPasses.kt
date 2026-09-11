@@ -848,6 +848,7 @@ object V6HotfixPasses {
         val rng = Random(seed)
         val before = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = quantitativeRangeEval)
         var best = normalizeSchedule(schedule, p)
+        val original = best   // [厳密ピン保護] 全サイクル共通の基準盤面（exactPinRegressionの比較元）
         var bestReport = before
         var applied = false
         var usedCycles = 0
@@ -875,7 +876,11 @@ object V6HotfixPasses {
             val polished = localBestImprovement(p, ev, cand, 250 + cycle * 120, rng, shouldStop)
             val rep = UnifiedViolationChecker.check(state, polished, quantitativeRangeEval = quantitativeRangeEval)
             usedCycles = cycle + 1
-            if (isBetter(rep, bestReport)) {
+            // [厳密ピン保護/3.522.0] 摂動+再研磨は複数職員の回数を同時に変えうるため、他パス（RangePolish等）
+            //   と同じ exactPinRegression ガードを追加。旧実装はこのパスだけ欠けており、SOFT重みの相対関係が
+            //   十分ずれると（例: c1/covU等の重み引き上げ）weightedScore改善とのトレードで
+            //   staffRange厳密ピン(lo==hi)が崩れうる不具合があった（PinInvariantTest, docs/history/3.4xx.md）。
+            if (isBetter(rep, bestReport) && !exactPinRegression(p, original, polished)) {
                 best = polished
                 bestReport = rep
                 applied = true

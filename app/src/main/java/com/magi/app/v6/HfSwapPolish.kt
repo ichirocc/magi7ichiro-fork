@@ -57,7 +57,8 @@ internal object HfSwapPolish {
                         val cand = trySwapShiftBetweenStaff(p, work, from, to, k) ?: continue
                         val rep = UnifiedViolationChecker.check(state, cand.first, quantitativeRangeEval)
                         val ref = bestReport ?: current
-                        if (betterReport(rep, ref)) {
+                        // [厳密ピン保護/3.522.0] 職員間交換はfrom/toの2者の回数を同時に変えうるため他パスと同じガード。
+                        if (betterReport(rep, ref) && !exactPinRegression(p, work, cand.first)) {
                             best = cand.second
                             bestReport = rep
                         }
@@ -127,7 +128,8 @@ internal object HfSwapPolish {
                         val cand = work.copy2D()
                         cand[i][j] = want
                         val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
-                        if (betterReport(rep, bestReport ?: current)) {
+                        // [厳密ピン保護/3.522.0] 職員内の担当替えも自身の回数を変えるため他パスと同じガード。
+                        if (betterReport(rep, bestReport ?: current) && !exactPinRegression(p, work, cand)) {
                             bestMove = MoveCandidate(i, j, give, want)
                             bestReport = rep
                         }
@@ -157,7 +159,7 @@ internal object HfSwapPolish {
                             cand[i][j] = allowed[rng.nextInt(allowed.size)]
                             if (cand[i][j] != old) {
                                 val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
-                                if (betterReport(rep, current)) {
+                                if (betterReport(rep, current) && !exactPinRegression(p, work, cand)) {
                                     work = cand
                                     current = rep
                                     moves++
@@ -240,7 +242,7 @@ internal object HfSwapPolish {
             cand[i][j] = b
             cand[i2][j] = a
             val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
-            if (betterReport(rep, current)) {
+            if (betterReport(rep, current) && !exactPinRegression(p, work, cand)) {
                 work = cand
                 current = rep
                 applied++

@@ -31,6 +31,14 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-11（3.522.0＝重み表の全面見直し（HF77明示指示）。tools/loop 34ケース×10seedの
+baseline対比ベンチマークで決定: groupViol/covU/c3n/pref(HARD)を11000/10000/9000/8000へ再配分、
+low/c1/c3/c3m/c3mn/c2/c41s/c42s を90/30/3/2/30/1/1/1→120/50/15/10/90/4/6/6 に、apt/fair/weeklyを
+1→4/2/2に、covOを5→10へ引き上げ（SOFT中「上限超過(high)>人員過剰(covO)」の優先順位をoutcomeレベルでも
+保つため。high違反+42%→+3.4%まで解消・covUは3配分中最良を維持）。`MirrorKeys.weights`・
+`Evaluator.fullEvalParts`・`DeltaEvaluator`・destroy-repair/polish系4ファイル・`magi_native.cpp`5箇所を
+同時更新、詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-11（3.521.0＝設定ミス診断に検査6e追加。実機ログ調査で「希望件数(wishes)が
 個人上限(staffRange.hi)を超過」（例: 古泉 健一「有給」上限0・希望10件、荒井克枝「Cｵ」上限0・希望10件）
 というどの既存診断でも検出されていなかったパターンを確認。希望固定セルはLevel Zero不変条件で動かせない

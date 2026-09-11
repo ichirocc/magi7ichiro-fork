@@ -1073,11 +1073,11 @@ class V6NativeOptimizerChoiceTest {
 
     @Test
     fun marginalCostStillCountsLowerBoundOnAllowedShift() {
-        // X(k=1) は担当可。下限2に対し現在0なら 2×90=180。回帰の固定。
+        // X(k=1) は担当可。下限2に対し現在0なら 2×120=240（[3.522.0] low 90→120）。回帰の固定。
         val p = Problem(canDoState(mapOf("0,1" to Range("2", ""))))
         assertTrue("前提: s0 は X を担当できる", p.canDo(0, 1))
-        assertEquals("担当可の下限は従来どおり重み90で数える",
-            180L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 0))
+        assertEquals("担当可の下限は従来どおり重み120で数える",
+            240L, DestroyRepairMarginalCost.staffCountPenaltyAt(p, 0, 1, 0))
     }
 
     @Test

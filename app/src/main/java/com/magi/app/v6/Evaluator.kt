@@ -85,19 +85,19 @@ class Evaluator(private val p: Problem) {
                     var z = 0
                     var l = 0
                     while (l < d1) { if (a[i][j + l] == si) z++; l++ }
-                    if (z < d2) soft += 30L
+                    if (z < d2) soft += 50L
                     j++
                 }
             }
         }
 
-        // c2: per-staff total of a shift must reach count
+        // c2: per-staff total of a shift must reach count [3.522.0] 重み1→4。
         for (c in p.cons2) {
             for (i in 0 until S) {
                 if (!p.canDo(i, c.shiftIdx)) continue   // [監査#5] 担当不可の職員は対象外（チェッカーと同一条件）
                 var z = 0
                 for (j in 0 until T) if (a[i][j] == c.shiftIdx) z++
-                soft += if (p.quantitativeRangeEval) c2Amount(z, c.count) else if (z < c.count) 1L else 0L
+                soft += (if (p.quantitativeRangeEval) c2Amount(z, c.count) else if (z < c.count) 1L else 0L) * 4L
             }
         }
 
@@ -122,12 +122,12 @@ class Evaluator(private val p: Problem) {
             }
         }
 
-        // c41s / c42s: スキルグループ版（ssk = スキル群index。既存 sgrp とは独立）。罰則は c41/c42 と同等(soft)。
+        // c41s / c42s: スキルグループ版（ssk = スキル群index。既存 sgrp とは独立）。[3.522.0] 重み1→6。
         for (c in p.cons41s) {
             for (j in 0 until T) {
                 var z = 0
                 for (i in 0 until S) if (p.ssk[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
-                soft += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
+                soft += (if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L) * 6L
             }
         }
         for (c in p.cons42s) {
@@ -137,18 +137,17 @@ class Evaluator(private val p: Problem) {
                     if (p.ssk[i] == c.g1 && a[i][j] == c.s1) n1++
                     if (p.ssk[i] == c.g2 && a[i][j] == c.s2) n2++
                 }
-                soft += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
+                soft += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 6L
             }
         }
 
-        // c3 family — [統一] UnifiedViolationChecker と同じ重み(c3=3/c3m=2/c3mn=30)を soft に適用。
+        // c3 family — [統一] UnifiedViolationChecker と同じ重みを soft に適用。
         // c3n は forbidden=HARD として hard1(count, ×1e6) のまま。窓マッチは #fire 計上(後述の sub += 1)。
-        // [外部レビューM2/コメントドリフト是正] 回避の並び(c3mn)の重みは
-        //   12→15(2026-07-20)→30(3.409.24)とHF77明示数値指示で変遷。実装(30L)は常に正しい。
-        soft += c3check(a, p.cons3, false) * 3L
+        // [3.522.0] c3=3→15・c3m=2→10・c3mn=30→90（全面見直し、経緯はdocs/history/3.4xx.md）。
+        soft += c3check(a, p.cons3, false) * 15L
         hard1 += c3check(a, p.cons3n, true)    // forbidden -> display HARD (count)
-        soft += c3check(a, p.cons3m, false) * 2L
-        soft += c3check(a, p.cons3mn, true) * 30L
+        soft += c3check(a, p.cons3m, false) * 10L
+        soft += c3check(a, p.cons3mn, true) * 90L
 
         // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
         for (i in 0 until S) for (j in 0 until T) {
@@ -172,15 +171,16 @@ class Evaluator(private val p: Problem) {
         for (i in 0 until S) for (k in 0 until K) {
             val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
             val n = ssn[i][k]
-            if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) soft += (lo - n).toLong() * 90L
+            // [3.522.0] low 90→120。high は3.520.0以来25のまま不変。
+            if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) soft += (lo - n).toLong() * 120L
             if (hi != Int.MAX_VALUE && n > hi) soft += (n - hi).toLong() * 25L
-            // [統一apt] 適切回数(双方向目標) SOFT・重み1・L1偏差|n-t|。UnifiedViolationChecker の "apt" と一致。
+            // [統一apt] 適切回数(双方向目標) SOFT・L1偏差|n-t|。UnifiedViolationChecker の "apt" と一致。[3.522.0] 重み1→4。
             val t = p.apt[i][k]
-            if (t >= 0) soft += kotlin.math.abs(n - t).toLong()
+            if (t >= 0) soft += kotlin.math.abs(n - t).toLong() * 4L
         }
 
-        // [統一fair] グループ内公平化 SOFT・重み1。群×担当ONシフトごと、メンバー回数の round(平均) からの
-        // L1偏差和。同群の職員間で各シフト回数を均す（UnifiedViolationChecker の "fair" と一致）。
+        // [統一fair] グループ内公平化 SOFT。群×担当ONシフトごと、メンバー回数の round(平均) からの
+        // L1偏差和。同群の職員間で各シフト回数を均す（UnifiedViolationChecker の "fair" と一致）。[3.522.0] 重み1→2。
         for (g in 0 until p.G) {
             val mem = p.groupMembers[g]
             val m = mem.size
@@ -189,17 +189,17 @@ class Evaluator(private val p: Problem) {
                 var sum = 0
                 for (x in mem) sum += ssn[x][k]
                 val tgt = Math.round(sum.toDouble() / m).toInt()
-                for (x in mem) soft += kotlin.math.abs(ssn[x][k] - tgt).toLong()
+                for (x in mem) soft += kotlin.math.abs(ssn[x][k] - tgt).toLong() * 2L
             }
         }
 
-        // [統一weekly] 7日周期のシフト平準化 SOFT・重み1。職員ごと**シフトごと**に、そのシフトが入る日の
+        // [統一weekly] 7日周期のシフト平準化 SOFT。職員ごと**シフトごと**に、そのシフトが入る日の
         // 曜日別カウントの round(回数/7) からの L1偏差和（UnifiedViolationChecker の "weekly" と一致）。
-        // [3.345.0] 休も1シフトとして数える（旧: 勤務日=非休の二値）。
+        // [3.345.0] 休も1シフトとして数える（旧: 勤務日=非休の二値）。[3.522.0] 重み1→2。
         for (i in 0 until S) {
             val wd = Array(K) { IntArray(7) }
             for (j in 0 until T) { val k = a[i][j]; if (k in 0 until K) wd[k][(p.dow0 + j) % 7]++ }
-            for (k in 0 until K) soft += weeklyDevOfBucket(wd[k]).toLong()
+            for (k in 0 until K) soft += weeklyDevOfBucket(wd[k]).toLong() * 2L
         }
 
         // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。共有ヘルパで Δ/Checker と同式。
@@ -210,8 +210,8 @@ class Evaluator(private val p: Problem) {
                 var dsn = 0
                 for (i in 0 until S) if (a[i][j] == k) dsn++
                 covU += p.covUCell(k, j, dsn)
-                // [HF77明示指示 2026-08-27] covO 重み 1→5。MirrorKeys.weights["covO"] と同時に変更。
-                soft += p.covOCell(k, j, dsn).toLong() * 5L
+                // [3.522.0] covO 重み5→10。MirrorKeys.weights["covO"] と同時に変更（経緯: docs/history/3.4xx.md）。
+                soft += p.covOCell(k, j, dsn).toLong() * 10L
             }
         }
         hard1 += covU

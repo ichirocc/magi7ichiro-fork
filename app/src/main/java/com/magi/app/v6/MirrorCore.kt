@@ -120,26 +120,16 @@ object MirrorKeys {
     val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly")
     // [N2/⛏11] weightedScore の重み（単一の真実）。UI の重み表もこのマップを描画して
     //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
+    // [HF77明示数値指示・全面見直し 3.522.0] tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定
+    //   （経緯・数値の詳細は docs/history/3.4xx.md）。high(25)は3.520.0以来不変。
+    // **ここを変えたら `Evaluator.fullEvalParts` のリテラルと C++ も同時に変える**。
+    //   Kotlin 側のずれは `ObjectiveParityTest`、C++ 側は native-parity CI が捕まえる。
     val weights: Map<String, Double> = linkedMapOf(
-        "groupViol" to 10000.0, "pref" to 9000.0, "covU" to 8000.0, "c3n" to 7000.0,
-        "low" to 90.0, "high" to 25.0,
-        // [HF77明示数値指示] 回避の並び(c3mn)=30・窓の要件(c1)=30。経緯: 3.249.0 で c3mn 12→15・c1 4→5、
-        //   3.253.0 で c1 5→15、3.409.24 で両方 15→30。**現在値はどちらも 30**（この行が stale だと監査が
-        //   誤誘導される。実際 3.389.0 まで「c1=5」、3.428.0 まで「15」と書いた旧コメントが残っていた）。
-        //   high(上限超過)は 45→25（2026-09-10、HF77明示指示。表示順で人員過剰(covO=5)と期間の制約/
-        //   回避の並び(c1/c3mn=30)の間に来るようにするため）。
-        // **ここを変えたら `Evaluator.fullEvalParts` のリテラルと C++ も同時に変える**。
-        //   Kotlin 側のずれは `ObjectiveParityTest`、C++ 側は native-parity CI が捕まえる。
-        "c3mn" to 30.0, "c1" to 30.0, "c3" to 3.0, "c3m" to 2.0,
-        "c2" to 1.0, "c41" to 1.0, "c42" to 1.0, "c41s" to 1.0, "c42s" to 1.0,
-        "apt" to 1.0, "fair" to 1.0, "weekly" to 1.0,
-        // [目的関数統一] covO は最適化器(Evaluator/Delta/C++)が amount×重みで加算しており、
-        //   チェッカー weightedScore も同じ重みに統一する（乖離させない）。
-        //   経緯: 0.5→1.0(2026-07-13, HF77明示指示,「最適化器を正」として統一)→5.0(2026-08-27,
-        //   HF77明示指示。人員過剰が individually-capped high(45)に阻まれ研磨されない実機ログを受け、
-        //   apt/fair/weekly/c2/c41/c42等(重み1)より確実に優先して削られる水準へ引き上げ。high/low/c1/c3mnには
-        //   遠く及ばない＝個人上限・構造ルールより過剰削減を優先しない、という位置づけは維持）。
-        "covO" to 5.0,
+        "groupViol" to 11000.0, "covU" to 10000.0, "c3n" to 9000.0, "pref" to 8000.0,
+        "low" to 120.0, "c3mn" to 90.0, "c1" to 50.0, "high" to 25.0, "covO" to 10.0,
+        "c3" to 15.0, "c3m" to 10.0,
+        "c41" to 1.0, "c42" to 1.0, "c41s" to 6.0, "c42s" to 6.0,
+        "c2" to 4.0, "apt" to 4.0, "fair" to 2.0, "weekly" to 2.0,
     )
 
     // [表示優先度/HF77明示指示 2026-07-20] aptLow/aptHigh は apt の表示専用サブクラス（重み表(WeightTableCard)には

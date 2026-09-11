@@ -37,10 +37,11 @@ internal object DestroyRepairMarginalCost {
         //   実データ3件（golden/real/user）では該当セル0＝潜在バグ。high は n>hi の形で担当外なら n=0 に
         //   なり発火せず、かつ Evaluator 側もガードを持たない＝既に一致しているので触らない。
         //   apt は `Problem` 構築時に bucket=canDo でガード済み。
-        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) pen += (lo - n).toLong() * 90L
+        // [3.522.0] low 90→120, apt 1→4。
+        if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) pen += (lo - n).toLong() * 120L
         if (hi != Int.MAX_VALUE && n > hi) pen += (n - hi).toLong() * 25L
         val t = p.apt[i][k]
-        if (t >= 0) pen += kotlin.math.abs(n - t).toLong()
+        if (t >= 0) pen += kotlin.math.abs(n - t).toLong() * 4L
         return pen
     }
 
@@ -67,7 +68,7 @@ internal object DestroyRepairMarginalCost {
             acc += (weeklyDevOfBucket(b) - before).toLong()
             b[bucket]--
         }
-        return acc
+        return acc * 2L  // [3.522.0] weekly 1→2
     }
 
 
@@ -92,7 +93,7 @@ internal object DestroyRepairMarginalCost {
         counts[i][k] += delta
         val after = dev(grpTotal[g][k] + delta)
         counts[i][k] -= delta
-        return (after - before).toLong()
+        return (after - before).toLong() * 2L  // [3.522.0] fair 1→2（weeklyMarginalAtと同型で内部適用）
     }
 
 

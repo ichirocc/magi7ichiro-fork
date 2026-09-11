@@ -52,7 +52,8 @@ class QuantitativeRangeEvalTest {
     /**
      * 全員 A が0回・B(=[2,2])が0人 → c2不足=3(目標)×4人、c41距離=2×日数（不足のみ）。
      * fullEvalParts の合計には weekly 等の無関係な族も乗るため、量的/二値の**差分**（=このモードだけが
-     * 動かす分）を検証する: 差分 = c2の(不足量-件数)×4 + c41の(距離-件数)×5 = (12-4)+(10-5) = 13。
+     * 動かす分）を重み付きで検証する: 差分 = (c2の生カウント差12-4)×重み4 + (c41の生カウント差10-5)×重み1
+     * = 8*4 + 5*1 = 37（[3.522.0] c2重み1→4で13→37）。
      */
     @Test
     fun evaluatorQuantitativeSumMatchesHandComputedAmount() {
@@ -67,7 +68,7 @@ class QuantitativeRangeEvalTest {
         val evBin = Evaluator(pBin)
         val partsBin = evBin.fullEvalParts(pBin.initialAssignment())
 
-        assertEquals(13L, parts[1] - partsBin[1])
+        assertEquals(37L, parts[1] - partsBin[1])
     }
 
     @Test
@@ -82,7 +83,10 @@ class QuantitativeRangeEvalTest {
         val report = UnifiedViolationChecker.check(state, p.initialAssignment(), quantitativeRangeEval = true)
         assertEquals(12, report.breakdown["c2"])
         assertEquals(10, report.breakdown["c41"])
-        assertEquals(parts[1], report.soft.toLong())
+        // [3.522.0] report.soft は total-hard の生カウントで重み非依存＝c2(重み4)導入後は parts[1]
+        //   (Evaluatorの重み付きsoft)と一致しなくなった（旧c2=1のとき生カウント=重み付き値で偶然一致）。
+        //   このfixtureはHARD=0なので report.weightedScore と比較する。
+        assertEquals(parts[1], report.weightedScore.toLong())
 
         // 既定(false)は従来どおり二値件数のまま
         val reportBin = UnifiedViolationChecker.check(state, p.initialAssignment())

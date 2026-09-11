@@ -1,5 +1,14 @@
 # 作業記録の索引（見出し一覧）
 
+- 重み表の全面見直し（3.522.0、HF77明示指示）。tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定:
+  groupViol/covU/c3n/pref(HARD)を10000/8000/7000/9000→11000/10000/9000/8000へ再配分、
+  low/c1/c3/c3m/c3mn/c2/c41s/c42s を90/30/3/2/30/1/1/1→120/50/15/10/90/4/6/6、apt/fair/weeklyを1→4/2/2、
+  covOを5→10へ（SOFT中「上限超過(high)>人員過剰(covO)」をoutcomeレベルでも保つため。high違反+42%→+3.4%まで
+  解消・covUは3配分中最良を維持）。B1のaptHigh違反群(古泉/山本/佐藤)がapt/fair同重みの綱引きで解消不能
+  だった実機ログを受けapt=4に改定（D3再改定）。副産物として`DestroyRepairMarginalCost.fairMarginalAt`が
+  fair重みを内部適用していなかった潜在ギャップ(旧重み1では無害)を発見・修正。`MirrorKeys.weights`・
+  `Evaluator.fullEvalParts`・`DeltaEvaluator`・destroy-repair/polish系4ファイル・`magi_native.cpp`5箇所
+  → `docs/history/3.4xx.md`
 - 設定ミス診断に検査6e追加: 希望件数>個人上限（grilling確定）。実機ログで「古泉 健一の有給（上限0・
   希望10件）」「荒井克枝のCｵ（上限0・希望10件）」がhigh違反として最適化後も残り続ける事象を調査し、
   希望固定(wishLocked)セルは最適化器のどのパスも動かさないため上限超過は解消不能と判明（不具合ではなく

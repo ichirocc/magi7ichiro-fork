@@ -112,3 +112,16 @@
 17. ~~**[表示のみ] 設定タブ・勤務表タブの文字サイズ階層**（3.515.4 の続き）~~ **→ 3.515.5 で完了**。
     `MagiSetupCards.kt`・`MagiScheduleViews.kt`・`MagiDashboardCards.kt`を`docs/DESIGN.md` §3.3の階層
     （章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label=部品ラベル・チップ・凡例のみ）へ統一。
+18. **[要継続調査・ユーザー承知の上でmainへマージ済み] 重み表全面見直し（3.522.0）後、厳密ピン(staffRange lo==hi)保護に
+    残存する穴**。`applyHF80StrategicOscillation`・`HfSwapPolish.applyHF67InterStaffSwap`・
+    `applyHF66IntraStaffRedistribution`の3パスに他パス同型の`exactPinRegression`ガードを追加したが、
+    `PinInvariantTest.postOptimizationHoldsPinsAcrossRandomStates`はまだ一部seedで失敗する＝後段の
+    巡回研磨クラスタ内のいずれかのパス（未特定、`runPolishCluster`が呼ぶ十数パスのどれか）にも同型の穴が
+    残っている。旧重みではlow/high(90/25)が他のSOFT族(大半が重み1)より圧倒的に重く経済的に成立しなかった
+    ため潜在化していた構造的欠陥＝c1/covU/c2/apt/fair/weekly等を引き上げた今回の変更で顕在化した。
+    次に着手するときは「呼出前後でexactPinRegressionを比較するデバッグ計装」（in-place変異を避けるため
+    呼出直前に盤面をdeep copyしてから比較する必要がある＝3.522.0作業時に一度実装したが原因特定前に時間切れで
+    撤去）から再開するのが早い。同時に`CombinatorialRepairTest.combineAndApplyAcceptsPairRejectedIndividuallyButImprovingTogether`・
+    `ViolationComponentRepairTest.combinesCandidatesRejectedByDifferentPassesIntoOneTransaction`も
+    「単独不採用(タイ)・組合せで採用」という精密なapt/c41バランス依存のfixtureが新重みで崩れており未修正
+    （3.409台の候補A作業時に同種の再チューニング実績あり、docs/history/3.4xx.md参照）。
