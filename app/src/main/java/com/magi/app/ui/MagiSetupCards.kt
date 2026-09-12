@@ -628,6 +628,19 @@ internal fun DataActionsCard(
                     Text("開く前のデータに戻す（もう一度押すと入れ替え）")
                 }
             }
+            // [3.529.0/外部仕様書取り入れ] 自動保存の状態。既定(Saved)では出さず、変化がある間だけ表示。
+            if (ui.saveState != SaveState.Saved) {
+                Text(
+                    when (ui.saveState) {
+                        SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"
+                        SaveState.Saving -> "保存中…"
+                        SaveState.Failed -> "自動保存に失敗しています（端末の空き容量をご確認のうえ「データを保存」をお試しください）"
+                        SaveState.Saved -> ""
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (ui.saveState == SaveState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存") }
                 OutlinedButton(onClick = onCheck, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("いま診断し直す") }

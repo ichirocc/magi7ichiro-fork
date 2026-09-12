@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- 外部仕様書「決定論的修復統合基盤」を評価し3件だけ取り入れ（3.529.0）。SHA-256+TLV正規化・因果証拠
+  構造体・新規safety/パッケージ・全操作への汎用Preview化は既存の軽量な仕組み(checkSeq/fixBoardKey/
+  FixApplyGate/SaveGate/checkRev)と重複するため不採用。採用: ①applyAlternative()の鮮度チェック追加
+  ②保存状態(SaveState)をUIへ表示 ③Undo履歴に操作名を表示 → `docs/history/3.4xx.md`
 - 設定タブの既定OFFトグルはUIに残し、AB評価で既定ONへ確定した機構(blockSwapC3nFilter/lnsAdaptive)は
   UI表示から外す（3.528.0）。opt-outフラグ自体は温存。ユーザー指示「AB評価で確定した既定Onのフラグは
   UIに表示しない」→ `docs/history/3.4xx.md`

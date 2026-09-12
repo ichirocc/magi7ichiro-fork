@@ -31,6 +31,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-12（3.529.0＝ユーザー提示の外部仕様書「決定論的修復統合基盤」を調査エージェントで
+現状コードと突合し、SHA-256+TLV正規化・因果証拠構造体・新規safety/パッケージ・全操作への汎用Preview化は
+既存の`checkSeq`/`fixBoardKey`/`FixApplyGate`/`SaveGate`/`checkRev`と重複のため不採用、3件のみ既存パターンを
+横展開して実装: ①`applyAlternative()`に鮮度チェック追加（`fixBoardKey`と同型） ②`MagiUiState.SaveState`
+新設で保存状態(Dirty/Saving/Saved/Failed)を設定タブへ表示 ③`UndoSnap.label`追加でUndo/Redoのメッセージに
+操作名を表示。エンジン・重みは不変。host JVM 740/740・design_lint.py新規違反0件。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-12（3.528.0＝ユーザー指示「AB評価のフラグはUIに出す」→grillingで確認し「既定OFF
 トグルはUIに残し、AB評価で既定ONへ確定した機構はUIに出さない」と確定。`wideC3nBreakDays`・
 `combineExhaustPairs`（既定OFF）は元々UI実装済みと判明（調査のみ）。`blockSwapC3nFilter`・`lnsAdaptive`
