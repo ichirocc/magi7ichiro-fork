@@ -222,14 +222,14 @@ static bool consIndicesValidN(const MagiProblem& p) {
     return true;
 }
 
-// MirrorCore.weeklyDevOfBucket と同式。
+// MirrorCore.weeklyDevOfBucket と同式。[3.526.0] 厳密目標(合計/7)からの偏差を7倍スケールの整数の
+//   まま扱う（旧: round(平均)は合計が少ないと目標0に丸まり配置非依存の定数になる死角があった）。
 inline long long weeklyDevOfBucket(const int wd[7]) {
-    int sum = 0;
+    long long sum = 0;
     for (int w = 0; w < 7; w++) sum += wd[w];
-    long long tgt = jround((double)sum / 7.0);
     long long d = 0;
-    for (int w = 0; w < 7; w++) d += std::llabs((long long)wd[w] - tgt);
-    return d;
+    for (int w = 0; w < 7; w++) d += std::llabs(7LL * wd[w] - sum);
+    return d / 7;
 }
 
 // C3Run.rowDeficit と同式（行走査で run の不足 L-r を加算）。

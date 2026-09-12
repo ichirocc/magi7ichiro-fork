@@ -120,16 +120,17 @@ class WeeklyFairMarginalTest {
 
     @Test
     fun weeklyMarginalAtMovesBothBucketsOfTheOldAndNewShift() {
-        // [3.345.0] シフト0が月曜(bucket0)に偏り、シフト1は均等。月曜の1日を 0→1 へ移すと
-        //   偏っている側は均され、均等な側は崩れる。両バケットの寄与を足したものが返る。
+        // [3.345.0/3.526.0] シフト0が月曜(bucket0)に偏り、シフト1は均等。月曜の1日を 0→1 へ移すと
+        //   偏っている側は均され、均等な側は崩れる。両バケットの寄与を足したものが返る（返り値は
+        //   weeklyMarginalAt が重み2を適用済み＝raw差分×2）。
         val wd = arrayOf(
-            intArrayOf(3, 0, 0, 0, 0, 0, 0),   // 計3・目標 round(3/7)=0 → dev=3
-            intArrayOf(1, 1, 1, 1, 1, 1, 1),   // 計7・目標 1 → dev=0
+            intArrayOf(3, 0, 0, 0, 0, 0, 0),   // 計3 → dev=|21-3|/7+6*|0-3|/7=(18+18)/7=5
+            intArrayOf(1, 1, 1, 1, 1, 1, 1),   // 計7・均等 → dev=0
         )
-        // 0側: 計2・目標0 → dev=2（-1）／1側: 計8・目標 round(8/7)=1 → 月曜2で dev=1（+1）
-        assertEquals(0L, DestroyRepairMarginalCost.weeklyMarginalAt(wd, 0, 0, 1))
-        // 逆向き（1→0）: 0側は月曜4で計4・目標1 → dev=3+... を実測でなく式で確かめるのは別テストの役目。
-        // ここでは「呼んでも wd を書き換えない」ことだけ固定する。
+        // 0側: 計2 → dev=(|14-2|+6*|0-2|)/7=(12+12)/7=3（-2）／1側: 計8・月曜2 → dev=(|14-8|+6*|7-8|)/7=(6+6)/7=1（+1）
+        // raw差分=-2+1=-1、重み2適用で-2。
+        assertEquals(-2L, DestroyRepairMarginalCost.weeklyMarginalAt(wd, 0, 0, 1))
+        // 呼んでも wd を書き換えないことを固定する。
         assertEquals(3, wd[0][0]); assertEquals(1, wd[1][0])
     }
 
