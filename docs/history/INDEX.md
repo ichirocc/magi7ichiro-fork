@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- 職員一覧をシフト種別/グループと同じ並び替え・削除の形へ統一（3.530.0）。▲▼ボタン→ドラッグハンドル
+  （`ReorderableRows`を`internal`化して再利用）、独立した編集/削除ボタン→行タップ+編集ダイアログ内の
+  削除（`StaffDialog.onDelete`新設）。ユーザー提示デザイン案をgrillingで既存の3.515.6パターンへ統一する
+  形にスコープ確定 → `docs/history/3.4xx.md`
 - 外部仕様書「決定論的修復統合基盤」を評価し3件だけ取り入れ（3.529.0）。SHA-256+TLV正規化・因果証拠
   構造体・新規safety/パッケージ・全操作への汎用Preview化は既存の軽量な仕組み(checkSeq/fixBoardKey/
   FixApplyGate/SaveGate/checkRev)と重複するため不採用。採用: ①applyAlternative()の鮮度チェック追加

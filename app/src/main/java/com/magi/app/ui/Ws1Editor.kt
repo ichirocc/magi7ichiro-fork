@@ -238,13 +238,15 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
     }
 }
 
-/** [3.515.6] ドラッグハンドルの説明文に埋め込む記号。実際のアイコンは [Icons.Filled.DragHandle]。 */
-private const val DRAG_HANDLE_GLYPH = "≡"
+/** [3.515.6] ドラッグハンドルの説明文に埋め込む記号。実際のアイコンは [Icons.Filled.DragHandle]。
+ *  [3.530.0] StaffManageCard.kt から再利用するため internal へ（シフト種別/グループと同じ形に統一）。 */
+internal const val DRAG_HANDLE_GLYPH = "≡"
 
 /** [3.515.6] 一覧行を長押し+ドラッグで並び替える（片手一本指の既定からの明示的な例外。経緯: history 3.515.6）。
- *  掴んだ行だけを指に追従させ、離した位置を行の高さで割った目標位置で [onMove] を1回だけ呼ぶ。 */
+ *  掴んだ行だけを指に追従させ、離した位置を行の高さで割った目標位置で [onMove] を1回だけ呼ぶ。
+ *  [3.530.0] StaffManageCard.kt からも使うため internal。 */
 @Composable
-private fun <T> ReorderableRows(
+internal fun <T> ReorderableRows(
     items: List<T>,
     enabled: Boolean,
     onMove: (from: Int, to: Int) -> Unit,
@@ -335,6 +337,8 @@ private fun GroupDialog(
 internal fun StaffDialog(
     title: String, name0: String, group0: Int, groupKigou: List<String>,
     onOk: (String, Int) -> Unit, onClose: () -> Unit,
+    // [3.530.0] 削除の入口（行から移設・シフト種別/グループと同じ形）。編集時のみ渡す＝追加時はnullで非表示。
+    onDelete: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(name0) }
     var gi by remember { mutableStateOf(group0.coerceIn(0, (groupKigou.size - 1).coerceAtLeast(0))) }
@@ -355,6 +359,7 @@ internal fun StaffDialog(
                 }
             }
         }
+        if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "この職員を削除")
     }
 }
 

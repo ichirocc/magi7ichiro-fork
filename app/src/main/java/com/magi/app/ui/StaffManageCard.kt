@@ -10,11 +10,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -47,15 +51,20 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("職員一覧（${v.staff.size}名）", style = MaterialTheme.typography.titleMedium)
-            v.staff.forEachIndexed { i, st ->
+            Text("タップで編集、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            // [3.530.0] シフト種別/グループ（3.515.6）と同じ形へ統一（経緯: docs/history/3.4xx.md）。
+            ReorderableRows(items = v.staff, enabled = !ui.running, onMove = { from, to -> vm.ws1MoveStaffTo(from, to) }) { i, st, dragHandle ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp)
                         .clickable(enabled = !ui.running) { edit = Triple(i, st.name, st.groupIdx) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = cs.onSurfaceVariant,
+                        modifier = Modifier.size(48.dp).padding(12.dp).then(dragHandle))
                     // [3.483.0 E-4] 旧: 名前列＋スキル▼＋編集＋削除が1行に並び、名前が押し潰されていた。
-                    //   スキル▼はグループと同じ「所属」の情報なので2行目に移し、右端は編集/削除だけにする。
+                    //   スキル▼はグループと同じ「所属」の情報なので2行目に移し、右端は「›」だけにする。
                     Column(Modifier.weight(1f)) {
                         Text(st.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -79,15 +88,7 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                             }
                         }
                     }
-                    // [3.515.3] 並び替え＝勤務表の行順にそのまま反映（経緯: history 3.515.3）。
-                    MoveRowButtons(canUp = i > 0, canDown = i < v.staff.size - 1,
-                        onUp = { vm.ws1MoveStaff(i, -1) }, onDown = { vm.ws1MoveStaff(i, +1) }, enabled = !ui.running)
-                    Spacer(Modifier.width(6.dp))
-                    EditRowButton(onClick = { edit = Triple(i, st.name, st.groupIdx) }, enabled = !ui.running)
-                    if (v.staff.size > 1) {
-                        Spacer(Modifier.width(6.dp))
-                        DeleteRowButton(onClick = { confirmDelete = i }, enabled = !ui.running)
-                    }
+                    Text("›", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant)
                 }
             }
             // [3.409.11] 残り1名のとき削除ボタンが理由なく消える（年間マスター側と同じ対象漏れ）。
@@ -104,8 +105,10 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
             { lines, gi -> lines.forEach { vm.ws1AddStaff(it, gi) }; bulkOpen = false }, { bulkOpen = false })
     }
     edit?.let { (i, nm, gi0) ->
+        // [3.530.0] 削除の入口はシフト種別/グループと同じく編集ダイアログの中（3.515.6と同じ形）。
         StaffDialog("職員の編集（改名・所属）", nm, gi0, v.groups.map { toHankakuKigou(it.kigou) },
-            { n, gi -> vm.ws1EditStaff(i, n, gi); edit = null }, { edit = null })
+            { n, gi -> vm.ws1EditStaff(i, n, gi); edit = null }, { edit = null },
+            onDelete = if (v.staff.size > 1) ({ edit = null; confirmDelete = i }) else null)
     }
     if (addOpen) {
         StaffDialog("入職（職員追加）", "", 0, v.groups.map { toHankakuKigou(it.kigou) },

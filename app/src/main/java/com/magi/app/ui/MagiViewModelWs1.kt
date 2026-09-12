@@ -230,13 +230,18 @@ fun MagiViewModel.ws1RemoveStaff(i: Int) {
     applyStructure(Ws1Ops.removeStaff(st, sched, i))
 }
 
-/** [3.515.3] 職員の並び替え（dir=-1 上へ / +1 下へ）。端では何もしない。 */
-fun MagiViewModel.ws1MoveStaff(i: Int, dir: Int) {
-    val st = state ?: return
-    val sched = currentSchedule ?: return
-    val r = Ws1Ops.moveStaff(st, sched, i, dir)
-    if (r.state === st) return
-    logOp("I", "職員の並び替え: ${opNm(i)} を${if (dir < 0) "上" else "下"}へ")
+/** [3.530.0/ドラッグ&ドロップ] 職員を任意位置へ移動。[ws1MoveShiftTo] と同じ理由・同じ形
+ *  （3.515.3の隣接swap `Ws1Ops.moveStaff` を from→to の方向へ内部で繰り返し適用）。 */
+fun MagiViewModel.ws1MoveStaffTo(from: Int, to: Int) {
+    val st0 = state ?: return
+    val sched0 = currentSchedule ?: return
+    if (from == to || from !in st0.staff.indices || to !in st0.staff.indices) return
+    val name = opNm(from)
+    val dir = if (to > from) 1 else -1
+    var r = Ws1Ops.moveStaff(st0, sched0, from, dir)
+    var pos = from + dir
+    while (pos != to) { r = Ws1Ops.moveStaff(r.state, r.schedule, pos, dir); pos += dir }
+    logOp("I", "職員の並び替え: $name を${from + 1}→${to + 1}番目へ")
     applyStructure(r)
 }
 
