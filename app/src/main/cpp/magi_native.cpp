@@ -275,93 +275,132 @@ long long c3check(const MagiProblem& p, const int* a, const std::vector<C3r>& li
     return sub;
 }
 
+// [3.524.0/backlog#6] fullEvalParts の breakdown 引数のスロット順。Kotlin MirrorKeys.all と
+//   同じ19族・同じ並びにすること（native-parity host harness がこの並びで名前付き比較する）。
+static const char* const kBreakdownNames[19] = {
+    "c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s",
+    "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly",
+};
+static constexpr int kBreakdownCount = 19;
+
 // Evaluator.fullEvalParts の忠実移植。a は S*T の平坦配列。out[0]=hard1, out[1]=soft。
-void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
+// [3.524.0/backlog#6] bd!=nullptr なら族別の生の違反量（重み適用前、kBreakdownNames順）も書く。
+//   既存呼び出し（nullptr）の挙動・戻り値は不変。
+void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long long* bd = nullptr) {
     const int S = p.S, T = p.T, K = p.K;
     long long hard1 = 0, soft = 0;
+    if (bd) for (int i = 0; i < kBreakdownCount; i++) bd[i] = 0;
 
     // c1（canDo ガード＋#fire×重み50、[3.522.0] 30→50。経緯はdocs/history/3.4xx.md）
-    for (const auto& c : p.cons1) {
-        for (int i = 0; i < S; i++) {
-            if (!p.cd(i, c.si)) continue;
-            const int* row = a + (size_t)i * T;
-            for (int j = 0; j <= T - c.d1; j++) {
-                int z = 0;
-                for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
-                if (z < c.d2) soft += 50;
+    {
+        long long raw = 0;
+        for (const auto& c : p.cons1) {
+            for (int i = 0; i < S; i++) {
+                if (!p.cd(i, c.si)) continue;
+                const int* row = a + (size_t)i * T;
+                for (int j = 0; j <= T - c.d1; j++) {
+                    int z = 0;
+                    for (int l = 0; l < c.d1; l++) if (row[j + l] == c.si) z++;
+                    if (z < c.d2) raw++;
+                }
             }
         }
+        soft += raw * 50; if (bd) bd[0] += raw;
     }
 
     // c2（canDo ガード）
-    for (const auto& c : p.cons2) {
-        for (int i = 0; i < S; i++) {
-            if (!p.cd(i, c.si)) continue;
-            const int* row = a + (size_t)i * T;
-            int z = 0;
-            for (int j = 0; j < T; j++) if (row[j] == c.si) z++;
-            soft += (p.quantitativeRangeEval ? c2Amount(z, c.c) : (z < c.c ? 1 : 0)) * 4;  // [3.522.0] c2 1→4
+    {
+        long long raw = 0;
+        for (const auto& c : p.cons2) {
+            for (int i = 0; i < S; i++) {
+                if (!p.cd(i, c.si)) continue;
+                const int* row = a + (size_t)i * T;
+                int z = 0;
+                for (int j = 0; j < T; j++) if (row[j] == c.si) z++;
+                raw += p.quantitativeRangeEval ? c2Amount(z, c.c) : (z < c.c ? 1 : 0);
+            }
         }
+        soft += raw * 4; if (bd) bd[1] += raw;  // [3.522.0] c2 1→4
     }
 
     // c41 / c42（通常群）
-    for (const auto& c : p.cons41) {
-        for (int j = 0; j < T; j++) {
-            int z = 0;
-            for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            soft += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
-        }
-    }
-    for (const auto& c : p.cons42) {
-        for (int j = 0; j < T; j++) {
-            long long n1 = 0, n2 = 0;
-            for (int i = 0; i < S; i++) {
-                int v = a[(size_t)i * T + j];
-                if (p.sgrp[i] == c.g1 && v == c.s1) n1++;
-                if (p.sgrp[i] == c.g2 && v == c.s2) n2++;
+    {
+        long long raw = 0;
+        for (const auto& c : p.cons41) {
+            for (int j = 0; j < T; j++) {
+                int z = 0;
+                for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
+                raw += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
             }
-            soft += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
         }
+        soft += raw; if (bd) bd[6] += raw;
+    }
+    {
+        long long raw = 0;
+        for (const auto& c : p.cons42) {
+            for (int j = 0; j < T; j++) {
+                long long n1 = 0, n2 = 0;
+                for (int i = 0; i < S; i++) {
+                    int v = a[(size_t)i * T + j];
+                    if (p.sgrp[i] == c.g1 && v == c.s1) n1++;
+                    if (p.sgrp[i] == c.g2 && v == c.s2) n2++;
+                }
+                raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
+            }
+        }
+        soft += raw; if (bd) bd[7] += raw;
     }
 
     // c41s / c42s（スキル群）
     // [3.522.0] c41s/c42s 1→6。
-    for (const auto& c : p.cons41s) {
-        for (int j = 0; j < T; j++) {
-            int z = 0;
-            for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            soft += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 6;
-        }
-    }
-    for (const auto& c : p.cons42s) {
-        for (int j = 0; j < T; j++) {
-            long long n1 = 0, n2 = 0;
-            for (int i = 0; i < S; i++) {
-                int v = a[(size_t)i * T + j];
-                if (p.ssk[i] == c.g1 && v == c.s1) n1++;
-                if (p.ssk[i] == c.g2 && v == c.s2) n2++;
+    {
+        long long raw = 0;
+        for (const auto& c : p.cons41s) {
+            for (int j = 0; j < T; j++) {
+                int z = 0;
+                for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
+                raw += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
             }
-            soft += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 6;
         }
+        soft += raw * 6; if (bd) bd[8] += raw;
+    }
+    {
+        long long raw = 0;
+        for (const auto& c : p.cons42s) {
+            for (int j = 0; j < T; j++) {
+                long long n1 = 0, n2 = 0;
+                for (int i = 0; i < S; i++) {
+                    int v = a[(size_t)i * T + j];
+                    if (p.ssk[i] == c.g1 && v == c.s1) n1++;
+                    if (p.ssk[i] == c.g2 && v == c.s2) n2++;
+                }
+                raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
+            }
+        }
+        soft += raw * 6; if (bd) bd[9] += raw;
     }
 
     // c3 族（重み: c3=15 / c3n=HARD / c3m=10 / c3mn=90。[3.522.0] 3/2/30→15/10/90）
-    soft += c3check(p, a, p.cons3, false) * 15;
-    hard1 += c3check(p, a, p.cons3n, true);
-    soft += c3check(p, a, p.cons3m, false) * 10;
-    soft += c3check(p, a, p.cons3mn, true) * 90;
+    { long long raw = c3check(p, a, p.cons3, false); soft += raw * 15; if (bd) bd[2] += raw; }
+    { long long raw = c3check(p, a, p.cons3n, true); hard1 += raw; if (bd) bd[3] += raw; }
+    { long long raw = c3check(p, a, p.cons3m, false); soft += raw * 10; if (bd) bd[4] += raw; }
+    { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * 90; if (bd) bd[5] += raw; }
 
     // pref（実現可能な希望のみ）＋ [3.318.0] groupViol（担当できないシフトに就いているセル）。
     //   MirrorKeys.hard は元から4族（groupViol/c3n/covU/pref）なのに評価器だけ3族で、同じ盤面に
     //   対してチェッカーと評価器が違う hard を返していた。Kotlin Evaluator と同時に揃える。
-    for (int i = 0; i < S; i++) {
-        const int* row = a + (size_t)i * T;
-        for (int j = 0; j < T; j++) {
-            int w = p.wish[(size_t)i * T + j];
-            if (w >= 0 && p.cd(i, w) && row[j] != w) hard1 += 1;
-            int k = row[j];
-            if (k >= 0 && k < K && !p.cd(i, k)) hard1 += 1;
+    {
+        long long rawPref = 0, rawGroupViol = 0;
+        for (int i = 0; i < S; i++) {
+            const int* row = a + (size_t)i * T;
+            for (int j = 0; j < T; j++) {
+                int w = p.wish[(size_t)i * T + j];
+                if (w >= 0 && p.cd(i, w) && row[j] != w) rawPref++;
+                int k = row[j];
+                if (k >= 0 && k < K && !p.cd(i, k)) rawGroupViol++;
+            }
         }
+        hard1 += rawPref + rawGroupViol; if (bd) { bd[12] += rawPref; bd[15] += rawGroupViol; }
     }
 
     // 回数行列 ssn（range/apt/fair が共有）
@@ -375,34 +414,44 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
     }
 
     // range low(120)/high(25) ＋ apt（L1偏差×4）。[3.522.0] low 90→120, apt 1→4。
-    for (int i = 0; i < S; i++) {
-        for (int k = 0; k < K; k++) {
-            int lo = p.rangeLo[(size_t)i * K + k];
-            int hi = p.rangeHi[(size_t)i * K + k];
-            int n = ssn[(size_t)i * K + k];
-            if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) soft += (long long)(lo - n) * 120;
-            if (hi != INT32_MAX && n > hi) soft += (long long)(n - hi) * 25;
-            int t = p.apt[(size_t)i * K + k];
-            if (t >= 0) soft += std::llabs((long long)n - t) * 4;
+    {
+        long long rawLow = 0, rawHigh = 0, rawApt = 0;
+        for (int i = 0; i < S; i++) {
+            for (int k = 0; k < K; k++) {
+                int lo = p.rangeLo[(size_t)i * K + k];
+                int hi = p.rangeHi[(size_t)i * K + k];
+                int n = ssn[(size_t)i * K + k];
+                if (lo != INT32_MIN && lo != 0 && n < lo && p.cd(i, k)) rawLow += (long long)(lo - n);
+                if (hi != INT32_MAX && n > hi) rawHigh += (long long)(n - hi);
+                int t = p.apt[(size_t)i * K + k];
+                if (t >= 0) rawApt += std::llabs((long long)n - t);
+            }
         }
+        soft += rawLow * 120 + rawHigh * 25 + rawApt * 4;
+        if (bd) { bd[13] += rawLow; bd[14] += rawHigh; bd[16] += rawApt; }
     }
 
     // fair（群×担当ONシフト、round(平均) からの L1 偏差）。[3.522.0] 重み1→2。
-    for (int g = 0; g < p.G; g++) {
-        const auto& mem = p.members[g];
-        const int m = (int)mem.size();
-        if (m < 2) continue;
-        for (int k : p.bucket[g]) {
-            int sum = 0;
-            for (int x : mem) sum += ssn[(size_t)x * K + k];
-            long long tgt = jround((double)sum / m);
-            for (int x : mem) soft += std::llabs((long long)ssn[(size_t)x * K + k] - tgt) * 2;
+    {
+        long long raw = 0;
+        for (int g = 0; g < p.G; g++) {
+            const auto& mem = p.members[g];
+            const int m = (int)mem.size();
+            if (m < 2) continue;
+            for (int k : p.bucket[g]) {
+                int sum = 0;
+                for (int x : mem) sum += ssn[(size_t)x * K + k];
+                long long tgt = jround((double)sum / m);
+                for (int x : mem) raw += std::llabs((long long)ssn[(size_t)x * K + k] - tgt);
+            }
         }
+        soft += raw * 2; if (bd) bd[17] += raw;
     }
 
     // weekly（職員×シフト×曜日、round(そのシフトの回数/7) からの L1 偏差）。[3.522.0] 重み1→2。
     // [3.345.0] 休を通常のシフト種として扱う＝勤務/休の二値でなくシフト別に均す（Kotlin と同式）。
     {
+        long long raw = 0;
         std::vector<int> wdk((size_t)K * 7, 0);
         for (int i = 0; i < S; i++) {
             std::fill(wdk.begin(), wdk.end(), 0);
@@ -411,27 +460,30 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2]) {
                 int k = row[j];
                 if (k >= 0 && k < K) wdk[(size_t)k * 7 + (p.dow0 + j) % 7]++;
             }
-            for (int k = 0; k < K; k++) soft += weeklyDevOfBucket(&wdk[(size_t)k * 7]) * 2;
+            for (int k = 0; k < K; k++) raw += weeklyDevOfBucket(&wdk[(size_t)k * 7]);
         }
+        soft += raw * 2; if (bd) bd[18] += raw;
     }
 
     // 被覆（covU=HARD / covO=SOFT, per-cell OR/AND）
-    long long covU = 0;
-    // Kotlin は j→k→i の三重ループだが、dsn[k] を日ごとに1回で数える（結果は同一・O(T*(S+K))）。
-    std::vector<int> dsn(K, 0);
-    for (int j = 0; j < T; j++) {
-        for (int k = 0; k < K; k++) dsn[k] = 0;
-        for (int i = 0; i < S; i++) {
-            int k = a[(size_t)i * T + j];
-            if (k >= 0 && k < K) dsn[k]++;
+    {
+        long long covU = 0, rawCovO = 0;
+        // Kotlin は j→k→i の三重ループだが、dsn[k] を日ごとに1回で数える（結果は同一・O(T*(S+K))）。
+        std::vector<int> dsn(K, 0);
+        for (int j = 0; j < T; j++) {
+            for (int k = 0; k < K; k++) dsn[k] = 0;
+            for (int i = 0; i < S; i++) {
+                int k = a[(size_t)i * T + j];
+                if (k >= 0 && k < K) dsn[k]++;
+            }
+            for (int k = 0; k < K; k++) {
+                covU += p.covUCell(k, j, dsn[k]);
+                // [3.522.0] covO 重み5→10。MirrorKeys.weights["covO"]・Evaluator.kt と同時に変更。
+                rawCovO += p.covOCell(k, j, dsn[k]);
+            }
         }
-        for (int k = 0; k < K; k++) {
-            covU += p.covUCell(k, j, dsn[k]);
-            // [3.522.0] covO 重み5→10。MirrorKeys.weights["covO"]・Evaluator.kt と同時に変更。
-            soft += p.covOCell(k, j, dsn[k]) * 10;
-        }
+        hard1 += covU; soft += rawCovO * 10; if (bd) { bd[10] += covU; bd[11] += rawCovO; }
     }
-    hard1 += covU;
 
     out[0] = hard1;
     out[1] = soft;

@@ -255,21 +255,43 @@ static void runParityLoop(const MagiProblem& p, const std::vector<int>& board, c
 //   直した」意味的乖離（3.345.0 の weekly 定義変更がまさにその形）は**どちらの経路でも検出できなかった**。
 //   実機の番兵は捕まえるが、そのときネイティブは黙って無効化される＝速度が落ちるだけで気づけない。
 //   両側を1つの数字に固定することで、片側だけの変更が必ず CI で落ちる。
+//
+// [3.524.0/backlog#6] expect ファイルに族ごとの行（`c1=115` 等、MirrorKeys.all の19族）があれば
+//   族単位でも突き合わせる（無ければ旧来どおり hard/soft の2値のみ＝後方互換。経緯は docs/history/3.4xx.md）。
 static bool checkCrossLanguage(const MagiProblem& p, const std::vector<int>& board, const char* expectPath) {
     std::ifstream f(expectPath);
     if (!f) { printf("CROSS: cannot open %s\n", expectPath); return false; }
     long long expHard = -1, expSoft = -1;
+    long long expBd[kBreakdownCount]; for (int i = 0; i < kBreakdownCount; i++) expBd[i] = -1;
     std::string line;
     while (std::getline(f, line)) {
         if (line.rfind("hard=", 0) == 0) expHard = atoll(line.c_str() + 5);
         else if (line.rfind("soft=", 0) == 0) expSoft = atoll(line.c_str() + 5);
+        else {
+            for (int i = 0; i < kBreakdownCount; i++) {
+                const std::string prefix = std::string(kBreakdownNames[i]) + "=";
+                if (line.rfind(prefix, 0) == 0) { expBd[i] = atoll(line.c_str() + prefix.size()); break; }
+            }
+        }
     }
     if (expHard < 0 || expSoft < 0) { printf("CROSS: bad expectation file %s\n", expectPath); return false; }
+    const bool hasBreakdown = std::all_of(std::begin(expBd), std::end(expBd), [](long long v) { return v >= 0; });
     long long out[2];
-    fullEvalParts(p, board.data(), out);
-    const bool ok = (out[0] == expHard && out[1] == expSoft);
+    long long bd[kBreakdownCount];
+    fullEvalParts(p, board.data(), out, hasBreakdown ? bd : nullptr);
+    bool ok = (out[0] == expHard && out[1] == expSoft);
     printf("CROSS Kotlin-vs-C++ (%s): C++ hard=%lld soft=%lld / Kotlin hard=%lld soft=%lld -> %s\n",
            expectPath, out[0], out[1], expHard, expSoft, ok ? "MATCH" : "MISMATCH");
+    if (hasBreakdown) {
+        for (int i = 0; i < kBreakdownCount; i++) {
+            if (bd[i] != expBd[i]) {
+                ok = false;
+                printf("CROSS-FAMILY MISMATCH (%s): %s C++=%lld Kotlin=%lld\n",
+                       expectPath, kBreakdownNames[i], bd[i], expBd[i]);
+            }
+        }
+        if (ok) printf("CROSS-FAMILY (%s): all %d families MATCH\n", expectPath, kBreakdownCount);
+    }
     return ok;
 }
 

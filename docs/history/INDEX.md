@@ -1,5 +1,13 @@
 # 作業記録の索引（見出し一覧）
 
+- native-parityの言語跨ぎ照合を族単位へ強化・tools/loopにc2deficit/c42pair追加（3.524.0）。backlog#6:
+  `Evaluator.fullEvalParts`/C++`fullEvalParts`に任意の`breakdown`出力を追加し、19族(MirrorKeys.all)
+  すべてを比較する`full_coverage_state.json`フィクスチャを新設（golden/sample_v6/blocked_covuは3件
+  そろってapt=c41=c41s=c42s=0で死角だった）。backlog#12(b): `tools/loop`のケース生成にcons2不足2件
+  以上・cons42違反ありの2分類を追加し、C2Polish/C42FlowPolishのiter15/18「検証不能」を解消（再測定は
+  両パスとも旧腕と同点、既定OFF維持）
+  → `docs/history/3.4xx.md`
+
 - 3.522.0の3件の既知failureを解決（3.523.0）。PinInvariantTestの真因は`厳密ピン(staffRange lo==hi)`
   ではなく`希望固定(wishLocked)`セルの値保持違反＝`C1WindowPolish.applyC1IndexChainRepair`の候補日
   フィルタに他の全パスが持つ`!p.wishLocked(staff,d)`ガードが欠けていた（重み非依存の旧バグだが

@@ -64,11 +64,14 @@ class Evaluator(private val p: Problem) {
         return v[0] * SCORE_HARD_UNIT + v[1]
     }
 
-    /** [監査#7] hard/soft を分離して返す（soft の SCORE_HARD_UNIT 桁溢れ＝辞書式崩壊の診断用）。fullEval はこの合成で挙動不変。 */
-    fun fullEvalParts(a: Array<IntArray>): LongArray {
+    /** [監査#7] hard/soft を分離して返す（soft の SCORE_HARD_UNIT 桁溢れ＝辞書式崩壊の診断用）。fullEval はこの合成で挙動不変。
+     *  [3.524.0/backlog#6] breakdown を渡すと族別の生の違反量（重み適用前、UnifiedViolationChecker.breakdown と同じ単位）も
+     *  書く。既存呼び出し（null）の挙動・戻り値は不変。 */
+    fun fullEvalParts(a: Array<IntArray>, breakdown: MutableMap<String, Long>? = null): LongArray {
         val S = p.S; val T = p.T; val K = p.K
         var hard1 = 0L
         var soft = 0L
+        fun record(key: String, raw: Long) { breakdown?.let { it[key] = (it[key] ?: 0L) + raw } }
 
         // c1: every window of length day1 must contain >= day2 of shiftIdx
         // [統一] (1)担当不可スタッフは対象外(canDoガード=チェッカーと一致、解消不能な幻の違反を除去)、
@@ -76,89 +79,117 @@ class Evaluator(private val p: Problem) {
         // [外部レビューM2/コメントドリフト是正] 窓の要件(c1)の重みは
         //   4→5(2026-07-20)→15(2026-07-21)→30(3.409.24)とHF77明示数値指示で変遷。ここは実装(30L)は
         //   常に正しく、この行のコメント自体が旧値のまま取り残されていた（実害なし・記述のみ訂正）。
-        for (c in p.cons1) {
-            val d1 = c.day1; val si = c.shiftIdx; val d2 = c.day2
-            for (i in 0 until S) {
-                if (!p.canDo(i, si)) continue
-                var j = 0
-                while (j <= T - d1) {
-                    var z = 0
-                    var l = 0
-                    while (l < d1) { if (a[i][j + l] == si) z++; l++ }
-                    if (z < d2) soft += 50L
-                    j++
+        run {
+            var raw = 0L
+            for (c in p.cons1) {
+                val d1 = c.day1; val si = c.shiftIdx; val d2 = c.day2
+                for (i in 0 until S) {
+                    if (!p.canDo(i, si)) continue
+                    var j = 0
+                    while (j <= T - d1) {
+                        var z = 0
+                        var l = 0
+                        while (l < d1) { if (a[i][j + l] == si) z++; l++ }
+                        if (z < d2) raw++
+                        j++
+                    }
                 }
             }
+            soft += raw * 50L; record("c1", raw)
         }
 
         // c2: per-staff total of a shift must reach count [3.522.0] 重み1→4。
-        for (c in p.cons2) {
-            for (i in 0 until S) {
-                if (!p.canDo(i, c.shiftIdx)) continue   // [監査#5] 担当不可の職員は対象外（チェッカーと同一条件）
-                var z = 0
-                for (j in 0 until T) if (a[i][j] == c.shiftIdx) z++
-                soft += (if (p.quantitativeRangeEval) c2Amount(z, c.count) else if (z < c.count) 1L else 0L) * 4L
+        run {
+            var raw = 0L
+            for (c in p.cons2) {
+                for (i in 0 until S) {
+                    if (!p.canDo(i, c.shiftIdx)) continue   // [監査#5] 担当不可の職員は対象外（チェッカーと同一条件）
+                    var z = 0
+                    for (j in 0 until T) if (a[i][j] == c.shiftIdx) z++
+                    raw += if (p.quantitativeRangeEval) c2Amount(z, c.count) else if (z < c.count) 1L else 0L
+                }
             }
+            soft += raw * 4L; record("c2", raw)
         }
 
         // c41: per-day, count of (group, shift) must lie in [l, u]
-        for (c in p.cons41) {
-            for (j in 0 until T) {
-                var z = 0
-                for (i in 0 until S) if (p.sgrp[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
-                soft += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
+        run {
+            var raw = 0L
+            for (c in p.cons41) {
+                for (j in 0 until T) {
+                    var z = 0
+                    for (i in 0 until S) if (p.sgrp[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
+                    raw += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
+                }
             }
+            soft += raw; record("c41", raw)
         }
 
         // c42: per-day, (g1,s1) co-occurring with (g2,s2) is penalized per pair
-        for (c in p.cons42) {
-            for (j in 0 until T) {
-                var n1 = 0; var n2 = 0
-                for (i in 0 until S) {
-                    if (p.sgrp[i] == c.g1 && a[i][j] == c.s1) n1++
-                    if (p.sgrp[i] == c.g2 && a[i][j] == c.s2) n2++
+        run {
+            var raw = 0L
+            for (c in p.cons42) {
+                for (j in 0 until T) {
+                    var n1 = 0; var n2 = 0
+                    for (i in 0 until S) {
+                        if (p.sgrp[i] == c.g1 && a[i][j] == c.s1) n1++
+                        if (p.sgrp[i] == c.g2 && a[i][j] == c.s2) n2++
+                    }
+                    raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
                 }
-                soft += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
             }
+            soft += raw; record("c42", raw)
         }
 
         // c41s / c42s: スキルグループ版（ssk = スキル群index。既存 sgrp とは独立）。[3.522.0] 重み1→6。
-        for (c in p.cons41s) {
-            for (j in 0 until T) {
-                var z = 0
-                for (i in 0 until S) if (p.ssk[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
-                soft += (if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L) * 6L
-            }
-        }
-        for (c in p.cons42s) {
-            for (j in 0 until T) {
-                var n1 = 0; var n2 = 0
-                for (i in 0 until S) {
-                    if (p.ssk[i] == c.g1 && a[i][j] == c.s1) n1++
-                    if (p.ssk[i] == c.g2 && a[i][j] == c.s2) n2++
+        run {
+            var raw = 0L
+            for (c in p.cons41s) {
+                for (j in 0 until T) {
+                    var z = 0
+                    for (i in 0 until S) if (p.ssk[i] == c.groupIdx && a[i][j] == c.shiftIdx) z++
+                    raw += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
                 }
-                soft += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 6L
             }
+            soft += raw * 6L; record("c41s", raw)
+        }
+        run {
+            var raw = 0L
+            for (c in p.cons42s) {
+                for (j in 0 until T) {
+                    var n1 = 0; var n2 = 0
+                    for (i in 0 until S) {
+                        if (p.ssk[i] == c.g1 && a[i][j] == c.s1) n1++
+                        if (p.ssk[i] == c.g2 && a[i][j] == c.s2) n2++
+                    }
+                    raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
+                }
+            }
+            soft += raw * 6L; record("c42s", raw)
         }
 
         // c3 family — [統一] UnifiedViolationChecker と同じ重みを soft に適用。
         // c3n は forbidden=HARD として hard1(count, ×1e6) のまま。窓マッチは #fire 計上(後述の sub += 1)。
         // [3.522.0] c3=3→15・c3m=2→10・c3mn=30→90（全面見直し、経緯はdocs/history/3.4xx.md）。
-        soft += c3check(a, p.cons3, false) * 15L
-        hard1 += c3check(a, p.cons3n, true)    // forbidden -> display HARD (count)
-        soft += c3check(a, p.cons3m, false) * 10L
-        soft += c3check(a, p.cons3mn, true) * 90L
+        run { val raw = c3check(a, p.cons3, false); soft += raw * 15L; record("c3", raw) }
+        run { val raw = c3check(a, p.cons3n, true); hard1 += raw; record("c3n", raw) }    // forbidden -> display HARD (count)
+        run { val raw = c3check(a, p.cons3m, false); soft += raw * 10L; record("c3m", raw) }
+        run { val raw = c3check(a, p.cons3mn, true); soft += raw * 90L; record("c3mn", raw) }
 
         // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
-        for (i in 0 until S) for (j in 0 until T) {
-            val w = p.wish[i][j]
-            if (w >= 0 && p.canDo(i, w) && a[i][j] != w) hard1 += 1
-            // [3.318.0] groupViol（担当できないシフトに就いているセル）も HARD へ。`MirrorKeys.hard` は
-            //   元から4族（groupViol/c3n/covU/pref）なのに評価器だけ3族で、同じ盤面に対してチェッカーと
-            //   評価器が違う hard を返していた（SA の受理と最終採否が別基準）。実データでは入口の
-            //   hf67HardRepair が群外セルを正規化するため通常 0 に落ちるが、契約の非対称は残っていた。
-            val k = a[i][j]
-            if (k in 0 until K && !p.canDo(i, k)) hard1 += 1
+        run {
+            var rawPref = 0L; var rawGroupViol = 0L
+            for (i in 0 until S) for (j in 0 until T) {
+                val w = p.wish[i][j]
+                if (w >= 0 && p.canDo(i, w) && a[i][j] != w) rawPref++
+                // [3.318.0] groupViol（担当できないシフトに就いているセル）も HARD へ。`MirrorKeys.hard` は
+                //   元から4族（groupViol/c3n/covU/pref）なのに評価器だけ3族で、同じ盤面に対してチェッカーと
+                //   評価器が違う hard を返していた（SA の受理と最終採否が別基準）。実データでは入口の
+                //   hf67HardRepair が群外セルを正規化するため通常 0 に落ちるが、契約の非対称は残っていた。
+                val k = a[i][j]
+                if (k in 0 until K && !p.canDo(i, k)) rawGroupViol++
+            }
+            hard1 += rawPref + rawGroupViol; record("pref", rawPref); record("groupViol", rawGroupViol)
         }
 
         // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low=90/high=25)・
@@ -168,53 +199,68 @@ class Evaluator(private val p: Problem) {
         //   旧: 無ガードの ssn[i][a[i][j]]++ が -1 で ArrayIndexOutOfBoundsException。C++ fullEvalParts
         //   （3.199.0 で全面ガード済＝範囲外セルはスキップ）と同じ意味論へ対称化する。
         for (i in 0 until S) for (j in 0 until T) { val k = a[i][j]; if (k in 0 until K) ssn[i][k]++ }
-        for (i in 0 until S) for (k in 0 until K) {
-            val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
-            val n = ssn[i][k]
-            // [3.522.0] low 90→120。high は3.520.0以来25のまま不変。
-            if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) soft += (lo - n).toLong() * 120L
-            if (hi != Int.MAX_VALUE && n > hi) soft += (n - hi).toLong() * 25L
-            // [統一apt] 適切回数(双方向目標) SOFT・L1偏差|n-t|。UnifiedViolationChecker の "apt" と一致。[3.522.0] 重み1→4。
-            val t = p.apt[i][k]
-            if (t >= 0) soft += kotlin.math.abs(n - t).toLong() * 4L
+        run {
+            var rawLow = 0L; var rawHigh = 0L; var rawApt = 0L
+            for (i in 0 until S) for (k in 0 until K) {
+                val lo = p.rangeLo[i][k]; val hi = p.rangeHi[i][k]
+                val n = ssn[i][k]
+                // [3.522.0] low 90→120。high は3.520.0以来25のまま不変。
+                if (lo != Int.MIN_VALUE && lo != 0 && n < lo && p.canDo(i, k)) rawLow += (lo - n).toLong()
+                if (hi != Int.MAX_VALUE && n > hi) rawHigh += (n - hi).toLong()
+                // [統一apt] 適切回数(双方向目標) SOFT・L1偏差|n-t|。UnifiedViolationChecker の "apt" と一致。[3.522.0] 重み1→4。
+                val t = p.apt[i][k]
+                if (t >= 0) rawApt += kotlin.math.abs(n - t).toLong()
+            }
+            soft += rawLow * 120L + rawHigh * 25L + rawApt * 4L
+            record("low", rawLow); record("high", rawHigh); record("apt", rawApt)
         }
 
         // [統一fair] グループ内公平化 SOFT。群×担当ONシフトごと、メンバー回数の round(平均) からの
         // L1偏差和。同群の職員間で各シフト回数を均す（UnifiedViolationChecker の "fair" と一致）。[3.522.0] 重み1→2。
-        for (g in 0 until p.G) {
-            val mem = p.groupMembers[g]
-            val m = mem.size
-            if (m < 2) continue
-            for (k in p.bucket[g]) {
-                var sum = 0
-                for (x in mem) sum += ssn[x][k]
-                val tgt = Math.round(sum.toDouble() / m).toInt()
-                for (x in mem) soft += kotlin.math.abs(ssn[x][k] - tgt).toLong() * 2L
+        run {
+            var raw = 0L
+            for (g in 0 until p.G) {
+                val mem = p.groupMembers[g]
+                val m = mem.size
+                if (m < 2) continue
+                for (k in p.bucket[g]) {
+                    var sum = 0
+                    for (x in mem) sum += ssn[x][k]
+                    val tgt = Math.round(sum.toDouble() / m).toInt()
+                    for (x in mem) raw += kotlin.math.abs(ssn[x][k] - tgt).toLong()
+                }
             }
+            soft += raw * 2L; record("fair", raw)
         }
 
         // [統一weekly] 7日周期のシフト平準化 SOFT。職員ごと**シフトごと**に、そのシフトが入る日の
         // 曜日別カウントの round(回数/7) からの L1偏差和（UnifiedViolationChecker の "weekly" と一致）。
         // [3.345.0] 休も1シフトとして数える（旧: 勤務日=非休の二値）。[3.522.0] 重み1→2。
-        for (i in 0 until S) {
-            val wd = Array(K) { IntArray(7) }
-            for (j in 0 until T) { val k = a[i][j]; if (k in 0 until K) wd[k][(p.dow0 + j) % 7]++ }
-            for (k in 0 until K) soft += weeklyDevOfBucket(wd[k]).toLong() * 2L
+        run {
+            var raw = 0L
+            for (i in 0 until S) {
+                val wd = Array(K) { IntArray(7) }
+                for (j in 0 until T) { val k = a[i][j]; if (k in 0 until K) wd[k][(p.dow0 + j) % 7]++ }
+                for (k in 0 until K) raw += weeklyDevOfBucket(wd[k]).toLong()
+            }
+            soft += raw * 2L; record("weekly", raw)
         }
 
         // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。共有ヘルパで Δ/Checker と同式。
         //   旧: 総量min（#4のhasP2式）は「日毎OR」の業務意味と不一致（大域コミット強制）だったため置換。
-        var covU = 0L
-        for (j in 0 until T) {
-            for (k in 0 until K) {
-                var dsn = 0
-                for (i in 0 until S) if (a[i][j] == k) dsn++
-                covU += p.covUCell(k, j, dsn)
-                // [3.522.0] covO 重み5→10。MirrorKeys.weights["covO"] と同時に変更（経緯: docs/history/3.4xx.md）。
-                soft += p.covOCell(k, j, dsn).toLong() * 10L
+        run {
+            var covU = 0L; var rawCovO = 0L
+            for (j in 0 until T) {
+                for (k in 0 until K) {
+                    var dsn = 0
+                    for (i in 0 until S) if (a[i][j] == k) dsn++
+                    covU += p.covUCell(k, j, dsn)
+                    // [3.522.0] covO 重み5→10。MirrorKeys.weights["covO"] と同時に変更（経緯: docs/history/3.4xx.md）。
+                    rawCovO += p.covOCell(k, j, dsn).toLong()
+                }
             }
+            hard1 += covU; soft += rawCovO * 10L; record("covU", covU); record("covO", rawCovO)
         }
-        hard1 += covU
 
         return longArrayOf(hard1, soft)
     }
