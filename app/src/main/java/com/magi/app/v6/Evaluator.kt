@@ -71,6 +71,7 @@ class Evaluator(private val p: Problem) {
         val S = p.S; val T = p.T; val K = p.K
         var hard1 = 0L
         var soft = 0L
+        breakdown?.clear()   // C++ 側の bd[i]=0 一括初期化と対称。呼び出し側が使い回した map の残留値を防ぐ。
         fun record(key: String, raw: Long) { breakdown?.let { it[key] = (it[key] ?: 0L) + raw } }
 
         // c1: every window of length day1 must contain >= day2 of shiftIdx

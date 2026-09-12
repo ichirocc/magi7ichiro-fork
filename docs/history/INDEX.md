@@ -1,5 +1,11 @@
 # 作業記録の索引（見出し一覧）
 
+- 3.524.0への/code-review指摘3件を修正（3.525.0）。`Evaluator.fullEvalParts`のbreakdown mapを
+  `clear()`してC++側の初期化と対称化、`NativeParityFixtureTest`の期待値パーサが`#`コメント行で
+  クラッシュしないよう修正、`host_parity_bench.cpp`の族別breakdownが1〜18件だけ揃った壊れたファイルを
+  黙って2値照合へ後退させず fail-loud にした
+  → `docs/history/3.4xx.md`
+
 - native-parityの言語跨ぎ照合を族単位へ強化・tools/loopにc2deficit/c42pair追加（3.524.0）。backlog#6:
   `Evaluator.fullEvalParts`/C++`fullEvalParts`に任意の`breakdown`出力を追加し、19族(MirrorKeys.all)
   すべてを比較する`full_coverage_state.json`フィクスチャを新設（golden/sample_v6/blocked_covuは3件

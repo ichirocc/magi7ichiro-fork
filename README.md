@@ -31,6 +31,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-12（3.525.0＝3.524.0への`/code-review`指摘3件を修正。`Evaluator.fullEvalParts`の
+breakdown mapをC++側と対称に`clear()`、`NativeParityFixtureTest`の期待値パーサが`#`コメント行で落ちない
+よう修正、`host_parity_bench.cpp`の族別breakdownが1〜18件だけの壊れたファイルを黙って2値照合へ後退させず
+fail-loudに。host JVM 740/740・host_parity_bench 4フィクスチャ×19族 全MATCH確認。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-12（3.524.0＝backlog#6/#12(b)。#6: native-parity の言語跨ぎ照合（Kotlin `Evaluator.fullEval`
 vs C++ `fullEvalParts`）を集約値(hard/soft)だけでなく19族の内訳へ強化（`fullEvalParts`に任意の`breakdown`
 出力を追加、Kotlin/C++両側とも既存呼び出しは挙動不変）。golden/sample_v6/blocked_covuの3実データが揃って

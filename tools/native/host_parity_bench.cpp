@@ -275,7 +275,15 @@ static bool checkCrossLanguage(const MagiProblem& p, const std::vector<int>& boa
         }
     }
     if (expHard < 0 || expSoft < 0) { printf("CROSS: bad expectation file %s\n", expectPath); return false; }
-    const bool hasBreakdown = std::all_of(std::begin(expBd), std::end(expBd), [](long long v) { return v >= 0; });
+    const int bdPresent = (int)std::count_if(std::begin(expBd), std::end(expBd), [](long long v) { return v >= 0; });
+    // [3.524.0] 0件(旧来2値)と19件(全族)だけ受理。1〜18件は壊れたファイルの徴候＝黙って2値へ後退せず
+    //   fail-loud にする（--expect の件数不一致と同型の「無言スキップは罠」対策）。
+    if (bdPresent != 0 && bdPresent != kBreakdownCount) {
+        printf("CROSS: %s has a partial family block (%d/%d lines) — write all %d or none\n",
+               expectPath, bdPresent, kBreakdownCount, kBreakdownCount);
+        return false;
+    }
+    const bool hasBreakdown = bdPresent == kBreakdownCount;
     long long out[2];
     long long bd[kBreakdownCount];
     fullEvalParts(p, board.data(), out, hasBreakdown ? bd : nullptr);
