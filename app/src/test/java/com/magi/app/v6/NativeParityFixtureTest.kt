@@ -3,6 +3,7 @@ package com.magi.app.v6
 import com.magi.app.model.StateParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -50,36 +51,56 @@ class NativeParityFixtureTest {
         assertFixtureMatchesEvaluator("/blocked_covu_state.json", "/blocked_covu_eval_expected.txt")
     }
 
-    private fun assertFixtureMatchesEvaluator(stateResource: String, expectResource: String) {
+    /** [3.524.0/backlog#6] 他3件は apt=c41=c41s=c42s=0（一度も発火しない）＝手組みの小さな合成 state で
+     *  19族すべてを非ゼロにした4件目のフィクスチャ（経緯は docs/history/3.4xx.md）。 */
+    @Test
+    fun fullCoverageEvaluatorValueMatchesTheSharedCrossLanguageFixtureAndExercisesAllFamilies() {
+        val breakdown = assertFixtureMatchesEvaluator("/full_coverage_state.json", "/full_coverage_eval_expected.txt")
+        val zero = MirrorKeys.all.filter { (breakdown[it] ?: 0L) == 0L }
+        assertTrue("全19族が非ゼロになるはずが、発火しない族がある: $zero（fixture 側の修正が要る）", zero.isEmpty())
+    }
+
+    private fun assertFixtureMatchesEvaluator(stateResource: String, expectResource: String): Map<String, Long> {
         val json = javaClass.getResourceAsStream(stateResource)?.bufferedReader()?.readText()
         assertNotNull("$stateResource がテストリソースにありません", json)
         val expectText = javaClass.getResourceAsStream(expectResource)?.bufferedReader()?.readText()
         assertNotNull("$expectResource がテストリソースにありません", expectText)
 
-        val expected = expectText!!.lineSequence()
-            .mapNotNull { line ->
-                val t = line.trim()
-                when {
-                    t.startsWith("hard=") -> "hard" to t.removePrefix("hard=").toLong()
-                    t.startsWith("soft=") -> "soft" to t.removePrefix("soft=").toLong()
-                    else -> null
-                }
-            }.toMap()
-        assertEquals("期待値ファイルは hard= と soft= の2行", setOf("hard", "soft"), expected.keys)
+        val expected = HashMap<String, Long>()
+        expectText!!.lineSequence().forEach { line ->
+            val t = line.trim()
+            val eq = t.indexOf('=')
+            if (eq > 0) expected[t.substring(0, eq)] = t.substring(eq + 1).toLong()
+        }
+        assertTrue("期待値ファイルに hard=/soft= が無い（$expectResource）", "hard" in expected && "soft" in expected)
+        // [3.524.0] 族の行（MirrorKeys.all の19キー）はあれば全部揃っていること＝一部だけの部分照合を防ぐ。
+        val bdKeys = expected.keys - setOf("hard", "soft")
+        assertTrue(
+            "期待値ファイルの族の行が19族の一部だけ（$expectResource）。全部揃えるか1つも書かないこと: $bdKeys",
+            bdKeys.isEmpty() || bdKeys == MirrorKeys.all.toSet(),
+        )
 
         val st = StateParser.parse(json!!)!!
         val p = Problem(st)
         val sched = Array(st.schedule.size) { i -> st.schedule[i].toIntArray() }
         val ev = Evaluator(p)
-        val (hard, soft) = ev.split(ev.fullEval(sched))
+        val breakdown = HashMap<String, Long>()
+        val parts = ev.fullEvalParts(sched, breakdown)
 
         assertEquals(
             "Kotlin の hard が固定値と違う（$expectResource）。C++ 側も同時に直したうえで期待値ファイルを更新すること",
-            expected["hard"], hard,
+            expected["hard"], parts[0],
         )
         assertEquals(
             "Kotlin の soft が固定値と違う（$expectResource）。C++ 側も同時に直したうえで期待値ファイルを更新すること",
-            expected["soft"], soft,
+            expected["soft"], parts[1],
         )
+        for (k in bdKeys) {
+            assertEquals(
+                "Kotlin の族別内訳「$k」が固定値と違う（$expectResource）。C++ 側も同時に直したうえで期待値ファイルを更新すること",
+                expected[k], breakdown[k] ?: 0L,
+            )
+        }
+        return breakdown
     }
 }

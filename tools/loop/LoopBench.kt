@@ -7,12 +7,14 @@ import java.lang.management.MemoryType
 import kotlin.math.ceil
 import kotlin.random.Random
 
-/** ケース生成: 30 ケース＝規模(小/中/大)×分類(正常/過密/充足不能/希望集中/禁止連集中)×2。seed 固定で決定的。 */
+/** ケース生成: 42 ケース＝規模(小/中/大)×分類(正常/過密/充足不能/希望集中/禁止連集中/c2不足2件以上/c42違反あり)×2。
+ *  seed 固定で決定的。[3.524.0/backlog#12(b)] c2deficit・c42pair は C2Polish/C42FlowPolish の「検証不能」
+ *  （旧: cons2不足最大1件・cons42空）を解消するための追加（既存5分類は不変。経緯は docs/history/3.4xx.md）。 */
 object Cases {
     data class Spec(val id: String, val size: String, val cat: String, val s: Int, val t: Int, val seed: Long, val budgetMs: Long)
     val specs: List<Spec> = buildList {
         val sizes = listOf(Triple("small", 8, 14), Triple("medium", 16, 28), Triple("large", 30, 31))
-        val cats = listOf("normal", "dense", "infeasible", "wishheavy", "forbidden")
+        val cats = listOf("normal", "dense", "infeasible", "wishheavy", "forbidden", "c2deficit", "c42pair")
         var n = 0
         for ((sz, s, t) in sizes) for (c in cats) repeat(2) { k ->
             n++
@@ -55,14 +57,20 @@ object Cases {
         if (sp.cat == "forbidden") { cons3n.add(C3Row(listOf("C", "B"))); cons3n.add(C3Row(listOf("B", "B", "B"))); cons3n.add(C3Row(listOf("A", "B", "A"))); cons3n.add(C3Row(listOf("C", "C", "C"))) }
         val cons3mn = listOf(C3Row(listOf("B", "休", "B")))
         val cons41 = listOf(C41Row("V", "B", "1", "2"))
-        val cons2 = listOf(C2Row("B", "1"))
+        // [3.524.0/backlog#12(b)] c2deficit: 平均達成数(needB*T/S)より3高い目標にし、大半の職員で不足2件以上を作る
+        //   （既定の "1" は最大不足1件でC2Polishのバッチ化優位性を試せなかった＝iter15検証不能）。
+        val c2Count = if (sp.cat == "c2deficit") maxOf(3, needB * T / maxOf(S, 1) + 3) else 1
+        val cons2 = listOf(C2Row("B", "$c2Count"))
+        // [3.524.0/backlog#12(b)] c42pair: V/早番(C) と N/夜勤(B) の同日共起を禁止（両方担当可・cons41のV/B強制とは
+        //   独立のシフト対）にして実際の c42 違反を作る（既定は cons42 空＝C42FlowPolishを一度も検証できなかった＝iter18検証不能）。
+        val cons42 = if (sp.cat == "c42pair") listOf(C42Row("V", "N", "C", "B")) else emptyList()
         val start = "2026-10-01"
         val end = java.time.LocalDate.parse(start).plusDays((T - 1).toLong()).toString()
         val schedule = List(S) { List(T) { 0 } }
         return MagiState(startDate = start, endDate = end, shifts = shifts2, groups = groups, staff = staff, use2Patterns = false,
             groupShift = groupShift, groupShiftApt = List(2) { List(4) { "" } }, schedule = schedule, wishes = wishes, staffRange = staffRange,
             needDay1 = needDay1, needDay2 = emptyMap(), cons1 = cons1, cons2 = cons2, cons3 = emptyList(), cons3n = cons3n,
-            cons3m = emptyList(), cons3mn = cons3mn, cons41 = cons41, cons42 = emptyList())
+            cons3m = emptyList(), cons3mn = cons3mn, cons41 = cons41, cons42 = cons42)
     }
 }
 

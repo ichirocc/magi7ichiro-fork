@@ -31,6 +31,16 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-12（3.524.0＝backlog#6/#12(b)。#6: native-parity の言語跨ぎ照合（Kotlin `Evaluator.fullEval`
+vs C++ `fullEvalParts`）を集約値(hard/soft)だけでなく19族の内訳へ強化（`fullEvalParts`に任意の`breakdown`
+出力を追加、Kotlin/C++両側とも既存呼び出しは挙動不変）。golden/sample_v6/blocked_covuの3実データが揃って
+apt=c41=c41s=c42s=0（どちらの側にバグがあっても集約値・族単位のどちらでも気づけない死角）と判明したため、
+19族すべてを非ゼロにした`full_coverage_state.json`を4件目のフィクスチャとして追加。#12(b): `tools/loop`の
+合成ケースにcons2不足2件以上(`c2deficit`)・cons42違反あり(`c42pair`)の2分類を追加（42ケースへ）し、
+`C2Polish`/`C42FlowPolish`のiter15/18「検証不能」を解消。小/中/大の各カテゴリ・5seed のスコープ付き
+再測定では両パスとも旧腕と完全同点（新規に置いた違反は一般探索の段階で解消されており、専用研磨に
+残作業が無い）＝「検証不能」から「実測して無風」という結論に前進、既定OFFは維持。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-11（3.523.0＝3.522.0で既知の問題としてmainマージした3テスト失敗を解決。
 `PinInvariantTest`の真因は厳密ピン(staffRange lo==hi)ではなく希望固定(wishLocked)セルの値保持違反で、
 `C1WindowPolish.applyC1IndexChainRepair`の候補日フィルタに他の全パス同型の`!p.wishLocked`ガードが
