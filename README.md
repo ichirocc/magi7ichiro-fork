@@ -31,6 +31,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-12（3.528.0＝ユーザー指示「AB評価のフラグはUIに出す」→grillingで確認し「既定OFF
+トグルはUIに残し、AB評価で既定ONへ確定した機構はUIに出さない」と確定。`wideC3nBreakDays`・
+`combineExhaustPairs`（既定OFF）は元々UI実装済みと判明（調査のみ）。`blockSwapC3nFilter`・`lnsAdaptive`
+（3.518.0でAB評価により既定ON昇格済み）のUIスイッチを`MagiSetupCards.kt`の`OptimizationTuningSection`
+から削除（opt-outフラグ自体は温存）。エンジン・重みは不変。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-12（3.527.0＝日付ヘッダーに人員過剰バッジ「▲N」を新設（ユーザー明示指示）。既存
 「▼N」（人員不足）と対称に`V6PortAnalyzer.V6DayRisk.surplus`を新設し、同じ行に並べて表示（grillingで
 配置確認、ヘッダー高さ・レイアウトは不変）。実データで12日A4のsurplus=1を確認。host JVM 740/740・

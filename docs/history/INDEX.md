@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- 設定タブの既定OFFトグルはUIに残し、AB評価で既定ONへ確定した機構(blockSwapC3nFilter/lnsAdaptive)は
+  UI表示から外す（3.528.0）。opt-outフラグ自体は温存。ユーザー指示「AB評価で確定した既定Onのフラグは
+  UIに表示しない」→ `docs/history/3.4xx.md`
 - 日付ヘッダーに人員過剰バッジ「▲N」を新設（3.527.0）。既存「▼N」（人員不足）と対称。
   `V6PortAnalyzer.V6DayRisk.surplus`新設・`DayHeader`（MagiScheduleViews.kt）で同じ行に並べて表示
   （ユーザー明示指示、grillingで配置確認）。実データで12日A4 surplus=1を確認
