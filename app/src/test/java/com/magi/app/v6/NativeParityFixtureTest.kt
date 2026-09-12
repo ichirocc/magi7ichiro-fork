@@ -69,6 +69,7 @@ class NativeParityFixtureTest {
         val expected = HashMap<String, Long>()
         expectText!!.lineSequence().forEach { line ->
             val t = line.trim()
+            if (t.isEmpty() || t.startsWith("#")) return@forEach   // 空行・コメント行は非対象（数値以外は無視）
             val eq = t.indexOf('=')
             if (eq > 0) expected[t.substring(0, eq)] = t.substring(eq + 1).toLong()
         }

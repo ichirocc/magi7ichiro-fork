@@ -642,8 +642,10 @@ fun normalizeSchedule(schedule: Array<IntArray>, p: Problem): Array<IntArray> = 
     }
 }
 
-/** [統一weekly] 曜日バケット(size 7)の平準化偏差 = round(平均) からの L1 偏差和。
- *  Evaluator / DeltaEvaluator / UnifiedViolationChecker の "weekly" 共通ソース（3面のドリフト防止）。 */
+/** [統一weekly/3.526.0] 曜日バケット(size 7)の平準化偏差 = 厳密目標(合計/7)からの偏差を7倍スケールの
+ *  整数のまま扱う(dev=Σ|7×回数−合計|÷7)。旧: round(平均)は合計が少ないと目標0に丸まり配置非依存の
+ *  定数になる死角があった（HF77指示、経緯はdocs/history/3.4xx.md）。`weeklyFloorOfCount`は最良配置での
+ *  値が旧式と一致するため据え置き。Evaluator / DeltaEvaluator / UnifiedViolationChecker の共通ソース。 */
 /**
  * [3.355.0] 回数 c を7曜日へどう配っても消せない weekly 偏差の下限。
  *
@@ -660,10 +662,9 @@ fun weeklyFloorOfCount(c: Int): Int {
 fun weeklyDevOfBucket(wd: IntArray): Int {
     var sum = 0
     for (w in wd) sum += w
-    val tgt = Math.round(sum.toDouble() / 7.0).toInt()
     var d = 0
-    for (w in wd) d += kotlin.math.abs(w - tgt)
-    return d
+    for (w in wd) d += kotlin.math.abs(7 * w - sum)
+    return d / 7
 }
 
 fun countMatrix(p: Problem, schedule: Array<IntArray>): Array<IntArray> {

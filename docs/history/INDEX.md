@@ -1,5 +1,17 @@
 # 作業記録の索引（見出し一覧）
 
+- weekly（曜日平準化）の指標式を再定義（3.526.0）。旧`round(平均)`式は合計3回以下だと目標が0に丸まり
+  「配置に関わらず偏差が合計回数のまま不変」＝同一曜日集中を検出できない死角があった（実データ調査で
+  発覚）。新式`dev=Σ|7×曜日回数-合計|÷7`へ変更（HF77明示指示、重みは不変）。Kotlin/C++両方の
+  `weeklyDevOfBucket`のみ変更・増分コスト計算は自動追従。golden/sample_v6/sept2026の期待値を更新
+  → `docs/history/3.4xx.md`
+
+- 3.524.0への/code-review指摘3件を修正（3.525.0）。`Evaluator.fullEvalParts`のbreakdown mapを
+  `clear()`してC++側の初期化と対称化、`NativeParityFixtureTest`の期待値パーサが`#`コメント行で
+  クラッシュしないよう修正、`host_parity_bench.cpp`の族別breakdownが1〜18件だけ揃った壊れたファイルを
+  黙って2値照合へ後退させず fail-loud にした
+  → `docs/history/3.4xx.md`
+
 - native-parityの言語跨ぎ照合を族単位へ強化・tools/loopにc2deficit/c42pair追加（3.524.0）。backlog#6:
   `Evaluator.fullEvalParts`/C++`fullEvalParts`に任意の`breakdown`出力を追加し、19族(MirrorKeys.all)
   すべてを比較する`full_coverage_state.json`フィクスチャを新設（golden/sample_v6/blocked_covuは3件
