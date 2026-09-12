@@ -1,5 +1,11 @@
 # 作業記録の索引（見出し一覧）
 
+- 3.522.0の3件の既知failureを解決（3.523.0）。PinInvariantTestの真因は`厳密ピン(staffRange lo==hi)`
+  ではなく`希望固定(wishLocked)`セルの値保持違反＝`C1WindowPolish.applyC1IndexChainRepair`の候補日
+  フィルタに他の全パスが持つ`!p.wishLocked(staff,d)`ガードが欠けていた（重み非依存の旧バグだが
+  重み表全面見直しで探索経路が変わり顕在化）。修正して候補から除外。CombinatorialRepairTest/
+  ViolationComponentRepairTestはcons41を4重複させ「単独不採用・結合で採用」の性質を復元
+  → `docs/history/3.4xx.md`
 - 重み表の全面見直し（3.522.0、HF77明示指示）。tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定:
   groupViol/covU/c3n/pref(HARD)を10000/8000/7000/9000→11000/10000/9000/8000へ再配分、
   low/c1/c3/c3m/c3mn/c2/c41s/c42s を90/30/3/2/30/1/1/1→120/50/15/10/90/4/6/6、apt/fair/weeklyを1→4/2/2、
