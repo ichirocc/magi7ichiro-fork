@@ -184,12 +184,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // [3.485.0] 保存の世代（main で採番）と、古い世代の書き込みを捨てるゲート（SaveGate の KDoc 参照）。
     private var saveGen = 0
     private val saveGate = com.magi.app.work.SaveGate()
-    private data class UndoSnap(val st: MagiState, val sched: Array<IntArray>)
+    // [3.529.0/外部仕様書取り入れ] label は「この snap の後に行われた操作」の名前＝undo() が拾って
+    //   「元に戻す: <label>」に使う。redo() へ渡すときも同じ label を引き継ぐ（同じ操作を指すため）。
+    private data class UndoSnap(val st: MagiState, val sched: Array<IntArray>, val label: String? = null)
     private val undoStack = ArrayDeque<UndoSnap>()
     private val redoStack = ArrayDeque<UndoSnap>()   // [Web反映] undo で退避→redo で復元（手動修正ループ）
-    private fun snapNow(): UndoSnap? {
+    private fun snapNow(label: String? = null): UndoSnap? {
         val st = state ?: return null; val sc = currentSchedule ?: return null
-        return UndoSnap(st, Array(sc.size) { sc[it].clone() })
+        return UndoSnap(st, Array(sc.size) { sc[it].clone() }, label)
     }
 
     // ===== プロセス強制終了の耐性: 実行中マーカー（中断検知 / 仕様書 §3.4 補完） =====
@@ -433,7 +435,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sched0 = currentSchedule ?: return
         if (runBlockedByInFlight("バックグラウンド最適化の開始")) return
         if (!ensureValidForRun(st0, sched0)) return
-        pushUndo()
+        pushUndo("バックグラウンド最適化")
         OptimizationRepository.clear()
         // [3.327.0/外部レビュー High3] この実行の識別子を先に確定する。ファイル名は固定なので、これが無いと
         //   置き換えられた旧実行が新実行の入力を消したり、別データの結果を書き残したりできてしまう。
@@ -608,18 +610,21 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun autoSave() {
         if (!hydrated) return
+        _ui.update { it.copy(saveState = SaveState.Dirty) }   // [3.529.0] SaveState の KDoc 参照
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             kotlinx.coroutines.delay(1200)
             val gen = ++saveGen   // main で採番＝exportJson の時点の状態順
             val json = exportJson() ?: return@launch
+            _ui.update { it.copy(saveState = SaveState.Saving) }
             val ok = withContext(Dispatchers.IO) {
                 saveGate.writeIfLatest(gen) {
                     runCatching {
                         com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
                     }.getOrDefault(false)
                 }
-            } ?: return@launch   // より新しい世代が先に書かれた＝この世代は捨てる（通知しない）
+            } ?: return@launch   // より新しい世代が先に書かれた＝この世代は捨てる（通知しない・状態も上書きしない）
+            _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
             reportNonAtomicSave()   // [3.428.0/#7] 記録は **main へ戻ってから**（下の KDoc 参照）
             reportAutoSave(ok)
         }
@@ -670,6 +675,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val t0 = System.nanoTime()
         val gen = ++saveGen
         val json = exportJson() ?: return
+        _ui.update { it.copy(saveState = SaveState.Saving) }
         // [3.410.0/U-03] 即時保存も同じ扱い（原子書き込み＋失敗の通知）。
         // saveNow は同期（main）なので旗を立てたその場で記録して構わない。
         // [3.485.0] 走行中の自動保存とはゲートのロックで直列化（同期呼出しの世代は常に最新＝捨てられない）。
@@ -678,6 +684,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
             }.getOrDefault(false)
         } ?: true
+        _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
         reportNonAtomicSave()
         reportAutoSave(ok)
         // [賢い修正・saveNowメインスレッドI/O] 意図的な同期I/O（上記 SAVE_NOW_SLOW_MS の KDoc参照）を
@@ -686,15 +693,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (ms >= SAVE_NOW_SLOW_MS) logOp("W", "即時保存に${ms}ms（想定より遅い。端末のストレージ負荷をご確認ください）")
     }
 
-    private fun pushUndo() {
-        val snap = snapNow() ?: return
+    private fun pushUndo(label: String? = null) {
+        val snap = snapNow(label) ?: return
         undoStack.addLast(snap)
         while (undoStack.size > 30) undoStack.removeFirst()
         redoStack.clear()   // 新しい操作は redo 履歴を無効化（標準的な undo/redo 挙動）
         // [3.475.0/論理監査] 盤面/設定が変わる操作は必ずここを通る＝改善提案（別の盤面で計算した差分）を
         //   その場で無効化する。旧: 提案は findFixSuggestions と applyFixSuggestion でしか書き換えられず、
         //   セル編集・取込・職員削除のあとも古い提案が表示され、適用時に別セル/別職員へ書いていた。
-        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList()) }
+        // [3.529.0/外部仕様書取り入れ] 「他の案」も同根で無効化する（旧: fixSuggestions だけ外していた）。
+        alternativeScheds = emptyList()
+        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), alternatives = emptyList()) }
     }
 
     private fun clearUndo() {
@@ -707,15 +716,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun undo() {
         if (job?.isActive == true || optimizeInFlight()) return   // [3.328.0] 背景の最適化中も抑止（job は前景のみ）
         val snap = undoStack.removeLastOrNull() ?: return
-        snapNow()?.let { redoStack.addLast(it) }   // [Web反映] 現在をやり直し用に退避
+        snapNow(snap.label)?.let { redoStack.addLast(it) }   // [Web反映] 現在をやり直し用に退避（同じ操作名を引き継ぐ）
         state = snap.st
         currentSchedule = Array(snap.sched.size) { snap.sched[it].clone() }
         // [3.500.1/外部レビュー] 元に戻すは手操作＝「計算済み」ではない。前の結果盤面と改善提案はこの盤面とは別の実体なので外す
         //   （提案は 3.475.0 の指紋照合でも弾かれるが、画面に古い候補を残さない）。
         resultSchedule = null
+        alternativeScheds = emptyList()
+        val label = snap.label
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
-            engineRan = false, fixSuggestions = emptyList(), message = "1つ前に戻しました") }
-        logOp("I", "元に戻す")
+            engineRan = false, fixSuggestions = emptyList(), alternatives = emptyList(),
+            message = if (label != null) "元に戻す: $label" else "1つ前に戻しました") }
+        logOp("I", "元に戻す" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
         autoSave()
     }
@@ -724,13 +736,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun redo() {
         if (job?.isActive == true || optimizeInFlight()) return   // [3.328.0] 背景の最適化中も抑止（job は前景のみ）
         val snap = redoStack.removeLastOrNull() ?: return
-        snapNow()?.let { undoStack.addLast(it) }
+        snapNow(snap.label)?.let { undoStack.addLast(it) }
         state = snap.st
         currentSchedule = Array(snap.sched.size) { snap.sched[it].clone() }
         resultSchedule = null   // [3.500.1] undo() と同じ理由
+        alternativeScheds = emptyList()
+        val label = snap.label
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
-            engineRan = false, fixSuggestions = emptyList(), message = "やり直しました") }
-        logOp("I", "やり直し")
+            engineRan = false, fixSuggestions = emptyList(), alternatives = emptyList(),
+            message = if (label != null) "やり直す: $label" else "やり直しました") }
+        logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
         autoSave()
     }
@@ -1076,7 +1091,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         if (!ensureValidForRun(st, sched)) return
-        pushUndo()
+        pushUndo("下書き作成")
         _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, message = "下書きをつくっています…") }
         // [3.404.0] 完了時に currentSchedule/state を丸ごと差し替えるので、その間の編集を止める旗を立てる。
         //   旧: `running=true`（画面は全ロック）なのに `optimizeInFlight()` は false のままで、
@@ -1206,7 +1221,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sched0 = currentSchedule ?: return
         if (runBlockedByInFlight("勤務表の作成")) return
         if (!ensureValidForRun(st0, sched0)) return
-        pushUndo()
+        pushUndo("勤務表の作成")
         val sig = "${_ui.value.budgetSec}|${_ui.value.workers}|${_ui.value.v6Algorithm}|${_ui.value.softPolish}"
         val hint = if (sig == lastSettingsSig && lastResultHard > 0L)
             "前回と同じ設定での再実行です。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
@@ -1521,7 +1536,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sched0 = currentSchedule ?: return
         if (runBlockedByInFlight("仕上げ最適化の開始")) return
         if (!ensureValidForRun(st0, sched0)) return
-        pushUndo()
+        pushUndo("仕上げ最適化")
         writeRunMarker("fg")   // [監査A8]
         _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, liveSchedule = emptyList(), message = "自動で整えています…") }
         logOp("I", "ソフト研磨 開始 (予算${_ui.value.budgetSec}s)")
@@ -1710,7 +1725,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
         val p = Problem(st)
-        pushUndo()
+        pushUndo("希望を反映")
         var applied = 0
         var oos = 0
         for ((key, k) in st.wishes) {
@@ -1742,6 +1757,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private var alternativeScheds: List<Array<IntArray>> = emptyList()
+    // [3.529.0/外部仕様書取り入れ] 「他の案」を計算したときの盤面/設定の指紋。fixBoardKey/fixStateKey と
+    //   同じ手法（適用時に照合し、その間の手動編集による上書きを防ぐ）。旧: 次元（職員数×期間）しか
+    //   見ておらず、同じ次元のままセルだけ編集した直後に別案を適用すると無警告でその編集を消していた。
+    private var altBoardKey = 0L
+    private var altStateKey = 0L
 
     /** 直近の並列最適化で得た「他の案」を取り込み、サマリをUIへ反映。 */
     /** [3.335.0/外部レビュー P1] 「他の案」は可変 static でなく `handleOptimize` の返り値から受け取る
@@ -1750,6 +1770,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         val alts = source.map { it.copy2D() }
         alternativeScheds = alts
+        altBoardKey = currentSchedule?.let { boardKey(it) } ?: 0L
+        altStateKey = stateKey(st)
         // [Main負荷回避] 他案（最大3件）の違反チェックは同期CPU → Default で実行してから反映。
         val summaries = withContext(Dispatchers.Default) {
             alts.mapIndexed { idx, sch ->
@@ -1777,7 +1799,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             logOp("W", "他の案 ${i + 1}: 職員数/期間が今のデータと違うため適用せず")
             return
         }
-        pushUndo()
+        // [3.529.0/外部仕様書取り入れ] 次元は合っていても、案を計算した後に盤面/設定が変わっていれば拒否。
+        val curSched = currentSchedule
+        if (altBoardKey != 0L && curSched != null && (altBoardKey != boardKey(curSched) || altStateKey != stateKey(st))) {
+            alternativeScheds = emptyList()
+            _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
+                message = "その後に勤務表か設定が変わったため、この案は適用できません。もう一度計算してください") }
+            logOp("W", "他の案 ${i + 1}: 案の計算後に盤面/設定が変わったため適用せず")
+            return
+        }
+        // [3.529.0/外部仕様書取り入れ] pushUndo() が alternativeScheds/ui.alternatives を丸ごと外す
+        //   （残りの案も今適用した盤面に対しては古いため。fixSuggestions と同じ形）。
+        pushUndo("他の案 ${i + 1} を適用")
         currentSchedule = sch
         resultSchedule = sch
         state = st.withSchedule(sch)
@@ -1825,7 +1858,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (i !in sched.indices || j !in sched[i].indices) return
         if (rejectUnknownShift(st, shift)) return
         if (sched[i][j] == shift) return
-        pushUndo()
+        pushUndo("セル編集")
         sched[i][j] = shift
         currentSchedule = sched
         state = st.withSchedule(sched)
@@ -1852,7 +1885,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         for ((i, j) in cells) {
             if (i !in sched.indices || j !in sched[i].indices) continue
             if (sched[i][j] == shift) continue
-            if (first) { pushUndo(); first = false }
+            if (first) { pushUndo("複数セルの一括編集"); first = false }
             sched[i][j] = shift
             changed++
         }
@@ -1974,7 +2007,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun mutateConstraints(newState: MagiState?) {
         val ns = newState ?: return
         if (structuralEditBlocked()) return
-        pushUndo()
+        pushUndo("制約の変更")
         state = ns
         // [3.222.0, 実機バグ修正「回避の並びなどが削除できない」] constraintsEdited が既に true だと
         //   copy が同値でStateFlowがemitせず（3.185.0/3.189.0と同型）、ConstraintsCard/SkillConstraintsCard
@@ -2003,7 +2036,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     internal fun applyStructure(ns: MagiState) {
         if (structuralEditBlocked()) return
-        pushUndo()
+        pushUndo("設定の変更")
         state = ns
         // [再構成保証] editRev を必ず増やして distinct な UiState を emit（structureEdited 既true時の非emit＋
         //   currentSchedule=null 時の refreshCheck 早期return で編集画面が再構成されない「+/-で数字が変わらない」修正）。
@@ -2021,7 +2054,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      */
     internal fun applyStructureWithMessage(ns: MagiState, doneMessage: String) {
         if (structuralEditBlocked()) return
-        pushUndo()
+        pushUndo(doneMessage)
         state = ns
         autoSave()
         val sched = currentSchedule?.copy2D()
@@ -2268,7 +2301,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 message = "この提案は見送りました（$why）。「直し方を探す」で探し直してください") }
             return
         }
-        pushUndo()
+        pushUndo(s.label)
         val applied = gate.schedule
         currentSchedule = applied
         state = st.withSchedule(applied)
@@ -2286,7 +2319,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     internal fun applyStructure(r: Ws1Result) {
         if (structuralEditBlocked()) return
-        pushUndo()
+        pushUndo("編集タブの変更")
         state = r.state
         // [review 4b] Ws1Result の schedule を防御コピーして取り込む。Undo は pushUndo() の
         // 事前クローンで保護されるが、currentSchedule を以降 in-place 編集する経路があるため、
@@ -2303,7 +2336,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   ガードが無かった**。通るのは apt全リセットと職員一覧CSV取込で、後者は `currentSchedule` ごと
         //   差し替えるため、最適化中に到達すると 3.161.0 の「別名共有で編集が消える」クラスに触れる。
         if (structuralEditBlocked()) return
-        pushUndo()
+        pushUndo(doneMessage)
         state = r.state
         val sched = r.schedule.copy2D()
         currentSchedule = sched
@@ -2401,7 +2434,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         else "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
                     return@launch
                 }
-                pushUndo()
+                pushUndo("CSV取込")
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
                 resultSchedule = res.schedule.copy2D()

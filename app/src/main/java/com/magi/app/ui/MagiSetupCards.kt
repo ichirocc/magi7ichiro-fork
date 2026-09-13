@@ -315,15 +315,8 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             }
             Switch(checked = ui.nativeParity, onCheckedChange = { vm.setNativeParity(it) }, enabled = !ui.running && ui.nativeAccel)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("禁止連続の事前フィルタ")
-                Text("期間まるごとの入れ替えを試すとき、禁止の並びを新しく作る案を最初から候補にしません。" +
-                    "できあがる勤務表は同じで（そういう案は最後に必ず却下されるため）、無駄な検査を省くぶんだけ速くなります。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.blockSwapC3nFilter, onCheckedChange = { vm.setBlockSwapC3nFilter(it) }, enabled = !ui.running)
-        }
+        // [3.528.0/ユーザー指示] AB評価で既定ONへ確定した機構（blockSwapC3nFilter・lnsAdaptive）は
+        //   opt-outスイッチ自体は残すがUIには出さない。UIに出すのは既定OFFのまま据え置いたトグルのみ。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("禁止連続の崩し範囲")
@@ -352,8 +345,8 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
         }
         // [3.514.0/3.519.0訂正] 個々の手はisBetterゲートを通るが、探索経路が変わるため最終盤面が
         // 別の局所解に着地することがあり「結果は絶対に悪化しない」は正確でなかった（iter24計測で
-        // combineExhaustPairsに退行1件を確認して訂正）。lnsAdaptiveは既定ON（3.518.0）、
-        // combineExhaustPairsは既定OFFで確定（3.519.0、根拠は docs/algorithm_portfolio.md）。
+        // combineExhaustPairsに退行1件を確認して訂正）。combineExhaustPairsは既定OFFで確定
+        // （3.519.0、根拠は docs/algorithm_portfolio.md）。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("職員どうしの交換探索を粘り強く")
@@ -361,14 +354,6 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.combineExhaustPairs, onCheckedChange = { vm.setCombineExhaustPairs(it) }, enabled = !ui.running)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("一括見直しの時間配分を自動調整")
-                Text("個人回数・期間の一括見直しにかける時間を、改善が続く間だけ延ばします。ほとんどの場合は結果を変えずに高速化します（既定ON）。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.lnsAdaptive, onCheckedChange = { vm.setLnsAdaptive(it) }, enabled = !ui.running)
         }
     }
 }
@@ -642,6 +627,19 @@ internal fun DataActionsCard(
                 TextButton(onClick = onRestorePrev, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
                     Text("開く前のデータに戻す（もう一度押すと入れ替え）")
                 }
+            }
+            // [3.529.0/外部仕様書取り入れ] 自動保存の状態。既定(Saved)では出さず、変化がある間だけ表示。
+            if (ui.saveState != SaveState.Saved) {
+                Text(
+                    when (ui.saveState) {
+                        SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"
+                        SaveState.Saving -> "保存中…"
+                        SaveState.Failed -> "自動保存に失敗しています（端末の空き容量をご確認のうえ「データを保存」をお試しください）"
+                        SaveState.Saved -> ""
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (ui.saveState == SaveState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存") }

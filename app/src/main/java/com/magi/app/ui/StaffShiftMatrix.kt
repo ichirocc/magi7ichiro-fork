@@ -136,9 +136,13 @@ internal fun StaffShiftMatrixCard(
                     }
                     for (i in 0 until S) {
                         val gr = v.groups.getOrNull(v.staff[i].groupIdx)
+                        // [3.531.0/ユーザー提示のデザイン案] 行に1件でも違反があれば名前の頭に警告を出す。
+                        //   新しい色軸は増やさない（このファイルの既定＝既存 error 色をそのまま使う）。
+                        val flagged = (0 until K).any { k -> ui.countViolations.containsKey("$i,$k") }
                         MatrixHeaderCell(labelW, rowH, cs.surfaceVariant, alignStart = true) {
-                            Text("${v.staff[i].name}（${gr?.kigou?.let { toHankakuKigou(it) } ?: "?"}）",
-                                style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text((if (flagged) "⚠ " else "") + "${v.staff[i].name}（${gr?.kigou?.let { toHankakuKigou(it) } ?: "?"}）",
+                                style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                color = if (flagged) cs.error else Color.Unspecified)
                         }
                     }
                     // [3.483.0 E-9] フッター行の見出し。旧: 右側の「実績/目標」数字列だけで、左列に何の行か無かった。

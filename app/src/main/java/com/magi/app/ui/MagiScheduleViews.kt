@@ -60,6 +60,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -1595,6 +1598,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     val dayVioH = remember(vioKind, needVioByDay) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 1 } + needVioByDay.first[d] } }
     val dayVioS = remember(vioKind, needVioByDay) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] >= 2 } + needVioByDay.second[d] } }
     val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
+    val dayOver = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.surplus ?: 0 } }   // [3.527.0/ユーザー明示指示] ▲N
     // [3.444.0 行列クロスハイライト] セルをタップすると対象の「職員名」と「日付」を約2.5秒強調＝
     //   広いグリッドでどの行/列を触ったか見失いにくくする（読み間違い防止。ユーザー提示の改善案③）。
     //   セル自体の枠（違反表示）は変更しない＝タップした瞬間に違反枠が隠れて読めなくなるのを避ける。
@@ -1647,12 +1651,19 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
             .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${d + 1}日 ${weekdayJa[dow]}曜日 ${holidayName[d]}" } else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
-            // [a11y] 荷重情報の「▼N」は別行の赤字バッジに分離（曜日と混ざって潰れないように）。
+            // [a11y] 荷重情報の「▼N ▲N」は別行のバッジに分離（曜日と混ざって潰れないように）。
             Text(weekdayJa[dow], fontSize = headFontSize, color = dcol, maxLines = 1)
-            // [E7] 「▼N」(人員不足)は covU 由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
+            // [E7] 「▼N」(人員不足)/「▲N」(人員過剰、3.527.0でユーザー明示指示により追加)は
+            //   covU/covO由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
             // [悲観検証P2+P7] 旧「不足N」(4文字)はフォント拡大時に38dp列からクリップ。集計凡例と
             //   同語彙の「▼N」(2-3文字)へ短縮し、サイズも列幅フィット(dp→sp)に。
-            if (dayShort[d] > 0 && "need" in vioEnabled) Text("▼${dayShort[d]}", fontSize = headFontSize, color = cs.error, fontWeight = FontWeight.Bold, maxLines = 1)
+            if ((dayShort[d] > 0 || dayOver[d] > 0) && "need" in vioEnabled) {
+                Text(buildAnnotatedString {
+                    if (dayShort[d] > 0) withStyle(SpanStyle(color = cs.error, fontWeight = FontWeight.Bold)) { append("▼${dayShort[d]}") }
+                    if (dayShort[d] > 0 && dayOver[d] > 0) append(" ")
+                    if (dayOver[d] > 0) withStyle(SpanStyle(color = vioSoftColor, fontWeight = FontWeight.Bold)) { append("▲${dayOver[d]}") }
+                }, fontSize = headFontSize, maxLines = 1)
+            }
             if (hc != null) Box(Modifier.width(cellW - 10.dp).height(2.5.dp).background(hc, RoundedCornerShape(2.dp)))
             else Spacer(Modifier.height(2.5.dp))
         }

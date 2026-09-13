@@ -13,6 +13,7 @@ data class V6DayRisk(
     val label: String,
     val shortage: Int,
     val detail: String,
+    val surplus: Int = 0,
 )
 
 data class V6StaffProfile(
@@ -774,6 +775,7 @@ object V6PortAnalyzer {
         val out = ArrayList<V6DayRisk>(p.T)
         for (j in 0 until p.T) {
             var shortfall = 0
+            var surplus = 0
             val parts = ArrayList<String>()
             for (k in 0 until p.K) {
                 // [3.379.0] 同上。need1 だけ見ると need2 単独定義シフトの不足が日別リスクに出なかった。
@@ -781,12 +783,13 @@ object V6PortAnalyzer {
                 val need = p.covUCell(k, j, 0)
                 if (need <= 0) continue
                 shortfall += miss
+                surplus += p.covOCell(k, j, cov[j][k])   // [3.527.0] 日別ヘッダの「▲N」用（ユーザー明示指示）
                 if (miss > 0) {
                     val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                     parts.add("${sym}×${miss}")
                 }
             }
-            out.add(V6DayRisk(j, dayLabel(state.startDate, j), shortfall, parts.joinToString(" ")))
+            out.add(V6DayRisk(j, dayLabel(state.startDate, j), shortfall, parts.joinToString(" "), surplus))
         }
         return out
     }

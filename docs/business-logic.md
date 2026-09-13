@@ -68,6 +68,8 @@
   - `cons3` ＝ **MUST**（必須・SOFT 3）／`cons3n` ＝ **FORBIDDEN**（禁止・**HARD 7000**）／`cons3m` ＝ **Want**（推奨・SOFT 2）／`cons3mn` ＝ **Hate**（回避・SOFT 15）。
   - 定義は WS4：MUST=r28c4 / Want=r28c13 / FORBIDDEN=r46c4 / Hate=r46c13。
   - **`ws3`（希望シフト＝`wishes`）と C3 族は別物**。混同しない（希望の採点は `pref`、連勤パターンは c3 系）。
+  - **単一シフト連の評価**：非forbidden（`cons3`/`cons3m`）は run-deficit（`C3Run.rowDeficit`＝連続長Lで頭打ち、L以上連続すれば満たす・完成runを罰しない）。forbidden（`cons3n`/`cons3mn`）は窓マッチ（N連続の窓が1つでもあれば発火）。
+  - **設定ミス診断 6f（必須/推奨と禁止の連続数矛盾、3.534.0）**：同じシフトで非forbiddenの単一シフト連の連続数Lが、forbidden側の連続数N以上（L≥N）だと、必須/推奨を満たすL以上の連続は必ずforbidden側のN連続の窓を含むため常に未達になる（探索の失敗ではなく設定の衝突）。`cons3`/`cons3m` × `cons3n`（HARD）だけを対象にし、両方SOFTの `cons3mn` との組合せは対象外。読み取り専用（`V6SanityPort.mustForbiddenSeqIssues`）。
 - **被覆（covU/covO）**：シフト×日で必要数に対する過不足。`use2Patterns` 時の P1/P2 は **MIN=OR**（緩い方で充足）＝加算ではない（中間世代 MWS 由来の意図的設計）。被覆は同日のみ（夜勤の翌日繰越なし）。
 - **群レンジ/ペア（C41/C42）**と**スキル群版（C41s/C42s）**：`C41Row(groupKigou, shiftKigou, l, u)` ＝1日に [l,u] 回／`C42Row(g1,g2,s1,s2)` ＝群g1のs1と群g2のs2が同日併存不可。
 - **個人下限/上限（low/high）**：`staffRange["i,k"]={lo,hi}`。`low` は `lo!=0 && 担当可 && 回数<lo`、`high` は `回数>hi`。重み 120/25（被覆や c1 に負けない最低限の重み）。

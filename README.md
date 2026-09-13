@@ -31,6 +31,57 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-13（3.534.0＝ユーザー提示案「制約設定画面にインテリジェンスを追加」の技術検証。
+提案の具体例（必須3連続+禁止4連続=矛盾）は実際の評価式(`C3Run.rowDeficit`=run-deficit・窓マッチ)では
+矛盾しないと判明、正しい条件（必須の連続数L≥禁止の連続数N）で`V6SanityPort.mustForbiddenSeqIssues`を
+新設。実現可能性表示・自動修正は新規DP計算/HF77の安全基準に照らし見送り、検知のみ既存の設定ミス診断
+枠組み（`SettingIssue`/`IssueKind.CONSTRAINT`）へ実装＝UI変更不要。`V6SanityPortTest`に2件追加、
+host JVM 742/742。エンジンの評価・重みは不変（読み取り専用診断）。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-13（3.533.0＝ユーザー提示のグループ一括設定デザイン案を`StaffRangeEditor.kt`と
+照合。真因は各チップに「グループ名・シフト・範囲・人数」を全部詰め込み実質1行1件になっていたこと。
+`groupRangeSummary()`の既存ソート順を使いgroupByでグループ別セクション化＋チップ短縮、`全解除`
+（`clearGroupRangeSection`新設・1回のUndoでまとめて戻せる）を追加。編集モード化・インライン追加UI・
+配色全面見直し・下部ナビ記号化は、この app 全体の統一パターンを崩すため不採用。エンジン・重みは
+不変。design_lint.py新規違反0件。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-13（3.532.0＝ユーザー指示「設定に集中できる静かな環境を提供」→設定タブ全体の
+視覚的ノイズを減らす、と確認。7節のうち`WeightTableCard`（19件の重み表）だけが`ColorSettingsView`
+（3.483.0で同型対策済み）に対して既定展開のまま漏れていたと判明し、既存の共通部品
+`CollapsibleSection`で既定折りたたみへ統一。他6節は日常的に触る操作が多いため対象外。エンジン・
+重みは不変。design_lint.py新規違反0件。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-13（3.531.0＝ユーザー提示の回数マトリクス デザイン案を`StaffShiftMatrix.kt`と
+照合。「薄色=目標のズレ/濃色=上下限の逸脱」「=N表記」「太字現在値+小さく薄い詳細」「セル罫線排除」は
+すべて実装済みと確認（変更不要）。唯一の新規提案「行に違反があれば職員名の頭に⚠」だけ実装（既存の
+`ui.countViolations`を行単位に集約するだけ・判定ロジック増やさず・新しい色軸も増やさない）。下部ナビの
+記号化は全画面共通パーツで具体的な不具合報告が無いため見送り。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-12（3.530.0＝ユーザー提示のデザイン案（職員一覧の▲▼ボタン→ドラッグ&ドロップ）を
+grillingで「既存のシフト種別/グループ(3.515.6)と同じ形（行タップ=編集、削除は編集ダイアログの中）」に
+スコープ確定して実装。`StaffManageCard.kt`を`Ws1Editor.kt`の`ReorderableRows`(internal化して再利用)へ
+統一、`StaffDialog`に`onDelete`追加、`ws1MoveStaffTo`新設・未使用化した`ws1MoveStaff`/`MoveRowButtons`は
+削除。エンジン・重みは不変。design_lint.py新規違反0件。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-12（3.529.0＝ユーザー提示の外部仕様書「決定論的修復統合基盤」を調査エージェントで
+現状コードと突合し、SHA-256+TLV正規化・因果証拠構造体・新規safety/パッケージ・全操作への汎用Preview化は
+既存の`checkSeq`/`fixBoardKey`/`FixApplyGate`/`SaveGate`/`checkRev`と重複のため不採用、3件のみ既存パターンを
+横展開して実装: ①`applyAlternative()`に鮮度チェック追加（`fixBoardKey`と同型） ②`MagiUiState.SaveState`
+新設で保存状態(Dirty/Saving/Saved/Failed)を設定タブへ表示 ③`UndoSnap.label`追加でUndo/Redoのメッセージに
+操作名を表示。エンジン・重みは不変。host JVM 740/740・design_lint.py新規違反0件。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-12（3.528.0＝ユーザー指示「AB評価のフラグはUIに出す」→grillingで確認し「既定OFF
+トグルはUIに残し、AB評価で既定ONへ確定した機構はUIに出さない」と確定。`wideC3nBreakDays`・
+`combineExhaustPairs`（既定OFF）は元々UI実装済みと判明（調査のみ）。`blockSwapC3nFilter`・`lnsAdaptive`
+（3.518.0でAB評価により既定ON昇格済み）のUIスイッチを`MagiSetupCards.kt`の`OptimizationTuningSection`
+から削除（opt-outフラグ自体は温存）。エンジン・重みは不変。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-12（3.527.0＝日付ヘッダーに人員過剰バッジ「▲N」を新設（ユーザー明示指示）。既存
+「▼N」（人員不足）と対称に`V6PortAnalyzer.V6DayRisk.surplus`を新設し、同じ行に並べて表示（grillingで
+配置確認、ヘッダー高さ・レイアウトは不変）。実データで12日A4のsurplus=1を確認。host JVM 740/740・
+design_lint.py新規違反0件。`/design-review`はツールから起動不可のためユーザー側での実行を推奨。
+詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-12（3.526.0＝weekly（曜日平準化）の指標式を再定義（ユーザー明示指示）。旧
 `round(平均)`式は合計3回以下だと目標0に丸まり「配置に関わらず偏差が合計回数のまま不変」という死角が
 あった（実データ調査で発覚）。新式`dev=Σ|7×曜日回数-合計|÷7`（重みは不変）。Kotlin/C++の

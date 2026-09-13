@@ -700,7 +700,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                     SettingsCard(ui, vm, onBgOptimize = onBgOptimize)
                     // [実機指摘/移動] 重み表＝最適化の優先順位の根拠。実行条件（最適化設定）の隣が定位置。
-                    WeightTableCard()
+                    // [3.532.0/設定タブ静音化] 常時展開の19件表は毎回の初見コストが高いため既定で閉じる
+                    // （ColorSettingsViewの族別チップが3.483.0で同じ理由・同じ形で先行済み）。
+                    CollapsibleSection("直す優先順位", "settings_weighttable") { WeightTableCard() }
                     // [冗長性] 旧 OperatorLogView（見出し「操作ログ」だが中身は診断ログ＝誤ラベルで、
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(

@@ -1,5 +1,35 @@
 # 作業記録の索引（見出し一覧）
 
+- 設定ミス診断6f: 必須/推奨(c3/c3m)と禁止(c3n)の連続数矛盾を検出（3.534.0）。ユーザー提示案の具体例は
+  検証の結果誤り（L=3,N=4は矛盾しない）と判明、正しい条件（L≥N）で実装。実現可能性表示・自動修正は
+  新規DP計算/HF77の安全基準に照らし見送り、検知のみ既存のSettingIssue枠組みへ追加（UI変更不要）
+  → `docs/history/3.4xx.md`
+- グループ一括設定: グループ別セクション化と一括解除を追加（3.533.0）。`groupRangeSummary()`の既存
+  ソート順を利用しgroupByでチップをグループ別に整理、重複するグループ名接頭辞を除去、
+  `clearGroupRangeSection(g)`新設。編集モード化・インライン追加UI・配色全面見直し・下部ナビ記号化は
+  既存の統一パターン維持のため不採用 → `docs/history/3.4xx.md`
+- 設定タブを静音化: 「直す優先順位」表(WeightTableCard)を既定で折りたたむ（3.532.0）。7節中
+  唯一この表だけ既存の折りたたみ対策(ColorSettingsView、3.483.0)から漏れていたと判明し
+  CollapsibleSectionで統一。他6節は対象外（根拠なき全面リフォーム回避） → `docs/history/3.4xx.md`
+- 回数マトリクスに行単位の警告マーカーを追加（3.531.0）。ユーザー提示デザイン案の大半（薄色/濃色・
+  =N表記・罫線排除）は実装済みと確認、行頭⚠マーカーだけ新規実装。下部ナビ記号化は見送り
+  → `docs/history/3.4xx.md`
+- 職員一覧をシフト種別/グループと同じ並び替え・削除の形へ統一（3.530.0）。▲▼ボタン→ドラッグハンドル
+  （`ReorderableRows`を`internal`化して再利用）、独立した編集/削除ボタン→行タップ+編集ダイアログ内の
+  削除（`StaffDialog.onDelete`新設）。ユーザー提示デザイン案をgrillingで既存の3.515.6パターンへ統一する
+  形にスコープ確定 → `docs/history/3.4xx.md`
+- 外部仕様書「決定論的修復統合基盤」を評価し3件だけ取り入れ（3.529.0）。SHA-256+TLV正規化・因果証拠
+  構造体・新規safety/パッケージ・全操作への汎用Preview化は既存の軽量な仕組み(checkSeq/fixBoardKey/
+  FixApplyGate/SaveGate/checkRev)と重複するため不採用。採用: ①applyAlternative()の鮮度チェック追加
+  ②保存状態(SaveState)をUIへ表示 ③Undo履歴に操作名を表示 → `docs/history/3.4xx.md`
+- 設定タブの既定OFFトグルはUIに残し、AB評価で既定ONへ確定した機構(blockSwapC3nFilter/lnsAdaptive)は
+  UI表示から外す（3.528.0）。opt-outフラグ自体は温存。ユーザー指示「AB評価で確定した既定Onのフラグは
+  UIに表示しない」→ `docs/history/3.4xx.md`
+- 日付ヘッダーに人員過剰バッジ「▲N」を新設（3.527.0）。既存「▼N」（人員不足）と対称。
+  `V6PortAnalyzer.V6DayRisk.surplus`新設・`DayHeader`（MagiScheduleViews.kt）で同じ行に並べて表示
+  （ユーザー明示指示、grillingで配置確認）。実データで12日A4 surplus=1を確認
+  → `docs/history/3.4xx.md`
+
 - weekly（曜日平準化）の指標式を再定義（3.526.0）。旧`round(平均)`式は合計3回以下だと目標が0に丸まり
   「配置に関わらず偏差が合計回数のまま不変」＝同一曜日集中を検出できない死角があった（実データ調査で
   発覚）。新式`dev=Σ|7×曜日回数-合計|÷7`へ変更（HF77明示指示、重みは不変）。Kotlin/C++両方の
