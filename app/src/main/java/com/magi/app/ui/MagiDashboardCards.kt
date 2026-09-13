@@ -998,7 +998,7 @@ internal fun WeightTableCard() {
             //   初見の人は「重み？ 最適化器？」と聞き返す。見出しと**並び順そのもの**（上から重い順）が
             //   読み方を教える形にし、説明の一文は落とした。英字コード(HARD/SOFT)も作り手語彙なので外す
             //   （日本語が既に同じことを言っている＝operator_ux「英字符号を画面に出さない」）。
-            Text("直す優先順位", fontWeight = FontWeight.Bold)
+            // [3.532.0] タイトルは呼出元の CollapsibleSection ヘッダが担う（設定タブの静音化・二重見出し回避）。
             Text("上にあるものから先に直します。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("絶対に守る", style = MaterialTheme.typography.titleSmall)
             hard.forEach { (k, w) ->
