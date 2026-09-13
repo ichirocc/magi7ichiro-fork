@@ -39,8 +39,17 @@ internal object AptFairPolish {
         val remaining = (budget - usedByBest).coerceAtLeast(0.0)
         val increase = (nonFamilySoftTotal(rep, family) - nonFamilySoftTotal(bestRep, family)).coerceAtLeast(0.0)
         val forgiven = minOf(increase, remaining)
-        val effectiveDelta = (rep.weightedScore - bestRep.weightedScore) - forgiven
-        return effectiveDelta < 0.0 || (effectiveDelta == 0.0 && rep.total < bestRep.total)
+        val rawDelta = rep.weightedScore - bestRep.weightedScore
+        val effectiveDelta = rawDelta - forgiven
+        val accepted = effectiveDelta < 0.0 || (effectiveDelta == 0.0 && rep.total < bestRep.total)
+        // [3.535.0/実機ログで発覚] TuningTelemetry.summaryの「設定の効き」に本トグルの行が無く、
+        // ONでも実行の痕跡が一切見えなかった（他トグルは効果カウンタつきで表示済み）。素のbetterReport
+        // （＝rawDeltaだけで同じ判定）なら却下されるはずの手を、容認で採用に転じさせた回数だけを数える。
+        if (accepted && forgiven > 0.0) {
+            val rawAccepted = rawDelta < 0.0 || (rawDelta == 0.0 && rep.total < bestRep.total)
+            if (!rawAccepted) TuningTelemetry.aptFairToleranceUsed.incrementAndGet()
+        }
+        return accepted
     }
 
     /**
