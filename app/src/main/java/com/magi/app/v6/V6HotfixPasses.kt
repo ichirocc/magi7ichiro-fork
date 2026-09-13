@@ -215,6 +215,8 @@ object TuningTelemetry {
     val lahcEntered = java.util.concurrent.atomic.AtomicInteger(0)
     /** Kotlin照合を実施した回数（ネイティブ結果を採用する直前の再評価）。 */
     val parityChecks = java.util.concurrent.atomic.AtomicInteger(0)
+    /** [3.535.0] apt/fair研磨の6%許容が、素のbetterReportなら却下される手を採用に転じさせた回数。 */
+    val aptFairToleranceUsed = java.util.concurrent.atomic.AtomicInteger(0)
 
     /**
      * 実行ごとに 0 へ戻す（`optimize()` 入口）。
@@ -228,7 +230,7 @@ object TuningTelemetry {
      */
     fun reset() {
         c3nFilterSkipped.set(0); wideC3nDiffered.set(0); wideC3nCalls.set(0)
-        lahcEntered.set(0); parityChecks.set(0)
+        lahcEntered.set(0); parityChecks.set(0); aptFairToleranceUsed.set(0)
     }
 
     /** 各トグルの ON/OFF と、その実行で観測できた効果を1行にまとめる。 */
@@ -252,7 +254,8 @@ object TuningTelemetry {
             " / 禁止連続の崩し範囲=" + wide +
             " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替") +
             " / 結合探索を粘り強く=" + (if (PolishGate.combineExhaustPairs) "ON" else "OFF") +
-            " / 一括見直しの自動調整=" + (if (PolishGate.lnsAdaptive) "ON" else "OFF")
+            " / 一括見直しの自動調整=" + (if (PolishGate.lnsAdaptive) "ON" else "OFF") +
+            " / 公平化/適切回数の他ソフト許容(6%)=" + eff(PolishGate.aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用")
     }
 }
 
