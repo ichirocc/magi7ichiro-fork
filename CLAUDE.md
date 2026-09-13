@@ -20,7 +20,8 @@
 
 ## 判断の基準
 - チェッカー（`UnifiedViolationChecker`）が source of truth。最適化器（`Evaluator`/`DeltaEvaluator`）は同じ目的関数（Δ×フル整合）。
-- 研磨は keep-best（`betterReport`＝hard→weightedScore→total の辞書式、単一ソースは `reportComparator`）。採用基準を増やさない。
+- 研磨は keep-best（`betterReport`＝hard→weightedScore→total の辞書式、単一ソースは `reportComparator`）。採用基準を増やさない
+  （例外＝apt/fair研磨限定の`PolishGate.aptFairSoftTolerance`、既定OFF・3.535.0 HF77明示数値指示。詳細は`docs/business-logic.md`）。
 - 探索動学の変更は測ってから採否（`tools/loop/` のペア比較、または実データ 4 件の probe で最終盤面のハッシュ比較）。便益が測れない／負なら入れない。
   否決済みの案は history にある（戦略的振動・nonlinear restart・GLS スイープ・targeted-perturb・big-destroy・softFocusProb）。
 - ソフト研磨は構造的下限（3.94.0）。効き所は「解ける HARD が残る盤面」＝`ViolationComponentRepair`（拒否候補の結合は巡の末尾、

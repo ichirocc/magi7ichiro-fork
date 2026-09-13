@@ -75,6 +75,7 @@ data class UiState(
                                                  // 必須退行1件・速度-5.6%平均のため不合格。候補ごとのisBetterゲートは個々の手を悪化させないが、
                                                  // 探索経路が変わることで最終盤面が別の局所解に着地し得る＝旧「退化なし」の記述は誤りだったため訂正）
     val lnsAdaptive: Boolean = true,            // [3.514.0/3.518.0] 個人回数・期間の一括見直しの時間配分を自動調整するか。既定ON（iter9: 品質±0・速度は実データ-23%〜-32%）
+    val aptFairSoftTolerance: Boolean = false,  // [3.535.0/HF77明示数値指示] 公平化(fair)/適切回数(apt)研磨で、対象家族以外のSOFT悪化を研磨開始時点比+6%まで容認するか。既定OFF
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),

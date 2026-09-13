@@ -1034,6 +1034,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 一括見直しの自動調整 → ${if (on) "ON" else "OFF"}")
     }
 
+    /**
+     * [3.535.0/HF77明示数値指示] 公平化(fair)/適切回数(apt)研磨で、対象家族以外のSOFT違反の悪化を
+     * 研磨開始時点の合計比+6%まで容認する（累積予算、`AptFairPolish.toleratedBetter`）。HARDの不増加・
+     * keep-bestの根幹（`betterReport`）は不変。既定OFF（採否はtools/loopのA/Bで別途測定）。
+     */
+    fun setAptFairSoftTolerance(on: Boolean) {
+        com.magi.app.v6.PolishGate.aptFairSoftTolerance = on
+        _ui.update { it.copy(aptFairSoftTolerance = on) }
+        logOp("I", "設定変更: 公平化/適切回数研磨の他ソフト許容(6%) → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }

@@ -18,6 +18,31 @@ import java.util.Random
  * 構築・参照する。
  */
 internal object AptFairPolish {
+    /** [3.535.0/HF77明示数値指示] 研磨開始時点の対象家族(apt/fair)以外のSOFT合計の6%を上限に、
+     *  その悪化を容認する累積予算。既定OFF（[PolishGate.aptFairSoftTolerance]）。 */
+    internal const val SOFT_TOLERANCE_FRACTION = 0.06
+
+    /** internal＝`AptFairPolishToleranceTest` から直接検証するため（private だとファイル外から呼べない）。 */
+    internal fun nonFamilySoftTotal(rep: ViolationReport, excludeFamily: String): Double =
+        MirrorKeys.soft.filter { it != excludeFamily }.sumOf { (rep.breakdown[it] ?: 0) * MirrorKeys.weights.getValue(it) }
+
+    /**
+     * [3.535.0] OFF時はbetterReport(keep-best)のまま。ON時はHARD不増加は変えず、対象家族以外のSOFT
+     * 悪化分を研磨開始時点(before)比+6%の累積予算まで差し引いてweightedScoreを比較する（詳細は3.535.0節）。
+     */
+    internal fun toleratedBetter(rep: ViolationReport, bestRep: ViolationReport, before: ViolationReport, family: String, enabled: Boolean): Boolean {
+        if (!enabled) return betterReport(rep, bestRep)
+        if (rep.hard != bestRep.hard) return rep.hard < bestRep.hard
+        val baseline = nonFamilySoftTotal(before, family)
+        val budget = baseline * SOFT_TOLERANCE_FRACTION
+        val usedByBest = (nonFamilySoftTotal(bestRep, family) - baseline).coerceAtLeast(0.0)
+        val remaining = (budget - usedByBest).coerceAtLeast(0.0)
+        val increase = (nonFamilySoftTotal(rep, family) - nonFamilySoftTotal(bestRep, family)).coerceAtLeast(0.0)
+        val forgiven = minOf(increase, remaining)
+        val effectiveDelta = (rep.weightedScore - bestRep.weightedScore) - forgiven
+        return effectiveDelta < 0.0 || (effectiveDelta == 0.0 && rep.total < bestRep.total)
+    }
+
     /**
      * [AptPolish・適切回数(apt, 重み1)専用の研磨パス] ユーザー指示「専用の研磨パスAptPolish的なものを
      * 賢く深く網羅的に作る」（grillingで確定: ①自己振替最優先 ②同一グループ内の相互交換(同日1対1・
@@ -41,7 +66,7 @@ internal object AptFairPolish {
      * 採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定(movable)・禁止連続
      * (makesForbiddenRun)を事前ガード。
      */
-    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyAptPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xA97L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -77,8 +102,8 @@ internal object AptFairPolish {
             work[i][j] = toK
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBefore, work)
-            if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
-            if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+            if (pinBad && toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance)) pinBlocks.record(p, workBefore, work)
+            if (toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
             rejectCulprits.record(rep, bestRep, pinBad)
             work[i][j] = fromK
             return false
@@ -111,8 +136,8 @@ internal object AptFairPolish {
                 work[i][j] = b; work[i2][j] = a
                 val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBefore, work)
-                if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
-                if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+                if (pinBad && toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance)) pinBlocks.record(p, workBefore, work)
+                if (toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
                 rejectCulprits.record(rep, bestRep, pinBad)
                 work[i][j] = a; work[i2][j] = b
             }
@@ -130,8 +155,8 @@ internal object AptFairPolish {
             if (!needsChain) {
                 val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBeforeRelocate, work)
-                if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
-                if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+                if (pinBad && toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance)) pinBlocks.record(p, workBeforeRelocate, work)
+                if (toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
                 rejectCulprits.record(rep, bestRep, pinBad)
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "AptChain", label(i, fromK)))
@@ -144,8 +169,8 @@ internal object AptFairPolish {
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBeforeRelocate, work)
-            if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
-            if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+            if (pinBad && toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance)) pinBlocks.record(p, workBeforeRelocate, work)
+            if (toleratedBetter(rep, bestRep, before, "apt", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
             rejectCulprits.record(rep, bestRep, pinBad)
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
@@ -228,7 +253,9 @@ internal object AptFairPolish {
         val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val aptCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = aptCombStats, p = p, leftover = rejectedOut,
+            state, work, bestRep, combinable.asReversed(),
+            { a, b -> toleratedBetter(a, b, before, "apt", aptFairSoftTolerance) },
+            shouldStop = shouldStop, stats = aptCombStats, p = p, leftover = rejectedOut,
             exhaustPairs = combineExhaustPairs,
         )
         applied += aptCombStats.combosAccepted
@@ -268,7 +295,7 @@ internal object AptFairPolish {
      * 拒否するだけ）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定
      * (movable)・禁止連続(makesForbiddenRun)を事前ガード。
      */
-    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -312,8 +339,8 @@ internal object AptFairPolish {
             work[i][j] = toK
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBefore, work)
-            if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
-            if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+            if (pinBad && toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance)) pinBlocks.record(p, workBefore, work)
+            if (toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
             rejectCulprits.record(rep, bestRep, pinBad)
             work[i][j] = fromK
             return false
@@ -347,8 +374,8 @@ internal object AptFairPolish {
                 work[i][j] = b; work[i2][j] = a
                 val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBefore, work)
-                if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBefore, work)
-                if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+                if (pinBad && toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance)) pinBlocks.record(p, workBefore, work)
+                if (toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
                 rejectCulprits.record(rep, bestRep, pinBad)
                 work[i][j] = a; work[i2][j] = b
             }
@@ -366,8 +393,8 @@ internal object AptFairPolish {
             if (!needsChain) {
                 val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                 val pinBad = exactPinRegression(p, workBeforeRelocate, work)
-                if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
-                if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+                if (pinBad && toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance)) pinBlocks.record(p, workBeforeRelocate, work)
+                if (toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
                 rejectCulprits.record(rep, bestRep, pinBad)
                 work[i][j] = fromK
                 combinable.add(CombinatorialRepair.Candidate(listOf(intArrayOf(i, j, toK)), "FairChain", label(i, fromK)))
@@ -380,8 +407,8 @@ internal object AptFairPolish {
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
             val pinBad = exactPinRegression(p, workBeforeRelocate, work)
-            if (pinBad && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeRelocate, work)
-            if (betterReport(rep, bestRep) && !pinBad) { bestRep = rep; applied++; return true }
+            if (pinBad && toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance)) pinBlocks.record(p, workBeforeRelocate, work)
+            if (toleratedBetter(rep, bestRep, before, "fair", aptFairSoftTolerance) && !pinBad) { bestRep = rep; applied++; return true }
             rejectCulprits.record(rep, bestRep, pinBad)
             for (idx in chain.indices) work[chain[idx][0]][chain[idx][1]] = oldVals[idx]
             work[i][j] = fromK
@@ -467,7 +494,9 @@ internal object AptFairPolish {
         val rejectedOut = ArrayList<CombinatorialRepair.Candidate>()
         val fairCombStats = CombinatorialRepair.Stats()
         bestRep = CombinatorialRepair.combineAndApply(
-            state, work, bestRep, combinable.asReversed(), ::betterReport, shouldStop = shouldStop, stats = fairCombStats, p = p, leftover = rejectedOut,
+            state, work, bestRep, combinable.asReversed(),
+            { a, b -> toleratedBetter(a, b, before, "fair", aptFairSoftTolerance) },
+            shouldStop = shouldStop, stats = fairCombStats, p = p, leftover = rejectedOut,
             exhaustPairs = combineExhaustPairs,
         )
         applied += fairCombStats.combosAccepted
