@@ -77,6 +77,12 @@ jobs:
           python3 tools/native/state_to_flat.py \
             app/src/test/resources/full_coverage_state.json build/full_coverage.flat \
             2>&1 | tee -a build/ci-logs/native-parity-fixture.log
+          # [3.538.0] 5件目=fairの達成率モード（範囲staffRange.lo/hiとapt目標が群の全メンバーに揃う）を
+          #   実際に発火させる唯一の fixture（他4件は揃わず旧来のround(平均)方式のまま＝達成率モードが
+          #   C++側で検証不能だった）。
+          python3 tools/native/state_to_flat.py \
+            app/src/test/resources/sept2026_state.json build/sept2026.flat \
+            2>&1 | tee -a build/ci-logs/native-parity-fixture.log
 
       - name: Run parity check (fails on any mismatch)
         shell: bash
@@ -89,11 +95,12 @@ jobs:
           # 旧チェックは 0 mismatch で通り、この --expect だけが MISMATCH で落ちる）。
           # [3.361.0] flat と --expect は**出現順**で対応づく（golden⇔golden_expected,
           #   sample_v6⇔sample_v6_expected）。合成ベンチは1回のまま両形状を言語跨ぎ照合する。
-          ./build/magi_host build/golden.flat build/sample_v6.flat build/blocked_covu.flat build/full_coverage.flat \
+          ./build/magi_host build/golden.flat build/sample_v6.flat build/blocked_covu.flat build/full_coverage.flat build/sept2026.flat \
             --expect=app/src/test/resources/golden_eval_expected.txt \
             --expect=app/src/test/resources/sample_v6_eval_expected.txt \
             --expect=app/src/test/resources/blocked_covu_eval_expected.txt \
             --expect=app/src/test/resources/full_coverage_eval_expected.txt \
+            --expect=app/src/test/resources/sept2026_eval_expected.txt \
             2>&1 | tee build/ci-logs/native-parity-run.log
 
       - name: Upload logs (on failure only)

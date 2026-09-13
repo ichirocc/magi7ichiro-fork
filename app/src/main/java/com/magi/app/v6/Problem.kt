@@ -81,6 +81,16 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
      *  「設定した目標が構造的に届かない」ことを言い続けるために読む。評価・最適化は [apt]（実効目標）だけを見る。 */
     val aptRaw: Array<IntArray>
 
+    /**
+     * [3.538.0/ユーザー指示「公平化の平均は達成率スコアに変換してから計算する」] fair(公平化)の達成率モード用、
+     * 職員×シフトの「基準」。範囲(rangeLo/Hi、両方有限)があればそれを優先、無ければ実効apt目標([apt]>=0)。
+     * 基準が無ければ [fairBasisAnchor]=Int.MIN_VALUE（=この(職員,シフト)は達成率モードに参加できない）。
+     * [fairBasisWidth] は基準の幅（範囲ならhi-lo、apt目標ならtarget自身）。0＝基準幅ゼロ（`fairDevOfBucket`が
+     * 個別扱い）。群単位でなく職員単位で持つのは、同じ職員が異なる群には属さない（sgrpは単射）ため。
+     */
+    val fairBasisAnchor: Array<IntArray>
+    val fairBasisWidth: Array<IntArray>
+
     val cons1: List<C1>
     val cons2: List<C2>
     val cons3: List<C3>
@@ -192,6 +202,16 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
                 val reachHi = T - sumLo
                 if (reachLo <= reachHi) { if (t < reachLo) t = reachLo; if (t > reachHi) t = reachHi }
                 apt[i][k] = t
+            }
+        }
+
+        fairBasisAnchor = Array(S) { IntArray(K) { Int.MIN_VALUE } }
+        fairBasisWidth = Array(S) { IntArray(K) }
+        for (i in 0 until S) for (k in 0 until K) {
+            if (rangeLo[i][k] != Int.MIN_VALUE && rangeHi[i][k] != Int.MAX_VALUE) {
+                fairBasisAnchor[i][k] = rangeLo[i][k]; fairBasisWidth[i][k] = rangeHi[i][k] - rangeLo[i][k]
+            } else if (apt[i][k] >= 0) {
+                fairBasisAnchor[i][k] = apt[i][k]; fairBasisWidth[i][k] = apt[i][k]
             }
         }
 

@@ -72,26 +72,16 @@ internal object DestroyRepairMarginalCost {
     }
 
 
-    /** fair(グループ内公平化)の marginal cost。staff i の shift k 保有回数が delta 変化した際の、群
-     *  g=p.sgrp[i] のシフト k における L1偏差(checkerと同一式)の変化。m<2(公平化対象外)・k が群の
-     *  担当外なら 0（対象外セルは無害にゼロ扱い）。counts/grpTotal は呼出元が維持する S×K・G×K 集計。 */
-    internal fun fairMarginalAt(
-        p: Problem, i: Int, k: Int, delta: Int, counts: Array<IntArray>, grpTotal: Array<IntArray>,
-    ): Long {
+    /** [3.538.0] fair(グループ内公平化)の marginal cost。staff i の shift k 保有回数が delta 変化した際の
+     *  `Problem.fairDevOfBucket`（群 g=p.sgrp[i]・シフト k）の変化。m<2・k が群の担当外なら 0。counts は
+     *  呼出元が維持するS×K集計（達成率モードは個々人の回数が要るため、旧実装のG×K群合計grpTotalは不要）。 */
+    internal fun fairMarginalAt(p: Problem, i: Int, k: Int, delta: Int, counts: Array<IntArray>): Long {
         if (delta == 0 || k !in 0 until p.K) return 0L
         val g = p.sgrp[i]
-        val mem = p.groupMembers[g]
-        val m = mem.size
-        if (m < 2 || k !in p.bucket[g]) return 0L
-        fun dev(sum: Int): Int {
-            val tgt = Math.round(sum.toDouble() / m).toInt()
-            var d = 0
-            for (x in mem) d += kotlin.math.abs(counts[x][k] - tgt)
-            return d
-        }
-        val before = dev(grpTotal[g][k])
+        if (p.groupMembers[g].size < 2 || k !in p.bucket[g]) return 0L
+        val before = p.fairDevOfBucket(g, k) { x -> counts[x][k] }.total
         counts[i][k] += delta
-        val after = dev(grpTotal[g][k] + delta)
+        val after = p.fairDevOfBucket(g, k) { x -> counts[x][k] }.total
         counts[i][k] -= delta
         return (after - before).toLong() * 2L  // [3.522.0] fair 1→2（weeklyMarginalAtと同型で内部適用）
     }

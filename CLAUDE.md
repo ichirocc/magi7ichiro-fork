@@ -55,9 +55,16 @@
   実効値は希望固定込み。例: 休の希望固定 15 日の職員に 休 目標 10 → 15）。評価は実効目標 `Problem.apt`（個人設定あり＝-1）、
   設定ミス診断 6b/6d/6-C は設定値 `Problem.aptRaw` を読む。低/高(staffRange) とは別系統（LimMin/LimMax は別画面 ws5）。
   上限超過(high)がapt/fairの同時解消を阻む例＝B1のaptHigh（3.522.0、docs/history/3.4xx.md）。
-- **fair**（グループ内公平化, SOFT, 重み2, L1偏差）。群×担当ONシフト(`bucket[g]`)ごとに、メンバー回数の
-  `round(平均)` からの L1 偏差和。同群の職員間で各シフト回数を均す。`Problem.groupMembers` 使用、m<2の群は対象外。
-  目的関数(Evaluator/Delta)/チェッカー3者に統合。UI内訳チップには出さない（常時非ゼロになりやすいため weightedScore/total のみ算入）。
+- **fair**（グループ内公平化, SOFT, 重み2, L1偏差）。群×担当ONシフト(`bucket[g]`)ごとに`Problem.fairDevOfBucket`
+  が偏差を出す。**達成率モード**（3.538.0、ユーザー指示「平均は目標値と個人上下限を配慮した達成率スコアに変換して
+  から計算する」）: 群の全メンバーに基準（範囲staffRange.lo/hi両方有限→優先、無ければ実効apt目標`Problem.apt`>=0）
+  が揃えば、各人の達成率=(回数-基準値)/基準幅、目標達成率は達成率の単純平均（丸めない）。各人の偏差は
+  `|達成率-目標達成率|×自分の基準幅`を四捨五入し件数相当へ戻す（重み2の「件数」という単位は不変）。基準幅ゼロ
+  （範囲lo==hi・apt目標0）の人は個別扱い＝回数が基準値と一致すれば偏差0、それ以外は差をそのまま件数化し
+  平均対象からは除外。1人でも基準が無ければ、その群×シフト全体は従来の生回数`round(平均)`のL1偏差へ
+  フォールバックする。`Problem.groupMembers`使用、m<2の群は対象外。目的関数(Evaluator/Delta)/チェッカー3者と
+  C++(`magi_native.cpp`の`fairDevOfBucket`)に統合。UI内訳チップには出さない（常時非ゼロになりやすいため
+  weightedScore/total のみ算入）。
 - **weekly**（7日周期(曜日)シフト平準化, SOFT, 重み2, L1偏差）。職員ごとに勤務日(非休)の**曜日別カウント**の
   `round(勤務日数/7)` からの L1 偏差和。weekday(j)=`(dow0+j)%7`（`Problem.dow0`=startDate曜日オフセット %7 /
   `Problem.restIdx`=休index）。「毎週おなじ曜日に偏る」を均す。共通ソース=`weeklyDevOfBucket(wd[7])`。

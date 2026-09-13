@@ -1,5 +1,19 @@
 # 作業記録の索引（見出し一覧）
 
+- fair(公平化)の平均計算を達成率モード化（3.538.0）。ユーザー指示「平均はOlympic average類似の、
+  目標値・個人上下限などの設定を配慮した達成率スコアで計算する」をgrilling6問で確定。範囲/apt目標が
+  群全員に揃う場合だけ達成率（回数の位置/目標比）で比較、揃わなければ従来のround(平均)へフォールバック。
+  `Problem.fairDevOfBucket`を共通ソース化しEvaluator/Delta/Checker/DestroyRepairMarginalCostの4箇所を
+  統一（1箇所の改修漏れをテストで検出）。C++も同式へ移植、sept2026を達成率モード検証用の5件目フィクスチャ
+  として追加 → `docs/history/3.4xx.md`
+- aptFairSoftToleranceのtools/loop正式A/B結果（3.537.0）。46ケース×3seed=138ペアで辞書式
+  旧68/新38/同等32＝ONが劣勢、速度-62%・タイムアウト12→32、下位10%品質も旧未満＝4ゲート全て
+  不合格。c40-large-c2deficit1でON側のみ例外を観測したが単体再実行6/6で非再現（未解決・環境依存
+  の疑い）。HF77の恒久機能指定のため撤去せず既定OFFを維持 → `docs/history/3.4xx.md`
+- aptFairSoftToleranceの「設定の効き」テレメトリ欠落を修正（3.536.0）。実機ログでON時も痕跡が
+  出ないと発覚（`TuningTelemetry.summary`への追加漏れ）。素のbetterReportなら却下される手を
+  容認で採用に転じさせた回数だけを数えるカウンタを追加、他トグルと同型の1行に統合。エンジンの
+  採否・重みは不変（読み取り専用） → `docs/history/3.4xx.md`
 - 公平化/適切回数研磨に他ソフト6%許容オプションを追加（3.535.0）。ユーザー指示でkeep-best原則
   （採用基準を増やさない）の唯一の明示的例外として、`AptFairPolish.toleratedBetter`の累積予算方式
   （fair/apt改善のためHARD不増加を維持したまま対象家族以外のSOFT悪化を研磨開始時点比+6%まで容認）を

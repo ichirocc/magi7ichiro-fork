@@ -589,18 +589,12 @@ class DeltaEvaluator(private val p: Problem) {
         return h
     }
 
-    /** [統一fair] 群g・シフトk の公平化偏差。staff [special] のカウントに [delta] を加味（preview用）。
-     *  round(平均) からのメンバー L1 偏差和。UnifiedViolationChecker の "fair" と一致。 */
+    /** [統一fair/3.538.0] 群g・シフトk の公平化偏差。staff [special] のカウントに [delta] を加味（preview用）。
+     *  `Problem.fairDevOfBucket` を呼ぶだけ（達成率モード、全員に基準が無ければ従来の生回数round(平均)方式）。
+     *  UnifiedViolationChecker の "fair" と一致。 */
     private fun fairDevAt(g: Int, k: Int, special: Int, delta: Int): Long {
-        val mem = p.groupMembers[g]
-        val m = mem.size
-        if (m < 2) return 0L
-        var sum = 0
-        for (x in mem) sum += cntSS[x][k] + (if (x == special) delta else 0)
-        val tgt = Math.round(sum.toDouble() / m).toInt()
-        var d = 0L
-        for (x in mem) { val c = cntSS[x][k] + (if (x == special) delta else 0); d += kotlin.math.abs(c - tgt).toLong() }
-        return d
+        if (p.groupMembers[g].size < 2) return 0L
+        return p.fairDevOfBucket(g, k) { x -> cntSS[x][k] + (if (x == special) delta else 0) }.total.toLong()
     }
     private fun fairAll(): Long {
         var h = 0L
