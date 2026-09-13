@@ -31,6 +31,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-13（3.537.0＝aptFairSoftTolerance(3.535.0)のtools/loop正式A/B結果（46ケース×3seed
+=138ペア、決定的モード）。辞書式で旧(OFF)68勝・新(ON)38勝・同等32＝ONが劣勢。速度-62%・タイムアウト
+12→32件・下位10%品質も旧未満＝退行ゼロ/品質≥10%/速度≥10%/安定性の4ゲート全て不合格。c40-large-
+c2deficit1でON側のみ例外を観測したが単体再実行6/6で非再現（未解決）。HF77の恒久機能指定のため撤去
+せず既定OFFを維持、`docs/algorithm_portfolio.md`を更新。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-13（3.536.0＝実機ログ（Pixel 10 Pro XL・実データ）でaptFairSoftTolerance(3.535.0)
 をONにしても「設定の効き」1行に痕跡が出ないと発覚。`TuningTelemetry.aptFairToleranceUsed`を新設し、
 素のbetterReportなら却下される手を容認で採用に転じさせた回数だけを数えるカウンタを追加、他トグルと
