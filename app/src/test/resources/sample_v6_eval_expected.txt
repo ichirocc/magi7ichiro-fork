@@ -1,5 +1,5 @@
 hard=15
-soft=2588
+soft=2586
 c1=7
 c2=0
 c3=89
@@ -17,5 +17,5 @@ low=2
 high=0
 groupViol=0
 apt=0
-fair=4
+fair=3
 weekly=180

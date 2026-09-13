@@ -664,58 +664,58 @@ fun weeklyDevOfBucket(wd: IntArray): Int {
 class FairDevResult(val total: Int, val perMember: List<Pair<Int, Int>>)
 
 /**
- * [3.538.0/ユーザー指示「公平化の平均は、目標値と個人上下限などの設定を配慮した達成率スコアに変換してから
- * 計算する」] 群g・シフトk の公平化(fair)偏差。[count] は職員indexから現在の回数を返す関数（Evaluatorの
- * 全走査・DeltaEvaluatorの1手プレビュー・UnifiedViolationCheckerのcountsのいずれからも呼べるようにする）。
- *
- * 群の全メンバーに `Problem.fairBasisAnchor`（範囲staffRange.lo/hi優先、無ければ実効apt目標）が揃う場合だけ
- * 「達成率モード」: 各人の達成率=(count-基準値)/基準幅、目標達成率(tgt_rate)は達成率の単純平均（丸めない）。
- * 各人の偏差は |達成率-tgt_rate| に**自分の基準幅**を掛けて四捨五入し、件数相当へ戻す（重み2の「件数」という
- * 単位を変えないため）。基準幅ゼロ（範囲lo==hi、apt目標0）の人は達成率を作れないため個別扱い：
- * count が基準値と一致すれば偏差0、それ以外は |count-基準値| をそのまま件数化し、tgt_rateの平均対象からは
- * 除外する（自分の基準ちょうどを100%達成とみなすだけで、群平均との比較はしない）。
- *
- * 1人でも基準が無い、または達成率の平均対象（基準幅>0の人）が1人もいなければ、その群×シフト全体を
- * 従来の生回数 `round(平均)` 方式のL1偏差（Evaluator/DeltaEvaluator/UnifiedViolationChecker の旧実装と同一）
- * へフォールバックする。m<2の群は呼び出し前に除外される想定（呼び出し側の既存ガードを踏襲）。
+ * [3.541.0/ユーザー指示・案E] 公平化（達成率モード v2）: 各職員を「自分の基準に対する達成率」へ写してから群内で比べる。
+ * 基準＝範囲 lo/hi（両方有限、回数は帯へクランプ＝帯の外は high/low の担当）優先、無ければ実効 apt 目標（中心 t・幅 t）。
+ * 母集団＝mayPlace または回数>0。基準達成率＝幅を重みにした中央値（Σ幅×|達成率−基準| の最小点＝帯の端の 1 人に引きずられない）。
+ * 偏差＝round(|達成率−基準|×自分の幅)。基準が 1 人でも無ければ同じ母集団で生回数 round(平均) の L1 へ。式の根拠と実データの
+ * 数値は docs/business-logic.md / docs/history 3.541.0。**C++ `magi_native.cpp` の `fairDevOfBucket` と同じコミットで揃える。**
  */
 fun Problem.fairDevOfBucket(g: Int, k: Int, count: (Int) -> Int): FairDevResult {
-    val mem = groupMembers[g]
-    var allHaveBasis = true
-    for (x in mem) if (fairBasisAnchor[x][k] == Int.MIN_VALUE) { allHaveBasis = false; break }
-    if (!allHaveBasis) return legacyFairDevOfBucket(mem, count)
-
-    var rateSum = 0.0; var rateN = 0
-    for (x in mem) {
-        val width = fairBasisWidth[x][k]
-        if (width > 0) { rateSum += (count(x) - fairBasisAnchor[x][k]).toDouble() / width; rateN++ }
+    val all = groupMembers[g]
+    val mem = IntArray(all.size); var n = 0
+    for (x in all) if (mayPlace(x, k) || count(x) > 0) mem[n++] = x
+    if (n < 2) return FairDevResult(0, emptyList())
+    val ach = DoubleArray(n); val scale = DoubleArray(n)
+    for (idx in 0 until n) {
+        val x = mem[idx]
+        val lo = rangeLo[x][k]; val hi = rangeHi[x][k]; val c = count(x)
+        if (lo != Int.MIN_VALUE && hi != Int.MAX_VALUE) {
+            // lo>hi（設定ミス）は幅 0 扱い。coerceIn は lo>hi で例外を投げるので手でクランプする（C++ と同じ式）。
+            val e = if (c < lo) lo else if (c > hi) hi else c
+            val s = if (hi > lo) (hi - lo) / 2.0 else 0.0
+            scale[idx] = s; ach[idx] = if (s > 0.0) (e - (lo + hi) / 2.0) / s else 0.0
+        } else if (apt[x][k] >= 0) {
+            val t = apt[x][k]
+            scale[idx] = t.toDouble(); ach[idx] = if (t > 0) (c - t).toDouble() / t else 0.0
+        } else return legacyFairDevOfBucket(mem, n, count)
     }
-    if (rateN == 0) return legacyFairDevOfBucket(mem, count)
-    val tgtRate = rateSum / rateN
-
+    var w = 0.0
+    for (idx in 0 until n) w += scale[idx]
+    if (w <= 0.0) return FairDevResult(0, emptyList())
+    val order = (0 until n).sortedBy { ach[it] }
+    var acc = 0.0; var tgt = ach[order[n - 1]]
+    for (idx in order) { acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break } }
     var total = 0
     val perMember = ArrayList<Pair<Int, Int>>()
-    for (x in mem) {
-        val anchor = fairBasisAnchor[x][k]; val width = fairBasisWidth[x][k]; val c = count(x)
-        val dx = if (width > 0) Math.round(kotlin.math.abs((c - anchor).toDouble() / width - tgtRate) * width).toInt()
-                 else if (c == anchor) 0 else kotlin.math.abs(c - anchor)
+    for (idx in 0 until n) {
+        val dx = Math.round(kotlin.math.abs(ach[idx] - tgt) * scale[idx]).toInt()
         total += dx
-        if (dx > 0) perMember.add(x to dx)
+        if (dx > 0) perMember.add(mem[idx] to dx)
     }
     return FairDevResult(total, perMember)
 }
 
-/** [3.538.0] `fairDevOfBucket` のフォールバック先＝3.537.0以前の実装そのもの（生回数のround(平均)からのL1偏差）。 */
-private fun legacyFairDevOfBucket(mem: IntArray, count: (Int) -> Int): FairDevResult {
+/** `fairDevOfBucket` のフォールバック先＝生回数の round(平均) からの L1 偏差（母集団 mem[0 until n]）。 */
+private fun legacyFairDevOfBucket(mem: IntArray, n: Int, count: (Int) -> Int): FairDevResult {
     var sum = 0
-    for (x in mem) sum += count(x)
-    val tgt = Math.round(sum.toDouble() / mem.size).toInt()
+    for (idx in 0 until n) sum += count(mem[idx])
+    val tgt = Math.round(sum.toDouble() / n).toInt()
     var total = 0
     val perMember = ArrayList<Pair<Int, Int>>()
-    for (x in mem) {
-        val dx = kotlin.math.abs(count(x) - tgt)
+    for (idx in 0 until n) {
+        val dx = kotlin.math.abs(count(mem[idx]) - tgt)
         total += dx
-        if (dx > 0) perMember.add(x to dx)
+        if (dx > 0) perMember.add(mem[idx] to dx)
     }
     return FairDevResult(total, perMember)
 }

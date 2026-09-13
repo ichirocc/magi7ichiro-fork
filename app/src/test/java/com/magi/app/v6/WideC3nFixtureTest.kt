@@ -42,8 +42,8 @@ class WideC3nFixtureTest {
         val sched = Array(st.schedule.size) { i -> st.schedule[i].toIntArray() }
         val rep = UnifiedViolationChecker.check(st, sched)
         assertEquals(0, rep.hard)
-        assertEquals(401, rep.total)   // [3.538.0] fairの達成率モードでfair 23→19（他族は3.509.0のD9以来不変）
-        assertEquals(5473.0, rep.weightedScore, 1e-9)
+        assertEquals(399, rep.total)   // [3.541.0] fair 達成率モード v2 で fair 19→17（3.538.0 は 23→19。他族は 3.509.0 の D9 以来不変）
+        assertEquals(5469.0, rep.weightedScore, 1e-9)
     }
 
     @Test
