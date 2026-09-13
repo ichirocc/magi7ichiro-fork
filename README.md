@@ -31,6 +31,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-13（3.540.0＝回数連鎖研磨 `CountChainPolish`（既定OFF・測定中）。ユーザー指示「A4/Cｱ の
+超過を研磨できるアルゴリズム」。作る前に CP-SAT で到達値を測定（制限なし 105 セルで 3954→3806、A4 の目標超過は設定上
+残る）。同日 k=2/3 の被覆保存巡回交換を複数日で束ね、回数族＋連続系の負債が正味 ≤0 の連鎖だけをチェッカーで keep-best。
+実データ 3954→3931（既存パス大予算は 0〜−6）、golden −67。トグル/params/LoopBench 配線・テスト 2 件・host 749/749。
+tools/loop A/B は次版で記録。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-13（3.539.0＝「休の過剰がB4に移行しない」（実データ11名/31日）の切り分け記録。対策案
 「B4に1人置いたときのfair悪化を探索全体で容認する」を実装前にホストJVMで測定: fairを評価0にしても10/28の
 休5人は動かず（最適化器60s）、入力盤面の≤3セル連鎖25本はfair免除でも採用0・low免除でも0・fair+low+c1免除で

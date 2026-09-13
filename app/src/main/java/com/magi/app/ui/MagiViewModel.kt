@@ -1039,6 +1039,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 研磨開始時点の合計比+6%まで容認する（累積予算、`AptFairPolish.toleratedBetter`）。HARDの不増加・
      * keep-bestの根幹（`betterReport`）は不変。既定OFF（採否はtools/loopのA/Bで別途測定）。
      */
+    fun setCountChainPolish(on: Boolean) {
+        com.magi.app.v6.PolishGate.countChainPolish = on
+        _ui.update { it.copy(countChainPolish = on) }
+    }
+
     fun setAptFairSoftTolerance(on: Boolean) {
         com.magi.app.v6.PolishGate.aptFairSoftTolerance = on
         _ui.update { it.copy(aptFairSoftTolerance = on) }
