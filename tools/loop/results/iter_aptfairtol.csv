@@ -216,3 +216,10 @@ c36-large-wishheavy1,large,wishheavy,1,new,41891,1,0,0,0,39,390000.0,2395.0,0.96
 c36-large-wishheavy1,large,wishheavy,2,old,9964,0,0,0,0,39,390000.0,2408.0,0.9677,41,630,392408.0,2184,856570595,
 c36-large-wishheavy1,large,wishheavy,2,new,32562,0,0,0,0,39,390000.0,2410.0,0.9677,81,615,392410.0,2039,-1539174465,
 c37-large-forbidden0,large,forbidden,0,old,17561,0,0,0,0,0,0.0,1301.0,0.9540,21,322,1301.0,318,288425677,
+c37-large-forbidden0,large,forbidden,0,new,68606,1,0,0,0,0,0.0,1320.0,0.9540,55,331,1320.0,84,1174626801,same
+c37-large-forbidden0,large,forbidden,1,old,18227,0,0,0,0,0,0.0,1305.0,0.9540,19,324,1305.0,80,1636918545,
+c37-large-forbidden0,large,forbidden,1,new,65276,1,0,0,0,0,0.0,1316.0,0.9540,67,329,1316.0,82,-433390297,
+c37-large-forbidden0,large,forbidden,2,old,18419,0,0,0,0,0,0.0,1301.0,0.9540,22,322,1301.0,79,810275981,
+c37-large-forbidden0,large,forbidden,2,new,67809,1,0,0,0,0,0.0,1320.0,0.9540,55,331,1320.0,82,1174626801,
+c38-large-forbidden1,large,forbidden,0,old,16108,0,0,0,0,0,0.0,1176.0,0.9429,55,302,1176.0,80,-593422766,
+c38-large-forbidden1,large,forbidden,0,new,72725,1,0,0,0,0,0.0,1199.0,0.9429,120,314,1199.0,82,1614524781,same
