@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- グループ一括設定: グループ別セクション化と一括解除を追加（3.533.0）。`groupRangeSummary()`の既存
+  ソート順を利用しgroupByでチップをグループ別に整理、重複するグループ名接頭辞を除去、
+  `clearGroupRangeSection(g)`新設。編集モード化・インライン追加UI・配色全面見直し・下部ナビ記号化は
+  既存の統一パターン維持のため不採用 → `docs/history/3.4xx.md`
 - 設定タブを静音化: 「直す優先順位」表(WeightTableCard)を既定で折りたたむ（3.532.0）。7節中
   唯一この表だけ既存の折りたたみ対策(ColorSettingsView、3.483.0)から漏れていたと判明し
   CollapsibleSectionで統一。他6節は対象外（根拠なき全面リフォーム回避） → `docs/history/3.4xx.md`

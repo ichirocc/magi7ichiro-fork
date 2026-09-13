@@ -173,6 +173,32 @@ fun MagiViewModel.clearGroupRangeAll(g: Int, k: Int) {
     applyStructure(stNew)
 }
 
+/** [3.533.0/ユーザー提示のデザイン案] グループ一括設定の「このグループぶんを全解除」:
+ *  groupRangeSummary に出ている、そのグループの全シフトぶんを1操作でまとめて解除する
+ *  （×を1つずつ押すのと同じ判定＝表示中レンジと一致するメンバーだけ・1回のUndoで戻せる）。 */
+fun MagiViewModel.clearGroupRangeSection(g: Int) {
+    val st0 = state ?: return
+    val members = st0.staff.indices.filter { st0.staff[it].groupIdx == g }
+    if (members.isEmpty()) return
+    val targets = groupRangeSummary().filter { it.g == g }
+    if (targets.isEmpty()) return
+    val m = st0.staffRange.toMutableMap()
+    var cleared = 0
+    var stNew = st0
+    for (t in targets) {
+        val loT = t.lo.trim(); val hiT = t.hi.trim()
+        for (i in members) {
+            val key = "$i,${t.k}"; val r = m[key] ?: continue
+            if (r.lo.trim() == loT && r.hi.trim() == hiT) { m.remove(key); cleared++ }
+        }
+        stNew = Ws1Ops.setGroupApt(stNew.copy(staffRange = m), g, t.k, "")
+    }
+    if (cleared == 0) return
+    val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
+    notify("$gname のグループ上下限をまとめて解除しました（${targets.size}件・${cleared}名ぶん・「元に戻す」で戻せます）")
+    applyStructure(stNew)
+}
+
 /** グループ g のメンバーのうち (i,k) に個人上下限（非空）を持つ人数。ダイアログの「なし」適用可否と件数表示に使う。 */
 fun MagiViewModel.groupRangeMemberCount(g: Int, k: Int): Int {
     val st = state ?: return 0

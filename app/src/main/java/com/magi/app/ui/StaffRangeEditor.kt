@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -79,28 +80,38 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
             )
             // [適用済み一覧] 一括適用したグループ上下限(全メンバー同一レンジ)を表示。各メンバーの個人の回数にも
             //   展開済みだが、ここでグループ単位に集約して確認・削除できるようにする。×=全員分クリア。
+            // [3.533.0/ユーザー提示のデザイン案] groupRangeSummary は既に g→k 順ソート済み＝groupBy で
+            //   隣接するグループ単位にまとまる。グループ名の重複表示をやめ見出し1つにまとめ、
+            //   チップからも「グループ名・」の接頭辞を外して短くする（1行に収まる件数を増やす）。
             val applied = vm.groupRangeSummary()
             if (applied.isNotEmpty()) {
                 Text("適用中のグループ上下限（${applied.size}件・個人の回数にも展開済み）",
                     style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    applied.forEach { gr ->
-                        val rangeLab = when {
-                            gr.lo.isNotBlank() && gr.hi.isNotBlank() -> "${gr.lo}–${gr.hi}"
-                            gr.hi.isNotBlank() -> "≤${gr.hi}"
-                            gr.lo.isNotBlank() -> "≥${gr.lo}"
-                            else -> ""
+                applied.groupBy { it.g to it.groupName }.forEach { (gKey, rows) ->
+                    val (g, groupName) = gKey
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(groupName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        DeleteRowButton(onClick = { vm.clearGroupRangeSection(g) }, enabled = !ui.running, text = "全解除")
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        rows.forEach { gr ->
+                            val rangeLab = when {
+                                gr.lo.isNotBlank() && gr.hi.isNotBlank() -> "${gr.lo}–${gr.hi}"
+                                gr.hi.isNotBlank() -> "≤${gr.hi}"
+                                gr.lo.isNotBlank() -> "≥${gr.lo}"
+                                else -> ""
+                            }
+                            InputChip(
+                                selected = false,
+                                enabled = !ui.running,
+                                onClick = { dialog = true },
+                                label = { Text("${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）") },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, contentDescription = "削除",
+                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.clearGroupRange(gr.g, gr.k, gr.lo, gr.hi) }.padding(7.dp))
+                                },
+                            )
                         }
-                        InputChip(
-                            selected = false,
-                            enabled = !ui.running,
-                            onClick = { dialog = true },
-                            label = { Text("${gr.groupName}·${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）") },
-                            trailingIcon = {
-                                Icon(Icons.Filled.Close, contentDescription = "削除",
-                                    modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.clearGroupRange(gr.g, gr.k, gr.lo, gr.hi) }.padding(7.dp))
-                            },
-                        )
                     }
                 }
             }
