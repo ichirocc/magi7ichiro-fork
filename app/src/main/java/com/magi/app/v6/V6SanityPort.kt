@@ -384,7 +384,7 @@ object V6SanityPort {
         fun capableCount(k: Int): Int = (0 until p.S).count { p.canDo(it, k) }
 
         fun run(): List<SettingIssue> {
-            wishIssues(); duplicateSeqIssues(); c1RuleIssues(); unusableRowIssues(); nonNumericIssues(); assignmentIssues()
+            wishIssues(); duplicateSeqIssues(); mustForbiddenSeqIssues(); c1RuleIssues(); unusableRowIssues(); nonNumericIssues(); assignmentIssues()
             demandCapacityIssues(); staffRangeIssues(); seatIssues(); forcedCountIssues(); forcedCovUIssues(); duplicateKeyIssues()
             musIssues(); softOverflowIssue()
             return sorted()
@@ -420,6 +420,41 @@ object V6SanityPort {
                     action = SettingFixAction.DELETE_DUP_SEQ, actionLabel = "重複を1つ削除",
                     seqFamily = famRaw, seqKey = seq))
             }
+        }
+
+        /**
+         * [3.534.0/経緯は docs/history/3.4xx.md] 必須(c3)/推奨(c3m)はrun-deficit（L以上連続で満たす）、
+         * 禁止(c3n,HARD)は窓マッチ（N連続の窓が1つでもあれば発火）。同じシフトでL>=Nなら必須を満たす
+         * 連続は必ずN連続を含み常に未達＝探索の失敗でなく設定の衝突。c3mn(回避,SOFT)は対象外。
+         */
+        fun mustForbiddenSeqIssues() {
+            fun singleShiftRun(row: C3Row): Pair<String, Int>? {
+                val parts = ArrayList<String>()
+                for (item in row.pattern) { if (item.isBlank()) break; parts.add(item) }
+                if (parts.size < 2 || parts.any { it != parts[0] }) return null
+                return parts[0] to parts.size
+            }
+            val forbidLen = HashMap<String, Int>()
+            for (row in state.cons3n) {
+                val (sym, n) = singleShiftRun(row) ?: continue
+                forbidLen[sym] = minOf(forbidLen[sym] ?: Int.MAX_VALUE, n)
+            }
+            if (forbidLen.isEmpty()) return
+            fun check(famRaw: String, rows: List<C3Row>) {
+                val famJp = c3FamilyJp(famRaw)
+                for (row in rows) {
+                    val (sym, l) = singleShiftRun(row) ?: continue
+                    val n = forbidLen[sym] ?: continue
+                    if (l < n) continue
+                    out.add(SettingIssue(IssueKind.CONSTRAINT,
+                        "「$sym」の連続パターン（$famJp ${l}連続 / 禁止の並び ${n}連続）",
+                        "「$sym」を${l}連続以上にする$famJp が、「$sym」の${n}連続禁止と両立できません" +
+                            "（${l}連続以上には必ず${n}連続が含まれるため、この$famJp は常に未達になります）",
+                        "「$sym」の連続数を見直すか、$famJp か禁止の並びのどちらかの行を削除してください"))
+                }
+            }
+            check("c3", state.cons3)
+            check("c3m", state.cons3m)
         }
 
         fun c1RuleIssues() {

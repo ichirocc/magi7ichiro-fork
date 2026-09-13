@@ -74,6 +74,44 @@ class V6SanityPortTest {
             V6SanityPort.buildGuidance(st).none { it.kind == IssueKind.DEMAND })
     }
 
+    /** [3.534.0] 単一シフト連の必須(c3)/禁止(c3n)の組合せだけを切替える最小盤面。 */
+    private fun seqState(cons3: List<com.magi.app.model.C3Row>, cons3n: List<com.magi.app.model.C3Row>) = MagiState(
+        startDate = "2026-06-01", endDate = "2026-06-06",
+        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", "")),
+        groups = listOf(Group("G", "G")),
+        staff = listOf(Staff("s0", 0)),
+        use2Patterns = false,
+        groupShift = listOf(listOf(1, 1)),
+        groupShiftApt = listOf(listOf("", "")),
+        schedule = listOf(listOf(1, 1, 0, 1, 1, 0)),
+        wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = cons3, cons3n = cons3n,
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun mustForbiddenSameShiftContradictionIsReported() {
+        // 「A」を3連続以上にする必須と、「A」の3連続禁止は両立できない（3連続以上には必ず3連続の窓を含む）。
+        val st = seqState(
+            cons3 = listOf(com.magi.app.model.C3Row(listOf("A", "A", "A"))),
+            cons3n = listOf(com.magi.app.model.C3Row(listOf("A", "A", "A"))),
+        )
+        val issues = V6SanityPort.buildGuidance(st)
+        assertTrue("必須と禁止の連続数矛盾を検知する: $issues",
+            issues.any { it.kind == IssueKind.CONSTRAINT && it.problem.contains("両立できません") })
+    }
+
+    @Test fun mustShorterThanForbiddenIsNotFalselyReported() {
+        // [ユーザー提示案の技術検証] 「A」を3連続以上にする必須と、「A」の4連続禁止は両立できる
+        // （3連続の直後に別シフトを挟めば両方満たせる＝提案時に例示された「矛盾」は実際は矛盾でない）。
+        val st = seqState(
+            cons3 = listOf(com.magi.app.model.C3Row(listOf("A", "A", "A"))),
+            cons3n = listOf(com.magi.app.model.C3Row(listOf("A", "A", "A", "A"))),
+        )
+        val issues = V6SanityPort.buildGuidance(st)
+        assertTrue("両立可能な組合せは矛盾として誤検知しない: $issues",
+            issues.none { it.kind == IssueKind.CONSTRAINT && it.problem.contains("両立できません") })
+    }
+
     /** ベース: 2職員×6日、A は 1日1スロット。cons1 A(窓3日で2回以上) を切替えて壁/ダイヤルを検証。 */
     private fun windowState(need1A: String, cons1: List<com.magi.app.model.C1Row>) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
