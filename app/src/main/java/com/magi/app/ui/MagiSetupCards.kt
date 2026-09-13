@@ -355,6 +355,17 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             }
             Switch(checked = ui.combineExhaustPairs, onCheckedChange = { vm.setCombineExhaustPairs(it) }, enabled = !ui.running)
         }
+        // [3.535.0/HF77明示数値指示] 公平化/適切回数の研磨で、それ以外のソフト違反がわずかに増える
+        // 手も試せるようにする（keep-bestの原則自体は変えず、上限つきで容認するだけ）。既定OFF。
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("公平化/適切回数の研磨をもう一歩広げる")
+                Text("「グループ内の均等化」や「適切な回数」をよくする代わりに、他の細かい違反が少し増えるのを許します" +
+                    "（増える幅は始めの6%までに抑えます）。既定はOFFです。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.aptFairSoftTolerance, onCheckedChange = { vm.setAptFairSoftTolerance(it) }, enabled = !ui.running)
+        }
     }
 }
 

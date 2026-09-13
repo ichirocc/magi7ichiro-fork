@@ -31,6 +31,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-13（3.535.0＝ユーザー指示「公平化の違反研磨時に、公平化以外のソフト制約違反を6%
+以内なら容認する」を実装。CLAUDE.mdの標準原則「研磨はkeep-best、採用基準を増やさない」への唯一の明示的
+例外として、grillingで範囲を確定した上で`AptFairPolish.toleratedBetter`（累積予算方式、HARDの不増加は
+不変）を実装、`PolishGate.aptFairSoftTolerance`（既定OFF）で設定タブ→詳細設定にSwitch追加。apt/fair両系
+に対称適用、`tools/loop`でA/Bも実施。`AptFairPolishToleranceTest`を新設、host JVM 746/746。詳細は
+`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-13（3.534.0＝ユーザー提示案「制約設定画面にインテリジェンスを追加」の技術検証。
 提案の具体例（必須3連続+禁止4連続=矛盾）は実際の評価式(`C3Run.rowDeficit`=run-deficit・窓マッチ)では
 矛盾しないと判明、正しい条件（必須の連続数L≥禁止の連続数N）で`V6SanityPort.mustForbiddenSeqIssues`を

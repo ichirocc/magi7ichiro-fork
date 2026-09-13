@@ -603,6 +603,7 @@ object V6FinalPort {
                 quantitativeRangeEval = quantitativeRangeEval,
                 combineExhaustPairs = PolishGate.combineExhaustPairs,
                 lnsAdaptive = PolishGate.lnsAdaptive,
+                aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
             ),
         )
         val tPost1 = EngineClock.nowMs()
