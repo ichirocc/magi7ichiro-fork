@@ -216,20 +216,15 @@ class Evaluator(private val p: Problem) {
             record("low", rawLow); record("high", rawHigh); record("apt", rawApt)
         }
 
-        // [統一fair] グループ内公平化 SOFT。群×担当ONシフトごと、メンバー回数の round(平均) からの
-        // L1偏差和。同群の職員間で各シフト回数を均す（UnifiedViolationChecker の "fair" と一致）。[3.522.0] 重み1→2。
+        // [統一fair/3.538.0] グループ内公平化 SOFT。群×担当ONシフトごと、`Problem.fairDevOfBucket`（達成率
+        // モード、全員に基準が無ければ従来の生回数round(平均)方式）からのL1偏差和（UnifiedViolationChecker の
+        // "fair" と一致）。[3.522.0] 重み1→2。
         run {
             var raw = 0L
             for (g in 0 until p.G) {
                 val mem = p.groupMembers[g]
-                val m = mem.size
-                if (m < 2) continue
-                for (k in p.bucket[g]) {
-                    var sum = 0
-                    for (x in mem) sum += ssn[x][k]
-                    val tgt = Math.round(sum.toDouble() / m).toInt()
-                    for (x in mem) raw += kotlin.math.abs(ssn[x][k] - tgt).toLong()
-                }
+                if (mem.size < 2) continue
+                for (k in p.bucket[g]) raw += p.fairDevOfBucket(g, k) { x -> ssn[x][k] }.total.toLong()
             }
             soft += raw * 2L; record("fair", raw)
         }

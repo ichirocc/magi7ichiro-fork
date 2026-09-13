@@ -96,10 +96,8 @@ class WeeklyFairMarginalTest {
                 val dWeekly = DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, old, newK).toDouble()
 
                 val counts = Array(s) { ss -> IntArray(k).also { a -> for (jj in 0 until t) { val kk = board[ss][jj]; if (kk in 0 until k) a[kk]++ } } }
-                val grpTotal = Array(p.G) { IntArray(k) }
-                for (ss in 0 until s) for (kk in 0 until k) grpTotal[p.sgrp[ss]][kk] += counts[ss][kk]
-                val dFair = DestroyRepairMarginalCost.fairMarginalAt(p, i, old, -1, counts, grpTotal).toDouble() +
-                    DestroyRepairMarginalCost.fairMarginalAt(p, i, newK, 1, counts, grpTotal).toDouble()
+                val dFair = DestroyRepairMarginalCost.fairMarginalAt(p, i, old, -1, counts).toDouble() +
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, newK, 1, counts).toDouble()
 
                 val myDelta = dOld + dNew + dWeekly + dFair
                 assertEquals(
@@ -152,7 +150,6 @@ class WeeklyFairMarginalTest {
         )
         val p = cachedProblem(state)
         val counts = Array(3) { IntArray(3) }
-        val grpTotal = Array(p.G) { IntArray(3) }
-        assertEquals(0L, DestroyRepairMarginalCost.fairMarginalAt(p, 0, 1, 1, counts, grpTotal))
+        assertEquals(0L, DestroyRepairMarginalCost.fairMarginalAt(p, 0, 1, 1, counts))
     }
 }

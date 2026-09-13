@@ -31,6 +31,15 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-13（3.538.0＝ユーザー指示「公平化の平均は、目標値と個人上下限などの設定を配慮した
+達成率スコアに変換してから計算する」をgrillingで確定し実装。範囲staffRange.lo/hiまたは実効apt目標が
+群の全メンバーに揃う場合だけ達成率（回数の位置/目標比）で比較、揃わなければ従来のround(平均)へ
+フォールバック。`Problem.fairDevOfBucket`を共通ソース化しEvaluator/DeltaEvaluator/UnifiedViolationChecker/
+DestroyRepairMarginalCostの4箇所を統一（1箇所の改修漏れをテストで検出・修正）。C++`magi_native.cpp`も
+同式へ移植し、達成率モードを実際に発火させる5件目のクロス言語フィクスチャ(sept2026)を追加。host JVM
+747/747・C++ host_parity_bench 5フィクスチャ全MATCH・自己整合約600万手0 mismatch。C#(-MAGI_PC)は
+別リポジトリのため同日同期が必要（本セッション未実施）。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-13（3.537.0＝aptFairSoftTolerance(3.535.0)のtools/loop正式A/B結果（46ケース×3seed
 =138ペア、決定的モード）。辞書式で旧(OFF)68勝・新(ON)38勝・同等32＝ONが劣勢。速度-62%・タイムアウト
 12→32件・下位10%品質も旧未満＝退行ゼロ/品質≥10%/速度≥10%/安定性の4ゲート全て不合格。c40-large-

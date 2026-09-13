@@ -467,14 +467,10 @@ static int runMarginalCostTest() {
             }
         long long d = 0;
         for (int g = 0; g < p.G; g++) {
-            const auto& mem = p.members[g];
-            if ((int)mem.size() < 2) continue;
+            if ((int)p.members[g].size() < 2) continue;
             for (int k = 0; k < p.K; k++) {
                 if (!p.bucketHas[(size_t)g * p.K + k]) continue;
-                int sum = 0;
-                for (int x : mem) sum += counts[(size_t)x * p.K + k];
-                long long tgt = jround((double)sum / (double)mem.size());
-                for (int x : mem) d += std::llabs((long long)counts[(size_t)x * p.K + k] - tgt);
+                d += fairDevOfBucket(p, g, k, [&](int x) { return counts[(size_t)x * p.K + k]; });
             }
         }
         return d;
@@ -502,15 +498,11 @@ static int runMarginalCostTest() {
                 if (k >= 0 && k < p.K) counts[(size_t)s2 * p.K + k]++;
             }
         std::vector<int> countsCopy = counts;
-        std::vector<int> grpTotal((size_t)p.G * p.K, 0);
-        for (int s2 = 0; s2 < p.S; s2++)
-            for (int k = 0; k < p.K; k++)
-                grpTotal[(size_t)p.sgrp[s2] * p.K + k] += counts[(size_t)s2 * p.K + k];
 
         const int bucket = (p.dow0 + j) % 7;
         long long mWeekly = weeklyMarginalN(wd.data(), p.K, bucket, oldK, newK);
-        long long mFair = fairMarginalN(p, i, oldK, -1, counts, grpTotal)
-                        + fairMarginalN(p, i, newK, 1, counts, grpTotal);
+        long long mFair = fairMarginalN(p, i, oldK, -1, counts)
+                        + fairMarginalN(p, i, newK, 1, counts);
 
         if (wd != wdCopy) { printf("MARGINAL-TEST FAIL: weeklyMarginalN が作業配列を戻していない\n"); failures++; break; }
         if (counts != countsCopy) { printf("MARGINAL-TEST FAIL: fairMarginalN が counts を戻していない\n"); failures++; break; }

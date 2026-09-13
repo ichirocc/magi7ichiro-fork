@@ -74,10 +74,8 @@ internal object DestroyRepairOperators {
             }
             return d
         }
-        // [3.267.0/weekly+fair統合] 群合計(fair, 月間total)と職員別曜日バケット(weekly)を一度だけ構築
-        // （destroy後のschedule基準＝c41のgrpCntと同じ順序）。day j は固定のため bucket は全候補共通。
-        val grpTotal = Array(p.G) { IntArray(p.K) }
-        for (i in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[i]][k] += cnt[i][k]
+        // [3.267.0/weekly統合] 職員別曜日バケット(weekly)を一度だけ構築（destroy後のschedule基準＝c41の
+        // grpCntと同じ順序）。day j は固定のため bucket は全候補共通。
         val wd = Array(p.S) { s ->
             Array(p.K) { IntArray(7) }.also { a ->
                 for (jj in 0 until p.T) { val k2 = schedule[s][jj]; if (k2 in 0 until p.K) a[k2][(p.dow0 + jj) % 7]++ }
@@ -102,8 +100,8 @@ internal object DestroyRepairOperators {
                     val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k]) +
                         c41DayMarg(p.sgrp[i], k) +
                         DestroyRepairMarginalCost.weeklyMarginalAt(wd[i], bucket, rest, k) +
-                        DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, cnt, grpTotal) +
-                        DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, cnt, grpTotal)
+                        DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, cnt) +
+                        DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, cnt)
                     if (delta < bestDelta) {
                         bestDelta = delta; bestI = i; tied = 1
                     } else if (delta == bestDelta) {
@@ -114,7 +112,6 @@ internal object DestroyRepairOperators {
                 if (bestI < 0) break
                 schedule[bestI][j] = k; cnt[bestI][k]++; cnt[bestI][rest]--; covJ[k]++; miss--
                 if (hasC41) grpCnt[p.sgrp[bestI]][k]++
-                grpTotal[p.sgrp[bestI]][k]++; grpTotal[p.sgrp[bestI]][rest]--
                 wd[bestI][rest][bucket]--; wd[bestI][k][bucket]++
             }
         }
@@ -137,15 +134,13 @@ internal object DestroyRepairOperators {
         // [soft-aware staff-DR / 実測 tools/nsp_bench.py --real: staff+viol で実データ final -49.5%]
         //   非希望セルを休へ destroy → 各日の被覆穴を「staff i の marginal soft 最小のシフト」で repair。
         //   被覆穴のみ埋める(過剰=covO を作らない)。希望固定は保持。スコアリング不変=Δ×フル無関係。
-        // [3.267.0/weekly+fair統合] fair(群内公平化)は群メンバー全員の月間totalが要るため、counts は
+        // [3.267.0/weekly+fair統合] fair(群内公平化)は群メンバー全員の各回数が要るため、counts は
         // 全職員S×Kで構築する（cntI は counts[i] の別名＝同一配列参照、以降どちらの名前で更新しても
-        // 他方に反映される）。grpTotal(G×K, 群合計)とwd(staff iの曜日別非休日数, 7要素)も一度だけ構築。
+        // 他方に反映される）。wd(staff iの曜日別非休日数, 7要素)も一度だけ構築。
         val counts = Array(p.S) { s ->
             IntArray(p.K).also { a -> for (jj in 0 until p.T) { val k = schedule[s][jj]; if (k in 0 until p.K) a[k]++ } }
         }
         val cntI = counts[i]
-        val grpTotal = Array(p.G) { IntArray(p.K) }
-        for (s in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[s]][k] += counts[s][k]
         val wd = Array(p.K) { IntArray(7) }
         for (jj in 0 until p.T) { val k2 = schedule[i][jj]; if (k2 in 0 until p.K) wd[k2][(p.dow0 + jj) % 7]++ }
         for (j in 0 until p.T) {
@@ -154,7 +149,6 @@ internal object DestroyRepairOperators {
             if (old != rest && old in 0 until p.K) {
                 schedule[i][j] = rest
                 cntI[old]--; cntI[rest]++
-                grpTotal[p.sgrp[i]][old]--; grpTotal[p.sgrp[i]][rest]++
                 wd[old][(p.dow0 + j) % 7]--; wd[rest][(p.dow0 + j) % 7]++
             }
         }
@@ -173,8 +167,8 @@ internal object DestroyRepairOperators {
                 if (p.covUCell(k, j, cov[j][k]) <= 0) continue
                 val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k]) +
                     DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, rest, k) +
-                    DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, counts, grpTotal) +
-                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts, grpTotal)
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, rest, -1, counts) +
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts)
                 if (delta < bestDelta) {
                     bestDelta = delta; bestK = k; tied = 1
                 } else if (delta == bestDelta) {
@@ -185,7 +179,6 @@ internal object DestroyRepairOperators {
             if (bestK >= 0) {
                 schedule[i][j] = bestK
                 cntI[bestK]++; cntI[rest]--
-                grpTotal[p.sgrp[i]][bestK]++; grpTotal[p.sgrp[i]][rest]--
                 wd[rest][bucket]--; wd[bestK][bucket]++
                 cov[j][bestK]++; cov[j][rest]--
             }
@@ -208,15 +201,13 @@ internal object DestroyRepairOperators {
             //   marginal soft(old→k)最小のシフトへ再割当(従来はランダム)。スコアリング不変=Δ×フル無関係。
             val cntI = IntArray(p.K)
             for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cntI[k]++ }
-            // [3.267.0/weekly+fair統合] この手専用にwd(staff iの曜日別非休日数)とgrpTotal(群合計, 全職員
-            // スキャン)を構築。件数は最大8回(repeat)に限られ盤面規模も小さいため、毎回の再走査を許容する。
+            // [3.267.0/weekly+fair統合] この手専用にwd(staff iの曜日別非休日数)とcounts(全職員S×K, fairの
+            // 達成率モードに要る)を構築。件数は最大8回(repeat)に限られ盤面規模も小さいため、毎回の再走査を許容する。
             val wd = Array(p.K) { IntArray(7) }
             for (jj in 0 until p.T) { val k2 = schedule[i][jj]; if (k2 in 0 until p.K) wd[k2][(p.dow0 + jj) % 7]++ }
             val counts = Array(p.S) { s ->
                 IntArray(p.K).also { a -> for (jj in 0 until p.T) { val k = schedule[s][jj]; if (k in 0 until p.K) a[k]++ } }
             }
-            val grpTotal = Array(p.G) { IntArray(p.K) }
-            for (s in 0 until p.S) for (k in 0 until p.K) grpTotal[p.sgrp[s]][k] += counts[s][k]
             val bucket = (p.dow0 + j) % 7
             val old = schedule[i][j]
             var bestK = old; var bestDelta = Long.MAX_VALUE; var tied = 0
@@ -225,8 +216,8 @@ internal object DestroyRepairOperators {
                 val dOld = if (old in 0 until p.K) DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old] - 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old]) else 0L
                 val dK = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k])
                 val dWeekly = DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, old, k)
-                val dFair = (if (old in 0 until p.K) DestroyRepairMarginalCost.fairMarginalAt(p, i, old, -1, counts, grpTotal) else 0L) +
-                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts, grpTotal)
+                val dFair = (if (old in 0 until p.K) DestroyRepairMarginalCost.fairMarginalAt(p, i, old, -1, counts) else 0L) +
+                    DestroyRepairMarginalCost.fairMarginalAt(p, i, k, 1, counts)
                 val delta = dOld + dK + dWeekly + dFair
                 if (delta < bestDelta) {
                     bestDelta = delta; bestK = k; tied = 1

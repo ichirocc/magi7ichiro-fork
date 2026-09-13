@@ -392,25 +392,18 @@ object UnifiedViolationChecker {
             }
         }
 
-        // [統一fair] グループ内公平化: 群×担当ONシフトごと、メンバー回数の round(平均) からの L1 偏差和。
-        // SOFT・重み1。最適化器(Evaluator/Delta)と同一指標。内訳チップ(UI)には出さず weightedScore/total に算入。
+        // [統一fair/3.538.0] グループ内公平化: 群×担当ONシフトごと、`Problem.fairDevOfBucket`（達成率モード、
+        // 全員に基準が無ければ従来の生回数round(平均)方式）からのL1偏差和。SOFT・重み2。最適化器(Evaluator/Delta)
+        // と同一指標。内訳チップ(UI)には出さず weightedScore/total に算入。
         // [場所表示] 偏っているメンバー(x,k,dev)を収集（内訳パネル用・グリッドには出さない）。
         val fairLocs = ArrayList<List<Int>>()
         for (g in 0 until p.G) {
             val mem = p.groupMembers[g]
-            val m = mem.size
-            if (m < 2) continue
+            if (mem.size < 2) continue
             for (k in p.bucket[g]) {
-                var sum = 0
-                for (x in mem) sum += counts[x][k]
-                val tgt = Math.round(sum.toDouble() / m).toInt()
-                var d = 0
-                for (x in mem) {
-                    val dx = kotlin.math.abs(counts[x][k] - tgt)
-                    d += dx
-                    if (dx > 0) fairLocs.add(listOf(x, k, dx))
-                }
-                if (d > 0) inc("fair", d)
+                val res = p.fairDevOfBucket(g, k) { x -> counts[x][k] }
+                for ((x, dx) in res.perMember) fairLocs.add(listOf(x, k, dx))
+                if (res.total > 0) inc("fair", res.total)
             }
         }
 
@@ -665,6 +658,66 @@ fun weeklyDevOfBucket(wd: IntArray): Int {
     var d = 0
     for (w in wd) d += kotlin.math.abs(7 * w - sum)
     return d / 7
+}
+
+/** [3.538.0] `fairDevOfBucket` の1件分の結果。[perMember] は偏差>0の(職員index, 偏差件数)のみ（場所表示用）。 */
+class FairDevResult(val total: Int, val perMember: List<Pair<Int, Int>>)
+
+/**
+ * [3.538.0/ユーザー指示「公平化の平均は、目標値と個人上下限などの設定を配慮した達成率スコアに変換してから
+ * 計算する」] 群g・シフトk の公平化(fair)偏差。[count] は職員indexから現在の回数を返す関数（Evaluatorの
+ * 全走査・DeltaEvaluatorの1手プレビュー・UnifiedViolationCheckerのcountsのいずれからも呼べるようにする）。
+ *
+ * 群の全メンバーに `Problem.fairBasisAnchor`（範囲staffRange.lo/hi優先、無ければ実効apt目標）が揃う場合だけ
+ * 「達成率モード」: 各人の達成率=(count-基準値)/基準幅、目標達成率(tgt_rate)は達成率の単純平均（丸めない）。
+ * 各人の偏差は |達成率-tgt_rate| に**自分の基準幅**を掛けて四捨五入し、件数相当へ戻す（重み2の「件数」という
+ * 単位を変えないため）。基準幅ゼロ（範囲lo==hi、apt目標0）の人は達成率を作れないため個別扱い：
+ * count が基準値と一致すれば偏差0、それ以外は |count-基準値| をそのまま件数化し、tgt_rateの平均対象からは
+ * 除外する（自分の基準ちょうどを100%達成とみなすだけで、群平均との比較はしない）。
+ *
+ * 1人でも基準が無い、または達成率の平均対象（基準幅>0の人）が1人もいなければ、その群×シフト全体を
+ * 従来の生回数 `round(平均)` 方式のL1偏差（Evaluator/DeltaEvaluator/UnifiedViolationChecker の旧実装と同一）
+ * へフォールバックする。m<2の群は呼び出し前に除外される想定（呼び出し側の既存ガードを踏襲）。
+ */
+fun Problem.fairDevOfBucket(g: Int, k: Int, count: (Int) -> Int): FairDevResult {
+    val mem = groupMembers[g]
+    var allHaveBasis = true
+    for (x in mem) if (fairBasisAnchor[x][k] == Int.MIN_VALUE) { allHaveBasis = false; break }
+    if (!allHaveBasis) return legacyFairDevOfBucket(mem, count)
+
+    var rateSum = 0.0; var rateN = 0
+    for (x in mem) {
+        val width = fairBasisWidth[x][k]
+        if (width > 0) { rateSum += (count(x) - fairBasisAnchor[x][k]).toDouble() / width; rateN++ }
+    }
+    if (rateN == 0) return legacyFairDevOfBucket(mem, count)
+    val tgtRate = rateSum / rateN
+
+    var total = 0
+    val perMember = ArrayList<Pair<Int, Int>>()
+    for (x in mem) {
+        val anchor = fairBasisAnchor[x][k]; val width = fairBasisWidth[x][k]; val c = count(x)
+        val dx = if (width > 0) Math.round(kotlin.math.abs((c - anchor).toDouble() / width - tgtRate) * width).toInt()
+                 else if (c == anchor) 0 else kotlin.math.abs(c - anchor)
+        total += dx
+        if (dx > 0) perMember.add(x to dx)
+    }
+    return FairDevResult(total, perMember)
+}
+
+/** [3.538.0] `fairDevOfBucket` のフォールバック先＝3.537.0以前の実装そのもの（生回数のround(平均)からのL1偏差）。 */
+private fun legacyFairDevOfBucket(mem: IntArray, count: (Int) -> Int): FairDevResult {
+    var sum = 0
+    for (x in mem) sum += count(x)
+    val tgt = Math.round(sum.toDouble() / mem.size).toInt()
+    var total = 0
+    val perMember = ArrayList<Pair<Int, Int>>()
+    for (x in mem) {
+        val dx = kotlin.math.abs(count(x) - tgt)
+        total += dx
+        if (dx > 0) perMember.add(x to dx)
+    }
+    return FairDevResult(total, perMember)
 }
 
 fun countMatrix(p: Problem, schedule: Array<IntArray>): Array<IntArray> {

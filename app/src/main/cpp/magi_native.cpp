@@ -232,6 +232,56 @@ inline long long weeklyDevOfBucket(const int wd[7]) {
     return d / 7;
 }
 
+struct FairBasis { int anchor; int width; };  // anchor==INT32_MIN は基準なし
+
+// [3.538.0] Kotlin Problem.fairBasisAnchor/Width と同じ導出式（範囲staffRange.lo/hi両方有限を優先、
+// 無ければ実効apt目標>=0）。C++はJNIで別途受け取らずrangeLo/rangeHi/aptから都度導出する（Kotlin側と
+// 常に同じ入力から同じ式で計算するため、JNI経由のデータ二重輸送を避ける。呼び出しはO(1)）。
+inline FairBasis fairBasisOf(const MagiProblem& p, int x, int k) {
+    int lo = p.rangeLo[(size_t)x * p.K + k];
+    int hi = p.rangeHi[(size_t)x * p.K + k];
+    if (lo != INT32_MIN && hi != INT32_MAX) return { lo, hi - lo };
+    int t = p.apt[(size_t)x * p.K + k];
+    if (t >= 0) return { t, t };
+    return { INT32_MIN, 0 };
+}
+
+// [3.538.0] 群g・シフトk の公平化(fair)偏差。count(x)は職員xの現在の回数（contribFairの全走査・
+// fairMarginalNの1手プレビューのいずれからも呼べるようテンプレート化）。Kotlin `Problem.fairDevOfBucket`
+// （MirrorCore.kt）と同じ式＝達成率モード（詳細はそちらのdocまたはdocs/business-logic.md参照）。
+template <typename CountFn>
+inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn count) {
+    const auto& mem = p.members[g];
+    auto legacy = [&]() -> long long {
+        int sum = 0;
+        for (int x : mem) sum += count(x);
+        long long tgt = jround((double)sum / (int)mem.size());
+        long long d = 0;
+        for (int x : mem) d += std::llabs((long long)count(x) - tgt);
+        return d;
+    };
+    for (int x : mem) if (fairBasisOf(p, x, k).anchor == INT32_MIN) return legacy();
+
+    double rateSum = 0.0; int rateN = 0;
+    for (int x : mem) {
+        FairBasis b = fairBasisOf(p, x, k);
+        if (b.width > 0) { rateSum += (double)(count(x) - b.anchor) / b.width; rateN++; }
+    }
+    if (rateN == 0) return legacy();
+    double tgtRate = rateSum / rateN;
+
+    long long total = 0;
+    for (int x : mem) {
+        FairBasis b = fairBasisOf(p, x, k);
+        int c = count(x);
+        long long dx;
+        if (b.width > 0) dx = jround(std::fabs((double)(c - b.anchor) / b.width - tgtRate) * b.width);
+        else dx = (c == b.anchor) ? 0 : std::llabs((long long)c - b.anchor);
+        total += dx;
+    }
+    return total;
+}
+
 // C3Run.rowDeficit と同式（行走査で run の不足 L-r を加算）。
 inline long long rowDeficit(const int* row, int T, int k, int L) {
     long long sub = 0;
@@ -431,19 +481,12 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
         if (bd) { bd[13] += rawLow; bd[14] += rawHigh; bd[16] += rawApt; }
     }
 
-    // fair（群×担当ONシフト、round(平均) からの L1 偏差）。[3.522.0] 重み1→2。
+    // [3.538.0] fair（群×担当ONシフト、`fairDevOfBucket`＝達成率モード or 従来のround(平均)方式）。[3.522.0] 重み1→2。
     {
         long long raw = 0;
         for (int g = 0; g < p.G; g++) {
-            const auto& mem = p.members[g];
-            const int m = (int)mem.size();
-            if (m < 2) continue;
-            for (int k : p.bucket[g]) {
-                int sum = 0;
-                for (int x : mem) sum += ssn[(size_t)x * K + k];
-                long long tgt = jround((double)sum / m);
-                for (int x : mem) raw += std::llabs((long long)ssn[(size_t)x * K + k] - tgt);
-            }
+            if (p.members[g].size() < 2) continue;
+            for (int k : p.bucket[g]) raw += fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; });
         }
         soft += raw * 2; if (bd) bd[17] += raw;
     }
@@ -676,18 +719,11 @@ struct SaChunk {
         if (t >= 0) v += std::llabs((long long)n - t) * 4;  // [3.522.0] apt 1→4
         return v;
     }
-    long long contribFair(int g, int k) const {
+    long long contribFair(int g, int k) const {  // [3.538.0] fairDevOfBucket＝達成率モード or 従来方式
         if (g < 0 || g >= p.G || k < 0 || k >= K) return 0;
         if (!p.bucketHas[(size_t)g * K + k]) return 0;
-        const auto& mem = p.members[g];
-        const int m = (int)mem.size();
-        if (m < 2) return 0;
-        int sum = 0;
-        for (int x : mem) sum += ssn[(size_t)x * K + k];
-        long long tgt = jround((double)sum / m);
-        long long v = 0;
-        for (int x : mem) v += std::llabs((long long)ssn[(size_t)x * K + k] - tgt) * 2;  // [3.522.0] fair 1→2
-        return v;
+        if (p.members[g].size() < 2) return 0;
+        return fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; }) * 2;  // [3.522.0] fair 1→2
     }
     // [3.345.0] weekly は職員×シフト。deltaApply では old/nw の2バケットだけが動くので
     //   contribRangeApt/contribFair と同じく (i,old)+(i,nw) の形で before/after を取る。
@@ -1280,26 +1316,19 @@ inline long long weeklyMarginalN(int* wdI, int K, int bucket, int oldK, int newK
     return acc;
 }
 
-// counts(S*K) は一時的に書き換えて必ず戻す（Kotlin fairMarginalAt と同じ手）。
-inline long long fairMarginalN(const MagiProblem& p, int i, int k, int delta,
-                               std::vector<int>& counts, const std::vector<int>& grpTotal) {
+// [3.538.0] counts(S*K) は一時的に書き換えて必ず戻す（Kotlin fairMarginalAt と同じ手）。fairDevOfBucket
+// は合計でなく個々人の回数が要るため、旧実装が使っていたG*K群合計grpTotalは不要になった。
+inline long long fairMarginalN(const MagiProblem& p, int i, int k, int delta, std::vector<int>& counts) {
     const int K = p.K;
     if (delta == 0 || k < 0 || k >= K) return 0;
     int g = p.sgrp[i];
     if (g < 0 || g >= p.G) return 0;
     if (!p.bucketHas[(size_t)g * K + k]) return 0;
-    const auto& mem = p.members[g];
-    const int m = (int)mem.size();
-    if (m < 2) return 0;
-    auto dev = [&](int sum) -> long long {
-        long long tgt = jround((double)sum / m);
-        long long d = 0;
-        for (int x : mem) d += std::llabs((long long)counts[(size_t)x * K + k] - tgt);
-        return d;
-    };
-    long long before = dev(grpTotal[(size_t)g * K + k]);
+    if (p.members[g].size() < 2) return 0;
+    auto countAt = [&](int x) { return counts[(size_t)x * K + k]; };
+    long long before = fairDevOfBucket(p, g, k, countAt);
     counts[(size_t)i * K + k] += delta;
-    long long after = dev(grpTotal[(size_t)g * K + k] + delta);
+    long long after = fairDevOfBucket(p, g, k, countAt);
     counts[(size_t)i * K + k] -= delta;
     return after - before;
 }
@@ -1373,10 +1402,8 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
         }
         return d;
     };
-    // [3.409.22/Kotlin 3.267.0 のミラー] 群合計(fair の月間 total)と職員別の曜日バケット(weekly)を
-    //   destroy 後の盤面基準で一度だけ構築（c41 の grpCnt と同じ順序）。day j は固定なので bucket は共通。
-    std::vector<int> grpTotal((size_t)p.G * K, 0);
-    for (int i = 0; i < S; i++) for (int k = 0; k < K; k++) grpTotal[(size_t)p.sgrp[i] * K + k] += cnt[(size_t)i * K + k];
+    // [3.409.22/Kotlin 3.267.0 のミラー] 職員別の曜日バケット(weekly)を destroy 後の盤面基準で一度だけ
+    //   構築（c41 の grpCnt と同じ順序）。day j は固定なので bucket は共通。
     std::vector<int> wd((size_t)S * K * 7, 0);
     for (int i = 0; i < S; i++) for (int jj = 0; jj < T; jj++) {
         int k2 = a[(size_t)i * T + jj];
@@ -1398,8 +1425,8 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
                 long long delta = staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k] + 1)
                     - staffCountPenaltyAtN(p, i, k, cnt[(size_t)i * K + k]) + c41DayMarg(p.sgrp[i], k)
                     + weeklyMarginalN(&wd[((size_t)i * K) * 7], K, bucket, rest, k)
-                    + fairMarginalN(p, i, rest, -1, cnt, grpTotal)
-                    + fairMarginalN(p, i, k, 1, cnt, grpTotal);
+                    + fairMarginalN(p, i, rest, -1, cnt)
+                    + fairMarginalN(p, i, k, 1, cnt);
                 if (delta < bestDelta) { bestDelta = delta; bestI = i; tied = 1; }
                 else if (delta == bestDelta) { tied++; if (reservoirTieN(tied, rng)) bestI = i; }
             }
@@ -1408,7 +1435,6 @@ void destroyRepairDayAtN(const MagiProblem& p, int* a, int j, std::mt19937_64& r
             cnt[(size_t)bestI * K + k]++; cnt[(size_t)bestI * K + rest]--;
             covJ[k]++; miss--;
             if (hasC41) grpCnt[(size_t)p.sgrp[bestI] * K + k]++;
-            grpTotal[(size_t)p.sgrp[bestI] * K + k]++; grpTotal[(size_t)p.sgrp[bestI] * K + rest]--;
             wd[((size_t)bestI * K + rest) * 7 + (size_t)bucket]--;
             wd[((size_t)bestI * K + k) * 7 + (size_t)bucket]++;
         }
@@ -1434,15 +1460,13 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
         int k2 = a[(size_t)x * T + j];
         if (k2 >= 0 && k2 < K) cov[(size_t)j * K + k2]++;
     }
-    // [3.409.22/Kotlin 3.267.0 のミラー] fair は群メンバー全員の月間 total が要るので counts(S*K) を持つ
+    // [3.409.22/Kotlin 3.267.0 のミラー] fair は群メンバー全員の各回数が要るので counts(S*K) を持つ
     //   （職員 i の行は cntI と同じ値を二重に持たず、下の更新で両方を同時に動かす）。weekly は職員 i のぶんだけ。
     std::vector<int> counts((size_t)S * K, 0);
     for (int x = 0; x < S; x++) for (int jj = 0; jj < T; jj++) {
         int k2 = a[(size_t)x * T + jj];
         if (k2 >= 0 && k2 < K) counts[(size_t)x * K + k2]++;
     }
-    std::vector<int> grpTotal((size_t)p.G * K, 0);
-    for (int x = 0; x < S; x++) for (int k = 0; k < K; k++) grpTotal[(size_t)p.sgrp[x] * K + k] += counts[(size_t)x * K + k];
     std::vector<int> wd((size_t)K * 7, 0);
     for (int jj = 0; jj < T; jj++) {
         int k2 = a[(size_t)i * T + jj];
@@ -1460,8 +1484,8 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
             if (p.covUCell(k, j, cov[(size_t)j * K + k]) <= 0) continue;
             long long delta = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k])
                 + weeklyMarginalN(wd.data(), K, bucket, rest, k)
-                + fairMarginalN(p, i, rest, -1, counts, grpTotal)
-                + fairMarginalN(p, i, k, 1, counts, grpTotal);
+                + fairMarginalN(p, i, rest, -1, counts)
+                + fairMarginalN(p, i, k, 1, counts);
             if (delta < bestDelta) { bestDelta = delta; bestK = k; tied = 1; }
             else if (delta == bestDelta) { tied++; if (reservoirTieN(tied, rng)) bestK = k; }
         }
@@ -1470,7 +1494,6 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
             cntI[bestK]++; cntI[rest]--;
             cov[(size_t)j * K + bestK]++; cov[(size_t)j * K + rest]--;
             counts[(size_t)i * K + bestK]++; counts[(size_t)i * K + rest]--;
-            grpTotal[(size_t)p.sgrp[i] * K + bestK]++; grpTotal[(size_t)p.sgrp[i] * K + rest]--;
             wd[(size_t)rest * 7 + (size_t)bucket]--; wd[(size_t)bestK * 7 + (size_t)bucket]++;
         }
     }
@@ -1478,7 +1501,7 @@ void destroyRepairStaffAtN(const MagiProblem& p, int* a, int i, std::mt19937_64&
 
 // destroyRepairViolations: 違反セル(hint)から最大8セルを marginal soft 最小の担当可シフトへ再割当。
 // [3.409.22] 費用は 個人回数(low/high/apt) + weekly + fair、同点は reservoir 抽選＝Kotlin と同式。
-//   兄弟2関数（Day/Staff）と違い、ここは wd/counts/grpTotal を **repeat ごとに再構築**する
+//   兄弟2関数（Day/Staff）と違い、ここは wd/counts を **repeat ごとに再構築**する
 //   （Kotlin も同じ＝件数が最大8回に限られるため毎回の再走査を許容している）。
 void destroyRepairViolationsN(const MagiProblem& p, int* a, const std::vector<int>& cells, std::mt19937_64& rng) {
     const int S = p.S, T = p.T, K = p.K;
@@ -1503,12 +1526,6 @@ void destroyRepairViolationsN(const MagiProblem& p, int* a, const std::vector<in
                 int k2 = a[(size_t)s2 * T + jj];
                 if (k2 >= 0 && k2 < K) counts[(size_t)s2 * K + k2]++;
             }
-        std::vector<int> grpTotal((size_t)p.G * K, 0);
-        for (int s2 = 0; s2 < S; s2++) {
-            int g = p.sgrp[s2];
-            if (g < 0 || g >= p.G) continue;
-            for (int k2 = 0; k2 < K; k2++) grpTotal[(size_t)g * K + k2] += counts[(size_t)s2 * K + k2];
-        }
         const int bucket = (p.dow0 + j) % 7;
         int old = a[(size_t)i * T + j];
         int bestK = old;
@@ -1521,8 +1538,8 @@ void destroyRepairViolationsN(const MagiProblem& p, int* a, const std::vector<in
             long long dK = staffCountPenaltyAtN(p, i, k, cntI[k] + 1) - staffCountPenaltyAtN(p, i, k, cntI[k]);
             long long delta = dOld + dK
                 + weeklyMarginalN(wd.data(), K, bucket, old, k)
-                + ((old >= 0 && old < K) ? fairMarginalN(p, i, old, -1, counts, grpTotal) : 0)
-                + fairMarginalN(p, i, k, 1, counts, grpTotal);
+                + ((old >= 0 && old < K) ? fairMarginalN(p, i, old, -1, counts) : 0)
+                + fairMarginalN(p, i, k, 1, counts);
             if (delta < bestDelta) { bestDelta = delta; bestK = k; tied = 1; }
             else if (delta == bestDelta) { tied++; if (reservoirTieN(tied, rng)) bestK = k; }
         }

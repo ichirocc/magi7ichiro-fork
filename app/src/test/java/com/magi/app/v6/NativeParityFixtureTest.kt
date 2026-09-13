@@ -60,6 +60,15 @@ class NativeParityFixtureTest {
         assertTrue("全19族が非ゼロになるはずが、発火しない族がある: $zero（fixture 側の修正が要る）", zero.isEmpty())
     }
 
+    /** [3.538.0] fairの達成率モード（`Problem.fairDevOfBucket`）を実際に発火させる5件目の実データ形状
+     *  （他4件は範囲staffRange.lo/hiとapt目標の両方が群の全メンバーに揃う組合せを持たず、旧来の
+     *  生回数round(平均)方式のままだった＝達成率モードが検証不能だった）。C++側は
+     *  `.github/workflows/native-parity.yml` の `--expect=` で同じファイルを照合する。 */
+    @Test
+    fun sept2026EvaluatorValueMatchesTheSharedCrossLanguageFixtureAndExercisesFairAchievementMode() {
+        assertFixtureMatchesEvaluator("/sept2026_state.json", "/sept2026_eval_expected.txt")
+    }
+
     private fun assertFixtureMatchesEvaluator(stateResource: String, expectResource: String): Map<String, Long> {
         val json = javaClass.getResourceAsStream(stateResource)?.bufferedReader()?.readText()
         assertNotNull("$stateResource がテストリソースにありません", json)
