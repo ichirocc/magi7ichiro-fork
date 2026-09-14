@@ -76,7 +76,7 @@ fun ConstraintsCard(
                 Text(fam.title, style = MaterialTheme.typography.titleSmall)
                 if (fam.rows.isEmpty()) {
                     Text("(なし)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else if (fam.key.startsWith("cons3")) {
+                } else if (fam.key.startsWith("cons3") && fam.key != "cons3w") {
                     // [3.482.0 編集タブ簡素化] 並び4族は「起点シフトごとのチップ」に集約（見本データは禁止11行のうち
                     //   Dﾃ起点が7行＝1行ずつの縦積みでは重複に気づけなかった）。データは従来の C3Row のまま＝表示の集約のみ。
                     SeqFamilyGrouped(fam, vm, enabled = !ui.running,
@@ -91,7 +91,7 @@ fun ConstraintsCard(
                     }
                 }
                 // [3.483.0 E-10] 並び系は起点チップごとに「＋」があるため、末尾の「追加」は「新しい起点で追加」と区別。
-                AddRowButton(if (fam.key.startsWith("cons3")) "新しい起点で追加" else "追加", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
+                AddRowButton(if (fam.key.startsWith("cons3") && fam.key != "cons3w") "新しい起点で追加" else "追加", onClick = { addTarget = fam.key to null }, enabled = !ui.running)
                 Divider()
             }
         }
@@ -366,6 +366,15 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
                 Picker("シフト1", shifts, s1) { s1 = it }
                 Picker("スキル2", skills, g2) { g2 = it }
                 Picker("シフト2", shifts, s2) { s2 = it }
+            }
+        }
+        "cons3w" -> {
+            var x by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
+            var y by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
+            Shell("希望の前日に禁止$mode", okLabel, onClose, { commit(listOf(x, y)) { vm.addCons3w(x, y) } },
+                x.isNotBlank() && y.isNotBlank()) {
+                Picker("希望シフト（希望で固定されたもの）", shifts, x) { x = it }
+                Picker("その前日に置けないシフト", shifts, y) { y = it }
             }
         }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {

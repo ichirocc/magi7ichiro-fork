@@ -24,7 +24,7 @@ internal object RsiFocusSelection {
         // [同根の穴=weekly/fair] 同じ理由で weekly/fair も未focusだったため追加（実データ検証: weekly=65
         //   （aptの37より大きい）・fair=11）。destroyRepairStaff は weekly/fair の cost には未対応だが、
         //   専用ラウンドを割り当てるだけで無指向な"total"空振りより改善機会が増える（詳細はrsiGenerateHypothesis）。
-        val order = listOf("groupViol", "covU", "pref", "c3n", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "apt", "weekly", "fair", "c1", "c3", "c3m", "c3mn")
+        val order = listOf("groupViol", "covU", "pref", "c3n", "c3w", "low", "high", "c41", "c41s", "c2", "covO", "c42", "c42s", "apt", "weekly", "fair", "c1", "c3", "c3m", "c3mn")
         // [D1/A1] 解ける HARD 族(groupViol/covU/pref/c3n)は件数に関わらず SOFT より先に focus する。
         //   旧実装は純・件数最大だったため、単一の c3n=1 が c1=118 等の高頻度 SOFT に埋もれ RSI が一度も HARD を
         //   狙わない失敗があった。目的関数 better() は辞書式(hard<<total<<weighted)で HARD 支配ゆえ focus も HARD

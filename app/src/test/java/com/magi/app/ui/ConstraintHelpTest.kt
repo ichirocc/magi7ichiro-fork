@@ -31,9 +31,10 @@ class ConstraintHelpTest {
             // 必須/任意の区別を必ず言う（利用者が優先度を誤解しないため）。
             assertTrue("$k が必須かどうかを言っていません", "必須条件" in v || "できるだけ守る" in v)
         }
-        // 禁止の並び（cons3n）だけが必須＝MirrorKeys.hard のうち利用者がこの画面で登録できる唯一の族。
+        // 禁止の並び（cons3n）と希望の前日に禁止（cons3w, 3.542.0）が必須＝MirrorKeys.hard のうち利用者がこの画面で登録できる2族。
         assertTrue("必須条件" in constraintHelp.getValue("cons3n"))
-        assertEquals(1, constraintHelp.values.count { "必須条件＝" in it })
+        assertTrue("必須条件" in constraintHelp.getValue("cons3w"))
+        assertEquals(2, constraintHelp.values.count { "必須条件＝" in it })
     }
 
     // [3.409.18] ペア禁止の「向き」の説明（違うシフトの組は鏡の2行が必要・同じシフトは1行でよい）。

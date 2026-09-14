@@ -38,6 +38,8 @@
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
   - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み10）— **非forbidden**。
   - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み90）— **forbidden**。
+  - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格, 3.542.0）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishLocked`)で固定した X の
+    **前日**セルが Y なら違反（前日側セルが違反箇所）。希望でない X・初日は対象外。静的表 `Problem.c3wBan` を3者＋C++＋`makesForbiddenRun` が共有。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
     それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。
 - **c41/c42**（群/日 範囲, SOFT, 重み1）／**c41s/c42s**（スキル群変種, SOFT, 重み6）。
@@ -70,7 +72,7 @@
   Evaluator/Delta/チェッカー3者に統合（fairと同型）。UI内訳では「曜日の偏り」チップに件数表示（場所マップは無し）。
 - **pref**（希望シフト未充足, HARD, 重み8000）/ **groupViol**（群外シフト, HARD, 重み11000）。
 
-weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000) > pref(8000) > low(120) >
+weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000) > low(120) >
 c3mn(90) > c1(50) > high(25) > c3(15) > c3m(10)=covO(10) > c41s(6)=c42s(6) > c2(4)=apt(4) >
 fair(2)=weekly(2) > c41(1)=c42(1)。（3.522.0で全面見直し＝tools/loop 34ケース×10seedの
 baseline対比ベンチマークで決定。旧: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) >

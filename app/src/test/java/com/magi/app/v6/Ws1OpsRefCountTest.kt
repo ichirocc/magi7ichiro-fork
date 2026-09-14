@@ -5,6 +5,7 @@ import com.magi.app.model.C2Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
+import com.magi.app.model.C3wRow
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
@@ -39,16 +40,17 @@ class Ws1OpsRefCountTest {
         skillGroups = listOf(Group("リーダー", "L"), Group("新人", "N")),
         cons41s = listOf(C41Row("L", "日", "1", "1")),
         cons42s = listOf(C42Row("L", "N", "夜", "休")),
+        cons3w = listOf(C3wRow("夜", "休")),
     )
 
     @Test fun shiftRefCountSumsAllReferencingFamilies() {
         val s = state()
         // 「日」: cons1(1) + cons2(1) + cons3 pattern(1) + cons41(1) + cons42 s1(1) + cons41s(1) = 6
         assertEquals(6, Ws1Ops.shiftRefCount(s, "日"))
-        // 「夜」: cons3 pattern(1) + cons41(1) + cons42 s2(1) + cons42s s1(1) = 4
-        assertEquals(4, Ws1Ops.shiftRefCount(s, "夜"))
-        // 「休」: cons2(1) + cons3m pattern(1) + cons42s s2(1) = 3
-        assertEquals(3, Ws1Ops.shiftRefCount(s, "休"))
+        // 「夜」: cons3 pattern(1) + cons41(1) + cons42 s2(1) + cons42s s1(1) + cons3w wish(1) = 5
+        assertEquals(5, Ws1Ops.shiftRefCount(s, "夜"))
+        // 「休」: cons2(1) + cons3m pattern(1) + cons42s s2(1) + cons3w prev(1) = 4
+        assertEquals(4, Ws1Ops.shiftRefCount(s, "休"))
     }
 
     @Test fun shiftRefCountIsZeroForUnreferencedOrUnknownSymbol() {

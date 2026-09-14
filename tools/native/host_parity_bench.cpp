@@ -55,6 +55,7 @@ static void finalizeProblem(MagiProblem& p) {
     p.bucketHas.assign((size_t)p.G * p.K, 0);
     for (int g = 0; g < p.G; g++) for (int k : p.bucket[g]) if (k >= 0 && k < p.K) p.bucketHas[(size_t)g * p.K + k] = 1;
     p.buildPlacementTables();   // allowed / staffForShift（3.507.0: 個人上限 0 を除いた置けるシフト）
+    p.buildC3wBan();            // [3.542.0] 希望の前日に禁止（wish 確定後）
 }
 
 static C3r mkC3(std::initializer_list<int> seq) {
@@ -102,6 +103,7 @@ static bool loadFlat(const char* path, MagiProblem& p, std::vector<int>& board) 
     n = rd(); for (int c = 0; c < n; c++) { int g1 = rd(), s1 = rd(), g2 = rd(), s2 = rd(); p.cons42.push_back({g1, s1, g2, s2}); }
     n = rd(); for (int c = 0; c < n; c++) { int g = rd(), s = rd(), l = rd(), u = rd(); p.cons41s.push_back({g, s, l, u}); }
     n = rd(); for (int c = 0; c < n; c++) { int g1 = rd(), s1 = rd(), g2 = rd(), s2 = rd(); p.cons42s.push_back({g1, s1, g2, s2}); }
+    n = rd(); for (int c = 0; c < n; c++) { int x = rd(), y = rd(); p.cons3w.push_back({x, y}); }
     size_t cx = 0;
     auto rdc = [&]() { return c3[cx++]; };
     for (std::vector<C3r>* fam : {&p.cons3, &p.cons3n, &p.cons3m, &p.cons3mn}) {
@@ -184,6 +186,8 @@ static MagiProblem buildProblem(int S, int T, int K, int G, uint64_t seed, bool 
     for (int c = 0; c < ri(1, 3); c++) { int s = ri(1, K - 1); p.cons3n.push_back(mkC3({s, s, s})); }   // forbidden triple-run
     for (int c = 0; c < ri(1, 2); c++) { int s = ri(1, K - 1); p.cons3m.push_back(mkC3({s, s})); }        // single-run want
     for (int c = 0; c < ri(1, 2); c++) p.cons3mn.push_back(mkC3({ri(1, K - 1), 0}));
+    // [3.542.0] 希望の前日に禁止: 希望に多いシフトを起点に 1〜3 行（wish は上で ~10% 埋め済み＝実際に ban セルが生える）。
+    for (int c = 0; c < ri(1, 3); c++) p.cons3w.push_back({ri(0, K - 1), ri(0, K - 1)});
     // [c3 窓マッチのビット化(3.174.0)を明示的に踏む] 多シフト D>=3 の非forbidden/forbidden を追加。
     //   これらは singleRun=false の窓マッチ経路＝新しい popcount パスの主対象。
     if (K >= 4) {
@@ -679,6 +683,7 @@ static int runConsIndexGuardTest() {
         // [3.442.0/M4] cons1/cons2 も正当な値なら通す（Kotlin の Problem 構築と同じ意味論）。
         p.cons1.push_back({3, 1, 2});
         p.cons2.push_back({0, 4});
+        p.cons3w.push_back({1, 0});
         if (!consIndicesValidN(p)) { printf("CONS-GUARD FAIL: 正当な制約を拒否した\n"); failures++; }
     }
     // 不正: 負の群 id / 範囲外シフト id を4族それぞれで拒否する。
@@ -687,8 +692,8 @@ static int runConsIndexGuardTest() {
     const char* names[] = {"cons41.g<0", "cons41.s>=K", "cons41s.s<0",
                            "cons42.g2<0", "cons42.s1>=K", "cons42s.s2>=K",
                            "cons1.si<0", "cons1.si>=K", "cons1.d1<=0", "cons1.d2<=0",
-                           "cons2.si>=K", "cons2.c<=0"};
-    for (int c = 0; c < 12; c++) {
+                           "cons2.si>=K", "cons2.c<=0", "cons3w.wishK>=K", "cons3w.prevK<0"};
+    for (int c = 0; c < 14; c++) {
         MagiProblem p = base();
         switch (c) {
             case 0: p.cons41.push_back({-1, 0, 0, 1}); break;
@@ -703,6 +708,8 @@ static int runConsIndexGuardTest() {
             case 9: p.cons1.push_back({3, 1, 0}); break;
             case 10: p.cons2.push_back({p.K, 1}); break;
             case 11: p.cons2.push_back({0, 0}); break;
+            case 12: p.cons3w.push_back({p.K, 0}); break;
+            case 13: p.cons3w.push_back({0, -1}); break;
         }
         if (consIndicesValidN(p)) {
             printf("CONS-GUARD FAIL: %s を受け入れた\n", names[c]);

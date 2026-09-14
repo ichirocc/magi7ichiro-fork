@@ -17,7 +17,7 @@ package com.magi.app.ui
  * 3.72.0 で weekly が19族目として実際に追加された経緯があり、同じことは今後も起こる。
  */
 internal val breakdownLabels: Map<String, String> = mapOf(
-    "groupViol" to "担当外シフト", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び",
+    "groupViol" to "担当外シフト", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び", "c3w" to "希望前日の禁止",
     "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ", "weekly" to "曜日の偏り",
     "c1" to "期間の制約", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "群のレンジ", "c42" to "群ペア",

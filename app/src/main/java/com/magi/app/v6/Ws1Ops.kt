@@ -64,6 +64,7 @@ object Ws1Ops {
             cons41s = s.cons41s.map { if (it.shiftKigou == old) it.copy(shiftKigou = new) else it },
             cons42 = s.cons42.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
             cons42s = s.cons42s.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
+            cons3w = s.cons3w.map { it.copy(wishKigou = if (it.wishKigou == old) new else it.wishKigou, prevKigou = if (it.prevKigou == old) new else it.prevKigou) },
         )
     }
 
@@ -203,6 +204,7 @@ object Ws1Ops {
         n += state.cons42.count { it.s1Kigou == kigou || it.s2Kigou == kigou }
         n += state.cons41s.count { it.shiftKigou == kigou }
         n += state.cons42s.count { it.s1Kigou == kigou || it.s2Kigou == kigou }
+        n += state.cons3w.count { it.wishKigou == kigou || it.prevKigou == kigou }
         return n
     }
 

@@ -4,7 +4,7 @@ import com.magi.app.model.MagiState
 import java.util.Random
 
 /**
- * [3.540.0/測定中] 回数連鎖研磨: 個人上限/群目標の超過を起点に、同日の被覆保存巡回交換(k=2/3)を複数日で束ね、
+ * [3.540.0/測定済み・既定OFF] 回数連鎖研磨: 個人上限/群目標の超過を起点に、同日の被覆保存巡回交換(k=2/3)を複数日で束ね、
  * 回数族＋連続系の負債が正味 ≤0 の連鎖だけを UnifiedViolationChecker で keep-best 採点する（採用基準は増やさない）。
  * 1 日ずつ採否を見る既存パスが取れない「相手に渡して別の日で返す」迂回を狙う（根拠＝厳密解との比較、docs/history 3.540.0）。
  */
@@ -31,7 +31,8 @@ internal object CountChainPolish {
     /** 同日 j の巡回交換。staff[t] が oldShift[t] → newShift[t] へ変わる（被覆は不変）。 */
     private class Rotation(val day: Int, val staff: IntArray, val oldShift: IntArray, val newShift: IntArray)
 
-    private class Target(val staff: Int, val shift: Int, val excess: Int, val weight: Double)
+    /** 起点。day>=0 なら人員過剰(covO)セル＝その日に staff が shift を手放す手から始める（回数超過の起点は day=-1）。 */
+    private class Target(val staff: Int, val shift: Int, val excess: Int, val weight: Double, val day: Int = -1)
 
     fun applyCountChainPolish(
         state: MagiState,
@@ -63,6 +64,15 @@ internal object CountChainPolish {
                 val apt = p.apt[i][k]
                 if (hi != Int.MAX_VALUE && c > hi) out.add(Target(i, k, c - hi, MirrorKeys.weightOf("high") * (c - hi)))
                 else if (apt >= 0 && c > apt) out.add(Target(i, k, c - apt, MirrorKeys.weightOf("apt") * (c - apt)))
+            }
+            // 人員過剰(covO)セル: 過剰の日にそのシフトを持つ人（非希望）ごとに起点を立てる。
+            val wCovO = MirrorKeys.weightOf("covO")
+            for (j in 0 until p.T) for (k in 0 until p.K) {
+                var got = 0
+                for (i in 0 until p.S) if (work[i][j] == k) got++
+                val over = p.covOCell(k, j, got)
+                if (over <= 0) continue
+                for (i in 0 until p.S) if (work[i][j] == k && movable(i, j)) out.add(Target(i, k, over, wCovO * over, day = j))
             }
             return out.sortedByDescending { it.weight }.take(config.maxTargets)
         }
@@ -131,11 +141,12 @@ internal object CountChainPolish {
             val seqBase = DoubleArray(p.S) { seqPenRow(it, cur[it]) }
             val seqCur = seqBase.copyOf()
             fun entryDebt(s: Int, k: Int, v: Int) = pen(s, k, counts[s][k] + v) - pen(s, k, counts[s][k])
-            /** 回数族の負債 ＋ 連続系の負債（行単位で厳密）。fair/weekly/c42 系は含まない＝最終採点で決まる。 */
+            /** 回数族の負債 ＋ 連続系の負債（行単位で厳密）＋ covO 起点なら過剰セルを外した分の利得。fair/weekly/c42 系は最終採点で決まる。 */
             fun debt(): Double {
                 var d = 0.0
                 for ((kk, v) in delta) if (v != 0) d += entryDebt(kk / p.K, kk % p.K, v)
                 for (s in 0 until p.S) d += seqCur[s] - seqBase[s]
+                if (target.day >= 0 && cur[target.staff][target.day] != target.shift) d -= MirrorKeys.weightOf("covO")
                 return d
             }
             /** 次に直す (s,k)＝負債が最大の項。起点がまだ動いていなければ起点。 */
@@ -158,9 +169,10 @@ internal object CountChainPolish {
                 for (s in r.staff) seqCur[s] = seqPenRow(s, cur[s])
             }
             /** (s,k) の負債を減らす同日巡回交換を列挙する。give=true なら s が k を手放す、false なら受け取る。 */
-            fun children(s: Int, k: Int, give: Boolean): List<Rotation> {
+            fun children(s: Int, k: Int, give: Boolean, onlyDay: Int = -1): List<Rotation> {
                 val out = ArrayList<Rotation>()
                 for (j in 0 until p.T) {
+                    if (onlyDay >= 0 && j != onlyDay) continue
                     if (usedDay[j] || !movable(s, j)) continue
                     val sk = cur[s][j]
                     if (give != (sk == k)) continue
@@ -213,7 +225,8 @@ internal object CountChainPolish {
                 if (depth >= maxDepth) return
                 val (s, k) = worstOpen() ?: return
                 val give = (delta[key(s, k)] ?: 0) >= 0
-                val cands = children(s, k, give)
+                val atRoot = s == target.staff && k == target.shift && (delta[key(s, k)] ?: 0) == 0
+                val cands = children(s, k, give, onlyDay = if (atRoot) target.day else -1)
                 if (cands.isEmpty()) return
                 // 負債が小さくなる順、同点は乱択（seed で決定的）。
                 val scored = cands.map { r -> apply(r, +1); val nd = debt(); apply(r, -1); Triple(nd, rng.nextInt(), r) }

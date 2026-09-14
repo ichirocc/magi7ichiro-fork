@@ -34,6 +34,7 @@ object NativeEval {
         cons.add(p.cons42.size); p.cons42.forEach { cons.add(it.g1); cons.add(it.s1); cons.add(it.g2); cons.add(it.s2) }
         cons.add(p.cons41s.size); p.cons41s.forEach { cons.add(it.groupIdx); cons.add(it.shiftIdx); cons.add(it.l); cons.add(it.u) }
         cons.add(p.cons42s.size); p.cons42s.forEach { cons.add(it.g1); cons.add(it.s1); cons.add(it.g2); cons.add(it.s2) }
+        cons.add(p.cons3w.size); p.cons3w.forEach { cons.add(it.wishIdx); cons.add(it.prevIdx) }
         val c3 = ArrayList<Int>(64)
         for (fam in listOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)) {
             c3.add(fam.size)

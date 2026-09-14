@@ -31,6 +31,8 @@ data class C2Row(val shiftKigou: String, val count: String)
 data class C3Row(val pattern: List<String>)
 data class C41Row(val groupKigou: String, val shiftKigou: String, val l: String, val u: String)
 data class C42Row(val g1Kigou: String, val g2Kigou: String, val s1Kigou: String, val s2Kigou: String)
+/** 希望(ws3)で固定した [wishKigou] の前日に [prevKigou] を置けない（3.542.0）。素の連続禁止は cons3n。 */
+data class C3wRow(val wishKigou: String, val prevKigou: String)
 
 data class MagiState(
     val startDate: String,
@@ -60,6 +62,8 @@ data class MagiState(
     val cons41s: List<C41Row> = emptyList(),
     /** スキルグループの C42 相当: スキル群 g1 の s1 と スキル群 g2 の s2 が同日に併存不可（既存C42のスキル版）。 */
     val cons42s: List<C42Row> = emptyList(),
+    /** 希望の前日に禁止（HARD、c3n と同格）。希望で固定された wishKigou の前日セルが prevKigou なら違反。 */
+    val cons3w: List<C3wRow> = emptyList(),
     /** Per-shift display colour overrides, keyed by shift kigou -> "#rrggbb". Display only (no engine effect). */
     val shiftColors: Map<String, String> = emptyMap(),
     /** Anything we do not model yet, kept verbatim so export round-trips losslessly. */
