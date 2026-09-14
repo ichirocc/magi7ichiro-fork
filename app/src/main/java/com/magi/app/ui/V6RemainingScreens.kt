@@ -65,8 +65,9 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
     SectionSegment("違反種別の色") {
         val cs = MaterialTheme.colorScheme
         // 基準色の実効値（未設定なら既定＝必須は UD 赤 / 要調整はアンバー。ピッカーの defaultHex と同値）。
-        val baseHard = ui.violationColorHex.ifBlank { "#BA1A1A" }
-        val baseSoft = ui.violationSoftColorHex.ifBlank { "#E08A1E" }
+        // [色覚アクセシビリティ] 深紅×アンバーで明度差を最大化（P型/D型色覚でも判別しやすい配色、ユーザー指示）。
+        val baseHard = ui.violationColorHex.ifBlank { "#B71C1C" }
+        val baseSoft = ui.violationSoftColorHex.ifBlank { "#F59E0B" }
         // [3.483.0 C-1] 基準色2チップを先頭に常時表示し、19種の族別チップは既定で折りたたむ
         //   （設定タブの大半を1節が占めていた実機所見。個別設定の入口は開閉行で残す）。
         Text("未設定の種別に効く基準色", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
@@ -109,13 +110,13 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
     pickFam?.let { pf ->
         // [実機指摘] 未設定時にグレーの偽「現在の色」を出さないよう、実効の既定色を defaultHex で渡す
         //   （必須=UD赤 / 要調整=橙 / 族=その重大度の基準色）。ColorPickerDialog 側で✓も一致表示。
-        val hardHex = ui.violationColorHex.ifBlank { "#BA1A1A" }
-        val softHex = ui.violationSoftColorHex.ifBlank { "#E08A1E" }
+        val hardHex = ui.violationColorHex.ifBlank { "#B71C1C" }
+        val softHex = ui.violationSoftColorHex.ifBlank { "#F59E0B" }
         when (pf) {
             "__hard__" -> ColorPickerDialog(
                 kigou = "必須違反（基準色）",
                 currentHex = ui.violationColorHex,
-                defaultHex = "#BA1A1A",
+                defaultHex = "#B71C1C",
                 // [実機バグ修正] 選ぶ・既定に戻すで閉じない（ShiftColorCard と同じ。経緯: history 3.515.2）。
                 onPick = { hex -> vm.setViolationColor(hex) },
                 onReset = { vm.resetViolationColor() },
@@ -124,7 +125,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
             "__soft__" -> ColorPickerDialog(
                 kigou = "要調整（基準色）",
                 currentHex = ui.violationSoftColorHex,
-                defaultHex = "#E08A1E",
+                defaultHex = "#F59E0B",
                 onPick = { hex -> vm.setViolationSoftColor(hex) },
                 onReset = { vm.resetViolationSoftColor() },
                 onClose = { pickFam = null },
