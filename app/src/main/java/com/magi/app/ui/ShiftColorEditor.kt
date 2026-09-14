@@ -92,16 +92,24 @@ internal fun hexToColor(hex: String): Color {
 //   色相・明度分布の空白（真紅・鮮緑・濃紺・インディゴ・焦茶・寒色系グレー・ミントティール・
 //   深紫・珊瑚赤・セージ・暖色ゴールド）を埋める方向で選定し、既存色との完全一致は無し。
 //   perRow変更で既存25色の行/列の見た目上の並びは組み替わるが、格納順自体は不変のため
-//   shiftColors[kigou]の明示指定（hex文字列を直接保存）には一切影響しない。
+//   shiftColors[kigou]の明示指定（hex文字列を直接保存）には一切影響しない（このバージョンは
+//   下記の再改訂で差し替え済み。経緯として残す）。
+// [ユーザー指示 8回目改訂/CUD全面見直し, 3.543.0] 「背景色系／早番／日勤／時短パート／遅番／夜勤」の
+//   6家族＋「違反/アクセント」の7家族×6色=42色へ全面再設計。各家族はヒュー帯を固定しつつ、全ペアで
+//   P型/D型二色覚シミュレーション後の最小 ΔE を最大化（`tools/palette_cud_redesign.py`、CVD計算式は
+//   `tools/cud_colors.py`＝design_lint.py の P12 検査と共有）。既定色・MagiAccent7色は実ヒュー値で
+//   家族へ振り分け（blue→早番・green→時短パート・orange→遅番、残りは違反/アクセント家族）。
+//   経緯・旧パレットとの比較・既知の残存ペア（値を変えずには解消できない2組、design_lint.py の
+//   P12_EXEMPT_PAIRS 参照）は docs/history/3.4xx.md（3.543.0）。
+private val PALETTE_ROW_LABELS = listOf("背景色系", "早番", "日勤", "時短パート", "遅番", "夜勤", "違反/アクセント")
 private val COLOR_PALETTE = listOf(
-    "#e08a1e", "#e5e5e5", "#52b788", "#f77f00", "#ffb3c6",
-    "#83a6ed", "#ff8c42", "#3a86ff", "#e76f51", "#457b9d",
-    "#9d4edd", "#a7c957", "#ff006e", "#ffcc00", "#b5838d",
-    "#8338ec", "#f7ee7f", "#48cae4", "#f4978e", "#606c38",
-    "#f4a261", "#a2d2ff", "#e09f3e", "#2a9d8f", "#a82246",
-    "#d62828", "#2b9348", "#023047", "#6a4c93", "#6f4518",
-    "#adb5bd", "#06d6a0", "#7209b7", "#ef476f", "#588157",
-    "#ffd166",
+    "#b0c7c3", "#b9bbb7", "#aba9c3", "#c8c6b0", "#b899b2", "#849c7c",
+    "#3b6fd4", "#839bd2", "#a1a5d6", "#7e83c1", "#248eb2", "#425e94",
+    "#ccce7f", "#d6c489", "#d3c765", "#d7ba5b", "#c7b26b", "#d1b761",
+    "#2e9e62", "#58c37f", "#45d13a", "#4eb960", "#34a458", "#59894d",
+    "#e08a1e", "#93621a", "#6e532b", "#7b571e", "#735a26", "#9f8941",
+    "#8067ad", "#6a4db1", "#3f1d7b", "#5f38d5", "#8557a1", "#854bc8",
+    "#b71c1c", "#f59e0b", "#8a5cd1", "#d24d89", "#d23b34", "#8a979b",
 )
 
 /**
@@ -232,7 +240,11 @@ internal fun ColorPickerDialog(
                 }
                 Text("色を選ぶ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val perRow = 6
-                COLOR_PALETTE.chunked(perRow).forEach { rowColors ->
+                COLOR_PALETTE.chunked(perRow).forEachIndexed { rowIndex, rowColors ->
+                    // [色覚配慮/3.543.0] 家族名を文字でも示す＝色だけに頼らない見出し（CUD全面見直し）。
+                    PALETTE_ROW_LABELS.getOrNull(rowIndex)?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     // [不具合修正×2] 固定40dp×6は幅超過で6個目が切れ、weight等分は端数行(2個)が巨大化していた。
                     //   幅いっぱいを等分(weight)＋正方形(aspectRatio)＋端数行は空 Spacer で埋めて全行同サイズに。
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

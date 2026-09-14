@@ -183,9 +183,12 @@ internal fun StaffShiftMatrixCard(
                             }
                             val over = hasTarget && actualSum > targetSum
                             val under = hasTarget && actualSum < targetSum
+                            // [色覚配慮/3.543.0] 本文セル(▲/▼)と同じ語彙をフッターにも付与＝色だけで
+                            //   方向を判断させない（旧: 色の濃淡だけで over/under を区別していた）。
+                            val glyph = when { over -> "▲"; under -> "▼"; else -> "" }
                             MatrixHeaderCell(cellW, rowH,
                                 when { over -> overC.copy(alpha = 0.30f); under -> shortC.copy(alpha = 0.30f); else -> cs.surfaceVariant }) {
-                                Text(if (hasTarget) "$actualSum/$targetSum" else "$actualSum",
+                                Text(if (hasTarget) "$glyph$actualSum/$targetSum" else "$actualSum",
                                     style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
                             }
                         }
