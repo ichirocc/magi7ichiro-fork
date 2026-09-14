@@ -353,7 +353,7 @@
 - **意味色（ライト、MAGI "Ward"＝ディープティール種色）**: background `#F4F7F7`／surface `#FBFDFC`／surfaceVariant `#DAE5E2`／outline `#6F7977`／onSurface `#171D1C`／onSurfaceVariant `#3F4947`／**primary（CTA・実行中＝ディープティール）`#0E6E63`**／**tertiary（成功・配布可＝リーフグリーン）`#3E6837`**／**error（重大違反＝濃赤）`#B3261E`**。
 - **意味色（ダーク）**: background `#0E1514`／surface `#0E1514`／primary `#86D6C9`／tertiary `#A3D397`／error `#FFB4AB`。**UD（高コントラスト, mode=3）**＝白地＋`#000`境界の独立スキーム。
 - **アクセント／シフト既定色（MagiAccent、3.89.0のWard調和後の値）**: blue `#3B6FD4`(実行中/早番)／green `#2E9E62`(成功/日勤)／orange `#E08A1E`(警告/夜勤)／purple `#8A5CD1`(遅番/個人属性)／**pink `#D24D89`(希望・未反映バッジ)**／red `#D23B34`(重大違反/NG制約)／gray `#8A979B`(休み/無効)。シフト色は未設定時この既定、`shiftColors[kigou]→"#rrggbb"` で上書き可。
-  違反の基準色（必須/要調整）はこれらと別系統の既定を持つ：必須違反 `#B71C1C`（深紅）／要調整 `#F59E0B`（アンバー）。色覚多様性(CUD)配慮で明度差を最大化した組合せ（3.543.0）。シフト色ピッカーの42色パレットは `tools/palette_cud_redesign.py` で再設計（P型/D型二色覚シミュレーション後の最小距離を最適化）。
+  違反の基準色（必須/要調整）はこれらと別系統の既定を持つ：必須違反 `#B71C1C`（深紅）／要調整 `#F59E0B`（アンバー）。色覚多様性(CUD)配慮で明度差を最大化した組合せ（3.543.0）。ColorPickerDialog はシフト色（36色＝早番/日勤/時短パート/遅番/夜勤の5段階グラデーション＋事由別「特別枠」6区分）と違反色（30色、必須違反・要調整・族別19種の専用パレット）を別パレットで持つ（3.544.0）。いずれも P型/D型二色覚シミュレーション後の最小距離を検証・調整（`tools/palette_shift_families_cud.py`／`tools/palette_violation_cud.py`）。
 - **角丸(dp)**: extraSmall12／small16／**medium20＝カード**／**large24＝タイル**／extraLarge28／チップ・ピル＝円形。
 - **余白(dp・4グリッド)**: xs4／sm8／md12／**lg16＝カード内標準**／xl20／**section20＝カード間**／**screenH16＝画面左右**。
 - **タイポ(sp)**: headlineSmall 24Bold(画面タイトル)／titleLarge 20SemiBold(節)／**titleMedium 17SemiBold(カード見出し)**／bodyLarge16・Medium15・Small13／labelLarge15・Medium13／**大数値 displaySmall 34**(特に強調は `fontSize=44.sp`)。
