@@ -187,7 +187,7 @@ object PolishGate {
      */
     @Volatile var aptFairSoftTolerance: Boolean = false
 
-    /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）を後処理に入れる。既定 **false**（tools/loop A/B で採否）。 */
+    /** [3.540.0] 回数連鎖研磨（`CountChainPolish`）を後処理に入れる。既定 **false**（A/B 138 ペアで新2/同等135/旧1＝ゲート不合格、docs/algorithm_portfolio.md）。 */
     @Volatile var countChainPolish: Boolean = false
 }
 
