@@ -1,5 +1,18 @@
 # 作業記録の索引（見出し一覧）
 
+- シフト色パレットへ「背景色系」家族を新設、公休を移動（3.546.0、ユーザー指示「公休は背景色系にする」）。
+  中立グレー6色を新規生成（`tools/palette_bg_family_cud.py`）、特別枠は残り5区分に → `docs/history/3.4xx.md`
+- 特別枠の1文字ラベルを撤回（3.545.0、ユーザー指示「1文字ラベル不要」）。`lastRowCellLabels`・
+  `SPECIAL_FAMILY_LABELS` を削除、他家族と同じ表示に統一 → `docs/history/3.4xx.md`
+- シフト色パレットをユーザー手指定36色へ差し替え、違反色パレットを分離（3.544.0）。早番=黄/日勤=青/
+  時短パート=緑/遅番=紫/夜勤=インディゴの5段階×6家族＋事由別「特別枠」6区分（公休/有休/研修/出張/
+  特別休暇/欠勤）。P型/D型シミュレーション後のΔEを狭い範囲で微調整（`tools/palette_shift_families_cud.py`）。
+  違反色は別パレット30色（`tools/palette_violation_cud.py`）。design_lint.py P12 は2パレット独立判定へ
+  → `docs/history/3.4xx.md`
+- 全画面・全ポップアップの CUD（色覚多様性）見直し（3.543.0）。ColorPickerDialog の36色パレットを
+  P型/D型二色覚シミュレーション後のΔEで7家族(背景色系/早番/日勤/時短パート/遅番/夜勤/違反アクセント)×6色=42色へ
+  再設計（`tools/palette_cud_redesign.py`・`tools/cud_colors.py`）、日ヘッダ下線を実線/破線化、マトリクス
+  フッターに▲▼追加、design_lint.py に P12（パレットCUD距離）を新設 → `docs/history/3.4xx.md`
 - 新制約「希望の前日に禁止」cons3w/c3w（3.542.0、ユーザーと対話で設計）。希望(wishLocked)で固定した X の前日セルが Y なら
   違反、HARD 9000＝c3n 同格（HF77 明示指示）。`C3wRow(wishKigou, prevKigou)`・静的表 `Problem.c3wBan` を3者＋C++＋
   `makesForbiddenRun` が共有。希望どうしの連日は違反として数え診断 1b が案内。編集タブ⑤に族追加、CSV 種別「希望前日禁止」。

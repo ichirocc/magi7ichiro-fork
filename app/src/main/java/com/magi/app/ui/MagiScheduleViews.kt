@@ -1637,7 +1637,8 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
             headerTintColor != null -> ensureReadable(headerTint ?: cs.surface, headerTintColor)
             else -> cs.onSurfaceVariant
         }
-        val hc = when { dayVioH[d] > 0 -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
+        val dayHard = dayVioH[d] > 0
+        val hc = when { dayHard -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
         // [⑥日別ジャンプ／列クロスハイライト] 要確認一覧の日別項目(人員/群レンジ)から来たとき、または
         //   このセル列を最近タップしたとき、日ヘッダを primary 枠で注目表示
         //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。
@@ -1664,8 +1665,23 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                     if (dayOver[d] > 0) withStyle(SpanStyle(color = vioSoftColor, fontWeight = FontWeight.Bold)) { append("▲${dayOver[d]}") }
                 }, fontSize = headFontSize, maxLines = 1)
             }
-            if (hc != null) Box(Modifier.width(cellW - 10.dp).height(2.5.dp).background(hc, RoundedCornerShape(2.dp)))
-            else Spacer(Modifier.height(2.5.dp))
+            // [色覚配慮/3.543.0] 必須=実線・要調整=破線でセル枠(violationBorder)と同じ形状符号化を
+            //   下線にも適用（旧: 色だけの違い＝DESIGN.md §2原則4の唯一の未対応箇所だった）。
+            if (hc != null) {
+                Box(
+                    Modifier.width(cellW - 10.dp).height(2.5.dp).drawBehind {
+                        if (dayHard) {
+                            drawRect(hc, size = size)
+                        } else {
+                            drawLine(
+                                hc, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f),
+                                strokeWidth = size.height,
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f)),
+                            )
+                        }
+                    },
+                )
+            } else Spacer(Modifier.height(2.5.dp))
         }
     }
     Column {
@@ -1805,10 +1821,12 @@ private fun FlatCell(
                         color = ensureReadable(MagiAccent.pink, Color.White), maxLines = 1)
                 }
             } else if (wk != 0) {
+                // [色覚配慮/3.543.0] 桃(未反映)と緑リング(反映済)は形（塗り/中空）で既に区別できるが、
+                // D型二色覚では色そのものも近づくため縁取りを太く(1.5dp→2.5dp)し境界の手がかりを増やす。
                 Box(
                     Modifier.align(Alignment.BottomStart).padding(1.5.dp).size(9.dp)
                         .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)
-                        .then(if (wk == 2) Modifier.background(MagiAccent.pink, RoundedCornerShape(50)) else Modifier.border(1.5.dp, cs.tertiary, RoundedCornerShape(50))),
+                        .then(if (wk == 2) Modifier.background(MagiAccent.pink, RoundedCornerShape(50)) else Modifier.border(2.5.dp, cs.tertiary, RoundedCornerShape(50))),
                 )
             }
         }

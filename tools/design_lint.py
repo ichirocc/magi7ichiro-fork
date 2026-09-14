@@ -488,6 +488,56 @@ def find_p11():
     return hits
 
 
+# [3.543.0/CUD全面見直し、3.544.0でシフト色/違反色の2パレットに分離] ColorPickerDialog の色パレット
+# （ShiftColorEditor.kt の COLOR_PALETTE＝シフト色・VIOLATION_COLOR_PALETTE＝違反色）が P型/D型
+# 二色覚シミュレーション後も最低限の距離を保っているか。tools/cud_colors.py（CVDシミュレーション＋
+# CIE76 ΔE）を共有し、tools/palette_shift_families_cud.py・tools/palette_violation_cud.py が
+# 同じ式で設計した結果を壊す変更（色の追加・値の書き換え）を機械で検出する。2パレットは別々の
+# ダイアログでしか同時に表示されない（呼出元で palette= を明示切替）ため、判定も別々に行う
+# （パレット間の組は対象外）。
+# 除外ペア: 固定アンカー（既定色/MagiAccent、値を変えられない）どうしの組で、パレット設計時の
+# ヒルクライム探索でも解消できなかった既知の限界（ShiftColorEditor.kt のコメント参照）。
+P12_EXEMPT_PAIRS = {
+    frozenset({"#3b6fd4", "#8a5cd1"}),  # MagiAccent.blue × MagiAccent.purple（違反色パレット内）
+}
+P12_MIN_DELTA_E = 3.0  # 上記の除外ペアを除いた両パレットの最小値(3.56/5.31)に余裕を持たせた基準。
+SHIFT_COLOR_EDITOR = os.path.join(UI_DIR, "ShiftColorEditor.kt")
+RE_P12_PALETTES = {
+    "COLOR_PALETTE": re.compile(r"private val COLOR_PALETTE\s*=\s*listOf\((.*?)\)", re.DOTALL),
+    "VIOLATION_COLOR_PALETTE": re.compile(r"internal val VIOLATION_COLOR_PALETTE\s*=\s*listOf\((.*?)\)", re.DOTALL),
+}
+RE_P12_HEX = re.compile(r'"(#[0-9a-fA-F]{6})"')
+
+
+def find_p12():
+    """各パレットの全ペアが P型/D型シミュレーション後も P12_MIN_DELTA_E 以上離れているか（パレットごとに独立判定）。"""
+    if not os.path.exists(SHIFT_COLOR_EDITOR):
+        return []
+    with open(SHIFT_COLOR_EDITOR, encoding="utf-8") as fh:
+        src = fh.read()
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import cud_colors as cc  # noqa: E402  (遅延import。design_lint単体実行を軽くする)
+    hits = []
+    for name, pattern in RE_P12_PALETTES.items():
+        m = pattern.search(src)
+        if not m:
+            hits.append(f"ShiftColorEditor.kt: {name} が見つかりません（宣言の形が変わった可能性）")
+            continue
+        colors = [h.lower() for h in RE_P12_HEX.findall(m.group(1))]
+        if len(colors) < 2:
+            continue
+        n = len(colors)
+        for i in range(n):
+            for j in range(i + 1, n):
+                a, b = colors[i], colors[j]
+                if frozenset({a, b}) in P12_EXEMPT_PAIRS:
+                    continue
+                d = cc.worst_case_delta_e(a, b)
+                if d < P12_MIN_DELTA_E:
+                    hits.append(f"ShiftColorEditor.kt: {name} {a} x {b}  ΔE={d:.2f} (P型/D型シミュレーション後、基準{P12_MIN_DELTA_E}未満)")
+    return hits
+
+
 def main():
     strict = "--strict" in sys.argv
     findings = scan()
@@ -498,6 +548,7 @@ def main():
     findings["P9"] = find_p9()
     findings["P10"] = find_p10()
     findings["P11"] = find_p11()
+    findings["P12"] = find_p12()
     labels = {
         "P1": "純黒本文/背景 (Color.Black / 0xFF000000)",
         "P2": "生 hex 直書き (Color(0x……)) ※MagiTokens.kt 除く=baseline監視",
@@ -510,10 +561,11 @@ def main():
         "P9": "beginBoardJob と finally の endBoardJob が対になっていない（読み取り専用に固着）",
         "P10": "シフト記号を文字列リテラルと比較（記号の字面で分岐＝別の記号の職場では黙って効かない）※baseline監視",
         "P11": "fontSize 直書き（MaterialTheme.typography.* に寄せる）※baseline監視",
+        "P12": "色パレットのCUD距離不足（P型/D型二色覚シミュレーション後 ΔE<3.0、既知の1ペアは除外）",
     }
     total = sum(len(v) for v in findings.values())
     print("=== MAGI design lint (docs/DESIGN.md P1-P4) ===")
-    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11"):
+    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"):
         hits = findings[key]
         print(f"\n[{key}] {labels[key]}: {len(hits)} 件")
         for h in hits[:40]:
@@ -522,8 +574,8 @@ def main():
             print(f"    …ほか {len(hits) - 40} 件")
     hard = (len(findings["P1"]) + len(findings["P3"]) + len(findings["P5"])
             + len(findings["P6"]) + len(findings["P7"]) + len(findings["P8"])
-            + len(findings["P9"]))
-    print(f"\n合計 {total} 件（P1純黒+P3影+P5テンプレート+P6メッセージ+P8DS表示+P9ジョブ解放 severity=hard {hard} 件 / P2生hex・P4角丸=baseline監視）。")
+            + len(findings["P9"]) + len(findings["P12"]))
+    print(f"\n合計 {total} 件（P1純黒+P3影+P5テンプレート+P6メッセージ+P8DS表示+P9ジョブ解放+P12CUD距離 severity=hard {hard} 件 / P2生hex・P4角丸=baseline監視）。")
 
     # [3.409.5] P2/P4 は「baseline 監視」と名乗りながら**baseline を記録していなかった**＝20件増えても
     #   exit 0 で静かに通る。`docs/DESIGN.md` §4 はこれを「禁止事項（machine-checkable）」と呼んでいるのに
@@ -563,6 +615,12 @@ def main():
         blockers.append("P9: beginBoardJob には finally の endBoardJob を必ず対にしてください（旗が戻らないとアプリが読み取り専用に固着します）。")
     if findings["P7"]:
         blockers.append("P7: 二重エンコードの文字化けです。`text.encode('latin-1').decode('utf-8')` で復号できます（可逆であることを確認してから保存）。")
+    # P12 は色を追加/変更しても実機で気づけない＝色覚多様性のあるユーザーだけが不便を受ける。ここで止める。
+    if findings["P12"]:
+        blockers.append(
+            "P12: 色パレットの一部ペアがP型/D型二色覚シミュレーション後に近すぎます。"
+            "tools/palette_cud_redesign.py で再設計するか、既知の限界として認識のうえ"
+            "P12_EXEMPT_PAIRS へ理由を添えて追加してください。")
     if blockers:
         for line in blockers:
             print(line)

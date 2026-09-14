@@ -92,16 +92,43 @@ internal fun hexToColor(hex: String): Color {
 //   色相・明度分布の空白（真紅・鮮緑・濃紺・インディゴ・焦茶・寒色系グレー・ミントティール・
 //   深紫・珊瑚赤・セージ・暖色ゴールド）を埋める方向で選定し、既存色との完全一致は無し。
 //   perRow変更で既存25色の行/列の見た目上の並びは組み替わるが、格納順自体は不変のため
-//   shiftColors[kigou]の明示指定（hex文字列を直接保存）には一切影響しない。
+//   shiftColors[kigou]の明示指定（hex文字列を直接保存）には一切影響しない（このバージョンは
+//   下記の再改訂で差し替え済み。経緯として残す）。
+// [ユーザー指示 8回目改訂/CUD全面見直し, 3.543.0] 「背景色系／早番／日勤／時短パート／遅番／夜勤」の
+//   6家族＋「違反/アクセント」の7家族×6色=42色へ全面再設計。既定色・MagiAccent7色をヒュー帯で
+//   各家族へ振り分けた1枚共有パレット（このバージョンは下記の9回目改訂で差し替え済み。経緯として残す）。
+// [ユーザー指示 9回目改訂/3.544.0] シフト色と違反色を**別パレットへ分離**。シフト色は
+//   「早番／日勤／時短パート／遅番／夜勤」の5段階グラデーション＋「特別枠」(公休/有休/研修/出張/
+//   特別休暇/欠勤・突発の事由別6区分)の36色をユーザーが手指定。色相・段階の意図は保ったまま
+//   P型/D型二色覚シミュレーション後の最小 ΔE を狭い範囲（ヒュー±14°等）でだけ微調整
+//   （`tools/palette_shift_families_cud.py`）。違反色（必須/要調整/族別19種）は既定色＋MagiAccent7色を
+//   固定アンカーに全域で ΔE を最大化した30色（`tools/palette_violation_cud.py`）。CVD計算式は両方とも
+//   `tools/cud_colors.py`＝design_lint.py の P12 検査と共有。既知の残存ペア（値を変えずには解消できない組、
+//   design_lint.py の P12_EXEMPT_PAIRS 参照）は docs/history/3.4xx.md（3.544.0）。特別枠の各スウォッチに
+//   区分名を1文字表示する案は撤回（ユーザー指示「1文字ラベル不要」、3.545.0）。
+// [ユーザー指示 10回目改訂/3.546.0]「公休は背景色系にする」＝公休を独立の「背景色系」家族(中立グレー6色)へ
+//   移し、特別枠は事由別5区分(有休/研修/出張/特別休暇/欠勤・突発)に。背景色系は他5家族と値を変えず
+//   固定した上でCUD距離を最大化して新規生成（`tools/palette_bg_family_cud.py`）、公休には家族内最淡色を
+//   割当（他家族との対比で「稼働色でない」ことを示す）。既存35色は不変のため他家族の格納位置・
+//   保存済みhex文字列への影響は無い。
+private val PALETTE_ROW_LABELS = listOf("背景色系", "早番家族", "日勤家族", "時短パート家族", "遅番家族", "夜勤家族", "特別枠")
 private val COLOR_PALETTE = listOf(
-    "#e08a1e", "#e5e5e5", "#52b788", "#f77f00", "#ffb3c6",
-    "#83a6ed", "#ff8c42", "#3a86ff", "#e76f51", "#457b9d",
-    "#9d4edd", "#a7c957", "#ff006e", "#ffcc00", "#b5838d",
-    "#8338ec", "#f7ee7f", "#48cae4", "#f4978e", "#606c38",
-    "#f4a261", "#a2d2ff", "#e09f3e", "#2a9d8f", "#a82246",
-    "#d62828", "#2b9348", "#023047", "#6a4c93", "#6f4518",
-    "#adb5bd", "#06d6a0", "#7209b7", "#ef476f", "#588157",
-    "#ffd166",
+    "#ced1d5", "#b5aca5", "#a09ea3", "#695f75", "#5c6264", "#3b3f41",
+    "#e8e5e5", "#ffeeca", "#f5d964", "#ffca8f", "#ffd759", "#c68b0c",
+    "#dceeff", "#d1e1fc", "#a1c4fa", "#7bb4f8", "#1c9bfc", "#084277",
+    "#eef7e8", "#d5ead6", "#b7e2bb", "#95c09a", "#369937", "#246823",
+    "#ddcafd", "#e1c7e7", "#d9acd9", "#c971c6", "#d421ce", "#801cb7",
+    "#d9e0ec", "#9caee2", "#8f8ccb", "#5f5db0", "#3b43b5", "#1a1498",
+    "#fab3c5", "#e5f4f7", "#fff2b8", "#d4c3ec", "#262b2f",
+)
+/** 違反色専用パレット（必須違反・要調整・族別19種）。シフト色とは別物＝家族ヒュー帯の制約が無い分、
+ *  全域でCUD距離を最大化できる（`tools/palette_violation_cud.py`）。 */
+internal val VIOLATION_COLOR_PALETTE = listOf(
+    "#b71c1c", "#f59e0b", "#3b6fd4", "#2e9e62", "#e08a1e", "#8a5cd1",
+    "#d24d89", "#d23b34", "#8a979b", "#5740d1", "#75581a", "#7ec6bd",
+    "#975eca", "#915a2d", "#5eabe4", "#286760", "#339312", "#602e4f",
+    "#b4bd85", "#8fc5cd", "#7386ce", "#106dbd", "#1b5574", "#9ab7e9",
+    "#d4ccaf", "#306e20", "#b83997", "#c08ab5", "#2164b0", "#81ca9c",
 )
 
 /**
@@ -214,6 +241,10 @@ internal fun ColorPickerDialog(
     onReset: () -> Unit,
     onClose: () -> Unit,
     defaultHex: String = "",
+    // [3.544.0/シフト色と違反色を別パレットへ分離] 既定はシフト色パレット。違反色ピッカーは
+    // V6RemainingScreens.kt から VIOLATION_COLOR_PALETTE を明示指定する。
+    palette: List<String> = COLOR_PALETTE,
+    rowLabels: List<String>? = PALETTE_ROW_LABELS,
 ) {
     // [実機指摘「現在の設定している色が画面の中にない」] 未設定(空)のときグレーの偽色を出していた →
     //   実効色(既定色)を表示し、パレット上の一致スウォッチにも✓を付ける。
@@ -232,7 +263,11 @@ internal fun ColorPickerDialog(
                 }
                 Text("色を選ぶ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val perRow = 6
-                COLOR_PALETTE.chunked(perRow).forEach { rowColors ->
+                palette.chunked(perRow).forEachIndexed { rowIndex, rowColors ->
+                    // [色覚配慮/3.543.0] 家族名を文字でも示す＝色だけに頼らない見出し（CUD全面見直し）。
+                    rowLabels?.getOrNull(rowIndex)?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     // [不具合修正×2] 固定40dp×6は幅超過で6個目が切れ、weight等分は端数行(2個)が巨大化していた。
                     //   幅いっぱいを等分(weight)＋正方形(aspectRatio)＋端数行は空 Spacer で埋めて全行同サイズに。
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
