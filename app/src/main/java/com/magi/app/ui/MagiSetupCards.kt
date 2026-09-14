@@ -366,6 +366,15 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             }
             Switch(checked = ui.aptFairSoftTolerance, onCheckedChange = { vm.setAptFairSoftTolerance(it) }, enabled = !ui.running)
         }
+        // [3.540.0/測定中] 回数の超過（個人上限・適切回数）を、複数日の同日交換の束で減らす研磨。既定OFF（tools/loop A/B で採否）。
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("回数の超過を数日がかりで減らす")
+                Text("「上限超過」「適切な回数の超過」を、同じ日の入れ替えを何日か組み合わせて減らします。他の違反が増えない場合だけ採用します。既定はOFFです。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.countChainPolish, onCheckedChange = { vm.setCountChainPolish(it) }, enabled = !ui.running)
+        }
     }
 }
 

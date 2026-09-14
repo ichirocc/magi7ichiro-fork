@@ -31,7 +31,9 @@ class ViolationComponentRepairTest {
             shifts = shifts, groups = groups, staff = staff, use2Patterns = false,
             groupShift = listOf(listOf(1, 1, 1, 1)), groupShiftApt = listOf(listOf("", "0", "", "1")),
             schedule = listOf(listOf(1), listOf(2), listOf(0), listOf(0)), wishes = emptyMap(),
-            staffRange = mapOf("0,3" to Range("", "0"), "2,3" to Range("", "0"), "3,3" to Range("", "0")),
+            // [3.541.0] W2 の D は上限 0 でなく 0〜1。fair v2 は担当不可(上限0)で 0 回の職員を母集団から外すため、上限 0 のままだと
+            //   D バケットが Y 1 人＝偏差 0 になり、Y 単独の移動が「タイ」でなく改善になって結合の検証にならない。
+            staffRange = mapOf("0,3" to Range("", "0"), "2,3" to Range("", "0"), "3,3" to Range("0", "1")),
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),

@@ -604,6 +604,7 @@ object V6FinalPort {
                 combineExhaustPairs = PolishGate.combineExhaustPairs,
                 lnsAdaptive = PolishGate.lnsAdaptive,
                 aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
+                countChainEnabled = PolishGate.countChainPolish,
             ),
         )
         val tPost1 = EngineClock.nowMs()

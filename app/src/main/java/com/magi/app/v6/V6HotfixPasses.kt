@@ -186,6 +186,9 @@ object PolishGate {
      * HARDの不増加・keep-bestの根幹は不変）。既定 **false**（詳細は`docs/algorithm_portfolio.md`参照）。
      */
     @Volatile var aptFairSoftTolerance: Boolean = false
+
+    /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）を後処理に入れる。既定 **false**（tools/loop A/B で採否）。 */
+    @Volatile var countChainPolish: Boolean = false
 }
 
 /**
@@ -217,6 +220,8 @@ object TuningTelemetry {
     val parityChecks = java.util.concurrent.atomic.AtomicInteger(0)
     /** [3.535.0] apt/fair研磨の6%許容が、素のbetterReportなら却下される手を採用に転じさせた回数。 */
     val aptFairToleranceUsed = java.util.concurrent.atomic.AtomicInteger(0)
+    /** [3.540.0] 回数連鎖研磨が採用した連鎖数。 */
+    val countChainApplied = java.util.concurrent.atomic.AtomicInteger(0)
 
     /**
      * 実行ごとに 0 へ戻す（`optimize()` 入口）。
@@ -230,7 +235,7 @@ object TuningTelemetry {
      */
     fun reset() {
         c3nFilterSkipped.set(0); wideC3nDiffered.set(0); wideC3nCalls.set(0)
-        lahcEntered.set(0); parityChecks.set(0); aptFairToleranceUsed.set(0)
+        lahcEntered.set(0); parityChecks.set(0); aptFairToleranceUsed.set(0); countChainApplied.set(0)
     }
 
     /** 各トグルの ON/OFF と、その実行で観測できた効果を1行にまとめる。 */
@@ -255,7 +260,8 @@ object TuningTelemetry {
             " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替") +
             " / 結合探索を粘り強く=" + (if (PolishGate.combineExhaustPairs) "ON" else "OFF") +
             " / 一括見直しの自動調整=" + (if (PolishGate.lnsAdaptive) "ON" else "OFF") +
-            " / 公平化/適切回数の他ソフト許容(6%)=" + eff(PolishGate.aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用")
+            " / 公平化/適切回数の他ソフト許容(6%)=" + eff(PolishGate.aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用") +
+            " / 回数連鎖研磨=" + eff(PolishGate.countChainPolish, countChainApplied.get(), "連鎖を採用")
     }
 }
 
@@ -376,6 +382,8 @@ object V6HotfixPasses {
         /** [3.535.0/HF77明示数値指示] AptPolish/FairPolishの採否で、研磨開始時点の対象家族(apt/fair)
          *  以外のSOFT合計比+6%まで悪化を容認する（累積予算・keep-bestのHARD不増加は不変）。既定false。 */
         val aptFairSoftTolerance: Boolean = false,
+        /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）。既定 OFF。 */
+        val countChainEnabled: Boolean = false,
     )
 
     /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
@@ -770,6 +778,13 @@ object V6HotfixPasses {
             if (params.c2PolishEnabled) {
                 take("c2玉突き", chain.timed("後処理 個人合計(c2)研磨$tag", "C2Polish") { work ->
                     C2Polish.applyC2Polish(state, work, maxPasses = params.c2Passes, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                })
+            }
+            if (params.countChainEnabled) {
+                take("回数連鎖", chain.timed("後処理 回数連鎖研磨$tag", "CountChainPolish") { work ->
+                    CountChainPolish.applyCountChainPolish(state, work, config = if (params.deterministic) CountChainPolish.Config(maxMillis = 60_000L) else CountChainPolish.Config(),
+                        shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), quantitativeRangeEval = params.quantitativeRangeEval)
+                        .also { TuningTelemetry.countChainApplied.addAndGet(it.applied) }
                 })
             }
             if (params.c42FlowPolishEnabled) {

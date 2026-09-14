@@ -232,53 +232,49 @@ inline long long weeklyDevOfBucket(const int wd[7]) {
     return d / 7;
 }
 
-struct FairBasis { int anchor; int width; };  // anchor==INT32_MIN は基準なし
-
-// [3.538.0] Kotlin Problem.fairBasisAnchor/Width と同じ導出式（範囲staffRange.lo/hi両方有限を優先、
-// 無ければ実効apt目標>=0）。C++はJNIで別途受け取らずrangeLo/rangeHi/aptから都度導出する（Kotlin側と
-// 常に同じ入力から同じ式で計算するため、JNI経由のデータ二重輸送を避ける。呼び出しはO(1)）。
-inline FairBasis fairBasisOf(const MagiProblem& p, int x, int k) {
-    int lo = p.rangeLo[(size_t)x * p.K + k];
-    int hi = p.rangeHi[(size_t)x * p.K + k];
-    if (lo != INT32_MIN && hi != INT32_MAX) return { lo, hi - lo };
-    int t = p.apt[(size_t)x * p.K + k];
-    if (t >= 0) return { t, t };
-    return { INT32_MIN, 0 };
-}
-
-// [3.538.0] 群g・シフトk の公平化(fair)偏差。count(x)は職員xの現在の回数（contribFairの全走査・
-// fairMarginalNの1手プレビューのいずれからも呼べるようテンプレート化）。Kotlin `Problem.fairDevOfBucket`
-// （MirrorCore.kt）と同じ式＝達成率モード（詳細はそちらのdocまたはdocs/business-logic.md参照）。
+// [3.541.0] 群g・シフトk の公平化(fair)偏差＝Kotlin `Problem.fairDevOfBucket`（MirrorCore.kt、達成率モード v2）と同式。
+//   母集団＝pl(x,k) または回数>0。基準＝範囲(帯へクランプ・中心(lo+hi)/2・半幅(hi-lo)/2)、無ければ apt 目標 t（中心 t・幅 t）。
+//   基準達成率＝幅を重みにした中央値（昇順に累積幅が総幅の半分以上に達する最初の人）。偏差＝jround(|達成率−基準|×幅)。
+//   count(x) はテンプレート（contribFair の全走査・fairMarginalN の 1 手プレビューの両方から呼ぶ）。丸めは Kotlin Math.round と同じ jround。
 template <typename CountFn>
 inline long long fairDevOfBucket(const MagiProblem& p, int g, int k, CountFn count) {
-    const auto& mem = p.members[g];
-    auto legacy = [&]() -> long long {
-        int sum = 0;
-        for (int x : mem) sum += count(x);
-        long long tgt = jround((double)sum / (int)mem.size());
-        long long d = 0;
-        for (int x : mem) d += std::llabs((long long)count(x) - tgt);
-        return d;
-    };
-    for (int x : mem) if (fairBasisOf(p, x, k).anchor == INT32_MIN) return legacy();
-
-    double rateSum = 0.0; int rateN = 0;
-    for (int x : mem) {
-        FairBasis b = fairBasisOf(p, x, k);
-        if (b.width > 0) { rateSum += (double)(count(x) - b.anchor) / b.width; rateN++; }
-    }
-    if (rateN == 0) return legacy();
-    double tgtRate = rateSum / rateN;
-
-    long long total = 0;
-    for (int x : mem) {
-        FairBasis b = fairBasisOf(p, x, k);
+    const auto& all = p.members[g];
+    int mem[64]; int n = 0;
+    for (int x : all) if (n < 64 && (p.pl(x, k) || count(x) > 0)) mem[n++] = x;
+    if (n < 2) return 0;
+    double ach[64], scale[64];
+    for (int idx = 0; idx < n; idx++) {
+        int x = mem[idx];
+        int lo = p.rangeLo[(size_t)x * p.K + k];
+        int hi = p.rangeHi[(size_t)x * p.K + k];
         int c = count(x);
-        long long dx;
-        if (b.width > 0) dx = jround(std::fabs((double)(c - b.anchor) / b.width - tgtRate) * b.width);
-        else dx = (c == b.anchor) ? 0 : std::llabs((long long)c - b.anchor);
-        total += dx;
+        if (lo != INT32_MIN && hi != INT32_MAX) {
+            int e = c < lo ? lo : (c > hi ? hi : c);
+            double s = hi > lo ? (hi - lo) / 2.0 : 0.0;
+            scale[idx] = s; ach[idx] = s > 0.0 ? (e - (lo + hi) / 2.0) / s : 0.0;
+        } else {
+            int t = p.apt[(size_t)x * p.K + k];
+            if (t < 0) {
+                int sum = 0;
+                for (int i2 = 0; i2 < n; i2++) sum += count(mem[i2]);
+                long long tgt = jround((double)sum / n);
+                long long d = 0;
+                for (int i2 = 0; i2 < n; i2++) d += std::llabs((long long)count(mem[i2]) - tgt);
+                return d;
+            }
+            scale[idx] = (double)t; ach[idx] = t > 0 ? (double)(c - t) / t : 0.0;
+        }
     }
+    double w = 0.0;
+    for (int idx = 0; idx < n; idx++) w += scale[idx];
+    if (w <= 0.0) return 0;
+    int order[64];
+    for (int idx = 0; idx < n; idx++) order[idx] = idx;
+    std::stable_sort(order, order + n, [&](int a, int b) { return ach[a] < ach[b]; });
+    double acc = 0.0; double tgt = ach[order[n - 1]];
+    for (int oi = 0; oi < n; oi++) { int idx = order[oi]; acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break; } }
+    long long total = 0;
+    for (int idx = 0; idx < n; idx++) total += jround(std::fabs(ach[idx] - tgt) * scale[idx]);
     return total;
 }
 
