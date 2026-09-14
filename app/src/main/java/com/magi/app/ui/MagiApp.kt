@@ -296,6 +296,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         "staff" -> vm.exportStaffCsv()
                         "wishes" -> vm.exportWishesCsv()
                         "cons" -> vm.exportConstraintsCsv()
+                        "colors" -> vm.exportShiftColorsCsv()
                         else -> null
                     }
                 }
@@ -308,7 +309,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             } ?: throw java.io.FileNotFoundException("書き込み先を開けません")
                         }
                     }
-                    vm.notifySave(r, when (kind) { "staff" -> "職員CSV"; "wishes" -> "希望CSV"; else -> "制約CSV" })
+                    vm.notifySave(r, when (kind) { "staff" -> "職員CSV"; "wishes" -> "希望CSV"; "colors" -> "シフト色CSV"; else -> "制約CSV" })
                 } else vm.notify("書き出す内容がありません", "W")
             }
         }
@@ -696,6 +697,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSaveStaffCsv = { pendingExportKind = "staff"; saveComponentCsvLauncher.launch("magi_staff_${System.currentTimeMillis()}.csv") },
                         onSaveWishesCsv = { pendingExportKind = "wishes"; saveComponentCsvLauncher.launch("magi_wishes_${System.currentTimeMillis()}.csv") },
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
+                        onSaveShiftColorsCsv = { pendingExportKind = "colors"; saveComponentCsvLauncher.launch("magi_shift_colors_${System.currentTimeMillis()}.csv") },
                         onRestorePrev = { vm.restorePreviousData() },
                     )
                     SettingsCard(ui, vm, onBgOptimize = onBgOptimize)
@@ -744,7 +746,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             "・勤務表（重ね合わせ）：氏名,1日,2日… の表を現在の割り当てに重ねる\n" +
                             "・職員一覧：氏名,グループ,スキル（所属群/スキルを更新）\n" +
                             "・希望シフト：氏名,日,希望シフト（希望を置換）\n" +
-                            "・各制約：種別タグ付き（制約一式・個人レンジを置換）",
+                            "・各制約：種別タグ付き（制約一式・個人レンジを置換）\n" +
+                            "・シフト色：記号,色（掲載された記号だけ更新、他は現状維持）",
                     )
                 },
                 confirmButton = {
@@ -757,6 +760,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         DialogConfirmButton("職員一覧", onClick = { vm.importStaffCsv(csvText); pendingCsvImport = null })
                         DialogConfirmButton("希望シフト", onClick = { vm.importWishesCsv(csvText); pendingCsvImport = null })
                         DialogConfirmButton("各制約", onClick = { vm.importConstraintsCsv(csvText); pendingCsvImport = null })
+                        DialogConfirmButton("シフト色", onClick = { vm.importShiftColorsCsv(csvText); pendingCsvImport = null })
                     }
                 },
                 dismissButton = { DialogDismissButton(onClick = { pendingCsvImport = null }) },

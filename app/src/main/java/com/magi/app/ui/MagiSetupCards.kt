@@ -627,12 +627,14 @@ internal fun LogsCard(ui: UiState, onExportLog: () -> Unit, onExportJson: () -> 
 }
 
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DataActionsCard(
     ui: UiState,
     onOpenJson: () -> Unit, onSample: () -> Unit, onSaveJson: () -> Unit,
     onOpenCsv: () -> Unit, onSaveCsv: () -> Unit, onCheck: () -> Unit,
     onSaveStaffCsv: () -> Unit = {}, onSaveWishesCsv: () -> Unit = {}, onSaveConstraintsCsv: () -> Unit = {},
+    onSaveShiftColorsCsv: () -> Unit = {},
     onRestorePrev: () -> Unit = {},
 ) {
     Card(Modifier.fillMaxWidth()) {
@@ -671,10 +673,13 @@ internal fun DataActionsCard(
             }
             Text("コンポーネント別 出力（取込種別と対・往復用）",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("職員") }
-                OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("希望") }
-                OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("制約") }
+            // [3.547.0] 3→4項目化でRow等分weightだと1項目あたりの幅が狭まり続けるため、
+            //   幅いっぱいに収まる分だけ並べ余りは折り返すFlowRowへ（ShiftColorCardのチップと同じ考え方）。
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSaveStaffCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("職員") }
+                OutlinedButton(onClick = onSaveWishesCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望") }
+                OutlinedButton(onClick = onSaveConstraintsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("制約") }
+                OutlinedButton(onClick = onSaveShiftColorsCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("シフト色") }
             }
         }
     }

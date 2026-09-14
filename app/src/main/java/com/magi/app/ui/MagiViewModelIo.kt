@@ -43,6 +43,8 @@ fun MagiViewModel.exportCsv(): String? {
 fun MagiViewModel.exportStaffCsv(): String? = state?.let { com.magi.app.v6.StaffCsvIO.build(it) }
 fun MagiViewModel.exportWishesCsv(): String? = state?.let { com.magi.app.v6.WishesCsvIO.build(it) }
 fun MagiViewModel.exportConstraintsCsv(): String? = state?.let { com.magi.app.v6.ConstraintsCsvIO.build(it) }
+/** [3.547.0] シフト種別の色のみ出力（違反色は対象外、`ShiftColorsCsvIO`参照）。 */
+fun MagiViewModel.exportShiftColorsCsv(): String? = state?.let { com.magi.app.v6.ShiftColorsCsvIO.build(it) }
 
 /**
  * [3.360.0] 書き出したログが「どの版・どの端末で走ったか」を1行で残す。
@@ -352,4 +354,34 @@ fun MagiViewModel.importConstraintsCsv(rawText: String) {
     }
     logOp("I", "各制約CSV取込: ${res.accepted}件を反映（制約一式を置換）")
     applyStructureWithMessage(res.state, "各制約を取込: ${res.accepted}件を反映（既存の制約・個人レンジは置換）")
+}
+
+/** [コンポーネント別取込/3.547.0] シフト種別の色CSV（記号,色）。掲載された記号だけ upsert で更新、
+ *  掲載されない記号の既存カスタム色は変更しない（グリルで確認済み: 3.547.0「載っている分だけ上書き」）。 */
+fun MagiViewModel.importShiftColorsCsv(rawText: String) {
+    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（シフト色は既存データに重ねます）") }; return }
+    val text = MojibakeRepair.repair(rawText)
+    val res = runCatching { com.magi.app.v6.ShiftColorsCsvIO.parseUpsert(text, st) }.getOrNull()
+    if (res == null) {
+        val hint = componentImportMismatchHint(text)
+        val tail = if (hint.isEmpty()) "形式『記号,色』（例: 休,#ced1d5）をご確認ください。" else hint
+        _ui.update { it.copy(messageIsError = true, message = "シフト色の取込失敗（形式を読めません）。$tail") }
+        logOp("W", "シフト色CSV取込 失敗: 解析不能")
+        return
+    }
+    val badK = res.unknownKigou
+    val badH = res.invalidHex
+    val warn = buildList {
+        if (badK.isNotEmpty()) add("未知の記号 ${badK.entries.take(3).joinToString("・") { "「${it.key}」${it.value}件" }}${if (badK.size > 3) "ほか" else ""}")
+        if (badH.isNotEmpty()) add("不正な色 ${badH.entries.take(3).joinToString("・") { "「${it.key}」${it.value}件" }}${if (badH.size > 3) "ほか" else ""}")
+    }
+    if (res.updated == 0) {
+        val tailWarn = if (warn.isEmpty()) "形式『記号,色』（例: 休,#ced1d5）をご確認ください。" else "⚠ ${warn.joinToString("／")}"
+        _ui.update { it.copy(messageIsError = true, message = "シフト色の取込失敗（反映0件）。$tailWarn") }
+        logOp("W", "シフト色CSV取込 失敗: 0件" + (if (warn.isEmpty()) "" else " (${warn.joinToString("／")})"))
+        return
+    }
+    val tailWarn = if (warn.isEmpty()) "" else "。⚠ ${warn.joinToString("／")}（該当行は反映せず現状維持）"
+    logOp("I", "シフト色CSV取込: ${res.updated}件を反映" + (if (warn.isEmpty()) "" else " (${warn.joinToString("／")})"))
+    applyStructureWithMessage(res.state, "シフト色を取込: ${res.updated}件を反映（掲載されない記号の色は現状維持）$tailWarn")
 }
