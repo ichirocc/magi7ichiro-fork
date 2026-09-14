@@ -885,3 +885,55 @@ object ConstraintsCsvIO {
         return ComponentImport(candidate, n, bad, samples)
     }
 }
+
+/**
+ * [3.547.0/ユーザー指示] シフト種別の色のみを外部へ出力・取込む機能。「記号,色」の2列。
+ * 違反色（`shiftColors["__vio__"]`等の予約キー）は対象外＝シフト記号のカスタム色だけを扱う。
+ * 出力は`state.shiftColors`に実際に値がある記号だけ（既定色のまま=未カスタムの記号は出さない）。
+ * 取込はupsert（グリルで確認済み: 3.547.0「載っている分だけ上書き」）: CSVに載っている記号だけ
+ * shiftColors を更新し、載っていない記号の既存カスタム色は変更しない。他のコンポーネント別CSV
+ * （希望/制約）と違い全置換ではない＝表示専用データで欠落による業務影響が無いため。
+ */
+class ShiftColorsUpsertResult(
+    val state: MagiState,
+    val updated: Int,
+    /** 現在のシフト一覧に無い記号（記号→行数）。カスタム色は追加しない（新規シフト作成はこの機能の範囲外）。 */
+    val unknownKigou: Map<String, Int> = emptyMap(),
+    /** "#rrggbb" 形式でないセル（記号→行数）。反映しない。 */
+    val invalidHex: Map<String, Int> = emptyMap(),
+)
+
+object ShiftColorsCsvIO {
+    private val HEX_RE = Regex("^#[0-9a-fA-F]{6}$")
+
+    fun build(state: MagiState): String {
+        val sb = StringBuilder()
+        appendCsvRow(sb, listOf("記号", "色"))
+        for (sh in state.shifts) {
+            val hex = state.shiftColors[sh.kigou] ?: continue
+            appendCsvRow(sb, listOf(sh.kigou, hex))
+        }
+        return sb.toString()
+    }
+
+    /** @return null は解析不能（空/引用符未閉）のみ。0件反映でも本体を返す（呼出側が updated==0 で判定）。 */
+    fun parseUpsert(text: String, state: MagiState): ShiftColorsUpsertResult? {
+        val rows = parseCsvGuarded(text) ?: return null
+        val body = csvBody(rows, "記号")
+        val known = state.shifts.map { it.kigou }.toHashSet()
+        val m = state.shiftColors.toMutableMap()
+        var updated = 0
+        val unknownKigou = LinkedHashMap<String, Int>()
+        val invalidHex = LinkedHashMap<String, Int>()
+        for (r in body) {
+            val kigou = r.getOrElse(0) { "" }.trim()
+            val hex = r.getOrElse(1) { "" }.trim()
+            if (kigou.isEmpty()) continue
+            if (kigou !in known) { unknownKigou[kigou] = (unknownKigou[kigou] ?: 0) + 1; continue }
+            if (!HEX_RE.matches(hex)) { invalidHex[kigou] = (invalidHex[kigou] ?: 0) + 1; continue }
+            m[kigou] = hex
+            updated++
+        }
+        return ShiftColorsUpsertResult(state.copy(shiftColors = m), updated, unknownKigou, invalidHex)
+    }
+}
