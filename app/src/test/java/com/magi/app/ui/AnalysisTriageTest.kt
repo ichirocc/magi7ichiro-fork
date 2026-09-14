@@ -109,10 +109,10 @@ class AnalysisTriageTest {
         assertEquals("件", t.searching.first { it.label == "期間の制約" }.unit)
     }
 
-    /** 0件の族はサマリー側へ回してゼロサプレッションする（19族すべてがどちらかに入る）。 */
+    /** 0件の族はサマリー側へ回してゼロサプレッションする（全族がどちらかに入る）。 */
     @Test fun zeroCountFamiliesGoToTheCollapsedSummary() {
         val t = analysisTriage(ui(mapOf("c1" to 6)))
-        assertEquals(19, t.okFamilies.size + t.busyFamilies.size)
+        assertEquals(com.magi.app.v6.MirrorKeys.all.size, t.okFamilies.size + t.busyFamilies.size)
         assertEquals(listOf("期間の制約"), t.busyFamilies)
         assertTrue("人員不足は0件なので正常側", "人員不足" in t.okFamilies)
     }

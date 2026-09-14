@@ -31,6 +31,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-14（3.542.0＝新制約「希望の前日に禁止」`cons3w`/違反キー `c3w`。ユーザーと対話（grilling）で設計:
+希望(ws3)で固定した X の前日に Y を置けない（希望でない X・初日は対象外）、HARD 9000＝c3n と同格（HF77 明示指示）、行＝
+`C3wRow(wishKigou, prevKigou)`。静的表 `Problem.c3wBan` を Evaluator/Delta/チェッカー/C++/`makesForbiddenRun` が共有。
+希望どうしの連日は違反として数え、設定ミス診断が「前日の希望を取消」を案内。編集タブ⑤に族「希望の前日に禁止」、CSV 種別
+「希望前日禁止」。759 テスト緑・C++ parity 0 mismatch・言語跨ぎ 5 フィクスチャ×20 族 MATCH。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-14（3.541.1＝「そのデータで B4 に移行できるアルゴリズムと重み」の検証記録。厳密解で B4 の値段を
 測定（4 セル +94・16 セル +21・10/28 休ゼロ +724）、単一重みの採用境界は covO≥32（HF77 の high>covO を破る）か c3m≤3 で
 境界でも利得 −1〜0＝重みでは正当化できない。古泉の窓ルール免除も covO を減らさない。`CountChainPolish` に人員過剰セル起点を

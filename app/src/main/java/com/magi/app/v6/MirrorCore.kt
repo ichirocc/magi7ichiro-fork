@@ -115,9 +115,10 @@ data class LightOptimizeResult(
 )
 
 object MirrorKeys {
-    val hard = listOf("groupViol", "c3n", "covU", "pref")
+    val hard = listOf("groupViol", "c3n", "covU", "pref", "c3w")
     val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "fair", "weekly")
-    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly")
+    // [3.542.0] c3w は末尾＝C++ kBreakdownNames / 言語跨ぎ期待値ファイルの添字を既存19族から動かさない。
+    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w")
     // [N2/⛏11] weightedScore の重み（単一の真実）。UI の重み表もこのマップを描画して
     //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
     // [HF77明示数値指示・全面見直し 3.522.0] tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定
@@ -125,7 +126,7 @@ object MirrorKeys {
     // **ここを変えたら `Evaluator.fullEvalParts` のリテラルと C++ も同時に変える**。
     //   Kotlin 側のずれは `ObjectiveParityTest`、C++ 側は native-parity CI が捕まえる。
     val weights: Map<String, Double> = linkedMapOf(
-        "groupViol" to 11000.0, "covU" to 10000.0, "c3n" to 9000.0, "pref" to 8000.0,
+        "groupViol" to 11000.0, "covU" to 10000.0, "c3n" to 9000.0, "c3w" to 9000.0, "pref" to 8000.0,
         "low" to 120.0, "c3mn" to 90.0, "c1" to 50.0, "high" to 25.0, "covO" to 10.0,
         "c3" to 15.0, "c3m" to 10.0,
         "c41" to 1.0, "c42" to 1.0, "c41s" to 6.0, "c42s" to 6.0,
@@ -161,7 +162,7 @@ object UnifiedViolationChecker {
     private val classWeight: Map<String, Double> by lazy { vioClass.entries.associate { it.value to MirrorKeys.weightOf(it.key) } }
 
     private val vioClass = mapOf(
-        "c1" to "vio-c1", "c2" to "vio-c2", "c3" to "vio-c3", "c3n" to "vio-c3n",
+        "c1" to "vio-c1", "c2" to "vio-c2", "c3" to "vio-c3", "c3n" to "vio-c3n", "c3w" to "vio-c3w",
         "c3m" to "vio-c3m", "c3mn" to "vio-c3mn", "c41" to "vio-c41", "c42" to "vio-c42",
         "c41s" to "vio-c41s", "c42s" to "vio-c42s",
         "covU" to "vio-covU", "covO" to "vio-covO", "pref" to "vio-pref",
@@ -355,6 +356,11 @@ object UnifiedViolationChecker {
         checkC3Family(p, s, p.cons3n, "c3n", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
         checkC3Family(p, s, p.cons3m, "c3m", forbidden = false, { key, amt -> inc(key, amt) }, ::mark)
         checkC3Family(p, s, p.cons3mn, "c3mn", forbidden = true, { key, amt -> inc(key, amt) }, ::mark)
+
+        // [3.542.0] 希望の前日に禁止(c3w, HARD)。前日側のセル（動かせる側）を違反箇所にする。
+        if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T) {
+            if (p.c3wBanned(i, j, s[i][j])) { inc("c3w"); mark(i, j, "c3w") }
+        }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {
             val w = p.wish[i][j]

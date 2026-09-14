@@ -56,6 +56,7 @@ object StateFingerprint {
         for (fam in listOf(st.cons42, st.cons42s)) {
             mix(4); for (c in fam) { txt(c.g1Kigou); txt(c.g2Kigou); txt(c.s1Kigou); txt(c.s2Kigou) }
         }
+        mix(5); for (c in st.cons3w) { txt(c.wishKigou); txt(c.prevKigou) }
         return h
     }
 }

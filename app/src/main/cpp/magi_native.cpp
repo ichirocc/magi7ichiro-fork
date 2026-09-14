@@ -119,6 +119,7 @@ static inline long long rangeDistance(long long z, long long l, long long u) {
     return (z < l ? (l - z) : 0) + (z > u ? (z - u) : 0);
 }
 struct C3r { std::vector<int> seq; bool singleRun; };
+struct C3wr { int wishK, prevK; };   // 希望で固定した wishK の前日に prevK を禁止（Kotlin C3w, HARD, 3.542.0）
 
 struct MagiProblem {
     int S = 0, T = 0, K = 0, G = 0, restIdx = 0, dow0 = 0;
@@ -135,6 +136,8 @@ struct MagiProblem {
     std::vector<C41r> cons41, cons41s;
     std::vector<C42r> cons42, cons42s;
     std::vector<C3r> cons3, cons3n, cons3m, cons3mn;
+    std::vector<C3wr> cons3w;
+    std::vector<uint8_t> c3wBan;             // S*T*K（cons3w が空なら空＝Kotlin Problem.c3wBan の null）。buildC3wBan で導出
     std::vector<std::vector<int>> bucket;    // G: 群の担当ONシフト
     std::vector<std::vector<int>> members;   // G: 群のメンバー（sgrp から導出）
     std::vector<uint8_t> bucketHas;          // G*K: 群 g がシフト k を担当できるか（fair 用）
@@ -150,6 +153,22 @@ struct MagiProblem {
         if (!cd(i, k)) return false;
         const size_t idx = (size_t)i * K + k;
         return !(idx < rangeHi.size() && rangeHi[idx] == 0 && k != restIdx);
+    }
+    // [3.542.0] セル (i,j) にシフト k を置くと「希望の前日に禁止」に当たるか（Kotlin Problem.c3wBanned と同値）。
+    inline bool c3wBanned(int i, int j, int k) const {
+        if (c3wBan.empty() || i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K) return false;
+        return c3wBan[((size_t)i * T + j) * K + k] != 0;
+    }
+    // 翌日が希望固定（実現可能な希望＝wishLockedN と同義）の X で、cons3w に (X→k) があれば ban。wish 確定後に呼ぶ。
+    void buildC3wBan() {
+        c3wBan.clear();
+        if (cons3w.empty() || (int)wish.size() != S * T) return;
+        c3wBan.assign((size_t)S * T * K, 0);
+        for (int i = 0; i < S; i++) for (int j = 0; j + 1 < T; j++) {
+            int w = wish[(size_t)i * T + j + 1];
+            if (w < 0 || !cd(i, w)) continue;
+            for (const auto& c : cons3w) if (c.wishK == w && c.prevK >= 0 && c.prevK < K) c3wBan[((size_t)i * T + j) * K + c.prevK] = 1;
+        }
     }
     // 置けるシフト（allowed）と置ける職員（staffForShift）を bucket/rangeHi から作る。JNI 復号とホストハーネスで共用。
     void buildPlacementTables() {
@@ -213,6 +232,8 @@ static bool consIndicesValidN(const MagiProblem& p) {
         if (c.si < 0 || c.si >= K || c.d1 <= 0 || c.d2 <= 0) return false;
     for (const auto& c : p.cons2)
         if (c.si < 0 || c.si >= K || c.c <= 0) return false;
+    for (const auto& c : p.cons3w)   // [3.542.0] prevK は c3wBan の index（Kotlin は shiftIdxOf>=0 の行だけ通す）
+        if (c.wishK < 0 || c.wishK >= K || c.prevK < 0 || c.prevK >= K) return false;
     for (const auto* fam : {&p.cons41, &p.cons41s})
         for (const auto& c : *fam)
             if (c.g < 0 || c.s < 0 || c.s >= K) return false;
@@ -322,12 +343,12 @@ long long c3check(const MagiProblem& p, const int* a, const std::vector<C3r>& li
 }
 
 // [3.524.0/backlog#6] fullEvalParts の breakdown 引数のスロット順。Kotlin MirrorKeys.all と
-//   同じ19族・同じ並びにすること（native-parity host harness がこの並びで名前付き比較する）。
-static const char* const kBreakdownNames[19] = {
+//   同じ20族・同じ並びにすること（native-parity host harness がこの並びで名前付き比較する）。
+static const char* const kBreakdownNames[20] = {
     "c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s",
-    "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly",
+    "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w",
 };
-static constexpr int kBreakdownCount = 19;
+static constexpr int kBreakdownCount = 20;
 
 // Evaluator.fullEvalParts の忠実移植。a は S*T の平坦配列。out[0]=hard1, out[1]=soft。
 // [3.524.0/backlog#6] bd!=nullptr なら族別の生の違反量（重み適用前、kBreakdownNames順）も書く。
@@ -447,6 +468,12 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
             }
         }
         hard1 += rawPref + rawGroupViol; if (bd) { bd[12] += rawPref; bd[15] += rawGroupViol; }
+    }
+    // [3.542.0] c3w（希望の前日に禁止, HARD）。Kotlin Evaluator と同じ静的表 c3wBan を引く。
+    if (!p.c3wBan.empty()) {
+        long long raw = 0;
+        for (int i = 0; i < S; i++) { const int* row = a + (size_t)i * T; for (int j = 0; j < T; j++) if (p.c3wBanned(i, j, row[j])) raw++; }
+        hard1 += raw; if (bd) bd[19] += raw;
     }
 
     // 回数行列 ssn（range/apt/fair が共有）
@@ -699,6 +726,7 @@ struct SaChunk {
         int w = p.wish[(size_t)i * T + j];
         if (w >= 0 && p.cd(i, w) && cur != w) v += (long long)M;
         if (cur >= 0 && cur < K && !p.cd(i, cur)) v += (long long)M;
+        if (p.c3wBanned(i, j, cur)) v += (long long)M;   // [3.542.0] c3w もセル単位の HARD
         return v;
     }
     long long contribRangeApt(int i, int k) const {
@@ -1220,6 +1248,7 @@ void collectViolationCells(const MagiProblem& p, const int* a, std::vector<int>&
             if (w >= 0 && p.cd(i, w) && row[j] != w) markCell(i, j);
             int k = row[j];
             if (k >= 0 && k < K && !p.cd(i, k)) markCell(i, j);
+            if (p.c3wBanned(i, j, k)) markCell(i, j);
         }
     }
 }
@@ -2517,7 +2546,7 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     p->apt.assign(ranges.begin() + 2 * (size_t)S * K, ranges.end());
 
     // cons レイアウト: [n1,(d1,si,d2)*] [n2,(si,c)*] [n41,(g,s,l,u)*] [n42,(g1,s1,g2,s2)*]
-    //                  [n41s,(g,s,l,u)*] [n42s,(g1,s1,g2,s2)*]
+    //                  [n41s,(g,s,l,u)*] [n42s,(g1,s1,g2,s2)*] [n3w,(wishK,prevK)*]
     // [3.284.0/外部レビュー=JNI hardening] 可変長領域(cons/c3/bucket)を checked cursor で検証する。
     //   旧: count/len 未検証で、負の len が (size_t) 変換で巨大 reserve → C++例外が JNI 境界を越えて
     //   プロセスクラッシュ、巨大 count が 0 埋めの大量 push で異常確保になり得た（正規の Kotlin
@@ -2548,6 +2577,8 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     for (int r = 0; r < n41s; r++) { C41r c{next(), next(), next(), next()}; p->cons41s.push_back(c); }
     int n42s = takeCount(4);
     for (int r = 0; r < n42s; r++) { C42r c{next(), next(), next(), next()}; p->cons42s.push_back(c); }
+    int n3w = takeCount(2);
+    for (int r = 0; r < n3w; r++) { C3wr c{next(), next()}; p->cons3w.push_back(c); }
     if (!parseOk) { delete p; return 0; }
     // [3.409.23/監査G3] 群 index が負・シフト index が範囲外の制約行はハンドル生成ごと拒否する
     //   （0=native 不可→Kotlin へ安全退化＝sgrp/ssk 検証と同じ確立済みの契約）。判定は
@@ -2608,6 +2639,7 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     for (int g = 0; g < G; g++) for (int k : p->bucket[g]) if (k >= 0 && k < K) p->bucketHas[(size_t)g * K + k] = 1;
     // [3.507.0] 置けるシフト（bucket から個人上限 0 を除く）。候補生成はこちら、評価は canDo/bucket のまま。
     p->buildPlacementTables();
+    p->buildC3wBan();
 
     return reinterpret_cast<jlong>(p);
 }

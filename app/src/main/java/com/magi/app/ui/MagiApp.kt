@@ -649,7 +649,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     //   ④と同じく直下のカード・族見出しの完全な重複だった。
                                     key(ui.editRev) {
                                         ConstraintsCard(ui, vm, title = "",
-                                            keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn"))
+                                            keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons3w"))
                                     }
                                 }
                             }

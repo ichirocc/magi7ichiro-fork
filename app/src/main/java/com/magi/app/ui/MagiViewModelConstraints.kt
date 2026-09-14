@@ -5,6 +5,7 @@ import com.magi.app.model.C2Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
+import com.magi.app.model.C3wRow
 import com.magi.app.ui.MagiViewModel.ConstraintFamilyView
 import kotlinx.coroutines.flow.update
 
@@ -49,6 +50,9 @@ fun MagiViewModel.constraintFamilies(): List<ConstraintFamilyView> {
         ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
         ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
         ConstraintFamilyView("cons3mn", "回避の並び", st.cons3mn.map { seq(it.pattern) }),
+        // [3.542.0] 希望で固定した X の前日だけ Y を禁止（HARD）。素の並び禁止は cons3n。
+        ConstraintFamilyView("cons3w", "希望の前日に禁止（必ず守る）",
+            st.cons3w.map { "${it.wishKigou} の希望の前日は ${it.prevKigou} 禁止" }),
         ConstraintFamilyView("cons41", "群のレンジ（1日の人数の下限〜上限）",
             st.cons41.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
         // [3.409.18] 「禁止/不可」はラベルとして実態（最軽量のソフト条件＝他の条件と衝突すると
@@ -100,6 +104,15 @@ fun MagiViewModel.addCons41(groupKigou: String, shiftKigou: String, l: String, u
 fun MagiViewModel.addCons42(g1: String, g2: String, s1: String, s2: String) {
     val st = state ?: return
     logOp("I", "制約追加(群組合せ禁止): ${g1}${s1} & ${g2}${s2}"); mutateConstraints(st.copy(cons42 = st.cons42 + C42Row(g1, g2, s1, s2)))
+}
+
+fun MagiViewModel.addCons3w(wishKigou: String, prevKigou: String) {
+    val st = state ?: return
+    if (st.cons3w.any { it.wishKigou == wishKigou && it.prevKigou == prevKigou }) {
+        _ui.update { it.copy(messageIsError = true, message = "「${wishKigou} の希望の前日は ${prevKigou} 禁止」は登録済みです") }
+        return
+    }
+    logOp("I", "制約追加(希望前日禁止): ${wishKigou} の希望の前日は ${prevKigou} 禁止"); mutateConstraints(st.copy(cons3w = st.cons3w + C3wRow(wishKigou, prevKigou)))
 }
 
 /** 並び4族の日本語名（ConstraintDialog の見出しと同じ語彙）。 */
@@ -173,6 +186,7 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
         "cons42" -> st.cons42.size
         "cons41s" -> st.cons41s.size
         "cons42s" -> st.cons42s.size
+        "cons3w" -> st.cons3w.size
         else -> return
     }
     if (index !in 0 until size) {
@@ -193,6 +207,7 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
             "cons42" -> st.copy(cons42 = st.cons42.without(index))
             "cons41s" -> st.copy(cons41s = st.cons41s.without(index))
             "cons42s" -> st.copy(cons42s = st.cons42s.without(index))
+            "cons3w" -> st.copy(cons3w = st.cons3w.without(index))
             else -> return
         }
     )
@@ -201,7 +216,7 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
 /** [制約編集/実機指摘「登録した制約の変更ができない」] 行の生値（編集ダイアログのプリフィル用）。
  *  値の並びは追加ダイアログの入力順と同じ:
  *  cons1=[日数,シフト,回数] / cons2=[シフト,回数] / cons3系=並び(最大5) /
- *  cons41(s)=[群,シフト,下限,上限] / cons42(s)=[群1,シフト1,群2,シフト2]。 */
+ *  cons41(s)=[群,シフト,下限,上限] / cons42(s)=[群1,シフト1,群2,シフト2] / cons3w=[希望シフト,前日禁止シフト]。 */
 fun MagiViewModel.constraintRowValues(family: String, index: Int): List<String>? {
     val st = state ?: return null
     return when (family) {
@@ -215,6 +230,7 @@ fun MagiViewModel.constraintRowValues(family: String, index: Int): List<String>?
         "cons41s" -> st.cons41s.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
         "cons42" -> st.cons42.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
         "cons42s" -> st.cons42s.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
+        "cons3w" -> st.cons3w.getOrNull(index)?.let { listOf(it.wishKigou, it.prevKigou) }
         else -> null
     }
 }
@@ -233,6 +249,7 @@ fun MagiViewModel.updateConstraint(family: String, index: Int, values: List<Stri
         "cons41s" -> { if (index !in st.cons41s.indices) return; st.copy(cons41s = st.cons41s.replaced(index, C41Row(g(0), g(1), g(2), g(3)))) }
         "cons42" -> { if (index !in st.cons42.indices) return; st.copy(cons42 = st.cons42.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
         "cons42s" -> { if (index !in st.cons42s.indices) return; st.copy(cons42s = st.cons42s.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
+        "cons3w" -> { if (index !in st.cons3w.indices) return; st.copy(cons3w = st.cons3w.replaced(index, C3wRow(g(0), g(1)))) }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
             val pat = v.takeWhile { it.isNotEmpty() }.take(5)
             if (pat.isEmpty()) return

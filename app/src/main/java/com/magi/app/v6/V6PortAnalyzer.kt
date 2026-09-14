@@ -737,7 +737,7 @@ object V6PortAnalyzer {
         }
 
         val hardGuard = report.breakdown["groupViol"] ?: 0
-        val hardCore = (report.breakdown["c3n"] ?: 0) + (report.breakdown["covU"] ?: 0) + (report.breakdown["pref"] ?: 0)
+        val hardCore = (report.breakdown["c3n"] ?: 0) + (report.breakdown["covU"] ?: 0) + (report.breakdown["pref"] ?: 0) + (report.breakdown["c3w"] ?: 0)
         val softCore = (report.total - hardGuard - hardCore).coerceAtLeast(0)
         val staffViol = staffViolationCounts(p, report)
 
@@ -921,7 +921,7 @@ object V6PortAnalyzer {
                 }
             }
         }
-        val hard = (breakdown["groupViol"] ?: 0) + (breakdown["c3n"] ?: 0) + (breakdown["covU"] ?: 0) + (breakdown["pref"] ?: 0)
+        val hard = (breakdown["groupViol"] ?: 0) + (breakdown["c3n"] ?: 0) + (breakdown["covU"] ?: 0) + (breakdown["pref"] ?: 0) + (breakdown["c3w"] ?: 0)
         val psi = max(0.2, 1.0 / (1.0 + 10.0 * hard.toDouble()))
         return raw * psi
     }

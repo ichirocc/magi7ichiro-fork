@@ -2,7 +2,7 @@
 
 > **このファイルの役割**：制約の判定条件・スコア計算・エラーハンドリング方針の**唯一の正解**。最もハルシネーションが起きやすい業務ルールをここに集約する。「上限はいくつか」「違反時にどう振る舞うか」はここを見る。
 > **コード基準**：`v6/MirrorCore.kt`（`MirrorKeys.weights` ＝重みの単一の真実）／`v6/Evaluator.kt`。
-> **最終更新**：2026-09-13（3.541.0＝fair 達成率モード v2：クランプ＋担当不可除外＋重み付き中央値、ユーザー指示・案E）
+> **最終更新**：2026-09-14（3.542.0＝新制約「希望の前日に禁止」cons3w/c3w、HARD 9000＝c3n と同格、ユーザーと対話で設計）
 
 ---
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 2. 19 種の違反と重み（HARD 4／SOFT 15）
+## 2. 20 種の違反と重み（HARD 5／SOFT 15）
 
 > **keep-best の比較順（3.287.0 統一）**: 候補どうしの優劣は **hard → weightedScore → total** の辞書式
 > （単一ソース `MirrorCore.betterReport`）。旧来は第2キーが total（重み無視の生カウント）で、この重み表の
@@ -31,6 +31,7 @@
 | `groupViol` | 11000 | HARD | 群が就けないシフトを割当（`groupShift` マスク違反） | セル `i,j` |
 | `covU` | 10000 | HARD | 人員不足（必要数 lo に対し配置 got が不足、`lo-got`） | 被覆 `k,j` |
 | `c3n` | 9000 | HARD | 禁止の連勤パターン（FORBIDDEN）に一致 | セル `i,j` |
+| `c3w` | 9000 | HARD | 希望の前日に禁止（3.542.0）：希望(`wishes`, 実現可能＝`wishLocked`)で固定された X の**前日**セルが Y（`cons3w` の (X→Y)）。初日・希望でない X は対象外。違反箇所は前日側のセル | セル `i,j` |
 | `pref` | 8000 | HARD | 希望（`wishes`）に反していない＝未反映 | セル `i,j` |
 | `low` | 120 | SOFT | 個人下限割れ（`staffRange.lo`、LimMin。90→120、3.522.0 HF77明示指示） | 回数 `i,k` |
 | `c3mn` | 90 | SOFT | 回避（Hate）の連勤パターンに一致（12→15→30→90、3.522.0 HF77明示指示） | セル `i,j` |
@@ -48,7 +49,7 @@
 | `c41` | 1 | SOFT | 群レンジ違反（1日 [l,u] 外） | 被覆/日 |
 | `c42` | 1 | SOFT | 群ペア同日併存（**異なる2人のペア数**。同一集合 `g1==g2 && s1==s2` は C(n,2)） | セル/日 |
 
-> **HARD = {groupViol, c3n, covU, pref}**、それ以外は SOFT。この4族はチェッカー（`MirrorKeys.hard`）と
+> **HARD = {groupViol, c3n, covU, pref, c3w}**（c3w は 3.542.0 追加）、それ以外は SOFT。この5族はチェッカー（`MirrorKeys.hard`）と
 > 最適化器（`Evaluator.fullEvalParts` の hard1・`DeltaEvaluator`・`magi_native.cpp`）で一致する
 > （3.318.0 以前は評価器側だけ groupViol を欠いた3族で、同じ盤面に対して両者の hard が食い違っていた）。`covO` は 2026-07-13（HF77 明示指示）に 0.5→1.0 へ統一済み
 > （最適化器 Evaluator/Delta/C++ は元々 1.0、チェッカー `weightedScore` のみ 0.5 だった factor-2 乖離を最適化器基準に解消）。
@@ -75,6 +76,9 @@
   - **`ws3`（希望シフト＝`wishes`）と C3 族は別物**。混同しない（希望の採点は `pref`、連勤パターンは c3 系）。
   - **単一シフト連の評価**：非forbidden（`cons3`/`cons3m`）は run-deficit（`C3Run.rowDeficit`＝連続長Lで頭打ち、L以上連続すれば満たす・完成runを罰しない）。forbidden（`cons3n`/`cons3mn`）は窓マッチ（N連続の窓が1つでもあれば発火）。
   - **設定ミス診断 6f（必須/推奨と禁止の連続数矛盾、3.534.0）**：同じシフトで非forbiddenの単一シフト連の連続数Lが、forbidden側の連続数N以上（L≥N）だと、必須/推奨を満たすL以上の連続は必ずforbidden側のN連続の窓を含むため常に未達になる（探索の失敗ではなく設定の衝突）。`cons3`/`cons3m` × `cons3n`（HARD）だけを対象にし、両方SOFTの `cons3mn` との組合せは対象外。読み取り専用（`V6SanityPort.mustForbiddenSeqIssues`）。
+- **C3w（希望の前日に禁止, 3.542.0）**：`C3wRow(wishKigou, prevKigou)`。希望(ws3)で固定された X（`wishLocked`＝担当可の希望のみ）の前日セルが Y なら違反。**HARD 9000＝c3n と同格**（ユーザー明示指示）。希望でない X（最適化器が置いた X）の前日の Y は許す＝どこでも禁止したい並びは `cons3n` の [Y,X]。初日は前日が無いので対象外（前月の繰越データは持たない）。
+  評価は `Problem.c3wBan[i][j][k]`（希望は探索中に動かないので盤面非依存の静的表。cons3w が空なら null）を Evaluator/DeltaEvaluator/チェッカー/C++ が共通に引く。`Problem.makesForbiddenRun` も同じ表で枝刈りする（全研磨パスが c3n と同じ経路で避ける）。
+  前日の Y も希望固定（希望 Y→希望 X の連日）なら最適化器は解消できない＝違反として数え、設定ミス診断 1b（`V6SanityPort.wishIssues`）が「前日の希望を取消」のワンタップ付きで案内する。行の記号が解決できないときは `unresolvedRows`（2f）へ。制約 CSV の種別は「希望前日禁止」。
 - **被覆（covU/covO）**：シフト×日で必要数に対する過不足。`use2Patterns` 時の P1/P2 は **MIN=OR**（緩い方で充足）＝加算ではない（中間世代 MWS 由来の意図的設計）。被覆は同日のみ（夜勤の翌日繰越なし）。
 - **群レンジ/ペア（C41/C42）**と**スキル群版（C41s/C42s）**：`C41Row(groupKigou, shiftKigou, l, u)` ＝1日に [l,u] 回／`C42Row(g1,g2,s1,s2)` ＝群g1のs1と群g2のs2が同日併存不可。
 - **個人下限/上限（low/high）**：`staffRange["i,k"]={lo,hi}`。`low` は `lo!=0 && 担当可 && 回数<lo`、`high` は `回数>hi`。重み 120/25（被覆や c1 に負けない最低限の重み）。

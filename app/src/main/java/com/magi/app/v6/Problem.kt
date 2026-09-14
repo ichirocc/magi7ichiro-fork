@@ -8,6 +8,8 @@ class C2(@JvmField val shiftIdx: Int, @JvmField val count: Int)
 class C3(@JvmField val seq: IntArray)
 class C41(@JvmField val groupIdx: Int, @JvmField val shiftIdx: Int, @JvmField val l: Int, @JvmField val u: Int)
 class C42(@JvmField val g1: Int, @JvmField val s1: Int, @JvmField val g2: Int, @JvmField val s2: Int)
+/** 希望で固定した [wishIdx] の前日に [prevIdx] を禁止（cons3w, HARD）。 */
+class C3w(@JvmField val wishIdx: Int, @JvmField val prevIdx: Int)
 
 /**
  * Immutable, index-resolved view of a [MagiState] ready for fast evaluation.
@@ -125,6 +127,10 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
     val ssk = IntArray(S) { state.staff[it].skillIdx }
     val cons41s: List<C41>
     val cons42s: List<C42>
+    val cons3w: List<C3w>
+    /** [3.542.0] c3wBan[i][j][k] = 翌日 j+1 が希望固定（wishLocked）の X で、cons3w に (X→k) がある＝セル (i,j) に k を置くと違反。
+     *  希望は探索中に動かないので盤面非依存の静的表。cons3w が空なら null（評価・Δの分岐を無料にする）。 */
+    val c3wBan: Array<Array<BooleanArray>>?
 
     /** 記号が解決できたかを `〈〉` で示す表示（cons3 系の記録と同じ書式）。 */
     private fun mark(kigou: String, resolved: Boolean): String = if (resolved) kigou else "〈$kigou〉"
@@ -215,6 +221,21 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val c = it.count.trim().toIntOrNull() ?: 0
             if (si >= 0 && c > 0) C2(si, c)
             else { _unresolvedRows.add("個人の合計" to "${mark(it.shiftKigou, si >= 0)} を${it.count}回以上"); null }
+        }
+        cons3w = state.cons3w.mapNotNull {
+            val x = shiftIdxOf(it.wishKigou); val y = shiftIdxOf(it.prevKigou)
+            if (x >= 0 && y >= 0) C3w(x, y)
+            else { _unresolvedRows.add("希望の前日に禁止" to "${mark(it.wishKigou, x >= 0)} の希望の前日は ${mark(it.prevKigou, y >= 0)}"); null }
+        }
+        c3wBan = if (cons3w.isEmpty()) null else Array(S) { i ->
+            Array(T) { j ->
+                BooleanArray(K).also { ban ->
+                    if (j + 1 < T) {
+                        val w = wish[i][j + 1]
+                        if (w >= 0 && canDo(i, w)) for (c in cons3w) if (c.wishIdx == w) ban[c.prevIdx] = true
+                    }
+                }
+            }
         }
         cons3 = resolveC3(state.cons3, "c3")
         cons3n = resolveC3(state.cons3n, "c3n")
@@ -358,6 +379,7 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
      * （source of truth）が担保する＝本関数の判定が仮に見逃しても結果は不変（安全側）。
      */
     fun makesForbiddenRun(schedule: Array<IntArray>, i: Int, j: Int, newK: Int): Boolean {
+        if (c3wBanned(i, j, newK)) return true   // [3.542.0] 希望の前日に禁止（cons3w, HARD）も同じ枝刈りで避ける
         for (c in cons3n) {
             val seq = c.seq
             val d = seq.size
@@ -376,6 +398,13 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             }
         }
         return false
+    }
+
+    /** [3.542.0] セル (i,j) にシフト k を置くと「希望の前日に禁止」(cons3w) に当たるか。範囲外は false。 */
+    fun c3wBanned(i: Int, j: Int, k: Int): Boolean {
+        val b = c3wBan ?: return false
+        if (i !in 0 until S || j !in 0 until T || k !in 0 until K) return false
+        return b[i][j][k]
     }
 
     fun initialAssignment(): Array<IntArray> = Array(S) { i ->

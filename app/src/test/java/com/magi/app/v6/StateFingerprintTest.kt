@@ -5,6 +5,7 @@ import com.magi.app.model.C2Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
+import com.magi.app.model.C3wRow
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Range
@@ -46,6 +47,7 @@ class StateFingerprintTest {
         skillGroups = listOf(Group("S", "S")),
         cons41s = listOf(C41Row("S", "A", "0", "1")),
         cons42s = listOf(C42Row("S", "S", "A", "休")),
+        cons3w = listOf(C3wRow("A", "休")),
     )
 
     /** 各族を1つだけ変えた state を返す。名前は失敗時にどの族かが分かるようにする。 */
@@ -79,6 +81,7 @@ class StateFingerprintTest {
         "スキル群のレンジ" to b.copy(cons41s = listOf(C41Row("S", "A", "1", "1"))),
         "群ペア禁止" to b.copy(cons42 = listOf(C42Row("G", "H", "休", "A"))),
         "スキル群ペア禁止" to b.copy(cons42s = listOf(C42Row("S", "S", "休", "A"))),
+        "希望の前日に禁止" to b.copy(cons3w = listOf(C3wRow("休", "A"))),
     )
 
     @Test fun everyInputFamilyChangesTheFingerprint() {

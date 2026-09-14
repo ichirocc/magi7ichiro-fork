@@ -407,6 +407,17 @@ object V6SanityPort {
                     actionLabel = if (canOneTap) "この希望を取消" else "",
                     wishKey = if (canOneTap) "${w.staffIndex},${w.dayIndex}" else null))
             }
+            // 1b) [3.542.0] 希望の前日に禁止(c3w)が希望どうしで衝突＝前日の Y も希望固定なら最適化器は解消できない。
+            if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T - 1) {
+                if (!p.wishLocked(i, j) || !p.c3wBanned(i, j, p.wish[i][j])) continue
+                val name = state.staff.getOrNull(i)?.name ?: "#$i"
+                val y = symOf(p.wish[i][j]); val x = symOf(p.wish[i][j + 1])
+                out.add(SettingIssue(IssueKind.WISH,
+                    "$name ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
+                    "「$x の希望の前日は $y 禁止」に希望どうしで当たっています。希望は固定なので計算では解消できません",
+                    "どちらかの希望を取り消すか、制約「希望の前日に禁止」の行を見直してください",
+                    action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j"))
+            }
         }
 
         fun duplicateSeqIssues() {

@@ -252,6 +252,16 @@ def main():
     cons.append(len(c42s))
     for r in c42s:
         cons.extend(r)
+    # [3.542.0] cons3w: [n, (wishK, prevK)*]（Problem.cons3w: 両記号が解決できる行だけ）
+    c3w = []
+    for c in st.get("cons3w", []):
+        x = shift_idx(c.get("wishKigou", ""))
+        y = shift_idx(c.get("prevKigou", ""))
+        if x >= 0 and y >= 0:
+            c3w.append((x, y))
+    cons.append(len(c3w))
+    for r in c3w:
+        cons.extend(r)
 
     # c3 blob: 各族 count, (len, seq...)*
     def resolve_c3(rows):

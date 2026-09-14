@@ -4,6 +4,7 @@ package com.magi.app.v6
  * [c3n(禁止連続)のビット走査] 職員行を「シフト→割当日のビット集合」へ畳んで、禁止連続の完全一致窓を
  * AND＋シフト＋popcount で数える。意味論は `Problem.makesForbiddenRun` / `C1DeltaPrefilter.staffC3nFires`
  * （どちらもチェッカー `MirrorCore.checkC3Family` の forbidden 分岐と同一）と厳密に一致させる。
+ * [3.542.0] `makesForbiddenRun` は希望の前日に禁止（cons3w）も返すが、ここは c3n の窓だけ（最終採否はチェッカー）。
  *
  * 動機（3.303.0）: c3n の回避経路を「隣接日1日」から「パターンがまたぐ全日」へ広げ、さらに当日自身も
  * 変更候補に含めると、1つの違反あたりの候補数が (パターン長 × 担当可能シフト数) 倍に増える。素朴な

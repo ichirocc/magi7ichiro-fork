@@ -465,10 +465,11 @@ object V6FinalPort {
                         val gv = report.breakdown["groupViol"] ?: 0
                         val pf = report.breakdown["pref"] ?: 0
                         val c3n = report.breakdown["c3n"] ?: 0
-                        bestNonCovUHard.set(gv + pf + c3n)
+                        val c3w = report.breakdown["c3w"] ?: 0
+                        bestNonCovUHard.set(gv + pf + c3n + c3w)
                         // [3.281.0/A] 非covU HARD が c3n のみか（c3n構造壁チェックの適用条件）＋best世代を進める
                         //   （世代が変わると c3n壁キャッシュは無効化＝新しい best 盤面で再証明する）。
-                        bestNonCovUAllC3n.set(gv == 0 && pf == 0 && c3n > 0)
+                        bestNonCovUAllC3n.set(gv == 0 && pf == 0 && c3w == 0 && c3n > 0)
                         bestVersion.incrementAndGet()
                     }
                 }

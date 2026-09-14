@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- 新制約「希望の前日に禁止」cons3w/c3w（3.542.0、ユーザーと対話で設計）。希望(wishLocked)で固定した X の前日セルが Y なら
+  違反、HARD 9000＝c3n 同格（HF77 明示指示）。`C3wRow(wishKigou, prevKigou)`・静的表 `Problem.c3wBan` を3者＋C++＋
+  `makesForbiddenRun` が共有。希望どうしの連日は違反として数え診断 1b が案内。編集タブ⑤に族追加、CSV 種別「希望前日禁止」。
+  759 テスト緑・C++ parity 0 mismatch・言語跨ぎ 5×20 族 MATCH → `docs/history/3.4xx.md`
 - 「そのデータで B4 に移行できるアルゴリズムと重み」の検証（3.541.1）。厳密解で B4 の値段を測定: 4 セル +94（古泉の
   c1 +2 窓）、16 セル +21（休のリレー 4 段、c3m +3）、10/28 休ゼロは +724。単一重みの採用境界は covO≥32（HF77 の high>covO
   を破る）か c3m≤3、境界でも利得 −1〜0。古泉の窓ルール免除は covO を減らさない。CountChainPolish に covO 起点を追加

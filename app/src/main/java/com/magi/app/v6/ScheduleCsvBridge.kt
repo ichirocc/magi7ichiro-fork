@@ -10,6 +10,7 @@ import com.magi.app.model.C2Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
+import com.magi.app.model.C3wRow
 import java.time.LocalDate
 
 /**
@@ -771,6 +772,7 @@ object ConstraintsCsvIO {
         for (c in state.cons41s) appendCsvRow(sb, listOf("スキル群回数", c.groupKigou, c.shiftKigou, c.l, c.u))
         for (c in state.cons42) appendCsvRow(sb, listOf("群組合せ禁止", c.g1Kigou, c.s1Kigou, c.g2Kigou, c.s2Kigou))
         for (c in state.cons42s) appendCsvRow(sb, listOf("スキル群組合せ禁止", c.g1Kigou, c.s1Kigou, c.g2Kigou, c.s2Kigou))
+        for (c in state.cons3w) appendCsvRow(sb, listOf("希望前日禁止", c.wishKigou, c.prevKigou))
         for ((key, r) in state.staffRange) {
             val p = key.split(","); val i = p.getOrNull(0)?.toIntOrNull(); val k = p.getOrNull(1)?.toIntOrNull()
             if (i == null || k == null) continue
@@ -801,6 +803,7 @@ object ConstraintsCsvIO {
         val cons3m = ArrayList<C3Row>(); val cons3mn = ArrayList<C3Row>()
         val cons41 = ArrayList<C41Row>(); val cons41s = ArrayList<C41Row>()
         val cons42 = ArrayList<C42Row>(); val cons42s = ArrayList<C42Row>()
+        val cons3w = ArrayList<C3wRow>()
         val ranges = LinkedHashMap<String, Range>()
         var n = 0
         // [3.314.0] ヘッダ判定を `build()` が出す実ヘッダ「種別」の一致へ（旧: 既知キーワード集合との
@@ -826,6 +829,7 @@ object ConstraintsCsvIO {
                 "スキル群回数" -> { cons41s.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
                 "群組合せ禁止" -> { cons42.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "スキル群組合せ禁止" -> { cons42s.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
+                "希望前日禁止" -> { cons3w.add(C3wRow(c(r, 1), c(r, 2))); n++ }
                 "個人レンジ" -> {
                     val i = nameToI[nameMatchKey(c(r, 1))]
                     val sym = c(r, 2)
@@ -852,7 +856,7 @@ object ConstraintsCsvIO {
         val candidate = state.copy(
             cons1 = cons1, cons2 = cons2, cons3 = cons3, cons3n = cons3n,
             cons3m = cons3m, cons3mn = cons3mn, cons41 = cons41, cons41s = cons41s,
-            cons42 = cons42, cons42s = cons42s, staffRange = ranges,
+            cons42 = cons42, cons42s = cons42s, cons3w = cons3w, staffRange = ranges,
         )
         // [3.333.0/外部レビュー Critical] 種別が既知なだけの行を**無条件に受理**していた。
         //   例えば `連勤,,,` は C1Row("","","") として n に数えられ、`Problem` は

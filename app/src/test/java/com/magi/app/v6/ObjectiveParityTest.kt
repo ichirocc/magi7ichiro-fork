@@ -5,6 +5,7 @@ import com.magi.app.model.C2Row
 import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
+import com.magi.app.model.C3wRow
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Range
@@ -107,6 +108,7 @@ class ObjectiveParityTest {
             cons42 = listOf(C42Row("G0", if (g > 1) "G1" else "G0", sym(1), sym(if (k > 2) 2 else 1))),
             cons41s = listOf(C41Row("K0", sym(1), "1", "1")),
             cons42s = listOf(C42Row("K0", "K1", sym(1), sym(if (k > 2) 2 else 1))),
+            cons3w = listOf(C3wRow(sym(rng.nextInt(k)), sym(rng.nextInt(k)))),
         )
     }
 

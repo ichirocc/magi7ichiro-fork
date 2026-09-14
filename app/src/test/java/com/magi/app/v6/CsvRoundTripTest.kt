@@ -82,9 +82,10 @@ class CsvRoundTripTest {
         assertEquals("$label: cons41s", st.cons41s, s.cons41s)
         assertEquals("$label: cons42", st.cons42, s.cons42)
         assertEquals("$label: cons42s", st.cons42s, s.cons42s)
+        assertEquals("$label: cons3w", st.cons3w, s.cons3w)
         assertEquals("$label: staffRange", expectedRanges, s.staffRange)
         val rows = st.cons1.size + st.cons2.size + st.cons3.size + st.cons3n.size + st.cons3m.size + st.cons3mn.size +
-            st.cons41.size + st.cons41s.size + st.cons42.size + st.cons42s.size + expectedRanges.size
+            st.cons41.size + st.cons41s.size + st.cons42.size + st.cons42s.size + st.cons3w.size + expectedRanges.size
         assertEquals("$label: 取込件数", rows - unresolvedInSource, r.accepted)
     }
 

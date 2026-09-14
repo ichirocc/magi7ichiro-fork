@@ -66,6 +66,8 @@ class DeltaEvaluatorTest {
         val skillGroups = listOf(Group("SK0", "SK0"), Group("SK1", "SK1"))
         val cons41s = listOf(C41Row("SK0", "A", "", "2"))    // per day, SK0 doing A <= 2
         val cons42s = listOf(C42Row("SK0", "SK1", "A", "C")) // per day, SK0-A vs SK1-C conflict
+        // [3.542.0] 希望の前日に禁止: 希望 (1,4)=A の前日 (1,3) に B、希望 (2,2)=C の前日 (2,1) に 休 を禁止
+        val cons3w = listOf(C3wRow("A", "B"), C3wRow("C", "休"))
 
         return MagiState(
             startDate = "2025-01-01", endDate = "2025-01-08",
@@ -76,7 +78,7 @@ class DeltaEvaluatorTest {
             wishes = wishes, staffRange = staffRange, needDay1 = needDay1, needDay2 = needDay2,
             cons1 = cons1, cons2 = cons2, cons3 = cons3, cons3n = cons3n,
             cons3m = cons3m, cons3mn = cons3mn, cons41 = cons41, cons42 = cons42,
-            skillGroups = skillGroups, cons41s = cons41s, cons42s = cons42s,
+            skillGroups = skillGroups, cons41s = cons41s, cons42s = cons42s, cons3w = cons3w,
         )
     }
 

@@ -213,6 +213,7 @@
 | `pref` | 希望違反 | 9000 | セル | 登録された希望シフトが満たされない |
 | `covU` | 人員不足 | 8000 | 日付 | その日のシフトの必要人数に足りない（被覆不足） |
 | `c3n` | 禁止の並び | 7000 | セル | 禁止された勤務の並び（cons3n／FORBIDDEN） |
+| `c3w` | 希望前日の禁止 | c3n と同格（3.542.0） | セル | 希望で固定されたシフトの前日に置けないシフト（cons3w）。違反箇所は前日側のセル |
 
 ### SOFT（できれば・14種）※重み降順
 | キー | 表示名 | 重み | 場所 | 意味 |
@@ -330,6 +331,7 @@
 | `needDay1`,`needDay2` | Map\<String,String\> | 日別必要人数（系統1/2） |
 | `cons1`..`cons42` | List\<CxRow\> | 制約（下記サブ型） |
 | `skillGroups`,`cons41s`,`cons42s` | … | スキルグループ（第2分類）とそのC41/C42 |
+| `cons3w` | List\<C3wRow\> | 希望の前日に禁止（3.542.0）。編集タブ ⑤ 並び・くり返し に族「希望の前日に禁止（必ず守る）」 |
 | `shiftColors` | Map\<String,String\> | シフト記号→"#rrggbb"（表示のみ。`"__vio__"`=違反色） |
 
 **サブ型**
@@ -340,6 +342,7 @@
 - `C3Row(pattern: List<String>)` … 並びパターン（cons3=必須/cons3n=禁止/cons3m=推奨/cons3mn=回避で同型）
 - `C41Row(groupKigou, shiftKigou, l, u)` … 群のシフトを1日 [l,u] 人
 - `C42Row(g1Kigou, g2Kigou, s1Kigou, s2Kigou)` … 群g1のs1と群g2のs2は同日併存不可
+- `C3wRow(wishKigou, prevKigou)` … 希望で固定した wishKigou の前日に prevKigou を置けない（3.542.0）
 
 **UiState（UI・表示用、`ui/MagiUiState.kt`）**: ドメインから導出した表示集約。主なもの＝`loaded/running/hasResult`、`bestHard/bestSoft/weightedScore/totalViolations`、`breakdown`(19種→件数)、`violationCells`(キー`"i,j"`)／`needViolations`(`"k,j"`)／`countViolations`(`"i,k"`)→各説明文、`schedule/wishes/resultSchedule/liveSchedule`、`shiftSymbols/shiftColorHex/shiftTextHex/staffNames/staffGroupSymbols`、`fixSuggestions`(変更/交換の1手)、`satisfaction/copilotHint/coverageDiag/settingIssues`、`logs/opLog`、`canUndo/canRedo/workers/budgetSec/softPolish/v6Algorithm`。
 
