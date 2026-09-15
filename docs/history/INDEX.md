@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 色ピッカーの形をシフト色・違反色で統一（3.550.0、ユーザー提示モック）。族は行で表し文字見出しなし、
+  `rowLabels`/`PALETTE_ROW_LABELS`/「色を選ぶ」を撤去、✓と余白だけで示す → `docs/history/3.4xx.md`
 - 画面文言の類似語を統一「群」→「グループ」（3.549.0、ユーザー指示）。制約名も グループのレンジ／グループペア禁止／
   スキルグループ へ。CSV 種別タグ・コード識別子・技術略記は据え置き。決定は CLAUDE.md へ → `docs/history/3.4xx.md`
 - CI: setup-android@v3 の既定 `packages: tools platform-tools` の旧 `tools` が SDK リポジトリから消え

@@ -111,7 +111,8 @@ internal fun hexToColor(hex: String): Color {
 //   固定した上でCUD距離を最大化して新規生成（`tools/palette_bg_family_cud.py`）、公休には家族内最淡色を
 //   割当（他家族との対比で「稼働色でない」ことを示す）。既存35色は不変のため他家族の格納位置・
 //   保存済みhex文字列への影響は無い。
-private val PALETTE_ROW_LABELS = listOf("背景色系", "早番家族", "日勤家族", "時短パート家族", "遅番家族", "夜勤家族", "特別枠")
+// [ユーザー指示 11回目改訂/3.550.0] ピッカーの形をシフト色・違反色で統一＝家族は「行」で表し文字見出しなし
+//   （3.543.0 の家族名見出しと「色を選ぶ」の小見出しを撤去）。行間の余白だけで族を区切り、✓だけが選択中を示す。
 private val COLOR_PALETTE = listOf(
     "#ced1d5", "#b5aca5", "#a09ea3", "#695f75", "#5c6264", "#3b3f41",
     "#e8e5e5", "#ffeeca", "#f5d964", "#ffca8f", "#ffd759", "#c68b0c",
@@ -244,7 +245,6 @@ internal fun ColorPickerDialog(
     // [3.544.0/シフト色と違反色を別パレットへ分離] 既定はシフト色パレット。違反色ピッカーは
     // V6RemainingScreens.kt から VIOLATION_COLOR_PALETTE を明示指定する。
     palette: List<String> = COLOR_PALETTE,
-    rowLabels: List<String>? = PALETTE_ROW_LABELS,
 ) {
     // [実機指摘「現在の設定している色が画面の中にない」] 未設定(空)のときグレーの偽色を出していた →
     //   実効色(既定色)を表示し、パレット上の一致スウォッチにも✓を付ける。
@@ -261,13 +261,8 @@ internal fun ColorPickerDialog(
                     Text(if (currentHex.isBlank()) "  現在の色（既定）" else "  現在の色",
                         style = MaterialTheme.typography.bodyMedium)
                 }
-                Text("色を選ぶ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val perRow = 6
-                palette.chunked(perRow).forEachIndexed { rowIndex, rowColors ->
-                    // [色覚配慮/3.543.0] 家族名を文字でも示す＝色だけに頼らない見出し（CUD全面見直し）。
-                    rowLabels?.getOrNull(rowIndex)?.let {
-                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                palette.chunked(perRow).forEach { rowColors ->
                     // [不具合修正×2] 固定40dp×6は幅超過で6個目が切れ、weight等分は端数行(2個)が巨大化していた。
                     //   幅いっぱいを等分(weight)＋正方形(aspectRatio)＋端数行は空 Spacer で埋めて全行同サイズに。
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
