@@ -65,7 +65,7 @@ class C42PairCountTest {
         // 同じ行で s0/s1 の2人が X。異なる2人のペアは1組だけ＝C(2,2)=1。旧実装は 2²=4 件。
         val s = st(listOf(listOf(1), listOf(1), listOf(0)), listOf(C42Row("G0", "G0", "X", "X")))
         assertEquals("2人ならペアは1組", 1, c42Of(s))
-        assertEquals("評価器もチェッカーと同値", 1L, evalC42Of(s))
+        assertEquals("評価器もチェッカーと同値（c42 重み 9＝3.556.0）", 9L, evalC42Of(s))
     }
 
     @Test
@@ -74,7 +74,7 @@ class C42PairCountTest {
         val s3 = st(listOf(listOf(1), listOf(1), listOf(1)), listOf(C42Row("G0", "G0", "X", "X")))
             .let { it.copy(staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0))) }
         assertEquals("3人ならペアは3組", 3, c42Of(s3))
-        assertEquals("評価器もチェッカーと同値", 3L, evalC42Of(s3))
+        assertEquals("評価器もチェッカーと同値（c42 重み 9＝3.556.0）", 27L, evalC42Of(s3))
     }
 
     @Test
@@ -83,7 +83,7 @@ class C42PairCountTest {
         // G0 の X = s0/s1 の2人、G1 の Y = s2 の1人 → 2×1 = 2 件。
         val s = st(listOf(listOf(1), listOf(1), listOf(2)), listOf(C42Row("G0", "G1", "X", "Y")))
         assertEquals("異なる群の組合せは従来どおり", 2, c42Of(s))
-        assertEquals("評価器もチェッカーと同値", 2L, evalC42Of(s))
+        assertEquals("評価器もチェッカーと同値（c42 重み 9＝3.556.0）", 18L, evalC42Of(s))
     }
 
     @Test
@@ -92,6 +92,6 @@ class C42PairCountTest {
         // G0 の X = s0、G0 の Y = s1 → 1×1 = 1 件。
         val s = st(listOf(listOf(1), listOf(2), listOf(0)), listOf(C42Row("G0", "G0", "X", "Y")))
         assertEquals("同じ群でもシフトが違えば従来どおり", 1, c42Of(s))
-        assertEquals("評価器もチェッカーと同値", 1L, evalC42Of(s))
+        assertEquals("評価器もチェッカーと同値（c42 重み 9＝3.556.0）", 9L, evalC42Of(s))
     }
 }

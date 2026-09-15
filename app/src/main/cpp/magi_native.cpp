@@ -400,7 +400,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
             }
         }
-        soft += raw; if (bd) bd[6] += raw;
+        soft += raw * 9; if (bd) bd[6] += raw;
     }
     {
         long long raw = 0;
@@ -415,7 +415,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
             }
         }
-        soft += raw; if (bd) bd[7] += raw;
+        soft += raw * 9; if (bd) bd[7] += raw;
     }
 
     // c41s / c42s（スキル群）
@@ -429,7 +429,7 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
             }
         }
-        soft += raw * 6; if (bd) bd[8] += raw;
+        soft += raw * 10; if (bd) bd[8] += raw;
     }
     {
         long long raw = 0;
@@ -444,13 +444,13 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
                 raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
             }
         }
-        soft += raw * 6; if (bd) bd[9] += raw;
+        soft += raw * 10; if (bd) bd[9] += raw;
     }
 
-    // c3 族（重み: c3=15 / c3n=HARD / c3m=10 / c3mn=90。[3.522.0] 3/2/30→15/10/90）
+    // c3 族（重み: c3=15 / c3n=HARD / c3m=6 / c3mn=90。[3.522.0] 3/2/30→15/10/90、[3.556.0] c3m 10→6）
     { long long raw = c3check(p, a, p.cons3, false); soft += raw * 15; if (bd) bd[2] += raw; }
     { long long raw = c3check(p, a, p.cons3n, true); hard1 += raw; if (bd) bd[3] += raw; }
-    { long long raw = c3check(p, a, p.cons3m, false); soft += raw * 10; if (bd) bd[4] += raw; }
+    { long long raw = c3check(p, a, p.cons3m, false); soft += raw * 6; if (bd) bd[4] += raw; }
     { long long raw = c3check(p, a, p.cons3mn, true); soft += raw * 90; if (bd) bd[5] += raw; }
 
     // pref（実現可能な希望のみ）＋ [3.318.0] groupViol（担当できないシフトに就いているセル）。
@@ -714,7 +714,7 @@ struct SaChunk {
     long long contribC3Row(int i) const {  // [3.522.0] c3/c3m/c3mn 3/2/30→15/10/90
         return contribC3RowFam(i, p.cons3, false, 15)
              + contribC3RowFam(i, p.cons3n, true, (long long)M)
-             + contribC3RowFam(i, p.cons3m, false, 10)
+             + contribC3RowFam(i, p.cons3m, false, 6)
              + contribC3RowFam(i, p.cons3mn, true, 90);
     }
     // [3.318.0] このセルの HARD 寄与＝pref（実現可能な希望の未充足）＋ groupViol（担当できないシフト）。
@@ -761,28 +761,28 @@ struct SaChunk {
             const uint64_t* dm = &dayShiftMask[(size_t)j * K];
             for (const auto& c : p.cons41) {
                 int z = __builtin_popcountll(dm[c.s] & grpMask[(size_t)c.g]);
-                v += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
+                v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 9;
             }
             for (const auto& c : p.cons42) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & grpMask[(size_t)c.g1]);
                 long long n2 = __builtin_popcountll(dm[c.s2] & grpMask[(size_t)c.g2]);
-                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
+                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 9;
             }
-            for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6
+            for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
                 int z = __builtin_popcountll(dm[c.s] & sskMask[(size_t)c.g]);
-                v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 6;
+                v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 10;
             }
             for (const auto& c : p.cons42s) {
                 long long n1 = __builtin_popcountll(dm[c.s1] & sskMask[(size_t)c.g1]);
                 long long n2 = __builtin_popcountll(dm[c.s2] & sskMask[(size_t)c.g2]);
-                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 6;
+                v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 10;
             }
             return v;
         }
         for (const auto& c : p.cons41) {
             int z = 0;
             for (int i = 0; i < S; i++) if (p.sgrp[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0);
+            v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 9;
         }
         for (const auto& c : p.cons42) {
             long long n1 = 0, n2 = 0;
@@ -791,12 +791,12 @@ struct SaChunk {
                 if (p.sgrp[i] == c.g1 && x == c.s1) n1++;
                 if (p.sgrp[i] == c.g2 && x == c.s2) n2++;
             }
-            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2);
+            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 9;
         }
-        for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6
+        for (const auto& c : p.cons41s) {  // [3.522.0] c41s/c42s 1→6 [3.556.0] 6→10・c41/c42 1→9
             int z = 0;
             for (int i = 0; i < S; i++) if (p.ssk[i] == c.g && a[(size_t)i * T + j] == c.s) z++;
-            v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 6;
+            v += (p.quantitativeRangeEval ? rangeDistance(z, c.l, c.u) : (z < c.l || c.u < z ? 1 : 0)) * 10;
         }
         for (const auto& c : p.cons42s) {
             long long n1 = 0, n2 = 0;
@@ -805,7 +805,7 @@ struct SaChunk {
                 if (p.ssk[i] == c.g1 && x == c.s1) n1++;
                 if (p.ssk[i] == c.g2 && x == c.s2) n2++;
             }
-            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 6;
+            v += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2) * 10;
         }
         return v;
     }

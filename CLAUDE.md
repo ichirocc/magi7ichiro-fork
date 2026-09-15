@@ -41,13 +41,13 @@
   **担当不可スタッフは対象外（canDoガード）**。構造上単一シフトのみ（複数種類変種なし）。
 - **c2**（職員別合計, SOFT, 重み4）。
 - **c3族**（ws4の列パターン。ws3=希望シフトとは別物）:
-  - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み10）— **非forbidden**。
+  - c3 = MUST/want（SOFT, 重み15）, c3m = Want（SOFT, 重み6＝3.556.0）— **非forbidden**。
   - c3n = FORBIDDEN（HARD, 重み9000）, c3mn = Hate（SOFT, 重み90）— **forbidden**。
   - **c3w**（希望の前日に禁止, HARD, 重み9000＝c3n 同格, 3.542.0）: `C3wRow(wishKigou, prevKigou)`＝希望(`wishLocked`)で固定した X の
     **前日**セルが Y なら違反（前日側セルが違反箇所）。希望でない X・初日は対象外。静的表 `Problem.c3wBan` を3者＋C++＋`makesForbiddenRun` が共有。
   - 評価モデル: **非forbiddenの単一シフト連 → run-deficit**（C3Run.rowDeficit。完成runを罰しない）。
     それ以外（複数シフト連 / forbidden）→ **窓マッチ #fire**。
-- **c41/c42**（群/日 範囲, SOFT, 重み1）／**c41s/c42s**（スキル群変種, SOFT, 重み6）。
+- **c41/c42**（群/日 範囲, SOFT, 重み9＝3.556.0）／**c41s/c42s**（スキル群変種, SOFT, 重み10＝3.556.0）。
 - **covU**（人員不足, HARD, 重み10000）/ **covO**（人員過剰, SOFT, 重み10）。被覆は同日のみ（夜勤繰越なし）。
   ※ covO 重みは 0.5→1.0（2026-07-13）→5.0（2026-08-27）→10（3.522.0、全面見直し＋SOFT中「上限超過(high)>人員過剰(covO)」
   指示）、いずれも HF77 明示指示。最適化器とチェッカーは同じ値。
@@ -78,8 +78,8 @@
 - **pref**（希望シフト未充足, HARD, 重み8000）/ **groupViol**（群外シフト, HARD, 重み11000）。
 
 weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000) > low(120) >
-c3mn(90) > c1(50) > high(25) > c3(15) > c3m(10)=covO(10) > c41s(6)=c42s(6) > c2(4)=apt(4) >
-fair(2)=weekly(2) > c41(1)=c42(1)。（3.522.0で全面見直し＝tools/loop 34ケース×10seedの
+c3mn(90) > c1(50) > high(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > c2(4)=apt(4) >
+fair(2)=weekly(2)。（3.556.0 HF77明示指示: c41s/c42s 6→10・c41/c42 1→9・c3m 10→6。3.522.0で全面見直し＝tools/loop 34ケース×10seedの
 baseline対比ベンチマークで決定。旧: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) >
 c3mn(30)=c1(30) > high(25) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。
 covO は 0.5→1.0→5.0→**10**、c1 は 4→5→15→30→**50**、c3mn は 12→15→30→**90**、high は 45→25で不変＝

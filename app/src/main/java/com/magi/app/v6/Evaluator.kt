@@ -124,7 +124,7 @@ class Evaluator(private val p: Problem) {
                     raw += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
                 }
             }
-            soft += raw; record("c41", raw)
+            soft += raw * 9L; record("c41", raw)
         }
 
         // c42: per-day, (g1,s1) co-occurring with (g2,s2) is penalized per pair
@@ -140,7 +140,7 @@ class Evaluator(private val p: Problem) {
                     raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
                 }
             }
-            soft += raw; record("c42", raw)
+            soft += raw * 9L; record("c42", raw)
         }
 
         // c41s / c42s: スキルグループ版（ssk = スキル群index。既存 sgrp とは独立）。[3.522.0] 重み1→6。
@@ -153,7 +153,7 @@ class Evaluator(private val p: Problem) {
                     raw += if (p.quantitativeRangeEval) rangeDistance(z, c.l, c.u) else if (z < c.l || c.u < z) 1L else 0L
                 }
             }
-            soft += raw * 6L; record("c41s", raw)
+            soft += raw * 10L; record("c41s", raw)
         }
         run {
             var raw = 0L
@@ -167,15 +167,15 @@ class Evaluator(private val p: Problem) {
                     raw += c42PairCount(c.g1 == c.g2 && c.s1 == c.s2, n1, n2)
                 }
             }
-            soft += raw * 6L; record("c42s", raw)
+            soft += raw * 10L; record("c42s", raw)
         }
 
         // c3 family — [統一] UnifiedViolationChecker と同じ重みを soft に適用。
         // c3n は forbidden=HARD として hard1(count, ×1e6) のまま。窓マッチは #fire 計上(後述の sub += 1)。
-        // [3.522.0] c3=3→15・c3m=2→10・c3mn=30→90（全面見直し、経緯はdocs/history/3.4xx.md）。
+        // [3.522.0] c3=3→15・c3m=2→10・c3mn=30→90（全面見直し）。[3.556.0] c3m 10→6、c41/c42 1→9、c41s/c42s 6→10（HF77 明示指示）。
         run { val raw = c3check(a, p.cons3, false); soft += raw * 15L; record("c3", raw) }
         run { val raw = c3check(a, p.cons3n, true); hard1 += raw; record("c3n", raw) }    // forbidden -> display HARD (count)
-        run { val raw = c3check(a, p.cons3m, false); soft += raw * 10L; record("c3m", raw) }
+        run { val raw = c3check(a, p.cons3m, false); soft += raw * 6L; record("c3m", raw) }
         run { val raw = c3check(a, p.cons3mn, true); soft += raw * 90L; record("c3mn", raw) }
 
         // pref: wished cell not honored -> display HARD（[監査#11②] 実現可能な希望のみ計上。不可能希望は計数から対称除外）
