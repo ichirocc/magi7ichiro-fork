@@ -342,6 +342,9 @@ object V6HotfixPasses {
         val componentRepair: ViolationComponentRepair.Params = ViolationComponentRepair.Params(),
         /** 人員過剰(covO)の退避研磨（CovOReliefPolish）を最終段（成分修復の後）に置く。 */
         val covOReliefEnabled: Boolean = true,
+        /** 休の必要人数を明示した日に休が余るとき、前後の窓を夜勤列の列挙＋人間移動＋ビームで組み直す（RestZeroWindowLns）。最終段・退避の前。
+         *  既定 OFF＝ユーザー決定（実データでは 30 日の休希望 5 人で 29 日に夜勤できる人が足りず採用ゼロ、history 3.555.0）。 */
+        val restZeroWindowLnsEnabled: Boolean = false,
         /** HF66 直後にも退避する（既定 false＝最終段だけ。早期配置は後続パスの経路を変える＝測定は history 3.554.0）。 */
         val covOReliefEarly: Boolean = false,
         /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
@@ -631,6 +634,14 @@ object V6HotfixPasses {
                 ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), finalParams, shouldStop = finalStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
             chain.rejectedPool.clear()
+        }
+
+        if (params.restZeroWindowLnsEnabled && !shouldStop()) {
+            val lnsStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+            val r = chain.timed("後処理 休0日の窓LNS(最終)", "RestZeroLNS") { work ->
+                RestZeroWindowLns.apply(state, work, shouldStop = lnsStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            }
+            chain.replaceBoard(r.newSchedule, r.logs)
         }
 
         if (params.covOReliefEnabled && !shouldStop()) {
