@@ -132,7 +132,7 @@ internal fun StaffShiftMatrixCard(
             Row(Modifier.fillMaxWidth()) {
                 Column {
                     MatrixHeaderCell(labelW, rowH, cs.surfaceVariant) {
-                        Text("職員 (群)", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        Text("職員 (グループ)", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     }
                     for (i in 0 until S) {
                         val gr = v.groups.getOrNull(v.staff[i].groupIdx)
@@ -344,10 +344,10 @@ private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: MagiViewModel
                 }
             }
             val raw = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
-            Text("群の目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text("グループの目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
             AptStepperRow(label = toHankakuKigou(kigou), value = raw, onChange = { vm.ws1SetGroupApt(g, k, it) })
             if (hasRange && raw.trim().toIntOrNull() != null) {
-                Text("この職員・シフトは個人の下限・上限を優先するため、群の目標は適用されません", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("この職員・シフトは個人の下限・上限を優先するため、グループの目標は適用されません", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             } else if (apt != null && raw.trim().toIntOrNull() != apt) {
                 Text("この職員の希望・置けるシフトから ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }

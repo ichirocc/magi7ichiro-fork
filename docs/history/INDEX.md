@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 画面文言の類似語を統一「群」→「グループ」（3.549.0、ユーザー指示）。制約名も グループのレンジ／グループペア禁止／
+  スキルグループ へ。CSV 種別タグ・コード識別子・技術略記は据え置き。決定は CLAUDE.md へ → `docs/history/3.4xx.md`
 - CI: setup-android@v3 の既定 `packages: tools platform-tools` の旧 `tools` が SDK リポジトリから消え
   V6 Engine Check / Android SDK が落ちた件（3.548.0）。3 workflow に `packages: platform-tools` を明示 → `docs/history/3.4xx.md`
 - シフト種別の色のみ外部へ出力・取込む機能を追加（3.547.0）。`ShiftColorsCsvIO`（記号,色）、

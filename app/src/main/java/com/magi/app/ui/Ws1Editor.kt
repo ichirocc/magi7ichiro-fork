@@ -168,8 +168,8 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
 
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
-            SectionHeader("担当可否（群 × シフト：担当できるか）")   // [3.483.0 E-7] 回数マトリクスと軸が同じため副題で区別
-            Text("セルをタップで担当ON/OFF（✓＝担当できる）。群名をタップでその群を一括、シフト名をタップで全グループへ一括。「休」は外せません。",
+            SectionHeader("担当可否（グループ × シフト：担当できるか）")   // [3.483.0 E-7] 回数マトリクスと軸が同じため副題で区別
+            Text("セルをタップで担当ON/OFF（✓＝担当できる）。グループ名をタップでそのグループを一括、シフト名をタップで全グループへ一括。「休」は外せません。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
             // [マトリックス再設計（ユーザー提示案）] 旧: 群ごとに FlowRow でチップを折り返す形（2.66.0）。群とシフトの
@@ -470,7 +470,7 @@ private fun GroupShiftMatrix(
         // 固定列: 左上の角＋行ヘッダ（群名＝タップで行一括）
         Column(Modifier.width(nameW)) {
             Box(Modifier.width(nameW).height(cellH).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
-                Text("群 ＼ シフト", fontSize = 11.sp, color = cs.onSurfaceVariant)
+                Text("グループ＼シフト", fontSize = 11.sp, color = cs.onSurfaceVariant)
             }
             groups.forEachIndexed { g, gr ->
                 val row = groupShift.getOrNull(g).orEmpty()
