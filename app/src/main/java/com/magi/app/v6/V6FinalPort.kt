@@ -290,7 +290,7 @@ object V6FinalPort {
         val plan = optimizationPlan(seconds)
         val busy = buildBusyDetail(state, label.name, mapOf(
             "subtitle" to label.desc,
-            "phaseDesc" to "${label.name} で計算中",
+            "phaseDesc" to "${label.name} で最適化中",
             "expectedSec" to "約 ${seconds} 秒",
             "estimatedIter" to "問題サイズに応じて自動調整",
         ))

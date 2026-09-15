@@ -340,6 +340,10 @@ object V6HotfixPasses {
         /** [Iteration 2] 各パスの拒否候補を巡の末尾で違反起点のトランザクションに束ねる（ViolationComponentRepair）。3.505.1 でハイブリッド併用＝既定 ON。 */
         val componentRepairEnabled: Boolean = true,
         val componentRepair: ViolationComponentRepair.Params = ViolationComponentRepair.Params(),
+        /** 人員過剰(covO)の退避研磨（CovOReliefPolish）を最終段（成分修復の後）に置く。 */
+        val covOReliefEnabled: Boolean = true,
+        /** HF66 直後にも退避する（既定 false＝最終段だけ。早期配置は後続パスの経路を変える＝測定は history 3.554.0）。 */
+        val covOReliefEarly: Boolean = false,
         /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
         val componentRepairFinal: Boolean = true,
         /** [Iteration 7] 決定的モード＝時間（ms キャップ・締切・残り時間の判定）でなく回数で止める。同じ入力・seed なら同じ盤面。
@@ -510,6 +514,12 @@ object V6HotfixPasses {
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
         chain.replaceBoard(r66.newSchedule, r66.logs)
+        if (params.covOReliefEnabled && params.covOReliefEarly && !shouldStop()) {
+            val r = chain.timed("後処理 人員過剰の退避", "CovORelief") { work ->
+                CovOReliefPolish.apply(state, work, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            }
+            chain.replaceBoard(r.newSchedule, r.logs)
+        }
         val t66Done = EngineClock.nowMs()
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
@@ -621,6 +631,15 @@ object V6HotfixPasses {
                 ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), finalParams, shouldStop = finalStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
             chain.rejectedPool.clear()
+        }
+
+        if (params.covOReliefEnabled && !shouldStop()) {
+            // 最後に置く＝後続パスが無いので keep-best の 1 セル手だけが盤面に足され、旧チェーンの結果より悪くならない。
+            val reliefStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
+            val r = chain.timed("後処理 人員過剰の退避(最終)", "CovORelief") { work ->
+                CovOReliefPolish.apply(state, work, shouldStop = reliefStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            }
+            chain.replaceBoard(r.newSchedule, r.logs)
         }
 
         val tHf = EngineClock.nowMs()

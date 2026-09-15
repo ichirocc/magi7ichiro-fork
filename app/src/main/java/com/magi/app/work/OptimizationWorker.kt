@@ -50,7 +50,7 @@ class OptimizationWorker(
      * いる（SanityCheck・CoverageDiag・設定ミス・NativeBridge がすべて W）ので、正常系を混ぜると壊れる。
      */
     private fun note(msg: String, level: String = "I") {
-        runCatching { OptimizationRepository.publishNote(level, "バックグラウンド計算: $msg") }
+        runCatching { OptimizationRepository.publishNote(level, "バックグラウンド最適化: $msg") }
     }
 
     override suspend fun doWork(): Result {
@@ -132,7 +132,7 @@ class OptimizationWorker(
         //   走り（OS はバックグラウンドのプロセスを優先的に殺す）、次回起動が「中断されました」と
         //   だけ案内する＝**なぜ途中で消えたか**が読めなかった。失敗しても本体は続ける（従来どおり）。
         runCatching { setForeground(getForegroundInfo()) }
-            .onFailure { note("前景サービスにできませんでした（${it.javaClass.simpleName}）＝端末の都合で計算が途中終了する可能性があります", "W") }
+            .onFailure { note("前景サービスにできませんでした（${it.javaClass.simpleName}）＝端末の都合で最適化が途中終了する可能性があります", "W") }
         // [Android 17 バブル] 会話バブルの前提（会話チャンネル＋長寿命ショートカット）を用意し、開始バブルを提示。
         runCatching {
             BubbleSupport.ensureChannel(ctx)
@@ -198,7 +198,7 @@ class OptimizationWorker(
                         val s = wallElapsed / 1000
                         val clock = "%d:%02d".format(s / 60, s % 60)
                         runCatching {
-                            BubbleSupport.postProgress(ctx, "計算中 ・ 経過 $clock ・ 違反 ${report.total}（必須 ${report.hard}）")
+                            BubbleSupport.postProgress(ctx, "最適化中 ・ 経過 $clock ・ 違反 ${report.total}（必須 ${report.hard}）")
                         }
                     }
                     // [#4/C1] 途中最良解を定期スナップショット → kill されても「途中結果から再開」できる。
@@ -351,7 +351,7 @@ class OptimizationWorker(
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle("勤務表を最適化中")
-            .setContentText("バックグラウンドで計算しています…")
+            .setContentText("バックグラウンドで最適化しています…")
             .setOngoing(true)
             .build()
         // minSdk 36 (Android 16+): foregroundServiceType is always required.

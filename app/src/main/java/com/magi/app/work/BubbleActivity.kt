@@ -79,12 +79,12 @@ private fun BubbleContent(
             }
             p != null -> {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("計算中 ・ 経過 ${fmtElapsed(p.elapsedMs)}")
+                Text("最適化中 ・ 経過 ${fmtElapsed(p.elapsedMs)}")
                 Text("違反 ${p.total}（必須 ${p.hard}）")
             }
             running -> {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("計算を開始しています…")
+                Text("最適化を開始しています…")
             }
             else -> Text("待機中…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

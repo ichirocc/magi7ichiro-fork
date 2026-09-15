@@ -1821,7 +1821,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (altBoardKey != 0L && curSched != null && (altBoardKey != boardKey(curSched) || altStateKey != stateKey(st))) {
             alternativeScheds = emptyList()
             _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
-                message = "その後に勤務表か設定が変わったため、この案は適用できません。もう一度計算してください") }
+                message = "その後に勤務表か設定が変わったため、この案は適用できません。もう一度最適化してください") }
             logOp("W", "他の案 ${i + 1}: 案の計算後に盤面/設定が変わったため適用せず")
             return
         }
