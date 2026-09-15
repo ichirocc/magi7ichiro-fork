@@ -68,7 +68,8 @@ object MagiStartupGuard {
             appendLine()
             appendLine("版: $version")
             appendLine("端末: ${Build.MANUFACTURER} ${Build.MODEL} / Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            appendLine("前回の到達段階: ${prev.lastStage ?: "記録なし"}" + if (prev.lastStage != STAGE_UI) "（画面まで到達していません）" else "")
+            val notReached = prev.lastStage != null && prev.lastStage != STAGE_UI
+            appendLine("前回の到達段階: ${prev.lastStage ?: "記録なし"}" + (if (notReached) "（画面まで到達していません）" else ""))
             appendLine()
             if (prev.crash != null) {
                 appendLine("前回の例外:")

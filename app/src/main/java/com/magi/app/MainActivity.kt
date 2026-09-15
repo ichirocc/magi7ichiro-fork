@@ -49,7 +49,8 @@ class MainActivity : ComponentActivity() {
 
     private fun showStartupDiagnostic(prev: MagiStartupGuard.Previous) {
         val pad = (16 * resources.displayMetrics.density).toInt()
-        val text = TextView(this).apply {
+        // ローカル名を text にすると Button.apply 内の `text =` がこの変数を指す（CI run 1075 で踏んだ）。
+        val message = TextView(this).apply {
             text = MagiStartupGuard.diagnosticText(this@MainActivity, prev)
             setTextIsSelectable(true)
             setPadding(pad, pad, pad, pad)
@@ -63,7 +64,7 @@ class MainActivity : ComponentActivity() {
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(text)
+            addView(message)
             addView(button)
         }
         setContentView(ScrollView(this).apply { addView(column) })
