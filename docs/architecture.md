@@ -141,6 +141,11 @@ ViewModel ハブ
 - `V6FinalPort.kt` — `handleOptimize`（最適化オーケストレーション）, `handleCheck`（UnifiedViolationChecker）。
   最終番兵 `checkResultWorse`（入力より悪化したら入力へ復帰）。
 - `V6NativeOptimizer.kt`/`V6HotfixPasses.kt`/`V6LateOperators.kt`/`V6SearchOperators.kt` — 探索本体・各オペレータ。
+- `CovOReliefPolish.kt` — **人員過剰(covO)の退避研磨**（3.554.0）。過剰セルの在勤者を、受け皿のある担当可シフト（B4 のような需要 0 の
+  シフトを含む）へ 1 セルずつ動かし、正式チェッカーの `betterReport` で採る。`V6PortAnalyzer.diagnoseSurpluses` が「移すだけで良くなる」と
+  見つける手と同じ探索を修復として行う。後処理チェーンの最終段（成分修復の後・HF70 の前）＝後続パスが無いので旧チェーンの結果より
+  悪くならない（`PostOptimizationParams.covOReliefEnabled`。HF66 直後にも置く `covOReliefEarly` は既定 OFF＝tools/loop で経路が揺れた）。
+  C# は `V6HotfixPasses.CovORelief.cs`。
 - `ViolationComponentRepair.kt` — **違反起点のトランザクション修復**（Iteration 2 第一弾, 3.505.0）。各研磨パスが単独で不採用にした候補
   （`CombinatorialRepair.Candidate`＝`CyclicSwapResult.rejectedCandidates` で巡ごとに集める）を、違反（セル/回数/人数）を起点に
   「主候補＋職員か日を共有する助候補」へ絞り、`DeltaEvaluator` の推定＋厳密ピンの事前枝刈りでビーム、commit は正式チェッカーの
