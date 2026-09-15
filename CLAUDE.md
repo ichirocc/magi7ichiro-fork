@@ -14,8 +14,9 @@
 - **Kotlin が正**。C++（`magi_native.cpp`）と C#（`ichirocc/-MAGI_PC`）は同値の移植。評価器を変えたら C++ を同じコミットで
   （`.claude/rules/weights.md`）、C# は同日に同期。パリティは CI（native-parity）が守る。
 - `ichirocc/MAGI-Godot` は Godot 4.5.1 UI 版（Compose UI を削除した派生）。エンジン層 `v6/`・`model/`・`work/`・`MagiViewModel*`・
-  `UnifiedViolationChecker`・C++ は**この repo が正**で、MAGI-Godot は UI だけを変える。エンジン・ViewModel を変えたら
-  MAGI-Godot へ同日に取り込む（C# 同期と同じ扱い、3.552.0）。
+  `UnifiedViolationChecker`・C++・起動診断・CI 検査は両 repo で**相互互換**（同値）を保つ＝どちらで直しても同日にもう一方へ
+  取り込む（ベース→Godot はエンジン・ViewModel の変更、Godot→ベースは 3.552.0 の起動診断・`.so` 整列検査が実例）。
+  食い違ったときの正は Kotlin エンジンについてこの repo、UI はそれぞれの repo（ユーザー指示「相互互換」、3.552.1）。
 - 2 層番兵（C++ 自己整合＋Kotlin `fullEval` 照合）は正しさの根幹＝削らない。不一致なら `NativeGate` が閉じて Kotlin へ退化する（誤出力でなく速度低下として現れる）。
 - 片手一本指（ドラッグ不可、例外は編集タブのシフト種別/グループ/職員一覧の並び替えのみ＝3.515.6・3.530.0 ユーザー明示指示）・最小デザイン。色/角丸/影は `docs/DESIGN.md` の原則と `tools/design_lint.py`。
 - Serena は名前の分かるシンボルの定義/参照に使い、意味検索・文言・docs は Grep。初期化に失敗したら Grep で進める。

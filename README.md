@@ -5,8 +5,8 @@ MAGI shift optimizer, native Android port.
 This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI web shift optimizer engine into native Kotlin.
 
 **関連リポジトリ**: `ichirocc/-MAGI_PC`（C# 移植＝エンジン同値、同日同期）／`ichirocc/MAGI-Godot`（Godot 4.5.1 UI 版。
-エンジン層 `v6/`・`model/`・`work/`・`MagiViewModel*`・`UnifiedViolationChecker`・C++ は**この repo が正**で、MAGI-Godot は UI だけを
-変える。エンジン・ViewModel を変えたら同日に取り込む。3.552.0）。
+エンジン層 `v6/`・`model/`・`work/`・`MagiViewModel*`・`UnifiedViolationChecker`・C++・起動診断・CI 検査は両 repo で**相互互換**
+（同値）を保ち、どちらで直しても同日にもう一方へ取り込む。食い違いの正は Kotlin エンジン＝この repo、UI＝各 repo。3.552.1）。
 
 ## ドキュメント目次（AI はここから読む）
 
