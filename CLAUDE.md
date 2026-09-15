@@ -13,6 +13,9 @@
 - 規模の上限は職員 30 名・31 日（業務前提）。ビット化経路（`C3nBitScan`・C++ `SaChunk`）はこの範囲で常に有効＝スカラー経路は防御。
 - **Kotlin が正**。C++（`magi_native.cpp`）と C#（`ichirocc/-MAGI_PC`）は同値の移植。評価器を変えたら C++ を同じコミットで
   （`.claude/rules/weights.md`）、C# は同日に同期。パリティは CI（native-parity）が守る。
+- `ichirocc/MAGI-Godot` は Godot 4.5.1 UI 版（Compose UI を削除した派生）。エンジン層 `v6/`・`model/`・`work/`・`MagiViewModel*`・
+  `UnifiedViolationChecker`・C++ は**この repo が正**で、MAGI-Godot は UI だけを変える。エンジン・ViewModel を変えたら
+  MAGI-Godot へ同日に取り込む（C# 同期と同じ扱い、3.552.0）。
 - 2 層番兵（C++ 自己整合＋Kotlin `fullEval` 照合）は正しさの根幹＝削らない。不一致なら `NativeGate` が閉じて Kotlin へ退化する（誤出力でなく速度低下として現れる）。
 - 片手一本指（ドラッグ不可、例外は編集タブのシフト種別/グループ/職員一覧の並び替えのみ＝3.515.6・3.530.0 ユーザー明示指示）・最小デザイン。色/角丸/影は `docs/DESIGN.md` の原則と `tools/design_lint.py`。
 - Serena は名前の分かるシンボルの定義/参照に使い、意味検索・文言・docs は Grep。初期化に失敗したら Grep で進める。

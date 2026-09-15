@@ -4,6 +4,10 @@ MAGI shift optimizer, native Android port.
 
 This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI web shift optimizer engine into native Kotlin.
 
+**関連リポジトリ**: `ichirocc/-MAGI_PC`（C# 移植＝エンジン同値、同日同期）／`ichirocc/MAGI-Godot`（Godot 4.5.1 UI 版。
+エンジン層 `v6/`・`model/`・`work/`・`MagiViewModel*`・`UnifiedViolationChecker`・C++ は**この repo が正**で、MAGI-Godot は UI だけを
+変える。エンジン・ViewModel を変えたら同日に取り込む。3.552.0）。
+
 ## ドキュメント目次（AI はここから読む）
 
 > 設計・仕様は下記の Markdown に分かれています。**まずこの表で当たりをつけて**から目的の文書を読んでください。事実が変わりやすい順に独立させており、とくに `business-logic.md` / `data-models.md` を最新に保つことでハルシネーションの大半を抑えます。
@@ -30,6 +34,14 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-09-15（3.543.0〜3.552.0＝画面まわりの一連。3.543〜3.546 全画面 CUD 見直し＝シフト色 41 色・違反色 30 色を
+P型/D型シミュレーション後の ΔE で設計し design_lint P12 で機械検査、公休は「背景色系」家族へ／3.547 シフト種別の色だけの
+CSV 出力・取込（upsert）／3.548 CI: setup-android の旧 `tools` 消滅対策／3.549 画面文言「群」→「グループ」統一（決定は
+CLAUDE.md）／3.550 色ピッカーの形を統一（文字見出しなし）／3.551 内部用語を一般画面から外す（「破壊再構築」→「組み替え」）／
+3.552 MAGI-Godot からのフィードバック取り込み＝`tools/check_apk_native_libs.py`（.so の非圧縮＋16KiB 整列を CI で検査）・
+`MagiStartupGuard`（起動段階マーカー＋例外記録＋次回起動の診断画面）・release upload の失敗可視化・教訓 3 件。
+765 テスト緑。詳細は`docs/history/3.4xx.md`）
 
 **最終更新**：2026-09-14（3.542.0＝新制約「希望の前日に禁止」`cons3w`/違反キー `c3w`。ユーザーと対話（grilling）で設計:
 希望(ws3)で固定した X の前日に Y を置けない（希望でない X・初日は対象外）、HARD 9000＝c3n と同格（HF77 明示指示）、行＝

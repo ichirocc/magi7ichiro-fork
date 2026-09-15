@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- MAGI-Godot からのフィードバック取り込み（3.552.0）: `tools/check_apk_native_libs.py`（.so 非圧縮＋16KiB 整列を CI で検査）、
+  `MagiStartupGuard`（起動段階マーカー＋例外記録＋次回起動の診断画面）、release upload の失敗可視化、lessons/environment/
+  CLAUDE/README に MAGI-Godot との関係と教訓 → `docs/history/3.4xx.md`
 - 内部用語を一般画面から外す「破壊再構築」→「組み替え」・おまかせ解決先の説明・「SAチェーン数」（3.551.0、
   自動化方針 #13(i)）。進捗フェーズ名は既に非表示、`AlgorithmLabel.tech` は不変 → `docs/history/3.4xx.md`
 - 色ピッカーの形をシフト色・違反色で統一（3.550.0、ユーザー提示モック）。族は行で表し文字見出しなし、

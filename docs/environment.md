@@ -13,6 +13,12 @@
 - 監視: `api.github.com/repos/ichirocc/magi7ichiro-fork/actions/runs?head_sha=<sha>`（status / conclusion）。失敗 step は `/actions/runs/{id}/jobs`。
   CI ログ本体は results-receiver 上で取得不可＝コンパイルエラーは目視＋静的チェック（波括弧・フィールド名照合）で見つける。
 - ビルド約 4〜5 分 → debug-key APK 約 10.9MB。変更ごとに `versionCode++` と `versionName`（`app/build.gradle.kts`）。
+- `concurrency: cancel-in-progress` で取り消された run はコミット一覧で ❌ に見える（連続 push・同一 SHA を別ブランチへ push）。
+  失敗ではないので run の conclusion（`cancelled`）で判別する（MAGI-Godot からの知見、3.552.0）。
+- 成果物名にブランチ名を使うなら `/` を正規化する（`claude/...` ブランチの手動実行で拒否され成果物 0 件になった実例）:
+  Checkout 直後に `echo "SAFE_REF=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"`。現状の `release-build.yml` は `github.sha` なので不要。
+- APK 内の `.so` が非圧縮かつ 16KiB 境界かは `tools/check_apk_native_libs.py` が assemble 後に検査する（3.552.0）。
+  Release Build の成果物 upload は `continue-on-error` のまま、`if-no-files-found: error`＋STEP_SUMMARY で失敗を見えるようにした。
 
 ## スキル・プラグイン（2026-07-18 ユーザー決定の原文）
 - **タスク着手前にスキル一覧を確認し、該当スキルを Skill ツールで自動起動する**（superpowers流）:
