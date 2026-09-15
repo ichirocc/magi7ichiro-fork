@@ -141,6 +141,10 @@ ViewModel ハブ
 - `V6FinalPort.kt` — `handleOptimize`（最適化オーケストレーション）, `handleCheck`（UnifiedViolationChecker）。
   最終番兵 `checkResultWorse`（入力より悪化したら入力へ復帰）。
 - `V6NativeOptimizer.kt`/`V6HotfixPasses.kt`/`V6LateOperators.kt`/`V6SearchOperators.kt` — 探索本体・各オペレータ。
+- `RestZeroWindowLns.kt` — **休0日の窓LNS**（3.555.0、既定 OFF＝`PostOptimizationParams.restZeroWindowLnsEnabled`）。休の必要人数を明示した日に
+  休が余るとき、前後の窓を職員ごとの窓内並べ替えで組み直す。外側で夜勤型シフト（翌日が自分か休に限られる＝2 長の禁止連続から判定）の
+  担当列を列挙（対象日の強制休が少ない順）、窓の外の同日交換で夜勤を人から人へ移す候補（1〜3 日）も試し、内側で日ごとのビーム
+  （推定は日内で決まる族だけ）、完成盤面は正式チェッカーで keep-best。最終段・退避（CovORelief）の前。C# は `V6HotfixPasses.RestZeroLns.cs`。
 - `CovOReliefPolish.kt` — **人員過剰(covO)の退避研磨**（3.554.0）。過剰セルの在勤者を、受け皿のある担当可シフト（B4 のような需要 0 の
   シフトを含む）へ 1 セルずつ動かし、正式チェッカーの `betterReport` で採る。`V6PortAnalyzer.diagnoseSurpluses` が「移すだけで良くなる」と
   見つける手と同じ探索を修復として行う。後処理チェーンの最終段（成分修復の後・HF70 の前）＝後続パスが無いので旧チェーンの結果より

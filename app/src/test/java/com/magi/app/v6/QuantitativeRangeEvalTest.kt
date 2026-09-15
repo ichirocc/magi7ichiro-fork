@@ -52,8 +52,8 @@ class QuantitativeRangeEvalTest {
     /**
      * 全員 A が0回・B(=[2,2])が0人 → c2不足=3(目標)×4人、c41距離=2×日数（不足のみ）。
      * fullEvalParts の合計には weekly 等の無関係な族も乗るため、量的/二値の**差分**（=このモードだけが
-     * 動かす分）を重み付きで検証する: 差分 = (c2の生カウント差12-4)×重み4 + (c41の生カウント差10-5)×重み1
-     * = 8*4 + 5*1 = 37（[3.522.0] c2重み1→4で13→37）。
+     * 動かす分）を重み付きで検証する: 差分 = (c2の生カウント差12-4)×重み4 + (c41の生カウント差10-5)×重み9
+     * = 8*4 + 5*9 = 77（[3.522.0] c2重み1→4で13→37、[3.556.0] c41重み1→9で37→77）。
      */
     @Test
     fun evaluatorQuantitativeSumMatchesHandComputedAmount() {
@@ -68,7 +68,7 @@ class QuantitativeRangeEvalTest {
         val evBin = Evaluator(pBin)
         val partsBin = evBin.fullEvalParts(pBin.initialAssignment())
 
-        assertEquals(37L, parts[1] - partsBin[1])
+        assertEquals(77L, parts[1] - partsBin[1])
     }
 
     @Test

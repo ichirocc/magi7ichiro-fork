@@ -128,8 +128,8 @@ object MirrorKeys {
     val weights: Map<String, Double> = linkedMapOf(
         "groupViol" to 11000.0, "covU" to 10000.0, "c3n" to 9000.0, "c3w" to 9000.0, "pref" to 8000.0,
         "low" to 120.0, "c3mn" to 90.0, "c1" to 50.0, "high" to 25.0, "covO" to 10.0,
-        "c3" to 15.0, "c3m" to 10.0,
-        "c41" to 1.0, "c42" to 1.0, "c41s" to 6.0, "c42s" to 6.0,
+        "c3" to 15.0, "c3m" to 6.0,
+        "c41" to 9.0, "c42" to 9.0, "c41s" to 10.0, "c42s" to 10.0,
         "c2" to 4.0, "apt" to 4.0, "fair" to 2.0, "weekly" to 2.0,
     )
 

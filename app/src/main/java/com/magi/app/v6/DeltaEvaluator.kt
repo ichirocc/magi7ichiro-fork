@@ -154,7 +154,7 @@ class DeltaEvaluator(private val p: Problem) {
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
         // [統一c/c1/apt/fair/weekly] sc1/sc3/sc3m/sc3mn/sApt/sFair/sWeekly に checker 重みを適用
         //   （各カウンタ自体は #fire/run-deficit/L1偏差の生カウント）。[3.522.0/全面見直し、docs/history/3.4xx.md]。
-        val soft = sc1 * 50 + sc2 * 4 + sc41 + sc42 + sc41s * 6 + sc42s * 6 + sc3 * 15 + sc3m * 10 + sc3mn * 90 + hct + sApt * 4 + sFair * 2 + sWeekly * 2 + scovO * 10
+        val soft = sc1 * 50 + sc2 * 4 + sc41 * 9 + sc42 * 9 + sc41s * 10 + sc42s * 10 + sc3 * 15 + sc3m * 6 + sc3mn * 90 + hct + sApt * 4 + sFair * 2 + sWeekly * 2 + scovO * 10
         return h1 * SCORE_HARD_UNIT + soft
     }
 
