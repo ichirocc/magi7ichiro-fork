@@ -1,5 +1,14 @@
 # 作業記録の索引（見出し一覧）
 
+- MAGI-Godot からのフィードバック取り込み（3.552.0）: `tools/check_apk_native_libs.py`（.so 非圧縮＋16KiB 整列を CI で検査）、
+  `MagiStartupGuard`（起動段階マーカー＋例外記録＋次回起動の診断画面）、release upload の失敗可視化、lessons/environment/
+  CLAUDE/README に MAGI-Godot との関係（3.552.1 ユーザー指示「相互互換」＝双方向同値）と教訓 → `docs/history/3.4xx.md`
+- 内部用語を一般画面から外す「破壊再構築」→「組み替え」・おまかせ解決先の説明・「SAチェーン数」（3.551.0、
+  自動化方針 #13(i)）。進捗フェーズ名は既に非表示、`AlgorithmLabel.tech` は不変 → `docs/history/3.4xx.md`
+- 色ピッカーの形をシフト色・違反色で統一（3.550.0、ユーザー提示モック）。族は行で表し文字見出しなし、
+  `rowLabels`/`PALETTE_ROW_LABELS`/「色を選ぶ」を撤去、✓と余白だけで示す → `docs/history/3.4xx.md`
+- 画面文言の類似語を統一「群」→「グループ」（3.549.0、ユーザー指示）。制約名も グループのレンジ／グループペア禁止／
+  スキルグループ へ。CSV 種別タグ・コード識別子・技術略記は据え置き。決定は CLAUDE.md へ → `docs/history/3.4xx.md`
 - CI: setup-android@v3 の既定 `packages: tools platform-tools` の旧 `tools` が SDK リポジトリから消え
   V6 Engine Check / Android SDK が落ちた件（3.548.0）。3 workflow に `packages: platform-tools` を明示 → `docs/history/3.4xx.md`
 - シフト種別の色のみ外部へ出力・取込む機能を追加（3.547.0）。`ShiftColorsCsvIO`（記号,色）、

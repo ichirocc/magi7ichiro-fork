@@ -284,11 +284,11 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
             val spawn = com.magi.app.v6.HypothesisPlanning.hypothesisSpawnPlan(ui.workers, hyp).first
             val overNote = if (ui.workers > cores)
                 "この端末のコア数(${cores})を超えるためコアを奪い合います。極端に大きい値は電池・発熱に注意してください。" +
-                    (if (spawn < hyp) "なお「破壊再構築」「違反集中」「違反集中＋」では、コア数を超える分は" +
+                    (if (spawn < hyp) "なお「組み替え」「違反集中」「違反集中＋」では、コア数を超える分は" +
                         "案を増やさず各案の内部並列へ回します（同時に走る案は${spawn}）。" else "")
             else ""
             Text(
-                "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値をそのままSAチェーン数に使います。" +
+                "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値がそのまま同時に走る探索の本数になります。" +
                     "それ以外の方式では設定値がそのまま並列に探索する仮説（案）の数（${hyp}）になります。$overNote",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -382,7 +382,8 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
 internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
     V6Algorithm.AUTO -> "おまかせ"
     V6Algorithm.V5 -> "高速"
-    V6Algorithm.ALNS -> "破壊再構築"
+    // [3.551.0/自動化方針 #13(i)] 旧「破壊再構築」。内部の比喩（destroy-repair）を利用者に見せない。
+    V6Algorithm.ALNS -> "組み替え"
     V6Algorithm.RSI -> "違反集中"
     V6Algorithm.RSI_PLUS -> "違反集中＋"
     // [3.191.0 用語重複解消] 「並列ワーカー」（同時実行数=workers）と「並列(複数案)」が同じ「並列」を

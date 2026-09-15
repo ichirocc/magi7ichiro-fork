@@ -83,7 +83,7 @@
   - **基本マスター**(2) = 注意帯（「制度・人員が変わったときだけ編集」）＋**5つの折りたたみ節**(`CollapsibleSection`)。各節は先頭に平易な一文(`SectionNote`)を持ち、`rememberSaveable` で開閉状態を保持して縦長を畳む。
     - **① シフト・グループ・スタッフ**(`Ws1Card`：種類の追加・編集・削除。既定で展開)
     - **② スキルグループ**(`SkillGroupCard`：似た技能のまとめ)
-    - **③ 回数（1人あたり）**★統合 = `CountsCard`（`StaffRangeEditor.kt`）内の2節：`StaffShiftMatrixCard`（`StaffShiftMatrix.kt`＝担当可否・目標(apt)・個人の下限/上限・実績を職員×シフトの1マトリクスに統合、セルタップで編集）／`GroupRangeSection`（グループ一括の下限/上限＝ws5共有・既存個人値はスキップ保持。下限・上限とも「なし」で適用すると全員ぶん解除＝3.506.0）。[再設計] 旧実装は`AptSection`（群×シフトの目標グリッド）と`StaffRangeSection`（職員別チップ一覧）が縦に2段並び、同じ職員×シフトの情報を2つの節を往復しないと把握できなかった。1マトリクスへ統合し撤去した。
+    - **③ 回数（1人あたり）**★統合 = `CountsCard`（`StaffRangeEditor.kt`）内の2節：`StaffShiftMatrixCard`（`StaffShiftMatrix.kt`＝担当可否・目標(apt)・個人の下限/上限・実績を職員×シフトの1マトリクスに統合、セルタップで編集）／`GroupRangeSection`（グループ一括の下限/上限＝ws5共有・既存個人値はスキップ保持。下限・上限とも「なし」で適用すると全員ぶん解除＝3.506.0）。[再設計] 旧実装は`AptSection`（グループ×シフトの目標グリッド）と`StaffRangeSection`（職員別チップ一覧）が縦に2段並び、同じ職員×シフトの情報を2つの節を往復しないと把握できなかった。1マトリクスへ統合し撤去した。
     - **④ 人数と組み合わせ**★統合 = `ConstraintsCard`（グループ単位：C41 1日の人数・C42 禁止ペア）＋`SkillConstraintsCard`（スキル単位：C41s/C42s）
     - **⑤ 並び・くり返し** = `ConstraintsCard`（cons1/2/3/3n/3m/3mn：並び・窓）
 - **ラベル混同防止**: サブタブ「シフト希望」(ws3＝勤務の希望) と ⑤ 内の cons3系(ws4＝並びパターン) を区別するため、cons3m を**「並び希望」**、cons3mn を**「並び回避」**と表記（cons3=「必須の並び」/cons3n=「禁止の並び」）。
@@ -121,7 +121,7 @@
 - **停滞脱出戦略の自律選択（MagiConductor 移植）**: SA再加熱境界で、直近の最良未更新反復数が一定（既定3000）を超えたら、UCB1多腕バンディットで脱出戦略 {Reheat（最良へ戻し再加熱）/ StrongPerturb（最良から数手摂動して離す）/ ScaleTemp（現在解から再加熱）} を自律選択し、効果（最良が改善したか）を報酬としてオンライン学習する。停滞前は NoOp＝従来の reset-to-best 再加熱で挙動不変。Web版 com.magi の MagiConductor を忠実移植（`MagiConductor`／`SaParams.conductor`）。
 - **Guided Local Search（GLS 移植）**: ALNS探索で、停滞時（最良未更新が既定200反復超）に違反セルのうち util=寄与/(1+penalty) 最大の割当を penalty+1 し、accept-worse（探索）判定に `lambda*Σpenalty` を加えて局所最適から遠ざける。改善手は従来どおり生スコアで受理し、グローバル最良も生スコアで別管理するため**GLSで真の最良を失わない**。Web版 ALNS の penalty[i][j][k] を移植（`GlsPenalty`／`V6NativeOptimizer.runAlns`）。
 - **役割分担による並列仮説の多様化（HF289/HF290 移植）**: 最大5並列の仮説に、探索/精製の温度・摂動プロファイルを割り当てて多様化（W0=1.0＝従来のベースライン、W1=探索(高温×2)、W2=精製(低温×0.5)、W3=探索1.6、W4=精製0.6）。最良採用なので**役割分担が裏目でも W0 が現状を保証＝退化しない**。`V6OptimizerOptions.explore`（SAの初期温度・ALNSの受理温度/再スタート摂動に作用）。三賢人(SAGE)人格モードは専用フラグ＋未実装の重み体系のため見送り。
-- **平準化研磨（二次目的・退化なし）**: 主目的(hard→weightedScore→total, 3.287.0 keep-best統一)を悪化させない範囲で、被覆を保つ同日スワップにより (a) **グループ内シフト回数の平準化**（群ごと・担当ONシフトの分散最小化）と (b) **7日周期(曜日)の平準化**（各職員の勤務を曜日7バケットで均す）を厳密に下げる。スコア体系は不変（ゴールデン不変）。`V6HotfixPasses.applyGroupShiftEqualizePolish` / `applyWeeklyEqualizePolish`。
+- **平準化研磨（二次目的・退化なし）**: 主目的(hard→weightedScore→total, 3.287.0 keep-best統一)を悪化させない範囲で、被覆を保つ同日スワップにより (a) **グループ内シフト回数の平準化**（グループごと・担当ONシフトの分散最小化）と (b) **7日周期(曜日)の平準化**（各職員の勤務を曜日7バケットで均す）を厳密に下げる。スコア体系は不変（ゴールデン不変）。`V6HotfixPasses.applyGroupShiftEqualizePolish` / `applyWeeklyEqualizePolish`。
 - **ソフト研磨の連続規則(C3/C3m/C3n/C3mn)特化＝2-3日連結スワップ**: c3(必須)/c3m(推奨)/c3mn(回避)/**c3n(禁止=HARD)** はいずれも職員の**連続日の並び**。同日スワップ(循環交換)は1日しか変えられず多日パターンに届かないため、**2職員が連続 W日(W=2,3)を丸ごと交換**（各日の人数＝被覆不変・HARD維持）する移動を追加。W日パターンが入れ替わり2〜3日の並びを直す。実目的関数で評価し改善時のみ採用（keep-best）。isBetter は HARD 最優先のため **c3n(禁止=HARD)** の解消も同時に拾う。`V6HotfixPasses.applyC3SequencePolish`。
 - **ソフト研磨の期間要件(C1)特化**: c1（cons1＝D日窓にシフトXをN回以上・**職員ごと**）は実機ログでも大きいSOFT（c1=25〜114）。c1不足の (職員,窓) に的を絞り、その窓内の非X日に**Xをしている提供者と同日スワップ**（被覆不変＝HARD維持）して不足職員のXを増やす。実目的関数で評価し改善時のみ採用（keep-best）。汎用循環交換より c1 を効率的に削る。`V6HotfixPasses.applyC1WindowPolish`。
 - **ソフト研磨の循環交換(VLSN・T2)**: 実機ログ上、残存SOFTの大半は **c3/c3m（連続規則）**。日内Hungarianは range/apt 中心で c3 に効かないため、**被覆を保つ循環交換（k=2 スワップ / k=3 ローテーション、同日・人数不変＝HARD維持）** を追加。各サイクルを**実目的関数(UnifiedViolationChecker)で評価し改善時のみ採用**（keep-best＝退化なし、サイクル生成が不完全でも悪化しない）。`V6HotfixPasses.applyCyclicSwapPolish`。
@@ -225,10 +225,10 @@
 | `c3` | 必須の並び | 3 | セル | 望ましい勤務の並び（cons3）※Androidでは SOFT 扱い |
 | `c3m` | 推奨の並び | 2 | セル | 推奨の勤務の並び（cons3m／編集名「並び希望」） |
 | `c2` | 個人の合計 | 1 | 回数 | 個人の合計回数の要件（cons2） |
-| `c41` | 群のレンジ | 1 | 日付 | 1日あたりの群の人数レンジ（C41） |
-| `c42` | 群ペア | 1 | セル | 同日共存を禁じる群ペア（C42） |
-| `c41s` | スキル群のレンジ | 1 | 日付 | スキル群の人数レンジ（C41s） |
-| `c42s` | スキル群ペア | 1 | セル | スキル群の禁止ペア（C42s） |
+| `c41` | グループのレンジ | 1 | 日付 | 1日あたりのグループの人数レンジ（C41） |
+| `c42` | グループペア | 1 | セル | 同日共存を禁じるグループペア（C42） |
+| `c41s` | スキルグループのレンジ | 1 | 日付 | スキルグループの人数レンジ（C41s） |
+| `c42s` | スキルグループペア | 1 | セル | スキルグループの禁止ペア（C42s） |
 | `apt` | 適切回数のズレ | 1 | （無し） | 目標回数(ws1 C／groupShiftApt)とのズレ |
 | `fair` | 公平化のズレ | 1 | （無し） | 職員間の偏り（公平性） |
 | `covO` | 過剰な配置 | 0.5 | 日付 | 必要人数を超える配置（被覆超過） |
@@ -261,7 +261,7 @@
 - **CSV取込（強化）**: 取込時に**文字コードを自動判定**（妥当な UTF-8 はそのまま／不正なら CP932(Shift-JIS) として復号。日本の Excel 由来CSVの文字化けを解消）。さらに**病院などの「勤務表テンプレCSV」を新規データとして丸ごと取込**（`RosterCsvImport`）。**固定セル対応**：年月タイトル→期間、グループ名＝**C2/C13**（ユニット見出し）、氏名＝**C4:C11/C15:C22**、勤務記号＝本表**E4:AI11/E15:AI22**（31日）、シフト記号＝凡例**B25:B40**（時刻はC列＝表示名）。**必要人数(need1/need2)はこのCSVに存在せず取り込まない**（凡例の日別数値は現在表の人数集計＝需要ではないため、休/有の人数も含む）。担当可否は不明のため全シフト可で取り込み、後から調整可。
   - **取り込み方法の選択（ダイアログ）**: テンプレ検出時に「**勤務表として**／**希望シフトとして**」を選ばせる（`importRosterAs`）。**勤務表**＝本表セルを初期割り当てに（空セル＝公休）。**希望シフト**＝埋まっているセルを `wishes` に取り込み、勤務表は空（全公休）から開始して最適化で希望を尊重（空セル＝希望なし／元の明示「休」＝希望休として区別）。
   - テンプレでなく既存データがある場合は従来どおり**勤務表だけを重ねる**取込に振り分ける（`importCsvSmart`）。
-  - **コンポーネント別の取込/出力**: データ全体だけでなく、**スタッフ一覧／希望シフト／各制約／勤務表／シフト色**を種別選択して個別に取込・出力できる（`StaffCsvIO`/`WishesCsvIO`/`ConstraintsCsvIO`/`ShiftColorsCsvIO`）。**スタッフ一覧は upsert**＝既存氏名は所属群/スキルを更新、未知の氏名は**新規スタッフとして追加**（勤務表に休の行を追加）。**シフト色（3.547.0）も upsert**＝「記号,色」の2列で、違反色（`__vio__`等の予約キー）は対象外＝シフト種別のカスタム色のみ。CSVに載っている記号だけ`shiftColors`を更新し、載っていない記号の既存カスタム色は変更しない。現在のシフト一覧に無い記号・不正な色形式は反映せず件数で案内。
+  - **コンポーネント別の取込/出力**: データ全体だけでなく、**スタッフ一覧／希望シフト／各制約／勤務表／シフト色**を種別選択して個別に取込・出力できる（`StaffCsvIO`/`WishesCsvIO`/`ConstraintsCsvIO`/`ShiftColorsCsvIO`）。**スタッフ一覧は upsert**＝既存氏名は所属グループ/スキルを更新、未知の氏名は**新規スタッフとして追加**（勤務表に休の行を追加）。**シフト色（3.547.0）も upsert**＝「記号,色」の2列で、違反色（`__vio__`等の予約キー）は対象外＝シフト種別のカスタム色のみ。CSVに載っている記号だけ`shiftColors`を更新し、載っていない記号の既存カスタム色は変更しない。現在のシフト一覧に無い記号・不正な色形式は反映せず件数で案内。
   - **氏名照合は空白無視**: 「山本 昌幸」(空白あり)と「山本昌幸」(空白なし)を同一人物として扱い、外部CSVの取込で1人分しか入らない事故を防ぐ（`nameMatchKey`）。先頭 **BOM(U+FEFF)も除去**。
   - **取込ミスの診断**: 希望/制約として取り込もうとしたCSVが勤務表/ロスター形式だった場合、正しい形式と取込元を案内する（`componentImportMismatchHint`）。
   - **グループ別の適切回数(`groupShiftApt`)はCSVに無い**ため、初期設定エディタ(`Ws1Editor`)に**Web版「グループ別 担当シフトと適切回数」を移植**：担当ONのシフトに −/＋ ステッパーで「1人あたりの期間内目標回数」を設定でき、最適化が各人をその回数へ近づける（空欄＝目標なし）。`Ws1Ops.setGroupApt`/`MagiViewModel.ws1SetGroupApt`。
@@ -323,8 +323,8 @@
 | `groups` | List\<Group\> | ユニット（担当可否・covUに使用） |
 | `staff` | List\<Staff\> | 職員 |
 | `use2Patterns` | Bool | 平日/休日など2系統の必要人数を使うか |
-| `groupShift` | List\<List\<Int\>\> | 群×シフトの担当可否(0/1) |
-| `groupShiftApt` | List\<List\<String\>\> | 群×シフトの「1人あたり目標回数」(空=なし) |
+| `groupShift` | List\<List\<Int\>\> | グループ×シフトの担当可否(0/1) |
+| `groupShiftApt` | List\<List\<String\>\> | グループ×シフトの「1人あたり目標回数」(空=なし) |
 | `schedule` | List\<List\<Int\>\> | `schedule[i][j]`＝職員i・日jの**シフトidx**（<0＝未割当/公休） |
 | `wishes` | Map\<String,Int\> | 希望。キー `"i,j"`→シフトidx |
 | `staffRange` | Map\<String,Range\> | 個人別回数の下限上限。キー `"i,k"`(職員i・シフトk) |
@@ -336,12 +336,12 @@
 
 **サブ型**
 - `Shift(name, kigou, need1, need2)` … 表示名・記号・必要人数(系統1/2)
-- `Group(name, kigou)` ／ `Staff(name, groupIdx, skillIdx)`（groupIdx=ユニット＝担当可否、skillIdx=スキル群＝C41s/C42s専用）／ `Range(lo, hi)`
+- `Group(name, kigou)` ／ `Staff(name, groupIdx, skillIdx)`（groupIdx=ユニット＝担当可否、skillIdx=スキルグループ＝C41s/C42s専用）／ `Range(lo, hi)`
 - `C1Row(day1, shiftKigou, day2)` … day1日窓でシフトを day2 回以上（窓要件・職員ごと）
 - `C2Row(shiftKigou, count)` … 個人の合計回数
 - `C3Row(pattern: List<String>)` … 並びパターン（cons3=必須/cons3n=禁止/cons3m=推奨/cons3mn=回避で同型）
-- `C41Row(groupKigou, shiftKigou, l, u)` … 群のシフトを1日 [l,u] 人
-- `C42Row(g1Kigou, g2Kigou, s1Kigou, s2Kigou)` … 群g1のs1と群g2のs2は同日併存不可
+- `C41Row(groupKigou, shiftKigou, l, u)` … グループのシフトを1日 [l,u] 人
+- `C42Row(g1Kigou, g2Kigou, s1Kigou, s2Kigou)` … グループg1のs1とグループg2のs2は同日併存不可
 - `C3wRow(wishKigou, prevKigou)` … 希望で固定した wishKigou の前日に prevKigou を置けない（3.542.0）
 
 **UiState（UI・表示用、`ui/MagiUiState.kt`）**: ドメインから導出した表示集約。主なもの＝`loaded/running/hasResult`、`bestHard/bestSoft/weightedScore/totalViolations`、`breakdown`(19種→件数)、`violationCells`(キー`"i,j"`)／`needViolations`(`"k,j"`)／`countViolations`(`"i,k"`)→各説明文、`schedule/wishes/resultSchedule/liveSchedule`、`shiftSymbols/shiftColorHex/shiftTextHex/staffNames/staffGroupSymbols`、`fixSuggestions`(変更/交換の1手)、`satisfaction/copilotHint/coverageDiag/settingIssues`、`logs/opLog`、`canUndo/canRedo/workers/budgetSec/softPolish/v6Algorithm`。

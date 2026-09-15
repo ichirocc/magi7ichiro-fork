@@ -1,6 +1,10 @@
 package com.magi.app
 
 import android.os.Bundle
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,7 +37,45 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // [3.552.0 起動診断] 前回が画面未到達／例外記録ありなら、Compose の前に素の View で診断を出す。
+        MagiStartupGuard.installExceptionHandler(this)
+        val prev = MagiStartupGuard.readPrevious(this)
+        if (savedInstanceState == null && prev.needsDiagnostic) {
+            showStartupDiagnostic(prev)
+            return
+        }
+        startCompose()
+    }
+
+    private fun showStartupDiagnostic(prev: MagiStartupGuard.Previous) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        // ローカル名を text にすると Button.apply 内の `text =` がこの変数を指す（CI run 1075 で踏んだ）。
+        val message = TextView(this).apply {
+            text = MagiStartupGuard.diagnosticText(this@MainActivity, prev)
+            setTextIsSelectable(true)
+            setPadding(pad, pad, pad, pad)
+        }
+        val button = Button(this).apply {
+            text = "そのまま起動"
+            setOnClickListener {
+                MagiStartupGuard.clear(this@MainActivity)
+                startCompose()
+            }
+        }
+        val column = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(message)
+            addView(button)
+        }
+        setContentView(ScrollView(this).apply { addView(column) })
+    }
+
+    private fun startCompose() {
+        MagiStartupGuard.markStage(this, MagiStartupGuard.STAGE_ACTIVITY)
         setContent {
+            // [3.552.0 起動診断] 最初の合成で composition、MagiApp が組み上がった後で ui を記録する。
+            SideEffect { MagiStartupGuard.markStage(this@MainActivity, MagiStartupGuard.STAGE_COMPOSITION) }
+            LaunchedEffect(Unit) { MagiStartupGuard.markStage(this@MainActivity, MagiStartupGuard.STAGE_UI) }
             // [D8/UD固定] 外観はユーザー判断で UD（高コントラスト・白地）固定。自動/明/暗の選択は撤去。
             //   白地＝ステータスバー/ナビバーは暗アイコン。
             SideEffect {

@@ -314,7 +314,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             // [3.403.0] 下限>上限は engine の `z < l || z > u` で**どの人数でも必ず違反**＝期間の全日が違反になる。
             //   事後診断(V6SanityPort 検査2f)は出していたが、画面は素通しで確定できた＝入力時に止める。
             val bad = V6SanityPort.rangeOrderConflict(l, u) != null
-            Shell("群のレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41(gk, sk, l, u) } },
+            Shell("グループのレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41(gk, sk, l, u) } },
                 gk.isNotBlank() && sk.isNotBlank() && !bad) {
                 Picker("グループ", groups, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -330,7 +330,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: groups.firstOrNull() ?: "") }
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
-            Shell("群ペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42(g1, g2, s1, s2) } },
+            Shell("グループペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42(g1, g2, s1, s2) } },
                 g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
                 Picker("グループ1", groups, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
@@ -344,7 +344,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var l by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
             var u by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
             val bad = V6SanityPort.rangeOrderConflict(l, u) != null   // [3.403.0] cons41 と同じ（群かスキル群かの違いだけ）
-            Shell("スキル群のレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41s(gk, sk, l, u) } },
+            Shell("スキルグループのレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { vm.addCons41s(gk, sk, l, u) } },
                 gk.isNotBlank() && sk.isNotBlank() && !bad) {
                 Picker("スキル", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
@@ -360,7 +360,7 @@ private fun ConstraintDialog(family: String, vm: MagiViewModel, editIndex: Int? 
             var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: skills.firstOrNull() ?: "") }
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
-            Shell("スキル群ペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42s(g1, g2, s1, s2) } },
+            Shell("スキルグループペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { vm.addCons42s(g1, g2, s1, s2) } },
                 g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
                 Picker("スキル1", skills, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }

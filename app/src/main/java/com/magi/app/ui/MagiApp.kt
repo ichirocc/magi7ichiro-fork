@@ -609,7 +609,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [3.482.0 編集タブ簡素化] 職員の一覧・入退職は「職員管理」ドアへ一本化（Ws1Card の職員節を撤去）。
                             CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    SectionNote("勤務の種類・グループと、群×勤務の担当可否を決めます。職員の入退職・所属は「職員管理」へ。")
+                                    SectionNote("勤務の種類・グループと、グループ×勤務の担当可否を決めます。職員の入退職・所属は「職員管理」へ。")
                                     key(ui.editRev) { Ws1Card(ui, vm) }
                                 }
                             }
@@ -744,7 +744,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         "この CSV を何として取り込みますか？\n\n" +
                             "・データ全体（新規）：勤務表テンプレ/ユニット列形式を新しいデータとして読み込み\n" +
                             "・勤務表（重ね合わせ）：氏名,1日,2日… の表を現在の割り当てに重ねる\n" +
-                            "・職員一覧：氏名,グループ,スキル（所属群/スキルを更新）\n" +
+                            "・職員一覧：氏名,グループ,スキル（所属グループ/スキルを更新）\n" +
                             "・希望シフト：氏名,日,希望シフト（希望を置換）\n" +
                             "・各制約：種別タグ付き（制約一式・個人レンジを置換）\n" +
                             "・シフト色：記号,色（掲載された記号だけ更新、他は現状維持）",

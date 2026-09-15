@@ -91,6 +91,10 @@ jobs:
           set -o pipefail
           gradle assembleDebug --stacktrace 2>&1 | tee build/ci-logs/assembleDebug.log
 
+      # [3.552.0] APK 内の .so が非圧縮かつ 16KiB 境界か（Android 16 の 16KB ページ端末は APK から直接 mmap する）。
+      - name: Check APK native libs (stored + 16KiB aligned)
+        run: python3 tools/check_apk_native_libs.py app/build/outputs/apk/debug/*.apk
+
       # アーティファクト保存はベストエフォート。成功時は何もアップロードせず（ストレージ枠の
       # 浪費を防ぐ）、失敗時だけ短期保持でログを残す。ビルド用 APK はここでは保存しない
       # （必要なときは release-build.yml / android-sdk.yml で取得する）。

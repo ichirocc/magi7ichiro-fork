@@ -113,8 +113,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
         val hardHex = ui.violationColorHex.ifBlank { "#B71C1C" }
         val softHex = ui.violationSoftColorHex.ifBlank { "#F59E0B" }
         when (pf) {
-            // [3.544.0] 違反色はシフト色と別パレット（家族の段階/事由区分という文脈が無いため
-            //   rowLabels は出さない）。
+            // [3.544.0] 違反色はシフト色と別パレット（ダイアログの形は 3.550.0 で両者同一）。
             "__hard__" -> ColorPickerDialog(
                 kigou = "必須違反（基準色）",
                 currentHex = ui.violationColorHex,
@@ -123,7 +122,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 onPick = { hex -> vm.setViolationColor(hex) },
                 onReset = { vm.resetViolationColor() },
                 onClose = { pickFam = null },
-                palette = VIOLATION_COLOR_PALETTE, rowLabels = null,
+                palette = VIOLATION_COLOR_PALETTE,
             )
             "__soft__" -> ColorPickerDialog(
                 kigou = "要調整（基準色）",
@@ -132,7 +131,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 onPick = { hex -> vm.setViolationSoftColor(hex) },
                 onReset = { vm.resetViolationSoftColor() },
                 onClose = { pickFam = null },
-                palette = VIOLATION_COLOR_PALETTE, rowLabels = null,
+                palette = VIOLATION_COLOR_PALETTE,
             )
             else -> ColorPickerDialog(
                 kigou = breakdownLabels[pf] ?: pf,
@@ -145,7 +144,7 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 onPick = { hex -> vm.setViolationFamilyColor(pf, hex) },
                 onReset = { vm.resetViolationFamilyColor(pf) },
                 onClose = { pickFam = null },
-                palette = VIOLATION_COLOR_PALETTE, rowLabels = null,
+                palette = VIOLATION_COLOR_PALETTE,
             )
         }
     }
