@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.578.0＝backlog#23完了。`docs/screen_spec.md` §08bのHARD/SOFT重み表が
+3.522.0の全面見直し以前の旧値のまま陳腐化していたのを修正（SOFT「14種」→「15種」、`weekly`行追加、
+全表を現行重みへ更新・重み降順に整列）。`docs/sudo_model.md`の重み値引用も現行値へ修正。コード変更なし。
+詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.577.0＝外部提案の探索エンジン改良ロードマップを仕分け。全工程正式最良保存
 (3.575.0)・削除時暗黙置換の封鎖(3.576.0)・DebtBudget型見送り(3.576.0)は対応済みと確認。残る提案
 （並列所有権/停止監査・既定OFF腕の条件付き再活性化・停滞判定の精緻化・業務重みと腕選択基準の分離）は
