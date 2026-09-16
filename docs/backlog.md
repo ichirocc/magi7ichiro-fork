@@ -145,3 +145,7 @@
     （HARD 内部重みを辞書式の独立段にする＝外部仕様 v12.1 Gate 5）は 3.510.3 で決定待ちに登録済み＝**同じ枠**。
     直す場合は `ObjectiveParityTest`（この非対称を固定しているテスト）の期待式も設計変更の対象になる。
     **明示指示＋`tools/loop` のペアベンチが前提**。経緯と再現手順は `docs/history/3.4xx.md` の 3.563.0〜3.568.0 節。
+20. **[C# パリティ・要調査] `-MAGI_PC` の `PinInvariantTest.PostOptimizationHoldsPinsAcrossRandomStates` が赤**（3.569.0 の同期時に
+    発見。random#1「実現可能な希望（職員0 日5）が後処理で動いた」。同期前の 6276edf でも同じ＝今回の変更と無関係）。
+    Kotlin の同名テストは緑なので、C# の後処理チェーンのどこかが `wishLocked` を破っている。C# 単独では直さない
+    （パリティの原則）＝Kotlin 側の同じ入力（`BusyState(JavaRandom(0x91A7L))` の random#1）で差分を取ってから同期する。
