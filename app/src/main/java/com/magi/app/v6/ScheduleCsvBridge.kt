@@ -80,6 +80,10 @@ private fun parseCsvGuarded(text: String): List<List<String>>? {
 /** 取込で解釈できなかった行の表示用サンプル（先頭60文字）。 */
 private fun rowSample(r: List<String>): String = r.joinToString(",").take(60)
 
+// [3.568.0/外部レビュー] 記号は1〜2文字の想定だが、引用符が閉じていない行は1セルへ数千字を飲み込む＝
+//   そのまま UI 文言と操作ログへ流れていた。rowSample と同じ考えでセル単位にも頭打ちを入れる。
+private fun symSample(s: String): String = if (s.length > 12) s.take(12) + "…" else s
+
 /**
  * [3.475.0/論理監査] 引用符が閉じていないCSVか。[parseCsvGuarded] は「未閉引用符」と「空データ」を同じ
  * null で返すため、種類別取込（職員/希望/制約）の呼出側が「取り込める行が0件」と氏名不一致を疑わせる
@@ -414,7 +418,7 @@ object ScheduleCsvBridge {
         val report = UnifiedViolationChecker.check(state, schedule)
         val matched = matchedStaff.size
         val unknownTotal = unknown.values.sum()
-        val unknownTop = unknown.entries.sortedByDescending { it.value }.take(5).map { "${it.key}(${it.value})" }
+        val unknownTop = unknown.entries.sortedByDescending { it.value }.take(5).map { "${symSample(it.key)}(${it.value})" }
         val log = MirrorLog(tag = "CSVImport", message = "CSV取込: staff一致 ${matched}名" +
             if (unknownTotal > 0) " / 読めない記号 ${unknownTotal}セル: ${unknownTop.joinToString("・")}" else "")
         val logs = ArrayList<MirrorLog>()

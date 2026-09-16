@@ -68,26 +68,22 @@ import kotlinx.coroutines.launch
  */
 @Composable
 internal fun StaffShiftMatrixCard(
-    ui: UiState, vm: MagiViewModel,
-    /** [実機バグ修正] セルタップシートの開閉状態。呼び出し元(MagiApp.kt)が`key(ui.editRev)`の**外**で
-     *  保持する。群の目標の+/-自体が`ws1SetGroupApt`経由でeditRevを増やし、key配下のrememberだと
-     *  シートが自分の操作のたびに閉じていた（経緯: history 3.515.2）。 */
+    ui: UiState, v: Ws1View, cv: ConditionsView, onEvent: (MagiEvent) -> Unit,
+    /** 盤面から数えた回数。画面ごとに数え直さない（同じ値の別版が並ぶのを防ぐ）。 */
+    counts: ScheduleCounts,
+    /** セルタップシートの開閉状態。Root が保持する＝群の目標の +/- のたびにシートが閉じない
+     *  （経緯: history 3.515.2）。 */
     sheetCell: Pair<Int, Int>?, onSheetCellChange: (Pair<Int, Int>?) -> Unit,
 ) {
-    val v = vm.ws1() ?: return
     val cs = MaterialTheme.colorScheme
     val K = v.shifts.size
     val S = v.staff.size
     if (K == 0 || S == 0) return
     // [P10] シフト記号の字面比較でなく `restShiftIndex`(MirrorCore.kt) の唯一の持ち場へ委譲。
-    val restIdx = remember(v.shifts) { vm.state?.let { com.magi.app.v6.restShiftIndex(it) } ?: 0 }
+    val restIdx = cv.restIdx
     // 方向カラー（TallyCard/StaffRangeSectionと同じM6統一トークン。ここだけの新色は作らない）。
     val shortC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.red
     val overC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-
-    val counts = remember(ui.schedule, K) {
-        Array(S) { i -> IntArray(K).also { c -> ui.schedule.getOrNull(i)?.forEach { kk -> if (kk in 0 until K) c[kk]++ } } }
-    }
 
     var confirmResetApt by remember { mutableStateOf(false) }
     val hScroll = rememberScrollState()
@@ -97,7 +93,7 @@ internal fun StaffShiftMatrixCard(
     val rowH = 52.dp
 
     // 目標超過の検算（既存 aptBalances=検査6-C と単一ソース）。最も足りない列を1行で示し、その列へジャンプする。
-    val overloaded = remember(ui.editRev, ui.structureEdited) { vm.aptBalances().filter { it.overloaded } }
+    val overloaded = cv.aptBalances.filter { it.overloaded }
     val worst = overloaded.maxByOrNull { it.shortfall }
 
     Card(Modifier.fillMaxWidth()) {
@@ -161,11 +157,11 @@ internal fun StaffShiftMatrixCard(
                     }
                     for (i in 0 until S) {
                         Row {
-                            val allowed = remember(v, i) { vm.allowedShiftsFor(i).toHashSet() }
+                            val allowed = cv.allowedShiftsFor(i)
                             for (k in 0 until K) {
                                 val cell = matrixCell(
-                                    allowed = k in allowed, count = counts[i][k],
-                                    limits = vm.staffCellLimits(i, k), vio = ui.countViolations["$i,$k"],
+                                    allowed = k in allowed, count = counts.perStaff[i][k],
+                                    limits = cv.staffCellLimits(i, k), vio = ui.countViolations["$i,$k"],
                                     isRest = k == restIdx, shortC = shortC, overC = overC, cs = cs,
                                 )
                                 MatrixDataCell(cellW, rowH, cell) { if (k in allowed) onSheetCellChange(i to k) }
@@ -177,8 +173,8 @@ internal fun StaffShiftMatrixCard(
                         for (k in 0 until K) {
                             var targetSum = 0; var actualSum = 0; var hasTarget = false
                             for (i in 0 until S) {
-                                actualSum += counts[i][k]
-                                val apt = vm.staffCellLimits(i, k).third
+                                actualSum += counts.perStaff[i][k]
+                                val apt = cv.staffCellLimits(i, k).third
                                 if (apt != null) { targetSum += apt; hasTarget = true }
                             }
                             val over = hasTarget && actualSum > targetSum
@@ -199,7 +195,7 @@ internal fun StaffShiftMatrixCard(
     }
 
     sheetCell?.let { (i, k) ->
-        StaffShiftCellSheet(ui, vm, v, i, k, onDismiss = { onSheetCellChange(null) })
+        StaffShiftCellSheet(ui, cv, onEvent, counts, v, i, k, onDismiss = { onSheetCellChange(null) })
     }
     if (confirmResetApt) {
         AlertDialog(
@@ -214,7 +210,7 @@ internal fun StaffShiftMatrixCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             },
-            confirmButton = { DialogDangerButton("全リセット", onClick = { vm.ws1ResetGroupApt(); confirmResetApt = false }) },
+            confirmButton = { DialogDangerButton("全リセット", onClick = { onEvent(MagiEvent.Structure.ResetGroupApt); confirmResetApt = false }) },
             dismissButton = { DialogDismissButton(onClick = { confirmResetApt = false }) },
         )
     }
@@ -313,15 +309,15 @@ private fun MatrixDataCell(
 /** セルタップの編集シート。①群の目標(apt、全員に影響) ②個人の上下限(staffRange) の2系統のみ提供する。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
+private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, counts: ScheduleCounts, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState()
     val name = v.staff.getOrNull(i)?.name ?: "$i"
     val g = v.staff.getOrNull(i)?.groupIdx ?: -1
     val groupName = v.groups.getOrNull(g)?.name ?: "?"
     val kigou = v.shifts.getOrNull(k)?.kigou ?: "$k"
-    val count = ui.schedule.getOrNull(i)?.count { it == k } ?: 0
-    val (lo0, hi0, apt) = vm.staffCellLimits(i, k)
+    val count = counts.perStaff.getOrNull(i)?.getOrNull(k) ?: 0
+    val (lo0, hi0, apt) = cv.staffCellLimits(i, k)
     val vio = ui.countViolations["$i,$k"]
     var lo by remember(i, k) { mutableStateOf(lo0?.toString() ?: "") }
     var hi by remember(i, k) { mutableStateOf(hi0?.toString() ?: "") }
@@ -345,7 +341,7 @@ private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: Ws1View, i: I
             }
             val raw = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
             Text("グループの目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            AptStepperRow(label = toHankakuKigou(kigou), value = raw, onChange = { vm.ws1SetGroupApt(g, k, it) })
+            AptStepperRow(label = toHankakuKigou(kigou), value = raw, onChange = { onEvent(MagiEvent.Structure.SetGroupApt(g, k, it)) })
             if (hasRange && raw.trim().toIntOrNull() != null) {
                 Text("この職員・シフトは個人の下限・上限を優先するため、グループの目標は適用されません", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             } else if (apt != null && raw.trim().toIntOrNull() != apt) {
@@ -358,18 +354,18 @@ private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: Ws1View, i: I
             if (bad) Text(RANGE_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = cs.error)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasRange) {
-                    DeleteRowButton(onClick = { vm.removeStaffRange(i, k); onDismiss() }, text = "上下限を解除")
+                    DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() }, text = "上下限を解除")
                 }
                 if (vio == "vio-high") {
                     DialogConfirmButton("上限を${count}に引き上げて解決", enabled = true,
-                        onClick = { vm.setStaffRange(i, k, lo0?.toString() ?: "", count.toString()); onDismiss() })
+                        onClick = { onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo0?.toString() ?: "", count.toString())); onDismiss() })
                 } else if (vio == "vio-low") {
                     DialogConfirmButton("下限を${count}に下げて解決", enabled = true,
-                        onClick = { vm.setStaffRange(i, k, count.toString(), hi0?.toString() ?: ""); onDismiss() })
+                        onClick = { onEvent(MagiEvent.Condition.SetStaffRange(i, k, count.toString(), hi0?.toString() ?: "")); onDismiss() })
                 }
             }
             DialogConfirmButton("この上下限を適用", enabled = !bad && (lo.isNotBlank() || hi.isNotBlank() || hasRange),
-                onClick = { vm.setStaffRange(i, k, lo.trim(), hi.trim()); onDismiss() })
+                onClick = { onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo.trim(), hi.trim())); onDismiss() })
         }
     }
 }

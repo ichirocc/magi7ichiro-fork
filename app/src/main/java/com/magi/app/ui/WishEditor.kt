@@ -60,9 +60,9 @@ import androidx.compose.ui.unit.dp
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitialConsumed: () -> Unit = {}) {
+internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, initialStaff: Int? = null, onInitialConsumed: () -> Unit = {}) {
     val staff = ui.staffNames
-    val shifts = vm.shiftKigouList()
+    val shifts = cv.shiftKigou
     if (staff.isEmpty() || shifts.isEmpty()) return
     var i by remember { mutableStateOf(initialStaff?.takeIf { it in staff.indices } ?: 0) }
     if (i !in staff.indices) i = 0
@@ -77,8 +77,8 @@ fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitia
     var staffMenu by remember { mutableStateOf(false) }
     var showAllStaff by remember { mutableStateOf(false) }
     val cs = MaterialTheme.colorScheme
-    val allowed = vm.allowedShiftsFor(i).toHashSet()
-    val rows = vm.wishOverrides()
+    val allowed = cv.allowedShiftsFor(i)
+    val rows = cv.wishOverrides
     val myRows = rows.filter { it.i == i }
     val marked = myRows.associate { it.day to it.k }
 
@@ -111,7 +111,7 @@ fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitia
             )
             // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（モーダルシートは撤去）。
             if (daysSel.isNotEmpty()) {
-                WishApplyPanel(ui, vm, i, daysSel, shifts, allowed, onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
+                WishApplyPanel(ui, onEvent, i, daysSel, shifts, allowed, onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
             } else {
             }
             // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー（既定非表示）。
@@ -128,7 +128,7 @@ fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitia
                                 label = { Text("${r.day}日 ${r.kigou}") },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, contentDescription = "削除",
-                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.removeWish(r.i, r.j) }.padding(7.dp))
+                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { onEvent(MagiEvent.Condition.RemoveWish(r.i, r.j)) }.padding(7.dp))
                                 },
                             )
                         }
@@ -145,11 +145,11 @@ fun WishCard(ui: UiState, vm: MagiViewModel, initialStaff: Int? = null, onInitia
 @Composable
 private fun WishApplyPanel(
     ui: UiState,
-    vm: MagiViewModel,
+    onEvent: (MagiEvent) -> Unit,
     staffIdx: Int,
     days: Set<Int>,
     shifts: List<String>,
-    allowed: HashSet<Int>,
+    allowed: Set<Int>,
     onCancel: () -> Unit,
     onDone: () -> Unit,
 ) {
@@ -180,12 +180,12 @@ private fun WishApplyPanel(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
             Button(
-                onClick = { vm.setWishesForDays(staffIdx, days.map { it - 1 }, selK); onDone() },
+                onClick = { onEvent(MagiEvent.Condition.SetWishesForDays(staffIdx, days.map { it - 1 }, selK)); onDone() },
                 enabled = !ui.running,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text("${days.size}日に適用") }
         }
-        TextButton(onClick = { vm.clearWishesForDays(staffIdx, days.map { it - 1 }); onDone() }, enabled = !ui.running,
+        TextButton(onClick = { onEvent(MagiEvent.Condition.ClearWishesForDays(staffIdx, days.map { it - 1 })); onDone() }, enabled = !ui.running,
             modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
     }
 }

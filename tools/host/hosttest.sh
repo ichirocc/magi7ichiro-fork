@@ -10,7 +10,22 @@ ROOT=${1:-$(cd "$HERE/../.." && pwd)}
 KV=2.3.21; CV=1.8.1
 L=${MAGI_HOST_LIBS:-$HOME/.cache/magi-host-libs}; mkdir -p "$L"
 M=https://repo1.maven.org/maven2
-get(){ f=$(basename "$1"); [ -s "$L/$f" ] || curl -sSfL -o "$L/$f" "$M/$1" || { echo "download failed: $1"; exit 1; }; }
+# [3.568.0] 途中で切れた取得物を残さない: tmp へ落として .sha1 と照合してから置く。
+#   .sha1 を引けないとき（網なし）は既存キャッシュを信じる＝オフラインでも回る。
+get(){
+  f=$(basename "$1"); c="$L/$f"
+  want=$(curl -sSfL --max-time 20 "$M/$1.sha1" 2>/dev/null | tr -d '[:space:]' | cut -c1-40)
+  if [ -s "$c" ]; then
+    [ -z "$want" ] && return 0
+    [ "$(sha1sum "$c" | cut -d' ' -f1)" = "$want" ] && return 0
+    echo "cache broken, refetching: $f"
+  fi
+  curl -sSfL -o "$c.tmp" "$M/$1" || { echo "download failed: $1"; rm -f "$c.tmp"; exit 1; }
+  if [ -n "$want" ] && [ "$(sha1sum "$c.tmp" | cut -d' ' -f1)" != "$want" ]; then
+    echo "sha1 mismatch (取得物が期待と違う): $f"; rm -f "$c.tmp"; exit 1
+  fi
+  mv "$c.tmp" "$c"
+}
 get org/jetbrains/kotlin/kotlin-compiler-embeddable/$KV/kotlin-compiler-embeddable-$KV.jar
 get org/jetbrains/kotlin/kotlin-stdlib/$KV/kotlin-stdlib-$KV.jar
 get org/jetbrains/kotlin/kotlin-script-runtime/$KV/kotlin-script-runtime-$KV.jar
@@ -26,7 +41,7 @@ OUT=${MAGI_HOST_OUT:-/tmp/magi-hostbuild}; rm -rf "$OUT"; mkdir -p "$OUT/main" "
 KC="$L/kotlin-compiler-embeddable-$KV.jar:$L/kotlin-stdlib-$KV.jar:$L/kotlin-script-runtime-$KV.jar:$L/kotlin-reflect-$KV.jar:$L/kotlin-daemon-embeddable-$KV.jar:$L/trove4j-1.0.20200330.jar:$L/annotations-13.0.jar:$L/kotlinx-coroutines-core-jvm-$CV.jar"
 CP="$L/kotlin-stdlib-$KV.jar:$L/kotlinx-coroutines-core-jvm-$CV.jar:$L/json-20240303.jar:$L/junit-4.13.2.jar:$L/hamcrest-core-1.3.jar"
 A=$ROOT/app/src/main/java/com/magi/app
-MAIN_SRC=$(find "$A/v6" "$A/model" -name '*.kt'; ls "$A"/ui/{MagiUiState,AnalysisTriage,BreakdownLabels,ConstraintHelp,VioBuckets,MagiPhase,MagiEvent,MagiMediator,MagiViewState,MagiConstraintsView,MagiWs1View}.kt "$A"/work/{RunFiles,SaveGate,OptimizationRepository}.kt "$HERE"/stubs/*.kt)
+MAIN_SRC=$(find "$A/v6" "$A/model" -name '*.kt'; ls "$A"/ui/{MagiUiState,AnalysisTriage,BreakdownLabels,ConstraintHelp,VioBuckets,MagiPhase,MagiEvent,MagiMediator,MagiViewState,MagiConstraintsView,MagiWs1View,MagiConditionsView}.kt "$A"/work/{RunFiles,SaveGate,OptimizationRepository}.kt "$HERE"/stubs/*.kt)
 kotlinc(){ java -Xmx3g -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -nowarn -no-stdlib -no-reflect -jvm-target 17 "$@" 2>&1 | grep -v JAVA_TOOL_OPTIONS; return ${PIPESTATUS[0]}; }
 echo "== compile main ($(echo "$MAIN_SRC" | wc -l) files) from $ROOT"
 kotlinc -cp "$CP" -d "$OUT/main" $MAIN_SRC | grep -E "^e: |error:|exception" | head -40; [ ${PIPESTATUS[0]} -eq 0 ] || { echo "MAIN COMPILE FAILED"; exit 1; }

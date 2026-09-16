@@ -569,18 +569,33 @@ def find_p13():
     out = []
     for f in files:
         rel = os.path.relpath(f, ROOT)
-        for i, line in enumerate(io.open(f, encoding="utf-8").read().split("\n"), 1):
+        lines = io.open(f, encoding="utf-8").read().split("\n")
+        i = 0
+        while i < len(lines):
+            line = lines[i]
             st = line.strip()
-            # 入れ子（字下げあり）のメンバは、外側が internal なら実効 internal＝対象外。
-            if not (st.startswith("fun ") or st.startswith("public fun ") or st.startswith("val ")):
+            # トップレベル（字下げなし）の公開宣言だけが対象。入れ子のメンバは外側が internal なら実効 internal。
+            if (line[:1] in (" ", "\t")) or not (
+                st.startswith("fun ") or st.startswith("public fun ") or st.startswith("val ")
+                or st.startswith("public val ")
+            ):
+                i += 1
                 continue
-            if line[:1] in (" ", "\t"):
-                continue
-            if st.startswith("internal ") or st.startswith("private "):
-                continue
-            m = word.search(line)
+            # [3.566.0/外部レビュー] 宣言が複数行に折り返されていると、`fun` の行だけでは引数の型が読めない
+            #   （旧実装はここで取りこぼし、CI を落とした当の形＝多行 Composable が素通りしていた）。
+            #   括弧が閉じて本体（{ か =）へ入るまでを 1 つの署名として連結する。
+            sig, depth, j = "", 0, i
+            while j < len(lines) and j - i < 40:
+                seg = lines[j]
+                sig += " " + seg
+                depth += seg.count("(") - seg.count(")")
+                if depth <= 0 and j > i or (depth == 0 and ("{" in seg or "=" in seg)):
+                    break
+                j += 1
+            m = word.search(sig)
             if m:
-                out.append(f"{rel}:{i}: {m.group(1)} を公開宣言が露出: {st[:90]}")
+                out.append(f"{rel}:{i + 1}: {m.group(1)} を公開宣言が露出: {st[:90]}")
+            i = j + 1
     return out
 
 def main():

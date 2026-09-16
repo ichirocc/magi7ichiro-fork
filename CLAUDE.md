@@ -71,9 +71,11 @@
   フォールバック。`Problem.groupMembers`使用、m<2は0。目的関数(Evaluator/Delta)/チェッカー3者と
   C++(`magi_native.cpp`の`fairDevOfBucket`)に統合。UI内訳チップには出さない（常時非ゼロになりやすいため
   weightedScore/total のみ算入）。
-- **weekly**（7日周期(曜日)シフト平準化, SOFT, 重み2, L1偏差）。職員ごとに勤務日(非休)の**曜日別カウント**の
-  `round(勤務日数/7)` からの L1 偏差和。weekday(j)=`(dow0+j)%7`（`Problem.dow0`=startDate曜日オフセット %7 /
-  `Problem.restIdx`=休index）。「毎週おなじ曜日に偏る」を均す。共通ソース=`weeklyDevOfBucket(wd[7])`。
+- **weekly**（7日周期(曜日)シフト平準化, SOFT, 重み2, L1偏差）。職員ごと**シフトごと**に、そのシフトが入る日の
+  **曜日別カウント**の `round(そのシフトの回数/7)` からの L1 偏差和（**休も1シフトとして数える**＝3.345.0。
+  旧「勤務日=非休の二値」ではない）。weekday(j)=`(dow0+j)%7`（`Problem.dow0`=startDate曜日オフセット %7）。
+  「夜勤が毎週おなじ曜日」「休みが毎週おなじ曜日」を同じ式で均す。共通ソース=`weeklyDevOfBucket(wd[7])`。
+  数式の正は `docs/business-logic.md`。
   Evaluator/Delta/チェッカー3者に統合（fairと同型）。UI内訳では「曜日の偏り」チップに件数表示（場所マップは無し）。
 - **pref**（希望シフト未充足, HARD, 重み8000）/ **groupViol**（群外シフト, HARD, 重み11000）。
 

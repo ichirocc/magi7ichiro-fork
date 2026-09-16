@@ -134,3 +134,18 @@
     `PinInvariantTest`green化。`CombinatorialRepairTest`・`ViolationComponentRepairTest`の
     `combineTwoRejectedState`もcons41を4重複させ「単独不採用(タイ)・結合で採用」の性質を新重みで復元
     （詳細はdocs/history/3.4xx.md）。
+19. **[探索動学・決定待ち] HARD 同点時のタイブレークが探索と公式で食い違う**（3.568.0 で測定・登録）。
+    公式の `betterReport` は第2キー `weightedScore`（HARD 族の重みも入る）だが、SA/LAHC のコア loop と
+    `SaOptimizer` のワーカー横断 best が使う `fullEval` は `hard1` を**生カウント**で合算する＝HARD 件数が
+    同点なら族の重みを見ない。乖離が残るのは `fullEval` で決める 11 箇所だけ（RSI・チェーン選抜・研磨・
+    番兵の 87 箇所は既に `betterReport`）。実測: 実データ 7 件×3 seed の 21 走行中 12 走行で発生・計 30 件
+    （HARD 同点遷移の 0.01〜0.1%）、形はすべて「c3n(9000) −1 / covU(10000) +1 で soft を下げる」。
+    ただし最終盤面は 7 件中 6 件が単一族か同重み族へ収束し、**最終出力を決めた形跡は無い**。
+    この性質自体は 3.522.0 の重み表全面見直しの動機として業務担当者が既に指摘済みで、隣接案
+    （HARD 内部重みを辞書式の独立段にする＝外部仕様 v12.1 Gate 5）は 3.510.3 で決定待ちに登録済み＝**同じ枠**。
+    直す場合は `ObjectiveParityTest`（この非対称を固定しているテスト）の期待式も設計変更の対象になる。
+    **明示指示＋`tools/loop` のペアベンチが前提**。経緯と再現手順は `docs/history/3.4xx.md` の 3.563.0〜3.568.0 節。
+20. **[C# パリティ・要調査] `-MAGI_PC` の `PinInvariantTest.PostOptimizationHoldsPinsAcrossRandomStates` が赤**（3.569.0 の同期時に
+    発見。random#1「実現可能な希望（職員0 日5）が後処理で動いた」。同期前の 6276edf でも同じ＝今回の変更と無関係）。
+    Kotlin の同名テストは緑なので、C# の後処理チェーンのどこかが `wishLocked` を破っている。C# 単独では直さない
+    （パリティの原則）＝Kotlin 側の同じ入力（`BusyState(JavaRandom(0x91A7L))` の random#1）で差分を取ってから同期する。

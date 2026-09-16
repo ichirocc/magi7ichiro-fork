@@ -11,6 +11,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 4 実データで `parse(build(state))` が勤務表・職員・希望・制約・個人レンジを完全再現することを固定する
@@ -116,6 +117,18 @@ class CsvRoundTripTest {
         assertStaffRoundTrip(st, "escaped")
         assertWishesRoundTrip(st, "escaped")
         assertConstraintsRoundTrip(st, "escaped")
+    }
+
+    /** [3.568.0/外部レビュー] 未知記号は「セル丸ごと」が鍵になる＝引用符で数千字を 1 セルへ入れると
+     *  そのまま UI 文言と操作ログへ流れていた。1 件ずつ頭打ちされることを固定する。 */
+    @Test fun unknownSymbolSamplesAreTruncated() {
+        val st = load("golden_state")
+        val huge = "X".repeat(3000)
+        val csv = "スタッフ \\ 日付,1,2\n${st.staff[0].name},\"$huge\",\"$huge\"\n"
+        val r = ScheduleCsvBridge.parse(csv, st, blankBase(st))
+        assertEquals("読めない記号は2セル", 2, r.unknownCells)
+        for (sym in r.unknownSymbols) assertTrue("記号サンプルが長い: ${sym.length}", sym.length <= 24)
+        for (l in r.report.logs) assertTrue("ログが長い: ${l.message.length}", l.message.length < 400)
     }
 }
 

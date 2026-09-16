@@ -1,5 +1,18 @@
 # 作業記録の索引（見出し一覧）
 
+- 末尾の待ち時間（3.569.0、ユーザー指示「不要なソートを消す・大きなテキストを生成しない・同じ検査を繰り返さない・
+  数ミリ秒の仕事をまとめて渡す・直列だった解析や評価を安全な範囲で並列化する」）。**計測が先**: S=10・8s では末尾
+  11〜98ms＝もともと小さい。実データ 60s では探索後 3.6〜6.0s が後処理（共同 LNS 2 本＋C1 広域ビームが単一スレッド
+  で締切まで走る）。結果を変えない改修 7 件（盤面の文字列化ハッシュ→`BoardKey`／研磨の入口・出口の二重 check／
+  `ChangeSummary`・VM・LNS の新規 `Problem`→`cachedProblem`／`logOp` の 1000 行再整形→1 行／autoSave の文字列化を
+  main から外す／既に順序付いたリストの `sortedWith` 2 箇所／**共同 LNS 2 本の候補評価を並列化**＝生成・採否は
+  逐次のまま `mapParallel`）。決定論モードの盤面ハッシュは実データ 4 件で旧新一致、時間 −17〜−40%。C# 同日同期 → `docs/history/3.4xx.md`
+- UI 層の再構成 Stage C-4/C-5/D と外部レビュー由来の修正（3.563.0〜3.568.0）＝Composable の `vm` 参照 0・
+  `key(ui.editRev)` 全廃、`MagiConditionsView` 追加。外部レビューで**再現できたものだけ**を修正:
+  Worker の片付け漏れ／リリース CI の書込みトークン分離と `v*` タグの品質ゲート／`android-sdk.yml` の
+  `permissions`／**`hosttest.sh` の壊れたキャッシュが永久に再利用される**（`.sha1` 照合を追加）／
+  CSV 未知記号サンプルの頭打ち。**未閉引用符の中断・action の SHA ピン・P1-1 比較は据え置き**（理由は本文）
+  → `docs/history/3.4xx.md`
 - UI 層の再構成 Stage C-2/C-3（3.561.0/3.562.0）＝制約と ws1 の編集を Passive View へ。`ConstraintFamilyView`
   と `Ws1View` を `MagiViewModel` の入れ子から独立した型へ出し、Compose 非依存のビューデータ 2 ファイルへ。
   `vm` 参照 55 箇所と `key(ui.editRev)` 5 箇所を撤去。design_lint に **P13（公開宣言が internal 型を露出）**

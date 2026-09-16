@@ -178,7 +178,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     // [Web反映/Wake Lock] 最適化(前景)中は画面を消灯させない＝計算の中断・ライブ表示の停止を防ぐ。
     val rootView = androidx.compose.ui.platform.LocalView.current
-    LaunchedEffect(ui.running) { rootView.keepScreenOn = ui.running }
+    LaunchedEffect(ui.keepScreenOn) { rootView.keepScreenOn = ui.keepScreenOn }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
@@ -192,7 +192,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // [下流→上流ディープリンク] 要確認一覧「設定で直す」→ 該当職員/シフトを事前選択して開く（-1=無し・消費で戻す）。
     var deepLinkWishStaff by rememberSaveable { mutableStateOf(-1) }
     var deepLinkNeedShift by rememberSaveable { mutableStateOf(-1) }
-    // [実機バグ修正] CountsCard(③回数)のセルタップシート開閉。key(ui.editRev)の外に置く（573行目コメントと同じ理由）。
+    // CountsCard(③回数)のセルタップシート開閉。カード側でなく Root が持つ＝編集のたびに閉じない。
     var countsSheetCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
@@ -214,6 +214,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // 制約エディタが描くのに要るものを Root で 1 度だけ組み立てる（画面から vm への問い合わせを無くす）。
     val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
     val ws1View = remember(ui) { vm.ws1() }
+    val conditionsView = remember(ui) { vm.conditionsView() }
 
     val openJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -407,6 +408,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val vioEnabled = remember(vioMask) {
         vioBuckets.filterIndexed { i, _ -> (vioMask shr i) and 1 == 1 }.map { it.key }.toSet()
     }
+    // 勤務表タブの派生描画値。画面ごとに作り直さず、Root が 1 つ持って配る（違反フィルタに依存するので
+    //   vioEnabled の後に置く）。
+    val viewState = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled) }
     val onToggleVioBucket: (String) -> Unit = { key ->
         val i = vioBuckets.indexOfFirst { it.key == key }
         if (i >= 0) vioMask = vioMask xor (1 shl i)
@@ -500,7 +504,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
-                    SmartActionCard(ui, vm)
+                    SmartActionCard(ui, onEvent)
                     // [3.480.0] 旧: 画面最下部にボタン列で配置していたが、比較検討は「処方箋」の一部として
                     // 完成度バーの近くで即決できるほうが良い（grilling決定#4）。セグメントタブへ差替え済み。
                     AlternativesCard(ui, onApply = { vm.applyAlternative(it) })
@@ -552,14 +556,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it })
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
                     SearchLegendBar(ui, searchQuery, onQuery = { searchQuery = it })
-                    ScheduleGrid(ui, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
+                    ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
-                        canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) }, plainCellBorder = plainCellBorder,
+                        canDo = { i, k -> k in conditionsView.allowedShiftsFor(i) }, plainCellBorder = plainCellBorder,
                         nav = schedNav, stickyTopPx = viewportTopPx)
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
-                    TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
+                    TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled)
                     // [3.194.0 情報の冗長性検証] 「不一致だけ抽出」（MismatchExtractCard）を撤去。
                     //   TallyCard(職員別/日別)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
                     //   内容が重複しており、しかも apt(適切回数)由来の違反を含まず新しい表示より不完全だった。
@@ -576,14 +580,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         Text("希望シフトの一括操作")
                     }
                     if (wishBulkOpen) {
-                        WishBulkSheet(ui, vm, presetWeekday = 0, onDismiss = { wishBulkOpen = false })
+                        WishBulkSheet(ui, conditionsView, onEvent, presetWeekday = 0, onDismiss = { wishBulkOpen = false })
                     }
                 }
                 2 -> {
                     // [見つけやすさ改善] 案内カードの「希望シフト」行タップで月次条件タブへ直行。
                     //   WishCardは常時展開のカレンダー主導線のため、タブ切替のみで編集画面に到達する。
                     val openWish: () -> Unit = { editScope = 0 }
-                    SetupGuideCard(ui, vm, editScope = editScope, onOpenWish = openWish)
+                    SetupGuideCard(ui, conditionsView, editScope = editScope, onOpenWish = openWish)
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
                     MagiSegmentedControl(options = listOf("月次条件", "職員管理", "年間マスター"), selected = editScope, onSelect = { editScope = it })
@@ -602,15 +606,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         0 -> {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
                             // [3.482.0 導線重複] 作成ボタンは固定フッター（BottomCommandBar）に一本化＝カードは確認だけ。
-                            MonthlyChecklistCard(ui, vm, onOpenWish = openWish)
+                            MonthlyChecklistCard(ui, ws1View, conditionsView, onOpenWish = openWish)
                             MonthPickerCard(ui, onEvent)
-                            // [3.190.0 横展開・検討のうえ対象外] WishCard/NeedCalendarCard は選択中の職員/シフト
-                            //   (i/k・remember)を保持したまま複数回編集する設計のため、key(ui.editRev)で包むと
-                            //   自分自身の編集コミット(editRev変化)のたびに選択がリセットされ、③より悪い退行を生む。
-                            //   よって対象外（未確認のリスクへの予防的変更よりも確定した退行の回避を優先）。
-                            WishCard(ui, vm, initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, onInitialConsumed = { deepLinkWishStaff = -1 })
-                            NeedCalendarCard(ui, vm, initialShift = deepLinkNeedShift.takeIf { it >= 0 }, onInitialConsumed = { deepLinkNeedShift = -1 })
-                            key(ui.editRev) { NeedDayCard(ui, vm) }
+                            WishCard(ui, conditionsView, onEvent, initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, onInitialConsumed = { deepLinkWishStaff = -1 })
+                            ws1View?.let { NeedCalendarCard(ui, it, conditionsView, onEvent, initialShift = deepLinkNeedShift.takeIf { s -> s >= 0 }, onInitialConsumed = { deepLinkNeedShift = -1 }) }
+                            NeedDayCard(ui, conditionsView, onEvent)
                         }
                         1 -> {
                             // [職員管理] 入退職・所属・スキルの随時変更（人の属性管理に純化。個人の回数上下限は
@@ -624,7 +624,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
                             ReviewMemoCard(ui, onEvent)
                             // [年度始めモード] シフト別の実働体制（担当人数 vs 需要・欠勤耐性）を土台編集の入口で提示。
-                            StaffingRealityCard(ui, vm)
+                            StaffingRealityCard(ui, conditionsView)
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                                 // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
                                 Text("土台の設定（制度変更時のみ）。毎月の調整は「月次条件」、人の入替は「職員管理」へ。",
@@ -633,11 +633,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     style = MaterialTheme.typography.bodyMedium)
                             }
                             // [E6案A] 長大スクロールを畳んで削減。①のみ既定で展開。展開状態は rememberSaveable で保持。
-                            // [3.190.0 横展開] ①②④⑤も③と同じ再構成保証を適用（CollapsibleSection の content
-                            //   ラムダが ui/vm を捕捉しスキップ判定に絡む同型の懸念に対する予防的対応。
-                            //   Ws1Card=use2トグル・担当可否チップ／SkillGroupCard=スキル割当ボタン／
-                            //   がいずれも生の vm 読取で即時反映を期待する箇所のため key(ui.editRev) で編集ごとに
-                            //   確実に作り直す）。ConstraintsCard(s) はデータを引数で受け取るようになったので不要。
+                            // 編集画面はデータを引数で受け取るようになったので `key(ui.editRev)` の包みは全廃した
+                            //   （3.190.0〜3.515.2 の再構成保証は「生の vm 読取」への対処だった）。editRev 自体は
+                            //   Root が派生ビューを作り直す合図として残っている（`remember(ui)`）。
                             // [3.482.0 編集タブ簡素化] 職員の一覧・入退職は「職員管理」ドアへ一本化（Ws1Card の職員節を撤去）。
                             CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -655,14 +653,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             //   [design-review 冗長性] 旧SectionNoteは CountsCard 冒頭の説明文と全文重複していた
                             //   （3枚の別カードだった名残）。CountsCard へ統合したいま、説明はカード内の1回だけ。
                             CollapsibleSection("③ 回数（1人あたり）", "yr_count") {
-                                // [実機バグ修正/③回数] +/-を押しても画面上の数字が更新されない（タブを離れて
-                                //   戻ると反映される＝データは正しく保存されるが同一画面での再描画だけが
-                                //   遅れる）。CollapsibleSection の content ラムダが ui/vm を捕捉するため
-                                //   スキップ判定が絡み再構成が伝播しないケースがある。key(ui.editRev) で
-                                //   editRev 変化ごとに確実に作り直す（タブ往復と同じ効果）。
-                                // [実機バグ修正] countsSheetCell は上のWishCard/NeedCalendarCardと同じ理由
-                                //   （572行目）でkey(ui.editRev)の外に置く（群の目標+/-自体がeditRevを増やすため）。
-                                key(ui.editRev) { CountsCard(ui, vm, sheetCell = countsSheetCell, onSheetCellChange = { countsSheetCell = it }) }
+                                ws1View?.let { CountsCard(ui, it, viewState.counts, conditionsView, onEvent, sheetCell = countsSheetCell, onSheetCellChange = { c -> countsSheetCell = c }) }
                             }
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
                             CollapsibleSection("④ 人数と組み合わせ", "yr_headcount") {
@@ -749,11 +740,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (cell != null) {
             ShiftPickerSheet(
                 ui = ui,
-                vm = vm,
+                cv = conditionsView,
+                onEvent = onEvent,
                 cell = cell,
                 onPick = { k ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    vm.setCell(cell.first, cell.second, k)
+                    onEvent(MagiEvent.Board.SetCell(cell.first, cell.second, k))
                     editingCell = null
                     focusRange = null
                 },
@@ -761,7 +753,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             )
         }
         if (guidedFix) {
-            GuidedFixDialog(ui, vm, onDismiss = { guidedFix = false })
+            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(

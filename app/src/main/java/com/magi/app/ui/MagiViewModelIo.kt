@@ -4,6 +4,7 @@ import android.app.Application
 import com.magi.app.model.MojibakeRepair
 import com.magi.app.model.StateParser
 import com.magi.app.v6.ScheduleCsvBridge
+import com.magi.app.v6.copy2D
 import com.magi.app.v6.toIntArray2D
 import kotlinx.coroutines.flow.update
 
@@ -24,13 +25,17 @@ import kotlinx.coroutines.flow.update
  * logOp・load/loadAsync・applyStructureWithMessage。
  */
 /** Current JSON to export. ws1 edits -> full serialize; constraint edits -> overwrite cons; else schedule only. */
-fun MagiViewModel.exportJson(): String? {
-    val sched = currentSchedule ?: resultSchedule ?: return null
+fun MagiViewModel.exportJson(): String? = exportJsonDeferred()?.invoke()
+
+/** [3.569.0] 入力の固定（main で呼ぶ。盤面は編集で書き換わるので複製）と文字列化（任意のスレッド）を分ける。 */
+fun MagiViewModel.exportJsonDeferred(): (() -> String)? {
+    val sched = (currentSchedule ?: resultSchedule ?: return null).copy2D()
     val st = state
-    if (_ui.value.structureEdited && st != null) return StateParser.serialize(st, sched)
+    val ui = _ui.value
+    if (ui.structureEdited && st != null) return { StateParser.serialize(st, sched) }
     val orig = originalJson ?: return null
-    return if (_ui.value.constraintsEdited && st != null) StateParser.exportWithEdits(orig, st, sched)
-    else StateParser.exportWithSchedule(orig, sched)
+    return if (ui.constraintsEdited && st != null) { { StateParser.exportWithEdits(orig, st, sched) } }
+    else { { StateParser.exportWithSchedule(orig, sched) } }
 }
 
 fun MagiViewModel.exportCsv(): String? {
@@ -80,7 +85,7 @@ private fun runTag(serial: Int): String = if (serial > 0) "実行#$serial" else 
 
 fun MagiViewModel.exportLogs(): String? {
     val ops = _ui.value.opLog
-    val runsInLog = opLog.map { it.run }.filter { it > 0 }.distinct().sorted()
+    val runsInLog = synchronized(this) { opLog.map { it.run } }.filter { it > 0 }.distinct().sorted()   // logOp（@Synchronized）と同じモニタ
     val runSpan = if (runsInLog.isEmpty()) "" else "・実行#${runsInLog.first()}〜#${runsInLog.last()}"
     // 出力は全文（非圧縮）。画面表示は圧縮版だが、監査用にはロスレスの rawDiagLogs を使う。
     val logs = rawDiagLogs.ifEmpty { _ui.value.logs }
@@ -130,7 +135,7 @@ fun MagiViewModel.exportLogsJson(): String? {
     // [3.408.0] 帰属の鍵。opLog の行頭 #N と対応する。これが無いと、複数回実行したあとの書き出しで
     //   前の実行の「グローバル最良更新」と直近の「全体最良更新=0回」が同一実行の矛盾に見える。
     o.put("diagRun", lastDiagSerial)
-    o.put("runsInOpLog", org.json.JSONArray().apply { opLog.map { it.run }.filter { it > 0 }.distinct().sorted().forEach { put(it) } })
+    o.put("runsInOpLog", org.json.JSONArray().apply { synchronized(this@exportLogsJson) { opLog.map { it.run } }.filter { it > 0 }.distinct().sorted().forEach { put(it) } })
     // [3.379.0] テキスト版と同じ理由＝最適化後の編集で diagLog は作り直されるため実行時のぶんも残す。
     if (lastRunDiagLogs.isNotEmpty()) {
         o.put("lastRunLabel", lastRunDiagLabel)

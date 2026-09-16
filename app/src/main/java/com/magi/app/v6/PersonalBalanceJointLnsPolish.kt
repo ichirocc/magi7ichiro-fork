@@ -73,7 +73,7 @@ internal object PersonalBalanceJointLnsPolish {
         seed: Long = 0xA97B4L,
         quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = Problem(state, quantitativeRangeEval)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val rootSchedule = normalizeSchedule(schedule, p)
         val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
         if (p.S <= 0 || p.T <= 0 || p.K <= 0) return noOp(rootSchedule, rootReport, "対象なし")
@@ -93,6 +93,7 @@ internal object PersonalBalanceJointLnsPolish {
         var evaluations = 0
         fun evalCapped(): Boolean = config.maxEvaluations > 0 && evaluations >= config.maxEvaluations
         fun stopped(): Boolean = shouldStop() || System.nanoTime() >= deadline || evalCapped()
+        fun haltNow(): Boolean = shouldStop() || System.nanoTime() >= deadline   // 評価数上限を含まない（生成時に見る）
 
         val root = Node(rootSchedule.copy2D(), rootReport, rootPersonal, rootFocus, emptyList(), 0)
         var best = root
@@ -121,39 +122,54 @@ internal object PersonalBalanceJointLnsPolish {
                     if (stopped()) break
                     expanded++
                     val goals = collectGoals(p, parent.schedule, focus, lower, config.maxGoals, rng)
+                    // [3.569.0] C1JointLnsPolish と同じ形: 生成と採否は逐次、評価（check＋個人罰点）だけ塊ごとに並列。
+                    val pending = ArrayList<Candidate>()
+                    fun capReached() = config.maxEvaluations > 0 && evaluations + pending.size >= config.maxEvaluations
                     for (goal in goals) {
-                        if (stopped()) break
+                        if (haltNow() || capReached()) break
                         val variants = buildCandidates(
                             p, parent.schedule, goal, config.maxVariantsPerGoal, rng,
                         )
                         for (candidate in variants) {
-                            if (stopped()) break
-                            generated++; evaluations++
-                            val report = UnifiedViolationChecker.check(state, candidate.schedule, quantitativeRangeEval = quantitativeRangeEval)
-                            val personal = personalPenaltyByStaff(p, candidate.schedule)
-                            val focusTotal = focus.sumOf { personal[it] }
-                            val overDebt = if (config.debtFactor > 0.0) !WeightDebt.within(rootReport, report, config.debtFactor)
-                                else report.total > rootReport.total + config.totalDebt.coerceAtLeast(0) ||
-                                    focusTotal > rootFocus + config.personalDebt.coerceAtLeast(0)
-                            if (report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0) || overDebt) {
-                                debtRejected++
-                                continue
-                            }
-                            if (!remember(seen, candidate.schedule)) {
-                                duplicateRejected++
-                                continue
-                            }
-                            val child = Node(
-                                candidate.schedule,
-                                report,
-                                personal,
-                                focusTotal,
-                                parent.path + candidate.label,
-                                changedCellCount(rootSchedule, candidate.schedule),
-                            )
-                            children.add(child)
-                            if (isFinalCandidate(p, child, root, focus, pinBlocks)) {
-                                if (best === root || betterFinal(child, best, focus, lower)) best = child
+                            if (haltNow() || capReached()) break
+                            pending.add(candidate)
+                        }
+                    }
+                    var from = 0
+                    while (from < pending.size && !haltNow()) {
+                        val chunk = pending.subList(from, minOf(pending.size, from + PARALLEL_EVAL_CHUNK))
+                        val evaluated = mapParallel(chunk) {
+                            UnifiedViolationChecker.check(state, it.schedule, quantitativeRangeEval = quantitativeRangeEval) to personalPenaltyByStaff(p, it.schedule)
+                        }
+                        generated += chunk.size; evaluations += chunk.size
+                        from += chunk.size
+                        for ((idx, candidate) in chunk.withIndex()) {
+                            run {
+                                val (report, personal) = evaluated[idx]
+                                val focusTotal = focus.sumOf { personal[it] }
+                                val overDebt = if (config.debtFactor > 0.0) !WeightDebt.within(rootReport, report, config.debtFactor)
+                                    else report.total > rootReport.total + config.totalDebt.coerceAtLeast(0) ||
+                                        focusTotal > rootFocus + config.personalDebt.coerceAtLeast(0)
+                                if (report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0) || overDebt) {
+                                    debtRejected++
+                                    return@run
+                                }
+                                if (!remember(seen, candidate.schedule)) {
+                                    duplicateRejected++
+                                    return@run
+                                }
+                                val child = Node(
+                                    candidate.schedule,
+                                    report,
+                                    personal,
+                                    focusTotal,
+                                    parent.path + candidate.label,
+                                    changedCellCount(rootSchedule, candidate.schedule),
+                                )
+                                children.add(child)
+                                if (isFinalCandidate(p, child, root, focus, pinBlocks)) {
+                                    if (best === root || betterFinal(child, best, focus, lower)) best = child
+                                }
                             }
                         }
                     }

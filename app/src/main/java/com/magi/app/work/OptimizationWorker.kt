@@ -104,7 +104,11 @@ class OptimizationWorker(
         // [P2修正/レビュー指摘] 復元は「途中最良スナップショット」を優先（8秒毎に退避済み＝実質的な途中再開。
         //   無ければ元入力）。旧: 常に元入力から再スタートし、途中の改善を捨てていた。
         val req = OptimizationRepository.request ?: loadInputFromFile(ctx) ?: run {
-            terminal("入力を復元できず開始できませんでした（メモリにも退避ファイルにも無い）")
+            // この出口は try/finally の**前**なので片付けを自分で行う。マーカーを残すと次回起動が
+            //   「中断された・再開できます」と案内するのに入力が無く、再開のたび同じ失敗に戻る
+            //   （実行中フラグは未設定なので触らない。経緯: history 3.567.0）。
+            reportClear("入力復元の失敗")
+            terminal("入力を復元できず開始できませんでした（メモリにも退避ファイルにも無い）", "W")
             return Result.failure()
         }
         ensureChannel()
