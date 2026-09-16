@@ -73,6 +73,17 @@ jobs:
             //   消せなくても定期クリーンアップは緑のままだった。1件も消せなければジョブを失敗にする
             //   （一部失敗は従来どおり警告＝次回の定期実行で拾える）。
             if (targets.length > 0 && deleted === 0) core.setFailed(`No artifact could be deleted (${failed} failures)`);
+            // [3.572.0/監査指摘] 「1件だけ削除成功・99件失敗」でもジョブは緑のまま＝個別 core.warning は
+            //   ログ内に埋もれ気づけない。失敗が半数を超えたら集約 warning annotation（Checks タブに出る）を
+            //   1本追加する。ジョブを失敗にはしない＝一時的なAPI/権限エラーは翌日の再実行で自然回復する
+            //   （setFailed の既存方針を変えない）が、恒常的な権限・特定artifact問題を見逃さないための可視化。
+            const failRate = targets.length > 0 ? failed / targets.length : 0;
+            if (failed > 0 && failRate > 0.5) {
+              core.warning(
+                `Cleanup partially failed: ${failed}/${targets.length} artifacts could not be deleted ` +
+                `(${(failRate * 100).toFixed(0)}%). Job still succeeded (${deleted} deleted) — check permissions/API errors above if this repeats.`,
+              );
+            }
             await core.summary
               .addHeading('Artifact cleanup (delete non-release, daily)')
               .addRaw(`${msg}. If total was 0, this repository holds no artifacts (quota is account-wide / other repos).`)

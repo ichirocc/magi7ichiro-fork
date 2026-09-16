@@ -1,5 +1,11 @@
 # 作業記録の索引（見出し一覧）
 
+- 外部監査の三重並列トリアージ（3.572.0）。重みリテラル静的検査`tools/weight_lint.py`を新設しCI配線
+  （`MirrorKeys.weights`以外への直書きを検出、現状0件）。c3w追加(3.542.0)以来の文書族数「19→20」ずれを
+  7ファイル20箇所で修正（過去時制の記録は不変）。`cleanup-artifacts.yml`の部分失敗可視化・
+  `dependabot.yml`の同一メジャーgroup化を実施。main branch protectionは利用可能なツールで設定不可＝
+  GitHub Web UIでの手動設定が必要と明記。backlog#14(g)（予算超過回帰試験）の打消し線漏れも是正
+  （3.511.4で実装済みと判明）→ `docs/history/3.4xx.md`
 - backlog #19（HARD同点タイブレーク乖離）の計測実装＋ペアベンチ（3.571.0）。`SaParams.officialTieBreak`
   （既定OFF・計測専用、選定ロジックは無変更＝`SaOfficialTieBreakTest`で固定）で `fullEval` 基準の現行選定と
   `betterReport` 基準の「もう一つの best」を同一実行内で並行追跡。実データ4件×10seed×20秒×4ワーカー＝40走行で

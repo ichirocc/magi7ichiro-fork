@@ -1,5 +1,8 @@
 # GitHub Actions は commit SHA へピン留めしている（3.570.0、ユーザー決定）。
 # Dependabot はメジャータグの新しい SHA を検出して更新 PR を作る（レビュー・CI 通過が前提、自動マージはしない）。
+# [3.572.0/監査指摘] 同一メジャー内のSHA更新（例: checkout@4系の新しいSHA）は1本のPRへ束ねる＝
+#   Native Parity/V6 Engine Check等の重いCIを個別PRごとに何度も回す負荷とレビュー件数を減らす。
+#   メジャーバージョンの切り上げ（例: 4系→5系）はgroupの対象外＝挙動が変わりうるので個別PR・個別判断のまま。
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -8,3 +11,6 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "ci"
+    groups:
+      github-actions-minor-patch:
+        update-types: ["minor", "patch"]
