@@ -6,7 +6,6 @@ import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
 import com.magi.app.model.C3wRow
-import com.magi.app.ui.MagiViewModel.ConstraintFamilyView
 import kotlinx.coroutines.flow.update
 
 /**
@@ -23,58 +22,9 @@ import kotlinx.coroutines.flow.update
  */
 fun MagiViewModel.groupKigouList(): List<String> = state?.groups?.map { it.kigou } ?: emptyList()
 
-/** [冗長除去/データ密度] 1日人数の上下限 [l〜u] を意味で圧縮して短く表す。見出しが「人数(上下限)」の
- *  文脈を担うので、行は記号のみで足りる。l==u=ちょうどN / 下限のみ=N以上 / 上限のみ=N以下 / 両方=l〜u。 */
-private fun boundLabel(l: String, u: String): String {
-    val lo = l.ifBlank { null }; val hi = u.ifBlank { null }
-    return when {
-        lo != null && hi != null && lo == hi -> "ちょうど$lo"
-        lo != null && hi != null -> "$lo〜$hi"
-        lo != null -> "$lo 以上"
-        hi != null -> "$hi 以下"
-        else -> "制限なし"
-    }
-}
+fun MagiViewModel.constraintFamilies(): List<ConstraintFamilyView> = constraintsViewOf(state).families
 
-fun MagiViewModel.constraintFamilies(): List<ConstraintFamilyView> {
-    val st = state ?: return emptyList()
-    fun seq(p: List<String>) = p.filter { it.isNotBlank() }.joinToString(" -> ").ifEmpty { "(空)" }
-    return listOf(
-        // [用語統一/下流→上流] 節タイトルは違反チップ(breakdownLabels)の語彙を正として一致させる
-        //   （違反を見て設定を直しに来たとき同じ名前で見つかるように）。単位や補足は括弧で添える。
-        ConstraintFamilyView("cons1", "期間の制約（○日間で○回など）",
-            st.cons1.map { "${it.shiftKigou}   ${it.day1}日で${it.day2}回以上" }),
-        ConstraintFamilyView("cons2", "個人の合計（回数）",
-            st.cons2.map { "${it.shiftKigou}   合計${it.count}回以上" }),
-        ConstraintFamilyView("cons3", "必須の並び", st.cons3.map { seq(it.pattern) }),
-        ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
-        ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
-        ConstraintFamilyView("cons3mn", "回避の並び", st.cons3mn.map { seq(it.pattern) }),
-        // [3.542.0] 希望で固定した X の前日だけ Y を禁止（HARD）。素の並び禁止は cons3n。
-        ConstraintFamilyView("cons3w", "希望の前日に禁止（必ず守る）",
-            st.cons3w.map { "${it.wishKigou} の希望の前日は ${it.prevKigou} 禁止" }),
-        ConstraintFamilyView("cons41", "グループのレンジ（1日の人数の下限〜上限）",
-            st.cons41.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
-        // [3.409.18] 「禁止/不可」はラベルとして実態（最軽量のソフト条件＝他の条件と衝突すると
-        //   真っ先に譲られる）と逆の約束をするため「できるだけ守る」を見出しへ明示（3.405.0 の言葉版）。
-        // [3.427.0] 行タイトルを「吉・休 ✕ 古・休」→「吉の休 ✕ 古の休」（の形）へ。3.409.18 は
-        //   羅列が読めない問題を行下の読み下し文で補ったが、タイトル自体を読める形にすれば
-        //   文は見出しの「同じ日に不可」と全て重複＝行ごとの文を撤去（7行×2行→7行×1行）。
-        ConstraintFamilyView("cons42", "グループペア禁止（同じ日に不可・できるだけ守る）",
-            st.cons42.map { "${it.g1Kigou}の${it.s1Kigou} ✕ ${it.g2Kigou}の${it.s2Kigou}" }),
-    )
-}
-
-/** [スキルグループ専用ルール] C41s/C42s。スキルグループ定義の直下に co-locate して表示する。 */
-fun MagiViewModel.skillConstraintFamilies(): List<ConstraintFamilyView> {
-    val st = state ?: return emptyList()
-    return listOf(
-        ConstraintFamilyView("cons41s", "スキルグループのレンジ（1日の人数の下限〜上限）",
-            st.cons41s.map { "${it.groupKigou}・${it.shiftKigou}   ${boundLabel(it.l, it.u)}" }),
-        ConstraintFamilyView("cons42s", "スキルグループペア禁止（同じ日に不可・できるだけ守る）",
-            st.cons42s.map { "${it.g1Kigou}の${it.s1Kigou} ✕ ${it.g2Kigou}の${it.s2Kigou}" }),
-    )
-}
+fun MagiViewModel.skillConstraintFamilies(): List<ConstraintFamilyView> = constraintsViewOf(state).skillFamilies
 
 fun MagiViewModel.skillGroupKigouList(): List<String> = state?.skillGroups?.map { it.kigou } ?: emptyList()
 fun MagiViewModel.addCons41s(groupKigou: String, shiftKigou: String, l: String, u: String) {
@@ -115,11 +65,6 @@ fun MagiViewModel.addCons3w(wishKigou: String, prevKigou: String) {
     logOp("I", "制約追加(希望前日禁止): ${wishKigou} の希望の前日は ${prevKigou} 禁止"); mutateConstraints(st.copy(cons3w = st.cons3w + C3wRow(wishKigou, prevKigou)))
 }
 
-/** 並び4族の日本語名（ConstraintDialog の見出しと同じ語彙）。 */
-internal fun seqFamilyJp(family: String): String = when (family) {
-    "cons3" -> "必須の並び"; "cons3n" -> "禁止の並び"; "cons3m" -> "推奨の並び"; "cons3mn" -> "回避の並び"; else -> family
-}
-
 /**
  * [3.482.0 入口ガード] 同じ並びが既に登録されていれば、その族の日本語名を返す（無ければ null）。
  * 旧: 追加/変更のどちらにも重複検出が無く、見本データの `Dﾃ→A4` が禁止の並びに2行入ったまま
@@ -129,20 +74,8 @@ internal fun seqFamilyJp(family: String): String = when (family) {
  * （族内しか見ない `collectDuplicateSeq`）より一段厳しく入口で知らせる。
  * 正規化は addCons3 と同じ（先頭から最初の空白まで・最大5）。`excludeIndex` は変更時に自分自身を除く。
  */
-fun MagiViewModel.seqDuplicateOf(family: String, pattern: List<String>, excludeIndex: Int? = null): String? {
-    val st = state ?: return null
-    val key = pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5).joinToString("→")
-    if (key.isBlank()) return null
-    val fams = listOf("cons3" to st.cons3, "cons3n" to st.cons3n, "cons3m" to st.cons3m, "cons3mn" to st.cons3mn)
-    for ((fam, rows) in fams) {
-        rows.forEachIndexed { idx, r ->
-            if (fam == family && idx == excludeIndex) return@forEachIndexed
-            val k = r.pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5).joinToString("→")
-            if (k == key) return seqFamilyJp(fam)
-        }
-    }
-    return null
-}
+fun MagiViewModel.seqDuplicateOf(family: String, pattern: List<String>, excludeIndex: Int? = null): String? =
+    constraintsViewOf(state).duplicateOf(family, pattern, excludeIndex)
 
 fun MagiViewModel.addCons3(family: String, pattern: List<String>) {
     val st = state ?: return
@@ -217,23 +150,8 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
  *  値の並びは追加ダイアログの入力順と同じ:
  *  cons1=[日数,シフト,回数] / cons2=[シフト,回数] / cons3系=並び(最大5) /
  *  cons41(s)=[群,シフト,下限,上限] / cons42(s)=[群1,シフト1,群2,シフト2] / cons3w=[希望シフト,前日禁止シフト]。 */
-fun MagiViewModel.constraintRowValues(family: String, index: Int): List<String>? {
-    val st = state ?: return null
-    return when (family) {
-        "cons1" -> st.cons1.getOrNull(index)?.let { listOf(it.day1, it.shiftKigou, it.day2) }
-        "cons2" -> st.cons2.getOrNull(index)?.let { listOf(it.shiftKigou, it.count) }
-        "cons3" -> st.cons3.getOrNull(index)?.pattern
-        "cons3n" -> st.cons3n.getOrNull(index)?.pattern
-        "cons3m" -> st.cons3m.getOrNull(index)?.pattern
-        "cons3mn" -> st.cons3mn.getOrNull(index)?.pattern
-        "cons41" -> st.cons41.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
-        "cons41s" -> st.cons41s.getOrNull(index)?.let { listOf(it.groupKigou, it.shiftKigou, it.l, it.u) }
-        "cons42" -> st.cons42.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
-        "cons42s" -> st.cons42s.getOrNull(index)?.let { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) }
-        "cons3w" -> st.cons3w.getOrNull(index)?.let { listOf(it.wishKigou, it.prevKigou) }
-        else -> null
-    }
-}
+fun MagiViewModel.constraintRowValues(family: String, index: Int): List<String>? =
+    constraintsViewOf(state).rowValues(family, index)
 
 /** [制約編集] 行を同じ位置で置き換える。values の並びは constraintRowValues と同一。
  *  cons3系は追加(addCons3)と同じ正規化（先頭から最初の空白まで・最大5）。 */

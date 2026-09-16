@@ -1936,11 +1936,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- constraint editing (ws3-5) -------------------------------------------
 
-    /** A constraint family with its rows rendered for display (key used for add/remove).
-     *  [3.427.0] 旧 `subs`（行ごとの読み下し文）は撤去: ペア禁止系の行タイトル自体を読める形
-     *  （「吉の休 ✕ 古の休」）にしたため、行＋文の二重表示（3.409.18）が冗長になった。 */
-    data class ConstraintFamilyView(val key: String, val title: String, val rows: List<String>)
-
     fun shiftKigouList(): List<String> = state?.shifts?.map { it.kigou } ?: emptyList()
 
     // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
