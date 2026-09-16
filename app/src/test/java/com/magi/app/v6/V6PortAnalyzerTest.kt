@@ -621,4 +621,34 @@ class V6PortAnalyzerTest {
         assertTrue("動かせる候補として数える: " + sp.reason, sp.reason.contains("動かせる1人"))
     }
 
+    // [回帰] 下限0・上限ありのシフト（休）の過剰は、不足用の `need <= 0` ガードで捨ててはいけない
+    //   （日ヘッダの▲N とシフト集計の▲が食い違う。経緯: history 3.557.0）。
+    @Test
+    fun dayRiskCountsSurplusForShiftWithoutLowerBound() {
+        val st = MagiState(
+            startDate = "2025-12-01",
+            endDate = "2025-12-01",
+            shifts = listOf(Shift("休み", "休", "0", "2"), Shift("早番", "A", "1", "1")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0)),
+            use2Patterns = true,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(0), listOf(0), listOf(0)),
+            wishes = emptyMap(),
+            staffRange = emptyMap(),
+            needDay1 = emptyMap(),
+            needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val report = UnifiedViolationChecker.check(st, sched)
+        val v6 = V6PortAnalyzer.analyze(st, sched, report)
+        val risk = v6.dayRisks[0]
+        // チェッカー（source of truth）が covO を立てた日は、ヘッダの▲も同じ数を出す。
+        assertEquals("休 3人 / 上限2 = 過剰1", 1, report.breakdown["covO"])
+        assertEquals("ヘッダの▲N もチェッカーと同値", 1, risk.surplus)
+        assertEquals("A が0人 = 不足1", 1, risk.shortage)
+    }
 }

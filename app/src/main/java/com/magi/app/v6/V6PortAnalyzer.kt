@@ -778,12 +778,13 @@ object V6PortAnalyzer {
             var surplus = 0
             val parts = ArrayList<String>()
             for (k in 0 until p.K) {
+                // [3.557.0] 過剰は下限0のシフト（休＝上限だけ設定）でも立つので、不足用の need ガードより前で数える。
+                surplus += p.covOCell(k, j, cov[j][k])   // [3.527.0] 日別ヘッダの「▲N」用（ユーザー明示指示）
                 // [3.379.0] 同上。need1 だけ見ると need2 単独定義シフトの不足が日別リスクに出なかった。
                 val miss = p.covUCell(k, j, cov[j][k])
                 val need = p.covUCell(k, j, 0)
                 if (need <= 0) continue
                 shortfall += miss
-                surplus += p.covOCell(k, j, cov[j][k])   // [3.527.0] 日別ヘッダの「▲N」用（ユーザー明示指示）
                 if (miss > 0) {
                     val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                     parts.add("${sym}×${miss}")
