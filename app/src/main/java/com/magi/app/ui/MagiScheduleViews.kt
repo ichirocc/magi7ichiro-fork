@@ -271,7 +271,7 @@ internal fun ShiftPickerSheet(
                     // [実機バグ修正] covU/covOはneedViolations["k,j"](シフト×日)にあり、上のcellVioClasses
                     //   （職員×日）には出ないため、この日のこのシフトが人員不足/過剰でも理由が出なかった
                     //   （経緯: history 3.515.2）。現在の割当シフトぶんだけ追加で見る。
-                    if (current >= 0) ui.needViolations["$current,$j"]?.let { needCls ->
+                    if (current >= 0) visibleNeedClasses(ui, current, j, allVioBucketKeys).forEach { needCls ->
                         val fam = needCls.removePrefix("vio-")
                         val hard = isHardCellViolation(needCls)
                         val limits = vm.needCellLimits(current, j)
@@ -345,7 +345,7 @@ internal fun ShiftPickerSheet(
                         var noteWarn = false
                         if (mode == 0) {
                             if (k == current) noteParts.add("現在") else if (k == wish) noteParts.add("希望")
-                            when (ui.needViolations["$k,$j"]) {
+                            when (coverageVioAt(ui, k, j, allVioBucketKeys)) {
                                 "vio-covU" -> noteParts.add("当日の不足を解消")  // [3.483.0 M-1] 旧「不足解消」＝何の不足か読めなかった
                                 "vio-covO" -> { noteParts.add("当日は人員超過"); noteWarn = true }
                             }
@@ -397,38 +397,14 @@ internal fun ShiftPickerSheet(
 
 
 // ===== [E7] 違反 種別フィルタ =====
-// [3.382.0] 分類表（VioBucket/vioBuckets/vioBucketlessFamilies/familyOfVioClass/bucketOfFamily/
-//   vioVisible/allVioBucketKeys）は Compose 非依存なので `VioBuckets.kt` へ切り出した
-//   （族の追加漏れを `VioBucketsTest` で機械的に固定するため）。ロジックは不変。
-
-/** [Set化] セル("i,j")の全違反クラス（重み降順）。families 未充填の経路では最重1クラスへフォールバック。 */
-internal fun cellVioClasses(ui: UiState, key: String): List<String> =
-    ui.violationCellFamilies[key] ?: listOfNotNull(ui.violationCells[key])
-/** [Set化×E7] フィルタを通過する最重の違反クラス。旧: 最重1クラスのみ判定＝最重族のバケツをOFFにすると
- *  表示中の族が同セルに残っていても枠ごと消えていた（フィルタと表示の不整合）。 */
-internal fun visibleCellVio(ui: UiState, key: String, enabled: Set<String>): String? =
-    cellVioClasses(ui, key).firstOrNull { vioVisible(it, enabled) }
+// 分類表は `VioBuckets.kt`、派生値（キー符号化・必須判定・回数・日別の人員）は `MagiViewState.kt`。
+//   どちらも Compose 非依存＝ホスト JVM と CI で固定できる。ここには色を作るものだけ残す。
 
 /** [違反色/族別] 違反クラスの表示色を解決: 族別色（__vioFam_*）→ 重大度色（必須/要調整）の順でフォールバック。 */
 internal fun resolvedVioColor(ui: UiState, cls: String?, hardC: Color, softC: Color): Color {
     if (cls == null) return hardC
     ui.violationFamilyColorHex[familyOfVioClass(cls)]?.takeIf { it.isNotBlank() }?.let { return hexToColor(it) }
     return if (isHardCellViolation(cls)) hardC else softC
-}
-
-/** [E7] 各バケットの「違反ロケーション数」(=セル/エントリ件数、見出し『要確認 N件』と同単位)。
- *  breakdown の量/#fire ではなく箇所数で集計＝チップ間・見出しと比較可能なトリアージ指標にする。 */
-internal fun vioBucketLocCounts(ui: UiState): Map<String, Int> {
-    val out = HashMap<String, Int>()
-    fun tally(cls: String) { bucketOfFamily(familyOfVioClass(cls))?.let { out[it] = (out[it] ?: 0) + 1 } }
-    // [Set化] セルは重なった全族のバケツへ計上（同セル同バケツは1回）＝バケツOFF/ONの見え方と件数が一致。
-    ui.violationCells.keys.forEach { key ->
-        cellVioClasses(ui, key).mapNotNull { bucketOfFamily(familyOfVioClass(it)) }.toSet()
-            .forEach { b -> out[b] = (out[b] ?: 0) + 1 }
-    }
-    ui.needViolations.values.forEach(::tally)
-    ui.countViolations.values.forEach(::tally)
-    return out
 }
 
 /** [週ページング] 月曜始まりで日を週に分割（各週=その週に属する日index）。最初の週は部分週になり得る。
@@ -604,12 +580,10 @@ internal fun ScheduleGrid(
             // [Web試作①] シフト別の人員不足サマリー: covU のある日数をシフト別に集計（多い順）＝
             //   「どのシフトが慢性的に埋まらないか」を1行で提示。E7 人員バケツOFF時は他の covU 表示と同様に隠す。
             if ("need" in vioEnabled) {
-                val shortByShift = ui.needViolations.entries
-                    .filter { it.value == "vio-covU" }
-                    .mapNotNull { e ->
-                        val p = e.key.split(",")
-                        val k = p.getOrNull(0)?.toIntOrNull(); val j = p.getOrNull(1)?.toIntOrNull()
-                        if (k == null || j == null) null else k to j
+                val shortByShift = (if (ui.needFamilies.isNotEmpty()) ui.needFamilies.keys else ui.needViolations.keys)
+                    .mapNotNull { key ->
+                        val k = VioKey.first(key); val j = VioKey.second(key)
+                        if (k != null && j != null && coverageVioAt(ui, k, j, vioEnabled) == "vio-covU") k to j else null
                     }
                     .groupBy({ it.first }, { it.second })
                     .entries.sortedByDescending { it.value.size }
@@ -637,16 +611,7 @@ internal fun ScheduleGrid(
             //   ここでは違反日リストを計算して共有状態へ書き、navFlash を focusCell の代替として読むだけ。
             // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
             //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
-            val vioDays = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, vioEnabled) {
-                val days = sortedSetOf<Int>()
-                ui.violationCells.keys.forEach { key ->
-                    if (visibleCellVio(ui, key, vioEnabled) != null) key.substringAfter(",").toIntOrNull()?.let { days.add(it) }
-                }
-                for ((k, cls) in ui.needViolations) {
-                    if (vioVisible(cls, vioEnabled)) k.substringAfter(",").toIntOrNull()?.let { days.add(it) }
-                }
-                days.toList()
-            }
+            val vioDays = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled).violationDays }
             // [3.481.0 勤務表タブ再設計②] 違反日リストは共有状態へ（変わったときだけ書き、巡回位置を先頭へ戻す）。
             //   前週/次週・＜前の違反/次の違反＞ のボタン列は ScheduleNavBar（Scaffold 下部＝スクロール位置に
             //   関係なく親指で押せる真の下部固定）へ移動。3.444.0 が高リスクとして保留した引き上げの実施。
@@ -846,27 +811,6 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
         }
     }
 }
-
-/**
- * 違反値("vio-<family>")が必須(HARD)系か判定。色に依らない手がかり(実線/破線)の切替に使う。
- * ハード族の一覧は MirrorKeys.hard を唯一の真実源とする（ここで列挙し直すと将来の追加/改名で乖離する）。
- */
-
-internal fun isHardCellViolation(v: String?): Boolean =
-    v != null && MirrorKeys.hard.any { v.contains(it) }
-
-/** [判読性] 破線枠にする「重いソフト族」（low=90 / c1=30 / c3mn=30）か。
- *  残りは右上の角マークに落として「格子全体が警告に埋まって必須違反が埋没する」のを防ぐ。
- *  [3.409.11] c1 を破線側へ昇格した。3.367.0 は「c1 は最多件数のソフト族だから飽和する」として
- *  角マークに据え置いたが、その判断は **fire 数**（golden 96）で見ており、この表示が実際に扱うのは
- *  **セル数**（同 22）＝単位が違った。実測（セル総数 310）: golden 破線 20→42・real3 11→28・
- *  sample_v6 0→5。3.99.0 が飽和と判定した 194 セルには遠く、重み階層と表示強度を一致させる
- *  当初の規則（c1=30=c3mn）が回復する。
- *  [2026-09-10] high は HF77 明示指示で 45→25 に変更され c1/c3mn(30) を下回ったため、この規則
- *  （重み階層と表示強度を一致させる）に従い角マーク側（非 heavy）へ降格した。 */
-internal val heavySoftFamilies = setOf("low", "c1", "c3mn")
-internal fun isHeavySoftCellViolation(v: String?): Boolean =
-    v != null && familyOfVioClass(v) in heavySoftFamilies
 
 /** 違反セルの非色手がかり: HARD=実線枠、SOFT=破線枠（色覚多様性／モノクロ印刷でも区別可能）。
  *  [校正] 色付きセル上でも埋もれないよう枠を太く（3dp）。
@@ -1331,7 +1275,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                             for (kk in 0 until k) {
                                 val v = perDay[j][kk]
                                 // [E7] 人員(covU/covO)バケツOFF時はこの日セルの違反表示を抑止（値は表示・色/枠だけ消す）。
-                                val vio = ui.needViolations["$kk,$j"]?.takeIf { vioVisible(it, vioEnabled) }
+                                val vio = coverageVioAt(ui, kk, j, vioEnabled)
                                 // [レイアウト/実機指摘] 0セルは白い穴に見えるため淡色へ（職員別と同じ）。
                                 val cbg = when (vio) { "vio-covU" -> shortBg; "vio-covO" -> overBg; else -> if (v == 0) cs.surfaceVariant.copy(alpha = 0.35f) else cs.surfaceVariant }
                                 // [M3 色覚安全] 人員不足=▼ / 過剰=▲ を数字に前置。色に依らず方向が判る。
@@ -1582,23 +1526,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     //   記号が誤読になる（Dﾃ→D）のを防ぐ。可読の代替は contentDescription と編集シート（通常どおり拡大）。
     val symFontSize = with(LocalDensity.current) { minOf(cellW * 0.40f, 15.dp).toSp() }
     val headFontSize = with(LocalDensity.current) { 12.dp.toSp() }   // 曜日/▼N も同方針で列幅フィット
-    // [実機バグ修正] covO/covUはneedViolations["k,j"](シフト×日)に立ち、職員セル(violationCells)には
-    //   立たないため、dayVioH/dayVioSがそれだけ見ていると曜日ヘッダの下線が付かない日があった。下の
-    //   違反ナビ`vioDays`（617行目付近）と同じく両マップを合算する（経緯: history 3.515.2）。
-    val needVioByDay = remember(ui.needViolations, vioEnabled, days) {
-        val hard = IntArray(days); val soft = IntArray(days)
-        for ((key, cls) in ui.needViolations) {
-            if (!vioVisible(cls, vioEnabled)) continue
-            val d = key.substringAfter(",").toIntOrNull() ?: continue
-            if (d !in 0 until days) continue
-            if (isHardCellViolation(cls)) hard[d]++ else soft[d]++
-        }
-        hard to soft
-    }
-    val dayVioH = remember(vioKind, needVioByDay) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] == 1 } + needVioByDay.first[d] } }
-    val dayVioS = remember(vioKind, needVioByDay) { IntArray(days) { d -> (0 until staffCount).count { vioKind[it][d] >= 2 } + needVioByDay.second[d] } }
-    val dayShort = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.shortage ?: 0 } }
-    val dayOver = remember(ui.v6, days) { IntArray(days) { d -> ui.v6?.dayRisks?.getOrNull(d)?.surplus ?: 0 } }   // [3.527.0/ユーザー明示指示] ▲N
+    // 日ごとの派生値（下線の段階・▼N・▲N）は MagiViewState が唯一の算出元。ここで別に数えると
+    //   同じ「その日は過剰か」の別版ができ、片方だけ壊れても誰も気づけない（3.557.0・3.559.0）。
+    val dayState = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled).days }
     // [3.444.0 行列クロスハイライト] セルをタップすると対象の「職員名」と「日付」を約2.5秒強調＝
     //   広いグリッドでどの行/列を触ったか見失いにくくする（読み間違い防止。ユーザー提示の改善案③）。
     //   セル自体の枠（違反表示）は変更しない＝タップした瞬間に違反枠が隠れて読めなくなるのを避ける。
@@ -1637,8 +1567,9 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
             headerTintColor != null -> ensureReadable(headerTint ?: cs.surface, headerTintColor)
             else -> cs.onSurfaceVariant
         }
-        val dayHard = dayVioH[d] > 0
-        val hc = when { dayHard -> vioColor; dayVioS[d] > 0 -> vioSoftColor; else -> null }
+        val dayMark = dayState.getOrNull(d)?.mark ?: DayMark.None
+        val dayHard = dayMark == DayMark.Hard
+        val hc = when (dayMark) { DayMark.Hard -> vioColor; DayMark.Soft -> vioSoftColor; DayMark.None -> null }
         // [⑥日別ジャンプ／列クロスハイライト] 要確認一覧の日別項目(人員/群レンジ)から来たとき、または
         //   このセル列を最近タップしたとき、日ヘッダを primary 枠で注目表示
         //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。
@@ -1658,11 +1589,13 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
             //   covU/covO由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
             // [悲観検証P2+P7] 旧「不足N」(4文字)はフォント拡大時に38dp列からクリップ。集計凡例と
             //   同語彙の「▼N」(2-3文字)へ短縮し、サイズも列幅フィット(dp→sp)に。
-            if ((dayShort[d] > 0 || dayOver[d] > 0) && "need" in vioEnabled) {
+            val short = dayState.getOrNull(d)?.shortage ?: 0
+            val over = dayState.getOrNull(d)?.surplus ?: 0
+            if ((short > 0 || over > 0) && "need" in vioEnabled) {
                 Text(buildAnnotatedString {
-                    if (dayShort[d] > 0) withStyle(SpanStyle(color = cs.error, fontWeight = FontWeight.Bold)) { append("▼${dayShort[d]}") }
-                    if (dayShort[d] > 0 && dayOver[d] > 0) append(" ")
-                    if (dayOver[d] > 0) withStyle(SpanStyle(color = vioSoftColor, fontWeight = FontWeight.Bold)) { append("▲${dayOver[d]}") }
+                    if (short > 0) withStyle(SpanStyle(color = cs.error, fontWeight = FontWeight.Bold)) { append("▼$short") }
+                    if (short > 0 && over > 0) append(" ")
+                    if (over > 0) withStyle(SpanStyle(color = vioSoftColor, fontWeight = FontWeight.Bold)) { append("▲$over") }
                 }, fontSize = headFontSize, maxLines = 1)
             }
             // [色覚配慮/3.543.0] 必須=実線・要調整=破線でセル枠(violationBorder)と同じ形状符号化を

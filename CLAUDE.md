@@ -8,7 +8,7 @@
 教訓は `docs/lessons.md` を**更新**する（新しいメモを作らない）。応答は簡潔・結論先出し・日本語。コード識別子は英語のまま。
 
 ## 環境の注意点（見ても分からない罠）
-- Android のビルドはこのサンドボックスでは不可（CI の Release Build / Android SDK は main への push で走る）。エンジン層と JUnit は
+- Android のビルドはこのサンドボックスでは不可。ただし **UI を触ったら `android-sdk.yml` を `workflow_dispatch` で作業ブランチに走らせて実コンパイルを確認する**（約 8 分。`docs/environment.md`）。エンジン層と JUnit は
   `tools/host/hosttest.sh` でホスト JVM で回る（約 1 分。`MAGI_HOST_OUT` で出力先を分けるとベンチ中でも安全）。UI 層（Compose）は不可。
 - 規模の上限は職員 30 名・31 日（業務前提）。ビット化経路（`C3nBitScan`・C++ `SaChunk`）はこの範囲で常に有効＝スカラー経路は防御。
 - **Kotlin が正**。C++（`magi_native.cpp`）と C#（`ichirocc/-MAGI_PC`）は同値の移植。評価器を変えたら C++ を同じコミットで

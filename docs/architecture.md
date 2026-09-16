@@ -32,6 +32,38 @@ StateParser（JSON I/O） / ScheduleCsvBridge（CSV I/O）── map ─▶ Magi
 
 役割の分担：**UI** は表示と操作のみ、**ViewModel** が唯一のハブ（状態・操作・最適化起動・I/O）、**v6 エンジン**が探索本体、**model** がデータ、**work** が中断耐性のある背景実行。
 
+### UI 層の再構成（進行中・3.558.0〜）
+
+ユーザー指示「すべてのコンポーネントを Root の配下に置き、各コンポーネントは MVP の Passive View として
+描画に関わるパラメータだけを操作し、動作は Chain of Responsibility でイベントをバブリングさせて、
+ステートマシンとして振る舞う Mediator に裁定させる」に沿って、UI 層を次の形へ移す。
+
+```
+MagiRoot（唯一の合成ルート）
+    │ 描画パラメータだけを配る            ▲ MagiEvent を上げる
+    ▼                                   │
+各 Composable = Passive View  ──────────┘
+                                        │
+                              MagiMediator（ステートマシン）
+                                 │ MagiArbiter が段階×種別で可否を裁定
+                                 ▼
+                              MagiEventHandler の鎖（Chain of Responsibility）
+```
+
+- `MagiPhase`: 盤面を差し替えるジョブの段階。`Idle` 以外は編集・実行を閉じる（旧 `boardJobLabel` の型化）。
+- `MagiArbiter`: 「いま通してよいか」を決める唯一の場所。旧実装は `runBlockedByInFlight` /
+  `editBlockedNow` / `structuralEditBlocked` の3つに分かれ、14 箇所以上の入口が個別に
+  `optimizeInFlight()` を呼んでいた。
+- `MagiEvent`: 画面で起きた操作の型。`kind` が権限の種類だけを表す。
+- `MagiMediator`: 段階を持ち、裁定を通ったイベントだけをハンドラの鎖へ流す。鎖は最初に名乗り出た輪で止まる。
+
+これらは Compose にも Android にも依存しない＝`tools/host/hosttest.sh` の白名単に載せてホスト JVM と CI で
+検証する（`VioBuckets.kt` を UI ファイルから切り出したのと同じ理由）。Compose はこのサンドボックスでは
+ビルドできないため、**壊れうるロジックを Compose の外へ出すこと自体が検証可能性の担保**になっている。
+
+段階: A=イベント/段階/鎖（済） → B=派生描画値の単一算出 → C=Composable の Passive View 化 → D=`editRev` と
+バイパス問い合わせ経路の撤去。
+
 ---
 
 ## Entities（type ｜ 役割＝observation）

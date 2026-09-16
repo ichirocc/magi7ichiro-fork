@@ -10,6 +10,10 @@
 
 ## CI（GitHub Actions）
 - ブランチで走るのは Design Lint / Native Parity Check / V6 Engine Check。Release Build と Android SDK は main への push で走る。
+- **UI（Compose）のコンパイル検証はブランチでも取れる**: `android-sdk.yml` は `workflow_dispatch` を持つので、
+  `actions_run_trigger(run_workflow, workflow_id=android-sdk.yml, ref=<作業ブランチ>)` で debug/release の
+  assemble ＋ Android Lint が走る（約 8 分）。ホストでは `ui/` の Compose ファイルをコンパイルできないため、
+  UI を触る変更はこれが唯一の実コンパイル確認手段＝main へ出す前に回す（3.559.0 で確立）。
 - 監視: `api.github.com/repos/ichirocc/magi7ichiro-fork/actions/runs?head_sha=<sha>`（status / conclusion）。失敗 step は `/actions/runs/{id}/jobs`。
   CI ログ本体は results-receiver 上で取得不可＝コンパイルエラーは目視＋静的チェック（波括弧・フィールド名照合）で見つける。
 - ビルド約 4〜5 分 → debug-key APK 約 10.9MB。変更ごとに `versionCode++` と `versionName`（`app/build.gradle.kts`）。

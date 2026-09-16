@@ -139,12 +139,12 @@ internal val VIOLATION_COLOR_PALETTE = listOf(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ShiftColorCard(
+internal fun ShiftColorCard(
     ui: UiState,
-    vm: MagiViewModel,
+    shifts: List<ShiftColorView>,
+    onEvent: (MagiEvent) -> Unit,
 ) {
     var target by remember { mutableStateOf<String?>(null) }
-    val shifts = vm.shiftColorList()
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("シフトの表示色", style = MaterialTheme.typography.titleMedium)
@@ -183,8 +183,8 @@ fun ShiftColorCard(
             kigou = kg,
             currentHex = current?.hex ?: "",
             // [実機バグ修正] 選ぶ・既定に戻すで閉じない（「閉じる」/×だけで閉じる。経緯: history 3.515.2）。
-            onPick = { hex -> vm.setShiftColor(kg, hex) },
-            onReset = { vm.resetShiftColor(kg) },
+            onPick = { hex -> onEvent(MagiEvent.Condition.SetShiftColor(kg, hex)) },
+            onReset = { onEvent(MagiEvent.Condition.ResetShiftColor(kg)) },
             onClose = { target = null },
         )
     }
