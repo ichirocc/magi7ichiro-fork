@@ -149,3 +149,9 @@
     発見。random#1「実現可能な希望（職員0 日5）が後処理で動いた」。同期前の 6276edf でも同じ＝今回の変更と無関係）。
     Kotlin の同名テストは緑なので、C# の後処理チェーンのどこかが `wishLocked` を破っている。C# 単独では直さない
     （パリティの原則）＝Kotlin 側の同じ入力（`BusyState(JavaRandom(0x91A7L))` の random#1）で差分を取ってから同期する。
+21. **[将来課題・実装不要] タグ成果物（リリース APK）を GitHub Release アセットへ移す**（3.570.0、ユーザー決定
+    「将来的にGitHub Release assetへ移す」）。現状は `release-build.yml` が `v*` タグで `actions/upload-artifact`
+    （`retention-days: 14`）へ APK を置くだけ＝Actions アーティファクトの保存枠を消費し、`cleanup-artifacts.yml`
+    の除外リスト（`app-release-` prefix）で個別に保護している。Release アセットへ移せばこの除外が不要になり、
+    保存枠も別勘定になる（`gh release create`/`softprops/action-gh-release` 等で `v*` タグ push 時にアセット添付）。
+    ストア配布用の署名鍵・Lint ゲート・縮小と合わせて検討する話＝**明示 go まで着手しない**。

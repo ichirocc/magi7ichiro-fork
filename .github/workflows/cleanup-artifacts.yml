@@ -1,7 +1,9 @@
 name: Cleanup Artifacts
 
-# アーティファクト保存枠を解放するワークフロー。
-# 入力や日数による分岐は廃止し、無条件で「全件削除」をハードコードする。
+# アーティファクト保存枠を解放するワークフロー。lint/失敗ログ/通常CI成果物は毎日無条件で全削除する
+# （保存枠のためのハードコード。入力や日数による分岐は持たない）。
+# [3.570.0/ユーザー決定] `app-release-*`（リリース APK）は対象外にし `retention-days: 14` を実際に保証する
+# （経緯・将来課題は docs/environment.md・docs/backlog.md #21）。
 # 明示ページング(listArtifactsForRepo)で total_count もログに出すので、
 # 0 件なら本リポジトリに実体が無い（＝枠超過はアカウント共有枠/他リポジトリ起因）と確定できる。
 on:
@@ -21,12 +23,14 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete ALL artifacts (hard-coded)
-        uses: actions/github-script@v7
+      - name: Delete non-release artifacts (daily, release APK excluded)
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            // [3.570.0] release-build.yml の `name: app-release-${{ github.sha }}` と一致させる。
+            const PROTECTED_PREFIX = 'app-release-';
 
             // 明示ページングで全件収集（paginate のラッパー差異を避ける）。
             let page = 1;
@@ -44,9 +48,13 @@ jobs:
             }
             core.info(`collected ${all.length} artifacts`);
 
-            // 無条件で全削除。
+            const protectedArts = all.filter(a => a.name.startsWith(PROTECTED_PREFIX));
+            const targets = all.filter(a => !a.name.startsWith(PROTECTED_PREFIX));
+            for (const a of protectedArts) core.info(`skip (protected) #${a.id} "${a.name}"`);
+
+            // 対象（release APK 以外）は無条件で全削除。
             let deleted = 0, failed = 0, freedBytes = 0;
-            for (const a of all) {
+            for (const a of targets) {
               try {
                 await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: a.id });
                 deleted++; freedBytes += (a.size_in_bytes || 0);
@@ -58,13 +66,14 @@ jobs:
             }
 
             const mib = (freedBytes / (1024 * 1024)).toFixed(1);
-            const msg = `Deleted ALL: ${deleted}/${all.length} artifacts (failed ${failed}), freed ~${mib} MiB`;
+            const msg = `Deleted: ${deleted}/${targets.length} non-release artifacts (failed ${failed}), ` +
+              `freed ~${mib} MiB. Protected (retention-days native): ${protectedArts.length}.`;
             core.notice(msg);
             // [レビュー指摘 2026-09-04] 旧: 削除失敗は core.warning だけで、権限・API・容量の問題で1件も
             //   消せなくても定期クリーンアップは緑のままだった。1件も消せなければジョブを失敗にする
             //   （一部失敗は従来どおり警告＝次回の定期実行で拾える）。
-            if (all.length > 0 && deleted === 0) core.setFailed(`No artifact could be deleted (${failed} failures)`);
+            if (targets.length > 0 && deleted === 0) core.setFailed(`No artifact could be deleted (${failed} failures)`);
             await core.summary
-              .addHeading('Artifact cleanup (delete ALL)')
+              .addHeading('Artifact cleanup (delete non-release, daily)')
               .addRaw(`${msg}. If total was 0, this repository holds no artifacts (quota is account-wide / other repos).`)
               .write();

@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.570.0＝CI ワークフローの Actions を commit SHA へ全ピン留め（7種・29箇所、
+Dependabot新設）＋成果物保持方針の精緻化（ユーザー決定）。通常のCI成果物は`cleanup-artifacts.yml`が毎日無条件削除、
+リリースAPK（`app-release-*`）だけ除外して`retention-days: 14`を実際に保証。詳細は`docs/history/3.4xx.md`・
+`docs/environment.md`）
+
 **最終更新**：2026-09-16（3.569.0＝末尾の待ち時間。ユーザー指示「不要なソート・大きなテキスト・同じ検査の繰り返し・
 数ミリ秒の仕事・直列の解析や評価」→ 計測が先（S=10・8s の末尾は 11〜98ms、実データ 60s は後処理 3.6〜6.0s＝共同 LNS
 と C1 広域ビームが単一スレッドで締切まで走る）。結果を変えない改修 7 件＋共同 LNS 2 本の候補評価を並列化

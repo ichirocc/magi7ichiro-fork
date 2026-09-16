@@ -1,0 +1,10 @@
+# GitHub Actions は commit SHA へピン留めしている（3.570.0、ユーザー決定）。
+# Dependabot はメジャータグの新しい SHA を検出して更新 PR を作る（レビュー・CI 通過が前提、自動マージはしない）。
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"
