@@ -77,7 +77,7 @@ jobs:
       - name: Add Gradle to PATH
         run: echo "$HOME/gradle-dist/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
-      # [HF77 の機械化] MirrorKeys.weights（19族の重みの単一の真実）の値が MirrorCore.kt 以外の
+      # [HF77 の機械化] MirrorKeys.weights（20族の重みの単一の真実）の値が MirrorCore.kt 以外の
       #   v6/*.kt に生の数値リテラルとして紛れ込んでいないかを静的検査する（tools/weight_lint.py）。
       - name: Weight lint (MirrorKeys.weights source-of-truth check)
         run: python3 tools/weight_lint.py

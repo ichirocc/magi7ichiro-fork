@@ -26,6 +26,7 @@ object FixApplyGate {
         val after = UnifiedViolationChecker.check(state, work)
         if (!betterReport(after, before)) return Outcome.Rejected("今の勤務表では改善になりません", before, after)
         if (exactPinRegression(p, schedule, work)) return Outcome.Rejected("回数固定（下限＝上限）を崩す提案です", before, after)
+        newHardFamilyViolation(before, after)?.let { fam -> return Outcome.Rejected("別の必須条件（$fam）が新たに崩れる提案です", before, after) }
         return Outcome.Applied(work, before, after)
     }
 }

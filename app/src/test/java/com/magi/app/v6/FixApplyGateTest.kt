@@ -27,6 +27,35 @@ class FixApplyGateTest {
     )
     private fun sched(st: MagiState) = Array(st.staffCount) { st.schedule[it].toIntArray() }
 
+    /** [3.573.0/外部レビュー指摘・実データで再現] covU を1件解消する代わりに禁止連(c3n)を1件新規発生させる
+     *  提案は、HARD合計が同値（1=1）でweightedScoreが改善（covU10000→c3n9000）するため、
+     *  newHardFamilyViolation ガードが無ければ betterReport だけで Applied になっていた
+     *  （docs/automation.md「禁止連の新規違反なし」が実装と食い違っていた実例）。 */
+    @Test fun resolvingOneHardFamilyByIntroducingAnotherIsRejected() {
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-02",
+            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "1")),
+            groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0), Staff("s1", 0)), use2Patterns = true,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            // s0: day0=A・day1=休（covU: day1のAが0人で1件不足）。s1は常に休。
+            schedule = listOf(listOf(A, REST), listOf(REST, REST)),
+            wishes = emptyMap(), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(com.magi.app.model.C3Row(listOf("A", "A"))),   // A の2連続を禁止
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val s = sched(st)
+        val before = UnifiedViolationChecker.check(st, s)
+        assertEquals(1, before.breakdown["covU"]); assertEquals(0, before.breakdown["c3n"])
+        // s0 の day1 を休→A にすると covU は解消するが、s0 は day0 も A なので禁止連(c3n)が新規発生する。
+        val r = FixApplyGate.apply(st, s, listOf(FixCell(0, 1, A)))
+        assertTrue("HARD合計は改善(1→1・weightedも改善)するがc3nが新規発生する提案は拒否すべき", r is FixApplyGate.Outcome.Rejected)
+        r as FixApplyGate.Outcome.Rejected
+        assertEquals(1, r.after?.breakdown?.get("c3n"))
+        assertEquals(REST, s[0][1])   // 入力は不変
+    }
+
     @Test fun improvingOpsAreAppliedToACopy() {
         val st = state(); val s = sched(st)
         val r = FixApplyGate.apply(st, s, listOf(FixCell(0, 0, A)))

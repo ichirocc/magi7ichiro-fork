@@ -163,18 +163,45 @@
     の除外リスト（`app-release-` prefix）で個別に保護している。Release アセットへ移せばこの除外が不要になり、
     保存枠も別勘定になる（`gh release create`/`softprops/action-gh-release` 等で `v*` タグ push 時にアセット添付）。
     ストア配布用の署名鍵・Lint ゲート・縮小と合わせて検討する話＝**明示 go まで着手しない**。
-22. ~~**[要人手対応・ツール権限外] main の branch protection / ruleset が未設定**（2026-09-16、外部監査で指摘・
-    3.572.0で確認）。force-push・削除・CI未通過コミットの直接 push を防ぐ設定が repo 側に無い。この
-    セッションで使える GitHub MCP ツールに branch protection/repository ruleset を変更する手段が無く
-    （`gh` CLI・直接 API access も環境上不可）、コードやワークフローの変更では実現できない＝**GitHub Web UI
-    （Settings→Branches→Branch protection rules、または Rulesets）から人手で設定が必要**。
+22. **[要人手対応・ツール権限外・再オープン] main の branch protection / ruleset が未設定**（2026-09-16、
+    外部監査で指摘・3.572.0で確認）。force-push・削除・CI未通過コミットの直接 push を防ぐ設定が repo 側に
+    無い。このセッションで使える GitHub MCP ツールに branch protection/repository ruleset を変更する手段が
+    無く（`gh` CLI・直接 API access も環境上不可）、コードやワークフローの変更では実現できない＝**GitHub
+    Web UI（Settings→Branches→Branch protection rules、または Rulesets）から人手で設定が必要**。
     推奨設定: main への直接 push 禁止（PR 必須）、必須ステータスチェック（Design Lint／Native Parity Check／
     V6 Engine Check）、force-push 禁止。CLAUDE.md の運用（「main へのマージは本人の『mainにマージする』で
     squash」「force-push は自分の作業ブランチだけ」）は既にこの制約を前提に運用されているため、設定しても
-    通常のワークフローへの影響は無いはず。~~ **→ 2026-09-16 完了**（ユーザーがGitHub Web UIで直接設定。
-    このセッションのツールでは状態を照会できないため内容の検証はしていない＝ユーザー申告に基づく）。
+    通常のワークフローへの影響は無いはず。
+    **経緯**: 一度「ユーザーがGitHub Web UIで設定した」との申告を受け完了扱いにしたが（2026-09-16）、
+    別の監査で GitHub の設定画面が実際には「Rulesets: You haven't created any rulesets」「Classic branch
+    protections: have not been configured」「main branch isn't protected」を示していると報告され、
+    完了申告と食い違った。このセッションには branch protection の状態を照会するツールが無く、
+    どちらの報告が現状を反映しているか自分では確認できない＝**要再確認**として再オープンする
+    （設定完了時は実際に GitHub の設定画面で Active になっていることを目視確認してから閉じること）。
 23. **[将来課題・要専用パス] `docs/screen_spec.md` §08b の SOFT テーブルが古い**（2026-09-16、外部監査契機の
     19→20族修正時に発見・3.572.0）。見出し「SOFT（できれば・14種）」だが実際は15種＝`weekly` の行が
     丸ごと欠落（新しい行の創作が要るため族数修正とは別対応）。さらに表の重み値も3.522.0以前の旧値のまま
     （groupViol 10000/pref 9000/covU 8000/c3n 7000/c1 4/c3mn 12/low 90/high 45/covO 0.5 等、
     現行値は CLAUDE.md 参照）。`docs/sudo_model.md:500` の重み値引用も同様に陳腐化。専用の修正パスが必要。
+24. **[要product判断・過去に2度精読済み] `restShiftIndex`（`MirrorCore.kt`）の記号依存＋無言の0退避**
+    （2026-09-16、外部監査で指摘）。`fun restShiftIndex(state) = shifts.indexOfFirst { it.kigou == "休" }
+    .takeIf { it >= 0 } ?: 0` は①表示記号"休"への文字列一致②見つからなければ**無言で index 0 を休とみなす**。
+    **この設計自体は過去に2度精読済みで、真に新しい発見ではない**: `docs/DESIGN.md:116`が既に
+    「記号の字面で分岐すると黙って...」という原則を明記し、`design_lint.py` の **P10**（3.417.0新設）が
+    「シフト記号の文字列リテラル比較は`restShiftIndex`1箇所だけ」というラチェットを既に敷いている
+    （baseline=2、3.420.0で`Ws1Ops.removeShift`の重複実装を検出・一本化した実績あり。詳細は
+    `docs/history/3.4xx.md`「P10 が baseline超過を検出」「同じ穴が探索の入口にもあった」3.419.0/3.420.0節）。
+    加えて`docs/data-models.md:78`が`?: 0`の挙動を現状として明記済み。**新しい点**: 3.416.0（方針「休は
+    通常のシフト定義」）で「休」シフト自体の削除禁止を撤廃したため、ユーザーが通常の編集操作で「休」を
+    削除・改名すると`?: 0`退避が実際に発火し得る（以前は削除禁止で到達不能だった可能性がある）。
+    **未検証**: 削除後にindex0が実際にどう扱われるか（`removeShift`のコメントは「削除後の一覧から解決」と
+    説明しており、意図的にindex0へフォールバックする設計の可能性がある＝要実機/実データでの追跡）。
+    対応方針（フル改修＝表示名と独立した`ShiftRole`データモデル追加・移行）は**JSON互換性に関わる
+    schema変更**＝業務判断が要る（grilling対象）。着手前に、①現状の`?: 0`到達時の実害を実データ/実機で
+    再現するか、②再現するなら「無言退避」を「診断で警告」へ変える最小修正（データモデル変更なし）で
+    足りるか、を先に詰める。
+25. **[運用・要個別判断] Dependabotのminor/patch group化設定後、既存の個別メジャー更新PRが残っている**
+    （2026-09-16、外部監査で指摘）。3.572.0で`dependabot.yml`にgroup設定を追加したが、設定変更は既存の
+    オープンPRを自動では統合・クローズしない。既に作成済みのメジャーバージョン更新PR（5件程度、
+    actions/checkout・upload-artifact・cache・github-script・setup-android）は個別に採否判断が必要
+    （それぞれ独立したメジャー更新でCI結果を見て判断する話＝一括処理は不可）。

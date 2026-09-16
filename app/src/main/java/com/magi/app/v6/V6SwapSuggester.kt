@@ -126,10 +126,12 @@ object FixSuggester {
             found.add(Quad(FixSuggestion(kind, ops, label, rep.hard - base.hard, rep.total - base.total, diffOf(rep)),
                 rep.hard - base.hard, rep.total - base.total, rep.weightedScore - base.weightedScore))
         }
-        /** ops をその場で適用→評価→復元。base より良ければ候補に追加。 */
+        /** ops をその場で適用→評価→復元。base より良く、かつ別の HARD 族を新規に崩さなければ候補に追加
+         *  （[newHardFamilyViolation]。`FixApplyGate` と同じ規則＝提案の時点で弾く。docs/automation.md
+         *  「担当外・希望固定・禁止連・個人固定の新規違反なし」）。 */
         private fun tryOps(kind: FixKind, ops: List<FixCell>, label: String) {
             val rep = evalOps(ops)
-            if (betterReport(rep, base)) record(kind, ops, label, rep)
+            if (betterReport(rep, base) && newHardFamilyViolation(base, rep) == null) record(kind, ops, label, rep)
         }
 
         fun run(maxResults: Int): List<FixSuggestion> {
@@ -262,7 +264,8 @@ object FixSuggester {
                 while (true) {
                     for (c in 0 until n) s[cells[c]][j] = cellOpts[c][idx[c]]
                     val rep = UnifiedViolationChecker.check(state, s)
-                    if (betterReport(rep, base) && (bestComboRep == null || betterReport(rep, bestComboRep))) {
+                    if (betterReport(rep, base) && newHardFamilyViolation(base, rep) == null &&
+                        (bestComboRep == null || betterReport(rep, bestComboRep))) {
                         bestComboRep = rep; bestCombo = IntArray(n) { cellOpts[it][idx[it]] }
                     }
                     var c = 0
