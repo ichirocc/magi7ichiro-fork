@@ -10,7 +10,22 @@ ROOT=${1:-$(cd "$HERE/../.." && pwd)}
 KV=2.3.21; CV=1.8.1
 L=${MAGI_HOST_LIBS:-$HOME/.cache/magi-host-libs}; mkdir -p "$L"
 M=https://repo1.maven.org/maven2
-get(){ f=$(basename "$1"); [ -s "$L/$f" ] || curl -sSfL -o "$L/$f" "$M/$1" || { echo "download failed: $1"; exit 1; }; }
+# [3.568.0] 途中で切れた取得物を残さない: tmp へ落として .sha1 と照合してから置く。
+#   .sha1 を引けないとき（網なし）は既存キャッシュを信じる＝オフラインでも回る。
+get(){
+  f=$(basename "$1"); c="$L/$f"
+  want=$(curl -sSfL --max-time 20 "$M/$1.sha1" 2>/dev/null | tr -d '[:space:]' | cut -c1-40)
+  if [ -s "$c" ]; then
+    [ -z "$want" ] && return 0
+    [ "$(sha1sum "$c" | cut -d' ' -f1)" = "$want" ] && return 0
+    echo "cache broken, refetching: $f"
+  fi
+  curl -sSfL -o "$c.tmp" "$M/$1" || { echo "download failed: $1"; rm -f "$c.tmp"; exit 1; }
+  if [ -n "$want" ] && [ "$(sha1sum "$c.tmp" | cut -d' ' -f1)" != "$want" ]; then
+    echo "sha1 mismatch (取得物が期待と違う): $f"; rm -f "$c.tmp"; exit 1
+  fi
+  mv "$c.tmp" "$c"
+}
 get org/jetbrains/kotlin/kotlin-compiler-embeddable/$KV/kotlin-compiler-embeddable-$KV.jar
 get org/jetbrains/kotlin/kotlin-stdlib/$KV/kotlin-stdlib-$KV.jar
 get org/jetbrains/kotlin/kotlin-script-runtime/$KV/kotlin-script-runtime-$KV.jar

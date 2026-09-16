@@ -32,7 +32,7 @@ StateParser（JSON I/O） / ScheduleCsvBridge（CSV I/O）── map ─▶ Magi
 
 役割の分担：**UI** は表示と操作のみ、**ViewModel** が唯一のハブ（状態・操作・最適化起動・I/O）、**v6 エンジン**が探索本体、**model** がデータ、**work** が中断耐性のある背景実行。
 
-### UI 層の再構成（進行中・3.558.0〜）
+### UI 層の再構成（3.558.0〜3.565.0、Stage A〜D 完了）
 
 ユーザー指示「すべてのコンポーネントを Root の配下に置き、各コンポーネントは MVP の Passive View として
 描画に関わるパラメータだけを操作し、動作は Chain of Responsibility でイベントをバブリングさせて、
@@ -61,8 +61,14 @@ MagiRoot（唯一の合成ルート）
 検証する（`VioBuckets.kt` を UI ファイルから切り出したのと同じ理由）。Compose はこのサンドボックスでは
 ビルドできないため、**壊れうるロジックを Compose の外へ出すこと自体が検証可能性の担保**になっている。
 
-段階: A=イベント/段階/鎖（済） → B=派生描画値の単一算出 → C=Composable の Passive View 化 → D=`editRev` と
-バイパス問い合わせ経路の撤去。
+段階: A=イベント/段階/鎖 → B=派生描画値の単一算出 → C=Composable の Passive View 化 → D=`editRev` と
+バイパス問い合わせ経路の撤去。**4 段階とも完了**（3.565.0）。到達点は次の 3 つ:
+
+- Composable の `vm` 参照は 0（Root の `MagiApp` と鎖の `MagiHandlers` を除く）。`key(ui.editRev)` の包みは全廃。
+- 描画に要る派生値は Root が組み立てる 4 つのビューデータに集約: `MagiViewState`（盤面）/ `ConstraintsView`（制約）/
+  `Ws1View`（ws1）/ `ConditionsView`（月次条件）。いずれも Compose/Android 非依存＝ホストテスト白名単。
+- 残す問い合わせは 2 つだけで、どちらも「開いたときにその場で 1 回」の性質＝表にして持ち回るものではない:
+  `GuidedFixDialog` の `shortageFixCandidates`、`MagiApp` の `violationRange` / `wishOutOfScopeCount`。
 
 ---
 
@@ -196,6 +202,13 @@ UI は `app/src/main/java/com/magi/app/ui/`:
 - `MagiViewModel.kt` — 状態管理。`findFixSuggestions`/`applyFixSuggestion`、`refreshCheck`(currentSchedule検査)。
   ジョブ: `job`/`checkJob`/`fixJob`（連続タップ競合回避）。
 - `MagiUiState.kt` — `schedule`, `staffNames`, `staffGroupSymbols`, `shiftSymbols`, `countViolations("i,k")`,
-  `needViolations("k,j")`, `resultSchedule`, `breakdown` 等。
+  `needViolations("k,j")`, `needFamilies("k,j")`, `breakdown` 等。
+  （`resultSchedule` は `MagiViewModel` のメンバで `UiState` には無い。UiState 側の結果スナップショットは
+  読み手が現れず 3.393.0 で撤去済み。）
+- 再構成で足した Compose 非依存の 7 ファイル（すべて `tools/host/hosttest.sh` の白名単）:
+  `MagiPhase.kt`（段階と裁定）/ `MagiEvent.kt`（操作の型）/ `MagiMediator.kt`（段階機械と鎖）/
+  `MagiViewState.kt`（盤面の派生描画値）/ `MagiConstraintsView.kt` / `MagiWs1View.kt` /
+  `MagiConditionsView.kt`（編集画面のビューデータ）。
+  `MagiHandlers.kt`（鎖の中身＝ViewModel への振り分け）だけは ViewModel を参照するため白名単外。
 - `MagiScheduleViews.kt` — `ScheduleGrid`, `StaffCalendarCard`, **`TallyCard`（シフト集計：職員別/日別＋違反ハイライト）**。
 - `MagiDashboardCards.kt` — `BreakdownCard`, `FixSuggestionCard` 等。`MagiTokens.kt` — `MagiAccent`(色)。

@@ -27,6 +27,9 @@ data class UiState(
     val initSoft: Long = 0,
     /** 実行中の**表示**。可否の判定には使わない（[MagiViewModel.optimizeInFlight] が唯一の根拠）。 */
     val running: Boolean = false,
+    // [3.568.0/外部レビュー] 画面消灯防止の可否。旧: 画面が `running` を見ていたが、これは背景実行・
+    //   読み込み・違反チェックでも真＝仕様（screen_spec §「前景最適化中」）より広く点けっぱなしにしていた。
+    val keepScreenOn: Boolean = false,
     val hasResult: Boolean = false,
     /**
      * [3.475.0/論理監査] エンジン（最適化/仕上げ/下書き/背景）が**この盤面に対して一度でも走ったか**。

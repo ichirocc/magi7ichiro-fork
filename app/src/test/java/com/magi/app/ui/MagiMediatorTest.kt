@@ -146,4 +146,14 @@ class MagiMediatorTest {
         m.dispatch(MagiEvent.Settings.SetBudget(60))
         assertEquals("盤面を触らない操作は実行中でも通る", 3, seen.size)
     }
+    /** [3.568.0/外部レビュー] 画面消灯防止は「前景で探索が走っている段階」だけ。
+     *  旧: 画面が `ui.running` を見ており、背景実行・読み込み・違反チェックでも点けっぱなしだった。 */
+    @Test
+    fun onlyForegroundSearchKeepsScreenOn() {
+        val on = MagiPhase.values().filter { it.keepsScreenOn }.toSet()
+        assertEquals(setOf(MagiPhase.Drafting, MagiPhase.Optimizing, MagiPhase.Polishing), on)
+        assertTrue("背景実行は前景サービスが持つので画面は要らない", !MagiPhase.Background.keepsScreenOn)
+        assertTrue("読み込みは短い", !MagiPhase.Loading.keepsScreenOn && !MagiPhase.Importing.keepsScreenOn)
+    }
+
 }

@@ -33,6 +33,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.557.0〜3.568.0＝日ヘッダ「▲N」の取りこぼし修正（実機報告）＋UI 層の再構成 Stage A〜D
+完了（Root 配下・Passive View・CoR・ステートマシン Mediator。Composable の `vm` 参照 0・`key(ui.editRev)` 全廃）＋
+外部レビュー由来の修正（Worker の片付け漏れ／リリース CI の書込みトークン分離と `v*` タグの品質ゲート／
+`android-sdk.yml` の `permissions`／`hosttest.sh` の壊れたキャッシュ／CSV 未知記号サンプルの頭打ち／
+画面消灯防止を前景探索中だけに絞る）。探索の HARD 同点タイブレーク乖離は測定のうえ据え置き＝backlog #19。
+797 テスト緑。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-15（3.543.0〜3.556.0＝画面まわりの一連。3.543〜3.546 全画面 CUD 見直し＝シフト色 41 色・違反色 30 色を
 P型/D型シミュレーション後の ΔE で設計し design_lint P12 で機械検査、公休は「背景色系」家族へ／3.547 シフト種別の色だけの
 CSV 出力・取込（upsert）／3.548 CI: setup-android の旧 `tools` 消滅対策／3.549 画面文言「群」→「グループ」統一（決定は

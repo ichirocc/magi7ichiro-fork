@@ -291,7 +291,7 @@
 - **指1本**: 2ボタン48dp。既定フォーカスは安全側（キャンセル）。
 - **実装**: `AlertDialog`（`applyWishes` 経路）。
 
-- **Web版反映（手動修正⇄再最適化ループ向け・Op1/Op2）**: (1) **やり直し(Redo)** を新設（既存30段Undoの相方）。元に戻した直後に下部バーへ「やり直し」を出し、修正→戻す→やり直しを支える。`MagiViewModel.redo`／`canRedo`。 (2) **画面消灯防止(Wake Lock相当)**: 前景最適化中は `keepScreenOn=true`（消灯による計算中断・ライブ表示停止を防止）。`MagiApp` の `LaunchedEffect(ui.running)`。 ※再最適化は常に編集後の `currentSchedule` を種に開始するため、手動修正がそのまま探索の初期解になる（検証済み）。
+- **Web版反映（手動修正⇄再最適化ループ向け・Op1/Op2）**: (1) **やり直し(Redo)** を新設（既存30段Undoの相方）。元に戻した直後に下部バーへ「やり直し」を出し、修正→戻す→やり直しを支える。`MagiViewModel.redo`／`canRedo`。 (2) **画面消灯防止(Wake Lock相当)**: 前景最適化中は `keepScreenOn=true`（消灯による計算中断・ライブ表示停止を防止）。`MagiApp` の `LaunchedEffect(ui.keepScreenOn)`（3.568.0。旧 `ui.running` は背景実行・読み込み・違反チェックでも真＝この仕様より広く点けていた）。 ※再最適化は常に編集後の `currentSchedule` を種に開始するため、手動修正がそのまま探索の初期解になる（検証済み）。
 
 ## 11. 中断復帰バナー（プロセスkill耐性・メッセージ）
 ![中断復帰](screens/12_interrupted.png)

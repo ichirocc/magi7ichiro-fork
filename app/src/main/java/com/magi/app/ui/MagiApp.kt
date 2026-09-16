@@ -178,7 +178,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     // [Web反映/Wake Lock] 最適化(前景)中は画面を消灯させない＝計算の中断・ライブ表示の停止を防ぐ。
     val rootView = androidx.compose.ui.platform.LocalView.current
-    LaunchedEffect(ui.running) { rootView.keepScreenOn = ui.running }
+    LaunchedEffect(ui.keepScreenOn) { rootView.keepScreenOn = ui.keepScreenOn }
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current

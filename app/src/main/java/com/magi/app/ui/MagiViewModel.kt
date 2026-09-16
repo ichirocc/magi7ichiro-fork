@@ -123,6 +123,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun beginBoardJob(phase: MagiPhase, engineRun: Boolean = false): Int {
         val jobToken = phases.begin(phase)
+        if (phase.keepsScreenOn) _ui.update { it.copy(keepScreenOn = true) }
         if (engineRun) {
             runSerial++
             activeRunSerial = runSerial
@@ -131,7 +132,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun endBoardJob(token: Int) {
-        if (phases.end(token)) activeRunSerial = 0
+        if (phases.end(token)) {
+            activeRunSerial = 0
+            _ui.update { it.copy(keepScreenOn = false) }
+        }
     }
 
     /** 画面のメッセージで「何の実行中か」を言うための名前。背景 Worker には名前が無いので既定を返す。 */
