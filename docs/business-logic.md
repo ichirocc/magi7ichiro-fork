@@ -60,7 +60,7 @@
 
 > **HARD = {groupViol, c3n, covU, pref, c3w}**（c3w は 3.542.0 追加）、それ以外は SOFT。この5族はチェッカー（`MirrorKeys.hard`）と
 > 最適化器（`Evaluator.fullEvalParts` の hard1・`DeltaEvaluator`・`magi_native.cpp`）で一致する
-> （3.318.0 以前は評価器側だけ groupViol を欠いた3族で、同じ盤面に対して両者の hard が食い違っていた）。`covO` は 2026-07-13（HF77 明示指示）に 0.5→1.0 へ統一済み
+> （3.318.0 以前は評価器側だけ groupViol を欠いた3族で、同じ盤面に対して両者の hard が食い違っていた）。`covO` の重みは上の表が唯一の現行値（0.5→1.0→5.0→**10**、いずれも HF77 明示指示）
 > （最適化器 Evaluator/Delta/C++ は元々 1.0、チェッカー `weightedScore` のみ 0.5 だった factor-2 乖離を最適化器基準に解消）。
 > 2026-08-27（HF77 明示指示）に 1.0→5.0、2026-09-10 に high を 45→25 へ変更した後、
 > **3.522.0（2026-09-11、HF77 明示指示）で重み表を全面見直し**。tools/loop の34ケース×10seedベンチマークで
