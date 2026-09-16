@@ -50,26 +50,26 @@ import androidx.compose.ui.unit.dp
  */
 @Composable
 internal fun CountsCard(
-    ui: UiState, vm: MagiViewModel, counts: ScheduleCounts,
+    ui: UiState, v: Ws1View, counts: ScheduleCounts, cv: ConditionsView, onEvent: (MagiEvent) -> Unit,
     /** [実機バグ修正] 呼び出し元がkey(ui.editRev)の外で保持する（詳細はStaffShiftMatrixCardのdoc）。 */
     sheetCell: Pair<Int, Int>?, onSheetCellChange: (Pair<Int, Int>?) -> Unit,
 ) {
     // [3.483.0 E-8] 旧: 説明文だけのカードが先頭にあった。同じ説明（目標＝やわらかい／上下限＝かたい）は
     //   StaffShiftMatrixCard の見出し直下にもあり二重だったので、こちらを撤去。
-    StaffShiftMatrixCard(ui, vm, counts, sheetCell, onSheetCellChange)
+    StaffShiftMatrixCard(ui, v, cv, onEvent, counts, sheetCell, onSheetCellChange)
     Spacer(Modifier.height(8.dp))
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            GroupRangeSection(ui, vm)
+            GroupRangeSection(ui, cv, onEvent)
         }
     }
 }
 
 // ---- グループ単位の回数（一括）: 選んだグループの全職員に同じ上下限を設定する。
-//   内部は既存 staffRange への展開（vm.setGroupRange）＝新制約・スコア評価器の変更なし。 ----
+//   内部は既存 staffRange への展開（SetGroupRange）＝新制約・スコア評価器の変更なし。 ----
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
+internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit) {
     var dialog by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("グループ一括設定", style = MaterialTheme.typography.titleSmall)
@@ -83,7 +83,7 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
             // [3.533.0/ユーザー提示のデザイン案] groupRangeSummary は既に g→k 順ソート済み＝groupBy で
             //   隣接するグループ単位にまとまる。グループ名の重複表示をやめ見出し1つにまとめ、
             //   チップからも「グループ名・」の接頭辞を外して短くする（1行に収まる件数を増やす）。
-            val applied = vm.groupRangeSummary()
+            val applied = cv.groupRanges
             if (applied.isNotEmpty()) {
                 Text("適用中のグループ上下限（${applied.size}件・個人の回数にも展開済み）",
                     style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
@@ -91,7 +91,7 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
                     val (g, groupName) = gKey
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(groupName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        DeleteRowButton(onClick = { vm.clearGroupRangeSection(g) }, enabled = !ui.running, text = "全解除")
+                        DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) }, enabled = !ui.running, text = "全解除")
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         rows.forEach { gr ->
@@ -108,7 +108,7 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
                                 label = { Text("${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）") },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, contentDescription = "削除",
-                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { vm.clearGroupRange(gr.g, gr.k, gr.lo, gr.hi) }.padding(7.dp))
+                                        modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { onEvent(MagiEvent.Condition.ClearGroupRange(gr.g, gr.k, gr.lo, gr.hi)) }.padding(7.dp))
                                 },
                             )
                         }
@@ -119,13 +119,13 @@ internal fun GroupRangeSection(ui: UiState, vm: MagiViewModel) {
     }
     if (dialog) {
         GroupRangeDialog(
-            groups = vm.groupLabels(),
-            shifts = vm.shiftKigouList(),
-            allowedFor = { g -> vm.allowedShiftsForGroup(g) },
-            memberCount = { g -> vm.groupMemberCount(g) },
-            rangeCount = { g, k -> vm.groupRangeMemberCount(g, k) },
+            groups = cv.groupLabels,
+            shifts = cv.shiftKigou,
+            allowedFor = { g -> cv.allowedByGroup.getOrElse(g) { emptySet() } },
+            memberCount = { g -> cv.groupMembers.getOrElse(g) { 0 } },
+            rangeCount = { g, k -> cv.groupRangeMemberCount(g, k) },
             onApply = { g, k, lo, hi ->
-                if (lo.isBlank() && hi.isBlank()) vm.clearGroupRangeAll(g, k) else vm.setGroupRange(g, k, lo, hi)
+                if (lo.isBlank() && hi.isBlank()) onEvent(MagiEvent.Condition.ClearGroupRangeAll(g, k)) else onEvent(MagiEvent.Condition.SetGroupRange(g, k, lo, hi))
                 dialog = false
             },
             onClose = { dialog = false },

@@ -107,8 +107,7 @@ internal fun CountPill(text: String) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, onInitialConsumed: () -> Unit = {}) {
-    val v = vm.ws1() ?: return
+internal fun NeedCalendarCard(ui: UiState, v: Ws1View, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, initialShift: Int? = null, onInitialConsumed: () -> Unit = {}) {
     if (v.shifts.isEmpty()) return
     var k by remember { mutableStateOf(initialShift?.takeIf { it in v.shifts.indices } ?: 0) }
     if (k !in v.shifts.indices) k = 0
@@ -125,9 +124,9 @@ fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, 
     var shiftMenu by remember { mutableStateOf(false) }
     var baseSheet by remember { mutableStateOf(false) }
     val onToggleDay: (Int) -> Unit = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d }
-    val ranges = (0 until ui.days).map { j -> vm.needCellLimits(k, j) }
+    val ranges = (0 until ui.days).map { j -> cv.needCellLimits(k, j) }
     // 個別設定＝日別例外が登録された日（0始まり）。カレンダーで太字＋小さな印にする。
-    val individualDays = vm.needDayOverrides().filter { it.k == k }.map { it.j }.toSet()
+    val individualDays = cv.needDayOverrides.filter { it.k == k }.map { it.j }.toSet()
     // 標準（基本設定）の表示ラベル。「N人」または「lo–hi人」、未設定は「未設定」。
     val baseLabel = run {
         val n1 = shift.need1.toIntOrNull(); val n2 = shift.need2.toIntOrNull()
@@ -163,7 +162,7 @@ fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, 
             NeedMonthGrid(startDate = ui.startDate, ranges = ranges, individualDays = individualDays, selectedDays = daysSel, onToggle = onToggleDay)
             // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（専用「複数日選択」カードは撤去）。
             if (daysSel.isNotEmpty()) {
-                NeedApplyPanel(ui, vm, k, daysSel, shift.need1, shift.need2,
+                NeedApplyPanel(ui, onEvent, k, daysSel, shift.need1, shift.need2,
                     onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
             } else {
             }
@@ -171,7 +170,7 @@ fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, 
     }
     if (baseSheet) {
         BaseNeedSheet(shift.kigou, shift.need1, shift.need2, running = ui.running,
-            onApply = { p1, p2 -> vm.setShiftNeed(k, p1, p2) }, onDismiss = { baseSheet = false })
+            onApply = { p1, p2 -> onEvent(MagiEvent.Structure.SetShiftNeed(k, p1, p2)) }, onDismiss = { baseSheet = false })
     }
 }
 
@@ -180,7 +179,7 @@ fun NeedCalendarCard(ui: UiState, vm: MagiViewModel, initialShift: Int? = null, 
  * カレンダーを見ながら追加選択・適用できる。「未設定に戻す」で選択日の例外を削除＝既定へ。入力エラー(最低>最高)は赤枠＋注記。
  */
 @Composable
-private fun NeedApplyPanel(ui: UiState, vm: MagiViewModel, k: Int, days: Set<Int>, baseN1: String, baseN2: String, onCancel: () -> Unit, onDone: () -> Unit) {
+private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, days: Set<Int>, baseN1: String, baseN2: String, onCancel: () -> Unit, onDone: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     var p1 by remember(k) { mutableStateOf(baseN1) }
     var p2 by remember(k) { mutableStateOf(baseN2) }
@@ -205,12 +204,12 @@ private fun NeedApplyPanel(ui: UiState, vm: MagiViewModel, k: Int, days: Set<Int
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
             Button(
-                onClick = { days.forEach { d -> vm.setNeedDay(k, d - 1, p1, p2) }; onDone() },
+                onClick = { days.forEach { d -> onEvent(MagiEvent.Condition.SetNeedDay(k, d - 1, p1, p2)) }; onDone() },
                 enabled = !ui.running && (p1.isNotBlank() || p2.isNotBlank()) && !invalid,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text("${days.size}日に適用") }
         }
-        TextButton(onClick = { days.forEach { d -> vm.removeNeedDay(k, d - 1) }; onDone() }, enabled = !ui.running,
+        TextButton(onClick = { days.forEach { d -> onEvent(MagiEvent.Condition.RemoveNeedDay(k, d - 1)) }; onDone() }, enabled = !ui.running,
             modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
     }
 }
@@ -239,7 +238,7 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, running: 
 }
 
 /** [必要人数設定のカレンダー本体] 月内の日を曜日整列で並べ、タップで複数日選択できる。
- *  各日は実効need(lo–hi、`vm.needCellLimits`)を表示。区別は色でなく形と文字で:
+ *  各日は実効need(lo–hi、`ConditionsView.needCellLimits`)を表示。区別は色でなく形と文字で:
  *  未設定=「—」(淡色) / 標準どおり=通常文字 / 個別設定(日別例外)=太字＋小さな印 / 選択中=枠＋✓。
  *  充足色ドット(covU/covO)は本画面(設定)では出さない＝勤務表グリッド/集計で確認する。 */
 @Composable
@@ -322,8 +321,8 @@ private fun NeedMonthGrid(
  * （カレンダーは1シフトずつしか見えない弱点を補う）。登録/変更は上の`NeedCalendarCard`へ一本化。
  */
 @Composable
-fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
-    val overrides = vm.needDayOverrides()
+internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit) {
+    val overrides = cv.needDayOverrides
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("日別の必要人数（例外）一覧", style = MaterialTheme.typography.titleMedium)
@@ -346,7 +345,7 @@ fun NeedDayCard(ui: UiState, vm: MagiViewModel) {
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
-                        DeleteRowButton(onClick = { vm.removeNeedDay(o.k, o.j) }, enabled = !ui.running)
+                        DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.RemoveNeedDay(o.k, o.j)) }, enabled = !ui.running)
                     }
                 }
             }

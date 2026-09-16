@@ -106,7 +106,14 @@ import androidx.compose.ui.input.pointer.pointerInput
  */
 
 @Composable
-internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Unit) {
+internal fun GuidedFixDialog(
+    ui: UiState,
+    /** 不足枠ごとの候補は「開いたときにその枠だけ」求めるもので、表にして持ち回るものではない
+     *  ＝この画面だけが問い合わせを残す。盤面の書き換えは onEvent（裁定を通る）。 */
+    vm: MagiViewModel,
+    onEvent: (MagiEvent) -> Unit,
+    onDismiss: () -> Unit,
+) {
     val cs = MaterialTheme.colorScheme
     val shortfalls = ui.coverageDiag?.shortfalls ?: emptyList()
     // [3.401.0] 旧: target を `verdict == FIXABLE && miss > 0` だけで選び、無条件に「この日に動かせる人が
@@ -152,7 +159,7 @@ internal fun GuidedFixDialog(ui: UiState, vm: MagiViewModel, onDismiss: () -> Un
                         } else {
                             cands.take(8).forEach { c ->
                                 Button(
-                                    onClick = { pressedRev.value = ui.checkRev; vm.setCell(c.staffIndex, target.dayIndex, target.shiftIndex) },
+                                    onClick = { pressedRev.value = ui.checkRev; onEvent(MagiEvent.Board.SetCell(c.staffIndex, target.dayIndex, target.shiftIndex)) },
                                     enabled = !pending,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
                                 ) {
@@ -392,18 +399,18 @@ private fun DiagDetailToggle(
 /**
  * [3.480.0 ホームAIリデザイン] 「スマートアクション」＝AIが先回りして最有力の1手を提示するカード。
  * grilling決定#2どおり新規ロジックは作らず、分析タブと同じ改善提案エンジン（FixSuggester／
- * `ui.fixSuggestions`／`vm.applyFixSuggestion`）の先頭候補（=最も効果の大きい1手）を使う。
+ * `ui.fixSuggestions`／`Board.ApplyFixSuggestion`）の先頭候補（=最も効果の大きい1手）を使う。
  * 必須違反が残っている間だけ表示し、まだ探索していなければ自動で1回探す（`findFixSuggestions` は
  * 副作用が「候補リストの計算」だけで盤面は変えないため、自動起動しても安全＝GuidedFixの狭いスコープ
  * [人員不足のみ] と違い、c3n/c1 等どの族の違反でも先頭候補が出せる）。
  */
 @Composable
-internal fun SmartActionCard(ui: UiState, vm: MagiViewModel) {
+internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.running || !ui.hasResult || ui.bestHard <= 0L) return
     val cs = MaterialTheme.colorScheme
     // 既にある候補が別スタッフに絞った探索(fixFocusName!="")の結果なら、ホームでは全体探索へ差し替える。
     LaunchedEffect(ui.schedule, ui.bestHard) {
-        if (!ui.fixSearching && (ui.fixSuggestions.isEmpty() || ui.fixFocusName.isNotBlank())) vm.findFixSuggestions()
+        if (!ui.fixSearching && (ui.fixSuggestions.isEmpty() || ui.fixFocusName.isNotBlank())) onEvent(MagiEvent.Session.FindFixSuggestions(null, null))
     }
     val top = ui.fixSuggestions.firstOrNull()
     if (ui.fixFocusName.isNotBlank() && !ui.fixSearching) return // 探索待ちのフレームだけ描画をスキップ
@@ -426,7 +433,7 @@ internal fun SmartActionCard(ui: UiState, vm: MagiViewModel) {
                     Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
                         style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer.copy(alpha = 0.85f))
                     Button(
-                        onClick = { vm.applyFixSuggestion(top) },
+                        onClick = { onEvent(MagiEvent.Board.ApplyFixSuggestion(top)) },
                         enabled = !ui.running,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                     ) { Text("この手を適用（推奨）") }

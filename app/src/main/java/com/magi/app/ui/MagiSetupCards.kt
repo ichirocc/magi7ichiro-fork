@@ -137,9 +137,9 @@ internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
 
 
 @Composable
-internal fun SetupGuideCard(ui: UiState, vm: MagiViewModel, editScope: Int = -1, onOpenWish: (() -> Unit)? = null) {
+internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1, onOpenWish: (() -> Unit)? = null) {
     if (!ui.loaded) return
-    val c = vm.setupCounts()
+    val c = cv.setupCounts
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -402,14 +402,14 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
  * 例外件数は D6 に従い、明示的な例外リストを持つ「日別必要人数の例外」のみを数える。
  */
 @Composable
-internal fun MonthlyChecklistCard(ui: UiState, vm: MagiViewModel, onOpenWish: (() -> Unit)? = null) {
+internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, onOpenWish: (() -> Unit)? = null) {
     if (!ui.loaded) return
     val staffN = ui.staffNames.size
     val wishStaff = remember(ui.wishes, staffN) {
         ui.wishes.keys.mapNotNull { it.substringBefore(",").toIntOrNull() }.toSet().size
     }
-    val needExceptions = vm.needDayOverrides().size
-    val needStdOk = vm.ws1()?.shifts?.any { it.need1.isNotBlank() } == true
+    val needExceptions = cv.needDayOverrides.size
+    val needStdOk = v?.shifts?.any { it.need1.isNotBlank() } == true
     val issues = ui.settingIssues.size
     // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
     var issuesOpen by rememberSaveable { mutableStateOf(false) }
@@ -459,17 +459,17 @@ private fun ChecklistRow(label: String, value: String, ok: Boolean, onClick: (()
  * データは Problem 由来（allowedShiftsFor / needCellLimits=need1+日別例外込み）＝チェッカーと同じ実効値。
  */
 @Composable
-internal fun StaffingRealityCard(ui: UiState, vm: MagiViewModel) {
+internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     val days = ui.days
     val staffN = ui.staffNames.size
     val canDoCount = IntArray(ui.shiftSymbols.size)
-    for (i in 0 until staffN) vm.allowedShiftsFor(i).forEach { k -> if (k in canDoCount.indices) canDoCount[k]++ }
+    for (i in 0 until staffN) cv.allowedShiftsFor(i).forEach { k -> if (k in canDoCount.indices) canDoCount[k]++ }
     data class RowV(val sym: String, val q: Int, val d: Int, val maxNeed: Int)
     val rows = ui.shiftSymbols.indices.mapNotNull { k ->
         var d = 0; var mx = 0
-        for (j in 0 until days) { val lo = vm.needCellLimits(k, j)?.first ?: 0; d += lo; if (lo > mx) mx = lo }
+        for (j in 0 until days) { val lo = cv.needCellLimits(k, j)?.first ?: 0; d += lo; if (lo > mx) mx = lo }
         if (d == 0) null else RowV(ui.shiftSymbols[k], canDoCount[k], d, mx)
     }
     if (rows.isEmpty()) return

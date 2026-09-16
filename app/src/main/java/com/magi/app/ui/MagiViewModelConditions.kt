@@ -22,7 +22,17 @@ import kotlinx.coroutines.flow.update
  * ＝いずれも public または internal（モジュール内限定）。
  */
 // ---- ws2: 日別の必要人数（例外） needDay1/needDay2 の疎な上書きを編集 ----
-data class NeedDayView(val k: Int, val j: Int, val kigou: String, val p1: String, val p2: String)
+
+/** 月次条件の編集画面が要るものを 1 度に組み立てる。`Problem` は state ごとの使い回しを渡す。 */
+internal fun MagiViewModel.conditionsView(): ConditionsView {
+    val st = state ?: return ConditionsView()
+    return conditionsViewOf(st, com.magi.app.v6.cachedProblem(st)).copy(
+        needDayOverrides = needDayOverrides(),
+        wishOverrides = wishOverrides(),
+        countRules = staffCountRules(),
+        groupRanges = groupRangeSummary(),
+    )
+}
 
 fun MagiViewModel.needDayOverrides(): List<NeedDayView> {
     val st = state ?: return emptyList()
@@ -205,7 +215,6 @@ fun MagiViewModel.groupRangeMemberCount(g: Int, k: Int): Int {
     return st.staff.indices.count { st.staff[it].groupIdx == g && st.staffRange["$it,$k"]?.let { r -> r.lo.isNotBlank() || r.hi.isNotBlank() } == true }
 }
 
-data class GroupRangeView(val g: Int, val k: Int, val groupName: String, val kigou: String, val lo: String, val hi: String, val members: Int, val shared: Int = members)
 
 /** 「グループ単位の回数」適用済み一覧。グループ全メンバーが同一の非空レンジを持つ (g,k) のみ＝
  *  一括適用された(個別に変更されていない)グループ上下限を再構成して表示する。×で全員分をクリア。 */
@@ -276,10 +285,6 @@ fun MagiViewModel.needCellLimits(k: Int, j: Int): Pair<Int, Int>? {
 /** [回数センター] 個人別の回数(上下限)と適切回数(apt)を職員×シフトで統合した一覧。
  *  staffRange または apt(実効=担当可＆クランプ後)が効くセルのみ返す。aptEff=実効目標(-1=なし),
  *  aptRaw=群目標の生値(-1=なし。aptEff と異なればクランプされている)。hasRange=個人別の上下限あり。 */
-data class CountRuleView(
-    val i: Int, val k: Int, val staffName: String, val kigou: String,
-    val lo: String, val hi: String, val aptEff: Int, val aptRaw: Int, val hasRange: Boolean,
-)
 
 fun MagiViewModel.staffCountRules(): List<CountRuleView> {
     val st = state ?: return emptyList()
@@ -310,7 +315,6 @@ fun MagiViewModel.staffCountRules(): List<CountRuleView> {
 //   呼出0のまま残存していた孤児クラスタのため削除（grep で外部参照0を確認済み）。
 
 // ---- ws3 移植: 希望シフト wishes["i,j"]=シフトindex（採点=pref/hard1。割当やcons3系とは別。UIのみ・モデル/エンジン不変）----
-data class WishView(val i: Int, val j: Int, val staffName: String, val day: Int, val kigou: String, val k: Int)
 
 fun MagiViewModel.wishOverrides(): List<WishView> {
     val st = state ?: return emptyList()

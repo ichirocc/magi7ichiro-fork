@@ -231,7 +231,8 @@ internal fun LiveScheduleCard(ui: UiState) {
 @Composable
 internal fun ShiftPickerSheet(
     ui: UiState,
-    vm: MagiViewModel,
+    cv: ConditionsView,
+    onEvent: (MagiEvent) -> Unit,
     cell: Pair<Int, Int>,
     onPick: (Int) -> Unit,
     onDismiss: () -> Unit,
@@ -240,7 +241,7 @@ internal fun ShiftPickerSheet(
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current   // [一貫性G2] 希望操作にも触覚を付ける（割当と対称）
     val sheetState = rememberModalBottomSheetState()
-    val allowed = remember(cell) { vm.allowedShiftsFor(i).toList() }
+    val allowed = cv.allowedShiftsFor(i).toList()
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
     var mode by remember(cell) { mutableIntStateOf(0) } // 0=割当, 1=希望
@@ -274,7 +275,7 @@ internal fun ShiftPickerSheet(
                     if (current >= 0) visibleNeedClasses(ui, current, j, allVioBucketKeys).forEach { needCls ->
                         val fam = needCls.removePrefix("vio-")
                         val hard = isHardCellViolation(needCls)
-                        val limits = vm.needCellLimits(current, j)
+                        val limits = cv.needCellLimits(current, j)
                         val countNow = ui.schedule.count { it.getOrNull(j) == current }
                         val detail = limits?.let { (lo, hi) ->
                             when (needCls) {
@@ -300,7 +301,7 @@ internal fun ShiftPickerSheet(
                     if (vioFams.isNotEmpty()) {
                         TextButton(onClick = {
                             val famsJp = vioFams.joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
-                            vm.addReviewMemo("$name ${j + 1}日=${sym(current)}：$famsJp")
+                            onEvent(MagiEvent.Session.AddReviewMemo("$name ${j + 1}日=${sym(current)}：$famsJp"))
                         }) { Text("基本ルールの見直し候補にする") }
                     }
                 }
@@ -358,7 +359,7 @@ internal fun ShiftPickerSheet(
                                 .background(bg, MaterialTheme.shapes.large)
                                 .then(if (ng) Modifier.border(2.dp, cs.error, MaterialTheme.shapes.large) else Modifier)
                                 .clickable {
-                                    if (mode == 0) onPick(k) else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.setWish(i, j, k); onDismiss() }
+                                    if (mode == 0) onPick(k) else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)); onDismiss() }
                                 }
                                 .padding(4.dp),
                             contentAlignment = Alignment.Center,
@@ -378,7 +379,7 @@ internal fun ShiftPickerSheet(
             }
             // 希望を削除（希望モード・登録済みのみ）
             if (mode == 1 && wish != null) {
-                OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); vm.removeWish(i, j); onDismiss() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)); onDismiss() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                     Text("希望を削除（希望なし）", color = cs.error)
                 }
             }
@@ -853,7 +854,7 @@ internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: and
 /** [希望の一括操作] 対象範囲(曜日/期間全体) × 対象(全員/1名) × 希望シフト。登録/クリア。誤操作防止で明示確定。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, onDismiss: () -> Unit) {
+internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, presetWeekday: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState()
     val days = ui.days
@@ -867,7 +868,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
     var confirmClearAll by remember { mutableStateOf(false) }
     val targetDays = if (scope == 1) (0 until days).toList()
         else (0 until days).filter { (startDow + it) % 7 == weekday }
-    val allowed = if (staffSel >= 0) vm.allowedShiftsFor(staffSel).toList() else emptyList()
+    val allowed = if (staffSel >= 0) cv.allowedShiftsFor(staffSel).toList() else emptyList()
     val targetName = if (staffSel >= 0) (ui.staffNames.getOrNull(staffSel) ?: "$staffSel") else "全職員"
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -935,13 +936,13 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     if (scope == 1 && staffSel < 0) confirmClearAll = true
-                    else { vm.clearWishesForDays(if (staffSel < 0) null else staffSel, targetDays); onDismiss() }
+                    else { onEvent(MagiEvent.Condition.ClearWishesForDays(if (staffSel < 0) null else staffSel, targetDays)); onDismiss() }
                 }, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                     Text("この範囲を希望なしに", color = cs.error)
                 }
                 Button(onClick = {
                     if (picked in ui.shiftSymbols.indices) {
-                        vm.setWishesForDays(if (staffSel < 0) null else staffSel, targetDays, picked); onDismiss()
+                        onEvent(MagiEvent.Condition.SetWishesForDays(if (staffSel < 0) null else staffSel, targetDays, picked)); onDismiss()
                     }
                 }, enabled = picked in ui.shiftSymbols.indices && targetDays.isNotEmpty() && !ui.running,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
@@ -973,7 +974,7 @@ internal fun WishBulkSheet(ui: UiState, vm: MagiViewModel, presetWeekday: Int, o
     if (confirmClearAll) {
         AlertDialog(
             onDismissRequest = { confirmClearAll = false },
-            confirmButton = { DialogDangerButton("すべて削除", onClick = { confirmClearAll = false; vm.clearAllWishes(); onDismiss() }) },
+            confirmButton = { DialogDangerButton("すべて削除", onClick = { confirmClearAll = false; onEvent(MagiEvent.Condition.ClearAllWishes); onDismiss() }) },
             dismissButton = { DialogDismissButton(onClick = { confirmClearAll = false }) },
             title = { Text("すべての希望を削除") },
             text = { Text("登録済みの希望をすべて削除します。割当には影響しません。元に戻すで復元できます。") },
@@ -1128,7 +1129,7 @@ internal fun dayMD(startDate: String, j: Int): String = try {
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState, vm: MagiViewModel, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys) {
+internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
@@ -1227,7 +1228,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, vs: MagiViewState, onFix:
                                     val dir = when (vio) { "vio-low", "vio-aptLow" -> "不足"; else -> "超過" }
                                     "${ui.staffNames.getOrNull(i) ?: i} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}回 $dir・タップで詳細"
                                 } else null
-                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(vm, ui, i, kk, v, vio) }) else null, cd = cellCd) {
+                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(cv, ui, i, kk, v, vio) }) else null, cd = cellCd) {
                                     if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
@@ -1279,7 +1280,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, vs: MagiViewState, onFix:
                                     val dir = if (vio == "vio-covU") "人員不足" else "人員過剰"
                                     "${j + 1}日 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
                                 } else null
-                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(vm, ui, kk, j, v, vio) }) else null, cd = cellCd) {
+                                TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(cv, ui, kk, j, v, vio) }) else null, cd = cellCd) {
                                     if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
                                 }
                             }
@@ -1302,7 +1303,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, vs: MagiViewState, onFix:
                                 Spacer(Modifier.height(4.dp))
                                 for (i in d.pinned) {
                                     OutlinedButton(
-                                        onClick = { detail = null; vm.removeWish(i, dj) },
+                                        onClick = { detail = null; onEvent(MagiEvent.Condition.RemoveWish(i, dj)) },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                     ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の希望を取り消す", color = cs.error) }
@@ -1343,8 +1344,8 @@ private data class TallyDetailUi(
 )
 
 /** 職員別セル(i,k): 現在回数と 下限/上限/目標 の差を数字で。 */
-private fun staffViolDetail(vm: MagiViewModel, ui: UiState, i: Int, k: Int, count: Int, vio: String): TallyDetailUi {
-    val (lo, hi, apt) = vm.staffCellLimits(i, k)
+private fun staffViolDetail(cv: ConditionsView, ui: UiState, i: Int, k: Int, count: Int, vio: String): TallyDetailUi {
+    val (lo, hi, apt) = cv.staffCellLimits(i, k)
     val name = ui.staffNames.getOrNull(i) ?: "$i"
     val sym = ui.shiftSymbols.getOrNull(k) ?: "$k"
     val lines = ArrayList<String>()
@@ -1359,8 +1360,8 @@ private fun staffViolDetail(vm: MagiViewModel, ui: UiState, i: Int, k: Int, coun
 }
 
 /** 日別セル(k,j): 現在人数と 必要数レンジ の差を数字で。 */
-private fun dayViolDetail(vm: MagiViewModel, ui: UiState, k: Int, j: Int, count: Int, vio: String): TallyDetailUi {
-    val limits = vm.needCellLimits(k, j)
+private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count: Int, vio: String): TallyDetailUi {
+    val limits = cv.needCellLimits(k, j)
     val sym = ui.shiftSymbols.getOrNull(k) ?: "$k"
     val lines = ArrayList<String>()
     lines += "現在 ${count}人"
