@@ -39,9 +39,8 @@ import androidx.compose.ui.unit.dp
  * の CountsCard（StaffShiftMatrixCard, StaffShiftMatrix.kt）が担当。
  */
 @Composable
-fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
-    val v = vm.ws1() ?: return
-    val skills = vm.skillGroups()
+internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
+    val skills = v.skillGroups
     val cs = MaterialTheme.colorScheme
     var edit by remember { mutableStateOf<Triple<Int, String, Int>?>(null) }   // (i, name, groupIdx)
     var addOpen by remember { mutableStateOf(false) }
@@ -54,7 +53,7 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
             Text("タップで編集、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             // [3.530.0] シフト種別/グループ（3.515.6）と同じ形へ統一（経緯: docs/history/3.4xx.md）。
-            ReorderableRows(items = v.staff, enabled = !ui.running, onMove = { from, to -> vm.ws1MoveStaffTo(from, to) }) { i, st, dragHandle ->
+            ReorderableRows(items = v.staff, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveStaff(from, to)) }) { i, st, dragHandle ->
                 val gk = v.groups.getOrNull(st.groupIdx)?.kigou?.let { toHankakuKigou(it) } ?: "?"
                 Row(
                     Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -79,9 +78,9 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
                                         Text(skills.getOrNull(st.skillIdx)?.kigou ?: "(なし)")
                                     }
                                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                                        DropdownMenuItem(text = { Text("(なし)") }, onClick = { vm.setStaffSkill(i, -1); open = false })
+                                        DropdownMenuItem(text = { Text("(なし)") }, onClick = { onEvent(MagiEvent.Structure.SetStaffSkill(i, -1)); open = false })
                                         skills.forEachIndexed { gi, sg ->
-                                            DropdownMenuItem(text = { Text("${sg.kigou}  ${sg.name}") }, onClick = { vm.setStaffSkill(i, gi); open = false })
+                                            DropdownMenuItem(text = { Text("${sg.kigou}  ${sg.name}") }, onClick = { onEvent(MagiEvent.Structure.SetStaffSkill(i, gi)); open = false })
                                         }
                                     }
                                 }
@@ -102,22 +101,22 @@ fun StaffManageCard(ui: UiState, vm: MagiViewModel) {
     if (bulkOpen) {
         BulkAddDialog("職員を一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。",
             v.groups.map { toHankakuKigou(it.kigou) },
-            { lines, gi -> lines.forEach { vm.ws1AddStaff(it, gi) }; bulkOpen = false }, { bulkOpen = false })
+            { lines, gi -> lines.forEach { onEvent(MagiEvent.Structure.AddStaff(it, gi)) }; bulkOpen = false }, { bulkOpen = false })
     }
     edit?.let { (i, nm, gi0) ->
         // [3.530.0] 削除の入口はシフト種別/グループと同じく編集ダイアログの中（3.515.6と同じ形）。
         StaffDialog("職員の編集（改名・所属）", nm, gi0, v.groups.map { toHankakuKigou(it.kigou) },
-            { n, gi -> vm.ws1EditStaff(i, n, gi); edit = null }, { edit = null },
+            { n, gi -> onEvent(MagiEvent.Structure.EditStaff(i, n, gi)); edit = null }, { edit = null },
             onDelete = if (v.staff.size > 1) ({ edit = null; confirmDelete = i }) else null)
     }
     if (addOpen) {
         StaffDialog("入職（職員追加）", "", 0, v.groups.map { toHankakuKigou(it.kigou) },
-            { n, gi -> vm.ws1AddStaff(n, gi); addOpen = false }, { addOpen = false })
+            { n, gi -> onEvent(MagiEvent.Structure.AddStaff(n, gi)); addOpen = false }, { addOpen = false })
     }
     confirmDelete?.let { i ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            confirmButton = { DialogDangerButton("削除（退職）", onClick = { vm.ws1RemoveStaff(i); confirmDelete = null }) },
+            confirmButton = { DialogDangerButton("削除（退職）", onClick = { onEvent(MagiEvent.Structure.RemoveStaff(i)); confirmDelete = null }) },
             dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }) },
             title = { DialogHeader("退職・削除の確認", { confirmDelete = null }) },
             text = { Text("${v.staff.getOrNull(i)?.name ?: ""} を削除します。この職員の勤務・希望も消えます。") },

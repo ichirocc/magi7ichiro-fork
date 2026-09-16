@@ -38,11 +38,11 @@ import androidx.compose.ui.unit.dp
  * スキル別の回数(cons41s)/組み合わせ禁止(cons42s) だけが参照する。1人1スキル。
  */
 @Composable
-fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
+internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEvent: (MagiEvent) -> Unit) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
-    val skills = vm.skillGroups()
-    val staff = vm.ws1()?.staff ?: emptyList()
+    val skills = v.skillGroups
+    val staff = v.staff
     var dialog by remember { mutableStateOf<SkillDlg?>(null) }
     // [破壊操作ガード] スキル群削除は職員の skillIdx を再割当てする高影響操作。確認を挟む。
     var confirmDelete by remember { mutableStateOf<Int?>(null) }
@@ -56,7 +56,7 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
             Text("担当シフトには影響しない、勤務グループとは別の分類です（1人1スキル）。スキルグループのルール（レンジ／ペア禁止）だけがこの分類を使います。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             if (skills.isNotEmpty()) {
-                val skillRules = vm.skillConstraintFamilies().sumOf { it.rows.size }
+                val skillRules = skillRuleCount
                 if (skillRules == 0) {
                     Text("いまはスキルグループのルールが1件も無いため、この分類は勤務表に影響しません（分類を置いておくこと自体は問題ありません）。ルールはこの下の専用ルール欄で作れます。",
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -88,21 +88,21 @@ fun SkillGroupCard(ui: UiState, vm: MagiViewModel) {
     }
 
     when (val d = dialog) {
-        SkillDlg.Add -> SkillGroupDialog("スキルグループ追加", "", "", onOk = { n, k -> vm.addSkillGroup(n, k); dialog = null }, onClose = { dialog = null })
-        is SkillDlg.Edit -> SkillGroupDialog("スキルグループ編集", d.name, d.kigou, onOk = { n, k -> vm.editSkillGroup(d.g, n, k); dialog = null }, onClose = { dialog = null })
+        SkillDlg.Add -> SkillGroupDialog("スキルグループ追加", "", "", onOk = { n, k -> onEvent(MagiEvent.Structure.AddSkillGroup(n, k)); dialog = null }, onClose = { dialog = null })
+        is SkillDlg.Edit -> SkillGroupDialog("スキルグループ編集", d.name, d.kigou, onOk = { n, k -> onEvent(MagiEvent.Structure.EditSkillGroup(d.g, n, k)); dialog = null }, onClose = { dialog = null })
         null -> {}
     }
 
     confirmDelete?.let { g ->
         val name = skills.getOrNull(g)?.let { "${it.kigou} ${it.name}" } ?: "このスキルグループ"
         // [3.429.0/R-03] cons41s/cons42s の参照件数も見せる（削除自体は従来どおり進められる）。
-        val refs = vm.ws1SkillGroupRefCount(g)
+        val refs = v.skillGroupRefCount(g)
         val refNote = if (refs > 0) " このスキルグループを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
             title = { Text("スキルグループを削除しますか？") },
             text = { Text("「$name」を削除します。所属していた職員のスキル割当は自動で付け替わります。元に戻すで取り消せます。$refNote") },
-            confirmButton = { DialogDangerButton("削除する", onClick = { vm.removeSkillGroup(g); confirmDelete = null }) },
+            confirmButton = { DialogDangerButton("削除する", onClick = { onEvent(MagiEvent.Structure.RemoveSkillGroup(g)); confirmDelete = null }) },
             dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }) },
         )
     }

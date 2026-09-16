@@ -2017,19 +2017,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- ws1 initial setup ----------------------------------------------------
 
-    /** Snapshot of the ws1 (初期設定) data for the editor. Recomputed per call (cheap). */
-    data class Ws1View(
-        val startDate: String, val endDate: String, val days: Int, val use2: Boolean,
-        val shifts: List<Shift>, val groups: List<Group>, val staff: List<Staff>,
-        val groupShift: List<List<Int>>,
-        val groupShiftApt: List<List<String>>,
-    )
-
-    fun ws1(): Ws1View? {
-        val st = state ?: return null
-        val days = currentSchedule?.firstOrNull()?.size ?: st.dayCount
-        return Ws1View(st.startDate, st.endDate, days, st.use2Patterns, st.shifts, st.groups, st.staff, st.groupShift, st.groupShiftApt)
-    }
+    internal fun ws1(): Ws1View? =
+        ws1ViewOf(state, currentSchedule?.firstOrNull()?.size ?: state?.dayCount ?: 0)
 
     internal fun applyStructure(ns: MagiState) {
         if (structuralEditBlocked()) return

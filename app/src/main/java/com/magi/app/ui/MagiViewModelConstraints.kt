@@ -22,9 +22,9 @@ import kotlinx.coroutines.flow.update
  */
 fun MagiViewModel.groupKigouList(): List<String> = state?.groups?.map { it.kigou } ?: emptyList()
 
-fun MagiViewModel.constraintFamilies(): List<ConstraintFamilyView> = constraintsViewOf(state).families
+internal fun MagiViewModel.constraintFamilies(): List<ConstraintFamilyView> = constraintsViewOf(state).families
 
-fun MagiViewModel.skillConstraintFamilies(): List<ConstraintFamilyView> = constraintsViewOf(state).skillFamilies
+internal fun MagiViewModel.skillConstraintFamilies(): List<ConstraintFamilyView> = constraintsViewOf(state).skillFamilies
 
 fun MagiViewModel.skillGroupKigouList(): List<String> = state?.skillGroups?.map { it.kigou } ?: emptyList()
 fun MagiViewModel.addCons41s(groupKigou: String, shiftKigou: String, l: String, u: String) {

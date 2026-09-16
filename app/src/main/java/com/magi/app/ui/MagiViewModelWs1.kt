@@ -202,17 +202,11 @@ fun MagiViewModel.setStaffSkill(i: Int, skillIdx: Int) {
     logOp("I", "スキル割当: ${opNm(i)} → 区分[$skillIdx]"); applyStructure(st.copy(staff = st.staff.mapIndexed { idx, s -> if (idx == i) s.copy(skillIdx = skillIdx) else s }))
 }
 
-/** グループを削除できるか（2グループ以上あれば可。所属者がいても先頭グループへ移動して削除）。 */
-fun MagiViewModel.ws1CanRemoveGroup(g: Int): Boolean = state?.let { g in it.groups.indices && it.groups.size > 1 } ?: false
-
-/** グループgの所属人数（削除確認の警告表示用）。 */
-fun MagiViewModel.ws1GroupMemberCount(g: Int): Int = state?.staff?.count { it.groupIdx == g } ?: 0
-
-/** [3.429.0/R-03] 削除確認ダイアログで見せる影響件数（Ws1Ops.shiftRefCount/groupRefCount へ委譲）。
- *  対象のシフト/グループを参照する制約行数。0 件なら影響なし。 */
-fun MagiViewModel.ws1ShiftRefCount(k: Int): Int = state?.let { st -> st.shifts.getOrNull(k)?.let { Ws1Ops.shiftRefCount(st, it.kigou) } } ?: 0
-fun MagiViewModel.ws1GroupRefCount(g: Int): Int = state?.let { st -> st.groups.getOrNull(g)?.let { Ws1Ops.groupRefCount(st, it.kigou) } } ?: 0
-fun MagiViewModel.ws1SkillGroupRefCount(g: Int): Int = state?.let { st -> st.skillGroups.getOrNull(g)?.let { Ws1Ops.skillGroupRefCount(st, it.kigou) } } ?: 0
+fun MagiViewModel.ws1CanRemoveGroup(g: Int): Boolean = ws1()?.canRemoveGroup(g) ?: false
+fun MagiViewModel.ws1GroupMemberCount(g: Int): Int = ws1()?.groupMemberCount(g) ?: 0
+fun MagiViewModel.ws1ShiftRefCount(k: Int): Int = ws1()?.shiftRefCount(k) ?: 0
+fun MagiViewModel.ws1GroupRefCount(g: Int): Int = ws1()?.groupRefCount(g) ?: 0
+fun MagiViewModel.ws1SkillGroupRefCount(g: Int): Int = ws1()?.skillGroupRefCount(g) ?: 0
 
 fun MagiViewModel.ws1RemoveShift(k: Int) {
     val st = state ?: return

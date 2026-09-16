@@ -213,6 +213,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val onEvent: (MagiEvent) -> Unit = { mediator.dispatch(it) }
     // 制約エディタが描くのに要るものを Root で 1 度だけ組み立てる（画面から vm への問い合わせを無くす）。
     val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
+    val ws1View = remember(ui) { vm.ws1() }
 
     val openJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -614,7 +615,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         1 -> {
                             // [職員管理] 入退職・所属・スキルの随時変更（人の属性管理に純化。個人の回数上下限は
                             //   年間マスター「③ 回数（1人あたり）」の StaffRangeCard へ=3.286.0 冗長性A）。
-                            key(ui.editRev) { StaffManageCard(ui, vm) }
+                            ws1View?.let { StaffManageCard(ui, it, onEvent) }
                             // [3.286.0 冗長性A] StaffRangeCard は年間マスター「③ 回数（1人あたり）」へ一本化
                             //   （旧: 職員管理と③の2ドアに同一カード全体が重複＝編集タブ内で唯一のカード丸ごと重複だった。
                             //   回数設定は③が意味的定位置・職員管理は人の属性管理=入職/退職/改名/所属/スキルに純化）。
@@ -641,13 +642,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("勤務の種類・グループと、グループ×勤務の担当可否を決めます。職員の入退職・所属は「職員管理」へ。")
-                                    key(ui.editRev) { Ws1Card(ui, vm) }
+                                    ws1View?.let { Ws1Card(ui, it, onEvent) }
                                 }
                             }
                             CollapsibleSection("② スキルグループ", "yr_skillg") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("資格や対応できる業務などの“スキル”でまとめる単位です。勤務のグループとは別の切り口で分けます（例：採血できる人・リーダーできる人）。")
-                                    key(ui.editRev) { SkillGroupCard(ui, vm) }
+                                    ws1View?.let { SkillGroupCard(ui, it, constraintsView.skillFamilies.sumOf { f -> f.rows.size }, onEvent) }
                                 }
                             }
                             // ③ 回数（1人あたり）★統合: 目標(apt) ＋ 個人の下限上限(ws5) ＋ グループ一括。
