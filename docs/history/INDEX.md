@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- design-lint P10違反を修正（3.579.0、PR #201 CI赤対応）。`Ws1Editor.kt`の削除確認ダイアログが
+  「休」を生文字列比較していたのを`Ws1View.restIdx`（`restShiftIndex`経由）へ置換。P10は
+  baseline 2件に復帰、hosttest 803テスト緑 → `docs/history/3.4xx.md`
 - backlog#23完了: `docs/screen_spec.md` §08b・`docs/sudo_model.md`の陳腐化した重み表を現行値へ更新
   （3.578.0）。SOFT表「14種」→「15種」（`weekly`行追加）、HARD/SOFT両表を3.522.0以降の現行重みへ
   更新・重み降順に並び替え。コード変更なし → `docs/history/3.4xx.md`

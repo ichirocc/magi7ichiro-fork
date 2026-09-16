@@ -5,6 +5,7 @@ import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
 import com.magi.app.v6.Ws1Ops
+import com.magi.app.v6.restShiftIndex
 
 /** ws1（初期設定）の編集画面が描くのに要るもの。`MagiState` から 1 度だけ組み立てる。 */
 internal data class Ws1View(
@@ -18,6 +19,8 @@ internal data class Ws1View(
     val groupRefs: List<Int> = emptyList(),
     val groupMembers: List<Int> = emptyList(),
     val skillGroupRefs: List<Int> = emptyList(),
+    /** [3.578.0/P10] 「休」の記号解決は`restShiftIndex`の唯一の持ち場に委譲（生文字列比較を作らない）。 */
+    val restIdx: Int = -1,
 ) {
     /** グループは 2 つ以上あれば削除できる（所属者がいても先頭グループへ移して削除）。 */
     fun canRemoveGroup(g: Int): Boolean = g in groups.indices && groups.size > 1
@@ -40,5 +43,6 @@ internal fun ws1ViewOf(st: MagiState?, days: Int): Ws1View? {
         groupRefs = st.groups.map { Ws1Ops.groupRefCount(st, it.kigou) },
         groupMembers = st.groups.indices.map { g -> st.staff.count { it.groupIdx == g } },
         skillGroupRefs = st.skillGroups.map { Ws1Ops.skillGroupRefCount(st, it.kigou) },
+        restIdx = restShiftIndex(st),
     )
 }
