@@ -265,10 +265,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * [3.378.0/HF77=コメント≠実装] 旧 KDoc は「最大300件」と書いていたが実装は 1000。
      * 「自分の行がリングから押し出されたのか」を判断する材料なので実装値へ訂正する。
      */
+    /** `opLog` と同じ順の整形済み写し。書き換えるのは [logOp] だけ（差し替えのみ・要素は不変）。 */
+    private var opLogLines: List<String> = emptyList()
+
     internal fun logOp(level: String, message: String) {
-        opLog.addFirst(OpLogEntry(System.currentTimeMillis(), level, message, activeRunSerial))
+        val e = OpLogEntry(System.currentTimeMillis(), level, message, activeRunSerial)
+        opLog.addFirst(e)
         while (opLog.size > 1000) opLog.removeLast()
-        _ui.update { it.copy(opLog = opLog.map { formatOpLine(it) }) }
+        // [3.569.0] 旧: 毎回 1000 行を SimpleDateFormat で作り直していた（最適化中は数秒おき・編集のたび）。新 1 行だけ整形する。
+        val keep = opLog.size - 1
+        opLogLines = ArrayList<String>(keep + 1).apply { add(formatOpLine(e)); for (i in 0 until keep) add(opLogLines[i]) }
+        _ui.update { it.copy(opLog = opLogLines) }
     }
 
     /** [3.408.0] 実行中の行だけ `#N` を付ける（実行外＝0 は従来どおり無印）。 */
@@ -594,8 +601,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
             kotlinx.coroutines.delay(1200)
-            val gen = ++saveGen   // main で採番＝exportJson の時点の状態順
-            val json = exportJson() ?: return@launch
+            val gen = ++saveGen   // main で採番＝入力を固定した時点の状態順
+            val build = exportJsonDeferred() ?: return@launch
+            val json = withContext(Dispatchers.Default) { build() }   // [3.569.0] 文字列化は main で行わない
             _ui.update { it.copy(saveState = SaveState.Saving) }
             val ok = withContext(Dispatchers.IO) {
                 saveGate.writeIfLatest(gen) {
@@ -796,7 +804,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     // [3.488.0] 検証を通ったあとで groupShiftApt を G×K に揃える（空配列・行不足は空欄＝目標なし）。
                     val st = Ws1Ops.normalizeGroupShiftApt(st0)
                     normalizedOnLoad = st !== parsed
-                    val p = Problem(st)
+                    val p = cachedProblem(st)
                     val init = p.initialAssignment()
                     val report = UnifiedViolationChecker.check(st, init)
                     Result.success(LoadedProblem(st, init, report))
@@ -1675,7 +1683,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 担当外（そのスタッフのグループで担当不可）な希望の件数。希望で上書き時の確認に使う。 */
     fun wishOutOfScopeCount(): Int {
         val st = state ?: return 0
-        val p = Problem(st)
+        val p = cachedProblem(st)
         var n = 0
         for ((key, k) in st.wishes) {
             val i = key.split(',').getOrNull(0)?.toIntOrNull() ?: continue
@@ -1695,7 +1703,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   良化採用時に上書き消失しうる。3.328.0/3.161.0 の「編集は必ず4入口を通る」の対象漏れだった。
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
-        val p = Problem(st)
+        val p = cachedProblem(st)
         pushUndo("希望を反映")
         var applied = 0
         var oos = 0
@@ -1880,7 +1888,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun shortageFixCandidates(dayIndex: Int, shiftIndex: Int): List<FixCandidate> {
         val st = state ?: return emptyList()
         val sched = currentSchedule ?: return emptyList()
-        val p = Problem(st)
+        val p = cachedProblem(st)
         if (shiftIndex !in 0 until p.K || dayIndex !in 0 until p.T) return emptyList()
         val rest = restShiftIndex(st)   // [監査A5] 休は記号解決（raw"休"比較は「公」職場で全滅していた）
         val out = ArrayList<FixCandidate>()
@@ -2187,7 +2195,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val s = state ?: return
         // [3.502.0/バックログ#9(d)] 対象はいまの設定で担当できないシフトへの希望（Problem.canDo＝wishOutOfScopeCount と同じ判定）。
         //   旧: 非同期の診断(settingIssues)に残るキーを消していた＝設定変更直後は古い診断で、いまは担当可能な希望まで消し得た。
-        val p = Problem(s)
+        val p = cachedProblem(s)
         val keys = s.wishes.entries.filter { (key, k) ->
             val i = key.substringBefore(",").toIntOrNull() ?: return@filter false
             i in 0 until p.S && k in 0 until p.K && !p.canDo(i, k)

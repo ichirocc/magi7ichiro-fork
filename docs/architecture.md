@@ -96,6 +96,7 @@ MagiRoot（唯一の合成ルート）
 | `SaOptimizer` | Engine-SA | 焼きなまし（Metropolis 基準）本体 |
 | `Evaluator` / `DeltaEvaluator` | Engine-Scoring | 違反スコアの計算 / 差分評価（高速化） |
 | `MirrorCore`（`MirrorKeys`） | Constraint-Defs | **18 違反種と重み**＝`weightedScore` の唯一の真実 |
+| `mapParallel`（`MirrorCore.kt`） | Util | 純関数を並列に適用し**入力順**で返す。後処理の共同 LNS 2 本が候補の評価だけをこれへ配る（生成・採否は逐次＝決定論モードの結果は不変、3.569.0） |
 | `V6SearchOperators` / `V6LateOperators` / `V6SwapSuggester` | Engine-Operators | 近傍・交換・修復などの探索手 |
 | `SmartInitialScheduler` / `GreedyMirrorScheduler` | Engine-Seed | 初期解の生成（後者はテスト専用の旧生成器） |
 | `V6SanityPort` / `V6FinalPort` / `V6PortAnalyzer` | Engine-Facade | 事前診断・UI 向けファサード・分析層 |

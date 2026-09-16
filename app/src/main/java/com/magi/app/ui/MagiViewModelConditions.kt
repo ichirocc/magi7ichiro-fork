@@ -220,7 +220,7 @@ fun MagiViewModel.groupRangeSummary(): List<GroupRangeView> {
             }
         }
     }
-    return out.sortedWith(compareBy({ it.g }, { it.k }))
+    return out   // g→k の二重ループの順にそのまま並ぶ＝並べ替え不要
 }
 
 /** [回数センター] 個人別の回数(上下限)と適切回数(apt)を職員×シフトで統合した一覧。
@@ -248,7 +248,7 @@ fun MagiViewModel.staffCountRules(): List<CountRuleView> {
             )
         }
     }
-    return rows.sortedWith(compareBy({ it.i }, { it.k }))
+    return rows   // i→k の二重ループの順にそのまま並ぶ＝並べ替え不要
 }
 
 // [3.286.0 冗長性B] 旧「回数設定画面」(CountSettingsCard, 2.60〜2.63世代)の集約ビュー

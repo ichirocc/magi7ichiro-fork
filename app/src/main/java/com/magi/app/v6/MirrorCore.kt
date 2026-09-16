@@ -596,6 +596,12 @@ object UnifiedViolationChecker {
 fun List<List<Int>>.toIntArray2D(): Array<IntArray> {
     return Array(size) { i -> this[i].toIntArray() }
 }
+/** 純関数 [f] を [items] へ並列に適用し、**入力順**で返す。少数なら逐次（fork の起動費のほうが高い）。
+ *  後処理の研磨は探索本体が終わったあと単一スレッドで走るため、候補の評価だけ空いたコアへ配る。 */
+internal fun <T, R> mapParallel(items: List<T>, minParallel: Int = 8, f: (T) -> R): List<R> =
+    if (items.size < minParallel) items.map(f)
+    else items.parallelStream().map(f).collect(java.util.stream.Collectors.toList())
+
 fun Array<IntArray>.copy2D(): Array<IntArray> {
     return Array(size) { i -> this[i].copyOf() }
 }

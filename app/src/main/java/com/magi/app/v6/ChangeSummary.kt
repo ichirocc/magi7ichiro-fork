@@ -20,7 +20,7 @@ data class ChangeSummary(
 
     companion object {
         fun of(state: MagiState, before: Array<IntArray>, after: Array<IntArray>, report: ViolationReport, beforeReport: ViolationReport? = null): ChangeSummary {
-            val p = Problem(state)
+            val p = cachedProblem(state)
             var staff = 0; var cells = 0
             for (i in 0 until p.S) {
                 var c = 0

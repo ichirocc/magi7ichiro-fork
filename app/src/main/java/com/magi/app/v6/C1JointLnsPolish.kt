@@ -99,7 +99,7 @@ internal object C1JointLnsPolish {
         seed: Long = 0xC1A11L,
         quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = Problem(state, quantitativeRangeEval)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val rootSchedule = normalizeSchedule(schedule, p)
         val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
         val rootC1 = rootReport.breakdown["c1"] ?: 0
@@ -174,6 +174,9 @@ internal object C1JointLnsPolish {
                     if (stopped()) break
                     expanded++
                     val goals = collectGoals(p, parent.schedule, goalLimit, rng, includeTemporal = parent.path.isEmpty())
+                    // [3.569.0] 候補の生成（rng 順）と採否（seen・best）は逐次のまま、評価だけ並列にする。
+                    //   評価数の上限は生成時に数えるので、決定論モード（maxEvaluations）の評価集合は旧実装と同一。
+                    val pending = ArrayList<Pair<Move, Array<IntArray>>>()
                     for (goal in goals) {
                         if (stopped()) break
                         val moves = generateMoves(p, parent.schedule, goal, moveLimit, rng)
@@ -182,7 +185,14 @@ internal object C1JointLnsPolish {
                             val next = parent.schedule.copy2D()
                             if (!applyMove(next, move)) continue
                             generated++; evaluations++
-                            val report = UnifiedViolationChecker.check(state, next, quantitativeRangeEval = quantitativeRangeEval)
+                            pending.add(move to next)
+                        }
+                    }
+                    val reports = mapParallel(pending) { UnifiedViolationChecker.check(state, it.second, quantitativeRangeEval = quantitativeRangeEval) }
+                    for ((idx, pair) in pending.withIndex()) {
+                        val (move, next) = pair
+                        run {
+                            val report = reports[idx]
                             val c1 = report.breakdown["c1"] ?: 0
                             val overHard = report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0)
                             val weightDebt = config.debtFactor > 0.0
@@ -201,7 +211,7 @@ internal object C1JointLnsPolish {
                                     overTotal -> debtTotal++
                                     else -> debtC1++
                                 }
-                                continue
+                                return@run
                             }
                             val child = Node(
                                 next,
@@ -212,7 +222,7 @@ internal object C1JointLnsPolish {
                             )
                             if (!remember(seen, child)) {
                                 duplicateRejected++
-                                continue
+                                return@run
                             }
                             children.add(child)
 

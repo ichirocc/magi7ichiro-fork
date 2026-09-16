@@ -73,7 +73,7 @@ internal object PersonalBalanceJointLnsPolish {
         seed: Long = 0xA97B4L,
         quantitativeRangeEval: Boolean = false,
     ): V6HotfixPasses.CyclicSwapResult {
-        val p = Problem(state, quantitativeRangeEval)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val rootSchedule = normalizeSchedule(schedule, p)
         val rootReport = UnifiedViolationChecker.check(state, rootSchedule, quantitativeRangeEval = quantitativeRangeEval)
         if (p.S <= 0 || p.T <= 0 || p.K <= 0) return noOp(rootSchedule, rootReport, "対象なし")
@@ -121,6 +121,8 @@ internal object PersonalBalanceJointLnsPolish {
                     if (stopped()) break
                     expanded++
                     val goals = collectGoals(p, parent.schedule, focus, lower, config.maxGoals, rng)
+                    // [3.569.0] C1JointLnsPolish と同じ形: 生成と採否は逐次、評価（check＋個人罰点）だけ並列。
+                    val pending = ArrayList<Candidate>()
                     for (goal in goals) {
                         if (stopped()) break
                         val variants = buildCandidates(
@@ -129,19 +131,26 @@ internal object PersonalBalanceJointLnsPolish {
                         for (candidate in variants) {
                             if (stopped()) break
                             generated++; evaluations++
-                            val report = UnifiedViolationChecker.check(state, candidate.schedule, quantitativeRangeEval = quantitativeRangeEval)
-                            val personal = personalPenaltyByStaff(p, candidate.schedule)
+                            pending.add(candidate)
+                        }
+                    }
+                    val evaluated = mapParallel(pending) {
+                        UnifiedViolationChecker.check(state, it.schedule, quantitativeRangeEval = quantitativeRangeEval) to personalPenaltyByStaff(p, it.schedule)
+                    }
+                    for ((idx, candidate) in pending.withIndex()) {
+                        run {
+                            val (report, personal) = evaluated[idx]
                             val focusTotal = focus.sumOf { personal[it] }
                             val overDebt = if (config.debtFactor > 0.0) !WeightDebt.within(rootReport, report, config.debtFactor)
                                 else report.total > rootReport.total + config.totalDebt.coerceAtLeast(0) ||
                                     focusTotal > rootFocus + config.personalDebt.coerceAtLeast(0)
                             if (report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0) || overDebt) {
                                 debtRejected++
-                                continue
+                                return@run
                             }
                             if (!remember(seen, candidate.schedule)) {
                                 duplicateRejected++
-                                continue
+                                return@run
                             }
                             val child = Node(
                                 candidate.schedule,

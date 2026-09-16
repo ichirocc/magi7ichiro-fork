@@ -382,26 +382,26 @@ object V6NativeOptimizer {
         // [E11/多人数ブロック移動] エピローグで残 covU を「勤務→勤務」連鎖で充填（ALNS単独や covU を focus
         //   しなかった経路でも走る保険）。keep-best 照合＝退化不能。ユーザー実例(8/11・8/17)の詰み局面を解く。
         var resultSched = result.schedule
-        run {
-            val preRep = UnifiedViolationChecker.check(state, resultSched, quantitativeRangeEval = options.quantitativeRangeEval)
-            if (preRep.hard > 0 && (preRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
-                val cand = resultSched.copy2D()
-                val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL), quantitativeRangeEval = options.quantitativeRangeEval)
-                if (n > 0) {
-                    val candRep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval = options.quantitativeRangeEval)
-                    if (better(candRep, preRep)) {
-                        resultSched = cand
-                        logs = logs + MirrorLog(tag = "ChainFill",
-                            message = "多人数ブロック移動で covU 充填: HARD ${preRep.hard}→${candRep.hard} / total ${preRep.total}→${candRep.total}（連鎖${n}件）")
-                    }
+        // [3.569.0] この盤面の評価は研磨の入口と出口でも要る＝同じ盤面を 3 回 check しない（report は盤面と対で持ち回る）。
+        var resultRep = UnifiedViolationChecker.check(state, resultSched, quantitativeRangeEval = options.quantitativeRangeEval)
+        if (resultRep.hard > 0 && (resultRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
+            val cand = resultSched.copy2D()
+            val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL), quantitativeRangeEval = options.quantitativeRangeEval)
+            if (n > 0) {
+                val candRep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval = options.quantitativeRangeEval)
+                if (better(candRep, resultRep)) {
+                    logs = logs + MirrorLog(tag = "ChainFill",
+                        message = "多人数ブロック移動で covU 充填: HARD ${resultRep.hard}→${candRep.hard} / total ${resultRep.total}→${candRep.total}（連鎖${n}件）")
+                    resultSched = cand
+                    resultRep = candRep
                 }
             }
         }
         // [review #3] Final epilogue polish only when the caller isn't running its own post chain.
         val polished = if (options.postPolish && !shouldStop())
-            hf80PostPolish(state, resultSched, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop, options.quantitativeRangeEval)
-        else PolishResult(resultSched, emptyList(), 0)
-        val finalReport = UnifiedViolationChecker.check(state, polished.schedule, quantitativeRangeEval = options.quantitativeRangeEval)
+            hf80PostPolish(state, resultSched, max(1, min(30, options.totalBudgetSec / 20)), actualSeed(options.seed) xor 0x80L, shouldStop, options.quantitativeRangeEval, initialReport = resultRep)
+        else PolishResult(resultSched, emptyList(), 0, resultRep)
+        val finalReport = polished.report
         logs = logs + polished.logs + MirrorLog(
             tag = "V6Dispatcher",
             message = "完了 algorithm=$chosen HARD=${finalReport.hard} total=${finalReport.total} elapsed=${nowMs() - started}ms",
@@ -882,9 +882,7 @@ object V6NativeOptimizer {
         //   （`register` が sameSchedule で重複を弾き `snapshot` も filterNot で除くので、
         //   圧縮エリートは常に相異なる＝実機ログでも2実行とも 10/10）。
         //   意味があるのは**ワーカー解が潰れているか**（同一解に収束＝並列の無駄）なので、そちらを出す。
-        val distinctWorkers = outcomes.map { o ->
-            o.elite.joinToString("|") { it.joinToString(",") }
-        }.distinct().size
+        val distinctWorkers = outcomes.map { BoardKey(it.elite) }.distinct().size
         val pairDistances = ArrayList<Int>()
         for (i in outcomes.indices) for (j in i + 1 until outcomes.size) {
             pairDistances.add(RoleDiversityHelpers.scheduleDistance(outcomes[i].elite, outcomes[j].elite))
@@ -1195,7 +1193,7 @@ object V6NativeOptimizer {
             .filter { it !== best }
             .sortedWith(compareBy(reportComparator) { it.report })
             .map { it.schedule }
-            .distinctBy { sch -> sch.joinToString("|") { it.joinToString(",") } }
+            .distinctBy { BoardKey(it) }
             .take(3)
             .toList()
         runSlot()?.alternatives = alts                      // [3.335.0] この実行の「他の案」
@@ -1215,7 +1213,7 @@ object V6NativeOptimizer {
         //   各仮説の合計が揃っていれば収束、ばらけていれば多様な探索ができている、と判別できる。
         val perHyp = results.sortedWith(compareBy(reportComparator) { it.report })
             .joinToString("  ") { r -> "[必須${r.report.hard}/合計${r.report.total}${if (r === best) "★採用" else ""}]" }
-        val distinctSols = results.map { r -> r.schedule.joinToString("|") { row -> row.joinToString(",") } }.distinct().size
+        val distinctSols = results.map { BoardKey(it.schedule) }.distinct().size
         val pairDistances = ArrayList<Int>()
         for (a in results.indices) for (b in a + 1 until results.size) {
             pairDistances.add(AdaptiveEliteArchive.scheduleDistance(results[a].schedule, results[b].schedule))
@@ -1346,7 +1344,7 @@ object V6NativeOptimizer {
         val chain0Iters = results.firstOrNull()?.iterations ?: 0L
         val perChain = results.sortedWith(compareBy(reportComparator) { it.report })
             .joinToString("  ") { r -> "[必須${r.report.hard}/合計${r.report.total}${if (r === best) "★採用" else ""}]" }
-        val distinctSols = results.map { r -> r.schedule.joinToString("|") { row -> row.joinToString(",") } }.distinct().size
+        val distinctSols = results.map { BoardKey(it.schedule) }.distinct().size
         val failNote = if (results.size < chains) "・失敗${chains - results.size}本(例外/キャンセル)" else ""
         val extra = MirrorLog(tag = "AlnsChains", message =
             "ALNS多チェーン(${chains}並列$failNote) → 採用 HARD=${best.report.hard} total=${best.report.total}" +
@@ -1930,7 +1928,7 @@ object V6NativeOptimizer {
             }
         }
         val polish = hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, shouldStop, options.quantitativeRangeEval)
-        val report = UnifiedViolationChecker.check(state, polish.schedule, quantitativeRangeEval = options.quantitativeRangeEval)
+        val report = polish.report
         logs.add(MirrorLog(tag = "RSIPlus", message = "Phase3/4 Refine+Polish: HARD=${report.hard} total=${report.total}"))
         return V6OptimizerResult(
             polish.schedule,
@@ -1942,7 +1940,8 @@ object V6NativeOptimizer {
         )
     }
 
-    private data class PolishResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>, val iterations: Long)
+    /** `report` は常に `schedule` の評価（hf80PostPolish 内で盤面と対で更新される）。 */
+    private data class PolishResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>, val iterations: Long, val report: ViolationReport)
 
     /**
      * [ソフト研磨専用] 現在の盤面をHARDガード付きで局所研磨し、SOFTのみ削減する公開エントリ。
@@ -1969,12 +1968,14 @@ object V6NativeOptimizer {
     private suspend fun hf80PostPolish(
         state: MagiState, initial: Array<IntArray>, seconds: Int, seed: Long,
         shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false,
+        /** 呼出側が `initial` の評価を既に持つならそれ（同じ quantitativeRangeEval で取ったもの）。 */
+        initialReport: ViolationReport? = null,
     ): PolishResult {
         val started = nowMs()
         val rng = Random(seed)
         val p = cachedProblem(state, quantitativeRangeEval)
         var best = initial.copy2D()
-        var bestReport = UnifiedViolationChecker.check(state, best, quantitativeRangeEval = quantitativeRangeEval)
+        var bestReport = initialReport ?: UnifiedViolationChecker.check(state, best, quantitativeRangeEval = quantitativeRangeEval)
         val baseSched = best          // 入力スナップショット（best は改善時に別配列へ差し替わる）
         val baseReport = bestReport
         var iters = 0L
@@ -1995,7 +1996,7 @@ object V6NativeOptimizer {
         if (nat.completed) {
             if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
             val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}（ネイティブ）" + if (stalled) "（停滞早期終了 枠${seconds}s）" else ""))
-            return PolishResult(best, logs, iters)
+            return PolishResult(best, logs, iters, bestReport)
         }
         var cur = best.copy2D()
         val eval = DeltaEvaluator(p)
@@ -2120,7 +2121,7 @@ object V6NativeOptimizer {
         if (better(baseReport, bestReport)) { best = baseSched; bestReport = baseReport }
         val logs = listOf(MirrorLog(iter = iters, tag = "HF80", message = "PostPolish ${nowMs() - started}ms HARD=${bestReport.hard} total=${bestReport.total}" +
             if (stalled) "（停滞早期終了 枠${seconds}s・停滞${stallDurationMs}ms無改善）" else ""))
-        return PolishResult(best, logs, iters)
+        return PolishResult(best, logs, iters, bestReport)
     }
 
     /** [Stage10] ネイティブ Polish 実行の結果。completed=枠を消費し切った(=Kotlin ループ不要) /

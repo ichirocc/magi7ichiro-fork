@@ -4,6 +4,7 @@ import android.app.Application
 import com.magi.app.model.MojibakeRepair
 import com.magi.app.model.StateParser
 import com.magi.app.v6.ScheduleCsvBridge
+import com.magi.app.v6.copy2D
 import com.magi.app.v6.toIntArray2D
 import kotlinx.coroutines.flow.update
 
@@ -24,13 +25,17 @@ import kotlinx.coroutines.flow.update
  * logOp・load/loadAsync・applyStructureWithMessage。
  */
 /** Current JSON to export. ws1 edits -> full serialize; constraint edits -> overwrite cons; else schedule only. */
-fun MagiViewModel.exportJson(): String? {
-    val sched = currentSchedule ?: resultSchedule ?: return null
+fun MagiViewModel.exportJson(): String? = exportJsonDeferred()?.invoke()
+
+/** [3.569.0] 入力の固定（main で呼ぶ。盤面は編集で書き換わるので複製）と文字列化（任意のスレッド）を分ける。 */
+fun MagiViewModel.exportJsonDeferred(): (() -> String)? {
+    val sched = (currentSchedule ?: resultSchedule ?: return null).copy2D()
     val st = state
-    if (_ui.value.structureEdited && st != null) return StateParser.serialize(st, sched)
+    val ui = _ui.value
+    if (ui.structureEdited && st != null) return { StateParser.serialize(st, sched) }
     val orig = originalJson ?: return null
-    return if (_ui.value.constraintsEdited && st != null) StateParser.exportWithEdits(orig, st, sched)
-    else StateParser.exportWithSchedule(orig, sched)
+    return if (ui.constraintsEdited && st != null) { { StateParser.exportWithEdits(orig, st, sched) } }
+    else { { StateParser.exportWithSchedule(orig, sched) } }
 }
 
 fun MagiViewModel.exportCsv(): String? {
