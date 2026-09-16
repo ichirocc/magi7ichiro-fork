@@ -200,6 +200,18 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおすのを手伝って」対話
 
+    // [Root] 画面から上がってきた操作の入口。可否は MagiArbiter が決め、通ったものだけが鎖へ流れる。
+    //   配下の Composable は vm を知らず、この onEvent へ MagiEvent を渡すだけ。
+    var exportRequest by remember { mutableStateOf<MagiEvent.ExportKind?>(null) }
+    val mediator = remember(vm) {
+        MagiMediator(
+            phaseOf = { vm.currentPhase() },
+            handlers = magiHandlers(vm) { kind -> exportRequest = kind },
+            onReject = { _, r -> vm.rejectFromMediator(r) },
+        )
+    }
+    val onEvent: (MagiEvent) -> Unit = { mediator.dispatch(it) }
+
     val openJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -360,6 +372,23 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     val onBgOptimize: () -> Unit = {
         notifPermLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+    // [Root] 書き出しだけは端末の保存先ダイアログが要るので、鎖の最後を Root が受ける。
+    //   ハンドラ側は「どの種類か」を置くだけで、どう保存するかは知らない。
+    LaunchedEffect(exportRequest) {
+        val kind = exportRequest ?: return@LaunchedEffect
+        exportRequest = null
+        val stamp = System.currentTimeMillis()
+        when (kind) {
+            MagiEvent.ExportKind.Json -> saveJsonLauncher.launch("magi_state_$stamp.json")
+            MagiEvent.ExportKind.Csv -> saveCsvLauncher.launch("magi_schedule_$stamp.csv")
+            MagiEvent.ExportKind.StaffCsv -> { pendingExportKind = "staff"; saveComponentCsvLauncher.launch("magi_staff_$stamp.csv") }
+            MagiEvent.ExportKind.WishesCsv -> { pendingExportKind = "wishes"; saveComponentCsvLauncher.launch("magi_wishes_$stamp.csv") }
+            MagiEvent.ExportKind.ConstraintsCsv -> { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_$stamp.csv") }
+            MagiEvent.ExportKind.ShiftColorsCsv -> { pendingExportKind = "colors"; saveComponentCsvLauncher.launch("magi_shift_colors_$stamp.csv") }
+            MagiEvent.ExportKind.Logs -> saveLogLauncher.launch("magi_log_$stamp.txt")
+            MagiEvent.ExportKind.LogsJson -> saveLogJsonLauncher.launch("magi_log_$stamp.json")
+        }
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
@@ -571,7 +600,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [月次条件] チェックリスト→月えらび→希望→日別例外。入力順序＝作成前の安全な流れ。
                             // [3.482.0 導線重複] 作成ボタンは固定フッター（BottomCommandBar）に一本化＝カードは確認だけ。
                             MonthlyChecklistCard(ui, vm, onOpenWish = openWish)
-                            MonthPickerCard(ui, vm)
+                            MonthPickerCard(ui, onEvent)
                             // [3.190.0 横展開・検討のうえ対象外] WishCard/NeedCalendarCard は選択中の職員/シフト
                             //   (i/k・remember)を保持したまま複数回編集する設計のため、key(ui.editRev)で包むと
                             //   自分自身の編集コミット(editRev変化)のたびに選択がリセットされ、③より悪い退行を生む。
@@ -590,7 +619,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         }
                         else -> {
                             // [見直し候補] 月次の修正から送られたルール見直しメモ（あれば先頭に表示）。
-                            ReviewMemoCard(ui, vm)
+                            ReviewMemoCard(ui, onEvent)
                             // [年度始めモード] シフト別の実働体制（担当人数 vs 需要・欠勤耐性）を土台編集の入口で提示。
                             StaffingRealityCard(ui, vm)
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
@@ -681,11 +710,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 else -> {
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
                         plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it })
-                    ShiftColorCard(ui, vm)
+                    ShiftColorCard(ui, vm.shiftColorList(), onEvent)
                     // [IA重複解消 3.132系] 違反の色は ColorSettingsView（基準色2種＋族別）へ一本化し、
                     //   シフトの表示色の直後＝色設定の定位置に配置（旧: 詳細設定の折りたたみ内で見つけにくい＋
                     //   ShiftColorCard 内に必須色だけの部分入口が重複していた）。
-                    ColorSettingsView(ui, vm)
+                    ColorSettingsView(ui, onEvent)
                     DataActionsCard(
                         ui = ui,
                         onOpenJson = openJson,
@@ -700,7 +729,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSaveShiftColorsCsv = { pendingExportKind = "colors"; saveComponentCsvLauncher.launch("magi_shift_colors_${System.currentTimeMillis()}.csv") },
                         onRestorePrev = { vm.restorePreviousData() },
                     )
-                    SettingsCard(ui, vm, onBgOptimize = onBgOptimize)
+                    SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     // [実機指摘/移動] 重み表＝最適化の優先順位の根拠。実行条件（最適化設定）の隣が定位置。
                     // [3.532.0/設定タブ静音化] 常時展開の19件表は毎回の初見コストが高いため既定で閉じる
                     // （ColorSettingsViewの族別チップが3.483.0で同じ理由・同じ形で先行済み）。
@@ -709,7 +738,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   詳細設定の LogsCard と重複）を撤去。ログは詳細設定>ログ(操作+診断)に一本化。
                     AdvancedSettingsSection(
                         ui = ui,
-                        vm = vm,
+                        onEvent = onEvent,
                         onExportLog = { saveLogLauncher.launch("magi_log_${System.currentTimeMillis()}.txt") },
                         onExportJson = { saveLogJsonLauncher.launch("magi_log_${System.currentTimeMillis()}.json") },
                     )

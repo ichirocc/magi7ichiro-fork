@@ -109,7 +109,7 @@ import androidx.compose.ui.platform.LocalContext
  */
 
 @Composable
-internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
+internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (!ui.loaded) return
     val cs = MaterialTheme.colorScheme
     val label = remember(ui.startDate) {
@@ -121,15 +121,15 @@ internal fun MonthPickerCard(ui: UiState, vm: MagiViewModel) {
             Text("作成対象の月。変えると日数に合わせて表を作り直します。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { vm.shiftMonth(-1) }, enabled = !ui.running,
+                OutlinedButton(onClick = { onEvent(MagiEvent.Structure.ShiftMonth(-1)) }, enabled = !ui.running,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("前の月") }
                 Text(label ?: "未設定", style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = { vm.shiftMonth(1) }, enabled = !ui.running,
+                OutlinedButton(onClick = { onEvent(MagiEvent.Structure.ShiftMonth(1)) }, enabled = !ui.running,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("次の月") }
             }
             // [実機指摘] 月末に「来月」の表を作る業務フローに合わせ、ワンタップは来月へ。
-            OutlinedButton(onClick = { vm.setNextMonth() }, enabled = !ui.running,
+            OutlinedButton(onClick = { onEvent(MagiEvent.Structure.SetNextMonth) }, enabled = !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("来月にする") }
         }
     }
@@ -203,18 +203,18 @@ internal fun GuideRow(label: String, value: String, done: Boolean, onClick: (() 
  * 触らない内部チューニング）は既存の「詳細設定（上級者向け）」（`AdvancedSettingsSection`）へ移動。
  */
 @Composable
-internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Unit = {}) {
+internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimize: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Text("最適化の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.setBudget((ui.budgetSec - 60).coerceAtLeast(10)) },
+                Button(onClick = { onEvent(MagiEvent.Settings.SetBudget((ui.budgetSec - 60).coerceAtLeast(10))) },
                     enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.height(48.dp)) { Text("− 60秒") }
                 Text("${ui.budgetSec} 秒", style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center, modifier = Modifier.width(84.dp))
-                Button(onClick = { vm.setBudget((ui.budgetSec + 60).coerceAtMost(MAX_BUDGET_SEC)) },
+                Button(onClick = { onEvent(MagiEvent.Settings.SetBudget((ui.budgetSec + 60).coerceAtMost(MAX_BUDGET_SEC))) },
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
             }
             Spacer(Modifier.height(10.dp))
@@ -231,9 +231,9 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
                 V6Algorithm.values().forEach { alg ->
                     val selected = ui.v6Algorithm == alg
                     if (selected) {
-                        Button(onClick = { vm.setV6Algorithm(alg) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
                     } else {
-                        OutlinedButton(onClick = { vm.setV6Algorithm(alg) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
                     }
                 }
             }
@@ -261,15 +261,15 @@ internal fun SettingsCard(ui: UiState, vm: MagiViewModel, onBgOptimize: () -> Un
 /** [3.188.0 オプション集約] 技術系チューニング（並列ワーカー・ネイティブ加速・Kotlin照合・仕上げ最適化）。
  *  `SettingsCard` から「詳細設定（上級者向け）」へ移動した項目。一般の運用では既定値のままで問題ない。 */
 @Composable
-private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
+private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("並列ワーカー（同時に最適化する数）: ${ui.workers}")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.setWorkers((ui.workers - 1).coerceAtLeast(1)) },
+            Button(onClick = { onEvent(MagiEvent.Settings.SetWorkers((ui.workers - 1).coerceAtLeast(1))) },
                 enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に最適化する数を減らす" }) { Text("−", fontSize = 20.sp) }
             Text("${ui.workers}", style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
-            Button(onClick = { vm.setWorkers((ui.workers + 1).coerceAtMost(16)) },
+            Button(onClick = { onEvent(MagiEvent.Settings.SetWorkers((ui.workers + 1).coerceAtMost(16))) },
                 enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に最適化する数を増やす" }) { Text("＋", fontSize = 20.sp) }
         }
         // [仮説数上限撤廃・ユーザー指示] 旧: 仮説数は5固定・超過ワーカーは仮説内並列度へ配分。
@@ -299,7 +299,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                 Text("最適化の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = ui.nativeAccel, onCheckedChange = { vm.setNativeAccel(it) }, enabled = !ui.running)
+            Switch(checked = ui.nativeAccel, onCheckedChange = { onEvent(MagiEvent.Settings.SetNativeAccel(it)) }, enabled = !ui.running)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
@@ -313,7 +313,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                     color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                 )
             }
-            Switch(checked = ui.nativeParity, onCheckedChange = { vm.setNativeParity(it) }, enabled = !ui.running && ui.nativeAccel)
+            Switch(checked = ui.nativeParity, onCheckedChange = { onEvent(MagiEvent.Settings.SetNativeParity(it)) }, enabled = !ui.running && ui.nativeAccel)
         }
         // [3.528.0/ユーザー指示] AB評価で既定ONへ確定した機構（blockSwapC3nFilter・lnsAdaptive）は
         //   opt-outスイッチ自体は残すがUIには出さない。UIに出すのは既定OFFのまま据え置いたトグルのみ。
@@ -330,14 +330,14 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                     color = if (ui.wideC3nBreak) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(checked = ui.wideC3nBreak, onCheckedChange = { vm.setWideC3nBreak(it) }, enabled = !ui.running)
+            Switch(checked = ui.wideC3nBreak, onCheckedChange = { onEvent(MagiEvent.Settings.SetWideC3nBreak(it)) }, enabled = !ui.running)
         }
         // [3.409.21] 「行き詰まりからの立て直し方」「PORTFOLIOロール内並列SA」の2トグルは、単体 A/B
         //   （各15ペア・基準は測定前に固定）で中立と確定したため機構ごと削除した（PolishGate 冒頭の記録参照）。
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(
                 checked = ui.softPolish,
-                onCheckedChange = { vm.setSoftPolish(it) },
+                onCheckedChange = { onEvent(MagiEvent.Settings.SetSoftPolish(it)) },
                 enabled = !ui.running,
             )
             Spacer(Modifier.width(8.dp))
@@ -353,7 +353,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                 Text("2人一組の入れ替えを、通常より多くの組合せまで試します。ごくまれに結果が変わることがあり、時間もかかるため既定はOFFです。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = ui.combineExhaustPairs, onCheckedChange = { vm.setCombineExhaustPairs(it) }, enabled = !ui.running)
+            Switch(checked = ui.combineExhaustPairs, onCheckedChange = { onEvent(MagiEvent.Settings.SetCombineExhaustPairs(it)) }, enabled = !ui.running)
         }
         // [3.535.0/HF77明示数値指示] 公平化/適切回数の研磨で、それ以外のソフト違反がわずかに増える
         // 手も試せるようにする（keep-bestの原則自体は変えず、上限つきで容認するだけ）。既定OFF。
@@ -364,7 +364,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                     "（増える幅は始めの6%までに抑えます）。既定はOFFです。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = ui.aptFairSoftTolerance, onCheckedChange = { vm.setAptFairSoftTolerance(it) }, enabled = !ui.running)
+            Switch(checked = ui.aptFairSoftTolerance, onCheckedChange = { onEvent(MagiEvent.Settings.SetAptFairSoftTolerance(it)) }, enabled = !ui.running)
         }
         // [3.540.0/測定中] 回数の超過（個人上限・適切回数）を、複数日の同日交換の束で減らす研磨。既定OFF（tools/loop A/B で採否）。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
@@ -373,7 +373,7 @@ private fun OptimizationTuningSection(ui: UiState, vm: MagiViewModel) {
                 Text("「上限超過」「適切な回数の超過」を、同じ日の入れ替えを何日か組み合わせて減らします。他の違反が増えない場合だけ採用します。既定はOFFです。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Switch(checked = ui.countChainPolish, onCheckedChange = { vm.setCountChainPolish(it) }, enabled = !ui.running)
+            Switch(checked = ui.countChainPolish, onCheckedChange = { onEvent(MagiEvent.Settings.SetCountChainPolish(it)) }, enabled = !ui.running)
         }
     }
 }
@@ -511,7 +511,7 @@ internal fun StaffingRealityCard(ui: UiState, vm: MagiViewModel) {
  * セッション内メモ（state 非保存）＝アプリ終了で消える旨を明示。read-only・スコアリング不変。
  */
 @Composable
-internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
+internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.reviewMemos.isEmpty()) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
@@ -522,7 +522,7 @@ internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
             ui.reviewMemos.forEachIndexed { idx, memo ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(memo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    DeleteRowButton(onClick = { vm.removeReviewMemo(idx) }, text = "済")
+                    DeleteRowButton(onClick = { onEvent(MagiEvent.Session.RemoveReviewMemo(idx)) }, text = "済")
                 }
             }
         }
@@ -533,7 +533,7 @@ internal fun ReviewMemoCard(ui: UiState, vm: MagiViewModel) {
 @Composable
 internal fun AdvancedSettingsSection(
     ui: UiState,
-    vm: MagiViewModel,
+    onEvent: (MagiEvent) -> Unit,
     onExportLog: () -> Unit,
     onExportJson: () -> Unit,
 ) {
@@ -577,7 +577,7 @@ internal fun AdvancedSettingsSection(
                     //   （設定タブ上部）へ移動＝色設定を1か所に。ここはログのみ。
                     // [3.188.0 オプション集約] 並列ワーカー/ネイティブ加速/Kotlin照合/仕上げ最適化は
                     //   一般の運用では触らない内部チューニングのため SettingsCard からここへ移動。
-                    OptimizationTuningSection(ui, vm)
+                    OptimizationTuningSection(ui, onEvent)
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
                 }
             }

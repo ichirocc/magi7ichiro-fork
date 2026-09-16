@@ -48,7 +48,7 @@ fun SectionSegment(title: String, subtitle: String? = null, content: @Composable
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
+fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     // [色変更/スクショ指摘] 旧版は read-only の凡例で、チップを押しても何も起きず「色を変更出来ない」と誤解を
     //   招いていた（カード題も「違反種別の色」）。チップタップでその重大度の色を変更できるように:
     //   必須=既存トークン __vio__（外観の「違反の色」と同一）/ 要調整=新トークン __vioSoft__。灰=情報は固定。
@@ -119,8 +119,8 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 currentHex = ui.violationColorHex,
                 defaultHex = "#B71C1C",
                 // [実機バグ修正] 選ぶ・既定に戻すで閉じない（ShiftColorCard と同じ。経緯: history 3.515.2）。
-                onPick = { hex -> vm.setViolationColor(hex) },
-                onReset = { vm.resetViolationColor() },
+                onPick = { hex -> onEvent(MagiEvent.Condition.SetViolationColor(hex)) },
+                onReset = { onEvent(MagiEvent.Condition.ResetViolationColor) },
                 onClose = { pickFam = null },
                 palette = VIOLATION_COLOR_PALETTE,
             )
@@ -128,8 +128,8 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                 kigou = "要調整（基準色）",
                 currentHex = ui.violationSoftColorHex,
                 defaultHex = "#F59E0B",
-                onPick = { hex -> vm.setViolationSoftColor(hex) },
-                onReset = { vm.resetViolationSoftColor() },
+                onPick = { hex -> onEvent(MagiEvent.Condition.SetViolationSoftColor(hex)) },
+                onReset = { onEvent(MagiEvent.Condition.ResetViolationSoftColor) },
                 onClose = { pickFam = null },
                 palette = VIOLATION_COLOR_PALETTE,
             )
@@ -141,8 +141,8 @@ fun ColorSettingsView(ui: UiState, vm: MagiViewModel) {
                     "HIGH", "WARN" -> softHex
                     else -> "#8A979B"   // INFO(灰)
                 },
-                onPick = { hex -> vm.setViolationFamilyColor(pf, hex) },
-                onReset = { vm.resetViolationFamilyColor(pf) },
+                onPick = { hex -> onEvent(MagiEvent.Condition.SetViolationFamilyColor(pf, hex)) },
+                onReset = { onEvent(MagiEvent.Condition.ResetViolationFamilyColor(pf)) },
                 onClose = { pickFam = null },
                 palette = VIOLATION_COLOR_PALETTE,
             )

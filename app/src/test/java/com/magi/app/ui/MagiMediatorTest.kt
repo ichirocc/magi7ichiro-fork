@@ -7,11 +7,14 @@ import org.junit.Test
 /** 裁定（段階×種別の可否）と鎖（最初に名乗り出た輪だけが処理）を固定する。
  *  拒否の文言は既存3種のガードと1文字も変えない＝この移行で画面の言葉が変わらないことの担保。 */
 class MagiMediatorTest {
+    private var bgRunning = false
+    private val machine = MagiPhaseMachine { bgRunning }
+
     private fun mediator(
         handlers: List<MagiEventHandler> = listOf(MagiEventHandler { true }),
         rejects: MutableList<Arbitration.Reject> = mutableListOf(),
         unhandled: MutableList<MagiEvent> = mutableListOf(),
-    ) = MagiMediator(handlers, onReject = { _, r -> rejects.add(r) }, onUnhandled = { unhandled.add(it) })
+    ) = MagiMediator({ machine.phase }, handlers, onReject = { _, r -> rejects.add(r) }, onUnhandled = { unhandled.add(it) })
 
     @Test
     fun idleAcceptsEveryKind() {
@@ -32,7 +35,7 @@ class MagiMediatorTest {
         val rejects = mutableListOf<Arbitration.Reject>()
         val seen = mutableListOf<MagiEvent>()
         val m = mediator(listOf(MagiEventHandler { seen.add(it); true }), rejects)
-        m.beginJob(MagiPhase.Optimizing)
+        machine.begin(MagiPhase.Optimizing)
 
         m.dispatch(MagiEvent.Board.SetCell(0, 0, 1))
         m.dispatch(MagiEvent.Structure.AddShift("夜", "N", "1", "1"))
@@ -51,7 +54,7 @@ class MagiMediatorTest {
     fun rejectMessagesMatchLegacyWording() {
         val rejects = mutableListOf<Arbitration.Reject>()
         val m = mediator(rejects = rejects)
-        m.beginJob(MagiPhase.Optimizing)
+        machine.begin(MagiPhase.Optimizing)
 
         m.dispatch(MagiEvent.Board.SetCell(0, 0, 1))
         assertEquals("勤務表づくりの実行中は編集できません（完了後にもう一度お試しください）", rejects[0].userMessage)
@@ -68,39 +71,38 @@ class MagiMediatorTest {
 
     @Test
     fun endJobOnlyClearsOwnToken() {
-        val m = mediator()
-        val first = m.beginJob(MagiPhase.Loading)
-        val second = m.beginJob(MagiPhase.Optimizing)
-        m.endJob(first)
-        assertEquals("先に終わった側が後発の旗を下ろさない", MagiPhase.Optimizing, m.phase)
-        m.endJob(second)
-        assertEquals(MagiPhase.Idle, m.phase)
+        val first = machine.begin(MagiPhase.Loading)
+        val second = machine.begin(MagiPhase.Optimizing)
+        machine.end(first)
+        assertEquals("先に終わった側が後発の旗を下ろさない", MagiPhase.Optimizing, machine.phase)
+        machine.end(second)
+        assertEquals(MagiPhase.Idle, machine.phase)
     }
 
     @Test
     fun backgroundRunningIsBusyWithoutJob() {
         val rejects = mutableListOf<Arbitration.Reject>()
         val m = mediator(rejects = rejects)
-        m.backgroundRunning = true
-        assertEquals(MagiPhase.Background, m.phase)
+        bgRunning = true
+        assertEquals(MagiPhase.Background, machine.phase)
         m.dispatch(MagiEvent.Board.SetCell(0, 0, 1))
         assertEquals("バックグラウンド最適化の実行中は編集できません（完了後にもう一度お試しください）", rejects[0].userMessage)
-        m.backgroundRunning = false
-        assertEquals(MagiPhase.Idle, m.phase)
+        bgRunning = false
+        assertEquals(MagiPhase.Idle, machine.phase)
     }
 
     @Test
     fun jobPhaseWinsOverBackgroundFlag() {
-        val m = mediator()
-        m.backgroundRunning = true
-        m.beginJob(MagiPhase.Importing)
-        assertEquals("前面のジョブ名が優先（画面の文言がそちらを指す）", MagiPhase.Importing, m.phase)
+        bgRunning = true
+        machine.begin(MagiPhase.Importing)
+        assertEquals("前面のジョブ名が優先（画面の文言がそちらを指す）", MagiPhase.Importing, machine.phase)
     }
 
     @Test
     fun chainStopsAtFirstHandlerThatClaims() {
         val order = mutableListOf<String>()
         val m = MagiMediator(
+            { machine.phase },
             listOf(
                 MagiEventHandler { order.add("a"); false },
                 MagiEventHandler { order.add("b"); true },
@@ -122,24 +124,23 @@ class MagiMediatorTest {
 
     @Test
     fun phaseForMapsBoardReplacingEvents() {
-        val m = mediator()
-        assertEquals(MagiPhase.Optimizing, m.phaseFor(MagiEvent.Run.Optimize))
-        assertEquals(MagiPhase.Polishing, m.phaseFor(MagiEvent.Run.SoftPolish))
-        assertEquals(MagiPhase.Drafting, m.phaseFor(MagiEvent.Run.SmartInitial))
-        assertEquals(MagiPhase.Loading, m.phaseFor(MagiEvent.Io.Load("{}")))
-        assertEquals(MagiPhase.Loading, m.phaseFor(MagiEvent.Io.RestorePrevious))
-        assertEquals(MagiPhase.Importing, m.phaseFor(MagiEvent.Io.ImportCsvSmart("")))
-        assertEquals(MagiPhase.Importing, m.phaseFor(MagiEvent.Io.ImportRosterAs("", false)))
-        assertEquals("盤面を差し替えないものは段階を作らない", null, m.phaseFor(MagiEvent.Board.SetCell(0, 0, 1)))
-        assertEquals(null, m.phaseFor(MagiEvent.Run.Stop))
-        assertEquals(null, m.phaseFor(MagiEvent.Io.Export(MagiEvent.ExportKind.Json)))
+        assertEquals(MagiPhase.Optimizing, phaseFor(MagiEvent.Run.Optimize))
+        assertEquals(MagiPhase.Polishing, phaseFor(MagiEvent.Run.SoftPolish))
+        assertEquals(MagiPhase.Drafting, phaseFor(MagiEvent.Run.SmartInitial))
+        assertEquals(MagiPhase.Loading, phaseFor(MagiEvent.Io.Load("{}")))
+        assertEquals(MagiPhase.Loading, phaseFor(MagiEvent.Io.RestorePrevious))
+        assertEquals(MagiPhase.Importing, phaseFor(MagiEvent.Io.ImportCsvSmart("")))
+        assertEquals(MagiPhase.Importing, phaseFor(MagiEvent.Io.ImportRosterAs("", false)))
+        assertEquals("盤面を差し替えないものは段階を作らない", null, phaseFor(MagiEvent.Board.SetCell(0, 0, 1)))
+        assertEquals(null, phaseFor(MagiEvent.Run.Stop))
+        assertEquals(null, phaseFor(MagiEvent.Io.Export(MagiEvent.ExportKind.Json)))
     }
 
     @Test
     fun exportAndSettingsPassDuringRun() {
         val seen = mutableListOf<MagiEvent>()
         val m = mediator(listOf(MagiEventHandler { seen.add(it); true }))
-        m.beginJob(MagiPhase.Polishing)
+        machine.begin(MagiPhase.Polishing)
         m.dispatch(MagiEvent.Io.Export(MagiEvent.ExportKind.Logs))
         m.dispatch(MagiEvent.Io.SaveNow)
         m.dispatch(MagiEvent.Settings.SetBudget(60))
