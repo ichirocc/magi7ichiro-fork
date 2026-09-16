@@ -24,6 +24,14 @@
   Checkout 直後に `echo "SAFE_REF=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"`。現状の `release-build.yml` は `github.sha` なので不要。
 - APK 内の `.so` が非圧縮かつ 16KiB 境界かは `tools/check_apk_native_libs.py` が assemble 後に検査する（3.552.0）。
   Release Build の成果物 upload は `continue-on-error` のまま、`if-no-files-found: error`＋STEP_SUMMARY で失敗を見えるようにした。
+- **成果物の保持方針（3.570.0、ユーザー決定）**: 通常の CI 成果物（lint 結果・失敗ログ・debug/native-parity 等の
+  ビルド成果物）は `cleanup-artifacts.yml` が毎日 03:00 UTC に無条件で全削除する（`workflow_dispatch` でも即時実行可）。
+  **`release-build.yml` のリリース APK（成果物名 `app-release-*`）だけは対象外**にし、`retention-days: 14` を
+  実際に保証する（デバッグ鍵署名の動作確認用 APK なので恒久保存はしない＝14日で十分、というのが根拠）。
+  除外は `cleanup-artifacts.yml` 側の名前プレフィックス判定（`app-release-`）で行う＝release-build.yml 側は
+  ふつうに `retention-days: 14` を指定するだけでよい。他ワークフローの `retention-days: 7` はこの日次削除に
+  よってほぼ効かない（削除まで最短1日）が、対象は通常成果物のみなので実害はない。将来的にはリリース APK を
+  アーティファクトでなく GitHub Release アセットへ移す想定（`docs/backlog.md` #21、未着手・明示 go 待ち）。
 
 ## スキル・プラグイン（2026-07-18 ユーザー決定の原文）
 - **タスク着手前にスキル一覧を確認し、該当スキルを Skill ツールで自動起動する**（superpowers流）:

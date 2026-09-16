@@ -1,5 +1,20 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog #19（HARD同点タイブレーク乖離）の計測実装＋ペアベンチ（3.571.0）。`SaParams.officialTieBreak`
+  （既定OFF・計測専用、選定ロジックは無変更＝`SaOfficialTieBreakTest`で固定）で `fullEval` 基準の現行選定と
+  `betterReport` 基準の「もう一つの best」を同一実行内で並行追跡。実データ4件×10seed×20秒×4ワーカー＝40走行で
+  **HARD退行0/40・weightedScoreの勝ちは0/40**＝採用基準未達につき既定動作は不変（決定は維持）。
+  backlog #20（C# `PinInvariantTest` 赤2件）は根本原因3件（`C1IndexChainRepair`/`HF66`/`HF67`/`HF80` の
+  厳密ピン保護ガード漏れ）を特定・修正——**Kotlin/C++は無変更**、C# 単独の移植漏れ（3.523.0 C1WindowPolish と
+  同型）。`-MAGI_PC` commit `b1f4b64`、MagiEngine.Tests 856/856緑 → `docs/history/3.4xx.md`
+- CI ワークフローの Actions を commit SHA へ全ピン留め（3.570.0、ユーザー決定）。7 種・29 箇所すべて
+  `uses: owner/repo@<sha> # vN`（元タグをコメントで保持）。`.github/dependabot.yml` を新設し週次で更新 PR を
+  自動生成（自動マージはしない）→ `docs/environment.md`
+- CI 成果物の保持方針を精緻化（3.570.0、ユーザー決定）。通常の CI 成果物（lint・失敗ログ・debug/native-parity
+  ビルド等）は `cleanup-artifacts.yml` が毎日 03:00 UTC 無条件削除（無変更）。**リリース APK（`app-release-*`）
+  だけは対象から除外**し `retention-days: 14` を実際に保証（デバッグ鍵署名の動作確認用＝恒久保存は不要という
+  根拠）。タグ成果物を GitHub Release アセットへ移す案は将来課題として backlog #21 へ（未着手）
+  → `docs/history/3.4xx.md`（3.501.x 台のレビュー対応節）・`docs/environment.md`
 - 末尾の待ち時間（3.569.0、ユーザー指示「不要なソートを消す・大きなテキストを生成しない・同じ検査を繰り返さない・
   数ミリ秒の仕事をまとめて渡す・直列だった解析や評価を安全な範囲で並列化する」）。**計測が先**: S=10・8s では末尾
   11〜98ms＝もともと小さい。実データ 60s では探索後 3.6〜6.0s が後処理（共同 LNS 2 本＋C1 広域ビームが単一スレッド

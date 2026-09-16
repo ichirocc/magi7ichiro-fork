@@ -145,7 +145,21 @@
     （HARD 内部重みを辞書式の独立段にする＝外部仕様 v12.1 Gate 5）は 3.510.3 で決定待ちに登録済み＝**同じ枠**。
     直す場合は `ObjectiveParityTest`（この非対称を固定しているテスト）の期待式も設計変更の対象になる。
     **明示指示＋`tools/loop` のペアベンチが前提**。経緯と再現手順は `docs/history/3.4xx.md` の 3.563.0〜3.568.0 節。
-20. **[C# パリティ・要調査] `-MAGI_PC` の `PinInvariantTest.PostOptimizationHoldsPinsAcrossRandomStates` が赤**（3.569.0 の同期時に
+    **→ 3.571.0 で計測実装＋ペアベンチ実施**（`SaParams.officialTieBreak`、既定OFF・選定ロジックは無変更）。
+    実データ4件×10seed×20秒×4ワーカー＝40走行で HARD退行0/40・weightedScoreの勝ちは0/40＝**採用基準を満たさず
+    既定動作は不変**（この決定自体は維持、詳細は `docs/history/3.4xx.md`）。
+20. ~~**[C# パリティ・要調査] `-MAGI_PC` の `PinInvariantTest.PostOptimizationHoldsPinsAcrossRandomStates` が赤**（3.569.0 の同期時に
     発見。random#1「実現可能な希望（職員0 日5）が後処理で動いた」。同期前の 6276edf でも同じ＝今回の変更と無関係）。
     Kotlin の同名テストは緑なので、C# の後処理チェーンのどこかが `wishLocked` を破っている。C# 単独では直さない
-    （パリティの原則）＝Kotlin 側の同じ入力（`BusyState(JavaRandom(0x91A7L))` の random#1）で差分を取ってから同期する。
+    （パリティの原則）＝Kotlin 側の同じ入力（`BusyState(JavaRandom(0x91A7L))` の random#1）で差分を取ってから同期する。~~
+    **→ 3.571.0 で解消**。Kotlin側は当初から緑＝原因はC#単独の実装漏れ3件（①`C1IndexChainRepair`候補日フィルタに
+    `WishLocked`ガード欠如、②`HF66`/`HF67`の`IsBetter`判定に`ExactPinRegression`ガード欠如、③`HF80StrategicOscillation`
+    が基準盤面`original`を持たず`ExactPinRegression`も欠如）。3件とも3.523.0のC1WindowPolishと同型の
+    「他パスは持つ厳密ピン保護ガードが1パスだけ欠けていた」移植漏れ。Kotlin/C++は無変更。`-MAGI_PC` commit
+    `b1f4b64`、MagiEngine.Tests 856/856緑（詳細は `docs/history/3.4xx.md`）。
+21. **[将来課題・実装不要] タグ成果物（リリース APK）を GitHub Release アセットへ移す**（3.570.0、ユーザー決定
+    「将来的にGitHub Release assetへ移す」）。現状は `release-build.yml` が `v*` タグで `actions/upload-artifact`
+    （`retention-days: 14`）へ APK を置くだけ＝Actions アーティファクトの保存枠を消費し、`cleanup-artifacts.yml`
+    の除外リスト（`app-release-` prefix）で個別に保護している。Release アセットへ移せばこの除外が不要になり、
+    保存枠も別勘定になる（`gh release create`/`softprops/action-gh-release` 等で `v*` タグ push 時にアセット添付）。
+    ストア配布用の署名鍵・Lint ゲート・縮小と合わせて検討する話＝**明示 go まで着手しない**。
