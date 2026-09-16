@@ -214,6 +214,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // 制約エディタが描くのに要るものを Root で 1 度だけ組み立てる（画面から vm への問い合わせを無くす）。
     val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
     val ws1View = remember(ui) { vm.ws1() }
+    // 勤務表タブの派生描画値。画面ごとに作り直さず、Root が 1 つ持って配る。
+    val viewState = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled) }
 
     val openJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -552,14 +554,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it })
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
                     SearchLegendBar(ui, searchQuery, onQuery = { searchQuery = it })
-                    ScheduleGrid(ui, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
+                    ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
                         canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) }, plainCellBorder = plainCellBorder,
                         nav = schedNav, stickyTopPx = viewportTopPx)
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
-                    TallyCard(ui, vm, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
+                    TallyCard(ui, vm, viewState, onFix = { staff, shift -> tab = 3; vm.findFixSuggestions(staff, shift) }, vioEnabled = vioEnabled)
                     // [3.194.0 情報の冗長性検証] 「不一致だけ抽出」（MismatchExtractCard）を撤去。
                     //   TallyCard(職員別/日別)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
                     //   内容が重複しており、しかも apt(適切回数)由来の違反を含まず新しい表示より不完全だった。
@@ -662,7 +664,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                 //   editRev 変化ごとに確実に作り直す（タブ往復と同じ効果）。
                                 // [実機バグ修正] countsSheetCell は上のWishCard/NeedCalendarCardと同じ理由
                                 //   （572行目）でkey(ui.editRev)の外に置く（群の目標+/-自体がeditRevを増やすため）。
-                                key(ui.editRev) { CountsCard(ui, vm, sheetCell = countsSheetCell, onSheetCellChange = { countsSheetCell = it }) }
+                                key(ui.editRev) { CountsCard(ui, vm, viewState.counts, sheetCell = countsSheetCell, onSheetCellChange = { countsSheetCell = it }) }
                             }
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
                             CollapsibleSection("④ 人数と組み合わせ", "yr_headcount") {

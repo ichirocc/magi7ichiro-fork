@@ -69,6 +69,8 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun StaffShiftMatrixCard(
     ui: UiState, vm: MagiViewModel,
+    /** 盤面から数えた回数。画面ごとに数え直さない（同じ値の別版が並ぶのを防ぐ）。 */
+    counts: ScheduleCounts,
     /** [実機バグ修正] セルタップシートの開閉状態。呼び出し元(MagiApp.kt)が`key(ui.editRev)`の**外**で
      *  保持する。群の目標の+/-自体が`ws1SetGroupApt`経由でeditRevを増やし、key配下のrememberだと
      *  シートが自分の操作のたびに閉じていた（経緯: history 3.515.2）。 */
@@ -84,10 +86,6 @@ internal fun StaffShiftMatrixCard(
     // 方向カラー（TallyCard/StaffRangeSectionと同じM6統一トークン。ここだけの新色は作らない）。
     val shortC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.red
     val overC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-
-    val counts = remember(ui.schedule, K) {
-        Array(S) { i -> IntArray(K).also { c -> ui.schedule.getOrNull(i)?.forEach { kk -> if (kk in 0 until K) c[kk]++ } } }
-    }
 
     var confirmResetApt by remember { mutableStateOf(false) }
     val hScroll = rememberScrollState()
@@ -164,7 +162,7 @@ internal fun StaffShiftMatrixCard(
                             val allowed = remember(v, i) { vm.allowedShiftsFor(i).toHashSet() }
                             for (k in 0 until K) {
                                 val cell = matrixCell(
-                                    allowed = k in allowed, count = counts[i][k],
+                                    allowed = k in allowed, count = counts.perStaff[i][k],
                                     limits = vm.staffCellLimits(i, k), vio = ui.countViolations["$i,$k"],
                                     isRest = k == restIdx, shortC = shortC, overC = overC, cs = cs,
                                 )
@@ -177,7 +175,7 @@ internal fun StaffShiftMatrixCard(
                         for (k in 0 until K) {
                             var targetSum = 0; var actualSum = 0; var hasTarget = false
                             for (i in 0 until S) {
-                                actualSum += counts[i][k]
+                                actualSum += counts.perStaff[i][k]
                                 val apt = vm.staffCellLimits(i, k).third
                                 if (apt != null) { targetSum += apt; hasTarget = true }
                             }
@@ -199,7 +197,7 @@ internal fun StaffShiftMatrixCard(
     }
 
     sheetCell?.let { (i, k) ->
-        StaffShiftCellSheet(ui, vm, v, i, k, onDismiss = { onSheetCellChange(null) })
+        StaffShiftCellSheet(ui, vm, counts, v, i, k, onDismiss = { onSheetCellChange(null) })
     }
     if (confirmResetApt) {
         AlertDialog(
@@ -313,14 +311,14 @@ private fun MatrixDataCell(
 /** セルタップの編集シート。①群の目標(apt、全員に影響) ②個人の上下限(staffRange) の2系統のみ提供する。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
+private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, counts: ScheduleCounts, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState()
     val name = v.staff.getOrNull(i)?.name ?: "$i"
     val g = v.staff.getOrNull(i)?.groupIdx ?: -1
     val groupName = v.groups.getOrNull(g)?.name ?: "?"
     val kigou = v.shifts.getOrNull(k)?.kigou ?: "$k"
-    val count = ui.schedule.getOrNull(i)?.count { it == k } ?: 0
+    val count = counts.perStaff.getOrNull(i)?.getOrNull(k) ?: 0
     val (lo0, hi0, apt) = vm.staffCellLimits(i, k)
     val vio = ui.countViolations["$i,$k"]
     var lo by remember(i, k) { mutableStateOf(lo0?.toString() ?: "") }

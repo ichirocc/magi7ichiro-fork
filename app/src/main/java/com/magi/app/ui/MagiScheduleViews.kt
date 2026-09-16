@@ -519,7 +519,7 @@ internal fun SearchLegendBar(ui: UiState, query: String, onQuery: (String) -> Un
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ScheduleGrid(
-    ui: UiState, onCellClick: (Int, Int) -> Unit, proMode: Boolean = false, nameQuery: String = "",
+    ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, proMode: Boolean = false, nameQuery: String = "",
     vioEnabled: Set<String> = allVioBucketKeys,
     onBulkSet: (Collection<Pair<Int, Int>>, Int) -> Unit = { _, _ -> },
     // [ジャンプ/Web試作の移植] 要確認一覧から渡される注目セル(i,j)。該当日へ自動スクロール＋一時ハイライト。
@@ -611,7 +611,7 @@ internal fun ScheduleGrid(
             //   ここでは違反日リストを計算して共有状態へ書き、navFlash を focusCell の代替として読むだけ。
             // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
             //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
-            val vioDays = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled).violationDays }
+            val vioDays = vs.violationDays
             // [3.481.0 勤務表タブ再設計②] 違反日リストは共有状態へ（変わったときだけ書き、巡回位置を先頭へ戻す）。
             //   前週/次週・＜前の違反/次の違反＞ のボタン列は ScheduleNavBar（Scaffold 下部＝スクロール位置に
             //   関係なく親指で押せる真の下部固定）へ移動。3.444.0 が高リスクとして保留した引き上げの実施。
@@ -623,7 +623,7 @@ internal fun ScheduleGrid(
                 if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
@@ -1128,7 +1128,7 @@ internal fun dayMD(startDate: String, j: Int): String = try {
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys) {
+internal fun TallyCard(ui: UiState, vm: MagiViewModel, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
@@ -1140,13 +1140,8 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
     //   3.477.0で職員別モードを撤去し編集タブのStaffShiftMatrixCardへ一本化したが、勤務表タブから
     //   編集タブを往復せず確認したいという実機要望を受け、シフト集計カード内トグルとして復活させた
     //   （StaffShiftMatrixCardは併存＝編集タブ側は目標(apt)編集も兼ねるため両者の役割は異なる）。
-    val perStaff = remember(ui.schedule, k) {
-        Array(s) { i -> IntArray(k).also { c -> ui.schedule[i].forEach { v -> if (v in 0 until k) c[v]++ } } }
-    }
-    // 日別: perDay[j][k] = 日 j にシフト k へ配置された人数
-    val perDay = remember(ui.schedule, k, t) {
-        Array(t) { j -> IntArray(k).also { c -> for (i in 0 until s) { val v = ui.schedule[i].getOrNull(j) ?: -1; if (v in 0 until k) c[v]++ } } }
-    }
+    val perStaff = vs.counts.perStaff
+    val perDay = vs.counts.perDay
     // 違反ハイライト色（Excel版の色分けに対応）: 不足=赤 / 過剰=橙。
     // 職員別は countViolations["i,k"](vio-low/vio-high=人数範囲)、日別は needViolations["k,j"](vio-covU/vio-covO=被覆)で判定。
     // [M6統一] 不足=vioColor(ユーザー設定色に連動・既定 赤)、超過=橙。グリッド/ヒートバーと同じ2色言語。
@@ -1238,7 +1233,7 @@ internal fun TallyCard(ui: UiState, vm: MagiViewModel, onFix: (Int?, Int?) -> Un
                             }
                             // [D1] シフト別の期間合計（列合計）。グリッドの重複行を廃止しここへ集約。
                             TallyBox(cw, rh, cs.surfaceVariant, false) {
-                                Text("${(0 until s).sumOf { perStaff[it][kk] }}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
+                                Text("${vs.counts.staffTotal(kk)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
                             }
                         }
                     }
@@ -1461,7 +1456,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f) {
+internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1493,12 +1488,10 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     // [判読性] 0=なし / 1=必須(実線) / 2=重いソフト(破線) / 3=軽いソフト(右上角マーク)。
     //   従来は全ソフトが太い破線枠＝数百件で格子が警告に飽和し、必須違反1件が埋没していた。
     // [Set化] 表示中(フィルタ通過)の最重クラス。段階(vioKind)と族別色(3.122.0)の両方の源泉。
-    val vioCls = remember(ui.violationCells, ui.violationCellFamilies, staffCount, days, vioEnabled) {
-        Array(staffCount) { i -> Array(days) { d -> visibleCellVio(ui, "$i,$d", vioEnabled) } }
-    }
+    val vioCls = vs.cellVio
     val vioKind = remember(vioCls) {
         Array(staffCount) { i -> IntArray(days) { d ->
-            val v = vioCls[i][d]
+            val v = vioCls.getOrNull(i)?.getOrNull(d)
             when { v == null -> 0; isHardCellViolation(v) -> 1; isHeavySoftCellViolation(v) -> 2; else -> 3 }
         } }
     }
@@ -1528,7 +1521,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
     val headFontSize = with(LocalDensity.current) { 12.dp.toSp() }   // 曜日/▼N も同方針で列幅フィット
     // 日ごとの派生値（下線の段階・▼N・▲N）は MagiViewState が唯一の算出元。ここで別に数えると
     //   同じ「その日は過剰か」の別版ができ、片方だけ壊れても誰も気づけない（3.557.0・3.559.0）。
-    val dayState = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled).days }
+    val dayState = vs.days
     // [3.444.0 行列クロスハイライト] セルをタップすると対象の「職員名」と「日付」を約2.5秒強調＝
     //   広いグリッドでどの行/列を触ったか見失いにくくする（読み間違い防止。ユーザー提示の改善案③）。
     //   セル自体の枠（違反表示）は変更しない＝タップした瞬間に違反枠が隠れて読めなくなるのを避ける。
@@ -1691,7 +1684,7 @@ internal fun MagiFlatGrid(ui: UiState, onCellClick: (Int, Int) -> Unit, vioEnabl
                                 (if (vk == 1) "・絶対NG" else if (vk >= 2) "・できれば直す" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") + "、タップで変更"
                             // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
-                            val cellVioC = vioCls[i][d]?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
+                            val cellVioC = vioCls.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
                             FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder) { tapped = i to d; onCellClick(i, d) }
                         }
                     }

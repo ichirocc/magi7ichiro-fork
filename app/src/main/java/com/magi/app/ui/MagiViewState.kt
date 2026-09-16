@@ -109,11 +109,17 @@ internal class ScheduleCounts(schedule: List<List<Int>>, staffCount: Int, dayCou
 /** 画面が描くのに要る派生値を一度だけ算出して配る。各 Composable が自前で `remember{…}` すると
  *  同じ値の別々の版が並び、片方だけ壊れても誰も気づけない（3.557.0）。 */
 internal class MagiViewState(val ui: UiState, val vioEnabled: Set<String> = allVioBucketKeys) {
-    val counts = ScheduleCounts(ui.schedule, ui.staff, ui.days, ui.shifts)
+    // 構造編集の直後は `ui.staff`（宣言上の人数）と `ui.schedule.size`（表示中の盤面）が一瞬ずれ得る。
+    //   表を共有する以上、大きい方で確保しないと添字が範囲外になる（画面ごとに作っていた頃は各自が
+    //   自分の基準で確保していたので起きなかった）。
+    private val staffCount = maxOf(ui.staff, ui.schedule.size)
+    private val dayCount = maxOf(ui.days, ui.schedule.firstOrNull()?.size ?: 0)
+
+    val counts = ScheduleCounts(ui.schedule, staffCount, dayCount, ui.shifts)
 
     /** cellVio[i][j] = そのセルで表示する最重の違反クラス（フィルタ通過後。無ければ null）。 */
-    val cellVio: Array<Array<String?>> = Array(ui.staff) { i ->
-        Array(ui.days) { j -> visibleCellVio(ui, VioKey.cell(i, j), vioEnabled) }
+    val cellVio: Array<Array<String?>> = Array(staffCount) { i ->
+        Array(dayCount) { j -> visibleCellVio(ui, VioKey.cell(i, j), vioEnabled) }
     }
 
     val days: List<DayStaffing> = buildDays()
@@ -124,12 +130,12 @@ internal class MagiViewState(val ui: UiState, val vioEnabled: Set<String> = allV
     val violationDays: List<Int> get() = days.filter { it.mark != DayMark.None }.map { it.day }
 
     private fun buildDays(): List<DayStaffing> {
-        val hard = IntArray(ui.days); val soft = IntArray(ui.days)
-        val short = BooleanArray(ui.days); val over = BooleanArray(ui.days)
+        val hard = IntArray(dayCount); val soft = IntArray(dayCount)
+        val short = BooleanArray(dayCount); val over = BooleanArray(dayCount)
         val keys = if (ui.needFamilies.isNotEmpty()) ui.needFamilies.keys else ui.needViolations.keys
         for (key in keys) {
             val d = VioKey.dayOf(key) ?: continue
-            if (d !in 0 until ui.days) continue
+            if (d !in 0 until dayCount) continue
             val classes = (ui.needFamilies[key] ?: listOfNotNull(ui.needViolations[key]))
                 .filter { vioVisible(it, vioEnabled) }
             if (classes.isEmpty()) continue
@@ -140,11 +146,11 @@ internal class MagiViewState(val ui: UiState, val vioEnabled: Set<String> = allV
                 "covO" -> over[d] = true
             }
         }
-        for (i in 0 until ui.staff) for (j in 0 until ui.days) {
+        for (i in 0 until staffCount) for (j in 0 until dayCount) {
             val v = cellVio[i][j] ?: continue
             if (isHardCellViolation(v)) hard[j]++ else soft[j]++
         }
-        return (0 until ui.days).map { d ->
+        return (0 until dayCount).map { d ->
             val risk = ui.v6?.dayRisks?.getOrNull(d)
             DayStaffing(
                 day = d,
