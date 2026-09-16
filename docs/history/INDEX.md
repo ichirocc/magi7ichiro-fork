@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- UI 層の再構成 Stage B（3.559.0）＝派生描画値を `MagiViewState` へ単一化。不変条件テストが新しい不具合を
+  自動検出: `needViolations` は最重1クラスのみのため、同じ重み10の c41s の陰に covO が隠れて
+  シフト集計の▲が出ない日があった（`needFamilies` 経由へ修正）。キー符号化・必須判定・回数・日別を統合 →
+  `docs/history/3.4xx.md`
 - UI 層の再構成 Stage A（3.558.0、ユーザー指示「Root 配下・Passive View・CoR・ステートマシン Mediator」）。
   `MagiPhase`/`MagiArbiter`/`MagiEvent`/`MagiMediator` を Compose 非依存で追加しホストテスト白名単へ。
   着手前調査で同じ描画値の独立算出が 13 系統（日別不足/過剰が 3 ソース→6 画面、回数が 5 箇所、
