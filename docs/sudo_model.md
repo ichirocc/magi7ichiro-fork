@@ -331,8 +331,8 @@ classDiagram
 
 ### 不変条件（すべて実装から）
 
-**19族と重み** — `breakdown` は `MirrorKeys.all` の19キーを 0 で初期化してから加算するのでキー数は常に19。
-HARD 4族 = `groupViol` / `c3n` / `covU` / `pref`、SOFT 15族。
+**20族と重み** — `breakdown` は `MirrorKeys.all` の20キーを 0 で初期化してから加算するのでキー数は常に20。
+HARD 5族 = `groupViol` / `c3n` / `covU` / `pref` / `c3w`、SOFT 15族。
 
 ```
 groupViol 10000 > pref 9000 > covU 8000 > c3n 7000 > low 90 > high 45
@@ -416,7 +416,7 @@ C++ 側は native-parity CI が捕まえる）。
 **なぜ golden を選んだか**：実データ由来の fixture は2つある（もう1つは `sample_state_v6.json`＝
 native-parity CI の2つ目の形状で、入力盤面 `hard=15`＝C++ の HARD 族パスを実データで exercise するために
 3.362.0 で追加した）。**golden は `hard=0` に到達済み＝「配布できる盤面」の具体例**として O 図に向く。
-`hard=15` の方はどの族がどう壊れているかの例としては良いが、19族が同時に発火して図が読めなくなる。
+`hard=15` の方はどの族がどう壊れているかの例としては良いが、20族が同時に発火して図が読めなくなる。
 
 ```mermaid
 flowchart TB
@@ -497,7 +497,7 @@ flowchart TB
    ドリフトしていた。**→ 3.390.0 で §4 を全82フィールドへ刷新**（旧記述は30フィールドが未記載＝`*Families` 3種・
    result 専用マップ7種・調整トグル4種・診断5種などが丸ごと落ちていた）。以後は各グループの**件数**を
    `MagiUiState.kt` の `val` 宣言数と機械照合できる形にしてある。
-4. **`docs/business-logic.md` は重み・族数とも実装と一致**（19族・c1=30・c3mn=30・covO=5.0・c42 の C(n,2)・
+4. **`docs/business-logic.md` は重み・族数とも実装と一致**（20族・c1=30・c3mn=30・covO=5.0・c42 の C(n,2)・
    keep-best の hard→weightedScore→total。3.505.7 で再照合）。ここは信用してよい。
 5. ~~**コード内コメントの stale が1件**：`MirrorKeys.weights` の「窓の要件(c1)=5」~~ → 3.428.0 までに「現在値はどちらも 30」へ
    書き直し済み（HF77 の変遷を 1 行で持つ形）。

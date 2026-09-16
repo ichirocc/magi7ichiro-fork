@@ -194,22 +194,22 @@
 - **Web対応**: Web は ws3（希望グリッド）入力＋「そのまま反映」。Native は担当外を**確認ダイアログ＋Undo＋操作ログ**で安全化。基本マスター(ws4 制約／ws5 個人回数)も編集タブ「基本マスター」に実装済み（`ConstraintEditor`/`StaffRangeEditor` ほか。§07b 参照）。
 - **実装**: `WishApplyCard`（`effectiveEditing` 時のみ）／`WishBulkSheet`／3サブタブは `editScope`（0/1/2）。
 
-## 08. 分析（一般/プロ切替・ようす・チェック概要・違反の内訳19/19）
+## 08. 分析（一般/プロ切替・ようす・チェック概要・違反の内訳20/20）
 ![分析](screens/10_analysis.png)
 
 - **目的**: 配布可否の根拠を数値で示す。
 - **主要オブジェクト**: 上部に **一般/プロ** 切替(`MagiSegmentedControl`→`proMode`)。以下を縦に表示：`OverviewDashboard`（ようす＝俯瞰）／`CheckSummaryView`（チェック概要＝守れていない約束の件数）／`BreakdownCard`（違反の内訳）／`BottleneckCard`（しわ寄せの集中箇所）／`FixSuggestionCard`（違反を減らす1手提案・「変更」＝1マス別勤務／「交換」＝2人の同日入替）。`重大のみ`フィルタ。**プロ時のみ** `V6DashboardCard`＋`WeightTableCard` を上段に追加。
-- **違反の内訳は全19種=100%**: 必須群（groupViol/pref/covU/c3n）＋人数の範囲群（low/high/apt）＋任意群（c1/c2/c3/c3m/c3mn/c41/c42/c41s/c42s/covO/**fair**/**weekly**）。**fair（公平化のズレ）** と **weekly（曜日の偏り）** を任意群に追加し 17/19→**19/19** に。fair/weekly はセル単位の場所を持たないため、内訳チップのタップ時は「場所情報がありません」（ペナルティ量は表示）。**各19種の意味・重み・違反箇所の出し方は §08b にまとめた。**
+- **違反の内訳は全20種=100%**: 必須群（groupViol/pref/covU/c3n/c3w）＋人数の範囲群（low/high/apt）＋任意群（c1/c2/c3/c3m/c3mn/c41/c42/c41s/c42s/covO/**fair**/**weekly**）。**fair（公平化のズレ）** と **weekly（曜日の偏り）** を任意群に追加し 17/19→**19/19** に。fair/weekly はセル単位の場所を持たないため、内訳チップのタップ時は「場所情報がありません」（ペナルティ量は表示）。**各20種の意味・重み・違反箇所の出し方は §08b にまとめた。**
 - **一般/プロの差**: プロ表示は熟練者向けに**冗長な説明文を非表示**（概要のサブ文・内訳の注記「数値はペナルティの大きさ…」・群名の括弧（満たすべき/できれば）・ボトルネックの注釈・改善提案の変更/交換の説明）。**構造的不足ヒント**（「※1手で直せない違反は設定(ws1)の見直しが根本解」）・状態表示・実データ（件数/場所/提案）は**常時表示**。
 - **指1本**: スクロールのみで全体把握。各項目は読み取り専用（内訳チップのタップで該当セルへ）。
 - **【ドッグフーディング校正 2026-06-13】**: 開発用の **`ColorSettingsView`**（英語名＋生の制約コード c1/c3n/covU ＋ WARN/CRITICAL 露出）と **`FlagsView`**（実験フラグ）を**分析タブから除外**し、**設定＞詳細設定（上級者/開発者向け）へ移設**（#10）。分析タブは「数値で配布可否を判断」に専念。
-- **実装**: `OverviewDashboard`／`CheckSummaryView`／`BreakdownCard`（`breakdownLabels`/`BreakdownGroup`）／`BottleneckCard`／`FixSuggestionCard`。違反の正準集合は `MirrorKeys.all`（19種）。5カードは `proMode` を受け取り条件分岐。プロ専用は `V6DashboardCard`／`WeightTableCard`。
+- **実装**: `OverviewDashboard`／`CheckSummaryView`／`BreakdownCard`（`breakdownLabels`/`BreakdownGroup`）／`BottleneckCard`／`FixSuggestionCard`。違反の正準集合は `MirrorKeys.all`（20種）。5カードは `proMode` を受け取り条件分岐。プロ専用は `V6DashboardCard`／`WeightTableCard`。
 
-## 08b. 制約・違反の種類（全19種：C1〜C42・回数・被覆・公平ほか）
+## 08b. 制約・違反の種類（全20種：C1〜C42・回数・被覆・公平ほか）
 
-分析タブ「違反の内訳」(`BreakdownCard`)・勤務表のセル表示・改善の提案が共通で扱う**違反の正準集合は19種**（`MirrorKeys.all`）。各違反は**重み**(`MirrorKeys.weights`＝単一の真実)で `weightedScore` に加算される。**HARD＝守るべき約束**（重みが桁違いに大きい）、**SOFT＝できれば**。HARD が1つでも残ると「配れない」。
+分析タブ「違反の内訳」(`BreakdownCard`)・勤務表のセル表示・改善の提案が共通で扱う**違反の正準集合は20種**（`MirrorKeys.all`）。各違反は**重み**(`MirrorKeys.weights`＝単一の真実)で `weightedScore` に加算される。**HARD＝守るべき約束**（重みが桁違いに大きい）、**SOFT＝できれば**。HARD が1つでも残ると「配れない」。
 
-### HARD（守るべき約束・4種）
+### HARD（守るべき約束・5種）
 | キー | 表示名 | 重み | 場所 | 意味 |
 |---|---|---|---|---|
 | `groupViol` | グループ不整合 | 10000 | セル | グループ制約に反する配置 |
@@ -383,7 +383,7 @@
 - `C42Row(g1Kigou, g2Kigou, s1Kigou, s2Kigou)` … グループg1のs1とグループg2のs2は同日併存不可
 - `C3wRow(wishKigou, prevKigou)` … 希望で固定した wishKigou の前日に prevKigou を置けない（3.542.0）
 
-**UiState（UI・表示用、`ui/MagiUiState.kt`）**: ドメインから導出した表示集約。主なもの＝`loaded/running/hasResult`、`bestHard/bestSoft/weightedScore/totalViolations`、`breakdown`(19種→件数)、`violationCells`(キー`"i,j"`)／`needViolations`(`"k,j"`)／`countViolations`(`"i,k"`)→各説明文、`schedule/wishes/resultSchedule/liveSchedule`、`shiftSymbols/shiftColorHex/shiftTextHex/staffNames/staffGroupSymbols`、`fixSuggestions`(変更/交換の1手)、`satisfaction/copilotHint/coverageDiag/settingIssues`、`logs/opLog`、`canUndo/canRedo/workers/budgetSec/softPolish/v6Algorithm`。
+**UiState（UI・表示用、`ui/MagiUiState.kt`）**: ドメインから導出した表示集約。主なもの＝`loaded/running/hasResult`、`bestHard/bestSoft/weightedScore/totalViolations`、`breakdown`(20種→件数)、`violationCells`(キー`"i,j"`)／`needViolations`(`"k,j"`)／`countViolations`(`"i,k"`)→各説明文、`schedule/wishes/resultSchedule/liveSchedule`、`shiftSymbols/shiftColorHex/shiftTextHex/staffNames/staffGroupSymbols`、`fixSuggestions`(変更/交換の1手)、`satisfaction/copilotHint/coverageDiag/settingIssues`、`logs/opLog`、`canUndo/canRedo/workers/budgetSec/softPolish/v6Algorithm`。
 
 **キー規約（重要）**: セル＝`"i,j"`（i=職員index, j=日index, 0始まり）／回数＝`"i,k"`（k=シフトindex）／被覆＝`"k,j"`。`schedule[i][j]` のシフトidx `<0` は未割当（公休）。希望バッジは `wishes["i,j"]` と `schedule[i][j]` の一致で 反映済(緑)/未反映(桃) を判定（§03）。
 
@@ -392,7 +392,7 @@
 - **意味色（ライト、MAGI "Ward"＝ディープティール種色）**: background `#F4F7F7`／surface `#FBFDFC`／surfaceVariant `#DAE5E2`／outline `#6F7977`／onSurface `#171D1C`／onSurfaceVariant `#3F4947`／**primary（CTA・実行中＝ディープティール）`#0E6E63`**／**tertiary（成功・配布可＝リーフグリーン）`#3E6837`**／**error（重大違反＝濃赤）`#B3261E`**。
 - **意味色（ダーク）**: background `#0E1514`／surface `#0E1514`／primary `#86D6C9`／tertiary `#A3D397`／error `#FFB4AB`。**UD（高コントラスト, mode=3）**＝白地＋`#000`境界の独立スキーム。
 - **アクセント／シフト既定色（MagiAccent、3.89.0のWard調和後の値）**: blue `#3B6FD4`(実行中/早番)／green `#2E9E62`(成功/日勤)／orange `#E08A1E`(警告/夜勤)／purple `#8A5CD1`(遅番/個人属性)／**pink `#D24D89`(希望・未反映バッジ)**／red `#D23B34`(重大違反/NG制約)／gray `#8A979B`(休み/無効)。シフト色は未設定時この既定、`shiftColors[kigou]→"#rrggbb"` で上書き可。
-  違反の基準色（必須/要調整）はこれらと別系統の既定を持つ：必須違反 `#B71C1C`（深紅）／要調整 `#F59E0B`（アンバー）。色覚多様性(CUD)配慮で明度差を最大化した組合せ（3.543.0）。ColorPickerDialog はシフト色（41色＝背景色系(中立グレー6色、公休)＋早番/日勤/時短パート/遅番/夜勤の5段階グラデーション30色＋事由別「特別枠」5区分)と違反色（30色、必須違反・要調整・族別19種の専用パレット）を別パレットで持つ（3.544.0、背景色系の分離は3.546.0）。いずれも P型/D型二色覚シミュレーション後の最小距離を検証・調整（`tools/palette_shift_families_cud.py`／`tools/palette_bg_family_cud.py`／`tools/palette_violation_cud.py`）。
+  違反の基準色（必須/要調整）はこれらと別系統の既定を持つ：必須違反 `#B71C1C`（深紅）／要調整 `#F59E0B`（アンバー）。色覚多様性(CUD)配慮で明度差を最大化した組合せ（3.543.0）。ColorPickerDialog はシフト色（41色＝背景色系(中立グレー6色、公休)＋早番/日勤/時短パート/遅番/夜勤の5段階グラデーション30色＋事由別「特別枠」5区分)と違反色（30色、必須違反・要調整・族別20種の専用パレット）を別パレットで持つ（3.544.0、背景色系の分離は3.546.0）。いずれも P型/D型二色覚シミュレーション後の最小距離を検証・調整（`tools/palette_shift_families_cud.py`／`tools/palette_bg_family_cud.py`／`tools/palette_violation_cud.py`）。
 - **角丸(dp)**: extraSmall12／small16／**medium20＝カード**／**large24＝タイル**／extraLarge28／チップ・ピル＝円形。
 - **余白(dp・4グリッド)**: xs4／sm8／md12／**lg16＝カード内標準**／xl20／**section20＝カード間**／**screenH16＝画面左右**。
 - **タイポ(sp)**: headlineSmall 24Bold(画面タイトル)／titleLarge 20SemiBold(節)／**titleMedium 17SemiBold(カード見出し)**／bodyLarge16・Medium15・Small13／labelLarge15・Medium13／**大数値 displaySmall 34**(特に強調は `fontSize=44.sp`)。
@@ -400,7 +400,7 @@
 - **共通部品API**: `MagiSegmentedControl`／`MagiTagChip`／`MagiListRow`／`CollapsibleSection`／`SectionNote`／**`DialogHeader`＋3ダイアログボタン（§4.14：確定=右/取消=左/危険⚠・48dp）**（詳細は design_system §4）。
 
 ### A.4 最適化・制約評価（正典：§02・§08b）
-- **違反19種・重み・違反箇所**＝§08b（`MirrorKeys.weights` が唯一の真実、`weightedScore` に加算。HARD=守るべき約束／SOFT=できれば）。
+- **違反20種・重み・違反箇所**＝§08b（`MirrorKeys.weights` が唯一の真実、`weightedScore` に加算。HARD=守るべき約束／SOFT=できれば）。
 - **探索**＝§02：最大5並列の仮説（役割分担で多様化・**最良採用で退化なし**）、SA＋ALNS＋GLS＋Tabu＋Path Relinking＋Great Deluge、停滞脱出はUCB1多腕バンディット、**早期停止**（予算1/4の停滞で終了）、**keep-best 研磨**（C1窓/C3連結スワップ・日内Hungarian・平準化）。前景サービス＋約8秒スナップショットで中断耐性。
 
 ### A.5 永続化・入出力
@@ -449,7 +449,7 @@
 - **ホーム(tab0)**: ① `OperatorNextActionCard`(次の一手・大ボタン1) → ② `CopilotCard`(助言/警告) → ③ `CoverageDiagnosisCard`(不足の原因) → ④ `SettingIssuesCard`(設定ミスの誘導) → ⑤ `ActionCard`(ほかの作り方) → ⑥ `AlternativesCard`(他の案)。§01。
 - **勤務表(tab1)**: ① 表示切替 `MagiSegmentedControl`(7日/カレンダー/1ヶ月) → ② 前/次＋期間 → ③ グリッド(gridMode別＝7日:`Cell` / カレンダー:`MagiCalendarMonthView` / 1ヶ月:`Box`) → ④ 表示中の違反セル列挙(名前 d日・最大8) → ⑤ 凡例(折りたたみ・既定閉)。§03–§06。
 - **編集(tab2)**: ① `WishApplyCard`(下書き/編集中のみ) → ② 希望の一括操作ボタン → ③ サブタブ `MagiSegmentedControl`(今月の調整/シフト希望/基本マスター) → ④ サブタブ本体(§07b)。§07。
-- **分析(tab3)**: ① `MagiSegmentedControl`(一般/プロ) →〔プロのみ ② `V6DashboardCard` → ③ `WeightTableCard`〕→ ④ `OverviewDashboard`(ようす) → ⑤ `CheckSummaryView`(チェック概要) → ⑥ `BreakdownCard`(違反の内訳19種) → ⑦ `BottleneckCard` → ⑧ `FixSuggestionCard`。§08。
+- **分析(tab3)**: ① `MagiSegmentedControl`(一般/プロ) →〔プロのみ ② `V6DashboardCard` → ③ `WeightTableCard`〕→ ④ `OverviewDashboard`(ようす) → ⑤ `CheckSummaryView`(チェック概要) → ⑥ `BreakdownCard`(違反の内訳20種) → ⑦ `BottleneckCard` → ⑧ `FixSuggestionCard`。§08。
 - **設定(tab4)**: ① `AppearanceCard`(自動/明/暗/UD・片手・かんたん/プロ) → ② `ShiftColorCard`(シフト色) → ③ `DataActionsCard`(JSON/CSV/チェック) → ④ `SettingsCard`(最適化設定＝並列/時間/方式/研磨/版) → ⑤ `AdvancedSettingsSection`(折りたたみ・既定閉＝`V6DashboardCard`＋`LogsCard`＋`ColorSettingsView`)。§09/§12。
 - **共通**: 全タブ上に `MagiTopBar`(状態チップ)・下に `BottomCommandBar`(主操作/実行中は停止)＋`MagiBottomNav`(5タブ)。ポップアップ＝シフト選択シート(§04)・希望反映確認(§10)・中断復帰バナー(§11)。全ポップアップは `DialogHeader`＋共有3ボタン(品質ゲート#8)。
 

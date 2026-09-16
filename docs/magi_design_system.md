@@ -328,7 +328,7 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 上部に **一般/プロ** 切替(`proMode`)。**`ViolationHubCard`**（3.459.0＝旧`ConfirmListCard`/`AttentionCardsSection`/
 `BreakdownCard`の3枚を統合。①見出し＋設定見直し件数 ②勤務表タブと共有するE7族フィルタ(6バケツ) ③一覧／
 日別・人別／内訳の3ビューを切り替えるセグメント。各ビューの中身は`ConfirmListBody`(箇所単位・重大度リスト)/
-`AttentionBody`(日別・人別＋「要確認のみ」トグル)/`BreakdownBody`(**違反内訳=全19種/100%**・fair/weekly含む・
+`AttentionBody`(日別・人別＋「要確認のみ」トグル)/`BreakdownBody`(**違反内訳=全20種/100%**・fair/weekly含む・
 「重大のみ」トグル)へロジック不変で分割）/ `FixSuggestionCard`(1手提案。3.483.0: 結果あり＆必須>0なら自動で探索＝ホームと同じ挙動)。
 プロ時のみ `V6DashboardCard`。[3.483.0] `AnalysisTriageCard` 末尾の「▶ 勤務表をつくる」は撤去（固定フッターに一本化）。
 > 旧記述の `OverviewDashboard` / `CheckSummaryView` / `BottleneckCard` は**いずれも撤去済み**
@@ -338,7 +338,7 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 
 ### 5.5 設定 ✅
 外観(`AppearanceCard`：片手モード ＋ かんたん/プロ。**テーマ選択は D8/3.121.0 で撤去し UD 固定**) /
-シフトの表示色(`ShiftColorCard`) / 違反種別の色(`ColorSettingsView`。3.483.0: 基準色2チップを常時、19種の族別チップは既定で折りたたみ) / 直す優先順位(`WeightTableCard`) /
+シフトの表示色(`ShiftColorCard`) / 違反種別の色(`ColorSettingsView`。3.483.0: 基準色2チップを常時、20種の族別チップは既定で折りたたみ) / 直す優先順位(`WeightTableCard`) /
 **最適化設定**(`SettingsCard`：並列・時間予算・計算方式・仕上げ最適化・版表示) /
 データ(`DataActionsCard`：JSON/CSV入出力・コンポーネント別出力) /
 詳細設定(`AdvancedSettingsSection`・折りたたみ・既定=閉：並列ワーカー/ネイティブ加速/Kotlin照合/

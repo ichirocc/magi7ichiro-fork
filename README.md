@@ -16,7 +16,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/requirements.md`](./docs/requirements.md) | 要件定義。ユーザーストーリーと受け入れ条件（なぜ存在するか） |
 | [`docs/design.md`](./docs/design.md) | 設計。主要インタフェースと処理フロー（どう作られているか） |
 | [`docs/architecture.md`](./docs/architecture.md) | レイヤー構成・依存関係・どのファイルが何を担当するか（地図） |
-| [`docs/business-logic.md`](./docs/business-logic.md) | 判定条件・計算（重み19種）・エラー方針（**業務ルールの正解**） |
+| [`docs/business-logic.md`](./docs/business-logic.md) | 判定条件・計算（重み20種）・エラー方針（**業務ルールの正解**） |
 | [`docs/data-models.md`](./docs/data-models.md) | エンティティ定義・項目名と型（**存在しない項目を創作しない**） |
 | [`docs/screen_spec.md`](./docs/screen_spec.md) | 画面仕様（挙動・実寸・違反/希望の表示） |
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
@@ -32,6 +32,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-09-16（3.572.0＝外部監査を三重並列トリアージ。`tools/weight_lint.py`新設（`MirrorKeys.weights`
+以外への重みリテラル直書きをCI検査、現状0件）＋文書の族数「19→20」修正（c3w追加3.542.0以来7ファイル20箇所）＋
+`cleanup-artifacts.yml`部分失敗可視化＋`dependabot.yml`同一メジャーgroup化。main branch protectionは
+利用可能ツールで設定不可＝backlog#22へ人手対応事項として登録。ホストJVM 800テスト緑。詳細は`docs/history/3.4xx.md`）
 
 **最終更新**：2026-09-16（3.571.0＝backlog #19 の計測実装＋ペアベンチ（`SaParams.officialTieBreak`、既定OFF・
 選定ロジック無変更）＝実データ4件×10seed×20秒×4ワーカーでHARD退行0/40・weightedScoreの勝ち0/40＝既定動作は不変。
