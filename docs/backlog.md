@@ -163,7 +163,7 @@
     の除外リスト（`app-release-` prefix）で個別に保護している。Release アセットへ移せばこの除外が不要になり、
     保存枠も別勘定になる（`gh release create`/`softprops/action-gh-release` 等で `v*` タグ push 時にアセット添付）。
     ストア配布用の署名鍵・Lint ゲート・縮小と合わせて検討する話＝**明示 go まで着手しない**。
-22. **[要人手対応・ツール権限外] main の branch protection / ruleset が未設定**（2026-09-16、外部監査で指摘・
+22. ~~**[要人手対応・ツール権限外] main の branch protection / ruleset が未設定**（2026-09-16、外部監査で指摘・
     3.572.0で確認）。force-push・削除・CI未通過コミットの直接 push を防ぐ設定が repo 側に無い。この
     セッションで使える GitHub MCP ツールに branch protection/repository ruleset を変更する手段が無く
     （`gh` CLI・直接 API access も環境上不可）、コードやワークフローの変更では実現できない＝**GitHub Web UI
@@ -171,7 +171,8 @@
     推奨設定: main への直接 push 禁止（PR 必須）、必須ステータスチェック（Design Lint／Native Parity Check／
     V6 Engine Check）、force-push 禁止。CLAUDE.md の運用（「main へのマージは本人の『mainにマージする』で
     squash」「force-push は自分の作業ブランチだけ」）は既にこの制約を前提に運用されているため、設定しても
-    通常のワークフローへの影響は無いはず。
+    通常のワークフローへの影響は無いはず。~~ **→ 2026-09-16 完了**（ユーザーがGitHub Web UIで直接設定。
+    このセッションのツールでは状態を照会できないため内容の検証はしていない＝ユーザー申告に基づく）。
 23. **[将来課題・要専用パス] `docs/screen_spec.md` §08b の SOFT テーブルが古い**（2026-09-16、外部監査契機の
     19→20族修正時に発見・3.572.0）。見出し「SOFT（できれば・14種）」だが実際は15種＝`weekly` の行が
     丸ごと欠落（新しい行の創作が要るため族数修正とは別対応）。さらに表の重み値も3.522.0以前の旧値のまま
