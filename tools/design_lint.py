@@ -21,6 +21,7 @@ Compose/Kotlin をコンパイルせずに grep 相当で検出（サンドボ�
     P11 fontSize 直書き   : ui/*.kt の fontSize = N.sp 直書き（一次ソースは MainActivity の
                             Typography。MaterialTheme.typography.* へ寄せる。baseline 監視）
 """
+import io
 import os
 import re
 import subprocess
@@ -538,6 +539,50 @@ def find_p12():
     return hits
 
 
+
+def find_p13():
+    """公開宣言が internal 型を露出している（`'public' function exposes its 'internal' …`）。
+
+    UI を Passive View へ移す過程で、Composable や ViewModel の問い合わせが internal な
+    ビューデータ型（MagiEvent / ConstraintsView / Ws1View …）を受け渡すようになった。宣言側を
+    internal にし忘れると**コンパイルエラーになるが、ホスト JVM では ui/ の Compose ファイルを
+    コンパイルできないため気づけない**（実際 3.560.0 と 3.561.0 で 1 回ずつ CI を落とした）。
+    Android ビルドは 8 分かかるので、数秒で同じ誤りを止める。
+    """
+    root = os.path.join(ROOT, "app/src/main/java/com/magi/app")
+    files = []
+    for dirpath, _dirnames, filenames in os.walk(root):
+        for fn in sorted(filenames):
+            if fn.endswith(".kt"):
+                files.append(os.path.join(dirpath, fn))
+    files.sort()
+    internal_types = set()
+    decl = re.compile(r"^internal\s+(?:@\w+\s+)?(?:data\s+|sealed\s+|value\s+)?(?:class|interface|object|enum class)\s+(\w+)")
+    for f in files:
+        for line in io.open(f, encoding="utf-8").read().split("\n"):
+            m = decl.match(line)
+            if m:
+                internal_types.add(m.group(1))
+    if not internal_types:
+        return []
+    word = re.compile(r"\b(" + "|".join(sorted(internal_types)) + r")\b")
+    out = []
+    for f in files:
+        rel = os.path.relpath(f, ROOT)
+        for i, line in enumerate(io.open(f, encoding="utf-8").read().split("\n"), 1):
+            st = line.strip()
+            # 入れ子（字下げあり）のメンバは、外側が internal なら実効 internal＝対象外。
+            if not (st.startswith("fun ") or st.startswith("public fun ") or st.startswith("val ")):
+                continue
+            if line[:1] in (" ", "\t"):
+                continue
+            if st.startswith("internal ") or st.startswith("private "):
+                continue
+            m = word.search(line)
+            if m:
+                out.append(f"{rel}:{i}: {m.group(1)} を公開宣言が露出: {st[:90]}")
+    return out
+
 def main():
     strict = "--strict" in sys.argv
     findings = scan()
@@ -549,6 +594,7 @@ def main():
     findings["P10"] = find_p10()
     findings["P11"] = find_p11()
     findings["P12"] = find_p12()
+    findings["P13"] = find_p13()
     labels = {
         "P1": "純黒本文/背景 (Color.Black / 0xFF000000)",
         "P2": "生 hex 直書き (Color(0x……)) ※MagiTokens.kt 除く=baseline監視",
@@ -562,10 +608,11 @@ def main():
         "P10": "シフト記号を文字列リテラルと比較（記号の字面で分岐＝別の記号の職場では黙って効かない）※baseline監視",
         "P11": "fontSize 直書き（MaterialTheme.typography.* に寄せる）※baseline監視",
         "P12": "色パレットのCUD距離不足（P型/D型二色覚シミュレーション後 ΔE<3.0、既知の1ペアは除外）",
+        "P13": "公開宣言が internal 型を露出（Kotlin のコンパイルエラー。ホストでは ui/ を組めず気づけない）",
     }
     total = sum(len(v) for v in findings.values())
     print("=== MAGI design lint (docs/DESIGN.md P1-P4) ===")
-    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12"):
+    for key in ("P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13"):
         hits = findings[key]
         print(f"\n[{key}] {labels[key]}: {len(hits)} 件")
         for h in hits[:40]:
@@ -574,8 +621,8 @@ def main():
             print(f"    …ほか {len(hits) - 40} 件")
     hard = (len(findings["P1"]) + len(findings["P3"]) + len(findings["P5"])
             + len(findings["P6"]) + len(findings["P7"]) + len(findings["P8"])
-            + len(findings["P9"]) + len(findings["P12"]))
-    print(f"\n合計 {total} 件（P1純黒+P3影+P5テンプレート+P6メッセージ+P8DS表示+P9ジョブ解放+P12CUD距離 severity=hard {hard} 件 / P2生hex・P4角丸=baseline監視）。")
+            + len(findings["P9"]) + len(findings["P12"]) + len(findings["P13"]))
+    print(f"\n合計 {total} 件（P1純黒+P3影+P5テンプレート+P6メッセージ+P8DS表示+P9ジョブ解放+P12CUD距離+P13可視性 severity=hard {hard} 件 / P2生hex・P4角丸=baseline監視）。")
 
     # [3.409.5] P2/P4 は「baseline 監視」と名乗りながら**baseline を記録していなかった**＝20件増えても
     #   exit 0 で静かに通る。`docs/DESIGN.md` §4 はこれを「禁止事項（machine-checkable）」と呼んでいるのに
@@ -621,6 +668,10 @@ def main():
             "P12: 色パレットの一部ペアがP型/D型二色覚シミュレーション後に近すぎます。"
             "tools/palette_cud_redesign.py で再設計するか、既知の限界として認識のうえ"
             "P12_EXEMPT_PAIRS へ理由を添えて追加してください。")
+    if findings["P13"]:
+        blockers.append(
+            "P13: 公開宣言が internal 型を露出しています（Kotlin のコンパイルエラー）。"
+            "宣言側へ internal を付けてください。ホスト JVM では ui/ を組めないのでここでしか止まりません。")
     if blockers:
         for line in blockers:
             print(line)

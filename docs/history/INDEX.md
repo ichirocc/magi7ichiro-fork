@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- UI 層の再構成 Stage C-2/C-3（3.561.0/3.562.0）＝制約と ws1 の編集を Passive View へ。`ConstraintFamilyView`
+  と `Ws1View` を `MagiViewModel` の入れ子から独立した型へ出し、Compose 非依存のビューデータ 2 ファイルへ。
+  `vm` 参照 55 箇所と `key(ui.editRev)` 5 箇所を撤去。design_lint に **P13（公開宣言が internal 型を露出）**
+  を追加＝ホストでは気づけずAndroidビルド 8 分まで分からない誤りを数秒で止める → `docs/history/3.4xx.md`
 - UI 層の再構成 Stage C-1（3.560.0）＝Root に Mediator を配線。段階の表現を `MagiPhaseMachine` 1 つへ
   （ViewModel が所有・Mediator は読むだけ）、3 種のガードを `MagiArbiter` へ委譲。設定系 7 つを Passive View 化。
   **UI のコンパイル検証は `android-sdk.yml` を作業ブランチへ `workflow_dispatch` すれば取れる**（この回で

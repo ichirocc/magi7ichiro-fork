@@ -1936,11 +1936,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- constraint editing (ws3-5) -------------------------------------------
 
-    /** A constraint family with its rows rendered for display (key used for add/remove).
-     *  [3.427.0] 旧 `subs`（行ごとの読み下し文）は撤去: ペア禁止系の行タイトル自体を読める形
-     *  （「吉の休 ✕ 古の休」）にしたため、行＋文の二重表示（3.409.18）が冗長になった。 */
-    data class ConstraintFamilyView(val key: String, val title: String, val rows: List<String>)
-
     fun shiftKigouList(): List<String> = state?.shifts?.map { it.kigou } ?: emptyList()
 
     // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
@@ -2022,19 +2017,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- ws1 initial setup ----------------------------------------------------
 
-    /** Snapshot of the ws1 (初期設定) data for the editor. Recomputed per call (cheap). */
-    data class Ws1View(
-        val startDate: String, val endDate: String, val days: Int, val use2: Boolean,
-        val shifts: List<Shift>, val groups: List<Group>, val staff: List<Staff>,
-        val groupShift: List<List<Int>>,
-        val groupShiftApt: List<List<String>>,
-    )
-
-    fun ws1(): Ws1View? {
-        val st = state ?: return null
-        val days = currentSchedule?.firstOrNull()?.size ?: st.dayCount
-        return Ws1View(st.startDate, st.endDate, days, st.use2Patterns, st.shifts, st.groups, st.staff, st.groupShift, st.groupShiftApt)
-    }
+    internal fun ws1(): Ws1View? =
+        ws1ViewOf(state, currentSchedule?.firstOrNull()?.size ?: state?.dayCount ?: 0)
 
     internal fun applyStructure(ns: MagiState) {
         if (structuralEditBlocked()) return

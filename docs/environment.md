@@ -14,6 +14,7 @@
   `actions_run_trigger(run_workflow, workflow_id=android-sdk.yml, ref=<作業ブランチ>)` で debug/release の
   assemble ＋ Android Lint が走る（約 8 分）。ホストでは `ui/` の Compose ファイルをコンパイルできないため、
   UI を触る変更はこれが唯一の実コンパイル確認手段＝main へ出す前に回す（3.559.0 で確立）。
+  ただし「公開宣言が internal 型を露出」だけは `tools/design_lint.py` の **P13** が数秒で止める（3.562.0）。
 - 監視: `api.github.com/repos/ichirocc/magi7ichiro-fork/actions/runs?head_sha=<sha>`（status / conclusion）。失敗 step は `/actions/runs/{id}/jobs`。
   CI ログ本体は results-receiver 上で取得不可＝コンパイルエラーは目視＋静的チェック（波括弧・フィールド名照合）で見つける。
 - ビルド約 4〜5 分 → debug-key APK 約 10.9MB。変更ごとに `versionCode++` と `versionName`（`app/build.gradle.kts`）。

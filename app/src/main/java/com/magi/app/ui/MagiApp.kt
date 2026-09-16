@@ -211,6 +211,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         )
     }
     val onEvent: (MagiEvent) -> Unit = { mediator.dispatch(it) }
+    // 制約エディタが描くのに要るものを Root で 1 度だけ組み立てる（画面から vm への問い合わせを無くす）。
+    val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
+    val ws1View = remember(ui) { vm.ws1() }
 
     val openJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -612,7 +615,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         1 -> {
                             // [職員管理] 入退職・所属・スキルの随時変更（人の属性管理に純化。個人の回数上下限は
                             //   年間マスター「③ 回数（1人あたり）」の StaffRangeCard へ=3.286.0 冗長性A）。
-                            key(ui.editRev) { StaffManageCard(ui, vm) }
+                            ws1View?.let { StaffManageCard(ui, it, onEvent) }
                             // [3.286.0 冗長性A] StaffRangeCard は年間マスター「③ 回数（1人あたり）」へ一本化
                             //   （旧: 職員管理と③の2ドアに同一カード全体が重複＝編集タブ内で唯一のカード丸ごと重複だった。
                             //   回数設定は③が意味的定位置・職員管理は人の属性管理=入職/退職/改名/所属/スキルに純化）。
@@ -633,19 +636,19 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [3.190.0 横展開] ①②④⑤も③と同じ再構成保証を適用（CollapsibleSection の content
                             //   ラムダが ui/vm を捕捉しスキップ判定に絡む同型の懸念に対する予防的対応。
                             //   Ws1Card=use2トグル・担当可否チップ／SkillGroupCard=スキル割当ボタン／
-                            //   ConstraintsCard(s)=行タップ編集後の一覧表示、がいずれも生の vm 読取で
-                            //   即時反映を期待する箇所のため key(ui.editRev) で編集ごとに確実に作り直す）。
+                            //   がいずれも生の vm 読取で即時反映を期待する箇所のため key(ui.editRev) で編集ごとに
+                            //   確実に作り直す）。ConstraintsCard(s) はデータを引数で受け取るようになったので不要。
                             // [3.482.0 編集タブ簡素化] 職員の一覧・入退職は「職員管理」ドアへ一本化（Ws1Card の職員節を撤去）。
                             CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("勤務の種類・グループと、グループ×勤務の担当可否を決めます。職員の入退職・所属は「職員管理」へ。")
-                                    key(ui.editRev) { Ws1Card(ui, vm) }
+                                    ws1View?.let { Ws1Card(ui, it, onEvent) }
                                 }
                             }
                             CollapsibleSection("② スキルグループ", "yr_skillg") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("資格や対応できる業務などの“スキル”でまとめる単位です。勤務のグループとは別の切り口で分けます（例：採血できる人・リーダーできる人）。")
-                                    key(ui.editRev) { SkillGroupCard(ui, vm) }
+                                    ws1View?.let { SkillGroupCard(ui, it, constraintsView.skillFamilies.sumOf { f -> f.rows.size }, onEvent) }
                                 }
                             }
                             // ③ 回数（1人あたり）★統合: 目標(apt) ＋ 個人の下限上限(ws5) ＋ グループ一括。
@@ -666,21 +669,17 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     // [3.427.0] 旧 SectionNote（群のレンジ／群ペア禁止の列挙）は撤去:
                                     //   直下のカード見出し・族見出しの完全な重複だった（3.129.0 の方針）。
-                                    key(ui.editRev) {
-                                        ConstraintsCard(ui, vm, title = "グループ単位",
-                                            keys = setOf("cons41", "cons42"))
-                                    }
-                                    key(ui.editRev) { SkillConstraintsCard(ui, vm) }
+                                    ConstraintsCard(ui, constraintsView, onEvent, title = "グループ単位",
+                                        keys = setOf("cons41", "cons42"))
+                                    SkillConstraintsCard(ui, constraintsView, onEvent)
                                 }
                             }
                             CollapsibleSection("⑤ 並び・くり返し", "yr_cons") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     // [3.427.0] 旧 SectionNote（窓の要件／個人の合計／並び4種の列挙）は撤去:
                                     //   ④と同じく直下のカード・族見出しの完全な重複だった。
-                                    key(ui.editRev) {
-                                        ConstraintsCard(ui, vm, title = "",
-                                            keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons3w"))
-                                    }
+                                    ConstraintsCard(ui, constraintsView, onEvent, title = "",
+                                        keys = setOf("cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn", "cons3w"))
                                 }
                             }
                         }

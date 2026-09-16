@@ -70,8 +70,7 @@ import kotlin.math.roundToInt
  * Remove operations are deferred to a later increment.
  */
 @Composable
-fun Ws1Card(ui: UiState, vm: MagiViewModel) {
-    val v = vm.ws1() ?: return
+internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
     var dialog by remember { mutableStateOf<Ws1Dialog?>(null) }
     var daysText by remember(v.days) { mutableStateOf(v.days.toString()) }
 
@@ -92,13 +91,13 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 W1Field("日数(1-31)", daysText, Modifier.width(130.dp)) { daysText = it }
-                EditRowButton(onClick = { daysText.toIntOrNull()?.let { vm.ws1ResizeDays(it) } }, enabled = !ui.running, text = "変更")
+                EditRowButton(onClick = { daysText.toIntOrNull()?.let { onEvent(MagiEvent.Structure.ResizeDays(it)) } }, enabled = !ui.running, text = "変更")
             }
 
             // --- use2 ---
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                Switch(checked = v.use2, onCheckedChange = { vm.ws1SetUse2(it) })
+                Switch(checked = v.use2, onCheckedChange = { onEvent(MagiEvent.Structure.SetUse2(it)) })
             }
             Divider()
 
@@ -109,7 +108,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [3.515.6/ドラッグ&ドロップ・ユーザー指示] ▲/▼(3.515.3)から並び替えを行内ドラッグへ変更。
             //   削除は行から編集シートの中へ移した（行はタップ＝編集・ハンドル長押し＝並び替えの2導線に整理）。
-            ReorderableRows(items = v.shifts, enabled = !ui.running, onMove = { from, to -> vm.ws1MoveShiftTo(from, to) }) { k, s, dragHandle ->
+            ReorderableRows(items = v.shifts, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveShift(from, to)) }) { k, s, dragHandle ->
                 // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
                 //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
@@ -147,7 +146,7 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             if (v.groups.size <= 1) {
                 Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
-            ReorderableRows(items = v.groups, enabled = !ui.running, onMove = { from, to -> vm.ws1MoveGroupTo(from, to) }) { g, gr, dragHandle ->
+            ReorderableRows(items = v.groups, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveGroup(from, to)) }) { g, gr, dragHandle ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
                     verticalAlignment = Alignment.CenterVertically) {
@@ -178,9 +177,9 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
             GroupShiftMatrix(
                 groups = v.groups, shifts = v.shifts, groupShift = v.groupShift,
                 enabled = !ui.running,   // [3.409.13] 実行中は applyStructure が必ず拒否＝押せる形は嘘（3.405.0）
-                onCell = { g, k, on -> vm.ws1SetGroupShift(g, k, on) },
-                onRow = { g, on -> vm.ws1SetGroupShiftRow(g, on) },
-                onColumn = { k, on -> vm.ws1SetGroupShiftColumn(k, on) },
+                onCell = { g, k, on -> onEvent(MagiEvent.Structure.SetGroupShift(g, k, on)) },
+                onRow = { g, on -> onEvent(MagiEvent.Structure.SetGroupShiftRow(g, on)) },
+                onColumn = { k, on -> onEvent(MagiEvent.Structure.SetGroupShiftColumn(k, on)) },
             )
 
             // [③回数へ移動] 適切回数(apt)の編集は「回数（1人あたり）」節の StaffShiftMatrixCard（職員×シフト
@@ -193,37 +192,37 @@ fun Ws1Card(ui: UiState, vm: MagiViewModel) {
         // [3.515.6] 削除の入口は行から編集シートの中へ（ユーザー指示）。参照件数の確認は従来どおり
         //   ConfirmDelete を経由する（安全確認は不変、経由の場所だけ変える）。
         is Ws1Dialog.EditShift -> ShiftDialog("シフト編集", d.name, d.kigou, d.need1, d.need2,
-            { n, kg, n1, n2 -> vm.ws1EditShift(d.k, n, kg, n1, n2); dialog = null }, { dialog = null },
+            { n, kg, n1, n2 -> onEvent(MagiEvent.Structure.EditShift(d.k, n, kg, n1, n2)); dialog = null }, { dialog = null },
             onDelete = if (v.shifts.size > 1) ({
                 // [3.429.0/R-03] 削除する前に、参照している制約の件数を見せる（削除自体は
                 //   従来どおり進められる＝止めるのではなく、確認ダイアログを情報つきにする）。
-                val refs = vm.ws1ShiftRefCount(d.k)
+                val refs = v.shiftRefCount(d.k)
                 val note = if (refs > 0) "このシフトを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
                 dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note)
             }) else null)
         Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "",
-            { n, kg, n1, n2 -> vm.ws1AddShift(n, kg, n1, n2); dialog = null }, { dialog = null })
+            { n, kg, n1, n2 -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2)); dialog = null }, { dialog = null })
         is Ws1Dialog.EditGroup -> GroupDialog("グループ編集", d.name, d.kigou,
-            { n, kg -> vm.ws1EditGroup(d.g, n, kg); dialog = null }, { dialog = null },
-            onDelete = if (vm.ws1CanRemoveGroup(d.g)) ({
+            { n, kg -> onEvent(MagiEvent.Structure.EditGroup(d.g, n, kg)); dialog = null }, { dialog = null },
+            onDelete = if (v.canRemoveGroup(d.g)) ({
                 // [3.429.0/R-03] 所属者移動に加え、参照している制約の件数も見せる。
-                val members = vm.ws1GroupMemberCount(d.g)
-                val refs = vm.ws1GroupRefCount(d.g)
+                val members = v.groupMemberCount(d.g)
+                val refs = v.groupRefCount(d.g)
                 val note = if (refs > 0) "このグループを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
                 val label = "グループ ${toHankakuKigou(d.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
                 dialog = Ws1Dialog.ConfirmDelete("group", d.g, label, note)
             }) else null)
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
-            { n, kg -> vm.ws1AddGroup(n, kg); dialog = null }, { dialog = null })
+            { n, kg -> onEvent(MagiEvent.Structure.AddGroup(n, kg)); dialog = null }, { dialog = null })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
-            { lines, _ -> lines.forEach { vm.ws1AddShift(it, it, "", "") }; dialog = null }, { dialog = null })
+            { lines, _ -> lines.forEach { onEvent(MagiEvent.Structure.AddShift(it, it, "", "")) }; dialog = null }, { dialog = null })
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
             confirmButton = {
                 DialogDangerButton("削除", onClick = {
                     when (d.kind) {
-                        "shift" -> vm.ws1RemoveShift(d.index)
-                        "group" -> vm.ws1RemoveGroup(d.index)
+                        "shift" -> onEvent(MagiEvent.Structure.RemoveShift(d.index))
+                        "group" -> onEvent(MagiEvent.Structure.RemoveGroup(d.index))
                     }
                     dialog = null
                 })

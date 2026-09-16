@@ -313,7 +313,7 @@ private fun MatrixDataCell(
 /** セルタップの編集シート。①群の目標(apt、全員に影響) ②個人の上下限(staffRange) の2系統のみ提供する。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: MagiViewModel.Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
+private fun StaffShiftCellSheet(ui: UiState, vm: MagiViewModel, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState()
     val name = v.staff.getOrNull(i)?.name ?: "$i"
