@@ -85,7 +85,7 @@ private fun runTag(serial: Int): String = if (serial > 0) "実行#$serial" else 
 
 fun MagiViewModel.exportLogs(): String? {
     val ops = _ui.value.opLog
-    val runsInLog = opLog.map { it.run }.filter { it > 0 }.distinct().sorted()
+    val runsInLog = synchronized(this) { opLog.map { it.run } }.filter { it > 0 }.distinct().sorted()   // logOp（@Synchronized）と同じモニタ
     val runSpan = if (runsInLog.isEmpty()) "" else "・実行#${runsInLog.first()}〜#${runsInLog.last()}"
     // 出力は全文（非圧縮）。画面表示は圧縮版だが、監査用にはロスレスの rawDiagLogs を使う。
     val logs = rawDiagLogs.ifEmpty { _ui.value.logs }
@@ -135,7 +135,7 @@ fun MagiViewModel.exportLogsJson(): String? {
     // [3.408.0] 帰属の鍵。opLog の行頭 #N と対応する。これが無いと、複数回実行したあとの書き出しで
     //   前の実行の「グローバル最良更新」と直近の「全体最良更新=0回」が同一実行の矛盾に見える。
     o.put("diagRun", lastDiagSerial)
-    o.put("runsInOpLog", org.json.JSONArray().apply { opLog.map { it.run }.filter { it > 0 }.distinct().sorted().forEach { put(it) } })
+    o.put("runsInOpLog", org.json.JSONArray().apply { synchronized(this@exportLogsJson) { opLog.map { it.run } }.filter { it > 0 }.distinct().sorted().forEach { put(it) } })
     // [3.379.0] テキスト版と同じ理由＝最適化後の編集で diagLog は作り直されるため実行時のぶんも残す。
     if (lastRunDiagLogs.isNotEmpty()) {
         o.put("lastRunLabel", lastRunDiagLabel)

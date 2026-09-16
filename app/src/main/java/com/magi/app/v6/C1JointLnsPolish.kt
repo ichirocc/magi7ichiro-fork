@@ -138,6 +138,7 @@ internal object C1JointLnsPolish {
         var evaluations = 0
         fun evalCapped(): Boolean = config.maxEvaluations > 0 && evaluations >= config.maxEvaluations
         fun stopped(): Boolean = shouldStop() || System.nanoTime() >= deadline || stalled() || evalCapped()
+        fun haltNow(): Boolean = shouldStop() || System.nanoTime() >= deadline || stalled()   // 評価数上限を含まない（生成時に見る）
 
         val lowerBound = structuralC1LowerBound(p)
         val improvable = (rootC1 - lowerBound).coerceAtLeast(0)
@@ -175,61 +176,68 @@ internal object C1JointLnsPolish {
                     expanded++
                     val goals = collectGoals(p, parent.schedule, goalLimit, rng, includeTemporal = parent.path.isEmpty())
                     // [3.569.0] 候補の生成（rng 順）と採否（seen・best）は逐次のまま、評価だけ並列にする。
-                    //   評価数の上限は生成時に数えるので、決定論モード（maxEvaluations）の評価集合は旧実装と同一。
+                    //   評価数の上限は生成時に見るので、決定論モード（maxEvaluations）の評価集合は旧実装と同一。
+                    //   締切・停止は塊の境目で見る＝行き過ぎは 1 塊ぶん。
                     val pending = ArrayList<Pair<Move, Array<IntArray>>>()
+                    fun capReached() = config.maxEvaluations > 0 && evaluations + pending.size >= config.maxEvaluations
                     for (goal in goals) {
-                        if (stopped()) break
+                        if (haltNow() || capReached()) break
                         val moves = generateMoves(p, parent.schedule, goal, moveLimit, rng)
                         for (move in moves) {
-                            if (stopped()) break
+                            if (haltNow() || capReached()) break
                             val next = parent.schedule.copy2D()
                             if (!applyMove(next, move)) continue
-                            generated++; evaluations++
                             pending.add(move to next)
                         }
                     }
-                    val reports = mapParallel(pending) { UnifiedViolationChecker.check(state, it.second, quantitativeRangeEval = quantitativeRangeEval) }
-                    for ((idx, pair) in pending.withIndex()) {
-                        val (move, next) = pair
-                        run {
-                            val report = reports[idx]
-                            val c1 = report.breakdown["c1"] ?: 0
-                            val overHard = report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0)
-                            val weightDebt = config.debtFactor > 0.0
-                            val overTotal = if (weightDebt) !WeightDebt.within(rootReport, report, config.debtFactor)
-                                else report.total > rootReport.total + config.totalDebt.coerceAtLeast(0)
-                            val overC1 = !weightDebt && c1 > rootC1 + config.c1Debt.coerceAtLeast(0)
-                            if (overHard || overTotal || overC1) {
-                                debtRejected++
-                                when {
-                                    overHard -> {
-                                        debtHard++
-                                        worstWorsenedFamily(report, rootReport)?.let {
-                                            debtCulprits[it] = (debtCulprits[it] ?: 0) + 1
+                    var from = 0
+                    while (from < pending.size && !haltNow()) {
+                        val chunk = pending.subList(from, minOf(pending.size, from + PARALLEL_EVAL_CHUNK))
+                        val reports = mapParallel(chunk) { UnifiedViolationChecker.check(state, it.second, quantitativeRangeEval = quantitativeRangeEval) }
+                        generated += chunk.size; evaluations += chunk.size
+                        from += chunk.size
+                        for ((idx, pair) in chunk.withIndex()) {
+                            val (move, next) = pair
+                            run {
+                                val report = reports[idx]
+                                val c1 = report.breakdown["c1"] ?: 0
+                                val overHard = report.hard > rootReport.hard + config.hardDebt.coerceAtLeast(0)
+                                val weightDebt = config.debtFactor > 0.0
+                                val overTotal = if (weightDebt) !WeightDebt.within(rootReport, report, config.debtFactor)
+                                    else report.total > rootReport.total + config.totalDebt.coerceAtLeast(0)
+                                val overC1 = !weightDebt && c1 > rootC1 + config.c1Debt.coerceAtLeast(0)
+                                if (overHard || overTotal || overC1) {
+                                    debtRejected++
+                                    when {
+                                        overHard -> {
+                                            debtHard++
+                                            worstWorsenedFamily(report, rootReport)?.let {
+                                                debtCulprits[it] = (debtCulprits[it] ?: 0) + 1
+                                            }
                                         }
+                                        overTotal -> debtTotal++
+                                        else -> debtC1++
                                     }
-                                    overTotal -> debtTotal++
-                                    else -> debtC1++
+                                    return@run
                                 }
-                                return@run
-                            }
-                            val child = Node(
-                                next,
-                                report,
-                                c1,
-                                parent.path + move,
-                                changedCellCount(rootSchedule, next),
-                            )
-                            if (!remember(seen, child)) {
-                                duplicateRejected++
-                                return@run
-                            }
-                            children.add(child)
+                                val child = Node(
+                                    next,
+                                    report,
+                                    c1,
+                                    parent.path + move,
+                                    changedCellCount(rootSchedule, next),
+                                )
+                                if (!remember(seen, child)) {
+                                    duplicateRejected++
+                                    return@run
+                                }
+                                children.add(child)
 
-                            val finalCandidate = isFinalCandidate(p, child, root, pinBlocks)
-                            if (finalCandidate && better(child.report, best.report)) {
-                                best = child
-                                lastImproveNs = System.nanoTime()
+                                val finalCandidate = isFinalCandidate(p, child, root, pinBlocks)
+                                if (finalCandidate && better(child.report, best.report)) {
+                                    best = child
+                                    lastImproveNs = System.nanoTime()
+                                }
                             }
                         }
                     }

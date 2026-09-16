@@ -265,9 +265,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * [3.378.0/HF77=コメント≠実装] 旧 KDoc は「最大300件」と書いていたが実装は 1000。
      * 「自分の行がリングから押し出されたのか」を判断する材料なので実装値へ訂正する。
      */
-    /** `opLog` と同じ順の整形済み写し。書き換えるのは [logOp] だけ（差し替えのみ・要素は不変）。 */
+    /** `opLog` と同じ順の整形済み写し。書き換えるのは [logOp] だけ（差し替えのみ・要素は不変）。
+     *  [logOp] は main のほか最適化の進捗コールバック（Default）からも呼ばれる＝2 つの deque の更新はモニタで原子化する。 */
     private var opLogLines: List<String> = emptyList()
 
+    @Synchronized
     internal fun logOp(level: String, message: String) {
         val e = OpLogEntry(System.currentTimeMillis(), level, message, activeRunSerial)
         opLog.addFirst(e)
