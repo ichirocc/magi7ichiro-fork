@@ -33,6 +33,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.574.0＝backlog#24（`restShiftIndex`の記号依存＋`?:0`退避）を実データ4件
+（sept2026/blocked_covu/golden/sample_v6）で再現・実害確認（調査のみ、コード変更なし）。「休」シフトを
+通常の編集操作（`Ws1Ops.removeShift`）で削除すると4件ともHARDが激増（例: sept2026 hard 0→60、
+weightedScore最大104倍悪化）＝理論上の懸念でなく実データで確認、backlog#24を深刻へ格上げ・
+対応方針はgrilling対象として保留。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.573.0＝追加監査2件対応。`FixApplyGate`/`FixSuggester`が別HARD族の新規発生を
 「相殺」として許していたバグを実データで再現・`MirrorCore.newHardFamilyViolation`で修正（探索本体は対象外）。
 `weight_lint.py`の「正本だけ重み変更・複製更新忘れ」検出漏れ（reverse-direction）をmutation testで確認・

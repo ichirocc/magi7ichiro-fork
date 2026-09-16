@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#24（restShiftIndexの記号依存＋?:0退避）を実データ4件で再現・実害確認（3.574.0、調査のみ・
+  コード変更なし）。「休」シフトを`Ws1Ops.removeShift`（通常の編集操作）で削除すると、4件とも
+  hard激増（例: sept2026 0→60・golden 0→46、いずれも新規c3n）・weightedScore 5〜104倍悪化を確認。
+  理論上の懸念でなく実データで実害を確認したためbacklog#24を深刻へ格上げ、対応方針はgrilling対象
+  として保留 → `docs/history/3.4xx.md`
 - FixApplyGate/FixSuggesterのHARD族相殺バグ修正＋weight_lint.pyのreverse-direction強化（3.573.0）。
   `docs/automation.md`が済としていた「担当外・希望固定・禁止連・個人固定の新規違反なし」は、実は
   HARD合計が辞書式先頭というだけで**族どうしの相殺**（covU解消と引き換えにc3n新規発生等）を防げて
