@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- 最終番兵/多重防御を「入力vs最終結果」の2点比較から全段（入力/探索/統合/後処理）比較へ拡張（3.575.0、
+  実機ログ起因）。旧実装は統合が入力より改善していても後処理(aptFairSoftTolerance等)が退化させると
+  改善ごと入力へ丸ごと戻していた機会損失バグ。`StageCandidate`/`pickBestStage`で修正、
+  hosttest 803件緑 → `docs/history/3.4xx.md`
 - backlog#24（restShiftIndexの記号依存＋?:0退避）を実データ4件で再現・実害確認（3.574.0、調査のみ・
   コード変更なし）。「休」シフトを`Ws1Ops.removeShift`（通常の編集操作）で削除すると、4件とも
   hard激増（例: sept2026 0→60・golden 0→46、いずれも新規c3n）・weightedScore 5〜104倍悪化を確認。

@@ -33,6 +33,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.575.0＝実機ログ（Pixel 10 Pro XL）起因。最終番兵/多重防御が「入力」と
+パイプライン最終結果の2点だけを比較していたため、途中の段（統合）が入力より改善していても後段
+（後処理、`aptFairSoftTolerance`発火時）がそれを退化させると改善ごと入力へ丸ごと戻していた機会損失を
+修正。`StageCandidate`/`pickBestStage`で入力/探索/統合/後処理の全段から`reportComparator`で最良を
+採用するよう拡張。ホストJVM 803テスト緑。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.574.0＝backlog#24（`restShiftIndex`の記号依存＋`?:0`退避）を実データ4件
 （sept2026/blocked_covu/golden/sample_v6）で再現・実害確認（調査のみ、コード変更なし）。「休」シフトを
 通常の編集操作（`Ws1Ops.removeShift`）で削除すると4件ともHARDが激増（例: sept2026 hard 0→60、

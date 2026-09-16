@@ -772,22 +772,32 @@ object V6FinalPort {
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
                 (if (c3nWallResult.get() && bestNonCovUAllC3n.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
         )) else emptyList()
-        // [最終番兵/多重防御] 全段 keep-best のため通常は発火しないが、万一パイプラインが入力より
-        // 悪い結果を返した場合は入力を採用し退化を防ぐ（checkResultWorse をここで配線）。
-        // [3.513.0/バグ修正] 復帰先は inputReport と同じ盤面 cappedInput（経緯: history 3.513.0）。
-        val regression = checkResultWorse(inputReport, refReport)
-        val finalSched = sentinelSchedule(regression, cappedInput, refSched)
-        val finalReport = if (regression != null) inputReport else refReport
+        // [最終番兵/多重防御・3.575.0で強化] 「入力」と最終結果の2点比較だと、途中の段の改善が
+        //   後段の悪化で丸ごと失われる（実機ログで確認、経緯: docs/history/3.4xx.md 3.575.0）。
+        //   主要な段を全部候補にし [pickBestStage] で最良を選ぶ。
+        val bestStage = pickBestStage(listOf(
+            StageCandidate("入力", cappedInput, inputReport),
+            StageCandidate("探索", chained.schedule, chained.report),
+            StageCandidate("統合", integrated.schedule, integrated.report),
+            StageCandidate("後処理", refSched, refReport),
+        ))
+        val finalSched = bestStage.sched
+        val finalReport = bestStage.report
+        // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
+        //   label が「後処理」でなくなるが、これは退化ではないので警告しない。実際に refReport（後処理の
+        //   最終値）が bestStage より悪いとき（= checkResultWorse が非null）だけ多重防御ログを出す。
+        val regression = if (bestStage.label != "後処理") checkResultWorse(bestStage.report, refReport) else null
         val sentinelLog = if (regression != null) listOf(
             MirrorLog(
                 level = "W", tag = "Sentinel",
-                message = "後処理結果が入力より悪化を検知したため入力を採用しました（多重防御）: $regression",
+                message = "後処理結果が${bestStage.label}より悪化を検知したため${bestStage.label}を採用しました" +
+                    "（多重防御）: $regression",
             ),
             // [N3] ログ末尾には棄却盤面(post)の UnifiedCheck/診断行が履歴として残るため、
             //   採用した勤務表の集計を明示して読者の取り違え（例: covU詳細と件数の不一致に見える）を防ぐ。
             MirrorLog(
                 level = "I", tag = "UnifiedCheck",
-                message = "採用した勤務表の集計: HARD=${inputReport?.hard} 合計=${inputReport?.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
+                message = "採用した勤務表の集計: HARD=${finalReport.hard} 合計=${finalReport.total}（直近のUnifiedCheck行・違反詳細は棄却盤面の診断）",
             ),
         ) else emptyList()
         // [ネイティブ加速 Stage2/3] C++フル評価器と Kotlin Evaluator を採用盤面で照合し、結果を診断ログへ。
@@ -1042,9 +1052,14 @@ object V6FinalPort {
         else -> "%,d億回".format(n / 100_000_000)
     }
 
-    /** [3.513.0] 番兵発火時の復帰盤面は `inputReport` と同じ `cappedInput` に揃える（旧実装のバグ、経緯: history 3.513.0）。 */
-    internal fun sentinelSchedule(regression: String?, cappedInput: Array<IntArray>, refSched: Array<IntArray>): Array<IntArray> =
-        if (regression != null) cappedInput else refSched
+    /** [3.575.0] 最終番兵が比較する「パイプラインの主要な段」の1つ（入力/探索/統合/後処理）。
+     *  [sched] は必ずその段が実際に持つ盤面（[3.513.0]の教訓＝「入力」段は正規化前の生入力ではなく
+     *  `cappedInput`＝`inputReport`と同じ基準の盤面を渡すこと）。 */
+    internal data class StageCandidate(val label: String, val sched: Array<IntArray>, val report: ViolationReport)
+
+    /** [3.575.0] [reportComparator] で候補中の最良を選ぶ（同値なら早い段を残す）。 */
+    internal fun pickBestStage(candidates: List<StageCandidate>): StageCandidate =
+        candidates.reduce { a, b -> if (betterReport(b.report, a.report)) b else a }
 
     fun checkResultWorse(before: ViolationReport?, after: ViolationReport): String? {
         if (before == null) return null
