@@ -1,5 +1,12 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog #19（HARD同点タイブレーク乖離）の計測実装＋ペアベンチ（3.571.0）。`SaParams.officialTieBreak`
+  （既定OFF・計測専用、選定ロジックは無変更＝`SaOfficialTieBreakTest`で固定）で `fullEval` 基準の現行選定と
+  `betterReport` 基準の「もう一つの best」を同一実行内で並行追跡。実データ4件×10seed×20秒×4ワーカー＝40走行で
+  **HARD退行0/40・weightedScoreの勝ちは0/40**＝採用基準未達につき既定動作は不変（決定は維持）。
+  backlog #20（C# `PinInvariantTest` 赤2件）は根本原因3件（`C1IndexChainRepair`/`HF66`/`HF67`/`HF80` の
+  厳密ピン保護ガード漏れ）を特定・修正——**Kotlin/C++は無変更**、C# 単独の移植漏れ（3.523.0 C1WindowPolish と
+  同型）。`-MAGI_PC` commit `b1f4b64`、MagiEngine.Tests 856/856緑 → `docs/history/3.4xx.md`
 - CI ワークフローの Actions を commit SHA へ全ピン留め（3.570.0、ユーザー決定）。7 種・29 箇所すべて
   `uses: owner/repo@<sha> # vN`（元タグをコメントで保持）。`.github/dependabot.yml` を新設し週次で更新 PR を
   自動生成（自動マージはしない）→ `docs/environment.md`
