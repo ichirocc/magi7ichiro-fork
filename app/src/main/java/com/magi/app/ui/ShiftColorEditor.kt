@@ -139,7 +139,7 @@ internal val VIOLATION_COLOR_PALETTE = listOf(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ShiftColorCard(
+internal fun ShiftColorCard(
     ui: UiState,
     shifts: List<ShiftColorView>,
     onEvent: (MagiEvent) -> Unit,

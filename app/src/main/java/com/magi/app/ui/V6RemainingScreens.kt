@@ -48,7 +48,7 @@ fun SectionSegment(title: String, subtitle: String? = null, content: @Composable
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
+internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     // [色変更/スクショ指摘] 旧版は read-only の凡例で、チップを押しても何も起きず「色を変更出来ない」と誤解を
     //   招いていた（カード題も「違反種別の色」）。チップタップでその重大度の色を変更できるように:
     //   必須=既存トークン __vio__（外観の「違反の色」と同一）/ 要調整=新トークン __vioSoft__。灰=情報は固定。
