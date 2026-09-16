@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- UI 層の再構成 Stage A（3.558.0、ユーザー指示「Root 配下・Passive View・CoR・ステートマシン Mediator」）。
+  `MagiPhase`/`MagiArbiter`/`MagiEvent`/`MagiMediator` を Compose 非依存で追加しホストテスト白名単へ。
+  着手前調査で同じ描画値の独立算出が 13 系統（日別不足/過剰が 3 ソース→6 画面、回数が 5 箇所、
+  「必須か」の規則が 4 つ、キーの組立分解が 16 箇所）→ `docs/history/3.4xx.md`
 - 日ヘッダの「▲N」が休の過剰で出なかった（3.557.0、実機報告「21日など日付の下に印がつかない」）。`buildDayRisks` が
   過剰の集計を不足用の `need<=0 continue` ガードの内側に置いており、下限0・上限ありのシフト（休）が常に捨てられていた。
   ヘッダと集計が同じ値を別々の源から出していた drift の実例 → `docs/history/3.4xx.md`
