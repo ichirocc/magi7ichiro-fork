@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.577.0＝外部提案の探索エンジン改良ロードマップを仕分け。全工程正式最良保存
+(3.575.0)・削除時暗黙置換の封鎖(3.576.0)・DebtBudget型見送り(3.576.0)は対応済みと確認。残る提案
+（並列所有権/停止監査・既定OFF腕の条件付き再活性化・停滞判定の精緻化・業務重みと腕選択基準の分離）は
+backlog#26へ登録し個別にgrilling＋tools/loop測定してから採否。コード変更なし。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.576.0＝backlog#24をgrillingで壁打ち。探索エンジンへのHARD一時負債許容
 （DebtBudget案）は見送り、3.416.0（休削除許可）は反転せず、`V6SanityPort`の既存診断2gが「休が無い」
 一般ケースを既に案内済みと判明したため対応範囲を絞り込み。`Ws1Editor.kt`の削除確認ダイアログに
