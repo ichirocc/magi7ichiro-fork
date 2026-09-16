@@ -1,5 +1,28 @@
 # 作業記録の索引（見出し一覧）
 
+- design-lint P10違反を修正（3.579.0、PR #201 CI赤対応）。`Ws1Editor.kt`の削除確認ダイアログが
+  「休」を生文字列比較していたのを`Ws1View.restIdx`（`restShiftIndex`経由）へ置換。P10は
+  baseline 2件に復帰、hosttest 803テスト緑 → `docs/history/3.4xx.md`
+- backlog#23完了: `docs/screen_spec.md` §08b・`docs/sudo_model.md`の陳腐化した重み表を現行値へ更新
+  （3.578.0）。SOFT表「14種」→「15種」（`weekly`行追加）、HARD/SOFT両表を3.522.0以降の現行重みへ
+  更新・重み降順に並び替え。コード変更なし → `docs/history/3.4xx.md`
+- 探索エンジン改良ロードマップ（外部提案）の仕分け（3.577.0）。全工程正式最良保存(3.575.0)と
+  削除時暗黙置換の封鎖(3.576.0)は実装済み、DebtBudget型は見送り済みと確認。残る提案（並列監査・
+  OFF腕再活性化・停滞判定精緻化・重み予算分離）はbacklog#26へ登録、個別にgrilling＋tools/loop
+  測定してから採否（コード変更なし）→ `docs/history/3.4xx.md`
+- backlog#24: grillingで対応方針確定（3.576.0）。DebtBudget（探索のHARD一時負債許容）は見送り、
+  3.416.0（休削除許可）は反転せず、`V6SanityPort`の既存診断2gで一般ケースは案内済みと判明したため
+  対応を「休削除の確認ダイアログに警告文を追加」のみへ絞った（`Ws1Editor.kt`、UI層のみ・エンジン
+  無変更）→ `docs/history/3.4xx.md`
+- 最終番兵/多重防御を「入力vs最終結果」の2点比較から全段（入力/探索/統合/後処理）比較へ拡張（3.575.0、
+  実機ログ起因）。旧実装は統合が入力より改善していても後処理(aptFairSoftTolerance等)が退化させると
+  改善ごと入力へ丸ごと戻していた機会損失バグ。`StageCandidate`/`pickBestStage`で修正、
+  hosttest 803件緑 → `docs/history/3.4xx.md`
+- backlog#24（restShiftIndexの記号依存＋?:0退避）を実データ4件で再現・実害確認（3.574.0、調査のみ・
+  コード変更なし）。「休」シフトを`Ws1Ops.removeShift`（通常の編集操作）で削除すると、4件とも
+  hard激増（例: sept2026 0→60・golden 0→46、いずれも新規c3n）・weightedScore 5〜104倍悪化を確認。
+  理論上の懸念でなく実データで実害を確認したためbacklog#24を深刻へ格上げ、対応方針はgrilling対象
+  として保留 → `docs/history/3.4xx.md`
 - FixApplyGate/FixSuggesterのHARD族相殺バグ修正＋weight_lint.pyのreverse-direction強化（3.573.0）。
   `docs/automation.md`が済としていた「担当外・希望固定・禁止連・個人固定の新規違反なし」は、実は
   HARD合計が辞書式先頭というだけで**族どうしの相殺**（covU解消と引き換えにc3n新規発生等）を防げて

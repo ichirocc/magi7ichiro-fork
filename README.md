@@ -33,6 +33,38 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.579.0＝PR #201のCI（design-lint）赤対応。3.576.0で追加した「休」削除
+確認ダイアログの警告条件が生文字列比較でP10ラチェットに抵触（baseline 2→3件）していたのを
+`Ws1View.restIdx`（`restShiftIndex`経由）へ置換して修正。ホストJVM 803テスト緑。
+詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-16（3.578.0＝backlog#23完了。`docs/screen_spec.md` §08bのHARD/SOFT重み表が
+3.522.0の全面見直し以前の旧値のまま陳腐化していたのを修正（SOFT「14種」→「15種」、`weekly`行追加、
+全表を現行重みへ更新・重み降順に整列）。`docs/sudo_model.md`の重み値引用も現行値へ修正。コード変更なし。
+詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-16（3.577.0＝外部提案の探索エンジン改良ロードマップを仕分け。全工程正式最良保存
+(3.575.0)・削除時暗黙置換の封鎖(3.576.0)・DebtBudget型見送り(3.576.0)は対応済みと確認。残る提案
+（並列所有権/停止監査・既定OFF腕の条件付き再活性化・停滞判定の精緻化・業務重みと腕選択基準の分離）は
+backlog#26へ登録し個別にgrilling＋tools/loop測定してから採否。コード変更なし。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-16（3.576.0＝backlog#24をgrillingで壁打ち。探索エンジンへのHARD一時負債許容
+（DebtBudget案）は見送り、3.416.0（休削除許可）は反転せず、`V6SanityPort`の既存診断2gが「休が無い」
+一般ケースを既に案内済みと判明したため対応範囲を絞り込み。`Ws1Editor.kt`の削除確認ダイアログに
+「休」削除時だけ警告文を追加（UI層のみ、エンジン・restShiftIndexは無変更）。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-16（3.575.0＝実機ログ（Pixel 10 Pro XL）起因。最終番兵/多重防御が「入力」と
+パイプライン最終結果の2点だけを比較していたため、途中の段（統合）が入力より改善していても後段
+（後処理、`aptFairSoftTolerance`発火時）がそれを退化させると改善ごと入力へ丸ごと戻していた機会損失を
+修正。`StageCandidate`/`pickBestStage`で入力/探索/統合/後処理の全段から`reportComparator`で最良を
+採用するよう拡張。ホストJVM 803テスト緑。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-16（3.574.0＝backlog#24（`restShiftIndex`の記号依存＋`?:0`退避）を実データ4件
+（sept2026/blocked_covu/golden/sample_v6）で再現・実害確認（調査のみ、コード変更なし）。「休」シフトを
+通常の編集操作（`Ws1Ops.removeShift`）で削除すると4件ともHARDが激増（例: sept2026 hard 0→60、
+weightedScore最大104倍悪化）＝理論上の懸念でなく実データで確認、backlog#24を深刻へ格上げ・
+対応方針はgrilling対象として保留。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.573.0＝追加監査2件対応。`FixApplyGate`/`FixSuggester`が別HARD族の新規発生を
 「相殺」として許していたバグを実データで再現・`MirrorCore.newHardFamilyViolation`で修正（探索本体は対象外）。
 `weight_lint.py`の「正本だけ重み変更・複製更新忘れ」検出漏れ（reverse-direction）をmutation testで確認・

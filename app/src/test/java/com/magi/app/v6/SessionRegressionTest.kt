@@ -44,15 +44,39 @@ class SessionRegressionTest {
         assertNull(V6FinalPort.checkResultWorse(null, rep(9, 99, 999.0)))
     }
 
-    // ---- sentinelSchedule: [3.513.0] 番兵発火時の復帰盤面は inputReport と同じ cappedInput でなければならない ----
+    // ---- pickBestStage: [3.513.0] 番兵発火時の復帰盤面は inputReport と同じ cappedInput でなければならない ----
+    // ---- [3.575.0/実機ログ起因] 途中の段（統合等）が最良なら、後処理が悪化させても入力まで戻さずそちらを採用する ----
 
-    @Test fun sentinelSchedule_fallsBackToCappedInputNotRawInput() {
-        val cappedInput = arrayOf(intArrayOf(0, 0, 0))   // 個人上限 0 のセルを外した盤面（inputReport の基準）
-        val refSched = arrayOf(intArrayOf(1, 1, 1))
-        // 発火時: refSched でなく cappedInput を返す（旧実装は上限 0 を外す前の生入力へ戻していたバグ）
-        assertEquals(listOf(0, 0, 0), V6FinalPort.sentinelSchedule("HARDが悪化しました", cappedInput, refSched)[0].toList())
-        // 非発火時: refSched（パイプラインの結果）をそのまま返す
-        assertEquals(listOf(1, 1, 1), V6FinalPort.sentinelSchedule(null, cappedInput, refSched)[0].toList())
+    private fun stage(label: String, cell: Int, hard: Int, total: Int, weighted: Double) =
+        V6FinalPort.StageCandidate(label, arrayOf(intArrayOf(cell)), rep(hard, total, weighted))
+
+    @Test fun pickBestStage_fallsBackToCappedInputNotRawInputOnRegression() {
+        val input = stage("入力", 0, hard = 2, total = 10, weighted = 100.0)
+        val post = stage("後処理", 1, hard = 3, total = 20, weighted = 200.0)   // 悪化
+        // 発火時: 後処理でなく入力（cappedInput）を返す（旧実装は上限0を外す前の生入力へ戻していたバグ、3.513.0）
+        val best = V6FinalPort.pickBestStage(listOf(input, post))
+        assertEquals("入力", best.label); assertEquals(listOf(0), best.sched[0].toList())
+    }
+
+    @Test fun pickBestStage_prefersAnIntermediateStageOverBothInputAndFinal() {
+        // 実機ログ由来の実例(3.575.0): 統合が入力より改善したのに、後処理がそれを入力より悪い値まで
+        // 悪化させた（aptFairSoftTolerance有効時に起こりうる）。旧実装は「入力 vs 後処理」の2点しか見ず、
+        // 統合が見つけていた改善を切り捨てて入力へ丸ごと戻していた。
+        val input = stage("入力", 0, hard = 3, total = 281, weighted = 27274.0)
+        val search = stage("探索", 1, hard = 3, total = 281, weighted = 27274.0)   // 無改善
+        val integrated = stage("統合", 2, hard = 3, total = 275, weighted = 27258.0)   // 入力より改善
+        val post = stage("後処理", 3, hard = 3, total = 284, weighted = 27278.0)   // 入力より悪化
+        val best = V6FinalPort.pickBestStage(listOf(input, search, integrated, post))
+        assertEquals("統合が全段中の最良のはず", "統合", best.label)
+        assertEquals(listOf(2), best.sched[0].toList())
+    }
+
+    @Test fun pickBestStage_keepsTheFinalStageWhenItIsActuallyBest() {
+        // 通常経路（多重防御が発火しない）: 後処理が最良ならそのまま採用する。
+        val input = stage("入力", 0, hard = 2, total = 10, weighted = 100.0)
+        val post = stage("後処理", 1, hard = 1, total = 5, weighted = 50.0)   // 改善
+        val best = V6FinalPort.pickBestStage(listOf(input, post))
+        assertEquals("後処理", best.label)
     }
 
     // ---- 検査6b: 担当={休,B4,有}・休10-10・有1-1・31日 → B4 は最低20回＝目標1は達成不能 ----
