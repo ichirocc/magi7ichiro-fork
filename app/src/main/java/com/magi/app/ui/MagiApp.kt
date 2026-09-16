@@ -214,8 +214,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // 制約エディタが描くのに要るものを Root で 1 度だけ組み立てる（画面から vm への問い合わせを無くす）。
     val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
     val ws1View = remember(ui) { vm.ws1() }
-    // 勤務表タブの派生描画値。画面ごとに作り直さず、Root が 1 つ持って配る。
-    val viewState = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled) }
 
     val openJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -409,6 +407,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val vioEnabled = remember(vioMask) {
         vioBuckets.filterIndexed { i, _ -> (vioMask shr i) and 1 == 1 }.map { it.key }.toSet()
     }
+    // 勤務表タブの派生描画値。画面ごとに作り直さず、Root が 1 つ持って配る（違反フィルタに依存するので
+    //   vioEnabled の後に置く）。
+    val viewState = remember(ui, vioEnabled) { MagiViewState(ui, vioEnabled) }
     val onToggleVioBucket: (String) -> Unit = { key ->
         val i = vioBuckets.indexOfFirst { it.key == key }
         if (i >= 0) vioMask = vioMask xor (1 shl i)
