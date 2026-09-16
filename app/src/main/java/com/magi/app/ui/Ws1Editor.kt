@@ -198,7 +198,9 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 //   従来どおり進められる＝止めるのではなく、確認ダイアログを情報つきにする）。
                 val refs = v.shiftRefCount(d.k)
                 val note = if (refs > 0) "このシフトを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
-                dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note)
+                // [3.575.0] 「休」削除は休だった日を黙って他シフトへ自動変換する（経緯: history 3.574.0/3.575.0）。
+                val restNote = if (d.kigou == "休") "休だった日は自動的に他のシフトへ変わります。" else ""
+                dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note + restNote)
             }) else null)
         Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "",
             { n, kg, n1, n2 -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2)); dialog = null }, { dialog = null })

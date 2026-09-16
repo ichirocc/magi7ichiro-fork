@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.576.0＝backlog#24をgrillingで壁打ち。探索エンジンへのHARD一時負債許容
+（DebtBudget案）は見送り、3.416.0（休削除許可）は反転せず、`V6SanityPort`の既存診断2gが「休が無い」
+一般ケースを既に案内済みと判明したため対応範囲を絞り込み。`Ws1Editor.kt`の削除確認ダイアログに
+「休」削除時だけ警告文を追加（UI層のみ、エンジン・restShiftIndexは無変更）。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.575.0＝実機ログ（Pixel 10 Pro XL）起因。最終番兵/多重防御が「入力」と
 パイプライン最終結果の2点だけを比較していたため、途中の段（統合）が入力より改善していても後段
 （後処理、`aptFairSoftTolerance`発火時）がそれを退化させると改善ごと入力へ丸ごと戻していた機会損失を
