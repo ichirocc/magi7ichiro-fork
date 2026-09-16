@@ -33,6 +33,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.573.0＝追加監査2件対応。`FixApplyGate`/`FixSuggester`が別HARD族の新規発生を
+「相殺」として許していたバグを実データで再現・`MirrorCore.newHardFamilyViolation`で修正（探索本体は対象外）。
+`weight_lint.py`の「正本だけ重み変更・複製更新忘れ」検出漏れ（reverse-direction）をmutation testで確認・
+族名ベースの値照合へ強化。branch protection完了申告と食い違う監査を受けbacklog#22を再オープン、
+`restShiftIndex`の記号依存＋`?:0`退避は過去2度精読済みの設計と判明しbacklog#24へ実装保留で登録。
+ホストJVM 801テスト緑。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.572.0＝外部監査を三重並列トリアージ。`tools/weight_lint.py`新設（`MirrorKeys.weights`
 以外への重みリテラル直書きをCI検査、現状0件）＋文書の族数「19→20」修正（c3w追加3.542.0以来7ファイル20箇所）＋
 `cleanup-artifacts.yml`部分失敗可視化＋`dependabot.yml`同一メジャーgroup化。main branch protectionは

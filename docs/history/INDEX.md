@@ -1,5 +1,13 @@
 # 作業記録の索引（見出し一覧）
 
+- FixApplyGate/FixSuggesterのHARD族相殺バグ修正＋weight_lint.pyのreverse-direction強化（3.573.0）。
+  `docs/automation.md`が済としていた「担当外・希望固定・禁止連・個人固定の新規違反なし」は、実は
+  HARD合計が辞書式先頭というだけで**族どうしの相殺**（covU解消と引き換えにc3n新規発生等）を防げて
+  いなかった＝実データで再現・`MirrorCore.newHardFamilyViolation`で修正（探索本体は対象外、
+  利用者向け「1手」提案・適用境界のみ）。`weight_lint.py`も「正本だけ重み変更し複製の更新忘れ」を
+  検出できないreverse-directionの穴をmutation testで確認・族名ベースの値照合へ強化。
+  backlog#22（branch protection）は完了申告と別監査の食い違いで再オープン、backlog#24（`restShiftIndex`
+  の記号依存）は過去2度精読済みの設計と判明し実装保留で新規登録 → `docs/history/3.4xx.md`
 - 外部監査の三重並列トリアージ（3.572.0）。重みリテラル静的検査`tools/weight_lint.py`を新設しCI配線
   （`MirrorKeys.weights`以外への直書きを検出、現状0件）。c3w追加(3.542.0)以来の文書族数「19→20」ずれを
   7ファイル20箇所で修正（過去時制の記録は不変）。`cleanup-artifacts.yml`の部分失敗可視化・

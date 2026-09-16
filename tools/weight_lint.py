@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MAGI weight lint — 制約ファミリー重みの単一の真実（`MirrorKeys.weights`）からの逸脱を検出する。
 
-CLAUDE.md の規約: 19 の制約ファミリー重み（c1/c2/c3/c3n/…/weekly）は
+CLAUDE.md の規約: 20 の制約ファミリー重み（c1/c2/c3/c3n/…/weekly/c3w）は
 `app/src/main/java/com/magi/app/v6/MirrorCore.kt` の `MirrorKeys.weights` にだけ定義し、他の
 Kotlin コードは `MirrorKeys.weightOf(family)` / `MirrorKeys.weights[...]` 経由で参照する
 （HF77＝重みの変更は業務担当者の明示数値指示＋1件ずつ、という運用は人間のレビューでしか
@@ -10,8 +10,11 @@ Kotlin コードは `MirrorKeys.weightOf(family)` / `MirrorKeys.weights[...]` �
 
 検出対象: `app/src/main/java/com/magi/app/v6/*.kt`（`MirrorCore.kt` 自身とテストは除外）の中で、
 `MirrorKeys.weights` の現在値のいずれかと**厳密に一致する**数値リテラルが、算術/比較/代入/
-when分岐の文脈で使われている行。19族の値は実行時に `MirrorCore.kt` をパースして取るので、
+when分岐の文脈で使われている行。族の値は実行時に `MirrorCore.kt` をパースして取るので、
 このスクリプト自身に古い値のコピーは持たない（重みを変えても lint が stale にならない）。
+**ただし「新しい重みと同じ値が許可外の場所に増えた」ことは検出できても、「重みを変更したのに複製側の
+更新を忘れて古い値が残った」ことは、抑止リストが族名で検証する仕組み（下記）を経由しない限り検出できない
+点に注意（この lint 単体は前方向の逸脱だけを見る片方向の検査）。**
 
 検出する文脈（例）:
     violations.c3n * 9000          # 演算子の直後/直前の数値
@@ -20,11 +23,16 @@ when分岐の文脈で使われている行。19族の値は実行時に `Mirror
 
 抑止（この repo の design_lint.py の P2_BASELINE/P10_BASELINE/P12_EXEMPT_PAIRS と同じ流儀＝
 新たに1行ごとのインラインコメント規約を作らず、この lint 自身に理由つきの許可リストを持つ）:
-  - WEIGHT_LINT_EXEMPT に (相対パス, 行番号): "理由" を追加する（既定の抑止手段。narrow に保つ）。
-    `.claude/rules/weights.md` が列挙する destroy-repair/polish 系の重複リテラル（性能上の理由で
-    `MirrorKeys.weightOf` の呼び出しコストを避け、手動同期で揃える設計）と、族名と無関係な数値の
-    偶然の一致（GLS の周期・内部優先順位オフセット等）はここに載せる。値が変わると行番号もずれる
-    ので、重みを変更するコミットでここも一緒に確認する。
+  - WEIGHT_LINT_EXEMPT に (相対パス, 行番号): (対象族名のタプル, "理由") を追加する（既定の抑止手段。
+    narrow に保つ）。`.claude/rules/weights.md` が列挙する destroy-repair/polish 系の重複リテラル
+    （性能上の理由で `MirrorKeys.weightOf` の呼び出しコストを避け、手動同期で揃える設計）と、族名と
+    無関係な数値の偶然の一致（GLS の周期・内部優先順位オフセット等）はここに載せる。
+    **[3.573.0/外部レビュー指摘] 抑止は「その行に重み形の数値が今も現れる」だけでなく「宣言した族名の
+    “現在の”重みと一致する値が今もその行にある」ことまで検証する**（族名を書かせるのはこのため）。
+    旧実装は行の値そのものを検索対象にしていたため、正本だけ重みを変更し複製側の更新を忘れても
+    複製側の古い値がもう「現在のどの重みとも一致しない」場合にしか気づけず、たまたま**別の族の現在値と
+    数値が一致**すれば古い値のまま緑になり得た（reverse-direction の穴、実例は無いが再現手順で確認済み）。
+    値が変わると行番号もずれるので、重みを変更するコミットでここも一緒に確認する。
   - WEIGHT_LINT_FILE_EXEMPT にファイル相対パス: "理由" を追加する（ファイル単位。`Evaluator.kt`/
     `DeltaEvaluator.kt` のような「19族の重み全部を集約する関数を持つ」ファイルだけに限定して使う。
     行単位で管理するとメンテ不能になるうえ、ドリフトは ObjectiveParityTest/native-parity CI が
@@ -51,57 +59,59 @@ MIRROR_CORE = os.path.join(ENGINE_DIR, "MirrorCore.kt")
 #   これらは「MirrorKeys を経由していない」という lint の定義上は真だが、経由しない理由が
 #   ドキュメント化された既知の設計判断であり、誤って値がドリフトした場合はこの許可リストの
 #   行番号がコード側とずれる（見つからなくなる）ので、そのときは目視で再確認すること。
+#   値は (対象族名のタプル, 理由)。族名を書いた行は「その族の“現在の”重みと一致する値がまだそこにあるか」
+#   まで毎回検証する（族名タプルが空＝族と無関係な偶然の一致＝値そのものの追跡はしない、下の「偽陽性」節）。
 WEIGHT_LINT_EXEMPT = {
     ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", 41):
-        "low(120) の複製。weights.md: destroy-repair marginal cost はホットパスで weightOf 呼び出しコストを避ける",
+        (("low",), "low(120) の複製。weights.md: destroy-repair marginal cost はホットパスで weightOf 呼び出しコストを避ける"),
     ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", 42):
-        "high(25) の複製。同上",
+        (("high",), "high(25) の複製。同上"),
     ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", 44):
-        "apt(4) の複製。同上",
+        (("apt",), "apt(4) の複製。同上"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 285):
-        "low(120) の複製。weights.md 明記の既知重複",
+        (("low",), "low(120) の複製。weights.md 明記の既知重複"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 286):
-        "high(25) の複製。同上",
+        (("high",), "high(25) の複製。同上"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 473):
-        "low(120) の複製。同上",
+        (("low",), "low(120) の複製。同上"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 474):
-        "high(25) の複製。同上",
+        (("high",), "high(25) の複製。同上"),
     ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 70):
-        "low(120)/high(25) の複製（乗数が左の逆順パターン）。weights.md 明記の既知重複",
+        (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。weights.md 明記の既知重複"),
     ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 157):
-        "low(120)/high(25) の複製（乗数が左の逆順パターン）。同上",
+        (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。同上"),
     # [dayPenalty] covU(10000)/covO(10) の候補見積り。C1TemporalFlowPolish.kt・DayAssignmentPolish.kt
     #   と同じ「ホットパスで MirrorKeys.weightOf を避ける」設計だが、weights.md の destroy-repair/polish
     #   系チェックリストには covU/covO の組までは列挙されていない（low/high の組だけが明記）。
     #   4ファイルで完全に同一の1行関数（[3.522.0] タグ＝covO の重み改定と同時に更新済み＝ドリフトなし）
     #   ＝新規に紛れ込んだ複製ではなく既存の一貫した実装。weights.md のチェックリストへの追記は別途検討。
     ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", 112):
-        "low(120) の複製。weights.md 明記の既知重複（同関数113行のhigh(25)・115行のapt(4)と同型）",
+        (("low",), "low(120) の複製。weights.md 明記の既知重複（同関数113行のhigh(25)・115行のapt(4)と同型）"),
     ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", 122):
-        "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）",
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
     ("app/src/main/java/com/magi/app/v6/C41FlowPolish.kt", 28):
-        "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）",
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
     ("app/src/main/java/com/magi/app/v6/C42FlowPolish.kt", 27):
-        "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）",
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 484):
-        "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）",
-    # [偽陽性/族名と無関係な偶然の一致]
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
+    # [偽陽性/族名と無関係な偶然の一致＝族名タプルは空。値そのものの継続一致は検証しない]
     ("app/src/main/java/com/magi/app/v6/C1JointLnsPolish.kt", 490):
-        "50 は GoalKind別の内部優先順位オフセット（C1=100/TEMPORAL=150/COVERAGE=200/RANGE_LOW=50、"
-        "同関数139/463/477行）。c1の重み(50)とは無関係な偶然の一致（GoalKindはRANGE_LOWで、C1ではない）",
+        ((), "50 は GoalKind別の内部優先順位オフセット（C1=100/TEMPORAL=150/COVERAGE=200/RANGE_LOW=50、"
+        "同関数139/463/477行）。c1の重み(50)とは無関係な偶然の一致（GoalKindはRANGE_LOWで、C1ではない）"),
     ("app/src/main/java/com/magi/app/v6/Hf63Infeasibility.kt", 38):
-        "\"pref\" to 10 の 10 はfamily→添字の列挙表のインデックス。直前の\"covO\"（別ペア）に反応した"
-        "文脈窓の偽陽性で、covO(10)の重みとは無関係",
+        ((), "\"pref\" to 10 の 10 はfamily→添字の列挙表のインデックス。直前の\"covO\"（別ペア）に反応した"
+        "文脈窓の偽陽性で、covO(10)の重みとは無関係"),
     ("app/src/main/java/com/magi/app/v6/V6HotfixPasses.kt", 934):
-        "120 は localBestImprovement の評価予算パラメータ（250 + cycle*120）。low の重みとは無関係な偶然の一致",
+        ((), "120 は localBestImprovement の評価予算パラメータ（250 + cycle*120）。low の重みとは無関係な偶然の一致"),
     ("app/src/main/java/com/magi/app/v6/V6LateOperators.kt", 86):
-        "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"
+        ((), "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"
         "KDoc参照）。MirrorKeys由来ではない（200がhigh=25と一致しないことがその証拠）。120がlow(120)と"
-        "偶然一致しているだけ",
+        "偶然一致しているだけ"),
     ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1672):
-        "iter % 50L はGLS停滞検出の周期（cadence）。c1の重みとは無関係な偶然の一致",
+        ((), "iter % 50L はGLS停滞検出の周期（cadence）。c1の重みとは無関係な偶然の一致"),
     ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1698):
-        "iter % 120L は進捗報告(publishLiveBest)の周期（cadence）。lowの重みとは無関係な偶然の一致",
+        ((), "iter % 120L は進捗報告(publishLiveBest)の周期（cadence）。lowの重みとは無関係な偶然の一致"),
 }
 
 # [file-level exemption] Evaluator.kt(fullEvalParts)・DeltaEvaluator.kt(集約式)は weights.md が
@@ -109,11 +119,11 @@ WEIGHT_LINT_EXEMPT = {
 #   行単位で列挙すると更新のたびに行番号がずれてメンテ不能になる（design_lint.py のラチェット
 #   baseline と同じ「厳密には妥当だが1行ずつ管理する価値がない」ケース）。この2ファイルのドリフトは
 #   既に別の機械検査で守られている（Kotlin側=ObjectiveParityTest、C++側=native-parity CI、実行時は
-#   SaOptimizer の2層番兵）ため、この lint の対象外にしてよい。ここに追加する基準は「19族の重みを
+#   SaOptimizer の2層番兵）ため、この lint の対象外にしてよい。ここに追加する基準は「全族の重みを
 #   本質的に**全部**集約する関数」だけに限る（destroy-repair/polish の個別コスト関数を追加しない）。
 WEIGHT_LINT_FILE_EXEMPT = {
     "app/src/main/java/com/magi/app/v6/Evaluator.kt":
-        "fullEvalParts＝19族全部の重みを集約する評価器本体。weights.md明記の同期対象、"
+        "fullEvalParts＝全族の重みを集約する評価器本体。weights.md明記の同期対象、"
         "ドリフトはObjectiveParityTest/native-parity CIが別途守る",
     "app/src/main/java/com/magi/app/v6/DeltaEvaluator.kt":
         "Δ評価の集約式＝同上。fullEvalParts と同じ理由でファイル単位除外",
@@ -277,11 +287,12 @@ def engine_files():
 
 
 def scan(by_value):
-    """戻り値: (findings, used_exempt)。used_exempt は実際に抑止が効いた (相対パス, 行番号) の集合
-    （`main()` が WEIGHT_LINT_EXEMPT との差分から「行番号がずれて効かなくなった抑止」を検出する）。
+    """戻り値: (findings, used_exempt_values)。used_exempt_values は (相対パス, 行番号) -> その行で
+    実際にマッチした数値の集合（`main()` が WEIGHT_LINT_EXEMPT の宣言族名の“現在の”重みと突き合わせて、
+    行番号のずれによる空振りだけでなく「値そのものが古いまま残っている」抑止も検出する）。
     """
     findings = []
-    used_exempt = set()
+    used_exempt_values = {}
     for path in engine_files():
         rel = os.path.relpath(path, ROOT)
         if rel in WEIGHT_LINT_FILE_EXEMPT:
@@ -298,7 +309,7 @@ def scan(by_value):
                 if not fams:
                     continue
                 if (rel, n) in WEIGHT_LINT_EXEMPT:
-                    used_exempt.add((rel, n))
+                    used_exempt_values.setdefault((rel, n), set()).add(val)
                     continue
                 if val < DISTINCTIVE_MIN:
                     hit_fam = _family_context(raw[i], pos, fams)
@@ -306,7 +317,7 @@ def scan(by_value):
                         continue
                     fams = [hit_fam]
                 findings.append((rel, n, text, fams, raw[i].strip()))
-    return findings, used_exempt
+    return findings, used_exempt_values
 
 
 def main():
@@ -315,8 +326,22 @@ def main():
     a = ap.parse_args()
 
     by_family, by_value = parse_weights()
-    findings, used_exempt = scan(by_value)
-    stale_exempt = sorted(set(WEIGHT_LINT_EXEMPT) - used_exempt)
+    findings, used_exempt_values = scan(by_value)
+
+    # [3.573.0/外部レビュー指摘] 空振り（行に重み形の値が一つも無い＝行番号ずれ／削除）と、
+    #   値ミスマッチ（宣言した族の“現在の”重みがその行の値の中に無い＝正本だけ変更し複製を
+    #   更新し忘れた可能性）を分けて検出する。族名タプルが空（偽陽性の登録）はミスマッチ判定の対象外。
+    stale_exempt = []
+    mismatched_exempt = []
+    for key, (fams, reason) in WEIGHT_LINT_EXEMPT.items():
+        matched_here = used_exempt_values.get(key, set())
+        if not matched_here:
+            stale_exempt.append(key)
+            continue
+        if fams:
+            missing = [f for f in fams if by_family.get(f) not in matched_here]
+            if missing:
+                mismatched_exempt.append((key, missing, matched_here))
 
     print("=== MAGI weight lint (MirrorKeys.weights の単一ソース逸脱検査) ===")
     print(f"MirrorKeys.weights: {len(by_family)} 族 / {len(by_value)} 種の値を検出")
@@ -333,7 +358,7 @@ def main():
     if findings:
         print(
             "MirrorKeys.weightOf(family) / MirrorKeys.weights[...] 経由に直すか、"
-            "既知の意図的な複製なら理由を添えて WEIGHT_LINT_EXEMPT へ追加してください。"
+            "既知の意図的な複製なら理由と対象族名を添えて WEIGHT_LINT_EXEMPT へ追加してください。"
         )
     if stale_exempt:
         # [ラチェット/design_lint.py の baseline 昇降と同じ発想] コードが変わって該当行に
@@ -341,9 +366,22 @@ def main():
         #   誤って見逃す事故につながるので、古い抑止は削除を促して fail させる。
         blockers = True
         print(f"\n抑止リストが空振りしています（{len(stale_exempt)} 件、コード変更で行がずれたか削除された可能性）:")
-        for rel, n in stale_exempt:
-            print(f"    {rel}:{n}  {WEIGHT_LINT_EXEMPT[(rel, n)]}")
+        for rel, n in sorted(stale_exempt):
+            print(f"    {rel}:{n}  {WEIGHT_LINT_EXEMPT[(rel, n)][1]}")
         print("該当行を確認し、WEIGHT_LINT_EXEMPT から削除するか正しい行番号へ直してください。")
+    if mismatched_exempt:
+        # [3.573.0/外部レビュー指摘] reverse-direction の穴＝正本の重みだけ変更し、複製側の更新を
+        #   忘れた場合の検出。旧実装は「複製側の古い値が現在のどの重みとも一致しない」ときしか
+        #   気づけず、古い値がたまたま別の族の現在値と一致すれば見逃していた。
+        blockers = True
+        print(f"\n抑止リストの値が現在の重みと一致しません（{len(mismatched_exempt)} 件、"
+              "重みを変更したのに複製側の更新を忘れた可能性）:")
+        for (rel, n), missing, matched_here in sorted(mismatched_exempt):
+            _, reason = WEIGHT_LINT_EXEMPT[(rel, n)]
+            expect = ", ".join(f"{f}={by_family[f]:g}" for f in missing)
+            print(f"    {rel}:{n}  宣言した族の現在値 [{expect}] がこの行に見つかりません"
+                  f"（実際にこの行にある値: {sorted(matched_here)}）。{reason}")
+        print("MirrorKeys.weights の変更に合わせてこの行の値も更新するか、抑止の族名を見直してください。")
     return 1 if blockers else 0
 
 

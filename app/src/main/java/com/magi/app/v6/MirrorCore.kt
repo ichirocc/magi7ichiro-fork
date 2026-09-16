@@ -150,6 +150,17 @@ object MirrorKeys {
     }
 }
 
+/** [3.573.0/外部レビュー指摘] `betterReport` は HARD の**合計件数**を先頭に見るため、ある HARD 族（例: covU）
+ *  を減らす代わりに別の HARD 族（例: c3n＝禁止連）を新規発生させても、合計が同じか減れば「改善」と
+ *  判定されうる（実データで再現: covU 1件解消と引き換えに c3n 1件を新規発生させる提案が weightedScore
+ *  改善で通った）。`docs/automation.md`は「担当外・希望固定・禁止連・個人固定の新規違反なし」を済としているが、
+ *  実装は HARD 族どうしの相殺を直接防いでいなかった。`FixSuggester`/`FixApplyGate`（利用者に見せる「1手」の
+ *  提案・適用境界）だけに使う——探索本体（SA/ALNS/Polish）の中間状態はこの限りではない（一時的な族間の
+ *  トレードを許して大域探索するのは意図的な設計、`exactPinRegression`と同様に境界だけで直接ガードする）。
+ *  戻り値は最初に見つかった悪化族名（無ければ null）＝拒否理由の表示に使う。 */
+fun newHardFamilyViolation(before: ViolationReport, after: ViolationReport): String? =
+    MirrorKeys.hard.firstOrNull { fam -> (after.breakdown[fam] ?: 0) > (before.breakdown[fam] ?: 0) }
+
 object UnifiedViolationChecker {
     /**
      * [3.395.0/高速化] mark 系の重み優先比較のための事前表。
