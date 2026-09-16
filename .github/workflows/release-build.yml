@@ -17,15 +17,40 @@ on:
     tags:
       - 'v*'
 
+# [3.567.0/外部レビュー] 既定は読み取りのみ。書込みトークンは失敗報告 job だけが持つ。
+#   旧: job 全体が contents:write を持ち、さらに GH_TOKEN を assembleRelease の env へ渡していた＝
+#   Gradle プラグイン・ビルドスクリプト・ネイティブ子プロセスから書込みトークンを取得できた。
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-build-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # [3.567.0/外部レビュー] v* タグは検査を通さずに配布物を作れてしまっていた。Android SDK の要らない
+  #   2 つ（エンジンの JUnit と design_lint）を必須の前段にする。ここが赤ければ APK は作らない。
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Design lint
+        run: python3 tools/design_lint.py
+
+      - name: Engine unit tests (host JVM)
+        run: bash tools/host/hosttest.sh
+
   release:
+    needs: gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -75,16 +100,24 @@ jobs:
       - name: Add Gradle to PATH
         run: echo "$HOME/gradle-dist/gradle-9.3.1/bin" >> "$GITHUB_PATH"
 
+      # [3.567.0/外部レビュー] GH_TOKEN はここへ渡さない（Gradle の子プロセスに書込み権限を持たせない）。
+      #   失敗の抜粋はファイルに残し、コミットへの書き込みは権限を持つ別 job が行う。
       - name: Build release APK
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/build.log || {
             { echo "[CI診断r4] Build失敗ログ抜粋:"; echo '```'; grep -nE "^e: |error:|FAILURE:|What went wrong|Caused by" /tmp/build.log | head -60; echo '--- tail40 ---'; tail -n 40 /tmp/build.log; echo '```'; } > /tmp/errbody.txt
-            gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@/tmp/errbody.txt || true
             exit 1
           }
+
+      - name: Upload failure excerpt (on failure only)
+        if: ${{ failure() && hashFiles('/tmp/errbody.txt') != '' }}
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: release-failure-excerpt
+          path: /tmp/errbody.txt
+          retention-days: 7
 
       # [3.552.0] APK 内の .so が非圧縮かつ 16KiB 境界か（理由は v6-engine-check.yml の同じ箇所）。
       - name: Check APK native libs (stored + 16KiB aligned)
@@ -111,3 +144,27 @@ jobs:
           if [ "${{ steps.upload.outcome }}" != "success" ]; then
             echo "成果物のアップロードに失敗しました（枠超過など）。ジョブは緑ですが成果物は 0 件です。" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # 書込みトークンを持つのはこの job だけ。ビルドの成果物（失敗抜粋）を読んでコミットへ貼る。
+  report-failure:
+    needs: release
+    if: ${{ always() && needs.release.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download failure excerpt
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: release-failure-excerpt
+          path: excerpt
+
+      - name: Comment on commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body=excerpt/errbody.txt
+          [ -s "$body" ] || { echo "抜粋が無いので何も貼りません"; exit 0; }
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@"$body" || true
