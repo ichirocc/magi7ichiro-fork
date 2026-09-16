@@ -33,6 +33,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-16（3.580.0＝backlog#26。既定OFFの専用修復腕5種（C2Polish/C42FlowPolish/
+C1成分修復/C3nMarginLnsPolish/CountChainPolish）を「対象違反が残る局面でだけ条件付きに接続」する
+再活性化メカニズムをgrillingで設計・実装。判定は腕の自己申告カウンタでなく正式チェッカーの
+breakdown生値（`V6HotfixPasses.targetFamiliesRemain`）、新規`xxxReactivate`フラグは全て既定OFFで
+挙動不変。ホストJVM 807テスト緑。tools/loop配線・専用合成ケース新設・再ゲートは残作業
+（backlog#26参照）。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.579.0＝PR #201のCI（design-lint）赤対応。3.576.0で追加した「休」削除
 確認ダイアログの警告条件が生文字列比較でP10ラチェットに抵触（baseline 2→3件）していたのを
 `Ws1View.restIdx`（`restShiftIndex`経由）へ置換して修正。ホストJVM 803テスト緑。

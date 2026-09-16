@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#26: 既定OFF専用修復腕5種（C2Polish/C42FlowPolish/C1成分修復/C3nMarginLnsPolish/
+  CountChainPolish）の「対象違反が残る局面でだけ再活性化」メカニズムをgrillingで設計・実装（3.580.0）。
+  `V6HotfixPasses.targetFamiliesRemain`（腕の自己申告カウンタでなく正式チェッカーのbreakdown生値で
+  判定）＋各腕の新規`xxxReactivate`フラグ（既定OFF、挙動不変）。tools/loop配線・C1/C3n用の専用
+  合成ケース新設・5腕の再ゲートは残作業 → `docs/history/3.4xx.md`
 - design-lint P10違反を修正（3.579.0、PR #201 CI赤対応）。`Ws1Editor.kt`の削除確認ダイアログが
   「休」を生文字列比較していたのを`Ws1View.restIdx`（`restShiftIndex`経由）へ置換。P10は
   baseline 2件に復帰、hosttest 803テスト緑 → `docs/history/3.4xx.md`

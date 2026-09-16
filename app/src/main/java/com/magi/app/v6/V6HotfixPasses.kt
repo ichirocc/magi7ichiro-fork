@@ -304,12 +304,16 @@ object V6HotfixPasses {
         val cyclicSwapKTrialsPerDay: Int = 20,
         /** [3.511.3/測定中] 個人合計(c2)専用研磨（backlog #12(b)）。既定 OFF。 */
         val c2PolishEnabled: Boolean = false,
+        /** [3.580.0/測定中/backlog#26] c2PolishEnabledがOFFでも、c2違反が残っている局面でだけ試す。既定 OFF。 */
+        val c2PolishReactivate: Boolean = false,
         val c2Passes: Int = 3,
         /** [3.511.5/測定中] 群/日レンジ(c41/c41s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
         val c41FlowPolishEnabled: Boolean = false,
         val c41FlowPasses: Int = 3,
         /** [3.511.7/測定中] 群ペア禁止(c42/c42s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
         val c42FlowPolishEnabled: Boolean = false,
+        /** [3.580.0/測定中/backlog#26] c42FlowPolishEnabledがOFFでも、c42/c42s違反が残っている局面でだけ試す。既定 OFF。 */
+        val c42FlowPolishReactivate: Boolean = false,
         val c42FlowPasses: Int = 3,
         val c1WindowPasses: Int = 3,
         val c1FlowPasses: Int = 2,
@@ -359,6 +363,8 @@ object V6HotfixPasses {
         val c3PairMaskEvaluations: Int = 3_000,
         /** [測定中] 最終段の「c3n(禁止連続) 前後余白込みLNS」（C3nMarginLnsPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
         val c3nMarginLnsEnabled: Boolean = false,
+        /** [3.580.0/測定中/backlog#26] c3nMarginLnsEnabledがOFFでも、c3n違反が残っている局面でだけ試す。既定 OFF。 */
+        val c3nMarginLnsReactivate: Boolean = false,
         val c3nMarginLnsMarginDays: Int = 2,
         val c3nMarginLnsEvaluations: Int = 3_000,
         /** [3.510.2/測定中] 共同 LNS を「短い試行→採用があったときだけ本予算で続行」にする（backlog #14(a)）。既定 OFF。 */
@@ -380,6 +386,8 @@ object V6HotfixPasses {
         /** [C1 重複窓の連結成分化/測定中] 厳密窓修復(C1ExactRepair)の起点を、1件の違反でなく近接・重複窓を
          *  束ねた連結成分にする（backlog「C1 重複窓の連結成分化」）。既定 OFF＝挙動不変。 */
         val c1ComponentRepair: Boolean = false,
+        /** [3.580.0/測定中/backlog#26] c1ComponentRepairがOFFでも、c1違反が残っている局面でだけ試す。既定 OFF。 */
+        val c1ComponentRepairReactivate: Boolean = false,
         /** [backlog #12(a)・実験段階] c2/c41/c41sを二値でなく不足量/距離量で評価する（既定false=挙動不変）。
          *  全Polishパス・checker呼出へ明示伝播（Stage2）。 */
         val quantitativeRangeEval: Boolean = false,
@@ -391,6 +399,8 @@ object V6HotfixPasses {
         val aptFairSoftTolerance: Boolean = false,
         /** [3.540.0/測定中] 回数連鎖研磨（`CountChainPolish`）。既定 OFF。 */
         val countChainEnabled: Boolean = false,
+        /** [3.580.0/測定中/backlog#26] countChainEnabledがOFFでも、high/apt超過が残っている局面でだけ試す。既定 OFF。 */
+        val countChainReactivate: Boolean = false,
     )
 
     /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
@@ -609,7 +619,9 @@ object V6HotfixPasses {
             })
         }
 
-        if (params.c3nMarginLnsEnabled && !shouldStop()) {
+        val c3nMarginActive = params.c3nMarginLnsEnabled ||
+            (params.c3nMarginLnsReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c3n"))
+        if (c3nMarginActive && !shouldStop()) {
             // [測定中] 共同 LNS の後・成分修復の前。c3n(禁止連続)のパターン日+前後余白を複数セル同時に
             //   destroy-rebuildして、1セル付け替え(C3nPolish)が構造的に届かない局面を拾う。
             val marginStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
@@ -750,8 +762,10 @@ object V6HotfixPasses {
                 C1RepairOperators.wideBeam(state, work, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C1_BEAM, round), quantitativeRangeEval = params.quantitativeRangeEval)
             })
             // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
+            val c1ComponentActive = params.c1ComponentRepair ||
+                (params.c1ComponentRepairReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c1"))
             take("c1", chain.timed("後処理 期間要件(c1)厳密窓修復$tag", "C1厳密窓") { work ->
-                C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop, useComponents = params.c1ComponentRepair, quantitativeRangeEval = params.quantitativeRangeEval)
+                C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop, useComponents = c1ComponentActive, quantitativeRangeEval = params.quantitativeRangeEval)
             })
 
             val rC3 = chain.timed("後処理 連続規則(c3系)研磨$tag", "C3SequencePolish") { work ->
@@ -805,19 +819,22 @@ object V6HotfixPasses {
                     shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval,
                 )
             })
-            if (params.c2PolishEnabled) {
+            if (params.c2PolishEnabled ||
+                (params.c2PolishReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c2"))) {
                 take("c2玉突き", chain.timed("後処理 個人合計(c2)研磨$tag", "C2Polish") { work ->
                     C2Polish.applyC2Polish(state, work, maxPasses = params.c2Passes, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
                 })
             }
-            if (params.countChainEnabled) {
+            if (params.countChainEnabled ||
+                (params.countChainReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "high", "apt"))) {
                 take("回数連鎖", chain.timed("後処理 回数連鎖研磨$tag", "CountChainPolish") { work ->
                     CountChainPolish.applyCountChainPolish(state, work, config = if (params.deterministic) CountChainPolish.Config(maxMillis = 60_000L) else CountChainPolish.Config(),
                         shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), quantitativeRangeEval = params.quantitativeRangeEval)
                         .also { TuningTelemetry.countChainApplied.addAndGet(it.applied) }
                 })
             }
-            if (params.c42FlowPolishEnabled) {
+            if (params.c42FlowPolishEnabled ||
+                (params.c42FlowPolishReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c42", "c42s"))) {
                 take("c42フロー", chain.timed("後処理 群ペア禁止(c42/c42s)フロー研磨$tag", "C42FlowPolish") { work ->
                     C42FlowPolish.applyC42FlowPolish(state, work, maxPasses = params.c42FlowPasses, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
                 })
@@ -1040,5 +1057,13 @@ object V6HotfixPasses {
 
     // [3.287.0 keep-best統一] hard→weightedScore→total（単一ソース betterReport へ委譲。MirrorCore.kt 参照）。
     private fun isBetter(a: ViolationReport, b: ViolationReport): Boolean = betterReport(a, b)
+
+    /** [3.580.0/backlog#26] 既定OFFの専用修復腕を再活性化フラグ経由で呼ぶかどうかの判定材料。
+     *  腕自身の自己申告カウンタ（TuningTelemetryの適用数など）でなく、正式チェッカーの breakdown 生値で
+     *  「対象違反が今まだ残っているか」を見る。各xxxReactivateフラグがOFFなら一切呼ばれない＝挙動不変。 */
+    internal fun targetFamiliesRemain(state: MagiState, work: Array<IntArray>, quantitativeRangeEval: Boolean, vararg families: String): Boolean {
+        val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+        return families.any { (rep.breakdown[it] ?: 0) > 0 }
+    }
 
 }

@@ -221,8 +221,21 @@
     3.576.0のgrillingで見送り済み・再提案しない**）:
     - 並列所有権・停止・統合経路の監査（親子で同一Semaphoreを共有するとデッドロックし得る、盤面の
       所有権・乱数のワーカー分離・単一Reducerでの最良更新・実行世代スナップショット）。
-    - 既定OFFの専用修復腕（C2/C42専用・C1成分修復・C3n余白LNS・CountChain等）を「対象違反が残る
-      局面でだけ条件付きに接続」する再活性化基準（腕の自己申告改善でなく正式評価での寄与を見る）。
+    - ~~既定OFFの専用修復腕（C2/C42専用・C1成分修復・C3n余白LNS・CountChain等）を「対象違反が残る
+      局面でだけ条件付きに接続」する再活性化基準（腕の自己申告改善でなく正式評価での寄与を見る）。~~
+      **→ 3.580.0でgrilling実施・メカニズム実装済み**。決定: ①DebtBudgetは対象外（既に見送り済み）。
+      ②「正式評価での寄与」＝実行中の`betterReport`/`reportComparator`（オンライン比較。tools/loopの
+      gate.py4部門ゲートとは別レイヤーと確認）。③既定は現状維持、条件成立時だけ腕ごとの新規
+      `xxxReactivate`フラグ（既定OFF）で「対象違反のbreakdown生値」を見て試す。腕自身の自己申告
+      カウンタ（`TuningTelemetry.countChainApplied`等）は判定に使わない。④5腕（C2Polish/C42FlowPolish/
+      C1成分修復/C3nMarginLnsPolish/CountChainPolish）同時に同じ形で実装（`V6HotfixPasses.
+      targetFamiliesRemain`＋各腕呼び出し箇所のOR条件、`ArmReactivationTest`で固定）。各パス自体は
+      既存どおりchain.adopt/replaceBoardで無条件反映されるが、パス内部が自分のkeep-bestで非退行を
+      保証する既存設計（`runPostOptimization`のKDoc）は不変＝呼ぶかどうかの判定だけを追加。
+      **残作業**: tools/loopに5腕分の`xxxReactivate`比較用featureキーを追加、C1成分修復・
+      C3nMarginLnsPolishは検証用の専用合成ケースが無い（3.524.0のc2deficit/c42pair追加と同じやり方で
+      新設が必要）ため先に着手、その上で5腕とも全170ペア（またはCountChainPolish同等の138ペア）で
+      再ゲートしてから個別に既定ON昇格を判断する。C#(-magi_pc)への同期は採否確定後。
     - 停滞判定の精緻化（正式最良不変・同一探索範囲の反復・修復途中の進捗・証明済み下限・時間不足を
       区別）と、既存の再配属/摂動/エリート機構への小さな追加としての限定的な専門腕の試行。
     - 業務重み（正式スコア用）と腕選択・予算配分の基準を分離する設計指針の明文化（探索スケジューラに
