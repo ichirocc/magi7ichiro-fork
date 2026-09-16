@@ -113,7 +113,7 @@ jobs:
       # ビルドの成否は最後の "Fail if build failed" で判定する。
       # 成功時の常時アップロードはストレージ枠を浪費するため、ログは失敗時のみ・短期保持。
       - name: Upload build log (on failure only)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         # 旧: `failure()`＝ビルドステップが成功扱いのため常に偽で、失敗ログが一度も保存されなかった。
         if: ${{ always() && steps.build.outputs.code != '0' }}
@@ -123,7 +123,7 @@ jobs:
           retention-days: 7
 
       - name: Upload lint reports
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         if: ${{ always() && hashFiles('**/build/reports/lint-results-*.*') != '' }}
         with:
@@ -132,7 +132,7 @@ jobs:
           retention-days: 7
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         if: ${{ always() && github.event.inputs.upload_apk == 'true' && hashFiles('**/build/outputs/apk/debug/**/*.apk') != '' }}
         with:
@@ -141,7 +141,7 @@ jobs:
           retention-days: 7
 
       - name: Upload release APK
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         if: ${{ always() && github.event.inputs.upload_apk == 'true' && hashFiles('**/build/outputs/apk/release/**/*.apk') != '' }}
         with:
@@ -150,7 +150,7 @@ jobs:
           retention-days: 7
 
       - name: Upload any APK fallback
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         if: ${{ always() && github.event.inputs.upload_apk == 'true' && hashFiles('**/build/outputs/apk/**/*.apk') != '' }}
         with:

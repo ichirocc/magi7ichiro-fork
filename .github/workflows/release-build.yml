@@ -112,7 +112,7 @@ jobs:
 
       - name: Upload failure excerpt (on failure only)
         if: ${{ failure() && hashFiles('/tmp/errbody.txt') != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         with:
           name: release-failure-excerpt
@@ -131,7 +131,7 @@ jobs:
       #   （デバッグ鍵署名の動作確認用 APK なので恒久保存はしない＝14日で十分。経緯は docs/environment.md）。
       - name: Upload release APK
         id: upload
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         if: ${{ always() && (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.upload_apk == 'true') && hashFiles('**/build/outputs/apk/release/**/*.apk') != '' }}
         with:
