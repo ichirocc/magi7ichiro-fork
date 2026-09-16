@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- UI 層の再構成 Stage C-1（3.560.0）＝Root に Mediator を配線。段階の表現を `MagiPhaseMachine` 1 つへ
+  （ViewModel が所有・Mediator は読むだけ）、3 種のガードを `MagiArbiter` へ委譲。設定系 7 つを Passive View 化。
+  **UI のコンパイル検証は `android-sdk.yml` を作業ブランチへ `workflow_dispatch` すれば取れる**（この回で
+  public/internal の可視性エラー 2 件を捕捉） → `docs/history/3.4xx.md`
 - UI 層の再構成 Stage B（3.559.0）＝派生描画値を `MagiViewState` へ単一化。不変条件テストが新しい不具合を
   自動検出: `needViolations` は最重1クラスのみのため、同じ重み10の c41s の陰に covO が隠れて
   シフト集計の▲が出ない日があった（`needFamilies` 経由へ修正）。キー符号化・必須判定・回数・日別を統合 →
