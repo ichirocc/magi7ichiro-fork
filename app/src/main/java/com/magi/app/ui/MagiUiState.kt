@@ -98,7 +98,7 @@ data class UiState(
     val structureEdited: Boolean = false,
     // [再構成保証] 構造編集(apt/群/シフト等)ごとに単調増加。structureEdited は Boolean で既 true 時に copy が
     //   同値となり StateFlow が emit せず、かつ currentSchedule=null 時は refreshCheck も早期returnするため、
-    //   editScope の編集画面(AptCard 等が vm.ws1()=state 直読み)が再構成されず「+/-で数字が変わらない」実機バグを
+    //   editScope の編集画面が再構成されず「+/-で数字が変わらない」実機バグを
     //   生んでいた。applyStructure が毎回これを増やして必ず distinct な UiState を emit＝確実に再構成させる。
     val editRev: Int = 0,
     val message: String? = null,

@@ -18,7 +18,7 @@ import kotlinx.coroutines.flow.update
  * 無い（エディタ側は型推論で消費）ためトップレベルへ同時移動した。
  *
  * 触るメンバ: state（読み取りのみ）・logOp/opNm/opSy/opDays（操作ログ）・_ui（実行中ガードの
- * メッセージ表示）・optimizeInFlight/busyWhat（同ガード）・notify・allowedShiftsFor・applyStructure
+ * メッセージ表示）・optimizeInFlight/busyWhat（同ガード）・notify・applyStructure
  * ＝いずれも public または internal（モジュール内限定）。
  */
 // ---- ws2: 日別の必要人数（例外） needDay1/needDay2 の疎な上書きを編集 ----
@@ -102,20 +102,6 @@ fun MagiViewModel.removeStaffRange(i: Int, k: Int) {
 // ---- グループ単位の回数（一括）: 既存 staffRange をグループ所属職員に展開する。
 //   新しい制約種別やスコア評価器の変更は不要（low/high は既に重み90/25で最適化対象）＝退行リスクなし。
 //   業務担当者が値を入力しボタンで適用する operator ツール（HF77準拠）。 ----
-fun MagiViewModel.groupLabels(): List<String> = state?.groups?.map {
-    if (it.kigou.isNotBlank() && it.kigou != it.name) "${it.name}·${it.kigou}" else it.name
-} ?: emptyList()
-
-fun MagiViewModel.groupMemberCount(g: Int): Int = state?.staff?.count { it.groupIdx == g } ?: 0
-
-/** グループの全メンバーが担当できるシフトの積集合（下限を全員が満たせる範囲に限定し構造的floorを防ぐ）。 */
-fun MagiViewModel.allowedShiftsForGroup(g: Int): Set<Int> {
-    val st = state ?: return emptySet()
-    val members = st.staff.indices.filter { st.staff[it].groupIdx == g }
-    if (members.isEmpty()) return emptySet()
-    return members.map { allowedShiftsFor(it).toHashSet() }.reduce { a, b -> a.apply { retainAll(b) } }
-}
-
 /** グループ g 所属の全職員に、ws5 個人別[lo,hi](staffRange, low/high 重み90/25=強い境界) を一括設定し、
  *  さらに ws1 C のグループ別 適切回数(groupShiftApt, apt 重み1=弱い目標) も同時に書く。
  *  apt は「最低=最高」の単一値のときのみ設定（範囲指定や空欄時はクリア）＝Excelの ws1 C→ws5 展開を1操作で再現。 */
@@ -209,13 +195,6 @@ fun MagiViewModel.clearGroupRangeSection(g: Int) {
     applyStructure(stNew)
 }
 
-/** グループ g のメンバーのうち (i,k) に個人上下限（非空）を持つ人数。ダイアログの「なし」適用可否と件数表示に使う。 */
-fun MagiViewModel.groupRangeMemberCount(g: Int, k: Int): Int {
-    val st = state ?: return 0
-    return st.staff.indices.count { st.staff[it].groupIdx == g && st.staffRange["$it,$k"]?.let { r -> r.lo.isNotBlank() || r.hi.isNotBlank() } == true }
-}
-
-
 /** 「グループ単位の回数」適用済み一覧。グループ全メンバーが同一の非空レンジを持つ (g,k) のみ＝
  *  一括適用された(個別に変更されていない)グループ上下限を再構成して表示する。×で全員分をクリア。 */
 fun MagiViewModel.groupRangeSummary(): List<GroupRangeView> {
@@ -242,44 +221,6 @@ fun MagiViewModel.groupRangeSummary(): List<GroupRangeView> {
         }
     }
     return out.sortedWith(compareBy({ it.g }, { it.k }))
-}
-
-/** [直せる導線] 集計セル(職員別)の違反詳細用しきい値: 下限/上限(staffRange)・目標(apt実効)。未設定は null。 */
-fun MagiViewModel.staffCellLimits(i: Int, k: Int): Triple<Int?, Int?, Int?> {
-    val st = state ?: return Triple(null, null, null)
-    val p = cachedProblem(st)
-    if (i !in 0 until p.S || k !in 0 until p.K) return Triple(null, null, null)
-    // [3.489.0/実機報告「個人の下限をゼロに出来ない」] 旧: `it == 0` も未設定扱いにしていたため、下限を 0 に
-    //   設定して適用しても再表示が「なし」に戻り、表も「〜0」（=0 の固定表示にならない）で、利用者には
-    //   「設定できない」に見えた。エンジンは lo=0 を保持しており（Problem.rangeLo=0、lo==hi の固定も成立）、
-    //   落としていたのは表示だけ。明示した 0 は 0 として返す（未設定＝MIN_VALUE のみ null）。
-    val lo = p.rangeLo[i][k].let { if (it == Int.MIN_VALUE) null else it }
-    val hi = p.rangeHi[i][k].let { if (it == Int.MAX_VALUE) null else it }
-    val apt = p.apt[i][k].let { if (it < 0) null else it }
-    return Triple(lo, hi, apt)
-}
-
-/** [直せる導線] 集計セル(日別)の必要数レンジ lo..hi（need1/need2 の OR）。どちらも未定義なら null。
- *
- *  [3.391.0/need1直参照の第5世代] 旧実装は `lo = need1; if (lo < 0) return null` で、
- *  **need2 だけで需要が定義されたセルを「対象外」として null を返していた**（need1 未設定は -1）。
- *  エンジンは `Problem.covUCell`（source of truth）の OR 意味論でそこに covU(HARD) を課すのに、
- *  UI 側だけが「要件なし」と表示していた＝赤いセルをタップしても何も出ない／必要人数カレンダーが
- *  「未設定」と出る／実働チェックの月間需要が 0 になる。3.173.0・3.309.0・3.369.0・3.379.0 と同根。
- *
- *  しきい値は `covUCell`/`covOCell` の選択と厳密に一致させる:
- *  両方定義なら lo=min・hi=max（小さい方で不足が立ち、大きい方を超えて初めて過剰が立つ）、
- *  片方だけなら双方その値。**通常データ（need1 <= need2）では旧実装と同じ値**になる。 */
-fun MagiViewModel.needCellLimits(k: Int, j: Int): Pair<Int, Int>? {
-    val st = state ?: return null
-    val p = cachedProblem(st)
-    if (k !in 0 until p.K || j !in 0 until p.T) return null
-    val n1 = p.need1[k][j]
-    val n2 = if (p.use2) p.need2[k][j] else -1
-    if (n1 < 0 && n2 < 0) return null
-    val lo = if (n1 >= 0 && n2 >= 0) minOf(n1, n2) else maxOf(n1, n2)
-    val hi = maxOf(n1, n2)
-    return lo to hi
 }
 
 /** [回数センター] 個人別の回数(上下限)と適切回数(apt)を職員×シフトで統合した一覧。

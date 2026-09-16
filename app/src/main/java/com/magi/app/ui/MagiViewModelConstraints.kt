@@ -150,9 +150,6 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
  *  値の並びは追加ダイアログの入力順と同じ:
  *  cons1=[日数,シフト,回数] / cons2=[シフト,回数] / cons3系=並び(最大5) /
  *  cons41(s)=[群,シフト,下限,上限] / cons42(s)=[群1,シフト1,群2,シフト2] / cons3w=[希望シフト,前日禁止シフト]。 */
-fun MagiViewModel.constraintRowValues(family: String, index: Int): List<String>? =
-    constraintsViewOf(state).rowValues(family, index)
-
 /** [制約編集] 行を同じ位置で置き換える。values の並びは constraintRowValues と同一。
  *  cons3系は追加(addCons3)と同じ正規化（先頭から最初の空白まで・最大5）。 */
 fun MagiViewModel.updateConstraint(family: String, index: Int, values: List<String>) {

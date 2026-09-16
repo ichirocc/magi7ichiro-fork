@@ -456,7 +456,7 @@ private fun ChecklistRow(label: String, value: String, ok: Boolean, onClick: (()
  * [年度始めモード/実働チェック] 「15人いるから大丈夫」ではなく、シフトごとの実働体制で見る（D5 残スコープ）。
  * Q=担当できる人数(canDo)・D=月間需要人日(Σ日次必要数)・日最大=1日に同時に必要な最大人数。
  * 欠勤余裕 = Q − 日最大（1人欠けてもその日の必要人数を揃えられるか）。read-only・スコアリング不変。
- * データは Problem 由来（allowedShiftsFor / needCellLimits=need1+日別例外込み）＝チェッカーと同じ実効値。
+ * データは Problem 由来（`ConditionsView` の担当可否 / 必要人数レンジ＝日別例外込み）＝チェッカーと同じ実効値。
  */
 @Composable
 internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {

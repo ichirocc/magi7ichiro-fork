@@ -1667,32 +1667,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         clearRunMarker()
     }
 
-    /** Shift indices a staff member may take (for the cell-edit bottom sheet). */
-    // [メインスレッド負荷削減] cachedProblem を使用（兄弟の staffCellLimits/needCellLimits と統一）。
-    //   本アクセサは StaffingRealityCard の `for i: allowedShiftsFor(i)` ループや ScheduleGrid の
-    //   canDo ラムダ等、Compose の合成/再合成から O(職員数) 回呼ばれる。旧実装は呼び出し毎に
-    //   Problem(st) を新規構築し（canDo/range/apt/wish 行列を毎回再割当）メインスレッドを浪費していた。
-    //   Problem は state の純粋関数のため、state 参照で識別する ProblemCache のヒットに置換して等価かつ
-    //   スコアリング不変（canDoShiftsForStaff は bucket を返す読み取り専用）。
-    fun allowedShiftsFor(i: Int): IntArray {
-        val st = state ?: return IntArray(0)
-        return cachedProblem(st).canDoShiftsForStaff(i)   // [3.507.0] UI は担当可否そのもの（上限 0 は最適化器だけが除外）
-    }
-
-    /** 入力ガイド（月次/年次の入力手順）用の各項目の件数。 */
-    data class SetupCounts(
-        val days: Int, val staff: Int, val shifts: Int, val groups: Int,
-        val wishes: Int, val needDay: Int, val constraints: Int, val ranges: Int, val use2: Boolean,
-    )
-    fun setupCounts(): SetupCounts {
-        val st = state ?: return SetupCounts(0, 0, 0, 0, 0, 0, 0, 0, false)
-        val cons = st.cons1.size + st.cons2.size + st.cons3.size + st.cons3n.size +
-            st.cons3m.size + st.cons3mn.size + st.cons41.size + st.cons42.size + st.cons3w.size
-        return SetupCounts(
-            st.dayCount, st.staffCount, st.shiftCount, st.groupCount,
-            st.wishes.size, st.needDay1.size + st.needDay2.size, cons, st.staffRange.size, st.use2Patterns,
-        )
-    }
 
     /** 担当外（そのスタッフのグループで担当不可）な希望の件数。希望で上書き時の確認に使う。 */
     fun wishOutOfScopeCount(): Int {
@@ -1936,7 +1910,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- constraint editing (ws3-5) -------------------------------------------
 
-    fun shiftKigouList(): List<String> = state?.shifts?.map { it.kigou } ?: emptyList()
 
     // ---- [見直し候補] 月次の修正から「基本ルールの見直し候補」を積む軽量メモ（セッション内のみ・state 非保存） ----
     fun addReviewMemo(text: String) {
@@ -2086,11 +2059,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 盤面を参照しないので、勤務表を作る前（未計算）でも目標を触るたびに正しい値が出る
      * （`settingIssues` は `refreshCheck` 経由＝盤面が無いと更新されないため、設定中は届かない）。
      */
-    fun aptBalances(): List<V6SanityPort.AptBalance> {
-        val st = state ?: return emptyList()
-        return runCatching { V6SanityPort.aptBalances(st) }.getOrDefault(emptyList())
-    }
-
     fun relaxForbiddenRule(seqLabel: String) {
         if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は設定を変更できません（完了後にもう一度お試しください）") }; return }
         val s = state ?: return

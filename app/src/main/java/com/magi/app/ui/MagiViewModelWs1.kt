@@ -176,7 +176,6 @@ fun MagiViewModel.setNextMonth() {
 }
 
 // ---- スキルグループ（年次マスター・新C41s/C42s 専用） -----------------------
-fun MagiViewModel.skillGroups(): List<Group> = state?.skillGroups ?: emptyList()
 fun MagiViewModel.addSkillGroup(name: String, kigou: String) {
     val st = state ?: return; if (kigou.isBlank()) return
     if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分")) return

@@ -559,7 +559,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
-                        canDo = { i, k -> vm.allowedShiftsFor(i).contains(k) }, plainCellBorder = plainCellBorder,
+                        canDo = { i, k -> k in conditionsView.allowedShiftsFor(i) }, plainCellBorder = plainCellBorder,
                         nav = schedNav, stickyTopPx = viewportTopPx)
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
