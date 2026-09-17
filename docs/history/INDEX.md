@@ -1,5 +1,29 @@
 # 作業記録の索引（見出し一覧）
 
+- weight_lint.pyの抑止リスト行番号ズレを修正（3.585.0、PR #202 CI赤対応）。3.580.0のコード挿入で
+  `V6HotfixPasses.kt`の既知の空振り対象行が934→951へずれたのを検査が正しく検知、行番号を更新
+  → `docs/history/3.4xx.md`
+- countChainReactivateの再ゲート結果（3.584.0）: 5腕中唯一実際に発火したが、下位10%品質
+  （large infeasible区分）でhardがわずかに悪化する試行が3件あり不合格。CountChainPolish自身の
+  history（3.540.0）の「実害なく効く」という記述を訂正（infeasible大規模盤面では成立しない例外）。
+  backlog#26の再活性化メカニズムはtools/loopで測定できた3腕（C2/C42/CountChain）とも
+  既定ON昇格に不合格と確定、既定値は全て変更なし → `docs/history/3.4xx.md`
+- c42FlowPolishReactivateの再ゲート結果（3.583.0）: 5seed×46ケース(230ペア)でゲート不合格
+  （品質改善±0%・速度±1%以内、退行ゼロは合格）。C2Polishと同型でmain探索がc42/c42sを既に
+  解消済み＝既定OFF維持 → `docs/history/3.4xx.md`
+- c2PolishReactivateの再ゲート結果（3.582.0）: 5seed×46ケース(230ペア)でゲート不合格
+  （品質改善±0%・速度±1%以内、退行ゼロは合格）。main探索がc2不足を既に解消済みで腕の出番が無い＝
+  3.524.0の診断を再確認。既定OFF維持 → `docs/history/3.4xx.md`
+- backlog#26続き: tools/loopへ5腕分のxxxReactivate featureキーを追加、C2/C42/CountChainは既存
+  ケースで再ゲート実行中（3.581.0）。C1成分修復の専用合成ケース化は`sequentialBlindSpotFixture`を
+  8/16/30人×14/28/31日へタイルしてプローブしたが全9組み合わせで旧腕(useComponents=false)がすでに
+  c1=0まで解消＝フル後処理チェーンでは他のC1修復パスが先に消費してしまい効かない、と判明し断念
+  → `docs/history/3.4xx.md`
+- backlog#26: 既定OFF専用修復腕5種（C2Polish/C42FlowPolish/C1成分修復/C3nMarginLnsPolish/
+  CountChainPolish）の「対象違反が残る局面でだけ再活性化」メカニズムをgrillingで設計・実装（3.580.0）。
+  `V6HotfixPasses.targetFamiliesRemain`（腕の自己申告カウンタでなく正式チェッカーのbreakdown生値で
+  判定）＋各腕の新規`xxxReactivate`フラグ（既定OFF、挙動不変）。tools/loop配線・C1/C3n用の専用
+  合成ケース新設・5腕の再ゲートは残作業 → `docs/history/3.4xx.md`
 - design-lint P10違反を修正（3.579.0、PR #201 CI赤対応）。`Ws1Editor.kt`の削除確認ダイアログが
   「休」を生文字列比較していたのを`Ws1View.restIdx`（`restShiftIndex`経由）へ置換。P10は
   baseline 2件に復帰、hosttest 803テスト緑 → `docs/history/3.4xx.md`

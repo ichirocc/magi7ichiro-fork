@@ -33,6 +33,38 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.585.0＝PR #202のCI（v6-engine-check）赤対応。3.580.0の`V6HotfixPasses.kt`
+編集で既知の空振り対象行が934→951へずれたのを`weight_lint.py`が検知、行番号を更新。ホストJVM
+807テスト緑。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-17（3.584.0＝countChainReactivateの再ゲート結果。5腕中唯一実際に発火したが、
+下位10%品質（large infeasible区分）でhardがわずかに悪化する試行が3件あり不合格。CountChainPolish
+自身のhistory（3.540.0）の「実害なく効く」という記述を訂正（infeasible大規模盤面では成立しない
+例外）。backlog#26の再活性化メカニズムはtools/loopで測定できた3腕（C2/C42/CountChain）とも
+既定ON昇格に不合格と確定、既定値は全て変更なし。C1成分修復・C3nMarginLnsPolishは未計測のまま
+別途方針検討。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-17（3.583.0＝c42FlowPolishReactivateの再ゲート結果。5seed×46ケース(230ペア)で
+ゲート不合格（品質改善±0%・速度±1%以内、退行ゼロは合格）。C2Polishと同型でmain探索がc42/c42sを
+既に解消済み、既定OFF維持。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-17（3.582.0＝c2PolishReactivateの再ゲート結果。5seed×46ケース(230ペア)で
+ゲート不合格（品質改善±0%・速度±1%以内、退行ゼロは合格）。main探索がc2不足を既に解消済みで
+腕の出番が無く3.524.0の診断を再確認、既定OFF維持。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-17（3.581.0＝backlog#26続き。tools/loopへ5腕分の`xxxReactivate`featureキーを
+追加、C2Polish/C42FlowPolish/CountChainPolishは既存ケースで再ゲート実行中（バックグラウンド）。
+C1成分修復の専用合成ケース化は単体テスト実証済み構成をタイルしてプローブしたが、フル後処理チェーンでは
+他のC1修復パスが先に消費してしまい効果を測れないと判明し断念（コード変更はfeatureキー追加のみ）。
+詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-16（3.580.0＝backlog#26。既定OFFの専用修復腕5種（C2Polish/C42FlowPolish/
+C1成分修復/C3nMarginLnsPolish/CountChainPolish）を「対象違反が残る局面でだけ条件付きに接続」する
+再活性化メカニズムをgrillingで設計・実装。判定は腕の自己申告カウンタでなく正式チェッカーの
+breakdown生値（`V6HotfixPasses.targetFamiliesRemain`）、新規`xxxReactivate`フラグは全て既定OFFで
+挙動不変。ホストJVM 807テスト緑。tools/loop配線・専用合成ケース新設・再ゲートは残作業
+（backlog#26参照）。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.579.0＝PR #201のCI（design-lint）赤対応。3.576.0で追加した「休」削除
 確認ダイアログの警告条件が生文字列比較でP10ラチェットに抵触（baseline 2→3件）していたのを
 `Ws1View.restIdx`（`restShiftIndex`経由）へ置換して修正。ホストJVM 803テスト緑。

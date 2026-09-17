@@ -221,8 +221,62 @@
     3.576.0のgrillingで見送り済み・再提案しない**）:
     - 並列所有権・停止・統合経路の監査（親子で同一Semaphoreを共有するとデッドロックし得る、盤面の
       所有権・乱数のワーカー分離・単一Reducerでの最良更新・実行世代スナップショット）。
-    - 既定OFFの専用修復腕（C2/C42専用・C1成分修復・C3n余白LNS・CountChain等）を「対象違反が残る
-      局面でだけ条件付きに接続」する再活性化基準（腕の自己申告改善でなく正式評価での寄与を見る）。
+    - ~~既定OFFの専用修復腕（C2/C42専用・C1成分修復・C3n余白LNS・CountChain等）を「対象違反が残る
+      局面でだけ条件付きに接続」する再活性化基準（腕の自己申告改善でなく正式評価での寄与を見る）。~~
+      **→ 3.580.0でgrilling実施・メカニズム実装済み**。決定: ①DebtBudgetは対象外（既に見送り済み）。
+      ②「正式評価での寄与」＝実行中の`betterReport`/`reportComparator`（オンライン比較。tools/loopの
+      gate.py4部門ゲートとは別レイヤーと確認）。③既定は現状維持、条件成立時だけ腕ごとの新規
+      `xxxReactivate`フラグ（既定OFF）で「対象違反のbreakdown生値」を見て試す。腕自身の自己申告
+      カウンタ（`TuningTelemetry.countChainApplied`等）は判定に使わない。④5腕（C2Polish/C42FlowPolish/
+      C1成分修復/C3nMarginLnsPolish/CountChainPolish）同時に同じ形で実装（`V6HotfixPasses.
+      targetFamiliesRemain`＋各腕呼び出し箇所のOR条件、`ArmReactivationTest`で固定）。各パス自体は
+      既存どおりchain.adopt/replaceBoardで無条件反映されるが、パス内部が自分のkeep-bestで非退行を
+      保証する既存設計（`runPostOptimization`のKDoc）は不変＝呼ぶかどうかの判定だけを追加。
+      **→ 3.581.0で進捗**: tools/loopに5腕分の`xxxReactivate`featureキーを追加。C2Polish/C42FlowPolish/
+      CountChainPolishは既存ケース（c2deficit/c42pair/46ケース）で再ゲート可能なため5seed×46ケースの
+      再ベンチマークを実行中（バックグラウンド）。C1成分修復は`sequentialBlindSpotFixture`
+      （`C1RepairAnalysisComponentsTest`、5人1組=全可1:休班2:夜班2の単体実証済み構成）を
+      8/16/30人×14/28/31日へ比率タイルして`V6HotfixPasses.runPostOptimization`（決定的モード）へ
+      直接プローブ（教訓#30＝本番導入前にまず発火確認）した結果、**全9組み合わせで
+      useComponents=false/true とも完全同点（c1=0に一致）**＝単体テストでは再現する「視野の狭さでの
+      手詰まり」が、フル後処理チェーン内では`exactWindow`の**前**に走る他のC1修復パス
+      （時系列DP・広域ビーム・自己再配置・index駆動修復）が先に解消してしまい、component-repair
+      固有の効き所へ到達しない（iter20の実データ4件での結果と同じ構造、規模を変えても再現せず）。
+      C3nMarginLnsPolishも同型のearly-pass-consumption構造が疑われる（iter19の診断と整合）が未検証。
+      **結論**: C1成分修復・C3nMarginLnsPolish用の専用合成ケースは、単に構造的シナリオを再現するだけ
+      では作れない（他パスが先に消費する）＝tools/loopのケース生成器という枠組みでは検証が難しい
+      可能性が高く、実データで偶然遭遇するのを待つか、`exactWindow`単体を強制的に先頭で呼ぶような
+      別の計測手法が要る＝別途grillingで方針を決める（今回はここで打ち切り、無理に合成ケースを
+      作らない）。C#(-magi_pc)への同期は5腕の採否確定後。
+      **c2polishreactivateの再ゲート結果（5seed×46ケース=230ペア、`iter_c2reactivate.csv`）**:
+      辞書式で新が良い0/同等229/旧が良い1、必須違反退行0件、品質改善率 平均-0.01%/中央値+0.00%
+      （c2deficitカテゴリでも+0.00%〜-0.13%＝無風）、速度±1%以内。ゲート
+      `{退行ゼロ: 合格, 品質≥10%: 不合格, 速度≥10%: 不合格, 安定性: 合格}` → **不合格**。
+      「対象違反が残る局面でだけ試す」よう条件を絞っても、main探索が既にc2不足を解消済みのため
+      腕の出番自体がほとんど無い（3.524.0の診断がxxxReactivate版でも再確認された）。
+      **c2PolishReactivateの既定ON昇格は見送り**（既定OFFのまま、コードは残す）。
+      **c42flowreactivateの再ゲート結果（5seed×46ケース=230ペア、`iter_c42reactivate.csv`）**:
+      辞書式で新が良い0/同等225/旧が良い5、必須違反退行0件・10%超の個別退行0件（探索経路の分岐由来と
+      推定、CountChainPolishのiter記録と同型）、品質改善率 平均-0.01%/中央値+0.00%
+      （c42pairカテゴリはmedium区分で-0.32%のみ、他は無風）、速度±1%以内。ゲート
+      `{退行ゼロ: 合格, 品質≥10%: 不合格, 速度≥10%: 不合格, 安定性: 合格}` → **不合格**。
+      C2Polishと同型の「main探索が既にc42を解消済みで出番が無い」構造を再確認。
+      **c42FlowPolishReactivateの既定ON昇格も見送り**（既定OFFのまま、コードは残す）。
+      **countchainreactivateの再ゲート結果（5seed×46ケース=230ペア、`iter_countchainreactivate.csv`）**:
+      他4腕と違い**実際に発火して盤面を変える**（辞書式で新が良い8/同等215/旧が良い7）。必須違反退行
+      （旧hard=0→新hard>0）は0件・10%超の個別退行も0件だが、**下位10%品質(旧の最悪帯)で新が旧以上を
+      満たさず**＝`large infeasible`区分（hard>0が前提の充足不能ケース）で一部試行のhardが
+      125.30→126.00（平均、必須件数が増えた試行3件）とわずかに悪化。ゲート
+      `{退行ゼロ: 不合格, 品質≥10%: 不合格, 速度≥10%: 不合格, 安定性: 合格}` → **不合格**。
+      CountChainPolish自身のhistory（3.540.0）が「効く盤面では実害なく効く」と楽観的に記していたのは
+      **充足不能（infeasible）な大規模盤面では成立しない例外がある**と訂正が必要＝腕自身の
+      keep-bestは自分の呼び出し前後を保証するが、盤面を変えたことで後続パスが辿る探索経路が変わり
+      （探索経路の分岐）、下流で結果的にわずかに悪化する場合がある。
+      **countChainReactivateの既定ON昇格も見送り**（既定OFFのまま、コードは残す）。
+      tools/loopで実際に測定できた3腕（C2Polish/C42FlowPolish/CountChainPolish）はいずれも
+      既定ON昇格に不合格と確定。C1成分修復（専用合成ケースが作れず`xxxReactivate`のtools/loopゲート
+      測定は未実施）・C3nMarginLnsPolish（未着手）は「測定して不合格」でなく「既定OFFのまま未計測」
+      が正確な現状で、測定手法は別途grillingで決める。5腕とも既定値（全てfalse）は変更なし。
     - 停滞判定の精緻化（正式最良不変・同一探索範囲の反復・修復途中の進捗・証明済み下限・時間不足を
       区別）と、既存の再配属/摂動/エリート機構への小さな追加としての限定的な専門腕の試行。
     - 業務重み（正式スコア用）と腕選択・予算配分の基準を分離する設計指針の明文化（探索スケジューラに
