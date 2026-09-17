@@ -33,6 +33,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.581.0＝backlog#26続き。tools/loopへ5腕分の`xxxReactivate`featureキーを
+追加、C2Polish/C42FlowPolish/CountChainPolishは既存ケースで再ゲート実行中（バックグラウンド）。
+C1成分修復の専用合成ケース化は単体テスト実証済み構成をタイルしてプローブしたが、フル後処理チェーンでは
+他のC1修復パスが先に消費してしまい効果を測れないと判明し断念（コード変更はfeatureキー追加のみ）。
+詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-16（3.580.0＝backlog#26。既定OFFの専用修復腕5種（C2Polish/C42FlowPolish/
 C1成分修復/C3nMarginLnsPolish/CountChainPolish）を「対象違反が残る局面でだけ条件付きに接続」する
 再活性化メカニズムをgrillingで設計・実装。判定は腕の自己申告カウンタでなく正式チェッカーの

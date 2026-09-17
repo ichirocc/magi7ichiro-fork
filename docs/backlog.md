@@ -232,10 +232,22 @@
       targetFamiliesRemain`＋各腕呼び出し箇所のOR条件、`ArmReactivationTest`で固定）。各パス自体は
       既存どおりchain.adopt/replaceBoardで無条件反映されるが、パス内部が自分のkeep-bestで非退行を
       保証する既存設計（`runPostOptimization`のKDoc）は不変＝呼ぶかどうかの判定だけを追加。
-      **残作業**: tools/loopに5腕分の`xxxReactivate`比較用featureキーを追加、C1成分修復・
-      C3nMarginLnsPolishは検証用の専用合成ケースが無い（3.524.0のc2deficit/c42pair追加と同じやり方で
-      新設が必要）ため先に着手、その上で5腕とも全170ペア（またはCountChainPolish同等の138ペア）で
-      再ゲートしてから個別に既定ON昇格を判断する。C#(-magi_pc)への同期は採否確定後。
+      **→ 3.581.0で進捗**: tools/loopに5腕分の`xxxReactivate`featureキーを追加。C2Polish/C42FlowPolish/
+      CountChainPolishは既存ケース（c2deficit/c42pair/46ケース）で再ゲート可能なため5seed×46ケースの
+      再ベンチマークを実行中（バックグラウンド）。C1成分修復は`sequentialBlindSpotFixture`
+      （`C1RepairAnalysisComponentsTest`、5人1組=全可1:休班2:夜班2の単体実証済み構成）を
+      8/16/30人×14/28/31日へ比率タイルして`V6HotfixPasses.runPostOptimization`（決定的モード）へ
+      直接プローブ（教訓#30＝本番導入前にまず発火確認）した結果、**全9組み合わせで
+      useComponents=false/true とも完全同点（c1=0に一致）**＝単体テストでは再現する「視野の狭さでの
+      手詰まり」が、フル後処理チェーン内では`exactWindow`の**前**に走る他のC1修復パス
+      （時系列DP・広域ビーム・自己再配置・index駆動修復）が先に解消してしまい、component-repair
+      固有の効き所へ到達しない（iter20の実データ4件での結果と同じ構造、規模を変えても再現せず）。
+      C3nMarginLnsPolishも同型のearly-pass-consumption構造が疑われる（iter19の診断と整合）が未検証。
+      **結論**: C1成分修復・C3nMarginLnsPolish用の専用合成ケースは、単に構造的シナリオを再現するだけ
+      では作れない（他パスが先に消費する）＝tools/loopのケース生成器という枠組みでは検証が難しい
+      可能性が高く、実データで偶然遭遇するのを待つか、`exactWindow`単体を強制的に先頭で呼ぶような
+      別の計測手法が要る＝別途grillingで方針を決める（今回はここで打ち切り、無理に合成ケースを
+      作らない）。C#(-magi_pc)への同期は5腕の採否確定後。
     - 停滞判定の精緻化（正式最良不変・同一探索範囲の反復・修復途中の進捗・証明済み下限・時間不足を
       区別）と、既存の再配属/摂動/エリート機構への小さな追加としての限定的な専門腕の試行。
     - 業務重み（正式スコア用）と腕選択・予算配分の基準を分離する設計指針の明文化（探索スケジューラに

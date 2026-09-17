@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#26続き: tools/loopへ5腕分のxxxReactivate featureキーを追加、C2/C42/CountChainは既存
+  ケースで再ゲート実行中（3.581.0）。C1成分修復の専用合成ケース化は`sequentialBlindSpotFixture`を
+  8/16/30人×14/28/31日へタイルしてプローブしたが全9組み合わせで旧腕(useComponents=false)がすでに
+  c1=0まで解消＝フル後処理チェーンでは他のC1修復パスが先に消費してしまい効かない、と判明し断念
+  → `docs/history/3.4xx.md`
 - backlog#26: 既定OFF専用修復腕5種（C2Polish/C42FlowPolish/C1成分修復/C3nMarginLnsPolish/
   CountChainPolish）の「対象違反が残る局面でだけ再活性化」メカニズムをgrillingで設計・実装（3.580.0）。
   `V6HotfixPasses.targetFamiliesRemain`（腕の自己申告カウンタでなく正式チェッカーのbreakdown生値で
