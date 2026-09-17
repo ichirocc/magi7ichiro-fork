@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- weight_lint.pyの抑止リスト行番号ズレを修正（3.585.0、PR #202 CI赤対応）。3.580.0のコード挿入で
+  `V6HotfixPasses.kt`の既知の空振り対象行が934→951へずれたのを検査が正しく検知、行番号を更新
+  → `docs/history/3.4xx.md`
 - countChainReactivateの再ゲート結果（3.584.0）: 5腕中唯一実際に発火したが、下位10%品質
   （large infeasible区分）でhardがわずかに悪化する試行が3件あり不合格。CountChainPolish自身の
   history（3.540.0）の「実害なく効く」という記述を訂正（infeasible大規模盤面では成立しない例外）。
