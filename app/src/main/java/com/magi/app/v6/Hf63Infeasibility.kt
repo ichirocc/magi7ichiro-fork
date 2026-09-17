@@ -68,6 +68,7 @@ class Hf63Infeasibility {
             // （これを怠ると、0到達後に摂動で再違反した瞬間 gIter-旧改善 が即 STALL を超え、
             //  解けた族を誤って infeasible 判定し RSI focus から外してしまう）。
             gLastImproveIter[c] = gIter
+            if (gInfeasibleLikely[c]) gInfeasibleLikely[c] = false   // [3.592.0] 0到達もself-correction対象
         } else if (gIter - gLastImproveIter[c] >= INFEAS_STALL_ITERS) {
             // curV>0 かつ STALL 反復改善なし。focus 回避/診断のため deprioritize する。
             gInfeasibleLikely[c] = true                               // 構造的下限推定 → deprioritize
@@ -99,6 +100,7 @@ class Hf63Infeasibility {
                 if (gInfeasibleLikely[idx]) gInfeasibleLikely[idx] = false   // self-correction
             } else if (curV == 0) {
                 gFocusedStall[idx] = 0   // 充足済みの族は「不能」ではない（update() の 0 到達分岐と同義）
+                if (gInfeasibleLikely[idx]) gInfeasibleLikely[idx] = false   // [3.592.0]
             } else if (key == focusedKey) {
                 gFocusedStall[idx] += effortIters
                 if (gFocusedStall[idx] >= INFEAS_STALL_ITERS) gInfeasibleLikely[idx] = true

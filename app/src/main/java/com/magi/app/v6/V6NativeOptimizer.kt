@@ -1874,6 +1874,9 @@ object V6NativeOptimizer {
                 }
             }
         }
+        // [3.592.0] ループ内は毎ラウンド頭で「前ラウンドの focus」を記録するため、最終ラウンド分の
+        //   投入量だけ記録されず取りこぼしていた（次回runRsi呼出時にlastFocusがリセットされ消える）。
+        hf63.updateFromBreakdownFocused(bestReport.breakdown, lastFocus, effortIters)
         // [3.288.0/ログ強化=回数軸] 戦略変更の1行サマリ（focus遷移を連続圧縮）。2手以上あるときだけ出す＝スパムなし。
         if (focusTrail.count { !it.startsWith("[") } >= 2) {
             logs.add(MirrorLog(iter = iters, tag = "戦略変更", message =

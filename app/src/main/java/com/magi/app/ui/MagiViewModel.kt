@@ -64,7 +64,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 /**
  * 勤務表最適化のタイムアウト上限（秒）。高精度を保ったまま5分(300s)以内に圧縮。
@@ -361,9 +363,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 if (state == null) {
                     // 途中最良解を優先して復元（無ければ自動保存の入力）。
-                    val resumeTxt = snapTxt?.takeIf { it.isNotBlank() } ?: txt
+                    // [3.592.0/3.406.0-B-02と同じ] 読めることを確かめてから消す。壊れていたら自動保存へ落とす。
+                    val snapUsable = !snapTxt.isNullOrBlank() && withContext(Dispatchers.Default) {
+                        runCatching { validate(Ws1Ops.normalizeEndDate(StateParser.parse(snapTxt))) == null }.getOrDefault(false)
+                    }
+                    if (!snapTxt.isNullOrBlank() && !snapUsable) {
+                        logOp("W", "途中結果のスナップショットが壊れていて読めませんでした（自動保存の入力から再開します）")
+                    }
+                    val resumeTxt = if (snapUsable) snapTxt else txt
                     if (!resumeTxt.isNullOrBlank()) loadAsync(resumeTxt, fromRestore = true)
-                    if (!snapTxt.isNullOrBlank()) clearBgFiles("途中結果の復元後")   // 消費後は掃除
+                    if (snapUsable) clearBgFiles("途中結果の復元後")   // 消費できたときだけ掃除
                 }
                 }
             }
@@ -483,21 +492,38 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   所有権が残ったまま関数を抜けていた（次回起動が「中断されました」と誤案内しうる）。
         //   保存の成否と同じ扱いへ揃える＝失敗したら所有権を確認したうえで片付け、開始失敗を通知する。
         //   enqueue が成功したときだけ「開始しました」を表示する。
-        val enqueued = runCatching {
-            androidx.work.WorkManager.getInstance(getApplication())
-                .enqueueUniqueWork(OptimizationWorker.UNIQUE, androidx.work.ExistingWorkPolicy.REPLACE, work)
-        }.isSuccess
-        if (!enqueued) {
+        fun handleEnqueueFailed() {
             OptimizationRepository.request = null
             bgStateKey = 0L
             bgRunId = 0L
             clearBgFiles("バックグラウンド最適化の投入に失敗")
             notify("バックグラウンド最適化を開始できませんでした（端末の状態をご確認ください）", "W")
+        }
+        val op = runCatching {
+            androidx.work.WorkManager.getInstance(getApplication())
+                .enqueueUniqueWork(OptimizationWorker.UNIQUE, androidx.work.ExistingWorkPolicy.REPLACE, work)
+        }.getOrNull()
+        if (op == null) {
+            handleEnqueueFailed()
             return
         }
         _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "バックグラウンドで最適化を開始しました（完了時に通知）") }
         writeRunMarker("bg")
         logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers})")
+        // [3.592.0] runCatchingは同期例外しか捉えない。enqueueUniqueWorkが返すOperationの完了を
+        //   非同期に監視し、後から失敗した場合も開始失敗と同じ片付けをする（置き換え済みなら何もしない）。
+        viewModelScope.launch {
+            val failed = suspendCancellableCoroutine<Boolean> { cont ->
+                op.result.addListener({
+                    val f = runCatching { op.result.get() }.isFailure
+                    if (cont.isActive) cont.resume(f)
+                }, { it.run() })
+            }
+            if (failed && bgRunId == runId) {
+                handleEnqueueFailed()
+                _ui.update { it.copy(running = false) }
+            }
+        }
     }
 
     /** [3.475.0] 破棄する背景結果の後始末を一箇所に。旧: 「入力が変わった」分岐だけこれを一切せず、
@@ -572,6 +598,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = sched
         state = st0.withSchedule(sched)
         autoSave()
+        captureAlternatives(r.alternatives)   // [3.592.0] 背景結果にも前景と同じ「他の案」を反映する
         pushReport(state ?: st0, sched, r.report, runLabel = "バックグラウンド最適化") { it.copy(
             messageIsError = false,
             running = false, hasResult = true, engineRan = true,
@@ -708,7 +735,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val snap = undoStack.removeLastOrNull() ?: return
         snapNow(snap.label)?.let { redoStack.addLast(it) }   // [Web反映] 現在をやり直し用に退避（同じ操作名を引き継ぐ）
         state = snap.st
-        currentSchedule = Array(snap.sched.size) { snap.sched[it].clone() }
+        val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
+        currentSchedule = restoredSched
         // [3.500.1/外部レビュー] 元に戻すは手操作＝「計算済み」ではない。前の結果盤面と改善提案はこの盤面とは別の実体なので外す
         //   （提案は 3.475.0 の指紋照合でも弾かれるが、画面に古い候補を残さない）。
         resultSchedule = null
@@ -716,6 +744,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = snap.label
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
             engineRan = false, fixSuggestions = emptyList(), alternatives = emptyList(),
+            // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
+            //   （再検査が失敗/停止すると画面だけ元のまま残っていた）。
+            schedule = restoredSched.map { it.toList() },
             message = if (label != null) "元に戻す: $label" else "1つ前に戻しました") }
         logOp("I", "元に戻す" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
@@ -728,12 +759,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val snap = redoStack.removeLastOrNull() ?: return
         snapNow(snap.label)?.let { undoStack.addLast(it) }
         state = snap.st
-        currentSchedule = Array(snap.sched.size) { snap.sched[it].clone() }
+        val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
+        currentSchedule = restoredSched
         resultSchedule = null   // [3.500.1] undo() と同じ理由
         alternativeScheds = emptyList()
         val label = snap.label
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
             engineRan = false, fixSuggestions = emptyList(), alternatives = emptyList(),
+            schedule = restoredSched.map { it.toList() },   // [3.592.0] undo()と同じ理由
             message = if (label != null) "やり直す: $label" else "やり直しました") }
         logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
@@ -1706,7 +1739,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
         val p = cachedProblem(st)
-        pushUndo("希望を反映")
+        // [3.592.0] setCellsと同様、実際に変更する1件目でだけpushUndoする（変更0件でRedo履歴/別候補を
+        //   無駄に消し、無意味なUndo段を積んでいた）。
+        var first = true
         var applied = 0
         var oos = 0
         for ((key, k) in st.wishes) {
@@ -1717,11 +1752,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val can = p.canDo(i, k)
             if (!can && !includeOutOfScope) continue
             if (i in sched.indices && j in sched[i].indices && sched[i][j] != k) {
+                if (first) { pushUndo("希望を反映"); first = false }
                 sched[i][j] = k
                 applied++
                 if (!can) oos++
             }
         }
+        if (applied == 0) return
         currentSchedule = sched
         state = st.withSchedule(sched)
         autoSave()
@@ -2384,6 +2421,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val text = MojibakeRepair.repair(rawText)
         _ui.update { it.copy(messageIsError = false, running = true, message = "CSV取込中…") }
         val boardToken = beginBoardJob(MagiPhase.Importing)
+        var pushedUndo = false
         job = viewModelScope.launch {
             try {
                 // [3.282.0] JSON 側(loadAsync)と同じ是正: BOM 除去だけの健全な CSV で誤警告しない。
@@ -2403,6 +2441,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 pushUndo("CSV取込")
+                pushedUndo = true
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
                 resultSchedule = res.schedule.copy2D()
@@ -2417,12 +2456,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val unk = if (res.unknownCells > 0)
                     "｜読めない記号 ${res.unknownCells}セル(${res.unknownSymbols.joinToString("・")})は取り込めませんでした"
                 else ""
+                // [3.592.0] 実日付ヘッダが今の対象期間とズレたまま列位置で取り込んだ場合の警告。
+                val dateWarn = if (res.headerDateMismatches > 0)
+                    "｜⚠ CSVヘッダの日付が今の期間と${res.headerDateMismatches}列ズレています（列の位置で取り込みました）" else ""
                 val msg = if (res.matched in 1 until total)
-                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn"
+                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn"
                 else
-                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn"
+                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn"
                 pushReport(state ?: st, res.schedule, res.report) { it.copy(
-                    messageIsError = res.unknownCells > 0 || res.unclosedQuote,
+                    messageIsError = res.unknownCells > 0 || res.unclosedQuote || res.headerDateMismatches > 0,
                     running = false,
                     hasResult = true,
                     engineRan = false,   // [3.475.0] CSV取込は手操作扱い
@@ -2436,14 +2478,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 logOp("I", "CSV取込 完了 ${res.matched}名一致 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: CancellationException) {
+                // [3.592.0] pushUndo済み(=盤面を既に書き換え済み)なら取込前へロールバックする。旧: 診断
+                //   (pushReport)の中止・例外を捕まえても内部盤面・自動保存は書き換えたままだった。
+                if (pushedUndo) rollbackImportCsv(st, sched)
                 _ui.update { it.copy(messageIsError = false, running = false, message = "CSV取込を中止しました") }   // [3.404.0]
                 throw e
             } catch (e: Throwable) {
+                if (pushedUndo) rollbackImportCsv(st, sched)
                 _ui.update { it.copy(running = false, message = "CSVを取り込めませんでした（${e.javaClass.simpleName}）", messageIsError = true) }
             } finally {
                 endBoardJob(boardToken)
             }
         }
+    }
+
+    /** [3.592.0] importCsvの診断失敗時、pushUndo直後の状態(st/sched)へ戻す。pushUndoが積んだ段も外す。 */
+    private fun rollbackImportCsv(st: MagiState, sched: Array<IntArray>) {
+        currentSchedule = sched
+        state = st
+        resultSchedule = null
+        undoStack.removeLastOrNull()
+        autoSave()
     }
 
     /**

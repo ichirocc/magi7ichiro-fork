@@ -120,7 +120,8 @@ class OptimizationWorker(
         //   「中断されました・再開できます」として掴んでから読み、パースに失敗する＝**案内した再開が
         //   できない**。3.336.0 が結果に対して直したのと同じ扱いへ揃える。
         runCatching {
-            files(ctx).writeAtomically(inputFile(ctx), StateParser.serialize(req.first, req.second))
+            // [3.592.0] 所有権確認から本書き込みまでの間の置き換わりを防ぐ（結果・途中保存と同じガード）。
+            files(ctx).writeAtomically(inputFile(ctx), StateParser.serialize(req.first, req.second)) { ownsFiles() }
         }
             .onSuccess { step("入力退避") }
             .onFailure { note("入力の退避に失敗（この実行は途中でプロセスが終了すると復元できません）", it) }
@@ -264,6 +265,7 @@ class OptimizationWorker(
                         OptimizationRepository.BgResult(
                             res.schedule, res.report, res.phase, inputData.getLong(KEY_RUN_ID, 0L),
                             stateKey = com.magi.app.v6.StateFingerprint.of(req.first),   // [3.475.0] 入力の指紋
+                            alternatives = res.alternatives,   // [3.592.0] 前景と同じ候補群を背景結果にも載せる
                         ),
                     )
                     notifyDone(res.report.hard, res.report.total)
