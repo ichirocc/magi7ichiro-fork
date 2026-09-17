@@ -299,3 +299,20 @@
       新しい重み表を作らない）。
     比較は同一入力・同一seed群・同一総予算（固定仕事量と壁時計予算の両方）で行い、tools/loopの
     ベンチマークで測ってから個別に採否する（CLAUDE.md「探索動学の変更は測ってから採否」）。
+27. **[探索エンジン・要grilling] `AptFairPolish.fairTarget`（候補分類）と`Problem.fairDevOfBucket`
+    （正式評価・達成率モード）の乖離＝取りこぼしの実測完了、①候補生成式・②交換探索改良は未着手**
+    （外部提案、2026-09-17）。`fairTarget`（群の全メンバーの生回数の単純平均）は`applyFairPolish`が
+    `distLocations["fair"]`（`fairDevOfBucket`由来、担当可否でフィルタした母集団の達成率ベース
+    幅重み付き中央値）の各セルをhigh/low分類するのに使われるが、母集団・計算式とも独立した別経路。
+    **→ 3.588.0で③（乖離の実測）を実施**: 実データ4件（生入力31件＋決定的後処理後34件=計65件）＋
+    母集団差を意図的に作った合成ケース(5件)を合わせ、計70件の`distLocations["fair"]`セルを走査。
+    `fairDevOfBucket`は判定式を複製せず仮想入力(±1)で黒箱呼び出しして方向を観測
+    （`DeltaEvaluator.fairDevAt`と同じ手法）。結果: sept2026の後処理後盤面で**1件、実在する乖離を
+    確認**（`fairTarget`は「一致」と判定し何もしないが、達成率モードでは不足方向の是正が有効＝
+    取りこぼし）。母集団差（担当不可かつ回数0のメンバー除外）自体は合成ケースで発生を確認したが、
+    今回見つかった実データの乖離はそれとは別要因（整数丸めの一致ゾーンのズレ）。`FairTargetDivergenceTest`
+    で固定（`fairTargetOmitsACellThatOfficialAchievementRateWouldStillFlag`）。
+    **①（個人基準に合う目標候補の生成式）・②（その配分を実現する日単位交換探索の改良）は未着手**。
+    重み・6%許容・keep-best採用規則は変更しない（候補分類ロジックだけの改善）。着手前に対象範囲
+    （fairTargetをfairDevOfBucketの母集団・達成率式へ揃えるだけか、①②の候補生成式まで含むか）を
+    grillingで詰める。

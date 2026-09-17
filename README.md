@@ -33,6 +33,17 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.589.0＝PR #205のCI（v6-engine-check）赤対応。`FairTargetDivergenceTest`が
+CIのGradle単体テストJVM（ヒープが小さい）で`OutOfMemoryError`。実測結果は変えず、フル後処理
+パイプライン呼び出しを排除して合成`MagiState`直接構築＋素の入力のみの走査へ軽量化。ホストJVM
+810テスト緑。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-17（3.588.0＝fair（公平化）仕様調査③。`AptFairPolish.fairTarget`（候補分類・
+生回数平均）と`Problem.fairDevOfBucket`（正式評価・達成率モード）の乖離を実データ4件+合成ケースで
+実測。sept2026の後処理後盤面で1件、fairTargetが「一致」と誤判定し是正機会を放置する取りこぼしを
+確認（`FairTargetDivergenceTest`で固定）。①候補生成式・②交換探索改良は未着手、backlog#27へ登録。
+ホストJVM 810テスト緑。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-17（3.587.0＝外部の状況報告5件をサブエージェントで実コードと突き合わせ検証、
 4件は現状と食い違うが1件（「設定の効き」ログが実行時スナップショットでなくPolishGateを直読みし
 表示が食い違いうるバグ）は実在すると確認し修正。表示のみの影響で勤務表・スコアには無関係。
