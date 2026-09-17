@@ -1,5 +1,11 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#27①: fairAchievementDirectionのtools/loopベンチ判定＝既定OFF維持（3.591.0）。5seed×46ケース、
+  仕様§4の4基準すべて不合格（品質±0%・速度+1.6%で便益測れず）。backlog#26の5腕と同じ判断基準で
+  既定OFF確定、取りこぼし自体はテストで固定済み → `docs/history/3.4xx.md`
+- backlog#27①: fairの候補分類をfairDevOfBucketの黒箱観測へ揃える（3.590.0、実装・既定OFF・測定中）。
+  grillingで範囲確定、`PostOptimizationParams.fairAchievementDirection`でA/B切替、tools/loopベンチ
+  実行中 → `docs/history/3.4xx.md`
 - FairTargetDivergenceTestのCI OOMを修正（3.589.0、PR #205 CI赤対応）。CIのGradle単体テストJVMは
   ヒープが小さく、5回の`runPostOptimization`呼び出しでOutOfMemoryError。実測結果は変えず、
   合成`MagiState`直接構築＋素の入力のみの走査へ軽量化 → `docs/history/3.4xx.md`

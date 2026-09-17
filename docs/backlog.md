@@ -299,8 +299,9 @@
       新しい重み表を作らない）。
     比較は同一入力・同一seed群・同一総予算（固定仕事量と壁時計予算の両方）で行い、tools/loopの
     ベンチマークで測ってから個別に採否する（CLAUDE.md「探索動学の変更は測ってから採否」）。
-27. **[探索エンジン・要grilling] `AptFairPolish.fairTarget`（候補分類）と`Problem.fairDevOfBucket`
-    （正式評価・達成率モード）の乖離＝取りこぼしの実測完了、①候補生成式・②交換探索改良は未着手**
+27. **[探索エンジン・①完了] `AptFairPolish.fairTarget`（候補分類）と`Problem.fairDevOfBucket`
+    （正式評価・達成率モード）の乖離＝①（候補分類の黒箱観測化）実装・ベンチ判定完了＝既定OFF確定、
+    ②（交換探索改良）は未着手**
     （外部提案、2026-09-17）。`fairTarget`（群の全メンバーの生回数の単純平均）は`applyFairPolish`が
     `distLocations["fair"]`（`fairDevOfBucket`由来、担当可否でフィルタした母集団の達成率ベース
     幅重み付き中央値）の各セルをhigh/low分類するのに使われるが、母集団・計算式とも独立した別経路。
@@ -312,7 +313,12 @@
     取りこぼし）。母集団差（担当不可かつ回数0のメンバー除外）自体は合成ケースで発生を確認したが、
     今回見つかった実データの乖離はそれとは別要因（整数丸めの一致ゾーンのズレ）。`FairTargetDivergenceTest`
     で固定（`fairTargetOmitsACellThatOfficialAchievementRateWouldStillFlag`）。
-    **①（個人基準に合う目標候補の生成式）・②（その配分を実現する日単位交換探索の改良）は未着手**。
-    重み・6%許容・keep-best採用規則は変更しない（候補分類ロジックだけの改善）。着手前に対象範囲
-    （fairTargetをfairDevOfBucketの母集団・達成率式へ揃えるだけか、①②の候補生成式まで含むか）を
-    grillingで詰める。
+    **→ 3.590.0でgrillingにより①（分類ロジックの黒箱観測化）を実装**: 分類ループ本体と
+    `worsensOwnFair`（玉突きチェーンのavoid述語）の両方を`fairDevOfBucket`の仮想入力(±1)黒箱観測へ
+    置換、`PostOptimizationParams.fairAchievementDirection`（既定OFF）でA/B切替可能に。
+    `FairAchievementDirectionTest`で取りこぼしの再現(OFF)・修正(ON)を固定。重み・6%許容・keep-best
+    採用規則は変更しない（候補分類ロジックだけの改善）。
+    **→ 3.591.0でtools/loopのA/Bベンチ判定（5seed×46ケース）完了**: 仕様§4の4基準（退行ゼロ／品質≥10%／
+    速度≥10%／安定性）すべて不合格（品質±0%・速度+1.6%で便益測れず、既にHARDが残るinfeasible区分で
+    必須件数が増えた試行6件）。backlog#26の5腕と同じ基準で**既定OFFを維持**。オプトイン切替
+    (`fairAchievementDirection`)とテストは残す。①は実装・計測完了。②（交換探索の改良）は未着手。

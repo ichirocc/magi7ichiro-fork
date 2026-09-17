@@ -139,6 +139,8 @@ fun main(args: Array<String>) {
         "c1componentreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepairReactivate = true)
         "c3nmarginreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsReactivate = true)
         "countchainreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainReactivate = true)
+        // [3.590.0/backlog#27] FairPolishの候補分類をfairTarget(生回数平均)からfairDevOfBucket黒箱観測へ揃える。
+        "fairachievementdirection" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, fairAchievementDirection = true)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
