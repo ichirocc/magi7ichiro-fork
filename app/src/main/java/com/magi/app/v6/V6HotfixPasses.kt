@@ -405,6 +405,9 @@ object V6HotfixPasses {
         val countChainEnabled: Boolean = false,
         /** [3.580.0/測定中/backlog#26] countChainEnabledがOFFでも、high/apt超過が残っている局面でだけ試す。既定 OFF。 */
         val countChainReactivate: Boolean = false,
+        /** [3.590.0/測定中/backlog#27] FairPolishの候補分類を`fairTarget`（生回数round(平均)）でなく
+         *  `fairDevOfBucket`（正式評価・達成率モード）の黒箱観測へ揃える（3.588.0で実測した分類漏れの修正）。既定 OFF。 */
+        val fairAchievementDirection: Boolean = false,
     )
 
     /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
@@ -847,7 +850,7 @@ object V6HotfixPasses {
                 AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance)
             })
             take("fair玉突き", chain.timed("後処理 グループ内公平化(fair)玉突き研磨$tag", "FairPolish") { work ->
-                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance)
+                AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, fairAchievementDirection = params.fairAchievementDirection)
             })
             // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
             val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()

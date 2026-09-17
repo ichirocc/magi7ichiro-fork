@@ -304,7 +304,7 @@ internal object AptFairPolish {
      * 拒否するだけ）。採否はisBetter(hard→weighted→total)keep-best＝退化不能。全手とも希望固定
      * (movable)・禁止連続(makesForbiddenRun)を事前ガード。
      */
-    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false): V6HotfixPasses.CyclicSwapResult {
+    fun applyFairPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0xFA12L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false, aptFairSoftTolerance: Boolean = false, fairAchievementDirection: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
         val p = Problem(state, quantitativeRangeEval)
@@ -331,12 +331,32 @@ internal object AptFairPolish {
             return Math.round(sum.toDouble() / mem.size).toInt()
         }
 
+        // [3.590.0/測定中/backlog#27] fairTargetの生回数平均が偶然counts[x][k]と一致すると偏差ありの
+        //   セルが握り潰される（3.588.0実測）。fairDevOfBucketを仮想入力(±1)で黒箱観測して分類する。
+        fun fairAchievementDir(g: Int, k: Int, counts: Array<IntArray>, x: Int): String? {
+            val base = p.fairDevOfBucket(g, k) { xx -> counts[xx][k] }
+            val down = p.fairDevOfBucket(g, k) { xx -> if (xx == x) counts[xx][k] - 1 else counts[xx][k] }
+            val up = p.fairDevOfBucket(g, k) { xx -> if (xx == x) counts[xx][k] + 1 else counts[xx][k] }
+            return when {
+                down.total < base.total -> "high"
+                up.total < base.total -> "low"
+                else -> null
+            }
+        }
+
         // [玉突きチェーンのavoid述語] 候補がfillShiftを1つ得ると、候補自身の群目標(スナップショット近似)
         //   からちょうど新規に乖離するか（既に乖離済みなら中立扱い＝対象外）。
         fun worsensOwnFair(staff: Int, fillShift: Int): Boolean {
             val g = p.sgrp.getOrNull(staff) ?: return false
             if (g !in p.bucket.indices || fillShift !in p.bucket[g]) return false
             val counts = countMatrix(p, work)
+            if (fairAchievementDirection) {
+                val before = p.fairDevOfBucket(g, fillShift) { xx -> counts[xx][fillShift] }
+                val after = p.fairDevOfBucket(g, fillShift) { xx -> if (xx == staff) counts[xx][fillShift] + 1 else counts[xx][fillShift] }
+                val dxBefore = before.perMember.firstOrNull { it.first == staff }?.second ?: 0
+                val dxAfter = after.perMember.firstOrNull { it.first == staff }?.second ?: 0
+                return dxBefore == 0 && dxAfter > 0
+            }
             val tgt = fairTarget(g, fillShift, counts)
             return counts[staff][fillShift] == tgt
         }
@@ -441,10 +461,17 @@ internal object AptFairPolish {
                 if (x !in 0 until p.S || k !in 0 until p.K) continue
                 val g = p.sgrp.getOrNull(x) ?: continue
                 if (g !in p.bucket.indices) continue
-                val tgt = fairTarget(g, k, counts)
-                when {
-                    counts[x][k] > tgt -> highTargets.add(x to k)
-                    counts[x][k] < tgt -> lowTargets.add(x to k)
+                if (fairAchievementDirection) {
+                    when (fairAchievementDir(g, k, counts, x)) {
+                        "high" -> highTargets.add(x to k)
+                        "low" -> lowTargets.add(x to k)
+                    }
+                } else {
+                    val tgt = fairTarget(g, k, counts)
+                    when {
+                        counts[x][k] > tgt -> highTargets.add(x to k)
+                        counts[x][k] < tgt -> lowTargets.add(x to k)
+                    }
                 }
             }
             if (highTargets.isEmpty() && lowTargets.isEmpty()) break
