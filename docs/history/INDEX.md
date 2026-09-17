@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- countChainReactivateの再ゲート結果（3.584.0）: 5腕中唯一実際に発火したが、下位10%品質
+  （large infeasible区分）でhardがわずかに悪化する試行が3件あり不合格。CountChainPolish自身の
+  history（3.540.0）の「実害なく効く」という記述を訂正（infeasible大規模盤面では成立しない例外）。
+  backlog#26の再活性化メカニズムはtools/loopで測定できた3腕（C2/C42/CountChain）とも
+  既定ON昇格に不合格と確定、既定値は全て変更なし → `docs/history/3.4xx.md`
 - c42FlowPolishReactivateの再ゲート結果（3.583.0）: 5seed×46ケース(230ペア)でゲート不合格
   （品質改善±0%・速度±1%以内、退行ゼロは合格）。C2Polishと同型でmain探索がc42/c42sを既に
   解消済み＝既定OFF維持 → `docs/history/3.4xx.md`
