@@ -33,6 +33,15 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.595.0＝ロール時間クォンタム超過の2つの構造的原因を確定（コード変更なし）。
+`runRsiPlus`のフェーズ予算下限合計がbudget≤30秒で最大3.5倍超過、`stopRole`は協調的ポーリングで
+プリエンプティブ中断なし＝3.409.17記録の3〜9倍規模と整合する機構として特定。修正は探索動学変更＝
+grilling+tools/loop計測が必要、backlog#34を更新。詳細は`docs/history/3.4xx.md`）
+
+**最終更新**：2026-09-17（3.594.0＝ロール時間クォンタム超過を再検証（コード変更なし）。外部提案の規模
+(300〜3000倍)は3.409.17の実記録(最大3〜9倍)と不一致＝誇張。新たな手がかり`nativeSaChunk`の
+壁時計未確認を発見、backlog#34へ記録。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-17（3.593.0＝外部監査5件をbacklog#29〜33へ登録（コード変更なし・調査記録のみ）。
 `SmartInitialScheduler.solveConstructionDp`の状態爆発(#29・要grilling・高)、`MinCostAssignment`の
 禁止辺混入(#30・要修正・中)、C41/C42Flowの群外混入(#31・既定OFF実害小)、hf67HardRepairの古い
