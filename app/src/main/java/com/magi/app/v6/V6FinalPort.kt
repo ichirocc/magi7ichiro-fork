@@ -594,20 +594,21 @@ object V6FinalPort {
         )
         val tIntegration1 = EngineClock.nowMs()
 
+        // [3.587.0] PolishGateは1回だけ読んでpostParamsに固定する（実行中にUIから値が変わっても
+        //   この実行はこのスナップショットのまま走る＝下のtuningLogも同じ値を使う）。
+        val postParams = V6HotfixPasses.PostOptimizationParams(
+            quantitativeRangeEval = quantitativeRangeEval,
+            combineExhaustPairs = PolishGate.combineExhaustPairs,
+            lnsAdaptive = PolishGate.lnsAdaptive,
+            aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
+            countChainEnabled = PolishGate.countChainPolish,
+        )
         val post = V6HotfixPasses.runPostOptimization(
             state, integrated.schedule, label.tech,
             shouldStop = postShouldStop,
             onPhase = { phase -> progressWatch(phase, null, EngineClock.nowMs() - startMs, budgetMs) },
             deadlineMs = hardDeadlineMs,   // [残予算ガード] HF66 が後段パスを押し出さないよう全体締切を渡す
-            // [3.514.0/UIトグル化] combineExhaustPairs/lnsAdaptive は PolishGate 経由（呼び出し鎖に
-            //   引数を通さず届ける、c3n系トグルと同じ形）。
-            params = V6HotfixPasses.PostOptimizationParams(
-                quantitativeRangeEval = quantitativeRangeEval,
-                combineExhaustPairs = PolishGate.combineExhaustPairs,
-                lnsAdaptive = PolishGate.lnsAdaptive,
-                aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
-                countChainEnabled = PolishGate.countChainPolish,
-            ),
+            params = postParams,
         )
         val tPost1 = EngineClock.nowMs()
         // [高精度化/予算残の活用] 後処理予約枠(budget/12, 8〜25s)は後処理が早期にフィックスポイント到達すると
@@ -844,6 +845,10 @@ object V6FinalPort {
             nativeOn = NativeGate.usable,
             parityOn = NativeBridge.available && NativeGate.userEnabled && NativeGate.parityCheckEnabled,
             softPolishOn = softPolish,
+            combineExhaustPairs = postParams.combineExhaustPairs,
+            lnsAdaptive = postParams.lnsAdaptive,
+            aptFairSoftTolerance = postParams.aptFairSoftTolerance,
+            countChainPolish = postParams.countChainEnabled,
         ))
         // [3.288.0/ログ強化=状態軸] 「本当に改善可能な制約が残るか」を最終盤面で1行に集約。
         //   残った族を ①構造的な壁（もう直せない: 構造的covU下限・証明済みc3n壁・HF63が学習した充足困難族）
