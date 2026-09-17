@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- c2PolishReactivateの再ゲート結果（3.582.0）: 5seed×46ケース(230ペア)でゲート不合格
+  （品質改善±0%・速度±1%以内、退行ゼロは合格）。main探索がc2不足を既に解消済みで腕の出番が無い＝
+  3.524.0の診断を再確認。既定OFF維持 → `docs/history/3.4xx.md`
 - backlog#26続き: tools/loopへ5腕分のxxxReactivate featureキーを追加、C2/C42/CountChainは既存
   ケースで再ゲート実行中（3.581.0）。C1成分修復の専用合成ケース化は`sequentialBlindSpotFixture`を
   8/16/30人×14/28/31日へタイルしてプローブしたが全9組み合わせで旧腕(useComponents=false)がすでに

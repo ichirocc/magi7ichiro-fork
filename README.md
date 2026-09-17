@@ -33,6 +33,10 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.582.0＝c2PolishReactivateの再ゲート結果。5seed×46ケース(230ペア)で
+ゲート不合格（品質改善±0%・速度±1%以内、退行ゼロは合格）。main探索がc2不足を既に解消済みで
+腕の出番が無く3.524.0の診断を再確認、既定OFF維持。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-17（3.581.0＝backlog#26続き。tools/loopへ5腕分の`xxxReactivate`featureキーを
 追加、C2Polish/C42FlowPolish/CountChainPolishは既存ケースで再ゲート実行中（バックグラウンド）。
 C1成分修復の専用合成ケース化は単体テスト実証済み構成をタイルしてプローブしたが、フル後処理チェーンでは
