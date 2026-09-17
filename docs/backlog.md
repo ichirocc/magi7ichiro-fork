@@ -299,8 +299,8 @@
       新しい重み表を作らない）。
     比較は同一入力・同一seed群・同一総予算（固定仕事量と壁時計予算の両方）で行い、tools/loopの
     ベンチマークで測ってから個別に採否する（CLAUDE.md「探索動学の変更は測ってから採否」）。
-27. **[探索エンジン・測定中] `AptFairPolish.fairTarget`（候補分類）と`Problem.fairDevOfBucket`
-    （正式評価・達成率モード）の乖離＝①（候補分類の黒箱観測化）実装完了・tools/loopベンチ判定待ち、
+27. **[探索エンジン・①完了] `AptFairPolish.fairTarget`（候補分類）と`Problem.fairDevOfBucket`
+    （正式評価・達成率モード）の乖離＝①（候補分類の黒箱観測化）実装・ベンチ判定完了＝既定OFF確定、
     ②（交換探索改良）は未着手**
     （外部提案、2026-09-17）。`fairTarget`（群の全メンバーの生回数の単純平均）は`applyFairPolish`が
     `distLocations["fair"]`（`fairDevOfBucket`由来、担当可否でフィルタした母集団の達成率ベース
@@ -317,5 +317,8 @@
     `worsensOwnFair`（玉突きチェーンのavoid述語）の両方を`fairDevOfBucket`の仮想入力(±1)黒箱観測へ
     置換、`PostOptimizationParams.fairAchievementDirection`（既定OFF）でA/B切替可能に。
     `FairAchievementDirectionTest`で取りこぼしの再現(OFF)・修正(ON)を固定。重み・6%許容・keep-best
-    採用規則は変更しない（候補分類ロジックだけの改善）。tools/loopのA/Bベンチ判定を経て既定ON/OFFを
-    決める（結果は別途history追記）。②（交換探索の改良）は未着手。
+    採用規則は変更しない（候補分類ロジックだけの改善）。
+    **→ 3.591.0でtools/loopのA/Bベンチ判定（5seed×46ケース）完了**: 仕様§4の4基準（退行ゼロ／品質≥10%／
+    速度≥10%／安定性）すべて不合格（品質±0%・速度+1.6%で便益測れず、既にHARDが残るinfeasible区分で
+    必須件数が増えた試行6件）。backlog#26の5腕と同じ基準で**既定OFFを維持**。オプトイン切替
+    (`fairAchievementDirection`)とテストは残す。①は実装・計測完了。②（交換探索の改良）は未着手。
