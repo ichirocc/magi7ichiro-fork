@@ -274,9 +274,25 @@
       （探索経路の分岐）、下流で結果的にわずかに悪化する場合がある。
       **countChainReactivateの既定ON昇格も見送り**（既定OFFのまま、コードは残す）。
       tools/loopで実際に測定できた3腕（C2Polish/C42FlowPolish/CountChainPolish）はいずれも
-      既定ON昇格に不合格と確定。C1成分修復（専用合成ケースが作れず`xxxReactivate`のtools/loopゲート
-      測定は未実施）・C3nMarginLnsPolish（未着手）は「測定して不合格」でなく「既定OFFのまま未計測」
-      が正確な現状で、測定手法は別途grillingで決める。5腕とも既定値（全てfalse）は変更なし。
+      既定ON昇格に不合格と確定。
+      **→ 3.586.0でC1成分修復・C3nMarginLnsPolishの測定手法を確定・測定完了**。
+      tools/loopの合成ケース生成器はこの2腕の狭い効き所（他パスが先に消費してしまう局面）を
+      再現できない（3.581.0で確認済み）と判明していたため、**実データ4件への直接ON/OFF比較**
+      （`runPostOptimization`をc1ComponentRepair/c3nMarginLnsEnabledそれぞれtrue/falseで実行し
+      breakdown・hard・weightedScoreを比較）という、tools/loopより単純で直接的な手法に切り替えた。
+      結果: **golden/sample_v6/blocked_covu/sept2026の4件全てで、ON/OFFの結果が完全に同一
+      （hard・c1・c3n・weightedScoreが1件残らず一致）**。特にsample_v6は後処理後もc3n=1
+      （HARD、weight9000）が構造的に残る唯一の実データだが、c3nMarginLnsEnabled=trueにしても
+      この1件は解消されなかった＝この特定の残存はマージンLNSの対象外の構造（両側wish固定等で
+      動かせない完全に手詰まりな配置）である可能性が高い。旧history（3.511.8/3.511.9）の
+      「4実データ: 既定OFFのhash 4/4不変」という記述は「OFF同士の再現性確認」であって
+      「ON/OFF比較」ではなかった＝今回のほうがより直接的な検証になっている。
+      **結論**: 5腕全て（tools/loop測定3腕＋実データ直接比較2腕）で既定ON昇格の根拠なし。
+      C1成分修復・C3nMarginLnsPolishも既定OFFのまま維持を確定（コード・テストは残す）。
+      今後もし将来の実データ（新しい実機ログ・アップロード）でこの2腕の狙い通りの構造
+      （c1なら複数cons1窓の重なりでexhaustive=true手詰まり、c3nならマージン日を使えば解ける
+      禁止連続）が実際に見つかれば、その時点で同じ直接比較手法で再検証する。backlog#26は
+      これで全項目の測定を完了した。
     - 停滞判定の精緻化（正式最良不変・同一探索範囲の反復・修復途中の進捗・証明済み下限・時間不足を
       区別）と、既存の再配属/摂動/エリート機構への小さな追加としての限定的な専門腕の試行。
     - 業務重み（正式スコア用）と腕選択・予算配分の基準を分離する設計指針の明文化（探索スケジューラに
