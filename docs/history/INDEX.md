@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- 外部監査5件をbacklog#29〜33へ登録（3.593.0）。DP状態爆発(#29・高)・MinCostAssignment禁止辺(#30・中)・
+  C41/C42FlowのbaseCount群外混入(#31・既定OFF実害小)・hf67HardRepair古い回数(#32・意図的既存)・
+  DP seed相殺(#33・低)。コード変更なし・調査記録のみ → `docs/history/3.4xx.md`
 - 外部監査13件のうち12件を修正（3.592.0）。HF63フラグ解除・RSI最終ラウンド記録・c3nWallProven
   アトミック統合・toleratedBetterカウンタ・背景alternatives伝播・Worker所有権ガード・
   enqueue非同期失敗検出・途中結果復元順序・Undo/Redo表示反映・applyWishes条件付きpushUndo・
