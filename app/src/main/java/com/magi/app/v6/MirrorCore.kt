@@ -104,6 +104,9 @@ data class ScheduleRunResult(
      * 部分的な成功に見えるため、旗として持ち上げて必ず知らせる。
      */
     val unclosedQuote: Boolean = false,
+    /** [3.592.0] 実日付ヘッダ(build()のM/D(曜)形式)が今の対象期間と列位置で食い違う列数。数字のみの
+     *  日番号ヘッダ（位置指定・日付なしCSV）は対象外＝別機能のまま。0=見出しなし/全一致。 */
+    val headerDateMismatches: Int = 0,
 )
 
 data class LightOptimizeResult(

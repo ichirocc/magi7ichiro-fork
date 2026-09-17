@@ -392,6 +392,16 @@ object ScheduleCsvBridge {
         //   csvBody() と同じ考え方（ヘッダの先頭セルが職員名と一致することは実運用上ない）。
         // [3.509.1] ヘッダは build() の見出し語か 2 列目以降が日付列のときだけ（先頭が職員名に解決しないだけでは飛ばさない＝氏名誤記の行を落とさない）。
         var rr = if (rows.isNotEmpty() && nameToI[nameMatchKey(rows[0].getOrElse(0) { "" })] == null && looksLikeHeaderRow(rows[0])) 1 else 0
+        // [3.592.0] ヘッダがbuild()の実日付形式(M/D(曜))のときだけ、現在の期間と列位置で突き合わせる。
+        //   数字のみの日番号ヘッダ(位置指定・日付なしCSV)は対象外＝別機能のまま壊さない。
+        var headerDateMismatches = 0
+        if (rr == 1) {
+            val dateCellRe = Regex("^\\d{1,2}/\\d{1,2}\\([月火水木金土日]\\)$")
+            for (j in 0 until minOf(p.T, rows[0].size - 1)) {
+                val cell = rows[0].getOrElse(j + 1) { "" }.trim()
+                if (dateCellRe.matches(cell) && cell != formatDay(state.startDate, j)) headerDateMismatches++
+            }
+        }
         while (rr < rows.size) {
             val r = rows[rr]
             // build() は勤務表の後に「空行＋『集計』ヘッダ＋職員名で始まる回数行」を出力する。ここで終端しないと
@@ -428,6 +438,7 @@ object ScheduleCsvBridge {
             schedule, report.copy(logs = logs), matched = matched,
             unknownCells = unknownTotal, unknownSymbols = unknownTop,
             unclosedQuote = parsedAll.unclosedQuote,
+            headerDateMismatches = headerDateMismatches,
         )
     }
 }

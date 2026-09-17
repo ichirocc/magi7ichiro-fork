@@ -430,8 +430,9 @@ object V6FinalPort {
         //   「停滞が stallHardMs を超えた後・best 世代ごとに一度だけ」遅延実行しキャッシュする。
         val bestNonCovUAllC3n = java.util.concurrent.atomic.AtomicBoolean(false)
         val bestVersion = java.util.concurrent.atomic.AtomicInteger(0)
-        val c3nWallCheckedVersion = java.util.concurrent.atomic.AtomicInteger(-1)
-        val c3nWallResult = java.util.concurrent.atomic.AtomicBoolean(false)
+        // [3.592.0] 世代とresultを別Atomicで持つと、並行診断するワーカー間で新世代の「checked」に
+        //   旧世代のresultが結び付く競合があった。(version,result)組を単一AtomicReferenceで置換する。
+        val c3nWallCache = java.util.concurrent.atomic.AtomicReference(-1 to false)
         var bTotal = Int.MAX_VALUE; var bWeighted = Double.MAX_VALUE; var lastPhase = ""
         val progressLock = Any()   // [競合解消] 並列ワーカーから呼ばれる best 追跡の read-modify-write を直列化
         val progressWatch: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
@@ -490,17 +491,16 @@ object V6FinalPort {
         //   誤っても時間配分が変わるだけ＝品質は不変。並行呼出は同一結果を二重計算するだけで無害。
         val c3nWallProven = {
             val v = bestVersion.get()
-            if (c3nWallCheckedVersion.get() != v) {
+            if (c3nWallCache.get().first != v) {
                 val board = V6NativeOptimizer.liveBest
                 val proven = if (board == null) false else try {
                     val arr = Array(board.size) { r -> IntArray(board[r].size) { c -> board[r][c] } }
                     val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, arr)
                     diag.hasRuns && diag.allBlocked
                 } catch (_: Exception) { false }
-                c3nWallResult.set(proven)
-                c3nWallCheckedVersion.set(v)
+                c3nWallCache.set(v to proven)
             }
-            c3nWallResult.get()
+            c3nWallCache.get().second
         }
         val shouldStop = {
             val now = EngineClock.nowMs()
@@ -713,7 +713,7 @@ object V6FinalPort {
             val nonCovU = bestNonCovUHard.get()
             val kind = when {
                 bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
-                c3nWallResult.get() && bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
+                c3nWallCache.get().second && bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
             }
             // [3.375.2/実測で判明] 発火しなかったとき**どの条件が塞いだか**を出す。実測(golden・150s予算)で
@@ -750,8 +750,9 @@ object V6FinalPort {
             // 探索の後（後処理・追加精製）で改善したなら別項目として出す。探索フェーズの停滞と混ぜない。
             val afterNote = if (lastBestImproveMs.get() > tChain1)
                 "・探索後も改善あり(経過${((lastBestImproveMs.get() - startMs) / 1000)}s＝後処理/追加精製)" else ""
-            val wallNote = if (c3nWallCheckedVersion.get() >= 0)
-                "・c3n壁診断=${if (c3nWallResult.get()) "構造的な壁と判定" else "壁ではない（崩す手が実在）"}" else ""
+            val wallCache = c3nWallCache.get()
+            val wallNote = if (wallCache.first >= 0)
+                "・c3n壁診断=${if (wallCache.second) "構造的な壁と判定" else "壁ではない（崩す手が実在）"}" else ""
             listOf(MirrorLog(
                 level = "I", tag = "Watchdog",
                 message = "停滞監視: 最終改善=経過${((lastImp - startMs) / 1000).coerceAtLeast(0)}s・" +
@@ -771,7 +772,7 @@ object V6FinalPort {
                     "・発火までに無改善のまま約${fmtIter(stagnationIters.get() - lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
                 "・解は最良を維持）" +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
-                (if (c3nWallResult.get() && bestNonCovUAllC3n.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
+                (if (c3nWallCache.get().second && bestNonCovUAllC3n.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
         )) else emptyList()
         // [最終番兵/多重防御・3.575.0で強化] 「入力」と最終結果の2点比較だと、途中の段の改善が
         //   後段の悪化で丸ごと失われる（実機ログで確認、経緯: docs/history/3.4xx.md 3.575.0）。
@@ -857,7 +858,7 @@ object V6FinalPort {
         val residualLog = run {
             val bd = finalReport.breakdown
             val infeasLearned = chained.infeasibleFamilies   // [3.335.0] この実行の返り値から
-            val c3nWall = c3nWallResult.get() && bestNonCovUAllC3n.get()
+            val c3nWall = c3nWallCache.get().second && bestNonCovUAllC3n.get()
             val walls = ArrayList<String>()
             val open = ArrayList<String>()
             // [3.375.0/実機ログ起因] 構造床は**族ループより先に**計算する。旧実装は床を後から walls へ

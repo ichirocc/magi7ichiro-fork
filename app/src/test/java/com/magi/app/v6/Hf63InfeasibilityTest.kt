@@ -133,6 +133,28 @@ class Hf63InfeasibilityTest {
             shared.isInfeasibleLikely(3))
     }
 
+    // ==== [3.592.0] 違反0復帰でも「充足困難」フラグを解除する ====
+
+    @Test
+    fun zeroAfterRegressionAndReflagClearsFlagOnReturnToZero() {
+        val hf = Hf63Infeasibility()
+        hf.update(8, 0, 0)          // best=0（初回到達）
+        hf.update(8, 5, 5000)       // 再違反＋無改善5000iter → infeasible判定（gBestCurV=0のまま）
+        assertTrue(hf.isInfeasibleLikely(8))
+        hf.update(8, 0, 10000)      // 再び0に復帰。0<0は偽なのでcurV==0分岐でも解除する必要がある
+        assertFalse("0復帰でフラグが解除される", hf.isInfeasibleLikely(8))
+    }
+
+    @Test
+    fun focusedUpdateZeroAfterRegressionClearsFlagOnReturnToZero() {
+        val hf = Hf63Infeasibility()
+        hf.updateFromBreakdownFocused(mapOf("covU" to 0), null, 0)   // best=0
+        repeat(3) { hf.updateFromBreakdownFocused(mapOf("covU" to 1), "covU", 1800) }
+        assertTrue(hf.isInfeasibleLikely(8))
+        hf.updateFromBreakdownFocused(mapOf("covU" to 0), "covU", 1800)   // 0へ復帰
+        assertFalse("0復帰でフラグが解除される", hf.isInfeasibleLikely(8))
+    }
+
     @Test
     fun perturbationBounceDoesNotResetSharedLearning() {
         // エポック間の摂動で族の件数が一時的に増えても（1→3→1）、gBestCurV は全期間min のため

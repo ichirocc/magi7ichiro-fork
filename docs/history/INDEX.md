@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- 外部監査13件のうち12件を修正（3.592.0）。HF63フラグ解除・RSI最終ラウンド記録・c3nWallProven
+  アトミック統合・toleratedBetterカウンタ・背景alternatives伝播・Worker所有権ガード・
+  enqueue非同期失敗検出・途中結果復元順序・Undo/Redo表示反映・applyWishes条件付きpushUndo・
+  CSV取込ロールバック・CSV日付照合。1件(RSI周期枠)はbacklog#28へ登録し測定してから採否。
+  hosttest 815テスト緑 → `docs/history/3.4xx.md`
 - backlog#27①: fairAchievementDirectionのtools/loopベンチ判定＝既定OFF維持（3.591.0）。5seed×46ケース、
   仕様§4の4基準すべて不合格（品質±0%・速度+1.6%で便益測れず）。backlog#26の5腕と同じ判断基準で
   既定OFF確定、取りこぼし自体はテストで固定済み → `docs/history/3.4xx.md`

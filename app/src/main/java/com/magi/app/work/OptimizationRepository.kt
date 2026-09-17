@@ -64,6 +64,8 @@ object OptimizationRepository {
          * Worker が入力から計算して載せ、ViewModel は常にこれと現在の state を照合する。
          */
         val stateKey: Long = 0L,
+        /** [3.592.0] 前景の`captureAlternatives`と同じ候補群。背景実行はこれまで捨てており「他の案」が出なかった。 */
+        val alternatives: List<Array<IntArray>> = emptyList(),
     )
 
     /** Input handed to the next worker run. */

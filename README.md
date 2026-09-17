@@ -33,6 +33,14 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.592.0＝外部監査で実在確認した13件のうち12件を修正。HF63の違反0復帰時
+フラグ解除漏れ・RSI最終ラウンドのfocus記録漏れ・c3nWallProvenの世代/結果アトミック競合・
+toleratedBetterの許容カウンタ二重計上・背景最適化のalternatives欠落・Worker入力保存の所有権ガード・
+WorkManager enqueue非同期失敗検出・途中結果復元の順序・Undo/Redoの表示反映・applyWishesの
+無条件pushUndo・CSV取込の診断失敗ロールバック・CSV日付見出し照合。残る1件(RSI周期枠の持ち越し)は
+探索動学の変更のためbacklog#28へ登録しgrilling→tools/loop測定してから採否。hosttest 815テスト緑。
+詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-17（3.591.0＝backlog#27①のtools/loopベンチ判定完了（5seed×46ケース）。仕様§4の
 4基準すべて不合格（品質±0%・速度+1.6%で便益測れず）＝`fairAchievementDirection`は既定OFFを維持
 （backlog#26の5腕と同じ判断基準）。取りこぼし自体は`FairAchievementDirectionTest`で固定済み、

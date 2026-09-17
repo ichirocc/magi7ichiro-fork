@@ -62,4 +62,17 @@ class AptFairPolishToleranceTest {
         assertFalse("残り予算(3.2)を超え、かつfairの改善が無いため却下",
             AptFairPolish.toleratedBetter(candidateNoFairGain, bestRep, before, "fair", enabled = true))
     }
+
+    // ==== [3.592.0] countパラメータ: pinBad診断分岐からの呼び出しを許容カウンタへ数えない ====
+
+    @Test fun countFalseSkipsTheTelemetryCounterEvenWhenAccepted() {
+        val before = rep(fair = 10, apt = 0, low = 1)
+        val bestRep = before
+        val candidate = rep(fair = 9, apt = 2, low = 1)   // withinBudgetTradeIsAcceptedと同じ＝容認採用される手
+        TuningTelemetry.reset()
+        assertTrue(AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true, count = false))
+        assertEquals("count=falseなら診断分岐からの呼び出しはカウントしない", 0, TuningTelemetry.aptFairToleranceUsed.get())
+        assertTrue(AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true, count = true))
+        assertEquals("count=true(既定)なら従来どおり数える", 1, TuningTelemetry.aptFairToleranceUsed.get())
+    }
 }
