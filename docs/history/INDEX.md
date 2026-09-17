@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#26完了: C1成分修復・C3nMarginLnsPolishを実データ4件への直接ON/OFF比較で測定（3.586.0）。
+  tools/loopの合成ケースでは再現できない狙いのため、実データへ直接runPostOptimizationを実行する
+  手法へ切り替え。sample_v6のc3n=1(HARD)残存を含む4件全てでON/OFF完全同一という結果を得て、
+  5腕とも既定OFF維持を確定 → `docs/history/3.4xx.md`
 - weight_lint.pyの抑止リスト行番号ズレを修正（3.585.0、PR #202 CI赤対応）。3.580.0のコード挿入で
   `V6HotfixPasses.kt`の既知の空振り対象行が934→951へずれたのを検査が正しく検知、行番号を更新
   → `docs/history/3.4xx.md`
