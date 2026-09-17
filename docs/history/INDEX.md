@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- FairTargetDivergenceTestのCI OOMを修正（3.589.0、PR #205 CI赤対応）。CIのGradle単体テストJVMは
+  ヒープが小さく、5回の`runPostOptimization`呼び出しでOutOfMemoryError。実測結果は変えず、
+  合成`MagiState`直接構築＋素の入力のみの走査へ軽量化 → `docs/history/3.4xx.md`
 - fair仕様調査③: fairTargetとfairDevOfBucketの乖離を実データで実測（3.588.0）。実データ4件
   （生入力+決定的後処理後=計65件）+合成ケース(5件)の`distLocations["fair"]`セルを走査、sept2026の
   後処理後盤面で1件、fairTargetが「一致」と誤判定し放置する取りこぼしを確認。`fairDevOfBucket`は
