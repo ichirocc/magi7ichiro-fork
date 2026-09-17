@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.587.0＝外部の状況報告5件をサブエージェントで実コードと突き合わせ検証、
+4件は現状と食い違うが1件（「設定の効き」ログが実行時スナップショットでなくPolishGateを直読みし
+表示が食い違いうるバグ）は実在すると確認し修正。表示のみの影響で勤務表・スコアには無関係。
+ホストJVM 808テスト緑。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-17（3.586.0＝backlog#26完了。C1成分修復・C3nMarginLnsPolishをtools/loopでなく
 実データ4件への直接ON/OFF比較で測定（sample_v6のc3n=1(HARD)残存を含め4件全てで完全同一という結果）。
 5腕（C2Polish/C42FlowPolish/CountChainPolish/C1成分修復/C3nMarginLnsPolish）とも既定OFF維持を確定。

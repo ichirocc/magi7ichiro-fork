@@ -238,8 +238,12 @@ object TuningTelemetry {
         lahcEntered.set(0); parityChecks.set(0); aptFairToleranceUsed.set(0); countChainApplied.set(0)
     }
 
-    /** 各トグルの ON/OFF と、その実行で観測できた効果を1行にまとめる。 */
-    fun summary(nativeOn: Boolean, parityOn: Boolean, softPolishOn: Boolean): String {
+    /** 各トグルの ON/OFF と、その実行で観測できた効果を1行にまとめる。
+     *  [3.587.0] 4トグルは呼び出し元が実行に使ったスナップショットをそのまま渡す（`PolishGate`直読みだと表示が食い違いうる）。 */
+    fun summary(
+        nativeOn: Boolean, parityOn: Boolean, softPolishOn: Boolean,
+        combineExhaustPairs: Boolean, lnsAdaptive: Boolean, aptFairSoftTolerance: Boolean, countChainPolish: Boolean,
+    ): String {
         fun eff(on: Boolean, n: Int, unit: String): String =
             if (!on) "OFF" else if (n > 0) "ON($n$unit)" else "ON(この実行では観測なし)"
         // 同一の値を2回読むと表示内で食い違う（別スレッドが加算しうる）ため、判定も表示も1回の読みで済ませる。
@@ -258,10 +262,10 @@ object TuningTelemetry {
             " / 禁止連続の事前フィルタ=" + eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の無駄な検査を省略・勤務表は不変") +
             " / 禁止連続の崩し範囲=" + wide +
             " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替") +
-            " / 結合探索を粘り強く=" + (if (PolishGate.combineExhaustPairs) "ON" else "OFF") +
-            " / 一括見直しの自動調整=" + (if (PolishGate.lnsAdaptive) "ON" else "OFF") +
-            " / 公平化/適切回数の他ソフト許容(6%)=" + eff(PolishGate.aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用") +
-            " / 回数連鎖研磨=" + eff(PolishGate.countChainPolish, countChainApplied.get(), "連鎖を採用")
+            " / 結合探索を粘り強く=" + (if (combineExhaustPairs) "ON" else "OFF") +
+            " / 一括見直しの自動調整=" + (if (lnsAdaptive) "ON" else "OFF") +
+            " / 公平化/適切回数の他ソフト許容(6%)=" + eff(aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用") +
+            " / 回数連鎖研磨=" + eff(countChainPolish, countChainApplied.get(), "連鎖を採用")
     }
 }
 
