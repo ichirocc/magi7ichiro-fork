@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-17（3.593.0＝外部監査5件をbacklog#29〜33へ登録（コード変更なし・調査記録のみ）。
+`SmartInitialScheduler.solveConstructionDp`の状態爆発(#29・要grilling・高)、`MinCostAssignment`の
+禁止辺混入(#30・要修正・中)、C41/C42Flowの群外混入(#31・既定OFF実害小)、hf67HardRepairの古い
+回数参照(#32・意図的既存)、DPのseed相殺(#33・低)。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-17（3.592.0＝外部監査で実在確認した13件のうち12件を修正。HF63の違反0復帰時
 フラグ解除漏れ・RSI最終ラウンドのfocus記録漏れ・c3nWallProvenの世代/結果アトミック競合・
 toleratedBetterの許容カウンタ二重計上・背景最適化のalternatives欠落・Worker入力保存の所有権ガード・
