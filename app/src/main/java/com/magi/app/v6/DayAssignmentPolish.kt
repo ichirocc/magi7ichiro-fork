@@ -35,6 +35,7 @@ internal object DayAssignmentPolish {
     fun applyDayAssignmentPolish(
         state: MagiState, schedule: Array<IntArray>, shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
+        identityFallback: Boolean = false,
     ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
@@ -58,7 +59,11 @@ internal object DayAssignmentPolish {
                 val i = free[r]
                 LongArray(n) { c ->
                     val k = slots[c]
-                    if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
+                    // [3.597.0/backlog#30] 対角(c==r)は「自分の現シフトを保つ」＝盤面を変えないので常に選べる。
+                    //   有限にすると恒等割当が必ず実行可能になり、置けないスロットがある日も残りを研磨できる。
+                    val ownSlot = identityFallback && c == r
+                    if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                    else if (k !in 0 until p.K) 0L
                     else {
                         val x0 = counts[i][k] - (if (work[i][j] == k) 1 else 0)   // この日を除いた現状カウント
                         val x1 = x0 + 1                                            // k を割当てた後
@@ -112,6 +117,7 @@ internal object DayAssignmentPolish {
     fun applyAlternatingSoftPolish(
         state: MagiState, schedule: Array<IntArray>, maxSweeps: Int = 4, shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
+        identityFallback: Boolean = false,
     ): DayAssignResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
@@ -147,7 +153,9 @@ internal object DayAssignmentPolish {
                     val i = free[r]
                     LongArray(n) { c ->
                         val k = slots[c]
-                        if (k !in 0 until p.K || !p.mayPlace(i, k)) MinCostAssignment.INF
+                        val ownSlot = identityFallback && c == r   // [3.597.0] 上と同じ＝現状維持は常に選べる
+                        if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                        else if (k !in 0 until p.K) 0L
                         else {
                             val x0 = counts[i][k] - (if (work[i][j] == k) 1 else 0)   // この日を除いた現状カウント
                             val x1 = x0 + 1
