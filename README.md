@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-18（3.596.0＝backlog#29完了。窓ルールの最小必要日数（診断2b-3が読む
+`minDaysForFullCompliance`）を指数的なビットマスクDPから**右端優先の厳密貪欲**へ置換（窓18=6.3秒・
+窓22以上はOOMだったものが0ms）。構築DPは状態数上限200,000で打ち切り＝決定性を保ったままOOMを構造的に
+封じる。総当たりオラクルとt=13の全4,186通りで一致確認、hosttest 819件緑。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-17（3.595.0＝ロール時間クォンタム超過の2つの構造的原因を確定（コード変更なし）。
 `runRsiPlus`のフェーズ予算下限合計がbudget≤30秒で最大3.5倍超過、`stopRole`は協調的ポーリングで
 プリエンプティブ中断なし＝3.409.17記録の3〜9倍規模と整合する機構として特定。修正は探索動学変更＝

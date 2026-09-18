@@ -558,8 +558,8 @@ object V6SanityPort {
             //   スライド窓の真の必要量を過小評価する（実データ検証: 「15日窓4回以上」の粗い下界=8だが、
             //   実際に0違反へ到達するには9〜11日必要な職員が複数おり、粗い下界では「上限8/9で足りている」
             //   と誤って見逃していた＝false negative）。`SmartInitialScheduler.minDaysForFullCompliance`
-            //   （構築本体の`solveConstructionDp`を無制限capで呼び、0違反を達成する最小日数を求める）へ
-            //   置換し、同一シフトの複数規則(例: 休の5日窓＋15日窓)も**同時充足**の真の必要量として厳密判定。
+            //   （0違反を達成する最小日数を厳密に求める）へ置換し、同一シフトの複数規則(例: 休の5日窓＋
+            //   15日窓)も**同時充足**の真の必要量として厳密判定。
             run {
                 val rulesByShift = LinkedHashMap<Int, MutableList<C1>>()
                 for (c in p.cons1) {
@@ -568,7 +568,6 @@ object V6SanityPort {
                 }
                 for ((shiftIdx, rules) in rulesByShift) {
                     // [3.272.0] ConstraintMus.cachedMinDays（同じ純関数のプロセス全域キャッシュ）経由に統一。
-                    //   buildGuidance はセル編集ごとに走るため、重いDP（15日窓で数百ms）を毎回払わない。
                     val minNeeded = ConstraintMus.cachedMinDays(
                         p.T, rules.map { it.day1 to it.day2 },
                     ) ?: continue

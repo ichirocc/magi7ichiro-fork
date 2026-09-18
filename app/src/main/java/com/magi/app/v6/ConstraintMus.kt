@@ -8,7 +8,7 @@ package com.magi.app.v6
  *    実行意味論は checker/evaluator/C++ の三面一致に据え置き＝第4の意味論を作らない。
  *    IRのドリフトは「誤った診断」（見えて無害）にしかならず「誤った勤務表」にはならない。
  *  - **不能性の判定は健全（sound）だが不完全な証明ルールに限定**: 発火＝真に矛盾。
- *    証明手段は (a) 厳密DP `SmartInitialScheduler.minDaysForFullCompliance`（窓ルールの真の最小
+ *    証明手段は (a) 厳密貪欲 `SmartInitialScheduler.minDaysForFullCompliance`（窓ルールの真の最小
  *    必要日数）、(b) 鳩の巣論法（1職員の全シフト需要合計 > 期間日数）、(c) 二部マッチング
  *    （1日の必要人数が固定希望のもとで満たせるか＝クロス日制約を無視した緩和なので不能判定は健全）。
  *    見逃し（不完全）は安全側＝誤検知ゼロの設計（2b-2「false wallを出さない」と同方針）。
@@ -45,9 +45,9 @@ object ConstraintMus {
     data class DayConflict(val day: Int, val core: List<Item>)
 
     /**
-     * [性能] `minDaysForFullCompliance`（15日窓で数百msかかりうる重いDP）のプロセス全域キャッシュ。
+     * [性能] `minDaysForFullCompliance` のプロセス全域キャッシュ。
      * key=(T, ルール部分集合) は入力の純関数＝安全にキャッシュ可能。buildGuidance はセル編集ごとに
-     * 走る（makeUi の analyzeParallel 経由）ため、初回だけDPを払い2回目以降はほぼ0msにする。
+     * 走る（makeUi の analyzeParallel 経由）ため、初回だけ計算し2回目以降はほぼ0msにする。
      * ルール構成は滅多に変わらず部分集合の種類も高々 2^(シフト毎ルール数) で極小。
      * 値の null（計算不能）は MIN_VALUE 番兵で保持。
      *
