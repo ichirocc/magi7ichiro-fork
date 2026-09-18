@@ -76,9 +76,9 @@ WEIGHT_LINT_EXEMPT = {
         (("low",), "low(120) の複製。同上"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 474):
         (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 70):
+    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 75):
         (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。weights.md 明記の既知重複"),
-    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 157):
+    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 165):
         (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。同上"),
     # [dayPenalty] covU(10000)/covO(10) の候補見積り。C1TemporalFlowPolish.kt・DayAssignmentPolish.kt
     #   と同じ「ホットパスで MirrorKeys.weightOf を避ける」設計だが、weights.md の destroy-repair/polish
@@ -102,7 +102,7 @@ WEIGHT_LINT_EXEMPT = {
     ("app/src/main/java/com/magi/app/v6/Hf63Infeasibility.kt", 38):
         ((), "\"pref\" to 10 の 10 はfamily→添字の列挙表のインデックス。直前の\"covO\"（別ペア）に反応した"
         "文脈窓の偽陽性で、covO(10)の重みとは無関係"),
-    ("app/src/main/java/com/magi/app/v6/V6HotfixPasses.kt", 958):
+    ("app/src/main/java/com/magi/app/v6/V6HotfixPasses.kt", 961):
         ((), "120 は localBestImprovement の評価予算パラメータ（250 + cycle*120）。low の重みとは無関係な偶然の一致"),
     ("app/src/main/java/com/magi/app/v6/V6LateOperators.kt", 86):
         ((), "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"
