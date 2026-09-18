@@ -21,6 +21,12 @@ import kotlin.math.max
 object SmartInitialScheduler {
     private data class C1Rule(val days: Int, val minimum: Int)
 
+    /**
+     * `solveConstructionDp`の状態数上限（3.596.0 ユーザー指示の数値。実測の根拠は docs/history）。
+     * 時間でなく状態数で切るのは、同じ入力・同じseedなら必ず同じ初期解になる決定性を保つため。
+     */
+    private const val MAX_DP_STATES = 200_000
+
     fun generate(state: MagiState, seed: Long = 0x517A2L, quantitativeRangeEval: Boolean = false): ScheduleRunResult {
         val t0 = System.nanoTime()
         val p = Problem(state, quantitativeRangeEval)
@@ -171,22 +177,35 @@ object SmartInitialScheduler {
      * （`day2*floor(T/day1)`）を使っており、スライド窓の真の必要量を過小評価していた
      * （実データ検証: 15日窓4回以上の粗い下界=8だが、実際にDPが0違反へ到達するには9〜11日
      * 必要な職員が複数存在し、粗い下界では「上限8/9で足りている」と誤って見逃していた）。
-     * 無制限cap・全日自由で`solveConstructionDp`を呼び、0違反を達成する解のうち対象日数最小の
-     * ものを返す（DPの優先順位=違反数最優先→対象日数次点、と一致するため正確）。
-     * 0違反が原理的に不可能（規則の日数が期間を超える等）ならnullを返す。
+     * 窓を右端の昇順に見て、不足している窓へ**右端に近い空き日から**足す貪欲。窓制約の係数行列は
+     * consecutive-ones＝全単模なので、この貪欲が厳密な最小値を与える（交換論法: 右端へ置く方が
+     * 以降の窓を必ず同等以上に覆う）。0違反が原理的に不可能（窓長より多い回数を要求する等）ならnull。
+     * 3.596.0 で指数的なDPから置換（経緯と実測は docs/history、厳密性は総当たりオラクル照合で担保）。
      */
-    fun minDaysForFullCompliance(t: Int, rules: List<Pair<Int, Int>>, seed: Long = 0x517A2L): Int? {
-        val c1Rules = rules.map { C1Rule(it.first, it.second) }
-        val forced = IntArray(t) { -1 }
-        val targetDays = solveConstructionDp(t, c1Rules, forced, seed, t) ?: return null
-        for (rule in c1Rules) {
-            for (j0 in 0..(t - rule.days)) {
+    fun minDaysForFullCompliance(t: Int, rules: List<Pair<Int, Int>>): Int? {
+        // 旧DPのビットマスク由来の上限を踏襲＝対象外の長期間で診断の挙動を変えない（業務上限は31日）。
+        if (t <= 0 || t > 62) return null
+        val valid = rules.filter { it.first in 1..t && it.second > 0 }
+        if (valid.isEmpty()) return null
+        val chosen = BooleanArray(t)
+        var used = 0
+        for (end in 0 until t) {
+            for ((days, minimum) in valid) {
+                if (end + 1 < days) continue
+                val from = end - days + 1
                 var cnt = 0
-                for (j in j0 until j0 + rule.days) if (targetDays[j]) cnt++
-                if (cnt < rule.minimum) return null
+                for (j in from..end) if (chosen[j]) cnt++
+                var j = end
+                while (cnt < minimum) {
+                    while (j >= from && chosen[j]) j--
+                    if (j < from) return null
+                    chosen[j] = true
+                    used++
+                    cnt++
+                }
             }
         }
-        return targetDays.count { it }
+        return used
     }
 
     /**
@@ -257,6 +276,7 @@ object SmartInitialScheduler {
                         (cost == old.cost && java.lang.Long.compareUnsigned(bits, old.bits) < 0)
                     ) {
                         next[nk] = Rec(cost, bits)
+                        if (next.size > MAX_DP_STATES) return null
                     }
                 }
             }
