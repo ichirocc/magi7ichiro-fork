@@ -352,7 +352,7 @@
     （2^T全列挙）との網羅照合＝`MinDaysForFullComplianceTest`。C#同期は別タスク（本セッションは
     リポジトリ参照不可）。
 
-30. **[契約修正=3.597.0で完了／対角の有限化=測定中] `MinCostAssignment.solve`が禁止辺(INF)を含む割当を返しうる**
+30. **[完了・3.598.0] `MinCostAssignment.solve`が禁止辺(INF)を含む割当を返しうる**
     （外部提案、2026-09-17・2026-09-18にgrillingで方針決定後に修正）。**実測で再現**: 2x2で列0が両行とも
     禁止のとき`null`でなく禁止辺1本入りの割当を返す（3x3の鳩の巣形も同様）。既存の`j1 == -1`ガードは
     全INF**行**しか捕まえず、全INF**列**は素通りする。
@@ -364,8 +364,11 @@
     `PolishRobustnessTest`へ）。**対処(2)** 対角（自分の現シフトを保つ＝盤面を変えない）を常に有限にし、
     恒等割当を常に実行可能にする＝置けない職員/スロットがある日も残りを研磨できる。凍結対の選び方に
     タイブレーク設計が要らず、最大化は費用最小化がそのまま厳密に行う。探索動学の変更なので
-    `PostOptimizationParams.dayAssignIdentityFallback`（既定OFF）に置き、tools/loop A/B（5seed×46ケース、
-    腕キー`dayassignidentityfallback`）→gate.pyで採否する。
+    `PostOptimizationParams.dayAssignIdentityFallback`（既定OFF）に置き、tools/loop A/B（5seed×46ケース）で
+    計測した。**judgment=不合格→既定OFF維持**（3.598.0）: 230ペアで辞書式 新5/同等224/旧1、品質は平均・
+    中央値とも+0.00%、速度+0.3%、必須違反の退行0件。ほぼ完全なno-op＝ベンチ資材では「完全割当が不可能な日」
+    がほとんど発生しないということで、当初の「実害は未確認」と整合する。フラグは将来の再評価用に残す
+    （腕キー`dayassignidentityfallback`、CSVは`tools/loop/results/`）。
 
 31. **[既定OFF・実害小] `C41FlowPolish`/`C42FlowPolish`のbaseCountが群外の職員も数える**（外部提案、
     2026-09-17・実コード確認済み）。群スコープのレンジ制約コストに使う人数集計が、動かす職員以外の
