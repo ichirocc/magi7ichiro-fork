@@ -70,6 +70,26 @@ class PolishRobustnessTest {
     }
 
     @Test
+    fun minCostAssignmentReturnsNullWhenOnlyForbiddenEdgesRemain() {
+        // [3.597.0/backlog#30] 全INF「行」は無いが完全割当が不可能な形＝旧実装は禁止辺を1本含む解を返していた。
+        val inf = MinCostAssignment.INF
+        // 列0は両行とも禁止＝どう並べても禁止辺が1本残る。
+        assertNull(MinCostAssignment.solve(arrayOf(longArrayOf(inf, 1L), longArrayOf(inf, 2L))))
+        // 行0と行1が列2しか置けない＝鳩の巣。
+        assertNull(
+            MinCostAssignment.solve(
+                arrayOf(longArrayOf(inf, inf, 1L), longArrayOf(inf, inf, 2L), longArrayOf(1L, 1L, 1L)),
+            ),
+        )
+        // 禁止辺があっても実行可能な完全割当があるなら従来どおり返す。
+        val assign = MinCostAssignment.solve(
+            arrayOf(longArrayOf(4L, 1L, inf), longArrayOf(inf, 3L, 2L), longArrayOf(5L, inf, 6L)),
+        )
+        assertNotNull(assign)
+        assertEquals(listOf(1, 2, 0), assign!!.toList())
+    }
+
+    @Test
     fun dayAssignmentPolishSkipsInfeasibleDaysInsteadOfCrashing() {
         // 空bucket職員(s1)の行は全列 INF → 旧実装は Hungarian 内で AIOOBE。新実装は null→その日 skip の no-op。
         val s = emptyBucketState()

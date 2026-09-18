@@ -141,6 +141,9 @@ fun main(args: Array<String>) {
         "countchainreactivate" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainReactivate = true)
         // [3.590.0/backlog#27] FairPolishの候補分類をfairTarget(生回数平均)からfairDevOfBucket黒箱観測へ揃える。
         "fairachievementdirection" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, fairAchievementDirection = true)
+        // [3.597.0/backlog#30] 日ごと厳密割当の対角(自分の現シフト)を常に有限にし、置けない職員/スロットが
+        //   ある日も残りを研磨できるようにする。
+        "dayassignidentityfallback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, dayAssignIdentityFallback = true)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")

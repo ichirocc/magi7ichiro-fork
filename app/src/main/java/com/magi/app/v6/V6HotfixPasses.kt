@@ -408,6 +408,9 @@ object V6HotfixPasses {
         /** [3.590.0/測定中/backlog#27] FairPolishの候補分類を`fairTarget`（生回数round(平均)）でなく
          *  `fairDevOfBucket`（正式評価・達成率モード）の黒箱観測へ揃える（3.588.0で実測した分類漏れの修正）。既定 OFF。 */
         val fairAchievementDirection: Boolean = false,
+        /** [3.597.0/測定中/backlog#30] 日ごと厳密割当で「自分の現シフトを保つ」対角を常に有限にする。
+         *  恒等割当が常に実行可能になり、置けない職員/スロットがある日も残りを研磨できる。既定 OFF。 */
+        val dayAssignIdentityFallback: Boolean = false,
     )
 
     /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
@@ -549,7 +552,7 @@ object V6HotfixPasses {
         val clusterStop: () -> Boolean = { shouldStop() || EngineClock.nowMs() >= clusterDeadline }
 
         chain.adopt(chain.timed("後処理 厳密日割当", "DayAssignmentPolish") { work ->
-            DayAssignmentPolish.applyDayAssignmentPolish(state, work, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            DayAssignmentPolish.applyDayAssignmentPolish(state, work, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval, identityFallback = params.dayAssignIdentityFallback)
         })
 
         // ソフト研磨クラスタの前後を測る基準（SoftPolishVerify）。
@@ -565,7 +568,7 @@ object V6HotfixPasses {
         })
         // 長方形交換（クロス日）が届かない同日内の割当先を Hungarian で再配置＝相補的なので両方走らせる。
         chain.adopt(chain.timed("後処理 交互最適化(日ブロック割当)", "AlternatingSoftPolish") { work ->
-            DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = params.alternatingSweeps, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            DayAssignmentPolish.applyAlternatingSoftPolish(state, work, maxSweeps = params.alternatingSweeps, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval, identityFallback = params.dayAssignIdentityFallback)
         })
 
         // 最終 LNS 2 本（高コストなので巡回ループでなく最終 1 回）。残予算は既定比 8:6 で按分（3.255.0）。

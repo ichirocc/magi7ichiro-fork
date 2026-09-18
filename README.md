@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-18（3.597.0＝backlog#30。`MinCostAssignment.solve`が禁止辺(INF)を含む割当を
+返す契約違反を修正（返却前検証でnull、2x2/3x3の再現ケースをテスト化）。呼出側の`DayAssignmentPolish`で
+対角＝自分の現シフト（無操作）を常に有限にする案は探索動学の変更のため既定OFFでtools/loop計測中。
+hosttest 820件緑。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-18（3.596.0＝backlog#29完了。窓ルールの最小必要日数（診断2b-3が読む
 `minDaysForFullCompliance`）を指数的なビットマスクDPから**右端優先の厳密貪欲**へ置換（窓18=6.3秒・
 窓22以上はOOMだったものが0ms）。構築DPは状態数上限200,000で打ち切り＝決定性を保ったままOOMを構造的に

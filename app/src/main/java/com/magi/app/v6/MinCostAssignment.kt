@@ -55,6 +55,9 @@ object MinCostAssignment {
         }
         val assign = IntArray(n)
         for (j in 1..n) if (p[j] in 1..n) assign[p[j] - 1] = j - 1
+        // [3.597.0] j1==-1 のガードは全INF**行**しか捕まえない。全INF列や「2行が同じ1列しか置けない」形では、
+        //   INFは十分大きいだけの有限値なので最小費用割当として禁止辺を1本含む解が返る＝完全割当ではないのでnull。
+        for (i in 0 until n) if (cost[i][assign[i]] >= INF) return null
         return assign
     }
 }
