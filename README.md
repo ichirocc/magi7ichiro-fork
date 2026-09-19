@@ -33,6 +33,13 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-19（3.600.0＝backlog#34 P0着手。締切/停止済みならロールを始めない・ロール成果を
+**回収してから**break（旧案は締切間際の改善解を捨て得た）・RSI+入口の無駄走り回避を既定ONで修正。
+ロール予算を`min(量子,残り)`へ収め位相合計を予算ちょうどにする案は`roleBudgetFit`（既定OFF＝RSI_PLUSの
+base量子35sが比例配分側に落ちる＝通常経路の探索動学変更のため、ポートフォリオ経路のベンチ整備後に採否）。
+P1(ExtraRefineをHARD減少時のみに絞る案)は既定適用を撤回しbacklog#35へ登録。hosttest 823件緑。
+詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-19（3.599.0＝backlog#34の記録を訂正（コード変更なし）。3.595.0「フェーズ下限合計
 35s固定」はフェーズ境界の`stopRole`判定（`shouldStop()`が真ならRSI/ALNSを丸ごとスキップ）を見落とした
 誤り。3.594.0「SAはmaxIters単独制御」も冷却条件(t<tf)での終了を見落とした誤り。現行`tools/loop`の

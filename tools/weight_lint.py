@@ -108,9 +108,9 @@ WEIGHT_LINT_EXEMPT = {
         ((), "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"
         "KDoc参照）。MirrorKeys由来ではない（200がhigh=25と一致しないことがその証拠）。120がlow(120)と"
         "偶然一致しているだけ"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1672):
+    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1684):
         ((), "iter % 50L はGLS停滞検出の周期（cadence）。c1の重みとは無関係な偶然の一致"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1698):
+    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1710):
         ((), "iter % 120L は進捗報告(publishLiveBest)の周期（cadence）。lowの重みとは無関係な偶然の一致"),
 }
 
