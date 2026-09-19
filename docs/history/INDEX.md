@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#34: ポートフォリオ経路(algorithm=PORTFOLIO)を回すベンチを新設（3.601.0）。
+  `PortfolioBudgetBench.kt`が`roleBudgetFit`のA/Bを実データ4件で取る。超過回数比較用に
+  `V6OptimizerResult.epochOverrunCount`を追加（既存集計の複製、既定0）。スモークでは超過0件
+  （このケース規模・速いホストJVMでは踏みにくい一次データ）。正式な採否判定は別途 → `docs/history/3.4xx.md`
 - backlog#34 P0着手（3.600.0）。締切/停止済みならロールを始めない・成果を回収してからbreak・RSI+入口の
   無駄走り回避を既定ONで修正。ロール予算を`min(量子,残り)`に収め位相合計を予算ちょうどにする案は
   `roleBudgetFit`（既定OFF、通常経路の探索動学が変わるため計測後に採否）。P1(ExtraRefine絞り込み)は

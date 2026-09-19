@@ -444,8 +444,13 @@
     短いときだけ比率配分＝**短時間でも各段階を一度は試す**、ユーザー決定2026-09-18）。RSI_PLUSの量子は
     base35s/improving45sで**base35sが比例配分側に落ちる＝通常経路の探索動学変更**のため既定OFF。
     単体テストは`RsiPlusPhaseBudgetTest`（合計＝予算の不変条件・短予算でも全位相≥1・大予算で床維持）。
-    **計測はまだできない**（上記「測定手段の欠落」のとおり現行tools/loopはポートフォリオを通らない）＝
-    ポートフォリオ経路のベンチを用意してから採否する。
+    **3.601.0でベンチ新設・完了**: `tools/loop/PortfolioBudgetBench.kt`（`run_portfolio_budget_bench.sh`）が
+    `algorithm=PORTFOLIO`を実際に呼び`roleBudgetFit`のA/Bを取る（実データ4件×seed×フルoptimize()、
+    PersonSwapBench.ktと同型）。超過回数を機械比較できるよう`V6OptimizerResult.epochOverrunCount`
+    （既存の`epochOverruns`の集計を複製、既定0・PORTFOLIO以外は常に0）を追加。ホストJVMでの動作確認
+    （budgetSec=20〜30s・seed2件）ではこの環境・このケース規模では超過が0件＝小さい合成/実データケースと
+    速いホストJVMでは超過が起きにくいことを示す一次データ。**本採否の判定（gate相当の正式ベンチ）は
+    別途、実データでの複数seed・十分な予算での実行が必要**（着手済みでない）。
 
 35. **[未採用・要測定] 追加精製(ExtraRefine)を「後処理でHARDが減ったとき」だけに絞る案**（外部パッチの
     P1、2026-09-19にユーザー判断で**既定適用を撤回**）。`V6FinalPort`の`canExtra`へ
