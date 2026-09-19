@@ -33,6 +33,12 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-19（3.599.0＝backlog#34の記録を訂正（コード変更なし）。3.595.0「フェーズ下限合計
+35s固定」はフェーズ境界の`stopRole`判定（`shouldStop()`が真ならRSI/ALNSを丸ごとスキップ）を見落とした
+誤り。3.594.0「SAはmaxIters単独制御」も冷却条件(t<tf)での終了を見落とした誤り。現行`tools/loop`の
+A/Bベンチは`V6Algorithm.V5, workers=1`固定でポートフォリオ経路を一度も経由せず、backlog#28/#34は
+測定不能と判明。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-18（3.598.0＝backlog#30完了。`dayAssignIdentityFallback`（日ごと厳密割当の対角を
 常に有限化）のtools/loop A/B判定＝**不合格につき既定OFF維持**（230ペアで辞書式 新5/同等224/旧1、
 品質±0.00%、速度+0.3%、必須違反の退行0件）。ほぼno-opだったこと自体が「完全割当が不可能な日はまず

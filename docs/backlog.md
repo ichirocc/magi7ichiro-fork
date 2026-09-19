@@ -398,27 +398,36 @@
     `stopRole`（`V6NativeOptimizer.kt`のエポックループ）はロール呼出しの**間**でしか効かず、超過検知
     （`epochOverrunNotes`）は呼出し後の事後ログのみ＝根本原因は当時「原因の特定には至っていない」と
     明記され再現も失敗している。
-    **確認済み機構1（3.594.0で再検証・確定）**: `runRsiPlus`（`V6NativeOptimizer.kt:1893-1906`）は
+    **確認済み機構1（3.594.0/3.595.0で再検証・3.599.0で訂正）**: `runRsiPlus`（`V6NativeOptimizer.kt:1893-1906`）は
     budgetSec(=quantum)をSeed/Hypothesis(RSI)/Refine(ALNS)/Polishの4フェーズへ按分する際、主要3フェーズに
-    各`max(10, budget*0.20/0.35/0.30)`の下限（floor）があり、budgetが小さいと下限合計がbudget自体を超える。
-    数値例: budget=10sで3フェーズ下限合計=30s（quantumの3倍）、polishの下限5sを足すと35s（3.5倍）。
-    budget≤30sの範囲では下限合計(30s)が常にbudgetを上回るためpolishは常に床の5sに張り付き、合計は常に35s
-    固定（budget=20sなら1.75倍、budget=30sなら1.17倍）。`quantumSeconds`は`remainingSeconds`で
-    `coerceAtMost`される（`AdaptiveHypothesisEpochPolicy.kt:162`）ため、ポートフォリオ締切間際にquantumが
-    30s以下へ縮み、この構造的超過が実際に発生しうる＝記録済みの3〜9倍という規模と整合。
-    **確認済み機構2（同日再検証・確定）**: `stopRole`はネイティブチャンク（`nativeAlnsChunk`、200
+    各`max(10, budget*0.20/0.35/0.30)`の下限（floor）があり、budgetが小さいと下限**算術和**がbudget自体を
+    超える（budget=10sで3フェーズ下限合計30s＝3倍、polish下限5sを足すと35s＝3.5倍）。
+    **ただし3.595.0時点の記載は「フェーズが必ず全部走る」前提の誤り**: `:1911`
+    `val rsi = if (shouldStop()) seed else runRsi(...)`、`:1915`
+    `val refine = if (shouldStop()) base else runAlns(...)`と、Seed完了後に**フェーズ境界のstopRole判定**が
+    ある。Seedが下限10sを使い切って`shouldStop()`が真になれば、RSI/ALNSは丸ごとスキップされ実時間は
+    35sへ積み上がらない（RSI+ロールが実質V5＝種生成だけへ静かに縮退する、という別の問題ではある）。
+    35s固定という数値は「全フェーズが必ず走った場合の上限」であり、実測される超過の主要因という主張は
+    未検証のまま。
+    **確認済み機構2（同日再検証・確定、変更なし）**: `stopRole`はネイティブチャンク（`nativeAlnsChunk`、200
     イテレーション単位、`V6NativeOptimizer.kt:1435-1459`）やRSIのラウンド境界（`:1775-1776`）でしか
     確認されない協調的（cooperative）ポーリングで、プリエンプティブに強制中断する仕組み（Jobキャンセル・
     `withTimeout`等）は無い。ポートフォリオ外側の`while (nowMs() < deadline)`（`:615`）は1ロール呼出しを
     suspend関数として同期的に待つのみで、ロール内部が唯一の脱出点＝ロールが長時間戻らなければ外側loopも
     進めない。
-    **未確認のまま**: 上記2機構は記録済みの3〜9倍規模は説明できるが、外部提案が主張した4.3時間級の
-    規模を単独で説明できるかは未確認。`nativeSaChunk`（SA用ネイティブチャンク、`magi_native.cpp`）だけが
-    ALNS/Polishのチャンクと違い明示的な反復回数を引数で渡さず、内部の`maxIters=200000`（他の約500倍）のみで
-    制御され、チャンク実行中は壁時計/`stopRole`の確認が一切ない（`SaOptimizer.kt`の`timeUp()`はチャンク間
-    でしか効かない）という手がかりも未確認のまま残る。
-    **修正方針（着手前にgrilling要）**: (a)`runRsiPlus`のフェーズ下限をbudget内に収まるよう比例縮小する
-    のか単純capにするのか、(b)ロール復帰後`now > roleDeadline`なら次のフェーズへ進まず即epoch break
+    **未確認のまま／3.599.0で1点訂正**: 上記2機構が実測の3〜9倍規模を単独で説明できるか、外部提案が
+    主張した4.3時間級の規模を説明できるかは未確認。`nativeSaChunk`（`magi_native.cpp:963-965`）の
+    `maxIters=200000`は安全上限であり、実際は`for (double t = t0; t >= tf && iters < maxIters; ...)`で
+    **冷却条件(t<tf)でも終了する**＝「maxItersのみで制御」という3.594.0の記載は不正確。実測反復数を
+    記録していないため、1チャンクが実際にどれだけ時間を使っているかは依然不明。
+    **測定手段の欠落（3.599.0で判明）**: `tools/loop/LoopBench.kt`のA/Bベンチは`V6NativeOptimizer.optimize`を
+    `algorithm = V6Algorithm.V5, workers = 1`固定で呼ぶ（`:82`）＝ポートフォリオ（`runAdaptivePortfolio`）も
+    `runRsiPlus`も`stopRole`も一度も経由しない。したがって現行のtools/loopベンチはbacklog#28（RSI周期枠）・
+    本backlog#34のいずれも測定できない。着手前にベンチ側の対応が必要（新しい腕でworkers>1/RSI_PLUSを
+    実際に回し、フェーズ別実時間・ネイティブ呼出し実時間・SA実測反復数・予算超過時間を記録する）。
+    **修正方針（着手前にgrilling要、測定経路の整備が前提）**: (a)`runRsiPlus`のフェーズ下限を
+    **ロール単位**でbudget内に収まるよう比例縮小するか、残時間がロール最小値未満ならそのロールを
+    ポートフォリオに配らないか、(b)ロール復帰後`now > roleDeadline`なら次のフェーズへ進まず即epoch break
     するのか、(c)ネイティブチャンク上限を残り時間でcapするのか＝いずれも探索の時間配分（search dynamics）
     を変える設計判断のため、grillingで方針を詰めたのちtools/loopで計測してから採否する
     （CLAUDE.md「探索動学の変更は測ってから採否」）。
