@@ -69,6 +69,7 @@
 | 53 | **重み変更のリテラル sweep を `\* 45L` の片方向 grep だけで完了と判断しかけた**。`DayAssignmentPolish.kt`/`V6HotfixPasses.DayAssign.cs` は `45L * maxOf(...)`（乗数が左）で、この方向の grep には掛からなかった（2026-09-10, high 45→25）。C# 側の言語跨ぎ期待値ファイルも `-MAGI_PC` に別コピー（`MagiEngine.Tests/Fixtures/*.txt`）があり、Android 側だけ直すと `dotnet test` で初めて発覚した | **数値リテラルの sweep は乗算の両方向**（`grep '\* NL\|NL \*'`）**で行う**。言語跨ぎ期待値・重複コピーは `weights.md` の `paths:` に実ファイルを列挙し、片方の repo だけ直して終わったと判断しない（両方の test suite を実行してから完了とする）
 | 55 | **長時間ベンチを `nohup … &` で起動して「継続中」と報告した**が、ターン終了時のプロセス整理で 2 分後に落ちていた（c05 で停止、7 時間後に発覚。3.540.0） | 数分を超える処理は**ハーネス追跡の背景タスク（Bash の run_in_background）**で起動し、報告前に `pgrep` で生存と CSV の更新時刻を確かめる。「起動した」と「走っている」は別 |
 | 54 | **greedy first-improvement な探索（「最初に改善した手を採用し以降を試さない」）の上に「この手は必ず isBetter に棄却される」という前提のテストを書いていた**。重みの大小関係が変わると前提ごと崩れ、テストは「別の、より安い手が先に採用される」形で失敗した（`C1WindowPolish` の手A/B vs 手R1/R2/R3、2026-09-10, high 45→25 でhigh<c1になった単窓局面）。手R3自体は無傷だが、検証する経路を失った | **コメントで「必ず◯◯より安い/高い」と書く箇所は、比較対象がHF77で変わりうる重みなら値でなく関係を assert するか、テストに `assertEquals(重み)` の前提チェックを入れて崩れたら教えてくれるようにする**。greedy な採用順に依存するテストは、順序が変わる余地を明記する
+| 58 | **`tools/weight_lint.py` の `WEIGHT_LINT_EXEMPT` が固定行番号キーのため、`V6NativeOptimizer.kt` へ数行足すたびにCIが赤くなった**（3.601.0/3.602.0で連続3回発生。`iter % 50L`/`iter % 120L` の cadence 抑止2件が空振り） | **`V6NativeOptimizer.kt` の先頭〜中盤にコード（フィールド・KDoc）を足したら、push前に必ず`python3 tools/weight_lint.py`をローカルで実行して0件を確認する**（hosttestは通っても weight_lint は別ジョブでCIにしか出ない）。行番号キーそのものをやめる根本対策は未着手（コメントアンカー方式などへの変更はbacklog候補）
 
 ---
 
