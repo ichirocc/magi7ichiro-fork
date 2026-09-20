@@ -13,3 +13,4 @@ __pycache__/
 .serena/cache/
 .serena/memories/
 .serena/project.local.yml
+tools/loop/results/
