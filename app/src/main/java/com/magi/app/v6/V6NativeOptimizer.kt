@@ -82,6 +82,10 @@ data class V6OptimizerResult(
     //   **誤った勤務表にはならない**が、「他の案」「残存分析」「ライブ表示」が混ざり得た。
     val alternatives: List<Array<IntArray>> = emptyList(),
     val infeasibleFamilies: Set<String> = emptySet(),
+    /** [3.601.0/backlog#34] `runAdaptivePortfolio`のロールがroleDeadlineを5秒超えて戻った回数の合計
+     *  （`epochOverruns`と同じ判定を全ワーカー分集計）。PORTFOLIO以外は常に0。既存の`overrunLog`は
+     *  自由文字列で機械比較できないため、tools/loopベンチが数値比較できるようここへ複製する。 */
+    val epochOverrunCount: Int = 0,
 ) {
     /** 同上。`AdaptiveElite` は internal なので本体プロパティとして持つ（`copy()` は引き継がない＝
      *  作った側が明示的に載せる）。 */
@@ -959,6 +963,7 @@ object V6NativeOptimizer {
             logs,
             outcomes.sumOf { it.iterations },
             nowMs() - started,
+            epochOverrunCount = outcomes.sumOf { it.epochOverruns.size },
         )
     }
 
