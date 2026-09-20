@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#34: ポートフォリオ経路ベンチ新設・roleBudgetFit採否判定＝既定OFF維持（3.601.0）。
+  PortfolioBudgetBench.kt実行結果（4 fixtures×5 seeds×budgetSec=90s）: golden -1.9%✅・
+  sample +0.03%➡️・blocked_covu +0.8%❌・sept2026 -2.3%✅。3/4で改善するも blocked_covu
+  での悪化が懸念。超過回数ゼロ。→ `docs/history/3.4xx.md`
 - backlog#34 P0着手（3.600.0）。締切/停止済みならロールを始めない・成果を回収してからbreak・RSI+入口の
   無駄走り回避を既定ONで修正。ロール予算を`min(量子,残り)`に収め位相合計を予算ちょうどにする案は
   `roleBudgetFit`（既定OFF、通常経路の探索動学が変わるため計測後に採否）。P1(ExtraRefine絞り込み)は
