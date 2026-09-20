@@ -211,7 +211,10 @@
     モデル）は不変。④対応は`Ws1Editor.kt`の削除確認ダイアログに限定＝削除対象が「休」のときだけ
     「休だった日は自動的に他のシフトへ変わります。」を表示し、削除前にユーザーへ明示する（UI層のみ、
     エンジン・チェッカー・restShiftIndexのシグネチャは無変更）。フル改修（`ShiftRole`データモデル追加・
-    JSON互換のschema変更）は引き続き保留。
+    JSON互換のschema変更）は引き続き保留。**2026-09-20 grillingで再確認**: フル改修は
+    `docs/data-models.md`が3.345.0/3.416.0で二度確定させた「休は通常のシフトの一つ・記号一致で解決」の
+    方針転換にあたり、参照箇所11ファイル・JSON schema変更を伴う。暫定対応（削除確認ダイアログ）で
+    実害は回避済みのため、業務担当者の明示指示があるまで保留を継続（ユーザー判断）。
 25. **[運用・要個別判断] Dependabotのminor/patch group化設定後、既存の個別メジャー更新PRが残っている**
     （2026-09-16、外部監査で指摘）。3.572.0で`dependabot.yml`にgroup設定を追加したが、設定変更は既存の
     オープンPRを自動では統合・クローズしない。既に作成済みのメジャーバージョン更新PR（5件程度、
@@ -327,16 +330,18 @@
     必須件数が増えた試行6件）。backlog#26の5腕と同じ基準で**既定OFFを維持**。オプトイン切替
     (`fairAchievementDirection`)とテストは残す。①は実装・計測完了。②（交換探索の改良）は未着手。
 
-28. **[探索エンジン・要grilling＋tools/loop測定] `RsiFocusSelection`の周期枠が呼出しごとにリセットされ、
+28. **[探索エンジン・実装済み・要tools/loop測定] `RsiFocusSelection`の周期枠が呼出しごとにリセットされ、
     短いRSI呼出しでは特定の族(covO等)の専用探索機会が回らない条件がある**（外部提案、2026-09-17）。
-    3.592.0の12件修正と合わせて検証し、これだけは探索動学の変更にあたるため保留した。周期枠(`round%3`)
+    3.592.0の12件修正と合わせて検証し、これだけは探索動学の変更にあたるため保留していた。周期枠(`round%3`)
     はrunRsi呼出しごとにゼロから始まるstack-local変数で、短い(2ラウンド)呼出しを繰り返すと最終ラウンド
     以外の専用枠(`round%3==1`=apt, `==2`=covO)に到達しない。値が静的なケースでは同じ族(c1→apt)を
     毎回選び続けcovOの枠が来ない条件が実測で再現された（サブエージェントで実コード確認済み）。
-    設計候補: (a)ワーカーごとのHf63Infeasibility（既にrunRsi呼出しをまたいで共有されている）へ
-    ローテーション用カウンタを持たせる、(b)別途小さな持ち越しオブジェクトを新設しrunRsiへ渡す。
-    `PostOptimizationParams`の`xxxReactivate`と同じ既定OFFの測定用フラグとして追加し、tools/loopの
-    A/Bベンチで採否を決める。着手前にgrillingで持ち越し先・フラグ名を確定する。
+    **grillingで確定・実装**: 持ち越し先はワーカー専属で共有される`Hf63Infeasibility`（ユーザー指示。
+    本来の不能性追跡とは無関係だが、既にrunRsi呼出しをまたぐ寿命を持つため流用）に`gFocusRotationRound`
+    を追加し`nextFocusRotationRound()`で取得。`RsiFocusSelection.maxViolatedFamily`に`rotationRound`
+    引数を追加（既定=`round`＝挙動不変）、`V6OptimizerOptions.rsiFocusRotationPersist`（既定OFF）が
+    ONのときだけ`hf63.nextFocusRotationRound()`を使う。1ラウンドにつき1回だけ進め、早期終了判定(pivot)
+    にも同じ値を使い回す。hosttest 823件緑。**tools/loopでのA/Bベンチ・採否判定は未実施**。
 
 29. **[完了・3.596.0] `SmartInitialScheduler.solveConstructionDp`の状態爆発**（外部提案、2026-09-17・
     サブエージェントで実コード確認、2026-09-18にgrillingで方針決定後に修正）。状態キーは直近
@@ -447,13 +452,18 @@
     **計測はまだできない**（上記「測定手段の欠落」のとおり現行tools/loopはポートフォリオを通らない）＝
     ポートフォリオ経路のベンチを用意してから採否する。
 
-35. **[未採用・要測定] 追加精製(ExtraRefine)を「後処理でHARDが減ったとき」だけに絞る案**（外部パッチの
+35. **[実装済み・要測定] 追加精製(ExtraRefine)を「後処理でHARDが減ったとき」だけに絞る案**（外部パッチの
     P1、2026-09-19にユーザー判断で**既定適用を撤回**）。`V6FinalPort`の`canExtra`へ
     `post.report.hard < integrated.report.hard` を足す案だったが、これは「空振り検出」ではなく
     **追加精製の起動方針変更**であり、既定ONにはできない。却下理由（ユーザー指摘）:
     ①**HARD=0のとき常に省略される**＝統合も後処理もHARD=0なら条件が偽になり、配布可能な表のSOFT仕上げを
     潰す。②HARD不変でも後処理で配置が変わり追加ALNSがまだ動かせるケースを、実機1件のログでは否定できない。
     ③「18s・改善なし」は単一実行の結果で一般化できない。④`pickBestStage`があるため追加精製の有無は
-    段の候補集合自体を変える＝keep-bestで品質同等とは言えない。入れるなら既定OFFフラグ
-    （例`extraRefineRequirePostHardDrop`）にして、HARD=0／改善可能なHARD残／構造的HARD残の3ケースに
-    分けて時間と正式スコアの両方でA/B。P0（締切・ロール予算）の成否にこの時間短縮を混ぜない。
+    段の候補集合自体を変える＝keep-bestで品質同等とは言えない。
+    **grillingで確定・実装**: 元案の生差分ではなく、停滞検知が既に持つ「構造的に解けないと証明済み」判定
+    （構造的covU床`hardFloor`／`ForbiddenDiag`が全run塞がりを証明したc3n壁）を流用し、却下理由①②を安全に
+    回避する。`handleOptimize`に`extraRefineRequirePostHardDrop: Boolean = false`引数を追加（ViewModelは
+    未使用のまま既定値で呼ぶ＝UI挙動不変）。ONのとき、`post.report.hard>0`かつ非covU HARD残が0（covU<=
+    hardFloor）または非covU HARD残がc3nのみでForbiddenDiagが証明済みの場合だけExtraRefineを省略する。
+    HARD=0・改善可能なHARD残は従来どおり常時実行。hosttest 823件緑。**tools/loopでのA/Bベンチ・採否判定は
+    未実施**（3ケース別の時間/スコア比較は今後）。

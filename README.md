@@ -33,6 +33,11 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-20（3.602.0＝backlog#28/#35/#24をgrillingで設計確定・実装。#28はHf63Infeasibility
+へ持続カウンタ追加でRsiFocusSelectionの周期枠を持続化（既定OFF）、#35はExtraRefineゲートに構造的HARD判定
+（covU床・c3n壁）を流用（既定OFF）、#24（restShiftIndexフル改修）は方針転換を要するため保留継続。
+hosttest 823件緑、tools/loop採否判定は未実施。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-19（3.601.0＝backlog#34。ポートフォリオ経路(algorithm=PORTFOLIO)を実際に回す
 ベンチ`tools/loop/PortfolioBudgetBench.kt`を新設（`roleBudgetFit`のA/B、実データ4件）。超過回数を
 機械比較できるよう`V6OptimizerResult.epochOverrunCount`を追加（既存集計の複製、既定0）。スモークテスト

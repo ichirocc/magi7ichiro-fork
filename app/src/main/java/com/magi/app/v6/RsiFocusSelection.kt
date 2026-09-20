@@ -15,7 +15,16 @@ package com.magi.app.v6
  * `RsiFocusSelection.maxViolatedFamily`へ一括置換した。
  */
 internal object RsiFocusSelection {
-    internal fun maxViolatedFamily(report: ViolationReport, avoid: Set<String> = emptySet(), round: Int = -1, roundsTotal: Int = -1): String {
+    internal fun maxViolatedFamily(
+        report: ViolationReport,
+        avoid: Set<String> = emptySet(),
+        round: Int = -1,
+        roundsTotal: Int = -1,
+        // [測定中/backlog#28] apt/covOの周期判定(%3)にだけ使う値。既定は round と同じ（従来どおり
+        //   runRsi呼出し単位でリセット）。V6OptimizerOptions.rsiFocusRotationPersist が既定OFF時は
+        //   呼出元が round をそのまま渡す＝挙動不変。finalRound判定は round/roundsTotal のまま不変。
+        rotationRound: Int = round,
+    ): String {
         // [実機ログ起因=公平化のズレ] apt(適切回数)を追加。旧orderに無かったため RSI 探索中は一度も
         //   focus されず、post-processing(applyDayAssignmentPolish)頼みで広く未研磨のまま残っていた
         //   （実データ検証: apt L1偏差合計37、staffRange低/高はわずか3で規模が逆転）。rsiGenerateHypothesis
@@ -67,8 +76,8 @@ internal object RsiFocusSelection {
         //   一つ）。最終ラウンドで両方が候補になる場合のみ、実際の件数を比較し「より少ない方
         //   （より構造的に不利＝件数最大選択に絶対勝てない方）」を優先する。通常ラウンド(round%3==1/2の
         //   単独枠)は従来どおり衝突しないため無変更。
-        val aptEligible = round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 && (round % 3 == 1 || finalRound)
-        val covOEligible = round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 && (round % 3 == 2 || finalRound)
+        val aptEligible = round >= 0 && "apt" !in avoid && (report.breakdown["apt"] ?: 0) > 0 && (rotationRound % 3 == 1 || finalRound)
+        val covOEligible = round >= 0 && "covO" !in avoid && (report.breakdown["covO"] ?: 0) > 0 && (rotationRound % 3 == 2 || finalRound)
         if (aptEligible && covOEligible) {
             return if ((report.breakdown["covO"] ?: 0) <= (report.breakdown["apt"] ?: 0)) "covO" else "apt"
         }

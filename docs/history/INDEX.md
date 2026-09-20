@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#28/#35/#24: grillingで設計確定・実装（3.602.0）。#28はHf63Infeasibilityへ持続カウンタ追加
+  （rsiFocusRotationPersist既定OFF）。#35はExtraRefineゲートに構造的HARD判定を流用
+  （extraRefineRequirePostHardDrop既定OFF）。#24（restShiftIndexフル改修）は方針転換を要するため保留継続。
+  hosttest 823件緑、tools/loop採否判定は未実施。→ `docs/history/3.4xx.md`
 - backlog#34: ポートフォリオ経路ベンチ新設・roleBudgetFit採否判定＝既定OFF維持（3.601.0）。
   PortfolioBudgetBench.kt実行結果（4 fixtures×5 seeds×budgetSec=90s）: golden -1.9%✅・
   sample +0.03%➡️・blocked_covu +0.8%❌・sept2026 -2.3%✅。3/4で改善するも blocked_covu

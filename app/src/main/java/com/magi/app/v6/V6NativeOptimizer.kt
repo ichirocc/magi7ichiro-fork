@@ -67,6 +67,9 @@ data class V6OptimizerOptions(
     /** [3.600.0/測定中/backlog#34] ロールへ渡す秒数を `min(量子, 探索締切までの残り)` にし、RSI+ の位相合計も
      *  その予算ちょうどに収める。既定 OFF＝探索の時間配分が変わるため計測後に採否（経緯は docs/history）。 */
     val roleBudgetFit: Boolean = false,
+    /** [測定中/backlog#28] `RsiFocusSelection`のapt/covO周期枠(`round%3`)を`runRsi`呼出し単位でなく
+     *  `sharedHf63`が持続するカウンタで計る。既定OFF＝短いRSI呼出しの繰返しで枠が回らない条件の対策（経緯はdocs/history）。 */
+    val rsiFocusRotationPersist: Boolean = false,
 )
 
 data class V6OptimizerResult(
@@ -1814,7 +1817,11 @@ object V6NativeOptimizer {
             if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
             val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
-            val focus = RsiFocusSelection.maxViolatedFamily(bestReport, focusAvoid, round, rounds)
+            // [測定中/backlog#28] 既定OFF時はround（従来どおりrunRsi呼出し単位でリセット）。ONならhf63が
+            //   持続するカウンタを使い、apt/covOの周期枠(%3)をエポック跨ぎで維持する。1ラウンドにつき1回だけ
+            //   進め、下段の早期終了判定(pivot)にも同じ値を使う（そちらで再度進めない）。
+            val rotationRound = if (options.rsiFocusRotationPersist) hf63.nextFocusRotationRound() else round
+            val focus = RsiFocusSelection.maxViolatedFamily(bestReport, focusAvoid, round, rounds, rotationRound)
             if (avoid.isNotEmpty() && avoid != lastLoggedAvoid) {
                 // [3.288.0/スパム対応] 集合が変化したラウンドのみログ（旧: 毎ラウンド同文）。
                 logs.add(MirrorLog(iter = iters, tag = "HF63", message = "deprioritize ${avoid.joinToString(",")} → focus=$focus (round ${round + 1})"))
@@ -1879,7 +1886,7 @@ object V6NativeOptimizer {
             //   本当に狙える族が尽きた(pivot=="total" or 件数0)ときだけ従来どおり空転停止する。stuck な SOFT も
             //   HF63 が順次 dynamicAvoid へ入れて focusable から外すため、いずれ pivot 枯渇→終了で自己収束する。
             if (stagnantRounds >= 2 && dynamicAvoid.isNotEmpty()) {
-                val pivot = RsiFocusSelection.maxViolatedFamily(bestReport, avoid, round, rounds)   // avoid=dynamicAvoid＋静的covU床
+                val pivot = RsiFocusSelection.maxViolatedFamily(bestReport, avoid, round, rounds, rotationRound)   // avoid=dynamicAvoid＋静的covU床
                 if (pivot == "total" || (bestReport.breakdown[pivot] ?: 0) == 0) {
                     logs.add(MirrorLog(iter = iters, tag = "RunMAGI_RSI", message = "早期終了: 狙える族が枯渇(deprioritize=${avoid.size}族)＋${stagnantRounds}R無改善（残${rounds - round - 1}Rの空転を停止）"))
                     break

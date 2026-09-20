@@ -46,6 +46,10 @@ class Hf63Infeasibility {
     // [レビュー#5 3.213.0] focus 投入量ベースの停滞累積（updateFromBreakdownFocused 用）。
     //   gIter 時計と独立に「実際に focus した無改善ラウンドの概算反復数」だけを族ごとに積む。
     private val gFocusedStall = IntArray(N_CONSTRAINTS)
+    // [測定中/backlog#28] Hf63本来の不能性追跡とは無関係だが、runRsi呼出しをまたいでワーカー専属で
+    //   共有される本インスタンスを流用し、RsiFocusSelectionのapt/covO周期枠(round%3)をrunRsi呼出し単位
+    //   でなく持続させる（ユーザー指示、V6OptimizerOptions.rsiFocusRotationPersist が既定OFFのときは未使用）。
+    private var gFocusRotationRound = 0
 
     fun reset() {
         for (c in 0 until N_CONSTRAINTS) {
@@ -54,7 +58,11 @@ class Hf63Infeasibility {
             gInfeasibleLikely[c] = false
             gFocusedStall[c] = 0
         }
+        gFocusRotationRound = 0
     }
+
+    /** [測定中/backlog#28] 呼出しのたびに1つ進む持続カウンタを返す（同一ラウンド内では1回だけ呼ぶこと）。 */
+    fun nextFocusRotationRound(): Int = gFocusRotationRound++
 
     /** 制約 c の改善状況を追跡し、不可能性を判定する（VBA UpdateInfeasibilityState 等価）。 */
     fun update(c: Int, curV: Int, gIter: Int) {

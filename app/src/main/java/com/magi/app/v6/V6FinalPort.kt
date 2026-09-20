@@ -260,6 +260,9 @@ object V6FinalPort {
         requestedAlgorithm: V6Algorithm = V6Algorithm.AUTO,
         allowImpossible: Boolean = false,
         quantitativeRangeEval: Boolean = false,
+        /** [測定中/backlog#35] ExtraRefineを、後処理後の残りHARDが構造的に解けないと証明済み（covU床のみ／
+         *  ForbiddenDiag確定のc3n壁）のときだけ省略する。改善可能なHARD残・HARD=0では従来どおり実行。既定OFF。 */
+        extraRefineRequirePostHardDrop: Boolean = false,
         onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
     ): ActionResult = withContext(Dispatchers.Default) {
         // [3.388.0/外部レビュー] 計測は**この1回の「つくる」ぶん**。旧実装は optimize() の入口で
@@ -628,10 +631,22 @@ object V6FinalPort {
             //   判定は1回だけ評価して分岐と説明で共有する（`isActive` を2度読むと食い違い得るため）。
             val stopRequested = !isActive
             val stagnated = stagnationFired.get()
-            val canExtra = !stopRequested && !stagnated && post.report.total > 0
+            // [測定中/backlog#35] post.report の残りHARDが「解けないと証明済み」かどうか。HARD=0（SOFT仕上げの
+            //   余地）や、証明できない残りHARD（改善可能かもしれない）は false のまま＝常にExtraRefineを許可する。
+            val postNonCovUHard = post.report.hard - (post.report.breakdown["covU"] ?: 0)
+            val structuralHardResidual = extraRefineRequirePostHardDrop && post.report.hard > 0 && when {
+                postNonCovUHard == 0 -> (post.report.breakdown["covU"] ?: 0) <= hardFloor
+                postNonCovUHard == (post.report.breakdown["c3n"] ?: 0) -> try {
+                    val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, post.schedule)
+                    diag.hasRuns && diag.allBlocked
+                } catch (_: Exception) { false }
+                else -> false
+            }
+            val canExtra = !stopRequested && !stagnated && post.report.total > 0 && !structuralHardResidual
             if (extraMs >= 5_000 && !canExtra) {
                 val why = when {
                     stopRequested -> "停止要求"
+                    structuralHardResidual -> "残るHARDが解けないと証明済み（構造的covU床のみ、またはc3n壁）"
                     stagnated -> "停滞検知で早期終了済み（無改善なら早く返す方針）"
                     else -> "違反が残っていない"
                 }
