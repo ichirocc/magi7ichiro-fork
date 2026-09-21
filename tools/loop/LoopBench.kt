@@ -144,6 +144,9 @@ fun main(args: Array<String>) {
         // [3.597.0/backlog#30] 日ごと厳密割当の対角(自分の現シフト)を常に有限にし、置けない職員/スロットが
         //   ある日も残りを研磨できるようにする。
         "dayassignidentityfallback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, dayAssignIdentityFallback = true)
+        // [3.608.0/backlog#34] チェーン内走行keep-best。パス単体の改善が同一チェーン内の別パスの
+        //   悪化に道連れで捨てられる問題への対処＝postChainRunningKeepBestのA/B。
+        "runningkeepbest" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = true)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
