@@ -30,7 +30,7 @@ fun main(args: Array<String>) {
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(
                         st, st.schedule.map { it.toIntArray() }.toTypedArray(),
-                        secondsRaw = secondsBudget, workers = workers,
+                        secondsRaw = secondsBudget, workers = workers, allowImpossible = true,
                         extraRefineRequirePostHardDrop = armOn,
                     )
                 }
