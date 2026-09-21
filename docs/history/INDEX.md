@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- UX机上テストP2の2件を修正（3.606.0）: `SettingIssuesCard`/`AnalysisTriageCard`の「設定へ」を族キー/
+  IssueKind別に年間マスター④⑤へも自動展開するよう拡張。CSV「データ全体（新規）」取込直後に
+  `ImportGuidanceBanner`で次の一手を案内。残りP2項目（勤務表フィルタ既定・適用後自動再探索等）は
+  副作用のリスクを検討し見送り。→ `docs/history/3.4xx.md`
 - UX机上テストP1の2件を修正（3.605.0）: `GuidedFixDialog`の候補0行き止まりに「データを見直す」を追加。
   `CollapsibleSection`に`forceExpandKey`を追加しC1頭打ち/ピン影響カードからの誘導が年間マスター③へ
   自動展開するように。E2(HARD同点)はbacklog#19で測定済み、E4(休の散在)は事実誤りと確認・対応不要。

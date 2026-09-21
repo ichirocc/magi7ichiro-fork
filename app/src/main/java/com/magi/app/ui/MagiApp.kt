@@ -154,6 +154,22 @@ internal fun decodeCsvBytes(bytes: ByteArray): String {
     return text.removePrefix("﻿")
 }
 
+// [UX監査#4] 診断からの誘導を年間マスターの節（CollapsibleSectionのstateKey）まで着地させるための対応表。
+//   対応の無い族/種別（groupViol・covU・covO・pref・希望など）はnull＝従来どおりtabのみ遷移。
+private fun yearSectionForFamily(fam: String?): String? = when (fam) {
+    "c1", "c3", "c3n", "c3m", "c3mn", "c3w" -> "yr_cons"
+    "c41", "c42", "c41s", "c42s" -> "yr_headcount"
+    "c2", "apt", "fair", "weekly", "low", "high" -> "yr_count"
+    else -> null
+}
+
+private fun yearSectionForIssueKind(kind: com.magi.app.v6.IssueKind?): String? = when (kind) {
+    com.magi.app.v6.IssueKind.RANGE -> "yr_count"
+    com.magi.app.v6.IssueKind.DEMAND -> "yr_headcount"
+    com.magi.app.v6.IssueKind.CONSTRAINT -> "yr_cons"
+    com.magi.app.v6.IssueKind.WISH, null -> null
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -200,6 +216,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
     var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
+    // [UX監査#3] 「データ全体（新規）」取込直後は担当可否が全ON・必要人数/制約が空のまま＝すぐ最適化すると
+    //   本番と違う性質の解になる。ホームへ次の一手を1枚出す（InterruptedBannerと同型の使い捨て案内）。
+    var showImportGuidance by rememberSaveable { mutableStateOf(false) }
     var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおすのを手伝って」対話
 
@@ -492,6 +511,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             } else when (tab) {
                 0 -> {
                     InterruptedBanner(ui, onRerun = { vm.runV6FullOptimize() }, onDismiss = { vm.dismissInterrupted() })
+                    if (showImportGuidance) {
+                        ImportGuidanceBanner(
+                            // [UX監査#3] 必要人数の既定はシフト編集(①、既定展開)・群単位の上書きは④・並びの制約は⑤と
+                            //   複数節にまたがるため、節を決め打ちせず年間マスターの入口(①)までで留める。
+                            onGoEdit = { tab = 2; editScope = 2; showImportGuidance = false },
+                            onDismiss = { showImportGuidance = false },
+                        )
+                    }
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     OperatorNextActionCard(
                         ui = ui,
@@ -524,7 +551,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [3.325.0] 回数固定の横断集計は c1 固有でないので独立カードへ分離（c1=0 でも出る）。
                     PinFixedImpactCard(ui, onGoEdit = { tab = 2; editScope = 2; deepLinkEditSection = "yr_count" },
                         onRelax = { i, k, loD, hiD -> vm.relaxStaffRangePin(i, k, loD, hiD) })
-                    SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) }, onGoEdit = { tab = 2 },
+                    SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) },
+                        onGoEdit = { kind -> tab = 2; yearSectionForIssueKind(kind)?.let { editScope = 2; deepLinkEditSection = it } },
                         onClearWishes = { vm.clearOutOfScopeWishes() })
                     // [スクショ指摘/撤去] 「ほかの作り方」カード（速くつくる/かんたんに/閉じても大丈夫）は
                     //   主導線（思考誘導カード＋下部バー）と重複し、実行中は全ボタン無効の死に領域だった
@@ -660,7 +688,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                 ws1View?.let { CountsCard(ui, it, viewState.counts, conditionsView, onEvent, sheetCell = countsSheetCell, onSheetCellChange = { c -> countsSheetCell = c }) }
                             }
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
-                            CollapsibleSection("④ 人数と組み合わせ", "yr_headcount") {
+                            CollapsibleSection("④ 人数と組み合わせ", "yr_headcount", forceExpandKey = deepLinkEditSection,
+                                onForceExpandConsumed = { deepLinkEditSection = null }) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     // [3.427.0] 旧 SectionNote（群のレンジ／群ペア禁止の列挙）は撤去:
                                     //   直下のカード見出し・族見出しの完全な重複だった（3.129.0 の方針）。
@@ -669,7 +698,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     SkillConstraintsCard(ui, constraintsView, onEvent)
                                 }
                             }
-                            CollapsibleSection("⑤ 並び・くり返し", "yr_cons") {
+                            CollapsibleSection("⑤ 並び・くり返し", "yr_cons", forceExpandKey = deepLinkEditSection,
+                                onForceExpandConsumed = { deepLinkEditSection = null }) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     // [3.427.0] 旧 SectionNote（窓の要件／個人の合計／並び4種の列挙）は撤去:
                                     //   ④と同じく直下のカード・族見出しの完全な重複だった。
@@ -691,7 +721,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     AnalysisTriageCard(
                         ui,
                         onFocusStaff = { vm.findFixSuggestions(it) },
-                        onGoEdit = { tab = 2 },
+                        onGoEdit = { fam -> tab = 2; yearSectionForFamily(fam)?.let { editScope = 2; deepLinkEditSection = it } },
                         onShowCell = { i, j -> focusCell = i to j; tab = 1 },
                         onShowDay = { j -> focusCell = -1 to j; tab = 1 },
                         onFixWish = { s -> deepLinkWishStaff = s; editScope = 0; tab = 2 },
@@ -777,7 +807,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DialogConfirmButton("データ全体（新規）", onClick = {
-                            if (com.magi.app.v6.RosterCsvImport.detect(csvText)) { rosterCsvChoice = csvText } else { vm.importCsvSmart(csvText) }
+                            if (com.magi.app.v6.RosterCsvImport.detect(csvText)) { rosterCsvChoice = csvText } else { vm.importCsvSmart(csvText); showImportGuidance = true }
                             pendingCsvImport = null
                         })
                         DialogConfirmButton("勤務表（重ね合わせ）", onClick = { vm.importCsv(csvText); pendingCsvImport = null })
@@ -803,8 +833,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 },
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false); rosterCsvChoice = null })
-                        DialogDismissButton(onClick = { vm.importRosterAs(csvText, true); rosterCsvChoice = null }, text = "希望シフトとして取り込む")
+                        DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false); showImportGuidance = true; rosterCsvChoice = null })
+                        DialogDismissButton(onClick = { vm.importRosterAs(csvText, true); showImportGuidance = true; rosterCsvChoice = null }, text = "希望シフトとして取り込む")
                     }
                 },
                 dismissButton = { DialogDismissButton(onClick = { rosterCsvChoice = null }) },
@@ -998,6 +1028,23 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
     }
 }
 
+
+/** [UX監査#3] CSV「データ全体（新規）」取込直後の次の一手。担当可否は全ON・必要人数と制約は空で
+ *  始まる（意図的、3.320.0系）ため、そのまま最適化すると実運用と違う自由度になる。 */
+@Composable
+internal fun ImportGuidanceBanner(onGoEdit: () -> Unit, onDismiss: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("取込が完了しました", style = MaterialTheme.typography.titleMedium)
+            Text("担当できるシフトは全部OK、必要人数と制約は未設定のまま取り込まれています。次は年間マスターで人数と制約を決めてください。",
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("設定へ") }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
+            }
+        }
+    }
+}
 
 @Composable
 internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () -> Unit) {
