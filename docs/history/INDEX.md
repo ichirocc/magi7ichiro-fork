@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- UX机上テストP0の3件を修正（3.604.0）: ホームのamberカードで人手不足0＋未完成のとき主ボタンが1つも
+  出ない不具合を修正（必ず1つ出す）。V6診断カードの英字「HARD Core/Guard/Apt/Equalize/Demand/covU」を
+  日本語へ（breakdownLabels再利用）。U16（休の改名警告）はbacklog#24で構造的に解消済みと確認・対応不要。
+  → `docs/history/3.4xx.md`
 - backlog#24完了（3.603.0）: restShiftIndex根本改修。ShiftRole{None,Rest}導入・restIdx全面nullable化
   （ユーザー指示で縮小案を却下・全参照約20ファイルへ伝播）。記号"休"の字面一致＋無言0フォールバックを撤去
   （実データでHARD 0→60等の実害を確認済み・history 3.574.0）。UIに「休みとして扱う」トグル追加。
