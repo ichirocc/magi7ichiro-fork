@@ -505,6 +505,15 @@
     hardFloor）または非covU HARD残がc3nのみでForbiddenDiagが証明済みの場合だけExtraRefineを省略する。
     HARD=0・改善可能なHARD残は従来どおり常時実行。hosttest 823件緑。**tools/loopでのA/Bベンチ・採否判定は
     未実施**（3ケース別の時間/スコア比較は今後）。
+    **→ 2026-09-21で判定完了・既定OFF維持**。新規`HandleOptimizeBench.kt`（`runPostOptimization`より下しか
+    呼ばない既存ベンチでは`handleOptimize`内部のExtraRefine自体を経由できないため新設）で実データ4件×3回×
+    secondsBudget=60sを測定（`tools/loop/results/handleoptimize.csv`）。**結果は方向がケースで割れ、
+    信号なし**: golden weighted -1.60%（改善）・sample +0.63%（悪化）・blocked_covu -0.32%（改善）・
+    sept2026 +0.77%（悪化）、いずれも10%基準に遠く及ばない。速度もgolden -37%・sept2026 +31%と大きく
+    ブレるが、`handleOptimize`にはseed引数が無く（内部固定seed=0、実行ごとの差はワーカー間の実時間競合
+    ノイズのみ）golden/blocked_covu(hard=0/4で不変)は条件`post.report.hard>0`のゲート上そもそもON/OFFで
+    分岐しないはず＝観測されたブレは同一設定内の実行時ノイズであり機能の効果ではない。**既定OFF維持**
+    （信号を検出できず、3回では統計的検出力も不足）。フラグ・コードは残す。
 
 36. **[完了・既定OFF維持] `postChainRunningKeepBest`（3.608.0）のtools/loop A/B判定**（2026-09-21）。
     `LoopBench.kt`に`MAGI_BENCH_FEATURE=runningkeepbest`腕を追加し5seed×46ケース(230ペア)で実施
