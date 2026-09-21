@@ -355,6 +355,13 @@
     引数を追加（既定=`round`＝挙動不変）、`V6OptimizerOptions.rsiFocusRotationPersist`（既定OFF）が
     ONのときだけ`hf63.nextFocusRotationRound()`を使う。1ラウンドにつき1回だけ進め、早期終了判定(pivot)
     にも同じ値を使い回す。hosttest 823件緑。**tools/loopでのA/Bベンチ・採否判定は未実施**。
+    **→ 2026-09-21で判定完了・既定OFF維持**。`PortfolioBudgetBench.kt`に`rsiFocusRotationPersist`腕
+    （`PORTFOLIO_BENCH_FEATURE=rsifocusrotation`）を追加し実データ4件×5seed×budgetSec=90sで測定
+    （`tools/loop/results/portfoliobudget_rsifocus.csv`）。**結果: 全4件でON(持ち越しあり)がOFFより悪化**
+    （golden +2.49%・sample +0.19%・blocked_covu +0.46%・sept2026 +0.35%、weightedScore平均、hard件数は
+    全fixture・全seedでON/OFF完全一致、epochOverrunCount=0）。改善する fixture が1件も無い＝
+    `RsiFocusSelection`の周期枠を呼出しをまたいで持ち越すこと自体は、この規模の実データでは有害
+    （golden以外はほぼ無風だがgoldenで明確に悪化）。**既定OFF維持**、フラグ・コードは残す。
 
 29. **[完了・3.596.0] `SmartInitialScheduler.solveConstructionDp`の状態爆発**（外部提案、2026-09-17・
     サブエージェントで実コード確認、2026-09-18にgrillingで方針決定後に修正）。状態キーは直近
