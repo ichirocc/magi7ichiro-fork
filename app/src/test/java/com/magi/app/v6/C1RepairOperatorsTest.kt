@@ -18,7 +18,7 @@ class C1RepairOperatorsTest {
 
     private fun st(days: Int, staff: Int, sched: List<List<Int>>, cons1: List<C1Row>): MagiState {
         val end = "2026-01-" + days.toString().padStart(2, '0')
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
         return MagiState(
             startDate = "2026-01-01", endDate = end,
             shifts = shifts, groups = listOf(Group("G", "G")),
@@ -106,7 +106,7 @@ class C1RepairOperatorsTest {
     fun indexChainRepairFillsHoleViaChain() {
         // 被覆要件 X=1・Y=1/日。s0=[Y,Y]・s1=[X,X]。ルール「X 2日窓≥1」で s0 が不足。
         //   直接移動 s0:Y→X は Y@day0 に covU 穴（Y需要1）を作り却下 → findCovUChain が s1:X→Y で埋め直し採用。
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", ""), Shift("Y", "Y", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", ""), Shift("Y", "Y", "1", ""))
         val s = MagiState(
             startDate = "2026-01-01", endDate = "2026-01-02",
             shifts = shifts, groups = listOf(Group("G", "G")),

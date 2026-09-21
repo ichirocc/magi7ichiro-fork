@@ -24,7 +24,7 @@ class C3wConstraintTest {
         groupShift: List<List<Int>> = listOf(listOf(1, 1, 1)),
     ) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-05",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
         groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false, groupShift = groupShift, groupShiftApt = emptyList(),
         schedule = schedule, wishes = wishes, staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),

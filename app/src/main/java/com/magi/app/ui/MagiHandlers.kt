@@ -23,9 +23,9 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
     MagiEventHandler { e ->
         if (e !is MagiEvent.Structure) return@MagiEventHandler false
         when (e) {
-            is MagiEvent.Structure.EditShift -> vm.ws1EditShift(e.shift, e.name, e.kigou, e.need1, e.need2)
+            is MagiEvent.Structure.EditShift -> vm.ws1EditShift(e.shift, e.name, e.kigou, e.need1, e.need2, e.isRest)
             is MagiEvent.Structure.SetShiftNeed -> vm.setShiftNeed(e.shift, e.need1, e.need2)
-            is MagiEvent.Structure.AddShift -> vm.ws1AddShift(e.name, e.kigou, e.need1, e.need2)
+            is MagiEvent.Structure.AddShift -> vm.ws1AddShift(e.name, e.kigou, e.need1, e.need2, e.isRest)
             is MagiEvent.Structure.RemoveShift -> vm.ws1RemoveShift(e.shift)
             is MagiEvent.Structure.MoveShift -> vm.ws1MoveShiftTo(e.from, e.to)
             is MagiEvent.Structure.EditGroup -> vm.ws1EditGroup(e.group, e.name, e.kigou)

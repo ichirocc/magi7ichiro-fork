@@ -39,8 +39,10 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
         if (g in 0 until G) g else { _outOfRangeGroupStaff.add(i); 0 }
     }
 
-    /** 休シフトの index（記号"休"解決、無ければ0）。曜日平準化(weekly)で「勤務日か休か」を判定。 */
-    val restIdx: Int = restShiftIndex(state)
+    /** [3.603.0] 休シフトの index（ShiftRole.Rest解決、どのシフトにも付与が無ければnull）。
+     *  曜日平準化(weekly)で「勤務日か休か」を判定。nullのときは最適化/検査の入口(V6SanityPort)で
+     *  ブロックする＝ここへ到達する時点でnullは「呼出元がブロックせずに進めた」異常系。 */
+    val restIdx: Int? = restShiftIndex(state)
 
     /** startDate の曜日オフセット（%7）。weekday(j)=(dow0+j)%7。曜日平準化(weekly)の曜日バケットに使う。
      *  絶対曜日ラベルは重要でなく、day j と day j+7 が同一バケットに落ちることのみが必要。

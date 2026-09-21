@@ -21,7 +21,7 @@ class Ws1OpsRefCountTest {
 
     private fun state() = MagiState(
         startDate = "2026-07-01", endDate = "2026-07-02",
-        shifts = listOf(Shift("日勤", "日", "", ""), Shift("休み", "休", "", ""), Shift("夜勤", "夜", "", "")),
+        shifts = listOf(Shift("日勤", "日", "", ""), Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("夜勤", "夜", "", "")),
         groups = listOf(Group("A", "A"), Group("B", "B")),
         staff = listOf(Staff("s1", 0)),
         use2Patterns = false,

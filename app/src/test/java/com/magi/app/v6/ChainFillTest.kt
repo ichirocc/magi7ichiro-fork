@@ -26,7 +26,7 @@ class ChainFillTest {
     private fun depth2State(): MagiState {
         // shift: 0=休(need無) 1=P(need1) 2=Q(need1) 3=R(need1)
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("P", "P", "1", ""),
             Shift("Q", "Q", "1", ""),
             Shift("R", "R", "1", ""),
@@ -88,7 +88,7 @@ class ChainFillTest {
     @Test
     fun chainFillSolvesDepth3Cascade() {
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
             Shift("R", "R", "1", ""), Shift("S", "S", "1", ""),
         )
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"), Group("G3", "G3"))
@@ -133,7 +133,7 @@ class ChainFillTest {
     @Test
     fun chainFillSolvesDepth5Cascade() {
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
             Shift("R", "R", "1", ""), Shift("S", "S", "1", ""), Shift("T", "T", "1", ""), Shift("U", "U", "1", ""),
         )
         val groups = listOf(
@@ -188,7 +188,7 @@ class ChainFillTest {
     @Test
     fun chainFillFindsDepth6ChainOnlyReachableWithRaisedDefaultMaxDepth() {
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "1", ""),
             Shift("R", "R", "1", ""), Shift("S", "S", "1", ""), Shift("T", "T", "1", ""),
             Shift("U", "U", "1", ""), Shift("V", "V", "1", ""),
         )
@@ -246,7 +246,7 @@ class ChainFillTest {
     @Test
     fun chainFillSolvesDepth1FromOvercoveredShift() {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("Co", "Co", "1", ""),   // need1=1
             Shift("B4", "B4", "1", ""),   // need1=1（現状2＝過剰）
         )
@@ -291,7 +291,7 @@ class ChainFillTest {
     @Test
     fun chainFillAvoidsTripleForbiddenRun() {
         // shift: 0=休 1=P(need1・cons3n=P,P,P三連禁止) 2=Q
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1, 1))
         val staff = listOf(Staff("a", 0), Staff("b", 0))
@@ -334,7 +334,7 @@ class ChainFillTest {
     // （2段の合流手）ことを確認する。ユーザー指摘「禁止連続の並びにならないようにする」への対応。
     @Test
     fun chainFillResolvesC3nBlockViaAdjacentDayFix() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1, 1))
         val staff = listOf(Staff("a", 0), Staff("b", 0))
@@ -378,7 +378,7 @@ class ChainFillTest {
     // Problem.makesForbiddenRun 自体の直接検証（三連・五連）。
     @Test
     fun makesForbiddenRunDetectsTripleAndQuintuple() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("a", 0))
         fun stateWith(sched: List<Int>, cons3n: List<C3Row>) = MagiState(
@@ -413,7 +413,7 @@ class ChainFillTest {
     fun c1PolishSolvesViaChainWhenNoDirectSwapPartner() {
         // shift: 0=休 1=X(c1対象・need無) 2=A(need1・iのみ在勤) 3=B(need1・過剰=2人在勤)
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("X", "X", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""),
             Shift("A", "A", "1", ""), Shift("B", "B", "1", ""),
         )
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"))
@@ -465,7 +465,7 @@ class ChainFillTest {
     @Test
     fun chainFillAdjacentFixTriesRepeatShiftThenFallsBackToSafeAlternative() {
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("P", "P", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", ""),
             Shift("N", "N", "", ""), Shift("O", "O", "", ""),
         )
         val groups = listOf(Group("G0", "G0"))
@@ -518,7 +518,7 @@ class ChainFillTest {
     @Test
     fun chainFillNeverBreaksAnotherShiftViaStaleAncestorCount() {
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("P", "P", "1", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""),
             Shift("Q", "Q", "2", ""), Shift("M", "M", "1", ""),
         )
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
@@ -564,7 +564,7 @@ class ChainFillTest {
     // rangeAvoid を渡すと、rng順に関わらず必ず good が選ばれることを複数seedで固定する
     // （渡さない場合は shuffle 次第で bad が選ばれ得ることも併せて確認＝旧実装の脆さの実証）。
     private fun rangeAvoidState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1))   // 休/Pとも担当可
         val staff = listOf(Staff("bad", 0), Staff("good", 0))

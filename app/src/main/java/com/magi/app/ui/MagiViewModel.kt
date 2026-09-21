@@ -1930,6 +1930,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val p = cachedProblem(st)
         if (shiftIndex !in 0 until p.K || dayIndex !in 0 until p.T) return emptyList()
         val rest = restShiftIndex(st)   // [監査A5] 休は記号解決（raw"休"比較は「公」職場で全滅していた）
+        // [3.603.0] rest は null 許容＝下の `== rest` は休が無ければ常に false（fromRest フラグが単に立たないだけ）
         val out = ArrayList<FixCandidate>()
         for (i in 0 until p.S) {
             if (i !in sched.indices || dayIndex !in sched[i].indices) continue

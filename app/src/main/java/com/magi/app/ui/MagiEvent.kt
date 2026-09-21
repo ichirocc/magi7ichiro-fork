@@ -28,9 +28,11 @@ internal sealed interface MagiEvent {
     sealed interface Structure : MagiEvent {
         override val kind: MagiEventKind get() = MagiEventKind.StructureEdit
 
-        data class EditShift(val shift: Int, val name: String, val kigou: String, val need1: String, val need2: String) : Structure
+        // [3.603.0/backlog#24] isRest: このシフトを「休みとして扱う」(ShiftRole.Rest)トグル。単一選択＝
+        //   trueにすると他の全シフトのRestは外れる（Ws1Ops側で担保）。
+        data class EditShift(val shift: Int, val name: String, val kigou: String, val need1: String, val need2: String, val isRest: Boolean) : Structure
         data class SetShiftNeed(val shift: Int, val need1: String, val need2: String) : Structure
-        data class AddShift(val name: String, val kigou: String, val need1: String, val need2: String) : Structure
+        data class AddShift(val name: String, val kigou: String, val need1: String, val need2: String, val isRest: Boolean = false) : Structure
         data class RemoveShift(val shift: Int) : Structure
         data class MoveShift(val from: Int, val to: Int) : Structure
         data class EditGroup(val group: Int, val name: String, val kigou: String) : Structure

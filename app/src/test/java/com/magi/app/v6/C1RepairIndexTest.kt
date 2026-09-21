@@ -15,7 +15,7 @@ class C1RepairIndexTest {
 
     private fun st(days: Int, staff: Int, sched: List<List<Int>>, cons1: List<C1Row>): MagiState {
         val end = "2026-01-" + days.toString().padStart(2, '0')
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
         return MagiState(
             startDate = "2026-01-01", endDate = end,
             shifts = shifts, groups = listOf(Group("G", "G")),

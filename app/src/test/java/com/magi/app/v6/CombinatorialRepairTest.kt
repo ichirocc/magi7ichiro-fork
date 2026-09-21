@@ -39,7 +39,7 @@ class CombinatorialRepairTest {
     // グループ共有のためW1/W2も常時aptLow(D)を持ち、彼ら自身がDへ動いて「解決」してしまう）。
     private fun combineTwoRejectedState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("P", "P", "", ""),
             Shift("Qres", "Qres", "", ""),
             Shift("D", "D", "", ""),

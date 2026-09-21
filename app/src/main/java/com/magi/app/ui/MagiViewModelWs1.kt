@@ -20,14 +20,14 @@ import com.magi.app.v6.restShiftIndex
  * ＝いずれも internal（モジュール内限定）。violationRange（窓ハイライト表示）は ws1 ドメイン外の
  * ため本体に残置。呼出側（Ws1Editor/MagiSetupCards 等）は同一パッケージ＝無修正で解決される。
  */
-fun MagiViewModel.ws1EditShift(k: Int, name: String, kigou: String, need1: String, need2: String) {
+fun MagiViewModel.ws1EditShift(k: Int, name: String, kigou: String, need1: String, need2: String, isRest: Boolean) {
     val st = state ?: return
     if (symbolTaken(st.shifts.map { it.kigou }, kigou, "シフト", exceptIndex = k)) return
     // [3.416.0] 3.415.0 の R-04 ガード（休シフトの改名禁止）はユーザー方針「休は通常のシフト定義」により
-    //   撤回。改名は他シフトと同じ経路＝renameShiftInConstraints が制約参照を追従させ、「休」記号が
-    //   無くなった場合の帰結（既定シフト解決が先頭へ倒れる）は検査2g が案内する。
+    //   撤回。改名は他シフトと同じ経路＝renameShiftInConstraints が制約参照を追従させる。休の識別は
+    //   [3.603.0] 記号でなく isRest トグル(ShiftRole)＝改名しても壊れない。
     logOp("I", "シフト編集: ${opSy(k)} → ${name.trim()}(${kigou.trim()}) 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-    applyStructure(Ws1Ops.editShift(st, k, name.trim(), kigou.trim(), need1.trim(), need2.trim()))
+    applyStructure(Ws1Ops.editShift(st, k, name.trim(), kigou.trim(), need1.trim(), need2.trim(), isRest))
 }
 
 /** [必要人数カレンダー] シフト既定のneed1/need2だけをその場で編集する（name/kigouは不変）。
@@ -36,7 +36,7 @@ fun MagiViewModel.setShiftNeed(k: Int, need1: String, need2: String) {
     val st = state ?: return
     val sh = st.shifts.getOrNull(k) ?: return
     logOp("I", "必要人数編集: ${opSy(k)} → 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-    applyStructure(Ws1Ops.editShift(st, k, sh.name, sh.kigou, need1.trim(), need2.trim()))
+    applyStructure(Ws1Ops.editShift(st, k, sh.name, sh.kigou, need1.trim(), need2.trim(), sh.role == com.magi.app.model.ShiftRole.Rest))
 }
 
 fun MagiViewModel.ws1EditGroup(g: Int, name: String, kigou: String) {
@@ -123,12 +123,12 @@ private fun MagiViewModel.symbolTaken(existing: List<String>, kigou: String, wha
     return true
 }
 
-fun MagiViewModel.ws1AddShift(name: String, kigou: String, need1: String, need2: String) {
+fun MagiViewModel.ws1AddShift(name: String, kigou: String, need1: String, need2: String, isRest: Boolean = false) {
     val st = state ?: return
     if (kigou.isBlank()) return
     if (symbolTaken(st.shifts.map { it.kigou }, kigou, "シフト")) return
     logOp("I", "シフト追加: ${name.trim()}(${kigou.trim()}) 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-    applyStructure(Ws1Ops.addShift(st, name.trim(), kigou.trim(), need1.trim(), need2.trim()))
+    applyStructure(Ws1Ops.addShift(st, name.trim(), kigou.trim(), need1.trim(), need2.trim(), isRest))
 }
 
 fun MagiViewModel.ws1AddGroup(name: String, kigou: String) {

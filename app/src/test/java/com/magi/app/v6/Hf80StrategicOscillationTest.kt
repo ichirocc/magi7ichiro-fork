@@ -17,7 +17,7 @@ class Hf80StrategicOscillationTest {
 
     private fun state(): MagiState = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "1"), Shift("B", "B", "1", "1")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "1"), Shift("B", "B", "1", "1")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0)),
         use2Patterns = true,

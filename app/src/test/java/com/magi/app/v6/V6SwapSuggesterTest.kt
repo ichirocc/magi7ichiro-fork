@@ -75,7 +75,7 @@ class V6SwapSuggesterTest {
     fun chainDoesNotPlaceShiftsWithZeroCap() {
         val st = com.magi.app.model.MagiState(
             startDate = "2026-08-01", endDate = "2026-08-03",
-            shifts = listOf(com.magi.app.model.Shift("休", "休", "", ""), com.magi.app.model.Shift("A", "A", "", "")),
+            shifts = listOf(com.magi.app.model.Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), com.magi.app.model.Shift("A", "A", "", "")),
             groups = listOf(com.magi.app.model.Group("G", "G")), staff = listOf(com.magi.app.model.Staff("X", 0), com.magi.app.model.Staff("Y", 0)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
             schedule = listOf(listOf(0, 0, 0), listOf(1, 1, 0)), wishes = emptyMap(),

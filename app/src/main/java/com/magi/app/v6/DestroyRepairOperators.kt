@@ -46,7 +46,7 @@ internal object DestroyRepairOperators {
         //   等価ベンチでは soft-aware 修復が AUC -24%〜-34% と唯一の大幅改善だった。ここで同じレバーを適用:
         //   非希望セルを休へ destroy → 各需要を「割当の marginal soft が最小の休スタッフ」で repair。
         //   休→k のみ移すため被覆穴を新たに作らない。希望固定は保持。受理(SA/isBetter)が最終採否=安全。
-        val rest = restShiftIndex(state)   // [監査#2] 休はindex0固定でなく記号から解決（Level Zero: 全シフト同等・番号非依存）
+        val rest = restShiftIndex(state) ?: return   // [3.603.0] 休シフト未設定なら休へ寄せるdestroy自体が無意味＝no-op
         val cnt = Array(p.S) { IntArray(p.K) }
         for (i in 0 until p.S) for (jj in 0 until p.T) { val k = schedule[i][jj]; if (k in 0 until p.K) cnt[i][k]++ }
         // destroy: 非希望セルを休へ。休を担当できない職員は対象外（群外割当を作らない）。cnt も同期。
@@ -129,7 +129,7 @@ internal object DestroyRepairOperators {
         val p = cachedProblem(state, quantitativeRangeEval)
         val allowed = p.allowedShiftsForStaff(i)
         if (allowed.isEmpty()) return
-        val rest = restShiftIndex(state)   // [監査#2] 休の記号解決
+        val rest = restShiftIndex(state) ?: return   // [3.603.0] 休シフト未設定ならno-op
         if (!p.mayPlace(i, rest)) return      // 休を担当できない職員は破壊修復の対象外（群外割当を作らない）
         // [soft-aware staff-DR / 実測 tools/nsp_bench.py --real: staff+viol で実データ final -49.5%]
         //   非希望セルを休へ destroy → 各日の被覆穴を「staff i の marginal soft 最小のシフト」で repair。

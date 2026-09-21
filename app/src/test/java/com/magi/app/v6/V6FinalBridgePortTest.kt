@@ -153,7 +153,7 @@ class V6FinalBridgePortTest {
     private fun sampleState(): MagiState = MagiState(
         startDate = "2026-06-01",
         endDate = "2026-06-02",
-        shifts = listOf(Shift("日勤", "日", "1", "1"), Shift("休み", "休", "", "")),
+        shifts = listOf(Shift("日勤", "日", "1", "1"), Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
         groups = listOf(Group("A", "A")),
         staff = listOf(Staff("s1", 0), Staff("s2", 0)),
         use2Patterns = false,

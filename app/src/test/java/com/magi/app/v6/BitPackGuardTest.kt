@@ -24,7 +24,7 @@ class BitPackGuardTest {
     /** T 日・禁止連続「X,X」だけの最小盤面。職員2名（i=0 を対象・i=1 は未使用）。 */
     private fun state(days: Int) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-20",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
         groups = listOf(Group("G0", "G0")),
         staff = listOf(Staff("A", 0), Staff("B", 0)),
         use2Patterns = false,

@@ -23,7 +23,7 @@ class ViolationComponentRepairTest {
     }
 
     private fun combineTwoRejectedState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "", ""), Shift("Qres", "Qres", "", ""), Shift("D", "D", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", ""), Shift("Qres", "Qres", "", ""), Shift("D", "D", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("W1", 0), Staff("W2", 0))
         return MagiState(
@@ -248,7 +248,7 @@ class ViolationComponentRepairTest {
     fun generatesCandidatesFromAnchorsWhenThePoolIsEmpty() {
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-01",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "")), groups = listOf(Group("G", "G")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "")), groups = listOf(Group("G", "G")),
             staff = listOf(Staff("甲", 0), Staff("乙", 0)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
             schedule = listOf(listOf(0), listOf(0)), wishes = emptyMap(), staffRange = emptyMap(),
@@ -302,7 +302,7 @@ class ViolationComponentRepairTest {
     fun pinBreakingSinglesAreReplacedByRowSwapsAtGeneration() {
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-03",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "")), groups = listOf(Group("G", "G")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "")), groups = listOf(Group("G", "G")),
             staff = listOf(Staff("甲", 0), Staff("乙", 0)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
             schedule = listOf(listOf(1, 0, 0), listOf(0, 1, 0)), wishes = emptyMap(), staffRange = mapOf("0,1" to Range("1", "1")),

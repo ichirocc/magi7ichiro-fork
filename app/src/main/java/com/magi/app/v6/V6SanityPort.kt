@@ -3,6 +3,7 @@ package com.magi.app.v6
 import com.magi.app.toHankakuKigou
 import com.magi.app.model.C3Row
 import com.magi.app.model.MagiState
+import com.magi.app.model.ShiftRole
 
 /**
  * Deeper native port of V6 Web diagnostics: detectImpossibleWishes(),
@@ -91,6 +92,11 @@ object V6SanityPort {
         val s = normalizeSchedule(schedule, p)
         val warns = ArrayList<String>()
         val notes = ArrayList<String>()
+
+        // [3.603.0/backlog#24] restIdx の全面 nullable 化＝休が1つも無い設定は最適化/チェックの入口で
+        //   ブロックする（旧: 記号"休"の字面一致に失敗すると黙って index 0 へフォールバックし、実データ破損の
+        //   原因になった）。ok=false で warns に積むこの入口の既存契約に乗せる。
+        if (p.restIdx == null) warns.add("休みシフトが設定されていません")
 
         val invalidAssignments = invalidAssignmentCells(state, p, s)
         if (invalidAssignments.isNotEmpty()) {
@@ -305,7 +311,8 @@ object V6SanityPort {
      * 保守的に丸まる。[3.235.0] で適切回数の検査へ導入したものを [3.316.0] で下限合計の検査とも共有する。
      */
     internal fun restCapacity(p: Problem): Int {
-        val k = p.restIdx
+        // [3.603.0] 休が無ければ「休の上限」という概念自体が無い＝0（呼び出し元は p.restIdx==k のときだけ呼ぶ）。
+        val k = p.restIdx ?: return 0
         var cap = 0
         for (i in 0 until p.S) {
             if (!p.canDo(i, k)) continue
@@ -639,17 +646,14 @@ object V6SanityPort {
                     "制約設定でこの行を今ある記号・正しい数値に直すか、行を削除してください"))
             }
 
-            // 2g) [3.320.0] 「休」記号のシフトが無い＝先頭シフトが黙って休として扱われる。
-            //   `restShiftIndex` は記号"休"が見つからなければ `?: 0` を返す。これは 3.103.0 で -1 に
-            //   すると全シフトが勤務扱いになる別のバグを避けた**意図的な**フォールバックだが、
-            //   曜日平準化(weekly)の「勤務日か休か」・診断の休関連の判定が先頭シフトを休とみなすため、
-            //   入力が黙って別の意味になる。データ側で直せるので明示的に案内する。
-            if (state.shifts.none { it.kigou == "休" }) {
-                val head = state.shifts.firstOrNull()?.kigou ?: "(シフト未登録)"
+            // 2g) [3.603.0/backlog#24] 休(ShiftRole.Rest)がどのシフトにも付与されていない＝
+            //   最適化/検査の入口(build()のwarns)でブロックされる設定。ここでは案内の詳細を出す
+            //   （旧: 記号"休"の字面一致に失敗すると index0 へ黙ってフォールバックしていたが撤去済み）。
+            if (state.shifts.none { it.role == ShiftRole.Rest }) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "「休」のシフトがありません",
-                    "記号が「休」のシフトが無いため、先頭の「$head」を休として扱っています" +
-                        "（曜日の偏りや休み関連の診断がこの前提で動きます）",
-                    "シフト設定で休みのシフトの記号を「休」にしてください"))
+                    "休みとして扱うシフトが設定されていないため、最適化・検査を実行できません" +
+                        "（曜日の偏りや休み関連の診断も休を前提に動きます）",
+                    "シフト設定で休みのシフトを「休みとして扱う」に設定してください"))
             }
 
             // 2j) [3.349.0/ユーザー確認「最大期間一ヶ月です」] 業務前提は **職員30名以内・期間1か月(31日)以内**。

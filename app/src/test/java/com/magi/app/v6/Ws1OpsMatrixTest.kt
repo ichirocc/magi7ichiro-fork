@@ -21,7 +21,7 @@ class Ws1OpsMatrixTest {
     // 休=index0 / A / B の3シフト、G0/G1 の2群。
     private fun state() = MagiState(
         startDate = "2026-07-01", endDate = "2026-07-02",
-        shifts = listOf(Shift("休み", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+        shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
         groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
         staff = listOf(Staff("s1", 0), Staff("s2", 1)),
         use2Patterns = false,
@@ -74,7 +74,7 @@ class Ws1OpsMatrixTest {
     @Test fun rowOffKeepsRestEvenWhenRestIsNotIndexZero() {
         // 休が先頭でないデータ（3.416.0 以降は記号で解決する）。
         val st = state().copy(
-            shifts = listOf(Shift("A", "A", "", ""), Shift("休み", "休", "", ""), Shift("B", "B", "", "")),
+            shifts = listOf(Shift("A", "A", "", ""), Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("B", "B", "", "")),
             groupShift = listOf(listOf(1, 1, 1), listOf(1, 1, 1)),
         )
         val off = Ws1Ops.setGroupShiftRow(st, 1, false)

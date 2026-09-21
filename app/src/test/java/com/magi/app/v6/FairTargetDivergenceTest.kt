@@ -40,7 +40,7 @@ class FairTargetDivergenceTest {
     fun fairTargetOmitsACellThatOfficialAchievementRateWouldStillFlag() {
         // 実データ(sept2026, 群0/シフト0)で見つかった構図を3人へ凝縮: 範囲[7,9]/[7,9]/[3,10]、回数7/8/9
         // （フル最適化を回さず範囲/回数を直接与える。経緯: docs/history 3.588.0/3.589.0）。
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val t = 9
         val counts = intArrayOf(7, 8, 9)
         val schedule = List(3) { i -> List(t) { j -> if (j < counts[i]) 1 else 0 } }

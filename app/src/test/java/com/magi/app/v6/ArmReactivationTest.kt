@@ -18,7 +18,7 @@ import org.junit.Test
 class ArmReactivationTest {
     /** 3 職員×31日。X は毎日1人(need1=1)、A の X 上限超過1件のみを持つ（`CountChainPolishTest.chainState` と同型）。 */
     private fun highOnlyState(): MagiState {
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
         val groups = listOf(Group("G", "G"))
         val t = 31
         val a = IntArray(t) { 2 }; val b = IntArray(t) { 2 }; val c = IntArray(t) { 2 }

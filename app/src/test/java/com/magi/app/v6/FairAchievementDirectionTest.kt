@@ -16,7 +16,7 @@ class FairAchievementDirectionTest {
     // 3.588.0で実測したsept2026 g=0,k=0,x=2の構図を再現: 範囲[7,9]/[7,9]/[3,10]・回数7/8/9。
     // 生回数平均は(7+8+9)/3=8=中央の職員(idx1)の回数と一致し「match」判定で候補生成が握り潰される。
     private fun threeMemberState(): MagiState {
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val t = 9
         val counts = intArrayOf(7, 8, 9)
         val schedule = List(3) { i -> List(t) { j -> if (j < counts[i]) 1 else 0 } }

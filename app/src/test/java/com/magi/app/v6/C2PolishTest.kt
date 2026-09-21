@@ -18,7 +18,7 @@ import org.junit.Test
  */
 class C2PolishTest {
     private fun monthState(wishes: Map<String, Int> = emptyMap()): MagiState {
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("P", "P", "", ""), Shift("Q", "Q", "", ""))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", ""), Shift("Q", "Q", "", ""))
         val groups = listOf(Group("GA", "GA"))
         val t = 31
         // P は7日おき(同じ曜日)に5回、残りはQ。cons2でP>=10を要求＝不足5。

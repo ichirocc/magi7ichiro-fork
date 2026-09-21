@@ -337,7 +337,7 @@ class C1RelocationPolishTest {
     @Test
     fun c1PolishLogsNoCandidateReasonWhenOnlyChainPartnerIsWishLocked() {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", ""),
             Shift("Y", "Y", "", ""),
             Shift("Z", "Z", "", ""),

@@ -440,11 +440,12 @@ object ViolationComponentRepair {
                 }
                 a.staff < 0 -> when (a.family) {
                     "covU" -> for (i in 0 until p.S) single(i, a.day, a.shift)
-                    "covO" -> for (i in 0 until p.S) if (work[i][a.day] == a.shift) single(i, a.day, p.restIdx)
+                    // [3.603.0] 休が無い設定は「休へ逃がす」候補を作れない＝生成しない（この起点は他の候補経路に委ねる）。
+                    "covO" -> p.restIdx?.let { rest -> for (i in 0 until p.S) if (work[i][a.day] == a.shift) single(i, a.day, rest) }
                 }
                 else -> when {
                     a.family.endsWith("low", ignoreCase = true) -> for (j in 0 until p.T) single(a.staff, j, a.shift)
-                    a.family.endsWith("high", ignoreCase = true) -> for (j in 0 until p.T) if (work[a.staff][j] == a.shift) single(a.staff, j, p.restIdx)
+                    a.family.endsWith("high", ignoreCase = true) -> p.restIdx?.let { rest -> for (j in 0 until p.T) if (work[a.staff][j] == a.shift) single(a.staff, j, rest) }
                 }
             }
         }

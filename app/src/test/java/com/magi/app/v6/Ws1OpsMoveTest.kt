@@ -20,7 +20,7 @@ class Ws1OpsMoveTest {
     // 休=0 / A=1 / B=2 の3シフト、s0(G0)・s1(G1)・s2(G0) の3職員、2日。
     private fun state() = MagiState(
         startDate = "2026-07-01", endDate = "2026-07-02",
-        shifts = listOf(Shift("休み", "休", "", ""), Shift("A", "A", "1", ""), Shift("B", "B", "2", "")),
+        shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", ""), Shift("B", "B", "2", "")),
         groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
         staff = listOf(Staff("s0", 0, 1), Staff("s1", 1, -1), Staff("s2", 0, 0)),
         use2Patterns = false,

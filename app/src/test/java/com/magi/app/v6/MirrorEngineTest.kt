@@ -18,7 +18,7 @@ import org.junit.Test
 class MirrorEngineTest {
     private fun buildState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("A", "A", "1", "2"),
             Shift("B", "B", "1", "1"),
             Shift("C", "C", "1", ""),
@@ -88,7 +88,7 @@ class MirrorEngineTest {
     // テストは「同一セルで複数族が重なったとき常に最重の族が表示される」という不変条件を固定する。
     @Test
     fun countViolationsPrefersHeavierFamilyOverLighterAtSameCell() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("s0", 0))
         // X を1回しか勤務していない: cons2(count>=3)とstaffRange低(lo=3)の両方が同一セル(0,1=staff0,shift X)で発火。
@@ -128,7 +128,7 @@ class MirrorEngineTest {
      */
     @Test
     fun personalRangeDisablesTheGroupTargetWithoutDoubleCounting() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("s0", 0), Staff("s1", 0))
         // 両名とも X を 1 回だけ勤務。s0 は個人下限 3（low）、s1 は個人設定なし。群目標 X=3。
@@ -163,7 +163,7 @@ class MirrorEngineTest {
      */
     @Test
     fun needFamiliesKeepsC41WhenItOverlapsWithCovU() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "3", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "3", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("s0", 0))
         // day0: s0のみXへ配置＝need1(3)に対しcovU(不足2)、かつG0のXレンジ[2,5]に対してもc41(不足)が同時発火。

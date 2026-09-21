@@ -19,7 +19,7 @@ class PersonSwapKickTest {
     // a,b が唯一の最大負担ペアなので、乱数種によらず交換相手は決定的に a<->b になる。
     private fun fixture(): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-04",
-        shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+        shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "")),
         groups = listOf(Group("G0", "G0")),
         staff = listOf(Staff("a", 0), Staff("b", 0), Staff("c", 0), Staff("d", 0)),
         use2Patterns = false,

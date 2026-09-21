@@ -19,7 +19,7 @@ class CyclicSwapNTest {
 
     private fun ringState(): MagiState {
         val shifts = listOf(
-            Shift("休み", "休", "", ""),
+            Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("P", "P", "1", "1"),
             Shift("Q", "Q", "1", "1"),
             Shift("R", "R", "1", "1"),

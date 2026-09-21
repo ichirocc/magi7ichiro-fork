@@ -24,7 +24,7 @@ class C1RepairAnalysisComponentsTest {
         cons1: List<C1Row>,
     ): MagiState {
         val end = "2026-01-" + days.toString().padStart(2, '0')
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         return MagiState(
             startDate = "2026-01-01", endDate = end,
             shifts = shifts, groups = listOf(Group("G", "G")),
@@ -191,7 +191,7 @@ class C1RepairAnalysisComponentsTest {
     // patch=null で確定）。連結成分化は最初から M={職員0,1,2,3,4}（休・夜どちらの関与者も）で
     // 1回のDFSにかけるため、休を必要数(1)ぴったりに抑えつつ夜も1つ確保する配置を見つけられる。
     private fun sequentialBlindSpotFixture(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("夜", "夜", "", ""), Shift("日", "日", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("夜", "夜", "", ""), Shift("日", "日", "", ""))
         val groups = listOf(Group("全可", "G0"), Group("休班", "G1"), Group("夜班", "G2"))
         val groupShift = listOf(listOf(1, 1, 1), listOf(1, 0, 1), listOf(0, 1, 1))
         val staffGroup = listOf(0, 1, 2, 2, 1)

@@ -65,7 +65,7 @@ class C1JointLnsPolishTest {
         // ②同時に別窓(day1-2/day2-3)はday2へXを置くことで正しく解消できる、の両方を確認する。
         // 事前フィルタが無くても最終正しさ(isFinalCandidate+defensive re-check)は保たれる設計だが、
         // これは「事前に弾いても解ける能力を失っていない」ことの回帰ガード。
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
         val groups = listOf(Group("G", "G"))
         val staff = listOf(Staff("target", 0))
         val st = MagiState(

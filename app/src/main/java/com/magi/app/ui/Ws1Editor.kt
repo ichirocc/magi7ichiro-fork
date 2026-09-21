@@ -111,7 +111,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             ReorderableRows(items = v.shifts, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveShift(from, to)) }) { k, s, dragHandle ->
                 // [不具合修正] 行に .clickable が無く、シフト行をタップしても選択/編集できなかった
                 //   （小さな「編集」ボタンのみ反応）。行全体タップで編集ダイアログを開く。
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2) },
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditShift(k, s.name, s.kigou, s.need1, s.need2, k == v.restIdx) },
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.DragHandle, contentDescription = "ドラッグで並び替え", tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(48.dp).padding(12.dp).then(dragHandle))
@@ -191,8 +191,8 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
     when (val d = dialog) {
         // [3.515.6] 削除の入口は行から編集シートの中へ（ユーザー指示）。参照件数の確認は従来どおり
         //   ConfirmDelete を経由する（安全確認は不変、経由の場所だけ変える）。
-        is Ws1Dialog.EditShift -> ShiftDialog("シフト編集", d.name, d.kigou, d.need1, d.need2,
-            { n, kg, n1, n2 -> onEvent(MagiEvent.Structure.EditShift(d.k, n, kg, n1, n2)); dialog = null }, { dialog = null },
+        is Ws1Dialog.EditShift -> ShiftDialog("シフト編集", d.name, d.kigou, d.need1, d.need2, d.isRest,
+            { n, kg, n1, n2, rest -> onEvent(MagiEvent.Structure.EditShift(d.k, n, kg, n1, n2, rest)); dialog = null }, { dialog = null },
             onDelete = if (v.shifts.size > 1) ({
                 // [3.429.0/R-03] 削除する前に、参照している制約の件数を見せる（削除自体は
                 //   従来どおり進められる＝止めるのではなく、確認ダイアログを情報つきにする）。
@@ -203,8 +203,8 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 val restNote = if (d.k == v.restIdx) "休だった日は自動的に他のシフトへ変わります。" else ""
                 dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note + restNote)
             }) else null)
-        Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "",
-            { n, kg, n1, n2 -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2)); dialog = null }, { dialog = null })
+        Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "", false,
+            { n, kg, n1, n2, rest -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2, rest)); dialog = null }, { dialog = null })
         is Ws1Dialog.EditGroup -> GroupDialog("グループ編集", d.name, d.kigou,
             { n, kg -> onEvent(MagiEvent.Structure.EditGroup(d.g, n, kg)); dialog = null }, { dialog = null },
             onDelete = if (v.canRemoveGroup(d.g)) ({
@@ -285,7 +285,7 @@ internal fun <T> ReorderableRows(
 }
 
 private sealed interface Ws1Dialog {
-    data class EditShift(val k: Int, val name: String, val kigou: String, val need1: String, val need2: String) : Ws1Dialog
+    data class EditShift(val k: Int, val name: String, val kigou: String, val need1: String, val need2: String, val isRest: Boolean) : Ws1Dialog
     object AddShift : Ws1Dialog
     data class EditGroup(val g: Int, val name: String, val kigou: String) : Ws1Dialog
     object AddGroup : Ws1Dialog
@@ -295,8 +295,8 @@ private sealed interface Ws1Dialog {
 
 @Composable
 private fun ShiftDialog(
-    title: String, name0: String, kigou0: String, need10: String, need20: String,
-    onOk: (String, String, String, String) -> Unit, onClose: () -> Unit,
+    title: String, name0: String, kigou0: String, need10: String, need20: String, isRest0: Boolean,
+    onOk: (String, String, String, String, Boolean) -> Unit, onClose: () -> Unit,
     // [3.515.6] 削除の入口（行から移設）。編集時のみ渡す＝追加時はnullで非表示。
     onDelete: (() -> Unit)? = null,
 ) {
@@ -304,10 +304,11 @@ private fun ShiftDialog(
     var kigou by remember { mutableStateOf(kigou0) }
     var need1 by remember { mutableStateOf(need10) }
     var need2 by remember { mutableStateOf(need20) }
+    var isRest by remember { mutableStateOf(isRest0) }
     // [design-review] 下限>上限は他の3面（群/スキル群のレンジ・個人回数、3.403.0）と同じく必ず違反を
     //   生む設定ミスだが、必要人数(need1/need2)のこの面だけ入力時のガードが無かった（対象漏れ）。
     val bad = V6SanityPort.rangeOrderConflict(need1, need2) != null
-    W1Shell(title, onClose, { onOk(name, kigou, need1, need2) }, kigou.isNotBlank() && !bad) {
+    W1Shell(title, onClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad) {
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -315,6 +316,11 @@ private fun ShiftDialog(
             W1Field("上限人数(2パターン時)", need2, Modifier.weight(1f), isError = bad) { need2 = it }
         }
         if (bad) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+        // [3.603.0/backlog#24] 休の識別を記号でなくここで明示指定する（単一選択＝ONにすると他は自動でOFF）。
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("休みとして扱う", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            Switch(checked = isRest, onCheckedChange = { isRest = it })
+        }
         if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このシフトを削除")
     }
 }

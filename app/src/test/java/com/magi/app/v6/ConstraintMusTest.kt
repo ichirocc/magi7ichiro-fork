@@ -52,7 +52,7 @@ class ConstraintMusTest {
         // X上限1に対しXへの固定希望が2件 → {上限, 希望, 希望} の3件が極小コア。
         val st = state(
             days = 5,
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
             wishes = mapOf("0,0" to 1, "0,2" to 1),
             staffRange = mapOf("0,1" to Range("", "1")),
         )
@@ -69,7 +69,7 @@ class ConstraintMusTest {
         // T=5でX下限3＋休への固定希望3件 → 需要合計6>5（鳩の巣）。どの1件を外しても5以下=コアは4件で一意。
         val st = state(
             days = 5,
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
             wishes = mapOf("0,0" to 0, "0,1" to 0, "0,2" to 0),
             staffRange = mapOf("0,1" to Range("3", "")),
         )
@@ -86,7 +86,7 @@ class ConstraintMusTest {
         // 窓ルール「X 5日で1回以上」(最小1日) ＋ 全5日が休への固定希望 → 1+5=6>5（鳩の巣）。
         val st = state(
             days = 5,
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
             wishes = mapOf("0,0" to 0, "0,1" to 0, "0,2" to 0, "0,3" to 0, "0,4" to 0),
             cons1 = listOf(C1Row(day1 = "5", shiftKigou = "X", day2 = "1")),
         )
@@ -104,7 +104,7 @@ class ConstraintMusTest {
         // 日1は希望なしで充足可能=矛盾なし。
         val st = state(
             days = 2,
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", "")),
             wishes = mapOf("0,0" to 0, "1,0" to 0),
             staffCount = 2,
         )
@@ -123,7 +123,7 @@ class ConstraintMusTest {
         // buildGuidance 検査9は既存検査との重複回避のため「希望を含むコアのみ」を出す。
         val st = state(
             days = 10,
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
             staffRange = mapOf("0,1" to Range("", "1")),
             cons1 = listOf(C1Row(day1 = "5", shiftKigou = "X", day2 = "2")),
         )
@@ -141,7 +141,7 @@ class ConstraintMusTest {
     fun guidanceEmitsDayConflictWithWishLabels() {
         val st = state(
             days = 2,
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", "")),
             wishes = mapOf("0,0" to 0, "1,0" to 0),
             staffCount = 2,
         )
@@ -157,7 +157,7 @@ class ConstraintMusTest {
     fun noConflictYieldsNothing() {
         val st = state(
             days = 5,
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", "")),
             wishes = mapOf("0,0" to 1),
             staffRange = mapOf("0,1" to Range("1", "5")),
             staffCount = 2,

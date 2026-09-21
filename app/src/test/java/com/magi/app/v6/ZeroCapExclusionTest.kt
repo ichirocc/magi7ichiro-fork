@@ -15,7 +15,7 @@ import org.junit.Test
  *  盤面: 休/A、A は毎日 1 名必要。X は A 上限 0、Y/Z は制限なし。入力は X が全日 A（上限超過 4 だが被覆は満たす）。 */
 class ZeroCapExclusionTest {
     private fun state(wishes: Map<String, Int> = emptyMap(), extraRange: Map<String, Range> = emptyMap()): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("Z", 0))
         return MagiState(

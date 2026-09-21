@@ -39,7 +39,7 @@ class CountChainPolishTest {
 
     /** 3 職員 × 31 日。X は毎日 1 人（lo=hi=1）、残りは Y/Z。A は X 上限 2 で 3 回持つ。B も X 上限 2 で 2 回。C は上限なし。 */
     private fun chainState(): MagiState {
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
         val groups = listOf(Group("G", "G"))
         val t = 31
         val a = IntArray(t) { 2 }; val b = IntArray(t) { 2 }; val c = IntArray(t) { 2 }

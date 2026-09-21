@@ -22,7 +22,7 @@ class V6LateOperatorsTest {
     private fun st(): MagiState = MagiState(
         startDate = "2026-06-01",
         endDate = "2026-06-05",
-        shifts = listOf(Shift("日勤A", "A", "2", ""), Shift("日勤B", "B", "1", ""), Shift("休み", "休", "", "")),
+        shifts = listOf(Shift("日勤A", "A", "2", ""), Shift("日勤B", "B", "1", ""), Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0), Staff("s3", 0)),
         use2Patterns = false,

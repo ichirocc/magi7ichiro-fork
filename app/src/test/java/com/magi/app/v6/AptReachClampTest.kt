@@ -15,7 +15,7 @@ class AptReachClampTest {
 
     private fun state(ranges: Map<String, Range>, aptA: String, wishes: Map<String, Int> = emptyMap(), groupShiftA: Int = 1, staff2: Boolean = false) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-05",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
         groups = listOf(Group("G", "G")), staff = if (staff2) listOf(Staff("s0", 0), Staff("s1", 0)) else listOf(Staff("s0", 0)),
         use2Patterns = false,
         groupShift = listOf(listOf(1, groupShiftA, 1)), groupShiftApt = listOf(listOf("", aptA, "")),

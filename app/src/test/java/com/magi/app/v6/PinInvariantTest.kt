@@ -94,7 +94,7 @@ class PinInvariantTest {
     private fun busyState(rng: Random, s: Int, t: Int, k: Int): MagiState {
         val groups = listOf(Group("G", "G"))
         val staff = (0 until s).map { Staff("S$it", 0) }
-        val shifts = listOf(Shift("休", "休", "0", "")) + (1 until k).map {
+        val shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest)) + (1 until k).map {
             Shift("S$it", "S$it", "1", (1 + rng.nextInt(2)).toString())
         }
         val staffRange = HashMap<String, Range>()

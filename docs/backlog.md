@@ -189,7 +189,13 @@
     c41s・c42s・covO 10/c41・c42 9/c3m 6/c2・apt 4/fair・weekly 2）、重み降順の並びに揃え、
     「違反箇所の出し方」のセル系にc3w・場所なしにweeklyを追加。`docs/sudo_model.md:500`の重み値引用
     （c1=30/c3mn=30/covO=5.0という3.522.0以前の値）も現行値へ修正。
-24. **[要product判断・実データで実害確認済み＝深刻] `restShiftIndex`（`MirrorCore.kt`）の記号依存＋無言の0退避**
+24. ~~**[要product判断・実データで実害確認済み＝深刻] `restShiftIndex`（`MirrorCore.kt`）の記号依存＋無言の0退避**~~
+    **→ 3.603.0で完了**: 業務担当者の明示go＋grillingを経てフル改修を実装。`ShiftRole{None,Rest}`を
+    `Shift`に追加し、`restShiftIndex`は記号一致でなく`role==Rest`の付与先を返す（無ければnull、
+    フォールバックは撤去）。`Problem.restIdx`を含む全参照約20ファイルを`Int?`へ全面伝播
+    （ユーザー指示で「入口だけブロックする縮小案」を明示的に却下）。JSON後方互換（旧schemaは記号"休"へ
+    自動付与）・UIトグル（`Ws1Editor.kt`「休みとして扱う」単一選択）を追加。詳細は
+    `docs/history/3.4xx.md`（3.603.0）。
     （2026-09-16、外部監査で指摘・実データ4件で再現確認・3.574.0）。`fun restShiftIndex(state) =
     shifts.indexOfFirst { it.kigou == "休" }.takeIf { it >= 0 } ?: 0` は①表示記号"休"への文字列一致
     ②見つからなければ**無言で index 0 を休とみなす**。設計自体は過去に2度精読済み（`docs/DESIGN.md:116`

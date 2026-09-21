@@ -13,7 +13,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-03",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "1")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "1")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = true,
@@ -44,7 +44,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "", "2")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "", "2")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = true,
@@ -75,7 +75,7 @@ class V6PortAnalyzerTest {
     // 変え、chainVerified の有無で案内文が変わることを固定する。
     private fun cascadeChainState(cWished: Boolean): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-01",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", ""), Shift("Y", "Y", "1", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", ""), Shift("Y", "Y", "1", "")),
         groups = listOf(Group("GA", "GA"), Group("GC", "GC")),
         staff = listOf(Staff("A", 0), Staff("C", 1)),
         use2Patterns = false,
@@ -137,7 +137,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = false,
@@ -188,7 +188,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "")),
             groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
             staff = listOf(Staff("s0", 0), Staff("s1", 1)),
             use2Patterns = false,
@@ -218,7 +218,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = false,
@@ -248,7 +248,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-02",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "1")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "1")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = false,
@@ -279,7 +279,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = false,
@@ -306,7 +306,7 @@ class V6PortAnalyzerTest {
         schedule: List<List<Int>>,
         cons3n: List<C3Row>,
         wishes: Map<String, Int> = emptyMap(),
-        shifts: List<Shift> = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        shifts: List<Shift> = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
         staff: List<Staff> = listOf(Staff("s0", 0)),
         groupShift: List<List<Int>> = listOf(List(3) { 1 }),
     ): MagiState {
@@ -364,7 +364,7 @@ class V6PortAnalyzerTest {
         val st = forbiddenState(
             schedule = listOf(listOf(1, 1), listOf(0, 0)),
             cons3n = listOf(C3Row(listOf("P", "P"))),
-            shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "", "")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             groupShift = listOf(List(3) { 1 }),
         )
@@ -383,7 +383,7 @@ class V6PortAnalyzerTest {
             schedule = listOf(listOf(1, 1), listOf(0, 0)),
             cons3n = listOf(C3Row(listOf("P", "P"))),
             wishes = mapOf("1,0" to 0, "1,1" to 0),           // s1 は両日とも休へ希望固定＝連鎖の受け皿なし
-            shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""), Shift("Q", "Q", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "", "")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             groupShift = listOf(List(3) { 1 }),
         )
@@ -408,7 +408,7 @@ class V6PortAnalyzerTest {
         val st = forbiddenState(
             schedule = listOf(listOf(2, 1, 1, 0)),
             cons3n = listOf(C3Row(listOf("P", "P")), C3Row(listOf("Q", "休")), C3Row(listOf("Q", "Q"))),
-            shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "", ""), Shift("Q", "Q", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", ""), Shift("Q", "Q", "", "")),
         )
         val diag = V6PortAnalyzer.diagnoseForbiddenRuns(st)
         val run = diag.runs.single { it.seqLabel == "P→P" }
@@ -561,7 +561,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "2", "2"), Shift("遅番", "B", "", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "2", "2"), Shift("遅番", "B", "", "")),
             groups = listOf(Group("G", "G"), Group("H", "H")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = true,
@@ -594,7 +594,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "0", "0")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "0", "0")),
             groups = listOf(Group("G", "G"), Group("H", "H")),
             staff = listOf(Staff("s0", 0), Staff("s1", 1)),
             use2Patterns = true,
@@ -628,7 +628,7 @@ class V6PortAnalyzerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "0", "2"), Shift("早番", "A", "1", "1")),
+            shifts = listOf(Shift("休み", "休", "0", "2", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "1")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0)),
             use2Patterns = true,

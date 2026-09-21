@@ -27,7 +27,7 @@ class FlexibleDayFlowTest {
 
     private fun fiveIllegalAaState(): MagiState {
         val shifts = listOf(
-            Shift("休み", "休", "", ""),
+            Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("A", "Aｱ", "1", "1"),
             Shift("B1", "B1", "1", "1"),
         )
@@ -107,7 +107,7 @@ class FlexibleDayFlowTest {
      */
     private fun kamijoLikeState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("Dﾃ", "Dﾃ", "", ""),
             Shift("Q", "Q", "", ""),
         )

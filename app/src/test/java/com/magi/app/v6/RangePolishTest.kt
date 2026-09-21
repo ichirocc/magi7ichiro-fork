@@ -21,7 +21,7 @@ class RangePolishTest {
     private fun highState(): MagiState {
         // shift: 0=休(need無) 1=X(need1=1) 2=Y(need無、Aの逃げ先) 3=Z(need無、Bの現在地)
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", ""),
             Shift("Y", "Y", "", ""),
             Shift("Z", "Z", "", ""),

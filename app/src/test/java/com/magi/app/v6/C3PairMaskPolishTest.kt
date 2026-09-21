@@ -14,7 +14,7 @@ import org.junit.Test
 class C3PairMaskPolishTest {
     private fun toy() = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-05",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", "")), groups = listOf(Group("G", "G")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")), groups = listOf(Group("G", "G")),
         staff = listOf(Staff("甲", 0), Staff("乙", 0)), use2Patterns = true,
         groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
         schedule = listOf(listOf(0, 0, 1, 1, 0), listOf(0, 1, 0, 0, 1)), wishes = emptyMap(), staffRange = emptyMap(),

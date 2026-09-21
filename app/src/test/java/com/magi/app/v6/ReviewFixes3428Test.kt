@@ -20,7 +20,7 @@ class ReviewFixes3428Test {
     /** 休が index0 でない＝旧実装との差が観測できる最小フィクスチャ。 */
     private fun stRestNotFirst() = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-02",
-        shifts = listOf(Shift("X", "X", "", ""), Shift("休", "休", "", "")),
+        shifts = listOf(Shift("X", "X", "", ""), Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
         groups = listOf(Group("G0", "G0")),
         staff = listOf(Staff("s0", 0)),
         use2Patterns = false,

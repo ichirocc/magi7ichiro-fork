@@ -25,7 +25,7 @@ import org.junit.Test
 class StateFingerprintTest {
     private fun base() = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-03",
-        shifts = listOf(Shift("休", "休", "0", "1"), Shift("A", "A", "1", "2")),
+        shifts = listOf(Shift("休", "休", "0", "1", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "2")),
         groups = listOf(Group("G", "G"), Group("H", "H")),
         staff = listOf(Staff("s0", 0, 0), Staff("s1", 1, 0)),
         use2Patterns = false,

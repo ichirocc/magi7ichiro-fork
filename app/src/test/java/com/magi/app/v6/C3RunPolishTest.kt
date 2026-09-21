@@ -22,7 +22,7 @@ class C3RunPolishTest {
     private fun chainState(): MagiState {
         // shift: 0=休(need無) 1=X(need無、連続させたい対象) 2=Y(need1=1、全日担保が必要) 3=Z(need無)
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "", ""),
             Shift("Y", "Y", "1", ""),
             Shift("Z", "Z", "", ""),

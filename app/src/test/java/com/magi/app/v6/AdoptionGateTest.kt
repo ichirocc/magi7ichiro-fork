@@ -16,7 +16,7 @@ class AdoptionGateTest {
 
     private fun state(ranges: Map<String, Range> = emptyMap()) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-02",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "1")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "1")),
         groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0)), use2Patterns = true,
         groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
         schedule = listOf(listOf(REST, A)), wishes = emptyMap(), staffRange = ranges,

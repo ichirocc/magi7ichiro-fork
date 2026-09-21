@@ -1,6 +1,7 @@
 package com.magi.app.v6
 
 import com.magi.app.model.MagiState
+import com.magi.app.model.ShiftRole
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Random
@@ -797,7 +798,10 @@ fun coverage(p: Problem, schedule: Array<IntArray>): Array<IntArray> {
 // [レビュー#4 3.213.0] lockedMatrix(canDo 無視の全希望ロック)は撤去。唯一の呼出元 LightMirrorOptimizer が
 //   wishLocked（実現可能希望のみ凍結）へ統一されたため呼出0のデッドコード＝削除。
 
-fun restShiftIndex(state: MagiState): Int = state.shifts.indexOfFirst { it.kigou == "休" }.takeIf { it >= 0 } ?: 0
+// [3.603.0/backlog#24] 記号"休"の字面一致でなく ShiftRole.Rest の付与先を返す。どのシフトにも
+//   付与されていなければ null（旧: 見つからなければ index 0 へ無言で倒し、削除等で別のシフトが
+//   「休」として誤解釈される実害があった＝実データ4件で再現・確認済み）。
+fun restShiftIndex(state: MagiState): Int? = state.shifts.indexOfFirst { it.role == ShiftRole.Rest }.takeIf { it >= 0 }
 
 /**
  * 空きマス（新職員の行・伸ばした日・消したシフトのマス・範囲外や欠損の値）を埋めるシフト index。
@@ -812,8 +816,8 @@ fun restShiftIndex(state: MagiState): Int = state.shifts.indexOfFirst { it.kigou
  * 担当できるシフトが1つも無ければ休へ倒す＝**ここで例外を投げると、その不整合を直しに来た編集操作
  * そのものがクラッシュする**（検査2k/2l が別途その状態を指摘する）。
  */
-fun fillShiftIndex(allowed: IntArray, rest: Int): Int =
-    if (allowed.contains(rest)) rest else allowed.firstOrNull() ?: rest
+fun fillShiftIndex(allowed: IntArray, rest: Int?): Int =
+    if (rest != null && allowed.contains(rest)) rest else allowed.firstOrNull() ?: (rest ?: -1)
 
 fun formatDay(startDate: String, offset: Int): String {
     return try {

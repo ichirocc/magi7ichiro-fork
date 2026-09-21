@@ -16,7 +16,7 @@ import org.junit.Test
 class FairAchievementV2Test {
     /** 1 群 × シフト X。staffRange/apt/回数を与えて `fairDevOfBucket` を直接評価する。 */
     private fun fairOf(n: Int, ranges: Map<Int, Range>, aptX: String, counts: IntArray, hiZero: Set<Int> = emptySet()): Int {
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val t = 31
         val schedule = List(n) { i -> List(t) { j -> if (j < counts[i]) 1 else 0 } }
         val sr = HashMap<String, Range>()
