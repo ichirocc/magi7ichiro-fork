@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- 後処理チェーンにrunning keep-best追加（3.608.0、既定OFF/測定中、backlog#34系）: grillingで方針確定。
+  実データでCovOReliefPolishの良い一手がチェーン内の別パスの悪化に道連れでpickBestStageに棄却される
+  問題を実証。`PostChain`にbestWork/bestReportを追加し`postChainRunningKeepBest`フラグでガード。
+  flag OFF時は挙動完全不変。全パスの結果型に`report`フィールド追加（新規check呼び出しゼロ）。
+  hosttest 826件緑。既定ON昇格はtools/loopベンチ待ち（測定手段の整備が前提）。→ `docs/history/3.4xx.md`
 - 実機ログ調査（3.607.0）: ユーザーデータ調査で10/25のA4過剰・希望違反はcons3n「休休休」禁止パターンとの
   構造的衝突と特定（正しい挙動）。副次的に見つけた不具合＝Sentinel発火時、post.report.logsが棄却盤面の
   観測であることを行単位で明示していなかった問題を`annotateStaleLogsIfRegressed`で修正。ログを削らない

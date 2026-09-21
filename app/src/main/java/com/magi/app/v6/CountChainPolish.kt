@@ -270,6 +270,6 @@ internal object CountChainPolish {
         val logs = listOf(MirrorLog(tag = "CountChainPolish", message = "回数連鎖研磨: total ${before.total}->${bestRep.total} 採用${applied}連鎖 " +
             "high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} apt ${before.breakdown["apt"] ?: 0}->${bestRep.breakdown["apt"] ?: 0} " +
             "評価${evaluations} ノード${nodes}"))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 }

@@ -221,7 +221,7 @@ internal object PersonalBalanceJointLnsPolish {
         )
         return V6HotfixPasses.CyclicSwapResult(
             chosen, rootReport.total, chosenReport.total, if (valid) 1 else 0, listOf(log),
-            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks,
+            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = chosenReport,
         )
     }
 
@@ -230,6 +230,7 @@ internal object PersonalBalanceJointLnsPolish {
     ): V6HotfixPasses.CyclicSwapResult = V6HotfixPasses.CyclicSwapResult(
         schedule.copy2D(), report.total, report.total, 0,
         listOf(MirrorLog(tag = "PersonalJointLNS", message = reason)),
+        report = report,
     )
 
     private fun chooseFocusStaff(

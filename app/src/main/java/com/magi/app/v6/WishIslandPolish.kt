@@ -448,7 +448,7 @@ internal object WishIslandPolish {
             val finalRep = if (improved) bestRep else before
             return V6HotfixPasses.CyclicSwapResult(
                 finalSched, before.total, finalRep.total, applied, listOf(MirrorLog(tag = "WishIslandPolish", message = summary(finalRep))),
-                observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks,
+                observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = finalRep,
             )
         }
 

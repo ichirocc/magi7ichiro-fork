@@ -749,7 +749,7 @@ internal object RangePolish {
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (rangeCombSummary.isNotEmpty()) " / $rangeCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut, report = bestRep)
     }
 
 

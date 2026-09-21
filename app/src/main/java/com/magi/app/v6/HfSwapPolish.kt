@@ -86,7 +86,7 @@ internal object HfSwapPolish {
             capacity = swaps
         }
         val logs = listOf(MirrorLog(tag = "HF67", message = "inter-staff swap applied=$swaps rollback=$rollback total ${before.total}->${current.total}"))
-        return HF67Result(work, before.total, current.total, swaps, shortage, capacity, rollback, logs)
+        return HF67Result(work, before.total, current.total, swaps, shortage, capacity, rollback, logs, report = current)
     }
 
 
@@ -175,7 +175,7 @@ internal object HfSwapPolish {
             }
         }
         val logs = listOf(MirrorLog(tag = "HF66", message = "intra-staff redistribution applied=$moves rollback=$rollback total ${before.total}->${current.total}"))
-        return HF66Result(work, before.total, current.total, moves, shortageMoves, capacityMoves, rollback, logs)
+        return HF66Result(work, before.total, current.total, moves, shortageMoves, capacityMoves, rollback, logs, report = current)
     }
 
 

@@ -28,7 +28,7 @@ internal object C3FamilyPolish {
         var applied = 0
         if (p.cons3mn.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
-                listOf(MirrorLog(tag = "C3mnPolish", message = "cons3mnなし=スキップ")))
+                listOf(MirrorLog(tag = "C3mnPolish", message = "cons3mnなし=スキップ")), report = bestRep)
         }
         val rng = Random(seed)
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
@@ -121,7 +121,7 @@ internal object C3FamilyPolish {
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (c3mnCombSummary.isNotEmpty()) " / $c3mnCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut, report = bestRep)
     }
 
 
@@ -152,7 +152,7 @@ internal object C3FamilyPolish {
         var applied = 0
         if (p.cons3n.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
-                listOf(MirrorLog(tag = "C3nPolish", message = "cons3nなし=スキップ")))
+                listOf(MirrorLog(tag = "C3nPolish", message = "cons3nなし=スキップ")), report = bestRep)
         }
         val rng = Random(seed)
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
@@ -269,7 +269,7 @@ internal object C3FamilyPolish {
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (c3nCombSummary.isNotEmpty()) " / $c3nCombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, rejectedCandidates = rejectedOut, report = bestRep)
     }
 
 
@@ -305,7 +305,7 @@ internal object C3FamilyPolish {
         for (c in p.cons3m) if (C3Run.isSingleShiftSeq(c.seq)) rules.add(RunRule(c.seq[0], c.seq.size))
         if (rules.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
-                listOf(MirrorLog(tag = "C3RunPolish", message = "対象規則(単一シフト連)なし=スキップ")))
+                listOf(MirrorLog(tag = "C3RunPolish", message = "対象規則(単一シフト連)なし=スキップ")), report = bestRep)
         }
         val rng = Random(seed)
         val rejectCulprits = RejectCulpritStats()
@@ -388,7 +388,7 @@ internal object C3FamilyPolish {
                 (if (applied == 0 && ((before.breakdown["c3"] ?: 0) + (before.breakdown["c3m"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep)
     }
 
 
@@ -424,7 +424,7 @@ internal object C3FamilyPolish {
         for (c in p.cons3m) if (c.seq.size > 1 && !C3Run.isSingleShiftSeq(c.seq)) rules.add(c)
         if (rules.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
-                listOf(MirrorLog(tag = "C3PatternPolish", message = "複数シフトc3/c3mパターンなし=スキップ")))
+                listOf(MirrorLog(tag = "C3PatternPolish", message = "複数シフトc3/c3mパターンなし=スキップ")), report = bestRep)
         }
         val rng = Random(seed)
         val rejectCulprits = RejectCulpritStats()
@@ -512,7 +512,7 @@ internal object C3FamilyPolish {
                 (if (applied == 0 && initialCount > 0) " [頭打ち=改善手なし]" else "") +
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep)
     }
 
 

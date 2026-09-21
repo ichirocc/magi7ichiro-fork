@@ -107,6 +107,7 @@ internal object C1JointLnsPolish {
             return V6HotfixPasses.CyclicSwapResult(
                 rootSchedule, rootReport.total, rootReport.total, 0,
                 listOf(MirrorLog(tag = "C1JointLNS", message = "期間要件(c1)対象なし=スキップ")),
+                report = rootReport,
             )
         }
 
@@ -122,6 +123,7 @@ internal object C1JointLnsPolish {
             return V6HotfixPasses.CyclicSwapResult(
                 rootSchedule, rootReport.total, rootReport.total, 0,
                 listOf(MirrorLog(tag = "C1JointLNS", message = "探索上限0=明示的に無効")),
+                report = rootReport,
             )
         }
         val width = config.beamWidth
@@ -285,7 +287,7 @@ internal object C1JointLnsPolish {
         )
         return V6HotfixPasses.CyclicSwapResult(
             chosen, rootReport.total, chosenReport.total, if (valid) 1 else 0, listOf(log),
-            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks,
+            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = chosenReport,
         )
     }
 

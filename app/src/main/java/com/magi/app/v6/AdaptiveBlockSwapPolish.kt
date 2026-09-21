@@ -428,14 +428,14 @@ internal object AdaptiveBlockSwapPolish {
                 params.maxEvaluations <= 0 || params.maxFocusStaff <= 0
             ) {
                 return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
-                    listOf(MirrorLog(tag = "AdaptiveBlockSwap", message = "対象長または職員ペアなし=スキップ")))
+                    listOf(MirrorLog(tag = "AdaptiveBlockSwap", message = "対象長または職員ペアなし=スキップ")), report = before)
             }
             var pass = 0
             while (pass < params.maxPasses && !shouldStop()) {
                 if (!runPass()) break
                 pass++
             }
-            return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, listOf(summaryLog()), pinBlocks = pinBlocks)
+            return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, listOf(summaryLog()), pinBlocks = pinBlocks, report = bestRep)
         }
 
         /** 1 pass＝候補生成→正式評価→最良1手の適用。手が無ければ false。 */
@@ -807,14 +807,14 @@ internal object AdaptiveBlockSwapPolish {
         fun run(): V6HotfixPasses.CyclicSwapResult {
             if (p.S < 2 || p.T < 1 || params.maxPasses <= 0 || params.maxEvaluations <= 0) {
                 return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
-                    listOf(MirrorLog(tag = "AnchoredWindowSwap", message = "違反アンカー窓交換: 職員ペアなし=スキップ")))
+                    listOf(MirrorLog(tag = "AnchoredWindowSwap", message = "違反アンカー窓交換: 職員ペアなし=スキップ")), report = before)
             }
             var pass = 0
             while (pass < params.maxPasses && !shouldStop()) {
                 if (!runPass()) break
                 pass++
             }
-            return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, listOf(summaryLog()), pinBlocks = pinBlocks)
+            return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, listOf(summaryLog()), pinBlocks = pinBlocks, report = bestRep)
         }
 
         private fun runPass(): Boolean {

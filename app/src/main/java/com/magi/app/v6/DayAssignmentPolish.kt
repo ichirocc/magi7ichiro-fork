@@ -23,6 +23,7 @@ internal object DayAssignmentPolish {
         val logs: List<MirrorLog>,
         /** [3.326.0] 回数固定だけが却下した候補試行（対象別）。 */
         val pinBlocks: PinBlockAttribution? = null,
+        val report: ViolationReport? = null,
     )
 
 
@@ -96,7 +97,7 @@ internal object DayAssignmentPolish {
         }
         val logs = listOf(MirrorLog(tag = "DayAssign",
             message = "日ごと厳密割当: total ${before.total}->${bestRep.total} 採用${applied}日"))
-        return DayAssignResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+        return DayAssignResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 
 
@@ -206,7 +207,7 @@ internal object DayAssignmentPolish {
         }
         val logs = listOf(MirrorLog(tag = "AltOptPolish",
             message = "交互最適化(日ブロック・weekly込み割当): total ${before.total}->${bestRep.total} 採用${applied}日 (${lastSweep}スイープ)"))
-        return DayAssignResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+        return DayAssignResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 
 

@@ -57,6 +57,7 @@ internal object C1TemporalFlowPolish {
             return V6HotfixPasses.CyclicSwapResult(
                 work, before.total, before.total, 0,
                 listOf(MirrorLog(tag = "C1TemporalFlow", message = "cons1なし=スキップ")),
+                report = before,
             )
         }
 
@@ -237,7 +238,7 @@ internal object C1TemporalFlowPolish {
         )
         return V6HotfixPasses.CyclicSwapResult(
             work, before.total, bestRep.total, applied, logs,
-            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks,
+            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep,
         )
     }
 }

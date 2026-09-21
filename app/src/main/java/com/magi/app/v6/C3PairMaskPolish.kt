@@ -23,7 +23,7 @@ internal object C3PairMaskPolish {
         var applied = 0
         val tag = "C3PairMask"
         if (p.cons3.isEmpty() && p.cons3n.isEmpty() && p.cons3m.isEmpty() && p.cons3mn.isEmpty() || p.S < 2) {
-            return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0, listOf(MirrorLog(tag = tag, message = "c3系なし=スキップ")))
+            return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0, listOf(MirrorLog(tag = tag, message = "c3系なし=スキップ")), report = bestRep)
         }
         val rng = Random(seed)
         val rejects = RejectCulpritStats()
@@ -96,7 +96,7 @@ internal object C3PairMaskPolish {
             "連続規則(c3系)選択日ペア交換: c3系加重 $c3b->$c3a / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard}" +
                 " 正式評価$evaluated c3n枝刈り$screened 採用$applied(1日${adoptedBySize[1]}/2日${adoptedBySize[2]}/3日${adoptedBySize[3]})" +
                 (if (applied == 0 && c3b > 0) " [頭打ち=現在の探索範囲では改善手なし]" else "") + rejects.summary()))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep)
     }
 
     /** アンカー日を必ず 1 つ含む size 日の集合（昇順・重複なし・窓 ±window 内）を、アンカーに近い順で列挙する。 */

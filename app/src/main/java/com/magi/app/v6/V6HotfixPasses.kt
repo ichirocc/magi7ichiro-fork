@@ -24,6 +24,7 @@ data class HF80Result(
     val applied: Boolean,
     val reason: String,
     val logs: List<MirrorLog>,
+    val report: ViolationReport? = null,
 )
 
 data class HF67Result(
@@ -35,6 +36,7 @@ data class HF67Result(
     val capacitySwaps: Int,
     val swapsRollback: Int,
     val logs: List<MirrorLog>,
+    val report: ViolationReport? = null,
 )
 
 data class HF66Result(
@@ -46,6 +48,7 @@ data class HF66Result(
     val capacityMoves: Int,
     val movesRollback: Int,
     val logs: List<MirrorLog>,
+    val report: ViolationReport? = null,
 )
 
 data class HF70Result(
@@ -355,6 +358,12 @@ object V6HotfixPasses {
         val restZeroWindowLnsEnabled: Boolean = false,
         /** HF66 直後にも退避する（既定 false＝最終段だけ。早期配置は後続パスの経路を変える＝測定は history 3.554.0）。 */
         val covOReliefEarly: Boolean = false,
+        /** [3.6xx.0/測定中] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
+         *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
+         *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
+         *  最上位の `pickBestStage`（V6FinalPort、4 マクロ段）とは独立・併用＝チェーン内部の粒度を補完するだけ。
+         *  既定 OFF。採否は tools/loop のベンチマークで決める。 */
+        val postChainRunningKeepBest: Boolean = false,
         /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
         val componentRepairFinal: Boolean = true,
         /** [Iteration 7] 決定的モード＝時間（ms キャップ・締切・残り時間の判定）でなく回数で止める。同じ入力・seed なら同じ盤面。
@@ -457,7 +466,16 @@ object V6HotfixPasses {
      * 後処理チェーンの作業域＝盤面・ログ・パス別所要・ピン帰属の合流点。
      * 各パスは必ず [adopt] を通す＝「pinBlocks の合流を書き忘れる」（3.350.0・3.409.9 で実際に起きた）を構造的に防ぐ。
      */
-    private class PostChain(private val onPhase: (String) -> Unit, schedule: Array<IntArray>) {
+    /** [postChainRunningKeepBest テスト用] visibility は internal＝`DeterministicPostChainTest` から直接駆動して検証する。 */
+    internal class PostChain(
+        private val onPhase: (String) -> Unit,
+        schedule: Array<IntArray>,
+        private val state: MagiState,
+        private val quantitativeRangeEval: Boolean,
+        /** [postChainRunningKeepBest/測定中] false のときは以下の bestWork/bestReport を一切触らない＝挙動完全不変。 */
+        private val runningKeepBest: Boolean = false,
+        initialReport: ViolationReport? = null,
+    ) {
         var work: Array<IntArray> = schedule.copy2D()
             private set
         val logs = ArrayList<MirrorLog>()
@@ -465,6 +483,10 @@ object V6HotfixPasses {
         val pinBlocksAll = PinBlockAttribution()
         /** [Iteration 2] 巡の中で各パスが残した拒否候補。巡の末尾で違反連結成分修復へ渡して空にする。 */
         val rejectedPool = ArrayList<CombinatorialRepair.Candidate>()
+
+        /** [postChainRunningKeepBest] チェーン内で到達した最良盤面・報告書（flag OFF なら未使用のまま）。 */
+        private var bestWork: Array<IntArray> = work.copy2D()
+        private var bestReport: ViolationReport? = initialReport
 
         /** フェーズ名を UI へ通知し、所要 ms を [key] に累算しながら [block] を実行する。 */
         fun <R> timed(phase: String, key: String, block: (Array<IntArray>) -> R): R {
@@ -475,24 +497,50 @@ object V6HotfixPasses {
             return r
         }
 
+        /**
+         * [postChainRunningKeepBest/測定中] 直前に畳み込んだ [work] を、パス自身が既に評価済みの [report]
+         * （なければ安価な再チェック）でチェーン最良と比較する。悪化していれば最良盤面へ巻き戻し、
+         * [passLogs] は棄却マーカー付きで返す（ログは落とさない＝`annotateStaleLogsIfRegressed` と同じ方針）。
+         * flag OFF のときは何もせず [passLogs] をそのまま返す＝挙動完全不変。
+         */
+        private fun runningKeepBestFold(report: ViolationReport?, passLogs: List<MirrorLog>): List<MirrorLog> {
+            if (!runningKeepBest) return passLogs
+            val rep = report ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+            val best = bestReport
+            if (best == null || betterReport(rep, best)) {
+                bestReport = rep
+                bestWork = work.copy2D()
+                return passLogs
+            }
+            work = bestWork.copy2D()
+            return passLogs.map { it.copy(message = "$ROLLBACK_MARKER${it.message}") }
+        }
+
         /** 結果を盤面へ反映し、ピン帰属を合流させ、[keepLogs] のときだけログを積む。採用数を返す。 */
         fun adopt(r: CyclicSwapResult, keepLogs: Boolean = true): Int {
             r.pinBlocks?.let { pinBlocksAll.merge(it) }
             rejectedPool.addAll(r.rejectedCandidates)
             work = r.newSchedule.copy2D()
-            if (keepLogs) logs.addAll(r.logs)
+            val folded = runningKeepBestFold(r.report, r.logs)
+            if (keepLogs) logs.addAll(folded)
             return r.applied
         }
 
         fun adopt(r: DayAssignmentPolish.DayAssignResult) {
             r.pinBlocks?.let { pinBlocksAll.merge(it) }
             work = r.newSchedule.copy2D()
-            logs.addAll(r.logs)
+            logs.addAll(runningKeepBestFold(r.report, r.logs))
         }
 
-        fun replaceBoard(newSchedule: Array<IntArray>, passLogs: List<MirrorLog>) {
+        fun replaceBoard(newSchedule: Array<IntArray>, passLogs: List<MirrorLog>, report: ViolationReport? = null) {
             work = newSchedule.copy2D()
-            logs.addAll(passLogs)
+            logs.addAll(runningKeepBestFold(report, passLogs))
+        }
+
+        companion object {
+            /** [postChainRunningKeepBest/測定中] チェーン内巻き戻しで不採用になった行の目印（`annotateStaleLogsIfRegressed`
+             *  の "[棄却盤面の観測] " と同型・別文脈用）。 */
+            const val ROLLBACK_MARKER = "[チェーン内巻き戻しで不採用] "
         }
     }
 
@@ -514,21 +562,21 @@ object V6HotfixPasses {
         deadlineMs: Long = Long.MAX_VALUE,
         params: PostOptimizationParams = PostOptimizationParams(),
     ): V6PostOptimizationResult {
-        val chain = PostChain(onPhase, schedule)
-        val t0 = EngineClock.nowMs()
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
+        val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0)
+        val t0 = EngineClock.nowMs()
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
             applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
         }
-        chain.replaceBoard(r80.newSchedule, r80.logs)
+        chain.replaceBoard(r80.newSchedule, r80.logs, r80.report)
 
         val t67 = EngineClock.nowMs()
         val r67 = chain.timed("後処理 HF67 職員間スワップ", "HF67InterStaffSwap") { work ->
             val cap = (EngineClock.remainingMs(deadlineMs, t67) / 2).coerceAtMost(params.hf67CapMs)
             HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = params.hf67MaxSwaps, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t67 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
-        chain.replaceBoard(r67.newSchedule, r67.logs)
+        chain.replaceBoard(r67.newSchedule, r67.logs, r67.report)
 
         val t66 = EngineClock.nowMs()
         val r66 = chain.timed("後処理 HF66 職員内再配分", "HF66IntraStaffRedistribution") { work ->
@@ -536,12 +584,12 @@ object V6HotfixPasses {
             val cap = (EngineClock.remainingMs(deadlineMs, t66) / 2).coerceAtMost(params.hf66CapMs)
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
-        chain.replaceBoard(r66.newSchedule, r66.logs)
+        chain.replaceBoard(r66.newSchedule, r66.logs, r66.report)
         if (params.covOReliefEnabled && params.covOReliefEarly && !shouldStop()) {
             val r = chain.timed("後処理 人員過剰の退避", "CovORelief") { work ->
                 CovOReliefPolish.apply(state, work, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             }
-            chain.replaceBoard(r.newSchedule, r.logs)
+            chain.replaceBoard(r.newSchedule, r.logs, r.report)
         }
         val t66Done = EngineClock.nowMs()
 
@@ -663,7 +711,7 @@ object V6HotfixPasses {
             val r = chain.timed("後処理 休0日の窓LNS(最終)", "RestZeroLNS") { work ->
                 RestZeroWindowLns.apply(state, work, shouldStop = lnsStop, quantitativeRangeEval = params.quantitativeRangeEval)
             }
-            chain.replaceBoard(r.newSchedule, r.logs)
+            chain.replaceBoard(r.newSchedule, r.logs, r.report)
         }
 
         if (params.covOReliefEnabled && !shouldStop()) {
@@ -672,7 +720,7 @@ object V6HotfixPasses {
             val r = chain.timed("後処理 人員過剰の退避(最終)", "CovORelief") { work ->
                 CovOReliefPolish.apply(state, work, shouldStop = reliefStop, quantitativeRangeEval = params.quantitativeRangeEval)
             }
-            chain.replaceBoard(r.newSchedule, r.logs)
+            chain.replaceBoard(r.newSchedule, r.logs, r.report)
         }
 
         val tHf = EngineClock.nowMs()
@@ -974,7 +1022,7 @@ object V6HotfixPasses {
         }
         val reason = if (applied) "strategic oscillation accepted" else "no improving oscillation"
         val logs = listOf(MirrorLog(tag = "HF80", message = "SO applied=$applied HARD ${before.hard}->${bestReport.hard} score ${before.weightedScore.toLong()}->${bestReport.weightedScore.toLong()} cycles=$usedCycles"))
-        return HF80Result(best, before.hard, bestReport.hard, before.weightedScore, bestReport.weightedScore, usedCycles, applied, reason, logs)
+        return HF80Result(best, before.hard, bestReport.hard, before.weightedScore, bestReport.weightedScore, usedCycles, applied, reason, logs, report = bestReport)
     }
 
     data class CyclicSwapResult(
@@ -998,6 +1046,9 @@ object V6HotfixPasses {
         val pinBlocks: PinBlockAttribution? = null,
         /** [Iteration 2] このパスが単独では不採用にし、結合にも使わなかった候補（違反連結成分修復の材料）。 */
         val rejectedCandidates: List<CombinatorialRepair.Candidate> = emptyList(),
+        /** [postChainRunningKeepBest/測定中] このパスが自身の keep-best ループで既に評価済みの `newSchedule` に対応する報告書。
+         * 未設定(null)のパスは `PostChain` 側で安価な再チェックにフォールバックする。 */
+        val report: ViolationReport? = null,
     )
 
     /**

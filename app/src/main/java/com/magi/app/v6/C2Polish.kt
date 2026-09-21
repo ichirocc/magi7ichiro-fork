@@ -75,6 +75,6 @@ internal object C2Polish {
             if (!improved) break
         }
         val logs = listOf(MirrorLog(tag = "C2Polish", message = "個人合計(c2)研磨: total ${before.total}->${bestRep.total} 採用${applied}回"))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 }

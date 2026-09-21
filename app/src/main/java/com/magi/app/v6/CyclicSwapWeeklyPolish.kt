@@ -120,7 +120,7 @@ internal object CyclicSwapWeeklyPolish {
         }
         val logs = listOf(MirrorLog(tag = "CyclicSwap",
             message = "循環交換(k=2,3${if (maxK >= 4) ",4.." + maxK else ""})研磨: total ${before.total}->${bestRep.total} 採用${applied}回"))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 
 
@@ -237,7 +237,7 @@ internal object CyclicSwapWeeklyPolish {
         }
         val logs = listOf(MirrorLog(tag = "WeeklyRebalance",
             message = "曜日平準化(長方形交換): total ${before.total}->${bestRep.total} 採用${applied}回"))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 
 

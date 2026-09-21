@@ -95,6 +95,6 @@ internal object C41FlowPolish {
             if (!a && !b) break
         }
         val logs = listOf(MirrorLog(tag = "C41FlowPolish", message = "群/日レンジ(c41/c41s)フロー研磨: total ${before.total}->${bestRep.total} 採用${applied}回"))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 }

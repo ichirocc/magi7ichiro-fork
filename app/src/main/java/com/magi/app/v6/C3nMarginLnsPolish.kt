@@ -29,7 +29,7 @@ internal object C3nMarginLnsPolish {
         val tag = "C3nMarginLNS"
         if (p.cons3n.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
-                listOf(MirrorLog(tag = tag, message = "cons3nなし=スキップ")))
+                listOf(MirrorLog(tag = tag, message = "cons3nなし=スキップ")), report = bestRep)
         }
         val rng = Random(seed)
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
@@ -140,6 +140,6 @@ internal object C3nMarginLnsPolish {
                 (if (applied == 0 && (before.breakdown["c3n"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 rejectCulprits.summary() +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep)
     }
 }

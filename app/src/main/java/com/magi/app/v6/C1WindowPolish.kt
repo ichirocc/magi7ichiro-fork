@@ -76,7 +76,7 @@ internal object C1WindowPolish {
         var provenWalls = 0
         if (p.cons1.isEmpty() || (before.breakdown["c1"] ?: 0) == 0) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
-                listOf(MirrorLog(tag = "C1ExactRepair", message = "c1対象なし=スキップ")))
+                listOf(MirrorLog(tag = "C1ExactRepair", message = "c1対象なし=スキップ")), report = before)
         }
         // [A1] 証明済み「解消不能スパン」のmemo（キー=焦点職員,シフト,スパン内容ハッシュ）。
         val deadSpans = HashSet<String>()
@@ -159,7 +159,7 @@ internal object C1WindowPolish {
                 // [3.321.0] 旧: applied==0 を一律「改善手なし」としていたが、patch が出て却下された場合と
                 //   patch がそもそも出ない場合を区別できなかった。前者は上の内訳が語るのでここは後者だけ。
                 (if (applied == 0 && c1b > 0 && rejectCulprits.rejected == 0) " [頭打ち=候補が出ない]" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep)
     }
 
 
@@ -191,7 +191,7 @@ internal object C1WindowPolish {
         val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         if (p.cons1.isEmpty() || (before.breakdown["c1"] ?: 0) == 0) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, before.total, 0,
-                listOf(MirrorLog(tag = "C1IndexRepair", message = "c1対象なし=スキップ")))
+                listOf(MirrorLog(tag = "C1IndexRepair", message = "c1対象なし=スキップ")), report = before)
         }
         val rng = Random(seed)
         var bestRep = before
@@ -260,7 +260,7 @@ internal object C1WindowPolish {
             listOf(MirrorLog(tag = "C1IndexRepair",
                 message = "index駆動C1修復: c1 ${before.breakdown["c1"] ?: 0}->$c1After 採用$applied(連鎖$chainUsed) " +
                     "prefilter除外(延べ)$screened" + (if (capHit) " 採用上限${maxAdoptions}到達=打ち切り" else ""))),
-            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks,
+            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep,
         )
     }
 
@@ -304,7 +304,7 @@ internal object C1WindowPolish {
         var aRect = 0; var aSelf = 0
         if (p.cons1.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
-                listOf(MirrorLog(tag = "C1Polish", message = "cons1なし=スキップ")))
+                listOf(MirrorLog(tag = "C1Polish", message = "cons1なし=スキップ")), report = bestRep)
         }
         val rng = Random(seed)
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
@@ -643,7 +643,7 @@ internal object C1WindowPolish {
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
                 (if (c1CombSummary.isNotEmpty()) " / $c1CombSummary" else "")))
-        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, plateau, pinBlocks.attempts, pinBlocks, rejectedCandidates = rejectedOut)
+        return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, plateau, pinBlocks.attempts, pinBlocks, rejectedCandidates = rejectedOut, report = bestRep)
     }
 
     /**
@@ -723,7 +723,7 @@ internal object C1WindowPolish {
         val before = UnifiedViolationChecker.check(state, work0, quantitativeRangeEval)
         if (p.cons1.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work0, before.total, before.total, 0,
-                listOf(MirrorLog(tag = "C1BeamPolish", message = "cons1なし=スキップ")))
+                listOf(MirrorLog(tag = "C1BeamPolish", message = "cons1なし=スキップ")), report = before)
         }
         val rng = Random(seed)
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
@@ -840,7 +840,7 @@ internal object C1WindowPolish {
                 // 「c1 107->112 / total 425->431」だけが出て退行に見えた＝数字の根拠を同じ行に出す。
                 "c1 ${before.breakdown["c1"] ?: 0}->${best.rep.breakdown["c1"] ?: 0} / total ${before.total}->${best.rep.total} score ${before.weightedScore.toLong()}->${best.rep.weightedScore.toLong()} HARD ${before.hard}->${best.rep.hard} 手数${best.applied}" +
                 (if (best.applied == 0 && candidate !== best && candidate.applied > 0) " [探索結果が根に勝てず破棄]" else "")))
-        return V6HotfixPasses.CyclicSwapResult(best.work, before.total, best.rep.total, best.applied, logs, pinBlocks = pinBlocks)
+        return V6HotfixPasses.CyclicSwapResult(best.work, before.total, best.rep.total, best.applied, logs, pinBlocks = pinBlocks, report = best.rep)
     }
 
 

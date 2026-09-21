@@ -195,7 +195,7 @@ object ViolationComponentRepair {
         var applied = 0
         fun done(message: String) = V6HotfixPasses.CyclicSwapResult(
             work, before.total, bestRep.total, applied, listOf(MirrorLog(tag = "ComponentRepair", message = "違反連結成分修復: $message")),
-            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks,
+            observedPinBlockedAttempts = pinBlocks.attempts, pinBlocks = pinBlocks, report = bestRep,
         )
         if (pool.size < 2 && !params.generateFromAnchors) return done("候補${pool.size}件=スキップ")
         if (work.any { row -> row.any { it !in 0 until p.K } }) return done("未割当セルあり=スキップ")

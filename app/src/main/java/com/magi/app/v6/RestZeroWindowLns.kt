@@ -8,7 +8,7 @@ import com.magi.app.model.MagiState
  * 内側で残りをビーム探索、完成盤面を正式チェッカーで keep-best 判定する。経緯と実データの測定は history 3.555.0。
  */
 internal object RestZeroWindowLns {
-    data class Result(val newSchedule: Array<IntArray>, val applied: Int, val logs: List<MirrorLog>)
+    data class Result(val newSchedule: Array<IntArray>, val applied: Int, val logs: List<MirrorLog>, val report: ViolationReport? = null)
 
     data class Config(
         val before: Int = 4,
@@ -51,13 +51,13 @@ internal object RestZeroWindowLns {
         var applied = 0
         val notes = ArrayList<String>()
 
-        if (rest !in 0 until p.K) return Result(work, 0, listOf(MirrorLog(tag = "RestZeroLNS", message = "休0日の窓LNS: 休シフトなし=スキップ")))
+        if (rest !in 0 until p.K) return Result(work, 0, listOf(MirrorLog(tag = "RestZeroLNS", message = "休0日の窓LNS: 休シフトなし=スキップ")), report = before)
         fun restCount(board: Array<IntArray>, j: Int): Int { var c = 0; for (i in 0 until p.S) if (board[i][j] == rest) c++; return c }
         fun explicitRestNeed(j: Int): Boolean = p.need1[rest][j] >= 0 || (p.use2 && p.need2[rest][j] >= 0)
         val targets = (0 until p.T).filter { j ->
             explicitRestNeed(j) && p.covOCell(rest, j, restCount(work, j)) > 0 && (0 until p.S).any { work[it][j] == rest && !p.wishLocked(it, j) }
         }
-        if (targets.isEmpty()) return Result(work, 0, listOf(MirrorLog(tag = "RestZeroLNS", message = "休0日の窓LNS: 対象日なし（休の必要人数が明示された日に非希望の休の過剰なし）")))
+        if (targets.isEmpty()) return Result(work, 0, listOf(MirrorLog(tag = "RestZeroLNS", message = "休0日の窓LNS: 対象日なし（休の必要人数が明示された日に非希望の休の過剰なし）")), report = before)
 
         // 「翌日が自分か休に限られる」シフト＝夜勤型（2 長の禁止連続 [k, m] から求める）。
         val nightLike = (0 until p.K).filter { k ->
@@ -283,6 +283,6 @@ internal object RestZeroWindowLns {
         val msg = "休0日の窓LNS: covO ${before.breakdown["covO"] ?: 0}->${bestRep.breakdown["covO"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}窓 対象日 " +
             targets.joinToString("/") { "${it + 1}" } + (if (nightLike.isNotEmpty()) " 夜勤型=" + nightLike.joinToString("/") { state.shifts[it].kigou } else "") + " " + notes.joinToString(" | ") +
             (if (evaluations >= config.maxEvaluations) " [評価上限]" else "")
-        return Result(work, applied, listOf(MirrorLog(tag = "RestZeroLNS", message = msg)))
+        return Result(work, applied, listOf(MirrorLog(tag = "RestZeroLNS", message = msg)), report = bestRep)
     }
 }

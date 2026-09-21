@@ -55,4 +55,51 @@ class DeterministicPostChainTest {
         val r = C1RepairOperators.jointLns(s, s.schedule.map { it.toIntArray() }.toTypedArray(), config = cfg)
         assertTrue(r.logs.first().message, !r.logs.first().message.contains("評価回数上限"))
     }
+
+    /** [postChainRunningKeepBest] チェーン内で「良い手→悪い手」の順に畳み込まれたとき、flag OFF は今日と同じ
+     * 退行放置、flag ON は悪い手の直前（＝良い手の盤面）へ巻き戻すことを、`PostChain` を直接駆動して確認する。 */
+    private fun makeCyclicSwapResult(schedule: Array<IntArray>, report: ViolationReport, tag: String) =
+        V6HotfixPasses.CyclicSwapResult(schedule, report.total, report.total, 1, listOf(MirrorLog(tag = tag, message = "$tag 適用")), report = report)
+
+    @Test
+    fun runningKeepBestOffKeepsChainRegression() {
+        val s = state()
+        val work0 = s.schedule.map { it.toIntArray() }.toTypedArray()
+        val report0 = UnifiedViolationChecker.check(s, work0)
+        // 改善盤面(実測): [1][1]=1 で HARD 2->1・weightedScore 20144->10188。
+        val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
+        val improvedReport = UnifiedViolationChecker.check(s, improved)
+        // 退行盤面(実測): 改善盤面からさらに [1][0]=1 で HARD は不変(1)だが weightedScore 10188->10252 に悪化。
+        val regressed = improved.map { it.copyOf() }.toTypedArray().also { it[1][0] = 1 }
+        val regressedReport = UnifiedViolationChecker.check(s, regressed)
+        assertTrue("改善盤面が起点より良いこと(テスト前提)", betterReport(improvedReport, report0))
+        assertTrue("退行盤面が改善盤面より悪いこと(テスト前提)", betterReport(improvedReport, regressedReport))
+
+        val chainOff = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+            runningKeepBest = false, initialReport = report0)
+        chainOff.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
+        chainOff.adopt(makeCyclicSwapResult(regressed, regressedReport, "Bad"))
+        assertTrue("flag OFF は今日と同じくチェーン内の退行を放置する", chainOff.work.contentDeepEquals(regressed))
+        assertTrue(chainOff.logs.none { it.message.contains("チェーン内巻き戻しで不採用") })
+    }
+
+    @Test
+    fun runningKeepBestOnRevertsChainRegression() {
+        val s = state()
+        val work0 = s.schedule.map { it.toIntArray() }.toTypedArray()
+        val report0 = UnifiedViolationChecker.check(s, work0)
+        val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
+        val improvedReport = UnifiedViolationChecker.check(s, improved)
+        val regressed = improved.map { it.copyOf() }.toTypedArray().also { it[1][0] = 1 }
+        val regressedReport = UnifiedViolationChecker.check(s, regressed)
+
+        val chainOn = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+            runningKeepBest = true, initialReport = report0)
+        chainOn.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
+        chainOn.adopt(makeCyclicSwapResult(regressed, regressedReport, "Bad"))
+        assertTrue("flag ON はチェーン内最良（改善盤面）へ巻き戻す", chainOn.work.contentDeepEquals(improved))
+        assertTrue("巻き戻された Bad パスのログは棄却マーカー付きで残る（ログを落とさない）",
+            chainOn.logs.any { it.tag == "Bad" && it.message.contains("チェーン内巻き戻しで不採用") })
+        assertTrue("採用された Good パスのログはマーカーなし", chainOn.logs.any { it.tag == "Good" && !it.message.contains("チェーン内巻き戻しで不採用") })
+    }
 }

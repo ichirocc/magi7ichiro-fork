@@ -13,6 +13,7 @@ internal object CovOReliefPolish {
         val afterCovO: Int,
         val applied: Int,
         val logs: List<MirrorLog>,
+        val report: ViolationReport? = null,
     )
 
     fun apply(
@@ -81,6 +82,6 @@ internal object CovOReliefPolish {
             if (residual.isNotEmpty()) append(" 残存: " + residual.entries.take(8).joinToString(", ") { "${it.key}(${it.value})" })
             if (evaluations >= maxEvaluations) append(" [評価上限で打ち切り]")
         }
-        return Result(work, before.breakdown["covO"] ?: 0, bestRep.breakdown["covO"] ?: 0, applied, listOf(MirrorLog(tag = "CovORelief", message = log)))
+        return Result(work, before.breakdown["covO"] ?: 0, bestRep.breakdown["covO"] ?: 0, applied, listOf(MirrorLog(tag = "CovORelief", message = log)), report = bestRep)
     }
 }
