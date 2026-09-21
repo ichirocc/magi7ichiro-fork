@@ -265,7 +265,11 @@ internal fun OperatorNextActionCard(
             // [3.483.0 H-1] 人手不足が無い狩猟では、この大ボタンは分析タブへ飛んで同じ探索を起動するだけ
             //   ＝直下の「AIの解決提案」と同じ結果を別画面で見せる冗長。不足があるとき（GuidedFix＝
             //   代用要員のピッカーという別機能）だけ出す。
-            "なおすのを手伝って", onFix, !ui.coverageDiag?.shortfalls.isNullOrEmpty(), null, {})
+            // [UX監査P0/U2,H3] 人手不足0のときbigActionを消すだけだとカードにボタンが1つも無くなる
+            //   （helperLabelもnullだった）。主導線は必ず1つ出す＝不足があれば大ボタン、無ければ
+            //   「データを見直す」を補助ボタンとして代わりに出す（infeasible分岐と同じ導線）。
+            "なおすのを手伝って", onFix, !ui.coverageDiag?.shortfalls.isNullOrEmpty(),
+            "データを見直す".takeIf { ui.coverageDiag?.shortfalls.isNullOrEmpty() }, onSetup)
     }
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
@@ -956,8 +960,10 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
                 Spacer(Modifier.height(14.dp))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                BigStat("HARD Core", v6.hardCore.toString(), Modifier.weight(1f))
-                BigStat("Guard", v6.hardGuard.toString(), Modifier.weight(1f))
+                // [UX監査P0/U6,H7] 英字の内部指標名を画面に出さない（operator_ux.md）。hardCore/hardGuardは
+                //   単一のbreakdownLabelsキーに対応しない集計値なので、内訳の意味に沿った日本語を直接あてる。
+                BigStat("必須違反", v6.hardCore.toString(), Modifier.weight(1f))
+                BigStat(breakdownLabels["groupViol"] ?: "groupViol", v6.hardGuard.toString(), Modifier.weight(1f))
                 BigStat("充足", v6.coveragePct?.let { "$it%" } ?: "-", Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
@@ -970,7 +976,9 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             //   要確認のみトグル＋タップ修復）が上位互換のため撤去（3.195.0 で保留した次点候補の実施）。
             Spacer(Modifier.height(10.dp))
             Text(
-                "Apt=${"%.2f".format(v6.aptPenalty)} / Equalize=${"%.2f".format(v6.equPenalty)} / Demand=${v6.demand} / covU=${v6.covU}",
+                "${breakdownLabels["apt"] ?: "apt"}=${"%.2f".format(v6.aptPenalty)} / " +
+                    "${breakdownLabels["fair"] ?: "fair"}=${"%.2f".format(v6.equPenalty)} / " +
+                    "必要人数=${v6.demand} / ${breakdownLabels["covU"] ?: "covU"}=${v6.covU}",
                 fontFamily = FontFamily.Monospace,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
