@@ -1,5 +1,9 @@
 # 作業記録の索引（見出し一覧）
 
+- UX机上テストP1の2件を修正（3.605.0）: `GuidedFixDialog`の候補0行き止まりに「データを見直す」を追加。
+  `CollapsibleSection`に`forceExpandKey`を追加しC1頭打ち/ピン影響カードからの誘導が年間マスター③へ
+  自動展開するように。E2(HARD同点)はbacklog#19で測定済み、E4(休の散在)は事実誤りと確認・対応不要。
+  → `docs/history/3.4xx.md`
 - UX机上テストP0の3件を修正（3.604.0）: ホームのamberカードで人手不足0＋未完成のとき主ボタンが1つも
   出ない不具合を修正（必ず1つ出す）。V6診断カードの英字「HARD Core/Guard/Apt/Equalize/Demand/covU」を
   日本語へ（breakdownLabels再利用）。U16（休の改名警告）はbacklog#24で構造的に解消済みと確認・対応不要。

@@ -192,6 +192,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // [下流→上流ディープリンク] 要確認一覧「設定で直す」→ 該当職員/シフトを事前選択して開く（-1=無し・消費で戻す）。
     var deepLinkWishStaff by rememberSaveable { mutableStateOf(-1) }
     var deepLinkNeedShift by rememberSaveable { mutableStateOf(-1) }
+    // [UX監査#1] 年間マスターの節（CollapsibleSection）への誘導先。C1頭打ち/ピン影響カードは
+    //   「個人の回数を見直す」導線なので③(yr_count)を対象に強制展開する。
+    var deepLinkEditSection by rememberSaveable { mutableStateOf<String?>(null) }
     // CountsCard(③回数)のセルタップシート開閉。カード側でなく Root が持つ＝編集のたびに閉じない。
     var countsSheetCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
@@ -517,9 +520,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ForbiddenRunDiagnosisCard(ui, onRelaxRule = { vm.relaxForbiddenRule(it) })
                     // [3.322.0] 窓の要件(c1)が直せなかった理由（直近の最適化での却下記録。残存なしなら非表示）。
                     // 誘導先は年間マスター③「回数（1人あたり）」＝個人の下限/上限がある場所（3.286.0 で一本化済み）。
-                    C1PlateauCard(ui, onGoEdit = { tab = 2; editScope = 2 })
+                    C1PlateauCard(ui, onGoEdit = { tab = 2; editScope = 2; deepLinkEditSection = "yr_count" })
                     // [3.325.0] 回数固定の横断集計は c1 固有でないので独立カードへ分離（c1=0 でも出る）。
-                    PinFixedImpactCard(ui, onGoEdit = { tab = 2; editScope = 2 },
+                    PinFixedImpactCard(ui, onGoEdit = { tab = 2; editScope = 2; deepLinkEditSection = "yr_count" },
                         onRelax = { i, k, loD, hiD -> vm.relaxStaffRangePin(i, k, loD, hiD) })
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) }, onGoEdit = { tab = 2 },
                         onClearWishes = { vm.clearOutOfScopeWishes() })
@@ -652,7 +655,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // ③ 回数（1人あたり）★統合: 目標(apt) ＋ 個人の下限上限(ws5) ＋ グループ一括。
                             //   [design-review 冗長性] 旧SectionNoteは CountsCard 冒頭の説明文と全文重複していた
                             //   （3枚の別カードだった名残）。CountsCard へ統合したいま、説明はカード内の1回だけ。
-                            CollapsibleSection("③ 回数（1人あたり）", "yr_count") {
+                            CollapsibleSection("③ 回数（1人あたり）", "yr_count", forceExpandKey = deepLinkEditSection,
+                                onForceExpandConsumed = { deepLinkEditSection = null }) {
                                 ws1View?.let { CountsCard(ui, it, viewState.counts, conditionsView, onEvent, sheetCell = countsSheetCell, onSheetCellChange = { c -> countsSheetCell = c }) }
                             }
                             // ④ 人数と組み合わせ ★統合: グループ(C41/C42) ＋ スキルグループ(C41s/C42s)
@@ -753,7 +757,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             )
         }
         if (guidedFix) {
-            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false })
+            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { tab = 2 })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(

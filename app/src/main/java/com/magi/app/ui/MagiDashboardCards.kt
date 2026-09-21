@@ -113,6 +113,7 @@ internal fun GuidedFixDialog(
     vm: MagiViewModel,
     onEvent: (MagiEvent) -> Unit,
     onDismiss: () -> Unit,
+    onGoEdit: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val shortfalls = ui.coverageDiag?.shortfalls ?: emptyList()
@@ -156,6 +157,11 @@ internal fun GuidedFixDialog(
                             // [3.401.0] 汎用の文言でなく、この枠についての診断そのものを出す
                             //   （なぜ動かせないかは CoverageDiagnosis が既に調べて書いている）。
                             Text(target.reason, color = cs.error, style = MaterialTheme.typography.bodyMedium)
+                            // [UX監査#5] 旧: 候補0のとき「閉じる」以外の導線が無い行き止まりだった。
+                            //   担当できるシフトや希望を編集タブで直すという次の一手を明示する。
+                            OutlinedButton(onClick = { onDismiss(); onGoEdit() }, modifier = Modifier.fillMaxWidth()) {
+                                Text("データを見直す")
+                            }
                         } else {
                             cands.take(8).forEach { c ->
                                 Button(
