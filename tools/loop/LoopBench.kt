@@ -26,7 +26,7 @@ object Cases {
     fun build(sp: Spec): MagiState {
         val rng = Random(sp.seed)
         val S = sp.s; val T = sp.t
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("日勤", "A", "", ""), Shift("早番", "C", "", ""), Shift("夜勤", "B", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", role = ShiftRole.Rest), Shift("日勤", "A", "", ""), Shift("早番", "C", "", ""), Shift("夜勤", "B", "", ""))
         val groups = listOf(Group("ベテラン", "V"), Group("一般", "N"))
         val staff = (0 until S).map { Staff("職員%02d".format(it + 1), if (it % 3 == 0) 0 else 1) }
         // 一般は早番不可（担当可否に差を作る）
