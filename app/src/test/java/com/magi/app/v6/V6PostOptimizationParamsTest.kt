@@ -17,7 +17,7 @@ class V6PostOptimizationParamsTest {
 
     /** 3 職員×11 日・厳密ピンと下限割れを持つ盤面（AdaptiveBlockSwapPolishTest の pinnedRestState と同形）。 */
     private fun pinnedState(): MagiState {
-        val shifts = listOf(Shift("休み", "休", "1", "1"), Shift("X", "X", "1", "1"), Shift("Y", "Y", "1", "1"))
+        val shifts = listOf(Shift("休み", "休", "1", "1", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", "1"), Shift("Y", "Y", "1", "1"))
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"))
         return MagiState(
             startDate = "2026-02-01", endDate = "2026-02-11",

@@ -15,7 +15,7 @@ class RestZeroWindowLnsTest {
     private fun st(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap(), needDay: Map<String, String> = mapOf("0,3" to "0")): MagiState =
         MagiState(
             startDate = "2026-08-01", endDate = "2026-08-06",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("D", "D", "1", ""), Shift("A", "A", "1", ""), Shift("B", "B", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("D", "D", "1", ""), Shift("A", "A", "1", ""), Shift("B", "B", "", "")),
             groups = listOf(Group("G", "G")), staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("Z", 0)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1, 1, 1)), groupShiftApt = listOf(listOf("", "", "", "")),
             schedule = schedule, wishes = wishes, staffRange = emptyMap(), needDay1 = needDay, needDay2 = emptyMap(),

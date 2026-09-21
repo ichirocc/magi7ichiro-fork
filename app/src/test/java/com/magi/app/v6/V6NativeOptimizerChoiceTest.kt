@@ -259,7 +259,7 @@ class V6NativeOptimizerChoiceTest {
     //   このテスト自身が偶然踏んでいた＝新実装が正しく動作している証拠）。
     private fun covOState(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-01",
-        shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+        shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "")),
         groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
         staff = listOf(Staff("a", 0), Staff("b", 1)),
         use2Patterns = false,
@@ -291,7 +291,7 @@ class V6NativeOptimizerChoiceTest {
     @Test fun applyCovOFreeMovesStaffWhoseWishIsInfeasible() {
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "")),
             groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
             staff = listOf(Staff("a", 0), Staff("b", 1)),
             use2Patterns = false,
@@ -336,7 +336,7 @@ class V6NativeOptimizerChoiceTest {
     // どちらも即諦めて covO を残していたが、隣接日調整(day0のYを休へ変更しパターンを崩す)で
     // X側の候補が解放され解消できることを固定する。
     @Test fun applyCovOFreeResolvesViaAdjacentDayFixWhenAllDirectMovesAreForbidden() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1, 1))
         val staff = listOf(Staff("a", 0), Staff("b", 0))
@@ -376,7 +376,7 @@ class V6NativeOptimizerChoiceTest {
     // [smoke] focus="apt" が destroyRepairStaff 経路(low/high/c2と合流)へ正しくルーティングされ、
     //   例外なく同一次元の盤面を返すこと。改善量そのものはラウンド単位 keep-best が別途保証する。
     @Test fun rsiGenerateHypothesisAptFocusReturnsValidSchedule() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("a", 0), Staff("b", 0))
         val schedule = listOf(listOf(0, 1, 0, 1), listOf(1, 0, 1, 0))
@@ -436,7 +436,7 @@ class V6NativeOptimizerChoiceTest {
     //   また両staffを別々の単独群(G0/G1)にしfair対象外にする（covOState と同じ理由）。
     private fun covOOrderState(): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-01",
-        shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", ""), Shift("雑務", "C", "", "")),
+        shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", ""), Shift("雑務", "C", "", "")),
         groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
         staff = listOf(Staff("a", 0), Staff("b", 1)),
         use2Patterns = false,
@@ -544,7 +544,7 @@ class V6NativeOptimizerChoiceTest {
         // shift: 0=休(need無) 1=X(c41対象、need1=2でA/Bちょうど単独充足) 2=Y(need無、Aの逃げ先)
         //   3=Z(need無、Cのday0在籍地)
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("X", "X", "2", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "2", ""),
             Shift("Y", "Y", "", ""), Shift("Z", "Z", "", ""),
         )
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
@@ -584,7 +584,7 @@ class V6NativeOptimizerChoiceTest {
         // shift: 0=休(need無) 1=X(c41対象、need無) 2=Y(need1=1、Aの現在地) 3=W(need1=1、Bの現在地)
         //   4=Z(need無、Cの現在地)。offShift候補(A,B)がどちらもneed1を単独充足しており直接移動は不可。
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("X", "X", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""),
             Shift("Y", "Y", "1", ""), Shift("W", "W", "1", ""), Shift("Z", "Z", "", ""),
         )
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
@@ -637,7 +637,7 @@ class V6NativeOptimizerChoiceTest {
     // 再割当頼みだった。applyC42Freeが違反ペアの片側を実際に動かして解消することを固定する。
     private fun c42State(schedule: List<List<Int>>, wishes: Map<String, Int> = emptyMap()): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-01",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
         groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
         staff = listOf(Staff("A", 0), Staff("B", 1)),
         use2Patterns = false,
@@ -687,7 +687,7 @@ class V6NativeOptimizerChoiceTest {
     //   解けない。findCovUChainで別職員に玉突き充填すれば解消できることを固定する。
     @Test fun applyC42FreeResolvesViaChainWhenDirectMoveWouldCreateCovU() {
         // shift: 0=休(need無) 1=X(c42対象、need1=1でAがちょうど単独充足) 2=Y(need無、Bの現在地)
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", ""), Shift("Y", "Y", "", ""))
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2"))
         val groupShift = listOf(
             listOf(1, 1, 0), // G0(A)=休,X
@@ -919,7 +919,7 @@ class V6NativeOptimizerChoiceTest {
     // 「明確に最良(hard=0,total=0)」→「明確に劣る(hard=0,total=極大)」の順で呼び、劣る側が無視されることを
     // 直接確認する（逆順=劣る値を先に публиしても後続の最良値が正しく採用されることも合わせて確認）。
     private fun tinyState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("A", 0))
         return MagiState(
@@ -1049,7 +1049,7 @@ class V6NativeOptimizerChoiceTest {
     /** 2職員×2日・シフト {休, X, Y}。G0 は {休, X} のみ担当可＝Y は担当外。 */
     private fun canDoState(staffRange: Map<String, Range>) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-02",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
         groups = listOf(Group("G0", "G0")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,
@@ -1146,7 +1146,7 @@ class V6NativeOptimizerChoiceTest {
      */
     private fun need2OnlyState(): MagiState = MagiState(
         startDate = "2026-09-01", endDate = "2026-09-01",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "1")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "1")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("A", 0)),
         use2Patterns = true,

@@ -19,7 +19,9 @@ package com.magi.app.model
  *  - needDay1/needDay2["k,j"]    : per-day need override for shift k on day j.
  *  - cons1..cons42  : the constraint families (see resolveConstraints / Evaluator).
  */
-data class Shift(val name: String, val kigou: String, val need1: String, val need2: String)
+/** [backlog#24] シフトの特別な役割。休みの識別を記号"休"の字面一致から切り離すために導入（3.603.0）。 */
+enum class ShiftRole { None, Rest }
+data class Shift(val name: String, val kigou: String, val need1: String, val need2: String, val role: ShiftRole = ShiftRole.None)
 data class Group(val name: String, val kigou: String)
 /** staff[i]: groupIdx -> ユニットグループ(既存・担当可否/covU)、skillIdx -> スキルグループ(新設・新C41s/C42s専用)。 */
 data class Staff(val name: String, val groupIdx: Int, val skillIdx: Int = 0)

@@ -27,7 +27,7 @@ class AdaptiveBlockSwapPolishTest {
      */
     private fun crossGroupState(wishes: Map<String, Int> = emptyMap()): MagiState {
         val shifts = listOf(
-            Shift("休み", "休", "", ""),
+            Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", "1"),
             Shift("Y", "Y", "1", "1"),
         )
@@ -117,7 +117,7 @@ class AdaptiveBlockSwapPolishTest {
      */
     private fun threeWayCycleState(): MagiState {
         val shifts = listOf(
-            Shift("休み", "休", "", ""),
+            Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", "1"),
             Shift("Y", "Y", "1", "1"),
             Shift("Z", "Z", "1", "1"),
@@ -181,7 +181,7 @@ class AdaptiveBlockSwapPolishTest {
      */
     private fun fourWayCycleState(): MagiState {
         val shifts = listOf(
-            Shift("休み", "休", "", ""),
+            Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("P", "P", "1", "1"),
             Shift("Q", "Q", "1", "1"),
             Shift("R", "R", "1", "1"),
@@ -250,7 +250,7 @@ class AdaptiveBlockSwapPolishTest {
      */
     private fun pinnedRestState(): MagiState {
         val shifts = listOf(
-            Shift("休み", "休", "1", "1"),
+            Shift("休み", "休", "1", "1", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", "1"),
             Shift("Y", "Y", "1", "1"),
         )
@@ -356,7 +356,7 @@ class AdaptiveBlockSwapPolishTest {
     /** [3.511.0] 30 日月は固定長(11/13/17/19/23/28)のどれとも一致しないため「当月まるごと」が一度も試されない穴を、
      *  動的長(backlog #14(c))が [Problem.T] を足して塞ぐことを確認する。 */
     private fun thirtyDayState(): MagiState {
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("X", "X", "1", "1"))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", "1"))
         val staff = listOf(Staff("A", 0), Staff("B", 0))
         return MagiState(
             startDate = "2026-04-01", endDate = "2026-04-30",

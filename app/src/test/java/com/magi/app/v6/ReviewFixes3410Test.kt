@@ -60,7 +60,7 @@ class ReviewFixes3410Test {
     /** 休が index 0 でないデータ。schedule に範囲外セルを1つ置く。 */
     private fun stWithRestNotFirst(groupIdxOfS0: Int) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-02",
-        shifts = listOf(Shift("X", "X", "", ""), Shift("休", "休", "", "")),
+        shifts = listOf(Shift("X", "X", "", ""), Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
         groups = listOf(Group("G0", "G0")),
         staff = listOf(Staff("s0", groupIdxOfS0)),
         use2Patterns = false,
@@ -167,7 +167,7 @@ class ReviewFixes3410Test {
     @Test fun unknownGroupAndSkillSymbolsInStaffCsvAreRecorded() {
         val st = com.magi.app.model.MagiState(
             startDate = "2026-06-01", endDate = "2026-06-02",
-            shifts = listOf(com.magi.app.model.Shift("休", "休", "", ""), com.magi.app.model.Shift("A", "A", "", "")),
+            shifts = listOf(com.magi.app.model.Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), com.magi.app.model.Shift("A", "A", "", "")),
             groups = listOf(com.magi.app.model.Group("G1", "G1")),
             skillGroups = listOf(com.magi.app.model.Group("S1", "S1")),
             staff = listOf(com.magi.app.model.Staff("既存", 0, 0)),
@@ -198,7 +198,7 @@ class ReviewFixes3410Test {
     @Test fun unclosedQuoteInScheduleCsvIsFlaggedInsteadOfSilentlyTruncated() {
         val st = com.magi.app.model.MagiState(
             startDate = "2026-06-01", endDate = "2026-06-02",
-            shifts = listOf(com.magi.app.model.Shift("休", "休", "", ""), com.magi.app.model.Shift("A", "A", "", "")),
+            shifts = listOf(com.magi.app.model.Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), com.magi.app.model.Shift("A", "A", "", "")),
             groups = listOf(com.magi.app.model.Group("G1", "G1")),
             staff = listOf(com.magi.app.model.Staff("職員A", 0), com.magi.app.model.Staff("職員B", 0)),
             use2Patterns = false,

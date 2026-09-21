@@ -23,7 +23,7 @@ class V6SearchOperatorsTest {
     private fun state(): MagiState = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-01",
         // shift 0="休"(needなし), shift 1="X"(need1未設定・need2=1のみで上限定義)
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "1")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "1")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = true,
@@ -77,7 +77,7 @@ class TargetedFixTest {
         staffRange: Map<String, com.magi.app.model.Range> = emptyMap(), apt: List<String> = listOf("", "", ""),
     ): MagiState = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-04",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
         groups = listOf(Group("G", "G"), Group("H", "H")),
         staff = rows.indices.map { Staff("s$it", groups[it], skills[it]) },
         use2Patterns = false,

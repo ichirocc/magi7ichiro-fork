@@ -13,9 +13,18 @@ object StateParser {
     fun parse(json: String): MagiState {
         val o = JSONObject(json)
 
-        val shifts = o.optJSONArray("shifts").mapObjects("shifts") {
-            Shift(it.optString("name"), it.optString("kigou"), asStr(it.opt("need1")), asStr(it.opt("need2")))
+        val shiftsRaw = o.optJSONArray("shifts").mapObjects("shifts") {
+            val role = if (it.optString("role") == "rest") ShiftRole.Rest else ShiftRole.None
+            Shift(it.optString("name"), it.optString("kigou"), asStr(it.opt("need1")), asStr(it.opt("need2")), role)
         }
+        // [3.603.0/backlog#24] 旧JSON（roleフィールド無し）の後方互換: どのシフトにもRestが
+        //   付与されていなければ、記号"休"のシフト(最初の1件)へ自動で付与する。移行後はroleが
+        //   唯一の正＝以後、記号を変えてもRestは追従しない（意図的な分離）。
+        val shifts = if (shiftsRaw.none { it.role == ShiftRole.Rest }) {
+            val restPos = shiftsRaw.indexOfFirst { it.kigou == "休" }
+            if (restPos >= 0) shiftsRaw.mapIndexed { idx, s -> if (idx == restPos) s.copy(role = ShiftRole.Rest) else s }
+            else shiftsRaw
+        } else shiftsRaw
         val groups = o.optJSONArray("groups").mapObjects("groups") {
             Group(it.optString("name"), it.optString("kigou"))
         }
@@ -174,7 +183,8 @@ object StateParser {
         o.put("endDate", state.endDate)
         o.put("use2Patterns", state.use2Patterns)
         o.put("shifts", consArr(state.shifts) {
-            obj("name" to it.name, "kigou" to it.kigou, "need1" to it.need1, "need2" to it.need2)
+            obj("name" to it.name, "kigou" to it.kigou, "need1" to it.need1, "need2" to it.need2,
+                "role" to (if (it.role == ShiftRole.Rest) "rest" else ""))
         })
         o.put("groups", consArr(state.groups) { obj("name" to it.name, "kigou" to it.kigou) })
         val staffArr = JSONArray()

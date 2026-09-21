@@ -74,7 +74,7 @@ class ObjectiveParityTest {
         val groupShiftApt = (0 until g).map {
             (0 until k).map { if (rng.nextInt(3) == 0) rng.nextInt(t + 1).toString() else "" }
         }
-        val shifts = listOf(Shift("休", "休", "", "")) + (1 until k).map {
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)) + (1 until k).map {
             // need1/need2 を入れて covU/covO を出す。
             Shift("S$it", "S$it", if (rng.nextInt(2) == 0) rng.nextInt(3).toString() else "",
                 if (rng.nextInt(2) == 0) (1 + rng.nextInt(3)).toString() else "")

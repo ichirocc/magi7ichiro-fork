@@ -18,7 +18,7 @@ import org.junit.Test
  */
 class C42FlowPolishTest {
     private fun state(wishes: Map<String, Int> = emptyMap()): MagiState {
-        val shifts = listOf(Shift("休み", "休", "", ""), Shift("P", "P", "", ""), Shift("Q", "Q", "", ""))
+        val shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", ""), Shift("Q", "Q", "", ""))
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
         return MagiState(
             startDate = "2026-02-01", endDate = "2026-02-01",

@@ -23,7 +23,7 @@ class WishIslandPolishTest {
     // 0=休 1=A 2=B（被覆なし）
     private fun base(schedule: List<List<Int>>, wishes: Map<String, Int>, staffRange: Map<String, Range>) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("甲", 0), Staff("乙", 0), Staff("丙", 0)),
         use2Patterns = false,

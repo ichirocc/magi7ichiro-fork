@@ -695,6 +695,7 @@ object StaffCsvIO {
                     //   必須違反31件）。3.418.0 が `Ws1Ops` の3経路で直したのと同じ穴の、CSV 側の取り残し。
                     //   未知の群は `gi ?: 0`＝先頭グループへ落ちるので、そこが休を持たない場合も同様に効く。
                     val gIdx = gi ?: 0
+                    // [3.603.0] restShiftIndex は休が無ければ null＝fillShift 側の -1 フォールバックに委ねる。
                     val fill = Ws1Ops.fillShift(state.groupShift.getOrNull(gIdx), restShiftIndex(state))
                     newStaff.add(Staff(rawName, gIdx, si ?: -1))
                     extraRows.add(IntArray(t) { fill })

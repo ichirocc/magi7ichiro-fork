@@ -43,6 +43,6 @@ internal fun ws1ViewOf(st: MagiState?, days: Int): Ws1View? {
         groupRefs = st.groups.map { Ws1Ops.groupRefCount(st, it.kigou) },
         groupMembers = st.groups.indices.map { g -> st.staff.count { it.groupIdx == g } },
         skillGroupRefs = st.skillGroups.map { Ws1Ops.skillGroupRefCount(st, it.kigou) },
-        restIdx = restShiftIndex(st),
+        restIdx = restShiftIndex(st) ?: -1,  // [3.603.0] 休が無い設定はどのシフトにも一致しない番兵（既定値と同じ）
     )
 }

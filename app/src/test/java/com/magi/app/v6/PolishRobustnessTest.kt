@@ -24,7 +24,7 @@ class PolishRobustnessTest {
 
     /** G1 = 担当可否が1つもチェックされていない群（正規のエディタ操作で作れるデータ）。 */
     private fun emptyBucketState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", ""))
         return MagiState(
             startDate = "2026-01-01", endDate = "2026-01-03",
             shifts = shifts, groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
@@ -41,7 +41,7 @@ class PolishRobustnessTest {
 
     /** 範囲外セル(99)入り＝normalizeSchedule が -1 センチネルへ写像する盤面。c1不足窓が -1 日を含む。 */
     private fun neg1CellState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "1", ""))
         return MagiState(
             startDate = "2026-01-01", endDate = "2026-01-03",
             shifts = shifts, groups = listOf(Group("G", "G")),

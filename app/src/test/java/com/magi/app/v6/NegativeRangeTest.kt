@@ -13,7 +13,7 @@ import org.junit.Test
 class NegativeRangeTest {
     private fun state(lo: String, hi: String) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-05",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")),
         groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0)), use2Patterns = false,
         groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "2")),
         schedule = listOf(listOf(1, 1, 1, 0, 0)), wishes = emptyMap(), staffRange = mapOf("0,1" to Range(lo, hi)),

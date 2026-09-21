@@ -18,7 +18,7 @@ class AptPolishTest {
     // 休/X/Yとも need 無し(被覆制約ゼロ)＝自己振替が構造的に無償で成立する。
     private fun selfSwapState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "", ""),
             Shift("Y", "Y", "", ""),
         )
@@ -58,7 +58,7 @@ class AptPolishTest {
     // 手②: 同一グループの2職員が同一シフトで逆方向のapt不均衡を持つ最小盤面（自身の中には
     // 逆方向シフトが無いため自己振替は成立せず、相互交換のみが解となる）。
     private fun mutualSwapState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1))
         val groupShiftApt = listOf(listOf("", "1")) // X目標1（休は目標なし＝自己振替の相手になり得ない）
@@ -102,7 +102,7 @@ class AptPolishTest {
     // Aが唯一のX担当可能者でXを独占(need1=1)。Bは需要のない別シフトZに在勤中(いつでも動かせる)。
     private fun chainState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", ""),
             Shift("Y", "Y", "", ""), // Aの逃げ先
             Shift("Z", "Z", "", ""), // Bの現在地
@@ -156,7 +156,7 @@ class AptPolishTest {
     // 実績9=不足10)が、AptPolishの1回の呼出で採用1回=2単位しか縮まらず残存し続けていた実例を再現）。
     private fun multiUnitSelfSwapState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "", ""),
             Shift("Y", "Y", "", ""),
         )

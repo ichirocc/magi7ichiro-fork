@@ -19,7 +19,7 @@ import org.junit.Test
 class SmartInitialSchedulerTest {
     private fun blankState(cons1: List<C1Row> = emptyList()): MagiState = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-11",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("a", 0)),
         use2Patterns = false,
@@ -73,7 +73,7 @@ class SmartInitialSchedulerTest {
         // （CLAUDE.md記載の実運用例 cons1=[5日窓休≥1, 14日窓休≥4, ...] と同型の同一シフト複数規則）。
         val st = MagiState(
             startDate = "2026-01-01", endDate = "2026-01-14",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("a", 0)),
             use2Patterns = false,
@@ -104,7 +104,7 @@ class SmartInitialSchedulerTest {
         // 各規則が軽い(5日窓≥1)ため両立できることを確認する。
         val st = MagiState(
             startDate = "2026-01-01", endDate = "2026-01-11",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("a", 0)),
             use2Patterns = false,
@@ -134,7 +134,7 @@ class SmartInitialSchedulerTest {
         // 重いため、C1充足のためだけに上限を超えてXを増やしてはならない。
         fun state(withCap: Boolean): MagiState = MagiState(
             startDate = "2026-01-01", endDate = "2026-01-10",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("a", 0)),
             use2Patterns = false,
@@ -199,7 +199,7 @@ class SmartInitialSchedulerTest {
     fun fillsNeed2OnlyDemandDuringInitialConstruction() {
         val st = MagiState(
             startDate = "2026-01-01", endDate = "2026-01-01",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", "2")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", "2")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = true,
@@ -229,7 +229,7 @@ class SmartInitialSchedulerTest {
         val st = MagiState(
             startDate = "2025-12-01",
             endDate = "2025-12-03",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "1", "1"), Shift("遅番", "B", "", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "1", "1"), Shift("遅番", "B", "", "")),
             groups = listOf(Group("G", "G"), Group("H", "H")),
             staff = listOf(Staff("s0", 0), Staff("s1", 1)),
             use2Patterns = true,

@@ -26,7 +26,7 @@ class EliteIntegrationRandomSafetyTest {
             startDate = "2026-08-01",
             endDate = java.time.LocalDate.parse("2026-08-01").plusDays((t - 1).coerceAtLeast(0).toLong()).toString(),
             shifts = listOf(
-                Shift("休", "休", "", ""),
+                Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
                 Shift("A", "A", "", ""),
                 Shift("B", "B", "", ""),
             ),

@@ -815,6 +815,8 @@ object V6PortAnalyzer {
     ): List<V6StaffProfile> {
         // [監査(未レビュー領域再監査) 実バグ修正] 休記号改名時に rest=-1 となり「schedule!=-1」が常に真＝
         //   全職員を全日勤務と誤カウントしていた（3.103.0でweeklyに適用済みの p.restIdx フォールバックへ統一）。
+        // [3.603.0] 休シフト未設定(null)なら同じ理由で「全日勤務」表示に自然劣化する（診断表示のみ・
+        //   ブロックは入口のV6SanityPortが担う）。
         val rest = p.restIdx
         val profiles = ArrayList<V6StaffProfile>(p.S)
         for (i in 0 until p.S) {

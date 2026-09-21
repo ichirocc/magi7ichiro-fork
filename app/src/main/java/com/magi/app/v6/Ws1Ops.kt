@@ -28,15 +28,26 @@ object Ws1Ops {
 
     // ---- no dimension change -------------------------------------------------
 
-    fun editShift(state: MagiState, k: Int, name: String, kigou: String, need1: String, need2: String): MagiState {
+    fun editShift(state: MagiState, k: Int, name: String, kigou: String, need1: String, need2: String, isRest: Boolean): MagiState {
         if (k !in state.shifts.indices) return state
         val old = state.shifts[k].kigou
         val s = state.shifts.toMutableList()
-        s[k] = Shift(name, kigou, need1, need2)
+        // [3.603.0] role(ShiftRole)は記号でなく付与先そのもの＝改名でも保持する（新規Shiftで作り直さない）
+        s[k] = state.shifts[k].copy(name = name, kigou = kigou, need1 = need1, need2 = need2)
         // [記号変更の伝播] 制約はシフト記号(文字列)で参照するため、記号を変えたら参照行も一括置換し
         //   旧記号の幽霊行化(評価では無視されるが表示に残る)を防ぐ。index保存(staffRange/希望/apt/勤務表)は
         //   indexで参照するため自動追従＝対象外。
-        return renameShiftInConstraints(state.copy(shifts = s), old, kigou)
+        return applyRestRole(renameShiftInConstraints(state.copy(shifts = s), old, kigou), k, isRest)
+    }
+
+    /** [3.603.0/backlog#24] shifts[target]のShiftRoleを単一選択で更新する（trueなら他は全てNoneへ）。 */
+    private fun applyRestRole(state: MagiState, target: Int, isRest: Boolean): MagiState {
+        val cur = state.shifts.getOrNull(target)?.role == com.magi.app.model.ShiftRole.Rest
+        if (isRest == cur) return state
+        val s = state.shifts.mapIndexed { i, sh ->
+            sh.copy(role = if (i == target && isRest) com.magi.app.model.ShiftRole.Rest else com.magi.app.model.ShiftRole.None)
+        }
+        return state.copy(shifts = s)
     }
 
     fun editGroup(state: MagiState, g: Int, name: String, kigou: String): MagiState {
@@ -224,12 +235,12 @@ object Ws1Ops {
         return n
     }
 
-    fun addShift(state: MagiState, name: String, kigou: String, need1: String, need2: String): MagiState {
+    fun addShift(state: MagiState, name: String, kigou: String, need1: String, need2: String, isRest: Boolean = false): MagiState {
         val shifts = state.shifts + Shift(name, kigou, need1, need2)
         val gs = state.groupShift.map { it + 0 }                 // new shift not allowed by default
         val apt = if (state.groupShiftApt.isEmpty()) state.groupShiftApt
         else state.groupShiftApt.map { it + "" }
-        return state.copy(shifts = shifts, groupShift = gs, groupShiftApt = apt)
+        return applyRestRole(state.copy(shifts = shifts, groupShift = gs, groupShiftApt = apt), shifts.lastIndex, isRest)
     }
 
     /** Add a group (index G). groupShift/apt gain a row; staff group indices stay valid.
@@ -264,8 +275,11 @@ object Ws1Ops {
      */
     /** [3.442.0/H3] CSV取込(`ScheduleCsvBridge.parseUpsert`)も同じ判断を読むため internal 化した。
      *  写すと必ず片方が取り残される（3.418.0/3.419.0 でこの規則を1箇所へ寄せたのと同じ理由）。 */
-    internal fun fillShift(groupShiftRow: List<Int>?, rest: Int): Int {
-        if (groupShiftRow == null) return rest
+    // [3.603.0] rest は null 許容（休が無い設定）。groupShiftRow が無いときの `?: rest` は
+    //   休が無いと -1 になり得るが、この経路は「担当可能シフトが1つも無い群」向けの最終手段で、
+    //   その不整合は検査2k/2l が別途指摘する（上のコメント方針どおり throw しない）。
+    internal fun fillShift(groupShiftRow: List<Int>?, rest: Int?): Int {
+        if (groupShiftRow == null) return rest ?: -1
         val allowed = groupShiftRow.indices.filter { groupShiftRow[it] == 1 }.toIntArray()
         return fillShiftIndex(allowed, rest)
     }

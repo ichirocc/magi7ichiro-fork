@@ -20,7 +20,7 @@ import org.junit.Test
 class AnchoredWindowSwapTest {
     private fun base(schedule: List<List<Int>>, wishes: Map<String, Int>, staffRange: Map<String, Range>, cons3n: List<C3Row>) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("N", "N", "", ""), Shift("E", "E", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("N", "N", "", ""), Shift("E", "E", "", "")),
         groups = listOf(Group("A", "A")),
         staff = listOf(Staff("甲", 0), Staff("乙", 0)),
         use2Patterns = false,

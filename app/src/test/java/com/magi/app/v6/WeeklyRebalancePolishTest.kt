@@ -20,7 +20,7 @@ class WeeklyRebalancePolishTest {
     // B はその補集合で対称に weekly-L1=6（合計12）。長方形交換で過剰曜日→過少曜日へ勤務を移せる。
     private fun weeklyState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("W", "W", "1", ""),   // need1=1
         )
         val groups = listOf(Group("G0", "G0"))
@@ -48,7 +48,7 @@ class WeeklyRebalancePolishTest {
     // weekly の改善が fair(群内シフト回数)の悪化と 1:1 で相殺され採用されない。単独グループ(メンバー<2)は
     // fair の対象外のため、weekly のみが目的関数に効く純粋な検証になる。
     private fun weeklyStateSeparateGroups(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("W", "W", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("W", "W", "1", ""))
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
         val groupShift = listOf(listOf(1, 1), listOf(1, 1))
         val staff = listOf(Staff("A", 0), Staff("B", 1))   // A∈G0, B∈G1（各単独＝fair対象外）
@@ -118,7 +118,7 @@ class WeeklyRebalancePolishTest {
     fun alternatingOptimizationIsNoOpWhenAlreadyOptimal() {
         // weekly=0(A が各曜日ちょうど1回勤務)・A/B は別グループ(単独=fair対象外)。どの日を入替えても
         // weekly が増える(改善余地なし)ため交互最適化は1日も採用しない(no-op)。
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("W", "W", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("W", "W", "1", ""))
         val groups = listOf(Group("G0", "G0"), Group("G1", "G1"))
         val staff = listOf(Staff("A", 0), Staff("B", 1))
         val aRow = listOf(1, 1, 1, 1, 1, 1, 1)
@@ -143,7 +143,7 @@ class WeeklyRebalancePolishTest {
     @Test
     fun weeklyRebalanceIsNoOpWhenBalanced() {
         // 既に weekly=0（各職員が全曜日を均等に勤務）なら 1手も採用しない（空探索は即終了）。
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("W", "W", "1", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("W", "W", "1", ""))
         val groups = listOf(Group("G0", "G0"))
         // 7日・1職員が毎日 W（各曜日ちょうど1回＝weekly=0）。need を満たすため2人目は毎日休。
         val staff = listOf(Staff("A", 0), Staff("B", 0))

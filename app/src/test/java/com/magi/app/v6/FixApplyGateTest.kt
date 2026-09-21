@@ -16,7 +16,7 @@ class FixApplyGateTest {
 
     private fun state(wishes: Map<String, Int> = emptyMap(), ranges: Map<String, Range> = emptyMap()) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-02",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "1")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "1")),
         groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0), Staff("s1", 0)), use2Patterns = true,
         groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
         // 1 日目は A が 0 人（不足 1）、2 日目は A が 2 人（過剰 1）
@@ -34,7 +34,7 @@ class FixApplyGateTest {
     @Test fun resolvingOneHardFamilyByIntroducingAnotherIsRejected() {
         val st = MagiState(
             startDate = "2026-01-01", endDate = "2026-01-02",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "1")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "1")),
             groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0), Staff("s1", 0)), use2Patterns = true,
             groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
             // s0: day0=A・day1=休（covU: day1のAが0人で1件不足）。s1は常に休。

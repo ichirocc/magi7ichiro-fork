@@ -18,7 +18,7 @@ import org.junit.Test
 class SaOfficialTieBreakTest {
     private fun state(): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-12",
-        shifts = listOf(Shift("休", "休", "0", ""), Shift("A", "A", "1", ""), Shift("B", "B", "1", "")),
+        shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", ""), Shift("B", "B", "1", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0)),
         use2Patterns = false,

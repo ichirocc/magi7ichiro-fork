@@ -13,7 +13,7 @@ class ChangeSummaryTest {
     @Test fun countsChangedStaffCellsWishesAndRanges() {
         val st = MagiState(
             startDate = "2026-01-01", endDate = "2026-01-03",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")),
             groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
             schedule = List(3) { List(3) { 0 } }, wishes = mapOf("0,0" to 1, "1,2" to 0), staffRange = mapOf("2,1" to Range("", "1")),

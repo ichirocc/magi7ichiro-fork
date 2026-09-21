@@ -31,7 +31,8 @@ internal object RestZeroWindowLns {
         shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false,
     ): Result {
         val p = Problem(state, quantitativeRangeEval)
-        val rest = p.restIdx
+        // [3.603.0] 休シフト未設定ならno-op（このパス自体が「休が余る窓」を扱うので前提が成立しない）。
+        val rest = p.restIdx ?: return Result(schedule, 0, emptyList())
         val work = normalizeSchedule(schedule, p)
         val before = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         var bestRep = before

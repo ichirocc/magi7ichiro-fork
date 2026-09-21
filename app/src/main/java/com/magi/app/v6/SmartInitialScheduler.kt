@@ -31,7 +31,8 @@ object SmartInitialScheduler {
         val t0 = System.nanoTime()
         val p = Problem(state, quantitativeRangeEval)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
-        val restK = restShiftIndex(state)
+        // [3.603.0] 休シフト未設定はここも入口＝ブロックする。
+        val restK = restShiftIndex(state) ?: throw IllegalArgumentException("休みシフトが設定されていません")
         // [3.261.0, ユーザー実機報告「初期解生成後にC1違反になる/何度も出来ない」で判明した実バグ修正]
         // 旧実装は既存スケジュールの充足率で「既存表ベース(そのまま保持)/空表ベース(ゼロから構築)」を
         // 切り替えていたが、本関数の呼出元(ボタン)は「初期解を(作り直す)」という常に**ゼロから組み立て

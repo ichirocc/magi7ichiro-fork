@@ -22,7 +22,7 @@ class EliteIntegrationPolishTest {
         startDate = "2026-08-01",
         endDate = "2026-08-01",
         shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X勤務", "X", "1", ""),
             Shift("Y勤務", "Y", "1", ""),
         ),
@@ -57,7 +57,7 @@ class EliteIntegrationPolishTest {
         startDate = "2026-08-01",
         endDate = "2026-08-01",
         shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("固定勤務", "X", "", ""),
             Shift("不足勤務", "Y", "1", ""),
         ),

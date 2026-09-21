@@ -39,7 +39,7 @@ class C1RestConstraintTest {
     )
 
     private fun buildState(rows: List<List<Int>>): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("勤", "勤", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("勤", "勤", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = rows.indices.map { Staff("s$it", 0) }
         return MagiState(

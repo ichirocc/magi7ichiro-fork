@@ -1,5 +1,10 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#24完了（3.603.0）: restShiftIndex根本改修。ShiftRole{None,Rest}導入・restIdx全面nullable化
+  （ユーザー指示で縮小案を却下・全参照約20ファイルへ伝播）。記号"休"の字面一致＋無言0フォールバックを撤去
+  （実データでHARD 0→60等の実害を確認済み・history 3.574.0）。UIに「休みとして扱う」トグル追加。
+  JSON後方互換の自動付与つき。hosttest 823件緑。C++/C#はindexを受け取るだけで同期不要と判断。
+  → `docs/history/3.4xx.md`
 - backlog#28/#35/#24: grillingで設計確定・実装（3.602.0）。#28はHf63Infeasibilityへ持続カウンタ追加
   （rsiFocusRotationPersist既定OFF）。#35はExtraRefineゲートに構造的HARD判定を流用
   （extraRefineRequirePostHardDrop既定OFF）。#24（restShiftIndexフル改修）は方針転換を要するため保留継続。

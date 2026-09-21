@@ -182,8 +182,9 @@ object FixSuggester {
                 if (timeUp()) break
                 val allowed = p.allowedShiftsForStaff(i)
                 // 目標シフト = そのstaffの下限割れシフト ∪ 休（記号で解決した restIdx）。なければ置けるシフト全部。
+                // [3.603.0] 休が無い設定は `?: -1`（後段の allowed.contains で自然に弾かれる無害な番兵）。
                 val targets: List<Int> = (shortShift[i]?.toList() ?: emptyList())
-                    .let { if (it.isEmpty()) allowed.toList() else it + p.restIdx }
+                    .let { if (it.isEmpty()) allowed.toList() else it + (p.restIdx ?: -1) }
                     .distinct().filter { k -> allowed.contains(k) }
                 val cells = (0 until p.T).filter { !p.wishLocked(i, it) }
                 for (a in cells.indices) {

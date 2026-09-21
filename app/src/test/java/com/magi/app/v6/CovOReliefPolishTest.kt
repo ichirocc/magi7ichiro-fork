@@ -12,7 +12,7 @@ import org.junit.Test
 
 /** 人員過剰の退避研磨（CovOReliefPolish）: 過剰セルの在勤者を需要 0 のシフト（B）へ退避し、希望固定と禁止連続は避ける。 */
 class CovOReliefPolishTest {
-    private val rest = Shift("休", "休", "", "")
+    private val rest = Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)
     private val a = Shift("A", "A", "1", "")
     private val b = Shift("B", "B", "", "")
 

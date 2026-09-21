@@ -19,7 +19,7 @@ class FairPolishTest {
     // 手①: 4人グループ(A,B,C,D)・休は誰も使わず常に中立。A だけが X で過多・Y で過少（B/C/Dは両方とも
     // ちょうど目標どおり=中立）。自己振替(A: X→Y 1日)だけで両シフトとも厳密に0まで解消する。
     private fun selfSwapState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1, 1))
         val staff = listOf(Staff("A", 0), Staff("B", 0), Staff("C", 0), Staff("D", 0))
@@ -61,7 +61,7 @@ class FairPolishTest {
     // 互いに鏡像の不均衡を持つ最小盤面。各自が自分自身の中で解消できる(自己振替×2)ため、相手を
     // 必要とせず両者とも独立に解消し、最終的にfair=0まで到達することを確認する。
     private fun twoStaffState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1))
         val staff = listOf(Staff("A", 0), Staff("B", 0))
@@ -102,7 +102,7 @@ class FairPolishTest {
     // 玉突きチェーン(A→別シフトへ直接移動、Xの空き穴はCがZから玉突きで埋める)のみ。
     private fun chainState(): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", ""),
             Shift("Y", "Y", "", ""),
             Shift("Z", "Z", "", ""),
@@ -156,7 +156,7 @@ class FairPolishTest {
     // [3.260.0, AptPolishと同型の穴] 手①(自己振替)は旧実装だと1パスにつき(i,k)ペア1回成功したら
     // 次のhighTargetsへ移っており、excess/deficitが複数単位ある職員は1パスで1単位しか解消できなかった。
     private fun multiUnitSelfSwapState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val groupShift = listOf(listOf(1, 1, 1))
         val staff = listOf(Staff("A", 0), Staff("B", 0), Staff("C", 0), Staff("D", 0))

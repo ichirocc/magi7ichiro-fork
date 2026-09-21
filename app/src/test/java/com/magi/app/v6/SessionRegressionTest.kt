@@ -83,7 +83,7 @@ class SessionRegressionTest {
 
     private fun aptState(restCapped: Boolean) = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-31",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("B4", "B4", "", ""), Shift("有", "有", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("B4", "B4", "", ""), Shift("有", "有", "", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("美幸", 0)),
         use2Patterns = false,
@@ -115,7 +115,7 @@ class SessionRegressionTest {
 
     private fun csvState() = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("花子", 0)),
         use2Patterns = false,
@@ -210,7 +210,7 @@ class SessionRegressionTest {
     private fun threeShiftState() = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-03",
         // 休が index0 でない配置（旧実装のハードコード0が露呈するケース）
-        shifts = listOf(Shift("A", "A", "1", ""), Shift("休", "休", "", ""), Shift("B", "B", "1", "")),
+        shifts = listOf(Shift("A", "A", "1", ""), Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("B", "B", "1", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0, 2)),   // skillIdx=2
         use2Patterns = false,
@@ -250,7 +250,7 @@ class SessionRegressionTest {
      *  k==rest の末尾削除で削除済みindexを指し、正規化で -1 センチネル＝必須違反化していた形）。 */
     @Test fun removeShiftDeletingTrailingRestStaysInBounds() {
         val st = threeShiftState().copy(
-            shifts = listOf(Shift("A", "A", "1", ""), Shift("B", "B", "1", ""), Shift("休", "休", "", "")),
+            shifts = listOf(Shift("A", "A", "1", ""), Shift("B", "B", "1", ""), Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
             schedule = listOf(listOf(0, 1, 2)),
         )
         val sched = arrayOf(intArrayOf(0, 1, 2))
@@ -266,10 +266,11 @@ class SessionRegressionTest {
         val st = threeShiftState().copy(
             cons1 = listOf(com.magi.app.model.C1Row("5", "休", "2")),
         )
-        val r = Ws1Ops.editShift(st, 1, "公休", "公", "", "")
+        val r = Ws1Ops.editShift(st, 1, "公休", "公", "", "", isRest = true)
         assertEquals("公", r.shifts[1].kigou)
         assertEquals("公", r.cons1[0].shiftKigou)          // 窓ルールが改名へ追従＝同じシフトを指し続ける
-        assertEquals(0, restShiftIndex(r))                  // 「休」記号は消えた＝既定解決は先頭へ
+        // [3.603.0/backlog#24] 休の識別はShiftRole（記号ではない）＝改名してもindex1のままrestShiftIndexが追従する
+        assertEquals(1, restShiftIndex(r))
     }
 
     // ---- 判読性/レビュー指摘: 同一セルの複数違反で「重い族」のマークが軽い族に上書きされない ----
@@ -279,7 +280,7 @@ class SessionRegressionTest {
         // マークする。旧実装は評価順の最後(c3系)が後勝ちで vio-c3 に降格していた。修正後は vio-pref を保持。
         val st = MagiState(
             startDate = "2026-06-01", endDate = "2026-06-03",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0)),
             use2Patterns = false,
@@ -330,7 +331,7 @@ class SessionRegressionTest {
         //   index 0 ではなく**休**で埋まること。
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-02",
-            shifts = listOf(Shift("A", "A", "0", ""), Shift("B", "B", "0", ""), Shift("休", "休", "0", "")),
+            shifts = listOf(Shift("A", "A", "0", ""), Shift("B", "B", "0", ""), Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest)),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0)),
             use2Patterns = false,
@@ -357,7 +358,7 @@ class SessionRegressionTest {
         //   その全日が groupViol(HARD 重み10000) になった。埋めた瞬間に必須違反が並ぶ。
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-02",
-            shifts = listOf(Shift("A", "A", "0", ""), Shift("B", "B", "0", ""), Shift("休", "休", "0", "")),
+            shifts = listOf(Shift("A", "A", "0", ""), Shift("B", "B", "0", ""), Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest)),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0)),
             use2Patterns = false,
@@ -406,7 +407,7 @@ class SessionRegressionTest {
         // H-02: 希望CSVは既存を全置換する。読めない行を黙って捨てると、その分の希望が消える。
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-03",
-            shifts = listOf(Shift("休", "休", "0", ""), Shift("A", "A", "0", "")),
+            shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "0", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("花子", 0)),
             use2Patterns = false,
@@ -452,7 +453,7 @@ class SessionRegressionTest {
         // H-02: 種別の綴り違いで制約一式が消えるのを防ぐ。
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-03",
-            shifts = listOf(Shift("休", "休", "0", ""), Shift("A", "A", "0", "")),
+            shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "0", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("花子", 0)),
             use2Patterns = false,
@@ -477,7 +478,7 @@ class SessionRegressionTest {
         //   黙って掛かる ②最後の1群を消すと全員 0 になり、あとで群を足すと全員がそこに所属した扱い。
         val st = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-02",
-            shifts = listOf(Shift("休", "休", "0", ""), Shift("A", "A", "0", "")),
+            shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "0", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0, 0), Staff("s1", 0, 1), Staff("s2", 0, 2), Staff("s3", 0, -1)),
             use2Patterns = false,

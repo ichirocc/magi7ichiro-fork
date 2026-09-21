@@ -19,7 +19,7 @@ class Hf67DeadlineTest {
 
     private fun st(): MagiState = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-04",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,

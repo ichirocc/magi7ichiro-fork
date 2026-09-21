@@ -32,8 +32,8 @@ internal data class SetupCounts(
  */
 internal data class ConditionsView(
     val shiftKigou: List<String> = emptyList(),
-    /** 休のシフト index（記号の字面でなく `restShiftIndex` の唯一の持ち場から）。 */
-    val restIdx: Int = 0,
+    /** 休のシフト index（記号の字面でなく `restShiftIndex` の唯一の持ち場から）。休が無い設定は -1（どのシフトにも一致しない番兵、[3.603.0]）。 */
+    val restIdx: Int = -1,
     val groupLabels: List<String> = emptyList(),
     val groupMembers: List<Int> = emptyList(),
     /** 担当できるシフト（職員ごと）。上限 0 は最適化器だけが除外するのでここには出る。 */
@@ -103,7 +103,7 @@ internal fun conditionsViewOf(st: MagiState?, p: Problem?): ConditionsView {
         st.cons3m.size + st.cons3mn.size + st.cons41.size + st.cons42.size + st.cons3w.size
     return ConditionsView(
         shiftKigou = st.shifts.map { it.kigou },
-        restIdx = com.magi.app.v6.restShiftIndex(st),
+        restIdx = com.magi.app.v6.restShiftIndex(st) ?: -1,  // [3.603.0] 休が無い設定はどのシフトにも一致しない番兵
         groupLabels = st.groups.map { if (it.kigou.isNotBlank() && it.kigou != it.name) "${it.name}·${it.kigou}" else it.name },
         groupMembers = groupMembers,
         allowedByStaff = allowedByStaff,

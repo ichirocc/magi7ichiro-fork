@@ -21,7 +21,7 @@ class C3PatternPolishTest {
     private fun chainState(): MagiState {
         // shift: 0=休(need無) 1=X(need1=1) 2=Y(need無) 3=Z(need無)
         val shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("X", "X", "1", ""),
             Shift("Y", "Y", "", ""),
             Shift("Z", "Z", "", ""),

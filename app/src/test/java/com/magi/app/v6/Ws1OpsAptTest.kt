@@ -12,7 +12,7 @@ class Ws1OpsAptTest {
 
     private fun state(apt: List<List<String>> = emptyList()) = MagiState(
         startDate = "2026-07-01", endDate = "2026-07-02",
-        shifts = listOf(Shift("日勤", "日", "", ""), Shift("休み", "休", "", "")),
+        shifts = listOf(Shift("日勤", "日", "", ""), Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
         groups = listOf(Group("A", "A"), Group("B", "B")),
         staff = listOf(Staff("s1", 0)),
         use2Patterns = false,

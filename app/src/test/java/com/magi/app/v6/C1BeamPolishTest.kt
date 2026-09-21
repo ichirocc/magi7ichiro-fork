@@ -23,7 +23,7 @@ class C1BeamPolishTest {
     // T=7日, cons1="5日窓X>=2"。target(職員0)がX不足(1<2)。partner1/partner2との同日swap+
     // 玉突きチェーンの組合せで解消可能な最小盤面（BeamC1PolishV2Testと同一盤面を再利用）。
     private fun deficientState(): MagiState {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("target", 0), Staff("partner1", 0), Staff("partner2", 0))
         val schedule = listOf(

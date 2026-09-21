@@ -17,7 +17,7 @@ class V6SanityPortTest {
         val st = MagiState(
             startDate = "2026-06-01",
             endDate = "2026-06-02",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0)),
             use2Patterns = false,
@@ -44,7 +44,7 @@ class V6SanityPortTest {
      */
     private fun need2OnlyState(need2A: String, staffCount: Int) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", need2A)),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", need2A)),
         groups = listOf(Group("G", "G")),
         staff = List(staffCount) { Staff("s$it", 0) },
         use2Patterns = true,
@@ -77,7 +77,7 @@ class V6SanityPortTest {
     /** [3.534.0] 単一シフト連の必須(c3)/禁止(c3n)の組合せだけを切替える最小盤面。 */
     private fun seqState(cons3: List<com.magi.app.model.C3Row>, cons3n: List<com.magi.app.model.C3Row>) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0)),
         use2Patterns = false,
@@ -115,7 +115,7 @@ class V6SanityPortTest {
     /** ベース: 2職員×6日、A は 1日1スロット。cons1 A(窓3日で2回以上) を切替えて壁/ダイヤルを検証。 */
     private fun windowState(need1A: String, cons1: List<com.magi.app.model.C1Row>) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", need1A, "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", need1A, "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,
@@ -188,7 +188,7 @@ class V6SanityPortTest {
     /** [3.228.0/個人内壁検知] 1職員×31日、cons1(day1日窓でXが≥day2回)、Xの個人上限をhiで指定。 */
     private fun personalWallState(day1: String, day2: String, hi: String) = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-31",
-        shifts = listOf(Shift("休", "休", "0", ""), Shift("X", "X", "0", "")),
+        shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "0", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0)),
         use2Patterns = false,
@@ -238,7 +238,7 @@ class V6SanityPortTest {
         day1a: String, day2a: String, day1b: String, day2b: String, hi: String, t: Int,
     ) = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-${t.toString().padStart(2, '0')}",
-        shifts = listOf(Shift("休", "休", "0", ""), Shift("X", "X", "0", "")),
+        shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "0", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0)),
         use2Patterns = false,
@@ -278,7 +278,7 @@ class V6SanityPortTest {
     @Test fun violationDebugReportsC1CountsPerStaffAndRule() {
         val st = MagiState(
             startDate = "2026-06-01", endDate = "2026-06-07",
-            shifts = listOf(Shift("休", "休", "0", ""), Shift("A", "A", "0", "")),
+            shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "0", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = false,
@@ -315,7 +315,7 @@ class V6SanityPortTest {
     @Test fun violationDebugShowsFiresAndLocationsWhenTheyDiffer() {
         val st = MagiState(
             startDate = "2026-06-01", endDate = "2026-06-03",
-            shifts = listOf(Shift("休", "休", "0", ""), Shift("A", "A", "0", "")),
+            shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "0", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0)),
             use2Patterns = false,
@@ -343,7 +343,7 @@ class V6SanityPortTest {
      *  T=days・staff数=2・他シフトへの個人下限はotherLoで指定（未指定なら無し）。 */
     private fun aptVsNeedState(days: Int, need1: String, aptTarget: String, otherLo: String = "") = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-${days.toString().padStart(2, '0')}",
-        shifts = listOf(Shift("休", "休", need1, ""), Shift("X", "X", need1, "")),
+        shifts = listOf(Shift("休", "休", need1, "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", need1, "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,
@@ -366,7 +366,7 @@ class V6SanityPortTest {
      */
     private fun restLoState(days: Int, restLo: String, otherLo: String = "") = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-${days.toString().padStart(2, '0')}",
-        shifts = listOf(Shift("休", "休", "0", ""), Shift("X", "X", "0", "")),
+        shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "0", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,
@@ -481,7 +481,7 @@ class V6SanityPortTest {
     // 構造的に不可避。sub(G0=target側と同じグループ)はXを担当可能＝代用要員候補として提示されるはず。
     private fun rangeHiWallState(subCanDoX: Boolean): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-10",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
         groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
         staff = listOf(Staff("target", 0), Staff("sub", if (subCanDoX) 0 else 1)),
         use2Patterns = false,
@@ -531,7 +531,7 @@ class V6SanityPortTest {
      */
     private fun unknownShiftState(pattern: List<String>) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "1", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,
@@ -576,7 +576,11 @@ class V6SanityPortTest {
         apt: List<List<String>> = listOf(listOf("", "")),
     ) = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-03",
-        shifts = listOf(Shift(restKigou, restKigou, "0", ""), Shift("X", "X", needX, "")),
+        // [3.603.0] restKigou="休"(既定)のときだけ休として付与＝restKigouを変える呼び出しは「休が無い」設定を再現する
+        shifts = listOf(
+            Shift(restKigou, restKigou, "0", "", if (restKigou == "休") com.magi.app.model.ShiftRole.Rest else com.magi.app.model.ShiftRole.None),
+            Shift("X", "X", needX, ""),
+        ),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0, skillIdx)),
         use2Patterns = false,
@@ -627,9 +631,10 @@ class V6SanityPortTest {
     }
 
     @Test fun missingRestShiftIsReported() {
-        // 記号「休」のシフトが無いと restShiftIndex が先頭シフト(index 0)を休として扱う。
+        // [3.603.0] 休(ShiftRole.Rest)が無いと restShiftIndex は null（旧: 記号「休」が無ければ先頭へ
+        //   黙ってフォールバックしていたが撤去済み）。
         val st = unresolvedState(restKigou = "OFF")
-        assertEquals("前提: 先頭シフトが休として扱われる", 0, Problem(st).restIdx)
+        assertEquals("前提: 休が付与されていない", null, Problem(st).restIdx)
         val rep = V6SanityPort.buildGuidance(st)
         assertTrue("「休」不在が案内されること", rep.any { it.where.contains("「休」のシフトがありません") })
         assertFalse("「休」があれば案内しない",
@@ -708,7 +713,7 @@ class V6SanityPortTest {
 
     private fun scaleState(days: Int, staffCount: Int) = MagiState(
         startDate = "2026-08-01", endDate = "",
-        shifts = listOf(Shift("休", "休", "0", ""), Shift("X", "X", "1", "")),
+        shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", "")),
         groups = listOf(Group("G", "G")),
         staff = List(staffCount) { Staff("s$it", 0) },
         use2Patterns = false,
@@ -762,7 +767,7 @@ class V6SanityPortTest {
      */
     @Test
     fun structuralPersonalFloorMatchesTheForcedRepertoireMinimum() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("B4", "B4", "", ""), Shift("有", "有", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("B4", "B4", "", ""), Shift("有", "有", "", ""))
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("s0", 0))
         val st = MagiState(
@@ -790,7 +795,7 @@ class V6SanityPortTest {
     /** 他シフトに上限未設定が1つでもあれば下界は立たない（6b/6c と同じ保守的判定）。 */
     @Test
     fun structuralPersonalFloorIsZeroWhenAnotherShiftIsUncapped() {
-        val shifts = listOf(Shift("休", "休", "", ""), Shift("B4", "B4", "", ""), Shift("有", "有", "", ""))
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("B4", "B4", "", ""), Shift("有", "有", "", ""))
         val st = MagiState(
             startDate = "2025-01-01", endDate = "2025-01-31",
             shifts = shifts, groups = listOf(Group("G0", "G0")), staff = listOf(Staff("s0", 0)),
@@ -816,7 +821,7 @@ class V6SanityPortTest {
         val wishes = (0 until T).filter { it % 2 == 0 }.take(wishCount).associate { "0,$it" to 0 }
         return MagiState(
             startDate = "2026-09-01", endDate = "2026-09-12",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("P", "P", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "", "")),
             groups = listOf(Group("G0", "G0")), staff = listOf(Staff("大島", 0)),
             use2Patterns = false, groupShift = listOf(listOf(1, 1)),
             groupShiftApt = listOf(listOf(aptTarget, "")),
@@ -855,7 +860,7 @@ class V6SanityPortTest {
         // 1日・休の必要人数0に対し3人とも休＝covO は 1枠で 3件。
         val st = MagiState(
             startDate = "2026-09-01", endDate = "2026-09-01",
-            shifts = listOf(Shift("休", "休", "0", "")),
+            shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest)),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("A", 0), Staff("B", 0), Staff("C", 0)),
             use2Patterns = false,
@@ -877,7 +882,7 @@ class V6SanityPortTest {
     /** 群のレンジ l/u を差し替えた最小 state（2職員・1グループ・A シフト・3日）。 */
     private fun groupRangeState(l: String, u: String) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-03",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,
@@ -952,7 +957,7 @@ class V6SanityPortTest {
     @Test fun capSumBelowDemandBoundsTheSumNotCoverageAlone() {
         val st = MagiState(
             startDate = "2025-12-01", endDate = "2025-12-01",
-            shifts = listOf(Shift("休み", "休", "", ""), Shift("早番", "A", "2", "")),
+            shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("早番", "A", "2", "")),
             groups = listOf(Group("G", "G")),
             staff = listOf(Staff("s0", 0), Staff("s1", 0)),
             use2Patterns = false,
@@ -985,7 +990,7 @@ class V6SanityPortTest {
     fun capacityCountsPlaceableStaffAndWishPinnedCells() {
         fun st(wishes: Map<String, Int>) = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-03",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "2", "")), groups = listOf(Group("G", "G")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "2", "")), groups = listOf(Group("G", "G")),
             staff = listOf(Staff("X", 0), Staff("Y", 0)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
             schedule = listOf(listOf(0, 0, 0), listOf(0, 0, 0)), wishes = wishes,

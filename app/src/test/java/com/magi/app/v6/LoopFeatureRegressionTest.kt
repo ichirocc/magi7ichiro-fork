@@ -31,7 +31,7 @@ class LoopFeatureRegressionTest {
             cons41 = cons41, cons42 = emptyList(), skillGroups = skillGroups, cons41s = cons41s,
         )
     }
-    private val rest = Shift("休", "休", "", "")
+    private val rest = Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)
     private fun sh(k: String, need: String = "") = Shift(k, k, need, "")
     private fun sched(s: MagiState) = s.schedule.map { it.toIntArray() }.toTypedArray()
 

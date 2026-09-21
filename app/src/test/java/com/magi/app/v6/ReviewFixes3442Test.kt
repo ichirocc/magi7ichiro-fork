@@ -23,7 +23,7 @@ class ReviewFixes3442Test {
     /** 群 G0 は **X しか担当できない**（休は担当外）。休は index1＝旧実装との差が観測できる。 */
     private fun stRestNotAllowed() = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-03",
-        shifts = listOf(Shift("X", "X", "", ""), Shift("休", "休", "", "")),
+        shifts = listOf(Shift("X", "X", "", ""), Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)),
         groups = listOf(Group("G0", "G0")),
         staff = listOf(Staff("s0", 0)),
         use2Patterns = false,

@@ -39,7 +39,7 @@ class WeeklyFairMarginalTest {
         return MagiState(
             startDate = "2026-0${1 + rng.nextInt(9)}-0${1 + rng.nextInt(9)}",
             endDate = "2026-12-28",
-            shifts = listOf(Shift("休", "休", "", "")) + (1 until k).map { Shift("S$it", "S$it", "", "") },
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)) + (1 until k).map { Shift("S$it", "S$it", "", "") },
             groups = groups, staff = staff, use2Patterns = false,
             groupShift = groupShift, groupShiftApt = groupShiftApt, schedule = schedule,
             wishes = emptyMap(), staffRange = staffRange, needDay1 = emptyMap(), needDay2 = emptyMap(),
@@ -137,7 +137,7 @@ class WeeklyFairMarginalTest {
         // 3 staff, each in their own singleton group (m=1 per group) -> fair must never fire.
         val state = MagiState(
             startDate = "2026-08-01", endDate = "2026-08-06",
-            shifts = listOf(Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", "")),
             groups = listOf(Group("G0", "G0"), Group("G1", "G1"), Group("G2", "G2")),
             staff = listOf(Staff("S0", 0), Staff("S1", 1), Staff("S2", 2)),
             use2Patterns = false,

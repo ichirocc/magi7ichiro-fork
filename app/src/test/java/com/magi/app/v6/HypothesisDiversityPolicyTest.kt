@@ -14,7 +14,7 @@ class HypothesisDiversityPolicyTest {
         startDate = "2026-08-01",
         endDate = "2026-08-05",
         shifts = listOf(
-            Shift("休", "休", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest),
             Shift("D", "D", "", ""),
             Shift("A", "A", "", ""),
         ),

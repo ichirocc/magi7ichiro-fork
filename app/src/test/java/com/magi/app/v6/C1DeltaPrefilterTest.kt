@@ -17,7 +17,7 @@ import org.junit.Test
  */
 class C1DeltaPrefilterTest {
 
-    private val shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
+    private val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", ""))
 
     /** 単一群（全シフト担当可）。 */
     private fun single(

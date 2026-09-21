@@ -12,7 +12,7 @@ import org.junit.Test
 class Ws1OpsEndDateTest {
     private fun state(start: String, end: String, days: Int) = MagiState(
         startDate = start, endDate = end,
-        shifts = listOf(Shift("休み", "休", "", ""), Shift("A", "A", "", "")),
+        shifts = listOf(Shift("休み", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")),
         groups = listOf(Group("G0", "G0")),
         staff = listOf(Staff("s1", 0)),
         use2Patterns = false,

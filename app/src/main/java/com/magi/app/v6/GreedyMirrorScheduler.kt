@@ -19,7 +19,8 @@ object GreedyMirrorScheduler {
         val t0 = System.nanoTime()
         val p = Problem(state, quantitativeRangeEval)
         if (p.T <= 0 || p.S <= 0 || p.K <= 0) throw IllegalArgumentException("期間/職員/シフトが不足しています")
-        val restK = restShiftIndex(state)
+        // [3.603.0] 休シフト未設定はここも入口＝ブロックする（V6SanityPortの起動前チェックと同じ判断）。
+        val restK = restShiftIndex(state) ?: throw IllegalArgumentException("休みシフトが設定されていません")
         val existing = state.schedule.toIntArray2D()
         var filled = 0
         for (row in existing) for (v in row) if (v >= 0) filled++

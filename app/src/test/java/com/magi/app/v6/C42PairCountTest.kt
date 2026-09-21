@@ -25,7 +25,7 @@ class C42PairCountTest {
     /** 2職員・1日・シフト {休, X, Y}。群 G0 に s0/s1、G1 に s2。cons42 は呼び出し側が与える。 */
     private fun st(sched: List<List<Int>>, cons42: List<C42Row>) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-01",
-        shifts = listOf(Shift("休", "休", "", ""), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
         groups = listOf(Group("G0", "G0"), Group("G1", "G1")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 1)),
         use2Patterns = false,

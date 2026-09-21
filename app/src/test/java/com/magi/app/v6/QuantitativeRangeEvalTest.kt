@@ -33,7 +33,7 @@ class QuantitativeRangeEvalTest {
 
     private fun buildState(schedule: List<List<Int>>): MagiState {
         val shifts = listOf(
-            Shift("休", "休", "", ""), Shift("A", "A", "", ""), Shift("B", "B", "", ""),
+            Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("B", "B", "", ""),
         )
         val groups = listOf(Group("G0", "G0"))
         val staff = listOf(Staff("s0", 0), Staff("s1", 0), Staff("s2", 0), Staff("s3", 0))

@@ -25,7 +25,7 @@ class SaWishLockTest {
     /** 2職員×12日・シフト3種。希望は全部「担当できる」＝実現可能。 */
     private fun state(): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-12",
-        shifts = listOf(Shift("休", "休", "0", ""), Shift("A", "A", "1", ""), Shift("B", "B", "1", "")),
+        shifts = listOf(Shift("休", "休", "0", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", ""), Shift("B", "B", "1", "")),
         groups = listOf(Group("G", "G")),
         staff = listOf(Staff("s0", 0), Staff("s1", 0)),
         use2Patterns = false,

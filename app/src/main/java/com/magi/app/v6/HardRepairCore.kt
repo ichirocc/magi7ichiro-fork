@@ -35,7 +35,8 @@ internal object HardRepairCore {
             //   旧実装との違いは2つ: ①休が担当可なら休を選ぶ（旧は index 最小＝休が先頭でないデータでは
             //   勤務シフトへ倒れる）②担当可能が空なら 0 でなく休へ倒す。実データ3件は restIdx=0 かつ
             //   全群が休を担当できるので**挙動は完全に不変**（測って確認済み）。
-            val fallback = fillShiftIndex(allowed, p.restIdx)
+            // [3.603.0] 休が無い設定は入口で止める（安全側フォールバックの黙認 0 は不可）。
+            val fallback = fillShiftIndex(allowed, p.restIdx ?: throw IllegalArgumentException("休みシフトが設定されていません"))
             for (j in 0 until p.T) {
                 val k = out[i][j]
                 // [3.507.0] 個人上限 0 のセル（希望でそのシフトに固定されたものは除く）も入口で外す＝探索は置き直しから始める。
@@ -54,7 +55,8 @@ internal object HardRepairCore {
         val out = schedule.copy2D()
         var n = 0
         for (i in 0 until p.S) {
-            val fallback = fillShiftIndex(p.allowedShiftsForStaff(i), p.restIdx)
+            // [3.603.0] 同上（休が無い設定はここも入口で止める）。
+            val fallback = fillShiftIndex(p.allowedShiftsForStaff(i), p.restIdx ?: throw IllegalArgumentException("休みシフトが設定されていません"))
             for (j in 0 until p.T) {
                 val k = out[i][j]
                 if (k in 0 until p.K && p.canDo(i, k) && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.wish[i][j] == k)) { out[i][j] = fallback; n++ }
