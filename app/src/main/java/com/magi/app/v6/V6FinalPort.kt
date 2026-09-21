@@ -19,6 +19,12 @@ import kotlinx.coroutines.isActive
 const val MAX_OPTIMIZE_SEC = 300
 
 object V6FinalPort {
+    /** [UX調査] regression!=null（Sentinel発火＝後処理盤面が棄却された）のとき、その盤面を観測した
+     *  各パスのログ行（CovORelief:/C1Polish:/CoverageDiag等）を採用盤面の実態と誤読させないよう
+     *  行単位で明示する。ログは落とさない方針(3.327.0)は不変＝目印を足すだけ。 */
+    internal fun annotateStaleLogsIfRegressed(logs: List<MirrorLog>, regression: String?): List<MirrorLog> =
+        if (regression != null) logs.map { it.copy(message = "[棄却盤面の観測] " + it.message) } else logs
+
     data class BusyDetail(
         val algorithm: String,
         val base: String = algorithm,
@@ -1025,7 +1031,9 @@ object V6FinalPort {
         }
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + post.report.logs
+        // [UX調査] sentinelLog（1文）だけでは後続の個々の行まで読者が覚えていられない（history参照）。
+        val postReportLogs = annotateStaleLogsIfRegressed(post.report.logs, regression)
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」

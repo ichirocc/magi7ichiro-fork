@@ -79,6 +79,21 @@ class SessionRegressionTest {
         assertEquals("後処理", best.label)
     }
 
+    // ---- [UX調査] Sentinel発火時、post.report.logsは棄却盤面の観測＝行単位で明示する（ログは落とさない） ----
+
+    @Test fun annotateStaleLogsIfRegressed_marksEachLineOnlyWhenRegressed() {
+        val logs = listOf(
+            MirrorLog(tag = "CovORelief", message = "人員過剰の退避: covO 30->28"),
+            MirrorLog(tag = "C1Polish", message = "期間要件(c1)研磨: c1 2->2"),
+        )
+        val marked = V6FinalPort.annotateStaleLogsIfRegressed(logs, regression = "重み付きスコアが悪化しました: 100 -> 120")
+        assertTrue(marked.all { it.message.startsWith("[棄却盤面の観測] ") })
+        assertEquals("[棄却盤面の観測] 人員過剰の退避: covO 30->28", marked[0].message)
+        // regressionがnull（多重防御が発火していない通常経路）なら1文字も変えない
+        val unmarked = V6FinalPort.annotateStaleLogsIfRegressed(logs, regression = null)
+        assertEquals(logs, unmarked)
+    }
+
     // ---- 検査6b: 担当={休,B4,有}・休10-10・有1-1・31日 → B4 は最低20回＝目標1は達成不能 ----
 
     private fun aptState(restCapped: Boolean) = MagiState(
