@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -747,9 +748,14 @@ internal fun CollapsibleSection(
     title: String,
     stateKey: String,
     initiallyExpanded: Boolean = false,
+    // [UX監査#1] 診断カードからの誘導が①以外の節に着地しない問題への対処。呼び出し側が対象の
+    //   stateKeyをここへ渡すと、その節だけ強制的に開く（一致しなければ何もしない＝挙動不変）。
+    forceExpandKey: String? = null,
+    onForceExpandConsumed: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     var expanded by rememberSaveable(stateKey) { mutableStateOf(initiallyExpanded) }
+    LaunchedEffect(forceExpandKey) { if (forceExpandKey == stateKey) { expanded = true; onForceExpandConsumed() } }
     Column(Modifier.fillMaxWidth()) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
