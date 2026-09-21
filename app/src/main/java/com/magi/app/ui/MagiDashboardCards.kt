@@ -872,7 +872,8 @@ internal fun PinFixedImpactCard(
 internal fun SettingIssuesCard(
     ui: UiState,
     onFix: (com.magi.app.v6.SettingIssue) -> Unit,
-    onGoEdit: () -> Unit,
+    // [UX監査#4] 一覧は重要な順に整列済み＝先頭の種別を編集タブの節誘導に使う（無ければnull＝従来どおりtabのみ）。
+    onGoEdit: (com.magi.app.v6.IssueKind?) -> Unit,
     onClearWishes: () -> Unit = {},
 ) {
     val issues = ui.settingIssues
@@ -929,7 +930,7 @@ internal fun SettingIssuesCard(
                     Text("ほか ${issues.size - 6} 件（重要な順に表示中。まず上から直してください）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
             }
-            OutlinedButton(onClick = onGoEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定・希望を編集する") }
+            OutlinedButton(onClick = { onGoEdit(issues.firstOrNull()?.kind) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定・希望を編集する") }
         }
     }
 }
@@ -1256,7 +1257,8 @@ private fun ConfirmRow(
 internal fun AnalysisTriageCard(
     ui: UiState,
     onFocusStaff: (Int) -> Unit,
-    onGoEdit: () -> Unit,
+    // [UX監査#4] 引数は発火した族キー（例: "c1"）。呼出側が編集タブの対象節へ変換する（無ければ従来どおりtabのみ）。
+    onGoEdit: (String?) -> Unit,
     onShowCell: (Int, Int) -> Unit,
     onShowDay: (Int) -> Unit,
     onFixWish: (Int) -> Unit,
@@ -1305,7 +1307,7 @@ internal fun AnalysisTriageCard(
                                 Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
                                 if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            TextButton(onClick = onGoEdit) { Text("設定へ") }
+                            TextButton(onClick = { onGoEdit(row.family) }) { Text("設定へ") }
                         }
                     }
                 }
