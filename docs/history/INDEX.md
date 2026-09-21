@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#36: postChainRunningKeepBest(3.608.0)のtools/loop A/B判定＝既定OFF維持（2026-09-21）。
+  46ケース全カテゴリ・実データ4件で新旧完全同点、ゲート不合格。副次的にLoopBenchの起動不能バグ
+  （`Cases.build()`のShift role省略でhf66DataHardeningの休シフト必須ガードに抵触）を修正。
 - backlog#34: `docs/backlog.md`の更新漏れを是正（2026-09-21）。ポートフォリオ経路ベンチ（3.601.0）の
   整備・roleBudgetFit採否判定（既定OFF維持）は完了済みだったが、backlog.md本文が反映しておらず
   「測定手段の欠落」で未着手に見えていた。history 3.601.0節を引いて追記、コード変更なし。

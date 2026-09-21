@@ -498,3 +498,20 @@
     hardFloor）または非covU HARD残がc3nのみでForbiddenDiagが証明済みの場合だけExtraRefineを省略する。
     HARD=0・改善可能なHARD残は従来どおり常時実行。hosttest 823件緑。**tools/loopでのA/Bベンチ・採否判定は
     未実施**（3ケース別の時間/スコア比較は今後）。
+
+36. **[完了・既定OFF維持] `postChainRunningKeepBest`（3.608.0）のtools/loop A/B判定**（2026-09-21）。
+    `LoopBench.kt`に`MAGI_BENCH_FEATURE=runningkeepbest`腕を追加し5seed×46ケース(230ペア)で実施
+    （`tools/loop/results/iter_runningkeepbest.csv`）。**結果: 辞書式 新0/同等230/旧0、品質±0.00%、
+    速度+0.7〜0.8%、必須違反退行0、安定性 例外0・再現性46/46。ゲート{退行ゼロ:合格,品質≥10%:不合格,
+    速度≥10%:不合格,安定性:合格}→不合格**＝46ケース全カテゴリ・実データ4件とも新旧が完全に同点。
+    backlog#26の5腕と同型の構造（合成ベンチ資材では「チェーン内の良い一手が別パスの悪化に道連れで
+    棄却される」局面自体が発生しない）で、実データ（前回セッションのCovOReliefPolish 10/25 A4→B4修正が
+    Sentinelに棄却された事例）で実証済みの問題を合成ケースが再現できないだけ＝機能自体の無意味さを
+    意味しない。**既定OFF維持**、フラグ・コードは残し実データで再遭遇時に直接比較（backlog#26の
+    3.586.0手法）で再検証する。
+    **副次修正**: このベンチが3.603.0（`ShiftRole`導入）以降で初めて走らせたものだったため、
+    `LoopBench.kt`の合成ケース生成`Cases.build()`が`Shift("休",...)`を`role`省略（既定`ShiftRole.None`）
+    で構築しており`hf66DataHardening`の「休シフト無しは例外で止める」ガード（3.603.0）に即座に
+    引っかかって全ケースが起動不能だった。`role = ShiftRole.Rest`を明示して修正（ホストJVMの
+    ロケールがPOSIXで`sun.jnu.encoding`がASCIIになり日本語リテラルが化ける問題も同時に踏んだため、
+    `LANG=C.utf8 LC_ALL=C.utf8`でのビルド・実行が必須と再確認）。
