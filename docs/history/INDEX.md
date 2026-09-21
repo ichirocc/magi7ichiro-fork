@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#34: `docs/backlog.md`の更新漏れを是正（2026-09-21）。ポートフォリオ経路ベンチ（3.601.0）の
+  整備・roleBudgetFit採否判定（既定OFF維持）は完了済みだったが、backlog.md本文が反映しておらず
+  「測定手段の欠落」で未着手に見えていた。history 3.601.0節を引いて追記、コード変更なし。
 - 後処理チェーンにrunning keep-best追加（3.608.0、既定OFF/測定中、backlog#34系）: grillingで方針確定。
   実データでCovOReliefPolishの良い一手がチェーン内の別パスの悪化に道連れでpickBestStageに棄却される
   問題を実証。`PostChain`にbestWork/bestReportを追加し`postChainRunningKeepBest`フラグでガード。

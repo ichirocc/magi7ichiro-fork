@@ -464,6 +464,14 @@
     単体テストは`RsiPlusPhaseBudgetTest`（合計＝予算の不変条件・短予算でも全位相≥1・大予算で床維持）。
     **計測はまだできない**（上記「測定手段の欠落」のとおり現行tools/loopはポートフォリオを通らない）＝
     ポートフォリオ経路のベンチを用意してから採否する。
+    **→ 3.601.0でベンチ整備・(b)の採否判定完了**（本行、当時のbacklog更新漏れ。2026-09-21に追記）。
+    `tools/loop/PortfolioBudgetBench.kt`（`run_portfolio_budget_bench.sh`）を新設し、`V6Algorithm.PORTFOLIO`を
+    実際に回すA/Bを実データ4件×5seed×budgetSec=90sで実施（`LoopBench.kt`が経由しない
+    `V6OptimizerOptions.roleBudgetFit`の可否）。結果: golden -1.9%・sept2026 -2.3%改善、sample ±0.03%同等、
+    blocked_covu +0.8%悪化、epochOverrunCountは全件0。**判定＝既定OFF維持**（3/4改善もエッジケース悪化ありで
+    探索動学変更のリスク・報酬比が不明確、詳細は`docs/history/3.4xx.md`3.601.0節）。これにより
+    「測定手段の欠落」は解消済み＝このベンチ基盤は今後backlog#28（RsiFocusSelection周期枠）等の
+    ポートフォリオ経由の測定にも再利用できる（フェーズ別実時間・SA実測反復数までは未計装、必要なら追加）。
     **実データで新しい規模を確認（3.608.0作業中に発見）**: 実機ログ（Google Pixel 10 Pro XL・11名/31日）で
     `W5:MAX_DISTANCE_RSI_PLUS(q=45s→実8166s)`など**量子比で最大約181倍**を観測、これまで記録の3〜9倍を
     大きく超える。同ログで壁時計（`System.currentTimeMillis`基準の操作ログ経過表示）は19,950秒進んでいたが、
