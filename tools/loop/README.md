@@ -18,7 +18,7 @@
   歴代 44 件で一度も満たされていない（最大 +1.84%）ため。旧ゲートは比較のため残す。
   **新ゲートは今後の合否判定専用**で、既採用の腕（例: 勝ち越し大だが必須増 1 試行で不合格になる iter4〜7 の
   成分修復系）を自動で戻す根拠にはしない（再評価のメモに留める）。再判定で合格したのは iter8（C3 選択日ペア交換、
-  勝11/負1）と、aptFairSoftTolerance ON 条件の running keep-best の途中経過のみ。
+  勝11/負1）のみ（aptFairSoftTolerance ON 条件の running keep-best は途中まで合格だったが、完走後に充足不能ケースの必須増5件で不合格）。
 - 壁時計予算のハーネス（`PortfolioBudgetBench`・`HandleOptimizeBench`）は同一設定でもばらつく。
   HandleOptimizeBench の実質 A/A（フラグが経路上効かない 3 件）で品質 ±1.6%・時間 ±37% を観測した＝
   これ未満の差は効果と読まない。
