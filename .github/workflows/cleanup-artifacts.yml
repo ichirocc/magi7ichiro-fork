@@ -2,8 +2,11 @@ name: Cleanup Artifacts
 
 # アーティファクト保存枠を解放するワークフロー。lint/失敗ログ/通常CI成果物は毎日無条件で全削除する
 # （保存枠のためのハードコード。入力や日数による分岐は持たない）。
-# [3.570.0/ユーザー決定] `app-release-*`（リリース APK）は対象外にし `retention-days: 14` を実際に保証する
-# （経緯・将来課題は docs/environment.md・docs/backlog.md #21）。
+# [3.570.0/ユーザー決定] `app-release-*`（手動実行=workflow_dispatchのリリース APK）は対象外にし
+# `retention-days: 14` を実際に保証する（経緯は docs/environment.md）。
+# [backlog#21/2026-09-22] タグビルド（v*）の APK は GitHub Release アセットへ移した＝publish-release job
+# への一時受け渡し用アーティファクト（`release-apk-handoff-*`、retention-days: 1）はここでの保護対象外
+# （恒久コピーは Release アセット側にあるため、Actions 側は素早く消えてよい）。
 # 明示ページング(listArtifactsForRepo)で total_count もログに出すので、
 # 0 件なら本リポジトリに実体が無い（＝枠超過はアカウント共有枠/他リポジトリ起因）と確定できる。
 on:

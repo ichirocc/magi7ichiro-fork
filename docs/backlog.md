@@ -161,12 +161,18 @@
     が基準盤面`original`を持たず`ExactPinRegression`も欠如）。3件とも3.523.0のC1WindowPolishと同型の
     「他パスは持つ厳密ピン保護ガードが1パスだけ欠けていた」移植漏れ。Kotlin/C++は無変更。`-MAGI_PC` commit
     `b1f4b64`、MagiEngine.Tests 856/856緑（詳細は `docs/history/3.4xx.md`）。
-21. **[将来課題・実装不要] タグ成果物（リリース APK）を GitHub Release アセットへ移す**（3.570.0、ユーザー決定
-    「将来的にGitHub Release assetへ移す」）。現状は `release-build.yml` が `v*` タグで `actions/upload-artifact`
+21. ~~**[将来課題・実装不要] タグ成果物（リリース APK）を GitHub Release アセットへ移す**~~（3.570.0、ユーザー決定
+    「将来的にGitHub Release assetへ移す」）。~~現状は `release-build.yml` が `v*` タグで `actions/upload-artifact`
     （`retention-days: 14`）へ APK を置くだけ＝Actions アーティファクトの保存枠を消費し、`cleanup-artifacts.yml`
-    の除外リスト（`app-release-` prefix）で個別に保護している。Release アセットへ移せばこの除外が不要になり、
-    保存枠も別勘定になる（`gh release create`/`softprops/action-gh-release` 等で `v*` タグ push 時にアセット添付）。
-    ストア配布用の署名鍵・Lint ゲート・縮小と合わせて検討する話＝**明示 go まで着手しない**。
+    の除外リスト（`app-release-` prefix）で個別に保護している。~~
+    **→ 2026-09-22でユーザー明示go・実装完了**。`release-build.yml`にタグビルド専用の`publish-release` job
+    を新設し、`gh release create`/`gh release upload`（追加の第三者actionは使わず既存のgh CLIのみ）で`v*`
+    タグへAPKをRelease アセットとして添付する。書込みトークンは`report-failure`と同じくこのjob単独に分離
+    （3.567.0で確立した「ビルドjobは読み取り専用」方針を踏襲、Gradle子プロセスへ書込み権限を渡さない）。
+    `release` jobの受け渡し用アーティファクトは`release-apk-handoff-<sha>`（retention-days:1）へ改名し
+    `cleanup-artifacts.yml`の保護対象から外した（恒久コピーはRelease アセット側）。**手動実行
+    （workflow_dispatch）はRelease を作らないため`app-release-*`・retention-days:14・cleanup-artifacts.yml
+    の保護を従来どおり維持**（署名鍵・Lintゲート・縮小は引き続き対象外＝今回の変更に含まない）。
 22. **[要人手対応・ツール権限外・再オープン] main の branch protection / ruleset が未設定**（2026-09-16、
     外部監査で指摘・3.572.0で確認）。force-push・削除・CI未通過コミットの直接 push を防ぐ設定が repo 側に
     無い。このセッションで使える GitHub MCP ツールに branch protection/repository ruleset を変更する手段が

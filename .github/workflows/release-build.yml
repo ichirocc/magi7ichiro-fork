@@ -126,19 +126,20 @@ jobs:
       # アップロードはベストエフォート（枠超過などで赤くしない）。
       # タグビルドでは常に、手動実行では upload_apk=true のときのみアップロードする。
       # [3.552.0] 失敗を緑のまま隠さない: 0 件は error 扱いにし、outcome を STEP_SUMMARY へ出す（MAGI-Godot run #3 の教訓）。
-      # [3.570.0/ユーザー決定] retention-days: 14 を実際に保証する。cleanup-artifacts.yml は
-      #   `app-release-` 名の成果物を対象から除外するので、ここは無条件削除に巻き込まれない
-      #   （デバッグ鍵署名の動作確認用 APK なので恒久保存はしない＝14日で十分。経緯は docs/environment.md）。
+      # [backlog#21/2026-09-22/ユーザー明示go] タグビルドは GitHub Release アセットへ移すため、この
+      #   アーティファクトは publish-release job への一時的な受け渡し用（名前を分けて cleanup-artifacts.yml の
+      #   保護対象から外す＝保存枠は Release アセット側の別勘定になる）。手動実行（workflow_dispatch）は
+      #   Release を作らないため従来どおり `app-release-*`・retention-days: 14 で保護を維持する。
       - name: Upload release APK
         id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
         if: ${{ always() && (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.upload_apk == 'true') && hashFiles('**/build/outputs/apk/release/**/*.apk') != '' }}
         with:
-          name: app-release-${{ github.sha }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('release-apk-handoff-{0}', github.sha) || format('app-release-{0}', github.sha) }}
           path: "**/build/outputs/apk/release/**/*.apk"
           if-no-files-found: error
-          retention-days: 14
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 14 }}
 
       - name: Report upload outcome
         if: ${{ always() && steps.upload.outcome != 'skipped' }}
@@ -146,6 +147,37 @@ jobs:
           echo "## Release APK upload: ${{ steps.upload.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ steps.upload.outcome }}" != "success" ]; then
             echo "成果物のアップロードに失敗しました（枠超過など）。ジョブは緑ですが成果物は 0 件です。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # [backlog#21/2026-09-22/ユーザー明示go] タグビルドの APK を Actions アーティファクトでなく GitHub Release
+  #   アセットへ添付する。書込みトークンは release job（Gradle 実行）に持たせず、この job だけに分離する
+  #   （3.567.0で確立した「ビルドjobは読み取り専用」方針をそのまま踏襲）。
+  publish-release:
+    needs: release
+    if: ${{ always() && needs.release.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download release APK
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-apk-handoff-${{ github.sha }}
+          path: release-apk
+
+      - name: Create GitHub Release and attach APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          apk=$(find release-apk -name '*.apk' | head -1)
+          [ -n "$apk" ] || { echo "APKが見つかりません"; exit 1; }
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --title "$tag" \
+              --notes "自動ビルド（デバッグ鍵署名・動作確認用）。詳細は該当コミットのCIログを参照。"
           fi
 
   # 書込みトークンを持つのはこの job だけ。ビルドの成果物（失敗抜粋）を読んでコミットへ貼る。
