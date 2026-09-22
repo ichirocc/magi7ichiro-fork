@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#26: 停滞判定「修復途中の進捗」を調査・実装不要と確認（2026-09-22）。improvedThisEpochは
+  既にbetter()の辞書式比較でHARD優先＝想定した欠陥は無かった（コード変更なし）。
 - backlog#34: 181倍量子超過の根本原因調査＝runRsiPlusの4フェーズにフェーズ別実測ms計装を追加（2026-09-22、
   grilling）。サンドボックスではDozeを再現できないため次の実機ログで確証を取る前提の準備。
 - backlog#35: extraRefineRequirePostHardDrop(3.600.0)のA/B判定＝既定OFF維持（2026-09-21）。
