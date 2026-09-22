@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog#34: 181倍量子超過の根本原因調査＝runRsiPlusの4フェーズにフェーズ別実測ms計装を追加（2026-09-22、
+  grilling）。サンドボックスではDozeを再現できないため次の実機ログで確証を取る前提の準備。
 - backlog#35: extraRefineRequirePostHardDrop(3.600.0)のA/B判定＝既定OFF維持（2026-09-21）。
   新規HandleOptimizeBench.ktで実データ4件測定、方向がケースで割れ信号なし。
 - backlog#28: rsiFocusRotationPersistのtools/loop A/B判定＝既定OFF維持（2026-09-21）。

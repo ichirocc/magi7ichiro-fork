@@ -1982,16 +1982,23 @@ object V6NativeOptimizer {
             alnsSec = max(10, (budgetSec * 0.30).toInt())
             polishSec = max(5, budgetSec - seedSec - rsiSec - alnsSec)
         }
+        // [2026-09-22/backlog#34] 各フェーズの実測msを予算msと並べてログへ出す。実機で観測された
+        //   量子比最大約181倍（W5:MAX_DISTANCE_RSI_PLUS q=45s→実8166s）がSeed/Hypothesis/Refine/Polishの
+        //   どこで生じたかは従来ログ（HARD/totalのみ）では特定できなかった。次の実機ログでの切り分け用。
+        val seedT0 = nowMs()
         val seed = if (seedSec <= 0) {
             val rep = UnifiedViolationChecker.check(state, initial, quantitativeRangeEval = options.quantitativeRangeEval)
             V6OptimizerResult(initial, rep, V6Algorithm.V5, emptyList(), 0L, 0L)
         } else runV5(state, initial, options, seedSec, shouldStop, onProgress)
-        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase1 Seed: HARD=${seed.report.hard} total=${seed.report.total}"))
+        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase1 Seed: HARD=${seed.report.hard} total=${seed.report.total} 実測${nowMs() - seedT0}ms(予算${seedSec}000ms)"))
+        val rsiT0 = nowMs()
         val rsi = if (shouldStop() || rsiSec <= 0) seed else runRsi(state, seed.schedule, options, rsiSec, shouldStop, onProgress, sharedHf63)
         val base = if (better(rsi.report, seed.report)) rsi else seed
-        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase2 Hypothesis: HARD=${base.report.hard} total=${base.report.total}"))
+        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase2 Hypothesis: HARD=${base.report.hard} total=${base.report.total} 実測${nowMs() - rsiT0}ms(予算${rsiSec}000ms)"))
+        val alnsT0 = nowMs()
         val refine = if (shouldStop() || alnsSec <= 0) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, shouldStop, onProgress)
         val best = if (better(refine.report, base.report)) refine else base
+        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase3 Refine: HARD=${refine.report.hard} total=${refine.report.total} 実測${nowMs() - alnsT0}ms(予算${alnsSec}000ms)"))
         var bestSched = best.schedule
         // [HF361/528/541移植] EarlyChain: Refine 確定後の停滞境界で Chain3/4(常時)+Rect/BlkN(rectSwap)を発火
         run {
@@ -2010,13 +2017,14 @@ object V6NativeOptimizer {
                 }
             }
         }
+        val polishT0 = nowMs()
         val polish = if (polishSec <= 0 || shouldStop()) {
             PolishResult(bestSched, emptyList(), 0L, UnifiedViolationChecker.check(state, bestSched, quantitativeRangeEval = options.quantitativeRangeEval))
         } else {
             hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, shouldStop, options.quantitativeRangeEval)
         }
         val report = polish.report
-        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase3/4 Refine+Polish: HARD=${report.hard} total=${report.total}"))
+        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase4 Polish: HARD=${report.hard} total=${report.total} 実測${nowMs() - polishT0}ms(予算${polishSec}000ms) 全体実測${nowMs() - started}ms(予算${budgetSec}000ms)"))
         return V6OptimizerResult(
             polish.schedule,
             report.copy(logs = logs + seed.phaseLogs + rsi.phaseLogs + refine.phaseLogs + polish.logs + report.logs),
