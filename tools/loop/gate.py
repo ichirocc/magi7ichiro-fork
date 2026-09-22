@@ -44,6 +44,17 @@ print(f"下位10%品質 旧以上: {worst_ok} / 個別 10% 超退行: {len(big_r
 gates={'退行ゼロ':len(regress)==0 and worst_ok and len(big_regress)==0,'品質≥10%':mean_q>=10 and med_q>=10 and hz_new>=hz_old and wish_new>=wish_old-1e-9,
  '速度≥10%':mean_s>=10 and med_s>=10 and p90(ms_new)<=p90(ms_old) and mem_new<=mem_old*1.2 and to_new<=to_old,'安定性':exc==0 and oob==0 and mm==0 and repro_bad==0}
 print("ゲート:", {k:('合格' if v else '不合格') for k,v in gates.items()}, "→", "合格" if all(gates.values()) else "不合格")
+# [2026-09-22/ユーザー指示「基準の見直し」] 品質・速度≥10%は後処理パスでは構造的に届かない（歴代44件で最大+1.84%）
+#   ため、併記で統計ゲートを出す: 退行ゼロ（必須退行0・必須件数増0）かつ辞書式の勝敗に対する両側符号検定 p<0.05 で勝ち越し。
+import math
+def sign_test_p(w,l):
+    m=w+l
+    if m==0: return 1.0
+    k=min(w,l); tail=sum(math.comb(m,i) for i in range(k+1))/2**m
+    return min(1.0,2*tail)
+p_sign=sign_test_p(better,worse)
+stat_ok=len(regress)==0 and len(hard_worse)==0 and better>worse and p_sign<0.05
+print(f"統計ゲート: 勝{better}/負{worse} 符号検定 p={p_sign:.4f} 必須退行{len(regress)} 必須増{len(hard_worse)} → {'合格' if stat_ok else '不合格'}")
 # per-category breakdown
 from collections import defaultdict
 cat=defaultdict(list)
