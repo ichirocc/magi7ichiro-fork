@@ -173,6 +173,12 @@
     `cleanup-artifacts.yml`の保護対象から外した（恒久コピーはRelease アセット側）。**手動実行
     （workflow_dispatch）はRelease を作らないため`app-release-*`・retention-days:14・cleanup-artifacts.yml
     の保護を従来どおり維持**（署名鍵・Lintゲート・縮小は引き続き対象外＝今回の変更に含まない）。
+    **→ 2026-09-22に実タグpushで動作確認完了**。初回`v3.608.0-verify-release-asset`は`gate`のDesign lintで
+    落ちた（P6誤検知＋P10 baseline陳腐化、いずれも今回の変更とは無関係の既存不具合。原因調査・修正は同日）。
+    修正コミット`fa84633`を`v3.608.1-verify-release-asset`で再検証し、`gate`→`release`→`publish-release`
+    全ジョブ緑、GitHub Releaseが実際に作成されAPK（`app-release.apk`、44.9MB）がアセット添付されることを
+    確認（https://github.com/ichirocc/magi7ichiro-fork/releases/tag/v3.608.1-verify-release-asset ）。
+    backlog#21は完全に決着。
 22. **[要人手対応・ツール権限外・再オープン] main の branch protection / ruleset が未設定**（2026-09-16、
     外部監査で指摘・3.572.0で確認）。force-push・削除・CI未通過コミットの直接 push を防ぐ設定が repo 側に
     無い。このセッションで使える GitHub MCP ツールに branch protection/repository ruleset を変更する手段が

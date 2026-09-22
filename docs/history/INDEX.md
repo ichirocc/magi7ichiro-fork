@@ -1,7 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
 - backlog#21完了: タグビルドのリリースAPKをGitHub Release アセットへ移行（2026-09-22、ユーザー明示go）。
-  `publish-release` job新設、書込みトークンは分離、手動実行は従来どおり。
+  `publish-release` job新設、書込みトークンは分離、手動実行は従来どおり。実タグpushで動作確認済み
+  （途中design_lint.pyのP6誤検知/P10 baseline陳腐化を発見・修正）。
 - backlog#26: 停滞判定「修復途中の進捗」を調査・実装不要と確認（2026-09-22）。improvedThisEpochは
   既にbetter()の辞書式比較でHARD優先＝想定した欠陥は無かった（コード変更なし）。
 - backlog#34: 181倍量子超過の根本原因調査＝runRsiPlusの4フェーズにフェーズ別実測ms計装を追加（2026-09-22、
