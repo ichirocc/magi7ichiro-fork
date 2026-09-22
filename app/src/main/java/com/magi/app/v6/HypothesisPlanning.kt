@@ -184,11 +184,21 @@ internal object HypothesisPlanning {
      */
     internal fun epochOverrunLog(notes: List<String>): MirrorLog? {
         if (notes.isEmpty()) return null
+        // [2026-09-22/実機ログ] 3回の超過すべてで、算法も量子も違う8ロールが±20s以内の同じ秒数だけ超過し、
+        //   その秒数は「最後の進捗→完了」の空白と一致した＝ロール個別の締切漏れではなくプロセス全体の停止。
+        val actual = notes.mapNotNull { Regex("""実(\d+)s""").find(it)?.groupValues?.get(1)?.toLongOrNull() }
+        val uniform = actual.size >= 2 && actual.size == notes.size &&
+            actual.max() - actual.min() <= maxOf(30L, actual.max() / 20)
+        val cause = if (uniform) {
+            "（全ロールがほぼ同じ秒数だけ超過＝個別の締切漏れではなく、プロセス全体が止まっていた可能性が高い" +
+                "（端末のスリープ/バックグラウンドでの凍結）。再開後は各ロールが直ちに締切を検知して終了している）"
+        } else {
+            "（量子q秒のロールが実N秒走った＝内部で締切を見ない経路がある。役割名から特定する）"
+        }
         return MirrorLog(
             level = "W", tag = "エポック超過",
             message = "ロールが停止確認(stopRole)を大きく超過: " + notes.take(8).joinToString(",") +
-                (if (notes.size > 8) " ほか${notes.size - 8}件" else "") +
-                "（量子q秒のロールが実N秒走った＝内部で締切を見ない経路がある。役割名から特定する）",
+                (if (notes.size > 8) " ほか${notes.size - 8}件" else "") + cause,
         )
     }
 

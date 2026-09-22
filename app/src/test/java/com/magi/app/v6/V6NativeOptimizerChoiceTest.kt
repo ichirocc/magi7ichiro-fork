@@ -1219,4 +1219,18 @@ class V6NativeOptimizerChoiceTest {
         assertTrue(many.message, many.message.contains("ほか2件"))
     }
 
+    // 実機ログ（2026-09-22）の3回の超過は、全ロールが同じ秒数だけ超過＝プロセス凍結。ばらつくときだけ経路漏れと書く。
+    @Test
+    fun epochOverrunLogDistinguishesProcessFreezeFromPerRoleLeak() {
+        val freeze = HypothesisPlanning.epochOverrunLog(listOf(
+            "W0:BASELINE_REFINE(q=35s→実8150s)", "W2:LARGE_DESTROY_ALNS(q=5s→実8138s)", "W5:MAX_DISTANCE_RSI_PLUS(q=45s→実8166s)"))!!
+        assertTrue(freeze.message, freeze.message.contains("プロセス全体が止まっていた"))
+        assertFalse(freeze.message, freeze.message.contains("締切を見ない経路"))
+        val leak = HypothesisPlanning.epochOverrunLog(listOf(
+            "W0:BASELINE_REFINE(q=35s→実40s)", "W5:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))!!
+        assertTrue(leak.message, leak.message.contains("締切を見ない経路"))
+        val single = HypothesisPlanning.epochOverrunLog(listOf("W4:MAX_DISTANCE_RSI_PLUS(q=45s→実412s)"))!!
+        assertTrue(single.message, single.message.contains("締切を見ない経路"))
+    }
+
 }
