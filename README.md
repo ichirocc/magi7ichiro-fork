@@ -33,6 +33,10 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-22（3.608.1＝タグビルドのリリースAPKをGitHub Release アセットへ移行（backlog#21、
+実タグで動作確認済み）、hosttest.shでdesign lintとUTF-8ロケールを強制、design_lint.pyのP6誤検知/P10 baseline
+陳腐化を修正。backlog#28/#35/#36はtools/loop等で測定し既定OFF維持。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-20（3.602.0＝backlog#28/#35/#24をgrillingで設計確定・実装。#28はHf63Infeasibility
 へ持続カウンタ追加でRsiFocusSelectionの周期枠を持続化（既定OFF）、#35はExtraRefineゲートに構造的HARD判定
 （covU床・c3n壁）を流用（既定OFF）、#24（restShiftIndexフル改修）は方針転換を要するため保留継続。

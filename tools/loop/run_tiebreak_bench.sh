@@ -4,6 +4,7 @@
 #   tools/loop/run_tiebreak_bench.sh out.csv [seeds=5] [budgetMs=20000] [workers=4]
 # 実データ4件（app/src/test/resources）× seed × 1 回の実行内で fullEval 基準と betterReport 基準を比較する。
 set -e
+export LANG=C.utf8 LC_ALL=C.utf8   # POSIX ロケールだと日本語リテラルが化ける（hosttest.sh 参照）
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
 HOSTOUT=${MAGI_HOST_OUT:-/tmp/magi-hostbuild}
 L=${MAGI_HOST_LIBS:-$HOME/.cache/magi-host-libs}; KV=2.3.21; CV=1.8.1

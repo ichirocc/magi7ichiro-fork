@@ -3,6 +3,7 @@
 #   tools/host/hosttest.sh                                  # 先にエンジンを /tmp/magi-hostbuild へビルド
 #   tools/loop/run_person_swap_bench.sh results/personswap1.csv [seeds=5] [budgetSec=120] [workers=4]
 set -e
+export LANG=C.utf8 LC_ALL=C.utf8   # POSIX ロケールだと日本語リテラルが化ける（hosttest.sh 参照）
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
 HOSTOUT=${MAGI_HOST_OUT:-/tmp/magi-hostbuild}
 L=${MAGI_HOST_LIBS:-$HOME/.cache/magi-host-libs}; KV=2.3.21; CV=1.8.1

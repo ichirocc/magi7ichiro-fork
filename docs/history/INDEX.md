@@ -1,5 +1,8 @@
 # 作業記録の索引（見出し一覧）
 
+- 再発防止4件（3.608.1）: hosttest.shでdesign lint実行・hosttest/loopでLANG=C.utf8強制・
+  versionCode 821/versionName更新・lessons§5に「外部レポートの成果物は実在を照合」を追記。
+
 - backlog#21完了: タグビルドのリリースAPKをGitHub Release アセットへ移行（2026-09-22、ユーザー明示go）。
   `publish-release` job新設、書込みトークンは分離、手動実行は従来どおり。実タグpushで動作確認済み
   （途中design_lint.pyのP6誤検知/P10 baseline陳腐化を発見・修正）。

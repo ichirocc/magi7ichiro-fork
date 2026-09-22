@@ -5,6 +5,9 @@
 ## ホスト JVM でエンジン層を検証する
 - `tools/host/hosttest.sh`（kotlin-compiler-embeddable で `v6/`・`model/`・Android 非依存の `ui/work` と全 JUnit をコンパイルして実行。約 1 分）。
   出力先は `MAGI_HOST_OUT=/tmp/magi-hostbuild-xxx` で変えられる。**ベンチや probe が掴んでいる出力先を再ビルドしない**（クラスファイルが差し替わり結果が汚れる）。
+  2026-09-22 から冒頭で `tools/design_lint.py` も走る（落ちたら即終了。別ツリーのバグ注入検証など不要なときは
+  `MAGI_SKIP_LINT=1`）。また `LANG=C.utf8` を強制する（POSIX ロケールだと kotlinc が日本語リテラルを化かして
+  焼き込み、実行時の文言比較・例外メッセージが壊れる）。`tools/loop/run_*.sh` も同じく強制する。
 - probe（研磨 1 本・後処理全体の最終盤面ハッシュ比較）は `tools/loop/run_bench.sh` と同じ要領でホストビルドに対して Kotlin ファイルを 1 本コンパイルして走らせる。
 - ループのベンチ: `tools/loop/README.md`。
 

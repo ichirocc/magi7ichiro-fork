@@ -5,6 +5,7 @@
 # [2026-09-21/backlog#28] PORTFOLIO_BENCH_FEATURE=rsifocusrotation で rsiFocusRotationPersist のA/Bに切替
 #   （既定はroleBudgetFit）。runRsi自体がRSI/RSI_PLUS/PORTFOLIOでしか呼ばれずLoopBenchでは測れない。
 set -e
+export LANG=C.utf8 LC_ALL=C.utf8   # POSIX ロケールだと日本語リテラルが化ける（hosttest.sh 参照）
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
 HOSTOUT=${MAGI_HOST_OUT:-/tmp/magi-hostbuild}
 L=${MAGI_HOST_LIBS:-$HOME/.cache/magi-host-libs}; KV=2.3.21; CV=1.8.1

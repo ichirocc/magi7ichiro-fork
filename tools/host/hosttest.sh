@@ -5,8 +5,17 @@
 # 依存 jar は初回に Maven Central から ~/.cache/magi-host-libs へ落とす（Java 21 が必要。Android SDK は不要）。
 # stubs/KigouFormat.kt は android.icu の Transliterator を置き換える JVM 版（表示用の全角→半角）。
 set -u
+# POSIX ロケールだと kotlinc が日本語の文字列リテラルを化かしたまま class へ焼き込む（実行時に
+#   「休みシフトが設定されていません」が ??? になり hf66 のガードで全ケースが落ちた。2026-09-22）。
+export LANG=C.utf8 LC_ALL=C.utf8
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=${1:-$(cd "$HERE/../.." && pwd)}
+# エンジンだけの変更では android-sdk.yml を回さない運用のため、release-build.yml の gate が初めて
+#   lint を見る＝タグビルドまで気づけなかった（P6 誤検知・P10 baseline 陳腐化、2026-09-22）。
+#   別ツリーのバグ注入検証など lint を見たくないときは MAGI_SKIP_LINT=1。
+if [ "${MAGI_SKIP_LINT:-0}" != "1" ]; then
+  python3 "$ROOT/tools/design_lint.py" > /tmp/magi-design-lint.log 2>&1 || { tail -n 20 /tmp/magi-design-lint.log; echo "DESIGN LINT FAILED"; exit 1; }
+fi
 KV=2.3.21; CV=1.8.1
 L=${MAGI_HOST_LIBS:-$HOME/.cache/magi-host-libs}; mkdir -p "$L"
 M=https://repo1.maven.org/maven2
