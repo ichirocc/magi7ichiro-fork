@@ -140,6 +140,13 @@ def find_p6():
                     break
                 j += 1
             text = "\n".join(block)
+            # [2026-09-22/CI検出] UiState.copy は常に単体の `_ui.update { it.copy(...) }` で、
+            #   `.map { ... }` でリストへ適用されることはない。一方 MirrorLog（messageIsError を
+            #   持たないログ行）はチェーン内アノテーション（棄却盤面注釈・ロールバック印）で
+            #   `logs.map { it.copy(message = ...) }` を使う＝この形は誤検出（P6の対象外）。
+            if re.search(r"\.map\s*\{", text):
+                i = j + 1
+                continue
             if re.search(r"\bmessage\s*=", text) and "messageIsError" not in text:
                 hits.append("%s:%d" % (path.replace(ROOT + "/", ""), i + 1))
             i = j + 1
@@ -425,15 +432,14 @@ def find_p9():
 #   記号の字面で分岐すると ①その記号を使わない職場では黙って効かない ②同じ字を含む別の勤務に
 #   誤って効く、のどちらかが必ず起きる。実際 3.106.0 は `Ws1Ops.removeShift` の記号取り違えを、
 #   監査A5 は「raw "休" 比較が『公』職場で全滅していた」を直しており、**この型は2回発生している**。
-#   3.417.0 で表示色のカテゴリ推測（休/夜/早/遅/日）と「希」の割当除外3件を撤去し、残りは下の
-#   baseline 2 件だけ:
-#     - `MirrorCore.restShiftIndex`（記号「休」の解決。Ws1Ops の初期化・診断・初期解が使う業務概念）
-#     - `V6SanityPort` 検査2g（その解決が失敗して先頭シフトを休とみなしていることの警告）
-#   ＝**片方は概念の解決、もう片方はその失敗の告知**で対になっている。増やすときはここも更新する。
+#   3.417.0 で表示色のカテゴリ推測（休/夜/早/遅/日）と「希」の割当除外3件を撤去し、
+#   3.603.0（backlog#24）で`MirrorCore.restShiftIndex`が`ShiftRole.Rest`解決へ置き換わり
+#   記号一致が1件消えたため、残りは下の baseline 1 件だけ:
+#     - `StateParser`（JSON後方互換。roleフィールドが無い旧schemaを記号「休」で自動付与する経路）
 #   このルールが見ないもの（既知の残債・記号依存だが比較の形をしていない）:
 #     - `ScheduleCsvBridge` の `const val REST = "休"`（凡例に無ければ休シフトを補完する）
 #     - `restShiftIndex` 経由で `restIdx` を読む側（Problem/Ws1Ops/V6SanityPort/探索オペレータ）
-P10_BASELINE = 2
+P10_BASELINE = 1
 RE_P10_FWD = re.compile(
     r'(?:kigou|shiftSymbols\w*)[^"\n]{0,40}?(?:==|!=|\.contains\(|\.startsWith\(|\.endsWith\()\s*"([^"]+)"')
 RE_P10_REV = re.compile(r'"([^"]+)"\s*(?:==|!=)[^"\n]{0,40}?(?:kigou|shiftSymbols\w*)\b')
