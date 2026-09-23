@@ -182,12 +182,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // [保存] バックグラウンド遷移(ON_STOP/ON_PAUSE)で保留中の編集を即時永続化する。
     //   制約編集などはデバウンス保存のため、即背景化→プロセス破棄だと失われ得る。その保険。
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val activity = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
     androidx.compose.runtime.DisposableEffect(lifecycleOwner, vm) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP ||
                 event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
                 vm.saveNow()
             }
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) vm.onAppBackgrounded(activity?.isChangingConfigurations == true)   // [#34]
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_START) vm.onAppForegrounded()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }

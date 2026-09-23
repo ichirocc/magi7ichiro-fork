@@ -107,6 +107,7 @@ MagiRoot（唯一の合成ルート）
 | Entity | type | 役割 |
 |---|---|---|
 | `OptimizationWorker` | Background-Service | WorkManager の**前景サービス**で最適化を実行。中断耐性・スナップショット |
+| `ForegroundRunKeepAlive` | Background-Service | 前景実行（最適化・ソフト研磨）の間だけ WorkManager の前景サービスを保つ（通知を出して待つだけ。凍結対策・backlog#34） |
 
 ### UI 画面・部品（ui）
 | Entity | type | 役割 |
@@ -132,7 +133,7 @@ ViewModel ハブ
 - `MagiViewModel` **produces** `UiState`
 - `MagiViewModel` **holds** `MagiState`
 - `MagiViewModel` **calls** `V6NativeOptimizer`
-- `MagiViewModel` **enqueues**（WorkManager 経由）`OptimizationWorker`
+- `MagiViewModel` **enqueues**（WorkManager 経由）`OptimizationWorker` ／ `ForegroundRunKeepAlive`（前景実行の間だけ）
 - `MagiViewModel` **uses** `StateParser`（JSON）, `ScheduleCsvBridge`（CSV）
 
 エンジン（v6）

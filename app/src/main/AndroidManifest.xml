@@ -5,6 +5,8 @@
     <!-- バックグラウンド最適化を前景サービスとして実行（5分のCPUジョブをOSに止められない） -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- [#34] 前景で計算中は画面 OFF でも CPU を止めない（部分 WakeLock、実行中だけ保持。前景サービス ForegroundRunKeepAlive と併用） -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- [賢い修正・allowBackup] filesDir(magi_autosave.json/RunFiles入出力等)は職員氏名・勤務割当を
          含む実データ（golden_state.json 等に実名が入る運用実績あり）。allowBackup="true"(旧値。既定値と
          同一だが明示)のままだと adb backup（USBデバッグ/rootでの抜き取り経路）と Auto Backup

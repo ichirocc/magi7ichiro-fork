@@ -192,6 +192,52 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     private fun clearRunMarker() { runCatching { if (runMarkerFile.exists()) runMarkerFile.delete() } }
+    // [#34] 前景実行中の凍結対策。実機ログの予算超過3回はプロセス凍結だった（2026-09-22）。
+    //   前景サービスの無いアプリは画面 OFF から約 60 秒で部分 WakeLock を無効化され、別アプリへの切替でも
+    //   凍結されうる。実行中だけ前景サービス（ForegroundRunKeepAlive）と部分 WakeLock を併せて持つ。
+    //   画面の出入りは操作ログに残す（凍結の有無を次の実機ログから読むため）。
+    private var fgWakeLock: android.os.PowerManager.WakeLock? = null
+    private var fgRunKind: String? = null   // 実行中の前景処理名（null=前景実行なし）
+    private var fgRunLeftAt = 0L            // 0=画面上、>0=外れた時刻
+    private var fgRunLeaves = 0
+    private fun beginFgRunGuard(kind: String) {
+        fgRunKind = kind; fgRunLeftAt = 0L; fgRunLeaves = 0
+        val limitMs = (_ui.value.budgetSec + 600) * 1000L   // 解放漏れでも予算+10分で自動解放
+        val title = if (kind == "最適化") "勤務表をつくっています" else "勤務表を整えています"
+        if (!com.magi.app.work.ForegroundRunKeepAlive.start(getApplication(), title, limitMs)) logOp("W", "前景サービスを開始できませんでした（画面を消すと計算が止まることがあります）")
+        runCatching {
+            val pm = getApplication<Application>().getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+            fgWakeLock?.takeIf { it.isHeld }?.release()
+            fgWakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "MAGI:foregroundRun").apply {
+                setReferenceCounted(false)
+                acquire(limitMs)
+            }
+        }.onFailure { logOp("W", "WakeLock を取得できませんでした: ${it.javaClass.simpleName}") }
+    }
+    private fun endFgRunGuard() {
+        fgRunKind = null
+        com.magi.app.work.ForegroundRunKeepAlive.stop(getApplication())
+        com.magi.app.work.ForegroundRunKeepAlive.takeFailure()?.let { logOp("W", "前景サービスにできませんでした（$it）＝画面を消すと計算が止まることがあります") }
+        runCatching { fgWakeLock?.takeIf { it.isHeld }?.release() }
+        fgWakeLock = null
+    }
+    /** アプリが画面から外れた（ON_STOP）。構成変更（回転など）による再生成は数えない。1 実行あたり 5 回まで記録。 */
+    fun onAppBackgrounded(changingConfigurations: Boolean) {
+        val kind = fgRunKind ?: return
+        if (changingConfigurations || fgRunLeftAt > 0L || fgRunLeaves >= 5) return
+        fgRunLeftAt = System.currentTimeMillis(); fgRunLeaves++
+        val pm = getApplication<Application>().getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+        val how = if (pm?.isInteractive == false) "画面が消えました" else "別の画面へ切り替わりました"
+        logOp("I", "${kind}中に$how")
+    }
+    /** 画面に戻った（ON_START）。外れていた秒数を残す。 */
+    fun onAppForegrounded() {
+        val kind = fgRunKind ?: return
+        val left = fgRunLeftAt
+        if (left <= 0L) return
+        fgRunLeftAt = 0L
+        logOp("I", "${kind}中に画面へ戻りました（${(System.currentTimeMillis() - left) / 1000}秒ぶり）")
+    }
     /**
      * [3.428.0/#14] 背景実行の共有ファイルを消し、**消し残った名前を必ず記録する**。
      *
@@ -1285,6 +1331,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val phaseNameLastLogMs = HashMap<String, Long>()   // [3.283.0] 同名フェーズの再ログ抑制（60s窓・スパム対策）
         var lastHardLogMs = -10_000L
         val boardToken = beginBoardJob(MagiPhase.Optimizing, engineRun = true)   // [3.328.0/3.404.0]
+        beginFgRunGuard("最適化")   // 直後の launch の finally で必ず解放
         job = viewModelScope.launch {
             // [3.372.0/実機ログ起因] 終端ログ（完了/停止/失敗）を必ず1行残す保証。実機ログ(2026-08-15)で
             //   「最適化 開始」だけあって終端行が無い実行が2件あり、死因を判別できなかった。全経路が
@@ -1556,6 +1603,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   走ると（`ui.running` が再び真になり）**前の実行の古い途中経過が現在のものとして出た**。
                 if (_ui.value.liveSchedule.isNotEmpty()) _ui.update { it.copy(liveSchedule = emptyList()) }
                 clearRunMarker()  // 正常終了・停止・失敗いずれでもマーカーを消す（中断のみ残す）
+                endFgRunGuard()
                 if (!terminalLogged) logOp("W", "最適化 終了: 完了・停止・失敗のいずれも記録されませんでした（想定外の経路。停止処理自体の失敗が疑われます）")
                 // [3.409.0] endBoardJob は**終端ログより後**。旧: 先頭にあったため `activeRunSerial` が
                 //   先に 0 へ戻り、この行だけ「実行外」と刻まれていた＝実行IDを最も必要とする診断
@@ -1582,6 +1630,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "ソフト研磨 開始 (予算${_ui.value.budgetSec}s)")
         val startMs = System.currentTimeMillis()
         val boardToken = beginBoardJob(MagiPhase.Polishing, engineRun = true)   // [3.328.0/3.404.0]
+        beginFgRunGuard("ソフト研磨")   // 直後の launch の finally で必ず解放
         job = viewModelScope.launch {
             var terminalLogged = false   // [3.372.0] 終端ログの保証（runV6FullOptimize と同じ理由）
             try {
@@ -1666,6 +1715,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             } finally {
                 if (_ui.value.liveSchedule.isNotEmpty()) _ui.update { it.copy(liveSchedule = emptyList()) }   // [3.404.0]
                 clearRunMarker()   // [監査A8]
+                endFgRunGuard()
                 if (!terminalLogged) logOp("W", "ソフト研磨 終了: 完了・停止・失敗のいずれも記録されませんでした（想定外の経路。停止処理自体の失敗が疑われます）")
                 endBoardJob(boardToken)   // [3.328.0/3.404.0] 終端ログより後（実行IDを刻むため・3.409.0）
                 if (_ui.value.running) _ui.update { it.copy(running = false) }

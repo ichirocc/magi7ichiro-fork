@@ -33,6 +33,9 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-23（3.611.0＝前景実行中の凍結対策（backlog#34）: 実行中だけ前景サービス（常駐通知）と
+部分WakeLockを持ち（ユーザー決定）、画面の離脱/復帰を操作ログに残す。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-23（3.610.0＝後処理チェーンの走行 keep-best を構造的covU床>0では働かない条件つきで既定ON
 （許容ON同士230ペアで勝108/負54・必須増0）、iter8は再測定で昇格見送り。詳細は`docs/history/3.4xx.md`）
 

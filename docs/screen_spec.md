@@ -292,7 +292,7 @@
 - **指1本**: 2ボタン48dp。既定フォーカスは安全側（キャンセル）。
 - **実装**: `AlertDialog`（`applyWishes` 経路）。
 
-- **Web版反映（手動修正⇄再最適化ループ向け・Op1/Op2）**: (1) **やり直し(Redo)** を新設（既存30段Undoの相方）。元に戻した直後に下部バーへ「やり直し」を出し、修正→戻す→やり直しを支える。`MagiViewModel.redo`／`canRedo`。 (2) **画面消灯防止(Wake Lock相当)**: 前景最適化中は `keepScreenOn=true`（消灯による計算中断・ライブ表示停止を防止）。`MagiApp` の `LaunchedEffect(ui.keepScreenOn)`（3.568.0。旧 `ui.running` は背景実行・読み込み・違反チェックでも真＝この仕様より広く点けていた）。 ※再最適化は常に編集後の `currentSchedule` を種に開始するため、手動修正がそのまま探索の初期解になる（検証済み）。
+- **Web版反映（手動修正⇄再最適化ループ向け・Op1/Op2）**: (1) **やり直し(Redo)** を新設（既存30段Undoの相方）。元に戻した直後に下部バーへ「やり直し」を出し、修正→戻す→やり直しを支える。`MagiViewModel.redo`／`canRedo`。 (2) **画面消灯防止(Wake Lock相当)**: 前景最適化中は `keepScreenOn=true`（消灯による計算中断・ライブ表示停止を防止）。`MagiApp` の `LaunchedEffect(ui.keepScreenOn)`（3.568.0。旧 `ui.running` は背景実行・読み込み・違反チェックでも真＝この仕様より広く点けていた）。 ※再最適化は常に編集後の `currentSchedule` を種に開始するため、手動修正がそのまま探索の初期解になる（検証済み）。 (3) **凍結防止（3.611.0・backlog#34、ユーザー決定「前景サービス併用」）**: 前景実行（最適化・ソフト研磨）の間だけ前景サービス `ForegroundRunKeepAlive`（WorkManager、常駐通知「勤務表をつくっています／整えています」、タップでアプリへ戻る）と部分 WakeLock `MAGI:foregroundRun` を持つ（どちらも予算+10分で自動解放）。前景サービスが無いと画面 OFF から約60秒で WakeLock が無効化され、アプリ切替でも凍結しうるため。実行中にアプリが画面から外れる/戻ると操作ログに記録（`onAppBackgrounded`/`onAppForegrounded`。画面OFFと切替を区別、復帰は外れていた秒数つき、回転などの構成変更は除外、1実行5回まで）。
 
 ## 11. 中断復帰バナー（プロセスkill耐性・メッセージ）
 ![中断復帰](screens/12_interrupted.png)
