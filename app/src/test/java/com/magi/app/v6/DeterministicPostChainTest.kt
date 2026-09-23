@@ -119,7 +119,7 @@ class DeterministicPostChainTest {
         assertTrue("構造床>0 では巻き戻さず最後の盤面のまま", chain.work.contentDeepEquals(regressed))
     }
 
-    // acceptTies: 同点の横移動は受け入れる（既定は同点でも最良盤面へ戻す）。
+    // acceptTies: 同点の横移動は受け入れ、厳密な悪化は巻き戻す（既定は同点でも最良盤面へ戻す）。
     @Test
     fun runningKeepBestAcceptTiesKeepsLateralMove() {
         val s = state()
@@ -127,15 +127,21 @@ class DeterministicPostChainTest {
         val report0 = UnifiedViolationChecker.check(s, work0)
         val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
         val improvedReport = UnifiedViolationChecker.check(s, improved)
-        val lateral = improved.map { it.copyOf() }.toTypedArray().also { it[2][2] = 1 - it[2][2] }
-        fun runChain(acceptTies: Boolean): Array<IntArray> {
+        assertTrue(betterReport(improvedReport, report0))
+        // 同群・個人設定なしの 2 人の行を入れ替えた盤面＝報告は同点
+        val lateral = arrayOf(improved[1].copyOf(), improved[0].copyOf(), improved[2].copyOf())
+        val lateralReport = UnifiedViolationChecker.check(s, lateral)
+        assertTrue(!betterReport(lateralReport, improvedReport) && !betterReport(improvedReport, lateralReport))
+        assertTrue(!lateral.contentDeepEquals(improved))
+        fun runChain(acceptTies: Boolean, last: Array<IntArray>, lastReport: ViolationReport): Array<IntArray> {
             val c = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
                 runningKeepBest = true, initialReport = report0, acceptTies = acceptTies)
             c.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
-            c.adopt(makeCyclicSwapResult(lateral, improvedReport, "Tie"))
+            c.adopt(makeCyclicSwapResult(last, lastReport, "Last"))
             return c.work
         }
-        assertTrue("既定は同点でも最良盤面へ戻す", runChain(acceptTies = false).contentDeepEquals(improved))
-        assertTrue("acceptTies は同点の横移動を残す", runChain(acceptTies = true).contentDeepEquals(lateral))
+        assertTrue("既定は同点でも最良盤面へ戻す", runChain(false, lateral, lateralReport).contentDeepEquals(improved))
+        assertTrue("acceptTies は同点の横移動を残す", runChain(true, lateral, lateralReport).contentDeepEquals(lateral))
+        assertTrue("acceptTies でも厳密な悪化は巻き戻す", runChain(true, work0, report0).contentDeepEquals(improved))
     }
 }
