@@ -146,15 +146,15 @@ fun main(args: Array<String>) {
         "dayassignidentityfallback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, dayAssignIdentityFallback = true)
         // [3.608.0/backlog#34] チェーン内走行keep-best。パス単体の改善が同一チェーン内の別パスの
         //   悪化に道連れで捨てられる問題への対処＝postChainRunningKeepBestのA/B。
-        "runningkeepbest" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = true)
+        "runningkeepbest" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det, postChainRunningKeepBest = true)
         //   既定設定では各パスが自前の keep-best でチェーンが単調＝巻き戻しが構造的に起きない（230/230 盤面一致）。
         //   非単調になるのは aptFairSoftTolerance（他ソフト悪化を許容）ON のとき＝実機で道連れ棄却が起きた設定。
-        "runningkeepbestaft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true) to
+        "runningkeepbestaft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
         //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装（A）と、同点も受け入れる版（B）。どちらも許容 ON 同士。
-        "rkbstruct" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true) to
+        "rkbstruct" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        "rkbstructties" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true) to
+        "rkbstructties" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true, postChainRunningKeepBestAcceptTies = true)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }

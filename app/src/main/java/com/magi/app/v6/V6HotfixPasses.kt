@@ -358,16 +358,16 @@ object V6HotfixPasses {
         val restZeroWindowLnsEnabled: Boolean = false,
         /** HF66 直後にも退避する（既定 false＝最終段だけ。早期配置は後続パスの経路を変える＝測定は history 3.554.0）。 */
         val covOReliefEarly: Boolean = false,
-        /** [3.6xx.0/測定中] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
+        /** [3.608.0/3.610.0] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
          *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
          *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
          *  最上位の `pickBestStage`（V6FinalPort、4 マクロ段）とは独立・併用＝チェーン内部の粒度を補完するだけ。
-         *  既定 OFF。採否は tools/loop のベンチマークで決める。
          *  構造的 covU 床（`V6SanityPort.structuralHardFloor`）が 0 より大きい盤面では働かない
-         *  （2026-09-22 実測: 必須件数が増えた試行はすべて構造的に充足不能なケースだった）。 */
-        val postChainRunningKeepBest: Boolean = false,
-        /** [測定中] true なら同点（悪化していない）の手も受け入れ、厳密に悪化したときだけ巻き戻す。
-         *  同点の横移動を捨てると後続パスの経路を塞ぐため。 */
+         *  （必須件数が増えた試行はすべて構造的に充足不能なケースだった）。既定 ON（3.610.0、tools/loop 許容ON 同士
+         *  230 ペアで勝108/負54・必須退行0・必須増0）。許容 OFF ではチェーンが単調＝巻き戻しが起きず出力不変。 */
+        val postChainRunningKeepBest: Boolean = true,
+        /** [不合格・既定 OFF] true なら同点の手も受け入れ、厳密に悪化したときだけ巻き戻す（3.610.0 で勝109/負53 だが
+         *  必須増 1 試行、上の既定との差は勝27/負29 で有意差なし）。 */
         val postChainRunningKeepBestAcceptTies: Boolean = false,
         /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
         val componentRepairFinal: Boolean = true,
@@ -477,7 +477,7 @@ object V6HotfixPasses {
         schedule: Array<IntArray>,
         private val state: MagiState,
         private val quantitativeRangeEval: Boolean,
-        /** [postChainRunningKeepBest/測定中] false のときは以下の bestWork/bestReport を一切触らない＝挙動完全不変。 */
+        /** [postChainRunningKeepBest] false のときは以下の bestWork/bestReport を一切触らない＝挙動完全不変。 */
         runningKeepBest: Boolean = false,
         initialReport: ViolationReport? = null,
         private val acceptTies: Boolean = false,
@@ -507,7 +507,7 @@ object V6HotfixPasses {
         }
 
         /**
-         * [postChainRunningKeepBest/測定中] 直前に畳み込んだ [work] を、パス自身が既に評価済みの [report]
+         * [postChainRunningKeepBest] 直前に畳み込んだ [work] を、パス自身が既に評価済みの [report]
          * （なければ安価な再チェック）でチェーン最良と比較する。悪化していれば最良盤面へ巻き戻し、
          * [passLogs] は棄却マーカー付きで返す（ログは落とさない＝`annotateStaleLogsIfRegressed` と同じ方針）。
          * flag OFF のときは何もせず [passLogs] をそのまま返す＝挙動完全不変。
@@ -547,7 +547,7 @@ object V6HotfixPasses {
         }
 
         companion object {
-            /** [postChainRunningKeepBest/測定中] チェーン内巻き戻しで不採用になった行の目印（`annotateStaleLogsIfRegressed`
+            /** [postChainRunningKeepBest] チェーン内巻き戻しで不採用になった行の目印（`annotateStaleLogsIfRegressed`
              *  の "[棄却盤面の観測] " と同型・別文脈用）。 */
             const val ROLLBACK_MARKER = "[チェーン内巻き戻しで不採用] "
         }
@@ -1056,7 +1056,7 @@ object V6HotfixPasses {
         val pinBlocks: PinBlockAttribution? = null,
         /** [Iteration 2] このパスが単独では不採用にし、結合にも使わなかった候補（違反連結成分修復の材料）。 */
         val rejectedCandidates: List<CombinatorialRepair.Candidate> = emptyList(),
-        /** [postChainRunningKeepBest/測定中] このパスが自身の keep-best ループで既に評価済みの `newSchedule` に対応する報告書。
+        /** [postChainRunningKeepBest] このパスが自身の keep-best ループで既に評価済みの `newSchedule` に対応する報告書。
          * 未設定(null)のパスは `PostChain` 側で安価な再チェックにフォールバックする。 */
         val report: ViolationReport? = null,
     )
