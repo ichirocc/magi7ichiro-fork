@@ -581,3 +581,7 @@
     既定（許容OFF）との突き合わせ: 許容ONのみ 98/115（p=0.27）、許容ON+keep-best 97/86（p=0.46）＝**許容ON自体も
     既定より有意に良いとは言えない**（実機は許容ON）。採るなら「充足不能（HARD残が構造的）な盤面では keep-best を
     切る」等の条件付けが要る＝探索動学の設計判断として明示指示待ち。
+    **→ 2026-09-23 ユーザー指示「すべて」で条件付けを実装・測定中**: `PostChain` は構造的 covU 床
+    （`V6SanityPort.structuralHardFloor`）が 0 より大きい盤面では keep-best を働かせない（合成の充足不能 6 件だけが床>0、
+    他 36 件と実データ 4 件は 0）。任意で同点の手も受け入れる `postChainRunningKeepBestAcceptTies`（既定 false）。
+    腕 `rkbstruct`（床条件のみ）と `rkbstructties`（＋同点受け入れ）を許容 ON 同士で比較中。

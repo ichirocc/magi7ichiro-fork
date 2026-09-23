@@ -11,12 +11,12 @@ import org.junit.Test
 
 /** [Iteration 7] 決定的モード（`PostOptimizationParams.deterministic`）＝時間でなく回数で止める。同じ入力・seed なら同じ盤面。 */
 class DeterministicPostChainTest {
-    private fun state(): MagiState {
+    private fun state(needA: String = "2"): MagiState {
         val t = 8
         val rows = listOf(listOf(1, 1, 1, 0, 1, 1, 1, 0), listOf(0, 0, 1, 1, 0, 0, 1, 1), listOf(1, 0, 0, 1, 1, 0, 0, 1))
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-08",
-            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "2", "")), groups = listOf(Group("G", "G")),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", needA, "")), groups = listOf(Group("G", "G")),
             staff = listOf(Staff("X", 0), Staff("Y", 0), Staff("Z", 0)), use2Patterns = false,
             groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
             schedule = rows, wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
@@ -101,5 +101,41 @@ class DeterministicPostChainTest {
         assertTrue("巻き戻された Bad パスのログは棄却マーカー付きで残る（ログを落とさない）",
             chainOn.logs.any { it.tag == "Bad" && it.message.contains("チェーン内巻き戻しで不採用") })
         assertTrue("採用された Good パスのログはマーカーなし", chainOn.logs.any { it.tag == "Good" && !it.message.contains("チェーン内巻き戻しで不採用") })
+    }
+
+    // 構造的 covU 床 > 0（必要人数 5 > 職員 3）の盤面では巻き戻さない＝必須件数が増えた試行はすべてこの形だった（2026-09-22）。
+    @Test
+    fun runningKeepBestIsInactiveWhenStructuralHardFloorIsPositive() {
+        val s = state(needA = "5")
+        assertTrue(V6SanityPort.structuralHardFloor(s) > 0)
+        val work0 = s.schedule.map { it.toIntArray() }.toTypedArray()
+        val report0 = UnifiedViolationChecker.check(s, work0)
+        val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
+        val regressed = improved.map { it.copyOf() }.toTypedArray().also { it[1][0] = 0; it[0][0] = 0 }
+        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+            runningKeepBest = true, initialReport = report0)
+        chain.adopt(makeCyclicSwapResult(improved, UnifiedViolationChecker.check(s, improved), "Good"))
+        chain.adopt(makeCyclicSwapResult(regressed, UnifiedViolationChecker.check(s, regressed), "Bad"))
+        assertTrue("構造床>0 では巻き戻さず最後の盤面のまま", chain.work.contentDeepEquals(regressed))
+    }
+
+    // acceptTies: 同点の横移動は受け入れる（既定は同点でも最良盤面へ戻す）。
+    @Test
+    fun runningKeepBestAcceptTiesKeepsLateralMove() {
+        val s = state()
+        val work0 = s.schedule.map { it.toIntArray() }.toTypedArray()
+        val report0 = UnifiedViolationChecker.check(s, work0)
+        val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
+        val improvedReport = UnifiedViolationChecker.check(s, improved)
+        val lateral = improved.map { it.copyOf() }.toTypedArray().also { it[2][2] = 1 - it[2][2] }
+        fun runChain(acceptTies: Boolean): Array<IntArray> {
+            val c = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+                runningKeepBest = true, initialReport = report0, acceptTies = acceptTies)
+            c.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
+            c.adopt(makeCyclicSwapResult(lateral, improvedReport, "Tie"))
+            return c.work
+        }
+        assertTrue("既定は同点でも最良盤面へ戻す", runChain(acceptTies = false).contentDeepEquals(improved))
+        assertTrue("acceptTies は同点の横移動を残す", runChain(acceptTies = true).contentDeepEquals(lateral))
     }
 }

@@ -362,8 +362,13 @@ object V6HotfixPasses {
          *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
          *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
          *  最上位の `pickBestStage`（V6FinalPort、4 マクロ段）とは独立・併用＝チェーン内部の粒度を補完するだけ。
-         *  既定 OFF。採否は tools/loop のベンチマークで決める。 */
+         *  既定 OFF。採否は tools/loop のベンチマークで決める。
+         *  構造的 covU 床（`V6SanityPort.structuralHardFloor`）が 0 より大きい盤面では働かない
+         *  （2026-09-22 実測: 必須件数が増えた試行はすべて構造的に充足不能なケースだった）。 */
         val postChainRunningKeepBest: Boolean = false,
+        /** [測定中] true なら同点（悪化していない）の手も受け入れ、厳密に悪化したときだけ巻き戻す。
+         *  同点の横移動を捨てると後続パスの経路を塞ぐため。 */
+        val postChainRunningKeepBestAcceptTies: Boolean = false,
         /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
         val componentRepairFinal: Boolean = true,
         /** [Iteration 7] 決定的モード＝時間（ms キャップ・締切・残り時間の判定）でなく回数で止める。同じ入力・seed なら同じ盤面。
@@ -473,9 +478,13 @@ object V6HotfixPasses {
         private val state: MagiState,
         private val quantitativeRangeEval: Boolean,
         /** [postChainRunningKeepBest/測定中] false のときは以下の bestWork/bestReport を一切触らない＝挙動完全不変。 */
-        private val runningKeepBest: Boolean = false,
+        runningKeepBest: Boolean = false,
         initialReport: ViolationReport? = null,
+        private val acceptTies: Boolean = false,
     ) {
+        private val runningKeepBest: Boolean =
+            runningKeepBest && V6SanityPort.structuralHardFloor(state, cachedProblem(state, quantitativeRangeEval)) == 0
+
         var work: Array<IntArray> = schedule.copy2D()
             private set
         val logs = ArrayList<MirrorLog>()
@@ -507,7 +516,7 @@ object V6HotfixPasses {
             if (!runningKeepBest) return passLogs
             val rep = report ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val best = bestReport
-            if (best == null || betterReport(rep, best)) {
+            if (best == null || betterReport(rep, best) || (acceptTies && !betterReport(best, rep))) {
                 bestReport = rep
                 bestWork = work.copy2D()
                 return passLogs
@@ -563,7 +572,8 @@ object V6HotfixPasses {
         params: PostOptimizationParams = PostOptimizationParams(),
     ): V6PostOptimizationResult {
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
-        val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0)
+        val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
+            acceptTies = params.postChainRunningKeepBestAcceptTies)
         val t0 = EngineClock.nowMs()
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
