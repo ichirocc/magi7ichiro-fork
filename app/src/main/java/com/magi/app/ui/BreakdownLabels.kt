@@ -19,8 +19,23 @@ package com.magi.app.ui
 internal val breakdownLabels: Map<String, String> = mapOf(
     "groupViol" to "担当外シフト", "pref" to "希望違反", "covU" to "人員不足", "c3n" to "禁止の並び", "c3w" to "希望前日の禁止",
     "low" to "下限割れ", "high" to "上限超過", "apt" to "適切回数のズレ", "fair" to "公平化のズレ", "weekly" to "曜日の偏り",
-    "c1" to "期間の制約", "c2" to "個人の合計", "c3" to "必須の並び", "c3m" to "推奨の並び",
+    "c1" to "期間の制約", "c2" to "個人の合計", "c3" to "守るとよい並び", "c3m" to "推奨の並び",
     "c3mn" to "回避の並び", "c41" to "グループのレンジ", "c42" to "グループペア",
     // [④用語統一] covO は covU「人員不足」/集計凡例「人員過剰」と対にする（旧「過剰な配置」は同じ違反の別名で紛らわしい）。
     "c41s" to "スキルグループのレンジ", "c42s" to "スキルグループペア", "covO" to "人員過剰",
 )
+
+/**
+ * [思考誘導S1] 1手の提案の得失を、利用者が最初に考える順に2行で言う。1行目＝必須の約束が減るか、
+ * 2行目＝注意（増える要調整。無ければ null）。
+ */
+internal fun fixImpactLines(s: com.magi.app.v6.FixSuggestion): Pair<String, String?> {
+    val hardLine = when {
+        s.deltaHard < 0 -> "必須の約束: 減る（${-s.deltaHard}件）"
+        s.deltaHard == 0 -> "必須の約束: 変わらない"
+        else -> "必須の約束: 増える（${s.deltaHard}件）"
+    }
+    val worse = s.diff.filter { (k, d) -> d > 0 && k !in com.magi.app.v6.MirrorKeys.hard }
+    val caution = worse.takeIf { it.isNotEmpty() }?.joinToString("・", prefix = "注意: ") { (k, d) -> "${breakdownLabels[k] ?: k} +$d" }
+    return hardLine to caution
+}

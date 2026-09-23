@@ -766,7 +766,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   セル編集・取込・職員削除のあとも古い提案が表示され、適用時に別セル/別職員へ書いていた。
         // [3.529.0/外部仕様書取り入れ] 「他の案」も同根で無効化する（旧: fixSuggestions だけ外していた）。
         alternativeScheds = emptyList()
-        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), alternatives = emptyList()) }
+        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), alternatives = emptyList()) }
     }
 
     private fun clearUndo() {
@@ -789,7 +789,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         alternativeScheds = emptyList()
         val label = snap.label
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
-            engineRan = false, fixSuggestions = emptyList(), alternatives = emptyList(),
+            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), alternatives = emptyList(),
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
             //   （再検査が失敗/停止すると画面だけ元のまま残っていた）。
             schedule = restoredSched.map { it.toList() },
@@ -811,7 +811,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         alternativeScheds = emptyList()
         val label = snap.label
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
-            engineRan = false, fixSuggestions = emptyList(), alternatives = emptyList(),
+            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), alternatives = emptyList(),
             schedule = restoredSched.map { it.toList() },   // [3.592.0] undo()と同じ理由
             message = if (label != null) "やり直す: $label" else "やり直しました") }
         logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
@@ -1313,7 +1313,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             "前回と同じ設定での再実行です。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
         else null
         lastSettingsSig = sig
-        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, copilotHint = hint, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, message = "勤務表をつくり始めました") }
+        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, copilotHint = hint, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
         logOp("I", "最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
         writeRunMarker("fg")
         clearBgFiles("前景実行の開始")   // [C1] fg実行ではbg途中状態は無関係＝掃除
@@ -1533,6 +1533,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [実機ログ起因] 探索中の一時盤面でしか違反が無かった族（最終盤面で0）は「充足できている」ので
                 //   警告から除外する（旧: 破棄された探索トラックの covO/LimMax まで列挙され誤解を招いた）。
                 val staleKeys = hf63.infeasibleBreakdownKeys().filter { (res.report.breakdown[it] ?: 0) > 0 }
+                // [思考誘導S4] 画面の下限判定は採用した盤面で見る（入力維持の分岐では捨てた盤面の族を出さない）。
+                _ui.update { it.copy(stalledHardFamilies = hf63.infeasibleBreakdownKeys()
+                    .filter { k -> k in com.magi.app.v6.MirrorKeys.hard && (adoptedReport.breakdown[k] ?: 0) > 0 }) }
                 if (staleKeys.isNotEmpty()) {
                     val names = staleKeys.mapNotNull { k -> Hf63Infeasibility.KEY_TO_INDEX[k]?.let { Hf63Infeasibility.CNAMES[it] } }
                     logOp("W", "構造的に充足が難しい制約を検出: ${names.joinToString(", ")}（データの見直しを推奨）")
@@ -1626,7 +1629,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (!ensureValidForRun(st0, sched0)) return
         pushUndo("仕上げ最適化")
         writeRunMarker("fg")   // [監査A8]
-        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, liveSchedule = emptyList(), message = "自動で整えています…") }
+        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, liveSchedule = emptyList(), fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "自動で整えています…") }
         logOp("I", "ソフト研磨 開始 (予算${_ui.value.budgetSec}s)")
         val startMs = System.currentTimeMillis()
         val boardToken = beginBoardJob(MagiPhase.Polishing, engineRun = true)   // [3.328.0/3.404.0]
@@ -2323,7 +2326,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8)
                 }
                 if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
-                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName) }
+                // [思考誘導S0/レビュー] 探索中に盤面か設定が変わったら（元に戻す・セル編集・実行の完了など）、古い盤面の
+                //   結果と「探索済み」を書き戻さず、今の盤面で探し直す。
+                val curSched = currentSchedule; val curSt = state
+                if (curSched == null || curSt == null || boardKey(curSched) != boardKey(snap) || stateKey(curSt) != stateKey(st)) {
+                    _ui.update { it.copy(fixSearching = false) }
+                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift)
+                    return@launch
+                }
+                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName, fixSearched = focusName.isBlank()) }
             } catch (e: CancellationException) {
                 if (seq == fixSeq) _ui.update { it.copy(fixSearching = false) }
                 throw e
@@ -2344,7 +2355,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   元に戻す・別データ読込・職員削除のあとでも同じ ops をそのまま書き込んでいた（staff/day/toShift が
         //   別の実体を指す）。一致しなければ適用せず再探索を促す。toShift の上限（K）も未検査だった。
         if (fixBoardKey != 0L && (fixBoardKey != boardKey(sched) || fixStateKey != stateKey(st))) {
-            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(),
+            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),
                 message = "勤務表か設定が変わったため、この提案は適用できません。「直し方を探す」をもう一度押してください") }
             return
         }
@@ -2353,7 +2364,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (gate !is com.magi.app.v6.FixApplyGate.Outcome.Applied) {
             val why = (gate as com.magi.app.v6.FixApplyGate.Outcome.Rejected).reason
             logOp("W", "改善手を見送り: ${s.label}（$why）")
-            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(),
+            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),
                 message = "この提案は見送りました（$why）。「直し方を探す」で探し直してください") }
             return
         }
@@ -2367,7 +2378,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             hasResult = true,
             engineRan = false,   // [3.475.0] 提案の適用は手操作扱い（局所1手のみ、フルの計算ではない）
             schedule = applied.map { it.toList() },
-            fixSuggestions = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
+            fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
             message = "改善手を適用: ${s.label}（必須 ${gate.before.hard}→${gate.after.hard}・合計 ${gate.before.total}→${gate.after.total}）",
         ) }
         refreshCheck()

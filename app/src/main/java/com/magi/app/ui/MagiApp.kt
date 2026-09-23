@@ -224,6 +224,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var showImportGuidance by rememberSaveable { mutableStateOf(false) }
     var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおすのを手伝って」対話
+    var wishConflicts by remember { mutableStateOf(false) }          // [思考誘導S3] ぶつかっている希望の一覧
 
     // [Root] 画面から上がってきた操作の入口。可否は MagiArbiter が決め、通ったものだけが鎖へ流れる。
     //   配下の Composable は vm を知らず、この onEvent へ MagiEvent を渡すだけ。
@@ -534,6 +535,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         //   → 不足なし時は分析タブの修復フローへ。
                         onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
                         onSetup = { tab = 2 },
+                        onShowMove = { tab = 3 },
+                        onShowWishes = { wishConflicts = true },
+                        onShowList = { tab = 3 },
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
@@ -791,6 +795,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }
         if (guidedFix) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { tab = 2 })
+        }
+        if (wishConflicts) {
+            WishConflictDialog(ui, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
+                wishConflicts = false; tab = 1; editingCell = i to j
+            })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(

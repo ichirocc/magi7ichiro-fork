@@ -164,3 +164,24 @@ internal class MagiViewState(val ui: UiState, val vioEnabled: Set<String> = allV
         }
     }
 }
+
+/** [思考誘導S3] 残っている必須違反に関わる希望 1 件（職員・日・理由）。 */
+internal data class InvolvedWish(val staff: Int, val day: Int, val name: String, val reason: String)
+
+/**
+ * 必須違反に関わる希望を、名前・日付・理由つきで列挙する（職員順→日順）。関わる＝そのセルに希望違反(pref)か
+ * 希望前日の禁止(c3w)がある、または禁止の並び(c3n)が希望で固定したセルに掛かっている。
+ */
+internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
+    ui.violationCellFamilies.flatMap { (key, fams) ->
+        val parts = key.split(",")
+        val i = parts.getOrNull(0)?.toIntOrNull() ?: return@flatMap emptyList()
+        val j = parts.getOrNull(1)?.toIntOrNull() ?: return@flatMap emptyList()
+        val name = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
+        buildList {
+            if ("vio-pref" in fams) add(InvolvedWish(i, j, name, "希望の勤務になっていません"))
+            // c3w の印は前日側のセルに付く＝ぶつかっている希望はその翌日。
+            if ("vio-c3w" in fams) add(InvolvedWish(i, j + 1, name, "前日（${j + 1}日）に置けない勤務が入っています"))
+            if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(InvolvedWish(i, j, name, "希望が禁止の並びに掛かっています"))
+        }
+    }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))

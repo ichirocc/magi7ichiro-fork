@@ -262,31 +262,38 @@ internal fun ShiftPickerSheet(
                     // [見直しF1] 重大度色はユーザートークン(__vio__/__vioSoft__)から解決（グリッド/凡例と同色）。
                     val vioHardC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
                     val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-                    cellVioClasses(ui, "$i,$j").forEach { vioCls ->
-                        val fam = vioCls.removePrefix("vio-")
-                        val hard = isHardCellViolation(vioCls)
-                        Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam),
-                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                            color = resolvedVioColor(ui, vioCls, vioHardC, vioSoftC))
-                    }
-                    // [実機バグ修正] covU/covOはneedViolations["k,j"](シフト×日)にあり、上のcellVioClasses
-                    //   （職員×日）には出ないため、この日のこのシフトが人員不足/過剰でも理由が出なかった
-                    //   （経緯: history 3.515.2）。現在の割当シフトぶんだけ追加で見る。
-                    if (current >= 0) visibleNeedClasses(ui, current, j, allVioBucketKeys).forEach { needCls ->
-                        val fam = needCls.removePrefix("vio-")
-                        val hard = isHardCellViolation(needCls)
-                        val limits = cv.needCellLimits(current, j)
-                        val countNow = ui.schedule.count { it.getOrNull(j) == current }
-                        val detail = limits?.let { (lo, hi) ->
-                            when (needCls) {
-                                "vio-covU" -> "必要${lo}人 → ${(lo - countNow).coerceAtLeast(0)}人不足"
-                                "vio-covO" -> "適正${hi}人 → ${(countNow - hi).coerceAtLeast(0)}人過剰"
-                                else -> null
+                    // [セルシート小修正] セルの族と人員の族（covU 等）をまとめ、必須を先・要調整を後に見出しで分ける。
+                    //   旧: 人員の行を末尾に足していたため、必須の人員不足が要調整の行より下に出た。
+                    val lines = cellVioClasses(ui, "$i,$j").map { it to "" } +
+                        (if (current >= 0) visibleNeedClasses(ui, current, j, allVioBucketKeys).map { needCls ->
+                            val limits = cv.needCellLimits(current, j)
+                            val countNow = ui.schedule.count { it.getOrNull(j) == current }
+                            val detail = limits?.let { (lo, hi) ->
+                                when (needCls) {
+                                    "vio-covU" -> "必要${lo}人 → ${(lo - countNow).coerceAtLeast(0)}人不足"
+                                    "vio-covO" -> "適正${hi}人 → ${(countNow - hi).coerceAtLeast(0)}人過剰"
+                                    else -> null
+                                }
                             }
+                            needCls to (detail?.let { "（$it）" } ?: "")
+                        } else emptyList())
+                    val (hardLines, softLines) = lines.partition { isHardCellViolation(it.first) }
+                    // 必須があるときは要調整を折りたたむ（先に直すのは必須だけ）。
+                    var softOpen by remember(i, j) { mutableStateOf(false) }
+                    for ((title, group, mark) in listOf(Triple("必須（配る前に直す）", hardLines, "⚠ "), Triple("要調整（できれば）", softLines, "△ "))) {
+                        if (group.isEmpty()) continue
+                        val folded = mark == "△ " && hardLines.isNotEmpty() && !softOpen
+                        if (mark == "△ " && hardLines.isNotEmpty()) {
+                            TextButton(onClick = { softOpen = !softOpen }, contentPadding = PaddingValues(0.dp)) {
+                                Text("要調整 ${group.size}件（後回しで大丈夫）" + if (softOpen) " ▾" else " ▸", style = MaterialTheme.typography.labelMedium)
+                            }
+                        } else Text(title, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        if (!folded) group.forEach { (vioCls, detail) ->
+                            val fam = vioCls.removePrefix("vio-")
+                            Text(mark + (breakdownLabels[fam] ?: fam) + detail,
+                                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                                color = resolvedVioColor(ui, vioCls, vioHardC, vioSoftC))
                         }
-                        Text((if (hard) "⚠ 必須違反: " else "△ 要調整: ") + (breakdownLabels[fam] ?: fam) + (detail?.let { "（$it）" } ?: ""),
-                            style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                            color = resolvedVioColor(ui, needCls, vioHardC, vioSoftC))
                     }
                     Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     val wt = if (wish == null) "希望  未登録"

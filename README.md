@@ -33,6 +33,9 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-23（3.612.0＝思考誘導 UX: セルシートで必須を先に・要調整を折りたたみ、c3 を「守るとよい並び」へ、ホームの主ボタンを
+不足→1手→下限の見込み→希望→問題 の順に1つ、1手カードに「必須は減るか」、ぶつかっている希望の一覧。詳細は`docs/history/3.4xx.md`）
+
 **最終更新**：2026-09-23（3.611.0＝前景実行中の凍結対策（backlog#34）: 実行中だけ前景サービス（常駐通知）と
 部分WakeLockを持ち（ユーザー決定）、画面の離脱/復帰を操作ログに残す。詳細は`docs/history/3.4xx.md`）
 

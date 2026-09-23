@@ -18,7 +18,7 @@ private fun boundLabel(l: String, u: String): String {
 }
 
 internal fun seqFamilyJp(family: String): String = when (family) {
-    "cons3" -> "必須の並び"
+    "cons3" -> "守るとよい並び"
     "cons3n" -> "禁止の並び"
     "cons3m" -> "推奨の並び"
     "cons3mn" -> "回避の並び"
@@ -74,7 +74,7 @@ internal fun constraintsViewOf(st: MagiState?): ConstraintsView {
                 st.cons1.map { "${it.shiftKigou}   ${it.day1}日で${it.day2}回以上" }),
             ConstraintFamilyView("cons2", "個人の合計（回数）",
                 st.cons2.map { "${it.shiftKigou}   合計${it.count}回以上" }),
-            ConstraintFamilyView("cons3", "必須の並び", st.cons3.map { seq(it.pattern) }),
+            ConstraintFamilyView("cons3", "守るとよい並び", st.cons3.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3n", "禁止の並び", st.cons3n.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3m", "推奨の並び", st.cons3m.map { seq(it.pattern) }),
             ConstraintFamilyView("cons3mn", "回避の並び", st.cons3mn.map { seq(it.pattern) }),

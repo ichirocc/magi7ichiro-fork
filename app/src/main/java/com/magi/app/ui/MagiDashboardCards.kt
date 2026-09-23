@@ -105,6 +105,31 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
+/** [思考誘導S3] 必須違反に関わる希望を、名前・日付・理由つきで並べる。押すとそのセルを開く（希望の変更もそこで）。 */
+@Composable
+internal fun WishConflictDialog(ui: UiState, onDismiss: () -> Unit, onOpenCell: (Int, Int) -> Unit) {
+    val items = remember(ui.violationCellFamilies, ui.wishes) { involvedWishes(ui) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("ぶつかっている希望") },
+        text = {
+            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (items.isEmpty()) Text("いま必須違反に関わる希望はありません。")
+                else {
+                    Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    items.forEach { w ->
+                        TextButton(onClick = { onOpenCell(w.staff, w.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            Text("${w.name} ・ ${w.day + 1}日　${w.reason}", modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("閉じる") } },
+    )
+}
+
 @Composable
 internal fun GuidedFixDialog(
     ui: UiState,
@@ -235,6 +260,9 @@ internal fun OperatorNextActionCard(
     onSchedule: () -> Unit,  // 中身を見る（勤務表へ）
     onFix: () -> Unit,       // なおすのを手伝って（勤務表で手直し）
     onSetup: () -> Unit,     // データを見直す（編集へ）
+    onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
+    onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
+    onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -261,21 +289,26 @@ internal fun OperatorNextActionCard(
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
             "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
-        else -> OpNextPlan(amber, onAmber,
-            // [監査#1] 人手不足ゼロでも必須違反(希望/禁止連続/群)で此処に来る。不足が無いのに
-            //   「人手が足りない」と告げる誤診断を排し、実態（必須違反の残数）を言う。
-            (worstDay?.let { "$it が人手不足です。" }
-                ?: "必須違反が ${ui.bestHard}件 残っています。"),
-            // [3.480.0 ホームAIリデザイン] 補助ボタン「もう一度つくる」は固定フッターと重複のため撤去
-            // （grilling決定#3）。この状態の主導線は「なおすのを手伝って」1つに絞る。
-            // [3.483.0 H-1] 人手不足が無い狩猟では、この大ボタンは分析タブへ飛んで同じ探索を起動するだけ
-            //   ＝直下の「AIの解決提案」と同じ結果を別画面で見せる冗長。不足があるとき（GuidedFix＝
-            //   代用要員のピッカーという別機能）だけ出す。
-            // [UX監査P0/U2,H3] 人手不足0のときbigActionを消すだけだとカードにボタンが1つも無くなる
-            //   （helperLabelもnullだった）。主導線は必ず1つ出す＝不足があれば大ボタン、無ければ
-            //   「データを見直す」を補助ボタンとして代わりに出す（infeasible分岐と同じ導線）。
-            "なおすのを手伝って", onFix, !ui.coverageDiag?.shortfalls.isNullOrEmpty(),
-            "データを見直す".takeIf { ui.coverageDiag?.shortfalls.isNullOrEmpty() }, onSetup)
+        // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す。
+        //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
+        ui.coverageDiag?.shortfalls?.any { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow } == true ->
+            OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人手不足です。" } ?: "人手が足りない日があります。"),
+                "なおすのを手伝って", onFix, true, null, onSetup)
+        // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
+        ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() ->
+            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
+                "直す1手を見る", onShowMove, true, null, onSetup)
+        ui.fixSearching ->
+            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
+        // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
+        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && involvedWishes(ui).isNotEmpty() ->
+            OpNextPlan(amber, onAmber, "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
+                "ぶつかっている希望を見る", onShowWishes, true, "このまま書き出す", onExport)
+        ui.violationCellFamilies.values.any { f -> f.any { it == "vio-pref" || it == "vio-c3w" } } ->
+            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
+                "ぶつかっている希望を見る", onShowWishes, true, null, onSetup)
+        else -> OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。",
+            "問題を見る", onShowList, true, null, onSetup)
     }
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
@@ -438,6 +471,9 @@ internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
                         MagiTagChip(text = tag, color = tagColor)
                         Text(top.label, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
                     }
+                    val (hardLine, caution) = fixImpactLines(top)
+                    Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
+                    caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                     val diffTxt = top.diff.joinToString("・") { (k, d) -> "${breakdownLabels[k] ?: k} ${if (d < 0) "−${-d}" else "+$d"}" }
                     val totalTxt = if (top.deltaTotal <= 0) "−${-top.deltaTotal}" else "+${top.deltaTotal}"
                     Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
@@ -446,7 +482,7 @@ internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
                         onClick = { onEvent(MagiEvent.Board.ApplyFixSuggestion(top)) },
                         enabled = !ui.running,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    ) { Text("この手を適用（推奨）") }
+                    ) { Text("この手を使う（元に戻せます）") }
                     if (ui.fixSuggestions.size > 1) {
                         Text("ほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer.copy(alpha = 0.8f))
@@ -1478,6 +1514,9 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                                 MagiTagChip(text = tag, color = tagColor)
                                 Text(s.label, style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
                             }
+                            val (hardLine, caution) = fixImpactLines(s)
+                            Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
+                            caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             val diffTxt = s.diff.joinToString("・") { (k, d) ->
                                 "${breakdownLabels[k] ?: k} ${if (d < 0) "−${-d}" else "+$d"}"
                             }
@@ -1485,7 +1524,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                             Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
-                                Text("この手を適用")
+                                Text("この手を使う（元に戻せます）")
                             }
                         }
                     }

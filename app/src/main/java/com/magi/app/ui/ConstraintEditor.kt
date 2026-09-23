@@ -125,7 +125,7 @@ private fun SeqFamilyGrouped(
         // [3.483.0 E-11] 見出しに族の意味（禁止/必須/推奨/回避）を含める。旧「【X の次の日】」は4族で同文だった。
         val heading = when (fam.key) {
             "cons3n" -> "【$first の次の日に禁止】"
-            "cons3" -> "【$first の次の日に必須（どれか）】"
+            "cons3" -> "【$first の次の日に守るとよい（どれか）】"
             "cons3m" -> "【$first の次の日に推奨】"
             "cons3mn" -> "【$first の次の日は避ける】"
             else -> "【$first の次の日】"

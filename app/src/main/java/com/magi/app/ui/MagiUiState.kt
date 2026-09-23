@@ -64,6 +64,8 @@ data class UiState(
     val distLocations: Map<String, List<List<Int>>> = emptyMap(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
     val fixSearching: Boolean = false,                                       // 改善手を探索中
+    val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）
+    val stalledHardFamilies: List<String> = emptyList(),   // [思考誘導S4] 直近の実行で長く改善せず採用盤面にも残った必須族（盤面を変えたら空）
     val fixFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）
     val logs: List<String> = emptyList(),
     val elapsedMs: Long = 0,

@@ -53,7 +53,7 @@ class AnalysisTriageTest {
         val t = analysisTriage(ui(breakdown = mapOf("c1" to 6, "c3" to 97, "weekly" to 186)))
         assertFalse(t.computed)
         assertTrue("実行前に壁と決めつけない", t.blockers.isEmpty())
-        assertEquals(setOf("期間の制約", "必須の並び", "曜日の偏り"), t.searching.map { it.label }.toSet())
+        assertEquals(setOf("期間の制約", "守るとよい並び", "曜日の偏り"), t.searching.map { it.label }.toSet())
         assertTrue("断定しない注記が出る", t.searchNote.contains("最適化後も残る場合があります"))
     }
 
