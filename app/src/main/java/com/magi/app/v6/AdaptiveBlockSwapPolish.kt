@@ -644,7 +644,7 @@ internal object AdaptiveBlockSwapPolish {
 
         /**
          * [3.295.0 境界c3nの事前フィルタ / 3.296.0 で既定OFF] この巡回交換では covU/covO は同日置換で不変・groupViol は
-         * canDo・pref は movable で不変なので、変化しうる HARD は c3n だけ。c3n は職員行ローカルなので、参加者の行に交換を
+         * canDo・pref は movable で不変。変化しうる HARD は c3n と c3w（3.542.0、翌日が希望のセルを動かすと増減）で、ここは c3n の増加だけを落とす（c3w は checker が判定＝安全側のまま）。c3n は職員行ローカルなので、参加者の行に交換を
          * 当てた fire 数を数えれば近似でなく厳密に判定できる。`firesAfter > firesBefore` の候補だけを落とす。
          */
         private fun c3nFiresIncrease(cycle: IntArray, swapDays: List<Int>): Boolean {
