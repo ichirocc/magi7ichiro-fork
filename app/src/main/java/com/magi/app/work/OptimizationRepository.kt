@@ -1,6 +1,7 @@
 package com.magi.app.work
 
 import com.magi.app.model.MagiState
+import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.ViolationReport
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 
 /**
  * In-process bridge between the UI/ViewModel and the background [OptimizationWorker]
@@ -68,6 +70,31 @@ object OptimizationRepository {
         val alternatives: List<Array<IntArray>> = emptyList(),
     )
 
+    /**
+     * [外部レビュー N6] 背景実行の計算条件＝前景（`runV6FullOptimize`）が `handleOptimize` へ渡すのと同じ4つ。
+     * ViewModel が WorkManager の inputData へ載せ（kill 後の再実行でも残る）、Worker はそこから読む。
+     */
+    data class RunConfig(val seconds: Int, val workers: Int, val softPolish: Boolean, val algorithm: V6Algorithm) {
+        fun toInput(): Map<String, Any> = mapOf(
+            KEY_SECONDS to seconds, KEY_WORKERS to workers, KEY_SOFT_POLISH to softPolish, KEY_ALGORITHM to algorithm.name,
+        )
+
+        companion object {
+            const val KEY_SECONDS = "seconds"
+            const val KEY_WORKERS = "workers"
+            const val KEY_SOFT_POLISH = "softPolish"
+            const val KEY_ALGORITHM = "algorithm"
+
+            /** 鍵の無い入力（この版より前に投入された Work）は従来の条件で読む＝予算・並列は Repository、仕上げ OFF・AUTO。 */
+            fun fromInput(input: Map<String, Any?>): RunConfig = RunConfig(
+                seconds = (input[KEY_SECONDS] as? Int)?.takeIf { it > 0 } ?: OptimizationRepository.seconds,
+                workers = (input[KEY_WORKERS] as? Int)?.takeIf { it > 0 } ?: OptimizationRepository.workers,
+                softPolish = input[KEY_SOFT_POLISH] as? Boolean ?: false,
+                algorithm = V6Algorithm.entries.firstOrNull { it.name == input[KEY_ALGORITHM] } ?: V6Algorithm.AUTO,
+            )
+        }
+    }
+
     /** Input handed to the next worker run. */
     @Volatile var request: Pair<MagiState, Array<IntArray>>? = null
     @Volatile var seconds: Int = 60
@@ -115,4 +142,16 @@ object OptimizationRepository {
     fun publishProgress(p: BgProgress) { _progress.value = p }
     fun publishResult(r: BgResult?) { _result.value = r }
     fun clear() { _progress.value = null; _result.value = null }
+
+    /** 受け取らずに捨てた結果を下ろす。そのあとに新しい結果が公開されていたら触らない。 */
+    fun dropResult(r: BgResult) { _result.compareAndSet(r, null) }
+
+    /**
+     * [外部レビュー R6] 結果の購読を [ready]（起動時の復元が state を立て終えた）の後に始める。
+     * StateFlow は購読の開始時に最新値を渡すが、渡した値を再送しない＝復元前に受けて捨てた結果は二度と来ない。
+     */
+    suspend fun collectResultsAfter(ready: StateFlow<Boolean>, onResult: suspend (BgResult) -> Unit) {
+        ready.first { it }
+        result.collect { r -> if (r != null) onResult(r) }
+    }
 }

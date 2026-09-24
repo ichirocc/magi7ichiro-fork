@@ -165,6 +165,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // [判断設計監査 #3] 「データを開く」直前の状態を1世代だけ退避（開く=取消不能な置換だった穴を塞ぐ）。
     private val prevBackupFile get() = getApplication<Application>().filesDir.resolve("magi_prev_before_open.json")
     private var hydrated = false           // 復元完了前の自動保存を抑止（Web HF514 と同思想）
+    private val restoreLoaded = MutableStateFlow(false)   // [外部レビュー R6] 起動時の復元の読込が終わった（背景結果の受付開始）
     private var saveJob: Job? = null
     // [3.485.0] 保存の世代（main で採番）と、古い世代の書き込みを捨てるゲート（SaveGate の KDoc 参照）。
     private var saveGen = 0
@@ -376,6 +377,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             if (resultUsable) {
                 clearRunMarker()
                 clearBgFiles("前回の完了結果を反映")
+                OptimizationRepository.publishResult(null)   // [外部レビュー R6] 同じ結果がメモリにも残っていれば二重に当てない
                 if (state == null) loadAsync(resultTxt, markResult = true, fromRestore = true)   // initialAssignment が state.schedule を返すため結果が復元される
                 logOp("I", "前回のバックグラウンド最適化の結果を反映しました")
             } else {
@@ -426,6 +428,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             hydrated = true
+            job?.join()   // [外部レビュー R6] 上の loadAsync が state を立てるまで待つ
+            restoreLoaded.value = true
         }
         // バックグラウンド最適化（WorkManager）の進捗・結果を購読して画面へ反映（仕様書 §6.3）
         viewModelScope.launch {
@@ -443,7 +447,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            OptimizationRepository.result.collect { r -> if (r != null) applyBgResult(r) }
+            OptimizationRepository.collectResultsAfter(restoreLoaded) { r -> applyBgResult(r) }
         }
         // [3.385.0/外部レビュー High3] Worker が握り潰していた耐久保証（kill 耐性）の失敗を操作ログへ。
         //   旧: 入力・途中最良・完了結果の書き込みが全て runCatching で無言＝失敗しても書き出したログに
@@ -532,11 +536,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             // [P2修正/レビュー指摘] 予算秒数・並列数を WorkManager の inputData に永続化。プロセス再起動後の
             //   再実行でも開始時の条件（例: 300秒/8並列）が保たれる（旧: インメモリのみで既定60秒/4並列に化けた）。
-            .setInputData(androidx.work.workDataOf(
-                OptimizationWorker.KEY_SECONDS to _ui.value.budgetSec,
-                OptimizationWorker.KEY_WORKERS to _ui.value.workers,
-                OptimizationWorker.KEY_RUN_ID to runId,
-            ))
+            //   [外部レビュー N6] 方式・仕上げ最適化も載せる＝前景と同じ条件で計算する（RunConfig の KDoc 参照）。
+            .setInputData(androidx.work.Data.Builder()
+                .putAll(OptimizationRepository.RunConfig(_ui.value.budgetSec, _ui.value.workers, _ui.value.softPolish, _ui.value.v6Algorithm).toInput())
+                .putLong(OptimizationWorker.KEY_RUN_ID, runId)
+                .build())
             .build()
         // [外部レビュー P1-02] 旧: enqueue が例外を投げると、直前に立てたマーカー・入力ファイル・
         //   所有権が残ったまま関数を抜けていた（次回起動が「中断されました」と誤案内しうる）。
@@ -559,7 +563,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "バックグラウンドで最適化を開始しました（完了時に通知）") }
         writeRunMarker("bg")
-        logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers})")
+        logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
         // [3.592.0] runCatchingは同期例外しか捉えない。enqueueUniqueWorkが返すOperationの完了を
         //   非同期に監視し、後から失敗した場合も開始失敗と同じ片付けをする（置き換え済みなら何もしない）。
         viewModelScope.launch {
@@ -596,6 +600,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   持たない経路（プロセス再起動後のファイル復元）＝従来どおり通す。
         if (bgRunId != 0L && r.runId != 0L && r.runId != bgRunId) {
             logOp("W", "バックグラウンド最適化の結果を破棄しました（置き換えられた古い実行の結果）")
+            OptimizationRepository.dropResult(r)   // [外部レビュー R6] 残すと次の起動の復元後に当たる
             return
         }
         // [3.475.0/論理監査] `bgStateKey`（インメモリ）はプロセス再起動で 0 に戻り、以後は runId/指紋の両方が
@@ -825,7 +830,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         autoSave()
     }
 
-    fun load(json: String, note: String = "") = loadAsync(json, note = note)
+    fun load(json: String, note: String = "", onLoaded: (() -> Unit)? = null) = loadAsync(json, note = note, onLoaded = onLoaded)
 
     /**
      * [⛏6] ゼロから作る起点。最小の有効データ(1シフト/1グループ/1スタッフ/31日)を
@@ -866,7 +871,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      *   いる**経路が、その事実を利用者へ届けるための唯一の口（旧: 呼出側が `_ui.update` で出しても
      *   この関数の「読込完了: …」が必ず上書きしていた）。既定は空＝JSON 読込などは従来どおり。
      */
-    fun loadAsync(rawJson: String, markResult: Boolean = false, fromRestore: Boolean = false, note: String = "") {
+    fun loadAsync(rawJson: String, markResult: Boolean = false, fromRestore: Boolean = false, note: String = "", onLoaded: (() -> Unit)? = null) {
         if (!fromRestore && runBlockedByInFlight("読み込み")) return
         val json = MojibakeRepair.repair(rawJson)
         // [3.282.0/新領域ログ監査] 旧: 参照比較(`!==`)のため BOM 除去だけの健全なファイルでも毎回
@@ -968,6 +973,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             )
                         }
                         logOp("I", "読込 ${lp.state.staffCount}名/${lp.state.dayCount}日/${lp.state.shiftCount}シフト")
+                        onLoaded?.invoke()
                     },
                     onFailure = { err ->
                         // [3.400.0] 旧: `onFailure = { _ui.update { it.copy(message = "読込失敗: ${it.message}") } }`
@@ -1623,16 +1629,33 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   **Error を再送出しない**のは意図的なトレードオフ: `viewModelScope.launch` の未捕捉例外は
                 //   既定ハンドラでプロセスを落とすため、**その死因を説明する操作ログ（メモリ上のリング）ごと
                 //   失われる**。ここで捕まえれば `OutOfMemoryError` と名指しした行が残り、書き出せる。
-                //   状態の一貫性は保たれる（ViewModel の盤面は handleOptimize が値を返した**後**にしか
-                //   書き換えず、この時点では未変更＝入力盤面のまま）。代償は「プロセス状態が不明なまま
+                //   状態の一貫性は保たれる（handleOptimize 内の失敗なら VM の盤面は入力のまま。採用の後で
+                //   落ちたときは下の分岐で画面を今の盤面へ揃える）。代償は「プロセス状態が不明なまま
                 //   継続しうる」ことで、これは業務判断として受け入れる（利用者は続行/再起動を選べる）。
                 val kind = if (e is Error) "重大なエラー(${e.javaClass.simpleName})" else e.javaClass.simpleName
-                logOp("W", "最適化 失敗: $kind: ${e.message}")
+                val lateSt = state?.takeIf { it !== st0 }   // 非 null＝この実行が state を差し替えた後の失敗
+                logOp("W", "最適化 失敗${if (lateSt != null) "（結果の採用後）" else ""}: $kind: ${e.message}")
                 terminalLogged = true
                 // [3.400.0] 画面には失敗の種類と次の一手だけ。内部名「V6」と生の例外文は直上の logOp へ
                 //   （3.147.0/3.191.0 の「英字符号・内部名を画面に出さない」方針の取り残し）。
                 val failMsg = "勤務表をつくれませんでした（$kind）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）"
-                if (s5 == null) {
+                if (lateSt != null) {
+                    // [S5 §10] 採用・維持の分岐が state・盤面・自動保存を書いた後（pushReport・captureAlternatives 等）で落ちた。
+                    //   結果は捨てず、画面を VM が持つ今の盤面へ揃える（入力の盤面で描くと保存・書き出しと食い違う）。
+                    val curB = currentSchedule ?: sched0
+                    val lateMsg = "勤務表の作成は終わりましたが、最後の処理でエラーが起きました（$kind）。表示は今の勤務表です。$s5Suffix"
+                    withContext(NonCancellable) {
+                        runCatching {
+                            val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(lateSt, curB) }
+                            pushReport(lateSt, curB, rep, nonCancellable = true) { it.copy(
+                                running = false, hasResult = true, messageIsError = true, message = lateMsg) }
+                        }.onFailure {
+                            // 診断がまた落ちても盤面だけは今のものを出す（3.592.0 の undo と同じ）。
+                            _ui.update { it.copy(running = false, hasResult = true, message = lateMsg, messageIsError = true,
+                                wishes = lateSt.wishes, schedule = curB.map { r -> r.toList() }) }
+                        }
+                    }
+                } else if (s5 == null) {
                     _ui.update { it.copy(running = false, message = failMsg, messageIsError = true) }
                 } else {
                     // [S5 §10] 希望は消えたまま＝画面もその state で数え直す（refreshCheck は失敗文を上書きするので使わない）。
@@ -1663,7 +1686,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ===== [S5] 「この希望を取り消したら」試算と確定（docs/s5_wish_trial.md §6・§8・§14 D） =====
-    /** 試算の文脈。state は参照（===）で見る＝StateFingerprint は Shift.role を読まない（§7 I4）。 */
+    /** 試算の文脈。state は参照（===）で見る（どの編集でも state が差し替わる＝指紋より厳しい、§7 I4）。 */
     private class TrialCtx(val st: MagiState, val boardKey: Long)
     private class StalledSnap(val st: MagiState, val boardKey: Long, val families: List<String>)
     private var wishTrialJob: Job? = null

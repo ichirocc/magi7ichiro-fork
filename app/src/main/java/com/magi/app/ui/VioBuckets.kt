@@ -50,3 +50,13 @@ internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
 }
 
 internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
+
+// [UX監査#4] 診断からの誘導を年間マスターの節（CollapsibleSectionのstateKey）まで着地させるための対応表。
+//   対応の無い族/種別（groupViol・covU・covO・pref・希望など）はnull＝従来どおりtabのみ遷移。
+//   c2 の編集欄（cons2）は ⑤並び・くり返しの ConstraintsCard にある（外部レビュー N4）。
+internal fun yearSectionForFamily(fam: String?): String? = when (fam) {
+    "c1", "c2", "c3", "c3n", "c3m", "c3mn", "c3w" -> "yr_cons"
+    "c41", "c42", "c41s", "c42s" -> "yr_headcount"
+    "apt", "fair", "weekly", "low", "high" -> "yr_count"
+    else -> null
+}

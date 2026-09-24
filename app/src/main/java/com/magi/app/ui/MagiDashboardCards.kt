@@ -106,11 +106,8 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
-/**
- * [思考誘導S3→S5] 必須違反に関わる希望と、人手不足の日に別の勤務の希望がある人を並べる。行を押すとそのセルを開く。
- * 各行の「取り消したら？」で 1 行ずつ試算し（`docs/s5_wish_trial.md` §5）、結果が出た行は確定できる。
- * 試算の結果は VM が ctx つきで持ち、ここは読むたびに問い合わせる（古ければ隠す＝§8）。
- */
+/** [思考誘導S3→S5] 必須違反に関わる希望と、人手不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「取り消したら？」で試算・確定（§5）。
+ *  試算の結果は VM が ctx つきで持ち、ここは読むたびに問い合わせる（古ければ隠す＝§8）。 */
 @Composable
 internal fun WishConflictDialog(
     ui: UiState,
@@ -126,7 +123,7 @@ internal fun WishConflictDialog(
     }
     // 閉じる・行を押してセルへ移る・Activity の作り直し、どの閉じ方でもここ 1 か所で試算を止める（§8）。
     DisposableEffect(Unit) { onDispose { vm.cancelWishTrial() } }
-    val control = vm.wishTrialControlFor()   // 照合は VM が読むたびに行う（ui が変われば描き直される）
+    val control = vm.wishTrialControlFor()   // 非 State の読み取り＝ui（wishTrialRev）が変われば描き直される
     var expanded by remember { mutableStateOf(setOf<Pair<Int, Int>>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -351,10 +348,13 @@ internal fun OperatorNextActionCard(
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
-    // [S5 §2.1] 関わる希望（S5a の行か S5b の行）があるか。WISH・FLOOR・充足不可の分岐がこれを見る。
+    // [S5 §2.1] 関わる希望（S5a の行か S5b の行）があるか。WISH・FLOOR の分岐がこれを見る。
     val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.coverageDiag) { wishTrialCandidates(ui) }
     val shortDays = ui.coverageDiag?.shortfalls?.map { it.dayIndex }?.distinct()?.size ?: 0
     val worstDay = ui.coverageDiag?.shortfalls?.firstOrNull()?.dayLabel
+    // 充足不可の S5b 版は重複除去の前（S5a の行に畳まれた人も含む）で決め、例の日も希望で固定された人がいる枠から取る。
+    val hasPinned = ui.coverageDiag?.shortfalls?.any { it.wishPinned.isNotEmpty() } == true
+    val wishDay = ui.coverageDiag?.shortfalls?.firstOrNull { it.wishPinned.isNotEmpty() }?.dayLabel
 
     // [M3] 成功=tertiary / 注意=error / 主操作=primary はテーマロール。警告のみ独自トークンに集約。
     val (amber, onAmber) = magiWarnColors()
@@ -373,8 +373,8 @@ internal fun OperatorNextActionCard(
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
             "③ 完成しました。そのまま配れます。" + (ui.runSummary?.let { "\n$it" } ?: ""),
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
-        infeasible && wishCands.shortfall.isNotEmpty() -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
-            "いまの希望のままでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
+        infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
+            "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
             "ぶつかっている希望を見る", onShowWishes, true, "データを見直す", onSetup)
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
