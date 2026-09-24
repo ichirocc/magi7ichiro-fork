@@ -1629,16 +1629,31 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   **Error を再送出しない**のは意図的なトレードオフ: `viewModelScope.launch` の未捕捉例外は
                 //   既定ハンドラでプロセスを落とすため、**その死因を説明する操作ログ（メモリ上のリング）ごと
                 //   失われる**。ここで捕まえれば `OutOfMemoryError` と名指しした行が残り、書き出せる。
-                //   状態の一貫性は保たれる（ViewModel の盤面は handleOptimize が値を返した**後**にしか
-                //   書き換えず、この時点では未変更＝入力盤面のまま）。代償は「プロセス状態が不明なまま
+                //   状態の一貫性は保たれる（handleOptimize 内の失敗なら VM の盤面は入力のまま。採用の後で
+                //   落ちたときは下の分岐で画面を今の盤面へ揃える）。代償は「プロセス状態が不明なまま
                 //   継続しうる」ことで、これは業務判断として受け入れる（利用者は続行/再起動を選べる）。
                 val kind = if (e is Error) "重大なエラー(${e.javaClass.simpleName})" else e.javaClass.simpleName
-                logOp("W", "最適化 失敗: $kind: ${e.message}")
+                val lateSt = state?.takeIf { it !== st0 }   // 非 null＝この実行が state を差し替えた後の失敗
+                logOp("W", "最適化 失敗${if (lateSt != null) "（結果の採用後）" else ""}: $kind: ${e.message}")
                 terminalLogged = true
                 // [3.400.0] 画面には失敗の種類と次の一手だけ。内部名「V6」と生の例外文は直上の logOp へ
                 //   （3.147.0/3.191.0 の「英字符号・内部名を画面に出さない」方針の取り残し）。
                 val failMsg = "勤務表をつくれませんでした（$kind）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）"
-                if (s5 == null) {
+                if (lateSt != null) {
+                    // [S5 §10] 採用・維持の分岐が state・盤面・自動保存を書いた後（pushReport・captureAlternatives 等）で落ちた。
+                    //   結果は捨てず、画面を VM が持つ今の盤面へ揃える（入力の盤面で描くと保存・書き出しと食い違う）。
+                    val curB = currentSchedule ?: sched0
+                    val lateMsg = "勤務表の作成は終わりましたが、最後の処理でエラーが起きました（$kind）。表示は今の勤務表です。$s5Suffix"
+                    withContext(NonCancellable) {
+                        runCatching {
+                            val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(lateSt, curB) }
+                            pushReport(lateSt, curB, rep, nonCancellable = true) { it.copy(
+                                running = false, hasResult = true, messageIsError = true, message = lateMsg) }
+                        }.onFailure {
+                            _ui.update { it.copy(running = false, hasResult = true, message = lateMsg, messageIsError = true, wishes = lateSt.wishes) }
+                        }
+                    }
+                } else if (s5 == null) {
                     _ui.update { it.copy(running = false, message = failMsg, messageIsError = true) }
                 } else {
                     // [S5 §10] 希望は消えたまま＝画面もその state で数え直す（refreshCheck は失敗文を上書きするので使わない）。
