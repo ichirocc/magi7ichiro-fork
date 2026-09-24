@@ -538,6 +538,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowMove = { tab = 3 },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
+                        outcomeLine = vm.wishCancelOutcomeLine(),
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
@@ -797,8 +798,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { tab = 2 })
         }
         if (wishConflicts) {
-            WishConflictDialog(ui, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
+            WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
                 wishConflicts = false; tab = 1; editingCell = i to j
+            }, onConfirm = { token ->
+                wishConflicts = false; vm.cancelWishAndRebuild(token)
+            }, onRebuild = {
+                wishConflicts = false; onEvent(MagiEvent.Run.Optimize)
             })
         }
         pendingCsvImport?.let { csvText ->

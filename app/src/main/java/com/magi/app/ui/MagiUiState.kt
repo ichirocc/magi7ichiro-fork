@@ -98,6 +98,9 @@ data class UiState(
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
     val lockedWishKeys: Set<String> = emptySet(),   // [S5] wishLocked の希望のキー（試算できる希望）
+    val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
+    val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
+    val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して、もう一度つくる」の結果（表示は vm.wishCancelOutcomeLine）
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,
@@ -156,4 +159,10 @@ data class PinTargetView(
     /** 固定されている回数（lo==hi の値）。 */
     val pinnedCount: Int,
     val attempts: Int,
+)
+
+/** [S5] 「希望を取り消して、もう一度つくる」の結果（`docs/s5_wish_trial.md` §9）。`line` は次にやることカードに出す 1 行。 */
+data class WishCancelOutcome(
+    val name: String, val day: Int, val symbol: String,
+    val h0: Int, val pCancel: Int, val g: Int, val line: String,
 )

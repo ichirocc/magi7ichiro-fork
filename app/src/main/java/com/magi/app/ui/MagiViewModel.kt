@@ -27,6 +27,7 @@ import com.magi.app.v6.V6NativeOptimizer
 import com.magi.app.v6.V6SanityPort
 import com.magi.app.v6.V6SanityReport
 import com.magi.app.v6.Hf63Infeasibility
+import com.magi.app.v6.WishTrial
 import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.Ws1Result
 import com.magi.app.v6.canDoShiftsForStaff
@@ -58,6 +59,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -124,6 +126,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var activeRunSerial = 0
 
     private fun beginBoardJob(phase: MagiPhase, engineRun: Boolean = false): Int {
+        cancelWishTrial()   // [S5 §8] 盤面を差し替えるジョブの前に試算の CPU を返す
         val jobToken = phases.begin(phase)
         if (phase.keepsScreenOn) _ui.update { it.copy(keepScreenOn = true) }
         if (engineRun) {
@@ -479,6 +482,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sched0 = currentSchedule ?: return
         if (runBlockedByInFlight("バックグラウンド最適化の開始")) return
         if (!ensureValidForRun(st0, sched0)) return
+        cancelWishTrial()   // [S5 §8] 背景実行は beginBoardJob を通らない
         pushUndo("バックグラウンド最適化")
         OptimizationRepository.clear()
         // [3.327.0/外部レビュー High3] この実行の識別子を先に確定する。ファイル名は固定なので、これが無いと
@@ -788,8 +792,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = null
         alternativeScheds = emptyList()
         val label = snap.label
+        val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
-            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), alternatives = emptyList(),
+            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = stalled, alternatives = emptyList(),
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
             //   （再検査が失敗/停止すると画面だけ元のまま残っていた）。
             schedule = restoredSched.map { it.toList() },
@@ -810,8 +815,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = null   // [3.500.1] undo() と同じ理由
         alternativeScheds = emptyList()
         val label = snap.label
+        val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
-            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), alternatives = emptyList(),
+            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = stalled, alternatives = emptyList(),
             schedule = restoredSched.map { it.toList() },   // [3.592.0] undo()と同じ理由
             message = if (label != null) "やり直す: $label" else "やり直しました") }
         logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
@@ -1302,18 +1308,30 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if ((breakdown[top] ?: 0) > 0) hardFamilyJp(top) else null
     }
 
-    fun runV6FullOptimize() {
+    fun runV6FullOptimize() = startFullOptimize("勤務表の作成", null)
+
+    /** [S5] 確定操作の文脈（§6 の 10）。希望はすでに state から消えている。 */
+    private class S5Ctx(
+        val name: String, val day: Int, val symbol: String,
+        val h0: Int, val hx: Int, val rk: Int, val rr: Int, val pCancel: Int,
+    ) {
+        val label get() = "$name ${day + 1}日 $symbol"
+    }
+
+    /** 本実行。[undoLabel]＝null は Undo を積まない（S5 の確定がすでに積んでいる）。 */
+    private fun startFullOptimize(undoLabel: String?, s5: S5Ctx?) {
         val st0 = state ?: return
         val sched0 = currentSchedule ?: return
         if (runBlockedByInFlight("勤務表の作成")) return
         if (!ensureValidForRun(st0, sched0)) return
-        pushUndo("勤務表の作成")
+        if (undoLabel != null) pushUndo(undoLabel)
         val sig = "${_ui.value.budgetSec}|${_ui.value.workers}|${_ui.value.v6Algorithm}|${_ui.value.softPolish}"
-        val hint = if (sig == lastSettingsSig && lastResultHard > 0L)
+        val hint = if (s5 == null && sig == lastSettingsSig && lastResultHard > 0L)
             "前回と同じ設定での再実行です。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
         else null
         lastSettingsSig = sig
-        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, copilotHint = hint, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
+        val s5Suffix = if (s5 != null) "（希望の取り消しはそのままです。元に戻すで希望も戻ります）" else ""
+        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, copilotHint = hint, wishCancelOutcome = null, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
         logOp("I", "最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
         writeRunMarker("fg")
         clearBgFiles("前景実行の開始")   // [C1] fg実行ではbg途中状態は無関係＝掃除
@@ -1480,12 +1498,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     autoSave()
                     resultSchedule = kept
                     state = st0.withSchedule(kept)
+                    // [S5 §9] 維持の分岐は「前回の結果を維持します」だと希望が消えたことが伝わらない＝置き換える。
+                    val keptMsg = if (s5 == null) "今回(必須$newHard/合計$newTotal)は前回(必須$baseHard/合計$baseTotal)より改善しませんでした。前回の結果を維持します。"
+                    else if (s5.h0 - baseReport.hard > 0) "希望（${s5.label}）を取り消しました。必須違反は ${s5.h0} → ${baseReport.hard}（取り消しの分だけ）。もう一度つくっても、それ以上は減りませんでした。元に戻すで希望と勤務表をまとめて戻せます。"
+                    else "希望（${s5.label}）を取り消しましたが、もう一度つくっても必須違反は減りませんでした（必須 ${s5.h0}）。元に戻すで希望と勤務表をまとめて戻せます。"
                     pushReport(state ?: st0, kept, baseReport) { it.copy(
                         messageIsError = false,
                         running = false,
                         hasResult = true,
                         engineRan = true,
-                        message = "今回(必須$newHard/合計$newTotal)は前回(必須$baseHard/合計$baseTotal)より改善しませんでした。前回の結果を維持します。",
+                        message = keptMsg,
+                        wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, baseReport.hard, keptMsg) },
                     ) }
                     logOp("I", "再実行: 今回 必須$newHard/合計$newTotal は前回 必須$baseHard/合計$baseTotal 以下に改善せず → 前回を維持")
                     lastResultHard = baseHard
@@ -1498,6 +1521,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     autoSave()
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
+                    val adoptedMsg = if (s5 == null) "勤務表ができました: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)"
+                    else "希望（${s5.label}）を取り消して、もう一度つくりました: 必須違反 ${s5.h0} → ${res.report.hard}（試算の見込み ${s5.pCancel}）" +
+                        (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。もう一度つくるか、元に戻す（希望と勤務表をまとめて戻す）を選べます。" else "")
                     // [design-review] 旧「最適化（${res.phase}）完了: …」は res.phase="optimize:PORTFOLIO" 等の
                     //   生の内部識別子（label.tech）をそのまま画面へ出していた（operator_ux.md §2「英字符号を
                     //   画面に一切出さない」・3.400.0 が背景進捗の同型漏れを既に除去した先例の取りこぼし）。
@@ -1509,7 +1535,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         hasResult = true,
                         engineRan = true,
                         runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, res.schedule, res.report, baseReport)),
-                        message = "勤務表ができました: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)",
+                        message = adoptedMsg,
+                        wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, res.report.hard, adoptedMsg) },
                     ) }
                     lastResultHard = newHard
                 }
@@ -1519,6 +1546,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val adoptedReport = if (worseThanInput) baseReport else res.report
                 lastTopHardFamily = if (adoptedReport.hard > 0) topHardFamilyJp(adoptedReport.breakdown) else null
                 logOp(if (res.report.hard == 0) "I" else "W", "最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})")
+                if (s5 != null) {
+                    cancelOutcomeCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
+                    logOp("I", "S5 結果: ${s5.h0}/${s5.hx}/${s5.rk}/${s5.rr}/${s5.pCancel} → ${adoptedReport.hard}")
+                }
                 // [3.409.17/実機ログ 3.409.14] 予算超過の実行は内訳が診断ログ（次の実行で消える）にしか
                 //   残らず特定不能だった（13実行中5回が474〜959sまで超過したのに、残った診断は最後の
                 //   1回ぶんだけ）。超過時は TIME/エポック超過/後処理パス別 を操作ログへ写して生き残らせる。
@@ -1570,12 +1601,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             running = false,
                             hasResult = true,
                             engineRan = true,
-                            message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。",
+                            message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。$s5Suffix",
                         ) }
                     }.onFailure { t ->
                         _ui.update { it.copy(running = false, hasResult = true, engineRan = true,
-                            messageIsError = false,
-                            message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。") }
+                            messageIsError = false, wishes = st0.wishes,
+                            message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。$s5Suffix") }
                         logOp("W", "停止時の診断に失敗: ${t.javaClass.simpleName}: ${t.message}")
                     }
                     logOp("I", "停止: 直前の勤務表 必須=${keptReport.hard}/合計=${keptReport.total} を保持")
@@ -1600,7 +1631,21 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 terminalLogged = true
                 // [3.400.0] 画面には失敗の種類と次の一手だけ。内部名「V6」と生の例外文は直上の logOp へ
                 //   （3.147.0/3.191.0 の「英字符号・内部名を画面に出さない」方針の取り残し）。
-                _ui.update { it.copy(running = false, message = "勤務表をつくれませんでした（$kind）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）", messageIsError = true) }
+                val failMsg = "勤務表をつくれませんでした（$kind）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）"
+                if (s5 == null) {
+                    _ui.update { it.copy(running = false, message = failMsg, messageIsError = true) }
+                } else {
+                    // [S5 §10] 希望は消えたまま＝画面もその state で数え直す（refreshCheck は失敗文を上書きするので使わない）。
+                    withContext(NonCancellable) {
+                        runCatching {
+                            val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, sched0) }
+                            pushReport(st0, sched0, rep, nonCancellable = true) { it.copy(
+                                running = false, hasResult = true, messageIsError = true, message = failMsg + s5Suffix) }
+                        }.onFailure {
+                            _ui.update { it.copy(running = false, message = failMsg + s5Suffix, messageIsError = true, wishes = st0.wishes) }
+                        }
+                    }
+                }
             } finally {
                 // [3.404.0] 途中経過の盤面を捨てる。旧: 完了時に消さないので、あとで編集して違反チェックが
                 //   走ると（`ui.running` が再び真になり）**前の実行の古い途中経過が現在のものとして出た**。
@@ -1616,6 +1661,116 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
+    // ===== [S5] 「この希望を取り消したら」試算と確定（docs/s5_wish_trial.md §6・§8・§14 D） =====
+    /** 試算の文脈。state は参照（===）で見る＝StateFingerprint は Shift.role を読まない（§7 I4）。 */
+    private class TrialCtx(val st: MagiState, val boardKey: Long)
+    private class StalledSnap(val st: MagiState, val boardKey: Long, val families: List<String>)
+    private var wishTrialJob: Job? = null
+    /** cancel() は非同期なので世代で古い完了を捨てる（fixSeq と同じ理由）。 */
+    private var wishTrialSeq = 0L
+    /** 結果と対照は 1 世代だけ。別の ctx で新しい試算を始めたときにだけ入れ替える（読む・確定するでは消さない）。 */
+    private var trialCtx: TrialCtx? = null
+    private var trialControl: WishTrial.Outcome? = null
+    private val trialResults = HashMap<String, WishTrial.Outcome>()   // "i,j,k"
+    private var cancelOutcomeCtx: TrialCtx? = null
+    /** 確定の直前の stalledHardFamilies。確定を元に戻して同じ (state, 盤面) に戻ったら復元する（§14 D）。 */
+    private var stalledBeforeConfirm: StalledSnap? = null
+
+    private fun ctxMatches(c: TrialCtx?): Boolean {
+        val st = state ?: return false
+        val b = currentSchedule ?: return false
+        return c != null && c.st === st && c.boardKey == boardKey(b)
+    }
+
+    /** 1 行の試算を始める。本実行・背景実行の最中は始めない（I11）。盤面は複製して渡す（I1）。 */
+    fun startWishTrial(i: Int, j: Int) {
+        val st = state ?: return
+        val b = currentSchedule ?: return
+        if (optimizeInFlight()) return
+        val k = st.wishes["$i,$j"] ?: return
+        val bKey = boardKey(b)
+        val ctx = trialCtx?.takeIf { it.st === st && it.boardKey == bKey }
+            ?: TrialCtx(st, bKey).also { trialCtx = it; trialControl = null; trialResults.clear() }
+        wishTrialJob?.cancel()
+        val seq = ++wishTrialSeq
+        val board = b.copy2D()
+        val ctl0 = trialControl
+        _ui.update { it.copy(wishTrialBusy = "$i,$j") }
+        wishTrialJob = viewModelScope.launch {
+            try {
+                val (ctl, out) = withContext(Dispatchers.Default) {
+                    val stop = { !isActive }
+                    val c = ctl0 ?: WishTrial.control(st, board, stop)
+                    c to (if (c is WishTrial.ControlOutcome) WishTrial.trial(st, board, i, j, c.control, stop) else c)
+                }
+                if (seq != wishTrialSeq || trialCtx !== ctx) return@launch
+                if (ctl !is WishTrial.Stopped) trialControl = ctl
+                if (out != null && out !is WishTrial.Stopped) trialResults["$i,$j,$k"] = out
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logOp("W", "希望の試算 失敗: ${e.javaClass.simpleName}: ${e.message}")
+                if (seq == wishTrialSeq && trialCtx === ctx) trialResults["$i,$j,$k"] = WishTrial.Unavailable(e.javaClass.simpleName)
+            } finally {
+                if (seq == wishTrialSeq) _ui.update { it.copy(wishTrialBusy = null, wishTrialRev = it.wishTrialRev + 1) }
+            }
+        }
+    }
+
+    /** 試算ジョブの取消だけ（CPU を返す）。結果は消さない＝正しさは読むときの照合が守る（§8）。 */
+    fun cancelWishTrial() {
+        wishTrialJob?.cancel()
+        ++wishTrialSeq
+        if (_ui.value.wishTrialBusy != null) _ui.update { it.copy(wishTrialBusy = null) }
+    }
+
+    /** 行の表示。読むたびに ctx を照合し、ずれていれば [WishTrialView.Stale]（結果は消さない）。 */
+    internal fun wishTrialFor(i: Int, j: Int, k: Int): WishTrialView {
+        if (_ui.value.wishTrialBusy == "$i,$j") return WishTrialView.Busy
+        val o = trialResults["$i,$j,$k"] ?: return WishTrialView.None
+        val c = trialCtx
+        if (c == null || !ctxMatches(c) || state?.wishes?.get("$i,$j") != k) return WishTrialView.Stale
+        return WishTrialView.Ready(o, WishTrialToken(c.st, c.boardKey, i, j, k, o as? WishTrial.Result))
+    }
+
+    /** いまの (state, 盤面) の対照。Rk < H0 ならダイアログの先頭行を出す（§5）。 */
+    internal fun wishTrialControlFor(): WishTrial.Control? =
+        if (ctxMatches(trialCtx)) (trialControl as? WishTrial.ControlOutcome)?.control else null
+
+    /** 直近の確定の結果 1 行。確定の後の (state, 盤面) から変わったら出さない（§9）。 */
+    internal fun wishCancelOutcomeLine(): String? =
+        _ui.value.wishCancelOutcome?.takeIf { ctxMatches(cancelOutcomeCtx) }?.line
+
+    /** 確定「希望を取り消して、もう一度つくる」（§6 の 1〜10。ガードはすべて最初の書き換えより前＝I5）。 */
+    internal fun cancelWishAndRebuild(token: WishTrialToken) {
+        val st = state ?: return
+        val b = currentSchedule ?: return
+        if (runBlockedByInFlight("希望の取り消し")) return
+        val key = "${token.staff},${token.day}"
+        val r = token.result
+        if (r == null || st !== token.state || boardKey(b) != token.boardKey || st.wishes[key] != token.shift) {
+            _ui.update { it.copy(messageIsError = true, message = "勤務表か希望が変わりました。もう一度試算してください。") }
+            return
+        }
+        cancelWishTrial()
+        val ns = st.copy(wishes = st.wishes - key)
+        if (!ensureValidForRun(ns, b)) return
+        stalledBeforeConfirm = StalledSnap(st, token.boardKey, _ui.value.stalledHardFamilies)
+        pushUndo("希望の取り消しと、もう一度つくる")
+        state = ns
+        ++checkSeq; checkJob?.cancel()
+        _ui.update { it.copy(wishes = ns.wishes, structureEdited = true, editRev = it.editRev + 1, runSummary = null) }
+        saveNow()
+        val name = st.staff.getOrNull(token.staff)?.name ?: "職員${token.staff + 1}"
+        val sym = st.shifts.getOrNull(token.shift)?.kigou ?: "?"
+        logOp("I", "希望取消＋もう一度つくる: $name ${token.day + 1}日（$sym） ${r.h0}/${r.hx}/${r.rk}/${r.rr}/${r.pCancel}")
+        startFullOptimize(null, S5Ctx(name, token.day, sym, r.h0, r.hx, r.rk, r.rr, r.pCancel))
+    }
+
+    /** 元に戻す・やり直しで確定前の (state, 盤面) に戻ったときの stalledHardFamilies（§14 D）。 */
+    private fun stalledAfterRestore(st: MagiState, sched: Array<IntArray>): List<String> =
+        stalledBeforeConfirm?.takeIf { it.st === st && it.boardKey == boardKey(sched) }?.families ?: emptyList()
 
     /**
      * [ソフト研磨のみ] 現在の勤務表をHARDガード付きで局所研磨し、SOFT違反だけを削る。
@@ -1728,6 +1883,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun stop() {
         job?.cancel(); checkJob?.cancel(); fixJob?.cancel()
+        cancelWishTrial()
         // [監査A2] バックグラウンド実行(WorkManager)も停止する。従来は前景jobのみで、bg中は
         //   停止ボタンが実質無効・runningが結果到着まで固着していた。
         val bgWasRunning = OptimizationRepository.running.value
@@ -2841,3 +2997,19 @@ private fun Int.floorMod(m: Int): Int = ((this % m) + m) % m
 
 /** 完了カードの前後比較 2 行（変更量／族別の改善・悪化）。 */
 private fun runSummaryOf(s: com.magi.app.v6.ChangeSummary): String = s.line() + "\n" + s.familyLine { breakdownLabels[it] ?: it }
+
+/** [S5] 試算 1 行の表示状態（`MagiViewModel.wishTrialFor`）。 */
+internal sealed interface WishTrialView {
+    data object None : WishTrialView
+    data object Busy : WishTrialView
+    /** 盤面か希望が試算時から変わった（結果は消さずに隠す）。 */
+    data object Stale : WishTrialView
+    data class Ready(val outcome: WishTrial.Outcome, val token: WishTrialToken) : WishTrialView
+}
+
+/** [S5] 確定の照合に使う試算時の文脈（§6 の 3）。`result`＝null は試算できなかった行（確定できない）。 */
+internal class WishTrialToken(
+    val state: MagiState, val boardKey: Long,
+    val staff: Int, val day: Int, val shift: Int,
+    val result: WishTrial.Result?,
+)

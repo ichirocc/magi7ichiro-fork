@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- S5 試算の VM と画面（2026-09-24）: startWishTrial/wishTrialFor（ctx＝state 参照＋盤面キーを読むたびに照合・1 世代保持）・cancelWishAndRebuild（§6 の 1〜10、Undo 1 段）・startFullOptimize（Undo ラベル/S5 文脈）・停止/失敗の希望維持・元に戻すで stalledHardFamilies 復元・ダイアログの「取り消したら？」・S5b 節・WISH 入口を候補ありへ・充足不可の S5b 版
 - S5 試算のエンジン層（2026-09-24）: WishTrial（H0/Hx/Rk/Rr・a'・b、数値だけの結果型、対照は別関数）・CoverageShortfall.wishPinned と充足不可の文の直し・候補行と文言の純粋関数・lockedWishKeys。VM/画面は未着手
 
 - S5「この希望を取り消したら」試算の設計（2026-09-24、未実装）: 確定分＋VCR 見込み（対照差し引き）・取り消し＋本実行を Undo 1 段・机上 v1/v2（0 の行の 10/18 は本当は減る）・敵対的検証 28 件反映・範囲と入口は利用者決定（人手不足の日の希望も最初から・c3w 両方・入口拡大・戻すと入口も戻る）。`docs/s5_wish_trial.md`。

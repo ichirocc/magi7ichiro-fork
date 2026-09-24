@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,29 +106,112 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
-/** [思考誘導S3] 必須違反に関わる希望を、名前・日付・理由つきで並べる。押すとそのセルを開く（希望の変更もそこで）。 */
+/**
+ * [思考誘導S3→S5] 必須違反に関わる希望と、人手不足の日に別の勤務の希望がある人を並べる。行を押すとそのセルを開く。
+ * 各行の「取り消したら？」で 1 行ずつ試算し（`docs/s5_wish_trial.md` §5）、結果が出た行は確定できる。
+ * 試算の結果は VM が ctx つきで持ち、ここは読むたびに問い合わせる（古ければ隠す＝§8）。
+ */
 @Composable
-internal fun WishConflictDialog(ui: UiState, onDismiss: () -> Unit, onOpenCell: (Int, Int) -> Unit) {
-    val items = remember(ui.violationCellFamilies, ui.wishes) { involvedWishes(ui) }
+internal fun WishConflictDialog(
+    ui: UiState,
+    vm: MagiViewModel,
+    onDismiss: () -> Unit,
+    onOpenCell: (Int, Int) -> Unit,
+    onConfirm: (WishTrialToken) -> Unit,
+    onRebuild: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val cands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.coverageDiag, ui.staffNames, ui.shiftSymbols) {
+        wishTrialCandidates(ui)
+    }
+    // 閉じる・行を押してセルへ移る・Activity の作り直し、どの閉じ方でもここ 1 か所で試算を止める（§8）。
+    DisposableEffect(Unit) { onDispose { vm.cancelWishTrial() } }
+    val control = vm.wishTrialControlFor()   // 照合は VM が読むたびに行う（ui が変われば描き直される）
+    var expanded by remember { mutableStateOf(setOf<Pair<Int, Int>>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("ぶつかっている希望") },
         text = {
-            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (items.isEmpty()) Text("いま必須違反に関わる希望はありません。")
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
                 else {
-                    Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    items.forEach { w ->
-                        TextButton(onClick = { onOpenCell(w.staff, w.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                            Text("${w.name} ・ ${w.day + 1}日　${w.reason}", modifier = Modifier.fillMaxWidth())
+                    control?.let { wishTrialKeepOnlyText(it) }?.let { line ->
+                        Text(line, fontWeight = FontWeight.Bold)
+                        OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("もう一度つくる") }
+                    }
+                    if (cands.direct.isNotEmpty()) {
+                        Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
+                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                    }
+                    if (cands.shortfall.isNotEmpty()) {
+                        Text("人手不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        cands.shortfall.forEach { g ->
+                            Text(g.header, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                            val slot = g.day to g.shift
+                            val rows = if (slot in expanded) g.rows else g.rows.take(WISH_TRIAL_GROUP_LIMIT)
+                            rows.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                            if (rows.size < g.rows.size) {
+                                TextButton(onClick = { expanded = expanded + slot }, modifier = Modifier.heightIn(min = 48.dp)) {
+                                    Text("ほか ${g.rows.size - rows.size}人")
+                                }
+                            }
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("閉じる") } },
+        confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
     )
+}
+
+/** [S5] 候補 1 行＝「名前 ・ N日　理由」（押すとセル）と、その下の試算・結果・確定。 */
+@Composable
+private fun WishTrialRowView(
+    row: WishTrialRow,
+    ui: UiState,
+    vm: MagiViewModel,
+    onOpenCell: (Int, Int) -> Unit,
+    onConfirm: (WishTrialToken) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val small = MaterialTheme.typography.bodySmall
+    TextButton(onClick = { onOpenCell(row.staff, row.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text("${row.name} ・ ${row.day + 1}日　${row.reason}", modifier = Modifier.fillMaxWidth())
+    }
+    val k = ui.wishes["${row.staff},${row.day}"]
+    if (!row.locked || k == null) {
+        Text(WISH_TRIAL_NOT_LOCKED, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+    } else {
+        val view = vm.wishTrialFor(row.staff, row.day, k)
+        val canTrial = ui.wishTrialBusy == null && !ui.running
+        when (view) {
+            WishTrialView.Busy -> Text("試算しています…", style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+            WishTrialView.None -> WishTrialButton(canTrial) { vm.startWishTrial(row.staff, row.day) }
+            WishTrialView.Stale -> {
+                Text("勤務表が変わりました。もう一度試算してください。", style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+                WishTrialButton(canTrial) { vm.startWishTrial(row.staff, row.day) }
+            }
+            is WishTrialView.Ready -> {
+                wishTrialText(view.outcome)?.let { Text(it, style = small, modifier = Modifier.padding(start = 12.dp)) }
+                if (view.token.result != null) {
+                    TextButton(
+                        onClick = { onConfirm(view.token) },
+                        enabled = !ui.running,
+                        colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+                        modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
+                    ) { Text("希望を取り消して、もう一度つくる") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) {
+        Text("取り消したら？")
+    }
 }
 
 @Composable
@@ -263,9 +347,12 @@ internal fun OperatorNextActionCard(
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
+    outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して、もう一度つくる」の結果（VM が鮮度を照合済み）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
+    // [S5 §2.1] 関わる希望（S5a の行か S5b の行）があるか。WISH・FLOOR・充足不可の分岐がこれを見る。
+    val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.coverageDiag) { wishTrialCandidates(ui) }
     val shortDays = ui.coverageDiag?.shortfalls?.map { it.dayIndex }?.distinct()?.size ?: 0
     val worstDay = ui.coverageDiag?.shortfalls?.firstOrNull()?.dayLabel
 
@@ -286,6 +373,9 @@ internal fun OperatorNextActionCard(
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
             "③ 完成しました。そのまま配れます。" + (ui.runSummary?.let { "\n$it" } ?: ""),
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
+        infeasible && wishCands.shortfall.isNotEmpty() -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
+            "いまの希望のままでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
+            "ぶつかっている希望を見る", onShowWishes, true, "データを見直す", onSetup)
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
             "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
@@ -301,10 +391,10 @@ internal fun OperatorNextActionCard(
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
-        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && involvedWishes(ui).isNotEmpty() ->
+        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
                 "ぶつかっている希望を見る", onShowWishes, true, "このまま書き出す", onExport)
-        ui.violationCellFamilies.values.any { f -> f.any { it == "vio-pref" || it == "vio-c3w" } } ->
+        !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
                 "ぶつかっている希望を見る", onShowWishes, true, null, onSetup)
         else -> OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。",
@@ -329,6 +419,7 @@ internal fun OperatorNextActionCard(
                 }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+            if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
             // [3.480.0 ホームAIリデザイン] 旧: 「できあがり度：N%」の数字1行＋その意味を説明する注記1行を
             // 常時2行表示していた。grilling決定#1のとおり文言（正直さ）は変えず、①前向きな言い回し
             // 「解消度：N%（残りM件）」＋バーへ統合 ②注記は既定折りたたみ（ConstraintHelpExpander と
