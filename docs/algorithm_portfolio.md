@@ -157,6 +157,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `PolishGate.filterC3nIncrease`（ブロック巡回交換の c3n 事前フィルタ） | 測定済み・**速度のみ、品質不変**。ON/OFF で最終盤面・採用数が完全に同一。詰んだ候補への無駄な checker 呼び出しを省くだけ（3.296.0 / 3.298.0）。副作用が原理的に無いため既定ONへ。 |
 | `PolishGate.lnsAdaptive`（共同LNSの「短時間試行→採用時だけ本予算」） | iter9（決定的・5 seed・170ペア）: 必須退行0・品質±0（新4/同等164/旧2、旧が良い2件も差0.01%以内）・速度は平均+10%、実データ**-23%**・大規模+29〜32%（すべて短縮）、タイムアウト13→12。機械的ゲートは中央値が閾値未達で形式上「不合格」だったが、これは**品質改善を測るゲートを速度改善狙いの機能に当てた不一致**（3.510.2時点の結論「既定ONはユーザー判断待ち、推奨ON」）。今回のユーザー指示で判断が確定＝昇格。 |
 | `PolishGate.personSwapKick`（PORTFOLIO の新役割 `PERSON_SWAP_ILS`＝同群2名の1ヶ月分割当を丸ごと交換してから RSI+ で再最適化するILS摂動） | 3.517.0実装直後（ユーザー実機データ1件の手動probe）は weightedScore 9831→9605（-2.3%）を確認。**3.519.0で正式計測**（`PersonSwapBench.kt`、実データ4件×5seed×フルoptimize(PORTFOLIO・120秒budget・workers4)＝CLAUDE.mdが認める代替手法「実データ4件のprobeで最終盤面のハッシュ比較」に基づく）: **全20ペアで必須(hard)退行ゼロ**（4フィクスチャ×5seedすべてhard値が旧新で完全一致）。品質(weightedScore)は golden 5/5勝(平均-2.1%)・blocked_covu 4/5勝(-0.34%)・sample 3/5勝(-0.05%、ほぼ同値)・sept2026 2/3勝2分(-0.62%)＝**4フィクスチャ全てで負けなし**。3.517.0の-2.3%より幅が小さいのは、同時に既定ONへ昇格した`lnsAdaptive`が既に同種の改善余地の一部を食っているため（両者は独立に発見されたが効果が部分的に重なる）。既定trueへ昇格。 |
+| `V6HotfixPasses.Params.postChainRunningKeepBest`（後処理チェーンの各パス後に走行 keep-best で巻き戻す） | 3.608.0 実装、**3.610.0 で既定ON（構造床条件つき）**＝tools/loop A/B（backlog #36）。同点採用の変種 `postChainRunningKeepBestAcceptTies` は必須増 1 で既定OFF。 |
 
 ## 実装済みだが既定 OFF
 
@@ -174,6 +175,33 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `PolishGate.aptFairSoftTolerance`（apt/fair研磨のkeep-bestで、対象家族以外のSOFT悪化を研磨開始時点比+6%まで容認、累積予算） | **測定済み・既定OFFのまま**（3.536.0、`tools/loop/results/iter_aptfairtol.csv`） | HF77明示数値指示（6%）で追加。`AptFairPolish.toleratedBetter`はHARDの不増加は変えず、weightedScoreの差引計算のみで実装（keep-best自体の撤廃ではない）。46ケース×3seed=138ペアの正式A/B（決定的モード）: 辞書式**旧が良い68 / 新が良い38 / 同等32**（新が劣勢）。品質改善は平均+2.07%だが中央値+0.00%（典型的には無風）。希望充足率は92.10%→87.84%へ悪化。速度は**平均-61.9%・中央値-58.7%**（約2〜3倍に遅化）、タイムアウトは12→32件へ増加。下位10%品質は旧未満（`c41-large-c42pair0`の3seed全てで個別10%超退行）。ゲート判定は{退行ゼロ:不合格, 品質≥10%:不合格, 速度≥10%:不合格, 安定性:不合格}＝4項目とも不合格。加えて`c40-large-c2deficit1`の3seed全てでON側のみ例外を記録したが、同一ケースの単体再実行(6/6)では再現せず＝多数ケースを連続処理する長時間JVMセッション特有の環境依存（メモリ/GC圧など）である可能性が高く、`toleratedBetter`自体の決定的バグとは特定できていない（未解決、再現条件は不明）。他トグル（`combineExhaustPairs`等）と異なり業務担当者の明示数値指示による恒久機能のため撤去はしないが、この費用対効果を踏まえ既定OFFを維持する。 |
 | `PolishGate.normalStallFraction`（停滞ウォッチドッグ「通常」分岐の閾値割合、既定0.9） | 測定済み・**blocked_covu型に絞って再測定・効果は再現せず**（3.447.0） | **[第1ラウンド・3.423.0]** 3fixture×2条件(0.9基準 vs 0.5)×3反復=18run(RSI・workers=1・60秒予算)。符号検定 全9ペア中6勝3敗(p≈0.25＝有意でない)。ただし `blocked_covu_state`（唯一 入口HARDが構造床より高いまま＝この割合が支配する「通常」分岐に全区間留まるfixture）だけ**3/3全反復が品質・速度とも0.5に一貫して有利**（weighted中央−2.0%・elapsed中央−4.9%）、かつHARDは両条件とも4→4不変。golden/sample_v6はこの閾値がそもそも60秒枠内で一度も効いていない可能性が高く根拠として弱い。信号は機構的に筋が通っているが**サンプルが薄い**ため据え置き。**[3.424.0/式の基準を是正]** 適用式は「予算×割合を基本・予算基準の値が探索区間内で発火し得ない帯（≦80s）だけ探索区間×割合へフォールバック」へ（3.422.0 初版の無条件 探索区間×割合 は到達可能な帯まで無計測で厳格化していた）。60s帯＝この A/B の帯はフォールバック側＝0.9 側の挙動は不変で結論に影響なし（0.5 側の対応値のみ 26s→30s へずれる）。値は (0,1) 排他・有限のみ（require）。**[第2ラウンド・3.447.0で実施] `blocked_covu_state` 単体に絞って同一条件(60s・RSI・workers=1)で12ペア追加測定**（見直しの条件が指示するとおり対象を blocked_covu 型へ限定）。結果は**0.9=weighted平均33724.9・0.5=33743.3（差0.06%）・6勝6敗の完全な五分**、HARDは24run全て4で不変。第1ラウンドと合わせ計15ペア中9勝6敗(符号検定 p≈0.61＝有意でない)。**結論: 第1ラウンドの3/3一貫はn=3のサンプルノイズだった**（同一形状でサンプルを4倍にすると効果が完全に消えた）。既定0.9のまま据え置き。 |
 
+
+**表に無い既定OFFの経路（台帳、2026-09-24 補完）**。詳細な測定は括弧内の版・backlog 項目を history で引く。いずれも既定OFF・UI トグル無し（コード／`tools/loop` の feature キーからのみ）。
+
+| 機構（コード上の既定 false / 0 / 1） | 一行の意味 | 測定・経緯 |
+|---|---|---|
+| `Params.c2PolishEnabled`／`c2PolishReactivate` | 職員別合計（c2）の専用研磨／巡末の再起動 | iter15 不合格・3.524.0、iter_c2reactivate（backlog #12(b)・#26） |
+| `Params.c41FlowPolishEnabled`／`c42FlowPolishEnabled`／`c42FlowPolishReactivate` | 群/日範囲 c41・c42 の最小費用フロー研磨 | 3.511.5 iter16 不合格／3.511.7 iter18 同等／iter_c42reactivate（#12(b)・#26・#31） |
+| `ViolationComponentRepair.Params.familyPriorityScoring` | VCR の族選択を件数×重み×改善可能性で | 3.511.6 iter17 不合格（#12(b)） |
+| `ViolationComponentRepair.Params.bestOfK`（=1） | VCR で K 候補から最良を採る | iter23・ユーザー判断で終了（#12(b)） |
+| `ViolationComponentRepair.Params.debtLaneSlots`（=0） | 負債レーン枠 | iter22・2026-09-09 検証中止（#15 v2.1） |
+| `Params.stallEscalation.enabled` | 採用 0 の巡で VCR の半径を拡張 | 3.511.1 iter13 全件無変化（#12(b)・#13(a)） |
+| `Params.useDynamicBlockLens` | ブロック交換の窓長を違反窓・禁止連・希望島から動的に | 3.511.0 iter12 不合格（#14(b)） |
+| `Params.lnsWeightDebt` | 共同 LNS の件数負債を重み基準へ（WeightDebt） | 3.510.4 iter10 不合格（#15(f)） |
+| `Params.quantitativeRangeEval`／`V6OptimizerOptions.quantitativeRangeEval`／`Problem(quantitativeRangeEval)` | C2・C41/C41s を不足量・超過量で評価 | 3.512.0 iter21 不合格（#12(a)・#14(d)） |
+| `Params.c1ComponentRepair`／`c1ComponentRepairReactivate` | C1 成分修復 | 3.586.0 実データ4件 ON=OFF（#26） |
+| `Params.c3nMarginLnsEnabled`／`c3nMarginLnsReactivate` | c3n 余裕日の LNS 研磨 | 3.586.0 実データ4件 ON=OFF（#26） |
+| `Params.countChainReactivate` | 回数連鎖研磨の巡末再起動（本体は上表 `countChainPolish`） | iter_countchainreactivate（#26） |
+| `Params.c3PairMaskEnabled` | 連続規則の選択日ペア交換（C3PairMaskPolish） | 3.510.0 iter8（#12(b)） |
+| `Params.restZeroWindowLnsEnabled` | 休が余る日の前後窓を夜勤列挙＋ビームで組み直す | 3.555.0 実データで採用ゼロ・ユーザー決定 |
+| `Params.covOReliefEarly` | covO 退避を HF66 直後にも | 3.554.0（後続パスの経路が変わる） |
+| `Params.fairAchievementDirection` | fair 研磨の候補分類を達成率の向きで（#27①） | 3.591.0 不合格（#27） |
+| `Params.dayAssignIdentityFallback` | 日割当の恒等フォールバック | 3.598.0（#30 対処2） |
+| `Params.postChainRunningKeepBestAcceptTies` | 走行 keep-best で同点も採る | 必須増 1（#36 B） |
+| `SaParams.officialTieBreak` | SA/LAHC の HARD 同点を公式 weightedScore で決める | 3.571.0 40走行で勝ち 0（#19） |
+| `V6OptimizerOptions.roleBudgetFit` | ロールへ渡す秒数を min(量子, 残り) に | 3.601.0 有意差なし（#34(b)） |
+| `V6OptimizerOptions.rsiFocusRotationPersist` | RSI 焦点の周期枠を呼出しをまたいで保持 | 2026-09-21/22 有意差なし（#28） |
+| `extraRefineRequirePostHardDrop`（V6FinalPort） | 追加精製を後処理で HARD が減ったときだけに | 実質 A/A（#35） |
 ### 見直しの条件（腐らせないための判断基準）
 
 既定 OFF のトグルは、放っておくと「消すのも怖いし試すのも面倒」で残り続ける。**次にこれを見るとき、

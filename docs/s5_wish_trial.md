@@ -1,6 +1,6 @@
 # S5「この希望を取り消したら」試算 — 設計・机上評価・安全仕様
 
-状態: **Android 実装済み**（エンジン層＝`WishTrial`・`wishPinned`・候補と文言の純粋関数、VM＝試算・確定・鮮度照合・§14 D、画面＝ダイアログ拡張と入口の拡大。2026-09-24）。C# 同期は未着手。机上試験は `tools/loop/S5Probe.kt`（`tools/loop/run_s5probe.sh`）。
+状態: **Android・C# とも実装済み・main へマージ済み**（エンジン層＝`WishTrial`・`wishPinned`・候補と文言の純粋関数、VM＝試算・確定・鮮度照合・§14 D、画面＝ダイアログ拡張と入口の拡大。Android 0b1d7b3/96a147f/044268d、C# `-MAGI_PC` a56506c..ddbb16d、2026-09-24）。任意の残作業は `docs/backlog.md` #37。机上試験は `tools/loop/S5Probe.kt`（`tools/loop/run_s5probe.sh`）。
 前提の UX（S0〜S4＝ホームの主ボタン 1 つ・1手の得失・ぶつかっている希望の一覧）は 3.612.0 で実装済み（`docs/operator_ux.md` §3）。
 この版は、草稿を 5 観点（Undo・保存／数え方とエンジン／鮮度と並行／C# 移植とテスト／画面の方針と抜け漏れ）で敵対的に検証し、
 確かめられた指摘 28 件を取り込んだもの（退けた 4 件は §15）。

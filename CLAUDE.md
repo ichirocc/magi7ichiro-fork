@@ -104,6 +104,6 @@ covO は 0.5→1.0→5.0→**10**、c1 は 4→5→15→30→**50**、c3mn は 1
 - main へのマージは本人の「mainにマージする」で（squash、`expectedHeadSha` は `git rev-parse` の値）。force-push は自分の作業ブランチだけ。
 
 ## 必要時に読むもの
-- `docs/architecture.md`（ファイルと役割、レイヤ）／ `docs/backlog.md`（開いている課題: 未レビュー領域の精読 #2、E5 #5、C++ パリティの残課題 #6）／
+- `docs/architecture.md`（ファイルと役割、レイヤ）／ `docs/backlog.md`（開いている課題: 未レビュー領域の精読 #2＝UI 層のみ、E5 #5、C++ パリティの残課題 #6）／
   `docs/history/topics.md`（ネイティブ加速・停滞脱出・目的関数統一・ドッグフーディングの経緯）／ `docs/environment.md`（環境手順）／
   `tools/loop/README.md`（自律改善ループのベンチ）。
