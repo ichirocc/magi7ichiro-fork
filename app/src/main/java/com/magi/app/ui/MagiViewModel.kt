@@ -2789,6 +2789,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 .associate { it.key.removePrefix("__vioFam_").removeSuffix("__") to it.value },
             schedule = schedule.map { it.toList() },
             wishes = st.wishes,
+            lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
             v6 = v6,
             satisfaction = sat,
             // 研磨の限界: 必須は解決済みだが微調整が残る → 手修正の検討を促す

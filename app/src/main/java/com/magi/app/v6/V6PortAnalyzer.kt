@@ -72,6 +72,8 @@ data class CoverageShortfall(
      * 文字列でなく値として持つ。
      */
     val blockedNow: Boolean = false,
+    /** [S5b] 担当できる（mayPlace）のに、この日は別の勤務で希望固定されている職員（capacity から外した人。職員順）。 */
+    val wishPinned: List<Int> = emptyList(),
 )
 
 /** 人員過剰(covO)が残る 1 つの (日, シフト) 枠の診断。読み取り専用・エンジン非変更。 */
@@ -304,13 +306,14 @@ object V6PortAnalyzer {
                 val need = got + miss   // [表示用] 実際に不足を生んだ実効しきい値（covUCellのOR選択と整合）
                 total += miss
                 var capacity = 0
+                val wishPinned = ArrayList<Int>()
                 for (i in 0 until p.S) {
                     if (!p.mayPlace(i, k)) continue
                     // [3.391.0] 生の `w != k` は**実現不能な希望**（担当できないシフトへの希望）まで
                     //   「別シフトへ固定」として capacity から外していた。実現不能な希望は凍結しない
                     //   （wishLocked の規約）ので、その職員はこの枠へ回せる。過小な capacity は
                     //   verdict を FIXABLE→INFEASIBLE へ倒し「データ上、充足不可」という**誤った断定**を生む。
-                    if (p.wishLocked(i, j) && p.wish[i][j] != k) continue   // 実現可能な希望が別シフト → この枠には回せない
+                    if (p.wishLocked(i, j) && p.wish[i][j] != k) { wishPinned.add(i); continue }   // 実現可能な希望が別シフト → この枠には回せない
                     capacity++
                 }
                 val verdict = if (capacity < need) CoverageVerdict.INFEASIBLE else CoverageVerdict.FIXABLE
@@ -318,7 +321,10 @@ object V6PortAnalyzer {
                 val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                 // [3.344.0] reason と同じ根拠で「いまの希望のままでは埋められない」かを値として持つ。
                 var blockedNow = false
-                val reason = if (verdict == CoverageVerdict.INFEASIBLE) {
+                val reason = if (verdict == CoverageVerdict.INFEASIBLE && wishPinned.isNotEmpty()) {
+                    // 希望固定の人を外して数えた結果＝「データ上」は言い過ぎ（希望を取り消せば届きうる）。
+                    "いまの希望のままでは担当できる人が${capacity}人で必要数${need}に届きません（希望で別の勤務に固定: ${wishPinned.size}人）"
+                } else if (verdict == CoverageVerdict.INFEASIBLE) {
                     "担当可能な職員が${capacity}人で必要数${need}に届きません（データ上、充足不可）"
                 } else {
                     // [なぜ埋まらないか] 「移せる候補」(canDo・別シフト希望でない)を、なぜ今動かせないかで
@@ -362,7 +368,7 @@ object V6PortAnalyzer {
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity,
-                        verdict, reason, blockedNow)
+                        verdict, reason, blockedNow, wishPinned)
                 )
             }
         }

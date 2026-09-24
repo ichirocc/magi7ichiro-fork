@@ -97,6 +97,7 @@ data class UiState(
     val violationFamilyColorHex: Map<String, String> = emptyMap(),
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
+    val lockedWishKeys: Set<String> = emptySet(),   // [S5] wishLocked の希望のキー（試算できる希望）
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,

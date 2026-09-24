@@ -1,6 +1,7 @@
 package com.magi.app.ui
 
 import com.magi.app.v6.MirrorKeys
+import com.magi.app.v6.WishTrial
 
 /** 違反マップのキーの符号化。文字列なのは保存データ互換のため。組立と分解はここだけ＝
  *  各所で `split(",")` を書くと、どちらの添字が日かを取り違えても誰も気づけない。 */
@@ -185,3 +186,79 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
             if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(InvolvedWish(i, j, name, "希望が禁止の並びに掛かっています"))
         }
     }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))
+
+/** [S5] 試算の候補 1 行。`locked=false`（担当できない勤務の希望）は試算ボタンを出さず [WISH_TRIAL_NOT_LOCKED] を出す。 */
+internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean)
+
+/** [S5b] 人手不足の枠 1 つ（見出し「12日 日勤 1人不足」）と、その日に別の勤務で希望固定されている人の行（職員順）。 */
+internal data class ShortfallWishGroup(val day: Int, val shift: Int, val header: String, val rows: List<WishTrialRow>)
+
+internal data class WishTrialCandidates(val direct: List<WishTrialRow>, val shortfall: List<ShortfallWishGroup>) {
+    val isEmpty: Boolean get() = direct.isEmpty() && shortfall.all { it.rows.isEmpty() }
+}
+
+internal const val WISH_TRIAL_NOT_LOCKED = "担当できない勤務の希望なので、取り消しても勤務表は変わりません。"
+/** [S5b] 1 枠に並べる行の上限（超えたら「ほか N人」）。 */
+internal const val WISH_TRIAL_GROUP_LIMIT = 8
+
+/**
+ * [S5] 試算の候補（`docs/s5_wish_trial.md` §2.2・§2.3）。S5a＝必須違反に関わる希望を (職員, 日) で重複除去し、
+ * 代表の理由を pref＞c3w＞c3n で選ぶ（他は「ほか: …」）。c3w は翌日の希望 X と、印の付く前日自身が wishLocked の希望 Y の両方。
+ * S5b＝人手不足の枠の `wishPinned`（日→シフト、職員順）。S5a と重なる (職員, 日) は S5a を代表にし「ほか: 人手不足の日」を足す。
+ */
+internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
+    // 優先度（小さいほど代表）と「ほか」に出す短い名前。
+    class Hit(val staff: Int, val day: Int, val prio: Int, val reason: String)
+    val short = listOf("希望の勤務になっていない", "前日の禁止", "禁止の並び")
+    val hits = ui.violationCellFamilies.flatMap { (key, fams) ->
+        val parts = key.split(",")
+        val i = parts.getOrNull(0)?.toIntOrNull() ?: return@flatMap emptyList()
+        val j = parts.getOrNull(1)?.toIntOrNull() ?: return@flatMap emptyList()
+        buildList {
+            if ("vio-pref" in fams) add(Hit(i, j, 0, "希望の勤務になっていません"))
+            if ("vio-c3w" in fams) {
+                add(Hit(i, j + 1, 1, "前日（${j + 1}日）に置けない勤務が入っています"))
+                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, "翌日（${j + 2}日）の希望の勤務の前日に置けない勤務の希望です"))
+            }
+            if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(Hit(i, j, 2, "希望が禁止の並びに掛かっています"))
+        }
+    }
+    val pinned = ui.coverageDiag?.shortfalls.orEmpty().filter { it.wishPinned.isNotEmpty() }
+        .sortedWith(compareBy({ it.dayIndex }, { it.shiftIndex }))
+    val pinnedKeys = pinned.flatMap { s -> s.wishPinned.map { it to s.dayIndex } }.toSet()
+    fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
+    val direct = hits.groupBy { it.staff to it.day }.map { (sd, hs) ->
+        val rep = hs.minBy { it.prio }
+        val others = hs.map { it.prio }.distinct().filter { it != rep.prio }.sorted().map { short[it] } +
+            (if (sd in pinnedKeys) listOf("人手不足の日") else emptyList())
+        val reason = if (others.isEmpty()) rep.reason else "${rep.reason}（ほか: ${others.joinToString("・")}）"
+        WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys)
+    }.sortedWith(compareBy({ it.staff }, { it.day }))
+    val directKeys = direct.map { it.staff to it.day }.toSet()
+    val shortfall = pinned.map { s ->
+        val rows = s.wishPinned.sorted().filter { (it to s.dayIndex) !in directKeys }.map { i ->
+            val sym = ui.wishes["$i,${s.dayIndex}"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "別の勤務"
+            WishTrialRow(i, s.dayIndex, name(i), "${sym}の希望", "$i,${s.dayIndex}" in ui.lockedWishKeys)
+        }
+        ShortfallWishGroup(s.dayIndex, s.shiftIndex, "${s.dayLabel} ${s.shiftSymbol} ${s.miss}人不足", rows)
+    }.filter { it.rows.isNotEmpty() }
+    return WishTrialCandidates(direct, shortfall)
+}
+
+/** [S5] 試算結果 1 行の文（§5 の表）。止めた試算は null（数字を出さない）。 */
+internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
+    is WishTrial.Result -> when {
+        o.rk >= o.h0 && o.att <= 0 -> "この試算では、減る見込みは見つかりませんでした（もう一度つくると減ることはあります）。"
+        o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減り、もう一度つくるとさらに${o.b}件 減る見込みです。"
+        o.rk >= o.h0 && o.aPrime > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減ります。"
+        o.rk >= o.h0 -> "取り消してもう一度つくると、必須違反が${o.b}件 減る見込みです。"
+        o.att > 0 -> "もう一度つくるだけの場合より、さらに${o.att}件 減る見込みです。"
+        else -> "取り消さなくても、もう一度つくるだけで同じだけ減る見込みです。"
+    }
+    is WishTrial.Unavailable -> "試算できませんでした（${o.reason}）。"
+    else -> null
+}
+
+/** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
+internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =
+    if (control.rk < control.h0) "希望を残したまま、もう一度つくるだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
