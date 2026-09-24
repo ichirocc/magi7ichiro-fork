@@ -119,6 +119,18 @@ class CsvRoundTripTest {
         assertConstraintsRoundTrip(st, "escaped")
     }
 
+    /** [外部レビュー R2] 取込が 5 セルで頭打ちし、JSON 由来の 6 要素の並びが往復で 5 要素へ切れていた。 */
+    @Test fun sixCellRunPatternSurvivesRoundTrip() {
+        val st0 = load("golden_state")
+        val k = st0.shifts[0].kigou
+        val six = List(6) { k }
+        val st = st0.copy(cons3n = listOf(C3Row(six)), cons3mn = listOf(C3Row(six + "")))
+        val r = ConstraintsCsvIO.parse(ConstraintsCsvIO.build(st), st)!!
+        assertEquals(listOf(C3Row(six)), r.state.cons3n)
+        assertEquals(listOf(C3Row(six)), r.state.cons3mn)
+        assertEquals(1, ConstraintsCsvIO.parse("禁止連続,$k,$k,$k,$k,$k,,$k", st)!!.rejected)
+    }
+
     /** [3.568.0/外部レビュー] 未知記号は「セル丸ごと」が鍵になる＝引用符で数千字を 1 セルへ入れると
      *  そのまま UI 文言と操作ログへ流れていた。1 件ずつ頭打ちされることを固定する。 */
     @Test fun unknownSymbolSamplesAreTruncated() {

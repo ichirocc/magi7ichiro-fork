@@ -807,10 +807,11 @@ object ConstraintsCsvIO {
         // [3.336.0/外部レビュー P2] 空セルで打ち切るので `MUST連続,A,,B` は ["A"] になり、**B が黙って
         //   消えたまま accepted に数えられた**（3.333.0 で他の族に入れた「評価されない行を受理しない」
         //   の取り残し）。穴が空いた行は書式の誤りとして呼び出し側で弾けるよう、別に判定する。
-        fun pat(r: List<String>): List<String> = (1..5).map { c(r, it) }.takeWhile { it.isNotEmpty() }.take(5)
+        fun patCells(r: List<String>): List<String> = (1 until r.size).map { c(r, it) }
+        fun pat(r: List<String>): List<String> = patCells(r).takeWhile { it.isNotEmpty() }
         /** 途中に空セルがあり、その後ろにまだ中身がある＝並びが途切れている（書式の誤り）。 */
         fun patHasGap(r: List<String>): Boolean {
-            val cells = (1..5).map { c(r, it) }
+            val cells = patCells(r)
             val last = cells.indexOfLast { it.isNotEmpty() }
             return last >= 0 && cells.take(last).any { it.isEmpty() }
         }
