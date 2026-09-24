@@ -1664,7 +1664,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ===== [S5] 「この希望を取り消したら」試算と確定（docs/s5_wish_trial.md §6・§8・§14 D） =====
-    /** 試算の文脈。state は参照（===）で見る＝StateFingerprint は Shift.role を読まない（§7 I4）。 */
+    /** 試算の文脈。state は参照（===）で見る（どの編集でも state が差し替わる＝指紋より厳しい、§7 I4）。 */
     private class TrialCtx(val st: MagiState, val boardKey: Long)
     private class StalledSnap(val st: MagiState, val boardKey: Long, val families: List<String>)
     private var wishTrialJob: Job? = null
