@@ -19,6 +19,15 @@ import kotlinx.coroutines.isActive
 const val MAX_OPTIMIZE_SEC = 300
 
 object V6FinalPort {
+    /** [backlog#35] 残りHARDが「解けないと証明済み」か＝covU は床以下で、非covU は c3n だけかつ c3n 壁（[c3nWall]）。 */
+    internal fun isStructuralHardResidual(report: ViolationReport, hardFloor: Int, c3nWall: () -> Boolean): Boolean {
+        if (report.hard <= 0) return false
+        val covU = report.breakdown["covU"] ?: 0
+        if (covU > hardFloor) return false
+        val nonCovU = report.hard - covU
+        return nonCovU == 0 || (nonCovU == (report.breakdown["c3n"] ?: 0) && c3nWall())
+    }
+
     /** [UX調査] regression!=null（Sentinel発火＝後処理盤面が棄却された）のとき、その盤面を観測した
      *  各パスのログ行（CovORelief:/C1Polish:/CoverageDiag等）を採用盤面の実態と誤読させないよう
      *  行単位で明示する。ログは落とさない方針(3.327.0)は不変＝目印を足すだけ。 */
@@ -639,15 +648,13 @@ object V6FinalPort {
             val stagnated = stagnationFired.get()
             // [測定中/backlog#35] post.report の残りHARDが「解けないと証明済み」かどうか。HARD=0（SOFT仕上げの
             //   余地）や、証明できない残りHARD（改善可能かもしれない）は false のまま＝常にExtraRefineを許可する。
-            val postNonCovUHard = post.report.hard - (post.report.breakdown["covU"] ?: 0)
-            val structuralHardResidual = extraRefineRequirePostHardDrop && post.report.hard > 0 && when {
-                postNonCovUHard == 0 -> (post.report.breakdown["covU"] ?: 0) <= hardFloor
-                postNonCovUHard == (post.report.breakdown["c3n"] ?: 0) -> try {
-                    val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, post.schedule)
-                    diag.hasRuns && diag.allBlocked
-                } catch (_: Exception) { false }
-                else -> false
-            }
+            val structuralHardResidual = extraRefineRequirePostHardDrop &&
+                isStructuralHardResidual(post.report, hardFloor) {
+                    try {
+                        val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, post.schedule)
+                        diag.hasRuns && diag.allBlocked
+                    } catch (_: Exception) { false }
+                }
             val canExtra = !stopRequested && !stagnated && post.report.total > 0 && !structuralHardResidual
             if (extraMs >= 5_000 && !canExtra) {
                 val why = when {

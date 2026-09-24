@@ -102,7 +102,7 @@ WEIGHT_LINT_EXEMPT = {
     ("app/src/main/java/com/magi/app/v6/Hf63Infeasibility.kt", 38):
         ((), "\"pref\" to 10 の 10 はfamily→添字の列挙表のインデックス。直前の\"covO\"（別ペア）に反応した"
         "文脈窓の偽陽性で、covO(10)の重みとは無関係"),
-    ("app/src/main/java/com/magi/app/v6/V6HotfixPasses.kt", 1019):
+    ("app/src/main/java/com/magi/app/v6/V6HotfixPasses.kt", 1020):
         ((), "120 は localBestImprovement の評価予算パラメータ（250 + cycle*120）。low の重みとは無関係な偶然の一致"),
     ("app/src/main/java/com/magi/app/v6/V6LateOperators.kt", 86):
         ((), "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"

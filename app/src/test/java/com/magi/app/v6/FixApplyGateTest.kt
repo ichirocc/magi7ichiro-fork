@@ -56,6 +56,17 @@ class FixApplyGateTest {
         assertEquals(REST, s[0][1])   // 入力は不変
     }
 
+    /** 外部レビュー N10: 提案の生成側も回数固定（下限＝上限）を崩す手を出さない＝出した提案は適用ゲートを通る。 */
+    @Test fun suggesterDoesNotProposePinBreakingOps() {
+        val st = state(ranges = mapOf("0,1" to Range("1", "1"), "1,1" to Range("1", "1"))); val s = sched(st)
+        val sugs = FixSuggester.suggest(st, s)
+        assertTrue(sugs.none { sug -> sug.ops.size == 1 && sug.ops[0].day == 0 && sug.ops[0].toShift == A })
+        for (sug in sugs) {
+            val r = FixApplyGate.apply(st, s, sug.ops)
+            assertTrue("${sug.label}: $r", r is FixApplyGate.Outcome.Applied)
+        }
+    }
+
     @Test fun improvingOpsAreAppliedToACopy() {
         val st = state(); val s = sched(st)
         val r = FixApplyGate.apply(st, s, listOf(FixCell(0, 0, A)))

@@ -309,6 +309,7 @@ class V6PortAnalyzerTest {
         shifts: List<Shift> = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "", ""), Shift("Y", "Y", "", "")),
         staff: List<Staff> = listOf(Staff("s0", 0)),
         groupShift: List<List<Int>> = listOf(List(3) { 1 }),
+        cons3w: List<com.magi.app.model.C3wRow> = emptyList(),
     ): MagiState {
         val days = schedule[0].size
         return MagiState(
@@ -320,8 +321,23 @@ class V6PortAnalyzerTest {
             needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
             cons3n = cons3n, cons3m = emptyList(), cons3mn = emptyList(),
-            cons41 = emptyList(), cons42 = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(), cons3w = cons3w,
         )
+    }
+
+    // 外部レビュー R3: 前日セルの代替が全て c3w（希望の前日に禁止）を作る＝正味 HARD は減らない。
+    @Test
+    fun diagnoseForbiddenRunsCountsC3wCreatedByAlternative() {
+        val st = forbiddenState(
+            schedule = listOf(listOf(1, 1)),
+            cons3n = listOf(C3Row(listOf("X", "X"))),
+            wishes = mapOf("0,1" to 1),
+            cons3w = listOf(com.magi.app.model.C3wRow("X", "休"), com.magi.app.model.C3wRow("X", "Y")),
+        )
+        val diag = V6PortAnalyzer.diagnoseForbiddenRuns(st)
+        val run = diag.runs.single()
+        assertTrue(run.cells.none { it.escape == ForbiddenCellEscape.FREE })
+        assertTrue(diag.allBlocked)
     }
 
     // 需要も希望も無い盤面の禁止連続は、どのセルも休へ変えるだけで安全に崩せる＝FREE。

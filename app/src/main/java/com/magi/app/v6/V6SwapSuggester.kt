@@ -128,10 +128,12 @@ object FixSuggester {
         }
         /** ops をその場で適用→評価→復元。base より良く、かつ別の HARD 族を新規に崩さなければ候補に追加
          *  （[newHardFamilyViolation]。`FixApplyGate` と同じ規則＝提案の時点で弾く。docs/automation.md
-         *  「担当外・希望固定・禁止連・個人固定の新規違反なし」）。 */
+         *  「担当外・希望固定・禁止連・個人固定の新規違反なし」）。回数固定（下限＝上限）を崩す手も同じく弾く。 */
         private fun tryOps(kind: FixKind, ops: List<FixCell>, label: String) {
             val rep = evalOps(ops)
-            if (betterReport(rep, base) && newHardFamilyViolation(base, rep) == null) record(kind, ops, label, rep)
+            if (!betterReport(rep, base) || newHardFamilyViolation(base, rep) != null) return
+            val after = s.copy2D().also { w -> for (op in ops) w[op.staff][op.day] = op.toShift }
+            if (!exactPinRegression(p, s, after)) record(kind, ops, label, rep)
         }
 
         fun run(maxResults: Int): List<FixSuggestion> {
