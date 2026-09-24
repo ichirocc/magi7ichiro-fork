@@ -38,7 +38,7 @@ internal object AptFairPolish {
         //   ①どの必須族も best より増やさない（合計が同点でも covU→c3n の付け替えを拒む＝1手の提案ゲートと同型）。
         if (newHardFamilyViolation(bestRep, rep) != null) return false
         if (rep.hard != bestRep.hard) return rep.hard < bestRep.hard
-        //   ②重い SOFT が 1 件でも増える手は許容の有無にかかわらず採らない。
+        //   ②必須が減る手は OFF と同じく採る（上の行）。必須が同点のとき、重い SOFT が 1 件でも増える手は採らない。
         if (TOLERANCE_BLOCKED_FAMILIES.any { (rep.breakdown[it] ?: 0) > (bestRep.breakdown[it] ?: 0) }) return false
         val baseline = nonFamilySoftTotal(before, family)
         val budget = baseline * SOFT_TOLERANCE_FRACTION

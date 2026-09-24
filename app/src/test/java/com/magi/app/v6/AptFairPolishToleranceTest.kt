@@ -106,4 +106,13 @@ class AptFairPolishToleranceTest {
         val withFairGain = repOf("fair" to 9, "weekly" to 47, "apt" to 2)   // fair も減るなら容認で採る
         assertTrue(AptFairPolish.toleratedBetter(withFairGain, before, before, "fair", enabled = true))
     }
+
+    @Test
+    fun hardDecreaseIsAcceptedEvenIfAHeavySoftFamilyGrows() {
+        // 必須が減る手は OFF（betterReport）と同じく採る＝重い SOFT の増加禁止は必須が同点の比較だけに掛かる。
+        val best = repOf("covU" to 1, "c1" to 0, "apt" to 2)
+        val cand = repOf("covU" to 0, "c1" to 1, "apt" to 0)
+        assertTrue(betterReport(cand, best))
+        assertTrue(AptFairPolish.toleratedBetter(cand, best, best, "apt", enabled = true))
+    }
 }
