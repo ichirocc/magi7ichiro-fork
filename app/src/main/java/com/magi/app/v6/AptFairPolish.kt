@@ -21,6 +21,8 @@ internal object AptFairPolish {
     /** [3.535.0/HF77明示数値指示] 研磨開始時点の対象家族(apt/fair)以外のSOFT合計の6%を上限に、
      *  その悪化を容認する累積予算。既定OFF（[PolishGate.aptFairSoftTolerance]）。 */
     internal const val SOFT_TOLERANCE_FRACTION = 0.06
+    /** [無害化, 2026-09-24 ユーザー指定の集合] 許容 ON でも 1 件でも増えたら採らない重い SOFT（apt/fair/weekly/c2/c3/c3m は軽い側として許容しうる）。 */
+    internal val TOLERANCE_BLOCKED_FAMILIES = setOf("c1", "low", "high", "covO", "c3mn", "c41", "c42", "c41s", "c42s")
 
     /** internal＝`AptFairPolishToleranceTest` から直接検証するため（private だとファイル外から呼べない）。 */
     internal fun nonFamilySoftTotal(rep: ViolationReport, excludeFamily: String): Double =
@@ -32,7 +34,12 @@ internal object AptFairPolish {
      */
     internal fun toleratedBetter(rep: ViolationReport, bestRep: ViolationReport, before: ViolationReport, family: String, enabled: Boolean, count: Boolean = true): Boolean {
         if (!enabled) return betterReport(rep, bestRep)
+        // [無害化, 2026-09-24 ユーザー指示] 許容 ON の敗因（重い SOFT の増加・必須どうしの付け替え）を切る。
+        //   ①どの必須族も best より増やさない（合計が同点でも covU→c3n の付け替えを拒む＝1手の提案ゲートと同型）。
+        if (newHardFamilyViolation(bestRep, rep) != null) return false
         if (rep.hard != bestRep.hard) return rep.hard < bestRep.hard
+        //   ②重い SOFT が 1 件でも増える手は許容の有無にかかわらず採らない。
+        if (TOLERANCE_BLOCKED_FAMILIES.any { (rep.breakdown[it] ?: 0) > (bestRep.breakdown[it] ?: 0) }) return false
         val baseline = nonFamilySoftTotal(before, family)
         val budget = baseline * SOFT_TOLERANCE_FRACTION
         val usedByBest = (nonFamilySoftTotal(bestRep, family) - baseline).coerceAtLeast(0.0)
@@ -41,7 +48,9 @@ internal object AptFairPolish {
         val forgiven = minOf(increase, remaining)
         val rawDelta = rep.weightedScore - bestRep.weightedScore
         val effectiveDelta = rawDelta - forgiven
-        val accepted = effectiveDelta < 0.0 || (effectiveDelta == 0.0 && rep.total < bestRep.total)
+        //   ③容認を使うなら、研磨対象の族（apt/fair）の件数が best より減っていること。
+        val targetImproved = (rep.breakdown[family] ?: 0) < (bestRep.breakdown[family] ?: 0)
+        val accepted = (effectiveDelta < 0.0 || (effectiveDelta == 0.0 && rep.total < bestRep.total)) && (forgiven <= 0.0 || targetImproved)
         // [3.535.0/実機ログで発覚] TuningTelemetry.summaryの「設定の効き」に本トグルの行が無く、
         // ONでも実行の痕跡が一切見えなかった（他トグルは効果カウンタつきで表示済み）。素のbetterReport
         // （＝rawDeltaだけで同じ判定）なら却下されるはずの手を、容認で採用に転じさせた回数だけを数える。
