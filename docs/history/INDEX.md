@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- アルゴリズム案の机上テスト（2026-09-25）: §1 必須残中の SOFT 研磨カット＝否決（必須増 10〜13・減 0、Fair も HARD を減らす）、§3 HARD 差分の事前却下を巡回交換・C1 広域ビームへ＝後処理 −26%・盤面 18/18 一致で採る候補。
+
 - N9 巻き戻したパスの採用数を0と数える版の A/B（2026-09-24）: postChainRollbackCountsZero（既定false）・n9rollback 腕 勝2/負4 p=0.69 → 不合格・既定不変
 - 文書の古い記述の是正（2026-09-24）: backlog #14(a) lnsAdaptive 既定ON・#14 重み現行値・#16 roleBudgetFit 参照・#19 決着・#37 S5 任意残作業／s5 冒頭 C# 同期済み／AP 既定OFF台帳補完＋postChainRunningKeepBest 昇格／automation 否決済み 3 件・pref 8000／CLAUDE.md #2＝UI 層のみ
 - weight_lint 抑止キーを行番号→コード断片へ（2026-09-24）: WEIGHT_LINT_EXEMPT を (ファイル, 行の一部) で引き、上の行の編集で抑止がずれない・断片は検出行ちょうど1行（第3要素で行数指定）に一致、空振り/曖昧は fail
