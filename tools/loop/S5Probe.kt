@@ -26,6 +26,7 @@ fun main(args: Array<String>) = runBlocking {
     // v2（2026-09-24）: 違反起点修復（VCR、決定的・回数上限）を希望あり（対照）/希望なしの両方で回し、1手探索にも対照を足す。
     //   試算は本計算の入口と同じく上限 0 のセルを外した盤面から始める（clearCappedCells）。
     val quick = System.getenv("S5_QUICK") == "1"   // 本計算（G）を省いて試算だけを測る
+    val vcrOnly = System.getenv("S5_VCR_ONLY") == "1"   // 短い最適化・短い後処理（v1 で測定済み）を省く＝列は -1
     out.writeText("fixture,staff,day,reason,hardB,hardG0,fixed,hardFix,msFix,hardFixKept,hardOpt,msOpt,hardPost,msPost,hardVcr,hardVcrKept,msVcr,hardVcrW,hardVcrWKept,msVcrW,hardG,msG\n")
     for ((name, st0) in fixtures) {
         val b = V6FinalPort.handleOptimize(st0, st0.schedule.toIntArray2D(), secondsRaw = fullSec, workers = 2, allowImpossible = true).schedule
@@ -60,11 +61,11 @@ fun main(args: Array<String>) = runBlocking {
             val hardFix = fixed + (sugg.minOfOrNull { it.deltaHard } ?: 0).coerceAtMost(0)
             val msFix = System.currentTimeMillis() - t
             t = System.currentTimeMillis()
-            val opt = V6NativeOptimizer.optimize(st2, b.copy2D(), V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = trialSec,
+            val opt = if (vcrOnly) -1 else V6NativeOptimizer.optimize(st2, b.copy2D(), V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = trialSec,
                 workers = 1, softPolish = false, restarts = 0, seed = 1L, postPolish = false)).report.hard
             val msOpt = System.currentTimeMillis() - t
             t = System.currentTimeMillis()
-            val post = V6HotfixPasses.runPostOptimization(st2, b.copy2D(), "s5", seed = 5L,
+            val post = if (vcrOnly) -1 else V6HotfixPasses.runPostOptimization(st2, b.copy2D(), "s5", seed = 5L,
                 deadlineMs = EngineClock.nowMs() + trialSec * 1000L).report.hard
             val msPost = System.currentTimeMillis() - t
             val b2 = HardRepairCore.clearCappedCells(st2, b).first
