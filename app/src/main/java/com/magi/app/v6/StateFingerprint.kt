@@ -32,7 +32,8 @@ object StateFingerprint {
         fun mix(v: Long) { h = h * 1099511628211L + v }
         fun txt(t: String?) { if (t == null) mix(0) else { for (c in t) mix(c.code.toLong()); mix(1) } }
         txt(st.startDate); txt(st.endDate); mix(if (st.use2Patterns) 1 else 0)
-        for (sh in st.shifts) { txt(sh.name); txt(sh.kigou); txt(sh.need1); txt(sh.need2) }
+        // [外部レビュー N2] role（休みとして扱う）も読む。旧: 休みの付け替え・OFFだけの変更で指紋が変わらなかった。
+        for (sh in st.shifts) { txt(sh.name); txt(sh.kigou); txt(sh.need1); txt(sh.need2); mix(sh.role.ordinal.toLong()) }
         for (g in st.groups) { txt(g.name); txt(g.kigou) }
         for (g in st.skillGroups) { txt(g.name); txt(g.kigou) }
         for (p in st.staff) { txt(p.name); mix(p.groupIdx.toLong()); mix(p.skillIdx.toLong()) }

@@ -10,6 +10,7 @@ import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Range
 import com.magi.app.model.Shift
+import com.magi.app.model.ShiftRole
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -59,6 +60,8 @@ class StateFingerprintTest {
         "シフト記号" to b.copy(shifts = b.shifts.mapIndexed { i, s -> if (i == 1) s.copy(kigou = "B") else s }),
         "必要人数(既定)" to b.copy(shifts = b.shifts.mapIndexed { i, s -> if (i == 1) s.copy(need1 = "2") else s }),
         "上限人数(既定)" to b.copy(shifts = b.shifts.mapIndexed { i, s -> if (i == 1) s.copy(need2 = "9") else s }),
+        "休みの付け替え" to b.copy(shifts = b.shifts.mapIndexed { i, s -> s.copy(role = if (i == 1) ShiftRole.Rest else ShiftRole.None) }),
+        "休みOFF" to b.copy(shifts = b.shifts.map { it.copy(role = ShiftRole.None) }),
         "群" to b.copy(groups = b.groups + Group("I", "I")),
         "スキル群" to b.copy(skillGroups = b.skillGroups + Group("T", "T")),
         "職員名" to b.copy(staff = b.staff.mapIndexed { i, p -> if (i == 0) p.copy(name = "x") else p }),

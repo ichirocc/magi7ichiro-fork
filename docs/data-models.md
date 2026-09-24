@@ -2,7 +2,8 @@
 
 > **このファイルの役割**：エンティティ定義・項目名・型の**唯一の正解**。AI が存在しないフィールドを創作するのを防ぐ。ここに無い項目は「存在しない」とみなす。
 > **コード基準**：`app/src/main/java/com/magi/app/model/MagiState.kt`。Web 版の `state` オブジェクトと名前・意味が一致し、JSON が往復する。
-> **最終更新**：2026-09-21（3.603.0 — `Shift.role: ShiftRole`追加。休の識別を記号一致から分離、詳細は§下記）。
+> **最終更新**：2026-09-24（外部レビュー N1 — `shifts[].role` の保存を `"rest"`/`"none"` に、`""` は旧JSONと同じ扱い）。
+> 2026-09-21（3.603.0 — `Shift.role: ShiftRole`追加。休の識別を記号一致から分離、詳細は§下記）。
 > 2026-09-20（§4 UiState を実装と再照合し、3.394.0 以降に追加されて丸ごと未記載だった
 > 9フィールド `checkRev`/`engineRan`/`keepScreenOn`/`runSummary`/`combineExhaustPairs`/`countChainPolish`/
 > `aptFairSoftTolerance`/`lnsAdaptive`/`saveState` を追加、件数を 71 → **80** へ訂正）。
@@ -86,8 +87,8 @@
 > ShiftRole.Rest` の付与先（`fun restShiftIndex(state): Int?`）。どのシフトにも付与が無ければ **`null`**
 > （旧: `?: 0` で無言に先頭シフトへフォールバックしていたが、休の削除・改名で別シフトが誤って「休」と
 > 解釈されHARD違反が実データで激増する実害があったため撤去。詳細は `docs/history/3.4xx.md` 3.603.0節）。
-> `Problem.restIdx` も同型で `Int?`。旧JSON（`role`フィールド無し）読込時は記号"休"のシフトへ自動付与する
-> 後方互換パスが `StateParser` にある。
+> `Problem.restIdx` も同型で `Int?`。保存は `"rest"`/`"none"`（外部レビュー N1＝休みOFFの往復）。明示の role が1つも無い JSON
+> （旧JSON・非休を `""` で書いていた保存）だけ、読込時に記号"休"のシフトへ自動付与する後方互換パスが `StateParser` にある。
 > 「休は特殊な OFF ではなく通常のシフト種の一つ」は 3.345.0 で全面的に徹底された前提で、weekly も
 > シフト別に均すので休を特別扱いしない。**編集規則も同じ**（3.416.0）＝休シフトの削除・改名は他シフトと
 > 同一経路（削除セルは削除後一覧の既定シフトへ・改名は制約参照が追従）。
