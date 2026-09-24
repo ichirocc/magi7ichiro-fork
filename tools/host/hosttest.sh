@@ -59,4 +59,4 @@ echo "== compile tests ($(echo "$TEST_SRC" | wc -l) files)"
 kotlinc -cp "$CP:$OUT/main" -Xfriend-paths="$OUT/main" -d "$OUT/test" $TEST_SRC | grep -E "^e: |error:|exception" | head -40; [ ${PIPESTATUS[0]} -eq 0 ] || { echo "TEST COMPILE FAILED"; exit 1; }
 CLASSES=$(cd "$OUT/test" && find . -name '*Test.class' ! -name '*$*' | sed 's#^\./##; s#\.class$##; s#/#.#g' | sort)
 echo "== run $(echo "$CLASSES" | wc -l) test classes"
-cd "$ROOT/app" && java -Xmx3g -cp "$CP:$OUT/main:$OUT/test:$ROOT/app/src/test/resources" org.junit.runner.JUnitCore $CLASSES 2>&1 | grep -vE "^\s*at |^$|JAVA_TOOL" | tail -8
+cd "$ROOT/app" && java -Xmx3g -cp "$CP:$OUT/main:$OUT/test:$ROOT/app/src/test/resources" org.junit.runner.JUnitCore $CLASSES 2>&1 | grep -vE "^\s*at |^$|JAVA_TOOL" | tail -8; rc=${PIPESTATUS[0]}; [ "$rc" -eq 0 ] || echo "JUNIT FAILED (exit $rc)"; exit "$rc"

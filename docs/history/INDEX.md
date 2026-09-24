@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 外部レビュー R1/N8（2026-09-24）: hosttest.sh が JUnit 失敗を終了コードへ伝播しない（tail の 0 を返していた）→PIPESTATUS で伝播・weight_lint の抑止リスト行番号 6 件の陳腐化で exit 1→現行行へ
 - S5 試算の VM と画面（2026-09-24）: startWishTrial/wishTrialFor（ctx＝state 参照＋盤面キーを読むたびに照合・1 世代保持）・cancelWishAndRebuild（§6 の 1〜10、Undo 1 段）・startFullOptimize（Undo ラベル/S5 文脈）・停止/失敗の希望維持・元に戻すで stalledHardFamilies 復元・ダイアログの「取り消したら？」・S5b 節・WISH 入口を候補ありへ・充足不可の S5b 版
 - S5 試算のエンジン層（2026-09-24）: WishTrial（H0/Hx/Rk/Rr・a'・b、数値だけの結果型、対照は別関数）・CoverageShortfall.wishPinned と充足不可の文の直し・候補行と文言の純粋関数・lockedWishKeys。VM/画面は未着手
 
