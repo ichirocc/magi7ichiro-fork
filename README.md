@@ -23,6 +23,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
+| [`docs/s5_wish_trial.md`](./docs/s5_wish_trial.md) | **S5「この希望を取り消したら」試算の設計・机上評価・安全仕様**（未実装。試算＝確定分＋違反起点修復の見込み（対照差し引き）、確定＝取り消し＋本実行を Undo 1 段、鮮度・並行・C# 移植・テスト計画・利用者の判断事項） |
 | [`docs/automation.md`](./docs/automation.md) | **自動化方針と実装の対応**（済／部分／未、採用ゲート・探索段階・必須修正 10 項目） |
 | [`docs/backlog.md`](./docs/backlog.md) | **バックログ / 未対応**（完了項目は打消し線で保持。CLAUDE.md から移設） |
 | [`docs/claudemd-tune-proposal.md`](./docs/claudemd-tune-proposal.md) | **CLAUDE.md 見直し提案**（棚卸し・削除/書き直し/移動/残す/矛盾の表と全文案。承認待ち） |
@@ -32,6 +33,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-09-24（S5「この希望を取り消したら」試算の設計・机上評価・安全仕様を `docs/s5_wish_trial.md` に。未実装・利用者の判断待ち 4 点）
 
 **最終更新**：2026-09-23（3.612.0＝思考誘導 UX: セルシートで必須を先に・要調整を折りたたみ、c3 を「守るとよい並び」へ、ホームの主ボタンを
 不足→1手→下限の見込み→希望→問題 の順に1つ、1手カードに「必須は減るか」、ぶつかっている希望の一覧。詳細は`docs/history/3.4xx.md`）
