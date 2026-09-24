@@ -44,6 +44,19 @@ def is_blank(v):
     return v is None or str(v).strip() == ""
 
 
+def rest_index(shifts):
+    """restIdx — StateParser.parse の role 解決＋MirrorCore.restShiftIndex、無ければ -1（NativeEval の `?: -1`）。
+
+    明示の role（"rest"/"none"）が1つも無い JSON（旧JSON・"" で書いた保存）だけ記号"休"へ付ける。
+    """
+    for i, s in enumerate(shifts):
+        if s.get("role") == "rest":
+            return i
+    if any(s.get("role") == "none" for s in shifts):
+        return -1
+    return next((i for i, s in enumerate(shifts) if s.get("kigou") == "休"), -1)
+
+
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
@@ -79,8 +92,7 @@ def main():
                 return i
         return -1
 
-    # restIdx = 記号"休"のindex（無ければ0）— MirrorCore.restShiftIndex
-    rest_idx = next((i for i, s in enumerate(shifts) if s["kigou"] == "休"), 0)
+    rest_idx = rest_index(shifts)
     # dow0 = ISO dayOfWeek(月=1..日=7) % 7 — Problem.dow0
     y, m, d = (int(x) for x in st["startDate"].split("-"))
     dow0 = (date(y, m, d).isoweekday()) % 7
@@ -303,13 +315,13 @@ def main():
         bucket_blob.append(len(b))
         bucket_blob.extend(b)
 
-    # board: normalizeSchedule 相当（範囲外→-1。-1 セルは実ランタイムで正当に現れる）
+    # board: normalizeSchedule 相当（範囲外・欠損・null→-1。-1 セルは実ランタイムで正当に現れる）
     board = []
     for i in range(S):
         row = schedule[i] if i < len(schedule) else []
         for j in range(T):
             k = to_int_or_none(row[j]) if j < len(row) else None
-            k = k if k is not None else 0
+            k = k if k is not None else -1
             board.append(k if 0 <= k < K else -1)
 
     meta = [S, T, K, G, rest_idx, dow0, use2]

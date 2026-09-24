@@ -421,9 +421,9 @@ object V6NativeOptimizer {
         if (better(entryBoardReport, finalReport)) {
             logs = logs + MirrorLog(level = "W", tag = "V6Dispatcher",
                 message = "内側番兵: 結果(HARD=${finalReport.hard}/total=${finalReport.total})が入力の勤務表(HARD=${entryBoardReport.hard}/total=${entryBoardReport.total})より劣化のため入力の勤務表を採用")
-            return V6OptimizerResult(entryBoard, entryBoardReport.copy(logs = logs + entryBoardReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
+            return V6OptimizerResult(entryBoard, entryBoardReport.copy(logs = logs + entryBoardReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started, epochOverrunCount = result.epochOverrunCount)
         }
-        return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started)
+        return V6OptimizerResult(polished.schedule, finalReport.copy(logs = logs + finalReport.logs), chosen, logs, result.iterations + polished.iterations, nowMs() - started, epochOverrunCount = result.epochOverrunCount)
     }
 
     /** [3.231.0/ドッグフーディングで発見・修正] RSIラウンドループがHf63Infeasibilityへ渡す

@@ -2,6 +2,7 @@ package com.magi.app.v6
 
 import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
+import com.magi.app.model.ShiftRole
 import com.magi.app.model.Group
 import com.magi.app.model.Staff
 import com.magi.app.model.Range
@@ -159,6 +160,8 @@ object RosterCsvImport {
         }
         if (shiftsOut.isEmpty()) return null
         val restK = symToK.getValue(REST)
+        // [外部レビュー N1] 休みは取込で付ける（旧: 読込の後方互換任せ。保存が明示の role を書くと休み無しになる）。
+        shiftsOut[restK] = shiftsOut[restK].copy(role = ShiftRole.Rest)
 
         // --- ユニット(グループ)・スタッフ・勤務表グリッド ---
         val groupsOut = ArrayList<Group>()
@@ -287,7 +290,8 @@ object FlatRosterCsvImport {
         for (s in symSet) if (s != REST) symbols.add(s)
         val symToK = LinkedHashMap<String, Int>()
         symbols.forEachIndexed { i, s -> symToK[s] = i }
-        val shiftsOut = symbols.map { Shift(name = it, kigou = it, need1 = "", need2 = "") }
+        val shiftsOut = symbols.map { Shift(name = it, kigou = it, need1 = "", need2 = "",
+            role = if (it == REST) ShiftRole.Rest else ShiftRole.None) }
         val restK = symToK.getValue(REST)
 
         // ユニット→グループ（出現順）。

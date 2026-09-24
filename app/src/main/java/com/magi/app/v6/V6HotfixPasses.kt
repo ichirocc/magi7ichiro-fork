@@ -521,6 +521,7 @@ object V6HotfixPasses {
                 bestWork = work.copy2D()
                 return passLogs
             }
+            if (work.contentDeepEquals(bestWork)) return passLogs   // 無変更のパスは巻き戻していない＝印を付けない
             work = bestWork.copy2D()
             return passLogs.map { it.copy(message = "$ROLLBACK_MARKER${it.message}") }
         }

@@ -606,8 +606,13 @@ object V6PortAnalyzer {
         p: Problem, before: Array<IntArray>, after: Array<IntArray>, i: Int, c3nBefore: Int,
     ): Boolean {
         val c3nAfter = C1DeltaPrefilter.staffC3nFires(p, IntArray(p.T) { after[i][it] })
-        return c3nAfter + prefMissesOf(p, after, i) < c3nBefore + prefMissesOf(p, before, i)
+        return c3nAfter + prefMissesOf(p, after, i) + c3wOf(p, after, i) <
+            c3nBefore + prefMissesOf(p, before, i) + c3wOf(p, before, i)
     }
+
+    /** 職員 [i] の行の c3w（希望の前日に禁止, HARD）件数。 */
+    private fun c3wOf(p: Problem, board: Array<IntArray>, i: Int): Int =
+        (0 until p.T).count { d -> p.c3wBanned(i, d, board[i][d]) }
 
     /** 職員 [i] の行で「実現可能な希望どおりでない」日数（＝pref の HARD 件数）。 */
     private fun prefMissesOf(p: Problem, board: Array<IntArray>, i: Int): Int =
@@ -644,6 +649,8 @@ object V6PortAnalyzer {
         var c3nBlocked = 0
         var noReceiver = 0
         var prefBlocked = 0   // c3n は減るが、希望を破る代金（pref +1）を払えない代替の数
+        var c3wBlocked = 0    // c3n は減るが、代わりに希望の前日に禁止（c3w）を作る代替の数
+        val c3wCur = if (p.c3wBanned(i, j, cur)) 1 else 0
         var chainOk: Int? = null      // CHAIN が成立した代替シフト
         var adjOk: Int? = null        // ADJACENT が成立した代替シフト
         var alts = 0
@@ -652,7 +659,8 @@ object V6PortAnalyzer {
             alts++
             val after = c3nAfter(m)
             // 正味 HARD が減るか（希望を破る手は pref が 1 増える。hard は族横断の件数和なので同じ単位）。
-            val netOk = after + prefCost < firesBefore
+            val c3wDelta = (if (p.c3wBanned(i, j, m)) 1 else 0) - c3wCur
+            val netOk = after + prefCost + c3wDelta < firesBefore
             // 「新たな禁止連続を作る（＝そもそも c3n が減らない）」かどうかは pref 代とは別問題。
             //   両者を混ぜると、c3n は減るのに pref 代を払えないだけの代替まで隣接日調整へ流れてしまう。
             val createsNewRun = after >= firesBefore
@@ -667,6 +675,8 @@ object V6PortAnalyzer {
                     tmp[i][j] = m
                     if (chainFills(tmp)) chainOk = m else noReceiver++
                 } else noReceiver++   // 既に CHAIN 成立済み＝以降の重い連鎖検証は省略（分類は不変）
+            } else if (!createsNewRun && after + c3wDelta >= firesBefore) {
+                c3wBlocked++
             } else if (!createsNewRun) {
                 // c3n 自体は減るが、希望を破る代金を払うと正味では減らない＝希望が本当に効いている。
                 prefBlocked++
@@ -711,7 +721,8 @@ object V6PortAnalyzer {
             prefBlocked > 0 -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.PINNED,
                 "本人希望=$curSym（動かしても正味の必須違反が減らない）")
             else -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.BLOCKED,
-                "代替${alts}件全滅: 新たな禁止連続${c3nBlocked}・covU受け皿なし${noReceiver}")
+                "代替${alts}件全滅: 新たな禁止連続${c3nBlocked}・covU受け皿なし${noReceiver}" +
+                    if (c3wBlocked > 0) "・希望の前日に禁止${c3wBlocked}" else "")
         }
     }
 
