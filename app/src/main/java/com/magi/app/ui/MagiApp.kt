@@ -154,15 +154,6 @@ internal fun decodeCsvBytes(bytes: ByteArray): String {
     return text.removePrefix("﻿")
 }
 
-// [UX監査#4] 診断からの誘導を年間マスターの節（CollapsibleSectionのstateKey）まで着地させるための対応表。
-//   対応の無い族/種別（groupViol・covU・covO・pref・希望など）はnull＝従来どおりtabのみ遷移。
-private fun yearSectionForFamily(fam: String?): String? = when (fam) {
-    "c1", "c3", "c3n", "c3m", "c3mn", "c3w" -> "yr_cons"
-    "c41", "c42", "c41s", "c42s" -> "yr_headcount"
-    "c2", "apt", "fair", "weekly", "low", "high" -> "yr_count"
-    else -> null
-}
-
 private fun yearSectionForIssueKind(kind: com.magi.app.v6.IssueKind?): String? = when (kind) {
     com.magi.app.v6.IssueKind.RANGE -> "yr_count"
     com.magi.app.v6.IssueKind.DEMAND -> "yr_headcount"
@@ -824,7 +815,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DialogConfirmButton("データ全体（新規）", onClick = {
-                            if (com.magi.app.v6.RosterCsvImport.detect(csvText)) { rosterCsvChoice = csvText } else { vm.importCsvSmart(csvText); showImportGuidance = true }
+                            if (com.magi.app.v6.RosterCsvImport.detect(csvText)) { rosterCsvChoice = csvText } else { vm.importCsvSmart(csvText) { showImportGuidance = true } }
                             pendingCsvImport = null
                         })
                         DialogConfirmButton("勤務表（重ね合わせ）", onClick = { vm.importCsv(csvText); pendingCsvImport = null })
@@ -850,8 +841,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 },
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false); showImportGuidance = true; rosterCsvChoice = null })
-                        DialogDismissButton(onClick = { vm.importRosterAs(csvText, true); showImportGuidance = true; rosterCsvChoice = null }, text = "希望シフトとして取り込む")
+                        DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false) { showImportGuidance = true }; rosterCsvChoice = null })
+                        DialogDismissButton(onClick = { vm.importRosterAs(csvText, true) { showImportGuidance = true }; rosterCsvChoice = null }, text = "希望シフトとして取り込む")
                     }
                 },
                 dismissButton = { DialogDismissButton(onClick = { rosterCsvChoice = null }) },

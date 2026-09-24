@@ -825,7 +825,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         autoSave()
     }
 
-    fun load(json: String, note: String = "") = loadAsync(json, note = note)
+    fun load(json: String, note: String = "", onLoaded: (() -> Unit)? = null) = loadAsync(json, note = note, onLoaded = onLoaded)
 
     /**
      * [⛏6] ゼロから作る起点。最小の有効データ(1シフト/1グループ/1スタッフ/31日)を
@@ -866,7 +866,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      *   いる**経路が、その事実を利用者へ届けるための唯一の口（旧: 呼出側が `_ui.update` で出しても
      *   この関数の「読込完了: …」が必ず上書きしていた）。既定は空＝JSON 読込などは従来どおり。
      */
-    fun loadAsync(rawJson: String, markResult: Boolean = false, fromRestore: Boolean = false, note: String = "") {
+    fun loadAsync(rawJson: String, markResult: Boolean = false, fromRestore: Boolean = false, note: String = "", onLoaded: (() -> Unit)? = null) {
         if (!fromRestore && runBlockedByInFlight("読み込み")) return
         val json = MojibakeRepair.repair(rawJson)
         // [3.282.0/新領域ログ監査] 旧: 参照比較(`!==`)のため BOM 除去だけの健全なファイルでも毎回
@@ -968,6 +968,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             )
                         }
                         logOp("I", "読込 ${lp.state.staffCount}名/${lp.state.dayCount}日/${lp.state.shiftCount}シフト")
+                        onLoaded?.invoke()
                     },
                     onFailure = { err ->
                         // [3.400.0] 旧: `onFailure = { _ui.update { it.copy(message = "読込失敗: ${it.message}") } }`

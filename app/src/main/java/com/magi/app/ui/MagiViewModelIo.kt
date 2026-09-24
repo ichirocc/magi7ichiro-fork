@@ -175,7 +175,7 @@ private fun MagiViewModel.rosterUnknownNote(unknown: Map<String, Int>): String {
     return "｜⚠ 凡例に無い記号 ${cells}セル（$top）は休として取り込みました"
 }
 
-fun MagiViewModel.importCsvSmart(rawText: String) {
+fun MagiViewModel.importCsvSmart(rawText: String, onNewDataLoaded: (() -> Unit)? = null) {
     val text = MojibakeRepair.repair(rawText)
     if (com.magi.app.v6.RosterCsvImport.detect(text)) {
         val unknownSym = LinkedHashMap<String, Int>()
@@ -194,7 +194,7 @@ fun MagiViewModel.importCsvSmart(rawText: String) {
             //   間違っていれば曜日の平準化も日付表示もずれる。**何日から取り込んだかを必ず出す**
             //   （挙動は不変＝知らせるだけ。違っていれば設定タブで直せる）。
             logOp("I", "勤務表CSVを新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}")
-            load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate) + rosterUnknownNote(unknownSym))
+            load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate) + rosterUnknownNote(unknownSym), onNewDataLoaded)
             return
         }
         // テンプレらしいが解析不能 → 既存取込にフォールバック（または案内）。
@@ -206,7 +206,7 @@ fun MagiViewModel.importCsvSmart(rawText: String) {
             // [3.414.0/I-02] この形式は**必ず**期間を推定する（曜日行から当年で最初に一致する月・
             //   曜日行が無ければ当年1月）。何日から取り込んだかを必ず出す（挙動は不変）。
             logOp("I", "勤務表CSV(ユニット列形式)を新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}（推定）")
-            load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate))
+            load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate), onNewDataLoaded)
             return
         }
         _ui.update { it.copy(messageIsError = true, message = "CSV取込失敗: ユニット列形式と判定しましたが解析できませんでした。ヘッダ行（ユニット, No, 役職, 氏名, 1, 2, …）と氏名列をご確認ください。") }
@@ -227,7 +227,7 @@ fun MagiViewModel.importCsvSmart(rawText: String) {
  *  - asWishes=false: 本表を初期割り当て(勤務表)として読み込む。
  *  - asWishes=true : 本表をスタッフの希望として読み込み、勤務表は空(全公休)で開始（最適化で尊重）。
  */
-fun MagiViewModel.importRosterAs(rawText: String, asWishes: Boolean) {
+fun MagiViewModel.importRosterAs(rawText: String, asWishes: Boolean, onLoaded: (() -> Unit)? = null) {
     val text = MojibakeRepair.repair(rawText)
     val unknownSym = LinkedHashMap<String, Int>()
     val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text, asWishes, unknownOut = unknownSym) }.getOrNull()
@@ -246,7 +246,7 @@ fun MagiViewModel.importRosterAs(rawText: String, asWishes: Boolean) {
     //   何日から取り込んだかを必ず出す（挙動は不変＝知らせるだけ）。
     logOp("I", "${kind}として新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}" +
         if (asWishes) "（希望${st.wishes.size}件）" else "")
-    load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate) + rosterUnknownNote(unknownSym))
+    load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate) + rosterUnknownNote(unknownSym), onLoaded)
 }
 
 /** 取込種別を取り違えた可能性の判定: 勤務表(スケジュール)CSVらしいか。 */

@@ -52,4 +52,11 @@ class VioBucketsTest {
         assertTrue("バケツONなら表示", vioVisible("vio-covU", setOf("need")))
         assertTrue("バケツOFFなら非表示", !vioVisible("vio-covU", setOf("pref")))
     }
+
+    /** [外部レビュー N4] c2 の編集欄（cons2）は ⑤並び（yr_cons）にあるのに ③回数（yr_count）を開いていた。 */
+    @Test fun c2SettingsLinkOpensSectionWithCons2Editor() {
+        assertEquals("yr_cons", yearSectionForFamily("c2"))
+        assertEquals("yr_count", yearSectionForFamily("low"))
+        assertNull(yearSectionForFamily("covU"))
+    }
 }
