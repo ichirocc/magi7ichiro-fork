@@ -589,6 +589,9 @@
     （`tools/loop/results/iter_runningkeepbestaft.csv`）: **勝112/負72・符号検定 p=0.004・速度+28%（タイムアウト 23→11）
     だが、必須件数が増えた試行が5件（全て充足不能カテゴリ、必須+1〜2）＝統計ゲート不合格→既定OFF維持**。
     keep-best が「一時的に悪化してから必須を減らす」逃げ道を塞ぐ型（CountChain 等と同型）。
+    **N9（外部レビュー, 2026-09-24）**: 巻き戻したパスでも `PostChain.adopt` が `r.applied` を返し巡の打ち切り（roundApplied）・停滞検知（totalApplied==0）へ流れる件。
+    `postChainRollbackCountsZero`（既定 false、C# 同期済み）で 0 と数える版を `n9rollback` 腕（両腕とも許容 ON）で 5seed×46 ケース測定
+    （`tools/loop/results/iter_n9rollback.csv`）: 230ペア: 辞書式 新2/同等224/旧4・符号検定 p=0.69・必須退行0・必須増0・品質平均-0.03%・速度平均+3.8%（中央値-4.0%）・安定性 例外0/再現性46/46＝統計ゲート不合格。**既定 false 維持**（フラグは残す）。
     既定（許容OFF）との突き合わせ: 許容ONのみ 98/115（p=0.27）、許容ON+keep-best 97/86（p=0.46）＝**許容ON自体も
     既定より有意に良いとは言えない**（実機は許容ON）。採るなら「充足不能（HARD残が構造的）な盤面では keep-best を
     切る」等の条件付けが要る＝探索動学の設計判断として明示指示待ち。

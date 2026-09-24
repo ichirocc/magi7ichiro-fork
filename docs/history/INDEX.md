@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- N9 巻き戻したパスの採用数を0と数える版の A/B（2026-09-24）: postChainRollbackCountsZero（既定false）・n9rollback 腕 勝2/負4 p=0.69 → 不合格・既定不変
 - 文書の古い記述の是正（2026-09-24）: backlog #14(a) lnsAdaptive 既定ON・#14 重み現行値・#16 roleBudgetFit 参照・#19 決着・#37 S5 任意残作業／s5 冒頭 C# 同期済み／AP 既定OFF台帳補完＋postChainRunningKeepBest 昇格／automation 否決済み 3 件・pref 8000／CLAUDE.md #2＝UI 層のみ
 - weight_lint 抑止キーを行番号→コード断片へ（2026-09-24）: WEIGHT_LINT_EXEMPT を (ファイル, 行の一部) で引き、上の行の編集で抑止がずれない・断片は検出行ちょうど1行（第3要素で行数指定）に一致、空振り/曖昧は fail
 - S5 VM・画面のレビュー対応（2026-09-24）: 採用後の例外（遅い失敗）で画面を入力盤面へ戻さず今の盤面で描き直す（文言「作成は終わりましたが…」）・充足不可の S5b 版を重複除去の前の wishPinned で決め、例の日も wishPinned の枠から・描き直しも落ちたときの代替でも盤面を今のものへ（C# 同期）
