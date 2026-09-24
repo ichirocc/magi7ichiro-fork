@@ -264,11 +264,13 @@ object FixSuggester {
                 val idx = IntArray(n)
                 var bestComboRep: ViolationReport? = null
                 var bestCombo: IntArray? = null
+                val s0 = s.copy2D()
                 while (true) {
                     for (c in 0 until n) s[cells[c]][j] = cellOpts[c][idx[c]]
                     val rep = UnifiedViolationChecker.check(state, s)
+                    // tryOps と同じ規則（回数固定を崩す組み合わせは最良に選ばない）。
                     if (betterReport(rep, base) && newHardFamilyViolation(base, rep) == null &&
-                        (bestComboRep == null || betterReport(rep, bestComboRep))) {
+                        (bestComboRep == null || betterReport(rep, bestComboRep)) && !exactPinRegression(p, s0, s)) {
                         bestComboRep = rep; bestCombo = IntArray(n) { cellOpts[it][idx[it]] }
                     }
                     var c = 0

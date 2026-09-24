@@ -67,6 +67,28 @@ class FixApplyGateTest {
         }
     }
 
+    /** 外部レビュー N10: ミニ再最適化（WINDOW）も回数固定を崩す組み合わせを提案しない。
+     *  s0 は A、s1 は B しか担当できず、1 日目の不足を埋める唯一の 2 人組み合わせが両者の回数固定を崩す。 */
+    @Test fun windowSuggestionDoesNotBreakPins() {
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-02",
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "1"), Shift("B", "B", "1", "1")),
+            groups = listOf(Group("G0", "G0"), Group("G1", "G1")), staff = listOf(Staff("s0", 0), Staff("s1", 1)), use2Patterns = true,
+            groupShift = listOf(listOf(1, 1, 0), listOf(1, 0, 1)), groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
+            schedule = listOf(listOf(REST, A), listOf(REST, 2)), wishes = emptyMap(),
+            staffRange = mapOf("0,1" to Range("1", "1"), "1,2" to Range("1", "1")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val s = sched(st)
+        val sugs = FixSuggester.suggest(st, s)
+        for (sug in sugs) {
+            val r = FixApplyGate.apply(st, s, sug.ops)
+            assertTrue("${sug.kind} ${sug.label}: $r", r is FixApplyGate.Outcome.Applied)
+        }
+    }
+
     @Test fun improvingOpsAreAppliedToACopy() {
         val st = state(); val s = sched(st)
         val r = FixApplyGate.apply(st, s, listOf(FixCell(0, 0, A)))
