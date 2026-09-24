@@ -132,6 +132,12 @@ object PolishGate {
     @Volatile var filterC3nIncrease: Boolean = true
 
     /**
+     * 循環交換研磨（k=2,3）と C1広域ビームで、必ず却下される候補（HARD 正味増）を [HardDelta] の厳密差分で
+     * checker の前に捨てるか。既定 **true**。速度専用＝ON/OFF で盤面は同一（`HardDeltaPrefilterTest`）。UI トグルは無し。
+     */
+    @Volatile var hardDeltaPrefilter: Boolean = true
+
+    /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
      * 解ける可能性がある局面）の停滞閾値の割合。既定 **0.9** ＝旧来の固定値 `9/10` と厳密に同一。

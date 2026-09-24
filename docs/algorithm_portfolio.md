@@ -133,6 +133,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `CombinatorialRepair` | 単独で不採用だった候補を 2〜4件束ねて再評価。C1Window / C3mn / C3n / Range / Apt / Fair の各パスへ配線。 |
 | `PolishGate` | UI トグル → エンジン内部フラグ（`NativeGate` と同型）。現在は AdaptiveBlockSwap の c3n 事前フィルタと c3n 回避の範囲拡張（どちらも既定 OFF・下記）。 |
 | `exactPinRegression` | `staffRange` の厳密ピン（lo==hi）を崩す候補を全研磨パスで却下。 |
+| `HardDelta`（`PolishGate.hardDeltaPrefilter`、既定ON） | 循環交換（k=2,3）と C1広域ビームで、HARD 正味増の候補を checker の前に捨てる速度専用の事前却下。巡回交換は同日置換＝被覆不変なのでセル単位（groupViol/pref/c3w）＋触れた行の j を含む c3n 窓だけ、ビームは変わったセル・行・日の厳密差分（covU は到着・離脱の両方）。どちらもパスが必ず却下する候補だけを省く＝盤面は ON/OFF で同一（決定的後処理 18 盤面×2 回で全一致、後処理 −42%、2026-09-25）。共同 LNS 2 本は対象外。 |
 | `C3nBitScan` | 禁止連続の完全一致窓を AND＋シフト＋popcount で数えるビット走査。候補が増える経路の前段の枝刈り専用で、スカラーのオラクル（`makesForbiddenRun` / `staffC3nFires`）は置き換えない。 |
 | `worstWorsenedFamily` / `RejectCulpritStats` | 候補を捨てたとき「重み付きで最も増えた族」をログへ残す。全 Polish パスに配線済み。 |
 
