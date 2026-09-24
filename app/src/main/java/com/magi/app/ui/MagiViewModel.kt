@@ -1650,7 +1650,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             pushReport(lateSt, curB, rep, nonCancellable = true) { it.copy(
                                 running = false, hasResult = true, messageIsError = true, message = lateMsg) }
                         }.onFailure {
-                            _ui.update { it.copy(running = false, hasResult = true, message = lateMsg, messageIsError = true, wishes = lateSt.wishes) }
+                            // 診断がまた落ちても盤面だけは今のものを出す（3.592.0 の undo と同じ）。
+                            _ui.update { it.copy(running = false, hasResult = true, message = lateMsg, messageIsError = true,
+                                wishes = lateSt.wishes, schedule = curB.map { r -> r.toList() }) }
                         }
                     }
                 } else if (s5 == null) {
