@@ -27,7 +27,8 @@ fun main(args: Array<String>) = runBlocking {
     //   試算は本計算の入口と同じく上限 0 のセルを外した盤面から始める（clearCappedCells）。
     val quick = System.getenv("S5_QUICK") == "1"   // 本計算（G）を省いて試算だけを測る
     val vcrOnly = System.getenv("S5_VCR_ONLY") == "1"   // 短い最適化・短い後処理（v1 で測定済み）を省く＝列は -1
-    out.writeText("fixture,staff,day,reason,hardB,hardG0,fixed,hardFix,msFix,hardFixKept,hardOpt,msOpt,hardPost,msPost,hardVcr,hardVcrKept,msVcr,hardVcrW,hardVcrWKept,msVcrW,hardG,msG\n")
+    val skipOpt = vcrOnly || System.getenv("S5_SKIP_OPT") == "1"   // 短い最適化だけ省く（static を書き換えるので候補外）
+    out.writeText("fixture,staff,day,reason,hardB,hardG0,fixed,hardFix,msFix,hardFixKept,hardOpt,msOpt,hardPost,msPost,hardVcr,hardVcrKept,msVcr,hardVcrW,hardVcrWKept,msVcrW,hardG,msG,hardPostKept\n")
     for ((name, st0) in fixtures) {
         val b = V6FinalPort.handleOptimize(st0, st0.schedule.toIntArray2D(), secondsRaw = fullSec, workers = 2, allowImpossible = true).schedule
         val st = st0.withSchedule(b)
@@ -52,6 +53,8 @@ fun main(args: Array<String>) = runBlocking {
         }
         val fixKeptHard = repB.hard + (FixSuggester.suggest(st, b, maxResults = 8, deadlineMs = trialSec * 1000L).minOfOrNull { it.deltaHard } ?: 0).coerceAtMost(0)
         val vcrKept = vcr(st, bKept, false); val vcrWKept = vcr(st, bKept, true)
+        val postKept = if (vcrOnly) -1 else V6HotfixPasses.runPostOptimization(st, b.copy2D(), "s5", seed = 5L,
+            deadlineMs = EngineClock.nowMs() + trialSec * 1000L).report.hard
         for (w in ws) {
             val key = "${w.staff},${w.day}"
             val st2 = st.copy(wishes = st.wishes - key)
@@ -61,7 +64,7 @@ fun main(args: Array<String>) = runBlocking {
             val hardFix = fixed + (sugg.minOfOrNull { it.deltaHard } ?: 0).coerceAtMost(0)
             val msFix = System.currentTimeMillis() - t
             t = System.currentTimeMillis()
-            val opt = if (vcrOnly) -1 else V6NativeOptimizer.optimize(st2, b.copy2D(), V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = trialSec,
+            val opt = if (skipOpt) -1 else V6NativeOptimizer.optimize(st2, b.copy2D(), V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = trialSec,
                 workers = 1, softPolish = false, restarts = 0, seed = 1L, postPolish = false)).report.hard
             val msOpt = System.currentTimeMillis() - t
             t = System.currentTimeMillis()
@@ -75,7 +78,7 @@ fun main(args: Array<String>) = runBlocking {
             val g = if (quick) -1 else V6FinalPort.handleOptimize(st2, b, secondsRaw = fullSec, workers = 2, allowImpossible = true).report.hard
             val msG = System.currentTimeMillis() - t
             val row = listOf(name, w.staff, w.day, w.reason, repB.hard, g0, fixed, hardFix, msFix, fixKeptHard, opt, msOpt, post, msPost,
-                hv, vcrKept, msVcr, hvw, vcrWKept, msVcrW, g, msG).joinToString(",")
+                hv, vcrKept, msVcr, hvw, vcrWKept, msVcrW, g, msG, postKept).joinToString(",")
             out.appendText(row + "\n"); System.err.println(row)
         }
     }
