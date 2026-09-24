@@ -21,7 +21,7 @@ fun main(args: Array<String>) = runBlocking {
     val fixtures = ArrayList<Pair<String, MagiState>>()
     for (f in listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json"))
         fixtures += f.removeSuffix(".json") to StateParser.parse(File(resDir, f).readText())
-    for (sp in Cases.specs.filter { (it.cat == "wishheavy" || it.cat == "forbidden") && it.size != "small" && it.id.endsWith("0") })
+    for (sp in Cases.specs.filter { it.cat == "wishheavy" || it.cat == "forbidden" || it.cat == "dense" })
         fixtures += sp.id to Cases.build(sp)
     out.writeText("fixture,staff,day,reason,hardB,hardG0,fixed,hardFix,msFix,hardOpt,msOpt,hardPost,msPost,hardG,msG\n")
     for ((name, st0) in fixtures) {
@@ -29,8 +29,15 @@ fun main(args: Array<String>) = runBlocking {
         val st = st0.withSchedule(b)
         val repB = UnifiedViolationChecker.check(st, b)
         val ui = UiState(staffNames = st.staff.map { it.name }, wishes = st.wishes, violationCellFamilies = repB.cellFamilies)
-        val ws = involvedWishes(ui).distinctBy { it.staff to it.day }.filter { st.wishes.containsKey("${it.staff},${it.day}") }.take(perBoard)
-        System.err.println("$name hardB=${repB.hard} involved=${involvedWishes(ui).size} probing=${ws.size}")
+        // S3 の関わる希望（pref/c3w/c3n）に加え、人手不足（covU）の日に別の勤務で希望固定され、その不足シフトを担当できる職員。
+        val p = cachedProblem(st)
+        val covWish = repB.needFamilies.filterValues { "vio-covU" in it }.keys.flatMap { nk ->
+            val (k, j) = nk.split(",").map { it.toInt() }
+            (0 until p.S).filter { i -> p.wish[i][j] >= 0 && p.wish[i][j] != k && p.canDo(i, k) }
+                .map { i -> com.magi.app.ui.InvolvedWish(i, j, st.staff[i].name, "人手不足の日に別の勤務の希望") }
+        }
+        val ws = (involvedWishes(ui) + covWish).distinctBy { it.staff to it.day }.filter { st.wishes.containsKey("${it.staff},${it.day}") }.take(perBoard)
+        System.err.println("$name hardB=${repB.hard} involved=${involvedWishes(ui).size} covWish=${covWish.size} probing=${ws.size}")
         if (ws.isEmpty()) continue
         val g0 = V6FinalPort.handleOptimize(st, b, secondsRaw = fullSec, workers = 2, allowImpossible = true).report.hard
         for (w in ws) {
