@@ -34,6 +34,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-24（S5「この希望を取り消したら」試算を Android に実装＝ぶつかっている希望の各行で試算し、「希望を取り消して、もう一度つくる」を元に戻す 1 回で戻せる操作に。`docs/s5_wish_trial.md`）
+
 **最終更新**：2026-09-24（S5「この希望を取り消したら」試算の設計・机上評価・安全仕様を `docs/s5_wish_trial.md` に。未実装・範囲と入口は利用者決定済み）
 
 **最終更新**：2026-09-23（3.612.0＝思考誘導 UX: セルシートで必須を先に・要調整を折りたたみ、c3 を「守るとよい並び」へ、ホームの主ボタンを
