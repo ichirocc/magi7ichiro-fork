@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 外部レビュー bg 組（2026-09-24）: R6 復元前に届いた背景結果を復元後に受ける（購読を復元の後へ・二重適用と置き換え結果の残留を防ぐ）・N6 Worker へ方式・仕上げ最適化を渡す（RunConfig、C# 同期）
 - 外部レビュー csv-ui 組（2026-09-24）: R2 制約CSVの並びが 5 列で切れる（行末まで読む、C# 同期）・N3 取込完了案内を成功時だけ・N4 c2 の設定リンクを ⑤並びへ
 - 外部レビュー R1/N8（2026-09-24）: hosttest.sh が JUnit 失敗を終了コードへ伝播しない（tail の 0 を返していた）→PIPESTATUS で伝播・weight_lint の抑止リスト行番号 6 件の陳腐化で exit 1→現行行へ
 - S5 試算の VM と画面（2026-09-24）: startWishTrial/wishTrialFor（ctx＝state 参照＋盤面キーを読むたびに照合・1 世代保持）・cancelWishAndRebuild（§6 の 1〜10、Undo 1 段）・startFullOptimize（Undo ラベル/S5 文脈）・停止/失敗の希望維持・元に戻すで stalledHardFamilies 復元・ダイアログの「取り消したら？」・S5b 節・WISH 入口を候補ありへ・充足不可の S5b 版

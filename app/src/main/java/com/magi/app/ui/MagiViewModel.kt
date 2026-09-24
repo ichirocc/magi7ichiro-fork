@@ -165,6 +165,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // [判断設計監査 #3] 「データを開く」直前の状態を1世代だけ退避（開く=取消不能な置換だった穴を塞ぐ）。
     private val prevBackupFile get() = getApplication<Application>().filesDir.resolve("magi_prev_before_open.json")
     private var hydrated = false           // 復元完了前の自動保存を抑止（Web HF514 と同思想）
+    private val restoreLoaded = MutableStateFlow(false)   // [外部レビュー R6] 起動時の復元の読込が終わった（背景結果の受付開始）
     private var saveJob: Job? = null
     // [3.485.0] 保存の世代（main で採番）と、古い世代の書き込みを捨てるゲート（SaveGate の KDoc 参照）。
     private var saveGen = 0
@@ -376,6 +377,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             if (resultUsable) {
                 clearRunMarker()
                 clearBgFiles("前回の完了結果を反映")
+                OptimizationRepository.publishResult(null)   // [外部レビュー R6] 同じ結果がメモリにも残っていれば二重に当てない
                 if (state == null) loadAsync(resultTxt, markResult = true, fromRestore = true)   // initialAssignment が state.schedule を返すため結果が復元される
                 logOp("I", "前回のバックグラウンド最適化の結果を反映しました")
             } else {
@@ -426,6 +428,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             hydrated = true
+            job?.join()   // [外部レビュー R6] 上の loadAsync が state を立てるまで待つ
+            restoreLoaded.value = true
         }
         // バックグラウンド最適化（WorkManager）の進捗・結果を購読して画面へ反映（仕様書 §6.3）
         viewModelScope.launch {
@@ -443,7 +447,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            OptimizationRepository.result.collect { r -> if (r != null) applyBgResult(r) }
+            OptimizationRepository.collectResultsAfter(restoreLoaded) { r -> applyBgResult(r) }
         }
         // [3.385.0/外部レビュー High3] Worker が握り潰していた耐久保証（kill 耐性）の失敗を操作ログへ。
         //   旧: 入力・途中最良・完了結果の書き込みが全て runCatching で無言＝失敗しても書き出したログに
@@ -532,11 +536,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             .setExpedited(androidx.work.OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             // [P2修正/レビュー指摘] 予算秒数・並列数を WorkManager の inputData に永続化。プロセス再起動後の
             //   再実行でも開始時の条件（例: 300秒/8並列）が保たれる（旧: インメモリのみで既定60秒/4並列に化けた）。
-            .setInputData(androidx.work.workDataOf(
-                OptimizationWorker.KEY_SECONDS to _ui.value.budgetSec,
-                OptimizationWorker.KEY_WORKERS to _ui.value.workers,
-                OptimizationWorker.KEY_RUN_ID to runId,
-            ))
+            //   [外部レビュー N6] 方式・仕上げ最適化も載せる＝前景と同じ条件で計算する（RunConfig の KDoc 参照）。
+            .setInputData(androidx.work.Data.Builder()
+                .putAll(OptimizationRepository.RunConfig(_ui.value.budgetSec, _ui.value.workers, _ui.value.softPolish, _ui.value.v6Algorithm).toInput())
+                .putLong(OptimizationWorker.KEY_RUN_ID, runId)
+                .build())
             .build()
         // [外部レビュー P1-02] 旧: enqueue が例外を投げると、直前に立てたマーカー・入力ファイル・
         //   所有権が残ったまま関数を抜けていた（次回起動が「中断されました」と誤案内しうる）。
@@ -559,7 +563,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "バックグラウンドで最適化を開始しました（完了時に通知）") }
         writeRunMarker("bg")
-        logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers})")
+        logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
         // [3.592.0] runCatchingは同期例外しか捉えない。enqueueUniqueWorkが返すOperationの完了を
         //   非同期に監視し、後から失敗した場合も開始失敗と同じ片付けをする（置き換え済みなら何もしない）。
         viewModelScope.launch {
@@ -596,6 +600,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   持たない経路（プロセス再起動後のファイル復元）＝従来どおり通す。
         if (bgRunId != 0L && r.runId != 0L && r.runId != bgRunId) {
             logOp("W", "バックグラウンド最適化の結果を破棄しました（置き換えられた古い実行の結果）")
+            OptimizationRepository.dropResult(r)   // [外部レビュー R6] 残すと次の起動の復元後に当たる
             return
         }
         // [3.475.0/論理監査] `bgStateKey`（インメモリ）はプロセス再起動で 0 に戻り、以後は runId/指紋の両方が
