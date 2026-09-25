@@ -583,8 +583,9 @@ object V6PortAnalyzer {
                         else ->
                             "全セルが塞がっています" +
                                 (if (pinnedDays.isNotEmpty()) "（希望固定: $pinnedDays）" else "") +
-                                "。単独変更・玉突き連鎖・隣接日調整のすべてを検証して不成立＝現在の希望・担当のままでは" +
-                                "崩せる見込みがありません。周辺の希望を1件調整するか、担当を追加してください"
+                                "。各セルで試したのは 1 セルの変更・そのセルを起点にした人員の玉突き・隣の日の調整までで、" +
+                                "いずれも不成立でした（複数日にまたがる 2 人の入れ替えなどは試していません）。" +
+                                "周辺の希望を1件調整するか、担当を追加してください"
                     }
                     runs.add(ForbiddenRunDiag(i, state.staff.getOrNull(i)?.name ?: "#$i", j0, seqLabel, cells, hint))
                     j0++

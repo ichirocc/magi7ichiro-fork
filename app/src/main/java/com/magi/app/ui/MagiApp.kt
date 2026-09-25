@@ -592,7 +592,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
-                        canDo = canDoShift, plainCellBorder = plainCellBorder,
+                        canDo = canDoShift, plainCellBorder = plainCellBorder, cv = conditionsView,
                         nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1])
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
@@ -700,7 +700,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     SkillConstraintsCard(ui, constraintsView, onEvent)
                                 }
                             }
-                            CollapsibleSection("⑤ 並び・くり返し", "yr_cons", forceExpandKey = deepLinkEditSection,
+                            CollapsibleSection("⑤ 並び・期間の制約", "yr_cons", forceExpandKey = deepLinkEditSection,
                                 onForceExpandConsumed = { deepLinkEditSection = null }) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     // [3.427.0] 旧 SectionNote（窓の要件／個人の合計／並び4種の列挙）は撤去:

@@ -63,6 +63,8 @@ data class UiState(
     // [場所表示] fair/weekly の職員単位の偏り箇所。"weekly"->[[i,dev],..] / "fair"->[[i,k,dev],..]（dev降順）。
     //   内訳パネルの場所表示専用（グリッドには出さない）。表示のみ・スコア不変。
     val distLocations: Map<String, List<List<Int>>> = emptyMap(),
+    /** c1 の違反窓ラン（`ViolationReport.c1Runs`）。画面の表示専用の印を作る元。 */
+    val c1Runs: List<List<Int>> = emptyList(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
     val fixSearching: Boolean = false,                                       // 改善手を探索中
     val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）

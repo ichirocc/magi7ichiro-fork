@@ -410,7 +410,8 @@ class V6PortAnalyzerTest {
         assertTrue(diag.allBlocked)
         // [3.284.0] 「証明」の強さを限定: 受け皿なしの塞がりは「探索手の全滅を検証」であり
         //   全空間の数学的証明ではない＝断定を避けた文言になったことを固定。
-        assertTrue(run.hint.contains("崩せる見込みがありません"))
+        assertTrue(run.hint.contains("試していません"))
+        assertFalse("検証した範囲を「すべて」と言わない", run.hint.contains("すべてを検証"))
     }
 
     // 代替が全て新たな禁止連続を作る局面でも、隣接日調整（tryFixForbiddenRunViaAdjacentDay=
