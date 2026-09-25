@@ -390,9 +390,6 @@ object V6HotfixPasses {
         val deterministic: Boolean = false,
         val c1LnsMaxEvaluations: Int = 90_000,
         val personalLnsMaxEvaluations: Int = 60_000,
-        /** [3.510.0/測定中] 最終段の「連続規則 選択日ペア交換」（C3PairMaskPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
-        val c3PairMaskEnabled: Boolean = false,
-        val c3PairMaskEvaluations: Int = 3_000,
         /** [測定中] 最終段の「c3n(禁止連続) 前後余白込みLNS」（C3nMarginLnsPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
         val c3nMarginLnsEnabled: Boolean = false,
         /** [3.580.0/測定中/backlog#26] c3nMarginLnsEnabledがOFFでも、c3n違反が残っている局面でだけ試す。既定 OFF。 */
@@ -445,7 +442,6 @@ object V6HotfixPasses {
         const val C3PATTERN = 0xC3B4L
         const val APT = 0xA97L
         const val FAIR = 0xFA12L
-        const val C3PAIR = 0xC3AA1L
         const val CYCLIC_N = 0xC1C54L
         const val C3N_MARGIN = 0xC3E9L
     }
@@ -669,14 +665,6 @@ object V6HotfixPasses {
                 }
             }
         })
-
-        if (params.c3PairMaskEnabled && !shouldStop()) {
-            // [3.510.0/測定中] 共同 LNS の後・成分修復の前。連続でない 1〜3 日の同日交換で c3 系の取り残しを拾う。
-            val pairStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
-            chain.adopt(chain.timed("後処理 連続規則(c3系)選択日ペア交換(最終)", "C3PairMask") { work ->
-                C3PairMaskPolish.apply(state, work, maxEvaluations = params.c3PairMaskEvaluations, shouldStop = pairStop, seed = seed xor SeedTag.C3PAIR, quantitativeRangeEval = params.quantitativeRangeEval)
-            })
-        }
 
         val c3nMarginActive = params.c3nMarginLnsEnabled ||
             (params.c3nMarginLnsReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c3n"))

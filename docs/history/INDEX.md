@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 既定OFF台帳の整理⑨（2026-09-25）: 否決済み `c3PairMaskEnabled`＋`C3PairMaskPolish` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
 - handleOptimize に任意の `seed` 引数（2026-09-25）: 既定 null＝従来の時刻由来で出力不変、ベンチ用。backlog #38 D2（skillIdx 既定 0）・#39 SI-3（C1 初期解のシフト順依存）を登録（C# 同期）。  → `docs/history/3.4xx.md`
 - sudo_model.md 再照合（2026-09-25）: 不変条件を20族・HARD 5族（c3w）・3.556.0 の重みへ、O の実測を 8990/total 409 へ、fair v2・D9・HardDelta・WishTrial/RunMarker を反映（docs のみ、C# 同期）。  → `docs/history/3.4xx.md`
 - S5 中断案内で取り消した希望を名指し（2026-09-25）: 実行マーカーに `s5` 文脈、`work/RunMarker.kt`＋`RunMarkerTest`、C# 対象外（backlog #37(b)）。  → `docs/history/3.4xx.md`
