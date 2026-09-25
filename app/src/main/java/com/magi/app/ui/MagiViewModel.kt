@@ -2960,6 +2960,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             schedule = schedule.map { it.toList() },
             wishes = st.wishes,
             lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
+            wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
             v6 = v6,
             satisfaction = sat,
             // 研磨の限界: 必須は解決済みだが微調整が残る → 手修正の検討を促す

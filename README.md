@@ -34,6 +34,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-25（実データ精読の是正・UI 層: S5 の候補に希望どうしの衝突の兄弟の希望、設定の見直しの一覧に「すべて表示」）
+
 **最終更新**：2026-09-25（実データ精読の是正・エンジン層: MUS 日別の誤「証明つき」を解消、希望どうしの禁止の並びの診断 1c と `wishSelfConflicts`、HF70・残存分析の仕分け＝既定出力不変）
 
 **最終更新**：2026-09-25（既定OFF台帳の整理⑬: 否決済み `roleBudgetFit` と `rsiPlusPhaseBudgets` を撤去＝既定出力不変、C# 同日同期）
