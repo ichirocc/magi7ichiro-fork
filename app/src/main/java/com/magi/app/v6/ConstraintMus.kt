@@ -185,6 +185,9 @@ object ConstraintMus {
         for (x in allowed) sum += demand(x)
         if (sum > p.T) return true
         // C) 強制下限: 他の全担当シフトに上限がある場合のみ（未設定=無制限なので発火しない=保守的）
+        //   置けないシフト（allowed 外）への希望固定の日は x に使えない＝差し引く（引かないと強制下限を過大に見積もり誤検知する）。
+        var pinnedOutside = 0L
+        for ((k, n) in pins) if (k !in allowed) pinnedOutside += n
         for (x in allowed) {
             val cap = caps[x] ?: Int.MAX_VALUE
             var otherCapSum = 0L
@@ -196,7 +199,7 @@ object ConstraintMus {
                 otherCapSum += minOf(cy, p.T)
             }
             if (!allCapped) continue
-            val forcedMin = p.T - otherCapSum
+            val forcedMin = p.T - otherCapSum - pinnedOutside
             if (forcedMin > cap) return true
         }
         return false
@@ -217,9 +220,9 @@ object ConstraintMus {
         if (slots.size > p.S) return true   // 席数が職員数を超える＝固定希望に関わらず埋め不能（健全）
         val staffMatch = IntArray(p.S) { -1 }   // staff -> slot
         val slotMatch = IntArray(slots.size) { -1 }
+        // 希望固定は mayPlace より優先（HardRepairCore.hf66DataHardening と同じ）＝上限 0 のシフトへの希望固定もその席に就ける。
         fun canServe(i: Int, shift: Int): Boolean {
-            if (!p.mayPlace(i, shift)) return false
-            val pin = pinned[i] ?: return true
+            val pin = pinned[i] ?: return p.mayPlace(i, shift)
             return pin == shift
         }
         fun tryAugment(slot: Int, visited: BooleanArray): Boolean {

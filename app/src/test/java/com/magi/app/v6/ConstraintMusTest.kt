@@ -154,6 +154,37 @@ class ConstraintMusTest {
     }
 
     @Test
+    fun dayMusWishPinOnZeroCapShiftServesItsSeat() {
+        // 実データ 10/11 の形: 上限 0 の C へ希望固定した人はその席に就ける（希望固定は mayPlace より優先）。
+        val st = state(
+            days = 1,
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("D", "D", "1", ""), Shift("C", "C", "1", "")),
+            wishes = mapOf("0,0" to 0, "1,0" to 2),
+            staffRange = mapOf("1,2" to Range("", "0")),
+            staffCount = 3,
+        )
+        val p = Problem(st)
+        assertFalse(p.mayPlace(1, 2))
+        assertTrue(ConstraintMus.analyzeDayConflicts(p).isEmpty())
+        assertFalse(V6SanityPort.buildGuidance(st).any { it.where.contains("必要人数と固定希望の衝突") })
+    }
+
+    @Test
+    fun staffForcedMinSubtractsDaysPinnedToUnplaceableShift() {
+        // Z は上限 0（置けない）だが 2 日が Z の希望固定。残り 3 日は 休≤2・A≤1 で埋まる＝矛盾なし（強制下限は Z の日を差し引く）。
+        val st = state(
+            days = 5,
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", ""), Shift("Z", "Z", "", "")),
+            wishes = mapOf("0,0" to 2, "0,1" to 2),
+            staffRange = mapOf("0,0" to Range("", "2"), "0,1" to Range("", "1"), "0,2" to Range("", "0")),
+        )
+        assertTrue(ConstraintMus.analyzeStaffConflicts(Problem(st)).isEmpty())
+        // 希望が 1 日だけなら残り 4 日を 休≤2・A≤1 で埋められない＝真の矛盾は引き続き出る。
+        val st1 = st.copy(wishes = mapOf("0,0" to 2))
+        assertEquals(1, ConstraintMus.analyzeStaffConflicts(Problem(st1)).size)
+    }
+
+    @Test
     fun noConflictYieldsNothing() {
         val st = state(
             days = 5,

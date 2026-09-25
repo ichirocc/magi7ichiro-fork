@@ -188,10 +188,13 @@ internal object HfSwapPolish {
     ): HF70Result {
         val invalid = invalidAssignmentCount(state, schedule, quantitativeRangeEval)
         val impossible = V6SanityPort.detectImpossibleWishes(state).size
-        val hardCore = report.hard - (report.breakdown["pref"] ?: 0)
+        // 希望どうしの衝突が生む c3n/c3w は希望起因＝「希望以外」に数えない（pref と同じ扱い）。
+        val selfConflict = V6SanityPort.wishSelfConflictHard(cachedProblem(state, quantitativeRangeEval), schedule)
+        val hardCore = report.hard - (report.breakdown["pref"] ?: 0) - (selfConflict["c3n"] ?: 0) - (selfConflict["c3w"] ?: 0)
         val issues = ArrayList<String>()
         if (invalid > 0) issues.add("担当不可/範囲外配置 $invalid 件")
         if (impossible > 0) issues.add("不可能希望 $impossible 件")
+        if (selfConflict.isNotEmpty()) issues.add("希望どうしの衝突 ${selfConflict.values.sum()} 件")
         if (hardCore > 0) issues.add("希望以外HARD $hardCore 件")
         val msg = if (issues.isEmpty()) "HF70: $algoName 異常なし" else "HF70: ${issues.joinToString(" / ")}"
         val advice = if (issues.isEmpty()) "" else "設定(担当範囲), 希望, 必要人数, 連勤禁止条件を確認してください"

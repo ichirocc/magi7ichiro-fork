@@ -931,6 +931,9 @@ object V6FinalPort {
                 covUBlockedAmount(V6PortAnalyzer.diagnoseCoverage(state, finalSched, finalReport, includeSurplus = false))
             }.getOrDefault(0)
             val covUWall = covUStructuralWall(covUNow, hardFloor, covUBlocked)
+            // 希望どうしの衝突（希望を1件取り消すまで c3n/c3w か pref が必ず残る）。族別に open から差し引く。
+            val selfConflict = runCatching { V6SanityPort.wishSelfConflictHard(cachedProblem(state), finalSched) }.getOrDefault(emptyMap())
+            val selfConflictShown = ArrayList<Pair<String, Int>>()
             for (key in MirrorKeys.all) {
                 val n0 = bd[key] ?: 0
                 if (n0 <= 0) continue
@@ -941,13 +944,17 @@ object V6FinalPort {
                     else -> null
                 }
                 if (structural != null) { walls.add("$key ${n0}件($structural)"); continue }
+                val self = minOf(n0, selfConflict[key] ?: 0)
+                if (self > 0) selfConflictShown.add(key to self)
                 val n = when (key) {
                     "weekly" -> n0 - weeklyWall
                     "covU" -> n0 - covUWall
                     else -> n0
-                }
+                } - self
                 if (n > 0) open.add("$key ${n}件")
             }
+            if (selfConflictShown.isNotEmpty()) walls.add("希望どうしの衝突 ${selfConflictShown.sumOf { it.second }}件(" +
+                selfConflictShown.joinToString("・") { "${it.first} ${it.second}" } + "＝希望を1件取り消すまで解消しない)")
             if (covUWall > 0) {
                 // 床が全部を覆うときだけ従来どおり「構造的下限」（供給不足）と名乗る。それ以外は
                 //   「担当者は居るが いまの希望では動かせない」＝データ側で希望を1件調整すれば動きうる、を明示。

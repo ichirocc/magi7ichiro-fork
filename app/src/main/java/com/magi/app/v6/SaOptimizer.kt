@@ -340,8 +340,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         }
         // [3.334.0] 近傍は**実現可能な希望が入ったセルを触らない**。後処理研磨の全パスと C++ の修復
         //   オペレータは元から `wishLocked` を見ているのに、探索の近傍だけが見ていなかった（非対称）。
-        //   採点は元から正しい（pref は hard＝希望を破ると差分が 1e9 単位で増え Metropolis はほぼ必ず却下）
-        //   ので誤った勤務表は出ないが、**手の 35〜36% がその却下される手に費やされていた**（実測）。
+        //   希望を破る手は多くの盤面で HARD 件数が増え Metropolis はほぼ必ず却下するが、**手の 35〜36% がその手に費やされていた**（実測）。
+        //   例外: 希望どうしの衝突（`V6SanityPort.wishSelfConflicts`）のセルでは c3n→pref が HARD 件数不変＝soft の差だけで決まり、
+        //   却下されるとは限らない。近傍はそれでも触らない（扱いは未決）。
         //   入口の hf67HardRepair が実現可能な希望を先に盤面へ入れるので、触らなければ正しいまま残る。
         fun locked(i: Int, j: Int) = problem.wishLocked(i, j)
         fun opSingle() {

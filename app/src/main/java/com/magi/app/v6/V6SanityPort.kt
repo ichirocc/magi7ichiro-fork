@@ -20,6 +20,12 @@ data class ImpossibleWish(
     val reason: String,
 )
 
+/** 希望どうしの衝突（[V6SanityPort.wishSelfConflicts]、定義は docs/business-logic.md）。family="c3n"＝days は禁止の並びの窓、
+ *  "c3w"＝days は [前日, 希望日]。shifts は days と同じ順の希望の勤務。 */
+data class WishSelfConflict(val staff: Int, val family: String, val days: List<Int>, val shifts: List<Int>) {
+    val wishKeys: List<String> get() = days.map { "$staff,$it" }
+}
+
 /** 設定ミスの種別。UI でアイコン/誘導先タブを切り替えるのに使う。 */
 enum class IssueKind { WISH, CONSTRAINT, DEMAND, RANGE }
 
@@ -181,6 +187,57 @@ object V6SanityPort {
             }
         }
         return out.sortedWith(compareBy<ImpossibleWish> { it.staffIndex }.thenBy { it.dayIndex })
+    }
+
+    /** 希望どうしの衝突を職員→先頭日→族の順に返す（盤面に依存しない）。同じ職員・同じ日の並びは 1 組（重複行は検査 2 が扱う）。 */
+    fun wishSelfConflicts(state: MagiState): List<WishSelfConflict> = wishSelfConflicts(cachedProblem(state))
+
+    fun wishSelfConflicts(p: Problem): List<WishSelfConflict> {
+        val out = ArrayList<WishSelfConflict>()
+        val seen = HashSet<Pair<Int, List<Int>>>()
+        for (i in 0 until p.S) {
+            val mine = ArrayList<WishSelfConflict>()
+            for (c in p.cons3n) {
+                val seq = c.seq
+                val d = seq.size
+                if (d == 0 || d > p.T) continue
+                for (j in 0..p.T - d) {
+                    if ((0 until d).all { l -> p.wishLocked(i, j + l) && p.wish[i][j + l] == seq[l] }) {
+                        val days = (j until j + d).toList()
+                        if (seen.add(i to days)) mine.add(WishSelfConflict(i, "c3n", days, seq.toList()))
+                    }
+                }
+            }
+            if (p.c3wBan != null) for (j in 0 until p.T - 1) {
+                if (p.wishLocked(i, j) && p.c3wBanned(i, j, p.wish[i][j])) {
+                    mine.add(WishSelfConflict(i, "c3w", listOf(j, j + 1), listOf(p.wish[i][j], p.wish[i][j + 1])))
+                }
+            }
+            mine.sortWith(compareBy<WishSelfConflict> { it.days.first() }.thenBy { it.family })
+            out.addAll(mine)
+        }
+        return out
+    }
+
+    /** 盤面の HARD のうち希望どうしの衝突が必ず生む分の族別件数（下限）。セルを共有しない組ごとに成立なら c3n/c3w・崩れなら pref を 1 件
+     *  （職員ごとに区間を終わりの早い順に取る＝最大個数）。ログの仕分け専用＝探索・採否には使わない。 */
+    fun wishSelfConflictHard(p: Problem, schedule: Array<IntArray>, groups: List<WishSelfConflict> = wishSelfConflicts(p)): Map<String, Int> {
+        val out = LinkedHashMap<String, Int>()
+        for ((_, gs) in groups.groupBy { it.staff }) {
+            var lastEnd = -1
+            for (g in gs.sortedBy { it.days.last() }) {
+                if (g.days.first() <= lastEnd) continue
+                lastEnd = g.days.last()
+                val row = schedule.getOrNull(g.staff) ?: continue
+                val holds = when (g.family) {
+                    "c3w" -> row.getOrNull(g.days[0]) == g.shifts[0]
+                    else -> g.days.indices.all { row.getOrNull(g.days[it]) == g.shifts[it] }
+                }
+                val key = if (holds) g.family else "pref"
+                out[key] = (out[key] ?: 0) + 1
+            }
+        }
+        return out
     }
 
     /** シフト単位の「証明可能に解消不能な covU 不足」。担当可能人数 capable(k) を全員そのシフトへ
@@ -414,16 +471,26 @@ object V6SanityPort {
                     actionLabel = if (canOneTap) "この希望を取消" else "",
                     wishKey = if (canOneTap) "${w.staffIndex},${w.dayIndex}" else null))
             }
+            val selfConflicts = wishSelfConflicts(p)
             // 1b) [3.542.0] 希望の前日に禁止(c3w)が希望どうしで衝突＝前日の Y も希望固定なら最適化器は解消できない。
-            if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T - 1) {
-                if (!p.wishLocked(i, j) || !p.c3wBanned(i, j, p.wish[i][j])) continue
-                val name = state.staff.getOrNull(i)?.name ?: "#$i"
-                val y = symOf(p.wish[i][j]); val x = symOf(p.wish[i][j + 1])
+            for (g in selfConflicts) {
+                if (g.family != "c3w") continue
+                val (i, j) = g.staff to g.days[0]
+                val y = symOf(g.shifts[0]); val x = symOf(g.shifts[1])
                 out.add(SettingIssue(IssueKind.WISH,
-                    "$name ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
+                    "${nameOf(i)} ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
                     "「$x の希望の前日は $y 禁止」に希望どうしで当たっています。希望は固定なので計算では解消できません",
                     "どちらかの希望を取り消すか、制約「希望の前日に禁止」の行を見直してください",
                     action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j"))
+            }
+            // 1c) 禁止の並び(c3n)の窓がまるごと希望固定（例: 休の希望 3 連日と「休→休→休」禁止）。どれを取り消すかは利用者が選ぶ＝ワンタップなし。
+            for (g in selfConflicts) {
+                if (g.family != "c3n") continue
+                val seq = g.shifts.joinToString("→") { symOf(it) }
+                out.add(SettingIssue(IssueKind.WISH,
+                    "${nameOf(g.staff)} ${g.days.joinToString("・") { safeDayLabel(state.startDate, it) }} 希望「$seq」",
+                    "禁止の並び「$seq」に希望どうしで当たっています。希望は固定なので計算では解消できません",
+                    "いずれか1件の希望を取り消すか、禁止の並び「$seq」を見直してください"))
             }
         }
 
