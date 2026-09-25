@@ -2,6 +2,7 @@ package com.magi.app.ui
 
 import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
+import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.WishTrial
 
 /** 違反マップのキーの符号化。文字列なのは保存データ互換のため。組立と分解はここだけ＝
@@ -305,6 +306,68 @@ internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =
     if (control.rk < control.h0) "希望を残したまま、もう一度つくるだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
+
+/** [S6] 試算ダイアログの文（`docs/s6_relax_trial.md` §5）。盤面は持たない＝手順は言葉だけ。 */
+internal data class RelaxTrialText(
+    val title: String,
+    val prerequisiteLead: String?,
+    val prerequisiteRows: List<String>,
+    val lead: String,
+    val rows: List<String>,
+    val moveLines: List<String>,
+    val otherMoves: Int,
+    val keepNote: String?,
+)
+
+/**
+ * [S6] 結果を文にする。上限の行は 0→1（上げ幅は `mayPlace` を外す最小）。当てた後の回数が 2 回以上になる行は
+ * 要調整（上限超過）に数えることを添える。組は探索が見つけた十分条件＝「この組で」と言い、最小とは言わない。
+ */
+internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
+    fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
+    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "?"
+    val board = ui.schedule.map { it.toIntArray() }.toTypedArray()
+    val after = RelaxTrial.applyMoves(board, r.moves) ?: board
+    val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
+    val what = when {
+        "vio-c3n" in fams -> "禁止の並び"
+        "vio-c3w" in fams -> "希望の前日に禁止"
+        "vio-pref" in fams -> "希望の勤務になっていません"
+        else -> "担当できない勤務"
+    }
+    val hardDays = r.window.filter { j -> ui.violationCellFamilies[VioKey.cell(r.staff, j)].orEmpty().any { isHardCellViolation(it) } }
+    val span = if (hardDays.size > 1) "${hardDays.first() + 1}日〜${hardDays.last() + 1}日" else "${r.day + 1}日"
+    fun row(x: RelaxTrial.Relax): String {
+        val n = after.getOrNull(x.staff)?.count { it == x.shift } ?: 0
+        val note = if (n > x.newHi) "（この月は ${n}回になります。要調整に数えます）" else ""
+        return "${name(x.staff)} ${sym(x.shift)} 上限 0→${x.newHi}$note"
+    }
+    val preRows = r.prerequisite.map { x ->
+        val days = board.getOrNull(x.staff)?.indices?.filter { board[x.staff][it] == x.shift }.orEmpty()
+        "${row(x)}（${days.joinToString("・") { "${it + 1}日" }} に置いてあります）"
+    }
+    val inWin = r.moves.filter { it.day in r.window }
+    val moveLines = inWin.groupBy { it.day }.toSortedMap().map { (d, ms) ->
+        "${d + 1}日　" + ms.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
+    }
+    val lead = if (r.prerequisite.isEmpty()) "この組で緩めると、必須違反が ${r.att}件 減る見込みです。"
+        else "手で置いた勤務に合わせて上限を上げ、この組も緩めると、必須違反が ${r.att}件 減る見込みです。"
+    val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、手で置いた勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
+    return RelaxTrialText(
+        title = "${name(r.staff)} ${span}　$what",
+        prerequisiteLead = if (preRows.isEmpty()) null else "先に、手で置いた勤務に合わせて上限を上げます（上げないと、もう一度つくると外されます）",
+        prerequisiteRows = preRows,
+        lead = lead,
+        rows = r.relaxes.map(::row),
+        moveLines = moveLines,
+        otherMoves = r.moves.size - inWin.size,
+        keepNote = keep,
+    )
+}
+
+/** [S6 §9] 確定の後、次にやることカードに出す 1 行。 */
+internal fun relaxDoneLine(h0: Int, after: Int): String =
+    "設定を緩めて手順を当てました: 必須違反 $h0 → $after。元に戻すで設定と勤務表をまとめて戻せます。"
 
 /** 表示色だけの undo 段（[MagiViewModel.applyDisplayOnly] と元に戻す/やり直す）の判定の単一ソース。 */
 internal object DisplayOnlyUndo {

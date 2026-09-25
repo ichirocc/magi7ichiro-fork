@@ -108,6 +108,8 @@ data class UiState(
     val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
     val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
+    val relaxRev: Int = 0,                          // [S6] 試算が終わるたびに進む（画面は vm.relaxTrialFor で読み直す）
+    val relaxSearching: Boolean = false,            // [S6] 背景で設定の壁を探している
     val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して、もう一度つくる」の結果（表示は vm.wishCancelOutcomeLine）
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
