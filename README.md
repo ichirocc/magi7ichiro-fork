@@ -34,6 +34,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-25（既定OFF台帳の整理①: 否決済み `lnsWeightDebt` を撤去＝既定出力不変。`docs/algorithm_portfolio.md` 廃止・統合済み）
+
 **最終更新**：2026-09-25（HARD 差分の事前却下 `HardDelta` を巡回交換・C1広域ビームへ＝盤面不変のまま後処理 −42%。`docs/algorithm_portfolio.md` 横断機構）
 
 **最終更新**：2026-09-24（文書の古い記述を是正: lnsAdaptive 既定ON・S5 の C# 同期済み・既定OFF台帳の補完・automation の否決済み・pref 8000・#19 決着・S5 任意残作業を backlog #37 へ）

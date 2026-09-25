@@ -402,9 +402,6 @@ object V6HotfixPasses {
         val personalLnsFirstEvaluations: Int = 15_000,
         val c1LnsFirstMs: Long = 1_500L,
         val personalLnsFirstMs: Long = 1_500L,
-        /** [3.510.4/測定中] 共同 LNS の中間ノードの一時負債を件数でなく重み（負債 ≤ クレジット×係数）で絞る（backlog #15(f)）。既定 OFF。 */
-        val lnsWeightDebt: Boolean = false,
-        val lnsDebtFactor: Double = 2.0,
         /** [3.511.0/測定中] 長期ブロック交換の候補長を固定 11/13/17/19/23/28 日だけでなく、違反窓長・禁止連長・
          *  希望島半径・当月日数からも導出する（backlog #14(c)）。既定 OFF。 */
         val useDynamicBlockLens: Boolean = false,
@@ -652,9 +649,8 @@ object V6HotfixPasses {
         chain.adopt(chain.timed("後処理 期間要件(c1)共同LNS", "C1共同LNS") { work ->
             val remaining = EngineClock.remainingMs(deadlineMs, tC1Lns).coerceAtMost(params.remainingClampMs)
             val cap = if (lnsTotal <= 0L) 0L else (remaining * params.c1LnsMaxMs / lnsTotal).coerceAtMost(params.c1LnsMaxMs)
-            val debtFactor = if (params.lnsWeightDebt) params.lnsDebtFactor else 0.0
-            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations, debtFactor = debtFactor)
-                else C1JointLnsPolish.Config(maxMillis = cap, debtFactor = debtFactor)
+            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
+                else C1JointLnsPolish.Config(maxMillis = cap)
             if (!params.lnsAdaptive) C1RepairOperators.jointLns(state, work, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             else {
                 // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
@@ -676,9 +672,8 @@ object V6HotfixPasses {
         val tPersonalLns = EngineClock.nowMs()
         chain.adopt(chain.timed("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS") { work ->
             val cap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(params.personalLnsMaxMs)
-            val debtFactor = if (params.lnsWeightDebt) params.lnsDebtFactor else 0.0
-            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations, debtFactor = debtFactor)
-                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap, debtFactor = debtFactor)
+            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
+                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
             if (!params.lnsAdaptive) PersonalBalanceJointLnsPolish.apply(state, work, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             else {
                 val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
