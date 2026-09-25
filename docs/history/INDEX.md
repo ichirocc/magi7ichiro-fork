@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 既定OFF台帳の整理②（2026-09-25）: 否決済み `useDynamicBlockLens` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
 - 既定OFF台帳の整理①（2026-09-25）: 否決済み `lnsWeightDebt`／`WeightDebt` を撤去、盤面ハッシュ 8/8 一致。台帳 22 件の分類と残した理由を記録。  → `docs/history/3.4xx.md`
 
 - HARD 差分の事前却下を実装（2026-09-25）: `HardDelta`＋`PolishGate.hardDeltaPrefilter`（既定ON）を巡回交換 k=2,3・C1広域ビームへ。決定的後処理 18 盤面×2 回で盤面全一致、合計 227s→132s（−42%）。C# 同日同期。

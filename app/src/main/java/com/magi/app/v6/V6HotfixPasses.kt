@@ -402,9 +402,6 @@ object V6HotfixPasses {
         val personalLnsFirstEvaluations: Int = 15_000,
         val c1LnsFirstMs: Long = 1_500L,
         val personalLnsFirstMs: Long = 1_500L,
-        /** [3.511.0/測定中] 長期ブロック交換の候補長を固定 11/13/17/19/23/28 日だけでなく、違反窓長・禁止連長・
-         *  希望島半径・当月日数からも導出する（backlog #14(c)）。既定 OFF。 */
-        val useDynamicBlockLens: Boolean = false,
         /** [3.511.1/測定中] 巡回研磨クラスタが1巡も採用0（停滞）だったときだけ、共同LNS2本のstage1が採用0の場合に
          *  もう1回だけ幅（対象人数/goal数）を広げて試し、成分修復の最終段も窓長・起点数を広げる（backlog #12(b)/#13(a)）。
          *  巡回研磨クラスタの round loop 自体（LNS前）は変えない＝3.505.4で否決済みの領域（巡の中の起点生成拡大）は再度触らない。既定 OFF。 */
@@ -894,7 +891,7 @@ object V6HotfixPasses {
                     state, work,
                     AdaptiveBlockSwapPolish.CyclicParams(
                         maxPasses = params.blockSwapPasses, candidatesPerLength = params.blockSwapCandidatesPerLength,
-                        maxEvaluations = params.blockSwapEvaluations, useDynamicBlockLens = params.useDynamicBlockLens,
+                        maxEvaluations = params.blockSwapEvaluations,
                     ),
                     shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval,
                 )

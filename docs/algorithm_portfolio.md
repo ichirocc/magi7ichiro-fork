@@ -187,7 +187,6 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `ViolationComponentRepair.Params.bestOfK`（=1） | VCR で K 候補から最良を採る | iter23・ユーザー判断で終了（#12(b)） |
 | `ViolationComponentRepair.Params.debtLaneSlots`（=0） | 負債レーン枠 | iter22・2026-09-09 検証中止（#15 v2.1） |
 | `Params.stallEscalation.enabled` | 採用 0 の巡で VCR の半径を拡張 | 3.511.1 iter13 全件無変化（#12(b)・#13(a)） |
-| `Params.useDynamicBlockLens` | ブロック交換の窓長を違反窓・禁止連・希望島から動的に | 3.511.0 iter12 不合格（#14(b)） |
 | `Params.quantitativeRangeEval`／`V6OptimizerOptions.quantitativeRangeEval`／`Problem(quantitativeRangeEval)` | C2・C41/C41s を不足量・超過量で評価 | 3.512.0 iter21 不合格（#12(a)・#14(d)） |
 | `Params.c1ComponentRepair`／`c1ComponentRepairReactivate` | C1 成分修復 | 3.586.0 実データ4件 ON=OFF（#26） |
 | `Params.c3nMarginLnsEnabled`／`c3nMarginLnsReactivate` | c3n 余裕日の LNS 研磨 | 3.586.0 実データ4件 ON=OFF（#26） |
@@ -230,6 +229,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `useDynamicBlockLens`／`dynamicBlockLengths`（ブロック交換の動的窓長） | 既定経路（フラグごと撤去） | 3.511.0 iter12 不合格（#14(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `PostOptimizationParams.lnsWeightDebt`／`WeightDebt`（共同 LNS の重み基準の一時負債） | 既定経路（フラグごと撤去） | 3.510.4 iter10 不合格（#15(f)）。2026-09-25 撤去＝既定出力不変（決定的後処理の盤面ハッシュ 8/8 一致）。 |
 | C1 用の自動3者ブロック回転 | `C1TemporalFlowPolish` / 広域ビーム / 厳密窓 | 実測（ablation）で寄与ゼロ＝抜いても結果が1ビットも変わらないことを確認して撤去（3.254.0）。 |
 | `BeamC1PolishV2` | 同上 | 同じ ablation で寄与ゼロ。ファイルごと削除（3.254.0）。 |
