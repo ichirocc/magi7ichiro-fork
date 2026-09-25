@@ -612,7 +612,7 @@
     「一時的に悪化してから後段で回収する」経路を塞ぐ型（CountChain 等と同型）。改善案（例: 巻き戻しを締切直前だけにする）は
     探索動学の変更＝測定前提で未着手。
     **→ 測定（2026-09-25、`n36finalonly` 腕、両腕とも許容 ON、5seed×46＝230 ペア、`iter_n36finalonly.csv`）**:
-    `postChainKeepBestFinalOnly`（既定 false、C# 同期）＝パス間では巻き戻さず HF70 の前に 1 回だけ最良盤面へ戻す版。
+    `postChainKeepBestFinalOnly`（既定 false、C# 同期。不合格で同日撤去）＝パス間では巻き戻さず HF70 の前に 1 回だけ最良盤面へ戻す版。
     **勝11/負36・符号検定 p=0.0003・必須退行0・必須増0＝統計ゲート不合格（有意に不利）→既定 OFF 維持**。
     負けは large-dense 3/7・large-normal 0/4・medium c2deficit 1/8・medium wishheavy 0/6、large c42pair/forbidden は 10/10 同点。
     パス間の巻き戻しは後段パスの起点を良くする効果の方が大きく、「序盤へ戻る」ことが大規模の負けの主因ではなかった。

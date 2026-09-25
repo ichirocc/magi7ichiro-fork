@@ -221,6 +221,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `PostOptimizationParams.postChainKeepBestFinalOnly`／`PolishGate.postChainKeepBestFinalOnly`（走行 keep-best を末尾 1 回だけに） | 既定経路（フラグごと撤去） | 2026-09-25 tools/loop 勝11/負36 p=0.0003＝不合格（#36）。同日撤去（Kotlin・C#）＝既定出力不変 |
 | `PostOptimizationParams.postChainRunningKeepBestAcceptTies`（走行 keep-best で同点も採る） | 既定経路（フラグごと撤去） | 3.610.0（#36 B）必須増 1＝不合格。2026-09-25 撤去（Kotlin・C#）＝既定出力不変 |
 | `PostOptimizationParams.c41FlowPolishEnabled`／`c41FlowPasses`（群/日範囲 c41 の最小費用フロー研磨 C41FlowPolish） | 既定経路（フラグごと撤去） | 3.511.5 iter16 不合格。2026-09-25 撤去（Kotlin のみ、C# 未移植）＝既定出力不変。c42 側は Reactivate の保持明記により残す |
 | `PostOptimizationParams.c3PairMaskEnabled`（連続規則の選択日ペア交換 C3PairMaskPolish） | 既定経路（フラグごと撤去） | 3.510.0 iter8 不合格。2026-09-25 撤去（Kotlin のみ、C# 未移植）＝既定出力不変 |
