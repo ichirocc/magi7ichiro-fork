@@ -1,5 +1,77 @@
 # 作業記録の索引（見出し一覧）
 
+- 外部レビュー e07bbd5 の是正（2026-09-26）: 板挟みのボタンを「希望は残して…（希望は未反映になります）」、セルシートの状態・印・回数を 1 つの評価の版（`cellSheetRev`）から、操作の通知（`opNotice`）を検査の文言と分離し元に戻すを操作に結ぶ、直し方探しの明示状態（`fixPanelState`）、［詳しく］に重なった違反・連続 N 区間・職員の回数と偏り、元に戻す/やり直すで希望表示を即時復元。採点・探索は不変、C# は同日同期。  → `docs/history/3.4xx.md`
+
+- セル編集シートの再設計（2026-09-25）: 画面下の固定パネル（スワイプ無し、閉じる／戻る／空白タップ、別セルのタップで移る）、シフトボタンは固定配置（担当外は灰色の「外」）、1 行の状態（原因と相手・日・数、必須＝淡い赤／要調整＝淡いアンバー）、緑の点＝おすすめ・警告＝必須が増える、希望を守っている板挟みは「他の人で補う（推奨）」、即反映＋元に戻す、前日／翌日、「必須違反 N件を順に見る」巡回、セルをシート直上へ自動で寄せる。採点・探索は不変、C# は同日同期。  → `docs/history/3.4xx.md`
+
+- 勤務表の表示専用の印（2026-09-25）: 回数の族は職員名の横の ▼/▲（タップで回数・偏りの内訳、公平化・曜日も）、人員は日付の下に「休▲」とシフト名、期間の制約は窓幅おきに印（`ViolationReport.c1Runs`）、隠れた族は左上の点、セルシートに「この職員の回数・偏り」。チップ「連勤」→「並び」、凡例に形ごとの族名、⑤ 並び・期間の制約、ForbiddenDiag の検証範囲の文言。違反セル・印・集計の内訳は開いた時点で直し方を探して同じシートに手か理由を出す、「計（期間）」に人員の日数。チェッカーの場所マップ・採点・探索は不変、C# は同日同期。  → `docs/history/3.4xx.md`
+
+- 画面層の精読 #2 の残り（2026-09-25）: UI 層 52 件＋取りこぼし 5 件の是正（ViewModel・取込／ホーム・分析／勤務表・月次条件／編集画面）。他の案は当てても残し元に戻すで一覧ごと戻す、同じ行の重複はダイアログで断る（エンジンは dedup しない）、1 つだけの並びは「X（1つだけ）」表示、成り立たない値はダイアログで断る、画面語彙はグループ／スキルグループ、1 操作＝1 undo。2 回目の是正（レビュー 18 件）: 背景結果の反映失敗の後始末、背景の「やめる」を runId ファイルの所有者で判定、停止・失敗の結果の旗、読込の退避は確定後、表示色の undo は結果を外さず対象ごと、並び以外の同じ行を設定の見直しに。探索・目的関数は不変、C# は同日同期。  → `docs/history/3.4xx.md`
+
+- 診断の文言 2 件（2026-09-25）: 設定ミス診断 1c は窓が 1 セル（単独の禁止シフト）なら単数の文言、HF70・残存分析の集計名を「希望どうしの衝突」→「希望と禁止の衝突」（1 件の組も数えるため）。MUS 日別の「証明つき」に上限 0 で席に数えなかった人を名指し。文言のみ＝盤面不変。  → `docs/history/3.4xx.md`
+
+- backlog #38（2026-09-25）: `Staff.skillIdx` の既定を 0→−1（未所属）、スキル群 0 件から最初の 1 群を作るとき全員 −1（`Ws1Ops.addSkillGroup`。3.327.0「自動で書き換えない」からの意図的な逸脱）、検査 2i のコメント是正。0/−1 混在で探索の組分けが変わりうる。盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 実データ精読の是正・UI 層（2026-09-25）: S5 の候補に希望どうしの衝突の兄弟の希望（古泉 10/26・10/27）を足す（`UiState.wishSelfConflicts`）、設定の見直しの一覧が編集・ホームとも 6 件で切れて全件を見る場所が無かった→「すべて表示」。  → `docs/history/3.4xx.md`
+
+- backlog #36 R1 締結（2026-09-25）: 走行 keep-best の大規模負け越しは無害化前の許容（FairPolish の許容出力の巻き戻し）が原因。現行 main で `rkbstruct` 再測定＝勝45/負11 p<0.0001・必須悪化0・大規模 c42pair/forbidden 10/10 盤面一致・dense 7/3＝事前基準合格。許容 ON は大規模の保存盤面で既定 OFF に 8/26（実機設定の切替は利用者判断）。  → `docs/history/3.4xx.md`
+
+- 実データ精読の是正・エンジン層（2026-09-25）: MUS 日別が上限 0 の希望固定を席に数えず誤「証明つき」（10/11）→希望固定優先、強制下限も同型。希望どうしの禁止の並びの診断 1c、`V6SanityPort.wishSelfConflicts`（1b/1c/HF70/残存分析/S5 兄弟行が共有）、HF70・残存分析の仕分け、SaOptimizer のコメント是正。盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑬（2026-09-25）: 否決済み `roleBudgetFit`＋`rsiPlusPhaseBudgets` を撤去（C# 同期）、探索側は 3.600.0 直前と roleBudgetFit 差分なし。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑫（2026-09-25）: 否決済み `postChainKeepBestFinalOnly` を撤去（C# 同期）、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑪（2026-09-25）: 否決済み `postChainRunningKeepBestAcceptTies` を撤去（C# 同期）、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑩（2026-09-25）: 否決済み `c41FlowPolishEnabled`＋`C41FlowPolish` を撤去（c42 側は保持明記で残す）、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑨（2026-09-25）: 否決済み `c3PairMaskEnabled`＋`C3PairMaskPolish` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- handleOptimize に任意の `seed` 引数（2026-09-25）: 既定 null＝従来の時刻由来で出力不変、ベンチ用。backlog #38 D2（skillIdx 既定 0）・#39 SI-3（C1 初期解のシフト順依存）を登録（C# 同期）。  → `docs/history/3.4xx.md`
+- sudo_model.md 再照合（2026-09-25）: 不変条件を20族・HARD 5族（c3w）・3.556.0 の重みへ、O の実測を 8990/total 409 へ、fair v2・D9・HardDelta・WishTrial/RunMarker を反映（docs のみ、C# 同期）。  → `docs/history/3.4xx.md`
+- S5 中断案内で取り消した希望を名指し（2026-09-25）: 実行マーカーに `s5` 文脈、`work/RunMarker.kt`＋`RunMarkerTest`、C# 対象外（backlog #37(b)）。  → `docs/history/3.4xx.md`
+- backlog #36 走行 keep-best を末尾だけにする案（2026-09-25）: `postChainKeepBestFinalOnly` 勝11/負36 p=0.0003＝不合格、既定 OFF。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑧（2026-09-25）: 否決済み `covOReliefEarly` を撤去（C# 同期）、盤面ハッシュ 8/8 一致。今回の上限 8 件で終了。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑦（2026-09-25）: 否決済み `SaParams.officialTieBreak`＋TieBreakBench を撤去、SaOptimizer は導入前とバイト一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑥（2026-09-25）: 否決済み `debtLaneSlots` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑤（2026-09-25）: 否決済み `bestOfK` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理④（2026-09-25）: 否決済み `familyPriorityScoring` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理③（2026-09-25）: 否決済み `stallEscalation` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- S5 T8 言語跨ぎ契約（2026-09-25）: `wish_trial_expected.txt` を Kotlin/C# の `WishTrialCrossLanguageTest` が共有、両言語一致（backlog #37(a)）。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理②（2026-09-25）: 否決済み `useDynamicBlockLens` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理①（2026-09-25）: 否決済み `lnsWeightDebt`／`WeightDebt` を撤去、盤面ハッシュ 8/8 一致。台帳 22 件の分類と残した理由を記録。  → `docs/history/3.4xx.md`
+
+- HARD 差分の事前却下を実装（2026-09-25）: `HardDelta`＋`PolishGate.hardDeltaPrefilter`（既定ON）を巡回交換 k=2,3・C1広域ビームへ。決定的後処理 18 盤面×2 回で盤面全一致、合計 227s→132s（−42%）。C# 同日同期。
+
+- アルゴリズム案の机上テスト（2026-09-25）: §1 必須残中の SOFT 研磨カット＝否決（必須増 10〜13・減 0、Fair も HARD を減らす）、§3 HARD 差分の事前却下を巡回交換・C1 広域ビームへ＝後処理 −26%・盤面 18/18 一致で採る候補。
+
+- N9 巻き戻したパスの採用数を0と数える版の A/B（2026-09-24）: postChainRollbackCountsZero（既定false）・n9rollback 腕 勝2/負4 p=0.69 → 不合格・既定不変
+- 文書の古い記述の是正（2026-09-24）: backlog #14(a) lnsAdaptive 既定ON・#14 重み現行値・#16 roleBudgetFit 参照・#19 決着・#37 S5 任意残作業／s5 冒頭 C# 同期済み／AP 既定OFF台帳補完＋postChainRunningKeepBest 昇格／automation 否決済み 3 件・pref 8000／CLAUDE.md #2＝UI 層のみ
+- weight_lint 抑止キーを行番号→コード断片へ（2026-09-24）: WEIGHT_LINT_EXEMPT を (ファイル, 行の一部) で引き、上の行の編集で抑止がずれない・断片は検出行ちょうど1行（第3要素で行数指定）に一致、空振り/曖昧は fail
+- S5 VM・画面のレビュー対応（2026-09-24）: 採用後の例外（遅い失敗）で画面を入力盤面へ戻さず今の盤面で描き直す（文言「作成は終わりましたが…」）・充足不可の S5b 版を重複除去の前の wishPinned で決め、例の日も wishPinned の枠から・描き直しも落ちたときの代替でも盤面を今のものへ（C# 同期）
+- 外部レビュー bg 組（2026-09-24）: R6 復元前に届いた背景結果を復元後に受ける（購読を復元の後へ・二重適用と置き換え結果の残留を防ぐ）・N6 Worker へ方式・仕上げ最適化を渡す（RunConfig、C# 同期）
+- 外部レビュー修正の監査（2026-09-24）: N10 の取り残し＝ミニ再最適化（WINDOW）が tryOps を通らず回数固定を崩す組み合わせを提案していた→最良の選択で exactPinRegression を弾く（C# 同期、R2/R3/R5/N9/N10 の C# 移植も同日）
+- 外部レビュー role 組（2026-09-24）: N1 休みOFFが再読込で戻る（保存を rest/none に・"" は旧JSON扱い・CSV取込で休みを付与、C# 同期）・N2 指紋が Shift.role を読まない・N5 native 変換の restIdx を role 解決に
+- 外部レビュー csv-ui 組（2026-09-24）: R2 制約CSVの並びが 5 列で切れる（行末まで読む、C# 同期）・N3 取込完了案内を成功時だけ・N4 c2 の設定リンクを ⑤並びへ
+- 外部レビュー R3/R4/R5/N9/N10（2026-09-24）: c3n 診断に c3w を算入・epochOverrunCount の伝播・ExtraRefine 省略判定の covU 床条件・無変更パスに巻き戻し印を付けない・提案生成で回数固定を弾く
+- 外部レビュー R1/N8（2026-09-24）: hosttest.sh が JUnit 失敗を終了コードへ伝播しない（tail の 0 を返していた）→PIPESTATUS で伝播・weight_lint の抑止リスト行番号 6 件の陳腐化で exit 1→現行行へ
+- S5 試算の VM と画面（2026-09-24）: startWishTrial/wishTrialFor（ctx＝state 参照＋盤面キーを読むたびに照合・1 世代保持）・cancelWishAndRebuild（§6 の 1〜10、Undo 1 段）・startFullOptimize（Undo ラベル/S5 文脈）・停止/失敗の希望維持・元に戻すで stalledHardFamilies 復元・ダイアログの「取り消したら？」・S5b 節・WISH 入口を候補ありへ・充足不可の S5b 版
+- S5 試算のエンジン層（2026-09-24）: WishTrial（H0/Hx/Rk/Rr・a'・b、数値だけの結果型、対照は別関数）・CoverageShortfall.wishPinned と充足不可の文の直し・候補行と文言の純粋関数・lockedWishKeys。VM/画面は未着手
+
+- S5「この希望を取り消したら」試算の設計（2026-09-24、未実装）: 確定分＋VCR 見込み（対照差し引き）・取り消し＋本実行を Undo 1 段・机上 v1/v2（0 の行の 10/18 は本当は減る）・敵対的検証 28 件反映・範囲と入口は利用者決定（人手不足の日の希望も最初から・c3w 両方・入口拡大・戻すと入口も戻る）。`docs/s5_wish_trial.md`。
+
+- 許容 ON の無害化（2026-09-24）: 必須族の非増・重い SOFT の増加禁止・対象族の厳密改善。OFF vs 無害化 ON＝ON 63/OFF 52 p=0.35・必須増5（減6）＝段1不合格、既定 OFF 維持（無害化前の有意な不利は解消、実データは同値）。
+
 - 思考誘導 UX（3.612.0）: セルシートの必須先頭化・要調整の折りたたみ、c3 を「守るとよい並び」へ、ホームの主ボタンを
   不足→1手→下限→希望→問題 の順に1つ、1手カードに「必須は減るか」、ぶつかっている希望の一覧。違反20族の位置の種類をテストで固定（2026-09-23）。
 

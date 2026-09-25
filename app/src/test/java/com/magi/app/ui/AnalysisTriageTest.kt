@@ -91,6 +91,18 @@ class AnalysisTriageTest {
         val t = analysisTriage(ui(issues = issues))
         assertEquals(listOf("回数の設定" to 3, "必要人数の設定" to 1), t.issues.map { it.label to it.count })
         assertTrue("先頭2名＋ほか", t.issues.first().detail.contains("ほか"))
+        // 「設定へ」の着地先は種類で決まる（族キーは設定の行では常に null）。
+        assertEquals(listOf(IssueKind.RANGE, IssueKind.DEMAND), t.issues.map { it.kind })
+    }
+
+    /** ホームの残り: 必須0のときの要調整は件数の族だけ（公平化・曜日の偏りの pt を件として足さない）。 */
+    @Test fun homeRemainingLabelCountsOnlyCountFamilies() {
+        assertEquals("必須 残り2件", homeRemainingLabel(2L, 0, mapOf("covU" to 2, "c1" to 5)))
+        assertEquals("残り1日", homeRemainingLabel(0L, 1, emptyMap()))
+        assertEquals("必須は解消・要調整 5件", homeRemainingLabel(0L, 0, mapOf("apt" to 5, "fair" to 80, "weekly" to 60)))
+        assertEquals("pt だけなら解消済みとは言わない", "必須は解消・残りは偏りのみ",
+            homeRemainingLabel(0L, 0, mapOf("fair" to 3)))
+        assertEquals("解消済み", homeRemainingLabel(0L, 0, mapOf("fair" to 0)))
     }
 
     /** [3.515.2] 1件だけの種類は場所を切り詰めず理由まで出す（重複登録の警告が勤務表の違反に見えないように）。 */

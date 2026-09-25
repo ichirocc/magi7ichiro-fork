@@ -72,6 +72,8 @@ data class CoverageShortfall(
      * 文字列でなく値として持つ。
      */
     val blockedNow: Boolean = false,
+    /** [S5b] 担当できる（mayPlace）のに、この日は別の勤務で希望固定されている職員（capacity から外した人。職員順）。 */
+    val wishPinned: List<Int> = emptyList(),
 )
 
 /** 人員過剰(covO)が残る 1 つの (日, シフト) 枠の診断。読み取り専用・エンジン非変更。 */
@@ -304,13 +306,14 @@ object V6PortAnalyzer {
                 val need = got + miss   // [表示用] 実際に不足を生んだ実効しきい値（covUCellのOR選択と整合）
                 total += miss
                 var capacity = 0
+                val wishPinned = ArrayList<Int>()
                 for (i in 0 until p.S) {
                     if (!p.mayPlace(i, k)) continue
                     // [3.391.0] 生の `w != k` は**実現不能な希望**（担当できないシフトへの希望）まで
                     //   「別シフトへ固定」として capacity から外していた。実現不能な希望は凍結しない
                     //   （wishLocked の規約）ので、その職員はこの枠へ回せる。過小な capacity は
                     //   verdict を FIXABLE→INFEASIBLE へ倒し「データ上、充足不可」という**誤った断定**を生む。
-                    if (p.wishLocked(i, j) && p.wish[i][j] != k) continue   // 実現可能な希望が別シフト → この枠には回せない
+                    if (p.wishLocked(i, j) && p.wish[i][j] != k) { wishPinned.add(i); continue }   // 実現可能な希望が別シフト → この枠には回せない
                     capacity++
                 }
                 val verdict = if (capacity < need) CoverageVerdict.INFEASIBLE else CoverageVerdict.FIXABLE
@@ -318,7 +321,10 @@ object V6PortAnalyzer {
                 val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                 // [3.344.0] reason と同じ根拠で「いまの希望のままでは埋められない」かを値として持つ。
                 var blockedNow = false
-                val reason = if (verdict == CoverageVerdict.INFEASIBLE) {
+                val reason = if (verdict == CoverageVerdict.INFEASIBLE && wishPinned.isNotEmpty()) {
+                    // 希望固定の人を外して数えた結果＝「データ上」は言い過ぎ（希望を取り消せば届きうる）。
+                    "いまの希望のままでは担当できる人が${capacity}人で必要数${need}に届きません（希望で別の勤務に固定: ${wishPinned.size}人）"
+                } else if (verdict == CoverageVerdict.INFEASIBLE) {
                     "担当可能な職員が${capacity}人で必要数${need}に届きません（データ上、充足不可）"
                 } else {
                     // [なぜ埋まらないか] 「移せる候補」(canDo・別シフト希望でない)を、なぜ今動かせないかで
@@ -362,7 +368,7 @@ object V6PortAnalyzer {
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity,
-                        verdict, reason, blockedNow)
+                        verdict, reason, blockedNow, wishPinned)
                 )
             }
         }
@@ -577,8 +583,9 @@ object V6PortAnalyzer {
                         else ->
                             "全セルが塞がっています" +
                                 (if (pinnedDays.isNotEmpty()) "（希望固定: $pinnedDays）" else "") +
-                                "。単独変更・玉突き連鎖・隣接日調整のすべてを検証して不成立＝現在の希望・担当のままでは" +
-                                "崩せる見込みがありません。周辺の希望を1件調整するか、担当を追加してください"
+                                "。各セルで試したのは 1 セルの変更・そのセルを起点にした人員の玉突き・隣の日の調整までで、" +
+                                "いずれも不成立でした（複数日にまたがる 2 人の入れ替えなどは試していません）。" +
+                                "周辺の希望を1件調整するか、担当を追加してください"
                     }
                     runs.add(ForbiddenRunDiag(i, state.staff.getOrNull(i)?.name ?: "#$i", j0, seqLabel, cells, hint))
                     j0++
@@ -600,8 +607,13 @@ object V6PortAnalyzer {
         p: Problem, before: Array<IntArray>, after: Array<IntArray>, i: Int, c3nBefore: Int,
     ): Boolean {
         val c3nAfter = C1DeltaPrefilter.staffC3nFires(p, IntArray(p.T) { after[i][it] })
-        return c3nAfter + prefMissesOf(p, after, i) < c3nBefore + prefMissesOf(p, before, i)
+        return c3nAfter + prefMissesOf(p, after, i) + c3wOf(p, after, i) <
+            c3nBefore + prefMissesOf(p, before, i) + c3wOf(p, before, i)
     }
+
+    /** 職員 [i] の行の c3w（希望の前日に禁止, HARD）件数。 */
+    private fun c3wOf(p: Problem, board: Array<IntArray>, i: Int): Int =
+        (0 until p.T).count { d -> p.c3wBanned(i, d, board[i][d]) }
 
     /** 職員 [i] の行で「実現可能な希望どおりでない」日数（＝pref の HARD 件数）。 */
     private fun prefMissesOf(p: Problem, board: Array<IntArray>, i: Int): Int =
@@ -638,6 +650,8 @@ object V6PortAnalyzer {
         var c3nBlocked = 0
         var noReceiver = 0
         var prefBlocked = 0   // c3n は減るが、希望を破る代金（pref +1）を払えない代替の数
+        var c3wBlocked = 0    // c3n は減るが、代わりに希望の前日に禁止（c3w）を作る代替の数
+        val c3wCur = if (p.c3wBanned(i, j, cur)) 1 else 0
         var chainOk: Int? = null      // CHAIN が成立した代替シフト
         var adjOk: Int? = null        // ADJACENT が成立した代替シフト
         var alts = 0
@@ -646,7 +660,8 @@ object V6PortAnalyzer {
             alts++
             val after = c3nAfter(m)
             // 正味 HARD が減るか（希望を破る手は pref が 1 増える。hard は族横断の件数和なので同じ単位）。
-            val netOk = after + prefCost < firesBefore
+            val c3wDelta = (if (p.c3wBanned(i, j, m)) 1 else 0) - c3wCur
+            val netOk = after + prefCost + c3wDelta < firesBefore
             // 「新たな禁止連続を作る（＝そもそも c3n が減らない）」かどうかは pref 代とは別問題。
             //   両者を混ぜると、c3n は減るのに pref 代を払えないだけの代替まで隣接日調整へ流れてしまう。
             val createsNewRun = after >= firesBefore
@@ -661,6 +676,8 @@ object V6PortAnalyzer {
                     tmp[i][j] = m
                     if (chainFills(tmp)) chainOk = m else noReceiver++
                 } else noReceiver++   // 既に CHAIN 成立済み＝以降の重い連鎖検証は省略（分類は不変）
+            } else if (!createsNewRun && after + c3wDelta >= firesBefore) {
+                c3wBlocked++
             } else if (!createsNewRun) {
                 // c3n 自体は減るが、希望を破る代金を払うと正味では減らない＝希望が本当に効いている。
                 prefBlocked++
@@ -705,7 +722,8 @@ object V6PortAnalyzer {
             prefBlocked > 0 -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.PINNED,
                 "本人希望=$curSym（動かしても正味の必須違反が減らない）")
             else -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.BLOCKED,
-                "代替${alts}件全滅: 新たな禁止連続${c3nBlocked}・covU受け皿なし${noReceiver}")
+                "代替${alts}件全滅: 新たな禁止連続${c3nBlocked}・covU受け皿なし${noReceiver}" +
+                    if (c3wBlocked > 0) "・希望の前日に禁止${c3wBlocked}" else "")
         }
     }
 

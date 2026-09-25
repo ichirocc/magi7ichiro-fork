@@ -44,7 +44,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
     val skills = v.skillGroups
     val staff = v.staff
     var dialog by remember { mutableStateOf<SkillDlg?>(null) }
-    // [破壊操作ガード] スキル群削除は職員の skillIdx を再割当てする高影響操作。確認を挟む。
+    // [破壊操作ガード] スキル群削除は所属職員を未所属(-1)へ戻す高影響操作。確認を挟む。
     var confirmDelete by remember { mutableStateOf<Int?>(null) }
 
     Card(Modifier.fillMaxWidth()) {
@@ -101,7 +101,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
             title = { Text("スキルグループを削除しますか？") },
-            text = { Text("「$name」を削除します。所属していた職員のスキル割当は自動で付け替わります。元に戻すで取り消せます。$refNote") },
+            text = { Text("「$name」を削除します。所属していた職員のスキルは「(なし)」に戻ります（スキルグループのルールの対象から外れます）。元に戻すで取り消せます。$refNote") },
             confirmButton = { DialogDangerButton("削除する", onClick = { onEvent(MagiEvent.Structure.RemoveSkillGroup(g)); confirmDelete = null }) },
             dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }) },
         )

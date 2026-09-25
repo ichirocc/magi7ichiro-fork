@@ -771,6 +771,7 @@ internal object C1WindowPolish {
             return w
         }
 
+        val prefilter = PolishGate.hardDeltaPrefilter
         var beam = listOf(Beam(work0, before, 0))
         // [3.340.0] 探索中に見つけた最良を保持する（最終ビームは観測列に含まれるので退化不能）。
         var bestEver: Beam? = null
@@ -788,6 +789,7 @@ internal object C1WindowPolish {
                     if (shouldStop()) break
                     val x = p.cons1[ci].shiftIdx
                     val w2 = tryOneMove(b.work, i, j, x) ?: continue
+                    if (prefilter && b.rep.hard + HardDelta.delta(p, b.work, w2) > before.hard) continue
                     val rep2 = UnifiedViolationChecker.check(state, w2, quantitativeRangeEval)
                     if (rep2.hard > before.hard) continue
                     nextCandidates.add(Beam(w2, rep2, b.applied + 1))

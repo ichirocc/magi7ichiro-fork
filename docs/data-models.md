@@ -2,7 +2,11 @@
 
 > **このファイルの役割**：エンティティ定義・項目名・型の**唯一の正解**。AI が存在しないフィールドを創作するのを防ぐ。ここに無い項目は「存在しない」とみなす。
 > **コード基準**：`app/src/main/java/com/magi/app/model/MagiState.kt`。Web 版の `state` オブジェクトと名前・意味が一致し、JSON が往復する。
-> **最終更新**：2026-09-21（3.603.0 — `Shift.role: ShiftRole`追加。休の識別を記号一致から分離、詳細は§下記）。
+> **最終更新**：2026-09-25（画面層の精読 #2 — §4 UiState を `val` 宣言と再照合し、未記載だった 8 フィールド
+> `fixSearched`/`stalledHardFamilies`/`alternativeApplied` と希望の試算 5 種を追加、件数を 80 → **88** へ訂正）。
+> 2026-09-25（backlog#38 — `Staff.skillIdx` の既定を 0 → **-1（未所属）**、最初のスキル群を作るときは全員を -1 にしてから足す）。
+> 2026-09-24（外部レビュー N1 — `shifts[].role` の保存を `"rest"`/`"none"` に、`""` は旧JSONと同じ扱い）。
+> 2026-09-21（3.603.0 — `Shift.role: ShiftRole`追加。休の識別を記号一致から分離、詳細は§下記）。
 > 2026-09-20（§4 UiState を実装と再照合し、3.394.0 以降に追加されて丸ごと未記載だった
 > 9フィールド `checkRev`/`engineRan`/`keepScreenOn`/`runSummary`/`combineExhaustPairs`/`countChainPolish`/
 > `aptFairSoftTolerance`/`lnsAdaptive`/`saveState` を追加、件数を 71 → **80** へ訂正）。
@@ -41,7 +45,7 @@
 | `skillGroups` | `List<Group>` = `[]` | スキルグループ（ユニットとは別の第2分類。担当可否には使わない） |
 | `cons41s` / `cons42s` | `List<C41Row>` / `List<C42Row>` = `[]` | スキル群版の C41 / C42 |
 | `cons3w` | `List<C3wRow>` = `[]` | 希望の前日に禁止（3.542.0）。希望(`wishes`)で固定された `wishKigou` の前日セルが `prevKigou` なら違反（HARD `c3w`、c3n と同格）。JSON キー無しは空 |
-| `shiftColors` | `Map<String, String>` = `{}` | 表示色の上書き。キー＝シフト記号 → `"#rrggbb"`（**表示のみ・エンジン無影響**）。特殊キー `"__vio__"` ＝違反色 |
+| `shiftColors` | `Map<String, String>` = `{}` | 表示色の上書き。キー＝シフト記号 → `"#rrggbb"`（**表示のみ・エンジン無影響**。シフトの記号変更でキーを付け替え、シフト削除で取り除く）。特殊キー `"__vio__"` ＝違反色 |
 | `extras` | `Map<String, Any?>` = `{}` | 未モデル化の項目を逐語保持（往復の無損失化） |
 
 ### 計算プロパティ（保持しない／導出）
@@ -55,7 +59,7 @@
 |---|---|---|
 | `Shift` | `name: String`, `kigou: String`, `need1: String`, `need2: String`, `role: ShiftRole = None` | need1/need2 = P1/P2 の既定必要数（`""`/null＝要件なし）。`role`＝`ShiftRole{None,Rest}`（3.603.0、休の識別。詳細は下記） |
 | `Group` | `name: String`, `kigou: String` | kigou＝制約で使う記号 |
-| `Staff` | `name: String`, `groupIdx: Int`, `skillIdx: Int = 0` | groupIdx→ユニット群（担当可否/covU）、skillIdx→スキル群（C41s/C42s 専用）。**`skillIdx = -1` は「未所属」の正規の値**（UI の「(なし)」・3.70.0）。`ssk[i] == groupIdx(>=0)` が常に偽になるので cons41s/cons42s から安全に外れる。群削除時の再割当も `-1` へ寄せる（3.328.0） |
+| `Staff` | `name: String`, `groupIdx: Int`, `skillIdx: Int = -1` | groupIdx→ユニット群（担当可否/covU）、skillIdx→スキル群（C41s/C42s 専用）。**`skillIdx = -1` は「未所属」の正規の値で既定**（UI の「(なし)」・3.70.0。既定は backlog#38 で 0 → -1＝職員追加・名簿取込・`skillIdx` の無い JSON は -1、保存済みの明示の値はそのまま）。`ssk[i] == groupIdx(>=0)` が常に偽になるので cons41s/cons42s から安全に外れる。群削除時の再割当も `-1` へ寄せる（3.328.0）。スキル群が 0 件の状態で最初の 1 群を作るときは全員を `-1` にしてから足す（`Ws1Ops.addSkillGroup`、backlog#38） |
 | `Range` | `lo: String`, `hi: String` | 個人×シフトの下限/上限（LimMin/LimMax） |
 | `C1Row` | `day1: String`, `shiftKigou: String`, `day2: String` | 「day1 日窓で shiftKigou を day2 回」 |
 | `C2Row` | `shiftKigou: String`, `count: String` | 個人の shiftKigou 合計の目標 |
@@ -86,8 +90,8 @@
 > ShiftRole.Rest` の付与先（`fun restShiftIndex(state): Int?`）。どのシフトにも付与が無ければ **`null`**
 > （旧: `?: 0` で無言に先頭シフトへフォールバックしていたが、休の削除・改名で別シフトが誤って「休」と
 > 解釈されHARD違反が実データで激増する実害があったため撤去。詳細は `docs/history/3.4xx.md` 3.603.0節）。
-> `Problem.restIdx` も同型で `Int?`。旧JSON（`role`フィールド無し）読込時は記号"休"のシフトへ自動付与する
-> 後方互換パスが `StateParser` にある。
+> `Problem.restIdx` も同型で `Int?`。保存は `"rest"`/`"none"`（外部レビュー N1＝休みOFFの往復）。明示の role が1つも無い JSON
+> （旧JSON・非休を `""` で書いていた保存）だけ、読込時に記号"休"のシフトへ自動付与する後方互換パスが `StateParser` にある。
 > 「休は特殊な OFF ではなく通常のシフト種の一つ」は 3.345.0 で全面的に徹底された前提で、weekly も
 > シフト別に均すので休を特別扱いしない。**編集規則も同じ**（3.416.0）＝休シフトの削除・改名は他シフトと
 > 同一経路（削除セルは削除後一覧の既定シフトへ・改名は制約参照が追従）。
@@ -97,7 +101,7 @@
 ## 4. UiState（画面表示用の派生状態）
 
 `data class UiState`（`ui/MagiUiState.kt`）。MagiState と `ViolationReport` から ViewModel が生成する**表示専用**の
-状態。**全80フィールド**（下記は全数。`MagiUiState.kt` と機械照合済み）。
+状態。**全88フィールド**（下記は全数。2026-09-25 に `MagiUiState.kt` の `val` 宣言と機械照合）。
 
 **読込/履歴**（3）：`loaded`, `canUndo`, `canRedo`
 
@@ -106,7 +110,7 @@
 **最適化の状態**（13）：`running`, `hasResult`, `initHard`/`initSoft`(Long), `bestHard`/`bestSoft`(Long),
 `totalViolations`, `weightedScore`(Double), `elapsedMs`, `checkRev`（表示中の検査結果の世代・3.502.0）,
 `engineRan`（エンジンがこの盤面に対して一度でも走ったか・3.475.0）,
-`keepScreenOn`（画面消灯防止の可否・3.568.0）, `runSummary`（直近の最適化の前後比較1行・3.509.4）
+`keepScreenOn`（画面消灯防止の可否・3.568.0）, `runSummary`（直近の最適化の前後比較1行・3.509.4。盤面が変わる操作・元に戻す・読込で消える）
 
 **計算の設定**（12）：`workers`(既定=コア数を1..8でクランプ), `budgetSec`(=300), `v6Algorithm`(=AUTO),
 `softPolish`(=true), `nativeAccel`(=true), `nativeParity`(=true) と、**既定 OFF の調整トグル**
@@ -145,17 +149,24 @@
 > 編集画面が再構成されず「+/- で数字が変わらない」実機バグを生んでいた（3.185.0/3.189.0）。
 > `editRev` があると必ず distinct な UiState になる。
 
-**誘導/診断**（14）：`satisfaction`(%), `copilotHint`, `polishExhausted`, `impossibleWishCount`,
-`settingIssues`, `fixSuggestions`, `fixSearching`, `fixFocusName`, `alternatives`,
+**誘導/診断**（17）：`satisfaction`(%), `copilotHint`, `polishExhausted`, `impossibleWishCount`,
+`settingIssues`, `fixSuggestions`, `fixSearching`, `fixFocusName`,
+`fixSearched`（盤面全体の 1 手探索を今の盤面で終えたか＝未探索と「探して 0 件」を分ける）,
+`stalledHardFamilies`（直近の実行で長く改善せず採用盤面にも残った必須族・盤面を変えたら空）, `alternatives`,
+`alternativeApplied`（いま盤面に適用している他の案の添字・-1＝なし）,
 `coverageDiag`(covU/covO の原因診断), `forbiddenDiag`(禁止連続の壁・3.280.0),
 `c1Plateau`(窓の要件が直せなかった理由・3.322.0), `observedPinBlockedAttempts` と `pinTargets`
 （回数固定が却下した候補の**計測できた下限**と対象・3.326.0）
+
+**希望の試算（S5）**（5）：`lockedWishKeys`（希望で固定したセルのキー＝試算できる希望）,
+`wishSelfConflicts`（希望どうしの衝突）, `wishTrialRev`（試算が終わるたびに進む）, `wishTrialBusy`（試算中の行 `"i,j"`・null＝なし）,
+`wishCancelOutcome`（直近の「希望を取り消して、もう一度つくる」の結果）
 
 **中断**（2）：`interruptedRun`, `interruptedInfo`
 
 **その他**（6）：`v6`(`V6PortReport?`), `message`, `messageIsError`(Snackbar を失敗色にするか), `opLog`(操作ログ), `logs`(診断ログ), `startDate`
 
-> **各グループに件数を書いてあるのは機械照合できるようにするため。** 合計 3+5+13+12+8+12+5+14+2+6 = **80** で
+> **各グループに件数を書いてあるのは機械照合できるようにするため。** 合計 3+5+13+12+8+12+5+17+5+2+6 = **88** で
 > `MagiUiState.kt` の `val` 宣言数と一致する。グループ本文の名前を数えて宣言側と突き合わせれば、
 > **フィールドが増減したのにここを直し忘れた**ことが件数のずれとして出る（実際、本文を書いた直後の照合で
 > 4グループとも数字が間違っていた）。件数を落とすと照合は無意味になるので、更新のたびに数字も直すこと。

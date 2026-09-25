@@ -172,7 +172,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
                 c.wishes == 0 -> "次に『希望シフト』を登録すると 解消度 が上がります。"
                 // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
                 //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
-                else -> "準備OK。画面下の『勤務表をつくる』で作成できます。"
+                else -> "準備OK。画面下の『${if (ui.hasResult) "もう一度つくる" else "勤務表をつくる"}』で作成できます。"
             }
             Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                 Text("次の一手: $next", color = cs.onSecondaryContainer,
@@ -189,7 +189,7 @@ internal fun GuideRow(label: String, value: String, done: Boolean, onClick: (() 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick) else Modifier,
+        modifier = if (onClick != null) Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick) else Modifier,
     ) {
         Text(if (done) "✓" else "・", color = if (done) cs.primary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
@@ -414,6 +414,7 @@ internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, 
     val issues = ui.settingIssues.size
     // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
     var issuesOpen by rememberSaveable { mutableStateOf(false) }
+    var issuesAll by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
@@ -425,12 +426,12 @@ internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, 
                 onClick = if (issues > 0) ({ issuesOpen = !issuesOpen }) else null)
             if (issuesOpen && issues > 0) {
                 val cs = MaterialTheme.colorScheme
-                ui.settingIssues.take(6).forEach { iss ->
+                val shown = if (issuesAll) ui.settingIssues else ui.settingIssues.take(SETTING_ISSUE_PREVIEW)
+                shown.forEach { iss ->
                     Text("・${iss.where}：${iss.problem}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(start = 12.dp))
                 }
-                if (issues > 6) Text("ほか${issues - 6}件（ホームの設定見直しに全件）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp))
+                if (shown.size < issues) SettingIssuesShowAll(issues - shown.size) { issuesAll = true }
             }
             // [3.482.0 導線重複] 旧「▶ 勤務表をつくる」ボタンは撤去。同じ画面の固定フッター（BottomCommandBar）に
             //   常設の同名ボタンがあり、1画面に作成導線が3つ（案内文・このボタン・フッター）並んでいた。
@@ -445,7 +446,7 @@ private fun ChecklistRow(label: String, value: String, ok: Boolean, onClick: (()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick) else Modifier,
+        modifier = if (onClick != null) Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick) else Modifier,
     ) {
         Text(if (ok) "✓" else "！", color = if (ok) cs.tertiary else cs.error, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
@@ -693,6 +694,7 @@ internal fun AppearanceCard(
     oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
     proMode: Boolean = false, onProMode: (Boolean) -> Unit = {},
     plainCellBorder: Boolean = false, onPlainCellBorder: (Boolean) -> Unit = {},
+    leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {},
 ) {
     // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
     Card(Modifier.fillMaxWidth()) {
@@ -712,6 +714,8 @@ internal fun AppearanceCard(
                 Spacer(Modifier.width(8.dp))
                 Text("勤務表の通常セルに枠線を表示", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }
+            Text("セル編集シートの利き手", style = MaterialTheme.typography.titleSmall)
+            MagiSegmentedControl(options = listOf("右手", "左手"), selected = if (leftHand) 1 else 0, onSelect = { onLeftHand(it == 1) })
             // [プロ編集] 表示モード。プロ＝数値診断（生指標）を前面に。今後さらに高密度編集を拡張予定。
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
             MagiSegmentedControl(options = listOf("かんたん", "プロ"), selected = if (proMode) 1 else 0, onSelect = { onProMode(it == 1) })
@@ -760,7 +764,7 @@ internal fun CollapsibleSection(
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.small,
-            modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { expanded = !expanded },
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),

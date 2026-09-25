@@ -42,9 +42,6 @@ data class SaParams(
     /** [多様化] 乱数シード。0=従来通り System.nanoTime()。多仮説では各仮説に異なる seed を渡して
      *  探索を多様化・再現可能にする（各ワーカーは内部で seed xor (w*定数) に分散）。 */
     val seed: Long = 0L,
-    /** [3.570.0/backlog#19、既定OFF・計測専用] true で `betterReport` 基準の「もう一つの best」も並行追跡し
-     *  [SaResult.officialBestSchedule]/[SaResult.officialBestReport] へ出す（選定=[SaResult.schedule] には無影響、tools/loop のペアベンチ専用）。 */
-    val officialTieBreak: Boolean = false,
 ) {
     init {
         // [3.410.0/E-15] 直接APIからの不正値は**構築時に落とす**（PhaseB 突入まで潜伏させない）。
@@ -67,10 +64,6 @@ data class SaResult(
      * 増やした意味があったかを判断できなかった。1本しか勝っていなければ残りは無駄と読める。
      */
     val chainWins: IntArray = IntArray(0),
-    /** [3.570.0/backlog#19 計測用] officialTieBreak=true のときだけ非 null。[schedule] の選定には使わない
-     *  「もう一つの最良」（betterReport基準、tools/loop のペアベンチが比較用に読む）。 */
-    val officialBestSchedule: Array<IntArray>? = null,
-    val officialBestReport: ViolationReport? = null,
 )
 
 /**
@@ -95,10 +88,6 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         var totalIters = 0L
         val chainWins = IntArray(params.workers.coerceAtLeast(1))
         val lock = Any()
-        // [3.570.0/backlog#19 計測用] officialTieBreak=true のときだけ使う。globalBest/globalBestSol の
-        //   選定には触れない（下の flush 内で完全に独立した if を通す）。globalBest と同様 init から種を撒く。
-        var officialBest: ViolationReport? = if (params.officialTieBreak) UnifiedViolationChecker.check(problem.state, init) else null
-        var officialBestSol: Array<IntArray>? = if (params.officialTieBreak) init else null
 
         fun report() { onProgress(SaProgress(globalBest, totalIters, (System.nanoTime() / 1_000_000L) - start)) }
         report()
@@ -120,14 +109,6 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                         totalIters += iters
                         if (localBest < globalBest) {
                             globalBest = localBest; globalBestSol = localSol; chainWins[w]++
-                        }
-                        // [3.570.0/backlog#19 計測用] 既存の選定（上の if）は一切変えない。同じ localSol を
-                        //   betterReport 基準でも独立に追跡するだけ＝計測のみ、既定 OFF。
-                        if (params.officialTieBreak) {
-                            val rep = UnifiedViolationChecker.check(problem.state, localSol)
-                            if (officialBest == null || betterReport(rep, officialBest!!)) {
-                                officialBest = rep; officialBestSol = localSol
-                            }
                         }
                         report()
                     }
@@ -154,8 +135,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
 
         val finalScore = evaluator.fullEval(globalBestSol)
         synchronized(lock) { globalBest = finalScore; report() }
-        SaResult(globalBestSol, finalScore, totalIters, (System.nanoTime() / 1_000_000L) - start, chainWins,
-            officialBestSchedule = officialBestSol, officialBestReport = officialBest)
+        SaResult(globalBestSol, finalScore, totalIters, (System.nanoTime() / 1_000_000L) - start, chainWins)
     }
 
     /**
@@ -360,8 +340,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
         }
         // [3.334.0] 近傍は**実現可能な希望が入ったセルを触らない**。後処理研磨の全パスと C++ の修復
         //   オペレータは元から `wishLocked` を見ているのに、探索の近傍だけが見ていなかった（非対称）。
-        //   採点は元から正しい（pref は hard＝希望を破ると差分が 1e9 単位で増え Metropolis はほぼ必ず却下）
-        //   ので誤った勤務表は出ないが、**手の 35〜36% がその却下される手に費やされていた**（実測）。
+        //   希望を破る手は多くの盤面で HARD 件数が増え Metropolis はほぼ必ず却下するが、**手の 35〜36% がその手に費やされていた**（実測）。
+        //   例外: 希望どうしの衝突（`V6SanityPort.wishSelfConflicts`）のセルでは c3n→pref が HARD 件数不変＝soft の差だけで決まり、
+        //   却下されるとは限らない。近傍はそれでも触らない（扱いは未決）。
         //   入口の hf67HardRepair が実現可能な希望を先に盤面へ入れるので、触らなければ正しいまま残る。
         fun locked(i: Int, j: Int) = problem.wishLocked(i, j)
         fun opSingle() {

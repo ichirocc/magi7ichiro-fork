@@ -103,6 +103,15 @@ class ZeroCapExclusionTest {
     }
 
     @Test
+    fun handleOptimizeSeedReachesOptimizerOptionsAndDefaultKeepsZero() = runBlocking {
+        val s = state()
+        V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true, seed = 42L)
+        assertEquals(42L, V6FinalPort.lastOptimizerSeed)
+        V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
+        assertEquals("既定 null は従来の 0（時刻由来）", 0L, V6FinalPort.lastOptimizerSeed)
+    }
+
+    @Test
     fun wishForCappedShiftStaysPinnedAndIsTheOnlyPlacement() = runBlocking {
         val s = state(wishes = mapOf("0,1" to 1))
         val r = V6NativeOptimizer.optimize(s, options = V6OptimizerOptions(algorithm = V6Algorithm.V5, totalBudgetSec = 2, workers = 1,

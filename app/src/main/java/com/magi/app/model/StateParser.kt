@@ -9,18 +9,25 @@ import org.json.JSONObject
  * and sometimes the empty string "". org.json tolerates that cleanly.
  */
 object StateParser {
+    private const val ROLE_REST = "rest"
+    private const val ROLE_NONE = "none"
 
     fun parse(json: String): MagiState {
         val o = JSONObject(json)
 
+        var explicitRole = false
         val shiftsRaw = o.optJSONArray("shifts").mapObjects("shifts") {
-            val role = if (it.optString("role") == "rest") ShiftRole.Rest else ShiftRole.None
-            Shift(it.optString("name"), it.optString("kigou"), asStr(it.opt("need1")), asStr(it.opt("need2")), role)
+            val r = it.optString("role")
+            if (r == ROLE_REST || r == ROLE_NONE) explicitRole = true
+            Shift(it.optString("name"), it.optString("kigou"), asStr(it.opt("need1")), asStr(it.opt("need2")),
+                if (r == ROLE_REST) ShiftRole.Rest else ShiftRole.None)
         }
         // [3.603.0/backlog#24] 旧JSON（roleフィールド無し）の後方互換: どのシフトにもRestが
         //   付与されていなければ、記号"休"のシフト(最初の1件)へ自動で付与する。移行後はroleが
         //   唯一の正＝以後、記号を変えてもRestは追従しない（意図的な分離）。
-        val shifts = if (shiftsRaw.none { it.role == ShiftRole.Rest }) {
+        // [外部レビュー N1] 明示の role（"rest"/"none"）が1つでもあれば付与しない＝休みOFFの保存が往復する。
+        //   "" は付与する（3.603.0〜の保存は非休を "" で書いており、CSV取込のまま保存した原本は全シフト ""）。
+        val shifts = if (!explicitRole) {
             val restPos = shiftsRaw.indexOfFirst { it.kigou == "休" }
             if (restPos >= 0) shiftsRaw.mapIndexed { idx, s -> if (idx == restPos) s.copy(role = ShiftRole.Rest) else s }
             else shiftsRaw
@@ -29,7 +36,7 @@ object StateParser {
             Group(it.optString("name"), it.optString("kigou"))
         }
         val staff = o.optJSONArray("staff").mapObjects("staff") {
-            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", 0))
+            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", -1))
         }
         val skillGroups = o.optJSONArray("skillGroups").mapObjects("skillGroups") {
             Group(it.optString("name"), it.optString("kigou"))
@@ -184,7 +191,7 @@ object StateParser {
         o.put("use2Patterns", state.use2Patterns)
         o.put("shifts", consArr(state.shifts) {
             obj("name" to it.name, "kigou" to it.kigou, "need1" to it.need1, "need2" to it.need2,
-                "role" to (if (it.role == ShiftRole.Rest) "rest" else ""))
+                "role" to (if (it.role == ShiftRole.Rest) ROLE_REST else ROLE_NONE))
         })
         o.put("groups", consArr(state.groups) { obj("name" to it.name, "kigou" to it.kigou) })
         val staffArr = JSONArray()

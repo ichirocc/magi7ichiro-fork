@@ -4,6 +4,7 @@ import com.magi.app.model.Range
 import com.magi.app.v6.ShiftAppearance
 import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.cachedProblem
+import com.magi.app.v6.canDo
 import kotlinx.coroutines.flow.update
 
 /**
@@ -63,6 +64,25 @@ fun MagiViewModel.removeNeedDay(k: Int, j: Int) {
     logOp("I", "需要削除: ${opSy(k)} ${j + 1}日"); applyStructure(st.copy(needDay1 = st.needDay1 - key, needDay2 = st.needDay2 - key))
 }
 
+/** [一括] シフト k の複数日へ必要人数の例外を一括設定（空欄＝その側は既定に戻す）。Undo 1 回・再チェック 1 回。 */
+fun MagiViewModel.setNeedDaysForDays(k: Int, days: List<Int>, p1: String, p2: String) {
+    val st = state ?: return
+    if (days.isEmpty() || k !in st.shifts.indices) return
+    val (nd1, nd2) = needDaysWith(st.needDay1, st.needDay2, k, days, st.dayCount, p1, p2)
+    logOp("I", "需要一括: ${opSy(k)} ${opDays(days)} → P1=${p1.trim().ifBlank { "-" }} P2=${p2.trim().ifBlank { "-" }}")
+    applyStructure(st.copy(needDay1 = nd1, needDay2 = nd2))
+}
+
+/** [一括] シフト k の複数日の例外を既定へ戻す。変化が無ければ何もしない。 */
+fun MagiViewModel.clearNeedDaysForDays(k: Int, days: List<Int>) {
+    val st = state ?: return
+    if (days.isEmpty()) return
+    val (nd1, nd2) = needDaysWithout(st.needDay1, st.needDay2, k, days)
+    if (nd1.size == st.needDay1.size && nd2.size == st.needDay2.size) return
+    logOp("I", "需要クリア: ${opSy(k)} ${opDays(days)}")
+    applyStructure(st.copy(needDay1 = nd1, needDay2 = nd2))
+}
+
 // ---- ws5: 個人別の回数（LimMin/LimMax） staffRange["i,k"]=Range(lo,hi) を編集 ----
 
 fun MagiViewModel.setStaffRange(i: Int, k: Int, lo: String, hi: String) {
@@ -87,6 +107,8 @@ fun MagiViewModel.relaxStaffRangePin(i: Int, k: Int, loDelta: Int, hiDelta: Int)
     val cur = st.staffRange["$i,$k"] ?: return
     val lo = cur.lo.trim().toIntOrNull() ?: return
     val hi = cur.hi.trim().toIntOrNull() ?: return
+    // 行の前提は「N回に固定」＝緩めた後の2回目のタップ（再検査で行が消える前）で幅を更に広げない。
+    if (lo != hi) return
     val newLo = (lo + loDelta).coerceAtLeast(0)
     val newHi = (hi + hiDelta).coerceAtLeast(newLo)
     if (newLo == lo && newHi == hi) return
@@ -100,10 +122,10 @@ fun MagiViewModel.removeStaffRange(i: Int, k: Int) {
 }
 
 // ---- グループ単位の回数（一括）: 既存 staffRange をグループ所属職員に展開する。
-//   新しい制約種別やスコア評価器の変更は不要（low/high は既に重み90/25で最適化対象）＝退行リスクなし。
+//   新しい制約種別やスコア評価器の変更は不要（low/high は既に最適化対象。重みは MirrorKeys.weights）＝退行リスクなし。
 //   業務担当者が値を入力しボタンで適用する operator ツール（HF77準拠）。 ----
-/** グループ g 所属の全職員に、ws5 個人別[lo,hi](staffRange, low/high 重み90/25=強い境界) を一括設定し、
- *  さらに ws1 C のグループ別 適切回数(groupShiftApt, apt 重み1=弱い目標) も同時に書く。
+/** グループ g 所属の全職員に、ws5 個人別[lo,hi](staffRange, low/high=強い境界) を一括設定し、
+ *  さらに ws1 C のグループ別 適切回数(groupShiftApt, apt=弱い目標) も同時に書く。
  *  apt は「最低=最高」の単一値のときのみ設定（範囲指定や空欄時はクリア）＝Excelの ws1 C→ws5 展開を1操作で再現。 */
 fun MagiViewModel.setGroupRange(g: Int, k: Int, lo: String, hi: String) {
     val st0 = state ?: return
@@ -122,10 +144,15 @@ fun MagiViewModel.setGroupRange(g: Int, k: Int, lo: String, hi: String) {
         if (ex != null && (ex.lo.isNotBlank() || ex.hi.isNotBlank())) { skipped++; continue }
         m[key] = Range(loT, hiT); wrote++
     }
+    val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
+    // 全員が個人設定済み＝何も書かない（適切回数の書き換えも undo もしない）。黙って変わらない形を避けて知らせる。
+    if (wrote == 0) {
+        notify("$gname「${opSy(k)}」は全員が個人設定済みのため変更はありません（変えるときは × で解除してから適用）", "W")
+        return
+    }
     // ws1 C: グループ別 適切回数（弱い目標）。単一値(最低=最高)のときのみ設定。
     val aptVal = if (loT == hiT) loT else ""
     val stNew = Ws1Ops.setGroupApt(st0.copy(staffRange = m), g, k, aptVal)
-    val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
     logOp("I", "グループ一括: $gname ${opSy(k)} → ws5=${loT.ifBlank { "?" }}〜${hiT.ifBlank { "?" }} (書込${wrote}名/スキップ${skipped}名・既存個人値は保持)")
     applyStructure(stNew)
 }
@@ -282,14 +309,17 @@ fun MagiViewModel.removeWish(i: Int, j: Int) {
     applyStructure(st.copy(wishes = st.wishes - "$i,$j"))
 }
 
-/** [一括] スタッフ(null=全員)×日群に希望 k を一括設定。Undo1回・再チェック1回。 */
+/** [一括] スタッフ(null=全員)×日群に希望 k を一括設定。Undo1回・再チェック1回。
+ *  全員のときは k を担当できる職員だけ（担当外の希望は実現も表示もされず、その人の既存の希望を消すだけ）。 */
 fun MagiViewModel.setWishesForDays(staffIdx: Int?, days: List<Int>, k: Int) {
     val st = state ?: return
     if (days.isEmpty() || k !in st.shifts.indices) return
     val m = st.wishes.toMutableMap()
-    val staffRange = if (staffIdx != null) listOf(staffIdx) else st.staff.indices.toList()
+    val staffRange = if (staffIdx != null) listOf(staffIdx) else cachedProblem(st).let { p -> st.staff.indices.filter { p.canDo(it, k) } }
+    if (staffRange.isEmpty()) return
     for (i in staffRange) for (j in days) if (i in st.staff.indices && j in 0 until st.dayCount) m["$i,$j"] = k
-    logOp("I", "希望一括: ${if (staffIdx != null) opNm(staffIdx) else "全員"} ${opDays(days)} → ${opSy(k)}")
+    val who = if (staffIdx != null) opNm(staffIdx) else "全員" + (st.staff.size - staffRange.size).let { if (it > 0) "（担当外${it}名を除く）" else "" }
+    logOp("I", "希望一括: $who ${opDays(days)} → ${opSy(k)}")
     applyStructure(st.copy(wishes = m))
 }
 
@@ -314,6 +344,7 @@ fun MagiViewModel.clearAllWishes() {
 }
 
 // ---- colors: シフトの表示色 shiftColors[kigou]="#rrggbb"（表示専用）----
+//   表示専用なので applyDisplayOnly（他の案・改善提案を残す／続けての色変更は1つの undo）を通す。
 data class ShiftColorView(val kigou: String, val name: String, val hex: String, val custom: Boolean)
 
 fun MagiViewModel.shiftColorList(): List<ShiftColorView> {
@@ -329,39 +360,39 @@ fun MagiViewModel.setShiftColor(kigou: String, hex: String) {
     if (kigou.isBlank()) return
     val m = st.shiftColors.toMutableMap()
     m[kigou] = hex.trim()
-    applyStructure(st.copy(shiftColors = m))
+    applyDisplayOnly(st.copy(shiftColors = m))
 }
 
 fun MagiViewModel.resetShiftColor(kigou: String) {
     val st = state ?: return
-    applyStructure(st.copy(shiftColors = st.shiftColors - kigou))
+    applyDisplayOnly(st.copy(shiftColors = st.shiftColors - kigou))
 }
 /** [違反色] 違反セルの枠/マーカー色。予約キー "__vio__" に保存（状態スキーマ非変更）。 */
 fun MagiViewModel.setViolationColor(hex: String) {
     val st = state ?: return; if (hex.isBlank()) return
-    applyStructure(st.copy(shiftColors = st.shiftColors + ("__vio__" to hex.trim())))
+    applyDisplayOnly(st.copy(shiftColors = st.shiftColors + ("__vio__" to hex.trim())))
 }
 fun MagiViewModel.resetViolationColor() {
     val st = state ?: return
-    applyStructure(st.copy(shiftColors = st.shiftColors - "__vio__"))
+    applyDisplayOnly(st.copy(shiftColors = st.shiftColors - "__vio__"))
 }
 /** [違反色] 要調整(ソフト違反)の枠/マーカー色。予約キー "__vioSoft__"（空=既定の橙）。 */
 fun MagiViewModel.setViolationSoftColor(hex: String) {
     val st = state ?: return; if (hex.isBlank()) return
-    applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioSoft__" to hex.trim())))
+    applyDisplayOnly(st.copy(shiftColors = st.shiftColors + ("__vioSoft__" to hex.trim())))
 }
 fun MagiViewModel.resetViolationSoftColor() {
     val st = state ?: return
-    applyStructure(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
+    applyDisplayOnly(st.copy(shiftColors = st.shiftColors - "__vioSoft__"))
 }
 
 /** [違反色/族別] 違反種別（族）ごとの個別色。予約キー "__vioFam_<fam>__"（例: __vioFam_c3n__）。
  *  未設定の族は重大度色（__vio__/__vioSoft__）へフォールバック。 */
 fun MagiViewModel.setViolationFamilyColor(fam: String, hex: String) {
     val st = state ?: return; if (hex.isBlank() || fam.isBlank()) return
-    applyStructure(st.copy(shiftColors = st.shiftColors + ("__vioFam_${fam}__" to hex.trim())))
+    applyDisplayOnly(st.copy(shiftColors = st.shiftColors + ("__vioFam_${fam}__" to hex.trim())))
 }
 fun MagiViewModel.resetViolationFamilyColor(fam: String) {
     val st = state ?: return
-    applyStructure(st.copy(shiftColors = st.shiftColors - "__vioFam_${fam}__"))
+    applyDisplayOnly(st.copy(shiftColors = st.shiftColors - "__vioFam_${fam}__"))
 }

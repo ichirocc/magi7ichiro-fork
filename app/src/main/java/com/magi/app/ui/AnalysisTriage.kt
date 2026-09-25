@@ -44,6 +44,8 @@ internal data class TriageRow(
     val promoted: Boolean = false,
     /** タップで修復フローへ渡す職員（null=全体探索 or 導線なし）。 */
     val staff: Int? = null,
+    /** settingIssues 由来の行の種類＝「設定へ」の着地先（族の行は null）。 */
+    val kind: IssueKind? = null,
 )
 
 internal data class AnalysisTriage(
@@ -68,6 +70,20 @@ internal data class AnalysisTriage(
 private fun unitOf(family: String) = if (family == "fair" || family == "weekly") "pt" else "件"
 
 private fun labelOf(family: String) = breakdownLabels[family] ?: family
+
+/** ホームの解消度に添える残り。必須0の要調整は件数の族だけ数える（pt の公平化・曜日の偏りを件と足さない）。
+ *  pt だけ残っても解消度は 100% でないので「解消済み」とは言わない。 */
+internal fun homeRemainingLabel(bestHard: Long, shortDays: Int, breakdown: Map<String, Int>): String {
+    val softN = MirrorKeys.soft.filter { unitOf(it) == "件" }.sumOf { breakdown[it] ?: 0 }
+    val ptN = MirrorKeys.soft.filter { unitOf(it) == "pt" }.sumOf { breakdown[it] ?: 0 }
+    return when {
+        bestHard > 0L -> "必須 残り${bestHard}件"
+        shortDays > 0 -> "残り${shortDays}日"
+        softN > 0 -> "必須は解消・要調整 ${softN}件"
+        ptN > 0 -> "必須は解消・残りは偏りのみ"
+        else -> "解消済み"
+    }
+}
 
 /** `SettingIssue` の種類 → 画面に出す見出し（英字符号を出さない＝`docs/operator_ux.md`）。 */
 private fun issueKindLabel(kind: IssueKind) = when (kind) {
@@ -97,6 +113,7 @@ private fun aggregateIssues(issues: List<SettingIssue>): List<TriageRow> =
                 count = list.size,
                 unit = "件",
                 detail = detail,
+                kind = kind,
             )
         }
         .sortedByDescending { it.count }

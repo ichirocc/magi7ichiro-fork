@@ -1,9 +1,8 @@
 package probe
 // [3.601.0/backlog#34] ポートフォリオ経路（algorithm=PORTFOLIO）を実際に回すベンチ。既存の
 // LoopBench.kt は経由しない（経緯は docs/history）。PersonSwapBench.kt と同型のハーネスで
-// V6OptimizerOptions.roleBudgetFit（既定OFF）のA/Bを取る。
-// [2026-09-21/backlog#28] PORTFOLIO_BENCH_FEATURE で比較対象のオプションを選べるよう一般化
-//   （既定は従来どおり roleBudgetFit）。rsiFocusRotationPersist（runRsi呼出しをまたぐ周期枠の持ち越し）は
+// 既定OFFオプションのA/Bを取る（最初の腕 roleBudgetFit は否決・2026-09-25 撤去）。
+// [2026-09-21/backlog#28] PORTFOLIO_BENCH_FEATURE で比較対象のオプションを選ぶ。rsiFocusRotationPersist（runRsi呼出しをまたぐ周期枠の持ち越し）は
 //   runRsi自体がRSI/RSI_PLUS/PORTFOLIOでしか呼ばれずLoopBench(V5固定)では測定不能なため、ここでのみ測れる。
 import com.magi.app.model.StateParser
 import com.magi.app.v6.UnifiedViolationChecker
@@ -20,16 +19,13 @@ fun main(args: Array<String>) {
     val budgetSec = args.getOrNull(3)?.toInt() ?: 90
     val workers = args.getOrNull(4)?.toInt() ?: 4
     val fixtures = listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json")
-    val feature = System.getenv("PORTFOLIO_BENCH_FEATURE") ?: "rolebudgetfit"
+    val feature = System.getenv("PORTFOLIO_BENCH_FEATURE") ?: "rsifocusrotation"
     fun options(seed: Long, armOn: Boolean) = when (feature) {
         "rsifocusrotation" -> V6OptimizerOptions(
             algorithm = V6Algorithm.PORTFOLIO, totalBudgetSec = budgetSec, workers = workers,
             seed = seed, rsiFocusRotationPersist = armOn,
         )
-        else -> V6OptimizerOptions(
-            algorithm = V6Algorithm.PORTFOLIO, totalBudgetSec = budgetSec, workers = workers,
-            seed = seed, roleBudgetFit = armOn,
-        )
+        else -> error("unknown PORTFOLIO_BENCH_FEATURE=$feature")
     }
 
     val w = java.io.FileWriter(out, false).buffered()

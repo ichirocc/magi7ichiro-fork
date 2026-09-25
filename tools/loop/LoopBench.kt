@@ -103,32 +103,16 @@ fun main(args: Array<String>) {
     // [3.510.0] MAGI_BENCH_FEATURE で比較する機能を選ぶ。既定（未設定）は Iteration 2 以来の「成分修復の有無」。
     val feature = System.getenv("MAGI_BENCH_FEATURE") ?: ""
     val (oldP, newP) = when (feature) {
-        "c3pair" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3PairMaskEnabled = true)
         "c3nmargin" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c3nMarginLnsEnabled = true)
         "lnsadaptive" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true)
-        "weightdebt" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsWeightDebt = true)
         "debtexplore" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true))
-        "familypriority" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true))
-        "dynamicblocklens" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, useDynamicBlockLens = true)
-        "stallwiden" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, lnsAdaptive = true, stallEscalation = V6HotfixPasses.StallEscalationConfig(enabled = true))
         "cyclicn" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, cyclicSwapMaxK = 5)
         "restzero" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, restZeroWindowLnsEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        "covoreliefFinal" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEarly = false)
         "covorelief" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         "c2polish" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishEnabled = true)
-        "c41flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c41FlowPolishEnabled = true)
         "c42flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c42FlowPolishEnabled = true)
         "c1component" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c1ComponentRepair = true)
         "quantrange" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, quantitativeRangeEval = true)
-        // [3.512.3] debtExploration/familyPriorityScoring は旧腕にも入れて固定する＝debtlane/bestofk単体のレバーだけを
-        //   分離して測る（旧: debtExploration=false vs 新: debtExploration=true+debtLaneSlots=2 だと、iter11で
-        //   既に不合格判定済みのdebtExploration自体の効果と混ざり、debtLaneSlotsという新レバー単体の効果を測れない）。
-        "debtlane" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 0)) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2))
-        "bestofk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true, bestOfK = 1)) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true, bestOfK = 3))
         "combineexhaust" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, combineExhaustPairs = true)
         "aptfairtol" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true)
         "countchain" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainEnabled = true)
@@ -151,11 +135,12 @@ fun main(args: Array<String>) {
         //   非単調になるのは aptFairSoftTolerance（他ソフト悪化を許容）ON のとき＝実機で道連れ棄却が起きた設定。
         "runningkeepbestaft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装（A）と、同点も受け入れる版（B）。どちらも許容 ON 同士。
+        //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装。許容 ON 同士。
         "rkbstruct" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        "rkbstructties" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true, postChainRunningKeepBestAcceptTies = true)
+        //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
+        "n9rollback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = false) to
+            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = true)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")

@@ -27,32 +27,48 @@ internal fun MagiViewModel.constraintFamilies(): List<ConstraintFamilyView> = co
 internal fun MagiViewModel.skillConstraintFamilies(): List<ConstraintFamilyView> = constraintsViewOf(state).skillFamilies
 
 fun MagiViewModel.skillGroupKigouList(): List<String> = state?.skillGroups?.map { it.kigou } ?: emptyList()
+
+/** 値がすべて同じ行があれば知らせて true（画面も [ConstraintsView.rowDuplicate] で確定を止める）。
+ *  既存の重複は消さない（エンジンでも dedup しない）＝画面経由の追加・変更だけを止める。 */
+private fun MagiViewModel.rowAlreadyExists(family: String, values: List<String>, excludeIndex: Int? = null): Boolean {
+    if (!constraintsViewOf(state).rowDuplicate(family, values, excludeIndex)) return false
+    logOp("W", "制約の追加/変更を無視($family): ${values.joinToString(" ")} は登録済み")
+    _ui.update { it.copy(messageIsError = true, message = DUPLICATE_ROW_HINT) }
+    return true
+}
+
 fun MagiViewModel.addCons41s(groupKigou: String, shiftKigou: String, l: String, u: String) {
     val st = state ?: return
+    if (rowAlreadyExists("cons41s", listOf(groupKigou, shiftKigou, l, u))) return
     logOp("I", "制約追加(スキルグループ回数): $groupKigou $shiftKigou ${l.trim()}〜${u.trim()}"); mutateConstraints(st.copy(cons41s = st.cons41s + C41Row(groupKigou, shiftKigou, l.trim(), u.trim())))
 }
 fun MagiViewModel.addCons42s(g1: String, g2: String, s1: String, s2: String) {
     val st = state ?: return
+    if (rowAlreadyExists("cons42s", listOf(g1, s1, g2, s2))) return
     logOp("I", "制約追加(スキルグループ組合せ禁止): ${g1}${s1} & ${g2}${s2}"); mutateConstraints(st.copy(cons42s = st.cons42s + C42Row(g1, g2, s1, s2)))
 }
 
 fun MagiViewModel.addCons1(day1: String, shiftKigou: String, day2: String) {
     val st = state ?: return
+    if (rowAlreadyExists("cons1", listOf(day1, shiftKigou, day2))) return
     logOp("I", "制約追加(連勤/休): ${day1.trim()}日に${shiftKigou}${day2.trim()}回以上"); mutateConstraints(st.copy(cons1 = st.cons1 + C1Row(day1.trim(), shiftKigou, day2.trim())))
 }
 
 fun MagiViewModel.addCons2(shiftKigou: String, count: String) {
     val st = state ?: return
+    if (rowAlreadyExists("cons2", listOf(shiftKigou, count))) return
     logOp("I", "制約追加(cons2): $shiftKigou ${count.trim()}"); mutateConstraints(st.copy(cons2 = st.cons2 + C2Row(shiftKigou, count.trim())))
 }
 
 fun MagiViewModel.addCons41(groupKigou: String, shiftKigou: String, l: String, u: String) {
     val st = state ?: return
+    if (rowAlreadyExists("cons41", listOf(groupKigou, shiftKigou, l, u))) return
     logOp("I", "制約追加(グループ回数): $groupKigou $shiftKigou ${l.trim()}〜${u.trim()}"); mutateConstraints(st.copy(cons41 = st.cons41 + C41Row(groupKigou, shiftKigou, l.trim(), u.trim())))
 }
 
 fun MagiViewModel.addCons42(g1: String, g2: String, s1: String, s2: String) {
     val st = state ?: return
+    if (rowAlreadyExists("cons42", listOf(g1, s1, g2, s2))) return
     logOp("I", "制約追加(グループ組合せ禁止): ${g1}${s1} & ${g2}${s2}"); mutateConstraints(st.copy(cons42 = st.cons42 + C42Row(g1, g2, s1, s2)))
 }
 
@@ -79,6 +95,7 @@ fun MagiViewModel.seqDuplicateOf(family: String, pattern: List<String>, excludeI
 
 fun MagiViewModel.addCons3(family: String, pattern: List<String>) {
     val st = state ?: return
+    if (seqGapRejected(family, pattern)) return
     // Level Zero loads cons3 by reading day columns until the first blank (truncate at
     // first blank, max 5 days), not by removing all blanks. Match that here.
     val pat = pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5)
@@ -101,6 +118,17 @@ fun MagiViewModel.addCons3(family: String, pattern: List<String>) {
         }
     )
 }
+
+/** 途中に空欄のある並びは断る（後ろが黙って切れ、1番目だけの禁止になりうる。CSV 取込も同じ形を形式エラーにする）。 */
+private fun MagiViewModel.seqGapRejected(family: String, pattern: List<String>): Boolean {
+    if (!seqHasGap(pattern)) return false
+    logOp("W", "制約の追加/変更を無視($family): 並びの途中に空欄 ${pattern.joinToString(",")}")
+    _ui.update { it.copy(messageIsError = true, message = "並びの途中に空欄があります。上から詰めて選んでください") }
+    return true
+}
+
+/** 変更時に値の重複を止める族（追加は各 addConsX が止める・並び4族は [seqDuplicateOf]）。 */
+private val DUP_GUARDED = setOf("cons1", "cons2", "cons41", "cons41s", "cons42", "cons42s", "cons3w")
 
 fun MagiViewModel.removeConstraint(family: String, index: Int) {
     val st = state ?: return
@@ -157,6 +185,7 @@ fun MagiViewModel.updateConstraint(family: String, index: Int, values: List<Stri
     fun <T> List<T>.replaced(i: Int, v: T) = mapIndexed { idx, e -> if (idx == i) v else e }
     val v = values.map { it.trim() }
     fun g(i: Int) = v.getOrElse(i) { "" }
+    if (family in DUP_GUARDED && rowAlreadyExists(family, v, excludeIndex = index)) return
     val next = when (family) {
         "cons1" -> { if (index !in st.cons1.indices) return; st.copy(cons1 = st.cons1.replaced(index, C1Row(g(0), g(1), g(2)))) }
         "cons2" -> { if (index !in st.cons2.indices) return; st.copy(cons2 = st.cons2.replaced(index, C2Row(g(0), g(1)))) }
@@ -166,6 +195,7 @@ fun MagiViewModel.updateConstraint(family: String, index: Int, values: List<Stri
         "cons42s" -> { if (index !in st.cons42s.indices) return; st.copy(cons42s = st.cons42s.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
         "cons3w" -> { if (index !in st.cons3w.indices) return; st.copy(cons3w = st.cons3w.replaced(index, C3wRow(g(0), g(1)))) }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
+            if (seqGapRejected(family, v)) return
             val pat = v.takeWhile { it.isNotEmpty() }.take(5)
             if (pat.isEmpty()) return
             // [3.482.0 入口ガード] 変更後の並びが他の行（自分自身は除く）と同じなら止める（addCons3 と同じ）。

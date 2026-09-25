@@ -130,8 +130,8 @@ class OptimizationWorker(
         //   旧: インメモリの OptimizationRepository のみで、プロセス再起動後は既定の 60秒/4並列 に
         //   化けていた（300秒/8並列で開始したジョブが別条件で再実行される）。inputData は WorkManager が
         //   永続化するため kill/再起動を跨いで開始時の条件が保たれる（0=未設定なら従来どおり Repository）。
-        val budgetSec = inputData.getInt(KEY_SECONDS, 0).takeIf { it > 0 } ?: OptimizationRepository.seconds
-        val bgWorkers = inputData.getInt(KEY_WORKERS, 0).takeIf { it > 0 } ?: OptimizationRepository.workers
+        //   [外部レビュー N6] 方式・仕上げ最適化も同じ inputData から読む（RunConfig の KDoc 参照）。
+        val cfg = OptimizationRepository.RunConfig.fromInput(inputData.keyValueMap)
         // [#4] 前景サービス化: 5分のCPUジョブをOSに止めさせない（FGS不可な環境では通常実行へフォールバック）。
         // [3.428.0/#43] 前景化の失敗を**残す**。旧: 握り潰していたため、前景サービスになれないまま
         //   走り（OS はバックグラウンドのプロセスを優先的に殺す）、次回起動が「中断されました」と
@@ -168,8 +168,10 @@ class OptimizationWorker(
             val res = V6FinalPort.handleOptimize(
                 state = req.first,
                 schedule = req.second.copy2D(),
-                secondsRaw = budgetSec,
-                workers = bgWorkers,
+                secondsRaw = cfg.seconds,
+                workers = cfg.workers,
+                softPolish = cfg.softPolish,
+                requestedAlgorithm = cfg.algorithm,
                 allowImpossible = true,
             ) { phase, report, iters, elapsed ->
                 if (report != null) {
@@ -418,8 +420,6 @@ class OptimizationWorker(
 
         fun clearFiles(ctx: Context, keepRunId: Boolean = false) = files(ctx).clear(keepRunId)
 
-        const val KEY_SECONDS = "seconds"   // [P2] enqueue 時の予算秒数（WorkManager が永続化）
-        const val KEY_WORKERS = "workers"   // [P2] enqueue 時の並列数
         const val KEY_RUN_ID = "runId"      // [3.327.0] 実行の識別子（WorkManager が永続化＝kill後も同一）
 
         private fun loadPair(f: File): Pair<MagiState, Array<IntArray>>? {

@@ -2,8 +2,8 @@
 # ポートフォリオ経路（algorithm=PORTFOLIO）のA/Bベンチ（tools/loop/PortfolioBudgetBench.kt、backlog#34）をホスト JVM で走らせる。
 #   tools/host/hosttest.sh                                  # 先にエンジンを /tmp/magi-hostbuild へビルド
 #   tools/loop/run_portfolio_budget_bench.sh results/portfoliobudget1.csv [seeds=5] [budgetSec=90] [workers=4]
-# [2026-09-21/backlog#28] PORTFOLIO_BENCH_FEATURE=rsifocusrotation で rsiFocusRotationPersist のA/Bに切替
-#   （既定はroleBudgetFit）。runRsi自体がRSI/RSI_PLUS/PORTFOLIOでしか呼ばれずLoopBenchでは測れない。
+# [2026-09-21/backlog#28] PORTFOLIO_BENCH_FEATURE（既定 rsifocusrotation＝rsiFocusRotationPersist のA/B）。
+#   runRsi自体がRSI/RSI_PLUS/PORTFOLIOでしか呼ばれずLoopBenchでは測れない。
 set -e
 export LANG=C.utf8 LC_ALL=C.utf8   # POSIX ロケールだと日本語リテラルが化ける（hosttest.sh 参照）
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)

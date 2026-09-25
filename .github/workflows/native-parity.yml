@@ -61,6 +61,10 @@ jobs:
       # （backlog#6 残課題「実データ形状の網羅」への対応）。
       # [3.361.0] golden(hard=0) は C++ の HARD 族パスを実データで一度も exercise しないため、
       #   sample_state_v6(入力盤面 hard=15＝groupViol/c3n/pref/covU 発火) を2つ目の形状として追加。
+      - name: Converter self-test (restIdx resolution matches Kotlin)
+        shell: bash
+        run: python3 tools/native/test_state_to_flat.py
+
       - name: Generate real-data fixtures (state JSON → flat)
         shell: bash
         run: |

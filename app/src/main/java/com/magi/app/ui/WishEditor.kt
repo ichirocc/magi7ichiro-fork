@@ -97,11 +97,12 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
                         }
                     }
                 }
-                Text(
-                    if (showAllStaff) "一覧を隠す" else "全職員を見る",
-                    style = MaterialTheme.typography.labelMedium, color = cs.primary,
-                    modifier = Modifier.clickable { showAllStaff = !showAllStaff }.padding(vertical = 4.dp),
-                )
+                Box(Modifier.heightIn(min = 48.dp).clickable { showAllStaff = !showAllStaff }, contentAlignment = Alignment.Center) {
+                    Text(
+                        if (showAllStaff) "一覧を隠す" else "全職員を見る",
+                        style = MaterialTheme.typography.labelMedium, color = cs.primary,
+                    )
+                }
             }
             MonthHeaderStatic(ui.startDate)
             WishMonthGrid(

@@ -127,23 +127,14 @@ internal fun NeedCalendarCard(ui: UiState, v: Ws1View, cv: ConditionsView, onEve
     val ranges = (0 until ui.days).map { j -> cv.needCellLimits(k, j) }
     // 個別設定＝日別例外が登録された日（0始まり）。カレンダーで太字＋小さな印にする。
     val individualDays = cv.needDayOverrides.filter { it.k == k }.map { it.j }.toSet()
-    // 標準（基本設定）の表示ラベル。「N人」または「lo–hi人」、未設定は「未設定」。
-    val baseLabel = run {
-        val n1 = shift.need1.toIntOrNull(); val n2 = shift.need2.toIntOrNull()
-        when {
-            n1 == null && n2 == null -> "未設定"
-            n2 == null || n2 == n1 -> "${n1 ?: n2}人"
-            n1 == null -> "${n2}人"
-            else -> "$n1–${n2}人"
-        }
-    }
+    val baseLabel = needBaseLabel(shift.need1, shift.need2, v.use2)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // [1行に統合] タイトル＋「シフト▼ ・ 標準 N人」。説明文/設定済・未設定の凡例は撤去。
             Text("必要人数設定", style = MaterialTheme.typography.titleMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box {
-                    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.clickable { shiftMenu = true }) {
+                    Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.extraSmall, modifier = Modifier.heightIn(min = 48.dp).clickable { shiftMenu = true }) {
                         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(shift.kigou, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             Text("▼", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -155,21 +146,22 @@ internal fun NeedCalendarCard(ui: UiState, v: Ws1View, cv: ConditionsView, onEve
                         }
                     }
                 }
-                Text("標準 $baseLabel", style = MaterialTheme.typography.bodyLarge, color = cs.primary,
-                    modifier = Modifier.clickable { baseSheet = true }.padding(vertical = 4.dp))
+                Box(Modifier.heightIn(min = 48.dp).clickable { baseSheet = true }, contentAlignment = Alignment.CenterStart) {
+                    Text("標準 $baseLabel", style = MaterialTheme.typography.bodyLarge, color = cs.primary)
+                }
             }
             MonthHeaderStatic(ui.startDate)
             NeedMonthGrid(startDate = ui.startDate, ranges = ranges, individualDays = individualDays, selectedDays = daysSel, onToggle = onToggleDay)
             // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（専用「複数日選択」カードは撤去）。
             if (daysSel.isNotEmpty()) {
-                NeedApplyPanel(ui, onEvent, k, daysSel, shift.need1, shift.need2,
+                NeedApplyPanel(ui, onEvent, k, daysSel, shift.need1, shift.need2, v.use2,
                     onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
             } else {
             }
         }
     }
     if (baseSheet) {
-        BaseNeedSheet(shift.kigou, shift.need1, shift.need2, running = ui.running,
+        BaseNeedSheet(shift.kigou, shift.need1, shift.need2, v.use2, running = ui.running,
             onApply = { p1, p2 -> onEvent(MagiEvent.Structure.SetShiftNeed(k, p1, p2)) }, onDismiss = { baseSheet = false })
     }
 }
@@ -179,7 +171,7 @@ internal fun NeedCalendarCard(ui: UiState, v: Ws1View, cv: ConditionsView, onEve
  * カレンダーを見ながら追加選択・適用できる。「未設定に戻す」で選択日の例外を削除＝既定へ。入力エラー(最低>最高)は赤枠＋注記。
  */
 @Composable
-private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, days: Set<Int>, baseN1: String, baseN2: String, onCancel: () -> Unit, onDone: () -> Unit) {
+private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, days: Set<Int>, baseN1: String, baseN2: String, use2: Boolean, onCancel: () -> Unit, onDone: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     var p1 by remember(k) { mutableStateOf(baseN1) }
     var p2 by remember(k) { mutableStateOf(baseN2) }
@@ -198,18 +190,18 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
         }
         Column(Modifier.border(1.dp, if (invalid) cs.error else Color.Transparent, MaterialTheme.shapes.medium)) {
             NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
-            NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "既定")
+            NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "既定")
         }
         if (invalid) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = cs.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
             Button(
-                onClick = { days.forEach { d -> onEvent(MagiEvent.Condition.SetNeedDay(k, d - 1, p1, p2)) }; onDone() },
-                enabled = !ui.running && (p1.isNotBlank() || p2.isNotBlank()) && !invalid,
+                onClick = { onEvent(MagiEvent.Condition.SetNeedDaysForDays(k, sorted.map { it - 1 }, p1, p2)); onDone() },
+                enabled = !ui.running && (p1.isNotBlank() || (use2 && p2.isNotBlank())) && !invalid,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text("${days.size}日に適用") }
         }
-        TextButton(onClick = { days.forEach { d -> onEvent(MagiEvent.Condition.RemoveNeedDay(k, d - 1)) }; onDone() }, enabled = !ui.running,
+        TextButton(onClick = { onEvent(MagiEvent.Condition.ClearNeedDaysForDays(k, sorted.map { it - 1 })); onDone() }, enabled = !ui.running,
             modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
     }
 }
@@ -217,7 +209,7 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
 /** 基本の必要人数（シフト既定need1/need2）編集シート。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BaseNeedSheet(kigou: String, need1: String, need2: String, running: Boolean, onApply: (String, String) -> Unit, onDismiss: () -> Unit) {
+private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boolean, running: Boolean, onApply: (String, String) -> Unit, onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
     var p1 by remember { mutableStateOf(need1) }
     var p2 by remember { mutableStateOf(need2) }
@@ -229,7 +221,7 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, running: 
             Text("基本の必要人数（${kigou}の既定値）", style = MaterialTheme.typography.titleMedium)
             Column(Modifier.border(1.dp, if (bad) MaterialTheme.colorScheme.error else Color.Transparent, MaterialTheme.shapes.medium)) {
                 NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "未設定")
-                NumberStepper("上限人数", p2, { p2 = it }, min = 0, blankLabel = "未設定")
+                NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "未設定")
             }
             if (bad) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
             Button(onClick = { onApply(p1, p2); onDismiss() }, enabled = !running && !bad, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("保存") }
@@ -341,7 +333,7 @@ internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -
                 overrides.forEach { o ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "${o.kigou}  ${o.j + 1}日  最低 ${o.p1.ifBlank { "-" }}人 / 上限 ${o.p2.ifBlank { "-" }}人",
+                            "${o.kigou}  ${o.j + 1}日  最低 ${o.p1.ifBlank { "-" }}人 / ${needUpperLabel(cv.setupCounts.use2, short = true)} ${o.p2.ifBlank { "-" }}人",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )

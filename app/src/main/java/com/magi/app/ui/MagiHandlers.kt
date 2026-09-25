@@ -26,6 +26,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Structure.EditShift -> vm.ws1EditShift(e.shift, e.name, e.kigou, e.need1, e.need2, e.isRest)
             is MagiEvent.Structure.SetShiftNeed -> vm.setShiftNeed(e.shift, e.need1, e.need2)
             is MagiEvent.Structure.AddShift -> vm.ws1AddShift(e.name, e.kigou, e.need1, e.need2, e.isRest)
+            is MagiEvent.Structure.BulkAddShift -> vm.ws1AddShiftsBulk(e.kigous)
             is MagiEvent.Structure.RemoveShift -> vm.ws1RemoveShift(e.shift)
             is MagiEvent.Structure.MoveShift -> vm.ws1MoveShiftTo(e.from, e.to)
             is MagiEvent.Structure.EditGroup -> vm.ws1EditGroup(e.group, e.name, e.kigou)
@@ -34,6 +35,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Structure.MoveGroup -> vm.ws1MoveGroupTo(e.from, e.to)
             is MagiEvent.Structure.EditStaff -> vm.ws1EditStaff(e.staff, e.name, e.groupIdx)
             is MagiEvent.Structure.AddStaff -> vm.ws1AddStaff(e.name, e.groupIdx)
+            is MagiEvent.Structure.BulkAddStaff -> vm.ws1AddStaffBulk(e.names, e.groupIdx)
             is MagiEvent.Structure.RemoveStaff -> vm.ws1RemoveStaff(e.staff)
             is MagiEvent.Structure.MoveStaff -> vm.ws1MoveStaffTo(e.from, e.to)
             is MagiEvent.Structure.SetGroupShift -> vm.ws1SetGroupShift(e.group, e.shift, e.allowed)
@@ -58,6 +60,8 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
         when (e) {
             is MagiEvent.Condition.SetNeedDay -> vm.setNeedDay(e.shift, e.day, e.p1, e.p2)
             is MagiEvent.Condition.RemoveNeedDay -> vm.removeNeedDay(e.shift, e.day)
+            is MagiEvent.Condition.SetNeedDaysForDays -> vm.setNeedDaysForDays(e.shift, e.days, e.p1, e.p2)
+            is MagiEvent.Condition.ClearNeedDaysForDays -> vm.clearNeedDaysForDays(e.shift, e.days)
             is MagiEvent.Condition.SetStaffRange -> vm.setStaffRange(e.staff, e.shift, e.lo, e.hi)
             is MagiEvent.Condition.RelaxStaffRangePin -> vm.relaxStaffRangePin(e.staff, e.shift, e.loDelta, e.hiDelta)
             is MagiEvent.Condition.RemoveStaffRange -> vm.removeStaffRange(e.staff, e.shift)
@@ -151,7 +155,8 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
         if (e !is MagiEvent.Session) return@MagiEventHandler false
         when (e) {
             MagiEvent.Session.RefreshCheck -> vm.refreshCheck()
-            is MagiEvent.Session.FindFixSuggestions -> vm.findFixSuggestions(e.focusStaff, e.focusShift)
+            is MagiEvent.Session.FindFixSuggestions -> vm.findFixSuggestions(e.focusStaff, e.focusShift, e.focusKey, e.exceptStaff, e.day)
+            is MagiEvent.Session.CancelFixSearch -> vm.cancelFixSearch()
             is MagiEvent.Session.Notify -> vm.notify(e.text, e.level)
             is MagiEvent.Session.ClearMessage -> vm.clearMessage(e.shown)
             is MagiEvent.Session.AddReviewMemo -> vm.addReviewMemo(e.text)

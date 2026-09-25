@@ -37,6 +37,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,29 +106,109 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
-/** [思考誘導S3] 必須違反に関わる希望を、名前・日付・理由つきで並べる。押すとそのセルを開く（希望の変更もそこで）。 */
+/** [思考誘導S3→S5] 必須違反に関わる希望と、人手不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「取り消したら？」で試算・確定（§5）。
+ *  試算の結果は VM が ctx つきで持ち、ここは読むたびに問い合わせる（古ければ隠す＝§8）。 */
 @Composable
-internal fun WishConflictDialog(ui: UiState, onDismiss: () -> Unit, onOpenCell: (Int, Int) -> Unit) {
-    val items = remember(ui.violationCellFamilies, ui.wishes) { involvedWishes(ui) }
+internal fun WishConflictDialog(
+    ui: UiState,
+    vm: MagiViewModel,
+    onDismiss: () -> Unit,
+    onOpenCell: (Int, Int) -> Unit,
+    onConfirm: (WishTrialToken) -> Unit,
+    onRebuild: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val cands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag, ui.staffNames, ui.shiftSymbols) {
+        wishTrialCandidates(ui)
+    }
+    // 閉じる・行を押してセルへ移る・Activity の作り直し、どの閉じ方でもここ 1 か所で試算を止める（§8）。
+    DisposableEffect(Unit) { onDispose { vm.cancelWishTrial() } }
+    val control = vm.wishTrialControlFor()   // 非 State の読み取り＝ui（wishTrialRev）が変われば描き直される
+    var expanded by remember { mutableStateOf(setOf<Pair<Int, Int>>()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("ぶつかっている希望") },
         text = {
-            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (items.isEmpty()) Text("いま必須違反に関わる希望はありません。")
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
                 else {
-                    Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    items.forEach { w ->
-                        TextButton(onClick = { onOpenCell(w.staff, w.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                            Text("${w.name} ・ ${w.day + 1}日　${w.reason}", modifier = Modifier.fillMaxWidth())
+                    control?.let { wishTrialKeepOnlyText(it) }?.let { line ->
+                        Text(line, fontWeight = FontWeight.Bold)
+                        OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("もう一度つくる") }
+                    }
+                    if (cands.direct.isNotEmpty()) {
+                        Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
+                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                    }
+                    if (cands.shortfall.isNotEmpty()) {
+                        Text("人手不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        cands.shortfall.forEach { g ->
+                            Text(g.header, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                            val slot = g.day to g.shift
+                            val rows = if (slot in expanded) g.rows else g.rows.take(WISH_TRIAL_GROUP_LIMIT)
+                            rows.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                            if (rows.size < g.rows.size) {
+                                TextButton(onClick = { expanded = expanded + slot }, modifier = Modifier.heightIn(min = 48.dp)) {
+                                    Text("ほか ${g.rows.size - rows.size}人")
+                                }
+                            }
                         }
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("閉じる") } },
+        confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
     )
+}
+
+/** [S5] 候補 1 行＝「名前 ・ N日　理由」（押すとセル）と、その下の試算・結果・確定。 */
+@Composable
+private fun WishTrialRowView(
+    row: WishTrialRow,
+    ui: UiState,
+    vm: MagiViewModel,
+    onOpenCell: (Int, Int) -> Unit,
+    onConfirm: (WishTrialToken) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val small = MaterialTheme.typography.bodySmall
+    TextButton(onClick = { onOpenCell(row.staff, row.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+        Text("${row.name} ・ ${row.day + 1}日　${row.reason}", modifier = Modifier.fillMaxWidth())
+    }
+    val k = ui.wishes["${row.staff},${row.day}"]
+    if (!row.locked || k == null) {
+        Text(WISH_TRIAL_NOT_LOCKED, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+    } else {
+        val view = vm.wishTrialFor(row.staff, row.day, k)
+        val canTrial = ui.wishTrialBusy == null && !ui.running
+        when (view) {
+            WishTrialView.Busy -> Text("試算しています…", style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+            WishTrialView.None -> WishTrialButton(canTrial) { vm.startWishTrial(row.staff, row.day) }
+            WishTrialView.Stale -> {
+                Text("勤務表が変わりました。もう一度試算してください。", style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+                WishTrialButton(canTrial) { vm.startWishTrial(row.staff, row.day) }
+            }
+            is WishTrialView.Ready -> {
+                wishTrialText(view.outcome)?.let { Text(it, style = small, modifier = Modifier.padding(start = 12.dp)) }
+                if (view.token.result != null) {
+                    TextButton(
+                        onClick = { onConfirm(view.token) },
+                        enabled = !ui.running,
+                        colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+                        modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
+                    ) { Text("希望を取り消して、もう一度つくる") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) {
+        Text("取り消したら？")
+    }
 }
 
 @Composable
@@ -220,7 +301,7 @@ internal fun GuidedFixDialog(
                             Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text("もう一度つくっても、この日は同じ結果になります。希望を1件調整するか、担当できるシフトを増やしてください（編集タブ＞月次条件）。",
+                        Text("もう一度つくっても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     else -> {
@@ -263,11 +344,17 @@ internal fun OperatorNextActionCard(
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
+    outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して、もう一度つくる」の結果（VM が鮮度を照合済み）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
+    // [S5 §2.1] 関わる希望（S5a の行か S5b の行）があるか。WISH・FLOOR の分岐がこれを見る。
+    val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui) }
     val shortDays = ui.coverageDiag?.shortfalls?.map { it.dayIndex }?.distinct()?.size ?: 0
     val worstDay = ui.coverageDiag?.shortfalls?.firstOrNull()?.dayLabel
+    // 充足不可の S5b 版は重複除去の前（S5a の行に畳まれた人も含む）で決め、例の日も希望で固定された人がいる枠から取る。
+    val hasPinned = ui.coverageDiag?.shortfalls?.any { it.wishPinned.isNotEmpty() } == true
+    val wishDay = ui.coverageDiag?.shortfalls?.firstOrNull { it.wishPinned.isNotEmpty() }?.dayLabel
 
     // [M3] 成功=tertiary / 注意=error / 主操作=primary はテーマロール。警告のみ独自トークンに集約。
     val (amber, onAmber) = magiWarnColors()
@@ -286,6 +373,9 @@ internal fun OperatorNextActionCard(
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
             "③ 完成しました。そのまま配れます。" + (ui.runSummary?.let { "\n$it" } ?: ""),
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
+        infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
+            "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
+            "ぶつかっている希望を見る", onShowWishes, true, "データを見直す", onSetup)
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
             "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
@@ -301,10 +391,10 @@ internal fun OperatorNextActionCard(
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
-        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && involvedWishes(ui).isNotEmpty() ->
+        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
                 "ぶつかっている希望を見る", onShowWishes, true, "このまま書き出す", onExport)
-        ui.violationCellFamilies.values.any { f -> f.any { it == "vio-pref" || it == "vio-c3w" } } ->
+        !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
                 "ぶつかっている希望を見る", onShowWishes, true, null, onSetup)
         else -> OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。",
@@ -329,18 +419,14 @@ internal fun OperatorNextActionCard(
                 }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+            if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
             // [3.480.0 ホームAIリデザイン] 旧: 「できあがり度：N%」の数字1行＋その意味を説明する注記1行を
             // 常時2行表示していた。grilling決定#1のとおり文言（正直さ）は変えず、①前向きな言い回し
             // 「解消度：N%（残りM件）」＋バーへ統合 ②注記は既定折りたたみ（ConstraintHelpExpander と
             // 同じ開閉パターン）にして、常時見えるのは進捗バー1本だけにする。
             // [3.483.0 H-2] 旧: 必須0なら一律「解消済み」だが、解消度は調整（ソフト）違反が残ると 100% に
             //   ならない（40+比率×60）＝「78%（解消済み）」という自己矛盾。必須0のときは残りの単位を調整件数へ。
-            val remainingLabel = when {
-                ui.bestHard > 0L -> "必須 残り${ui.bestHard}件"
-                shortDays > 0 -> "残り${shortDays}日"
-                ui.bestSoft > 0L -> "必須は解消・調整 ${ui.bestSoft}件"
-                else -> "解消済み"
-            }
+            val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown)
             // [3.483.0 H-5] 実行中は直下の進捗行（progressSummary）が同じ残数を出すため、解消度の行とバーは出さない。
             if (!ui.running) {
                 Text(
@@ -356,7 +442,7 @@ internal fun OperatorNextActionCard(
             if (!ui.running && ui.hasResult) {
                 var detailOpen by remember { mutableStateOf(false) }
                 Row(
-                    Modifier.fillMaxWidth().clickable { detailOpen = !detailOpen },
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { detailOpen = !detailOpen },
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
@@ -428,7 +514,7 @@ private fun DiagDetailToggle(
     openText: String = "ⓘ 詳細を閉じる",
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(onClick = onToggle),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onToggle),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
@@ -451,9 +537,13 @@ private fun DiagDetailToggle(
 internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.running || !ui.hasResult || ui.bestHard <= 0L) return
     val cs = MaterialTheme.colorScheme
-    // 既にある候補が別スタッフに絞った探索(fixFocusName!="")の結果なら、ホームでは全体探索へ差し替える。
-    LaunchedEffect(ui.schedule, ui.bestHard) {
-        if (!ui.fixSearching && (ui.fixSuggestions.isEmpty() || ui.fixFocusName.isNotBlank())) onEvent(MagiEvent.Session.FindFixSuggestions(null, null))
+    // 既にある候補が別スタッフに絞った探索(fixFocusName!="")の結果なら、ホームでは全体探索へ差し替える
+    //   （探索の途中でも差し替える＝終わるのを待つと鍵が変わらず、カードが隠れたままになる）。
+    //   全体探索を「探して0件」で終えた盤面（fixSearched）では探し直さない。
+    LaunchedEffect(ui.schedule, ui.bestHard, ui.fixFocusName) {
+        if (ui.fixFocusName.isNotBlank() || (!ui.fixSearching && ui.fixSuggestions.isEmpty() && !ui.fixSearched)) {
+            onEvent(MagiEvent.Session.FindFixSuggestions(null, null))
+        }
     }
     val top = ui.fixSuggestions.firstOrNull()
     if (ui.fixFocusName.isNotBlank() && !ui.fixSearching) return // 探索待ちのフレームだけ描画をスキップ
@@ -496,7 +586,14 @@ internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
 /** [対象月の選択] 勤務表を作る月を前月/翌月/今月で選ぶ。変更でその月の日数に合わせて表を作り直す。 */
 
 @Composable
-internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> Unit = {}) {
+internal fun CopilotCard(
+    ui: UiState,
+    onGoEdit: () -> Unit,
+    // 希望の編集は月次条件、手修正は勤務表タブ（D7）＝編集タブの今の節に任せない。
+    onEditWishes: () -> Unit,
+    onManualEdit: () -> Unit,
+    onSoftPolish: () -> Unit = {},
+) {
     // [冗長性削減] できあがり度・進捗は OperatorNextActionCard が表示するため、ここは助言/警告だけに専念。
     val cs = MaterialTheme.colorScheme
     val show = ui.impossibleWishCount > 0 || ui.copilotHint != null || (ui.polishExhausted && !ui.running)
@@ -509,7 +606,7 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("⚠ 実現できない希望が ${ui.impossibleWishCount} 件（担当外シフトなど）。配布前に見直しを。",
                             color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(onClick = onGoEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフトを編集") }
+                        OutlinedButton(onClick = onEditWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフトを編集") }
                     }
                 }
             }
@@ -529,7 +626,7 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
                             color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自動で整える") }
-                            OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
+                            OutlinedButton(onClick = onManualEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
                         }
                     }
                 }
@@ -911,6 +1008,8 @@ internal fun SettingIssuesCard(
     // [UX監査#4] 一覧は重要な順に整列済み＝先頭の種別を編集タブの節誘導に使う（無ければnull＝従来どおりtabのみ）。
     onGoEdit: (com.magi.app.v6.IssueKind?) -> Unit,
     onClearWishes: () -> Unit = {},
+    // 一括クリアが実際に消す件数（VM の canDo 判定）。行の種別で数えると希望どうしの c3w 衝突まで混ざる。
+    wishClearCount: Int = 0,
 ) {
     val issues = ui.settingIssues
     if (issues.isEmpty()) return
@@ -920,9 +1019,7 @@ internal fun SettingIssuesCard(
     // ①「担当外の希望」は同型行がまとまりやすいので一括クリアを先頭に置く ②一覧は既定折りたたみ
     // （DiagDetailToggle・付随事項として扱う）へ。
     var detailOpen by remember { mutableStateOf(false) }
-    val wishClearCount = issues.count {
-        it.kind == com.magi.app.v6.IssueKind.WISH && it.action == com.magi.app.v6.SettingFixAction.REMOVE_WISH
-    }
+    var showAll by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("設定の見直し（${issues.size}件）", style = MaterialTheme.typography.titleMedium)
@@ -936,7 +1033,8 @@ internal fun SettingIssuesCard(
                 closedText = "ⓘ 一覧を見る（${issues.size}件）", openText = "ⓘ 一覧を閉じる",
             )
             if (detailOpen) {
-                for (s in issues.take(6)) {
+                val shown = if (showAll) issues else issues.take(SETTING_ISSUE_PREVIEW)
+                for (s in shown) {
                     val label: String
                     val tagColor: androidx.compose.ui.graphics.Color
                     when (s.kind) {
@@ -961,14 +1059,19 @@ internal fun SettingIssuesCard(
                         }
                     }
                 }
-                if (issues.size > 6) {
-                    // [誘導] 重要な順に整列済み。届かない「ログ出力」ではなく、上から直せば解消する旨を案内。
-                    Text("ほか ${issues.size - 6} 件（重要な順に表示中。まず上から直してください）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                }
+                if (shown.size < issues.size) SettingIssuesShowAll(issues.size - shown.size) { showAll = true }
             }
             OutlinedButton(onClick = { onGoEdit(issues.firstOrNull()?.kind) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定・希望を編集する") }
         }
     }
+}
+
+/** 設定の見直しの一覧で最初に出す件数（重要な順に整列済み）。残りは [SettingIssuesShowAll] で開く。 */
+internal const val SETTING_ISSUE_PREVIEW = 6
+
+@Composable
+internal fun SettingIssuesShowAll(hidden: Int, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text("すべて表示（ほか ${hidden}件）") }
 }
 
 @Composable
@@ -1005,8 +1108,9 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 // [UX監査P0/U6,H7] 英字の内部指標名を画面に出さない（operator_ux.md）。hardCore/hardGuardは
                 //   単一のbreakdownLabelsキーに対応しない集計値なので、内訳の意味に沿った日本語を直接あてる。
-                BigStat("必須違反", v6.hardCore.toString(), Modifier.weight(1f))
-                BigStat(breakdownLabels["groupViol"] ?: "groupViol", v6.hardGuard.toString(), Modifier.weight(1f))
+                // 必須違反はホーム等と同じ全必須（担当外シフトを含む）＝担当外はその内数として並べる。
+                BigStat("必須違反", (v6.hardCore + v6.hardGuard).toString(), Modifier.weight(1f))
+                BigStat("うち" + (breakdownLabels["groupViol"] ?: "groupViol"), v6.hardGuard.toString(), Modifier.weight(1f))
                 BigStat("充足", v6.coveragePct?.let { "$it%" } ?: "-", Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
@@ -1184,7 +1288,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
         val fam = cls.removePrefix("vio-")
         // [④用語統一] 過剰マークは「過剰」（凡例/集計と同語）。[⑥日別ジャンプ] day=j で勤務表の該当日列へ飛べる。
-        val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過剰" to 1; else -> "調整" to 1 }
+        val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過剰" to 1; else -> "要調整" to 1 }
         out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, j, kind * 100000 + j * 100 + k,
             needShift = if (fam == "covU" || fam == "covO") k else null, families = listOf(fam))
     }
@@ -1205,9 +1309,9 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val cell = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
         val cellSym = if (cell >= 0) sym(cell) else "—"
         val (mark, kind) = when (fam) {
-            "c1" -> "窓" to 2
+            "c1" -> "期間" to 2   // 族名「期間の制約」の短縮（46dp の枠に収める）
             "pref", "groupViol", "c3n", "c3w" -> "必須" to 0
-            else -> "調整" to 1
+            else -> "要調整" to 1
         }
         // [Set化] 同セルに重なった族は sub に全列挙（重み降順）。行数=箇所数は不変（見出し件数の意味を保つ）。
         val famsAll = (ui.violationCellFamilies[key] ?: listOf(cls)).map { it.removePrefix("vio-") }
@@ -1244,7 +1348,9 @@ private fun ConfirmRow(
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Surface(color = bg, shape = MaterialTheme.shapes.small) {
                 Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
-                    Text(item.mark, color = fg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+                    // 3 字（要調整）は 1 段小さい字で 46dp の枠に収める。
+                    Text(item.mark, color = fg, style = if (item.mark.length >= 3) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                 }
             }
             Column(Modifier.weight(1f)) {
@@ -1293,8 +1399,8 @@ private fun ConfirmRow(
 internal fun AnalysisTriageCard(
     ui: UiState,
     onFocusStaff: (Int) -> Unit,
-    // [UX監査#4] 引数は発火した族キー（例: "c1"）。呼出側が編集タブの対象節へ変換する（無ければ従来どおりtabのみ）。
-    onGoEdit: (String?) -> Unit,
+    // [UX監査#4] 引数は設定の見直しの種類。呼出側が編集タブの対象節へ変換する。
+    onGoEdit: (com.magi.app.v6.IssueKind?) -> Unit,
     onShowCell: (Int, Int) -> Unit,
     onShowDay: (Int) -> Unit,
     onFixWish: (Int) -> Unit,
@@ -1302,7 +1408,7 @@ internal fun AnalysisTriageCard(
 ) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
-    val t = remember(ui.breakdown, ui.settingIssues, ui.coverageDiag, ui.forbiddenDiag, ui.c1Plateau, ui.hasResult) { analysisTriage(ui) }
+    val t = remember(ui.breakdown, ui.settingIssues, ui.coverageDiag, ui.forbiddenDiag, ui.c1Plateau, ui.engineRan) { analysisTriage(ui) }
     val items = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
     var showSummary by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
@@ -1343,7 +1449,7 @@ internal fun AnalysisTriageCard(
                                 Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
                                 if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            TextButton(onClick = { onGoEdit(row.family) }) { Text("設定へ") }
+                            TextButton(onClick = { onGoEdit(row.kind) }) { Text("設定へ") }
                         }
                     }
                 }
@@ -1467,7 +1573,7 @@ internal fun BigStat(label: String, value: String, modifier: Modifier = Modifier
 
 
 /** 改善手の種類 → (チップ文言, 色)。 */
-private fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compose.ui.graphics.Color> = when (k) {
+internal fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compose.ui.graphics.Color> = when (k) {
     com.magi.app.v6.FixKind.CHANGE -> "変更" to MagiAccent.green
     com.magi.app.v6.FixKind.CHANGE_MULTI -> "複数変更" to MagiAccent.green
     com.magi.app.v6.FixKind.SWAP -> "交換" to MagiAccent.blue
@@ -1485,7 +1591,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
     //   ソフトだけの盤面は従来どおり手動（探索コストに見合う候補が少ない）。
     LaunchedEffect(ui.schedule, ui.bestHard) {
         if (ui.hasResult && ui.bestHard > 0L && !ui.running && !ui.fixSearching &&
-            ui.fixSuggestions.isEmpty() && ui.fixFocusName.isBlank()) onSearch()
+            ui.fixSuggestions.isEmpty() && !ui.fixSearched && ui.fixFocusName.isBlank()) onSearch()
     }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1543,7 +1649,8 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
 @Composable
 internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     if (ui.alternatives.isEmpty()) return
-    var selected by rememberSaveable(ui.alternatives) { mutableStateOf(-1) }
+    // 適用中の案は VM が持つ（元に戻すで一覧ごと戻るため）。
+    val selected = ui.alternativeApplied
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
@@ -1552,7 +1659,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
             MagiSegmentedControl(
                 options = ui.alternatives.indices.map { "案${it + 1}" },
                 selected = selected,
-                onSelect = { i -> selected = i; onApply(i) },
+                onSelect = { i -> if (i != selected) onApply(i) },
             )
             // [3.483.0 H-3] タップ＝即反映なので「見てから選ぶ」ために全案の要約（必須/合計）を常時出す。
             //   反映済みの案は太字。

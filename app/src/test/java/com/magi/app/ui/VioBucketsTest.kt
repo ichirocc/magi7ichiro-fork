@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import com.magi.app.v6.IssueKind
 import com.magi.app.v6.MirrorKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -51,5 +52,24 @@ class VioBucketsTest {
         assertEquals("count", bucketOfFamily(familyOfVioClass("vio-aptHigh")))
         assertTrue("バケツONなら表示", vioVisible("vio-covU", setOf("need")))
         assertTrue("バケツOFFなら非表示", !vioVisible("vio-covU", setOf("pref")))
+    }
+
+    /** 設定の見直しの「設定へ」: 希望は年間マスターに無い（null＝呼出側が月次条件を開く）。 */
+    @Test fun issueKindLinksOpenYearSections() {
+        assertEquals("yr_cons", yearSectionForIssueKind(IssueKind.CONSTRAINT))
+        assertEquals("yr_count", yearSectionForIssueKind(IssueKind.RANGE))
+        assertEquals("yr_headcount", yearSectionForIssueKind(IssueKind.DEMAND))
+        assertNull(yearSectionForIssueKind(IssueKind.WISH))
+        assertNull(yearSectionForIssueKind(null))
+    }
+
+    /** フィルタのチップも族の表示名と同じ語（c1 を「窓」と呼ぶと分析タブの「期間の制約」と結びつかない）。 */
+    @Test fun windowBucketUsesTheSameWordAsTheBreakdownLabel() {
+        assertEquals(breakdownLabels["c1"], vioBuckets.single { "c1" in it.families }.label)
+    }
+
+    /** 並びのチップは「連勤」でなく「並び」（禁止・推奨の並びと希望前日の禁止を束ねる。連勤は期間の制約の語感と混ざる）。 */
+    @Test fun sequenceBucketIsNamedNarabi() {
+        assertEquals("並び", vioBuckets.single { it.key == "seq" }.label)
     }
 }
