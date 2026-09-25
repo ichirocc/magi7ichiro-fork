@@ -89,15 +89,22 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("${v.startDate} 〜 ${v.endDate}", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // 範囲外は黙って丸めず断る。縮めると後ろの日の希望・日別の必要人数が消えるので確認を挟む。
+            val newDays = daysText.toIntOrNull()
+            val okDays = newDays != null && newDays in 1..31
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                W1Field("日数(1-31)", daysText, Modifier.width(130.dp)) { daysText = it }
-                EditRowButton(onClick = { daysText.toIntOrNull()?.let { onEvent(MagiEvent.Structure.ResizeDays(it)) } }, enabled = !ui.running, text = "変更")
+                W1Field("日数(1-31)", daysText, Modifier.width(130.dp), isError = !okDays) { daysText = it }
+                EditRowButton(onClick = {
+                    if (newDays != null && newDays < v.days) dialog = Ws1Dialog.ConfirmShrink(newDays)
+                    else if (newDays != null) onEvent(MagiEvent.Structure.ResizeDays(newDays))
+                }, enabled = !ui.running && okDays && newDays != v.days, text = "変更")
             }
+            if (!okDays) Text("日数は 1〜31 で入れてください", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 
             // --- use2 ---
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                Switch(checked = v.use2, onCheckedChange = { onEvent(MagiEvent.Structure.SetUse2(it)) })
+                Switch(checked = v.use2, onCheckedChange = { onEvent(MagiEvent.Structure.SetUse2(it)) }, enabled = !ui.running)
             }
             Divider()
 
@@ -218,7 +225,14 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> onEvent(MagiEvent.Structure.AddGroup(n, kg)); dialog = null }, { dialog = null })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
-            { lines, _ -> lines.forEach { onEvent(MagiEvent.Structure.AddShift(it, it, "", "")) }; dialog = null }, { dialog = null })
+            { lines, _ -> onEvent(MagiEvent.Structure.BulkAddShift(lines)); dialog = null }, { dialog = null })
+        is Ws1Dialog.ConfirmShrink -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            confirmButton = { DialogDangerButton("縮める", onClick = { onEvent(MagiEvent.Structure.ResizeDays(d.days)); dialog = null }) },
+            dismissButton = { DialogDismissButton(onClick = { dialog = null }) },
+            title = { Text("期間を縮めますか？") },
+            text = { Text("${v.days}日 → ${d.days}日にします。${d.days + 1}日目以降の希望と日別の必要人数は削除されます（元に戻すで取り消せます）。") },
+        )
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
             confirmButton = {
@@ -291,6 +305,7 @@ private sealed interface Ws1Dialog {
     object AddGroup : Ws1Dialog
     object BulkAddShift : Ws1Dialog
     data class ConfirmDelete(val kind: String, val index: Int, val label: String, val note: String = "") : Ws1Dialog
+    data class ConfirmShrink(val days: Int) : Ws1Dialog
 }
 
 @Composable
@@ -374,8 +389,8 @@ internal fun StaffDialog(
 /**
  * [⛏12] 改行区切りで複数件をまとめて追加する汎用ダイアログ。1件ずつの追加(各4-5tap×N)を
  * 1回の入力に短縮し、ゼロ構築の操作量を削減する。groups!=null のときは既定グループを選ぶ
- * (スタッフ用)。groups==null はグループ選択なし(シフト用)。追加は呼び出し側で既存の
- * ws1AddStaff/ws1AddShift をループ呼びするだけ＝ロジックは不変。
+ * (スタッフ用)。groups==null はグループ選択なし(シフト用)。追加は呼び出し側が BulkAddStaff/BulkAddShift を
+ * 1回だけ送る（1回の操作＝1回の「元に戻す」）。
  */
 @Composable
 internal fun BulkAddDialog(

@@ -29,6 +29,47 @@ internal fun seqFamilyJp(family: String): String = when (family) {
 internal fun normalizeSeq(pattern: List<String>): List<String> =
     pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5)
 
+/** 途中に空欄があるか（空欄の後ろに記号がある）。正規化で黙って切れる＝CSV 取込は同じ形を形式エラーで断る。 */
+internal fun seqHasGap(pattern: List<String>): Boolean {
+    val cells = pattern.map { it.trim() }
+    val last = cells.indexOfLast { it.isNotEmpty() }
+    return cells.take(last.coerceAtLeast(0)).any { it.isEmpty() }
+}
+
+/** 並び族の起点見出し。行は1行ずつ別に数える（同じ起点の行どうしを「どれか」で束ねない）。 */
+internal fun seqStartHeading(family: String, first: String): String = when (family) {
+    "cons3n" -> "【$first の次の日に禁止】"
+    "cons3" -> "【$first の次の日に守るとよい】"
+    "cons3m" -> "【$first の次の日に推奨】"
+    "cons3mn" -> "【$first の次の日は避ける】"
+    else -> "【$first の次の日】"
+}
+
+/** 記号1つだけの禁止の並び＝そのシフトを置いた日がすべて違反になる（エンジンの意味論どおり）。 */
+internal fun singleForbiddenNote(kigou: String): String = "1つだけの禁止は、$kigou をどの日にも置けなくします"
+
+/** ダイアログで確定できない理由（null＝確定可）。`Problem` が捨てる 0 以下・必ず違反になる値を断る。
+ *  空欄は理由を出さない。[dayCount]=0（勤務表なし）は期間の上限を見ない。 */
+internal fun cons1InputError(d1: String, d2: String, dayCount: Int): String? {
+    val days = d1.trim().toIntOrNull(); val need = d2.trim().toIntOrNull()
+    val maxDays = if (dayCount > 0) dayCount else Int.MAX_VALUE
+    return when {
+        days != null && days !in 1..maxDays -> if (dayCount > 0) "何日間は 1〜$dayCount で入れてください" else "何日間は 1 以上で入れてください"
+        need != null && need < 1 -> "必要数は 1 以上で入れてください"
+        days != null && need != null && need > days -> "必要数は何日間以下にしてください（超えると必ず違反になります）"
+        else -> null
+    }
+}
+
+internal fun cons2InputError(count: String): String? =
+    count.trim().toIntOrNull()?.let { if (it < 1) "合計は 1 以上で入れてください" else null }
+
+/** グループ/スキルグループのレンジ: 両方空欄の行は評価されない（`Problem` が未解決行へ落とす）。 */
+internal fun rangeBothBlank(l: String, u: String): Boolean = l.isBlank() && u.isBlank()
+
+internal const val RANGE_BOTH_BLANK_HINT = "下限か上限のどちらかを入れてください"
+internal const val DUPLICATE_ROW_HINT = "同じ条件がすでにあります"
+
 /**
  * 制約エディタが描くのに要るものを、`MagiState` から一度だけ組み立てたもの。
  * Composable はこれと `onEvent` だけを受け取る＝画面から ViewModel への問い合わせを無くす。
@@ -41,8 +82,18 @@ internal data class ConstraintsView(
     val skillGroupKigou: List<String> = emptyList(),
     /** 族 -> 各行の生値（編集ダイアログのプリフィル用。並びは追加ダイアログの入力順）。 */
     val rows: Map<String, List<List<String>>> = emptyMap(),
+    /** 期間の日数（期間の制約の「何日間」の上限）。 */
+    val dayCount: Int = 0,
 ) {
     fun rowValues(family: String, index: Int): List<String>? = rows[family]?.getOrNull(index)
+
+    /** 並び以外の族で値がすべて同じ行があるか（05 と 5 は同じ）。同じ行が2本だと違反が2倍に数えられ、
+     *  重みを変えずに優先度だけ変わる。既存の重複は消さない（入口で止めるだけ）。 */
+    fun rowDuplicate(family: String, values: List<String>, excludeIndex: Int? = null): Boolean {
+        fun norm(v: List<String>) = v.map { x -> x.trim().let { it.toIntOrNull()?.toString() ?: it } }
+        val key = norm(values)
+        return rows[family].orEmpty().withIndex().any { (idx, raw) -> idx != excludeIndex && norm(raw) == key }
+    }
 
     /**
      * 同じ並びが既にあれば、その族の日本語名を返す。族をまたいで見る＝HARD の禁止と SOFT の回避へ
@@ -107,5 +158,6 @@ internal fun constraintsViewOf(st: MagiState?): ConstraintsView {
             "cons42" to st.cons42.map { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) },
             "cons42s" to st.cons42s.map { listOf(it.g1Kigou, it.s1Kigou, it.g2Kigou, it.s2Kigou) },
         ),
+        dayCount = st.dayCount,
     )
 }

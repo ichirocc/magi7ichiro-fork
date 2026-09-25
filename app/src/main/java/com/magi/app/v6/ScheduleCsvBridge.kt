@@ -623,6 +623,19 @@ object StaffCsvIO {
         return state.copy(staff = newStaff) to matched
     }
 
+    /** 先頭行が別のコンポーネントCSV（`build()` の見出し）なら、その取込種別の名前。[parseUpsert] は未知の氏名を
+     *  新規追加するので、見出し・種別タグが職員として入る前に呼出側が断るために使う。 */
+    fun otherKindOf(text: String): String? {
+        val head = parseCsvRows(text).firstOrNull() ?: return null
+        val c0 = head.getOrElse(0) { "" }.trim()
+        return when {
+            c0 == "種別" -> "各制約"
+            c0 == "記号" -> "シフト色"
+            c0 == "氏名" && head.getOrElse(1) { "" }.trim() == "日" -> "希望シフト"
+            else -> null
+        }
+    }
+
     /** スタッフ一覧 upsert の結果（新規追加分の勤務表行も反映済み）。 */
     /**
      * @param unknownGroups 空でないのに既存のグループ記号と一致しなかったセル（記号→件数）。

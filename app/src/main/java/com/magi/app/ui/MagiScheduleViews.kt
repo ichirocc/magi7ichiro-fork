@@ -115,7 +115,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableFloatStateOf
@@ -309,6 +313,7 @@ internal fun ShiftPickerSheet(
                         TextButton(onClick = {
                             val famsJp = vioFams.joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
                             onEvent(MagiEvent.Session.AddReviewMemo("$name ${j + 1}日=${sym(current)}：$famsJp"))
+                            onDismiss()   // 結果の Snackbar はシートの下に隠れるので閉じて見せる
                         }) { Text("基本ルールの見直し候補にする") }
                     }
                 }
@@ -354,7 +359,8 @@ internal fun ShiftPickerSheet(
                         if (mode == 0) {
                             if (k == current) noteParts.add("現在") else if (k == wish) noteParts.add("希望")
                             when (coverageVioAt(ui, k, j, allVioBucketKeys)) {
-                                "vio-covU" -> noteParts.add("当日の不足を解消")  // [3.483.0 M-1] 旧「不足解消」＝何の不足か読めなかった
+                                // 今のシフトを選び直しても人数は増えない＝現在のタイルには付けない。
+                                "vio-covU" -> if (k != current) noteParts.add("当日の不足を解消")  // [3.483.0 M-1] 旧「不足解消」＝何の不足か読めなかった
                                 "vio-covO" -> { noteParts.add("当日は人員超過"); noteWarn = true }
                             }
                         }
@@ -503,7 +509,7 @@ internal fun SearchLegendBar(ui: UiState, query: String, onQuery: (String) -> Un
     val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { open = !open }) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { open = !open }) {
                 Text("検索・凡例" + (if (!open && query.isNotBlank()) "（検索中: $query）" else ""),
                     style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                 Text(if (open) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
@@ -541,6 +547,8 @@ internal fun ScheduleGrid(
     nav: ScheduleNavState = rememberScheduleNavState(),
     // [3.481.0 勤務表タブ再設計①] 縦スクロールのビューポート上端（root座標px）。負なら日ヘッダ固定なし。
     stickyTopPx: Float = -1f,
+    // タブの縦スクロール。注目セルの行を画面内へ動かすのに使う（null なら縦は動かさない）。
+    vScroll: ScrollState? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -576,6 +584,8 @@ internal fun ScheduleGrid(
             kotlinx.coroutines.delay(2_500)
             onFocusShown()
         }
+        // タブを離れたら注目を消す（上の解除は取り消されるので、残ると次に開いたとき古い位置＝並び替え後は別の職員へ飛ぶ）。
+        DisposableEffect(Unit) { onDispose { onFocusShown(); nav.navFlash = null } }
         Column(Modifier.padding(16.dp)) {
             Text("勤務表", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
@@ -631,7 +641,7 @@ internal fun ScheduleGrid(
                 if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx, vScroll = vScroll, revealCell = focusCell)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
@@ -678,7 +688,7 @@ internal fun ScheduleNavBar(ui: UiState, nav: ScheduleNavState) {
         derivedStateOf {
             val px = nav.cellWpx
             val d = if (px > 0) nav.hScroll.value / px else 0
-            weeks.indexOfFirst { d <= it.last() }.let { if (it < 0) (weeks.size - 1).coerceAtLeast(0) else it }
+            currentWeekIndex(weeks, d, atEnd = nav.hScroll.maxValue > 0 && !nav.hScroll.canScrollForward)
         }
     }
     // [3.483.0 S-3] 旧: 週送り行＋違反ナビ行の2段（約110dp）。下部固定領域が最大4段になっていたため1段に
@@ -716,7 +726,7 @@ internal fun ScheduleNavBar(ui: UiState, nav: ScheduleNavState) {
                 ) { Text("◀週") }
                 OutlinedButton(
                     onClick = { val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
-                    enabled = curWeek < weeks.size - 1, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "次の週へ" },
+                    enabled = curWeek < weeks.size - 1 && nav.hScroll.canScrollForward, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "次の週へ" },
                     contentPadding = PaddingValues(horizontal = 10.dp),
                 ) { Text("週▶") }
             }
@@ -877,6 +887,9 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
         else (0 until days).filter { (startDow + it) % 7 == weekday }
     val allowed = if (staffSel >= 0) cv.allowedShiftsFor(staffSel).toList() else emptyList()
     val targetName = if (staffSel >= 0) (ui.staffNames.getOrNull(staffSel) ?: "$staffSel") else "全職員"
+    // 全職員へは担当できる人だけに付ける（setWishesForDays と同じ判定。担当外の希望は実現も表示もされない）。
+    val eligibleCount = if (staffSel < 0 && picked in ui.shiftSymbols.indices) ui.staffNames.indices.count { picked in cv.allowedShiftsFor(it) } else -1
+    val wishCount = targetDays.size * when { staffSel >= 0 -> 1; eligibleCount >= 0 -> eligibleCount; else -> ui.staffNames.size }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
@@ -940,6 +953,11 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                     repeat(3 - rowKeys.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+            if (eligibleCount >= 0) {
+                val skipped = ui.staffNames.size - eligibleCount
+                Text("${eligibleCount}名 × ${targetDays.size}日 = ${wishCount}件" + (if (skipped > 0) "（担当外 ${skipped}名は対象外）" else ""),
+                    style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     if (scope == 1 && staffSel < 0) confirmClearAll = true
@@ -951,9 +969,9 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                     if (picked in ui.shiftSymbols.indices) {
                         onEvent(MagiEvent.Condition.SetWishesForDays(if (staffSel < 0) null else staffSel, targetDays, picked)); onDismiss()
                     }
-                }, enabled = picked in ui.shiftSymbols.indices && targetDays.isNotEmpty() && !ui.running,
+                }, enabled = picked in ui.shiftSymbols.indices && wishCount > 0 && !ui.running,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text(if (ui.running) "最適化中は変更できません" else "適用（${targetDays.size}件）")
+                    Text(if (ui.running) "最適化中は変更できません" else "適用（${wishCount}件）")
                 }
             }
             Text("※ 期間全体×全職員の「希望なし」は全削除（確認あり）。元に戻すで取消可。",
@@ -1464,7 +1482,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f) {
+internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1508,7 +1526,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     // 警告が案内）。旧実装はここで wish!=schedule のみ比較しており canDo を見ていなかったため、実現不可能な
     // 希望まで「未反映（直せる）」として桃バッジ表示していた＝チェッカーとの不整合。canDo を通し、実現不可能な
     // 希望はバッジ0（無し）にしてチェッカーの pref 判定と意味を一致させる。
-    val wishKind = remember(ui.wishes, ui.schedule, staffCount, days) {
+    val wishKind = remember(ui.wishes, ui.schedule, staffCount, days, canDo) {
         Array(staffCount) { i -> IntArray(days) { d ->
             val wk = ui.wishes["$i,$d"]
             if (wk == null || !canDo(i, wk)) 0
@@ -1549,8 +1567,22 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     //   下へ平行移動＝本体の下端まで追従して留まる。graphicsLayer 内で state を読むので再合成は起きない。
     //   位置は「本体の上端 − ヘッダ高」から求める（平行移動しているヘッダ自身は測らない）。
     val headHpx = with(LocalDensity.current) { headH.toPx() }
+    val cellHpx = with(LocalDensity.current) { cellH.toPx() }
     var bodyTopPx by remember { mutableFloatStateOf(0f) }
     var bodyHpx by remember { mutableFloatStateOf(0f) }
+    // [ジャンプ] 要確認一覧から来た注目セルの行を、縦にも固定した日ヘッダの下へ入れる（日だけの注目は先頭行＝日ヘッダが見える位置）。
+    //   違反ナビ（navFlash）は勤務表を見ながら押すので縦は動かさない。
+    LaunchedEffect(revealCell) {
+        val fc = revealCell ?: return@LaunchedEffect
+        val sc = vScroll ?: return@LaunchedEffect
+        if (stickyTopPx < 0f) return@LaunchedEffect
+        snapshotFlow { bodyHpx }.first { it > 0f }   // 本体の位置が測れるまで待つ（タブを開いた直後）
+        val top = bodyTopPx + fc.first.coerceIn(0, staffCount - 1) * cellHpx
+        val above = top - (stickyTopPx + headHpx)
+        val below = top + cellHpx - (stickyTopPx + sc.viewportSize)
+        val delta = if (above < 0f) above else if (below > 0f) below else 0f
+        if (delta != 0f) sc.animateScrollBy(delta)
+    }
     val headerBg = CardDefaults.cardColors().containerColor
     @Composable
     fun DayHeader(d: Int) {

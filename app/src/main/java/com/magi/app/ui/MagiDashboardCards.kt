@@ -301,7 +301,7 @@ internal fun GuidedFixDialog(
                             Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text("もう一度つくっても、この日は同じ結果になります。希望を1件調整するか、担当できるシフトを増やしてください（編集タブ＞月次条件）。",
+                        Text("もう一度つくっても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     else -> {
@@ -426,12 +426,7 @@ internal fun OperatorNextActionCard(
             // 同じ開閉パターン）にして、常時見えるのは進捗バー1本だけにする。
             // [3.483.0 H-2] 旧: 必須0なら一律「解消済み」だが、解消度は調整（ソフト）違反が残ると 100% に
             //   ならない（40+比率×60）＝「78%（解消済み）」という自己矛盾。必須0のときは残りの単位を調整件数へ。
-            val remainingLabel = when {
-                ui.bestHard > 0L -> "必須 残り${ui.bestHard}件"
-                shortDays > 0 -> "残り${shortDays}日"
-                ui.bestSoft > 0L -> "必須は解消・調整 ${ui.bestSoft}件"
-                else -> "解消済み"
-            }
+            val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown)
             // [3.483.0 H-5] 実行中は直下の進捗行（progressSummary）が同じ残数を出すため、解消度の行とバーは出さない。
             if (!ui.running) {
                 Text(
@@ -447,7 +442,7 @@ internal fun OperatorNextActionCard(
             if (!ui.running && ui.hasResult) {
                 var detailOpen by remember { mutableStateOf(false) }
                 Row(
-                    Modifier.fillMaxWidth().clickable { detailOpen = !detailOpen },
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { detailOpen = !detailOpen },
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
@@ -519,7 +514,7 @@ private fun DiagDetailToggle(
     openText: String = "ⓘ 詳細を閉じる",
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 44.dp).clickable(onClick = onToggle),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onToggle),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
@@ -542,9 +537,13 @@ private fun DiagDetailToggle(
 internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     if (ui.running || !ui.hasResult || ui.bestHard <= 0L) return
     val cs = MaterialTheme.colorScheme
-    // 既にある候補が別スタッフに絞った探索(fixFocusName!="")の結果なら、ホームでは全体探索へ差し替える。
-    LaunchedEffect(ui.schedule, ui.bestHard) {
-        if (!ui.fixSearching && (ui.fixSuggestions.isEmpty() || ui.fixFocusName.isNotBlank())) onEvent(MagiEvent.Session.FindFixSuggestions(null, null))
+    // 既にある候補が別スタッフに絞った探索(fixFocusName!="")の結果なら、ホームでは全体探索へ差し替える
+    //   （探索の途中でも差し替える＝終わるのを待つと鍵が変わらず、カードが隠れたままになる）。
+    //   全体探索を「探して0件」で終えた盤面（fixSearched）では探し直さない。
+    LaunchedEffect(ui.schedule, ui.bestHard, ui.fixFocusName) {
+        if (ui.fixFocusName.isNotBlank() || (!ui.fixSearching && ui.fixSuggestions.isEmpty() && !ui.fixSearched)) {
+            onEvent(MagiEvent.Session.FindFixSuggestions(null, null))
+        }
     }
     val top = ui.fixSuggestions.firstOrNull()
     if (ui.fixFocusName.isNotBlank() && !ui.fixSearching) return // 探索待ちのフレームだけ描画をスキップ
@@ -587,7 +586,14 @@ internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
 /** [対象月の選択] 勤務表を作る月を前月/翌月/今月で選ぶ。変更でその月の日数に合わせて表を作り直す。 */
 
 @Composable
-internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> Unit = {}) {
+internal fun CopilotCard(
+    ui: UiState,
+    onGoEdit: () -> Unit,
+    // 希望の編集は月次条件、手修正は勤務表タブ（D7）＝編集タブの今の節に任せない。
+    onEditWishes: () -> Unit,
+    onManualEdit: () -> Unit,
+    onSoftPolish: () -> Unit = {},
+) {
     // [冗長性削減] できあがり度・進捗は OperatorNextActionCard が表示するため、ここは助言/警告だけに専念。
     val cs = MaterialTheme.colorScheme
     val show = ui.impossibleWishCount > 0 || ui.copilotHint != null || (ui.polishExhausted && !ui.running)
@@ -600,7 +606,7 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("⚠ 実現できない希望が ${ui.impossibleWishCount} 件（担当外シフトなど）。配布前に見直しを。",
                             color = cs.onErrorContainer, style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(onClick = onGoEdit, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフトを編集") }
+                        OutlinedButton(onClick = onEditWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望シフトを編集") }
                     }
                 }
             }
@@ -620,7 +626,7 @@ internal fun CopilotCard(ui: UiState, onGoEdit: () -> Unit, onSoftPolish: () -> 
                             color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自動で整える") }
-                            OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
+                            OutlinedButton(onClick = onManualEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
                         }
                     }
                 }
@@ -1002,6 +1008,8 @@ internal fun SettingIssuesCard(
     // [UX監査#4] 一覧は重要な順に整列済み＝先頭の種別を編集タブの節誘導に使う（無ければnull＝従来どおりtabのみ）。
     onGoEdit: (com.magi.app.v6.IssueKind?) -> Unit,
     onClearWishes: () -> Unit = {},
+    // 一括クリアが実際に消す件数（VM の canDo 判定）。行の種別で数えると希望どうしの c3w 衝突まで混ざる。
+    wishClearCount: Int = 0,
 ) {
     val issues = ui.settingIssues
     if (issues.isEmpty()) return
@@ -1012,9 +1020,6 @@ internal fun SettingIssuesCard(
     // （DiagDetailToggle・付随事項として扱う）へ。
     var detailOpen by remember { mutableStateOf(false) }
     var showAll by remember { mutableStateOf(false) }
-    val wishClearCount = issues.count {
-        it.kind == com.magi.app.v6.IssueKind.WISH && it.action == com.magi.app.v6.SettingFixAction.REMOVE_WISH
-    }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("設定の見直し（${issues.size}件）", style = MaterialTheme.typography.titleMedium)
@@ -1103,8 +1108,9 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                 // [UX監査P0/U6,H7] 英字の内部指標名を画面に出さない（operator_ux.md）。hardCore/hardGuardは
                 //   単一のbreakdownLabelsキーに対応しない集計値なので、内訳の意味に沿った日本語を直接あてる。
-                BigStat("必須違反", v6.hardCore.toString(), Modifier.weight(1f))
-                BigStat(breakdownLabels["groupViol"] ?: "groupViol", v6.hardGuard.toString(), Modifier.weight(1f))
+                // 必須違反はホーム等と同じ全必須（担当外シフトを含む）＝担当外はその内数として並べる。
+                BigStat("必須違反", (v6.hardCore + v6.hardGuard).toString(), Modifier.weight(1f))
+                BigStat("うち" + (breakdownLabels["groupViol"] ?: "groupViol"), v6.hardGuard.toString(), Modifier.weight(1f))
                 BigStat("充足", v6.coveragePct?.let { "$it%" } ?: "-", Modifier.weight(1f))
             }
             Spacer(Modifier.height(8.dp))
@@ -1391,8 +1397,8 @@ private fun ConfirmRow(
 internal fun AnalysisTriageCard(
     ui: UiState,
     onFocusStaff: (Int) -> Unit,
-    // [UX監査#4] 引数は発火した族キー（例: "c1"）。呼出側が編集タブの対象節へ変換する（無ければ従来どおりtabのみ）。
-    onGoEdit: (String?) -> Unit,
+    // [UX監査#4] 引数は設定の見直しの種類。呼出側が編集タブの対象節へ変換する。
+    onGoEdit: (com.magi.app.v6.IssueKind?) -> Unit,
     onShowCell: (Int, Int) -> Unit,
     onShowDay: (Int) -> Unit,
     onFixWish: (Int) -> Unit,
@@ -1400,7 +1406,7 @@ internal fun AnalysisTriageCard(
 ) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
-    val t = remember(ui.breakdown, ui.settingIssues, ui.coverageDiag, ui.forbiddenDiag, ui.c1Plateau, ui.hasResult) { analysisTriage(ui) }
+    val t = remember(ui.breakdown, ui.settingIssues, ui.coverageDiag, ui.forbiddenDiag, ui.c1Plateau, ui.engineRan) { analysisTriage(ui) }
     val items = remember(ui.violationCells, ui.violationCellFamilies, ui.needViolations, ui.countViolations, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) { confirmItems(ui) }
     var showSummary by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
@@ -1441,7 +1447,7 @@ internal fun AnalysisTriageCard(
                                 Text("${row.label} ${row.count}件", style = MaterialTheme.typography.bodyMedium, color = warnFg, fontWeight = FontWeight.SemiBold)
                                 if (row.detail.isNotBlank()) Text(row.detail, style = MaterialTheme.typography.labelMedium, color = warnFg, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
-                            TextButton(onClick = { onGoEdit(row.family) }) { Text("設定へ") }
+                            TextButton(onClick = { onGoEdit(row.kind) }) { Text("設定へ") }
                         }
                     }
                 }
@@ -1583,7 +1589,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
     //   ソフトだけの盤面は従来どおり手動（探索コストに見合う候補が少ない）。
     LaunchedEffect(ui.schedule, ui.bestHard) {
         if (ui.hasResult && ui.bestHard > 0L && !ui.running && !ui.fixSearching &&
-            ui.fixSuggestions.isEmpty() && ui.fixFocusName.isBlank()) onSearch()
+            ui.fixSuggestions.isEmpty() && !ui.fixSearched && ui.fixFocusName.isBlank()) onSearch()
     }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1641,7 +1647,8 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
 @Composable
 internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     if (ui.alternatives.isEmpty()) return
-    var selected by rememberSaveable(ui.alternatives) { mutableStateOf(-1) }
+    // 適用中の案は VM が持つ（元に戻すで一覧ごと戻るため）。
+    val selected = ui.alternativeApplied
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
@@ -1650,7 +1657,7 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
             MagiSegmentedControl(
                 options = ui.alternatives.indices.map { "案${it + 1}" },
                 selected = selected,
-                onSelect = { i -> selected = i; onApply(i) },
+                onSelect = { i -> if (i != selected) onApply(i) },
             )
             // [3.483.0 H-3] タップ＝即反映なので「見てから選ぶ」ために全案の要約（必須/合計）を常時出す。
             //   反映済みの案は太字。

@@ -154,14 +154,6 @@ internal fun decodeCsvBytes(bytes: ByteArray): String {
     return text.removePrefix("﻿")
 }
 
-private fun yearSectionForIssueKind(kind: com.magi.app.v6.IssueKind?): String? = when (kind) {
-    com.magi.app.v6.IssueKind.RANGE -> "yr_count"
-    com.magi.app.v6.IssueKind.DEMAND -> "yr_headcount"
-    com.magi.app.v6.IssueKind.CONSTRAINT -> "yr_cons"
-    com.magi.app.v6.IssueKind.WISH, null -> null
-}
-
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MagiApp(vm: MagiViewModel = viewModel()) {
@@ -232,6 +224,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val constraintsView = remember(ui) { constraintsViewOf(vm.state) }
     val ws1View = remember(ui) { vm.ws1() }
     val conditionsView = remember(ui) { vm.conditionsView() }
+    // conditionsView ごとに作る＝勤務表の希望バッジがこれをキーに作り直される（担当可否の Undo でも）。
+    val canDoShift = remember(conditionsView) { { i: Int, k: Int -> k in conditionsView.allowedShiftsFor(i) } }
 
     val openJsonLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -413,6 +407,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
+    // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。
+    val goEditForIssue: (com.magi.app.v6.IssueKind?) -> Unit = { kind ->
+        tab = 2
+        val sec = yearSectionForIssueKind(kind)
+        if (sec != null) { editScope = 2; deepLinkEditSection = sec } else if (kind == com.magi.app.v6.IssueKind.WISH) editScope = 0
+    }
+    // 縦スクロールはタブごと（別のタブの縦位置のまま開かない）。
+    val tabScrolls = List(5) { rememberScrollState() }
     // [ジャンプ/Web試作の移植] 要確認一覧→勤務表タブの注目セル(i,j)。表示後に自動クリア（一時ハイライト）。
     var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
@@ -495,7 +497,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 // [3.481.0] verticalScroll より外側（＝スクロールで動かないビューポート側）の座標を測る。
                 //   勤務表グリッドの日ヘッダは、この上端より上へ出る分だけ下へ平行移動して画面に留まる。
                 .onGloballyPositioned { viewportTopPx = it.positionInRoot().y }
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(tabScrolls[tab.coerceIn(0, 4)]),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Spacer(Modifier.height(4.dp))
@@ -540,7 +542,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     LiveScheduleCard(ui)
                     // [冗長性削減] StatusHero(状態三重表示) / SummaryCard(統計は「ようす」と重複＋開発用語) /
                     //   QuickActionGrid(下部ナビと4/6重複) は home から除外。詳細統計は「ようす」タブへ集約。
-                    CopilotCard(ui, onGoEdit = { tab = 2 }, onSoftPolish = { vm.runSoftPolish() })
+                    CopilotCard(ui, onGoEdit = { tab = 2 }, onSoftPolish = { vm.runSoftPolish() },
+                        onEditWishes = { tab = 2; editScope = 0 }, onManualEdit = { tab = 1 })
                     CoverageDiagnosisCard(ui, onCancelWish = { i, j -> vm.removeWish(i, j) })
                     // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（CoverageDiag の c3n 版・c3n=0 なら非表示）。
                     ForbiddenRunDiagnosisCard(ui, onRelaxRule = { vm.relaxForbiddenRule(it) })
@@ -551,8 +554,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     PinFixedImpactCard(ui, onGoEdit = { tab = 2; editScope = 2; deepLinkEditSection = "yr_count" },
                         onRelax = { i, k, loD, hiD -> vm.relaxStaffRangePin(i, k, loD, hiD) })
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) },
-                        onGoEdit = { kind -> tab = 2; yearSectionForIssueKind(kind)?.let { editScope = 2; deepLinkEditSection = it } },
-                        onClearWishes = { vm.clearOutOfScopeWishes() })
+                        onGoEdit = goEditForIssue,
+                        onClearWishes = { vm.clearOutOfScopeWishes() }, wishClearCount = vm.wishOutOfScopeCount())
                     // [スクショ指摘/撤去] 「ほかの作り方」カード（速くつくる/かんたんに/閉じても大丈夫）は
                     //   主導線（思考誘導カード＋下部バー）と重複し、実行中は全ボタン無効の死に領域だった
                     //   （ユーザー赤囲い指示）。唯一固有のバックグラウンド実行は設定タブ「最適化設定」へ移設。
@@ -589,8 +592,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
-                        canDo = { i, k -> k in conditionsView.allowedShiftsFor(i) }, plainCellBorder = plainCellBorder,
-                        nav = schedNav, stickyTopPx = viewportTopPx)
+                        canDo = canDoShift, plainCellBorder = plainCellBorder,
+                        nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1])
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled)
@@ -720,7 +723,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     AnalysisTriageCard(
                         ui,
                         onFocusStaff = { vm.findFixSuggestions(it) },
-                        onGoEdit = { fam -> tab = 2; yearSectionForFamily(fam)?.let { editScope = 2; deepLinkEditSection = it } },
+                        onGoEdit = goEditForIssue,
                         onShowCell = { i, j -> focusCell = i to j; tab = 1 },
                         onShowDay = { j -> focusCell = -1 to j; tab = 1 },
                         onFixWish = { s -> deepLinkWishStaff = s; editScope = 0; tab = 2 },

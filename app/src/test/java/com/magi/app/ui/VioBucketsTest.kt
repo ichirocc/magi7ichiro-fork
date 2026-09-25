@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import com.magi.app.v6.IssueKind
 import com.magi.app.v6.MirrorKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -53,10 +54,17 @@ class VioBucketsTest {
         assertTrue("バケツOFFなら非表示", !vioVisible("vio-covU", setOf("pref")))
     }
 
-    /** [外部レビュー N4] c2 の編集欄（cons2）は ⑤並び（yr_cons）にあるのに ③回数（yr_count）を開いていた。 */
-    @Test fun c2SettingsLinkOpensSectionWithCons2Editor() {
-        assertEquals("yr_cons", yearSectionForFamily("c2"))
-        assertEquals("yr_count", yearSectionForFamily("low"))
-        assertNull(yearSectionForFamily("covU"))
+    /** 設定の見直しの「設定へ」: 希望は年間マスターに無い（null＝呼出側が月次条件を開く）。 */
+    @Test fun issueKindLinksOpenYearSections() {
+        assertEquals("yr_cons", yearSectionForIssueKind(IssueKind.CONSTRAINT))
+        assertEquals("yr_count", yearSectionForIssueKind(IssueKind.RANGE))
+        assertEquals("yr_headcount", yearSectionForIssueKind(IssueKind.DEMAND))
+        assertNull(yearSectionForIssueKind(IssueKind.WISH))
+        assertNull(yearSectionForIssueKind(null))
+    }
+
+    /** フィルタのチップも族の表示名と同じ語（c1 を「窓」と呼ぶと分析タブの「期間の制約」と結びつかない）。 */
+    @Test fun windowBucketUsesTheSameWordAsTheBreakdownLabel() {
+        assertEquals(breakdownLabels["c1"], vioBuckets.single { "c1" in it.families }.label)
     }
 }

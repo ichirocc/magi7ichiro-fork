@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.ui.draw.clip
@@ -106,7 +107,8 @@ internal fun ConstraintsCard(
  * [3.482.0 編集タブ簡素化] 並び族（必須/禁止/推奨/回避）を**起点シフトごと**にまとめて表示する。
  * 「【Dﾃ の次の日】 [B4 ×][A4 ×]… ＋追加」の形＝ユーザー提示案の画面2。
  * - 2連（起点→次）はチップ。タップ=変更、× =削除（どちらも従来の行操作と同じ vm API）。
- * - 3連以上と1つだけの並びは従来の行表示のまま（チップで表せない）。起点の見出しの下に並べる。
+ * - 3連以上の並びは従来の行表示のまま（チップで表せない）。起点の見出しの下に並べる。
+ * - 1つだけの並びは起点の見出しに入れず「X（1つだけ）」の行で先頭に並べる。
  * - 「＋ ○○の次を追加」は追加ダイアログを起点プリセットで開く（ダイアログ側の重複ガードが効く）。
  * データは `C3Row` のまま（表示の集約だけ）。族の見出し・詳しい説明・削除確認の意味論も不変。
  */
@@ -119,22 +121,26 @@ private fun SeqFamilyGrouped(
     val cs = MaterialTheme.colorScheme
     // 行の生パターン（追加ダイアログと同じ正規化=先頭から最初の空白まで・最大5）。
     val pats = fam.rows.indices.map { idx -> normalizeSeq(cv.rowValues(fam.key, idx) ?: emptyList()) }
-    val firsts = pats.mapNotNull { it.firstOrNull() }.distinct()
+    // 1つだけの行は「X の次の日」の見出しに入れない（X→X と読めてしまう）。
+    for (idx in pats.indices.filter { pats[it].size == 1 }) {
+        ConstraintRow("${pats[idx][0]}（1つだけ）", enabled = enabled, onEdit = { onEdit(idx) }, onDelete = { onDelete(idx) })
+        if (fam.key == "cons3n") {
+            Text(singleForbiddenNote(pats[idx][0]), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        }
+    }
+    val firsts = pats.filter { it.size >= 2 }.map { it[0] }.distinct()
     for (first in firsts) {
         Spacer(Modifier.height(4.dp))
         // [3.483.0 E-11] 見出しに族の意味（禁止/必須/推奨/回避）を含める。旧「【X の次の日】」は4族で同文だった。
-        val heading = when (fam.key) {
-            "cons3n" -> "【$first の次の日に禁止】"
-            "cons3" -> "【$first の次の日に守るとよい（どれか）】"
-            "cons3m" -> "【$first の次の日に推奨】"
-            "cons3mn" -> "【$first の次の日は避ける】"
-            else -> "【$first の次の日】"
-        }
         // [3.515.4] 族見出し(titleSmall)の下位＝本文サイズの太字。label 層は部品ラベル/チップ用（DESIGN.md §3.3）。
-        Text(heading, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
-        val idxs = pats.indices.filter { pats[it].firstOrNull() == first }
+        Text(seqStartHeading(fam.key, first), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+        val idxs = pats.indices.filter { pats[it].size >= 2 && pats[it][0] == first }
         val pairIdxs = idxs.filter { pats[it].size == 2 }
         val otherIdxs = idxs.filter { pats[it].size != 2 }
+        // 守る/推奨は行ごとに別に数える＝同じ起点に2本あると、どちらかは必ず崩れる。
+        if (pairIdxs.size >= 2 && (fam.key == "cons3" || fam.key == "cons3m")) {
+            Text("それぞれ別に数えます（どれか1つでよい、ではありません）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+        }
         if (pairIdxs.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (idx in pairIdxs) {
@@ -146,7 +152,7 @@ private fun SeqFamilyGrouped(
                         trailingIcon = {
                             // [a11y] 削除は × の onClick で。チップ本体のタップは変更（行操作と同じ2操作を保つ）。
                             Icon(Icons.Filled.Close, contentDescription = "$first→$next を削除",
-                                modifier = Modifier.clickable(enabled = enabled) { onDelete(idx) })
+                                modifier = Modifier.size(32.dp).clickable(enabled = enabled) { onDelete(idx) }.padding(7.dp))
                         },
                     )
                 }
@@ -205,7 +211,7 @@ private fun ConstraintHelpExpander(families: List<ConstraintFamilyView>) {
  * 表しているので、同じ操作は同じ形にする。貼り紙は剥がした。
  */
 @Composable
-private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onDelete: () -> Unit, editable: Boolean = true) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         // [3.427.0] 旧 sub（3.409.18 の読み下し文）は撤去。ペア禁止系の行タイトル自体を
         //   「吉の休 ✕ 古の休」（の形）にしたため、行下の文はタイトルと見出し（同じ日に不可）の
@@ -213,14 +219,16 @@ private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onD
         Column(Modifier
             .weight(1f)
             .clip(MaterialTheme.shapes.small)
-            .clickable(enabled = enabled, onClick = onEdit)
+            .clickable(enabled = enabled && editable, onClick = onEdit)
             .heightIn(min = 48.dp)
             .wrapContentHeight(Alignment.CenterVertically)
             .padding(horizontal = 4.dp)) {
             Text(row, style = MaterialTheme.typography.bodyMedium)
         }
-        EditRowButton(onClick = onEdit, enabled = enabled)
-        Spacer(Modifier.width(6.dp))
+        if (editable) {
+            EditRowButton(onClick = onEdit, enabled = enabled)
+            Spacer(Modifier.width(6.dp))
+        }
         DeleteRowButton(onClick = onDelete, enabled = enabled)
     }
 }
@@ -242,6 +250,19 @@ internal fun SkillConstraintsCard(ui: UiState, cv: ConstraintsView, onEvent: (Ma
                 Spacer(Modifier.height(8.dp))
                 Text("先に上で「スキルグループ」を追加すると設定できます。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // スキルグループが無くても行は残る（未評価・設定の見直しが削除を促す）＝削除だけできるように出す。
+                val orphans = families.filter { it.rows.isNotEmpty() }
+                if (orphans.isNotEmpty()) {
+                    Text("スキルグループが無いため、次のルールは使われていません。",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    orphans.forEach { fam ->
+                        Text(fam.title, style = MaterialTheme.typography.titleSmall)
+                        fam.rows.forEachIndexed { idx, row ->
+                            ConstraintRow(row, enabled = !ui.running, onEdit = {}, editable = false,
+                                onDelete = { onEvent(MagiEvent.Constraint.Remove(fam.key, idx)) })
+                        }
+                    }
+                }
             } else {
                 ConstraintHelpExpander(families)
                 families.forEachIndexed { fi, fam ->
@@ -285,26 +306,33 @@ private fun ConstraintDialog(
         if (editIndex != null) onEvent(MagiEvent.Constraint.Update(family, editIndex, values)) else add()
         onClose()
     }
+    fun dup(values: List<String>) = cv.rowDuplicate(family, values, excludeIndex = editIndex)
 
     when (family) {
         "cons1" -> {
             var d1 by remember { mutableStateOf(init?.getOrNull(0) ?: "") }
             var sk by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var d2 by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
+            val err = cons1InputError(d1, d2, cv.dayCount)
+            val isDup = dup(listOf(d1, sk, d2))
             Shell("期間の制約$mode", okLabel, onClose, { commit(listOf(d1, sk, d2)) { onEvent(MagiEvent.Constraint.AddCons1(d1, sk, d2)) } },
-                d1.isNotBlank() && sk.isNotBlank() && d2.isNotBlank()) {
-                NumField("何日間", d1) { d1 = it }
+                d1.isNotBlank() && sk.isNotBlank() && d2.isNotBlank() && err == null && !isDup) {
+                NumField("何日間", d1, isError = err != null) { d1 = it }
                 Picker("シフト", shifts, sk) { sk = it }
-                NumField("必要数(以上)", d2) { d2 = it }
+                NumField("必要数(以上)", d2, isError = err != null) { d2 = it }
+                InputHint(err ?: DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
         "cons2" -> {
             var sk by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
             var c by remember { mutableStateOf(init?.getOrNull(1) ?: "") }
+            val err = cons2InputError(c)
+            val isDup = dup(listOf(sk, c))
             Shell("個人の合計$mode", okLabel, onClose, { commit(listOf(sk, c)) { onEvent(MagiEvent.Constraint.AddCons2(sk, c)) } },
-                sk.isNotBlank() && c.isNotBlank()) {
+                sk.isNotBlank() && c.isNotBlank() && err == null && !isDup) {
                 Picker("シフト", shifts, sk) { sk = it }
-                NumField("合計(以上)", c) { c = it }
+                NumField("合計(以上)", c, isError = err != null) { c = it }
+                InputHint(err ?: DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
         "cons41" -> {
@@ -315,15 +343,17 @@ private fun ConstraintDialog(
             // [3.403.0] 下限>上限は engine の `z < l || z > u` で**どの人数でも必ず違反**＝期間の全日が違反になる。
             //   事後診断(V6SanityPort 検査2f)は出していたが、画面は素通しで確定できた＝入力時に止める。
             val bad = V6SanityPort.rangeOrderConflict(l, u) != null
+            val blank = rangeBothBlank(l, u)
+            val isDup = dup(listOf(gk, sk, l, u))
             Shell("グループのレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { onEvent(MagiEvent.Constraint.AddCons41(gk, sk, l, u)) } },
-                gk.isNotBlank() && sk.isNotBlank() && !bad) {
+                gk.isNotBlank() && sk.isNotBlank() && !bad && !blank && !isDup) {
                 Picker("グループ", groups, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumField("下限(空=0)", l, Modifier.weight(1f), isError = bad) { l = it }
                     NumField("上限(空=無制限)", u, Modifier.weight(1f), isError = bad) { u = it }
                 }
-                if (bad) Text(RANGE_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                InputHint(if (bad) RANGE_ORDER_HINT else if (blank) RANGE_BOTH_BLANK_HINT else DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
         "cons42" -> {
@@ -331,12 +361,14 @@ private fun ConstraintDialog(
             var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: groups.firstOrNull() ?: "") }
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
+            val isDup = dup(listOf(g1, s1, g2, s2))
             Shell("グループペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { onEvent(MagiEvent.Constraint.AddCons42(g1, g2, s1, s2)) } },
-                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
+                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank() && !isDup) {
                 Picker("グループ1", groups, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
                 Picker("グループ2", groups, g2) { g2 = it }
                 Picker("シフト2", shifts, s2) { s2 = it }
+                InputHint(DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
         "cons41s" -> {
@@ -345,15 +377,17 @@ private fun ConstraintDialog(
             var l by remember { mutableStateOf(init?.getOrNull(2) ?: "") }
             var u by remember { mutableStateOf(init?.getOrNull(3) ?: "") }
             val bad = V6SanityPort.rangeOrderConflict(l, u) != null   // [3.403.0] cons41 と同じ（群かスキル群かの違いだけ）
+            val blank = rangeBothBlank(l, u)
+            val isDup = dup(listOf(gk, sk, l, u))
             Shell("スキルグループのレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { onEvent(MagiEvent.Constraint.AddCons41s(gk, sk, l, u)) } },
-                gk.isNotBlank() && sk.isNotBlank() && !bad) {
+                gk.isNotBlank() && sk.isNotBlank() && !bad && !blank && !isDup) {
                 Picker("スキル", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumField("下限(空=0)", l, Modifier.weight(1f), isError = bad) { l = it }
                     NumField("上限(空=無制限)", u, Modifier.weight(1f), isError = bad) { u = it }
                 }
-                if (bad) Text(RANGE_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                InputHint(if (bad) RANGE_ORDER_HINT else if (blank) RANGE_BOTH_BLANK_HINT else DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
         "cons42s" -> {
@@ -361,21 +395,25 @@ private fun ConstraintDialog(
             var s1 by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             var g2 by remember { mutableStateOf(init?.getOrNull(2) ?: skills.firstOrNull() ?: "") }
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
+            val isDup = dup(listOf(g1, s1, g2, s2))
             Shell("スキルグループペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { onEvent(MagiEvent.Constraint.AddCons42s(g1, g2, s1, s2)) } },
-                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank()) {
+                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank() && !isDup) {
                 Picker("スキル1", skills, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
                 Picker("スキル2", skills, g2) { g2 = it }
                 Picker("シフト2", shifts, s2) { s2 = it }
+                InputHint(DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
         "cons3w" -> {
             var x by remember { mutableStateOf(init?.getOrNull(0) ?: shifts.firstOrNull() ?: "") }
             var y by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
+            val isDup = dup(listOf(x, y))
             Shell("希望の前日に禁止$mode", okLabel, onClose, { commit(listOf(x, y)) { onEvent(MagiEvent.Constraint.AddCons3w(x, y)) } },
-                x.isNotBlank() && y.isNotBlank()) {
+                x.isNotBlank() && y.isNotBlank() && !isDup) {
                 Picker("希望シフト（希望で固定されたもの）", shifts, x) { x = it }
                 Picker("その前日に置けないシフト", shifts, y) { y = it }
+                InputHint(DUPLICATE_ROW_HINT.takeIf { isDup })
             }
         }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
@@ -389,12 +427,18 @@ private fun ConstraintDialog(
             // [3.482.0 入口ガード] 同じ並びが既にあれば OK を無効化し、どの族に登録済みかを枠の下で言う
             //   （族をまたぐ同一の並びも対象＝禁止と回避に同じ並びを二重掛けしても回避側は無意味）。
             val dupFam = cv.duplicateOf(family, listOf(a, b, c, d, e), excludeIndex = editIndex)
+            // 途中の空欄は後ろが黙って切れる（1番目だけの禁止になりうる）＝CSV 取込と同じく断る。
+            val gap = seqHasGap(listOf(a, b, c, d, e))
             Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { onEvent(MagiEvent.Constraint.AddCons3(family, listOf(a, b, c, d, e))) } },
-                a.isNotBlank() && dupFam == null) {
+                a.isNotBlank() && dupFam == null && !gap) {
                 Text("並び (上から順・最大5連日 / 空=ここで終了)", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (dupFam != null) {
                     Text("この並びは「$dupFam」に登録済みです。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                }
+                InputHint("途中に空欄があります。上から詰めて選んでください".takeIf { gap })
+                if (family == "cons3n" && a.isNotBlank() && b.isBlank() && !gap) {
+                    Text(singleForbiddenNote(a), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Picker("1番目", shifts, a) { a = it }
                 Picker("2番目", shiftsOpt, b) { b = it }
@@ -405,6 +449,11 @@ private fun ConstraintDialog(
         }
         else -> onClose()
     }
+}
+
+@Composable
+private fun InputHint(text: String?) {
+    if (text != null) Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 }
 
 @Composable

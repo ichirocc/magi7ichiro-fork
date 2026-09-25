@@ -33,6 +33,14 @@ class V6FinalBridgePortTest {
         assertEquals("PORTFOLIO拡張", V6FinalPort.getAlgorithmLabel(600).tech)
     }
 
+    /** 「おまかせ」の説明は方式チップの語で言う（究極(5分)・学習+研磨・標準は選べる方式に無い名前だった）。 */
+    @Test fun algorithmLabelNamesUseChipVocabulary() {
+        assertEquals("高速", V6FinalPort.getAlgorithmLabel(30).name)
+        assertEquals("違反集中→組み替え", V6FinalPort.getAlgorithmLabel(120).name)
+        assertEquals("方式ミックス", V6FinalPort.getAlgorithmLabel(240).name)
+        assertEquals("方式ミックス", V6FinalPort.getAlgorithmLabel(600).name)
+    }
+
     @Test fun busyDetailAndGateWork() {
         val st = sampleState()
         val b = V6FinalPort.buildBusyDetail(st, "違反チェック中")

@@ -252,7 +252,7 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val hi = if (hasHi) it.u.trim().toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
             if (gi >= 0 && si >= 0 && (hasLo || hasHi)) C41(gi, si, lo, hi)
             else {
-                _unresolvedRows.add("群のレンジ" to
+                _unresolvedRows.add("グループのレンジ" to
                     "${mark(it.groupKigou, gi >= 0)} の ${mark(it.shiftKigou, si >= 0)}（${it.l}〜${it.u}）")
                 null
             }
@@ -262,7 +262,7 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val s1 = shiftIdxOf(it.s1Kigou); val s2 = shiftIdxOf(it.s2Kigou)
             if (g1 >= 0 && g2 >= 0 && s1 >= 0 && s2 >= 0) C42(g1, s1, g2, s2)
             else {
-                _unresolvedRows.add("群ペア禁止" to
+                _unresolvedRows.add("グループペア禁止" to
                     "${mark(it.g1Kigou, g1 >= 0)}/${mark(it.s1Kigou, s1 >= 0)} × " +
                         "${mark(it.g2Kigou, g2 >= 0)}/${mark(it.s2Kigou, s2 >= 0)}")
                 null
@@ -276,7 +276,7 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val hi = if (hasHi) it.u.trim().toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
             if (gi >= 0 && si >= 0 && (hasLo || hasHi)) C41(gi, si, lo, hi)
             else {
-                _unresolvedRows.add("スキル群のレンジ" to
+                _unresolvedRows.add("スキルグループのレンジ" to
                     "${mark(it.groupKigou, gi >= 0)} の ${mark(it.shiftKigou, si >= 0)}（${it.l}〜${it.u}）")
                 null
             }
@@ -286,7 +286,7 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val s1 = shiftIdxOf(it.s1Kigou); val s2 = shiftIdxOf(it.s2Kigou)
             if (g1 >= 0 && g2 >= 0 && s1 >= 0 && s2 >= 0) C42(g1, s1, g2, s2)
             else {
-                _unresolvedRows.add("スキル群ペア禁止" to
+                _unresolvedRows.add("スキルグループペア禁止" to
                     "${mark(it.g1Kigou, g1 >= 0)}/${mark(it.s1Kigou, s1 >= 0)} × " +
                         "${mark(it.g2Kigou, g2 >= 0)}/${mark(it.s2Kigou, s2 >= 0)}")
                 null

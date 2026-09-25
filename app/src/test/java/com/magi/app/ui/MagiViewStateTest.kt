@@ -145,4 +145,32 @@ class MagiViewStateTest {
         assertEquals("最重1クラスだけ見ると c41s に隠れて過剰が消える", "vio-covO", coverageVioAt(ui, 1, 0, allVioBucketKeys))
         assertTrue("過剰のある日は印が付く", MagiViewState(ui).days[0].hasSurplus)
     }
+
+    /** 違反フィルタのチップ件数も同じ（needViolations だけを数えると c41s に隠れた過剰が「人員 0」になる）。 */
+    @Test
+    fun bucketChipCountsSeeClassesHiddenBehindEqualWeightFamilies() {
+        val ui = UiState(
+            staff = 1, days = 1, shifts = 2, schedule = listOf(listOf(0)),
+            needViolations = mapOf("1,0" to "vio-c41s"),
+            needFamilies = mapOf("1,0" to listOf("vio-c41s", "vio-covO")),
+        )
+        val counts = vioBucketLocCounts(ui)
+        assertEquals("c41s に隠れた過剰も人員に数える", 1, counts["need"])
+        assertEquals("グループルールは 1 箇所のまま", 1, counts["group"])
+        val fallback = vioBucketLocCounts(ui.copy(needFamilies = emptyMap()))
+        assertEquals("families 未充填の経路は最重1クラスへフォールバック", null, fallback["need"])
+        assertEquals(1, fallback["group"])
+    }
+
+    /** 最終週が 7 日に満たない月でも、右端まで送れば最終週になる（左端の日だけだと最後から 2 番目で止まる）。 */
+    @Test
+    fun currentWeekReachesAPartialLastWeekAtTheRightEdge() {
+        val weeks = listOf((0..6).toList(), (7..13).toList(), (14..20).toList(), (21..27).toList(), (28..30).toList())
+        assertEquals(0, currentWeekIndex(weeks, leftDay = 0, atEnd = false))
+        assertEquals(2, currentWeekIndex(weeks, leftDay = 14, atEnd = false))
+        assertEquals("31日・7日表示の右端は左端が 24日目", 3, currentWeekIndex(weeks, leftDay = 24, atEnd = false))
+        assertEquals(4, currentWeekIndex(weeks, leftDay = 24, atEnd = true))
+        assertEquals(0, currentWeekIndex(listOf((0..6).toList()), leftDay = 0, atEnd = true))
+        assertEquals(0, currentWeekIndex(emptyList(), leftDay = 3, atEnd = false))
+    }
 }

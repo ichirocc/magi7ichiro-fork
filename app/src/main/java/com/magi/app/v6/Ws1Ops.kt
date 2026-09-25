@@ -36,8 +36,16 @@ object Ws1Ops {
         s[k] = state.shifts[k].copy(name = name, kigou = kigou, need1 = need1, need2 = need2)
         // [記号変更の伝播] 制約はシフト記号(文字列)で参照するため、記号を変えたら参照行も一括置換し
         //   旧記号の幽霊行化(評価では無視されるが表示に残る)を防ぐ。index保存(staffRange/希望/apt/勤務表)は
-        //   indexで参照するため自動追従＝対象外。
-        return applyRestRole(renameShiftInConstraints(state.copy(shifts = s), old, kigou), k, isRest)
+        //   indexで参照するため自動追従＝対象外。表示色(shiftColors)も記号キーなので同じく付け替える。
+        return applyRestRole(renameShiftInConstraints(state.copy(shifts = s, shiftColors = renameColorKey(state.shiftColors, old, kigou)), old, kigou), k, isRest)
+    }
+
+    /** 表示色の記号キーを old→new へ移す。新しい記号に残っていた孤児の色は捨てる（別のシフトの色を引き継がない）。 */
+    private fun renameColorKey(colors: Map<String, String>, old: String, new: String): Map<String, String> {
+        if (old.isBlank() || old == new) return colors
+        val c = colors[old]
+        val m = colors - old - new
+        return if (c != null) m + (new to c) else m
     }
 
     /** [3.603.0/backlog#24] shifts[target]のShiftRoleを単一選択で更新する（trueなら他は全てNoneへ）。 */
@@ -411,6 +419,8 @@ object Ws1Ops {
         for ((key, v) in state.wishes) { if (v == k) continue; wishes[key] = if (v > k) v - 1 else v }
         val ns = state.copy(
             shifts = shifts, groupShift = gs, groupShiftApt = apt, wishes = wishes,
+            // 消したシフトの表示色は残さない（同じ記号で作り直したシフトが黙って引き継がないように）。
+            shiftColors = state.shiftColors - state.shifts[k].kigou,
             needDay1 = reindexKeys(state.needDay1, 0, k),
             needDay2 = reindexKeys(state.needDay2, 0, k),
             staffRange = reindexKeys(state.staffRange, 1, k),

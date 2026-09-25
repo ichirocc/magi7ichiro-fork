@@ -711,7 +711,7 @@ object V6SanityPort {
             for ((famJp, rowStr) in p.unresolvedRows) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「$rowStr」",
                     "この行は評価されていません。〈〉で囲んだ記号が今の一覧にないか、日数・回数が空か数値でない" +
-                        "ためです（シフトや群を改名・削除するとこうなります）",
+                        "ためです（シフトやグループを改名・削除するとこうなります）",
                     "制約設定でこの行を今ある記号・正しい数値に直すか、行を削除してください"))
             }
 
@@ -795,8 +795,8 @@ object V6SanityPort {
                     }
                 }
             }
-            checkRange("群のレンジ", "c41", state.cons41)
-            checkRange("スキル群のレンジ", "c41s", state.cons41s)
+            checkRange("グループのレンジ", "c41", state.cons41)
+            checkRange("スキルグループのレンジ", "c41s", state.cons41s)
             // [3.328.0/外部レビュー] 日別の必要人数と適切回数も同じ穴。とくに needDay は
             //   `needAt` が非数値のとき**シフト既定値へ黙って読み替える**ので、0 になるより性質が悪い
             //   （その日だけ意図と違う人数で計算され、画面には何も出ない）。
@@ -843,10 +843,10 @@ object V6SanityPort {
                 }
                 if (bad.isNotEmpty()) {
                     val names = bad.take(Guidance.NAME_PREVIEW).joinToString("・") { it.value.name.ifBlank { "#${it.index}" } }
-                    out.add(SettingIssue(IssueKind.CONSTRAINT, "スキル群の割当",
-                        "${bad.size}名（$names${if (bad.size > Guidance.NAME_PREVIEW) " ほか" else ""}）のスキル群が今の一覧の範囲外です。" +
-                            "この職員はスキル群の制約から外れて計算されます",
-                        "職員管理でスキル群を選び直すか、所属させないなら「(なし)」にしてください"))
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "スキルグループの割当",
+                        "${bad.size}名（$names${if (bad.size > Guidance.NAME_PREVIEW) " ほか" else ""}）のスキルグループが今の一覧の範囲外です。" +
+                            "この職員はスキルグループのルールから外れて計算されます",
+                        "職員管理でスキルグループを選び直すか、所属させないなら「(なし)」にしてください"))
                 }
             }
 
@@ -880,7 +880,7 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "担当できるシフト",
                     "グループ「$gname」（${members}名）は担当できるシフトが1つもありません。この職員は休しか置けず、" +
                         "必要人数のある日はすべて人員不足になります",
-                    "年間マスターの「担当できるシフト（群×シフト）」で担当するシフトを選んでください"))
+                    "年間マスターの「担当可否（グループ × シフト）」で担当するシフトを選んでください"))
             }
         }
 

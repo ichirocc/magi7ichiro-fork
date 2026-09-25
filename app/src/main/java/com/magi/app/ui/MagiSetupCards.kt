@@ -172,7 +172,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
                 c.wishes == 0 -> "次に『希望シフト』を登録すると 解消度 が上がります。"
                 // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
                 //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
-                else -> "準備OK。画面下の『勤務表をつくる』で作成できます。"
+                else -> "準備OK。画面下の『${if (ui.hasResult) "もう一度つくる" else "勤務表をつくる"}』で作成できます。"
             }
             Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                 Text("次の一手: $next", color = cs.onSecondaryContainer,
@@ -189,7 +189,7 @@ internal fun GuideRow(label: String, value: String, done: Boolean, onClick: (() 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick) else Modifier,
+        modifier = if (onClick != null) Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick) else Modifier,
     ) {
         Text(if (done) "✓" else "・", color = if (done) cs.primary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
@@ -446,7 +446,7 @@ private fun ChecklistRow(label: String, value: String, ok: Boolean, onClick: (()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = if (onClick != null) Modifier.fillMaxWidth().clickable(onClick = onClick) else Modifier,
+        modifier = if (onClick != null) Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick) else Modifier,
     ) {
         Text(if (ok) "✓" else "！", color = if (ok) cs.tertiary else cs.error, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
@@ -761,7 +761,7 @@ internal fun CollapsibleSection(
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.small,
-            modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { expanded = !expanded },
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),

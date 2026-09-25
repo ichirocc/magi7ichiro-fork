@@ -259,8 +259,8 @@ private fun looksLikeScheduleCsv(t: String): Boolean {
     return lines.any { it.trimStart().startsWith("集計,") }
 }
 
-/** 希望/制約の取込が0件のとき、別形式CSVの取り違えを推定して利用者向けヒントを返す（無ければ空）。 */
-private fun componentImportMismatchHint(repairedText: String): String = when {
+/** 種類別取込で別形式CSVの取り違えを推定して利用者向けヒントを返す（無ければ空）。職員一覧は取込の前、ほかは0件のとき。 */
+private fun componentImportMismatchHint(repairedText: String, what: String = "希望・制約", buttons: String = "『希望』『制約』"): String = when {
     // [3.475.0/論理監査] 未閉引用符は「取り込める行が0件」ではなく書式の誤り（3.413.0/I-08 が断る理由）。
     //   旧: 種類別取込3経路とも氏名/記号の不一致を疑わせる案内しか出せなかった。
     com.magi.app.v6.csvHasUnclosedQuote(repairedText) ->
@@ -269,7 +269,7 @@ private fun componentImportMismatchHint(repairedText: String): String = when {
         com.magi.app.v6.FlatRosterCsvImport.detect(repairedText) ->
         "これは勤務表全体（テンプレ/ユニット列形式）のCSVのようです。取込種別で『データ全体（新規）』を選んでください。"
     looksLikeScheduleCsv(repairedText) ->
-        "これは勤務表（スケジュール）CSVのようで、希望・制約は含まれていません。専用CSVを、出力タブの『希望』『制約』ボタンで出して取り込んでください。"
+        "これは勤務表（スケジュール）CSVのようで、${what}は含まれていません。専用CSVを、設定タブの『コンポーネント別 出力』にある${buttons}ボタンで出して取り込んでください。"
     else -> ""
 }
 
@@ -278,11 +278,18 @@ fun MagiViewModel.importStaffCsv(rawText: String) {
     val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
     val sched = currentSchedule ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
     val text = MojibakeRepair.repair(rawText)
+    // 未知の氏名を新規追加する経路なので、別形式のCSVは0件を待たずに断る（見出し・集計行・種別タグが職員として入る）。
+    val mis = componentImportMismatchHint(text, what = "職員一覧", buttons = "『職員』").ifEmpty {
+        com.magi.app.v6.StaffCsvIO.otherKindOf(text)?.let { "これは${it}のCSVのようです。取込種別で『$it』を選んでください。" } ?: ""
+    }
+    if (mis.isNotEmpty()) {
+        _ui.update { it.copy(messageIsError = true, message = "職員一覧の取込を中止しました。$mis") }
+        logOp("W", "職員一覧CSV取込 中止: 別形式CSVの取り違えの可能性")
+        return
+    }
     val res = runCatching { com.magi.app.v6.StaffCsvIO.parseUpsert(text, st, sched) }.getOrNull()
     if (res == null) {
-        val hint = componentImportMismatchHint(text)
-        val tail = if (hint.isEmpty()) "形式『氏名,グループ,スキル』（1行=1名）をご確認ください。" else hint
-        _ui.update { it.copy(messageIsError = true, message = "職員一覧の取込失敗（追加0・更新0）。$tail") }
+        _ui.update { it.copy(messageIsError = true, message = "職員一覧の取込失敗（追加0・更新0）。形式『氏名,グループ,スキル』（1行=1名）をご確認ください。") }
         logOp("W", "職員一覧CSV取込 失敗: 0件")
         return
     }

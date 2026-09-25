@@ -401,8 +401,8 @@ object UnifiedViolationChecker {
                     inc("high", n - hi)
                     markCount(i, k, "high")
                 }
-                // [統一apt] 適切回数(群単位の双方向目標)。SOFT・重み1・L1偏差|n-t|。担当可シフトのみ(apt 構築時に canDo ガード済)。
-                // セル着色は range(low/high, 重み90/25)を優先し、markCount の重み優先ガードにより低優先の
+                // [統一apt] 適切回数(群単位の双方向目標)。SOFT・L1偏差|n-t|。担当可シフトのみ(apt 構築時に canDo ガード済)。
+                // セル着色は range(low/high)を優先し、markCount の重み優先ガードにより低優先の
                 // apt 色(不足=赤/超過=橙)は既存マークを上書きしない（手動 containsKey ガードは markCount 側の
                 // 重み優先に統合済みのため撤去）。
                 val t = p.apt[i][k]

@@ -637,8 +637,8 @@ class V6SanityPortTest {
         val st = unresolvedState(cons42 = listOf(com.magi.app.model.C42Row("G", "GX", "X", "X")))
         assertTrue("前提: この行は評価対象から外れる", Problem(st).cons42.isEmpty())
         val rep = V6SanityPort.buildGuidance(st)
-        assertTrue("群ペア禁止の未解決行が案内されること",
-            rep.any { it.where.contains("群ペア禁止") && it.where.contains("〈GX〉") })
+        assertTrue("グループペア禁止の未解決行が案内されること",
+            rep.any { it.where.contains("グループペア禁止") && it.where.contains("〈GX〉") })
     }
 
     @Test fun nonNumericRangeRowIsReported() {
@@ -646,7 +646,7 @@ class V6SanityPortTest {
         val st = unresolvedState(cons41 = listOf(com.magi.app.model.C41Row("G", "X", "", "")))
         assertTrue("前提: この行は評価対象から外れる", Problem(st).cons41.isEmpty())
         val rep = V6SanityPort.buildGuidance(st)
-        assertTrue("群のレンジの未解決行が案内されること", rep.any { it.where.contains("群のレンジ") })
+        assertTrue("グループのレンジの未解決行が案内されること", rep.any { it.where.contains("グループのレンジ") })
     }
 
     @Test fun resolvableRowsAreNotReported() {
@@ -691,8 +691,8 @@ class V6SanityPortTest {
 
     @Test fun nonNumericGroupRangeIsReported() {
         val st = unresolvedState(cons41 = listOf(com.magi.app.model.C41Row("G", "X", "1", "多")))
-        assertTrue("群のレンジの非数値が案内されること",
-            V6SanityPort.buildGuidance(st).any { it.where.contains("群のレンジ") && it.problem.contains("数値でない") })
+        assertTrue("グループのレンジの非数値が案内されること",
+            V6SanityPort.buildGuidance(st).any { it.where.contains("グループのレンジ") && it.problem.contains("数値でない") })
     }
 
     @Test fun blankNumbersAreNotReportedAsNonNumeric() {
@@ -706,13 +706,13 @@ class V6SanityPortTest {
         // skillIdx=3 だがスキル群は1つ＝この職員はスキル群の制約から静かに外れる。
         val st = unresolvedState(skillGroups = listOf(Group("S", "S")), skillIdx = 3)
         assertTrue("範囲外のスキル群が案内されること",
-            V6SanityPort.buildGuidance(st).any { it.where.contains("スキル群の割当") })
+            V6SanityPort.buildGuidance(st).any { it.where.contains("スキルグループの割当") })
         assertFalse("範囲内なら案内しない",
             V6SanityPort.buildGuidance(unresolvedState(skillGroups = listOf(Group("S", "S")), skillIdx = 0))
-                .any { it.where.contains("スキル群の割当") })
+                .any { it.where.contains("スキルグループの割当") })
         assertFalse("未所属(-1)は案内しない",
             V6SanityPort.buildGuidance(unresolvedState(skillGroups = listOf(Group("S", "S")), skillIdx = -1))
-                .any { it.where.contains("スキル群の割当") })
+                .any { it.where.contains("スキルグループの割当") })
     }
 
     @Test fun nonNumericDailyNeedIsReported() {

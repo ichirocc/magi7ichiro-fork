@@ -45,7 +45,8 @@ data class UiState(
     val checkRev: Long = 0,
     val bestHard: Long = 0,
     val bestSoft: Long = 0,
-    /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。 */
+    /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。
+     *  盤面が変わる操作（pushUndo）・元に戻す・読込で消す＝別の盤面の比較を完了カードに残さない。 */
     val runSummary: String? = null,
     val totalViolations: Int = 0,
     val weightedScore: Double = 0.0,
@@ -125,6 +126,7 @@ data class UiState(
     val impossibleWishCount: Int = 0,
     val opLog: List<String> = emptyList(),
     val alternatives: List<String> = emptyList(), // 他の案（採用案以外の候補サマリ）
+    val alternativeApplied: Int = -1,             // いま盤面に適用している他の案の添字（-1=どれでもない）
     val coverageDiag: CoverageDiagnosis? = null,  // 人員不足(covU)/人員過剰(covO)の原因診断（充足不可/充足可能の切り分け・過剰がなぜ動かせないか）
     val forbiddenDiag: ForbiddenRunDiagnosis? = null,  // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（c3n=0 なら null）
     val c1Plateau: C1PlateauDiagnosis? = null,  // [3.322.0] 窓の要件(c1)がなぜ直せなかったかの構造化診断（直近の最適化の観測。残存なし/未実行なら null）
@@ -149,7 +151,7 @@ data class UiState(
  * [3.326.0] 回数固定(lo==hi)の緩和対象1件。
  * `attempts` は「目的関数が採用を認めた手を、このピンのガードだけが止めた**計測できた回数**」。
  * 手の数ではなく試行の回数で、研磨の巡（最大4）を重複排除せず数えている。
- * **0 件でも緩和が無意味とは限らない** — 緩和は下限割れ(low, 重み90)の罰も外すため、
+ * **0 件でも緩和が無意味とは限らない** — 緩和は下限割れ(low)の罰も外すため、
  * 「ピン以外の理由で」却下されていた候補が通るようになる経路が別にある（実測で確認済み）。
  */
 data class PinTargetView(

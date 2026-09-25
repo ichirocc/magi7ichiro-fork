@@ -40,16 +40,18 @@ internal fun cellVioClasses(ui: UiState, key: String): List<String> =
 internal fun visibleCellVio(ui: UiState, key: String, enabled: Set<String>): String? =
     cellVioClasses(ui, key).firstOrNull { vioVisible(it, enabled) }
 
-/** 各バケットの「違反ロケーション数」(=箇所数、見出し『要確認 N件』と同単位)。 */
+/** 各バケットの「違反ロケーション数」(=箇所数、見出し『要確認 N件』と同単位)。
+ *  被覆キーもセルと同じく重なった全クラスから数える（最重1クラスだけだと c41s に隠れた covO が「人員 0」になる）。 */
 internal fun vioBucketLocCounts(ui: UiState): Map<String, Int> {
     val out = HashMap<String, Int>()
-    fun tally(cls: String) { bucketOfFamily(familyOfVioClass(cls))?.let { out[it] = (out[it] ?: 0) + 1 } }
-    ui.violationCells.keys.forEach { key ->
-        cellVioClasses(ui, key).mapNotNull { bucketOfFamily(familyOfVioClass(it)) }.toSet()
-            .forEach { b -> out[b] = (out[b] ?: 0) + 1 }
+    fun tallyKey(classes: List<String>) {
+        classes.mapNotNull { bucketOfFamily(familyOfVioClass(it)) }.toSet().forEach { b -> out[b] = (out[b] ?: 0) + 1 }
     }
-    ui.needViolations.values.forEach(::tally)
-    ui.countViolations.values.forEach(::tally)
+    ui.violationCells.keys.forEach { key -> tallyKey(cellVioClasses(ui, key)) }
+    (if (ui.needFamilies.isNotEmpty()) ui.needFamilies.keys else ui.needViolations.keys).forEach { key ->
+        tallyKey(ui.needFamilies[key] ?: listOfNotNull(ui.needViolations[key]))
+    }
+    ui.countViolations.values.forEach { tallyKey(listOf(it)) }
     return out
 }
 
@@ -164,6 +166,13 @@ internal class MagiViewState(val ui: UiState, val vioEnabled: Set<String> = allV
             )
         }
     }
+}
+
+/** 週送りの現在週。左端の日を含む週、右端まで来ていれば最終週（最終週が 7 日未満の月は左端の日だけでは届かない）。 */
+internal fun currentWeekIndex(weeks: List<List<Int>>, leftDay: Int, atEnd: Boolean): Int {
+    if (weeks.isEmpty()) return 0
+    if (atEnd) return weeks.size - 1
+    return weeks.indexOfFirst { leftDay <= it.last() }.let { if (it < 0) weeks.size - 1 else it }
 }
 
 /** [思考誘導S3] 残っている必須違反に関わる希望 1 件（職員・日・理由）。 */
