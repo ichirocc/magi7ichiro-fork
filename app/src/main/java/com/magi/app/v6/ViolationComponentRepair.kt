@@ -70,15 +70,12 @@ object ViolationComponentRepair {
          *  その後のビームトリムは est 昇順の単一ソートのため「悪化しない候補が8件以上あれば負債候補は
          *  一切生き残れない」という構造上の飢餓が起きうる（未検証の仮説。debtExploration=false では無効）。 */
         val debtLaneSlots: Int = 0,
-        /** [測定中] セグメント内（解けるHARD／回数+SOFTセル／blocked）を 件数×重み×族の成功率 で降順に並べ替える。既定 OFF。 */
-        val familyPriorityScoring: Boolean = false,
         /** [測定中/bestOfK] 1 周あたり起点を最大何件 search() して結果を比較するか。既定 1=従来どおり
          *  「最初に成功した起点をすぐ採用して次周へ」（起点の並び順に結果が依存する）。2 以上にすると、
          *  複数の起点候補を実際に search() し、betterReport で客観的に最良の一つだけを採用する
          *  （順序非依存になる代わり search() 呼出が増える）。search() は差分を当てて戻すだけで
          *  盤面(work)/delta を変更しない（副作用なし）ので複数回呼んでも安全。
-         *  iter17(familyPriorityScore) が無差別だった一因＝「並べ替えても greedy な早期採用のままでは
-         *  順序依存のノイズに埋もれる」という未検証の仮説の検証用（familyPriorityScoring=false でも独立して使える）。 */
+         */
         val bestOfK: Int = 1,
     )
 
@@ -143,12 +140,9 @@ object ViolationComponentRepair {
     /**
      * 起点の並び: HARD のセル・人数違反 → 回数違反 → SOFT のセル・人数違反（同種はキー順で決定的）。
      * 構造的に埋められない人員不足 [infeasible] は末尾＝起点の上限（maxAnchors）を「解ける HARD」に使う。
-     * [familyScore] を渡すとセグメント内（solvable/counts/soft/blocked それぞれの内部）だけを降順に並べ替える
-     * （セグメントの境界＝「解ける HARD 優先→SOFT→blocked」は死守。同点は元のキー順で安定）。
      */
     internal fun anchors(
         report: ViolationReport, infeasible: Set<Long> = emptySet(),
-        familyScore: ((Anchor) -> Double)? = null,
     ): List<Anchor> {
         fun fam(cls: String) = cls.removePrefix("vio-")
         val cells = report.violations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, j) -> Anchor(fam(cls) in MirrorKeys.hard, fam(cls), i, j) } }
@@ -156,13 +150,7 @@ object ViolationComponentRepair {
         val counts = report.countViolations.entries.sortedBy { it.key }.mapNotNull { (k, cls) -> parseKey(k)?.let { (i, sh) -> Anchor(false, fam(cls), i, -1, sh) } }
         val hardOnes = (cells + needs).filter { it.hard }
         val (blocked, solvable) = hardOnes.partition { it.family == "covU" && (it.shift * 1000L + it.day) in infeasible }
-        fun ordered(list: List<Anchor>): List<Anchor> {
-            val f = familyScore ?: return list
-            return list.withIndex()
-                .sortedWith(compareByDescending<IndexedValue<Anchor>> { f(it.value) }.thenBy { it.index })
-                .map { it.value }
-        }
-        return ordered(solvable) + ordered(counts) + ordered((cells + needs).filter { !it.hard }) + ordered(blocked)
+        return solvable + counts + (cells + needs).filter { !it.hard } + blocked
     }
 
     /** 起点ごとの探索集合＝主候補（起点を触る）＋助候補（主と職員か日を共有）。主候補が無い起点は除く。 */
@@ -453,14 +441,9 @@ object ViolationComponentRepair {
         // 起点（違反）ごとに探索し、採用があれば盤面が変わるので起点（と起点生成の候補）を作り直す。1 周して採用が無ければ終わり。
         val used = HashSet<Int>()
         var anchorCount = 0; var maxSet = 0; var generatedTotal = 0
-        // familyPriorityScoring 用: 1 回の repair() 呼出に閉じたスコープ（呼出をまたいだ永続化はしない）。
-        val triedByFamily = HashMap<String, Int>()
-        val committedByFamily = HashMap<String, Int>()
-        val familyScoreFn: ((Anchor) -> Double)? = if (!params.familyPriorityScoring) null
-            else { a -> ConstraintRepairInference.familyPriorityScore(bestRep, a.family, triedByFamily[a.family] ?: 0, committedByFamily[a.family] ?: 0) }
         class Found(val anchor: Anchor, val chosen: IntArray, val rep: ViolationReport)
         outer@ while (!shouldStop() && evaluations < params.maxEvaluations && estimates < params.maxEstimates) {
-            val currentAnchors = anchors(bestRep, infeasibleSlots, familyScoreFn)
+            val currentAnchors = anchors(bestRep, infeasibleSlots)
             while (patches.size > poolCount) patches.removeAt(patches.size - 1)
             if (params.generateFromAnchors) {
                 val sig = HashSet<String>(); for (pt in patches) sig.add(pt.signature)
@@ -479,14 +462,12 @@ object ViolationComponentRepair {
             for ((anchor, ids) in sets.take(params.maxAnchors)) {
                 if (shouldStop() || evaluations >= params.maxEvaluations || estimates >= params.maxEstimates) break
                 anchorsTried++; maxSet = maxOf(maxSet, ids.size)
-                triedByFamily.merge(anchor.family, 1, Int::plus)
                 val (chosen, rep) = search(anchor, ids) ?: continue
                 found.add(Found(anchor, chosen, rep))
                 if (found.size >= maxOf(1, params.bestOfK)) break
             }
             if (found.isNotEmpty()) {
                 val best = found.reduce { a, b -> if (betterReport(b.rep, a.rep)) b else a }
-                committedByFamily.merge(best.anchor.family, 1, Int::plus)
                 for (id in best.chosen) for (op in patches[id].ops) {
                     if (work[op[0]][op[1]] != op[2]) { work[op[0]][op[1]] = op[2]; delta.apply(op[0], op[1], op[2]) }
                 }

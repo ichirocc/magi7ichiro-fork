@@ -183,7 +183,6 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 |---|---|---|
 | `Params.c2PolishEnabled`／`c2PolishReactivate` | 職員別合計（c2）の専用研磨／巡末の再起動 | iter15 不合格・3.524.0、iter_c2reactivate（backlog #12(b)・#26） |
 | `Params.c41FlowPolishEnabled`／`c42FlowPolishEnabled`／`c42FlowPolishReactivate` | 群/日範囲 c41・c42 の最小費用フロー研磨 | 3.511.5 iter16 不合格／3.511.7 iter18 同等／iter_c42reactivate（#12(b)・#26・#31） |
-| `ViolationComponentRepair.Params.familyPriorityScoring` | VCR の族選択を件数×重み×改善可能性で | 3.511.6 iter17 不合格（#12(b)） |
 | `ViolationComponentRepair.Params.bestOfK`（=1） | VCR で K 候補から最良を採る | iter23・ユーザー判断で終了（#12(b)） |
 | `ViolationComponentRepair.Params.debtLaneSlots`（=0） | 負債レーン枠 | iter22・2026-09-09 検証中止（#15 v2.1） |
 | `Params.quantitativeRangeEval`／`V6OptimizerOptions.quantitativeRangeEval`／`Problem(quantitativeRangeEval)` | C2・C41/C41s を不足量・超過量で評価 | 3.512.0 iter21 不合格（#12(a)・#14(d)） |
@@ -228,6 +227,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `ViolationComponentRepair.Params.familyPriorityScoring`／`familyPriorityScore`（VCR の族優先度） | 既定経路（フラグごと撤去） | 3.511.6 iter17 不合格（#12(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `stallEscalation`／`StallEscalationConfig`（採用 0 の巡で LNS・VCR を拡張） | 既定経路（フラグごと撤去） | 3.511.1 iter13 全件無変化（#12(b)・#13(a)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `useDynamicBlockLens`／`dynamicBlockLengths`（ブロック交換の動的窓長） | 既定経路（フラグごと撤去） | 3.511.0 iter12 不合格（#14(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `PostOptimizationParams.lnsWeightDebt`／`WeightDebt`（共同 LNS の重み基準の一時負債） | 既定経路（フラグごと撤去） | 3.510.4 iter10 不合格（#15(f)）。2026-09-25 撤去＝既定出力不変（決定的後処理の盤面ハッシュ 8/8 一致）。 |

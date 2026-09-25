@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 既定OFF台帳の整理④（2026-09-25）: 否決済み `familyPriorityScoring` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
 - 既定OFF台帳の整理③（2026-09-25）: 否決済み `stallEscalation` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
 - S5 T8 言語跨ぎ契約（2026-09-25）: `wish_trial_expected.txt` を Kotlin/C# の `WishTrialCrossLanguageTest` が共有、両言語一致（backlog #37(a)）。  → `docs/history/3.4xx.md`
 
