@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 既定OFF台帳の整理⑥（2026-09-25）: 否決済み `debtLaneSlots` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
 - 既定OFF台帳の整理⑤（2026-09-25）: 否決済み `bestOfK` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
 
 - 既定OFF台帳の整理④（2026-09-25）: 否決済み `familyPriorityScoring` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`

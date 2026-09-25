@@ -64,12 +64,6 @@ object ViolationComponentRepair {
         /** [3.510.5/測定中] 設計 v3: 起点の族の 重み×現在量×係数 を SOFT 一時負債の予算にし、HARD 悪化と予算超えの枝をビームから外す（[ConstraintRepairInference]）。既定 OFF。 */
         val debtExploration: Boolean = false,
         val temporaryDebtFactor: Double = 2.0,
-        /** [測定中/二車線ビーム] debtExploration 時、ビーム幅のうち何枠を負債候補(est>baseEst)専用に予約するか。
-         *  0=予約なし（従来どおり est 昇順の単一トリムで、負債候補は非負債候補に埋もれて落選し得る）。
-         *  iter11(ConstraintRepairInference)が無差別だった一因として、explorable()は予算内かどうかしか見ず、
-         *  その後のビームトリムは est 昇順の単一ソートのため「悪化しない候補が8件以上あれば負債候補は
-         *  一切生き残れない」という構造上の飢餓が起きうる（未検証の仮説。debtExploration=false では無効）。 */
-        val debtLaneSlots: Int = 0,
     )
 
     /** 盤面差分。`ops` は [職員, 日, 新シフト] の並び（[CombinatorialRepair.Candidate.ops] と同じ形）。 */
@@ -96,21 +90,6 @@ object ViolationComponentRepair {
         val n = minOf(a.ids.size, b.ids.size)
         for (t in 0 until n) { val d = a.ids[t].compareTo(b.ids[t]); if (d != 0) return@Comparator d }
         a.ids.size.compareTo(b.ids.size)
-    }
-
-    /** [測定中/二車線ビーム] debtExploration && debtLaneSlots>0 のときだけ、負債候補(est>baseEst)を
-     *  非負債候補と別枠でトリムする（互いを競わせない）。それ以外は従来どおりの単一トリム。
-     *  負債枠は「予約」であって「専有」ではない＝負債候補が debtCap 未満（0 件含む）のときは、
-     *  余った枠を非負債候補へ返す（先に負債候補を選び、残り容量で非負債候補を選ぶ）。
-     *  戻り値は最後に nodeOrder で再整列する＝負債候補が混ざっても展開順（est 昇順）は従来と同じ意味を保つ
-     *  （search() の展開ループは評価予算切れで frontier の先頭から順に打ち切るため、順序は結果に影響する）。 */
-    internal fun trimFrontier(candidates: List<Node>, baseEst: Long, params: Params): List<Node> {
-        if (!params.debtExploration || params.debtLaneSlots <= 0) return candidates.sortedWith(nodeOrder).take(params.beamWidth)
-        val (debtNodes, normalNodes) = candidates.partition { it.est > baseEst }
-        val debtCap = params.debtLaneSlots.coerceAtMost(params.beamWidth)
-        val selectedDebt = debtNodes.sortedWith(nodeOrder).take(debtCap)
-        val selectedNormal = normalNodes.sortedWith(nodeOrder).take(params.beamWidth - selectedDebt.size)
-        return (selectedNormal + selectedDebt).sortedWith(nodeOrder)
     }
 
     /** 違反の起点。セル違反は (staff, day)、回数違反は staff、人数違反は day を範囲に持つ。 */
@@ -265,7 +244,7 @@ object ViolationComponentRepair {
 
         fun overlapsAny(ids: IntArray, j: Int): Boolean = ids.any { patches[it].overlaps(patches[j]) }
 
-        fun trimFrontier(candidates: List<Node>, baseEst: Long): List<Node> = trimFrontier(candidates, baseEst, params)
+        fun trimFrontier(candidates: List<Node>): List<Node> = candidates.sortedWith(nodeOrder).take(params.beamWidth)
 
         /** 成分 [remaining] の中で最浅の深さで見つかる「正式評価で改善する」トランザクション。無ければ null。 */
         fun search(anchor: Anchor, remaining: List<Int>): Pair<IntArray, ViolationReport>? {
@@ -278,7 +257,7 @@ object ViolationComponentRepair {
                 if (!params.debtExploration) return true
                 return ConstraintRepairInference.mayExplore(baseEst, est, allowance).also { if (!it) prunedDebt++ }
             }
-            var frontier = trimFrontier(remaining.map { Node(intArrayOf(it), estimate(intArrayOf(it))) }.filter { explorable(it.est) }, baseEst)
+            var frontier = trimFrontier(remaining.map { Node(intArrayOf(it), estimate(intArrayOf(it))) }.filter { explorable(it.est) })
             var depth = 1
             while (frontier.isNotEmpty()) {
                 var best: Pair<IntArray, ViolationReport>? = null
@@ -327,7 +306,7 @@ object ViolationComponentRepair {
                         if (explorable(est)) next.add(Node(ids, est))
                     }
                 }
-                frontier = trimFrontier(next, baseEst)
+                frontier = trimFrontier(next)
                 depth++
             }
             return null
