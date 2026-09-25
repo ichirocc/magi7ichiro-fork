@@ -124,7 +124,7 @@
     production の予算（後処理予約25秒を含め常に数十秒〜300秒、backlog #14(g) の実要件「300秒→305秒以内」も無傷）では発生しないため
     実害は無いが、将来 UI から短い予算（プレビュー・クイック実行等）でRSI_PLUSを呼ぶ機能を足す場合は踏む。フェーズ下限を
     budgetSec に応じて緩めるかは探索動学の変更＝明示指示があれば。現状は放置で良い（実機で踏む経路が無い）。
-    関連: 3.600.0 で按分を `rsiPlusPhaseBudgets` に切り出し、`V6OptimizerOptions.roleBudgetFit`（既定OFF、#34(b)・3.601.0 で有意差なし）が予算按分側の対処。
+    関連: 3.600.0 で按分を `rsiPlusPhaseBudgets` に切り出し、`V6OptimizerOptions.roleBudgetFit`（既定OFF、#34(b)・3.601.0 で有意差なし、2026-09-25 撤去）が予算按分側の対処だった。
 17. ~~**[表示のみ] 設定タブ・勤務表タブの文字サイズ階層**（3.515.4 の続き）~~ **→ 3.515.5 で完了**。
     `MagiSetupCards.kt`・`MagiScheduleViews.kt`・`MagiDashboardCards.kt`を`docs/DESIGN.md` §3.3の階層
     （章=titleMedium／節=titleSmall／本文・行=bodyMedium／補足=bodySmall／label=部品ラベル・チップ・凡例のみ）へ統一。
@@ -500,7 +500,7 @@
     `tools/loop/PortfolioBudgetBench.kt`（`run_portfolio_budget_bench.sh`）を新設し、`V6Algorithm.PORTFOLIO`を
     実際に回すA/Bを実データ4件×5seed×budgetSec=90sで実施（`LoopBench.kt`が経由しない
     `V6OptimizerOptions.roleBudgetFit`の可否）。結果: golden -1.9%・sept2026 -2.3%改善、sample ±0.03%同等、
-    blocked_covu +0.8%悪化、epochOverrunCountは全件0。**判定＝既定OFF維持**（3/4改善もエッジケース悪化ありで
+    blocked_covu +0.8%悪化、epochOverrunCountは全件0。**判定＝既定OFF維持→2026-09-25 フラグ・`rsiPlusPhaseBudgets` ごと撤去**（3/4改善もエッジケース悪化ありで
     探索動学変更のリスク・報酬比が不明確、詳細は`docs/history/3.4xx.md`3.601.0節）。これにより
     「測定手段の欠落」は解消済み＝このベンチ基盤は今後backlog#28（RsiFocusSelection周期枠）等の
     ポートフォリオ経由の測定にも再利用できる（フェーズ別実時間・SA実測反復数までは未計装、必要なら追加）。

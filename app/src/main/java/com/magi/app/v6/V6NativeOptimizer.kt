@@ -64,9 +64,6 @@ data class V6OptimizerOptions(
     val tabu: Boolean = false,
     /** [backlog #12(a)・実験段階] c2/c41/c41sを二値でなく不足量/距離量で評価する（既定false=挙動不変）。 */
     val quantitativeRangeEval: Boolean = false,
-    /** [3.600.0/測定中/backlog#34] ロールへ渡す秒数を `min(量子, 探索締切までの残り)` にし、RSI+ の位相合計も
-     *  その予算ちょうどに収める。既定 OFF＝探索の時間配分が変わるため計測後に採否（経緯は docs/history）。 */
-    val roleBudgetFit: Boolean = false,
     /** [測定中/backlog#28] `RsiFocusSelection`のapt/covO周期枠(`round%3`)を`runRsi`呼出し単位でなく
      *  `sharedHf63`が持続するカウンタで計る。既定OFF＝短いRSI呼出しの繰返しで枠が回らない条件の対策（経緯はdocs/history）。 */
     val rsiFocusRotationPersist: Boolean = false,
@@ -718,11 +715,9 @@ object V6NativeOptimizer {
                     val stopRole = {
                         shouldStop() || nowMs() >= roleDeadline
                     }
-                    // [3.600.0/roleBudgetFit] ロールへ渡す秒数。既定は従来どおり量子そのもの。
-                    val roleBudgetSec = if (options.roleBudgetFit) minOf(quantum, remainingSec).coerceAtLeast(0) else quantum
                     val roleT0 = nowMs()
                     // [3.600.0] 既に締切／停止済みならロールを始めない（始めれば位相下限ぶん必ず超過する）。
-                    val result = if (stopRole() || roleBudgetSec <= 0) null else try {
+                    val result = if (stopRole() || quantum <= 0) null else try {
                         val progress: (String, ViolationReport?, Long, Long) -> Unit = { phase, rep, it, elapsed ->
                             if (rep?.hard == 0) hardZeroWinner.compareAndSet(-1, i)   // 記録のみ（キルしない）
                             if (i == 0 || rep?.hard == 0) {
@@ -733,9 +728,9 @@ object V6NativeOptimizer {
                             }
                         }
                         when (assignment.algorithm) {
-                            V6Algorithm.ALNS -> runAlns(state, start.copy2D(), roleOptions, roleBudgetSec, stopRole, progress)
-                            V6Algorithm.RSI -> runRsi(state, start.copy2D(), roleOptions, roleBudgetSec, stopRole, progress, workerHf63)
-                            else -> runRsiPlus(state, start.copy2D(), roleOptions, roleBudgetSec, stopRole, progress, workerHf63)
+                            V6Algorithm.ALNS -> runAlns(state, start.copy2D(), roleOptions, quantum, stopRole, progress)
+                            V6Algorithm.RSI -> runRsi(state, start.copy2D(), roleOptions, quantum, stopRole, progress, workerHf63)
+                            else -> runRsiPlus(state, start.copy2D(), roleOptions, quantum, stopRole, progress, workerHf63)
                         }
                     } catch (ce: kotlinx.coroutines.CancellationException) {
                         throw ce
@@ -1914,45 +1909,6 @@ object V6NativeOptimizer {
         return V6OptimizerResult(best, bestReport.copy(logs = logs + bestReport.logs), V6Algorithm.RSI, logs, iters, nowMs() - started)
     }
 
-    /**
-     * [3.600.0/roleBudgetFit] RSI+ の位相秒数。合計は必ず [budgetSec] に一致する（不変条件）。
-     * 予算が床を賄える（>=40s）ときだけ従来の 10s/5s 床を保ち、短いときは比率配分へ落とす＝
-     * 短時間でも各段階を一度は試す（一部へ集中させない。ユーザー決定 2026-09-18）。
-     */
-    internal fun rsiPlusPhaseBudgets(budgetSec: Int): IntArray {
-        val b = budgetSec.coerceAtLeast(0)
-        if (b <= 0) return intArrayOf(0, 0, 0, 0)
-        if (b <= 3) return intArrayOf(b, 0, 0, 0)
-        val useFloor = b >= 40
-        val phaseFloor = if (useFloor) 10 else 1
-        val polishFloor = if (useFloor) 5 else 0
-        var seed = max(phaseFloor, (b * 0.20).toInt())
-        var rsi = max(phaseFloor, (b * 0.35).toInt())
-        var alns = max(phaseFloor, (b * 0.30).toInt())
-        var polish = b - seed - rsi - alns
-        if (polish < polishFloor || seed + rsi + alns + max(polish, 0) > b) {
-            val weights = doubleArrayOf(0.20, 0.35, 0.30, 0.15)
-            val raw = weights.map { max(1, (b * it).toInt()) }.toMutableList()
-            var sum = raw.sum()
-            while (sum > b) {
-                val i = raw.indices.maxBy { raw[it] }
-                if (raw[i] <= 1) break
-                raw[i]--
-                sum--
-            }
-            while (sum < b) {
-                val i = raw.indices.maxBy { weights[it] }
-                raw[i]++
-                sum++
-            }
-            seed = raw[0]; rsi = raw[1]; alns = raw[2]; polish = raw[3]
-        }
-        polish = polish.coerceAtLeast(0)
-        val sum = seed + rsi + alns + polish
-        if (sum != b) polish = (polish + (b - sum)).coerceAtLeast(0)
-        return intArrayOf(seed, rsi, alns, polish)
-    }
-
     private suspend fun runRsiPlus(
         state: MagiState,
         initial: Array<IntArray>,
@@ -1969,34 +1925,22 @@ object V6NativeOptimizer {
             val rep = UnifiedViolationChecker.check(state, initial, quantitativeRangeEval = options.quantitativeRangeEval)
             return V6OptimizerResult(initial, rep, V6Algorithm.RSI_PLUS, logs, 0L, 0L)
         }
-        val seedSec: Int
-        val rsiSec: Int
-        val alnsSec: Int
-        val polishSec: Int
-        if (options.roleBudgetFit) {
-            val phases = rsiPlusPhaseBudgets(budgetSec)
-            seedSec = phases[0]; rsiSec = phases[1]; alnsSec = phases[2]; polishSec = phases[3]
-        } else {
-            seedSec = max(10, (budgetSec * 0.20).toInt())
-            rsiSec = max(10, (budgetSec * 0.35).toInt())
-            alnsSec = max(10, (budgetSec * 0.30).toInt())
-            polishSec = max(5, budgetSec - seedSec - rsiSec - alnsSec)
-        }
+        val seedSec = max(10, (budgetSec * 0.20).toInt())
+        val rsiSec = max(10, (budgetSec * 0.35).toInt())
+        val alnsSec = max(10, (budgetSec * 0.30).toInt())
+        val polishSec = max(5, budgetSec - seedSec - rsiSec - alnsSec)
         // [2026-09-22/backlog#34] 各フェーズの実測msを予算msと並べてログへ出す。実機で観測された
         //   量子比最大約181倍（W5:MAX_DISTANCE_RSI_PLUS q=45s→実8166s）がSeed/Hypothesis/Refine/Polishの
         //   どこで生じたかは従来ログ（HARD/totalのみ）では特定できなかった。次の実機ログでの切り分け用。
         val seedT0 = nowMs()
-        val seed = if (seedSec <= 0) {
-            val rep = UnifiedViolationChecker.check(state, initial, quantitativeRangeEval = options.quantitativeRangeEval)
-            V6OptimizerResult(initial, rep, V6Algorithm.V5, emptyList(), 0L, 0L)
-        } else runV5(state, initial, options, seedSec, shouldStop, onProgress)
+        val seed = runV5(state, initial, options, seedSec, shouldStop, onProgress)
         logs.add(MirrorLog(tag = "RSIPlus", message = "Phase1 Seed: HARD=${seed.report.hard} total=${seed.report.total} 実測${nowMs() - seedT0}ms(予算${seedSec}000ms)"))
         val rsiT0 = nowMs()
-        val rsi = if (shouldStop() || rsiSec <= 0) seed else runRsi(state, seed.schedule, options, rsiSec, shouldStop, onProgress, sharedHf63)
+        val rsi = if (shouldStop()) seed else runRsi(state, seed.schedule, options, rsiSec, shouldStop, onProgress, sharedHf63)
         val base = if (better(rsi.report, seed.report)) rsi else seed
         logs.add(MirrorLog(tag = "RSIPlus", message = "Phase2 Hypothesis: HARD=${base.report.hard} total=${base.report.total} 実測${nowMs() - rsiT0}ms(予算${rsiSec}000ms)"))
         val alnsT0 = nowMs()
-        val refine = if (shouldStop() || alnsSec <= 0) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, shouldStop, onProgress)
+        val refine = if (shouldStop()) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, shouldStop, onProgress)
         val best = if (better(refine.report, base.report)) refine else base
         logs.add(MirrorLog(tag = "RSIPlus", message = "Phase3 Refine: HARD=${refine.report.hard} total=${refine.report.total} 実測${nowMs() - alnsT0}ms(予算${alnsSec}000ms)"))
         var bestSched = best.schedule
@@ -2018,7 +1962,7 @@ object V6NativeOptimizer {
             }
         }
         val polishT0 = nowMs()
-        val polish = if (polishSec <= 0 || shouldStop()) {
+        val polish = if (shouldStop()) {
             PolishResult(bestSched, emptyList(), 0L, UnifiedViolationChecker.check(state, bestSched, quantitativeRangeEval = options.quantitativeRangeEval))
         } else {
             hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, shouldStop, options.quantitativeRangeEval)

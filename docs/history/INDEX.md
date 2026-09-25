@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 既定OFF台帳の整理⑬（2026-09-25）: 否決済み `roleBudgetFit`＋`rsiPlusPhaseBudgets` を撤去（C# 同期）、探索側は 3.600.0 直前と roleBudgetFit 差分なし。  → `docs/history/3.4xx.md`
+
 - 既定OFF台帳の整理⑫（2026-09-25）: 否決済み `postChainKeepBestFinalOnly` を撤去（C# 同期）、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
 
 - 既定OFF台帳の整理⑪（2026-09-25）: 否決済み `postChainRunningKeepBestAcceptTies` を撤去（C# 同期）、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
