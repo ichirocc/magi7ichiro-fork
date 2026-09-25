@@ -632,3 +632,13 @@
     ~~(a) T8 共有 fixture の言語跨ぎ期待値ファイル~~ **済（2026-09-25）**: `wish_trial_expected.txt`（sample_state_v6＋blocked_covu、各 wishLocked 先頭 3 件＋対照）を Kotlin/C# の `WishTrialCrossLanguageTest` が読む。両言語一致／
     ~~(b) 実行マーカーに S5 文脈を載せ中断案内で名指し~~ **済（2026-09-25）**: `work/RunMarker.kt`（`s5`＝staff/day/symbol/name、旧マーカーは従来文）＋`RunMarkerTest`。C# は実行マーカー撤去済み（2026-09-01）＝対象外／
     (c) 「詳しい試算」＝VCR＋後処理チェーンの重い試算を出すか（利用者の決定が要る。机上評価では当たりはほぼ同じで 30 倍遅い）。
+38. **[外部机上テスト D2・2026-09-25 登録、未修正]** スキルグループ未指定の職員が先頭のスキルグループ（index 0）に入る。
+    `Staff.skillIdx` の既定が 0（`model/MagiState.kt:27`）で、職員追加 `Ws1Ops.addStaff`（`v6/Ws1Ops.kt:293` の `Staff(name, gi)`）・
+    CSV 新規職員（`v6/ScheduleCsvBridge.kt:185`・`:308`）・`skillIdx` 欠落 JSON（`model/StateParser.kt:39` の `optInt("skillIdx", 0)`）が
+    すべて 0 になる。正規の「未所属」は -1（`Ws1Ops.kt:544` のグループ削除・`ScheduleCsvBridge.kt:704` の取込）で、c41s/c42s は
+    `Problem.kt:129`（`ssk`）経由で 0 の職員を先頭スキルグループの頭数に数える。既定を -1 へ変えると既存データの c41s/c42s の採点が
+    変わる（出力が変わる）ため、利用者の決定まで登録のみ。C# も同じ既定（`Staff` の既定値）。
+39. **[外部机上テスト SI-3・2026-09-25 登録、未修正]** 初期解の C1 充足がシフト index 順に依存する。
+    `SmartInitialScheduler.kt:58-80` は C1 規則をシフトごとにまとめ `rulesByShift.keys.sorted()`（`:68`）の順に空きセルを埋める＝
+    同じ職員に複数シフトの C1 があると先のシフトが空きセルを取り、後のシフトの C1 が満たしにくくなる（シフトの並び替えで初期解が変わる）。
+    決定的で、後段の最適化器が c1 を目的関数で直すため最終盤面への影響は未測定。順序の変更は初期解（出力）を変えるので登録のみ。

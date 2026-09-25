@@ -19,6 +19,9 @@ import kotlinx.coroutines.isActive
 const val MAX_OPTIMIZE_SEC = 300
 
 object V6FinalPort {
+    /** 直近の [handleOptimize] が最適化器へ渡した種（テスト用）。 */
+    @Volatile internal var lastOptimizerSeed: Long = 0L
+
     /** [backlog#35] 残りHARDが「解けないと証明済み」か＝covU は床以下で、非covU は c3n だけかつ c3n 壁（[c3nWall]）。 */
     internal fun isStructuralHardResidual(report: ViolationReport, hardFloor: Int, c3nWall: () -> Boolean): Boolean {
         if (report.hard <= 0) return false
@@ -278,6 +281,9 @@ object V6FinalPort {
         /** [測定中/backlog#35] ExtraRefineを、後処理後の残りHARDが構造的に解けないと証明済み（covU床のみ／
          *  ForbiddenDiag確定のc3n壁）のときだけ省略する。改善可能なHARD残・HARD=0では従来どおり実行。既定OFF。 */
         extraRefineRequirePostHardDrop: Boolean = false,
+        /** ベンチ用の乱数種。null（既定）は従来どおり [V6OptimizerOptions.seed]=0＝時刻由来。0 も時刻由来。
+         *  種を固定しても、ワーカー並列と壁時計の予算・後処理の時刻由来の種があるため盤面の再現は保証しない。 */
+        seed: Long? = null,
         onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
     ): ActionResult = withContext(Dispatchers.Default) {
         // [3.388.0/外部レビュー] 計測は**この1回の「つくる」ぶん**。旧実装は optimize() の入口で
@@ -323,7 +329,9 @@ object V6FinalPort {
             is OptimizationPlan.RSIThenALNS -> V6OptimizerOptions(V6Algorithm.RSI, plan.rsiSec, workers, softPolish, restarts = plan.alnsRestarts, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
             is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
         }
-        val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true))   // [HF532移植] optFlags.rectSwap 既定ON
+        val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true),   // [HF532移植] optFlags.rectSwap 既定ON
+            seed = seed ?: opts.seed)
+        lastOptimizerSeed = optsR.seed
         // [review: 予算一本化] optimize() + runPostOptimization() を一つの予算で管理する。
         // 後処理は元々 deadline も progress も持たず、optimize が予算を使い切った後も走り続け、
         // 合計が予算を大きく超過していた(実機44分。当時の上限は600s)。ここで全体に hardDeadline を張り、
