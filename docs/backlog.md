@@ -656,7 +656,7 @@
     P_cancel を完了文とログ（`MagiViewModel.kt` の S5 結果・§9 のカード行）に使うか／⑤結果の保存を簡易と分ける（今は "i,j,k" だけがキー）／
     ⑥Rk<H0・att≤0 の行も対象にするか。仕様 `s5_wish_trial.md` の「実機で 0 の行が多いと分かってから足す」に従い、実機の 0 の行の頻度を見てから着手を推奨。**利用者の決定（2026-09-25）: 実機で 0 の行が多いと分かってから作る**（それまで未着手）。
 38. ~~**[外部机上テスト D2・2026-09-25 登録]** スキルグループ未指定の職員が先頭のスキルグループ（index 0）に入る。~~ **→ 2026-09-25 Android で完了**
-    （既定 −1＋最初のスキル群を作るとき全員 −1＝`Ws1Ops.addSkillGroup`、画面の配線は作業ブランチ。C# は同日同期。history「backlog #38」）。
+    （既定 −1＋最初のスキル群を作るとき全員 −1＝`Ws1Ops.addSkillGroup`、画面の配線は 60e79d4（#221）。C# は `-MAGI_PC` 3e9a5c2 で同日同期。history「backlog #38」）。
     `Staff.skillIdx` の既定が 0（`model/MagiState.kt:27`）で、職員追加 `Ws1Ops.addStaff`（`v6/Ws1Ops.kt:293` の `Staff(name, gi)`）・
     CSV 新規職員（`v6/ScheduleCsvBridge.kt:185`・`:308`）・`skillIdx` 欠落 JSON（`model/StateParser.kt:39` の `optInt("skillIdx", 0)`）が
     すべて 0 になる。正規の「未所属」は -1（`Ws1Ops.kt:544` のグループ削除・`ScheduleCsvBridge.kt:704` の取込）で、c41s/c42s は

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""state_to_flat.py の休（meta の restIdx）と盤面の欠損セルが Kotlin と同じかを見る。
+"""state_to_flat.py の休（meta の restIdx）・盤面の欠損セル・skillIdx の既定が Kotlin と同じかを見る。
 
 実行: python3 tools/native/test_state_to_flat.py（native-parity.yml が変換の前に回す）
 """
@@ -14,10 +14,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CONVERTER = os.path.join(HERE, "state_to_flat.py")
 
 
-def convert(shifts, schedule=None):
+def convert(shifts, schedule=None, staff=None):
     st = {
         "startDate": "2026-08-01", "endDate": "2026-08-02", "shifts": shifts,
-        "groups": [{"name": "G", "kigou": "G"}], "staff": [{"name": "s", "groupIdx": 0}],
+        "groups": [{"name": "G", "kigou": "G"}], "staff": staff or [{"name": "s", "groupIdx": 0}],
         "groupShift": [[1] * len(shifts)], "schedule": schedule or [[0, 0]],
     }
     with tempfile.TemporaryDirectory() as d:
@@ -62,6 +62,13 @@ class BoardTest(unittest.TestCase):
         # MirrorCore.normalizeSchedule（3.475.0）: 欠損セルは -1（旧: 0＝先頭シフトの勤務）
         board = convert([sh("休"), sh("A")], schedule=[[1, None]])[-1]
         self.assertEqual([1, -1], board)
+
+
+class SkillIdxTest(unittest.TestCase):
+    def test_missing_skill_idx_is_unassigned(self):
+        # StateParser の optInt("skillIdx", -1)（backlog #38）: キーの無い職員は未所属 -1（旧: 0＝先頭のスキルグループ）
+        staff = [{"name": "a", "groupIdx": 0}, {"name": "b", "groupIdx": 0, "skillIdx": 0}]
+        self.assertEqual([0, 0, -1, 0], convert([sh("休")], schedule=[[0, 0], [0, 0]], staff=staff)[1])   # sgrp + ssk
 
 
 if __name__ == "__main__":
