@@ -184,15 +184,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // 実行開始時にマーカーを書き、正常終了で消す。プロセスがkillされるとマーカーが残るので、
     // 次回起動時に「前回の計算は中断された（入力は自動保存済み）」と気づかせ、再実行へ導く。
     private val runMarkerFile get() = getApplication<Application>().filesDir.resolve("magi_run_marker.json")
-    private fun writeRunMarker(mode: String) {
+    private fun writeRunMarker(mode: String, s5: com.magi.app.work.RunMarker.S5? = null) {
         runCatching {
-            val o = org.json.JSONObject()
-            o.put("startedAt", System.currentTimeMillis())
-            o.put("mode", mode) // "fg" | "bg"
-            o.put("budgetSec", _ui.value.budgetSec)
-            o.put("workers", _ui.value.workers)
-            o.put("algorithm", _ui.value.v6Algorithm.name)
-            runMarkerFile.writeText(o.toString())
+            runMarkerFile.writeText(com.magi.app.work.RunMarker.format(System.currentTimeMillis(), mode,
+                _ui.value.budgetSec, _ui.value.workers, _ui.value.v6Algorithm.name, s5))
         }
     }
     private fun clearRunMarker() { runCatching { if (runMarkerFile.exists()) runMarkerFile.delete() } }
@@ -402,12 +397,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (marker != null) {
                     val hasSnap = !snapTxt.isNullOrBlank()
                     val info = if (hasSnap)
-                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。"
-                    else runCatching {
-                        val o = org.json.JSONObject(marker)
-                        val modeJp = if (o.optString("mode") == "bg") "バックグラウンド" else ""
-                        "前回の${modeJp}最適化は完了前に中断されました。入力は自動保存済みです。もう一度実行できます。"
-                    }.getOrNull() ?: "前回の最適化は完了前に中断されました。入力は自動保存済みです。"
+                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。" + com.magi.app.work.RunMarker.s5Suffix(marker)
+                    else com.magi.app.work.RunMarker.interruptedInfo(marker)
                     _ui.update { it.copy(interruptedRun = true, interruptedInfo = info) }
                     clearRunMarker()
                     logOp("W", if (hasSnap) "前回の中断を検知（途中結果あり＝再開可）" else "前回の最適化の中断を検知しました（入力は復元済み）")
@@ -1318,7 +1309,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** [S5] 確定操作の文脈（§6 の 10）。希望はすでに state から消えている。 */
     private class S5Ctx(
-        val name: String, val day: Int, val symbol: String,
+        val staff: Int, val name: String, val day: Int, val symbol: String,
         val h0: Int, val hx: Int, val rk: Int, val rr: Int, val pCancel: Int,
     ) {
         val label get() = "$name ${day + 1}日 $symbol"
@@ -1339,7 +1330,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val s5Suffix = if (s5 != null) "（希望の取り消しはそのままです。元に戻すで希望も戻ります）" else ""
         _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, copilotHint = hint, wishCancelOutcome = null, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
         logOp("I", "最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
-        writeRunMarker("fg")
+        writeRunMarker("fg", s5?.let { com.magi.app.work.RunMarker.S5(it.staff, it.day, it.symbol, it.name) })
         clearBgFiles("前景実行の開始")   // [C1] fg実行ではbg途中状態は無関係＝掃除
         val startMs = System.currentTimeMillis()
         // HF63: 探索の改善ストリームを追跡し、構造的に充足困難な制約族を検出（重み系は非改変＝安全）。
@@ -1788,7 +1779,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val name = st.staff.getOrNull(token.staff)?.name ?: "職員${token.staff + 1}"
         val sym = st.shifts.getOrNull(token.shift)?.kigou ?: "?"
         logOp("I", "希望取消＋もう一度つくる: $name ${token.day + 1}日（$sym） ${r.h0}/${r.hx}/${r.rk}/${r.rr}/${r.pCancel}")
-        startFullOptimize(null, S5Ctx(name, token.day, sym, r.h0, r.hx, r.rk, r.rr, r.pCancel))
+        startFullOptimize(null, S5Ctx(token.staff, name, token.day, sym, r.h0, r.hx, r.rk, r.rr, r.pCancel))
     }
 
     /** 元に戻す・やり直しで確定前の (state, 盤面) に戻ったときの stalledHardFamilies（§14 D）。 */
