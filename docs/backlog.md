@@ -632,6 +632,8 @@
     ~~(a) T8 共有 fixture の言語跨ぎ期待値ファイル~~ **済（2026-09-25）**: `wish_trial_expected.txt`（sample_state_v6＋blocked_covu、各 wishLocked 先頭 3 件＋対照）を Kotlin/C# の `WishTrialCrossLanguageTest` が読む。両言語一致／
     ~~(b) 実行マーカーに S5 文脈を載せ中断案内で名指し~~ **済（2026-09-25）**: `work/RunMarker.kt`（`s5`＝staff/day/symbol/name、旧マーカーは従来文）＋`RunMarkerTest`。C# は実行マーカー撤去済み（2026-09-01）＝対象外／
     (c) 「詳しい試算」＝VCR＋後処理チェーンの重い試算を出すか（利用者の決定が要る。机上評価では当たりはほぼ同じで 30 倍遅い）。
+    机上の推奨案（2026-09-25、未決）: 既定は出さない（VCR のみ）。「減る見込みは見つかりませんでした」の行にだけ任意の「詳しく試算（数秒）」を出す＝
+    0 の偽陰性（v3 で 14 行中 8）を必要な行だけ減らし、全行に載せて長い一覧（希望 91 件級）と衝突させない。
 38. **[外部机上テスト D2・2026-09-25 登録、未修正]** スキルグループ未指定の職員が先頭のスキルグループ（index 0）に入る。
     `Staff.skillIdx` の既定が 0（`model/MagiState.kt:27`）で、職員追加 `Ws1Ops.addStaff`（`v6/Ws1Ops.kt:293` の `Staff(name, gi)`）・
     CSV 新規職員（`v6/ScheduleCsvBridge.kt:185`・`:308`）・`skillIdx` 欠落 JSON（`model/StateParser.kt:39` の `optInt("skillIdx", 0)`）が
