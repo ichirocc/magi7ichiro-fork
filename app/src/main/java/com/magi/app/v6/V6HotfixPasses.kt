@@ -373,9 +373,6 @@ object V6HotfixPasses {
          *  （必須件数が増えた試行はすべて構造的に充足不能なケースだった）。既定 ON（3.610.0、tools/loop 許容ON 同士
          *  230 ペアで勝108/負54・必須退行0・必須増0）。許容 OFF ではチェーンが単調＝巻き戻しが起きず出力不変。 */
         val postChainRunningKeepBest: Boolean = true,
-        /** [不合格・既定 OFF] true なら同点の手も受け入れ、厳密に悪化したときだけ巻き戻す（3.610.0 で勝109/負53 だが
-         *  必須増 1 試行、上の既定との差は勝27/負29 で有意差なし）。 */
-        val postChainRunningKeepBestAcceptTies: Boolean = false,
         /** [N9] 巻き戻したパスの採用数を 0 と数える（巡の打ち切り判定・停滞検知へ流れる値）。既定は [PolishGate.postChainRollbackCountsZero]。 */
         val postChainRollbackCountsZero: Boolean = PolishGate.postChainRollbackCountsZero,
         /** [#36] 既定は [PolishGate.postChainKeepBestFinalOnly]。 */
@@ -467,7 +464,6 @@ object V6HotfixPasses {
         /** [postChainRunningKeepBest] false のときは以下の bestWork/bestReport を一切触らない＝挙動完全不変。 */
         runningKeepBest: Boolean = false,
         initialReport: ViolationReport? = null,
-        private val acceptTies: Boolean = false,
         private val rollbackCountsZero: Boolean = false,
         private val finalOnly: Boolean = false,
     ) {
@@ -507,7 +503,7 @@ object V6HotfixPasses {
             if (!runningKeepBest) return passLogs
             val rep = report ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val best = bestReport
-            if (best == null || betterReport(rep, best) || (acceptTies && !betterReport(best, rep))) {
+            if (best == null || betterReport(rep, best)) {
                 bestReport = rep
                 bestWork = work.copy2D()
                 return passLogs
@@ -578,7 +574,7 @@ object V6HotfixPasses {
     ): V6PostOptimizationResult {
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
         val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
-            acceptTies = params.postChainRunningKeepBestAcceptTies, rollbackCountsZero = params.postChainRollbackCountsZero,
+            rollbackCountsZero = params.postChainRollbackCountsZero,
             finalOnly = params.postChainKeepBestFinalOnly)
         val t0 = EngineClock.nowMs()
 

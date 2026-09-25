@@ -158,7 +158,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `PolishGate.filterC3nIncrease`（ブロック巡回交換の c3n 事前フィルタ） | 測定済み・**速度のみ、品質不変**。ON/OFF で最終盤面・採用数が完全に同一。詰んだ候補への無駄な checker 呼び出しを省くだけ（3.296.0 / 3.298.0）。副作用が原理的に無いため既定ONへ。 |
 | `PolishGate.lnsAdaptive`（共同LNSの「短時間試行→採用時だけ本予算」） | iter9（決定的・5 seed・170ペア）: 必須退行0・品質±0（新4/同等164/旧2、旧が良い2件も差0.01%以内）・速度は平均+10%、実データ**-23%**・大規模+29〜32%（すべて短縮）、タイムアウト13→12。機械的ゲートは中央値が閾値未達で形式上「不合格」だったが、これは**品質改善を測るゲートを速度改善狙いの機能に当てた不一致**（3.510.2時点の結論「既定ONはユーザー判断待ち、推奨ON」）。今回のユーザー指示で判断が確定＝昇格。 |
 | `PolishGate.personSwapKick`（PORTFOLIO の新役割 `PERSON_SWAP_ILS`＝同群2名の1ヶ月分割当を丸ごと交換してから RSI+ で再最適化するILS摂動） | 3.517.0実装直後（ユーザー実機データ1件の手動probe）は weightedScore 9831→9605（-2.3%）を確認。**3.519.0で正式計測**（`PersonSwapBench.kt`、実データ4件×5seed×フルoptimize(PORTFOLIO・120秒budget・workers4)＝CLAUDE.mdが認める代替手法「実データ4件のprobeで最終盤面のハッシュ比較」に基づく）: **全20ペアで必須(hard)退行ゼロ**（4フィクスチャ×5seedすべてhard値が旧新で完全一致）。品質(weightedScore)は golden 5/5勝(平均-2.1%)・blocked_covu 4/5勝(-0.34%)・sample 3/5勝(-0.05%、ほぼ同値)・sept2026 2/3勝2分(-0.62%)＝**4フィクスチャ全てで負けなし**。3.517.0の-2.3%より幅が小さいのは、同時に既定ONへ昇格した`lnsAdaptive`が既に同種の改善余地の一部を食っているため（両者は独立に発見されたが効果が部分的に重なる）。既定trueへ昇格。 |
-| `V6HotfixPasses.Params.postChainRunningKeepBest`（後処理チェーンの各パス後に走行 keep-best で巻き戻す） | 3.608.0 実装、**3.610.0 で既定ON（構造床条件つき）**＝tools/loop A/B（backlog #36）。同点採用の変種 `postChainRunningKeepBestAcceptTies` は必須増 1 で既定OFF。 |
+| `V6HotfixPasses.Params.postChainRunningKeepBest`（後処理チェーンの各パス後に走行 keep-best で巻き戻す） | 3.608.0 実装、**3.610.0 で既定ON（構造床条件つき）**＝tools/loop A/B（backlog #36）。同点採用の変種 `postChainRunningKeepBestAcceptTies` は必須増 1 で不合格（2026-09-25 撤去）。 |
 
 ## 実装済みだが既定 OFF
 
@@ -190,7 +190,6 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `Params.restZeroWindowLnsEnabled` | 休が余る日の前後窓を夜勤列挙＋ビームで組み直す | 3.555.0 実データで採用ゼロ・ユーザー決定 |
 | `Params.fairAchievementDirection` | fair 研磨の候補分類を達成率の向きで（#27①） | 3.591.0 不合格（#27） |
 | `Params.dayAssignIdentityFallback` | 日割当の恒等フォールバック | 3.598.0（#30 対処2） |
-| `Params.postChainRunningKeepBestAcceptTies` | 走行 keep-best で同点も採る | 必須増 1（#36 B） |
 | `V6OptimizerOptions.roleBudgetFit` | ロールへ渡す秒数を min(量子, 残り) に | 3.601.0 有意差なし（#34(b)） |
 | `V6OptimizerOptions.rsiFocusRotationPersist` | RSI 焦点の周期枠を呼出しをまたいで保持 | 2026-09-21/22 有意差なし（#28） |
 | `extraRefineRequirePostHardDrop`（V6FinalPort） | 追加精製を後処理で HARD が減ったときだけに | 実質 A/A（#35） |
@@ -222,6 +221,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `PostOptimizationParams.postChainRunningKeepBestAcceptTies`（走行 keep-best で同点も採る） | 既定経路（フラグごと撤去） | 3.610.0（#36 B）必須増 1＝不合格。2026-09-25 撤去（Kotlin・C#）＝既定出力不変 |
 | `PostOptimizationParams.c41FlowPolishEnabled`／`c41FlowPasses`（群/日範囲 c41 の最小費用フロー研磨 C41FlowPolish） | 既定経路（フラグごと撤去） | 3.511.5 iter16 不合格。2026-09-25 撤去（Kotlin のみ、C# 未移植）＝既定出力不変。c42 側は Reactivate の保持明記により残す |
 | `PostOptimizationParams.c3PairMaskEnabled`（連続規則の選択日ペア交換 C3PairMaskPolish） | 既定経路（フラグごと撤去） | 3.510.0 iter8 不合格。2026-09-25 撤去（Kotlin のみ、C# 未移植）＝既定出力不変 |
 | `PostOptimizationParams.covOReliefEarly`（covO 退避を HF66 直後にも） | 既定経路（フラグごと撤去） | 3.554.0 配置 A/B で必須増 4＝不合格（最終段だけを採用）。2026-09-25 撤去（Kotlin・C#）＝既定出力不変（盤面ハッシュ 8/8 一致）。 |

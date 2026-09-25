@@ -138,8 +138,6 @@ fun main(args: Array<String>) {
         //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装（A）と、同点も受け入れる版（B）。どちらも許容 ON 同士。
         "rkbstruct" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        "rkbstructties" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
-            V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true, postChainRunningKeepBestAcceptTies = true)
         //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
         // [#36] 走行 keep-best をパス間でなくチェーン末尾だけで巻き戻す（両腕とも許容 ON）。
         "n36finalonly" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true) to

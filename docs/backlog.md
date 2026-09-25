@@ -597,7 +597,7 @@
     切る」等の条件付けが要る＝探索動学の設計判断として明示指示待ち。
     **→ 2026-09-23 ユーザー指示「すべて」で条件付けを実装・測定中**: `PostChain` は構造的 covU 床
     （`V6SanityPort.structuralHardFloor`）が 0 より大きい盤面では keep-best を働かせない（合成の充足不能 6 件だけが床>0、
-    他 36 件と実データ 4 件は 0）。任意で同点の手も受け入れる `postChainRunningKeepBestAcceptTies`（既定 false）。
+    他 36 件と実データ 4 件は 0）。任意で同点の手も受け入れる `postChainRunningKeepBestAcceptTies`（既定 false、不合格で 2026-09-25 撤去）。
     腕 `rkbstruct`（床条件のみ）と `rkbstructties`（＋同点受け入れ）を許容 ON 同士で比較中。
     **→ 結果（5seed×46、230ペア）**: A（床条件のみ）＝**勝108/負54・p<0.0001・必須退行0・必須増0＝統計ゲート合格**、
     品質+0.21%・速度+24%（`iter_rkbstruct.csv`）。充足不能30ペアは構造上すべて同点（床>0で旧腕と同じ経路）。
