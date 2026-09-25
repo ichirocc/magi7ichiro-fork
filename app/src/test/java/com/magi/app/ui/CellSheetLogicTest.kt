@@ -202,15 +202,13 @@ class CellSheetLogicTest {
         assertTrue(messageMayReplaceNotice(noticeShowing = false, isError = false))
     }
 
-    @Test fun detailListsEveryOverlappingFamilyAndC1Runs() {
+    @Test fun detailListsEveryOverlappingFamily() {
         val (key, cls) = rep.cellFamilies.entries.first { it.value.map { c -> familyOfVioClass(c) }.distinct().size >= 2 }
         val i = VioKey.first(key)!!; val j = VioKey.second(key)!!
         val fams = cellStatusFamilies(cls, emptyList(), emptyList())
-        val lines = cellDetailLines(st, p, s, i, j, fams, null)
+        val lines = cellDetailLines(st, p, s, i, j, fams)
         println(lines)
         assertEquals(fams.size, lines.size)
         assertTrue(lines.all { it.startsWith("必須・") || it.startsWith("要調整・") })
-        val c1 = cellDetailLines(st, p, s, i, j, listOf("c1"), 3)
-        assertTrue(c1.single(), "期間の制約（連続 3 区間）" in c1.single())
     }
 }

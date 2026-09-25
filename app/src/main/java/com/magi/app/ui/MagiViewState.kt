@@ -121,11 +121,21 @@ internal class MagiViewState(val ui: UiState, val vioEnabled: Set<String> = allV
 
     val counts = ScheduleCounts(ui.schedule, staffCount, dayCount, ui.shifts)
 
-    val c1Anchors: Map<String, Int> = c1DisplayAnchors(ui)
+    val c1Marks: Set<String> = c1DisplayMarks(ui)
 
-    /** セルに出す違反クラスのうちフィルタを通るもの（重み降順・c1 の表示アンカー込み）。 */
+    /** c1Band[i][j] = 職員 i の行の j 日の下に期間の制約の帯を引くか（「期間の制約」チップが OFF なら引かない）。 */
+    val c1Band: Array<BooleanArray> = Array(staffCount) { BooleanArray(dayCount) }.also { b ->
+        if (vioVisible("vio-c1", vioEnabled)) for (sh in ui.c1Shortages) if (sh.band && sh.staff < staffCount) {
+            for (d in sh.from..minOf(sh.to, dayCount - 1)) b[sh.staff][d] = true
+        }
+    }
+
+    /** 勤務表だけでは期間の制約を満たせない職員（行末の内訳を開けるようにする）。 */
+    val c1Stuck: Set<Int> = ui.c1Shortages.filter { it.stuck }.map { it.staff }.toSet()
+
+    /** セルに出す違反クラスのうちフィルタを通るもの（重み降順・c1 は表示専用の印に置き換え）。 */
     private val cellVisible: Array<Array<List<String>>> = Array(staffCount) { i ->
-        Array(dayCount) { j -> displayCellClasses(ui, VioKey.cell(i, j), c1Anchors).filter { vioVisible(it, vioEnabled) } }
+        Array(dayCount) { j -> displayCellClasses(ui, VioKey.cell(i, j), c1Marks).filter { vioVisible(it, vioEnabled) } }
     }
 
     /** cellVio[i][j] = そのセルで表示する最重の違反クラス（フィルタ通過後。無ければ null）。 */
@@ -311,25 +321,14 @@ internal object DisplayOnlyUndo {
 // チェッカーの場所マップ（violations/countViolations/needViolations）は探索の手掛かり（V6SwapSuggester・GLS・
 //   C1WindowPolish 等）も読むので変えない。画面だけが要る印はここで報告から別に組み立てる。
 
-/** c1 の表示アンカー（セルキー → そのランの違反窓数）。ランの先頭に加えて窓幅おきに置き、ランが覆う日の中に
- *  収める＝どの違反窓にも少なくとも 1 つ入る（チェッカーはランの先頭 1 セルだけ）。 */
-internal fun c1DisplayAnchors(ui: UiState): Map<String, Int> {
-    val out = HashMap<String, Int>()
-    for (r in ui.c1Runs) {
-        val i = r.getOrNull(0) ?: continue; val j0 = r.getOrNull(1) ?: continue
-        val n = r.getOrNull(2) ?: continue; val w = r.getOrNull(3) ?: continue
-        if (n <= 0 || w <= 0) continue
-        val last = j0 + n - 1 + w - 1
-        var a = j0
-        while (a <= last) { val key = VioKey.cell(i, a); out[key] = maxOf(out[key] ?: 0, n); a += w }
-    }
-    return out
-}
+/** c1 の表示専用の印（セルキー）。不足窓の中で、いま そのシフトでなく そのシフトに変えられる日だけ。 */
+internal fun c1DisplayMarks(ui: UiState): Set<String> =
+    ui.c1Shortages.flatMap { sh -> sh.marks.map { VioKey.cell(sh.staff, it) } }.toSet()
 
-/** 画面に出すセルの違反クラス（重み降順）。チェッカーのクラスに c1 の表示アンカーを足したもの。 */
-internal fun displayCellClasses(ui: UiState, key: String, c1Anchors: Map<String, Int>): List<String> {
-    val base = cellVioClasses(ui, key)
-    if (key !in c1Anchors || "vio-c1" in base) return base
+/** 画面に出すセルの違反クラス（重み降順）。チェッカーの c1（ランの先頭）は描かず、表示専用の印に置き換える。 */
+internal fun displayCellClasses(ui: UiState, key: String, c1Marks: Set<String>): List<String> {
+    val base = cellVioClasses(ui, key).filter { it != "vio-c1" }
+    if (key !in c1Marks) return base
     return (base + "vio-c1").sortedByDescending { MirrorKeys.weightOf(familyOfVioClass(it)) }
 }
 
@@ -398,6 +397,9 @@ private fun countDetail(cls: String, count: Int, lo: Int?, hi: Int?, apt: Int?):
  */
 internal fun staffCountLines(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null): List<String> {
     val out = ArrayList<String>()
+    for (sh in ui.c1Shortages.filter { it.staff == i && it.stuck }.distinctBy { it.shift }) {
+        out += "・${ui.shiftSymbols.getOrNull(sh.shift) ?: "${sh.shift}"}: ${breakdownLabels["c1"]}（${sh.day1}日に${sh.day2}日）— $C1_STUCK_TEXT"
+    }
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
     val keys = (ui.countFamilies.keys + ui.countViolations.keys).filter { VioKey.first(it) == i }
         .sortedBy { VioKey.second(it) ?: 0 }
@@ -433,8 +435,7 @@ internal fun dayCoverageLines(ui: UiState, j: Int, marks: List<CoverageMark>, li
 /** 凡例の「枠の形 → 族」の 1 行。セルに印を持つ族だけを名指す（回数・人員は行末と日ヘッダの印）。 */
 internal fun legendShapeFamilies(): String {
     val solid = listOf("c3n", "c3w", "pref", "groupViol").map { breakdownLabels[it] ?: it }
-    val dashed = listOf("c1", "c3mn").map { breakdownLabels[it] ?: it }
-    return "実線: ${solid.joinToString("・")}／破線: ${dashed.joinToString("・")}"
+    return "実線: ${solid.joinToString("・")}／破線: 期間の約束：この日を○○にすると届く・${breakdownLabels["c3mn"]}"
 }
 
 // ===== その場の直し方探し（印・セルのシートの中で探して、見つからなければ理由と次の一歩） =====

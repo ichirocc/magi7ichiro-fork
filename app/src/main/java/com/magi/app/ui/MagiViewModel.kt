@@ -3114,7 +3114,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             countFamilies = report.countFamilies,
             needFamilies = report.needFamilies,
             distLocations = report.distLocations,
-            c1Runs = report.c1Runs,
+            c1Shortages = c1Shortages(cachedProblem(st), schedule),
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },

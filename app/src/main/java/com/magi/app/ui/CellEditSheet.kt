@@ -85,13 +85,14 @@ internal fun CellEditSheet(
     var mode by remember { mutableIntStateOf(0) } // 0=割当, 1=希望（セルを移っても保つ）
     val name = ui.staffNames.getOrNull(i) ?: i.toString()
     fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
-    val c1Anchors = remember(ui.c1Runs) { c1DisplayAnchors(ui) }
+    val c1Marks = remember(ui.c1Shortages) { c1DisplayMarks(ui) }
+    val c1Here = ui.c1Shortages.firstOrNull { it.staff == i && j in it.from..it.to }
     val shown = remember(ui.shiftSymbols.size, cv.allowedByStaff) { sheetShifts(ui.shiftSymbols.size, cv.allowedByStaff) }
     // 状態の 1 行・印・回数の 1 行・詳しくは同じ版（盤面・希望・設定・検査世代）から作る。
     val rev = cellSheetRev(ui)
     val fams = remember(rev, cell) {
         cellStatusFamilies(
-            displayCellClasses(ui, VioKey.cell(i, j), c1Anchors),
+            sheetCellClasses(displayCellClasses(ui, VioKey.cell(i, j), c1Marks), c1Here != null),
             if (current >= 0) ui.needFamilies[VioKey.need(current, j)].orEmpty() else emptyList(),
             if (current >= 0) ui.countFamilies[VioKey.count(i, current)].orEmpty() else emptyList(),
         )
@@ -136,6 +137,12 @@ internal fun CellEditSheet(
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
                 StatusRow(status, if (dilemma) wishKeptLine(sym(wish)) else null)
+                if (c1Here != null && c1Here.stuck && mode == 0) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                        OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                    }
+                }
                 if (mode == 0 && dilemma && dilemmaChoice != 2) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
@@ -153,7 +160,7 @@ internal fun CellEditSheet(
                 }
                 if (details) {
                     val detailLines = remember(rev, cell) {
-                        stateOf()?.let { st -> cellDetailLines(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, c1Anchors[VioKey.cell(i, j)]) }.orEmpty()
+                        stateOf()?.let { st -> cellDetailLines(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams) }.orEmpty()
                     }
                     val staffLines = remember(rev, i, cv) { staffCountLines(ui, i, cv::staffCellLimits) }
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
