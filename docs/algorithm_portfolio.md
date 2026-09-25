@@ -183,21 +183,15 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 |---|---|---|
 | `Params.c2PolishEnabled`／`c2PolishReactivate` | 職員別合計（c2）の専用研磨／巡末の再起動 | iter15 不合格・3.524.0、iter_c2reactivate（backlog #12(b)・#26） |
 | `Params.c41FlowPolishEnabled`／`c42FlowPolishEnabled`／`c42FlowPolishReactivate` | 群/日範囲 c41・c42 の最小費用フロー研磨 | 3.511.5 iter16 不合格／3.511.7 iter18 同等／iter_c42reactivate（#12(b)・#26・#31） |
-| `ViolationComponentRepair.Params.familyPriorityScoring` | VCR の族選択を件数×重み×改善可能性で | 3.511.6 iter17 不合格（#12(b)） |
-| `ViolationComponentRepair.Params.bestOfK`（=1） | VCR で K 候補から最良を採る | iter23・ユーザー判断で終了（#12(b)） |
-| `ViolationComponentRepair.Params.debtLaneSlots`（=0） | 負債レーン枠 | iter22・2026-09-09 検証中止（#15 v2.1） |
-| `Params.stallEscalation.enabled` | 採用 0 の巡で VCR の半径を拡張 | 3.511.1 iter13 全件無変化（#12(b)・#13(a)） |
 | `Params.quantitativeRangeEval`／`V6OptimizerOptions.quantitativeRangeEval`／`Problem(quantitativeRangeEval)` | C2・C41/C41s を不足量・超過量で評価 | 3.512.0 iter21 不合格（#12(a)・#14(d)） |
 | `Params.c1ComponentRepair`／`c1ComponentRepairReactivate` | C1 成分修復 | 3.586.0 実データ4件 ON=OFF（#26） |
 | `Params.c3nMarginLnsEnabled`／`c3nMarginLnsReactivate` | c3n 余裕日の LNS 研磨 | 3.586.0 実データ4件 ON=OFF（#26） |
 | `Params.countChainReactivate` | 回数連鎖研磨の巡末再起動（本体は上表 `countChainPolish`） | iter_countchainreactivate（#26） |
 | `Params.c3PairMaskEnabled` | 連続規則の選択日ペア交換（C3PairMaskPolish） | 3.510.0 iter8（#12(b)） |
 | `Params.restZeroWindowLnsEnabled` | 休が余る日の前後窓を夜勤列挙＋ビームで組み直す | 3.555.0 実データで採用ゼロ・ユーザー決定 |
-| `Params.covOReliefEarly` | covO 退避を HF66 直後にも | 3.554.0（後続パスの経路が変わる） |
 | `Params.fairAchievementDirection` | fair 研磨の候補分類を達成率の向きで（#27①） | 3.591.0 不合格（#27） |
 | `Params.dayAssignIdentityFallback` | 日割当の恒等フォールバック | 3.598.0（#30 対処2） |
 | `Params.postChainRunningKeepBestAcceptTies` | 走行 keep-best で同点も採る | 必須増 1（#36 B） |
-| `SaParams.officialTieBreak` | SA/LAHC の HARD 同点を公式 weightedScore で決める | 3.571.0 40走行で勝ち 0（#19） |
 | `V6OptimizerOptions.roleBudgetFit` | ロールへ渡す秒数を min(量子, 残り) に | 3.601.0 有意差なし（#34(b)） |
 | `V6OptimizerOptions.rsiFocusRotationPersist` | RSI 焦点の周期枠を呼出しをまたいで保持 | 2026-09-21/22 有意差なし（#28） |
 | `extraRefineRequirePostHardDrop`（V6FinalPort） | 追加精製を後処理で HARD が減ったときだけに | 実質 A/A（#35） |
@@ -229,6 +223,12 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `PostOptimizationParams.covOReliefEarly`（covO 退避を HF66 直後にも） | 既定経路（フラグごと撤去） | 3.554.0 配置 A/B で必須増 4＝不合格（最終段だけを採用）。2026-09-25 撤去（Kotlin・C#）＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
+| `SaParams.officialTieBreak`＋`TieBreakBench`（SA の HARD 同点を公式 weightedScore で追跡） | 既定経路（フラグごと撤去） | 3.571.0 40 走行で勝ち 0（#19）。2026-09-25 撤去＝選定に触れない計測専用、SaOptimizer.kt は導入前とバイト一致。 |
+| `ViolationComponentRepair.Params.debtLaneSlots`（VCR の二車線ビーム） | 既定経路（フラグごと撤去） | 3.512.4 iter22 不合格・2026-09-09 検証中止（#15 v2.1）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
+| `ViolationComponentRepair.Params.bestOfK`（VCR で K 起点から最良を採る） | 既定経路（フラグごと撤去） | 3.512.4 iter23 不合格・ユーザー判断で終了（#12(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
+| `ViolationComponentRepair.Params.familyPriorityScoring`／`familyPriorityScore`（VCR の族優先度） | 既定経路（フラグごと撤去） | 3.511.6 iter17 不合格（#12(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
+| `stallEscalation`／`StallEscalationConfig`（採用 0 の巡で LNS・VCR を拡張） | 既定経路（フラグごと撤去） | 3.511.1 iter13 全件無変化（#12(b)・#13(a)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `useDynamicBlockLens`／`dynamicBlockLengths`（ブロック交換の動的窓長） | 既定経路（フラグごと撤去） | 3.511.0 iter12 不合格（#14(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `PostOptimizationParams.lnsWeightDebt`／`WeightDebt`（共同 LNS の重み基準の一時負債） | 既定経路（フラグごと撤去） | 3.510.4 iter10 不合格（#15(f)）。2026-09-25 撤去＝既定出力不変（決定的後処理の盤面ハッシュ 8/8 一致）。 |
 | C1 用の自動3者ブロック回転 | `C1TemporalFlowPolish` / 広域ビーム / 厳密窓 | 実測（ablation）で寄与ゼロ＝抜いても結果が1ビットも変わらないことを確認して撤去（3.254.0）。 |

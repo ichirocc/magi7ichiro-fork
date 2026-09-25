@@ -35,6 +35,17 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
 **最終更新**：2026-09-25（S5 中断案内で取り消した希望を名指し＝実行マーカーに `s5` 文脈、backlog #37(b)）
+**最終更新**：2026-09-25（既定OFF台帳の整理⑧: 否決済み `covOReliefEarly` を撤去＝既定出力不変、C# 同日同期）
+
+**最終更新**：2026-09-25（既定OFF台帳の整理⑦: 否決済み `SaParams.officialTieBreak` と計測ベンチを撤去＝既定出力不変）
+
+**最終更新**：2026-09-25（既定OFF台帳の整理⑥: 否決済み `debtLaneSlots` を撤去＝既定出力不変）
+
+**最終更新**：2026-09-25（既定OFF台帳の整理⑤: 否決済み `bestOfK` を撤去＝既定出力不変）
+
+**最終更新**：2026-09-25（既定OFF台帳の整理④: 否決済み `familyPriorityScoring` を撤去＝既定出力不変）
+
+**最終更新**：2026-09-25（既定OFF台帳の整理③: 否決済み `stallEscalation` を撤去＝既定出力不変）
 
 **最終更新**：2026-09-25（既定OFF台帳の整理②: 否決済み `useDynamicBlockLens` を撤去＝既定出力不変）
 

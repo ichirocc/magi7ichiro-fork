@@ -147,76 +147,6 @@ class ViolationComponentRepairTest {
         assertTrue(!betterReport(before, r.report))
     }
 
-    /** [測定中/二車線ビーム] debtExploration有効時、debtLaneSlotsを設定しても既存の不変条件（退行しない・
-     *  例外を出さない）が保たれる。効果自体（負債候補が飢餓せず生き残るか）はtools/loopで測る。 */
-    @Test
-    fun debtLaneSlotsRunsWithoutRegressionWhenDebtExplorationEnabled() {
-        val st = combineTwoRejectedState()
-        val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
-        val before = UnifiedViolationChecker.check(st, sched)
-        val params = V6HotfixPasses.PostOptimizationParams(
-            componentRepairEnabled = true, maxRounds = 1,
-            componentRepair = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2),
-        )
-        val r = V6HotfixPasses.runPostOptimization(st, sched.map { it.clone() }.toTypedArray(), "t", seed = 7L, params = params)
-        assertTrue(r.report.hard <= before.hard)
-        assertTrue(!betterReport(before, r.report))
-    }
-
-    /** [3.512.3/バグ修正] trimFrontier: 負債枠(debtLaneSlots)は予約であって専有ではない＝負債候補が
-     *  debtCap 未満（0件含む）のときは、余った枠を非負債候補へ返す。修正前は非負債候補の枠が
-     *  beamWidth-debtCap に固定され、負債候補が無くてもビーム幅が実質縮小していた（純粋な退行）。 */
-    @Test
-    fun trimFrontierReturnsUnusedDebtSlotsToNormalCandidates() {
-        val params = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2, beamWidth = 8)
-        // baseEst=100。非負債候補(est<=100)を10件、負債候補(est>100)は0件。
-        val normals = (0 until 10).map { ViolationComponentRepair.Node(intArrayOf(it), 100L - it) }
-        val trimmed = ViolationComponentRepair.trimFrontier(normals, baseEst = 100L, params = params)
-        assertEquals("負債候補0件なら非負債候補がbeamWidth全体を使う（6件に縮小しない）", 8, trimmed.size)
-        assertTrue("非負債候補のみ", trimmed.all { it.est <= 100L })
-    }
-
-    /** [3.512.3] 負債候補が debtCap 以上あるときは、従来どおり非負債候補は beamWidth-debtCap 件に絞られる。 */
-    @Test
-    fun trimFrontierCapsNormalCandidatesWhenDebtCandidatesFillTheirSlots() {
-        val params = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2, beamWidth = 8)
-        val normals = (0 until 10).map { ViolationComponentRepair.Node(intArrayOf(it), 100L - it) }
-        val debts = (0 until 5).map { ViolationComponentRepair.Node(intArrayOf(100 + it), 101L + it) }
-        val trimmed = ViolationComponentRepair.trimFrontier(normals + debts, baseEst = 100L, params = params)
-        assertEquals(8, trimmed.size)
-        assertEquals("負債候補は予約枠2件まで", 2, trimmed.count { it.est > 100L })
-        assertEquals("非負債候補はbeamWidth-debtCap=6件まで", 6, trimmed.count { it.est <= 100L })
-    }
-
-    /** [3.512.3] トリム後は est 昇順（同点は ids 辞書式）に再整列される＝負債候補が混ざっても
-     *  search() の展開順（評価予算切れの打ち切り基準）が壊れない。 */
-    @Test
-    fun trimFrontierReturnsResultSortedByNodeOrderEvenWhenDebtSlotsAreUsed() {
-        val params = ViolationComponentRepair.Params(debtExploration = true, debtLaneSlots = 2, beamWidth = 4)
-        val nodes = listOf(
-            ViolationComponentRepair.Node(intArrayOf(3), 99L), ViolationComponentRepair.Node(intArrayOf(1), 105L),
-            ViolationComponentRepair.Node(intArrayOf(2), 100L), ViolationComponentRepair.Node(intArrayOf(4), 101L),
-        )
-        val trimmed = ViolationComponentRepair.trimFrontier(nodes, baseEst = 100L, params = params)
-        assertEquals(listOf(99L, 100L, 101L, 105L), trimmed.map { it.est })
-    }
-
-    /** [測定中/bestOfK] bestOfK>=2 でも既存の不変条件（退行しない・例外を出さない）が保たれる。
-     *  効果自体（順序非依存の採用が iter17 の無効さを覆すか）は tools/loop で測る。 */
-    @Test
-    fun bestOfKRunsWithoutRegressionAndPicksAnObjectivelyBetterResult() {
-        val st = combineTwoRejectedState()
-        val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
-        val before = UnifiedViolationChecker.check(st, sched)
-        val params = V6HotfixPasses.PostOptimizationParams(
-            componentRepairEnabled = true, maxRounds = 1,
-            componentRepair = ViolationComponentRepair.Params(familyPriorityScoring = true, bestOfK = 3),
-        )
-        val r = V6HotfixPasses.runPostOptimization(st, sched.map { it.clone() }.toTypedArray(), "t", seed = 7L, params = params)
-        assertTrue(r.report.hard <= before.hard)
-        assertTrue(!betterReport(before, r.report))
-    }
-
     /** [Iteration 3] 単独で厳密ピン（lo==hi）を崩す候補は、同じ集合に逆向きの相方が無ければ最初から外す（推定予算を有効な枝へ）。 */
     @Test
     fun lonePinBreakersAreDroppedBeforeTheSearch() {
@@ -265,35 +195,6 @@ class ViolationComponentRepairTest {
         // 生成を切ると候補が無いので何もしない
         val off = ViolationComponentRepair.repair(st, work, emptyList(), ViolationComponentRepair.Params(generateFromAnchors = false))
         assertEquals(0, off.applied)
-    }
-
-    /** [族選択] familyScore を渡すとセグメント内だけ降順に並び替わる。同点は元のキー順（安定）。 */
-    @Test
-    fun familyScoreOrdersWithinSegmentByScoreDescendingWithStableTiesOnKeyOrder() {
-        val rep = ViolationReport(
-            violations = linkedMapOf("0,0" to "vio-c2", "0,1" to "vio-low", "0,2" to "vio-c2"),
-            needViolations = emptyMap(), countViolations = emptyMap(),
-            breakdown = emptyMap(), total = 3, hard = 0, soft = 3, weightedScore = 0.0,
-        )
-        val score: (ViolationComponentRepair.Anchor) -> Double = { a -> if (a.family == "low") 90.0 else 1.0 }
-        val ordered = ViolationComponentRepair.anchors(rep, familyScore = score)
-        assertEquals(listOf("low", "c2", "c2"), ordered.map { it.family })
-        assertEquals(listOf(0 to 1, 0 to 0, 0 to 2), ordered.map { it.staff to it.day })
-    }
-
-    /** [族選択] 「解ける HARD 優先 → SOFT → blocked」のセグメント境界は familyScore の値に関わらず死守する（不変条件）。 */
-    @Test
-    fun hardSegmentNeverOvertakesSoftSegmentEvenWithHighFamilyScores() {
-        val rep = ViolationReport(
-            violations = linkedMapOf("0,0" to "vio-low", "0,1" to "vio-low", "0,2" to "vio-covU"),
-            needViolations = emptyMap(), countViolations = emptyMap(),
-            breakdown = emptyMap(), total = 3, hard = 1, soft = 2, weightedScore = 0.0,
-        )
-        val score: (ViolationComponentRepair.Anchor) -> Double = { a -> if (a.family == "low") 1_000_000.0 else 1.0 }
-        val ordered = ViolationComponentRepair.anchors(rep, familyScore = score)
-        assertTrue("HARD(covU)が先頭のまま", ordered.first().hard)
-        assertEquals("covU", ordered.first().family)
-        assertEquals(listOf("covU", "low", "low"), ordered.map { it.family })
     }
 
     /** [Iteration 6] 厳密ピン（lo==hi）を単独で崩す単セル候補は生成しない＝推定でピン枝刈りされる無駄弾が出ない。

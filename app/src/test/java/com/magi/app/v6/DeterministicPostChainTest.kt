@@ -160,4 +160,24 @@ class DeterministicPostChainTest {
         assertTrue("acceptTies は同点の横移動を残す", runChain(true, lateral, lateralReport).contentDeepEquals(lateral))
         assertTrue("acceptTies でも厳密な悪化は巻き戻す", runChain(true, work0, report0).contentDeepEquals(improved))
     }
+
+    // #36 finalOnly: パス間では巻き戻さず、restoreBestIfWorse で末尾に 1 回だけ最良盤面へ戻す。
+    @Test
+    fun finalOnlyDefersRollbackToChainEnd() {
+        val s = state()
+        val work0 = s.schedule.map { it.toIntArray() }.toTypedArray()
+        val report0 = UnifiedViolationChecker.check(s, work0)
+        val improved = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
+        val improvedReport = UnifiedViolationChecker.check(s, improved)
+        val regressed = improved.map { it.copyOf() }.toTypedArray().also { it[1][0] = 1 }
+        val regressedReport = UnifiedViolationChecker.check(s, regressed)
+        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+            runningKeepBest = true, initialReport = report0, finalOnly = true)
+        chain.adopt(makeCyclicSwapResult(improved, improvedReport, "Good"))
+        chain.adopt(makeCyclicSwapResult(regressed, regressedReport, "Bad"))
+        assertTrue("パス間では巻き戻さない", chain.work.contentDeepEquals(regressed))
+        assertTrue(chain.restoreBestIfWorse())
+        assertTrue("末尾で最良盤面へ戻す", chain.work.contentDeepEquals(improved))
+        assertTrue("最良なら何もしない", !chain.restoreBestIfWorse())
+    }
 }

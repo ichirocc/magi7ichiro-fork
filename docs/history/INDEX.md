@@ -1,6 +1,20 @@
 # 作業記録の索引（見出し一覧）
 
 - S5 中断案内で取り消した希望を名指し（2026-09-25）: 実行マーカーに `s5` 文脈、`work/RunMarker.kt`＋`RunMarkerTest`、C# 対象外（backlog #37(b)）。  → `docs/history/3.4xx.md`
+- backlog #36 走行 keep-best を末尾だけにする案（2026-09-25）: `postChainKeepBestFinalOnly` 勝11/負36 p=0.0003＝不合格、既定 OFF。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑧（2026-09-25）: 否決済み `covOReliefEarly` を撤去（C# 同期）、盤面ハッシュ 8/8 一致。今回の上限 8 件で終了。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑦（2026-09-25）: 否決済み `SaParams.officialTieBreak`＋TieBreakBench を撤去、SaOptimizer は導入前とバイト一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑥（2026-09-25）: 否決済み `debtLaneSlots` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理⑤（2026-09-25）: 否決済み `bestOfK` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理④（2026-09-25）: 否決済み `familyPriorityScoring` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
+- 既定OFF台帳の整理③（2026-09-25）: 否決済み `stallEscalation` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
 - S5 T8 言語跨ぎ契約（2026-09-25）: `wish_trial_expected.txt` を Kotlin/C# の `WishTrialCrossLanguageTest` が共有、両言語一致（backlog #37(a)）。  → `docs/history/3.4xx.md`
 
 - 既定OFF台帳の整理②（2026-09-25）: 否決済み `useDynamicBlockLens` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
