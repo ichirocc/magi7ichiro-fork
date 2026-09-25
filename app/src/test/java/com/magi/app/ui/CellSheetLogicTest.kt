@@ -168,4 +168,49 @@ class CellSheetLogicTest {
         assertEquals("反映済", wishTabState(1, 1))
         assertEquals("未反映", wishTabState(2, 1))
     }
+
+    @Test fun sheetRevChangesOnWishOnlyChangeAndUndoRestoresWishDisplay() {
+        val before = UiState(schedule = st.schedule, checkRev = 5, editRev = 2).withWishDisplay(st)
+        assertEquals(st.wishes, before.wishes)
+        val key = st.wishes.keys.first()
+        val edited = st.copy(wishes = st.wishes + (key to (st.wishes.getValue(key) + 1) % st.shiftCount))
+        val afterWish = before.withWishDisplay(edited)
+        assertEquals(before.schedule, afterWish.schedule)
+        assertTrue(cellSheetRev(before) != cellSheetRev(afterWish))
+        // 元に戻すは同じ段の設定から希望の表示を即時に戻す（検査の完了を待たない）
+        val undone = afterWish.copy(editRev = afterWish.editRev + 1).withWishDisplay(st)
+        assertEquals(st.wishes, undone.wishes)
+        assertEquals(before.lockedWishKeys, undone.lockedWishKeys)
+        assertTrue(cellSheetRev(afterWish) != cellSheetRev(undone))
+    }
+
+    @Test fun fixPanelStatesSpinOnlyWhileRunning() {
+        assertEquals(FixPanelState.WAIT_CHECK, fixPanelState(running = true, fixSearching = false, doneKey = "k", failedKey = "", key = "k"))
+        assertEquals(FixPanelState.NOT_STARTED, fixPanelState(running = false, fixSearching = false, doneKey = "", failedKey = "", key = "k"))
+        assertEquals(FixPanelState.RUNNING, fixPanelState(running = false, fixSearching = true, doneKey = "", failedKey = "", key = "k"))
+        assertEquals(FixPanelState.DONE, fixPanelState(running = false, fixSearching = false, doneKey = "k", failedKey = "", key = "k"))
+        assertEquals(FixPanelState.FAILED, fixPanelState(running = false, fixSearching = false, doneKey = "", failedKey = "k", key = "k"))
+        assertEquals(FixPanelState.NOT_STARTED, fixPanelState(running = false, fixSearching = false, doneKey = "other", failedKey = "", key = "k"))
+    }
+
+    @Test fun noticeUndoOnlyForItsOwnOperationAndProgressDoesNotReplaceIt() {
+        assertTrue(noticeUndoApplies(7L, 7L))
+        assertTrue(!noticeUndoApplies(8L, 7L))
+        assertTrue(!noticeUndoApplies(null, 7L))
+        assertTrue(!messageMayReplaceNotice(noticeShowing = true, isError = false))
+        assertTrue(messageMayReplaceNotice(noticeShowing = true, isError = true))
+        assertTrue(messageMayReplaceNotice(noticeShowing = false, isError = false))
+    }
+
+    @Test fun detailListsEveryOverlappingFamilyAndC1Runs() {
+        val (key, cls) = rep.cellFamilies.entries.first { it.value.map { c -> familyOfVioClass(c) }.distinct().size >= 2 }
+        val i = VioKey.first(key)!!; val j = VioKey.second(key)!!
+        val fams = cellStatusFamilies(cls, emptyList(), emptyList())
+        val lines = cellDetailLines(st, p, s, i, j, fams, null)
+        println(lines)
+        assertEquals(fams.size, lines.size)
+        assertTrue(lines.all { it.startsWith("必須・") || it.startsWith("要調整・") })
+        val c1 = cellDetailLines(st, p, s, i, j, listOf("c1"), 3)
+        assertTrue(c1.single(), "期間の制約（連続 3 区間）" in c1.single())
+    }
 }

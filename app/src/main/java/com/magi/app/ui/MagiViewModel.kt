@@ -178,7 +178,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     //   「元に戻す: <label>」に使う。redo() へ渡すときも同じ label を引き継ぐ（同じ操作を指すため）。
     //   alts は snap の盤面/設定に対して有効だった「他の案」＝元に戻す/やり直すで盤面と一緒に一覧も戻す。
     //   colorKey は表示色だけの段（applyDisplayOnly）で変えた色の対象。非 null なら元に戻す/やり直すも結果を外さない。
-    private data class UndoSnap(val st: MagiState, val sched: Array<IntArray>, val label: String? = null, val alts: AltSnap? = null, val colorKey: String? = null)
+    private data class UndoSnap(val st: MagiState, val sched: Array<IntArray>, val label: String? = null, val alts: AltSnap? = null, val colorKey: String? = null, val serial: Long = 0)
     private class AltSnap(val scheds: List<Array<IntArray>>, val summaries: List<String>, val applied: Int, val boardKey: Long, val stateKey: Long)
     private val undoStack = ArrayDeque<UndoSnap>()
     private val redoStack = ArrayDeque<UndoSnap>()   // [Web反映] undo で退避→redo で復元（手動修正ループ）
@@ -186,8 +186,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return null; val sc = currentSchedule ?: return null
         val alts = alternativeScheds.takeIf { it.isNotEmpty() && altBoardKey == boardKey(sc) && altStateKey == stateKey(st) }
             ?.let { AltSnap(it, _ui.value.alternatives, _ui.value.alternativeApplied, altBoardKey, altStateKey) }
-        return UndoSnap(st, Array(sc.size) { sc[it].clone() }, label, alts, colorKey)
+        return UndoSnap(st, Array(sc.size) { sc[it].clone() }, label, alts, colorKey, ++undoSerialSeq)
     }
+    private var undoSerialSeq = 0L
+    private var opNoticeSeq = 0L
 
     /** undo/redo の復元先に退避してあった「他の案」を戻す（無ければ外す）。 */
     private fun restoreAlts(a: AltSnap?) {
@@ -807,7 +809,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.529.0/外部仕様書取り入れ] 「他の案」も同根で無効化する（旧: fixSuggestions だけ外していた）。
         alternativeScheds = emptyList()
         // 完了カードの前後比較（runSummary）も直前の実行の盤面の話＝同じ理由で外す。
-        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null) }
+        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null) }
     }
 
     private fun clearUndo() {
@@ -832,12 +834,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = snap.label
         val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
-            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = stalled, runSummary = null,
+            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null,
+            editRev = it.editRev + 1,
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
             //   （再検査が失敗/停止すると画面だけ元のまま残っていた）。
             schedule = restoredSched.map { it.toList() },
-            message = if (label != null) "元に戻す: $label" else "1つ前に戻しました") }
+            message = if (label != null) "元に戻す: $label" else "1つ前に戻しました").withWishDisplay(snap.st) }
         logOp("I", "元に戻す" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
         autoSave()
@@ -857,10 +860,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = snap.label
         val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
-            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = stalled, runSummary = null,
+            engineRan = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null,
+            editRev = it.editRev + 1,
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             schedule = restoredSched.map { it.toList() },   // [3.592.0] undo()と同じ理由
-            message = if (label != null) "やり直す: $label" else "やり直しました") }
+            message = if (label != null) "やり直す: $label" else "やり直しました").withWishDisplay(snap.st) }
         logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
         autoSave()
@@ -2220,8 +2224,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             hasResult = true,
             engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
-            message = cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
-        ).let { u -> u.copy(undoableMessage = u.message) } }
+            opNotice = OpNotice(++opNoticeSeq, cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
+                undoStack.lastOrNull()?.serial ?: 0L),
+        ) }
         logOp("I", "編集: ${opNm(i)} ${j + 1}日 → ${opSy(shift)}")
         refreshCheck()
     }
@@ -2622,7 +2627,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   `fixSearching=true` を立てた**後**に古いジョブの後始末が走ると、新しい探索の旗を消してしまう。
         val seq = ++fixSeq
         fixJob?.cancel()   // 連続タップ時の前探索を破棄（古い結果で UI を上書きしない）
-        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "") }
+        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "", fixFailedKey = "") }
         fixJob = viewModelScope.launch {
             try {
                 val list = withContext(Dispatchers.Default) {
@@ -2647,9 +2652,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 logOp("W", "直し方の探索に失敗: ${e.javaClass.simpleName}: ${e.message}")
-                if (seq == fixSeq) _ui.update { it.copy(messageIsError = false, fixSearching = false, message = "直し方を探せませんでした") }
+                if (seq == fixSeq) _ui.update { it.copy(messageIsError = false, fixSearching = false, fixFailedKey = focusKey, message = "直し方を探せませんでした") }
             }
         }
+    }
+
+    /** 通知の「元に戻す」。その操作がまだ元に戻すの先頭にあるときだけ戻す（後の別の操作は戻さない）。 */
+    fun undoNotice(n: OpNotice) {
+        if (noticeUndoApplies(undoStack.lastOrNull()?.serial, n.undoSerial)) undo()
+        else _ui.update { it.copy(messageIsError = false, message = "このあとに別の操作があるため、通知からは戻せません（「元に戻す」ボタンで順に戻せます）") }
+    }
+
+    fun clearOpNotice(id: Long) {
+        _ui.update { if (it.opNotice?.id == id) it.copy(opNotice = null) else it }
     }
 
     /** 走行中の直し方の探索を捨てる（世代を進めるので、完了間際の結果も書き戻さない）。 */
@@ -3105,9 +3120,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },
             shiftSymbols = st.shifts.map { toHankakuKigou(it.kigou) },
             schedule = schedule.map { it.toList() },
-            wishes = st.wishes,
-            lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
-            wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
             v6 = v6,
             satisfaction = sat,
             // 研磨の限界: 必須は解決済みだが微調整が残る → 手修正の検討を促す
@@ -3145,7 +3157,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             },
             settingIssues = sanity.guidance,
             startDate = st.startDate,
-        ).withShiftColors(st)
+        ).withShiftColors(st).withWishDisplay(st)
     }
 
     /** 表示色（shiftColors 由来）の UI 項目。makeUi と [applyDisplayOnly]（検査を回さない）の単一ソース。 */

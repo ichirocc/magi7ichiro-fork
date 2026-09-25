@@ -1733,20 +1733,25 @@ internal fun FixSearchPanel(
     compact: Boolean = false,   // セル編集シートの上段: 手は 1 件・理由は 2 行まで
 ) {
     val cs = MaterialTheme.colorScheme
-    LaunchedEffect(focus.key, ui.schedule) {
-        if (!ui.running) onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null }))
-    }
+    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null })) }
+    // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
+    LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) find() }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
-    val done = !ui.fixSearching && ui.fixDoneKey == focus.key
+    val panel = fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!compact) Text("直し方", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-        when {
-            ui.running -> Text("計算中は探せません。終わってから開き直してください。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            !done -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        when (panel) {
+            FixPanelState.WAIT_CHECK -> Text("計算・チェックが終わると探します。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            FixPanelState.NOT_STARTED -> Text("まだ探していません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            FixPanelState.RUNNING -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                 Text("この場所の直し方を探しています…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
-            ui.fixSuggestions.isNotEmpty() -> ui.fixSuggestions.take(if (compact) 1 else 3).forEach { s ->
+            FixPanelState.FAILED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("直し方を探せませんでした。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text("もう一度探す") }
+            }
+            else -> if (ui.fixSuggestions.isNotEmpty()) ui.fixSuggestions.take(if (compact) 1 else 3).forEach { s ->
                 val (tag, tagColor) = fixKindTag(s.kind)
                 Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1761,8 +1766,7 @@ internal fun FixSearchPanel(
                             modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text("この手を使う（元に戻せます）") }
                     }
                 }
-            }
-            else -> {
+            } else {
                 val why = remember(ui.schedule, ui.wishes, focus.key, cv) {
                     noFixReasons(ui, focus, cv?.let { c -> c::staffCellLimits }, cv?.let { c -> c::needCellLimits })
                 }
