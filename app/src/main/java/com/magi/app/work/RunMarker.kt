@@ -3,7 +3,7 @@ package com.magi.app.work
 import org.json.JSONObject
 
 /**
- * 実行中マーカー（`magi_run_marker.json`）の組み立てと、中断案内の文言。`MagiViewModel` から切り出して JVM で試せるようにしたもの。
+ * 実行中マーカー（`magi_run_marker.json`）の組み立てと、中断案内の文言。JVM で試せるよう VM の外に置く。
  * S5（希望の取り消しと、もう一度つくる）の実行だけ `s5` オブジェクトを載せ、再起動後の案内で取り消した希望を名指しする（s5_wish_trial.md §10）。
  */
 internal object RunMarker {

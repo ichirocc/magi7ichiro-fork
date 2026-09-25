@@ -25,7 +25,7 @@ class OptimizationRepositoryBgTest {
 
     @After fun tearDown() { OptimizationRepository.clear() }
 
-    /** 旧: 購読は起動直後。復元前（state=null）に受けて捨てた結果は、StateFlow が再送しないので二度と来ない。 */
+    /** 購読を起動直後に始めると、復元前（state=null）に受けて捨てた結果は、StateFlow が再送しないので二度と来ない。 */
     @Test fun resultIgnoredBeforeRestoreIsNeverRedeliveredByAPlainCollector() = runBlocking {
         OptimizationRepository.publishResult(result())
         val restored = MutableStateFlow(false)
