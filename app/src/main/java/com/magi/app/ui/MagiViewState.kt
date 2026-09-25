@@ -436,3 +436,79 @@ internal fun legendShapeFamilies(): String {
     val dashed = listOf("c1", "c3mn").map { breakdownLabels[it] ?: it }
     return "実線: ${solid.joinToString("・")}／破線: ${dashed.joinToString("・")}"
 }
+
+// ===== その場の直し方探し（印・セルのシートの中で探して、見つからなければ理由と次の一歩） =====
+
+/** 探す対象。staff/shift は `FixSuggester` の絞り込み、day はセル・日の理由の読み取りだけに使う。 */
+internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null) {
+    /** 結果がどの依頼のものかを見分ける鍵（`UiState.fixDoneKey` と照合）。 */
+    val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}"
+}
+
+/** 手が見つからなかったときの説明。lines は確かめた事実だけ、wishRelated なら「希望を見る」を出す。 */
+internal data class NoFixExplain(val lines: List<String>, val wishRelated: Boolean, val settingsSection: String)
+
+internal const val NO_FIX_SCOPE = "1 セルの変更・2 人の入れ替え・玉突きの範囲では、必須を増やさずに違反を減らす手が見つかりませんでした。"
+
+/**
+ * 直せる手が 0 件のときの理由を盤面と設定から読む（推測は書かない）。
+ * limits は (職員,シフト) → (下限, 上限, 目標)、needLimits は (シフト,日) → (必要, 適正)。
+ */
+internal fun noFixReasons(
+    ui: UiState, f: FixFocus,
+    limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null,
+    needLimits: ((Int, Int) -> Pair<Int, Int>?)? = null,
+): NoFixExplain {
+    val out = ArrayList<String>()
+    var wish = false
+    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
+    fun cellAt(i: Int, j: Int) = ui.schedule.getOrNull(i)?.getOrNull(j)
+    fun headcount(k: Int, j: Int) = ui.schedule.count { it.getOrNull(j) == k }
+    val i = f.staff; val k = f.shift; val d = f.day
+    if (i != null && d != null) {
+        val cur = cellAt(i, d)
+        if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${d + 1}日の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
+    }
+    if (i != null && k != null) {
+        val days = ui.schedule.getOrNull(i)?.indices?.filter { cellAt(i, it) == k }.orEmpty()
+        val pinned = days.filter { ui.wishes["$i,$it"] == k }
+        if (days.isNotEmpty() && pinned.size == days.size) { out += "「${sym(k)}」の ${days.size} 回はどれも本人の希望で固定されています。"; wish = true }
+        else if (pinned.isNotEmpty()) { out += "「${sym(k)}」の ${days.size} 回のうち ${pinned.size} 回は本人の希望で固定されています。"; wish = true }
+        val (_, hi, _) = limits?.invoke(i, k) ?: Triple(null, null, null)
+        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は上限 0（置かない設定）です。"
+        val tight = days.filter { j -> needLimits?.invoke(k, j)?.let { headcount(k, j) <= it.first } == true }
+        if (tight.isNotEmpty()) out += tight.joinToString("・") { "${it + 1}日" } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
+        val fixedOthers = (0 until ui.shifts.coerceAtLeast(ui.shiftSymbols.size)).filter { k2 ->
+            if (k2 == k) return@filter false
+            val (lo2, hi2, _) = limits?.invoke(i, k2) ?: return@filter false
+            lo2 != null && lo2 == hi2 && (ui.schedule.getOrNull(i)?.count { it == k2 } ?: -1) == lo2
+        }
+        if (fixedOthers.isNotEmpty()) out += "ほかの勤務は下限＝上限で固定です（" +
+            fixedOthers.joinToString("・") { k2 -> "${sym(k2)} ${limits!!.invoke(i, k2).first}回" } + "）。"
+    }
+    if (i == null && k != null && d != null) {
+        val here = ui.schedule.indices.filter { cellAt(it, d) == k }
+        val pinned = here.filter { ui.wishes["$it,$d"] == k }
+        if (pinned.isNotEmpty()) {
+            out += "${d + 1}日の「${sym(k)}」のうち " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } + " は本人の希望で固定されています。"
+            wish = true
+        }
+    }
+    out += NO_FIX_SCOPE
+    val section = if (i == null && k != null) "yr_headcount" else "yr_count"
+    return NoFixExplain(out, wish, section)
+}
+
+/** シフト集計「計（期間）」の人員の印：そのシフトに人員不足・過剰がある日。 */
+internal data class ShiftCoverageTotal(val underDays: List<Int>, val overDays: List<Int>) {
+    /** 例「▼2」「▲1」「▼1▲2」（数字は日数）。 */
+    val glyph: String get() = (if (underDays.isNotEmpty()) "▼${underDays.size}" else "") + (if (overDays.isNotEmpty()) "▲${overDays.size}" else "")
+    val days: List<Int> get() = (underDays + overDays).distinct().sorted()
+}
+
+/** シフト → 期間中の人員の印（必要数の無いシフトは被覆キーが無いので載らない）。 */
+internal fun shiftCoverageTotals(marks: List<List<CoverageMark>>): Map<Int, ShiftCoverageTotal> {
+    val under = HashMap<Int, MutableList<Int>>(); val over = HashMap<Int, MutableList<Int>>()
+    marks.forEachIndexed { d, ms -> for (m in ms) (if (m.under) under else over).getOrPut(m.shift) { ArrayList() }.add(d) }
+    return (under.keys + over.keys).associateWith { ShiftCoverageTotal(under[it].orEmpty(), over[it].orEmpty()) }
+}

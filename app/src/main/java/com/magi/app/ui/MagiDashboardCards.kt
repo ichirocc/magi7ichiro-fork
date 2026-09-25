@@ -1573,7 +1573,7 @@ internal fun BigStat(label: String, value: String, modifier: Modifier = Modifier
 
 
 /** 改善手の種類 → (チップ文言, 色)。 */
-private fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compose.ui.graphics.Color> = when (k) {
+internal fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compose.ui.graphics.Color> = when (k) {
     com.magi.app.v6.FixKind.CHANGE -> "変更" to MagiAccent.green
     com.magi.app.v6.FixKind.CHANGE_MULTI -> "複数変更" to MagiAccent.green
     com.magi.app.v6.FixKind.SWAP -> "交換" to MagiAccent.blue

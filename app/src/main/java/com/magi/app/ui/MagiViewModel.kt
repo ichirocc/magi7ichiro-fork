@@ -2609,7 +2609,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var fixBoardKey = 0L
     private var fixStateKey = 0L
 
-    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null) {
+    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "") {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
@@ -2622,7 +2622,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   `fixSearching=true` を立てた**後**に古いジョブの後始末が走ると、新しい探索の旗を消してしまう。
         val seq = ++fixSeq
         fixJob?.cancel()   // 連続タップ時の前探索を破棄（古い結果で UI を上書きしない）
-        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName) }
+        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "") }
         fixJob = viewModelScope.launch {
             try {
                 val list = withContext(Dispatchers.Default) {
@@ -2636,10 +2636,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val curSched = currentSchedule; val curSt = state
                 if (curSched == null || curSt == null || boardKey(curSched) != boardKey(snap) || stateKey(curSt) != stateKey(st)) {
                     _ui.update { it.copy(fixSearching = false) }
-                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift)
+                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey)
                     return@launch
                 }
-                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName, fixSearched = focusName.isBlank()) }
+                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
             } catch (e: CancellationException) {
                 if (seq == fixSeq) _ui.update { it.copy(fixSearching = false) }
                 throw e
@@ -2651,7 +2651,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 走行中の直し方の探索を捨てる（世代を進めるので、完了間際の結果も書き戻さない）。 */
-    private fun cancelFixSearch() {
+    fun cancelFixSearch() {
         ++fixSeq
         fixJob?.cancel()
         fixJob = null

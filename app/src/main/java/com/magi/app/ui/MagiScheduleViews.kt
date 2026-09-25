@@ -240,6 +240,7 @@ internal fun ShiftPickerSheet(
     cell: Pair<Int, Int>,
     onPick: (Int) -> Unit,
     onDismiss: () -> Unit,
+    fixNav: FixNav = FixNav(),
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -253,7 +254,7 @@ internal fun ShiftPickerSheet(
     fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             DialogHeader("$name ・ ${j + 1}日", onDismiss)
@@ -328,6 +329,10 @@ internal fun ShiftPickerSheet(
                     }
                 }
             }
+            // 違反のあるセルは開いた時点でこのセルの直し方を探す（手動の割当変更はその下でいつでもできる）。
+            val cellHasVio = displayCellClasses(ui, VioKey.cell(i, j), remember(ui.c1Runs) { c1DisplayAnchors(ui) }).isNotEmpty() ||
+                (current >= 0 && visibleNeedClasses(ui, current, j, allVioBucketKeys).isNotEmpty())
+            if (cellHasVio) FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = onDismiss)
             // 希望どおりにする（割当モード・未反映・担当可のときだけ）= 最頻操作を1タップ
             if (mode == 0 && wish != null && wish != current && wish in allowed) {
                 Button(onClick = { onPick(wish) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
@@ -554,6 +559,8 @@ internal fun ScheduleGrid(
     canDo: (Int, Int) -> Boolean = { _, _ -> true },   // [矛盾なく選択] 一括割当の担当可否（(職員i, シフトk)）
     plainCellBorder: Boolean = false,   // [外観] 違反の無いセルにも1dp輪郭を付けるか（既定=付けない）
     cv: ConditionsView? = null,   // 行末・日ヘッダの印のシートに下限/上限/必要数を添える（無ければ数値なし）
+    onEvent: (MagiEvent) -> Unit = {},
+    fixNav: FixNav = FixNav(),
     // [3.481.0 勤務表タブ再設計②] 週送り/違反ナビの共有状態。ボタン列は Scaffold 下部の ScheduleNavBar が描く。
     nav: ScheduleNavState = rememberScheduleNavState(),
     // [3.481.0 勤務表タブ再設計①] 縦スクロールのビューポート上端（root座標px）。負なら日ヘッダ固定なし。
@@ -652,7 +659,7 @@ internal fun ScheduleGrid(
                 if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx, vScroll = vScroll, revealCell = focusCell, cv = cv)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx, vScroll = vScroll, revealCell = focusCell, cv = cv, onEvent = onEvent, fixNav = fixNav)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
@@ -1172,7 +1179,7 @@ internal fun dayMD(startDate: String, j: Int): String = try {
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys) {
+internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys, nav: FixNav = FixNav()) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
@@ -1180,6 +1187,9 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
     val cs = MaterialTheme.colorScheme
     // [直せる導線] 違反セルをタップ→原因(必要/下限/上限/目標 と現在)を数字で提示し「直し方を探す」へ。
     var detail by remember { mutableStateOf<TallyDetailUi?>(null) }
+    // 「計（期間）」の人員の印をタップしたシフト。
+    var totalSheet by remember { mutableStateOf<Int?>(null) }
+    val covTotals = remember(vs) { shiftCoverageTotals(vs.coverageMarks) }
     // [3.479.0 復活] 職員別: perStaff[i][k] = スタッフ i がシフト k を担当した回数。
     //   3.477.0で職員別モードを撤去し編集タブのStaffShiftMatrixCardへ一本化したが、勤務表タブから
     //   編集タブを往復せず確認したいという実機要望を受け、シフト集計カード内トグルとして復活させた
@@ -1276,8 +1286,12 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                 }
                             }
                             // [D1] シフト別の期間合計（列合計）。グリッドの重複行を廃止しここへ集約。
-                            TallyBox(cw, rh, cs.surfaceVariant, false) {
-                                Text("${vs.counts.staffTotal(kk)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
+                            // そのシフトに人員不足▼・過剰▲の日があれば日数を添える（職員別セルと同じ字形。タップで日の一覧）。
+                            val ct = covTotals[kk]
+                            val totalBg = when { ct == null -> cs.surfaceVariant; ct.underDays.isNotEmpty() -> shortBg; else -> overBg }
+                            TallyBox(cw, rh, totalBg, false, onClick = if (ct != null) ({ totalSheet = kk }) else null,
+                                cd = ct?.let { "「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 人員 ${it.glyph}日・タップで詳細" }) {
+                                Text("${vs.counts.staffTotal(kk)}" + (ct?.glyph?.let { " $it" } ?: ""), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface, maxLines = 1)
                             }
                         }
                     }
@@ -1332,13 +1346,24 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 }
             }
             }   // if (open)
+            totalSheet?.let { kk ->
+                val ct = covTotals[kk]
+                if (ct != null) {
+                    val lines = ct.days.flatMap { j -> dayCoverageLines(ui, j, listOf(CoverageMark(kk, j in ct.underDays)), cv::needCellLimits).map { "${j + 1}日 $it" } }
+                    GridMarkDialog("「${ui.shiftSymbols.getOrNull(kk) ?: kk}」の人員", lines, onDismiss = { totalSheet = null }) {
+                        FixSearchPanel(ui, cv, FixFocus(null, kk, ct.days.first()), onEvent, nav, onApplied = { totalSheet = null })
+                    }
+                }
+            }
             detail?.let { d ->
                 AlertDialog(
                     onDismissRequest = { detail = null },
                     title = { Text(d.title) },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            // 開いた時点でこの職員×シフト（日別は日×シフト）の直し方を探し、ここに並べる（別タブへ行かない）。
+                            FixSearchPanel(ui, cv, FixFocus(d.focus, d.shift, d.day), onEvent, nav, onApplied = { detail = null })
                             // [3.492.0] データ修正の導線: 希望で固定している在勤者ごとに「希望を取り消す」。
                             //   実行中は編集不可（他の編集入口と同じ）。取り消しは Undo 可（applyStructure 経由）。
                             val dj = d.day
@@ -1367,10 +1392,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             }
                         }
                     },
-                    confirmButton = {
-                        DialogConfirmButton("直し方を探す", onClick = { val f = d.focus; val sh = d.shift; detail = null; onFix(f, sh) })
-                    },
-                    dismissButton = { DialogDismissButton(onClick = { detail = null }, text = "閉じる") },
+                    confirmButton = { DialogDismissButton(onClick = { detail = null }, text = "閉じる") },
                 )
             }
         }
@@ -1500,7 +1522,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null, cv: ConditionsView? = null) {
+internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null, cv: ConditionsView? = null, onEvent: (MagiEvent) -> Unit = {}, fixNav: FixNav = FixNav()) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1761,23 +1783,29 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         }
     }
     staffSheet?.let { i ->
-        GridMarkDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountLines(ui, i, cv?.let { c -> c::staffCellLimits })) { staffSheet = null }
+        GridMarkDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountLines(ui, i, cv?.let { c -> c::staffCellLimits }), onDismiss = { staffSheet = null }) {
+            FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
+        }
     }
     daySheet?.let { j ->
-        GridMarkDialog("${j + 1}日の人員", dayCoverageLines(ui, j, vs.coverageMarks.getOrNull(j).orEmpty(), cv?.let { c -> c::needCellLimits })) { daySheet = null }
+        val marks = vs.coverageMarks.getOrNull(j).orEmpty()
+        GridMarkDialog("${j + 1}日の人員", dayCoverageLines(ui, j, marks, cv?.let { c -> c::needCellLimits }), onDismiss = { daySheet = null }) {
+            marks.firstOrNull()?.let { m -> FixSearchPanel(ui, cv, FixFocus(null, m.shift, j), onEvent, fixNav, onApplied = { daySheet = null }) }
+        }
     }
 }
 
 /** 行末・日ヘッダの印の内訳（読むだけ。直すのはセルのタップから）。 */
 @Composable
-private fun GridMarkDialog(title: String, lines: List<String>, onDismiss: () -> Unit) {
+private fun GridMarkDialog(title: String, lines: List<String>, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (lines.isEmpty()) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodyMedium)
                 lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                extra()
             }
         },
         confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
@@ -1854,3 +1882,60 @@ private fun FlatCell(
     }
 }
 
+
+/** 印・セルのシートの行き先（手が見つからなかったときの次の一歩）。 */
+internal class FixNav(val onWishes: (Int?) -> Unit = {}, val onSettings: (String) -> Unit = {})
+
+/**
+ * シートを開いた時点でその対象（職員×シフト・日×シフト・セル）の直し方を探し、同じシートの中に
+ * 進み具合 → 見つかった手（「この手を使う」）→ 無ければ確かめた理由と次の一歩、を出す。
+ * 盤面が変われば探し直し、シートを閉じれば探索を取り消す（古い結果を書き戻さない）。
+ */
+@Composable
+internal fun FixSearchPanel(
+    ui: UiState, cv: ConditionsView?, focus: FixFocus, onEvent: (MagiEvent) -> Unit,
+    nav: FixNav, onApplied: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    LaunchedEffect(focus.key, ui.schedule) {
+        if (!ui.running) onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key))
+    }
+    DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
+    val done = !ui.fixSearching && ui.fixDoneKey == focus.key
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("直し方", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        when {
+            ui.running -> Text("計算中は探せません。終わってから開き直してください。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            !done -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text("この場所の直し方を探しています…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            ui.fixSuggestions.isNotEmpty() -> ui.fixSuggestions.take(3).forEach { s ->
+                val (tag, tagColor) = fixKindTag(s.kind)
+                Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MagiTagChip(text = tag, color = tagColor)
+                            Text(s.label, style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
+                        }
+                        val (hardLine, caution) = fixImpactLines(s)
+                        Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
+                        caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                        Button(onClick = { onEvent(MagiEvent.Board.ApplyFixSuggestion(s)); onApplied() }, enabled = !ui.running,
+                            modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text("この手を使う（元に戻せます）") }
+                    }
+                }
+            }
+            else -> {
+                val why = remember(ui.schedule, ui.wishes, focus.key, cv) {
+                    noFixReasons(ui, focus, cv?.let { c -> c::staffCellLimits }, cv?.let { c -> c::needCellLimits })
+                }
+                why.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (why.wishRelated) OutlinedButton(onClick = { nav.onWishes(focus.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                    OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                }
+            }
+        }
+    }
+}

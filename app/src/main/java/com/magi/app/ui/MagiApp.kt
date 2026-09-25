@@ -407,6 +407,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
+    // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員／設定＝年間マスターの節）。
+    val fixNav = remember { FixNav(
+        onWishes = { s -> editingCell = null; if (s != null) deepLinkWishStaff = s; editScope = 0; tab = 2 },
+        onSettings = { sec -> editingCell = null; editScope = 2; deepLinkEditSection = sec; tab = 2 },
+    ) }
     // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。
     val goEditForIssue: (com.magi.app.v6.IssueKind?) -> Unit = { kind ->
         tab = 2
@@ -592,11 +597,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
-                        canDo = canDoShift, plainCellBorder = plainCellBorder, cv = conditionsView,
+                        canDo = canDoShift, plainCellBorder = plainCellBorder, cv = conditionsView, onEvent = onEvent, fixNav = fixNav,
                         nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1])
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
-                    TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled)
+                    TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav)
                     // [3.194.0 情報の冗長性検証] 「不一致だけ抽出」（MismatchExtractCard）を撤去。
                     //   TallyCard(職員別/日別)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
                     //   内容が重複しており、しかも apt(適切回数)由来の違反を含まず新しい表示より不完全だった。
@@ -786,6 +791,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     focusRange = null
                 },
                 onDismiss = { editingCell = null; focusRange = null },
+                fixNav = fixNav,
             )
         }
         if (guidedFix) {

@@ -196,7 +196,9 @@ internal sealed interface MagiEvent {
         data class ToggleVioBucket(val bucket: String) : Session
         data class SetNameQuery(val query: String) : Session
         data object RefreshCheck : Session
-        data class FindFixSuggestions(val focusStaff: Int?, val focusShift: Int?) : Session
+        data class FindFixSuggestions(val focusStaff: Int?, val focusShift: Int?, val focusKey: String = "") : Session
+        /** シートを閉じたときの探索の取り消し（古い結果を書き戻さない）。 */
+        data object CancelFixSearch : Session
         data class Notify(val text: String, val level: String = "I") : Session
         data class ClearMessage(val shown: String?) : Session
         data class AddReviewMemo(val text: String) : Session

@@ -72,4 +72,44 @@ class GridDisplayMarksTest {
             assertTrue("$fam 職員${e[0]}", staffCountLines(ui, e[0]).any { breakdownLabels[fam]!! in it })
         }
     }
+
+    /** 手が見つからないときは確かめた事実だけを書く（希望固定・上限 0・その日の必要人数ぎりぎり・ほかの勤務の固定）。 */
+    @Test fun noFixReasonsNameOnlyVerifiedFacts() {
+        val u = UiState(
+            staff = 2, days = 3, shifts = 3, shiftSymbols = listOf("休", "A", "B"),
+            schedule = listOf(listOf(1, 1, 0), listOf(2, 0, 1)),
+            wishes = mapOf("0,0" to 1, "0,1" to 1),
+        )
+        val limits = { i: Int, k: Int -> if (i == 0 && k == 1) Triple(null, 0, null) else if (i == 0 && k == 0) Triple(1, 1, null) else Triple(null, null, null) }
+        val need = { k: Int, _: Int -> if (k == 1) 1 to 1 else null }
+        val why = noFixReasons(u, FixFocus(0, 1), limits, need)
+        assertTrue(why.wishRelated)
+        assertTrue(why.lines.any { "どれも本人の希望で固定" in it })
+        assertTrue(why.lines.any { "上限 0" in it })
+        assertTrue(why.lines.any { "必要人数ぎりぎり" in it })
+        assertTrue(why.lines.any { "下限＝上限で固定" in it && "休 1回" in it })
+        assertEquals(NO_FIX_SCOPE, why.lines.last())
+        assertEquals("yr_count", why.settingsSection)
+        val plain = noFixReasons(u, FixFocus(1, 2))
+        assertEquals(listOf(NO_FIX_SCOPE), plain.lines)
+        assertEquals("yr_headcount", noFixReasons(u, FixFocus(null, 1, 0)).settingsSection)
+        assertTrue(noFixReasons(u, FixFocus(0, null, 0)).lines.first().contains("このセル"))
+    }
+
+    @Test fun fixFocusKeyTellsRequestsApart() {
+        assertTrue(FixFocus(0, 1).key != FixFocus(0, null, 1).key)
+        assertEquals(FixFocus(0, 1).key, FixFocus(0, 1, null).key)
+    }
+
+    /** シフト集計「計（期間）」: 休は 10/28-29、A4 は 10/9 の人員過剰を日数で持ち、必要数の無いシフトは載らない。 */
+    @Test fun shiftTotalsCarryCoverageDays() {
+        val totals = shiftCoverageTotals(vs.coverageMarks)
+        val rest = st.shifts.indexOfFirst { it.kigou == "休" }
+        val a4 = st.shifts.indexOfFirst { it.kigou == "A4" }
+        assertTrue(totals[rest]!!.overDays.containsAll(listOf(27, 28)))
+        assertEquals(listOf(8), totals[a4]!!.overDays)
+        assertTrue(totals[a4]!!.glyph.startsWith("▲"))
+        val needKeys = rep.needFamilies.filterValues { v -> v.any { it == "vio-covU" || it == "vio-covO" } }.keys.mapNotNull { VioKey.first(it) }.toSet()
+        assertEquals(needKeys, totals.keys)
+    }
 }
