@@ -625,5 +625,5 @@
     実データ 20/20 は OFF と同値。詳細は history「許容 ON の無害化」。
 37. **[S5 任意の残作業・2026-09-24 登録]**（本体は Android 0b1d7b3/96a147f/044268d・C# a56506c..ddbb16d で実装済み、`docs/s5_wish_trial.md`）:
     ~~(a) T8 共有 fixture の言語跨ぎ期待値ファイル~~ **済（2026-09-25）**: `wish_trial_expected.txt`（sample_state_v6＋blocked_covu、各 wishLocked 先頭 3 件＋対照）を Kotlin/C# の `WishTrialCrossLanguageTest` が読む。両言語一致／
-    (b) 実行マーカー（`MagiViewModel` の mode/budget/workers/algorithm）に S5 文脈＝取り消した希望のキーを載せ、中断案内で名指しする（s5 §15 の「backlog へ」と同件）／
+    ~~(b) 実行マーカーに S5 文脈を載せ中断案内で名指し~~ **済（2026-09-25）**: `work/RunMarker.kt`（`s5`＝staff/day/symbol/name、旧マーカーは従来文）＋`RunMarkerTest`。C# は実行マーカー撤去済み（2026-09-01）＝対象外／
     (c) 「詳しい試算」＝VCR＋後処理チェーンの重い試算を出すか（利用者の決定が要る。机上評価では当たりはほぼ同じで 30 倍遅い）。

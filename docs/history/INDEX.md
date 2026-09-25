@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- S5 中断案内で取り消した希望を名指し（2026-09-25）: 実行マーカーに `s5` 文脈、`work/RunMarker.kt`＋`RunMarkerTest`、C# 対象外（backlog #37(b)）。  → `docs/history/3.4xx.md`
 - S5 T8 言語跨ぎ契約（2026-09-25）: `wish_trial_expected.txt` を Kotlin/C# の `WishTrialCrossLanguageTest` が共有、両言語一致（backlog #37(a)）。  → `docs/history/3.4xx.md`
 
 - 既定OFF台帳の整理②（2026-09-25）: 否決済み `useDynamicBlockLens` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
