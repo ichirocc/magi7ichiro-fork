@@ -63,8 +63,12 @@ data class UiState(
     // [場所表示] fair/weekly の職員単位の偏り箇所。"weekly"->[[i,dev],..] / "fair"->[[i,k,dev],..]（dev降順）。
     //   内訳パネルの場所表示専用（グリッドには出さない）。表示のみ・スコア不変。
     val distLocations: Map<String, List<List<Int>>> = emptyMap(),
+    /** c1 の違反窓ラン（`ViolationReport.c1Runs`）。画面の表示専用の印を作る元。 */
+    val c1Runs: List<List<Int>> = emptyList(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
-    val fixSearching: Boolean = false,                                       // 改善手を探索中
+    val fixSearching: Boolean = false,
+    /** 直し方の探索を終えた依頼の鍵（`FixFocus.key`、空＝画面全体や未完了）。印・セルのシートが自分の結果か見分ける。 */
+    val fixDoneKey: String = "",                                       // 改善手を探索中
     val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）
     val stalledHardFamilies: List<String> = emptyList(),   // [思考誘導S4] 直近の実行で長く改善せず採用盤面にも残った必須族（盤面を変えたら空）
     val fixFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）
@@ -113,6 +117,8 @@ data class UiState(
     //   生んでいた。applyStructure が毎回これを増やして必ず distinct な UiState を emit＝確実に再構成させる。
     val editRev: Int = 0,
     val message: String? = null,
+    /** この文言の Snackbar に「元に戻す」を付ける（セルを 1 つ変えた直後だけ。1 段戻す）。 */
+    val undoableMessage: String? = null,
     // [3.400.0] 直近メッセージが「失敗・拒否」か。Snackbar の色（errorContainer）と表示時間（長め）を分ける。
     //   **`notify(text, "W")` が唯一の true の書き手**で、`clearMessage` が false へ戻す。素の
     //   `copy(message = …)` は触らない＝既定 false のまま＝旧来どおりの見た目になる（退行しない）。

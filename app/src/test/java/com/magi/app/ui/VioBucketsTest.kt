@@ -67,4 +67,9 @@ class VioBucketsTest {
     @Test fun windowBucketUsesTheSameWordAsTheBreakdownLabel() {
         assertEquals(breakdownLabels["c1"], vioBuckets.single { "c1" in it.families }.label)
     }
+
+    /** 並びのチップは「連勤」でなく「並び」（禁止・推奨の並びと希望前日の禁止を束ねる。連勤は期間の制約の語感と混ざる）。 */
+    @Test fun sequenceBucketIsNamedNarabi() {
+        assertEquals("並び", vioBuckets.single { it.key == "seq" }.label)
+    }
 }

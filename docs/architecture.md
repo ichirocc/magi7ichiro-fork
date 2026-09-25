@@ -112,7 +112,9 @@ MagiRoot（唯一の合成ルート）
 ### UI 画面・部品（ui）
 | Entity | type | 役割 |
 |---|---|---|
-| `MagiScheduleViews` | UI-Schedule | 勤務表グリッド / セル / シフト選択シート / 集中モード |
+| `MagiScheduleViews` | UI-Schedule | 勤務表グリッド / セル / 集中モード |
+| `CellEditSheet` | UI-Schedule | セル編集シート（画面下の固定パネル・固定配置のシフトボタン） |
+| `CellSheetLogic` | UI-logic（Compose 非依存） | セル編集シートの固定配置・1 行の状態・シフトの印・巡回・回数の 1 行（ホストテスト） |
 | `MagiDashboardCards` ＋ `V6RemainingScreens` | UI-Analysis | 分析カード（違反の内訳18 / 俯瞰 / チェック概要 / ボトルネック / 改善提案） |
 | `Ws1Editor` / `StaffRangeEditor` / `ConstraintEditor` / `WishEditor` / `NeedDayEditor` / `SkillGroupEditor` / `CountSettingsScreen` / `ShiftColorEditor` | UI-Editors | 「基本マスター」の各エディタ |
 | `MagiSetupCards` | UI-Setup | 初期設定・外観・データ操作などのカード群 |

@@ -694,6 +694,7 @@ internal fun AppearanceCard(
     oneHand: Boolean = false, onOneHand: (Boolean) -> Unit = {},
     proMode: Boolean = false, onProMode: (Boolean) -> Unit = {},
     plainCellBorder: Boolean = false, onPlainCellBorder: (Boolean) -> Unit = {},
+    leftHand: Boolean = false, onLeftHand: (Boolean) -> Unit = {},
 ) {
     // [D8/UD固定] 配色セレクタ（自動/明/暗/UD）はユーザー判断で撤去。テーマは UD（高コントラスト）固定。
     Card(Modifier.fillMaxWidth()) {
@@ -713,6 +714,8 @@ internal fun AppearanceCard(
                 Spacer(Modifier.width(8.dp))
                 Text("勤務表の通常セルに枠線を表示", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }
+            Text("セル編集シートの利き手", style = MaterialTheme.typography.titleSmall)
+            MagiSegmentedControl(options = listOf("右手", "左手"), selected = if (leftHand) 1 else 0, onSelect = { onLeftHand(it == 1) })
             // [プロ編集] 表示モード。プロ＝数値診断（生指標）を前面に。今後さらに高密度編集を拡張予定。
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
             MagiSegmentedControl(options = listOf("かんたん", "プロ"), selected = if (proMode) 1 else 0, onSelect = { onProMode(it == 1) })

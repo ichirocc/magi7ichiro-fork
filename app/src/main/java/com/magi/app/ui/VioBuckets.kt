@@ -19,7 +19,7 @@ internal data class VioBucket(val key: String, val label: String, val families: 
 internal val vioBuckets: List<VioBucket> = listOf(
     VioBucket("need", "人員", setOf("covU", "covO")),
     VioBucket("pref", "希望", setOf("pref")),
-    VioBucket("seq", "連勤", setOf("c3", "c3n", "c3m", "c3mn", "c3w")),
+    VioBucket("seq", "並び", setOf("c3", "c3n", "c3m", "c3mn", "c3w")),
     VioBucket("count", "回数", setOf("low", "high", "apt", "c2")),
     VioBucket("group", "グループルール", setOf("groupViol", "c41", "c42", "c41s", "c42s")),
     VioBucket("window", "期間の制約", setOf("c1")),

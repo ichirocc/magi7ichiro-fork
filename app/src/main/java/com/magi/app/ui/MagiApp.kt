@@ -110,6 +110,14 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 
@@ -185,11 +193,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var tourActive by remember { mutableStateOf(false) }   // 「必須違反を順に見る」の巡回中
+    var sheetPx by remember { mutableFloatStateOf(0f) }
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
     // [通常セルの枠線] 違反の無いセルにも「分離」用の1dp輪郭を付けていた(3.397.0)が、常時表示は格子が
     //   線で埋まって見づらいという声を受け選択式に。既定は非表示＝違反枠（実線/破線/角マーク）だけが目立つ。
     var plainCellBorder by rememberSaveable { mutableStateOf(false) }
+    var leftHand by rememberSaveable { mutableStateOf(false) }   // セル編集シートの左右（既定＝右手）
     var editScope by rememberSaveable { mutableStateOf(0) }   // [入口4分割] 編集タブ: 0=月次条件 / 1=職員管理 / 2=年間マスター
     // [下流→上流ディープリンク] 要確認一覧「設定で直す」→ 該当職員/シフトを事前選択して開く（-1=無し・消費で戻す）。
     var deepLinkWishStaff by rememberSaveable { mutableStateOf(-1) }
@@ -407,6 +418,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
+    // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員／設定＝年間マスターの節）。
+    val fixNav = remember { FixNav(
+        onWishes = { s -> editingCell = null; if (s != null) deepLinkWishStaff = s; editScope = 0; tab = 2 },
+        onSettings = { sec -> editingCell = null; editScope = 2; deepLinkEditSection = sec; tab = 2 },
+    ) }
     // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。
     val goEditForIssue: (com.magi.app.v6.IssueKind?) -> Unit = { kind ->
         tab = 2
@@ -459,13 +475,21 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         val m = ui.message ?: return@LaunchedEffect
         snackbarHostState.currentSnackbarData?.dismiss()
         // [3.400.0] 失敗・拒否は長め（4秒だと120字級の失敗文を読み切る前に消える）。
-        snackbarHostState.showSnackbar(m, duration = if (ui.messageIsError) SnackbarDuration.Long else SnackbarDuration.Short)
-        vm.clearMessage(m)   // 同じ文言が再び来ても状態が変わる＝次のタップでもう一度出る
+        val undoable = m == ui.undoableMessage && ui.canUndo
+        val r = snackbarHostState.showSnackbar(m, actionLabel = if (undoable) "元に戻す" else null,
+            duration = if (ui.messageIsError) SnackbarDuration.Long else SnackbarDuration.Short)
+        vm.clearMessage(m)
+        if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) vm.undo()   // 同じ文言が再び来ても状態が変わる＝次のタップでもう一度出る
     }
 
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
-        topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }) },
+        topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }, onHardTour = {
+            violationTour(ui).firstOrNull()?.let { c ->
+                tab = 1; tourActive = true; editingCell = c
+                focusRange = vm.violationRange(c.first, c.second)?.let { Triple(c.first, it.first, it.second) }
+            }
+        }) },
         bottomBar = {
             Column {
                 // [3.481.0 勤務表タブ再設計②] 週送り/違反ナビを勤務表タブ表示中だけ下部バーへ常駐
@@ -497,6 +521,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 // [3.481.0] verticalScroll より外側（＝スクロールで動かないビューポート側）の座標を測る。
                 //   勤務表グリッドの日ヘッダは、この上端より上へ出る分だけ下へ平行移動して画面に留まる。
                 .onGloballyPositioned { viewportTopPx = it.positionInRoot().y }
+                // セル編集シートを開いている間、何も押していない所のタップはシートを閉じる（セル・ボタンのタップは各自が消費する）。
+                .then(if (editingCell != null && tab == 1) Modifier.pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        val up = waitForUpOrCancellation(PointerEventPass.Final)
+                        if (up != null && !up.isConsumed) { editingCell = null; focusRange = null; tourActive = false }
+                    }
+                } else Modifier)
                 .verticalScroll(tabScrolls[tab.coerceIn(0, 4)]),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
@@ -592,11 +624,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
-                        canDo = canDoShift, plainCellBorder = plainCellBorder,
-                        nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1])
+                        canDo = canDoShift, plainCellBorder = plainCellBorder, cv = conditionsView, onEvent = onEvent, fixNav = fixNav,
+                        nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1], editCell = editingCell, sheetPx = sheetPx)
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
-                    TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled)
+                    TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav)
                     // [3.194.0 情報の冗長性検証] 「不一致だけ抽出」（MismatchExtractCard）を撤去。
                     //   TallyCard(職員別/日別)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
                     //   内容が重複しており、しかも apt(適切回数)由来の違反を含まず新しい表示より不完全だった。
@@ -700,7 +732,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                                     SkillConstraintsCard(ui, constraintsView, onEvent)
                                 }
                             }
-                            CollapsibleSection("⑤ 並び・くり返し", "yr_cons", forceExpandKey = deepLinkEditSection,
+                            CollapsibleSection("⑤ 並び・期間の制約", "yr_cons", forceExpandKey = deepLinkEditSection,
                                 onForceExpandConsumed = { deepLinkEditSection = null }) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     // [3.427.0] 旧 SectionNote（窓の要件／個人の合計／並び4種の列挙）は撤去:
@@ -735,7 +767,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 }
                 else -> {
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
-                        plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it })
+                        plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it },
+                        leftHand = leftHand, onLeftHand = { leftHand = it })
                     ShiftColorCard(ui, vm.shiftColorList(), onEvent)
                     // [IA重複解消 3.132系] 違反の色は ColorSettingsView（基準色2種＋族別）へ一本化し、
                     //   シフトの表示色の直後＝色設定の定位置に配置（旧: 詳細設定の折りたたみ内で見つけにくい＋
@@ -770,23 +803,41 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp)) // 下部コマンドバー分の余白
+            // 下部コマンドバー分の余白。セル編集シートを開いている間は、最後の行もシートの上へ出せるだけ足す。
+            Spacer(Modifier.height(if (editingCell != null && tab == 1) with(LocalDensity.current) { sheetPx.toDp() } else 12.dp))
         }
+        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false } }
         val cell = editingCell
-        if (cell != null) {
-            ShiftPickerSheet(
-                ui = ui,
-                cv = conditionsView,
-                onEvent = onEvent,
-                cell = cell,
-                onPick = { k ->
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onEvent(MagiEvent.Board.SetCell(cell.first, cell.second, k))
-                    editingCell = null
-                    focusRange = null
-                },
-                onDismiss = { editingCell = null; focusRange = null },
-            )
+        if (cell != null && tab == 1) {
+            val closeSheet = { editingCell = null; focusRange = null; tourActive = false }
+            BackHandler(onBack = closeSheet)
+            val moveTo: (Pair<Int, Int>) -> Unit = { c ->
+                if (c.first in 0 until ui.staff && c.second in 0 until ui.days) {
+                    editingCell = c
+                    focusRange = vm.violationRange(c.first, c.second)?.let { Triple(c.first, it.first, it.second) }
+                }
+            }
+            val tour = if (tourActive) remember(ui.violationCellFamilies) { violationTour(ui) } else emptyList()
+            val maxH = (LocalConfiguration.current.screenHeightDp * 0.62f).dp
+            Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
+                CellEditSheet(
+                    ui = ui,
+                    cv = conditionsView,
+                    onEvent = onEvent,
+                    cell = cell,
+                    stateOf = { vm.state },
+                    onPick = { k ->
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onEvent(MagiEvent.Board.SetCell(cell.first, cell.second, k))
+                    },
+                    onMove = moveTo,
+                    onDismiss = closeSheet,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
+                    fixNav = fixNav,
+                    tourNext = nextTourCell(tour, cell),
+                    leftHand = leftHand,
+                )
+            }
         }
         if (guidedFix) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { tab = 2 })
@@ -879,7 +930,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
  */
 
 @Composable
-internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表") {
+internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -917,7 +968,17 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表") {
                     ui.hasResult -> { label = "必須違反 ${ui.bestHard}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
                     else -> { label = "未計算"; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
-                Surface(color = bg, shape = MaterialTheme.shapes.small) {
+                // 必須違反が残るときは「順に見る」巡回の入口（勤務表のセルを必須から順に開く）。
+                val tourable = !ui.running && ui.hasResult && ui.bestHard > 0L && onHardTour != null
+                if (tourable) {
+                    Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.heightIn(min = 48.dp)) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("必須違反 ${ui.bestHard}件を順に見る", color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 12.dp))
+                        }
+                    }
+                } else Surface(color = bg, shape = MaterialTheme.shapes.small) {
                     Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }

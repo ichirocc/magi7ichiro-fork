@@ -231,175 +231,6 @@ internal fun LiveScheduleCard(ui: UiState) {
  * タップ→反映(setCell, Undo可)→診断が更新され次の枠へ自動で進む。埋められない枠は理由つきで提示。
  */
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun ShiftPickerSheet(
-    ui: UiState,
-    cv: ConditionsView,
-    onEvent: (MagiEvent) -> Unit,
-    cell: Pair<Int, Int>,
-    onPick: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val (i, j) = cell
-    val cs = MaterialTheme.colorScheme
-    val haptic = LocalHapticFeedback.current   // [一貫性G2] 希望操作にも触覚を付ける（割当と対称）
-    val sheetState = rememberModalBottomSheetState()
-    val allowed = cv.allowedShiftsFor(i).toList()
-    val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
-    val wish = ui.wishes["$i,$j"]
-    var mode by remember(cell) { mutableIntStateOf(0) } // 0=割当, 1=希望
-    val name = ui.staffNames.getOrNull(i) ?: i.toString()
-    fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            DialogHeader("$name ・ ${j + 1}日", onDismiss)
-            // 凝縮ステータス: 現在の割当 + 希望 + 違反理由
-            Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
-                Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                    // [セルタップで違反理由/認知ウォークスルー最優先] このセルの違反族を提示。
-                    //   従来は枠の意味(なぜ違反か)が要確認一覧/診断ログへ往復しないと分からなかった。
-                    //   [Set化] 重なった違反は全列挙（重み降順＝必須が先頭）。表示のみ・スコア不変。
-                    // [見直しF1] 重大度色はユーザートークン(__vio__/__vioSoft__)から解決（グリッド/凡例と同色）。
-                    val vioHardC = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
-                    val vioSoftC = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
-                    // [セルシート小修正] セルの族と人員の族（covU 等）をまとめ、必須を先・要調整を後に見出しで分ける。
-                    //   旧: 人員の行を末尾に足していたため、必須の人員不足が要調整の行より下に出た。
-                    val lines = cellVioClasses(ui, "$i,$j").map { it to "" } +
-                        (if (current >= 0) visibleNeedClasses(ui, current, j, allVioBucketKeys).map { needCls ->
-                            val limits = cv.needCellLimits(current, j)
-                            val countNow = ui.schedule.count { it.getOrNull(j) == current }
-                            val detail = limits?.let { (lo, hi) ->
-                                when (needCls) {
-                                    "vio-covU" -> "必要${lo}人 → ${(lo - countNow).coerceAtLeast(0)}人不足"
-                                    "vio-covO" -> "適正${hi}人 → ${(countNow - hi).coerceAtLeast(0)}人過剰"
-                                    else -> null
-                                }
-                            }
-                            needCls to (detail?.let { "（$it）" } ?: "")
-                        } else emptyList())
-                    val (hardLines, softLines) = lines.partition { isHardCellViolation(it.first) }
-                    // 必須があるときは要調整を折りたたむ（先に直すのは必須だけ）。
-                    var softOpen by remember(i, j) { mutableStateOf(false) }
-                    for ((title, group, mark) in listOf(Triple("必須（配る前に直す）", hardLines, "⚠ "), Triple("要調整（できれば）", softLines, "△ "))) {
-                        if (group.isEmpty()) continue
-                        val folded = mark == "△ " && hardLines.isNotEmpty() && !softOpen
-                        if (mark == "△ " && hardLines.isNotEmpty()) {
-                            TextButton(onClick = { softOpen = !softOpen }, contentPadding = PaddingValues(0.dp)) {
-                                Text("要調整 ${group.size}件（後回しで大丈夫）" + if (softOpen) " ▾" else " ▸", style = MaterialTheme.typography.labelMedium)
-                            }
-                        } else Text(title, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                        if (!folded) group.forEach { (vioCls, detail) ->
-                            val fam = vioCls.removePrefix("vio-")
-                            Text(mark + (breakdownLabels[fam] ?: fam) + detail,
-                                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
-                                color = resolvedVioColor(ui, vioCls, vioHardC, vioSoftC))
-                        }
-                    }
-                    Text("現在の割当  ${sym(current)}", style = MaterialTheme.typography.bodyMedium)
-                    val wt = if (wish == null) "希望  未登録"
-                        else "希望  ${sym(wish)}" + (if (wish == current) "（反映済）" else "（未反映）")
-                    // [UD監査] 桃(4.07:1)は通常文字でAA不足→太字(14sp bold=大テキスト扱い・3:1基準)で担保。
-                    Text(wt, style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = if (wish != null && wish != current) FontWeight.Bold else FontWeight.Normal,
-                        color = if (wish != null && wish != current) MagiAccent.pink else cs.onSurfaceVariant)
-                    // [見直し候補] 割当変更（今回だけ）と土台ルールの直し（年間マスター）を混同させない第3の出口。
-                    //   違反セルのみ表示。メモは年間マスターの先頭（ReviewMemoCard）に積まれる。
-                    val vioFams = cellVioClasses(ui, "$i,$j")
-                    if (vioFams.isNotEmpty()) {
-                        TextButton(onClick = {
-                            val famsJp = vioFams.joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
-                            onEvent(MagiEvent.Session.AddReviewMemo("$name ${j + 1}日=${sym(current)}：$famsJp"))
-                            onDismiss()   // 結果の Snackbar はシートの下に隠れるので閉じて見せる
-                        }) { Text("基本ルールの見直し候補にする") }
-                    }
-                }
-            }
-            // 希望どおりにする（割当モード・未反映・担当可のときだけ）= 最頻操作を1タップ
-            if (mode == 0 && wish != null && wish != current && wish in allowed) {
-                Button(onClick = { onPick(wish) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text("希望どおり ${sym(wish)} にする")
-                }
-            }
-            // 割当/希望 トグル
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("割当を変更", "希望を変更").forEachIndexed { idx, label ->
-                    val selSeg = mode == idx
-                    Box(
-                        Modifier.weight(1f).heightIn(min = 48.dp)
-                            .background(if (selSeg) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
-                            .clickable { mode = idx },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(label, color = if (selSeg) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                            fontWeight = if (selSeg) FontWeight.Bold else FontWeight.Normal)
-                    }
-                }
-            }
-            Text(
-                if (mode == 0) "タップで割当を即変更。" else "タップで希望を登録/変更（即確定）。「外」=担当外（登録可・配置で違反）。",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
-            )
-            val opts = if (mode == 0) (if (allowed.isNotEmpty()) allowed else ui.shiftSymbols.indices.toList())
-                       else ui.shiftSymbols.indices.toList()
-            opts.chunked(4).forEach { rowKeys ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    rowKeys.forEach { k ->
-                        val symbol = ui.shiftSymbols.getOrNull(k) ?: k.toString()
-                        val sel = if (mode == 0) k == current else k == wish
-                        val ng = mode == 1 && k !in allowed
-                        val bg = if (sel) cs.primary else hexToColor(ui.shiftColorHex.getOrNull(k) ?: "")
-                        val fg = if (sel) cs.onPrimary else ensureReadable(bg, hexToColor(ui.shiftTextHex.getOrNull(k) ?: ""))
-                        // [結果プレビュー] 割当モードのみ: 現在/希望/不足解消/超過 を注記（needViolations から確実に判定）。
-                        val noteParts = ArrayList<String>()
-                        var noteWarn = false
-                        if (mode == 0) {
-                            if (k == current) noteParts.add("現在") else if (k == wish) noteParts.add("希望")
-                            when (coverageVioAt(ui, k, j, allVioBucketKeys)) {
-                                // 今のシフトを選び直しても人数は増えない＝現在のタイルには付けない。
-                                "vio-covU" -> if (k != current) noteParts.add("当日の不足を解消")  // [3.483.0 M-1] 旧「不足解消」＝何の不足か読めなかった
-                                "vio-covO" -> { noteParts.add("当日は人員超過"); noteWarn = true }
-                            }
-                        }
-                        val note = noteParts.joinToString("・")
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .heightIn(min = 56.dp)
-                                .background(bg, MaterialTheme.shapes.large)
-                                .then(if (ng) Modifier.border(2.dp, cs.error, MaterialTheme.shapes.large) else Modifier)
-                                .clickable {
-                                    if (mode == 0) onPick(k) else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)); onDismiss() }
-                                }
-                                .padding(4.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(symbol + (if (ng) " 外" else ""), color = if (ng) cs.error else fg, fontWeight = FontWeight.Bold)
-                                if (note.isNotEmpty()) {
-                                    // [UD監査] 任意のシフト色上の注記は WCAG 保証（橙/緑の生アクセントは淡色上で不足）。
-                                    Text(note, style = MaterialTheme.typography.labelSmall,
-                                        color = if (sel) cs.onPrimary else ensureReadable(bg, if (noteWarn) MagiAccent.orange else MagiAccent.green))
-                                }
-                            }
-                        }
-                    }
-                    repeat(4 - rowKeys.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
-            // 希望を削除（希望モード・登録済みのみ）
-            if (mode == 1 && wish != null) {
-                OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)); onDismiss() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                    Text("希望を削除（希望なし）", color = cs.error)
-                }
-            }
-        }
-    }
-}
-
 
 // [3.193.0 シンプル化] StaffCalendarCard/CalendarCell（職員別カレンダー）を撤去。全職員グリッド
 //   （ScheduleGrid）と同じ盤面の二重表示＝タブの密度/冗長の主因だった（旧コメントが自認済み）。呼出0を確認済み。
@@ -543,12 +374,18 @@ internal fun ScheduleGrid(
     focusMode: Boolean = false,                  // [集中モード] 違反・未反映希望以外のセルを淡色化
     canDo: (Int, Int) -> Boolean = { _, _ -> true },   // [矛盾なく選択] 一括割当の担当可否（(職員i, シフトk)）
     plainCellBorder: Boolean = false,   // [外観] 違反の無いセルにも1dp輪郭を付けるか（既定=付けない）
+    cv: ConditionsView? = null,   // 行末・日ヘッダの印のシートに下限/上限/必要数を添える（無ければ数値なし）
+    onEvent: (MagiEvent) -> Unit = {},
+    fixNav: FixNav = FixNav(),
     // [3.481.0 勤務表タブ再設計②] 週送り/違反ナビの共有状態。ボタン列は Scaffold 下部の ScheduleNavBar が描く。
     nav: ScheduleNavState = rememberScheduleNavState(),
     // [3.481.0 勤務表タブ再設計①] 縦スクロールのビューポート上端（root座標px）。負なら日ヘッダ固定なし。
     stickyTopPx: Float = -1f,
     // タブの縦スクロール。注目セルの行を画面内へ動かすのに使う（null なら縦は動かさない）。
     vScroll: ScrollState? = null,
+    // セル編集シートで開いているセルと、シートの高さ（px）。セルをシートの直上へ寄せ、行と列を強調する。
+    editCell: Pair<Int, Int>? = null,
+    sheetPx: Float = 0f,
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -641,7 +478,7 @@ internal fun ScheduleGrid(
                 if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx, vScroll = vScroll, revealCell = focusCell)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx, vScroll = vScroll, revealCell = focusCell, cv = cv, onEvent = onEvent, fixNav = fixNav, editCell = editCell, sheetPx = sheetPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
@@ -784,6 +621,13 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
             })
             Text("右上の角＝できれば直す（軽）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(8.dp).background(vioSoftColor, CircleShape))
+            Text("左上の点＝ほかの種類も重なっている", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+        Text("名前の横の ▼▲＝回数の不足・超過／日付の下の「休▲」＝そのシフトの人員不足▼・過剰▲（タップで内訳）",
+            style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text(legendShapeFamilies(), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         // [凡例の抜け] 希望シフトの桃バッジ/緑リングは勤務表グリッドの常時キャプションにしかなく、この
         //   折りたたみ凡例には無かった＝重複解消でキャプションを短縮する前提として、ここへ移す。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -841,11 +685,11 @@ internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: and
         // [実機バグ修正] Modifier.border はチェーンの「先」が最後=最前面に描かれる（内側の drawContent 後に
         //   自分の枠を描くため）。旧実装はハローを先に置いたため 5dp のハローが違反色 3dp を覆い、枠が
         //   白リングだけに見えていた。違反色を先（最前面）・ハローを後（背面）に: 外側3dp=違反色/内側2dp=ハロー。
-        this.border(3.dp, color, RoundedCornerShape(radiusDp))
+        this.border(MagiMarks.hardStroke, color, RoundedCornerShape(radiusDp))
             .then(if (halo != null) Modifier.border(5.dp, halo, RoundedCornerShape(radiusDp)) else Modifier)
     } else {
         this.drawBehind {
-            val stroke = 3.dp.toPx()
+            val stroke = MagiMarks.softStroke.toPx()
             val r = radiusDp.toPx()
             // 破線の下に実線ハロー（太め）を敷く: 破線の隙間・両脇がハロー色になり、同系色セル上でも読める。
             if (halo != null) {
@@ -1154,7 +998,7 @@ internal fun dayMD(startDate: String, j: Int): String = try {
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys) {
+internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys, nav: FixNav = FixNav()) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
@@ -1162,6 +1006,9 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
     val cs = MaterialTheme.colorScheme
     // [直せる導線] 違反セルをタップ→原因(必要/下限/上限/目標 と現在)を数字で提示し「直し方を探す」へ。
     var detail by remember { mutableStateOf<TallyDetailUi?>(null) }
+    // 「計（期間）」の人員の印をタップしたシフト。
+    var totalSheet by remember { mutableStateOf<Int?>(null) }
+    val covTotals = remember(vs) { shiftCoverageTotals(vs.coverageMarks) }
     // [3.479.0 復活] 職員別: perStaff[i][k] = スタッフ i がシフト k を担当した回数。
     //   3.477.0で職員別モードを撤去し編集タブのStaffShiftMatrixCardへ一本化したが、勤務表タブから
     //   編集タブを往復せず確認したいという実機要望を受け、シフト集計カード内トグルとして復活させた
@@ -1258,8 +1105,12 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                 }
                             }
                             // [D1] シフト別の期間合計（列合計）。グリッドの重複行を廃止しここへ集約。
-                            TallyBox(cw, rh, cs.surfaceVariant, false) {
-                                Text("${vs.counts.staffTotal(kk)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
+                            // そのシフトに人員不足▼・過剰▲の日があれば日数を添える（職員別セルと同じ字形。タップで日の一覧）。
+                            val ct = covTotals[kk]
+                            val totalBg = when { ct == null -> cs.surfaceVariant; ct.underDays.isNotEmpty() -> shortBg; else -> overBg }
+                            TallyBox(cw, rh, totalBg, false, onClick = if (ct != null) ({ totalSheet = kk }) else null,
+                                cd = ct?.let { "「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 人員 ${it.glyph}日・タップで詳細" }) {
+                                Text("${vs.counts.staffTotal(kk)}" + (ct?.glyph?.let { " $it" } ?: ""), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface, maxLines = 1)
                             }
                         }
                     }
@@ -1314,13 +1165,24 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 }
             }
             }   // if (open)
+            totalSheet?.let { kk ->
+                val ct = covTotals[kk]
+                if (ct != null) {
+                    val lines = ct.days.flatMap { j -> dayCoverageLines(ui, j, listOf(CoverageMark(kk, j in ct.underDays)), cv::needCellLimits).map { "${j + 1}日 $it" } }
+                    GridMarkDialog("「${ui.shiftSymbols.getOrNull(kk) ?: kk}」の人員", lines, onDismiss = { totalSheet = null }) {
+                        FixSearchPanel(ui, cv, FixFocus(null, kk, ct.days.first()), onEvent, nav, onApplied = { totalSheet = null })
+                    }
+                }
+            }
             detail?.let { d ->
                 AlertDialog(
                     onDismissRequest = { detail = null },
                     title = { Text(d.title) },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            // 開いた時点でこの職員×シフト（日別は日×シフト）の直し方を探し、ここに並べる（別タブへ行かない）。
+                            FixSearchPanel(ui, cv, FixFocus(d.focus, d.shift, d.day), onEvent, nav, onApplied = { detail = null })
                             // [3.492.0] データ修正の導線: 希望で固定している在勤者ごとに「希望を取り消す」。
                             //   実行中は編集不可（他の編集入口と同じ）。取り消しは Undo 可（applyStructure 経由）。
                             val dj = d.day
@@ -1349,10 +1211,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             }
                         }
                     },
-                    confirmButton = {
-                        DialogConfirmButton("直し方を探す", onClick = { val f = d.focus; val sh = d.shift; detail = null; onFix(f, sh) })
-                    },
-                    dismissButton = { DialogDismissButton(onClick = { detail = null }, text = "閉じる") },
+                    confirmButton = { DialogDismissButton(onClick = { detail = null }, text = "閉じる") },
                 )
             }
         }
@@ -1482,7 +1341,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null) {
+internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null, cv: ConditionsView? = null, onEvent: (MagiEvent) -> Unit = {}, fixNav: FixNav = FixNav(), editCell: Pair<Int, Int>? = null, sheetPx: Float = 0f) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1552,6 +1411,9 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     //   広いグリッドでどの行/列を触ったか見失いにくくする（読み間違い防止。ユーザー提示の改善案③）。
     //   セル自体の枠（違反表示）は変更しない＝タップした瞬間に違反枠が隠れて読めなくなるのを避ける。
     var tapped by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // 行末の回数の印／日ヘッダの人員の印をタップしたときの一覧（職員 i ／日 j）。
+    var staffSheet by remember { mutableStateOf<Int?>(null) }
+    var daySheet by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(tapped) { if (tapped != null) { kotlinx.coroutines.delay(2_500); tapped = null } }
 
     // [a11y] 生の Box.clickable セルは M3 の 48dp タッチ補完が効かないため、主操作セルの高さは 48dp を維持。
@@ -1583,6 +1445,19 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         val delta = if (above < 0f) above else if (below > 0f) below else 0f
         if (delta != 0f) sc.animateScrollBy(delta)
     }
+    // 編集中のセルをシートの直上へ（列は左に 2 日ぶん余白を残す）。
+    val cellWpxF = with(LocalDensity.current) { cellW.toPx() }
+    LaunchedEffect(editCell, sheetPx) {
+        val c = editCell ?: return@LaunchedEffect
+        hScroll.animateScrollTo(((c.second - 2) * cellWpxF).toInt().coerceAtLeast(0))
+        val sc = vScroll ?: return@LaunchedEffect
+        if (stickyTopPx < 0f) return@LaunchedEffect
+        snapshotFlow { bodyHpx }.first { it > 0f }
+        val top = bodyTopPx + c.first.coerceIn(0, staffCount - 1) * cellHpx
+        val want = stickyTopPx + sc.viewportSize - sheetPx - cellHpx * 0.5f
+        val delta = (top + cellHpx) - want
+        if (kotlin.math.abs(delta) > 1f) sc.animateScrollBy(delta)
+    }
     val headerBg = CardDefaults.cardColors().containerColor
     @Composable
     fun DayHeader(d: Int) {
@@ -1607,13 +1482,15 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         //   このセル列を最近タップしたとき、日ヘッダを primary 枠で注目表示
         //   （focusCell.first=-1 は「日のみ注目」＝どの行セルにも一致しない番兵）。約2.5秒で自動解除。
         val dayFocused = (focusCell != null && focusCell.first < 0 && focusCell.second == d) ||
-            (tapped?.second == d)
+            ((editCell ?: tapped)?.second == d)
+        val covMarks = vs.coverageMarks.getOrNull(d).orEmpty()
         Column(Modifier.width(cellW).height(headH)
             // [祝日色] 今日マーカーの日はテキスト色のみで示す（背景タグは重ねない＝混同回避）。
             .then(if (d != todayIdx && headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
             .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
             // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
-            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${d + 1}日 ${weekdayJa[dow]}曜日 ${holidayName[d]}" } else Modifier),
+            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${d + 1}日 ${weekdayJa[dow]}曜日 ${holidayName[d]}" } else Modifier)
+            .then(if (covMarks.isNotEmpty()) Modifier.clickable(onClickLabel = "人員の内訳") { daySheet = d } else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
             // [a11y] 荷重情報の「▼N ▲N」は別行のバッジに分離（曜日と混ざって潰れないように）。
@@ -1622,14 +1499,12 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             //   covU/covO由来なので 人員バケツON時のみ表示（種別フィルタと整合）。
             // [悲観検証P2+P7] 旧「不足N」(4文字)はフォント拡大時に38dp列からクリップ。集計凡例と
             //   同語彙の「▼N」(2-3文字)へ短縮し、サイズも列幅フィット(dp→sp)に。
-            val short = dayState.getOrNull(d)?.shortage ?: 0
-            val over = dayState.getOrNull(d)?.surplus ?: 0
-            if ((short > 0 || over > 0) && "need" in vioEnabled) {
-                Text(buildAnnotatedString {
-                    if (short > 0) withStyle(SpanStyle(color = cs.error, fontWeight = FontWeight.Bold)) { append("▼$short") }
-                    if (short > 0 && over > 0) append(" ")
-                    if (over > 0) withStyle(SpanStyle(color = vioSoftColor, fontWeight = FontWeight.Bold)) { append("▲$over") }
-                }, fontSize = headFontSize, maxLines = 1)
+            // 人員の印はシフトを名指す（「休▲」＝休の人員過剰、2 つ目以降は「+N」）。旧「▼N ▲N」は人数だけで
+            //   どのシフトかが読めなかった。人員チップが OFF なら vs.coverageMarks が空。
+            if (covMarks.isNotEmpty()) {
+                val under = covMarks.first().under
+                Text(coverageHeaderLabel(ui, covMarks), fontSize = headFontSize, maxLines = 1, overflow = TextOverflow.Clip,
+                    color = if (under) cs.error else ensureReadable(headerTint ?: cs.surface, vioSoftColor), fontWeight = FontWeight.Bold)
             }
             // [色覚配慮/3.543.0] 必須=実線・要調整=破線でセル枠(violationBorder)と同じ形状符号化を
             //   下線にも適用（旧: 色だけの違い＝DESIGN.md §2原則4の唯一の未対応箇所だった）。
@@ -1684,9 +1559,11 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             Column {
                 for (i in 0 until staffCount) {
                     // [行クロスハイライト] このセル行が最近タップされた対象なら淡い primary 背景で強調。
-                    val rowTapped = tapped?.first == i
+                    val rowTapped = (editCell ?: tapped)?.first == i
+                    val badge = vs.countBadges[i]
                     Row(Modifier.width(nameW).height(cellH)
                         .then(if (rowTapped) Modifier.background(cs.primary.copy(alpha = 0.12f)) else Modifier)
+                        .then(if (badge != null) Modifier.clickable(onClickLabel = "回数・偏りの内訳") { staffSheet = i } else Modifier)
                         .padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         // [グループ色帯] 左端4dp=所属グループ色（出現順に黄金角で自動割当）。行追跡の視線ガイド兼用。
                         val gi = groupOrder.indexOf(ui.staffGroupSymbols.getOrNull(i) ?: "").coerceAtLeast(0)
@@ -1697,7 +1574,11 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                         val nm = ui.staffNames.getOrNull(i) ?: "$i"
                         val hit = nameQuery.isNotBlank() && nm.contains(nameQuery, ignoreCase = true)
                         Text(nm, style = MaterialTheme.typography.bodySmall, color = if (hit) MagiAccent.blue else cs.onSurface,
-                            fontWeight = if (hit) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            fontWeight = if (hit) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false))
+                        // 回数の族（下限・上限・適切回数・個人の合計）はセルを持たないので名前の横に小さく ▼/▲。
+                        if (badge != null) Text(badge.glyph, fontSize = headFontSize, fontWeight = FontWeight.Normal, maxLines = 1,
+                            color = vioSoftColor)
                     }
                 }
             }
@@ -1710,8 +1591,10 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             val rawBg = if (k < 0) cs.surfaceVariant else (shiftColorsC.getOrNull(k) ?: cs.surfaceVariant)
                             val sym = ui.shiftSymbols.getOrNull(k) ?: ""
                             val vk = vioKind[i][d]; val wkk = wishKind[i][d]
+                            val editing = editCell?.first == i && editCell.second == d
                             val cellFocused = (focusCell?.first == i && focusCell.second == d) ||
-                                (focusRange != null && focusRange.first == i && d >= focusRange.second && d <= focusRange.third)
+                                (focusRange != null && focusRange.first == i && (editCell == null || editCell.first == i) &&
+                                    d >= focusRange.second && d <= focusRange.third)
                             // [集中モード] 違反・未反映希望・注目セル以外を淡色に沈める（非表示にはしない＝被覆の文脈は残す）。
                             val quiet = focusMode && vk == 0 && wkk != 2 && !cellFocused
                             val bg = if (quiet) rawBg.copy(alpha = 0.30f) else rawBg
@@ -1725,13 +1608,42 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") + "、タップで変更"
                             // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
                             val cellVioC = vioCls.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder) { tapped = i to d; onCellClick(i, d) }
+                            val secondC = vs.cellSecond.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing) { tapped = i to d; onCellClick(i, d) }
                         }
                     }
                 }
             }
         }
     }
+    staffSheet?.let { i ->
+        GridMarkDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountLines(ui, i, cv?.let { c -> c::staffCellLimits }), onDismiss = { staffSheet = null }) {
+            FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
+        }
+    }
+    daySheet?.let { j ->
+        val marks = vs.coverageMarks.getOrNull(j).orEmpty()
+        GridMarkDialog("${j + 1}日の人員", dayCoverageLines(ui, j, marks, cv?.let { c -> c::needCellLimits }), onDismiss = { daySheet = null }) {
+            marks.firstOrNull()?.let { m -> FixSearchPanel(ui, cv, FixFocus(null, m.shift, j), onEvent, fixNav, onApplied = { daySheet = null }) }
+        }
+    }
+}
+
+/** 行末・日ヘッダの印の内訳（読むだけ。直すのはセルのタップから）。 */
+@Composable
+private fun GridMarkDialog(title: String, lines: List<String>, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (lines.isEmpty()) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodyMedium)
+                lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                extra()
+            }
+        },
+        confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
+    )
 }
 
 @Composable
@@ -1739,7 +1651,7 @@ private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
     bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false,
     symSize: androidx.compose.ui.unit.TextUnit = 15.sp, focused: Boolean = false, wishSym: String = "",
-    plainBorder: Boolean = false, onClick: () -> Unit,
+    plainBorder: Boolean = false, secondDot: Color? = null, editing: Boolean = false, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     Box(Modifier.width(w).height(h).padding(1.5.dp)) {
@@ -1750,6 +1662,7 @@ private fun FlatCell(
                 //   隣接セル同士を切り分けやすくなるが、格子全体が線で埋まり違反枠が目立ちにくくなるため。
                 // [判読性] 枠は 1=実線(必須)/2=破線(重い調整)のみ。3=軽い調整は右上の角マークに落とし飽和を防ぐ。
                 .then(when {
+                    editing -> Modifier.border(5.dp, cs.surface, RoundedCornerShape(6.dp)).border(4.dp, cs.primary, RoundedCornerShape(6.dp))
                     focused -> Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp))   // [ジャンプ] 注目セル
                     // [枠のハロー] 違反色と同系色のセル背景でも枠が埋没しないよう surface の縁取りを敷く。
                     vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp, halo = cs.surface)
@@ -1767,11 +1680,16 @@ private fun FlatCell(
             // [判読性] 軽いソフト違反(vk=3)＝右上の角マーク（枠より静かな手がかり。色＋位置の二重符号化）。
             // [悲観検証P3] 9dp→12dp＋斜辺に surface のハロー縁取り。直射日光下・任意のシフト色上でも消えないように。
             if (vk == 3) {
-                Box(Modifier.align(Alignment.TopEnd).padding(1.5.dp).size(12.dp).drawBehind {
+                Box(Modifier.align(Alignment.TopEnd).padding(1.5.dp).size(MagiMarks.softCorner).drawBehind {
                     val p = Path().apply { moveTo(0f, 0f); lineTo(size.width, 0f); lineTo(size.width, size.height); close() }
                     drawPath(p, cs.surface, style = Stroke(width = 2.dp.toPx()))
                     drawPath(p, vioSoftColor)
                 })
+            }
+            // 最重の族に隠れた別の族がある＝左上の小さな点（枠は 1 つしか描けないので、重なりを見つける手掛かり）。
+            if (secondDot != null) {
+                Box(Modifier.align(Alignment.TopStart).padding(2.dp).size(8.dp)
+                    .background(cs.surface, CircleShape).padding(1.5.dp).background(secondDot, CircleShape))
             }
             // [希望バッジ] 未反映（割付≠希望）= 希望シフトの記号を桃色バッジで左下に重ねる（ユーザー指示。
             //   旧: 桃ドットのみで希望の中身が読めなかった）。反映済は従来どおり青緑リング（控えめ・情報は割付記号と同じ）。
@@ -1799,3 +1717,62 @@ private fun FlatCell(
     }
 }
 
+
+/** 印・セルのシートの行き先（手が見つからなかったときの次の一歩）。 */
+internal class FixNav(val onWishes: (Int?) -> Unit = {}, val onSettings: (String) -> Unit = {})
+
+/**
+ * シートを開いた時点でその対象（職員×シフト・日×シフト・セル）の直し方を探し、同じシートの中に
+ * 進み具合 → 見つかった手（「この手を使う」）→ 無ければ確かめた理由と次の一歩、を出す。
+ * 盤面が変われば探し直し、シートを閉じれば探索を取り消す（古い結果を書き戻さない）。
+ */
+@Composable
+internal fun FixSearchPanel(
+    ui: UiState, cv: ConditionsView?, focus: FixFocus, onEvent: (MagiEvent) -> Unit,
+    nav: FixNav, onApplied: () -> Unit,
+    compact: Boolean = false,   // セル編集シートの上段: 手は 1 件・理由は 2 行まで
+) {
+    val cs = MaterialTheme.colorScheme
+    LaunchedEffect(focus.key, ui.schedule) {
+        if (!ui.running) onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null }))
+    }
+    DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
+    val done = !ui.fixSearching && ui.fixDoneKey == focus.key
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (!compact) Text("直し方", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        when {
+            ui.running -> Text("計算中は探せません。終わってから開き直してください。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            !done -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text("この場所の直し方を探しています…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            ui.fixSuggestions.isNotEmpty() -> ui.fixSuggestions.take(if (compact) 1 else 3).forEach { s ->
+                val (tag, tagColor) = fixKindTag(s.kind)
+                Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MagiTagChip(text = tag, color = tagColor)
+                            Text(s.label, style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
+                        }
+                        val (hardLine, caution) = fixImpactLines(s)
+                        Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
+                        caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                        Button(onClick = { onEvent(MagiEvent.Board.ApplyFixSuggestion(s)); onApplied() }, enabled = !ui.running,
+                            modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text("この手を使う（元に戻せます）") }
+                    }
+                }
+            }
+            else -> {
+                val why = remember(ui.schedule, ui.wishes, focus.key, cv) {
+                    noFixReasons(ui, focus, cv?.let { c -> c::staffCellLimits }, cv?.let { c -> c::needCellLimits })
+                }
+                if (compact) Text(why.lines.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                else why.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (why.wishRelated) OutlinedButton(onClick = { nav.onWishes(focus.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                    OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                }
+            }
+        }
+    }
+}

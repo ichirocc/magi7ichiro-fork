@@ -2220,8 +2220,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             hasResult = true,
             engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
-            message = "${st.staff.getOrNull(i)?.name ?: i} / ${j + 1}日 を ${st.shifts.getOrNull(shift)?.kigou ?: shift} に変更",
-        ) }
+            message = cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
+        ).let { u -> u.copy(undoableMessage = u.message) } }
         logOp("I", "編集: ${opNm(i)} ${j + 1}日 → ${opSy(shift)}")
         refreshCheck()
     }
@@ -2609,7 +2609,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var fixBoardKey = 0L
     private var fixStateKey = 0L
 
-    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null) {
+    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
@@ -2622,11 +2622,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   `fixSearching=true` を立てた**後**に古いジョブの後始末が走ると、新しい探索の旗を消してしまう。
         val seq = ++fixSeq
         fixJob?.cancel()   // 連続タップ時の前探索を破棄（古い結果で UI を上書きしない）
-        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName) }
+        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "") }
         fixJob = viewModelScope.launch {
             try {
                 val list = withContext(Dispatchers.Default) {
-                    FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8)
+                    if (exceptStaff != null && day != null) {
+                        fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40), day, exceptStaff).take(8)
+                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8)
                 }
                 if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
                 // 盤面を差し替えるジョブの最中は書き戻さず探し直しもしない（完了後の盤面で探し直す）。
@@ -2636,10 +2638,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val curSched = currentSchedule; val curSt = state
                 if (curSched == null || curSt == null || boardKey(curSched) != boardKey(snap) || stateKey(curSt) != stateKey(st)) {
                     _ui.update { it.copy(fixSearching = false) }
-                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift)
+                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day)
                     return@launch
                 }
-                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName, fixSearched = focusName.isBlank()) }
+                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
             } catch (e: CancellationException) {
                 if (seq == fixSeq) _ui.update { it.copy(fixSearching = false) }
                 throw e
@@ -2651,7 +2653,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 走行中の直し方の探索を捨てる（世代を進めるので、完了間際の結果も書き戻さない）。 */
-    private fun cancelFixSearch() {
+    fun cancelFixSearch() {
         ++fixSeq
         fixJob?.cancel()
         fixJob = null
@@ -3097,6 +3099,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             countFamilies = report.countFamilies,
             needFamilies = report.needFamilies,
             distLocations = report.distLocations,
+            c1Runs = report.c1Runs,
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },
