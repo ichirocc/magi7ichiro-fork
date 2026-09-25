@@ -36,6 +36,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 
 **最終更新**：2026-09-25（backlog #38: `Staff.skillIdx` の既定を −1（未所属）へ、最初のスキル群を作るとき全員を未所属に＝既定出力不変）
 
+**最終更新**：2026-09-25（実データ精読の是正・UI 層: S5 の候補に希望どうしの衝突の兄弟の希望、設定の見直しの一覧に「すべて表示」）
+
 **最終更新**：2026-09-25（実データ精読の是正・エンジン層: MUS 日別の誤「証明つき」を解消、希望どうしの禁止の並びの診断 1c と `wishSelfConflicts`、HF70・残存分析の仕分け＝既定出力不変）
 
 **最終更新**：2026-09-25（既定OFF台帳の整理⑬: 否決済み `roleBudgetFit` と `rsiPlusPhaseBudgets` を撤去＝既定出力不変、C# 同日同期）

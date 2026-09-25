@@ -204,12 +204,13 @@ internal const val WISH_TRIAL_GROUP_LIMIT = 8
 /**
  * [S5] 試算の候補（`docs/s5_wish_trial.md` §2.2・§2.3）。S5a＝必須違反に関わる希望を (職員, 日) で重複除去し、
  * 代表の理由を pref＞c3w＞c3n で選ぶ（他は「ほか: …」）。c3w は翌日の希望 X と、印の付く前日自身が wishLocked の希望 Y の両方。
+ * 満たされない希望が希望どうしの衝突（`UiState.wishSelfConflicts`）の組に入っていれば、組のほかの希望も S5a の行にする（§2.2）。
  * S5b＝人手不足の枠の `wishPinned`（日→シフト、職員順）。S5a と重なる (職員, 日) は S5a を代表にし「ほか: 人手不足の日」を足す。
  */
 internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
     // 優先度（小さいほど代表）と「ほか」に出す短い名前。
     class Hit(val staff: Int, val day: Int, val prio: Int, val reason: String)
-    val short = listOf("希望の勤務になっていない", "前日の禁止", "禁止の並び")
+    val short = listOf("希望の勤務になっていない", "前日の禁止", "禁止の並び", "希望どうし")
     val hits = ui.violationCellFamilies.flatMap { (key, fams) ->
         val parts = key.split(",")
         val i = parts.getOrNull(0)?.toIntOrNull() ?: return@flatMap emptyList()
@@ -223,11 +224,18 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
             if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(Hit(i, j, 2, "希望が禁止の並びに掛かっています"))
         }
     }
+    val hitKeys = hits.map { it.staff to it.day }.toSet()
+    val prefKeys = ui.violationCellFamilies.filterValues { "vio-pref" in it }.keys
+    val siblings = ui.wishSelfConflicts.filter { g -> g.wishKeys.any { it in prefKeys } }.flatMap { g ->
+        val pat = g.shifts.joinToString("→") { ui.shiftSymbols.getOrNull(it) ?: "?" }
+        val reason = if (g.family == "c3w") "希望どうしが前日の禁止「$pat」に当たっています" else "希望どうしが禁止の並び「$pat」を作っています"
+        g.days.filter { (g.staff to it) !in hitKeys }.map { Hit(g.staff, it, 3, reason) }
+    }.distinctBy { it.staff to it.day }
     val pinned = ui.coverageDiag?.shortfalls.orEmpty().filter { it.wishPinned.isNotEmpty() }
         .sortedWith(compareBy({ it.dayIndex }, { it.shiftIndex }))
     val pinnedKeys = pinned.flatMap { s -> s.wishPinned.map { it to s.dayIndex } }.toSet()
     fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
-    val direct = hits.groupBy { it.staff to it.day }.map { (sd, hs) ->
+    val direct = (hits + siblings).groupBy { it.staff to it.day }.map { (sd, hs) ->
         val rep = hs.minBy { it.prio }
         val others = hs.map { it.prio }.distinct().filter { it != rep.prio }.sorted().map { short[it] } +
             (if (sd in pinnedKeys) listOf("人手不足の日") else emptyList())

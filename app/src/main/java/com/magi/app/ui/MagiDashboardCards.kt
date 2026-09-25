@@ -118,7 +118,7 @@ internal fun WishConflictDialog(
     onRebuild: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val cands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.coverageDiag, ui.staffNames, ui.shiftSymbols) {
+    val cands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag, ui.staffNames, ui.shiftSymbols) {
         wishTrialCandidates(ui)
     }
     // 閉じる・行を押してセルへ移る・Activity の作り直し、どの閉じ方でもここ 1 か所で試算を止める（§8）。
@@ -349,7 +349,7 @@ internal fun OperatorNextActionCard(
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
     // [S5 §2.1] 関わる希望（S5a の行か S5b の行）があるか。WISH・FLOOR の分岐がこれを見る。
-    val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.coverageDiag) { wishTrialCandidates(ui) }
+    val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui) }
     val shortDays = ui.coverageDiag?.shortfalls?.map { it.dayIndex }?.distinct()?.size ?: 0
     val worstDay = ui.coverageDiag?.shortfalls?.firstOrNull()?.dayLabel
     // 充足不可の S5b 版は重複除去の前（S5a の行に畳まれた人も含む）で決め、例の日も希望で固定された人がいる枠から取る。
@@ -1011,6 +1011,7 @@ internal fun SettingIssuesCard(
     // ①「担当外の希望」は同型行がまとまりやすいので一括クリアを先頭に置く ②一覧は既定折りたたみ
     // （DiagDetailToggle・付随事項として扱う）へ。
     var detailOpen by remember { mutableStateOf(false) }
+    var showAll by remember { mutableStateOf(false) }
     val wishClearCount = issues.count {
         it.kind == com.magi.app.v6.IssueKind.WISH && it.action == com.magi.app.v6.SettingFixAction.REMOVE_WISH
     }
@@ -1027,7 +1028,8 @@ internal fun SettingIssuesCard(
                 closedText = "ⓘ 一覧を見る（${issues.size}件）", openText = "ⓘ 一覧を閉じる",
             )
             if (detailOpen) {
-                for (s in issues.take(6)) {
+                val shown = if (showAll) issues else issues.take(SETTING_ISSUE_PREVIEW)
+                for (s in shown) {
                     val label: String
                     val tagColor: androidx.compose.ui.graphics.Color
                     when (s.kind) {
@@ -1052,14 +1054,19 @@ internal fun SettingIssuesCard(
                         }
                     }
                 }
-                if (issues.size > 6) {
-                    // [誘導] 重要な順に整列済み。届かない「ログ出力」ではなく、上から直せば解消する旨を案内。
-                    Text("ほか ${issues.size - 6} 件（重要な順に表示中。まず上から直してください）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                }
+                if (shown.size < issues.size) SettingIssuesShowAll(issues.size - shown.size) { showAll = true }
             }
             OutlinedButton(onClick = { onGoEdit(issues.firstOrNull()?.kind) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定・希望を編集する") }
         }
     }
+}
+
+/** 設定の見直しの一覧で最初に出す件数（重要な順に整列済み）。残りは [SettingIssuesShowAll] で開く。 */
+internal const val SETTING_ISSUE_PREVIEW = 6
+
+@Composable
+internal fun SettingIssuesShowAll(hidden: Int, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text("すべて表示（ほか ${hidden}件）") }
 }
 
 @Composable

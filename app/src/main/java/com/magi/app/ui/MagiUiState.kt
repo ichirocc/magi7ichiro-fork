@@ -98,6 +98,7 @@ data class UiState(
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
     val lockedWishKeys: Set<String> = emptySet(),   // [S5] wishLocked の希望のキー（試算できる希望）
+    val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
     val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
     val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して、もう一度つくる」の結果（表示は vm.wishCancelOutcomeLine）

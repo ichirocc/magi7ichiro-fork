@@ -3,6 +3,7 @@ package com.magi.app.ui
 import com.magi.app.v6.CoverageDiagnosis
 import com.magi.app.v6.CoverageShortfall
 import com.magi.app.v6.CoverageVerdict
+import com.magi.app.v6.WishSelfConflict
 import com.magi.app.v6.WishTrial
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -45,6 +46,55 @@ class WishTrialCandidatesTest {
     @Test fun t9_c3wWithoutLockedYListsOnlyX() {
         val ui = UiState(staffNames = listOf("山田"), violationCellFamilies = mapOf("0,1" to listOf("vio-c3w")), lockedWishKeys = setOf("0,2"))
         assertEquals(listOf(2), wishTrialCandidates(ui).direct.map { it.day })
+    }
+
+    // 実データ（古泉 10/25-27 の休の希望と「休→休→休」禁止、福澤 10/1 Dﾃ・10/2 休と前日の禁止）の形。
+    private val selfUi = UiState(
+        staffNames = listOf("古泉", "福澤"),
+        shiftSymbols = listOf("休", "日", "Dﾃ"),
+        wishes = mapOf("0,24" to 0, "0,25" to 0, "0,26" to 0, "1,0" to 2, "1,1" to 0),
+        lockedWishKeys = setOf("0,24", "0,25", "0,26", "1,0", "1,1"),
+        wishSelfConflicts = listOf(
+            WishSelfConflict(0, "c3n", listOf(24, 25, 26), listOf(0, 0, 0)),
+            WishSelfConflict(1, "c3w", listOf(0, 1), listOf(2, 0)),
+        ),
+    )
+
+    @Test fun t9_prefCellInWishSelfConflictListsItsSiblingWishes() {
+        val ui = selfUi.copy(violationCellFamilies = mapOf("0,24" to listOf("vio-pref"), "1,1" to listOf("vio-pref")))
+        assertEquals(listOf(
+            WishTrialRow(0, 24, "古泉", "希望の勤務になっていません", true),
+            WishTrialRow(0, 25, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true),
+            WishTrialRow(0, 26, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true),
+            WishTrialRow(1, 0, "福澤", "希望どうしが前日の禁止「Dﾃ→休」に当たっています", true),
+            WishTrialRow(1, 1, "福澤", "希望の勤務になっていません", true),
+        ), wishTrialCandidates(ui).direct)
+    }
+
+    @Test fun t9_selfConflictWithoutPrefCellAddsNothing() {
+        // 並びが成立している（c3n の印が窓の全セル）＝行は今までどおり。pref の無い組は兄弟を足さない。
+        val ui = selfUi.copy(violationCellFamilies = mapOf("0,24" to listOf("vio-c3n"), "0,25" to listOf("vio-c3n"), "0,26" to listOf("vio-c3n")))
+        assertEquals(listOf(24, 25, 26), wishTrialCandidates(ui).direct.map { it.day })
+        assertEquals(setOf("希望が禁止の並びに掛かっています"), wishTrialCandidates(ui).direct.map { it.reason }.toSet())
+        assertEquals(emptyList<WishTrialRow>(), wishTrialCandidates(selfUi).direct)
+    }
+
+    @Test fun t9_siblingRowsDedupeAcrossOverlappingWindowsAndWithShortfall() {
+        // 休の希望 4 連日＝窓 [1,2,3] と [2,3,4]。2日が崩れると兄弟は 1・3・4日 を 1 行ずつ。4日 は人手不足の枠にも出る＝S5a が代表。
+        val ui = UiState(
+            staffNames = listOf("大島"), shiftSymbols = listOf("休", "日"),
+            wishes = (1..4).associate { "0,$it" to 0 }, lockedWishKeys = (1..4).map { "0,$it" }.toSet(),
+            wishSelfConflicts = listOf(
+                WishSelfConflict(0, "c3n", listOf(1, 2, 3), listOf(0, 0, 0)),
+                WishSelfConflict(0, "c3n", listOf(2, 3, 4), listOf(0, 0, 0)),
+            ),
+            violationCellFamilies = mapOf("0,2" to listOf("vio-pref")),
+            coverageDiag = CoverageDiagnosis(1, 1, 0, listOf(shortfall(4, 1, listOf(0))), emptyList()),
+        )
+        val c = wishTrialCandidates(ui)
+        assertEquals(listOf(1, 2, 3, 4), c.direct.map { it.day })
+        assertEquals("希望どうしが禁止の並び「休→休→休」を作っています（ほか: 人手不足の日）", c.direct.last().reason)
+        assertEquals(emptyList<ShortfallWishGroup>(), c.shortfall)
     }
 
     private fun r(h0: Int, hx: Int, rk: Int, rr: Int): WishTrial.Result {

@@ -414,6 +414,7 @@ internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, 
     val issues = ui.settingIssues.size
     // [3.483.0 E-3] 入力診断の中身をこの場で開く（旧「（ホームに詳細）」＝ホームへ往復させていた）。
     var issuesOpen by rememberSaveable { mutableStateOf(false) }
+    var issuesAll by rememberSaveable { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
@@ -425,12 +426,12 @@ internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, 
                 onClick = if (issues > 0) ({ issuesOpen = !issuesOpen }) else null)
             if (issuesOpen && issues > 0) {
                 val cs = MaterialTheme.colorScheme
-                ui.settingIssues.take(6).forEach { iss ->
+                val shown = if (issuesAll) ui.settingIssues else ui.settingIssues.take(SETTING_ISSUE_PREVIEW)
+                shown.forEach { iss ->
                     Text("・${iss.where}：${iss.problem}", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(start = 12.dp))
                 }
-                if (issues > 6) Text("ほか${issues - 6}件（ホームの設定見直しに全件）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp))
+                if (shown.size < issues) SettingIssuesShowAll(issues - shown.size) { issuesAll = true }
             }
             // [3.482.0 導線重複] 旧「▶ 勤務表をつくる」ボタンは撤去。同じ画面の固定フッター（BottomCommandBar）に
             //   常設の同名ボタンがあり、1画面に作成導線が3つ（案内文・このボタン・フッター）並んでいた。

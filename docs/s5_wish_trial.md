@@ -51,6 +51,12 @@
 - 試算できるのは **`wishLocked` の希望だけ**。担当できない勤務の希望（c3n の行だけに紛れうる。pref と c3w の行は常に wishLocked）は、
   試算ボタンを出さずに「担当できない勤務の希望なので、取り消しても勤務表は変わりません。」と 1 行出す。
   wishLocked かどうかは画面では分からないので、makeUi が `lockedWishKeys`（`Problem.wishLocked` の集合）を UiState に載せる。
+- **希望どうしの衝突の兄弟の行**（2026-09-25、実データ精読 N4）: 満たされない希望（pref）のセルが希望どうしの衝突の組
+  （`V6SanityPort.wishSelfConflicts`＝禁止の並びの窓がまるごと、または希望の前日の禁止の 2 日が、希望固定でその並びどおり）に入っていれば、
+  組のほかの希望も行にする。理由は c3n の組が「希望どうしが禁止の並び「休→休→休」を作っています」、c3w の組が「希望どうしが前日の禁止「Dﾃ→休」に当たっています」。
+  例: 古泉 10/25〜27 の休の希望と禁止「休→休→休」で 10/25 が pref のとき、10/26・10/27 も並ぶ（どれを取り消しても必須 −1、実測 2/2）。
+  ほかの理由で既に行がある (職員, 日) には足さない。S5b との重複は今と同じく S5a が代表。組は makeUi が `wishSelfConflicts` として UiState に載せる
+  （盤面に依存しない）。pref の無い組（並びが成立して c3n の印が窓の全セルに付く）は今までの c3n の行のまま。
 
 ### 2.3 人手不足の日の希望（S5b、§14 A で最初から含める）
 - 行の条件: 人員不足（covU）が残る枠 (日 j, シフト k) について、職員 i が `mayPlace(i, k)`（担当できて個人上限 0 でない）かつ
@@ -244,7 +250,7 @@ Undo が 2 段になり、1 回目の Undo は「希望なし＋元の盤面」�
   wishPinned がある INFEASIBLE 枠の理由は「いまの希望のままでは…」、無い枠は今の文のまま。
 - T8（補強）共有 fixture（sample_state_v6.json＋希望 1〜2 件）の (H0, Hx, Rk, Rr, a, b) を期待値ファイルにし、`CrossLanguageFixtureTest` と同じ形で
   両言語から読んで一致を確かめる。
-- T9 候補の重複除去と代表理由（pref＞c3w＞c3n・「ほか」）・担当外の行・c3w の Y の行・S5b の行（S5a との重複は S5a を代表）、T10 §5 の表の 7 通り → 文言（純粋関数、`InvolvedWishesTest` ↔ `NextActionGuideTest`）。
+- T9 候補の重複除去と代表理由（pref＞c3w＞c3n・「ほか」）・担当外の行・c3w の Y の行・S5b の行（S5a との重複は S5a を代表）・希望どうしの衝突の兄弟の行、T10 §5 の表の 7 通り → 文言（純粋関数、`InvolvedWishesTest` ↔ `NextActionGuideTest`）。
   新しいファイルに置くなら `tools/host/hosttest.sh` の一覧に足す。
 VM（C# の MagiApp.ViewModels.Tests。Kotlin の VM は AndroidViewModel でホストでは回らない）:
 - V1 確定 → Undo 1 回で希望と盤面が両方戻る。V2 古い試算（盤面・希望・state の差し替え）での確定は何も変えない。
