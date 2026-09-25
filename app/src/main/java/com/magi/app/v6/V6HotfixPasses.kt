@@ -326,9 +326,6 @@ object V6HotfixPasses {
         /** [3.580.0/測定中/backlog#26] c2PolishEnabledがOFFでも、c2違反が残っている局面でだけ試す。既定 OFF。 */
         val c2PolishReactivate: Boolean = false,
         val c2Passes: Int = 3,
-        /** [3.511.5/測定中] 群/日レンジ(c41/c41s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
-        val c41FlowPolishEnabled: Boolean = false,
-        val c41FlowPasses: Int = 3,
         /** [3.511.7/測定中] 群ペア禁止(c42/c42s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
         val c42FlowPolishEnabled: Boolean = false,
         /** [3.580.0/測定中/backlog#26] c42FlowPolishEnabledがOFFでも、c42/c42s違反が残っている局面でだけ試す。既定 OFF。 */
@@ -829,11 +826,6 @@ object V6HotfixPasses {
             take("range玉突き", chain.timed("後処理 個人回数(low/high)玉突き研磨$tag", "RangePolish") { work ->
                 RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
             })
-            if (params.c41FlowPolishEnabled) {
-                take("c41フロー", chain.timed("後処理 群/日レンジ(c41/c41s)フロー研磨$tag", "C41FlowPolish") { work ->
-                    C41FlowPolish.applyC41FlowPolish(state, work, maxPasses = params.c41FlowPasses, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                })
-            }
             take("c3run玉突き", chain.timed("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨$tag", "C3RunPolish") { work ->
                 C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round), quantitativeRangeEval = params.quantitativeRangeEval)
             })

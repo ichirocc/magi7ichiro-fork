@@ -13,7 +13,7 @@ import org.junit.Test
  * C42FlowPolish の検証。群ペア禁止(c42)違反を、片側固定のヤコビ近似(g1側/g2側の対称2試行)で
  * min-cost-flow 再配分して解消する。
  *
- * テスト設計の教訓（C41FlowPolishTest/C2PolishTest と同型）: 群の人数が奇数だと、可動メンバーを寄せる手が
+ * テスト設計の教訓（C2PolishTest と同型）: 群の人数が奇数だと、可動メンバーを寄せる手が
  * 群内の`fair`（公平化）を新規に悪化させ相殺されて却下される。両群とも人数=2で回避した。
  */
 class C42FlowPolishTest {

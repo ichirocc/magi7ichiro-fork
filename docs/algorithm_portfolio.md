@@ -182,7 +182,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | 機構（コード上の既定 false / 0 / 1） | 一行の意味 | 測定・経緯 |
 |---|---|---|
 | `Params.c2PolishEnabled`／`c2PolishReactivate` | 職員別合計（c2）の専用研磨／巡末の再起動 | iter15 不合格・3.524.0、iter_c2reactivate（backlog #12(b)・#26） |
-| `Params.c41FlowPolishEnabled`／`c42FlowPolishEnabled`／`c42FlowPolishReactivate` | 群/日範囲 c41・c42 の最小費用フロー研磨 | 3.511.5 iter16 不合格／3.511.7 iter18 同等／iter_c42reactivate（#12(b)・#26・#31） |
+| `Params.c42FlowPolishEnabled`／`c42FlowPolishReactivate` | 群ペア禁止 c42 の最小費用フロー研磨（Reactivate は backlog でコード保持と明記） | 3.511.7 iter18 同等／iter_c42reactivate（#12(b)・#26・#31） |
 | `Params.quantitativeRangeEval`／`V6OptimizerOptions.quantitativeRangeEval`／`Problem(quantitativeRangeEval)` | C2・C41/C41s を不足量・超過量で評価 | 3.512.0 iter21 不合格（#12(a)・#14(d)） |
 | `Params.c1ComponentRepair`／`c1ComponentRepairReactivate` | C1 成分修復 | 3.586.0 実データ4件 ON=OFF（#26） |
 | `Params.c3nMarginLnsEnabled`／`c3nMarginLnsReactivate` | c3n 余裕日の LNS 研磨 | 3.586.0 実データ4件 ON=OFF（#26） |
@@ -222,6 +222,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `PostOptimizationParams.c41FlowPolishEnabled`／`c41FlowPasses`（群/日範囲 c41 の最小費用フロー研磨 C41FlowPolish） | 既定経路（フラグごと撤去） | 3.511.5 iter16 不合格。2026-09-25 撤去（Kotlin のみ、C# 未移植）＝既定出力不変。c42 側は Reactivate の保持明記により残す |
 | `PostOptimizationParams.c3PairMaskEnabled`（連続規則の選択日ペア交換 C3PairMaskPolish） | 既定経路（フラグごと撤去） | 3.510.0 iter8 不合格。2026-09-25 撤去（Kotlin のみ、C# 未移植）＝既定出力不変 |
 | `PostOptimizationParams.covOReliefEarly`（covO 退避を HF66 直後にも） | 既定経路（フラグごと撤去） | 3.554.0 配置 A/B で必須増 4＝不合格（最終段だけを採用）。2026-09-25 撤去（Kotlin・C#）＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `SaParams.officialTieBreak`＋`TieBreakBench`（SA の HARD 同点を公式 weightedScore で追跡） | 既定経路（フラグごと撤去） | 3.571.0 40 走行で勝ち 0（#19）。2026-09-25 撤去＝選定に触れない計測専用、SaOptimizer.kt は導入前とバイト一致。 |

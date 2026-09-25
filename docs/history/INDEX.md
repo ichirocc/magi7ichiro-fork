@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- 既定OFF台帳の整理⑩（2026-09-25）: 否決済み `c41FlowPolishEnabled`＋`C41FlowPolish` を撤去（c42 側は保持明記で残す）、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
+
 - 既定OFF台帳の整理⑨（2026-09-25）: 否決済み `c3PairMaskEnabled`＋`C3PairMaskPolish` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
 
 - handleOptimize に任意の `seed` 引数（2026-09-25）: 既定 null＝従来の時刻由来で出力不変、ベンチ用。backlog #38 D2（skillIdx 既定 0）・#39 SI-3（C1 初期解のシフト順依存）を登録（C# 同期）。  → `docs/history/3.4xx.md`

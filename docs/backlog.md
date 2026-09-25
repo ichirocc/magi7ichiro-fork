@@ -420,7 +420,7 @@
     がほとんど発生しないということで、当初の「実害は未確認」と整合する。フラグは将来の再評価用に残す
     （腕キー`dayassignidentityfallback`、CSVは`tools/loop/results/`）。
 
-31. **[既定OFF・実害小] `C41FlowPolish`/`C42FlowPolish`のbaseCountが群外の職員も数える**（外部提案、
+31. **[既定OFF・実害小] `C42FlowPolish`のbaseCountが（`C41FlowPolish` は 2026-09-25 撤去）群外の職員も数える**（外部提案、
     2026-09-17・実コード確認済み）。群スコープのレンジ制約コストに使う人数集計が、動かす職員以外の
     **全職員**を数えており、対象群のメンバーだけを数えるべき箇所で他群の配置が「満たしている」ように
     誤誘導する。両パスとも既定OFFの実験腕（tools/loopでベンチ済み・不採用、`docs/backlog.md`記録済み）

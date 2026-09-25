@@ -87,13 +87,11 @@ WEIGHT_LINT_EXEMPT = {
     ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "(lo - c).toLong() * 120L"):
         (("low",), "low(120) の複製。weights.md 明記の既知重複（同関数のhigh(25)・apt(4)と同型）"),
     ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "* 10000L + p.covOCell"):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
-    ("app/src/main/java/com/magi/app/v6/C41FlowPolish.kt", "p.covUCell("):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
     ("app/src/main/java/com/magi/app/v6/C42FlowPolish.kt", "p.covUCell("):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
     ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "* 10000L + p.covOCell"):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
     # [偽陽性/族名と無関係な偶然の一致＝族名タプルは空。値そのものの継続一致は検証しない]
     ("app/src/main/java/com/magi/app/v6/C1JointLnsPolish.kt", "50 + deficit, GoalKind.RANGE_LOW"):
         ((), "50 は GoalKind別の内部優先順位オフセット（C1=100/TEMPORAL=150/COVERAGE=200/RANGE_LOW=50、"
