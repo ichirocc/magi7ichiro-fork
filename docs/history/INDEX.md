@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog #36 走行 keep-best を末尾だけにする案（2026-09-25）: `postChainKeepBestFinalOnly` 勝11/負36 p=0.0003＝不合格、既定 OFF。  → `docs/history/3.4xx.md`
+
 - 既定OFF台帳の整理⑧（2026-09-25）: 否決済み `covOReliefEarly` を撤去（C# 同期）、盤面ハッシュ 8/8 一致。今回の上限 8 件で終了。  → `docs/history/3.4xx.md`
 
 - 既定OFF台帳の整理⑦（2026-09-25）: 否決済み `SaParams.officialTieBreak`＋TieBreakBench を撤去、SaOptimizer は導入前とバイト一致。  → `docs/history/3.4xx.md`

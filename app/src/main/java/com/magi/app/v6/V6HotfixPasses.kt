@@ -201,6 +201,9 @@ object PolishGate {
 
     /** [N9] PostChain の keep-best で巻き戻したパスの採用数を 0 と数える。既定 **false**（docs/backlog.md #36）。 */
     @Volatile var postChainRollbackCountsZero: Boolean = false
+
+    /** [#36] 走行 keep-best をパス間で巻き戻さず、チェーン末尾（HF70 の前）で最良盤面へ 1 回だけ戻す。既定 **false**（docs/backlog.md #36）。 */
+    @Volatile var postChainKeepBestFinalOnly: Boolean = false
 }
 
 /**
@@ -378,6 +381,8 @@ object V6HotfixPasses {
         val postChainRunningKeepBestAcceptTies: Boolean = false,
         /** [N9] 巻き戻したパスの採用数を 0 と数える（巡の打ち切り判定・停滞検知へ流れる値）。既定は [PolishGate.postChainRollbackCountsZero]。 */
         val postChainRollbackCountsZero: Boolean = PolishGate.postChainRollbackCountsZero,
+        /** [#36] 既定は [PolishGate.postChainKeepBestFinalOnly]。 */
+        val postChainKeepBestFinalOnly: Boolean = PolishGate.postChainKeepBestFinalOnly,
         /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
         val componentRepairFinal: Boolean = true,
         /** [Iteration 7] 決定的モード＝時間（ms キャップ・締切・残り時間の判定）でなく回数で止める。同じ入力・seed なら同じ盤面。
@@ -471,6 +476,7 @@ object V6HotfixPasses {
         initialReport: ViolationReport? = null,
         private val acceptTies: Boolean = false,
         private val rollbackCountsZero: Boolean = false,
+        private val finalOnly: Boolean = false,
     ) {
         private val runningKeepBest: Boolean =
             runningKeepBest && V6SanityPort.structuralHardFloor(state, cachedProblem(state, quantitativeRangeEval)) == 0
@@ -513,10 +519,21 @@ object V6HotfixPasses {
                 bestWork = work.copy2D()
                 return passLogs
             }
-            if (work.contentDeepEquals(bestWork)) return passLogs   // 無変更のパスは巻き戻していない＝印を付けない
+            if (finalOnly || work.contentDeepEquals(bestWork)) return passLogs   // 無変更のパスは巻き戻していない＝印を付けない
             work = bestWork.copy2D()
             lastFoldRolledBack = true
             return passLogs.map { it.copy(message = "$ROLLBACK_MARKER${it.message}") }
+        }
+
+        /** [finalOnly] チェーン末尾で最良盤面より悪ければ戻す。戻したら true。 */
+        fun restoreBestIfWorse(): Boolean {
+            if (!runningKeepBest || !finalOnly) return false
+            val best = bestReport ?: return false
+            val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+            if (!betterReport(best, rep) || work.contentDeepEquals(bestWork)) return false
+            work = bestWork.copy2D()
+            logs.add(MirrorLog(tag = "POST", message = "${ROLLBACK_MARKER}チェーン末尾で最良盤面へ復帰"))
+            return true
         }
 
         /** 結果を盤面へ反映し、ピン帰属を合流させ、[keepLogs] のときだけログを積む。採用数を返す。 */
@@ -568,7 +585,8 @@ object V6HotfixPasses {
     ): V6PostOptimizationResult {
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
         val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
-            acceptTies = params.postChainRunningKeepBestAcceptTies, rollbackCountsZero = params.postChainRollbackCountsZero)
+            acceptTies = params.postChainRunningKeepBestAcceptTies, rollbackCountsZero = params.postChainRollbackCountsZero,
+            finalOnly = params.postChainKeepBestFinalOnly)
         val t0 = EngineClock.nowMs()
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
@@ -705,6 +723,7 @@ object V6HotfixPasses {
             chain.logs.add(MirrorLog(level = "W", tag = "POST", message = "予算超過のため後処理は締切で短縮されました(各パスは内部で打ち切り済み・以降は最終検査のみ)"))
         }
 
+        chain.restoreBestIfWorse()
         onPhase("後処理 HF70 異常検知")
         val work = chain.work
         val report = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = params.quantitativeRangeEval)
