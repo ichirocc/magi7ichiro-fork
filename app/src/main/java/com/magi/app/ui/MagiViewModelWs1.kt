@@ -179,7 +179,8 @@ fun MagiViewModel.setNextMonth() {
 fun MagiViewModel.addSkillGroup(name: String, kigou: String) {
     val st = state ?: return; if (kigou.isBlank()) return
     if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分")) return
-    logOp("I", "スキル区分追加: ${name.trim()}(${kigou.trim()})"); applyStructure(st.copy(skillGroups = st.skillGroups + Group(name.trim(), kigou.trim())))
+    // [backlog#38] 最初の 1 群では全員を未所属(-1)にしてから足す（規則は Ws1Ops.addSkillGroup）。
+    logOp("I", "スキル区分追加: ${name.trim()}(${kigou.trim()})"); applyStructure(Ws1Ops.addSkillGroup(st, name.trim(), kigou.trim()))
 }
 fun MagiViewModel.editSkillGroup(g: Int, name: String, kigou: String) {
     val st = state ?: return
