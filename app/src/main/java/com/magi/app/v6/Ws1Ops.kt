@@ -527,6 +527,16 @@ object Ws1Ops {
     }
 
     /**
+     * [backlog#38] スキル群を末尾に足す。**0 件から最初の 1 群を作るときだけ先に全員を `-1`（未所属）にする**＝群が 0 件の間の
+     * `skillIdx` は採点に効かず、既定 0 の頃に保存された 0 は「先頭を選んだ」と区別できない（そのまま足すと全員が所属した扱い）。
+     * 群が 1 件以上あるときの値は明示の割当として触らない。
+     */
+    fun addSkillGroup(state: MagiState, name: String, kigou: String): MagiState {
+        val staff = if (state.skillGroups.isEmpty()) state.staff.map { it.copy(skillIdx = -1) } else state.staff
+        return state.copy(skillGroups = state.skillGroups + Group(name, kigou), staff = staff)
+    }
+
+    /**
      * [3.330.0/外部レビュー] スキル群 [g] を削除する。担当グループの [removeGroup] と対になる操作で、
      * これまで ViewModel 側に手書きされていた（Android 依存＝テストできなかった）ので同じ置き場へ移す。
      *
