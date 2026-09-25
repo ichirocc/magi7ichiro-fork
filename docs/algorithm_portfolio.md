@@ -189,7 +189,6 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `Params.countChainReactivate` | 回数連鎖研磨の巡末再起動（本体は上表 `countChainPolish`） | iter_countchainreactivate（#26） |
 | `Params.c3PairMaskEnabled` | 連続規則の選択日ペア交換（C3PairMaskPolish） | 3.510.0 iter8（#12(b)） |
 | `Params.restZeroWindowLnsEnabled` | 休が余る日の前後窓を夜勤列挙＋ビームで組み直す | 3.555.0 実データで採用ゼロ・ユーザー決定 |
-| `Params.covOReliefEarly` | covO 退避を HF66 直後にも | 3.554.0（後続パスの経路が変わる） |
 | `Params.fairAchievementDirection` | fair 研磨の候補分類を達成率の向きで（#27①） | 3.591.0 不合格（#27） |
 | `Params.dayAssignIdentityFallback` | 日割当の恒等フォールバック | 3.598.0（#30 対処2） |
 | `Params.postChainRunningKeepBestAcceptTies` | 走行 keep-best で同点も採る | 必須増 1（#36 B） |
@@ -224,6 +223,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `PostOptimizationParams.covOReliefEarly`（covO 退避を HF66 直後にも） | 既定経路（フラグごと撤去） | 3.554.0 配置 A/B で必須増 4＝不合格（最終段だけを採用）。2026-09-25 撤去（Kotlin・C#）＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `SaParams.officialTieBreak`＋`TieBreakBench`（SA の HARD 同点を公式 weightedScore で追跡） | 既定経路（フラグごと撤去） | 3.571.0 40 走行で勝ち 0（#19）。2026-09-25 撤去＝選定に触れない計測専用、SaOptimizer.kt は導入前とバイト一致。 |
 | `ViolationComponentRepair.Params.debtLaneSlots`（VCR の二車線ビーム） | 既定経路（フラグごと撤去） | 3.512.4 iter22 不合格・2026-09-09 検証中止（#15 v2.1）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `ViolationComponentRepair.Params.bestOfK`（VCR で K 起点から最良を採る） | 既定経路（フラグごと撤去） | 3.512.4 iter23 不合格・ユーザー判断で終了（#12(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |

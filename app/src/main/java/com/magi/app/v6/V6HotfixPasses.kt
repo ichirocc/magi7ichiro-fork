@@ -365,8 +365,6 @@ object V6HotfixPasses {
         /** 休の必要人数を明示した日に休が余るとき、前後の窓を夜勤列の列挙＋人間移動＋ビームで組み直す（RestZeroWindowLns）。最終段・退避の前。
          *  既定 OFF＝ユーザー決定（実データでは 30 日の休希望 5 人で 29 日に夜勤できる人が足りず採用ゼロ、history 3.555.0）。 */
         val restZeroWindowLnsEnabled: Boolean = false,
-        /** HF66 直後にも退避する（既定 false＝最終段だけ。早期配置は後続パスの経路を変える＝測定は history 3.554.0）。 */
-        val covOReliefEarly: Boolean = false,
         /** [3.608.0/3.610.0] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
          *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
          *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
@@ -592,12 +590,6 @@ object V6HotfixPasses {
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
         chain.replaceBoard(r66.newSchedule, r66.logs, r66.report)
-        if (params.covOReliefEnabled && params.covOReliefEarly && !shouldStop()) {
-            val r = chain.timed("後処理 人員過剰の退避", "CovORelief") { work ->
-                CovOReliefPolish.apply(state, work, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-            }
-            chain.replaceBoard(r.newSchedule, r.logs, r.report)
-        }
         val t66Done = EngineClock.nowMs()
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。

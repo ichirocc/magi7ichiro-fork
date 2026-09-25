@@ -109,7 +109,6 @@ fun main(args: Array<String>) {
         "debtexplore" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, componentRepair = ViolationComponentRepair.Params(debtExploration = true))
         "cyclicn" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, cyclicSwapMaxK = 5)
         "restzero" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, restZeroWindowLnsEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
-        "covoreliefFinal" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEarly = false)
         "covorelief" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, covOReliefEnabled = false) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         "c2polish" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c2PolishEnabled = true)
         "c41flow" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, c41FlowPolishEnabled = true)
