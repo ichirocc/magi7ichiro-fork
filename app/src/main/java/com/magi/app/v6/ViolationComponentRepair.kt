@@ -70,13 +70,6 @@ object ViolationComponentRepair {
          *  その後のビームトリムは est 昇順の単一ソートのため「悪化しない候補が8件以上あれば負債候補は
          *  一切生き残れない」という構造上の飢餓が起きうる（未検証の仮説。debtExploration=false では無効）。 */
         val debtLaneSlots: Int = 0,
-        /** [測定中/bestOfK] 1 周あたり起点を最大何件 search() して結果を比較するか。既定 1=従来どおり
-         *  「最初に成功した起点をすぐ採用して次周へ」（起点の並び順に結果が依存する）。2 以上にすると、
-         *  複数の起点候補を実際に search() し、betterReport で客観的に最良の一つだけを採用する
-         *  （順序非依存になる代わり search() 呼出が増える）。search() は差分を当てて戻すだけで
-         *  盤面(work)/delta を変更しない（副作用なし）ので複数回呼んでも安全。
-         */
-        val bestOfK: Int = 1,
     )
 
     /** 盤面差分。`ops` は [職員, 日, 新シフト] の並び（[CombinatorialRepair.Candidate.ops] と同じ形）。 */
@@ -441,7 +434,6 @@ object ViolationComponentRepair {
         // 起点（違反）ごとに探索し、採用があれば盤面が変わるので起点（と起点生成の候補）を作り直す。1 周して採用が無ければ終わり。
         val used = HashSet<Int>()
         var anchorCount = 0; var maxSet = 0; var generatedTotal = 0
-        class Found(val anchor: Anchor, val chosen: IntArray, val rep: ViolationReport)
         outer@ while (!shouldStop() && evaluations < params.maxEvaluations && estimates < params.maxEstimates) {
             val currentAnchors = anchors(bestRep, infeasibleSlots)
             while (patches.size > poolCount) patches.removeAt(patches.size - 1)
@@ -456,23 +448,15 @@ object ViolationComponentRepair {
                 .map { (a, ids) -> a to dropLonePinBreakers(ids.filter { it !in used }) }.filter { it.second.isNotEmpty() }
             anchorCount = sets.size
             var committed = false
-            // bestOfK<=1: 従来どおり最初に成功した起点で即採用。bestOfK>=2: 最大 bestOfK 件を実際に search() し、
-            // betterReport で客観的に最良の一つだけを採用する（順序非依存。search() は副作用なし＝複数回呼んでも安全）。
-            val found = ArrayList<Found>()
             for ((anchor, ids) in sets.take(params.maxAnchors)) {
                 if (shouldStop() || evaluations >= params.maxEvaluations || estimates >= params.maxEstimates) break
                 anchorsTried++; maxSet = maxOf(maxSet, ids.size)
                 val (chosen, rep) = search(anchor, ids) ?: continue
-                found.add(Found(anchor, chosen, rep))
-                if (found.size >= maxOf(1, params.bestOfK)) break
-            }
-            if (found.isNotEmpty()) {
-                val best = found.reduce { a, b -> if (betterReport(b.rep, a.rep)) b else a }
-                for (id in best.chosen) for (op in patches[id].ops) {
+                for (id in chosen) for (op in patches[id].ops) {
                     if (work[op[0]][op[1]] != op[2]) { work[op[0]][op[1]] = op[2]; delta.apply(op[0], op[1], op[2]) }
                 }
-                bestRep = best.rep; applied++; used.addAll(best.chosen.filter { it < poolCount })   // 起点生成の候補は毎周作り直す
-                acceptedLabels.add(best.anchor.label + ": " + best.chosen.joinToString("+") { patches[it].hint.ifBlank { patches[it].mechanism } } + "(k=${best.chosen.size})")
+                bestRep = rep; applied++; used.addAll(chosen.filter { it < poolCount })   // 起点生成の候補は毎周作り直す
+                acceptedLabels.add(anchor.label + ": " + chosen.joinToString("+") { patches[it].hint.ifBlank { patches[it].mechanism } } + "(k=${chosen.size})")
                 committed = true
                 continue@outer
             }
