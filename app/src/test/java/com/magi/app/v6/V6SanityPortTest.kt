@@ -467,6 +467,36 @@ class V6SanityPortTest {
         assertTrue("目標なしなら行そのものを出さない", V6SanityPort.aptBalances(st).isEmpty())
     }
 
+    @Test fun aptBalancesSkipsShiftWithAnUndefinedDay() {
+        // 必要人数が 1 日だけ定義（0）＝残り 9 日は上限なし。目標の合計 12 を「席 0」と比べて誤警告しない（capKnown）。
+        val st = aptVsNeedState(days = 10, need1 = "", aptTarget = "6").copy(needDay1 = mapOf("1,0" to "0"))
+        assertTrue(V6SanityPort.aptBalances(st).none { it.kigou == "X" })
+        assertTrue(V6SanityPort.buildGuidance(st).none { it.where.contains("X") && it.where.contains("適切回数の合計") })
+    }
+
+    @Test fun wishCountAboveStaffCapIsReported() {
+        // 検査 6e: X の希望 3 件 vs 個人上限 1 回 → 希望を守る限り上限超過は解消できない。
+        val st = aptVsNeedState(days = 10, need1 = "1", aptTarget = "").copy(
+            wishes = mapOf("0,0" to 1, "0,2" to 1, "0,4" to 1),
+            staffRange = mapOf("0,1" to Range("", "1")),
+        )
+        val issue = V6SanityPort.buildGuidance(st).single { it.where == "s0さんの「X」個人上限と希望の衝突" }
+        assertEquals(IssueKind.RANGE, issue.kind)
+        assertTrue(issue.problem, issue.problem.contains("希望が3件"))
+        assertTrue(issue.fix, issue.fix.contains("希望を2件減らして"))
+        val within = st.copy(staffRange = mapOf("0,1" to Range("", "3")))
+        assertTrue(V6SanityPort.buildGuidance(within).none { it.where.contains("個人上限と希望の衝突") })
+    }
+
+    @Test fun demandAboveStaffCapsStatesTheGapInBothPlaces() {
+        // 必要数 10 回 vs 担当者の上限 3+4=7 回 → 差 3 回。文中の 2 か所とも数値で出る。
+        val st = aptVsNeedState(days = 10, need1 = "1", aptTarget = "").copy(
+            staffRange = mapOf("0,1" to Range("", "3"), "1,1" to Range("", "4")),
+        )
+        val issue = V6SanityPort.buildGuidance(st).single { it.where == "「X」の必要人数" }
+        assertTrue(issue.problem, issue.problem.contains("限り3回ぶんは埋まりません") && issue.problem.contains("合わせて3回ぶん"))
+    }
+
     @Test fun aptSumCheckAccountsForOtherShiftLowerBoundsReducingRestCapacity() {
         // T=10・apt目標3(合計6)だが、他シフトXの個人下限が8(各自)設定済み＝休の実質上限=2人×(10-8)=4 < 6。
         val rep = V6SanityPort.buildGuidance(aptVsNeedState(days = 10, need1 = "0", aptTarget = "3", otherLo = "8"))
