@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- sudo_model.md 再照合（2026-09-25）: 不変条件を20族・HARD 5族（c3w）・3.556.0 の重みへ、O の実測を 8990/total 409 へ、fair v2・D9・HardDelta・WishTrial/RunMarker を反映（docs のみ、C# 同期）。  → `docs/history/3.4xx.md`
 - S5 中断案内で取り消した希望を名指し（2026-09-25）: 実行マーカーに `s5` 文脈、`work/RunMarker.kt`＋`RunMarkerTest`、C# 対象外（backlog #37(b)）。  → `docs/history/3.4xx.md`
 - backlog #36 走行 keep-best を末尾だけにする案（2026-09-25）: `postChainKeepBestFinalOnly` 勝11/負36 p=0.0003＝不合格、既定 OFF。  → `docs/history/3.4xx.md`
 

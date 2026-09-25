@@ -27,7 +27,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/automation.md`](./docs/automation.md) | **自動化方針と実装の対応**（済／部分／未、採用ゲート・探索段階・必須修正 10 項目） |
 | [`docs/backlog.md`](./docs/backlog.md) | **バックログ / 未対応**（完了項目は打消し線で保持。CLAUDE.md から移設） |
 | [`docs/claudemd-tune-proposal.md`](./docs/claudemd-tune-proposal.md) | **CLAUDE.md 見直し提案**（棚卸し・削除/書き直し/移動/残す/矛盾の表と全文案。承認待ち） |
-| [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（3.505.7 で再照合）（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
+| [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（2026-09-25・3.612.0 で再照合）（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
 | [`docs/history/`](./docs/history/) | **作業記録の本文**（版数付き約360節・版数でバケツ分け: `2.x` / `3.0xx` / `3.1xx` / `3.2xx` / `3.3xx` / `3.4xx`）。見出し一覧は [`INDEX.md`](./docs/history/INDEX.md)、話題別の叙述（ネイティブ加速・停滞脱出・ドッグフーディング等）は [`topics.md`](./docs/history/topics.md)（3.497.3 で `CLAUDE.md` 本体から分離）。`grep -n 'キーワード' docs/history/INDEX.md` で当たりを付けてから版数で引く。毎ターン自動では読み込まれない＝過去に測って否決した案・同型のバグ・決定記録を再発させないため、同じ領域を触る前に INDEX.md を必ず確認する |
 | [`docs/screen_inventory_textart.md`](./docs/screen_inventory_textart.md) | **画面棚卸し＋テキストアートのドッグフーディング検証**（3.482.0 時点。タブ5／画面12／モーダル30／Activity2 の集計と、全画面の再現図＋所見20件の優先表。UI を触る前の現状確認と、次の改善候補の一次ソース） |
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
@@ -90,7 +90,8 @@ base量子35sが比例配分側に落ちる＝通常経路の探索動学変更�
 P1(ExtraRefineをHARD減少時のみに絞る案)は既定適用を撤回しbacklog#35へ登録。hosttest 823件緑。
 詳細は`docs/history/3.4xx.md`）
 
-**最終更新**：2026-09-19（3.599.0＝backlog#34の記録を訂正（コード変更なし）。3.595.0「フェーズ下限合計
+**最終更新**：2026-09-25（docs/sudo_model.md を main と再照合＝20族・HARD 5族・3.556.0 の重み・O の実測 8990。コード変更なし）。
+前回：2026-09-19（3.599.0＝backlog#34の記録を訂正（コード変更なし）。3.595.0「フェーズ下限合計
 35s固定」はフェーズ境界の`stopRole`判定（`shouldStop()`が真ならRSI/ALNSを丸ごとスキップ）を見落とした
 誤り。3.594.0「SAはmaxIters単独制御」も冷却条件(t<tf)での終了を見落とした誤り。現行`tools/loop`の
 A/Bベンチは`V6Algorithm.V5, workers=1`固定でポートフォリオ経路を一度も経由せず、backlog#28/#34は
