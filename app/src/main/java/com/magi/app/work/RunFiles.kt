@@ -104,6 +104,11 @@ internal class RunFiles(private val dir: File) {
     ): Boolean = writeFileAtomically(target, text, onNonAtomic, rename, commitGuard)
 }
 
+/** 「やめる」を背景の停止にするか。Worker が running を立てる前（投入直後・再起動後の再開待ち）も含める。メモリの ID だけだと
+ *  結果なしで失敗した Worker（所有者なら runId ファイルを消す）の後も残るので、ファイルの所有者と一致するときだけ。 */
+internal fun bgStopApplies(repoRunning: Boolean, fgJob: Boolean, memRunId: Long, diskRunId: Long): Boolean =
+    repoRunning || (!fgJob && memRunId != 0L && memRunId == diskRunId)
+
 /**
  * 一時ファイル経由の原子置換。[RunFiles.writeAtomically] の実体で、**run ファイル以外**（自動保存など）
  * からも使えるようにファイルレベルへ出してある（同じ処理を写すと必ず片方が取り残される）。

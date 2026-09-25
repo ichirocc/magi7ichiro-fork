@@ -1040,4 +1040,38 @@ class V6SanityPortTest {
         val wished = st(mapOf("0,0" to 1))
         assertEquals(2, V6SanityPort.structuralHardFloor(wished))
     }
+
+    /** 並び以外の族の同じ行を設定の見直しに出す（解決後の値で比べる・ワンタップなし）。期間の制約は 2 本で違反も 2 倍、
+     *  希望の前日に禁止は禁止表に畳まれるので「評価は 1 本分」。 */
+    @Test fun duplicateNonSequenceRulesAreListedWithoutAutoFix() {
+        val base = MagiState(
+            startDate = "2026-06-01", endDate = "2026-06-03",
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(0, 0, 0), listOf(0, 0, 0)),
+            wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(com.magi.app.model.C1Row("3", "A", "1")), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        fun dupIssues(st: MagiState) = V6SanityPort.buildGuidance(st).filter { it.problem.startsWith("同じ行が") }
+        assertTrue("1 本なら出ない", dupIssues(base).isEmpty())
+        val twice = base.copy(
+            cons1 = listOf(com.magi.app.model.C1Row("3", "A", "1"), com.magi.app.model.C1Row(" 03", "A", "1")),
+            cons3w = listOf(com.magi.app.model.C3wRow("A", "休"), com.magi.app.model.C3wRow("A", "休")),
+            cons41 = listOf(com.magi.app.model.C41Row("G", "A", "1", ""), com.magi.app.model.C41Row("G", "A", "1", "")),
+        )
+        val issues = dupIssues(twice)
+        assertEquals(3, issues.size)
+        assertTrue(issues.all { it.kind == IssueKind.CONSTRAINT && it.action == SettingFixAction.NONE && it.actionLabel.isEmpty() })
+        val c1 = issues.single { it.where.startsWith("期間の制約") }
+        assertTrue(c1.problem, c1.problem.contains("2本") && c1.problem.contains("2倍"))
+        assertTrue(issues.single { it.where.startsWith("希望の前日に禁止") }.problem.contains("1本分"))
+        val one = UnifiedViolationChecker.check(base, base.schedule.toIntArray2D()).breakdown["c1"] ?: 0
+        val two = UnifiedViolationChecker.check(twice, twice.schedule.toIntArray2D()).breakdown["c1"] ?: 0
+        assertTrue("A を 1 回も置かない盤面は期間の制約に当たる", one > 0)
+        assertEquals("同じ行 2 本は違反も 2 倍（文言の根拠）", 2 * one, two)
+    }
 }

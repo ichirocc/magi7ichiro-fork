@@ -187,7 +187,8 @@ flowchart TB
 2. **子に独立した ID が無い** — Shift/Group/Staff/Range/C\*Row はすべて識別子を持たず、位置 index（`i`/`j`/`k`/`g`）か
    `kigou` でしか同定できない＝ルートの外では意味を持たない。
 3. **一括で置き換わる値意味論** — 全部 `data class`。編集は `applyStructure` / `mutateConstraints`（表示色だけは
-   `applyDisplayOnly`＝他の案・改善提案を消さず、続けての色変更は1つの Undo）を通って新インスタンスになり、Undo/Redo もこの単位。
+   `applyDisplayOnly`＝他の案・改善提案を消さず、同じ色の対象への続けての変更は1つの Undo、その Undo/Redo も結果を外さない）を通って
+   新インスタンスになり、Undo/Redo もこの単位。
 4. **参照方向が一方向** — 子から親への参照が無い。
 
 ```mermaid

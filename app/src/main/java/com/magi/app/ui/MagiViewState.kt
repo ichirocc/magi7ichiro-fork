@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.WishTrial
 
@@ -279,3 +280,14 @@ internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =
     if (control.rk < control.h0) "希望を残したまま、もう一度つくるだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
+
+/** 表示色だけの undo 段（[MagiViewModel.applyDisplayOnly] と元に戻す/やり直す）の判定の単一ソース。 */
+internal object DisplayOnlyUndo {
+    /** 変えた色の対象（記号・予約キー）。同じ対象への続けての変更だけを 1 段にまとめる目印。 */
+    fun colorKey(old: Map<String, String>, new: Map<String, String>): String =
+        (old.keys + new.keys).filter { old[it] != new[it] }.sorted().joinToString(",")
+
+    /** 2 つの (設定, 盤面) の差が表示色だけか＝戻しても結果・他の案・直し方はそのまま使える。 */
+    fun differsOnlyInColors(a: MagiState, aSched: Array<IntArray>, b: MagiState, bSched: Array<IntArray>): Boolean =
+        aSched.contentDeepEquals(bSched) && a.copy(shiftColors = b.shiftColors) == b
+}

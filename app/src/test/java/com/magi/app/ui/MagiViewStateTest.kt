@@ -7,6 +7,7 @@ import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.V6PortAnalyzer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -172,5 +173,30 @@ class MagiViewStateTest {
         assertEquals(4, currentWeekIndex(weeks, leftDay = 24, atEnd = true))
         assertEquals(0, currentWeekIndex(listOf((0..6).toList()), leftDay = 0, atEnd = true))
         assertEquals(0, currentWeekIndex(emptyList(), leftDay = 3, atEnd = false))
+    }
+
+    /** 色の対象ごとに別の段（違う対象の変更は 1 つの「元に戻す」にまとめない）。 */
+    @Test
+    fun colourUndoKeyNamesTheChangedTargetsOnly() {
+        val base = mapOf("D" to "#ff0000", "__vio__" to "#00ff00")
+        assertEquals("D", DisplayOnlyUndo.colorKey(base, base + ("D" to "#0000ff")))
+        assertEquals("__vio__", DisplayOnlyUndo.colorKey(base, base - "__vio__"))
+        assertEquals("N", DisplayOnlyUndo.colorKey(base, base + ("N" to "#123456")))
+        assertTrue("D の続けての変更は同じ目印", DisplayOnlyUndo.colorKey(base, base + ("D" to "#111111")) ==
+            DisplayOnlyUndo.colorKey(base + ("D" to "#111111"), base + ("D" to "#222222")))
+        assertFalse("D と違反色は別の目印", DisplayOnlyUndo.colorKey(base, base + ("D" to "#111111")) ==
+            DisplayOnlyUndo.colorKey(base, base + ("__vio__" to "#222222")))
+    }
+
+    /** 差が表示色だけの段は、戻しても結果・他の案・直し方を外さない（盤面か設定が違えば通常の元に戻す）。 */
+    @Test
+    fun colourOnlyDifferenceIsDetectedAgainstBoardAndSettings() {
+        val st = load("/golden_state.json")
+        val sched = st.schedule.toIntArray2D()
+        val recoloured = st.copy(shiftColors = st.shiftColors + ("__vio__" to "#123456"))
+        assertTrue(DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured, sched.map { it.clone() }.toTypedArray()))
+        val edited = sched.map { it.clone() }.toTypedArray().also { it[0][0] = (it[0][0] + 1) % st.shiftCount }
+        assertFalse("盤面が違う", DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured, edited))
+        assertFalse("設定が違う", DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured.copy(use2Patterns = !st.use2Patterns), sched))
     }
 }

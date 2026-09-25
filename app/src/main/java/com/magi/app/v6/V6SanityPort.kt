@@ -448,7 +448,7 @@ object V6SanityPort {
         fun capableCount(k: Int): Int = (0 until p.S).count { p.canDo(it, k) }
 
         fun run(): List<SettingIssue> {
-            wishIssues(); duplicateSeqIssues(); mustForbiddenSeqIssues(); c1RuleIssues(); unusableRowIssues(); nonNumericIssues(); assignmentIssues()
+            wishIssues(); duplicateSeqIssues(); duplicateRuleIssues(); mustForbiddenSeqIssues(); c1RuleIssues(); unusableRowIssues(); nonNumericIssues(); assignmentIssues()
             demandCapacityIssues(); staffRangeIssues(); seatIssues(); forcedCountIssues(); forcedCovUIssues(); duplicateKeyIssues()
             musIssues(); softOverflowIssue()
             return sorted()
@@ -507,6 +507,31 @@ object V6SanityPort {
                     action = SettingFixAction.DELETE_DUP_SEQ, actionLabel = "重複を1つ削除",
                     seqFamily = famRaw, seqKey = seq))
             }
+        }
+
+        /** 2') 並び以外の族の同じ行（CSV 取込・既存データはダイアログを通らない）。エンジンは dedup しない＝知らせるだけ。
+         *  `Problem` の解決後の値で比べる＝評価が実際に 2 回数える行だけ。希望の前日に禁止は禁止表（`c3wBan`）に畳まれ 1 本分。 */
+        fun duplicateRuleIssues() {
+            fun gsym(g: Int) = state.groups.getOrNull(g)?.kigou ?: "#$g"
+            fun ssym(g: Int) = state.skillGroups.getOrNull(g)?.kigou ?: "#$g"
+            fun bound(l: Int, u: Int) = "${if (l > 0) "$l" else ""}〜${if (u == Int.MAX_VALUE) "" else "$u"}"
+            fun <T> report(rows: List<T>, key: (T) -> List<Int>, where: (T) -> String, counted: Boolean = true) {
+                for (same in rows.groupBy(key).values) {
+                    val n = same.size
+                    if (n < 2) continue
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, where(same[0]),
+                        if (counted) "同じ行が${n}本あります。違反を${n}回数えるので、この決まりだけ重みが${n}倍になります"
+                        else "同じ行が${n}本あります（評価は1本分で変わりません）",
+                        "制約設定でこの行の重複を削除してください（自動では消しません）"))
+                }
+            }
+            report(p.cons1, { listOf(it.day1, it.shiftIdx, it.day2) }, { "期間の制約「${symOf(it.shiftIdx)} ${it.day1}日で${it.day2}回以上」" })
+            report(p.cons2, { listOf(it.shiftIdx, it.count) }, { "個人の合計「${symOf(it.shiftIdx)} 合計${it.count}回以上」" })
+            report(p.cons3w, { listOf(it.wishIdx, it.prevIdx) }, { "希望の前日に禁止「${symOf(it.wishIdx)} の希望の前日は ${symOf(it.prevIdx)}」" }, counted = false)
+            report(p.cons41, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "グループのレンジ「${gsym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" })
+            report(p.cons42, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "グループペア禁止「${gsym(it.g1)}の${symOf(it.s1)} ✕ ${gsym(it.g2)}の${symOf(it.s2)}」" })
+            report(p.cons41s, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "スキルグループのレンジ「${ssym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" })
+            report(p.cons42s, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "スキルグループペア禁止「${ssym(it.g1)}の${symOf(it.s1)} ✕ ${ssym(it.g2)}の${symOf(it.s2)}」" })
         }
 
         /**
