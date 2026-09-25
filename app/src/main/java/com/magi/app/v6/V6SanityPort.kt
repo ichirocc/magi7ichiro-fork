@@ -484,13 +484,15 @@ object V6SanityPort {
                     action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j"))
             }
             // 1c) 禁止の並び(c3n)の窓がまるごと希望固定（例: 休の希望 3 連日と「休→休→休」禁止）。どれを取り消すかは利用者が選ぶ＝ワンタップなし。
+            //     窓が 1 セル（単独の禁止シフト）なら関わる希望は 1 件＝単数の文言。
             for (g in selfConflicts) {
                 if (g.family != "c3n") continue
                 val seq = g.shifts.joinToString("→") { symOf(it) }
+                val one = g.days.size == 1
                 out.add(SettingIssue(IssueKind.WISH,
                     "${nameOf(g.staff)} ${g.days.joinToString("・") { safeDayLabel(state.startDate, it) }} 希望「$seq」",
-                    "禁止の並び「$seq」に希望どうしで当たっています。希望は固定なので計算では解消できません",
-                    "いずれか1件の希望を取り消すか、禁止の並び「$seq」を見直してください"))
+                    "禁止の並び「$seq」に${if (one) "希望が" else "希望どうしで"}当たっています。希望は固定なので計算では解消できません",
+                    "${if (one) "この希望" else "いずれか1件の希望"}を取り消すか、禁止の並び「$seq」を見直してください"))
             }
         }
 
@@ -1205,11 +1207,20 @@ object V6SanityPort {
                         "次の${sc.core.size}件は同時に成立しません（証明つき）: $labels",
                         "いずれか1件を緩めてください（例: $hints）"))
                 }
+                // 日別の証明（ConstraintMus の canServe）はコアで希望固定されていない人を mayPlace で数える＝上限 0 の人を前提として名指しする。
+                fun capZeroNote(dc: ConstraintMus.DayConflict): String {
+                    val pinned = dc.core.filterIsInstance<ConstraintMus.WishPin>().map { it.staff }.toSet()
+                    val parts = dc.core.filterIsInstance<ConstraintMus.DayNeed>().map { it.shift }.distinct().mapNotNull { k ->
+                        val names = (0 until p.S).filter { it !in pinned && p.canDo(it, k) && !p.mayPlace(it, k) }
+                        if (names.isEmpty()) null else "${names.joinToString("・") { staffName(it) }}（${sym(k)}）"
+                    }
+                    return if (parts.isEmpty()) "" else "。個人上限が0のため置けない人: ${parts.joinToString("、")}"
+                }
                 for (dc in ConstraintMus.analyzeDayConflicts(p).filter { hasWish(it.core) }.sortedBy { it.core.size }.take(Guidance.MUS_TOP)) {
                     val labels = dc.core.joinToString(" ・ ") { itemLabel(it) }
                     val wishHint = dc.core.firstOrNull { it is ConstraintMus.WishPin }?.let { relaxHint(it) }
                     out.add(SettingIssue(IssueKind.WISH, "${safeDayLabel(state.startDate, dc.day)} の必要人数と固定希望の衝突",
-                        "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません（証明つき）: $labels",
+                        "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません（証明つき）: $labels" + capZeroNote(dc),
                         "この日の希望を1件調整するか、必要人数を下げてください" + (wishHint?.let { "（例: $it）" } ?: "")))
                 }
             }

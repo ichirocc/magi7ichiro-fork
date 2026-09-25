@@ -34,6 +34,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-09-25（診断の文言: 1c の 1 セルの窓は単数、HF70・残存分析の集計名「希望と禁止の衝突」、MUS 日別に上限 0 の前提を名指し＝既定出力不変）
+
 **最終更新**：2026-09-25（backlog #38: `Staff.skillIdx` の既定を −1（未所属）へ、最初のスキル群を作るとき全員を未所属に＝既定出力不変）
 
 **最終更新**：2026-09-25（実データ精読の是正・UI 層: S5 の候補に希望どうしの衝突の兄弟の希望、設定の見直しの一覧に「すべて表示」）

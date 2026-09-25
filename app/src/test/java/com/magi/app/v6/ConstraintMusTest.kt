@@ -151,6 +151,26 @@ class ConstraintMusTest {
         assertTrue(hit[0].problem.contains("同時に成立しません"))
         assertTrue("コアの希望が名前つきで列挙される", hit[0].problem.contains("希望「"))
         assertTrue("緩和候補として希望調整を提案する", hit[0].fix.contains("希望を1件調整"))
+        assertFalse(hit[0].problem, hit[0].problem.contains("個人上限が0"))
+    }
+
+    @Test
+    fun dayMusNamesStaffLeftOutByZeroCap() {
+        // X 必要 1 人: s0 は休の希望固定、s1 は X の上限 0（希望なし＝mayPlace が偽で席に就けない）。証明の前提として s1 を名指しする。
+        val st = state(
+            days = 1,
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("X", "X", "1", "")),
+            wishes = mapOf("0,0" to 0),
+            staffRange = mapOf("1,1" to Range("", "0")),
+            staffCount = 2,
+        )
+        assertEquals(2, ConstraintMus.analyzeDayConflicts(Problem(st)).single().core.size)
+        val hit = V6SanityPort.buildGuidance(st).single { it.where.contains("必要人数と固定希望の衝突") }
+        assertEquals(
+            "固定された希望の組合せでは、この日の必要人数を満たせません。次の2件は同時に成立しません（証明つき）: " +
+                "必要人数「Xに1人」 ・ 希望「s0 1/1(木)=休」。個人上限が0のため置けない人: s1（X）",
+            hit.problem,
+        )
     }
 
     @Test

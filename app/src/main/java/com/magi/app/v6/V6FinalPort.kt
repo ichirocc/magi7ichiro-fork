@@ -953,7 +953,7 @@ object V6FinalPort {
                 } - self
                 if (n > 0) open.add("$key ${n}件")
             }
-            if (selfConflictShown.isNotEmpty()) walls.add("希望どうしの衝突 ${selfConflictShown.sumOf { it.second }}件(" +
+            if (selfConflictShown.isNotEmpty()) walls.add("希望と禁止の衝突 ${selfConflictShown.sumOf { it.second }}件(" +
                 selfConflictShown.joinToString("・") { "${it.first} ${it.second}" } + "＝希望を1件取り消すまで解消しない)")
             if (covUWall > 0) {
                 // 床が全部を覆うときだけ従来どおり「構造的下限」（供給不足）と名乗る。それ以外は

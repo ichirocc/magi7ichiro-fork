@@ -66,7 +66,22 @@ class WishSelfConflictTest {
         assertEquals(1, issues.size)
         assertEquals(IssueKind.WISH, issues[0].kind)
         assertEquals("大島 10/3(土)・10/4(日)・10/5(月) 希望「休→休→休」", issues[0].where)
+        assertEquals("禁止の並び「休→休→休」に希望どうしで当たっています。希望は固定なので計算では解消できません", issues[0].problem)
+        assertEquals("いずれか1件の希望を取り消すか、禁止の並び「休→休→休」を見直してください", issues[0].fix)
         assertEquals(SettingFixAction.NONE, issues[0].action)
+    }
+
+    @Test fun oneCellForbiddenWindowOnAWishIsWordedAsOneWish() {
+        val st = state(mapOf("0,2" to d), cons3n = listOf(C3Row(listOf("Dﾃ"))))
+        assertEquals(listOf(listOf(2)), V6SanityPort.wishSelfConflicts(st).map { it.days })
+        val issue = V6SanityPort.buildGuidance(st).single { it.kind == IssueKind.WISH && it.problem.contains("禁止の並び「Dﾃ」") }
+        assertEquals("大島 10/3(土) 希望「Dﾃ」", issue.where)
+        assertEquals("禁止の並び「Dﾃ」に希望が当たっています。希望は固定なので計算では解消できません", issue.problem)
+        assertEquals("この希望を取り消すか、禁止の並び「Dﾃ」を見直してください", issue.fix)
+        val sched = arrayOf(intArrayOf(a, a, d, a, a, a, a), IntArray(7) { a })
+        val msg = HfSwapPolish.detectHF70Anomalies(st, sched, "t").message
+        assertTrue(msg, msg.contains("希望と禁止の衝突 1 件"))
+        assertFalse(msg, msg.contains("希望以外HARD"))
     }
 
     @Test fun windowWithOneFreeCellIsNotASelfConflict() {
@@ -101,7 +116,7 @@ class WishSelfConflictTest {
         val rep = UnifiedViolationChecker.check(st, sched)
         assertEquals(1, rep.breakdown["c3n"]); assertEquals(1, rep.breakdown["c3w"])
         val msg = HfSwapPolish.detectHF70Anomalies(st, sched, "t", rep).message
-        assertTrue(msg, msg.contains("希望どうしの衝突 2 件"))
+        assertTrue(msg, msg.contains("希望と禁止の衝突 2 件"))
         assertFalse(msg, msg.contains("希望以外HARD"))
     }
 
@@ -110,7 +125,7 @@ class WishSelfConflictTest {
         val res = V6FinalPort.handleOptimize(st, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
         assertEquals(1, res.report.hard)
         val line = res.logs.single { it.tag == "残存分析" }.message
-        assertTrue(line, line.substringBefore("／").contains("希望どうしの衝突"))
+        assertTrue(line, line.substringBefore("／").contains("希望と禁止の衝突"))
         val open = line.substringAfter("まだ狙える: ")
         assertFalse(line, open.contains("c3n") || open.contains("pref"))
     }
