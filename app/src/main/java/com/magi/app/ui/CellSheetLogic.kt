@@ -239,5 +239,45 @@ internal fun nextTourCell(tour: List<Pair<Int, Int>>, current: Pair<Int, Int>?):
 internal fun fixesByOthers(list: List<com.magi.app.v6.FixSuggestion>, day: Int, except: Int): List<com.magi.app.v6.FixSuggestion> =
     list.filter { s -> s.ops.none { it.staff == except } && s.ops.any { it.day == day } }
 
+/**
+ * セル詳細（「詳しく」）の行: セルに重なった族をすべて、重い順に「必須・原因」「要調整・原因」で 1 行ずつ。
+ * [c1Runs] はこのセルに掛かる期間の制約のランの違反窓数（表示アンカー。無ければ null）。
+ */
+internal fun cellDetailLines(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, families: List<String>, c1Runs: Int?): List<String> =
+    families.map { fam ->
+        val label = breakdownLabels[fam] ?: fam
+        var d = familyDetail(state, p, s, i, j, fam) ?: label
+        if (fam == "c1" && c1Runs != null && c1Runs > 0) {
+            val withRuns = "$label（連続 $c1Runs 区間）"
+            d = if (d.startsWith(label)) withRuns + d.removePrefix(label) else "$withRuns：$d"
+        }
+        (if (fam in MirrorKeys.hard) "必須・" else "要調整・") + d
+    }
+
+/**
+ * セルシートの評価の版。状態の 1 行・おすすめの印・回数の 1 行はこの版が変わったときだけ同じ入力から作り直す。
+ * 盤面・希望・設定（editRev）・検査世代のどれかが変われば変わる（元に戻す/やり直すも同じ）。
+ */
+internal data class CellSheetRev(val checkRev: Long, val editRev: Int, val schedule: List<List<Int>>, val wishes: Map<String, Int>)
+
+internal fun cellSheetRev(ui: UiState): CellSheetRev = CellSheetRev(ui.checkRev, ui.editRev, ui.schedule, ui.wishes)
+
+/** その場の直し方探しの状態（計算・チェック待ち／未開始／探索中／完了／失敗）。スピナーは探索中だけ。 */
+internal enum class FixPanelState { WAIT_CHECK, NOT_STARTED, RUNNING, DONE, FAILED }
+
+internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: String, failedKey: String, key: String): FixPanelState = when {
+    fixSearching -> FixPanelState.RUNNING
+    running -> FixPanelState.WAIT_CHECK
+    doneKey == key -> FixPanelState.DONE
+    failedKey == key -> FixPanelState.FAILED
+    else -> FixPanelState.NOT_STARTED
+}
+
+/** 通知の「元に戻す」は、その操作が今も元に戻すの先頭にあるときだけ効く（後の別の操作を戻さない）。 */
+internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = topSerial != null && topSerial == noticeSerial
+
+/** 操作の通知を出している間、検査の進み具合などの通常の文言では置き換えない（失敗・拒否だけは置き換える）。 */
+internal fun messageMayReplaceNotice(noticeShowing: Boolean, isError: Boolean): Boolean = !noticeShowing || isError
+
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
 internal fun cellChangedMessage(name: String, day: Int, symbol: String): String = "$name ${day + 1}日を${symbol}に変更しました"

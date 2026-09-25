@@ -57,7 +57,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * 勤務表のセル編集シート（画面下の固定パネル。引っ張る操作は無い＝片手一本指）。
- * 上から: 見出し・1 行の状態・直し方（読む）→ 割当｜希望｜回数 → 前日/翌日 → シフトボタン（固定配置）→ 閉じる → 32dp の余白。
+ * 上から: 見出し・1 行の状態・直し方・詳しく（読む）→ 割当｜希望｜回数 → 前日/翌日 → シフトボタン（固定配置）→ 閉じる → 32dp の余白。
  * 閉じるのは「閉じる」・戻る・シートの外のタップ。別のセルをタップするとそのセルへ移る（呼び出し側）。
  */
 @Composable
@@ -87,19 +87,23 @@ internal fun CellEditSheet(
     fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
     val c1Anchors = remember(ui.c1Runs) { c1DisplayAnchors(ui) }
     val shown = remember(ui.shiftSymbols.size, cv.allowedByStaff) { sheetShifts(ui.shiftSymbols.size, cv.allowedByStaff) }
-    val status = remember(ui.schedule, ui.violationCellFamilies, ui.needFamilies, ui.countFamilies, cell) {
-        val st = stateOf() ?: return@remember CellStatus(CellSeverity.NONE, "違反なし")
-        val fams = cellStatusFamilies(
+    // 状態の 1 行・印・回数の 1 行・詳しくは同じ版（盤面・希望・設定・検査世代）から作る。
+    val rev = cellSheetRev(ui)
+    val fams = remember(rev, cell) {
+        cellStatusFamilies(
             displayCellClasses(ui, VioKey.cell(i, j), c1Anchors),
             if (current >= 0) ui.needFamilies[VioKey.need(current, j)].orEmpty() else emptyList(),
             if (current >= 0) ui.countFamilies[VioKey.count(i, current)].orEmpty() else emptyList(),
         )
+    }
+    val status = remember(rev, cell) {
+        val st = stateOf() ?: return@remember CellStatus(CellSeverity.NONE, "違反なし")
         cellStatusLine(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams)
     }
     val dilemma = isWishDilemma(wish, current, status.severity)
-    var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=割当を変える
+    var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える
     var marks by remember(cell) { mutableStateOf(ShiftMarks()) }
-    LaunchedEffect(cell, ui.schedule, status.severity) {
+    LaunchedEffect(cell, rev) {
         marks = ShiftMarks()
         val st = stateOf() ?: return@LaunchedEffect
         val sched = ui.schedule.toIntArray2D()
@@ -110,7 +114,7 @@ internal fun CellEditSheet(
             evaluateShiftMarks(st, sched, i, j, status.severity, cands, stillWanted = { job.isActive })
         }
     }
-    val countLine = remember(ui.schedule, ui.countFamilies, i) {
+    val countLine = remember(rev, i) {
         stateOf()?.let { st -> staffCountShort(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, ui.countFamilies) }.orEmpty()
     }
     val topCorner = MaterialTheme.shapes.extraLarge
@@ -136,12 +140,30 @@ internal fun CellEditSheet(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
                         OutlinedButton(onClick = { dilemmaChoice = 2 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                            Text("希望を取り消して別のシフトを割り当てる", maxLines = 2)
+                            Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", maxLines = 3)
                         }
                     }
                     if (dilemmaChoice == 1) FixSearchPanel(ui, cv, FixFocus(null, null, j, exceptStaff = i), onEvent, fixNav, onApplied = {}, compact = true)
                 } else if (mode == 0 && status.severity != CellSeverity.NONE) {
                     FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true)
+                }
+                var details by remember(cell) { mutableStateOf(false) }
+                TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(if (details) "詳しく ▲" else "詳しく ▼")
+                }
+                if (details) {
+                    val detailLines = remember(rev, cell) {
+                        stateOf()?.let { st -> cellDetailLines(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, c1Anchors[VioKey.cell(i, j)]) }.orEmpty()
+                    }
+                    val staffLines = remember(rev, i, cv) { staffCountLines(ui, i, cv::staffCellLimits) }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("このセルの違反", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        if (detailLines.isEmpty()) Text("違反はありません。", style = MaterialTheme.typography.bodySmall)
+                        detailLines.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        Text("この職員の回数・偏り", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                        if (staffLines.isEmpty()) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodySmall)
+                        staffLines.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }
                 }
                 if (status.severity != CellSeverity.NONE) {
                     TextButton(onClick = {

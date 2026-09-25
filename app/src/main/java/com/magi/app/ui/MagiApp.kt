@@ -471,15 +471,27 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     //   数秒で消える＝**イベントはSnackbar・状態は上部バッジと進捗行**、という役割分担になる。
     //   消えたあとも操作ログ（詳細設定＞ログ）に残るので読み返せる。
     val snackbarHostState = remember { SnackbarHostState() }
+    // 操作の通知（「元に戻す」付き）は検査の進み具合と別のイベント。出ている間は通常の文言で置き換えない。
+    var noticeShowingId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(ui.opNotice?.id) {
+        val n = ui.opNotice ?: return@LaunchedEffect
+        snackbarHostState.currentSnackbarData?.dismiss()
+        noticeShowingId = n.id
+        try {
+            val r = snackbarHostState.showSnackbar(n.text, actionLabel = "元に戻す", duration = SnackbarDuration.Short)
+            if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) vm.undoNotice(n)
+        } finally {
+            if (noticeShowingId == n.id) noticeShowingId = null
+            vm.clearOpNotice(n.id)
+        }
+    }
     LaunchedEffect(ui.message) {
         val m = ui.message ?: return@LaunchedEffect
+        if (!messageMayReplaceNotice(noticeShowingId != null, ui.messageIsError)) { vm.clearMessage(m); return@LaunchedEffect }
         snackbarHostState.currentSnackbarData?.dismiss()
         // [3.400.0] 失敗・拒否は長め（4秒だと120字級の失敗文を読み切る前に消える）。
-        val undoable = m == ui.undoableMessage && ui.canUndo
-        val r = snackbarHostState.showSnackbar(m, actionLabel = if (undoable) "元に戻す" else null,
-            duration = if (ui.messageIsError) SnackbarDuration.Long else SnackbarDuration.Short)
+        snackbarHostState.showSnackbar(m, duration = if (ui.messageIsError) SnackbarDuration.Long else SnackbarDuration.Short)
         vm.clearMessage(m)
-        if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) vm.undo()   // 同じ文言が再び来ても状態が変わる＝次のタップでもう一度出る
     }
 
     Scaffold(

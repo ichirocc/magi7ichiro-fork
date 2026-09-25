@@ -68,7 +68,9 @@ data class UiState(
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
     val fixSearching: Boolean = false,
     /** 直し方の探索を終えた依頼の鍵（`FixFocus.key`、空＝画面全体や未完了）。印・セルのシートが自分の結果か見分ける。 */
-    val fixDoneKey: String = "",                                       // 改善手を探索中
+    val fixDoneKey: String = "",
+    /** 直し方の探索が失敗した依頼の鍵（`FixFocus.key`）。 */
+    val fixFailedKey: String = "",
     val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）
     val stalledHardFamilies: List<String> = emptyList(),   // [思考誘導S4] 直近の実行で長く改善せず採用盤面にも残った必須族（盤面を変えたら空）
     val fixFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）
@@ -117,8 +119,8 @@ data class UiState(
     //   生んでいた。applyStructure が毎回これを増やして必ず distinct な UiState を emit＝確実に再構成させる。
     val editRev: Int = 0,
     val message: String? = null,
-    /** この文言の Snackbar に「元に戻す」を付ける（セルを 1 つ変えた直後だけ。1 段戻す）。 */
-    val undoableMessage: String? = null,
+    /** 操作の通知（「元に戻す」付き）。検査の進み具合の [message] とは別のイベント＝再検査で上書きされない。 */
+    val opNotice: OpNotice? = null,
     // [3.400.0] 直近メッセージが「失敗・拒否」か。Snackbar の色（errorContainer）と表示時間（長め）を分ける。
     //   **`notify(text, "W")` が唯一の true の書き手**で、`clearMessage` が false へ戻す。素の
     //   `copy(message = …)` は触らない＝既定 false のまま＝旧来どおりの見た目になる（退行しない）。
@@ -171,6 +173,16 @@ data class PinTargetView(
 )
 
 /** [S5] 「希望を取り消して、もう一度つくる」の結果（`docs/s5_wish_trial.md` §9）。`line` は次にやることカードに出す 1 行。 */
+/** 操作の通知。[undoSerial] はその操作が積んだ元に戻すの段（通知から戻すのはこの段が先頭のときだけ）。 */
+data class OpNotice(val id: Long, val text: String, val undoSerial: Long)
+
+/** 希望の表示（希望・試算できる希望・希望どうしの衝突）を設定から作り直す。報告の反映と元に戻す/やり直すで共有する。 */
+internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState = copy(
+    wishes = st.wishes,
+    lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
+    wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
+)
+
 data class WishCancelOutcome(
     val name: String, val day: Int, val symbol: String,
     val h0: Int, val pCancel: Int, val g: Int, val line: String,
