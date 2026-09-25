@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- backlog #36 R1 締結（2026-09-25）: 走行 keep-best の大規模負け越しは無害化前の許容（FairPolish の許容出力の巻き戻し）が原因。現行 main で `rkbstruct` 再測定＝勝45/負11 p<0.0001・必須悪化0・大規模 c42pair/forbidden 10/10 盤面一致・dense 7/3＝事前基準合格。許容 ON は大規模の保存盤面で既定 OFF に 8/26（実機設定の切替は利用者判断）。  → `docs/history/3.4xx.md`
+
 - 実データ精読の是正・エンジン層（2026-09-25）: MUS 日別が上限 0 の希望固定を席に数えず誤「証明つき」（10/11）→希望固定優先、強制下限も同型。希望どうしの禁止の並びの診断 1c、`V6SanityPort.wishSelfConflicts`（1b/1c/HF70/残存分析/S5 兄弟行が共有）、HF70・残存分析の仕分け、SaOptimizer のコメント是正。盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
 
 - 既定OFF台帳の整理⑬（2026-09-25）: 否決済み `roleBudgetFit`＋`rsiPlusPhaseBudgets` を撤去（C# 同期）、探索側は 3.600.0 直前と roleBudgetFit 差分なし。  → `docs/history/3.4xx.md`
