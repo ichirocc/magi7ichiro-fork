@@ -193,7 +193,6 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | `Params.fairAchievementDirection` | fair 研磨の候補分類を達成率の向きで（#27①） | 3.591.0 不合格（#27） |
 | `Params.dayAssignIdentityFallback` | 日割当の恒等フォールバック | 3.598.0（#30 対処2） |
 | `Params.postChainRunningKeepBestAcceptTies` | 走行 keep-best で同点も採る | 必須増 1（#36 B） |
-| `SaParams.officialTieBreak` | SA/LAHC の HARD 同点を公式 weightedScore で決める | 3.571.0 40走行で勝ち 0（#19） |
 | `V6OptimizerOptions.roleBudgetFit` | ロールへ渡す秒数を min(量子, 残り) に | 3.601.0 有意差なし（#34(b)） |
 | `V6OptimizerOptions.rsiFocusRotationPersist` | RSI 焦点の周期枠を呼出しをまたいで保持 | 2026-09-21/22 有意差なし（#28） |
 | `extraRefineRequirePostHardDrop`（V6FinalPort） | 追加精製を後処理で HARD が減ったときだけに | 実質 A/A（#35） |
@@ -225,6 +224,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 旧要素 | 整理先 | 理由 |
 |---|---|---|
+| `SaParams.officialTieBreak`＋`TieBreakBench`（SA の HARD 同点を公式 weightedScore で追跡） | 既定経路（フラグごと撤去） | 3.571.0 40 走行で勝ち 0（#19）。2026-09-25 撤去＝選定に触れない計測専用、SaOptimizer.kt は導入前とバイト一致。 |
 | `ViolationComponentRepair.Params.debtLaneSlots`（VCR の二車線ビーム） | 既定経路（フラグごと撤去） | 3.512.4 iter22 不合格・2026-09-09 検証中止（#15 v2.1）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `ViolationComponentRepair.Params.bestOfK`（VCR で K 起点から最良を採る） | 既定経路（フラグごと撤去） | 3.512.4 iter23 不合格・ユーザー判断で終了（#12(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
 | `ViolationComponentRepair.Params.familyPriorityScoring`／`familyPriorityScore`（VCR の族優先度） | 既定経路（フラグごと撤去） | 3.511.6 iter17 不合格（#12(b)）。2026-09-25 撤去＝既定出力不変（盤面ハッシュ 8/8 一致）。 |
