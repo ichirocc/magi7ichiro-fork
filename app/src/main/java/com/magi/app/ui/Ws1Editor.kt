@@ -231,7 +231,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             confirmButton = { DialogDangerButton("縮める", onClick = { onEvent(MagiEvent.Structure.ResizeDays(d.days)); dialog = null }) },
             dismissButton = { DialogDismissButton(onClick = { dialog = null }) },
             title = { Text("期間を縮めますか？") },
-            text = { Text("${v.days}日 → ${d.days}日にします。${d.days + 1}日目以降の希望と日別の必要人数は削除されます（元に戻すで取り消せます）。") },
+            text = { Text("${v.days}日 → ${d.days}日にします。${d.days + 1}日目以降の勤務表の割り当て・希望・日別の必要人数は削除されます（元に戻すで取り消せます）。") },
         )
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },

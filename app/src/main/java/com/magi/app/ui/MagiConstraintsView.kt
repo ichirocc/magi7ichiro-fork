@@ -54,9 +54,9 @@ internal fun cons1InputError(d1: String, d2: String, dayCount: Int): String? {
     val days = d1.trim().toIntOrNull(); val need = d2.trim().toIntOrNull()
     val maxDays = if (dayCount > 0) dayCount else Int.MAX_VALUE
     return when {
-        days != null && days !in 1..maxDays -> if (dayCount > 0) "何日間は 1〜$dayCount で入れてください" else "何日間は 1 以上で入れてください"
-        need != null && need < 1 -> "必要数は 1 以上で入れてください"
-        days != null && need != null && need > days -> "必要数は何日間以下にしてください（超えると必ず違反になります）"
+        days != null && days !in 1..maxDays -> if (dayCount > 0) "「何日間」は 1〜$dayCount で入れてください" else "「何日間」は 1 以上で入れてください"
+        need != null && need < 1 -> "「必要数」は 1 以上で入れてください"
+        days != null && need != null && need > days -> "「必要数」は「何日間」以下にしてください（超えると必ず違反になります）"
         else -> null
     }
 }

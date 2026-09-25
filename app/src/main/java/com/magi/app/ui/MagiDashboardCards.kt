@@ -1288,7 +1288,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val p = key.split(","); val k = p.getOrNull(0)?.toIntOrNull() ?: continue; val j = p.getOrNull(1)?.toIntOrNull() ?: continue
         val fam = cls.removePrefix("vio-")
         // [④用語統一] 過剰マークは「過剰」（凡例/集計と同語）。[⑥日別ジャンプ] day=j で勤務表の該当日列へ飛べる。
-        val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過剰" to 1; else -> "調整" to 1 }
+        val (mark, kind) = when (fam) { "covU" -> "不足" to 0; "covO" -> "過剰" to 1; else -> "要調整" to 1 }
         out += ConfirmItem(kind, mark, "${dayMD(ui.startDate, j)}「${sym(k)}」", breakdownLabels[fam] ?: fam, null, j, kind * 100000 + j * 100 + k,
             needShift = if (fam == "covU" || fam == "covO") k else null, families = listOf(fam))
     }
@@ -1309,9 +1309,9 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val cell = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
         val cellSym = if (cell >= 0) sym(cell) else "—"
         val (mark, kind) = when (fam) {
-            "c1" -> "窓" to 2
+            "c1" -> "期間" to 2   // 族名「期間の制約」の短縮（46dp の枠に収める）
             "pref", "groupViol", "c3n", "c3w" -> "必須" to 0
-            else -> "調整" to 1
+            else -> "要調整" to 1
         }
         // [Set化] 同セルに重なった族は sub に全列挙（重み降順）。行数=箇所数は不変（見出し件数の意味を保つ）。
         val famsAll = (ui.violationCellFamilies[key] ?: listOf(cls)).map { it.removePrefix("vio-") }
@@ -1348,7 +1348,9 @@ private fun ConfirmRow(
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Surface(color = bg, shape = MaterialTheme.shapes.small) {
                 Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
-                    Text(item.mark, color = fg, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+                    // 3 字（要調整）は 1 段小さい字で 46dp の枠に収める。
+                    Text(item.mark, color = fg, style = if (item.mark.length >= 3) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                 }
             }
             Column(Modifier.weight(1f)) {
