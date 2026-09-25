@@ -624,6 +624,6 @@
     必須増5（減6、すべて充足不能）・速度 −7.4%＝段1（必須増 0）不合格・段2（有意勝ち）なし→**既定 OFF 維持**。有意な不利は解消し、
     実データ 20/20 は OFF と同値。詳細は history「許容 ON の無害化」。
 37. **[S5 任意の残作業・2026-09-24 登録]**（本体は Android 0b1d7b3/96a147f/044268d・C# a56506c..ddbb16d で実装済み、`docs/s5_wish_trial.md`）:
-    (a) T8 共有 fixture（sample_state_v6.json＋希望 1〜2 件）の言語跨ぎ期待値ファイルを Kotlin/C# 両方に追加（現状は `NativeParityFixtureTest` のみ）／
+    ~~(a) T8 共有 fixture の言語跨ぎ期待値ファイル~~ **済（2026-09-25）**: `wish_trial_expected.txt`（sample_state_v6＋blocked_covu、各 wishLocked 先頭 3 件＋対照）を Kotlin/C# の `WishTrialCrossLanguageTest` が読む。両言語一致／
     (b) 実行マーカー（`MagiViewModel` の mode/budget/workers/algorithm）に S5 文脈＝取り消した希望のキーを載せ、中断案内で名指しする（s5 §15 の「backlog へ」と同件）／
     (c) 「詳しい試算」＝VCR＋後処理チェーンの重い試算を出すか（利用者の決定が要る。机上評価では当たりはほぼ同じで 30 倍遅い）。

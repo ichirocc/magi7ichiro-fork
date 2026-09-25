@@ -1,5 +1,7 @@
 # 作業記録の索引（見出し一覧）
 
+- S5 T8 言語跨ぎ契約（2026-09-25）: `wish_trial_expected.txt` を Kotlin/C# の `WishTrialCrossLanguageTest` が共有、両言語一致（backlog #37(a)）。  → `docs/history/3.4xx.md`
+
 - 既定OFF台帳の整理②（2026-09-25）: 否決済み `useDynamicBlockLens` を撤去、盤面ハッシュ 8/8 一致。  → `docs/history/3.4xx.md`
 
 - 既定OFF台帳の整理①（2026-09-25）: 否決済み `lnsWeightDebt`／`WeightDebt` を撤去、盤面ハッシュ 8/8 一致。台帳 22 件の分類と残した理由を記録。  → `docs/history/3.4xx.md`
