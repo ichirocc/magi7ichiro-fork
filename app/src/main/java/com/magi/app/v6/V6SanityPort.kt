@@ -1228,7 +1228,7 @@ object V6SanityPort {
             }
         }
 
-        /** 直すべき度合いが高い順。SettingIssuesCard は先頭 take(6) のみ表示するため最重要のデータ起因を上位へ。sortedBy は安定＝同順は挿入順。 */
+        /** 直すべき度合いが高い順。設定の見直しの一覧は先頭 SETTING_ISSUE_PREVIEW 件を先に出す（残りは「すべて表示」）ため最重要のデータ起因を上位へ。sortedBy は安定＝同順は挿入順。 */
         fun sorted(): List<SettingIssue> {
             return out.sortedBy { iss ->
                 when {

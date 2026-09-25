@@ -567,7 +567,7 @@
     発動し得るのはsample（c3n壁の証明あり）だけ。代わりにこのハーネスのノイズ幅（品質±1.6%・時間±37%）の実測値として
     有用。なおc3n壁が証明されてもSOFTは改善し得るので、省略は品質とのトレードオフ（未測定）。既定OFFは維持。
 
-36. **[完了・3.610.0で既定ON（構造床条件つき）] `postChainRunningKeepBest`（3.608.0）のtools/loop A/B判定**（2026-09-21）。
+36. **[完了・3.610.0で既定ON（構造床条件つき）・大規模の負け越し R1 は 2026-09-25 締結] `postChainRunningKeepBest`（3.608.0）のtools/loop A/B判定**（2026-09-21）。
     `LoopBench.kt`に`MAGI_BENCH_FEATURE=runningkeepbest`腕を追加し5seed×46ケース(230ペア)で実施
     （`tools/loop/results/iter_runningkeepbest.csv`）。**結果: 辞書式 新0/同等230/旧0、品質±0.00%、
     速度+0.7〜0.8%、必須違反退行0、安定性 例外0・再現性46/46。ゲート{退行ゼロ:合格,品質≥10%:不合格,
@@ -628,6 +628,20 @@
     **→ 無害化（2026-09-24、ユーザー指示）後の再測定（`iter_aptfairtol_guarded.csv`、230 ペア）**: ON 勝63/OFF 勝52・p=0.35・
     必須増5（減6、すべて充足不能）・速度 −7.4%＝段1（必須増 0）不合格・段2（有意勝ち）なし→**既定 OFF 維持**。有意な不利は解消し、
     実データ 20/20 は OFF と同値。詳細は history「許容 ON の無害化」。
+    **→ R1（大規模の負け越し）締結（2026-09-25）**: 原因は走行 keep-best ではなく**無害化前の許容**。机上調査（大規模 8 件×seed 5、
+    同じ保存初期盤面で腕を比較）で、ON 腕の巻き戻し 181 件（無害化前 157・現行 24）はすべて許容を使った FairPolish の出力だった。
+    無害化前の `toleratedBetter`（ガードなし）に戻すと負けが再現（c42pair 0/10・dense 1/9・forbidden 3/7）＝fair を減らす代わりに
+    weekly・high・c41 等を増やした出力を keep-best が捨て、捨てなかった OFF 腕はその盤面から後段（CyclicSwapPolish・
+    WeeklyRebalancePolish・個人回数共同LNS）で回収して勝っていた（上の「変更セル数が揃う」もこの巻き戻し）。現行コードでは
+    normal/forbidden/c42pair は両腕で盤面一致、dense は ON 7/OFF 3。
+    現行 main（d2421af、`rkbstruct` 腕は prune 後も不変）で 5seed×46＝230 ペアを再測定（`iter_rkbstruct_head.csv`）:
+    **勝45/負11/同点174・p<0.0001・必須退行0・必須増0・品質+0.14%・速度+3.4%・再現性46/46**。大規模は normal 6/1
+    （負けの 1 件は加重同点で変更セル数の差だけ）・forbidden と c42pair は 10/10 盤面一致・dense 7/3・c2deficit/wishheavy/infeasible は
+    全同点・実データ 1/0/同19。事前に決めた基準（必須悪化 0／勝≥負かつ OFF の有意な勝ちなし／大規模 normal・forbidden・c42pair の
+    負け各 1/10 以下・dense 3/10 以下／どの大規模分類も負け 5/10 未満）をすべて満たす→**R1 締結、走行 keep-best は既定 ON のまま**。
+    **別件（利用者の決定待ち）**: 同じ保存盤面で許容 ON（実機の設定＝無害化＋keep-best）と既定 OFF を比べると
+    **ON 勝8/OFF 勝26/同点6（p=0.003）**＝大規模では許容 OFF が有利（`iter_aptfairtol_guarded.csv` でも大規模の充足可能 4 分類は
+    ON 15/OFF 21 と同じ向き、全体は p=0.35）。実機の設定を OFF へ切り替える根拠になる（切り替えは利用者の判断）。
 37. **[S5 任意の残作業・2026-09-24 登録]**（本体は Android 0b1d7b3/96a147f/044268d・C# a56506c..ddbb16d で実装済み、`docs/s5_wish_trial.md`）:
     ~~(a) T8 共有 fixture の言語跨ぎ期待値ファイル~~ **済（2026-09-25）**: `wish_trial_expected.txt`（sample_state_v6＋blocked_covu、各 wishLocked 先頭 3 件＋対照）を Kotlin/C# の `WishTrialCrossLanguageTest` が読む。両言語一致／
     ~~(b) 実行マーカーに S5 文脈を載せ中断案内で名指し~~ **済（2026-09-25）**: `work/RunMarker.kt`（`s5`＝staff/day/symbol/name、旧マーカーは従来文）＋`RunMarkerTest`。C# は実行マーカー撤去済み（2026-09-01）＝対象外／

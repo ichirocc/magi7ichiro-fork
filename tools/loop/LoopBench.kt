@@ -135,7 +135,7 @@ fun main(args: Array<String>) {
         //   非単調になるのは aptFairSoftTolerance（他ソフト悪化を許容）ON のとき＝実機で道連れ棄却が起きた設定。
         "runningkeepbestaft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
-        //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装（A）と、同点も受け入れる版（B）。どちらも許容 ON 同士。
+        //   2026-09-22: 構造床>0 の盤面では keep-best が働かない実装。許容 ON 同士。
         "rkbstruct" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRunningKeepBest = true)
         //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
