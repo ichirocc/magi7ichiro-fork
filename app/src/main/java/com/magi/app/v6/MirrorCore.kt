@@ -650,6 +650,21 @@ fun Problem.wishLocked(i: Int, j: Int): Boolean {
     return w >= 0 && canDo(i, w)
 }
 
+/** [希望固定の徹底] 規則 A: 最適化器がセル (i,j) を `cur` から `new` へ変えてよいか。希望固定セルは「希望へ」か「今のまま」だけ
+ *  ＝希望どおりのセルは動かさず、未反映のセル（希望と違う値）は希望へ戻すのだけ可で、希望でも今の値でもない値へは動かさない。
+ *  `strict=false`（[PolishGate.wishPinStrict] OFF）は旧挙動＝常に可。 */
+fun Problem.wishMoveAllowed(i: Int, j: Int, cur: Int, new: Int, strict: Boolean = PolishGate.wishPinStrict): Boolean =
+    !strict || !wishLocked(i, j) || new == wish[i][j] || new == cur
+
+/** [希望固定の徹底] 盤面単位の規則 A: `cand` の希望固定セルはどれも「希望どおり」か「`base` と同じ値」。
+ *  盤面ごと採る経路の採否に使う（[PolishGate.wishPinStrict] の間だけ呼ぶ）。 */
+fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>): Boolean {
+    for (i in 0 until S) for (j in 0 until T) {
+        if (!wishMoveAllowed(i, j, base[i][j], cand[i][j], strict = true)) return false
+    }
+    return true
+}
+
 /** [3.507.0] 最適化器が (i,k) を置いてよいか＝担当可かつ個人上限 0 でない（休は除外しない）。評価・表示は canDo。 */
 fun Problem.mayPlace(staffI: Int, shiftK: Int): Boolean {
     if (staffI !in 0 until S || shiftK !in 0 until K) return false

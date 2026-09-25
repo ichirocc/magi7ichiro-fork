@@ -190,6 +190,22 @@ object PolishGate {
     @Volatile var personSwapKick: Boolean = true
 
     /**
+     * [希望固定の徹底] 規則 A（利用者決定 2026-09-25）: 最適化器は希望固定セル（`wishLocked`）を「希望へ」か「今のまま」にしか
+     * しない＝希望どおりのセルは動かさない・未反映のセルは希望へ戻してよい（あとから足した希望も従来どおり載る）・
+     * 未反映のセルを希望でも今の値でもない値へは動かさない。判定は `Problem.wishMoveAllowed`（セル）と
+     * `Problem.keepsWishPins`（盤面）。多くの経路は元から希望固定セルを動かさないか希望の値しか書かない
+     * （経路ごとの分類は docs/history/3.4xx.md「希望固定セルの規則 A」）。このフラグが効くのは、それ以外の経路:
+     * `EliteRelinking.elitePathRelink`（希望以外は写さない）・`V6NativeOptimizer.personSwapKick`（希望固定の日は交換しない）・
+     * `EliteIntegrationPolish`（規則 A を破るエリート/中間解を採らない）・`CovOReliefPolish` と RSI の free 系
+     * （「希望どおりの値だけ固定」だった）・入口 hf66/`clearCappedCells`（外すセルは埋めシフトでなく希望へ）。
+     * 採否（pref=HARD）だけでは守れない: 希望どうしの衝突では c3n(9000)→pref(8000) が HARD 件数を変えず
+     * weighted だけ下げ、未反映のセルを別の値へ動かしても pref は変わらないので、keep-best は崩した盤面を採る。
+     * 手で変えたセルが残ることは保証しない（希望へ戻すのは可＝明示の手動固定は別課題）。
+     * 既定 **true**。false は旧挙動（tools/loop の A/B 用、UI トグルは無し）。
+     */
+    @Volatile var wishPinStrict: Boolean = true
+
+    /**
      * [3.535.0/HF77明示数値指示] `AptFairPolish.applyAptPolish`/`applyFairPolish`の採否で、対象家族
      * (apt/fair)以外のSOFT合計比+6%まで悪化を容認する（累積予算、`AptFairPolish.toleratedBetter`参照。
      * HARDの不増加・keep-bestの根幹は不変）。既定 **false**（詳細は`docs/algorithm_portfolio.md`参照）。
