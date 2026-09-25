@@ -516,8 +516,7 @@ class SessionRegressionTest {
         var s2 = st
         for (g in st.skillGroups.indices.reversed()) s2 = Ws1Ops.removeSkillGroup(s2, g)
         assertTrue("全員が未所属", s2.staff.all { it.skillIdx == -1 })
-        // 群の追加は `skillGroups` に1件足すだけ（MagiViewModel.addSkillGroup と同じ操作）。
-        val readded = s2.copy(skillGroups = s2.skillGroups + Group("S9", "S9"))
+        val readded = Ws1Ops.addSkillGroup(s2, "S9", "S9")
         assertTrue("群を足しても誰も所属しない", readded.staff.all { it.skillIdx == -1 })
 
         assertEquals("範囲外は何もしない", st, Ws1Ops.removeSkillGroup(st, 9))

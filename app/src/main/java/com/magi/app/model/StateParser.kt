@@ -36,7 +36,7 @@ object StateParser {
             Group(it.optString("name"), it.optString("kigou"))
         }
         val staff = o.optJSONArray("staff").mapObjects("staff") {
-            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", 0))
+            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", -1))
         }
         val skillGroups = o.optJSONArray("skillGroups").mapObjects("skillGroups") {
             Group(it.optString("name"), it.optString("kigou"))

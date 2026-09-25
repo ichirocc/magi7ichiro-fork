@@ -830,11 +830,11 @@ object V6SanityPort {
         }
 
         fun assignmentIssues() {
-            // 2i) [3.327.0/外部レビュー High5] スキル群の割当が範囲外。
-            //   `Staff.skillIdx` の既定は 0 で、`Problem` は素通しする（native は 3.311.0 で巨大確保だけ
-            //   防いでいるが、意味論は検証していない）。範囲外だと `ssk[i]==groupIdx` が常に偽＝その職員が
-            //   スキル群の制約から**静かに外れる**。さらに旧いデータは未指定が 0 なので、あとからスキル群を
-            //   作ると全員が先頭の群に所属したことになる。自動で書き換えると意味が変わるので**知らせるだけ**にする。
+            // 2i) [3.327.0/外部レビュー High5] スキル群の割当が範囲外（-1＝未所属でも一覧の index でもない値）。
+            //   `Problem` は `skillIdx` を素通しする（native は 3.311.0 で巨大確保だけ防いでいるが、意味論は
+            //   検証していない）。範囲外だと `ssk[i]==groupIdx` が常に偽＝その職員がスキル群の制約から
+            //   **静かに外れる**。自動で書き換えると意味が変わるので**知らせるだけ**にする。範囲内の値が意図した
+            //   所属かどうかは見ない（最初の 1 群を作るときの取り違えは `Ws1Ops.addSkillGroup` が防ぐ）。
             if (state.skillGroups.isNotEmpty()) {
                 val bad = state.staff.withIndex().filter { (_, st2) ->
                     st2.skillIdx != -1 && st2.skillIdx !in state.skillGroups.indices
