@@ -155,7 +155,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
         if (e !is MagiEvent.Session) return@MagiEventHandler false
         when (e) {
             MagiEvent.Session.RefreshCheck -> vm.refreshCheck()
-            is MagiEvent.Session.FindFixSuggestions -> vm.findFixSuggestions(e.focusStaff, e.focusShift, e.focusKey)
+            is MagiEvent.Session.FindFixSuggestions -> vm.findFixSuggestions(e.focusStaff, e.focusShift, e.focusKey, e.exceptStaff, e.day)
             is MagiEvent.Session.CancelFixSearch -> vm.cancelFixSearch()
             is MagiEvent.Session.Notify -> vm.notify(e.text, e.level)
             is MagiEvent.Session.ClearMessage -> vm.clearMessage(e.shown)

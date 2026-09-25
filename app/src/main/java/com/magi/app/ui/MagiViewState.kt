@@ -440,9 +440,9 @@ internal fun legendShapeFamilies(): String {
 // ===== その場の直し方探し（印・セルのシートの中で探して、見つからなければ理由と次の一歩） =====
 
 /** 探す対象。staff/shift は `FixSuggester` の絞り込み、day はセル・日の理由の読み取りだけに使う。 */
-internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null) {
+internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null, val exceptStaff: Int? = null) {
     /** 結果がどの依頼のものかを見分ける鍵（`UiState.fixDoneKey` と照合）。 */
-    val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}"
+    val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}" + (exceptStaff?.let { ",x$it" } ?: "")
 }
 
 /** 手が見つからなかったときの説明。lines は確かめた事実だけ、wishRelated なら「希望を見る」を出す。 */

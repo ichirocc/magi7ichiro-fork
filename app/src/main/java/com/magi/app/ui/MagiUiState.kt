@@ -117,6 +117,8 @@ data class UiState(
     //   生んでいた。applyStructure が毎回これを増やして必ず distinct な UiState を emit＝確実に再構成させる。
     val editRev: Int = 0,
     val message: String? = null,
+    /** この文言の Snackbar に「元に戻す」を付ける（セルを 1 つ変えた直後だけ。1 段戻す）。 */
+    val undoableMessage: String? = null,
     // [3.400.0] 直近メッセージが「失敗・拒否」か。Snackbar の色（errorContainer）と表示時間（長め）を分ける。
     //   **`notify(text, "W")` が唯一の true の書き手**で、`clearMessage` が false へ戻す。素の
     //   `copy(message = …)` は触らない＝既定 false のまま＝旧来どおりの見た目になる（退行しない）。
