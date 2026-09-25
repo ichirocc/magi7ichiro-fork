@@ -7,6 +7,7 @@ import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.V6PortAnalyzer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -144,5 +145,58 @@ class MagiViewStateTest {
         )
         assertEquals("最重1クラスだけ見ると c41s に隠れて過剰が消える", "vio-covO", coverageVioAt(ui, 1, 0, allVioBucketKeys))
         assertTrue("過剰のある日は印が付く", MagiViewState(ui).days[0].hasSurplus)
+    }
+
+    /** 違反フィルタのチップ件数も同じ（needViolations だけを数えると c41s に隠れた過剰が「人員 0」になる）。 */
+    @Test
+    fun bucketChipCountsSeeClassesHiddenBehindEqualWeightFamilies() {
+        val ui = UiState(
+            staff = 1, days = 1, shifts = 2, schedule = listOf(listOf(0)),
+            needViolations = mapOf("1,0" to "vio-c41s"),
+            needFamilies = mapOf("1,0" to listOf("vio-c41s", "vio-covO")),
+        )
+        val counts = vioBucketLocCounts(ui)
+        assertEquals("c41s に隠れた過剰も人員に数える", 1, counts["need"])
+        assertEquals("グループルールは 1 箇所のまま", 1, counts["group"])
+        val fallback = vioBucketLocCounts(ui.copy(needFamilies = emptyMap()))
+        assertEquals("families 未充填の経路は最重1クラスへフォールバック", null, fallback["need"])
+        assertEquals(1, fallback["group"])
+    }
+
+    /** 最終週が 7 日に満たない月でも、右端まで送れば最終週になる（左端の日だけだと最後から 2 番目で止まる）。 */
+    @Test
+    fun currentWeekReachesAPartialLastWeekAtTheRightEdge() {
+        val weeks = listOf((0..6).toList(), (7..13).toList(), (14..20).toList(), (21..27).toList(), (28..30).toList())
+        assertEquals(0, currentWeekIndex(weeks, leftDay = 0, atEnd = false))
+        assertEquals(2, currentWeekIndex(weeks, leftDay = 14, atEnd = false))
+        assertEquals("31日・7日表示の右端は左端が 24日目", 3, currentWeekIndex(weeks, leftDay = 24, atEnd = false))
+        assertEquals(4, currentWeekIndex(weeks, leftDay = 24, atEnd = true))
+        assertEquals(0, currentWeekIndex(listOf((0..6).toList()), leftDay = 0, atEnd = true))
+        assertEquals(0, currentWeekIndex(emptyList(), leftDay = 3, atEnd = false))
+    }
+
+    /** 色の対象ごとに別の段（違う対象の変更は 1 つの「元に戻す」にまとめない）。 */
+    @Test
+    fun colourUndoKeyNamesTheChangedTargetsOnly() {
+        val base = mapOf("D" to "#ff0000", "__vio__" to "#00ff00")
+        assertEquals("D", DisplayOnlyUndo.colorKey(base, base + ("D" to "#0000ff")))
+        assertEquals("__vio__", DisplayOnlyUndo.colorKey(base, base - "__vio__"))
+        assertEquals("N", DisplayOnlyUndo.colorKey(base, base + ("N" to "#123456")))
+        assertTrue("D の続けての変更は同じ目印", DisplayOnlyUndo.colorKey(base, base + ("D" to "#111111")) ==
+            DisplayOnlyUndo.colorKey(base + ("D" to "#111111"), base + ("D" to "#222222")))
+        assertFalse("D と違反色は別の目印", DisplayOnlyUndo.colorKey(base, base + ("D" to "#111111")) ==
+            DisplayOnlyUndo.colorKey(base, base + ("__vio__" to "#222222")))
+    }
+
+    /** 差が表示色だけの段は、戻しても結果・他の案・直し方を外さない（盤面か設定が違えば通常の元に戻す）。 */
+    @Test
+    fun colourOnlyDifferenceIsDetectedAgainstBoardAndSettings() {
+        val st = load("/golden_state.json")
+        val sched = st.schedule.toIntArray2D()
+        val recoloured = st.copy(shiftColors = st.shiftColors + ("__vio__" to "#123456"))
+        assertTrue(DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured, sched.map { it.clone() }.toTypedArray()))
+        val edited = sched.map { it.clone() }.toTypedArray().also { it[0][0] = (it[0][0] + 1) % st.shiftCount }
+        assertFalse("盤面が違う", DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured, edited))
+        assertFalse("設定が違う", DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured.copy(use2Patterns = !st.use2Patterns), sched))
     }
 }

@@ -33,6 +33,8 @@ internal sealed interface MagiEvent {
         data class EditShift(val shift: Int, val name: String, val kigou: String, val need1: String, val need2: String, val isRest: Boolean) : Structure
         data class SetShiftNeed(val shift: Int, val need1: String, val need2: String) : Structure
         data class AddShift(val name: String, val kigou: String, val need1: String, val need2: String, val isRest: Boolean = false) : Structure
+        /** 一括追加（記号がそのまま名称）。1回の操作＝1回の「元に戻す」。 */
+        data class BulkAddShift(val kigous: List<String>) : Structure
         data class RemoveShift(val shift: Int) : Structure
         data class MoveShift(val from: Int, val to: Int) : Structure
         data class EditGroup(val group: Int, val name: String, val kigou: String) : Structure
@@ -41,6 +43,7 @@ internal sealed interface MagiEvent {
         data class MoveGroup(val from: Int, val to: Int) : Structure
         data class EditStaff(val staff: Int, val name: String, val groupIdx: Int) : Structure
         data class AddStaff(val name: String, val groupIdx: Int) : Structure
+        data class BulkAddStaff(val names: List<String>, val groupIdx: Int) : Structure
         data class RemoveStaff(val staff: Int) : Structure
         data class MoveStaff(val from: Int, val to: Int) : Structure
         data class SetGroupShift(val group: Int, val shift: Int, val allowed: Boolean) : Structure
@@ -65,6 +68,8 @@ internal sealed interface MagiEvent {
 
         data class SetNeedDay(val shift: Int, val day: Int, val p1: String, val p2: String) : Condition
         data class RemoveNeedDay(val shift: Int, val day: Int) : Condition
+        data class SetNeedDaysForDays(val shift: Int, val days: List<Int>, val p1: String, val p2: String) : Condition
+        data class ClearNeedDaysForDays(val shift: Int, val days: List<Int>) : Condition
         data class SetStaffRange(val staff: Int, val shift: Int, val lo: String, val hi: String) : Condition
         data class RelaxStaffRangePin(val staff: Int, val shift: Int, val loDelta: Int, val hiDelta: Int) : Condition
         data class RemoveStaffRange(val staff: Int, val shift: Int) : Condition
@@ -191,7 +196,9 @@ internal sealed interface MagiEvent {
         data class ToggleVioBucket(val bucket: String) : Session
         data class SetNameQuery(val query: String) : Session
         data object RefreshCheck : Session
-        data class FindFixSuggestions(val focusStaff: Int?, val focusShift: Int?) : Session
+        data class FindFixSuggestions(val focusStaff: Int?, val focusShift: Int?, val focusKey: String = "", val exceptStaff: Int? = null, val day: Int? = null) : Session
+        /** シートを閉じたときの探索の取り消し（古い結果を書き戻さない）。 */
+        data object CancelFixSearch : Session
         data class Notify(val text: String, val level: String = "I") : Session
         data class ClearMessage(val shown: String?) : Session
         data class AddReviewMemo(val text: String) : Session

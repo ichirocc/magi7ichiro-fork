@@ -19,6 +19,18 @@ import kotlinx.coroutines.isActive
 const val MAX_OPTIMIZE_SEC = 300
 
 object V6FinalPort {
+    /** 直近の [handleOptimize] が最適化器へ渡した種（テスト用）。 */
+    @Volatile internal var lastOptimizerSeed: Long = 0L
+
+    /** [backlog#35] 残りHARDが「解けないと証明済み」か＝covU は床以下で、非covU は c3n だけかつ c3n 壁（[c3nWall]）。 */
+    internal fun isStructuralHardResidual(report: ViolationReport, hardFloor: Int, c3nWall: () -> Boolean): Boolean {
+        if (report.hard <= 0) return false
+        val covU = report.breakdown["covU"] ?: 0
+        if (covU > hardFloor) return false
+        val nonCovU = report.hard - covU
+        return nonCovU == 0 || (nonCovU == (report.breakdown["c3n"] ?: 0) && c3nWall())
+    }
+
     /** [UX調査] regression!=null（Sentinel発火＝後処理盤面が棄却された）のとき、その盤面を観測した
      *  各パスのログ行（CovORelief:/C1Polish:/CoverageDiag等）を採用盤面の実態と誤読させないよう
      *  行単位で明示する。ログは落とさない方針(3.327.0)は不変＝目印を足すだけ。 */
@@ -207,15 +219,16 @@ object V6FinalPort {
     }
 
     fun getAlgorithmLabel(seconds: Int): AlgorithmLabel = when {
+        // name は設定画面の「おまかせ」の説明に出る＝方式チップ（v6AlgorithmLabel）と同じ語にする。
         seconds <= 10 -> AlgorithmLabel("⚡", "高速", "短時間でサッと作成", "v5")
-        seconds <= 30 -> AlgorithmLabel("★", "標準", "速さと品質のバランス", "v5")
+        seconds <= 30 -> AlgorithmLabel("★", "高速", "速さと品質のバランス", "v5")
         // [実機指摘] 31〜210s は複合（違反集中→研磨）に統一。表示ラベルもプランと同期。
         // [3.551.0] desc は設定画面に出る利用者向け文（内部名 RSI/ALNS を出さない）。tech は内部用・テスト固定。
-        seconds <= 210 -> AlgorithmLabel("🧬", "学習+研磨", "違反集中のあと組み替えで仕上げ", "RSI→ALNS")
+        seconds <= 210 -> AlgorithmLabel("🧬", "違反集中→組み替え", "違反集中のあと組み替えで仕上げ", "RSI→ALNS")
         // [3.266.0] 表示ラベルもプラン(Portfolio)と同期。同型RSI++クローン8本でなく、ALNS/RSI/RSI++が
         //   異なる基盤・役割から非同期に探索し、停滞/重複を検知して再配属する。
-        seconds <= 300 -> AlgorithmLabel("🌈", "究極(5分)", "複数の方式を同時に走らせて最良を採用", "PORTFOLIO")
-        else -> AlgorithmLabel("🌈", "究極", "最大限の品質 (${seconds / 60}分)", "PORTFOLIO拡張")
+        seconds <= 300 -> AlgorithmLabel("🌈", "方式ミックス", "複数の方式を同時に走らせて最良を採用", "PORTFOLIO")
+        else -> AlgorithmLabel("🌈", "方式ミックス", "最大限の品質 (${seconds / 60}分)", "PORTFOLIO拡張")
     }
 
     /**
@@ -269,6 +282,9 @@ object V6FinalPort {
         /** [測定中/backlog#35] ExtraRefineを、後処理後の残りHARDが構造的に解けないと証明済み（covU床のみ／
          *  ForbiddenDiag確定のc3n壁）のときだけ省略する。改善可能なHARD残・HARD=0では従来どおり実行。既定OFF。 */
         extraRefineRequirePostHardDrop: Boolean = false,
+        /** ベンチ用の乱数種。null（既定）は従来どおり [V6OptimizerOptions.seed]=0＝時刻由来。0 も時刻由来。
+         *  種を固定しても、ワーカー並列と壁時計の予算・後処理の時刻由来の種があるため盤面の再現は保証しない。 */
+        seed: Long? = null,
         onProgress: (String, ViolationReport?, Long, Long) -> Unit = { _, _, _, _ -> },
     ): ActionResult = withContext(Dispatchers.Default) {
         // [3.388.0/外部レビュー] 計測は**この1回の「つくる」ぶん**。旧実装は optimize() の入口で
@@ -314,7 +330,9 @@ object V6FinalPort {
             is OptimizationPlan.RSIThenALNS -> V6OptimizerOptions(V6Algorithm.RSI, plan.rsiSec, workers, softPolish, restarts = plan.alnsRestarts, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
             is OptimizationPlan.Portfolio -> V6OptimizerOptions(V6Algorithm.PORTFOLIO, plan.seconds, workers, softPolish, restarts = 2, postPolish = false, quantitativeRangeEval = quantitativeRangeEval)
         }
-        val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true))   // [HF532移植] optFlags.rectSwap 既定ON
+        val optsR = opts.copy(rectSwap = V6LateOperators.optFlagBool(state, "rectSwap", true),   // [HF532移植] optFlags.rectSwap 既定ON
+            seed = seed ?: opts.seed)
+        lastOptimizerSeed = optsR.seed
         // [review: 予算一本化] optimize() + runPostOptimization() を一つの予算で管理する。
         // 後処理は元々 deadline も progress も持たず、optimize が予算を使い切った後も走り続け、
         // 合計が予算を大きく超過していた(実機44分。当時の上限は600s)。ここで全体に hardDeadline を張り、
@@ -639,15 +657,13 @@ object V6FinalPort {
             val stagnated = stagnationFired.get()
             // [測定中/backlog#35] post.report の残りHARDが「解けないと証明済み」かどうか。HARD=0（SOFT仕上げの
             //   余地）や、証明できない残りHARD（改善可能かもしれない）は false のまま＝常にExtraRefineを許可する。
-            val postNonCovUHard = post.report.hard - (post.report.breakdown["covU"] ?: 0)
-            val structuralHardResidual = extraRefineRequirePostHardDrop && post.report.hard > 0 && when {
-                postNonCovUHard == 0 -> (post.report.breakdown["covU"] ?: 0) <= hardFloor
-                postNonCovUHard == (post.report.breakdown["c3n"] ?: 0) -> try {
-                    val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, post.schedule)
-                    diag.hasRuns && diag.allBlocked
-                } catch (_: Exception) { false }
-                else -> false
-            }
+            val structuralHardResidual = extraRefineRequirePostHardDrop &&
+                isStructuralHardResidual(post.report, hardFloor) {
+                    try {
+                        val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, post.schedule)
+                        diag.hasRuns && diag.allBlocked
+                    } catch (_: Exception) { false }
+                }
             val canExtra = !stopRequested && !stagnated && post.report.total > 0 && !structuralHardResidual
             if (extraMs >= 5_000 && !canExtra) {
                 val why = when {
@@ -916,6 +932,9 @@ object V6FinalPort {
                 covUBlockedAmount(V6PortAnalyzer.diagnoseCoverage(state, finalSched, finalReport, includeSurplus = false))
             }.getOrDefault(0)
             val covUWall = covUStructuralWall(covUNow, hardFloor, covUBlocked)
+            // 希望どうしの衝突（希望を1件取り消すまで c3n/c3w か pref が必ず残る）。族別に open から差し引く。
+            val selfConflict = runCatching { V6SanityPort.wishSelfConflictHard(cachedProblem(state), finalSched) }.getOrDefault(emptyMap())
+            val selfConflictShown = ArrayList<Pair<String, Int>>()
             for (key in MirrorKeys.all) {
                 val n0 = bd[key] ?: 0
                 if (n0 <= 0) continue
@@ -926,13 +945,17 @@ object V6FinalPort {
                     else -> null
                 }
                 if (structural != null) { walls.add("$key ${n0}件($structural)"); continue }
+                val self = minOf(n0, selfConflict[key] ?: 0)
+                if (self > 0) selfConflictShown.add(key to self)
                 val n = when (key) {
                     "weekly" -> n0 - weeklyWall
                     "covU" -> n0 - covUWall
                     else -> n0
-                }
+                } - self
                 if (n > 0) open.add("$key ${n}件")
             }
+            if (selfConflictShown.isNotEmpty()) walls.add("希望と禁止の衝突 ${selfConflictShown.sumOf { it.second }}件(" +
+                selfConflictShown.joinToString("・") { "${it.first} ${it.second}" } + "＝希望を1件取り消すまで解消しない)")
             if (covUWall > 0) {
                 // 床が全部を覆うときだけ従来どおり「構造的下限」（供給不足）と名乗る。それ以外は
                 //   「担当者は居るが いまの希望では動かせない」＝データ側で希望を1件調整すれば動きうる、を明示。

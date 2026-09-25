@@ -2,6 +2,7 @@ package com.magi.app.v6
 
 import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
+import com.magi.app.model.ShiftRole
 import com.magi.app.model.Group
 import com.magi.app.model.Staff
 import com.magi.app.model.Range
@@ -159,6 +160,8 @@ object RosterCsvImport {
         }
         if (shiftsOut.isEmpty()) return null
         val restK = symToK.getValue(REST)
+        // [外部レビュー N1] 休みは取込で付ける（旧: 読込の後方互換任せ。保存が明示の role を書くと休み無しになる）。
+        shiftsOut[restK] = shiftsOut[restK].copy(role = ShiftRole.Rest)
 
         // --- ユニット(グループ)・スタッフ・勤務表グリッド ---
         val groupsOut = ArrayList<Group>()
@@ -287,7 +290,8 @@ object FlatRosterCsvImport {
         for (s in symSet) if (s != REST) symbols.add(s)
         val symToK = LinkedHashMap<String, Int>()
         symbols.forEachIndexed { i, s -> symToK[s] = i }
-        val shiftsOut = symbols.map { Shift(name = it, kigou = it, need1 = "", need2 = "") }
+        val shiftsOut = symbols.map { Shift(name = it, kigou = it, need1 = "", need2 = "",
+            role = if (it == REST) ShiftRole.Rest else ShiftRole.None) }
         val restK = symToK.getValue(REST)
 
         // ユニット→グループ（出現順）。
@@ -619,6 +623,19 @@ object StaffCsvIO {
         return state.copy(staff = newStaff) to matched
     }
 
+    /** 先頭行が別のコンポーネントCSV（`build()` の見出し）なら、その取込種別の名前。[parseUpsert] は未知の氏名を
+     *  新規追加するので、見出し・種別タグが職員として入る前に呼出側が断るために使う。 */
+    fun otherKindOf(text: String): String? {
+        val head = parseCsvRows(text).firstOrNull() ?: return null
+        val c0 = head.getOrElse(0) { "" }.trim()
+        return when {
+            c0 == "種別" -> "各制約"
+            c0 == "記号" -> "シフト色"
+            c0 == "氏名" && head.getOrElse(1) { "" }.trim() == "日" -> "希望シフト"
+            else -> null
+        }
+    }
+
     /** スタッフ一覧 upsert の結果（新規追加分の勤務表行も反映済み）。 */
     /**
      * @param unknownGroups 空でないのに既存のグループ記号と一致しなかったセル（記号→件数）。
@@ -807,10 +824,11 @@ object ConstraintsCsvIO {
         // [3.336.0/外部レビュー P2] 空セルで打ち切るので `MUST連続,A,,B` は ["A"] になり、**B が黙って
         //   消えたまま accepted に数えられた**（3.333.0 で他の族に入れた「評価されない行を受理しない」
         //   の取り残し）。穴が空いた行は書式の誤りとして呼び出し側で弾けるよう、別に判定する。
-        fun pat(r: List<String>): List<String> = (1..5).map { c(r, it) }.takeWhile { it.isNotEmpty() }.take(5)
+        fun patCells(r: List<String>): List<String> = (1 until r.size).map { c(r, it) }
+        fun pat(r: List<String>): List<String> = patCells(r).takeWhile { it.isNotEmpty() }
         /** 途中に空セルがあり、その後ろにまだ中身がある＝並びが途切れている（書式の誤り）。 */
         fun patHasGap(r: List<String>): Boolean {
-            val cells = (1..5).map { c(r, it) }
+            val cells = patCells(r)
             val last = cells.indexOfLast { it.isNotEmpty() }
             return last >= 0 && cells.take(last).any { it.isEmpty() }
         }

@@ -267,4 +267,19 @@ class RunFilesTest {
         assertEquals("原子置換を諦めたことを必ず通知する", 1, reported)
         assertTrue("一時ファイルの残骸を残さない", tmp.root.listFiles()!!.none { it.name.contains(".tmp") })
     }
+
+    /** 「やめる」が背景の停止になるのは Worker が走っているか投入した実行がまだ所有者のときだけ（失敗した Worker は runId ファイルを消す）。 */
+    @Test
+    fun stopIsABackgroundStopOnlyWhileTheEnqueuedRunStillOwnsTheFiles() {
+        val f = files()
+        assertTrue("Worker が走っていれば常に背景", bgStopApplies(true, fgJob = false, memRunId = 0L, diskRunId = 0L))
+        f.beginRun(42L)
+        assertTrue("投入の直後・再起動後の再開待ち", bgStopApplies(false, fgJob = false, memRunId = 42L, diskRunId = f.activeRunId()))
+        assertFalse("前景のジョブ中は前景の停止", bgStopApplies(false, fgJob = true, memRunId = 42L, diskRunId = f.activeRunId()))
+        f.clear()
+        assertFalse("失敗した Worker が所有権を消した後は背景でない", bgStopApplies(false, fgJob = false, memRunId = 42L, diskRunId = f.activeRunId()))
+        f.beginRun(43L)
+        assertFalse("別の実行の所有", bgStopApplies(false, fgJob = false, memRunId = 42L, diskRunId = f.activeRunId()))
+        assertFalse("ID を持たない", bgStopApplies(false, fgJob = false, memRunId = 0L, diskRunId = 0L))
+    }
 }

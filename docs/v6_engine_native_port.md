@@ -98,7 +98,8 @@ Each action launches a cancellable `job`; **計算を止める** calls `job?.can
   `V6NativeOptimizer.liveBest` を `snapshotFile` へ保存し、再起動時に「途中結果から再開」を
   提示（`FOREGROUND_SERVICE_DATA_SYNC`、消費後は `clearFiles` で掃除）。
 - **他の案**: 並列探索で得た非採用仮説を `captureAlternatives()` で保持し、`AlternativesCard`
-  から個別に「採用」(`applyAlternative()`) 可能。
+  から個別に「採用」(`applyAlternative()`) 可能。採用後も一覧は残って別の案へ切り替えられ（採用中の案は太字）、
+  「元に戻す」は盤面と一覧を一緒に戻す（undo の退避に案の一覧も載せる）。
 - **希望で上書き**: `WishApplyCard`／`applyWishes(includeOutOfScope)`（Undo・autoSave・操作ログ・
   再チェック込み）で実装済み。
 - **操作ログ**: 設定タブ＞詳細設定の `LogsCard`（操作ログ＋診断ログ）からテキスト/JSON 出力。開始・完了は

@@ -71,6 +71,8 @@ internal fun CountsCard(
 @Composable
 internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit) {
     var dialog by remember { mutableStateOf(false) }
+    // チップから開くとその行を入れて開く（null＝新規）。
+    var dialogInit by remember { mutableStateOf<GroupRangeView?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("グループ一括設定", style = MaterialTheme.typography.titleSmall)
             Text(
@@ -104,7 +106,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                             InputChip(
                                 selected = false,
                                 enabled = !ui.running,
-                                onClick = { dialog = true },
+                                onClick = { dialogInit = gr; dialog = true },
                                 label = { Text("${toHankakuKigou(gr.kigou)} $rangeLab（${if (gr.shared >= gr.members) "${gr.members}" else "${gr.shared}/${gr.members}"}名）") },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, contentDescription = "削除",
@@ -115,7 +117,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                     }
                 }
             }
-            AddRowButton("グループに上下限を適用", onClick = { dialog = true }, enabled = ui.loaded && !ui.running)
+            AddRowButton("グループに上下限を適用", onClick = { dialogInit = null; dialog = true }, enabled = ui.loaded && !ui.running)
     }
     if (dialog) {
         GroupRangeDialog(
@@ -124,6 +126,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
             allowedFor = { g -> cv.allowedByGroup.getOrElse(g) { emptySet() } },
             memberCount = { g -> cv.groupMembers.getOrElse(g) { 0 } },
             rangeCount = { g, k -> cv.groupRangeMemberCount(g, k) },
+            init = dialogInit,
             onApply = { g, k, lo, hi ->
                 if (lo.isBlank() && hi.isBlank()) onEvent(MagiEvent.Condition.ClearGroupRangeAll(g, k)) else onEvent(MagiEvent.Condition.SetGroupRange(g, k, lo, hi))
                 dialog = false
@@ -140,13 +143,14 @@ internal fun GroupRangeDialog(
     allowedFor: (Int) -> Set<Int>,
     memberCount: (Int) -> Int,
     rangeCount: (Int, Int) -> Int,
+    init: GroupRangeView? = null,
     onApply: (Int, Int, String, String) -> Unit,
     onClose: () -> Unit,
 ) {
-    var g by remember { mutableStateOf(0) }
-    var k by remember { mutableStateOf(0) }
-    var lo by remember { mutableStateOf("") }
-    var hi by remember { mutableStateOf("") }
+    var g by remember { mutableStateOf(init?.g ?: 0) }
+    var k by remember { mutableStateOf(init?.k ?: 0) }
+    var lo by remember { mutableStateOf(init?.lo ?: "") }
+    var hi by remember { mutableStateOf(init?.hi ?: "") }
     var openG by remember { mutableStateOf(false) }
     var openK by remember { mutableStateOf(false) }
     val allowed = allowedFor(g)
@@ -197,7 +201,8 @@ internal fun GroupRangeDialog(
                 } else if (blank) {
                     Text(RANGE_REQUIRED_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text("全員の個人上下限に設定し、下限=上限なら適切回数も同時に設定します（個人で設定済みの人は保持）。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // [決定 D9] 個人の上下限がある組にはグループの適切回数を使わない＝「同時に設定」とは言わない。
+                Text("全員の個人上下限に設定します（個人で設定済みの人は保持）。下限=上限のときはグループの適切回数も記録しますが、個人の上下限がある職員には使われません。両方「なし」で適用すると全員ぶん解除します。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )

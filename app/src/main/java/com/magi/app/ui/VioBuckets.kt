@@ -1,5 +1,7 @@
 package com.magi.app.ui
 
+import com.magi.app.v6.IssueKind
+
 /**
  * [E7] 違反 種別フィルタの分類表（勤務表タブ全面で共有・コース6分類）。
  *
@@ -17,10 +19,10 @@ internal data class VioBucket(val key: String, val label: String, val families: 
 internal val vioBuckets: List<VioBucket> = listOf(
     VioBucket("need", "人員", setOf("covU", "covO")),
     VioBucket("pref", "希望", setOf("pref")),
-    VioBucket("seq", "連勤", setOf("c3", "c3n", "c3m", "c3mn", "c3w")),
+    VioBucket("seq", "並び", setOf("c3", "c3n", "c3m", "c3mn", "c3w")),
     VioBucket("count", "回数", setOf("low", "high", "apt", "c2")),
     VioBucket("group", "グループルール", setOf("groupViol", "c41", "c42", "c41s", "c42s")),
-    VioBucket("window", "窓", setOf("c1")),
+    VioBucket("window", "期間の制約", setOf("c1")),
 )
 
 /**
@@ -50,3 +52,12 @@ internal fun vioVisible(cls: String?, enabled: Set<String>): Boolean {
 }
 
 internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
+
+// [UX監査#4] 設定の見直し（ホーム・分析タブ）の誘導を年間マスターの節（CollapsibleSectionのstateKey）まで
+//   着地させるための対応表。希望は月次条件にあるので null（呼出側が月次条件を開く）。
+internal fun yearSectionForIssueKind(kind: IssueKind?): String? = when (kind) {
+    IssueKind.RANGE -> "yr_count"
+    IssueKind.DEMAND -> "yr_headcount"
+    IssueKind.CONSTRAINT -> "yr_cons"
+    IssueKind.WISH, null -> null
+}

@@ -106,4 +106,21 @@ class RosterCsvImportTest {
         // 必要人数は取込方法に依らずCSVに無い。
         assertTrue(st.needDay1.isEmpty())
     }
+
+    /** [外部レビュー N1] 休みは取込の時点で付ける（読込の後方互換へ頼ると、明示の role を書く保存で休み無しになる）。 */
+    @Test fun importedRestShiftCarriesTheRestRole() {
+        val st = RosterCsvImport.parse(sample)!!
+        assertEquals(st.shifts.indexOfFirst { it.kigou == "休" }, restShiftIndex(st))
+        val noRestInLegend = sample.lines().filterNot { it.startsWith(",休,") }.joinToString("\n")
+        val st2 = RosterCsvImport.parse(noRestInLegend)!!
+        assertEquals(st2.shifts.indexOfFirst { it.kigou == "休" }, restShiftIndex(st2))
+        val flat = listOf(
+            "ユニット,No,役職,氏名,1,2,3",
+            "柳,1,,古泉 健一,A,,休",
+            "柳,2,,山本 昌幸,B,A,",
+        ).joinToString("\n")
+        val st3 = FlatRosterCsvImport.parse(flat)!!
+        assertEquals(st3.shifts.indexOfFirst { it.kigou == "休" }, restShiftIndex(st3))
+        assertEquals(1, st3.shifts.count { it.role == com.magi.app.model.ShiftRole.Rest })
+    }
 }

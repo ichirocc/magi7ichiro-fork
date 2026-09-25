@@ -101,7 +101,7 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
     if (bulkOpen) {
         BulkAddDialog("職員を一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。",
             v.groups.map { toHankakuKigou(it.kigou) },
-            { lines, gi -> lines.forEach { onEvent(MagiEvent.Structure.AddStaff(it, gi)) }; bulkOpen = false }, { bulkOpen = false })
+            { lines, gi -> onEvent(MagiEvent.Structure.BulkAddStaff(lines, gi)); bulkOpen = false }, { bulkOpen = false })
     }
     edit?.let { (i, nm, gi0) ->
         // [3.530.0] 削除の入口はシフト種別/グループと同じく編集ダイアログの中（3.515.6と同じ形）。

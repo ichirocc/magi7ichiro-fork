@@ -48,6 +48,9 @@ UD（高コントラスト, `mode=3`）＝白地＋黒境界＋濃色ロール�
 
 ### 3.2 意味色・シフト色（`MagiTokens.kt`）
 - `magiWarnColors()`＝要調整（amber container/onContainer、テーマ明暗で切替）。
+- `magiSeverityColors(severity)`＝セル編集シートの 1 行の状態（背景・アイコン・文字）。必須＝`errorContainer`/`error`、要調整＝`magiWarnColors`＋橙のアイコン、
+  違反なし＝`surfaceContainerHighest`。生の色値は持たずテーマロールから明暗を得る（2026-09-25）。
+- `MagiMarks`＝勤務表の違反の印の太さ（必須の実線 3dp／要調整の破線 2dp・角 10dp）。必須が先に目に入るよう太さで差を付け、色はユーザーの違反色と surface のハローのまま。
 - `MagiAccent`＝シフト/違反アクセント（blue/green/orange/purple/pink/red/gray）。**7 色の色相位置は固定**（機能色＝
   認識性を保つ）。3.89.0 で "Ward" 地に馴染むよう一段深い「診療チャート」調へ調和（ネオン Tailwind-500 系から更新）。
   **保存済みのユーザー指定シフト色は不変**（既定パレット＋直接使用アクセントのみ更新）。

@@ -45,7 +45,8 @@ data class UiState(
     val checkRev: Long = 0,
     val bestHard: Long = 0,
     val bestSoft: Long = 0,
-    /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。 */
+    /** [3.509.4] 直近の最適化の前後比較 1 行（変更人数・セル数・希望充足・個人回数）。完了カードに出す。
+     *  盤面が変わる操作（pushUndo）・元に戻す・読込で消す＝別の盤面の比較を完了カードに残さない。 */
     val runSummary: String? = null,
     val totalViolations: Int = 0,
     val weightedScore: Double = 0.0,
@@ -62,8 +63,14 @@ data class UiState(
     // [場所表示] fair/weekly の職員単位の偏り箇所。"weekly"->[[i,dev],..] / "fair"->[[i,k,dev],..]（dev降順）。
     //   内訳パネルの場所表示専用（グリッドには出さない）。表示のみ・スコア不変。
     val distLocations: Map<String, List<List<Int>>> = emptyMap(),
+    /** c1 の違反窓ラン（`ViolationReport.c1Runs`）。画面の表示専用の印を作る元。 */
+    val c1Runs: List<List<Int>> = emptyList(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
-    val fixSearching: Boolean = false,                                       // 改善手を探索中
+    val fixSearching: Boolean = false,
+    /** 直し方の探索を終えた依頼の鍵（`FixFocus.key`、空＝画面全体や未完了）。印・セルのシートが自分の結果か見分ける。 */
+    val fixDoneKey: String = "",
+    /** 直し方の探索が失敗した依頼の鍵（`FixFocus.key`）。 */
+    val fixFailedKey: String = "",
     val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）
     val stalledHardFamilies: List<String> = emptyList(),   // [思考誘導S4] 直近の実行で長く改善せず採用盤面にも残った必須族（盤面を変えたら空）
     val fixFocusName: String = "",                                           // 絞り込み対象スタッフ名（空=全体）
@@ -97,6 +104,11 @@ data class UiState(
     val violationFamilyColorHex: Map<String, String> = emptyMap(),
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
+    val lockedWishKeys: Set<String> = emptySet(),   // [S5] wishLocked の希望のキー（試算できる希望）
+    val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
+    val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
+    val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
+    val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して、もう一度つくる」の結果（表示は vm.wishCancelOutcomeLine）
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,
@@ -107,6 +119,8 @@ data class UiState(
     //   生んでいた。applyStructure が毎回これを増やして必ず distinct な UiState を emit＝確実に再構成させる。
     val editRev: Int = 0,
     val message: String? = null,
+    /** 操作の通知（「元に戻す」付き）。検査の進み具合の [message] とは別のイベント＝再検査で上書きされない。 */
+    val opNotice: OpNotice? = null,
     // [3.400.0] 直近メッセージが「失敗・拒否」か。Snackbar の色（errorContainer）と表示時間（長め）を分ける。
     //   **`notify(text, "W")` が唯一の true の書き手**で、`clearMessage` が false へ戻す。素の
     //   `copy(message = …)` は触らない＝既定 false のまま＝旧来どおりの見た目になる（退行しない）。
@@ -120,6 +134,7 @@ data class UiState(
     val impossibleWishCount: Int = 0,
     val opLog: List<String> = emptyList(),
     val alternatives: List<String> = emptyList(), // 他の案（採用案以外の候補サマリ）
+    val alternativeApplied: Int = -1,             // いま盤面に適用している他の案の添字（-1=どれでもない）
     val coverageDiag: CoverageDiagnosis? = null,  // 人員不足(covU)/人員過剰(covO)の原因診断（充足不可/充足可能の切り分け・過剰がなぜ動かせないか）
     val forbiddenDiag: ForbiddenRunDiagnosis? = null,  // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（c3n=0 なら null）
     val c1Plateau: C1PlateauDiagnosis? = null,  // [3.322.0] 窓の要件(c1)がなぜ直せなかったかの構造化診断（直近の最適化の観測。残存なし/未実行なら null）
@@ -144,7 +159,7 @@ data class UiState(
  * [3.326.0] 回数固定(lo==hi)の緩和対象1件。
  * `attempts` は「目的関数が採用を認めた手を、このピンのガードだけが止めた**計測できた回数**」。
  * 手の数ではなく試行の回数で、研磨の巡（最大4）を重複排除せず数えている。
- * **0 件でも緩和が無意味とは限らない** — 緩和は下限割れ(low, 重み90)の罰も外すため、
+ * **0 件でも緩和が無意味とは限らない** — 緩和は下限割れ(low)の罰も外すため、
  * 「ピン以外の理由で」却下されていた候補が通るようになる経路が別にある（実測で確認済み）。
  */
 data class PinTargetView(
@@ -155,4 +170,20 @@ data class PinTargetView(
     /** 固定されている回数（lo==hi の値）。 */
     val pinnedCount: Int,
     val attempts: Int,
+)
+
+/** [S5] 「希望を取り消して、もう一度つくる」の結果（`docs/s5_wish_trial.md` §9）。`line` は次にやることカードに出す 1 行。 */
+/** 操作の通知。[undoSerial] はその操作が積んだ元に戻すの段（通知から戻すのはこの段が先頭のときだけ）。 */
+data class OpNotice(val id: Long, val text: String, val undoSerial: Long)
+
+/** 希望の表示（希望・試算できる希望・希望どうしの衝突）を設定から作り直す。報告の反映と元に戻す/やり直すで共有する。 */
+internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState = copy(
+    wishes = st.wishes,
+    lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
+    wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
+)
+
+data class WishCancelOutcome(
+    val name: String, val day: Int, val symbol: String,
+    val h0: Int, val pCancel: Int, val g: Int, val line: String,
 )

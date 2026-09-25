@@ -95,6 +95,18 @@ class CsvRoundTripTest {
     @Test fun wishesCsvRoundTripsOnFixtures() { for (f in fixtures) assertWishesRoundTrip(load(f), f) }
     @Test fun constraintsCsvRoundTripsOnFixtures() { for (f in fixtures) assertConstraintsRoundTrip(load(f), f) }
 
+    /** 職員一覧の取込が断る別の種類は、各 build() が出す見出しで見分ける（職員CSV・見出し無しの職員行は断らない）。 */
+    @Test fun staffImportRecognisesOtherComponentHeaders() {
+        for (f in fixtures) {
+            val st = load(f)
+            assertEquals(f, null, StaffCsvIO.otherKindOf(StaffCsvIO.build(st)))
+            assertEquals(f, "希望シフト", StaffCsvIO.otherKindOf(WishesCsvIO.build(st)))
+            assertEquals(f, "各制約", StaffCsvIO.otherKindOf(ConstraintsCsvIO.build(st)))
+            assertEquals(f, "シフト色", StaffCsvIO.otherKindOf(ShiftColorsCsvIO.build(st)))
+        }
+        assertEquals(null, StaffCsvIO.otherKindOf("新人 一郎,A,\n"))
+    }
+
     /** カンマ・引用符・改行・全角空白を含む氏名/記号でも、書出し→取込で同じ盤面に戻る。 */
     @Test fun escapedCellsSurviveRoundTrip() {
         val base = load("golden_state")
@@ -117,6 +129,18 @@ class CsvRoundTripTest {
         assertStaffRoundTrip(st, "escaped")
         assertWishesRoundTrip(st, "escaped")
         assertConstraintsRoundTrip(st, "escaped")
+    }
+
+    /** [外部レビュー R2] 取込が 5 セルで頭打ちし、JSON 由来の 6 要素の並びが往復で 5 要素へ切れていた。 */
+    @Test fun sixCellRunPatternSurvivesRoundTrip() {
+        val st0 = load("golden_state")
+        val k = st0.shifts[0].kigou
+        val six = List(6) { k }
+        val st = st0.copy(cons3n = listOf(C3Row(six)), cons3mn = listOf(C3Row(six + "")))
+        val r = ConstraintsCsvIO.parse(ConstraintsCsvIO.build(st), st)!!
+        assertEquals(listOf(C3Row(six)), r.state.cons3n)
+        assertEquals(listOf(C3Row(six)), r.state.cons3mn)
+        assertEquals(1, ConstraintsCsvIO.parse("禁止連続,$k,$k,$k,$k,$k,,$k", st)!!.rejected)
     }
 
     /** [3.568.0/外部レビュー] 未知記号は「セル丸ごと」が鍵になる＝引用符で数千字を 1 セルへ入れると

@@ -100,7 +100,8 @@ internal fun conditionsViewOf(st: MagiState?, p: Problem?): ConditionsView {
         }
     }
     val cons = st.cons1.size + st.cons2.size + st.cons3.size + st.cons3n.size +
-        st.cons3m.size + st.cons3mn.size + st.cons41.size + st.cons42.size + st.cons3w.size
+        st.cons3m.size + st.cons3mn.size + st.cons41.size + st.cons42.size + st.cons3w.size +
+        st.cons41s.size + st.cons42s.size
     return ConditionsView(
         shiftKigou = st.shifts.map { it.kigou },
         restIdx = com.magi.app.v6.restShiftIndex(st) ?: -1,  // [3.603.0] 休が無い設定はどのシフトにも一致しない番兵
@@ -122,3 +123,40 @@ internal fun conditionsViewOf(st: MagiState?, p: Problem?): ConditionsView {
         groupRangeMembers = groupRangeMembers,
     )
 }
+
+/** シフト [k] の複数日（0 始まり）へ日別の必要人数（例外）を書いた needDay1/needDay2。空欄の側は既定へ戻し、期間外の日は無視。 */
+internal fun needDaysWith(
+    nd1: Map<String, String>, nd2: Map<String, String>, k: Int, days: List<Int>, dayCount: Int, p1: String, p2: String,
+): Pair<Map<String, String>, Map<String, String>> {
+    val m1 = nd1.toMutableMap(); val m2 = nd2.toMutableMap()
+    for (j in days) {
+        if (j !in 0 until dayCount) continue
+        val key = "$k,$j"
+        if (p1.isBlank()) m1.remove(key) else m1[key] = p1.trim()
+        if (p2.isBlank()) m2.remove(key) else m2[key] = p2.trim()
+    }
+    return m1 to m2
+}
+
+/** シフト [k] の複数日の例外を消した needDay1/needDay2（＝既定へ戻す）。 */
+internal fun needDaysWithout(
+    nd1: Map<String, String>, nd2: Map<String, String>, k: Int, days: List<Int>,
+): Pair<Map<String, String>, Map<String, String>> {
+    val keys = days.map { "$k,$it" }.toSet()
+    return (nd1 - keys) to (nd2 - keys)
+}
+
+/** 必要人数の標準（シフト既定）の表示。2パターン目を使わない月は need2 を読まない（`Problem.covUCell`/`covOCell` と同じ）。 */
+internal fun needBaseLabel(need1: String, need2: String, use2: Boolean): String {
+    val n1 = need1.toIntOrNull(); val n2 = if (use2) need2.toIntOrNull() else null
+    return when {
+        n1 == null && n2 == null -> "未設定"
+        n2 == null || n2 == n1 -> "${n1 ?: n2}人"
+        n1 == null -> "${n2}人"
+        else -> "$n1–${n2}人"
+    }
+}
+
+/** 上限人数（need2）の見出し。2パターン目を使わない月は効かないので、シフト編集（Ws1Editor）と同じ但し書きを付ける。 */
+internal fun needUpperLabel(use2: Boolean, short: Boolean = false): String =
+    (if (short) "上限" else "上限人数") + (if (use2) "" else "(2パターン時)")

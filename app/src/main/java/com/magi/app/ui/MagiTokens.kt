@@ -44,6 +44,20 @@ fun magiWarnColors(): Pair<Color, Color> {
     else Color(0xFFFBEAD0) to Color(0xFF6B4E00)                      // 明: 淡いアンバー＋濃い文字
 }
 
+/**
+ * セル編集シートの 1 行の状態の色（背景, アイコン, 文字）。必須＝淡い赤＋赤、要調整＝淡いアンバー＋橙、違反なし＝淡い灰。
+ * 明暗はテーマロールと [magiWarnColors] が持つ（生の色値をここで増やさない）。橙のアイコンは飾りで、意味は文字の「要調整」が持つ。
+ */
+@Composable
+internal fun magiSeverityColors(severity: CellSeverity): Triple<Color, Color, Color> {
+    val cs = MaterialTheme.colorScheme
+    return when (severity) {
+        CellSeverity.HARD -> Triple(cs.errorContainer, cs.error, cs.onErrorContainer)
+        CellSeverity.SOFT -> magiWarnColors().let { (bg, fg) -> Triple(bg, MagiAccent.orange, fg) }
+        CellSeverity.NONE -> Triple(cs.surfaceContainerHighest, cs.onSurfaceVariant, cs.onSurfaceVariant)
+    }
+}
+
 // シフトの表示色の既定フォールバックは ShiftAppearance.resolveShiftColor が唯一の真実源
 // （[3.417.0] 記号からは何も推測しない＝明示色→一覧上の位置、の順で決まる）。
 // （以前ここに同等の shiftAccentFallback があったが未配線・二重管理のため削除）
@@ -67,6 +81,16 @@ fun ensureReadable(bg: Color, preferred: Color, minRatio: Float = 4.5f): Color {
 
 /** 4dp グリッドの余白トークン（docs §2.2）。 */
 @Immutable
+/**
+ * 勤務表の違反の印の太さ。必須（実線）は太く、要調整（破線・角・点・名前の横の印）は細く小さく＝必須が先に目に入る。
+ * 色はユーザー設定の違反色のまま（明暗の区別は色設定と surface のハローが持つ）。
+ */
+object MagiMarks {
+    val hardStroke: Dp = 3.dp
+    val softStroke: Dp = 2.dp
+    val softCorner: Dp = 10.dp
+}
+
 object MagiSpacing {
     val xs: Dp = 4.dp
     val sm: Dp = 8.dp

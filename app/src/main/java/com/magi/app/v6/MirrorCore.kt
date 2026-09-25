@@ -54,6 +54,11 @@ data class ViolationReport(
     //   内訳パネルの場所表示専用に、職員単位の偏り箇所を構造化して持つ（グリッドには出さない＝飽和回避）。
     //   "weekly" -> [[staffIdx, dev], ...] / "fair" -> [[staffIdx, shiftIdx, dev], ...]（dev降順）。表示のみ・スコア不変。
     val distLocations: Map<String, List<List<Int>>> = emptyMap(),
+    /**
+     * 期間の制約(c1)の違反窓ラン。[職員, 先頭窓の開始日, 窓数, 窓幅(day1)]。`violations` はランの先頭 1 セルだけに
+     * 印を置く（探索の手掛かりはそれで揃っている）ので、画面が「どの違反窓にも印がある」を作るための表示専用の元データ。
+     */
+    val c1Runs: List<List<Int>> = emptyList(),
     val logs: List<MirrorLog> = emptyList(),
 )
 
@@ -210,6 +215,7 @@ object UnifiedViolationChecker {
         val cellFams = linkedMapOf<String, MutableList<String>>()
         val countFams = linkedMapOf<String, MutableList<String>>()
         val needFams = linkedMapOf<String, MutableList<String>>()
+        val c1Runs = ArrayList<List<Int>>()
         // [3.395.0/高速化] 「最重1クラス」を毎回ここで決めるのをやめ、末尾で `cellFams` の**整列済み先頭**
         //   から起こす。両者は定義上いつも同じ値になる：整列は重み降順の**安定ソート**なので先頭＝最初に
         //   マークされた最大重みのクラス、旧ロジックの「厳密に重いものだけが置き換える」も同じものを残す
@@ -255,6 +261,7 @@ object UnifiedViolationChecker {
                 //   窓幅ぶんの塗り広げを止め、違反窓ランの先頭1セルにアンカーする。スライド窓が重複して
                 //   持続不足で行全体を破線で埋めていた（1論理違反≒窓幅×重複数セル）のを 1不足領域=1マーカーへ。
                 var prevViol = false
+                var runStart = 0
                 // [3.395.0/高速化] 旧: 窓の開始位置ごとに day1 個を数え直す O(T×day1)。窓は1日ずつ滑るので
                 //   「出た日を引き、入った日を足す」だけで同じ数になる＝O(T)。`j` は `0..T-day1`・`l < day1`
                 //   なので `j+l <= T-1`＝常に範囲内で、`cellIs` の境界検査も外せる（`s` は S×T に正規化済み）。
@@ -271,11 +278,12 @@ object UnifiedViolationChecker {
                     val viol = z < c.day2
                     if (viol) {
                         inc("c1")
-                        if (!prevViol) mark(i, j, "c1")
-                    }
+                        if (!prevViol) { mark(i, j, "c1"); runStart = j }
+                    } else if (prevViol) c1Runs.add(listOf(i, runStart, j - runStart, c.day1))
                     prevViol = viol
                     j++
                 }
+                if (prevViol) c1Runs.add(listOf(i, runStart, j - runStart, c.day1))
             }
         }
 
@@ -401,8 +409,8 @@ object UnifiedViolationChecker {
                     inc("high", n - hi)
                     markCount(i, k, "high")
                 }
-                // [統一apt] 適切回数(群単位の双方向目標)。SOFT・重み1・L1偏差|n-t|。担当可シフトのみ(apt 構築時に canDo ガード済)。
-                // セル着色は range(low/high, 重み90/25)を優先し、markCount の重み優先ガードにより低優先の
+                // [統一apt] 適切回数(群単位の双方向目標)。SOFT・L1偏差|n-t|。担当可シフトのみ(apt 構築時に canDo ガード済)。
+                // セル着色は range(low/high)を優先し、markCount の重み優先ガードにより低優先の
                 // apt 色(不足=赤/超過=橙)は既存マークを上書きしない（手動 containsKey ガードは markCount 側の
                 // 重み優先に統合済みのため撤去）。
                 val t = p.apt[i][k]
@@ -530,6 +538,7 @@ object UnifiedViolationChecker {
             soft = soft,
             weightedScore = weightedScore(breakdown),
             distLocations = distLocations,
+            c1Runs = c1Runs,
             logs = listOf(MirrorLog(iter = 0, level = level, tag = "UnifiedCheck", message = "$msg (${elapsedMs}ms)")),
         )
     }

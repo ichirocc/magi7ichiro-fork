@@ -20,6 +20,12 @@ data class ImpossibleWish(
     val reason: String,
 )
 
+/** 希望どうしの衝突（[V6SanityPort.wishSelfConflicts]、定義は docs/business-logic.md）。family="c3n"＝days は禁止の並びの窓、
+ *  "c3w"＝days は [前日, 希望日]。shifts は days と同じ順の希望の勤務。 */
+data class WishSelfConflict(val staff: Int, val family: String, val days: List<Int>, val shifts: List<Int>) {
+    val wishKeys: List<String> get() = days.map { "$staff,$it" }
+}
+
 /** 設定ミスの種別。UI でアイコン/誘導先タブを切り替えるのに使う。 */
 enum class IssueKind { WISH, CONSTRAINT, DEMAND, RANGE }
 
@@ -181,6 +187,57 @@ object V6SanityPort {
             }
         }
         return out.sortedWith(compareBy<ImpossibleWish> { it.staffIndex }.thenBy { it.dayIndex })
+    }
+
+    /** 希望どうしの衝突を職員→先頭日→族の順に返す（盤面に依存しない）。同じ職員・同じ日の並びは 1 組（重複行は検査 2 が扱う）。 */
+    fun wishSelfConflicts(state: MagiState): List<WishSelfConflict> = wishSelfConflicts(cachedProblem(state))
+
+    fun wishSelfConflicts(p: Problem): List<WishSelfConflict> {
+        val out = ArrayList<WishSelfConflict>()
+        val seen = HashSet<Pair<Int, List<Int>>>()
+        for (i in 0 until p.S) {
+            val mine = ArrayList<WishSelfConflict>()
+            for (c in p.cons3n) {
+                val seq = c.seq
+                val d = seq.size
+                if (d == 0 || d > p.T) continue
+                for (j in 0..p.T - d) {
+                    if ((0 until d).all { l -> p.wishLocked(i, j + l) && p.wish[i][j + l] == seq[l] }) {
+                        val days = (j until j + d).toList()
+                        if (seen.add(i to days)) mine.add(WishSelfConflict(i, "c3n", days, seq.toList()))
+                    }
+                }
+            }
+            if (p.c3wBan != null) for (j in 0 until p.T - 1) {
+                if (p.wishLocked(i, j) && p.c3wBanned(i, j, p.wish[i][j])) {
+                    mine.add(WishSelfConflict(i, "c3w", listOf(j, j + 1), listOf(p.wish[i][j], p.wish[i][j + 1])))
+                }
+            }
+            mine.sortWith(compareBy<WishSelfConflict> { it.days.first() }.thenBy { it.family })
+            out.addAll(mine)
+        }
+        return out
+    }
+
+    /** 盤面の HARD のうち希望どうしの衝突が必ず生む分の族別件数（下限）。セルを共有しない組ごとに成立なら c3n/c3w・崩れなら pref を 1 件
+     *  （職員ごとに区間を終わりの早い順に取る＝最大個数）。ログの仕分け専用＝探索・採否には使わない。 */
+    fun wishSelfConflictHard(p: Problem, schedule: Array<IntArray>, groups: List<WishSelfConflict> = wishSelfConflicts(p)): Map<String, Int> {
+        val out = LinkedHashMap<String, Int>()
+        for ((_, gs) in groups.groupBy { it.staff }) {
+            var lastEnd = -1
+            for (g in gs.sortedBy { it.days.last() }) {
+                if (g.days.first() <= lastEnd) continue
+                lastEnd = g.days.last()
+                val row = schedule.getOrNull(g.staff) ?: continue
+                val holds = when (g.family) {
+                    "c3w" -> row.getOrNull(g.days[0]) == g.shifts[0]
+                    else -> g.days.indices.all { row.getOrNull(g.days[it]) == g.shifts[it] }
+                }
+                val key = if (holds) g.family else "pref"
+                out[key] = (out[key] ?: 0) + 1
+            }
+        }
+        return out
     }
 
     /** シフト単位の「証明可能に解消不能な covU 不足」。担当可能人数 capable(k) を全員そのシフトへ
@@ -391,7 +448,7 @@ object V6SanityPort {
         fun capableCount(k: Int): Int = (0 until p.S).count { p.canDo(it, k) }
 
         fun run(): List<SettingIssue> {
-            wishIssues(); duplicateSeqIssues(); mustForbiddenSeqIssues(); c1RuleIssues(); unusableRowIssues(); nonNumericIssues(); assignmentIssues()
+            wishIssues(); duplicateSeqIssues(); duplicateRuleIssues(); mustForbiddenSeqIssues(); c1RuleIssues(); unusableRowIssues(); nonNumericIssues(); assignmentIssues()
             demandCapacityIssues(); staffRangeIssues(); seatIssues(); forcedCountIssues(); forcedCovUIssues(); duplicateKeyIssues()
             musIssues(); softOverflowIssue()
             return sorted()
@@ -414,16 +471,28 @@ object V6SanityPort {
                     actionLabel = if (canOneTap) "この希望を取消" else "",
                     wishKey = if (canOneTap) "${w.staffIndex},${w.dayIndex}" else null))
             }
+            val selfConflicts = wishSelfConflicts(p)
             // 1b) [3.542.0] 希望の前日に禁止(c3w)が希望どうしで衝突＝前日の Y も希望固定なら最適化器は解消できない。
-            if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T - 1) {
-                if (!p.wishLocked(i, j) || !p.c3wBanned(i, j, p.wish[i][j])) continue
-                val name = state.staff.getOrNull(i)?.name ?: "#$i"
-                val y = symOf(p.wish[i][j]); val x = symOf(p.wish[i][j + 1])
+            for (g in selfConflicts) {
+                if (g.family != "c3w") continue
+                val (i, j) = g.staff to g.days[0]
+                val y = symOf(g.shifts[0]); val x = symOf(g.shifts[1])
                 out.add(SettingIssue(IssueKind.WISH,
-                    "$name ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
+                    "${nameOf(i)} ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
                     "「$x の希望の前日は $y 禁止」に希望どうしで当たっています。希望は固定なので計算では解消できません",
                     "どちらかの希望を取り消すか、制約「希望の前日に禁止」の行を見直してください",
                     action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j"))
+            }
+            // 1c) 禁止の並び(c3n)の窓がまるごと希望固定（例: 休の希望 3 連日と「休→休→休」禁止）。どれを取り消すかは利用者が選ぶ＝ワンタップなし。
+            //     窓が 1 セル（単独の禁止シフト）なら関わる希望は 1 件＝単数の文言。
+            for (g in selfConflicts) {
+                if (g.family != "c3n") continue
+                val seq = g.shifts.joinToString("→") { symOf(it) }
+                val one = g.days.size == 1
+                out.add(SettingIssue(IssueKind.WISH,
+                    "${nameOf(g.staff)} ${g.days.joinToString("・") { safeDayLabel(state.startDate, it) }} 希望「$seq」",
+                    "禁止の並び「$seq」に${if (one) "希望が" else "希望どうしで"}当たっています。希望は固定なので計算では解消できません",
+                    "${if (one) "この希望" else "いずれか1件の希望"}を取り消すか、禁止の並び「$seq」を見直してください"))
             }
         }
 
@@ -438,6 +507,31 @@ object V6SanityPort {
                     action = SettingFixAction.DELETE_DUP_SEQ, actionLabel = "重複を1つ削除",
                     seqFamily = famRaw, seqKey = seq))
             }
+        }
+
+        /** 2') 並び以外の族の同じ行（CSV 取込・既存データはダイアログを通らない）。エンジンは dedup しない＝知らせるだけ。
+         *  `Problem` の解決後の値で比べる＝評価が実際に 2 回数える行だけ。希望の前日に禁止は禁止表（`c3wBan`）に畳まれ 1 本分。 */
+        fun duplicateRuleIssues() {
+            fun gsym(g: Int) = state.groups.getOrNull(g)?.kigou ?: "#$g"
+            fun ssym(g: Int) = state.skillGroups.getOrNull(g)?.kigou ?: "#$g"
+            fun bound(l: Int, u: Int) = "${if (l > 0) "$l" else ""}〜${if (u == Int.MAX_VALUE) "" else "$u"}"
+            fun <T> report(rows: List<T>, key: (T) -> List<Int>, where: (T) -> String, counted: Boolean = true) {
+                for (same in rows.groupBy(key).values) {
+                    val n = same.size
+                    if (n < 2) continue
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, where(same[0]),
+                        if (counted) "同じ行が${n}本あります。違反を${n}回数えるので、この決まりだけ重みが${n}倍になります"
+                        else "同じ行が${n}本あります（評価は1本分で変わりません）",
+                        "制約設定でこの行の重複を削除してください（自動では消しません）"))
+                }
+            }
+            report(p.cons1, { listOf(it.day1, it.shiftIdx, it.day2) }, { "期間の制約「${symOf(it.shiftIdx)} ${it.day1}日で${it.day2}回以上」" })
+            report(p.cons2, { listOf(it.shiftIdx, it.count) }, { "個人の合計「${symOf(it.shiftIdx)} 合計${it.count}回以上」" })
+            report(p.cons3w, { listOf(it.wishIdx, it.prevIdx) }, { "希望の前日に禁止「${symOf(it.wishIdx)} の希望の前日は ${symOf(it.prevIdx)}」" }, counted = false)
+            report(p.cons41, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "グループのレンジ「${gsym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" })
+            report(p.cons42, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "グループペア禁止「${gsym(it.g1)}の${symOf(it.s1)} ✕ ${gsym(it.g2)}の${symOf(it.s2)}」" })
+            report(p.cons41s, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "スキルグループのレンジ「${ssym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" })
+            report(p.cons42s, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "スキルグループペア禁止「${ssym(it.g1)}の${symOf(it.s1)} ✕ ${ssym(it.g2)}の${symOf(it.s2)}」" })
         }
 
         /**
@@ -642,7 +736,7 @@ object V6SanityPort {
             for ((famJp, rowStr) in p.unresolvedRows) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「$rowStr」",
                     "この行は評価されていません。〈〉で囲んだ記号が今の一覧にないか、日数・回数が空か数値でない" +
-                        "ためです（シフトや群を改名・削除するとこうなります）",
+                        "ためです（シフトやグループを改名・削除するとこうなります）",
                     "制約設定でこの行を今ある記号・正しい数値に直すか、行を削除してください"))
             }
 
@@ -726,8 +820,8 @@ object V6SanityPort {
                     }
                 }
             }
-            checkRange("群のレンジ", "c41", state.cons41)
-            checkRange("スキル群のレンジ", "c41s", state.cons41s)
+            checkRange("グループのレンジ", "c41", state.cons41)
+            checkRange("スキルグループのレンジ", "c41s", state.cons41s)
             // [3.328.0/外部レビュー] 日別の必要人数と適切回数も同じ穴。とくに needDay は
             //   `needAt` が非数値のとき**シフト既定値へ黙って読み替える**ので、0 になるより性質が悪い
             //   （その日だけ意図と違う人数で計算され、画面には何も出ない）。
@@ -763,21 +857,21 @@ object V6SanityPort {
         }
 
         fun assignmentIssues() {
-            // 2i) [3.327.0/外部レビュー High5] スキル群の割当が範囲外。
-            //   `Staff.skillIdx` の既定は 0 で、`Problem` は素通しする（native は 3.311.0 で巨大確保だけ
-            //   防いでいるが、意味論は検証していない）。範囲外だと `ssk[i]==groupIdx` が常に偽＝その職員が
-            //   スキル群の制約から**静かに外れる**。さらに旧いデータは未指定が 0 なので、あとからスキル群を
-            //   作ると全員が先頭の群に所属したことになる。自動で書き換えると意味が変わるので**知らせるだけ**にする。
+            // 2i) [3.327.0/外部レビュー High5] スキル群の割当が範囲外（-1＝未所属でも一覧の index でもない値）。
+            //   `Problem` は `skillIdx` を素通しする（native は 3.311.0 で巨大確保だけ防いでいるが、意味論は
+            //   検証していない）。範囲外だと `ssk[i]==groupIdx` が常に偽＝その職員がスキル群の制約から
+            //   **静かに外れる**。自動で書き換えると意味が変わるので**知らせるだけ**にする。範囲内の値が意図した
+            //   所属かどうかは見ない（最初の 1 群を作るときの取り違えは `Ws1Ops.addSkillGroup` が防ぐ）。
             if (state.skillGroups.isNotEmpty()) {
                 val bad = state.staff.withIndex().filter { (_, st2) ->
                     st2.skillIdx != -1 && st2.skillIdx !in state.skillGroups.indices
                 }
                 if (bad.isNotEmpty()) {
                     val names = bad.take(Guidance.NAME_PREVIEW).joinToString("・") { it.value.name.ifBlank { "#${it.index}" } }
-                    out.add(SettingIssue(IssueKind.CONSTRAINT, "スキル群の割当",
-                        "${bad.size}名（$names${if (bad.size > Guidance.NAME_PREVIEW) " ほか" else ""}）のスキル群が今の一覧の範囲外です。" +
-                            "この職員はスキル群の制約から外れて計算されます",
-                        "職員管理でスキル群を選び直すか、所属させないなら「(なし)」にしてください"))
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "スキルグループの割当",
+                        "${bad.size}名（$names${if (bad.size > Guidance.NAME_PREVIEW) " ほか" else ""}）のスキルグループが今の一覧の範囲外です。" +
+                            "この職員はスキルグループのルールから外れて計算されます",
+                        "職員管理でスキルグループを選び直すか、所属させないなら「(なし)」にしてください"))
                 }
             }
 
@@ -811,7 +905,7 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "担当できるシフト",
                     "グループ「$gname」（${members}名）は担当できるシフトが1つもありません。この職員は休しか置けず、" +
                         "必要人数のある日はすべて人員不足になります",
-                    "年間マスターの「担当できるシフト（群×シフト）」で担当するシフトを選んでください"))
+                    "年間マスターの「担当可否（グループ × シフト）」で担当するシフトを選んでください"))
             }
         }
 
@@ -1138,11 +1232,20 @@ object V6SanityPort {
                         "次の${sc.core.size}件は同時に成立しません（証明つき）: $labels",
                         "いずれか1件を緩めてください（例: $hints）"))
                 }
+                // 日別の証明（ConstraintMus の canServe）はコアで希望固定されていない人を mayPlace で数える＝上限 0 の人を前提として名指しする。
+                fun capZeroNote(dc: ConstraintMus.DayConflict): String {
+                    val pinned = dc.core.filterIsInstance<ConstraintMus.WishPin>().map { it.staff }.toSet()
+                    val parts = dc.core.filterIsInstance<ConstraintMus.DayNeed>().map { it.shift }.distinct().mapNotNull { k ->
+                        val names = (0 until p.S).filter { it !in pinned && p.canDo(it, k) && !p.mayPlace(it, k) }
+                        if (names.isEmpty()) null else "${names.joinToString("・") { staffName(it) }}（${sym(k)}）"
+                    }
+                    return if (parts.isEmpty()) "" else "。個人上限が0のため置けない人: ${parts.joinToString("、")}"
+                }
                 for (dc in ConstraintMus.analyzeDayConflicts(p).filter { hasWish(it.core) }.sortedBy { it.core.size }.take(Guidance.MUS_TOP)) {
                     val labels = dc.core.joinToString(" ・ ") { itemLabel(it) }
                     val wishHint = dc.core.firstOrNull { it is ConstraintMus.WishPin }?.let { relaxHint(it) }
                     out.add(SettingIssue(IssueKind.WISH, "${safeDayLabel(state.startDate, dc.day)} の必要人数と固定希望の衝突",
-                        "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません（証明つき）: $labels",
+                        "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません（証明つき）: $labels" + capZeroNote(dc),
                         "この日の希望を1件調整するか、必要人数を下げてください" + (wishHint?.let { "（例: $it）" } ?: "")))
                 }
             }
@@ -1161,7 +1264,7 @@ object V6SanityPort {
             }
         }
 
-        /** 直すべき度合いが高い順。SettingIssuesCard は先頭 take(6) のみ表示するため最重要のデータ起因を上位へ。sortedBy は安定＝同順は挿入順。 */
+        /** 直すべき度合いが高い順。設定の見直しの一覧は先頭 SETTING_ISSUE_PREVIEW 件を先に出す（残りは「すべて表示」）ため最重要のデータ起因を上位へ。sortedBy は安定＝同順は挿入順。 */
         fun sorted(): List<SettingIssue> {
             return out.sortedBy { iss ->
                 when {

@@ -112,7 +112,9 @@ MagiRoot（唯一の合成ルート）
 ### UI 画面・部品（ui）
 | Entity | type | 役割 |
 |---|---|---|
-| `MagiScheduleViews` | UI-Schedule | 勤務表グリッド / セル / シフト選択シート / 集中モード |
+| `MagiScheduleViews` | UI-Schedule | 勤務表グリッド / セル / 集中モード |
+| `CellEditSheet` | UI-Schedule | セル編集シート（画面下の固定パネル・固定配置のシフトボタン） |
+| `CellSheetLogic` | UI-logic（Compose 非依存） | セル編集シートの固定配置・1 行の状態・シフトの印・巡回・回数の 1 行（ホストテスト） |
 | `MagiDashboardCards` ＋ `V6RemainingScreens` | UI-Analysis | 分析カード（違反の内訳18 / 俯瞰 / チェック概要 / ボトルネック / 改善提案） |
 | `Ws1Editor` / `StaffRangeEditor` / `ConstraintEditor` / `WishEditor` / `NeedDayEditor` / `SkillGroupEditor` / `CountSettingsScreen` / `ShiftColorEditor` | UI-Editors | 「基本マスター」の各エディタ |
 | `MagiSetupCards` | UI-Setup | 初期設定・外観・データ操作などのカード群 |
@@ -188,7 +190,7 @@ ViewModel ハブ
 - `CovOReliefPolish.kt` — **人員過剰(covO)の退避研磨**（3.554.0）。過剰セルの在勤者を、受け皿のある担当可シフト（B4 のような需要 0 の
   シフトを含む）へ 1 セルずつ動かし、正式チェッカーの `betterReport` で採る。`V6PortAnalyzer.diagnoseSurpluses` が「移すだけで良くなる」と
   見つける手と同じ探索を修復として行う。後処理チェーンの最終段（成分修復の後・HF70 の前）＝後続パスが無いので旧チェーンの結果より
-  悪くならない（`PostOptimizationParams.covOReliefEnabled`。HF66 直後にも置く `covOReliefEarly` は既定 OFF＝tools/loop で経路が揺れた）。
+  悪くならない（`PostOptimizationParams.covOReliefEnabled`。HF66 直後にも置く `covOReliefEarly` は tools/loop で経路が揺れたため 2026-09-25 撤去）。
   C# は `V6HotfixPasses.CovORelief.cs`。
 - `ViolationComponentRepair.kt` — **違反起点のトランザクション修復**（Iteration 2 第一弾, 3.505.0）。各研磨パスが単独で不採用にした候補
   （`CombinatorialRepair.Candidate`＝`CyclicSwapResult.rejectedCandidates` で巡ごとに集める）を、違反（セル/回数/人数）を起点に

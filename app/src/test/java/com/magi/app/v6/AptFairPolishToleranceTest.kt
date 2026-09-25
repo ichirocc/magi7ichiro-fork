@@ -13,14 +13,15 @@ import org.junit.Test
  */
 class AptFairPolishToleranceTest {
 
-    private fun rep(fair: Int, apt: Int, low: Int): ViolationReport {
-        val bd = mapOf("fair" to fair, "apt" to apt, "low" to low)
-        val weighted = fair * MirrorKeys.weights.getValue("fair") +
-            apt * MirrorKeys.weights.getValue("apt") +
-            low * MirrorKeys.weights.getValue("low")
+    private fun rep(fair: Int, apt: Int, low: Int): ViolationReport = repOf("fair" to fair, "apt" to apt, "low" to low)
+
+    private fun repOf(vararg fams: Pair<String, Int>): ViolationReport {
+        val bd = fams.toMap()
+        val weighted = bd.entries.sumOf { (k, v) -> v * MirrorKeys.weights.getValue(k) }
+        val hard = bd.filterKeys { it in MirrorKeys.hard }.values.sum()
         return ViolationReport(
             violations = emptyMap(), needViolations = emptyMap(), countViolations = emptyMap(),
-            breakdown = bd, total = fair + apt + low, hard = 0, soft = fair + apt + low, weightedScore = weighted,
+            breakdown = bd, total = bd.values.sum(), hard = hard, soft = bd.values.sum() - hard, weightedScore = weighted,
         )
     }
 
@@ -74,5 +75,44 @@ class AptFairPolishToleranceTest {
         assertEquals("count=falseなら診断分岐からの呼び出しはカウントしない", 0, TuningTelemetry.aptFairToleranceUsed.get())
         assertTrue(AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true, count = true))
         assertEquals("count=true(既定)なら従来どおり数える", 1, TuningTelemetry.aptFairToleranceUsed.get())
+    }
+
+    // ==== [無害化, 2026-09-24] 許容 ON でも重い SOFT の増加・必須どうしの付け替え・対象族の改善なしの容認は採らない ====
+
+    @Test fun heavySoftIncreaseIsRejectedEvenWhenTheRawScoreImproves() {
+        // c1 が 1 増えても fair が大きく減れば素の betterReport は採るが、許容 ON では c1 の増加を 1 件も許さない。
+        val before = repOf("fair" to 60, "c1" to 0, "weekly" to 5)
+        val candidate = repOf("fair" to 30, "c1" to 1, "weekly" to 5)
+        assertTrue(betterReport(candidate, before))
+        assertFalse(AptFairPolish.toleratedBetter(candidate, before, before, "fair", enabled = true))
+        val lowUp = repOf("fair" to 30, "low" to 1, "weekly" to 5)
+        assertFalse(AptFairPolish.toleratedBetter(lowUp, before, before, "fair", enabled = true))
+    }
+
+    @Test fun hardFamilySwapIsRejectedEvenAtTheSameHardTotal() {
+        // 必須の合計は同点(1)でも covU→c3n の付け替えは採らない（fair は改善していても）。
+        val bestRep = repOf("covU" to 1, "c3n" to 0, "fair" to 10)
+        val candidate = repOf("covU" to 0, "c3n" to 1, "fair" to 2)
+        assertFalse(AptFairPolish.toleratedBetter(candidate, bestRep, bestRep, "fair", enabled = true))
+    }
+
+    @Test fun toleranceIsNotUsedWhenTheTargetFamilyDoesNotImprove() {
+        // weekly −3(−6)・apt +2(+8) で加重 +2・件数 −1。容認(2 ≤ 予算 6)で実効 0・件数減なので旧判定なら採るが、
+        //   対象の fair が減っていない＝他の族を入れ替えただけの手は採らない。
+        val before = repOf("fair" to 10, "weekly" to 50, "apt" to 0)   // 非 fair SOFT = 100 → 予算 6
+        val candidate = repOf("fair" to 10, "weekly" to 47, "apt" to 2)
+        assertFalse(betterReport(candidate, before))
+        assertFalse(AptFairPolish.toleratedBetter(candidate, before, before, "fair", enabled = true))
+        val withFairGain = repOf("fair" to 9, "weekly" to 47, "apt" to 2)   // fair も減るなら容認で採る
+        assertTrue(AptFairPolish.toleratedBetter(withFairGain, before, before, "fair", enabled = true))
+    }
+
+    @Test
+    fun hardDecreaseIsAcceptedEvenIfAHeavySoftFamilyGrows() {
+        // 必須が減る手は OFF（betterReport）と同じく採る＝重い SOFT の増加禁止は必須が同点の比較だけに掛かる。
+        val best = repOf("covU" to 1, "c1" to 0, "apt" to 2)
+        val cand = repOf("covU" to 0, "c1" to 1, "apt" to 0)
+        assertTrue(betterReport(cand, best))
+        assertTrue(AptFairPolish.toleratedBetter(cand, best, best, "apt", enabled = true))
     }
 }

@@ -50,7 +50,7 @@ object C1DeltaPrefilter {
         if (staff !in 0 until p.S || day !in 0 until p.T) return Verdict.HARD_REJECT   // [C1-12] 不正座標は非手
         if (newShift !in 0 until p.K) return Verdict.HARD_REJECT
         // [3.279.1/レビューnit] 旧: normalizeSchedule で全盤面 O(S×T) をコピーしていたが、本判定が読むのは
-        //   staff の1行と day の1列のみ。normalizeSchedule と**同一の意味論**（欠損セル→0=休へパディング・
+        //   staff の1行と day の1列のみ。normalizeSchedule とほぼ同じ意味論（ただし欠損セルは 0 へパディング＝normalizeSchedule は 3.475.0 から -1。S×T の盤面では同一・
         //   範囲外値→-1）を読み取り時に局所適用し、コピーを行1本 O(T) に削減（正規化済み盤面には恒等＝結果同一。
         //   S×T 未満の不揃い盤面でも normalizeSchedule 経由と同じ判定になり AIOOBE しない）。
         fun cell(i: Int, j: Int): Int {

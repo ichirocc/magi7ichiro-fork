@@ -467,6 +467,36 @@ class V6SanityPortTest {
         assertTrue("目標なしなら行そのものを出さない", V6SanityPort.aptBalances(st).isEmpty())
     }
 
+    @Test fun aptBalancesSkipsShiftWithAnUndefinedDay() {
+        // 必要人数が 1 日だけ定義（0）＝残り 9 日は上限なし。目標の合計 12 を「席 0」と比べて誤警告しない（capKnown）。
+        val st = aptVsNeedState(days = 10, need1 = "", aptTarget = "6").copy(needDay1 = mapOf("1,0" to "0"))
+        assertTrue(V6SanityPort.aptBalances(st).none { it.kigou == "X" })
+        assertTrue(V6SanityPort.buildGuidance(st).none { it.where.contains("X") && it.where.contains("適切回数の合計") })
+    }
+
+    @Test fun wishCountAboveStaffCapIsReported() {
+        // 検査 6e: X の希望 3 件 vs 個人上限 1 回 → 希望を守る限り上限超過は解消できない。
+        val st = aptVsNeedState(days = 10, need1 = "1", aptTarget = "").copy(
+            wishes = mapOf("0,0" to 1, "0,2" to 1, "0,4" to 1),
+            staffRange = mapOf("0,1" to Range("", "1")),
+        )
+        val issue = V6SanityPort.buildGuidance(st).single { it.where == "s0さんの「X」個人上限と希望の衝突" }
+        assertEquals(IssueKind.RANGE, issue.kind)
+        assertTrue(issue.problem, issue.problem.contains("希望が3件"))
+        assertTrue(issue.fix, issue.fix.contains("希望を2件減らして"))
+        val within = st.copy(staffRange = mapOf("0,1" to Range("", "3")))
+        assertTrue(V6SanityPort.buildGuidance(within).none { it.where.contains("個人上限と希望の衝突") })
+    }
+
+    @Test fun demandAboveStaffCapsStatesTheGapInBothPlaces() {
+        // 必要数 10 回 vs 担当者の上限 3+4=7 回 → 差 3 回。文中の 2 か所とも数値で出る。
+        val st = aptVsNeedState(days = 10, need1 = "1", aptTarget = "").copy(
+            staffRange = mapOf("0,1" to Range("", "3"), "1,1" to Range("", "4")),
+        )
+        val issue = V6SanityPort.buildGuidance(st).single { it.where == "「X」の必要人数" }
+        assertTrue(issue.problem, issue.problem.contains("限り3回ぶんは埋まりません") && issue.problem.contains("合わせて3回ぶん"))
+    }
+
     @Test fun aptSumCheckAccountsForOtherShiftLowerBoundsReducingRestCapacity() {
         // T=10・apt目標3(合計6)だが、他シフトXの個人下限が8(各自)設定済み＝休の実質上限=2人×(10-8)=4 < 6。
         val rep = V6SanityPort.buildGuidance(aptVsNeedState(days = 10, need1 = "0", aptTarget = "3", otherLo = "8"))
@@ -607,8 +637,8 @@ class V6SanityPortTest {
         val st = unresolvedState(cons42 = listOf(com.magi.app.model.C42Row("G", "GX", "X", "X")))
         assertTrue("前提: この行は評価対象から外れる", Problem(st).cons42.isEmpty())
         val rep = V6SanityPort.buildGuidance(st)
-        assertTrue("群ペア禁止の未解決行が案内されること",
-            rep.any { it.where.contains("群ペア禁止") && it.where.contains("〈GX〉") })
+        assertTrue("グループペア禁止の未解決行が案内されること",
+            rep.any { it.where.contains("グループペア禁止") && it.where.contains("〈GX〉") })
     }
 
     @Test fun nonNumericRangeRowIsReported() {
@@ -616,7 +646,7 @@ class V6SanityPortTest {
         val st = unresolvedState(cons41 = listOf(com.magi.app.model.C41Row("G", "X", "", "")))
         assertTrue("前提: この行は評価対象から外れる", Problem(st).cons41.isEmpty())
         val rep = V6SanityPort.buildGuidance(st)
-        assertTrue("群のレンジの未解決行が案内されること", rep.any { it.where.contains("群のレンジ") })
+        assertTrue("グループのレンジの未解決行が案内されること", rep.any { it.where.contains("グループのレンジ") })
     }
 
     @Test fun resolvableRowsAreNotReported() {
@@ -661,8 +691,8 @@ class V6SanityPortTest {
 
     @Test fun nonNumericGroupRangeIsReported() {
         val st = unresolvedState(cons41 = listOf(com.magi.app.model.C41Row("G", "X", "1", "多")))
-        assertTrue("群のレンジの非数値が案内されること",
-            V6SanityPort.buildGuidance(st).any { it.where.contains("群のレンジ") && it.problem.contains("数値でない") })
+        assertTrue("グループのレンジの非数値が案内されること",
+            V6SanityPort.buildGuidance(st).any { it.where.contains("グループのレンジ") && it.problem.contains("数値でない") })
     }
 
     @Test fun blankNumbersAreNotReportedAsNonNumeric() {
@@ -676,13 +706,13 @@ class V6SanityPortTest {
         // skillIdx=3 だがスキル群は1つ＝この職員はスキル群の制約から静かに外れる。
         val st = unresolvedState(skillGroups = listOf(Group("S", "S")), skillIdx = 3)
         assertTrue("範囲外のスキル群が案内されること",
-            V6SanityPort.buildGuidance(st).any { it.where.contains("スキル群の割当") })
+            V6SanityPort.buildGuidance(st).any { it.where.contains("スキルグループの割当") })
         assertFalse("範囲内なら案内しない",
             V6SanityPort.buildGuidance(unresolvedState(skillGroups = listOf(Group("S", "S")), skillIdx = 0))
-                .any { it.where.contains("スキル群の割当") })
+                .any { it.where.contains("スキルグループの割当") })
         assertFalse("未所属(-1)は案内しない",
             V6SanityPort.buildGuidance(unresolvedState(skillGroups = listOf(Group("S", "S")), skillIdx = -1))
-                .any { it.where.contains("スキル群の割当") })
+                .any { it.where.contains("スキルグループの割当") })
     }
 
     @Test fun nonNumericDailyNeedIsReported() {
@@ -1009,5 +1039,39 @@ class V6SanityPortTest {
         // X の 1 日目の希望が A なら、その日は X も置かれる＝不足は 2 日ぶん
         val wished = st(mapOf("0,0" to 1))
         assertEquals(2, V6SanityPort.structuralHardFloor(wished))
+    }
+
+    /** 並び以外の族の同じ行を設定の見直しに出す（解決後の値で比べる・ワンタップなし）。期間の制約は 2 本で違反も 2 倍、
+     *  希望の前日に禁止は禁止表に畳まれるので「評価は 1 本分」。 */
+    @Test fun duplicateNonSequenceRulesAreListedWithoutAutoFix() {
+        val base = MagiState(
+            startDate = "2026-06-01", endDate = "2026-06-03",
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "", "")),
+            groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+            use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(0, 0, 0), listOf(0, 0, 0)),
+            wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(com.magi.app.model.C1Row("3", "A", "1")), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        fun dupIssues(st: MagiState) = V6SanityPort.buildGuidance(st).filter { it.problem.startsWith("同じ行が") }
+        assertTrue("1 本なら出ない", dupIssues(base).isEmpty())
+        val twice = base.copy(
+            cons1 = listOf(com.magi.app.model.C1Row("3", "A", "1"), com.magi.app.model.C1Row(" 03", "A", "1")),
+            cons3w = listOf(com.magi.app.model.C3wRow("A", "休"), com.magi.app.model.C3wRow("A", "休")),
+            cons41 = listOf(com.magi.app.model.C41Row("G", "A", "1", ""), com.magi.app.model.C41Row("G", "A", "1", "")),
+        )
+        val issues = dupIssues(twice)
+        assertEquals(3, issues.size)
+        assertTrue(issues.all { it.kind == IssueKind.CONSTRAINT && it.action == SettingFixAction.NONE && it.actionLabel.isEmpty() })
+        val c1 = issues.single { it.where.startsWith("期間の制約") }
+        assertTrue(c1.problem, c1.problem.contains("2本") && c1.problem.contains("2倍"))
+        assertTrue(issues.single { it.where.startsWith("希望の前日に禁止") }.problem.contains("1本分"))
+        val one = UnifiedViolationChecker.check(base, base.schedule.toIntArray2D()).breakdown["c1"] ?: 0
+        val two = UnifiedViolationChecker.check(twice, twice.schedule.toIntArray2D()).breakdown["c1"] ?: 0
+        assertTrue("A を 1 回も置かない盤面は期間の制約に当たる", one > 0)
+        assertEquals("同じ行 2 本は違反も 2 倍（文言の根拠）", 2 * one, two)
     }
 }

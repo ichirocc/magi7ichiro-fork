@@ -23,7 +23,7 @@ when分岐の文脈で使われている行。族の値は実行時に `MirrorCo
 
 抑止（この repo の design_lint.py の P2_BASELINE/P10_BASELINE/P12_EXEMPT_PAIRS と同じ流儀＝
 新たに1行ごとのインラインコメント規約を作らず、この lint 自身に理由つきの許可リストを持つ）:
-  - WEIGHT_LINT_EXEMPT に (相対パス, 行番号): (対象族名のタプル, "理由") を追加する（既定の抑止手段。
+  - WEIGHT_LINT_EXEMPT に (相対パス, 行の一部の文字列): (対象族名のタプル, "理由"[, 一致行数]) を追加する（既定の抑止手段。
     narrow に保つ）。`.claude/rules/weights.md` が列挙する destroy-repair/polish 系の重複リテラル
     （性能上の理由で `MirrorKeys.weightOf` の呼び出しコストを避け、手動同期で揃える設計）と、族名と
     無関係な数値の偶然の一致（GLS の周期・内部優先順位オフセット等）はここに載せる。
@@ -32,7 +32,8 @@ when分岐の文脈で使われている行。族の値は実行時に `MirrorCo
     旧実装は行の値そのものを検索対象にしていたため、正本だけ重みを変更し複製側の更新を忘れても
     複製側の古い値がもう「現在のどの重みとも一致しない」場合にしか気づけず、たまたま**別の族の現在値と
     数値が一致**すれば古い値のまま緑になり得た（reverse-direction の穴、実例は無いが再現手順で確認済み）。
-    値が変わると行番号もずれるので、重みを変更するコミットでここも一緒に確認する。
+    キーは行番号でなく行のコード断片＝上の行を編集しても抑止がずれない。断片は検出行のうち既定で
+    ちょうど1行（第3要素で行数を指定可）に一致しなければならず、0行・過多は空振り/曖昧として fail する。
   - WEIGHT_LINT_FILE_EXEMPT にファイル相対パス: "理由" を追加する（ファイル単位。`Evaluator.kt`/
     `DeltaEvaluator.kt` のような「19族の重み全部を集約する関数を持つ」ファイルだけに限定して使う。
     行単位で管理するとメンテ不能になるうえ、ドリフトは ObjectiveParityTest/native-parity CI が
@@ -51,66 +52,62 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENGINE_DIR = os.path.join(ROOT, "app/src/main/java/com/magi/app/v6")
 MIRROR_CORE = os.path.join(ENGINE_DIR, "MirrorCore.kt")
 
-# [narrow exclusion / 抑止リスト] (相対パス, 行番号) -> 理由。
+# [narrow exclusion / 抑止リスト] (相対パス, 行の一部の文字列) -> 理由。
 #   `.claude/rules/weights.md` が列挙する「destroy-repair/polish 系の重複リテラル」＝ホットパスで
 #   `MirrorKeys.weightOf` の呼び出しコスト（String の when 分岐）を避けるため、checker と同じ数値を
 #   手動同期で複製している箇所（HF77 の重み変更コミットで同時に更新する運用。MirrorCore.kt 自身の
 #   `classWeight` 事前表と同じ設計判断＝3.395.0 のコメント参照）。
 #   これらは「MirrorKeys を経由していない」という lint の定義上は真だが、経由しない理由が
 #   ドキュメント化された既知の設計判断であり、誤って値がドリフトした場合はこの許可リストの
-#   行番号がコード側とずれる（見つからなくなる）ので、そのときは目視で再確認すること。
+#   断片が検出行に見つからなくなる（空振りとして fail する）ので、そのときは目視で再確認すること。
 #   値は (対象族名のタプル, 理由)。族名を書いた行は「その族の“現在の”重みと一致する値がまだそこにあるか」
 #   まで毎回検証する（族名タプルが空＝族と無関係な偶然の一致＝値そのものの追跡はしない、下の「偽陽性」節）。
 WEIGHT_LINT_EXEMPT = {
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", 41):
+    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 120L"):
         (("low",), "low(120) の複製。weights.md: destroy-repair marginal cost はホットパスで weightOf 呼び出しコストを避ける"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", 42):
+    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "* 25L"):
         (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", 44):
+    ("app/src/main/java/com/magi/app/v6/DestroyRepairMarginalCost.kt", "abs(n - t).toLong() * 4L"):
         (("apt",), "apt(4) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 285):
+    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(lo - count).toLong() * 120L"):
         (("low",), "low(120) の複製。weights.md 明記の既知重複"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 286):
+    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(count - hiLim).toLong() * 25L"):
         (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 473):
+    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(lo - c).toLong() * 120L"):
         (("low",), "low(120) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 474):
+    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "(c - hi).toLong() * 25L"):
         (("high",), "high(25) の複製。同上"),
-    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 75):
-        (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。weights.md 明記の既知重複"),
-    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", 165):
-        (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。同上"),
+    ("app/src/main/java/com/magi/app/v6/DayAssignmentPolish.kt", "fun rangePen(x: Int) = "):
+        (("low", "high"), "low(120)/high(25) の複製（乗数が左の逆順パターン）。weights.md 明記の既知重複", 2),
     # [dayPenalty] covU(10000)/covO(10) の候補見積り。C1TemporalFlowPolish.kt・DayAssignmentPolish.kt
     #   と同じ「ホットパスで MirrorKeys.weightOf を避ける」設計だが、weights.md の destroy-repair/polish
     #   系チェックリストには covU/covO の組までは列挙されていない（low/high の組だけが明記）。
     #   4ファイルで完全に同一の1行関数（[3.522.0] タグ＝covO の重み改定と同時に更新済み＝ドリフトなし）
     #   ＝新規に紛れ込んだ複製ではなく既存の一貫した実装。weights.md のチェックリストへの追記は別途検討。
-    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", 112):
-        (("low",), "low(120) の複製。weights.md 明記の既知重複（同関数113行のhigh(25)・115行のapt(4)と同型）"),
-    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", 122):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
-    ("app/src/main/java/com/magi/app/v6/C41FlowPolish.kt", 28):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
-    ("app/src/main/java/com/magi/app/v6/C42FlowPolish.kt", 27):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
-    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", 484):
-        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、4ファイル共通・[3.522.0]で同期済み）"),
+    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "(lo - c).toLong() * 120L"):
+        (("low",), "low(120) の複製。weights.md 明記の既知重複（同関数のhigh(25)・apt(4)と同型）"),
+    ("app/src/main/java/com/magi/app/v6/C1TemporalFlowPolish.kt", "* 10000L + p.covOCell"):
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
+    ("app/src/main/java/com/magi/app/v6/C42FlowPolish.kt", "p.covUCell("):
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
+    ("app/src/main/java/com/magi/app/v6/RangePolish.kt", "* 10000L + p.covOCell"):
+        (("covU", "covO"), "covU(10000)/covO(10) の複製（dayPenalty、3ファイル共通・[3.522.0]で同期済み）"),
     # [偽陽性/族名と無関係な偶然の一致＝族名タプルは空。値そのものの継続一致は検証しない]
-    ("app/src/main/java/com/magi/app/v6/C1JointLnsPolish.kt", 490):
+    ("app/src/main/java/com/magi/app/v6/C1JointLnsPolish.kt", "50 + deficit, GoalKind.RANGE_LOW"):
         ((), "50 は GoalKind別の内部優先順位オフセット（C1=100/TEMPORAL=150/COVERAGE=200/RANGE_LOW=50、"
-        "同関数139/463/477行）。c1の重み(50)とは無関係な偶然の一致（GoalKindはRANGE_LOWで、C1ではない）"),
-    ("app/src/main/java/com/magi/app/v6/Hf63Infeasibility.kt", 38):
+        "同関数内の他の GoalKind 追加箇所）。c1の重み(50)とは無関係な偶然の一致（GoalKindはRANGE_LOWで、C1ではない）"),
+    ("app/src/main/java/com/magi/app/v6/Hf63Infeasibility.kt", '"pref" to 10,'):
         ((), "\"pref\" to 10 の 10 はfamily→添字の列挙表のインデックス。直前の\"covO\"（別ペア）に反応した"
         "文脈窓の偽陽性で、covO(10)の重みとは無関係"),
-    ("app/src/main/java/com/magi/app/v6/V6HotfixPasses.kt", 961):
+    ("app/src/main/java/com/magi/app/v6/V6HotfixPasses.kt", "250 + cycle * 120"):
         ((), "120 は localBestImprovement の評価予算パラメータ（250 + cycle*120）。low の重みとは無関係な偶然の一致"),
-    ("app/src/main/java/com/magi/app/v6/V6LateOperators.kt", 86):
+    ("app/src/main/java/com/magi/app/v6/V6LateOperators.kt", '120 * (r.breakdown["low"]'):
         ((), "200*high+120*low は旧Webゲート(HF151系)の固定係数として明示的に維持されている値（同ファイルの"
         "KDoc参照）。MirrorKeys由来ではない（200がhigh=25と一致しないことがその証拠）。120がlow(120)と"
         "偶然一致しているだけ"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1692):
+    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", "iter % 50L == 0L"):
         ((), "iter % 50L はGLS停滞検出の周期（cadence）。c1の重みとは無関係な偶然の一致"),
-    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", 1718):
+    ("app/src/main/java/com/magi/app/v6/V6NativeOptimizer.kt", "iter % 120L == 0L"):
         ((), "iter % 120L は進捗報告(publishLiveBest)の周期（cadence）。lowの重みとは無関係な偶然の一致"),
 }
 
@@ -287,12 +284,16 @@ def engine_files():
 
 
 def scan(by_value):
-    """戻り値: (findings, used_exempt_values)。used_exempt_values は (相対パス, 行番号) -> その行で
-    実際にマッチした数値の集合（`main()` が WEIGHT_LINT_EXEMPT の宣言族名の“現在の”重みと突き合わせて、
-    行番号のずれによる空振りだけでなく「値そのものが古いまま残っている」抑止も検出する）。
+    """戻り値: (findings, used_exempt, ambiguous_lines)。used_exempt は WEIGHT_LINT_EXEMPT のキー ->
+    一致した検出行の [(行番号, その行でマッチした数値の集合)]（`main()` が一致行数と宣言族名の
+    “現在の”重みを突き合わせる）。ambiguous_lines は複数の抑止の断片に一致した行。
     """
     findings = []
-    used_exempt_values = {}
+    used_exempt = {}
+    ambiguous_lines = []
+    by_file = {}
+    for (rel, snip) in WEIGHT_LINT_EXEMPT:
+        by_file.setdefault(rel, []).append(snip)
     for path in engine_files():
         rel = os.path.relpath(path, ROOT)
         if rel in WEIGHT_LINT_FILE_EXEMPT:
@@ -300,24 +301,29 @@ def scan(by_value):
         with open(path, encoding="utf-8") as fh:
             raw = fh.read().split("\n")
         stripped = _strip_kotlin_file(raw)
+        snips = by_file.get(rel, [])
         for i, code in enumerate(stripped):
             if not code.strip():
                 continue
             n = i + 1
-            for text, val, pos in _candidates(code):
-                fams = by_value.get(val)
-                if not fams:
-                    continue
-                if (rel, n) in WEIGHT_LINT_EXEMPT:
-                    used_exempt_values.setdefault((rel, n), set()).add(val)
-                    continue
+            hits = [(text, val, pos, by_value[val]) for text, val, pos in _candidates(code) if val in by_value]
+            if not hits:
+                continue
+            keys = [(rel, sn) for sn in snips if sn in raw[i]]
+            if len(keys) > 1:
+                ambiguous_lines.append((rel, n, [k[1] for k in keys]))
+            if keys:
+                for key in keys:
+                    used_exempt.setdefault(key, []).append((n, {h[1] for h in hits}))
+                continue
+            for text, val, pos, fams in hits:
                 if val < DISTINCTIVE_MIN:
                     hit_fam = _family_context(raw[i], pos, fams)
                     if hit_fam is None:
                         continue
                     fams = [hit_fam]
                 findings.append((rel, n, text, fams, raw[i].strip()))
-    return findings, used_exempt_values
+    return findings, used_exempt, ambiguous_lines
 
 
 def main():
@@ -326,22 +332,27 @@ def main():
     a = ap.parse_args()
 
     by_family, by_value = parse_weights()
-    findings, used_exempt_values = scan(by_value)
+    findings, used_exempt, ambiguous_lines = scan(by_value)
 
-    # [3.573.0/外部レビュー指摘] 空振り（行に重み形の値が一つも無い＝行番号ずれ／削除）と、
-    #   値ミスマッチ（宣言した族の“現在の”重みがその行の値の中に無い＝正本だけ変更し複製を
-    #   更新し忘れた可能性）を分けて検出する。族名タプルが空（偽陽性の登録）はミスマッチ判定の対象外。
+    # 空振り（断片が検出行に一致しない）・一致行数の不一致（断片が曖昧）・値ミスマッチ（宣言した族の
+    #   “現在の”重みがその行の値の中に無い＝正本だけ変更し複製を更新し忘れた可能性）を分けて検出する。
+    #   族名タプルが空（偽陽性の登録）はミスマッチ判定の対象外。
     stale_exempt = []
+    count_exempt = []
     mismatched_exempt = []
-    for key, (fams, reason) in WEIGHT_LINT_EXEMPT.items():
-        matched_here = used_exempt_values.get(key, set())
-        if not matched_here:
+    for key, entry in WEIGHT_LINT_EXEMPT.items():
+        fams, expected = entry[0], (entry[2] if len(entry) > 2 else 1)
+        lines = used_exempt.get(key, [])
+        if not lines:
             stale_exempt.append(key)
             continue
-        if fams:
+        if len(lines) != expected:
+            count_exempt.append((key, expected, [n for n, _ in lines]))
+            continue
+        for n, matched_here in lines:
             missing = [f for f in fams if by_family.get(f) not in matched_here]
             if missing:
-                mismatched_exempt.append((key, missing, matched_here))
+                mismatched_exempt.append((key, n, missing, matched_here))
 
     print("=== MAGI weight lint (MirrorKeys.weights の単一ソース逸脱検査) ===")
     print(f"MirrorKeys.weights: {len(by_family)} 族 / {len(by_value)} 種の値を検出")
@@ -365,10 +376,18 @@ def main():
         #   もう重み形の数値がない＝抑止が空振りしている。放置すると行番号のずれで別の行を
         #   誤って見逃す事故につながるので、古い抑止は削除を促して fail させる。
         blockers = True
-        print(f"\n抑止リストが空振りしています（{len(stale_exempt)} 件、コード変更で行がずれたか削除された可能性）:")
-        for rel, n in sorted(stale_exempt):
-            print(f"    {rel}:{n}  {WEIGHT_LINT_EXEMPT[(rel, n)][1]}")
-        print("該当行を確認し、WEIGHT_LINT_EXEMPT から削除するか正しい行番号へ直してください。")
+        print(f"\n抑止リストが空振りしています（{len(stale_exempt)} 件、断片が検出行に見つからない＝コード変更か削除の可能性）:")
+        for rel, sn in sorted(stale_exempt):
+            print(f"    {rel}: {sn!r}  {WEIGHT_LINT_EXEMPT[(rel, sn)][1]}")
+        print("該当行を確認し、WEIGHT_LINT_EXEMPT から削除するか断片を直してください。")
+    if count_exempt or ambiguous_lines:
+        blockers = True
+        print(f"\n抑止リストの断片が曖昧です（{len(count_exempt) + len(ambiguous_lines)} 件）:")
+        for (rel, sn), expected, ns in sorted(count_exempt):
+            print(f"    {rel}: {sn!r}  一致行 {ns}（期待 {expected} 行）")
+        for rel, n, sns in ambiguous_lines:
+            print(f"    {rel}:{n}  複数の断片に一致: {sns}")
+        print("一意に絞れる断片へ直してください（同一行の複製は第3要素で行数を指定）。")
     if mismatched_exempt:
         # [3.573.0/外部レビュー指摘] reverse-direction の穴＝正本の重みだけ変更し、複製側の更新を
         #   忘れた場合の検出。旧実装は「複製側の古い値が現在のどの重みとも一致しない」ときしか
@@ -376,8 +395,8 @@ def main():
         blockers = True
         print(f"\n抑止リストの値が現在の重みと一致しません（{len(mismatched_exempt)} 件、"
               "重みを変更したのに複製側の更新を忘れた可能性）:")
-        for (rel, n), missing, matched_here in sorted(mismatched_exempt):
-            _, reason = WEIGHT_LINT_EXEMPT[(rel, n)]
+        for (rel, sn), n, missing, matched_here in sorted(mismatched_exempt):
+            reason = WEIGHT_LINT_EXEMPT[(rel, sn)][1]
             expect = ", ".join(f"{f}={by_family[f]:g}" for f in missing)
             print(f"    {rel}:{n}  宣言した族の現在値 [{expect}] がこの行に見つかりません"
                   f"（実際にこの行にある値: {sorted(matched_here)}）。{reason}")

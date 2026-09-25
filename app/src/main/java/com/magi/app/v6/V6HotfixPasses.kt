@@ -132,6 +132,12 @@ object PolishGate {
     @Volatile var filterC3nIncrease: Boolean = true
 
     /**
+     * 循環交換研磨（k=2,3）と C1広域ビームで、必ず却下される候補（HARD 正味増）を [HardDelta] の厳密差分で
+     * checker の前に捨てるか。既定 **true**。速度専用＝ON/OFF で盤面は同一（`HardDeltaPrefilterTest`）。UI トグルは無し。
+     */
+    @Volatile var hardDeltaPrefilter: Boolean = true
+
+    /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
      * 解ける可能性がある局面）の停滞閾値の割合。既定 **0.9** ＝旧来の固定値 `9/10` と厳密に同一。
@@ -192,6 +198,9 @@ object PolishGate {
 
     /** [3.540.0] 回数連鎖研磨（`CountChainPolish`）を後処理に入れる。既定 **false**（A/B 138 ペアで新2/同等135/旧1＝ゲート不合格、docs/algorithm_portfolio.md）。 */
     @Volatile var countChainPolish: Boolean = false
+
+    /** [N9] PostChain の keep-best で巻き戻したパスの採用数を 0 と数える。既定 **false**（docs/backlog.md #36）。 */
+    @Volatile var postChainRollbackCountsZero: Boolean = false
 }
 
 /**
@@ -314,9 +323,6 @@ object V6HotfixPasses {
         /** [3.580.0/測定中/backlog#26] c2PolishEnabledがOFFでも、c2違反が残っている局面でだけ試す。既定 OFF。 */
         val c2PolishReactivate: Boolean = false,
         val c2Passes: Int = 3,
-        /** [3.511.5/測定中] 群/日レンジ(c41/c41s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
-        val c41FlowPolishEnabled: Boolean = false,
-        val c41FlowPasses: Int = 3,
         /** [3.511.7/測定中] 群ペア禁止(c42/c42s)専用の min-cost-flow 研磨（backlog #12(b)）。既定 OFF。 */
         val c42FlowPolishEnabled: Boolean = false,
         /** [3.580.0/測定中/backlog#26] c42FlowPolishEnabledがOFFでも、c42/c42s違反が残っている局面でだけ試す。既定 OFF。 */
@@ -356,8 +362,6 @@ object V6HotfixPasses {
         /** 休の必要人数を明示した日に休が余るとき、前後の窓を夜勤列の列挙＋人間移動＋ビームで組み直す（RestZeroWindowLns）。最終段・退避の前。
          *  既定 OFF＝ユーザー決定（実データでは 30 日の休希望 5 人で 29 日に夜勤できる人が足りず採用ゼロ、history 3.555.0）。 */
         val restZeroWindowLnsEnabled: Boolean = false,
-        /** HF66 直後にも退避する（既定 false＝最終段だけ。早期配置は後続パスの経路を変える＝測定は history 3.554.0）。 */
-        val covOReliefEarly: Boolean = false,
         /** [3.608.0/3.610.0] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
          *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
          *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
@@ -366,9 +370,8 @@ object V6HotfixPasses {
          *  （必須件数が増えた試行はすべて構造的に充足不能なケースだった）。既定 ON（3.610.0、tools/loop 許容ON 同士
          *  230 ペアで勝108/負54・必須退行0・必須増0）。許容 OFF ではチェーンが単調＝巻き戻しが起きず出力不変。 */
         val postChainRunningKeepBest: Boolean = true,
-        /** [不合格・既定 OFF] true なら同点の手も受け入れ、厳密に悪化したときだけ巻き戻す（3.610.0 で勝109/負53 だが
-         *  必須増 1 試行、上の既定との差は勝27/負29 で有意差なし）。 */
-        val postChainRunningKeepBestAcceptTies: Boolean = false,
+        /** [N9] 巻き戻したパスの採用数を 0 と数える（巡の打ち切り判定・停滞検知へ流れる値）。既定は [PolishGate.postChainRollbackCountsZero]。 */
+        val postChainRollbackCountsZero: Boolean = PolishGate.postChainRollbackCountsZero,
         /** 起点生成つきの修復は共同 LNS の**後**に 1 回だけ（巡の中で単セル covU 修正を採ると LNS の余地を先に使う＝3.505.4 で HARD 退行を実測）。 */
         val componentRepairFinal: Boolean = true,
         /** [Iteration 7] 決定的モード＝時間（ms キャップ・締切・残り時間の判定）でなく回数で止める。同じ入力・seed なら同じ盤面。
@@ -376,9 +379,6 @@ object V6HotfixPasses {
         val deterministic: Boolean = false,
         val c1LnsMaxEvaluations: Int = 90_000,
         val personalLnsMaxEvaluations: Int = 60_000,
-        /** [3.510.0/測定中] 最終段の「連続規則 選択日ペア交換」（C3PairMaskPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
-        val c3PairMaskEnabled: Boolean = false,
-        val c3PairMaskEvaluations: Int = 3_000,
         /** [測定中] 最終段の「c3n(禁止連続) 前後余白込みLNS」（C3nMarginLnsPolish）。採否は tools/loop のペア比較で決める＝既定 OFF。 */
         val c3nMarginLnsEnabled: Boolean = false,
         /** [3.580.0/測定中/backlog#26] c3nMarginLnsEnabledがOFFでも、c3n違反が残っている局面でだけ試す。既定 OFF。 */
@@ -391,16 +391,6 @@ object V6HotfixPasses {
         val personalLnsFirstEvaluations: Int = 15_000,
         val c1LnsFirstMs: Long = 1_500L,
         val personalLnsFirstMs: Long = 1_500L,
-        /** [3.510.4/測定中] 共同 LNS の中間ノードの一時負債を件数でなく重み（負債 ≤ クレジット×係数）で絞る（backlog #15(f)）。既定 OFF。 */
-        val lnsWeightDebt: Boolean = false,
-        val lnsDebtFactor: Double = 2.0,
-        /** [3.511.0/測定中] 長期ブロック交換の候補長を固定 11/13/17/19/23/28 日だけでなく、違反窓長・禁止連長・
-         *  希望島半径・当月日数からも導出する（backlog #14(c)）。既定 OFF。 */
-        val useDynamicBlockLens: Boolean = false,
-        /** [3.511.1/測定中] 巡回研磨クラスタが1巡も採用0（停滞）だったときだけ、共同LNS2本のstage1が採用0の場合に
-         *  もう1回だけ幅（対象人数/goal数）を広げて試し、成分修復の最終段も窓長・起点数を広げる（backlog #12(b)/#13(a)）。
-         *  巡回研磨クラスタの round loop 自体（LNS前）は変えない＝3.505.4で否決済みの領域（巡の中の起点生成拡大）は再度触らない。既定 OFF。 */
-        val stallEscalation: StallEscalationConfig = StallEscalationConfig(),
         /** [C1 重複窓の連結成分化/測定中] 厳密窓修復(C1ExactRepair)の起点を、1件の違反でなく近接・重複窓を
          *  束ねた連結成分にする（backlog「C1 重複窓の連結成分化」）。既定 OFF＝挙動不変。 */
         val c1ComponentRepair: Boolean = false,
@@ -427,16 +417,6 @@ object V6HotfixPasses {
         val dayAssignIdentityFallback: Boolean = false,
     )
 
-    /** [3.511.1/測定中] 停滞時（巡回研磨クラスタが1巡も採用0）の探索幅拡大トグル。backlog #12(b)/#13(a)。 */
-    data class StallEscalationConfig(
-        val enabled: Boolean = false,
-        /** [ViolationComponentRepair.Params.maxWindowLength] への倍率（内部で p.T-1 に自動クランプ済み）。 */
-        val radiusFactor: Int = 2,
-        /** 成分修復の [ViolationComponentRepair.Params.maxAnchors]/[maxPatchesPerAnchor]、両共同LNSの
-         *  goal数/restart数（個人側はさらに対象職員数）への倍率。 */
-        val scopeFactor: Int = 2,
-    )
-
     /** 巡ごとの乱数列を分けるためのパス別タグ（[roundSeed]）。値は 3.499.0 以前の手書き値と同じ＝乱数列不変。 */
     private object SeedTag {
         const val HF80 = 0x80L
@@ -451,7 +431,6 @@ object V6HotfixPasses {
         const val C3PATTERN = 0xC3B4L
         const val APT = 0xA97L
         const val FAIR = 0xFA12L
-        const val C3PAIR = 0xC3AA1L
         const val CYCLIC_N = 0xC1C54L
         const val C3N_MARGIN = 0xC3E9L
     }
@@ -480,7 +459,7 @@ object V6HotfixPasses {
         /** [postChainRunningKeepBest] false のときは以下の bestWork/bestReport を一切触らない＝挙動完全不変。 */
         runningKeepBest: Boolean = false,
         initialReport: ViolationReport? = null,
-        private val acceptTies: Boolean = false,
+        private val rollbackCountsZero: Boolean = false,
     ) {
         private val runningKeepBest: Boolean =
             runningKeepBest && V6SanityPort.structuralHardFloor(state, cachedProblem(state, quantitativeRangeEval)) == 0
@@ -496,6 +475,7 @@ object V6HotfixPasses {
         /** [postChainRunningKeepBest] チェーン内で到達した最良盤面・報告書（flag OFF なら未使用のまま）。 */
         private var bestWork: Array<IntArray> = work.copy2D()
         private var bestReport: ViolationReport? = initialReport
+        private var lastFoldRolledBack = false
 
         /** フェーズ名を UI へ通知し、所要 ms を [key] に累算しながら [block] を実行する。 */
         fun <R> timed(phase: String, key: String, block: (Array<IntArray>) -> R): R {
@@ -513,15 +493,18 @@ object V6HotfixPasses {
          * flag OFF のときは何もせず [passLogs] をそのまま返す＝挙動完全不変。
          */
         private fun runningKeepBestFold(report: ViolationReport?, passLogs: List<MirrorLog>): List<MirrorLog> {
+            lastFoldRolledBack = false
             if (!runningKeepBest) return passLogs
             val rep = report ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val best = bestReport
-            if (best == null || betterReport(rep, best) || (acceptTies && !betterReport(best, rep))) {
+            if (best == null || betterReport(rep, best)) {
                 bestReport = rep
                 bestWork = work.copy2D()
                 return passLogs
             }
+            if (work.contentDeepEquals(bestWork)) return passLogs   // 無変更のパスは巻き戻していない＝印を付けない
             work = bestWork.copy2D()
+            lastFoldRolledBack = true
             return passLogs.map { it.copy(message = "$ROLLBACK_MARKER${it.message}") }
         }
 
@@ -532,6 +515,7 @@ object V6HotfixPasses {
             work = r.newSchedule.copy2D()
             val folded = runningKeepBestFold(r.report, r.logs)
             if (keepLogs) logs.addAll(folded)
+            if (rollbackCountsZero && lastFoldRolledBack) return 0
             return r.applied
         }
 
@@ -573,7 +557,7 @@ object V6HotfixPasses {
     ): V6PostOptimizationResult {
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
         val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
-            acceptTies = params.postChainRunningKeepBestAcceptTies)
+            rollbackCountsZero = params.postChainRollbackCountsZero)
         val t0 = EngineClock.nowMs()
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
@@ -595,12 +579,6 @@ object V6HotfixPasses {
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
         chain.replaceBoard(r66.newSchedule, r66.logs, r66.report)
-        if (params.covOReliefEnabled && params.covOReliefEarly && !shouldStop()) {
-            val r = chain.timed("後処理 人員過剰の退避", "CovORelief") { work ->
-                CovOReliefPolish.apply(state, work, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-            }
-            chain.replaceBoard(r.newSchedule, r.logs, r.report)
-        }
         val t66Done = EngineClock.nowMs()
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
@@ -616,9 +594,6 @@ object V6HotfixPasses {
         // ソフト研磨クラスタの前後を測る基準（SoftPolishVerify）。
         val preSoftRep = UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval)
         val cluster = runPolishCluster(state, chain, params, seed, clusterStop, preSoftRep)
-        // [3.511.1/測定中] 巡回研磨クラスタが1巡も採用0＝停滞。下流(共同LNS2本・成分修復の最終段)へ広げる合図だけを渡す
-        //   （巡の中の起点生成拡大は3.505.4で否決済み＝round loop自体は変えない）。
-        val stalled = params.stallEscalation.enabled && cluster.totalApplied == 0
 
         // weekly は同日 2 者スワップでは動かない（曜日別の勤務/休が不変）→ 被覆保存の 2 職員×2 日 長方形交換。
         chain.adopt(chain.timed("後処理 曜日平準化(長方形交換)", "WeeklyRebalancePolish") { work ->
@@ -635,22 +610,15 @@ object V6HotfixPasses {
         chain.adopt(chain.timed("後処理 期間要件(c1)共同LNS", "C1共同LNS") { work ->
             val remaining = EngineClock.remainingMs(deadlineMs, tC1Lns).coerceAtMost(params.remainingClampMs)
             val cap = if (lnsTotal <= 0L) 0L else (remaining * params.c1LnsMaxMs / lnsTotal).coerceAtMost(params.c1LnsMaxMs)
-            val debtFactor = if (params.lnsWeightDebt) params.lnsDebtFactor else 0.0
-            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations, debtFactor = debtFactor)
-                else C1JointLnsPolish.Config(maxMillis = cap, debtFactor = debtFactor)
+            val cfg = if (params.deterministic) C1JointLnsPolish.Config(maxMillis = 60_000L, patienceMs = 0L, maxEvaluations = params.c1LnsMaxEvaluations)
+                else C1JointLnsPolish.Config(maxMillis = cap)
             if (!params.lnsAdaptive) C1RepairOperators.jointLns(state, work, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             else {
                 // [3.510.2/測定中] 短い試行で採用が無ければそこで止める（ログでは共同 LNS が後処理時間の大半を使って採用 0 が多い）。
                 val first = if (params.deterministic) cfg.copy(maxEvaluations = params.c1LnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.c1LnsFirstMs))
                 val r1 = C1RepairOperators.jointLns(state, work, config = first, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                if (r1.applied == 0) {
-                    // [3.511.1/測定中] クラスタが停滞していたときだけ、幅(goal数/restart数)を広げてもう1回だけ試す。
-                    if (stalled) {
-                        val f = params.stallEscalation.scopeFactor
-                        val widened = first.copy(maxGoals = first.maxGoals * f, maxRestarts = first.maxRestarts * f)
-                        C1RepairOperators.jointLns(state, work, config = widened, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                    } else r1
-                } else {
+                if (r1.applied == 0) r1
+                else {
                     val r2 = C1RepairOperators.jointLns(state, r1.newSchedule, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
                     r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
                 }
@@ -659,33 +627,19 @@ object V6HotfixPasses {
         val tPersonalLns = EngineClock.nowMs()
         chain.adopt(chain.timed("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS") { work ->
             val cap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(params.personalLnsMaxMs)
-            val debtFactor = if (params.lnsWeightDebt) params.lnsDebtFactor else 0.0
-            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations, debtFactor = debtFactor)
-                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap, debtFactor = debtFactor)
+            val cfg = if (params.deterministic) PersonalBalanceJointLnsPolish.Config(maxMillis = 60_000L, maxEvaluations = params.personalLnsMaxEvaluations)
+                else PersonalBalanceJointLnsPolish.Config(maxMillis = cap)
             if (!params.lnsAdaptive) PersonalBalanceJointLnsPolish.apply(state, work, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             else {
                 val first = if (params.deterministic) cfg.copy(maxEvaluations = params.personalLnsFirstEvaluations) else cfg.copy(maxMillis = minOf(cap, params.personalLnsFirstMs))
                 val r1 = PersonalBalanceJointLnsPolish.apply(state, work, config = first, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                if (r1.applied == 0) {
-                    if (stalled) {
-                        val f = params.stallEscalation.scopeFactor
-                        val widened = first.copy(maxFocusStaff = first.maxFocusStaff * f, maxGoals = first.maxGoals * f, maxRestarts = first.maxRestarts * f)
-                        PersonalBalanceJointLnsPolish.apply(state, work, config = widened, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                    } else r1
-                } else {
+                if (r1.applied == 0) r1
+                else {
                     val r2 = PersonalBalanceJointLnsPolish.apply(state, r1.newSchedule, config = cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
                     r2.copy(beforeTotal = r1.beforeTotal, applied = r1.applied + r2.applied, logs = r1.logs + r2.logs)
                 }
             }
         })
-
-        if (params.c3PairMaskEnabled && !shouldStop()) {
-            // [3.510.0/測定中] 共同 LNS の後・成分修復の前。連続でない 1〜3 日の同日交換で c3 系の取り残しを拾う。
-            val pairStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
-            chain.adopt(chain.timed("後処理 連続規則(c3系)選択日ペア交換(最終)", "C3PairMask") { work ->
-                C3PairMaskPolish.apply(state, work, maxEvaluations = params.c3PairMaskEvaluations, shouldStop = pairStop, seed = seed xor SeedTag.C3PAIR, quantitativeRangeEval = params.quantitativeRangeEval)
-            })
-        }
 
         val c3nMarginActive = params.c3nMarginLnsEnabled ||
             (params.c3nMarginLnsReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c3n"))
@@ -703,15 +657,9 @@ object V6HotfixPasses {
             val remainingFinal = EngineClock.remainingMs(deadlineMs)
             val base = params.componentRepair
             val timeWidened = if (params.deterministic || remainingFinal >= 2_000L) base.copy(maxEstimates = base.maxEstimates * 4, maxEvaluations = base.maxEvaluations * 5 / 2) else base
-            // [3.511.1/測定中] 時間残量ベースの拡大(Iteration5)とは独立に併用＝停滞していれば窓長・起点数もさらに広げる。
-            val finalParams = if (stalled) timeWidened.copy(
-                maxWindowLength = timeWidened.maxWindowLength * params.stallEscalation.radiusFactor,
-                maxAnchors = timeWidened.maxAnchors * params.stallEscalation.scopeFactor,
-                maxPatchesPerAnchor = timeWidened.maxPatchesPerAnchor * params.stallEscalation.scopeFactor,
-            ) else timeWidened
             val finalStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
             chain.adopt(chain.timed("後処理 違反起点修復(最終)", "ComponentRepair") { work ->
-                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), finalParams, shouldStop = finalStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), timeWidened, shouldStop = finalStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
             chain.rejectedPool.clear()
         }
@@ -769,7 +717,7 @@ object V6HotfixPasses {
         )
     }
 
-    private class ClusterOutcome(val c1Plateau: C1PlateauDiagnosis?, val totalApplied: Int)
+    private class ClusterOutcome(val c1Plateau: C1PlateauDiagnosis?)
 
     /**
      * 巡回研磨クラスタ（循環交換〜fair 玉突き）を「1 巡で 1 手も採用されなくなるまで」最大 maxRounds 巡繰り返す。
@@ -855,11 +803,6 @@ object V6HotfixPasses {
             take("range玉突き", chain.timed("後処理 個人回数(low/high)玉突き研磨$tag", "RangePolish") { work ->
                 RangePolish.applyRangePolish(state, work, maxPasses = params.rangePasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.RANGE, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs)
             })
-            if (params.c41FlowPolishEnabled) {
-                take("c41フロー", chain.timed("後処理 群/日レンジ(c41/c41s)フロー研磨$tag", "C41FlowPolish") { work ->
-                    C41FlowPolish.applyC41FlowPolish(state, work, maxPasses = params.c41FlowPasses, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
-                })
-            }
             take("c3run玉突き", chain.timed("後処理 連続規則(c3/c3m単一シフト連)玉突き研磨$tag", "C3RunPolish") { work ->
                 C3FamilyPolish.applyC3RunPolish(state, work, maxPasses = params.c3RunPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3RUN, round), quantitativeRangeEval = params.quantitativeRangeEval)
             })
@@ -882,7 +825,7 @@ object V6HotfixPasses {
                     state, work,
                     AdaptiveBlockSwapPolish.CyclicParams(
                         maxPasses = params.blockSwapPasses, candidatesPerLength = params.blockSwapCandidatesPerLength,
-                        maxEvaluations = params.blockSwapEvaluations, useDynamicBlockLens = params.useDynamicBlockLens,
+                        maxEvaluations = params.blockSwapEvaluations,
                     ),
                     shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval,
                 )
@@ -926,7 +869,7 @@ object V6HotfixPasses {
         }
 
         chain.logs.add(softPolishVerifyLog(state, chain.work, preSoftRep, round, adopted, params.quantitativeRangeEval))
-        return ClusterOutcome(c1Plateau, adopted.values.sum())
+        return ClusterOutcome(c1Plateau)
     }
 
     /** 研磨可否の検証ログ。採用 0 かつ対象 > 0 なら「頭打ち（正常）」、対象 0 なら「対象なし」と明示する。 */

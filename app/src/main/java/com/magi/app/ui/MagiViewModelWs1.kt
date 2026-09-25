@@ -26,8 +26,11 @@ fun MagiViewModel.ws1EditShift(k: Int, name: String, kigou: String, need1: Strin
     // [3.416.0] 3.415.0 の R-04 ガード（休シフトの改名禁止）はユーザー方針「休は通常のシフト定義」により
     //   撤回。改名は他シフトと同じ経路＝renameShiftInConstraints が制約参照を追従させる。休の識別は
     //   [3.603.0] 記号でなく isRest トグル(ShiftRole)＝改名しても壊れない。
+    val ns = Ws1Ops.editShift(st, k, name.trim(), kigou.trim(), need1.trim(), need2.trim(), isRest)
+    // 何も変えずに OK＝undo を積まず、他の案・改善提案も消さない。
+    if (ns == st) return
     logOp("I", "シフト編集: ${opSy(k)} → ${name.trim()}(${kigou.trim()}) 最低${need1.trim().ifBlank { "-" }}/上限${need2.trim().ifBlank { "-" }}")
-    applyStructure(Ws1Ops.editShift(st, k, name.trim(), kigou.trim(), need1.trim(), need2.trim(), isRest))
+    applyStructure(ns)
 }
 
 /** [必要人数カレンダー] シフト既定のneed1/need2だけをその場で編集する（name/kigouは不変）。
@@ -146,11 +149,41 @@ fun MagiViewModel.ws1AddStaff(name: String, groupIdx: Int) {
     applyStructure(Ws1Ops.addStaff(st, sched, name.trim(), groupIdx))
 }
 
+/** 一括追加（改行区切り）。畳み込んで applyStructure は1回＝1回の「元に戻す」で全員ぶん戻る。 */
+fun MagiViewModel.ws1AddStaffBulk(names: List<String>, groupIdx: Int) {
+    val st = state ?: return
+    val sched = currentSchedule ?: return
+    val list = names.map { it.trim() }.filter { it.isNotEmpty() }
+    if (list.isEmpty()) return
+    var r = com.magi.app.v6.Ws1Result(st, sched)
+    for (n in list) r = Ws1Ops.addStaff(r.state, r.schedule, n, groupIdx)
+    logOp("I", "職員一括追加: ${list.size}名 / グループ[$groupIdx]")
+    applyStructure(r)
+}
+
+/** シフトの一括追加（記号がそのまま名称）。既にある記号・同じ入力内の重複は飛ばし、件数を1回だけ知らせる。 */
+fun MagiViewModel.ws1AddShiftsBulk(kigous: List<String>) {
+    val st0 = state ?: return
+    var st = st0
+    val skipped = mutableListOf<String>()
+    for (kg in kigous.map { it.trim() }.filter { it.isNotEmpty() }) {
+        if (Ws1Ops.symbolCollides(st.shifts.map { it.kigou }, kg)) { skipped += kg; continue }
+        st = Ws1Ops.addShift(st, kg, kg, "", "")
+    }
+    val added = st.shifts.size - st0.shifts.size
+    val skipNote = "記号「${skipped.joinToString("・")}」はすでにあるため追加しませんでした"
+    if (added == 0) { if (skipped.isNotEmpty()) notify(skipNote, "W"); return }
+    logOp("I", "シフト一括追加: ${added}件")
+    if (skipped.isEmpty()) applyStructure(st) else applyStructureWithMessage(st, "シフトを${added}件追加しました。$skipNote")
+}
+
 fun MagiViewModel.ws1ResizeDays(newT: Int) {
     val st = state ?: return
     val sched = currentSchedule ?: return
+    val r = Ws1Ops.resizeDays(st, sched, newT)
+    if (r.state == st && r.schedule.contentDeepEquals(sched)) return   // 同じ日数で「変更」＝何もしない
     logOp("I", "期間変更: ${st.dayCount}日 → ${newT}日")
-    applyStructure(Ws1Ops.resizeDays(st, sched, newT))
+    applyStructure(r)
 }
 
 /** [対象月の選択] 開始日を指定年月の1日にし、その月の日数へ整える（endDate/希望/必要人数も追従）。 */
@@ -178,12 +211,13 @@ fun MagiViewModel.setNextMonth() {
 // ---- スキルグループ（年次マスター・新C41s/C42s 専用） -----------------------
 fun MagiViewModel.addSkillGroup(name: String, kigou: String) {
     val st = state ?: return; if (kigou.isBlank()) return
-    if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分")) return
-    logOp("I", "スキル区分追加: ${name.trim()}(${kigou.trim()})"); applyStructure(st.copy(skillGroups = st.skillGroups + Group(name.trim(), kigou.trim())))
+    if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキルグループ")) return
+    // [backlog#38] 最初の 1 群では全員を未所属(-1)にしてから足す（規則は Ws1Ops.addSkillGroup）。
+    logOp("I", "スキル区分追加: ${name.trim()}(${kigou.trim()})"); applyStructure(Ws1Ops.addSkillGroup(st, name.trim(), kigou.trim()))
 }
 fun MagiViewModel.editSkillGroup(g: Int, name: String, kigou: String) {
     val st = state ?: return
-    if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキル区分", exceptIndex = g)) return
+    if (symbolTaken(st.skillGroups.map { it.kigou }, kigou, "スキルグループ", exceptIndex = g)) return
     val old = st.skillGroups.getOrNull(g)?.kigou ?: ""
     val renamed = st.copy(skillGroups = st.skillGroups.mapIndexed { i, x -> if (i == g) Group(name.trim(), kigou.trim()) else x })
     logOp("I", "スキル区分編集: [$g] → ${name.trim()}(${kigou.trim()})")

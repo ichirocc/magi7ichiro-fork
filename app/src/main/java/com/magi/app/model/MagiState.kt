@@ -23,8 +23,9 @@ package com.magi.app.model
 enum class ShiftRole { None, Rest }
 data class Shift(val name: String, val kigou: String, val need1: String, val need2: String, val role: ShiftRole = ShiftRole.None)
 data class Group(val name: String, val kigou: String)
-/** staff[i]: groupIdx -> ユニットグループ(既存・担当可否/covU)、skillIdx -> スキルグループ(新設・新C41s/C42s専用)。 */
-data class Staff(val name: String, val groupIdx: Int, val skillIdx: Int = 0)
+/** staff[i]: groupIdx -> ユニットグループ(既存・担当可否/covU)、skillIdx -> スキルグループ(新設・新C41s/C42s専用)。
+ *  skillIdx の既定は -1＝未所属（backlog#38。0 は先頭のスキルグループ）。 */
+data class Staff(val name: String, val groupIdx: Int, val skillIdx: Int = -1)
 data class Range(val lo: String, val hi: String)
 
 /** Raw constraint rows (as authored), resolved later into index form. */

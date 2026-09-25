@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -91,6 +92,8 @@ internal fun StaffShiftMatrixCard(
     val cellW = 68.dp
     val labelW = 128.dp
     val rowH = 52.dp
+    // 横スクロールの単位は px。名前列はスクロールの外なので列位置は cellW の倍数だけ。
+    val cellWpx = with(LocalDensity.current) { cellW.roundToPx() }
 
     // 目標超過の検算（既存 aptBalances=検査6-C と単一ソース）。最も足りない列を1行で示し、その列へジャンプする。
     val overloaded = cv.aptBalances.filter { it.overloaded }
@@ -108,7 +111,7 @@ internal fun StaffShiftMatrixCard(
                 Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.small,
                     modifier = Modifier.fillMaxWidth().clickable {
                         val col = v.shifts.indexOfFirst { it.kigou == worst.kigou }
-                        if (col >= 0) scope.launch { hScroll.animateScrollTo((labelW.value.toInt() + col * cellW.value.toInt()).coerceAtLeast(0)) }
+                        if (col >= 0) scope.launch { hScroll.animateScrollTo((col * cellWpx).coerceAtLeast(0)) }
                     }) {
                     Text(
                         // [3.483.0 E-9] 旧「…に対し、…は…回（…）」の3段構文を「目標 ＞ 上限」の1式へ。
