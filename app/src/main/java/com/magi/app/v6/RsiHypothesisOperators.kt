@@ -169,6 +169,7 @@ internal object RsiHypothesisOperators {
         state: MagiState, sched: Array<IntArray>, rng: Random,
         shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
+        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Int {
         val p = cachedProblem(state, quantitativeRangeEval)
         if (p.S == 0 || p.T == 0) return 0
@@ -191,6 +192,7 @@ internal object RsiHypothesisOperators {
                         //   ＝**必須違反が厳密に減る手を丸ごと捨てていた**。規約の wishLocked へ統一（3.351.0 と同型）。
                         if (p.wishLocked(i, j) && p.wish[i][j] == k) continue   // 実現可能な本人希望＝動かすとpref未充足化
                         for (m in p.allowedShiftsForStaff(i).filter { it != k }) {
+                            if (!p.wishMoveAllowed(i, j, k, m, wishPinStrict)) continue   // 未反映の希望固定セルは希望へだけ
                             if (p.makesForbiddenRun(sched, i, j, m)) {
                                 val fix = tryFixForbiddenRunViaAdjacentDay(p, sched, i, j, m, rng) ?: continue
                                 candidates.add(fix + listOf(intArrayOf(i, j, m)))
@@ -228,6 +230,7 @@ internal object RsiHypothesisOperators {
         state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
         shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
+        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Int {
         val p = cachedProblem(state, quantitativeRangeEval)
         if (p.S == 0 || p.T == 0) return 0
@@ -259,6 +262,7 @@ internal object RsiHypothesisOperators {
                         // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。上の applyCovOFree と同型。
                         if (p.wishLocked(i, j) && p.wish[i][j] == c.shiftIdx) continue   // 実現可能な本人希望＝対象外
                         for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }) {
+                            if (!p.wishMoveAllowed(i, j, c.shiftIdx, m, wishPinStrict)) continue
                             if (p.makesForbiddenRun(sched, i, j, m)) continue
                             candidates.add(listOf(intArrayOf(i, j, m)))
                             // 玉突き連鎖版（離脱先を先に適用してから探索＝本人がまだ在籍中に見える誤判定を防ぐ既定の作法）。
@@ -282,6 +286,7 @@ internal object RsiHypothesisOperators {
                         val old = sched[i][j]
                         // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。
                         if (old !in 0 until p.K || (p.wishLocked(i, j) && p.wish[i][j] == old)) continue   // 現シフトが実現可能な本人希望＝対象外
+                        if (!p.wishMoveAllowed(i, j, old, c.shiftIdx, wishPinStrict)) continue
                         if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
                         candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)))
                         sched[i][j] = c.shiftIdx
@@ -319,6 +324,7 @@ internal object RsiHypothesisOperators {
         state: MagiState, sched: Array<IntArray>, rng: Random, skill: Boolean,
         shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
+        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Int {
         val p = cachedProblem(state, quantitativeRangeEval)
         if (p.S == 0 || p.T == 0) return 0
@@ -334,6 +340,7 @@ internal object RsiHypothesisOperators {
                 // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。
                 if (p.wishLocked(i, j) && p.wish[i][j] == fromShift) continue   // 実現可能な本人希望＝対象外
                 for (m in p.allowedShiftsForStaff(i).filter { it != fromShift }) {
+                    if (!p.wishMoveAllowed(i, j, fromShift, m, wishPinStrict)) continue
                     if (p.makesForbiddenRun(sched, i, j, m)) continue
                     out.add(listOf(intArrayOf(i, j, m)))
                     val oldK = sched[i][j]

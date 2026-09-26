@@ -10,7 +10,8 @@ import com.magi.app.model.MagiState
  *  2. disagreement-region beam fusion using only values present in the elites.
  *
  * Bridge schedules are never returned directly. Every adopted schedule is re-evaluated by the
- * official checker, must improve HARD -> weightedScore -> total, and must not regress exact pins.
+ * official checker, must improve HARD -> weightedScore -> total, must not regress exact pins, and
+ * must not break a wish the root keeps ([PolishGate.wishPinStrict]).
  */
 internal object EliteIntegrationPolish {
     data class Config(
@@ -55,6 +56,7 @@ internal object EliteIntegrationPolish {
         shouldStop: () -> Boolean,
         deadlineMs: Long,
         config: Config = Config(),
+        wishPinStrict: Boolean = PolishGate.wishPinStrict,
     ): Result {
         val p = cachedProblem(state)
         val root = rootSchedule.copy2D()
@@ -93,7 +95,7 @@ internal object EliteIntegrationPolish {
         for (candidate in candidates.drop(1)) {
             if (candidate.bridge || stopped(shouldStop, deadlineMs)) continue
             val checked = UnifiedViolationChecker.check(state, candidate.schedule)
-            if (better(checked, bestReport) && !exactPinRegression(p, root, candidate.schedule)) {
+            if (better(checked, bestReport) && pinsHold(p, root, candidate.schedule, wishPinStrict)) {
                 bestSchedule = candidate.schedule.copy2D()
                 bestReport = checked
             }
@@ -113,7 +115,7 @@ internal object EliteIntegrationPolish {
                     relinkPaths++
                     val improved = relinkOnePath(
                         state, p, root, source, target, variant, shouldStop, deadlineMs,
-                        bestReport,
+                        bestReport, wishPinStrict,
                     )
                     if (improved != null && better(improved.second, bestReport)) {
                         bestSchedule = improved.first
@@ -145,6 +147,7 @@ internal object EliteIntegrationPolish {
                 shouldStop = shouldStop,
                 deadlineMs = deadlineMs,
                 config = config,
+                wishPinStrict = wishPinStrict,
             )
             if (improved != null && better(improved.second, bestReport)) {
                 bestSchedule = improved.first
@@ -154,7 +157,7 @@ internal object EliteIntegrationPolish {
         }
 
         val checked = UnifiedViolationChecker.check(state, bestSchedule)
-        val valid = better(checked, rootReport) && !exactPinRegression(p, root, bestSchedule)
+        val valid = better(checked, rootReport) && pinsHold(p, root, bestSchedule, wishPinStrict)
         val chosen = if (valid) bestSchedule.copy2D() else root.copy2D()
         val chosenReport = if (valid) checked else rootReport
         val log = MirrorLog(
@@ -185,6 +188,7 @@ internal object EliteIntegrationPolish {
         shouldStop: () -> Boolean,
         deadlineMs: Long,
         incumbentReport: ViolationReport,
+        wishPinStrict: Boolean,
     ): Pair<Array<IntArray>, ViolationReport>? {
         val current = source.schedule.copy2D()
         val diffs = ArrayList<Pair<Int, Int>>()
@@ -217,7 +221,7 @@ internal object EliteIntegrationPolish {
             if (!p.mayPlace(i, k)) continue
             current[i][j] = k
             val report = UnifiedViolationChecker.check(state, current)
-            if (better(report, bestReport) && !exactPinRegression(p, rootSchedule, current)) {
+            if (better(report, bestReport) && pinsHold(p, rootSchedule, current, wishPinStrict)) {
                 bestSchedule = current.copy2D()
                 bestReport = report
             }
@@ -235,6 +239,7 @@ internal object EliteIntegrationPolish {
         shouldStop: () -> Boolean,
         deadlineMs: Long,
         config: Config,
+        wishPinStrict: Boolean,
     ): Pair<Array<IntArray>, ViolationReport>? {
         if (group.size < 2) return null
         // [賢く再構成] relinkOnePathと同じ3階層(c1違反セル最優先)。maxFusionCellsの枠がc1改善に
@@ -284,7 +289,7 @@ internal object EliteIntegrationPolish {
                     if (!withinDebt(report, currentBestReport, config)) continue
                     val child = BeamNode(schedule, report, changed)
                     next.add(child)
-                    if (better(report, bestReport) && !exactPinRegression(p, rootSchedule, schedule)) {
+                    if (better(report, bestReport) && pinsHold(p, rootSchedule, schedule, wishPinStrict)) {
                         bestSchedule = schedule.copy2D()
                         bestReport = report
                     }
@@ -299,10 +304,18 @@ internal object EliteIntegrationPolish {
     }
 
     /**
+     * 採用の共通条件（[better] の後）: 厳密ピンを崩さない＋[希望固定の徹底] root から希望を新たに崩さない
+     * （[Problem.keepsWishPins]）。エリートは別の経路の盤面ごと入るので、relink/fusion のセル単位の
+     * `wishLocked` 判定だけでは、端点の採用と崩れたエリートを起点にした relink から希望の崩れが持ち込まれる。
+     */
+    private fun pinsHold(p: Problem, root: Array<IntArray>, s: Array<IntArray>, wishPinStrict: Boolean): Boolean =
+        !exactPinRegression(p, root, s) && (!wishPinStrict || p.keepsWishPins(root, s))
+
+    /**
      * ビーム中間ノードの許容幅。[baseline] は**呼出時点の現在最良**（`fuseGroup` の
      * `currentBestReport`）であって入口盤面ではない。[3.349.2] 引数名が `root` だったため
      * 「入口比の debt」と読めたが、実際は現在最良比＝窓はより狭い。名前を実態へ合わせた。
-     * 中間ノードの緩さは探索にしか効かず、採用は必ず [better] ＋ `exactPinRegression` が決める。
+     * 中間ノードの緩さは探索にしか効かず、採用は必ず [better] ＋ [pinsHold] が決める。
      */
     private fun withinDebt(report: ViolationReport, baseline: ViolationReport, config: Config): Boolean {
         if (report.hard < baseline.hard) return true

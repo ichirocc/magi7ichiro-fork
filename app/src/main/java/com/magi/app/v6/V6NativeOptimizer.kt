@@ -1075,8 +1075,9 @@ object V6NativeOptimizer {
     /**
      * [3.517.0] PERSON_SWAP_ILS: 同群2名の1ヶ月分割当を丸ごと交換するILS摂動。交換相手は全ペア
      * 総当たりでなく「fair 負担が大きい職員」優先（経緯・実証データは `docs/history/3.4xx.md` 3.517.0）。
+     * [希望固定の徹底] [wishPinStrict] の間は、どちらかのセルが希望固定の日は交換しない（その日だけ行が残る）。
      */
-    internal fun personSwapKick(p: Problem, out: Array<IntArray>, rng: Random, pairs: Int) {
+    internal fun personSwapKick(p: Problem, out: Array<IntArray>, rng: Random, pairs: Int, wishPinStrict: Boolean = PolishGate.wishPinStrict) {
         if (p.S < 2 || p.T == 0) return
         val counts = Array(p.S) { IntArray(p.K) }
         for (i in 0 until p.S) for (j in 0 until p.T) {
@@ -1106,6 +1107,7 @@ object V6NativeOptimizer {
             if (candidates.isEmpty()) { swapped[a] = true; continue }
             val b = candidates.maxByOrNull { burden[it] } ?: continue
             for (j in 0 until p.T) {
+                if (wishPinStrict && (p.wishLocked(a, j) || p.wishLocked(b, j))) continue
                 val tmp = out[a][j]; out[a][j] = out[b][j]; out[b][j] = tmp
             }
             swapped[a] = true; swapped[b] = true
