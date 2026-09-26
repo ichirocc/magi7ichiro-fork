@@ -211,6 +211,49 @@ private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** [S6] 設定を緩める候補（`docs/s6_relax_trial.md` §5）。盤面は見せず手順を言葉で出し、押したときだけ当てる。 */
+@Composable
+internal fun RelaxTrialDialog(
+    ui: UiState,
+    token: RelaxToken?,
+    onDismiss: () -> Unit,
+    onConfirm: (RelaxToken) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val small = MaterialTheme.typography.bodySmall
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("設定を緩める候補") },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (token == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
+                else {
+                    val t = remember(token, ui.schedule, ui.staffNames, ui.shiftSymbols) { relaxTrialText(token.result, ui) }
+                    Text(t.title, fontWeight = FontWeight.Bold)
+                    t.prerequisiteLead?.let { lead ->
+                        Text(lead, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                        t.prerequisiteRows.forEach { Text("・$it", style = small) }
+                    }
+                    Text(t.lead, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+                    Text("この組で解けます", style = small, color = cs.onSurfaceVariant)
+                    t.rows.forEach { Text("・$it", style = small) }
+                    Text("手順", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                    t.moveLines.forEach { Text(it, style = small) }
+                    if (t.otherMoves > 0) Text("ほか ${t.otherMoves}セル", style = small, color = cs.onSurfaceVariant)
+                    t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
+                    Button(
+                        onClick = { onConfirm(token) },
+                        enabled = !ui.running,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp),
+                    ) { Text("この組で緩めて、手順を当てる") }
+                    Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
+                }
+            }
+        },
+        confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
+    )
+}
+
 @Composable
 internal fun GuidedFixDialog(
     ui: UiState,
@@ -345,6 +388,9 @@ internal fun OperatorNextActionCard(
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
     outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して、もう一度つくる」の結果（VM が鮮度を照合済み）
+    relaxFound: Boolean = false,    // [S6] いまのデータで設定の壁の組が見つかっている（VM が鮮度を照合済み）
+    onShowRelax: () -> Unit = {},
+    onStopRelax: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -390,6 +436,10 @@ internal fun OperatorNextActionCard(
                 "直す1手を見る", onShowMove, true, null, onSetup)
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
+        // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
+        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && relaxFound ->
+            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。設定が壁になっています。",
+                "緩める候補を見る", onShowRelax, true, if (wishCands.isEmpty) null else "ぶつかっている希望を見る", onShowWishes)
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
         ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
@@ -420,6 +470,12 @@ internal fun OperatorNextActionCard(
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
             if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
+            if (!ui.running && ui.relaxSearching) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("設定が壁になっていないか調べています…", style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
+                }
+            }
             // [3.480.0 ホームAIリデザイン] 旧: 「できあがり度：N%」の数字1行＋その意味を説明する注記1行を
             // 常時2行表示していた。grilling決定#1のとおり文言（正直さ）は変えず、①前向きな言い回し
             // 「解消度：N%（残りM件）」＋バーへ統合 ②注記は既定折りたたみ（ConstraintHelpExpander と

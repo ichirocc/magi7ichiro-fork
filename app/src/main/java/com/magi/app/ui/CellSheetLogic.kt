@@ -105,9 +105,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
                 "${breakdownLabels[fam]}：${sym(cur)}が${n}人（${c.l}〜${c.u}人）"
             }
         }
-        "c1" -> c1WindowAt(p, s, i, j)?.let { (c, j0, n) ->
-            "期間の制約：${day(j0)}〜${day(j0 + c.day1 - 1)}に${sym(c.shiftIdx)}が${n}回（${c.day2}回以上）"
-        }
+        "c1" -> c1CellText(c1Shortages(p, s), s, i, j, ::sym, ::day)
         "pref" -> p.wish.getOrNull(i)?.getOrNull(j)?.takeIf { it >= 0 }?.let { "希望は${sym(it)}（今は${sym(cur)}）" }
         "groupViol" -> "${sym(cur)}は${name(i)}の担当外"
         "low" -> if (cur < 0) null else "${sym(cur)}が${count(cur)}回（下限${p.rangeLo[i][cur]}）"
@@ -126,16 +124,6 @@ private fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list:
             if (j0 + d > p.T) continue
             if ((0 until d).all { s[i][j0 + it] == c.seq[it] }) return c.seq to j0
         }
-    }
-    return null
-}
-
-/** セル (i,j) を含む不足窓（開始日が j に近いものを優先）と、その窓での回数。 */
-private fun c1WindowAt(p: Problem, s: Array<IntArray>, i: Int, j: Int): Triple<com.magi.app.v6.C1, Int, Int>? {
-    for (j0 in j downTo 0) for (c in p.cons1) {
-        if (!p.canDo(i, c.shiftIdx) || j0 + c.day1 > p.T || j >= j0 + c.day1) continue
-        val n = (j0 until j0 + c.day1).count { s[i][it] == c.shiftIdx }
-        if (n < c.day2) return Triple(c, j0, n)
     }
     return null
 }
@@ -241,18 +229,16 @@ internal fun fixesByOthers(list: List<com.magi.app.v6.FixSuggestion>, day: Int, 
 
 /**
  * セル詳細（「詳しく」）の行: セルに重なった族をすべて、重い順に「必須・原因」「要調整・原因」で 1 行ずつ。
- * [c1Runs] はこのセルに掛かる期間の制約のランの違反窓数（表示アンカー。無ければ null）。
  */
-internal fun cellDetailLines(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, families: List<String>, c1Runs: Int?): List<String> =
+internal fun cellDetailLines(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, families: List<String>): List<String> =
     families.map { fam ->
-        val label = breakdownLabels[fam] ?: fam
-        var d = familyDetail(state, p, s, i, j, fam) ?: label
-        if (fam == "c1" && c1Runs != null && c1Runs > 0) {
-            val withRuns = "$label（連続 $c1Runs 区間）"
-            d = if (d.startsWith(label)) withRuns + d.removePrefix(label) else "$withRuns：$d"
-        }
+        val d = familyDetail(state, p, s, i, j, fam) ?: breakdownLabels[fam] ?: fam
         (if (fam in MirrorKeys.hard) "必須・" else "要調整・") + d
     }
+
+/** セルシートの族のクラス。印の無い日でも不足区間の中なら期間の制約を読めるようにする（すでに数に入っている日など）。 */
+internal fun sheetCellClasses(display: List<String>, inC1Shortage: Boolean): List<String> =
+    if (!inC1Shortage || "vio-c1" in display) display else display + "vio-c1"
 
 /**
  * セルシートの評価の版。状態の 1 行・おすすめの印・回数の 1 行はこの版が変わったときだけ同じ入力から作り直す。

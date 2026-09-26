@@ -218,6 +218,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var showImportGuidance by rememberSaveable { mutableStateOf(false) }
     var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおすのを手伝って」対話
+    var relaxDialog by remember { mutableStateOf(false) }            // [S6] 設定を緩める候補
     var wishConflicts by remember { mutableStateOf(false) }          // [思考誘導S3] ぶつかっている希望の一覧
 
     // [Root] 画面から上がってきた操作の入口。可否は MagiArbiter が決め、通ったものだけが鎖へ流れる。
@@ -575,7 +576,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowMove = { tab = 3 },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
-                        outcomeLine = vm.wishCancelOutcomeLine(),
+                        outcomeLine = vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
+                        relaxFound = vm.relaxTrialFor() != null,
+                        onShowRelax = { relaxDialog = true },
+                        onStopRelax = { vm.cancelRelaxTrial() },
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
@@ -853,6 +857,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }
         if (guidedFix) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { tab = 2 })
+        }
+        if (relaxDialog) {
+            RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false }, onConfirm = { token ->
+                relaxDialog = false; vm.relaxAndApply(token)
+            })
         }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->

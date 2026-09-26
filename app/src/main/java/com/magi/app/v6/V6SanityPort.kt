@@ -152,8 +152,26 @@ object V6SanityPort {
             shiftCountDiagnostics = buildShiftCountDiagnostic(state, p, s),
             impossibleWishes = impossible,
             duplicateSeqConstraints = dup,
-            guidance = buildGuidance(state, p),
+            guidance = buildGuidance(state, p) + listOfNotNull(handPlacedUpperZeroIssue(state, p, s)),
         )
+    }
+
+    /**
+     * [S6 §14 Q5] 個人の上限 0 のシフトが手で置いてある（希望で固定したセルを除く）。本実行の入口の clear が外すので、
+     * もう一度つくると消える。盤面に依存するため [buildGuidance]（設定だけの診断）には入れない。
+     */
+    fun handPlacedUpperZeroIssue(state: MagiState, p: Problem, s: Array<IntArray>): SettingIssue? {
+        val cells = ArrayList<String>()
+        for (i in 0 until minOf(p.S, s.size)) for (j in 0 until minOf(p.T, s[i].size)) {
+            val k = s[i][j]
+            if (k !in 0 until p.K || k == p.restIdx || !p.canDo(i, k) || p.rangeHi[i][k] != 0) continue
+            if (p.wishLocked(i, j) && p.wish[i][j] == k) continue
+            cells += "${state.staff.getOrNull(i)?.name ?: "#$i"} ${j + 1}日「${state.shifts.getOrNull(k)?.kigou ?: "$k"}」"
+        }
+        if (cells.isEmpty()) return null
+        return SettingIssue(IssueKind.RANGE, "上限 0 の勤務（${cells.take(3).joinToString("・")}${if (cells.size > 3) " ほか" else ""}）",
+            "手で置いた勤務 ${cells.size}件 が上限 0 と食い違っています。もう一度つくると外されます",
+            "残すなら、その人のそのシフトの個人上限を 1 以上に上げてください")
     }
 
     // 既定引数は cachedProblem(state)（build/aptBalances と同じ。p を渡さない呼出＝HfSwapPolish の

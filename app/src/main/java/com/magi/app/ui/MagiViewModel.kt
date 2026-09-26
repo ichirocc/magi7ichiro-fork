@@ -28,6 +28,7 @@ import com.magi.app.v6.V6SanityPort
 import com.magi.app.v6.V6SanityReport
 import com.magi.app.v6.Hf63Infeasibility
 import com.magi.app.v6.WishTrial
+import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.Ws1Ops
 import com.magi.app.v6.Ws1Result
 import com.magi.app.v6.canDoShiftsForStaff
@@ -130,6 +131,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun beginBoardJob(phase: MagiPhase, engineRun: Boolean = false): Int {
         cancelWishTrial()   // [S5 §8] 盤面を差し替えるジョブの前に試算の CPU を返す
+        cancelRelaxTrial()  // [S6 §8] 同じ
         cancelFixSearch()   // 直し方の探索も同じ（走らせたままだと差し替え前の盤面の提案が完了後に残る）
         val jobToken = phases.begin(phase)
         if (phase.keepsScreenOn) _ui.update { it.copy(keepScreenOn = true) }
@@ -514,6 +516,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (runBlockedByInFlight("バックグラウンド最適化の開始")) return
         if (!ensureValidForRun(st0, sched0)) return
         cancelWishTrial()   // [S5 §8] 背景実行は beginBoardJob を通らない
+        cancelRelaxTrial()
         cancelFixSearch()
         pushUndo("バックグラウンド最適化")
         OptimizationRepository.clear()
@@ -1868,6 +1871,99 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         startFullOptimize(null, S5Ctx(token.staff, name, token.day, sym, r.h0, r.hx, r.rk, r.rr, r.pCancel))
     }
 
+    // ===== [S6] 「設定を緩めたら」試算と確定（docs/s6_relax_trial.md §6・§8） =====
+    /** 鮮度はデータ（盤面・希望・制約・データに保存される設定）の指紋で見る。実行設定は含まない（S5 と同じ規則）。 */
+    private data class RelaxCtx(val stateKey: Long, val boardKey: Long)
+    private var relaxJob: Job? = null
+    private var relaxSeq = 0L
+    private var relaxCtx: RelaxCtx? = null
+    private var relaxResult: RelaxTrial.Outcome? = null
+    private var relaxDone: Pair<RelaxCtx, String>? = null
+
+    private fun relaxCtxNow(): RelaxCtx? {
+        val st = state ?: return null
+        val b = currentSchedule ?: return null
+        return RelaxCtx(stateKey(st), boardKey(b))
+    }
+
+    /** 背景で起点 3 件まで試算する（§8）。同じ ctx で済んでいる・走っているなら何もしない。 */
+    private fun startRelaxTrial() {
+        val st = state ?: return
+        val b = currentSchedule ?: return
+        if (optimizeInFlight()) return
+        val ctx = RelaxCtx(stateKey(st), boardKey(b))
+        if (relaxCtx == ctx && (relaxResult != null || relaxJob?.isActive == true)) return
+        relaxJob?.cancel()
+        val seq = ++relaxSeq
+        relaxCtx = ctx; relaxResult = null
+        val board = b.copy2D()
+        _ui.update { it.copy(relaxSearching = true) }
+        relaxJob = viewModelScope.launch {
+            try {
+                val out = withContext(Dispatchers.Default) { val stop = { !isActive }; RelaxTrial.firstWall(st, board, shouldStop = stop) }
+                if (seq != relaxSeq) return@launch
+                if (out !is RelaxTrial.Stopped) relaxResult = out
+                if (out is RelaxTrial.Result) logOp("I", "S6 試算: 起点 ${out.staff + 1}/${out.day + 1} 組${out.relaxes.size} 前提${out.prerequisite.size} ${out.h0}/${out.rk}/${out.rkH}/${out.rr}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logOp("W", "設定の緩和の試算 失敗: ${e.javaClass.simpleName}: ${e.message}")
+            } finally {
+                if (seq == relaxSeq) _ui.update { it.copy(relaxSearching = false, relaxRev = it.relaxRev + 1) }
+            }
+        }
+    }
+
+    /** 試算を止める（結果は出さない）。利用者の「やめる」と盤面ジョブの入口から呼ぶ。 */
+    fun cancelRelaxTrial() {
+        relaxJob?.cancel()
+        ++relaxSeq
+        if (_ui.value.relaxSearching) _ui.update { it.copy(relaxSearching = false) }
+    }
+
+    /** いまのデータで見つかった組（無い・古いなら null）。読むたびに照合する。 */
+    internal fun relaxTrialFor(): RelaxToken? {
+        val c = relaxCtx ?: return null
+        val r = relaxResult as? RelaxTrial.Result ?: return null
+        return if (relaxCtxNow() == c) RelaxToken(c.stateKey, c.boardKey, r) else null
+    }
+
+    /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
+    internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second
+
+    /** 確定「この組で緩めて、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
+    internal fun relaxAndApply(token: RelaxToken) {
+        val st = state ?: return
+        val b = currentSchedule ?: return
+        if (runBlockedByInFlight("設定の緩和")) return
+        if (stateKey(st) != token.stateKey || boardKey(b) != token.boardKey) {
+            _ui.update { it.copy(messageIsError = true, message = "勤務表か設定が変わりました。もう一度試算してください。") }
+            return
+        }
+        val r = token.result
+        val ns0 = RelaxTrial.apply(st, r.prerequisite + r.relaxes)
+        val nb = RelaxTrial.applyMoves(b, r.moves)
+        val got = nb?.let { UnifiedViolationChecker.check(ns0, it.copy2D()).hard }
+        if (nb == null || got != r.rr) {
+            logOp("W", "S6 確定を見送り: 手順を当てた必須 $got ≠ 試算 ${r.rr}")
+            _ui.update { it.copy(messageIsError = true, message = "試算の手順を当てても同じ結果になりませんでした。勤務表と設定はそのままです。") }
+            return
+        }
+        if (!ensureValidForRun(ns0, nb)) return
+        cancelRelaxTrial()
+        pushUndo("設定を緩めて、手順を当てる")
+        val ns = ns0.withSchedule(nb)
+        state = ns
+        currentSchedule = nb
+        resultSchedule = null
+        relaxDone = RelaxCtx(stateKey(ns), boardKey(nb)) to relaxDoneLine(r.h0, got)
+        _ui.update { it.copy(messageIsError = false, hasResult = true, engineRan = false, structureEdited = true, editRev = it.editRev + 1,
+            schedule = nb.map { row -> row.toList() }, runSummary = null, message = "設定を緩めて手順を当てました（元に戻せます）") }
+        logOp("I", "S6 確定: 組 " + (r.prerequisite + r.relaxes).joinToString { "${it.staff + 1}/${it.shift}" } + " 必須 ${r.h0}→$got")
+        refreshCheck()
+        saveNow()
+    }
+
     /** 元に戻す・やり直しで確定前の (state, 盤面) に戻ったときの stalledHardFamilies（§14 D）。 */
     private fun stalledAfterRestore(st: MagiState, sched: Array<IntArray>): List<String> =
         stalledBeforeConfirm?.takeIf { it.st === st && it.boardKey == boardKey(sched) }?.families ?: emptyList()
@@ -2003,6 +2099,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun stop() {
         job?.cancel(); checkJob?.cancel(); fixJob?.cancel()
         cancelWishTrial()
+        cancelRelaxTrial()
         // [監査A2] バックグラウンド実行(WorkManager)も停止する。従来は前景jobのみで、bg中は
         //   停止ボタンが実質無効・runningが結果到着まで固着していた。
         // 投入の直後・再起動後の再開待ち（Worker が running を立てる前）も背景の停止（bgStopApplies の KDoc）。
@@ -2647,6 +2744,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
+                // [S6 §8] 全体の 1 手探索が必須を減らす候補なしで終わったら、背景で設定の壁を探す。
+                if (focusName.isBlank() && list.none { it.deltaHard < 0 } && _ui.value.bestHard > 0) startRelaxTrial()
             } catch (e: CancellationException) {
                 if (seq == fixSeq) _ui.update { it.copy(fixSearching = false) }
                 throw e
@@ -3114,7 +3213,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             countFamilies = report.countFamilies,
             needFamilies = report.needFamilies,
             distLocations = report.distLocations,
-            c1Runs = report.c1Runs,
+            c1Shortages = c1Shortages(cachedProblem(st), schedule),
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },
@@ -3182,6 +3281,9 @@ private fun Int.floorMod(m: Int): Int = ((this % m) + m) % m
 
 /** 完了カードの前後比較 2 行（変更量／族別の改善・悪化）。 */
 private fun runSummaryOf(s: com.magi.app.v6.ChangeSummary): String = s.line() + "\n" + s.familyLine { breakdownLabels[it] ?: it }
+
+/** [S6] 確定の照合に使う試算時の文脈（§6 の 1）。 */
+internal class RelaxToken(val stateKey: Long, val boardKey: Long, val result: RelaxTrial.Result)
 
 /** [S5] 試算 1 行の表示状態（`MagiViewModel.wishTrialFor`）。 */
 internal sealed interface WishTrialView {

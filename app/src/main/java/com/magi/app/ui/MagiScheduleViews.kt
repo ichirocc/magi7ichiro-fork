@@ -1563,7 +1563,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                     val badge = vs.countBadges[i]
                     Row(Modifier.width(nameW).height(cellH)
                         .then(if (rowTapped) Modifier.background(cs.primary.copy(alpha = 0.12f)) else Modifier)
-                        .then(if (badge != null) Modifier.clickable(onClickLabel = "回数・偏りの内訳") { staffSheet = i } else Modifier)
+                        .then(if (badge != null || i in vs.c1Stuck) Modifier.clickable(onClickLabel = "回数・偏りの内訳") { staffSheet = i } else Modifier)
                         .padding(end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         // [グループ色帯] 左端4dp=所属グループ色（出現順に黄金角で自動割当）。行追跡の視線ガイド兼用。
                         val gi = groupOrder.indexOf(ui.staffGroupSymbols.getOrNull(i) ?: "").coerceAtLeast(0)
@@ -1609,7 +1609,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
                             val cellVioC = vioCls.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
                             val secondC = vs.cellSecond.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing) { tapped = i to d; onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing, band = if (vs.c1Band.getOrNull(i)?.getOrNull(d) == true) vioSoftColor.copy(alpha = 0.45f) else null) { tapped = i to d; onCellClick(i, d) }
                         }
                     }
                 }
@@ -1618,6 +1618,10 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     }
     staffSheet?.let { i ->
         GridMarkDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountLines(ui, i, cv?.let { c -> c::staffCellLimits }), onDismiss = { staffSheet = null }) {
+            if (i in vs.c1Stuck) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+            }
             FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
         }
     }
@@ -1651,10 +1655,13 @@ private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
     bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false,
     symSize: androidx.compose.ui.unit.TextUnit = 15.sp, focused: Boolean = false, wishSym: String = "",
-    plainBorder: Boolean = false, secondDot: Color? = null, editing: Boolean = false, onClick: () -> Unit,
+    plainBorder: Boolean = false, secondDot: Color? = null, editing: Boolean = false, band: Color? = null, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    Box(Modifier.width(w).height(h).padding(1.5.dp)) {
+    // 期間の制約の帯＝セルの下端に細い線。隣の日と途切れないようセルの余白の外まで引く。
+    Box(Modifier.width(w).height(h)
+        .then(if (band != null) Modifier.drawBehind { val t = 2.dp.toPx(); drawRect(band, Offset(0f, size.height - t), Size(size.width, t)) } else Modifier)
+        .padding(1.5.dp)) {
         Box(
             Modifier.fillMaxSize()
                 .background(bg, RoundedCornerShape(6.dp))

@@ -63,8 +63,8 @@ data class UiState(
     // [場所表示] fair/weekly の職員単位の偏り箇所。"weekly"->[[i,dev],..] / "fair"->[[i,k,dev],..]（dev降順）。
     //   内訳パネルの場所表示専用（グリッドには出さない）。表示のみ・スコア不変。
     val distLocations: Map<String, List<List<Int>>> = emptyMap(),
-    /** c1 の違反窓ラン（`ViolationReport.c1Runs`）。画面の表示専用の印を作る元。 */
-    val c1Runs: List<List<Int>> = emptyList(),
+    /** 期間の制約の不足区間（[c1Shortages]）。画面の表示専用の印と帯を作る元。 */
+    val c1Shortages: List<C1Shortage> = emptyList(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
     val fixSearching: Boolean = false,
     /** 直し方の探索を終えた依頼の鍵（`FixFocus.key`、空＝画面全体や未完了）。印・セルのシートが自分の結果か見分ける。 */
@@ -108,6 +108,8 @@ data class UiState(
     val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
     val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
+    val relaxRev: Int = 0,                          // [S6] 試算が終わるたびに進む（画面は vm.relaxTrialFor で読み直す）
+    val relaxSearching: Boolean = false,            // [S6] 背景で設定の壁を探している
     val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して、もう一度つくる」の結果（表示は vm.wishCancelOutcomeLine）
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
