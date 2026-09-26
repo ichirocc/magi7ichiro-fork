@@ -48,6 +48,11 @@ class RelaxTrialTextTest {
         assertEquals("この禁止の並びを解消できます。他の必須違反 4件 は残ります。", t.solveNote)
         println("S6 dialog: ${t.dialogTitle} / ${t.hardLine} / ${t.scaleLine}\n  pre=${t.prerequisiteRows}\n  set=${t.rows}\n  moves=${t.moveLines}\n  other=${t.otherMoveLines}\n  keep=${t.keepNote}")
         assertEquals("設定を緩めて手順を当てました: 必須違反 5 → 4。元に戻すで設定と勤務表をまとめて戻せます。", relaxDoneLine(r.h0, r.rr))
+        val c = relaxCardText(r, ui)
+        assertEquals("職員10 8〜9日の禁止の並び（必須 5件中 1件）は、設定が壁になっています", c.headline)
+        assertEquals("希望を残したまま、設定と勤務表を手順で変えられます", c.body)
+        assertEquals("残りの必須違反 4件はそのまま残ります", c.note)
+        assertEquals(null, relaxCardText(r.copy(rr = 0), ui).note)
     }
 
     @Test fun realData_handPlacedUpperZeroGetsOneSettingsLine() {

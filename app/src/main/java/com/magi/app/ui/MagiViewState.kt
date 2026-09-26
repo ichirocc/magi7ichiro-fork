@@ -385,6 +385,21 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     )
 }
 
+/** [S6] ホームの次にやることカードの文（見出し・本文・残る件数の注記）。起点の違反と件数を名指しする。 */
+internal data class RelaxCardText(val headline: String, val body: String, val note: String?)
+
+internal const val RELAX_SEARCHING_TEXT = "希望を変えずに、設定側で直す方法を調べています…"
+
+internal fun relaxCardText(r: RelaxTrial.Result, ui: UiState): RelaxCardText {
+    val t = relaxTarget(r, ui)
+    val span = t.span.replace("日〜", "〜")
+    return RelaxCardText(
+        headline = "${t.name} ${span}の${t.what}（必須 ${r.h0}件中 ${r.h0 - r.rr}件）は、設定が壁になっています",
+        body = "希望を残したまま、設定と勤務表を手順で変えられます",
+        note = if (r.rr > 0) "残りの必須違反 ${r.rr}件はそのまま残ります" else null,
+    )
+}
+
 /** [S6 §9] 確定の後、次にやることカードに出す 1 行。 */
 internal fun relaxDoneLine(h0: Int, after: Int): String =
     "設定を緩めて手順を当てました: 必須違反 $h0 → $after。元に戻すで設定と勤務表をまとめて戻せます。"

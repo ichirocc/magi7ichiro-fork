@@ -577,7 +577,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
                         outcomeLine = vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
-                        relaxFound = vm.relaxTrialFor() != null,
+                        relax = vm.relaxTrialFor(),
                         onShowRelax = { relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
                     )

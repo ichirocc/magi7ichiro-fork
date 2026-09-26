@@ -376,6 +376,7 @@ internal class OpNextPlan(
     val container: Color, val fg: Color, val headline: String,
     val bigLabel: String, val bigAction: () -> Unit, val bigEnabled: Boolean,
     val helperLabel: String?, val helperAction: () -> Unit,
+    val body: String? = null, val note: String? = null,   // 見出しの下の本文と注記（S6 の段だけ使う）
 )
 
 /**
@@ -399,7 +400,7 @@ internal fun OperatorNextActionCard(
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
     outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して、もう一度つくる」の結果（VM が鮮度を照合済み）
-    relaxFound: Boolean = false,    // [S6] いまのデータで設定の壁の組が見つかっている（VM が鮮度を照合済み）
+    relax: RelaxToken? = null,      // [S6] いまのデータで見つかった設定の壁の組（VM が鮮度を照合済み。null＝無い）
     onShowRelax: () -> Unit = {},
     onStopRelax: () -> Unit = {},
 ) {
@@ -448,12 +449,17 @@ internal fun OperatorNextActionCard(
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
-        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && relaxFound ->
-            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。設定が壁になっています。",
-                "緩める候補を見る", onShowRelax, true, if (wishCands.isEmpty) null else "ぶつかっている希望を見る", onShowWishes)
+        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && relax != null -> {
+            val t = relaxCardText(relax.result, ui)
+            OpNextPlan(amber, onAmber, t.headline,
+                "緩める候補を見る", onShowRelax, true, if (wishCands.isEmpty) null else "ぶつかっている希望を見る", onShowWishes,
+                body = t.body, note = t.note)
+        }
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
+        //   S6 の判定が済むまでは「下限」と言わない（設定を緩めれば減るかもしれない）。
         ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
-            OpNextPlan(amber, onAmber, "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
+            OpNextPlan(amber, onAmber,
+                if (ui.relaxSearching) "必須違反が ${ui.bestHard}件 残っています。" else "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
                 "ぶつかっている希望を見る", onShowWishes, true, "このまま書き出す", onExport)
         !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
@@ -480,10 +486,12 @@ internal fun OperatorNextActionCard(
                 }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+            plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
+            plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
             if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
             if (!ui.running && ui.relaxSearching) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("設定が壁になっていないか調べています…", style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
+                    Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
                     TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
                 }
             }
