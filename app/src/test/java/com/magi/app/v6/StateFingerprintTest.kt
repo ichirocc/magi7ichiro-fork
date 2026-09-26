@@ -85,6 +85,7 @@ class StateFingerprintTest {
         "群ペア禁止" to b.copy(cons42 = listOf(C42Row("G", "H", "休", "A"))),
         "スキル群ペア禁止" to b.copy(cons42s = listOf(C42Row("S", "S", "休", "A"))),
         "希望の前日に禁止" to b.copy(cons3w = listOf(C3wRow("休", "A"))),
+        "手動固定" to b.copy(manualPins = listOf(com.magi.app.model.ManualPin(0, 0, 0))),
     )
 
     @Test fun everyInputFamilyChangesTheFingerprint() {

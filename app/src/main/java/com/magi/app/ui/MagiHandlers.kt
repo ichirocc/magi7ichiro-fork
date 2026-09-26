@@ -12,6 +12,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
         when (e) {
             is MagiEvent.Board.SetCell -> vm.setCell(e.staff, e.day, e.shift)
             is MagiEvent.Board.SetCells -> vm.setCells(e.cells, e.shift)
+            is MagiEvent.Board.TogglePin -> vm.togglePin(e.staff, e.day)
             is MagiEvent.Board.ApplyWishes -> vm.applyWishes(e.includeOutOfScope)
             is MagiEvent.Board.ApplyAlternative -> vm.applyAlternative(e.index)
             is MagiEvent.Board.ApplyFixSuggestion -> vm.applyFixSuggestion(e.suggestion)

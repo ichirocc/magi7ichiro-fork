@@ -29,12 +29,13 @@ object GreedyMirrorScheduler {
         var wishIn = 0
         var wishOut = 0
         if (filled >= max(1, p.S * p.T / 2)) {
-            schedule = normalizeSchedule(existing, p)
+            schedule = p.withManualPins(normalizeSchedule(existing, p))
             baseMode = "既存表ベース"
         } else {
             schedule = Array(p.S) { IntArray(p.T) { -1 } }
             baseMode = "空表ベース"
             for (i in 0 until p.S) for (j in 0 until p.T) {
+                if (p.pinned(i, j)) { schedule[i][j] = p.pin[i][j]; continue }   // [#41] 手動固定が先
                 val w = p.wish[i][j]
                 if (w !in 0 until p.K) continue
                 // [3.391.0] 旧: 担当できないシフトへの希望まで**盤面へ置いていた**。pref は実現可能な

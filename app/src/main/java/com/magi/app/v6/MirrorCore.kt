@@ -639,30 +639,59 @@ fun Problem.canDo(staffI: Int, shiftK: Int): Boolean {
     return bucket.getOrNull(g)?.contains(shiftK) == true
 }
 
-/** [監査#11①] セル(i,j)の希望を「不可侵（凍結）」として扱うか。
- *  実現可能な希望のみ凍結する。担当不可（bucket外）の不可能希望は凍結しない＝セルを
- *  被覆等の最適化へ復帰させ、入口fallback値のまま座礁するのを防ぐ。
- *  正当性: 不可能希望の pref 寄与は「w を割当て不能」ゆえ割当値に依存しない定数1。
- *  可動化しても pref は増減せず、他目的の最適化余地だけが広がる。
+/** [監査#11①] セル(i,j)に「実現可能な希望」が入っているか（希望の意味＝pref の計数・希望の診断・S5 が読む）。
+ *  担当不可（bucket外）の不可能希望は含めない。正当性: 不可能希望の pref 寄与は割当値に依存しない定数1。
  *  pref の計数自体（不可能希望も違反として表示・カウント）は不変更（#11②は別裁定）。 */
-fun Problem.wishLocked(i: Int, j: Int): Boolean {
+fun Problem.wishFixed(i: Int, j: Int): Boolean {
     val w = wish[i][j]
     return w >= 0 && canDo(i, w)
 }
 
+/** 最適化器がセル(i,j)を縛るか＝手動固定（[#41]）または実現可能な希望（[wishFixed]）。縛る値は [lockTo]。
+ *  盤面へ書く経路はすべてこれで判定する（「動かさない」「縛る値へだけ書く」）。採点は読まない。 */
+fun Problem.wishLocked(i: Int, j: Int): Boolean = pin[i][j] >= 0 || wishFixed(i, j)
+
+/** [#41] 縛るセルの値＝手動固定の値、無ければ希望（[wishLocked] のセルでだけ意味を持つ）。手動固定は希望より強い。 */
+fun Problem.lockTo(i: Int, j: Int): Int { val v = pin[i][j]; return if (v >= 0) v else wish[i][j] }
+
+/** [#41] セル(i,j)が手動固定か。 */
+fun Problem.pinned(i: Int, j: Int): Boolean = pin[i][j] >= 0
+
 /** [希望固定の徹底] 規則 A: 最適化器がセル (i,j) を `cur` から `new` へ変えてよいか。希望固定セルは「希望へ」か「今のまま」だけ
  *  ＝希望どおりのセルは動かさず、未反映のセル（希望と違う値）は希望へ戻すのだけ可で、希望でも今の値でもない値へは動かさない。
- *  `strict=false`（[PolishGate.wishPinStrict] OFF）は旧挙動＝常に可。 */
-fun Problem.wishMoveAllowed(i: Int, j: Int, cur: Int, new: Int, strict: Boolean = PolishGate.wishPinStrict): Boolean =
-    !strict || !wishLocked(i, j) || new == wish[i][j] || new == cur
+ *  `strict=false`（[PolishGate.wishPinStrict] OFF）は旧挙動＝希望は常に可。[#41] 手動固定はフラグによらず「固定の値へ」か「今のまま」だけ。 */
+fun Problem.wishMoveAllowed(i: Int, j: Int, cur: Int, new: Int, strict: Boolean = PolishGate.wishPinStrict): Boolean {
+    val pv = pin[i][j]
+    if (pv >= 0) return new == pv || new == cur
+    return !strict || !wishFixed(i, j) || new == wish[i][j] || new == cur
+}
 
-/** [希望固定の徹底] 盤面単位の規則 A: `cand` の希望固定セルはどれも「希望どおり」か「`base` と同じ値」。
- *  盤面ごと採る経路の採否に使う（[PolishGate.wishPinStrict] の間だけ呼ぶ）。 */
-fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>): Boolean {
+/** [希望固定の徹底] 盤面単位の規則 A: `cand` の希望固定セルはどれも「希望どおり」か「`base` と同じ値」。[#41] 手動固定は常に同じ判定
+ *  （`strict=false` でも見る）。盤面ごと採る経路の採否に使う（[PolishGate.wishPinStrict] か手動固定があるときだけ呼ぶ）。 */
+fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>, strict: Boolean = true): Boolean {
+    if (!strict && !hasPins) return true
     for (i in 0 until S) for (j in 0 until T) {
-        if (!wishMoveAllowed(i, j, base[i][j], cand[i][j], strict = true)) return false
+        if (!wishMoveAllowed(i, j, base[i][j], cand[i][j], strict)) return false
     }
     return true
+}
+
+/** [#41] 盤面の手動固定セルがどれも固定の値か（最終番兵）。 */
+fun Problem.holdsManualPins(s: Array<IntArray>): Boolean {
+    if (!hasPins) return true
+    for (i in 0 until S) for (j in 0 until T) {
+        val v = pin[i][j]
+        if (v >= 0 && s.getOrNull(i)?.getOrNull(j) != v) return false
+    }
+    return true
+}
+
+/** [#41] 手動固定セルへ固定の値を書いた写し（入口で盤面を固定に合わせる）。固定が無ければ同じ参照を返す。 */
+fun Problem.withManualPins(s: Array<IntArray>): Array<IntArray> {
+    if (holdsManualPins(s)) return s
+    val out = s.copy2D()
+    for (i in 0 until minOf(S, out.size)) for (j in 0 until minOf(T, out[i].size)) { val v = pin[i][j]; if (v >= 0) out[i][j] = v }
+    return out
 }
 
 /** [3.507.0] 最適化器が (i,k) を置いてよいか＝担当可かつ個人上限 0 でない（休は除外しない）。評価・表示は canDo。 */

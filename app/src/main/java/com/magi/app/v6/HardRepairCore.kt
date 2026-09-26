@@ -41,9 +41,11 @@ internal object HardRepairCore {
             // [3.603.0] 休が無い設定は入口で止める（安全側フォールバックの黙認 0 は不可）。
             val fallback = fillShiftIndex(allowed, p.restIdx ?: throw IllegalArgumentException("休みシフトが設定されていません"))
             for (j in 0 until p.T) {
+                // [#41] 手動固定セルは固定の値へ（担当外・上限 0 でも利用者の固定が勝つ）。
+                if (p.pinned(i, j)) { out[i][j] = p.pin[i][j]; continue }
                 val k = out[i][j]
                 // [3.507.0] 個人上限 0 のセル（希望でそのシフトに固定されたものは除く）も入口で外す＝探索は置き直しから始める。
-                val capped = k in 0 until p.K && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.wish[i][j] == k)
+                val capped = k in 0 until p.K && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.lockTo(i, j) == k)
                 if (k !in 0 until p.K || !p.canDo(i, k) || capped) out[i][j] = refill(p, i, j, fallback, wishPinStrict)
             }
         }
@@ -65,7 +67,7 @@ internal object HardRepairCore {
             val fallback = fillShiftIndex(p.allowedShiftsForStaff(i), p.restIdx ?: throw IllegalArgumentException("休みシフトが設定されていません"))
             for (j in 0 until p.T) {
                 val k = out[i][j]
-                if (k in 0 until p.K && p.canDo(i, k) && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.wish[i][j] == k)) { out[i][j] = refill(p, i, j, fallback, wishPinStrict); n++ }
+                if (k in 0 until p.K && p.canDo(i, k) && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.lockTo(i, j) == k)) { out[i][j] = refill(p, i, j, fallback, wishPinStrict); n++ }
             }
         }
         return out to n
@@ -74,7 +76,7 @@ internal object HardRepairCore {
     /** 外したセルを何で埋めるか。[希望固定の徹底] 規則 A の間は、希望固定セル（未反映）は埋めシフトでなく希望へ戻す
      *  （希望でも今の値でもない値へは動かさない）。 */
     private fun refill(p: Problem, i: Int, j: Int, fallback: Int, wishPinStrict: Boolean): Int =
-        if (wishPinStrict && p.wishLocked(i, j)) p.wish[i][j] else fallback
+        if ((wishPinStrict || p.pinned(i, j)) && p.wishLocked(i, j)) p.lockTo(i, j) else fallback
 
     internal data class RepairResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>)
 
@@ -85,10 +87,11 @@ internal object HardRepairCore {
         val logs = ArrayList<MirrorLog>()
         var changed = 0
 
-        // Apply feasible wishes first; infeasible wishes are logged by Sanity, not forced.
+        // Apply feasible wishes first (a manual pin wins over its wish); infeasible wishes are logged by Sanity, not forced.
         for (i in 0 until p.S) for (j in 0 until p.T) {
-            val w = p.wish[i][j]
-            if (w in 0 until p.K && p.canDo(i, w) && out[i][j] != w) {
+            if (!p.wishLocked(i, j)) continue
+            val w = p.lockTo(i, j)
+            if (out[i][j] != w) {
                 out[i][j] = w
                 changed++
             }

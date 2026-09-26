@@ -368,6 +368,57 @@ static bool runSharedHandleConcurrency(const MagiProblem& p, const std::vector<i
     return ok;
 }
 
+// [#41] 手動固定: 盤面へ書く C++ の手（SA チャンク・違反セルの壊して直す・入口修復）が固定セルを書き換えないこと、
+//   入口修復が固定の値へ戻すこと（希望より強い）、採点が固定の有無で変わらないこと（Kotlin ManualPinTest と同じ受け入れ条件）。
+static int runManualPinTest() {
+    int failures = 0, moved = 0;
+    for (uint64_t seed = 1; seed <= 4; seed++) {
+        MagiProblem p = buildProblem(10, 21, 4, 2, seed * 4409ULL, seed % 2 == 0);
+        std::mt19937_64 rng(seed * 7727ULL);
+        std::vector<int> board = randomBoard(p, rng);
+        const long long before = fullEvalCombined(p, board.data());
+        std::vector<int> pinned;
+        p.pin.assign((size_t)p.S * p.T, -1);
+        for (int i = 0; i < p.S; i++) for (int j = (i % 3); j < p.T; j += 3) {
+            size_t idx = (size_t)i * p.T + j;
+            p.pin[idx] = board[idx]; pinned.push_back((int)idx);
+        }
+        if (fullEvalCombined(p, board.data()) != before) { printf("PIN-TEST FAIL: 手動固定で採点が変わった\n"); failures++; }
+        auto held = [&](const std::vector<int>& bd) {
+            for (int idx : pinned) if (bd[(size_t)idx] != p.pin[(size_t)idx]) return false;
+            return true;
+        };
+        for (int t = 0; t < 4; t++) {
+            std::vector<int> cur = board, best = board;
+            long long out[6];
+            runSaChunk(p, cur.data(), best.data(), fullEvalCombined(p, best.data()), seed * 100 + t, 1.0, 0.5, 0.5, 1, out);
+            if (out[0] == 0 && (!held(cur) || !held(best))) { printf("PIN-TEST FAIL: SA チャンクが手動固定を書き換えた\n"); failures++; }
+            for (size_t x = 0; x < cur.size(); x++) if (cur[x] != board[x]) moved++;
+        }
+        std::vector<int> cells;
+        for (int i = 0; i < p.S; i++) for (int j = 0; j < p.T; j++) cells.push_back(i * p.T + j);
+        for (int t = 0; t < 20; t++) {
+            std::vector<int> bd = board;
+            std::mt19937_64 r3(seed * 31 + t);
+            destroyRepairViolationsN(p, bd.data(), cells, r3);
+            if (!held(bd)) { printf("PIN-TEST FAIL: destroyRepairViolationsN が手動固定を書き換えた\n"); failures++; break; }
+        }
+        // 入口修復: 固定セルを別の値・同じセルに別の希望を置いても、固定の値へ戻す（希望へは戻さない）。
+        std::vector<int> bd = board;
+        int idx0 = pinned[0];
+        int i0 = idx0 / p.T;
+        int other = (p.pin[(size_t)idx0] + 1) % p.K;
+        bd[(size_t)idx0] = other;
+        for (int k : p.bucket[p.sgrp[i0]]) if (k != p.pin[(size_t)idx0]) { p.wish[(size_t)idx0] = k; break; }
+        std::mt19937_64 r4(seed);
+        hf67HardRepairN(p, bd.data(), r4);
+        if (!held(bd)) { printf("PIN-TEST FAIL: 入口修復が手動固定の値へ戻さなかった\n"); failures++; }
+    }
+    if (failures == 0 && moved == 0) { printf("PIN-TEST FAIL: SA が 1 セルも動かさず検証が空振り\n"); failures++; }
+    printf("PIN-TEST: %s (moved=%d)\n", failures == 0 ? "OK" : "FAILED", moved);
+    return failures;
+}
+
 // [3.409.22] ネイティブ修復器が **need2 単独定義の被覆需要** を扱えるかの直接検証。
 //   旧実装は `need1<=0 → continue`（destroyRepairDayAtN）/ `need1<0 → continue`（findCovOFixN）で
 //   need1 未設定のセルを丸ごと素通りしており、**評価器は covU/covO を計上するのに修復器はその枠を
@@ -857,6 +908,6 @@ int main(int argc, char** argv) {
     double bits   = benchOne(false);
     printf("BENCH deltaApply (10x31 K6): scalar %.2f M moves/s, bit-op %.2f M moves/s, speedup x%.2f\n",
            scalar / 1e6, bits / 1e6, bits / scalar);
-    int repairFail = runNeed2OnlyRepairTest() + runMarginalCostTest() + runConsIndexGuardTest();
+    int repairFail = runNeed2OnlyRepairTest() + runMarginalCostTest() + runConsIndexGuardTest() + runManualPinTest();
     return (mismatches == 0 && repairFail == 0) ? 0 : 1;
 }

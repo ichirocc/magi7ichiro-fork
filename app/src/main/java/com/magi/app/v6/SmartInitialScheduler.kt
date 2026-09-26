@@ -50,6 +50,7 @@ object SmartInitialScheduler {
         var wishOut = 0
         for (i in 0 until p.S) for (j in 0 until p.T) {
             if (schedule[i][j] >= 0) continue
+            if (p.pinned(i, j)) { schedule[i][j] = p.pin[i][j]; continue }   // [#41] 手動固定が先（希望より強い）。以降の段は空きセルだけ埋める
             val w = p.wish[i][j]
             if (w !in 0 until p.K) continue
             if (p.canDo(i, w)) { schedule[i][j] = w; wishIn++ } else wishOut++

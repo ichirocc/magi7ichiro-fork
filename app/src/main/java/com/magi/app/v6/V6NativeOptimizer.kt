@@ -1107,7 +1107,7 @@ object V6NativeOptimizer {
             if (candidates.isEmpty()) { swapped[a] = true; continue }
             val b = candidates.maxByOrNull { burden[it] } ?: continue
             for (j in 0 until p.T) {
-                if (wishPinStrict && (p.wishLocked(a, j) || p.wishLocked(b, j))) continue
+                if ((wishPinStrict && (p.wishLocked(a, j) || p.wishLocked(b, j))) || p.pinned(a, j) || p.pinned(b, j)) continue
                 val tmp = out[a][j]; out[a][j] = out[b][j]; out[b][j] = tmp
             }
             swapped[a] = true; swapped[b] = true
@@ -1996,7 +1996,7 @@ object V6NativeOptimizer {
         seed: Long = 0x50F11L,
         shouldStop: () -> Boolean = { false },
         quantitativeRangeEval: Boolean = false,
-    ): Array<IntArray> = hf80PostPolish(state, schedule, max(1, seconds), seed, shouldStop, quantitativeRangeEval).schedule
+    ): Array<IntArray> = hf80PostPolish(state, cachedProblem(state, quantitativeRangeEval).withManualPins(schedule), max(1, seconds), seed, shouldStop, quantitativeRangeEval).schedule
 
     /**
      * 最終研磨フェーズ。[差分化移植] DeltaEvaluator を生スコア源にして直接評価で回す

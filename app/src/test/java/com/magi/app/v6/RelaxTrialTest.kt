@@ -115,9 +115,11 @@ class RelaxTrialTest {
     @Test fun r11_applyMovesRefusesAMismatchedBoard() {
         val bd = arrayOf(intArrayOf(a, a), intArrayOf(rest, rest))
         val m = listOf(RelaxTrial.Move(0, 1, a, rest), RelaxTrial.Move(1, 1, rest, a))
-        assertTrue(RelaxTrial.applyMoves(bd, m)!!.contentDeepEquals(arrayOf(intArrayOf(a, rest), intArrayOf(rest, a))))
+        val none = { _: Int, _: Int -> false }
+        assertTrue(RelaxTrial.applyMoves(bd, m, none)!!.contentDeepEquals(arrayOf(intArrayOf(a, rest), intArrayOf(rest, a))))
         assertEquals("入力は書かない", a, bd[0][1])
-        assertNull(RelaxTrial.applyMoves(arrayOf(intArrayOf(a, b), intArrayOf(rest, rest)), m))
+        assertNull(RelaxTrial.applyMoves(arrayOf(intArrayOf(a, b), intArrayOf(rest, rest)), m, none))
+        assertNull("手動固定のセルに触れる手順は当てない（#41）", RelaxTrial.applyMoves(bd, m) { i, j -> i == 1 && j == 1 })
     }
 
     @Test fun r12_tooManyRelaxesIsNoWall() {
@@ -135,7 +137,7 @@ class RelaxTrialTest {
         assertEquals(5, r.h0); assertEquals(4, r.rr); assertEquals(1, r.att)
         assertEquals("手で置いた上限 0 は前提に分ける", RelaxTrial.handPlaced(st, board), r.prerequisite)
         val ns = RelaxTrial.apply(st, r.prerequisite + r.relaxes)
-        val nb = RelaxTrial.applyMoves(board, r.moves)!!
+        val nb = RelaxTrial.applyMoves(board, r.moves) { _, _ -> false }!!
         assertEquals("確定の盤面は試算の結果そのもの", r.rr, UnifiedViolationChecker.check(ns, nb).hard)
     }
 }

@@ -63,7 +63,7 @@ internal object EliteRelinking {
             for ((i, j) in diffs) {
                 if (shouldStop()) break
                 // [希望固定の徹底] 希望固定セルへ希望以外の値は写さない（希望どうしの衝突では崩した方が keep-best に勝つ）。
-                if (wishPinStrict && p.wishLocked(i, j) && alt[i][j] != p.wish[i][j]) continue
+                if ((wishPinStrict || p.pinned(i, j)) && p.wishLocked(i, j) && alt[i][j] != p.lockTo(i, j)) continue
                 cur[i][j] = alt[i][j]                 // alt へ向けた強制マーチ
                 curRep = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval = quantitativeRangeEval)
                 if (betterReport(curRep, bestRep)) { bestSched = cur.copy2D(); bestRep = curRep }

@@ -89,6 +89,8 @@ object MagiMarks {
     val hardStroke: Dp = 3.dp
     val softStroke: Dp = 2.dp
     val softCorner: Dp = 10.dp
+    /** [#41] 手動固定の錠（セル右下）。 */
+    val pinLock: Dp = 11.dp
 }
 
 object MagiSpacing {

@@ -151,11 +151,11 @@ object RelaxTrial {
         return if (shouldStop()) Stopped else NoWall
     }
 
-    /** 確定の盤面（§6 の 3）: 試算時の盤面に手順を当てる。どれかのセルが手順の from と違えば null。入力は書かない。 */
-    fun applyMoves(board: Array<IntArray>, moves: List<Move>): Array<IntArray>? {
+    /** 確定の盤面（§6 の 3）: 試算時の盤面に手順を当てる。どれかのセルが手順の from と違うか、手動固定（[pinned]、#41）なら null。入力は書かない。 */
+    fun applyMoves(board: Array<IntArray>, moves: List<Move>, pinned: (Int, Int) -> Boolean): Array<IntArray>? {
         val nb = board.copy2D()
         for (m in moves) {
-            if (nb.getOrNull(m.staff)?.getOrNull(m.day) != m.from) return null
+            if (nb.getOrNull(m.staff)?.getOrNull(m.day) != m.from || pinned(m.staff, m.day)) return null
             nb[m.staff][m.day] = m.to
         }
         return nb
@@ -207,7 +207,7 @@ object RelaxTrial {
 
     /** [board] が上限 0 の (職員, シフト) を使っている組（希望で固定したセルは除く）。上げ幅は最小の 1（`mayPlace` は上限 0 だけを外す）。 */
     private fun usedWalls(p: Problem, walls: List<Pair<Int, Int>>, board: Array<IntArray>): List<Relax> =
-        walls.filter { (i, k) -> (0 until p.T).any { j -> board[i][j] == k && !(p.wishLocked(i, j) && p.wish[i][j] == k) } }
+        walls.filter { (i, k) -> (0 until p.T).any { j -> board[i][j] == k && !(p.wishLocked(i, j) && p.lockTo(i, j) == k) } }
             .map { (i, k) -> Relax(i, k, 1) }
 
     private fun diff(a: Array<IntArray>, b: Array<IntArray>): List<Move> {

@@ -35,7 +35,7 @@ object WishTrial {
     data class ControlOutcome(val control: Control) : Outcome
 
     /**
-     * 希望 (staff, day) を取り消した試算。希望が無い・wishLocked でなければ null（試算の対象外）。
+     * 希望 (staff, day) を取り消した試算。希望が無い・実現可能でない・手動固定のセル（[#41]）は null（試算の対象外）。
      * [control] を渡さなければここで計算する。
      */
     fun trial(
@@ -49,7 +49,7 @@ object WishTrial {
         val key = "$staff,$day"
         if (!state.wishes.containsKey(key)) return null
         val p = cachedProblem(state, false)
-        if (staff !in 0 until p.S || day !in 0 until p.T || !p.wishLocked(staff, day)) return null
+        if (staff !in 0 until p.S || day !in 0 until p.T || !p.wishFixed(staff, day) || p.pinned(staff, day)) return null
         unavailableReason(state, schedule)?.let { return Unavailable(it) }
         val ctl = control ?: when (val c = control(state, schedule, shouldStop)) {
             is ControlOutcome -> c.control
@@ -66,12 +66,12 @@ object WishTrial {
         return Result(ctl.h0, hx, ctl.rk, rr, a, att, minOf(a, maxOf(0, att)), maxOf(0, att - a), pKeep, pCancel)
     }
 
-    /** wishLocked の希望のキー（"i,j"）。担当できない勤務の希望は入らない＝試算の対象外（§2.2）。 */
+    /** 試算できる希望のキー（"i,j"）。担当できない勤務の希望と手動固定のセル（[#41]）は入らない＝試算の対象外（§2.2）。 */
     fun lockedWishKeys(state: MagiState): Set<String> {
         val p = cachedProblem(state, false)
         return state.wishes.keys.filterTo(LinkedHashSet()) { key ->
             val (i, j) = key.split(",").map { it.trim().toIntOrNull() ?: -1 }.let { (it.getOrNull(0) ?: -1) to (it.getOrNull(1) ?: -1) }
-            i in 0 until p.S && j in 0 until p.T && p.wishLocked(i, j)
+            i in 0 until p.S && j in 0 until p.T && p.wishFixed(i, j) && !p.pinned(i, j)
         }
     }
 

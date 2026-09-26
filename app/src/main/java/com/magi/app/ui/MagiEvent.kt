@@ -17,6 +17,8 @@ internal sealed interface MagiEvent {
 
         data class SetCell(val staff: Int, val day: Int, val shift: Int) : Board
         data class SetCells(val cells: Collection<Pair<Int, Int>>, val shift: Int) : Board
+        /** [#41] セルの手動固定を付ける／外す。 */
+        data class TogglePin(val staff: Int, val day: Int) : Board
         data class ApplyWishes(val includeOutOfScope: Boolean) : Board
         data class ApplyAlternative(val index: Int) : Board
         data class ApplyFixSuggestion(val suggestion: FixSuggestion) : Board

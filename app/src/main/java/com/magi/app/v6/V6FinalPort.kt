@@ -304,7 +304,8 @@ object V6FinalPort {
         if (!gate.allowed) error(gate.message)
         // [最終番兵用] 入力の評価を保持。万一パイプラインが入力より悪い結果を出した場合に復帰する（多重防御）。
         val baseProblem = cachedProblem(state, quantitativeRangeEval)
-        val normInput = normalizeSchedule(schedule, baseProblem)
+        // [#41] 手動固定セルは入口で固定の値に合わせる（画面の編集で常に揃っているので通常は同じ盤面）。
+        val normInput = baseProblem.withManualPins(normalizeSchedule(schedule, baseProblem))
         // [3.507.0] 番兵の基準は「個人上限 0 のセルを外した入力」。上限 0 のセルは最適化器が置かない（mayPlace）ので、
         //   生の入力（上限超過 45 のまま）と比べると、外した代償のぶん結果が「悪化」に見えて入力へ戻ってしまう。
         val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput, quantitativeRangeEval)
@@ -814,12 +815,17 @@ object V6FinalPort {
         // [最終番兵/多重防御・3.575.0で強化] 「入力」と最終結果の2点比較だと、途中の段の改善が
         //   後段の悪化で丸ごと失われる（実機ログで確認、経緯: docs/history/3.4xx.md 3.575.0）。
         //   主要な段を全部候補にし [pickBestStage] で最良を選ぶ。
-        val bestStage = pickBestStage(listOf(
+        //   [#41] 手動固定を崩した段は候補から外す（入力は入口で固定に合わせてあるので必ず残る）。
+        val stages = listOf(
             StageCandidate("入力", cappedInput, inputReport),
             StageCandidate("探索", chained.schedule, chained.report),
             StageCandidate("統合", integrated.schedule, integrated.report),
             StageCandidate("後処理", refSched, refReport),
-        ))
+        )
+        val pinSafeStages = stages.filter { baseProblem.holdsManualPins(it.sched) }
+        val pinLog = (stages - pinSafeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
+            message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") }
+        val bestStage = pickBestStage(pinSafeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
         // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
@@ -1056,7 +1062,7 @@ object V6FinalPort {
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
         // [UX調査] sentinelLog（1文）だけでは後続の個々の行まで読者が覚えていられない（history参照）。
         val postReportLogs = annotateStaleLogsIfRegressed(post.report.logs, regression)
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」

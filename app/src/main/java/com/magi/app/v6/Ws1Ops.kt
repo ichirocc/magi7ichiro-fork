@@ -362,7 +362,8 @@ object Ws1Ops {
         val wishes = state.wishes.filterKeys { dayOf(it) in 0 until t }
         val end = runCatching { LocalDate.parse(state.startDate).plusDays((t - 1).toLong()).toString() }
             .getOrDefault(state.endDate)
-        val ns = state.copy(needDay1 = need1, needDay2 = need2, wishes = wishes, endDate = end)
+        val ns = state.copy(needDay1 = need1, needDay2 = need2, wishes = wishes, endDate = end,
+            manualPins = state.manualPins.filter { it.day in 0 until t })
         return Ws1Result(withSchedule(ns, newSched), newSched)
     }
 
@@ -417,8 +418,10 @@ object Ws1Ops {
         }
         val wishes = LinkedHashMap<String, Int>()
         for ((key, v) in state.wishes) { if (v == k) continue; wishes[key] = if (v > k) v - 1 else v }
+        // [#41] 消したシフトの手動固定は外す（マスは上の埋めシフトへ変わる）。
+        val pins = state.manualPins.filter { it.shift != k }.map { if (it.shift > k) it.copy(shift = it.shift - 1) else it }
         val ns = state.copy(
-            shifts = shifts, groupShift = gs, groupShiftApt = apt, wishes = wishes,
+            shifts = shifts, groupShift = gs, groupShiftApt = apt, wishes = wishes, manualPins = pins,
             // 消したシフトの表示色は残さない（同じ記号で作り直したシフトが黙って引き継がないように）。
             shiftColors = state.shiftColors - state.shifts[k].kigou,
             needDay1 = reindexKeys(state.needDay1, 0, k),
@@ -454,6 +457,7 @@ object Ws1Ops {
             staff = staff,
             wishes = swapKeys(state.wishes, 0, i, j),
             staffRange = swapKeys(state.staffRange, 0, i, j),
+            manualPins = state.manualPins.map { it.copy(staff = swapIdx(it.staff, i, j)) },
         )
         return Ws1Result(withSchedule(ns, arr), arr)
     }
@@ -473,6 +477,7 @@ object Ws1Ops {
         val ns = state.copy(
             shifts = shifts, groupShift = swapCols(state.groupShift), groupShiftApt = swapCols(state.groupShiftApt),
             wishes = wishes,
+            manualPins = state.manualPins.map { it.copy(shift = swapIdx(it.shift, k, k2)) },
             needDay1 = swapKeys(state.needDay1, 0, k, k2),
             needDay2 = swapKeys(state.needDay2, 0, k, k2),
             staffRange = swapKeys(state.staffRange, 1, k, k2),
@@ -511,6 +516,7 @@ object Ws1Ops {
             staff = staff,
             wishes = reindexKeys(state.wishes, 0, i),
             staffRange = reindexKeys(state.staffRange, 0, i),
+            manualPins = state.manualPins.filter { it.staff != i }.map { if (it.staff > i) it.copy(staff = it.staff - 1) else it },
         )
         return Ws1Result(withSchedule(ns, arr), arr)
     }

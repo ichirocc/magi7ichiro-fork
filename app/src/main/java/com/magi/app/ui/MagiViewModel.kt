@@ -38,6 +38,10 @@ import com.magi.app.v6.copy2D
 import com.magi.app.v6.toIntArray2D
 import com.magi.app.v6.withSchedule
 import com.magi.app.v6.restShiftIndex
+import com.magi.app.v6.lockTo
+import com.magi.app.v6.pinned
+import com.magi.app.model.togglePin
+import com.magi.app.model.withPinsFollowing
 import com.magi.app.v6.wishLocked
 import com.magi.app.work.OptimizationRepository
 import com.magi.app.work.OptimizationWorker
@@ -1942,7 +1946,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         val r = token.result
         val ns0 = RelaxTrial.apply(st, r.prerequisite + r.relaxes)
-        val nb = RelaxTrial.applyMoves(b, r.moves)
+        val pinP = cachedProblem(st)
+        val nb = RelaxTrial.applyMoves(b, r.moves) { i, j -> i in 0 until pinP.S && j in 0 until pinP.T && pinP.pinned(i, j) }
         val got = nb?.let { UnifiedViolationChecker.check(ns0, it.copy2D()).hard }
         if (nb == null || got != r.rr) {
             logOp("W", "S6 確定を見送り: 手順を当てた必須 $got ≠ 試算 ${r.rr}")
@@ -2181,6 +2186,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             if (i !in 0 until p.S || j !in 0 until p.T || k !in 0 until p.K) continue
             val can = p.canDo(i, k)
             if (!can && !includeOutOfScope) continue
+            if (p.pinned(i, j)) continue   // [#41] 手動固定は希望より強い（一括の反映でも書かない）
             if (i in sched.indices && j in sched[i].indices && sched[i][j] != k) {
                 if (first) { pushUndo("希望を反映"); first = false }
                 sched[i][j] = k
@@ -2314,7 +2320,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         pushUndo("セル編集")
         sched[i][j] = shift
         currentSchedule = sched
-        state = st.withSchedule(sched)
+        state = st.withSchedule(sched).withPinsFollowing(listOf(i to j), shift)
         autoSave()
         _ui.update { it.copy(
             messageIsError = false,
@@ -2345,7 +2351,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (changed == 0) return
         currentSchedule = sched
-        state = st.withSchedule(sched)
+        state = st.withSchedule(sched).withPinsFollowing(cells, shift)
         autoSave()
         _ui.update { it.copy(
             messageIsError = false,
@@ -2356,6 +2362,26 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         ) }
         logOp("I", "一括編集: ${changed}マス → ${opSy(shift)}")
         refreshCheck()
+    }
+
+    /** [#41] セル (i,j) の手動固定を付ける（いまの値で）／外す。採点は変わらないので検査は回さない。元に戻すで付け外しと値が一緒に戻る。 */
+    fun togglePin(i: Int, j: Int) {
+        val st = state ?: return
+        if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
+        val sched = currentSchedule ?: return
+        if (i !in sched.indices || j !in sched[i].indices) return
+        val cur = sched[i][j]
+        if (cur !in 0 until st.shiftCount) return
+        val on = st.manualPins.none { it.staff == i && it.day == j }
+        val label = if (on) "手動固定" else "手動固定を外す"
+        pushUndo(label)
+        val ns = st.withSchedule(sched).togglePin(i, j, cur)
+        state = ns
+        autoSave()
+        _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
+            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${j + 1}日を" + (if (on) "固定しました（最適化で変わりません）" else "固定から外しました"),
+                undoStack.lastOrNull()?.serial ?: 0L)).withWishDisplay(ns) }
+        logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }
 
     /** [operator_ux §5] 「なおすのを手伝って」用：ある不足枠(日×シフト)に1タップで入れられる候補職員。 */
@@ -2374,7 +2400,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             if (!p.mayPlace(i, shiftIndex)) continue
             if (sched[i][dayIndex] == shiftIndex) continue   // すでにそのシフト
             // [監査A5] 実現可能な希望のみ固定扱い（#11①整合: 不可能希望のセルはエンジン同様に可動）。
-            if (p.wishLocked(i, dayIndex) && p.wish[i][dayIndex] != shiftIndex) continue
+            if (p.wishLocked(i, dayIndex) && p.lockTo(i, dayIndex) != shiftIndex) continue
             // [3.401.0] ここまでは「担当できる・希望で固定されていない」だけの判定で、押しても必須違反が
             //   減らない候補が混ざっていた。CoverageDiagnosis(3.156.0) が「空き番」と数えるのと同じ2条件を
             //   足して、**実際に動かせる人だけ**を出す。

@@ -19,7 +19,9 @@ object FixApplyGate {
         for (op in ops) {
             if (op.staff !in work.indices || op.day !in work[op.staff].indices || op.toShift !in 0 until p.K)
                 return Outcome.Rejected("提案の範囲が今の勤務表と合いません", before, null)
-            if (p.wishLocked(op.staff, op.day) && p.wish[op.staff][op.day] != op.toShift)
+            if (p.pinned(op.staff, op.day) && p.pin[op.staff][op.day] != op.toShift)
+                return Outcome.Rejected("手動固定のセルを変える提案です", before, null)
+            if (p.wishLocked(op.staff, op.day) && p.lockTo(op.staff, op.day) != op.toShift)
                 return Outcome.Rejected("希望で固定されたセルを変える提案です", before, null)
             work[op.staff][op.day] = op.toShift
         }
