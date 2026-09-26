@@ -37,6 +37,16 @@ class RelaxTrialTextTest {
         assertTrue(t.title, t.title.startsWith("職員10 ") && t.title.endsWith("禁止の並び"))
         assertTrue(t.moveLines.isNotEmpty() && t.moveLines.all { it.contains("→") })
         assertEquals(r.moves.size, t.moveLines.sumOf { it.count { c -> c == '→' } } + t.otherMoves)
+        // 窓の外の手も全件が読める（畳むだけで隠さない）
+        assertEquals(t.otherMoves, t.otherMoveLines.sumOf { it.count { c -> c == '→' } })
+        assertTrue(t.otherMoves > 0 && t.otherMoveLines.all { (it.substringBefore("日").toInt() - 1) !in r.window })
+        assertEquals("設定を緩める候補 — 職員10 8日〜9日 禁止の並び", t.dialogTitle)
+        assertEquals("必須違反: 5件 → 4件", t.hardLine)
+        val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
+        assertEquals("変更規模: 設定 5項目・${people}人・${r.moves.size}セル", t.scaleLine)
+        assertEquals(3, t.prerequisiteRows.size)
+        assertEquals("この禁止の並びを解消できます。他の必須違反 4件 は残ります。", t.solveNote)
+        println("S6 dialog: ${t.dialogTitle} / ${t.hardLine} / ${t.scaleLine}\n  pre=${t.prerequisiteRows}\n  set=${t.rows}\n  moves=${t.moveLines}\n  other=${t.otherMoveLines}\n  keep=${t.keepNote}")
         assertEquals("設定を緩めて手順を当てました: 必須違反 5 → 4。元に戻すで設定と勤務表をまとめて戻せます。", relaxDoneLine(r.h0, r.rr))
     }
 

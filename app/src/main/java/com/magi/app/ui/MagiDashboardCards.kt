@@ -211,7 +211,8 @@ private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** [S6] 設定を緩める候補（`docs/s6_relax_trial.md` §5）。盤面は見せず手順を言葉で出し、押したときだけ当てる。 */
+/** [S6] 設定を緩める候補（`docs/s6_relax_trial.md` §5）。盤面は見せず手順を言葉で出し、押したときだけ当てる。
+ *  確定の前に全部の変更（設定・手順の全セル）を読める＝窓の外の手も畳むだけで隠さない。 */
 @Composable
 internal fun RelaxTrialDialog(
     ui: UiState,
@@ -221,25 +222,35 @@ internal fun RelaxTrialDialog(
 ) {
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
+    val t = if (token == null) null else remember(token, ui.schedule, ui.staffNames, ui.shiftSymbols) { relaxTrialText(token.result, ui) }
+    var showAll by remember(token) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("設定を緩める候補") },
+        title = { Text(t?.dialogTitle ?: "設定を緩める候補") },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (token == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
+                if (token == null || t == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
                 else {
-                    val t = remember(token, ui.schedule, ui.staffNames, ui.shiftSymbols) { relaxTrialText(token.result, ui) }
-                    Text(t.title, fontWeight = FontWeight.Bold)
-                    t.prerequisiteLead?.let { lead ->
-                        Text(lead, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    Text(RELAX_WISH_LINE, fontWeight = FontWeight.Bold)
+                    Text(t.hardLine, fontWeight = FontWeight.Bold)
+                    Text(t.scaleLine, style = small, color = cs.onSurfaceVariant)
+                    if (t.prerequisiteRows.isNotEmpty()) {
+                        Text(RELAX_PREREQ_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text(RELAX_PREREQ_WHY, style = small, color = cs.onSurfaceVariant)
                         t.prerequisiteRows.forEach { Text("・$it", style = small) }
                     }
-                    Text(t.lead, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
-                    Text("この組で解けます", style = small, color = cs.onSurfaceVariant)
+                    Text(RELAX_SET_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                    Text(t.lead, style = MaterialTheme.typography.bodyMedium)
                     t.rows.forEach { Text("・$it", style = small) }
+                    Text(t.solveNote, style = small, color = cs.onSurfaceVariant)
                     Text("手順", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                     t.moveLines.forEach { Text(it, style = small) }
-                    if (t.otherMoves > 0) Text("ほか ${t.otherMoves}セル", style = small, color = cs.onSurfaceVariant)
+                    if (t.otherMoves > 0) {
+                        if (showAll) t.otherMoveLines.forEach { Text(it, style = small) }
+                        else TextButton(onClick = { showAll = true }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("ほか ${t.otherMoves}セル（タップですべて表示）")
+                        }
+                    }
                     t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
                     Button(
                         onClick = { onConfirm(token) },

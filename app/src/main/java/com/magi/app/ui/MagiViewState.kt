@@ -307,36 +307,50 @@ internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =
     if (control.rk < control.h0) "希望を残したまま、もう一度つくるだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
 
+/** [S6] 起点の違反の呼び方（名前・日の範囲・族名）。ダイアログの題とホームの見出しが共有する。 */
+internal data class RelaxTarget(val name: String, val span: String, val what: String)
+
+internal fun relaxTarget(r: RelaxTrial.Result, ui: UiState): RelaxTarget {
+    val name = ui.staffNames.getOrNull(r.staff) ?: "職員${r.staff + 1}"
+    val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
+    val fam = listOf("c3n", "c3w", "pref", "groupViol").firstOrNull { "vio-$it" in fams } ?: "groupViol"
+    val hardDays = r.window.filter { j -> ui.violationCellFamilies[VioKey.cell(r.staff, j)].orEmpty().any { isHardCellViolation(it) } }
+    val span = if (hardDays.size > 1) "${hardDays.first() + 1}日〜${hardDays.last() + 1}日" else "${r.day + 1}日"
+    return RelaxTarget(name, span, breakdownLabels[fam] ?: fam)
+}
+
 /** [S6] 試算ダイアログの文（`docs/s6_relax_trial.md` §5）。盤面は持たない＝手順は言葉だけ。 */
 internal data class RelaxTrialText(
     val title: String,
-    val prerequisiteLead: String?,
+    val dialogTitle: String,
+    val hardLine: String,
+    val scaleLine: String,
     val prerequisiteRows: List<String>,
     val lead: String,
     val rows: List<String>,
+    val solveNote: String,
     val moveLines: List<String>,
+    val otherMoveLines: List<String>,
     val otherMoves: Int,
     val keepNote: String?,
 )
 
+internal const val RELAX_WISH_LINE = "希望: 変更しません"
+internal const val RELAX_PREREQ_HEAD = "前提として上限を上げる設定"
+internal const val RELAX_PREREQ_WHY = "いま手で置いてある勤務に合わせます（もう一度つくったときに手置きの勤務が外れないため）。"
+internal const val RELAX_SET_HEAD = "解消に使う設定"
+
 /**
  * [S6] 結果を文にする。上限の行は 0→1（上げ幅は `mayPlace` を外す最小）。当てた後の回数が 2 回以上になる行は
  * 要調整（上限超過）に数えることを添える。組は探索が見つけた十分条件＝「この組で」と言い、最小とは言わない。
+ * 手順は起点の窓の日をそのまま、窓の外は畳んで [RelaxTrialText.otherMoveLines] に全件（確定の前に全部読める）。
  */
 internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "?"
     val board = ui.schedule.map { it.toIntArray() }.toTypedArray()
     val after = RelaxTrial.applyMoves(board, r.moves) { i, j -> VioKey.cell(i, j) in ui.manualPins } ?: board
-    val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
-    val what = when {
-        "vio-c3n" in fams -> "禁止の並び"
-        "vio-c3w" in fams -> "希望の前日に禁止"
-        "vio-pref" in fams -> "希望の勤務になっていません"
-        else -> "担当できない勤務"
-    }
-    val hardDays = r.window.filter { j -> ui.violationCellFamilies[VioKey.cell(r.staff, j)].orEmpty().any { isHardCellViolation(it) } }
-    val span = if (hardDays.size > 1) "${hardDays.first() + 1}日〜${hardDays.last() + 1}日" else "${r.day + 1}日"
+    val target = relaxTarget(r, ui)
     fun row(x: RelaxTrial.Relax): String {
         val n = after.getOrNull(x.staff)?.count { it == x.shift } ?: 0
         val note = if (n > x.newHi) "（この月は ${n}回になります。要調整に数えます）" else ""
@@ -346,21 +360,27 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
         val days = board.getOrNull(x.staff)?.indices?.filter { board[x.staff][it] == x.shift }.orEmpty()
         "${row(x)}（${days.joinToString("・") { "${it + 1}日" }} に置いてあります）"
     }
-    val inWin = r.moves.filter { it.day in r.window }
-    val moveLines = inWin.groupBy { it.day }.toSortedMap().map { (d, ms) ->
-        "${d + 1}日　" + ms.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
+    fun dayLines(ms: List<RelaxTrial.Move>) = ms.groupBy { it.day }.toSortedMap().map { (d, xs) ->
+        "${d + 1}日　" + xs.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
     }
+    val (inWin, outWin) = r.moves.partition { it.day in r.window }
     val lead = if (r.prerequisite.isEmpty()) "この組で緩めると、必須違反が ${r.att}件 減る見込みです。"
         else "手で置いた勤務に合わせて上限を上げ、この組も緩めると、必須違反が ${r.att}件 減る見込みです。"
     val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、手で置いた勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
+    val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
+    val title = "${target.name} ${target.span}　${target.what}"
     return RelaxTrialText(
-        title = "${name(r.staff)} ${span}　$what",
-        prerequisiteLead = if (preRows.isEmpty()) null else "先に、手で置いた勤務に合わせて上限を上げます（上げないと、もう一度つくると外されます）",
+        title = title,
+        dialogTitle = "設定を緩める候補 — ${target.name} ${target.span} ${target.what}",
+        hardLine = "必須違反: ${r.h0}件 → ${r.rr}件",
+        scaleLine = "変更規模: 設定 ${r.prerequisite.size + r.relaxes.size}項目・${people}人・${r.moves.size}セル",
         prerequisiteRows = preRows,
         lead = lead,
         rows = r.relaxes.map(::row),
-        moveLines = moveLines,
-        otherMoves = r.moves.size - inWin.size,
+        solveNote = "この${target.what}を解消できます。" + (if (r.rr > 0) "他の必須違反 ${r.rr}件 は残ります。" else "必須違反はなくなる見込みです。"),
+        moveLines = dayLines(inWin),
+        otherMoveLines = dayLines(outWin),
+        otherMoves = outWin.size,
         keepNote = keep,
     )
 }
