@@ -313,7 +313,7 @@ object V6PortAnalyzer {
                     //   「別シフトへ固定」として capacity から外していた。実現不能な希望は凍結しない
                     //   （wishLocked の規約）ので、その職員はこの枠へ回せる。過小な capacity は
                     //   verdict を FIXABLE→INFEASIBLE へ倒し「データ上、充足不可」という**誤った断定**を生む。
-                    if (p.wishLocked(i, j) && p.wish[i][j] != k) { wishPinned.add(i); continue }   // 実現可能な希望が別シフト → この枠には回せない
+                    if (p.wishLocked(i, j) && p.lockTo(i, j) != k) { wishPinned.add(i); continue }   // 実現可能な希望が別シフト → この枠には回せない
                     capacity++
                 }
                 val verdict = if (capacity < need) CoverageVerdict.INFEASIBLE else CoverageVerdict.FIXABLE
@@ -340,7 +340,7 @@ object V6PortAnalyzer {
                         if (!p.mayPlace(i, k)) continue
                         val m = norm[i][j]
                         // [3.391.0] 上の capacity と同じ事前フィルタ＝同じ条件に揃える（wishLocked）。
-                        if (p.wishLocked(i, j) && p.wish[i][j] != k) continue   // 実現可能な希望が別シフト=capacity 対象外
+                        if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue   // 実現可能な希望が別シフト=capacity 対象外
                         if (m == k) { already++; continue }                    // 既にこのシフト=移す対象でない
                         if (c3nAt(i, j, k)) { forbid++; continue }
                         // m から1人引くと covU が増える=玉突き（多人数入替=連鎖でしか解けない）。
@@ -449,7 +449,7 @@ object V6PortAnalyzer {
                     if (norm[i][j] != k) continue   // このシフトの在勤者だけが移動候補
                     // [3.391.0] 実現不能な希望は凍結しない＝「希望固定で動かせない」と案内するのは誤り
                     //   （むしろ動かすと担当外セル=groupViol も同時に消える）。wishLocked へ統一。
-                    if (p.wishLocked(i, j) && p.wish[i][j] == k) { pinned++; pinnedIdx.add(i); continue }   // 実現可能な本人希望＝動かすとpref化
+                    if (p.wishLocked(i, j) && p.lockTo(i, j) == k) { pinned++; pinnedIdx.add(i); continue }   // 実現可能な本人希望＝動かすとpref化
                     val alts = p.allowedShiftsForStaff(i).filter { it != k }
                     if (alts.isEmpty()) { forbid++; continue }      // 担当可能な代替シフトが無い
                     var hasRoom = false; var blockedByC3n = true
@@ -617,7 +617,7 @@ object V6PortAnalyzer {
 
     /** 職員 [i] の行で「実現可能な希望どおりでない」日数（＝pref の HARD 件数）。 */
     private fun prefMissesOf(p: Problem, board: Array<IntArray>, i: Int): Int =
-        (0 until p.T).count { d -> p.wishLocked(i, d) && p.wish[i][d] != board[i][d] }
+        (0 until p.T).count { d -> p.wishFixed(i, d) && p.wish[i][d] != board[i][d] }
 
     private fun diagnoseForbiddenCell(
         state: MagiState, p: Problem, norm: Array<IntArray>, cov: Array<IntArray>,
@@ -633,7 +633,7 @@ object V6PortAnalyzer {
         //   2→1 と厳密に改善する（weighted も 14000→9000）。つまり isBetter は採用する＝固定ではない。
         //   偽の PINNED は run 全体を「構造壁」と誤診し、3.281.0 の短い停滞タイムアウトを早期に
         //   発火させうる。そこで pref の増加分を c3n の正味減と同じ土俵で勘定する。
-        val prefCost = if (p.wishLocked(i, j) && p.wish[i][j] == cur) 1 else 0
+        val prefCost = if (p.wishFixed(i, j) && p.wish[i][j] == cur) 1 else 0
         // 行 fires の正味減判定（C1DeltaPrefilter.screenCell と同じ row-local 差分・staffC3nFires を共用）。
         val row = IntArray(p.T) { norm[i][it] }
         val firesBefore = C1DeltaPrefilter.staffC3nFires(p, row)

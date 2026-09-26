@@ -298,7 +298,7 @@ internal object PersonalBalanceJointLnsPolish {
             //   書いているのに、この分岐だけ canDo を見ていなかった）。規約は Problem.wishLocked
             //   ＝実現可能な希望だけが凍結される（3.264.0 / 3.270.0 / 3.278.0 と同じ retrofit）。
             if (!p.wishLocked(staff, j)) continue
-            val w = p.wish[staff][j]
+            val w = p.lockTo(staff, j)
             if (w in 0 until p.K) {
                 forced[w]++
                 fixed++

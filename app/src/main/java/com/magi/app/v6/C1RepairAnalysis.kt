@@ -353,7 +353,7 @@ object C1RepairAnalysis {
                     assignDay(dayIdx + 1, onComplete); return
                 }
                 val i = m[mi]
-                val wl = if (p.wishLocked(i, d)) p.wish[i][d] else -1
+                val wl = if (p.wishLocked(i, d)) p.lockTo(i, d) else -1
                 // [3.279.0/外部レビューC1-10] 同一シフトが多重集合に複数あるとスロット単位の列挙が同値部分木を
                 //   重複探索し、node予算を浪費して不必要に exhaustive=false になっていた。同じシフト値は
                 //   職員 mi につき1回だけ試す（残り多重集合が同じ＝部分木は同値、の標準的な重複排除）。

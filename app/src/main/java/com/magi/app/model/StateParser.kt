@@ -90,13 +90,17 @@ object StateParser {
             C42Row(it.optString("g1Kigou"), it.optString("g2Kigou"), it.optString("s1Kigou"), it.optString("s2Kigou"))
         }
         val cons3w = o.optJSONArray("cons3w").mapObjects("cons3w") { C3wRow(it.optString("wishKigou"), it.optString("prevKigou")) }
+        // [#41] 無いキー＝手動固定なし（古いデータはそのまま開く）。同じセルが重なれば後の行を採る。
+        val manualPins = o.optJSONArray("manualPins").mapObjects("manualPins") {
+            ManualPin(it.optInt("staff", -1), it.optInt("day", -1), it.optInt("shift", -1))
+        }.filter { it.staff >= 0 && it.day >= 0 && it.shift >= 0 }.associateBy { it.staff to it.day }.values.toList()
 
         // Keep unmodelled top-level keys verbatim for lossless export.
         val modelled = setOf(
             "shifts", "groups", "staff", "groupShift", "groupShiftApt", "schedule", "wishes", "staffRange",
             "needDay1", "needDay2", "cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn",
             "cons41", "cons42", "shiftColors", "startDate", "endDate", "use2Patterns",
-            "skillGroups", "cons41s", "cons42s", "cons3w"
+            "skillGroups", "cons41s", "cons42s", "cons3w", "manualPins"
         )
         val extras = HashMap<String, Any?>()
         o.keys().forEach { key -> if (key !in modelled) extras[key] = o.get(key) }
@@ -114,6 +118,7 @@ object StateParser {
             cons3 = cons3, cons3n = cons3n, cons3m = cons3m, cons3mn = cons3mn,
             cons41 = cons41, cons42 = cons42,
             skillGroups = skillGroups, cons41s = cons41s, cons42s = cons42s, cons3w = cons3w,
+            manualPins = manualPins,
             extras = extras,
         )
     }
@@ -163,6 +168,7 @@ object StateParser {
         o.put("cons41s", consArr(state.cons41s) { obj("groupKigou" to it.groupKigou, "shiftKigou" to it.shiftKigou, "l" to it.l, "u" to it.u) })
         o.put("cons42s", consArr(state.cons42s) { obj("g1Kigou" to it.g1Kigou, "g2Kigou" to it.g2Kigou, "s1Kigou" to it.s1Kigou, "s2Kigou" to it.s2Kigou) })
         o.put("cons3w", consArr(state.cons3w) { obj("wishKigou" to it.wishKigou, "prevKigou" to it.prevKigou) })
+        o.put("manualPins", consArr(state.manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
         return o.toString(2)
     }
 
@@ -221,6 +227,7 @@ object StateParser {
         o.put("cons41s", consArr(state.cons41s) { obj("groupKigou" to it.groupKigou, "shiftKigou" to it.shiftKigou, "l" to it.l, "u" to it.u) })
         o.put("cons42s", consArr(state.cons42s) { obj("g1Kigou" to it.g1Kigou, "g2Kigou" to it.g2Kigou, "s1Kigou" to it.s1Kigou, "s2Kigou" to it.s2Kigou) })
         o.put("cons3w", consArr(state.cons3w) { obj("wishKigou" to it.wishKigou, "prevKigou" to it.prevKigou) })
+        o.put("manualPins", consArr(state.manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
         for ((k, v) in state.extras) if (!o.has(k)) o.put(k, v)
         return o.toString(2)
     }

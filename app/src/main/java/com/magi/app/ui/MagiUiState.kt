@@ -104,7 +104,8 @@ data class UiState(
     val violationFamilyColorHex: Map<String, String> = emptyMap(),
     val schedule: List<List<Int>> = emptyList(),
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
-    val lockedWishKeys: Set<String> = emptySet(),   // [S5] wishLocked の希望のキー（試算できる希望）
+    val lockedWishKeys: Set<String> = emptySet(),   // [S5] 試算できる希望のキー（実現可能で手動固定でない）
+    val manualPins: Set<String> = emptySet(),       // [#41] 手動固定のセル "i,j"
     val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
     val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
@@ -178,9 +179,10 @@ data class PinTargetView(
 /** 操作の通知。[undoSerial] はその操作が積んだ元に戻すの段（通知から戻すのはこの段が先頭のときだけ）。 */
 data class OpNotice(val id: Long, val text: String, val undoSerial: Long)
 
-/** 希望の表示（希望・試算できる希望・希望どうしの衝突）を設定から作り直す。報告の反映と元に戻す/やり直すで共有する。 */
+/** 希望の表示（希望・試算できる希望・希望どうしの衝突・手動固定）を設定から作り直す。報告の反映と元に戻す/やり直すで共有する。 */
 internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState = copy(
     wishes = st.wishes,
+    manualPins = st.manualPins.mapTo(HashSet()) { VioKey.cell(it.staff, it.day) },
     lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
     wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
 )

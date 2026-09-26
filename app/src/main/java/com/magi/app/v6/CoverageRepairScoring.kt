@@ -22,7 +22,7 @@ internal object CoverageRepairScoring {
         var bestScore = Int.MAX_VALUE
         for (i in 0 until p.S) {
             if (!p.mayPlace(i, k)) continue
-            if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
+            if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue
             val old = schedule[i][j]
             if (old == k) continue   // [監査#3] 既就業者はスキップ（旧: return で当該(日,シフト)の充填全体が中断していた）
             val hi = p.rangeHi[i][k]

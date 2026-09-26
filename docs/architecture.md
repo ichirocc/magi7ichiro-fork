@@ -85,13 +85,13 @@ MagiRoot（唯一の合成ルート）
 ### ドメイン・データ（model）
 | Entity | type | 役割 |
 |---|---|---|
-| `MagiState` | Domain-Model | ドメイン状態＝**JSON 入出力スキーマ**（shifts/groups/staff/cons1..42/wishes/staffRange/shiftColors） |
+| `MagiState` | Domain-Model | ドメイン状態＝**JSON 入出力スキーマ**（shifts/groups/staff/cons1..42/wishes/staffRange/manualPins/shiftColors）。手動固定の付け外し・追従は `togglePin`/`withPinsFollowing`（backlog #41） |
 | `StateParser` | IO-JSON | JSON ↔ `MagiState` の解析・直列化 |
 
 ### 最適化エンジン（v6）
 | Entity | type | 役割 |
 |---|---|---|
-| `Problem` | Engine-Model | `MagiState` から構築する最適化問題（次元・制約・重み） |
+| `Problem` | Engine-Model | `MagiState` から構築する最適化問題（次元・制約・重み）。盤面へ書く経路の縛り＝`wishLocked`/`lockTo`（手動固定＞実現可能な希望、backlog #41）、希望の意味＝`wishFixed` |
 | `V6NativeOptimizer` | Engine-Core | **主最適化器**。SA + ALNS + GLS + Tabu + Path Relinking を統括、最良解を研磨（約70KB） |
 | `SaOptimizer` | Engine-SA | 焼きなまし（Metropolis 基準）本体 |
 | `Evaluator` / `DeltaEvaluator` | Engine-Scoring | 違反スコアの計算 / 差分評価（高速化） |

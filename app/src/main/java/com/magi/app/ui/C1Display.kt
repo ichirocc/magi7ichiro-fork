@@ -3,6 +3,7 @@ package com.magi.app.ui
 import com.magi.app.v6.Problem
 import com.magi.app.v6.canDo
 import com.magi.app.v6.mayPlace
+import com.magi.app.v6.lockTo
 import com.magi.app.v6.wishLocked
 
 // ===== 期間の制約（c1）の表示専用の印 =====
@@ -23,7 +24,7 @@ data class C1Shortage(
 
 /** セル (i,d) を [k] に変えられるか。最適化器と同じ基準（希望固定なら希望どおりだけ、それ以外は mayPlace）。 */
 internal fun c1Changeable(p: Problem, i: Int, d: Int, k: Int): Boolean =
-    if (p.wishLocked(i, d)) p.wish[i][d] == k else p.mayPlace(i, k)
+    if (p.wishLocked(i, d)) p.lockTo(i, d) == k else p.mayPlace(i, k)
 
 /** 盤面 [s] の期間の制約の不足区間。窓の数え方はチェッカー（担当不可の職員は対象外）と同じ。 */
 internal fun c1Shortages(p: Problem, s: Array<IntArray>): List<C1Shortage> {

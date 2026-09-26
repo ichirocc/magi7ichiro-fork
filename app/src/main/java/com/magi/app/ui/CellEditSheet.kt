@@ -20,6 +20,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.Button
@@ -82,6 +84,7 @@ internal fun CellEditSheet(
     val canDoSet = allowed.ifEmpty { ui.shiftSymbols.indices.toSet() }
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
+    val pinned = VioKey.cell(i, j) in ui.manualPins
     var mode by remember { mutableIntStateOf(0) } // 0=割当, 1=希望（セルを移っても保つ）
     val name = ui.staffNames.getOrNull(i) ?: i.toString()
     fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
@@ -198,7 +201,7 @@ internal fun CellEditSheet(
                             style = MaterialTheme.typography.bodyMedium, fontWeight = if (selSeg) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
-                val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）"
+                val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・固定中" else "")
                 Text(wishText + (if (countLine.isNotEmpty()) "　回数 $countLine" else ""), style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
@@ -237,10 +240,17 @@ internal fun CellEditSheet(
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 閉じるは利き手の側（右手＝右、左手＝左）。0=閉じる, 1=希望を取り消す
+                // 閉じるは利き手の側（右手＝右、左手＝左）。0=閉じる, 1=［割当］では手動固定の付け外し／［希望］では希望を取り消す
                 for (b in if (leftHand) listOf(0, 1) else listOf(1, 0)) when (b) {
                     0 -> FilledTonalButton(onClick = onDismiss, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("閉じる") }
-                    else -> if (mode == 1 && wish != null) {
+                    else -> if (mode == 0 && current >= 0) {
+                        OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Board.TogglePin(i, j)) },
+                            modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
+                            Icon(if (pinned) Icons.Outlined.LockOpen else Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.size(6.dp))
+                            Text(if (pinned) "固定を外す" else "固定する", maxLines = 1)
+                        }
+                    } else if (mode == 1 && wish != null) {
                         OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                             Text("希望を取り消す", color = cs.error, maxLines = 1)

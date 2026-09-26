@@ -217,7 +217,7 @@ internal object EliteIntegrationPolish {
         for ((i, j) in diffs) {
             if (stopped(shouldStop, deadlineMs)) break
             val k = target.schedule[i][j]
-            if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
+            if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue
             if (!p.mayPlace(i, k)) continue
             current[i][j] = k
             val report = UnifiedViolationChecker.check(state, current)
@@ -276,7 +276,7 @@ internal object EliteIntegrationPolish {
             val seen = HashMap<Long, MutableList<Array<IntArray>>>()
             for (node in beam) {
                 for (k in values) {
-                    if (p.wishLocked(i, j) && p.wish[i][j] != k) continue
+                    if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue
                     if (!p.mayPlace(i, k)) continue
                     val changed = if (node.schedule[i][j] == k) node.changed else node.changed + 1
                     val schedule = node.schedule.copy2D()
@@ -309,7 +309,7 @@ internal object EliteIntegrationPolish {
      * `wishLocked` 判定だけでは、端点の採用と崩れたエリートを起点にした relink から希望の崩れが持ち込まれる。
      */
     private fun pinsHold(p: Problem, root: Array<IntArray>, s: Array<IntArray>, wishPinStrict: Boolean): Boolean =
-        !exactPinRegression(p, root, s) && (!wishPinStrict || p.keepsWishPins(root, s))
+        !exactPinRegression(p, root, s) && p.keepsWishPins(root, s, wishPinStrict)
 
     /**
      * ビーム中間ノードの許容幅。[baseline] は**呼出時点の現在最良**（`fuseGroup` の

@@ -47,7 +47,7 @@ internal object CovOReliefPolish {
                 var pinned = 0; var noRoom = 0; var worse = 0
                 for (i in 0 until p.S) {
                     if (work[i][j] != k) continue
-                    if (p.wishLocked(i, j) && p.wish[i][j] == k) { pinned++; continue }
+                    if (p.wishLocked(i, j) && p.lockTo(i, j) == k) { pinned++; continue }
                     var tried = false
                     for (m in p.allowedShiftsForStaff(i)) {
                         if (m == k || p.makesForbiddenRun(work, i, j, m)) continue

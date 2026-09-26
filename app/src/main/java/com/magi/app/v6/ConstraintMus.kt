@@ -99,7 +99,7 @@ object ConstraintMus {
                 val hi = p.rangeHi[i][k]
                 if (hi != Int.MAX_VALUE) universe.add(RangeCap(i, k, hi))
             }
-            for (j in 0 until p.T) if (p.wishLocked(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
+            for (j in 0 until p.T) if (p.wishFixed(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
             if (universe.isEmpty()) continue
             if (!staffProvablyInfeasible(p, allowed, universe)) continue
             val core = shrink(universe) { staffProvablyInfeasible(p, allowed, it) }
@@ -121,7 +121,7 @@ object ConstraintMus {
                 if (eff > 0) universe.add(DayNeed(j, k, eff))
             }
             if (universe.none { it is DayNeed }) continue
-            for (i in 0 until p.S) if (p.wishLocked(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
+            for (i in 0 until p.S) if (p.wishFixed(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
             if (!dayProvablyInfeasible(p, universe)) continue
             val core = shrink(universe) { dayProvablyInfeasible(p, it) }
             if (core.isNotEmpty()) out.add(DayConflict(j, core))

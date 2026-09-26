@@ -95,6 +95,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
@@ -1603,13 +1604,15 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             // [希望バッジ] 未反映（割付≠希望）のときは希望シフトの記号をバッジでセルに重ねる
                             //   （旧: 桃ドットのみで「何を希望していたか」が編集シートを開かないと分からなかった）。
                             val wishSym = if (wkk == 2) ui.wishes["$i,$d"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "" else ""
+                            val cellPinned = VioKey.cell(i, d) in ui.manualPins
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・絶対NG" else if (vk >= 2) "・できれば直す" else "") +
-                                (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") + "、タップで変更"
+                                (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") +
+                                (if (cellPinned) "・手動固定" else "") + "、タップで変更"
                             // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
                             val cellVioC = vioCls.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
                             val secondC = vs.cellSecond.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing, band = if (vs.c1Band.getOrNull(i)?.getOrNull(d) == true) vioSoftColor.copy(alpha = 0.45f) else null) { tapped = i to d; onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing, pinned = cellPinned, band = if (vs.c1Band.getOrNull(i)?.getOrNull(d) == true) vioSoftColor.copy(alpha = 0.45f) else null) { tapped = i to d; onCellClick(i, d) }
                         }
                     }
                 }
@@ -1655,7 +1658,7 @@ private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
     bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false,
     symSize: androidx.compose.ui.unit.TextUnit = 15.sp, focused: Boolean = false, wishSym: String = "",
-    plainBorder: Boolean = false, secondDot: Color? = null, editing: Boolean = false, band: Color? = null, onClick: () -> Unit,
+    plainBorder: Boolean = false, secondDot: Color? = null, editing: Boolean = false, pinned: Boolean = false, band: Color? = null, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     // 期間の制約の帯＝セルの下端に細い線。隣の日と途切れないようセルの余白の外まで引く。
@@ -1719,6 +1722,12 @@ private fun FlatCell(
                         .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)
                         .then(if (wk == 2) Modifier.background(MagiAccent.pink, RoundedCornerShape(50)) else Modifier.border(2.5.dp, cs.tertiary, RoundedCornerShape(50))),
                 )
+            }
+            // [#41] 手動固定＝右下の小さな錠（希望の印は左下の丸・バッジ＝位置と形で区別）。
+            if (pinned) {
+                Icon(Icons.Filled.Lock, contentDescription = null, tint = cs.onSurface,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(1.dp).size(MagiMarks.pinLock)
+                        .background(cs.surface, CircleShape).padding(1.dp))
             }
         }
     }

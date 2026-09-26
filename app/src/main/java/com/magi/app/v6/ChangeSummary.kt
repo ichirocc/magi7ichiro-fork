@@ -28,7 +28,7 @@ data class ChangeSummary(
                 if (c > 0) { staff++; cells += c }
             }
             var wishTotal = 0; var wishKept = 0
-            for (i in 0 until p.S) for (j in 0 until p.T) if (p.wishLocked(i, j)) { wishTotal++; if (after.getOrNull(i)?.getOrNull(j) == p.wish[i][j]) wishKept++ }
+            for (i in 0 until p.S) for (j in 0 until p.T) if (p.wishFixed(i, j)) { wishTotal++; if (after.getOrNull(i)?.getOrNull(j) == p.wish[i][j]) wishKept++ }
             val rangeOk = (report.breakdown["low"] ?: 0) == 0 && (report.breakdown["high"] ?: 0) == 0
             val deltas = familyDeltas(beforeReport ?: UnifiedViolationChecker.check(state, before), report)
             return ChangeSummary(staff, cells, wishKept, wishTotal, rangeOk, deltas)

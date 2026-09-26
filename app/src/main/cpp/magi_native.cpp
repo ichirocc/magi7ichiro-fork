@@ -20,81 +20,82 @@
 // - c3RunMode=true 固定（Evaluator の既定と同じ。非forbidden 単一シフト連は run-deficit）。
 
 // ===== TOC（自動生成: tools/native/gen_toc.py。コード改修時は再実行して更新） =====
-//  L  102  fn     jround
-//  L  104  struct C1r
-//  L  105  struct C2r
-//  L  106  struct C41r
-//  L  107  struct C42r
-//  L  113  fn     c42PairCount
-//  L  118  fn     c2Amount
-//  L  122  fn     rangeDistance
-//  L  125  struct C3r
-//  L  126  struct C3wr
-//  L  128  struct MagiProblem
-//  L  219  fn     consIndicesValidN
-//  L  252  fn     weeklyDevOfBucket
-//  L  265  fn     fairDevOfBucket
-//  L  307  fn     rowDeficit
-//  L  324  fn     c3check
-//  L  360  fn     fullEvalParts
-//  L  567  const  SCORE_HARD_UNIT
-//  L  570  const  ACCEPT_REJECT_DELTA
-//  L  572  fn     fullEvalCombined
-//  L  583  struct SaChunk
-//  L  876  fn     wishLockedN
-//  L  881  fn     runSaChunk
-//  L 1014  struct LahcState
-//  L 1033  fn     runLahcChunk
-//  L 1158  fn     collectViolationCells
-//  L 1261  struct GlsPenaltyN
-//  L 1306  fn     glsAcceptN
-//  L 1324  fn     rnInt
-//  L 1332  fn     weeklyMarginalN
-//  L 1350  fn     fairMarginalN
-//  L 1365  fn     reservoirTieN
-//  L 1379  fn     staffCountPenaltyAtN
-//  L 1390  fn     randomAllowedCellN
-//  L 1401  fn     destroyRepairDayAtN
-//  L 1476  fn     destroyRepairStaffAtN
-//  L 1535  fn     destroyRepairViolationsN
-//  L 1581  struct Fix
-//  L 1583  fn     findCovOFixN
-//  L 1610  fn     findC2FixN
-//  L 1627  fn     findRangeLowFixN
-//  L 1651  fn     findRangeHighFixN
-//  L 1682  fn     findC41FamFixN
-//  L 1715  fn     findC3WantFixN
-//  L 1745  fn     findAptFixN
-//  L 1777  fn     findTargetedFixN
-//  L 1802  fn     coverageShortageCostN
-//  L 1810  fn     bestStaffForCoverageN
-//  L 1825  fn     hf67HardRepairN
-//  L 1898  fn     rouletteSelectN
-//  L 1906  fn     thompsonSelectN
-//  L 1920  fn     greatDelugeLevelN
-//  L 1929  struct AlnsState
-//  L 1972  fn     runAlnsChunk
-//  L 2169  struct PolishState
-//  L 2192  fn     polishAcceptN
-//  L 2202  fn     runPolishChunk
-//  L 2314  fn     readIntArray
-//  L 2325  JNI    nativeAbiVersion
-//  L 2332  JNI    nativeAlnsCreate
-//  L 2346  JNI    nativeAlnsDestroy
-//  L 2352  JNI    nativeAlnsChunk
-//  L 2366  JNI    nativeAlnsRead
-//  L 2378  JNI    nativePolishCreate
-//  L 2391  JNI    nativePolishDestroy
-//  L 2397  JNI    nativePolishChunk
-//  L 2410  JNI    nativePolishRead
-//  L 2422  JNI    nativeLahcCreate
-//  L 2435  JNI    nativeLahcDestroy
-//  L 2441  JNI    nativeLahcChunk
-//  L 2454  JNI    nativeLahcRead
-//  L 2468  JNI    nativeSaChunk
-//  L 2498  JNI    nativeCreateProblem
-//  L 2651  JNI    nativeDestroyProblem
-//  L 2657  JNI    nativeFullEval
+//  L  103  fn     jround
+//  L  105  struct C1r
+//  L  106  struct C2r
+//  L  107  struct C41r
+//  L  108  struct C42r
+//  L  114  fn     c42PairCount
+//  L  119  fn     c2Amount
+//  L  123  fn     rangeDistance
+//  L  126  struct C3r
+//  L  127  struct C3wr
+//  L  129  struct MagiProblem
+//  L  221  fn     consIndicesValidN
+//  L  254  fn     weeklyDevOfBucket
+//  L  267  fn     fairDevOfBucket
+//  L  309  fn     rowDeficit
+//  L  326  fn     c3check
+//  L  362  fn     fullEvalParts
+//  L  569  const  SCORE_HARD_UNIT
+//  L  572  const  ACCEPT_REJECT_DELTA
+//  L  574  fn     fullEvalCombined
+//  L  585  struct SaChunk
+//  L  879  fn     wishLockedN
+//  L  886  fn     lockToN
+//  L  892  fn     runSaChunk
+//  L 1025  struct LahcState
+//  L 1044  fn     runLahcChunk
+//  L 1169  fn     collectViolationCells
+//  L 1272  struct GlsPenaltyN
+//  L 1317  fn     glsAcceptN
+//  L 1335  fn     rnInt
+//  L 1343  fn     weeklyMarginalN
+//  L 1361  fn     fairMarginalN
+//  L 1376  fn     reservoirTieN
+//  L 1390  fn     staffCountPenaltyAtN
+//  L 1401  fn     randomAllowedCellN
+//  L 1412  fn     destroyRepairDayAtN
+//  L 1487  fn     destroyRepairStaffAtN
+//  L 1546  fn     destroyRepairViolationsN
+//  L 1592  struct Fix
+//  L 1594  fn     findCovOFixN
+//  L 1621  fn     findC2FixN
+//  L 1638  fn     findRangeLowFixN
+//  L 1662  fn     findRangeHighFixN
+//  L 1693  fn     findC41FamFixN
+//  L 1726  fn     findC3WantFixN
+//  L 1756  fn     findAptFixN
+//  L 1788  fn     findTargetedFixN
+//  L 1813  fn     coverageShortageCostN
+//  L 1821  fn     bestStaffForCoverageN
+//  L 1836  fn     hf67HardRepairN
+//  L 1911  fn     rouletteSelectN
+//  L 1919  fn     thompsonSelectN
+//  L 1933  fn     greatDelugeLevelN
+//  L 1942  struct AlnsState
+//  L 1985  fn     runAlnsChunk
+//  L 2182  struct PolishState
+//  L 2205  fn     polishAcceptN
+//  L 2215  fn     runPolishChunk
+//  L 2327  fn     readIntArray
+//  L 2338  JNI    nativeAbiVersion
+//  L 2345  JNI    nativeAlnsCreate
+//  L 2359  JNI    nativeAlnsDestroy
+//  L 2365  JNI    nativeAlnsChunk
+//  L 2379  JNI    nativeAlnsRead
+//  L 2391  JNI    nativePolishCreate
+//  L 2404  JNI    nativePolishDestroy
+//  L 2410  JNI    nativePolishChunk
+//  L 2423  JNI    nativePolishRead
+//  L 2435  JNI    nativeLahcCreate
+//  L 2448  JNI    nativeLahcDestroy
+//  L 2454  JNI    nativeLahcChunk
+//  L 2467  JNI    nativeLahcRead
+//  L 2481  JNI    nativeSaChunk
+//  L 2511  JNI    nativeCreateProblem
+//  L 2672  JNI    nativeDestroyProblem
+//  L 2678  JNI    nativeFullEval
 // ===== TOC end =====
 
 namespace {
@@ -133,6 +134,7 @@ struct MagiProblem {
     std::vector<int> sgrp, ssk;              // S
     std::vector<uint8_t> canDo;              // S*K
     std::vector<int> wish;                   // S*T (-1 = none)
+    std::vector<int> pin;                    // S*T (-1 = none)。空＝手動固定なし（#41。採点は読まない）
     std::vector<int> need1, need2;           // K*T (-1 = none)
     std::vector<int> rangeLo, rangeHi, apt;  // S*K
     std::vector<C1r> cons1;
@@ -873,9 +875,18 @@ struct SaChunk {
 // status: 0=OK / 1=cur整合性NG / 2=best整合性NG（いずれもKotlin側で破棄・退化）。
 // [3.334.0] 実現可能な希望が入ったセルか（Kotlin `Problem.wishLocked` と同義）。
 //   SA/LAHC の近傍と修復オペレータの両方から使うので、SA の手前で定義する。
+// [#41] 手動固定も縛る（Kotlin `Problem.wishLocked`＝手動固定または実現可能な希望）。縛る値は lockToN。
 inline bool wishLockedN(const MagiProblem& p, int i, int j) {
-    int w = p.wish[(size_t)i * p.T + j];
+    const size_t idx = (size_t)i * p.T + j;
+    if (!p.pin.empty() && p.pin[idx] >= 0) return true;
+    int w = p.wish[idx];
     return w >= 0 && p.cd(i, w);
+}
+// [#41] 縛るセルの値＝手動固定の値、無ければ希望（Kotlin `Problem.lockTo`）。
+inline int lockToN(const MagiProblem& p, int i, int j) {
+    const size_t idx = (size_t)i * p.T + j;
+    if (!p.pin.empty() && p.pin[idx] >= 0) return p.pin[idx];
+    return p.wish[idx];
 }
 
 void runSaChunk(const MagiProblem& p, int* cur, int* best, long long bestScoreIn,
@@ -1811,7 +1822,7 @@ inline int bestStaffForCoverageN(const MagiProblem& p, const int* a, const std::
     int bestI = -1, bestScore = INT32_MAX;
     for (int i = 0; i < p.S; i++) {
         if (!p.pl(i, k)) continue;
-        if (wishLockedN(p, i, j) && p.wish[(size_t)i * p.T + j] != k) continue;
+        if (wishLockedN(p, i, j) && lockToN(p, i, j) != k) continue;
         int old = a[(size_t)i * p.T + j];
         if (old == k) continue;
         int hi = p.rangeHi[(size_t)i * p.K + k];
@@ -1830,14 +1841,16 @@ int hf67HardRepairN(const MagiProblem& p, int* a, std::mt19937_64& rng) {
         const auto& allowed = p.allowed[i];
         int fallback = allowed.empty() ? 0 : allowed[0];
         for (int j = 0; j < T; j++) {
+            if (!p.pin.empty() && p.pin[(size_t)i * T + j] >= 0) { a[(size_t)i * T + j] = p.pin[(size_t)i * T + j]; continue; }   // [#41] 手動固定が勝つ
             int k = a[(size_t)i * T + j];
             if (k < 0 || k >= K || !p.cd(i, k)) a[(size_t)i * T + j] = fallback;
         }
     }
-    // 実現可能な希望を適用（不可能希望は強制しない=Sanityの領分）。
+    // 実現可能な希望を適用（不可能希望は強制しない=Sanityの領分。手動固定は希望より強い）。
     for (int i = 0; i < S; i++) for (int j = 0; j < T; j++) {
-        int w = p.wish[(size_t)i * T + j];
-        if (w >= 0 && w < K && p.cd(i, w) && a[(size_t)i * T + j] != w) { a[(size_t)i * T + j] = w; changed++; }
+        if (!wishLockedN(p, i, j)) continue;
+        int w = lockToN(p, i, j);
+        if (a[(size_t)i * T + j] != w) { a[(size_t)i * T + j] = w; changed++; }
     }
     // 被覆不足の充填 ×3周（counts は周の頭で再計算・周内は Kotlin と同じく据え置き）。
     for (int rep = 0; rep < 3; rep++) {
@@ -2583,6 +2596,14 @@ Java_com_magi_app_v6_NativeBridge_nativeCreateProblem(
     for (int r = 0; r < n42s; r++) { C42r c{next(), next(), next(), next()}; p->cons42s.push_back(c); }
     int n3w = takeCount(2);
     for (int r = 0; r < n3w; r++) { C3wr c{next(), next()}; p->cons3w.push_back(c); }
+    // [#41] 手動固定 [nPin,(i,j,k)*]。範囲外はハンドル生成ごと拒否（Kotlin へ安全退化）。
+    int nPin = takeCount(3);
+    for (int r = 0; r < nPin && parseOk; r++) {
+        int pi = next(), pj = next(), pk = next();
+        if (pi < 0 || pi >= S || pj < 0 || pj >= T || pk < 0 || pk >= K) { parseOk = false; break; }
+        if (p->pin.empty()) p->pin.assign((size_t)S * T, -1);
+        p->pin[(size_t)pi * T + pj] = pk;
+    }
     if (!parseOk) { delete p; return 0; }
     // [3.409.23/監査G3] 群 index が負・シフト index が範囲外の制約行はハンドル生成ごと拒否する
     //   （0=native 不可→Kotlin へ安全退化＝sgrp/ssk 検証と同じ確立済みの契約）。判定は

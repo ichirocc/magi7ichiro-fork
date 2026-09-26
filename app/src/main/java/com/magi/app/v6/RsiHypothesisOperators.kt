@@ -190,7 +190,7 @@ internal object RsiHypothesisOperators {
                         //   固定扱いにしていた。pref は実現可能な希望しか数えない（MirrorCore）ので、
                         //   その場合ここを動かしても pref は増えず、逆に担当外セル＝groupViol(10000) が消える
                         //   ＝**必須違反が厳密に減る手を丸ごと捨てていた**。規約の wishLocked へ統一（3.351.0 と同型）。
-                        if (p.wishLocked(i, j) && p.wish[i][j] == k) continue   // 実現可能な本人希望＝動かすとpref未充足化
+                        if (p.wishLocked(i, j) && p.lockTo(i, j) == k) continue   // 実現可能な本人希望＝動かすとpref未充足化
                         for (m in p.allowedShiftsForStaff(i).filter { it != k }) {
                             if (!p.wishMoveAllowed(i, j, k, m, wishPinStrict)) continue   // 未反映の希望固定セルは希望へだけ
                             if (p.makesForbiddenRun(sched, i, j, m)) {
@@ -260,7 +260,7 @@ internal object RsiHypothesisOperators {
                     val candidates = ArrayList<List<IntArray>>()
                     for (i in onShift) {
                         // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。上の applyCovOFree と同型。
-                        if (p.wishLocked(i, j) && p.wish[i][j] == c.shiftIdx) continue   // 実現可能な本人希望＝対象外
+                        if (p.wishLocked(i, j) && p.lockTo(i, j) == c.shiftIdx) continue   // 実現可能な本人希望＝対象外
                         for (m in p.allowedShiftsForStaff(i).filter { it != c.shiftIdx }) {
                             if (!p.wishMoveAllowed(i, j, c.shiftIdx, m, wishPinStrict)) continue
                             if (p.makesForbiddenRun(sched, i, j, m)) continue
@@ -285,7 +285,7 @@ internal object RsiHypothesisOperators {
                     for (i in offShift) {
                         val old = sched[i][j]
                         // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。
-                        if (old !in 0 until p.K || (p.wishLocked(i, j) && p.wish[i][j] == old)) continue   // 現シフトが実現可能な本人希望＝対象外
+                        if (old !in 0 until p.K || (p.wishLocked(i, j) && p.lockTo(i, j) == old)) continue   // 現シフトが実現可能な本人希望＝対象外
                         if (!p.wishMoveAllowed(i, j, old, c.shiftIdx, wishPinStrict)) continue
                         if (p.makesForbiddenRun(sched, i, j, c.shiftIdx)) continue
                         candidates.add(listOf(intArrayOf(i, j, c.shiftIdx)))
@@ -338,7 +338,7 @@ internal object RsiHypothesisOperators {
         fun gatherSide(candidates: List<Int>, j: Int, fromShift: Int, out: ArrayList<List<IntArray>>) {
             for (i in candidates) {
                 // [3.391.0] 実現不能な希望は固定しない（wishLocked へ統一）。
-                if (p.wishLocked(i, j) && p.wish[i][j] == fromShift) continue   // 実現可能な本人希望＝対象外
+                if (p.wishLocked(i, j) && p.lockTo(i, j) == fromShift) continue   // 実現可能な本人希望＝対象外
                 for (m in p.allowedShiftsForStaff(i).filter { it != fromShift }) {
                     if (!p.wishMoveAllowed(i, j, fromShift, m, wishPinStrict)) continue
                     if (p.makesForbiddenRun(sched, i, j, m)) continue

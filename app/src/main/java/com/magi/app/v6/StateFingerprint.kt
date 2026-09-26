@@ -11,7 +11,7 @@ import com.magi.app.model.MagiState
  *  - 背景で走らせた最適化の結果を当ててよいかの照合。実行中に別のデータを開く・取り込むと、
  *    結果が別の入力に対して計算されたものになる。
  *
- * **意図的に読まないフィールド**（`MagiState` の26個のうちこの3つだけ。残り23個は全部読む）:
+ * **意図的に読まないフィールド**（`MagiState` の27個のうちこの3つだけ。残り24個は全部読む）:
  *  - `schedule`＝盤面。診断は「この盤面のもの」を盤面ハッシュで別に見ており、結果の適用では
  *    盤面が変わるのは当然。ここに混ぜると結果の照合が必ず不一致になって使えなくなる。
  *  - `shiftColors`＝表示色。エンジンに影響しない。
@@ -58,6 +58,10 @@ object StateFingerprint {
             mix(4); for (c in fam) { txt(c.g1Kigou); txt(c.g2Kigou); txt(c.s1Kigou); txt(c.s2Kigou) }
         }
         mix(5); for (c in st.cons3w) { txt(c.wishKigou); txt(c.prevKigou) }
+        // [#41] 手動固定。無いときは混ぜない（固定の無いデータの指紋は従来と同じ値）。
+        if (st.manualPins.isNotEmpty()) {
+            mix(6); for (m in st.manualPins.sortedWith(compareBy({ it.staff }, { it.day }))) { mix(m.staff.toLong()); mix(m.day.toLong()); mix(m.shift.toLong()) }
+        }
         return h
     }
 }

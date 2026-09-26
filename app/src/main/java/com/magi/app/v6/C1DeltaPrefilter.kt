@@ -64,7 +64,7 @@ object C1DeltaPrefilter {
         if (!p.canDo(staff, newShift)) delta++
         if (old in 0 until p.K && !p.canDo(staff, old)) delta--
         // pref: 実現可能希望の未充足（checker と同一）。既に違反中なら別シフトへ変えても不変（C1-02）。
-        if (p.wishLocked(staff, day)) {
+        if (p.wishFixed(staff, day)) {
             val w = p.wish[staff][day]
             delta += (if (newShift != w) 1 else 0) - (if (old != w) 1 else 0)
         }

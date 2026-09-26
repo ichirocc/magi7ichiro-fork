@@ -70,6 +70,10 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
     /** wish[i][j] = desired shift index, or -1. */
     val wish: Array<IntArray> = Array(S) { IntArray(T) { -1 } }
 
+    /** [#41] pin[i][j] = 手動固定の値, or -1。最適化器はこのセルを書き換えない（`wishLocked`/`lockTo` が読む）。採点は見ない。 */
+    val pin: Array<IntArray> = Array(S) { IntArray(T) { -1 } }
+    val hasPins: Boolean
+
     /** need1[k][j] / need2[k][j] = required count, or -1 (= no requirement). */
     val need1: Array<IntArray>
     val need2: Array<IntArray>
@@ -130,7 +134,7 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
     val cons41s: List<C41>
     val cons42s: List<C42>
     val cons3w: List<C3w>
-    /** [3.542.0] c3wBan[i][j][k] = 翌日 j+1 が希望固定（wishLocked）の X で、cons3w に (X→k) がある＝セル (i,j) に k を置くと違反。
+    /** [3.542.0] c3wBan[i][j][k] = 翌日 j+1 が希望固定（wishFixed）の X で、cons3w に (X→k) がある＝セル (i,j) に k を置くと違反。
      *  希望は探索中に動かないので盤面非依存の静的表。cons3w が空なら null（評価・Δの分岐を無料にする）。 */
     val c3wBan: Array<Array<BooleanArray>>?
 
@@ -144,6 +148,9 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val j = p.getOrNull(1)?.toIntOrNull() ?: continue
             if (i in 0 until S && j in 0 until T) wish[i][j] = v
         }
+        var pins = 0
+        for (m in state.manualPins) if (m.staff in 0 until S && m.day in 0 until T && m.shift in 0 until K) { pin[m.staff][m.day] = m.shift; pins++ }
+        hasPins = pins > 0
 
         need1 = Array(K) { IntArray(T) { -1 } }
         need2 = Array(K) { IntArray(T) { -1 } }
@@ -417,8 +424,7 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             //   範囲外セルについて直したのと同じ取り違えが、その1行上に残っていた。-1 へ倒して
             //   下の穴埋めに合流させる。
             var k = state.schedule.getOrNull(i)?.getOrNull(j) ?: -1
-            val w = wish[i][j]
-            if (w >= 0 && canDo(i, w)) k = w
+            if (wishLocked(i, j)) k = lockTo(i, j)
             // [3.410.0/P-01] 旧: 範囲外セルをハードコードの 0 へ寄せていた。0 が休とは限らない
             //   （休が先頭でないデータでは**勤務シフトへ化ける**）。
             // [3.419.0] さらに、寄せ先の `restIdx` を**この職員が担当できるか見ていなかった**＝

@@ -351,7 +351,7 @@ internal object C1JointLnsPolish {
         dp[0][0] = 0
         for (day in 0 until p.T) {
             val next = Array(hi + 1) { IntArray(maskLimit) { inf } }
-            val wished = p.wish[staff][day]
+            val wished = p.lockTo(staff, day)
             val locked = p.wishLocked(staff, day)
             val minBit = if (locked) (if (wished == c.shiftIdx) 1 else 0) else 0
             val maxBit = if (locked) minBit else 1
@@ -392,7 +392,7 @@ internal object C1JointLnsPolish {
         for (start in 0 until starts) {
             var possible = 0
             for (day in start until start + d) {
-                if (!p.wishLocked(staff, day) || p.wish[staff][day] == c.shiftIdx) possible++
+                if (!p.wishLocked(staff, day) || p.lockTo(staff, day) == c.shiftIdx) possible++
             }
             if (possible < c.day2) unavoidable++
         }
@@ -616,7 +616,7 @@ internal object C1JointLnsPolish {
     }
 
     private fun allowed(p: Problem, staff: Int, day: Int, shift: Int): Boolean {
-        val wish = p.wish[staff][day]
+        val wish = p.lockTo(staff, day)
         return if (p.wishLocked(staff, day)) wish == shift else p.mayPlace(staff, shift)
     }
 

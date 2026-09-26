@@ -165,7 +165,7 @@ object V6SanityPort {
         for (i in 0 until minOf(p.S, s.size)) for (j in 0 until minOf(p.T, s[i].size)) {
             val k = s[i][j]
             if (k !in 0 until p.K || k == p.restIdx || !p.canDo(i, k) || p.rangeHi[i][k] != 0) continue
-            if (p.wishLocked(i, j) && p.wish[i][j] == k) continue
+            if (p.wishFixed(i, j) && p.wish[i][j] == k) continue
             cells += "${state.staff.getOrNull(i)?.name ?: "#$i"} ${j + 1}日「${state.shifts.getOrNull(k)?.kigou ?: "$k"}」"
         }
         if (cells.isEmpty()) return null
@@ -220,14 +220,14 @@ object V6SanityPort {
                 val d = seq.size
                 if (d == 0 || d > p.T) continue
                 for (j in 0..p.T - d) {
-                    if ((0 until d).all { l -> p.wishLocked(i, j + l) && p.wish[i][j + l] == seq[l] }) {
+                    if ((0 until d).all { l -> p.wishFixed(i, j + l) && p.wish[i][j + l] == seq[l] }) {
                         val days = (j until j + d).toList()
                         if (seen.add(i to days)) mine.add(WishSelfConflict(i, "c3n", days, seq.toList()))
                     }
                 }
             }
             if (p.c3wBan != null) for (j in 0 until p.T - 1) {
-                if (p.wishLocked(i, j) && p.c3wBanned(i, j, p.wish[i][j])) {
+                if (p.wishFixed(i, j) && p.c3wBanned(i, j, p.wish[i][j])) {
                     mine.add(WishSelfConflict(i, "c3w", listOf(j, j + 1), listOf(p.wish[i][j], p.wish[i][j + 1])))
                 }
             }
@@ -1117,7 +1117,7 @@ object V6SanityPort {
                     val t = p.aptRaw[i][k]   // [3.508.0] 6b と同じく設定した目標で判定
                     if (t < 0 || !p.canDo(i, k)) continue
                     var wished = 0
-                    for (j in 0 until p.T) if (p.wishLocked(i, j) && p.wish[i][j] == k) wished++
+                    for (j in 0 until p.T) if (p.wishFixed(i, j) && p.wish[i][j] == k) wished++
                     if (wished > t) {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」適切回数と希望",
@@ -1164,7 +1164,7 @@ object V6SanityPort {
                     val hi = p.rangeHi[i][k]
                     if (hi == Int.MAX_VALUE || !p.canDo(i, k)) continue
                     var wished = 0
-                    for (j in 0 until p.T) if (p.wishLocked(i, j) && p.wish[i][j] == k) wished++
+                    for (j in 0 until p.T) if (p.wishFixed(i, j) && p.wish[i][j] == k) wished++
                     if (wished > hi) {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と希望の衝突",
@@ -1776,7 +1776,7 @@ object V6SanityPort {
 /** [3.507.5] その日にシフト k を実際に置ける人数＝最適化器が置ける（`mayPlace`）職員＋その日の希望でそのシフトに固定された職員。
  *  3.507.0 で個人上限 0 の職員は最適化器が置かなくなったので、「担当できる人数」を canDo で数えると人員不足の必然を見落とす。 */
 private fun placeableFor(p: Problem, k: Int, j: Int): Int =
-    (0 until p.S).count { i -> p.mayPlace(i, k) || (p.wishLocked(i, j) && p.wish[i][j] == k) }
+    (0 until p.S).count { i -> p.mayPlace(i, k) || (p.wishFixed(i, j) && p.wish[i][j] == k) }
 
 private fun needDefined(p: Problem, k: Int, j: Int): Boolean =
     p.need1[k][j] >= 0 || (p.use2 && p.need2[k][j] >= 0)

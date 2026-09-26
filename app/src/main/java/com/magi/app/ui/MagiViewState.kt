@@ -327,7 +327,7 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "?"
     val board = ui.schedule.map { it.toIntArray() }.toTypedArray()
-    val after = RelaxTrial.applyMoves(board, r.moves) ?: board
+    val after = RelaxTrial.applyMoves(board, r.moves) { i, j -> VioKey.cell(i, j) in ui.manualPins } ?: board
     val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
     val what = when {
         "vio-c3n" in fams -> "禁止の並び"
