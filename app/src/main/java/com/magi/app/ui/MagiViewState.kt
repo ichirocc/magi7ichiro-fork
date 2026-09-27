@@ -215,7 +215,7 @@ internal data class InvolvedWish(val staff: Int, val day: Int, val name: String,
 
 /**
  * 必須違反に関わる希望を、名前・日付・理由つきで列挙する（職員順→日順）。関わる＝そのセルに希望違反(pref)か
- * 希望前日の禁止(c3w)がある、または禁止の並び(c3n)が希望で固定したセルに掛かっている。
+ * 希望の前日の禁止(c3w)がある、または禁止の並び(c3n)が本人の希望のセルに掛かっている。
  */
 internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
     ui.violationCellFamilies.flatMap { (key, fams) ->
@@ -234,7 +234,7 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
 /** [S5] 試算の候補 1 行。`locked=false`（担当できない勤務の希望）は試算ボタンを出さず [WISH_TRIAL_NOT_LOCKED] を出す。 */
 internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean, val pinned: Boolean = false)
 
-/** [S5b] 人手不足の枠 1 つ（見出し「12日 日勤 1人不足」）と、その日に別の勤務で希望固定されている人の行（職員順）。 */
+/** [S5b] 人員不足の枠 1 つ（見出し「12日 日勤 1人不足」）と、その日に別の勤務で希望固定されている人の行（職員順）。 */
 internal data class ShortfallWishGroup(val day: Int, val shift: Int, val header: String, val rows: List<WishTrialRow>)
 
 internal data class WishTrialCandidates(val direct: List<WishTrialRow>, val shortfall: List<ShortfallWishGroup>) {
@@ -258,7 +258,7 @@ internal const val WISH_TRIAL_GROUP_LIMIT = 8
  * [S5] 試算の候補（`docs/s5_wish_trial.md` §2.2・§2.3）。S5a＝必須違反に関わる希望を (職員, 日) で重複除去し、
  * 代表の理由を pref＞c3w＞c3n で選ぶ（他は「ほか: …」）。c3w は翌日の希望 X と、印の付く前日自身が wishLocked の希望 Y の両方。
  * 満たされない希望が希望どうしの衝突（`UiState.wishSelfConflicts`）の組に入っていれば、組のほかの希望も S5a の行にする（§2.2）。
- * S5b＝人手不足の枠の `wishPinned`（日→シフト、職員順）。S5a と重なる (職員, 日) は S5a を代表にし「ほか: 人手不足の日」を足す。
+ * S5b＝人員不足の枠の `wishPinned`（日→シフト、職員順）。S5a と重なる (職員, 日) は S5a を代表にし「ほか: 人員不足の日」を足す。
  */
 internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
     // 優先度（小さいほど代表）と「ほか」に出す短い名前。
@@ -291,7 +291,7 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
     val direct = (hits + siblings).groupBy { it.staff to it.day }.map { (sd, hs) ->
         val rep = hs.minBy { it.prio }
         val others = hs.map { it.prio }.distinct().filter { it != rep.prio }.sorted().map { short[it] } +
-            (if (sd in pinnedKeys) listOf("人手不足の日") else emptyList())
+            (if (sd in pinnedKeys) listOf("人員不足の日") else emptyList())
         val reason = if (others.isEmpty()) rep.reason else "${rep.reason}（ほか: ${others.joinToString("・")}）"
         WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys, VioKey.cell(sd.first, sd.second) in ui.manualPins)
     }.sortedWith(compareBy({ it.staff }, { it.day }))
@@ -555,7 +555,7 @@ internal fun dayCoverageLines(ui: UiState, j: Int, marks: List<CoverageMark>, li
 /** 凡例の「枠の形 → 族」の 1 行。セルに印を持つ族だけを名指す（回数・人員は行末と日ヘッダの印）。 */
 internal fun legendShapeFamilies(): String {
     val solid = listOf("c3n", "c3w", "pref", "groupViol").map { breakdownLabels[it] ?: it }
-    return "実線: ${solid.joinToString("・")}／破線: 期間の約束：この日を○○にすると届く・${breakdownLabels["c3mn"]}"
+    return "実線: ${solid.joinToString("・")}／破線: ${breakdownLabels["c1"]}（この日を○○にすると届く）・${breakdownLabels["c3mn"]}"
 }
 
 // ===== その場の直し方探し（印・セルのシートの中で探して、見つからなければ理由と次の一歩） =====
@@ -564,6 +564,13 @@ internal fun legendShapeFamilies(): String {
 internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null, val exceptStaff: Int? = null) {
     /** 結果がどの依頼のものかを見分ける鍵（`UiState.fixDoneKey` と照合）。 */
     val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}" + (exceptStaff?.let { ",x$it" } ?: "")
+}
+
+/** 設定への行き先の名（節ごと。「設定を見直す」の一語で済ませない＝利用者決定 2026-09-27）。 */
+internal fun settingsLabelFor(section: String): String = when (section) {
+    "yr_headcount" -> "必要人数の設定を開く"
+    "yr_cons" -> "並び・期間の制約の設定を開く"
+    else -> "回数の設定を開く"
 }
 
 /** 手が見つからなかったときの説明。lines は確かめた事実だけ、wishRelated なら「希望を見る」を出す。 */
@@ -601,7 +608,7 @@ internal fun noFixReasons(
         if (days.isNotEmpty() && pinned.size == days.size) { out += "「${sym(k)}」の ${days.size} 回はどれも本人の希望で固定されています。"; wish = true }
         else if (pinned.isNotEmpty()) { out += "「${sym(k)}」の ${days.size} 回のうち ${pinned.size} 回は本人の希望で固定されています。"; wish = true }
         val (_, hi, _) = limits?.invoke(i, k) ?: Triple(null, null, null)
-        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は上限 0（置かない設定）です。"
+        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は個人の上限が 0 回（置かない設定）です。"
         val tight = days.filter { j -> needLimits?.invoke(k, j)?.let { headcount(k, j) <= it.first } == true }
         if (tight.isNotEmpty()) out += tight.joinToString("・") { DayText.short(ui.startDate, it) } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
         val fixedOthers = (0 until ui.shifts.coerceAtLeast(ui.shiftSymbols.size)).filter { k2 ->

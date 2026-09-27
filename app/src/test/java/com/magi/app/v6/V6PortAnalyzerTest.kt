@@ -236,7 +236,7 @@ class V6PortAnalyzerTest {
         assertEquals(1, diag.totalSurplus)
         val sp = diag.surpluses.single()
         assertEquals(1, sp.excess)
-        assertTrue(sp.reason.contains("希望固定2人"))
+        assertTrue(sp.reason.contains("本人の希望2人"))
         assertTrue(sp.reason.contains("希望"))
     }
 
@@ -369,7 +369,7 @@ class V6PortAnalyzerTest {
         val run = diag.runs.single()
         assertTrue("全セル希望固定", run.cells.all { it.escape == ForbiddenCellEscape.PINNED })
         assertTrue(diag.allBlocked)
-        assertTrue("希望固定の明示と対処の案内", run.hint.contains("希望固定") && run.hint.contains("残ります"))
+        assertTrue("希望固定の明示と対処の案内", run.hint.contains("本人の希望") && run.hint.contains("残ります"))
     }
 
     // 離脱すると covU 穴が空くが、玉突き連鎖（findCovUChain=探索本体と同一関数）で埋め直せる局面は
@@ -634,7 +634,7 @@ class V6PortAnalyzerTest {
         val sp = V6PortAnalyzer.diagnoseCoverage(st).surpluses.single()
         assertEquals("A の過剰1件", 1, sp.excess)
         // reason は 0 件でも「希望固定0人」というラベルを必ず含むので、件数で見る。
-        assertTrue("実現不能な希望を「希望固定」に数えない: " + sp.reason, sp.reason.contains("希望固定0人"))
+        assertTrue("実現不能な希望を「希望固定」に数えない: " + sp.reason, sp.reason.contains("本人の希望0人"))
         assertTrue("動かせる候補として数える: " + sp.reason, sp.reason.contains("動かせる1人"))
     }
 

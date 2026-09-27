@@ -1115,11 +1115,11 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("前回の最適化は中断されました", style = MaterialTheme.typography.titleMedium)
-            Text(ui.interruptedInfo ?: "入力は自動保存済みです。もう一度実行できます。",
+            Text(ui.interruptedInfo ?: "入力は自動保存済みです。もう一度つくれます。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = onRerun, enabled = ui.loaded,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("もう一度実行") }
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("もう一度つくる") }
                 OutlinedButton(onClick = onDismiss,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }

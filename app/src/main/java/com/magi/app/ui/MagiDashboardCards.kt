@@ -106,7 +106,7 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
-/** [思考誘導S3→S5] 必須違反に関わる希望と、人手不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「取り消したら？」で試算・確定（§5）。
+/** [思考誘導S3→S5] 必須違反に関わる希望と、人員不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「取り消したら？」で試算・確定（§5）。
  *  試算の結果は VM が ctx つきで持ち、ここは読むたびに問い合わせる（古ければ隠す＝§8）。 */
 @Composable
 internal fun WishConflictDialog(
@@ -144,7 +144,7 @@ internal fun WishConflictDialog(
                         cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                     }
                     if (cands.shortfall.isNotEmpty()) {
-                        Text("人手不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text("人員不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                         cands.shortfall.forEach { g ->
                             Text(g.header, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                             val slot = g.day to g.shift
@@ -367,7 +367,7 @@ internal fun GuidedFixDialog(
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     else -> {
-                        Text("人手が足りない日はなくなりました。仕上げにもう一度つくると全体が整います。")
+                        Text("人員不足の日はなくなりました。仕上げにもう一度つくると全体が整います。")
                     }
                 }
             }
@@ -448,7 +448,7 @@ internal fun OperatorNextActionCard(
         // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す。
         //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
         ui.coverageDiag?.shortfalls?.any { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow } == true ->
-            OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人手不足です。" } ?: "人手が足りない日があります。"),
+            OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人員不足です。" } ?: "人員不足の日があります。"),
                 "なおすのを手伝って", onFix, true, null, onSetup)
         // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
         ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() ->
@@ -740,8 +740,8 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                     diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
                         "希望を1件調整するか、担当を追加してください。"
                     diag.blockedNowSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.blockedNowSlots} 枠は" +
-                        "いまの希望のままでは埋められません（残りは再実行で解消し得ます）。"
-                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再実行や設定の見直しで解消し得ます。"
+                        "いまの希望のままでは埋められません（残りはもう一度つくると解消し得ます）。"
+                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。もう一度つくるか設定の見直しで解消し得ます。"
                     else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
                 }
                 Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -860,7 +860,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                                 com.magi.app.v6.ForbiddenCellEscape.FREE -> "崩せる"
                                 com.magi.app.v6.ForbiddenCellEscape.CHAIN -> "玉突きで崩せる"
                                 com.magi.app.v6.ForbiddenCellEscape.ADJACENT -> "隣接日調整で崩せる"
-                                com.magi.app.v6.ForbiddenCellEscape.PINNED -> "希望固定"
+                                com.magi.app.v6.ForbiddenCellEscape.PINNED -> "本人の希望"
                                 com.magi.app.v6.ForbiddenCellEscape.BLOCKED -> "塞がり"
                             }
                             "${c.dayLabel} ${c.shiftSymbol}=$tag"
@@ -900,7 +900,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                             Text("${rows.size}件（$whoTxt）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         TextButton(onClick = { onRelaxRule(seqLabel) }, enabled = !ui.running) {
-                            Text("この並びの禁止をやめる")
+                            Text("この並びの禁止を解除")
                         }
                     }
                 }

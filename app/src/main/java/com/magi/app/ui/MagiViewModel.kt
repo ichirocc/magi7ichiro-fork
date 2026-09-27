@@ -423,7 +423,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (marker != null) {
                     val hasSnap = !snapTxt.isNullOrBlank()
                     val info = if (hasSnap)
-                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。" + com.magi.app.work.RunMarker.s5Suffix(marker)
+                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度つくる』で仕上げられます。" + com.magi.app.work.RunMarker.s5Suffix(marker)
                     else com.magi.app.work.RunMarker.interruptedInfo(marker)
                     _ui.update { it.copy(interruptedRun = true, interruptedInfo = info) }
                     clearRunMarker()
@@ -1382,7 +1382,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private fun hardFamilyJp(key: String): String = when (key) {
         "covU" -> "人員不足（必要人数）"
         "c3n" -> "禁止の並び（連勤など）"
-        "c3w" -> "希望前日の禁止"
+        "c3w" -> "希望の前日の禁止"
         "pref" -> "希望シフト"
         "groupViol" -> "担当外シフト"
         "low" -> "個人の回数下限"
@@ -1415,7 +1415,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (undoLabel != null) pushUndo(undoLabel)
         val sig = "${_ui.value.budgetSec}|${_ui.value.workers}|${_ui.value.v6Algorithm}|${_ui.value.softPolish}"
         val hint = if (s5 == null && sig == lastSettingsSig && lastResultHard > 0L)
-            "前回と同じ設定での再実行です。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
+            "前回と同じ設定でもう一度つくります。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
         else null
         lastSettingsSig = sig
         val s5Suffix = if (s5 != null) "（希望の取り消しはそのままです。元に戻すで希望も戻ります）" else ""

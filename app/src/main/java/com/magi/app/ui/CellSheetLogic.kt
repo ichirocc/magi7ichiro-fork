@@ -136,7 +136,7 @@ private fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list:
 }
 
 /** 同じ違反のもう一方のセルの日（板挟みで他の人の手が無いときの行き先）。禁止の並びは一致した並びの他の日、
- *  希望前日の禁止は印のある前日⇄希望の翌日。チェッカーの印だけから決め、希望は触らない。 */
+ *  希望の前日の禁止は印のある前日⇄希望の翌日。チェッカーの印だけから決め、希望は触らない。 */
 internal fun violationPartnerDays(p: Problem, s: Array<IntArray>, i: Int, j: Int, families: List<String>, cellFamilies: Map<String, List<String>>): List<Int> {
     val out = LinkedHashSet<Int>()
     for (fam in families) when (fam) {
@@ -161,13 +161,13 @@ internal fun singleCellHopeless(marks: ShiftMarks, candidates: Collection<Int>, 
     return marks.recommended.isEmpty() && others.isNotEmpty() && others.all { it in marks.hardRisk }
 }
 
-/** 全部 ⚠ の理由 1 行（無ければ null）: 本人の希望のセル→希望違反、前日（翌日）から続く禁止の並び→その日の勤務を名指し。
+/** 全部 ⚠ の理由 1 行（無ければ null）: 本人の希望のセル→希望と違う勤務、前日（翌日）から続く禁止の並び→その日の勤務を名指し。
  *  候補ごとの増える必須の形が混ざるときは言わない（推測を書かない）。 */
 internal fun allRiskReason(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, marks: ShiftMarks, candidates: Collection<Int>): String? {
     val cur = s[i][j]
     if (!singleCellHopeless(marks, candidates, cur)) return null
     fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
-    if (p.wish.getOrNull(i)?.getOrNull(j) == cur) return "${sym(cur)} は本人の希望なので、ほかへ変えると希望違反になります"
+    if (p.wish.getOrNull(i)?.getOrNull(j) == cur) return "${sym(cur)} は本人の希望なので、ほかへ変えると希望と違う勤務になります"
     val trial = Array(s.size) { s[it].copyOf() }
     var fromPrev = true; var fromNext = true
     for (k in marks.hardRisk) {
@@ -325,7 +325,7 @@ internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: Str
 }
 
 /** [S6] セルシートから設定の緩和へ渡す状態。OFFER＝ホームで見つかった組の起点の窓か手順のセル（同じ結果を同じ確定で開く。セルごとに試算はしない）、
- *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い（1 手も無ければ設定の行き先の名を具体にする）。 */
+ *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い。 */
 internal enum class RelaxHandoff { NONE, SEARCHING, OFFER, NO_WALL }
 
 internal fun relaxHandoff(r: RelaxTrial.Result?, searching: Boolean, noWall: Boolean, i: Int, j: Int): RelaxHandoff = when {
@@ -338,8 +338,6 @@ internal fun relaxHandoff(r: RelaxTrial.Result?, searching: Boolean, noWall: Boo
 
 internal fun relaxHandoffLine(r: RelaxTrial.Result, ui: UiState): String =
     "設定を緩めると、この${relaxTarget(r, ui).what}を解消できる見込みです（上限 ${r.relaxes.size}件）"
-
-internal const val RELAX_SETTINGS_LABEL = "回数などの設定を開く"
 
 /** 通知の「元に戻す」は、その操作が今も元に戻すの先頭にあるときだけ効く（後の別の操作を戻さない）。 */
 internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = topSerial != null && topSerial == noticeSerial

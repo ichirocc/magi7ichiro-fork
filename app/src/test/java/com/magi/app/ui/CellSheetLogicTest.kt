@@ -112,7 +112,7 @@ class CellSheetLogicTest {
         val m8 = evaluateShiftMarks(st, s, i, 7, CellSeverity.HARD, cands.sorted())
         assertEquals("前日が Dﾃ なので、Dﾃ 以外はどれも禁止の並びになります", allRiskReason(st, p, s, i, 7, m8, cands))
         val m9 = evaluateShiftMarks(st, s, i, 8, CellSeverity.HARD, cands.sorted())
-        assertEquals("A4 は本人の希望なので、ほかへ変えると希望違反になります", allRiskReason(st, p, s, i, 8, m9, cands))
+        assertEquals("A4 は本人の希望なので、ほかへ変えると希望と違う勤務になります", allRiskReason(st, p, s, i, 8, m9, cands))
         assertEquals(null, allRiskReason(st, p, s, i, 7, ShiftMarks(), cands))
         assertEquals("関連セル: 10/9(金) A4（希望・反映済）", relatedCellsLine(st, s, i, listOf(8)))
         assertEquals("関連セル: 10/8(木) Dﾃ", relatedCellsLine(st, s, i, listOf(7)))

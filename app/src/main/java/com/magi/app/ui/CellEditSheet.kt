@@ -111,7 +111,6 @@ internal fun CellEditSheet(
     val dilemma = isWishDilemma(wish, current, status.severity)
     var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える
     val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j)
-    val settingsLabel = if (handoff == RelaxHandoff.NO_WALL) RELAX_SETTINGS_LABEL else "設定を見直す"
     var marks by remember(cell) { mutableStateOf(ShiftMarks()) }
     LaunchedEffect(cell, rev) {
         marks = ShiftMarks()
@@ -160,7 +159,7 @@ internal fun CellEditSheet(
                 if (c1Here != null && c1Here.stuck && mode == 0) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
-                        OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                        OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
                     }
                 }
                 if (mode == 0 && dilemma && dilemmaChoice != 2) {
@@ -172,7 +171,7 @@ internal fun CellEditSheet(
                     }
                     if (dilemmaChoice == 1) {
                         val focus = FixFocus(null, null, j, exceptStaff = i)
-                        FixSearchPanel(ui, cv, focus, onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
+                        FixSearchPanel(ui, cv, focus, onEvent, fixNav, onApplied = {}, compact = true)
                         // 他の人の手が無いとき、同じ違反のもう一方のセルへ（希望は触らない）。
                         if (fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key) == FixPanelState.DONE && ui.fixSuggestions.isEmpty()) {
                             partners.forEach { d ->
@@ -181,7 +180,7 @@ internal fun CellEditSheet(
                         }
                     }
                 } else if (mode == 0 && status.severity != CellSeverity.NONE) {
-                    FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
+                    FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true)
                 }
                 if (mode == 1 && wish != null) {
                     wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

@@ -32,7 +32,7 @@ class WishTrialCandidatesTest {
         )
         val c = wishTrialCandidates(ui)
         assertEquals(listOf(
-            WishTrialRow(0, 2, "山田", "希望の勤務になっていません（ほか: 禁止の並び・人手不足の日）", true),
+            WishTrialRow(0, 2, "山田", "希望の勤務になっていません（ほか: 禁止の並び・人員不足の日）", true),
             WishTrialRow(1, 3, "佐藤", "翌日（5日）の希望の勤務の前日に置けない勤務の希望です", true),
             WishTrialRow(1, 4, "佐藤", "前日（4日）に置けない勤務が入っています", true),
             WishTrialRow(2, 5, "鈴木", "希望が禁止の並びに掛かっています", false),
@@ -94,7 +94,7 @@ class WishTrialCandidatesTest {
         )
         val c = wishTrialCandidates(ui)
         assertEquals(listOf(1, 2, 3, 4), c.direct.map { it.day })
-        assertEquals("希望どうしが禁止の並び「休→休→休」を作っています（ほか: 人手不足の日）", c.direct.last().reason)
+        assertEquals("希望どうしが禁止の並び「休→休→休」を作っています（ほか: 人員不足の日）", c.direct.last().reason)
         assertEquals(emptyList<ShortfallWishGroup>(), c.shortfall)
     }
 

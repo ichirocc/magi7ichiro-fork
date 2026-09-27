@@ -320,7 +320,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         //   opt-outスイッチ自体は残すがUIには出さない。UIに出すのは既定OFFのまま据え置いたトグルのみ。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("禁止連続の崩し範囲")
+                Text("禁止の並びの崩し範囲")
                 Text(
                     if (ui.wideC3nBreak)
                         "⚠ 禁止の並びを崩すとき、並び全体（前後2日以上）まで動かします。3つ以上つながる並びの先頭にも手が届きますが、" +
