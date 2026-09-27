@@ -201,13 +201,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         val st = vm.state
         if (st == null || ui.schedule.isEmpty()) emptyList() else hardViolationItems(st, cachedProblem(st), ui.schedule.toIntArray2D(), ui.violationCellFamilies)
     }
-    // 巡回の 1 件へ移る: 見出しの何件目か・セル・関連セルの強調をまとめて更新する（違反単位）。
-    val goTourItem: (Int) -> Unit = { at ->
-        tourItems.getOrNull(at)?.let { it ->
-            tab = 1; tourActive = true; tourAt = at; editingCell = it.cell
-            focusRange = Triple(it.staff, it.days.first(), it.days.last())
-        }
-    }
     var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
     var oneHand by rememberSaveable { mutableStateOf(false) }
@@ -451,6 +444,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
     var focusRange by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    // 巡回の 1 件へ移る: 見出しの何件目か・セル・関連セルの強調をまとめて更新する（違反単位）。
+    val goTourItem: (Int) -> Unit = { at ->
+        tourItems.getOrNull(at)?.let { it ->
+            tab = 1; tourActive = true; tourAt = at; editingCell = it.cell
+            focusRange = Triple(it.staff, it.days.first(), it.days.last())
+        }
+    }
     // [E7/3.459.0] 違反 種別フィルタ。旧: 勤務表タブ(1)のブロック内だけの局所状態だったが、分析タブの
     //   [3.471.0] 分析タブの統合カードは撤去したので、いまの共有先は勤務表タブのグリッド/集計のみ。初期=全ON。
     //   bitmask(Int)で rememberSaveable 保存（回転/プロセス復元で保持）。表示のみ・スコアリング不変。
