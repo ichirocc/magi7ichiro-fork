@@ -75,6 +75,8 @@ internal fun CellEditSheet(
     modifier: Modifier = Modifier,
     fixNav: FixNav = FixNav(),
     tourNext: Pair<Int, Int>? = null,
+    tourHeading: String? = null,        // 巡回中の見出し「必須違反 2 / 5 ・ 禁止の並び …」（違反単位）
+    tourCovULine: String? = null,       // 巡回に入らない人員不足の件数
     leftHand: Boolean = false,
     relax: RelaxToken? = null,          // [S6] ホームで見つかった組（このセルが窓か手順に入るときだけ渡す）
     relaxNoWall: Boolean = false,       // [S6] 探し終えて組が無い
@@ -144,6 +146,8 @@ internal fun CellEditSheet(
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
+                tourHeading?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant) }
+                tourCovULine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 StatusRow(status, if (dilemma) wishKeptLine(sym(wish)) else null)
                 val partners = remember(rev, cell) {
                     if (status.severity != CellSeverity.HARD) emptyList()

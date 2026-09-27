@@ -162,6 +162,24 @@ class CellSheetLogicTest {
         assertTrue(real.isNotEmpty() && real.all { (a, b) -> rep.cellFamilies["$a,$b"]!!.any { isHardCellViolation(it) } })
     }
 
+    /** 巡回は違反単位: 実データの必須 5 件（c3n 4＋c3w 1）が 5 件、日→職員の順、職員10 は 10/8〜10/9 の 1 件、人員不足は別の 1 行。 */
+    @Test fun tourItemsAreOnePerHardViolation() {
+        val items = hardViolationItems(st, p, s, rep.cellFamilies)
+        println(items.map { it.heading })
+        assertEquals(rep.hard - (rep.breakdown["covU"] ?: 0), items.size)
+        assertEquals(items.sortedWith(compareBy({ it.days.first() }, { it.staff })), items)
+        val a = items.single { it.staff == staff("職員10") }
+        assertEquals(listOf(7, 8), a.days)
+        assertEquals("禁止の並び Dﾃ→A4 ・ 10/8〜10/9", a.heading)
+        val w = items.single { it.family == "c3w" }
+        assertEquals(staff("職員03") to 0, w.cell)
+        assertEquals(listOf(0, 1), w.days)
+        assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9", tourHeading(items, items.indexOf(a)))
+        assertEquals(null, tourHeading(items, 9))
+        assertEquals("ほかに人員不足 2件（日ヘッダから）", tourCovULine(2))
+        assertEquals(null, tourCovULine(0))
+    }
+
     @Test fun countLineAndDayLabels() {
         val keys = rep.countFamilies.keys.mapNotNull { VioKey.first(it) }
         val i = keys.first()

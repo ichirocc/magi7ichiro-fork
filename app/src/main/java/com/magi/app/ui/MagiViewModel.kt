@@ -2897,6 +2897,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val p = com.magi.app.v6.cachedProblem(st)
         if (i !in 0 until p.S || j !in 0 until p.T) return null
         when (cls) {
+            // 禁止の並びは一致した並びの全日、希望の前日の禁止は前日と希望の翌日（巡回と同じ関連セル）。
+            "vio-c3n" -> forbiddenRunAt(p, sched, i, j, p.cons3n)?.let { (seq, j0) -> return j0 to (j0 + seq.size - 1) }
+            "vio-c3w" -> return j to minOf(j + 1, p.T - 1)
             "vio-c1" -> for (c in p.cons1) {
                 if (!p.canDo(i, c.shiftIdx) || j + c.day1 > p.T) continue
                 var z = 0

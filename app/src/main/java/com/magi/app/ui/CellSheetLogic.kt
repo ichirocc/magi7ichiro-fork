@@ -124,7 +124,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
 }
 
 /** セル (i,j) を含む、完全に一致した禁止の並び（最初の 1 つ）と開始日。 */
-private fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list: List<com.magi.app.v6.C3>): Pair<IntArray, Int>? {
+internal fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list: List<com.magi.app.v6.C3>): Pair<IntArray, Int>? {
     for (c in list) {
         val d = c.seq.size
         for (j0 in (j - d + 1).coerceAtLeast(0)..j) {
@@ -280,6 +280,43 @@ internal fun violationTour(ui: UiState, includeSoft: Boolean = false): List<Pair
     val pick = if (hard.isNotEmpty() && !includeSoft) hard else cells
     return pick.sortedWith(compareBy({ !it.third }, { it.second }, { it.first })).map { it.first to it.second }
 }
+
+/** 巡回の 1 件＝必須違反 1 件（族・職員・関連セルの日・見出し）。1 セルが 2 件に属せば 2 回止まる（`report.hard` の数え方と同じ）。
+ *  セルで辿れる族だけ（c3n＝並びの全日、c3w＝前日＋希望の翌日、pref/groupViol＝1 セル）。人員不足は日ヘッダから＝件数は別に添える。 */
+internal data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String) {
+    val cell: Pair<Int, Int> get() = staff to days.first()
+}
+
+internal fun hardViolationItems(state: MagiState, p: Problem, s: Array<IntArray>, cellFamilies: Map<String, List<String>>): List<TourItem> {
+    fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
+    fun span(days: List<Int>) = DayText.range(state.startDate, days.first(), days.last())
+    val out = LinkedHashMap<String, TourItem>()
+    for ((key, fams) in cellFamilies) {
+        val i = VioKey.first(key) ?: continue
+        val j = VioKey.second(key) ?: continue
+        if (i !in 0 until p.S || j !in 0 until p.T) continue
+        for (cls in fams) when (val fam = familyOfVioClass(cls)) {
+            "c3n" -> forbiddenRunAt(p, s, i, j, p.cons3n)?.let { (seq, j0) ->
+                val days = (j0 until j0 + seq.size).toList()
+                out.getOrPut("c3n,$i,$j0,${seq.joinToString(",")}") {
+                    TourItem(fam, i, days, "${breakdownLabels["c3n"]} ${seq.joinToString("→") { sym(it) }} ・ ${span(days)}")
+                }
+            }
+            "c3w" -> { val days = listOf(j, minOf(j + 1, p.T - 1)).distinct()
+                out.getOrPut("c3w,$i,$j") { TourItem(fam, i, days, "${breakdownLabels["c3w"]} ${sym(s[i][j])}→${sym(s[i][days.last()])} ・ ${span(days)}") } }
+            "pref", "groupViol" -> out.getOrPut("$fam,$i,$j") { TourItem(fam, i, listOf(j), "${breakdownLabels[fam]} ${sym(s[i][j])} ・ ${DayText.full(state.startDate, j)}") }
+            else -> {}
+        }
+    }
+    return out.values.sortedWith(compareBy({ it.days.first() }, { it.staff }))
+}
+
+/** 巡回の見出し「必須違反 2 / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9」。 */
+internal fun tourHeading(items: List<TourItem>, at: Int): String? =
+    items.getOrNull(at)?.let { "必須違反 ${at + 1} / ${items.size} ・ ${it.heading}" }
+
+/** 巡回に入らない人員不足の件数の 1 行（0 なら null）。 */
+internal fun tourCovULine(covU: Int): String? = if (covU > 0) "ほかに人員不足 ${covU}件（日ヘッダから）" else null
 
 /** 巡回の次のセル（今のセルの次。今が巡回に無ければ先頭、末尾なら先頭へ戻る）。空なら null。 */
 internal fun nextTourCell(tour: List<Pair<Int, Int>>, current: Pair<Int, Int>?): Pair<Int, Int>? {
