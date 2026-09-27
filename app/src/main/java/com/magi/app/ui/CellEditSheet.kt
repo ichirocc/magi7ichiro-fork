@@ -145,6 +145,9 @@ internal fun CellEditSheet(
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
                 StatusRow(status, if (dilemma) wishKeptLine(sym(wish)) else null)
+                if (mode == 0 && status.severity != CellSeverity.NONE && singleCellHopeless(marks, canDoSet, current)) {
+                    Text(SINGLE_CELL_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
                 if (c1Here != null && c1Here.stuck && mode == 0) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }

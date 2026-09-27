@@ -101,6 +101,19 @@ class CellSheetLogicTest {
         assertEquals(ShiftMarks(), evaluateShiftMarks(st, s, i, 0, CellSeverity.HARD, cands, stillWanted = { false }))
     }
 
+    /** 職員10 10/8・10/9: おすすめ 0・置ける候補が全部警告＝1 マスでは直らない注記。印の計算前や、おすすめがあるセルには出ない。 */
+    @Test fun allRiskCellGetsTheSingleCellNote() {
+        val i = staff("職員10")
+        val cands = p.canDoShiftsForStaff(i).toSet()
+        for (j in listOf(7, 8)) {
+            val m = evaluateShiftMarks(st, s, i, j, CellSeverity.HARD, cands.sorted())
+            assertTrue("10/${j + 1}", singleCellHopeless(m, cands, s[i][j]))
+        }
+        assertTrue(!singleCellHopeless(ShiftMarks(), cands, s[i][7]))
+        assertTrue(!singleCellHopeless(ShiftMarks(recommended = setOf(0), hardRisk = cands - 0), cands, s[i][7]))
+        assertTrue(!singleCellHopeless(ShiftMarks(hardRisk = cands), setOf(s[i][7]), s[i][7]))
+    }
+
     /** 職員1010/8 に A4 を置くと禁止の並びが増える＝警告の印。 */
     @Test fun a4OnStaff10Oct8IsMarkedAsHardRisk() {
         val i = staff("職員10")

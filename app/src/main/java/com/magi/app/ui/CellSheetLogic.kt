@@ -153,6 +153,14 @@ internal fun partnerCellLabel(day: Int, single: Boolean): String =
 /** シフトボタンの印。[recommended]＝緑の点、[hardRisk]＝置くと必須の族が増える（警告の印）。 */
 internal data class ShiftMarks(val recommended: Set<Int> = emptySet(), val hardRisk: Set<Int> = emptySet())
 
+internal const val SINGLE_CELL_NOTE = "1 マスでは直りません。前後の日の組み合わせが必要です。"
+
+/** おすすめが無く、置ける候補（今の値を除く）がすべて必須を増やす印なら、この 1 マスだけでは直らない。印の計算前（空）は false。 */
+internal fun singleCellHopeless(marks: ShiftMarks, candidates: Collection<Int>, current: Int): Boolean {
+    val others = candidates.filter { it != current }
+    return marks.recommended.isEmpty() && others.isNotEmpty() && others.all { it in marks.hardRisk }
+}
+
 /**
  * セル (i,j) を各候補にしたときの印。おすすめは、必須のあるセルなら必須が減りどの必須族も増えない、
  * 要調整だけのセルなら重み付きの合計が減りどの必須族も増えない候補（違反の無いセルには付けない）。
