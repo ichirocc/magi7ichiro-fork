@@ -161,10 +161,10 @@ class CellSheetLogicTest {
         println("count line 職員${i + 1}: $line")
         assertTrue(line, line.contains("▼") || line.contains("▲"))
         assertEquals("", staffCountShort(st, p, s, i, emptyMap()))
-        assertEquals("7日(水)", adjacentDayLabel("2026-10-01", 31, 6))
+        assertEquals("10/7(水)", adjacentDayLabel("2026-10-01", 31, 6))
         assertEquals(null, adjacentDayLabel("2026-10-01", 31, 31))
         assertEquals(null, adjacentDayLabel("2026-10-01", 31, -1))
-        assertEquals("職員01 3日をA4に変更しました", cellChangedMessage("職員01", 2, "A4"))
+        assertEquals("職員01 10/3 をA4に変更しました", cellChangedMessage("職員01", "2026-10-01", 2, "A4"))
     }
 
     @Test fun fixesByOthersKeepThePersonAndTheDay() {
@@ -221,8 +221,11 @@ class CellSheetLogicTest {
         fun fams(j: Int) = cellStatusFamilies(rep.cellFamilies["$i,$j"].orEmpty(), emptyList(), emptyList())
         assertEquals(listOf(7), violationPartnerDays(p, s, i, 8, fams(8), rep.cellFamilies))
         assertEquals(listOf(8), violationPartnerDays(p, s, i, 7, fams(7), rep.cellFamilies))
-        assertEquals("同じ違反のもう一方のセル（8日）を見る", partnerCellLabel(7, true))
-        assertEquals("同じ違反のほかのセル（8日）を見る", partnerCellLabel(7, false))
+        assertEquals("同じ違反のもう一方のセル（10/8(木)）を見る", partnerCellLabel(st.startDate, 7, true))
+        assertEquals("同じ違反のほかのセル（10/8(木)）を見る", partnerCellLabel(st.startDate, 7, false))
+        assertEquals("10/8〜10/9", DayText.range(st.startDate, 7, 8))
+        assertEquals("10/8(木)", DayText.range(st.startDate, 7, 7))
+        assertEquals("8日", DayText.full("", 7))
         val w = staff("職員03")
         assertEquals(listOf(1), violationPartnerDays(p, s, w, 0, listOf("c3w"), rep.cellFamilies))
         assertEquals(listOf(0), violationPartnerDays(p, s, w, 1, emptyList(), rep.cellFamilies))

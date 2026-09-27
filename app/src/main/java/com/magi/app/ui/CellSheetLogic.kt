@@ -6,7 +6,6 @@ import com.magi.app.v6.Problem
 import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.canDo
-import com.magi.app.v6.formatDay
 import com.magi.app.v6.pinned
 
 /**
@@ -66,7 +65,8 @@ internal fun cellStatusLine(state: MagiState, p: Problem, s: Array<IntArray>, i:
 private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, fam: String): String? {
     fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
     fun name(x: Int) = state.staff.getOrNull(x)?.name ?: "#$x"
-    fun day(d: Int) = formatDay(state.startDate, d).substringBefore('(')
+    fun day(d: Int) = DayText.short(state.startDate, d)
+    fun dayFull(d: Int) = DayText.full(state.startDate, d)
     val cur = s.getOrNull(i)?.getOrNull(j) ?: -1
     val count = { k: Int -> s[i].count { it == k } }
     return when (fam) {
@@ -80,7 +80,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
         "c3", "c3m" -> {
             val list = if (fam == "c3") p.cons3 else p.cons3m
             list.firstOrNull { it.seq.firstOrNull() == cur }?.let { c ->
-                "${breakdownLabels[fam]} ${c.seq.joinToString("→") { sym(it) }} が${day(j)}から続かない"
+                "${breakdownLabels[fam]} ${c.seq.joinToString("→") { sym(it) }} が${dayFull(j)}から続かない"
             }
         }
         "c42s", "c42" -> {
@@ -101,8 +101,8 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
             val lo = p.need1[cur][j]
             val hi = if (p.use2 && p.need2[cur][j] >= 0) p.need2[cur][j] else lo
             val n = (0 until p.S).count { s[it][j] == cur }
-            if (fam == "covU") "${day(j)}の${sym(cur)}が人員不足（必要${lo}人に${n}人）"
-            else "${day(j)}の${sym(cur)}が人員過剰（適正${hi}人に${n}人）"
+            if (fam == "covU") "${dayFull(j)}の${sym(cur)}が人員不足（必要${lo}人に${n}人）"
+            else "${dayFull(j)}の${sym(cur)}が人員過剰（適正${hi}人に${n}人）"
         }
         "c41s", "c41" -> if (cur < 0) null else {
             val skill = fam == "c41s"
@@ -147,8 +147,8 @@ internal fun violationPartnerDays(p: Problem, s: Array<IntArray>, i: Int, j: Int
     return out.filter { it in 0 until p.T }.sorted()
 }
 
-internal fun partnerCellLabel(day: Int, single: Boolean): String =
-    if (single) "同じ違反のもう一方のセル（${day + 1}日）を見る" else "同じ違反のほかのセル（${day + 1}日）を見る"
+internal fun partnerCellLabel(startDate: String, day: Int, single: Boolean): String =
+    if (single) "同じ違反のもう一方のセル（${DayText.full(startDate, day)}）を見る" else "同じ違反のほかのセル（${DayText.full(startDate, day)}）を見る"
 
 /** シフトボタンの印。[recommended]＝緑の点、[hardRisk]＝置くと必須の族が増える（警告の印）。 */
 internal data class ShiftMarks(val recommended: Set<Int> = emptySet(), val hardRisk: Set<Int> = emptySet())
@@ -214,9 +214,9 @@ internal fun staffCountShort(state: MagiState, p: Problem, s: Array<IntArray>, i
     return parts.joinToString(" ")
 }
 
-/** 日送りボタンの日付「7日(水)」（範囲外は null＝押せない）。 */
+/** 日送りボタンの日付「10/7(水)」（範囲外は null＝押せない）。 */
 internal fun adjacentDayLabel(startDate: String, days: Int, j: Int): String? =
-    j.takeIf { it in 0 until days }?.let { d -> formatDay(startDate, d).let { f -> if ('/' in f) f.substringAfter('/').replaceFirst("(", "日(") else f } }
+    j.takeIf { it in 0 until days }?.let { DayText.full(startDate, it) }
 
 /** 希望タブの現在値の注記。 */
 internal fun wishTabState(wish: Int?, current: Int): String = when {
@@ -313,4 +313,4 @@ internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = 
 internal fun messageMayReplaceNotice(noticeShowing: Boolean, isError: Boolean): Boolean = !noticeShowing || isError
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
-internal fun cellChangedMessage(name: String, day: Int, symbol: String): String = "$name ${day + 1}日を${symbol}に変更しました"
+internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "$name ${DayText.short(startDate, day)} を${symbol}に変更しました"

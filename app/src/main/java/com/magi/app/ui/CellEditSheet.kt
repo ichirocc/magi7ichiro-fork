@@ -171,7 +171,7 @@ internal fun CellEditSheet(
                                 stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
                             }
                             partners.forEach { d ->
-                                OutlinedButton(onClick = { onMove(i to d) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(partnerCellLabel(d, partners.size == 1), maxLines = 2) }
+                                OutlinedButton(onClick = { onMove(i to d) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(partnerCellLabel(ui.startDate, d, partners.size == 1), maxLines = 2) }
                             }
                         }
                     }

@@ -179,7 +179,7 @@ private fun WishTrialRowView(
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
     TextButton(onClick = { onOpenCell(row.staff, row.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text("${row.name} ・ ${row.day + 1}日　${row.reason}", modifier = Modifier.fillMaxWidth())
+        Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.fillMaxWidth())
     }
     val k = ui.wishes["${row.staff},${row.day}"]
     if (!row.locked || k == null) {

@@ -2330,7 +2330,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             hasResult = true,
             engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
-            opNotice = OpNotice(++opNoticeSeq, cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
+            opNotice = OpNotice(++opNoticeSeq, cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", st.startDate, j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
                 undoStack.lastOrNull()?.serial ?: 0L),
         ) }
         logOp("I", "編集: ${opNm(i)} ${j + 1}日 → ${opSy(shift)}")
@@ -2382,7 +2382,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = ns
         autoSave()
         _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
-            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${j + 1}日を" + (if (on) "手動固定しました（自動では変更しません）" else "手動固定を外しました"),
+            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${DayText.short(st.startDate, j)} を" + (if (on) "手動固定しました（自動では変更しません）" else "手動固定を外しました"),
                 undoStack.lastOrNull()?.serial ?: 0L)).withWishDisplay(ns) }
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }

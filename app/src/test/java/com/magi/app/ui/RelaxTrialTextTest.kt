@@ -25,6 +25,7 @@ class RelaxTrialTextTest {
         wishes = st.wishes,
         lockedWishKeys = WishTrial.lockedWishKeys(st),
         wishSelfConflicts = V6SanityPort.wishSelfConflicts(st),
+        startDate = st.startDate,
     )
 
     @Test fun realData_ladderGoesToRelaxBeforeWishesAndTextNamesTheSet() {
@@ -39,17 +40,18 @@ class RelaxTrialTextTest {
         assertEquals(r.moves.size, t.moveLines.sumOf { it.count { c -> c == '→' } } + t.otherMoves)
         // 窓の外の手も全件が読める（畳むだけで隠さない）
         assertEquals(t.otherMoves, t.otherMoveLines.sumOf { it.count { c -> c == '→' } })
-        assertTrue(t.otherMoves > 0 && t.otherMoveLines.all { (it.substringBefore("日").toInt() - 1) !in r.window })
-        assertEquals("設定を緩める候補 — 職員10 8日〜9日 禁止の並び", t.dialogTitle)
+        assertTrue(t.otherMoves > 0 && t.otherMoveLines.all { (it.substringBefore("　").substringAfter("/").toInt() - 1) !in r.window })
+        assertEquals("設定を緩める候補 — 職員10 10/8〜10/9 禁止の並び", t.dialogTitle)
         assertEquals("必須違反: 5件 → 4件", t.hardLine)
         val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
         assertEquals("変更規模: 設定 5項目・${people}人・${r.moves.size}セル", t.scaleLine)
         assertEquals(3, t.prerequisiteRows.size)
+        assertTrue(t.prerequisiteRows[0], t.prerequisiteRows[0].contains("（10/") && t.moveLines[0].startsWith("10/7　"))
         assertEquals("この禁止の並びを解消できます。他の必須違反 4件 は残ります。", t.solveNote)
         println("S6 dialog: ${t.dialogTitle} / ${t.hardLine} / ${t.scaleLine}\n  pre=${t.prerequisiteRows}\n  set=${t.rows}\n  moves=${t.moveLines}\n  other=${t.otherMoveLines}\n  keep=${t.keepNote}")
         assertEquals("設定を緩めて手順を当てました: 必須違反 5 → 4。元に戻すで設定と勤務表をまとめて戻せます。", relaxDoneLine(r.h0, r.rr))
         val c = relaxCardText(r, ui)
-        assertEquals("職員10 8〜9日の禁止の並び（必須 5件中 1件）は、設定が壁になっています", c.headline)
+        assertEquals("職員10 10/8〜10/9の禁止の並び（必須 5件中 1件）は、設定が壁になっています", c.headline)
         assertEquals("希望を残したまま、設定と勤務表を手順で変えられます", c.body)
         assertEquals("残りの必須違反 4件はそのまま残ります", c.note)
         assertEquals(null, relaxCardText(r.copy(rr = 0), ui).note)

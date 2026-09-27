@@ -4,6 +4,14 @@ import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.WishTrial
+import com.magi.app.v6.formatDay
+
+/** 日付の表記の単一ソース（利用者決定 2026-09-26）: 既定「10/8(木)」、密な所（手順・一覧）「10/8」、範囲「10/8〜10/9」。開始日が読めなければ「8日」。 */
+internal object DayText {
+    fun full(startDate: String, j: Int): String = formatDay(startDate, j)
+    fun short(startDate: String, j: Int): String = formatDay(startDate, j).substringBefore('(')
+    fun range(startDate: String, a: Int, b: Int): String = if (a == b) full(startDate, a) else "${short(startDate, a)}〜${short(startDate, b)}"
+}
 
 /** 違反マップのキーの符号化。文字列なのは保存データ互換のため。組立と分解はここだけ＝
  *  各所で `split(",")` を書くと、どちらの添字が日かを取り違えても誰も気づけない。 */
@@ -218,7 +226,7 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
         buildList {
             if ("vio-pref" in fams) add(InvolvedWish(i, j, name, "希望の勤務になっていません"))
             // c3w の印は前日側のセルに付く＝ぶつかっている希望はその翌日。
-            if ("vio-c3w" in fams) add(InvolvedWish(i, j + 1, name, "前日（${j + 1}日）に置けない勤務が入っています"))
+            if ("vio-c3w" in fams) add(InvolvedWish(i, j + 1, name, "前日（${DayText.short(ui.startDate, j)}）に置けない勤務が入っています"))
             if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(InvolvedWish(i, j, name, "希望が禁止の並びに掛かっています"))
         }
     }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))
@@ -263,8 +271,8 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
         buildList {
             if ("vio-pref" in fams) add(Hit(i, j, 0, "希望の勤務になっていません"))
             if ("vio-c3w" in fams) {
-                add(Hit(i, j + 1, 1, "前日（${j + 1}日）に置けない勤務が入っています"))
-                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, "翌日（${j + 2}日）の希望の勤務の前日に置けない勤務の希望です"))
+                add(Hit(i, j + 1, 1, "前日（${DayText.short(ui.startDate, j)}）に置けない勤務が入っています"))
+                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, "翌日（${DayText.short(ui.startDate, j + 1)}）の希望の勤務の前日に置けない勤務の希望です"))
             }
             if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(Hit(i, j, 2, "希望が禁止の並びに掛かっています"))
         }
@@ -330,7 +338,7 @@ internal fun relaxTarget(r: RelaxTrial.Result, ui: UiState): RelaxTarget {
     val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
     val fam = listOf("c3n", "c3w", "pref", "groupViol").firstOrNull { "vio-$it" in fams } ?: "groupViol"
     val hardDays = r.window.filter { j -> ui.violationCellFamilies[VioKey.cell(r.staff, j)].orEmpty().any { isHardCellViolation(it) } }
-    val span = if (hardDays.size > 1) "${hardDays.first() + 1}日〜${hardDays.last() + 1}日" else "${r.day + 1}日"
+    val span = if (hardDays.size > 1) DayText.range(ui.startDate, hardDays.first(), hardDays.last()) else DayText.full(ui.startDate, r.day)
     return RelaxTarget(name, span, breakdownLabels[fam] ?: fam)
 }
 
@@ -373,10 +381,10 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     }
     val preRows = r.prerequisite.map { x ->
         val days = board.getOrNull(x.staff)?.indices?.filter { board[x.staff][it] == x.shift }.orEmpty()
-        "${row(x)}（${days.joinToString("・") { "${it + 1}日" }} に置いてあります）"
+        "${row(x)}（${days.joinToString("・") { DayText.short(ui.startDate, it) }} に置いてあります）"
     }
     fun dayLines(ms: List<RelaxTrial.Move>) = ms.groupBy { it.day }.toSortedMap().map { (d, xs) ->
-        "${d + 1}日　" + xs.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
+        "${DayText.short(ui.startDate, d)}　" + xs.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
     }
     val (inWin, outWin) = r.moves.partition { it.day in r.window }
     val lead = if (r.prerequisite.isEmpty()) "この組で緩めると、必須違反が ${r.att}件 減る見込みです。"
@@ -407,9 +415,8 @@ internal const val RELAX_SEARCHING_TEXT = "希望を変えずに、設定側で�
 
 internal fun relaxCardText(r: RelaxTrial.Result, ui: UiState): RelaxCardText {
     val t = relaxTarget(r, ui)
-    val span = t.span.replace("日〜", "〜")
     return RelaxCardText(
-        headline = "${t.name} ${span}の${t.what}（必須 ${r.h0}件中 ${r.h0 - r.rr}件）は、設定が壁になっています",
+        headline = "${t.name} ${t.span}の${t.what}（必須 ${r.h0}件中 ${r.h0 - r.rr}件）は、設定が壁になっています",
         body = "希望を残したまま、設定と勤務表を手順で変えられます",
         note = if (r.rr > 0) "残りの必須違反 ${r.rr}件はそのまま残ります" else null,
     )
@@ -581,7 +588,7 @@ internal fun noFixReasons(
     val i = f.staff; val k = f.shift; val d = f.day
     if (i != null && d != null) {
         val cur = cellAt(i, d)
-        if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${d + 1}日の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
+        if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${DayText.short(ui.startDate, d)} の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
     }
     if (i != null && k != null) {
         val days = ui.schedule.getOrNull(i)?.indices?.filter { cellAt(i, it) == k }.orEmpty()
@@ -591,7 +598,7 @@ internal fun noFixReasons(
         val (_, hi, _) = limits?.invoke(i, k) ?: Triple(null, null, null)
         if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は上限 0（置かない設定）です。"
         val tight = days.filter { j -> needLimits?.invoke(k, j)?.let { headcount(k, j) <= it.first } == true }
-        if (tight.isNotEmpty()) out += tight.joinToString("・") { "${it + 1}日" } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
+        if (tight.isNotEmpty()) out += tight.joinToString("・") { DayText.short(ui.startDate, it) } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
         val fixedOthers = (0 until ui.shifts.coerceAtLeast(ui.shiftSymbols.size)).filter { k2 ->
             if (k2 == k) return@filter false
             val (lo2, hi2, _) = limits?.invoke(i, k2) ?: return@filter false
@@ -604,7 +611,7 @@ internal fun noFixReasons(
         val here = ui.schedule.indices.filter { cellAt(it, d) == k }
         val pinned = here.filter { ui.wishes["$it,$d"] == k }
         if (pinned.isNotEmpty()) {
-            out += "${d + 1}日の「${sym(k)}」のうち " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } + " は本人の希望で固定されています。"
+            out += "${DayText.short(ui.startDate, d)} の「${sym(k)}」のうち " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } + " は本人の希望で固定されています。"
             wish = true
         }
     }
