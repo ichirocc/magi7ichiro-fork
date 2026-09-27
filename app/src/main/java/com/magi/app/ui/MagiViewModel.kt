@@ -2382,7 +2382,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = ns
         autoSave()
         _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
-            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${j + 1}日を" + (if (on) "固定しました（最適化で変わりません）" else "固定から外しました"),
+            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${j + 1}日を" + (if (on) "手動固定しました（自動では変更しません）" else "手動固定を外しました"),
                 undoStack.lastOrNull()?.serial ?: 0L)).withWishDisplay(ns) }
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }

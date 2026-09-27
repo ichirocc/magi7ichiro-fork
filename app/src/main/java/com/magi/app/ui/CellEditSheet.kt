@@ -234,7 +234,7 @@ internal fun CellEditSheet(
                             style = MaterialTheme.typography.bodyMedium, fontWeight = if (selSeg) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
-                val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・固定中" else "")
+                val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・手動固定" else "")
                 Text(wishText + (if (countLine.isNotEmpty()) "　回数 $countLine" else ""), style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
@@ -281,7 +281,7 @@ internal fun CellEditSheet(
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                             Icon(if (pinned) Icons.Outlined.LockOpen else Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(6.dp))
-                            Text(if (pinned) "固定を外す" else "固定する", maxLines = 1)
+                            Text(if (pinned) "手動固定を外す" else "手動固定する", maxLines = 1)
                         }
                     } else if (mode == 1 && wish != null) {
                         OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },

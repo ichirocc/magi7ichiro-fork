@@ -626,6 +626,10 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
             Box(Modifier.size(8.dp).background(vioSoftColor, CircleShape))
             Text("左上の点＝ほかの種類も重なっている", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Filled.Lock, contentDescription = null, tint = cs.onSurface, modifier = Modifier.size(MagiMarks.pinLock))
+            Text("右下の錠＝手動固定（自動では変更しません。周囲のセルを変えて解消できる場合はあります）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
         Text("名前の横の ▼▲＝回数の不足・超過／日付の下の「休▲」＝そのシフトの人員不足▼・過剰▲（タップで内訳）",
             style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Text(legendShapeFamilies(), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)

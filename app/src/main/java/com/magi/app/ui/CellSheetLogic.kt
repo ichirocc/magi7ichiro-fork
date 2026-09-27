@@ -39,8 +39,8 @@ internal enum class CellSeverity { HARD, SOFT, NONE }
 /** [cause] は接頭辞（必須/要調整）を除いた原因だけ（希望を守っている板挟みの 2 行目に使う）。 */
 internal data class CellStatus(val severity: CellSeverity, val text: String, val cause: String = "")
 
-/** [#41] 手動固定のセルに違反が残るときの状態の 1 行の言い方。 */
-internal const val PIN_BLOCKED_NOTE = "手動固定のため直せません"
+/** [#41] 手動固定のセルに違反が残るときの状態の 1 行の言い方（「直せない」と言わない＝周囲のセルを変えて解消できる場合はある）。 */
+internal const val PIN_BLOCKED_NOTE = "このセルは手動固定のため、自動では変更しません"
 
 /** セル・人員(当日の今のシフト)・回数(この職員の今のシフト) の族を重い順に並べる。族名は `vio-` なしの族キー。 */
 internal fun cellStatusFamilies(cellClasses: List<String>, needClasses: List<String>, countClasses: List<String>): List<String> =
@@ -56,7 +56,7 @@ internal fun cellStatusLine(state: MagiState, p: Problem, s: Array<IntArray>, i:
     val top = families.first()
     val hard = families.any { it in MirrorKeys.hard }
     val detail = familyDetail(state, p, s, i, j, top) ?: (breakdownLabels[top] ?: top)
-    // [#41] 手動固定のセルは違反を数えて見せたまま、最適化器も直し方も動かさないことを言う。
+    // [#41] 手動固定のセルは違反を数えて見せたまま、最適化器がこのセルを動かさないことを言う。
     val more = (if (families.size > 1) "（ほか${families.size - 1}件）" else "") +
         (if (i in 0 until p.S && j in 0 until p.T && p.pinned(i, j)) "。$PIN_BLOCKED_NOTE" else "")
     return if (hard) CellStatus(CellSeverity.HARD, "⚠ 必須：$detail$more", "$detail$more")
