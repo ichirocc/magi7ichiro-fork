@@ -161,6 +161,41 @@ internal fun singleCellHopeless(marks: ShiftMarks, candidates: Collection<Int>, 
     return marks.recommended.isEmpty() && others.isNotEmpty() && others.all { it in marks.hardRisk }
 }
 
+/** 全部 ⚠ の理由 1 行（無ければ null）: 本人の希望のセル→希望違反、前日（翌日）から続く禁止の並び→その日の勤務を名指し。
+ *  候補ごとの増える必須の形が混ざるときは言わない（推測を書かない）。 */
+internal fun allRiskReason(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, marks: ShiftMarks, candidates: Collection<Int>): String? {
+    val cur = s[i][j]
+    if (!singleCellHopeless(marks, candidates, cur)) return null
+    fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
+    if (p.wish.getOrNull(i)?.getOrNull(j) == cur) return "${sym(cur)} は本人の希望なので、ほかへ変えると希望違反になります"
+    val trial = Array(s.size) { s[it].copyOf() }
+    var fromPrev = true; var fromNext = true
+    for (k in marks.hardRisk) {
+        trial[i][j] = k
+        val run = forbiddenRunAt(p, trial, i, j, p.cons3n) ?: return null
+        val (seq, j0) = run
+        if (!(j0 < j && trial[i][j - 1] == s[i][j - 1])) fromPrev = false
+        if (!(j0 == j && seq.size > 1)) fromNext = false
+    }
+    val keep = candidates.filter { it !in marks.hardRisk }.joinToString("・") { sym(it) }
+    val tail = if (keep.isEmpty()) "どれに変えても禁止の並びになります" else "$keep 以外はどれも禁止の並びになります"
+    return when {
+        fromPrev && j > 0 -> "前日が ${sym(s[i][j - 1])} なので、$tail"
+        fromNext && j + 1 < p.T -> "翌日が ${sym(s[i][j + 1])} なので、$tail"
+        else -> null
+    }
+}
+
+/** 状態の下の「関連セル: 10/9(金) A4（希望・反映済）」（同じ違反のもう一方のセル。無ければ null）。 */
+internal fun relatedCellsLine(state: MagiState, s: Array<IntArray>, i: Int, partners: List<Int>): String? {
+    if (partners.isEmpty()) return null
+    fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
+    return "関連セル: " + partners.joinToString("、") { d ->
+        val w = state.wishes["$i,$d"]
+        DayText.full(state.startDate, d) + " " + sym(s[i][d]) + (if (w == null) "" else if (w == s[i][d]) "（希望・反映済）" else "（希望・未反映）")
+    }
+}
+
 /**
  * セル (i,j) を各候補にしたときの印。おすすめは、必須のあるセルなら必須が減りどの必須族も増えない、
  * 要調整だけのセルなら重み付きの合計が減りどの必須族も増えない候補（違反の無いセルには付けない）。

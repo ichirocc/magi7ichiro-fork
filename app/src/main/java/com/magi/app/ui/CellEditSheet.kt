@@ -146,8 +146,16 @@ internal fun CellEditSheet(
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
                 StatusRow(status, if (dilemma) wishKeptLine(sym(wish)) else null)
+                val partners = remember(rev, cell) {
+                    if (status.severity != CellSeverity.HARD) emptyList()
+                    else stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
+                }
+                if (mode == 0) remember(rev, cell) { stateOf()?.let { st -> relatedCellsLine(st, ui.schedule.toIntArray2D(), i, partners) } }
+                    ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 if (mode == 0 && status.severity != CellSeverity.NONE && singleCellHopeless(marks, canDoSet, current)) {
                     Text(SINGLE_CELL_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    remember(marks, rev, cell) { stateOf()?.let { st -> allRiskReason(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, marks, canDoSet) } }
+                        ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 }
                 if (c1Here != null && c1Here.stuck && mode == 0) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -167,9 +175,6 @@ internal fun CellEditSheet(
                         FixSearchPanel(ui, cv, focus, onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
                         // 他の人の手が無いとき、同じ違反のもう一方のセルへ（希望は触らない）。
                         if (fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key) == FixPanelState.DONE && ui.fixSuggestions.isEmpty()) {
-                            val partners = remember(rev, cell) {
-                                stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
-                            }
                             partners.forEach { d ->
                                 OutlinedButton(onClick = { onMove(i to d) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(partnerCellLabel(ui.startDate, d, partners.size == 1), maxLines = 2) }
                             }

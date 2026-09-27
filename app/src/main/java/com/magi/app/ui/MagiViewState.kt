@@ -589,6 +589,11 @@ internal fun noFixReasons(
     if (i != null && d != null) {
         val cur = cellAt(i, d)
         if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${DayText.short(ui.startDate, d)} の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
+        // 禁止の並びの相手が本人の希望のセル＝このセルを動かしても並びは希望側に残る。
+        if ("vio-c3n" in ui.violationCellFamilies[VioKey.cell(i, d)].orEmpty()) {
+            val near = listOf(d - 1, d + 1).filter { n -> ui.wishes["$i,$n"]?.let { it == cellAt(i, n) } == true && "vio-c3n" in ui.violationCellFamilies[VioKey.cell(i, n)].orEmpty() }
+            if (near.isNotEmpty()) { out += "この並びには本人の希望（" + near.joinToString("・") { "${DayText.short(ui.startDate, it)} の「${sym(cellAt(i, it)!!)}」" } + "）が入っています。"; wish = true }
+        }
     }
     if (i != null && k != null) {
         val days = ui.schedule.getOrNull(i)?.indices?.filter { cellAt(i, it) == k }.orEmpty()
@@ -606,6 +611,10 @@ internal fun noFixReasons(
         }
         if (fixedOthers.isNotEmpty()) out += "ほかの勤務は下限＝上限で固定です（" +
             fixedOthers.joinToString("・") { k2 -> "${sym(k2)} ${limits!!.invoke(i, k2).first}回" } + "）。"
+    }
+    if (f.exceptStaff != null && d != null) {
+        val w = ui.wishes["${f.exceptStaff},$d"]
+        if (w != null && w == cellAt(f.exceptStaff, d)) { out += "本人の希望（${DayText.short(ui.startDate, d)} の「${sym(w)}」）は守ったままです。"; wish = true }
     }
     if (i == null && k != null && d != null) {
         val here = ui.schedule.indices.filter { cellAt(it, d) == k }
