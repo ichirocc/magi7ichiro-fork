@@ -227,7 +227,7 @@ internal fun LiveScheduleCard(ui: UiState) {
 }
 
 /**
- * [operator_ux §5] 「なおすのを手伝って」対話。人手不足を1タップで埋める誘導フロー。
+ * [operator_ux §5] 「なおすのを手伝って」対話。人員不足を1タップで埋める誘導フロー。
  * いまの診断(coverageDiag)から「充足可能」な不足枠を1つ取り上げ、入れられる職員を大ボタンで提示。
  * タップ→反映(setCell, Undo可)→診断が更新され次の枠へ自動で進む。埋められない枠は理由つきで提示。
  */
@@ -606,13 +606,12 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
             // [B4] 色名は固定しない（ユーザーが違反色を変更でき、凡例とグリッドが食い違うため）。
             //   実線/破線の形状＋左の色見本が真の手がかり（色覚配慮＝形状符号化）。
-            // [レイアウト刷新] モックアップのカジュアルな言い回しへ変更（ユーザー明示選択・3.133.0の「必須違反/
-            //   要調整」統一を本箇所に限り上書き）。3段階の強度区分(実線/破線/角マーク)自体は3.99.0のまま不変。
-            Text("実線＝絶対NG", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            // 語は凡例も「必須／要調整」（利用者決定 2026-09-27。旧「絶対NG／できれば直す」）。3段階の強度区分(実線/破線/角マーク)は3.99.0のまま。
+            Text("実線の枠＝必須", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioSoftColor, 4.dp))
-            Text("破線＝できれば直す（重）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("破線の枠＝要調整（重）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(width = 22.dp, height = 16.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(4.dp)).drawBehind {
@@ -620,11 +619,15 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
                 val p = Path().apply { moveTo(size.width - t, 0f); lineTo(size.width, 0f); lineTo(size.width, t); close() }
                 drawPath(p, vioSoftColor)
             })
-            Text("右上の角＝できれば直す（軽）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("右上の角＝要調整（軽）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(8.dp).background(vioSoftColor, CircleShape))
             Text("左上の点＝ほかの種類も重なっている", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Filled.Lock, contentDescription = null, tint = cs.onSurface, modifier = Modifier.size(MagiMarks.pinLock))
+            Text("右下の錠＝手動固定（自動では変更しません。周囲のセルを変えて解消できる場合はあります）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Text("名前の横の ▼▲＝回数の不足・超過／日付の下の「休▲」＝そのシフトの人員不足▼・過剰▲（タップで内訳）",
             style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
@@ -1267,11 +1270,11 @@ private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count
     if (assigned.isNotEmpty()) {
         lines += "在勤: " + assigned.joinToString("・") { i ->
             val nm = ui.staffNames.getOrNull(i) ?: "#$i"
-            if (i in pinned) "$nm（希望固定）" else nm
+            if (i in pinned) "$nm（本人の希望）" else nm
         }
     }
     if (pinned.isNotEmpty()) {
-        lines += "希望で固定: " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } +
+        lines += "本人の希望: " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } +
             "（必須の希望どうしが同じ日に重なり、どちらかの希望を取り消さない限り過剰は残ります）"
     }
     return TallyDetailUi("$sym ・ ${j + 1}日", lines, null, k, day = j, pinned = pinned, assigned = assigned)
@@ -1606,7 +1609,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             val wishSym = if (wkk == 2) ui.wishes["$i,$d"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "" else ""
                             val cellPinned = VioKey.cell(i, d) in ui.manualPins
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
-                                (if (vk == 1) "・絶対NG" else if (vk >= 2) "・できれば直す" else "") +
+                                (if (vk == 1) "・必須" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") +
                                 (if (cellPinned) "・手動固定" else "") + "、タップで変更"
                             // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
@@ -1623,7 +1626,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         GridMarkDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountLines(ui, i, cv?.let { c -> c::staffCellLimits }), onDismiss = { staffSheet = null }) {
             if (i in vs.c1Stuck) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
-                OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
             }
             FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
         }
@@ -1747,6 +1750,7 @@ internal fun FixSearchPanel(
     ui: UiState, cv: ConditionsView?, focus: FixFocus, onEvent: (MagiEvent) -> Unit,
     nav: FixNav, onApplied: () -> Unit,
     compact: Boolean = false,   // セル編集シートの上段: 手は 1 件・理由は 2 行まで
+    settingsLabel: String? = null,   // 手が無いときの設定への行き先の名（null＝節ごとの名 settingsLabelFor）
 ) {
     val cs = MaterialTheme.colorScheme
     val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null })) }
@@ -1790,7 +1794,7 @@ internal fun FixSearchPanel(
                 else why.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (why.wishRelated) OutlinedButton(onClick = { nav.onWishes(focus.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
-                    OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                    OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabel ?: settingsLabelFor(why.settingsSection)) }
                 }
             }
         }

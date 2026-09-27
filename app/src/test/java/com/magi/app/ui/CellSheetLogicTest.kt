@@ -101,6 +101,27 @@ class CellSheetLogicTest {
         assertEquals(ShiftMarks(), evaluateShiftMarks(st, s, i, 0, CellSeverity.HARD, cands, stillWanted = { false }))
     }
 
+    /** 職員10 10/8・10/9: おすすめ 0・置ける候補が全部警告＝1 マスでは直らない注記。印の計算前や、おすすめがあるセルには出ない。 */
+    @Test fun allRiskCellGetsTheSingleCellNote() {
+        val i = staff("職員10")
+        val cands = p.canDoShiftsForStaff(i).toSet()
+        for (j in listOf(7, 8)) {
+            val m = evaluateShiftMarks(st, s, i, j, CellSeverity.HARD, cands.sorted())
+            assertTrue("10/${j + 1}", singleCellHopeless(m, cands, s[i][j]))
+        }
+        val m8 = evaluateShiftMarks(st, s, i, 7, CellSeverity.HARD, cands.sorted())
+        assertEquals("前日が Dﾃ なので、Dﾃ 以外はどれも禁止の並びになります", allRiskReason(st, p, s, i, 7, m8, cands))
+        val m9 = evaluateShiftMarks(st, s, i, 8, CellSeverity.HARD, cands.sorted())
+        assertEquals("A4 は本人の希望なので、ほかへ変えると希望と違う勤務になります", allRiskReason(st, p, s, i, 8, m9, cands))
+        assertEquals(null, allRiskReason(st, p, s, i, 7, ShiftMarks(), cands))
+        assertEquals("関連セル: 10/9(金) A4（希望・反映済）", relatedCellsLine(st, s, i, listOf(8)))
+        assertEquals("関連セル: 10/8(木) Dﾃ", relatedCellsLine(st, s, i, listOf(7)))
+        assertEquals(null, relatedCellsLine(st, s, i, emptyList()))
+        assertTrue(!singleCellHopeless(ShiftMarks(), cands, s[i][7]))
+        assertTrue(!singleCellHopeless(ShiftMarks(recommended = setOf(0), hardRisk = cands - 0), cands, s[i][7]))
+        assertTrue(!singleCellHopeless(ShiftMarks(hardRisk = cands), setOf(s[i][7]), s[i][7]))
+    }
+
     /** 職員1010/8 に A4 を置くと禁止の並びが増える＝警告の印。 */
     @Test fun a4OnStaff10Oct8IsMarkedAsHardRisk() {
         val i = staff("職員10")
@@ -141,6 +162,24 @@ class CellSheetLogicTest {
         assertTrue(real.isNotEmpty() && real.all { (a, b) -> rep.cellFamilies["$a,$b"]!!.any { isHardCellViolation(it) } })
     }
 
+    /** 巡回は違反単位: 実データの必須 5 件（c3n 4＋c3w 1）が 5 件、日→職員の順、職員10 は 10/8〜10/9 の 1 件、人員不足は別の 1 行。 */
+    @Test fun tourItemsAreOnePerHardViolation() {
+        val items = hardViolationItems(st, p, s, rep.cellFamilies)
+        println(items.map { it.heading })
+        assertEquals(rep.hard - (rep.breakdown["covU"] ?: 0), items.size)
+        assertEquals(items.sortedWith(compareBy({ it.days.first() }, { it.staff })), items)
+        val a = items.single { it.staff == staff("職員10") }
+        assertEquals(listOf(7, 8), a.days)
+        assertEquals("禁止の並び Dﾃ→A4 ・ 10/8〜10/9", a.heading)
+        val w = items.single { it.family == "c3w" }
+        assertEquals(staff("職員03") to 0, w.cell)
+        assertEquals(listOf(0, 1), w.days)
+        assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9", tourHeading(items, items.indexOf(a)))
+        assertEquals(null, tourHeading(items, 9))
+        assertEquals("ほかに人員不足 2件（日ヘッダから）", tourCovULine(2))
+        assertEquals(null, tourCovULine(0))
+    }
+
     @Test fun countLineAndDayLabels() {
         val keys = rep.countFamilies.keys.mapNotNull { VioKey.first(it) }
         val i = keys.first()
@@ -148,10 +187,10 @@ class CellSheetLogicTest {
         println("count line 職員${i + 1}: $line")
         assertTrue(line, line.contains("▼") || line.contains("▲"))
         assertEquals("", staffCountShort(st, p, s, i, emptyMap()))
-        assertEquals("7日(水)", adjacentDayLabel("2026-10-01", 31, 6))
+        assertEquals("10/7(水)", adjacentDayLabel("2026-10-01", 31, 6))
         assertEquals(null, adjacentDayLabel("2026-10-01", 31, 31))
         assertEquals(null, adjacentDayLabel("2026-10-01", 31, -1))
-        assertEquals("職員01 3日をA4に変更しました", cellChangedMessage("職員01", 2, "A4"))
+        assertEquals("職員01 10/3 をA4に変更しました", cellChangedMessage("職員01", "2026-10-01", 2, "A4"))
     }
 
     @Test fun fixesByOthersKeepThePersonAndTheDay() {
@@ -182,6 +221,40 @@ class CellSheetLogicTest {
         assertEquals(st.wishes, undone.wishes)
         assertEquals(before.lockedWishKeys, undone.lockedWishKeys)
         assertTrue(cellSheetRev(afterWish) != cellSheetRev(undone))
+    }
+
+    /** [S6] 起点の窓と手順のセルだけがホームの組を引き継ぐ。探索中・組なしはそれぞれの言い方、セルごとの試算はしない。 */
+    @Test fun relaxHandoffOnlyForCellsTheFoundSetTouches() {
+        val r = com.magi.app.v6.RelaxTrial.firstWall(st, s) as com.magi.app.v6.RelaxTrial.Result
+        val i = staff("職員10")
+        assertEquals(i to 7, r.staff to r.day)
+        assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, i, 7))
+        assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, i, 8))
+        val touched = r.moves.first { it.staff != i }
+        assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, touched.staff, touched.day))
+        assertEquals(RelaxHandoff.NONE, relaxHandoff(r, false, false, i, 20))
+        assertEquals(RelaxHandoff.NONE, relaxHandoff(r, true, true, i, 20))
+        assertEquals(RelaxHandoff.SEARCHING, relaxHandoff(null, true, false, i, 7))
+        assertEquals(RelaxHandoff.NO_WALL, relaxHandoff(null, false, true, i, 7))
+        assertEquals(RelaxHandoff.NONE, relaxHandoff(null, false, false, i, 7))
+        val ui = UiState(staffNames = st.staff.map { it.name }, shiftSymbols = st.shifts.map { it.kigou }, violationCellFamilies = rep.cellFamilies)
+        assertEquals("設定を緩めると、この禁止の並びを解消できる見込みです（上限 2件）", relaxHandoffLine(r, ui))
+    }
+
+    /** 職員10 10/9（A4 の希望を守る板挟み）: 同じ禁止の並びのもう一方は 10/8。10/8 から見れば 10/9。c3w は印の前日と希望の翌日。 */
+    @Test fun partnerCellOfTheSameViolation() {
+        val i = staff("職員10")
+        fun fams(j: Int) = cellStatusFamilies(rep.cellFamilies["$i,$j"].orEmpty(), emptyList(), emptyList())
+        assertEquals(listOf(7), violationPartnerDays(p, s, i, 8, fams(8), rep.cellFamilies))
+        assertEquals(listOf(8), violationPartnerDays(p, s, i, 7, fams(7), rep.cellFamilies))
+        assertEquals("同じ違反のもう一方のセル（10/8(木)）を見る", partnerCellLabel(st.startDate, 7, true))
+        assertEquals("同じ違反のほかのセル（10/8(木)）を見る", partnerCellLabel(st.startDate, 7, false))
+        assertEquals("10/8〜10/9", DayText.range(st.startDate, 7, 8))
+        assertEquals("10/8(木)", DayText.range(st.startDate, 7, 7))
+        assertEquals("8日", DayText.full("", 7))
+        val w = staff("職員03")
+        assertEquals(listOf(1), violationPartnerDays(p, s, w, 0, listOf("c3w"), rep.cellFamilies))
+        assertEquals(listOf(0), violationPartnerDays(p, s, w, 1, emptyList(), rep.cellFamilies))
     }
 
     @Test fun fixPanelStatesSpinOnlyWhileRunning() {

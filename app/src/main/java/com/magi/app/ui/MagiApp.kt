@@ -68,6 +68,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.magi.app.v6.toIntArray2D
+import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.V6PortReport
 import com.magi.app.v6.V6Algorithm
 import com.magi.app.v6.CoverageVerdict
@@ -194,6 +196,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val haptic = LocalHapticFeedback.current
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var tourActive by remember { mutableStateOf(false) }   // 「必須違反を順に見る」の巡回中
+    var tourAt by remember { mutableIntStateOf(0) }         // 巡回の何件目か（違反単位、`hardViolationItems`）
+    val tourItems = remember(ui.violationCellFamilies, ui.schedule) {
+        val st = vm.state
+        if (st == null || ui.schedule.isEmpty()) emptyList() else hardViolationItems(st, cachedProblem(st), ui.schedule.toIntArray2D(), ui.violationCellFamilies)
+    }
+    var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
@@ -436,6 +444,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
     var focusRange by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
+    // 巡回の 1 件へ移る: 見出しの何件目か・セル・関連セルの強調をまとめて更新する（違反単位）。
+    val goTourItem: (Int) -> Unit = { at ->
+        tourItems.getOrNull(at)?.let { it ->
+            tab = 1; tourActive = true; tourAt = at; editingCell = it.cell
+            focusRange = Triple(it.staff, it.days.first(), it.days.last())
+        }
+    }
     // [E7/3.459.0] 違反 種別フィルタ。旧: 勤務表タブ(1)のブロック内だけの局所状態だったが、分析タブの
     //   [3.471.0] 分析タブの統合カードは撤去したので、いまの共有先は勤務表タブのグリッド/集計のみ。初期=全ON。
     //   bitmask(Int)で rememberSaveable 保存（回転/プロセス復元で保持）。表示のみ・スコアリング不変。
@@ -498,10 +513,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }, onHardTour = {
-            violationTour(ui).firstOrNull()?.let { c ->
-                tab = 1; tourActive = true; editingCell = c
-                focusRange = vm.violationRange(c.first, c.second)?.let { Triple(c.first, it.first, it.second) }
-            }
+            if (tourItems.isNotEmpty()) goTourItem(0)
         }) },
         bottomBar = {
             Column {
@@ -577,7 +589,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
                         outcomeLine = vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
-                        relaxFound = vm.relaxTrialFor() != null,
+                        relax = vm.relaxTrialFor(),
                         onShowRelax = { relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
                     )
@@ -833,7 +845,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     focusRange = vm.violationRange(c.first, c.second)?.let { Triple(c.first, it.first, it.second) }
                 }
             }
-            val tour = if (tourActive) remember(ui.violationCellFamilies) { violationTour(ui) } else emptyList()
             val maxH = (LocalConfiguration.current.screenHeightDp * 0.62f).dp
             Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.BottomCenter) {
                 CellEditSheet(
@@ -846,12 +857,19 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onEvent(MagiEvent.Board.SetCell(cell.first, cell.second, k))
                     },
-                    onMove = moveTo,
+                    onMove = { c -> if (tourActive && tourItems.size > 1 && c == tourItems[(tourAt + 1) % tourItems.size].cell) goTourItem((tourAt + 1) % tourItems.size) else moveTo(c) },
                     onDismiss = closeSheet,
                     modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
                     fixNav = fixNav,
-                    tourNext = nextTourCell(tour, cell),
+                    tourNext = if (tourActive && tourItems.size > 1) tourItems[(tourAt + 1) % tourItems.size].cell else null,
+                    tourHeading = if (tourActive) tourHeading(tourItems, tourAt) else null,
+                    tourCovULine = if (tourActive) tourCovULine(ui.breakdown["covU"] ?: 0) else null,
                     leftHand = leftHand,
+                    relax = vm.relaxTrialFor(),
+                    relaxNoWall = vm.relaxNoWall(),
+                    onShowRelax = { relaxDialog = true },
+                    mode = sheetMode,
+                    onMode = { sheetMode = it },
                 )
             }
         }
@@ -865,12 +883,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
-                wishConflicts = false; tab = 1; editingCell = i to j
+                wishConflicts = false; tab = 1; editingCell = i to j; sheetMode = 1
             }, onConfirm = { token ->
                 wishConflicts = false; vm.cancelWishAndRebuild(token)
             }, onRebuild = {
                 wishConflicts = false; onEvent(MagiEvent.Run.Optimize)
-            })
+            }, relaxFound = vm.relaxTrialFor() != null, onShowRelax = { wishConflicts = false; relaxDialog = true })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(
@@ -1109,11 +1127,11 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("前回の最適化は中断されました", style = MaterialTheme.typography.titleMedium)
-            Text(ui.interruptedInfo ?: "入力は自動保存済みです。もう一度実行できます。",
+            Text(ui.interruptedInfo ?: "入力は自動保存済みです。もう一度つくれます。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = onRerun, enabled = ui.loaded,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("もう一度実行") }
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("もう一度つくる") }
                 OutlinedButton(onClick = onDismiss,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }

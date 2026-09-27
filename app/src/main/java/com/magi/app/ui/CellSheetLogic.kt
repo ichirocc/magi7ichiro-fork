@@ -3,9 +3,9 @@ package com.magi.app.ui
 import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.Problem
+import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.canDo
-import com.magi.app.v6.formatDay
 import com.magi.app.v6.pinned
 
 /**
@@ -38,8 +38,8 @@ internal enum class CellSeverity { HARD, SOFT, NONE }
 /** [cause] は接頭辞（必須/要調整）を除いた原因だけ（希望を守っている板挟みの 2 行目に使う）。 */
 internal data class CellStatus(val severity: CellSeverity, val text: String, val cause: String = "")
 
-/** [#41] 手動固定のセルに違反が残るときの状態の 1 行の言い方。 */
-internal const val PIN_BLOCKED_NOTE = "手動固定のため直せません"
+/** [#41] 手動固定のセルに違反が残るときの状態の 1 行の言い方（「直せない」と言わない＝周囲のセルを変えて解消できる場合はある）。 */
+internal const val PIN_BLOCKED_NOTE = "このセルは手動固定のため、自動では変更しません"
 
 /** セル・人員(当日の今のシフト)・回数(この職員の今のシフト) の族を重い順に並べる。族名は `vio-` なしの族キー。 */
 internal fun cellStatusFamilies(cellClasses: List<String>, needClasses: List<String>, countClasses: List<String>): List<String> =
@@ -55,7 +55,7 @@ internal fun cellStatusLine(state: MagiState, p: Problem, s: Array<IntArray>, i:
     val top = families.first()
     val hard = families.any { it in MirrorKeys.hard }
     val detail = familyDetail(state, p, s, i, j, top) ?: (breakdownLabels[top] ?: top)
-    // [#41] 手動固定のセルは違反を数えて見せたまま、最適化器も直し方も動かさないことを言う。
+    // [#41] 手動固定のセルは違反を数えて見せたまま、最適化器がこのセルを動かさないことを言う。
     val more = (if (families.size > 1) "（ほか${families.size - 1}件）" else "") +
         (if (i in 0 until p.S && j in 0 until p.T && p.pinned(i, j)) "。$PIN_BLOCKED_NOTE" else "")
     return if (hard) CellStatus(CellSeverity.HARD, "⚠ 必須：$detail$more", "$detail$more")
@@ -65,7 +65,8 @@ internal fun cellStatusLine(state: MagiState, p: Problem, s: Array<IntArray>, i:
 private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, fam: String): String? {
     fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
     fun name(x: Int) = state.staff.getOrNull(x)?.name ?: "#$x"
-    fun day(d: Int) = formatDay(state.startDate, d).substringBefore('(')
+    fun day(d: Int) = DayText.short(state.startDate, d)
+    fun dayFull(d: Int) = DayText.full(state.startDate, d)
     val cur = s.getOrNull(i)?.getOrNull(j) ?: -1
     val count = { k: Int -> s[i].count { it == k } }
     return when (fam) {
@@ -79,7 +80,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
         "c3", "c3m" -> {
             val list = if (fam == "c3") p.cons3 else p.cons3m
             list.firstOrNull { it.seq.firstOrNull() == cur }?.let { c ->
-                "${breakdownLabels[fam]} ${c.seq.joinToString("→") { sym(it) }} が${day(j)}から続かない"
+                "${breakdownLabels[fam]} ${c.seq.joinToString("→") { sym(it) }} が${dayFull(j)}から続かない"
             }
         }
         "c42s", "c42" -> {
@@ -100,8 +101,8 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
             val lo = p.need1[cur][j]
             val hi = if (p.use2 && p.need2[cur][j] >= 0) p.need2[cur][j] else lo
             val n = (0 until p.S).count { s[it][j] == cur }
-            if (fam == "covU") "${day(j)}の${sym(cur)}が人員不足（必要${lo}人に${n}人）"
-            else "${day(j)}の${sym(cur)}が人員過剰（適正${hi}人に${n}人）"
+            if (fam == "covU") "${dayFull(j)}の${sym(cur)}が人員不足（必要${lo}人に${n}人）"
+            else "${dayFull(j)}の${sym(cur)}が人員過剰（適正${hi}人に${n}人）"
         }
         "c41s", "c41" -> if (cur < 0) null else {
             val skill = fam == "c41s"
@@ -123,7 +124,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
 }
 
 /** セル (i,j) を含む、完全に一致した禁止の並び（最初の 1 つ）と開始日。 */
-private fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list: List<com.magi.app.v6.C3>): Pair<IntArray, Int>? {
+internal fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list: List<com.magi.app.v6.C3>): Pair<IntArray, Int>? {
     for (c in list) {
         val d = c.seq.size
         for (j0 in (j - d + 1).coerceAtLeast(0)..j) {
@@ -134,8 +135,66 @@ private fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list:
     return null
 }
 
+/** 同じ違反のもう一方のセルの日（板挟みで他の人の手が無いときの行き先）。禁止の並びは一致した並びの他の日、
+ *  希望の前日の禁止は印のある前日⇄希望の翌日。チェッカーの印だけから決め、希望は触らない。 */
+internal fun violationPartnerDays(p: Problem, s: Array<IntArray>, i: Int, j: Int, families: List<String>, cellFamilies: Map<String, List<String>>): List<Int> {
+    val out = LinkedHashSet<Int>()
+    for (fam in families) when (fam) {
+        "c3n", "c3mn" -> forbiddenRunAt(p, s, i, j, if (fam == "c3n") p.cons3n else p.cons3mn)?.let { (seq, j0) -> for (d in j0 until j0 + seq.size) if (d != j) out += d }
+        "c3w" -> if (j + 1 < p.T) out += j + 1
+    }
+    if (j > 0 && "vio-c3w" in cellFamilies[VioKey.cell(i, j - 1)].orEmpty()) out += j - 1
+    return out.filter { it in 0 until p.T }.sorted()
+}
+
+internal fun partnerCellLabel(startDate: String, day: Int, single: Boolean): String =
+    if (single) "同じ違反のもう一方のセル（${DayText.full(startDate, day)}）を見る" else "同じ違反のほかのセル（${DayText.full(startDate, day)}）を見る"
+
 /** シフトボタンの印。[recommended]＝緑の点、[hardRisk]＝置くと必須の族が増える（警告の印）。 */
 internal data class ShiftMarks(val recommended: Set<Int> = emptySet(), val hardRisk: Set<Int> = emptySet())
+
+internal const val SINGLE_CELL_NOTE = "1 マスでは直りません。前後の日の組み合わせが必要です。"
+
+/** おすすめが無く、置ける候補（今の値を除く）がすべて必須を増やす印なら、この 1 マスだけでは直らない。印の計算前（空）は false。 */
+internal fun singleCellHopeless(marks: ShiftMarks, candidates: Collection<Int>, current: Int): Boolean {
+    val others = candidates.filter { it != current }
+    return marks.recommended.isEmpty() && others.isNotEmpty() && others.all { it in marks.hardRisk }
+}
+
+/** 全部 ⚠ の理由 1 行（無ければ null）: 本人の希望のセル→希望と違う勤務、前日（翌日）から続く禁止の並び→その日の勤務を名指し。
+ *  候補ごとの増える必須の形が混ざるときは言わない（推測を書かない）。 */
+internal fun allRiskReason(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, marks: ShiftMarks, candidates: Collection<Int>): String? {
+    val cur = s[i][j]
+    if (!singleCellHopeless(marks, candidates, cur)) return null
+    fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
+    if (p.wish.getOrNull(i)?.getOrNull(j) == cur) return "${sym(cur)} は本人の希望なので、ほかへ変えると希望と違う勤務になります"
+    val trial = Array(s.size) { s[it].copyOf() }
+    var fromPrev = true; var fromNext = true
+    for (k in marks.hardRisk) {
+        trial[i][j] = k
+        val run = forbiddenRunAt(p, trial, i, j, p.cons3n) ?: return null
+        val (seq, j0) = run
+        if (!(j0 < j && trial[i][j - 1] == s[i][j - 1])) fromPrev = false
+        if (!(j0 == j && seq.size > 1)) fromNext = false
+    }
+    val keep = candidates.filter { it !in marks.hardRisk }.joinToString("・") { sym(it) }
+    val tail = if (keep.isEmpty()) "どれに変えても禁止の並びになります" else "$keep 以外はどれも禁止の並びになります"
+    return when {
+        fromPrev && j > 0 -> "前日が ${sym(s[i][j - 1])} なので、$tail"
+        fromNext && j + 1 < p.T -> "翌日が ${sym(s[i][j + 1])} なので、$tail"
+        else -> null
+    }
+}
+
+/** 状態の下の「関連セル: 10/9(金) A4（希望・反映済）」（同じ違反のもう一方のセル。無ければ null）。 */
+internal fun relatedCellsLine(state: MagiState, s: Array<IntArray>, i: Int, partners: List<Int>): String? {
+    if (partners.isEmpty()) return null
+    fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
+    return "関連セル: " + partners.joinToString("、") { d ->
+        val w = state.wishes["$i,$d"]
+        DayText.full(state.startDate, d) + " " + sym(s[i][d]) + (if (w == null) "" else if (w == s[i][d]) "（希望・反映済）" else "（希望・未反映）")
+    }
+}
 
 /**
  * セル (i,j) を各候補にしたときの印。おすすめは、必須のあるセルなら必須が減りどの必須族も増えない、
@@ -190,9 +249,9 @@ internal fun staffCountShort(state: MagiState, p: Problem, s: Array<IntArray>, i
     return parts.joinToString(" ")
 }
 
-/** 日送りボタンの日付「7日(水)」（範囲外は null＝押せない）。 */
+/** 日送りボタンの日付「10/7(水)」（範囲外は null＝押せない）。 */
 internal fun adjacentDayLabel(startDate: String, days: Int, j: Int): String? =
-    j.takeIf { it in 0 until days }?.let { d -> formatDay(startDate, d).let { f -> if ('/' in f) f.substringAfter('/').replaceFirst("(", "日(") else f } }
+    j.takeIf { it in 0 until days }?.let { DayText.full(startDate, it) }
 
 /** 希望タブの現在値の注記。 */
 internal fun wishTabState(wish: Int?, current: Int): String = when {
@@ -221,6 +280,43 @@ internal fun violationTour(ui: UiState, includeSoft: Boolean = false): List<Pair
     val pick = if (hard.isNotEmpty() && !includeSoft) hard else cells
     return pick.sortedWith(compareBy({ !it.third }, { it.second }, { it.first })).map { it.first to it.second }
 }
+
+/** 巡回の 1 件＝必須違反 1 件（族・職員・関連セルの日・見出し）。1 セルが 2 件に属せば 2 回止まる（`report.hard` の数え方と同じ）。
+ *  セルで辿れる族だけ（c3n＝並びの全日、c3w＝前日＋希望の翌日、pref/groupViol＝1 セル）。人員不足は日ヘッダから＝件数は別に添える。 */
+internal data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String) {
+    val cell: Pair<Int, Int> get() = staff to days.first()
+}
+
+internal fun hardViolationItems(state: MagiState, p: Problem, s: Array<IntArray>, cellFamilies: Map<String, List<String>>): List<TourItem> {
+    fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
+    fun span(days: List<Int>) = DayText.range(state.startDate, days.first(), days.last())
+    val out = LinkedHashMap<String, TourItem>()
+    for ((key, fams) in cellFamilies) {
+        val i = VioKey.first(key) ?: continue
+        val j = VioKey.second(key) ?: continue
+        if (i !in 0 until p.S || j !in 0 until p.T) continue
+        for (cls in fams) when (val fam = familyOfVioClass(cls)) {
+            "c3n" -> forbiddenRunAt(p, s, i, j, p.cons3n)?.let { (seq, j0) ->
+                val days = (j0 until j0 + seq.size).toList()
+                out.getOrPut("c3n,$i,$j0,${seq.joinToString(",")}") {
+                    TourItem(fam, i, days, "${breakdownLabels["c3n"]} ${seq.joinToString("→") { sym(it) }} ・ ${span(days)}")
+                }
+            }
+            "c3w" -> { val days = listOf(j, minOf(j + 1, p.T - 1)).distinct()
+                out.getOrPut("c3w,$i,$j") { TourItem(fam, i, days, "${breakdownLabels["c3w"]} ${sym(s[i][j])}→${sym(s[i][days.last()])} ・ ${span(days)}") } }
+            "pref", "groupViol" -> out.getOrPut("$fam,$i,$j") { TourItem(fam, i, listOf(j), "${breakdownLabels[fam]} ${sym(s[i][j])} ・ ${DayText.full(state.startDate, j)}") }
+            else -> {}
+        }
+    }
+    return out.values.sortedWith(compareBy({ it.days.first() }, { it.staff }))
+}
+
+/** 巡回の見出し「必須違反 2 / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9」。 */
+internal fun tourHeading(items: List<TourItem>, at: Int): String? =
+    items.getOrNull(at)?.let { "必須違反 ${at + 1} / ${items.size} ・ ${it.heading}" }
+
+/** 巡回に入らない人員不足の件数の 1 行（0 なら null）。 */
+internal fun tourCovULine(covU: Int): String? = if (covU > 0) "ほかに人員不足 ${covU}件（日ヘッダから）" else null
 
 /** 巡回の次のセル（今のセルの次。今が巡回に無ければ先頭、末尾なら先頭へ戻る）。空なら null。 */
 internal fun nextTourCell(tour: List<Pair<Int, Int>>, current: Pair<Int, Int>?): Pair<Int, Int>? {
@@ -265,6 +361,21 @@ internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: Str
     else -> FixPanelState.NOT_STARTED
 }
 
+/** [S6] セルシートから設定の緩和へ渡す状態。OFFER＝ホームで見つかった組の起点の窓か手順のセル（同じ結果を同じ確定で開く。セルごとに試算はしない）、
+ *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い。 */
+internal enum class RelaxHandoff { NONE, SEARCHING, OFFER, NO_WALL }
+
+internal fun relaxHandoff(r: RelaxTrial.Result?, searching: Boolean, noWall: Boolean, i: Int, j: Int): RelaxHandoff = when {
+    r != null && ((r.staff == i && j in r.window) || r.moves.any { it.staff == i && it.day == j }) -> RelaxHandoff.OFFER
+    r != null -> RelaxHandoff.NONE
+    searching -> RelaxHandoff.SEARCHING
+    noWall -> RelaxHandoff.NO_WALL
+    else -> RelaxHandoff.NONE
+}
+
+internal fun relaxHandoffLine(r: RelaxTrial.Result, ui: UiState): String =
+    "設定を緩めると、この${relaxTarget(r, ui).what}を解消できる見込みです（上限 ${r.relaxes.size}件）"
+
 /** 通知の「元に戻す」は、その操作が今も元に戻すの先頭にあるときだけ効く（後の別の操作を戻さない）。 */
 internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = topSerial != null && topSerial == noticeSerial
 
@@ -272,4 +383,4 @@ internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = 
 internal fun messageMayReplaceNotice(noticeShowing: Boolean, isError: Boolean): Boolean = !noticeShowing || isError
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
-internal fun cellChangedMessage(name: String, day: Int, symbol: String): String = "$name ${day + 1}日を${symbol}に変更しました"
+internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "$name ${DayText.short(startDate, day)} を${symbol}に変更しました"

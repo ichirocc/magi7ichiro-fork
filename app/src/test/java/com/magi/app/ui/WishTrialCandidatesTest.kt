@@ -7,6 +7,7 @@ import com.magi.app.v6.WishSelfConflict
 import com.magi.app.v6.WishTrial
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** [S5] 試算の候補（§2.2・§2.3）と結果の文（§5）。`docs/s5_wish_trial.md` §12 T9・T10。 */
@@ -31,7 +32,7 @@ class WishTrialCandidatesTest {
         )
         val c = wishTrialCandidates(ui)
         assertEquals(listOf(
-            WishTrialRow(0, 2, "山田", "希望の勤務になっていません（ほか: 禁止の並び・人手不足の日）", true),
+            WishTrialRow(0, 2, "山田", "希望の勤務になっていません（ほか: 禁止の並び・人員不足の日）", true),
             WishTrialRow(1, 3, "佐藤", "翌日（5日）の希望の勤務の前日に置けない勤務の希望です", true),
             WishTrialRow(1, 4, "佐藤", "前日（4日）に置けない勤務が入っています", true),
             WishTrialRow(2, 5, "鈴木", "希望が禁止の並びに掛かっています", false),
@@ -93,7 +94,7 @@ class WishTrialCandidatesTest {
         )
         val c = wishTrialCandidates(ui)
         assertEquals(listOf(1, 2, 3, 4), c.direct.map { it.day })
-        assertEquals("希望どうしが禁止の並び「休→休→休」を作っています（ほか: 人手不足の日）", c.direct.last().reason)
+        assertEquals("希望どうしが禁止の並び「休→休→休」を作っています（ほか: 人員不足の日）", c.direct.last().reason)
         assertEquals(emptyList<ShortfallWishGroup>(), c.shortfall)
     }
 
@@ -106,11 +107,15 @@ class WishTrialCandidatesTest {
         assertEquals("取り消すと必須違反が確実に1件 減り、もう一度つくるとさらに2件 減る見込みです。", wishTrialText(r(5, 4, 5, 2)))
         assertEquals("取り消すと必須違反が確実に1件 減ります。", wishTrialText(r(5, 4, 5, 4)))
         assertEquals("取り消してもう一度つくると、必須違反が2件 減る見込みです。", wishTrialText(r(5, 5, 5, 3)))
-        assertEquals("この試算では、減る見込みは見つかりませんでした（もう一度つくると減ることはあります）。", wishTrialText(r(5, 5, 5, 5)))
+        assertEquals("この希望を取り消しても、必須は減らない見込みです（必須 5件 → 5件）。これは全探索で解けない証明ではありません。", wishTrialText(r(5, 5, 5, 5)))
         assertEquals("もう一度つくるだけの場合より、さらに1件 減る見込みです。", wishTrialText(r(5, 5, 3, 2)))
         assertEquals("取り消さなくても、もう一度つくるだけで同じだけ減る見込みです。", wishTrialText(r(5, 4, 3, 3)))
         assertEquals("試算できませんでした（未割当のセルがあります）。", wishTrialText(WishTrial.Unavailable("未割当のセルがあります")))
         assertNull(wishTrialText(WishTrial.Stopped))
+        assertTrue(wishTrialNoGain(r(5, 5, 5, 5)))
+        assertEquals("A4はこの禁止の並びに関係しています。", wishTabInvolvedLine("A4", listOf("c3n", "covO")))
+        assertNull(wishTabInvolvedLine("A4", listOf("covO")))
+        assertTrue(!wishTrialNoGain(r(5, 4, 3, 3)) && !wishTrialNoGain(r(5, 5, 5, 3)) && !wishTrialNoGain(WishTrial.Stopped))
         assertEquals("希望を残したまま、もう一度つくるだけで必須違反が2件 減る見込みです。", wishTrialKeepOnlyText(WishTrial.Control(5, 3)))
         assertNull(wishTrialKeepOnlyText(WishTrial.Control(5, 5)))
     }

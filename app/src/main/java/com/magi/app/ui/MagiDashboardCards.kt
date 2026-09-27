@@ -106,7 +106,7 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
-/** [思考誘導S3→S5] 必須違反に関わる希望と、人手不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「取り消したら？」で試算・確定（§5）。
+/** [思考誘導S3→S5] 必須違反に関わる希望と、人員不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「取り消したら？」で試算・確定（§5）。
  *  試算の結果は VM が ctx つきで持ち、ここは読むたびに問い合わせる（古ければ隠す＝§8）。 */
 @Composable
 internal fun WishConflictDialog(
@@ -116,6 +116,8 @@ internal fun WishConflictDialog(
     onOpenCell: (Int, Int) -> Unit,
     onConfirm: (WishTrialToken) -> Unit,
     onRebuild: () -> Unit,
+    relaxFound: Boolean = false,    // [S6] 設定の壁の組がある＝改善なしの行から「希望を残したまま、設定を緩めて試す」へ
+    onShowRelax: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val cands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag, ui.staffNames, ui.shiftSymbols) {
@@ -139,15 +141,15 @@ internal fun WishConflictDialog(
                     if (cands.direct.isNotEmpty()) {
                         Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
                             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                     }
                     if (cands.shortfall.isNotEmpty()) {
-                        Text("人手不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text("人員不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                         cands.shortfall.forEach { g ->
                             Text(g.header, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                             val slot = g.day to g.shift
                             val rows = if (slot in expanded) g.rows else g.rows.take(WISH_TRIAL_GROUP_LIMIT)
-                            rows.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                            rows.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                             if (rows.size < g.rows.size) {
                                 TextButton(onClick = { expanded = expanded + slot }, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text("ほか ${g.rows.size - rows.size}人")
@@ -156,6 +158,7 @@ internal fun WishConflictDialog(
                         }
                     }
                 }
+                Text(WISH_KEEP_FOOTER, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         },
         confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
@@ -170,15 +173,17 @@ private fun WishTrialRowView(
     vm: MagiViewModel,
     onOpenCell: (Int, Int) -> Unit,
     onConfirm: (WishTrialToken) -> Unit,
+    relaxFound: Boolean,
+    onShowRelax: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
     TextButton(onClick = { onOpenCell(row.staff, row.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text("${row.name} ・ ${row.day + 1}日　${row.reason}", modifier = Modifier.fillMaxWidth())
+        Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.fillMaxWidth())
     }
     val k = ui.wishes["${row.staff},${row.day}"]
     if (!row.locked || k == null) {
-        Text(WISH_TRIAL_NOT_LOCKED, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+        Text(if (row.pinned) WISH_TRIAL_PINNED else WISH_TRIAL_NOT_LOCKED, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
     } else {
         val view = vm.wishTrialFor(row.staff, row.day, k)
         val canTrial = ui.wishTrialBusy == null && !ui.running
@@ -191,6 +196,9 @@ private fun WishTrialRowView(
             }
             is WishTrialView.Ready -> {
                 wishTrialText(view.outcome)?.let { Text(it, style = small, modifier = Modifier.padding(start = 12.dp)) }
+                if (relaxFound && wishTrialNoGain(view.outcome)) {
+                    TextButton(onClick = onShowRelax, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) { Text(WISH_TO_RELAX_LABEL) }
+                }
                 if (view.token.result != null) {
                     TextButton(
                         onClick = { onConfirm(view.token) },
@@ -211,7 +219,8 @@ private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** [S6] 設定を緩める候補（`docs/s6_relax_trial.md` §5）。盤面は見せず手順を言葉で出し、押したときだけ当てる。 */
+/** [S6] 設定を緩める候補（`docs/s6_relax_trial.md` §5）。盤面は見せず手順を言葉で出し、押したときだけ当てる。
+ *  確定の前に全部の変更（設定・手順の全セル）を読める＝窓の外の手も畳むだけで隠さない。 */
 @Composable
 internal fun RelaxTrialDialog(
     ui: UiState,
@@ -221,25 +230,35 @@ internal fun RelaxTrialDialog(
 ) {
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
+    val t = if (token == null) null else remember(token, ui.schedule, ui.staffNames, ui.shiftSymbols) { relaxTrialText(token.result, ui) }
+    var showAll by remember(token) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("設定を緩める候補") },
+        title = { Text(t?.dialogTitle ?: "設定を緩める候補") },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (token == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
+                if (token == null || t == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
                 else {
-                    val t = remember(token, ui.schedule, ui.staffNames, ui.shiftSymbols) { relaxTrialText(token.result, ui) }
-                    Text(t.title, fontWeight = FontWeight.Bold)
-                    t.prerequisiteLead?.let { lead ->
-                        Text(lead, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                    Text(RELAX_WISH_LINE, fontWeight = FontWeight.Bold)
+                    Text(t.hardLine, fontWeight = FontWeight.Bold)
+                    Text(t.scaleLine, style = small, color = cs.onSurfaceVariant)
+                    if (t.prerequisiteRows.isNotEmpty()) {
+                        Text(RELAX_PREREQ_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text(RELAX_PREREQ_WHY, style = small, color = cs.onSurfaceVariant)
                         t.prerequisiteRows.forEach { Text("・$it", style = small) }
                     }
-                    Text(t.lead, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
-                    Text("この組で解けます", style = small, color = cs.onSurfaceVariant)
+                    Text(RELAX_SET_HEAD, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                    Text(t.lead, style = MaterialTheme.typography.bodyMedium)
                     t.rows.forEach { Text("・$it", style = small) }
+                    Text(t.solveNote, style = small, color = cs.onSurfaceVariant)
                     Text("手順", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                     t.moveLines.forEach { Text(it, style = small) }
-                    if (t.otherMoves > 0) Text("ほか ${t.otherMoves}セル", style = small, color = cs.onSurfaceVariant)
+                    if (t.otherMoves > 0) {
+                        if (showAll) t.otherMoveLines.forEach { Text(it, style = small) }
+                        else TextButton(onClick = { showAll = true }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text("ほか ${t.otherMoves}セル（タップですべて表示）")
+                        }
+                    }
                     t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
                     Button(
                         onClick = { onConfirm(token) },
@@ -348,7 +367,7 @@ internal fun GuidedFixDialog(
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     else -> {
-                        Text("人手が足りない日はなくなりました。仕上げにもう一度つくると全体が整います。")
+                        Text("人員不足の日はなくなりました。仕上げにもう一度つくると全体が整います。")
                     }
                 }
             }
@@ -365,6 +384,7 @@ internal class OpNextPlan(
     val container: Color, val fg: Color, val headline: String,
     val bigLabel: String, val bigAction: () -> Unit, val bigEnabled: Boolean,
     val helperLabel: String?, val helperAction: () -> Unit,
+    val body: String? = null, val note: String? = null,   // 見出しの下の本文と注記（S6 の段だけ使う）
 )
 
 /**
@@ -388,7 +408,7 @@ internal fun OperatorNextActionCard(
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
     outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して、もう一度つくる」の結果（VM が鮮度を照合済み）
-    relaxFound: Boolean = false,    // [S6] いまのデータで設定の壁の組が見つかっている（VM が鮮度を照合済み）
+    relax: RelaxToken? = null,      // [S6] いまのデータで見つかった設定の壁の組（VM が鮮度を照合済み。null＝無い）
     onShowRelax: () -> Unit = {},
     onStopRelax: () -> Unit = {},
 ) {
@@ -428,7 +448,7 @@ internal fun OperatorNextActionCard(
         // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す。
         //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
         ui.coverageDiag?.shortfalls?.any { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow } == true ->
-            OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人手不足です。" } ?: "人手が足りない日があります。"),
+            OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人員不足です。" } ?: "人員不足の日があります。"),
                 "なおすのを手伝って", onFix, true, null, onSetup)
         // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
         ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() ->
@@ -437,12 +457,17 @@ internal fun OperatorNextActionCard(
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
-        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && relaxFound ->
-            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。設定が壁になっています。",
-                "緩める候補を見る", onShowRelax, true, if (wishCands.isEmpty) null else "ぶつかっている希望を見る", onShowWishes)
+        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && relax != null -> {
+            val t = relaxCardText(relax.result, ui)
+            OpNextPlan(amber, onAmber, t.headline,
+                "緩める候補を見る", onShowRelax, true, if (wishCands.isEmpty) null else "ぶつかっている希望を見る", onShowWishes,
+                body = t.body, note = t.note)
+        }
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
+        //   S6 の判定が済むまでは「下限」と言わない（設定を緩めれば減るかもしれない）。
         ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
-            OpNextPlan(amber, onAmber, "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
+            OpNextPlan(amber, onAmber,
+                if (ui.relaxSearching) "必須違反が ${ui.bestHard}件 残っています。" else "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
                 "ぶつかっている希望を見る", onShowWishes, true, "このまま書き出す", onExport)
         !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
@@ -469,10 +494,12 @@ internal fun OperatorNextActionCard(
                 }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+            plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
+            plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
             if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
             if (!ui.running && ui.relaxSearching) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("設定が壁になっていないか調べています…", style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
+                    Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
                     TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
                 }
             }
@@ -713,8 +740,8 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                     diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
                         "希望を1件調整するか、担当を追加してください。"
                     diag.blockedNowSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.blockedNowSlots} 枠は" +
-                        "いまの希望のままでは埋められません（残りは再実行で解消し得ます）。"
-                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再実行や設定の見直しで解消し得ます。"
+                        "いまの希望のままでは埋められません（残りはもう一度つくると解消し得ます）。"
+                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。もう一度つくるか設定の見直しで解消し得ます。"
                     else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
                 }
                 Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -833,7 +860,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                                 com.magi.app.v6.ForbiddenCellEscape.FREE -> "崩せる"
                                 com.magi.app.v6.ForbiddenCellEscape.CHAIN -> "玉突きで崩せる"
                                 com.magi.app.v6.ForbiddenCellEscape.ADJACENT -> "隣接日調整で崩せる"
-                                com.magi.app.v6.ForbiddenCellEscape.PINNED -> "希望固定"
+                                com.magi.app.v6.ForbiddenCellEscape.PINNED -> "本人の希望"
                                 com.magi.app.v6.ForbiddenCellEscape.BLOCKED -> "塞がり"
                             }
                             "${c.dayLabel} ${c.shiftSymbol}=$tag"
@@ -873,7 +900,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
                             Text("${rows.size}件（$whoTxt）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         TextButton(onClick = { onRelaxRule(seqLabel) }, enabled = !ui.running) {
-                            Text("この並びの禁止をやめる")
+                            Text("この並びの禁止を解除")
                         }
                     }
                 }

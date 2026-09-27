@@ -229,7 +229,7 @@ colorScheme に無い「意味色／シフト色」を一元化する。**値の
 data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: Boolean, val shortageNote: String?)
 @Composable fun ShiftEventPill(symbol: String, color: Color)
 ```
-- 日曜始まり・曜日ヘッダ（`月火水木金土日`）。日付は大きく左上、シフトは小さな色付きピル、右上に違反マーカー（赤）、下部に人数不足/過多の補助。
+- 日曜始まり・曜日ヘッダ（`月火水木金土日`）。日付は大きく左上、シフトは小さな色付きピル、右上に違反マーカー（赤）、下部に人員不足/過剰の補助。
 - セル最小 64dp 角丸 `small`(16)。違反日は赤みの補助表示（背景 `error.copy(alpha=.08f)`）。
 - `CalendarModeSwitcher` = `MagiSegmentedControl(["月","週","スタッフ別"])`。
 

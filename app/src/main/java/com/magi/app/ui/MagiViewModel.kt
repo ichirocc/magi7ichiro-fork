@@ -423,7 +423,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (marker != null) {
                     val hasSnap = !snapTxt.isNullOrBlank()
                     val info = if (hasSnap)
-                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度実行』で仕上げられます。" + com.magi.app.work.RunMarker.s5Suffix(marker)
+                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度つくる』で仕上げられます。" + com.magi.app.work.RunMarker.s5Suffix(marker)
                     else com.magi.app.work.RunMarker.interruptedInfo(marker)
                     _ui.update { it.copy(interruptedRun = true, interruptedInfo = info) }
                     clearRunMarker()
@@ -1382,7 +1382,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private fun hardFamilyJp(key: String): String = when (key) {
         "covU" -> "人員不足（必要人数）"
         "c3n" -> "禁止の並び（連勤など）"
-        "c3w" -> "希望前日の禁止"
+        "c3w" -> "希望の前日の禁止"
         "pref" -> "希望シフト"
         "groupViol" -> "担当外シフト"
         "low" -> "個人の回数下限"
@@ -1415,7 +1415,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (undoLabel != null) pushUndo(undoLabel)
         val sig = "${_ui.value.budgetSec}|${_ui.value.workers}|${_ui.value.v6Algorithm}|${_ui.value.softPolish}"
         val hint = if (s5 == null && sig == lastSettingsSig && lastResultHard > 0L)
-            "前回と同じ設定での再実行です。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
+            "前回と同じ設定でもう一度つくります。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
         else null
         lastSettingsSig = sig
         val s5Suffix = if (s5 != null) "（希望の取り消しはそのままです。元に戻すで希望も戻ります）" else ""
@@ -1932,6 +1932,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if (relaxCtxNow() == c) RelaxToken(c.stateKey, c.boardKey, r) else null
     }
 
+    /** いまのデータで探し終えて組が無かった（NoWall・試算不可）。走っている・未着手・古いなら false。 */
+    internal fun relaxNoWall(): Boolean = relaxCtx != null && relaxCtx == relaxCtxNow() && relaxResult != null && relaxResult !is RelaxTrial.Result
+
     /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
     internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second
 
@@ -2327,7 +2330,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             hasResult = true,
             engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
-            opNotice = OpNotice(++opNoticeSeq, cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
+            opNotice = OpNotice(++opNoticeSeq, cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", st.startDate, j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
                 undoStack.lastOrNull()?.serial ?: 0L),
         ) }
         logOp("I", "編集: ${opNm(i)} ${j + 1}日 → ${opSy(shift)}")
@@ -2379,7 +2382,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = ns
         autoSave()
         _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
-            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${j + 1}日を" + (if (on) "固定しました（最適化で変わりません）" else "固定から外しました"),
+            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${DayText.short(st.startDate, j)} を" + (if (on) "手動固定しました（自動では変更しません）" else "手動固定を外しました"),
                 undoStack.lastOrNull()?.serial ?: 0L)).withWishDisplay(ns) }
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }
@@ -2894,6 +2897,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val p = com.magi.app.v6.cachedProblem(st)
         if (i !in 0 until p.S || j !in 0 until p.T) return null
         when (cls) {
+            // 禁止の並びは一致した並びの全日、希望の前日の禁止は前日と希望の翌日（巡回と同じ関連セル）。
+            "vio-c3n" -> forbiddenRunAt(p, sched, i, j, p.cons3n)?.let { (seq, j0) -> return j0 to (j0 + seq.size - 1) }
+            "vio-c3w" -> return j to minOf(j + 1, p.T - 1)
             "vio-c1" -> for (c in p.cons1) {
                 if (!p.canDo(i, c.shiftIdx) || j + c.day1 > p.T) continue
                 var z = 0

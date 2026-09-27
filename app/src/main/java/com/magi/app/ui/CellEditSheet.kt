@@ -75,7 +75,14 @@ internal fun CellEditSheet(
     modifier: Modifier = Modifier,
     fixNav: FixNav = FixNav(),
     tourNext: Pair<Int, Int>? = null,
+    tourHeading: String? = null,        // 巡回中の見出し「必須違反 2 / 5 ・ 禁止の並び …」（違反単位）
+    tourCovULine: String? = null,       // 巡回に入らない人員不足の件数
     leftHand: Boolean = false,
+    relax: RelaxToken? = null,          // [S6] ホームで見つかった組（このセルが窓か手順に入るときだけ渡す）
+    relaxNoWall: Boolean = false,       // [S6] 探し終えて組が無い
+    onShowRelax: () -> Unit = {},
+    mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
+    onMode: (Int) -> Unit = {},
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -85,7 +92,6 @@ internal fun CellEditSheet(
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
     val pinned = VioKey.cell(i, j) in ui.manualPins
-    var mode by remember { mutableIntStateOf(0) } // 0=割当, 1=希望（セルを移っても保つ）
     val name = ui.staffNames.getOrNull(i) ?: i.toString()
     fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
     val c1Marks = remember(ui.c1Shortages) { c1DisplayMarks(ui) }
@@ -106,6 +112,7 @@ internal fun CellEditSheet(
     }
     val dilemma = isWishDilemma(wish, current, status.severity)
     var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える
+    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j)
     var marks by remember(cell) { mutableStateOf(ShiftMarks()) }
     LaunchedEffect(cell, rev) {
         marks = ShiftMarks()
@@ -139,11 +146,24 @@ internal fun CellEditSheet(
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
+                tourHeading?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant) }
+                tourCovULine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 StatusRow(status, if (dilemma) wishKeptLine(sym(wish)) else null)
+                val partners = remember(rev, cell) {
+                    if (status.severity != CellSeverity.HARD) emptyList()
+                    else stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
+                }
+                if (mode == 0) remember(rev, cell) { stateOf()?.let { st -> relatedCellsLine(st, ui.schedule.toIntArray2D(), i, partners) } }
+                    ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                if (mode == 0 && status.severity != CellSeverity.NONE && singleCellHopeless(marks, canDoSet, current)) {
+                    Text(SINGLE_CELL_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    remember(marks, rev, cell) { stateOf()?.let { st -> allRiskReason(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, marks, canDoSet) } }
+                        ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                }
                 if (c1Here != null && c1Here.stuck && mode == 0) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
-                        OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                        OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
                     }
                 }
                 if (mode == 0 && dilemma && dilemmaChoice != 2) {
@@ -153,9 +173,30 @@ internal fun CellEditSheet(
                             Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", maxLines = 3)
                         }
                     }
-                    if (dilemmaChoice == 1) FixSearchPanel(ui, cv, FixFocus(null, null, j, exceptStaff = i), onEvent, fixNav, onApplied = {}, compact = true)
+                    if (dilemmaChoice == 1) {
+                        val focus = FixFocus(null, null, j, exceptStaff = i)
+                        FixSearchPanel(ui, cv, focus, onEvent, fixNav, onApplied = {}, compact = true)
+                        // 他の人の手が無いとき、同じ違反のもう一方のセルへ（希望は触らない）。
+                        if (fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key) == FixPanelState.DONE && ui.fixSuggestions.isEmpty()) {
+                            partners.forEach { d ->
+                                OutlinedButton(onClick = { onMove(i to d) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(partnerCellLabel(ui.startDate, d, partners.size == 1), maxLines = 2) }
+                            }
+                        }
+                    }
                 } else if (mode == 0 && status.severity != CellSeverity.NONE) {
                     FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true)
+                }
+                if (mode == 1 && wish != null) {
+                    wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    Text(WISH_TAB_KEEP_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+                if (mode == 0 && status.severity == CellSeverity.HARD) when (handoff) {
+                    RelaxHandoff.OFFER -> {
+                        Text(relaxHandoffLine(relax!!.result, ui), style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("緩める候補を見る") }
+                    }
+                    RelaxHandoff.SEARCHING -> Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    else -> {}
                 }
                 var details by remember(cell) { mutableStateOf(false) }
                 TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -193,7 +234,7 @@ internal fun CellEditSheet(
                     Box(
                         Modifier.heightIn(min = 48.dp)
                             .background(if (selSeg) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
-                            .clickable { mode = idx }
+                            .clickable { onMode(idx) }
                             .padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -201,7 +242,7 @@ internal fun CellEditSheet(
                             style = MaterialTheme.typography.bodyMedium, fontWeight = if (selSeg) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
-                val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・固定中" else "")
+                val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・手動固定" else "")
                 Text(wishText + (if (countLine.isNotEmpty()) "　回数 $countLine" else ""), style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
@@ -248,7 +289,7 @@ internal fun CellEditSheet(
                             modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
                             Icon(if (pinned) Icons.Outlined.LockOpen else Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(6.dp))
-                            Text(if (pinned) "固定を外す" else "固定する", maxLines = 1)
+                            Text(if (pinned) "手動固定を外す" else "手動固定する", maxLines = 1)
                         }
                     } else if (mode == 1 && wish != null) {
                         OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },

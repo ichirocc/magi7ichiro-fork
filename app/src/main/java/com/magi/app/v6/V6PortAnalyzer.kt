@@ -360,11 +360,11 @@ object V6PortAnalyzer {
                     val hint = when {
                         free > 0 -> "空き番${free}人を${sym}へ移せば充足（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
                         cascade > 0 && chainVerified -> "空き番が無く、過剰シフトからの多人数入替（玉突き=ブロック移動）が必要"
-                        cascade > 0 -> "玉突き候補${cascade}人はいますが、移動先の受け皿もすべて希望固定/禁止連続で塞がっており、" +
+                        cascade > 0 -> "玉突き候補${cascade}人はいますが、移動先の受け皿もすべて本人の希望/禁止の並びで塞がっており、" +
                             "現在の希望のままではどう組んでも解消できません。希望を1件調整するか担当を追加してください"
-                        else -> "候補が希望/禁止連続で塞がっており、希望を1件調整するか担当を追加すると解消に近づく"
+                        else -> "候補が本人の希望/禁止の並びで塞がっており、希望を1件調整するか担当を追加すると解消に近づく"
                     }
-                    "担当可能${capacity}人（うち在勤中${already}人）・今動かせる空き番${free}人（玉突き${cascade}・希望固定${pinned}・禁止連続${forbid}）。$hint"
+                    "担当可能${capacity}人（うち在勤中${already}人）・今動かせる空き番${free}人（玉突き${cascade}・本人の希望${pinned}・禁止の並び${forbid}）。$hint"
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity,
@@ -509,12 +509,12 @@ object V6PortAnalyzer {
                     }
                     free > 0 -> "移せる先はありますが、目的関数での確認は打ち切りました（枠が多いため）"
                     cascade > 0 -> "移動先はどこも定員一杯で、過剰シフトからの多人数入替（玉突き）が必要"
-                    else -> "在籍者は希望固定/禁止連続で動かせず、希望を1件調整するか担当を減らすと解消に近づく"
+                    else -> "在籍者は本人の希望/禁止の並びで動かせず、希望を1件調整するか担当を減らすと解消に近づく"
                 }
                 surplusList.add(
                     CoverageSurplus(j, dayLabel(state.startDate, j), k, sym, need, got, excess,
                         blockedFamily = if (freeImproving == 0 && deepImproving == 0 && probedAny) famHits.maxByOrNull { it.value }?.key else null,
-                        reason = "在勤者中 動かせる${free}人・玉突き必要${cascade}人・希望固定${pinned}人・禁止連続${forbid}人。$hint",
+                        reason = "在勤者中 動かせる${free}人・玉突き必要${cascade}人・本人の希望${pinned}人・禁止の並び${forbid}人。$hint",
                         pinnedStaff = pinnedIdx)
                 )
             }
@@ -578,11 +578,11 @@ object V6PortAnalyzer {
                         //   (受け皿なし等)は「現在の探索手(単独変更・玉突き連鎖・隣接日調整)を検証して全て不成立」
                         //   という強い証拠であり、全勤務表空間の数学的な非充足証明ではない＝断定を避けた表現にする。
                         cells.all { it.escape == ForbiddenCellEscape.PINNED } ->
-                            "本人希望どおりの並びが禁止パターンを構成しています（希望固定: $pinnedDays）。" +
-                                "希望を変えない限りどう組んでもこの禁止連続は残ります。どちらか1件の希望を調整してください"
+                            "本人希望どおりの並びが禁止パターンを構成しています（本人の希望: $pinnedDays）。" +
+                                "希望を変えない限りどう組んでもこの禁止の並びは残ります。どちらか1件の希望を調整してください"
                         else ->
                             "全セルが塞がっています" +
-                                (if (pinnedDays.isNotEmpty()) "（希望固定: $pinnedDays）" else "") +
+                                (if (pinnedDays.isNotEmpty()) "（本人の希望: $pinnedDays）" else "") +
                                 "。各セルで試したのは 1 セルの変更・そのセルを起点にした人員の玉突き・隣の日の調整までで、" +
                                 "いずれも不成立でした（複数日にまたがる 2 人の入れ替えなどは試していません）。" +
                                 "周辺の希望を1件調整するか、担当を追加してください"
@@ -722,7 +722,7 @@ object V6PortAnalyzer {
             prefBlocked > 0 -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.PINNED,
                 "本人希望=$curSym（動かしても正味の必須違反が減らない）")
             else -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.BLOCKED,
-                "代替${alts}件全滅: 新たな禁止連続${c3nBlocked}・covU受け皿なし${noReceiver}" +
+                "代替${alts}件全滅: 新たな禁止の並び${c3nBlocked}・人員不足の受け皿なし${noReceiver}" +
                     if (c3wBlocked > 0) "・希望の前日に禁止${c3wBlocked}" else "")
         }
     }

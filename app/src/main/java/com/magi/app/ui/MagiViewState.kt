@@ -4,6 +4,14 @@ import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.WishTrial
+import com.magi.app.v6.formatDay
+
+/** 日付の表記の単一ソース（利用者決定 2026-09-26）: 既定「10/8(木)」、密な所（手順・一覧）「10/8」、範囲「10/8〜10/9」。開始日が読めなければ「8日」。 */
+internal object DayText {
+    fun full(startDate: String, j: Int): String = formatDay(startDate, j)
+    fun short(startDate: String, j: Int): String = formatDay(startDate, j).substringBefore('(')
+    fun range(startDate: String, a: Int, b: Int): String = if (a == b) full(startDate, a) else "${short(startDate, a)}〜${short(startDate, b)}"
+}
 
 /** 違反マップのキーの符号化。文字列なのは保存データ互換のため。組立と分解はここだけ＝
  *  各所で `split(",")` を書くと、どちらの添字が日かを取り違えても誰も気づけない。 */
@@ -207,7 +215,7 @@ internal data class InvolvedWish(val staff: Int, val day: Int, val name: String,
 
 /**
  * 必須違反に関わる希望を、名前・日付・理由つきで列挙する（職員順→日順）。関わる＝そのセルに希望違反(pref)か
- * 希望前日の禁止(c3w)がある、または禁止の並び(c3n)が希望で固定したセルに掛かっている。
+ * 希望の前日の禁止(c3w)がある、または禁止の並び(c3n)が本人の希望のセルに掛かっている。
  */
 internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
     ui.violationCellFamilies.flatMap { (key, fams) ->
@@ -218,15 +226,15 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
         buildList {
             if ("vio-pref" in fams) add(InvolvedWish(i, j, name, "希望の勤務になっていません"))
             // c3w の印は前日側のセルに付く＝ぶつかっている希望はその翌日。
-            if ("vio-c3w" in fams) add(InvolvedWish(i, j + 1, name, "前日（${j + 1}日）に置けない勤務が入っています"))
+            if ("vio-c3w" in fams) add(InvolvedWish(i, j + 1, name, "前日（${DayText.short(ui.startDate, j)}）に置けない勤務が入っています"))
             if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(InvolvedWish(i, j, name, "希望が禁止の並びに掛かっています"))
         }
     }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))
 
 /** [S5] 試算の候補 1 行。`locked=false`（担当できない勤務の希望）は試算ボタンを出さず [WISH_TRIAL_NOT_LOCKED] を出す。 */
-internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean)
+internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean, val pinned: Boolean = false)
 
-/** [S5b] 人手不足の枠 1 つ（見出し「12日 日勤 1人不足」）と、その日に別の勤務で希望固定されている人の行（職員順）。 */
+/** [S5b] 人員不足の枠 1 つ（見出し「12日 日勤 1人不足」）と、その日に別の勤務で希望固定されている人の行（職員順）。 */
 internal data class ShortfallWishGroup(val day: Int, val shift: Int, val header: String, val rows: List<WishTrialRow>)
 
 internal data class WishTrialCandidates(val direct: List<WishTrialRow>, val shortfall: List<ShortfallWishGroup>) {
@@ -234,6 +242,15 @@ internal data class WishTrialCandidates(val direct: List<WishTrialRow>, val shor
 }
 
 internal const val WISH_TRIAL_NOT_LOCKED = "担当できない勤務の希望なので、取り消しても勤務表は変わりません。"
+/** [#41] 手動固定のセルは試算の候補にしない（`lockedWishKeys` が外す）＝担当外と混ぜず、固定が理由だと言う。 */
+internal const val WISH_TRIAL_PINNED = "このセルは手動固定のため、自動では変更しません。固定を外すと試算できます。"
+/** 希望タブの注記（希望が必須違反の並びに掛かっているとき）。希望を変えても盤面のセルはそのまま＝黙って崩さない。 */
+internal const val WISH_TAB_KEEP_NOTE = "希望を変えても勤務表のセルはそのままです（未反映になります）。もう一度つくると希望に合わせます。"
+internal fun wishTabInvolvedLine(wishSymbol: String, families: List<String>): String? = when {
+    "c3n" in families -> "${wishSymbol}はこの禁止の並びに関係しています。"
+    "c3w" in families -> "${wishSymbol}はこの希望の前日の禁止に関係しています。"
+    else -> null
+}
 /** [S5b] 1 枠に並べる行の上限（超えたら「ほか N人」）。 */
 internal const val WISH_TRIAL_GROUP_LIMIT = 8
 
@@ -241,7 +258,7 @@ internal const val WISH_TRIAL_GROUP_LIMIT = 8
  * [S5] 試算の候補（`docs/s5_wish_trial.md` §2.2・§2.3）。S5a＝必須違反に関わる希望を (職員, 日) で重複除去し、
  * 代表の理由を pref＞c3w＞c3n で選ぶ（他は「ほか: …」）。c3w は翌日の希望 X と、印の付く前日自身が wishLocked の希望 Y の両方。
  * 満たされない希望が希望どうしの衝突（`UiState.wishSelfConflicts`）の組に入っていれば、組のほかの希望も S5a の行にする（§2.2）。
- * S5b＝人手不足の枠の `wishPinned`（日→シフト、職員順）。S5a と重なる (職員, 日) は S5a を代表にし「ほか: 人手不足の日」を足す。
+ * S5b＝人員不足の枠の `wishPinned`（日→シフト、職員順）。S5a と重なる (職員, 日) は S5a を代表にし「ほか: 人員不足の日」を足す。
  */
 internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
     // 優先度（小さいほど代表）と「ほか」に出す短い名前。
@@ -254,8 +271,8 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
         buildList {
             if ("vio-pref" in fams) add(Hit(i, j, 0, "希望の勤務になっていません"))
             if ("vio-c3w" in fams) {
-                add(Hit(i, j + 1, 1, "前日（${j + 1}日）に置けない勤務が入っています"))
-                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, "翌日（${j + 2}日）の希望の勤務の前日に置けない勤務の希望です"))
+                add(Hit(i, j + 1, 1, "前日（${DayText.short(ui.startDate, j)}）に置けない勤務が入っています"))
+                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, "翌日（${DayText.short(ui.startDate, j + 1)}）の希望の勤務の前日に置けない勤務の希望です"))
             }
             if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(Hit(i, j, 2, "希望が禁止の並びに掛かっています"))
         }
@@ -274,15 +291,15 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
     val direct = (hits + siblings).groupBy { it.staff to it.day }.map { (sd, hs) ->
         val rep = hs.minBy { it.prio }
         val others = hs.map { it.prio }.distinct().filter { it != rep.prio }.sorted().map { short[it] } +
-            (if (sd in pinnedKeys) listOf("人手不足の日") else emptyList())
+            (if (sd in pinnedKeys) listOf("人員不足の日") else emptyList())
         val reason = if (others.isEmpty()) rep.reason else "${rep.reason}（ほか: ${others.joinToString("・")}）"
-        WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys)
+        WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys, VioKey.cell(sd.first, sd.second) in ui.manualPins)
     }.sortedWith(compareBy({ it.staff }, { it.day }))
     val directKeys = direct.map { it.staff to it.day }.toSet()
     val shortfall = pinned.map { s ->
         val rows = s.wishPinned.sorted().filter { (it to s.dayIndex) !in directKeys }.map { i ->
             val sym = ui.wishes["$i,${s.dayIndex}"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "別の勤務"
-            WishTrialRow(i, s.dayIndex, name(i), "${sym}の希望", "$i,${s.dayIndex}" in ui.lockedWishKeys)
+            WishTrialRow(i, s.dayIndex, name(i), "${sym}の希望", "$i,${s.dayIndex}" in ui.lockedWishKeys, VioKey.cell(i, s.dayIndex) in ui.manualPins)
         }
         ShortfallWishGroup(s.dayIndex, s.shiftIndex, "${s.dayLabel} ${s.shiftSymbol} ${s.miss}人不足", rows)
     }.filter { it.rows.isNotEmpty() }
@@ -292,7 +309,7 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
 /** [S5] 試算結果 1 行の文（§5 の表）。止めた試算は null（数字を出さない）。 */
 internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     is WishTrial.Result -> when {
-        o.rk >= o.h0 && o.att <= 0 -> "この試算では、減る見込みは見つかりませんでした（もう一度つくると減ることはあります）。"
+        o.rk >= o.h0 && o.att <= 0 -> "この希望を取り消しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。これは全探索で解けない証明ではありません。"
         o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減り、もう一度つくるとさらに${o.b}件 減る見込みです。"
         o.rk >= o.h0 && o.aPrime > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減ります。"
         o.rk >= o.h0 -> "取り消してもう一度つくると、必須違反が${o.b}件 減る見込みです。"
@@ -303,40 +320,60 @@ internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     else -> null
 }
 
+/** [S5] 取り消しても必須が減らない見込みの行（S6 の組があれば「希望を残したまま、設定を緩めて試す」を添える）。 */
+internal fun wishTrialNoGain(o: WishTrial.Outcome): Boolean = o is WishTrial.Result && o.rk >= o.h0 && o.att <= 0
+
+internal const val WISH_KEEP_FOOTER = "希望は、あなたが選ぶまで取り消しません。"
+internal const val WISH_TO_RELAX_LABEL = "希望を残したまま、設定を緩めて試す"
+
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =
     if (control.rk < control.h0) "希望を残したまま、もう一度つくるだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
 
+/** [S6] 起点の違反の呼び方（名前・日の範囲・族名）。ダイアログの題とホームの見出しが共有する。 */
+internal data class RelaxTarget(val name: String, val span: String, val what: String)
+
+internal fun relaxTarget(r: RelaxTrial.Result, ui: UiState): RelaxTarget {
+    val name = ui.staffNames.getOrNull(r.staff) ?: "職員${r.staff + 1}"
+    val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
+    val fam = listOf("c3n", "c3w", "pref", "groupViol").firstOrNull { "vio-$it" in fams } ?: "groupViol"
+    val hardDays = r.window.filter { j -> ui.violationCellFamilies[VioKey.cell(r.staff, j)].orEmpty().any { isHardCellViolation(it) } }
+    val span = if (hardDays.size > 1) DayText.range(ui.startDate, hardDays.first(), hardDays.last()) else DayText.full(ui.startDate, r.day)
+    return RelaxTarget(name, span, breakdownLabels[fam] ?: fam)
+}
+
 /** [S6] 試算ダイアログの文（`docs/s6_relax_trial.md` §5）。盤面は持たない＝手順は言葉だけ。 */
 internal data class RelaxTrialText(
     val title: String,
-    val prerequisiteLead: String?,
+    val dialogTitle: String,
+    val hardLine: String,
+    val scaleLine: String,
     val prerequisiteRows: List<String>,
     val lead: String,
     val rows: List<String>,
+    val solveNote: String,
     val moveLines: List<String>,
+    val otherMoveLines: List<String>,
     val otherMoves: Int,
     val keepNote: String?,
 )
 
+internal const val RELAX_WISH_LINE = "希望: 変更しません"
+internal const val RELAX_PREREQ_HEAD = "前提として上限を上げる設定"
+internal const val RELAX_PREREQ_WHY = "いま手で置いてある勤務に合わせます（もう一度つくったときに手置きの勤務が外れないため）。"
+internal const val RELAX_SET_HEAD = "解消に使う設定"
+
 /**
  * [S6] 結果を文にする。上限の行は 0→1（上げ幅は `mayPlace` を外す最小）。当てた後の回数が 2 回以上になる行は
  * 要調整（上限超過）に数えることを添える。組は探索が見つけた十分条件＝「この組で」と言い、最小とは言わない。
+ * 手順は起点の窓の日をそのまま、窓の外は畳んで [RelaxTrialText.otherMoveLines] に全件（確定の前に全部読める）。
  */
 internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "?"
     val board = ui.schedule.map { it.toIntArray() }.toTypedArray()
     val after = RelaxTrial.applyMoves(board, r.moves) { i, j -> VioKey.cell(i, j) in ui.manualPins } ?: board
-    val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
-    val what = when {
-        "vio-c3n" in fams -> "禁止の並び"
-        "vio-c3w" in fams -> "希望の前日に禁止"
-        "vio-pref" in fams -> "希望の勤務になっていません"
-        else -> "担当できない勤務"
-    }
-    val hardDays = r.window.filter { j -> ui.violationCellFamilies[VioKey.cell(r.staff, j)].orEmpty().any { isHardCellViolation(it) } }
-    val span = if (hardDays.size > 1) "${hardDays.first() + 1}日〜${hardDays.last() + 1}日" else "${r.day + 1}日"
+    val target = relaxTarget(r, ui)
     fun row(x: RelaxTrial.Relax): String {
         val n = after.getOrNull(x.staff)?.count { it == x.shift } ?: 0
         val note = if (n > x.newHi) "（この月は ${n}回になります。要調整に数えます）" else ""
@@ -344,24 +381,44 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     }
     val preRows = r.prerequisite.map { x ->
         val days = board.getOrNull(x.staff)?.indices?.filter { board[x.staff][it] == x.shift }.orEmpty()
-        "${row(x)}（${days.joinToString("・") { "${it + 1}日" }} に置いてあります）"
+        "${row(x)}（${days.joinToString("・") { DayText.short(ui.startDate, it) }} に置いてあります）"
     }
-    val inWin = r.moves.filter { it.day in r.window }
-    val moveLines = inWin.groupBy { it.day }.toSortedMap().map { (d, ms) ->
-        "${d + 1}日　" + ms.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
+    fun dayLines(ms: List<RelaxTrial.Move>) = ms.groupBy { it.day }.toSortedMap().map { (d, xs) ->
+        "${DayText.short(ui.startDate, d)}　" + xs.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
     }
+    val (inWin, outWin) = r.moves.partition { it.day in r.window }
     val lead = if (r.prerequisite.isEmpty()) "この組で緩めると、必須違反が ${r.att}件 減る見込みです。"
         else "手で置いた勤務に合わせて上限を上げ、この組も緩めると、必須違反が ${r.att}件 減る見込みです。"
     val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、手で置いた勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
+    val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
+    val title = "${target.name} ${target.span}　${target.what}"
     return RelaxTrialText(
-        title = "${name(r.staff)} ${span}　$what",
-        prerequisiteLead = if (preRows.isEmpty()) null else "先に、手で置いた勤務に合わせて上限を上げます（上げないと、もう一度つくると外されます）",
+        title = title,
+        dialogTitle = "設定を緩める候補 — ${target.name} ${target.span} ${target.what}",
+        hardLine = "必須違反: ${r.h0}件 → ${r.rr}件",
+        scaleLine = "変更規模: 設定 ${r.prerequisite.size + r.relaxes.size}項目・${people}人・${r.moves.size}セル",
         prerequisiteRows = preRows,
         lead = lead,
         rows = r.relaxes.map(::row),
-        moveLines = moveLines,
-        otherMoves = r.moves.size - inWin.size,
+        solveNote = "この${target.what}を解消できます。" + (if (r.rr > 0) "他の必須違反 ${r.rr}件 は残ります。" else "必須違反はなくなる見込みです。"),
+        moveLines = dayLines(inWin),
+        otherMoveLines = dayLines(outWin),
+        otherMoves = outWin.size,
         keepNote = keep,
+    )
+}
+
+/** [S6] ホームの次にやることカードの文（見出し・本文・残る件数の注記）。起点の違反と件数を名指しする。 */
+internal data class RelaxCardText(val headline: String, val body: String, val note: String?)
+
+internal const val RELAX_SEARCHING_TEXT = "希望を変えずに、設定側で直す方法を調べています…"
+
+internal fun relaxCardText(r: RelaxTrial.Result, ui: UiState): RelaxCardText {
+    val t = relaxTarget(r, ui)
+    return RelaxCardText(
+        headline = "${t.name} ${t.span}の${t.what}（必須 ${r.h0}件中 ${r.h0 - r.rr}件）は、設定が壁になっています",
+        body = "希望を残したまま、設定と勤務表を手順で変えられます",
+        note = if (r.rr > 0) "残りの必須違反 ${r.rr}件はそのまま残ります" else null,
     )
 }
 
@@ -498,7 +555,7 @@ internal fun dayCoverageLines(ui: UiState, j: Int, marks: List<CoverageMark>, li
 /** 凡例の「枠の形 → 族」の 1 行。セルに印を持つ族だけを名指す（回数・人員は行末と日ヘッダの印）。 */
 internal fun legendShapeFamilies(): String {
     val solid = listOf("c3n", "c3w", "pref", "groupViol").map { breakdownLabels[it] ?: it }
-    return "実線: ${solid.joinToString("・")}／破線: 期間の約束：この日を○○にすると届く・${breakdownLabels["c3mn"]}"
+    return "実線: ${solid.joinToString("・")}／破線: ${breakdownLabels["c1"]}（この日を○○にすると届く）・${breakdownLabels["c3mn"]}"
 }
 
 // ===== その場の直し方探し（印・セルのシートの中で探して、見つからなければ理由と次の一歩） =====
@@ -507,6 +564,13 @@ internal fun legendShapeFamilies(): String {
 internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null, val exceptStaff: Int? = null) {
     /** 結果がどの依頼のものかを見分ける鍵（`UiState.fixDoneKey` と照合）。 */
     val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}" + (exceptStaff?.let { ",x$it" } ?: "")
+}
+
+/** 設定への行き先の名（節ごと。「設定を見直す」の一語で済ませない＝利用者決定 2026-09-27）。 */
+internal fun settingsLabelFor(section: String): String = when (section) {
+    "yr_headcount" -> "必要人数の設定を開く"
+    "yr_cons" -> "並び・期間の制約の設定を開く"
+    else -> "回数の設定を開く"
 }
 
 /** 手が見つからなかったときの説明。lines は確かめた事実だけ、wishRelated なら「希望を見る」を出す。 */
@@ -531,7 +595,12 @@ internal fun noFixReasons(
     val i = f.staff; val k = f.shift; val d = f.day
     if (i != null && d != null) {
         val cur = cellAt(i, d)
-        if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${d + 1}日の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
+        if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${DayText.short(ui.startDate, d)} の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
+        // 禁止の並びの相手が本人の希望のセル＝このセルを動かしても並びは希望側に残る。
+        if ("vio-c3n" in ui.violationCellFamilies[VioKey.cell(i, d)].orEmpty()) {
+            val near = listOf(d - 1, d + 1).filter { n -> ui.wishes["$i,$n"]?.let { it == cellAt(i, n) } == true && "vio-c3n" in ui.violationCellFamilies[VioKey.cell(i, n)].orEmpty() }
+            if (near.isNotEmpty()) { out += "この並びには本人の希望（" + near.joinToString("・") { "${DayText.short(ui.startDate, it)} の「${sym(cellAt(i, it)!!)}」" } + "）が入っています。"; wish = true }
+        }
     }
     if (i != null && k != null) {
         val days = ui.schedule.getOrNull(i)?.indices?.filter { cellAt(i, it) == k }.orEmpty()
@@ -539,9 +608,9 @@ internal fun noFixReasons(
         if (days.isNotEmpty() && pinned.size == days.size) { out += "「${sym(k)}」の ${days.size} 回はどれも本人の希望で固定されています。"; wish = true }
         else if (pinned.isNotEmpty()) { out += "「${sym(k)}」の ${days.size} 回のうち ${pinned.size} 回は本人の希望で固定されています。"; wish = true }
         val (_, hi, _) = limits?.invoke(i, k) ?: Triple(null, null, null)
-        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は上限 0（置かない設定）です。"
+        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は個人の上限が 0 回（置かない設定）です。"
         val tight = days.filter { j -> needLimits?.invoke(k, j)?.let { headcount(k, j) <= it.first } == true }
-        if (tight.isNotEmpty()) out += tight.joinToString("・") { "${it + 1}日" } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
+        if (tight.isNotEmpty()) out += tight.joinToString("・") { DayText.short(ui.startDate, it) } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
         val fixedOthers = (0 until ui.shifts.coerceAtLeast(ui.shiftSymbols.size)).filter { k2 ->
             if (k2 == k) return@filter false
             val (lo2, hi2, _) = limits?.invoke(i, k2) ?: return@filter false
@@ -550,11 +619,15 @@ internal fun noFixReasons(
         if (fixedOthers.isNotEmpty()) out += "ほかの勤務は下限＝上限で固定です（" +
             fixedOthers.joinToString("・") { k2 -> "${sym(k2)} ${limits!!.invoke(i, k2).first}回" } + "）。"
     }
+    if (f.exceptStaff != null && d != null) {
+        val w = ui.wishes["${f.exceptStaff},$d"]
+        if (w != null && w == cellAt(f.exceptStaff, d)) { out += "本人の希望（${DayText.short(ui.startDate, d)} の「${sym(w)}」）は守ったままです。"; wish = true }
+    }
     if (i == null && k != null && d != null) {
         val here = ui.schedule.indices.filter { cellAt(it, d) == k }
         val pinned = here.filter { ui.wishes["$it,$d"] == k }
         if (pinned.isNotEmpty()) {
-            out += "${d + 1}日の「${sym(k)}」のうち " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } + " は本人の希望で固定されています。"
+            out += "${DayText.short(ui.startDate, d)} の「${sym(k)}」のうち " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } + " は本人の希望で固定されています。"
             wish = true
         }
     }
