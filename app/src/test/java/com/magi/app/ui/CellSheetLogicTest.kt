@@ -202,6 +202,19 @@ class CellSheetLogicTest {
         assertEquals("設定を緩めると、この禁止の並びを解消できる見込みです（上限 2件）", relaxHandoffLine(r, ui))
     }
 
+    /** 職員10 10/9（A4 の希望を守る板挟み）: 同じ禁止の並びのもう一方は 10/8。10/8 から見れば 10/9。c3w は印の前日と希望の翌日。 */
+    @Test fun partnerCellOfTheSameViolation() {
+        val i = staff("職員10")
+        fun fams(j: Int) = cellStatusFamilies(rep.cellFamilies["$i,$j"].orEmpty(), emptyList(), emptyList())
+        assertEquals(listOf(7), violationPartnerDays(p, s, i, 8, fams(8), rep.cellFamilies))
+        assertEquals(listOf(8), violationPartnerDays(p, s, i, 7, fams(7), rep.cellFamilies))
+        assertEquals("同じ違反のもう一方のセル（8日）を見る", partnerCellLabel(7, true))
+        assertEquals("同じ違反のほかのセル（8日）を見る", partnerCellLabel(7, false))
+        val w = staff("職員03")
+        assertEquals(listOf(1), violationPartnerDays(p, s, w, 0, listOf("c3w"), rep.cellFamilies))
+        assertEquals(listOf(0), violationPartnerDays(p, s, w, 1, emptyList(), rep.cellFamilies))
+    }
+
     @Test fun fixPanelStatesSpinOnlyWhileRunning() {
         assertEquals(FixPanelState.WAIT_CHECK, fixPanelState(running = true, fixSearching = false, doneKey = "k", failedKey = "", key = "k"))
         assertEquals(FixPanelState.NOT_STARTED, fixPanelState(running = false, fixSearching = false, doneKey = "", failedKey = "", key = "k"))

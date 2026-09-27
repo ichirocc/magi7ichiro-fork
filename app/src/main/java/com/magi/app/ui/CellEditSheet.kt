@@ -158,7 +158,19 @@ internal fun CellEditSheet(
                             Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", maxLines = 3)
                         }
                     }
-                    if (dilemmaChoice == 1) FixSearchPanel(ui, cv, FixFocus(null, null, j, exceptStaff = i), onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
+                    if (dilemmaChoice == 1) {
+                        val focus = FixFocus(null, null, j, exceptStaff = i)
+                        FixSearchPanel(ui, cv, focus, onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
+                        // 他の人の手が無いとき、同じ違反のもう一方のセルへ（希望は触らない）。
+                        if (fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key) == FixPanelState.DONE && ui.fixSuggestions.isEmpty()) {
+                            val partners = remember(rev, cell) {
+                                stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
+                            }
+                            partners.forEach { d ->
+                                OutlinedButton(onClick = { onMove(i to d) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(partnerCellLabel(d, partners.size == 1), maxLines = 2) }
+                            }
+                        }
+                    }
                 } else if (mode == 0 && status.severity != CellSeverity.NONE) {
                     FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
                 }

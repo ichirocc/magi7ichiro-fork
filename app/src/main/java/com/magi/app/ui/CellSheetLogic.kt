@@ -135,6 +135,21 @@ private fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list:
     return null
 }
 
+/** 同じ違反のもう一方のセルの日（板挟みで他の人の手が無いときの行き先）。禁止の並びは一致した並びの他の日、
+ *  希望前日の禁止は印のある前日⇄希望の翌日。チェッカーの印だけから決め、希望は触らない。 */
+internal fun violationPartnerDays(p: Problem, s: Array<IntArray>, i: Int, j: Int, families: List<String>, cellFamilies: Map<String, List<String>>): List<Int> {
+    val out = LinkedHashSet<Int>()
+    for (fam in families) when (fam) {
+        "c3n", "c3mn" -> forbiddenRunAt(p, s, i, j, if (fam == "c3n") p.cons3n else p.cons3mn)?.let { (seq, j0) -> for (d in j0 until j0 + seq.size) if (d != j) out += d }
+        "c3w" -> if (j + 1 < p.T) out += j + 1
+    }
+    if (j > 0 && "vio-c3w" in cellFamilies[VioKey.cell(i, j - 1)].orEmpty()) out += j - 1
+    return out.filter { it in 0 until p.T }.sorted()
+}
+
+internal fun partnerCellLabel(day: Int, single: Boolean): String =
+    if (single) "同じ違反のもう一方のセル（${day + 1}日）を見る" else "同じ違反のほかのセル（${day + 1}日）を見る"
+
 /** シフトボタンの印。[recommended]＝緑の点、[hardRisk]＝置くと必須の族が増える（警告の印）。 */
 internal data class ShiftMarks(val recommended: Set<Int> = emptySet(), val hardRisk: Set<Int> = emptySet())
 
