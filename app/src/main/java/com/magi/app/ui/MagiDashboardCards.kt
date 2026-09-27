@@ -116,6 +116,8 @@ internal fun WishConflictDialog(
     onOpenCell: (Int, Int) -> Unit,
     onConfirm: (WishTrialToken) -> Unit,
     onRebuild: () -> Unit,
+    relaxFound: Boolean = false,    // [S6] 設定の壁の組がある＝改善なしの行から「希望を残したまま、設定を緩めて試す」へ
+    onShowRelax: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val cands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag, ui.staffNames, ui.shiftSymbols) {
@@ -139,7 +141,7 @@ internal fun WishConflictDialog(
                     if (cands.direct.isNotEmpty()) {
                         Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
                             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                     }
                     if (cands.shortfall.isNotEmpty()) {
                         Text("人手不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
@@ -147,7 +149,7 @@ internal fun WishConflictDialog(
                             Text(g.header, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                             val slot = g.day to g.shift
                             val rows = if (slot in expanded) g.rows else g.rows.take(WISH_TRIAL_GROUP_LIMIT)
-                            rows.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm) }
+                            rows.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                             if (rows.size < g.rows.size) {
                                 TextButton(onClick = { expanded = expanded + slot }, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text("ほか ${g.rows.size - rows.size}人")
@@ -156,6 +158,7 @@ internal fun WishConflictDialog(
                         }
                     }
                 }
+                Text(WISH_KEEP_FOOTER, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             }
         },
         confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
@@ -170,6 +173,8 @@ private fun WishTrialRowView(
     vm: MagiViewModel,
     onOpenCell: (Int, Int) -> Unit,
     onConfirm: (WishTrialToken) -> Unit,
+    relaxFound: Boolean,
+    onShowRelax: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
@@ -178,7 +183,7 @@ private fun WishTrialRowView(
     }
     val k = ui.wishes["${row.staff},${row.day}"]
     if (!row.locked || k == null) {
-        Text(WISH_TRIAL_NOT_LOCKED, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
+        Text(if (row.pinned) WISH_TRIAL_PINNED else WISH_TRIAL_NOT_LOCKED, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
     } else {
         val view = vm.wishTrialFor(row.staff, row.day, k)
         val canTrial = ui.wishTrialBusy == null && !ui.running
@@ -191,6 +196,9 @@ private fun WishTrialRowView(
             }
             is WishTrialView.Ready -> {
                 wishTrialText(view.outcome)?.let { Text(it, style = small, modifier = Modifier.padding(start = 12.dp)) }
+                if (relaxFound && wishTrialNoGain(view.outcome)) {
+                    TextButton(onClick = onShowRelax, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) { Text(WISH_TO_RELAX_LABEL) }
+                }
                 if (view.token.result != null) {
                     TextButton(
                         onClick = { onConfirm(view.token) },

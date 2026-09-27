@@ -224,7 +224,7 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
     }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))
 
 /** [S5] 試算の候補 1 行。`locked=false`（担当できない勤務の希望）は試算ボタンを出さず [WISH_TRIAL_NOT_LOCKED] を出す。 */
-internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean)
+internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean, val pinned: Boolean = false)
 
 /** [S5b] 人手不足の枠 1 つ（見出し「12日 日勤 1人不足」）と、その日に別の勤務で希望固定されている人の行（職員順）。 */
 internal data class ShortfallWishGroup(val day: Int, val shift: Int, val header: String, val rows: List<WishTrialRow>)
@@ -234,6 +234,15 @@ internal data class WishTrialCandidates(val direct: List<WishTrialRow>, val shor
 }
 
 internal const val WISH_TRIAL_NOT_LOCKED = "担当できない勤務の希望なので、取り消しても勤務表は変わりません。"
+/** [#41] 手動固定のセルは試算の候補にしない（`lockedWishKeys` が外す）＝担当外と混ぜず、固定が理由だと言う。 */
+internal const val WISH_TRIAL_PINNED = "このセルは手動固定のため、自動では変更しません。固定を外すと試算できます。"
+/** 希望タブの注記（希望が必須違反の並びに掛かっているとき）。希望を変えても盤面のセルはそのまま＝黙って崩さない。 */
+internal const val WISH_TAB_KEEP_NOTE = "希望を変えても勤務表のセルはそのままです（未反映になります）。もう一度つくると希望に合わせます。"
+internal fun wishTabInvolvedLine(wishSymbol: String, families: List<String>): String? = when {
+    "c3n" in families -> "${wishSymbol}はこの禁止の並びに関係しています。"
+    "c3w" in families -> "${wishSymbol}はこの希望の前日の禁止に関係しています。"
+    else -> null
+}
 /** [S5b] 1 枠に並べる行の上限（超えたら「ほか N人」）。 */
 internal const val WISH_TRIAL_GROUP_LIMIT = 8
 
@@ -276,13 +285,13 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
         val others = hs.map { it.prio }.distinct().filter { it != rep.prio }.sorted().map { short[it] } +
             (if (sd in pinnedKeys) listOf("人手不足の日") else emptyList())
         val reason = if (others.isEmpty()) rep.reason else "${rep.reason}（ほか: ${others.joinToString("・")}）"
-        WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys)
+        WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys, VioKey.cell(sd.first, sd.second) in ui.manualPins)
     }.sortedWith(compareBy({ it.staff }, { it.day }))
     val directKeys = direct.map { it.staff to it.day }.toSet()
     val shortfall = pinned.map { s ->
         val rows = s.wishPinned.sorted().filter { (it to s.dayIndex) !in directKeys }.map { i ->
             val sym = ui.wishes["$i,${s.dayIndex}"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "別の勤務"
-            WishTrialRow(i, s.dayIndex, name(i), "${sym}の希望", "$i,${s.dayIndex}" in ui.lockedWishKeys)
+            WishTrialRow(i, s.dayIndex, name(i), "${sym}の希望", "$i,${s.dayIndex}" in ui.lockedWishKeys, VioKey.cell(i, s.dayIndex) in ui.manualPins)
         }
         ShortfallWishGroup(s.dayIndex, s.shiftIndex, "${s.dayLabel} ${s.shiftSymbol} ${s.miss}人不足", rows)
     }.filter { it.rows.isNotEmpty() }
@@ -292,7 +301,7 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
 /** [S5] 試算結果 1 行の文（§5 の表）。止めた試算は null（数字を出さない）。 */
 internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     is WishTrial.Result -> when {
-        o.rk >= o.h0 && o.att <= 0 -> "この試算では、減る見込みは見つかりませんでした（もう一度つくると減ることはあります）。"
+        o.rk >= o.h0 && o.att <= 0 -> "この希望を取り消しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。これは全探索で解けない証明ではありません。"
         o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減り、もう一度つくるとさらに${o.b}件 減る見込みです。"
         o.rk >= o.h0 && o.aPrime > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減ります。"
         o.rk >= o.h0 -> "取り消してもう一度つくると、必須違反が${o.b}件 減る見込みです。"
@@ -302,6 +311,12 @@ internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     is WishTrial.Unavailable -> "試算できませんでした（${o.reason}）。"
     else -> null
 }
+
+/** [S5] 取り消しても必須が減らない見込みの行（S6 の組があれば「希望を残したまま、設定を緩めて試す」を添える）。 */
+internal fun wishTrialNoGain(o: WishTrial.Outcome): Boolean = o is WishTrial.Result && o.rk >= o.h0 && o.att <= 0
+
+internal const val WISH_KEEP_FOOTER = "希望は、あなたが選ぶまで取り消しません。"
+internal const val WISH_TO_RELAX_LABEL = "希望を残したまま、設定を緩めて試す"
 
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =

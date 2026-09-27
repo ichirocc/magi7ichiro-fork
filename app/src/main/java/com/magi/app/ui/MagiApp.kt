@@ -194,6 +194,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val haptic = LocalHapticFeedback.current
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var tourActive by remember { mutableStateOf(false) }   // 「必須違反を順に見る」の巡回中
+    var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
@@ -855,6 +856,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     relax = vm.relaxTrialFor(),
                     relaxNoWall = vm.relaxNoWall(),
                     onShowRelax = { relaxDialog = true },
+                    mode = sheetMode,
+                    onMode = { sheetMode = it },
                 )
             }
         }
@@ -868,12 +871,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
-                wishConflicts = false; tab = 1; editingCell = i to j
+                wishConflicts = false; tab = 1; editingCell = i to j; sheetMode = 1
             }, onConfirm = { token ->
                 wishConflicts = false; vm.cancelWishAndRebuild(token)
             }, onRebuild = {
                 wishConflicts = false; onEvent(MagiEvent.Run.Optimize)
-            })
+            }, relaxFound = vm.relaxTrialFor() != null, onShowRelax = { wishConflicts = false; relaxDialog = true })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(

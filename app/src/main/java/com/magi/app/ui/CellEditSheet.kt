@@ -79,6 +79,8 @@ internal fun CellEditSheet(
     relax: RelaxToken? = null,          // [S6] ホームで見つかった組（このセルが窓か手順に入るときだけ渡す）
     relaxNoWall: Boolean = false,       // [S6] 探し終えて組が無い
     onShowRelax: () -> Unit = {},
+    mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
+    onMode: (Int) -> Unit = {},
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -88,7 +90,6 @@ internal fun CellEditSheet(
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
     val pinned = VioKey.cell(i, j) in ui.manualPins
-    var mode by remember { mutableIntStateOf(0) } // 0=割当, 1=希望（セルを移っても保つ）
     val name = ui.staffNames.getOrNull(i) ?: i.toString()
     fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
     val c1Marks = remember(ui.c1Shortages) { c1DisplayMarks(ui) }
@@ -177,6 +178,10 @@ internal fun CellEditSheet(
                 } else if (mode == 0 && status.severity != CellSeverity.NONE) {
                     FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
                 }
+                if (mode == 1 && wish != null) {
+                    wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    Text(WISH_TAB_KEEP_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
                 if (mode == 0 && status.severity == CellSeverity.HARD) when (handoff) {
                     RelaxHandoff.OFFER -> {
                         Text(relaxHandoffLine(relax!!.result, ui), style = MaterialTheme.typography.bodySmall)
@@ -221,7 +226,7 @@ internal fun CellEditSheet(
                     Box(
                         Modifier.heightIn(min = 48.dp)
                             .background(if (selSeg) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
-                            .clickable { mode = idx }
+                            .clickable { onMode(idx) }
                             .padding(horizontal = 14.dp),
                         contentAlignment = Alignment.Center,
                     ) {
