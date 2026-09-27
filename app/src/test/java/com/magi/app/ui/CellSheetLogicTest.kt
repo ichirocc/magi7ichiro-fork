@@ -184,6 +184,24 @@ class CellSheetLogicTest {
         assertTrue(cellSheetRev(afterWish) != cellSheetRev(undone))
     }
 
+    /** [S6] 起点の窓と手順のセルだけがホームの組を引き継ぐ。探索中・組なしはそれぞれの言い方、セルごとの試算はしない。 */
+    @Test fun relaxHandoffOnlyForCellsTheFoundSetTouches() {
+        val r = com.magi.app.v6.RelaxTrial.firstWall(st, s) as com.magi.app.v6.RelaxTrial.Result
+        val i = staff("職員10")
+        assertEquals(i to 7, r.staff to r.day)
+        assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, i, 7))
+        assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, i, 8))
+        val touched = r.moves.first { it.staff != i }
+        assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, touched.staff, touched.day))
+        assertEquals(RelaxHandoff.NONE, relaxHandoff(r, false, false, i, 20))
+        assertEquals(RelaxHandoff.NONE, relaxHandoff(r, true, true, i, 20))
+        assertEquals(RelaxHandoff.SEARCHING, relaxHandoff(null, true, false, i, 7))
+        assertEquals(RelaxHandoff.NO_WALL, relaxHandoff(null, false, true, i, 7))
+        assertEquals(RelaxHandoff.NONE, relaxHandoff(null, false, false, i, 7))
+        val ui = UiState(staffNames = st.staff.map { it.name }, shiftSymbols = st.shifts.map { it.kigou }, violationCellFamilies = rep.cellFamilies)
+        assertEquals("設定を緩めると、この禁止の並びを解消できる見込みです（上限 2件）", relaxHandoffLine(r, ui))
+    }
+
     @Test fun fixPanelStatesSpinOnlyWhileRunning() {
         assertEquals(FixPanelState.WAIT_CHECK, fixPanelState(running = true, fixSearching = false, doneKey = "k", failedKey = "", key = "k"))
         assertEquals(FixPanelState.NOT_STARTED, fixPanelState(running = false, fixSearching = false, doneKey = "", failedKey = "", key = "k"))

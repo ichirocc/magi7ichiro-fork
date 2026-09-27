@@ -1932,6 +1932,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if (relaxCtxNow() == c) RelaxToken(c.stateKey, c.boardKey, r) else null
     }
 
+    /** いまのデータで探し終えて組が無かった（NoWall・試算不可）。走っている・未着手・古いなら false。 */
+    internal fun relaxNoWall(): Boolean = relaxCtx != null && relaxCtx == relaxCtxNow() && relaxResult != null && relaxResult !is RelaxTrial.Result
+
     /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
     internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second
 

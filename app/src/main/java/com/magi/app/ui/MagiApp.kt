@@ -852,6 +852,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     fixNav = fixNav,
                     tourNext = nextTourCell(tour, cell),
                     leftHand = leftHand,
+                    relax = vm.relaxTrialFor(),
+                    relaxNoWall = vm.relaxNoWall(),
+                    onShowRelax = { relaxDialog = true },
                 )
             }
         }

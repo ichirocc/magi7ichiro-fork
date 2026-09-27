@@ -76,6 +76,9 @@ internal fun CellEditSheet(
     fixNav: FixNav = FixNav(),
     tourNext: Pair<Int, Int>? = null,
     leftHand: Boolean = false,
+    relax: RelaxToken? = null,          // [S6] ホームで見つかった組（このセルが窓か手順に入るときだけ渡す）
+    relaxNoWall: Boolean = false,       // [S6] 探し終えて組が無い
+    onShowRelax: () -> Unit = {},
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -106,6 +109,8 @@ internal fun CellEditSheet(
     }
     val dilemma = isWishDilemma(wish, current, status.severity)
     var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える
+    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j)
+    val settingsLabel = if (handoff == RelaxHandoff.NO_WALL) RELAX_SETTINGS_LABEL else "設定を見直す"
     var marks by remember(cell) { mutableStateOf(ShiftMarks()) }
     LaunchedEffect(cell, rev) {
         marks = ShiftMarks()
@@ -153,9 +158,17 @@ internal fun CellEditSheet(
                             Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", maxLines = 3)
                         }
                     }
-                    if (dilemmaChoice == 1) FixSearchPanel(ui, cv, FixFocus(null, null, j, exceptStaff = i), onEvent, fixNav, onApplied = {}, compact = true)
+                    if (dilemmaChoice == 1) FixSearchPanel(ui, cv, FixFocus(null, null, j, exceptStaff = i), onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
                 } else if (mode == 0 && status.severity != CellSeverity.NONE) {
-                    FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true)
+                    FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, settingsLabel = settingsLabel)
+                }
+                if (mode == 0 && status.severity == CellSeverity.HARD) when (handoff) {
+                    RelaxHandoff.OFFER -> {
+                        Text(relaxHandoffLine(relax!!.result, ui), style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("緩める候補を見る") }
+                    }
+                    RelaxHandoff.SEARCHING -> Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    else -> {}
                 }
                 var details by remember(cell) { mutableStateOf(false) }
                 TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {

@@ -1747,6 +1747,7 @@ internal fun FixSearchPanel(
     ui: UiState, cv: ConditionsView?, focus: FixFocus, onEvent: (MagiEvent) -> Unit,
     nav: FixNav, onApplied: () -> Unit,
     compact: Boolean = false,   // セル編集シートの上段: 手は 1 件・理由は 2 行まで
+    settingsLabel: String = "設定を見直す",   // 手が無いときの設定への行き先の名（S6 も組なしなら「回数などの設定を開く」）
 ) {
     val cs = MaterialTheme.colorScheme
     val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null })) }
@@ -1790,7 +1791,7 @@ internal fun FixSearchPanel(
                 else why.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (why.wishRelated) OutlinedButton(onClick = { nav.onWishes(focus.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
-                    OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定を見直す") }
+                    OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabel) }
                 }
             }
         }

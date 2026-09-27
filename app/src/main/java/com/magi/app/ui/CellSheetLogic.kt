@@ -3,6 +3,7 @@ package com.magi.app.ui
 import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.Problem
+import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.canDo
 import com.magi.app.v6.formatDay
@@ -264,6 +265,23 @@ internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: Str
     failedKey == key -> FixPanelState.FAILED
     else -> FixPanelState.NOT_STARTED
 }
+
+/** [S6] セルシートから設定の緩和へ渡す状態。OFFER＝ホームで見つかった組の起点の窓か手順のセル（同じ結果を同じ確定で開く。セルごとに試算はしない）、
+ *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い（1 手も無ければ設定の行き先の名を具体にする）。 */
+internal enum class RelaxHandoff { NONE, SEARCHING, OFFER, NO_WALL }
+
+internal fun relaxHandoff(r: RelaxTrial.Result?, searching: Boolean, noWall: Boolean, i: Int, j: Int): RelaxHandoff = when {
+    r != null && ((r.staff == i && j in r.window) || r.moves.any { it.staff == i && it.day == j }) -> RelaxHandoff.OFFER
+    r != null -> RelaxHandoff.NONE
+    searching -> RelaxHandoff.SEARCHING
+    noWall -> RelaxHandoff.NO_WALL
+    else -> RelaxHandoff.NONE
+}
+
+internal fun relaxHandoffLine(r: RelaxTrial.Result, ui: UiState): String =
+    "設定を緩めると、この${relaxTarget(r, ui).what}を解消できる見込みです（上限 ${r.relaxes.size}件）"
+
+internal const val RELAX_SETTINGS_LABEL = "回数などの設定を開く"
 
 /** 通知の「元に戻す」は、その操作が今も元に戻すの先頭にあるときだけ効く（後の別の操作を戻さない）。 */
 internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = topSerial != null && topSerial == noticeSerial
