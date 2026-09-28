@@ -137,6 +137,10 @@ object PolishGate {
      */
     @Volatile var hardDeltaPrefilter: Boolean = true
 
+    /** [E0/測定中] 前面の「つくる」で HARD が希望衝突の床に到達したら頭打ち（E0A＝後処理は通常／E0B＝研磨を省いて時間を返す）。
+     *  既定 OFF＝実データ A/B を見て利用者が決める（docs/history 3.613.0）。背景 Worker には渡さない。 */
+    @Volatile var wishConflictFloorMode: WishFloorMode = WishFloorMode.OFF
+
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
@@ -731,6 +735,19 @@ object V6HotfixPasses {
             work, report.copy(logs = allLogs), r80, r67, r66, r70, chain.logs, plateauOut,
             chain.pinBlocksAll.attempts, chain.pinBlocksAll,
         )
+    }
+
+    /** [E0B] 研磨なしの後処理＝検査と HF70 だけ（盤面は入力のまま）。 */
+    fun minimalPost(state: MagiState, schedule: Array<IntArray>, algoName: String, quantitativeRangeEval: Boolean = false): V6PostOptimizationResult {
+        val work = schedule.copy2D()
+        val report = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+        val r70 = HfSwapPolish.detectHF70Anomalies(state, work, algoName, report, quantitativeRangeEval)
+        val note = MirrorLog(level = "I", tag = "POST", message = "希望衝突の床で頭打ち（E0B）: 後処理の研磨を省略（検査・HF70 のみ）")
+        val r80 = HF80Result(work, report.hard, report.hard, report.weightedScore, report.weightedScore, 0, false, "E0B", emptyList(), report)
+        val r67 = HF67Result(work, report.total, report.total, 0, 0, 0, 0, emptyList(), report)
+        val r66 = HF66Result(work, report.total, report.total, 0, 0, 0, 0, emptyList(), report)
+        val logs = listOf(note) + r70.logs
+        return V6PostOptimizationResult(work, report.copy(logs = logs + report.logs), r80, r67, r66, r70, logs)
     }
 
     private class ClusterOutcome(val c1Plateau: C1PlateauDiagnosis?)

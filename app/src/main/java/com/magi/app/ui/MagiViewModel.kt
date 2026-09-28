@@ -1503,6 +1503,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     softPolish = _ui.value.softPolish,
                     requestedAlgorithm = _ui.value.v6Algorithm,
                     allowImpossible = true,
+                    wishFloorMode = com.magi.app.v6.PolishGate.wishConflictFloorMode,
                 ) { phase, report, _, _ ->
                     val rep = report
                     // [3.93.1と同クラスの補正 / 実機ログ起因] 旧: 累積iter(数千万)を渡すと閾値5000が「約20msの無改善」

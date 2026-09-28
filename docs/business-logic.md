@@ -110,7 +110,8 @@
   1 セルの窓は「禁止の並び「X」に希望が当たっています」「この希望を取り消すか…」の単数の文言）、
   HF70 の「希望以外HARD」（①②の c3n/c3w を差し引き「希望と禁止の衝突 N 件」を別に出す）、残存分析（「もう直せない: 希望と禁止の衝突 N件(…)」へ族別に移す）が同じ組を読む。
   集計名は 1 件の組も含むので「どうし」と言わない。
-  盤面の必須違反のうち組が必ず生む分（`wishSelfConflictHard`）は、セルを共有しない組ごとに 1 件と数える下限（重なる窓は真ん中の 1 件で両方解けるため）。ログの仕分け専用で探索・採否には使わない。
+  盤面の件数（`wishConflictHard`、3.613.0）は report.hard と同じ単位＝成立している衝突の窓（cons3n の行ごと・窓ごと）と c3w のセル、衝突の区間の希望を崩したセル（pref）。HF70・残存分析・E0 の到達判定が同じ関数を読む。
+  盤面に依らない下限（`wishConflictFloorParts`＝希望衝突の床）は職員ごとに「崩すセル数＋残る区間数」の最小（重なる窓は真ん中の 1 件で両方解ける）＋上限 0 に頼らない日の証明の日数。構造的 covU の床（`structuralHardFloor`）とは別。探索に使うのは既定 OFF の `PolishGate.wishConflictFloorMode`（E0、測定中）だけ。
 - **つくる前の確認（`v6/PreRunCheck`、2026-09-28 利用者決定）**：本実行の入口（`MagiViewModel.runV6FullOptimize`＝フッター・ホーム・イベントの 5 経路が通る 1 点。S5 の確定と中断の再開は通さない）で数える。表示・導線だけ＝探索・評価・重みは不変、希望の取り消しも上限の変更も自動ではしない（HF77）。
   「計算では消えない」＝①希望どうしの衝突（上の `wishSelfConflicts`、c3n/c3w）②反映できない希望（`detectImpossibleWishes`）③配布不可（`forcedCovU`）④証明つきの矛盾で**コアに希望を含むもの**（`ConstraintMus.analyzeDayConflicts`＝日の必要人数と固定希望、`analyzeStaffConflicts`＝本人の希望と条件の組合せ。設定ミス診断 9 と同じ判定、シートは上位 3 件に絞らず全件）。
   「もう一度つくると外れる」＝手で置いた個人の上限 0 の勤務（希望で固定したセルを除く＝`handPlacedUpperZeroIssue` と同じ判定、`RelaxTrial.handPlaced` と同じ組）。本実行の入口の clear が外す。

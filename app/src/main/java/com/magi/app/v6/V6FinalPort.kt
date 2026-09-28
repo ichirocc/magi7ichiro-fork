@@ -18,17 +18,26 @@ import kotlinx.coroutines.isActive
 /** 勤務表最適化のタイムアウト上限（秒）。高精度を保ったまま5分(300s)以内へ圧縮（停滞早期脱出＋RSI++をこの予算に収める）。 */
 const val MAX_OPTIMIZE_SEC = 300
 
+/** [E0] 希望衝突の床での頭打ちの型（A/B 用）。 */
+enum class WishFloorMode { OFF, E0A, E0B }
+
 object V6FinalPort {
     /** 直近の [handleOptimize] が最適化器へ渡した種（テスト用）。 */
     @Volatile internal var lastOptimizerSeed: Long = 0L
 
     /** [backlog#35] 残りHARDが「解けないと証明済み」か＝covU は床以下で、非covU は c3n だけかつ c3n 壁（[c3nWall]）。 */
-    internal fun isStructuralHardResidual(report: ViolationReport, hardFloor: Int, c3nWall: () -> Boolean): Boolean {
+    /** [E0] [wishReached]（[wishFloorReached]）も解けない残りと数え、c3w は希望どうしの衝突で証明された件数（[c3wProven]）まで c3n と同列。既定は従来と同一。 */
+    internal fun isStructuralHardResidual(
+        report: ViolationReport, hardFloor: Int, wishReached: Boolean = false, c3wProven: Int = 0, c3nWall: () -> Boolean,
+    ): Boolean {
         if (report.hard <= 0) return false
+        if (wishReached) return true
         val covU = report.breakdown["covU"] ?: 0
         if (covU > hardFloor) return false
         val nonCovU = report.hard - covU
-        return nonCovU == 0 || (nonCovU == (report.breakdown["c3n"] ?: 0) && c3nWall())
+        val c3w = report.breakdown["c3w"] ?: 0
+        val c3wOk = if (c3w <= c3wProven) c3w else 0
+        return nonCovU == 0 || (nonCovU == (report.breakdown["c3n"] ?: 0) + c3wOk && c3nWall())
     }
 
     /** [UX調査] regression!=null（Sentinel発火＝後処理盤面が棄却された）のとき、その盤面を観測した
@@ -177,11 +186,16 @@ object V6FinalPort {
      *  新規: 残る非covU HARD が **c3n のみ**で、かつ 3.280.0 ForbiddenDiag が全 run の塞がりを**証明**した
      *  （c3nWallProven）場合も plateau とみなし stallHardMs へ移行する。証明つきのため誤発火なし・
      *  早期終了は時間/電池の節約のみで品質は keep-best が担保（退化不能）。 */
+    /** [E0] 希望衝突の床に「到達」＝HARD がちょうど床 [floor] で、残る HARD が全て希望由来（[allWishOrigin]＝`V6SanityPort.hardAllWishOrigin`）。
+     *  床を超えていれば未到達（検査もしない）。構造的 covU の床とは混ぜない。 */
+    internal fun wishFloorReached(hard: Int, floor: Int, allWishOrigin: () -> Boolean): Boolean =
+        floor > 0 && hard == floor && allWishOrigin()
+
     internal fun effectiveStallMs(
         bestHard: Int, hardFloor: Int, nonCovUHard: Int, nonCovUAllC3n: Boolean,
-        c3nWallProven: Boolean, stallHardMs: Long, stallMs: Long,
+        c3nWallProven: Boolean, stallHardMs: Long, stallMs: Long, wishReached: Boolean = false,
     ): Long {
-        val basePlateau = bestHard <= hardFloor && nonCovUHard == 0
+        val basePlateau = (bestHard <= hardFloor && nonCovUHard == 0) || wishReached
         val c3nWallPlateau = nonCovUHard > 0 && nonCovUAllC3n &&
             bestHard <= hardFloor + nonCovUHard && c3nWallProven
         return if (basePlateau || c3nWallPlateau) stallHardMs else stallMs
@@ -282,6 +296,9 @@ object V6FinalPort {
         /** [測定中/backlog#35] ExtraRefineを、後処理後の残りHARDが構造的に解けないと証明済み（covU床のみ／
          *  ForbiddenDiag確定のc3n壁）のときだけ省略する。改善可能なHARD残・HARD=0では従来どおり実行。既定OFF。 */
         extraRefineRequirePostHardDrop: Boolean = false,
+        /** [E0/測定中] 希望衝突の床に到達（[wishFloorReached]）したら頭打ち。E0A＝後処理は通常どおり、E0B＝後処理の研磨を省いて時間を返す。
+         *  既定 OFF。前面の実行だけが [PolishGate.wishConflictFloorMode] を渡す（背景 Worker は渡さない）。 */
+        wishFloorMode: WishFloorMode = WishFloorMode.OFF,
         /** ベンチ用の乱数種。null（既定）は従来どおり [V6OptimizerOptions.seed]=0＝時刻由来。0 も時刻由来。
          *  種を固定しても、ワーカー並列と壁時計の予算・後処理の時刻由来の種があるため盤面の再現は保証しない。 */
         seed: Long? = null,
@@ -413,6 +430,20 @@ object V6FinalPort {
         //     対称除外＝HARD寄与0のため下限にならず、逆に「解けるHARD」を早々に諦める誤りだった。構造的covUへ是正。
         //   構造(assignability/need)のみ依存で最適化中に不変＝一度だけ算出する。
         val hardFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
+        // [E0] 希望衝突の床。ログには常に出し、探索への配線は wishFloorMode≠OFF のときだけ（OFF なら挙動不変）。
+        val wishP = cachedProblem(state)
+        val wishParts = try { V6SanityPort.wishConflictFloorParts(wishP) } catch (_: Exception) { 0 to 0 }
+        val wishFloorLogged = wishParts.first + wishParts.second
+        val wishFloorMp = try { V6SanityPort.wishConflictFloorParts(wishP, zeroCapBinding = true).let { it.first + it.second } } catch (_: Exception) { 0 }
+        val wishOn = wishFloorMode != WishFloorMode.OFF
+        val wishC3wProven = if (wishOn) V6SanityPort.wishConflictC3wCount(wishP) else 0
+        val e0Fired = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun wishReachedOn(board: Array<IntArray>?, hard: Int): Boolean = board != null && wishFloorReached(hard, wishFloorLogged) {
+            try {
+                val r = UnifiedViolationChecker.check(state, board, quantitativeRangeEval = quantitativeRangeEval)
+                r.hard == wishFloorLogged && V6SanityPort.hardAllWishOrigin(wishP, board, r, wishParts.second)
+            } catch (_: Exception) { false }
+        }
         // [レビュー#9 3.213.0→3.230.0で本格分離] 「最良改善」と「フェーズ遷移」の時計を分離。
         //   [3.230.0/ドッグフーディングで発見・修正] 3.213.0時点では両者を max() で合成していたため、
         //   stallMs=270s(予算9/10)という長い閾値が、20〜90秒間隔で頻発するフェーズ遷移
@@ -499,7 +530,7 @@ object V6FinalPort {
                         bestNonCovUHard.set(gv + pf + c3n + c3w)
                         // [3.281.0/A] 非covU HARD が c3n のみか（c3n構造壁チェックの適用条件）＋best世代を進める
                         //   （世代が変わると c3n壁キャッシュは無効化＝新しい best 盤面で再証明する）。
-                        bestNonCovUAllC3n.set(gv == 0 && pf == 0 && c3w == 0 && c3n > 0)
+                        bestNonCovUAllC3n.set(gv == 0 && pf == 0 && c3w <= wishC3wProven && c3n > 0)
                         bestVersion.incrementAndGet()
                     }
                 }
@@ -517,6 +548,16 @@ object V6FinalPort {
         //   liveBest は publishLiveBest(CAS, better()単調) のグローバル最良スナップショット。best報告との
         //   僅かな世代ズレはあり得るが、本判定は「停滞閾値の選択」にのみ作用（採否/keep-bestとは無関係）で
         //   誤っても時間配分が変わるだけ＝品質は不変。並行呼出は同一結果を二重計算するだけで無害。
+        // [E0] 到達判定は best 世代ごとに一度だけ（床ちょうどのときだけ盤面を検査する）。
+        val wishReachedCache = java.util.concurrent.atomic.AtomicReference(-1 to false)
+        val bestWishReached = {
+            val v = bestVersion.get()
+            if (wishReachedCache.get().first != v) {
+                val board = V6NativeOptimizer.liveBest?.let { b -> Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } } }
+                wishReachedCache.set(v to wishReachedOn(board, bestHard.get()))
+            }
+            wishReachedCache.get().second
+        }
         val c3nWallProven = {
             val v = bestVersion.get()
             if (c3nWallCache.get().first != v) {
@@ -546,12 +587,14 @@ object V6FinalPort {
                 now - lastBestImproveMs.get() > stallHardMs && c3nWallProven()
             val effStall = effectiveStallMs(
                 bestHard.get(), hardFloor, nonCovU, bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
+                wishOn && bestHard.get() == wishFloorLogged && bestWishReached(),
             )
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, lastBestImproveMs.get(), effStall) -> {
                     stagnationDurationMs.set(now - lastBestImproveMs.get())
                     stagnationIters.set(observedIters.get())   // [3.375.0] 停滞発火の瞬間の反復数
+                    e0Fired.set(wishOn && bestHard.get() == wishFloorLogged && bestWishReached())
                     stagnationFired.set(true); true
                 }
                 else -> false
@@ -564,7 +607,8 @@ object V6FinalPort {
         //   （実測: 探索109.99s→114.998s・後処理8.48s→4.95s）。
         val stopIsFinal = { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         // 後処理(runPostOptimization)用の別締切。stall では止めず予約枠 hardDeadlineMs まで使える。
-        val postShouldStop = { EngineClock.nowMs() >= hardDeadlineMs || !isActive }
+        val e0bSkip = { wishFloorMode == WishFloorMode.E0B && stagnationFired.get() && e0Fired.get() }
+        val postShouldStop = { EngineClock.nowMs() >= hardDeadlineMs || !isActive || e0bSkip() }
 
         val tFirst0 = EngineClock.nowMs()
         val first = V6NativeOptimizer.optimize(state, schedule, optsR, shouldStop, progressWatch, stopIsFinal)
@@ -597,7 +641,7 @@ object V6FinalPort {
         //   後処理(fair/weekly/c41s 研磨)へ予約枠の半分を必ず残す（両者 keep-best＝退化なし）。
         val integrationDeadline = minOf(hardDeadlineMs - postReserveMs / 2, EngineClock.nowMs() + integrationBudgetMs)
             .coerceAtLeast(EngineClock.nowMs())
-        val integrationStop = { EngineClock.nowMs() >= integrationDeadline || !isActive }
+        val integrationStop = { EngineClock.nowMs() >= integrationDeadline || !isActive || e0bSkip() }
         // [3.335.0/外部レビュー P1] 可変 static でなく**この実行の返り値**から読む（実行が重なっても
         //   別の実行の値を拾わない）。読む対象は従来どおり最後の段（RSIThenALNS なら ALNS 段）。
         val archivedElites = chained.fusionElites
@@ -631,7 +675,9 @@ object V6FinalPort {
             aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
             countChainEnabled = PolishGate.countChainPolish,
         )
-        val post = V6HotfixPasses.runPostOptimization(
+        // [E0B] 希望衝突の床で頭打ちしたら後処理の研磨を丸ごと省き、検査・HF70 だけにする（最終番兵は下で通常どおり）。
+        val post = if (e0bSkip()) V6HotfixPasses.minimalPost(state, integrated.schedule, label.tech, quantitativeRangeEval)
+        else V6HotfixPasses.runPostOptimization(
             state, integrated.schedule, label.tech,
             shouldStop = postShouldStop,
             onPhase = { phase -> progressWatch(phase, null, EngineClock.nowMs() - startMs, budgetMs) },
@@ -659,7 +705,8 @@ object V6FinalPort {
             // [測定中/backlog#35] post.report の残りHARDが「解けないと証明済み」かどうか。HARD=0（SOFT仕上げの
             //   余地）や、証明できない残りHARD（改善可能かもしれない）は false のまま＝常にExtraRefineを許可する。
             val structuralHardResidual = extraRefineRequirePostHardDrop &&
-                isStructuralHardResidual(post.report, hardFloor) {
+                isStructuralHardResidual(post.report, hardFloor,
+                    wishOn && wishReachedOn(post.schedule, post.report.hard), wishC3wProven) {
                     try {
                         val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, post.schedule)
                         diag.hasRuns && diag.allBlocked
@@ -743,14 +790,18 @@ object V6FinalPort {
             message = "予算配分: 総${seconds}s = 探索${(searchDeadlineMs - startMs) / 1000}s + 後処理予約${postReserveMs / 1000}s" +
                 " / 早期終了の条件: 最短実行${minRunMs / 1000}s経過かつ現フェーズ${phaseGraceMs / 1000}s経過かつ無改善が" +
                 "${stallMs / 1000}s(通常)〜${stallHardMs / 1000}s(頭打ち=HARD下限到達 or c3n構造壁)続いたとき" +
-                " / 構造的HARD下限=${hardFloor}",
+                " / 構造的HARD下限=${hardFloor} / 希望衝突の床=${wishFloorLogged}(衝突${wishParts.first}+日の証明${wishParts.second}・" +
+                (if (wishOn) "到達で頭打ち=${wishFloorMode}" else "記録のみ") + "・上限0を拘束とみなすと${wishFloorMp}・covU の床とは別)",
         )
         val watchdogLog = run {
             val lastImp = lastImpAtSearchEnd
             val endStallS = (tChain1 - lastImp).coerceAtLeast(0L) / 1000
             val nonCovU = bestNonCovUHard.get()
+            val wishReachedEnd = bestHard.get() == wishFloorLogged && bestWishReached()
             val kind = when {
+                bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
+                wishOn && wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
                 c3nWallCache.get().second && bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
             }
@@ -794,7 +845,9 @@ object V6FinalPort {
             listOf(MirrorLog(
                 level = "I", tag = "Watchdog",
                 message = "停滞監視: 最終改善=経過${((lastImp - startMs) / 1000).coerceAtLeast(0)}s・" +
-                    "探索終了時の停滞${endStallS}s・実効閾値($kind)・発火=${if (stagnationFired.get()) "あり" else "なし"}" +
+                    "探索終了時の停滞${endStallS}s・実効閾値($kind)・" +
+                    "希望衝突の床${wishFloorLogged}=${if (wishReachedEnd) "到達" else "未到達"}(best ${bestHard.get()})・" +
+                    "covU床${hardFloor}=${if (bestHard.get() <= hardFloor && nonCovU == 0) "到達" else "未到達"}・発火=${if (stagnationFired.get()) "あり" else "なし"}" +
                     // [3.375.0] 時刻に加えて反復数も出す（「回していない」のか「回しても改善しない」のかの区別）。
                     "・反復(進捗報告ぶん・目安)=最終改善時${fmtIter(lastImpItersAtSearchEnd)}→" +
                     "探索終了時${fmtIter(itersAtSearchEnd)}（無改善のまま約${fmtIter(itersAtSearchEnd - lastImpItersAtSearchEnd)}転・" +
@@ -809,6 +862,7 @@ object V6FinalPort {
                 (if (stagnationIters.get() >= 0)
                     "・発火までに無改善のまま約${fmtIter(stagnationIters.get() - lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
                 "・解は最良を維持）" +
+                (if (e0Fired.get()) "（希望衝突の床に到達＝${wishFloorMode}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
                 (if (c3nWallCache.get().second && bestNonCovUAllC3n.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
         )) else emptyList()
@@ -939,7 +993,7 @@ object V6FinalPort {
             }.getOrDefault(0)
             val covUWall = covUStructuralWall(covUNow, hardFloor, covUBlocked)
             // 希望どうしの衝突（希望を1件取り消すまで c3n/c3w か pref が必ず残る）。族別に open から差し引く。
-            val selfConflict = runCatching { V6SanityPort.wishSelfConflictHard(cachedProblem(state), finalSched) }.getOrDefault(emptyMap())
+            val selfConflict = runCatching { V6SanityPort.wishConflictHard(cachedProblem(state), finalSched) }.getOrDefault(emptyMap())
             val selfConflictShown = ArrayList<Pair<String, Int>>()
             for (key in MirrorKeys.all) {
                 val n0 = bd[key] ?: 0

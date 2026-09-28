@@ -239,25 +239,87 @@ object V6SanityPort {
         return out
     }
 
-    /** 盤面の HARD のうち希望どうしの衝突が必ず生む分の族別件数（下限）。セルを共有しない組ごとに成立なら c3n/c3w・崩れなら pref を 1 件
-     *  （職員ごとに区間を終わりの早い順に取る＝最大個数）。ログの仕分け専用＝探索・採否には使わない。 */
-    fun wishSelfConflictHard(p: Problem, schedule: Array<IntArray>, groups: List<WishSelfConflict> = wishSelfConflicts(p)): Map<String, Int> {
-        val out = LinkedHashMap<String, Int>()
-        for ((_, gs) in groups.groupBy { it.staff }) {
-            var lastEnd = -1
-            for (g in gs.sortedBy { it.days.last() }) {
-                if (g.days.first() <= lastEnd) continue
-                lastEnd = g.days.last()
-                val row = schedule.getOrNull(g.staff) ?: continue
-                val holds = when (g.family) {
-                    "c3w" -> row.getOrNull(g.days[0]) == g.shifts[0]
-                    else -> g.days.indices.all { row.getOrNull(g.days[it]) == g.shifts[it] }
+    /** 希望どうしの衝突が生む HARD の区間（report.hard の単位＝cons3n は行ごと・窓ごとに 1、c3w はセルごとに 1）。
+     *  c3n＝窓の全セルが希望で固定され禁止の並びそのもの、c3w＝希望 Y で固定したセル（翌日の希望 X が禁じる）。 */
+    private data class WishHardSpan(val staff: Int, val from: Int, val to: Int, val family: String)
+
+    private fun wishHardSpans(p: Problem): List<WishHardSpan> {
+        val out = ArrayList<WishHardSpan>()
+        for (i in 0 until p.S) {
+            for (c in p.cons3n) {
+                val d = c.seq.size
+                if (d == 0 || d > p.T) continue
+                for (j in 0..p.T - d) {
+                    if ((0 until d).all { l -> p.wishFixed(i, j + l) && p.wish[i][j + l] == c.seq[l] }) out.add(WishHardSpan(i, j, j + d - 1, "c3n"))
                 }
-                val key = if (holds) g.family else "pref"
-                out[key] = (out[key] ?: 0) + 1
+            }
+            if (p.c3wBan != null) for (j in 0 until p.T) {
+                if (p.wishFixed(i, j) && p.c3wBanned(i, j, p.wish[i][j])) out.add(WishHardSpan(i, j, j, "c3w"))
             }
         }
         return out
+    }
+
+    /** 「希望と禁止の衝突」の件数（HF70・残存分析・E0 の到達判定が共有する単一ソース、report.hard と同じ単位）。
+     *  c3n/c3w＝盤面で成立している衝突の窓/セル、pref＝衝突の区間にかかる希望を崩したセル。 */
+    fun wishConflictHard(p: Problem, schedule: Array<IntArray>): Map<String, Int> {
+        val out = LinkedHashMap<String, Int>()
+        val prefCells = HashSet<Pair<Int, Int>>()
+        for (sp in wishHardSpans(p)) {
+            val row = schedule.getOrNull(sp.staff) ?: continue
+            var held = true
+            for (j in sp.from..sp.to) if (row.getOrNull(j) != p.wish[sp.staff][j]) { held = false; prefCells.add(sp.staff to j) }
+            if (held) out[sp.family] = (out[sp.family] ?: 0) + 1
+        }
+        if (prefCells.isNotEmpty()) out["pref"] = prefCells.size
+        return out
+    }
+
+    /** [E0] 希望衝突の床（report.hard と同単位、[structuralHardFloor] とは別に扱う）＝衝突の最小 HARD＋日の証明の日数。 */
+    fun wishConflictHardFloor(p: Problem): Int = wishConflictFloorParts(p).let { it.first + it.second }
+
+    /** [wishConflictHardFloor] の内訳（衝突の最小 HARD, 日の証明の日数）。衝突は職員ごとに「崩すセル数＋崩れずに残る区間数」の最小を
+     *  区間 DP で出す（どの盤面でも [wishConflictHard] の合計以下）。日の証明は衝突の区間の日と構造的 covU の日を数えない。
+     *  [zeroCapBinding]＝上限 0 に頼る日の証明も数える（ログの参考値 N_mayPlace。`mayPlace` を守る盤面でだけ健全＝手置きの上限 0 がある盤面では超えうるので頭打ちには使わない）。 */
+    fun wishConflictFloorParts(p: Problem, zeroCapBinding: Boolean = false): Pair<Int, Int> {
+        val spans = wishHardSpans(p)
+        var conflict = 0
+        val conflictDays = HashSet<Int>()
+        for ((_, ss) in spans.groupBy { it.staff }) {
+            for (sp in ss) for (j in sp.from..sp.to) conflictDays.add(j)
+            val byEnd = ss.groupBy { it.to }
+            // f[b+1]＝最後に崩したセルが b（-1＝まだ無し）のときの最小費用。
+            var f = IntArray(p.T + 1) { if (it == 0) 0 else Int.MAX_VALUE / 2 }
+            for (t in 0 until p.T) {
+                val g = IntArray(p.T + 1) { Int.MAX_VALUE / 2 }
+                for (b in 0..p.T) if (f[b] < Int.MAX_VALUE / 2) {
+                    g[b] = minOf(g[b], f[b])
+                    g[t + 1] = minOf(g[t + 1], f[b] + 1)
+                }
+                for (sp in byEnd[t].orEmpty()) for (b in 0..p.T) if (b - 1 < sp.from) g[b] += 1
+                f = g
+            }
+            conflict += f.min()
+        }
+        var days = 0
+        val proofDays = if (zeroCapBinding) ConstraintMus.analyzeDayConflicts(p).map { it.day } else ConstraintMus.dayProofsWithoutZeroCap(p)
+        for (j in proofDays) {
+            if (j in conflictDays) continue
+            if ((0 until p.K).any { k -> p.covUCell(k, j, placeableFor(p, k, j)) > 0 }) continue
+            days++
+        }
+        return conflict to days
+    }
+
+    /** [E0] 希望どうしの c3w の件数（c3w がこの件数までなら、pref==0 のとき全て希望由来）。 */
+    fun wishConflictC3wCount(p: Problem): Int = wishHardSpans(p).count { it.family == "c3w" }
+
+    /** [E0] 盤面の HARD が全て希望由来か（衝突の窓・セル・崩した希望＋日の証明の日数までの残り）。 */
+    fun hardAllWishOrigin(p: Problem, schedule: Array<IntArray>, report: ViolationReport, dayProofs: Int): Boolean {
+        val w = wishConflictHard(p, schedule)
+        if ((w["c3n"] ?: 0) > (report.breakdown["c3n"] ?: 0) || (w["c3w"] ?: 0) > (report.breakdown["c3w"] ?: 0)) return false
+        val rest = report.hard - w.values.sum()
+        return rest in 0..dayProofs
     }
 
     /** シフト単位の「証明可能に解消不能な covU 不足」。担当可能人数 capable(k) を全員そのシフトへ
