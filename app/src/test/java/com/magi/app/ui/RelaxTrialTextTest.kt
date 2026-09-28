@@ -34,14 +34,14 @@ class RelaxTrialTextTest {
         val r = RelaxTrial.firstWall(st, board) as RelaxTrial.Result
         val t = relaxTrialText(r, ui)
         assertEquals(listOf("職員10 Pｼ 上限 0→1", "職員11 Cｵ 上限 0→1"), t.rows.map { it.substringBefore("（") })
-        assertEquals("手で置いた勤務に合わせて上限を上げ、この組も緩めると、必須違反が 1件 減る見込みです。", t.lead)
+        assertEquals("手で置いた勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が 1件 減る見込みです。", t.lead)
         assertTrue(t.title, t.title.startsWith("職員10 ") && t.title.endsWith("禁止の並び"))
         assertTrue(t.moveLines.isNotEmpty() && t.moveLines.all { it.contains("→") })
         assertEquals(r.moves.size, t.moveLines.sumOf { it.count { c -> c == '→' } } + t.otherMoves)
         // 窓の外の手も全件が読める（畳むだけで隠さない）
         assertEquals(t.otherMoves, t.otherMoveLines.sumOf { it.count { c -> c == '→' } })
         assertTrue(t.otherMoves > 0 && t.otherMoveLines.all { (it.substringBefore("　").substringAfter("/").toInt() - 1) !in r.window })
-        assertEquals("設定を緩める候補 — 職員10 10/8〜10/9 禁止の並び", t.dialogTitle)
+        assertEquals("例外として上限を緩める候補 — 職員10 10/8〜10/9 禁止の並び", t.dialogTitle)
         assertEquals("必須違反: 5件 → 4件", t.hardLine)
         val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
         assertEquals("変更規模: 設定 5項目・${people}人・${r.moves.size}セル", t.scaleLine)
@@ -51,7 +51,7 @@ class RelaxTrialTextTest {
         println("S6 dialog: ${t.dialogTitle} / ${t.hardLine} / ${t.scaleLine}\n  pre=${t.prerequisiteRows}\n  set=${t.rows}\n  moves=${t.moveLines}\n  other=${t.otherMoveLines}\n  keep=${t.keepNote}")
         assertEquals("設定を緩めて手順を当てました: 必須違反 5 → 4。元に戻すで設定と勤務表をまとめて戻せます。", relaxDoneLine(r.h0, r.rr))
         val c = relaxCardText(r, ui)
-        assertEquals("職員10 10/8〜10/9の禁止の並び（必須 5件中 1件）は、設定が壁になっています", c.headline)
+        assertEquals("職員10 10/8〜10/9の禁止の並び（必須 5件中 1件）は、個人の上限0を例外で緩めると解消できる見込みです", c.headline)
         assertEquals("希望を残したまま、設定と勤務表を手順で変えられます", c.body)
         assertEquals("残りの必須違反 4件はそのまま残ります", c.note)
         assertEquals(null, relaxCardText(r.copy(rr = 0), ui).note)

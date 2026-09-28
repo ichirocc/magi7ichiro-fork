@@ -21,7 +21,7 @@ class PreRunCheckTest {
         assertEquals(listOf(8, 9, 10, 28), s.dayProofs.map { it.day })
         assertEquals(listOf(3), s.staffProofs.map { it.staff })
         assertEquals(listOf(Triple(7, 1, 0), Triple(10, 12, 0)), s.wishOverCaps.map { Triple(it.staff, it.wished, it.hi) })
-        assertEquals(11, s.floorCount)
+        assertEquals(9, s.floorCount)
         assertEquals(4, s.rerunClears.size)
         assertEquals(PreRunCheck.WallHint(22, 8, 7, 7), s.wallHint)
         assertTrue(s.needsSheet)
@@ -36,6 +36,8 @@ class PreRunCheckTest {
         val s = PreRunCheck.Summary(emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), null)
         assertFalse(s.needsSheet)
         assertNull(PreRunCheck.wallHint(emptyList()))
+        val overCapOnly = s.copy(wishOverCaps = listOf(PreRunCheck.WishOverCap(0, 1, 2, 0)))
+        assertFalse("要調整だけではシートを出さない", overCapOnly.needsSheet)
     }
 
     @Test fun wallHint_tieGoesToLowerIndex() {

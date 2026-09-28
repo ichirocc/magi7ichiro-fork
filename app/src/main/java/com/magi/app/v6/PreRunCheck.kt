@@ -13,7 +13,7 @@ object PreRunCheck {
     /** 個人の上限（0回）の密度。[topStaff] は組の数が最も多い職員（同数は番号の小さい方）。 */
     data class WallHint(val pairs: Int, val staffCount: Int, val topStaff: Int, val topPairs: Int)
 
-    /** 本人の希望の件数が個人の上限を超える（[V6SanityPort.buildGuidance] の 6e と同じ判定）。 */
+    /** 本人の希望の件数が個人の上限を超える（[V6SanityPort.buildGuidance] の 6e と同じ判定）。上限超過は要調整＝シートを出す条件に数えない。 */
     data class WishOverCap(val staff: Int, val shift: Int, val wished: Int, val hi: Int)
 
     data class Summary(
@@ -28,7 +28,7 @@ object PreRunCheck {
         val wallHint: WallHint?,
     ) {
         val floorCount: Int get() = wishConflicts.size + impossibleWishes.size + forcedShortfalls.size +
-            dayProofs.size + staffProofs.size + wishOverCaps.size
+            dayProofs.size + staffProofs.size
         /** 利用者決定 2026-09-28: どちらかの節に 1 件でもあるときだけシートを出す。 */
         val needsSheet: Boolean get() = floorCount > 0 || rerunClears.isNotEmpty()
     }

@@ -58,8 +58,13 @@ internal fun PreRunCheckSheet(
                     OutlinedButton(onClick = { onOpenCell(r.staff ?: 0, r.day ?: 0, false) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("該当セルを見る") }
                 }
             }
+            t.overCapNote?.let { n ->
+                Text("■ $PRE_RUN_OVERCAP_HEAD", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                Text(n, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                t.overCapRows.forEach { PreRunRowView(it, onOpenCell) }
+            }
             t.wallLine?.let { w ->
-                Text("■ 設定が壁になりやすい", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                Text("■ 入れないシフト（個人の上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(w, style = MaterialTheme.typography.bodyMedium)
             }
             ui.preRunRepeatHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) }

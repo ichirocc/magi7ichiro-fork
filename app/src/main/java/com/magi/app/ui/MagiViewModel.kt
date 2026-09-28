@@ -1972,7 +1972,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
     internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second
 
-    /** 確定「この組で緩めて、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
+    /** 確定「例外として上限を緩め、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
     internal fun relaxAndApply(token: RelaxToken) {
         val st = state ?: return
         val b = currentSchedule ?: return
@@ -3186,7 +3186,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sanity = sanityD.await()
         val coverageDiag = coverageD.await()
         val forbiddenDiag = forbiddenD.await()
-        val v6Logs = listOf("[I] LoadDataBit: ${sanity.loadDataBitSummary}") + sanity.warns.map { "[W] SanityCheck: $it" } + sanity.notes.map { "[I] V6Port: $it" } + sanity.duplicateSeqConstraints.take(4).map { "[W] DuplicateSeq: $it" } + sanity.guidance.take(12).map { "[W] 設定ミス: ${it.where} — ${it.problem} → ${it.fix}" } + (coverageDiag?.logLines() ?: emptyList()) + (forbiddenDiag?.logLines() ?: emptyList())
+        val v6Logs = listOf("[I] LoadDataBit: ${sanity.loadDataBitSummary}") + sanity.warns.map { "[W] SanityCheck: $it" } + sanity.notes.map { "[I] V6Port: $it" } + sanity.duplicateSeqConstraints.take(4).map { "[W] DuplicateSeq: $it" } + sanity.guidance.take(12).map { "${if (it.neutral) "[I] 設定の案内" else "[W] 設定ミス"}: ${it.where} — ${it.problem} → ${it.fix}" } + (coverageDiag?.logLines() ?: emptyList()) + (forbiddenDiag?.logLines() ?: emptyList())
         val mappedDiag = report.logs.map { "[${it.level}] ${it.tag}: ${it.message}" }
         Analysis(
             v6 = v6D.await(),

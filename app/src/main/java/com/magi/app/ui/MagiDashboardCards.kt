@@ -234,7 +234,7 @@ internal fun RelaxTrialDialog(
     var showAll by remember(token) { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(t?.dialogTitle ?: "設定を緩める候補") },
+        title = { Text(t?.dialogTitle ?: "例外として上限を緩める候補") },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (token == null || t == null) Text("勤務表か設定が変わりました。もう一度試算してください。")
@@ -264,7 +264,7 @@ internal fun RelaxTrialDialog(
                         onClick = { onConfirm(token) },
                         enabled = !ui.running,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp),
-                    ) { Text("この組で緩めて、手順を当てる") }
+                    ) { Text("例外として上限を緩め、手順を当てる") }
                     Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
                 }
             }

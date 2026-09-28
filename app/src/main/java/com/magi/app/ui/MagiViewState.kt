@@ -387,14 +387,14 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
         "${DayText.short(ui.startDate, d)}　" + xs.joinToString("、") { "${name(it.staff)} ${sym(it.from)}→${sym(it.to)}" }
     }
     val (inWin, outWin) = r.moves.partition { it.day in r.window }
-    val lead = if (r.prerequisite.isEmpty()) "この組で緩めると、必須違反が ${r.att}件 減る見込みです。"
-        else "手で置いた勤務に合わせて上限を上げ、この組も緩めると、必須違反が ${r.att}件 減る見込みです。"
+    val lead = if (r.prerequisite.isEmpty()) "この組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
+        else "手で置いた勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
     val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、手で置いた勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
     val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
     val title = "${target.name} ${target.span}　${target.what}"
     return RelaxTrialText(
         title = title,
-        dialogTitle = "設定を緩める候補 — ${target.name} ${target.span} ${target.what}",
+        dialogTitle = "例外として上限を緩める候補 — ${target.name} ${target.span} ${target.what}",
         hardLine = "必須違反: ${r.h0}件 → ${r.rr}件",
         scaleLine = "変更規模: 設定 ${r.prerequisite.size + r.relaxes.size}項目・${people}人・${r.moves.size}セル",
         prerequisiteRows = preRows,
@@ -411,12 +411,12 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
 /** [S6] ホームの次にやることカードの文（見出し・本文・残る件数の注記）。起点の違反と件数を名指しする。 */
 internal data class RelaxCardText(val headline: String, val body: String, val note: String?)
 
-internal const val RELAX_SEARCHING_TEXT = "希望を変えずに、設定側で直す方法を調べています…"
+internal const val RELAX_SEARCHING_TEXT = "希望を変えずに、個人の上限0を例外で緩める方法を調べています…"
 
 internal fun relaxCardText(r: RelaxTrial.Result, ui: UiState): RelaxCardText {
     val t = relaxTarget(r, ui)
     return RelaxCardText(
-        headline = "${t.name} ${t.span}の${t.what}（必須 ${r.h0}件中 ${r.h0 - r.rr}件）は、設定が壁になっています",
+        headline = "${t.name} ${t.span}の${t.what}（必須 ${r.h0}件中 ${r.h0 - r.rr}件）は、個人の上限0を例外で緩めると解消できる見込みです",
         body = "希望を残したまま、設定と勤務表を手順で変えられます",
         note = if (r.rr > 0) "残りの必須違反 ${r.rr}件はそのまま残ります" else null,
     )
@@ -715,9 +715,14 @@ internal data class PreRunSheetText(
     val rerunRows: List<PreRunRow>,
     val wallLine: String?,
     val hasWishRows: Boolean,
+    val overCapNote: String? = null,
+    val overCapRows: List<PreRunRow> = emptyList(),
 )
 
 internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。"
+internal const val PRE_RUN_OVERCAP_HEAD = "設定上入れないシフトと希望（要調整）"
+internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、例外として後から「設定を緩めたら」で試せます。"
+internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、例外として上限を緩めてください。"
 internal const val PRE_RUN_RERUN_NOTE = "手で置いた勤務が個人の上限（0回）と食い違っています。つくると外されます。"
 
 internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
@@ -744,12 +749,10 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
         for (c in s.staffProofs) pin(c.core).let { w ->
             add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません・証明つき）", w?.staff, w?.day, w != null))
         }
-        for (w in s.wishOverCaps) add(PreRunRow("${name(w.staff)}「${sym(w.shift)}」本人の希望${w.wished}件が個人の上限（${w.hi}回）を超えています"))
         for (f in s.forcedShortfalls) add(PreRunRow("「${f.shiftSymbol}」 ${f.cells}日で担当できる人より必要人数が多く、人員不足が合計${f.amount}人残ります"))
     }
     val rerun = s.rerunClears.map { PreRunRow("${name(it.staff)} ${day(it.day)} ${sym(it.shift)}", it.staff, it.day) }
-    val wall = s.wallHint?.let { "個人の上限（0回）が ${it.pairs}組（${it.staffCount}人）あります。多いのは ${name(it.topStaff)}（${it.topPairs}組）。" +
-        "つくった後に「設定を緩めたら」で試せます。" }
+    val wall = s.wallHint?.let { "個人の上限0：${it.pairs}組（${it.staffCount}人）。入れないシフトの指定です。つくったあとに、例外として緩める試算もできます。" }
     return PreRunSheetText(
         floorHeader = if (floor.isEmpty()) null else "計算では消えない（${floor.size}件）",
         floorRows = floor,
@@ -757,5 +760,10 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
         rerunRows = rerun,
         wallLine = wall,
         hasWishRows = floor.any { it.wish },
+        overCapNote = s.wishOverCaps.firstOrNull()?.let { f ->
+            val who = "${name(f.staff)}「${sym(f.shift)}」${if (s.wishOverCaps.size > 1) "など" else ""}"
+            if (s.wishOverCaps.all { it.hi == 0 }) "$who：$PRE_RUN_OVERCAP_ZERO" else "$who：$PRE_RUN_OVERCAP_OTHER"
+        },
+        overCapRows = s.wishOverCaps.map { PreRunRow("${name(it.staff)}「${sym(it.shift)}」 本人の希望${it.wished}件（個人の上限${it.hi}回）") },
     )
 }
