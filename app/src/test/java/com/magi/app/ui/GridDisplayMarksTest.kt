@@ -219,4 +219,77 @@ class GridDisplayMarksTest {
         val needKeys = rep.needFamilies.filterValues { v -> v.any { it == "vio-covU" || it == "vio-covO" } }.keys.mapNotNull { VioKey.first(it) }.toSet()
         assertEquals(needKeys, totals.keys)
     }
+
+    /** 上限0（休を除く）のシフトが入った日は全部セルに印（破線・回数チップに従う）。上限1以上の超過は名前の横だけ。 */
+    @Test fun zeroCapCellsAreMarkedAndFollowTheCountChip() {
+        val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
+        val z = zeroCapCells(p, s)
+        val ui2 = ui.copy(zeroCapCells = z)
+        val vs2 = MagiViewState(ui2)
+        fun sym(k: Int) = st.shifts[k].kigou
+        val expect = HashSet<String>()
+        for (i in 0 until st.staffCount) for (j in 0 until st.dayCount) {
+            val k = s[i][j]
+            if (sym(k) != "休" && p.rangeHi[i][k] == 0) expect += VioKey.cell(i, j)
+        }
+        assertEquals(expect, z)
+        // 職員04: Aｱ（10/10）と Cｵ（10/11）は上限0。A4 は上限0だがこの盤面には入っていない。
+        val s3 = (0 until st.dayCount).filter { VioKey.cell(3, it) in z }.map { "10/${it + 1} ${sym(s[3][it])}" }
+        assertEquals(listOf("10/10 Aｱ", "10/11 Cｵ"), s3)
+        for (key in z) {
+            val i = VioKey.first(key)!!; val j = VioKey.second(key)!!
+            assertTrue(key, "vio-high" in rep.countFamilies[VioKey.count(i, s[i][j])].orEmpty())
+            assertTrue(key, isHeavySoftCellViolation(vs2.cellVio[i][j]) || isHardCellViolation(vs2.cellVio[i][j]))
+        }
+        assertEquals(null, MagiViewState(ui2, allVioBucketKeys - bucketOfFamily("high")!!).cellVio[3][9])
+        // 上限1以上の超過（職員04 の範囲 20〜21 等）はセルに出さない。
+        for (key in rep.countFamilies.filterValues { "vio-high" in it }.keys) {
+            val i = VioKey.first(key)!!; val k = VioKey.second(key)!!
+            if (p.rangeHi[i][k] > 0) for (j in 0 until st.dayCount) if (s[i][j] == k) assertTrue(VioKey.cell(i, j) !in z)
+        }
+        println("上限0の印 " + z.map { VioKey.first(it)!! to VioKey.second(it)!! }.sortedWith(compareBy({ it.second }, { it.first }))
+            .joinToString { (i, j) -> "${st.staff[i].name} 10/${j + 1} ${sym(s[i][j])}" })
+    }
+
+    @Test fun zeroCapStatusLineIsNeutralAndNamesTheWish() {
+        val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
+        assertEquals("⚠ 要調整：$ZERO_CAP_TEXT", cellStatusLine(st, p, s, 3, 9, listOf("high")).text)
+        val i11 = st.staff.indexOfFirst { it.name == "職員11" }
+        assertEquals("⚠ 要調整：$ZERO_CAP_WISH_TEXT", cellStatusLine(st, p, s, i11, 5, listOf("high")).text)
+        assertTrue("間違い" !in ZERO_CAP_TEXT && "ミス" !in ZERO_CAP_WISH_TEXT)
+    }
+
+    /** 許容0の超過（人員の上限0・グループの上限0・適切回数0）: 入っているセルはどれも超過＝全部に印。
+     *  上限1以上の超過や不足には出さない。実データの件数を出す。 */
+    @Test fun zeroAllowCellsMarkEveryCellOnlyWhenTheAllowanceIsZero() {
+        val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
+        val z = zeroAllowCells(p, s)
+        for ((key, cls) in z) {
+            val i = VioKey.first(key)!!; val j = VioKey.second(key)!!; val k = s[i][j]
+            when (familyOfVioClass(cls)) {
+                "covO" -> { val n = (0 until p.S).count { s[it][j] == k }; assertEquals(key, n, p.covOCell(k, j, n)) }
+                "c41" -> assertTrue(key, p.cons41.any { it.u == 0 && it.shiftIdx == k && it.groupIdx == p.sgrp[i] })
+                "c41s" -> assertTrue(key, p.cons41s.any { it.u == 0 && it.shiftIdx == k && it.groupIdx == p.ssk[i] })
+                "apt" -> assertEquals(key, 0, p.apt[i][k])
+                else -> error(cls)
+            }
+        }
+        val byFam = z.values.groupingBy { familyOfVioClass(it) }.eachCount()
+        println("許容0の印 ${z.size}/${st.staffCount * st.dayCount} セル $byFam")
+        assertTrue("盤面の3割を超えない", z.size * 10 <= st.staffCount * st.dayCount * 3)
+
+        // 合成: グループの上限0 を足すと、その日そのシフトのグループ員のセル全部に角の印（チップ OFF で消える）。
+        val i0 = 0; val j0 = 0; val k0 = s[i0][j0]
+        val g = p.sgrp[i0]
+        val st2 = st.copy(cons41 = listOf(com.magi.app.model.C41Row(st.groups[g].kigou, st.shifts[k0].kigou, "0", "0")))
+        val p2 = cachedProblem(st2)
+        val z2 = zeroAllowCells(p2, s)
+        val members = (0 until p2.S).filter { p2.sgrp[it] == g && s[it][j0] == k0 }
+        for (x in members) assertEquals("vio-c410", z2[VioKey.cell(x, j0)])
+        val ui2 = ui.copy(zeroAllowCells = z2, zeroCapCells = emptySet())
+        val key0 = VioKey.cell(i0, j0)
+        assertTrue("vio-c410" in displayCellClasses(ui2, key0, emptySet()))
+        val off = MagiViewState(ui2, allVioBucketKeys - bucketOfFamily("c41")!!)
+        assertTrue(off.cellVio[i0][j0] != "vio-c410")
+    }
 }

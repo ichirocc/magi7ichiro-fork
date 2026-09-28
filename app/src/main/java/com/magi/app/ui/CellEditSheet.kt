@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
@@ -83,6 +86,9 @@ internal fun CellEditSheet(
     onShowRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
     onMode: (Int) -> Unit = {},
+    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「すべてのシフト ▾」のタップだけ
+    onToggleExpand: () -> Unit = {},
+    tourPrev: Pair<Int, Int>? = null,
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -125,6 +131,7 @@ internal fun CellEditSheet(
             evaluateShiftMarks(st, sched, i, j, status.severity, cands, stillWanted = { job.isActive })
         }
     }
+    val zeroCaps = remember(rev, i) { stateOf()?.let { st -> zeroCapShifts(cachedProblem(st), i) }.orEmpty() }
     val countLine = remember(rev, i) {
         stateOf()?.let { st -> staffCountShort(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, ui.countFamilies) }.orEmpty()
     }
@@ -135,7 +142,15 @@ internal fun CellEditSheet(
         shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)),
         tonalElevation = 2.dp,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
+        if (!expanded) PeekBody(
+            ui, cell, name, current, wish, mode, leftHand, onEvent, onPick, onMove, onDismiss, onToggleExpand,
+            heading = tourHeading ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
+            picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
+            recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
+        ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
+            TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
+                Text("すべてのシフト ▴")
+            }
             // 上段（読むところ）: 見出し・1 行の状態・直し方（手 1 件／理由 2 行）。長ければここだけ縦に送る。
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -188,6 +203,7 @@ internal fun CellEditSheet(
                 }
                 if (mode == 1 && wish != null) {
                     wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    if (wish in zeroCaps) Text(wishZeroCapLine(sym(wish)), style = MaterialTheme.typography.bodySmall)
                     Text(WISH_TAB_KEEP_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 if (mode == 0 && status.severity == CellSeverity.HARD) when (handoff) {
@@ -243,9 +259,12 @@ internal fun CellEditSheet(
                     }
                 }
                 val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・手動固定" else "")
-                Text(wishText + (if (countLine.isNotEmpty()) "　回数 $countLine" else ""), style = MaterialTheme.typography.bodySmall,
+                Text(wishText, style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
+            // 回数は全幅で 2 行まで（字数の見積もりは COUNT_LINE_EM）。
+            if (countLine.isNotEmpty()) Text("回数 $countLine", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
             // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
                 val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
@@ -271,6 +290,7 @@ internal fun CellEditSheet(
                                 recommended = mode == 0 && k in marks.recommended,
                                 hardRisk = mode == 0 && k in marks.hardRisk,
                                 wishMark = mode == 0 && k == wish && wish != current,
+                                zeroCap = k in zeroCaps,
                                 modifier = Modifier.weight(1f),
                             ) {
                                 if (mode == 0) { if (k != current) onPick(k) }
@@ -305,6 +325,59 @@ internal fun CellEditSheet(
     }
 }
 
+/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③操作 1 行（希望を取り消す・推奨・上位 4 シフト・他 ▸）。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PeekBody(
+    ui: UiState, cell: Pair<Int, Int>, name: String, current: Int, wish: Int?, mode: Int, leftHand: Boolean,
+    onEvent: (MagiEvent) -> Unit, onPick: (Int) -> Unit, onMove: (Pair<Int, Int>) -> Unit, onDismiss: () -> Unit, onToggleExpand: () -> Unit,
+    heading: String, severity: CellSeverity, tourPrev: Pair<Int, Int>?, tourNext: Pair<Int, Int>?,
+    picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
+) {
+    val (i, j) = cell
+    val cs = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: k.toString()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(heading, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                color = if (severity == CellSeverity.HARD) cs.error else cs.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("$name ・ ${formatDay(ui.startDate, j)}", style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (tourPrev != null || tourNext != null) {
+                TextButton(onClick = { tourPrev?.let(onMove) }, enabled = tourPrev != null && tourPrev != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
+                TextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
+            }
+        }
+        // 幅が足りないときは折り返す（横スクロールしない）。
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            if (wish != null) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
+                modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を取り消す", color = cs.error, maxLines = 1) }
+            if (recommend != null) FilledTonalButton(onClick = { onPick(recommend) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("推奨: ${sym(recommend)} に変更", maxLines = 1)
+            }
+            for (k in if (leftHand) picks.reversed() else picks) {
+                val sel = if (mode == 0) k == current else k == wish
+                SlotButton(
+                    ui, k, k in canDoSet, sel, enabled = mode == 1 || k in canDoSet,
+                    recommended = mode == 0 && k in marks.recommended, hardRisk = mode == 0 && k in marks.hardRisk,
+                    wishMark = mode == 0 && k == wish && wish != current, zeroCap = k in zeroCaps,
+                    modifier = Modifier.width(56.dp),
+                ) {
+                    if (mode == 0) { if (k != current) onPick(k) }
+                    else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
+                }
+            }
+            TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフト ▾" }) { Text("他 ▸") }
+        }
+        Spacer(Modifier.height(32.dp))
+    }
+}
+
 @Composable
 private fun StatusRow(status: CellStatus, wishLine: String?) {
     val (bg, icon, fg) = magiSeverityColors(status.severity)
@@ -322,11 +395,11 @@ private fun StatusRow(status: CellStatus, wishLine: String?) {
     }
 }
 
-/** 固定枠のシフトボタン。選択中はシフトの色のまま太枠＋✓、担当外は灰色で「外」、印は右上の角（緑の点＝おすすめ、赤の警告＝必須が増える。同時には付かない）。 */
+/** 固定枠のシフトボタン。選択中はシフトの色のまま太枠＋✓、担当外は灰色で「外」、個人の上限0は下に小さく「上限0」（押せる）、印は右上の角（緑の点＝おすすめ、赤の警告＝必須が増える。同時には付かない）。 */
 @Composable
 private fun SlotButton(
     ui: UiState, k: Int, canDo: Boolean, selected: Boolean, enabled: Boolean, recommended: Boolean, hardRisk: Boolean, wishMark: Boolean,
-    modifier: Modifier, onClick: () -> Unit,
+    zeroCap: Boolean, modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val symbol = ui.shiftSymbols.getOrNull(k) ?: k.toString()
@@ -340,13 +413,14 @@ private fun SlotButton(
             .then(if (selected) Modifier.border(4.dp, cs.onSurface, shape) else if (!canDo) Modifier.border(1.dp, cs.outline, shape) else Modifier)
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
-                contentDescription = symbol + (if (!canDo) " 担当外" else "") + (if (selected) " 選択中" else "") + (if (recommended) " おすすめ" else "") + (if (hardRisk) " 必須の違反が増える" else "")
+                contentDescription = symbol + (if (!canDo) " 担当外" else "") + (if (zeroCap) " 個人の上限0（入れない指定）" else "") + (if (selected) " 選択中" else "") + (if (recommended) " おすすめ" else "") + (if (hardRisk) " 必須の違反が増える" else "")
             }
             .padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text((if (selected) "✓ " else "") + symbol + (if (!canDo) " 外" else ""), color = fg, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (zeroCap) Text("上限0", style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 1)
             if (wishMark) Text("希望", style = MaterialTheme.typography.labelSmall, color = ensureReadable(bg, MagiAccent.pink))
         }
         if (hardRisk) {

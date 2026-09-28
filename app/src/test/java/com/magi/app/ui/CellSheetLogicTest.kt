@@ -2,6 +2,7 @@ package com.magi.app.ui
 
 import com.magi.app.model.MagiState
 import com.magi.app.model.StateParser
+import com.magi.app.v6.canDo
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.canDoShiftsForStaff
@@ -283,5 +284,40 @@ class CellSheetLogicTest {
         println(lines)
         assertEquals(fams.size, lines.size)
         assertTrue(lines.all { it.startsWith("必須・") || it.startsWith("要調整・") })
+    }
+
+    /** 大島愛（写しでは職員08）10/10: 上限0 の Cｱ・有 を回数の行で言い、シフトボタンに「上限0」を添える。360dp で 2 行に収まる。 */
+    @Test fun zeroCapIsSpelledOutInTheCountLineAndButtons() {
+        val i = st.staff.indexOfFirst { it.name == "職員08" }
+        val line = "回数 " + staffCountShort(st, p, s, i, rep.countFamilies)
+        println("職員08 10/10 $line")
+        val fams = cellStatusFamilies(rep.cellFamilies[VioKey.cell(i, 9)].orEmpty(), rep.needFamilies[VioKey.need(s[i][9], 9)].orEmpty(), rep.countFamilies[VioKey.count(i, s[i][9])].orEmpty())
+        println("職員08 10/10 今=${st.shifts[s[i][9]].kigou} 希望=${p.wish[i][9]} 状態=${cellStatusLine(st, p, s, i, 9, fams).text}")
+        println("職員08 ボタン " + (0 until p.K).joinToString(" ") { k -> "[" + st.shifts[k].kigou + (if (!p.canDo(i, k)) " 外" else if (k in zeroCapShifts(p, i)) "/上限0" else "") + "]" })
+        assertTrue(line, line.contains("Cｱ 2回（$ZERO_CAP_NOTE）▲") && line.contains("有 1回（上限0）▲"))
+        assertTrue(line, line.contains("(下限"))
+        assertTrue(line, fitsTwoLines(line, COUNT_LINE_EM))
+        val caps = zeroCapShifts(p, i).map { st.shifts[it].kigou }
+        assertTrue(caps.toString(), "Cｱ" in caps && "有" in caps && "休" !in caps)
+        assertEquals("Cｱは個人の上限0（入れない指定）のシフトです。希望どおり入れると要調整に数えます", wishZeroCapLine("Cｱ"))
+        for (x in 0 until st.staffCount) {
+            val l = "回数 " + staffCountShort(st, p, s, x, rep.countFamilies)
+            assertTrue("職員${x + 1}: $l", fitsTwoLines(l, COUNT_LINE_EM))
+        }
+        assertTrue(!fitsTwoLines("あ".repeat(55), COUNT_LINE_EM))
+    }
+
+    @Test fun peekPutsCurrentAndWishFirstThenShiftOrder() {
+        assertEquals(listOf(3, 5, 0, 1), peekShifts(listOf(0, 1, 2, 3, 4, 5), setOf(0, 1, 3, 5), current = 3, wish = 5))
+        assertEquals(listOf(0, 1, 2), peekShifts(listOf(0, 1, 2), setOf(0, 1, 2), current = -1, wish = null))
+        assertEquals(listOf(2, 0, 1, 3), peekShifts(listOf(0, 1, 2, 3, 4), setOf(0, 1, 2, 3, 4), current = 2, wish = 2))
+    }
+
+    @Test fun peekRecommendationOnlyFromAnExistingRelaxMove() {
+        val r = com.magi.app.v6.RelaxTrial.Result(1, 4, 2..6, emptyList(), emptyList(), 1, 1, 1, 0,
+            listOf(com.magi.app.v6.RelaxTrial.Move(1, 4, 0, 2)))
+        assertEquals(2, peekRecommendation(r, 1, 4))
+        assertEquals(null, peekRecommendation(r, 1, 5))
+        assertEquals(null, peekRecommendation(null, 1, 4))
     }
 }

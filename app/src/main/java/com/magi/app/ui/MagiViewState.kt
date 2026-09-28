@@ -2,6 +2,7 @@ package com.magi.app.ui
 
 import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
+import com.magi.app.v6.Problem
 import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.WishTrial
 import com.magi.app.v6.formatDay
@@ -39,7 +40,7 @@ internal fun isHardCellViolation(v: String?): Boolean =
 internal val heavySoftFamilies = setOf("low", "c1", "c3mn")
 
 internal fun isHeavySoftCellViolation(v: String?): Boolean =
-    v != null && familyOfVioClass(v) in heavySoftFamilies
+    v != null && (familyOfVioClass(v) in heavySoftFamilies || v == ZERO_CAP_CLASS)
 
 /** セル("i,j")の全違反クラス（重み降順）。families 未充填の経路では最重1クラスへフォールバック。 */
 internal fun cellVioClasses(ui: UiState, key: String): List<String> =
@@ -445,11 +446,54 @@ internal object DisplayOnlyUndo {
 internal fun c1DisplayMarks(ui: UiState): Set<String> =
     ui.c1Shortages.flatMap { sh -> sh.marks.map { VioKey.cell(sh.staff, it) } }.toSet()
 
-/** 画面に出すセルの違反クラス（重み降順）。チェッカーの c1（ランの先頭）は描かず、表示専用の印に置き換える。 */
+/** 上限0のセルの表示クラス。族は high（回数チップに従う）、枠は破線（どのセルが超過か一意なので）。 */
+internal const val ZERO_CAP_CLASS = "vio-high0"
+
+/** 個人の上限0（休を除く）のシフトが入っているセル。上限0なら入っている日はどれも超過なのでセルに印を付けられる
+ *  （上限1以上の超過はどの日が余分か決まらないので名前の横の ▲ だけ）。 */
+internal fun zeroCapCells(p: Problem, s: Array<IntArray>): Set<String> {
+    val out = HashSet<String>()
+    for (i in 0 until minOf(p.S, s.size)) for (j in s[i].indices) {
+        val k = s[i][j]
+        if (k in 0 until p.K && k != p.restIdx && p.rangeHi[i][k] == 0) out += VioKey.cell(i, j)
+    }
+    return out
+}
+
+/** 許容0の超過のセルの表示クラス（族→クラス）。人員の上限0・グループの上限0・適切回数0は、入っているセルが
+ *  どれも超過なので一意に印を付けられる（上限1以上の超過はどのセルが余分か決まらないので日付/名前の印だけ）。 */
+internal val ZERO_ALLOW_CLASS = mapOf("covO" to "vio-covO0", "c41" to "vio-c410", "c41s" to "vio-c41s0", "apt" to "vio-apt0")
+
+/** 許容0の超過のセル → 表示クラス。covO は人員の上限（covOCell の基準）が0の日、c41/c41s は上限0の日、
+ *  apt は実効目標0（個人設定のある組は -1 で対象外）。 */
+internal fun zeroAllowCells(p: Problem, s: Array<IntArray>): Map<String, String> {
+    val out = HashMap<String, String>()
+    val nS = minOf(p.S, s.size)
+    fun at(i: Int, j: Int) = s[i].getOrElse(j) { -1 }
+    for (j in 0 until p.T) for (k in 0 until p.K) {
+        val on = (0 until nS).filter { at(it, j) == k }
+        if (on.isNotEmpty() && p.covOCell(k, j, on.size) == on.size) for (i in on) out.putIfAbsent(VioKey.cell(i, j), ZERO_ALLOW_CLASS.getValue("covO"))
+    }
+    fun groupDay(rows: List<com.magi.app.v6.C41>, grp: IntArray, fam: String) {
+        for (c in rows) if (c.u == 0) for (j in 0 until p.T) for (i in 0 until nS)
+            if (grp[i] == c.groupIdx && at(i, j) == c.shiftIdx) out.putIfAbsent(VioKey.cell(i, j), ZERO_ALLOW_CLASS.getValue(fam))
+    }
+    groupDay(p.cons41, p.sgrp, "c41")
+    groupDay(p.cons41s, p.ssk, "c41s")
+    for (i in 0 until nS) for (j in s[i].indices) {
+        val k = s[i][j]
+        if (k in 0 until p.K && p.apt[i][k] == 0) out.putIfAbsent(VioKey.cell(i, j), ZERO_ALLOW_CLASS.getValue("apt"))
+    }
+    return out
+}
+
+/** 画面に出すセルの違反クラス（重み降順）。チェッカーの c1（ランの先頭）は描かず、表示専用の印に置き換える。
+ *  上限0のセルには表示専用の [ZERO_CAP_CLASS]、許容0の超過のセルには [zeroAllowCells] のクラスを足す。 */
 internal fun displayCellClasses(ui: UiState, key: String, c1Marks: Set<String>): List<String> {
     val base = cellVioClasses(ui, key).filter { it != "vio-c1" }
-    if (key !in c1Marks) return base
-    return (base + "vio-c1").sortedByDescending { MirrorKeys.weightOf(familyOfVioClass(it)) }
+    val extra = listOfNotNull("vio-c1".takeIf { key in c1Marks }, ZERO_CAP_CLASS.takeIf { key in ui.zeroCapCells }, ui.zeroAllowCells[key])
+    if (extra.isEmpty()) return base
+    return (base + extra).sortedByDescending { MirrorKeys.weightOf(familyOfVioClass(it)) }
 }
 
 /** 回数キーのクラスが不足側(▼)か。c2 は職員別合計の下限なので不足側。 */
