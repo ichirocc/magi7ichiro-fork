@@ -3282,6 +3282,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             distLocations = report.distLocations,
             c1Shortages = c1Shortages(cachedProblem(st), schedule),
             zeroCapCells = zeroCapCells(cachedProblem(st), schedule),
+            zeroAllowCells = zeroAllowCells(cachedProblem(st), schedule),
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },

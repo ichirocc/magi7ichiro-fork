@@ -125,6 +125,7 @@ internal fun CellEditSheet(
             evaluateShiftMarks(st, sched, i, j, status.severity, cands, stillWanted = { job.isActive })
         }
     }
+    val zeroCaps = remember(rev, i) { stateOf()?.let { st -> zeroCapShifts(cachedProblem(st), i) }.orEmpty() }
     val countLine = remember(rev, i) {
         stateOf()?.let { st -> staffCountShort(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, ui.countFamilies) }.orEmpty()
     }
@@ -188,6 +189,7 @@ internal fun CellEditSheet(
                 }
                 if (mode == 1 && wish != null) {
                     wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    if (wish in zeroCaps) Text(wishZeroCapLine(sym(wish)), style = MaterialTheme.typography.bodySmall)
                     Text(WISH_TAB_KEEP_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 if (mode == 0 && status.severity == CellSeverity.HARD) when (handoff) {
@@ -243,9 +245,12 @@ internal fun CellEditSheet(
                     }
                 }
                 val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・手動固定" else "")
-                Text(wishText + (if (countLine.isNotEmpty()) "　回数 $countLine" else ""), style = MaterialTheme.typography.bodySmall,
+                Text(wishText, style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
+            // 回数は全幅で 2 行まで（字数の見積もりは COUNT_LINE_EM）。
+            if (countLine.isNotEmpty()) Text("回数 $countLine", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
             // 利き手の側に寄せる（右手＝右寄せ、左手＝左寄せ。前日・翌日の順は変えない）。
             Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
                 val prev = adjacentDayLabel(ui.startDate, ui.days, j - 1)
@@ -271,6 +276,7 @@ internal fun CellEditSheet(
                                 recommended = mode == 0 && k in marks.recommended,
                                 hardRisk = mode == 0 && k in marks.hardRisk,
                                 wishMark = mode == 0 && k == wish && wish != current,
+                                zeroCap = k in zeroCaps,
                                 modifier = Modifier.weight(1f),
                             ) {
                                 if (mode == 0) { if (k != current) onPick(k) }
@@ -322,11 +328,11 @@ private fun StatusRow(status: CellStatus, wishLine: String?) {
     }
 }
 
-/** 固定枠のシフトボタン。選択中はシフトの色のまま太枠＋✓、担当外は灰色で「外」、印は右上の角（緑の点＝おすすめ、赤の警告＝必須が増える。同時には付かない）。 */
+/** 固定枠のシフトボタン。選択中はシフトの色のまま太枠＋✓、担当外は灰色で「外」、個人の上限0は下に小さく「上限0」（押せる）、印は右上の角（緑の点＝おすすめ、赤の警告＝必須が増える。同時には付かない）。 */
 @Composable
 private fun SlotButton(
     ui: UiState, k: Int, canDo: Boolean, selected: Boolean, enabled: Boolean, recommended: Boolean, hardRisk: Boolean, wishMark: Boolean,
-    modifier: Modifier, onClick: () -> Unit,
+    zeroCap: Boolean, modifier: Modifier, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val symbol = ui.shiftSymbols.getOrNull(k) ?: k.toString()
@@ -340,13 +346,14 @@ private fun SlotButton(
             .then(if (selected) Modifier.border(4.dp, cs.onSurface, shape) else if (!canDo) Modifier.border(1.dp, cs.outline, shape) else Modifier)
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
-                contentDescription = symbol + (if (!canDo) " 担当外" else "") + (if (selected) " 選択中" else "") + (if (recommended) " おすすめ" else "") + (if (hardRisk) " 必須の違反が増える" else "")
+                contentDescription = symbol + (if (!canDo) " 担当外" else "") + (if (zeroCap) " 個人の上限0（入れない指定）" else "") + (if (selected) " 選択中" else "") + (if (recommended) " おすすめ" else "") + (if (hardRisk) " 必須の違反が増える" else "")
             }
             .padding(4.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text((if (selected) "✓ " else "") + symbol + (if (!canDo) " 外" else ""), color = fg, fontWeight = FontWeight.Bold, maxLines = 1)
+            if (zeroCap) Text("上限0", style = MaterialTheme.typography.labelSmall, color = fg, maxLines = 1)
             if (wishMark) Text("希望", style = MaterialTheme.typography.labelSmall, color = ensureReadable(bg, MagiAccent.pink))
         }
         if (hardRisk) {

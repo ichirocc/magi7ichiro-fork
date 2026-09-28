@@ -631,7 +631,7 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
         }
         Text("名前の横の ▼▲＝回数の不足・超過／日付の下の「休▲」＝そのシフトの人員不足▼・過剰▲（タップで内訳）",
             style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-        Text("個人の上限0のシフトが入った日は破線の枠（要調整）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("個人の上限0のシフトが入った日は破線の枠（要調整）／人員・グループの上限0や適切回数0のシフトが入った日は右上の角", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Text(legendShapeFamilies(), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         // [凡例の抜け] 希望シフトの桃バッジ/緑リングは勤務表グリッドの常時キャプションにしかなく、この
         //   折りたたみ凡例には無かった＝重複解消でキャプションを短縮する前提として、ここへ移す。

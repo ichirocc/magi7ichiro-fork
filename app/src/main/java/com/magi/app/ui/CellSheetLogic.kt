@@ -233,25 +233,60 @@ internal fun evaluateShiftMarks(
 }
 
 /**
- * 1 行の回数（例「Aｱ 7(適8)▼ Dﾃ 4(下5)▼」）。この職員の回数の族があるシフトだけ、目安（下限/上限/適切）と ▼▲。
+ * 回数の行（例「Aｱ 7(適切8)▼ Dﾃ 4(下限5)▼」）。この職員の回数の族があるシフトだけ、目安（下限/上限/適切/合計）と ▼▲。
+ * 個人の上限0（休を除く）は「Cｱ 2回（上限0＝入れない指定）▲」（2 つ目からは「（上限0）」）。
+ * 行頭の「回数 」込みで 360dp の 2 行（[COUNT_LINE_EM]）に収まらなければ目安を 1 字（下/上/適/計）に縮める。
  * [countClasses] は回数キー "i,k" → クラス列（`UiState.countFamilies`）。
  */
 internal fun staffCountShort(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, countClasses: Map<String, List<String>>): String {
-    val parts = ArrayList<String>()
-    for (k in 0 until p.K) {
-        val fams = countClasses[VioKey.count(i, k)].orEmpty().map { it.removePrefix("vio-") }
-        if (fams.isEmpty()) continue
-        val n = s[i].count { it == k }
-        val (ref, under) = when {
-            "low" in fams -> "下${p.rangeLo[i][k]}" to true
-            "high" in fams -> "上${p.rangeHi[i][k]}" to false
-            "aptLow" in fams -> "適${p.apt[i][k]}" to true
-            "aptHigh" in fams -> "適${p.apt[i][k]}" to false
-            else -> (p.cons2.firstOrNull { it.shiftIdx == k }?.let { "計${it.count}" } ?: "") to true
+    fun build(long: Boolean): String {
+        val parts = ArrayList<String>()
+        var zeroSeen = false
+        for (k in 0 until p.K) {
+            val fams = countClasses[VioKey.count(i, k)].orEmpty().map { it.removePrefix("vio-") }
+            if (fams.isEmpty()) continue
+            val n = s[i].count { it == k }
+            val sym = state.shifts.getOrNull(k)?.kigou ?: "?"
+            if ("high" in fams && p.rangeHi[i][k] == 0 && k != p.restIdx) {
+                parts.add("$sym ${n}回（${if (zeroSeen) "上限0" else ZERO_CAP_NOTE}）▲"); zeroSeen = true; continue
+            }
+            fun r(l: String, sh: String, v: Int) = "${if (long) l else sh}$v"
+            val (ref, under) = when {
+                "low" in fams -> r("下限", "下", p.rangeLo[i][k]) to true
+                "high" in fams -> r("上限", "上", p.rangeHi[i][k]) to false
+                "aptLow" in fams -> r("適切", "適", p.apt[i][k]) to true
+                "aptHigh" in fams -> r("適切", "適", p.apt[i][k]) to false
+                else -> (p.cons2.firstOrNull { it.shiftIdx == k }?.let { r("合計", "計", it.count) } ?: "") to true
+            }
+            parts.add("$sym $n${if (ref.isEmpty()) "" else "($ref)"}${if (under) "▼" else "▲"}")
         }
-        parts.add("${state.shifts.getOrNull(k)?.kigou ?: "?"} $n${if (ref.isEmpty()) "" else "($ref)"}${if (under) "▼" else "▲"}")
+        return parts.joinToString(" ")
     }
-    return parts.joinToString(" ")
+    val long = build(true)
+    return if (fitsTwoLines("回数 $long", COUNT_LINE_EM)) long else build(false)
+}
+
+internal const val ZERO_CAP_NOTE = "上限0＝入れない指定"
+
+/** セルシートの回数の行の 1 行の字数（360dp−左右 16dp＝328dp を bodySmall 12sp で割った数）。 */
+internal const val COUNT_LINE_EM = 27.0
+
+/** この職員の個人の上限0（休を除く・担当できるもの）のシフト。シフトボタンの「上限0」の添え字。 */
+internal fun zeroCapShifts(p: Problem, i: Int): Set<Int> =
+    if (i !in 0 until p.S) emptySet() else (0 until p.K).filter { it != p.restIdx && p.rangeHi[i][it] == 0 && p.canDo(i, it) }.toSet()
+
+/** 希望タブ: 希望が個人の上限0のシフトのときの 1 行（希望は優先して入る。残るのは要調整）。 */
+internal fun wishZeroCapLine(wishSymbol: String): String =
+    "${wishSymbol}は個人の上限0（入れない指定）のシフトです。希望どおり入れると要調整に数えます"
+
+/** 回数の行が 2 行に収まるか（全角 1・半角 0.5 の字幅で、[emPerLine] 字ぶん × 2 行）。 */
+internal fun fitsTwoLines(text: String, emPerLine: Double): Boolean {
+    var line = 0.0; var lines = 1
+    for (ch in text) {
+        val w = if (ch.code < 0x80 || ch in '\uFF61'..'\uFF9F') 0.5 else 1.0
+        if (line + w > emPerLine) { lines++; line = w } else line += w
+    }
+    return lines <= 2
 }
 
 /** 日送りボタンの日付「10/7(水)」（範囲外は null＝押せない）。 */

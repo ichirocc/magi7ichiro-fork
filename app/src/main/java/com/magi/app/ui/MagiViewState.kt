@@ -460,11 +460,38 @@ internal fun zeroCapCells(p: Problem, s: Array<IntArray>): Set<String> {
     return out
 }
 
+/** 許容0の超過のセルの表示クラス（族→クラス）。人員の上限0・グループの上限0・適切回数0は、入っているセルが
+ *  どれも超過なので一意に印を付けられる（上限1以上の超過はどのセルが余分か決まらないので日付/名前の印だけ）。 */
+internal val ZERO_ALLOW_CLASS = mapOf("covO" to "vio-covO0", "c41" to "vio-c410", "c41s" to "vio-c41s0", "apt" to "vio-apt0")
+
+/** 許容0の超過のセル → 表示クラス。covO は人員の上限（covOCell の基準）が0の日、c41/c41s は上限0の日、
+ *  apt は実効目標0（個人設定のある組は -1 で対象外）。 */
+internal fun zeroAllowCells(p: Problem, s: Array<IntArray>): Map<String, String> {
+    val out = HashMap<String, String>()
+    val nS = minOf(p.S, s.size)
+    fun at(i: Int, j: Int) = s[i].getOrElse(j) { -1 }
+    for (j in 0 until p.T) for (k in 0 until p.K) {
+        val on = (0 until nS).filter { at(it, j) == k }
+        if (on.isNotEmpty() && p.covOCell(k, j, on.size) == on.size) for (i in on) out.putIfAbsent(VioKey.cell(i, j), ZERO_ALLOW_CLASS.getValue("covO"))
+    }
+    fun groupDay(rows: List<com.magi.app.v6.C41>, grp: IntArray, fam: String) {
+        for (c in rows) if (c.u == 0) for (j in 0 until p.T) for (i in 0 until nS)
+            if (grp[i] == c.groupIdx && at(i, j) == c.shiftIdx) out.putIfAbsent(VioKey.cell(i, j), ZERO_ALLOW_CLASS.getValue(fam))
+    }
+    groupDay(p.cons41, p.sgrp, "c41")
+    groupDay(p.cons41s, p.ssk, "c41s")
+    for (i in 0 until nS) for (j in s[i].indices) {
+        val k = s[i][j]
+        if (k in 0 until p.K && p.apt[i][k] == 0) out.putIfAbsent(VioKey.cell(i, j), ZERO_ALLOW_CLASS.getValue("apt"))
+    }
+    return out
+}
+
 /** 画面に出すセルの違反クラス（重み降順）。チェッカーの c1（ランの先頭）は描かず、表示専用の印に置き換える。
- *  上限0のセルには表示専用の [ZERO_CAP_CLASS] を足す。 */
+ *  上限0のセルには表示専用の [ZERO_CAP_CLASS]、許容0の超過のセルには [zeroAllowCells] のクラスを足す。 */
 internal fun displayCellClasses(ui: UiState, key: String, c1Marks: Set<String>): List<String> {
     val base = cellVioClasses(ui, key).filter { it != "vio-c1" }
-    val extra = listOfNotNull("vio-c1".takeIf { key in c1Marks }, ZERO_CAP_CLASS.takeIf { key in ui.zeroCapCells })
+    val extra = listOfNotNull("vio-c1".takeIf { key in c1Marks }, ZERO_CAP_CLASS.takeIf { key in ui.zeroCapCells }, ui.zeroAllowCells[key])
     if (extra.isEmpty()) return base
     return (base + extra).sortedByDescending { MirrorKeys.weightOf(familyOfVioClass(it)) }
 }

@@ -39,7 +39,7 @@ internal val vioBucketlessFamilies: Set<String> = setOf("fair", "weekly")
 
 /** vio-class（"vio-covU"/"vio-aptLow" 等）→ 族キー。aptLow/aptHigh は apt に畳む。 */
 internal fun familyOfVioClass(cls: String): String =
-    when (val f = cls.removePrefix("vio-")) { "aptLow", "aptHigh" -> "apt"; "high0" -> "high"; else -> f }
+    when (val f = cls.removePrefix("vio-")) { "aptLow", "aptHigh" -> "apt"; "high0" -> "high"; "covO0" -> "covO"; "c410" -> "c41"; "c41s0" -> "c41s"; "apt0" -> "apt"; else -> f }
 
 /** 族キー → バケツキー（対象外＝null）。 */
 internal fun bucketOfFamily(fam: String): String? = vioBuckets.firstOrNull { fam in it.families }?.key

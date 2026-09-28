@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 許容0の超過にセルの印・セルシートに上限0（2026-09-28、表示のみ）: 人員の上限0（covO0）・グループ/スキルグループの上限0（c410/c41s0）・実効の適切回数0（apt0）を右上の角に（`zeroAllowCells`）。原因セルが決まらない族（不足・上限1以上・c2・fair・weekly）は据え置き。セルシートのボタンに「上限0」、回数の行「Cｱ 2回（上限0＝入れない指定）▲」。採点・探索は不変、C# 同日同期（未 push）。  → `docs/history/3.4xx.md`
 - 上限0のセルに印（2026-09-28、表示のみ）: 個人の上限0（休を除く）のシフトが入った日を全部要調整の破線に（`zeroCapCells`・`vio-high0`、族 high＝回数チップに従う）。上限1以上の超過は名前の横の ▲ のまま。セルシートは中立の文（希望なら「本人の希望が…」）。凡例 1 行。採点・探索は不変、C# 同日同期（未 push）。  → `docs/history/3.4xx.md`
 - E0 希望衝突の床で頭打ち（3.613.0、既定 OFF）: `wishConflictHard`＝「希望と禁止の衝突」を report.hard の単位で数える単一ソース（HF70・残存分析・E0）、床 `wishConflictFloorParts`（区間 DP＋上限 0 に頼らない日の証明）、厳密な到達（HARD＝床かつ全て希望由来）、`PolishGate.wishConflictFloorMode` E0A/E0B（E0B は後処理を `minimalPost` に置換）。事前登録の A/B はホストで床に届かず（HARD 9 vs 床 4）判定不能＝端末水準の盤面から温める A/B が必要。N_mayPlace は端末盤面で健全でない（5＜6）。C# 同期（未 push）。  → `docs/history/3.4xx.md`
 - 端末設定 2 件の A/B（2026-09-28、docs のみ）: `aptFairSoftTolerance`（許容 6%）は Δweighted 平均 −68・3 勝 1 敗・HARD 増 0、後処理のみで 1/5 盤面改善＝中立で安全。`combineExhaustPairs`（粘り強く）は後処理ハッシュ 5/5 同一・本走平均 −60（A/A 揺れ 113 内）・実機で 5000 組採用 0＝便益なし、端末 OFF 推奨。両方 ON は平均 −86・2 勝 2 敗。既定はどちらも OFF 維持。  → `docs/history/3.4xx.md`
