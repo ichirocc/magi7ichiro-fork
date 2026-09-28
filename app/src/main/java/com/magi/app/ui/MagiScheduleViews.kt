@@ -1623,7 +1623,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         }
     }
     staffSheet?.let { i ->
-        GridMarkDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountLines(ui, i, cv?.let { c -> c::staffCellLimits }), onDismiss = { staffSheet = null }) {
+        StaffCountDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountSheet(ui, i, cv?.let { c -> c::staffCellLimits }), onDismiss = { staffSheet = null }) {
             if (i in vs.c1Stuck) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
@@ -1649,6 +1649,63 @@ private fun GridMarkDialog(title: String, lines: List<String>, onDismiss: () -> 
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (lines.isEmpty()) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodyMedium)
                 lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                extra()
+            }
+        },
+        confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
+    )
+}
+
+/** 回数の過不足の色（背景, 文字）。不足＝赤系・超過＝橙系（シフト集計の ▼▲ と同じ色言語）。差し替えはここだけ。 */
+@Composable
+private fun countChipColors(under: Boolean): Pair<Color, Color> {
+    val cs = MaterialTheme.colorScheme
+    return if (under) cs.errorContainer to cs.onErrorContainer else magiWarnColors()
+}
+
+/** 行末の印のシート: 回数の過不足（2 列のチップ）・曜日の偏り（既定は閉じる）・公平化・直し方。 */
+@Composable
+private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
+    var weeklyOpen by remember(title) { mutableStateOf(false) }
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(MagiSpacing.sm)) {
+                if (sheet.isEmpty) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodyMedium)
+                sheet.c1.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (sheet.chips.isNotEmpty()) {
+                    Text("回数の過不足", style = MaterialTheme.typography.titleSmall)
+                    sheet.chips.chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(MagiSpacing.sm)) {
+                            pair.forEach { c ->
+                                val (bg, fg) = countChipColors(c.under)
+                                Text(c.text, color = fg, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                                    modifier = Modifier.weight(1f).background(bg, MaterialTheme.shapes.extraSmall)
+                                        .padding(horizontal = MagiSpacing.sm, vertical = MagiSpacing.xs))
+                            }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+                if (sheet.weekly.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (weeklyOpen) "閉じる" else "開く") { weeklyOpen = !weeklyOpen },
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text((if (weeklyOpen) "▼ " else "▶ ") + "${breakdownLabels["weekly"]}（${sheet.weekly.size}件）",
+                            style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        Text(if (weeklyOpen) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (weeklyOpen) {
+                        Column(Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            sheet.weekly.forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                    }
+                }
+                if (sheet.fair.isNotEmpty()) {
+                    Text(breakdownLabels["fair"] ?: "fair", style = MaterialTheme.typography.titleSmall)
+                    sheet.fair.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                }
                 extra()
             }
         },

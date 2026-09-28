@@ -503,43 +503,96 @@ internal fun coverageHeaderLabel(ui: UiState, marks: List<CoverageMark>): String
     return sym + (if (m.under) "▼" else "▲") + (if (marks.size > 1) "+${marks.size - 1}" else "")
 }
 
-private fun countDetail(cls: String, count: Int, lo: Int?, hi: Int?, apt: Int?): String = when (cls) {
-    "vio-low" -> lo?.let { "現在 ${count}回・下限 ${it}回" }
-    "vio-high" -> hi?.let { "現在 ${count}回・上限 ${it}回" }
-    "vio-aptLow", "vio-aptHigh" -> apt?.let { "現在 ${count}回・目標 ${it}回" }
-    else -> "現在 ${count}回"
-}?.let { "（$it）" } ?: ""
+/**
+ * 回数の過不足の 1 枚（例「Dﾃ +2回 (6/4)」）。ref は目標（apt）か下限・上限、refLabel は下限・上限のときだけ付ける。
+ * under＝不足側の色（下限割れ・適切回数の不足・個人の合計）。
+ */
+internal data class CountChip(val shift: String, val count: Int, val ref: Int?, val refLabel: String, val under: Boolean) {
+    val delta: Int? get() = ref?.let { count - it }
+    val text: String get() = "$shift  " + (delta?.let { (if (it > 0) "+" else "") + "${it}回 " } ?: "") +
+        "(${count}/" + (ref?.let { refLabel + it } ?: "—") + ")"
+}
+
+/** 行末の印のシートの中身。weekly は 1 シフト 1 行、fair は「差 N回 : シフト, …」を差の大きい順。 */
+internal data class StaffCountSheet(val chips: List<CountChip>, val weekly: List<String>, val fair: List<String>, val c1: List<String> = emptyList()) {
+    val isEmpty: Boolean get() = c1.isEmpty() && chips.isEmpty() && weekly.isEmpty() && fair.isEmpty()
+}
+
+private val WEEKDAY_JP = listOf("日", "月", "火", "水", "木", "金", "土")
+
+/** startDate の曜日（0=日）。`Problem.dow0` と同じ式、読めなければ 0。 */
+internal fun dow0Of(startDate: String): Int =
+    runCatching { java.time.LocalDate.parse(startDate).dayOfWeek.value % 7 }.getOrDefault(0)
 
 /**
- * 職員 i の回数・偏りの一覧（行末の印のシートとセルシートの「この職員の回数・偏り」で共有）。
+ * 曜日別の回数 wd（0=日）の偏りを 1 句で言う。e=7×回数−合計（`weeklyDevOfBucket` の各項）。
+ * 平均より半回以上多い（e≥4）曜日を「集中」、半回以上少ない（e≤−4）曜日を「少ない」として名指し、両側あれば「／」で並べる。
+ * どちらも無ければ最も外れた 1 日。各側の数値は round(その側の |e| の和 ÷7)。Σe=0 なので両側の和は等しく、
+ * 片側は採点 Σ|e|÷7 のおよそ半分になる。
+ */
+internal fun weeklySkewPhrase(wd: IntArray): String? {
+    val c = wd.sum()
+    val e = IntArray(7) { 7 * wd[it] - c }
+    if (e.all { it == 0 }) return null
+    val amount = Math.round(e.filter { it > 0 }.sum() / 7.0).toInt()
+    var over = (0 until 7).filter { e[it] >= 4 }
+    var under = (0 until 7).filter { e[it] <= -4 }
+    if (over.isEmpty() && under.isEmpty()) {
+        if (e.max() >= -e.min()) over = listOf((0 until 7).maxBy { e[it] }) else under = listOf((0 until 7).minBy { e[it] })
+    }
+    fun names(ds: List<Int>) = ds.joinToString("・") { WEEKDAY_JP[it] }
+    return listOfNotNull(
+        over.takeIf { it.isNotEmpty() }?.let { "${names(it)}に集中 (+$amount)" },
+        under.takeIf { it.isNotEmpty() }?.let { "${names(it)}が少ない (-$amount)" },
+    ).joinToString("／")
+}
+
+/**
+ * 職員 i の回数・偏りのシート（行末の印・セルシートの「この職員の回数・偏り」で共有）。
  * 回数の族は報告の回数キー、公平化・曜日は `distLocations`（セルに印を出さない族）から。
  * limits は (職員,シフト) → (下限, 上限, 目標)。null なら数値の注記を省く。
  */
-internal fun staffCountLines(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null): List<String> {
-    val out = ArrayList<String>()
-    for (sh in ui.c1Shortages.filter { it.staff == i && it.stuck }.distinctBy { it.shift }) {
-        out += "・${ui.shiftSymbols.getOrNull(sh.shift) ?: "${sh.shift}"}: ${breakdownLabels["c1"]}（${sh.day1}日に${sh.day2}日）— $C1_STUCK_TEXT"
+internal fun staffCountSheet(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null): StaffCountSheet {
+    val c1 = ui.c1Shortages.filter { it.staff == i && it.stuck }.distinctBy { it.shift }.map { sh ->
+        "・${ui.shiftSymbols.getOrNull(sh.shift) ?: "${sh.shift}"}: ${breakdownLabels["c1"]}（${sh.day1}日に${sh.day2}日）— $C1_STUCK_TEXT"
     }
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
+    val row = ui.schedule.getOrNull(i).orEmpty()
+    val chips = ArrayList<CountChip>()
     val keys = (ui.countFamilies.keys + ui.countViolations.keys).filter { VioKey.first(it) == i }
         .sortedBy { VioKey.second(it) ?: 0 }
     for (key in keys) {
         val k = VioKey.second(key) ?: continue
-        val count = ui.schedule.getOrNull(i)?.count { it == k } ?: 0
+        val count = row.count { it == k }
         val (lo, hi, apt) = limits?.invoke(i, k) ?: Triple(null, null, null)
         for (cls in ui.countFamilies[key] ?: listOfNotNull(ui.countViolations[key])) {
-            val fam = cls.removePrefix("vio-")
-            val label = breakdownLabels[fam] ?: breakdownLabels[familyOfVioClass(cls)] ?: fam
-            out += (if (isUnderCountClass(cls)) "▼ " else "▲ ") + "${sym(k)}: $label" + countDetail(cls, count, lo, hi, apt)
+            chips += when (cls) {
+                "vio-low" -> CountChip(sym(k), count, lo, "下限", true)
+                "vio-high" -> CountChip(sym(k), count, hi, "上限", false)
+                "vio-aptLow", "vio-aptHigh" -> CountChip(sym(k), count, apt, "", cls == "vio-aptLow")
+                else -> CountChip(sym(k), count, null, "", isUnderCountClass(cls))
+            }
         }
     }
-    for (e in ui.distLocations["fair"].orEmpty()) if (e.getOrNull(0) == i && e.size >= 3) {
-        out += "・${sym(e[1])}: ${breakdownLabels["fair"]}（グループ内の差 ${e[2]}回）"
-    }
-    for (e in ui.distLocations["weekly"].orEmpty()) if (e.getOrNull(0) == i && e.size >= 3) {
-        out += "・${sym(e[1])}: ${breakdownLabels["weekly"]}（偏り ${e[2]}）"
-    }
-    return out
+    val dow0 = dow0Of(ui.startDate)
+    val weekly = ui.distLocations["weekly"].orEmpty().filter { it.getOrNull(0) == i && it.size >= 3 }
+        .sortedBy { it[1] }.mapNotNull { e ->
+            val wd = IntArray(7)
+            row.forEachIndexed { j, k -> if (k == e[1]) wd[(dow0 + j) % 7]++ }
+            weeklySkewPhrase(wd)?.let { "${sym(e[1])} : $it" }
+        }
+    val fair = ui.distLocations["fair"].orEmpty().filter { it.getOrNull(0) == i && it.size >= 3 }
+        .groupBy({ it[2] }, { it[1] }).toSortedMap(reverseOrder())
+        .map { (d, ks) -> "差 ${d}回 : " + ks.distinct().sorted().joinToString(", ") { sym(it) } }
+    return StaffCountSheet(chips, weekly, fair, c1)
+}
+
+/** セルシートの「この職員の回数・偏り」用の平文（シートと同じ中身を 1 行ずつ）。 */
+internal fun staffCountLines(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null): List<String> {
+    val sh = staffCountSheet(ui, i, limits)
+    return sh.c1 + sh.chips.map { (if (it.under) "▼ " else "▲ ") + it.text } +
+        sh.weekly.map { "${breakdownLabels["weekly"]} ${it}" } +
+        sh.fair.map { "${breakdownLabels["fair"]} ${it}" }
 }
 
 /** 日 j の人員の一覧（日ヘッダの印のシート）。limits は (シフト,日) → (必要, 適正)。 */
