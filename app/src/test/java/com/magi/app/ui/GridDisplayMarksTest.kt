@@ -219,4 +219,43 @@ class GridDisplayMarksTest {
         val needKeys = rep.needFamilies.filterValues { v -> v.any { it == "vio-covU" || it == "vio-covO" } }.keys.mapNotNull { VioKey.first(it) }.toSet()
         assertEquals(needKeys, totals.keys)
     }
+
+    /** 上限0（休を除く）のシフトが入った日は全部セルに印（破線・回数チップに従う）。上限1以上の超過は名前の横だけ。 */
+    @Test fun zeroCapCellsAreMarkedAndFollowTheCountChip() {
+        val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
+        val z = zeroCapCells(p, s)
+        val ui2 = ui.copy(zeroCapCells = z)
+        val vs2 = MagiViewState(ui2)
+        fun sym(k: Int) = st.shifts[k].kigou
+        val expect = HashSet<String>()
+        for (i in 0 until st.staffCount) for (j in 0 until st.dayCount) {
+            val k = s[i][j]
+            if (sym(k) != "休" && p.rangeHi[i][k] == 0) expect += VioKey.cell(i, j)
+        }
+        assertEquals(expect, z)
+        // 職員04: Aｱ（10/10）と Cｵ（10/11）は上限0。A4 は上限0だがこの盤面には入っていない。
+        val s3 = (0 until st.dayCount).filter { VioKey.cell(3, it) in z }.map { "10/${it + 1} ${sym(s[3][it])}" }
+        assertEquals(listOf("10/10 Aｱ", "10/11 Cｵ"), s3)
+        for (key in z) {
+            val i = VioKey.first(key)!!; val j = VioKey.second(key)!!
+            assertTrue(key, "vio-high" in rep.countFamilies[VioKey.count(i, s[i][j])].orEmpty())
+            assertTrue(key, isHeavySoftCellViolation(vs2.cellVio[i][j]) || isHardCellViolation(vs2.cellVio[i][j]))
+        }
+        assertEquals(null, MagiViewState(ui2, allVioBucketKeys - bucketOfFamily("high")!!).cellVio[3][9])
+        // 上限1以上の超過（職員04 の範囲 20〜21 等）はセルに出さない。
+        for (key in rep.countFamilies.filterValues { "vio-high" in it }.keys) {
+            val i = VioKey.first(key)!!; val k = VioKey.second(key)!!
+            if (p.rangeHi[i][k] > 0) for (j in 0 until st.dayCount) if (s[i][j] == k) assertTrue(VioKey.cell(i, j) !in z)
+        }
+        println("上限0の印 " + z.map { VioKey.first(it)!! to VioKey.second(it)!! }.sortedWith(compareBy({ it.second }, { it.first }))
+            .joinToString { (i, j) -> "${st.staff[i].name} 10/${j + 1} ${sym(s[i][j])}" })
+    }
+
+    @Test fun zeroCapStatusLineIsNeutralAndNamesTheWish() {
+        val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
+        assertEquals("⚠ 要調整：$ZERO_CAP_TEXT", cellStatusLine(st, p, s, 3, 9, listOf("high")).text)
+        val i11 = st.staff.indexOfFirst { it.name == "職員11" }
+        assertEquals("⚠ 要調整：$ZERO_CAP_WISH_TEXT", cellStatusLine(st, p, s, i11, 5, listOf("high")).text)
+        assertTrue("間違い" !in ZERO_CAP_TEXT && "ミス" !in ZERO_CAP_WISH_TEXT)
+    }
 }

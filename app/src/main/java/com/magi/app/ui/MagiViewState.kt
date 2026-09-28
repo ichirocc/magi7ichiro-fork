@@ -2,6 +2,7 @@ package com.magi.app.ui
 
 import com.magi.app.model.MagiState
 import com.magi.app.v6.MirrorKeys
+import com.magi.app.v6.Problem
 import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.WishTrial
 import com.magi.app.v6.formatDay
@@ -39,7 +40,7 @@ internal fun isHardCellViolation(v: String?): Boolean =
 internal val heavySoftFamilies = setOf("low", "c1", "c3mn")
 
 internal fun isHeavySoftCellViolation(v: String?): Boolean =
-    v != null && familyOfVioClass(v) in heavySoftFamilies
+    v != null && (familyOfVioClass(v) in heavySoftFamilies || v == ZERO_CAP_CLASS)
 
 /** セル("i,j")の全違反クラス（重み降順）。families 未充填の経路では最重1クラスへフォールバック。 */
 internal fun cellVioClasses(ui: UiState, key: String): List<String> =
@@ -445,11 +446,27 @@ internal object DisplayOnlyUndo {
 internal fun c1DisplayMarks(ui: UiState): Set<String> =
     ui.c1Shortages.flatMap { sh -> sh.marks.map { VioKey.cell(sh.staff, it) } }.toSet()
 
-/** 画面に出すセルの違反クラス（重み降順）。チェッカーの c1（ランの先頭）は描かず、表示専用の印に置き換える。 */
+/** 上限0のセルの表示クラス。族は high（回数チップに従う）、枠は破線（どのセルが超過か一意なので）。 */
+internal const val ZERO_CAP_CLASS = "vio-high0"
+
+/** 個人の上限0（休を除く）のシフトが入っているセル。上限0なら入っている日はどれも超過なのでセルに印を付けられる
+ *  （上限1以上の超過はどの日が余分か決まらないので名前の横の ▲ だけ）。 */
+internal fun zeroCapCells(p: Problem, s: Array<IntArray>): Set<String> {
+    val out = HashSet<String>()
+    for (i in 0 until minOf(p.S, s.size)) for (j in s[i].indices) {
+        val k = s[i][j]
+        if (k in 0 until p.K && k != p.restIdx && p.rangeHi[i][k] == 0) out += VioKey.cell(i, j)
+    }
+    return out
+}
+
+/** 画面に出すセルの違反クラス（重み降順）。チェッカーの c1（ランの先頭）は描かず、表示専用の印に置き換える。
+ *  上限0のセルには表示専用の [ZERO_CAP_CLASS] を足す。 */
 internal fun displayCellClasses(ui: UiState, key: String, c1Marks: Set<String>): List<String> {
     val base = cellVioClasses(ui, key).filter { it != "vio-c1" }
-    if (key !in c1Marks) return base
-    return (base + "vio-c1").sortedByDescending { MirrorKeys.weightOf(familyOfVioClass(it)) }
+    val extra = listOfNotNull("vio-c1".takeIf { key in c1Marks }, ZERO_CAP_CLASS.takeIf { key in ui.zeroCapCells })
+    if (extra.isEmpty()) return base
+    return (base + extra).sortedByDescending { MirrorKeys.weightOf(familyOfVioClass(it)) }
 }
 
 /** 回数キーのクラスが不足側(▼)か。c2 は職員別合計の下限なので不足側。 */

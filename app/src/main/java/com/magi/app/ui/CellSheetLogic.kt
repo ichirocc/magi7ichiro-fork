@@ -116,7 +116,9 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
         "pref" -> p.wish.getOrNull(i)?.getOrNull(j)?.takeIf { it >= 0 }?.let { "希望は${sym(it)}（今は${sym(cur)}）" }
         "groupViol" -> "${sym(cur)}は${name(i)}の担当外"
         "low" -> if (cur < 0) null else "${sym(cur)}が${count(cur)}回（下限${p.rangeLo[i][cur]}）"
-        "high" -> if (cur < 0) null else "${sym(cur)}が${count(cur)}回（上限${p.rangeHi[i][cur]}）"
+        "high" -> if (cur < 0) null else if (p.rangeHi[i][cur] == 0 && cur != p.restIdx) {
+            if (p.wish.getOrNull(i)?.getOrNull(j) == cur) ZERO_CAP_WISH_TEXT else ZERO_CAP_TEXT
+        } else "${sym(cur)}が${count(cur)}回（上限${p.rangeHi[i][cur]}）"
         "apt" -> if (cur < 0) null else "${sym(cur)}が${count(cur)}回（適切${p.apt[i][cur]}回）"
         "c2" -> if (cur < 0) null else p.cons2.firstOrNull { it.shiftIdx == cur }?.let { "${sym(cur)}が${count(cur)}回（個人の合計${it.count}回）" }
         else -> null
@@ -134,6 +136,9 @@ internal fun forbiddenRunAt(p: Problem, s: Array<IntArray>, i: Int, j: Int, list
     }
     return null
 }
+
+internal const val ZERO_CAP_TEXT = "個人の上限0（入れない指定）のシフトです。残るのは要調整です"
+internal const val ZERO_CAP_WISH_TEXT = "本人の希望が個人の上限0（入れない指定）のシフトに載っています。残るのは要調整です"
 
 /** 同じ違反のもう一方のセルの日（板挟みで他の人の手が無いときの行き先）。禁止の並びは一致した並びの他の日、
  *  希望の前日の禁止は印のある前日⇄希望の翌日。チェッカーの印だけから決め、希望は触らない。 */

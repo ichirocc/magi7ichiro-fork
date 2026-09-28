@@ -65,6 +65,8 @@ data class UiState(
     val distLocations: Map<String, List<List<Int>>> = emptyMap(),
     /** 期間の制約の不足区間（[c1Shortages]）。画面の表示専用の印と帯を作る元。 */
     val c1Shortages: List<C1Shortage> = emptyList(),
+    /** 個人の上限0のシフトが入っているセル（[zeroCapCells]）。画面の表示専用の印。 */
+    val zeroCapCells: Set<String> = emptySet(),
     val fixSuggestions: List<com.magi.app.v6.FixSuggestion> = emptyList(),  // [改善提案] 違反を減らす1手（変更/交換）
     val fixSearching: Boolean = false,
     /** 直し方の探索を終えた依頼の鍵（`FixFocus.key`、空＝画面全体や未完了）。印・セルのシートが自分の結果か見分ける。 */
