@@ -101,11 +101,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             }
             if (!okDays) Text("日数は 1〜31 で入れてください", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 
-            // --- use2 ---
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("必要人数の2パターン目を使う（特殊な月用・通常はOFF）", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                Switch(checked = v.use2, onCheckedChange = { onEvent(MagiEvent.Structure.SetUse2(it)) }, enabled = !ui.running)
-            }
+            // use2 は画面に出さない（保存値はそのまま）
             Divider()
 
             // --- shifts ---
