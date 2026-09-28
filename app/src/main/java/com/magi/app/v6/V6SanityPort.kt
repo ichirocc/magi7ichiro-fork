@@ -63,6 +63,8 @@ data class SettingIssue(
     //   並びが変わると別の行を壊す。DELETE_DUP_SEQ と同じく**内容一致**で指す（data class の equals）。
     val groupRangeFamily: String? = null,  // "c41" / "c41s"
     val groupRangeRow: com.magi.app.model.C41Row? = null,
+    /** 意図した設定に由来する案内（上限 0 × 希望）。ログで「設定ミス」と呼ばない。 */
+    val neutral: Boolean = false,
 )
 
 data class ShiftCountDiagnostic(
@@ -1165,7 +1167,12 @@ object V6SanityPort {
                     if (hi == Int.MAX_VALUE || !p.canDo(i, k)) continue
                     var wished = 0
                     for (j in 0 until p.T) if (p.wishFixed(i, j) && p.wish[i][j] == k) wished++
-                    if (wished > hi) {
+                    if (wished > hi && hi == 0) {
+                        // 上限 0 は意図した「入れない指定」（3.507.0）＝設定ミスと呼ばない。
+                        out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「${symOf(k)}」",
+                            "個人の上限0（入れない指定）に希望が${wished}件載っています。残るのは要調整です",
+                            "希望を変えるか、例外として上限を緩めてください", neutral = true))
+                    } else if (wished > hi) {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と希望の衝突",
                             "「$sym」の希望が${wished}件あり、個人上限${hi}回を超えています。希望どおりに配置する限り" +

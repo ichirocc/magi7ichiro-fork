@@ -134,6 +134,8 @@ data class UiState(
     val satisfaction: Int = 0,
     val polishExhausted: Boolean = false,
     val copilotHint: String? = null,
+    val preRunCheck: com.magi.app.v6.PreRunCheck.Summary? = null,   // [つくる前の確認] 非 null の間シートを出す
+    val preRunRepeatHint: String? = null,   // 同じ設定でもう一度つくるときの一言（シートの中に出す）
     val impossibleWishCount: Int = 0,
     val opLog: List<String> = emptyList(),
     val alternatives: List<String> = emptyList(), // 他の案（採用案以外の候補サマリ）

@@ -488,6 +488,17 @@ class V6SanityPortTest {
         assertTrue(V6SanityPort.buildGuidance(within).none { it.where.contains("個人上限と希望の衝突") })
     }
 
+    @Test fun wishOnUpperZeroIsNeutral() {
+        // 上限 0 は意図した入れない指定＝「衝突」と呼ばず、要調整が残ると案内する。
+        val st = aptVsNeedState(days = 10, need1 = "1", aptTarget = "").copy(
+            wishes = mapOf("0,0" to 1), staffRange = mapOf("0,1" to Range("", "0")))
+        val issue = V6SanityPort.buildGuidance(st).single { it.where == "s0さんの「X」" }
+        assertTrue(issue.neutral)
+        assertEquals("個人の上限0（入れない指定）に希望が1件載っています。残るのは要調整です", issue.problem)
+        assertEquals("希望を変えるか、例外として上限を緩めてください", issue.fix)
+        assertTrue(V6SanityPort.buildGuidance(st).none { it.where.contains("衝突") })
+    }
+
     @Test fun demandAboveStaffCapsStatesTheGapInBothPlaces() {
         // 必要数 10 回 vs 担当者の上限 3+4=7 回 → 差 3 回。文中の 2 か所とも数値で出る。
         val st = aptVsNeedState(days = 10, need1 = "1", aptTarget = "").copy(
