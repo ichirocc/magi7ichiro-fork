@@ -702,3 +702,60 @@ internal fun shiftCoverageTotals(marks: List<List<CoverageMark>>): Map<Int, Shif
     marks.forEachIndexed { d, ms -> for (m in ms) (if (m.under) under else over).getOrPut(m.shift) { ArrayList() }.add(d) }
     return (under.keys + over.keys).associateWith { ShiftCoverageTotal(under[it].orEmpty(), over[it].orEmpty()) }
 }
+
+// ===== つくる前の確認（`PreRunCheck` の結果を行にする） =====
+
+/** シートの 1 行。staff/day があれば押すとそのセルへ移る（希望の行は希望のシートで開く）。 */
+internal data class PreRunRow(val text: String, val staff: Int? = null, val day: Int? = null, val wish: Boolean = false)
+
+internal data class PreRunSheetText(
+    val floorHeader: String?,
+    val floorRows: List<PreRunRow>,
+    val rerunHeader: String?,
+    val rerunRows: List<PreRunRow>,
+    val wallLine: String?,
+    val hasWishRows: Boolean,
+)
+
+internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。"
+internal const val PRE_RUN_RERUN_NOTE = "手で置いた勤務が個人の上限（0回）と食い違っています。つくると外されます。"
+
+internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
+    fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
+    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
+    fun day(j: Int) = DayText.short(ui.startDate, j)
+    val floor = buildList {
+        for (g in s.wishConflicts) {
+            val pat = g.shifts.joinToString("→") { sym(it) }
+            val text = if (g.family == "c3w")
+                "${name(g.staff)} ${day(g.days[0])}「${sym(g.shifts[0])}」→ ${day(g.days[1])}「${sym(g.shifts[1])}」 本人の希望どうしが希望の前日の禁止に当たっています"
+            else "${name(g.staff)} ${g.days.joinToString("・") { day(it) }} 本人の希望「$pat」が禁止の並びに当たっています"
+            add(PreRunRow(text, g.staff, g.days.last(), wish = true))
+        }
+        for (w in s.impossibleWishes) {
+            val cell = w.staffIndex >= 0 && w.dayIndex >= 0
+            add(PreRunRow("${w.staffName} ${if (w.dayIndex >= 0) day(w.dayIndex) else "?"} 本人の希望「${w.shiftSymbol}」は反映できません（${w.reason}）",
+                w.staffIndex.takeIf { cell }, w.dayIndex.takeIf { cell }, wish = cell))
+        }
+        fun pin(core: List<com.magi.app.v6.ConstraintMus.Item>) = core.firstNotNullOfOrNull { it as? com.magi.app.v6.ConstraintMus.WishPin }
+        for (d in s.dayProofs) pin(d.core).let { w ->
+            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません・証明つき）", w?.staff, w?.day, w != null))
+        }
+        for (c in s.staffProofs) pin(c.core).let { w ->
+            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません・証明つき）", w?.staff, w?.day, w != null))
+        }
+        for (w in s.wishOverCaps) add(PreRunRow("${name(w.staff)}「${sym(w.shift)}」本人の希望${w.wished}件が個人の上限（${w.hi}回）を超えています"))
+        for (f in s.forcedShortfalls) add(PreRunRow("「${f.shiftSymbol}」 ${f.cells}日で担当できる人より必要人数が多く、人員不足が合計${f.amount}人残ります"))
+    }
+    val rerun = s.rerunClears.map { PreRunRow("${name(it.staff)} ${day(it.day)} ${sym(it.shift)}", it.staff, it.day) }
+    val wall = s.wallHint?.let { "個人の上限（0回）が ${it.pairs}組（${it.staffCount}人）あります。多いのは ${name(it.topStaff)}（${it.topPairs}組）。" +
+        "つくった後に「設定を緩めたら」で試せます。" }
+    return PreRunSheetText(
+        floorHeader = if (floor.isEmpty()) null else "計算では消えない（${floor.size}件）",
+        floorRows = floor,
+        rerunHeader = if (rerun.isEmpty()) null else "もう一度つくると外れる（${rerun.size}件）",
+        rerunRows = rerun,
+        wallLine = wall,
+        hasWishRows = floor.any { it.wish },
+    )
+}

@@ -564,7 +564,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 EmptyStateCard(onOpen = openJson, onSample = loadSample, onNew = { vm.initBlankState(); tab = 2; editScope = 2 })
             } else when (tab) {
                 0 -> {
-                    InterruptedBanner(ui, onRerun = { vm.runV6FullOptimize() }, onDismiss = { vm.dismissInterrupted() })
+                    InterruptedBanner(ui, onRerun = { vm.resumeInterruptedRun() }, onDismiss = { vm.dismissInterrupted() })
                     if (showImportGuidance) {
                         ImportGuidanceBanner(
                             // [UX監査#3] 必要人数の既定はシフト編集(①、既定展開)・群単位の上書きは④・並びの制約は⑤と
@@ -880,6 +880,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false }, onConfirm = { token ->
                 relaxDialog = false; vm.relaxAndApply(token)
             })
+        }
+        ui.preRunCheck?.let { sum ->
+            PreRunCheckSheet(sum, ui,
+                onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0 },
+                onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
+                onFixData = { vm.dismissPreRun(); tab = 2 },
+                onProceed = { vm.proceedPreRun() },
+                onDismiss = { vm.dismissPreRun() })
         }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->

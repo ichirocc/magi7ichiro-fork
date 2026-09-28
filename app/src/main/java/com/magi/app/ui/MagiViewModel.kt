@@ -4,6 +4,7 @@ import com.magi.app.toHankakuKigou
 import androidx.lifecycle.AndroidViewModel
 import android.app.Application
 import androidx.lifecycle.viewModelScope
+import com.magi.app.v6.PreRunCheck
 import com.magi.app.v6.betterReport
 import com.magi.app.v6.Problem
 import com.magi.app.v6.ScheduleCsvBridge
@@ -1396,7 +1397,42 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if ((breakdown[top] ?: 0) > 0) hardFamilyJp(top) else null
     }
 
-    fun runV6FullOptimize() = startFullOptimize("勤務表の作成", null)
+    /** 5 つの入口（フッター・ホーム・イベント）が通る。計算では消えない／もう一度つくると外れる項目があればシートを出して止まる。 */
+    fun runV6FullOptimize() {
+        val st = state; val sched = currentSchedule
+        if (st != null && sched != null && !_ui.value.running && PreRunCheck.fingerprint(st, sched) != preRunAckKey) {
+            val sum = PreRunCheck.build(st, sched)
+            if (sum.needsSheet) {
+                _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }
+                logOp("I", "つくる前の確認 表示 (消えない${sum.floorCount}件, 外れる${sum.rerunClears.size}件)")
+                return
+            }
+        }
+        startFullOptimize("勤務表の作成", null)
+    }
+
+    /** 中断された実行の再開はシートを通さない（利用者決定 2026-09-28）。 */
+    fun resumeInterruptedRun() = startFullOptimize("勤務表の作成", null)
+
+    /** 「このままつくる」。同じ指紋のあいだは同じ理由で止めない。 */
+    fun proceedPreRun() {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        preRunAckKey = PreRunCheck.fingerprint(st, sched)
+        _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
+        logOp("I", "つくる前の確認 このままつくる")
+        startFullOptimize("勤務表の作成", null, hintShown = true)
+    }
+
+    fun dismissPreRun() = _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
+
+    private var preRunAckKey = 0L
+
+    private fun runSig() = "${_ui.value.budgetSec}|${_ui.value.workers}|${_ui.value.v6Algorithm}|${_ui.value.softPolish}"
+
+    private fun repeatHint(): String? = if (runSig() == lastSettingsSig && lastResultHard > 0L)
+        "前回と同じ設定でもう一度つくります。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
+    else null
 
     /** [S5] 確定操作の文脈（§6 の 10）。希望はすでに state から消えている。 */
     private class S5Ctx(
@@ -1407,16 +1443,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** 本実行。[undoLabel]＝null は Undo を積まない（S5 の確定がすでに積んでいる）。 */
-    private fun startFullOptimize(undoLabel: String?, s5: S5Ctx?) {
+    private fun startFullOptimize(undoLabel: String?, s5: S5Ctx?, hintShown: Boolean = false) {
         val st0 = state ?: return
         val sched0 = currentSchedule ?: return
         if (runBlockedByInFlight("勤務表の作成")) return
         if (!ensureValidForRun(st0, sched0)) return
         if (undoLabel != null) pushUndo(undoLabel)
-        val sig = "${_ui.value.budgetSec}|${_ui.value.workers}|${_ui.value.v6Algorithm}|${_ui.value.softPolish}"
-        val hint = if (s5 == null && sig == lastSettingsSig && lastResultHard > 0L)
-            "前回と同じ設定でもう一度つくります。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
-        else null
+        val sig = runSig()
+        val hint = if (s5 == null && !hintShown) repeatHint() else null
         lastSettingsSig = sig
         val s5Suffix = if (s5 != null) "（希望の取り消しはそのままです。元に戻すで希望も戻ります）" else ""
         // 停止・失敗で入力の盤面へ戻すときは、実行前の旗へ戻す（一度も計算していない盤面を「計算済み」にしない＝3.500.1）。
