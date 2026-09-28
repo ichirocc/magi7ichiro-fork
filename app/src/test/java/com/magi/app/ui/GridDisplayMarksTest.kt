@@ -142,6 +142,35 @@ class GridDisplayMarksTest {
         }
     }
 
+    /** 行末の印のシート（実データ 職員02）: 回数は 2 列のチップ、曜日は 1 シフト 1 句、公平化は差ごとに 1 行。 */
+    @Test fun staffCountSheetOnTheRealBoard() {
+        val u = ui.copy(startDate = st.startDate)
+        val lim: (Int, Int) -> Triple<Int?, Int?, Int?> = { i, k -> conditionsViewOf(st, com.magi.app.v6.cachedProblem(st)).staffCellLimits(i, k) }
+        val sh = staffCountSheet(u, 1, lim)
+        assertEquals(listOf("Dﾃ  -1回 (3/4)", "Cｵ  +3回 (8/5)", "有  -1回 (0/1)"), sh.chips.map { it.text })
+        assertEquals(listOf(true, false, true), sh.chips.map { it.under })
+        assertEquals(listOf("差 1回 : A4, 有"), sh.fair)
+        assertEquals(rep.distLocations["weekly"]!!.count { it[0] == 1 }, sh.weekly.size)
+        val low = staffCountSheet(u, 3, lim).chips.single { it.shift == "B1" }
+        assertEquals("B1  -3回 (17/下限20)", low.text)
+        assertEquals("Aｱ  +1回 (1/上限0)", staffCountSheet(u, 3, lim).chips.first().text)
+    }
+
+    /** 曜日の句の数値＝各側の |e| の和÷7 を丸めたもの（両側で同じ値）。採点 Σ|e|/7 のおよそ半分で、偏りがあれば 1 以上。 */
+    @Test fun weeklySkewPhraseMatchesTheScoredDeviation() {
+        assertEquals(null, weeklySkewPhrase(intArrayOf(1, 1, 1, 1, 1, 1, 1)))
+        assertEquals("日・月に集中 (+1)", weeklySkewPhrase(intArrayOf(2, 2, 1, 1, 1, 1, 1)))
+        assertEquals("金が少ない (-1)", weeklySkewPhrase(intArrayOf(1, 1, 1, 1, 1, 0, 1)))
+        assertEquals("日・月に集中 (+2)／水が少ない (-2)", weeklySkewPhrase(intArrayOf(3, 3, 2, 0, 2, 2, 2)))
+        for (e in rep.distLocations["weekly"]!!) {
+            val row = st.schedule[e[0]]; val wd = IntArray(7)
+            row.forEachIndexed { j, k -> if (k == e[1]) wd[(dow0Of(st.startDate) + j) % 7]++ }
+            assertEquals(e[2], com.magi.app.v6.weeklyDevOfBucket(wd))
+            val ns = Regex("\\(([+-])(\\d+)\\)").findAll(weeklySkewPhrase(wd)!!).map { it.groupValues[2].toInt() }.toList()
+            assertTrue("$e ns=$ns", ns.isNotEmpty() && ns.distinct().size == 1 && ns.all { n -> n >= 1 && kotlin.math.abs(2 * n - e[2]) <= 1 })
+        }
+    }
+
     /** 手が見つからないときは確かめた事実だけを書く（希望固定・上限 0・その日の必要人数ぎりぎり・ほかの勤務の固定）。 */
     @Test fun noFixReasonsNameOnlyVerifiedFacts() {
         val u = UiState(
