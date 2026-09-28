@@ -129,6 +129,23 @@ object ConstraintMus {
         return out
     }
 
+    /** [analyzeDayConflicts] と同じ判定を上限 0（SOFT high＝払えば抜けられる）に頼らず canDo だけで行う。不成立の日には
+     *  covU・groupViol・pref のどれかが必ずその日に 1 件残る＝HARD の下限に使える。 */
+    fun dayProofsWithoutZeroCap(p: Problem): List<Int> {
+        val out = ArrayList<Int>()
+        for (j in 0 until p.T) {
+            val universe = ArrayList<Item>()
+            for (k in 0 until p.K) {
+                val eff = effectiveLowerBound(p, k, j)
+                if (eff > 0) universe.add(DayNeed(j, k, eff))
+            }
+            if (universe.isEmpty()) continue
+            for (i in 0 until p.S) if (p.wishFixed(i, j)) universe.add(WishPin(i, j, p.wish[i][j]))
+            if (dayProvablyInfeasible(p, universe, zeroCapExcluded = false)) out.add(j)
+        }
+        return out
+    }
+
     /** covUCell（source of truth）から逆算した「不足が出ない最小人数」。S人でも不足なら S+1。 */
     private fun effectiveLowerBound(p: Problem, k: Int, j: Int): Int {
         for (g in 0..p.S) if (p.covUCell(k, j, g) <= 0) return g
@@ -205,7 +222,7 @@ object ConstraintMus {
         return false
     }
 
-    private fun dayProvablyInfeasible(p: Problem, items: List<Item>): Boolean {
+    private fun dayProvablyInfeasible(p: Problem, items: List<Item>, zeroCapExcluded: Boolean = true): Boolean {
         val pinned = HashMap<Int, Int>()
         val slots = ArrayList<Int>()
         for (item in items) when (item) {
@@ -222,7 +239,7 @@ object ConstraintMus {
         val slotMatch = IntArray(slots.size) { -1 }
         // 希望固定は mayPlace より優先（HardRepairCore.hf66DataHardening と同じ）＝上限 0 のシフトへの希望固定もその席に就ける。
         fun canServe(i: Int, shift: Int): Boolean {
-            val pin = pinned[i] ?: return p.mayPlace(i, shift)
+            val pin = pinned[i] ?: return if (zeroCapExcluded) p.mayPlace(i, shift) else p.canDo(i, shift)
             return pin == shift
         }
         fun tryAugment(slot: Int, visited: BooleanArray): Boolean {

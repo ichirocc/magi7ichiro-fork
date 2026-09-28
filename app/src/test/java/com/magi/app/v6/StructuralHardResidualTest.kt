@@ -24,4 +24,14 @@ class StructuralHardResidualTest {
         assertFalse(V6FinalPort.isStructuralHardResidual(rep("c3n" to 1), hardFloor = 0) { false })
         assertFalse(V6FinalPort.isStructuralHardResidual(rep("pref" to 1), hardFloor = 5) { true })
     }
+
+    // [E0] 希望衝突の床に届いた HARD は解けない残り。c3w は希望どうしの衝突で証明された件数までだけ c3n と同列。
+    @Test
+    fun wishConflictFloorAndProvenC3wAreStructural() {
+        assertTrue(V6FinalPort.isStructuralHardResidual(rep("c3n" to 3, "c3w" to 2), hardFloor = 0, wishReached = true) { false })
+        assertFalse(V6FinalPort.isStructuralHardResidual(rep("c3n" to 3, "c3w" to 2), hardFloor = 0) { false })
+        assertTrue(V6FinalPort.isStructuralHardResidual(rep("c3n" to 3, "c3w" to 2), hardFloor = 0, c3wProven = 2) { true })
+        assertFalse(V6FinalPort.isStructuralHardResidual(rep("c3n" to 3, "c3w" to 2), hardFloor = 0, c3wProven = 1) { true })
+        assertFalse(V6FinalPort.isStructuralHardResidual(rep("c3n" to 3, "c3w" to 2), hardFloor = 0) { true })
+    }
 }

@@ -154,6 +154,19 @@ class V6FinalPortTest {
         assertEquals(stallLong, V6FinalPort.effectiveStallMs(3, 0, 1, true, true, stallHard, stallLong))
     }
 
+    @Test fun effectiveStallUsesShortStallAtWishConflictFloor() {
+        // [E0] 希望衝突の床に到達（HARD＝床かつ全て希望由来）なら短い閾値、未到達なら長いまま。
+        assertEquals(stallHard, V6FinalPort.effectiveStallMs(5, 0, 5, false, false, stallHard, stallLong, wishReached = true))
+        assertEquals(stallLong, V6FinalPort.effectiveStallMs(5, 0, 5, false, false, stallHard, stallLong))
+    }
+
+    @Test fun wishFloorReachedOnlyWhenHardEqualsFloorAndAllWishOrigin() {
+        assertTrue(V6FinalPort.wishFloorReached(5, 5) { true })
+        assertFalse(V6FinalPort.wishFloorReached(6, 5) { error("床を超えたら検査しない") })
+        assertFalse(V6FinalPort.wishFloorReached(5, 5) { false })
+        assertFalse(V6FinalPort.wishFloorReached(0, 0) { true })
+    }
+
     // ==== [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」・Part B / 3.424.0で基準是正]
     //   normalStallMs＝「通常」分岐の停滞閾値算出（PolishGate.normalStallFraction で外部化）。
     //   意味論=予算×割合、予算基準の値が探索区間内で発火し得ない帯だけ探索区間×割合へフォールバック ====

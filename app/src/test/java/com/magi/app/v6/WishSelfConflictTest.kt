@@ -99,15 +99,17 @@ class WishSelfConflictTest {
         assertEquals(setOf("0,3", "0,4"), siblings)
     }
 
-    @Test fun selfConflictHardCountsOnePerDisjointGroup() {
+    @Test fun selfConflictHardUsesReportUnitsAndFloorIsMinimum() {
         val st = state(restWindow + mapOf("0,5" to 0))
         val p = cachedProblem(st)
         val honored = arrayOf(intArrayOf(a, a, rest, rest, rest, rest, a), IntArray(7) { a })
-        assertEquals(mapOf("c3n" to 1), V6SanityPort.wishSelfConflictHard(p, honored))
+        // report.hard と同じ単位＝重なる 2 窓は c3n 2 件（checker と一致）。
+        assertEquals(mapOf("c3n" to 2), V6SanityPort.wishConflictHard(p, honored))
         assertEquals(2, UnifiedViolationChecker.check(st, honored).breakdown["c3n"])
-        // 重なる 2 窓は真ん中の 1 件を破れば両方解ける＝下限は 1。
+        // 真ん中の 1 件を破れば両方解ける＝床は 1。
         val brokeMiddle = arrayOf(intArrayOf(a, a, rest, a, rest, rest, a), IntArray(7) { a })
-        assertEquals(mapOf("pref" to 1), V6SanityPort.wishSelfConflictHard(p, brokeMiddle))
+        assertEquals(mapOf("pref" to 1), V6SanityPort.wishConflictHard(p, brokeMiddle))
+        assertEquals(1 to 0, V6SanityPort.wishConflictFloorParts(p))
     }
 
     @Test fun hf70DoesNotCountSelfConflictAsHardOtherThanWishes() {
