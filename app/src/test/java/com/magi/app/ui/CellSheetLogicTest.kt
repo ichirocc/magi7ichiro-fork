@@ -306,4 +306,18 @@ class CellSheetLogicTest {
         }
         assertTrue(!fitsTwoLines("あ".repeat(55), COUNT_LINE_EM))
     }
+
+    @Test fun peekPutsCurrentAndWishFirstThenShiftOrder() {
+        assertEquals(listOf(3, 5, 0, 1), peekShifts(listOf(0, 1, 2, 3, 4, 5), setOf(0, 1, 3, 5), current = 3, wish = 5))
+        assertEquals(listOf(0, 1, 2), peekShifts(listOf(0, 1, 2), setOf(0, 1, 2), current = -1, wish = null))
+        assertEquals(listOf(2, 0, 1, 3), peekShifts(listOf(0, 1, 2, 3, 4), setOf(0, 1, 2, 3, 4), current = 2, wish = 2))
+    }
+
+    @Test fun peekRecommendationOnlyFromAnExistingRelaxMove() {
+        val r = com.magi.app.v6.RelaxTrial.Result(1, 4, 2..6, emptyList(), emptyList(), 1, 1, 1, 0,
+            listOf(com.magi.app.v6.RelaxTrial.Move(1, 4, 0, 2)))
+        assertEquals(2, peekRecommendation(r, 1, 4))
+        assertEquals(null, peekRecommendation(r, 1, 5))
+        assertEquals(null, peekRecommendation(null, 1, 4))
+    }
 }

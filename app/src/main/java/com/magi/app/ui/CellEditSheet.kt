@@ -6,6 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
@@ -83,6 +86,9 @@ internal fun CellEditSheet(
     onShowRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
     onMode: (Int) -> Unit = {},
+    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「すべてのシフト ▾」のタップだけ
+    onToggleExpand: () -> Unit = {},
+    tourPrev: Pair<Int, Int>? = null,
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -136,7 +142,15 @@ internal fun CellEditSheet(
         shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)),
         tonalElevation = 2.dp,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
+        if (!expanded) PeekBody(
+            ui, cell, name, current, wish, mode, leftHand, onEvent, onPick, onMove, onDismiss, onToggleExpand,
+            heading = tourHeading ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
+            picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
+            recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
+        ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
+            TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
+                Text("すべてのシフト ▴")
+            }
             // 上段（読むところ）: 見出し・1 行の状態・直し方（手 1 件／理由 2 行）。長ければここだけ縦に送る。
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -308,6 +322,59 @@ internal fun CellEditSheet(
             // 画面下端のジェスチャー帯の上に、押せるものを置かない 32dp。
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③操作 1 行（希望を取り消す・推奨・上位 4 シフト・他 ▸）。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PeekBody(
+    ui: UiState, cell: Pair<Int, Int>, name: String, current: Int, wish: Int?, mode: Int, leftHand: Boolean,
+    onEvent: (MagiEvent) -> Unit, onPick: (Int) -> Unit, onMove: (Pair<Int, Int>) -> Unit, onDismiss: () -> Unit, onToggleExpand: () -> Unit,
+    heading: String, severity: CellSeverity, tourPrev: Pair<Int, Int>?, tourNext: Pair<Int, Int>?,
+    picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
+) {
+    val (i, j) = cell
+    val cs = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: k.toString()
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(heading, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                color = if (severity == CellSeverity.HARD) cs.error else cs.onSurface,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("$name ・ ${formatDay(ui.startDate, j)}", style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (tourPrev != null || tourNext != null) {
+                TextButton(onClick = { tourPrev?.let(onMove) }, enabled = tourPrev != null && tourPrev != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("◀ 前") }
+                TextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
+            }
+        }
+        // 幅が足りないときは折り返す（横スクロールしない）。
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            if (wish != null) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
+                modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を取り消す", color = cs.error, maxLines = 1) }
+            if (recommend != null) FilledTonalButton(onClick = { onPick(recommend) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("推奨: ${sym(recommend)} に変更", maxLines = 1)
+            }
+            for (k in if (leftHand) picks.reversed() else picks) {
+                val sel = if (mode == 0) k == current else k == wish
+                SlotButton(
+                    ui, k, k in canDoSet, sel, enabled = mode == 1 || k in canDoSet,
+                    recommended = mode == 0 && k in marks.recommended, hardRisk = mode == 0 && k in marks.hardRisk,
+                    wishMark = mode == 0 && k == wish && wish != current, zeroCap = k in zeroCaps,
+                    modifier = Modifier.width(56.dp),
+                ) {
+                    if (mode == 0) { if (k != current) onPick(k) }
+                    else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
+                }
+            }
+            TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフト ▾" }) { Text("他 ▸") }
+        }
+        Spacer(Modifier.height(32.dp))
     }
 }
 

@@ -424,3 +424,12 @@ internal fun messageMayReplaceNotice(noticeShowing: Boolean, isError: Boolean): 
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
 internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "$name ${DayText.short(startDate, day)} を${symbol}に変更しました"
+
+/** ちら見に出す上位 [n] シフト: 今の割当・希望を先に、残りは担当できるものを枠の順で。 */
+internal fun peekShifts(shown: List<Int>, canDo: Set<Int>, current: Int, wish: Int?, n: Int = 4): List<Int> =
+    (listOfNotNull(current.takeIf { it >= 0 }, wish?.takeIf { it >= 0 }) + shown.filter { it in canDo })
+        .filter { it in shown }.distinct().take(n)
+
+/** [S6] 既にある組の手順がこのセルを動かすなら、その行き先（新しく試算しない）。 */
+internal fun peekRecommendation(r: RelaxTrial.Result?, i: Int, j: Int): Int? =
+    r?.moves?.firstOrNull { it.staff == i && it.day == j }?.to

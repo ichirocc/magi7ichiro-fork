@@ -203,6 +203,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
+    var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見）
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
     // [通常セルの枠線] 違反の無いセルにも「分離」用の1dp輪郭を付けていた(3.397.0)が、常時表示は格子が
@@ -551,7 +552,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         val up = waitForUpOrCancellation(PointerEventPass.Final)
-                        if (up != null && !up.isConsumed) { editingCell = null; focusRange = null; tourActive = false }
+                        if (up != null && !up.isConsumed) { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false }
                     }
                 } else Modifier)
                 .verticalScroll(tabScrolls[tab.coerceIn(0, 4)]),
@@ -834,10 +835,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             // 下部コマンドバー分の余白。セル編集シートを開いている間は、最後の行もシートの上へ出せるだけ足す。
             Spacer(Modifier.height(if (editingCell != null && tab == 1) with(LocalDensity.current) { sheetPx.toDp() } else 12.dp))
         }
-        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false } }
+        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false; sheetExpanded = false } }
         val cell = editingCell
         if (cell != null && tab == 1) {
-            val closeSheet = { editingCell = null; focusRange = null; tourActive = false }
+            val closeSheet = { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false }
             BackHandler(onBack = closeSheet)
             val moveTo: (Pair<Int, Int>) -> Unit = { c ->
                 if (c.first in 0 until ui.staff && c.second in 0 until ui.days) {
@@ -857,7 +858,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onEvent(MagiEvent.Board.SetCell(cell.first, cell.second, k))
                     },
-                    onMove = { c -> if (tourActive && tourItems.size > 1 && c == tourItems[(tourAt + 1) % tourItems.size].cell) goTourItem((tourAt + 1) % tourItems.size) else moveTo(c) },
+                    onMove = { c ->
+                        val n = tourItems.size
+                        when {
+                            tourActive && n > 1 && c == tourItems[(tourAt + 1) % n].cell -> goTourItem((tourAt + 1) % n)
+                            tourActive && n > 1 && c == tourItems[(tourAt - 1 + n) % n].cell -> goTourItem((tourAt - 1 + n) % n)
+                            else -> moveTo(c)
+                        }
+                    },
                     onDismiss = closeSheet,
                     modifier = Modifier.fillMaxWidth().heightIn(max = maxH).onSizeChanged { sheetPx = it.height.toFloat() },
                     fixNav = fixNav,
@@ -870,6 +878,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     onShowRelax = { relaxDialog = true },
                     mode = sheetMode,
                     onMode = { sheetMode = it },
+                    expanded = sheetExpanded,
+                    onToggleExpand = { sheetExpanded = !sheetExpanded },
+                    tourPrev = if (tourActive && tourItems.size > 1) tourItems[(tourAt - 1 + tourItems.size) % tourItems.size].cell else null,
                 )
             }
         }
