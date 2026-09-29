@@ -326,6 +326,8 @@ object V6SanityPort {
      *  就けても残る不足（= covUCell(k,j,capable) の総和）。covUCell は got 単調減少なので、これは当該セルの
      *  covU 最小値＝どう割り当てても避けられない不足量。need1/need2 両設定時は covUCell が MIN(OR救済) を返す
      *  ため過大検出しない。誤検知ゼロ・読み取り専用・データ不変。 */
+    const val ZERO_CAP_SHORTFALL_NOTE = "個人の上限0（入れない指定）が絡みます。例外として緩めると解ける場合があります"
+
     data class ForcedCovU(val shiftIndex: Int, val shiftSymbol: String, val cells: Int, val amount: Int)
 
     fun forcedCovU(state: MagiState, p: Problem = cachedProblem(state)): List<ForcedCovU> {
@@ -349,6 +351,11 @@ object V6SanityPort {
      *  ・実現不能希望(pref): 監査#11② で HARD 寄与0（対称除外）のため下限に含めない。
      *  ・群外配置(groupViol): 探索は canDo ガードで群外を置かない＋不可能希望は gate 済＝構造下限では常時0。
      *  構造(assignability/need)のみ依存で最適化中に変化しないため一度だけ算出してよい。 */
+    /** 上限0を数えなければ（canDo で数えると）不足が減る＝この配布不可に個人の上限0（入れない指定）が絡む。 */
+    fun zeroCapInShortfall(p: Problem, f: ForcedCovU): Boolean = (0 until p.T).sumOf { j ->
+        maxOf(0, p.covUCell(f.shiftIndex, j, (0 until p.S).count { i -> p.canDo(i, f.shiftIndex) || (p.wishFixed(i, j) && p.wish[i][j] == f.shiftIndex) }))
+    } < f.amount
+
     fun structuralHardFloor(state: MagiState, p: Problem = cachedProblem(state)): Int =
         forcedCovU(state, p).sumOf { it.amount }
 
@@ -1250,7 +1257,8 @@ object V6SanityPort {
             //    人員不足(covU=HARD)が確定＝配布不可。最適化の hardFloor と同じ forcedCovU で検出（誤検知ゼロ）。
             for (fc in forcedCovU(state, p)) {
                 out.add(SettingIssue(IssueKind.DEMAND, "「${fc.shiftSymbol}」の担当者不足（配布不可の原因）",
-                    "${fc.cells}日で、担当できる人数より必要人数が多く、人員不足(covU)が必ず出ます（不足の合計${fc.amount}）。この不足は最適化では解消できません",
+                    "${fc.cells}日で、担当できる人数より必要人数が多く、人員不足(covU)が必ず出ます（不足の合計${fc.amount}）。この不足は最適化では解消できません" +
+                        (if (zeroCapInShortfall(p, fc)) "。$ZERO_CAP_SHORTFALL_NOTE" else ""),
                     "「${fc.shiftSymbol}」を担当できる職員を増やすか、その日の必要人数を下げてください"))
             }
         }

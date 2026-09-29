@@ -54,12 +54,8 @@ object PreRunCheck {
             rerunClears = handPlacedCells(p, s),
             wallHint = wallHint(RelaxTrial.upperZeroWalls(state)),
             zeroCapProofDays = dayProofs.map { it.day }.filter { it !in strict }.toSet(),
-            zeroCapShortShifts = forced.filter { f -> canDoShortfall(p, f.shiftIndex) < f.amount }.map { it.shiftIndex }.toSet(),
+            zeroCapShortShifts = forced.filter { f -> V6SanityPort.zeroCapInShortfall(p, f) }.map { it.shiftIndex }.toSet(),
         )
-    }
-
-    private fun canDoShortfall(p: Problem, k: Int): Int = (0 until p.T).sumOf { j ->
-        maxOf(0, p.covUCell(k, j, (0 until p.S).count { i -> p.canDo(i, k) || (p.wishFixed(i, j) && p.wish[i][j] == k) }))
     }
 
     private fun hasWish(core: List<ConstraintMus.Item>) = core.any { it is ConstraintMus.WishPin }
