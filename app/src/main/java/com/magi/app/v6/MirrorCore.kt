@@ -198,7 +198,8 @@ object UnifiedViolationChecker {
     ): ViolationReport {
         val t0 = System.nanoTime()
         val p = cachedProblem(state, quantitativeRangeEval)
-        val s = normalizeSchedule(schedule, p)
+        val scratch = checkScratch.get().fit(p)
+        val s = scratch.normalize(schedule, p)
         // [3.395.0/高速化] 集計は添字加算の IntArray で行い、最後に `MirrorKeys.all` の順で Map へ起こす
         //   （返り値の中身と順序は従来と完全に同じ）。`inc` に渡すキーは全て `MirrorKeys.all` にある
         //   ことを確認済み（c3系は `checkC3Family` が受け取った族名をそのまま返す）。
@@ -212,9 +213,9 @@ object UnifiedViolationChecker {
         //   ＝スコアリング不変・表示のみ。
         // [Set化] 重なった全クラスは cellFams("i,j"→クラス列)にも蓄積（重複なし・後で重み降順に整列）。
         //   violations は従来どおり最重1クラス＝既存読者は不変。
-        val cellFams = linkedMapOf<String, MutableList<String>>()
-        val countFams = linkedMapOf<String, MutableList<String>>()
-        val needFams = linkedMapOf<String, MutableList<String>>()
+        val cellFams = linkedMapOf<String, List<String>>()
+        val countFams = linkedMapOf<String, List<String>>()
+        val needFams = linkedMapOf<String, List<String>>()
         val c1Runs = ArrayList<List<Int>>()
         // [3.395.0/高速化] 「最重1クラス」を毎回ここで決めるのをやめ、末尾で `cellFams` の**整列済み先頭**
         //   から起こす。両者は定義上いつも同じ値になる：整列は重み降順の**安定ソート**なので先頭＝最初に
@@ -224,7 +225,7 @@ object UnifiedViolationChecker {
         //   ハッシュ探索1回＋重み比較2回が消える（実測で `mark` が `check()` 自己時間の 20% だった）。
         fun mark(i: Int, j: Int, family: String) {
             val cls = vioClass[family] ?: family
-            val fams = cellFams.getOrPut("$i,$j") { ArrayList(2) }
+            val fams = cellFams.getOrPut(pairKey(i, j)) { ArrayList(2) } as MutableList<String>
             if (cls !in fams) fams.add(cls)
         }
         // [判読性] mark() と同じ重み優先。旧: 後勝ちで軽い族(旧 covO=0.5 等)が重い族(c41 等)のマークを上書きし得た。
@@ -232,7 +233,7 @@ object UnifiedViolationChecker {
         // [3.395.0] mark() と同じ理由で「最重1クラス」は末尾で先頭から起こす。
         fun markNeed(k: Int, j: Int, family: String) {
             val cls0 = vioClass[family] ?: family
-            val fams = needFams.getOrPut("$k,$j") { ArrayList(2) }
+            val fams = needFams.getOrPut(pairKey(k, j)) { ArrayList(2) } as MutableList<String>
             if (cls0 !in fams) fams.add(cls0)
         }
         // [防御的統一/敵対的監査で確認] mark()/markNeed() と同じ重み優先へ統一。旧: 無条件上書き
@@ -248,7 +249,7 @@ object UnifiedViolationChecker {
         // [3.395.0] mark() と同じ理由で「最重1クラス」は末尾で先頭から起こす。
         fun markCount(i: Int, k: Int, family: String) {
             val cls0 = vioClass[family] ?: family
-            val fams = countFams.getOrPut("$i,$k") { ArrayList(2) }
+            val fams = countFams.getOrPut(pairKey(i, k)) { ArrayList(2) } as MutableList<String>
             if (cls0 !in fams) fams.add(cls0)
         }
         fun cellIs(i: Int, j: Int, k: Int): Boolean = i in 0 until p.S && j in 0 until p.T && s[i][j] == k
@@ -287,7 +288,7 @@ object UnifiedViolationChecker {
             }
         }
 
-        val counts = countMatrix(p, s)
+        val counts = scratch.countMatrix(s, p)
         for (c in p.cons2) {
             for (i in 0 until p.S) {
                 if (!p.canDo(i, c.shiftIdx)) continue
@@ -443,8 +444,9 @@ object UnifiedViolationChecker {
         //   区別できなかった。回数0のシフトは偏差0で無害（対象から外す必要はない）。
         // [場所表示] 偏っている(職員,シフト,dev)を収集（内訳パネル用・グリッドには出さない）。
         val weeklyLocs = ArrayList<List<Int>>()
+        val wd = scratch.wd
         for (i in 0 until p.S) {
-            val wd = Array(p.K) { IntArray(7) }
+            for (w in wd) w.fill(0)
             for (j in 0 until p.T) { val k = s[i][j]; if (k in 0 until p.K) wd[k][(p.dow0 + j) % 7]++ }
             for (k in 0 until p.K) {
                 val d = weeklyDevOfBucket(wd[k])
@@ -456,7 +458,7 @@ object UnifiedViolationChecker {
             "fair" to fairLocs.sortedByDescending { it[2] },
         )
 
-        val cov = coverage(p, s)
+        val cov = scratch.coverage(s, p)
         // [監査#4b] 被覆は per-cell OR/AND（VBA本家=Web HF574 と三面統一）。件数=Σセル寄与、
         //   着色=そのセルのU/Oが正のときのみ（「P2で救済されるP1不足は光らない」を自然に内包）。
         //   U>0とO>0は同一セルで両立しないため旧else-if遮蔽は不要。共有ヘルパで最適化器と同式。
@@ -504,34 +506,34 @@ object UnifiedViolationChecker {
         }
         val level = if (total == 0) "I" else "W"
         // [Set化] クラス列を重み降順に整列（安定ソート＝同重みはマーク順維持 → 先頭は violations[key] と常に一致）。
-        val cellFamilies = LinkedHashMap<String, List<String>>(cellFams.size)
         val violations = LinkedHashMap<String, String>(cellFams.size)
-        for ((ck, cv) in cellFams) {
+        for (e in cellFams.entries) {
+            val ck = e.key; val cv = e.value
             val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
-            cellFamilies[ck] = sorted
+            e.setValue(sorted)
             violations[ck] = sorted[0]   // [3.395.0] 最重1クラス＝整列済み先頭（旧 mark() と同値）
         }
-        val countFamilies = LinkedHashMap<String, List<String>>(countFams.size)
         val countViolations = LinkedHashMap<String, String>(countFams.size)
-        for ((ck, cv) in countFams) {
+        for (e in countFams.entries) {
+            val ck = e.key; val cv = e.value
             val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
-            countFamilies[ck] = sorted
+            e.setValue(sorted)
             countViolations[ck] = sorted[0]
         }
-        val needFamilies = LinkedHashMap<String, List<String>>(needFams.size)
         val needViolations = LinkedHashMap<String, String>(needFams.size)
-        for ((ck, cv) in needFams) {
+        for (e in needFams.entries) {
+            val ck = e.key; val cv = e.value
             val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
-            needFamilies[ck] = sorted
+            e.setValue(sorted)
             needViolations[ck] = sorted[0]
         }
         return ViolationReport(
             violations = violations,
             needViolations = needViolations,
             countViolations = countViolations,
-            cellFamilies = cellFamilies,
-            countFamilies = countFamilies,
-            needFamilies = needFamilies,
+            cellFamilies = cellFams,
+            countFamilies = countFams,
+            needFamilies = needFams,
             breakdown = breakdown,
             total = total,
             hard = hard,
@@ -775,7 +777,11 @@ fun Problem.fairDevOfBucket(g: Int, k: Int, count: (Int) -> Int): FairDevResult 
     var w = 0.0
     for (idx in 0 until n) w += scale[idx]
     if (w <= 0.0) return FairDevResult(0, emptyList())
-    val order = (0 until n).sortedBy { ach[it] }
+    // 達成率の昇順・同値は添字順（安定）。n は群の人数なので挿入整列で足りる。
+    val order = IntArray(n) { it }
+    for (x in 1 until n) { val v = order[x]; var y = x - 1
+        while (y >= 0 && ach[order[y]].compareTo(ach[v]) > 0) { order[y + 1] = order[y]; y-- }
+        order[y + 1] = v }
     var acc = 0.0; var tgt = ach[order[n - 1]]
     for (idx in order) { acc += scale[idx]; if (acc * 2 >= w) { tgt = ach[idx]; break } }
     var total = 0
@@ -837,6 +843,44 @@ private object ProblemCache {
         return np
     }
 }
+/** check() 内だけで使う作業配列（戻り値へ出ない）。1 スレッド 1 組を寸法が合う限り使い回す。 */
+private class CheckScratch {
+    var s: Array<IntArray> = emptyArray(); var counts: Array<IntArray> = emptyArray()
+    var cov: Array<IntArray> = emptyArray(); var wd: Array<IntArray> = emptyArray()
+    fun fit(p: Problem): CheckScratch {
+        if (s.size != p.S || s.firstOrNull()?.size != p.T) s = Array(p.S) { IntArray(p.T) }
+        if (counts.size != p.S || counts.firstOrNull()?.size != p.K) counts = Array(p.S) { IntArray(p.K) }
+        if (cov.size != p.T || cov.firstOrNull()?.size != p.K) cov = Array(p.T) { IntArray(p.K) }
+        if (wd.size != p.K) wd = Array(p.K) { IntArray(7) }
+        return this
+    }
+    /** `normalizeSchedule` と同じ値を [s] へ書く。 */
+    fun normalize(schedule: Array<IntArray>, p: Problem): Array<IntArray> {
+        for (i in 0 until p.S) { val src = schedule.getOrNull(i); val row = s[i]
+            for (j in 0 until p.T) { val k = src?.getOrNull(j) ?: -1; row[j] = if (k in 0 until p.K) k else -1 } }
+        return s
+    }
+    /** `countMatrix` と同じ値を [counts] へ書く。 */
+    fun countMatrix(sc: Array<IntArray>, p: Problem): Array<IntArray> {
+        for (r in counts) r.fill(0)
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sc[i][j]; if (k in 0 until p.K) counts[i][k]++ }
+        return counts
+    }
+    /** `coverage` と同じ値を [cov] へ書く。 */
+    fun coverage(sc: Array<IntArray>, p: Problem): Array<IntArray> {
+        for (r in cov) r.fill(0)
+        for (i in 0 until p.S) for (j in 0 until p.T) { val k = sc[i][j]; if (k in 0 until p.K) cov[j][k]++ }
+        return cov
+    }
+}
+private val checkScratch = ThreadLocal.withInitial { CheckScratch() }
+
+private const val PAIR_KEY_N = 64
+private val pairKeys: Array<String> = Array(PAIR_KEY_N * PAIR_KEY_N) { "${it / PAIR_KEY_N},${it % PAIR_KEY_N}" }
+/** 違反マップのキー "a,b"。業務上限（30 名・31 日）の範囲は作り置きを返す。 */
+internal fun pairKey(a: Int, b: Int): String =
+    if (a in 0 until PAIR_KEY_N && b in 0 until PAIR_KEY_N) pairKeys[a * PAIR_KEY_N + b] else "$a,$b"
+
 fun cachedProblem(state: MagiState, quantitativeRangeEval: Boolean = false): Problem = ProblemCache.get(state, quantitativeRangeEval)
 
 fun coverage(p: Problem, schedule: Array<IntArray>): Array<IntArray> {
