@@ -1047,6 +1047,9 @@ class V6SanityPortTest {
         assertEquals(3, demand.size)
         assertTrue(demand.first().problem, demand.first().problem.contains("担当できるのは1人"))
         assertEquals(1, demand.first().demandCap)
+        // 診断7: 不足は上限0が原因＝入れない指定が絡むと添える（G3）
+        val seven = V6SanityPort.buildGuidance(plain).single { it.where.contains("担当者不足") }
+        assertTrue(seven.problem, seven.problem.endsWith(V6SanityPort.ZERO_CAP_SHORTFALL_NOTE))
         // X の 1 日目の希望が A なら、その日は X も置かれる＝不足は 2 日ぶん
         val wished = st(mapOf("0,0" to 1))
         assertEquals(2, V6SanityPort.structuralHardFloor(wished))

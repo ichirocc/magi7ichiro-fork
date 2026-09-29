@@ -45,6 +45,7 @@ internal fun PreRunCheckSheet(
             t.floorHeader?.let { h ->
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(PRE_RUN_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                t.zeroCapNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 t.floorRows.forEach { PreRunRowView(it, onOpenCell) }
                 if (t.hasWishRows && onShowWishes != null) {
                     OutlinedButton(onClick = onShowWishes, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }

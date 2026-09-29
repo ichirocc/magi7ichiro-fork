@@ -709,7 +709,7 @@ internal fun noFixReasons(
         if (days.isNotEmpty() && pinned.size == days.size) { out += "「${sym(k)}」の ${days.size} 回はどれも本人の希望で固定されています。"; wish = true }
         else if (pinned.isNotEmpty()) { out += "「${sym(k)}」の ${days.size} 回のうち ${pinned.size} 回は本人の希望で固定されています。"; wish = true }
         val (_, hi, _) = limits?.invoke(i, k) ?: Triple(null, null, null)
-        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は個人の上限が 0 回（置かない設定）です。"
+        if (hi == 0 && days.isNotEmpty()) out += "「${sym(k)}」は個人の上限が 0 回（入れない指定）です。"
         val tight = days.filter { j -> needLimits?.invoke(k, j)?.let { headcount(k, j) <= it.first } == true }
         if (tight.isNotEmpty()) out += tight.joinToString("・") { DayText.short(ui.startDate, it) } + " は「${sym(k)}」がその日の必要人数ぎりぎりで、抜けると人員不足になります。"
         val fixedOthers = (0 until ui.shifts.coerceAtLeast(ui.shiftSymbols.size)).filter { k2 ->
@@ -765,12 +765,15 @@ internal data class PreRunSheetText(
     val hasWishRows: Boolean,
     val overCapNote: String? = null,
     val overCapRows: List<PreRunRow> = emptyList(),
+    val zeroCapNote: String? = null,
 )
 
 internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。"
 internal const val PRE_RUN_OVERCAP_HEAD = "設定上入れないシフトと希望（要調整）"
 internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、例外として後から「設定を緩めたら」で試せます。"
 internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、例外として上限を緩めてください。"
+internal const val PRE_RUN_ZERO_CAP_TAG = "（入れない指定が絡む）"
+internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れない指定が絡む」行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。例外として緩めると解ける場合があります。つくったあとに「設定を緩めたら」で試せます。"
 internal const val PRE_RUN_RERUN_NOTE = "手で置いた勤務が個人の上限（0回）と食い違っています。つくると外されます。"
 
 internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
@@ -792,12 +795,15 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
         }
         fun pin(core: List<com.magi.app.v6.ConstraintMus.Item>) = core.firstNotNullOfOrNull { it as? com.magi.app.v6.ConstraintMus.WishPin }
         for (d in s.dayProofs) pin(d.core).let { w ->
-            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません・証明つき）", w?.staff, w?.day, w != null))
+            val z = if (d.day in s.zeroCapProofDays) PRE_RUN_ZERO_CAP_TAG else ""
+            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません・証明つき）$z", w?.staff, w?.day, w != null))
         }
         for (c in s.staffProofs) pin(c.core).let { w ->
-            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません・証明つき）", w?.staff, w?.day, w != null))
+            val z = if (s.zeroCapStaffProof(c)) PRE_RUN_ZERO_CAP_TAG else ""
+            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません・証明つき）$z", w?.staff, w?.day, w != null))
         }
-        for (f in s.forcedShortfalls) add(PreRunRow("「${f.shiftSymbol}」 ${f.cells}日で担当できる人より必要人数が多く、人員不足が合計${f.amount}人残ります"))
+        for (f in s.forcedShortfalls) add(PreRunRow("「${f.shiftSymbol}」 ${f.cells}日で担当できる人より必要人数が多く、人員不足が合計${f.amount}人残ります" +
+            (if (f.shiftIndex in s.zeroCapShortShifts) PRE_RUN_ZERO_CAP_TAG else "")))
     }
     val rerun = s.rerunClears.map { PreRunRow("${name(it.staff)} ${day(it.day)} ${sym(it.shift)}", it.staff, it.day) }
     val wall = s.wallHint?.let { "個人の上限0：${it.pairs}組（${it.staffCount}人）。入れないシフトの指定です。つくったあとに、例外として緩める試算もできます。" }
@@ -812,6 +818,7 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
             val who = "${name(f.staff)}「${sym(f.shift)}」${if (s.wishOverCaps.size > 1) "など" else ""}"
             if (s.wishOverCaps.all { it.hi == 0 }) "$who：$PRE_RUN_OVERCAP_ZERO" else "$who：$PRE_RUN_OVERCAP_OTHER"
         },
+        zeroCapNote = PRE_RUN_ZERO_CAP_NOTE.takeIf { floor.any { it.text.endsWith(PRE_RUN_ZERO_CAP_TAG) } },
         overCapRows = s.wishOverCaps.map { PreRunRow("${name(it.staff)}「${sym(it.shift)}」 本人の希望${it.wished}件（個人の上限${it.hi}回）") },
     )
 }
