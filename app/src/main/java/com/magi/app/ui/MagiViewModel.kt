@@ -667,6 +667,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             //   （hard→weightedScore→total）に一本化。将来の順序変更でここだけ取り残される事故を防ぐ。
             val worse = betterReport(prevReport, r.report)
             if (worse) {
+                val nowScore = KeptResultText.Score(newHard, r.report.weightedScore, newTotal)
+                val prevScore = KeptResultText.Score(prevReport.hard.toLong(), prevReport.weightedScore, prevReport.total)
                 val kept = prev.copy2D()
                 currentSchedule = kept
                 resultSchedule = kept
@@ -677,9 +679,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 pushReport(state ?: st0, kept, prevReport, runLabel = "バックグラウンド最適化") { it.copy(
                     messageIsError = false,
                     running = false, hasResult = true, engineRan = true,
-                    message = "今回(必須$newHard/合計$newTotal)は前回(必須${prevReport.hard}/合計${prevReport.total})より改善せず。前回の結果を維持しました。",
+                    message = KeptResultText.screen(nowScore, prevScore),
                 ) }
-                logOp("I", "バックグラウンド: 今回 必須$newHard/合計$newTotal は前回 以下に改善せず → 前回を維持")
+                logOp("I", KeptResultText.log("バックグラウンド", nowScore, prevScore))
                 // 前景の維持分岐と同じ＝次回ヒントの族は維持した盤面から取る。
                 lastResultHard = prevReport.hard.toLong()
                 lastTopHardFamily = if (prevReport.hard > 0) topHardFamilyJp(prevReport.breakdown) else null
@@ -1625,7 +1627,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     resultSchedule = kept
                     state = st0.withSchedule(kept)
                     // [S5 §9] 維持の分岐は「前回の結果を維持します」だと希望が消えたことが伝わらない＝置き換える。
-                    val keptMsg = if (s5 == null) "今回(必須$newHard/合計$newTotal)は前回(必須$baseHard/合計$baseTotal)より改善しませんでした。前回の結果を維持します。"
+                    val nowScore = KeptResultText.Score(newHard, res.report.weightedScore, newTotal)
+                    val baseScore = KeptResultText.Score(baseHard, baseReport.weightedScore, baseTotal)
+                    val keptMsg = if (s5 == null) KeptResultText.screen(nowScore, baseScore)
                     else if (s5.h0 - baseReport.hard > 0) "希望（${s5.label}）を取り消しました。必須違反は ${s5.h0} → ${baseReport.hard}（取り消しの分だけ）。もう一度つくっても、それ以上は減りませんでした。元に戻すで希望と勤務表をまとめて戻せます。"
                     else "希望（${s5.label}）を取り消しましたが、もう一度つくっても必須違反は減りませんでした（必須 ${s5.h0}）。元に戻すで希望と勤務表をまとめて戻せます。"
                     pushReport(state ?: st0, kept, baseReport) { it.copy(
@@ -1636,7 +1640,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         message = keptMsg,
                         wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, baseReport.hard, keptMsg) },
                     ) }
-                    logOp("I", "再実行: 今回 必須$newHard/合計$newTotal は前回 必須$baseHard/合計$baseTotal 以下に改善せず → 前回を維持")
+                    logOp("I", KeptResultText.log("再実行", nowScore, baseScore))
                     lastResultHard = baseHard
                 } else {
                     // [3.324.0/外部レビュー] pushReport(=makeUi の唯一の経路)より**前**に保存する。
