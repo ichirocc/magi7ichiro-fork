@@ -26,7 +26,12 @@ object PreRunCheck {
         val wishOverCaps: List<WishOverCap>,
         val rerunClears: List<HandPlacedCell>,
         val wallHint: WallHint?,
+        /** 個人の上限0（入れない指定）を外すと成立する日の証明＝上限0が絡む（S6 で例外として緩めて確かめる）。 */
+        val zeroCapProofDays: Set<Int> = emptySet(),
+        /** 上限0を数えなければ不足が減るシフト。 */
+        val zeroCapShortShifts: Set<Int> = emptySet(),
     ) {
+        fun zeroCapStaffProof(c: ConstraintMus.StaffConflict) = c.core.any { it is ConstraintMus.RangeCap && it.hi == 0 }
         val floorCount: Int get() = wishConflicts.size + impossibleWishes.size + forcedShortfalls.size +
             dayProofs.size + staffProofs.size
         /** 利用者決定 2026-09-28: どちらかの節に 1 件でもあるときだけシートを出す。 */
@@ -36,16 +41,25 @@ object PreRunCheck {
     fun build(state: MagiState, schedule: Array<IntArray>): Summary {
         val p = cachedProblem(state)
         val s = normalizeSchedule(schedule, p)
+        val dayProofs = ConstraintMus.analyzeDayConflicts(p).filter { hasWish(it.core) }.sortedBy { it.day }
+        val strict = ConstraintMus.dayProofsWithoutZeroCap(p).toSet()
+        val forced = V6SanityPort.forcedCovU(state, p)
         return Summary(
             wishConflicts = V6SanityPort.wishSelfConflicts(p),
             impossibleWishes = V6SanityPort.detectImpossibleWishes(state, p),
-            forcedShortfalls = V6SanityPort.forcedCovU(state, p),
-            dayProofs = ConstraintMus.analyzeDayConflicts(p).filter { hasWish(it.core) }.sortedBy { it.day },
+            forcedShortfalls = forced,
+            dayProofs = dayProofs,
             staffProofs = ConstraintMus.analyzeStaffConflicts(p).filter { hasWish(it.core) }.sortedBy { it.staff },
             wishOverCaps = wishOverCaps(p),
             rerunClears = handPlacedCells(p, s),
             wallHint = wallHint(RelaxTrial.upperZeroWalls(state)),
+            zeroCapProofDays = dayProofs.map { it.day }.filter { it !in strict }.toSet(),
+            zeroCapShortShifts = forced.filter { f -> canDoShortfall(p, f.shiftIndex) < f.amount }.map { it.shiftIndex }.toSet(),
         )
+    }
+
+    private fun canDoShortfall(p: Problem, k: Int): Int = (0 until p.T).sumOf { j ->
+        maxOf(0, p.covUCell(k, j, (0 until p.S).count { i -> p.canDo(i, k) || (p.wishFixed(i, j) && p.wish[i][j] == k) }))
     }
 
     private fun hasWish(core: List<ConstraintMus.Item>) = core.any { it is ConstraintMus.WishPin }
