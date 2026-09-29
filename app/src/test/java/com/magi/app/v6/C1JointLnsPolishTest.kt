@@ -154,6 +154,42 @@ class C1JointLnsPolishTest {
         )
     }
 
+    /** 構造下限は、希望固定を守った全割当の総当たり最小と一致する（同じ希望の並びの職員は同じ値を足す）。 */
+    @Test
+    fun structuralLowerBoundMatchesBruteForceUnderWishes() {
+        val shifts = listOf(Shift("Y", "Y", "", ""), Shift("X", "X", "", ""))
+        val t = 10
+        val lockedY = setOf(1, 2, 3, 6)
+        val lockedX = setOf(8)
+        val wishes = HashMap<String, Int>()
+        for (i in 0..1) { for (j in lockedY) wishes["$i,$j"] = 0; for (j in lockedX) wishes["$i,$j"] = 1 }
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-10",
+            shifts = shifts, groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0), Staff("s1", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)),
+            groupShiftApt = List(1) { List(2) { "" } },
+            schedule = List(2) { List(t) { 0 } },
+            wishes = wishes,
+            staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "4", shiftKigou = "X", day2 = "2")),
+            cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        var best = Int.MAX_VALUE
+        for (bits in 0 until (1 shl t)) {
+            val x = BooleanArray(t) { (bits shr it) and 1 == 1 }
+            if (lockedY.any { x[it] } || lockedX.any { !x[it] }) continue
+            var viol = 0
+            for (start in 0..t - 4) if ((start until start + 4).count { x[it] } < 2) viol++
+            best = minOf(best, viol)
+        }
+        assertTrue(best > 0)
+        assertEquals(2 * best, C1JointLnsPolish.structuralC1LowerBound(Problem(st)))
+    }
+
     /**
      * [3.342.0] 停滞打ち切り（`patienceMs`）を入れても keep-best は壊れない。
      *

@@ -306,20 +306,31 @@ internal object C1JointLnsPolish {
         return betterReport(a, b)  // [3.287.0 keep-best統一] hard→weighted→total（MirrorCore.betterReport）
     }
 
+    // 下界は Problem だけで決まる（盤面に依らない）＝同じ Problem での再計算（適応 LNS の 2 本目）を省く。
+    @Volatile private var lowerBoundCache: Pair<Problem, Int>? = null
+
     /**
      * Optimistic C1 lower bound. Each staff/rule is minimized independently under wishes,
      * capability and that shift's monthly range. Summing independent minima is still a valid
      * lower bound for the combined C1 objective (it may be loose, never overstates feasibility).
      */
     internal fun structuralC1LowerBound(p: Problem): Int {
+        lowerBoundCache?.let { if (it.first === p) return it.second }
         var total = 0
+        // 同じ規則・同じ希望固定の並びの職員は同じ値＝1 回だけ解く。
+        val memo = HashMap<String, Int>()
         for (c in p.cons1) {
             if (c.day1 <= 0 || c.day1 > p.T || c.shiftIdx !in 0 until p.K) continue
             for (i in 0 until p.S) {
                 if (!p.canDo(i, c.shiftIdx)) continue
-                total += singleRuleLowerBound(p, i, c)
+                val key = buildString {
+                    append(c.day1).append(',').append(c.day2).append(',').append(c.shiftIdx).append(':')
+                    for (day in 0 until p.T) append(if (!p.wishLocked(i, day)) '.' else if (p.lockTo(i, day) == c.shiftIdx) '1' else '0')
+                }
+                total += memo.getOrPut(key) { singleRuleLowerBound(p, i, c) }
             }
         }
+        lowerBoundCache = p to total
         return total
     }
 
@@ -347,33 +358,33 @@ internal object C1JointLnsPolish {
         if (dpCells > MAX_EXACT_LOWER_BOUND_CELLS) return cheapSingleRuleLowerBound(p, staff, c)
         val maskKeep = maskLimit - 1
         val inf = 1_000_000
-        var dp = Array(hi + 1) { IntArray(maskLimit) { inf } }
-        dp[0][0] = 0
+        // 回数次元は hi=T で制約にならない（nc<=day+1<=T）＝回数ごとの最小を保つ必要がなく、mask だけで同じ最小値になる。
+        var dp = IntArray(maskLimit) { inf }
+        var next = IntArray(maskLimit)
+        dp[0] = 0
         for (day in 0 until p.T) {
-            val next = Array(hi + 1) { IntArray(maskLimit) { inf } }
+            java.util.Arrays.fill(next, inf)
             val wished = p.lockTo(staff, day)
             val locked = p.wishLocked(staff, day)
             val minBit = if (locked) (if (wished == c.shiftIdx) 1 else 0) else 0
             val maxBit = if (locked) minBit else 1
-            for (cnt in 0..minOf(day, hi)) for (mask in 0 until maskLimit) {
-                val base = dp[cnt][mask]
+            for (mask in 0 until maskLimit) {
+                val base = dp[mask]
                 if (base >= inf) continue
                 for (bit in minBit..maxBit) {
-                    val nc = cnt + bit
-                    if (nc > hi) continue
                     val windowPenalty = if (day + 1 >= d) {
                         val ones = Integer.bitCount(mask) + bit
                         if (ones < c.day2) 1 else 0
                     } else 0
                     val nm = if (suffixBits == 0) 0 else ((mask shl 1) or bit) and maskKeep
                     val v = base + windowPenalty
-                    if (v < next[nc][nm]) next[nc][nm] = v
+                    if (v < next[nm]) next[nm] = v
                 }
             }
-            dp = next
+            val t = dp; dp = next; next = t
         }
         var best = inf
-        for (cnt in 0..hi) for (mask in 0 until maskLimit) best = minOf(best, dp[cnt][mask])
+        for (mask in 0 until maskLimit) best = minOf(best, dp[mask])
         return if (best >= inf) 0 else best
     }
 
