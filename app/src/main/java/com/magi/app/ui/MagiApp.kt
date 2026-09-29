@@ -521,7 +521,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             Column {
                 // [3.481.0 勤務表タブ再設計②] 週送り/違反ナビを勤務表タブ表示中だけ下部バーへ常駐
                 //   （スクロール位置に関係なく親指で押せる。3.444.0 で保留した Scaffold 側への引き上げ）。
-                if (ui.loaded && tab == 1) ScheduleNavBar(ui, schedNav)
+                if (ui.loaded && tab == 1) ScheduleNavBar(ui, schedNav, hideVioNav = editingCell != null && tourActive)
                 if (ui.loaded) BottomCommandBar(ui, vm)
                 MagiBottomNav(tab) { tab = it }
             }

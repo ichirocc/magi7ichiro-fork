@@ -5,9 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -146,7 +146,7 @@ internal fun CellEditSheet(
     ) {
         if (!expanded) PeekBody(
             ui, cell, name, current, wish, mode, leftHand, onEvent, onPick, onMove, onDismiss, onToggleExpand, onShowRelax,
-            heading = tourHeading ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
+            heading = tourHeading?.let(::peekHeading) ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
             picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
             recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
@@ -332,9 +332,8 @@ internal fun CellEditSheet(
     }
 }
 
-/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③操作 1 行（希望を取り消す・緩める候補・上位 4 シフト・他 ▸）。
+/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を取り消す・緩める候補の行）＋シフトと他 ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
  *  緩める候補はこのセルだけを変えず、設定の緩和と手順をまとめて確定するダイアログを開く。 */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PeekBody(
     ui: UiState, cell: Pair<Int, Int>, name: String, current: Int, wish: Int?, mode: Int, leftHand: Boolean,
@@ -361,28 +360,39 @@ private fun PeekBody(
                 TextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
             }
         }
-        // 幅が足りないときは折り返す（横スクロールしない）。
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+        if (wish != null || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             if (wish != null) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                 modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を取り消す", color = cs.error, maxLines = 1) }
             if (recommend != null) FilledTonalButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(relaxPeekLabel(sym(recommend)), maxLines = 1)
             }
-            for (k in if (leftHand) picks.reversed() else picks) {
-                val sel = if (mode == 0) k == current else k == wish
-                SlotButton(
-                    ui, k, k in canDoSet, sel, enabled = mode == 1 || k in canDoSet,
-                    recommended = mode == 0 && k in marks.recommended, hardRisk = mode == 0 && k in marks.hardRisk,
-                    wishMark = mode == 0 && k == wish && wish != current, zeroCap = k in zeroCaps,
-                    modifier = Modifier.width(56.dp),
-                ) {
-                    if (mode == 0) { if (k != current) onPick(k) }
-                    else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
+        }
+        // シフトと「他 ▸」は 1 行に収める（入る数は peekPickCount）。
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val shownPicks = picks.take(peekPickCount(maxWidth.value.toInt()))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    for (k in if (leftHand) shownPicks.reversed() else shownPicks) {
+                        val sel = if (mode == 0) k == current else k == wish
+                        SlotButton(
+                            ui, k, k in canDoSet, sel, enabled = mode == 1 || k in canDoSet,
+                            recommended = mode == 0 && k in marks.recommended, hardRisk = mode == 0 && k in marks.hardRisk,
+                            wishMark = mode == 0 && k == wish && wish != current, zeroCap = k in zeroCaps,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            if (mode == 0) { if (k != current) onPick(k) }
+                            else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
+                        }
+                    }
+                    TextButton(onClick = onToggleExpand, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフト ▾" },
+                        contentPadding = PaddingValues(0.dp)) { Text("他 ▸", maxLines = 1) }
+                }
+                if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
+                    Text(PEEK_HARD_RISK_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
             }
-            TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフト ▾" }) { Text("他 ▸") }
         }
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(8.dp))
     }
 }
 

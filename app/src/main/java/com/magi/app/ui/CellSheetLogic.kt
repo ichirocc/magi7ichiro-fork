@@ -431,6 +431,14 @@ internal fun peekShifts(shown: List<Int>, canDo: Set<Int>, current: Int, wish: I
     (listOfNotNull(current.takeIf { it >= 0 }, wish?.takeIf { it >= 0 }) + shown.filter { it in canDo })
         .filter { it in shown }.distinct().take(n)
 
+/** ちら見の操作行に並べるシフトの数: 「他 ▸」(56dp) と同じ行に 52dp＋間 6dp で入るだけ（1〜4）。360dp 以上の端末は 4。 */
+internal fun peekPickCount(contentWidthDp: Int): Int = ((contentWidthDp - 56 + 6) / 58).coerceIn(1, 4)
+
+/** ちら見の見出し: 巡回の見出しから日付の範囲を落とす（日付は 2 段目にある）。 */
+internal fun peekHeading(tourHeading: String): String = tourHeading.substringBeforeLast(" ・ ")
+
+internal const val PEEK_HARD_RISK_NOTE = "⚠＝変えると必須違反"
+
 /** [S6] 既にある組の手順がこのセルを動かすなら、その行き先（新しく試算しない）。 */
 internal fun peekRecommendation(r: RelaxTrial.Result?, i: Int, j: Int): Int? =
     r?.moves?.firstOrNull { it.staff == i && it.day == j }?.to

@@ -515,10 +515,10 @@ internal fun rememberScheduleNavState(): ScheduleNavState {
  * 週も違反日も無いときは何も描かない（高さ0）。
  */
 @Composable
-internal fun ScheduleNavBar(ui: UiState, nav: ScheduleNavState) {
+internal fun ScheduleNavBar(ui: UiState, nav: ScheduleNavState, hideVioNav: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     val weeks = nav.weeks
-    val vioDays = nav.vioDays
+    val vioDays = if (hideVioNav) emptyList() else nav.vioDays
     if (weeks.size <= 1 && vioDays.isEmpty()) return
     val scope = rememberCoroutineScope()
     // derivedStateOf: hScroll.value を読むのはこの派生値の中だけ＝スクロールで再構成するのは週ラベルの読者のみ。
