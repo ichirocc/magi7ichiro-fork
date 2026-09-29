@@ -157,6 +157,6 @@ internal fun needBaseLabel(need1: String, need2: String, use2: Boolean): String 
     }
 }
 
-/** 上限人数（need2）の見出し。2パターン目を使わない月は効かないので、シフト編集（Ws1Editor）と同じ但し書きを付ける。 */
+/** 上限人数（need2）の見出し。use2 の切替は画面に無いので但し書きは付けない（[use2] は呼び出し側の互換で残す）。 */
 internal fun needUpperLabel(use2: Boolean, short: Boolean = false): String =
-    (if (short) "上限" else "上限人数") + (if (use2) "" else "(2パターン時)")
+    if (short) "上限" else "上限人数"

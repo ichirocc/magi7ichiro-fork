@@ -192,6 +192,8 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
 
     val note = if (computed) {
         "最適化後も残っている項目です。構造的に残ると判定されたものは上へ移しています。"
+    } else if (ui.relaxedBoard) {
+        "設定を緩めて手順を当てた盤面の概算です（もう一度つくる前）。"
     } else {
         "実行前の概算です。期間の制約・禁止の並びなどの構造的な要因により、最適化後も残る場合があります。"
     }

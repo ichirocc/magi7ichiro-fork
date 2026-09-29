@@ -57,6 +57,15 @@ class AnalysisTriageTest {
         assertTrue("断定しない注記が出る", t.searchNote.contains("最適化後も残る場合があります"))
     }
 
+    /** S6（設定を緩めて手順を当てる）の直後は「実行前」でなく、緩めた盤面の概算と言う。 */
+    @Test fun relaxedBoardSaysItIsTheRelaxedBoardNotBeforeRun() {
+        val t = analysisTriage(ui(breakdown = mapOf("c3" to 2)).copy(relaxedBoard = true))
+        assertFalse(t.computed)
+        assertEquals("設定を緩めて手順を当てた盤面の概算です（もう一度つくる前）。", t.searchNote)
+        val after = analysisTriage(ui(breakdown = mapOf("c3" to 2), hasResult = true).copy(relaxedBoard = true))
+        assertTrue("計算済みが優先", after.searchNote.startsWith("最適化後も残っている"))
+    }
+
     /**
      * **この版の肝**: 同じ c1=6 でも、C1頭打ち診断が却下を実際に観測していれば上段（構造的な壁）へ、
      * 観測が無ければ（`causeUnknown`）中段のまま。族名では決めない。
