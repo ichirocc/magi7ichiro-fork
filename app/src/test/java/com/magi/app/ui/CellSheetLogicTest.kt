@@ -177,6 +177,7 @@ class CellSheetLogicTest {
         assertEquals(listOf(0, 1), w.days)
         assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9", tourHeading(items, items.indexOf(a)))
         assertEquals(null, tourHeading(items, 9))
+        assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4", peekHeading(tourHeading(items, items.indexOf(a))!!))
         assertEquals("ほかに人員不足 2件（日ヘッダから）", tourCovULine(2))
         assertEquals(null, tourCovULine(0))
     }
@@ -323,5 +324,15 @@ class CellSheetLogicTest {
         assertEquals(2, peekRecommendation(r, 1, 4))
         assertEquals(null, peekRecommendation(r, 1, 5))
         assertEquals(null, peekRecommendation(null, 1, 4))
+    }
+
+    @Test
+    fun peekPickCountFitsFourAtPhoneWidths() {
+        assertEquals(4, peekPickCount(360 - 32))
+        assertEquals(4, peekPickCount(390 - 32))
+        assertEquals(4, peekPickCount(282))
+        assertEquals(3, peekPickCount(281))
+        assertEquals(1, peekPickCount(40))
+        assertEquals(4, peekPickCount(800))
     }
 }
