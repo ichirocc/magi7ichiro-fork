@@ -402,14 +402,15 @@ internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: Str
 }
 
 /** [S6] セルシートから設定の緩和へ渡す状態。OFFER＝ホームで見つかった組の起点の窓か手順のセル（同じ結果を同じ確定で開く。セルごとに試算はしない）、
- *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い。 */
-internal enum class RelaxHandoff { NONE, SEARCHING, OFFER, NO_WALL }
+ *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い、STOPPED＝途中で止めた（やり直しを出す）。 */
+internal enum class RelaxHandoff { NONE, SEARCHING, OFFER, NO_WALL, STOPPED }
 
-internal fun relaxHandoff(r: RelaxTrial.Result?, searching: Boolean, noWall: Boolean, i: Int, j: Int): RelaxHandoff = when {
+internal fun relaxHandoff(r: RelaxTrial.Result?, searching: Boolean, noWall: Boolean, i: Int, j: Int, stopped: Boolean = false): RelaxHandoff = when {
     r != null && ((r.staff == i && j in r.window) || r.moves.any { it.staff == i && it.day == j }) -> RelaxHandoff.OFFER
     r != null -> RelaxHandoff.NONE
     searching -> RelaxHandoff.SEARCHING
     noWall -> RelaxHandoff.NO_WALL
+    stopped -> RelaxHandoff.STOPPED
     else -> RelaxHandoff.NONE
 }
 

@@ -1918,6 +1918,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var relaxCtx: RelaxCtx? = null
     private var relaxResult: RelaxTrial.Outcome? = null
     private var relaxDone: Pair<RelaxCtx, String>? = null
+    private var relaxStoppedCtx: RelaxCtx? = null
 
     private fun relaxCtxNow(): RelaxCtx? {
         val st = state ?: return null
@@ -1934,7 +1935,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (relaxCtx == ctx && (relaxResult != null || relaxJob?.isActive == true)) return
         relaxJob?.cancel()
         val seq = ++relaxSeq
-        relaxCtx = ctx; relaxResult = null
+        relaxCtx = ctx; relaxResult = null; relaxStoppedCtx = null
         val board = b.copy2D()
         _ui.update { it.copy(relaxSearching = true) }
         relaxJob = viewModelScope.launch {
@@ -1955,6 +1956,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 試算を止める（結果は出さない）。利用者の「やめる」と盤面ジョブの入口から呼ぶ。 */
     fun cancelRelaxTrial() {
+        if (relaxJob?.isActive == true) relaxStoppedCtx = relaxCtx
         relaxJob?.cancel()
         ++relaxSeq
         if (_ui.value.relaxSearching) _ui.update { it.copy(relaxSearching = false) }
@@ -1969,6 +1971,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** いまのデータで探し終えて組が無かった（NoWall・試算不可）。走っている・未着手・古いなら false。 */
     internal fun relaxNoWall(): Boolean = relaxCtx != null && relaxCtx == relaxCtxNow() && relaxResult != null && relaxResult !is RelaxTrial.Result
+
+    /** いまのデータで試算を途中で止めた（結果なし）。「もう一度試す」を出す。 */
+    internal fun relaxStopped(): Boolean = relaxStoppedCtx != null && relaxStoppedCtx == relaxCtxNow() && relaxResult == null
+
+    /** 止めた試算を利用者の操作でやり直す。 */
+    fun retryRelaxTrial() = startRelaxTrial()
 
     /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
     internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second

@@ -83,7 +83,9 @@ internal fun CellEditSheet(
     leftHand: Boolean = false,
     relax: RelaxToken? = null,          // [S6] ホームで見つかった組（このセルが窓か手順に入るときだけ渡す）
     relaxNoWall: Boolean = false,       // [S6] 探し終えて組が無い
+    relaxStopped: Boolean = false,      // [S6] 試算を途中で止めた
     onShowRelax: () -> Unit = {},
+    onRetryRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
     onMode: (Int) -> Unit = {},
     expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「すべてのシフト ▾」のタップだけ
@@ -118,7 +120,7 @@ internal fun CellEditSheet(
     }
     val dilemma = isWishDilemma(wish, current, status.severity)
     var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える
-    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j)
+    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j, relaxStopped)
     var marks by remember(cell) { mutableStateOf(ShiftMarks()) }
     LaunchedEffect(cell, rev) {
         marks = ShiftMarks()
@@ -143,7 +145,7 @@ internal fun CellEditSheet(
         tonalElevation = 2.dp,
     ) {
         if (!expanded) PeekBody(
-            ui, cell, name, current, wish, mode, leftHand, onEvent, onPick, onMove, onDismiss, onToggleExpand,
+            ui, cell, name, current, wish, mode, leftHand, onEvent, onPick, onMove, onDismiss, onToggleExpand, onShowRelax,
             heading = tourHeading ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
             picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
             recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
@@ -212,7 +214,12 @@ internal fun CellEditSheet(
                         OutlinedButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("緩める候補を見る") }
                     }
                     RelaxHandoff.SEARCHING -> Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                    else -> {}
+                    RelaxHandoff.NO_WALL -> Text(RELAX_NO_WALL_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    RelaxHandoff.STOPPED -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL) }
+                    }
+                    RelaxHandoff.NONE -> {}
                 }
                 var details by remember(cell) { mutableStateOf(false) }
                 TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -325,13 +332,14 @@ internal fun CellEditSheet(
     }
 }
 
-/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③操作 1 行（希望を取り消す・推奨・上位 4 シフト・他 ▸）。 */
+/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③操作 1 行（希望を取り消す・緩める候補・上位 4 シフト・他 ▸）。
+ *  緩める候補はこのセルだけを変えず、設定の緩和と手順をまとめて確定するダイアログを開く。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PeekBody(
     ui: UiState, cell: Pair<Int, Int>, name: String, current: Int, wish: Int?, mode: Int, leftHand: Boolean,
     onEvent: (MagiEvent) -> Unit, onPick: (Int) -> Unit, onMove: (Pair<Int, Int>) -> Unit, onDismiss: () -> Unit, onToggleExpand: () -> Unit,
-    heading: String, severity: CellSeverity, tourPrev: Pair<Int, Int>?, tourNext: Pair<Int, Int>?,
+    onShowRelax: () -> Unit, heading: String, severity: CellSeverity, tourPrev: Pair<Int, Int>?, tourNext: Pair<Int, Int>?,
     picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
 ) {
     val (i, j) = cell
@@ -357,8 +365,8 @@ private fun PeekBody(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
             if (wish != null) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                 modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を取り消す", color = cs.error, maxLines = 1) }
-            if (recommend != null) FilledTonalButton(onClick = { onPick(recommend) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text("推奨: ${sym(recommend)} に変更", maxLines = 1)
+            if (recommend != null) FilledTonalButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(relaxPeekLabel(sym(recommend)), maxLines = 1)
             }
             for (k in if (leftHand) picks.reversed() else picks) {
                 val sel = if (mode == 0) k == current else k == wish

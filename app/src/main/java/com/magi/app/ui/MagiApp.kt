@@ -228,6 +228,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおすのを手伝って」対話
     var relaxDialog by remember { mutableStateOf(false) }            // [S6] 設定を緩める候補
+    var relaxFrom by remember { mutableStateOf<Pair<Int, Int>?>(null) } // [S6] セルから開いたとき、確定後に選び直すセル
     var wishConflicts by remember { mutableStateOf(false) }          // [思考誘導S3] ぶつかっている希望の一覧
 
     // [Root] 画面から上がってきた操作の入口。可否は MagiArbiter が決め、通ったものだけが鎖へ流れる。
@@ -591,8 +592,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowList = { tab = 3 },
                         outcomeLine = vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
                         relax = vm.relaxTrialFor(),
-                        onShowRelax = { relaxDialog = true },
+                        onShowRelax = { relaxFrom = null; relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
+                        relaxStopped = vm.relaxStopped(),
+                        onRetryRelax = { vm.retryRelaxTrial() },
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
@@ -875,7 +878,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     leftHand = leftHand,
                     relax = vm.relaxTrialFor(),
                     relaxNoWall = vm.relaxNoWall(),
-                    onShowRelax = { relaxDialog = true },
+                    relaxStopped = vm.relaxStopped(),
+                    onShowRelax = { relaxFrom = cell; relaxDialog = true },
+                    onRetryRelax = { vm.retryRelaxTrial() },
                     mode = sheetMode,
                     onMode = { sheetMode = it },
                     expanded = sheetExpanded,
@@ -888,8 +893,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { tab = 2 })
         }
         if (relaxDialog) {
-            RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false }, onConfirm = { token ->
+            RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false; relaxFrom = null }, onConfirm = { token ->
                 relaxDialog = false; vm.relaxAndApply(token)
+                relaxFrom?.let { c -> tab = 1; editingCell = c; sheetMode = 0; sheetExpanded = false }
+                relaxFrom = null
             })
         }
         ui.preRunCheck?.let { sum ->
@@ -907,7 +914,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 wishConflicts = false; vm.cancelWishAndRebuild(token)
             }, onRebuild = {
                 wishConflicts = false; onEvent(MagiEvent.Run.Optimize)
-            }, relaxFound = vm.relaxTrialFor() != null, onShowRelax = { wishConflicts = false; relaxDialog = true })
+            }, relaxFound = vm.relaxTrialFor() != null, onShowRelax = { wishConflicts = false; relaxFrom = null; relaxDialog = true })
         }
         pendingCsvImport?.let { csvText ->
             AlertDialog(

@@ -411,6 +411,8 @@ internal fun OperatorNextActionCard(
     relax: RelaxToken? = null,      // [S6] いまのデータで見つかった設定の壁の組（VM が鮮度を照合済み。null＝無い）
     onShowRelax: () -> Unit = {},
     onStopRelax: () -> Unit = {},
+    relaxStopped: Boolean = false,
+    onRetryRelax: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -501,6 +503,11 @@ internal fun OperatorNextActionCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
                     TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
+                }
+            } else if (!ui.running && relaxStopped && ui.bestHard > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL, color = plan.fg) }
                 }
             }
             // [3.480.0 ホームAIリデザイン] 旧: 「できあがり度：N%」の数字1行＋その意味を説明する注記1行を
