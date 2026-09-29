@@ -238,6 +238,10 @@ class CellSheetLogicTest {
         assertEquals(RelaxHandoff.SEARCHING, relaxHandoff(null, true, false, i, 7))
         assertEquals(RelaxHandoff.NO_WALL, relaxHandoff(null, false, true, i, 7))
         assertEquals(RelaxHandoff.NONE, relaxHandoff(null, false, false, i, 7))
+        assertEquals(RelaxHandoff.STOPPED, relaxHandoff(null, false, false, i, 7, stopped = true))
+        assertEquals(RelaxHandoff.SEARCHING, relaxHandoff(null, true, false, i, 7, stopped = true))
+        assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, i, 7, stopped = true))
+        assertEquals("例外として緩める候補: A", relaxPeekLabel("A"))
         val ui = UiState(staffNames = st.staff.map { it.name }, shiftSymbols = st.shifts.map { it.kigou }, violationCellFamilies = rep.cellFamilies)
         assertEquals("設定を緩めると、この禁止の並びを解消できる見込みです（上限 2件）", relaxHandoffLine(r, ui))
     }
