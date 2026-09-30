@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.magi.app.v6.PreRunCheck
 import com.magi.app.v6.betterReport
 import com.magi.app.v6.csvAmbiguousText
+import com.magi.app.v6.CsvPartialImport
+import com.magi.app.v6.ScheduleRunResult
 import com.magi.app.v6.Problem
 import com.magi.app.v6.ScheduleCsvBridge
 import com.magi.app.v6.UnifiedViolationChecker
@@ -136,6 +138,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var activeRunSerial = 0
 
     private fun beginBoardJob(phase: MagiPhase, engineRun: Boolean = false): Int {
+        dropCsvPartial()    // 確認待ちの部分取込は、盤面を動かすジョブが始まった時点で古い
         cancelWishTrial()   // [S5 §8] 盤面を差し替えるジョブの前に試算の CPU を返す
         cancelRelaxTrial()  // [S6 §8] 同じ
         cancelFixSearch()   // 直し方の探索も同じ（走らせたままだと差し替え前の盤面の提案が完了後に残る）
@@ -876,6 +879,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun pushUndo(label: String? = null, invalidate: Boolean = true, colorKey: String? = null) {
+        if (invalidate) dropCsvPartial()
         val snap = snapNow(label, colorKey) ?: return
         undoStack.addLast(snap)
         while (undoStack.size > 30) undoStack.removeFirst()
@@ -901,6 +905,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (job?.isActive == true || optimizeInFlight()) return   // [3.328.0] 背景の最適化中も抑止（job は前景のみ）
         val snap = undoStack.removeLastOrNull() ?: return
         if (restoreDisplayOnly(snap, toRedo = true)) return
+        dropCsvPartial()
         snapNow(snap.label)?.let { redoStack.addLast(it) }   // [Web反映] 現在をやり直し用に退避（同じ操作名を引き継ぐ）
         state = snap.st
         val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
@@ -929,6 +934,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (job?.isActive == true || optimizeInFlight()) return   // [3.328.0] 背景の最適化中も抑止（job は前景のみ）
         val snap = redoStack.removeLastOrNull() ?: return
         if (restoreDisplayOnly(snap, toRedo = false)) return
+        dropCsvPartial()
         snapNow(snap.label)?.let { undoStack.addLast(it) }
         state = snap.st
         val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
@@ -3066,29 +3072,75 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (runBlockedByInFlight("CSV取込")) return
         val st = state ?: return
         val sched = currentSchedule ?: return
+        runCsvImport(st, sched, partial = false) { parseCsvOrAsk(st, sched, rawText) }
+    }
+
+    /** 「この部分だけ取り込む」。指紋が作成時と同じときだけ、通常の取込と同じ適用（[runCsvImport]）へ渡す。 */
+    fun confirmCsvPartialImport() {
+        val pending = csvPartialPending ?: run { dropCsvPartial(); return }
+        dropCsvPartial()
+        if (runBlockedByInFlight("CSV取込")) return
+        val st = state; val sched = currentSchedule
+        val resolution = if (st != null && sched != null) CsvPartialImport.resolve(pending, stateKey(st), boardKey(sched))
+            else CsvPartialImport.Resolution.Stale
+        if (resolution is CsvPartialImport.Resolution.Apply && st != null && sched != null)
+            runCsvImport(st, sched, partial = true) { resolution.pending.ask.result }
+        else notify(CsvPartialImport.STALE, "W")
+    }
+
+    fun cancelCsvPartialImport() {
+        val had = csvPartialPending != null
+        dropCsvPartial()
+        if (had) notify(CsvPartialImport.CANCELLED)
+    }
+
+    private fun dropCsvPartial() {
+        csvPartialPending = null
+        if (_ui.value.csvPartialPrompt != null) _ui.update { it.copy(csvPartialPrompt = null) }
+    }
+
+    /** 確認待ちの部分取込。ui.csvPartialPrompt と同時に立て外す（[dropCsvPartial]）。保存しない＝プロセスが死ねば消える。 */
+    private var csvPartialPending: CsvPartialImport.Pending? = null
+
+    /** 適用してよい結果を返す。引用符が閉じていないときは確認待ち／断りを画面に出して null。 */
+    private suspend fun parseCsvOrAsk(st: MagiState, sched: Array<IntArray>, rawText: String): ScheduleRunResult? {
         val text = MojibakeRepair.repair(rawText)
+        // [3.282.0] JSON 側(loadAsync)と同じ是正: BOM 除去だけの健全な CSV で誤警告しない。
+        if (MojibakeRepair.wasDecoded(rawText, text)) logOp("W", "文字化け（二重エンコード）を自動修復してCSVを取り込みました。元のファイル自体は修復されません")
+        when (val v = withContext(Dispatchers.Default) { CsvPartialImport.judge(text, st, sched) }) {
+            is CsvPartialImport.Verdict.Ask -> {
+                csvPartialPending = CsvPartialImport.Pending(v, stateKey(st), boardKey(sched))
+                _ui.update { it.copy(running = false, messageIsError = false, message = null, csvPartialPrompt = v.prompt) }
+                logOp("I", "CSV取込 確認待ち: 引用符が閉じていません（${v.endLine}行目まで ${v.matched}名分が読めました）")
+                return null
+            }
+            CsvPartialImport.Verdict.NothingReadable -> {
+                _ui.update { it.copy(messageIsError = true, running = false, message = "CSV取込失敗: ${CsvPartialImport.NOTHING_READABLE}") }
+                logOp("W", "CSV取込 失敗: 引用符が閉じていて読めた職員の行がないため取込を中止しました")
+                return null
+            }
+            CsvPartialImport.Verdict.WellFormed -> Unit
+        }
+        return withContext(Dispatchers.Default) { ScheduleCsvBridge.parse(text, st, sched) }
+    }
+
+    /** 取込の適用本体。[produce] が null なら適用しない。[partial]＝確認済みの部分取込（結果メッセージに注意を残す）。 */
+    private fun runCsvImport(st: MagiState, sched: Array<IntArray>, partial: Boolean, produce: suspend () -> ScheduleRunResult?) {
         _ui.update { it.copy(messageIsError = false, running = true, message = "CSV取込中…") }
         val boardToken = beginBoardJob(MagiPhase.Importing)
         var pushedUndo = false
         var ui0 = _ui.value; var result0 = resultSchedule
         job = viewModelScope.launch {
             try {
-                // [3.282.0] JSON 側(loadAsync)と同じ是正: BOM 除去だけの健全な CSV で誤警告しない。
-                if (MojibakeRepair.wasDecoded(rawText, text)) logOp("W", "文字化け（二重エンコード）を自動修復してCSVを取り込みました。元のファイル自体は修復されません")
-                val res = withContext(Dispatchers.Default) { ScheduleCsvBridge.parse(text, st, sched) }
+                val res = produce() ?: return@launch
                 // 取込失敗の明示: 氏名が1件も一致しなければ適用せず、オペレーターに原因を表示する。
                 if (res.matched == 0) {
-                    // [3.475.0/論理監査] 未閉引用符で残りの行が1セルに吸い込まれたときも matched=0 になるが、
-                    //   旧: quoteWarn は成功経路でしか組み立てず、ここでは「氏名不一致」とだけ案内していた。
-                    val why = if (res.unclosedQuote)
-                        "CSV取込失敗: 引用符（\"）が閉じていない行があり、そこから後ろが1つのセルに吸い込まれています。書式を直してから取り込んでください。"
-                    else if (res.ambiguousNames.isNotEmpty())
+                    val why = if (res.ambiguousNames.isNotEmpty())
                         "CSV取込失敗: ${csvAmbiguousText(res.ambiguousNames)}"
                     else
                         "CSV取込失敗: 一致する職員名がありませんでした（0名）。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。"
                     _ui.update { it.copy(messageIsError = true, running = false, message = why) }
-                    logOp("W", if (res.unclosedQuote) "CSV取込 失敗: 引用符が閉じていないため取込を中止しました"
-                        else "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
+                    logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
                     return@launch
                 }
                 ui0 = _ui.value; result0 = resultSchedule
@@ -3103,8 +3155,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   誤字や凡例漏れが「休のまま」「元のまま」として静かに混入した。件数と記号を必ず出す。
                 // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える＝「氏名不一致でスキップ」と
                 //   区別が付かず部分的な成功に見える。必ず名指しする。
-                val quoteWarn = if (res.unclosedQuote)
-                    "｜⚠ 引用符（\"）が閉じていません。ここから後ろの行は読めていません" else ""
+                val quoteWarn = if (partial) CsvPartialImport.APPLIED_WARNING else ""
                 val unk = if (res.unknownCells > 0)
                     "｜読めない記号 ${res.unknownCells}セル(${res.unknownSymbols.joinToString("・")})は取り込めませんでした"
                 else ""
@@ -3118,7 +3169,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 else
                     "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn"
                 pushReport(state ?: st, res.schedule, res.report) { it.copy(
-                    messageIsError = res.unknownCells > 0 || res.unclosedQuote || res.headerDateMismatches > 0 || dupWarn.isNotEmpty(),
+                    messageIsError = res.unknownCells > 0 || partial || res.headerDateMismatches > 0 || dupWarn.isNotEmpty(),
                     running = false,
                     hasResult = true,
                     relaxedBoard = false, engineRan = false,   // [3.475.0] CSV取込は手操作扱い
@@ -3127,6 +3178,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (res.matched in 1 until total) {
                     logOp("W", "CSV取込 一部のみ反映: ${res.matched}/${total}名一致（${total - res.matched}名は氏名不一致）")
                 }
+                if (partial) logOp("W", "CSV取込 引用符が閉じていないため、読めた部分だけを取り込みました")
                 if (res.unknownCells > 0) {
                     logOp("W", "CSV取込 読めない記号 ${res.unknownCells}セル: ${res.unknownSymbols.joinToString("・")}（シフト一覧に無い記号）")
                 }

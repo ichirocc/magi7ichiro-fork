@@ -511,18 +511,32 @@ internal fun firstWinsMap(n: Int, key: (Int) -> String): Map<String, Int> {
  * 走査器を2つ作ると必ずドリフトするので、既存のループから両方を返す形にして
  * [parseCsvRows] はその行だけを取り出す薄い委譲にする（既存の呼出は無変更）。
  */
-private class CsvParse(val rows: List<List<String>>, val unclosedQuote: Boolean)
+internal class CsvParse(
+    val rows: List<List<String>>,
+    val unclosedQuote: Boolean,
+    /** 引用符の外の改行で終わった行の数（吸い込まれた行は含めない。閉じていれば全行）。 */
+    val readableRows: Int,
+    /** その最後の行の最終物理行（1 始まり。引用符の中の改行も数える）。読めた行が無ければ 0。 */
+    val readableEndLine: Int,
+    /** 読めた部分の終わりの位置（[parseCsvFull] に渡した文字列の添字。BOM を含めて数える）。 */
+    val readableEndOffset: Int,
+)
 
 private fun parseCsvRows(raw: String): List<List<String>> = parseCsvFull(raw).rows
 
-private fun parseCsvFull(raw: String): CsvParse {
+internal fun parseCsvFull(raw: String): CsvParse {
     // UTF-8 BOM(U+FEFF) 除去: 付いていると先頭セルが "\uFEFFユニット" 等になり、trim()でも消えず
     //   ヘッダ判定(== "ユニット" 等)が失敗して取り込めなくなる。Excel/UTF-8出力由来で頻出。
-    val text = if (raw.isNotEmpty() && raw[0] == '\uFEFF') raw.substring(1) else raw
+    val bomLen = if (raw.isNotEmpty() && raw[0] == '\uFEFF') 1 else 0
+    val text = raw.substring(bomLen)
     val rows = ArrayList<List<String>>()
     val row = ArrayList<String>()
     val cell = StringBuilder()
     var inQuote = false
+    var line = 1
+    var readableRows = 0
+    var readableEndLine = 0
+    var readableEnd = bomLen
     var i = 0
     while (i < text.length) {
         val c = text[i]
@@ -540,16 +554,21 @@ private fun parseCsvFull(raw: String): CsvParse {
             cell.setLength(0)
             rows.add(ArrayList(row))
             row.clear()
+            readableRows = rows.size; readableEndLine = line; readableEnd = bomLen + i + 1
+            line++
         } else {
             cell.append(c)
+            if (c == '\n' || (c == '\r' && !(i + 1 < text.length && text[i + 1] == '\n'))) line++
         }
         i++
     }
     if (cell.isNotEmpty() || row.isNotEmpty()) {
         row.add(cell.toString())
         rows.add(ArrayList(row))
+        if (!inQuote) { readableRows = rows.size; readableEndLine = line }
     }
-    return CsvParse(rows, inQuote)
+    if (!inQuote) readableEnd = bomLen + text.length
+    return CsvParse(rows, inQuote, readableRows, readableEndLine, readableEnd)
 }
 
 /**

@@ -102,6 +102,7 @@ MagiRoot（唯一の合成ルート）
 | `V6SanityPort` / `V6FinalPort` / `V6PortAnalyzer` | Engine-Facade | 事前診断・UI 向けファサード・分析層 |
 | `ShiftAppearance` | UI-Support | シフト記号→表示色 と 違反キー→重大度 の唯一の解決元（3.393.0 に `V6WebCompat` から切り出し） |
 | `ScheduleCsvBridge` | IO-CSV | 勤務表 / 希望 CSV ↔ `MagiState`（文字コード自動判定） |
+| `CsvPartialImport` | IO-CSV | 引用符が閉じていない勤務表CSVを、読めた部分だけ取り込むかの判断（読めた範囲・行番号・確認待ちの鮮度。純粋＝ホストでテストできる） |
 
 ### 背景実行（work）
 | Entity | type | 役割 |

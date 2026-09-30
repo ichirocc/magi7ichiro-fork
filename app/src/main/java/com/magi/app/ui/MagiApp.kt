@@ -950,6 +950,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 dismissButton = { DialogDismissButton(onClick = { pendingCsvImport = null }) },
             )
         }
+        ui.csvPartialPrompt?.let { prompt ->
+            AlertDialog(
+                onDismissRequest = { vm.cancelCsvPartialImport() },
+                title = { Text("引用符が閉じていないCSV") },
+                text = { Text(prompt) },
+                confirmButton = { DialogConfirmButton(com.magi.app.v6.CsvPartialImport.CONFIRM_LABEL, onClick = { vm.confirmCsvPartialImport() }) },
+                dismissButton = { DialogDismissButton(onClick = { vm.cancelCsvPartialImport() }, text = com.magi.app.v6.CsvPartialImport.CANCEL_LABEL) },
+            )
+        }
         rosterCsvChoice?.let { csvText ->
             AlertDialog(
                 onDismissRequest = { rosterCsvChoice = null },
