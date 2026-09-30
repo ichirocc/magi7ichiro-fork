@@ -3029,7 +3029,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             }
             CsvPartialImport.Verdict.NothingReadable -> {
                 _ui.update { it.copy(messageIsError = true, running = false, message = "CSV取込失敗: ${CsvPartialImport.NOTHING_READABLE}") }
-                logOp("W", "CSV取込 失敗: 引用符が閉じていて読めた職員の行がないため取込を中止しました")
+                logOp("W", "CSV取込 失敗: 引用符が閉じていなくて読めた職員の行がないため取込を中止しました")
                 return null
             }
             CsvPartialImport.Verdict.WellFormed -> Unit

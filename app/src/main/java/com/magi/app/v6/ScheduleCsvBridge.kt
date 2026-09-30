@@ -376,7 +376,8 @@ object ScheduleCsvBridge {
 
     fun parse(text: String, state: MagiState, base: Array<IntArray>): ScheduleRunResult {
         // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える。ここは非nullを返す経路なので
-        //   断れない代わりに旗を立て、呼出側が「一致が少ない」と「消えた」を区別できるようにする。
+        //   非nullを返す経路なので旗（unclosedQuote）を立てて返し、呼出側（CsvPartialImport.judge）が
+        //   「読めた範囲だけ取り込むか」の確認か断りかを決める。
         val parsedAll = parseCsvFull(text)
         val rows = parsedAll.rows
         val p = Problem(state)
@@ -822,6 +823,17 @@ object WishesCsvIO {
 }
 
 /** 各制約: 種別タグ付き行（種別,a,b,c,d,e）。取込時は制約一式＋個人レンジを置換。氏名/群/シフトは記号・氏名で照合。 */
+/**
+ * [2026-09-30/外部レビュー B1・B2] 下限/上限セルは空欄か 0 以上の整数、両方あれば下限≤上限。Problem は数値でない側を 0／無制限へ
+ * 読み替えて行を残すので、ここで通すと「意図と違う制約で既存の制約一式を置換」になる（個人レンジは 3.509.3）。
+ */
+internal fun rangeCellsOk(lo: String, hi: String): Boolean {
+    val l = lo.trim(); val h = hi.trim()
+    val ln = l.toIntOrNull(); val hn = h.toIntOrNull()
+    return (l.isEmpty() || (ln != null && ln >= 0)) && (h.isEmpty() || (hn != null && hn >= 0)) &&
+        (ln == null || hn == null || ln <= hn)
+}
+
 object ConstraintsCsvIO {
     fun build(state: MagiState): String {
         val sb = StringBuilder()
@@ -876,10 +888,14 @@ object ConstraintsCsvIO {
         val body = csvBody(rows, "種別")
         var bad = 0
         val samples = ArrayList<String>()
-        fun reject(r: List<String>) {
+        fun reject(r: List<String>, sample: String = rowSample(r)) {
             bad++
             // [3.474.0] 収集時に止める（WishesCsvIO.parse と同じ理由）。
-            if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(rowSample(r))
+            if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(sample)
+        }
+        fun rangeRow(r: List<String>, family: String, into: MutableList<C41Row>) {
+            if (rangeCellsOk(c(r, 3), c(r, 4))) { into.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
+            else reject(r, "${family}「${c(r, 1)} の ${c(r, 2)}（${c(r, 3)}〜${c(r, 4)}）」".take(60))
         }
         for (r in body) {
             if (r.all { it.isBlank() }) continue   // 書式上の空行は無視
@@ -890,8 +906,8 @@ object ConstraintsCsvIO {
                 "禁止連続" -> { val p = pat(r); if (p.isNotEmpty() && !patHasGap(r)) { cons3n.add(C3Row(p)); n++ } else reject(r) }
                 "希望連続" -> { val p = pat(r); if (p.isNotEmpty() && !patHasGap(r)) { cons3m.add(C3Row(p)); n++ } else reject(r) }
                 "回避連続" -> { val p = pat(r); if (p.isNotEmpty() && !patHasGap(r)) { cons3mn.add(C3Row(p)); n++ } else reject(r) }
-                "群回数" -> { cons41.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
-                "スキル群回数" -> { cons41s.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
+                "群回数" -> rangeRow(r, "グループのレンジ", cons41)
+                "スキル群回数" -> rangeRow(r, "スキルグループのレンジ", cons41s)
                 "群組合せ禁止" -> { cons42.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "スキル群組合せ禁止" -> { cons42s.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "希望前日禁止" -> { cons3w.add(C3wRow(c(r, 1), c(r, 2))); n++ }
@@ -903,11 +919,7 @@ object ConstraintsCsvIO {
                     //   捨てたまま置換すると、その職員の個人レンジが**消える**。
                     // [3.509.3] 下限/上限は空欄か 0 以上の整数、両方あれば下限≤上限。Problem は負数・非数値を未設定として
                     //   捨てるので、ここで受理すると「評価されない行で置換」になる（3.333.0 と同じ穴）。
-                    val loV = c(r, 3); val hiV = c(r, 4)
-                    val loN = loV.toIntOrNull(); val hiN = hiV.toIntOrNull()
-                    val numOk = (loV.isEmpty() || (loN != null && loN >= 0)) && (hiV.isEmpty() || (hiN != null && hiN >= 0)) &&
-                        (loN == null || hiN == null || loN <= hiN)
-                    if (i != null && k >= 0 && numOk) {
+                    if (i != null && k >= 0 && rangeCellsOk(c(r, 3), c(r, 4))) {
                         // [3.475.0/論理監査] 同じ職員×シフトの重複行（希望CSVと同じ扱い＝同値は1件、衝突は拒否）。
                         val key = "$i,$k"; val rng = Range(c(r, 3), c(r, 4)); val prev = ranges[key]
                         if (prev == null) { ranges[key] = rng; n++ } else if (prev != rng) reject(r)
