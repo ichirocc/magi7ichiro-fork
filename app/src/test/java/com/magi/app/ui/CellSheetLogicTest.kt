@@ -37,6 +37,32 @@ class CellSheetLogicTest {
         assertEquals(listOf(8, 9, null, null), few[2].map { it?.shift })
     }
 
+    /** 担当できるシフトが 0 件の職員は空（全部を押せる扱いにしない）。全部になるのはデータ未読込のときだけ。 */
+    @Test fun staffWithNoDoableShiftGetsNoDoableButtons() {
+        val by = listOf(setOf(0, 2), emptySet())
+        assertEquals(setOf(0, 2), sheetCanDo(by, 0, 5))
+        assertEquals(emptySet<Int>(), sheetCanDo(by, 1, 5))
+        assertEquals(emptySet<Int>(), sheetCanDo(by, 7, 5))
+        assertEquals((0 until 5).toSet(), sheetCanDo(emptyList(), 0, 5))
+        assertTrue(cellSheetSlots(sheetShifts(5, by), sheetCanDo(by, 1, 5)).flatten().filterNotNull().none { it.canDo })
+    }
+
+    /** [S6] 試算できない盤面（未割当のセル）は「組が無い」と言わず理由を出す。失敗はやり直しを出す。 */
+    @Test fun relaxUnavailableAndFailedAreNotNoWall() {
+        val s2 = s.map { it.copyOf() }.toTypedArray().also { it[0][0] = -1 }
+        val out = com.magi.app.v6.RelaxTrial.firstWall(st, s2)
+        assertTrue(out is com.magi.app.v6.RelaxTrial.Unavailable)
+        val reason = (out as com.magi.app.v6.RelaxTrial.Unavailable).reason
+        assertEquals(RelaxHandoff.UNAVAILABLE, relaxHandoff(null, false, false, 0, 0, unavailable = reason))
+        assertEquals("設定を緩める試算はできません（未割当のセルがあります）", relaxUnavailableText(reason))
+        assertEquals(RelaxHandoff.FAILED, relaxHandoff(null, false, false, 0, 0, failed = true))
+        assertEquals(RelaxHandoff.SEARCHING, relaxHandoff(null, true, false, 0, 0, failed = true))
+        assertTrue(relaxOutcomeApplies(3L, 3L, "a", "a"))
+        assertTrue("後から始めた試算がある", !relaxOutcomeApplies(2L, 3L, "a", "a"))
+        assertTrue("データが変わった", !relaxOutcomeApplies(3L, 3L, "a", "b"))
+        assertTrue(!relaxOutcomeApplies(3L, 3L, "a", null))
+    }
+
     @Test fun shiftsNobodyCanDoAreHiddenAndLeftHandMirrors() {
         val shown = sheetShifts(6, listOf(setOf(0, 2), setOf(2, 5), emptySet()))
         assertEquals(listOf(0, 2, 5), shown)

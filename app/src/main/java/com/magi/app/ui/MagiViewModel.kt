@@ -1923,6 +1923,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var relaxResult: RelaxTrial.Outcome? = null
     private var relaxDone: Pair<RelaxCtx, String>? = null
     private var relaxStoppedCtx: RelaxCtx? = null
+    private var relaxFailedCtx: RelaxCtx? = null
 
     private fun relaxCtxNow(): RelaxCtx? {
         val st = state ?: return null
@@ -1939,7 +1940,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (relaxCtx == ctx && (relaxResult != null || relaxJob?.isActive == true)) return
         relaxJob?.cancel()
         val seq = ++relaxSeq
-        relaxCtx = ctx; relaxResult = null; relaxStoppedCtx = null
+        relaxCtx = ctx; relaxResult = null; relaxStoppedCtx = null; relaxFailedCtx = null
         val board = b.copy2D()
         _ui.update { it.copy(relaxSearching = true) }
         relaxJob = viewModelScope.launch {
@@ -1952,6 +1953,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 logOp("W", "設定の緩和の試算 失敗: ${e.javaClass.simpleName}: ${e.message}")
+                if (relaxOutcomeApplies(seq, relaxSeq, ctx, relaxCtxNow())) relaxFailedCtx = ctx
             } finally {
                 if (seq == relaxSeq) _ui.update { it.copy(relaxSearching = false, relaxRev = it.relaxRev + 1) }
             }
@@ -1973,8 +1975,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if (relaxCtxNow() == c) RelaxToken(c.stateKey, c.boardKey, r) else null
     }
 
-    /** いまのデータで探し終えて組が無かった（NoWall・試算不可）。走っている・未着手・古いなら false。 */
-    internal fun relaxNoWall(): Boolean = relaxCtx != null && relaxCtx == relaxCtxNow() && relaxResult != null && relaxResult !is RelaxTrial.Result
+    /** いまのデータで探し終えて組が無かった（NoWall）。走っている・未着手・古い・試算不可なら false。 */
+    internal fun relaxNoWall(): Boolean = relaxCtx != null && relaxCtx == relaxCtxNow() && relaxResult is RelaxTrial.NoWall
+
+    /** いまのデータでは試算できない理由（未割当のセルなど）。無い・古いなら null。 */
+    internal fun relaxUnavailable(): String? =
+        (relaxResult as? RelaxTrial.Unavailable)?.reason?.takeIf { relaxCtx != null && relaxCtx == relaxCtxNow() }
+
+    /** いまのデータで試算が失敗した（結果なし）。「もう一度試す」を出す。 */
+    internal fun relaxFailed(): Boolean = relaxFailedCtx != null && relaxFailedCtx == relaxCtxNow() && relaxResult == null
 
     /** いまのデータで試算を途中で止めた（結果なし）。「もう一度試す」を出す。 */
     internal fun relaxStopped(): Boolean = relaxStoppedCtx != null && relaxStoppedCtx == relaxCtxNow() && relaxResult == null

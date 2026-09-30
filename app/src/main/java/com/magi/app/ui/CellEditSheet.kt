@@ -84,6 +84,8 @@ internal fun CellEditSheet(
     relax: RelaxToken? = null,          // [S6] ホームで見つかった組（このセルが窓か手順に入るときだけ渡す）
     relaxNoWall: Boolean = false,       // [S6] 探し終えて組が無い
     relaxStopped: Boolean = false,      // [S6] 試算を途中で止めた
+    relaxUnavailable: String? = null,   // [S6] 試算できない理由
+    relaxFailed: Boolean = false,       // [S6] 試算が失敗した
     onShowRelax: () -> Unit = {},
     onRetryRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
@@ -95,8 +97,7 @@ internal fun CellEditSheet(
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
-    val allowed = cv.allowedShiftsFor(i)
-    val canDoSet = allowed.ifEmpty { ui.shiftSymbols.indices.toSet() }
+    val canDoSet = sheetCanDo(cv.allowedByStaff, i, ui.shiftSymbols.size)
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
     val pinned = VioKey.cell(i, j) in ui.manualPins
@@ -120,7 +121,7 @@ internal fun CellEditSheet(
     }
     val dilemma = isWishDilemma(wish, current, status.severity)
     var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える
-    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j, relaxStopped)
+    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j, relaxStopped, relaxUnavailable, relaxFailed)
     var marks by remember(cell) { mutableStateOf(ShiftMarks()) }
     LaunchedEffect(cell, rev) {
         marks = ShiftMarks()
@@ -215,8 +216,9 @@ internal fun CellEditSheet(
                     }
                     RelaxHandoff.SEARCHING -> Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     RelaxHandoff.NO_WALL -> Text(RELAX_NO_WALL_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                    RelaxHandoff.STOPPED -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    RelaxHandoff.UNAVAILABLE -> Text(relaxUnavailableText(relaxUnavailable.orEmpty()), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    RelaxHandoff.STOPPED, RelaxHandoff.FAILED -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (handoff == RelaxHandoff.FAILED) RELAX_FAILED_TEXT else RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                         TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL) }
                     }
                     RelaxHandoff.NONE -> {}

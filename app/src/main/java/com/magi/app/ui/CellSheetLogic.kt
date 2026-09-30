@@ -13,6 +13,10 @@ import com.magi.app.v6.pinned
  * ボタンの固定配置・1 行の状態・おすすめの点をここに置き、画面は並べるだけにする。
  */
 
+/** 職員 [i] の担当できるシフト。データ未読込（一覧が空）のときだけ全部。担当できるシフトが 0 件の職員は空のまま（「外」を押せる扱いにしない）。 */
+internal fun sheetCanDo(allowedByStaff: List<Set<Int>>, i: Int, shiftCount: Int): Set<Int> =
+    if (allowedByStaff.isEmpty()) (0 until shiftCount).toSet() else allowedByStaff.getOrElse(i) { emptySet() }
+
 /** シフトボタン 1 枠。[canDo]=false は枠を残したまま「外」で灰色にする。 */
 internal data class ShiftSlot(val shift: Int, val canDo: Boolean)
 
@@ -402,17 +406,28 @@ internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: Str
 }
 
 /** [S6] セルシートから設定の緩和へ渡す状態。OFFER＝ホームで見つかった組の起点の窓か手順のセル（同じ結果を同じ確定で開く。セルごとに試算はしない）、
- *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い、STOPPED＝途中で止めた（やり直しを出す）。 */
-internal enum class RelaxHandoff { NONE, SEARCHING, OFFER, NO_WALL, STOPPED }
+ *  SEARCHING＝背景で探している、NO_WALL＝探し終えて組が無い、STOPPED＝途中で止めた／FAILED＝失敗した（どちらもやり直しを出す）、
+ *  UNAVAILABLE＝試算できない盤面（未割当など。理由を出す）。 */
+internal enum class RelaxHandoff { NONE, SEARCHING, OFFER, NO_WALL, STOPPED, UNAVAILABLE, FAILED }
 
-internal fun relaxHandoff(r: RelaxTrial.Result?, searching: Boolean, noWall: Boolean, i: Int, j: Int, stopped: Boolean = false): RelaxHandoff = when {
+internal fun relaxHandoff(
+    r: RelaxTrial.Result?, searching: Boolean, noWall: Boolean, i: Int, j: Int, stopped: Boolean = false,
+    unavailable: String? = null, failed: Boolean = false,
+): RelaxHandoff = when {
     r != null && ((r.staff == i && j in r.window) || r.moves.any { it.staff == i && it.day == j }) -> RelaxHandoff.OFFER
     r != null -> RelaxHandoff.NONE
     searching -> RelaxHandoff.SEARCHING
+    unavailable != null -> RelaxHandoff.UNAVAILABLE
     noWall -> RelaxHandoff.NO_WALL
+    failed -> RelaxHandoff.FAILED
     stopped -> RelaxHandoff.STOPPED
     else -> RelaxHandoff.NONE
 }
+
+internal fun relaxUnavailableText(reason: String): String = "設定を緩める試算はできません（$reason）"
+
+/** [S6] 背景の試算の結果を反映してよいか: 最新の試算で、始めたときのデータが今も同じとき（古い失敗で今の状態を上書きしない）。 */
+internal fun <C> relaxOutcomeApplies(seq: Long, latestSeq: Long, ctx: C, ctxNow: C?): Boolean = seq == latestSeq && ctx == ctxNow
 
 internal fun relaxHandoffLine(r: RelaxTrial.Result, ui: UiState): String =
     "設定を緩めると、この${relaxTarget(r, ui).what}を解消できる見込みです（上限 ${r.relaxes.size}件）"

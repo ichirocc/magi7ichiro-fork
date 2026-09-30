@@ -595,6 +595,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowRelax = { relaxFrom = null; relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
                         relaxStopped = vm.relaxStopped(),
+                        relaxFailed = vm.relaxFailed(),
                         onRetryRelax = { vm.retryRelaxTrial() },
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
@@ -879,6 +880,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     relax = vm.relaxTrialFor(),
                     relaxNoWall = vm.relaxNoWall(),
                     relaxStopped = vm.relaxStopped(),
+                    relaxUnavailable = vm.relaxUnavailable(),
+                    relaxFailed = vm.relaxFailed(),
                     onShowRelax = { relaxFrom = cell; relaxDialog = true },
                     onRetryRelax = { vm.retryRelaxTrial() },
                     mode = sheetMode,

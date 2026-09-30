@@ -12,7 +12,7 @@ import com.magi.app.v6.wishLocked
 /**
  * 職員 [staff] × 規則（[shift] を [day1] 日のなかに [day2] 日）の不足の 1 区間。[from]〜[to] は続けて不足した窓の和。
  * [marks] は不足窓の中で、いま [shift] でなく [shift] に変えられる日（変えられる日が 1 つも無い窓の日は含めない）。
- * [stuck] は変えられる日が 1 つも無い不足窓があること。
+ * [stuck] は変えられる日が足りない日数より少ない不足窓があること（印をすべて変えても届かない）。
  */
 data class C1Shortage(
     val staff: Int, val shift: Int, val day1: Int, val day2: Int,
@@ -47,7 +47,8 @@ internal fun c1Shortages(p: Problem, s: Array<IntArray>): List<C1Shortage> {
                 if (runStart < 0) runStart = j
                 n++
                 val inWin = (j until j + c.day1).filter { cand[it] }
-                if (inWin.isEmpty()) stuck = true else marks.addAll(inWin)
+                if (inWin.size < c.day2 - z) stuck = true
+                marks.addAll(inWin)
             }
             close()
         }
@@ -64,8 +65,8 @@ internal fun c1CellText(shortages: List<C1Shortage>, s: Array<IntArray>, i: Int,
     val k = sym(sh.shift)
     val head = "期間の約束: ${sh.day1}日のなかに「$k」が${sh.day2}日必要です。"
     val body = if (sh.marks.isEmpty()) C1_STUCK_TEXT
-    else "いま足りない期間（${day(sh.from)}〜${day(sh.to)}）があり、印の日を${k}にすると届く見込みです。" +
-        (if (sh.stuck) C1_STUCK_TEXT else "")
+    else if (sh.stuck) "いま足りない期間（${day(sh.from)}〜${day(sh.to)}）があり、印の日を${k}にすると不足は減ります。$C1_STUCK_TEXT"
+    else "いま足りない期間（${day(sh.from)}〜${day(sh.to)}）があり、印の日を${k}にするとこの約束の日数に届きます（ほかの約束への影響は見ていません）。"
     val held = if (s.getOrNull(i)?.getOrNull(j) == sh.shift) "（この日の${k}はすでに数に入っています）" else ""
     return head + body + held
 }

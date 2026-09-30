@@ -415,6 +415,7 @@ internal data class RelaxCardText(val headline: String, val body: String, val no
 internal const val RELAX_SEARCHING_TEXT = "希望を変えずに、個人の上限0を例外で緩める方法を調べています…"
 internal const val RELAX_NO_WALL_TEXT = "緩めても解ける組はありませんでした"
 internal const val RELAX_STOPPED_TEXT = "試算を止めました"
+internal const val RELAX_FAILED_TEXT = "試算に失敗しました"
 internal const val RELAX_RETRY_LABEL = "もう一度試す"
 internal fun relaxPeekLabel(sym: String) = "例外として緩める候補: $sym"
 
