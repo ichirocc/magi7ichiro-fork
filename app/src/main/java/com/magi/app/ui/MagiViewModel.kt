@@ -13,6 +13,7 @@ import com.magi.app.v6.Problem
 import com.magi.app.v6.ScheduleCsvBridge
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.ViolationReport
+import com.magi.app.v6.c3SeqKey
 import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.V6PortAnalyzer
 import com.magi.app.v6.SettingIssue
@@ -2732,12 +2733,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun relaxForbiddenRule(seqLabel: String) {
         if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は設定を変更できません（完了後にもう一度お試しください）") }; return }
         val s = state ?: return
-        fun key(row: C3Row): String {
-            val end = row.pattern.indexOfFirst { it.isBlank() }
-            val body = if (end >= 0) row.pattern.subList(0, end) else row.pattern
-            return body.joinToString("→")
-        }
-        val remain = s.cons3n.filter { key(it) != seqLabel }
+        val remain = s.cons3n.filter { c3SeqKey(it.pattern) != seqLabel }
         val removed = s.cons3n.size - remain.size
         if (removed == 0) {
             _ui.update { it.copy(messageIsError = true, message = "禁止の並び「$seqLabel」は見つかりませんでした") }
@@ -2749,96 +2745,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun applySettingFix(issue: SettingIssue) {
         val s = state ?: return
-        val ns: MagiState? = when (issue.action) {
-            SettingFixAction.REMOVE_WISH -> {
-                val key = issue.wishKey ?: return
-                if (!s.wishes.containsKey(key)) return
-                s.copy(wishes = s.wishes - key)
-            }
-            SettingFixAction.DELETE_DUP_SEQ -> {
-                val fam = issue.seqFamily ?: return
-                val key = issue.seqKey ?: return
-                fun delOne(rows: List<C3Row>): List<C3Row> {
-                    var done = false
-                    val res = ArrayList<C3Row>(rows.size)
-                    for (row in rows) {
-                        val joined = row.pattern.filter { it.isNotBlank() }.joinToString("→")
-                        if (!done && joined == key) { done = true; continue }
-                        res.add(row)
-                    }
-                    return res
-                }
-                when (fam) {
-                    "c3" -> s.copy(cons3 = delOne(s.cons3))
-                    "c3n" -> s.copy(cons3n = delOne(s.cons3n))
-                    "c3m" -> s.copy(cons3m = delOne(s.cons3m))
-                    "c3mn" -> s.copy(cons3mn = delOne(s.cons3mn))
-                    else -> return
-                }
-            }
-            SettingFixAction.ZERO_RANGE_LO, SettingFixAction.CLAMP_RANGE_LO -> {
-                val key = issue.rangeKey ?: return
-                val cur = s.staffRange[key] ?: Range("", "")
-                s.copy(staffRange = s.staffRange + (key to Range(issue.newLo ?: cur.lo, cur.hi)))
-            }
-            SettingFixAction.CLAMP_GROUP_RANGE_LO -> {
-                // 行は List なので index でなく**内容一致**で指す（DELETE_DUP_SEQ と同じ理由＝診断から
-                //   タップまでに並びが変わっても別の行を壊さない）。同じ内容が複数あるときは先頭1件だけ直す。
-                val row = issue.groupRangeRow ?: return
-                val lo = issue.newLo ?: return
-                fun clampOne(rows: List<C41Row>): List<C41Row> {
-                    val i = rows.indexOf(row)
-                    if (i < 0) return rows
-                    return rows.toMutableList().also { it[i] = row.copy(l = lo) }
-                }
-                when (issue.groupRangeFamily) {
-                    "c41" -> s.copy(cons41 = clampOne(s.cons41))
-                    "c41s" -> s.copy(cons41s = clampOne(s.cons41s))
-                    else -> return
-                }
-            }
-            SettingFixAction.CAP_DEMAND -> {
-                val k = issue.demandShiftIdx ?: return
-                val cap = issue.demandCap ?: return
-                val sh = s.shifts.getOrNull(k) ?: return
-                val j = issue.demandDayIdx
-                if (j != null) {
-                    // [3.475.0/論理監査] 需要が日別例外(needDay1/2)由来のときはその日の例外を丸める。
-                    //   旧: 常にシフト既定だけを丸めていたため、例外由来の診断はボタンを押しても消えなかった
-                    //   （既定が cap 以下なら no-op で return、例外は残るので同じ項目が出続けていた）。
-                    val key1 = "$k,$j"; val key2 = "$k,$j"
-                    val ov1 = s.needDay1[key1]?.trim()?.toIntOrNull()
-                    val ov2 = s.needDay2[key2]?.trim()?.toIntOrNull()
-                    var changed = false
-                    val nd1 = if (ov1 != null && ov1 > cap) { changed = true; s.needDay1 + (key1 to cap.toString()) } else s.needDay1
-                    val nd2 = if (ov2 != null && ov2 > cap) { changed = true; s.needDay2 + (key2 to cap.toString()) } else s.needDay2
-                    // 例外が無ければ既定を丸める（従来どおり）。
-                    val n1 = sh.need1.trim().toIntOrNull()
-                    val n2 = sh.need2.trim().toIntOrNull()
-                    if (ov1 == null && n1 != null && n1 > cap) { changed = true }
-                    if (ov2 == null && n2 != null && n2 > cap) { changed = true }
-                    if (!changed) return
-                    val newN1 = if (ov1 == null && n1 != null && n1 > cap) cap.toString() else sh.need1
-                    val newN2 = if (ov2 == null && n2 != null && n2 > cap) cap.toString() else sh.need2
-                    val list = s.shifts.toMutableList()
-                    list[k] = sh.copy(need1 = newN1, need2 = newN2)
-                    s.copy(shifts = list, needDay1 = nd1, needDay2 = nd2)
-                } else {
-                    val n1 = sh.need1.trim().toIntOrNull()
-                    val n2 = sh.need2.trim().toIntOrNull()
-                    val newN1 = if (n1 != null && n1 > cap) cap.toString() else sh.need1
-                    val newN2 = if (n2 != null && n2 > cap) cap.toString() else sh.need2
-                    if (newN1 == sh.need1 && newN2 == sh.need2) return
-                    val list = s.shifts.toMutableList()
-                    list[k] = sh.copy(need1 = newN1, need2 = newN2)
-                    s.copy(shifts = list)
-                }
-            }
-            SettingFixAction.NONE -> null
-        }
+        val ns = SettingFixLogic.apply(s, issue)
         if (ns != null) {
             logOp("I", "設定ミスの修正を適用: ${issue.action} @ ${issue.where}")
             applyStructure(ns)
+        } else if (issue.action == SettingFixAction.DELETE_DUP_SEQ) {
+            // 診断からタップまでに行が変わっていたときは黙って何も起きないより、戻すものが無いことを伝える。
+            _ui.update { it.copy(messageIsError = true, message = "削除する重複が見つかりませんでした（すでに変更されています）") }
         }
     }
 
