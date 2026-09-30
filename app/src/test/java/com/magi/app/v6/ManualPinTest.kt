@@ -132,6 +132,14 @@ class ManualPinTest {
         assertTrue("固定に当たらなければ同じ state", st.withPinsFollowing(listOf(5 to 5), 2) === st)
     }
 
+    @Test fun pinFollowingDropsThePinWhenTheNewShiftIsNotAShift() {
+        val st = sample().copy(manualPins = listOf(ManualPin(0, 1, 0), ManualPin(2, 3, 1)))
+        val ns = st.withPinsFollowing(listOf(0 to 1), -1)
+        assertNull(ns.pinAt(0, 1))
+        assertEquals(ManualPin(2, 3, 1), ns.pinAt(2, 3))
+        assertNull(st.withPinsFollowing(listOf(0 to 1), st.shiftCount).pinAt(0, 1))
+    }
+
     // 受け入れ 4: 保存→読込で残る。キーが無ければ固定なし。
     @Test fun jsonRoundTripKeepsPinsAndAMissingKeyMeansNone() {
         val st = sample().copy(manualPins = listOf(ManualPin(0, 1, 0), ManualPin(9, 30, 3)))

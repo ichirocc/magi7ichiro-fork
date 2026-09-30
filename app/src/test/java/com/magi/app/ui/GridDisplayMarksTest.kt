@@ -67,7 +67,7 @@ class GridDisplayMarksTest {
     @Test fun c1SheetTextNamesThePeriodAndCountsHeldDays() {
         val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
         val text = cellDetailLines(st, p, s, 0, 2, listOf("c1")).single()
-        assertEquals("要調整・期間の約束: 7日のなかに「休」が2日必要です。いま足りない期間（10/3〜10/12）があり、印の日を休にするとこの約束の日数に届きます（ほかの約束への影響は見ていません）。（この日の休はすでに数に入っています）", text)
+        assertEquals("要調整・期間の約束: 7日のなかに「休」が2日必要です。いま足りない期間（10/3〜10/12）があり、印の日をうまく選べば、いちばん少なくて2日を休にするとこの約束の日数に届きます（ほかの約束への影響は見ていません）。（この日の休はすでに数に入っています）", text)
         assertTrue("（この日の" !in cellDetailLines(st, p, s, 0, 3, listOf("c1")).single())
         assertTrue("vio-c1" in sheetCellClasses(displayCellClasses(ui, VioKey.cell(0, 2), vs.c1Marks), true))
     }
@@ -82,7 +82,7 @@ class GridDisplayMarksTest {
         for (x in sh) for (d in x.marks) assertTrue(s[x.staff][d] != a4 && c1Changeable(p, x.staff, d, a4))
         val x = sh.first { it.marks.isNotEmpty() }
         val line = cellDetailLines(st2, p, s, x.staff, x.marks.first(), listOf("c1")).single()
-        assertTrue(line, "「A4」が2日必要" in line && "印の日をA4にすると" in line)
+        assertTrue(line, "「A4」が2日必要" in line && "A4に" in line && ("すべて" in line || "いちばん少なくて" in line))
     }
 
     /** 変えられる日が 1 つも無い不足窓: その窓の日に印は出さず、勤務表だけでは満たせない旨と次の一歩。 */
@@ -119,6 +119,33 @@ class GridDisplayMarksTest {
         assertTrue(s0.stuck)
         val line = c1CellText(listOf(s0), s, 0, 3, { st.shifts[it].kigou }, { "${it + 1}日" })!!
         assertTrue(line, "届き" !in line && "届く" !in line && "不足は減ります" in line && C1_STUCK_TEXT in line)
+    }
+
+    /** 届かせるのに変える日数の最小は、印の日の全部分集合の総当たりと一致する。全部変える必要があるときだけ「すべて」と言う。 */
+    @Test fun c1MinChangesMatchesBruteForceAndTheTextDoesNotOverclaim() {
+        val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
+        var checked = 0
+        for (sh in ui.c1Shortages.filter { !it.stuck && it.marks.isNotEmpty() && it.marks.size <= 12 }) {
+            var best = Int.MAX_VALUE
+            for (mask in 0 until (1 shl sh.marks.size)) {
+                val ch = sh.marks.filterIndexed { idx, _ -> mask and (1 shl idx) != 0 }.toSet()
+                val ok = (sh.from..sh.to - sh.day1 + 1).all { w ->
+                    (w until w + sh.day1).count { s[sh.staff][it] == sh.shift || it in ch } >= sh.day2
+                }
+                if (ok) best = minOf(best, ch.size)
+            }
+            assertEquals("職員${sh.staff}", best, sh.minChanges)
+            val line = c1CellText(listOf(sh), s, sh.staff, sh.from, { st.shifts[it].kigou }, { "${it + 1}日" })!!
+            if (sh.minChanges >= sh.marks.size) assertTrue(line, "すべて" in line) else assertTrue(line, "すべて" !in line && "いちばん少なくて${sh.minChanges}日" in line)
+            checked++
+        }
+        assertTrue(checked > 0)
+        assertTrue(p.T > 0)
+    }
+
+    @Test fun legendAndStuckTextDoNotPromiseReaching() {
+        assertTrue("届く" !in legendShapeFamilies() && "近づく" in legendShapeFamilies())
+        assertTrue("手動固定" in C1_STUCK_TEXT && "入れない指定" in C1_STUCK_TEXT)
     }
 
     @Test fun checkerMarksStayAtTheRunHeadOnly() {

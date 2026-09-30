@@ -657,7 +657,7 @@ internal fun dayCoverageLines(ui: UiState, j: Int, marks: List<CoverageMark>, li
 /** 凡例の「枠の形 → 族」の 1 行。セルに印を持つ族だけを名指す（回数・人員は行末と日ヘッダの印）。 */
 internal fun legendShapeFamilies(): String {
     val solid = listOf("c3n", "c3w", "pref", "groupViol").map { breakdownLabels[it] ?: it }
-    return "実線: ${solid.joinToString("・")}／破線: ${breakdownLabels["c1"]}（この日を○○にすると届く）・${breakdownLabels["c3mn"]}"
+    return "実線: ${solid.joinToString("・")}／破線: ${breakdownLabels["c1"]}（この日を○○にすると近づく）・${breakdownLabels["c3mn"]}"
 }
 
 // ===== その場の直し方探し（印・セルのシートの中で探して、見つからなければ理由と次の一歩） =====
