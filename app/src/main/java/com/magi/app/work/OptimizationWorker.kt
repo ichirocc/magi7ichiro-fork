@@ -53,7 +53,10 @@ class OptimizationWorker(
         runCatching { OptimizationRepository.publishNote(level, "バックグラウンド最適化: $msg") }
     }
 
-    override suspend fun doWork(): Result {
+    override suspend fun doWork(): Result =
+        try { runWork() } finally { OptimizationRepository.markEnded(inputData.getLong(KEY_RUN_ID, 0L)) }
+
+    private suspend fun runWork(): Result {
         // [3.387.0] `doWork` の**並び**（耐久保存→公開→片付け）と所有権の喪失は、単体テストでは
         //   捕まらない（Robolectric か実機が要る）。せめて**実行のたびに1行**残して、書き出したログから
         //   後追いできるようにする。3.382.0 で前景4経路へ入れた終端ログの保証の、背景 Worker 版。
@@ -239,9 +242,8 @@ class OptimizationWorker(
                 //   「結果も再開手段も両方失う」経路になっていた。一時ファイル経由で置き換える。
                 // [C1] 完了結果を耐久保存。UI不在(プロセス再起動でWorkerだけ走った)でも次回起動で反映できる。
                 // [3.385.0/外部レビュー High1] `commitGuard` に所有権の再確認を渡す＝置き換えの**直前**に見る。
-                //   TOCTOU の窓自体は消えない（完全に閉じるには run 別のファイル名が要る＝3.336.0 で
-                //   復元経路ごと作り替えになるため見送り済み）。縮むのは「直列化(数百KBのJSON)＋一時ファイル
-                //   書き込み」のぶん＝ms 級 → μs 級。ガードが偽なら一時ファイルだけ捨てて resultFile は不変。
+                //   確認と置き換えは RunFiles の所有権の錠の中で行う（beginRun と交差しない）。
+                //   ガードが偽なら一時ファイルだけ捨てて resultFile は不変。
                 val saved = runCatching {
                     files(ctx).writeAtomically(
                         resultFile(ctx),

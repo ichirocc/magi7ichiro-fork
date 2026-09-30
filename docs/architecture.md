@@ -106,7 +106,7 @@ MagiRoot（唯一の合成ルート）
 ### 背景実行（work）
 | Entity | type | 役割 |
 |---|---|---|
-| `OptimizationWorker` | Background-Service | WorkManager の**前景サービス**で最適化を実行。中断耐性・スナップショット |
+| `OptimizationWorker` | Background-Service | WorkManager の**前景サービス**で最適化を実行。中断耐性・スナップショット。共有ファイルの所有権・原子置換は `RunFiles`、結果を画面へ渡す間の編集ガード・再確認・保存後の掃除は `BgHandoff` |
 | `ForegroundRunKeepAlive` | Background-Service | 前景実行（最適化・ソフト研磨）の間だけ WorkManager の前景サービスを保つ（通知を出して待つだけ。凍結対策・backlog#34） |
 
 ### UI 画面・部品（ui）

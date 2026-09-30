@@ -169,7 +169,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 「盤面を丸ごと差し替えるジョブが走っている」。
      */
     internal fun optimizeInFlight(): Boolean =
-        phases.hasJob || OptimizationRepository.running.value
+        phases.hasJob || OptimizationRepository.running.value || bgGuard.closed
+
+    /** 背景実行の投入から反映し終えるまで閉じる編集ガード（Worker が running を立てる前後の窓を塞ぐ）。 */
+    private val bgGuard = com.magi.app.work.BgEditGuard()
 
     // ===== [v2.22] 自動保存・復元（端末内）と「元に戻す」 =====
     private val autosaveFile get() = getApplication<Application>().filesDir.resolve("magi_autosave.json")
@@ -394,9 +397,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 logOp("W", "前回のバックグラウンド最適化の完了結果が壊れていて読めませんでした（入力と途中結果は残してあります）")
                 runCatching { OptimizationWorker.resultFile(getApplication()).delete() }
             }
+            // 復元元は、復元した状態の保存が成功してから消す（下の hydrated の後）。
+            var clearAfterRestore: String? = null
             if (resultUsable) {
-                clearRunMarker()
-                clearBgFiles("前回の完了結果を反映")
+                clearAfterRestore = "前回の完了結果を反映"
                 OptimizationRepository.publishResult(null)   // [外部レビュー R6] 同じ結果がメモリにも残っていれば二重に当てない
                 if (state == null) loadAsync(resultTxt, markResult = true, fromRestore = true)   // initialAssignment が state.schedule を返すため結果が復元される
                 logOp("I", "前回のバックグラウンド最適化の結果を反映しました")
@@ -417,6 +421,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (bgActive) {
                     // 実行の ID はメモリにしか無い＝再起動で 0 に戻る。所有者の記録から戻し、再開前の「やめる」も背景の停止にする。
                     bgRunId = withContext(Dispatchers.IO) { runCatching { OptimizationWorker.activeRunId(getApplication()) }.getOrDefault(0L) }
+                    if (bgRunId != 0L) { bgGuard.begin(bgRunId); releaseGuardIfEndedWithoutResult() }
                     _ui.update { it.copy(messageIsError = false, running = true, message = "バックグラウンド最適化を継続中…（完了時に自動反映）") }
                     if (state == null && !txt.isNullOrBlank()) loadAsync(txt, fromRestore = true)
                     logOp("I", "バックグラウンド最適化の継続を検知（進捗を購読）")
@@ -441,12 +446,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     val resumeTxt = if (snapUsable) snapTxt else txt
                     if (!resumeTxt.isNullOrBlank()) loadAsync(resumeTxt, fromRestore = true)
-                    if (snapUsable) clearBgFiles("途中結果の復元後")   // 消費できたときだけ掃除
+                    if (snapUsable) clearAfterRestore = "途中結果の復元後"   // 消費できたときだけ掃除
                 }
                 }
             }
             hydrated = true
             job?.join()   // [外部レビュー R6] 上の loadAsync が state を立てるまで待つ
+            clearAfterRestore?.let { where ->
+                val cleared = com.magi.app.work.clearAfterSaved({ persistNow() }) { clearRunMarker(); clearBgFiles(where) }
+                if (!cleared) logOp("W", "$where: 復元した状態を保存できなかったため、復元元のファイルを残しました（次回起動で再び戻せます）")
+            }
             restoreLoaded.value = true
         }
         // バックグラウンド最適化（WorkManager）の進捗・結果を購読して画面へ反映（仕様書 §6.3）
@@ -474,7 +483,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: Throwable) {
                     logOp("W", "背景結果の反映に失敗: ${e.javaClass.simpleName}: ${e.message}")
                     // 結果ファイルが残ると次の起動がそれを自動保存より先に読み、この後の編集を消す。
-                    bgStateKey = 0L; bgRunId = 0L; bgInput = null
+                    bgStateKey = 0L; bgRunId = 0L; bgInput = null; bgGuard.release()
                     discardBgResult("背景結果の反映に失敗")
                     val cur = currentSchedule
                     _ui.update { it.copy(running = false, hasResult = cur != null, messageIsError = true,
@@ -488,6 +497,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   1行も残らず、「5分回した実行が消えた」理由を後から追えなかった。
         viewModelScope.launch {
             OptimizationRepository.notes.collect { (level, msg) -> logOp(level, msg) }
+        }
+        viewModelScope.launch {
+            OptimizationRepository.ended.collect { releaseGuardIfEndedWithoutResult() }
         }
         // [3.409.13/レビュー#7] `ui.running`（表示の写し）が背景実行で stale-false になる経路を**源で**塞ぐ。
         //   3.336.0 は「init 時の WorkManager 問い合わせが失敗すると背景で走っているのに写しが false のまま」
@@ -561,6 +573,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.328.0] この結果を後で当ててよいかを判断するための入力の指紋。
         bgStateKey = stateKey(st0)
         bgRunId = runId
+        bgGuard.begin(runId)   // 投入の時点で閉じる（Worker が running を立てるまで待たない）
         // [3.475.0/論理監査] keep-best の比較先は「この実行に渡した入力」。旧: resultSchedule（前回の結果）と
         //   比較していたため、前回結果のあとに手編集した盤面で背景実行すると、入力より悪化さえしていない
         //   その編集が「前回の結果を維持」の名目で黙って巻き戻された（前景 runV6FullOptimize は元から入力比較）。
@@ -586,6 +599,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             OptimizationRepository.request = null
             bgStateKey = 0L
             bgRunId = 0L
+            bgGuard.end(runId)
             clearBgFiles("バックグラウンド最適化の投入に失敗")
             notify("バックグラウンド最適化を開始できませんでした（端末の状態をご確認ください）", "W")
         }
@@ -618,14 +632,39 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** [3.475.0] 破棄する背景結果の後始末を一箇所に。旧: 「入力が変わった」分岐だけこれを一切せず、
      *  結果ファイルが残って次回起動時に無関係なデータへ復元されうる穴があった。 */
-    private fun discardBgResult(reason: String) {
-        clearRunMarker()
-        clearBgFiles(reason)
+    private fun discardBgResult(reason: String, keepFiles: Boolean = false) {
+        if (!keepFiles) {
+            clearRunMarker()
+            clearBgFiles(reason)
+        }
         OptimizationRepository.request = null
         OptimizationRepository.publishResult(null)
     }
 
+    /** Worker が結果なしで降りた（開始前の離脱・失敗・停止・置き換え）なら、この実行の編集ガードを開ける。 */
+    private fun releaseGuardIfEndedWithoutResult() {
+        val id = bgGuard.pendingRunId
+        if (id == 0L || OptimizationRepository.ended.value != id) return
+        if (OptimizationRepository.result.value?.runId == id) return   // 結果の反映（applyBgResult）が開ける
+        bgGuard.end(id)
+        if (!phases.hasJob && checkJob?.isActive != true && !OptimizationRepository.running.value) {
+            _ui.update { it.copy(running = false) }
+        }
+    }
+
     private suspend fun applyBgResult(r: OptimizationRepository.BgResult) {
+        try { applyBgResultGuarded(r) } finally { bgGuard.end(r.runId) }
+    }
+
+    /** 反映の直前の再確認に通らなかった結果を捨てる（待つ間に実行・入力・盤面が変わった）。 */
+    private fun abandonStaleBgResult() {
+        bgStateKey = 0L; bgRunId = 0L; bgInput = null
+        logOp("W", "バックグラウンド最適化の結果を破棄しました（反映の直前に実行・入力・盤面のいずれかが変わっていたため）")
+        _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に勤務表または設定が変わったため、結果は反映しませんでした。もう一度つくってください。") }
+        discardBgResult("背景結果: 反映直前の再確認で破棄")
+    }
+
+    private suspend fun applyBgResultGuarded(r: OptimizationRepository.BgResult) {
         val st0 = state ?: return
         // [3.328.0/外部レビュー] 背景の結果は「開始時の入力」に対して計算されたもの。実行中に別のデータを
         //   開く・取り込むなどで入力が変わっていたら、その結果は今の入力の答えではないので捨てる
@@ -652,16 +691,21 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             discardBgResult("背景結果: 入力が変わったため破棄")
             return
         }
-        bgStateKey = 0L
-        bgRunId = 0L
         // [3.475.0/論理監査] keep-best の比較先は「この実行の入力」（bgInput）。旧: 前回の結果
         //   (resultSchedule) と比較していたため、前回結果のあとに手編集した盤面で背景実行すると、
         //   入力より悪化していないその編集が「前回の結果を維持」の名目で黙って巻き戻された。
         //   bgInput が無い（プロセス再起動後の復元経路）ときだけ、従来どおり前回の結果と比較する。
         val prev = bgInput ?: resultSchedule
-        bgInput = null
-        if (prev != null) {
-            val prevReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, prev) }
+        // 投入後に盤面が変わっていたら（ガードをすり抜けた編集）、この結果は今の盤面の答えではない。
+        val input = bgInput
+        if (input != null && currentSchedule?.contentDeepEquals(input) != true) { abandonStaleBgResult(); return }
+        val before = com.magi.app.work.BgApplySnapshot(bgRunId, st0, stateKey(st0), currentSchedule)
+        val prevReport = prev?.let { p -> withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, p) } }
+        // 評価を待つ間に実行の世代・入力・盤面が変わっていたら当てない。
+        val stNow = state
+        if (!before.unchanged(bgRunId, stNow, stNow?.let { stateKey(it) } ?: 0L, currentSchedule)) { abandonStaleBgResult(); return }
+        bgStateKey = 0L; bgRunId = 0L; bgInput = null
+        if (prev != null && prevReport != null) {
             val newHard = r.report.hard.toLong(); val newTotal = r.report.total
             // [3.287.0 keep-best統一 → 3.289.0 で単一ソースへ委譲] 手書きの3節複製をやめ betterReport
             //   （hard→weightedScore→total）に一本化。将来の順序変更でここだけ取り残される事故を防ぐ。
@@ -673,7 +717,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = kept
                 resultSchedule = kept
                 state = st0.withSchedule(kept)
-                autoSave()
                 // [3.475.0/論理監査] runLabel を付ける。旧: 背景実行の診断は「実行外」に分類され、
                 //   1回でも手編集すると rawDiagLogs が上書きされて書き出しログから消えていた。
                 pushReport(state ?: st0, kept, prevReport, runLabel = "バックグラウンド最適化") { it.copy(
@@ -685,7 +728,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // 前景の維持分岐と同じ＝次回ヒントの族は維持した盤面から取る。
                 lastResultHard = prevReport.hard.toLong()
                 lastTopHardFamily = if (prevReport.hard > 0) topHardFamilyJp(prevReport.breakdown) else null
-                discardBgResult("背景結果: 前回を維持")
+                val saved = persistNow()
+                if (!saved) logOp("W", "背景結果: 維持した勤務表を保存できなかったため、復元元のファイルを残しました")
+                discardBgResult("背景結果: 前回を維持", keepFiles = !saved)
                 return
             }
         }
@@ -693,7 +738,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         currentSchedule = sched
         resultSchedule = sched
         state = st0.withSchedule(sched)
-        autoSave()
         captureAlternatives(r.alternatives)   // [3.592.0] 背景結果にも前景と同じ「他の案」を反映する
         pushReport(state ?: st0, sched, r.report, runLabel = "バックグラウンド最適化") { it.copy(
             messageIsError = false,
@@ -704,8 +748,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
         lastResultHard = r.report.hard.toLong()
         lastTopHardFamily = if (r.report.hard > 0) topHardFamilyJp(r.report.breakdown) else null
-        clearRunMarker()
-        clearBgFiles("背景最適化 完了")   // [C1] 完了で途中状態ファイルを削除
+        // [C1] 完了で途中状態ファイルを削除。ただし反映した盤面の保存が成功してから（保存前に落ちると結果を失う）。
+        val cleared = com.magi.app.work.clearAfterSaved({ persistNow() }) { clearRunMarker(); clearBgFiles("背景最適化 完了") }
+        if (!cleared) logOp("W", "背景最適化の結果を保存できなかったため、結果のファイルを残しました（次回起動で再び反映できます）")
         // 消費したらクリア（再生成時の二重適用を防ぐ）
         OptimizationRepository.request = null
         OptimizationRepository.publishResult(null)
@@ -731,17 +776,39 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val build = exportJsonDeferred() ?: return@launch
             val json = withContext(Dispatchers.Default) { build() }   // [3.569.0] 文字列化は main で行わない
             _ui.update { it.copy(saveState = SaveState.Saving) }
-            val ok = withContext(Dispatchers.IO) {
-                saveGate.writeIfLatest(gen) {
-                    runCatching {
-                        com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
-                    }.getOrDefault(false)
-                }
-            } ?: return@launch   // より新しい世代が先に書かれた＝この世代は捨てる（通知しない・状態も上書きしない）
+            val ok = writeAutosave(gen, json)
+                ?: return@launch   // より新しい世代が先に書かれた＝この世代は捨てる（通知しない・状態も上書きしない）
             _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
             reportNonAtomicSave()   // [3.428.0/#7] 記録は **main へ戻ってから**（下の KDoc 参照）
             reportAutoSave(ok)
         }
+    }
+
+    /** 自動保存の書き込み本体（IO）。null＝より新しい世代が先に書かれた。 */
+    private suspend fun writeAutosave(gen: Int, json: String): Boolean? = withContext(Dispatchers.IO) {
+        saveGate.writeIfLatest(gen) {
+            runCatching {
+                com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
+            }.getOrDefault(false)
+        }
+    }
+
+    /**
+     * デバウンスせずに今の状態を保存し、**書けたかを返す**。復元元（背景結果・途中最良）を消す前に呼ぶ。
+     * より新しい世代が先に書かれていたら、それは今の状態を含むので成功扱い。
+     */
+    private suspend fun persistNow(): Boolean {
+        if (!hydrated) return false
+        saveJob?.cancel()
+        val gen = ++saveGen
+        val build = exportJsonDeferred() ?: return false
+        _ui.update { it.copy(saveState = SaveState.Saving) }
+        val json = withContext(Dispatchers.Default) { build() }
+        val ok = writeAutosave(gen, json) ?: true
+        _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
+        reportNonAtomicSave()
+        reportAutoSave(ok)
+        return ok
     }
 
     /** 直前の自動保存が成功したか。失敗を連続で通知しないための状態。 */
@@ -2171,6 +2238,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val bgWasRunning = com.magi.app.work.bgStopApplies(OptimizationRepository.running.value, phases.hasJob, bgRunId, diskRunId)
         if (!bgWasRunning && bgRunId != 0L && bgRunId != diskRunId) { bgStateKey = 0L; bgRunId = 0L; bgInput = null }
         runCatching { androidx.work.WorkManager.getInstance(getApplication()).cancelUniqueWork(OptimizationWorker.UNIQUE) }
+        bgGuard.release()
         if (bgWasRunning) {
             OptimizationRepository.clear()
             // [3.442.0/C1 の押した側] `clear()` は progress/result だけを落とし **running は落とさない**。

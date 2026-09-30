@@ -139,6 +139,11 @@ object OptimizationRepository {
     fun publishNote(level: String, msg: String) { _notes.tryEmit(level to msg) }
 
     fun setRunning(v: Boolean) { _running.value = v }
+
+    private val _ended = MutableStateFlow(0L)
+    /** 最後に `doWork` を抜けた実行の ID。開始前に降りた実行も含む＝画面の編集ガード（BgEditGuard）を結果なしで開ける合図。 */
+    val ended: StateFlow<Long> = _ended.asStateFlow()
+    fun markEnded(runId: Long) { _ended.value = runId }
     fun publishProgress(p: BgProgress) { _progress.value = p }
     fun publishResult(r: BgResult?) { _result.value = r }
     fun clear() { _progress.value = null; _result.value = null }
