@@ -37,7 +37,8 @@ class MagiConditionsViewTest {
         assertEquals("need2 だけでは必要人数は未設定のまま", "未設定", needBaseLabel("", "5", use2 = false))
         assertEquals("3人", needBaseLabel("3", "3", use2 = true))
         assertEquals("上限人数", needUpperLabel(use2 = true))
-        assertEquals("上限(2パターン時)", needUpperLabel(use2 = false, short = true))
+        assertEquals("上限", needUpperLabel(use2 = false, short = true))
+        assertEquals("上限人数", needUpperLabel(use2 = false))
     }
 
     private fun load(): MagiState =

@@ -37,6 +37,8 @@ data class UiState(
      * 残っている項目」の判定には使えない（手編集だけで「計算後」と語っていた）。読込・取込で false に戻す。
      */
     val engineRan: Boolean = false,
+    /** いまの盤面が S6（設定を緩めて手順を当てる）の結果か。分析タブの注記だけが読む。engineRan を書く箇所で false に戻す。 */
+    val relaxedBoard: Boolean = false,
     /**
      * [3.502.0/バックログ#10] 表示中の検査結果の世代。makeUi（検査完了・最適化完了など報告の反映）のたびに増える。
      * 「押したあとの再検査が盤面に追いついたか」を schedule の変化でなくこの世代で判定する（schedule は setCell 直後に

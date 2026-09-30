@@ -324,7 +324,7 @@ private fun ShiftDialog(
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             W1Field("最低人数", need1, Modifier.weight(1f), isError = bad) { need1 = it }
-            W1Field("上限人数(2パターン時)", need2, Modifier.weight(1f), isError = bad) { need2 = it }
+            W1Field("上限人数", need2, Modifier.weight(1f), isError = bad) { need2 = it }
         }
         if (bad) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
         // [3.603.0/backlog#24] 休の識別を記号でなくここで明示指定する（単一選択＝ONにすると他は自動でOFF）。

@@ -88,7 +88,7 @@ internal fun CellEditSheet(
     onRetryRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
     onMode: (Int) -> Unit = {},
-    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「すべてのシフト ▾」のタップだけ
+    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「他 ▸」のタップだけ
     onToggleExpand: () -> Unit = {},
     tourPrev: Pair<Int, Int>? = null,
 ) {
@@ -384,7 +384,7 @@ private fun PeekBody(
                             else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
                         }
                     }
-                    TextButton(onClick = onToggleExpand, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフト ▾" },
+                    TextButton(onClick = onToggleExpand, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフトを表示" },
                         contentPadding = PaddingValues(0.dp)) { Text("他 ▸", maxLines = 1) }
                 }
                 if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
