@@ -113,6 +113,10 @@ data class ScheduleRunResult(
     /** [3.592.0] 実日付ヘッダ(build()のM/D(曜)形式)が今の対象期間と列位置で食い違う列数。数字のみの
      *  日番号ヘッダ（位置指定・日付なしCSV）は対象外＝別機能のまま。0=見出しなし/全一致。 */
     val headerDateMismatches: Int = 0,
+    /** 同じ名前の職員が複数いるため取り込まなかった CSV の氏名（CSV の表記のまま）。 */
+    val ambiguousNames: List<String> = emptyList(),
+    /** 1人に解決する氏名の行が CSV に2行以上あった職員（後の行が前の行を上書きした）。 */
+    val duplicateRowNames: List<String> = emptyList(),
 )
 
 data class LightOptimizeResult(

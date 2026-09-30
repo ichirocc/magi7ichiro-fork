@@ -6,6 +6,7 @@ import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.magi.app.v6.PreRunCheck
 import com.magi.app.v6.betterReport
+import com.magi.app.v6.csvAmbiguousText
 import com.magi.app.v6.Problem
 import com.magi.app.v6.ScheduleCsvBridge
 import com.magi.app.v6.UnifiedViolationChecker
@@ -3081,6 +3082,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     //   旧: quoteWarn は成功経路でしか組み立てず、ここでは「氏名不一致」とだけ案内していた。
                     val why = if (res.unclosedQuote)
                         "CSV取込失敗: 引用符（\"）が閉じていない行があり、そこから後ろが1つのセルに吸い込まれています。書式を直してから取り込んでください。"
+                    else if (res.ambiguousNames.isNotEmpty())
+                        "CSV取込失敗: ${csvAmbiguousText(res.ambiguousNames)}"
                     else
                         "CSV取込失敗: 一致する職員名がありませんでした（0名）。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。"
                     _ui.update { it.copy(messageIsError = true, running = false, message = why) }
@@ -3108,12 +3111,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [3.592.0] 実日付ヘッダが今の対象期間とズレたまま列位置で取り込んだ場合の警告。
                 val dateWarn = if (res.headerDateMismatches > 0)
                     "｜⚠ CSVヘッダの日付が今の期間と${res.headerDateMismatches}列ズレています（列の位置で取り込みました）" else ""
+                val dupWarn = (if (res.ambiguousNames.isNotEmpty()) "｜⚠ ${csvAmbiguousText(res.ambiguousNames)}" else "") +
+                    (if (res.duplicateRowNames.isNotEmpty()) "｜⚠ 同じ職員の行が複数あり、後の行で上書きしました: ${res.duplicateRowNames.joinToString("・")}" else "")
                 val msg = if (res.matched in 1 until total)
-                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn"
+                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn"
                 else
-                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn"
+                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn"
                 pushReport(state ?: st, res.schedule, res.report) { it.copy(
-                    messageIsError = res.unknownCells > 0 || res.unclosedQuote || res.headerDateMismatches > 0,
+                    messageIsError = res.unknownCells > 0 || res.unclosedQuote || res.headerDateMismatches > 0 || dupWarn.isNotEmpty(),
                     running = false,
                     hasResult = true,
                     relaxedBoard = false, engineRan = false,   // [3.475.0] CSV取込は手操作扱い
@@ -3125,6 +3130,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (res.unknownCells > 0) {
                     logOp("W", "CSV取込 読めない記号 ${res.unknownCells}セル: ${res.unknownSymbols.joinToString("・")}（シフト一覧に無い記号）")
                 }
+                if (dupWarn.isNotEmpty()) logOp("W", "CSV取込 ${dupWarn.removePrefix("｜⚠ ").replace("｜⚠ ", " / ")}")
                 logOp("I", "CSV取込 完了 ${res.matched}名一致 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: CancellationException) {
                 // [3.592.0] pushUndo済み(=盤面を既に書き換え済み)なら取込前へロールバックする。旧: 診断

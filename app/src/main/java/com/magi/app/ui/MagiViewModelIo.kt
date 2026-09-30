@@ -24,7 +24,7 @@ import kotlinx.coroutines.flow.update
  * _ui（メッセージ表示等の update。UiState 更新は従来どおり copy ベースの単方向フローのみ）・
  * logOp・load/loadAsync・applyStructureWithMessage。
  */
-/** Current JSON to export. ws1 edits -> full serialize; constraint edits -> overwrite cons; else schedule only. */
+/** Current JSON to export. ws1 edits -> full serialize; constraint edits -> overwrite cons; else schedule + manual pins. */
 fun MagiViewModel.exportJson(): String? = exportJsonDeferred()?.invoke()
 
 /** [3.569.0] 入力の固定（main で呼ぶ。盤面は編集で書き換わるので複製）と文字列化（任意のスレッド）を分ける。 */
@@ -32,10 +32,9 @@ fun MagiViewModel.exportJsonDeferred(): (() -> String)? {
     val sched = (currentSchedule ?: resultSchedule ?: return null).copy2D()
     val st = state
     val ui = _ui.value
-    if (ui.structureEdited && st != null) return { StateParser.serialize(st, sched) }
-    val orig = originalJson ?: return null
-    return if (ui.constraintsEdited && st != null) { { StateParser.exportWithEdits(orig, st, sched) } }
-    else { { StateParser.exportWithSchedule(orig, sched) } }
+    val orig = originalJson
+    if (!(ui.structureEdited && st != null) && orig == null) return null
+    return { StateParser.exportCurrent(orig, st, sched, ui.structureEdited, ui.constraintsEdited)!! }
 }
 
 fun MagiViewModel.exportCsv(): String? {

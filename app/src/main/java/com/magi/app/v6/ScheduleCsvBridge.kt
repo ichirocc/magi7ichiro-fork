@@ -385,6 +385,10 @@ object ScheduleCsvBridge {
         //   旧: 後勝ちで、制約評価(最初)とCSV取込(最後)が同じ記号を別シフトとして扱っていた。
         val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         val kigouToK = firstWinsMap(state.shifts.size) { state.shifts[it].kigou.trim() }
+        // 同じ照合キーの職員が2人以上いる名前は、どの職員の行か決められない＝取り込まない（先勝ちだと後の職員の行が前の職員を上書きする）。
+        val ambiguousKeys = state.staff.groupingBy { nameMatchKey(it.name) }.eachCount().filterValues { it > 1 }.keys
+        val ambiguousNames = LinkedHashSet<String>()
+        val duplicateRowNames = LinkedHashSet<String>()
         // [3.475.0/論理監査] 一致は**職員単位**で数える（旧: 行単位＝同じ職員の行が2つあると 2 と数え、
         //   欠けている職員がいても「全員更新」に見えた。値は後勝ちで前の行が黙って上書きされる）。
         val matchedStaff = HashSet<Int>()
@@ -413,9 +417,11 @@ object ScheduleCsvBridge {
             if (r.isEmpty() || r.all { it.isBlank() }) break
             if (r[0].trim() == "集計") break
             if (r[0].trim().isNotEmpty()) {
-                val staffIndex = nameToI[nameMatchKey(r[0])]
+                val key = nameMatchKey(r[0])
+                val staffIndex = if (key in ambiguousKeys) null else nameToI[key]
+                if (key in ambiguousKeys) ambiguousNames.add(r[0].trim())
                 if (staffIndex != null) {
-                    matchedStaff.add(staffIndex)
+                    if (!matchedStaff.add(staffIndex)) duplicateRowNames.add(state.staff[staffIndex].name)
                     val last = minOf(p.T, r.size - 1)
                     var j = 0
                     while (j < last) {
@@ -443,9 +449,15 @@ object ScheduleCsvBridge {
             unknownCells = unknownTotal, unknownSymbols = unknownTop,
             unclosedQuote = parsedAll.unclosedQuote,
             headerDateMismatches = headerDateMismatches,
+            ambiguousNames = ambiguousNames.toList(),
+            duplicateRowNames = duplicateRowNames.toList(),
         )
     }
 }
+
+/** 同名の職員が複数いて取り込まなかった氏名の案内（画面とログで同じ文言）。 */
+fun csvAmbiguousText(names: List<String>): String =
+    "同じ名前の職員が複数いるため取り込みませんでした: ${names.joinToString("・")}"
 
 /** 勤務表CSVのヘッダ行か: 先頭セルが「スタッフ」を含むか、2 列目以降の非空セルがすべて日付列（数字・日付書式）。 */
 private fun looksLikeHeaderRow(row: List<String>): Boolean {
