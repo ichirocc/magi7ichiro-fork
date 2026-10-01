@@ -361,4 +361,17 @@ class CellSheetLogicTest {
         assertEquals(1, peekPickCount(40))
         assertEquals(4, peekPickCount(800))
     }
+
+    /** 人員不足・過剰の文言はチェッカー（covUCell/covOCell）と同じ実効の必要数を出す。 */
+    @Test fun coverageWordingUsesCheckersEffectiveDemand() {
+        val k = s[0][0].takeIf { it >= 0 } ?: 0
+        fun detail(need1: String, need2: String, fam: String): String {
+            val sh = st.shifts.mapIndexed { idx, x -> if (idx == k) x.copy(need1 = need1, need2 = need2) else x }
+            val st2 = st.copy(shifts = sh, use2Patterns = true, needDay1 = emptyMap(), needDay2 = emptyMap())
+            return cellStatusLine(st2, cachedProblem(st2), s, 0, 0, listOf(fam)).text
+        }
+        assertTrue(detail("", "3", "covU"), detail("", "3", "covU").contains("必要3人"))
+        assertTrue(detail("5", "3", "covU"), detail("5", "3", "covU").contains("必要3人"))
+        assertTrue(detail("5", "3", "covO"), detail("5", "3", "covO").contains("適正5人"))
+    }
 }
