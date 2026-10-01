@@ -213,6 +213,7 @@ internal object C1WindowPolish {
             windowLoop@ for (w in index.windows.sortedByDescending { it.deficit }) {
                 if (shouldStop()) break
                 val staff = w.staff; val shift = w.shift
+                if (!p.mayPlace(staff, shift)) continue   // [3.507.0] 上限0は置かない
                 val cands = (w.start until w.start + w.windowDays)
                     .filter { d ->
                         // [厳密ピン保護/3.522.0] 希望固定日は候補から除外。screenCellのdelta合算は
@@ -372,7 +373,7 @@ internal object C1WindowPolish {
                 for (i in 0 until p.S) {
                     if (shouldStop()) break
                     if (i !in anchorStaff) continue
-                    if (!p.canDo(i, x)) continue
+                    if (!p.mayPlace(i, x)) continue
                     // [移設ドナー] i 自身の X 保有日のうち「抜いても this ルールの窓が新規に不足化しない」余剰位置。
                     //   盤面が変わるたび(i,x)単位で無効化し次の j で再構築する（遅延キャッシュ）。
                     var donorsCache: List<Int>? = null
@@ -746,7 +747,7 @@ internal object C1WindowPolish {
                 val x = c.shiftIdx; val d = c.day1; val n = c.day2
                 if (x !in 0 until p.K || d <= 0) continue
                 for (i in 0 until p.S) {
-                    if (!p.canDo(i, x)) continue
+                    if (!p.mayPlace(i, x)) continue
                     for (j in 0 until p.T) {
                         if (work[i][j] == x || !movable(i, j)) continue
                         if (inDeficientC1Window(p, work, i, x, d, n, j)) out.add(Triple(ci, i, j))
