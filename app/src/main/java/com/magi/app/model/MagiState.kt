@@ -87,12 +87,31 @@ data class MagiState(
 /** [#41] セル (i,j) の手動固定（無ければ null）。 */
 fun MagiState.pinAt(i: Int, j: Int): ManualPin? = manualPins.firstOrNull { it.staff == i && it.day == j }
 
-/** [#41] 手の編集で [cells] が [shift] になったとき、固定されたセルの値を追従させる（固定は残す）。固定に当たらなければ同じ state。 */
+/** [#41] 手の編集で [cells] が [shift] になったとき、固定されたセルの値を追従させる（固定は残す）。固定に当たらなければ同じ state。
+ *  [shift] がシフト範囲外なら固定は外す（エンジンは範囲外の固定を無視するのに、表示の固定集合だけが残るのを避ける）。 */
 fun MagiState.withPinsFollowing(cells: Collection<Pair<Int, Int>>, shift: Int): MagiState {
     if (manualPins.isEmpty()) return this
     val set = cells.toHashSet()
     if (manualPins.none { (it.staff to it.day) in set && it.shift != shift }) return this
+    if (shift !in 0 until shiftCount) return copy(manualPins = manualPins.filterNot { (it.staff to it.day) in set })
     return copy(manualPins = manualPins.map { if ((it.staff to it.day) in set) it.copy(shift = shift) else it })
+}
+
+/** [#41] 盤面ごと置き換わった（CSV 取込）とき、[old] から [new] で値が変わったセルの固定を新しい値へ追従させる。
+ *  新しい値が -1／シフト範囲外なら固定は外す（[withPinsFollowing] と同じ規約）。変わらないセルの固定はそのまま。
+ *  戻り値の件数＝追従または外した固定の数。 */
+fun MagiState.withPinsFollowingBoard(old: Array<IntArray>, new: Array<IntArray>): Pair<MagiState, Int> {
+    if (manualPins.isEmpty()) return this to 0
+    var n = 0
+    val out = ArrayList<ManualPin>(manualPins.size)
+    for (m in manualPins) {
+        val was = old.getOrNull(m.staff)?.getOrNull(m.day)
+        val now = new.getOrNull(m.staff)?.getOrNull(m.day)
+        if (now == null || now == was) { out += m; continue }
+        n++
+        if (now in 0 until shiftCount) out += m.copy(shift = now)
+    }
+    return if (n == 0) this to 0 else copy(manualPins = out) to n
 }
 
 /** [#41] セル (i,j) を [shift] で固定する／固定を外す（トグル）。 */

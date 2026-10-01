@@ -47,6 +47,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -203,6 +206,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
+    var gridTopInContent by remember { mutableIntStateOf(-1) }   // 勤務表グリッドの上端（タブ本体のスクロール内容座標 px）
+    var prevTab by remember { mutableIntStateOf(-1) }
     var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見）
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
@@ -512,6 +517,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         vm.clearMessage(m)
     }
 
+    // [勤務表の縦寸法] 下部バーの種別（勤務表タブは週送り＋元に戻す＋つくるを 1 本に、シートを開いている間は隠す）。
+    val barMode = bottomBarMode(ui.loaded, tab == 1, editingCell != null, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }, onHardTour = {
@@ -519,10 +526,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }) },
         bottomBar = {
             Column {
-                // [3.481.0 勤務表タブ再設計②] 週送り/違反ナビを勤務表タブ表示中だけ下部バーへ常駐
-                //   （スクロール位置に関係なく親指で押せる。3.444.0 で保留した Scaffold 側への引き上げ）。
-                if (ui.loaded && tab == 1) ScheduleNavBar(ui, schedNav, hideVioNav = editingCell != null && tourActive)
-                if (ui.loaded) BottomCommandBar(ui, vm)
+                when (barMode) {
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm)
+                    BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
+                        ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION)
+                    BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
+                }
                 MagiBottomNav(tab) { tab = it }
             }
         },
@@ -595,6 +604,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowRelax = { relaxFrom = null; relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
                         relaxStopped = vm.relaxStopped(),
+                        relaxFailed = vm.relaxFailed(),
                         onRetryRelax = { vm.retryRelaxTrial() },
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
@@ -650,14 +660,17 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
                     val vioLocCount = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
                     ViolationFilterBar(vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket,
-                        locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it })
+                        locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it },
+                        vioDayNavOn = schedNav.vioMode, onVioDayNav = { schedNav.vioMode = !schedNav.vioMode })
                     // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
                     SearchLegendBar(ui, searchQuery, onQuery = { searchQuery = it })
+                    Box(Modifier.onGloballyPositioned { if (viewportTopPx >= 0f) gridTopInContent = (it.positionInRoot().y - viewportTopPx + tabScrolls[1].value).toInt() }) {
                     ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
                         canDo = canDoShift, plainCellBorder = plainCellBorder, cv = conditionsView, onEvent = onEvent, fixNav = fixNav,
-                        nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1], editCell = editingCell, sheetPx = sheetPx)
+                        nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1], editCell = editingCell, sheetPx = sheetPx, barKey = barMode.ordinal)
+                    }
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav)
@@ -838,7 +851,16 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             // 下部コマンドバー分の余白。セル編集シートを開いている間は、最後の行もシートの上へ出せるだけ足す。
             Spacer(Modifier.height(if (editingCell != null && tab == 1) with(LocalDensity.current) { sheetPx.toDp() } else 12.dp))
         }
-        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false; sheetExpanded = false } }
+        LaunchedEffect(tab) { if (tab != 1) { editingCell = null; tourActive = false; sheetExpanded = false; schedNav.vioMode = false } }
+        // [勤務表の縦寸法] 勤務表タブを開いたときだけ、縦スクロールをグリッドの上端へ（フィルタ・検索は上へスクロールで届く）。
+        //   シートを開いて入る（巡回）・要確認一覧からの注目セルは各自の位置決めがあるので動かさない。
+        LaunchedEffect(tab) {
+            val prev = prevTab; prevTab = tab
+            if (!shouldScrollToGridTop(prev, tab, ui.loaded, editingCell != null, focusCell != null)) return@LaunchedEffect
+            withFrameNanos { }; withFrameNanos { }   // 開いた直後の配置が確定してから測る
+            val top = snapshotFlow { gridTopInContent }.first { it >= 0 }
+            tabScrolls[1].scrollTo(top)
+        }
         val cell = editingCell
         if (cell != null && tab == 1) {
             val closeSheet = { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false }
@@ -879,6 +901,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     relax = vm.relaxTrialFor(),
                     relaxNoWall = vm.relaxNoWall(),
                     relaxStopped = vm.relaxStopped(),
+                    relaxUnavailable = vm.relaxUnavailable(),
+                    relaxFailed = vm.relaxFailed(),
                     onShowRelax = { relaxFrom = cell; relaxDialog = true },
                     onRetryRelax = { vm.retryRelaxTrial() },
                     mode = sheetMode,
@@ -886,6 +910,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     expanded = sheetExpanded,
                     onToggleExpand = { sheetExpanded = !sheetExpanded },
                     tourPrev = if (tourActive && tourItems.size > 1) tourItems[(tourAt - 1 + tourItems.size) % tourItems.size].cell else null,
+                    canUndo = ui.canUndo && !ui.running,
+                    onUndo = { vm.undo() },
                 )
             }
         }
@@ -945,6 +971,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }
                 },
                 dismissButton = { DialogDismissButton(onClick = { pendingCsvImport = null }) },
+            )
+        }
+        ui.csvPartialPrompt?.let { prompt ->
+            AlertDialog(
+                onDismissRequest = { vm.cancelCsvPartialImport() },
+                title = { Text("引用符が閉じていないCSV") },
+                text = { Text(prompt) },
+                confirmButton = { DialogConfirmButton(com.magi.app.v6.CsvPartialImport.CONFIRM_LABEL, onClick = { vm.confirmCsvPartialImport() }) },
+                dismissButton = { DialogDismissButton(onClick = { vm.cancelCsvPartialImport() }, text = com.magi.app.v6.CsvPartialImport.CANCEL_LABEL) },
             )
         }
         rosterCsvChoice?.let { csvText ->
@@ -1053,6 +1088,41 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
 }
 
 
+/** 停止/作成/もう一度の主ボタン（勤務表タブの統合バーと BottomCommandBar で同じ規則）。 */
+@Composable
+internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modifier, showIcon: Boolean = true) {
+    val cs = MaterialTheme.colorScheme
+    when {
+        // [3.402.0] 「直し方を探す」の最中も「やめる」を出す。`stop()` は元から
+        //   `running || fixSearching` を見て両方を戻す（3.284.0）のに、**このボタンのゲートだけ
+        //   `ui.running` に限定**されており、探索中は止める手段が画面上に一つも無かった。
+        ui.running || ui.fixSearching -> Button(
+            onClick = { vm.stop() },
+            modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
+        ) {
+            if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
+            Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        !ui.hasResult -> Button(
+            // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
+            //   [3.126.0] 「下書きをつくる」補助はユーザー判断で撤去済み＝作成導線はこの1本。
+            onClick = { vm.runV6FullOptimize() },
+            modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
+        ) {
+            if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
+            Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        else -> Button(
+            onClick = { vm.runV6FullOptimize() },
+            modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
+        ) {
+            if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
+            Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
 @Composable
 internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
     val cs = MaterialTheme.colorScheme
@@ -1064,13 +1134,13 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
         //   ラベルが省略されるため、狭い端末では補助2ボタンをアイコンだけにする（読み上げは従来どおり）。
         val narrow = this.maxWidth < 390.dp
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = ScheduleLayoutMetrics.COMMAND_BAR_PAD_V_DP.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (ui.canUndo && !ui.running) {
                 OutlinedButton(
                     onClick = { vm.undo() },
-                    modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "直前の操作を元に戻す" },
+                    modifier = Modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp).semantics { contentDescription = "直前の操作を元に戻す" },
                     contentPadding = if (narrow) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding,
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null) else Text("元に戻す") }
                 Spacer(Modifier.width(10.dp))
@@ -1079,43 +1149,12 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
             if (ui.canRedo && !ui.running) {
                 OutlinedButton(
                     onClick = { vm.redo() },
-                    modifier = Modifier.heightIn(min = 60.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
+                    modifier = Modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp).semantics { contentDescription = "元に戻した操作をやり直す" },
                     contentPadding = if (narrow) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding,
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) else Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
-            when {
-                // [3.402.0] 「直し方を探す」の最中も「やめる」を出す。`stop()` は元から
-                //   `running || fixSearching` を見て両方を戻す（3.284.0）のに、**このボタンのゲートだけ
-                //   `ui.running` に限定**されており、探索中は止める手段が画面上に一つも無かった。
-                ui.running || ui.fixSearching -> Button(
-                    onClick = { vm.stop() },
-                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
-                ) {
-                    Icon(Icons.Filled.Stop, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                !ui.hasResult -> Button(
-                    // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
-                    //   [3.126.0] 「下書きをつくる」補助はユーザー判断で撤去済み＝作成導線はこの1本。
-                    onClick = { vm.runV6FullOptimize() },
-                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                else -> Button(
-                    onClick = { vm.runV6FullOptimize() },
-                    modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
+            PrimaryCommandButton(ui, vm, Modifier.weight(1f))
         }
         }
     }

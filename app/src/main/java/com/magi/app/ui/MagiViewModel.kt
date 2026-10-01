@@ -6,10 +6,14 @@ import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.magi.app.v6.PreRunCheck
 import com.magi.app.v6.betterReport
+import com.magi.app.v6.csvAmbiguousText
+import com.magi.app.v6.CsvPartialImport
+import com.magi.app.v6.ScheduleRunResult
 import com.magi.app.v6.Problem
 import com.magi.app.v6.ScheduleCsvBridge
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.ViolationReport
+import com.magi.app.v6.c3SeqKey
 import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.V6PortAnalyzer
 import com.magi.app.v6.SettingIssue
@@ -43,6 +47,7 @@ import com.magi.app.v6.lockTo
 import com.magi.app.v6.pinned
 import com.magi.app.model.togglePin
 import com.magi.app.model.withPinsFollowing
+import com.magi.app.model.withPinsFollowingBoard
 import com.magi.app.v6.wishLocked
 import com.magi.app.work.OptimizationRepository
 import com.magi.app.work.OptimizationWorker
@@ -135,6 +140,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     @Volatile private var activeRunSerial = 0
 
     private fun beginBoardJob(phase: MagiPhase, engineRun: Boolean = false): Int {
+        dropCsvPartial()    // 確認待ちの部分取込は、盤面を動かすジョブが始まった時点で古い
         cancelWishTrial()   // [S5 §8] 盤面を差し替えるジョブの前に試算の CPU を返す
         cancelRelaxTrial()  // [S6 §8] 同じ
         cancelFixSearch()   // 直し方の探索も同じ（走らせたままだと差し替え前の盤面の提案が完了後に残る）
@@ -169,7 +175,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * 「盤面を丸ごと差し替えるジョブが走っている」。
      */
     internal fun optimizeInFlight(): Boolean =
-        phases.hasJob || OptimizationRepository.running.value
+        phases.hasJob || OptimizationRepository.running.value || bgGuard.closed
+
+    /** 背景実行の投入から反映し終えるまで閉じる編集ガード（Worker が running を立てる前後の窓を塞ぐ）。 */
+    private val bgGuard = com.magi.app.work.BgEditGuard()
 
     // ===== [v2.22] 自動保存・復元（端末内）と「元に戻す」 =====
     private val autosaveFile get() = getApplication<Application>().filesDir.resolve("magi_autosave.json")
@@ -394,9 +403,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 logOp("W", "前回のバックグラウンド最適化の完了結果が壊れていて読めませんでした（入力と途中結果は残してあります）")
                 runCatching { OptimizationWorker.resultFile(getApplication()).delete() }
             }
+            // 復元元は、復元した状態の保存が成功してから消す（下の hydrated の後）。
+            var clearAfterRestore: String? = null
             if (resultUsable) {
-                clearRunMarker()
-                clearBgFiles("前回の完了結果を反映")
+                clearAfterRestore = "前回の完了結果を反映"
                 OptimizationRepository.publishResult(null)   // [外部レビュー R6] 同じ結果がメモリにも残っていれば二重に当てない
                 if (state == null) loadAsync(resultTxt, markResult = true, fromRestore = true)   // initialAssignment が state.schedule を返すため結果が復元される
                 logOp("I", "前回のバックグラウンド最適化の結果を反映しました")
@@ -417,6 +427,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (bgActive) {
                     // 実行の ID はメモリにしか無い＝再起動で 0 に戻る。所有者の記録から戻し、再開前の「やめる」も背景の停止にする。
                     bgRunId = withContext(Dispatchers.IO) { runCatching { OptimizationWorker.activeRunId(getApplication()) }.getOrDefault(0L) }
+                    if (bgRunId != 0L) { bgGuard.begin(bgRunId); releaseGuardIfEndedWithoutResult() }
                     _ui.update { it.copy(messageIsError = false, running = true, message = "バックグラウンド最適化を継続中…（完了時に自動反映）") }
                     if (state == null && !txt.isNullOrBlank()) loadAsync(txt, fromRestore = true)
                     logOp("I", "バックグラウンド最適化の継続を検知（進捗を購読）")
@@ -441,12 +452,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     val resumeTxt = if (snapUsable) snapTxt else txt
                     if (!resumeTxt.isNullOrBlank()) loadAsync(resumeTxt, fromRestore = true)
-                    if (snapUsable) clearBgFiles("途中結果の復元後")   // 消費できたときだけ掃除
+                    if (snapUsable) clearAfterRestore = "途中結果の復元後"   // 消費できたときだけ掃除
                 }
                 }
             }
             hydrated = true
             job?.join()   // [外部レビュー R6] 上の loadAsync が state を立てるまで待つ
+            clearAfterRestore?.let { where ->
+                val cleared = com.magi.app.work.clearAfterSaved({ persistNow() }) { clearRunMarker(); clearBgFiles(where) }
+                if (!cleared) logOp("W", "$where: 復元した状態を保存できなかったため、復元元のファイルを残しました（次回起動で再び戻せます）")
+            }
             restoreLoaded.value = true
         }
         // バックグラウンド最適化（WorkManager）の進捗・結果を購読して画面へ反映（仕様書 §6.3）
@@ -474,7 +489,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (e: Throwable) {
                     logOp("W", "背景結果の反映に失敗: ${e.javaClass.simpleName}: ${e.message}")
                     // 結果ファイルが残ると次の起動がそれを自動保存より先に読み、この後の編集を消す。
-                    bgStateKey = 0L; bgRunId = 0L; bgInput = null
+                    bgStateKey = 0L; bgRunId = 0L; bgInput = null; bgGuard.release()
                     discardBgResult("背景結果の反映に失敗")
                     val cur = currentSchedule
                     _ui.update { it.copy(running = false, hasResult = cur != null, messageIsError = true,
@@ -488,6 +503,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   1行も残らず、「5分回した実行が消えた」理由を後から追えなかった。
         viewModelScope.launch {
             OptimizationRepository.notes.collect { (level, msg) -> logOp(level, msg) }
+        }
+        viewModelScope.launch {
+            OptimizationRepository.ended.collect { releaseGuardIfEndedWithoutResult() }
         }
         // [3.409.13/レビュー#7] `ui.running`（表示の写し）が背景実行で stale-false になる経路を**源で**塞ぐ。
         //   3.336.0 は「init 時の WorkManager 問い合わせが失敗すると背景で走っているのに写しが false のまま」
@@ -561,6 +579,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.328.0] この結果を後で当ててよいかを判断するための入力の指紋。
         bgStateKey = stateKey(st0)
         bgRunId = runId
+        bgGuard.begin(runId)   // 投入の時点で閉じる（Worker が running を立てるまで待たない）
         // [3.475.0/論理監査] keep-best の比較先は「この実行に渡した入力」。旧: resultSchedule（前回の結果）と
         //   比較していたため、前回結果のあとに手編集した盤面で背景実行すると、入力より悪化さえしていない
         //   その編集が「前回の結果を維持」の名目で黙って巻き戻された（前景 runV6FullOptimize は元から入力比較）。
@@ -586,6 +605,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             OptimizationRepository.request = null
             bgStateKey = 0L
             bgRunId = 0L
+            bgGuard.end(runId)
             clearBgFiles("バックグラウンド最適化の投入に失敗")
             notify("バックグラウンド最適化を開始できませんでした（端末の状態をご確認ください）", "W")
         }
@@ -618,14 +638,39 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** [3.475.0] 破棄する背景結果の後始末を一箇所に。旧: 「入力が変わった」分岐だけこれを一切せず、
      *  結果ファイルが残って次回起動時に無関係なデータへ復元されうる穴があった。 */
-    private fun discardBgResult(reason: String) {
-        clearRunMarker()
-        clearBgFiles(reason)
+    private fun discardBgResult(reason: String, keepFiles: Boolean = false) {
+        if (!keepFiles) {
+            clearRunMarker()
+            clearBgFiles(reason)
+        }
         OptimizationRepository.request = null
         OptimizationRepository.publishResult(null)
     }
 
+    /** Worker が結果なしで降りた（開始前の離脱・失敗・停止・置き換え）なら、この実行の編集ガードを開ける。 */
+    private fun releaseGuardIfEndedWithoutResult() {
+        val id = bgGuard.pendingRunId
+        if (id == 0L || OptimizationRepository.ended.value != id) return
+        if (OptimizationRepository.result.value?.runId == id) return   // 結果の反映（applyBgResult）が開ける
+        bgGuard.end(id)
+        if (!phases.hasJob && checkJob?.isActive != true && !OptimizationRepository.running.value) {
+            _ui.update { it.copy(running = false) }
+        }
+    }
+
     private suspend fun applyBgResult(r: OptimizationRepository.BgResult) {
+        try { applyBgResultGuarded(r) } finally { bgGuard.end(r.runId) }
+    }
+
+    /** 反映の直前の再確認に通らなかった結果を捨てる（待つ間に実行・入力・盤面が変わった）。 */
+    private fun abandonStaleBgResult() {
+        bgStateKey = 0L; bgRunId = 0L; bgInput = null
+        logOp("W", "バックグラウンド最適化の結果を破棄しました（反映の直前に実行・入力・盤面のいずれかが変わっていたため）")
+        _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に勤務表または設定が変わったため、結果は反映しませんでした。もう一度つくってください。") }
+        discardBgResult("背景結果: 反映直前の再確認で破棄")
+    }
+
+    private suspend fun applyBgResultGuarded(r: OptimizationRepository.BgResult) {
         val st0 = state ?: return
         // [3.328.0/外部レビュー] 背景の結果は「開始時の入力」に対して計算されたもの。実行中に別のデータを
         //   開く・取り込むなどで入力が変わっていたら、その結果は今の入力の答えではないので捨てる
@@ -652,16 +697,21 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             discardBgResult("背景結果: 入力が変わったため破棄")
             return
         }
-        bgStateKey = 0L
-        bgRunId = 0L
         // [3.475.0/論理監査] keep-best の比較先は「この実行の入力」（bgInput）。旧: 前回の結果
         //   (resultSchedule) と比較していたため、前回結果のあとに手編集した盤面で背景実行すると、
         //   入力より悪化していないその編集が「前回の結果を維持」の名目で黙って巻き戻された。
         //   bgInput が無い（プロセス再起動後の復元経路）ときだけ、従来どおり前回の結果と比較する。
         val prev = bgInput ?: resultSchedule
-        bgInput = null
-        if (prev != null) {
-            val prevReport = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, prev) }
+        // 投入後に盤面が変わっていたら（ガードをすり抜けた編集）、この結果は今の盤面の答えではない。
+        val input = bgInput
+        if (input != null && currentSchedule?.contentDeepEquals(input) != true) { abandonStaleBgResult(); return }
+        val before = com.magi.app.work.BgApplySnapshot(bgRunId, st0, stateKey(st0), currentSchedule)
+        val prevReport = prev?.let { p -> withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, p) } }
+        // 評価を待つ間に実行の世代・入力・盤面が変わっていたら当てない。
+        val stNow = state
+        if (!before.unchanged(bgRunId, stNow, stNow?.let { stateKey(it) } ?: 0L, currentSchedule)) { abandonStaleBgResult(); return }
+        bgStateKey = 0L; bgRunId = 0L; bgInput = null
+        if (prev != null && prevReport != null) {
             val newHard = r.report.hard.toLong(); val newTotal = r.report.total
             // [3.287.0 keep-best統一 → 3.289.0 で単一ソースへ委譲] 手書きの3節複製をやめ betterReport
             //   （hard→weightedScore→total）に一本化。将来の順序変更でここだけ取り残される事故を防ぐ。
@@ -673,7 +723,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = kept
                 resultSchedule = kept
                 state = st0.withSchedule(kept)
-                autoSave()
                 // [3.475.0/論理監査] runLabel を付ける。旧: 背景実行の診断は「実行外」に分類され、
                 //   1回でも手編集すると rawDiagLogs が上書きされて書き出しログから消えていた。
                 pushReport(state ?: st0, kept, prevReport, runLabel = "バックグラウンド最適化") { it.copy(
@@ -685,7 +734,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // 前景の維持分岐と同じ＝次回ヒントの族は維持した盤面から取る。
                 lastResultHard = prevReport.hard.toLong()
                 lastTopHardFamily = if (prevReport.hard > 0) topHardFamilyJp(prevReport.breakdown) else null
-                discardBgResult("背景結果: 前回を維持")
+                val saved = persistNow()
+                if (!saved) logOp("W", "背景結果: 維持した勤務表を保存できなかったため、復元元のファイルを残しました")
+                discardBgResult("背景結果: 前回を維持", keepFiles = !saved)
                 return
             }
         }
@@ -693,7 +744,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         currentSchedule = sched
         resultSchedule = sched
         state = st0.withSchedule(sched)
-        autoSave()
         captureAlternatives(r.alternatives)   // [3.592.0] 背景結果にも前景と同じ「他の案」を反映する
         pushReport(state ?: st0, sched, r.report, runLabel = "バックグラウンド最適化") { it.copy(
             messageIsError = false,
@@ -704,8 +754,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
         lastResultHard = r.report.hard.toLong()
         lastTopHardFamily = if (r.report.hard > 0) topHardFamilyJp(r.report.breakdown) else null
-        clearRunMarker()
-        clearBgFiles("背景最適化 完了")   // [C1] 完了で途中状態ファイルを削除
+        // [C1] 完了で途中状態ファイルを削除。ただし反映した盤面の保存が成功してから（保存前に落ちると結果を失う）。
+        val cleared = com.magi.app.work.clearAfterSaved({ persistNow() }) { clearRunMarker(); clearBgFiles("背景最適化 完了") }
+        if (!cleared) logOp("W", "背景最適化の結果を保存できなかったため、結果のファイルを残しました（次回起動で再び反映できます）")
         // 消費したらクリア（再生成時の二重適用を防ぐ）
         OptimizationRepository.request = null
         OptimizationRepository.publishResult(null)
@@ -731,17 +782,39 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val build = exportJsonDeferred() ?: return@launch
             val json = withContext(Dispatchers.Default) { build() }   // [3.569.0] 文字列化は main で行わない
             _ui.update { it.copy(saveState = SaveState.Saving) }
-            val ok = withContext(Dispatchers.IO) {
-                saveGate.writeIfLatest(gen) {
-                    runCatching {
-                        com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
-                    }.getOrDefault(false)
-                }
-            } ?: return@launch   // より新しい世代が先に書かれた＝この世代は捨てる（通知しない・状態も上書きしない）
+            val ok = writeAutosave(gen, json)
+                ?: return@launch   // より新しい世代が先に書かれた＝この世代は捨てる（通知しない・状態も上書きしない）
             _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
             reportNonAtomicSave()   // [3.428.0/#7] 記録は **main へ戻ってから**（下の KDoc 参照）
             reportAutoSave(ok)
         }
+    }
+
+    /** 自動保存の書き込み本体（IO）。null＝より新しい世代が先に書かれた。 */
+    private suspend fun writeAutosave(gen: Int, json: String): Boolean? = withContext(Dispatchers.IO) {
+        saveGate.writeIfLatest(gen) {
+            runCatching {
+                com.magi.app.work.writeFileAtomically(autosaveFile, json, onNonAtomic = { nonAtomicSaveSeen = true })
+            }.getOrDefault(false)
+        }
+    }
+
+    /**
+     * デバウンスせずに今の状態を保存し、**書けたかを返す**。復元元（背景結果・途中最良）を消す前に呼ぶ。
+     * より新しい世代が先に書かれていたら、それは今の状態を含むので成功扱い。
+     */
+    private suspend fun persistNow(): Boolean {
+        if (!hydrated) return false
+        saveJob?.cancel()
+        val gen = ++saveGen
+        val build = exportJsonDeferred() ?: return false
+        _ui.update { it.copy(saveState = SaveState.Saving) }
+        val json = withContext(Dispatchers.Default) { build() }
+        val ok = writeAutosave(gen, json) ?: true
+        _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
+        reportNonAtomicSave()
+        reportAutoSave(ok)
+        return ok
     }
 
     /** 直前の自動保存が成功したか。失敗を連続で通知しないための状態。 */
@@ -808,6 +881,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun pushUndo(label: String? = null, invalidate: Boolean = true, colorKey: String? = null) {
+        if (invalidate) dropCsvPartial()
         val snap = snapNow(label, colorKey) ?: return
         undoStack.addLast(snap)
         while (undoStack.size > 30) undoStack.removeFirst()
@@ -833,6 +907,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (job?.isActive == true || optimizeInFlight()) return   // [3.328.0] 背景の最適化中も抑止（job は前景のみ）
         val snap = undoStack.removeLastOrNull() ?: return
         if (restoreDisplayOnly(snap, toRedo = true)) return
+        dropCsvPartial()
         snapNow(snap.label)?.let { redoStack.addLast(it) }   // [Web反映] 現在をやり直し用に退避（同じ操作名を引き継ぐ）
         state = snap.st
         val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
@@ -861,6 +936,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (job?.isActive == true || optimizeInFlight()) return   // [3.328.0] 背景の最適化中も抑止（job は前景のみ）
         val snap = redoStack.removeLastOrNull() ?: return
         if (restoreDisplayOnly(snap, toRedo = false)) return
+        dropCsvPartial()
         snapNow(snap.label)?.let { undoStack.addLast(it) }
         state = snap.st
         val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
@@ -1923,6 +1999,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var relaxResult: RelaxTrial.Outcome? = null
     private var relaxDone: Pair<RelaxCtx, String>? = null
     private var relaxStoppedCtx: RelaxCtx? = null
+    private var relaxFailedCtx: RelaxCtx? = null
 
     private fun relaxCtxNow(): RelaxCtx? {
         val st = state ?: return null
@@ -1939,7 +2016,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (relaxCtx == ctx && (relaxResult != null || relaxJob?.isActive == true)) return
         relaxJob?.cancel()
         val seq = ++relaxSeq
-        relaxCtx = ctx; relaxResult = null; relaxStoppedCtx = null
+        relaxCtx = ctx; relaxResult = null; relaxStoppedCtx = null; relaxFailedCtx = null
         val board = b.copy2D()
         _ui.update { it.copy(relaxSearching = true) }
         relaxJob = viewModelScope.launch {
@@ -1952,6 +2029,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 logOp("W", "設定の緩和の試算 失敗: ${e.javaClass.simpleName}: ${e.message}")
+                if (relaxOutcomeApplies(seq, relaxSeq, ctx, relaxCtxNow())) relaxFailedCtx = ctx
             } finally {
                 if (seq == relaxSeq) _ui.update { it.copy(relaxSearching = false, relaxRev = it.relaxRev + 1) }
             }
@@ -1973,8 +2051,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if (relaxCtxNow() == c) RelaxToken(c.stateKey, c.boardKey, r) else null
     }
 
-    /** いまのデータで探し終えて組が無かった（NoWall・試算不可）。走っている・未着手・古いなら false。 */
-    internal fun relaxNoWall(): Boolean = relaxCtx != null && relaxCtx == relaxCtxNow() && relaxResult != null && relaxResult !is RelaxTrial.Result
+    /** いまのデータで探し終えて組が無かった（NoWall）。走っている・未着手・古い・試算不可なら false。 */
+    internal fun relaxNoWall(): Boolean = relaxCtx != null && relaxCtx == relaxCtxNow() && relaxResult is RelaxTrial.NoWall
+
+    /** いまのデータでは試算できない理由（未割当のセルなど）。無い・古いなら null。 */
+    internal fun relaxUnavailable(): String? =
+        (relaxResult as? RelaxTrial.Unavailable)?.reason?.takeIf { relaxCtx != null && relaxCtx == relaxCtxNow() }
+
+    /** いまのデータで試算が失敗した（結果なし）。「もう一度試す」を出す。 */
+    internal fun relaxFailed(): Boolean = relaxFailedCtx != null && relaxFailedCtx == relaxCtxNow() && relaxResult == null
 
     /** いまのデータで試算を途中で止めた（結果なし）。「もう一度試す」を出す。 */
     internal fun relaxStopped(): Boolean = relaxStoppedCtx != null && relaxStoppedCtx == relaxCtxNow() && relaxResult == null
@@ -2162,6 +2247,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val bgWasRunning = com.magi.app.work.bgStopApplies(OptimizationRepository.running.value, phases.hasJob, bgRunId, diskRunId)
         if (!bgWasRunning && bgRunId != 0L && bgRunId != diskRunId) { bgStateKey = 0L; bgRunId = 0L; bgInput = null }
         runCatching { androidx.work.WorkManager.getInstance(getApplication()).cancelUniqueWork(OptimizationWorker.UNIQUE) }
+        bgGuard.release()
         if (bgWasRunning) {
             OptimizationRepository.clear()
             // [3.442.0/C1 の押した側] `clear()` は progress/result だけを落とし **running は落とさない**。
@@ -2426,10 +2512,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = if (on) "手動固定" else "手動固定を外す"
         pushUndo(label)
         val ns = st.withSchedule(sched).togglePin(i, j, cur)
+        val pinHint = if (on) pinRegisterHint(
+            canDo = cur in cachedProblem(st).canDoShiftsForStaff(i),
+            families = _ui.value.violationCellFamilies[VioKey.cell(i, j)].orEmpty()) else ""
         state = ns
         autoSave()
         _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
-            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${DayText.short(st.startDate, j)} を" + (if (on) "手動固定しました（自動では変更しません）" else "手動固定を外しました"),
+            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${DayText.short(st.startDate, j)} を" + (if (on) "手動固定しました（自動では変更しません）$pinHint" else "手動固定を外しました"),
                 undoStack.lastOrNull()?.serial ?: 0L)).withWishDisplay(ns) }
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }
@@ -2648,12 +2737,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun relaxForbiddenRule(seqLabel: String) {
         if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は設定を変更できません（完了後にもう一度お試しください）") }; return }
         val s = state ?: return
-        fun key(row: C3Row): String {
-            val end = row.pattern.indexOfFirst { it.isBlank() }
-            val body = if (end >= 0) row.pattern.subList(0, end) else row.pattern
-            return body.joinToString("→")
-        }
-        val remain = s.cons3n.filter { key(it) != seqLabel }
+        val remain = s.cons3n.filter { c3SeqKey(it.pattern) != seqLabel }
         val removed = s.cons3n.size - remain.size
         if (removed == 0) {
             _ui.update { it.copy(messageIsError = true, message = "禁止の並び「$seqLabel」は見つかりませんでした") }
@@ -2665,96 +2749,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun applySettingFix(issue: SettingIssue) {
         val s = state ?: return
-        val ns: MagiState? = when (issue.action) {
-            SettingFixAction.REMOVE_WISH -> {
-                val key = issue.wishKey ?: return
-                if (!s.wishes.containsKey(key)) return
-                s.copy(wishes = s.wishes - key)
-            }
-            SettingFixAction.DELETE_DUP_SEQ -> {
-                val fam = issue.seqFamily ?: return
-                val key = issue.seqKey ?: return
-                fun delOne(rows: List<C3Row>): List<C3Row> {
-                    var done = false
-                    val res = ArrayList<C3Row>(rows.size)
-                    for (row in rows) {
-                        val joined = row.pattern.filter { it.isNotBlank() }.joinToString("→")
-                        if (!done && joined == key) { done = true; continue }
-                        res.add(row)
-                    }
-                    return res
-                }
-                when (fam) {
-                    "c3" -> s.copy(cons3 = delOne(s.cons3))
-                    "c3n" -> s.copy(cons3n = delOne(s.cons3n))
-                    "c3m" -> s.copy(cons3m = delOne(s.cons3m))
-                    "c3mn" -> s.copy(cons3mn = delOne(s.cons3mn))
-                    else -> return
-                }
-            }
-            SettingFixAction.ZERO_RANGE_LO, SettingFixAction.CLAMP_RANGE_LO -> {
-                val key = issue.rangeKey ?: return
-                val cur = s.staffRange[key] ?: Range("", "")
-                s.copy(staffRange = s.staffRange + (key to Range(issue.newLo ?: cur.lo, cur.hi)))
-            }
-            SettingFixAction.CLAMP_GROUP_RANGE_LO -> {
-                // 行は List なので index でなく**内容一致**で指す（DELETE_DUP_SEQ と同じ理由＝診断から
-                //   タップまでに並びが変わっても別の行を壊さない）。同じ内容が複数あるときは先頭1件だけ直す。
-                val row = issue.groupRangeRow ?: return
-                val lo = issue.newLo ?: return
-                fun clampOne(rows: List<C41Row>): List<C41Row> {
-                    val i = rows.indexOf(row)
-                    if (i < 0) return rows
-                    return rows.toMutableList().also { it[i] = row.copy(l = lo) }
-                }
-                when (issue.groupRangeFamily) {
-                    "c41" -> s.copy(cons41 = clampOne(s.cons41))
-                    "c41s" -> s.copy(cons41s = clampOne(s.cons41s))
-                    else -> return
-                }
-            }
-            SettingFixAction.CAP_DEMAND -> {
-                val k = issue.demandShiftIdx ?: return
-                val cap = issue.demandCap ?: return
-                val sh = s.shifts.getOrNull(k) ?: return
-                val j = issue.demandDayIdx
-                if (j != null) {
-                    // [3.475.0/論理監査] 需要が日別例外(needDay1/2)由来のときはその日の例外を丸める。
-                    //   旧: 常にシフト既定だけを丸めていたため、例外由来の診断はボタンを押しても消えなかった
-                    //   （既定が cap 以下なら no-op で return、例外は残るので同じ項目が出続けていた）。
-                    val key1 = "$k,$j"; val key2 = "$k,$j"
-                    val ov1 = s.needDay1[key1]?.trim()?.toIntOrNull()
-                    val ov2 = s.needDay2[key2]?.trim()?.toIntOrNull()
-                    var changed = false
-                    val nd1 = if (ov1 != null && ov1 > cap) { changed = true; s.needDay1 + (key1 to cap.toString()) } else s.needDay1
-                    val nd2 = if (ov2 != null && ov2 > cap) { changed = true; s.needDay2 + (key2 to cap.toString()) } else s.needDay2
-                    // 例外が無ければ既定を丸める（従来どおり）。
-                    val n1 = sh.need1.trim().toIntOrNull()
-                    val n2 = sh.need2.trim().toIntOrNull()
-                    if (ov1 == null && n1 != null && n1 > cap) { changed = true }
-                    if (ov2 == null && n2 != null && n2 > cap) { changed = true }
-                    if (!changed) return
-                    val newN1 = if (ov1 == null && n1 != null && n1 > cap) cap.toString() else sh.need1
-                    val newN2 = if (ov2 == null && n2 != null && n2 > cap) cap.toString() else sh.need2
-                    val list = s.shifts.toMutableList()
-                    list[k] = sh.copy(need1 = newN1, need2 = newN2)
-                    s.copy(shifts = list, needDay1 = nd1, needDay2 = nd2)
-                } else {
-                    val n1 = sh.need1.trim().toIntOrNull()
-                    val n2 = sh.need2.trim().toIntOrNull()
-                    val newN1 = if (n1 != null && n1 > cap) cap.toString() else sh.need1
-                    val newN2 = if (n2 != null && n2 > cap) cap.toString() else sh.need2
-                    if (newN1 == sh.need1 && newN2 == sh.need2) return
-                    val list = s.shifts.toMutableList()
-                    list[k] = sh.copy(need1 = newN1, need2 = newN2)
-                    s.copy(shifts = list)
-                }
-            }
-            SettingFixAction.NONE -> null
-        }
+        val ns = SettingFixLogic.apply(s, issue)
         if (ns != null) {
             logOp("I", "設定ミスの修正を適用: ${issue.action} @ ${issue.where}")
             applyStructure(ns)
+        } else if (issue.action == SettingFixAction.DELETE_DUP_SEQ) {
+            // 診断からタップまでに行が変わっていたときは黙って何も起きないより、戻すものが無いことを伝える。
+            _ui.update { it.copy(messageIsError = true, message = "削除する重複が見つかりませんでした（すでに変更されています）") }
         }
     }
 
@@ -2988,27 +2989,75 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (runBlockedByInFlight("CSV取込")) return
         val st = state ?: return
         val sched = currentSchedule ?: return
+        runCsvImport(st, sched, partial = false) { parseCsvOrAsk(st, sched, rawText) }
+    }
+
+    /** 「この部分だけ取り込む」。指紋が作成時と同じときだけ、通常の取込と同じ適用（[runCsvImport]）へ渡す。 */
+    fun confirmCsvPartialImport() {
+        val pending = csvPartialPending ?: run { dropCsvPartial(); return }
+        dropCsvPartial()
+        if (runBlockedByInFlight("CSV取込")) return
+        val st = state; val sched = currentSchedule
+        val resolution = if (st != null && sched != null) CsvPartialImport.resolve(pending, stateKey(st), boardKey(sched))
+            else CsvPartialImport.Resolution.Stale
+        if (resolution is CsvPartialImport.Resolution.Apply && st != null && sched != null)
+            runCsvImport(st, sched, partial = true) { resolution.pending.ask.result }
+        else notify(CsvPartialImport.STALE, "W")
+    }
+
+    fun cancelCsvPartialImport() {
+        val had = csvPartialPending != null
+        dropCsvPartial()
+        if (had) notify(CsvPartialImport.CANCELLED)
+    }
+
+    private fun dropCsvPartial() {
+        csvPartialPending = null
+        if (_ui.value.csvPartialPrompt != null) _ui.update { it.copy(csvPartialPrompt = null) }
+    }
+
+    /** 確認待ちの部分取込。ui.csvPartialPrompt と同時に立て外す（[dropCsvPartial]）。保存しない＝プロセスが死ねば消える。 */
+    private var csvPartialPending: CsvPartialImport.Pending? = null
+
+    /** 適用してよい結果を返す。引用符が閉じていないときは確認待ち／断りを画面に出して null。 */
+    private suspend fun parseCsvOrAsk(st: MagiState, sched: Array<IntArray>, rawText: String): ScheduleRunResult? {
         val text = MojibakeRepair.repair(rawText)
+        // [3.282.0] JSON 側(loadAsync)と同じ是正: BOM 除去だけの健全な CSV で誤警告しない。
+        if (MojibakeRepair.wasDecoded(rawText, text)) logOp("W", "文字化け（二重エンコード）を自動修復してCSVを取り込みました。元のファイル自体は修復されません")
+        when (val v = withContext(Dispatchers.Default) { CsvPartialImport.judge(text, st, sched) }) {
+            is CsvPartialImport.Verdict.Ask -> {
+                csvPartialPending = CsvPartialImport.Pending(v, stateKey(st), boardKey(sched))
+                _ui.update { it.copy(running = false, messageIsError = false, message = null, csvPartialPrompt = v.prompt) }
+                logOp("I", "CSV取込 確認待ち: 引用符が閉じていません（${v.endLine}行目まで ${v.matched}名分が読めました）")
+                return null
+            }
+            CsvPartialImport.Verdict.NothingReadable -> {
+                _ui.update { it.copy(messageIsError = true, running = false, message = "CSV取込失敗: ${CsvPartialImport.NOTHING_READABLE}") }
+                logOp("W", "CSV取込 失敗: 引用符が閉じていなくて読めた職員の行がないため取込を中止しました")
+                return null
+            }
+            CsvPartialImport.Verdict.WellFormed -> Unit
+        }
+        return withContext(Dispatchers.Default) { ScheduleCsvBridge.parse(text, st, sched) }
+    }
+
+    /** 取込の適用本体。[produce] が null なら適用しない。[partial]＝確認済みの部分取込（結果メッセージに注意を残す）。 */
+    private fun runCsvImport(st: MagiState, sched: Array<IntArray>, partial: Boolean, produce: suspend () -> ScheduleRunResult?) {
         _ui.update { it.copy(messageIsError = false, running = true, message = "CSV取込中…") }
         val boardToken = beginBoardJob(MagiPhase.Importing)
         var pushedUndo = false
         var ui0 = _ui.value; var result0 = resultSchedule
         job = viewModelScope.launch {
             try {
-                // [3.282.0] JSON 側(loadAsync)と同じ是正: BOM 除去だけの健全な CSV で誤警告しない。
-                if (MojibakeRepair.wasDecoded(rawText, text)) logOp("W", "文字化け（二重エンコード）を自動修復してCSVを取り込みました。元のファイル自体は修復されません")
-                val res = withContext(Dispatchers.Default) { ScheduleCsvBridge.parse(text, st, sched) }
+                val res = produce() ?: return@launch
                 // 取込失敗の明示: 氏名が1件も一致しなければ適用せず、オペレーターに原因を表示する。
                 if (res.matched == 0) {
-                    // [3.475.0/論理監査] 未閉引用符で残りの行が1セルに吸い込まれたときも matched=0 になるが、
-                    //   旧: quoteWarn は成功経路でしか組み立てず、ここでは「氏名不一致」とだけ案内していた。
-                    val why = if (res.unclosedQuote)
-                        "CSV取込失敗: 引用符（\"）が閉じていない行があり、そこから後ろが1つのセルに吸い込まれています。書式を直してから取り込んでください。"
+                    val why = if (res.ambiguousNames.isNotEmpty())
+                        "CSV取込失敗: ${csvAmbiguousText(res.ambiguousNames)}"
                     else
                         "CSV取込失敗: 一致する職員名がありませんでした（0名）。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。"
                     _ui.update { it.copy(messageIsError = true, running = false, message = why) }
-                    logOp("W", if (res.unclosedQuote) "CSV取込 失敗: 引用符が閉じていないため取込を中止しました"
-                        else "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
+                    logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
                     return@launch
                 }
                 ui0 = _ui.value; result0 = resultSchedule
@@ -3017,26 +3066,30 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
                 resultSchedule = res.schedule.copy2D()
-                state = st.withSchedule(res.schedule)
+                // 取込で値が変わったセルの手動固定は取り込んだ値へ追従させる（手の編集 setCell と同じ規約）。同じ undo 段。
+                val (followed, pinsMoved) = st.withPinsFollowingBoard(sched, res.schedule)
+                state = followed.withSchedule(res.schedule)
+                val pinNote = if (pinsMoved > 0) "｜手動固定 ${pinsMoved} 件を取り込んだ値に合わせました" else ""
                 val total = st.staff.size
                 // [3.410.0/I-01] シフト一覧に無い記号は取り込めない。旧: 黙って読み飛ばしていたため、
                 //   誤字や凡例漏れが「休のまま」「元のまま」として静かに混入した。件数と記号を必ず出す。
                 // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える＝「氏名不一致でスキップ」と
                 //   区別が付かず部分的な成功に見える。必ず名指しする。
-                val quoteWarn = if (res.unclosedQuote)
-                    "｜⚠ 引用符（\"）が閉じていません。ここから後ろの行は読めていません" else ""
+                val quoteWarn = if (partial) CsvPartialImport.APPLIED_WARNING else ""
                 val unk = if (res.unknownCells > 0)
                     "｜読めない記号 ${res.unknownCells}セル(${res.unknownSymbols.joinToString("・")})は取り込めませんでした"
                 else ""
                 // [3.592.0] 実日付ヘッダが今の対象期間とズレたまま列位置で取り込んだ場合の警告。
                 val dateWarn = if (res.headerDateMismatches > 0)
                     "｜⚠ CSVヘッダの日付が今の期間と${res.headerDateMismatches}列ズレています（列の位置で取り込みました）" else ""
+                val dupWarn = (if (res.ambiguousNames.isNotEmpty()) "｜⚠ ${csvAmbiguousText(res.ambiguousNames)}" else "") +
+                    (if (res.duplicateRowNames.isNotEmpty()) "｜⚠ 同じ職員の行が複数あり、後の行で上書きしました: ${res.duplicateRowNames.joinToString("・")}" else "")
                 val msg = if (res.matched in 1 until total)
-                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn"
+                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn$pinNote"
                 else
-                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn"
+                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn$pinNote"
                 pushReport(state ?: st, res.schedule, res.report) { it.copy(
-                    messageIsError = res.unknownCells > 0 || res.unclosedQuote || res.headerDateMismatches > 0,
+                    messageIsError = res.unknownCells > 0 || partial || res.headerDateMismatches > 0 || dupWarn.isNotEmpty(),
                     running = false,
                     hasResult = true,
                     relaxedBoard = false, engineRan = false,   // [3.475.0] CSV取込は手操作扱い
@@ -3045,9 +3098,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (res.matched in 1 until total) {
                     logOp("W", "CSV取込 一部のみ反映: ${res.matched}/${total}名一致（${total - res.matched}名は氏名不一致）")
                 }
+                if (partial) logOp("W", "CSV取込 引用符が閉じていないため、読めた部分だけを取り込みました")
                 if (res.unknownCells > 0) {
                     logOp("W", "CSV取込 読めない記号 ${res.unknownCells}セル: ${res.unknownSymbols.joinToString("・")}（シフト一覧に無い記号）")
                 }
+                if (dupWarn.isNotEmpty()) logOp("W", "CSV取込 ${dupWarn.removePrefix("｜⚠ ").replace("｜⚠ ", " / ")}")
                 logOp("I", "CSV取込 完了 ${res.matched}名一致 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: CancellationException) {
                 // [3.592.0] pushUndo済み(=盤面を既に書き換え済み)なら取込前へロールバックする。旧: 診断

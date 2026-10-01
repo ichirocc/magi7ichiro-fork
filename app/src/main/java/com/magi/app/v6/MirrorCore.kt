@@ -106,13 +106,17 @@ data class ScheduleRunResult(
     val unknownSymbols: List<String> = emptyList(),
     /**
      * [3.413.0/I-08] 引用符が閉じないまま入力が終わった＝開いた引用符以降が1セルへ吸い込まれ
-     * **残りの行が丸ごと消えた**。呼出側からは「一致した氏名が少ないCSV」と区別が付かず
-     * 部分的な成功に見えるため、旗として持ち上げて必ず知らせる。
+     * **残りの行が丸ごと消えた**。旗は [CsvPartialImport.judge] が読み、読めた範囲だけ取り込むかの確認
+     * （読めた範囲に職員の行が無ければ断り）へ振り分ける。旗を見ない呼出側は部分適用を黙って通してしまう。
      */
     val unclosedQuote: Boolean = false,
     /** [3.592.0] 実日付ヘッダ(build()のM/D(曜)形式)が今の対象期間と列位置で食い違う列数。数字のみの
      *  日番号ヘッダ（位置指定・日付なしCSV）は対象外＝別機能のまま。0=見出しなし/全一致。 */
     val headerDateMismatches: Int = 0,
+    /** 同じ名前の職員が複数いるため取り込まなかった CSV の氏名（CSV の表記のまま）。 */
+    val ambiguousNames: List<String> = emptyList(),
+    /** 1人に解決する氏名の行が CSV に2行以上あった職員（後の行が前の行を上書きした）。 */
+    val duplicateRowNames: List<String> = emptyList(),
 )
 
 data class LightOptimizeResult(

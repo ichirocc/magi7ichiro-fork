@@ -375,8 +375,8 @@ object ScheduleCsvBridge {
     }
 
     fun parse(text: String, state: MagiState, base: Array<IntArray>): ScheduleRunResult {
-        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える。ここは非nullを返す経路なので
-        //   断れない代わりに旗を立て、呼出側が「一致が少ない」と「消えた」を区別できるようにする。
+        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える。ここは null を返せないので、
+        //   旗（unclosedQuote）を立てて返し、呼出側（CsvPartialImport.judge）が読めた範囲だけ取り込むか断るかを決める。
         val parsedAll = parseCsvFull(text)
         val rows = parsedAll.rows
         val p = Problem(state)
@@ -385,6 +385,10 @@ object ScheduleCsvBridge {
         //   旧: 後勝ちで、制約評価(最初)とCSV取込(最後)が同じ記号を別シフトとして扱っていた。
         val nameToI = firstWinsMap(state.staff.size) { nameMatchKey(state.staff[it].name) }
         val kigouToK = firstWinsMap(state.shifts.size) { state.shifts[it].kigou.trim() }
+        // 同じ照合キーの職員が2人以上いる名前は、どの職員の行か決められない＝取り込まない（先勝ちだと後の職員の行が前の職員を上書きする）。
+        val ambiguousKeys = state.staff.groupingBy { nameMatchKey(it.name) }.eachCount().filterValues { it > 1 }.keys
+        val ambiguousNames = LinkedHashSet<String>()
+        val duplicateRowNames = LinkedHashSet<String>()
         // [3.475.0/論理監査] 一致は**職員単位**で数える（旧: 行単位＝同じ職員の行が2つあると 2 と数え、
         //   欠けている職員がいても「全員更新」に見えた。値は後勝ちで前の行が黙って上書きされる）。
         val matchedStaff = HashSet<Int>()
@@ -413,9 +417,11 @@ object ScheduleCsvBridge {
             if (r.isEmpty() || r.all { it.isBlank() }) break
             if (r[0].trim() == "集計") break
             if (r[0].trim().isNotEmpty()) {
-                val staffIndex = nameToI[nameMatchKey(r[0])]
+                val key = nameMatchKey(r[0])
+                val staffIndex = if (key in ambiguousKeys) null else nameToI[key]
+                if (key in ambiguousKeys) ambiguousNames.add(r[0].trim())
                 if (staffIndex != null) {
-                    matchedStaff.add(staffIndex)
+                    if (!matchedStaff.add(staffIndex)) duplicateRowNames.add(state.staff[staffIndex].name)
                     val last = minOf(p.T, r.size - 1)
                     var j = 0
                     while (j < last) {
@@ -443,9 +449,15 @@ object ScheduleCsvBridge {
             unknownCells = unknownTotal, unknownSymbols = unknownTop,
             unclosedQuote = parsedAll.unclosedQuote,
             headerDateMismatches = headerDateMismatches,
+            ambiguousNames = ambiguousNames.toList(),
+            duplicateRowNames = duplicateRowNames.toList(),
         )
     }
 }
+
+/** 同名の職員が複数いて取り込まなかった氏名の案内（画面とログで同じ文言）。 */
+fun csvAmbiguousText(names: List<String>): String =
+    "同じ名前の職員が複数いるため取り込みませんでした: ${names.joinToString("・")}"
 
 /** 勤務表CSVのヘッダ行か: 先頭セルが「スタッフ」を含むか、2 列目以降の非空セルがすべて日付列（数字・日付書式）。 */
 private fun looksLikeHeaderRow(row: List<String>): Boolean {
@@ -499,18 +511,32 @@ internal fun firstWinsMap(n: Int, key: (Int) -> String): Map<String, Int> {
  * 走査器を2つ作ると必ずドリフトするので、既存のループから両方を返す形にして
  * [parseCsvRows] はその行だけを取り出す薄い委譲にする（既存の呼出は無変更）。
  */
-private class CsvParse(val rows: List<List<String>>, val unclosedQuote: Boolean)
+internal class CsvParse(
+    val rows: List<List<String>>,
+    val unclosedQuote: Boolean,
+    /** 引用符の外の改行で終わった行の数（吸い込まれた行は含めない。閉じていれば全行）。 */
+    val readableRows: Int,
+    /** その最後の行の最終物理行（1 始まり。引用符の中の改行も数える）。読めた行が無ければ 0。 */
+    val readableEndLine: Int,
+    /** 読めた部分の終わりの位置（[parseCsvFull] に渡した文字列の添字。BOM を含めて数える）。 */
+    val readableEndOffset: Int,
+)
 
 private fun parseCsvRows(raw: String): List<List<String>> = parseCsvFull(raw).rows
 
-private fun parseCsvFull(raw: String): CsvParse {
+internal fun parseCsvFull(raw: String): CsvParse {
     // UTF-8 BOM(U+FEFF) 除去: 付いていると先頭セルが "\uFEFFユニット" 等になり、trim()でも消えず
     //   ヘッダ判定(== "ユニット" 等)が失敗して取り込めなくなる。Excel/UTF-8出力由来で頻出。
-    val text = if (raw.isNotEmpty() && raw[0] == '\uFEFF') raw.substring(1) else raw
+    val bomLen = if (raw.isNotEmpty() && raw[0] == '\uFEFF') 1 else 0
+    val text = raw.substring(bomLen)
     val rows = ArrayList<List<String>>()
     val row = ArrayList<String>()
     val cell = StringBuilder()
     var inQuote = false
+    var line = 1
+    var readableRows = 0
+    var readableEndLine = 0
+    var readableEnd = bomLen
     var i = 0
     while (i < text.length) {
         val c = text[i]
@@ -528,16 +554,21 @@ private fun parseCsvFull(raw: String): CsvParse {
             cell.setLength(0)
             rows.add(ArrayList(row))
             row.clear()
+            readableRows = rows.size; readableEndLine = line; readableEnd = bomLen + i + 1
+            line++
         } else {
             cell.append(c)
+            if (c == '\n' || (c == '\r' && !(i + 1 < text.length && text[i + 1] == '\n'))) line++
         }
         i++
     }
     if (cell.isNotEmpty() || row.isNotEmpty()) {
         row.add(cell.toString())
         rows.add(ArrayList(row))
+        if (!inQuote) { readableRows = rows.size; readableEndLine = line }
     }
-    return CsvParse(rows, inQuote)
+    if (!inQuote) readableEnd = bomLen + text.length
+    return CsvParse(rows, inQuote, readableRows, readableEndLine, readableEnd)
 }
 
 /**
@@ -791,6 +822,17 @@ object WishesCsvIO {
 }
 
 /** 各制約: 種別タグ付き行（種別,a,b,c,d,e）。取込時は制約一式＋個人レンジを置換。氏名/群/シフトは記号・氏名で照合。 */
+/**
+ * [2026-09-30/外部レビュー B1・B2] 下限/上限セルは空欄か 0 以上の整数、両方あれば下限≤上限。Problem は数値でない側を 0／無制限へ
+ * 読み替えて行を残すので、ここで通すと「意図と違う制約で既存の制約一式を置換」になる（個人レンジは 3.509.3）。
+ */
+internal fun rangeCellsOk(lo: String, hi: String): Boolean {
+    val l = lo.trim(); val h = hi.trim()
+    val ln = l.toIntOrNull(); val hn = h.toIntOrNull()
+    return (l.isEmpty() || (ln != null && ln >= 0)) && (h.isEmpty() || (hn != null && hn >= 0)) &&
+        (ln == null || hn == null || ln <= hn)
+}
+
 object ConstraintsCsvIO {
     fun build(state: MagiState): String {
         val sb = StringBuilder()
@@ -845,10 +887,14 @@ object ConstraintsCsvIO {
         val body = csvBody(rows, "種別")
         var bad = 0
         val samples = ArrayList<String>()
-        fun reject(r: List<String>) {
+        fun reject(r: List<String>, sample: String = rowSample(r)) {
             bad++
             // [3.474.0] 収集時に止める（WishesCsvIO.parse と同じ理由）。
-            if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(rowSample(r))
+            if (samples.size < ComponentImport.MAX_SAMPLES) samples.add(sample)
+        }
+        fun rangeRow(r: List<String>, family: String, into: MutableList<C41Row>) {
+            if (rangeCellsOk(c(r, 3), c(r, 4))) { into.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
+            else reject(r, "${family}「${c(r, 1)} の ${c(r, 2)}（${c(r, 3)}〜${c(r, 4)}）」".take(60))
         }
         for (r in body) {
             if (r.all { it.isBlank() }) continue   // 書式上の空行は無視
@@ -859,8 +905,8 @@ object ConstraintsCsvIO {
                 "禁止連続" -> { val p = pat(r); if (p.isNotEmpty() && !patHasGap(r)) { cons3n.add(C3Row(p)); n++ } else reject(r) }
                 "希望連続" -> { val p = pat(r); if (p.isNotEmpty() && !patHasGap(r)) { cons3m.add(C3Row(p)); n++ } else reject(r) }
                 "回避連続" -> { val p = pat(r); if (p.isNotEmpty() && !patHasGap(r)) { cons3mn.add(C3Row(p)); n++ } else reject(r) }
-                "群回数" -> { cons41.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
-                "スキル群回数" -> { cons41s.add(C41Row(c(r, 1), c(r, 2), c(r, 3), c(r, 4))); n++ }
+                "群回数" -> rangeRow(r, "グループのレンジ", cons41)
+                "スキル群回数" -> rangeRow(r, "スキルグループのレンジ", cons41s)
                 "群組合せ禁止" -> { cons42.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "スキル群組合せ禁止" -> { cons42s.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "希望前日禁止" -> { cons3w.add(C3wRow(c(r, 1), c(r, 2))); n++ }
@@ -872,11 +918,7 @@ object ConstraintsCsvIO {
                     //   捨てたまま置換すると、その職員の個人レンジが**消える**。
                     // [3.509.3] 下限/上限は空欄か 0 以上の整数、両方あれば下限≤上限。Problem は負数・非数値を未設定として
                     //   捨てるので、ここで受理すると「評価されない行で置換」になる（3.333.0 と同じ穴）。
-                    val loV = c(r, 3); val hiV = c(r, 4)
-                    val loN = loV.toIntOrNull(); val hiN = hiV.toIntOrNull()
-                    val numOk = (loV.isEmpty() || (loN != null && loN >= 0)) && (hiV.isEmpty() || (hiN != null && hiN >= 0)) &&
-                        (loN == null || hiN == null || loN <= hiN)
-                    if (i != null && k >= 0 && numOk) {
+                    if (i != null && k >= 0 && rangeCellsOk(c(r, 3), c(r, 4))) {
                         // [3.475.0/論理監査] 同じ職員×シフトの重複行（希望CSVと同じ扱い＝同値は1件、衝突は拒否）。
                         val key = "$i,$k"; val rng = Range(c(r, 3), c(r, 4)); val prev = ranges[key]
                         if (prev == null) { ranges[key] = rng; n++ } else if (prev != rng) reject(r)

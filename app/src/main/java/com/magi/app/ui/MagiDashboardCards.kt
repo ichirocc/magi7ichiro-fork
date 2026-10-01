@@ -412,6 +412,7 @@ internal fun OperatorNextActionCard(
     onShowRelax: () -> Unit = {},
     onStopRelax: () -> Unit = {},
     relaxStopped: Boolean = false,
+    relaxFailed: Boolean = false,
     onRetryRelax: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
@@ -504,9 +505,9 @@ internal fun OperatorNextActionCard(
                     Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
                     TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
                 }
-            } else if (!ui.running && relaxStopped && ui.bestHard > 0) {
+            } else if (!ui.running && (relaxStopped || relaxFailed) && ui.bestHard > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
+                    Text(if (relaxFailed) RELAX_FAILED_TEXT else RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
                     TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL, color = plan.fg) }
                 }
             }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.LockOpen
@@ -84,6 +85,8 @@ internal fun CellEditSheet(
     relax: RelaxToken? = null,          // [S6] ホームで見つかった組（このセルが窓か手順に入るときだけ渡す）
     relaxNoWall: Boolean = false,       // [S6] 探し終えて組が無い
     relaxStopped: Boolean = false,      // [S6] 試算を途中で止めた
+    relaxUnavailable: String? = null,   // [S6] 試算できない理由
+    relaxFailed: Boolean = false,       // [S6] 試算が失敗した
     onShowRelax: () -> Unit = {},
     onRetryRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
@@ -91,12 +94,13 @@ internal fun CellEditSheet(
     expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「他 ▸」のタップだけ
     onToggleExpand: () -> Unit = {},
     tourPrev: Pair<Int, Int>? = null,
+    canUndo: Boolean = false,           // 勤務表タブの下部バーはシートを開く間は隠れる＝元に戻すをここへ（規則は下部バーと同じ）
+    onUndo: () -> Unit = {},
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
-    val allowed = cv.allowedShiftsFor(i)
-    val canDoSet = allowed.ifEmpty { ui.shiftSymbols.indices.toSet() }
+    val canDoSet = sheetCanDo(cv.allowedByStaff, i, ui.shiftSymbols.size)
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
     val pinned = VioKey.cell(i, j) in ui.manualPins
@@ -120,7 +124,7 @@ internal fun CellEditSheet(
     }
     val dilemma = isWishDilemma(wish, current, status.severity)
     var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える
-    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j, relaxStopped)
+    val handoff = relaxHandoff(relax?.result, ui.relaxSearching, relaxNoWall, i, j, relaxStopped, relaxUnavailable, relaxFailed)
     var marks by remember(cell) { mutableStateOf(ShiftMarks()) }
     LaunchedEffect(cell, rev) {
         marks = ShiftMarks()
@@ -146,6 +150,7 @@ internal fun CellEditSheet(
     ) {
         if (!expanded) PeekBody(
             ui, cell, name, current, wish, mode, leftHand, onEvent, onPick, onMove, onDismiss, onToggleExpand, onShowRelax,
+            canUndo = canUndo, onUndo = onUndo,
             heading = tourHeading?.let(::peekHeading) ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
             picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
             recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
@@ -161,6 +166,7 @@ internal fun CellEditSheet(
                     if (tourNext != null && tourNext != cell) {
                         TextButton(onClick = { onMove(tourNext) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("次の違反 ▶") }
                     }
+                    SheetUndoButton(canUndo, onUndo)
                     IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
                 }
                 tourHeading?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant) }
@@ -215,8 +221,9 @@ internal fun CellEditSheet(
                     }
                     RelaxHandoff.SEARCHING -> Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     RelaxHandoff.NO_WALL -> Text(RELAX_NO_WALL_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                    RelaxHandoff.STOPPED -> Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                    RelaxHandoff.UNAVAILABLE -> Text(relaxUnavailableText(relaxUnavailable.orEmpty()), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    RelaxHandoff.STOPPED, RelaxHandoff.FAILED -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (handoff == RelaxHandoff.FAILED) RELAX_FAILED_TEXT else RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                         TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL) }
                     }
                     RelaxHandoff.NONE -> {}
@@ -332,6 +339,12 @@ internal fun CellEditSheet(
     }
 }
 
+/** 見出し行の「元に戻す」（IconButton 既定の 48dp）。有効条件は下部バーの元に戻すと同じ（呼び出し側が `canUndo && !running` を渡す）。 */
+@Composable
+private fun SheetUndoButton(enabled: Boolean, onUndo: () -> Unit) {
+    IconButton(onClick = onUndo, enabled = enabled) { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "元に戻す") }
+}
+
 /** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を取り消す・緩める候補の行）＋シフトと他 ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
  *  緩める候補はこのセルだけを変えず、設定の緩和と手順をまとめて確定するダイアログを開く。 */
 @Composable
@@ -340,6 +353,7 @@ private fun PeekBody(
     onEvent: (MagiEvent) -> Unit, onPick: (Int) -> Unit, onMove: (Pair<Int, Int>) -> Unit, onDismiss: () -> Unit, onToggleExpand: () -> Unit,
     onShowRelax: () -> Unit, heading: String, severity: CellSeverity, tourPrev: Pair<Int, Int>?, tourNext: Pair<Int, Int>?,
     picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
+    canUndo: Boolean = false, onUndo: () -> Unit = {},
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -350,6 +364,7 @@ private fun PeekBody(
             Text(heading, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                 color = if (severity == CellSeverity.HARD) cs.error else cs.onSurface,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            SheetUndoButton(canUndo, onUndo)
             IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "閉じる") }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {

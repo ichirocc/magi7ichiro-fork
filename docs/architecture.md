@@ -102,11 +102,12 @@ MagiRoot（唯一の合成ルート）
 | `V6SanityPort` / `V6FinalPort` / `V6PortAnalyzer` | Engine-Facade | 事前診断・UI 向けファサード・分析層 |
 | `ShiftAppearance` | UI-Support | シフト記号→表示色 と 違反キー→重大度 の唯一の解決元（3.393.0 に `V6WebCompat` から切り出し） |
 | `ScheduleCsvBridge` | IO-CSV | 勤務表 / 希望 CSV ↔ `MagiState`（文字コード自動判定） |
+| `CsvPartialImport` | IO-CSV | 引用符が閉じていない勤務表CSVを、読めた部分だけ取り込むかの判断（読めた範囲・行番号・確認待ちの鮮度。純粋＝ホストでテストできる） |
 
 ### 背景実行（work）
 | Entity | type | 役割 |
 |---|---|---|
-| `OptimizationWorker` | Background-Service | WorkManager の**前景サービス**で最適化を実行。中断耐性・スナップショット |
+| `OptimizationWorker` | Background-Service | WorkManager の**前景サービス**で最適化を実行。中断耐性・スナップショット。共有ファイルの所有権・原子置換は `RunFiles`、結果を画面へ渡す間の編集ガード・再確認・保存後の掃除は `BgHandoff` |
 | `ForegroundRunKeepAlive` | Background-Service | 前景実行（最適化・ソフト研磨）の間だけ WorkManager の前景サービスを保つ（通知を出して待つだけ。凍結対策・backlog#34） |
 
 ### UI 画面・部品（ui）

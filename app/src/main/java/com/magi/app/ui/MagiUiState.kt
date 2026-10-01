@@ -142,6 +142,7 @@ data class UiState(
     val copilotHint: String? = null,
     val preRunCheck: com.magi.app.v6.PreRunCheck.Summary? = null,   // [つくる前の確認] 非 null の間シートを出す
     val preRunRepeatHint: String? = null,   // 同じ設定でもう一度つくるときの一言（シートの中に出す）
+    val csvPartialPrompt: String? = null,   // 引用符が閉じていない勤務表CSVの「読めた部分だけ取り込むか」確認。非 null の間ダイアログを出す（保存しない）
     val impossibleWishCount: Int = 0,
     val opLog: List<String> = emptyList(),
     val alternatives: List<String> = emptyList(), // 他の案（採用案以外の候補サマリ）

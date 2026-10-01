@@ -17,8 +17,7 @@ import java.io.File
  * 届かず、**再発防止がコメントだけ**だった。所有権・後片付け・原子置換をここへ移して固定する。
  *
  * **ここで守れないもの（正直に）**: `doWork()` の並び（耐久保存→公開・失敗パスが所有権を閉じること・
- * 進捗公開の前の所有権確認）と、所有確認〜置き換えの TOCTOU。どちらも Worker のライフサイクル側に
- * あり Robolectric か instrumented test が要る。
+ * 進捗公開の前の所有権確認）。Worker のライフサイクル側にあり Robolectric か instrumented test が要る。
  */
 class RunFilesTest {
 
@@ -281,5 +280,33 @@ class RunFilesTest {
         f.beginRun(43L)
         assertFalse("別の実行の所有", bgStopApplies(false, fgJob = false, memRunId = 42L, diskRunId = f.activeRunId()))
         assertFalse("ID を持たない", bgStopApplies(false, fgJob = false, memRunId = 0L, diskRunId = 0L))
+    }
+
+    @Test
+    fun anOldRunCannotOverwriteTheNewRunsFileBetweenItsOwnershipCheckAndRename() {
+        // 旧実行が所有を確認して rename する最中に、新実行が beginRun して同じ結果ファイルを書く。
+        // 錠が無いと新実行が先に書き終え、その上へ旧実行の rename が被さる（新しい結果が消える）。
+        val f = files()
+        f.beginRun(1L)
+        val inRename = java.util.concurrent.CountDownLatch(1)
+        var newRun: Thread? = null
+        val oldRun = Thread {
+            f.writeAtomically(f.result, "old", rename = { from, to ->
+                inRename.countDown()
+                val t = newRun!!
+                val deadline = System.nanoTime() + 5_000_000_000L
+                while (t.isAlive && t.state != Thread.State.BLOCKED && System.nanoTime() < deadline) Thread.yield()
+                from.renameTo(to)
+            }) { f.owns(1L) }
+        }
+        newRun = Thread {
+            inRename.await()
+            f.beginRun(2L)
+            f.writeAtomically(f.result, "new") { f.owns(2L) }
+        }
+        newRun.start(); oldRun.start()
+        oldRun.join(10_000); newRun.join(10_000)
+        assertEquals("新しい実行の結果が残る", "new", f.result.readText())
+        assertEquals(2L, f.activeRunId())
     }
 }

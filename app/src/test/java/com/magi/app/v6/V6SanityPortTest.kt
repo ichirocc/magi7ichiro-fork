@@ -1044,7 +1044,9 @@ class V6SanityPortTest {
         // 需要 2/日 に対し置けるのは Y だけ＝毎日 1 不足が確定（旧: canDo で 2 名と数え 0 だった）
         assertEquals(3, V6SanityPort.structuralHardFloor(plain))
         val demand = V6SanityPort.buildGuidance(plain).filter { it.action == SettingFixAction.CAP_DEMAND }
-        assertEquals(3, demand.size)
+        // 全日が同じ上限で不足＝標準の必要数を下げる 1 件にまとめる（日付なし）
+        assertEquals(1, demand.size)
+        assertNull(demand.first().demandDayIdx)
         assertTrue(demand.first().problem, demand.first().problem.contains("担当できるのは1人"))
         assertEquals(1, demand.first().demandCap)
         // 診断7: 不足は上限0が原因＝入れない指定が絡むと添える（G3）
@@ -1053,6 +1055,9 @@ class V6SanityPortTest {
         // X の 1 日目の希望が A なら、その日は X も置かれる＝不足は 2 日ぶん
         val wished = st(mapOf("0,0" to 1))
         assertEquals(2, V6SanityPort.structuralHardFloor(wished))
+        // 不足が一部の日だけなら、日ごとの項目（直すとその日の例外だけが変わる）
+        val perDay = V6SanityPort.buildGuidance(wished).filter { it.action == SettingFixAction.CAP_DEMAND }
+        assertEquals(listOf(1, 2), perDay.map { it.demandDayIdx })
     }
 
     /** 並び以外の族の同じ行を設定の見直しに出す（解決後の値で比べる・ワンタップなし）。期間の制約は 2 本で違反も 2 倍、

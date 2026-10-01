@@ -51,13 +51,12 @@ data class SettingIssue(
     val actionLabel: String = "",          // ボタン文言（空=ワンタップ不可で編集画面へ）
     val wishKey: String? = null,           // REMOVE_WISH: "i,j"
     val seqFamily: String? = null,         // DELETE_DUP_SEQ: c3 / c3n / c3m / c3mn
-    val seqKey: String? = null,            // DELETE_DUP_SEQ: "Dﾃ→A4"（→区切り・非空のみ）
+    val seqKey: String? = null,            // DELETE_DUP_SEQ: "Dﾃ→A4"（→区切り・最初の空白まで＝c3SeqKey）
     val rangeKey: String? = null,          // ZERO/CLAMP_RANGE_LO: "i,k"
     val newLo: String? = null,             // ZERO/CLAMP_RANGE_LO: 新しい下限
     val demandShiftIdx: Int? = null,       // CAP_DEMAND: シフトidx
     val demandCap: Int? = null,            // CAP_DEMAND: 担当可能人数（上限）
-    // [3.475.0/論理監査] CAP_DEMAND: 需要が日別例外(needDay1/2)由来のときは、その日の例外を丸める。
-    //   旧: 日を持たずシフト既定だけを丸めていたため、例外由来の診断はボタンを押しても消えなかった。
+    // CAP_DEMAND: 日付つきの不足はその日の例外(needDay1/2)だけを書く。null は「全日が同じ上限で不足」の1件＝標準の必要数を下げる。
     val demandDayIdx: Int? = null,
     // CLAMP_GROUP_RANGE_LO: 群/スキル群のレンジ行。行は List なので index で指すと、診断からタップまでの間に
     //   並びが変わると別の行を壊す。DELETE_DUP_SEQ と同じく**内容一致**で指す（data class の equals）。
@@ -630,8 +629,7 @@ object V6SanityPort {
          */
         fun mustForbiddenSeqIssues() {
             fun singleShiftRun(row: C3Row): Pair<String, Int>? {
-                val parts = ArrayList<String>()
-                for (item in row.pattern) { if (item.isBlank()) break; parts.add(item) }
+                val parts = c3SeqBody(row.pattern)
                 if (parts.size < 2 || parts.any { it != parts[0] }) return null
                 return parts[0] to parts.size
             }
@@ -1000,14 +998,33 @@ object V6SanityPort {
 
         fun demandCapacityIssues() {
             // 3) 需要 > 担当可能人数（その枠は誰をどう並べても必ず不足）
-            for (j in 0 until p.T) for (k in 0 until p.K) {
-                // [3.409.22] 旧: `need1` 直読み＝need2 単独定義の需要を見落とし、担当可能人数が足りなくても
-                //   「設定上は問題なし」と見せていた（実行すると covU が必ず残る）。実効需要へ委譲する。
-                val need = effectiveDemand(p, k, j)
-                if (need <= 0) continue
-                val capable = placeableFor(p, k, j)   // [3.507.5] 置ける人数（forcedCovU と同じ定義）
-                if (need > capable) {
-                    val sym = symOf(k)
+            //    直し方は「その日の例外」が基本（標準の必要数を下げると他の日まで動く）。全日が同じ上限で不足し、
+            //    日別の例外が1つも無いときだけ、1件にまとめて標準を下げる（31 回タップさせない）。
+            for (k in 0 until p.K) {
+                val sym = symOf(k)
+                val short = ArrayList<Triple<Int, Int, Int>>()   // (day, need, capable)
+                for (j in 0 until p.T) {
+                    val need = effectiveDemand(p, k, j)
+                    if (need <= 0) continue
+                    val capable = placeableFor(p, k, j)   // [3.507.5] 置ける人数（forcedCovU と同じ定義）
+                    if (need > capable) short.add(Triple(j, need, capable))
+                }
+                if (short.isEmpty()) continue
+                val caps = short.map { it.third }.toSet()
+                val hasDayException = (0 until p.T).any { j ->
+                    "$k,$j".let { key -> state.needDay1[key].isNullOrBlank().not() || state.needDay2[key].isNullOrBlank().not() }
+                }
+                if (p.T >= 2 && short.size == p.T && caps.size == 1 && !hasDayException) {
+                    val capable = caps.first()
+                    val need = short.first().second
+                    out.add(SettingIssue(IssueKind.DEMAND, "全日 $sym",
+                        "必要${need}人ですが担当できるのは${capable}人だけです",
+                        "担当できる職員を増やすか、必要人数を${capable}人以下に下げてください",
+                        action = SettingFixAction.CAP_DEMAND, actionLabel = "必要数を${capable}人に下げる",
+                        demandShiftIdx = k, demandCap = capable))
+                    continue
+                }
+                for ((j, need, capable) in short) {
                     out.add(SettingIssue(IssueKind.DEMAND, "${safeDayLabel(state.startDate, j)} $sym",
                         "必要${need}人ですが担当できるのは${capable}人だけです",
                         "担当できる職員を増やすか、必要人数を${capable}人以下に下げてください",
@@ -1833,12 +1850,7 @@ object V6SanityPort {
     private fun collectDuplicateSeq(name: String, rows: List<C3Row>, out: MutableList<String>) {
         val seen = HashSet<String>()
         for (r in rows) {
-            val parts = ArrayList<String>()
-            for (item in r.pattern) {
-                if (item.isBlank()) break
-                parts.add(item)
-            }
-            val key = parts.joinToString("→")
+            val key = c3SeqKey(r.pattern)
             if (key.isBlank()) continue
             if (!seen.add(key)) out.add("$name:$key")
         }
@@ -1890,3 +1902,11 @@ private fun safeDayLabel(startDate: String, offset: Int): String = try {
 } catch (_: Exception) {
     "${offset + 1}日"
 }
+
+/** 連続パターン行の本体＝**最初の空白まで**（`Problem.resolveC3` と同じ。詰めない）。重複検出・削除・禁止の並びの照合はこれを共有する。 */
+fun c3SeqBody(pattern: List<String>): List<String> {
+    val end = pattern.indexOfFirst { it.isBlank() }
+    return if (end >= 0) pattern.subList(0, end) else pattern
+}
+
+fun c3SeqKey(pattern: List<String>): String = c3SeqBody(pattern).joinToString("→")

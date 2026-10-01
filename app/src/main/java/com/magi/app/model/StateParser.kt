@@ -123,12 +123,20 @@ object StateParser {
         )
     }
 
+    /** 保存経路の選択（exportJson の本体）。構造編集＝全体を書き出す／制約編集＝制約を上書き／それ以外＝元のファイルへ勤務表と手動固定だけ。 */
+    fun exportCurrent(originalJson: String?, state: MagiState?, schedule: Array<IntArray>, structureEdited: Boolean, constraintsEdited: Boolean): String? {
+        if (structureEdited && state != null) return serialize(state, schedule)
+        val orig = originalJson ?: return null
+        return if (constraintsEdited && state != null) exportWithEdits(orig, state, schedule)
+        else exportWithSchedule(orig, schedule, state?.manualPins)
+    }
+
     /**
      * Re-emit the state with [newSchedule] substituted. We reparse the original text
      * so every field (including ones this app does not model) is preserved exactly,
      * then overwrite only "schedule".
      */
-    fun exportWithSchedule(originalJson: String, newSchedule: Array<IntArray>): String {
+    fun exportWithSchedule(originalJson: String, newSchedule: Array<IntArray>, manualPins: List<ManualPin>? = null): String {
         val o = JSONObject(originalJson)
         // 最適化後 schedule と食い違う古い派生・キャッシュ系フィールドを除去（互換性事故防止）。
         for (k in listOf("violations", "needViolations", "countViolations", "lastResult", "lastPhase")) {
@@ -141,6 +149,10 @@ object StateParser {
             arr.put(r)
         }
         o.put("schedule", arr)
+        // 手動固定は構造・制約の編集フラグを立てずに付け外しできる＝元のファイルの値でなく今の値を書く（元に無く今も無ければキーを足さない）。
+        if (manualPins != null && (manualPins.isNotEmpty() || o.has("manualPins"))) {
+            o.put("manualPins", consArr(manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
+        }
         return o.toString(2)
     }
 
