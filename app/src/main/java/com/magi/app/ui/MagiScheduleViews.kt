@@ -22,6 +22,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.runtime.State
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -321,12 +325,19 @@ internal fun ViolationFilterBar(bucketCounts: Map<String, Int>, enabled: Set<Str
     focusMode: Boolean = false, onFocusMode: (Boolean) -> Unit = {},
     // [3.459.0/分析タブ統合] 「集中」はグリッドのセル淡色化専用（勤務表タブのみ意味を持つ）。分析タブの
     //   統合カードから共有フィルタとして呼ぶときは、意味の無いトグルを出さないよう false で隠す。
-    showFocusToggle: Boolean = true) {
+    showFocusToggle: Boolean = true,
+    // [勤務表の縦寸法] 下部バーの週送り↔違反の日ナビの切替（勤務表タブのみ。null なら出さない）。
+    vioDayNavOn: Boolean = false, onVioDayNav: (() -> Unit)? = null) {
     val anyViol = bucketCounts.values.any { it > 0 }
     if (!anyViol) return   // 違反ゼロなら出さない（ノイズ削減）
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             ViolationBucketChips(bucketCounts, enabled, onToggle, locCount, focusMode, onFocusMode, showFocusToggle)
+            if (onVioDayNav != null) {
+                OutlinedButton(onClick = onVioDayNav, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(if (vioDayNavOn) "下のボタンを週送りに戻す" else "違反の日を下のボタンで順に見る")
+                }
+            }
         }
     }
 }
@@ -342,7 +353,7 @@ internal fun SearchLegendBar(ui: UiState, query: String, onQuery: (String) -> Un
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { open = !open }) {
-                Text("検索・凡例" + (if (!open && query.isNotBlank()) "（検索中: $query）" else ""),
+                Text("検索・凡例（枠・バッジの見方）" + (if (!open && query.isNotBlank()) "（検索中: $query）" else ""),
                     style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                 Text(if (open) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant)
             }
@@ -387,6 +398,7 @@ internal fun ScheduleGrid(
     // セル編集シートで開いているセルと、シートの高さ（px）。セルをシートの直上へ寄せ、行と列を強調する。
     editCell: Pair<Int, Int>? = null,
     sheetPx: Float = 0f,
+    barKey: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
     // [一括編集] 円柱は1セル編集。まとめて変更するダイアログの開閉。
@@ -425,8 +437,6 @@ internal fun ScheduleGrid(
         // タブを離れたら注目を消す（上の解除は取り消されるので、残ると次に開いたとき古い位置＝並び替え後は別の職員へ飛ぶ）。
         DisposableEffect(Unit) { onDispose { onFocusShown(); nav.navFlash = null } }
         Column(Modifier.padding(16.dp)) {
-            Text("勤務表", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
             // [一括編集] まとめて変更は多数セルを上書きする上級操作のため、プロ表示時のみ。範囲×対象×シフトをダイアログで一括指定。
             if (proMode) {
                 OutlinedButton(onClick = { showBulk = true }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
@@ -479,7 +489,7 @@ internal fun ScheduleGrid(
                 if (navFlash != null) { kotlinx.coroutines.delay(2_500); nav.navFlash = null }
             }
             Spacer(Modifier.height(12.dp))
-            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx, vScroll = vScroll, revealCell = focusCell, cv = cv, onEvent = onEvent, fixNav = fixNav, editCell = editCell, sheetPx = sheetPx)   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
+            MagiFlatGrid(ui, vs, onCellClick, vioEnabled, hScroll, nameQuery, cellW = gridCellW, nameW = gridNameW, focusCell = focusCell ?: navFlash, focusRange = focusRange, focusMode = focusMode, canDo = canDo, plainCellBorder = plainCellBorder, stickyTopPx = stickyTopPx, vScroll = vScroll, revealCell = focusCell, cv = cv, onEvent = onEvent, fixNav = fixNav, editCell = editCell, sheetPx = sheetPx, barKey = barKey, corner = { WeekCornerLabel(ui, nav) })   // [円柱やめる] フィッシュアイ→平面グリッドに置換（旧円柱コードは削除済み）
             if (showBulk) AssignBulkSheet(ui, onBulkSet, onDismiss = { showBulk = false }, canDo = canDo)
         }
         }
@@ -501,6 +511,34 @@ internal class ScheduleNavState(val hScroll: ScrollState) {
     /** 違反ナビのジャンプ先（(-1, 日)＝日ヘッダのみ注目の番兵）。ScheduleGrid が focusCell の代替として読む。 */
     var navFlash by mutableStateOf<Pair<Int, Int>?>(null)
     var navIdx by mutableIntStateOf(-1)
+    /** 違反の日の巡回モード（下部バーが週送りの代わりに違反ナビを出す）。勤務表タブを離れると戻る。 */
+    var vioMode by mutableStateOf(false)
+
+    fun currentWeek(): Int {
+        val d = if (cellWpx > 0) hScroll.value / cellWpx else 0
+        return currentWeekIndex(weeks, d, atEnd = hScroll.maxValue > 0 && !hScroll.canScrollForward)
+    }
+}
+
+/** 表示中の週の番号。hScroll を読むのはこの派生値の中だけ＝スクロールで再構成するのは読者のみ。 */
+@Composable
+internal fun rememberCurrentWeek(nav: ScheduleNavState): State<Int> = remember(nav) { derivedStateOf { nav.currentWeek() } }
+
+/** グリッド左上（名前列の見出し）に出す週の範囲。週が 1 つしか無い・解析できないときは従来の「職員」。 */
+@Composable
+internal fun WeekCornerLabel(ui: UiState, nav: ScheduleNavState) {
+    val cs = MaterialTheme.colorScheme
+    val curWeek by rememberCurrentWeek(nav)
+    val wk = nav.weeks.getOrNull(curWeek)
+    val cap = if (nav.weeks.size > 1 && wk != null && wk.isNotEmpty()) weekRangeCaption(ui.startDate, wk.first(), wk.last()) else null
+    if (cap == null) {
+        Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+    } else {
+        Column(Modifier.semantics(mergeDescendants = true) { contentDescription = "表示中の週 ${cap.first}${cap.second}" }) {
+            Text(cap.first, style = MaterialTheme.typography.labelMedium, color = cs.onSurface, maxLines = 1)
+            Text(cap.second, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+        }
+    }
 }
 
 @Composable
@@ -510,77 +548,59 @@ internal fun rememberScheduleNavState(): ScheduleNavState {
 }
 
 /**
- * [3.481.0 勤務表タブ再設計②] 前週/次週 と ＜前の違反/次の違反＞ のボタン列。ScheduleGrid の下にあったものを
- * 文言・挙動そのままに Scaffold の下部バー（BottomCommandBar の直上・勤務表タブ表示中のみ）へ移した。
- * 週も違反日も無いときは何も描かない（高さ0）。
+ * [勤務表の縦寸法] 勤務表タブの下部バー（旧 ScheduleNavBar 60dp＋BottomCommandBar 80dp を 64dp の 1 本へ）。
+ * 左＝週送り（巡回モードのときは ◀違反 k/N・違反▶）、中＝元に戻す/やり直し（アイコン 48dp）、右＝主ボタン 60dp。
  */
 @Composable
-internal fun ScheduleNavBar(ui: UiState, nav: ScheduleNavState, hideVioNav: Boolean = false) {
+internal fun ScheduleCommandBar(ui: UiState, vm: MagiViewModel, nav: ScheduleNavState, violation: Boolean) {
     val cs = MaterialTheme.colorScheme
     val weeks = nav.weeks
-    val vioDays = if (hideVioNav) emptyList() else nav.vioDays
-    if (weeks.size <= 1 && vioDays.isEmpty()) return
+    val vioDays = nav.vioDays
     val scope = rememberCoroutineScope()
-    // derivedStateOf: hScroll.value を読むのはこの派生値の中だけ＝スクロールで再構成するのは週ラベルの読者のみ。
-    val curWeek by remember(weeks, nav) {
-        derivedStateOf {
-            val px = nav.cellWpx
-            val d = if (px > 0) nav.hScroll.value / px else 0
-            currentWeekIndex(weeks, d, atEnd = nav.hScroll.maxValue > 0 && !nav.hScroll.canScrollForward)
-        }
-    }
-    // [3.483.0 S-3] 旧: 週送り行＋違反ナビ行の2段（約110dp）。下部固定領域が最大4段になっていたため1段に
-    //   まとめる（左＝週送り2ボタン／中央＝週と違反日のラベル／右＝違反ナビ2ボタン）。ボタン高は 48dp を維持。
-    // [3.483.0 S-1] 違反日は「12/31日」の形で母数を付け、他の「N」（必須件数・か所・シフト別日数）と区別する。
-    val wk = weeks.getOrNull(curWeek)
-    val weekLabel = if (weeks.size > 1 && wk != null && wk.isNotEmpty()) runCatching {
-        // [レイアウト刷新] 月をまたぐ勤務表でも表示中の週の実際の年月（=週初日基準）を出す。
-        val d0 = LocalDate.parse(ui.startDate).plusDays(wk.first().toLong())
-        "${d0.monthValue}月 第${curWeek + 1}/${weeks.size}週"
-    }.getOrDefault("第${curWeek + 1}/${weeks.size}週") else ""
+    val curWeek by rememberCurrentWeek(nav)
     val navIdx = nav.navIdx
-    val vioLabel = when {
-        vioDays.isEmpty() -> ""
-        navIdx < 0 -> "違反 ${vioDays.size}/${ui.days}日"
-        else -> "違反日 ${navIdx + 1}/${vioDays.size}"
-    }
     fun jumpTo(n: Int) {
         val d = vioDays.getOrNull(n) ?: return
         nav.navIdx = n
         nav.navFlash = -1 to d
         scope.launch { nav.hScroll.animateScrollTo((d * nav.cellWpx).coerceAtLeast(0)) }
     }
-    Surface(color = cs.surfaceContainer, tonalElevation = 2.dp) {
+    val showVio = violation && vioDays.isNotEmpty()
+    val small = Modifier.defaultMinSize(minWidth = ScheduleLayoutMetrics.ICON_BUTTON_DP.dp, minHeight = ScheduleLayoutMetrics.ICON_BUTTON_DP.dp)
+    val tight = PaddingValues(horizontal = 8.dp)
+    Surface(color = cs.surfaceContainer, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().height(ScheduleLayoutMetrics.MERGED_BAR_DP.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            // [週ページング＋横スクロール併用] 前週/次週 は hScroll を1週ぶんジャンプ（列は隠さない＝自由スクロールと併用）。
-            if (weeks.size > 1) {
+            if (showVio) {
+                OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
+                    modifier = small.semantics { contentDescription = "前の違反の日へ" }, contentPadding = tight) {
+                    Text("◀違反 ${if (navIdx < 0) "–" else navIdx + 1}/${vioDays.size}", maxLines = 1)
+                }
+                OutlinedButton(onClick = { jumpTo(if (navIdx < 0) 0 else (navIdx + 1) % vioDays.size) },
+                    modifier = small.semantics { contentDescription = "次の違反の日へ" }, contentPadding = tight) { Text("違反▶", maxLines = 1) }
+            } else if (weeks.size > 1) {
                 OutlinedButton(
                     onClick = { val t = weeks[(curWeek - 1).coerceAtLeast(0)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
-                    enabled = curWeek > 0, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "前の週へ" },
-                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    enabled = curWeek > 0, modifier = small.semantics { contentDescription = "前の週へ" }, contentPadding = tight,
                 ) { Text("◀週") }
                 OutlinedButton(
                     onClick = { val t = weeks[(curWeek + 1).coerceAtMost(weeks.size - 1)].first(); scope.launch { nav.hScroll.animateScrollTo(t * nav.cellWpx) } },
-                    enabled = curWeek < weeks.size - 1 && nav.hScroll.canScrollForward, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "次の週へ" },
-                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    enabled = curWeek < weeks.size - 1 && nav.hScroll.canScrollForward, modifier = small.semantics { contentDescription = "次の週へ" }, contentPadding = tight,
                 ) { Text("週▶") }
             }
-            Text(listOf(weekLabel, vioLabel).filter { it.isNotBlank() }.joinToString(" ・ "),
-                style = MaterialTheme.typography.labelLarge, color = cs.onSurfaceVariant,
-                modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            // [違反ナビ] 表示中（フィルタ通過）の違反がある日を ＜前/次＞ で巡回（Web試作「不足日へ」の一般化）。
-            //   ジャンプ先の日ヘッダは focusCell=(-1,j) の番兵で約2.5秒ハイライト（⑥日別ジャンプと同機構）。
-            if (vioDays.isNotEmpty()) {
-                OutlinedButton(onClick = { jumpTo(if (navIdx <= 0) vioDays.size - 1 else navIdx - 1) },
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "前の違反の日へ" },
-                    contentPadding = PaddingValues(horizontal = 10.dp)) { Text("◀違反") }
-                OutlinedButton(onClick = { jumpTo(if (navIdx < 0) 0 else (navIdx + 1) % vioDays.size) },
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "次の違反の日へ" },
-                    contentPadding = PaddingValues(horizontal = 10.dp)) { Text("違反▶") }
+            if (ui.canUndo && !ui.running) {
+                OutlinedButton(onClick = { vm.undo() }, modifier = small.semantics { contentDescription = "直前の操作を元に戻す" }, contentPadding = tight) {
+                    Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = null)
+                }
             }
+            if (ui.canRedo && !ui.running) {
+                OutlinedButton(onClick = { vm.redo() }, modifier = small.semantics { contentDescription = "元に戻した操作をやり直す" }, contentPadding = tight) {
+                    Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null)
+                }
+            }
+            PrimaryCommandButton(ui, vm, Modifier.weight(1f), showIcon = !showVio)
         }
     }
 }
@@ -1346,7 +1366,7 @@ private fun TallyBox(
 // フィッシュアイ(円柱)をやめ、均一セルのスプレッドシート型に。名前列固定・横スクロールで日移動。
 // 歪みなし＝全職員×全日で記号/違反が明瞭（周辺日の潰れを構造的に解消）。Composeネイティブでタップ/スクロール。
 @Composable
-internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null, cv: ConditionsView? = null, onEvent: (MagiEvent) -> Unit = {}, fixNav: FixNav = FixNav(), editCell: Pair<Int, Int>? = null, sheetPx: Float = 0f) {
+internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int) -> Unit, vioEnabled: Set<String> = allVioBucketKeys, hScroll: ScrollState = rememberScrollState(), nameQuery: String = "", cellW: androidx.compose.ui.unit.Dp = 48.dp, nameW: androidx.compose.ui.unit.Dp = 80.dp, focusCell: Pair<Int, Int>? = null, focusRange: Triple<Int, Int, Int>? = null, focusMode: Boolean = false, canDo: (Int, Int) -> Boolean = { _, _ -> true }, plainCellBorder: Boolean = false, stickyTopPx: Float = -1f, vScroll: ScrollState? = null, revealCell: Pair<Int, Int>? = null, cv: ConditionsView? = null, onEvent: (MagiEvent) -> Unit = {}, fixNav: FixNav = FixNav(), editCell: Pair<Int, Int>? = null, sheetPx: Float = 0f, barKey: Int = 0, corner: (@Composable () -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     val days = ui.days.coerceAtLeast(1)
     val staffCount = ui.schedule.size
@@ -1426,7 +1446,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     // [レイアウト整合] headH は 日番号+曜日+不足+下線 の3行分。端末フォント拡大(≥1.3x)でも下線/数字が欠けないよう 72dp。
     //   nameW は 4文字名(拡大時)が省略されないよう 80dp。headH は共有定数なので氏名列ヘッダと連動＝崩れなし。
     // [7日間表示] cellW は ScheduleGrid が「1週間が収まる幅」を動的計算して注入（既定48dp=単独利用時）。
-    val cellH = 48.dp; val headH = 72.dp   // nameW は引数（幅 390dp 未満の端末では 56dp、3.497.0）
+    val cellH = ScheduleLayoutMetrics.ROW_DP.dp; val headH = ScheduleLayoutMetrics.DAY_HEADER_DP.dp   // nameW は引数（幅 390dp 未満の端末では 56dp、3.497.0）
     // [3.481.0 勤務表タブ再設計①] 日ヘッダの固定。旧: 日ごとの Column の先頭にヘッダセルがあり、タブ全体の
     //   縦スクロールでヘッダが画面外へ消えると（30名×48dp=1440dp の下段）何日の列か分からなくなっていた
     //   （タップ時の行列クロスハイライトだけが頼り）。ヘッダを独立した Row にし、本体と同じ hScroll を共有
@@ -1452,7 +1472,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     }
     // 編集中のセルをシートの直上へ（列は左に 2 日ぶん余白を残す）。
     val cellWpxF = with(LocalDensity.current) { cellW.toPx() }
-    LaunchedEffect(editCell, sheetPx) {
+    LaunchedEffect(editCell, sheetPx, barKey) {
         val c = editCell ?: return@LaunchedEffect
         hScroll.animateScrollTo(((c.second - 2) * cellWpxF).toInt().coerceAtLeast(0))
         val sc = vScroll ?: return@LaunchedEffect
@@ -1531,13 +1551,6 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         }
     }
     Column {
-        // [P7/実務者向け短文化] スクロール・週送り・土日/祝日色・休の淡色は操作/見た目から自明のため説明しない
-        //   （日本のカレンダーの慣行＝赤=日曜/祝日・青=土曜 をシフト作成者は既に知っている前提）。
-        // [冗長解消] 違反枠・希望バッジの全文は「検索・凡例」の ViolationLegend に一本化（重複表示だった）。
-        //   ここは常時表示なので「タップで直せる」ことだけ示し、詳細は凡例を指す。
-        Text("タップで修正。凡例（枠・バッジの見方）は「検索・凡例」へ。",
-            style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-        Spacer(Modifier.height(8.dp))
         // [3.481.0] 固定ヘッダ行（名前列の見出し＋日ヘッダ）。zIndex で本体の上に描き、背景をカード色で塗る
         //   （透過だと下を通るセルが透けて読めない）。
         Row(
@@ -1551,7 +1564,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 .background(headerBg),
         ) {
             Box(Modifier.width(nameW).height(headH), contentAlignment = Alignment.CenterStart) {
-                Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                if (corner != null) corner() else Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             }
             Row(Modifier.horizontalScroll(hScroll)) {
                 for (d in 0 until days) DayHeader(d)
