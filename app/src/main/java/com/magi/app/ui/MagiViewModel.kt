@@ -814,6 +814,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
         reportNonAtomicSave()
         reportAutoSave(ok)
+        if (!ok) autoSave()   // 取り消したデバウンス保存を戻す（次の編集まで未保存にしない）
         return ok
     }
 

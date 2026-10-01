@@ -145,4 +145,21 @@ class SettingFixLogicTest {
         assertEquals("A→R", c3SeqKey(listOf("A", "R")))
         assertEquals("", c3SeqKey(listOf("", "R")))
     }
+
+    @Test fun staleRangeFixDoesNotOverwriteWhatTheUserJustFixed() {
+        val s = demandState(days = 2)
+        fun issue(newLo: String) = SettingIssueFor("0,1", newLo)
+        // 診断時は下限 3。そのあと利用者が 0 へ直した＝「下限を0にする」を押しても何も変えない。
+        assertNull(SettingFixLogic.apply(s.copy(staffRange = mapOf("0,1" to Range("0", "5"))), issue("0")))
+        // まだ下限 3 > 0 のままなら直す。上限は触らない。
+        val ns = SettingFixLogic.apply(s.copy(staffRange = mapOf("0,1" to Range("3", "5"))), issue("0"))!!
+        assertEquals(Range("0", "5"), ns.staffRange["0,1"])
+        // 設定が消えていたら空の設定を作らない。
+        assertNull(SettingFixLogic.apply(s.copy(staffRange = emptyMap()), issue("0")))
+    }
+
+    private fun SettingIssueFor(key: String, newLo: String) = com.magi.app.v6.SettingIssue(
+        com.magi.app.v6.IssueKind.RANGE, "x", "x", "x",
+        action = SettingFixAction.ZERO_RANGE_LO, actionLabel = "x", rangeKey = key, newLo = newLo,
+    )
 }

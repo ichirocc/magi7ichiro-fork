@@ -102,8 +102,9 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
             }
         }
         "covU", "covO" -> if (cur < 0) null else {
-            val lo = p.need1[cur][j]
-            val hi = if (p.use2 && p.need2[cur][j] >= 0) p.need2[cur][j] else lo
+            // チェッカーと同じ実効値: 不足は covUCell(got=0)、過剰は「どちらかの必要数以下なら過剰でない」ので大きい方。
+            val lo = p.covUCell(cur, j, 0)
+            val hi = maxOf(p.need1[cur][j], if (p.use2) p.need2[cur][j] else -1)
             val n = (0 until p.S).count { s[it][j] == cur }
             if (fam == "covU") "${dayFull(j)}の${sym(cur)}が人員不足（必要${lo}人に${n}人）"
             else "${dayFull(j)}の${sym(cur)}が人員過剰（適正${hi}人に${n}人）"

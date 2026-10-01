@@ -35,8 +35,12 @@ object SettingFixLogic {
             }
             SettingFixAction.ZERO_RANGE_LO, SettingFixAction.CLAMP_RANGE_LO -> {
                 val key = issue.rangeKey ?: return null
-                val cur = s.staffRange[key] ?: Range("", "")
-                s.copy(staffRange = s.staffRange + (key to Range(issue.newLo ?: cur.lo, cur.hi)))
+                // 診断が古いまま押されても、いまの下限が新しい下限より大きいときだけ書く（直したばかりの値を戻さない・空の設定を作らない）。
+                val cur = s.staffRange[key] ?: return null
+                val newLo = issue.newLo?.trim()?.toIntOrNull() ?: return null
+                val curLo = cur.lo.trim().toIntOrNull() ?: return null
+                if (curLo <= newLo) return null
+                s.copy(staffRange = s.staffRange + (key to Range(newLo.toString(), cur.hi)))
             }
             SettingFixAction.CLAMP_GROUP_RANGE_LO -> {
                 // 行は List なので index でなく**内容一致**で指す（DELETE_DUP_SEQ と同じ理由＝診断から
