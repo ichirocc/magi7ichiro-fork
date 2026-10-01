@@ -47,6 +47,7 @@ import com.magi.app.v6.lockTo
 import com.magi.app.v6.pinned
 import com.magi.app.model.togglePin
 import com.magi.app.model.withPinsFollowing
+import com.magi.app.model.withPinsFollowingBoard
 import com.magi.app.v6.wishLocked
 import com.magi.app.work.OptimizationRepository
 import com.magi.app.work.OptimizationWorker
@@ -2511,10 +2512,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = if (on) "手動固定" else "手動固定を外す"
         pushUndo(label)
         val ns = st.withSchedule(sched).togglePin(i, j, cur)
+        val pinHint = if (on) pinRegisterHint(
+            canDo = cur in cachedProblem(st).canDoShiftsForStaff(i),
+            families = _ui.value.violationCellFamilies[VioKey.cell(i, j)].orEmpty()) else ""
         state = ns
         autoSave()
         _ui.update { it.copy(messageIsError = false, editRev = it.editRev + 1,
-            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${DayText.short(st.startDate, j)} を" + (if (on) "手動固定しました（自動では変更しません）" else "手動固定を外しました"),
+            opNotice = OpNotice(++opNoticeSeq, "${opNm(i)} ${DayText.short(st.startDate, j)} を" + (if (on) "手動固定しました（自動では変更しません）$pinHint" else "手動固定を外しました"),
                 undoStack.lastOrNull()?.serial ?: 0L)).withWishDisplay(ns) }
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }
@@ -3062,7 +3066,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
                 resultSchedule = res.schedule.copy2D()
-                state = st.withSchedule(res.schedule)
+                // 取込で値が変わったセルの手動固定は取り込んだ値へ追従させる（手の編集 setCell と同じ規約）。同じ undo 段。
+                val (followed, pinsMoved) = st.withPinsFollowingBoard(sched, res.schedule)
+                state = followed.withSchedule(res.schedule)
+                val pinNote = if (pinsMoved > 0) "｜手動固定 ${pinsMoved} 件を取り込んだ値に合わせました" else ""
                 val total = st.staff.size
                 // [3.410.0/I-01] シフト一覧に無い記号は取り込めない。旧: 黙って読み飛ばしていたため、
                 //   誤字や凡例漏れが「休のまま」「元のまま」として静かに混入した。件数と記号を必ず出す。
@@ -3078,9 +3085,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val dupWarn = (if (res.ambiguousNames.isNotEmpty()) "｜⚠ ${csvAmbiguousText(res.ambiguousNames)}" else "") +
                     (if (res.duplicateRowNames.isNotEmpty()) "｜⚠ 同じ職員の行が複数あり、後の行で上書きしました: ${res.duplicateRowNames.joinToString("・")}" else "")
                 val msg = if (res.matched in 1 until total)
-                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn"
+                    "CSV取込完了: ${res.matched}/${total}名を更新（${total - res.matched}名は氏名不一致でスキップ）｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn$pinNote"
                 else
-                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn"
+                    "CSV取込完了: ${res.matched}名を更新｜必須=${res.report.hard} 合計=${res.report.total}$unk$quoteWarn$dateWarn$dupWarn$pinNote"
                 pushReport(state ?: st, res.schedule, res.report) { it.copy(
                     messageIsError = res.unknownCells > 0 || partial || res.headerDateMismatches > 0 || dupWarn.isNotEmpty(),
                     running = false,

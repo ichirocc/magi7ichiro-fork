@@ -438,6 +438,16 @@ internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = 
 /** 操作の通知を出している間、検査の進み具合などの通常の文言では置き換えない（失敗・拒否だけは置き換える）。 */
 internal fun messageMayReplaceNotice(noticeShowing: Boolean, isError: Boolean): Boolean = !noticeShowing || isError
 
+/** 手動固定を付けたセルが担当外／必須違反を抱えているときの一文（付けない＝空）。固定の挙動は変えない＝知らせるだけ。 */
+internal fun pinRegisterHint(canDo: Boolean, families: List<String>): String = when {
+    !canDo -> PIN_NOT_CANDO_HINT
+    families.any { familyOfVioClass(it) in PIN_HARD_CELL_FAMILIES } -> PIN_HARD_HINT
+    else -> ""
+}
+internal const val PIN_HARD_HINT = "このセルには必須違反があります。固定すると自動では動かしません。"
+internal const val PIN_NOT_CANDO_HINT = "担当外のシフトです。固定すると必須違反が残ったまま自動では動かしません。"
+private val PIN_HARD_CELL_FAMILIES = setOf("c3n", "c3w", "pref", "groupViol")
+
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
 internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "$name ${DayText.short(startDate, day)} を${symbol}に変更しました"
 

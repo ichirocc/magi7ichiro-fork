@@ -375,9 +375,8 @@ object ScheduleCsvBridge {
     }
 
     fun parse(text: String, state: MagiState, base: Array<IntArray>): ScheduleRunResult {
-        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える。ここは非nullを返す経路なので
-        //   非nullを返す経路なので旗（unclosedQuote）を立てて返し、呼出側（CsvPartialImport.judge）が
-        //   「読めた範囲だけ取り込むか」の確認か断りかを決める。
+        // [3.413.0/I-08] 引用符が閉じないCSVは残りの行が丸ごと消える。ここは null を返せないので、
+        //   旗（unclosedQuote）を立てて返し、呼出側（CsvPartialImport.judge）が読めた範囲だけ取り込むか断るかを決める。
         val parsedAll = parseCsvFull(text)
         val rows = parsedAll.rows
         val p = Problem(state)

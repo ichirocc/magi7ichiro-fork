@@ -160,8 +160,10 @@ class CsvPartialImportTest {
         // docs/ux_test_checklist.md 16(d): 氏名の途中で改行した引用セルは空白を除いた鍵で職員に一致する。
         val text = "スタッフ \\ 日付,1,2,3\n\"山\n田\",日,夜,休\n鈴木,休,休,日\n佐藤,\"日,日,日\n"
         val v = CsvPartialImport.judge(text, StateParser.parse(json), base()) as CsvPartialImport.Verdict.Ask
+        // 行: 1=ヘッダ, 2〜3=山田（氏名セルが 2 行）, 4=鈴木, 5=佐藤（引用符が開く）。
         assertEquals(4, v.endLine)
         assertEquals(2, v.matched)
+        assertEquals("CSV の 4行目までは読めました（2 名分）。その先は引用符が閉じていないため読めません。この部分だけ取り込みますか？", v.prompt)
         assertArrayEquals(intArrayOf(0, 1, 2), v.result.schedule[0])
         assertArrayEquals(intArrayOf(2, 2, 0), v.result.schedule[1])
         assertArrayEquals("佐藤は元のまま", intArrayOf(2, 2, 2), v.result.schedule[2])

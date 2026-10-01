@@ -97,6 +97,23 @@ fun MagiState.withPinsFollowing(cells: Collection<Pair<Int, Int>>, shift: Int): 
     return copy(manualPins = manualPins.map { if ((it.staff to it.day) in set) it.copy(shift = shift) else it })
 }
 
+/** [#41] 盤面ごと置き換わった（CSV 取込）とき、[old] から [new] で値が変わったセルの固定を新しい値へ追従させる。
+ *  新しい値が -1／シフト範囲外なら固定は外す（[withPinsFollowing] と同じ規約）。変わらないセルの固定はそのまま。
+ *  戻り値の件数＝追従または外した固定の数。 */
+fun MagiState.withPinsFollowingBoard(old: Array<IntArray>, new: Array<IntArray>): Pair<MagiState, Int> {
+    if (manualPins.isEmpty()) return this to 0
+    var n = 0
+    val out = ArrayList<ManualPin>(manualPins.size)
+    for (m in manualPins) {
+        val was = old.getOrNull(m.staff)?.getOrNull(m.day)
+        val now = new.getOrNull(m.staff)?.getOrNull(m.day)
+        if (now == null || now == was) { out += m; continue }
+        n++
+        if (now in 0 until shiftCount) out += m.copy(shift = now)
+    }
+    return if (n == 0) this to 0 else copy(manualPins = out) to n
+}
+
 /** [#41] セル (i,j) を [shift] で固定する／固定を外す（トグル）。 */
 fun MagiState.togglePin(i: Int, j: Int, shift: Int): MagiState =
     if (pinAt(i, j) != null) copy(manualPins = manualPins.filterNot { it.staff == i && it.day == j })
