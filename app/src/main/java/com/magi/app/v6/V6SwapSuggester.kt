@@ -209,6 +209,7 @@ object FixSuggester {
 
         /** Phase 6: エジェクションチェーン（不足シフトを貪欲に最大 CHAIN_ROUNDS コマ充足。文書§2 玉突き）。 */
         private fun chains() {
+            val s0 = s.copy2D()
             for (i in targetStaff()) {
                 if (timeUp()) break
                 val shorts = shortShift[i] ?: continue
@@ -218,7 +219,8 @@ object FixSuggester {
                     val picked = ArrayList<FixCell>()
                     val applied = ArrayList<Pair<Int, Int>>()   // (day, savedShift) 復元用
                     while (picked.size < Limits.CHAIN_ROUNDS && !timeUp()) {
-                        // 現在の積み上げ盤面のスコアを基準に、x へ変えて更に改善する可動コマを1つ選ぶ（単調改善を保証）
+                        // 現在の積み上げ盤面のスコアを基準に、x へ変えて更に改善する可動コマを1つ選ぶ（単調改善を保証）。
+                        // 選ぶ規則は tryOps・windows と同じ（別の HARD 族への入替えや回数固定を崩すコマを途中で選ぶと連鎖ごと棄却される）。
                         var bestRep = UnifiedViolationChecker.check(state, s)
                         var bestJ = -1; var bestSaved = -1
                         for (j in 0 until p.T) {
@@ -227,8 +229,9 @@ object FixSuggester {
                             if (a == x) continue
                             s[i][j] = x
                             val rep = UnifiedViolationChecker.check(state, s)
+                            val ok = betterReport(rep, bestRep) && newHardFamilyViolation(base, rep) == null && !exactPinRegression(p, s0, s)
                             s[i][j] = a
-                            if (betterReport(rep, bestRep)) { bestRep = rep; bestJ = j; bestSaved = a }
+                            if (ok) { bestRep = rep; bestJ = j; bestSaved = a }
                         }
                         if (bestJ < 0) break
                         s[i][bestJ] = x; picked.add(FixCell(i, bestJ, x)); applied.add(bestJ to bestSaved)
