@@ -709,4 +709,5 @@
     ⑥c1 の窓が期間より長い・c2 の回数が期間より大きい行は取込で受理され後の診断で出る（エディタは塞ぐ）＝製品判断待ちでそのまま。
 43. **[低優先・2026-10-02 登録]** runV5 FULL は否決・再測定しない（`docs/history/3.4xx.md` 2026-10-02）。残り 2 件:
     ①runV5 NARROW（生 SA 盤面は探索内でだけ使い、最終候補にしない）: 未実装・ログ上の根拠なし。
-    ②ExtraRefine の空振り対策: `extraRefineRequirePostHardDrop` フラグで測定中。既定の変更は tools/loop ゲート＋ユーザー判断。
+    ②ExtraRefine の空振り対策: `extraRefineRequirePostHardDrop` は測定済み＝既定 OFF 維持（端末盤面で発火せず節約 0s）。
+    進めるなら `isStructuralHardResidual` の c3w 証明を wishOn に依らず数え、端末水準の盤面で A/B（節約上限 10〜14s）。
