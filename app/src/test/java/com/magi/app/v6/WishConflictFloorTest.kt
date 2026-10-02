@@ -112,6 +112,7 @@ class WishConflictFloorTest {
         assertEquals(1, res.report.hard)
         assertTrue(res.logs.joinToString("\n") { it.message }, res.logs.any { it.tag == "EarlyStop" && it.message.contains("希望衝突の床に到達＝E0B") })
         assertTrue(res.logs.any { it.tag == "Watchdog" && it.message.contains("希望衝突の床1=到達") })
+        assertTrue(res.logs.any { it.tag == "Watchdog" && Regex("入力超えの最終改善=(なし|経過\\d+s)・").containsMatchIn(it.message) })
         assertTrue("早く返す: ${ms}ms", ms < 55_000)
     }
 }
