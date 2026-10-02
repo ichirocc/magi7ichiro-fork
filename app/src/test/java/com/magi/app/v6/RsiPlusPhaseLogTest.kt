@@ -18,7 +18,8 @@ class RsiPlusPhaseLogTest {
         }
         val lines = (res.phaseLogs + res.report.logs).filter { it.tag == "RSIPlus" }.map { it.message }
         val all = lines.joinToString("\n")
-        assertTrue(all, lines.any { it.startsWith("[仮説0] Phase1 Seed: ") && it.contains("weighted=") })
+        // workers=1 でも仮説は 2 本走り、返るのは勝った仮説のログだけ＝どちらが勝つかは実行環境の時間で変わる。
+        assertTrue(all, lines.any { Regex("""^\[仮説\d+] Phase1 Seed: """).containsMatchIn(it) && it.contains("weighted=") })
         for (p in listOf("Phase2 Hypothesis(スキップ)", "Phase3 Refine(スキップ)", "Phase4 Polish(スキップ)"))
             assertTrue(all, lines.any { it.contains(p) && it.contains("weighted=") })
     }
