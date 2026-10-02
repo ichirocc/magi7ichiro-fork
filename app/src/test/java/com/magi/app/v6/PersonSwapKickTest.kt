@@ -12,7 +12,7 @@ import java.util.Random
 /**
  * [3.517.0] PERSON_SWAP_ILS の摂動本体 `V6NativeOptimizer.personSwapKick` の固定テスト。
  * fair(公平化)が交換で不変であること・fair負担が最大のペアを優先して選ぶことを固定する
- * （`MirrorCore.kt`のfair計算と同一式で負担を集計している前提）。
+ * （負担は personSwapKick 内の旧式＝生回数 round(平均) からの L1 偏差。評価器の fair（達成率モード）とは別式）。
  */
 class PersonSwapKickTest {
     // 同群4名(a,b,c,d)。A(idx1)の回数: a=4,b=0,c=2,d=2 → 群平均2 → 負担 a=2,b=2,c=0,d=0。

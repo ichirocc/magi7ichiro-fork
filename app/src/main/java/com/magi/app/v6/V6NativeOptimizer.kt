@@ -1084,8 +1084,9 @@ object V6NativeOptimizer {
             val k = out[i][j]
             if (k in 0 until p.K) counts[i][k]++
         }
-        // MirrorCore.kt のfair計算と同一式（群×担当ONシフトごとに round(平均) からのL1偏差）で
-        // 職員ごとの負担を集計する。
+        // 職員ごとの負担＝群×担当ONシフトごとに、群の全メンバーの生回数 round(平均) からの L1 偏差の和。
+        // 評価器の fair（`Problem.fairDevOfBucket`＝3.541.0 達成率モード、母集団は mayPlace/回数>0）とは別の旧式。
+        // 評価器の式へ揃えるのは交換相手の選び方＝探索動学の変更なので別件。
         val burden = DoubleArray(p.S)
         for (g in 0 until p.G) {
             val mem = p.groupMembers[g]
