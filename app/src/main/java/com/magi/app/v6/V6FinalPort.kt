@@ -453,6 +453,7 @@ object V6FinalPort {
         //   猶予(phaseGraceMs、下記)としてのみ機能させ、「本当に改善が無い時間」は lastBestImproveMs
         //   単独で計測する（フェーズが何回切り替わっても改善が無ければ着実に積み上がる）。
         val lastBestImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
+        val lastBeatInputMs = java.util.concurrent.atomic.AtomicLong(-1)
         val lastPhaseChangeMs = java.util.concurrent.atomic.AtomicLong(startMs)
         val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
         // [停滞時間のログ出力] 発火の瞬間に「何ms無改善だったか」を記録する（ログ側で再計算すると
@@ -514,6 +515,7 @@ object V6FinalPort {
                     if (improved) {
                         bestHard.set(h); bTotal = t; bWeighted = wgt; lastBestImproveMs.set(EngineClock.nowMs())
                         lastBestImproveIters.set(observedIters.get())   // [3.375.0] 最終改善時点の反復数
+                        if (betterReport(report, inputReport)) lastBeatInputMs.set(lastBestImproveMs.get())
                         // [3.346.0/実機ログ] 停滞ラッチを解除する。shouldStop は**単調でない**（改善が届けば
                         //   条件は偽に戻り、探索はそのまま締切まで走る）のに、旧実装は一度立った
                         //   stagnationFired を二度と降ろさなかった。実機ログ 2026-08-03 では 258s に発火 →
@@ -627,6 +629,7 @@ object V6FinalPort {
         //   という**時間軸の混ざった自己矛盾**になっていた（読み手は「探索は一度も停滞していない」と誤読する）。
         //   探索終了時点でスナップショットし、ウォッチドッグの数字は全てこの時刻基準で揃える。
         val lastImpAtSearchEnd = lastBestImproveMs.get()
+        val lastBeatInputAtSearchEnd = lastBeatInputMs.get()
         val lastPhaseAtSearchEnd = lastPhaseChangeMs.get()
         val itersAtSearchEnd = observedIters.get()
         val lastImpItersAtSearchEnd = lastBestImproveIters.get()
@@ -845,6 +848,7 @@ object V6FinalPort {
             listOf(MirrorLog(
                 level = "I", tag = "Watchdog",
                 message = "停滞監視: 最終改善=経過${((lastImp - startMs) / 1000).coerceAtLeast(0)}s・" +
+                    "入力超えの最終改善=${if (lastBeatInputAtSearchEnd < 0) "なし" else "経過${((lastBeatInputAtSearchEnd - startMs) / 1000).coerceAtLeast(0)}s"}・" +
                     "探索終了時の停滞${endStallS}s・実効閾値($kind)・" +
                     "希望衝突の床${wishFloorLogged}=${if (wishReachedEnd) "到達" else "未到達"}(best ${bestHard.get()})・" +
                     "covU床${hardFloor}=${if (bestHard.get() <= hardFloor && nonCovU == 0) "到達" else "未到達"}・発火=${if (stagnationFired.get()) "あり" else "なし"}" +

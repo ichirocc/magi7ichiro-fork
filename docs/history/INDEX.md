@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- Watchdog/RSIPlus ログの拡充（2026-10-02、採用、ログのみ・探索・採点・停止判定は不変）: Watchdog 行に「入力超えの最終改善=経過Xs／なし」（上限0を外した入力の inputReport に betterReport で勝った最終改善の時刻）、RSIPlus Phase1〜4 行に weighted・ワーカー識別（[仮説N]／[W{i} epoch{n}]）・shouldStop による「(スキップ)」。テスト `RsiPlusPhaseLogTest`・`WishConflictFloorTest`。C# 同日同期。  → `docs/history/3.4xx.md`
 - C1 研磨の直接移動が上限0へ置く欠陥（2026-10-01、採用、候補生成の規律のみ・重み・採否基準は不変）: 机上テストで `applyC1IndexChainRepair`／`applyC1WindowPolish`（手B）が個人上限 0 の (職員,シフト) へ置くのを確認（3.507.0 の「上限0は最適化器が置かない」違反）。候補の基準を `canDo`→`Problem.mayPlace`（beam の対象生成も）。テスト `C1UpperZeroGuardTest`。C++ に同等の研磨は無い。C# 同日同期。  → `docs/history/3.4xx.md`
 - 論理監査 2 本の確定欠陥の修正（2026-10-01、採用、表示・設定修正・保存の堅牢化のみ・採点・探索は不変）: セル状態行の人員不足/過剰の必要数をチェッカー（covUCell）と同じ実効値に／設定の見直し「下限を0にする・下げる」は古い診断で直したばかりの値を戻さない・空の設定を作らない／persistNow 失敗時に取り消したデバウンス保存を戻す。C# は CSV ヘッダ日付ズレ警告（3.592.0）の取りこぼしを移植。
 - E0 の床到達盤面での A/B（2026-10-01、測定のみ・製品コード不変・既定 OFF のまま）: 実データ oct2026_grid に実 S6 経路（`RelaxTrial.firstWall`→`apply`＋`applyMoves`）を当てて HARD=床=4 の入力を作り（rk9/rr4・前提3・組2、床は緩和後も 4）、OFF/E0A/E0B を 5 種×120s・workers4・交互で比較。E0 は全本 44〜52s で発火・HARD4＝床で偽停止0。中央値の壁時計 OFF117s / E0A50s / E0B44s、weighted 38958 / 39008 / 39215（E0B は入力盤面と一致＝探索の成果を採らない）。OFF は 300s でも 120s と同一盤面。推奨: OFF 維持（E0A は採用候補だが n=5・ホストのみ＝端末 A/B が要る）。  → `docs/history/3.4xx.md`

@@ -376,7 +376,7 @@ object V6NativeOptimizer {
                 runRsi(state, hypothesisStartFor(state, schedule, i, o.seed, o.quantitativeRangeEval), o, full, shouldStop, prog)
             }
             V6Algorithm.RSI_PLUS -> runMultiWorker(w, options, onProgress) { i, o, prog ->
-                runRsiPlus(state, hypothesisStartFor(state, schedule, i, o.seed, o.quantitativeRangeEval), o, full, shouldStop, prog)
+                runRsiPlus(state, hypothesisStartFor(state, schedule, i, o.seed, o.quantitativeRangeEval), o, full, shouldStop, prog, workerLabel = "仮説$i")
             }
             // [3.267.0/adaptive hypothesis epochs] 1回起動して終了を待つ旧協力ポートフォリオ（各仮説に
             //   異なる方式を割当て keep-best で最良採用）では、入口を多様化しても収束後は同じ吸引域へ
@@ -730,7 +730,7 @@ object V6NativeOptimizer {
                         when (assignment.algorithm) {
                             V6Algorithm.ALNS -> runAlns(state, start.copy2D(), roleOptions, quantum, stopRole, progress)
                             V6Algorithm.RSI -> runRsi(state, start.copy2D(), roleOptions, quantum, stopRole, progress, workerHf63)
-                            else -> runRsiPlus(state, start.copy2D(), roleOptions, quantum, stopRole, progress, workerHf63)
+                            else -> runRsiPlus(state, start.copy2D(), roleOptions, quantum, stopRole, progress, workerHf63, workerLabel = "W$i epoch${epoch + 1}")
                         }
                     } catch (ce: kotlinx.coroutines.CancellationException) {
                         throw ce
@@ -1919,9 +1919,12 @@ object V6NativeOptimizer {
         shouldStop: () -> Boolean = { false },
         onProgress: (String, ViolationReport?, Long, Long) -> Unit,
         sharedHf63: Hf63Infeasibility? = null,   // [3.281.0/B] Phase2 RSI へ透過（エポック跨ぎのHF63学習持続）
+        workerLabel: String = "",
     ): V6OptimizerResult {
         val started = nowMs()
         val logs = ArrayList<MirrorLog>()
+        val who = if (workerLabel.isEmpty()) "" else "[$workerLabel] "
+        fun scoreOf(r: ViolationReport) = "HARD=${r.hard} total=${r.total} weighted=${"%.1f".format(r.weightedScore)}"
         // [3.600.0] 入口で既に停止済みなら位相下限ぶんの無駄走りをせず入力をそのまま返す（keep-best不変）。
         if (shouldStop()) {
             val rep = UnifiedViolationChecker.check(state, initial, quantitativeRangeEval = options.quantitativeRangeEval)
@@ -1936,15 +1939,17 @@ object V6NativeOptimizer {
         //   どこで生じたかは従来ログ（HARD/totalのみ）では特定できなかった。次の実機ログでの切り分け用。
         val seedT0 = nowMs()
         val seed = runV5(state, initial, options, seedSec, shouldStop, onProgress)
-        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase1 Seed: HARD=${seed.report.hard} total=${seed.report.total} 実測${nowMs() - seedT0}ms(予算${seedSec}000ms)"))
+        logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase1 Seed: ${scoreOf(seed.report)} 実測${nowMs() - seedT0}ms(予算${seedSec}000ms)"))
         val rsiT0 = nowMs()
-        val rsi = if (shouldStop()) seed else runRsi(state, seed.schedule, options, rsiSec, shouldStop, onProgress, sharedHf63)
+        val rsiSkipped = shouldStop()
+        val rsi = if (rsiSkipped) seed else runRsi(state, seed.schedule, options, rsiSec, shouldStop, onProgress, sharedHf63)
         val base = if (better(rsi.report, seed.report)) rsi else seed
-        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase2 Hypothesis: HARD=${base.report.hard} total=${base.report.total} 実測${nowMs() - rsiT0}ms(予算${rsiSec}000ms)"))
+        logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase2 Hypothesis${if (rsiSkipped) "(スキップ)" else ""}: ${scoreOf(base.report)} 実測${nowMs() - rsiT0}ms(予算${rsiSec}000ms)"))
         val alnsT0 = nowMs()
-        val refine = if (shouldStop()) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, shouldStop, onProgress)
+        val refineSkipped = shouldStop()
+        val refine = if (refineSkipped) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, shouldStop, onProgress)
         val best = if (better(refine.report, base.report)) refine else base
-        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase3 Refine: HARD=${refine.report.hard} total=${refine.report.total} 実測${nowMs() - alnsT0}ms(予算${alnsSec}000ms)"))
+        logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase3 Refine${if (refineSkipped) "(スキップ)" else ""}: ${scoreOf(refine.report)} 実測${nowMs() - alnsT0}ms(予算${alnsSec}000ms)"))
         var bestSched = best.schedule
         // [HF361/528/541移植] EarlyChain: Refine 確定後の停滞境界で Chain3/4(常時)+Rect/BlkN(rectSwap)を発火
         run {
@@ -1964,13 +1969,14 @@ object V6NativeOptimizer {
             }
         }
         val polishT0 = nowMs()
-        val polish = if (shouldStop()) {
+        val polishSkipped = shouldStop()
+        val polish = if (polishSkipped) {
             PolishResult(bestSched, emptyList(), 0L, UnifiedViolationChecker.check(state, bestSched, quantitativeRangeEval = options.quantitativeRangeEval))
         } else {
             hf80PostPolish(state, bestSched, polishSec, actualSeed(options.seed) xor 0x555L, shouldStop, options.quantitativeRangeEval)
         }
         val report = polish.report
-        logs.add(MirrorLog(tag = "RSIPlus", message = "Phase4 Polish: HARD=${report.hard} total=${report.total} 実測${nowMs() - polishT0}ms(予算${polishSec}000ms) 全体実測${nowMs() - started}ms(予算${budgetSec}000ms)"))
+        logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase4 Polish${if (polishSkipped) "(スキップ)" else ""}: ${scoreOf(report)} 実測${nowMs() - polishT0}ms(予算${polishSec}000ms) 全体実測${nowMs() - started}ms(予算${budgetSec}000ms)"))
         return V6OptimizerResult(
             polish.schedule,
             report.copy(logs = logs + seed.phaseLogs + rsi.phaseLogs + refine.phaseLogs + polish.logs + report.logs),
