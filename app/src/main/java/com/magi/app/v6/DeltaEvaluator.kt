@@ -154,12 +154,18 @@ class DeltaEvaluator(private val p: Problem) {
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
         // [統一c/c1/apt/fair/weekly] sc1/sc3/sc3m/sc3mn/sApt/sFair/sWeekly に checker 重みを適用
         //   （各カウンタ自体は #fire/run-deficit/L1偏差の生カウント）。[3.522.0/全面見直し、docs/history/3.4xx.md]。
-        val soft = sc1 * 50 + sc2 * 4 + sc41 * 9 + sc42 * 9 + sc41s * 10 + sc42s * 10 + sc3 * 15 + sc3m * 6 + sc3mn * 90 + hct + sApt * 4 + sFair * 2 + sWeekly * 2 + scovO * 10
+        val soft = weightedSoft(sc1, sc2, sc41, sc42, sc41s, sc42s, sc3, sc3m, sc3mn, hct, sApt, sFair, sWeekly, scovO)
         return h1 * SCORE_HARD_UNIT + soft
     }
 
+    /** SOFT の重み付き和。線形なので合計にも差分にも同じ式を使う（scoreFrom と previewMove の単一ソース）。 */
+    private fun weightedSoft(
+        c1: Long, c2: Long, c41: Long, c42: Long, c41s: Long, c42s: Long, c3: Long, c3m: Long, c3mn: Long,
+        ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long,
+    ): Long = c1 * 50 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 90 + ct + apt * 4 + fair * 2 + weekly * 2 + covO * 10
+
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
-    private fun previewMove(i: Int, j: Int, nw: Int): Long {
+    internal fun previewMove(i: Int, j: Int, nw: Int): Long {
         // [3.410.0/D-02] 旧: `nw` を無検証で `cntDay[nw][j]` 等の添字に使っており、範囲外で即座に
         //   ArrayIndexOutOfBounds になった。正規の探索オペレータは `allowedShiftsForStaff` から選ぶので
         //   到達しないが、`revert()` は過去の `a[i][j]` を戻すため、盤面の不変条件（reset の require）と
@@ -346,8 +352,7 @@ class DeltaEvaluator(private val p: Problem) {
 
         // [統一b] dCt(range) は SOFT へ移動（hard から除外）。
         val dHard = dC3n + (nCovU - covUTot) + dPref + dGrpV + dC3w
-        // [3.522.0] scoreFrom と同一係数（全面見直し、経緯はdocs/history/3.4xx.md）。
-        val dSoft = dC1 * 50 + dC2 * 4 + dC41 + dC42 + dC41s * 6 + dC42s * 6 + dC3 * 15 + dC3m * 10 + dC3mn * 90 + dCt + dApt * 4 + dFair * 2 + dWeekly * 2 + dCovO * 10
+        val dSoft = weightedSoft(dC1, dC2, dC41, dC42, dC41s, dC42s, dC3, dC3m, dC3mn, dCt, dApt, dFair, dWeekly, dCovO)
         return score() + dHard * SCORE_HARD_UNIT + dSoft
     }
 

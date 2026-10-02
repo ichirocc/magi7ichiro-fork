@@ -36,7 +36,7 @@ class C1RelocationPolishTest {
      * [3.287.0 keep-best統一で強化] docstring どおりの「回数固定職員」を staffRange の厳密ピン(X=2固定)で
      * 実際に表現する。旧盤面はピン未設定で、weighted優先化後は「c1(15)を weekly(1)等と交換する count-changing 手」
      * が正当な改善として追加採用され、回数保存アサーションが破れた（挙動は正しい）。ピンを立てることで
-     * count-changing 手は low/high(90/25)+exactPinRegression で拒否され、本テストの意図（移設だけが唯一の
+     * count-changing 手は low/high(120/25)+exactPinRegression で拒否され、本テストの意図（移設だけが唯一の
      * 改善手である局面で R1 が機能する）が新旧どちらの比較器でも成立する。
      */
     private fun mirrorState(): MagiState {
