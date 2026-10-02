@@ -164,8 +164,8 @@ internal object AdaptiveBlockSwapPolish {
     // ===== 両モード共通の部品 =====
 
     /**
-     * range/apt の見積り（候補の順位付け専用・採否は正式 checker）。重みは [MirrorKeys] の low/high（90/25）を引く＝
-     * 重みを変えたときにここだけ古い値で残る事故を防ぐ（apt は L1 偏差×1）。
+     * range/apt の見積り（候補の順位付け専用・採否は正式 checker）。重みは [MirrorKeys] の low/high（120/25）を引く＝
+     * 重みを変えたときにここだけ古い値で残る事故を防ぐ。順位付けの見積りでは apt を L1×1 で足す（正式な重み 4 とは異なる。採否は betterReport）。
      */
     private class PersonalPenalty(private val p: Problem) {
         private val lowW = MirrorKeys.weightOf("low").toLong()

@@ -1,9 +1,11 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C3Row
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Range
 import com.magi.app.model.Shift
+import com.magi.app.model.ShiftRole
 import com.magi.app.model.Staff
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -88,5 +90,36 @@ class V6SwapSuggesterTest {
         assertTrue(UnifiedViolationChecker.check(st, sched).countViolations.containsKey("0,1"))
         val results = FixSuggester.suggest(st, sched, maxResults = 20, deadlineMs = 4000L)
         assertTrue(results.map { it.label }.toString(), results.none { r -> r.ops.any { it.staff == 0 && it.toShift == 1 } })
+    }
+
+    /**
+     * 連鎖の途中のコマも tryOps と同じ規則で選ぶ。D 必要 1・禁止連 D-D・A の D 下限 3、不足は隣り合う日1・日2。
+     * 旧: 2 コマ目に日2（不足−1 と引き換えに禁止連＋1＝HARD 同数で weighted が小さい）を選び、最後に連鎖ごと棄却されて
+     * CHAIN 0 件。新: 日1→日3→日5 の 3 コマ（2 コマの手と重ならない）が出る。
+     */
+    @Test
+    fun chainRoundDoesNotPickCellThatTradesIntoAnotherHardFamily() {
+        val st = MagiState(
+            startDate = "2026-08-03", endDate = "2026-08-08",
+            shifts = listOf(Shift("休", "休", "", "", ShiftRole.Rest), Shift("D", "D", "1", ""), Shift("N", "N", "", "")),
+            groups = listOf(Group("G0", "G0")), staff = listOf(Staff("A", 0), Staff("B", 0), Staff("C", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", "")),
+            schedule = listOf(
+                listOf(0, 0, 0, 0, 0, 0),   // A: 休休休休休休
+                listOf(1, 0, 0, 1, 0, 1),   // B: D休休D休D
+                listOf(0, 0, 0, 0, 1, 0),   // C: 休休休休D休
+            ),
+            wishes = emptyMap(), staffRange = mapOf("0,1" to Range("3", "")),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = listOf(C3Row(listOf("D", "D"))),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
+        val base = UnifiedViolationChecker.check(st, sched)
+        assertEquals(2, base.breakdown["covU"] ?: 0)
+        assertEquals(0, base.breakdown["c3n"] ?: 0)
+        val chains = FixSuggester.suggest(st, sched, maxResults = 200, deadlineMs = 20000L).filter { it.kind == FixKind.CHAIN }
+        val want = setOf(FixCell(0, 1, 1), FixCell(0, 3, 1), FixCell(0, 5, 1))
+        assertTrue(chains.map { it.ops }.toString(), chains.any { it.ops.toSet() == want && it.deltaHard == -1 })
     }
 }

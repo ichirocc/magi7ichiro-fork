@@ -41,7 +41,7 @@ internal fun rangeDistance(z: Int, l: Int, u: Int): Long =
  *           + groupViol (担当できないシフトに就いているセル。3.318.0 でチェッカーの MirrorKeys.hard と揃えた)
  *   soft  = c1 (window) + c2 (per-staff total) + c41 (group/day range)
  *           + c42 (group pair conflict) + c41s/c42s (skill-group変種) + c3 (want seq) + c3m + c3mn
- *           + [統一a/b] low/high (range, amount×90/25) + covO (over-coverage, amount×5, 2026-08-27 HF77明示指示)
+ *           + [統一a/b] low/high (range, amount×120/25) + covO (over-coverage, amount×10, 3.522.0 HF77明示指示)
  *   ※ range と covO は UnifiedViolationChecker と同分類(SOFT)。重みは MirrorKeys.weights が単一の真実
  *     （hard1 は ×SCORE_HARD_UNIT で常に優先）。
  *

@@ -256,4 +256,24 @@ class DeltaEvaluatorTest {
             everNonZero.size >= MirrorKeys.all.size - 2,
         )
     }
+
+    /** previewMove の戻り値（差分の見積り）が commit 後の score と一致する＝scoreFrom と同じ係数（c41/c42/c41s/c42s/c3m を含む）。 */
+    @Test
+    fun previewMoveReturnEqualsScoreAfterCommit() {
+        val p = Problem(buildState())
+        val de = DeltaEvaluator(p)
+        val rng = Random(777)
+        val fams = setOf("c41", "c42", "c41s", "c42s", "c3m")
+        val moved = HashSet<String>()
+        repeat(20_000) {
+            val i = rng.nextInt(p.S); val j = rng.nextInt(p.T)
+            val nw = rng.nextInt(p.K)
+            val before = de.familyRaw()
+            val predicted = de.previewMove(i, j, nw)
+            val after = de.apply(i, j, nw)
+            assertEquals("previewMove($i,$j,$nw)", after, predicted)
+            for ((k, v) in de.familyRaw()) if (k in fams && v != before[k]) moved += k
+        }
+        assertEquals("族の Δ が通っていない", fams, moved)
+    }
 }
