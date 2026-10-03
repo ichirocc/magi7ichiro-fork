@@ -560,9 +560,7 @@ internal object PersonalBalanceJointLnsPolish {
         rng: Random,
     ): List<Node> {
         val official = children.sortedWith(
-            compareBy<Node> { it.report.hard }
-                .thenBy { it.report.weightedScore }
-                .thenBy { it.report.total }
+            compareBy<Node, ViolationReport>(reportComparator) { it.report }
                 .thenBy { it.focusTotal }
                 .thenBy { it.changedCells },
         ).take(max(1, width / 2))

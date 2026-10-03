@@ -727,9 +727,7 @@ internal object C1JointLnsPolish {
         rng: Random,
     ): List<Node> {
         val official = children.sortedWith(
-            compareBy<Node> { it.report.hard }
-                .thenBy { it.report.weightedScore }
-                .thenBy { it.report.total }
+            compareBy<Node, ViolationReport>(reportComparator) { it.report }
                 .thenBy { it.c1 }
                 .thenBy { it.changedCells },
         ).take(max(1, width / 2))
