@@ -376,7 +376,48 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Switch(checked = ui.countChainPolish, onCheckedChange = { onEvent(MagiEvent.Settings.SetCountChainPolish(it)) }, enabled = !ui.running)
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("期間の制約の一括見直しを速く試す")
+                Text("「期間の制約」を職員の回数と一緒に見直すとき、候補の良し悪しを速い方法で見積もります。" +
+                    "効果はまだ確かめられておらず、結果が変わらないこともあります。既定はOFFです。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.c1DeltaChildEval, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1DeltaChildEval(it)) }, enabled = !ui.running)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("解けない違反だけ残ったら追加の見直しを省く")
+                Text("仕上げのあと、残った違反が「計算では消えない」と分かっているときだけ、最後の追加の見直しを省いて早く終えます。" +
+                    "効果はまだ確かめられておらず、結果が変わらないこともあります。既定はOFFです。",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.extraRefineRequirePostHardDrop, onCheckedChange = { onEvent(MagiEvent.Settings.SetExtraRefineRequirePostHardDrop(it)) }, enabled = !ui.running)
+        }
+        Column(Modifier.fillMaxWidth()) {
+            Text("希望どうしの衝突で止める")
+            Text("希望どうしがぶつかって消せない違反だけが残ったら、それ以上減らすのをやめます。" +
+                "「仕上げは続ける」は仕上げを通常どおり行い、「仕上げも省く」は仕上げを省いて早く終えます。" +
+                "効果はまだ確かめられておらず、結果が変わらないことも、変わることもあります。既定はOFFです。",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                com.magi.app.v6.WishFloorMode.values().forEach { mode ->
+                    val label = wishFloorModeLabel(mode)
+                    if (ui.wishFloorMode == mode) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetWishFloorMode(mode)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetWishFloorMode(mode)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    }
+                }
+            }
+        }
     }
+}
+
+internal fun wishFloorModeLabel(mode: com.magi.app.v6.WishFloorMode): String = when (mode) {
+    com.magi.app.v6.WishFloorMode.OFF -> "OFF"
+    com.magi.app.v6.WishFloorMode.E0A -> "仕上げは続ける"
+    com.magi.app.v6.WishFloorMode.E0B -> "仕上げも省く"
 }
 
 /** [見やすさ] 計算方式(V6Algorithm)の一般向け日本語ラベル。技術名(AUTO/RSI 等)は操作者に不明なため。 */

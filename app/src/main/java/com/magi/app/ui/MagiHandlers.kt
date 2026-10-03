@@ -149,6 +149,9 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetLnsAdaptive -> vm.setLnsAdaptive(e.on)
             is MagiEvent.Settings.SetCountChainPolish -> vm.setCountChainPolish(e.on)
             is MagiEvent.Settings.SetAptFairSoftTolerance -> vm.setAptFairSoftTolerance(e.on)
+            is MagiEvent.Settings.SetC1DeltaChildEval -> vm.setC1DeltaChildEval(e.on)
+            is MagiEvent.Settings.SetWishFloorMode -> vm.setWishFloorMode(e.mode)
+            is MagiEvent.Settings.SetExtraRefineRequirePostHardDrop -> vm.setExtraRefineRequirePostHardDrop(e.on)
         }
         true
     },

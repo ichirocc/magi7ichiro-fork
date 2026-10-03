@@ -1287,6 +1287,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 公平化/適切回数研磨の他ソフト許容(6%) → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setC1DeltaChildEval(on: Boolean) {
+        com.magi.app.v6.C1JointLnsPolish.deltaChildEvalDefault = on
+        _ui.update { it.copy(c1DeltaChildEval = on) }
+        logOp("I", "設定変更: 期間の制約の一括見直しを差分で評価 → ${if (on) "ON" else "OFF"}")
+    }
+
+    fun setWishFloorMode(mode: com.magi.app.v6.WishFloorMode) {
+        com.magi.app.v6.PolishGate.wishConflictFloorMode = mode
+        _ui.update { it.copy(wishFloorMode = mode) }
+        logOp("I", "設定変更: 希望どうしの衝突で止める → $mode")
+    }
+
+    fun setExtraRefineRequirePostHardDrop(on: Boolean) {
+        _ui.update { it.copy(extraRefineRequirePostHardDrop = on) }
+        logOp("I", "設定変更: 解けない違反だけなら追加の見直しを省く → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
     fun setSoftPolish(b: Boolean) { _ui.update { it.copy(softPolish = b) }; logOp("I", "設定変更: ソフト研磨 → ${if (b) "ON" else "OFF"}") }
     fun setV6Algorithm(a: V6Algorithm) { _ui.update { it.copy(v6Algorithm = a) }; logOp("I", "設定変更: 方式 → $a") }
@@ -1582,6 +1599,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     softPolish = _ui.value.softPolish,
                     requestedAlgorithm = _ui.value.v6Algorithm,
                     allowImpossible = true,
+                    extraRefineRequirePostHardDrop = _ui.value.extraRefineRequirePostHardDrop,
                     wishFloorMode = com.magi.app.v6.PolishGate.wishConflictFloorMode,
                 ) { phase, report, _, _ ->
                     val rep = report

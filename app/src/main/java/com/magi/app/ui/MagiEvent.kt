@@ -187,6 +187,9 @@ internal sealed interface MagiEvent {
         data class SetLnsAdaptive(val on: Boolean) : Settings
         data class SetCountChainPolish(val on: Boolean) : Settings
         data class SetAptFairSoftTolerance(val on: Boolean) : Settings
+        data class SetC1DeltaChildEval(val on: Boolean) : Settings
+        data class SetWishFloorMode(val mode: com.magi.app.v6.WishFloorMode) : Settings
+        data class SetExtraRefineRequirePostHardDrop(val on: Boolean) : Settings
     }
 
     /** 画面遷移・選択・問い合わせ。盤面を触らない。 */
