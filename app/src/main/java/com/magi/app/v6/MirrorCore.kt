@@ -217,9 +217,11 @@ object UnifiedViolationChecker {
         //   ＝スコアリング不変・表示のみ。
         // [Set化] 重なった全クラスは cellFams("i,j"→クラス列)にも蓄積（重複なし・後で重み降順に整列）。
         //   violations は従来どおり最重1クラス＝既存読者は不変。
-        val cellFams = linkedMapOf<String, List<String>>()
-        val countFams = linkedMapOf<String, List<String>>()
-        val needFams = linkedMapOf<String, List<String>>()
+        // 容量は同じスレッドの前回の件数から（中身・順序は容量に依らない＝再ハッシュを省くだけ）。
+        val cellFams = LinkedHashMap<String, List<String>>(mapCapacity(scratch.cellHint))
+        val countFams = LinkedHashMap<String, List<String>>(mapCapacity(scratch.countHint))
+        val needFams = LinkedHashMap<String, List<String>>(mapCapacity(scratch.needHint))
+        val canDo = p.canDoHas
         val c1Runs = ArrayList<List<Int>>()
         // [3.395.0/高速化] 「最重1クラス」を毎回ここで決めるのをやめ、末尾で `cellFams` の**整列済み先頭**
         //   から起こす。両者は定義上いつも同じ値になる：整列は重み降順の**安定ソート**なので先頭＝最初に
@@ -306,10 +308,11 @@ object UnifiedViolationChecker {
             }
         }
 
+        // 日ごとの (グループ, シフト) 人数を 1 回だけ数え、c41/c42 の規則ごとの職員走査を表引きにする。
+        val grpDay = if (p.cons41.isEmpty() && p.cons42.isEmpty()) null else scratch.groupDayCounts(s, p, p.sgrp, p.G, skill = false)
         for (c in p.cons41) {
             for (j in 0 until p.T) {
-                var z = 0
-                for (i in 0 until p.S) if (p.sgrp[i] == c.groupIdx && cellIs(i, j, c.shiftIdx)) z++
+                val z = scratch.groupDay(grpDay!!, p.G, c.groupIdx, c.shiftIdx, j, p)
                 if (p.quantitativeRangeEval) {
                     val amt = rangeDistance(z, c.l, c.u)
                     if (amt > 0) { inc("c41", amt.toInt()); markNeed(c.shiftIdx, j, "c41") }
@@ -327,6 +330,8 @@ object UnifiedViolationChecker {
         val pairR = IntArray(p.S)
         for (c in p.cons42) {
             for (j in 0 until p.T) {
+                // 片側が 0 人の日は組が無い（大半の日）＝職員を走査しない。
+                if (scratch.groupDay(grpDay!!, p.G, c.g1, c.s1, j, p) == 0 || scratch.groupDay(grpDay, p.G, c.g2, c.s2, j, p) == 0) continue
                 var nL = 0
                 var nR = 0
                 for (i in 0 until p.S) {
@@ -350,10 +355,11 @@ object UnifiedViolationChecker {
         }
 
         // [スキルグループ新設] スキル群の C41/C42 相当（ssk を参照・既存ユニットの sgrp とは独立）。
+        val nSkill = skillGroupSpan(p)
+        val skDay = if (nSkill == 0) null else scratch.groupDayCounts(s, p, p.ssk, nSkill, skill = true)
         for (c in p.cons41s) {
             for (j in 0 until p.T) {
-                var z = 0
-                for (i in 0 until p.S) if (p.ssk[i] == c.groupIdx && cellIs(i, j, c.shiftIdx)) z++
+                val z = scratch.groupDay(skDay!!, nSkill, c.groupIdx, c.shiftIdx, j, p)
                 if (p.quantitativeRangeEval) {
                     val amt = rangeDistance(z, c.l, c.u)
                     if (amt > 0) { inc("c41s", amt.toInt()); markNeed(c.shiftIdx, j, "c41s") }
@@ -362,6 +368,7 @@ object UnifiedViolationChecker {
         }
         for (c in p.cons42s) {
             for (j in 0 until p.T) {
+                if (scratch.groupDay(skDay!!, nSkill, c.g1, c.s1, j, p) == 0 || scratch.groupDay(skDay, nSkill, c.g2, c.s2, j, p) == 0) continue
                 var nL = 0
                 var nR = 0
                 for (i in 0 until p.S) {
@@ -395,7 +402,7 @@ object UnifiedViolationChecker {
             // [監査#11②] 実現可能な希望の未充足のみ HARD(pref) 計上・着色。担当不可の不可能希望は
             //   充足しようがなく「配布可(HARD=0)」を恒久不能にしていたため計数から対称除外する。
             //   可視性は impossibleWishCount と Sanity の不可能希望案内が担う。
-            if (w in 0 until p.K && p.canDo(i, w) && s[i][j] != w) {
+            if (w in 0 until p.K && canDo[i][w] && s[i][j] != w) {
                 inc("pref")
                 mark(i, j, "pref")
             }
@@ -406,7 +413,7 @@ object UnifiedViolationChecker {
                 val lo = p.rangeLo[i][k]
                 val hi = p.rangeHi[i][k]
                 val n = counts[i][k]
-                if (lo != Int.MIN_VALUE && lo != 0 && p.canDo(i, k) && n < lo) {
+                if (lo != Int.MIN_VALUE && lo != 0 && canDo[i][k] && n < lo) {
                     inc("low", lo - n)
                     markCount(i, k, "low")
                 }
@@ -478,14 +485,14 @@ object UnifiedViolationChecker {
 
         for (i in 0 until p.S) for (j in 0 until p.T) {
             val k = s[i][j]
-            if (k in 0 until p.K && !p.canDo(i, k)) {
+            if (k in 0 until p.K && !canDo[i][k]) {
                 inc("groupViol")
                 mark(i, j, "groupViol")
             }
         }
 
         // [3.395.0] 集計 IntArray を `MirrorKeys.all` の順で Map へ起こす（内容も順序も旧実装と同じ）。
-        val breakdown = linkedMapOf<String, Int>()
+        val breakdown = LinkedHashMap<String, Int>(mapCapacity(MirrorKeys.all.size))
         for ((bi, bk) in MirrorKeys.all.withIndex()) breakdown[bk] = bd[bi]
 
         var total = 0
@@ -494,37 +501,24 @@ object UnifiedViolationChecker {
         for (key0 in MirrorKeys.hard) hard += breakdown[key0] ?: 0
         val soft = total - hard
         val elapsedMs = ((System.nanoTime() - t0) / 1_000_000L)
-        val hardParts = ArrayList<String>()
-        for (key0 in MirrorKeys.hard) hardParts.add("${key0}=${breakdown[key0] ?: 0}")
-        val hardStr = hardParts.joinToString(" ")
-        val softParts = ArrayList<String>()
-        for (key0 in MirrorKeys.soft) {
-            val n = breakdown[key0] ?: 0
-            if (n > 0) softParts.add("${key0}=${n}")
-        }
-        val softStr = softParts.joinToString(" ")
-        val msg = if (total == 0) {
-            "違反なし"
-        } else {
-            "合計=$total | HARD=$hard [$hardStr]" + if (soft > 0) " | SOFT=$soft [$softStr]" else ""
-        }
         val level = if (total == 0) "I" else "W"
         // [Set化] クラス列を重み降順に整列（安定ソート＝同重みはマーク順維持 → 先頭は violations[key] と常に一致）。
-        val violations = LinkedHashMap<String, String>(cellFams.size)
+        scratch.cellHint = cellFams.size; scratch.countHint = countFams.size; scratch.needHint = needFams.size
+        val violations = LinkedHashMap<String, String>(mapCapacity(cellFams.size))
         for (e in cellFams.entries) {
             val ck = e.key; val cv = e.value
             val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
             e.setValue(sorted)
             violations[ck] = sorted[0]   // [3.395.0] 最重1クラス＝整列済み先頭（旧 mark() と同値）
         }
-        val countViolations = LinkedHashMap<String, String>(countFams.size)
+        val countViolations = LinkedHashMap<String, String>(mapCapacity(countFams.size))
         for (e in countFams.entries) {
             val ck = e.key; val cv = e.value
             val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
             e.setValue(sorted)
             countViolations[ck] = sorted[0]
         }
-        val needViolations = LinkedHashMap<String, String>(needFams.size)
+        val needViolations = LinkedHashMap<String, String>(mapCapacity(needFams.size))
         for (e in needFams.entries) {
             val ck = e.key; val cv = e.value
             val sorted = if (cv.size <= 1) cv else cv.sortedByDescending { classWeight[it] ?: 0.0 }
@@ -545,8 +539,26 @@ object UnifiedViolationChecker {
             weightedScore = weightedScore(breakdown),
             distLocations = distLocations,
             c1Runs = c1Runs,
-            logs = listOf(MirrorLog(iter = 0, level = level, tag = "UnifiedCheck", message = "$msg (${elapsedMs}ms)")),
+            logs = CheckLog(System.currentTimeMillis(), level, bd, total, hard, soft, elapsedMs),
         )
+    }
+
+    /** check のログ 1 行。研磨の候補評価では読まれないので文面は初回の読み取りで作る（時刻・中身は即時と同じ）。
+     *  [bd] は check の局所配列＝返した後に書き換わらない。 */
+    private class CheckLog(
+        private val ts: Long, private val level: String, private val bd: IntArray,
+        private val total: Int, private val hard: Int, private val soft: Int, private val elapsedMs: Long,
+    ) : AbstractList<MirrorLog>() {
+        private val log by lazy { MirrorLog(ts = ts, iter = 0, level = level, tag = "UnifiedCheck", message = "${message()} (${elapsedMs}ms)") }
+        override val size: Int get() = 1
+        override fun get(index: Int): MirrorLog { if (index != 0) throw IndexOutOfBoundsException("$index"); return log }
+        private fun message(): String {
+            if (total == 0) return "違反なし"
+            fun n(key: String) = bd[MirrorKeys.index.getValue(key)]
+            val hardStr = MirrorKeys.hard.joinToString(" ") { "$it=${n(it)}" }
+            val softStr = MirrorKeys.soft.filter { n(it) > 0 }.joinToString(" ") { "$it=${n(it)}" }
+            return "合計=$total | HARD=$hard [$hardStr]" + if (soft > 0) " | SOFT=$soft [$softStr]" else ""
+        }
     }
 
     private fun checkC3Family(
@@ -889,8 +901,37 @@ private class CheckScratch {
         for (i in 0 until p.S) for (j in 0 until p.T) { val k = sc[i][j]; if (k in 0 until p.K) cov[j][k]++ }
         return cov
     }
+    var cellHint = 0; var countHint = 0; var needHint = 0
+    private var grpTab = IntArray(0); private var skTab = IntArray(0)
+    /** 日 j に所属 [grp] が g でシフト k の人数を `[(g*K+k)*T+j]` へ数えた表。範囲外の所属は数えない。 */
+    fun groupDayCounts(sc: Array<IntArray>, p: Problem, grp: IntArray, nG: Int, skill: Boolean): IntArray {
+        val n = nG * p.K * p.T
+        var tab = if (skill) skTab else grpTab
+        if (tab.size < n) { tab = IntArray(n); if (skill) skTab = tab else grpTab = tab } else tab.fill(0, 0, n)
+        for (i in 0 until p.S) {
+            val g = grp[i]
+            if (g !in 0 until nG) continue
+            val row = sc[i]; val base = g * p.K
+            for (j in 0 until p.T) { val k = row[j]; if (k >= 0) tab[(base + k) * p.T + j]++ }
+        }
+        return tab
+    }
+    /** [groupDayCounts] の表引き。範囲外のグループ・シフトは 0 人（`cellIs` と同じ）。 */
+    fun groupDay(tab: IntArray, nG: Int, g: Int, k: Int, j: Int, p: Problem): Int =
+        if (g !in 0 until nG || k !in 0 until p.K) 0 else tab[(g * p.K + k) * p.T + j]
 }
 private val checkScratch = ThreadLocal.withInitial { CheckScratch() }
+
+/** [n] 件を入れても再ハッシュしない HashMap の初期容量（負荷率 0.75）。 */
+private fun mapCapacity(n: Int): Int = n * 4 / 3 + 1
+
+/** c41s/c42s の規則が指すスキルグループの添字の上限+1（規則が無ければ 0）。これ以外の所属の職員はどの規則にも数えられない。 */
+private fun skillGroupSpan(p: Problem): Int {
+    var n = 0
+    for (c in p.cons41s) n = max(n, c.groupIdx + 1)
+    for (c in p.cons42s) n = max(n, max(c.g1, c.g2) + 1)
+    return n
+}
 
 private const val PAIR_KEY_N = 64
 private val pairKeys: Array<String> = Array(PAIR_KEY_N * PAIR_KEY_N) { "${it / PAIR_KEY_N},${it % PAIR_KEY_N}" }
