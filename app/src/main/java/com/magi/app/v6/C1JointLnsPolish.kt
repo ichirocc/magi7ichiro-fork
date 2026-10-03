@@ -58,8 +58,8 @@ internal object C1JointLnsPolish {
         val deltaChildEval: Boolean = deltaChildEvalDefault,
     )
 
-    /** [Config.deltaChildEval] の既定。実験段階のため既定 OFF（計測で切り替える）。 */
-    @Volatile internal var deltaChildEvalDefault: Boolean = false
+    /** [Config.deltaChildEval] の既定。順番均衡 A/B（78 盤面）が事前基準を満たしたため既定 ON。 */
+    @Volatile internal var deltaChildEvalDefault: Boolean = true
 
     private class Pending(val move: Move, val next: Array<IntArray>?, val cells: IntArray?)
 
