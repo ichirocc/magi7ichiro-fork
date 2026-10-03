@@ -54,7 +54,14 @@ internal object C1JointLnsPolish {
         val patienceMs: Long = 4_000L,
         /** [Iteration 7] 正式評価の回数上限（0＝無効）。決定的モードでは時間でなくこれで止める＝同じ入力・seed なら同じ盤面。 */
         val maxEvaluations: Int = 0,
+        /** 子の評価を [DeltaEvaluator] の差分で行う（親へ1回 reset、1〜3セルを当てて戻す）。最終の正式 check は不変。 */
+        val deltaChildEval: Boolean = deltaChildEvalDefault,
     )
+
+    /** [Config.deltaChildEval] の既定。実験段階のため既定 OFF（計測で切り替える）。 */
+    @Volatile internal var deltaChildEvalDefault: Boolean = false
+
+    private class Pending(val move: Move, val next: Array<IntArray>?, val cells: IntArray?)
 
     private enum class GoalKind { C1, TEMPORAL, COVERAGE, RANGE_LOW }
 
@@ -146,6 +153,9 @@ internal object C1JointLnsPolish {
         val targetC1 = rootC1 - ((improvable * pct + 99) / 100)
 
         val root = Node(rootSchedule.copy2D(), rootReport, rootC1, emptyList(), 0)
+        // センチネル(-1)を含む盤面は DeltaEvaluator が受け付けない＝従来の check へ戻す。
+        val deltaPool = if (config.deltaChildEval && rootSchedule.all { row -> row.all { it in 0 until p.K } })
+            DeltaPool(p) else null
         var best = root
         var expanded = 0
         var generated = 0
@@ -178,26 +188,32 @@ internal object C1JointLnsPolish {
                     // [3.569.0] 候補の生成（rng 順）と採否（seen・best）は逐次のまま、評価だけ並列にする。
                     //   評価数の上限は生成時に見るので、決定論モード（maxEvaluations）の評価集合は旧実装と同一。
                     //   締切・停止は塊の境目で見る＝行き過ぎは 1 塊ぶん。
-                    val pending = ArrayList<Pair<Move, Array<IntArray>>>()
+                    val pending = ArrayList<Pending>()
                     fun capReached() = config.maxEvaluations > 0 && evaluations + pending.size >= config.maxEvaluations
                     for (goal in goals) {
                         if (haltNow() || capReached()) break
                         val moves = generateMoves(p, parent.schedule, goal, moveLimit, rng)
                         for (move in moves) {
                             if (haltNow() || capReached()) break
-                            val next = parent.schedule.copy2D()
-                            if (!applyMove(next, move)) continue
-                            pending.add(move to next)
+                            if (deltaPool != null) {
+                                val cells = moveCells(parent.schedule, move) ?: continue
+                                pending.add(Pending(move, null, cells))
+                            } else {
+                                val next = parent.schedule.copy2D()
+                                if (!applyMove(next, move)) continue
+                                pending.add(Pending(move, next, null))
+                            }
                         }
                     }
                     var from = 0
                     while (from < pending.size && !haltNow()) {
                         val chunk = pending.subList(from, minOf(pending.size, from + PARALLEL_EVAL_CHUNK))
-                        val reports = mapParallel(chunk) { UnifiedViolationChecker.check(state, it.second, quantitativeRangeEval = quantitativeRangeEval) }
+                        val reports = if (deltaPool != null) deltaPool.evaluate(parent.schedule, chunk.map { it.cells!! })
+                            else mapParallel(chunk) { UnifiedViolationChecker.check(state, it.next!!, quantitativeRangeEval = quantitativeRangeEval) }
                         generated += chunk.size; evaluations += chunk.size
                         from += chunk.size
                         for ((idx, pair) in chunk.withIndex()) {
-                            val (move, next) = pair
+                            val move = pair.move
                             run {
                                 val report = reports[idx]
                                 val c1 = report.breakdown["c1"] ?: 0
@@ -218,6 +234,7 @@ internal object C1JointLnsPolish {
                                     }
                                     return@run
                                 }
+                                val next = pair.next ?: parent.schedule.copy2D().also { applyCells(it, pair.cells!!) }
                                 val child = Node(
                                     next,
                                     report,
@@ -623,6 +640,77 @@ internal object C1JointLnsPolish {
                 schedule[move.donor][move.donateDay] = a
                 true
             }
+        }
+    }
+
+    /** [applyMove] と同じ変更を (staff, day, 新値) の並びで返す（変更なしは null）。親の盤面は書き換えない。 */
+    private fun moveCells(s: Array<IntArray>, move: Move): IntArray? = when (move) {
+        is Move.Direct ->
+            if (s[move.staff][move.day] == move.target) null else intArrayOf(move.staff, move.day, move.target)
+        is Move.SameDaySwap -> {
+            val x = s[move.a][move.day]; val y = s[move.b][move.day]
+            if (x == y) null else intArrayOf(move.a, move.day, y, move.b, move.day, x)
+        }
+        is Move.Rotate3 -> {
+            val a = s[move.receiver][move.day]; val x = s[move.donor][move.day]; val y = s[move.bridge][move.day]
+            if (a == x || x == y || y == a) null
+            else intArrayOf(move.receiver, move.day, x, move.donor, move.day, y, move.bridge, move.day, a)
+        }
+        is Move.SelfDaySwap -> {
+            val a = s[move.staff][move.dayA]; val b = s[move.staff][move.dayB]
+            if (a == b) null else intArrayOf(move.staff, move.dayA, b, move.staff, move.dayB, a)
+        }
+        is Move.CrossDayTransfer -> {
+            val a = s[move.receiver][move.receiveDay]; val x = s[move.donor][move.donateDay]
+            if (a == x) null else intArrayOf(move.receiver, move.receiveDay, x, move.donor, move.donateDay, a)
+        }
+    }
+
+    private fun applyCells(s: Array<IntArray>, cells: IntArray) {
+        var c = 0
+        while (c < cells.size) { s[cells[c]][cells[c + 1]] = cells[c + 2]; c += 3 }
+    }
+
+    /**
+     * 子の評価用の [DeltaEvaluator] をワーカー数だけ持つ。各インスタンスは親の盤面に保たれ（当てた手は戻す）、
+     * 親が変わったときだけ reset する。返す report は正式 check と同じ breakdown/total/hard/weightedScore
+     * （場所マップは空）＝この探索が読む項目だけ。
+     */
+    internal class DeltaPool(p: Problem) {
+        private val workers = Runtime.getRuntime().availableProcessors().coerceIn(1, 8)
+        private val des = Array(workers) { DeltaEvaluator(p) }
+        private val heldParent = arrayOfNulls<Array<IntArray>>(workers)
+
+        fun evaluate(parent: Array<IntArray>, chunk: List<IntArray>): List<ViolationReport> {
+            val out = arrayOfNulls<ViolationReport>(chunk.size)
+            val slices = if (chunk.size < 8) 1 else minOf(workers, chunk.size)
+            val per = (chunk.size + slices - 1) / slices
+            fun run(w: Int) {
+                val de = des[w]
+                if (heldParent[w] !== parent) { heldParent[w] = null; de.reset(parent); heldParent[w] = parent }
+                val end = minOf(chunk.size, (w + 1) * per)
+                for (idx in w * per until end) {
+                    val cells = chunk[idx]
+                    val old = IntArray(cells.size / 3)
+                    var c = 0
+                    try {
+                        while (c < cells.size) { old[c / 3] = de.at(cells[c], cells[c + 1]); de.apply(cells[c], cells[c + 1], cells[c + 2]); c += 3 }
+                        out[idx] = reportOf(de)
+                    } finally {
+                        while (c > 0) { c -= 3; de.apply(cells[c], cells[c + 1], old[c / 3]) }
+                    }
+                }
+            }
+            if (slices == 1) run(0) else java.util.stream.IntStream.range(0, slices).parallel().forEach { run(it) }
+            return out.map { it!! }
+        }
+
+        private fun reportOf(de: DeltaEvaluator): ViolationReport {
+            val raw = de.familyRaw()
+            val (low, high) = de.rangeRaw()
+            val bd = LinkedHashMap<String, Int>(MirrorKeys.all.size * 2)
+            for (k in MirrorKeys.all) bd[k] = when (k) { "low" -> low; "high" -> high; else -> raw.getValue(k) }.toInt()
+            return UnifiedViolationChecker.summaryReport(bd)
         }
     }
 
