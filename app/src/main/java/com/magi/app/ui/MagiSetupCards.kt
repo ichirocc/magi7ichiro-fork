@@ -387,7 +387,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("解けない違反だけ残ったら追加の見直しを省く")
+                Text("計算では消えない違反だけ残ったら追加の見直しを省く")
                 Text("仕上げのあと、残った違反が「計算では消えない」と分かっているときだけ、最後の追加の見直しを省いて早く終えます。" +
                     "効果はまだ確かめられておらず、結果が変わらないこともあります。既定はOFFです。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -398,7 +398,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Text("希望どうしの衝突で止める")
             Text("希望どうしがぶつかって消せない違反だけが残ったら、それ以上減らすのをやめます。" +
                 "「仕上げは続ける」は仕上げを通常どおり行い、「仕上げも省く」は仕上げを省いて早く終えます。" +
-                "効果はまだ確かめられておらず、結果が変わらないことも、変わることもあります。既定はOFFです。",
+                "早く終わる代わりに、細かい違反が少し多く残ることがあります。効果はまだ確かめられていません。既定はOFFです。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 com.magi.app.v6.WishFloorMode.values().forEach { mode ->
