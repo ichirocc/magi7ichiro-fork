@@ -34,7 +34,7 @@
   3.549.0 ユーザー決定）。例外＝CSV 種別タグ（`群回数`/`群組合せ禁止`、保存データの互換）とコード識別子・
   business-logic/CLAUDE.md の技術略記（c41=群/日 範囲 等）は据え置き。「読込」(JSON を開く)と「取込」(CSV を重ねる)は別語。
 - 画面（`ui/` の Composable）を触ったら `design-review`、非自明な変更・仕様判断の前は `grilling`（一問ずつ、推奨案つき）。
-- この repo に入っているスキルは `.claude/skills/` の 3 つ。無いスキル名を前提にしない。
+- この repo に入っているスキルは `.claude/skills/` の 4 つ（`yomiyasu` は外部 nanaism/yomiyasu 8d5abee の写し・MIT、2026-10-03 ユーザー指示）。無いスキル名を前提にしない。
 
 ## 制約ファミリーと重み（実装＝`MirrorKeys.weights` が正）
 - **c1**（窓制約, SOFT, 重み50）: `C1(day1=窓, shiftIdx=単一シフト, day2=最低数)`。窓day1内にshiftIdxがday2回以上。
