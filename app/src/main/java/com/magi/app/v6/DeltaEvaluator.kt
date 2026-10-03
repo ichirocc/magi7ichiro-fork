@@ -69,9 +69,10 @@ class DeltaEvaluator(private val p: Problem) {
             for (j in 0 until T) {
                 val k = row[j]
                 require(k in 0 until K) { "reset: cell($i,$j)=$k out of [0,$K)" }
-                a[i][j] = k
             }
         }
+        // 検証を書き込みの前に終える＝拒否したとき盤面と集計が食い違わない。
+        for (i in 0 until S) System.arraycopy(init[i], 0, a[i], 0, T)
         rebuild()
     }
 

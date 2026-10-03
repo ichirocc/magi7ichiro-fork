@@ -90,6 +90,19 @@ class DeltaEvaluatorTest {
         assertEquals(ev.fullEval(p.initialAssignment()), de.score())
     }
 
+    @Test
+    fun resetRejectingOutOfRangeCellLeavesStateUntouched() {
+        val p = Problem(buildState())
+        val de = DeltaEvaluator(p)
+        val before = de.snapshot()
+        val scoreBefore = de.score()
+        val bad = before.map { it.clone() }.toTypedArray()
+        bad[p.S - 1][p.T - 1] = p.K
+        try { de.reset(bad); org.junit.Assert.fail("reset must reject") } catch (_: IllegalArgumentException) {}
+        org.junit.Assert.assertTrue(de.snapshot().contentDeepEquals(before))
+        assertEquals(scoreBefore, de.score())
+    }
+
     /**
      * [3.318.0] groupViol（担当できないシフトに就いているセル）を評価器の HARD に含めた。
      * 既存の差分テストは移動先を `p.bucket[p.sgrp[i]]`（＝常に担当可）から選ぶため、この族の Δ を
