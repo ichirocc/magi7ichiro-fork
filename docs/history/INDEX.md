@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- design-review による探索スイッチの文言是正（2026-10-03、表示のみ）: 「解けない違反」→「計算では消えない違反」、希望衝突の床の説明に「細かい違反が少し多く残ることがある」（E0A/E0B の A/B で weighted 悪化）。  → `docs/history/3.4xx.md`
 - 条件フラグの UI（2026-10-03、ユーザー決定、既定 OFF のまま＝既定の出力は不変）: 最適化設定カードに `C1JointLnsPolish.deltaChildEvalDefault`・`handleOptimize(extraRefineRequirePostHardDrop)`・`PolishGate.wishConflictFloorMode`（OFF/E0A/E0B の 3 択）を既存の 3 スイッチと同じ形で追加。保存しない・実行中は不可。C# 同日同期。  → `docs/history/3.4xx.md`
 - C1 共同 LNS の子評価を差分評価へ（案 A、2026-10-03、実装・既定 OFF＝出力不変）: `C1JointLnsPolish.Config.deltaChildEval`（既定 `deltaChildEvalDefault=false`）。子は親へ reset 済みの `DeltaEvaluator`（ワーカーごと）に 1〜3 セルを当てて戻す・残す子だけ盤面を作る・最終の正式 check は不変。G1（全族一致）・G2（決定的モードで最終盤面一致）合格、評価速度 3.1〜5.1 倍。handleOptimize A/B は 60s 13-9・120s 8-15（blocked_covu 0-6）・HARD 増 0＝差を検出できていない／既定 ON の根拠なし。  → `docs/history/3.4xx.md`
 - runV5 FULL（生 SA 盤面を最終候補に入れる）否決・再測定しない＋周辺 4 案の不採用（2026-10-02、ユーザー決定、記録のみ・コード不変）: tools/loop ゲート 460 ペア 194-76 だが HARD 増 17 試行（c04-small-dense1 7・c21-medium-wishheavy0 10 に集中）。handleOptimize A/B（10s 64-0／120s 41-22／300s 10-2、HARD 退行 0/140）よりゲートで決める。逆巡回 3 人ローテ・連鎖合成の棄却検査・停滞時計の基準変更・AdaptiveBlockSwap apt×1 も既定 OFF／main に入れない。  → `docs/history/3.4xx.md`

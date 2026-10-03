@@ -1301,7 +1301,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setExtraRefineRequirePostHardDrop(on: Boolean) {
         _ui.update { it.copy(extraRefineRequirePostHardDrop = on) }
-        logOp("I", "設定変更: 解けない違反だけなら追加の見直しを省く → ${if (on) "ON" else "OFF"}")
+        logOp("I", "設定変更: 計算では消えない違反だけなら追加の見直しを省く → ${if (on) "ON" else "OFF"}")
     }
 
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
