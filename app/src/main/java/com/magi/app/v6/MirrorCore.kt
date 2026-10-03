@@ -613,6 +613,19 @@ object UnifiedViolationChecker {
     }
 
 
+    /** [check] の breakdown から total/hard/soft/weightedScore だけを同じ式で起こす（場所マップ・ログは空）。 */
+    internal fun summaryReport(breakdown: Map<String, Int>): ViolationReport {
+        var total = 0
+        for (v in breakdown.values) total += v
+        var hard = 0
+        for (key0 in MirrorKeys.hard) hard += breakdown[key0] ?: 0
+        return ViolationReport(
+            violations = emptyMap(), needViolations = emptyMap(), countViolations = emptyMap(),
+            breakdown = breakdown, total = total, hard = hard, soft = total - hard,
+            weightedScore = weightedScore(breakdown),
+        )
+    }
+
     private fun weightedScore(b: Map<String, Int>): Double {
         // [N2/⛏11] 重みは MirrorKeys.weights を単一の真実として参照。挿入順を保持しているため
         //   加算順は従来と同一＝Double 結果は不変。UI の重み表も同マップを描画する。
