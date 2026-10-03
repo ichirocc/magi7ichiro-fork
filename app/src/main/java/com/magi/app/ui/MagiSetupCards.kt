@@ -380,7 +380,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Column(Modifier.weight(1f)) {
                 Text("期間の制約の一括見直しを速く試す")
                 Text("「期間の制約」を職員の回数と一緒に見直すとき、候補の良し悪しを速い方法で見積もります。" +
-                    "効果はまだ確かめられておらず、結果が変わらないこともあります。既定はOFFです。",
+                    "同じ時間で多くの候補を試せるため、平均すると結果がわずかに良くなります（変わらない勤務表もあります）。既定はONです。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.c1DeltaChildEval, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1DeltaChildEval(it)) }, enabled = !ui.running)
