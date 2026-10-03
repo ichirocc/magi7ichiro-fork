@@ -11,6 +11,8 @@
 - probe（研磨 1 本・後処理全体の最終盤面ハッシュ比較）は `tools/loop/run_bench.sh` と同じ要領でホストビルドに対して Kotlin ファイルを 1 本コンパイルして走らせる。
 - ループのベンチ: `tools/loop/README.md`。
 
+- 案件別 Docker コンテナの構成案と実行記録（ユーザー提供、compose 定義は未収録）: `docs/containers_per_task.md`
+
 ## CI（GitHub Actions）
 - ブランチで走るのは Design Lint / Native Parity Check / V6 Engine Check。Release Build と Android SDK は main への push で走る。
 - **UI（Compose）のコンパイル検証はブランチでも取れる**: `android-sdk.yml` は `workflow_dispatch` を持つので、
