@@ -55,6 +55,9 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
         (0 until K).filter { k -> row.getOrNull(k) == 1 }.toIntArray()
     }
 
+    /** canDoHas[i][k] = `canDo(i, k)`（担当可）の表。正式チェッカーのセル走査が引く。 */
+    val canDoHas: Array<BooleanArray> = Array(S) { i -> val b = bucket.getOrNull(sgrp[i]); BooleanArray(K) { k -> b?.contains(k) == true } }
+
     /** groupMembers[g] = 群gに属する staff index。グループ内公平化(fair)で群メンバー間の回数偏差を均すのに使う。 */
     val groupMembers: Array<IntArray> = Array(G) { g -> (0 until S).filter { sgrp[it] == g }.toIntArray() }
 
