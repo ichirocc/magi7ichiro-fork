@@ -43,3 +43,7 @@
 - **S5 机上試験（2026-09-24）**: `tools/loop/run_s5probe.sh out.csv [本計算秒=30] [試算秒=3] [希望上限=6]`（`S5Probe.kt`）。
   本計算の盤面で必須違反に関わる希望を 1 件ずつ外し、短い試算（配置固定・1手探索・短い最適化・短い後処理）の必須件数と、
   同じ希望を外した本計算（正解）・外さずにやり直した本計算（G0）を比べる。壁時計予算なので値は負荷で揺れる。
+- **HARD 残存の分類（2026-10-03）**: `tools/loop/run_hard_residual_probe.sh <dir> fixtures 60,120 1,2,3`（`HardResidualProbe.kt`、合成は `synth:<id の一部>`）。
+  最終盤面の HARD を族・職員・日で並べ、既存の床（`structuralHardFloor`・`wishConflictFloorParts`・`ForbiddenDiag`・`PreRunCheck`）で分類し、
+  床を超えた盤面に `FixSuggester`/`ViolationComponentRepair` を当てる。厳密な最小 HARD は `HardFloorExport.kt`（export/verify）＋
+  `hard_floor_cpsat.py`（ortools、置ける範囲は mayPlace と canDo の 2 通り。解は checker で照合）。結果は `docs/history/3.4xx.md`。
