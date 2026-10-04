@@ -2,6 +2,7 @@ package probe
 import com.magi.app.model.StateParser
 import com.magi.app.v6.V6FinalPort
 import com.magi.app.v6.PolishGate
+import com.magi.app.v6.C1EjectionChainPolish
 import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.io.FileOutputStream
@@ -15,9 +16,12 @@ fun main(args: Array<String>) {
         val st = StateParser.parse(File(resDir, fname).readText())!!
         val fx = fname.removeSuffix("_state.json").removeSuffix("_state_v6.json")
         for (budget in listOf(60, 120)) for (seed in 1..3) {
-            val arms = if (seed % 2 == 1) listOf(true, false) else listOf(false, true)
-            for (on in arms) {
-                val arm = if (on) "on" else "off"
+            // ARMS=on,off（v1 vs OFF）/ ARMS=v2,off など。on=v1、v2=族越え。奇数 seed は列挙順、偶数 seed は逆順。
+            val armList = (System.getenv("ARMS") ?: "on,off").split(",")
+            val arms = if (seed % 2 == 1) armList else armList.reversed()
+            for (arm in arms) {
+                val on = arm != "off"
+                C1EjectionChainPolish.defaultCrossFamily = arm == "v2"
                 val key = "$fx,$budget,$seed,$arm"; if (key in done) continue
                 PolishGate.c1EjectionChain = on
                 val t0 = System.currentTimeMillis()
@@ -29,6 +33,7 @@ fun main(args: Array<String>) {
                 lfos.write(sb.toString().toByteArray()); lfos.fd.sync()
                 val line = "$key,$wall,${res.report.hard},${res.report.weightedScore},${res.report.total},${res.report.breakdown["c1"] ?: 0}\n"
                 fos.write(line.toByteArray()); fos.fd.sync(); System.err.print(line)
+                File(out.parentFile, "breakdown.tsv").appendText("$key\t${res.report.breakdown.entries.joinToString(" ") { "${it.key}=${it.value}" }}\n")
             }
         }
     }
