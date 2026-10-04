@@ -140,7 +140,7 @@ internal object C1JointLnsPolish {
         val deadline = System.nanoTime() + budgetMillis * 1_000_000L
         // [3.342.0] 最良が patienceMs 更新されなければ打ち切る。keep-best は不変＝早く止めるだけ。
         var lastImproveNs = System.nanoTime()
-        val patienceNs = if (config.patienceMs > 0L) config.patienceMs * 1_000_000L else Long.MAX_VALUE
+        val patienceNs = if (config.patienceMs > 0L) config.patienceMs.coerceAtMost(60_000L) * 1_000_000L else Long.MAX_VALUE
         fun stalled(): Boolean = patienceNs != Long.MAX_VALUE && System.nanoTime() - lastImproveNs >= patienceNs
         var evaluations = 0
         fun evalCapped(): Boolean = config.maxEvaluations > 0 && evaluations >= config.maxEvaluations
@@ -287,7 +287,7 @@ internal object C1JointLnsPolish {
         }
         val log = MirrorLog(
             tag = "C1JointLNS",
-            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, 50%目標=${if (targetReached) "到達" else "未達"})" +
+            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, $pct%目標=${if (targetReached) "到達" else "未達"})" +
                 " / total ${rootReport.total}->${chosenReport.total} HARD ${rootReport.hard}->${chosenReport.hard}" +
                 " 採用${if (valid) 1 else 0}束 手数${if (valid) best.path.size else 0}" +
                 " restart$restartsDone 展開$expanded 候補$generated debt除外$debtRejected" +
