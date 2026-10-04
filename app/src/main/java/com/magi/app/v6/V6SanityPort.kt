@@ -171,7 +171,7 @@ object V6SanityPort {
         }
         if (cells.isEmpty()) return null
         return SettingIssue(IssueKind.RANGE, "上限 0 の勤務（${cells.take(3).joinToString("・")}${if (cells.size > 3) " ほか" else ""}）",
-            "手で置いた勤務 ${cells.size}件 が上限 0 と食い違っています。もう一度つくると外されます",
+            "今の勤務表に個人の上限0のシフトが ${cells.size}件 入っています。もう一度つくると外されます",
             "残すなら、その人のそのシフトの個人上限を 1 以上に上げてください")
     }
 
