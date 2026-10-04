@@ -67,7 +67,7 @@ internal object HardRepairCore {
             val fallback = fillShiftIndex(p.allowedShiftsForStaff(i), p.restIdx ?: throw IllegalArgumentException("休みシフトが設定されていません"))
             for (j in 0 until p.T) {
                 val k = out[i][j]
-                if (k in 0 until p.K && p.canDo(i, k) && !p.mayPlace(i, k) && !(p.wishLocked(i, j) && p.lockTo(i, j) == k)) { out[i][j] = refill(p, i, j, fallback, wishPinStrict); n++ }
+                if (p.isCapZeroCell(i, j, k)) { out[i][j] = refill(p, i, j, fallback, wishPinStrict); n++ }
             }
         }
         return out to n

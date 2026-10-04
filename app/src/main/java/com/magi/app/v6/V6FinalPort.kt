@@ -906,8 +906,10 @@ object V6FinalPort {
         )
         val pinSafeStages = stages.filter { baseProblem.holdsManualPins(it.sched) }
         val pinLog = (stages - pinSafeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
-            message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") }
-        val bestStage = pickBestStage(pinSafeStages)
+            message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") } +
+            capZeroLogs(state, baseProblem, pinSafeStages)
+        val safeStages = excludeCapZeroStages(baseProblem, pinSafeStages)
+        val bestStage = pickBestStage(safeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
         // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
@@ -1196,6 +1198,21 @@ object V6FinalPort {
      *  [sched] は必ずその段が実際に持つ盤面（[3.513.0]の教訓＝「入力」段は正規化前の生入力ではなく
      *  `cappedInput`＝`inputReport`と同じ基準の盤面を渡すこと）。 */
     internal data class StageCandidate(val label: String, val sched: Array<IntArray>, val report: ViolationReport)
+
+    /** 個人上限 0 のセル（[isCapZeroCell]）を含む段を外す。入力（先頭＝入口で外し済み）は必ず残す。 */
+    internal fun excludeCapZeroStages(p: Problem, stages: List<StageCandidate>): List<StageCandidate> =
+        stages.filterIndexed { idx, st -> idx == 0 || p.capZeroCells(st.sched).isEmpty() }
+
+    /** [excludeCapZeroStages] で外した段ごとの W ログ（違反セルは先頭 5 件）。 */
+    internal fun capZeroLogs(state: MagiState, p: Problem, stages: List<StageCandidate>): List<MirrorLog> =
+        stages.drop(1).mapNotNull { st ->
+            val cells = p.capZeroCells(st.sched)
+            if (cells.isEmpty()) null else MirrorLog(level = "W", tag = "Sentinel",
+                message = "${st.label}の盤面に上限0の勤務が${cells.size}件あったため候補から外しました（多重防御）: " +
+                    cells.take(5).joinToString("、") { (i, j) ->
+                        "${state.staff.getOrNull(i)?.name ?: i}/${j + 1}日目/${state.shifts.getOrNull(st.sched[i][j])?.kigou ?: st.sched[i][j]}"
+                    })
+        }
 
     /** [3.575.0] [reportComparator] で候補中の最良を選ぶ（同値なら早い段を残す）。 */
     internal fun pickBestStage(candidates: List<StageCandidate>): StageCandidate =

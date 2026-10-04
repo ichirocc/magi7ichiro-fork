@@ -34,7 +34,7 @@ class RelaxTrialTextTest {
         val r = RelaxTrial.firstWall(st, board) as RelaxTrial.Result
         val t = relaxTrialText(r, ui)
         assertEquals(listOf("職員10 Pｼ 上限 0→1", "職員11 Cｵ 上限 0→1"), t.rows.map { it.substringBefore("（") })
-        assertEquals("手で置いた勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が 1件 減る見込みです。", t.lead)
+        assertEquals("今の勤務表の勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が 1件 減る見込みです。", t.lead)
         assertTrue(t.title, t.title.startsWith("職員10 ") && t.title.endsWith("禁止の並び"))
         assertTrue(t.moveLines.isNotEmpty() && t.moveLines.all { it.contains("→") })
         assertEquals(r.moves.size, t.moveLines.sumOf { it.count { c -> c == '→' } } + t.otherMoves)

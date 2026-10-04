@@ -361,7 +361,7 @@ internal data class RelaxTrialText(
 
 internal const val RELAX_WISH_LINE = "希望: 変更しません"
 internal const val RELAX_PREREQ_HEAD = "前提として上限を上げる設定"
-internal const val RELAX_PREREQ_WHY = "いま手で置いてある勤務に合わせます（もう一度つくったときに手置きの勤務が外れないため）。"
+internal const val RELAX_PREREQ_WHY = "今の勤務表の勤務に合わせます（もう一度つくったときにその勤務が外れないため）。"
 internal const val RELAX_SET_HEAD = "解消に使う設定"
 
 /**
@@ -389,8 +389,8 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     }
     val (inWin, outWin) = r.moves.partition { it.day in r.window }
     val lead = if (r.prerequisite.isEmpty()) "この組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
-        else "手で置いた勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
-    val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、手で置いた勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
+        else "今の勤務表の勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
+    val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、上限0の勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
     val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
     val title = "${target.name} ${target.span}　${target.what}"
     return RelaxTrialText(

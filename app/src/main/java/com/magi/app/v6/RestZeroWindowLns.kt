@@ -210,9 +210,9 @@ internal object RestZeroWindowLns {
                 for (a in 0 until p.S) {
                     if (remainAll[a][k] <= 0) continue
                     for (b in 0 until p.S) {
-                        if (b == a || !p.canDo(b, k) || free0[b].isEmpty()) continue
+                        if (b == a || !p.mayPlace(b, k) || free0[b].isEmpty()) continue
                         for (x in 0 until p.K) {
-                            if (x == k || remainAll[b][x] <= 0 || !p.canDo(a, x)) continue
+                            if (x == k || remainAll[b][x] <= 0 || !p.mayPlace(a, x)) continue
                             val gs = (0 until p.T).filter { g -> g !in w && work[a][g] == x && work[b][g] == k && !p.wishLocked(a, g) && !p.wishLocked(b, g) }
                                 .sortedBy { g -> minOf(kotlin.math.abs(g - w.first), kotlin.math.abs(g - w.last)) }
                             for (n in 1..minOf(3, remainAll[a][k], remainAll[b][x], gs.size)) cands.add(Transfer(a, b, x, gs.take(n)))
