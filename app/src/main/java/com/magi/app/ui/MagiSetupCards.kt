@@ -344,6 +344,14 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 }
             }
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("期間の制約の入れ替えで、できた禁止の並びも直す")
+                Text("試験中。測定では効果は確認できていません（既定はOFF）",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.c1MoveARepair, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1MoveARepair(it)) }, enabled = !ui.running)
+        }
     }
 }
 

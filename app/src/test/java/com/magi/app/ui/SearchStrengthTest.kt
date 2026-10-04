@@ -16,6 +16,8 @@ class SearchStrengthTest {
             SearchStrength.NORMAL.apply()
             assertEquals(listOf(false, false, false, false), flags())
             assertEquals(SearchStrength.NORMAL, UiState().searchStrength)
+            assertEquals(false, UiState().c1MoveARepair)
+            assertEquals(false, PolishGate.c1MoveARepair)
         } finally {
             PolishGate.combineExhaustPairs = saved[0]; PolishGate.wideC3nBreakDays = saved[1]
             PolishGate.countChainPolish = saved[2]; PolishGate.aptFairSoftTolerance = saved[3]
