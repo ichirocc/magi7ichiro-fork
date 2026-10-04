@@ -552,13 +552,22 @@ object V6FinalPort {
         //   誤っても時間配分が変わるだけ＝品質は不変。並行呼出は同一結果を二重計算するだけで無害。
         // [E0] 到達判定は best 世代ごとに一度だけ（床ちょうどのときだけ盤面を検査する）。
         val wishReachedCache = java.util.concurrent.atomic.AtomicReference(-1 to false)
-        val bestWishReached = {
+        val wishStaleCheckAtMs = java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE / 2)
+        fun bestWishReached(): Boolean {
             val v = bestVersion.get()
             if (wishReachedCache.get().first != v) {
+                val now = EngineClock.nowMs()
+                if (now - wishStaleCheckAtMs.get() < 200L) return false
+                wishStaleCheckAtMs.set(now)
                 val board = V6NativeOptimizer.liveBest?.let { b -> Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } } }
-                wishReachedCache.set(v to wishReachedOn(board, bestHard.get()))
+                val hb = bestHard.get()
+                val ok = wishReachedOn(board, hb)
+                // liveBest は best 報告より遅れて届く経路がある。古い盤面での「未到達」は保存せず、次の呼出で検査し直す。
+                val fresh = ok || hb != wishFloorLogged || (board != null &&
+                    runCatching { UnifiedViolationChecker.check(state, board, quantitativeRangeEval = quantitativeRangeEval).hard == hb }.getOrDefault(false))
+                if (fresh) { wishReachedCache.set(v to ok); wishStaleCheckAtMs.set(Long.MIN_VALUE / 2) } else return ok
             }
-            wishReachedCache.get().second
+            return wishReachedCache.get().second
         }
         val c3nWallProven = {
             val v = bestVersion.get()
@@ -800,7 +809,7 @@ object V6FinalPort {
             val lastImp = lastImpAtSearchEnd
             val endStallS = (tChain1 - lastImp).coerceAtLeast(0L) / 1000
             val nonCovU = bestNonCovUHard.get()
-            val wishReachedEnd = bestHard.get() == wishFloorLogged && bestWishReached()
+            val wishReachedEnd = bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, bestHard.get()))
             val kind = when {
                 bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"

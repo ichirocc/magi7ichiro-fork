@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 希望衝突の床に届いても E0 が発火しない不具合（2026-10-04、修正、E0 ON のときだけ挙動変化）: liveBest が best 報告より遅れる経路で古い盤面の「未到達」を保存していた。古い盤面では保存しない・探索終了時は結果の盤面で判定。  → `docs/history/3.4xx.md`
 - 後処理チェーンの段ごとの構造化記録（2026-10-04、採用、出力同一）: `V6PostOptimizationResult.stageRecords`。A/B 集計をログの正規表現から構造化データへ。  → `docs/history/3.4xx.md`
 - T5/T4 測定（2026-10-04、測定のみ）: handleOptimize 48 回で実時間/予算の最大 1.00＝超過なし（「181 倍」は再現せず）。案 A ON/OFF 24 対は 11-10-3・HARD 増 0。  → `docs/history/3.4xx.md`
 - 外部レビュー 4 件の照合と出力不変の防御 3 件（2026-10-04、採用、出力同一）: `DeltaEvaluator.reset` の検証先行・C1 LNS の patience 丸め・ログの目標率表示。C42FlowPolish の z 集計ずれは既定 OFF・探索動学に触れるため未着手。  → `docs/history/3.4xx.md`
