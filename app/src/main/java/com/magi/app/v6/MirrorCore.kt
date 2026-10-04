@@ -717,6 +717,17 @@ fun Problem.holdsManualPins(s: Array<IntArray>): Boolean {
     return true
 }
 
+/** 個人上限 0 で最適化器が置かないセル（担当可・[mayPlace] 外・縛る値でない）か。入口の除去と最終番兵が同じ基準を読む。 */
+fun Problem.isCapZeroCell(i: Int, j: Int, k: Int): Boolean =
+    k in 0 until K && canDo(i, k) && !mayPlace(i, k) && !(wishLocked(i, j) && lockTo(i, j) == k)
+
+/** 盤面中の [isCapZeroCell] のセル (i,j) の一覧（最終番兵）。 */
+fun Problem.capZeroCells(s: Array<IntArray>): List<Pair<Int, Int>> {
+    val out = ArrayList<Pair<Int, Int>>()
+    for (i in 0 until minOf(S, s.size)) for (j in 0 until minOf(T, s[i].size)) if (isCapZeroCell(i, j, s[i][j])) out.add(i to j)
+    return out
+}
+
 /** [#41] 手動固定セルへ固定の値を書いた写し（入口で盤面を固定に合わせる）。固定が無ければ同じ参照を返す。 */
 fun Problem.withManualPins(s: Array<IntArray>): Array<IntArray> {
     if (holdsManualPins(s)) return s

@@ -89,7 +89,21 @@ object V6FinalPort {
         /** [3.335.0/外部レビュー P1] この実行の「他の案」。旧実装は呼び出し側が可変 static を返却後に
          *  読んでおり、実行が重なると別の実行の候補を掴み得た。 */
         val alternatives: List<Array<IntArray>> = emptyList(),
+        /** 入口で外した個人上限 0 のセル（無ければ null）。 */
+        val capZero: CapZeroNotice? = null,
     )
+
+    /** 入口で個人上限 0 のセルを外した件数と、外す前後の必須件数（生の入力→外した入力）。 */
+    data class CapZeroNotice(val count: Int, val hardBefore: Int, val hardAfter: Int) {
+        val raisedHard: Boolean get() = hardAfter > hardBefore
+
+        fun logLine(): String =
+            if (raisedHard) "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置かないため、この設定では入力の必須${hardBefore}件には戻れません"
+            else "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置きません（表示・重みは不変）"
+
+        fun keptNote(): String? = if (!raisedHard) null else
+            "今の勤務表には個人の上限0のシフトが${count}件入っています。最適化は上限0の勤務を置かないため、この設定では必須${hardBefore}件まで戻れません（上限を見直すか、そのまま使ってください）"
+    }
 
     fun buildBusyDetail(state: MagiState, algorithm: String, overrides: Map<String, String> = emptyMap()): BusyDetail {
         val n = state.staffCount
@@ -327,8 +341,9 @@ object V6FinalPort {
         //   生の入力（上限超過 45 のまま）と比べると、外した代償のぶん結果が「悪化」に見えて入力へ戻ってしまう。
         val (cappedInput, cappedCount) = HardRepairCore.clearCappedCells(state, normInput, quantitativeRangeEval)
         val inputReport = UnifiedViolationChecker.check(state, cappedInput, quantitativeRangeEval = quantitativeRangeEval)
-        val cappedLog = if (cappedCount > 0) listOf(MirrorLog(tag = "CapZero",
-            message = "個人上限 0 のセル ${cappedCount} 件を最適化の対象外として置き直しから開始（設定どおり 0 にする。表示・重みは不変）")) else emptyList()
+        val capZero = if (cappedCount > 0) CapZeroNotice(cappedCount,
+            UnifiedViolationChecker.check(state, normInput, quantitativeRangeEval = quantitativeRangeEval).hard, inputReport.hard) else null
+        val cappedLog = if (capZero != null) listOf(MirrorLog(tag = "CapZero", message = capZero.logLine())) else emptyList()
         val label = getAlgorithmLabel(seconds)
         val plan = optimizationPlan(seconds)
         val busy = buildBusyDetail(state, label.name, mapOf(
@@ -891,8 +906,10 @@ object V6FinalPort {
         )
         val pinSafeStages = stages.filter { baseProblem.holdsManualPins(it.sched) }
         val pinLog = (stages - pinSafeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
-            message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") }
-        val bestStage = pickBestStage(pinSafeStages)
+            message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") } +
+            capZeroLogs(state, baseProblem, pinSafeStages)
+        val safeStages = excludeCapZeroStages(baseProblem, pinSafeStages)
+        val bestStage = pickBestStage(safeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
         // [レビュー修正/3.575.0] 全段が同値（無改善）のときも reduce は最初の候補（入力）を残す＝
@@ -1144,7 +1161,7 @@ object V6FinalPort {
         //   確認）。この1行は契約を読める場所に明示する保険＝挙動は不変。実在した非対称は Windows 版だった。
         ensureActive()
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, postForResult,
-            alternatives = chained.alternatives)
+            alternatives = chained.alternatives, capZero = capZero)
     }
 
     /**
@@ -1181,6 +1198,21 @@ object V6FinalPort {
      *  [sched] は必ずその段が実際に持つ盤面（[3.513.0]の教訓＝「入力」段は正規化前の生入力ではなく
      *  `cappedInput`＝`inputReport`と同じ基準の盤面を渡すこと）。 */
     internal data class StageCandidate(val label: String, val sched: Array<IntArray>, val report: ViolationReport)
+
+    /** 個人上限 0 のセル（[isCapZeroCell]）を含む段を外す。入力（先頭＝入口で外し済み）は必ず残す。 */
+    internal fun excludeCapZeroStages(p: Problem, stages: List<StageCandidate>): List<StageCandidate> =
+        stages.filterIndexed { idx, st -> idx == 0 || p.capZeroCells(st.sched).isEmpty() }
+
+    /** [excludeCapZeroStages] で外した段ごとの W ログ（違反セルは先頭 5 件）。 */
+    internal fun capZeroLogs(state: MagiState, p: Problem, stages: List<StageCandidate>): List<MirrorLog> =
+        stages.drop(1).mapNotNull { st ->
+            val cells = p.capZeroCells(st.sched)
+            if (cells.isEmpty()) null else MirrorLog(level = "W", tag = "Sentinel",
+                message = "${st.label}の盤面に上限0の勤務が${cells.size}件あったため候補から外しました（多重防御）: " +
+                    cells.take(5).joinToString("、") { (i, j) ->
+                        "${state.staff.getOrNull(i)?.name ?: i}/${j + 1}日目/${state.shifts.getOrNull(st.sched[i][j])?.kigou ?: st.sched[i][j]}"
+                    })
+        }
 
     /** [3.575.0] [reportComparator] で候補中の最良を選ぶ（同値なら早い段を残す）。 */
     internal fun pickBestStage(candidates: List<StageCandidate>): StageCandidate =
