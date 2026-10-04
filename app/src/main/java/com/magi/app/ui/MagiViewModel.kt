@@ -1674,7 +1674,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     // [S5 §9] 維持の分岐は「前回の結果を維持します」だと希望が消えたことが伝わらない＝置き換える。
                     val nowScore = KeptResultText.Score(newHard, res.report.weightedScore, newTotal)
                     val baseScore = KeptResultText.Score(baseHard, baseReport.weightedScore, baseTotal)
-                    val keptMsg = if (s5 == null) KeptResultText.screen(nowScore, baseScore)
+                    val capNote = res.capZero?.keptNote()
+                    val keptMsg = if (s5 == null) KeptResultText.withNote(KeptResultText.screen(nowScore, baseScore), capNote)
                     else if (s5.h0 - baseReport.hard > 0) "希望（${s5.label}）を取り消しました。必須違反は ${s5.h0} → ${baseReport.hard}（取り消しの分だけ）。もう一度つくっても、それ以上は減りませんでした。元に戻すで希望と勤務表をまとめて戻せます。"
                     else "希望（${s5.label}）を取り消しましたが、もう一度つくっても必須違反は減りませんでした（必須 ${s5.h0}）。元に戻すで希望と勤務表をまとめて戻せます。"
                     pushReport(state ?: st0, kept, baseReport) { it.copy(
@@ -1685,7 +1686,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         message = keptMsg,
                         wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, baseReport.hard, keptMsg) },
                     ) }
-                    logOp("I", KeptResultText.log("再実行", nowScore, baseScore))
+                    logOp("I", KeptResultText.withNote(KeptResultText.log("再実行", nowScore, baseScore), capNote))
                     lastResultHard = baseHard
                 } else {
                     // [3.324.0/外部レビュー] pushReport(=makeUi の唯一の経路)より**前**に保存する。

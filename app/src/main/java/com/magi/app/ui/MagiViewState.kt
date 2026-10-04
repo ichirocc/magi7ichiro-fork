@@ -775,7 +775,7 @@ internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っ
 internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、例外として上限を緩めてください。"
 internal const val PRE_RUN_ZERO_CAP_TAG = "（入れない指定が絡む）"
 internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れない指定が絡む」行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。例外として緩めると解ける場合があります。つくったあとに「設定を緩めたら」で試せます。"
-internal const val PRE_RUN_RERUN_NOTE = "手で置いた勤務が個人の上限（0回）と食い違っています。つくると外されます。"
+internal const val PRE_RUN_RERUN_NOTE = "今の勤務表に個人の上限（0回）のシフトが入っています。つくると外されます。"
 
 internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
     fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"

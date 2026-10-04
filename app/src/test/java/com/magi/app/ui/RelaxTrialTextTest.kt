@@ -58,8 +58,8 @@ class RelaxTrialTextTest {
     }
 
     @Test fun realData_handPlacedUpperZeroGetsOneSettingsLine() {
-        val lines = V6SanityPort.build(st, board).guidance.filter { it.problem.contains("上限 0 と食い違っています") }
+        val lines = V6SanityPort.build(st, board).guidance.filter { it.problem.contains("上限0のシフトが") }
         assertEquals(1, lines.size)
-        assertEquals("手で置いた勤務 4件 が上限 0 と食い違っています。もう一度つくると外されます", lines[0].problem)
+        assertEquals("今の勤務表に個人の上限0のシフトが 4件 入っています。もう一度つくると外されます", lines[0].problem)
     }
 }

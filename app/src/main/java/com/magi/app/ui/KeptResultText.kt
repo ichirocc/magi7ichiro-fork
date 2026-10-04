@@ -26,4 +26,7 @@ object KeptResultText {
 
     fun log(prefix: String, now: Score, prev: Score): String =
         "$prefix: 今回 ${parts(now)} は前回 ${parts(prev)} 以下に改善せず（${reason(now, prev)}）→ 前回を維持"
+
+    /** 維持の文言に理由を1文足す（入口で上限0のセルを外して必須が増えたとき等）。 */
+    fun withNote(base: String, note: String?): String = if (note == null) base else "$base $note"
 }
