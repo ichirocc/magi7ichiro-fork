@@ -57,6 +57,18 @@ class V6PostOptimizationParamsTest {
     }
 
     @Test
+    fun stageRecordsCoverTheChainAndMatchTheFinalBoard() {
+        val st = pinnedState()
+        val r = V6HotfixPasses.runPostOptimization(st, st.schedule.toIntArray2D(), "t", seed = 7L)
+        val keys = r.stageRecords.map { it.key }
+        assertTrue("HF80 から記録される", keys.firstOrNull() == "HF80StrategicOscillation")
+        assertTrue("C1 共同 LNS の段がある", "C1共同LNS" in keys)
+        assertTrue("空の段名がない", keys.none { it.isEmpty() })
+        val last = r.stageRecords.lastOrNull { it.hard != null && !it.rolledBack }
+        if (last != null) assertTrue("記録の HARD は最終以上にならない範囲", last.hard!! >= r.report.hard)
+    }
+
+    @Test
     fun degenerateParamsDoNotCrashAndNeverWorsenTheBoard() {
         val st = pinnedState()
         val sched = st.schedule.toIntArray2D()
