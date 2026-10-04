@@ -89,7 +89,7 @@ internal object DestroyRepairOperators {
             //   **need2 単独定義の需要を丸ごと素通り**していた（need1 未設定は -1）。3.173.0
             //   (CoverageDiagnosis)・3.309.0(isBalanceable)・3.369.0(初期解生成2つ+findCovOFix)で
             //   同じ穴を潰したのに、**RSI/ALNS 修復の中核であるこの2関数が取り残されていた**＝
-            //   そのデータでは covU(HARD, 重み8000) を修復オペレータが原理的に埋められない。
+            //   そのデータでは covU(HARD) を修復オペレータが原理的に埋められない。
             //   source of truth の `covUCell`（片方定義=その値）へ委譲する。
             var miss = p.covUCell(k, j, covJ[k])
             if (miss <= 0) continue

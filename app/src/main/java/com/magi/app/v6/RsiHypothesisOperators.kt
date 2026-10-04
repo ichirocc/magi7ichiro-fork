@@ -65,7 +65,7 @@ internal object RsiHypothesisOperators {
             "c42s" -> { repeat(6) { DestroyRepairOperators.destroyRepairDay(state, out, rng, quantitativeRangeEval) }; applyC42Free(state, out, rng, skill = true, shouldStop = shouldStop, quantitativeRangeEval = quantitativeRangeEval) }
             // [実機ログ起因=apt未focus] apt(適切回数)は maxViolatedFamily の order に無く探索中は一度も focus
             //   されなかった（post-processing の applyDayAssignmentPolish 頼み）。destroyRepairStaff の marginal
-            //   cost(DestroyRepairMarginalCost.staffCountPenaltyAt)は既にaptを織込み済み(重み1)のため、low/high/c2と同じ経路へ合流するだけで
+            //   cost(DestroyRepairMarginalCost.staffCountPenaltyAt)は既にaptを織込み済みのため、low/high/c2と同じ経路へ合流するだけで
             //   apt専用の新規オペレータ不要。ラウンド better() keep-best でゲート＝退化なし。
             // [同根の穴=weekly/fair] 同じ理由で weekly/fair も order に無く一度も focus されていなかった
             //   （実データ検証: weekly L1偏差合計65(aptの37より大きい)・fair合計11）。DestroyRepairMarginalCost.staffCountPenaltyAt は
@@ -188,7 +188,7 @@ internal object RsiHypothesisOperators {
                     for (i in staffOnK) {
                         // [3.391.0] 生の `wish==k` は**実現不能な希望**（担当できないシフトへの希望）まで
                         //   固定扱いにしていた。pref は実現可能な希望しか数えない（MirrorCore）ので、
-                        //   その場合ここを動かしても pref は増えず、逆に担当外セル＝groupViol(10000) が消える
+                        //   その場合ここを動かしても pref は増えず、逆に担当外セル＝groupViol(HARD) が消える
                         //   ＝**必須違反が厳密に減る手を丸ごと捨てていた**。規約の wishLocked へ統一（3.351.0 と同型）。
                         if (p.wishLocked(i, j) && p.lockTo(i, j) == k) continue   // 実現可能な本人希望＝動かすとpref未充足化
                         for (m in p.allowedShiftsForStaff(i).filter { it != k }) {
