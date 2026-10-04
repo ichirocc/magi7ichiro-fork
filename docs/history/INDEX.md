@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 重み値を書いたコメントの陳腐化を一掃（2026-10-04、コメントのみ、出力不変）: 3.522.0 以前の重み（pref 9000>c3n 7000 等）を前提にした説明を数値なし表現へ。ForbiddenDiag の PINNED は HARD 件数で判定＝現重みでは weighted 上は破る手が得になりうるが、希望セルは wishLocked で探索が動かさない。文言に「この希望を1件調整すると、全体の点数は良くなります」を添える（表示のみ）。  → `docs/history/3.4xx.md`
 - 最終番兵で個人上限0（希望でない）の勤務を含む段を外す（2026-10-04、ユーザー承認、通常は出力不変）: `excludeCapZeroStages`＋W ログ、RestZeroWindowLns を mayPlace へ、「手で置いた」文言を中立化。  → `docs/history/3.4xx.md`
 - 入口で個人上限0のセルを外して必須が増えたことを知らせる（2026-10-04、表示・ログのみ、ユーザー承認、出力不変）: CapZero ログに必須 a→b、再実行の「前回を維持」に戻れない理由を1文。  → `docs/history/3.4xx.md`
 - 設定の探索スイッチ群を「探索の強さ」2 択に統合（2026-10-04、3.615.0、ユーザー決定、ふつう＝出力不変）: じっくり＝combineExhaustPairs/wideC3nBreakDays/countChainPolish/aptFairSoftTolerance を ON。案 A 常時 ON、E0・extraRefine は常時 OFF。  → `docs/history/3.4xx.md`
