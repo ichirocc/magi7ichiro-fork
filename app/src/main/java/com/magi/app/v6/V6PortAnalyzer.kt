@@ -361,7 +361,8 @@ object V6PortAnalyzer {
                         free > 0 -> "空き番${free}人を${sym}へ移せば充足（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
                         cascade > 0 && chainVerified -> "空き番が無く、過剰シフトからの多人数入替（玉突き=ブロック移動）が必要"
                         cascade > 0 -> "玉突き候補${cascade}人はいますが、移動先の受け皿もすべて本人の希望/禁止の並びで塞がっており、" +
-                            "現在の希望のままではどう組んでも解消できません。希望を1件調整するか担当を追加してください"
+                            "現在の希望のままではどう組んでも解消できません。希望を1件調整するか担当を追加してください" +
+                            if (MirrorKeys.weightOf("covU") > MirrorKeys.weightOf("pref")) "。$WISH_SCORE_HINT" else ""
                         else -> "候補が本人の希望/禁止の並びで塞がっており、希望を1件調整するか担当を追加すると解消に近づく"
                     }
                     "担当可能${capacity}人（うち在勤中${already}人）・今動かせる空き番${free}人（玉突き${cascade}・本人の希望${pinned}・禁止の並び${forbid}）。$hint"
@@ -579,13 +580,14 @@ object V6PortAnalyzer {
                         //   という強い証拠であり、全勤務表空間の数学的な非充足証明ではない＝断定を避けた表現にする。
                         cells.all { it.escape == ForbiddenCellEscape.PINNED } ->
                             "本人希望どおりの並びが禁止パターンを構成しています（本人の希望: $pinnedDays）。" +
-                                "希望を変えない限りどう組んでもこの禁止の並びは残ります。どちらか1件の希望を調整してください"
+                                "希望を変えない限りどう組んでもこの禁止の並びは残ります。どちらか1件の希望を調整してください" +
+                                scoreHintOf(cells)
                         else ->
                             "全セルが塞がっています" +
                                 (if (pinnedDays.isNotEmpty()) "（本人の希望: $pinnedDays）" else "") +
                                 "。各セルで試したのは 1 セルの変更・そのセルを起点にした人員の玉突き・隣の日の調整までで、" +
                                 "いずれも不成立でした（複数日にまたがる 2 人の入れ替えなどは試していません）。" +
-                                "周辺の希望を1件調整するか、担当を追加してください"
+                                "周辺の希望を1件調整するか、担当を追加してください" + scoreHintOf(cells)
                     }
                     runs.add(ForbiddenRunDiag(i, state.staff.getOrNull(i)?.name ?: "#$i", j0, seqLabel, cells, hint))
                     j0++
@@ -596,6 +598,12 @@ object V6PortAnalyzer {
         runs.sortWith(compareBy { it.escapable })
         return ForbiddenRunDiagnosis(runs.size, runs)
     }
+
+    /** 希望を破ると HARD 件数は同じでも weightedScore が下がるときに添える一文（表示専用）。 */
+    const val WISH_SCORE_HINT = "この希望を1件調整すると、全体の点数は良くなります"
+
+    private fun scoreHintOf(cells: List<ForbiddenRunCell>): String =
+        if (cells.any { it.escape == ForbiddenCellEscape.PINNED && it.detail.endsWith(WISH_SCORE_HINT) }) "。$WISH_SCORE_HINT" else ""
 
     /** run 内の1セル (i,j,cur) の脱出可否を判定する（diagnoseForbiddenRuns 専用の下請け）。 */
     /**
@@ -651,6 +659,8 @@ object V6PortAnalyzer {
         var noReceiver = 0
         var prefBlocked = 0   // c3n は減るが、希望を破る代金（pref +1）を払えない代替の数
         var c3wBlocked = 0    // c3n は減るが、代わりに希望の前日に禁止（c3w）を作る代替の数
+        // HARD 件数は同じでも、重み（MirrorKeys.weightOf）では希望を破るほうが点数が良くなる代替があるか（表示専用）。
+        var scoreImproves = false
         val c3wCur = if (p.c3wBanned(i, j, cur)) 1 else 0
         var chainOk: Int? = null      // CHAIN が成立した代替シフト
         var adjOk: Int? = null        // ADJACENT が成立した代替シフト
@@ -681,6 +691,9 @@ object V6PortAnalyzer {
             } else if (!createsNewRun) {
                 // c3n 自体は減るが、希望を破る代金を払うと正味では減らない＝希望が本当に効いている。
                 prefBlocked++
+                val weighted = (after - firesBefore) * MirrorKeys.weightOf("c3n") +
+                    prefCost * MirrorKeys.weightOf("pref") + c3wDelta * MirrorKeys.weightOf("c3w")
+                if (prefCost > 0 && !departureHole && after + prefCost + c3wDelta == firesBefore && weighted < 0) scoreImproves = true
             } else {
                 // この代替は新たな禁止連続を作る → 隣接日調整（探索本体と同一関数）で崩せるか実証。
                 if (adjOk == null && chainOk == null) {
@@ -720,7 +733,7 @@ object V6PortAnalyzer {
             // [3.311.0] 希望どおりのセルで、かつどの代替も正味 HARD を減らせなかったときだけ
             //   「希望固定」と名乗る（旧: 希望が一致した時点で無条件に固定扱い）。
             prefBlocked > 0 -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.PINNED,
-                "本人希望=$curSym（動かしても正味の必須違反が減らない）")
+                "本人希望=$curSym（動かしても正味の必須違反が減らない）" + if (scoreImproves) "。$WISH_SCORE_HINT" else "")
             else -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.BLOCKED,
                 "代替${alts}件全滅: 新たな禁止の並び${c3nBlocked}・人員不足の受け皿なし${noReceiver}" +
                     if (c3wBlocked > 0) "・希望の前日に禁止${c3wBlocked}" else "")

@@ -356,7 +356,7 @@ class V6PortAnalyzerTest {
         assertTrue("探索未到達の案内", run.hint.contains("探索未到達"))
     }
 
-    // 両セルとも本人希望どおり＝動かすと pref(9000)>c3n(7000) の悪化で isBetter が却下する（設計どおり）。
+    // 両セルとも本人希望どおり＝動かすと c3n −1 / pref +1 で HARD 件数が減らず、探索は希望セルを動かさない（設計どおり）。
     // 全セル PINNED → 構造的に崩せないことを正直に案内する（実機 c3n=1 が67エポック不動だった穴の再現）。
     @Test
     fun diagnoseForbiddenRunsReportsWishPinnedRunAsStructurallyBlocked() {
@@ -370,6 +370,36 @@ class V6PortAnalyzerTest {
         assertTrue("全セル希望固定", run.cells.all { it.escape == ForbiddenCellEscape.PINNED })
         assertTrue(diag.allBlocked)
         assertTrue("希望固定の明示と対処の案内", run.hint.contains("本人の希望") && run.hint.contains("残ります"))
+    }
+
+    // c3n −1 / pref +1 は HARD 件数が同じでも重みでは点数が良くなる＝分類は PINNED のまま、文言にだけ一文を添える。
+    @Test
+    fun wishPinnedCellShowsScoreHintWhenWeightedScoreImproves() {
+        val st = forbiddenState(
+            schedule = listOf(listOf(1, 1, 0)),
+            cons3n = listOf(C3Row(listOf("X", "X"))),
+            wishes = mapOf("0,0" to 1, "0,1" to 1),
+        )
+        val run = V6PortAnalyzer.diagnoseForbiddenRuns(st).runs.single()
+        assertTrue(run.cells.all { it.escape == ForbiddenCellEscape.PINNED })
+        assertTrue(run.cells.all { it.detail.endsWith(V6PortAnalyzer.WISH_SCORE_HINT) })
+        assertTrue(run.hint.endsWith(V6PortAnalyzer.WISH_SCORE_HINT))
+    }
+
+    // 希望を破るとその日の人員不足（covU）が空く局面では点数も良くならない＝一文を添えない。
+    @Test
+    fun wishPinnedCellOmitsScoreHintWhenDepartureOpensCovU() {
+        val st = forbiddenState(
+            schedule = listOf(listOf(1, 1)),
+            cons3n = listOf(C3Row(listOf("P", "P"))),
+            shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "", "")),
+            staff = listOf(Staff("s0", 0)),
+            groupShift = listOf(List(3) { 1 }),
+            wishes = mapOf("0,0" to 1, "0,1" to 1),
+        )
+        val run = V6PortAnalyzer.diagnoseForbiddenRuns(st).runs.single()
+        assertTrue(run.cells.none { it.detail.contains(V6PortAnalyzer.WISH_SCORE_HINT) })
+        assertFalse(run.hint.contains(V6PortAnalyzer.WISH_SCORE_HINT))
     }
 
     // 離脱すると covU 穴が空くが、玉突き連鎖（findCovUChain=探索本体と同一関数）で埋め直せる局面は
