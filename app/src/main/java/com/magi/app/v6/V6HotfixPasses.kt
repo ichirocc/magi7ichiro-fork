@@ -157,6 +157,9 @@ object PolishGate {
      *  既定 OFF＝実データ A/B を見て利用者が決める（docs/history 3.613.0）。背景 Worker には渡さない。 */
     @Volatile var wishConflictFloorMode: WishFloorMode = WishFloorMode.OFF
 
+    /** [測定中] C1 共同 LNS の直後に月全体の玉突き連鎖（`C1EjectionChainPolish`）を走らせる。既定 OFF＝段そのものを呼ばない。 */
+    @Volatile var c1EjectionChain: Boolean = false
+
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
@@ -680,6 +683,14 @@ object V6HotfixPasses {
                 }
             }
         })
+        if (PolishGate.c1EjectionChain) {
+            val tEj = EngineClock.nowMs()
+            chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, 3_000L))
+                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            })
+        }
         val tPersonalLns = EngineClock.nowMs()
         chain.adopt(chain.timed("後処理 個人回数/適切回数 共同LNS", "個人回数共同LNS") { work ->
             val cap = EngineClock.remainingMs(deadlineMs, tPersonalLns).coerceAtMost(params.personalLnsMaxMs)
