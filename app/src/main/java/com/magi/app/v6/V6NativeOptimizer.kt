@@ -682,6 +682,7 @@ object V6NativeOptimizer {
                     }
                     if (startImprovedGlobal) {
                         globalImproves.incrementAndGet()
+                        if (ownsStatics(runSlot())) publishLiveBest(startReport, start)
                         onProgress(
                             "適応portfolio W$i ${AdaptiveHypothesisEpochPolicy.roleLabel(assignment)} 入口改善",
                             startReport, iterations, nowMs() - started,
@@ -771,6 +772,7 @@ object V6NativeOptimizer {
                         }
                         if (improvedGlobal) {
                             globalImproves.incrementAndGet()
+                            if (ownsStatics(runSlot())) publishLiveBest(result.report, result.schedule)
                             onProgress(
                                 "適応portfolio グローバル最良更新 W$i epoch${epoch + 1}",
                                 result.report, iterations, nowMs() - started,
@@ -1206,6 +1208,7 @@ object V6NativeOptimizer {
         ensureActive()
         val best = if (results.isEmpty()) run(0, options.copy(workers = plan[0]), onProgress)
         else results.reduce { a, b -> if (better(b.report, a.report)) b else a }
+        if (ownsStatics(runSlot())) publishLiveBest(best.report, best.schedule)
         // 「他の案」: 採用案以外の仮説結果を品質順に保持（重複schedule除外、最大3件）
         val alts = results.asSequence()
             .filter { it !== best }
@@ -1358,6 +1361,7 @@ object V6NativeOptimizer {
             throw firstError.get() ?: IllegalStateException("runAlnsChains: no chain produced a result")
         }
         val best = results.reduce { a, b -> if (better(b.report, a.report)) b else a }
+        if (ownsStatics(runSlot())) publishLiveBest(best.report, best.schedule)
         val totalIters = results.sumOf { it.iterations }
         val chain0Iters = results.firstOrNull()?.iterations ?: 0L
         val perChain = results.sortedWith(compareBy(reportComparator) { it.report })

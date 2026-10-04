@@ -1040,6 +1040,22 @@ class V6NativeOptimizerChoiceTest {
         assertEquals(st.staffCount, r.schedule.size)
     }
 
+    @Test fun liveBestMatchesResultAfterMultiWorkerRuns() = runBlocking {
+        // 仮説多並列/多チェーンの採用盤面は onProgress だけでなく liveBest にも出る（E0/c3n壁の判定が読む）。
+        val st = canDoState(emptyMap())
+        for (alg in listOf(V6Algorithm.ALNS, V6Algorithm.RSI)) {
+            V6NativeOptimizer.resetLiveBestForTest()
+            val r = V6NativeOptimizer.optimize(
+                st, st.schedule.toIntArray2D(),
+                V6OptimizerOptions(alg, totalBudgetSec = 1, workers = 2),
+            )
+            val live = V6NativeOptimizer.liveBest
+            assertNotNull("$alg: liveBest が publish されていない", live)
+            val liveHard = UnifiedViolationChecker.check(st, live!!.map { it.toIntArray() }.toTypedArray()).hard
+            assertEquals("$alg: liveBest の必須が採用結果と食い違う", r.report.hard, liveHard)
+        }
+    }
+
     // ---- [3.319.0] destroy-repair の marginal cost を目的関数と揃える -------------------------
     //
     // `staffCountPenaltyAt` は候補選択の marginal cost で、`Evaluator.fullEvalParts` と同じ族
