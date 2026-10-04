@@ -496,6 +496,8 @@ object V6HotfixPasses {
         runningKeepBest: Boolean = false,
         initialReport: ViolationReport? = null,
         private val rollbackCountsZero: Boolean = false,
+        /** [aptFairSoftTolerance] ON のとき apt/fair 研磨の畳み込みだけ [AptFairPolish.toleratedBetter] で判定する（OFF＝従来どおり betterReport）。 */
+        private val aptFairSoftTolerance: Boolean = false,
     ) {
         private val runningKeepBest: Boolean =
             runningKeepBest && V6SanityPort.structuralHardFloor(state, cachedProblem(state, quantitativeRangeEval)) == 0
@@ -533,12 +535,16 @@ object V6HotfixPasses {
          * [passLogs] は棄却マーカー付きで返す（ログは落とさない＝`annotateStaleLogsIfRegressed` と同じ方針）。
          * flag OFF のときは何もせず [passLogs] をそのまま返す＝挙動完全不変。
          */
-        private fun runningKeepBestFold(report: ViolationReport?, passLogs: List<MirrorLog>): List<MirrorLog> {
+        private fun runningKeepBestFold(report: ViolationReport?, passLogs: List<MirrorLog>, toleranceFamily: String? = null): List<MirrorLog> {
             lastFoldRolledBack = false
             if (!runningKeepBest) return passLogs
             val rep = report ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
             val best = bestReport
-            if (best == null || betterReport(rep, best)) {
+            // 許容 ON の apt/fair はパス内と同じ基準で畳む（素の betterReport だとパスが容認した手を必ず巻き戻す）。
+            //   予算の基準はパス開始時点＝この時点のチェーン最良。
+            val tolerated = aptFairSoftTolerance && toleranceFamily != null && best != null &&
+                AptFairPolish.toleratedBetter(rep, best, best, toleranceFamily, enabled = true, count = false)
+            if (best == null || betterReport(rep, best) || tolerated) {
                 bestReport = rep
                 bestWork = work.copy2D()
                 return passLogs
@@ -550,11 +556,11 @@ object V6HotfixPasses {
         }
 
         /** 結果を盤面へ反映し、ピン帰属を合流させ、[keepLogs] のときだけログを積む。採用数を返す。 */
-        fun adopt(r: CyclicSwapResult, keepLogs: Boolean = true): Int {
+        fun adopt(r: CyclicSwapResult, keepLogs: Boolean = true, toleranceFamily: String? = null): Int {
             r.pinBlocks?.let { pinBlocksAll.merge(it) }
             rejectedPool.addAll(r.rejectedCandidates)
             work = r.newSchedule.copy2D()
-            val folded = runningKeepBestFold(r.report, r.logs)
+            val folded = runningKeepBestFold(r.report, r.logs, toleranceFamily)
             if (keepLogs) logs.addAll(folded)
             record(r.applied, r.report)
             if (rollbackCountsZero && lastFoldRolledBack) return 0
@@ -607,7 +613,7 @@ object V6HotfixPasses {
     ): V6PostOptimizationResult {
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
         val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
-            rollbackCountsZero = params.postChainRollbackCountsZero)
+            rollbackCountsZero = params.postChainRollbackCountsZero, aptFairSoftTolerance = params.aptFairSoftTolerance)
         val t0 = EngineClock.nowMs()
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
@@ -804,8 +810,8 @@ object V6HotfixPasses {
             val first = round == 0
             val tag = " [巡${round + 1}]"
             var roundApplied = 0
-            fun take(key: String, r: CyclicSwapResult) {
-                val n = chain.adopt(r, keepLogs = first)
+            fun take(key: String, r: CyclicSwapResult, toleranceFamily: String? = null) {
+                val n = chain.adopt(r, keepLogs = first, toleranceFamily = toleranceFamily)
                 adopted[key] = (adopted[key] ?: 0) + n
                 roundApplied += n
             }
@@ -915,10 +921,10 @@ object V6HotfixPasses {
             }
             take("apt玉突き", chain.timed("後処理 適切回数(apt)研磨$tag", "AptPolish") { work ->
                 AptFairPolish.applyAptPolish(state, work, maxPasses = params.aptPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.APT, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance)
-            })
+            }, toleranceFamily = "apt")
             take("fair玉突き", chain.timed("後処理 グループ内公平化(fair)玉突き研磨$tag", "FairPolish") { work ->
                 AptFairPolish.applyFairPolish(state, work, maxPasses = params.fairPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.FAIR, round), quantitativeRangeEval = params.quantitativeRangeEval, combineExhaustPairs = params.combineExhaustPairs, aptFairSoftTolerance = params.aptFairSoftTolerance, fairAchievementDirection = params.fairAchievementDirection)
-            })
+            }, toleranceFamily = "fair")
             // [Iteration 2] 巡の中で各パスが単独では不採用にした候補を、違反連結成分ごとにトランザクション結合する。
             val pool = chain.rejectedPool.toList(); chain.rejectedPool.clear()
             if (params.componentRepairEnabled && pool.size >= 2) {

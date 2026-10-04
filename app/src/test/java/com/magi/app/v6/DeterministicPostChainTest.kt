@@ -155,4 +155,41 @@ class DeterministicPostChainTest {
         c.adopt(makeCyclicSwapResult(lateral, lateralReport, "Last"))
         assertTrue("同点でも最良盤面へ戻す", c.work.contentDeepEquals(improved))
     }
+
+    // apt/fair 研磨の容認（aptFairSoftTolerance）はチェーンの畳み込みでも同じ基準で残す。OFF は従来どおり巻き戻す。
+    private fun repOf(vararg fams: Pair<String, Int>): ViolationReport {
+        val bd = fams.toMap()
+        val hard = bd.filterKeys { it in MirrorKeys.hard }.values.sum()
+        return ViolationReport(violations = emptyMap(), needViolations = emptyMap(), countViolations = emptyMap(),
+            breakdown = bd, total = bd.values.sum(), hard = hard, soft = bd.values.sum() - hard,
+            weightedScore = bd.entries.sumOf { (k, v) -> v * MirrorKeys.weights.getValue(k) })
+    }
+
+    private fun foldToleratedApt(tolerance: Boolean): V6HotfixPasses.PostChain {
+        val s = state()
+        val work0 = s.schedule.map { it.toIntArray() }.toTypedArray()
+        // 基準: c2 が 50 件（apt 以外の SOFT=200、予算 12）。候補: apt -1(-4) と c2 +3(+12) で生スコアは +8 悪化。
+        val base = repOf("apt" to 5, "c2" to 50)
+        val moved = repOf("apt" to 4, "c2" to 53)
+        assertTrue("テスト前提: 素の betterReport は却下", !betterReport(moved, base))
+        val after = work0.map { it.copyOf() }.toTypedArray().also { it[1][1] = 1 }
+        val chain = V6HotfixPasses.PostChain(onPhase = {}, schedule = work0, state = s, quantitativeRangeEval = false,
+            runningKeepBest = true, initialReport = base, aptFairSoftTolerance = tolerance)
+        chain.adopt(makeCyclicSwapResult(after, moved, "AptPolish"), toleranceFamily = "apt")
+        return chain
+    }
+
+    @Test
+    fun toleratedAptMoveSurvivesChainFoldWhenToleranceOn() {
+        val chain = foldToleratedApt(tolerance = true)
+        assertTrue(chain.work[1][1] == 1)
+        assertTrue(chain.logs.none { it.message.contains("チェーン内巻き戻しで不採用") })
+    }
+
+    @Test
+    fun toleratedAptMoveIsRolledBackWhenToleranceOff() {
+        val chain = foldToleratedApt(tolerance = false)
+        assertTrue(chain.work[1][1] == 0)
+        assertTrue(chain.logs.any { it.message.contains("チェーン内巻き戻しで不採用") })
+    }
 }
