@@ -184,6 +184,7 @@ internal sealed interface MagiEvent {
         data class SetBlockSwapC3nFilter(val on: Boolean) : Settings
         data class SetSearchStrength(val strength: SearchStrength) : Settings
         data class SetC1MoveARepair(val on: Boolean) : Settings
+        data class SetC1EjectionChain(val on: Boolean) : Settings
         data class SetLnsAdaptive(val on: Boolean) : Settings
     }
 
