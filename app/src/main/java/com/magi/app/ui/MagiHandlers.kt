@@ -145,6 +145,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetNativeParity -> vm.setNativeParity(e.on)
             is MagiEvent.Settings.SetBlockSwapC3nFilter -> vm.setBlockSwapC3nFilter(e.on)
             is MagiEvent.Settings.SetSearchStrength -> vm.setSearchStrength(e.strength)
+            is MagiEvent.Settings.SetC1MoveARepair -> vm.setC1MoveARepair(e.on)
             is MagiEvent.Settings.SetLnsAdaptive -> vm.setLnsAdaptive(e.on)
         }
         true

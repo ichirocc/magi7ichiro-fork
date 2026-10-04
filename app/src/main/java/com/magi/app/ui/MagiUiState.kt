@@ -90,6 +90,7 @@ data class UiState(
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）
     val lnsAdaptive: Boolean = true,            // [3.514.0/3.518.0] 個人回数・期間の一括見直しの時間配分を自動調整するか。既定ON（iter9: 品質±0・速度は実データ-23%〜-32%）
     val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
+    val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),

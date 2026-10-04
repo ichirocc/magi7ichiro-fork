@@ -1242,6 +1242,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 探索の強さ → ${searchStrengthLabel(strength)}")
     }
 
+    fun setC1MoveARepair(on: Boolean) {
+        com.magi.app.v6.PolishGate.c1MoveARepair = on
+        _ui.update { it.copy(c1MoveARepair = on) }
+        logOp("I", "設定変更: 期間の制約の入れ替えで禁止の並びも直す → ${if (on) "ON" else "OFF"}")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 
