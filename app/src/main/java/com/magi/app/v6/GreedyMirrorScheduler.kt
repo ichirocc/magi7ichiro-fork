@@ -40,7 +40,7 @@ object GreedyMirrorScheduler {
                 if (w !in 0 until p.K) continue
                 // [3.391.0] 旧: 担当できないシフトへの希望まで**盤面へ置いていた**。pref は実現可能な
                 //   希望しか数えない（MirrorCore）ので置いても pref は1点も得しない一方、担当外セル＝
-                //   groupViol(HARD 10000) が確実に立つ＝純損。SmartInitialScheduler は同じ処理で
+                //   groupViol(HARD) が確実に立つ＝純損。SmartInitialScheduler は同じ処理で
                 //   canDo を見ており（3.257.0）、この旧世代の生成器だけが取り残されていた。
                 if (p.canDo(i, w)) { schedule[i][j] = w; wishIn++ } else wishOut++
             }

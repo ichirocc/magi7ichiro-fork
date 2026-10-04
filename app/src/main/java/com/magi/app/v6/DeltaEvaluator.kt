@@ -34,9 +34,9 @@ class DeltaEvaluator(private val p: Problem) {
     //   評価器側だけ3族（c3n/pref/covU）で、同じ盤面に対しチェッカーと評価器の hard が食い違っていた。
     private var hGrpV = 0L
     private var hc3w = 0L                             // [3.542.0] 希望の前日に禁止(c3w, HARD)。セル単位＝Δもこの1セルだけ
-    private var sApt = 0L                             // [統一apt] 適切回数(双方向目標)の running total（SOFT, 重み1）
-    private var sFair = 0L                            // [統一fair] グループ内公平化の running total（SOFT, 重み1）
-    private var sWeekly = 0L                          // [統一weekly] 曜日平準化の running total（SOFT, 重み1）
+    private var sApt = 0L                             // [統一apt] 適切回数(双方向目標)の running total（SOFT）
+    private var sFair = 0L                            // [統一fair] グループ内公平化の running total（SOFT）
+    private var sWeekly = 0L                          // [統一weekly] 曜日平準化の running total（SOFT）
     private var scovO = 0L                            // [統一a] 過剰被覆(covO)の running total（SOFT）
     private var covUTot = 0L   // [監査#4b] per-cell covU の総和（セル局所Δで維持）
 
@@ -97,8 +97,8 @@ class DeltaEvaluator(private val p: Problem) {
      * 一対一・checker の `report.breakdown[key]` と同一単位）を検証専用に公開する。
      *
      * `score()`(soft集約) は各フィールドへ重みを乗じて合算するため、**総和が一致しても族ごとの誤差が
-     * 相殺されて隠れる余地がある**（例: c1(重み30)とc3mn(重み30)が同じ重みを持つため、片方+1・もう片方-1
-     * の誤りは総和では検出できない。c2/c41/c42/c41s/c42s/apt/fair/weekly も全て重み1で同じ穴を持つ。
+     * 相殺されて隠れる余地がある**（例: c2 と apt、fair と weekly は同じ重みを持つため、片方+1・もう片方-1
+     * の誤りは総和では検出できない。重みが異なる族どうしでも整数倍の組合せで同じ穴がある。
      * covO は重み10＝上記2組とは別の値だが、この関数は生カウントを個別に突き合わせるため重みの値自体には
      * 依存しない）。
      * このマップは checker の `breakdown` と**1キーずつ**突き合わせる per-family パリティ検証のために
@@ -593,7 +593,7 @@ class DeltaEvaluator(private val p: Problem) {
         return h
     }
 
-    /** [統一apt] 1セル(staff i, shift k)の適切回数偏差。重み1の L1 |n-t|。UnifiedViolationChecker の "apt" と一致。 */
+    /** [統一apt] 1セル(staff i, shift k)の適切回数偏差。L1 |n-t|。UnifiedViolationChecker の "apt" と一致。 */
     private fun aptViol(i: Int, k: Int, n: Int): Long {
         val t = p.apt[i][k]
         return if (t >= 0) kotlin.math.abs(n - t).toLong() else 0L

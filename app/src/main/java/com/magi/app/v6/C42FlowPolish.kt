@@ -3,7 +3,7 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 
 /**
- * [測定中] c42/c42s（群ペア禁止, SOFT, 重み1）専用の決定的 min-cost-flow 研磨パス（backlog #12(b) 残課題）。
+ * [測定中] c42/c42s（群ペア禁止, SOFT）専用の決定的 min-cost-flow 研磨パス（backlog #12(b) 残課題）。
  * [FlexibleDayFlow] を群内サブセットへ適用する。c42 は2つの (群,シフト) ペアが
  * 同時に絡む（`c42PairCount(sameSet,n1,n2)`）ため片方の群だけを流すと相手側の目的値も変わる。片側固定の
  * ヤコビ近似＋対称2試行（sameSet時は同じ変数なので1試行）で扱う＝**真の相互最適ではない**が、最終採否は必ず
