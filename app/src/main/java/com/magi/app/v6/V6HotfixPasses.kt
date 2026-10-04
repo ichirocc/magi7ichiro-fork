@@ -128,6 +128,14 @@ object PolishGate {
     @Volatile
     var wideC3nBreakDays: Boolean = false
 
+    /**
+     * [測定中] C1 研磨の手A（同日交換）で、交換相手 i2 が受け取るシフト（または i の新シフト）が禁止連続(c3n)を
+     * 作るとき、`tryFixForbiddenRunViaAdjacentDay`（手B と同じ隣接日の付け替え＋1段の玉突き）で崩してから
+     * 結合手を 1 回の checker で判定する。採用基準は不変（betterReport＋厳密ピン）。既定 OFF。
+     */
+    @Volatile
+    var c1MoveARepair: Boolean = false
+
     // [3.409.21/ユーザー選択「両方削除」] adaptiveEscapeControl（停滞脱出の適応制御・3.306.0）と
     //   portfolioRoleParallelSa/portfolioRoleChains（ロール内並列SA・3.371.0）は削除した。
     //   単体 A/B（1プロセス=1実行・各15ペア・基準は測定前に固定「12/15 で採否」）の結果:
