@@ -40,7 +40,7 @@ data class ViolationReport(
     /**
      * [/code-review, 3.111.0/3.353.0と同根の第3キー空間] 被覆キー("k,j")に重なった全違反クラスを
      * 重み降順で保持（`needViolations` は最重1クラス＝後方互換のまま）。`cellFamilies`/`countFamilies`の
-     * 被覆空間版。covU(重み8000)と同じ(シフト,日)に c41/c41s(重み1)が重なると、covUが表示を独占し
+     * 被覆空間版。covU(HARD)と同じ(シフト,日)に c41/c41s(SOFT)が重なると、covUが表示を独占し
      * `needViolations` からc41/c41sが消えていた（`breakdownLocations`の「群のレンジ」タップ→場所一覧が
      * 内訳件数より少なく見える）。表示のみ。
      */
@@ -247,7 +247,7 @@ object UnifiedViolationChecker {
         //   偶然噛み合っているだけで安全が成立していた（低い重みの族が後から呼ばれると高い重みの族の
         //   マークを消し得る潜在的な地雷）。今回は実害の確認された不具合ではないが、mark/markNeed と
         //   同じ規律に揃えて将来の族追加に対して頑健にする。
-        //   [3.243.0, HF77明示指示] aptLow/aptHigh は `MirrorKeys.weightOf` により apt 本体と同じ重み1.0で
+        //   [3.243.0, HF77明示指示] aptLow/aptHigh は `MirrorKeys.weightOf` により apt 本体と同じ重みで
         //   解決する（旧: weights にキーが無く 0.0 扱い＝c2/low/high 等の全実族に対し常に劣後していた）。
         //   同重み同士は先勝ち(mark順)＝c2(先に呼ばれる)が apt(後に呼ばれる)より引き続き優先される。
         //   表示のみ・スコアリング(weightedScore/breakdown/inc)は不変。
@@ -449,7 +449,7 @@ object UnifiedViolationChecker {
         }
 
         // [統一weekly] 7日周期のシフト平準化: 職員ごと、**シフトごと**に、そのシフトが入る日の曜日別カウントの
-        // round(そのシフトの回数/7) からの L1 偏差和。SOFT・重み1。最適化器(Evaluator/Delta)と同一指標。
+        // round(そのシフトの回数/7) からの L1 偏差和。SOFT。最適化器(Evaluator/Delta)と同一指標。
         // [3.345.0] 休は通常のシフト種の一つとして扱う＝勤務/休の二値でなくシフト別に均す。旧定義（勤務日=非休の
         //   曜日カウント）は「毎週おなじ曜日に働く偏り」しか見ておらず、「夜勤が毎週水曜」「休みが毎週月曜」を
         //   区別できなかった。回数0のシフトは偏差0で無害（対象から外す必要はない）。
@@ -717,6 +717,17 @@ fun Problem.holdsManualPins(s: Array<IntArray>): Boolean {
     return true
 }
 
+/** 個人上限 0 で最適化器が置かないセル（担当可・[mayPlace] 外・縛る値でない）か。入口の除去と最終番兵が同じ基準を読む。 */
+fun Problem.isCapZeroCell(i: Int, j: Int, k: Int): Boolean =
+    k in 0 until K && canDo(i, k) && !mayPlace(i, k) && !(wishLocked(i, j) && lockTo(i, j) == k)
+
+/** 盤面中の [isCapZeroCell] のセル (i,j) の一覧（最終番兵）。 */
+fun Problem.capZeroCells(s: Array<IntArray>): List<Pair<Int, Int>> {
+    val out = ArrayList<Pair<Int, Int>>()
+    for (i in 0 until minOf(S, s.size)) for (j in 0 until minOf(T, s[i].size)) if (isCapZeroCell(i, j, s[i][j])) out.add(i to j)
+    return out
+}
+
 /** [#41] 手動固定セルへ固定の値を書いた写し（入口で盤面を固定に合わせる）。固定が無ければ同じ参照を返す。 */
 fun Problem.withManualPins(s: Array<IntArray>): Array<IntArray> {
     if (holdsManualPins(s)) return s
@@ -963,7 +974,7 @@ fun restShiftIndex(state: MagiState): Int? = state.shifts.indexOfFirst { it.role
  *
  * [3.419.0] 埋める側は「休」を既定にしてきたが、**その職員がそのシフトを担当できるかを見ていなかった**。
  * 担当可否から休を外した群（UI の担当可否チップで実際にできる操作）では、埋めたマスが丸ごと
- * groupViol（HARD・重み10000）になる＝入力が不正なだけなのに、こちらが**存在しない違反を作っていた**。
+ * groupViol（HARD）になる＝入力が不正なだけなのに、こちらが**存在しない違反を作っていた**。
  *
  * 規則はこの1箇所だけに置く（3.418.0 で `Ws1Ops` の3経路を直したとき同じ判断を写しかけた＝写すと必ず
  * 取り残される）。休を担当できるならそのまま休（需要が無く「まだ決めていない」を表すのに最も無難で、

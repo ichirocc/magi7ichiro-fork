@@ -182,14 +182,9 @@ internal sealed interface MagiEvent {
         data class SetNativeAccel(val on: Boolean) : Settings
         data class SetNativeParity(val on: Boolean) : Settings
         data class SetBlockSwapC3nFilter(val on: Boolean) : Settings
-        data class SetWideC3nBreak(val on: Boolean) : Settings
-        data class SetCombineExhaustPairs(val on: Boolean) : Settings
+        data class SetSearchStrength(val strength: SearchStrength) : Settings
+        data class SetC1MoveARepair(val on: Boolean) : Settings
         data class SetLnsAdaptive(val on: Boolean) : Settings
-        data class SetCountChainPolish(val on: Boolean) : Settings
-        data class SetAptFairSoftTolerance(val on: Boolean) : Settings
-        data class SetC1DeltaChildEval(val on: Boolean) : Settings
-        data class SetWishFloorMode(val mode: com.magi.app.v6.WishFloorMode) : Settings
-        data class SetExtraRefineRequirePostHardDrop(val on: Boolean) : Settings
     }
 
     /** 画面遷移・選択・問い合わせ。盤面を触らない。 */

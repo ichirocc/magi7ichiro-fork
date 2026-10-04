@@ -159,7 +159,7 @@ enum class ForbiddenCellEscape {
     CHAIN,
     /** 代替は全て新たな禁止連続を作るが、隣接日調整（tryFixForbiddenRunViaAdjacentDay）で崩せることを実証済み。 */
     ADJACENT,
-    /** 本人の希望で固定（動かすと pref(9000)>c3n(7000) の悪化＝isBetter が正しく却下する）。 */
+    /** 本人の希望で固定（希望セルは wishLocked＝探索が動かさない。HARD 件数で正味改善しないときだけ名乗る）。 */
     PINNED,
     /** 全ての代替が塞がっている（新たな禁止連続・covU受け皿なし・代替シフトなし）。 */
     BLOCKED,
@@ -350,8 +350,8 @@ object V6PortAnalyzer {
                     // （このセルへの直接移動は別のcovUを生む）に過ぎず、その先が実際に埋まる保証が
                     // 無かった。実データ検証(findCovUChainを200 seed総当たり)で「玉突き候補はいる
                     // のに、その先を埋める人が全員その日の希望で固定されており実際は誰一人動かせ
-                    // ない」という真の壁を確認済み（pref(重み9000)>covU(重み8000)のため、希望を
-                    // 破ってまでcovUを直す手はisBetterが正しく却下する＝バグではない）。診断が
+                    // ない」という真の壁を確認済み（希望セルは wishLocked＝探索・研磨の全パスが
+                    // 動かさないため、希望を破ってまでcovUを直す手は生成されない＝バグではない）。診断が
                     // 「玉突きが必要」と楽観的に言うだけでは、この壁を「もっと粘れば直る」との
                     // 誤解を招くため、findCovUChain（探索本体と同一の関数）で実在を確認してから
                     // 案内を出し分ける。
@@ -361,7 +361,8 @@ object V6PortAnalyzer {
                         free > 0 -> "空き番${free}人を${sym}へ移せば充足（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
                         cascade > 0 && chainVerified -> "空き番が無く、過剰シフトからの多人数入替（玉突き=ブロック移動）が必要"
                         cascade > 0 -> "玉突き候補${cascade}人はいますが、移動先の受け皿もすべて本人の希望/禁止の並びで塞がっており、" +
-                            "現在の希望のままではどう組んでも解消できません。希望を1件調整するか担当を追加してください"
+                            "現在の希望のままではどう組んでも解消できません。希望を1件調整するか担当を追加してください" +
+                            if (MirrorKeys.weightOf("covU") > MirrorKeys.weightOf("pref")) "。$WISH_SCORE_HINT" else ""
                         else -> "候補が本人の希望/禁止の並びで塞がっており、希望を1件調整するか担当を追加すると解消に近づく"
                     }
                     "担当可能${capacity}人（うち在勤中${already}人）・今動かせる空き番${free}人（玉突き${cascade}・本人の希望${pinned}・禁止の並び${forbid}）。$hint"
@@ -410,7 +411,7 @@ object V6PortAnalyzer {
     /**
      * [人員過剰(covO)の「なぜ減らないか」診断] covU診断(空き番/玉突き/希望固定/禁止連続)の対。
      * 在勤者を他シフトへ動かせば消えるはずの過剰が、なぜ最適化で解消されないかを枠ごとに示す。
-     * covO は全19族中もっとも軽い(重み1.0)ため、動かした先で他の族が1点でも悪化すると
+     * covO は軽い SOFT 族（重みは MirrorKeys.weights）のため、動かした先で他の族が1点でも悪化すると
      * isBetter に負けて採用されない＝件数自体は「動かせるか」の構造診断であり、
      * 「動かせるのに動いていない」ことの説明にはならない点に注意（読取専用・スコア不変）。
      * [3.406.0] だから「動かせる」と言う前に、同じ目的関数で実際に 1 手試す（予算 [Probe.SURPLUS_PROBE_BUDGET]）。
@@ -579,13 +580,14 @@ object V6PortAnalyzer {
                         //   という強い証拠であり、全勤務表空間の数学的な非充足証明ではない＝断定を避けた表現にする。
                         cells.all { it.escape == ForbiddenCellEscape.PINNED } ->
                             "本人希望どおりの並びが禁止パターンを構成しています（本人の希望: $pinnedDays）。" +
-                                "希望を変えない限りどう組んでもこの禁止の並びは残ります。どちらか1件の希望を調整してください"
+                                "希望を変えない限りどう組んでもこの禁止の並びは残ります。どちらか1件の希望を調整してください" +
+                                scoreHintOf(cells)
                         else ->
                             "全セルが塞がっています" +
                                 (if (pinnedDays.isNotEmpty()) "（本人の希望: $pinnedDays）" else "") +
                                 "。各セルで試したのは 1 セルの変更・そのセルを起点にした人員の玉突き・隣の日の調整までで、" +
                                 "いずれも不成立でした（複数日にまたがる 2 人の入れ替えなどは試していません）。" +
-                                "周辺の希望を1件調整するか、担当を追加してください"
+                                "周辺の希望を1件調整するか、担当を追加してください" + scoreHintOf(cells)
                     }
                     runs.add(ForbiddenRunDiag(i, state.staff.getOrNull(i)?.name ?: "#$i", j0, seqLabel, cells, hint))
                     j0++
@@ -596,6 +598,12 @@ object V6PortAnalyzer {
         runs.sortWith(compareBy { it.escapable })
         return ForbiddenRunDiagnosis(runs.size, runs)
     }
+
+    /** 希望を破ると HARD 件数は同じでも weightedScore が下がるときに添える一文（表示専用）。 */
+    const val WISH_SCORE_HINT = "この希望を1件調整すると、全体の点数は良くなります"
+
+    private fun scoreHintOf(cells: List<ForbiddenRunCell>): String =
+        if (cells.any { it.escape == ForbiddenCellEscape.PINNED && it.detail.endsWith(WISH_SCORE_HINT) }) "。$WISH_SCORE_HINT" else ""
 
     /** run 内の1セル (i,j,cur) の脱出可否を判定する（diagnoseForbiddenRuns 専用の下請け）。 */
     /**
@@ -627,10 +635,10 @@ object V6PortAnalyzer {
         val curSym = state.shifts.getOrNull(cur)?.kigou ?: cur.toString()
         // [3.311.0] 希望どおりのセルでも**即 PINNED にはしない**。
         //   旧実装は `wishLocked && wish == cur` で HARD 差分を一切見ずに早期 return しており、
-        //   その根拠（「pref(9000) の増加が c3n(7000) の減少を上回る」）は**そのセルが c3n fire
+        //   その根拠（「pref +1 が c3n −1 を相殺する」）は**そのセルが c3n fire
         //   1件にしか関与しない場合しか成り立たない**。例: 禁止「A→A」・行 A,A,A の中央セルは
         //   2件の fire に関与し、B へ動かすと c3n 2→0 / pref 0→1 ＝ betterReport の第1キー hard が
-        //   2→1 と厳密に改善する（weighted も 14000→9000）。つまり isBetter は採用する＝固定ではない。
+        //   2→1 と厳密に改善する（weighted も c3n 2件ぶん→pref 1件ぶんへ下がる）。つまり isBetter は採用する＝固定ではない。
         //   偽の PINNED は run 全体を「構造壁」と誤診し、3.281.0 の短い停滞タイムアウトを早期に
         //   発火させうる。そこで pref の増加分を c3n の正味減と同じ土俵で勘定する。
         val prefCost = if (p.wishFixed(i, j) && p.wish[i][j] == cur) 1 else 0
@@ -651,6 +659,8 @@ object V6PortAnalyzer {
         var noReceiver = 0
         var prefBlocked = 0   // c3n は減るが、希望を破る代金（pref +1）を払えない代替の数
         var c3wBlocked = 0    // c3n は減るが、代わりに希望の前日に禁止（c3w）を作る代替の数
+        // HARD 件数は同じでも、重み（MirrorKeys.weightOf）では希望を破るほうが点数が良くなる代替があるか（表示専用）。
+        var scoreImproves = false
         val c3wCur = if (p.c3wBanned(i, j, cur)) 1 else 0
         var chainOk: Int? = null      // CHAIN が成立した代替シフト
         var adjOk: Int? = null        // ADJACENT が成立した代替シフト
@@ -681,6 +691,9 @@ object V6PortAnalyzer {
             } else if (!createsNewRun) {
                 // c3n 自体は減るが、希望を破る代金を払うと正味では減らない＝希望が本当に効いている。
                 prefBlocked++
+                val weighted = (after - firesBefore) * MirrorKeys.weightOf("c3n") +
+                    prefCost * MirrorKeys.weightOf("pref") + c3wDelta * MirrorKeys.weightOf("c3w")
+                if (prefCost > 0 && !departureHole && after + prefCost + c3wDelta == firesBefore && weighted < 0) scoreImproves = true
             } else {
                 // この代替は新たな禁止連続を作る → 隣接日調整（探索本体と同一関数）で崩せるか実証。
                 if (adjOk == null && chainOk == null) {
@@ -694,7 +707,7 @@ object V6PortAnalyzer {
                         //   `prefCost` を入れたとき、この分岐（隣接日調整）には入れ忘れていた。隣接日調整は
                         //   この職員の複数日を動かすので、本セルだけでなく**行全体の希望違反**が増えうる。
                         //   実データで「本人希望のセルを休へ変えれば崩せる」と誤って ADJACENT を出しており
-                        //   （c3n −1 に対し pref +1 ＝ 正味 0・weighted は 9000−7000=+2000 悪化で採用され得ない）、
+                        //   （c3n −1 に対し pref +1 ＝ HARD 件数は正味 0。希望セルは wishLocked で探索が動かさない）、
                         //   利用者に「探索が見つけていないだけ」という誤った期待を与えていた。さらに
                         //   3.281.0 の停滞打ち切り（全 run 塞がりなら短い閾値）が発火せず時間も余計に使う。
                         if (netHardImproves(p, norm, tmp, i, firesBefore) &&
@@ -720,7 +733,7 @@ object V6PortAnalyzer {
             // [3.311.0] 希望どおりのセルで、かつどの代替も正味 HARD を減らせなかったときだけ
             //   「希望固定」と名乗る（旧: 希望が一致した時点で無条件に固定扱い）。
             prefBlocked > 0 -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.PINNED,
-                "本人希望=$curSym（動かしても正味の必須違反が減らない）")
+                "本人希望=$curSym（動かしても正味の必須違反が減らない）" + if (scoreImproves) "。$WISH_SCORE_HINT" else "")
             else -> ForbiddenRunCell(j, label, curSym, ForbiddenCellEscape.BLOCKED,
                 "代替${alts}件全滅: 新たな禁止の並び${c3nBlocked}・人員不足の受け皿なし${noReceiver}" +
                     if (c3wBlocked > 0) "・希望の前日に禁止${c3wBlocked}" else "")

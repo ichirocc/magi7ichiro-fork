@@ -294,6 +294,29 @@ internal object C1WindowPolish {
      * 採否は既存と同じ betterReport(hard→weighted→total) の keep-best のみ＝退化不能・HF77非該当（重み不変）。
      * add-fixable（追加が唯一の解の局面）は既存手A/Bの担当のまま＝手クラスが互いに素で冗長を作らない。
      */
+    /**
+     * 手A の交換直後の盤面で、i2 の a@j・i の x@j が禁止連続(c3n)を作っていれば隣接日の付け替えで崩す手を返す
+     * （盤面は変えない）。崩す必要がない・崩せないときは null＝呼び出し側は素の交換を判定する。
+     * c3w は当日セル自身の静的禁止なので隣接日では崩れず、ここでは扱わない（makesForbiddenRun が true のまま→null）。
+     */
+    internal fun moveARepairChain(p: Problem, work: Array<IntArray>, i: Int, i2: Int, j: Int, x: Int, a: Int, rng: Random): List<IntArray>? {
+        val out = ArrayList<IntArray>()
+        val saved = ArrayList<IntArray>()
+        try {
+            for ((s, sh) in listOf(i2 to a, i to x)) {
+                if (sh !in 0 until p.K || !p.makesForbiddenRun(work, s, j, sh)) continue
+                if (p.c3wBanned(s, j, sh)) return null
+                val f = tryFixForbiddenRunViaAdjacentDay(p, work, s, j, sh, rng) ?: return null
+                if (f.any { it[1] == j }) return null
+                for (mv in f) { saved.add(intArrayOf(mv[0], mv[1], work[mv[0]][mv[1]])); work[mv[0]][mv[1]] = mv[2] }
+                out.addAll(f)
+            }
+            return out.ifEmpty { null }
+        } finally {
+            for (idx in saved.indices.reversed()) work[saved[idx][0]][saved[idx][1]] = saved[idx][2]
+        }
+    }
+
     fun applyC1WindowPolish(state: MagiState, schedule: Array<IntArray>, maxPasses: Int = 3, shouldStop: () -> Boolean = { false }, seed: Long = 0x1C1L, quantitativeRangeEval: Boolean = false, combineExhaustPairs: Boolean = false): V6HotfixPasses.CyclicSwapResult {
         // [3.326.0] 回数固定(lo==hi)だけが却下した候補試行を対象別に数える（緩和対象の提示用）。
         val pinBlocks = PinBlockAttribution()
@@ -303,6 +326,7 @@ internal object C1WindowPolish {
         var bestRep = before
         var applied = 0
         var aRect = 0; var aSelf = 0
+        var mvaTried = 0; var mvaAccepted = 0
         if (p.cons1.isEmpty()) {
             return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, 0,
                 listOf(MirrorLog(tag = "C1Polish", message = "cons1なし=スキップ")), report = bestRep)
@@ -354,7 +378,7 @@ internal object C1WindowPolish {
             // [違反セル指向] c1で違反している職員のみを起点に絞る。c1は職員ごと→改善手は必ず違反職員を
             //   含む＝ロスレス。空なら即終了でコスト0。
             // [実機ログ起因/実バグ修正] 旧実装は rep0.violations（1セル=最重1クラスのみ）を見ていたため、
-            //   c1違反セルが同じセルでc3n(HARD,重み7000)等の更に重い違反も起こしている場合、そのセルの
+            //   c1違反セルが同じセルでc3n(HARD)等の更に重い違反も起こしている場合、そのセルの
             //   c1マークが violations 上では上書きされて消え、該当職員のc1違反自体が研磨の起点候補から
             //   漏れうる潜在バグだった（他のc1違反セルで既に起点に入っていれば実害なしだが、全run-startが
             //   重い違反と同居する職員では研磨が一度も試みられない）。cellFamilies（3.111.0で追加された
@@ -406,11 +430,17 @@ internal object C1WindowPolish {
                         for (i2 in 0 until p.S) {
                             if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a)) continue
                             work[i][j] = x; work[i2][j] = a                 // 同日スワップ（被覆不変）
+                            val fix = if (PolishGate.c1MoveARepair) moveARepairChain(p, work, i, i2, j, x, a, rng) else null
+                            val fixOld = fix?.let { f -> IntArray(f.size) { work[f[it][0]][f[it][1]] } }
+                            fix?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
+                            if (fix != null) mvaTried++
                             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
                             val pinBadA = exactPinRegression(p, workBeforeDay, work)
                             if (pinBadA && betterReport(rep, bestRep)) pinBlocks.record(p, workBeforeDay, work)
                             if (betterReport(rep, bestRep) && !pinBadA) {
-                                bestRep = rep; applied++; improved = true; done = true; break
+                                bestRep = rep; applied++; improved = true; done = true
+                                if (fix != null) mvaAccepted++
+                                break
                             }
                             // [3.324.0/外部レビュー] 旧実装は手Aのピン却下を黙って巻き戻すだけで数えておらず、
                             //   C1 の「ピン破り」件数が手B(玉突き)だけの部分集計になっていた。手Aは回数を実際に
@@ -421,6 +451,7 @@ internal object C1WindowPolish {
                             //   どちらも i2 ごと＝同じ粒度なので、対称に数える。
                             if (betterReport(rep, bestRep) && pinBadA) recordBlock(i, x, ri, C1PlateauDiagnosis.REASON_PIN)
                             else recordBlock(i, x, ri, C1PlateauDiagnosis.REASON_SCORE, after = rep, before = bestRep)
+                            if (fix != null && fixOld != null) for (idx in fix.indices.reversed()) work[fix[idx][0]][fix[idx][1]] = fixOld[idx]
                             work[i][j] = a; work[i2][j] = x                 // 巻き戻し
                         }
                         if (done) { donorsCache = null; continue }
@@ -643,12 +674,13 @@ internal object C1WindowPolish {
             message = "期間要件(c1)研磨: c1 ${before.breakdown["c1"] ?: 0}->${bestRep.breakdown["c1"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回(鏡像:$aRect 自己:$aSelf 再配置:$aRepack)" +
                 (if (applied == 0 && (before.breakdown["c1"] ?: 0) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +
-                (if (c1CombSummary.isNotEmpty()) " / $c1CombSummary" else "")))
+                (if (c1CombSummary.isNotEmpty()) " / $c1CombSummary" else "") +
+                (if (PolishGate.c1MoveARepair) " 手A禁止連続修復:試行${mvaTried}/採用${mvaAccepted}" else "")))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, plateau, pinBlocks.attempts, pinBlocks, rejectedCandidates = rejectedOut, report = bestRep)
     }
 
     /**
-     * [C3mnPolish・玉突き連鎖の横展開] cons3mn(回避パターン, SOFT重み30)専用の研磨パス。
+     * [C3mnPolish・玉突き連鎖の横展開] cons3mn(回避パターン, SOFT)専用の研磨パス。
      * grilling(2026-07-19)で確定: 対象はc3mnのみ(c3nはHARDで既存のRSI focus優先/keep-bestが担当済み・
      * 同一パスに混ぜると役割が重複し測定しづらくなる)。既存の`findCovUChain`(玉突き連鎖BFS、深さ5まで)を
      * そのまま再利用し、C1Polish(3.158.0)の「手B/E11」ブロックと同型の構成にする。

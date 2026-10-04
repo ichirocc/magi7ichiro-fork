@@ -4,7 +4,7 @@ import com.magi.app.model.MagiState
 import java.util.Random
 
 /**
- * 適切回数(apt, 重み1)/グループ内公平化(fair, 重み1)専用の研磨2パス。[V6HotfixPasses] から
+ * 適切回数(apt)/グループ内公平化(fair)専用の研磨2パス。[V6HotfixPasses] から
  * 抽出（責務別の物理分割＝AIコードレビュー時のコンテキスト圧迫対策）。ロジックは一切変更していない。
  *
  * 両パスとも同型の3段構成（ファイル自身の履歴コメントが対称性を明記）:
@@ -63,13 +63,13 @@ internal object AptFairPolish {
     }
 
     /**
-     * [AptPolish・適切回数(apt, 重み1)専用の研磨パス] ユーザー指示「専用の研磨パスAptPolish的なものを
+     * [AptPolish・適切回数(apt)専用の研磨パス] ユーザー指示「専用の研磨パスAptPolish的なものを
      * 賢く深く網羅的に作る」（grillingで確定: ①自己振替最優先 ②同一グループ内の相互交換(同日1対1・
      * 被覆総量保存で安全) ③RangePolish型の玉突きチェーン、の順で試す）。
      *
      * 動機（大島愛の実例）: 群目標(groupShiftApt)に対しaptHigh(超過)とaptLow(不足)が同一職員内に同時に
      * 存在するケース（休=超過・Pｼ=不足）は、本人内で1日分を振替えるだけで両方が同時に改善する「タダの
-     * 交換」のはずだが、apt(重み1)はRSI探索中のfocus選択で軽視されやすく(3.169.0)、専用研磨が無いまま
+     * 交換」のはずだが、aptはRSI探索中のfocus選択で軽視されやすく(3.169.0)、専用研磨が無いまま
      * 残っていた。
      *
      * アンカー: `report.countViolations`（"i,k"→"vio-aptHigh"/"vio-aptLow"、markCountの重み優先解決済）
@@ -299,7 +299,7 @@ internal object AptFairPolish {
 
 
     /**
-     * [FairPolish・グループ内公平化(fair, 重み1)専用の研磨パス] ユーザー指示「c42/c42s以外にも
+     * [FairPolish・グループ内公平化(fair)専用の研磨パス] ユーザー指示「c42/c42s以外にも
      * 『動かせるか』専用オペレータの欠如が無いか棚卸しする」で発見（棚卸し結果はユーザー承認済み）。
      * fair は群×担当ONシフトごとにメンバー回数の round(平均)からのL1偏差和で、apt(3.223.0)と
      * ほぼ同型の違反構造。しかし当時の平準化パス（同日2者スワップ＋**分散**指標での山登り）はチェーン救済が

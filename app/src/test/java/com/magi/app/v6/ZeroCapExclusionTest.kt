@@ -81,7 +81,8 @@ class ZeroCapExclusionTest {
         val res = V6FinalPort.handleOptimize(s, secondsRaw = 2, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
         assertEquals(0, countA(res.schedule, 0))
         assertEquals(0, res.report.hard)
-        assertTrue("入口で外した件数をログに出す", res.logs.any { it.tag == "CapZero" && it.message.contains("4 件") })
+        assertTrue("入口で外した件数をログに出す", res.logs.any { it.tag == "CapZero" && it.message.contains("4件") })
+        assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
         assertFalse("外した入力を基準にするので番兵は発火しない", res.logs.any { it.tag == "Sentinel" })
     }
 
@@ -118,5 +119,18 @@ class ZeroCapExclusionTest {
             softPolish = false, restarts = 0, seed = 7L, postPolish = false))
         assertEquals(1, r.schedule[0][1])
         assertEquals(1, countA(r.schedule, 0))
+    }
+
+    /** 上限0のセルだけが被覆を担っていた盤面: 入口で外すと必須が増え、ログと結果に前後の件数が出る。 */
+    @Test
+    fun capZeroNoticeReportsHardRiseWhenCappedCellsCarriedCoverage() = runBlocking {
+        val s = state(extraRange = mapOf("1,1" to Range("0", "0"), "2,1" to Range("0", "0")))
+        val res = V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
+        assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
+        assertTrue(res.logs.any { it.tag == "CapZero" && it.message ==
+            "入口: 個人上限0のセル4件を外しました（必須 0→4）。最適化は上限0の勤務を置かないため、この設定では入力の必須0件には戻れません" })
+        assertEquals("今の勤務表には個人の上限0のシフトが4件入っています。最適化は上限0の勤務を置かないため、この設定では必須0件まで戻れません（上限を見直すか、そのまま使ってください）",
+            res.capZero?.keptNote())
+        assertEquals(null, V6FinalPort.CapZeroNotice(4, 0, 0).keptNote())
     }
 }

@@ -318,21 +318,6 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         // [3.528.0/ユーザー指示] AB評価で既定ONへ確定した機構（blockSwapC3nFilter・lnsAdaptive）は
         //   opt-outスイッチ自体は残すがUIには出さない。UIに出すのは既定OFFのまま据え置いたトグルのみ。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("禁止の並びの崩し範囲")
-                Text(
-                    if (ui.wideC3nBreak)
-                        "⚠ 禁止の並びを崩すとき、並び全体（前後2日以上）まで動かします。3つ以上つながる並びの先頭にも手が届きますが、" +
-                            "できあがる勤務表が良くなるとは限りません（データによっては悪くなります）。"
-                    else
-                        "禁止の並びを崩すとき、前後1日だけを動かします。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (ui.wideC3nBreak) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = ui.wideC3nBreak, onCheckedChange = { onEvent(MagiEvent.Settings.SetWideC3nBreak(it)) }, enabled = !ui.running)
-        }
         // [3.409.21] 「行き詰まりからの立て直し方」「PORTFOLIOロール内並列SA」の2トグルは、単体 A/B
         //   （各15ペア・基準は測定前に固定）で中立と確定したため機構ごと削除した（PolishGate 冒頭の記録参照）。
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -344,80 +329,35 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Spacer(Modifier.width(8.dp))
             Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
-        // [3.514.0/3.519.0訂正] 個々の手はisBetterゲートを通るが、探索経路が変わるため最終盤面が
-        // 別の局所解に着地することがあり「結果は絶対に悪化しない」は正確でなかった（iter24計測で
-        // combineExhaustPairsに退行1件を確認して訂正）。combineExhaustPairsは既定OFFで確定
-        // （3.519.0、根拠は docs/algorithm_portfolio.md）。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("職員どうしの交換探索を粘り強く")
-                Text("2人一組の入れ替えを、通常より多くの組合せまで試します。ごくまれに結果が変わることがあり、時間もかかるため既定はOFFです。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.combineExhaustPairs, onCheckedChange = { onEvent(MagiEvent.Settings.SetCombineExhaustPairs(it)) }, enabled = !ui.running)
-        }
-        // [3.535.0/HF77明示数値指示] 公平化/適切回数の研磨で、それ以外のソフト違反がわずかに増える
-        // 手も試せるようにする（keep-bestの原則自体は変えず、上限つきで容認するだけ）。既定OFF。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("公平化/適切回数の研磨をもう一歩広げる")
-                Text("「グループ内の均等化」や「適切な回数」をよくする代わりに、他の細かい違反が少し増えるのを許します" +
-                    "（増える幅は始めの6%までに抑えます）。既定はOFFです。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.aptFairSoftTolerance, onCheckedChange = { onEvent(MagiEvent.Settings.SetAptFairSoftTolerance(it)) }, enabled = !ui.running)
-        }
-        // [3.540.0/測定中] 回数の超過（個人上限・適切回数）を、複数日の同日交換の束で減らす研磨。既定OFF（tools/loop A/B で採否）。
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("回数の超過を数日がかりで減らす")
-                Text("「上限超過」「適切な回数の超過」を、同じ日の入れ替えを何日か組み合わせて減らします。他の違反が増えない場合だけ採用します。既定はOFFです。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.countChainPolish, onCheckedChange = { onEvent(MagiEvent.Settings.SetCountChainPolish(it)) }, enabled = !ui.running)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("期間の制約の一括見直しを速く試す")
-                Text("「期間の制約」を職員の回数と一緒に見直すとき、候補の良し悪しを速い方法で見積もります。" +
-                    "同じ時間で多くの候補を試せるため、平均すると結果がわずかに良くなります（変わらない勤務表もあります）。既定はONです。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.c1DeltaChildEval, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1DeltaChildEval(it)) }, enabled = !ui.running)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("計算では消えない違反だけ残ったら追加の見直しを省く")
-                Text("仕上げのあと、残った違反が「計算では消えない」と分かっているときだけ、最後の追加の見直しを省いて早く終えます。" +
-                    "効果はまだ確かめられておらず、結果が変わらないこともあります。既定はOFFです。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.extraRefineRequirePostHardDrop, onCheckedChange = { onEvent(MagiEvent.Settings.SetExtraRefineRequirePostHardDrop(it)) }, enabled = !ui.running)
-        }
         Column(Modifier.fillMaxWidth()) {
-            Text("希望どうしの衝突で止める")
-            Text("希望どうしがぶつかって消せない違反だけが残ったら、それ以上減らすのをやめます。" +
-                "「仕上げは続ける」は仕上げを通常どおり行い、「仕上げも省く」は仕上げを省いて早く終えます。" +
-                "早く終わる代わりに、細かい違反が少し多く残ることがあります。効果はまだ確かめられていません。既定はOFFです。",
+            Text("探索の強さ")
+            Text("じっくり: 時間いっぱい粘り、細かい違反をもう一歩減らします。結果が良くなるとは限りません。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                com.magi.app.v6.WishFloorMode.values().forEach { mode ->
-                    val label = wishFloorModeLabel(mode)
-                    if (ui.wishFloorMode == mode) {
-                        Button(onClick = { onEvent(MagiEvent.Settings.SetWishFloorMode(mode)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SearchStrength.values().forEach { s ->
+                    val label = searchStrengthLabel(s)
+                    if (ui.searchStrength == s) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetSearchStrength(s)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
                     } else {
-                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetWishFloorMode(mode)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetSearchStrength(s)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
                     }
                 }
             }
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("期間の制約の入れ替えで、できた禁止の並びも直す")
+                Text("試験中。測定では効果は確認できていません（既定はOFF）",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.c1MoveARepair, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1MoveARepair(it)) }, enabled = !ui.running)
+        }
     }
 }
 
-internal fun wishFloorModeLabel(mode: com.magi.app.v6.WishFloorMode): String = when (mode) {
-    com.magi.app.v6.WishFloorMode.OFF -> "OFF"
-    com.magi.app.v6.WishFloorMode.E0A -> "仕上げは続ける"
-    com.magi.app.v6.WishFloorMode.E0B -> "仕上げも省く"
+internal fun searchStrengthLabel(s: SearchStrength): String = when (s) {
+    SearchStrength.NORMAL -> "ふつう"
+    SearchStrength.THOROUGH -> "じっくり"
 }
 
 /** [見やすさ] 計算方式(V6Algorithm)の一般向け日本語ラベル。技術名(AUTO/RSI 等)は操作者に不明なため。 */

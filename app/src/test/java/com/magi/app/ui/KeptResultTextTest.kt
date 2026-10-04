@@ -22,4 +22,9 @@ class KeptResultTextTest {
         assertEquals("合計が多いため", KeptResultText.reason(Score(5, 9.0, 10), Score(5, 9.0, 9)))
         assertEquals("同じ点数のため", KeptResultText.reason(Score(5, 9.0, 9), Score(5, 9.0, 9)))
     }
+
+    @Test fun noteIsAppendedOnlyWhenPresent() {
+        assertEquals("A", KeptResultText.withNote("A", null))
+        assertEquals("A B", KeptResultText.withNote("A", "B"))
+    }
 }

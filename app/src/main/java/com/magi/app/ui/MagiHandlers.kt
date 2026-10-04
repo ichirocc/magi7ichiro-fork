@@ -144,14 +144,9 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetNativeAccel -> vm.setNativeAccel(e.on)
             is MagiEvent.Settings.SetNativeParity -> vm.setNativeParity(e.on)
             is MagiEvent.Settings.SetBlockSwapC3nFilter -> vm.setBlockSwapC3nFilter(e.on)
-            is MagiEvent.Settings.SetWideC3nBreak -> vm.setWideC3nBreak(e.on)
-            is MagiEvent.Settings.SetCombineExhaustPairs -> vm.setCombineExhaustPairs(e.on)
+            is MagiEvent.Settings.SetSearchStrength -> vm.setSearchStrength(e.strength)
+            is MagiEvent.Settings.SetC1MoveARepair -> vm.setC1MoveARepair(e.on)
             is MagiEvent.Settings.SetLnsAdaptive -> vm.setLnsAdaptive(e.on)
-            is MagiEvent.Settings.SetCountChainPolish -> vm.setCountChainPolish(e.on)
-            is MagiEvent.Settings.SetAptFairSoftTolerance -> vm.setAptFairSoftTolerance(e.on)
-            is MagiEvent.Settings.SetC1DeltaChildEval -> vm.setC1DeltaChildEval(e.on)
-            is MagiEvent.Settings.SetWishFloorMode -> vm.setWishFloorMode(e.mode)
-            is MagiEvent.Settings.SetExtraRefineRequirePostHardDrop -> vm.setExtraRefineRequirePostHardDrop(e.on)
         }
         true
     },

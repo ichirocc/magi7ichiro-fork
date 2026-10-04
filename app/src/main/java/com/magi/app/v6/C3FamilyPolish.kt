@@ -126,7 +126,7 @@ internal object C3FamilyPolish {
 
 
     /**
-     * [C3nPolish・禁止連続(c3n, HARD重み7000)専用の研磨パス] ユーザー指示「C3nは前後日と当日も他の勤務
+     * [C3nPolish・禁止連続(c3n, HARD)専用の研磨パス] ユーザー指示「C3nは前後日と当日も他の勤務
      * シフトに変更できるようにアルゴリズムを賢く昇華する」（3.303.0・AskUserQuestion で「両方＝範囲拡張＋
      * 当日も可変」を選択）。
      *

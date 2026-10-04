@@ -1,5 +1,13 @@
 # 作業記録の索引（見出し一覧）
 
+- 最終番兵で個人上限0（希望でない）の勤務を含む段を外す（2026-10-04、ユーザー承認、通常は出力不変）: `excludeCapZeroStages`＋W ログ、RestZeroWindowLns を mayPlace へ、「手で置いた」文言を中立化。  → `docs/history/3.4xx.md`
+- 入口で個人上限0のセルを外して必須が増えたことを知らせる（2026-10-04、表示・ログのみ、ユーザー承認、出力不変）: CapZero ログに必須 a→b、再実行の「前回を維持」に戻れない理由を1文。  → `docs/history/3.4xx.md`
+- 設定の探索スイッチ群を「探索の強さ」2 択に統合（2026-10-04、3.615.0、ユーザー決定、ふつう＝出力不変）: じっくり＝combineExhaustPairs/wideC3nBreakDays/countChainPolish/aptFairSoftTolerance を ON。案 A 常時 ON、E0・extraRefine は常時 OFF。  → `docs/history/3.4xx.md`
+- C1 研磨・手A の禁止連続修復 `PolishGate.c1MoveARepair`（2026-10-04、既定 OFF・否決相当）: 修復で HARD 中立になる手A候補は 238/385 あるが採用 0（weighted で負ける）。A/B 24 対 ON 7 勝 14 敗 3 分 p=0.19・ΔW% +0.09・試行 1956/採用 4。3.616.0 でユーザー決定により設定に単独スイッチ（既定 OFF）、C# 同期。  → `docs/history/3.4xx.md`
+- 重み値を書いたコメントの陳腐化を一掃（2026-10-04、コメントのみ、出力不変）: 3.522.0 以前の重み（pref 9000>c3n 7000 等）を前提にした説明を数値なし表現へ。ForbiddenDiag の PINNED は HARD 件数で判定＝現重みでは weighted 上は破る手が得になりうるが、希望セルは wishLocked で探索が動かさない。文言に「この希望を1件調整すると、全体の点数は良くなります」を添える（表示のみ）。  → `docs/history/3.4xx.md`
+- 最終番兵で個人上限0（希望でない）の勤務を含む段を外す（2026-10-04、ユーザー承認、通常は出力不変）: `excludeCapZeroStages`＋W ログ、RestZeroWindowLns を mayPlace へ、「手で置いた」文言を中立化。  → `docs/history/3.4xx.md`
+- 入口で個人上限0のセルを外して必須が増えたことを知らせる（2026-10-04、表示・ログのみ、ユーザー承認、出力不変）: CapZero ログに必須 a→b、再実行の「前回を維持」に戻れない理由を1文。  → `docs/history/3.4xx.md`
+- 設定の探索スイッチ群を「探索の強さ」2 択に統合（2026-10-04、3.615.0、ユーザー決定、ふつう＝出力不変）: じっくり＝combineExhaustPairs/wideC3nBreakDays/countChainPolish/aptFairSoftTolerance を ON。案 A 常時 ON、E0・extraRefine は常時 OFF。  → `docs/history/3.4xx.md`
 - apt/fair 研磨の他ソフト許容がチェーン内 keep-best で巻き戻される（2026-10-04、修正、許容 ON のときだけ挙動変化）: 畳み込みも `toleratedBetter` で判定。  → `docs/history/3.4xx.md`
 - 改善を通知する経路で liveBest を publish（2026-10-04、採用、採否・盤面不変）: 適応 portfolio の入口改善/グローバル最良更新・仮説多並列/ALNS 多チェーンの採用盤面。追加コストは改善時のみ数十回。  → `docs/history/3.4xx.md`
 - 希望衝突の床に届いても E0 が発火しない不具合（2026-10-04、修正、E0 ON のときだけ挙動変化）: liveBest が best 報告より遅れる経路で古い盤面の「未到達」を保存していた。古い盤面では保存しない・探索終了時は結果の盤面で判定。  → `docs/history/3.4xx.md`

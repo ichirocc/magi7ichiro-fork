@@ -73,7 +73,7 @@ object ShiftAppearance {
         "groupViol", "covU", "pref", "c3n", "c3w" -> "CRITICAL"                            // HARD
         "low", "c3mn" -> "HIGH"                                                            // 重い soft(90/30)
         // [2026-09-10] high は HF77 明示指示で 45→25 に変更され c1/c3mn(30) を下回ったため、WARN 側へ降格。
-        "c1", "high", "c3", "c3m", "c2", "c41", "c42", "c41s", "c42s", "apt", "covO" -> "WARN"     // c1=30 は最多件数で飽和回避(3.367.0)・他は1〜3/過剰配置。下流(V6RemainingScreens)はHIGH/WARNを同一表示に畳む
+        "c1", "high", "c3", "c3m", "c2", "c41", "c42", "c41s", "c42s", "apt", "covO" -> "WARN"     // c1 は最多件数で飽和回避(3.367.0)・他は軽い SOFT 族/過剰配置。下流(V6RemainingScreens)はHIGH/WARNを同一表示に畳む
         "fair", "weekly" -> "INFO"                                                         // 整え(常時非ゼロ)
         else -> "INFO"
     }

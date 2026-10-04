@@ -79,6 +79,32 @@ class SessionRegressionTest {
         assertEquals("後処理", best.label)
     }
 
+    // ---- 最終番兵: 個人上限0（希望でない）のセルを含む段は外す。希望で固定した上限0のセルは外さない ----
+
+    private fun capZeroState() = aptState(restCapped = false).copy(
+        staffRange = mapOf("0,1" to Range("", "0")),   // B4 上限0
+        wishes = mapOf("0,3" to 1),                      // 4日目は B4 の希望
+    )
+
+    @Test fun excludeCapZeroStages_dropsNonWishUpperZeroCellAndLogsIt() {
+        val st = capZeroState(); val p = cachedProblem(st)
+        val input = V6FinalPort.StageCandidate("入力", Array(1) { IntArray(31) { 0 }.also { it[3] = 1 } }, rep(0, 0, 0.0))
+        val bad = V6FinalPort.StageCandidate("後処理", Array(1) { IntArray(31) { 0 }.also { it[3] = 1; it[5] = 1 } }, rep(0, 0, 0.0))
+        val kept = V6FinalPort.excludeCapZeroStages(p, listOf(input, bad))
+        assertEquals(listOf("入力"), kept.map { it.label })
+        val logs = V6FinalPort.capZeroLogs(st, p, listOf(input, bad))
+        assertEquals(1, logs.size)
+        assertTrue(logs[0].message, logs[0].message.contains("後処理") && logs[0].message.contains("美幸/6日目/B4"))
+    }
+
+    @Test fun excludeCapZeroStages_keepsUpperZeroCellLockedByWish() {
+        val st = capZeroState(); val p = cachedProblem(st)
+        val input = V6FinalPort.StageCandidate("入力", Array(1) { IntArray(31) { 0 } }, rep(0, 0, 0.0))
+        val ok = V6FinalPort.StageCandidate("後処理", Array(1) { IntArray(31) { 0 }.also { it[3] = 1 } }, rep(0, 0, 0.0))
+        assertEquals(listOf("入力", "後処理"), V6FinalPort.excludeCapZeroStages(p, listOf(input, ok)).map { it.label })
+        assertTrue(V6FinalPort.capZeroLogs(st, p, listOf(input, ok)).isEmpty())
+    }
+
     // ---- [UX調査] Sentinel発火時、post.report.logsは棄却盤面の観測＝行単位で明示する（ログは落とさない） ----
 
     @Test fun annotateStaleLogsIfRegressed_marksEachLineOnlyWhenRegressed() {

@@ -200,7 +200,7 @@ class Evaluator(private val p: Problem) {
             hard1 += raw; record("c3w", raw)
         }
 
-        // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low=90/high=25)・
+        // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low/high)・
         // 同じガード(lo!=0, low は canDo 必須)。旧実装は hard2(=表示HARD) として +1 計上していた。
         val ssn = Array(S) { IntArray(K) }
         // [レビュー#7 3.213.0] normalizeSchedule は不正セルを -1 に写像する（MirrorCore:476）。

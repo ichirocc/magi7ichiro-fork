@@ -87,17 +87,10 @@ data class UiState(
     val nativeAccel: Boolean = true,           // [Stage4] C++ネイティブ加速（SAチャンク）のユーザートグル
     val nativeParity: Boolean = true,          // [照合トグル] Kotlinパリティ照合。OFF=純ネイティブ(検証/ベンチ用・誤結果の可能性)
     val blockSwapC3nFilter: Boolean = true,     // [3.298.0/3.518.0] ブロック巡回交換で c3n が増える候補を候補生成段階で捨てるか。採用結果は不変・評価枠の節約のみ＝既定ON
-    val wideC3nBreak: Boolean = false,          // [3.304.0] 禁止連続を崩す日を j±1 から違反パターン全域へ広げるか。既定OFF（実データで利得が一貫しない）
     // [3.409.21] adaptiveEscape / portfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去）
-    val combineExhaustPairs: Boolean = false,   // [3.514.0] 職員2人の交換探索を打ち切らず粘り強く試すか。既定OFFで確定（3.519.0、iter24＝170ペアで
-                                                 // 必須退行1件・速度-5.6%平均のため不合格。候補ごとのisBetterゲートは個々の手を悪化させないが、
-                                                 // 探索経路が変わることで最終盤面が別の局所解に着地し得る＝旧「退化なし」の記述は誤りだったため訂正）
     val lnsAdaptive: Boolean = true,            // [3.514.0/3.518.0] 個人回数・期間の一括見直しの時間配分を自動調整するか。既定ON（iter9: 品質±0・速度は実データ-23%〜-32%）
-    val countChainPolish: Boolean = false,  // [3.540.0/測定中] 回数連鎖研磨(CountChainPolish)を後処理に入れるか。既定OFF（tools/loop A/B で採否）
-    val aptFairSoftTolerance: Boolean = false,  // [3.535.0/HF77明示数値指示] 公平化(fair)/適切回数(apt)研磨で、対象家族以外のSOFT悪化を研磨開始時点比+6%まで容認するか。既定OFF
-    val c1DeltaChildEval: Boolean = true,       // C1JointLnsPolish.deltaChildEvalDefault の写し。既定ON
-    val wishFloorMode: com.magi.app.v6.WishFloorMode = com.magi.app.v6.WishFloorMode.OFF,  // [E0/測定中] PolishGate.wishConflictFloorMode の写し。既定OFF
-    val extraRefineRequirePostHardDrop: Boolean = false,  // [測定中/backlog#35] handleOptimize へ渡す。既定OFF
+    val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
+    val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),
@@ -203,3 +196,16 @@ data class WishCancelOutcome(
     val name: String, val day: Int, val symbol: String,
     val h0: Int, val pCancel: Int, val g: Int, val line: String,
 )
+
+/** 設定画面「探索の強さ」。THOROUGH は測定中の4フラグを ON、NORMAL は既定値へ戻す（出力は従来どおり）。 */
+enum class SearchStrength {
+    NORMAL, THOROUGH;
+
+    fun apply() {
+        val on = this == THOROUGH
+        com.magi.app.v6.PolishGate.combineExhaustPairs = on
+        com.magi.app.v6.PolishGate.wideC3nBreakDays = on
+        com.magi.app.v6.PolishGate.countChainPolish = on
+        com.magi.app.v6.PolishGate.aptFairSoftTolerance = on
+    }
+}
