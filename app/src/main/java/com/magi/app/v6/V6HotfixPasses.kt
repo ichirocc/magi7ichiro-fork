@@ -91,6 +91,22 @@ data class V6PostOptimizationResult(
     val observedPinBlockedAttempts: Int = 0,
     /** [3.326.0] どのピン(職員,シフト)が何回止めたか。緩和対象の提示に使う。 */
     val pinBlocks: PinBlockAttribution? = null,
+    /** 後処理チェーンの段ごとの記録（採用数・所要・段の後の評価）。集計用で、盤面・採否には関わらない。 */
+    val stageRecords: List<PostStageRecord> = emptyList(),
+)
+
+/**
+ * 後処理チェーン 1 段の記録。[applied] は採用数（パスが数えないときは -1）。[hard]/[weightedScore]/[total] はパス自身が返した評価（無ければ null＝
+ * 記録のために追加の check はしない）。[rolledBack] はチェーン内 keep-best で巻き戻された段。
+ */
+data class PostStageRecord(
+    val key: String,
+    val applied: Int,
+    val ms: Long,
+    val hard: Int?,
+    val weightedScore: Double?,
+    val total: Int?,
+    val rolledBack: Boolean,
 )
 
 /**
@@ -488,6 +504,9 @@ object V6HotfixPasses {
             private set
         val logs = ArrayList<MirrorLog>()
         val passMs = LinkedHashMap<String, Long>()
+        val stageRecords = ArrayList<PostStageRecord>()
+        private var lastKey = ""
+        private var lastMs = 0L
         val pinBlocksAll = PinBlockAttribution()
         /** [Iteration 2] 巡の中で各パスが残した拒否候補。巡の末尾で違反連結成分修復へ渡して空にする。 */
         val rejectedPool = ArrayList<CombinatorialRepair.Candidate>()
@@ -502,7 +521,9 @@ object V6HotfixPasses {
             onPhase(phase)
             val t = EngineClock.nowMs()
             val r = block(work)
-            passMs.merge(key, EngineClock.nowMs() - t) { a, b -> a + b }
+            lastKey = key
+            lastMs = EngineClock.nowMs() - t
+            passMs.merge(key, lastMs) { a, b -> a + b }
             return r
         }
 
@@ -535,6 +556,7 @@ object V6HotfixPasses {
             work = r.newSchedule.copy2D()
             val folded = runningKeepBestFold(r.report, r.logs)
             if (keepLogs) logs.addAll(folded)
+            record(r.applied, r.report)
             if (rollbackCountsZero && lastFoldRolledBack) return 0
             return r.applied
         }
@@ -543,11 +565,19 @@ object V6HotfixPasses {
             r.pinBlocks?.let { pinBlocksAll.merge(it) }
             work = r.newSchedule.copy2D()
             logs.addAll(runningKeepBestFold(r.report, r.logs))
+            record(r.appliedDays, r.report)
         }
 
-        fun replaceBoard(newSchedule: Array<IntArray>, passLogs: List<MirrorLog>, report: ViolationReport? = null) {
+        private fun record(applied: Int, rep: ViolationReport?) {
+            stageRecords += PostStageRecord(lastKey, applied, lastMs, rep?.hard, rep?.weightedScore, rep?.total, lastFoldRolledBack)
+            lastKey = ""
+            lastMs = 0L
+        }
+
+        fun replaceBoard(newSchedule: Array<IntArray>, passLogs: List<MirrorLog>, report: ViolationReport? = null, applied: Int = -1) {
             work = newSchedule.copy2D()
             logs.addAll(runningKeepBestFold(report, passLogs))
+            record(applied, report)
         }
 
         companion object {
@@ -590,7 +620,7 @@ object V6HotfixPasses {
             val cap = (EngineClock.remainingMs(deadlineMs, t67) / 2).coerceAtMost(params.hf67CapMs)
             HfSwapPolish.applyHF67InterStaffSwap(state, work, maxSwaps = params.hf67MaxSwaps, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t67 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
-        chain.replaceBoard(r67.newSchedule, r67.logs, r67.report)
+        chain.replaceBoard(r67.newSchedule, r67.logs, r67.report, r67.swapsApplied)
 
         val t66 = EngineClock.nowMs()
         val r66 = chain.timed("後処理 HF66 職員内再配分", "HF66IntraStaffRedistribution") { work ->
@@ -598,7 +628,7 @@ object V6HotfixPasses {
             val cap = (EngineClock.remainingMs(deadlineMs, t66) / 2).coerceAtMost(params.hf66CapMs)
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
-        chain.replaceBoard(r66.newSchedule, r66.logs, r66.report)
+        chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
         val t66Done = EngineClock.nowMs()
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
@@ -733,7 +763,7 @@ object V6HotfixPasses {
         allLogs.addAll(report.logs)
         return V6PostOptimizationResult(
             work, report.copy(logs = allLogs), r80, r67, r66, r70, chain.logs, plateauOut,
-            chain.pinBlocksAll.attempts, chain.pinBlocksAll,
+            chain.pinBlocksAll.attempts, chain.pinBlocksAll, chain.stageRecords.toList(),
         )
     }
 
