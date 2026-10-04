@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 設定の探索スイッチ群を「探索の強さ」2 択に統合（2026-10-04、3.615.0、ユーザー決定、ふつう＝出力不変）: じっくり＝combineExhaustPairs/wideC3nBreakDays/countChainPolish/aptFairSoftTolerance を ON。案 A 常時 ON、E0・extraRefine は常時 OFF。  → `docs/history/3.4xx.md`
 - apt/fair 研磨の他ソフト許容がチェーン内 keep-best で巻き戻される（2026-10-04、修正、許容 ON のときだけ挙動変化）: 畳み込みも `toleratedBetter` で判定。  → `docs/history/3.4xx.md`
 - 改善を通知する経路で liveBest を publish（2026-10-04、採用、採否・盤面不変）: 適応 portfolio の入口改善/グローバル最良更新・仮説多並列/ALNS 多チェーンの採用盤面。追加コストは改善時のみ数十回。  → `docs/history/3.4xx.md`
 - 希望衝突の床に届いても E0 が発火しない不具合（2026-10-04、修正、E0 ON のときだけ挙動変化）: liveBest が best 報告より遅れる経路で古い盤面の「未到達」を保存していた。古い盤面では保存しない・探索終了時は結果の盤面で判定。  → `docs/history/3.4xx.md`

@@ -1236,30 +1236,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 禁止連続の事前フィルタ → ${if (on) "ON" else "OFF"}")
     }
 
-    /**
-     * [3.304.0] 禁止連続を崩しに行く日を j±1 から「違反パターンがまたぐ全日」へ広げる。
-     * 3連（`Dﾃ→休→A4`）の先頭に届くようになる一般化だが、実データ3件で利得が一貫しなかったため既定 OFF
-     * （詳細は `PolishGate.wideC3nBreakDays` の docstring）。検証用に切り替えられるようにしてある。
-     */
-    fun setWideC3nBreak(on: Boolean) {
-        com.magi.app.v6.PolishGate.wideC3nBreakDays = on
-        _ui.update { it.copy(wideC3nBreak = on) }
-        logOp("I", "設定変更: 禁止連続の崩し範囲 → ${if (on) "パターン全域" else "前後1日"}")
+    fun setSearchStrength(strength: SearchStrength) {
+        strength.apply()
+        _ui.update { it.copy(searchStrength = strength) }
+        logOp("I", "設定変更: 探索の強さ → ${searchStrengthLabel(strength)}")
     }
 
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
-
-    /**
-     * [3.514.0] 職員2人の同日シフト交換探索を、既定の連続不採用200回で打ち切らず、
-     * 2人組の全組合せぶん（`CombinatorialRepair.combineAndApply`のexhaustPairs、上限5000通り）まで試す。
-     * isBetterゲートは不変のため退化はしない＝安全。効果は未計測（`tools/loop`で別途測定中、既定OFF）。
-     */
-    fun setCombineExhaustPairs(on: Boolean) {
-        com.magi.app.v6.PolishGate.combineExhaustPairs = on
-        _ui.update { it.copy(combineExhaustPairs = on) }
-        logOp("I", "設定変更: 結合探索を粘り強く → ${if (on) "ON" else "OFF"}")
-    }
 
     /**
      * [3.514.0] 個人回数・期間の一括見直し（共同LNS）を「短時間試行→改善時だけ拡張」にする。
@@ -1269,39 +1253,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         com.magi.app.v6.PolishGate.lnsAdaptive = on
         _ui.update { it.copy(lnsAdaptive = on) }
         logOp("I", "設定変更: 一括見直しの自動調整 → ${if (on) "ON" else "OFF"}")
-    }
-
-    /**
-     * [3.535.0/HF77明示数値指示] 公平化(fair)/適切回数(apt)研磨で、対象家族以外のSOFT違反の悪化を
-     * 研磨開始時点の合計比+6%まで容認する（累積予算、`AptFairPolish.toleratedBetter`）。HARDの不増加・
-     * keep-bestの根幹（`betterReport`）は不変。既定OFF（採否はtools/loopのA/Bで別途測定）。
-     */
-    fun setCountChainPolish(on: Boolean) {
-        com.magi.app.v6.PolishGate.countChainPolish = on
-        _ui.update { it.copy(countChainPolish = on) }
-    }
-
-    fun setAptFairSoftTolerance(on: Boolean) {
-        com.magi.app.v6.PolishGate.aptFairSoftTolerance = on
-        _ui.update { it.copy(aptFairSoftTolerance = on) }
-        logOp("I", "設定変更: 公平化/適切回数研磨の他ソフト許容(6%) → ${if (on) "ON" else "OFF"}")
-    }
-
-    fun setC1DeltaChildEval(on: Boolean) {
-        com.magi.app.v6.C1JointLnsPolish.deltaChildEvalDefault = on
-        _ui.update { it.copy(c1DeltaChildEval = on) }
-        logOp("I", "設定変更: 期間の制約の一括見直しを差分で評価 → ${if (on) "ON" else "OFF"}")
-    }
-
-    fun setWishFloorMode(mode: com.magi.app.v6.WishFloorMode) {
-        com.magi.app.v6.PolishGate.wishConflictFloorMode = mode
-        _ui.update { it.copy(wishFloorMode = mode) }
-        logOp("I", "設定変更: 希望どうしの衝突で止める → $mode")
-    }
-
-    fun setExtraRefineRequirePostHardDrop(on: Boolean) {
-        _ui.update { it.copy(extraRefineRequirePostHardDrop = on) }
-        logOp("I", "設定変更: 計算では消えない違反だけなら追加の見直しを省く → ${if (on) "ON" else "OFF"}")
     }
 
     fun setBudget(sec: Int) { val v = sec.coerceIn(10, MAX_BUDGET_SEC); _ui.update { it.copy(budgetSec = v) }; logOp("I", "設定変更: 予算 → ${v}秒") }
@@ -1599,7 +1550,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     softPolish = _ui.value.softPolish,
                     requestedAlgorithm = _ui.value.v6Algorithm,
                     allowImpossible = true,
-                    extraRefineRequirePostHardDrop = _ui.value.extraRefineRequirePostHardDrop,
                     wishFloorMode = com.magi.app.v6.PolishGate.wishConflictFloorMode,
                 ) { phase, report, _, _ ->
                     val rep = report
