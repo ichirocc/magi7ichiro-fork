@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- T5/T4 測定（2026-10-04、測定のみ）: handleOptimize 48 回で実時間/予算の最大 1.00＝超過なし（「181 倍」は再現せず）。案 A ON/OFF 24 対は 11-10-3・HARD 増 0。  → `docs/history/3.4xx.md`
 - 外部レビュー 4 件の照合と出力不変の防御 3 件（2026-10-04、採用、出力同一）: `DeltaEvaluator.reset` の検証先行・C1 LNS の patience 丸め・ログの目標率表示。C42FlowPolish の z 集計ずれは既定 OFF・探索動学に触れるため未着手。  → `docs/history/3.4xx.md`
 - 最適化後に残る HARD の分類（2026-10-03、調査のみ・製品コード不変）: 実データ 6 件×60/120s×3 seed と合成 42 件の計 140 本で、HARD が残る 23 盤面すべて最終 HARD＝CP-SAT の厳密最小（seed・予算で HARD 不変、FixSuggester/VCR の改善手 0）＝探索の取り逃しは 0。既存の床（forcedCovU・日の証明 1 日 1 件・希望衝突）は緩く、日の供給不足（1 日複数・シフト跨ぎ）・上限0（oct 5 件）・被覆と禁止連の取り合い（日またぎ）を数えない。改善案＝日の証明を最小不足量へ（頭打ちに使うなら A/B）。  → `docs/history/3.4xx.md`
 - 案 A を既定 ON（3.614.0、ユーザー決定の事前基準を満たした）: PREREG2 の 78 盤面で ON 38/負 24/分 16・p=0.049・ΔW% −0.23 [−0.45, −0.01]・HARD 増 0。`C1JointLnsPolish.deltaChildEvalDefault`＝true・設定の既定と説明文も ON に。余裕は小さく単独で有意な部分集合はない。C# 同日同期。  → `docs/history/3.4xx.md`
