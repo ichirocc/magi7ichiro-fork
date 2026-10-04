@@ -9,5 +9,5 @@ if [ ! -d $W/main/com ]; then
   ( cd $R && MAGI_HOST_OUT=$W/hb bash tools/host/hosttest.sh >/dev/null 2>&1 || true ); cp -r $W/hb/main $W/main
 fi
 KC=$(ls $L/*.jar | tr '\n' ':'); CP="$L/kotlin-stdlib-2.3.21.jar:$L/kotlinx-coroutines-core-jvm-1.8.1.jar:$L/json-20240303.jar"
-[ -f $W/probe/probe/T5ProbeKt.class ] || LANG=C.utf8 java -Xmx3g -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -nowarn -no-stdlib -no-reflect -jvm-target 17 -cp "$CP:$W/main" -Xfriend-paths=$W/main -d $W/probe $D/Probe.kt
-cd $R && exec nice -n 19 env LANG=C.utf8 java -Xmx3g -cp "$CP:$W/main:$W/probe" probe.T5ProbeKt app/src/test/resources $W/out.csv $W/passlogs.tsv "$@"
+[ -f $W/probe/probe/ProbeKt.class ] || LANG=C.utf8 java -Xmx3g -cp "$KC" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -nowarn -no-stdlib -no-reflect -jvm-target 17 -cp "$CP:$W/main" -Xfriend-paths=$W/main -d $W/probe $D/Probe.kt
+cd $R && exec nice -n 19 env LANG=C.utf8 java -Xmx3g -cp "$CP:$W/main:$W/probe" probe.ProbeKt app/src/test/resources $W/out.csv $W/passlogs.tsv "$@"
