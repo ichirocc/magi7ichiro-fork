@@ -2059,7 +2059,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
     internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second
 
-    /** 確定「上限を緩め、手順を当てる（元に戻せます）」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
+    /** 確定「上限を緩め、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
     internal fun relaxAndApply(token: RelaxToken) {
         val st = state ?: return
         val b = currentSchedule ?: return

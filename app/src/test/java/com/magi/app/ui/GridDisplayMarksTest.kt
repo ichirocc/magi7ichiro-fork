@@ -67,7 +67,7 @@ class GridDisplayMarksTest {
     @Test fun c1SheetTextNamesThePeriodAndCountsHeldDays() {
         val p = cachedProblem(st); val s = st.schedule.toIntArray2D()
         val text = cellDetailLines(st, p, s, 0, 2, listOf("c1")).single()
-        assertEquals("要調整・期間の約束: 7日のなかに「休」が2日必要です。いま足りない期間（10/3〜10/12）があり、印の日をうまく選べば、いちばん少なくて2日を休にするとこの約束の日数に届きます（ほかの約束への影響は見ていません）。（この日の休はすでに数に入っています）", text)
+        assertEquals("要調整・期間の制約: 7日のなかに「休」が2日必要です。いま足りない期間（10/3〜10/12）があり、印の日をうまく選べば、いちばん少なくて2日を休にするとこの制約の日数に届きます（ほかの制約への影響は見ていません）。（この日の休はすでに数に入っています）", text)
         assertTrue("（この日の" !in cellDetailLines(st, p, s, 0, 3, listOf("c1")).single())
         assertTrue("vio-c1" in sheetCellClasses(displayCellClasses(ui, VioKey.cell(0, 2), vs.c1Marks), true))
     }
