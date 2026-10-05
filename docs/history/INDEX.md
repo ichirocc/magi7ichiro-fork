@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- DreamSearchEngine／ReplayWorld は採らない（2026-10-05、机上評価・未測定、ユーザー「推奨で」）: 採否が betterReport のみの山登り・候補ごとに全体 checker・既存の destroy/repair 3 手の巡回・反復ごとに trace 全体を複製＝現行 V6NativeOptimizer＋後処理の劣化版。Replay は観測済みの最良と手別成績の表で keep-best と重複。取り入れる価値は探索内トレース（手・変更セル・前後評価・棄却理由）の考え方だけ。  → `docs/history/3.4xx.md`
 - 統合仕様書 v2 の良い部分を `docs/invariants.md` へ（2026-10-05、文書のみ、ユーザー指示「メリットをマージする」）: INV-01〜12↔T の対応・責務分離・既知差分。S6 確定・C2Polish 撤去済み・Dream 等の食い違いは取り込まず明記。  → `docs/history/3.4xx.md`
 - S5 の改善なしの行から「証明」を外す（2026-10-05、3.620.1、机上テストで発見、表示のみ・C# 同期）。  → `docs/history/3.4xx.md`
 - 個人の上限0は緩めない＝S6 を画面から外す（2026-10-05、3.620.0、ユーザー決定「画面から外すだけ」、C# 同期）: `RELAX_TRIAL_ENABLED=false`、緩和を誘う文言を設定での見直しへ。コードは残す。  → `docs/history/3.4xx.md`
