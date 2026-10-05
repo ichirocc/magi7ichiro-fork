@@ -261,6 +261,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
 
 /** [3.188.0 オプション集約] 技術系チューニング（並列ワーカー・ネイティブ加速・Kotlin照合・仕上げ最適化）。
  *  `SettingsCard` から「詳細設定（上級者向け）」へ移動した項目。一般の運用では既定値のままで問題ない。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -347,31 +348,36 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
                 Text("期間の制約の入れ替えで、できた禁止の並びも直す")
-                Text("試験中。測定では効果は確認できていません（既定はOFF）",
+                Text(EJECTION_CHAIN_NOTE,
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.c1MoveARepair, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1MoveARepair(it)) }, enabled = !ui.running)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("月全体で、期間の制約を起点に玉突きで直す")
-                Text(EJECTION_CHAIN_NOTE,
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.fillMaxWidth()) {
+            Text("玉突きで直す（月全体）")
+            Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // 3 つ目の語が長く、幅 390dp では 1 行に収まらないので折り返す。
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                EjectionChainMode.values().forEach { m ->
+                    val label = ejectionChainLabel(m)
+                    if (ui.ejectionChain == m) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetEjectionChain(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetEjectionChain(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    }
+                }
             }
-            Switch(checked = ui.c1EjectionChain, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1EjectionChain(it)) }, enabled = !ui.running)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("月全体で、すべての違反を起点に玉突きで直す")
-                Text("$EJECTION_CHAIN_NOTE。上と両方ONならこちらだけ動きます",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.allFamilyEjectionChain, onCheckedChange = { onEvent(MagiEvent.Settings.SetAllFamilyEjectionChain(it)) }, enabled = !ui.running)
         }
     }
 }
 
 internal const val EJECTION_CHAIN_NOTE = "試験中。測定では効果は確認できていません（既定はOFF）"
+
+internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
+    EjectionChainMode.OFF -> "しない"
+    EjectionChainMode.C1 -> "期間の制約から"
+    EjectionChainMode.ALL -> "すべての違反から"
+}
 
 internal fun searchStrengthLabel(s: SearchStrength): String = when (s) {
     SearchStrength.NORMAL -> "ふつう"

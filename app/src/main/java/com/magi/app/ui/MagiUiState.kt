@@ -91,8 +91,7 @@ data class UiState(
     val lnsAdaptive: Boolean = true,            // [3.514.0/3.518.0] 個人回数・期間の一括見直しの時間配分を自動調整するか。既定ON（iter9: 品質±0・速度は実データ-23%〜-32%）
     val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
     val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
-    val c1EjectionChain: Boolean = false,  // PolishGate.c1EjectionChain（試験中・既定OFF）。保存しない
-    val allFamilyEjectionChain: Boolean = false,  // PolishGate.allFamilyEjectionChain（試験中・既定OFF）。保存しない
+    val ejectionChain: EjectionChainMode = EjectionChainMode.OFF,  // 玉突きで直す（試験中・既定OFF）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),
@@ -198,6 +197,16 @@ data class WishCancelOutcome(
     val name: String, val day: Int, val symbol: String,
     val h0: Int, val pCancel: Int, val g: Int, val line: String,
 )
+
+/** 設定画面「玉突きで直す」。PolishGate の 2 フラグへ振り分ける（同じ段で重複実行しないので 3 択）。 */
+enum class EjectionChainMode {
+    OFF, C1, ALL;
+
+    fun apply() {
+        com.magi.app.v6.PolishGate.c1EjectionChain = this == C1
+        com.magi.app.v6.PolishGate.allFamilyEjectionChain = this == ALL
+    }
+}
 
 /** 設定画面「探索の強さ」。THOROUGH は測定中の4フラグを ON、NORMAL は既定値へ戻す（出力は従来どおり）。 */
 enum class SearchStrength {
