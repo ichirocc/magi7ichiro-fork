@@ -431,7 +431,8 @@ internal fun relaxUnavailableText(reason: String): String = "設定を緩める�
 internal fun <C> relaxOutcomeApplies(seq: Long, latestSeq: Long, ctx: C, ctxNow: C?): Boolean = seq == latestSeq && ctx == ctxNow
 
 internal fun relaxHandoffLine(r: RelaxTrial.Result, ui: UiState): String =
-    "設定を緩めると、この${relaxTarget(r, ui).what}を解消できる見込みです（上限 ${r.relaxes.size}件）"
+    "設定を緩めると、この${relaxTarget(r, ui).what}を解消できる見込みです（上限 ${r.relaxes.size}件）" +
+        if (r.rr > 0) "。他の必須違反 ${r.rr}件 は残ります" else ""
 
 /** 通知の「元に戻す」は、その操作が今も元に戻すの先頭にあるときだけ効く（後の別の操作を戻さない）。 */
 internal fun noticeUndoApplies(topSerial: Long?, noticeSerial: Long): Boolean = topSerial != null && topSerial == noticeSerial

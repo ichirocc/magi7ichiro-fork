@@ -1711,7 +1711,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     state = st0.withSchedule(res.schedule)
                     val adoptedMsg = if (s5 == null) "勤務表ができました: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)"
                     else "希望（${s5.label}）を取り消して、もう一度つくりました: 必須違反 ${s5.h0} → ${res.report.hard}（試算の見込み ${s5.pCancel}）" +
-                        (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。もう一度つくるか、元に戻す（希望と勤務表をまとめて戻す）を選べます。" else "")
+                        (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。もう一度つくるか、元に戻す（希望と勤務表をまとめて戻す）を選べます。"
+                        else if (res.report.hard > 0) "。残りの必須違反 ${res.report.hard}件 は、次にやることカードから直します。" else "")
                     // [design-review] 旧「最適化（${res.phase}）完了: …」は res.phase="optimize:PORTFOLIO" 等の
                     //   生の内部識別子（label.tech）をそのまま画面へ出していた（operator_ux.md §2「英字符号を
                     //   画面に一切出さない」・3.400.0 が背景進捗の同型漏れを既に除去した先例の取りこぼし）。
