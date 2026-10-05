@@ -54,7 +54,7 @@ class AnalysisTriageTest {
         assertFalse(t.computed)
         assertTrue("実行前に壁と決めつけない", t.blockers.isEmpty())
         assertEquals(setOf("期間の制約", "守るとよい並び", "曜日の偏り"), t.searching.map { it.label }.toSet())
-        assertTrue("断定しない注記が出る", t.searchNote.contains("最適化後も残る場合があります"))
+        assertTrue("断定しない注記が出る", t.searchNote.contains("つくったあとも残る場合があります"))
     }
 
     /** S6（設定を緩めて手順を当てる）の直後は「実行前」でなく、緩めた盤面の概算と言う。 */

@@ -195,7 +195,7 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
     } else if (ui.relaxedBoard) {
         "設定を緩めて手順を当てた盤面の概算です（もう一度つくる前）。"
     } else {
-        "実行前の概算です。期間の制約・禁止の並びなどの構造的な要因により、最適化後も残る場合があります。"
+        "実行前の概算です。期間の制約・禁止の並びなど、設定の組み合わせによっては、つくったあとも残る場合があります。"
     }
     return AnalysisTriage(
         computed = computed,

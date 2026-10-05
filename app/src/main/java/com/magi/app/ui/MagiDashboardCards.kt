@@ -550,7 +550,7 @@ internal fun OperatorNextActionCard(
                 if (detailOpen) {
                     Text(
                         "※でき具合＝最初からの違反の減り具合（必須違反が残る間は最大55%）。" +
-                            "結果は下書きに反映済み・「元に戻す」で取消可・確定は書き出し時です。",
+                            "結果は下書きに反映しました。「元に戻す」で取り消せます。確定は書き出すときです。",
                         style = MaterialTheme.typography.bodySmall, color = plan.fg.copy(alpha = 0.8f),
                     )
                 }
@@ -1583,7 +1583,7 @@ internal fun AnalysisTriageCard(
 
             // [3.483.0 A-1] 旧「▶ 勤務表をつくる」ボタンは撤去。固定フッター（BottomCommandBar）の同名ボタンと重複
             //   （3.480.0 ホーム／3.482.0 編集タブで「フッターに一本化」した方針の取り残し）。
-            if (ui.running) Text("※実行中のため確定前の値です（確定後に最新化）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            if (ui.running) Text("※実行中のため、確定前の値です（確定すると最新の値になります）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -1701,7 +1701,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
             }
             when {
                 ui.fixSearching -> Text("候補を探しています。少しお待ちください。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                ui.fixSuggestions.isEmpty() -> Text("候補がありません。「探す」を押すか、上の違反の場所をタップしてください。\n※1手で直せない違反（下限が競合する等の構造的不足）は、設定の見直しが根本解です。",
+                ui.fixSuggestions.isEmpty() -> Text("候補がありません。「探す」を押すか、上の違反の場所をタップしてください。\n※1手で直せない違反（下限どうしがぶつかっているなど、そもそも足りない場合）は、設定を見直すのがいちばん確実です。",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 else -> ui.fixSuggestions.forEach { s ->
                     val (tag, tagColor) = fixKindTag(s.kind)

@@ -707,7 +707,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             0 -> "翌月だけの条件：希望・必要人数・例外（毎月ここから）"
                             // [3.482.0] 「個人の回数」は 3.286.0 で③へ一本化済み＝説明が実態より広かった。職員の属性だけに。
                             1 -> "入退職・所属・資格スキル（随時変更）。職員の一覧はここだけ"
-                            else -> "毎月は変えない土台：シフト・ルール・人数（制度変更時のみ）"
+                            else -> "毎月は変えない基本の設定：シフト・ルール・人数（制度変更時のみ）"
                         },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -737,7 +737,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             StaffingRealityCard(ui, conditionsView)
                             Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                                 // [P7/実務者向け短文化] 3文→1文。触るべきでない理由の説教は削り、行き先だけ示す。
-                                Text("土台の設定（制度変更時のみ）。毎月の調整は「月次条件」、人の入替は「職員管理」へ。",
+                                Text("基本の設定（制度変更時のみ）。毎月の調整は「月次条件」、人の入替は「職員管理」へ。",
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                                     style = MaterialTheme.typography.bodyMedium)

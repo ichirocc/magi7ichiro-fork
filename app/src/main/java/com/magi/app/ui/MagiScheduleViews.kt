@@ -843,7 +843,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                     Text(if (ui.running) "最適化中は変更できません" else "適用（${wishCount}件）")
                 }
             }
-            Text("※ 期間全体×全職員の「希望なし」は全削除（確認あり）。元に戻すで取消可。",
+            Text("※ 期間全体×全職員の「希望なし」は全部消します（確認あり）。元に戻すで取り消せます。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
@@ -980,7 +980,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                     else -> "この${cellCount}マスに一括割当"
                 })
             }
-            Text("※ 選択したマスを上書きします。元に戻すで取消可。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text("※ 選択したマスを上書きします。元に戻すで取り消せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
     if (showStaff) {

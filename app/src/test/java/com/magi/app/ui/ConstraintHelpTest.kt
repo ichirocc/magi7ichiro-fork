@@ -34,7 +34,7 @@ class ConstraintHelpTest {
         // 禁止の並び（cons3n）と希望の前日に禁止（cons3w, 3.542.0）が必須＝MirrorKeys.hard のうち利用者がこの画面で登録できる2族。
         assertTrue("必須条件" in constraintHelp.getValue("cons3n"))
         assertTrue("必須条件" in constraintHelp.getValue("cons3w"))
-        assertEquals(2, constraintHelp.values.count { "必須条件＝" in it })
+        assertEquals(2, constraintHelp.values.count { "これは必須条件です。" in it })
     }
 
     // [3.409.18] ペア禁止の「向き」の説明（違うシフトの組は鏡の2行が必要・同じシフトは1行でよい）。

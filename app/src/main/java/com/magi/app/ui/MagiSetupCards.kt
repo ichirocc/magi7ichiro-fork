@@ -265,14 +265,14 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
 @Composable
 private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("並列ワーカー（同時に最適化する数）: ${ui.workers}")
+        Text("同時に計算する数: ${ui.workers}")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { onEvent(MagiEvent.Settings.SetWorkers((ui.workers - 1).coerceAtLeast(1))) },
-                enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に最適化する数を減らす" }) { Text("−", fontSize = 20.sp) }
+                enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に計算する数を減らす" }) { Text("−", fontSize = 20.sp) }
             Text("${ui.workers}", style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
             Button(onClick = { onEvent(MagiEvent.Settings.SetWorkers((ui.workers + 1).coerceAtMost(16))) },
-                enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に最適化する数を増やす" }) { Text("＋", fontSize = 20.sp) }
+                enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に計算する数を増やす" }) { Text("＋", fontSize = 20.sp) }
         }
         // [仮説数上限撤廃・ユーザー指示] 旧: 仮説数は5固定・超過ワーカーは仮説内並列度へ配分。
         //   現在は設定値がそのまま並列に探索する仮説（案）の数になる（下限2、上限=設定値自体）。
@@ -734,7 +734,7 @@ internal fun AppearanceCard(
             Text("表示モード", style = MaterialTheme.typography.titleSmall)
             MagiSegmentedControl(options = listOf("かんたん", "プロ"), selected = if (proMode) 1 else 0, onSelect = { onProMode(it == 1) })
             // [3.483.0 C-3] 何が変わるかを1行で（旧: 無説明のトグル）。
-            Text("プロ＝分析の生指標カードと、勤務表の「まとめて割当」を表示します。",
+            Text("プロにすると、分析タブの詳しい数値のカードと、勤務表の「まとめて割当」を表示します。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }

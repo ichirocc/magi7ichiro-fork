@@ -1715,7 +1715,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     autoSave()
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
-                    val adoptedMsg = if (s5 == null) "勤務表ができました: 必須=${res.report.hard} 合計=${res.report.total} (${System.currentTimeMillis() - startMs}ms)"
+                    val adoptedMsg = if (s5 == null) "勤務表ができました: 必須違反 ${res.report.hard}件・違反の合計 ${res.report.total}件 (${System.currentTimeMillis() - startMs}ms)"
                     else "希望（${s5.label}）を取り消して、もう一度つくりました: 必須違反 ${s5.h0} → ${res.report.hard}（試算の見込み ${s5.pCancel}）" +
                         (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。もう一度つくるか、元に戻す（希望と勤務表をまとめて戻す）を選べます。"
                         else if (res.report.hard > 0) "。残りの必須違反 ${res.report.hard}件 は、次にやることカードから直します。" else "")
