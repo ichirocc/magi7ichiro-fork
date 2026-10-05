@@ -352,8 +352,18 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Switch(checked = ui.c1MoveARepair, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1MoveARepair(it)) }, enabled = !ui.running)
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("月全体で違反を玉突きで直す")
+                Text(EJECTION_CHAIN_NOTE,
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.c1EjectionChain, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1EjectionChain(it)) }, enabled = !ui.running)
+        }
     }
 }
+
+internal const val EJECTION_CHAIN_NOTE = "試験中。測定では効果は確認できていません（既定はOFF）"
 
 internal fun searchStrengthLabel(s: SearchStrength): String = when (s) {
     SearchStrength.NORMAL -> "ふつう"

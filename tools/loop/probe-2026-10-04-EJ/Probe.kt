@@ -1,0 +1,41 @@
+package probe
+import com.magi.app.model.StateParser
+import com.magi.app.v6.V6FinalPort
+import com.magi.app.v6.PolishGate
+import com.magi.app.v6.C1EjectionChainPolish
+import kotlinx.coroutines.runBlocking
+import java.io.File
+import java.io.FileOutputStream
+
+fun main(args: Array<String>) {
+    val resDir = args[0]; val out = File(args[1]); val logOut = File(args[2])
+    val done = if (out.exists()) out.readLines().drop(1).map { it.split(",").take(4).joinToString(",") }.toSet() else emptySet()
+    val fos = FileOutputStream(out, true); val lfos = FileOutputStream(logOut, true)
+    if (done.isEmpty() && out.length() == 0L) { fos.write("fixture,budget,seed,arm,wallMs,hard,weightedScore,total,c1,sha,inputHash,order\n".toByteArray()); fos.fd.sync() }
+    for (fname in args.drop(3)) {
+        val st = StateParser.parse(File(resDir, fname).readText())!!
+        val ih = java.security.MessageDigest.getInstance("SHA-256").digest(File(resDir, fname).readBytes()).take(6).joinToString("") { "%02x".format(it) }
+        val fx = fname.removeSuffix("_state.json").removeSuffix("_state_v6.json")
+        for (budget in listOf(60, 120)) for (seed in 1..3) {
+            // ARMS=on,off（v1 vs OFF）/ ARMS=v2,off など。on=v1、v2=族越え。奇数 seed は列挙順、偶数 seed は逆順。
+            val armList = (System.getenv("ARMS") ?: "on,off").split(",")
+            val arms = if (seed % 2 == 1) armList else armList.reversed()
+            for (arm in arms) {
+                val on = arm != "off"
+                C1EjectionChainPolish.defaultCrossFamily = arm == "v2"
+                val key = "$fx,$budget,$seed,$arm"; if (key in done) continue
+                PolishGate.c1EjectionChain = on
+                val t0 = System.currentTimeMillis()
+                val res = runBlocking { V6FinalPort.handleOptimize(st, st.schedule.map { it.toIntArray() }.toTypedArray(),
+                    secondsRaw = budget, allowImpossible = true, seed = seed.toLong()) }
+                val wall = System.currentTimeMillis() - t0
+                val sb = StringBuilder()
+                for (l in res.logs + (res.post?.logs ?: emptyList())) if (l.message.contains("ms")) sb.append("$key\t${l.ts - t0}\t${l.tag}\t${l.message.replace('\n',' ')}\n")
+                lfos.write(sb.toString().toByteArray()); lfos.fd.sync()
+                val line = "$key,$wall,${res.report.hard},${res.report.weightedScore},${res.report.total},${res.report.breakdown["c1"] ?: 0},${System.getenv("SHA") ?: "?"},$ih,${arms.indexOf(arm)}\n"
+                fos.write(line.toByteArray()); fos.fd.sync(); System.err.print(line)
+                File(out.parentFile, "breakdown.tsv").appendText("$key\t${res.report.breakdown.entries.joinToString(" ") { "${it.key}=${it.value}" }}\n")
+            }
+        }
+    }
+}
