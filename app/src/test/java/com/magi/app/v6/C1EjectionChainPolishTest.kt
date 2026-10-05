@@ -81,4 +81,62 @@ class C1EjectionChainPolishTest {
             assertTrue(r.newSchedule.contentDeepEquals(s0) || betterReport(rep, rep0))
         }
     }
+
+    @Test fun allFamilyGateDefaultsOff() {
+        assertFalse(PolishGate.allFamilyEjectionChain)
+    }
+
+    private fun sept(): Pair<MagiState, Array<IntArray>> {
+        val st = com.magi.app.model.StateParser.parse(javaClass.getResource("/sept2026_state.json")!!.readText())!!
+        return st to normalizeSchedule(st.schedule.toIntArray2D(), Problem(st))
+    }
+
+    /** 全族起点: 固定の評価上限で、起点か正式評価で厳密に良い盤面だけを返し、希望・手動固定・上限0を守る。同じ入力なら同じ盤面。 */
+    @Test fun allFamilyOriginKeepsProtectionAndIsDeterministic() {
+        val (st, s0) = sept()
+        val p = Problem(st)
+        val rep0 = UnifiedViolationChecker.check(st, s0)
+        val cfg = C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, maxEvaluations = 200_000L)
+        val stats = C1EjectionChainPolish.Stats()
+        val r1 = C1EjectionChainPolish.apply(st, s0.map { it.copyOf() }.toTypedArray(), cfg, stats = stats)
+        val r2 = C1EjectionChainPolish.apply(st, s0.map { it.copyOf() }.toTypedArray(), cfg)
+        assertTrue(r1.newSchedule.contentDeepEquals(r2.newSchedule))
+        val rep = UnifiedViolationChecker.check(st, r1.newSchedule)
+        assertTrue(rep.hard <= rep0.hard)
+        assertTrue(r1.newSchedule.contentDeepEquals(s0) || betterReport(rep, rep0))
+        for (i in 0 until p.S) for (j in 0 until p.T) {
+            if (r1.newSchedule[i][j] == s0[i][j]) continue
+            assertFalse(p.wishLocked(i, j))
+            assertTrue(p.mayPlace(i, r1.newSchedule[i][j]))
+        }
+        assertTrue(stats.byFamily.size > 1)   // c1 以外の族からも起点を出している
+        assertEquals(null, stats.mismatch)
+    }
+
+    /** 生成上限でも途中の盤面を返さない。 */
+    @Test fun candidateCapReturnsStartOrStrictlyBetter() {
+        val (st, s0) = sept()
+        val rep0 = UnifiedViolationChecker.check(st, s0)
+        for (cap in longArrayOf(1L, 3_000L)) {
+            val stats = C1EjectionChainPolish.Stats()
+            val r = C1EjectionChainPolish.apply(st, s0.map { it.copyOf() }.toTypedArray(),
+                C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, maxCandidates = cap), stats = stats)
+            val rep = UnifiedViolationChecker.check(st, r.newSchedule)
+            assertTrue(r.newSchedule.contentDeepEquals(s0) || betterReport(rep, rep0))
+            assertEquals("生成上限", stats.endReason)
+        }
+    }
+
+    /** 差分評価の不一致検出は名前で突き合わせ、一致なら null、ずれたら族名を返す。 */
+    @Test fun deltaMismatchDetectsDrift() {
+        val (st, s0) = sept()
+        val p = Problem(st)
+        val de = DeltaEvaluator(p); de.reset(s0)
+        assertEquals(null, C1EjectionChainPolish.deltaMismatch(de, UnifiedViolationChecker.check(st, s0)))
+        val w = s0.map { it.copyOf() }.toTypedArray()
+        val mv = (0 until p.S).asSequence().flatMap { i -> (0 until p.T).asSequence().flatMap { j -> p.allowedShiftsForStaff(i).asSequence().map { intArrayOf(i, j, it) } } }
+            .first { (i, j, k) -> !p.wishLocked(i, j) && k != w[i][j] && de.previewMove(i, j, k) != de.score() }
+        w[mv[0]][mv[1]] = mv[2]   // 差分評価には反映しない＝食い違いを作る
+        assertTrue(C1EjectionChainPolish.deltaMismatch(de, UnifiedViolationChecker.check(st, w)) != null)
+    }
 }

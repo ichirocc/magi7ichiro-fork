@@ -168,6 +168,9 @@ object PolishGate {
     /** [測定中] C1 共同 LNS の直後に月全体の玉突き連鎖（`C1EjectionChainPolish`）を走らせる。既定 OFF＝段そのものを呼ばない。 */
     @Volatile var c1EjectionChain: Boolean = false
 
+    /** [測定中] 同じ位置で全族起点の玉突き連鎖を走らせる。既定 OFF。[c1EjectionChain] と両方 ON ならこちらだけを 1 回走らせる。 */
+    @Volatile var allFamilyEjectionChain: Boolean = false
+
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
@@ -691,11 +694,12 @@ object V6HotfixPasses {
                 }
             }
         })
-        if (PolishGate.c1EjectionChain) {
+        if (PolishGate.c1EjectionChain || PolishGate.allFamilyEjectionChain) {
             val tEj = EngineClock.nowMs()
+            val origin = if (PolishGate.allFamilyEjectionChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, 3_000L))
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = origin, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, 3_000L))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
