@@ -18,11 +18,24 @@ class SearchStrengthTest {
             assertEquals(SearchStrength.NORMAL, UiState().searchStrength)
             assertEquals(false, UiState().c1MoveARepair)
             assertEquals(false, PolishGate.c1MoveARepair)
-            assertEquals(false, UiState().c1EjectionChain)
+            assertEquals(EjectionChainMode.OFF, UiState().ejectionChain)
             assertEquals(false, PolishGate.c1EjectionChain)
+            assertEquals(false, PolishGate.allFamilyEjectionChain)
         } finally {
             PolishGate.combineExhaustPairs = saved[0]; PolishGate.wideC3nBreakDays = saved[1]
             PolishGate.countChainPolish = saved[2]; PolishGate.aptFairSoftTolerance = saved[3]
         }
+    }
+
+    @Test fun ejectionChainModeRoutesToExactlyOneFlag() {
+        try {
+            EjectionChainMode.C1.apply()
+            assertEquals(listOf(true, false), listOf(PolishGate.c1EjectionChain, PolishGate.allFamilyEjectionChain))
+            EjectionChainMode.ALL.apply()
+            assertEquals(listOf(false, true), listOf(PolishGate.c1EjectionChain, PolishGate.allFamilyEjectionChain))
+        } finally {
+            EjectionChainMode.OFF.apply()
+        }
+        assertEquals(listOf(false, false), listOf(PolishGate.c1EjectionChain, PolishGate.allFamilyEjectionChain))
     }
 }
