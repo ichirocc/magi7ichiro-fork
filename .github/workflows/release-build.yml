@@ -4,8 +4,9 @@ name: Release Build
 # - v* タグを打つと自動でリリース APK をビルドし、成果物としてアップロードする。
 # - 手動実行（workflow_dispatch）では upload_apk=true のときだけアップロードする
 #   （android-sdk.yml と同じく、ストレージ枠超過の注記を避けるためゲートする）。
-# 注意: ここでは署名設定を持たないためデバッグ鍵で署名された動作確認用 APK になる。
-#       ストア配布する場合は別途リリース signingConfig を追加すること。
+# 署名: Secrets（MAGI_KEYSTORE_B64 / MAGI_KEYSTORE_PASSWORD / MAGI_KEY_ALIAS / MAGI_KEY_PASSWORD）が
+#       あれば固定鍵で署名する＝上書きインストールできる。無ければデバッグ鍵（ランナーごとに変わり上書き不可）。
+# 速度: gate（検査）と release（APK）は並列に走らせ、配布（Release 添付／手動実行の成果物）は両方が緑の後だけ。
 on:
   workflow_dispatch:
     inputs:
@@ -49,8 +50,8 @@ jobs:
       - name: Engine unit tests (host JVM)
         run: bash tools/host/hosttest.sh
 
+  # [速度] 旧: needs: gate で直列（約 4.4 分＋2.8 分）。並列化し、配布側の job が両方を待つ。
   release:
-    needs: gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -102,7 +103,25 @@ jobs:
 
       # [3.567.0/外部レビュー] GH_TOKEN はここへ渡さない（Gradle の子プロセスに書込み権限を持たせない）。
       #   失敗の抜粋はファイルに残し、コミットへの書き込みは権限を持つ別 job が行う。
+      # [上書きインストール] 固定鍵を Secrets から一時ファイルへ復元する（Secrets が無いフォークや PR では飛ばす）。
+      - name: Restore signing key
+        env:
+          MAGI_KEYSTORE_B64: ${{ secrets.MAGI_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$MAGI_KEYSTORE_B64" ]; then
+            echo "$MAGI_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/magi.keystore"
+            echo "MAGI_KEYSTORE_FILE=$RUNNER_TEMP/magi.keystore" >> "$GITHUB_ENV"
+            echo "## 署名: 固定鍵（上書きインストール可）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::MAGI_KEYSTORE_B64 が未設定のためデバッグ鍵で署名します（上書きインストール不可）"
+            echo "## 署名: デバッグ鍵（上書きインストール不可。Secrets を設定してください）" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Build release APK
+        env:
+          MAGI_KEYSTORE_PASSWORD: ${{ secrets.MAGI_KEYSTORE_PASSWORD }}
+          MAGI_KEY_ALIAS: ${{ secrets.MAGI_KEY_ALIAS }}
+          MAGI_KEY_PASSWORD: ${{ secrets.MAGI_KEY_PASSWORD }}
         run: |
           set -o pipefail
           gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/build.log || {
@@ -120,6 +139,10 @@ jobs:
           retention-days: 7
 
       # [3.552.0] APK 内の .so が非圧縮かつ 16KiB 境界か（理由は v6-engine-check.yml の同じ箇所）。
+      - name: Print APK signer
+        run: |
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/release/*.apk | grep -m1 'SHA-256' | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Check APK native libs (stored + 16KiB aligned)
         run: python3 tools/check_apk_native_libs.py app/build/outputs/apk/release/*.apk
 
@@ -134,12 +157,14 @@ jobs:
         id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         continue-on-error: true
+        # [速度] gate と並列になったため、ここは常に一時受け渡し用（1 日）。gate が緑のときだけ
+        #   publish-release / publish-artifact が配布物へ移す（gate 赤の APK は配布されない）。
         if: ${{ always() && (startsWith(github.ref, 'refs/tags/v') || github.event.inputs.upload_apk == 'true') && hashFiles('**/build/outputs/apk/release/**/*.apk') != '' }}
         with:
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('release-apk-handoff-{0}', github.sha) || format('app-release-{0}', github.sha) }}
+          name: release-apk-handoff-${{ github.sha }}
           path: "**/build/outputs/apk/release/**/*.apk"
           if-no-files-found: error
-          retention-days: ${{ startsWith(github.ref, 'refs/tags/v') && 1 || 14 }}
+          retention-days: 1
 
       - name: Report upload outcome
         if: ${{ always() && steps.upload.outcome != 'skipped' }}
@@ -153,8 +178,8 @@ jobs:
   #   アセットへ添付する。書込みトークンは release job（Gradle 実行）に持たせず、この job だけに分離する
   #   （3.567.0で確立した「ビルドjobは読み取り専用」方針をそのまま踏襲）。
   publish-release:
-    needs: release
-    if: ${{ always() && needs.release.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
+    needs: [gate, release]
+    if: ${{ always() && needs.gate.result == 'success' && needs.release.result == 'success' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -177,8 +202,29 @@ jobs:
             gh release upload "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$tag" "$apk" --repo "$GITHUB_REPOSITORY" --title "$tag" \
-              --notes "自動ビルド（デバッグ鍵署名・動作確認用）。詳細は該当コミットのCIログを参照。"
+              --notes "自動ビルド（動作確認用）。署名鍵は該当 run の Summary を参照。"
           fi
+
+  # 手動実行の APK を、gate も緑のときだけ従来の名前 `app-release-*`（14 日保護）で残す。
+  publish-artifact:
+    needs: [gate, release]
+    if: ${{ always() && needs.gate.result == 'success' && needs.release.result == 'success' && !startsWith(github.ref, 'refs/tags/v') && github.event.inputs.upload_apk == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download release APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-apk-handoff-${{ github.sha }}
+          path: release-apk
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: app-release-${{ github.sha }}
+          path: release-apk
+          if-no-files-found: error
+          retention-days: 14
 
   # 書込みトークンを持つのはこの job だけ。ビルドの成果物（失敗抜粋）を読んでコミットへ貼る。
   report-failure:
