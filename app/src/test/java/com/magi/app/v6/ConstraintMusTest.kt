@@ -167,7 +167,7 @@ class ConstraintMusTest {
         assertEquals(2, ConstraintMus.analyzeDayConflicts(Problem(st)).single().core.size)
         val hit = V6SanityPort.buildGuidance(st).single { it.where.contains("必要人数と固定希望の衝突") }
         assertEquals(
-            "固定された希望の組合せでは、この日の必要人数を満たせません。次の2件は同時に成立しません（証明つき）: " +
+            "固定された希望の組合せでは、この日の必要人数を満たせません。次の2件は同時に成立しません: " +
                 "必要人数「Xに1人」 ・ 希望「s0 1/1(木)=休」。個人上限が0のため置けない人: s1（X）",
             hit.problem,
         )
