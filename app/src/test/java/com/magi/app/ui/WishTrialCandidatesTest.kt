@@ -107,7 +107,7 @@ class WishTrialCandidatesTest {
         assertEquals("取り消すと必須違反が確実に1件 減り、もう一度つくるとさらに2件 減る見込みです。", wishTrialText(r(5, 4, 5, 2)))
         assertEquals("取り消すと必須違反が確実に1件 減ります。", wishTrialText(r(5, 4, 5, 4)))
         assertEquals("取り消してもう一度つくると、必須違反が2件 減る見込みです。", wishTrialText(r(5, 5, 5, 3)))
-        assertEquals("この希望を取り消しても、必須は減らない見込みです（必須 5件 → 5件）。これは全探索で解けない証明ではありません。", wishTrialText(r(5, 5, 5, 5)))
+        assertEquals("この希望を取り消しても、必須は減らない見込みです（必須 5件 → 5件）。すべての組み合わせを試したわけではありません。", wishTrialText(r(5, 5, 5, 5)))
         assertEquals("もう一度つくるだけの場合より、さらに1件 減る見込みです。", wishTrialText(r(5, 5, 3, 2)))
         assertEquals("取り消さなくても、もう一度つくるだけで同じだけ減る見込みです。", wishTrialText(r(5, 4, 3, 3)))
         assertEquals("試算できませんでした（未割当のセルがあります）。", wishTrialText(WishTrial.Unavailable("未割当のセルがあります")))

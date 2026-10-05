@@ -310,7 +310,7 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
 /** [S5] 試算結果 1 行の文（§5 の表）。止めた試算は null（数字を出さない）。 */
 internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     is WishTrial.Result -> when {
-        o.rk >= o.h0 && o.att <= 0 -> "この希望を取り消しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。これは全探索で解けない証明ではありません。"
+        o.rk >= o.h0 && o.att <= 0 -> "この希望を取り消しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。すべての組み合わせを試したわけではありません。"
         o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減り、もう一度つくるとさらに${o.b}件 減る見込みです。"
         o.rk >= o.h0 && o.aPrime > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減ります。"
         o.rk >= o.h0 -> "取り消してもう一度つくると、必須違反が${o.b}件 減る見込みです。"
