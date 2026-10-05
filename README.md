@@ -28,6 +28,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/automation.md`](./docs/automation.md) | **自動化方針と実装の対応**（済／部分／未、採用ゲート・探索段階・必須修正 10 項目） |
 | [`docs/backlog.md`](./docs/backlog.md) | **バックログ / 未対応**（完了項目は打消し線で保持。CLAUDE.md から移設） |
 | [`docs/claudemd-tune-proposal.md`](./docs/claudemd-tune-proposal.md) | **CLAUDE.md 見直し提案**（棚卸し・削除/書き直し/移動/残す/矛盾の表と全文案。承認待ち） |
+| [`docs/invariants.md`](./docs/invariants.md) | **不変条件 INV-01〜12 と検証 T の対応表**（希望・上限0・手動固定・採否・試算の純粋性・parity・HF77。統合仕様書 v2 から現行と一致する部分を取り込み、食い違う点を明記） |
 | [`docs/sudo_model.md`](./docs/sudo_model.md) | **SUDO モデル**（2026-09-25・3.612.0 で再照合）（S 関連図／U ユースケース／D ドメイン／O オブジェクト。実装から起こした全体像。D の不変条件と O の実測値つき） |
 | [`docs/history/`](./docs/history/) | **作業記録の本文**（版数付き約360節・版数でバケツ分け: `2.x` / `3.0xx` / `3.1xx` / `3.2xx` / `3.3xx` / `3.4xx`）。見出し一覧は [`INDEX.md`](./docs/history/INDEX.md)、話題別の叙述（ネイティブ加速・停滞脱出・ドッグフーディング等）は [`topics.md`](./docs/history/topics.md)（3.497.3 で `CLAUDE.md` 本体から分離）。`grep -n 'キーワード' docs/history/INDEX.md` で当たりを付けてから版数で引く。毎ターン自動では読み込まれない＝過去に測って否決した案・同型のバグ・決定記録を再発させないため、同じ領域を触る前に INDEX.md を必ず確認する |
 | [`docs/screen_inventory_textart.md`](./docs/screen_inventory_textart.md) | **画面棚卸し＋テキストアートのドッグフーディング検証**（3.482.0 時点。タブ5／画面12／モーダル30／Activity2 の集計と、全画面の再現図＋所見20件の優先表。UI を触る前の現状確認と、次の改善候補の一次ソース） |
@@ -35,7 +36,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
-**最終更新**：2026-10-05（3.620.1: S5 の改善なしの行に残っていた「これは全探索で解けない証明ではありません。」を「すべての組み合わせを試したわけではありません。」へ（「証明」を画面に出さない方針の漏れ、C# 同期）。3.620.0: S6 を画面から外す）
+**最終更新**：2026-10-05（統合仕様書 v2 の不変条件・検証の対応表を `docs/invariants.md` に取り込み（文書のみ）。3.620.1: S5 から「証明」を外す）
 
 **最終更新**：2026-10-01（勤務表タブの下部バーを 64dp の 1 本に統合・シートを開く間は隠して元に戻すを見出し行へ・タブを開くとグリッド上端へ（表示のみ、採点・探索は不変）。CSV 取込で値が変わったセルの手動固定は取り込んだ値へ追従（同じ元に戻す 1 段・完了文に件数）。担当外／必須違反のセルへ固定したときは登録文にヒントを 1 文足す（挙動は不変）。手順書 10(c)・16(d) を現行の文言・実パーサーの行番号に是正。採点・探索は不変）
 
