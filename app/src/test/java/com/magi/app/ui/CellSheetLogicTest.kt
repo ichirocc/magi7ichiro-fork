@@ -270,7 +270,8 @@ class CellSheetLogicTest {
         assertEquals(RelaxHandoff.OFFER, relaxHandoff(r, false, false, i, 7, stopped = true))
         assertEquals("例外として緩める候補: A", relaxPeekLabel("A"))
         val ui = UiState(staffNames = st.staff.map { it.name }, shiftSymbols = st.shifts.map { it.kigou }, violationCellFamilies = rep.cellFamilies)
-        assertEquals("設定を緩めると、この禁止の並びを解消できる見込みです（上限 2件）", relaxHandoffLine(r, ui))
+        assertEquals("設定を緩めると、この禁止の並びを解消できる見込みです（上限 2件）" + (if (r.rr > 0) "。他の必須違反 ${r.rr}件 は残ります" else ""), relaxHandoffLine(r, ui))
+        assertEquals("設定を緩めると、この禁止の並びを解消できる見込みです（上限 2件）。他の必須違反 3件 は残ります", relaxHandoffLine(r.copy(rr = 3), ui))
     }
 
     /** 職員10 10/9（A4 の希望を守る板挟み）: 同じ禁止の並びのもう一方は 10/8。10/8 から見れば 10/9。c3w は印の前日と希望の翌日。 */

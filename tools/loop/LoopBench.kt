@@ -141,6 +141,8 @@ fun main(args: Array<String>) {
         //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
         "n9rollback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = true)
+        // [3.618.1] 全族起点の玉突き連鎖。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
+        "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
@@ -164,6 +166,7 @@ fun main(args: Array<String>) {
         for (seed in 0 until seeds) {
             for ((arm, prm) in listOf("old" to oldP, "new" to newP)) {
                 if ("${sp.id}|$seed|$arm" in done) continue
+                PolishGate.allFamilyEjectionChain = feature == "ejectionall" && arm == "new"
                 fun once(): List<Any> {
                     resetPeak(); System.gc()
                     val t0 = System.nanoTime()
