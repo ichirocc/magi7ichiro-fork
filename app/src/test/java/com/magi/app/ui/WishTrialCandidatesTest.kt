@@ -104,19 +104,19 @@ class WishTrialCandidatesTest {
     }
 
     @Test fun t10_sevenWordings() {
-        assertEquals("取り消すと必須違反が確実に1件 減り、もう一度つくるとさらに2件 減る見込みです。", wishTrialText(r(5, 4, 5, 2)))
+        assertEquals("取り消すと必須違反が確実に1件 減り、再作成するとさらに2件 減る見込みです。", wishTrialText(r(5, 4, 5, 2)))
         assertEquals("取り消すと必須違反が確実に1件 減ります。", wishTrialText(r(5, 4, 5, 4)))
-        assertEquals("取り消してもう一度つくると、必須違反が2件 減る見込みです。", wishTrialText(r(5, 5, 5, 3)))
+        assertEquals("取り消して再作成すると、必須違反が2件 減る見込みです。", wishTrialText(r(5, 5, 5, 3)))
         assertEquals("この希望を取り消しても、必須は減らない見込みです（必須 5件 → 5件）。すべての組み合わせを試したわけではありません。", wishTrialText(r(5, 5, 5, 5)))
-        assertEquals("もう一度つくるだけの場合より、さらに1件 減る見込みです。", wishTrialText(r(5, 5, 3, 2)))
-        assertEquals("取り消さなくても、もう一度つくるだけで同じだけ減る見込みです。", wishTrialText(r(5, 4, 3, 3)))
+        assertEquals("再作成するだけの場合より、さらに1件 減る見込みです。", wishTrialText(r(5, 5, 3, 2)))
+        assertEquals("取り消さなくても、再作成するだけで同じだけ減る見込みです。", wishTrialText(r(5, 4, 3, 3)))
         assertEquals("試算できませんでした（未割当のセルがあります）。", wishTrialText(WishTrial.Unavailable("未割当のセルがあります")))
         assertNull(wishTrialText(WishTrial.Stopped))
         assertTrue(wishTrialNoGain(r(5, 5, 5, 5)))
         assertEquals("A4はこの禁止の並びに関係しています。", wishTabInvolvedLine("A4", listOf("c3n", "covO")))
         assertNull(wishTabInvolvedLine("A4", listOf("covO")))
         assertTrue(!wishTrialNoGain(r(5, 4, 3, 3)) && !wishTrialNoGain(r(5, 5, 5, 3)) && !wishTrialNoGain(WishTrial.Stopped))
-        assertEquals("希望を残したまま、もう一度つくるだけで必須違反が2件 減る見込みです。", wishTrialKeepOnlyText(WishTrial.Control(5, 3)))
+        assertEquals("希望を残したまま、再作成するだけで必須違反が2件 減る見込みです。", wishTrialKeepOnlyText(WishTrial.Control(5, 3)))
         assertNull(wishTrialKeepOnlyText(WishTrial.Control(5, 5)))
     }
 }

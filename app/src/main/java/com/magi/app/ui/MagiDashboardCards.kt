@@ -136,7 +136,7 @@ internal fun WishConflictDialog(
                 else {
                     control?.let { wishTrialKeepOnlyText(it) }?.let { line ->
                         Text(line, fontWeight = FontWeight.Bold)
-                        OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("もう一度つくる") }
+                        OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("再作成") }
                     }
                     if (cands.direct.isNotEmpty()) {
                         Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
@@ -205,7 +205,7 @@ private fun WishTrialRowView(
                         enabled = !ui.running,
                         colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
                         modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
-                    ) { Text("希望を取り消して、もう一度つくる") }
+                    ) { Text("希望を取り消して再作成") }
                 }
             }
         }
@@ -363,16 +363,16 @@ internal fun GuidedFixDialog(
                             Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text("もう一度つくっても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
+                        Text("再作成しても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                     else -> {
-                        Text("人員不足の日はなくなりました。仕上げにもう一度つくると全体が整います。")
+                        Text("人員不足の日はなくなりました。仕上げに再作成すると全体が整います。")
                     }
                 }
             }
         },
-        // [3.480.0 ホームAIリデザイン] 「もう一度つくる」はここにも出していたが、常設の固定フッター
+        // [3.480.0 ホームAIリデザイン] 「再作成」はここにも出していたが、常設の固定フッター
         // (BottomCommandBar)と重複する導線だった（grilling決定#3=フッターに一本化）。ここは常に「閉じる」のみ。
         confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
     )
@@ -407,7 +407,7 @@ internal fun OperatorNextActionCard(
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
-    outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して、もう一度つくる」の結果（VM が鮮度を照合済み）
+    outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して再作成」の結果（VM が鮮度を照合済み）
     relax: RelaxToken? = null,      // [S6] いまのデータで見つかった設定の壁の組（VM が鮮度を照合済み。null＝無い）
     onShowRelax: () -> Unit = {},
     onStopRelax: () -> Unit = {},
@@ -748,8 +748,8 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                     diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
                         "希望を1件調整するか、担当を追加してください。"
                     diag.blockedNowSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.blockedNowSlots} 枠は" +
-                        "いまの希望のままでは埋められません（残りはもう一度つくると解消し得ます）。"
-                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。もう一度つくるか設定の見直しで解消し得ます。"
+                        "いまの希望のままでは埋められません（残りは再作成すると解消し得ます）。"
+                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再作成するか設定の見直しで解消し得ます。"
                     else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
                 }
                 Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -941,7 +941,7 @@ internal fun C1PlateauCard(ui: UiState, onGoEdit: () -> Unit = {}) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("期間の制約が残っています（原因未確定）", style = MaterialTheme.typography.titleMedium)
                 Text("残り ${diag.remainingC1} 件。今回の整えでは、この残りについて直し方を試した記録が" +
-                    "残っていません。原因は特定できていません。もう一度つくると記録が取れる場合があります。",
+                    "残っていません。原因は特定できていません。再作成すると記録が取れる場合があります。",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             }
         }
@@ -1079,7 +1079,7 @@ internal fun PinFixedImpactCard(
                     Text("ほか ${ui.pinTargets.size - 5} 件（詳細はログ出力を参照）",
                         style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
-                Text("押すと設定が変わります。「元に戻す」で戻せます。効果はもう一度つくると分かります。",
+                Text("押すと設定が変わります。「元に戻す」で戻せます。効果は再作成すると分かります。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             TextButton(onClick = onGoEdit, enabled = !ui.running) { Text("個人の回数を見直す") }

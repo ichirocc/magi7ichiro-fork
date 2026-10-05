@@ -4,7 +4,7 @@ import org.json.JSONObject
 
 /**
  * 実行中マーカー（`magi_run_marker.json`）の組み立てと、中断案内の文言。JVM で試せるよう VM の外に置く。
- * S5（希望の取り消しと、もう一度つくる）の実行だけ `s5` オブジェクトを載せ、再起動後の案内で取り消した希望を名指しする（s5_wish_trial.md §10）。
+ * S5（希望の取り消しと再作成）の実行だけ `s5` オブジェクトを載せ、再起動後の案内で取り消した希望を名指しする（s5_wish_trial.md §10）。
  */
 internal object RunMarker {
     class S5(val staff: Int, val day: Int, val symbol: String, val name: String)
@@ -34,6 +34,6 @@ internal object RunMarker {
     /** 途中結果なしで中断したときの案内。 */
     fun interruptedInfo(marker: String): String = runCatching {
         val modeJp = if (JSONObject(marker).optString("mode") == "bg") "バックグラウンド" else ""
-        "前回の${modeJp}最適化は完了前に中断されました。入力は自動保存済みです。もう一度つくれます。"
+        "前回の${modeJp}最適化は完了前に中断されました。入力は自動保存済みです。再作成できます。"
     }.getOrNull()?.plus(s5Suffix(marker)) ?: "前回の最適化は完了前に中断されました。入力は自動保存済みです。"
 }

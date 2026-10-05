@@ -60,6 +60,6 @@ class RelaxTrialTextTest {
     @Test fun realData_handPlacedUpperZeroGetsOneSettingsLine() {
         val lines = V6SanityPort.build(st, board).guidance.filter { it.problem.contains("上限0のシフトが") }
         assertEquals(1, lines.size)
-        assertEquals("今の勤務表に個人の上限0のシフトが 4件 入っています。もう一度つくると外されます", lines[0].problem)
+        assertEquals("今の勤務表に個人の上限0のシフトが 4件 入っています。再作成すると外されます", lines[0].problem)
     }
 }

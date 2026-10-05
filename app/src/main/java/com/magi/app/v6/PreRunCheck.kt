@@ -3,7 +3,7 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 
 /**
- * [つくる前の確認] 本実行の前に「何度つくっても残る」「もう一度つくると外れる」を数える（`docs/business-logic.md` の診断の節）。
+ * [つくる前の確認] 本実行の前に「何度つくっても残る」「再作成すると外れる」を数える（`docs/business-logic.md` の診断の節）。
  * 表示と誘導だけ＝探索・評価・重みには触れない。希望も上限も自動で変えない（HF77）。
  */
 object PreRunCheck {

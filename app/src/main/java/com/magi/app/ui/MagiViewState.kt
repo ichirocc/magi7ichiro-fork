@@ -246,7 +246,7 @@ internal const val WISH_TRIAL_NOT_LOCKED = "担当できない勤務の希望な
 /** [#41] 手動固定のセルは試算の候補にしない（`lockedWishKeys` が外す）＝担当外と混ぜず、固定が理由だと言う。 */
 internal const val WISH_TRIAL_PINNED = "このセルは手動固定のため、自動では変更しません。固定を外すと試算できます。"
 /** 希望タブの注記（希望が必須違反の並びに掛かっているとき）。希望を変えても盤面のセルはそのまま＝黙って崩さない。 */
-internal const val WISH_TAB_KEEP_NOTE = "希望を変えても勤務表のセルはそのままです（未反映になります）。もう一度つくると希望に合わせます。"
+internal const val WISH_TAB_KEEP_NOTE = "希望を変えても勤務表のセルはそのままです（未反映になります）。再作成すると希望に合わせます。"
 internal fun wishTabInvolvedLine(wishSymbol: String, families: List<String>): String? = when {
     "c3n" in families -> "${wishSymbol}はこの禁止の並びに関係しています。"
     "c3w" in families -> "${wishSymbol}はこの希望の前日の禁止に関係しています。"
@@ -311,11 +311,11 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
 internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     is WishTrial.Result -> when {
         o.rk >= o.h0 && o.att <= 0 -> "この希望を取り消しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。すべての組み合わせを試したわけではありません。"
-        o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減り、もう一度つくるとさらに${o.b}件 減る見込みです。"
+        o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減り、再作成するとさらに${o.b}件 減る見込みです。"
         o.rk >= o.h0 && o.aPrime > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減ります。"
-        o.rk >= o.h0 -> "取り消してもう一度つくると、必須違反が${o.b}件 減る見込みです。"
-        o.att > 0 -> "もう一度つくるだけの場合より、さらに${o.att}件 減る見込みです。"
-        else -> "取り消さなくても、もう一度つくるだけで同じだけ減る見込みです。"
+        o.rk >= o.h0 -> "取り消して再作成すると、必須違反が${o.b}件 減る見込みです。"
+        o.att > 0 -> "再作成するだけの場合より、さらに${o.att}件 減る見込みです。"
+        else -> "取り消さなくても、再作成するだけで同じだけ減る見込みです。"
     }
     is WishTrial.Unavailable -> "試算できませんでした（${o.reason}）。"
     else -> null
@@ -329,7 +329,7 @@ internal const val WISH_TO_RELAX_LABEL = "希望を残したまま、設定を�
 
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
 internal fun wishTrialKeepOnlyText(control: WishTrial.Control): String? =
-    if (control.rk < control.h0) "希望を残したまま、もう一度つくるだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
+    if (control.rk < control.h0) "希望を残したまま、再作成するだけで必須違反が${control.h0 - control.rk}件 減る見込みです。" else null
 
 /** [S6] 起点の違反の呼び方（名前・日の範囲・族名）。ダイアログの題とホームの見出しが共有する。 */
 internal data class RelaxTarget(val name: String, val span: String, val what: String)
@@ -361,7 +361,7 @@ internal data class RelaxTrialText(
 
 internal const val RELAX_WISH_LINE = "希望: 変更しません"
 internal const val RELAX_PREREQ_HEAD = "前提として上限を上げる設定"
-internal const val RELAX_PREREQ_WHY = "今の勤務表の勤務に合わせます（もう一度つくったときにその勤務が外れないため）。"
+internal const val RELAX_PREREQ_WHY = "今の勤務表の勤務に合わせます（再作成したときにその勤務が外れないため）。"
 internal const val RELAX_SET_HEAD = "解消に使う設定"
 
 /**
@@ -390,7 +390,7 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     val (inWin, outWin) = r.moves.partition { it.day in r.window }
     val lead = if (r.prerequisite.isEmpty()) "この組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
         else "今の勤務表に合わせて上限を上げます。そのうえでこの組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
-    val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、上限0の勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
+    val keep = if (r.rk > r.h0) "設定をそのままに再作成すると、上限0の勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
     val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
     val title = "${target.name} ${target.span}　${target.what}"
     return RelaxTrialText(
@@ -814,7 +814,7 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
     return PreRunSheetText(
         floorHeader = if (floor.isEmpty()) null else "何度つくっても残る（${floor.size}件）",
         floorRows = floor,
-        rerunHeader = if (rerun.isEmpty()) null else "もう一度つくると外れる（${rerun.size}件）",
+        rerunHeader = if (rerun.isEmpty()) null else "再作成すると外れる（${rerun.size}件）",
         rerunRows = rerun,
         wallLine = wall,
         hasWishRows = floor.any { it.wish },

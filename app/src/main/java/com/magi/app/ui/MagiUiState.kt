@@ -115,7 +115,7 @@ data class UiState(
     val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
     val relaxRev: Int = 0,                          // [S6] 試算が終わるたびに進む（画面は vm.relaxTrialFor で読み直す）
     val relaxSearching: Boolean = false,            // [S6] 背景で設定の壁を探している
-    val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して、もう一度つくる」の結果（表示は vm.wishCancelOutcomeLine）
+    val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して再作成」の結果（表示は vm.wishCancelOutcomeLine）
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,
@@ -139,7 +139,7 @@ data class UiState(
     val polishExhausted: Boolean = false,
     val copilotHint: String? = null,
     val preRunCheck: com.magi.app.v6.PreRunCheck.Summary? = null,   // [つくる前の確認] 非 null の間シートを出す
-    val preRunRepeatHint: String? = null,   // 同じ設定でもう一度つくるときの一言（シートの中に出す）
+    val preRunRepeatHint: String? = null,   // 同じ設定で再作成するときの一言（シートの中に出す）
     val csvPartialPrompt: String? = null,   // 引用符が閉じていない勤務表CSVの「読めた部分だけ取り込むか」確認。非 null の間ダイアログを出す（保存しない）
     val impossibleWishCount: Int = 0,
     val opLog: List<String> = emptyList(),
@@ -182,7 +182,7 @@ data class PinTargetView(
     val attempts: Int,
 )
 
-/** [S5] 「希望を取り消して、もう一度つくる」の結果（`docs/s5_wish_trial.md` §9）。`line` は次にやることカードに出す 1 行。 */
+/** [S5] 「希望を取り消して再作成」の結果（`docs/s5_wish_trial.md` §9）。`line` は次にやることカードに出す 1 行。 */
 /** 操作の通知。[undoSerial] はその操作が積んだ元に戻すの段（通知から戻すのはこの段が先頭のときだけ）。 */
 data class OpNotice(val id: Long, val text: String, val undoSerial: Long)
 
