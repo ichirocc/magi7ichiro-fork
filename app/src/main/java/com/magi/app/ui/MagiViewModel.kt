@@ -1254,6 +1254,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで直す → ${ejectionChainLabel(mode)}")
     }
 
+    fun setEjectionChainSwap(on: Boolean) {
+        com.magi.app.v6.PolishGate.ejectionChainSwapMoves = on
+        _ui.update { it.copy(ejectionChainSwap = on) }
+        logOp("I", "設定変更: 玉突きで入れ替えも使う → ${if (on) "ON" else "OFF"}")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 
