@@ -278,8 +278,8 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 `LiveScheduleCard`(実行中の途中経過) → `CopilotCard`(満足度ゲージ) → `CoverageDiagnosisCard` →
 `ForbiddenRunDiagnosisCard` → `C1PlateauCard` → `PinFixedImpactCard` → `SettingIssuesCard` →
 `AlternativesCard`。
-[3.483.0] 解消度の括弧は5分岐（`homeRemainingLabel`: 必須>0「必須 残りN件」／人手不足「残りN日」／必須0で件数の要調整あり「必須は解消・要調整 N件」（件で数える族だけ）／公平化・曜日の偏りの pt だけ「必須は解消・残りは偏りのみ」／「解消済み」）、
-実行中は解消度行を出さず進捗行だけ。人手不足なしの狩猟では「なおすのを手伝って」の大ボタンを出さない（AI提案に一本化）。
+[3.483.0] でき具合の括弧は5分岐（`homeRemainingLabel`: 必須>0「必須 残りN件」／人手不足「残りN日」／必須0で件数の要調整あり「必須は解消・要調整 N件」（件で数える族だけ）／公平化・曜日の偏りの pt だけ「必須は解消・残りは偏りのみ」／「解消済み」）、
+実行中はでき具合行を出さず進捗行だけ。人手不足なしの狩猟では「なおし方を見る」の大ボタンを出さない（AI提案に一本化）。
 `AlternativesCard` はセグメントの下に全案の要約を常時列挙。
 > 旧記述の `StatusHero` / `SummaryCard` / `ActionCard` / `QuickActionGrid` は**いずれも存在しない**
 > （3.112.0 の冗長性削減で撤去。MagiApp.kt の該当箇所に撤去理由がコメントで残っている）。
@@ -406,7 +406,7 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 
 8. **一貫性と標準（Nielsen ヒューリスティクス #4, #6）**
    - 根拠: Nielsen (1994) "Enhancing the explanatory power of usability heuristics" — 一貫性と標準／記憶より認識。
-   - 担保: 全画面で同一のカード様式・ボトムナビ・トップバー・余白・用語（必須違反／解消度／コンピューターが組んでいます）・状態色を統一。
+   - 担保: 全画面で同一のカード様式・ボトムナビ・トップバー・余白・用語（必須違反／でき具合／コンピューターが組んでいます）・状態色を統一。
 
 9. **認知負荷の最小化（Sweller / 漸進的開示）**
    - 根拠: Sweller (1988) Cognitive Load Theory; Progressive Disclosure（Nielsen）。

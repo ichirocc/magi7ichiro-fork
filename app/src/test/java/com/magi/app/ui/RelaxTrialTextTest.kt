@@ -33,18 +33,18 @@ class RelaxTrialTextTest {
         assertFalse("希望の段も出る盤面（S6 がその前に来る）", wishTrialCandidates(ui).isEmpty)
         val r = RelaxTrial.firstWall(st, board) as RelaxTrial.Result
         val t = relaxTrialText(r, ui)
-        assertEquals(listOf("職員10 Pｼ 上限 0→1", "職員11 Cｵ 上限 0→1"), t.rows.map { it.substringBefore("（") })
-        assertEquals("今の勤務表の勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が 1件 減る見込みです。", t.lead)
+        assertEquals(listOf("職員10 Pｼ 上限 0回→1回まで", "職員11 Cｵ 上限 0回→1回まで"), t.rows.map { it.substringBefore("（") })
+        assertEquals("今の勤務表に合わせて上限を上げます。そのうえでこの組を例外として緩めると、必須違反が 1件 減る見込みです。", t.lead)
         assertTrue(t.title, t.title.startsWith("職員10 ") && t.title.endsWith("禁止の並び"))
         assertTrue(t.moveLines.isNotEmpty() && t.moveLines.all { it.contains("→") })
         assertEquals(r.moves.size, t.moveLines.sumOf { it.count { c -> c == '→' } } + t.otherMoves)
         // 窓の外の手も全件が読める（畳むだけで隠さない）
         assertEquals(t.otherMoves, t.otherMoveLines.sumOf { it.count { c -> c == '→' } })
         assertTrue(t.otherMoves > 0 && t.otherMoveLines.all { (it.substringBefore("　").substringAfter("/").toInt() - 1) !in r.window })
-        assertEquals("例外として上限を緩める候補 — 職員10 10/8〜10/9 禁止の並び", t.dialogTitle)
+        assertEquals("例外として上限を緩める候補：職員10 10/8〜10/9 禁止の並び", t.dialogTitle)
         assertEquals("必須違反: 5件 → 4件", t.hardLine)
         val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
-        assertEquals("変更規模: 設定 5項目・${people}人・${r.moves.size}セル", t.scaleLine)
+        assertEquals("変わるもの: 設定5つ、${people}人の勤務、${r.moves.size}か所", t.scaleLine)
         assertEquals(3, t.prerequisiteRows.size)
         assertTrue(t.prerequisiteRows[0], t.prerequisiteRows[0].contains("（10/") && t.moveLines[0].startsWith("10/7　"))
         assertEquals("この禁止の並びを解消できます。他の必須違反 4件 は残ります。", t.solveNote)

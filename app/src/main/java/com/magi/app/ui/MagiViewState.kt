@@ -378,7 +378,7 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     fun row(x: RelaxTrial.Relax): String {
         val n = after.getOrNull(x.staff)?.count { it == x.shift } ?: 0
         val note = if (n > x.newHi) "（この月は ${n}回になります。要調整に数えます）" else ""
-        return "${name(x.staff)} ${sym(x.shift)} 上限 0→${x.newHi}$note"
+        return "${name(x.staff)} ${sym(x.shift)} 上限 0回→${x.newHi}回まで$note"
     }
     val preRows = r.prerequisite.map { x ->
         val days = board.getOrNull(x.staff)?.indices?.filter { board[x.staff][it] == x.shift }.orEmpty()
@@ -389,15 +389,15 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     }
     val (inWin, outWin) = r.moves.partition { it.day in r.window }
     val lead = if (r.prerequisite.isEmpty()) "この組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
-        else "今の勤務表の勤務に合わせて上限を上げ、この組も例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
+        else "今の勤務表に合わせて上限を上げます。そのうえでこの組を例外として緩めると、必須違反が ${r.att}件 減る見込みです。"
     val keep = if (r.rk > r.h0) "設定をそのままにもう一度つくると、上限0の勤務が外されて必須違反が ${r.rk}件 に増えます（元の勤務表が残ります）。" else null
     val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
     val title = "${target.name} ${target.span}　${target.what}"
     return RelaxTrialText(
         title = title,
-        dialogTitle = "例外として上限を緩める候補 — ${target.name} ${target.span} ${target.what}",
+        dialogTitle = "例外として上限を緩める候補：${target.name} ${target.span} ${target.what}",
         hardLine = "必須違反: ${r.h0}件 → ${r.rr}件",
-        scaleLine = "変更規模: 設定 ${r.prerequisite.size + r.relaxes.size}項目・${people}人・${r.moves.size}セル",
+        scaleLine = "変わるもの: 設定${r.prerequisite.size + r.relaxes.size}つ、${people}人の勤務、${r.moves.size}か所",
         prerequisiteRows = preRows,
         lead = lead,
         rows = r.relaxes.map(::row),
@@ -773,8 +773,8 @@ internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数
 internal const val PRE_RUN_OVERCAP_HEAD = "設定上入れないシフトと希望（要調整）"
 internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、例外として後から「設定を緩めたら」で試せます。"
 internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、例外として上限を緩めてください。"
-internal const val PRE_RUN_ZERO_CAP_TAG = "（入れない指定が絡む）"
-internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れない指定が絡む」行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。例外として緩めると解ける場合があります。つくったあとに「設定を緩めたら」で試せます。"
+internal const val PRE_RUN_ZERO_CAP_TAG = "（入れないシフトの指定が関係）"
+internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れないシフトの指定が関係」の行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。例外として緩めると解ける場合があります。つくったあとに「設定を緩めたら」で試せます。"
 internal const val PRE_RUN_RERUN_NOTE = "今の勤務表に個人の上限（0回）のシフトが入っています。つくると外されます。"
 
 internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
@@ -797,11 +797,11 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
         fun pin(core: List<com.magi.app.v6.ConstraintMus.Item>) = core.firstNotNullOfOrNull { it as? com.magi.app.v6.ConstraintMus.WishPin }
         for (d in s.dayProofs) pin(d.core).let { w ->
             val z = if (d.day in s.zeroCapProofDays) PRE_RUN_ZERO_CAP_TAG else ""
-            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません・証明つき）$z", w?.staff, w?.day, w != null))
+            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null))
         }
         for (c in s.staffProofs) pin(c.core).let { w ->
             val z = if (s.zeroCapStaffProof(c)) PRE_RUN_ZERO_CAP_TAG else ""
-            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません・証明つき）$z", w?.staff, w?.day, w != null))
+            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null))
         }
         for (f in s.forcedShortfalls) add(PreRunRow("「${f.shiftSymbol}」 ${f.cells}日で担当できる人より必要人数が多く、人員不足が合計${f.amount}人残ります" +
             (if (f.shiftIndex in s.zeroCapShortShifts) PRE_RUN_ZERO_CAP_TAG else "")))
@@ -809,7 +809,7 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
     val rerun = s.rerunClears.map { PreRunRow("${name(it.staff)} ${day(it.day)} ${sym(it.shift)}", it.staff, it.day) }
     val wall = s.wallHint?.let { "個人の上限0：${it.pairs}組（${it.staffCount}人）。入れないシフトの指定です。つくったあとに、例外として緩める試算もできます。" }
     return PreRunSheetText(
-        floorHeader = if (floor.isEmpty()) null else "計算では消えない（${floor.size}件）",
+        floorHeader = if (floor.isEmpty()) null else "何度つくっても残る（${floor.size}件）",
         floorRows = floor,
         rerunHeader = if (rerun.isEmpty()) null else "もう一度つくると外れる（${rerun.size}件）",
         rerunRows = rerun,

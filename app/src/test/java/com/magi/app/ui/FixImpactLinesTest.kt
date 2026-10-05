@@ -11,14 +11,14 @@ class FixImpactLinesTest {
     private fun s(dh: Int, vararg diff: Pair<String, Int>) = FixSuggestion(FixKind.CHANGE, emptyList(), "x", dh, 0, diff.toList())
 
     @Test fun hardLineComesFromDeltaHard() {
-        assertEquals("必須の約束: 減る（2件）", fixImpactLines(s(-2)).first)
-        assertEquals("必須の約束: 変わらない", fixImpactLines(s(0)).first)
-        assertEquals("必須の約束: 増える（1件）", fixImpactLines(s(1)).first)
+        assertEquals("必須違反: 2件減る", fixImpactLines(s(-2)).first)
+        assertEquals("必須違反: 変わらない", fixImpactLines(s(0)).first)
+        assertEquals("必須違反: 1件増える", fixImpactLines(s(1)).first)
     }
 
     @Test fun cautionListsOnlyWorsenedSoftFamilies() {
         val (_, caution) = fixImpactLines(s(-1, "covU" to -1, "high" to 1, "c1" to -1, "covO" to 2))
-        assertEquals("注意: 上限超過 +1・人員過剰 +2", caution)
+        assertEquals("増える要調整: 上限超過 +1・人員過剰 +2", caution)
         assertNull(fixImpactLines(s(-1, "covU" to -1)).second)
     }
 }

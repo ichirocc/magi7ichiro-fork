@@ -21,6 +21,8 @@ class SearchStrengthTest {
             assertEquals(EjectionChainMode.OFF, UiState().ejectionChain)
             assertEquals(false, PolishGate.c1EjectionChain)
             assertEquals(false, PolishGate.allFamilyEjectionChain)
+            assertEquals(true, UiState().ejectionChainSwap)
+            assertEquals(true, PolishGate.ejectionChainSwapMoves)
         } finally {
             PolishGate.combineExhaustPairs = saved[0]; PolishGate.wideC3nBreakDays = saved[1]
             PolishGate.countChainPolish = saved[2]; PolishGate.aptFairSoftTolerance = saved[3]

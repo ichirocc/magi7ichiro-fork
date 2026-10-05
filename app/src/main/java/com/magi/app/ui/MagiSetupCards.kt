@@ -169,7 +169,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
             }
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
-                c.wishes == 0 -> "次に『希望シフト』を登録すると 解消度 が上がります。"
+                c.wishes == 0 -> "次に『希望シフト』を登録すると でき具合 が上がります。"
                 // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
                 //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
                 else -> "準備OK。画面下の『${if (ui.hasResult) "もう一度つくる" else "勤務表をつくる"}』で作成できます。"
@@ -366,6 +366,15 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                         OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetEjectionChain(m)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
                     }
                 }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("入れ替えも1手として使う")
+                    Text("同じ日の2人、同じ人の2日を入れ替える手も試します（既定はON）",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = ui.ejectionChainSwap, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) },
+                    enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
             }
         }
     }

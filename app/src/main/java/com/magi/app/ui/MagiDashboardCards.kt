@@ -264,7 +264,7 @@ internal fun RelaxTrialDialog(
                         onClick = { onConfirm(token) },
                         enabled = !ui.running,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp),
-                    ) { Text("例外として上限を緩め、手順を当てる") }
+                    ) { Text("上限を緩め、手順を当てる（元に戻せます）") }
                     Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
                 }
             }
@@ -402,7 +402,7 @@ internal fun OperatorNextActionCard(
     onStop: () -> Unit,      // やめる（停止）
     onExport: () -> Unit,    // 印刷・書き出し / そのまま配る（CSV書き出し）
     onSchedule: () -> Unit,  // 中身を見る（勤務表へ）
-    onFix: () -> Unit,       // なおすのを手伝って（勤務表で手直し）
+    onFix: () -> Unit,       // なおし方を見る（勤務表で手直し）
     onSetup: () -> Unit,     // データを見直す（編集へ）
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
@@ -452,7 +452,7 @@ internal fun OperatorNextActionCard(
         //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
         ui.coverageDiag?.shortfalls?.any { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow } == true ->
             OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人員不足です。" } ?: "人員不足の日があります。"),
-                "なおすのを手伝って", onFix, true, null, onSetup)
+                "なおし方を見る", onFix, true, null, onSetup)
         // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
         ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
@@ -470,7 +470,7 @@ internal fun OperatorNextActionCard(
         //   S6 の判定が済むまでは「下限」と言わない（設定を緩めれば減るかもしれない）。
         ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber,
-                if (ui.relaxSearching) "必須違反が ${ui.bestHard}件 残っています。" else "今の希望とルールの組み合わせでは、必須違反 ${ui.bestHard}件 が下限の見込みです。",
+                if (ui.relaxSearching) "必須違反が ${ui.bestHard}件 残っています。" else "今の希望とルールでは、必須違反 ${ui.bestHard}件 からこれ以上は減らせない見込みです。",
                 "ぶつかっている希望を見る", onShowWishes, true, "このまま書き出す", onExport)
         !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
@@ -513,15 +513,15 @@ internal fun OperatorNextActionCard(
             }
             // [3.480.0 ホームAIリデザイン] 旧: 「できあがり度：N%」の数字1行＋その意味を説明する注記1行を
             // 常時2行表示していた。grilling決定#1のとおり文言（正直さ）は変えず、①前向きな言い回し
-            // 「解消度：N%（残りM件）」＋バーへ統合 ②注記は既定折りたたみ（ConstraintHelpExpander と
+            // 「でき具合：N%（残りM件）」＋バーへ統合 ②注記は既定折りたたみ（ConstraintHelpExpander と
             // 同じ開閉パターン）にして、常時見えるのは進捗バー1本だけにする。
-            // [3.483.0 H-2] 旧: 必須0なら一律「解消済み」だが、解消度は調整（ソフト）違反が残ると 100% に
+            // [3.483.0 H-2] 旧: 必須0なら一律「解消済み」だが、でき具合は調整（ソフト）違反が残ると 100% に
             //   ならない（40+比率×60）＝「78%（解消済み）」という自己矛盾。必須0のときは残りの単位を調整件数へ。
             val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown)
-            // [3.483.0 H-5] 実行中は直下の進捗行（progressSummary）が同じ残数を出すため、解消度の行とバーは出さない。
+            // [3.483.0 H-5] 実行中は直下の進捗行（progressSummary）が同じ残数を出すため、でき具合の行とバーは出さない。
             if (!ui.running) {
                 Text(
-                    "解消度：${ui.satisfaction}%（${remainingLabel}）",
+                    "でき具合：${ui.satisfaction}%（${remainingLabel}）",
                     style = MaterialTheme.typography.bodyMedium, color = plan.fg, fontWeight = FontWeight.Bold,
                 )
                 LinearProgressIndicator(
@@ -541,7 +541,7 @@ internal fun OperatorNextActionCard(
                         contentDescription = null, tint = plan.fg.copy(alpha = 0.8f), modifier = Modifier.size(16.dp),
                     )
                     Text(
-                        if (detailOpen) "ⓘ 詳しい説明を閉じる" else "ⓘ 解消度の意味",
+                        if (detailOpen) "ⓘ 詳しい説明を閉じる" else "ⓘ でき具合の意味",
                         style = MaterialTheme.typography.bodySmall, color = plan.fg.copy(alpha = 0.8f),
                     )
                 }
@@ -549,7 +549,7 @@ internal fun OperatorNextActionCard(
                 //   不在を補う注記: 反映済み・取消可・確定は書き出し時）を1文字も変えず折りたたみへ収納。
                 if (detailOpen) {
                     Text(
-                        "※解消度＝最初からの違反の減り具合（必須違反が残る間は最大55%）。" +
+                        "※でき具合＝最初からの違反の減り具合（必須違反が残る間は最大55%）。" +
                             "結果は下書きに反映済み・「元に戻す」で取消可・確定は書き出し時です。",
                         style = MaterialTheme.typography.bodySmall, color = plan.fg.copy(alpha = 0.8f),
                     )
@@ -1187,10 +1187,10 @@ internal fun V6DashboardCard(v6: V6PortReport?) {
                     sub = "必要人数 ${v6.demand} のうち満たせた割合",
                     accent = tint,
                 )
-                // [D3-full案A] 「解消度(全体の完成度)」と「人員充足率(人員の一側面)」は別指標。
+                // [D3-full案A] 「でき具合(全体の完成度)」と「人員充足率(人員の一側面)」は別指標。
                 //   役割の違いを明示し、片方を他方の内訳と誤認させない(架空分解を避ける)。
                 Text(
-                    "※全体の完成度は「解消度」（ホーム）で確認。ここは人員の充足のみ。",
+                    "※全体の完成度は「でき具合」（ホーム）で確認。ここは人員の充足のみ。",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

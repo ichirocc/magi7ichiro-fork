@@ -1254,6 +1254,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで直す → ${ejectionChainLabel(mode)}")
     }
 
+    fun setEjectionChainSwap(on: Boolean) {
+        com.magi.app.v6.PolishGate.ejectionChainSwapMoves = on
+        _ui.update { it.copy(ejectionChainSwap = on) }
+        logOp("I", "設定変更: 玉突きで入れ替えも使う → ${if (on) "ON" else "OFF"}")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 
@@ -1456,7 +1462,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if ((breakdown[top] ?: 0) > 0) hardFamilyJp(top) else null
     }
 
-    /** 5 つの入口（フッター・ホーム・イベント）が通る。計算では消えない／もう一度つくると外れる項目があればシートを出して止まる。 */
+    /** 5 つの入口（フッター・ホーム・イベント）が通る。何度つくっても残る／もう一度つくると外れる項目があればシートを出して止まる。 */
     fun runV6FullOptimize() {
         val st = state; val sched = currentSchedule
         if (st != null && sched != null && !_ui.value.running && PreRunCheck.fingerprint(st, sched) != preRunAckKey) {
@@ -2053,7 +2059,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 直近の確定の結果 1 行。確定の後のデータから変わったら出さない（§9）。 */
     internal fun relaxDoneLine(): String? = relaxDone?.takeIf { it.first == relaxCtxNow() }?.second
 
-    /** 確定「例外として上限を緩め、手順を当てる」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
+    /** 確定「上限を緩め、手順を当てる（元に戻せます）」（§6。ガードはすべて最初の書き換えより前）。Undo 1 段で設定と盤面がまとめて戻る。 */
     internal fun relaxAndApply(token: RelaxToken) {
         val st = state ?: return
         val b = currentSchedule ?: return
@@ -2506,7 +2512,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }
 
-    /** [operator_ux §5] 「なおすのを手伝って」用：ある不足枠(日×シフト)に1タップで入れられる候補職員。 */
+    /** [operator_ux §5] 「なおし方を見る」用：ある不足枠(日×シフト)に1タップで入れられる候補職員。 */
     data class FixCandidate(val staffIndex: Int, val name: String, val groupSymbol: String, val fromRest: Boolean)
     fun shortageFixCandidates(dayIndex: Int, shiftIndex: Int): List<FixCandidate> {
         val st = state ?: return emptyList()

@@ -71,8 +71,8 @@ private fun unitOf(family: String) = if (family == "fair" || family == "weekly")
 
 private fun labelOf(family: String) = breakdownLabels[family] ?: family
 
-/** ホームの解消度に添える残り。必須0の要調整は件数の族だけ数える（pt の公平化・曜日の偏りを件と足さない）。
- *  pt だけ残っても解消度は 100% でないので「解消済み」とは言わない。 */
+/** ホームのでき具合に添える残り。必須0の要調整は件数の族だけ数える（pt の公平化・曜日の偏りを件と足さない）。
+ *  pt だけ残ってもでき具合は 100% でないので「解消済み」とは言わない。 */
 internal fun homeRemainingLabel(bestHard: Long, shortDays: Int, breakdown: Map<String, Int>): String {
     val softN = MirrorKeys.soft.filter { unitOf(it) == "件" }.sumOf { breakdown[it] ?: 0 }
     val ptN = MirrorKeys.soft.filter { unitOf(it) == "pt" }.sumOf { breakdown[it] ?: 0 }

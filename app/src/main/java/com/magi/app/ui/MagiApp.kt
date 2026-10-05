@@ -231,7 +231,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     //   本番と違う性質の解になる。ホームへ次の一手を1枚出す（InterruptedBannerと同型の使い捨て案内）。
     var showImportGuidance by rememberSaveable { mutableStateOf(false) }
     var pendingExportKind by remember { mutableStateOf<String?>(null) } // staff/wishes/cons: コンポーネント別出力
-    var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおすのを手伝って」対話
+    var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおし方を見る」対話
     var relaxDialog by remember { mutableStateOf(false) }            // [S6] 設定を緩める候補
     var relaxFrom by remember { mutableStateOf<Pair<Int, Int>?>(null) } // [S6] セルから開いたとき、確定後に選び直すセル
     var wishConflicts by remember { mutableStateOf(false) }          // [思考誘導S3] ぶつかっている希望の一覧

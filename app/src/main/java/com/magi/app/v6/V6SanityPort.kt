@@ -1341,7 +1341,7 @@ object V6SanityPort {
                     val labels = sc.core.joinToString(" ・ ") { itemLabel(it) }
                     val hints = sc.core.take(2).joinToString(" / ") { relaxHint(it) }
                     out.add(SettingIssue(IssueKind.WISH, "${name}さんの希望と条件の組合せ",
-                        "次の${sc.core.size}件は同時に成立しません（証明つき）: $labels",
+                        "次の${sc.core.size}件は同時に成立しません: $labels",
                         "いずれか1件を緩めてください（例: $hints）"))
                 }
                 // 日別の証明（ConstraintMus の canServe）はコアで希望固定されていない人を mayPlace で数える＝上限 0 の人を前提として名指しする。
@@ -1357,7 +1357,7 @@ object V6SanityPort {
                     val labels = dc.core.joinToString(" ・ ") { itemLabel(it) }
                     val wishHint = dc.core.firstOrNull { it is ConstraintMus.WishPin }?.let { relaxHint(it) }
                     out.add(SettingIssue(IssueKind.WISH, "${safeDayLabel(state.startDate, dc.day)} の必要人数と固定希望の衝突",
-                        "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません（証明つき）: $labels" + capZeroNote(dc),
+                        "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません: $labels" + capZeroNote(dc),
                         "この日の希望を1件調整するか、必要人数を下げてください" + (wishHint?.let { "（例: $it）" } ?: "")))
                 }
             }
