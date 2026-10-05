@@ -1251,7 +1251,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setC1EjectionChain(on: Boolean) {
         com.magi.app.v6.PolishGate.c1EjectionChain = on
         _ui.update { it.copy(c1EjectionChain = on) }
-        logOp("I", "設定変更: 月全体で違反を玉突きで直す → ${if (on) "ON" else "OFF"}")
+        logOp("I", "設定変更: 月全体で期間の制約を起点に玉突きで直す → ${if (on) "ON" else "OFF"}")
+    }
+
+    fun setAllFamilyEjectionChain(on: Boolean) {
+        com.magi.app.v6.PolishGate.allFamilyEjectionChain = on
+        _ui.update { it.copy(allFamilyEjectionChain = on) }
+        logOp("I", "設定変更: 月全体ですべての違反を起点に玉突きで直す → ${if (on) "ON" else "OFF"}")
     }
 
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。

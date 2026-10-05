@@ -185,6 +185,7 @@ internal sealed interface MagiEvent {
         data class SetSearchStrength(val strength: SearchStrength) : Settings
         data class SetC1MoveARepair(val on: Boolean) : Settings
         data class SetC1EjectionChain(val on: Boolean) : Settings
+        data class SetAllFamilyEjectionChain(val on: Boolean) : Settings
         data class SetLnsAdaptive(val on: Boolean) : Settings
     }
 

@@ -11,6 +11,9 @@ import kotlin.random.Random
  *
  * 広域ビーム（[C1WindowPolish.applyC1BeamPolish]）との違い: ビームは各段で HARD≦開始を要求し、継ぎ足しは同日の
  * covU 玉突き（`findCovUChain`）に限る。ここは継ぎ足し先を日をまたいで職員の行にも広げ、途中の HARD 増を許す。
+ *
+ * [Origin.ALL, 測定中・既定 OFF＝`PolishGate.allFamilyEjectionChain`] 起点を正式評価器が場所を返す全族の違反へ広げる
+ * （修復は v2 と同じ残存負債＝開始から増えた族）。採否・保護条件は C1 起点と同じ。
  */
 internal object C1EjectionChainPolish {
 
@@ -28,7 +31,22 @@ internal object C1EjectionChainPolish {
         val crossFamily: Boolean = defaultCrossFamily,
         /** v2: Δ評価の上位から族別差分まで調べる候補数。 */
         val familyProbe: Int = 48,
+        /** 起点。C1＝c1 不足窓、ALL＝正式評価器が場所を返す全族の違反（`PolishGate.allFamilyEjectionChain`）。 */
+        val origin: Origin = Origin.C1,
+        /** ALL: 違反 1 箇所あたり連鎖を始める初手の数（Δ評価の良い順）。 */
+        val seedBranch: Int = 2,
+        /** ALL: 1 巡で起点にする違反箇所の族ごとの上限（巡ごとにずらす）。起点づくりの評価で予算を使い切らない。 */
+        val unitsPerFamily: Int = 6,
+        /** 起点 1 つの連鎖に使う評価数の上限（0 以下＝無制限）。1 つの起点が全予算を使わないため。 */
+        val perSeedEvaluations: Long = 30_000L,
+        /** 0 以下＝無制限。重複・HARD 超過で捨てた候補も数える（決定的モードの停止条件）。 */
+        val maxCandidates: Long = 0L,
     )
+
+    enum class Origin { C1, ALL }
+
+    /** 測定用: 連鎖に入る直前の盤面を受け取る（前段の揺れと連鎖の効果を切り分ける）。本番では null。 */
+    @Volatile internal var entryProbe: ((Array<IntArray>) -> Unit)? = null
 
     /** 測定用の切替（v1/v2 を同条件で比べる）。 */
     @Volatile internal var defaultCrossFamily: Boolean = true
@@ -36,7 +54,16 @@ internal object C1EjectionChainPolish {
     class Stats {
         var seeds = 0; var candidates = 0L; var evaluations = 0L; var chainsTried = 0; var accepted = 0
         var acceptedMaxDepth = 0; var dedup = 0L; var timeouts = 0; var endReason = "完了"
+        var generated = 0L
+        /** 起点の族 → [起点数, 評価数, 採用数, 加重スコアの減少量]。 */
+        val byFamily = LinkedHashMap<String, LongArray>()
+        var mismatch: String? = null
     }
+
+    private class Seed(val family: String, val i: Int, val j: Int, val k: Int)
+
+    /** 違反クラス名（`vio-aptLow` 等）→ 族名。 */
+    private fun familyOfClass(cls: String): String = cls.removePrefix("vio-").let { if (it == "aptLow" || it == "aptHigh") "apt" else it }
 
     private fun familyWeighted(de: DeltaEvaluator): LongArray {
         val raw = de.familyRaw()
@@ -59,23 +86,30 @@ internal object C1EjectionChainPolish {
         val work = normalizeSchedule(schedule, p)
         var rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         val before = rep
+        entryProbe?.invoke(Array(p.S) { work[it].copyOf() })
+        val all = config.origin == Origin.ALL
+        val crossFamily = all || config.crossFamily
         val hasUnassigned = work.any { row -> row.any { it !in 0 until p.K } }
-        if (p.cons1.isEmpty() || hasUnassigned || (rep.breakdown["c1"] ?: 0) == 0) {
+        if (hasUnassigned || (if (all) rep.total == 0 else p.cons1.isEmpty() || (rep.breakdown["c1"] ?: 0) == 0)) {
             return V6HotfixPasses.CyclicSwapResult(work, rep.total, rep.total, 0,
                 listOf(MirrorLog(tag = "C1EjectionChain", message = "対象なし=スキップ")), report = rep)
         }
         val de = DeltaEvaluator(p)
         de.reset(work)
         val zob = Random(0xE1EC7L).let { r -> Array(p.S) { Array(p.T) { LongArray(p.K) { r.nextLong() } } } }
+        // 2 本目の独立なハッシュ。1 本目だけが一致した別盤面（衝突）を既訪と誤認して枝を捨てないため。
+        val zob2 = Random(0x5EC0DL).let { r -> Array(p.S) { Array(p.T) { LongArray(p.K) { r.nextLong() } } } }
         var hash = 0L
-        for (i in 0 until p.S) for (j in 0 until p.T) hash = hash xor zob[i][j][work[i][j]]
+        var hash2 = 0L
+        for (i in 0 until p.S) for (j in 0 until p.T) { hash = hash xor zob[i][j][work[i][j]]; hash2 = hash2 xor zob2[i][j][work[i][j]] }
         val pinBlocks = PinBlockAttribution()
 
         fun out(): Boolean {
             val why = when {
                 shouldStop() -> "中断"
                 config.maxEvaluations > 0 && stats.evaluations >= config.maxEvaluations -> "評価上限"
-                config.maxEvaluations <= 0 && EngineClock.nowMs() - t0 >= config.maxMillis -> "時間切れ"
+                config.maxCandidates > 0 && stats.generated >= config.maxCandidates -> "生成上限"
+                config.maxEvaluations <= 0 && config.maxCandidates <= 0 && EngineClock.nowMs() - t0 >= config.maxMillis -> "時間切れ"
                 else -> return false
             }
             stats.endReason = why
@@ -86,16 +120,16 @@ internal object C1EjectionChainPolish {
 
         fun move(i: Int, j: Int, k: Int) {
             hash = hash xor zob[i][j][work[i][j]] xor zob[i][j][k]
+            hash2 = hash2 xor zob2[i][j][work[i][j]] xor zob2[i][j][k]
             work[i][j] = k
             de.apply(i, j, k)
         }
 
         var applied = 0
         var round = 0
-        while (round < config.maxRounds && !out()) {
-            round++
-            var improvedThisRound = false
-            val seeds = ArrayList<IntArray>()
+
+        fun c1Seeds(): List<Seed> {
+            val seeds = ArrayList<Seed>()
             for (c in p.cons1) {
                 val x = c.shiftIdx
                 if (x !in 0 until p.K || c.day1 <= 0) continue
@@ -103,45 +137,118 @@ internal object C1EjectionChainPolish {
                     if (!p.mayPlace(i, x)) continue
                     for (j in 0 until p.T) {
                         if (work[i][j] == x || p.wishLocked(i, j)) continue
-                        if (inDeficientC1Window(p, work, i, x, c.day1, c.day2, j)) seeds.add(intArrayOf(i, j, x))
+                        if (inDeficientC1Window(p, work, i, x, c.day1, c.day2, j)) seeds.add(Seed("c1", i, j, x))
                     }
                 }
             }
+            return seeds
+        }
+
+        /**
+         * 全族の起点: 正式評価器の場所（セル・回数(職員,シフト)・被覆(シフト,日)・偏り(職員)）ごとに関与セルを集め、
+         * その中の Δ評価が良い初手を [Config.seedBranch] 個とる。族は HARD→重みの大きい順に並べ、族をまたいで
+         * 1 件ずつ交互に並べる（一部の族だけで予算を使い切らない）。
+         */
+        fun allSeeds(): List<Seed> {
+            val perFamily = LinkedHashMap<String, ArrayList<List<IntArray>>>()   // 族 → 違反 1 箇所ごとの関与セル
+            fun addUnit(fam: String, cells: List<IntArray>) { perFamily.getOrPut(fam) { ArrayList() }.add(cells) }
+            val row = { i: Int -> (0 until p.T).map { intArrayOf(i, it) } }
+            val col = { j: Int -> (0 until p.S).map { intArrayOf(it, j) } }
+            for ((key, classes) in rep.cellFamilies) {
+                val (i, j) = key.split(",").map { it.toInt() }
+                for (c in classes) { val f = familyOfClass(c); if (f != "c1") addUnit(f, listOf(intArrayOf(i, j))) }
+            }
+            for ((key, classes) in rep.countFamilies) {
+                val i = key.split(",")[0].toInt()
+                for (c in classes) addUnit(familyOfClass(c), row(i))
+            }
+            for ((key, classes) in rep.needFamilies) {
+                val j = key.split(",")[1].toInt()
+                for (c in classes) addUnit(familyOfClass(c), col(j))
+            }
+            for ((f, locs) in rep.distLocations) for (l in locs) addUnit(f, row(l[0]))
+            val lists = ArrayList<Pair<String, List<Seed>>>()
+            val c1 = c1Seeds()
+            if (c1.isNotEmpty()) lists.add("c1" to c1)
+            for ((f, us0) in perFamily) {
+                val out = ArrayList<Seed>()
+                val off = ((round - 1) * config.unitsPerFamily) % us0.size
+                val us = (us0.drop(off) + us0.take(off)).take(config.unitsPerFamily)
+                for (cells in us) {
+                    val cand = ArrayList<LongArray>()
+                    for (c in cells) {
+                        val i = c[0]; val j = c[1]
+                        if (p.wishLocked(i, j)) continue
+                        for (k in p.allowedShiftsForStaff(i)) {
+                            if (k == work[i][j]) continue
+                            val sc = de.previewMove(i, j, k); stats.evaluations++; stats.generated++
+                            if (hardOf(sc) > hardOf(de.score()) + config.hardSlack) continue
+                            cand.add(longArrayOf(sc, i.toLong(), j.toLong(), k.toLong()))
+                        }
+                    }
+                    cand.sortWith(compareBy<LongArray>({ it[0] }, { it[1] }, { it[2] }, { it[3] }))
+                    for (c in cand.take(config.seedBranch)) out.add(Seed(f, c[1].toInt(), c[2].toInt(), c[3].toInt()))
+                }
+                if (out.isNotEmpty()) lists.add(f to out.distinctBy { Triple(it.i, it.j, it.k) })
+            }
+            lists.sortWith(compareBy<Pair<String, List<Seed>>>({ if (it.first in MirrorKeys.hard) 0 else 1 }, { -MirrorKeys.weightOf(it.first) }, { it.first }))
+            val merged = ArrayList<Seed>()
+            var n = 0
+            while (true) {
+                var any = false
+                for ((_, l) in lists) if (n < l.size) { merged.add(l[n]); any = true }
+                if (!any) break
+                n++
+            }
+            return merged
+        }
+
+        while (round < config.maxRounds && !out()) {
+            round++
+            var improvedThisRound = false
+            val seeds = if (all) allSeeds() else c1Seeds()
             for (seed in seeds) {
                 if (out()) break
-                val (si, sj, sx) = Triple(seed[0], seed[1], seed[2])
-                if (work[si][sj] == sx || p.cons1.none { it.shiftIdx == sx && it.day1 > 0 && inDeficientC1Window(p, work, si, sx, it.day1, it.day2, sj) }) continue
+                val si = seed.i; val sj = seed.j; val sx = seed.k
+                if (work[si][sj] == sx) continue
+                if (!all && p.cons1.none { it.shiftIdx == sx && it.day1 > 0 && inDeficientC1Window(p, work, si, sx, it.day1, it.day2, sj) }) continue
                 stats.seeds++
+                val famStat = stats.byFamily.getOrPut(seed.family) { LongArray(4) }
+                famStat[0]++
+                val evalAtSeed = stats.evaluations
+                fun seedSpent() = config.perSeedEvaluations > 0 && stats.evaluations - evalAtSeed >= config.perSeedEvaluations
                 val baseScore = de.score()
                 val baseHard = hardOf(baseScore)
-                // 盤面ハッシュ→到達した最浅の深さ。より浅く再到達したときは残りの探索余地が増えるので再展開する。
-                val visited = HashMap<Long, Int>()
+                // 盤面ハッシュ→(2 本目のハッシュ, 到達した最浅の深さ)。より浅く再到達したときは残りの探索余地が増えるので再展開する。
+                val visited = HashMap<Long, LongArray>()
+                fun seenDepth(h: Long, h2: Long): Int? = visited[h]?.takeIf { it[0] == h2 }?.get(1)?.toInt()
                 val path = ArrayList<IntArray>()   // (i, j, old, new)
                 var bestScore = baseScore
                 var bestPath: List<IntArray> = emptyList()
                 val touched = HashSet<Int>()
 
-                val famStart = if (config.crossFamily) familyWeighted(de) else LongArray(0)
+                val famStart = if (crossFamily) familyWeighted(de) else LongArray(0)
                 fun dfs(depth: Int, li: Int, lj: Int) {
                     val s = de.score()
                     if (s < bestScore) { bestScore = s; bestPath = path.map { it.copyOf() } }
-                    if (depth >= config.maxDepth || out()) return
+                    if (depth >= config.maxDepth || out() || seedSpent()) return
                     val cand = ArrayList<LongArray>()
                     fun consider(i: Int, j: Int) {
                         if (touched.contains(i * p.T + j) || p.wishLocked(i, j)) return
                         val cur = work[i][j]
                         for (k in p.allowedShiftsForStaff(i)) {
                             if (k == cur) continue
+                            stats.generated++
                             val sc = de.previewMove(i, j, k); stats.evaluations++
                             if (hardOf(sc) > baseHard + config.hardSlack) continue
-                            val seen = visited[hash xor zob[i][j][cur] xor zob[i][j][k]]
+                            val seen = seenDepth(hash xor zob[i][j][cur] xor zob[i][j][k], hash2 xor zob2[i][j][cur] xor zob2[i][j][k])
                             if (seen != null && seen <= depth + 1) { stats.dedup++; continue }
                             stats.candidates++
                             cand.add(longArrayOf(sc, i.toLong(), j.toLong(), k.toLong()))
                         }
                     }
-                    if (config.crossFamily) {
-                        for (i2 in 0 until p.S) { for (j2 in 0 until p.T) consider(i2, j2); if (out()) return }
+                    if (crossFamily) {
+                        for (i2 in 0 until p.S) { for (j2 in 0 until p.T) consider(i2, j2); if (out() || seedSpent()) return }
                         cand.sortWith(compareBy<LongArray>({ it[0] }, { it[1] }, { it[2] }, { it[3] }))
                         val famNow = familyWeighted(de)
                         val worse = LongArray(famNow.size) { maxOf(0L, famNow[it] - famStart[it]) }
@@ -172,12 +279,13 @@ internal object C1EjectionChainPolish {
                     val b = config.branching[minOf(depth, config.branching.size - 1)]
                     var taken = 0
                     for (c in cand) {
-                        if (taken >= b || out()) break
+                        if (taken >= b || out() || seedSpent()) break
                         val i = c[1].toInt(); val j = c[2].toInt(); val k = c[3].toInt()
                         val nh = hash xor zob[i][j][work[i][j]] xor zob[i][j][k]
-                        val seen = visited[nh]
+                        val nh2 = hash2 xor zob2[i][j][work[i][j]] xor zob2[i][j][k]
+                        val seen = seenDepth(nh, nh2)
                         if (seen != null && seen <= depth + 1) { stats.dedup++; continue }
-                        visited[nh] = depth + 1
+                        visited[nh] = longArrayOf(nh2, (depth + 1).toLong())
                         taken++
                         stats.chainsTried++
                         val old = work[i][j]
@@ -191,31 +299,54 @@ internal object C1EjectionChainPolish {
 
                 val old0 = work[si][sj]
                 path.add(intArrayOf(si, sj, old0, sx)); touched.add(si * p.T + sj)
-                visited[hash] = 0
+                visited[hash] = longArrayOf(hash2, 0L)
                 move(si, sj, sx)
-                visited[hash] = 1
+                visited[hash] = longArrayOf(hash2, 1L)
                 dfs(1, si, sj)
                 move(si, sj, old0)
                 path.clear()
+                famStat[1] += stats.evaluations - evalAtSeed
 
                 if (bestPath.isEmpty() || bestScore >= baseScore) continue
                 val prev = Array(p.S) { work[it].copyOf() }
                 for (m in bestPath) move(m[0], m[1], m[3])
                 val rep2 = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
+                deltaMismatch(de, rep2)?.let { diff ->
+                    // 差分評価が正式評価と食い違った＝この経路の判断は信用できない。採らずに止め、最後の正式評価済み盤面を返す。
+                    stats.mismatch = "起点=${seed.family}(${si},${sj}->${sx}) 手順=" + bestPath.joinToString(";") { "${it[0]},${it[1]}:${it[2]}->${it[3]}" } + " " + diff
+                    for (m in bestPath.asReversed()) move(m[0], m[1], m[2])
+                    stats.endReason = "差分不一致"
+                }
+                if (stats.mismatch != null) break
                 if (adoptionGate(p, prev, work, rep2, rep, pinBlocks).accepted) {
+                    famStat[2]++; famStat[3] += (rep.weightedScore - rep2.weightedScore).toLong()
                     rep = rep2; applied += bestPath.size; stats.accepted++; improvedThisRound = true
                     stats.acceptedMaxDepth = maxOf(stats.acceptedMaxDepth, bestPath.size)
                 } else {
                     for (m in bestPath.asReversed()) move(m[0], m[1], m[2])
                 }
             }
-            if (!improvedThisRound) break
+            if (!improvedThisRound || stats.mismatch != null) break
         }
         if (stats.endReason == "時間切れ") stats.timeouts++
+        val label = if (all) "全族起点" else "期間要件(c1)起点${if (crossFamily) "v2" else "v1"}"
         val logs = listOf(MirrorLog(tag = "C1EjectionChain",
-            message = "期間要件(c1)玉突き連鎖${if (config.crossFamily) "v2" else "v1"}[起点${stats.seeds}/候補${stats.candidates}/評価${stats.evaluations}/試行${stats.chainsTried}/採用${stats.accepted}/採用深さ最大${stats.acceptedMaxDepth}/重複除外${stats.dedup}/終了${stats.endReason}/時間切れ${stats.timeouts}/${EngineClock.nowMs() - t0}ms]: " +
+            message = "${label}玉突き連鎖[起点${stats.seeds}/生成${stats.generated}/候補${stats.candidates}/評価${stats.evaluations}/試行${stats.chainsTried}/採用${stats.accepted}/採用深さ最大${stats.acceptedMaxDepth}/重複除外${stats.dedup}/深さ${config.maxDepth}/終了${stats.endReason}/時間切れ${stats.timeouts}/${EngineClock.nowMs() - t0}ms]: " +
                 "c1 ${before.breakdown["c1"] ?: 0}->${rep.breakdown["c1"] ?: 0} score ${before.weightedScore.toLong()}->${rep.weightedScore.toLong()} HARD ${before.hard}->${rep.hard} total ${before.total}->${rep.total} 族差 " +
-                (before.breakdown.keys + rep.breakdown.keys).sorted().mapNotNull { f -> val d = (rep.breakdown[f] ?: 0) - (before.breakdown[f] ?: 0); if (d != 0) "$f${if (d > 0) "+" else ""}$d" else null }.joinToString(" ")))
+                (before.breakdown.keys + rep.breakdown.keys).sorted().mapNotNull { f -> val d = (rep.breakdown[f] ?: 0) - (before.breakdown[f] ?: 0); if (d != 0) "$f${if (d > 0) "+" else ""}$d" else null }.joinToString(" ") +
+                " 起点族別[" + stats.byFamily.entries.joinToString(" ") { (f, v) -> "$f:起点${v[0]}/評価${v[1]}/採用${v[2]}/減${v[3]}" } + "]" +
+                (stats.mismatch?.let { " 差分不一致: $it" } ?: "")))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, rep.total, applied, logs, pinBlocks = pinBlocks, report = rep)
+    }
+
+    /** 差分評価と正式評価の全族・必須数の食い違い（一致なら null）。族は名前で突き合わせる。 */
+    internal fun deltaMismatch(de: DeltaEvaluator, rep: ViolationReport): String? {
+        val diffs = ArrayList<String>()
+        for ((f, raw) in de.familyRaw()) if ((rep.breakdown[f] ?: 0).toLong() != raw) diffs.add("$f Δ=$raw 正式=${rep.breakdown[f] ?: 0}")
+        val (lo, hi) = de.rangeRaw()
+        if ((rep.breakdown["low"] ?: 0).toLong() != lo) diffs.add("low Δ=$lo 正式=${rep.breakdown["low"] ?: 0}")
+        if ((rep.breakdown["high"] ?: 0).toLong() != hi) diffs.add("high Δ=$hi 正式=${rep.breakdown["high"] ?: 0}")
+        if (de.score() / SCORE_HARD_UNIT != rep.hard.toLong()) diffs.add("HARD Δ=${de.score() / SCORE_HARD_UNIT} 正式=${rep.hard}")
+        return diffs.takeIf { it.isNotEmpty() }?.joinToString(", ")
     }
 }

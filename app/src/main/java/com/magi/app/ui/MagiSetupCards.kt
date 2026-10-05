@@ -354,11 +354,19 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("月全体で違反を玉突きで直す")
+                Text("月全体で、期間の制約を起点に玉突きで直す")
                 Text(EJECTION_CHAIN_NOTE,
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(checked = ui.c1EjectionChain, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1EjectionChain(it)) }, enabled = !ui.running)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("月全体で、すべての違反を起点に玉突きで直す")
+                Text("$EJECTION_CHAIN_NOTE。上と両方ONならこちらだけ動きます",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.allFamilyEjectionChain, onCheckedChange = { onEvent(MagiEvent.Settings.SetAllFamilyEjectionChain(it)) }, enabled = !ui.running)
         }
     }
 }
