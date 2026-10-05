@@ -495,7 +495,7 @@ class V6SanityPortTest {
         val issue = V6SanityPort.buildGuidance(st).single { it.where == "s0さんの「X」" }
         assertTrue(issue.neutral)
         assertEquals("個人の上限0（入れない指定）に希望が1件載っています。残るのは要調整です", issue.problem)
-        assertEquals("希望を変えるか、例外として上限を緩めてください", issue.fix)
+        assertEquals("希望を変えるか、設定で上限を見直してください", issue.fix)
         assertTrue(V6SanityPort.buildGuidance(st).none { it.where.contains("衝突") })
     }
 

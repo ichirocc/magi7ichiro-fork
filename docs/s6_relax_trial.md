@@ -1,5 +1,7 @@
 # S6「設定を緩めたら」試算 — 設計草稿・実データ検証・安全仕様
 
+> **2026-10-05（3.620.0）画面から外した**: ユーザー決定「個人の上限0は緩めない」。`RELAX_TRIAL_ENABLED=false` で背景の試算を始めない＝ホームの段・セルシートの［緩める候補を見る］・S5 の［希望を残したまま、設定を緩めて試す］・確定ダイアログはどれも出ない。`RelaxTrial` のコードとテストは残す（戻す判断のため）。以下は当時の仕様。
+
 状態: **実装済み**（2026-09-26、Android・C# 同日）。エンジン `v6/RelaxTrial.kt`（`RelaxTrialTest` R1〜R13）、VM `MagiViewModel` の S6 節、
 画面 `OperatorNextActionCard` の段と `RelaxTrialDialog`、設定の見直しの 1 行 `V6SanityPort.handPlacedUpperZeroIssue`。§14 は利用者の決定。
 S5（`docs/s5_wish_trial.md`）と同じ骨組み（試算は読むだけ・対照を差し引く・自動で選ばない・仮盤禁止）で、対象を「希望」から

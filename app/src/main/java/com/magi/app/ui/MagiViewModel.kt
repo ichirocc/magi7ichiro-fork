@@ -1998,6 +1998,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 背景で起点 3 件まで試算する（§8）。同じ ctx で済んでいる・走っているなら何もしない。 */
     private fun startRelaxTrial() {
+        if (!RELAX_TRIAL_ENABLED) return
         val st = state ?: return
         val b = currentSchedule ?: return
         if (optimizeInFlight()) return
