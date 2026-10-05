@@ -172,7 +172,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
                 c.wishes == 0 -> "次に『希望シフト』を登録すると でき具合 が上がります。"
                 // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
                 //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
-                else -> "準備OK。画面下の『${if (ui.hasResult) "もう一度つくる" else "勤務表をつくる"}』で作成できます。"
+                else -> "準備OK。画面下の『${if (ui.hasResult) "再作成" else "勤務表をつくる"}』で作成できます。"
             }
             Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                 Text("次の一手: $next", color = cs.onSecondaryContainer,

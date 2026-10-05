@@ -112,7 +112,7 @@ fun MagiViewModel.relaxStaffRangePin(i: Int, k: Int, loDelta: Int, hiDelta: Int)
     val newLo = (lo + loDelta).coerceAtLeast(0)
     val newHi = (hi + hiDelta).coerceAtLeast(newLo)
     if (newLo == lo && newHi == hi) return
-    logOp("I", "回数固定を緩和: ${opNm(i)} ${opSy(k)} $lo〜$hi → $newLo〜$newHi（もう一度つくると効果が分かります）")
+    logOp("I", "回数固定を緩和: ${opNm(i)} ${opSy(k)} $lo〜$hi → $newLo〜$newHi（再作成すると効果が分かります）")
     setStaffRange(i, k, newLo.toString(), newHi.toString())
 }
 

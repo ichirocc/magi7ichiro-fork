@@ -159,7 +159,7 @@ object V6SanityPort {
 
     /**
      * [S6 §14 Q5] 個人の上限 0 のシフトが手で置いてある（希望で固定したセルを除く）。本実行の入口の clear が外すので、
-     * もう一度つくると消える。盤面に依存するため [buildGuidance]（設定だけの診断）には入れない。
+     * 再作成すると消える。盤面に依存するため [buildGuidance]（設定だけの診断）には入れない。
      */
     fun handPlacedUpperZeroIssue(state: MagiState, p: Problem, s: Array<IntArray>): SettingIssue? {
         val cells = ArrayList<String>()
@@ -171,7 +171,7 @@ object V6SanityPort {
         }
         if (cells.isEmpty()) return null
         return SettingIssue(IssueKind.RANGE, "上限 0 の勤務（${cells.take(3).joinToString("・")}${if (cells.size > 3) " ほか" else ""}）",
-            "今の勤務表に個人の上限0のシフトが ${cells.size}件 入っています。もう一度つくると外されます",
+            "今の勤務表に個人の上限0のシフトが ${cells.size}件 入っています。再作成すると外されます",
             "残すなら、その人のそのシフトの個人上限を 1 以上に上げてください")
     }
 

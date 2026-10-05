@@ -435,7 +435,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 if (marker != null) {
                     val hasSnap = !snapTxt.isNullOrBlank()
                     val info = if (hasSnap)
-                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『もう一度つくる』で仕上げられます。" + com.magi.app.work.RunMarker.s5Suffix(marker)
+                        "前回の最適化は中断されましたが、途中までの最良の勤務表から再開できます。『再作成』で仕上げられます。" + com.magi.app.work.RunMarker.s5Suffix(marker)
                     else com.magi.app.work.RunMarker.interruptedInfo(marker)
                     _ui.update { it.copy(interruptedRun = true, interruptedInfo = info) }
                     clearRunMarker()
@@ -666,7 +666,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private fun abandonStaleBgResult() {
         bgStateKey = 0L; bgRunId = 0L; bgInput = null
         logOp("W", "バックグラウンド最適化の結果を破棄しました（反映の直前に実行・入力・盤面のいずれかが変わっていたため）")
-        _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に勤務表または設定が変わったため、結果は反映しませんでした。もう一度つくってください。") }
+        _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に勤務表または設定が変わったため、結果は反映しませんでした。再作成してください。") }
         discardBgResult("背景結果: 反映直前の再確認で破棄")
     }
 
@@ -692,7 +692,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (mismatch) {
             bgStateKey = 0L; bgRunId = 0L; bgInput = null
             logOp("W", "バックグラウンド最適化の結果を破棄しました（最適化中に設定またはデータが変わったため）")
-            _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に設定が変わったため、結果は反映しませんでした。もう一度つくってください。") }
+            _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に設定が変わったため、結果は反映しませんでした。再作成してください。") }
             // [3.475.0] 旧: この分岐だけファイル/公開結果を片付けず、次回起動が古い結果を復元しうる穴だった。
             discardBgResult("背景結果: 入力が変わったため破棄")
             return
@@ -1462,7 +1462,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if ((breakdown[top] ?: 0) > 0) hardFamilyJp(top) else null
     }
 
-    /** 5 つの入口（フッター・ホーム・イベント）が通る。何度つくっても残る／もう一度つくると外れる項目があればシートを出して止まる。 */
+    /** 5 つの入口（フッター・ホーム・イベント）が通る。何度つくっても残る／再作成すると外れる項目があればシートを出して止まる。 */
     fun runV6FullOptimize() {
         val st = state; val sched = currentSchedule
         if (st != null && sched != null && !_ui.value.running && PreRunCheck.fingerprint(st, sched) != preRunAckKey) {
@@ -1496,7 +1496,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private fun runSig() = "${_ui.value.budgetSec}|${_ui.value.workers}|${_ui.value.v6Algorithm}|${_ui.value.softPolish}"
 
     private fun repeatHint(): String? = if (runSig() == lastSettingsSig && lastResultHard > 0L)
-        "前回と同じ設定でもう一度つくります。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
+        "前回と同じ設定で再作成します。いちばん多い必須違反は『${lastTopHardFamily ?: "不明"}』。編集タブでこれを1つ緩めると改善の可能性が高いです。"
     else null
 
     /** [S5] 確定操作の文脈（§6 の 10）。希望はすでに state から消えている。 */
@@ -1670,7 +1670,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 // [再実行 keep-best] 完了結果が入力より悪化なら、入力解を維持して通知する。
-                //   「もう一度つくる」を繰り返したとき、稀に多様化フェーズ等で入力より悪い解が返り、それを採用して
+                //   「再作成」を繰り返したとき、稀に多様化フェーズ等で入力より悪い解が返り、それを採用して
                 //   良い結果(例 HARD=1)を捨てる事象があった(実機ログで確認)。入力以上の結果のみ採用する。
                 // [3.289.0/自己監査で発見・runSoftPolish と同型] 判定を betterReport（hard→weightedScore→total）へ
                 //   統一。旧: (必須, 合計) のみで weightedScore を見ておらず、3.287.0 で keep-best が正しく採用する
@@ -1694,8 +1694,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     val baseScore = KeptResultText.Score(baseHard, baseReport.weightedScore, baseTotal)
                     val capNote = res.capZero?.keptNote()
                     val keptMsg = if (s5 == null) KeptResultText.withNote(KeptResultText.screen(nowScore, baseScore), capNote)
-                    else if (s5.h0 - baseReport.hard > 0) "希望（${s5.label}）を取り消しました。必須違反は ${s5.h0} → ${baseReport.hard}（取り消しの分だけ）。もう一度つくっても、それ以上は減りませんでした。元に戻すで希望と勤務表をまとめて戻せます。"
-                    else "希望（${s5.label}）を取り消しましたが、もう一度つくっても必須違反は減りませんでした（必須 ${s5.h0}）。元に戻すで希望と勤務表をまとめて戻せます。"
+                    else if (s5.h0 - baseReport.hard > 0) "希望（${s5.label}）を取り消しました。必須違反は ${s5.h0} → ${baseReport.hard}（取り消しの分だけ）。再作成しても、それ以上は減りませんでした。元に戻すで希望と勤務表をまとめて戻せます。"
+                    else "希望（${s5.label}）を取り消しましたが、再作成しても必須違反は減りませんでした（必須 ${s5.h0}）。元に戻すで希望と勤務表をまとめて戻せます。"
                     pushReport(state ?: st0, kept, baseReport) { it.copy(
                         messageIsError = false,
                         running = false,
@@ -1716,8 +1716,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
                     val adoptedMsg = if (s5 == null) "勤務表ができました: 必須違反 ${res.report.hard}件・違反の合計 ${res.report.total}件 (${System.currentTimeMillis() - startMs}ms)"
-                    else "希望（${s5.label}）を取り消して、もう一度つくりました: 必須違反 ${s5.h0} → ${res.report.hard}（試算の見込み ${s5.pCancel}）" +
-                        (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。もう一度つくるか、元に戻す（希望と勤務表をまとめて戻す）を選べます。"
+                    else "希望（${s5.label}）を取り消して、再作成しました: 必須違反 ${s5.h0} → ${res.report.hard}（試算の見込み ${s5.pCancel}）" +
+                        (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。再作成するか、元に戻す（希望と勤務表をまとめて戻す）を選べます。"
                         else if (res.report.hard > 0) "。残りの必須違反 ${res.report.hard}件 は、次にやることカードから直します。" else "")
                     // [design-review] 旧「最適化（${res.phase}）完了: …」は res.phase="optimize:PORTFOLIO" 等の
                     //   生の内部識別子（label.tech）をそのまま画面へ出していた（operator_ux.md §2「英字符号を
@@ -1953,7 +1953,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun wishCancelOutcomeLine(): String? =
         _ui.value.wishCancelOutcome?.takeIf { ctxMatches(cancelOutcomeCtx) }?.line
 
-    /** 確定「希望を取り消して、もう一度つくる」（§6 の 1〜10。ガードはすべて最初の書き換えより前＝I5）。 */
+    /** 確定「希望を取り消して再作成」（§6 の 1〜10。ガードはすべて最初の書き換えより前＝I5）。 */
     internal fun cancelWishAndRebuild(token: WishTrialToken) {
         val st = state ?: return
         val b = currentSchedule ?: return
@@ -1968,14 +1968,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val ns = st.copy(wishes = st.wishes - key)
         if (!ensureValidForRun(ns, b)) return
         stalledBeforeConfirm = StalledSnap(st, token.boardKey, _ui.value.stalledHardFamilies)
-        pushUndo("希望の取り消しと、もう一度つくる")
+        pushUndo("希望の取り消しと再作成")
         state = ns
         ++checkSeq; checkJob?.cancel()
         _ui.update { it.copy(wishes = ns.wishes, structureEdited = true, editRev = it.editRev + 1, runSummary = null) }
         saveNow()
         val name = st.staff.getOrNull(token.staff)?.name ?: "職員${token.staff + 1}"
         val sym = st.shifts.getOrNull(token.shift)?.kigou ?: "?"
-        logOp("I", "希望取消＋もう一度つくる: $name ${token.day + 1}日（$sym） ${r.h0}/${r.hx}/${r.rk}/${r.rr}/${r.pCancel}")
+        logOp("I", "希望取消＋再作成: $name ${token.day + 1}日（$sym） ${r.h0}/${r.hx}/${r.rk}/${r.rr}/${r.pCancel}")
         startFullOptimize(null, S5Ctx(token.staff, name, token.day, sym, r.h0, r.hx, r.rk, r.rr, r.pCancel))
     }
 
@@ -2100,7 +2100,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * [ソフト研磨のみ] 現在の勤務表をHARDガード付きで局所研磨し、SOFT違反だけを削る。
-     *   「もう一度つくる」と違い破壊/多様化を行わないため必須が一時的に増えることはなく、
+     *   「再作成」と違い破壊/多様化を行わないため必須が一時的に増えることはなく、
      *   keep-best により入力より悪い結果は採用しない（HARD=0 を壊さない）。
      */
     fun runSoftPolish() {
@@ -2375,7 +2375,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (sch.size != st.staffCount || sch.any { it.size != st.dayCount }) {
             alternativeScheds = emptyList()
             _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
-                message = "この案は今のデータ（職員数・期間）と合わないため適用できません。もう一度つくってください") }
+                message = "この案は今のデータ（職員数・期間）と合わないため適用できません。再作成してください") }
             logOp("W", "他の案 ${i + 1}: 職員数/期間が今のデータと違うため適用せず")
             return
         }

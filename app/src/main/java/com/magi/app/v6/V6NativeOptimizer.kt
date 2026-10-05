@@ -1998,7 +1998,7 @@ object V6NativeOptimizer {
     /**
      * [ソフト研磨専用] 現在の盤面をHARDガード付きで局所研磨し、SOFTのみ削減する公開エントリ。
      * 破壊/多様化フェーズは行わず、hf80PostPolish の keep-best＋退化防止により入力以上の盤面のみ返す
-     * （HARD=0 は壊さない）。最適化(もう一度つくる)と違い、必須が一時的に増えることはない。
+     * （HARD=0 は壊さない）。最適化(再作成する)と違い、必須が一時的に増えることはない。
      */
     suspend fun softPolishOnly(
         state: MagiState,

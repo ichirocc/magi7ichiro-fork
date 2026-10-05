@@ -61,7 +61,7 @@ class AnalysisTriageTest {
     @Test fun relaxedBoardSaysItIsTheRelaxedBoardNotBeforeRun() {
         val t = analysisTriage(ui(breakdown = mapOf("c3" to 2)).copy(relaxedBoard = true))
         assertFalse(t.computed)
-        assertEquals("設定を緩めて手順を当てた盤面の概算です（もう一度つくる前）。", t.searchNote)
+        assertEquals("設定を緩めて手順を当てた盤面の概算です（再作成する前）。", t.searchNote)
         val after = analysisTriage(ui(breakdown = mapOf("c3" to 2), hasResult = true).copy(relaxedBoard = true))
         assertTrue("計算済みが優先", after.searchNote.startsWith("最適化後も残っている"))
     }

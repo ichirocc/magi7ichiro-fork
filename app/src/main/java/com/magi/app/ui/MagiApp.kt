@@ -1124,7 +1124,7 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
             contentPadding = pad,
         ) {
             if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-            Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            Text("再作成", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
     }
 }
@@ -1198,11 +1198,11 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("前回の最適化は中断されました", style = MaterialTheme.typography.titleMedium)
-            Text(ui.interruptedInfo ?: "入力は自動保存済みです。もう一度つくれます。",
+            Text(ui.interruptedInfo ?: "入力は自動保存済みです。再作成できます。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = onRerun, enabled = ui.loaded,
-                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("もう一度つくる") }
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("再作成") }
                 OutlinedButton(onClick = onDismiss,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }

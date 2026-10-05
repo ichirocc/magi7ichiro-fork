@@ -22,7 +22,7 @@ object RelaxTrial {
      * [staff]/[day]＝起点、[window]＝手順を言葉で並べる日の範囲（外の手は畳む）。
      * [prerequisite]＝いまの勤務表に手で置いてある上限 0 の勤務（本実行の入口の clear が外す）に合わせる分。
      * [relaxes]＝それとは別に、起点の違反を解くのに要る上限 0。数値は必須違反の件数:
-     * h0＝いま、rk＝設定そのままでもう一度つくった見込み、rkH＝[prerequisite] だけ緩めた見込み、rr＝両方緩めた見込み。
+     * h0＝いま、rk＝設定そのままで再作成した見込み、rkH＝[prerequisite] だけ緩めた見込み、rr＝両方緩めた見込み。
      */
     data class Result(
         val staff: Int, val day: Int, val window: IntRange,
@@ -34,7 +34,7 @@ object RelaxTrial {
         val pKeep: Int get() = minOf(h0, rk)
         val pPrereq: Int get() = minOf(h0, rkH)
         val pRelax: Int get() = minOf(h0, rr)
-        /** 設定をどれも変えずにもう一度つくる場合と比べて減る見込み。 */
+        /** 設定をどれも変えずに再作成する場合と比べて減る見込み。 */
         val att: Int get() = pKeep - pRelax
         /** そのうち [relaxes]（手置きに合わせる分を除く）に帰属する分。 */
         val attWalls: Int get() = pPrereq - pRelax
