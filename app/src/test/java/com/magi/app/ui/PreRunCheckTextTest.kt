@@ -32,9 +32,9 @@ class PreRunCheckTextTest {
         assertEquals("もう一度つくると外れる（4件）", t.rerunHeader)
         assertEquals(listOf("職員08 10/9 Cｱ", "職員04 10/10 Aｱ", "職員04 10/11 Cｵ", "職員08 10/29 Cｱ"), t.rerunRows.map { it.text })
         assertEquals(listOf(7 to 8, 3 to 9, 3 to 10, 7 to 28), t.rerunRows.map { it.staff to it.day })
-        assertEquals("職員08「有」など：上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、例外として後から「設定を緩めたら」で試せます。", t.overCapNote)
+        assertEquals("職員08「有」など：上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、入れない指定を設定で見直してください。", t.overCapNote)
         assertEquals(listOf("職員08「有」 本人の希望1件（個人の上限0回）", "職員11「Cｵ」 本人の希望12件（個人の上限0回）"), t.overCapRows.map { it.text })
-        assertEquals("個人の上限0：22組（8人）。入れないシフトの指定です。つくったあとに、例外として緩める試算もできます。", t.wallLine)
+        assertEquals("個人の上限0：22組（8人）。入れないシフトの指定です。", t.wallLine)
     }
 
     @Test fun zeroCapRows_taggedAndPointToRelax() {

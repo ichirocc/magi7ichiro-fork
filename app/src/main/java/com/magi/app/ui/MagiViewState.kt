@@ -412,6 +412,9 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
 /** [S6] ホームの次にやることカードの文（見出し・本文・残る件数の注記）。起点の違反と件数を名指しする。 */
 internal data class RelaxCardText(val headline: String, val body: String, val note: String?)
 
+/** [S6] 個人の上限0は例外でも緩めない（2026-10-05 ユーザー決定）。false の間は背景の試算を始めない＝ホーム・セルシート・S5 の入口がすべて出ない。 */
+internal const val RELAX_TRIAL_ENABLED = false
+
 internal const val RELAX_SEARCHING_TEXT = "希望を変えずに、個人の上限0を例外で緩める方法を調べています…"
 internal const val RELAX_NO_WALL_TEXT = "緩めても解ける組はありませんでした"
 internal const val RELAX_STOPPED_TEXT = "試算を止めました"
@@ -771,10 +774,10 @@ internal data class PreRunSheetText(
 
 internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。"
 internal const val PRE_RUN_OVERCAP_HEAD = "設定上入れないシフトと希望（要調整）"
-internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、例外として後から「設定を緩めたら」で試せます。"
-internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、例外として上限を緩めてください。"
+internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、入れない指定を設定で見直してください。"
+internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、設定で上限を見直してください。"
 internal const val PRE_RUN_ZERO_CAP_TAG = "（入れないシフトの指定が関係）"
-internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れないシフトの指定が関係」の行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。例外として緩めると解ける場合があります。つくったあとに「設定を緩めたら」で試せます。"
+internal const val PRE_RUN_ZERO_CAP_NOTE = "「入れないシフトの指定が関係」の行は、個人の上限0（入れない指定）が原因で残ります。希望のせいではありません。見直すときは、設定で入れない指定を変えてください。"
 internal const val PRE_RUN_RERUN_NOTE = "今の勤務表に個人の上限（0回）のシフトが入っています。つくると外されます。"
 
 internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState): PreRunSheetText {
@@ -807,7 +810,7 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
             (if (f.shiftIndex in s.zeroCapShortShifts) PRE_RUN_ZERO_CAP_TAG else "")))
     }
     val rerun = s.rerunClears.map { PreRunRow("${name(it.staff)} ${day(it.day)} ${sym(it.shift)}", it.staff, it.day) }
-    val wall = s.wallHint?.let { "個人の上限0：${it.pairs}組（${it.staffCount}人）。入れないシフトの指定です。つくったあとに、例外として緩める試算もできます。" }
+    val wall = s.wallHint?.let { "個人の上限0：${it.pairs}組（${it.staffCount}人）。入れないシフトの指定です。" }
     return PreRunSheetText(
         floorHeader = if (floor.isEmpty()) null else "何度つくっても残る（${floor.size}件）",
         floorRows = floor,

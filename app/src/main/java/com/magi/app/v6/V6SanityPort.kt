@@ -325,7 +325,7 @@ object V6SanityPort {
      *  就けても残る不足（= covUCell(k,j,capable) の総和）。covUCell は got 単調減少なので、これは当該セルの
      *  covU 最小値＝どう割り当てても避けられない不足量。need1/need2 両設定時は covUCell が MIN(OR救済) を返す
      *  ため過大検出しない。誤検知ゼロ・読み取り専用・データ不変。 */
-    const val ZERO_CAP_SHORTFALL_NOTE = "個人の上限0（入れない指定）が絡みます。例外として緩めると解ける場合があります"
+    const val ZERO_CAP_SHORTFALL_NOTE = "個人の上限0（入れない指定）が関係しています。見直すときは設定で変えてください"
 
     data class ForcedCovU(val shiftIndex: Int, val shiftSymbol: String, val cells: Int, val amount: Int)
 
@@ -1257,7 +1257,7 @@ object V6SanityPort {
                         // 上限 0 は意図した「入れない指定」（3.507.0）＝設定ミスと呼ばない。
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「${symOf(k)}」",
                             "個人の上限0（入れない指定）に希望が${wished}件載っています。残るのは要調整です",
-                            "希望を変えるか、例外として上限を緩めてください", neutral = true))
+                            "希望を変えるか、設定で上限を見直してください", neutral = true))
                     } else if (wished > hi) {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と希望の衝突",
