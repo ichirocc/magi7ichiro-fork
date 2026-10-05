@@ -264,7 +264,7 @@ internal fun RelaxTrialDialog(
                         onClick = { onConfirm(token) },
                         enabled = !ui.running,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp),
-                    ) { Text("上限を緩め、手順を当てる（元に戻せます）") }
+                    ) { Text("上限を緩め、手順を当てる") }
                     Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
                 }
             }

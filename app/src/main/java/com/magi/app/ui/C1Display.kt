@@ -72,18 +72,18 @@ internal fun c1Shortages(p: Problem, s: Array<IntArray>): List<C1Shortage> {
 }
 
 /** 勤務表だけでは届かないときの 1 文（セルシート・職員の内訳で共有）。 */
-internal const val C1_STUCK_TEXT = "希望・手動固定・個人の上限0（入れない指定）の都合で、勤務表だけでは期間の約束を満たせません。"
+internal const val C1_STUCK_TEXT = "希望・手動固定・個人の上限0（入れない指定）の都合で、勤務表だけでは期間の制約を満たせません。"
 
 /** セル (i,j) に掛かる不足区間の説明文（無ければ null）。[sym] はシフト記号、[day] は日の表記。 */
 internal fun c1CellText(shortages: List<C1Shortage>, s: Array<IntArray>, i: Int, j: Int, sym: (Int) -> String, day: (Int) -> String): String? {
     val sh = shortages.firstOrNull { it.staff == i && j in it.from..it.to } ?: return null
     val k = sym(sh.shift)
-    val head = "期間の約束: ${sh.day1}日のなかに「$k」が${sh.day2}日必要です。"
+    val head = "期間の制約: ${sh.day1}日のなかに「$k」が${sh.day2}日必要です。"
     val body = if (sh.marks.isEmpty()) C1_STUCK_TEXT
     else if (sh.stuck) "いま足りない期間（${day(sh.from)}〜${day(sh.to)}）があり、印の日を${k}にすると不足は減ります。$C1_STUCK_TEXT"
     else {
         val how = if (sh.minChanges >= sh.marks.size) "印の日をすべて${k}に変えると" else "印の日をうまく選べば、いちばん少なくて${sh.minChanges}日を${k}にすると"
-        "いま足りない期間（${day(sh.from)}〜${day(sh.to)}）があり、${how}この約束の日数に届きます（ほかの約束への影響は見ていません）。"
+        "いま足りない期間（${day(sh.from)}〜${day(sh.to)}）があり、${how}この制約の日数に届きます（ほかの制約への影響は見ていません）。"
     }
     val held = if (s.getOrNull(i)?.getOrNull(j) == sh.shift) "（この日の${k}はすでに数に入っています）" else ""
     return head + body + held

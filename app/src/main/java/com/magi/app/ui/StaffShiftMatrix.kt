@@ -104,7 +104,7 @@ internal fun StaffShiftMatrixCard(
             Text("回数マトリクス（職員 × シフト：月に何回か）", style = MaterialTheme.typography.titleMedium)   // [3.483.0 E-7]
             Text(
                 "セルをタップで目標・上下限を編集。「—」＝担当不可（担当可否は①で変更）。" +
-                    "薄色＝目標(やわらかい)のズレ、濃色＝個人の上下限(かたい)の逸脱。",
+                    "薄色＝目安の回数との差(やわらかい)、濃色＝個人の上下限(かたい)の逸脱。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
             )
             if (worst != null) {
