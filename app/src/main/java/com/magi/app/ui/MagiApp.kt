@@ -1090,8 +1090,11 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
 
 /** 停止/作成/もう一度の主ボタン（勤務表タブの統合バーと BottomCommandBar で同じ規則）。 */
 @Composable
-internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modifier, showIcon: Boolean = true) {
+internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modifier, showIcon: Boolean = true, compact: Boolean = false) {
     val cs = MaterialTheme.colorScheme
+    // 勤務表タブの統合バーは前後・元に戻す等と並んで残り幅が 90dp まで縮む（390dp 幅）。余白を詰めて 2 行まで折り返し、ラベルを切らない。
+    val pad = if (compact) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding
+    val lines = if (compact) 2 else 1
     when {
         // [3.402.0] 「直し方を探す」の最中も「やめる」を出す。`stop()` は元から
         //   `running || fixSearching` を見て両方を戻す（3.284.0）のに、**このボタンのゲートだけ
@@ -1099,26 +1102,29 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
         ui.running || ui.fixSearching -> Button(
             onClick = { vm.stop() },
             modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
+            contentPadding = pad,
             colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
         ) {
             if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-            Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
         !ui.hasResult -> Button(
             // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
             //   [3.126.0] 「下書きをつくる」補助はユーザー判断で撤去済み＝作成導線はこの1本。
             onClick = { vm.runV6FullOptimize() },
             modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
+            contentPadding = pad,
         ) {
             if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-            Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
         else -> Button(
             onClick = { vm.runV6FullOptimize() },
             modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
+            contentPadding = pad,
         ) {
             if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-            Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("もう一度つくる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
     }
 }
