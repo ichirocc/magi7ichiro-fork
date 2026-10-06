@@ -114,6 +114,20 @@ class AnalysisTriageTest {
         assertEquals("解消済み", homeRemainingLabel(0L, 0, mapOf("fair" to 0)))
     }
 
+    /** 必須のうち希望どうしのぶつかりは M>0 のときだけ添え、必須件数を超えない。 */
+    @Test fun homeRemainingLabelShowsWishShare() {
+        assertEquals("必須 残り5件（うち希望のまま 2件）", homeRemainingLabel(5L, 0, emptyMap(), 2))
+        assertEquals("必須 残り5件", homeRemainingLabel(5L, 0, emptyMap(), 0))
+        assertEquals("必須 残り1件（うち希望のまま 1件）", homeRemainingLabel(1L, 0, emptyMap(), 3))
+    }
+
+    /** 主ボタンに最初の対象を添える。対象が無ければ元の文言。 */
+    @Test fun homeTargetLabelNamesFirstItem() {
+        assertEquals("ぶつかっている希望を見る（アリフ 10/8）", homeTargetLabel("ぶつかっている希望を見る", "アリフ", "10/8"))
+        assertEquals("なおし方を見る（10/8）", homeTargetLabel("なおし方を見る", null, "10/8"))
+        assertEquals("直す1手を見る", homeTargetLabel("直す1手を見る", null, null))
+    }
+
     /** [3.515.2] 1件だけの種類は場所を切り詰めず理由まで出す（重複登録の警告が勤務表の違反に見えないように）。 */
     @Test fun singleIssueShowsFullWhereAndProblem() {
         val issues = listOf(

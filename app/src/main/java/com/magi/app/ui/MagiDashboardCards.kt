@@ -179,7 +179,10 @@ private fun WishTrialRowView(
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
     TextButton(onClick = { onOpenCell(row.staff, row.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.fillMaxWidth())
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.weight(1f))
+            if (row.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
+        }
     }
     val k = ui.wishes["${row.staff},${row.day}"]
     if (!row.locked || k == null) {
@@ -424,6 +427,12 @@ internal fun OperatorNextActionCard(
     // 充足不可の S5b 版は重複除去の前（S5a の行に畳まれた人も含む）で決め、例の日も希望で固定された人がいる枠から取る。
     val hasPinned = ui.coverageDiag?.shortfalls?.any { it.wishPinned.isNotEmpty() } == true
     val wishDay = ui.coverageDiag?.shortfalls?.firstOrNull { it.wishPinned.isNotEmpty() }?.dayLabel
+    // 主ボタンに最初の対象を添える（押した先は変えない）。
+    fun staffName(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
+    val firstWish = wishCands.direct.firstOrNull() ?: wishCands.shortfall.firstOrNull()?.rows?.firstOrNull()
+    val wishLabel = homeTargetLabel("ぶつかっている希望を見る", firstWish?.let { staffName(it.staff) }, firstWish?.let { DayText.short(ui.startDate, it.day) })
+    val firstMove = ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.ops?.firstOrNull()
+    val moveLabel = homeTargetLabel("直す1手を見る", firstMove?.let { staffName(it.staff) }, firstMove?.let { DayText.short(ui.startDate, it.day) })
 
     // [M3] 成功=tertiary / 注意=error / 主操作=primary はテーマロール。警告のみ独自トークンに集約。
     val (amber, onAmber) = magiWarnColors()
@@ -444,7 +453,7 @@ internal fun OperatorNextActionCard(
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
         infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
-            "ぶつかっている希望を見る", onShowWishes, true, "データを見直す", onSetup)
+            wishLabel, onShowWishes, true, "データを見直す", onSetup)
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
             "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
@@ -452,11 +461,11 @@ internal fun OperatorNextActionCard(
         //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
         ui.coverageDiag?.shortfalls?.any { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow } == true ->
             OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人員不足です。" } ?: "人員不足の日があります。"),
-                "なおし方を見る", onFix, true, null, onSetup)
+                homeTargetLabel("なおし方を見る", null, worstDay), onFix, true, null, onSetup)
         // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
         ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
-                "直す1手を見る", onShowMove, true, null, onSetup)
+                moveLabel, onShowMove, true, null, onSetup)
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
@@ -471,10 +480,10 @@ internal fun OperatorNextActionCard(
         ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber,
                 if (ui.relaxSearching) "必須違反が ${ui.bestHard}件 残っています。" else "今の希望とルールでは、必須違反 ${ui.bestHard}件 からこれ以上は減らせない見込みです。",
-                "ぶつかっている希望を見る", onShowWishes, true, "このまま書き出す", onExport)
+                wishLabel, onShowWishes, true, "このまま書き出す", onExport)
         !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
-                "ぶつかっている希望を見る", onShowWishes, true, null, onSetup)
+                wishLabel, onShowWishes, true, null, onSetup)
         else -> OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。",
             "問題を見る", onShowList, true, null, onSetup)
     }
@@ -517,7 +526,7 @@ internal fun OperatorNextActionCard(
             // 同じ開閉パターン）にして、常時見えるのは進捗バー1本だけにする。
             // [3.483.0 H-2] 旧: 必須0なら一律「解消済み」だが、でき具合は調整（ソフト）違反が残ると 100% に
             //   ならない（40+比率×60）＝「78%（解消済み）」という自己矛盾。必須0のときは残りの単位を調整件数へ。
-            val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown)
+            val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown, ui.hardWishConflict)
             // [3.483.0 H-5] 実行中は直下の進捗行（progressSummary）が同じ残数を出すため、でき具合の行とバーは出さない。
             if (!ui.running) {
                 Text(

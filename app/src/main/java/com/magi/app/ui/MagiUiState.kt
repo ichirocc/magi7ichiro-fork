@@ -111,6 +111,7 @@ data class UiState(
     val lockedWishKeys: Set<String> = emptySet(),   // [S5] 試算できる希望のキー（実現可能で手動固定でない）
     val manualPins: Set<String> = emptySet(),       // [#41] 手動固定のセル "i,j"
     val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
+    val hardWishConflict: Int = 0,                  // 必須のうち希望どうしのぶつかり（計算では消せない）の件数
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
     val wishTrialBusy: String? = null,              // [S5] 試算中の行 "i,j"（null＝なし）
     val relaxRev: Int = 0,                          // [S6] 試算が終わるたびに進む（画面は vm.relaxTrialFor で読み直す）

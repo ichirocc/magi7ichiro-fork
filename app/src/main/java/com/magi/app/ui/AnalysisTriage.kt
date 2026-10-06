@@ -73,16 +73,22 @@ private fun labelOf(family: String) = breakdownLabels[family] ?: family
 
 /** ホームのでき具合に添える残り。必須0の要調整は件数の族だけ数える（pt の公平化・曜日の偏りを件と足さない）。
  *  pt だけ残ってもでき具合は 100% でないので「解消済み」とは言わない。 */
-internal fun homeRemainingLabel(bestHard: Long, shortDays: Int, breakdown: Map<String, Int>): String {
+internal fun homeRemainingLabel(bestHard: Long, shortDays: Int, breakdown: Map<String, Int>, wishHard: Int = 0): String {
     val softN = MirrorKeys.soft.filter { unitOf(it) == "件" }.sumOf { breakdown[it] ?: 0 }
     val ptN = MirrorKeys.soft.filter { unitOf(it) == "pt" }.sumOf { breakdown[it] ?: 0 }
     return when {
-        bestHard > 0L -> "必須 残り${bestHard}件"
+        bestHard > 0L -> "必須 残り${bestHard}件" + (if (wishHard > 0) "（うち希望のまま ${minOf(wishHard.toLong(), bestHard)}件）" else "")
         shortDays > 0 -> "残り${shortDays}日"
         softN > 0 -> "必須は解消・要調整 ${softN}件"
         ptN > 0 -> "必須は解消・残りは偏りのみ"
         else -> "解消済み"
     }
+}
+
+/** ホームの主ボタンに最初の対象（名前・日）を添える。対象が無ければ元の文言のまま。 */
+internal fun homeTargetLabel(base: String, name: String?, day: String?): String {
+    val t = listOfNotNull(name?.takeIf { it.isNotBlank() }, day?.takeIf { it.isNotBlank() }).joinToString(" ")
+    return if (t.isEmpty()) base else "$base（$t）"
 }
 
 /** `SettingIssue` の種類 → 画面に出す見出し（英字符号を出さない＝`docs/operator_ux.md`）。 */

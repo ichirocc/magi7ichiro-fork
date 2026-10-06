@@ -1076,7 +1076,7 @@ object V6FinalPort {
             val wallTxt = if (walls.isEmpty()) "なし" else walls.joinToString(" / ")
             val openTxt = if (open.isEmpty()) "なし＝これ以上は追っても減りません" else open.joinToString(" / ")
             // 採用盤面の必須を「希望どうしのぶつかり（希望を1件取り消すまで消えない）」と「それ以外」に分ける（表示・計測用）。
-            val hardWishFloor = selfConflict.entries.sumOf { (k, v) -> minOf(v, bd[k] ?: 0) }.coerceAtMost(finalReport.hard)
+            val hardWishFloor = V6SanityPort.wishConflictHardShare(selfConflict, bd, finalReport.hard)
             listOf(MirrorLog(
                 level = "I", tag = "残存分析",
                 message = "もう直せない: $wallTxt ／ まだ狙える: $openTxt",

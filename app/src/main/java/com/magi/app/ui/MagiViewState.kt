@@ -233,7 +233,10 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
     }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))
 
 /** [S5] 試算の候補 1 行。`locked=false`（担当できない勤務の希望）は試算ボタンを出さず [WISH_TRIAL_NOT_LOCKED] を出す。 */
-internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean, val pinned: Boolean = false)
+internal data class WishTrialRow(val staff: Int, val day: Int, val name: String, val reason: String, val locked: Boolean, val pinned: Boolean = false, val wishOnly: Boolean = false)
+
+/** 行に添える短い札。希望どうしのぶつかり（計算では消せない）だけ「希望のまま」。 */
+internal const val WISH_ONLY_TAG = "希望のまま"
 
 /** [S5b] 人員不足の枠 1 つ（見出し「12日 日勤 1人不足」）と、その日に別の勤務で希望固定されている人の行（職員順）。 */
 internal data class ShortfallWishGroup(val day: Int, val shift: Int, val header: String, val rows: List<WishTrialRow>)
@@ -289,18 +292,21 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
         .sortedWith(compareBy({ it.dayIndex }, { it.shiftIndex }))
     val pinnedKeys = pinned.flatMap { s -> s.wishPinned.map { it to s.dayIndex } }.toSet()
     fun name(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
+    val selfKeys = ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys }
     val direct = (hits + siblings).groupBy { it.staff to it.day }.map { (sd, hs) ->
         val rep = hs.minBy { it.prio }
         val others = hs.map { it.prio }.distinct().filter { it != rep.prio }.sorted().map { short[it] } +
             (if (sd in pinnedKeys) listOf("人員不足の日") else emptyList())
         val reason = if (others.isEmpty()) rep.reason else "${rep.reason}（ほか: ${others.joinToString("・")}）"
-        WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys, VioKey.cell(sd.first, sd.second) in ui.manualPins)
+        WishTrialRow(sd.first, sd.second, name(sd.first), reason, "${sd.first},${sd.second}" in ui.lockedWishKeys, VioKey.cell(sd.first, sd.second) in ui.manualPins,
+            wishOnly = "${sd.first},${sd.second}" in selfKeys)
     }.sortedWith(compareBy({ it.staff }, { it.day }))
     val directKeys = direct.map { it.staff to it.day }.toSet()
     val shortfall = pinned.map { s ->
         val rows = s.wishPinned.sorted().filter { (it to s.dayIndex) !in directKeys }.map { i ->
             val sym = ui.wishes["$i,${s.dayIndex}"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "別の勤務"
-            WishTrialRow(i, s.dayIndex, name(i), "${sym}の希望", "$i,${s.dayIndex}" in ui.lockedWishKeys, VioKey.cell(i, s.dayIndex) in ui.manualPins)
+            WishTrialRow(i, s.dayIndex, name(i), "${sym}の希望", "$i,${s.dayIndex}" in ui.lockedWishKeys, VioKey.cell(i, s.dayIndex) in ui.manualPins,
+                wishOnly = "$i,${s.dayIndex}" in selfKeys)
         }
         ShortfallWishGroup(s.dayIndex, s.shiftIndex, "${s.dayLabel} ${s.shiftSymbol} ${s.miss}人不足", rows)
     }.filter { it.rows.isNotEmpty() }
