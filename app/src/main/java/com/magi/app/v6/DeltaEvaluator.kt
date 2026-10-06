@@ -24,6 +24,10 @@ class DeltaEvaluator(private val p: Problem) {
     private val cntDay = Array(K) { IntArray(T) }     // per-shift per-day count
     // [統一weekly/3.345.0] per-staff × per-shift の曜日別カウント（休も1シフト＝特別扱いしない）。
     private val wdCnt = Array(S) { Array(K) { IntArray(7) } }
+    // 職員×シフトごとの勤務日ビット（bit j＝日 j がそのシフト）。窓の中の回数を popcount で数える（c1Local）。
+    //   業務上限 31 日なので Long 1 語に収まる。T>63 は使わず従来の走査へ落とす。
+    private val useBits = T <= 63
+    private val bits = Array(S) { LongArray(K) }
 
     // running penalty pieces
     private var sc1 = 0L; private var sc2 = 0L; private var sc41 = 0L; private var sc42 = 0L
@@ -189,14 +193,14 @@ class DeltaEvaluator(private val p: Problem) {
         //   ため実害は未確認だが、将来の変更で throw する経路が増えても「復元されないまま盤面が
         //   壊れる」という最悪の失敗モード（クラッシュではなく以降の全差分計算が静かに狂う）を
         //   構造的に防ぐため try/finally で復元を保証する。プリミティブ var のみ＝ボクシング無し。
-        a[i][j] = nw
+        setCell(i, j, nw)
         var aC1 = 0L; var aC3 = 0L; var aC3n = 0L; var aC3m = 0L; var aC3mn = 0L
         try {
             aC1 = c1Local(i, j); aC3 = c3Local(i, j, p.cons3, false)
             aC3n = c3Local(i, j, p.cons3n, true); aC3m = c3Local(i, j, p.cons3m, false)
             aC3mn = c3Local(i, j, p.cons3mn, true)
         } finally {
-            a[i][j] = old
+            setCell(i, j, old)
         }
         dC1 = (aC1 - bC1); dC3 = (aC3 - bC3); dC3n = (aC3n - bC3n); dC3m = (aC3m - bC3m); dC3mn = (aC3mn - bC3mn)
 
@@ -364,7 +368,7 @@ class DeltaEvaluator(private val p: Problem) {
         val old = lOld
         try {
             if (nw == old) return
-            a[i][j] = nw
+            setCell(i, j, nw)
             cntSS[i][old]--; cntSS[i][nw]++
             cntDay[old][j]--; cntDay[nw][j]++
             // [統一weekly/3.345.0] シフト別バケットを更新（previewMove の dWeekly と同ステップ）。
@@ -386,7 +390,20 @@ class DeltaEvaluator(private val p: Problem) {
 
     // ---- aggregate / total rebuild --------------------------------------------
 
+    private fun setCell(i: Int, j: Int, k: Int) {
+        val old = a[i][j]
+        a[i][j] = k
+        if (useBits) {
+            if (old in 0 until K) bits[i][old] = bits[i][old] and (1L shl j).inv()
+            if (k in 0 until K) bits[i][k] = bits[i][k] or (1L shl j)
+        }
+    }
+
     private fun rebuild() {
+        if (useBits) for (i in 0 until S) {
+            java.util.Arrays.fill(bits[i], 0L)
+            for (j in 0 until T) { val k = a[i][j]; if (k in 0 until K) bits[i][k] = bits[i][k] or (1L shl j) }
+        }
         for (i in 0 until S) java.util.Arrays.fill(cntSS[i], 0)
         for (k in 0 until K) java.util.Arrays.fill(cntDay[k], 0)
         for (i in 0 until S) for (k in 0 until K) java.util.Arrays.fill(wdCnt[i][k], 0)
@@ -427,6 +444,15 @@ class DeltaEvaluator(private val p: Problem) {
         for (c in p.cons1) {
             if (!p.canDo(i, c.shiftIdx)) continue   // [統一] 担当不可は対象外(チェッカーと一致)
             val js0 = maxOf(0, j - c.day1 + 1); val js1 = minOf(T - c.day1, j)
+            if (useBits && c.day1 in 1..63 && c.shiftIdx in 0 until K) {
+                val row = bits[i][c.shiftIdx]; val win = if (c.day1 == 63) Long.MAX_VALUE else (1L shl c.day1) - 1
+                var js = js0
+                while (js <= js1) {
+                    if (java.lang.Long.bitCount((row ushr js) and win) < c.day2) tot += 1
+                    js++
+                }
+                continue
+            }
             var js = js0
             while (js <= js1) {
                 var z = 0; var l = 0
@@ -451,6 +477,16 @@ class DeltaEvaluator(private val p: Problem) {
                 continue
             }
             val js0 = maxOf(0, j - D + 1); val js1 = minOf(T - D, j)
+            if (useBits && js0 <= js1 && seq.all { it in 0 until K }) {
+                // 窓の開始日 js の集合をビットで持つ: first＝js がseq[0]、full＝js から seq 全体が一致。
+                val first = bits[i][seq[0]]
+                var full = first
+                for (l in 1 until D) full = full and (bits[i][seq[l]] ushr l)
+                val range = ((-1L) ushr (63 - (js1 - js0))) shl js0
+                val nFull = java.lang.Long.bitCount(full and range)
+                sub += if (fbd) nFull.toLong() else (java.lang.Long.bitCount(first and range) - nFull).toLong()
+                continue
+            }
             var js = js0
             while (js <= js1) {
                 if (a[i][js] == seq[0]) {
