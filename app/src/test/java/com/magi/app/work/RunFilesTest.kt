@@ -309,4 +309,23 @@ class RunFilesTest {
         assertEquals("新しい実行の結果が残る", "new", f.result.readText())
         assertEquals(2L, f.activeRunId())
     }
+
+    /** 完了の片付けは所有権の確認と削除を一続きに行う: 旧実行の結果保存のあとに新実行が所有者になったら、
+     *  旧実行は新実行の入力・途中最良・所有権マーカーを消さない。 */
+    @Test
+    fun releaseIfOwnerDoesNotDeleteFilesOfANewerRun() {
+        val f = files()
+        assertTrue(f.beginRun(1L))
+        f.result.writeText("old")
+        assertTrue(f.beginRun(2L))
+        f.input.writeText("new-input"); f.snapshot.writeText("new-best")
+        assertEquals(null, f.releaseIfOwner(1L, deleteInputs = true))
+        assertEquals("new-input", f.input.readText())
+        assertEquals("new-best", f.snapshot.readText())
+        assertEquals(2L, f.activeRunId())
+        assertEquals(emptyList<String>(), f.releaseIfOwner(2L, deleteInputs = true))
+        assertFalse(f.input.exists()); assertFalse(f.snapshot.exists())
+        assertEquals(0L, f.activeRunId())
+        assertTrue("結果は残す（次回起動で反映する）", f.result.exists())
+    }
 }

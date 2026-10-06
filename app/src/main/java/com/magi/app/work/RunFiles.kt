@@ -80,6 +80,22 @@ internal class RunFiles(private val dir: File) {
     }
 
     /**
+     * 完了した実行の片付け: 所有権の確認と削除を錠の中で一続きに行う。確認と削除の間に新しい実行が
+     * [beginRun] すると、旧実行が新しい実行の入力・途中最良・所有権マーカーを消していた（TOCTOU）。
+     * @param deleteInputs 入力と途中最良も消す（結果を保存できたとき）。false なら所有権マーカーだけ消す。
+     * @return 所有していなかったら null（何も消さない）。所有していたら消し残った名前。
+     */
+    fun releaseIfOwner(mine: Long, deleteInputs: Boolean): List<String>? = synchronized(OWNERSHIP_LOCK) {
+        if (!owns(mine)) return@synchronized null
+        val stuck = ArrayList<String>()
+        for (f in (if (deleteInputs) listOf(input, snapshot) else emptyList()) + listOf(runId)) {
+            val ok = runCatching { if (f.exists()) f.delete() else true }.getOrDefault(false)
+            if (!ok) stuck.add(f.name)
+        }
+        stuck
+    }
+
+    /**
      * 一時ファイル経由の原子置換（3.336.0 S3）。素の `writeText` は非原子で、書き込み途中に落ちると
      * **壊れた JSON が残る**。起動時の復元は「結果が空でなければマーカーも入力も掃除してから読む」ため、
      * 壊れたファイルは「結果も再開手段も両方失う」経路になっていた。

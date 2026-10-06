@@ -90,11 +90,6 @@ class OptimizationWorker(
                     "（次回起動が古い状態を「中断」として掴む可能性があります）", "W")
             }
         }
-        /** 完了パスの個別削除も同じ理由で戻り値を捨てない（[reportClear] と対）。 */
-        fun reportDelete(f: File, what: String) {
-            val ok = runCatching { !f.exists() || f.delete() }.getOrDefault(false)
-            if (!ok) note("$what を削除できませんでした（次回起動が古い状態を「中断」として掴む可能性があります）", "W")
-        }
 
         // 置き換え済み／停止済みの実行はここで降りる（共有ファイルへ触らない）。
         // [3.387.0] ここは **所有権の競合が実際に起きた瞬間**（REPLACE で新しい実行に入れ替わった／
@@ -279,15 +274,18 @@ class OptimizationWorker(
                     //   プロセスが終了すると**結果も再開手段も両方失う**。保存できなかったときは復元元を
                     //   残す（次回起動が「中断されました」として拾える）。runId は所有権の解放そのものなので
                     //   どちらでも消す＝残すと次の実行が所有者になれない。
-                    if (saved) {
-                        reportDelete(inputFile(ctx), "入力ファイル")
-                        reportDelete(snapshotFile(ctx), "途中最良のスナップショット")   // [#4] 完了でスナップショット破棄
-                        step("片付け")
+                    if (!saved) note("結果を保存できなかったため、入力と途中経過は残します（次回起動で再開できます）", "W")
+                    // 所有権の確認と削除を錠の中で一続きに行う（公開のあいだに新しい実行へ置き換わっていたら何も消さない）。
+                    val stuck = runCatching { files(ctx).releaseIfOwner(inputData.getLong(KEY_RUN_ID, 0L), deleteInputs = saved) }
+                        .getOrElse { note("完了の片付けに失敗しました: ${it.javaClass.simpleName}", "W"); emptyList() }
+                    if (stuck == null) {
+                        note("片付けの直前に新しい実行へ置き換わったため、共有ファイルは消していません", "W")
                     } else {
-                        note("結果を保存できなかったため、入力と途中経過は残します（次回起動で再開できます）", "W")
+                        if (stuck.isNotEmpty()) note("完了の片付けで削除できないファイルが残りました: ${stuck.joinToString("・")}" +
+                            "（次回起動が古い状態を「中断」として掴む可能性があります）", "W")
+                        if (saved) step("片付け")
+                        releasedByMe = true
                     }
-                    reportDelete(runIdFile(ctx), "所有権マーカー")
-                    releasedByMe = true
                     terminal("完了（必須${res.report.hard} 合計${res.report.total}）" +
                         if (saved) "" else "・結果を保存できず（プロセス終了で失われます）")
                 }
