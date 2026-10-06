@@ -144,7 +144,7 @@ fun main(args: Array<String>) {
         // [3.618.1] 全族起点の玉突き連鎖。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [2026-10-06] 前段（HF66 直後）の玉突き連鎖。起点＝必須だけ／全族。大域フラグなので腕ごとに切り替える（下のループ）。
-        "ejectionearlyhard", "ejectionearlyall", "ejectionfinalall", "ejectionearlyallretry" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
+        "ejectionearlyhard", "ejectionearlyall", "ejectionfinalall", "ejectionearlyallretry", "ejectionafterrepair" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
@@ -173,6 +173,7 @@ fun main(args: Array<String>) {
                 PolishGate.allEjectionChainEarly = (feature == "ejectionearlyall" || feature == "ejectionearlyallretry") && arm == "new"
                 PolishGate.hardEjectionChainRetry = feature == "ejectionearlyallretry" && arm == "new"
                 PolishGate.allEjectionChainFinal = feature == "ejectionfinalall" && arm == "new"
+                PolishGate.allEjectionChainAfterRepair = feature == "ejectionafterrepair" && arm == "new"
                 fun once(): List<Any> {
                     resetPeak(); System.gc()
                     val t0 = System.nanoTime()
