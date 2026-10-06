@@ -356,6 +356,15 @@ internal fun hardViolationItems(state: MagiState, p: Problem, s: Array<IntArray>
     return out.values.sortedWith(compareBy({ it.days.first() }, { it.staff }))
 }
 
+/** 勤務表タブの「必須 N ▼」一覧の 1 行。`tourAt` は [hardViolationItems] の何件目か（行を押すと巡回と同じ移動でそのセルを開く）。 */
+internal data class HardListRow(val tourAt: Int, val name: String, val heading: String, val wishOnly: Boolean)
+
+/** 必須違反の一覧（巡回の項目を 1 件 1 行）。希望どうしのぶつかり（関連セルがすべて [wishSelfKeys]）は「希望のまま」を付けて後ろへ。 */
+internal fun hardViolationRows(items: List<TourItem>, staffNames: List<String>, wishSelfKeys: Set<String>): List<HardListRow> =
+    items.mapIndexed { at, it ->
+        HardListRow(at, staffNames.getOrNull(it.staff) ?: "職員${it.staff + 1}", it.heading, it.days.all { d -> "${it.staff},$d" in wishSelfKeys })
+    }.sortedBy { it.wishOnly }
+
 /** 巡回の見出し「必須違反 2 / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9」。 */
 internal fun tourHeading(items: List<TourItem>, at: Int): String? =
     items.getOrNull(at)?.let { "必須違反 ${at + 1} / ${items.size} ・ ${it.heading}" }

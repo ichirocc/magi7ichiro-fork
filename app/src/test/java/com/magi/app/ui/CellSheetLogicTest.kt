@@ -375,4 +375,18 @@ class CellSheetLogicTest {
         assertTrue(detail("5", "3", "covU"), detail("5", "3", "covU").contains("必要3人"))
         assertTrue(detail("5", "3", "covO"), detail("5", "3", "covO").contains("適正5人"))
     }
+
+    @Test
+    fun hardViolationRows_putsWishOnlyLastAndKeepsTourIndex() {
+        val items = listOf(
+            TourItem("c3n", 0, listOf(1, 2), "禁止の並び A→B ・ 10/2〜10/3"),
+            TourItem("pref", 1, listOf(4), "希望の勤務 A ・ 10/5"),
+            TourItem("c3w", 2, listOf(5, 6), "希望の前日禁止 A→B ・ 10/6〜10/7"),
+        )
+        val rows = hardViolationRows(items, listOf("佐藤", "鈴木"), setOf("0,1", "0,2", "2,5"))
+        assertEquals(listOf(1, 2, 0), rows.map { it.tourAt })
+        assertEquals(listOf(false, false, true), rows.map { it.wishOnly })
+        assertEquals(listOf("鈴木", "職員3", "佐藤"), rows.map { it.name })
+        assertEquals("禁止の並び A→B ・ 10/2〜10/3", rows.last().heading)
+    }
 }

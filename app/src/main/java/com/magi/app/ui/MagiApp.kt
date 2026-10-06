@@ -659,6 +659,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
                     val vioLocCount = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
+                    if (!ui.running && ui.hasResult && ui.bestHard > 0L) {
+                        val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
+                        val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
+                        HardListChip(ui.bestHard, rows, tourCovULine(ui.breakdown["covU"] ?: 0), onPick = goTourItem)
+                    }
                     ViolationFilterBar(vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket,
                         locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it },
                         vioDayNavOn = schedNav.vioMode, onVioDayNav = { schedNav.vioMode = !schedNav.vioMode })
@@ -1255,3 +1260,41 @@ internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () 
 }
 
 
+
+
+/** 勤務表タブ上部の「必須 N ▼」と、押すと開く必須違反の一覧。行を押すとシートを閉じ、巡回と同じ移動でそのセルのシートを開く。 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun HardListChip(hard: Long, rows: List<HardListRow>, covULine: String?, onPick: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var open by rememberSaveable { mutableStateOf(false) }
+    Surface(onClick = { open = true }, color = cs.errorContainer, shape = MaterialTheme.shapes.small,
+        modifier = Modifier.heightIn(min = 48.dp)) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text("必須 $hard ▼", color = cs.onErrorContainer, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                modifier = Modifier.padding(horizontal = 16.dp))
+        }
+    }
+    if (!open) return
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(onDismissRequest = { open = false }, sheetState = sheetState) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DialogHeader("必須違反の一覧", onClose = { open = false })
+            for (r in rows) {
+                Surface(onClick = { open = false; onPick(r.tourAt) }, color = cs.surfaceVariant, shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(r.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text(r.heading, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        }
+                        if (r.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
+                    }
+                }
+            }
+            covULine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+        }
+    }
+}
