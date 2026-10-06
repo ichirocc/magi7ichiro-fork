@@ -81,4 +81,19 @@ class OptimizationRepositoryBgTest {
         assertEquals(OptimizationRepository.workers, empty.workers)
         assertEquals(V6Algorithm.AUTO, empty.algorithm)
     }
+
+    /** 探索設定（玉突き・探索の強さなど）も inputData を往復し、再開した Worker が投入時の値へ戻せる。 */
+    @Test fun runConfigCarriesSearchGatesAndRestoresThem() {
+        val g = com.magi.app.v6.PolishGate
+        val saved = g.snapshot()
+        try {
+            g.allFamilyEjectionChain = true; g.countChainPolish = true; g.normalStallFraction = 0.5
+            val cfg = OptimizationRepository.RunConfig(300, 8, softPolish = false, algorithm = V6Algorithm.AUTO, gates = g.snapshot())
+            val back = OptimizationRepository.RunConfig.fromInput(cfg.toInput())
+            assertEquals(cfg, back)
+            g.allFamilyEjectionChain = false; g.countChainPolish = false; g.normalStallFraction = 0.9
+            g.restore(back.gates)
+            assertEquals(true, g.allFamilyEjectionChain); assertEquals(true, g.countChainPolish); assertEquals(0.5, g.normalStallFraction, 0.0)
+        } finally { g.restore(saved) }
+    }
 }

@@ -601,7 +601,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             //   再実行でも開始時の条件（例: 300秒/8並列）が保たれる（旧: インメモリのみで既定60秒/4並列に化けた）。
             //   [外部レビュー N6] 方式・仕上げ最適化も載せる＝前景と同じ条件で計算する（RunConfig の KDoc 参照）。
             .setInputData(androidx.work.Data.Builder()
-                .putAll(OptimizationRepository.RunConfig(_ui.value.budgetSec, _ui.value.workers, _ui.value.softPolish, _ui.value.v6Algorithm).toInput())
+                .putAll(OptimizationRepository.RunConfig(_ui.value.budgetSec, _ui.value.workers, _ui.value.softPolish, _ui.value.v6Algorithm,
+                    com.magi.app.v6.PolishGate.snapshot()).toInput())
                 .putLong(OptimizationWorker.KEY_RUN_ID, runId)
                 .build())
             .build()
@@ -715,6 +716,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (input != null && currentSchedule?.contentDeepEquals(input) != true) { abandonStaleBgResult(); return }
         val before = com.magi.app.work.BgApplySnapshot(bgRunId, st0, stateKey(st0), currentSchedule)
         val prevReport = prev?.let { p -> withContext(Dispatchers.Default) { UnifiedViolationChecker.check(st0, p) } }
+        // 前景と同じく、比べる基準は個人上限0のセルを外した盤面（表示は維持する盤面そのものの採点）。
+        val prevCmp = prev?.let { p -> withContext(Dispatchers.Default) { capZeroClearedReport(st0, p) } } ?: prevReport
         // 評価を待つ間に実行の世代・入力・盤面が変わっていたら当てない。
         val stNow = state
         if (!before.unchanged(bgRunId, stNow, stNow?.let { stateKey(it) } ?: 0L, currentSchedule)) { abandonStaleBgResult(); return }
@@ -723,7 +726,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val newHard = r.report.hard.toLong(); val newTotal = r.report.total
             // [3.287.0 keep-best統一 → 3.289.0 で単一ソースへ委譲] 手書きの3節複製をやめ betterReport
             //   （hard→weightedScore→total）に一本化。将来の順序変更でここだけ取り残される事故を防ぐ。
-            val worse = betterReport(prevReport, r.report)
+            val worse = betterReport(prevCmp ?: prevReport, r.report)
             if (worse) {
                 val nowScore = KeptResultText.Score(newHard, r.report.weightedScore, newTotal)
                 val prevScore = KeptResultText.Score(prevReport.hard.toLong(), prevReport.weightedScore, prevReport.total)
@@ -1686,7 +1689,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   入力へ戻していた**（外部レビューが指摘した runSoftPolish より影響が大きい経路）。
                 val newHard = res.report.hard.toLong(); val newTotal = res.report.total
                 val baseHard = baseReport.hard.toLong(); val baseTotal = baseReport.total
-                val worseThanInput = betterReport(baseReport, res.report)
+                // 比べる基準はエンジンの番兵と同じ「個人上限0のセルを外した入力」（ユーザー決定 2026-10-06）。生の入力と比べると、
+                //   上限0のセルが人員を満たしていた盤面では最適化の結果が毎回「悪化」に見えて前回へ戻っていた（実機 #9）。
+                val cmpReport = withContext(Dispatchers.Default) { capZeroClearedReport(st0, sched0) ?: baseReport }
+                val worseThanInput = betterReport(cmpReport, res.report)
                 if (worseThanInput) {
                     val kept = sched0.copy2D()
                     // [3.324.0/外部レビュー] 採用しなかった盤面の診断は保存しない。旧実装は分岐に関わらず
@@ -3274,6 +3280,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * （＝レース不能・単一ライタ）。全 makeUi 呼び出しをこの1経路へ集約する。
      * @param nonCancellable 停止(keep-best)経路から呼ぶ場合 true＝スコープキャンセル後も解析を完了させる。
      */
+
+    /** 個人上限0のセル（希望固定を除く）を外した盤面の採点。外すセルが無ければ null（呼出側は生の盤面の採点を使う）。 */
+    private fun capZeroClearedReport(st: MagiState, sched: Array<IntArray>): ViolationReport? {
+        val (cleared, n) = com.magi.app.v6.HardRepairCore.clearCappedCells(st, sched)
+        return if (n > 0) UnifiedViolationChecker.check(st, cleared) else null
+    }
     private suspend fun pushReport(
         st: MagiState,
         schedule: Array<IntArray>,
