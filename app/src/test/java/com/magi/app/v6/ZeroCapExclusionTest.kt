@@ -128,8 +128,8 @@ class ZeroCapExclusionTest {
         val res = V6FinalPort.handleOptimize(s, secondsRaw = 1, workers = 1, requestedAlgorithm = V6Algorithm.V5, allowImpossible = true)
         assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
         assertTrue(res.logs.any { it.tag == "CapZero" && it.message ==
-            "入口: 個人上限0のセル4件を外しました（必須 0→4）。最適化は上限0の勤務を置かないため、この設定では入力の必須0件には戻れません" })
-        assertEquals("今の勤務表には個人の上限0のシフトが4件入っています。最適化は上限0の勤務を置かないため、この設定では必須0件まで戻れません（上限を見直すか、そのまま使ってください）",
+            "入口: 個人上限0のセル4件を外しました（必須 0→4）。最適化は上限0の勤務を置かないため、入力の必須0件に戻らないことがあります" })
+        assertEquals("今の勤務表には個人の上限0のシフトが4件入っています。最適化は上限0の勤務を置かないため、必須0件まで戻らないことがあります（上限を見直すか、そのまま使ってください）",
             res.capZero?.keptNote())
         assertEquals(null, V6FinalPort.CapZeroNotice(4, 0, 0).keptNote())
     }

@@ -520,11 +520,17 @@ class V6PortAnalyzerTest {
         val diag = V6PortAnalyzer.diagnoseForbiddenRuns(st)
         val center = diag.runs.flatMap { it.cells }.filter { it.dayIndex == 1 }
         assertTrue("中央セルが検出される", center.isNotEmpty())
-        assertTrue(
-            "希望固定でも正味の必須違反が減るなら壁ではない: ${center.map { it.escape }}",
-            center.none { it.escape == ForbiddenCellEscape.PINNED },
-        )
-        assertFalse("この盤面を構造壁と誤診しない", diag.allBlocked)
+        // 希望固定の徹底（既定 ON）の間、探索は希望どおりのセルを動かさない＝崩せる手でも「希望固定」と名乗る（2026-10-06）。
+        assertTrue("探索が打たない手を探索未到達に見せない: ${center.map { it.escape }}",
+            center.all { it.escape == ForbiddenCellEscape.PINNED && it.detail.contains("この希望を1件変えれば崩せます") })
+        assertFalse("希望でない両端は崩せる＝この盤面を構造壁と誤診しない", diag.allBlocked)
+        val original = PolishGate.wishPinStrict
+        try {
+            PolishGate.wishPinStrict = false
+            val off = V6PortAnalyzer.diagnoseForbiddenRuns(st).runs.flatMap { it.cells }.filter { it.dayIndex == 1 }
+            assertTrue("徹底 OFF では希望を動かせる＝壁ではない: ${off.map { it.escape }}",
+                off.none { it.escape == ForbiddenCellEscape.PINNED })
+        } finally { PolishGate.wishPinStrict = original }
     }
 
     /**
