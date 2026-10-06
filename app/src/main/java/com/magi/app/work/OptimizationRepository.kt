@@ -74,16 +74,21 @@ object OptimizationRepository {
      * [外部レビュー N6] 背景実行の計算条件＝前景（`runV6FullOptimize`）が `handleOptimize` へ渡すのと同じ4つ。
      * ViewModel が WorkManager の inputData へ載せ（kill 後の再実行でも残る）、Worker はそこから読む。
      */
-    data class RunConfig(val seconds: Int, val workers: Int, val softPolish: Boolean, val algorithm: V6Algorithm) {
+    data class RunConfig(
+        val seconds: Int, val workers: Int, val softPolish: Boolean, val algorithm: V6Algorithm,
+        /** 投入時の探索設定（[com.magi.app.v6.PolishGate.snapshot]）。Worker が計算の前に戻す。 */
+        val gates: Map<String, Any> = emptyMap(),
+    ) {
         fun toInput(): Map<String, Any> = mapOf(
             KEY_SECONDS to seconds, KEY_WORKERS to workers, KEY_SOFT_POLISH to softPolish, KEY_ALGORITHM to algorithm.name,
-        )
+        ) + gates.mapKeys { GATE_PREFIX + it.key }
 
         companion object {
             const val KEY_SECONDS = "seconds"
             const val KEY_WORKERS = "workers"
             const val KEY_SOFT_POLISH = "softPolish"
             const val KEY_ALGORITHM = "algorithm"
+            const val GATE_PREFIX = "gate."
 
             /** 鍵の無い入力（この版より前に投入された Work）は従来の条件で読む＝予算・並列は Repository、仕上げ OFF・AUTO。 */
             fun fromInput(input: Map<String, Any?>): RunConfig = RunConfig(
@@ -91,6 +96,8 @@ object OptimizationRepository {
                 workers = (input[KEY_WORKERS] as? Int)?.takeIf { it > 0 } ?: OptimizationRepository.workers,
                 softPolish = input[KEY_SOFT_POLISH] as? Boolean ?: false,
                 algorithm = V6Algorithm.entries.firstOrNull { it.name == input[KEY_ALGORITHM] } ?: V6Algorithm.AUTO,
+                gates = input.entries.filter { it.key.startsWith(GATE_PREFIX) && it.value != null }
+                    .associate { it.key.removePrefix(GATE_PREFIX) to it.value!! },
             )
         }
     }

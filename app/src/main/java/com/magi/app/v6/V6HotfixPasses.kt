@@ -254,6 +254,33 @@ object PolishGate {
 
     /** [N9] PostChain の keep-best で巻き戻したパスの採用数を 0 と数える。既定 **false**（docs/backlog.md #36）。 */
     @Volatile var postChainRollbackCountsZero: Boolean = false
+
+    /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
+     *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
+    fun snapshot(): Map<String, Any> = mapOf(
+        "wideC3nBreakDays" to wideC3nBreakDays, "c1MoveARepair" to c1MoveARepair,
+        "filterC3nIncrease" to filterC3nIncrease, "hardDeltaPrefilter" to hardDeltaPrefilter,
+        "wishConflictFloorMode" to wishConflictFloorMode.name,
+        "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain,
+        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "normalStallFraction" to normalStallFraction,
+        "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
+        "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
+        "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
+    )
+
+    /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
+    fun restore(m: Map<String, Any?>) {
+        fun b(k: String, set: (Boolean) -> Unit) { (m[k] as? Boolean)?.let(set) }
+        b("wideC3nBreakDays") { wideC3nBreakDays = it }; b("c1MoveARepair") { c1MoveARepair = it }
+        b("filterC3nIncrease") { filterC3nIncrease = it }; b("hardDeltaPrefilter") { hardDeltaPrefilter = it }
+        (m["wishConflictFloorMode"] as? String)?.let { n -> WishFloorMode.entries.firstOrNull { it.name == n }?.let { wishConflictFloorMode = it } }
+        b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
+        b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }
+        (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
+        b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
+        b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
+        b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
+    }
 }
 
 /**

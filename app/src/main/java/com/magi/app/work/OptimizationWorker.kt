@@ -130,6 +130,9 @@ class OptimizationWorker(
         //   永続化するため kill/再起動を跨いで開始時の条件が保たれる（0=未設定なら従来どおり Repository）。
         //   [外部レビュー N6] 方式・仕上げ最適化も同じ inputData から読む（RunConfig の KDoc 参照）。
         val cfg = OptimizationRepository.RunConfig.fromInput(inputData.keyValueMap)
+        // 投入時の探索設定を戻す（プロセス終了後の再開では設定画面を経ずに Worker だけが起き、既定値で走っていた）。
+        //   実行中は設定画面の変更が無効なので、同じプロセスでも投入時の値と一致する。
+        com.magi.app.v6.PolishGate.restore(cfg.gates)
         // [#4] 前景サービス化: 5分のCPUジョブをOSに止めさせない（FGS不可な環境では通常実行へフォールバック）。
         // [3.428.0/#43] 前景化の失敗を**残す**。旧: 握り潰していたため、前景サービスになれないまま
         //   走り（OS はバックグラウンドのプロセスを優先的に殺す）、次回起動が「中断されました」と
