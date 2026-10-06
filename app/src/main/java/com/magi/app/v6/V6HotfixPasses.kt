@@ -174,6 +174,9 @@ object PolishGate {
     /** 玉突き連鎖の候補に入れ替え（同日の 2 人・同じ職員の 2 日）を含めるか。既定 true＝`C1EjectionChainPolish.Config.swapMoves` の既定と同じ。 */
     @Volatile var ejectionChainSwapMoves: Boolean = true
 
+    /** 玉突き連鎖 1 段あたりの上限ミリ秒（実時間モード）。残り時間の 1/4 との小さい方を使う。値は HF77 の明示指示で決める。 */
+    @Volatile var ejectionChainMaxMillis: Long = 6_000L
+
     /** [測定中] 必須の違反だけを起点にした玉突き連鎖を後処理の前段（HF66 の直後）で試す。既定 **false**（2026-10-06）。 */
     @Volatile var hardEjectionChainEarly: Boolean = false
 
@@ -279,7 +282,7 @@ object PolishGate {
         "filterC3nIncrease" to filterC3nIncrease, "hardDeltaPrefilter" to hardDeltaPrefilter,
         "wishConflictFloorMode" to wishConflictFloorMode.name,
         "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain,
-        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "hardEjectionChainEarly" to hardEjectionChainEarly, "allEjectionChainEarly" to allEjectionChainEarly, "allEjectionChainFinal" to allEjectionChainFinal, "hardEjectionChainRetry" to hardEjectionChainRetry, "allEjectionChainAfterRepair" to allEjectionChainAfterRepair, "normalStallFraction" to normalStallFraction,
+        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "hardEjectionChainEarly" to hardEjectionChainEarly, "allEjectionChainEarly" to allEjectionChainEarly, "allEjectionChainFinal" to allEjectionChainFinal, "hardEjectionChainRetry" to hardEjectionChainRetry, "allEjectionChainAfterRepair" to allEjectionChainAfterRepair, "normalStallFraction" to normalStallFraction,
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
@@ -294,6 +297,7 @@ object PolishGate {
         b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
         b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }; b("hardEjectionChainEarly") { hardEjectionChainEarly = it }; b("allEjectionChainEarly") { allEjectionChainEarly = it }; b("allEjectionChainFinal") { allEjectionChainFinal = it }; b("hardEjectionChainRetry") { hardEjectionChainRetry = it }; b("allEjectionChainAfterRepair") { allEjectionChainAfterRepair = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
+        (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
@@ -703,7 +707,7 @@ object V6HotfixPasses {
             val earlyOrigin = if (PolishGate.allEjectionChainEarly) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.HARD
             chain.adopt(chain.timed("後処理 前段の玉突き連鎖", "前段玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tHe) / 4).coerceIn(0L, 3_000L))
+                    else C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tHe) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -757,7 +761,7 @@ object V6HotfixPasses {
             val origin = if (PolishGate.allFamilyEjectionChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, 3_000L))
+                    else C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -794,7 +798,7 @@ object V6HotfixPasses {
             val tEr = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 必須が残ったときの玉突き連鎖", "必須再玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEr) / 4).coerceIn(0L, 3_000L))
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEr) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -803,7 +807,7 @@ object V6HotfixPasses {
             val tEf = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 最終段の玉突き連鎖", "最終段玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEf) / 4).coerceIn(0L, 3_000L))
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEf) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }
@@ -824,7 +828,7 @@ object V6HotfixPasses {
             val tEa = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 修復後の玉突き連鎖", "修復後玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
-                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEa) / 4).coerceIn(0L, 3_000L))
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEa) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
                 C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
         }

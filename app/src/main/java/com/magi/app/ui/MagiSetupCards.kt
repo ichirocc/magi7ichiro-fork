@@ -376,9 +376,22 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 Switch(checked = ui.ejectionChainSwap, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) },
                     enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
             }
+            Text("1回あたりの上限時間（残り時間の4分の1を超えません）")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                EJECTION_CHAIN_SECONDS.forEach { sec ->
+                    val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
+                    if (ui.ejectionChainSeconds == sec) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainSeconds(sec)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text("${sec}秒") }
+                    } else {
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainSeconds(sec)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text("${sec}秒") }
+                    }
+                }
+            }
         }
     }
 }
+
+internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
 internal const val EJECTION_CHAIN_NOTE = "試験中。測定では効果は確認できていません（既定はOFF）"
 

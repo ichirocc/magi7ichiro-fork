@@ -148,6 +148,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetC1MoveARepair -> vm.setC1MoveARepair(e.on)
             is MagiEvent.Settings.SetEjectionChain -> vm.setEjectionChain(e.mode)
             is MagiEvent.Settings.SetEjectionChainSwap -> vm.setEjectionChainSwap(e.on)
+            is MagiEvent.Settings.SetEjectionChainSeconds -> vm.setEjectionChainSeconds(e.seconds)
             is MagiEvent.Settings.SetLnsAdaptive -> vm.setLnsAdaptive(e.on)
         }
         true

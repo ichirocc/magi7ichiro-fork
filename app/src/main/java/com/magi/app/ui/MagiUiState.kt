@@ -93,6 +93,7 @@ data class UiState(
     val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
     val ejectionChain: EjectionChainMode = EjectionChainMode.OFF,  // 玉突きで直す（試験中・既定OFF）。保存しない
     val ejectionChainSwap: Boolean = true,  // PolishGate.ejectionChainSwapMoves（既定ON）。保存しない
+    val ejectionChainSeconds: Int = 6,  // PolishGate.ejectionChainMaxMillis / 1000（既定6）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),

@@ -1271,6 +1271,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで入れ替えも使う → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setEjectionChainSeconds(seconds: Int) {
+        com.magi.app.v6.PolishGate.ejectionChainMaxMillis = seconds * 1000L
+        _ui.update { it.copy(ejectionChainSeconds = seconds) }
+        logOp("I", "設定変更: 玉突きの上限時間 → ${seconds}秒")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 
