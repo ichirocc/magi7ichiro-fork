@@ -98,11 +98,11 @@ object V6FinalPort {
         val raisedHard: Boolean get() = hardAfter > hardBefore
 
         fun logLine(): String =
-            if (raisedHard) "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置かないため、この設定では入力の必須${hardBefore}件には戻れません"
+            if (raisedHard) "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置かないため、入力の必須${hardBefore}件に戻らないことがあります"
             else "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置きません（表示・重みは不変）"
 
         fun keptNote(): String? = if (!raisedHard) null else
-            "今の勤務表には個人の上限0のシフトが${count}件入っています。最適化は上限0の勤務を置かないため、この設定では必須${hardBefore}件まで戻れません（上限を見直すか、そのまま使ってください）"
+            "今の勤務表には個人の上限0のシフトが${count}件入っています。最適化は上限0の勤務を置かないため、必須${hardBefore}件まで戻らないことがあります（上限を見直すか、そのまま使ってください）"
     }
 
     fun buildBusyDetail(state: MagiState, algorithm: String, overrides: Map<String, String> = emptyMap()): BusyDetail {
@@ -917,6 +917,12 @@ object V6FinalPort {
         //   label が「後処理」でなくなるが、これは退化ではないので警告しない。実際に refReport（後処理の
         //   最終値）が bestStage より悪いとき（= checkResultWorse が非null）だけ多重防御ログを出す。
         val regression = if (bestStage.label != "後処理") checkResultWorse(bestStage.report, refReport) else null
+        // 採用した盤面が後処理の盤面でないのに、後処理より良くて regression が立たない場合（後処理の段が上限0・手動固定で
+        //   候補から外れたとき）も、後処理系の行は採用していない盤面の観測。どの段を採ったかを名指しして目印を付ける。
+        val staleWithoutRegression = regression == null && bestStage.label != "後処理" &&
+            !finalSched.contentDeepEquals(post.schedule)
+        val adoptedLog = if (staleWithoutRegression) listOf(MirrorLog(level = "I", tag = "UnifiedCheck",
+            message = "採用した勤務表=${bestStage.label}（HARD=${finalReport.hard} 合計=${finalReport.total}）。以降の後処理系の行・違反詳細は採用していない盤面の観測")) else emptyList()
         val sentinelLog = if (regression != null) listOf(
             MirrorLog(
                 level = "W", tag = "Sentinel",
@@ -1108,7 +1114,7 @@ object V6FinalPort {
                 Stage("統合", integrated.report),
                 Stage("後処理", post.report),
                 Stage("追加精製", refReport),
-                Stage("採用", finalReport),
+                Stage(if (bestStage.label == "後処理") "採用" else "採用(=${bestStage.label})", finalReport),
             )
             val sb = StringBuilder("スコア収支（各段の採用値・必須/合計/重み）: ")
             var prev: ViolationReport? = null
@@ -1146,8 +1152,8 @@ object V6FinalPort {
         // post.report.logs = [HF80/67/66/70 logs + POST timing + UnifiedViolationChecker logs]。
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
         // [UX調査] sentinelLog（1文）だけでは後続の個々の行まで読者が覚えていられない（history参照）。
-        val postReportLogs = annotateStaleLogsIfRegressed(post.report.logs, regression)
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val postReportLogs = annotateStaleLogsIfRegressed(post.report.logs, regression ?: if (staleWithoutRegression) "" else null)
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」

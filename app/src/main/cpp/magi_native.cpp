@@ -2232,7 +2232,7 @@ void runPolishChunk(PolishState& s, int iters, long long out[5]) {
             if (op == 0 && S > 0 && T > 0) {            // random allowed single cell
                 int i = rnInt(rng, S), j = rnInt(rng, T);
                 if (!wishLockedN(p, i, j)) {
-                    const auto& allowed = p.bucket[p.sgrp[i]];
+                    const auto& allowed = p.allowed[i];   // 置けるシフト（個人上限0を除く）＝Kotlin の allowedShiftsForStaff と同じ
                     if (!allowed.empty()) {
                         int oldK = st.a[(size_t)i * T + j];
                         int nw = allowed[rnInt(rng, (int)allowed.size())];

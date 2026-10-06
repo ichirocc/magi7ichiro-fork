@@ -314,7 +314,7 @@ internal object C3FamilyPolish {
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
 
         fun tryExtend(i: Int, extDay: Int, fromK: Int, toK: Int): Boolean {
-            if (!movable(i, extDay) || p.makesForbiddenRun(work, i, extDay, toK)) return false
+            if (!movable(i, extDay) || !p.mayPlace(i, toK) || p.makesForbiddenRun(work, i, extDay, toK)) return false
             var cnt = 0
             for (s in 0 until p.S) if (work[s][extDay] == fromK) cnt++
             val needsChain = p.covUCell(fromK, extDay, cnt - 1) > p.covUCell(fromK, extDay, cnt)
