@@ -23,8 +23,8 @@ android {
         applicationId = "com.magi.app"
         minSdk = 36
         targetSdk = 36
-        versionCode = 841
-        versionName = "3.621.0-saisakusei"
+        versionCode = 842
+        versionName = "3.621.1-capzero-stage"
         // [ネイティブ加速] minSdk 36（Android 16+）の実機は arm64 のみ対象で十分。
         //   .so が無い環境でも NativeBridge が false を返し Kotlin パスで全機能が動く。
         ndk { abiFilters += listOf("arm64-v8a") }
@@ -37,11 +37,24 @@ android {
         }
     }
 
+    // [上書きインストール] 旧: 常にデバッグ鍵で署名＝CI ランナーごとに使い捨ての鍵が生成され、ビルドの
+    //   たびに署名が変わって既存アプリへの上書きが「署名不一致」で失敗していた。CI が Secrets から復元した
+    //   固定鍵（MAGI_KEYSTORE_FILE ほか）があればそれで署名する。無ければ従来どおりデバッグ鍵（上書き不可）。
+    val magiKeystore = System.getenv("MAGI_KEYSTORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
+    if (magiKeystore != null) {
+        signingConfigs {
+            create("magiRelease") {
+                storeFile = file(magiKeystore)
+                storePassword = System.getenv("MAGI_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MAGI_KEY_ALIAS")
+                keyPassword = System.getenv("MAGI_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Personal-test release APK: signed with the debug key so it is installable from Actions.
-            // Replace with a private release signingConfig before store distribution.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (magiKeystore != null) "magiRelease" else "debug")
             // No shrinking for this personal-test build. proguardFiles() is intentionally omitted:
             // it is ignored while isMinifyEnabled = false and only invites the false impression that
             // shrink rules are active. Re-add it together with isMinifyEnabled = true for a store build.
@@ -65,7 +78,7 @@ android {
     buildFeatures { compose = true }
     packaging { resources { excludes += setOf("/META-INF/{AL2.0,LGPL2.1}") } }
 
-    // This release variant is a personal-test APK signed with the debug key (see buildTypes.release),
+    // This release variant is a personal-test APK signed with the fixed CI key or the debug key (see signingConfigs),
     // not a Play-store build. `lintVitalRelease` aborts the APK on any *fatal* lint issue, which only
     // blocks the test build without adding value here. Don't fail the build on lint; still emit the
     // HTML/XML report so issues remain inspectable in app/build/reports/.

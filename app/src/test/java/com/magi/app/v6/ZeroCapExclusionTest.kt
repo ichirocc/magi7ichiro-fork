@@ -133,4 +133,23 @@ class ZeroCapExclusionTest {
             res.capZero?.keptNote())
         assertEquals(null, V6FinalPort.CapZeroNotice(4, 0, 0).keptNote())
     }
+
+    /** 上限0のセルを含む段は捨てずに、そのセルを外した盤面を候補に足す（入力・上限0なしの段は足さない）。 */
+    @Test
+    fun clearedCapZeroStagesAddsTheStageWithCappedCellsRemoved() {
+        val s = state()
+        val p = cachedProblem(s, false)
+        val raw = s.schedule.map { it.toIntArray() }.toTypedArray()
+        val cleared = HardRepairCore.clearCappedCells(s, raw).first
+        val rep = { b: Array<IntArray> -> UnifiedViolationChecker.check(s, b) }
+        val stages = listOf(
+            V6FinalPort.StageCandidate("入力", cleared, rep(cleared)),
+            V6FinalPort.StageCandidate("探索", raw, rep(raw)),
+            V6FinalPort.StageCandidate("統合", cleared, rep(cleared)),
+        )
+        val added = V6FinalPort.clearedCapZeroStages(s, p, stages, false)
+        assertEquals(listOf("探索（上限0を外す）"), added.map { it.label })
+        assertEquals(0, countA(added[0].sched, 0))
+        assertTrue(p.capZeroCells(added[0].sched).isEmpty())
+    }
 }

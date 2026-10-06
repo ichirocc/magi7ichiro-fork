@@ -29,6 +29,10 @@
   Checkout 直後に `echo "SAFE_REF=${GITHUB_REF_NAME//\//-}" >> "$GITHUB_ENV"`。現状の `release-build.yml` は `github.sha` なので不要。
 - APK 内の `.so` が非圧縮かつ 16KiB 境界かは `tools/check_apk_native_libs.py` が assemble 後に検査する（3.552.0）。
   Release Build の成果物 upload は `continue-on-error` のまま、`if-no-files-found: error`＋STEP_SUMMARY で失敗を見えるようにした。
+- **Release Build の署名と速度（2026-10-05）**: 上書きインストールには固定鍵が要る（デバッグ鍵はランナーごとに変わり「署名不一致」になる）。
+  リポジトリ Secrets に `MAGI_KEYSTORE_B64`（`base64 -w0 鍵.jks`）・`MAGI_KEYSTORE_PASSWORD`・`MAGI_KEY_ALIAS`・`MAGI_KEY_PASSWORD` を登録すると
+  固定鍵で署名し、run の Summary に署名鍵と SHA-256 が出る。未登録ならデバッグ鍵で警告付き。鍵を切り替えた最初の 1 回だけは端末で
+  JSON を書き出してからアンインストール→インストールが要る。gate と release は並列、配布（Release 添付／`app-release-*`）は両方が緑の後だけ。
 - **成果物の保持方針（3.570.0、ユーザー決定）**: 通常の CI 成果物（lint 結果・失敗ログ・debug/native-parity 等の
   ビルド成果物）は `cleanup-artifacts.yml` が毎日 03:00 UTC に無条件で全削除する（`workflow_dispatch` でも即時実行可）。
   **`release-build.yml` のリリース APK（成果物名 `app-release-*`）だけは対象外**にし、`retention-days: 14` を

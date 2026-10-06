@@ -339,6 +339,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         private set
     internal var lastRunDiagAtMs: Long = 0L
         private set
+    /** 入力を維持した（結果を採用しなかった）エンジン実行の診断。表示中の勤務表の診断とは混ぜず、書き出しで別欄に出す。
+     *  採用した実行が来たら消す（古い不採用の記録を最新と取り違えないため）。 */
+    internal var rejectedRunDiagLogs: List<String> = emptyList()
+        private set
+    internal var rejectedRunDiagSerial = 0
+        private set
+    internal var rejectedRunDiagAtMs: Long = 0L
+        private set
     private val opLogFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.JAPAN)
 
     /**
@@ -1685,6 +1693,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     //   res.post を無条件に保存しており、「捨てた盤面で直せなかった理由」を「いま表示中の
                     //   勤務表の理由」として見せうる（維持した勤務表は別の探索の産物）。
                     setPolishDiagnostics(null, 0, kept)
+                    rejectedRunDiagLogs = res.logs.map { "[${it.level}] ${it.tag}: ${it.message}" }
+                    rejectedRunDiagSerial = activeRunSerial
+                    rejectedRunDiagAtMs = System.currentTimeMillis()
                     currentSchedule = kept
                     autoSave()
                     resultSchedule = kept
@@ -1711,6 +1722,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     //   旧実装は pushReport のあとに代入していたため、その回の画面には診断が入らず
                     //   次の再チェックでようやく（しかも古い盤面基準で）出るという順序の逆転だった。
                     setPolishDiagnostics(res.post?.c1Plateau, res.post?.observedPinBlockedAttempts ?: 0, res.schedule, res.post?.pinBlocks)
+                    rejectedRunDiagLogs = emptyList()
                     currentSchedule = res.schedule.copy2D()
                     autoSave()
                     resultSchedule = res.schedule.copy2D()

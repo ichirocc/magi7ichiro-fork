@@ -908,7 +908,8 @@ object V6FinalPort {
         val pinLog = (stages - pinSafeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
             message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") } +
             capZeroLogs(state, baseProblem, pinSafeStages)
-        val safeStages = excludeCapZeroStages(baseProblem, pinSafeStages)
+        val safeStages = excludeCapZeroStages(baseProblem, pinSafeStages) +
+            clearedCapZeroStages(state, baseProblem, pinSafeStages, quantitativeRangeEval)
         val bestStage = pickBestStage(safeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
@@ -1203,12 +1204,25 @@ object V6FinalPort {
     internal fun excludeCapZeroStages(p: Problem, stages: List<StageCandidate>): List<StageCandidate> =
         stages.filterIndexed { idx, st -> idx == 0 || p.capZeroCells(st.sched).isEmpty() }
 
+    /** 上限0のセルを含む段（入力以外）から、入口と同じ手順（[HardRepairCore.clearCappedCells]）でそのセルを外した盤面を作る。
+     *  探索が上限0のセルを抱えたまま進むと全段が [excludeCapZeroStages] で外れ、入口の盤面へ戻って探索の成果を丸ごと失う。
+     *  これを候補に足すだけなので選ばれる結果は悪化しない。外し切れない盤面・手動固定を崩す盤面は足さない。 */
+    internal fun clearedCapZeroStages(
+        state: MagiState, p: Problem, stages: List<StageCandidate>, quantitativeRangeEval: Boolean,
+    ): List<StageCandidate> =
+        stages.drop(1).filter { p.capZeroCells(it.sched).isNotEmpty() }.mapNotNull { st ->
+            val cleared = HardRepairCore.clearCappedCells(state, st.sched, quantitativeRangeEval).first
+            if (p.capZeroCells(cleared).isNotEmpty() || !p.holdsManualPins(cleared)) null
+            else StageCandidate("${st.label}（上限0を外す）", cleared,
+                UnifiedViolationChecker.check(state, cleared, quantitativeRangeEval = quantitativeRangeEval))
+        }
+
     /** [excludeCapZeroStages] で外した段ごとの W ログ（違反セルは先頭 5 件）。 */
     internal fun capZeroLogs(state: MagiState, p: Problem, stages: List<StageCandidate>): List<MirrorLog> =
         stages.drop(1).mapNotNull { st ->
             val cells = p.capZeroCells(st.sched)
             if (cells.isEmpty()) null else MirrorLog(level = "W", tag = "Sentinel",
-                message = "${st.label}の盤面に上限0の勤務が${cells.size}件あったため候補から外しました（多重防御）: " +
+                message = "${st.label}の盤面に上限0の勤務が${cells.size}件あったため、外した盤面を候補にしました（多重防御）: " +
                     cells.take(5).joinToString("、") { (i, j) ->
                         "${state.staff.getOrNull(i)?.name ?: i}/${j + 1}日目/${state.shifts.getOrNull(st.sched[i][j])?.kigou ?: st.sched[i][j]}"
                     })

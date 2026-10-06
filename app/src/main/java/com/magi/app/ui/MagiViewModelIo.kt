@@ -114,6 +114,14 @@ fun MagiViewModel.exportLogs(): String? {
             append("※上の診断ログはその後の編集/再チェックで作り直された最新版です。こちらは実行時のもの。\n")
             run.forEach { append(it).append('\n') }
         }
+        val rejected = rejectedRunDiagLogs
+        if (rejected.isNotEmpty()) {
+            val at = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.JAPAN)
+                .format(java.util.Date(rejectedRunDiagAtMs))
+            append("\n==== 採用しなかった実行の診断ログ（${runTag(rejectedRunDiagSerial)}・$at・全文 ${rejected.size}件）====\n")
+            append("※結果が前回より良くならず、勤務表は前回のままです。この診断は表示中の勤務表のものではありません。\n")
+            rejected.forEach { append(it).append('\n') }
+        }
     }
 }
 
@@ -141,6 +149,11 @@ fun MagiViewModel.exportLogsJson(): String? {
         o.put("lastRunSerial", lastRunDiagSerial)
         o.put("lastRunAt", lastRunDiagAtMs)
         o.put("lastRunDiagLog", org.json.JSONArray().apply { lastRunDiagLogs.forEach { put(it) } })
+    }
+    if (rejectedRunDiagLogs.isNotEmpty()) {
+        o.put("rejectedRunSerial", rejectedRunDiagSerial)
+        o.put("rejectedRunAt", rejectedRunDiagAtMs)
+        o.put("rejectedRunDiagLog", org.json.JSONArray().apply { rejectedRunDiagLogs.forEach { put(it) } })
     }
     o.put("breakdown", org.json.JSONObject().apply { _ui.value.breakdown.forEach { (k, v) -> put(k, v) } })
     return o.toString(2)
