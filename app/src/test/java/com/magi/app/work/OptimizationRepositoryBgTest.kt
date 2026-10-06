@@ -87,13 +87,14 @@ class OptimizationRepositoryBgTest {
         val g = com.magi.app.v6.PolishGate
         val saved = g.snapshot()
         try {
-            g.allFamilyEjectionChain = true; g.countChainPolish = true; g.normalStallFraction = 0.5
+            g.allFamilyEjectionChain = true; g.countChainPolish = true; g.normalStallFraction = 0.5; g.ejectionChainMaxMillis = 10_000L
             val cfg = OptimizationRepository.RunConfig(300, 8, softPolish = false, algorithm = V6Algorithm.AUTO, gates = g.snapshot())
             val back = OptimizationRepository.RunConfig.fromInput(cfg.toInput())
             assertEquals(cfg, back)
-            g.allFamilyEjectionChain = false; g.countChainPolish = false; g.normalStallFraction = 0.9
+            g.allFamilyEjectionChain = false; g.countChainPolish = false; g.normalStallFraction = 0.9; g.ejectionChainMaxMillis = 3_000L
             g.restore(back.gates)
             assertEquals(true, g.allFamilyEjectionChain); assertEquals(true, g.countChainPolish); assertEquals(0.5, g.normalStallFraction, 0.0)
+            assertEquals(10_000L, g.ejectionChainMaxMillis)
         } finally { g.restore(saved) }
     }
 }
