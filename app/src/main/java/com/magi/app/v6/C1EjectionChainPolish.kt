@@ -43,6 +43,10 @@ internal object C1EjectionChainPolish {
         val swapMoves: Boolean = true,
         /** 0 以下＝無制限。重複・HARD 超過で捨てた候補も数える（決定的モードの停止条件）。 */
         val maxCandidates: Long = 0L,
+        /** 2 手目以降の候補を、ここまでに動かしたセルの「穴」（同じ日の全職員・同じ職員の前後 [holeRadius] 日）に絞る。
+         *  false は月全体を総当たり（従来）。測定中・既定 [defaultHoleFocus]。 */
+        val holeFocus: Boolean = defaultHoleFocus,
+        val holeRadius: Int = 7,
     )
 
     /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol）の違反だけを起点にする（測定中・後処理の前段で使う）。 */
@@ -55,6 +59,9 @@ internal object C1EjectionChainPolish {
     @Volatile internal var defaultCrossFamily: Boolean = true
 
     private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol")
+
+    /** 測定用の切替（穴に絞った候補生成を同条件で比べる）。 */
+    @Volatile internal var defaultHoleFocus: Boolean = false
 
     /** 測定用の切替（深さ 2〜3 の短い連鎖を同条件で比べる）。 */
     @Volatile internal var defaultMaxDepth: Int = 8
@@ -309,10 +316,33 @@ internal object C1EjectionChainPolish {
                         }
                     }
                     if (crossFamily) {
-                        for (i2 in 0 until p.S) { for (j2 in 0 until p.T) consider(i2, j2); if (out() || seedSpent()) return }
-                        if (config.swapMoves) {
-                            for (j2 in 0 until p.T) { for (a in 0 until p.S) for (b in a + 1 until p.S) considerSwap(a, j2, b, j2); if (out() || seedSpent()) return }
-                            for (i2 in 0 until p.S) { for (a in 0 until p.T) for (b in a + 1 until p.T) considerSwap(i2, a, i2, b); if (out() || seedSpent()) return }
+                        if (config.holeFocus) {
+                            // 穴＝動かしたセルの同じ日（被覆の受け皿）と同じ職員の前後の日（並び・期間の制約）。
+                            val hole = java.util.BitSet(p.S * p.T)
+                            for (m in path) {
+                                val mi = m[0]; val mj = m[1]
+                                for (s2 in 0 until p.S) hole.set(s2 * p.T + mj)
+                                for (d in maxOf(0, mj - config.holeRadius)..minOf(p.T - 1, mj + config.holeRadius)) hole.set(mi * p.T + d)
+                            }
+                            var c = hole.nextSetBit(0)
+                            while (c >= 0) { consider(c / p.T, c % p.T); c = hole.nextSetBit(c + 1) }
+                            if (out() || seedSpent()) return
+                            if (config.swapMoves) {
+                                c = hole.nextSetBit(0)
+                                while (c >= 0) {
+                                    val ci = c / p.T; val cj = c % p.T
+                                    // 相手も穴なら番号の小さい側からだけ数える（同じ組を二度評価しない）。
+                                    for (b in 0 until p.S) if (b != ci && (!hole.get(b * p.T + cj) || b > ci)) considerSwap(ci, cj, b, cj)
+                                    for (d in 0 until p.T) if (d != cj && (!hole.get(ci * p.T + d) || d > cj)) considerSwap(ci, cj, ci, d)
+                                    c = hole.nextSetBit(c + 1)
+                                }
+                            }
+                        } else {
+                            for (i2 in 0 until p.S) { for (j2 in 0 until p.T) consider(i2, j2); if (out() || seedSpent()) return }
+                            if (config.swapMoves) {
+                                for (j2 in 0 until p.T) { for (a in 0 until p.S) for (b in a + 1 until p.S) considerSwap(a, j2, b, j2); if (out() || seedSpent()) return }
+                                for (i2 in 0 until p.S) { for (a in 0 until p.T) for (b in a + 1 until p.T) considerSwap(i2, a, i2, b); if (out() || seedSpent()) return }
+                            }
                         }
                         cand.sortWith(CAND_ORDER)
                         val famNow = familyWeighted(de)
