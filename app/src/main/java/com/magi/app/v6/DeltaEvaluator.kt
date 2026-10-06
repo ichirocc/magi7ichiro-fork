@@ -390,6 +390,19 @@ class DeltaEvaluator(private val p: Problem) {
 
     // ---- aggregate / total rebuild --------------------------------------------
 
+    /** [C3Run.rowDeficit] のビット版: 勤務日ビット [m] の連（連続する 1）ごとに長さ r<L なら L−r を足す。 */
+    private fun rowDeficitBits(m0: Long, L: Int): Long {
+        var m = m0; var sub = 0L
+        while (m != 0L) {
+            val start = java.lang.Long.numberOfTrailingZeros(m)
+            val len = java.lang.Long.numberOfTrailingZeros((m ushr start).inv())
+            if (len < L) sub += (L - len).toLong()
+            val end = start + len
+            m = if (end >= 64) 0L else m and ((1L shl end) - 1).inv()
+        }
+        return sub
+    }
+
     private fun setCell(i: Int, j: Int, k: Int) {
         val old = a[i][j]
         a[i][j] = k
@@ -464,16 +477,20 @@ class DeltaEvaluator(private val p: Problem) {
         return tot
     }
 
+    /** 制約の並びごとの「単一シフト連か」（[C3Run.isSingleShiftSeq]）を一度だけ求めて持つ。 */
+    private val singleShiftOf = java.util.IdentityHashMap<List<C3>, BooleanArray>()
+
     private fun c3Local(i: Int, j: Int, list: List<C3>, fbd: Boolean): Long {
         var sub = 0L
-        for (c in list) {
-            val seq = c.seq; val D = seq.size
+        val single = singleShiftOf.getOrPut(list) { BooleanArray(list.size) { C3Run.isSingleShiftSeq(list[it].seq) } }
+        for (ci in list.indices) {
+            val seq = list[ci].seq; val D = seq.size
             if (D == 0) continue
             // [HF507] single-shift run: deficit is per-staff whole-row, not windowed.
             // A move at (i,j) only affects staff i's row, so recompute row i's run deficit
             // (before/after via the caller's swap captures the delta correctly).
-            if (!fbd && C3Run.isSingleShiftSeq(seq)) {
-                sub += C3Run.rowDeficit(a, i, seq[0], D)
+            if (!fbd && single[ci]) {
+                sub += if (useBits && seq[0] in 0 until K) rowDeficitBits(bits[i][seq[0]], D) else C3Run.rowDeficit(a, i, seq[0], D)
                 continue
             }
             val js0 = maxOf(0, j - D + 1); val js1 = minOf(T - D, j)
