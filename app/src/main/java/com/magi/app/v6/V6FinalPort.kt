@@ -1075,9 +1075,14 @@ object V6FinalPort {
             }
             val wallTxt = if (walls.isEmpty()) "なし" else walls.joinToString(" / ")
             val openTxt = if (open.isEmpty()) "なし＝これ以上は追っても減りません" else open.joinToString(" / ")
+            // 採用盤面の必須を「希望どうしのぶつかり（希望を1件取り消すまで消えない）」と「それ以外」に分ける（表示・計測用）。
+            val hardWishFloor = V6SanityPort.wishConflictHardShare(selfConflict, bd, finalReport.hard)
             listOf(MirrorLog(
                 level = "I", tag = "残存分析",
                 message = "もう直せない: $wallTxt ／ まだ狙える: $openTxt",
+            ), MirrorLog(
+                level = "I", tag = "必須内訳",
+                message = "必須 ${finalReport.hard}件 = 希望どうしのぶつかり ${hardWishFloor}件 + それ以外 ${finalReport.hard - hardWishFloor}件",
             ))
         }
         // [3.387.0/3.388.0] 並行アクセスの実レースは実機でしか確かめられない、と記録してきた項目の

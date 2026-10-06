@@ -174,6 +174,23 @@ object PolishGate {
     /** 玉突き連鎖の候補に入れ替え（同日の 2 人・同じ職員の 2 日）を含めるか。既定 true＝`C1EjectionChainPolish.Config.swapMoves` の既定と同じ。 */
     @Volatile var ejectionChainSwapMoves: Boolean = true
 
+    /** [測定中] 必須の違反だけを起点にした玉突き連鎖を後処理の前段（HF66 の直後）で試す。既定 **false**（2026-10-06）。 */
+    @Volatile var hardEjectionChainEarly: Boolean = false
+
+    /** [測定中] 前段の玉突き連鎖の起点をソフトを含む全族の違反にする（[hardEjectionChainEarly] と独立に有効）。既定 **false**（2026-10-06）。 */
+    @Volatile var allEjectionChainEarly: Boolean = false
+
+    /** [測定中] 全族起点の玉突き連鎖を後処理の最終段（最終の違反起点修復の直前）で試す。既定 **false**（2026-10-06）。 */
+    @Volatile var allEjectionChainFinal: Boolean = false
+
+    /** [測定中] 後処理の終わりに必須が残っていれば、必須起点の玉突き連鎖をもう一度かける（前段の連鎖で経路が変わり、
+     *  後段が必須を詰め切れなかった盤面の救済）。既定 **false**（2026-10-06）。 */
+    @Volatile var hardEjectionChainRetry: Boolean = false
+
+    /** [測定中] 全族起点の玉突き連鎖を、最終の違反起点修復の**後**で試す（[allEjectionChainFinal] は修復の前。
+     *  前に置くと修復が使う手の組合せを先に崩す負けがあった）。既定 **false**（2026-10-06）。 */
+    @Volatile var allEjectionChainAfterRepair: Boolean = false
+
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
@@ -262,7 +279,7 @@ object PolishGate {
         "filterC3nIncrease" to filterC3nIncrease, "hardDeltaPrefilter" to hardDeltaPrefilter,
         "wishConflictFloorMode" to wishConflictFloorMode.name,
         "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain,
-        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "normalStallFraction" to normalStallFraction,
+        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "hardEjectionChainEarly" to hardEjectionChainEarly, "allEjectionChainEarly" to allEjectionChainEarly, "allEjectionChainFinal" to allEjectionChainFinal, "hardEjectionChainRetry" to hardEjectionChainRetry, "allEjectionChainAfterRepair" to allEjectionChainAfterRepair, "normalStallFraction" to normalStallFraction,
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
@@ -275,7 +292,7 @@ object PolishGate {
         b("filterC3nIncrease") { filterC3nIncrease = it }; b("hardDeltaPrefilter") { hardDeltaPrefilter = it }
         (m["wishConflictFloorMode"] as? String)?.let { n -> WishFloorMode.entries.firstOrNull { it.name == n }?.let { wishConflictFloorMode = it } }
         b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
-        b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }
+        b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }; b("hardEjectionChainEarly") { hardEjectionChainEarly = it }; b("allEjectionChainEarly") { allEjectionChainEarly = it }; b("allEjectionChainFinal") { allEjectionChainFinal = it }; b("hardEjectionChainRetry") { hardEjectionChainRetry = it }; b("allEjectionChainAfterRepair") { allEjectionChainAfterRepair = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
@@ -679,6 +696,17 @@ object V6HotfixPasses {
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
         chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
+        // [測定中・既定 OFF] 玉突き連鎖を研磨群が盤面を固める前に試す（起点は必須だけ／ソフトを含む全族）。
+        //   後段（C1共同LNSの後）の玉突きは研磨し尽くした盤面から始まり採用 0 が続いたため、置き場所を前へ出して測る。
+        if (PolishGate.hardEjectionChainEarly || PolishGate.allEjectionChainEarly) {
+            val tHe = EngineClock.nowMs()
+            val earlyOrigin = if (PolishGate.allEjectionChainEarly) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.HARD
+            chain.adopt(chain.timed("後処理 前段の玉突き連鎖", "前段玉突き連鎖") { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = earlyOrigin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tHe) / 4).coerceIn(0L, 3_000L))
+                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            })
+        }
         val t66Done = EngineClock.nowMs()
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。
@@ -761,6 +789,25 @@ object V6HotfixPasses {
             })
         }
 
+        if (PolishGate.hardEjectionChainRetry && !shouldStop() &&
+            UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval).hard > 0) {
+            val tEr = EngineClock.nowMs()
+            chain.adopt(chain.timed("後処理 必須が残ったときの玉突き連鎖", "必須再玉突き連鎖") { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEr) / 4).coerceIn(0L, 3_000L))
+                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            })
+        }
+
+        if (PolishGate.allEjectionChainFinal && !shouldStop()) {
+            val tEf = EngineClock.nowMs()
+            chain.adopt(chain.timed("後処理 最終段の玉突き連鎖", "最終段玉突き連鎖") { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEf) / 4).coerceIn(0L, 3_000L))
+                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            })
+        }
+
         if (params.componentRepairEnabled && params.componentRepairFinal && !shouldStop()) {
             // [Iteration 5] 最終段の予算は残り時間に応じて拡張（2 秒以上残っていれば推定 4 倍・正式評価 2.5 倍）。締切は stop に畳む。
             val remainingFinal = EngineClock.remainingMs(deadlineMs)
@@ -771,6 +818,15 @@ object V6HotfixPasses {
                 ViolationComponentRepair.repair(state, work, chain.rejectedPool.toList(), timeWidened, shouldStop = finalStop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
             chain.rejectedPool.clear()
+        }
+
+        if (PolishGate.allEjectionChainAfterRepair && !shouldStop()) {
+            val tEa = EngineClock.nowMs()
+            chain.adopt(chain.timed("後処理 修復後の玉突き連鎖", "修復後玉突き連鎖") { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEa) / 4).coerceIn(0L, 3_000L))
+                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            })
         }
 
         if (params.restZeroWindowLnsEnabled && !shouldStop()) {

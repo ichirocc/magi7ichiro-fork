@@ -3363,6 +3363,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             distLocations = report.distLocations,
             c1Shortages = c1Shortages(cachedProblem(st), schedule),
             zeroCapCells = zeroCapCells(cachedProblem(st), schedule),
+            hardWishConflict = if (report.hard <= 0) 0 else runCatching {
+                com.magi.app.v6.V6SanityPort.wishConflictHardShare(
+                    com.magi.app.v6.V6SanityPort.wishConflictHard(cachedProblem(st), schedule), report.breakdown, report.hard)
+            }.getOrDefault(0),
             zeroAllowCells = zeroAllowCells(cachedProblem(st), schedule),
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },

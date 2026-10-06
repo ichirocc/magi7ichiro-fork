@@ -131,4 +131,11 @@ class WishSelfConflictTest {
         val open = line.substringAfter("まだ狙える: ")
         assertFalse(line, open.contains("c3n") || open.contains("pref"))
     }
+
+    /** 必須内訳の単一ソース: 族ごとに報告の内訳で頭打ち、合計は必須件数で頭打ち。 */
+    @Test fun wishConflictHardShareCapsByBreakdownAndHard() {
+        assertEquals(3, V6SanityPort.wishConflictHardShare(mapOf("c3n" to 2, "pref" to 4), mapOf("c3n" to 2, "pref" to 1), 10))
+        assertEquals(2, V6SanityPort.wishConflictHardShare(mapOf("c3n" to 5), mapOf("c3n" to 5), 2))
+        assertEquals(0, V6SanityPort.wishConflictHardShare(emptyMap(), mapOf("c3n" to 5), 5))
+    }
 }

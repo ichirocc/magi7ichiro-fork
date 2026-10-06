@@ -64,12 +64,20 @@ class WishTrialCandidatesTest {
     @Test fun t9_prefCellInWishSelfConflictListsItsSiblingWishes() {
         val ui = selfUi.copy(violationCellFamilies = mapOf("0,24" to listOf("vio-pref"), "1,1" to listOf("vio-pref")))
         assertEquals(listOf(
-            WishTrialRow(0, 24, "古泉", "希望の勤務になっていません", true),
-            WishTrialRow(0, 25, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true),
-            WishTrialRow(0, 26, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true),
-            WishTrialRow(1, 0, "福澤", "希望どうしが前日の禁止「Dﾃ→休」に当たっています", true),
-            WishTrialRow(1, 1, "福澤", "希望の勤務になっていません", true),
+            WishTrialRow(0, 24, "古泉", "希望の勤務になっていません", true, wishOnly = true),
+            WishTrialRow(0, 25, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true, wishOnly = true),
+            WishTrialRow(0, 26, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true, wishOnly = true),
+            WishTrialRow(1, 0, "福澤", "希望どうしが前日の禁止「Dﾃ→休」に当たっています", true, wishOnly = true),
+            WishTrialRow(1, 1, "福澤", "希望の勤務になっていません", true, wishOnly = true),
         ), wishTrialCandidates(ui).direct)
+    }
+
+    /** 希望どうしの衝突に入る行だけ「希望のまま」の札。 */
+    @Test fun wishOnlyTagMarksOnlySelfConflictRows() {
+        val ui = selfUi.copy(wishSelfConflicts = selfUi.wishSelfConflicts.take(1),
+            violationCellFamilies = mapOf("0,24" to listOf("vio-pref"), "1,1" to listOf("vio-pref")))
+        assertEquals(mapOf(24 to true, 25 to true, 26 to true, 1 to false),
+            wishTrialCandidates(ui).direct.associate { it.day to it.wishOnly })
     }
 
     @Test fun t9_selfConflictWithoutPrefCellAddsNothing() {

@@ -274,6 +274,10 @@ object V6SanityPort {
         return out
     }
 
+    /** 必須 [hard] 件のうち希望どうしのぶつかり（[wishConflictHard]）の件数。族ごとに報告の内訳で頭打ちにする（必須内訳ログ・ホームが共有）。 */
+    fun wishConflictHardShare(selfConflict: Map<String, Int>, breakdown: Map<String, Int>, hard: Int): Int =
+        selfConflict.entries.sumOf { (k, v) -> minOf(v, breakdown[k] ?: 0) }.coerceIn(0, maxOf(hard, 0))
+
     /** [E0] 希望衝突の床（report.hard と同単位、[structuralHardFloor] とは別に扱う）＝衝突の最小 HARD＋日の証明の日数。 */
     fun wishConflictHardFloor(p: Problem): Int = wishConflictFloorParts(p).let { it.first + it.second }
 
