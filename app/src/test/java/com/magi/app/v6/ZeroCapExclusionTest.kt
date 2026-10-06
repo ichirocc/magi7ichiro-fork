@@ -152,4 +152,17 @@ class ZeroCapExclusionTest {
         assertEquals(0, countA(added[0].sched, 0))
         assertTrue(p.capZeroCells(added[0].sched).isEmpty())
     }
+
+    /** PERSON_SWAP_ILS の摂動（同じ群の2名の1ヶ月を入れ替える）は、上限0の職員へ相手の勤務を移さない。 */
+    @Test
+    fun personSwapKickDoesNotMoveCappedShiftOntoCappedStaff() {
+        val s = state()
+        val p = cachedProblem(s, false)
+        for (seed in 1L..5L) {
+            val b = arrayOf(intArrayOf(0, 0, 0, 0), intArrayOf(1, 1, 1, 1), intArrayOf(1, 1, 1, 1))
+            V6NativeOptimizer.personSwapKick(p, b, java.util.Random(seed), pairs = 1)
+            assertEquals("seed=$seed", 0, countA(b, 0))
+            assertTrue(p.capZeroCells(b).isEmpty())
+        }
+    }
 }

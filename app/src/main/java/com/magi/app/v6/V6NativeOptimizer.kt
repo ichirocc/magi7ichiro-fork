@@ -1111,6 +1111,9 @@ object V6NativeOptimizer {
             val b = candidates.maxByOrNull { burden[it] } ?: continue
             for (j in 0 until p.T) {
                 if ((wishPinStrict && (p.wishLocked(a, j) || p.wishLocked(b, j))) || p.pinned(a, j) || p.pinned(b, j)) continue
+                // 個人上限0は職員ごと＝同じ群でも相手の勤務を置けない日がある（mayPlace、3.507.0）。その日は交換しない。
+                val ka = out[a][j]; val kb = out[b][j]
+                if ((kb in 0 until p.K && !p.mayPlace(a, kb)) || (ka in 0 until p.K && !p.mayPlace(b, ka))) continue
                 val tmp = out[a][j]; out[a][j] = out[b][j]; out[b][j] = tmp
             }
             swapped[a] = true; swapped[b] = true
