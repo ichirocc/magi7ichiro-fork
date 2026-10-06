@@ -174,6 +174,9 @@ object PolishGate {
     /** 玉突き連鎖の候補に入れ替え（同日の 2 人・同じ職員の 2 日）を含めるか。既定 true＝`C1EjectionChainPolish.Config.swapMoves` の既定と同じ。 */
     @Volatile var ejectionChainSwapMoves: Boolean = true
 
+    /** [測定中] 必須の違反だけを起点にした玉突き連鎖を後処理の前段（HF66 の直後）で試す。既定 **false**（2026-10-06）。 */
+    @Volatile var hardEjectionChainEarly: Boolean = false
+
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
@@ -262,7 +265,7 @@ object PolishGate {
         "filterC3nIncrease" to filterC3nIncrease, "hardDeltaPrefilter" to hardDeltaPrefilter,
         "wishConflictFloorMode" to wishConflictFloorMode.name,
         "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain,
-        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "normalStallFraction" to normalStallFraction,
+        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "hardEjectionChainEarly" to hardEjectionChainEarly, "normalStallFraction" to normalStallFraction,
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
@@ -275,7 +278,7 @@ object PolishGate {
         b("filterC3nIncrease") { filterC3nIncrease = it }; b("hardDeltaPrefilter") { hardDeltaPrefilter = it }
         (m["wishConflictFloorMode"] as? String)?.let { n -> WishFloorMode.entries.firstOrNull { it.name == n }?.let { wishConflictFloorMode = it } }
         b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
-        b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }
+        b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }; b("hardEjectionChainEarly") { hardEjectionChainEarly = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
@@ -679,6 +682,16 @@ object V6HotfixPasses {
             HfSwapPolish.applyHF66IntraStaffRedistribution(state, work, maxMoves = params.hf66MaxMoves, shouldStop = shouldStop, deadlineMs = if (params.deterministic) Long.MAX_VALUE else t66 + cap, quantitativeRangeEval = params.quantitativeRangeEval)
         }
         chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
+        // [測定中・既定 OFF] 必須（HARD）の違反だけを起点にした玉突き連鎖を、研磨群が盤面を固める前に試す。
+        //   後段（C1共同LNSの後）の玉突きは研磨し尽くした盤面から始まり採用 0 が続いたため、置き場所を前へ出して測る。
+        if (PolishGate.hardEjectionChainEarly) {
+            val tHe = EngineClock.nowMs()
+            chain.adopt(chain.timed("後処理 必須起点の玉突き連鎖", "必須玉突き連鎖") { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
+                    else C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tHe) / 4).coerceIn(0L, 3_000L))
+                C1EjectionChainPolish.apply(state, work, cfg, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            })
+        }
         val t66Done = EngineClock.nowMs()
 
         // 巡回研磨クラスタは自身の締切を持たないため、共同 LNS 2 本の取り分を先に確保して clusterStop に畳む（3.271.0）。

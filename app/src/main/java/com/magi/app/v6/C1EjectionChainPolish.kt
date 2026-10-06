@@ -18,7 +18,7 @@ import kotlin.random.Random
 internal object C1EjectionChainPolish {
 
     data class Config(
-        val maxDepth: Int = 8,
+        val maxDepth: Int = defaultMaxDepth,
         /** 深さごとの分岐数（尽きたら最後の値）。 */
         val branching: IntArray = intArrayOf(4, 3, 2, 2, 1),
         /** 途中の盤面で許す HARD の増分。 */
@@ -45,13 +45,19 @@ internal object C1EjectionChainPolish {
         val maxCandidates: Long = 0L,
     )
 
-    enum class Origin { C1, ALL }
+    /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol）の違反だけを起点にする（測定中・後処理の前段で使う）。 */
+    enum class Origin { C1, ALL, HARD }
 
     /** 測定用: 連鎖に入る直前の盤面を受け取る（前段の揺れと連鎖の効果を切り分ける）。本番では null。 */
     @Volatile internal var entryProbe: ((Array<IntArray>) -> Unit)? = null
 
     /** 測定用の切替（v1/v2 を同条件で比べる）。 */
     @Volatile internal var defaultCrossFamily: Boolean = true
+
+    private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol")
+
+    /** 測定用の切替（深さ 2〜3 の短い連鎖を同条件で比べる）。 */
+    @Volatile internal var defaultMaxDepth: Int = 8
 
     class Stats {
         var seeds = 0; var candidates = 0L; var evaluations = 0L; var chainsTried = 0; var accepted = 0
@@ -91,10 +97,11 @@ internal object C1EjectionChainPolish {
         var rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
         val before = rep
         entryProbe?.invoke(Array(p.S) { work[it].copyOf() })
-        val all = config.origin == Origin.ALL
+        val all = config.origin != Origin.C1
+        val hardOnly = config.origin == Origin.HARD
         val crossFamily = all || config.crossFamily
         val hasUnassigned = work.any { row -> row.any { it !in 0 until p.K } }
-        if (hasUnassigned || (if (all) rep.total == 0 else p.cons1.isEmpty() || (rep.breakdown["c1"] ?: 0) == 0)) {
+        if (hasUnassigned || (if (hardOnly) rep.hard == 0 else if (all) rep.total == 0 else p.cons1.isEmpty() || (rep.breakdown["c1"] ?: 0) == 0)) {
             return V6HotfixPasses.CyclicSwapResult(work, rep.total, rep.total, 0,
                 listOf(MirrorLog(tag = "C1EjectionChain", message = "対象なし=スキップ")), report = rep)
         }
@@ -155,7 +162,10 @@ internal object C1EjectionChainPolish {
          */
         fun allSeeds(): List<Seed> {
             val perFamily = LinkedHashMap<String, ArrayList<List<IntArray>>>()   // 族 → 違反 1 箇所ごとの関与セル
-            fun addUnit(fam: String, cells: List<IntArray>) { perFamily.getOrPut(fam) { ArrayList() }.add(cells) }
+            fun addUnit(fam: String, cells: List<IntArray>) {
+                if (hardOnly && fam !in HARD_FAMILIES) return
+                perFamily.getOrPut(fam) { ArrayList() }.add(cells)
+            }
             val row = { i: Int -> (0 until p.T).map { intArrayOf(i, it) } }
             val col = { j: Int -> (0 until p.S).map { intArrayOf(it, j) } }
             for ((key, classes) in rep.cellFamilies) {
