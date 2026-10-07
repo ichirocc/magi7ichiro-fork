@@ -345,22 +345,6 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("行き詰まったら途中で仕上げを試す")
-                Text("改善が止まったとき、仕上げの手を途中で試して良くなれば探索をそこから続けます。試験中（既定はOFF）",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.stallPolishInjection, onCheckedChange = { onEvent(MagiEvent.Settings.SetStallPolishInjection(it)) }, enabled = !ui.running)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("期間の制約の入れ替えで、できた禁止の並びも直す")
-                Text(EJECTION_CHAIN_NOTE,
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = ui.c1MoveARepair, onCheckedChange = { onEvent(MagiEvent.Settings.SetC1MoveARepair(it)) }, enabled = !ui.running)
-        }
         Column(Modifier.fillMaxWidth()) {
             Text("玉突きで直す（月全体）")
             Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -386,7 +370,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Text("2手目以降を探す範囲")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                EjectionChainScope.values().forEach { sc ->
+                EJECTION_CHAIN_SCOPES_SHOWN.forEach { sc ->
                     val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
                     val label = ejectionChainScopeLabel(sc)
                     if (ui.ejectionChainScope == sc) {
@@ -410,6 +394,9 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
     }
 }
+
+/** 画面に出す範囲。「前後7日」は必須を増やした組があり BY_KIND が上位互換なので出さない。 */
+internal val EJECTION_CHAIN_SCOPES_SHOWN = listOf(EjectionChainScope.MONTH, EjectionChainScope.BY_KIND)
 
 internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
     EjectionChainScope.MONTH -> "月全体"

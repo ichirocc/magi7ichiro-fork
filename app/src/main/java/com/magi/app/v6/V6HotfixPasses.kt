@@ -278,6 +278,9 @@ object PolishGate {
     /** 適応 portfolio の停滞中に後処理チェーンを全体最良へ当てて差し戻す（`StallPolishInjection`）。既定 **false**。 */
     @Volatile var stallPolishInjection: Boolean = false
 
+    /** 後処理チェーンの先頭で貪欲な局所降下（`PrePostDescent`）をかける。既定 **false**（測定中）。 */
+    @Volatile var prePostDescent: Boolean = false
+
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
     fun snapshot(): Map<String, Any> = mapOf(
@@ -289,7 +292,7 @@ object PolishGate {
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
-        "stallPolishInjection" to stallPolishInjection,
+        "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -306,7 +309,7 @@ object PolishGate {
         b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
-        b("stallPolishInjection") { stallPolishInjection = it }
+        b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
     }
 }
 
@@ -418,6 +421,7 @@ object V6HotfixPasses {
         val hf67CapMs: Long = 3_000L,
         val hf66MaxMoves: Int = 30,
         val hf66CapMs: Long = 6_000L,
+        val prePostDescentMaxMs: Long = 3_000L,
         val jointLnsReserveMaxMs: Long = 14_000L,
         val maxRounds: Int = 4,
         val cyclicSwapPasses: Int = 4,
@@ -540,6 +544,7 @@ object V6HotfixPasses {
         const val FAIR = 0xFA12L
         const val CYCLIC_N = 0xC1C54L
         const val C3N_MARGIN = 0xC3E9L
+        const val PRE_DESCENT = 0x9DE5L
     }
 
     /** SoftPolishVerify の「採用内訳」の並び（ログ文言の順序を固定する）。 */
@@ -686,6 +691,15 @@ object V6HotfixPasses {
         val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
             rollbackCountsZero = params.postChainRollbackCountsZero, aptFairSoftTolerance = params.aptFairSoftTolerance)
         val t0 = EngineClock.nowMs()
+
+        // [測定中・既定 OFF] 探索が拾い残した 1〜2 セルの改善手を先に拾う（HF80 の振動より前＝机上測定と同じ置き場所）。
+        if (PolishGate.prePostDescent && !shouldStop()) {
+            val rd = chain.timed("後処理 前段の局所降下", "PrePostDescent") { work ->
+                if (params.deterministic) PrePostDescent.apply(state, work, maxMillis = Long.MAX_VALUE, maxDraws = 20_000, maxEvaluations = 3_000, seed = seed xor SeedTag.PRE_DESCENT, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                else PrePostDescent.apply(state, work, maxMillis = (EngineClock.remainingMs(deadlineMs, t0) / 4).coerceAtMost(params.prePostDescentMaxMs), seed = seed xor SeedTag.PRE_DESCENT, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            }
+            chain.replaceBoard(rd.newSchedule, rd.logs, rd.report, rd.improved + rd.sideways)
+        }
 
         val r80 = chain.timed("後処理 HF80 戦略的振動", "HF80StrategicOscillation") { work ->
             applyHF80StrategicOscillation(state, work, maxCycles = params.hf80MaxCycles, seed = seed xor SeedTag.HF80, shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)

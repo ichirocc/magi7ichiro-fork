@@ -899,7 +899,8 @@ object V6NativeOptimizer {
                     if (better(post.report, globalReport)) {
                         gainW += globalReport.weightedScore - post.report.weightedScore
                         gainT += globalReport.total - post.report.total
-                        globalBest = post.schedule.copy2D(); globalReport = post.report; globalLogs = post.logs
+                        // 差し込み内の後処理ログは診断に混ぜない（最終の後処理と同じ行が二重に出て、6s 打ち切りの警告も紛れる）。
+                        globalBest = post.schedule.copy2D(); globalReport = post.report
                         won = true
                     }
                 }
@@ -912,7 +913,7 @@ object V6NativeOptimizer {
                     onProgress("適応portfolio 停滞時研磨注入${tried}回目で全体最良更新", post.report, 0L, nowMs() - started)
                 }
             }
-            "停滞時研磨注入 試行${tried}/採用${adopted} 利得 weighted=-${"%.0f".format(gainW)} total=-${gainT}"
+            "停滞時研磨注入 試行${tried}/採用${adopted} 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}"
         }
         val outcomes = jobs.map { d -> d.await() }
         workersDone.set(true)
