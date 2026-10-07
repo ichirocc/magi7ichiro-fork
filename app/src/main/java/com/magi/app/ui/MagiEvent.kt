@@ -188,6 +188,7 @@ internal sealed interface MagiEvent {
         data class SetEjectionChainSwap(val on: Boolean) : Settings
         data class SetEjectionChainSeconds(val seconds: Int) : Settings
         data class SetEjectionChainScope(val scope: EjectionChainScope) : Settings
+        data class SetStallPolishInjection(val on: Boolean) : Settings
         data class SetLnsAdaptive(val on: Boolean) : Settings
     }
 
