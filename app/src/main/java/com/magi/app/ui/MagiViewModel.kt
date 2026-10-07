@@ -1277,6 +1277,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きの上限時間 → ${seconds}秒")
     }
 
+    fun setEjectionChainScope(scope: EjectionChainScope) {
+        scope.apply()
+        _ui.update { it.copy(ejectionChainScope = scope) }
+        logOp("I", "設定変更: 玉突きで探す範囲 → ${ejectionChainScopeLabel(scope)}")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 
