@@ -1,6 +1,10 @@
 package com.magi.app.v6
 
+import com.magi.app.model.Group
 import com.magi.app.model.MagiState
+import com.magi.app.model.Range
+import com.magi.app.model.Shift
+import com.magi.app.model.Staff
 import com.magi.app.model.StateParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -66,5 +70,24 @@ class PrePostDescentTest {
             assertTrue(res.logs.any { it.tag == "PrePostDescent" })
             assertFalse(betterReport(inRep, res.report))
         } finally { PolishGate.restore(saved) }
+    }
+
+    @Test fun cappedShiftIsNeverMovedToAnotherCell() {
+        // 1 人・5 日。B は個人上限 0（mayPlace=false）で入力の 5 日目に残っている。同一職員の 2 日交換でも別の日へ移さない。
+        val rest = Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)
+        val st = MagiState(
+            startDate = "2026-08-01", endDate = "2026-08-05",
+            shifts = listOf(rest, Shift("A", "A", "1", ""), Shift("B", "B", "", "")), groups = listOf(Group("G", "G")), staff = listOf(Staff("X", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", "")),
+            schedule = listOf(listOf(1, 0, 0, 1, 2)), wishes = emptyMap(), staffRange = mapOf("0,2" to Range("0", "0")), needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(), skillGroups = emptyList(), cons41s = emptyList(),
+        )
+        val p = Problem(st)
+        assertFalse(p.mayPlace(0, 2))
+        for (seed in 0L until 20L) {
+            val r = PrePostDescent.apply(st, board(st), maxMillis = Long.MAX_VALUE, maxDraws = 2_000, seed = seed)
+            for (j in 0 until 4) assertTrue("seed=$seed 日${j + 1}", r.newSchedule[0][j] != 2)
+        }
     }
 }

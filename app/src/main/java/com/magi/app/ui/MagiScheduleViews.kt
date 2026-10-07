@@ -1135,7 +1135,11 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             val totalBg = when { ct == null -> cs.surfaceVariant; ct.underDays.isNotEmpty() -> shortBg; else -> overBg }
                             TallyBox(cw, rh, totalBg, false, onClick = if (ct != null) ({ totalSheet = kk }) else null,
                                 cd = ct?.let { "「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 人員 ${it.glyph}日・タップで詳細" }) {
-                                Text("${vs.counts.staffTotal(kk)}" + (ct?.glyph?.let { " $it" } ?: ""), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface, maxLines = 1)
+                                // 合計と人員の日数（▲1 等）を 2 段に分ける（1 行だと「32 ▲1 ›」が 48dp に収まらず欠けた）。
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("${vs.counts.staffTotal(kk)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface, maxLines = 1, softWrap = false)
+                                    ct?.glyph?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = cs.onSurface, maxLines = 1, softWrap = false) }
+                                }
                             }
                         }
                     }

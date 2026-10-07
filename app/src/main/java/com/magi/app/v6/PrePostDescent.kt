@@ -65,7 +65,8 @@ internal object PrePostDescent {
                 }
                 else -> {
                     val j2 = rnd.nextInt(p.T); if (j2 == j0 || p.wishLocked(i0, j2)) continue
-                    val ka = cur[i0][j0]; val kb = cur[i0][j2]; if (ka == kb) continue
+                    val ka = cur[i0][j0]; val kb = cur[i0][j2]
+                    if (ka == kb || !p.mayPlace(i0, kb) || !p.mayPlace(i0, ka)) continue
                     mi[0] = i0; mj[0] = j0; mk[0] = kb; mi[1] = i0; mj[1] = j2; mk[1] = ka; n = 2
                 }
             }

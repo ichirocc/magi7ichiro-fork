@@ -200,12 +200,15 @@ internal object C1EjectionChainPolish {
                 val off = ((round - 1) * config.unitsPerFamily) % us0.size
                 val us = (us0.drop(off) + us0.take(off)).take(config.unitsPerFamily)
                 for (cells in us) {
+                    if (out()) break
                     val cand = ArrayList<LongArray>()
                     for (c in cells) {
                         val i = c[0]; val j = c[1]
                         if (p.wishLocked(i, j)) continue
                         for (k in p.allowedShiftsForStaff(i)) {
                             if (k == work[i][j]) continue
+                            // 起点づくりの評価も上限・中断・時間切れに数える（旧: 判定が無く、上限 1 でも 10 回評価した）。
+                            if (out()) break
                             val sc = de.previewMove(i, j, k); stats.evaluations++; stats.generated++
                             if (hardOf(sc) > hardOf(de.score()) + config.hardSlack) continue
                             cand.add(longArrayOf(sc, i.toLong(), j.toLong(), k.toLong()))
