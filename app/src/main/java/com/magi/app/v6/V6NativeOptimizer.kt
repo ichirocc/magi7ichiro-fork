@@ -912,7 +912,7 @@ object V6NativeOptimizer {
                     onProgress("適応portfolio 停滞時研磨注入${tried}回目で全体最良更新", post.report, 0L, nowMs() - started)
                 }
             }
-            "停滞時研磨注入 試行${tried}/採用${adopted} 利得 weighted=-${"%.0f".format(gainW)} total=-${gainT}"
+            "停滞時研磨注入 試行${tried}/採用${adopted} 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}"
         }
         val outcomes = jobs.map { d -> d.await() }
         workersDone.set(true)
