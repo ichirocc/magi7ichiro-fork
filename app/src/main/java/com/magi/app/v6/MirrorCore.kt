@@ -710,6 +710,12 @@ fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>, strict: 
     return true
 }
 
+/** [DeltaEvaluator.reportKey] どうしの辞書式比較（負＝a が良い）。`betterReport` と同じ順。 */
+internal fun compareReportKey(a: LongArray, b: LongArray): Int {
+    for (x in 0 until 3) { val c = a[x].compareTo(b[x]); if (c != 0) return c }
+    return 0
+}
+
 /** 拡張希望: `cand` で `base` から値が変わり、新しい値が禁止のセル (i,j)（最終番兵と盤面ごと採る経路の採否）。 */
 fun Problem.extBanNewCells(base: Array<IntArray>, cand: Array<IntArray>): List<Pair<Int, Int>> {
     if (!hasExtBan) return emptyList()

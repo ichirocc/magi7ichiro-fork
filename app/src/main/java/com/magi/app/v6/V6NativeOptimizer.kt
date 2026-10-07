@@ -884,7 +884,7 @@ object V6NativeOptimizer {
 
         val workersDone = java.util.concurrent.atomic.AtomicBoolean(false)
         val injector = if (!PolishGate.stallPolishInjection) null else async(Dispatchers.Default) {
-            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0; var failed = 0; var spentMs = 0L
+            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0; var failed = 0; var spentMs = 0L; var firstFailure: String? = null
             // 再試行の待ちは最終試行時刻から数える（全体最良の最終改善時刻 lastGlobalImproveMs とは別）。
             var lastTryMs = 0L
             val postParams = V6HotfixPasses.PostOptimizationParams(
@@ -908,7 +908,12 @@ object V6NativeOptimizer {
                         shouldStop = { workersDone.get() || shouldStop() || nowMs() >= capDeadline },
                         deadlineMs = capDeadline, params = postParams,
                     )
-                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) { failed++; null }
+                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) {
+                    failed++
+                    // 原因の調査用に最初の例外の種類と発生箇所（先頭フレーム）を残す（OBS-01）。
+                    if (firstFailure == null) firstFailure = "${e.javaClass.simpleName}: ${e.message ?: ""} @${e.stackTrace.firstOrNull()?.let { "${it.fileName}:${it.lineNumber}" } ?: "?"}"
+                    null
+                }
                 spentMs += nowMs() - tTry
                 var won = false
                 if (post != null) synchronized(lock) {
@@ -930,7 +935,7 @@ object V6NativeOptimizer {
                     onProgress("適応portfolio 停滞時研磨注入${tried}回目で全体最良更新", post.report, 0L, nowMs() - started)
                 }
             }
-            "停滞時研磨注入 試行${tried}/採用${adopted}/例外${failed} 計${spentMs}ms 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}"
+            "停滞時研磨注入 試行${tried}/採用${adopted}/例外${failed} 計${spentMs}ms 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}${firstFailure?.let { " 最初の例外=$it" } ?: ""}"
         }
         val outcomes = jobs.map { d -> d.await() }
         workersDone.set(true)
