@@ -12,8 +12,8 @@ import kotlin.random.Random
  * 広域ビーム（[C1WindowPolish.applyC1BeamPolish]）との違い: ビームは各段で HARD≦開始を要求し、継ぎ足しは同日の
  * covU 玉突き（`findCovUChain`）に限る。ここは継ぎ足し先を日をまたいで職員の行にも広げ、途中の HARD 増を許す。
  *
- * [Origin.ALL, 測定中・既定 OFF＝`PolishGate.allFamilyEjectionChain`] 起点を正式評価器が場所を返す全族の違反へ広げる
- * （修復は v2 と同じ残存負債＝開始から増えた族）。採否・保護条件は C1 起点と同じ。
+ * [Origin.ALL, 測定中・既定 OFF＝`PolishGate.allFamilyEjectionChain`] 必須の族は [Origin.HARD] の手順で、ソフトの族は
+ * [SoftEjectionChain]（違反の座標をそのまま玉にし、その族を減らす手だけで継ぐ）で連鎖する。予算は前半を必須、残りをソフトに使う。
  */
 internal object C1EjectionChainPolish {
 
@@ -49,6 +49,8 @@ internal object C1EjectionChainPolish {
         val holeRadius: Int = 7,
         /** [holeFocus] を必須以外の族の起点だけに使う（必須の起点は月全体）。既定 [defaultHoleSoftOnly]。 */
         val holeSoftOnly: Boolean = defaultHoleSoftOnly,
+        /** ALL のソフト側で玉にする族（null＝ソフト 15 族すべて）。 */
+        val softFamilies: Set<String>? = null,
     )
 
     /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol）の違反だけを起点にする（測定中・後処理の前段で使う）。 */
@@ -106,6 +108,15 @@ internal object C1EjectionChainPolish {
         shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false, stats: Stats = Stats(),
     ): V6HotfixPasses.CyclicSwapResult {
         val t0 = EngineClock.nowMs()
+        if (config.origin == Origin.ALL) {
+            val h = apply(state, schedule, config.copy(origin = Origin.HARD, maxMillis = config.maxMillis / 2, maxEvaluations = config.maxEvaluations / 2),
+                shouldStop, quantitativeRangeEval, stats)
+            val left = (config.maxMillis - (EngineClock.nowMs() - t0)).coerceAtLeast(0L)
+            val s = SoftEjectionChain.apply(state, h.newSchedule, config.copy(maxMillis = left), config.softFamilies ?: MirrorKeys.soft.toSet(),
+                shouldStop, quantitativeRangeEval, stats)
+            h.pinBlocks?.let { s.pinBlocks?.merge(it) }
+            return s.copy(beforeTotal = h.beforeTotal, applied = h.applied + s.applied, logs = h.logs + s.logs)
+        }
         val p = Problem(state, quantitativeRangeEval)
         val work = normalizeSchedule(schedule, p)
         var rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)

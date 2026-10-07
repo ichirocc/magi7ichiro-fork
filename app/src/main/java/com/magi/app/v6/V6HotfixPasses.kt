@@ -776,9 +776,9 @@ object V6HotfixPasses {
                 }
             }
         })
-        if (PolishGate.c1EjectionChain || PolishGate.allFamilyEjectionChain) {
+        if (PolishGate.c1EjectionChain) {
             val tEj = EngineClock.nowMs()
-            val origin = if (PolishGate.allFamilyEjectionChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
+            val origin = C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
                     else C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
@@ -853,6 +853,20 @@ object V6HotfixPasses {
             })
         }
 
+        // ソフト起点の玉突き連鎖は最終の違反起点修復の直後だけ（3.629.0）。前段に置くと後段の研磨が打ち消し、
+        //   修復より前に置くと修復が使う手の組合せを先に崩す。予算の約 2/3 で全ソフト族、残りは退避で増えた族だけ。
+        val softBudgetMs = EngineClock.remainingMs(deadlineMs).let { (it / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis) }
+        val tSoft = EngineClock.nowMs()
+        var softAfterFirst: ViolationReport? = null
+        if (PolishGate.allFamilyEjectionChain && !shouldStop()) {
+            chain.adopt(chain.timed("後処理 ソフト起点の玉突き連鎖", "ソフト玉突き連鎖") { work ->
+                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 8 / 3)
+                    else C1EjectionChainPolish.Config(maxMillis = softBudgetMs * 2 / 3)
+                SoftEjectionChain.apply(state, work, cfg, MirrorKeys.soft.toSet(), shouldStop, params.quantitativeRangeEval)
+            })
+            softAfterFirst = UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval)
+        }
+
         if (params.restZeroWindowLnsEnabled && !shouldStop()) {
             val lnsStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
             val r = chain.timed("後処理 休0日の窓LNS(最終)", "RestZeroLNS") { work ->
@@ -868,6 +882,18 @@ object V6HotfixPasses {
                 CovOReliefPolish.apply(state, work, shouldStop = reliefStop, quantitativeRangeEval = params.quantitativeRangeEval)
             }
             chain.replaceBoard(r.newSchedule, r.logs, r.report)
+        }
+
+        softAfterFirst?.let { first ->
+            val now = UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval)
+            val grown = MirrorKeys.soft.filter { (now.breakdown[it] ?: 0) > (first.breakdown[it] ?: 0) }.toSet()
+            if (grown.isNotEmpty() && !shouldStop()) {
+                chain.adopt(chain.timed("後処理 ソフト起点の玉突き連鎖(退避で増えた族)", "ソフト玉突き連鎖2") { work ->
+                    val cfg = if (params.deterministic) C1EjectionChainPolish.Config(maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4 / 3)
+                        else C1EjectionChainPolish.Config(maxMillis = (softBudgetMs - (EngineClock.nowMs() - tSoft)).coerceAtLeast(0L))
+                    SoftEjectionChain.apply(state, work, cfg, grown, shouldStop, params.quantitativeRangeEval)
+                })
+            }
         }
 
         val tHf = EngineClock.nowMs()
