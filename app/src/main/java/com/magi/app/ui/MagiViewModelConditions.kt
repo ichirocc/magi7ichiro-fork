@@ -30,6 +30,7 @@ internal fun MagiViewModel.conditionsView(): ConditionsView {
     return conditionsViewOf(st, com.magi.app.v6.cachedProblem(st)).copy(
         needDayOverrides = needDayOverrides(),
         wishOverrides = wishOverrides(),
+        extWishes = extWishViews(),
         countRules = staffCountRules(),
         groupRanges = groupRangeSummary(),
     )
@@ -339,6 +340,25 @@ fun MagiViewModel.clearWishesForDays(staffIdx: Int?, days: List<Int>) {
     if (m.size == st.wishes.size) return
     logOp("I", "希望クリア: ${if (staffIdx != null) opNm(staffIdx) else "全員"} ${opDays(days)}")
     applyStructure(st.copy(wishes = m))
+}
+
+/** 拡張希望の一覧（日は期間内だけ、1 始まり）。 */
+fun MagiViewModel.extWishViews(): List<ExtWishView> {
+    val st = state ?: return emptyList()
+    val start = runCatching { java.time.LocalDate.parse(st.startDate) }.getOrNull() ?: return emptyList()
+    return st.extWishes.mapIndexed { n, e ->
+        val days = e.days.mapNotNull { d -> runCatching { java.time.temporal.ChronoUnit.DAYS.between(start, java.time.LocalDate.parse(d)).toInt() }.getOrNull() }
+            .filter { it in 0 until st.dayCount }.map { it + 1 }.sorted()
+        ExtWishView(n, e.staff, st.staff.getOrNull(e.staff)?.name ?: "${e.staff}", days, e.shifts)
+    }
+}
+
+/** 日（0 始まり）とシフト index から拡張希望を 1 件足す（入力画面の入口）。 */
+fun MagiViewModel.addExtWishForDays(staff: Int, days: List<Int>, shifts: List<Int>): Boolean {
+    val st = state ?: return false
+    val start = runCatching { java.time.LocalDate.parse(st.startDate) }.getOrNull() ?: return false
+    return addExtWish(com.magi.app.model.ExtWish(staff, days.sorted().map { start.plusDays(it.toLong()).toString() },
+        shifts.mapNotNull { st.shifts.getOrNull(it)?.kigou }))
 }
 
 /** 拡張希望を 1 件足す（保存規則は [com.magi.app.v6.ExtWishRules.sanitize]）。案内は操作ログへ。保存したら true。 */
