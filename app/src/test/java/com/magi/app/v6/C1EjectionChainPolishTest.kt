@@ -127,6 +127,18 @@ class C1EjectionChainPolishTest {
         }
     }
 
+    /** 評価上限は起点づくりの評価も含めて守る（旧: 上限 1 でも起点づくりで 10 回評価した）。 */
+    @Test fun evaluationCapIncludesSeedGeneration() {
+        val (st, s0) = sept()
+        for (cap in longArrayOf(1L, 5L)) {
+            val stats = C1EjectionChainPolish.Stats()
+            C1EjectionChainPolish.apply(st, s0.map { it.copyOf() }.toTypedArray(),
+                C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, maxEvaluations = cap), stats = stats)
+            assertTrue("評価 ${stats.evaluations} > 上限 $cap", stats.evaluations <= cap)
+            assertEquals("評価上限", stats.endReason)
+        }
+    }
+
     /** 差分評価の不一致検出は名前で突き合わせ、一致なら null、ずれたら族名を返す。 */
     @Test fun deltaMismatchDetectsDrift() {
         val (st, s0) = sept()
