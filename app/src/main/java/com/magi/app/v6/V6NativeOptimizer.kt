@@ -542,6 +542,7 @@ object V6NativeOptimizer {
         //   「終盤まで刻み続けた」のかがログから読めなかった（Watchdog 行が出すのは最終改善の時刻だけ）。
         //   改善が確定した分岐で数えるだけ＝ホットパスに追加コストなし。
         val globalImproves = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastGlobalImproveMs = java.util.concurrent.atomic.AtomicLong(started)
         val archive = AdaptiveEliteArchive()
 
         val sharedTrajectories = Array(workers) { i -> hypothesisStartFor(state, entry, i, baseSeed, options.quantitativeRangeEval) }
@@ -681,7 +682,7 @@ object V6NativeOptimizer {
                         }
                     }
                     if (startImprovedGlobal) {
-                        globalImproves.incrementAndGet()
+                        globalImproves.incrementAndGet(); lastGlobalImproveMs.set(nowMs())
                         if (ownsStatics(runSlot())) publishLiveBest(startReport, start)
                         onProgress(
                             "適応portfolio W$i ${AdaptiveHypothesisEpochPolicy.roleLabel(assignment)} 入口改善",
@@ -771,7 +772,7 @@ object V6NativeOptimizer {
                             }
                         }
                         if (improvedGlobal) {
-                            globalImproves.incrementAndGet()
+                            globalImproves.incrementAndGet(); lastGlobalImproveMs.set(nowMs())
                             if (ownsStatics(runSlot())) publishLiveBest(result.report, result.schedule)
                             onProgress(
                                 "適応portfolio グローバル最良更新 W$i epoch${epoch + 1}",
@@ -869,7 +870,53 @@ object V6NativeOptimizer {
             }
         }
 
+        val workersDone = java.util.concurrent.atomic.AtomicBoolean(false)
+        val injector = if (!PolishGate.stallPolishInjection) null else async(Dispatchers.Default) {
+            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0
+            val postParams = V6HotfixPasses.PostOptimizationParams(
+                quantitativeRangeEval = options.quantitativeRangeEval,
+                combineExhaustPairs = PolishGate.combineExhaustPairs,
+                lnsAdaptive = PolishGate.lnsAdaptive,
+                aptFairSoftTolerance = PolishGate.aptFairSoftTolerance,
+                countChainEnabled = PolishGate.countChainPolish,
+            )
+            while (!workersDone.get() && nowMs() < deadline) {
+                kotlinx.coroutines.delay(500L)
+                val now = nowMs()
+                if (shouldStop() || !StallPolishInjection.shouldInject(now, lastGlobalImproveMs.get(), deadline, budgetSec, tried)) continue
+                tried++
+                val base = synchronized(lock) { globalBest.copy2D() }
+                val capDeadline = minOf(deadline, now + StallPolishInjection.CAP_MS)
+                val post = try {
+                    V6HotfixPasses.runPostOptimization(
+                        state, base, "PolishInjection", seed = baseSeed xor tried.toLong(),
+                        shouldStop = { workersDone.get() || shouldStop() || nowMs() >= capDeadline },
+                        deadlineMs = capDeadline, params = postParams,
+                    )
+                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) { null }
+                var won = false
+                if (post != null) synchronized(lock) {
+                    if (better(post.report, globalReport)) {
+                        gainW += globalReport.weightedScore - post.report.weightedScore
+                        gainT += globalReport.total - post.report.total
+                        globalBest = post.schedule.copy2D(); globalReport = post.report; globalLogs = post.logs
+                        won = true
+                    }
+                }
+                lastGlobalImproveMs.set(nowMs())
+                if (won) {
+                    adopted++
+                    globalImproves.incrementAndGet()
+                    archive.register(post!!.schedule, post.report, HypothesisEpochRole.BASELINE_REFINE, worker = workers, epoch = tried, bridge = false)
+                    if (ownsStatics(runSlot())) publishLiveBest(post.report, post.schedule)
+                    onProgress("適応portfolio 停滞時研磨注入${tried}回目で全体最良更新", post.report, 0L, nowMs() - started)
+                }
+            }
+            "停滞時研磨注入 試行${tried}/採用${adopted} 利得 weighted=-${"%.0f".format(gainW)} total=-${gainT}"
+        }
         val outcomes = jobs.map { d -> d.await() }
+        workersDone.set(true)
+        val injection = injector?.await()
         ensureActive()
         for ((index, o) in outcomes.withIndex()) {
             archive.register(
@@ -955,7 +1002,8 @@ object V6NativeOptimizer {
         // [3.409.17] エポック超過（役割名つき）は専用の [W] 行で出す。ViewModel が予算超過の実行で
         //   この行を操作ログへ写す＝診断ログが次の実行で消えても証拠が生き残る。
         val overrunLog = listOfNotNull(HypothesisPlanning.epochOverrunLog(outcomes.flatMap { it.epochOverruns }))
-        val logs = globalLogs + overrunLog + summary
+        val injectionLog = listOfNotNull(injection?.let { MirrorLog(tag = "AdaptivePortfolio", message = it) })
+        val logs = globalLogs + overrunLog + summary + injectionLog
         V6OptimizerResult(
             globalBest,
             globalReport.copy(logs = logs + globalReport.logs),
