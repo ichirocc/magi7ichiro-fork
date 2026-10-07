@@ -1629,14 +1629,18 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             //   （旧: 桃ドットのみで「何を希望していたか」が編集シートを開かないと分からなかった）。
                             val wishSym = if (wkk == 2) ui.wishes["$i,$d"]?.let { ui.shiftSymbols.getOrNull(it) } ?: "" else ""
                             val cellPinned = VioKey.cell(i, d) in ui.manualPins
+                            // 拡張希望: 0=無し・1=指定日・2=割当が禁止のシフト（違反）。
+                            val extBans = ui.extBanned[VioKey.cell(i, d)]
+                            val ext = when { extBans == null -> 0; k in extBans -> 2; else -> 1 }
                             val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") +
-                                (if (cellPinned) "・手動固定" else "") + "、タップで変更"
+                                (if (cellPinned) "・手動固定" else "") +
+                                (when (ext) { 2 -> "・拡張希望の違反"; 1 -> "・拡張希望（${extBans!!.sorted().joinToString("・") { ui.shiftSymbols.getOrNull(it) ?: "?" }}以外）"; else -> "" }) + "、タップで変更"
                             // [違反色/族別] このセルの表示中クラスの族色（未設定は重大度色）。枠・角マークに適用。
                             val cellVioC = vioCls.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
                             val secondC = vs.cellSecond.getOrNull(i)?.getOrNull(d)?.let { resolvedVioColor(ui, it, vioColor, vioSoftColor) }
-                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing, pinned = cellPinned, band = if (vs.c1Band.getOrNull(i)?.getOrNull(d) == true) vioSoftColor.copy(alpha = 0.45f) else null) { tapped = i to d; onCellClick(i, d) }
+                            FlatCell(cellW, cellH, sym, bg, fg, vk, wkk, cellVioC ?: vioColor, cellVioC ?: vioSoftColor, cd, dim = quiet, symSize = symFontSize, focused = cellFocused, wishSym = wishSym, plainBorder = plainCellBorder, secondDot = secondC, editing = editing, pinned = cellPinned, ext = ext, band = if (vs.c1Band.getOrNull(i)?.getOrNull(d) == true) vioSoftColor.copy(alpha = 0.45f) else null) { tapped = i to d; onCellClick(i, d) }
                         }
                     }
                 }
@@ -1739,7 +1743,7 @@ private fun FlatCell(
     w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, symbol: String,
     bg: Color, fg: Color, vk: Int, wk: Int, vioColor: Color, vioSoftColor: Color, cd: String, dim: Boolean = false,
     symSize: androidx.compose.ui.unit.TextUnit = 15.sp, focused: Boolean = false, wishSym: String = "",
-    plainBorder: Boolean = false, secondDot: Color? = null, editing: Boolean = false, pinned: Boolean = false, band: Color? = null, onClick: () -> Unit,
+    plainBorder: Boolean = false, secondDot: Color? = null, editing: Boolean = false, pinned: Boolean = false, ext: Int = 0, band: Color? = null, onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     // 期間の制約の帯＝セルの下端に細い線。隣の日と途切れないようセルの余白の外まで引く。
@@ -1803,6 +1807,12 @@ private fun FlatCell(
                         .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)
                         .then(if (wk == 2) Modifier.background(MagiAccent.pink, RoundedCornerShape(50)) else Modifier.border(2.5.dp, cs.tertiary, RoundedCornerShape(50))),
                 )
+            }
+            // 拡張希望＝上端中央の小さな「×」（指定日は控えめ、割当が禁止のシフトなら違反色）。他の印とは位置で区別。
+            if (ext != 0) {
+                val xc = if (ext == 2) vioColor else cs.onSurfaceVariant
+                Text("×", fontSize = symSize * 0.60f, fontWeight = FontWeight.Bold, color = xc, maxLines = 1,
+                    modifier = Modifier.align(Alignment.TopCenter).background(cs.surface, RoundedCornerShape(3.dp)).padding(horizontal = 1.dp))
             }
             // [#41] 手動固定＝右下の小さな錠（希望の印は左下の丸・バッジ＝位置と形で区別）。
             if (pinned) {

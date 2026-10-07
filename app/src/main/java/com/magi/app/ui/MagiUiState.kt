@@ -113,6 +113,7 @@ data class UiState(
     val wishes: Map<String, Int> = emptyMap(),   // ws3 希望 "i,j"->shiftIdx（表示融合用）
     val lockedWishKeys: Set<String> = emptySet(),   // [S5] 試算できる希望のキー（実現可能で手動固定でない）
     val manualPins: Set<String> = emptySet(),       // [#41] 手動固定のセル "i,j"
+    val extBanned: Map<String, Set<Int>> = emptyMap(), // 拡張希望: セル "i,j" → その日に禁止のシフト index
     val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
     val hardWishConflict: Int = 0,                  // 必須のうち希望どうしのぶつかり（計算では消せない）の件数
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
@@ -194,6 +195,7 @@ data class OpNotice(val id: Long, val text: String, val undoSerial: Long)
 internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState = copy(
     wishes = st.wishes,
     manualPins = st.manualPins.mapTo(HashSet()) { VioKey.cell(it.staff, it.day) },
+    extBanned = com.magi.app.v6.ExtWishRules.bannedByCell(st),
     lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
     wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
 )

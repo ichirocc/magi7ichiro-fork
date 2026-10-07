@@ -88,6 +88,13 @@ class ExtWishRulesTest {
         assertEquals(1, st.wishes.size); assertEquals(3, st.extWishes[0].days.size)
     }
 
+    @Test fun bannedByCellListsOnlyDesignatedDays() {
+        val m = ExtWishRules.bannedByCell(base(listOf(first)))   // 3 日（希望の日）は読み込みで重なっていても表示しない
+        assertEquals(setOf("0,0", "0,1"), m.keys)
+        assertEquals(setOf(2, 3), m["0,0"])
+        assertTrue(ExtWishRules.bannedByCell(base()).isEmpty())
+    }
+
     @Test fun jsonRoundTripAndAbsentKeyIsEmpty() {
         val st = base(listOf(ExtWishRules.sanitize(base(), first).saved!!))
         val back = StateParser.parse(StateParser.serialize(st, st.schedule.toIntArray2D()))

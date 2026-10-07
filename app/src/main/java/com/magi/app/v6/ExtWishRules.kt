@@ -89,6 +89,19 @@ object ExtWishRules {
         return BanTable(S, T, K, flat, overlaps.distinct())
     }
 
+    /** 表示用: セル "i,j" → その日に禁止のシフト index（希望シフト日は空＝入らない）。拡張希望が無ければ空。 */
+    fun bannedByCell(state: MagiState): Map<String, Set<Int>> {
+        if (state.extWishes.isEmpty()) return emptyMap()
+        val t = banTable(state, state.staffCount, state.dayCount, state.shiftCount)
+        val f = t.flat ?: return emptyMap()
+        val out = HashMap<String, Set<Int>>()
+        for (i in 0 until t.S) for (j in 0 until t.T) {
+            val ks = (0 until t.K).filter { f[(i * t.T + j) * t.K + it] }
+            if (ks.isNotEmpty()) out["$i,$j"] = ks.toSet()
+        }
+        return out
+    }
+
     /** 第 7 節: 違反セル（"i,j"）。未割当は数えない。 */
     fun violations(table: BanTable, schedule: Array<IntArray>, K: Int): List<String> {
         if (table.isEmpty) return emptyList()
