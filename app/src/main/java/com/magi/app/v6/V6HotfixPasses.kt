@@ -194,6 +194,9 @@ object PolishGate {
      *  前に置くと修復が使う手の組合せを先に崩す負けがあった）。既定 **false**（2026-10-06）。 */
     @Volatile var allEjectionChainAfterRepair: Boolean = false
 
+    /** [測定中] 全SOFT玉突き連鎖（`SoftCascadePolish`）を後処理の最後に置く。既定 **false**（測定が終わるまで）。 */
+    @Volatile var softCascade: Boolean = false
+
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
@@ -473,6 +476,9 @@ object V6HotfixPasses {
         /** 休の必要人数を明示した日に休が余るとき、前後の窓を夜勤列の列挙＋人間移動＋ビームで組み直す（RestZeroWindowLns）。最終段・退避の前。
          *  既定 OFF＝ユーザー決定（実データでは 30 日の休希望 5 人で 29 日に夜勤できる人が足りず採用ゼロ、history 3.555.0）。 */
         val restZeroWindowLnsEnabled: Boolean = false,
+        /** [測定中] 全SOFT玉突き連鎖（SoftCascadePolish）を後処理の最後の盤面変更（退避の直後・HF70 の前）に置く。既定 OFF。 */
+        val softCascadeEnabled: Boolean = PolishGate.softCascade,
+        val softCascade: SoftCascadePolish.Config = SoftCascadePolish.Config(),
         /** [3.608.0/3.610.0] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
          *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
          *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
@@ -776,9 +782,9 @@ object V6HotfixPasses {
                 }
             }
         })
-        if (PolishGate.c1EjectionChain) {
+        if (PolishGate.c1EjectionChain || PolishGate.allFamilyEjectionChain) {
             val tEj = EngineClock.nowMs()
-            val origin = C1EjectionChainPolish.Origin.C1
+            val origin = if (PolishGate.allFamilyEjectionChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
                     else C1EjectionChainPolish.Config(origin = origin, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = (EngineClock.remainingMs(deadlineMs, tEj) / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis))
@@ -853,20 +859,6 @@ object V6HotfixPasses {
             })
         }
 
-        // ソフト起点の玉突き連鎖は最終の違反起点修復の直後だけ（3.629.0）。前段に置くと後段の研磨が打ち消し、
-        //   修復より前に置くと修復が使う手の組合せを先に崩す。予算の約 2/3 で全ソフト族、残りは退避で増えた族だけ。
-        val softBudgetMs = EngineClock.remainingMs(deadlineMs).let { (it / 4).coerceIn(0L, PolishGate.ejectionChainMaxMillis) }
-        val tSoft = EngineClock.nowMs()
-        var softAfterFirst: ViolationReport? = null
-        if (PolishGate.allFamilyEjectionChain && !shouldStop()) {
-            chain.adopt(chain.timed("後処理 ソフト起点の玉突き連鎖", "ソフト玉突き連鎖") { work ->
-                val cfg = if (params.deterministic) C1EjectionChainPolish.Config(maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 8 / 3)
-                    else C1EjectionChainPolish.Config(maxMillis = softBudgetMs * 2 / 3)
-                SoftEjectionChain.apply(state, work, cfg, MirrorKeys.soft.toSet(), shouldStop, params.quantitativeRangeEval)
-            })
-            softAfterFirst = UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval)
-        }
-
         if (params.restZeroWindowLnsEnabled && !shouldStop()) {
             val lnsStop: () -> Boolean = if (params.deterministic) shouldStop else ({ shouldStop() || EngineClock.remainingMs(deadlineMs) <= 0L })
             val r = chain.timed("後処理 休0日の窓LNS(最終)", "RestZeroLNS") { work ->
@@ -884,16 +876,13 @@ object V6HotfixPasses {
             chain.replaceBoard(r.newSchedule, r.logs, r.report)
         }
 
-        softAfterFirst?.let { first ->
-            val now = UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval)
-            val grown = MirrorKeys.soft.filter { (now.breakdown[it] ?: 0) > (first.breakdown[it] ?: 0) }.toSet()
-            if (grown.isNotEmpty() && !shouldStop()) {
-                chain.adopt(chain.timed("後処理 ソフト起点の玉突き連鎖(退避で増えた族)", "ソフト玉突き連鎖2") { work ->
-                    val cfg = if (params.deterministic) C1EjectionChainPolish.Config(maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4 / 3)
-                        else C1EjectionChainPolish.Config(maxMillis = (softBudgetMs - (EngineClock.nowMs() - tSoft)).coerceAtLeast(0L))
-                    SoftEjectionChain.apply(state, work, cfg, grown, shouldStop, params.quantitativeRangeEval)
-                })
+        if (params.softCascadeEnabled && !shouldStop()) {
+            // 退避より後＝最後の盤面変更。改善が無ければ入力の盤面と report をそのまま返す（後段に再実行は無い）。
+            val cascade = chain.timed("後処理 全SOFT玉突き連鎖", "SoftCascadePolish") { work ->
+                if (params.deterministic) SoftCascadePolish.apply(state, work, params.softCascade.copy(maxMillis = Long.MAX_VALUE), shouldStop, 0L, params.quantitativeRangeEval)
+                else SoftCascadePolish.apply(state, work, params.softCascade, shouldStop, deadlineMs, params.quantitativeRangeEval)
             }
+            chain.replaceBoard(cascade.newSchedule, cascade.logs, cascade.report, cascade.applied)
         }
 
         val tHf = EngineClock.nowMs()
