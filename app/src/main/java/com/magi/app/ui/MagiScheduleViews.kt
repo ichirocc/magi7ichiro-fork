@@ -1349,14 +1349,17 @@ private fun TallyBox(
             } else {
                 // [3.397.0 形が語る] 押せるセルだけに「›」を出す。呼出側でなく TallyBox に置くのは、
                 //   「onClick を渡した＝押せる」と見た目が構造的に一致し、書き忘れが起こらないため。
-                //   数字は「›」のぶんだけ左へ寄せて重ならないようにする（セル幅48dp）。
-                Box(Modifier.fillMaxSize().padding(end = 10.dp), contentAlignment = Alignment.Center) { content() }
-                Text(
-                    "›",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),
-                )
+                //   数字と「›」を 1 行に並べて中央に置く（旧: 数字の枠を右 10dp 削っており、3 桁で左右が欠けた）。
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxSize()) {
+                    content()
+                    Text(
+                        "›",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 1, softWrap = false,
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
+                }
             }
         }
     }
