@@ -44,10 +44,10 @@ internal object C1EjectionChainPolish {
         /** 0 以下＝無制限。重複・HARD 超過で捨てた候補も数える（決定的モードの停止条件）。 */
         val maxCandidates: Long = 0L,
         /** 2 手目以降の候補を、ここまでに動かしたセルの「穴」（同じ日の全職員・同じ職員の前後 [holeRadius] 日）に絞る。
-         *  false は月全体を総当たり（従来）。測定中・既定 [defaultHoleFocus]。 */
+         *  false は月全体を総当たり。既定 [defaultHoleFocus]。 */
         val holeFocus: Boolean = defaultHoleFocus,
         val holeRadius: Int = 7,
-        /** [holeFocus] を必須以外の族の起点だけに使う（必須の起点は月全体）。測定中・既定 [defaultHoleSoftOnly]。 */
+        /** [holeFocus] を必須以外の族の起点だけに使う（必須の起点は月全体）。既定 [defaultHoleSoftOnly]。 */
         val holeSoftOnly: Boolean = defaultHoleSoftOnly,
     )
 
@@ -63,9 +63,9 @@ internal object C1EjectionChainPolish {
     private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol")
 
     /** 測定用の切替（穴に絞った候補生成を同条件で比べる）。 */
-    @Volatile internal var defaultHoleFocus: Boolean = false
+    @Volatile internal var defaultHoleFocus: Boolean = true
 
-    @Volatile internal var defaultHoleSoftOnly: Boolean = false
+    @Volatile internal var defaultHoleSoftOnly: Boolean = true
 
     /** 測定用の切替（深さ 2〜3 の短い連鎖を同条件で比べる）。 */
     @Volatile internal var defaultMaxDepth: Int = 8

@@ -93,7 +93,7 @@ data class UiState(
     val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
     val ejectionChain: EjectionChainMode = EjectionChainMode.OFF,  // 玉突きで直す（試験中・既定OFF）。保存しない
     val ejectionChainSwap: Boolean = true,  // PolishGate.ejectionChainSwapMoves（既定ON）。保存しない
-    val ejectionChainScope: EjectionChainScope = EjectionChainScope.MONTH,  // 保存しない
+    val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 6,  // PolishGate.ejectionChainMaxMillis / 1000（既定6）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
@@ -203,7 +203,7 @@ data class WishCancelOutcome(
 )
 
 /** 設定画面「玉突きで直す」。PolishGate の 2 フラグへ振り分ける（同じ段で重複実行しないので 3 択）。 */
-/** 設定画面「玉突きで探す範囲」。2 手目以降の候補を月全体か前後 7 日に絞るか（測定中・既定 MONTH）。 */
+/** 設定画面「玉突きで探す範囲」。2 手目以降の候補を月全体か前後 7 日に絞るか（既定 BY_KIND）。 */
 enum class EjectionChainScope {
     MONTH, BY_KIND, NEARBY;
 
