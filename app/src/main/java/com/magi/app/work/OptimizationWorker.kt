@@ -53,8 +53,13 @@ class OptimizationWorker(
         runCatching { OptimizationRepository.publishNote(level, "バックグラウンド最適化: $msg") }
     }
 
+    private var gatesBefore: Map<String, Any>? = null
+
     override suspend fun doWork(): Result =
-        try { runWork() } finally { OptimizationRepository.markEnded(inputData.getLong(KEY_RUN_ID, 0L)) }
+        try { runWork() } finally {
+            gatesBefore?.let { com.magi.app.v6.PolishGate.restore(it) }
+            OptimizationRepository.markEnded(inputData.getLong(KEY_RUN_ID, 0L))
+        }
 
     private suspend fun runWork(): Result {
         // [3.387.0] `doWork` の**並び**（耐久保存→公開→片付け）と所有権の喪失は、単体テストでは
@@ -132,6 +137,8 @@ class OptimizationWorker(
         val cfg = OptimizationRepository.RunConfig.fromInput(inputData.keyValueMap)
         // 投入時の探索設定を戻す（プロセス終了後の再開では設定画面を経ずに Worker だけが起き、既定値で走っていた）。
         //   実行中は設定画面の変更が無効なので、同じプロセスでも投入時の値と一致する。
+        // 終わったら投入前の値へ戻す（プロセス再起動後の再開では画面は既定値のまま＝戻さないと次回以降の実行が画面と食い違う）。
+        gatesBefore = com.magi.app.v6.PolishGate.snapshot()
         com.magi.app.v6.PolishGate.restore(cfg.gates)
         // [#4] 前景サービス化: 5分のCPUジョブをOSに止めさせない（FGS不可な環境では通常実行へフォールバック）。
         // [3.428.0/#43] 前景化の失敗を**残す**。旧: 握り潰していたため、前景サービスになれないまま

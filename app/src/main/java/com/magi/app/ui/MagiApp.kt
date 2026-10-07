@@ -299,7 +299,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val json = withContext(Dispatchers.Default) { vm.exportJson() }
+                // 盤面と設定は main で固定し、文字列化だけを別スレッドへ（編集・読込と重なっても同じ世代を書く）。
+                val export = vm.exportJsonDeferred()
+                val json = export?.let { withContext(Dispatchers.Default) { it() } }
                 if (json != null) {
                     // [3.400.0] 旧: runCatching の戻り値を捨てていた＝成功も失敗も画面に何も出ない。
                     //   CreateDocument は callback の前に SAF がファイルを実体化するので、書き込みが落ちると

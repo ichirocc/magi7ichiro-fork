@@ -872,7 +872,9 @@ object V6NativeOptimizer {
 
         val workersDone = java.util.concurrent.atomic.AtomicBoolean(false)
         val injector = if (!PolishGate.stallPolishInjection) null else async(Dispatchers.Default) {
-            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0
+            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0; var failed = 0; var spentMs = 0L
+            // 再試行の待ちは最終試行時刻から数える（全体最良の最終改善時刻 lastGlobalImproveMs とは別）。
+            var lastTryMs = 0L
             val postParams = V6HotfixPasses.PostOptimizationParams(
                 quantitativeRangeEval = options.quantitativeRangeEval,
                 combineExhaustPairs = PolishGate.combineExhaustPairs,
@@ -883,17 +885,19 @@ object V6NativeOptimizer {
             while (!workersDone.get() && nowMs() < deadline) {
                 kotlinx.coroutines.delay(500L)
                 val now = nowMs()
-                if (shouldStop() || !StallPolishInjection.shouldInject(now, lastGlobalImproveMs.get(), deadline, budgetSec, tried)) continue
+                if (shouldStop() || !StallPolishInjection.shouldInject(now, maxOf(lastGlobalImproveMs.get(), lastTryMs), deadline, budgetSec, tried)) continue
                 tried++
                 val base = synchronized(lock) { globalBest.copy2D() }
                 val capDeadline = minOf(deadline, now + StallPolishInjection.CAP_MS)
+                val tTry = nowMs()
                 val post = try {
                     V6HotfixPasses.runPostOptimization(
                         state, base, "PolishInjection", seed = baseSeed xor tried.toLong(),
                         shouldStop = { workersDone.get() || shouldStop() || nowMs() >= capDeadline },
                         deadlineMs = capDeadline, params = postParams,
                     )
-                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) { null }
+                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) { failed++; null }
+                spentMs += nowMs() - tTry
                 var won = false
                 if (post != null) synchronized(lock) {
                     if (better(post.report, globalReport)) {
@@ -904,8 +908,9 @@ object V6NativeOptimizer {
                         won = true
                     }
                 }
-                lastGlobalImproveMs.set(nowMs())
+                lastTryMs = nowMs()
                 if (won) {
+                    lastGlobalImproveMs.set(lastTryMs)
                     adopted++
                     globalImproves.incrementAndGet()
                     archive.register(post!!.schedule, post.report, HypothesisEpochRole.BASELINE_REFINE, worker = workers, epoch = tried, bridge = false)
@@ -913,7 +918,7 @@ object V6NativeOptimizer {
                     onProgress("適応portfolio 停滞時研磨注入${tried}回目で全体最良更新", post.report, 0L, nowMs() - started)
                 }
             }
-            "停滞時研磨注入 試行${tried}/採用${adopted} 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}"
+            "停滞時研磨注入 試行${tried}/採用${adopted}/例外${failed} 計${spentMs}ms 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}"
         }
         val outcomes = jobs.map { d -> d.await() }
         workersDone.set(true)
