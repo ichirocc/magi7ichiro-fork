@@ -21,7 +21,7 @@ object SoftCascadePolish {
         val maxChangedCells: Int = 12,
         val maxMillis: Long = 500L,
         /** ソフトの起点からの加重増分の上限（low 1 件分）。 */
-        val maxDebt: Double = 120.0,
+        val maxDebt: Double = MirrorKeys.weightOf("low"),
     )
 
     data class Result(
