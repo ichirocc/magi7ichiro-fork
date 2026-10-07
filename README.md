@@ -21,6 +21,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/screen_spec.md`](./docs/screen_spec.md) | 画面仕様（挙動・実寸・違反/希望の表示） |
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
+| [`docs/kotlin_cpp_split.md`](./docs/kotlin_cpp_split.md) | Kotlin と C++ の棲み分け（新しいコードをどちらに置くか・番兵の不変条件） |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
 | [`docs/s6_relax_trial.md`](./docs/s6_relax_trial.md) | **S6「設定を緩めたら」試算の設計・実データ検証・安全仕様**（Android・C# とも実装済み。候補は個人の上限 0 の組・0→1、確定＝緩和＋試算の手順を Undo 1 段、鮮度・背景探索・利用者の決定 Q1〜Q9） |
@@ -35,6 +36,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/lessons.md`](./docs/lessons.md) | **教訓メモ**（修正した点↔機能した点・作る前にやめた判断・測り方・検証手段の穴。新規作成せず更新する） |
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
+
+**最終更新**：2026-10-07（文書のみ: `docs/kotlin_cpp_split.md` を追加＝別ブランチ x8ygvy の 3.367.0 文書を現行コードで数え直して取り込み）
 
 **最終更新**：2026-10-07（3.627.0: 印・セルのシートの「直し方を探す」に、後処理と同じ多段の玉突き連鎖を追加（手の種類「玉突き」）。上限は設定の玉突き秒数と残り時間の半分の短い方）
 
