@@ -40,6 +40,9 @@ data class ManualPin(val staff: Int, val day: Int, val shift: Int)
 /** 希望(ws3)で固定した [wishKigou] の前日に [prevKigou] を置けない（3.542.0）。素の連続禁止は cons3n。 */
 data class C3wRow(val wishKigou: String, val prevKigou: String)
 
+/** 拡張希望の 1 件: [days]（"yyyy-MM-dd"）の各日、[staff] を [shifts]（記号）以外にする。基本希望の否定形で、セルは固定しない。 */
+data class ExtWish(val staff: Int, val days: List<String>, val shifts: List<String>)
+
 data class MagiState(
     val startDate: String,
     val endDate: String,
@@ -72,6 +75,8 @@ data class MagiState(
     val cons3w: List<C3wRow> = emptyList(),
     /** [#41] 手動固定（1 セル 1 件）。採点・希望の意味は変えない。 */
     val manualPins: List<ManualPin> = emptyList(),
+    /** 拡張希望（職員×日の集合×禁止シフトの集合）。採点の族・重みには入れない（重み未指示）。 */
+    val extWishes: List<ExtWish> = emptyList(),
     /** Per-shift display colour overrides, keyed by shift kigou -> "#rrggbb". Display only (no engine effect). */
     val shiftColors: Map<String, String> = emptyMap(),
     /** Anything we do not model yet, kept verbatim so export round-trips losslessly. */

@@ -59,6 +59,8 @@ data class ViolationReport(
      * 印を置く（探索の手掛かりはそれで揃っている）ので、画面が「どの違反窓にも印がある」を作るための表示専用の元データ。
      */
     val c1Runs: List<List<Int>> = emptyList(),
+    /** 拡張希望の違反セル（"i,j"）。件数＝要素数。採点の族・重みには入れない（`breakdown` に無い）。 */
+    val extWishCells: List<String> = emptyList(),
     val logs: List<MirrorLog> = emptyList(),
 )
 
@@ -539,6 +541,7 @@ object UnifiedViolationChecker {
             weightedScore = weightedScore(breakdown),
             distLocations = distLocations,
             c1Runs = c1Runs,
+            extWishCells = ExtWishRules.violations(p.extBan, s, p.K),
             logs = CheckLog(System.currentTimeMillis(), level, bd, total, hard, soft, elapsedMs),
         )
     }

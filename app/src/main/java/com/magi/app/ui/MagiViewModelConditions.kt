@@ -297,6 +297,7 @@ fun MagiViewModel.wishOverrides(): List<WishView> {
 
 fun MagiViewModel.setWish(i: Int, j: Int, k: Int) {
     val st = state ?: return
+    com.magi.app.v6.ExtWishRules.wishBlockedBy(st, i, j)?.let { logOp("W", "希望設定: ${opNm(i)} ${j + 1}日 — $it"); return }
     val m = st.wishes.toMutableMap()
     m["$i,$j"] = k
     logOp("I", "希望設定: ${opNm(i)} ${j + 1}日 → ${opSy(k)}")
@@ -317,7 +318,12 @@ fun MagiViewModel.setWishesForDays(staffIdx: Int?, days: List<Int>, k: Int) {
     val m = st.wishes.toMutableMap()
     val staffRange = if (staffIdx != null) listOf(staffIdx) else cachedProblem(st).let { p -> st.staff.indices.filter { p.canDo(it, k) } }
     if (staffRange.isEmpty()) return
-    for (i in staffRange) for (j in days) if (i in st.staff.indices && j in 0 until st.dayCount) m["$i,$j"] = k
+    var blocked = 0
+    for (i in staffRange) for (j in days) if (i in st.staff.indices && j in 0 until st.dayCount) {
+        if (com.magi.app.v6.ExtWishRules.wishBlockedBy(st, i, j) != null) { blocked++; continue }
+        m["$i,$j"] = k
+    }
+    if (blocked > 0) logOp("W", "希望一括: ${blocked}件 — ${com.magi.app.v6.ExtWishRules.MSG_EXT_DAY}")
     val who = if (staffIdx != null) opNm(staffIdx) else "全員" + (st.staff.size - staffRange.size).let { if (it > 0) "（担当外${it}名を除く）" else "" }
     logOp("I", "希望一括: $who ${opDays(days)} → ${opSy(k)}")
     applyStructure(st.copy(wishes = m))
@@ -333,6 +339,24 @@ fun MagiViewModel.clearWishesForDays(staffIdx: Int?, days: List<Int>) {
     if (m.size == st.wishes.size) return
     logOp("I", "希望クリア: ${if (staffIdx != null) opNm(staffIdx) else "全員"} ${opDays(days)}")
     applyStructure(st.copy(wishes = m))
+}
+
+/** 拡張希望を 1 件足す（保存規則は [com.magi.app.v6.ExtWishRules.sanitize]）。案内は操作ログへ。保存したら true。 */
+fun MagiViewModel.addExtWish(e: com.magi.app.model.ExtWish): Boolean {
+    val st = state ?: return false
+    val r = com.magi.app.v6.ExtWishRules.sanitize(st, e)
+    for (n in r.notices) logOp("W", "拡張希望: ${opNm(e.staff)} — $n")
+    val saved = r.saved ?: return false
+    logOp("I", "拡張希望設定: ${opNm(saved.staff)} ${saved.days.size}日 → ${saved.shifts.joinToString("・")}以外")
+    applyStructure(st.copy(extWishes = st.extWishes + saved))
+    return true
+}
+
+fun MagiViewModel.removeExtWish(index: Int) {
+    val st = state ?: return
+    val e = st.extWishes.getOrNull(index) ?: return
+    logOp("I", "拡張希望削除: ${opNm(e.staff)} ${e.days.size}日")
+    applyStructure(st.copy(extWishes = st.extWishes.filterIndexed { n, _ -> n != index }))
 }
 
 /** [一括] すべての希望を削除。 */
