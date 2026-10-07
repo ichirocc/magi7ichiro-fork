@@ -20,6 +20,9 @@ data class CountRuleView(
 /** ws3: 希望 1 行。 */
 data class WishView(val i: Int, val j: Int, val staffName: String, val day: Int, val kigou: String, val k: Int)
 
+/** 拡張希望 1 件（[index] は state.extWishes の位置）。[days] は 1 始まりの日、[kigou] は禁止シフトの記号。 */
+data class ExtWishView(val index: Int, val i: Int, val staffName: String, val days: List<Int>, val kigou: List<String>)
+
 /** 入力ガイド（月次/年次の入力手順）用の各項目の件数。 */
 internal data class SetupCounts(
     val days: Int, val staff: Int, val shifts: Int, val groups: Int,
@@ -42,6 +45,7 @@ internal data class ConditionsView(
     val allowedByGroup: List<Set<Int>> = emptyList(),
     val needDayOverrides: List<NeedDayView> = emptyList(),
     val wishOverrides: List<WishView> = emptyList(),
+    val extWishes: List<ExtWishView> = emptyList(),
     val countRules: List<CountRuleView> = emptyList(),
     val groupRanges: List<GroupRangeView> = emptyList(),
     val aptBalances: List<V6SanityPort.AptBalance> = emptyList(),

@@ -81,6 +81,11 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
     val rows = cv.wishOverrides
     val myRows = rows.filter { it.i == i }
     val marked = myRows.associate { it.day to it.k }
+    val myExt = cv.extWishes.filter { it.i == i }
+    // 拡張希望: 日 → その日に禁止のシフト記号（同じ職員の件は和集合）。
+    val extMarked = HashMap<Int, MutableList<String>>().also { m ->
+        for (e in myExt) for (d in e.days) { val l = m.getOrPut(d) { ArrayList() }; for (k in e.kigou) if (k !in l) l.add(k) }
+    }
 
     val onToggleDay: (Int) -> Unit = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d }
 
@@ -108,11 +113,29 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
             WishMonthGrid(
                 startDate = ui.startDate, maxDay = ui.days, marked = marked,
                 shiftKigou = shifts, shiftColorHex = ui.shiftColorHex, shiftTextHex = ui.shiftTextHex,
-                selectedDays = daysSel, onToggle = onToggleDay,
+                selectedDays = daysSel, onToggle = onToggleDay, extMarked = extMarked,
             )
+            if (myExt.isNotEmpty()) {
+                Text("拡張希望（この日はこのシフト以外）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    myExt.forEach { e ->
+                        InputChip(
+                            selected = false,
+                            enabled = !ui.running,
+                            onClick = { daysSel = e.days.toSet() },
+                            label = { Text("${e.days.joinToString(",")}日 ${e.kigou.joinToString("・")}以外") },
+                            trailingIcon = {
+                                Icon(Icons.Filled.Close, contentDescription = "拡張希望を削除",
+                                    modifier = Modifier.size(32.dp).clickable(enabled = !ui.running) { onEvent(MagiEvent.Condition.RemoveExtWish(e.index)) }.padding(7.dp))
+                            },
+                        )
+                    }
+                }
+            }
             // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（モーダルシートは撤去）。
             if (daysSel.isNotEmpty()) {
-                WishApplyPanel(ui, onEvent, i, daysSel, shifts, allowed, onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
+                WishApplyPanel(ui, onEvent, i, daysSel, shifts, allowed, wishDays = marked.keys, extDays = extMarked.keys,
+                    onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
             } else {
             }
             // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー（既定非表示）。
@@ -151,10 +174,14 @@ private fun WishApplyPanel(
     days: Set<Int>,
     shifts: List<String>,
     allowed: Set<Int>,
+    wishDays: Set<Int>,
+    extDays: Set<Int>,
     onCancel: () -> Unit,
     onDone: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    var extMode by remember(staffIdx) { mutableStateOf(false) }      // false=希望にする / true=以外にする（拡張希望）
+    var extSel by remember(staffIdx) { mutableStateOf(emptySet<Int>()) }
     val primary = shifts.indices.filter { it in allowed }
     val others = shifts.indices.filter { it !in allowed }
     var selK by remember(staffIdx) { mutableStateOf(primary.firstOrNull() ?: 0) }
@@ -168,6 +195,23 @@ private fun WishApplyPanel(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CountPill("${days.size}日選択中")
             Text(datesLabel, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 2, modifier = Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("希望にする" to false, "以外にする" to true).forEach { (label, mode) ->
+                val s = extMode == mode
+                Box(Modifier.weight(1f).heightIn(min = 48.dp)
+                    .background(if (s) cs.primaryContainer else cs.surfaceVariant, MaterialTheme.shapes.small)
+                    .clickable { extMode = mode }, contentAlignment = Alignment.Center) {
+                    Text(label, color = if (s) cs.onPrimaryContainer else cs.onSurfaceVariant, fontWeight = if (s) FontWeight.Bold else FontWeight.Normal)
+                }
+            }
+        }
+        if (extMode) {
+            ExtWishPanel(ui, onEvent, staffIdx, days, shifts, wishDays, extSel, { k -> extSel = if (k in extSel) extSel - k else extSel + k }, onCancel, onDone)
+            return@Column
+        }
+        if (days.any { it in extDays }) {
+            Text("拡張希望の日（${days.count { it in extDays }}日）には希望を入れられません。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         ShiftButtonGrid(shifts, primary, selK, ui.shiftColorHex, ui.shiftTextHex) { selK = it }
         if (showOther && others.isNotEmpty()) ShiftButtonGrid(shifts, others, selK, ui.shiftColorHex, ui.shiftTextHex, warnSet = others.toHashSet()) { selK = it }
@@ -188,6 +232,55 @@ private fun WishApplyPanel(
         }
         TextButton(onClick = { onEvent(MagiEvent.Condition.ClearWishesForDays(staffIdx, days.map { it - 1 })); onDone() }, enabled = !ui.running,
             modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
+    }
+}
+
+/** 拡張希望の入力: 禁止するシフトを複数選び、選択日をそれ以外にする。希望のある日は保存時に外れる（ExtWishRules）。 */
+@Composable
+private fun ExtWishPanel(
+    ui: UiState, onEvent: (MagiEvent) -> Unit, staffIdx: Int, days: Set<Int>, shifts: List<String>,
+    wishDays: Set<Int>, selected: Set<Int>, onToggle: (Int) -> Unit, onCancel: () -> Unit, onDone: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val usable = days.filter { it !in wishDays }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("この日は選んだシフト以外にする（複数選べます）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        shifts.indices.chunked(4).forEach { rowIdxs ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                rowIdxs.forEach { idx ->
+                    val sel = idx in selected
+                    val bg = hexToColor(ui.shiftColorHex.getOrElse(idx) { "" })
+                    val fg = hexToColor(ui.shiftTextHex.getOrElse(idx) { "" })
+                    Box(
+                        Modifier.weight(1f).heightIn(min = 52.dp)
+                            .background(bg, MaterialTheme.shapes.small)
+                            .border(if (sel) 3.dp else 2.dp, if (sel) cs.primary else cs.outline, MaterialTheme.shapes.small)
+                            .clickable { onToggle(idx) }
+                            .semantics { contentDescription = (shifts.getOrNull(idx) ?: "") + (if (sel) "・以外にする対象" else "") }
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            if (sel) Icon(Icons.Filled.Close, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+                            Text(shifts.getOrNull(idx) ?: "", color = fg, textAlign = TextAlign.Center,
+                                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+                repeat(4 - rowIdxs.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        if (usable.size < days.size) {
+            Text("希望のある日（${days.size - usable.size}日）は拡張希望に入れられません。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
+            Button(
+                onClick = { onEvent(MagiEvent.Condition.AddExtWish(staffIdx, usable.map { it - 1 }, selected.sorted())); onDone() },
+                enabled = !ui.running && selected.isNotEmpty() && usable.isNotEmpty(),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            ) { Text("${usable.size}日に登録") }
+        }
     }
 }
 
@@ -241,6 +334,7 @@ private fun WishMonthGrid(
     shiftTextHex: List<String>,
     selectedDays: Set<Int>,
     onToggle: (Int) -> Unit,
+    extMarked: Map<Int, List<String>> = emptyMap(),
 ) {
     val cs = MaterialTheme.colorScheme
     val sdow = (startDowMonFirst(startDate) + 1) % 7   // 月曜始まり(0=月)→日曜始まり(0=日)へ変換
@@ -269,7 +363,8 @@ private fun WishMonthGrid(
                                 .clickable { onToggle(d) }
                                 .semantics {
                                     contentDescription = "${d}日を" + (if (sel) "選択解除" else "選択") +
-                                        (k?.let { "・希望登録済み${shiftKigou.getOrNull(it) ?: ""}" } ?: "")
+                                        (k?.let { "・希望登録済み${shiftKigou.getOrNull(it) ?: ""}" } ?: "") +
+                                        (extMarked[d]?.let { "・${it.joinToString("・")}以外" } ?: "")
                                 },
                             contentAlignment = Alignment.Center,
                         ) {
@@ -286,6 +381,9 @@ private fun WishMonthGrid(
                                     Box(Modifier.background(chipBg, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 1.dp)) {
                                         Text(shiftKigou.getOrNull(k) ?: "", style = MaterialTheme.typography.labelSmall, color = chipFg, maxLines = 1)
                                     }
+                                }
+                                extMarked[d]?.let { ex ->
+                                    Text("×" + ex.joinToString(""), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
                                 }
                             }
                         }

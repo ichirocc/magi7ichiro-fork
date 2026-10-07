@@ -83,6 +83,9 @@ internal sealed interface MagiEvent {
         data class RemoveWish(val staff: Int, val day: Int) : Condition
         data class SetWishesForDays(val staff: Int?, val days: List<Int>, val shift: Int) : Condition
         data class ClearWishesForDays(val staff: Int?, val days: List<Int>) : Condition
+        /** 拡張希望: 職員 [staff] の日 [days]（0 始まり）を [shifts] 以外にする。 */
+        data class AddExtWish(val staff: Int, val days: List<Int>, val shifts: List<Int>) : Condition
+        data class RemoveExtWish(val index: Int) : Condition
         data object ClearAllWishes : Condition
         data object ClearOutOfScopeWishes : Condition
         data class SetShiftColor(val kigou: String, val hex: String) : Condition
