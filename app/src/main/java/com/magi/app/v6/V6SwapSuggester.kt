@@ -3,7 +3,7 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 
 /** 改善手の種類（UIのチップ表示用）。 */
-enum class FixKind { CHANGE, CHANGE_MULTI, SWAP, SWAP_XDAY, SWAP_MULTI, CHAIN, WINDOW }
+enum class FixKind { CHANGE, CHANGE_MULTI, SWAP, SWAP_XDAY, SWAP_MULTI, CHAIN, WINDOW, EJECT }
 
 /** 1セルへの代入（move = これらを盤面にセットする）。 */
 data class FixCell(val staff: Int, val day: Int, val toShift: Int)
@@ -18,6 +18,7 @@ data class FixCell(val staff: Int, val day: Int, val toShift: Int)
  *  - SWAP_MULTI   : 同日3人を巡回交換（2人交換が担当可否で塞がる時の打開）
  *  - CHAIN        : 不足シフトを貪欲に最大3コマ補充（エジェクションチェーン／玉突き）
  *  - WINDOW       : 1日×最大4名を総当たりで最適割当（ミニ・マスヒューリスティクス）
+ *  - EJECT        : 後処理と同じ多段の玉突き連鎖（`C1EjectionChainPolish`、全族起点・複数人・複数日）
  */
 data class FixSuggestion(
     val kind: FixKind,
@@ -51,10 +52,11 @@ object FixSuggester {
         focusShift: Int? = null,
         maxResults: Int = 8,
         deadlineMs: Long = 8000L,
+        ejectionChain: Boolean = false,
     ): List<FixSuggestion> {
         val p = Problem(state)
         if (p.S < 1 || p.T < 1) return emptyList()
-        return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs).run(maxResults)
+        return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs, ejectionChain).run(maxResults)
     }
 
     private class Quad(val sug: FixSuggestion, val dHard: Int, val dTotal: Int, val dWeighted: Double)
@@ -63,6 +65,7 @@ object FixSuggester {
     private class Session(
         private val state: MagiState, private val p: Problem, private val s: Array<IntArray>,
         private val focus: Int?, private val focusShift: Int?, private val deadlineMs: Long,
+        private val ejectionChain: Boolean = false,
     ) {
         private val base = UnifiedViolationChecker.check(state, s)
         private val found = ArrayList<Quad>()
@@ -141,6 +144,7 @@ object FixSuggester {
             sameDaySwaps()
             multiChanges()
             chains()
+            if (ejectionChain) ejection()
             windows()
             rotations3()
             crossDaySwaps()
@@ -241,6 +245,19 @@ object FixSuggester {
                     if (picked.size >= 2) tryOps(FixKind.CHAIN, picked.toList(), "（連鎖）${nm(i)} の「${sym(x)}」不足を${picked.size}コマ補充")
                 }
             }
+        }
+
+        /** Phase 6b: 多段の玉突き連鎖（後処理と同じ機構）。残り時間の半分・設定の上限秒まで。結果の盤面差分を 1 手として出す。 */
+        private fun ejection() {
+            val budget = minOf((deadlineMs - (EngineClock.nowMs() - start)) / 2, PolishGate.ejectionChainMaxMillis)
+            if (budget <= 0) return
+            val r = C1EjectionChainPolish.apply(state, s.copy2D(),
+                C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxMillis = budget))
+            val ops = ArrayList<FixCell>()
+            for (i in 0 until p.S) for (j in 0 until p.T) if (r.newSchedule[i][j] != s[i][j]) ops.add(FixCell(i, j, r.newSchedule[i][j]))
+            if (ops.size < 2 || (focus != null && ops.none { it.staff == focus })) return
+            val people = ops.map { it.staff }.distinct().size
+            tryOps(FixKind.EJECT, ops, "（玉突き連鎖）${people}人・${ops.size}マスを順に入れ替え")
         }
 
         /** Phase 7: ミニ再最適化（1 日 × 最大 WINDOW_STAFF 名を総当たりで最適割当。文書§4 マスヒューリスティクスのミニ版）。 */

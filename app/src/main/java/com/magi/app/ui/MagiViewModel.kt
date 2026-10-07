@@ -2826,8 +2826,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val list = withContext(Dispatchers.Default) {
                     if (exceptStaff != null && day != null) {
-                        fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40), day, exceptStaff).take(8)
-                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8)
+                        fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, ejectionChain = true), day, exceptStaff).take(8)
+                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, ejectionChain = true)
                 }
                 if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
                 // 盤面を差し替えるジョブの最中は書き戻さず探し直しもしない（完了後の盤面で探し直す）。

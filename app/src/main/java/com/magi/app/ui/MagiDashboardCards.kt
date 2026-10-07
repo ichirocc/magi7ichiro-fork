@@ -1681,6 +1681,7 @@ internal fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compo
     com.magi.app.v6.FixKind.SWAP_MULTI -> "3人交換" to MagiAccent.purple
     com.magi.app.v6.FixKind.CHAIN -> "連鎖" to MagiAccent.red
     com.magi.app.v6.FixKind.WINDOW -> "再最適化" to MagiAccent.orange
+    com.magi.app.v6.FixKind.EJECT -> "玉突き" to MagiAccent.red
 }
 
 @Composable
