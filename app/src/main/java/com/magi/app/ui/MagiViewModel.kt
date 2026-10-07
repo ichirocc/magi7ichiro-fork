@@ -1283,6 +1283,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで探す範囲 → ${ejectionChainScopeLabel(scope)}")
     }
 
+    fun setStallPolishInjection(on: Boolean) {
+        com.magi.app.v6.PolishGate.stallPolishInjection = on
+        _ui.update { it.copy(stallPolishInjection = on) }
+        logOp("I", "設定変更: 行き詰まったら途中で仕上げを試す → ${if (on) "ON" else "OFF"}")
+    }
+
     // [3.409.21] setAdaptiveEscape / setPortfolioRoleParallelSa は削除（単体 A/B 中立＝機構ごと撤去。
     //   PolishGate 冒頭の記録参照）。
 

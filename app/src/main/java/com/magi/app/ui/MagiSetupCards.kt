@@ -347,6 +347,14 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
+                Text("行き詰まったら途中で仕上げを試す")
+                Text("改善が止まったとき、仕上げの手を途中で試して良くなれば探索をそこから続けます。試験中（既定はOFF）",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = ui.stallPolishInjection, onCheckedChange = { onEvent(MagiEvent.Settings.SetStallPolishInjection(it)) }, enabled = !ui.running)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Column(Modifier.weight(1f)) {
                 Text("期間の制約の入れ替えで、できた禁止の並びも直す")
                 Text(EJECTION_CHAIN_NOTE,
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

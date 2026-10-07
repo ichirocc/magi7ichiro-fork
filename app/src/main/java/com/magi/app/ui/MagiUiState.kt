@@ -95,6 +95,7 @@ data class UiState(
     val ejectionChainSwap: Boolean = true,  // PolishGate.ejectionChainSwapMoves（既定ON）。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 6,  // PolishGate.ejectionChainMaxMillis / 1000（既定6）。保存しない
+    val stallPolishInjection: Boolean = false,  // PolishGate.stallPolishInjection（既定OFF）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),

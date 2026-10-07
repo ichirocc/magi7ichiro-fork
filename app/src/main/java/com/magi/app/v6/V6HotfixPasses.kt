@@ -275,6 +275,9 @@ object PolishGate {
     /** [N9] PostChain の keep-best で巻き戻したパスの採用数を 0 と数える。既定 **false**（docs/backlog.md #36）。 */
     @Volatile var postChainRollbackCountsZero: Boolean = false
 
+    /** 適応 portfolio の停滞中に後処理チェーンを全体最良へ当てて差し戻す（`StallPolishInjection`）。既定 **false**。 */
+    @Volatile var stallPolishInjection: Boolean = false
+
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
     fun snapshot(): Map<String, Any> = mapOf(
@@ -286,6 +289,7 @@ object PolishGate {
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
+        "stallPolishInjection" to stallPolishInjection,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -302,6 +306,7 @@ object PolishGate {
         b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
+        b("stallPolishInjection") { stallPolishInjection = it }
     }
 }
 
