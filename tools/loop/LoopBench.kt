@@ -145,6 +145,8 @@ fun main(args: Array<String>) {
         "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [2026-10-06] 前段（HF66 直後）の玉突き連鎖。起点＝必須だけ／全族。大域フラグなので腕ごとに切り替える（下のループ）。
         "ejectionearlyhard", "ejectionearlyall", "ejectionfinalall", "ejectionearlyallretry", "ejectionafterrepair", "ejectionafterrepairhole", "ejectionafterrepairholesoft" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
+        // [2026-10-07] 後処理チェーン先頭の局所降下（PolishGate.prePostDescent）。大域フラグなので腕ごとに切り替える（下のループ）。
+        "prepostdescent" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         else -> V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = false, deterministic = det) to V6HotfixPasses.PostOptimizationParams(componentRepairEnabled = true, deterministic = det)
     }
     System.err.println("feature=${feature.ifEmpty { "componentRepair" }} deterministic=$det")
@@ -177,6 +179,7 @@ fun main(args: Array<String>) {
                 // ejectionafterrepairhole: 両腕とも修復後の玉突きを ON にし、新腕だけ穴に絞った候補生成（旧腕＝月全体の総当たり）。
                 C1EjectionChainPolish.defaultHoleFocus = (feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft") && arm == "new"
                 C1EjectionChainPolish.defaultHoleSoftOnly = feature == "ejectionafterrepairholesoft"
+                PolishGate.prePostDescent = feature == "prepostdescent" && arm == "new"
                 fun once(): List<Any> {
                     resetPeak(); System.gc()
                     val t0 = System.nanoTime()
