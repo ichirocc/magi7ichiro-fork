@@ -908,8 +908,11 @@ object V6FinalPort {
         val pinLog = (stages - pinSafeStages.toSet()).map { MirrorLog(level = "W", tag = "Sentinel",
             message = "${it.label}の盤面が手動固定を崩していたため候補から外しました（多重防御）") } +
             capZeroLogs(state, baseProblem, pinSafeStages)
-        val safeStages = excludeCapZeroStages(baseProblem, pinSafeStages) +
+        val capSafeStages = excludeCapZeroStages(baseProblem, pinSafeStages) +
             clearedCapZeroStages(state, baseProblem, pinSafeStages, quantitativeRangeEval)
+        val extLog = extBanLogs(state, baseProblem, cappedInput, capSafeStages)
+        val safeStages = excludeExtBanStages(baseProblem, cappedInput, capSafeStages) +
+            revertedExtBanStages(state, baseProblem, cappedInput, capSafeStages, quantitativeRangeEval)
         val bestStage = pickBestStage(safeStages)
         val finalSched = bestStage.sched
         val finalReport = bestStage.report
@@ -1158,7 +1161,7 @@ object V6FinalPort {
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
         // [UX調査] sentinelLog（1文）だけでは後続の個々の行まで読者が覚えていられない（history参照）。
         val postReportLogs = annotateStaleLogsIfRegressed(post.report.logs, regression ?: if (staleWithoutRegression) "" else null)
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」
@@ -1234,6 +1237,35 @@ object V6FinalPort {
             val cells = p.capZeroCells(st.sched)
             if (cells.isEmpty()) null else MirrorLog(level = "W", tag = "Sentinel",
                 message = "${st.label}の盤面に上限0の勤務が${cells.size}件あったため、外した盤面を候補にしました（多重防御）: " +
+                    cells.take(5).joinToString("、") { (i, j) ->
+                        "${state.staff.getOrNull(i)?.name ?: i}/${j + 1}日目/${state.shifts.getOrNull(st.sched[i][j])?.kigou ?: st.sched[i][j]}"
+                    })
+        }
+
+    /** 拡張希望の禁止を入力から新しく置いた段を外す。入力（先頭）は必ず残す。 */
+    internal fun excludeExtBanStages(p: Problem, input: Array<IntArray>, stages: List<StageCandidate>): List<StageCandidate> =
+        stages.filterIndexed { idx, st -> idx == 0 || p.keepsExtBan(input, st.sched) }
+
+    /** 禁止を新しく置いた段（入力以外）から、そのセルを入力の値へ戻した盤面を作る。候補に足すだけなので選ばれる結果は悪化しない。 */
+    internal fun revertedExtBanStages(
+        state: MagiState, p: Problem, input: Array<IntArray>, stages: List<StageCandidate>, quantitativeRangeEval: Boolean,
+    ): List<StageCandidate> =
+        stages.drop(1).mapNotNull { st ->
+            val cells = p.extBanNewCells(input, st.sched)
+            if (cells.isEmpty()) return@mapNotNull null
+            val back = st.sched.copy2D()
+            for ((i, j) in cells) back[i][j] = input[i][j]
+            if (!p.keepsExtBan(input, back) || !p.holdsManualPins(back) || p.capZeroCells(back).isNotEmpty()) null
+            else StageCandidate("${st.label}（拡張希望の禁止を戻す）", back,
+                UnifiedViolationChecker.check(state, back, quantitativeRangeEval = quantitativeRangeEval))
+        }
+
+    /** [excludeExtBanStages] で外した段ごとの W ログ（候補生成の漏れの目印。セルは先頭 5 件）。 */
+    internal fun extBanLogs(state: MagiState, p: Problem, input: Array<IntArray>, stages: List<StageCandidate>): List<MirrorLog> =
+        stages.drop(1).mapNotNull { st ->
+            val cells = p.extBanNewCells(input, st.sched)
+            if (cells.isEmpty()) null else MirrorLog(level = "W", tag = "Sentinel",
+                message = "${st.label}の盤面に拡張希望の禁止が${cells.size}件新しく置かれていたため、戻した盤面を候補にしました（多重防御）: " +
                     cells.take(5).joinToString("、") { (i, j) ->
                         "${state.staff.getOrNull(i)?.name ?: i}/${j + 1}日目/${state.shifts.getOrNull(st.sched[i][j])?.kigou ?: st.sched[i][j]}"
                     })

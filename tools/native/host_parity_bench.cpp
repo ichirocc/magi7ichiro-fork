@@ -419,6 +419,67 @@ static int runManualPinTest() {
     return failures;
 }
 
+// 拡張希望: 盤面へ書く C++ の手（SA/LAHC/ALNS/研磨チャンク・壊して直す 3 種・入口修復）が禁止の値を新しく置かないこと、
+//   採点が禁止の有無で変わらないこと（Kotlin ExtWishOptimizeTest と同じ受け入れ条件）。禁止は「置きたくなる値」に寄せる。
+static int runExtBanTest() {
+    int failures = 0, moved = 0;
+    for (uint64_t seed = 1; seed <= 4; seed++) {
+        MagiProblem p = buildProblem(10, 21, 4, 2, seed * 5101ULL, seed % 2 == 1);
+        std::mt19937_64 rng(seed * 9973ULL);
+        std::vector<int> board = randomBoard(p, rng);
+        const long long before = fullEvalCombined(p, board.data());
+        p.extBan.assign((size_t)p.S * p.T * p.K, 0);
+        for (int i = 0; i < p.S; i++) for (int j = 0; j < p.T; j++) {
+            if (wishLockedN(p, i, j)) continue;
+            for (int k = 0; k < p.K; k++) if ((i * 3 + j * 5 + k) % 3 == 0) p.extBan[((size_t)i * p.T + j) * p.K + k] = 1;
+        }
+        if (fullEvalCombined(p, board.data()) != before) { printf("EXTBAN-TEST FAIL: 禁止で採点が変わった\n"); failures++; }
+        auto clean = [&](const std::vector<int>& bd, const char* who) {
+            for (int i = 0; i < p.S; i++) for (int j = 0; j < p.T; j++) {
+                size_t x = (size_t)i * p.T + j;
+                if (bd[x] != board[x] && p.extBanned(i, j, bd[x])) {
+                    printf("EXTBAN-TEST FAIL: %s が禁止を置いた (%d,%d)->%d\n", who, i, j, bd[x]); return false;
+                }
+            }
+            return true;
+        };
+        for (int t = 0; t < 4; t++) {
+            std::vector<int> cur = board, best = board;
+            long long out[6];
+            runSaChunk(p, cur.data(), best.data(), fullEvalCombined(p, best.data()), seed * 100 + t, 1.0, 0.5, 0.5, 1, out);
+            if (out[0] != 0) { printf("EXTBAN-TEST FAIL: SA 自己整合 status=%lld\n", out[0]); failures++; }
+            if (!clean(cur, "SA(cur)") || !clean(best, "SA(best)")) failures++;
+            for (size_t x = 0; x < cur.size(); x++) if (cur[x] != board[x]) moved++;
+            LahcState ls(p, board.data(), seed * 200 + t, 50);
+            long long o5[5];
+            runLahcChunk(ls, 20000, o5);
+            if (!clean(ls.st.a, "LAHC(cur)") || !clean(ls.bestSol, "LAHC(best)")) failures++;
+            AlnsState as(p, board.data(), seed * 300 + t, t % 3, t % 2, 1.0);
+            long long o6[6];
+            runAlnsChunk(as, 3000, 0.5, o6);
+            if (!clean(as.st.a, "ALNS(cur)") || !clean(as.bestSol, "ALNS(best)")) failures++;
+            PolishState ps(p, board.data(), seed * 400 + t);
+            long long op5[5];
+            runPolishChunk(ps, 3000, op5);
+            if (!clean(ps.st.a, "Polish(cur)") || !clean(ps.bestSol, "Polish(best)")) failures++;
+        }
+        std::vector<int> cells;
+        for (int i = 0; i < p.S; i++) for (int j = 0; j < p.T; j++) cells.push_back(i * p.T + j);
+        for (int t = 0; t < 20; t++) {
+            std::vector<int> bd = board;
+            std::mt19937_64 r3(seed * 31 + t);
+            destroyRepairViolationsN(p, bd.data(), cells, r3);
+            destroyRepairDayAtN(p, bd.data(), t % p.T, r3);
+            destroyRepairStaffAtN(p, bd.data(), t % p.S, r3);
+            hf67HardRepairN(p, bd.data(), r3);
+            if (!clean(bd, "壊して直す/入口修復")) { failures++; break; }
+        }
+    }
+    if (failures == 0 && moved == 0) { printf("EXTBAN-TEST FAIL: SA が 1 セルも動かさず検証が空振り\n"); failures++; }
+    printf("EXTBAN-TEST: %s (moved=%d)\n", failures == 0 ? "OK" : "FAILED", moved);
+    return failures;
+}
+
 // [3.409.22] ネイティブ修復器が **need2 単独定義の被覆需要** を扱えるかの直接検証。
 //   旧実装は `need1<=0 → continue`（destroyRepairDayAtN）/ `need1<0 → continue`（findCovOFixN）で
 //   need1 未設定のセルを丸ごと素通りしており、**評価器は covU/covO を計上するのに修復器はその枠を
@@ -908,6 +969,6 @@ int main(int argc, char** argv) {
     double bits   = benchOne(false);
     printf("BENCH deltaApply (10x31 K6): scalar %.2f M moves/s, bit-op %.2f M moves/s, speedup x%.2f\n",
            scalar / 1e6, bits / 1e6, bits / scalar);
-    int repairFail = runNeed2OnlyRepairTest() + runMarginalCostTest() + runConsIndexGuardTest() + runManualPinTest();
+    int repairFail = runNeed2OnlyRepairTest() + runMarginalCostTest() + runConsIndexGuardTest() + runManualPinTest() + runExtBanTest();
     return (mismatches == 0 && repairFail == 0) ? 0 : 1;
 }

@@ -45,7 +45,7 @@ internal fun findCovOFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArra
     if (i < 0) return null
     var bestNw = -1; var bestDef = Int.MIN_VALUE
     for (k in 0 until p.K) {
-        if (k == overK || !p.mayPlace(i, k)) continue
+        if (k == overK || !p.mayPlace(i, k) || p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
         val def = p.covUCell(k, j, eval.countOnDay(k, j))
         if (def > bestDef) { bestDef = def; bestNw = k }
     }
@@ -57,7 +57,7 @@ internal fun findC2Fix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray?
     val c = p.cons2[rng.nextInt(p.cons2.size)]
     val stf = pickUniform(p.S, rng) { p.mayPlace(it, c.shiftIdx) && eval.countForStaff(it, c.shiftIdx) < c.count }
     if (stf < 0) return null
-    val day = pickUniform(p.T, rng) { eval.at(stf, it) != c.shiftIdx && !p.wishLocked(stf, it) }
+    val day = pickUniform(p.T, rng) { eval.at(stf, it) != c.shiftIdx && !p.wishLocked(stf, it) && !p.extBanned(stf, it, c.shiftIdx) }
     if (day < 0) return null
     return intArrayOf(stf, day, c.shiftIdx)
 }
@@ -70,7 +70,7 @@ internal fun findRangeLowFix(p: Problem, eval: DeltaEvaluator, rng: Random): Int
     }
     if (cell < 0) return null
     val rlI = cell / p.K; val rlK = cell % p.K
-    val day = pickUniform(p.T, rng) { eval.at(rlI, it) != rlK && !p.wishLocked(rlI, it) }
+    val day = pickUniform(p.T, rng) { eval.at(rlI, it) != rlK && !p.wishLocked(rlI, it) && !p.extBanned(rlI, it, rlK) }
     if (day < 0) return null
     return intArrayOf(rlI, day, rlK)
 }
@@ -94,13 +94,14 @@ private fun findGroupRangeFix(p: Problem, eval: DeltaEvaluator, rng: Random, mem
         cnt > c.u -> {
             val ci = pickUniform(p.S, rng) { member[it] == c.groupIdx && eval.at(it, j) == c.shiftIdx && !p.wishLocked(it, j) }
             if (ci < 0) return null
-            val nwK = pickUniformValue(p.allowedShiftsForStaff(ci), rng) { it != c.shiftIdx }
+            val nwK = pickUniformValue(p.allowedShiftsForStaff(ci), rng) { it != c.shiftIdx && !p.extBanned(ci, j, it) }
             if (nwK < 0) return null
             intArrayOf(ci, j, nwK)
         }
         cnt < c.l -> {
             val ai = pickUniform(p.S, rng) {
-                member[it] == c.groupIdx && eval.at(it, j) != c.shiftIdx && !p.wishLocked(it, j) && p.mayPlace(it, c.shiftIdx)
+                member[it] == c.groupIdx && eval.at(it, j) != c.shiftIdx && !p.wishLocked(it, j) && p.mayPlace(it, c.shiftIdx) &&
+                    !p.extBanned(it, j, c.shiftIdx)
             }
             if (ai < 0) return null
             intArrayOf(ai, j, c.shiftIdx)
@@ -118,7 +119,7 @@ internal fun findRangeHighFix(p: Problem, eval: DeltaEvaluator, rng: Random): In
     val rhI = cell / p.K; val rhK = cell % p.K
     val day = pickUniform(p.T, rng) { eval.at(rhI, it) == rhK && !p.wishLocked(rhI, it) }
     if (day < 0) return null
-    val nwK = pickUniformValue(p.allowedShiftsForStaff(rhI), rng) { it != rhK }
+    val nwK = pickUniformValue(p.allowedShiftsForStaff(rhI), rng) { it != rhK && !p.extBanned(rhI, day, it) }
     if (nwK < 0) return null
     return intArrayOf(rhI, day, nwK)
 }
@@ -145,7 +146,7 @@ internal fun findC3WantFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntAr
                 }
                 if (miss == 1 && missL >= 0) {
                     val ml = j + missL
-                    if (!p.wishLocked(i, ml) && p.mayPlace(i, seq[missL])) return intArrayOf(i, ml, seq[missL])
+                    if (!p.wishLocked(i, ml) && p.mayPlace(i, seq[missL]) && !p.extBanned(i, ml, seq[missL])) return intArrayOf(i, ml, seq[missL])
                 }
             }
             j++
@@ -201,7 +202,7 @@ internal fun findAptFix(p: Problem, eval: DeltaEvaluator, rng: Random): IntArray
         val dayStart = rng.nextInt(p.T)
         for (d in 0 until p.T) {
             val j = (dayStart + d) % p.T
-            if (!p.wishLocked(i, j) && eval.at(i, j) == kOver) return intArrayOf(i, j, kUnder)
+            if (!p.wishLocked(i, j) && eval.at(i, j) == kOver && !p.extBanned(i, j, kUnder)) return intArrayOf(i, j, kUnder)
         }
     }
     return null
@@ -287,7 +288,7 @@ internal fun tryFixForbiddenRunViaAdjacentDay(
         var cntBefore = 0
         for (x in 0 until p.S) if (sched[x][j2] == oldJ2) cntBefore++
         for (alt in p.allowedShiftsForStaff(i)) {
-            if (alt == oldJ2) continue
+            if (alt == oldJ2 || p.extBanned(i, j2, alt)) continue   // 拡張希望の禁止へは置かない
             sched[i][j2] = alt   // [一時変更] 下の判定後に必ず復元する
             val jOk = !p.makesForbiddenRun(sched, i, j, fillShift)
             val j2Ok = !p.makesForbiddenRun(sched, i, j2, alt)
@@ -382,6 +383,7 @@ internal fun findCovUChain(
             val m = sched[i][j]
             if (m !in 0 until p.K || m == fillShift) continue
             if (!p.mayPlace(i, fillShift) || p.wishLocked(i, j)) continue
+            if (p.extBanned(i, j, fillShift)) continue   // 拡張希望の禁止へは置かない
             var q = prev; var used = false
             while (q != null) { if (q.staff == i) { used = true; break }; q = q.prev }
             if (used) continue

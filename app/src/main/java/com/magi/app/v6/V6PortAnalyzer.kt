@@ -451,7 +451,7 @@ object V6PortAnalyzer {
                     // [3.391.0] 実現不能な希望は凍結しない＝「希望固定で動かせない」と案内するのは誤り
                     //   （むしろ動かすと担当外セル=groupViol も同時に消える）。wishLocked へ統一。
                     if (p.wishLocked(i, j) && p.lockTo(i, j) == k) { pinned++; pinnedIdx.add(i); continue }   // 実現可能な本人希望＝動かすとpref化
-                    val alts = p.allowedShiftsForStaff(i).filter { it != k }
+                    val alts = p.allowedShiftsForStaff(i).filter { it != k && !p.extBanned(i, j, it) }   // 拡張希望の禁止へは最適化も置かない
                     if (alts.isEmpty()) { forbid++; continue }      // 担当可能な代替シフトが無い
                     var hasRoom = false; var blockedByC3n = true
                     for (m in alts) {
@@ -680,7 +680,7 @@ object V6PortAnalyzer {
         var adjOk: Int? = null        // ADJACENT が成立した代替シフト
         var alts = 0
         for (m in p.allowedShiftsForStaff(i)) {
-            if (m == cur) continue
+            if (m == cur || p.extBanned(i, j, m)) continue   // 拡張希望の禁止へは最適化も置かない
             alts++
             val after = c3nAfter(m)
             // 正味 HARD が減るか（希望を破る手は pref が 1 増える。hard は族横断の件数和なので同じ単位）。

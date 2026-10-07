@@ -19,8 +19,8 @@ internal object C1EjectionChainPolish {
 
     data class Config(
         val maxDepth: Int = defaultMaxDepth,
-        /** 深さごとの分岐数（尽きたら最後の値）。 */
-        val branching: IntArray = intArrayOf(4, 3, 2, 2, 1),
+        /** 深さごとの分岐数（尽きたら最後の値）。[defaultNarrow] では 2,1,1…＝深さ 8 で展開 15 回（従来 4,3,2,2,1 は 233 回）。 */
+        val branching: IntArray = if (defaultNarrow) intArrayOf(2, 1) else intArrayOf(4, 3, 2, 2, 1),
         /** 途中の盤面で許す HARD の増分。 */
         val hardSlack: Int = 2,
         val maxMillis: Long = 3_000L,
@@ -38,7 +38,7 @@ internal object C1EjectionChainPolish {
         /** ALL: 1 巡で起点にする違反箇所の族ごとの上限（巡ごとにずらす）。起点づくりの評価で予算を使い切らない。 */
         val unitsPerFamily: Int = 6,
         /** 起点 1 つの連鎖に使う評価数の上限（0 以下＝無制限）。1 つの起点が全予算を使わないため。 */
-        val perSeedEvaluations: Long = 30_000L,
+        val perSeedEvaluations: Long = if (defaultNarrow) 0L else 30_000L,
         /** 族越え（v2/ALL）で、1 セルの変更に加えて同日の 2 人・同じ職員の 2 日の入れ替えも 1 手として探す。 */
         val swapMoves: Boolean = true,
         /** 0 以下＝無制限。重複・HARD 超過で捨てた候補も数える（決定的モードの停止条件）。 */
@@ -69,6 +69,9 @@ internal object C1EjectionChainPolish {
 
     /** 測定用の切替（深さ 2〜3 の短い連鎖を同条件で比べる）。 */
     @Volatile internal var defaultMaxDepth: Int = 8
+
+    /** 測定用: 分岐を 2,1,1… に絞り、起点ごとの評価上限を外す（展開回数×1 回の候補数で自然に有界）。 */
+    @Volatile internal var defaultNarrow: Boolean = false
 
     class Stats {
         var seeds = 0; var candidates = 0L; var evaluations = 0L; var chainsTried = 0; var accepted = 0
@@ -158,7 +161,7 @@ internal object C1EjectionChainPolish {
                 for (i in 0 until p.S) {
                     if (!p.mayPlace(i, x)) continue
                     for (j in 0 until p.T) {
-                        if (work[i][j] == x || p.wishLocked(i, j)) continue
+                        if (work[i][j] == x || p.wishLocked(i, j) || p.extBanned(i, j, x)) continue
                         if (inDeficientC1Window(p, work, i, x, c.day1, c.day2, j)) seeds.add(Seed("c1", i, j, x))
                     }
                 }
@@ -206,7 +209,7 @@ internal object C1EjectionChainPolish {
                         val i = c[0]; val j = c[1]
                         if (p.wishLocked(i, j)) continue
                         for (k in p.allowedShiftsForStaff(i)) {
-                            if (k == work[i][j]) continue
+                            if (k == work[i][j] || p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
                             // 起点づくりの評価も上限・中断・時間切れに数える（旧: 判定が無く、上限 1 でも 10 回評価した）。
                             if (out()) break
                             val sc = de.previewMove(i, j, k); stats.evaluations++; stats.generated++
@@ -251,7 +254,9 @@ internal object C1EjectionChainPolish {
                 val visited = HashMap<Long, LongArray>()
                 fun seenDepth(h: Long, h2: Long): Int? = visited[h]?.takeIf { it[0] == h2 }?.get(1)?.toInt()
                 val path = ArrayList<IntArray>()   // (i, j, old, new)
-                var bestScore = baseScore
+                // 最良は正式比較と同じ辞書式で持つ（素の score は必須族の重みを含まず、必須 1→1 の改善を取りこぼした）。
+                val baseKey = de.reportKey()
+                var bestKey = baseKey
                 var bestPath: List<IntArray> = emptyList()
                 val touched = HashSet<Int>()
 
@@ -259,7 +264,10 @@ internal object C1EjectionChainPolish {
                 val famStart = if (crossFamily) familyWeighted(de) else LongArray(0)
                 fun dfs(depth: Int, li: Int, lj: Int) {
                     val s = de.score()
-                    if (s < bestScore) { bestScore = s; bestPath = path.map { it.copyOf() } }
+                    if (s / SCORE_HARD_UNIT <= baseHard + config.hardSlack) {
+                        val key = de.reportKey()
+                        if (compareReportKey(key, bestKey) < 0) { bestKey = key; bestPath = path.map { it.copyOf() } }
+                    }
                     if (depth >= config.maxDepth || out() || seedSpent()) return
                     // 候補 = [Δ後スコア, i, j, k, i2, j2, k2]。i2<0 は 1 セルの変更、そうでなければ 2 セルの交換。
                     val cand = ArrayList<LongArray>()
@@ -286,7 +294,9 @@ internal object C1EjectionChainPolish {
                         if (!free(i, j)) return
                         val cur = work[i][j]
                         for (k in p.allowedShiftsForStaff(i)) {
-                            if (k == cur) continue
+                            if (k == cur || p.extBanned(i, j, k)) continue
+                            // 上限・中断は評価 1 回ごとに見る（旧: 外側のループだけで、上限 5000 に 5179 回など超過した）。
+                            if (out() || seedSpent()) return
                             stats.generated++
                             val sc = de.previewMove(i, j, k); stats.evaluations++
                             admit(longArrayOf(sc, i.toLong(), j.toLong(), k.toLong(), -1, -1, -1))
@@ -296,6 +306,8 @@ internal object C1EjectionChainPolish {
                     fun considerSwap(i: Int, j: Int, i2: Int, j2: Int) {
                         val x = work[i][j]; val y = work[i2][j2]
                         if (x == y || !free(i, j) || !free(i2, j2) || !p.mayPlace(i, y) || !p.mayPlace(i2, x)) return
+                        if (p.extBanned(i, j, y) || p.extBanned(i2, j2, x)) return
+                        if (out() || seedSpent()) return
                         stats.generated++
                         de.apply(i, j, y); work[i][j] = y
                         val sc = de.previewMove(i2, j2, x)
@@ -404,7 +416,7 @@ internal object C1EjectionChainPolish {
                 path.clear()
                 famStat[1] += stats.evaluations - evalAtSeed
 
-                if (bestPath.isEmpty() || bestScore >= baseScore) continue
+                if (bestPath.isEmpty() || compareReportKey(bestKey, baseKey) >= 0) continue
                 val prev = Array(p.S) { work[it].copyOf() }
                 for (m in bestPath) move(m[0], m[1], m[3])
                 val rep2 = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)

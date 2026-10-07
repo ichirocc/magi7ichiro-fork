@@ -364,7 +364,7 @@ internal object PersonalBalanceJointLnsPolish {
                 val old = schedule[i][j]
                 if (old !in 0 until p.K) continue
                 for (target in 0 until p.K) {
-                    if (target == old || !p.mayPlace(i, target)) continue
+                    if (target == old || !p.mayPlaceAt(i, j, target)) continue
                     counts[i][old]--
                     counts[i][target]++
                     val after = countPenalty(p, i, counts[i])
@@ -430,13 +430,13 @@ internal object PersonalBalanceJointLnsPolish {
         val j = goal.day
         val target = goal.target
         val old = base[i][j]
-        if (old == target || p.wishLocked(i, j) || !p.mayPlace(i, target)) return emptyList()
+        if (old == target || p.wishLocked(i, j) || !p.mayPlaceAt(i, j, target)) return emptyList()
         val out = ArrayList<Candidate>()
 
         // 同日1対1交換。coverageを完全保存するため最優先。
         val donors = (0 until p.S).shuffled(rng)
         for (d in donors) {
-            if (d == i || base[d][j] != target || p.wishLocked(d, j) || !p.mayPlace(d, old)) continue
+            if (d == i || base[d][j] != target || p.wishLocked(d, j) || !p.mayPlaceAt(d, j, old)) continue
             val w = base.copy2D()
             w[i][j] = target
             w[d][j] = old
@@ -473,6 +473,7 @@ internal object PersonalBalanceJointLnsPolish {
                             w[mv[0]][mv[1]] = mv[2]
                             ops.add(CellOp(mv[0], mv[1], mv[2]))
                         }
+                        if (!p.keepsExtBan(base, w)) ok = false   // 拡張希望の禁止へ置く連鎖は採らない
                     }
                 }
                 if (ok) out.add(Candidate(w, ops, "${goal.reason}:直接+coverage連鎖"))
@@ -481,7 +482,7 @@ internal object PersonalBalanceJointLnsPolish {
 
         // 本人の別日targetと自己交換。月間回数は不変だが、下限内移替やc1/c3/weeklyの副作用改善に使う。
         for (d2 in (0 until p.T).shuffled(rng)) {
-            if (d2 == j || base[i][d2] != target || p.wishLocked(i, d2) || !p.mayPlace(i, old)) continue
+            if (d2 == j || base[i][d2] != target || p.wishLocked(i, d2) || !p.mayPlaceAt(i, d2, old)) continue
             val w = base.copy2D()
             w[i][j] = target
             w[i][d2] = old
@@ -494,7 +495,7 @@ internal object PersonalBalanceJointLnsPolish {
         if (out.size < limit) {
             outer@ for (d in donors) for (d2 in (0 until p.T).shuffled(rng)) {
                 if (d == i && d2 == j) continue
-                if (base[d][d2] != target || p.wishLocked(d, d2) || !p.mayPlace(d, old)) continue
+                if (base[d][d2] != target || p.wishLocked(d, d2) || !p.mayPlaceAt(d, d2, old)) continue
                 val w = base.copy2D()
                 w[i][j] = target
                 w[d][d2] = old

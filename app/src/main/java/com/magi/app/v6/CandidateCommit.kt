@@ -56,7 +56,10 @@ internal object CandidateCommit {
     ): ViolationReport? {
         var bestOps: List<IntArray>? = null
         var bestRep: ViolationReport? = null
+        val p = if (candidates.isEmpty()) null else cachedProblem(state, quantitativeRangeEval)
         for (ops in candidates) {
+            // 拡張希望: 値が変わるセルに禁止の値を置く候補は捨てる
+            if (p != null && p.hasExtBan && ops.any { it[2] != sched[it[0]][it[1]] && p.extBanned(it[0], it[1], it[2]) }) continue
             val saved = IntArray(ops.size) { sched[ops[it][0]][ops[it][1]] }
             for (mv in ops) sched[mv[0]][mv[1]] = mv[2]
             val rep = UnifiedViolationChecker.check(state, sched, quantitativeRangeEval = quantitativeRangeEval)

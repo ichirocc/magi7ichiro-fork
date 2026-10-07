@@ -71,7 +71,8 @@ object SmartInitialScheduler {
             for (i in 0 until p.S) {
                 if (!p.mayPlace(i, x)) continue
                 val forced = IntArray(p.T) { j ->
-                    when (schedule[i][j]) { -1 -> -1; x -> 1; else -> 0 }
+                    // 拡張希望で x が禁止の空き日は選べない日（0）として渡す
+                    when (schedule[i][j]) { -1 -> if (p.extBanned(i, j, x)) 0 else -1; x -> 1; else -> 0 }
                 }
                 val cap = p.rangeHi[i][x]
                 val targetDays = solveConstructionDp(p.T, rules, forced, rng.nextLong(), cap) ?: continue
@@ -104,7 +105,7 @@ object SmartInitialScheduler {
                     var bestI = -1
                     var bestPenalty = Int.MAX_VALUE
                     for (i in 0 until p.S) {
-                        if (schedule[i][j] >= 0 || !p.mayPlace(i, k)) continue
+                        if (schedule[i][j] >= 0 || !p.mayPlace(i, k) || p.extBanned(i, j, k)) continue
                         val hi = p.rangeHi[i][k]
                         val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
                         val penalty = (if (over) 1000 else 0) + counts[i][k] * 2
@@ -129,6 +130,11 @@ object SmartInitialScheduler {
                 val lo = p.rangeLo[i][k].takeIf { it != Int.MIN_VALUE } ?: 0
                 var need = max(0, lo - counts[i][k])
                 while (need > 0 && pos < free.size) {
+                    // 拡張希望の禁止の日は飛ばす（禁止が無ければ q == pos で従来どおり）
+                    var q = pos
+                    while (q < free.size && p.extBanned(i, free[q], k)) q++
+                    if (q >= free.size) break
+                    if (q != pos) { val t = free[q]; free[q] = free[pos]; free[pos] = t }
                     val j = free[pos++]
                     schedule[i][j] = k
                     counts[i][k]++
@@ -146,6 +152,7 @@ object SmartInitialScheduler {
                 var bestK = allowed.firstOrNull() ?: restK
                 var bestPenalty = Int.MAX_VALUE
                 for (k in allowed) {
+                    if (p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない（全部禁止なら従来の値）
                     val hi = p.rangeHi[i][k]
                     val over = hi != Int.MAX_VALUE && counts[i][k] >= hi
                     var covNow = 0

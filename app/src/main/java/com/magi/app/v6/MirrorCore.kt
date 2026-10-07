@@ -59,6 +59,8 @@ data class ViolationReport(
      * 印を置く（探索の手掛かりはそれで揃っている）ので、画面が「どの違反窓にも印がある」を作るための表示専用の元データ。
      */
     val c1Runs: List<List<Int>> = emptyList(),
+    /** 拡張希望の違反セル（"i,j"）。件数＝要素数。採点の族・重みには入れない（`breakdown` に無い）。 */
+    val extWishCells: List<String> = emptyList(),
     val logs: List<MirrorLog> = emptyList(),
 )
 
@@ -539,6 +541,7 @@ object UnifiedViolationChecker {
             weightedScore = weightedScore(breakdown),
             distLocations = distLocations,
             c1Runs = c1Runs,
+            extWishCells = ExtWishRules.violations(p.extBan, s, p.K),
             logs = CheckLog(System.currentTimeMillis(), level, bd, total, hard, soft, elapsedMs),
         )
     }
@@ -706,6 +709,26 @@ fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>, strict: 
     }
     return true
 }
+
+/** [DeltaEvaluator.reportKey] どうしの辞書式比較（負＝a が良い）。`betterReport` と同じ順。 */
+internal fun compareReportKey(a: LongArray, b: LongArray): Int {
+    for (x in 0 until 3) { val c = a[x].compareTo(b[x]); if (c != 0) return c }
+    return 0
+}
+
+/** 拡張希望: `cand` で `base` から値が変わり、新しい値が禁止のセル (i,j)（最終番兵と盤面ごと採る経路の採否）。 */
+fun Problem.extBanNewCells(base: Array<IntArray>, cand: Array<IntArray>): List<Pair<Int, Int>> {
+    if (!hasExtBan) return emptyList()
+    val out = ArrayList<Pair<Int, Int>>()
+    for (i in 0 until minOf(S, base.size, cand.size)) for (j in 0 until minOf(T, base[i].size, cand[i].size)) {
+        val k = cand[i][j]
+        if (k != base[i][j] && extBanned(i, j, k)) out.add(i to j)
+    }
+    return out
+}
+
+/** 拡張希望: `cand` が `base` から禁止のシフトを新しく置いていないか。 */
+fun Problem.keepsExtBan(base: Array<IntArray>, cand: Array<IntArray>): Boolean = !hasExtBan || extBanNewCells(base, cand).isEmpty()
 
 /** [#41] 盤面の手動固定セルがどれも固定の値か（最終番兵）。 */
 fun Problem.holdsManualPins(s: Array<IntArray>): Boolean {

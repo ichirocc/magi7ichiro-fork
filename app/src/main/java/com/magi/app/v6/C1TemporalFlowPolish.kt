@@ -130,7 +130,7 @@ internal object C1TemporalFlowPolish {
                     val changed = newK != oldK
                     if (changed) {
                         // [3.417.0] 記号「希」を割当先から外すガードを撤去（詳細は V6HotfixPasses の同種箇所）。
-                        if (p.wishLocked(i, j) || !p.mayPlace(i, newK)) continue
+                        if (p.wishLocked(i, j) || !p.mayPlace(i, newK) || p.extBanned(i, j, newK)) continue
                         board[i][j] = newK
                         val bad = p.makesForbiddenRun(board, i, j, newK)
                         board[i][j] = oldK
@@ -192,7 +192,8 @@ internal object C1TemporalFlowPolish {
                     if (!p.canDo(i, x)) continue
                     val focusBefore = C1TemporalDp.countFires(work[i], x, rules)
                     if (focusBefore == 0) continue
-                    val locked = BooleanArray(p.T) { j -> p.wishLocked(i, j) }
+                    // x が拡張希望で禁止の日は非 x のまま固定（DP が置けない日を提案しない）
+                    val locked = BooleanArray(p.T) { j -> p.wishLocked(i, j) || (work[i][j] != x && p.extBanned(i, j, x)) }
                     for (trial in 0 until trials.coerceAtLeast(1)) {
                         if (shouldStop()) break
                         val trialSeed = seed xor (i.toLong() shl 32) xor (x.toLong() shl 16) xor

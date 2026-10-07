@@ -64,6 +64,7 @@ internal object DayAssignmentPolish {
                     //   有限にすると恒等割当が必ず実行可能になり、置けないスロットがある日も残りを研磨できる。
                     val ownSlot = identityFallback && c == r
                     if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                    else if (k != work[i][j] && p.extBanned(i, j, k)) MinCostAssignment.INF   // 拡張希望の禁止へは置かない
                     else if (k !in 0 until p.K) 0L
                     else {
                         val x0 = counts[i][k] - (if (work[i][j] == k) 1 else 0)   // この日を除いた現状カウント
@@ -156,6 +157,7 @@ internal object DayAssignmentPolish {
                         val k = slots[c]
                         val ownSlot = identityFallback && c == r   // [3.597.0] 上と同じ＝現状維持は常に選べる
                         if ((k !in 0 until p.K || !p.mayPlace(i, k)) && !ownSlot) MinCostAssignment.INF
+                        else if (k != work[i][j] && p.extBanned(i, j, k)) MinCostAssignment.INF   // 拡張希望の禁止へは置かない
                         else if (k !in 0 until p.K) 0L
                         else {
                             val x0 = counts[i][k] - (if (work[i][j] == k) 1 else 0)   // この日を除いた現状カウント

@@ -49,7 +49,7 @@ internal object C42FlowPolish {
                 LongArray(p.K) { newK ->
                     when {
                         newK == oldK -> 0L
-                        !p.mayPlace(i, newK) || p.makesForbiddenRun(work, i, j, newK) -> FlexibleDayFlow.INF
+                        !p.mayPlaceAt(i, j, newK) || p.makesForbiddenRun(work, i, j, newK) -> FlexibleDayFlow.INF  // 拡張希望の禁止も INF
                         else -> 1L
                     }
                 }

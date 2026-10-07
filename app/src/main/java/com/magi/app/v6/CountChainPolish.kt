@@ -184,6 +184,7 @@ internal object CountChainPolish {
                         if (give && !p.freeCoverage(to, j)) continue
                         if (!give && !p.freeCoverage(from, j)) continue
                         if (!give && to != k) continue
+                        if (p.extBanned(s, j, to)) continue  // 拡張希望の禁止へは置かない
                         if (p.makesForbiddenRun(cur, s, j, to)) continue
                         out.add(Rotation(j, intArrayOf(s), intArrayOf(from), intArrayOf(to)))
                         if (!give) break
@@ -193,14 +194,15 @@ internal object CountChainPolish {
                         val bk = cur[b][j]
                         if (bk == sk) continue
                         if (!give && bk != k) continue
-                        if (allowed[s][bk] && allowed[b][sk] && !p.makesForbiddenRun(cur, s, j, bk) && !p.makesForbiddenRun(cur, b, j, sk))
+                        if (allowed[s][bk] && allowed[b][sk] && !p.extBanned(s, j, bk) && !p.extBanned(b, j, sk) &&
+                            !p.makesForbiddenRun(cur, s, j, bk) && !p.makesForbiddenRun(cur, b, j, sk))
                             out.add(Rotation(j, intArrayOf(s, b), intArrayOf(sk, bk), intArrayOf(bk, sk)))
-                        if (!allowed[s][bk] || p.makesForbiddenRun(cur, s, j, bk)) continue
+                        if (!allowed[s][bk] || p.extBanned(s, j, bk) || p.makesForbiddenRun(cur, s, j, bk)) continue
                         for (c in 0 until p.S) {
                             if (c == s || c == b || !movable(c, j)) continue
                             val ck = cur[c][j]
                             if (ck == sk || ck == bk) continue
-                            if (!allowed[b][ck] || !allowed[c][sk]) continue
+                            if (!allowed[b][ck] || !allowed[c][sk] || p.extBanned(b, j, ck) || p.extBanned(c, j, sk)) continue
                             if (p.makesForbiddenRun(cur, b, j, ck) || p.makesForbiddenRun(cur, c, j, sk)) continue
                             out.add(Rotation(j, intArrayOf(s, b, c), intArrayOf(sk, bk, ck), intArrayOf(bk, ck, sk)))
                         }

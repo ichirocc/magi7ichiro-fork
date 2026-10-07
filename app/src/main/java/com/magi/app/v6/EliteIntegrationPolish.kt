@@ -218,7 +218,7 @@ internal object EliteIntegrationPolish {
             if (stopped(shouldStop, deadlineMs)) break
             val k = target.schedule[i][j]
             if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue
-            if (!p.mayPlace(i, k)) continue
+            if (!p.mayPlace(i, k) || p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
             current[i][j] = k
             val report = UnifiedViolationChecker.check(state, current)
             if (better(report, bestReport) && pinsHold(p, rootSchedule, current, wishPinStrict)) {
@@ -278,6 +278,7 @@ internal object EliteIntegrationPolish {
                 for (k in values) {
                     if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue
                     if (!p.mayPlace(i, k)) continue
+                    if (node.schedule[i][j] != k && p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
                     val changed = if (node.schedule[i][j] == k) node.changed else node.changed + 1
                     val schedule = node.schedule.copy2D()
                     schedule[i][j] = k
@@ -307,9 +308,10 @@ internal object EliteIntegrationPolish {
      * 採用の共通条件（[better] の後）: 厳密ピンを崩さない＋[希望固定の徹底] root から希望を新たに崩さない
      * （[Problem.keepsWishPins]）。エリートは別の経路の盤面ごと入るので、relink/fusion のセル単位の
      * `wishLocked` 判定だけでは、端点の採用と崩れたエリートを起点にした relink から希望の崩れが持ち込まれる。
+     * 拡張希望の禁止も同じ理由で root との差分セルを判定する（[Problem.keepsExtBan]）。
      */
     private fun pinsHold(p: Problem, root: Array<IntArray>, s: Array<IntArray>, wishPinStrict: Boolean): Boolean =
-        !exactPinRegression(p, root, s) && p.keepsWishPins(root, s, wishPinStrict)
+        !exactPinRegression(p, root, s) && p.keepsWishPins(root, s, wishPinStrict) && p.keepsExtBan(root, s)
 
     /**
      * ビーム中間ノードの許容幅。[baseline] は**呼出時点の現在最良**（`fuseGroup` の

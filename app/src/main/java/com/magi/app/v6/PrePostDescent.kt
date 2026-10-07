@@ -39,7 +39,7 @@ internal object PrePostDescent {
 
         val de = DeltaEvaluator(p)
         de.reset(cur)
-        var curScore = de.score()
+        var curKey = de.reportKey()
         var curRep = inRep
         var best = cur.copy2D(); var bestRep = inRep
         val rnd = Random(seed)
@@ -55,25 +55,29 @@ internal object PrePostDescent {
                 0 -> {
                     val pl = p.allowedShiftsForStaff(i0); if (pl.isEmpty()) continue
                     val k = pl[rnd.nextInt(pl.size)]; if (k == cur[i0][j0]) continue
+                    if (p.extBanned(i0, j0, k)) continue   // 拡張希望の禁止へは置かない
                     mi[0] = i0; mj[0] = j0; mk[0] = k; n = 1
                 }
                 1 -> {
                     val b = rnd.nextInt(p.S); if (b == i0 || p.wishLocked(b, j0)) continue
                     val ka = cur[i0][j0]; val kb = cur[b][j0]
                     if (ka == kb || !p.mayPlace(i0, kb) || !p.mayPlace(b, ka)) continue
+                    if (p.extBanned(i0, j0, kb) || p.extBanned(b, j0, ka)) continue
                     mi[0] = i0; mj[0] = j0; mk[0] = kb; mi[1] = b; mj[1] = j0; mk[1] = ka; n = 2
                 }
                 else -> {
                     val j2 = rnd.nextInt(p.T); if (j2 == j0 || p.wishLocked(i0, j2)) continue
                     val ka = cur[i0][j0]; val kb = cur[i0][j2]
                     if (ka == kb || !p.mayPlace(i0, kb) || !p.mayPlace(i0, ka)) continue
+                    if (p.extBanned(i0, j0, kb) || p.extBanned(i0, j2, ka)) continue
                     mi[0] = i0; mj[0] = j0; mk[0] = kb; mi[1] = i0; mj[1] = j2; mk[1] = ka; n = 2
                 }
             }
-            var s = curScore
-            for (m in 0 until n) { mOld[m] = cur[mi[m]][mj[m]]; s = de.apply(mi[m], mj[m], mk[m]) }
+            for (m in 0 until n) { mOld[m] = cur[mi[m]][mj[m]]; de.apply(mi[m], mj[m], mk[m]) }
             fun undoDelta() { for (m in n - 1 downTo 0) de.apply(mi[m], mj[m], mOld[m]) }
-            if (s > curScore) { undoDelta(); continue }
+            // 事前判定は正式比較と同じ辞書式（必須件数→重み付き→総数）。素の score は必須族の重みを含まない（OPT-01）。
+            val key = de.reportKey()
+            if (compareReportKey(key, curKey) > 0) { undoDelta(); continue }
             val before = cur.copy2D()
             for (m in 0 until n) cur[mi[m]][mj[m]] = mk[m]
             val rep = UnifiedViolationChecker.check(state, cur, quantitativeRangeEval)
@@ -89,7 +93,7 @@ internal object PrePostDescent {
                 for (m in 0 until n) cur[mi[m]][mj[m]] = mOld[m]
                 undoDelta(); continue
             }
-            curRep = rep; curScore = s
+            curRep = rep; curKey = key
             if (better) { improved++; sidewaysRun = 0 } else { sidewaysTotal++; sidewaysRun++ }
             if (betterReport(rep, bestRep)) { best = cur.copy2D(); bestRep = rep }
         }

@@ -236,6 +236,8 @@ object ViolationComponentRepair {
                     val before = beforeCnt[i * 1000L + k] ?: continue
                     if (kotlin.math.abs(delta.countForStaff(i, k) - lo) > kotlin.math.abs(before - lo)) { prunedPin++; return Long.MAX_VALUE }
                 }
+                // 結合結果で拡張希望の禁止を新しく置く枝は落とす（候補が別パス由来でも）
+                if (p.hasExtBan && undo.any { r -> val nk = delta.at(r[0], r[1]); nk != work[r[0]][r[1]] && p.extBanned(r[0], r[1], nk) }) return Long.MAX_VALUE
                 return delta.score()
             } finally {
                 for (r in undo.asReversed()) delta.apply(r[0], r[1], r[2])
@@ -343,14 +345,14 @@ object ViolationComponentRepair {
             /** j に近い日から順に走査する（c1 の窓・c3 の並びに効く局所の手を優先）。 */
             fun daysNear(j: Int): Sequence<Int> = sequence { for (r in 1 until p.T) { if (j - r >= 0) yield(j - r); if (j + r < p.T) yield(j + r) } }
             fun single(i: Int, j: Int, k2: Int) {
-                if (k2 !in 0 until p.K || k2 == work[i][j] || p.wishLocked(i, j) || !p.mayPlace(i, k2)) return
+                if (k2 !in 0 until p.K || k2 == work[i][j] || p.wishLocked(i, j) || !p.mayPlaceAt(i, j, k2)) return
                 val old = work[i][j]
                 if (!breaksPin(i, old, k2)) { add(listOf(intArrayOf(i, j, k2)), "${staffName(i)} ${j + 1}日→${kig(k2)}"); return }
                 // 行内の入替（j を k2 に、別の日 d の k2 を old に）＝職員 i の回数は不変。近い日から最大 3 本。
                 var made2 = 0
                 for (d in daysNear(j)) {
                     if (made2 >= 3) break
-                    if (work[i][d] != k2 || p.wishLocked(i, d) || !p.mayPlace(i, old)) continue
+                    if (work[i][d] != k2 || p.wishLocked(i, d) || !p.mayPlaceAt(i, d, old)) continue
                     add(listOf(intArrayOf(i, j, k2), intArrayOf(i, d, old)), "${staffName(i)} ${j + 1}日⇄${d + 1}日")
                     made2++
                 }
@@ -358,13 +360,14 @@ object ViolationComponentRepair {
             fun swap(x: Int, y: Int, j: Int) {
                 if (x == y) return
                 val kx = work[x][j]; val ky = work[y][j]
-                if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.mayPlace(x, ky) || !p.mayPlace(y, kx)) return
+                if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.mayPlaceAt(x, j, ky) || !p.mayPlaceAt(y, j, kx)) return
                 if (!breaksPin(x, kx, ky) && !breaksPin(y, ky, kx)) { add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx)), "${staffName(x)}↔${staffName(y)} ${j + 1}日"); return }
                 // 2 日の交換（j で入れ替え、逆の並びの日 d で戻す）＝両者の回数は不変。近い日から最大 2 本。
                 var made2 = 0
                 for (d in daysNear(j)) {
                     if (made2 >= 2) break
                     if (work[x][d] != ky || work[y][d] != kx || p.wishLocked(x, d) || p.wishLocked(y, d)) continue
+                    if (p.extBanned(x, d, kx) || p.extBanned(y, d, ky)) continue   // 拡張希望の禁止へは置かない
                     add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kx), intArrayOf(x, d, kx), intArrayOf(y, d, ky)), "${staffName(x)}↔${staffName(y)} ${j + 1}日/${d + 1}日")
                     made2++
                 }
@@ -375,6 +378,7 @@ object ViolationComponentRepair {
                 for (d in s0..s1) {
                     val kx = work[x][d]; val ky = work[y][d]
                     if (p.wishLocked(x, d) || p.wishLocked(y, d) || !p.mayPlace(x, ky) || !p.mayPlace(y, kx)) return
+                    if (kx != ky && (p.extBanned(x, d, ky) || p.extBanned(y, d, kx))) return   // 拡張希望の禁止へは置かない
                     if (kx != ky) changes = true
                 }
                 if (!changes) return
@@ -387,7 +391,7 @@ object ViolationComponentRepair {
                 val kx = work[x][j]; val ky = work[y][j]; val kz = work[z][j]
                 if (kx == ky || ky == kz || kx == kz) return
                 if (p.wishLocked(x, j) || p.wishLocked(y, j) || p.wishLocked(z, j)) return
-                if (!p.mayPlace(x, ky) || !p.mayPlace(y, kz) || !p.mayPlace(z, kx)) return
+                if (!p.mayPlaceAt(x, j, ky) || !p.mayPlaceAt(y, j, kz) || !p.mayPlaceAt(z, j, kx)) return
                 add(listOf(intArrayOf(x, j, ky), intArrayOf(y, j, kz), intArrayOf(z, j, kx)), "${staffName(x)}→${staffName(y)}→${staffName(z)} ${j + 1}日")
             }
             when {

@@ -510,7 +510,7 @@ internal object AdaptiveBlockSwapPolish {
                         val a = work[u][j]
                         val b = work[v][j]
                         if (a == b || a !in 0 until p.K || b !in 0 until p.K) continue
-                        if (!p.mayPlace(u, b)) continue
+                        if (!p.mayPlaceAt(u, j, b)) continue   // 拡張希望の禁止を受け取る日も据え置き
                         delta[a]--; delta[b]++; any = true
                     }
                     if (!any) continue
@@ -578,6 +578,7 @@ internal object AdaptiveBlockSwapPolish {
                     val incoming = vals[(t + 1) % n]
                     if (incoming != vals[t]) changes = true
                     if (!p.mayPlace(cycle[t], incoming)) { ok = false; break }
+                    if (incoming != vals[t] && p.extBanned(cycle[t], j, incoming)) { ok = false; break }   // 拡張希望の禁止へは置かない（据え置き）
                 }
                 if (!ok || !changes) continue
                 swapDays.add(j)
@@ -917,6 +918,7 @@ internal object AdaptiveBlockSwapPolish {
                 if (ka !in 0 until p.K || kb !in 0 until p.K) return null
                 if (p.wishLocked(a, d) || p.wishLocked(b, d)) return null
                 if (!p.mayPlace(a, kb) || !p.mayPlace(b, ka)) return null
+                if (ka != kb && (p.extBanned(a, d, kb) || p.extBanned(b, d, ka))) return null   // 拡張希望の禁止へは置かない
                 if (ka != kb) { changed++; delta[kb]++; delta[ka]-- }
             }
             if (changed == 0) return null

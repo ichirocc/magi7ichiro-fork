@@ -52,6 +52,7 @@ internal object DestroyRepairOperators {
         // destroy: 非希望セルを休へ。休を担当できない職員は対象外（群外割当を作らない）。cnt も同期。
         for (i in 0 until p.S) {
             if (p.wishLocked(i, j) || !p.mayPlace(i, rest)) continue
+            if (p.extBanned(i, j, rest)) continue   // 拡張希望で休が禁止のセルは崩さない（休のまま残りうる）
             val old = schedule[i][j]
             if (old != rest && old in 0 until p.K) { schedule[i][j] = rest; cnt[i][old]--; cnt[i][rest]++ }
         }
@@ -97,6 +98,7 @@ internal object DestroyRepairOperators {
                 var bestI = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
                 for (i in 0 until p.S) {
                     if (schedule[i][j] != rest || p.wishLocked(i, j) || !p.mayPlace(i, k)) continue
+                    if (p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
                     val delta = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cnt[i][k]) +
                         c41DayMarg(p.sgrp[i], k) +
                         DestroyRepairMarginalCost.weeklyMarginalAt(wd[i], bucket, rest, k) +
@@ -145,6 +147,7 @@ internal object DestroyRepairOperators {
         for (jj in 0 until p.T) { val k2 = schedule[i][jj]; if (k2 in 0 until p.K) wd[k2][(p.dow0 + jj) % 7]++ }
         for (j in 0 until p.T) {
             if (p.wishLocked(i, j)) continue
+            if (p.extBanned(i, j, rest)) continue   // 拡張希望で休が禁止のセルは崩さない
             val old = schedule[i][j]
             if (old != rest && old in 0 until p.K) {
                 schedule[i][j] = rest
@@ -162,6 +165,7 @@ internal object DestroyRepairOperators {
             var bestK = -1; var bestDelta = Long.MAX_VALUE; var tied = 0
             for (k in 0 until p.K) {
                 if (k == rest || !p.mayPlace(i, k)) continue
+                if (p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
                 // [3.379.0/同上] need2 単独定義の穴を塞ぐ。`covUCell<=0` は「需要なし」と
                 //   「既に足りている」の両方を同時に表すので、旧2条件をこれ1つで置き換えられる。
                 if (p.covUCell(k, j, cov[j][k]) <= 0) continue
@@ -213,6 +217,7 @@ internal object DestroyRepairOperators {
             var bestK = old; var bestDelta = Long.MAX_VALUE; var tied = 0
             for (k in allowed) {
                 if (k == old) continue
+                if (p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
                 val dOld = if (old in 0 until p.K) DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old] - 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, old, cntI[old]) else 0L
                 val dK = DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k] + 1) - DestroyRepairMarginalCost.staffCountPenaltyAt(p, i, k, cntI[k])
                 val dWeekly = DestroyRepairMarginalCost.weeklyMarginalAt(wd, bucket, old, k)
@@ -238,7 +243,9 @@ internal object DestroyRepairOperators {
         val j = rng.nextInt(p.T)
         if (p.wishLocked(i, j)) return
         val allowed = p.allowedShiftsForStaff(i)
-        if (allowed.isNotEmpty()) schedule[i][j] = allowed[rng.nextInt(allowed.size)]
+        if (allowed.isEmpty()) return
+        val k = allowed[rng.nextInt(allowed.size)]
+        if (!p.extBanned(i, j, k)) schedule[i][j] = k   // 拡張希望の禁止へは置かない（乱数の消費は変えない）
     }
 
 

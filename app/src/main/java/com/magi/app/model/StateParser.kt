@@ -95,12 +95,21 @@ object StateParser {
             ManualPin(it.optInt("staff", -1), it.optInt("day", -1), it.optInt("shift", -1))
         }.filter { it.staff >= 0 && it.day >= 0 && it.shift >= 0 }.associateBy { it.staff to it.day }.values.toList()
 
+        val extWishes = ArrayList<ExtWish>()
+        o.optJSONArray("extWishes")?.let { a ->
+            for (n in 0 until a.length()) {
+                val e = a.optJSONObject(n) ?: continue
+                fun strs(key: String) = e.optJSONArray(key)?.let { x -> (0 until x.length()).map { x.optString(it) } } ?: emptyList()
+                extWishes.add(ExtWish(e.optInt("staff", -1), strs("days"), strs("shifts")))
+            }
+        }
+
         // Keep unmodelled top-level keys verbatim for lossless export.
         val modelled = setOf(
             "shifts", "groups", "staff", "groupShift", "groupShiftApt", "schedule", "wishes", "staffRange",
             "needDay1", "needDay2", "cons1", "cons2", "cons3", "cons3n", "cons3m", "cons3mn",
             "cons41", "cons42", "shiftColors", "startDate", "endDate", "use2Patterns",
-            "skillGroups", "cons41s", "cons42s", "cons3w", "manualPins"
+            "skillGroups", "cons41s", "cons42s", "cons3w", "manualPins", "extWishes"
         )
         val extras = HashMap<String, Any?>()
         o.keys().forEach { key -> if (key !in modelled) extras[key] = o.get(key) }
@@ -119,6 +128,7 @@ object StateParser {
             cons41 = cons41, cons42 = cons42,
             skillGroups = skillGroups, cons41s = cons41s, cons42s = cons42s, cons3w = cons3w,
             manualPins = manualPins,
+            extWishes = extWishes,
             extras = extras,
         )
     }
@@ -181,6 +191,7 @@ object StateParser {
         o.put("cons42s", consArr(state.cons42s) { obj("g1Kigou" to it.g1Kigou, "g2Kigou" to it.g2Kigou, "s1Kigou" to it.s1Kigou, "s2Kigou" to it.s2Kigou) })
         o.put("cons3w", consArr(state.cons3w) { obj("wishKigou" to it.wishKigou, "prevKigou" to it.prevKigou) })
         o.put("manualPins", consArr(state.manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
+        if (state.extWishes.isNotEmpty() || o.has("extWishes")) o.put("extWishes", consArr(state.extWishes) { JSONObject().put("staff", it.staff).put("days", JSONArray(it.days)).put("shifts", JSONArray(it.shifts)) })
         return o.toString(2)
     }
 
@@ -240,6 +251,7 @@ object StateParser {
         o.put("cons42s", consArr(state.cons42s) { obj("g1Kigou" to it.g1Kigou, "g2Kigou" to it.g2Kigou, "s1Kigou" to it.s1Kigou, "s2Kigou" to it.s2Kigou) })
         o.put("cons3w", consArr(state.cons3w) { obj("wishKigou" to it.wishKigou, "prevKigou" to it.prevKigou) })
         o.put("manualPins", consArr(state.manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
+        if (state.extWishes.isNotEmpty() || o.has("extWishes")) o.put("extWishes", consArr(state.extWishes) { JSONObject().put("staff", it.staff).put("days", JSONArray(it.days)).put("shifts", JSONArray(it.shifts)) })
         for ((k, v) in state.extras) if (!o.has(k)) o.put(k, v)
         return o.toString(2)
     }

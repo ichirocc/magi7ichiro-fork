@@ -252,6 +252,7 @@ object V6LateOperators {
                     if (!alw[i1].contains(k2) || !alw[i2].contains(k3) || !alw[i3].contains(k1)) continue
                     if (p.wishLocked(i1, j) || p.wishLocked(i2, j) || p.wishLocked(i3, j)) continue
                     if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k1)) continue
+                    if (p.extBanned(i1, j, k2) || p.extBanned(i2, j, k3) || p.extBanned(i3, j, k1)) continue   // 拡張希望の禁止へは置かない
                     sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k1
                     if (gateW()) chain3++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3 }
                 }
@@ -284,6 +285,7 @@ object V6LateOperators {
                     if (p.wishLocked(i1, j) || p.wishLocked(i2, j) ||
                         p.wishLocked(i3, j) || p.wishLocked(i4, j)) continue
                     if (c3nHit(i1, j, k2) || c3nHit(i2, j, k3) || c3nHit(i3, j, k4) || c3nHit(i4, j, k1)) continue
+                    if (p.extBanned(i1, j, k2) || p.extBanned(i2, j, k3) || p.extBanned(i3, j, k4) || p.extBanned(i4, j, k1)) continue   // 拡張希望の禁止へは置かない
                     sched[i1][j] = k2; sched[i2][j] = k3; sched[i3][j] = k4; sched[i4][j] = k1
                     if (gateW()) chain4++ else { sched[i1][j] = k1; sched[i2][j] = k2; sched[i3][j] = k3; sched[i4][j] = k4 }
                 }
@@ -355,6 +357,7 @@ object V6LateOperators {
                         if (k1 < 0 || k2 < 0) { ok = false; break }
                         if (k1 != k2) anyDiff = true
                         if (!b1.contains(k2) || !b2.contains(k1)) { ok = false; break } // 群互換(双方向)
+                        if (k1 != k2 && (p.extBanned(i1, j, k2) || p.extBanned(i2, j, k1))) { ok = false; break } // 拡張希望の禁止へは置かない
                         ks1[x] = k1; ks2[x] = k2
                         x++; j++
                     }
@@ -410,7 +413,7 @@ object V6LateOperators {
                             var okc = true
                             for (d in 0 until blen) {
                                 val j = s0 + d
-                                if (p.wishLocked(i1, j) || sched[i1][j] == kd) { okc = false; break }
+                                if (p.wishLocked(i1, j) || sched[i1][j] == kd || p.extBanned(i1, j, kd)) { okc = false; break }
                             }
                             if (okc) { j1 = s0; break }
                         }
@@ -427,7 +430,7 @@ object V6LateOperators {
                             var pick = -1
                             for (u in used) {
                                 if (sched[u][j] == kd && !p.wishLocked(u, j) &&
-                                    p.allowedShiftsForStaff(u).contains(k1)
+                                    p.allowedShiftsForStaff(u).contains(k1) && !p.extBanned(u, j, k1)
                                 ) { pick = u; break }
                             }
                             if (pick < 0) {
@@ -440,6 +443,7 @@ object V6LateOperators {
                                     if (sched[c2][j] != kd) continue
                                     if (p.wishLocked(c2, j)) continue
                                     if (!p.allowedShiftsForStaff(c2).contains(k1)) continue
+                                    if (p.extBanned(c2, j, k1)) continue   // 拡張希望の禁止へは置かない
                                     var cnt2 = 0
                                     for (jj in 0 until t) if (sched[c2][jj] == kd) cnt2++
                                     if (cnt2 > bestC) { bestC = cnt2; pick = c2 }

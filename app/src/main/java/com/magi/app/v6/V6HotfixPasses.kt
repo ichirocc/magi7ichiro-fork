@@ -194,6 +194,9 @@ object PolishGate {
      *  前に置くと修復が使う手の組合せを先に崩す負けがあった）。既定 **false**（2026-10-06）。 */
     @Volatile var allEjectionChainAfterRepair: Boolean = false
 
+    /** [測定中] 全SOFT玉突き連鎖（`SoftCascadePolish`）を後処理の最後に置く。既定 **false**（測定が終わるまで）。 */
+    @Volatile var softCascade: Boolean = false
+
     /**
      * [3.422.0/ユーザー報告「停滞の早期終了が実質効いていない」への対応・Part B]
      * `V6FinalPort` の停滞ウォッチドッグ「通常」分岐（HARD が構造床にまだ届いていない＝
@@ -473,6 +476,9 @@ object V6HotfixPasses {
         /** 休の必要人数を明示した日に休が余るとき、前後の窓を夜勤列の列挙＋人間移動＋ビームで組み直す（RestZeroWindowLns）。最終段・退避の前。
          *  既定 OFF＝ユーザー決定（実データでは 30 日の休希望 5 人で 29 日に夜勤できる人が足りず採用ゼロ、history 3.555.0）。 */
         val restZeroWindowLnsEnabled: Boolean = false,
+        /** [測定中] 全SOFT玉突き連鎖（SoftCascadePolish）を後処理の最後の盤面変更（退避の直後・HF70 の前）に置く。既定 OFF。 */
+        val softCascadeEnabled: Boolean = PolishGate.softCascade,
+        val softCascade: SoftCascadePolish.Config = SoftCascadePolish.Config(),
         /** [3.608.0/3.610.0] `PostChain` 自身がチェーン内の走行 keep-best を持つ＝各パスの結果を畳み込むたびに
          *  「このチェーンで到達した最良盤面」と比較し、悪化していれば次パスの前に巻き戻す。既存の巡ごと keep-best
          *  （各パスが自分の起点比でしか判定しない）を補い、複数パスの積み重ねで生じるチェーン全体の退行を防ぐ。
@@ -651,6 +657,7 @@ object V6HotfixPasses {
         }
 
         private fun record(applied: Int, rep: ViolationReport?) {
+            stageProbe?.invoke(lastKey, work)
             stageRecords += PostStageRecord(lastKey, applied, lastMs, rep?.hard, rep?.weightedScore, rep?.total, lastFoldRolledBack)
             lastKey = ""
             lastMs = 0L
@@ -663,6 +670,9 @@ object V6HotfixPasses {
         }
 
         companion object {
+            /** 測定・テスト用: 段を畳むたびに (段のキー, 畳んだ後の盤面) を受け取る。本番では null。 */
+            @Volatile internal var stageProbe: ((String, Array<IntArray>) -> Unit)? = null
+
             /** [postChainRunningKeepBest] チェーン内巻き戻しで不採用になった行の目印（`annotateStaleLogsIfRegressed`
              *  の "[棄却盤面の観測] " と同型・別文脈用）。 */
             const val ROLLBACK_MARKER = "[チェーン内巻き戻しで不採用] "
@@ -868,6 +878,15 @@ object V6HotfixPasses {
                 CovOReliefPolish.apply(state, work, shouldStop = reliefStop, quantitativeRangeEval = params.quantitativeRangeEval)
             }
             chain.replaceBoard(r.newSchedule, r.logs, r.report)
+        }
+
+        if (params.softCascadeEnabled && !shouldStop()) {
+            // 退避より後＝最後の盤面変更。改善が無ければ入力の盤面と report をそのまま返す（後段に再実行は無い）。
+            val cascade = chain.timed("後処理 全SOFT玉突き連鎖", "SoftCascadePolish") { work ->
+                if (params.deterministic) SoftCascadePolish.apply(state, work, params.softCascade.copy(maxMillis = Long.MAX_VALUE), shouldStop, 0L, params.quantitativeRangeEval)
+                else SoftCascadePolish.apply(state, work, params.softCascade, shouldStop, deadlineMs, params.quantitativeRangeEval)
+            }
+            chain.replaceBoard(cascade.newSchedule, cascade.logs, cascade.report, cascade.applied)
         }
 
         val tHf = EngineClock.nowMs()
@@ -1156,7 +1175,10 @@ object V6HotfixPasses {
                     //   外れ、そこに座礁した groupViol セルが永久に動かせなくなる。
                     if (!p.wishLocked(i, j)) {
                         val allowed = p.allowedShiftsForStaff(i)
-                        if (allowed.isNotEmpty()) cand[i][j] = allowed[rng.nextInt(allowed.size)]
+                        if (allowed.isNotEmpty()) {
+                            val k = allowed[rng.nextInt(allowed.size)]
+                            if (!p.extBanned(i, j, k)) cand[i][j] = k   // 拡張希望の禁止へは置かない（乱数は従来どおり消費）
+                        }
                     }
                 }
                 t++
@@ -1252,7 +1274,7 @@ object V6HotfixPasses {
                     if (allowed.isNotEmpty()) {
                         val nw = allowed[rng.nextInt(allowed.size)]
                         val old = best[i][j]
-                        if (nw != old) {
+                        if (nw != old && !p.extBanned(i, j, nw)) {
                             best[i][j] = nw
                             val score = ev.fullEval(best)
                             if (score < bestScore) bestScore = score else best[i][j] = old

@@ -145,6 +145,20 @@ class DeltaEvaluator(private val p: Problem) {
         return lowAmt to highAmt
     }
 
+    /**
+     * 正式評価の比較キー [必須件数, weightedScore, total]（`betterReport` と同じ辞書式）。[score] の必須部は生件数の和で
+     * 必須族ごとの重みを含まないため、必須 1→1 で族が入れ替わる手（covU→c3n 等）の優劣を [score] では判定できない。O(S×K)。
+     */
+    internal fun reportKey(): LongArray {
+        val s = score()
+        val hard = s / SCORE_HARD_UNIT
+        val raw = familyRaw()
+        var hardW = 0.0
+        for (f in MirrorKeys.hard) hardW += (raw[f] ?: 0L) * MirrorKeys.weightOf(f)
+        val (lo, hi) = rangeRaw()
+        return longArrayOf(hard, (s - hard * SCORE_HARD_UNIT) + hardW.toLong(), raw.values.sum() + lo + hi)
+    }
+
     /** Fused previewMove + commit for a single cell. Returns the new total score. */
     fun apply(i: Int, j: Int, nw: Int): Long {
         previewMove(i, j, nw)

@@ -60,6 +60,7 @@ internal object C3FamilyPolish {
                 for (alt in p.allowedShiftsForStaff(i)) {
                     if (done || shouldStop()) break
                     if (alt == curK) continue
+                    if (p.extBanned(i, j, alt)) continue  // 拡張希望の禁止へは置かない
                     if (p.makesForbiddenRun(work, i, j, alt)) continue
                     var cnt = 0
                     for (s in 0 until p.S) if (work[s][j] == curK) cnt++
@@ -85,7 +86,7 @@ internal object C3FamilyPolish {
                     // [玉突き連鎖] i の離脱で curK の被覆が悪化する → 玉突きで埋め直す（盤面不変・巻き戻し可能）。
                     val chain = findCovUChain(p, work, curK, j, rng, exclude = i,
                         rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
-                    if (chain == null) { work[i][j] = curK; continue }
+                    if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = curK; continue }
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                     chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
@@ -204,6 +205,7 @@ internal object C3FamilyPolish {
                     for (alt in p.allowedShiftsForStaff(i)) {
                         if (done || shouldStop()) break
                         if (alt == curK) continue
+                        if (p.extBanned(i, j2, alt)) continue  // 拡張希望の禁止へは置かない
                         // [C3n枝刈り] この1手で c3n の正味 fire が減らないなら checker を呼ばない。
                         //   減らない手は hard が下がらず、この HARD 族専用パスとしては意味がない。
                         if (c3nScan.firesAfterSet(j2, alt) >= firesNow) { screened++; continue }
@@ -230,7 +232,7 @@ internal object C3FamilyPolish {
                         // [玉突き連鎖] 崩した側の被覆が欠けるなら埋め直す（盤面不変・巻き戻し可能）。
                         val chain = findCovUChain(p, work, curK, j2, rng, exclude = i,
                             rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
-                        if (chain == null) { work[i][j2] = curK; continue }
+                        if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j2] = curK; continue }
                         val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                         chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                         evaluated++
@@ -314,7 +316,7 @@ internal object C3FamilyPolish {
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
 
         fun tryExtend(i: Int, extDay: Int, fromK: Int, toK: Int): Boolean {
-            if (!movable(i, extDay) || !p.mayPlace(i, toK) || p.makesForbiddenRun(work, i, extDay, toK)) return false
+            if (!movable(i, extDay) || !p.mayPlaceAt(i, extDay, toK) || p.makesForbiddenRun(work, i, extDay, toK)) return false
             var cnt = 0
             for (s in 0 until p.S) if (work[s][extDay] == fromK) cnt++
             val needsChain = p.covUCell(fromK, extDay, cnt - 1) > p.covUCell(fromK, extDay, cnt)
@@ -333,7 +335,7 @@ internal object C3FamilyPolish {
             }
             val chain = findCovUChain(p, work, fromK, extDay, rng, exclude = i,
                 rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
-            if (chain == null) { work[i][extDay] = fromK; return false }
+            if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][extDay] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
@@ -468,6 +470,7 @@ internal object C3FamilyPolish {
                 for (alt in p.allowedShiftsForStaff(i)) {
                     if (done || shouldStop()) break
                     if (alt == curK) continue
+                    if (p.extBanned(i, j, alt)) continue  // 拡張希望の禁止へは置かない
                     if (p.makesForbiddenRun(work, i, j, alt)) continue
                     var cnt = 0
                     for (s in 0 until p.S) if (work[s][j] == curK) cnt++
@@ -485,7 +488,7 @@ internal object C3FamilyPolish {
                     // [玉突き連鎖] i の離脱で curK の被覆が悪化する → 玉突きで埋め直す（盤面不変・巻き戻し可能）。
                     val chain = findCovUChain(p, work, curK, j, rng, exclude = i,
                         rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
-                    if (chain == null) { work[i][j] = curK; continue }
+                    if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = curK; continue }
                     val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
                     chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)

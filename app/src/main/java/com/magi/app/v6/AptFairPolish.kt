@@ -133,6 +133,7 @@ internal object AptFairPolish {
             for (j in 0 until p.T) {
                 if (shouldStop()) return false
                 if (work[i][j] != fromK || !movable(i, j)) continue
+                if (p.extBanned(i, j, toK)) continue  // 拡張希望の禁止へは置かない
                 if (p.makesForbiddenRun(work, i, j, toK)) continue
                 var cntFrom = 0; var cntTo = 0
                 for (s in 0 until p.S) { if (work[s][j] == fromK) cntFrom++; if (work[s][j] == toK) cntTo++ }
@@ -150,6 +151,7 @@ internal object AptFairPolish {
                 val a = work[i][j]; val b = work[i2][j]
                 if (a != sharedK || b == sharedK) continue
                 if (!movable(i, j) || !movable(i2, j)) continue
+                if (p.extBanned(i, j, b) || p.extBanned(i2, j, a)) continue  // 拡張希望の禁止へは置かない
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
                 val workBefore = work.copy2D()
                 work[i][j] = b; work[i2][j] = a
@@ -165,7 +167,7 @@ internal object AptFairPolish {
 
         // 手③: RangePolish型の玉突きチェーン。
         fun tryChainRelocate(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
-            if (!movable(i, j) || p.makesForbiddenRun(work, i, j, toK)) return false
+            if (!movable(i, j) || p.extBanned(i, j, toK) || p.makesForbiddenRun(work, i, j, toK)) return false
             var cnt = 0
             for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
             val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
@@ -183,7 +185,7 @@ internal object AptFairPolish {
             }
             val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
                 rangeAvoid = { st, fk -> worsensOwnApt(st, fk) })
-            if (chain == null) { work[i][j] = fromK; return false }
+            if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
@@ -390,6 +392,7 @@ internal object AptFairPolish {
             for (j in 0 until p.T) {
                 if (shouldStop()) return false
                 if (work[i][j] != fromK || !movable(i, j)) continue
+                if (p.extBanned(i, j, toK)) continue  // 拡張希望の禁止へは置かない
                 if (p.makesForbiddenRun(work, i, j, toK)) continue
                 var cntFrom = 0; var cntTo = 0
                 for (s in 0 until p.S) { if (work[s][j] == fromK) cntFrom++; if (work[s][j] == toK) cntTo++ }
@@ -408,6 +411,7 @@ internal object AptFairPolish {
                 if (a != sharedK || b == sharedK) continue
                 if (!movable(i, j) || !movable(i2, j)) continue
                 if (!p.mayPlace(i, b) || !p.mayPlace(i2, a)) continue
+                if (p.extBanned(i, j, b) || p.extBanned(i2, j, a)) continue  // 拡張希望の禁止へは置かない
                 if (p.makesForbiddenRun(work, i, j, b) || p.makesForbiddenRun(work, i2, j, a)) continue
                 val workBefore = work.copy2D()
                 work[i][j] = b; work[i2][j] = a
@@ -423,7 +427,7 @@ internal object AptFairPolish {
 
         // 手③: RangePolish/AptPolish型の玉突きチェーン。
         fun tryChainRelocate(i: Int, j: Int, fromK: Int, toK: Int): Boolean {
-            if (!movable(i, j) || p.makesForbiddenRun(work, i, j, toK)) return false
+            if (!movable(i, j) || p.extBanned(i, j, toK) || p.makesForbiddenRun(work, i, j, toK)) return false
             var cnt = 0
             for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
             val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
@@ -441,7 +445,7 @@ internal object AptFairPolish {
             }
             val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
                 rangeAvoid = { st, fk -> worsensOwnFair(st, fk) })
-            if (chain == null) { work[i][j] = fromK; return false }
+            if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = fromK; return false }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)

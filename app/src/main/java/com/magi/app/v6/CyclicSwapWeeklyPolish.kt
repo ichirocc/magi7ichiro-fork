@@ -65,6 +65,7 @@ internal object CyclicSwapWeeklyPolish {
                         if (!movable(b, j)) continue
                         val sa = work[a][j]; val sb = work[b][j]
                         if (sa == sb || !p.mayPlace(a, sb) || !p.mayPlace(b, sa)) continue
+                        if (p.extBanned(a, j, sb) || p.extBanned(b, j, sa)) continue   // 拡張希望の禁止へは置かない
                         // [厳密ピン保護] 異なるシフト同士の同日交換はa/bの自身のシフト回数を変えるため、
                         //   staffRange厳密ピン(lo==hi)を新たに崩す候補は不採用にする（keep-best/重み不変）。
                         val workBeforeSwap2 = work.copy2D()
@@ -90,7 +91,9 @@ internal object CyclicSwapWeeklyPolish {
                             val sa = work[a][j]; val sb = work[b][j]; val sc = work[c][j]
                             if (sa == sb && sb == sc) continue
                             // a←sb, b←sc, c←sa（feasibleなら適用→評価→不採用なら巻き戻し）
-                            if (p.mayPlace(a, sb) && p.mayPlace(b, sc) && p.mayPlace(c, sa)) {
+                            // 値が変わるセルだけ拡張希望の禁止を判定する
+                            val banned3 = (sb != sa && p.extBanned(a, j, sb)) || (sc != sb && p.extBanned(b, j, sc)) || (sa != sc && p.extBanned(c, j, sa))
+                            if (p.mayPlace(a, sb) && p.mayPlace(b, sc) && p.mayPlace(c, sa) && !banned3) {
                                 val workBeforeRotate3 = work.copy2D()
                                 work[a][j] = sb; work[b][j] = sc; work[c][j] = sa
                                 if (prefilter && HardDelta.sameDayPermutationDelta(p, work, j, intArrayOf(a, b, c), intArrayOf(sa, sb, sc)) > 0) {
@@ -115,6 +118,7 @@ internal object CyclicSwapWeeklyPolish {
                         val vals = IntArray(k) { work[idx[it]][j] }
                         if (vals.toHashSet().size < k) continue
                         if ((0 until k).any { !p.mayPlace(idx[it], vals[(it + 1) % k]) }) continue
+                        if ((0 until k).any { p.extBanned(idx[it], j, vals[(it + 1) % k]) }) continue
                         val workBeforeRotateN = work.copy2D()
                         for (t in 0 until k) work[idx[t]][j] = vals[(t + 1) % k]
                         val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
@@ -225,6 +229,7 @@ internal object CyclicSwapWeeklyPolish {
                                 val z = work[ip][j1]
                                 if (z == x || z !in 0 until p.K) continue
                                 if (!p.mayPlace(i, z) || !p.mayPlace(ip, y)) continue
+                                if (p.extBanned(i, j1, z) || p.extBanned(i, j2, x) || p.extBanned(ip, j1, x) || p.extBanned(ip, j2, y)) continue
                                 // 長方形交換を適用（被覆保存）→ フル評価 → 改善時のみ採用、不採用なら完全巻き戻し。
                                 // [監査で発見・3.270.0] isBetter は hard→weightedScore→total の辞書式のため、
                                 //   raw total が改善してもweightedScoreが悪化する組合せ(重い厳密ピン破りを軽い

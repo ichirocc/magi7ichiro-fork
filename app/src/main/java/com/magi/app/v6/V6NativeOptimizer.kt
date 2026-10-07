@@ -125,6 +125,8 @@ object V6NativeOptimizer {
                 HypothesisStartMode.BASELINE -> Unit
             }
         }
+        // 拡張希望の禁止へ置いた入口は採らない（入口を base に戻し、下の kick で離す）
+        if (!p.keepsExtBan(base, out)) for (i in out.indices) base[i].copyInto(out[i])
         if (RoleDiversityHelpers.scheduleDistance(base, out) == 0) forceDiverseKick(p, out, rng, max(1, plan.intensity))
         return out
     }
@@ -140,7 +142,7 @@ object V6NativeOptimizer {
             val key = i.toLong() * max(1, p.T) + j
             if (!touched.add(key) || p.wishLocked(i, j)) continue
             val old = out[i][j]
-            val alternatives = p.allowedShiftsForStaff(i).filter { it != old }
+            val alternatives = p.allowedShiftsForStaff(i).filter { it != old && !p.extBanned(i, j, it) }
             if (alternatives.isEmpty()) continue
             out[i][j] = alternatives[rng.nextInt(alternatives.size)]
             changed++
@@ -332,7 +334,7 @@ object V6NativeOptimizer {
         val entryReport = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = options.quantitativeRangeEval)
         val repaired = HardRepairCore.hf67HardRepair(state, schedule, Random(actualSeed(options.seed) xor 0x67L), options.quantitativeRangeEval).schedule
         val repairedReport = UnifiedViolationChecker.check(state, repaired, quantitativeRangeEval = options.quantitativeRangeEval)
-        val hf67Adopted = better(repairedReport, entryReport)
+        val hf67Adopted = better(repairedReport, entryReport) && p.keepsExtBan(schedule, repaired)
         if (hf67Adopted) schedule = repaired
         val entryBoard = schedule.copy2D()   // [N1c] 内側番兵用に入力の勤務表を保持
         val entryBoardReport = if (hf67Adopted) repairedReport else entryReport
@@ -389,6 +391,12 @@ object V6NativeOptimizer {
         // [E11/多人数ブロック移動] エピローグで残 covU を「勤務→勤務」連鎖で充填（ALNS単独や covU を focus
         //   しなかった経路でも走る保険）。keep-best 照合＝退化不能。ユーザー実例(8/11・8/17)の詰み局面を解く。
         var resultSched = result.schedule
+        // 拡張希望の禁止へ置いた探索結果は採らない（どこかの手が判定を漏らしたときの最後の砦）
+        if (!p.keepsExtBan(schedule, resultSched)) {
+            logs = logs + MirrorLog(level = "W", tag = "V6Dispatcher",
+                message = "探索結果が拡張希望の禁止へ置いていたため入口の勤務表を採用（${p.extBanNewCells(schedule, resultSched).size}セル）")
+            resultSched = schedule
+        }
         // [3.569.0] この盤面の評価は研磨の入口と出口でも要る＝同じ盤面を 3 回 check しない（report は盤面と対で持ち回る）。
         var resultRep = UnifiedViolationChecker.check(state, resultSched, quantitativeRangeEval = options.quantitativeRangeEval)
         if (resultRep.hard > 0 && (resultRep.breakdown["covU"] ?: 0) > 0 && !shouldStop()) {
@@ -396,7 +404,7 @@ object V6NativeOptimizer {
             val n = RsiHypothesisOperators.applyCovUChains(state, cand, Random(actualSeed(options.seed) xor 0xC0FFEEL), quantitativeRangeEval = options.quantitativeRangeEval)
             if (n > 0) {
                 val candRep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval = options.quantitativeRangeEval)
-                if (better(candRep, resultRep)) {
+                if (better(candRep, resultRep) && p.keepsExtBan(resultSched, cand)) {
                     logs = logs + MirrorLog(tag = "ChainFill",
                         message = "多人数ブロック移動で covU 充填: HARD ${resultRep.hard}→${candRep.hard} / total ${resultRep.total}→${candRep.total}（連鎖${n}件）")
                     resultSched = cand
@@ -544,6 +552,7 @@ object V6NativeOptimizer {
         val globalImproves = java.util.concurrent.atomic.AtomicInteger(0)
         val lastGlobalImproveMs = java.util.concurrent.atomic.AtomicLong(started)
         val archive = AdaptiveEliteArchive()
+        val p = cachedProblem(state, options.quantitativeRangeEval)
 
         val sharedTrajectories = Array(workers) { i -> hypothesisStartFor(state, entry, i, baseSeed, options.quantitativeRangeEval) }
         val initialReports = Array(workers) { i -> UnifiedViolationChecker.check(state, sharedTrajectories[i], quantitativeRangeEval = options.quantitativeRangeEval) }
@@ -649,7 +658,7 @@ object V6NativeOptimizer {
                             Array(workers) { x -> sharedTrajectories[x].copy2D() },
                         )
                     }
-                    val start = adaptiveEpochStart(
+                    var start = adaptiveEpochStart(
                         state = state,
                         globalBest = snapshot.first,
                         localTrajectory = trajectory,
@@ -659,13 +668,15 @@ object V6NativeOptimizer {
                         shouldStop = shouldStop,
                         quantitativeRangeEval = options.quantitativeRangeEval,
                     )
+                    // 拡張希望の禁止へ置いた入口は採らず、自分の軌道から続ける
+                    if (!p.keepsExtBan(trajectory, start)) start = trajectory.copy2D()
                     val startReport = UnifiedViolationChecker.check(state, start, quantitativeRangeEval = options.quantitativeRangeEval)
                     archive.register(
                         start, startReport, assignment.role, i, epoch,
                         bridge = startReport.hard == snapshot.second.hard + 1,
                     )
                     trajectory = start
-                    if (better(startReport, eliteReport)) {
+                    if (better(startReport, eliteReport) && p.keepsExtBan(elite, start)) {
                         elite = start.copy2D(); eliteReport = startReport
                         // [3.278.0/監査修正] 旧: eliteLogs 未更新＝この入口盤面が最終勝者になると、採用盤面を
                         //   生成していない古いロール実行のフェーズログが globalLogs としてユーザーに表示されていた。
@@ -675,7 +686,7 @@ object V6NativeOptimizer {
                     var startImprovedGlobal = false
                     synchronized(lock) {
                         sharedTrajectories[i] = start.copy2D()
-                        if (better(startReport, globalReport)) {
+                        if (better(startReport, globalReport) && p.keepsExtBan(globalBest, start)) {
                             globalBest = start.copy2D(); globalReport = startReport
                             globalLogs = eliteLogs   // [3.278.0] 同上: グローバル側の stale ログも同期
                             startImprovedGlobal = true
@@ -748,7 +759,8 @@ object V6NativeOptimizer {
                             "W$i:${assignment.role.name}(q=${quantum}s→実${(nowMs() - roleT0) / 1000}s)")
                     }
 
-                    if (result != null) {
+                    // 拡張希望の禁止へ置いたロール結果は採らない
+                    if (result != null && p.keepsExtBan(start, result.schedule)) {
                         if (result.report.hard == 0) hardZeroWinner.compareAndSet(-1, i)   // 記録のみ
                         iterations += result.iterations
                         archive.register(
@@ -756,7 +768,7 @@ object V6NativeOptimizer {
                             bridge = result.report.hard == snapshot.second.hard + 1,
                         )
                         trajectory = result.schedule.copy2D()
-                        if (better(result.report, eliteReport)) {
+                        if (better(result.report, eliteReport) && p.keepsExtBan(elite, result.schedule)) {
                             elite = result.schedule.copy2D()
                             eliteReport = result.report
                             eliteLogs = result.phaseLogs
@@ -764,7 +776,7 @@ object V6NativeOptimizer {
                         var improvedGlobal = false
                         synchronized(lock) {
                             sharedTrajectories[i] = result.schedule.copy2D()
-                            if (better(result.report, globalReport)) {
+                            if (better(result.report, globalReport) && p.keepsExtBan(globalBest, result.schedule)) {
                                 globalBest = result.schedule.copy2D()
                                 globalReport = result.report
                                 globalLogs = result.phaseLogs
@@ -872,7 +884,7 @@ object V6NativeOptimizer {
 
         val workersDone = java.util.concurrent.atomic.AtomicBoolean(false)
         val injector = if (!PolishGate.stallPolishInjection) null else async(Dispatchers.Default) {
-            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0; var failed = 0; var spentMs = 0L
+            var tried = 0; var adopted = 0; var gainW = 0.0; var gainT = 0; var failed = 0; var spentMs = 0L; var firstFailure: String? = null
             // 再試行の待ちは最終試行時刻から数える（全体最良の最終改善時刻 lastGlobalImproveMs とは別）。
             var lastTryMs = 0L
             val postParams = V6HotfixPasses.PostOptimizationParams(
@@ -896,11 +908,16 @@ object V6NativeOptimizer {
                         shouldStop = { workersDone.get() || shouldStop() || nowMs() >= capDeadline },
                         deadlineMs = capDeadline, params = postParams,
                     )
-                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) { failed++; null }
+                } catch (ce: kotlinx.coroutines.CancellationException) { throw ce } catch (e: Exception) {
+                    failed++
+                    // 原因の調査用に最初の例外の種類と発生箇所（先頭フレーム）を残す（OBS-01）。
+                    if (firstFailure == null) firstFailure = "${e.javaClass.simpleName}: ${e.message ?: ""} @${e.stackTrace.firstOrNull()?.let { "${it.fileName}:${it.lineNumber}" } ?: "?"}"
+                    null
+                }
                 spentMs += nowMs() - tTry
                 var won = false
                 if (post != null) synchronized(lock) {
-                    if (better(post.report, globalReport)) {
+                    if (better(post.report, globalReport) && p.keepsExtBan(globalBest, post.schedule)) {
                         gainW += globalReport.weightedScore - post.report.weightedScore
                         gainT += globalReport.total - post.report.total
                         // 差し込み内の後処理ログは診断に混ぜない（最終の後処理と同じ行が二重に出て、6s 打ち切りの警告も紛れる）。
@@ -918,7 +935,7 @@ object V6NativeOptimizer {
                     onProgress("適応portfolio 停滞時研磨注入${tried}回目で全体最良更新", post.report, 0L, nowMs() - started)
                 }
             }
-            "停滞時研磨注入 試行${tried}/採用${adopted}/例外${failed} 計${spentMs}ms 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}"
+            "停滞時研磨注入 試行${tried}/採用${adopted}/例外${failed} 計${spentMs}ms 利得 weighted=${"%+.0f".format(-gainW)} total=${"%+d".format(-gainT)}${firstFailure?.let { " 最初の例外=$it" } ?: ""}"
         }
         val outcomes = jobs.map { d -> d.await() }
         workersDone.set(true)
@@ -930,7 +947,7 @@ object V6NativeOptimizer {
                 o.lastRole,
                 index, o.epochs, bridge = o.report.hard == globalReport.hard + 1,
             )
-            if (better(o.report, globalReport)) {
+            if (better(o.report, globalReport) && p.keepsExtBan(globalBest, o.elite)) {
                 globalBest = o.elite.copy2D(); globalReport = o.report; globalLogs = o.logs
             }
         }
@@ -1117,6 +1134,7 @@ object V6NativeOptimizer {
             if (allowed.isEmpty()) continue
             var bestK = -1; var bestFreq = Int.MAX_VALUE; var tied = 0
             for (k in allowed) {
+                if (p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
                 val freq = peers.count { peer -> peer.getOrNull(i)?.getOrNull(j) == k }
                 if (freq < bestFreq) { bestFreq = freq; bestK = k; tied = 1 }
                 else if (freq == bestFreq) {
@@ -1168,6 +1186,7 @@ object V6NativeOptimizer {
                 // 個人上限0は職員ごと＝同じ群でも相手の勤務を置けない日がある（mayPlace、3.507.0）。その日は交換しない。
                 val ka = out[a][j]; val kb = out[b][j]
                 if ((kb in 0 until p.K && !p.mayPlace(a, kb)) || (ka in 0 until p.K && !p.mayPlace(b, ka))) continue
+                if (ka != kb && (p.extBanned(a, j, kb) || p.extBanned(b, j, ka))) continue   // 拡張希望の禁止へは置かない
                 val tmp = out[a][j]; out[a][j] = out[b][j]; out[b][j] = tmp
             }
             swapped[a] = true; swapped[b] = true
@@ -1323,7 +1342,8 @@ object V6NativeOptimizer {
             if (pr.elapsedMs % 1000L < 220L) onProgress("V5 SA", lastReport, pr.totalIters, pr.elapsedMs)
         }
         val repaired = HardRepairCore.hf67HardRepair(state, res.schedule, Random(actualSeed(options.seed) xor 0x5L), options.quantitativeRangeEval)
-        var outSched = repaired.schedule
+        // 拡張希望の禁止へ置いた修復は採らない
+        var outSched = if (p.keepsExtBan(res.schedule, repaired.schedule)) repaired.schedule else res.schedule
         var report = UnifiedViolationChecker.check(state, outSched, quantitativeRangeEval = options.quantitativeRangeEval)
         // [退化防止番兵 / 実機ログ起因] runAlns(578行)と同じ入力比keep-best。従来 runV5 だけ番兵が無く、SA+修復が
         //   入力より悪化した結果をそのまま返していた。RSI++ は Phase1 Seed に runV5 を使い、以降の各段は前段比
@@ -1333,7 +1353,7 @@ object V6NativeOptimizer {
         //   ＝多様化は維持。スコアリング不変(選択のみ・better()=hard→weighted→total)。
         val baseSched = normalizeSchedule(initial, p)
         val baseReport = UnifiedViolationChecker.check(state, baseSched, quantitativeRangeEval = options.quantitativeRangeEval)
-        val keptInput = better(baseReport, report)
+        val keptInput = better(baseReport, report) || !p.keepsExtBan(baseSched, outSched)
         if (keptInput) { outSched = baseSched; report = baseReport }
         lastReport = report
         val logs = listOf(MirrorLog(tag = "RunMAGI_V5",
@@ -1522,6 +1542,8 @@ object V6NativeOptimizer {
                         //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                         NativeBridge.nativeAlnsRead(alns, 0, bestFlat)
                         val bestSol = NativeEval.unflatten(bestFlat, p.S, p.T)
+                        // 拡張希望の禁止へ置いた盤面は採らない（この restart は Kotlin ループで続ける）
+                        if (!p.keepsExtBan(globalBest, bestSol)) { syncReport(); return false }
                         if (NativeGate.parityCheckEnabled) {
                             TuningTelemetry.parityChecks.incrementAndGet()
                             val kScore = fullEvaluator.fullEval(bestSol)
@@ -1551,6 +1573,7 @@ object V6NativeOptimizer {
             //   +101% 悪化と実測されたため revert(序盤の大摂動が強い repair 下で良解を壊し最終品質を損なう)。
             var cur = if (r == 0) globalBest.copy2D() else DestroyRepairOperators.perturb(state, globalBest, rng, strength = (0.18 * options.explore).coerceIn(0.05, 0.6), quantitativeRangeEval = options.quantitativeRangeEval)
             cur = HardRepairCore.hf67HardRepair(state, cur, rng, options.quantitativeRangeEval).schedule
+            if (!p.keepsExtBan(globalBest, cur)) cur = globalBest.copy2D()   // 拡張希望の禁止へ置いた再起動盤面は採らない
             val deadline = nowMs() + per * 1000L
             // [Stage8b] ネイティブ ALNS チャンクへ委譲。不可 or 番兵発火なら下の従来 Kotlin ループへ。
             val usedNative = nativeProblem != 0L && NativeGate.enabled && runRestartNative(cur, deadline, per, r)
@@ -1622,7 +1645,7 @@ object V6NativeOptimizer {
                             if (ja == jb) jb = (jb + 1) % p.T
                             if (!p.wishLocked(i, ja) && !p.wishLocked(i, jb)) {
                                 val ka = eval.at(i, ja); val kb = eval.at(i, jb)
-                                if (ka != kb) {
+                                if (ka != kb && !p.extBanned(i, ja, kb) && !p.extBanned(i, jb, ka)) {
                                     eval.apply(i, ja, kb); eval.apply(i, jb, ka)
                                     c0i = i; c0j = ja; c0old = ka; c1i = i; c1j = jb; c1old = kb
                                     moveAug = glsMoveAug(gls, i, ja, ka, kb) + glsMoveAug(gls, i, jb, kb, ka)
@@ -1636,7 +1659,7 @@ object V6NativeOptimizer {
                                 val allowed = p.allowedShiftsForStaff(i)
                                 if (allowed.isNotEmpty()) {
                                     val oldK = eval.at(i, j); val nw = allowed[rng.nextInt(allowed.size)]
-                                    if (nw != oldK) {
+                                    if (nw != oldK && !p.extBanned(i, j, nw)) {
                                         eval.apply(i, j, nw)
                                         c0i = i; c0j = j; c0old = oldK
                                         moveAug = glsMoveAug(gls, i, j, oldK, nw)
@@ -1649,7 +1672,7 @@ object V6NativeOptimizer {
                             val fix = findTargetedFix(p, eval, rng)
                             if (fix != null) {
                                 val oldK = eval.at(fix[0], fix[1])
-                                if (fix[2] != oldK) {
+                                if (fix[2] != oldK && !p.extBanned(fix[0], fix[1], fix[2])) {
                                     eval.apply(fix[0], fix[1], fix[2])
                                     c0i = fix[0]; c0j = fix[1]; c0old = oldK
                                     moveAug = glsMoveAug(gls, fix[0], fix[1], oldK, fix[2])
@@ -1663,7 +1686,7 @@ object V6NativeOptimizer {
                             if (i2 == i1) i2 = (i2 + 1) % p.S
                             if (!p.wishLocked(i1, j) && !p.wishLocked(i2, j)) {
                                 val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
-                                if (k1 != k2 && p.mayPlace(i1, k2) && p.mayPlace(i2, k1)) {
+                                if (k1 != k2 && p.mayPlace(i1, k2) && p.mayPlace(i2, k1) && !p.extBanned(i1, j, k2) && !p.extBanned(i2, j, k1)) {
                                     eval.apply(i1, j, k2); eval.apply(i2, j, k1)
                                     c0i = i1; c0j = j; c0old = k1; c1i = i2; c1j = j; c1old = k2
                                     moveAug = glsMoveAug(gls, i1, j, k1, k2) + glsMoveAug(gls, i2, j, k2, k1)
@@ -1719,16 +1742,19 @@ object V6NativeOptimizer {
                         }
                         else -> diffInto(p.T, cur, fixed, diffBuf)
                     }
+                    // 拡張希望の禁止へ置いた候補は評価せずに捨てる（eval へは何も反映しない）
+                    val extBad = p.hasExtBan && extBanInDiff(p, fixed, diffBuf, nDiffs)
+                    val nApply = if (extBad) 0 else nDiffs
                     var moveAug = 0.0
-                    for (idx in 0 until nDiffs) {
+                    for (idx in 0 until nApply) {
                         val flat = diffBuf[idx]; val i = flat / p.T; val j = flat % p.T
                         moveAug += glsMoveAug(gls, i, j, cur[i][j], fixed[i][j])
                         eval.apply(i, j, fixed[i][j])
                     }
                     val ns = eval.score()
                     val improvedCur = ns < curScore
-                    val accepted = improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng)
-                    if (options.accept == AcceptMode.LAM_ADAPTIVE) lamUpdate(accepted)
+                    val accepted = !extBad && (improvedCur || glsAccept(ns, curScore, moveAug, curAug, options.accept, temp, gdLevel, rng))
+                    if (options.accept == AcceptMode.LAM_ADAPTIVE && !extBad) lamUpdate(accepted)
                     if (accepted) {
                         // [零アロケ] スクラッチ採用時は cur とスワップ（旧 cur を次のスクラッチへ）。
                         if (fixed === scratchBuf) { val t = cur; cur = fixed; scratchBuf = t } else cur = fixed
@@ -1740,7 +1766,7 @@ object V6NativeOptimizer {
                             reward = 4.0
                         } else reward = if (improvedCur) 2.0 else 1.0
                     } else {
-                        for (idx in 0 until nDiffs) {
+                        for (idx in 0 until nApply) {
                             val flat = diffBuf[idx]; eval.apply(flat / p.T, flat % p.T, cur[flat / p.T][flat % p.T])
                         }
                     }
@@ -1801,7 +1827,8 @@ object V6NativeOptimizer {
     ): V6OptimizerResult {
         val started = nowMs()
         val rng = Random(actualSeed(options.seed) xor 0x451L)
-        var best = normalizeSchedule(initial, cachedProblem(state, options.quantitativeRangeEval))
+        val p = cachedProblem(state, options.quantitativeRangeEval)
+        var best = normalizeSchedule(initial, p)
         var bestReport = UnifiedViolationChecker.check(state, best, quantitativeRangeEval = options.quantitativeRangeEval)
         var iters = 0L
         val rounds = max(2, min(8, budgetSec / 30 + 2))
@@ -1903,14 +1930,15 @@ object V6NativeOptimizer {
             //   Chain3/4 は常時、Rect/BlkN は optFlags.rectSwap(既定ON)に従う — Web 呼出順 e3/e4/e5/e6 と同一。
             run {
                 val lr = V6LateOperators.improve(state, candSched, candReport, rng, started + budgetSec * 1000L, rectEnabled = options.rectSwap, quantitativeRangeEval = options.quantitativeRangeEval)
-                if (lr.chain3 + lr.chain4 + lr.rect + lr.blkN > 0) {
+                if (lr.chain3 + lr.chain4 + lr.rect + lr.blkN > 0 && p.keepsExtBan(candSched, lr.schedule)) {
                     candSched = lr.schedule
                     candReport = lr.report
                     logs.add(MirrorLog(iter = iters, tag = "EarlyChain", message = "早期循環フック改善 (Chain3=${lr.chain3} Chain4=${lr.chain4} Rect=${lr.rect} BlkN=${lr.blkN}) round=${round + 1} HARD=${candReport.hard} total=${candReport.total}"))
                     logs.addAll(lr.logs)
                 }
             }
-            if (better(candReport, bestReport)) {
+            // 拡張希望の禁止へ置いたラウンド結果は採らない
+            if (better(candReport, bestReport) && p.keepsExtBan(best, candSched)) {
                 best = candSched.copy2D()
                 bestReport = candReport
                 stagnantRounds = 0
@@ -2005,12 +2033,14 @@ object V6NativeOptimizer {
         val rsiT0 = nowMs()
         val rsiSkipped = shouldStop()
         val rsi = if (rsiSkipped) seed else runRsi(state, seed.schedule, options, rsiSec, shouldStop, onProgress, sharedHf63)
-        val base = if (better(rsi.report, seed.report)) rsi else seed
+        // 拡張希望の禁止へ置いた段の結果は採らない（前段を維持）
+        val p = cachedProblem(state, options.quantitativeRangeEval)
+        val base = if (better(rsi.report, seed.report) && p.keepsExtBan(seed.schedule, rsi.schedule)) rsi else seed
         logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase2 Hypothesis${if (rsiSkipped) "(スキップ)" else ""}: ${scoreOf(base.report)} 実測${nowMs() - rsiT0}ms(予算${rsiSec}000ms)"))
         val alnsT0 = nowMs()
         val refineSkipped = shouldStop()
         val refine = if (refineSkipped) base else runAlns(state, base.schedule, options.copy(restarts = max(1, options.restarts)), alnsSec, shouldStop, onProgress)
-        val best = if (better(refine.report, base.report)) refine else base
+        val best = if (better(refine.report, base.report) && p.keepsExtBan(base.schedule, refine.schedule)) refine else base
         logs.add(MirrorLog(tag = "RSIPlus", message = "${who}Phase3 Refine${if (refineSkipped) "(スキップ)" else ""}: ${scoreOf(refine.report)} 実測${nowMs() - alnsT0}ms(予算${alnsSec}000ms)"))
         var bestSched = best.schedule
         // [HF361/528/541移植] EarlyChain: Refine 確定後の停滞境界で Chain3/4(常時)+Rect/BlkN(rectSwap)を発火
@@ -2021,7 +2051,7 @@ object V6NativeOptimizer {
             //   runRsiと同じ better(hard→weighted→total) でゲートする（素通しでHARD悪化を最終出力しない）。
             // ※ run{} 末尾のため if を式位置にしない（else-if 連鎖は式扱いとなり全分岐必須。ネストifの文形式で書く）。
             if (fired) {
-                if (better(lr.report, best.report)) {
+                if (better(lr.report, best.report) && p.keepsExtBan(bestSched, lr.schedule)) {
                     bestSched = lr.schedule
                     logs.add(MirrorLog(tag = "EarlyChain", message = "早期循環フック改善 (Chain3=${lr.chain3} Chain4=${lr.chain4} Rect=${lr.rect} BlkN=${lr.blkN}) HARD=${lr.report.hard} total=${lr.report.total}"))
                     logs.addAll(lr.logs)
@@ -2136,7 +2166,7 @@ object V6NativeOptimizer {
                             val allowed = p.allowedShiftsForStaff(i)
                             if (allowed.isNotEmpty()) {
                                 val oldK = eval.at(i, j); val nw = allowed[rng.nextInt(allowed.size)]
-                                if (nw != oldK) {
+                                if (nw != oldK && !p.extBanned(i, j, nw)) {
                                     eval.apply(i, j, nw)
                                     val ns = eval.score()
                                     if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
@@ -2155,7 +2185,7 @@ object V6NativeOptimizer {
                         if (ja == jb) jb = (jb + 1) % p.T
                         if (!p.wishLocked(i, ja) && !p.wishLocked(i, jb)) {
                             val ka = eval.at(i, ja); val kb = eval.at(i, jb)
-                            if (ka != kb) {
+                            if (ka != kb && !p.extBanned(i, ja, kb) && !p.extBanned(i, jb, ka)) {
                                 eval.apply(i, ja, kb); eval.apply(i, jb, ka)
                                 val ns = eval.score()
                                 if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
@@ -2173,7 +2203,7 @@ object V6NativeOptimizer {
                         if (i2 == i1) i2 = (i2 + 1) % p.S
                         if (!p.wishLocked(i1, j) && !p.wishLocked(i2, j)) {
                             val k1 = eval.at(i1, j); val k2 = eval.at(i2, j)
-                            if (k1 != k2 && p.mayPlace(i1, k2) && p.mayPlace(i2, k1)) {
+                            if (k1 != k2 && p.mayPlace(i1, k2) && p.mayPlace(i2, k1) && !p.extBanned(i1, j, k2) && !p.extBanned(i2, j, k1)) {
                                 eval.apply(i1, j, k2); eval.apply(i2, j, k1)
                                 val ns = eval.score()
                                 if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
@@ -2188,7 +2218,7 @@ object V6NativeOptimizer {
                     val fix = findTargetedFix(p, eval, rng)
                     if (fix != null) {
                         val oldK = eval.at(fix[0], fix[1])
-                        if (fix[2] != oldK) {
+                        if (fix[2] != oldK && !p.extBanned(fix[0], fix[1], fix[2])) {
                             eval.apply(fix[0], fix[1], fix[2])
                             val ns = eval.score()
                             if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
@@ -2209,15 +2239,18 @@ object V6NativeOptimizer {
                         for (i in 0 until p.S) if (cur[i][drDay2] != fixed[i][drDay2]) diffBuf[n++] = i * p.T + drDay2
                         n
                     } else diffInto(p.T, cur, fixed, diffBuf)
-                    for (idx in 0 until nDiffs) {
+                    // 拡張希望の禁止へ置いた候補は評価せずに捨てる（eval へは何も反映しない）
+                    val extBad = p.hasExtBan && extBanInDiff(p, fixed, diffBuf, nDiffs)
+                    val nApply = if (extBad) 0 else nDiffs
+                    for (idx in 0 until nApply) {
                         val flat = diffBuf[idx]; eval.apply(flat / p.T, flat % p.T, fixed[flat / p.T][flat % p.T])
                     }
                     val ns = eval.score()
-                    if (ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
+                    if (!extBad && ns / SCORE_HARD_UNIT <= bestHard && (betterScore(ns, curScore) || acceptWorseScore(ns, curScore, 0.15, rng))) {
                         cur = fixed; curScore = ns
                         if (betterScore(ns, bestScore)) { best = fixed.copy2D(); bestScore = ns; bestReport = UnifiedViolationChecker.check(state, fixed, quantitativeRangeEval = quantitativeRangeEval) }
                     } else {
-                        for (idx in 0 until nDiffs) {
+                        for (idx in 0 until nApply) {
                             val flat = diffBuf[idx]; eval.apply(flat / p.T, flat % p.T, cur[flat / p.T][flat % p.T])
                         }
                     }
@@ -2283,6 +2316,8 @@ object V6NativeOptimizer {
                         //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                         NativeBridge.nativePolishRead(h, 0, buf)
                         val sol = NativeEval.unflatten(buf, p.S, p.T)
+                        // 拡張希望の禁止へ置いた盤面は採らない（照合済み best から Kotlin ループで続ける）
+                        if (!p.keepsExtBan(best ?: initial, sol)) return NativePolishRun(false, best, iters, false)
                         if (NativeGate.parityCheckEnabled) {
                             TuningTelemetry.parityChecks.incrementAndGet()
                             val k = fullEvaluator.fullEval(sol)
@@ -2304,6 +2339,15 @@ object V6NativeOptimizer {
         } finally {
             NativeBridge.nativeDestroyProblem(ph)
         }
+    }
+
+    /** diffBuf の先頭 n セルのうち、cand の値が拡張希望の禁止に当たるものがあるか。 */
+    private fun extBanInDiff(p: Problem, cand: Array<IntArray>, diffBuf: IntArray, n: Int): Boolean {
+        for (idx in 0 until n) {
+            val flat = diffBuf[idx]; val i = flat / p.T; val j = flat % p.T
+            if (p.extBanned(i, j, cand[i][j])) return true
+        }
+        return false
     }
 
     // [3.287.0 keep-best統一] hard→weightedScore→total（単一ソース betterReport へ委譲。MirrorCore.kt 参照）。

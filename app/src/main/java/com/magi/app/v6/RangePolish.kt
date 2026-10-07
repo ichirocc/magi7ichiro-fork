@@ -199,6 +199,7 @@ internal object RangePolish {
         fun tryRelocate(target: Pair<Int, Int>, i: Int, j: Int, fromK: Int, toK: Int): Boolean {
             if (!movable(i, j)) { recordBlock(target, "希望固定", day = j); return false }
             if (p.makesForbiddenRun(work, i, j, toK)) { recordBlock(target, "禁止連続", day = j); return false }
+            if (p.extBanned(i, j, toK)) { recordBlock(target, "拡張希望の禁止", day = j); return false }
             var cnt = 0
             for (s in 0 until p.S) if (work[s][j] == fromK) cnt++
             val needsChain = p.covUCell(fromK, j, cnt - 1) > p.covUCell(fromK, j, cnt)
@@ -218,7 +219,7 @@ internal object RangePolish {
             }
             val chain = findCovUChain(p, work, fromK, j, rng, exclude = i,
                 rangeAvoid = { st, fk -> exceedsOwnRangeHi(p, work, st, fk) })
-            if (chain == null) { work[i][j] = fromK; recordBlock(target, "候補なし"); return false }
+            if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) { work[i][j] = fromK; recordBlock(target, "候補なし"); return false }
             val usedAvoided = chain.any { mv -> exceedsOwnRangeHi(p, work, mv[0], mv[2]) }
             val oldVals = IntArray(chain.size) { work[chain[it][0]][chain[it][1]] }
             chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
@@ -248,7 +249,7 @@ internal object RangePolish {
                 if (work[hi][j] != k || !movable(hi, j) || !movable(lo, j)) continue
                 val loK = work[lo][j]
                 if (loK == k || loK !in 0 until p.K) continue
-                if (!p.mayPlace(hi, loK) || !p.mayPlace(lo, k)) continue
+                if (!p.mayPlaceAt(hi, j, loK) || !p.mayPlaceAt(lo, j, k)) continue
                 if (p.makesForbiddenRun(work, hi, j, loK) || p.makesForbiddenRun(work, lo, j, k)) continue
                 val workBeforeSwap = work.copy2D()
                 work[hi][j] = loK; work[lo][j] = k
@@ -336,7 +337,7 @@ internal object RangePolish {
                     r != hi &&
                         work[r][j] != k &&
                         movable(r, j) &&
-                        p.mayPlace(r, k) &&
+                        p.mayPlaceAt(r, j, k) &&
                         receiverRoom(r) > 0
                 }
                 if (rawReceivers.isEmpty()) continue
@@ -371,7 +372,7 @@ internal object RangePolish {
                                 //     「希」生成は 0 件（この職場では休が lo==hi の厳密ピンで9/10名固定＋勤務側に需要があり、
                                 //     「希望外の希」はデータ側の制約が既に禁じている＝中立な仕組みが機能している）。
                                 //   ③**別の職場では黙って効かない**: 記号が「希望」「W」等なら同じ意図でも一切適用されない。
-                                if (!movable(i, j) || !p.mayPlace(i, newK)) continue
+                                if (!movable(i, j) || !p.mayPlaceAt(i, j, newK)) continue
                                 work[i][j] = newK
                                 val badRun = p.makesForbiddenRun(work, i, j, newK)
                                 work[i][j] = oldK
@@ -514,14 +515,16 @@ internal object RangePolish {
                             val changed = newK != oldK
                             if (changed) {
                                 // [3.417.0] 記号「希」を割当先から外すガードを撤去（根拠は手M側の同種箇所に記載）。
-                                if (!movable(i, j) || !p.mayPlace(i, newK)) continue
+                                if (!movable(i, j) || !p.mayPlaceAt(i, j, newK)) continue
                                 work[i][j] = newK
                                 val badRun = p.makesForbiddenRun(work, i, j, newK)
                                 work[i][j] = oldK
                                 if (badRun) {
                                     val key = i to newK
                                     val fix = adjacentFix.getOrPut(key) {
-                                        tryFixForbiddenRunViaAdjacentDay(p, work, i, j, newK, rng) ?: emptyList()
+                                        // 隣接日の調整手も拡張希望の禁止へは置かない
+                                        tryFixForbiddenRunViaAdjacentDay(p, work, i, j, newK, rng)
+                                            ?.takeUnless { f -> f.any { p.extBanned(it[0], it[1], it[2]) } } ?: emptyList()
                                     }
                                     if (fix.isEmpty()) continue
                                 }

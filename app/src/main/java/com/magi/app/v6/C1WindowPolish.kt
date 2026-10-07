@@ -108,6 +108,8 @@ internal object C1WindowPolish {
                 if (res.exhaustive) { deadSpans.add(key); provenWalls++ }
                 return
             }
+            // 拡張希望の禁止へ置く patch は採らない（solver 側でも除外済み＝防御）
+            if (res.patch.any { op -> op[2] != work[op[0]][op[1]] && p.extBanned(op[0], op[1], op[2]) }) return
             val workBefore = work.copy2D()
             for (op in res.patch) work[op[0]][op[1]] = op[2]
             val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
@@ -220,6 +222,7 @@ internal object C1WindowPolish {
                         // pref+1が他族-1と相殺してNEUTRALになり得る＝checker委任のadoptionGateも
                         // wishLockedを見ないため、生成側でここを塞がないと希望固定セルが動きうる。
                         if (p.wishLocked(staff, d)) { if (work[staff][d] != shift) screened++; return@filter false }
+                        if (work[staff][d] != shift && p.extBanned(staff, d, shift)) return@filter false   // 拡張希望の禁止へは置かない
                         val neutral = C1DeltaPrefilter.screenCell(p, work, staff, d, shift) == C1DeltaPrefilter.Verdict.NEUTRAL
                         if (!neutral && work[staff][d] != shift) screened++
                         neutral
@@ -242,7 +245,7 @@ internal object C1WindowPolish {
                     val cntOldAfter = (0 until p.S).count { trial[it][d] == old }
                     if (old in 0 until p.K && p.covUCell(old, d, cntOldAfter) > 0) {
                         val chain = findCovUChain(p, trial, old, d, rng, exclude = staff)
-                        if (chain != null) {
+                        if (chain != null && chain.none { p.extBanned(it[0], it[1], it[2]) }) {
                             for (mv in chain) trial[mv[0]][mv[1]] = mv[2]
                             val repChain = UnifiedViolationChecker.check(state, trial, quantitativeRangeEval)
                             if (adoptionGate(p, work, trial, repChain, bestRep, pinBlocks).accepted) {
@@ -307,7 +310,7 @@ internal object C1WindowPolish {
                 if (sh !in 0 until p.K || !p.makesForbiddenRun(work, s, j, sh)) continue
                 if (p.c3wBanned(s, j, sh)) return null
                 val f = tryFixForbiddenRunViaAdjacentDay(p, work, s, j, sh, rng) ?: return null
-                if (f.any { it[1] == j }) return null
+                if (f.any { it[1] == j || p.extBanned(it[0], it[1], it[2]) }) return null
                 for (mv in f) { saved.add(intArrayOf(mv[0], mv[1], work[mv[0]][mv[1]])); work[mv[0]][mv[1]] = mv[2] }
                 out.addAll(f)
             }
@@ -420,6 +423,7 @@ internal object C1WindowPolish {
                         if (shouldStop()) break
                         if (work[i][j] == x || !movable(i, j)) continue
                         if (!inDeficientC1Window(p, work, i, x, d, n, j)) continue
+                        if (p.extBanned(i, j, x)) continue                  // 拡張希望の禁止へは置かない（手A/R1/R2/B 共通）
                         val a = work[i][j]                                  // i の旧シフト
                         // [厳密ピン保護] 手A/手B は i(・i2)の自身のシフト回数を実際に変える(x+1/a-1)唯一の
                         //   手（手R1/R2/R3は同一職員内の日入替のみで回数は代数的に保存される＝対象外）。
@@ -428,7 +432,7 @@ internal object C1WindowPolish {
                         val workBeforeDay = work.copy2D()
                         var done = false
                         for (i2 in 0 until p.S) {
-                            if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a)) continue
+                            if (i2 == i || work[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a) || p.extBanned(i2, j, a)) continue
                             work[i][j] = x; work[i2][j] = a                 // 同日スワップ（被覆不変）
                             val fix = if (PolishGate.c1MoveARepair) moveARepairChain(p, work, i, i2, j, x, a, rng) else null
                             val fixOld = fix?.let { f -> IntArray(f.size) { work[f[it][0]][f[it][1]] } }
@@ -461,7 +465,7 @@ internal object C1WindowPolish {
                         val fires0 = c1RowFires(p, work, i)
                         for (j1 in donors()) {
                             if (done || shouldStop()) break
-                            if (j1 == j) continue
+                            if (j1 == j || p.extBanned(i, j1, a)) continue
                             work[i][j1] = a; work[i][j] = x
                             val gain = fires0 - c1RowFires(p, work, i)
                             work[i][j1] = x; work[i][j] = a                 // 判定用の一時変更は必ず復元
@@ -472,6 +476,7 @@ internal object C1WindowPolish {
                                 if (work[i2][j1] != a || work[i2][j] != x) continue      // 完全鏡像の相手のみ
                                 if (!movable(i2, j1) || !movable(i2, j)) continue
                                 if (!p.mayPlace(i, x) || !p.mayPlace(i2, a)) continue           // 構造上恒真・規律として明示
+                                if (p.extBanned(i2, j1, x) || p.extBanned(i2, j, a)) continue
                                 work[i][j1] = a; work[i][j] = x; work[i2][j1] = x; work[i2][j] = a
                                 val bad3n = p.makesForbiddenRun(work, i, j1, a) || p.makesForbiddenRun(work, i, j, x) ||
                                     p.makesForbiddenRun(work, i2, j1, x) || p.makesForbiddenRun(work, i2, j, a)
@@ -497,7 +502,7 @@ internal object C1WindowPolish {
                         if (a in 0 until p.K) {
                             for (j1 in donors()) {
                                 if (done || shouldStop()) break
-                                if (j1 == j) continue
+                                if (j1 == j || p.extBanned(i, j1, a)) continue
                                 work[i][j1] = a; work[i][j] = x
                                 val gain = fires0 - c1RowFires(p, work, i)
                                 work[i][j1] = x; work[i][j] = a
@@ -528,6 +533,7 @@ internal object C1WindowPolish {
                         //   優先付け（並べ替えのみ・見つからなければ従来どおり）。
                         val chain = findCovUChain(p, work, a, j, rng, exclude = i,
                             c1Pref = { s2, sh, dy -> c1Deficient(s2, sh, dy) })
+                            ?.takeIf { ch -> ch.none { p.extBanned(it[0], it[1], it[2]) } }   // 禁止を含む連鎖は無し扱い
                         val oldVals = chain?.let { ch -> IntArray(ch.size) { work[ch[it][0]][ch[it][1]] } }
                         chain?.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                         val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
@@ -593,6 +599,7 @@ internal object C1WindowPolish {
                         for (s in 0 until p.S) { if (work[s][jx] == x) cx++; if (work[s][jo] == a) ca++ }
                         if (p.covUCell(x, jx, cx - 1) > p.covUCell(x, jx, cx)) continue
                         if (p.covUCell(a, jo, ca - 1) > p.covUCell(a, jo, ca)) continue
+                        if (p.extBanned(i, jx, a) || p.extBanned(i, jo, x)) continue
                         work[i][jx] = a; work[i][jo] = x
                         val bad3n = p.makesForbiddenRun(work, i, jx, a) || p.makesForbiddenRun(work, i, jo, x)
                         if (!bad3n) {
@@ -781,7 +788,7 @@ internal object C1WindowPolish {
                 for (i in 0 until p.S) {
                     if (!p.mayPlace(i, x)) continue
                     for (j in 0 until p.T) {
-                        if (work[i][j] == x || !movable(i, j)) continue
+                        if (work[i][j] == x || !movable(i, j) || p.extBanned(i, j, x)) continue
                         if (inDeficientC1Window(p, work, i, x, d, n, j)) out.add(Triple(ci, i, j))
                     }
                 }
@@ -792,14 +799,14 @@ internal object C1WindowPolish {
             val w = Array(base.size) { base[it].copyOf() }
             val a0 = w[i][j]
             for (i2 in 0 until p.S) {
-                if (i2 == i || w[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a0)) continue
+                if (i2 == i || w[i2][j] != x || !movable(i2, j) || !p.mayPlace(i2, a0) || p.extBanned(i2, j, a0)) continue
                 w[i][j] = x; w[i2][j] = a0
                 return w
             }
             w[i][j] = x
             val chain = findCovUChain(p, w, a0, j, rng, exclude = i,
                 c1Pref = { s2, sh, dy -> c1Deficient(w, s2, sh, dy) })
-            if (chain == null) return w
+            if (chain == null || chain.any { p.extBanned(it[0], it[1], it[2]) }) return w
             chain.forEach { mv -> w[mv[0]][mv[1]] = mv[2] }
             return w
         }

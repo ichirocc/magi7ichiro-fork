@@ -479,7 +479,7 @@ internal object C1JointLnsPolish {
                 // [3.278.0/監査修正] 生 wish>=0 は実現不能な希望（担当外シフトへの希望）まで固定扱いし、
                 //   DP 提案オラクルを過剰ロックしていた（同ファイル他2サイトは 3.264.0 で wishLocked へ統一済みの
                 //   retrofit 漏れ第3サイト）。wishLocked = 実現可能な希望のみ凍結（規約どおり）。
-                val locked = BooleanArray(p.T) { day -> p.wishLocked(i, day) }
+                val locked = BooleanArray(p.T) { day -> p.wishLocked(i, day) || (schedule[i][day] != x && p.extBanned(i, day, x)) }
                 val proposal = C1TemporalDp.solve(
                     row = schedule[i], targetShift = x, rules = rules, locked = locked,
                     maxRelocations = 6, seed = rng.nextLong(), maxExactWindow = 20,
@@ -716,7 +716,8 @@ internal object C1JointLnsPolish {
 
     private fun allowed(p: Problem, staff: Int, day: Int, shift: Int): Boolean {
         val wish = p.lockTo(staff, day)
-        return if (p.wishLocked(staff, day)) wish == shift else p.mayPlace(staff, shift)
+        // 全 Move の置く値はここを通る＝拡張希望の禁止もここで外す
+        return if (p.wishLocked(staff, day)) wish == shift else p.mayPlaceAt(staff, day, shift)
     }
 
     private fun selectBeam(

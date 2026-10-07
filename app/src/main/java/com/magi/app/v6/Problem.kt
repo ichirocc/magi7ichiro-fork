@@ -70,6 +70,18 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
     val placeable: Array<IntArray>
     val placeableHas: Array<BooleanArray>
 
+    /** 拡張希望の禁止表（割当を見ずに作る。希望シフト日は空）。採点は見ない。 */
+    val extBan: ExtWishRules.BanTable = ExtWishRules.banTable(state, S, T, K)
+
+    /** 拡張希望の禁止が 1 セルでもあるか。無ければ候補生成の判定は常に false。 */
+    val hasExtBan: Boolean get() = extBan.flat != null
+
+    /** 最適化器がセル (i,j) に k を置く候補を捨てるか（拡張希望の禁止）。旧値は問わない＝禁止から禁止への手も捨てる。 */
+    fun extBanned(i: Int, j: Int, k: Int): Boolean = extBan.banned(i, j, k)
+
+    /** 置いてよいか（`mayPlace` に拡張希望の禁止を足したもの）。候補生成が読む。 */
+    fun mayPlaceAt(i: Int, j: Int, k: Int): Boolean = mayPlace(i, k) && !extBan.banned(i, j, k)
+
     /** wish[i][j] = desired shift index, or -1. */
     val wish: Array<IntArray> = Array(S) { IntArray(T) { -1 } }
 
