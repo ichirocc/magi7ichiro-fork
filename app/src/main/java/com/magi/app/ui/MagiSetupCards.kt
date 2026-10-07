@@ -376,6 +376,18 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 Switch(checked = ui.ejectionChainSwap, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) },
                     enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
             }
+            Text("2手目以降を探す範囲")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                EjectionChainScope.values().forEach { sc ->
+                    val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
+                    val label = ejectionChainScopeLabel(sc)
+                    if (ui.ejectionChainScope == sc) {
+                        Button(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainScope(sc)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    } else {
+                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetEjectionChainScope(sc)) }, enabled = on, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
+                    }
+                }
+            }
             Text("1回あたりの上限時間（残り時間の4分の1を超えません）")
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 EJECTION_CHAIN_SECONDS.forEach { sec ->
@@ -389,6 +401,12 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
         }
     }
+}
+
+internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
+    EjectionChainScope.MONTH -> "月全体"
+    EjectionChainScope.BY_KIND -> "必須は月全体・他は前後7日"
+    EjectionChainScope.NEARBY -> "前後7日"
 }
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
