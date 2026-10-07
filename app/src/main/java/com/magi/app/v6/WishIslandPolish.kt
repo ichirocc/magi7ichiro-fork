@@ -209,7 +209,9 @@ internal object WishIslandPolish {
             val ka = work[a][d]; val kb = work[b][d]
             if (ka !in 0 until K || kb !in 0 until K) return false
             if (locked(a, d) || locked(b, d)) return false
-            return p.mayPlace(a, kb) && p.mayPlace(b, ka)
+            if (!p.mayPlace(a, kb) || !p.mayPlace(b, ka)) return false
+            // 拡張希望の禁止へは置かない（値が変わる日だけ判定）
+            return ka == kb || (!p.extBanned(a, d, kb) && !p.extBanned(b, d, ka))
         }
 
         /** 窓 [s0..s1] を a と b で丸ごと交換できて、かつ何かが変わるとき真。 */
@@ -291,6 +293,7 @@ internal object WishIslandPolish {
                     if (c == a || c == b || locked(c, d)) continue
                     val kc = work[c][d]; if (kc !in 0 until K || !p.mayPlace(b, kc) || !p.mayPlace(c, ka)) continue
                     if (ka == kb && kb == kc) continue
+                    if ((kb != ka && p.extBanned(a, d, kb)) || (kc != kb && p.extBanned(b, d, kc)) || (ka != kc && p.extBanned(c, d, ka))) continue
                     if ((sameGroup(a, b) && sameGroup(b, c)) != sg) continue
                     yield(Move(MoveKind.ROTATE3, intArrayOf(a, d, kb, b, d, kc, c, d, ka), sg))
                 }

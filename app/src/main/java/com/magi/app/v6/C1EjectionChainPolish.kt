@@ -161,7 +161,7 @@ internal object C1EjectionChainPolish {
                 for (i in 0 until p.S) {
                     if (!p.mayPlace(i, x)) continue
                     for (j in 0 until p.T) {
-                        if (work[i][j] == x || p.wishLocked(i, j)) continue
+                        if (work[i][j] == x || p.wishLocked(i, j) || p.extBanned(i, j, x)) continue
                         if (inDeficientC1Window(p, work, i, x, c.day1, c.day2, j)) seeds.add(Seed("c1", i, j, x))
                     }
                 }
@@ -209,7 +209,7 @@ internal object C1EjectionChainPolish {
                         val i = c[0]; val j = c[1]
                         if (p.wishLocked(i, j)) continue
                         for (k in p.allowedShiftsForStaff(i)) {
-                            if (k == work[i][j]) continue
+                            if (k == work[i][j] || p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
                             // 起点づくりの評価も上限・中断・時間切れに数える（旧: 判定が無く、上限 1 でも 10 回評価した）。
                             if (out()) break
                             val sc = de.previewMove(i, j, k); stats.evaluations++; stats.generated++
@@ -289,7 +289,7 @@ internal object C1EjectionChainPolish {
                         if (!free(i, j)) return
                         val cur = work[i][j]
                         for (k in p.allowedShiftsForStaff(i)) {
-                            if (k == cur) continue
+                            if (k == cur || p.extBanned(i, j, k)) continue
                             stats.generated++
                             val sc = de.previewMove(i, j, k); stats.evaluations++
                             admit(longArrayOf(sc, i.toLong(), j.toLong(), k.toLong(), -1, -1, -1))
@@ -299,6 +299,7 @@ internal object C1EjectionChainPolish {
                     fun considerSwap(i: Int, j: Int, i2: Int, j2: Int) {
                         val x = work[i][j]; val y = work[i2][j2]
                         if (x == y || !free(i, j) || !free(i2, j2) || !p.mayPlace(i, y) || !p.mayPlace(i2, x)) return
+                        if (p.extBanned(i, j, y) || p.extBanned(i2, j2, x)) return
                         stats.generated++
                         de.apply(i, j, y); work[i][j] = y
                         val sc = de.previewMove(i2, j2, x)

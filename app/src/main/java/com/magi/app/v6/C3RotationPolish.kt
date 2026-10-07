@@ -31,6 +31,7 @@ internal object C3RotationPolish {
         // [監査で発見・3.270.0] p.wish[i][j]<0 は実現不能な希望まで動かせないと誤判定していた
         //   （3.183.0 LightMirrorOptimizer と同型のバグ）。wishLocked は canDo ガード込みで正しい。
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
+        fun bannedNew(i: Int, j: Int, k: Int) = k != work[i][j] && p.extBanned(i, j, k)  // 拡張希望の禁止へは置かない
         val windows = intArrayOf(2, 3)   // 連続2日・3日（c3は最大5連日だが2-3日窓でほぼ捕捉）
         var pass = 0
         while (pass < maxPasses) {
@@ -63,6 +64,7 @@ internal object C3RotationPolish {
                             var feasible = true; var same = true
                             for (t in 0 until w) {
                                 if (!p.mayPlace(i, work[i2][j + t]) || !p.mayPlace(i2, work[i][j + t])) { feasible = false; break }
+                                if (bannedNew(i, j + t, work[i2][j + t]) || bannedNew(i2, j + t, work[i][j + t])) { feasible = false; break }
                                 if (work[i][j + t] != work[i2][j + t]) same = false
                             }
                             if (!feasible || same) continue
@@ -125,6 +127,7 @@ internal object C3RotationPolish {
         //   同型のバグ）。実現不能な希望はpref計上上も定数=動かして良い＝canDoガード込みの
         //   wishLocked が正しい判定。安全側（isBetter/checkerが最終ゲート）で候補が広がるのみ。
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
+        fun bannedNew(i: Int, j: Int, k: Int) = k != work[i][j] && p.extBanned(i, j, k)  // 拡張希望の禁止へは置かない
         val windows = intArrayOf(2, 3)
         var pass = 0
         while (pass < maxPasses) {
@@ -160,6 +163,7 @@ internal object C3RotationPolish {
                                 var feasible = true
                                 for (t in 0 until w) {
                                     if (!p.mayPlace(ai, work[bi][j + t]) || !p.mayPlace(bi, work[ci][j + t]) || !p.mayPlace(ci, work[ai][j + t])) { feasible = false; break }
+                                    if (bannedNew(ai, j + t, work[bi][j + t]) || bannedNew(bi, j + t, work[ci][j + t]) || bannedNew(ci, j + t, work[ai][j + t])) { feasible = false; break }
                                 }
                                 if (!feasible) continue
                                 val sa = IntArray(w) { work[ai][j + it] }

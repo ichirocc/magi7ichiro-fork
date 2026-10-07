@@ -81,6 +81,7 @@ internal object C3nMarginLnsPolish {
                         val bestAlts = ArrayList<Int>()
                         val curAtDay = tentative[day]
                         for (alt in alts) {
+                            if (p.extBanned(i, day, alt)) continue   // 拡張希望の禁止へは置かない（現在値は下の f0 で候補に入る）
                             val f = scan.firesAfterSet(day, alt)
                             if (f < bestFires) { bestFires = f; bestAlts.clear(); bestAlts.add(alt) }
                             else if (f == bestFires) bestAlts.add(alt)
@@ -115,7 +116,7 @@ internal object C3nMarginLnsPolish {
                         if (chain == null) { chainOk = false; break }
                         chain.forEach { mv -> work[mv[0]][mv[1]] = mv[2] }
                     }
-                    if (!chainOk) {
+                    if (!chainOk || !p.keepsExtBan(workBefore, work)) {
                         for (s in 0 until p.S) work[s] = workBefore[s].copyOf()
                         continue
                     }

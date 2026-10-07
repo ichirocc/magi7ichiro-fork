@@ -117,6 +117,9 @@ object FixSuggester {
         private fun targetStaff(): List<Int> = if (focus != null) listOf(focus) else countHot.toList()
         private fun targetDays(): List<Int> = if (focus != null) (0 until p.T).toList() else hotDays.toList()
 
+        /** 今の値から変えて拡張希望の禁止を置くか（禁止を置く手は提案しない）。 */
+        private fun banNew(i: Int, j: Int, k: Int) = k != s[i][j] && p.extBanned(i, j, k)
+
         /** [ops] を当てた盤面の report（必ず元へ戻す）。 */
         private fun evalOps(ops: List<FixCell>): ViolationReport {
             val saved = IntArray(ops.size) { s[ops[it].staff][ops[it].day] }
@@ -126,6 +129,7 @@ object FixSuggester {
             return rep
         }
         private fun record(kind: FixKind, ops: List<FixCell>, label: String, rep: ViolationReport) {
+            if (ops.any { banNew(it.staff, it.day, it.toShift) }) return
             found.add(Quad(FixSuggestion(kind, ops, label, rep.hard - base.hard, rep.total - base.total, diffOf(rep)),
                 rep.hard - base.hard, rep.total - base.total, rep.weightedScore - base.weightedScore))
         }
@@ -133,6 +137,7 @@ object FixSuggester {
          *  （[newHardFamilyViolation]。`FixApplyGate` と同じ規則＝提案の時点で弾く。docs/automation.md
          *  「担当外・希望固定・禁止連・個人固定の新規違反なし」）。回数固定（下限＝上限）を崩す手も同じく弾く。 */
         private fun tryOps(kind: FixKind, ops: List<FixCell>, label: String) {
+            if (ops.any { banNew(it.staff, it.day, it.toShift) }) return
             val rep = evalOps(ops)
             if (!betterReport(rep, base) || newHardFamilyViolation(base, rep) != null) return
             val after = s.copy2D().also { w -> for (op in ops) w[op.staff][op.day] = op.toShift }
@@ -160,7 +165,7 @@ object FixSuggester {
                     if (p.wishLocked(i, j)) continue
                     val a = s[i][j]
                     for (k in allowed) {
-                        if (k == a || timeUp()) continue
+                        if (k == a || p.extBanned(i, j, k) || timeUp()) continue
                         tryOps(FixKind.CHANGE, listOf(FixCell(i, j, k)), "${nm(i)} ${dlab(j)} 「${sym(a)}」→「${sym(k)}」")
                     }
                 }
@@ -175,7 +180,7 @@ object FixSuggester {
                     if (timeUp()) break
                     if (p.wishLocked(i, j) || p.wishLocked(i2, j)) continue
                     val a = s[i][j]; val b = s[i2][j]
-                    if (a == b || !p.mayPlace(i, b) || !p.mayPlace(i2, a)) continue
+                    if (a == b || !p.mayPlaceAt(i, j, b) || !p.mayPlaceAt(i2, j, a)) continue
                     tryOps(FixKind.SWAP, listOf(FixCell(i, j, b), FixCell(i2, j, a)),
                         "${nm(i)} 「${sym(a)}」 ↔ ${nm(i2)} 「${sym(b)}」（${dlab(j)}）")
                 }
@@ -199,9 +204,9 @@ object FixSuggester {
                         if (timeUp()) break
                         val j1 = cells[a]; val j2 = cells[b]; val s1 = s[i][j1]; val s2 = s[i][j2]
                         for (k1 in targets) {
-                            if (k1 == s1) continue
+                            if (k1 == s1 || p.extBanned(i, j1, k1)) continue
                             for (k2 in targets) {
-                                if (k2 == s2 || timeUp()) continue
+                                if (k2 == s2 || p.extBanned(i, j2, k2) || timeUp()) continue
                                 tryOps(FixKind.CHANGE_MULTI, listOf(FixCell(i, j1, k1), FixCell(i, j2, k2)),
                                     "${nm(i)} ${dlab(j1)}「${sym(s1)}」→「${sym(k1)}」＋${dlab(j2)}「${sym(s2)}」→「${sym(k2)}」")
                             }
@@ -230,7 +235,7 @@ object FixSuggester {
                         for (j in 0 until p.T) {
                             if (p.wishLocked(i, j)) continue
                             val a = s[i][j]
-                            if (a == x) continue
+                            if (a == x || p.extBanned(i, j, x)) continue
                             s[i][j] = x
                             val rep = UnifiedViolationChecker.check(state, s)
                             val ok = betterReport(rep, bestRep) && newHardFamilyViolation(base, rep) == null && !exactPinRegression(p, s0, s)
@@ -272,7 +277,7 @@ object FixSuggester {
                 val chosen0 = if (focus != null) (ranked.filter { it == focus } + ranked.filter { it != focus }) else ranked
                 var n = minOf(Limits.WINDOW_STAFF, chosen0.size)
                 val cells0 = chosen0.take(Limits.WINDOW_STAFF)
-                val opts0 = cells0.map { p.allowedShiftsForStaff(it).toList() }
+                val opts0 = cells0.map { i -> p.allowedShiftsForStaff(i).filter { k -> !banNew(i, j, k) } }
                 fun combos(m: Int): Long { var c = 1L; for (t in 0 until m) c *= opts0[t].size; return c }
                 while (n > 2 && combos(n) > Limits.WINDOW_COMBOS) n--
                 if (n < 2 || combos(n) > Limits.WINDOW_COMBOS) continue
@@ -323,6 +328,7 @@ object FixSuggester {
                             if (sa == sb && sb == sc) continue
                             // 巡回: a<-sb, b<-sc, c<-sa
                             if (!p.mayPlace(a, sb) || !p.mayPlace(b, sc) || !p.mayPlace(c, sa)) continue
+                            if (banNew(a, j, sb) || banNew(b, j, sc) || banNew(c, j, sa)) continue
                             tryOps(FixKind.SWAP_MULTI, listOf(FixCell(a, j, sb), FixCell(b, j, sc), FixCell(c, j, sa)),
                                 "（3人）${nm(a)}・${nm(b)}・${nm(c)} を ${dlab(j)} で入替")
                         }
@@ -348,7 +354,7 @@ object FixSuggester {
                         if (j2 == j1) continue
                         if (p.wishLocked(i2, j2) || timeUp()) continue
                         val b = s[i2][j2]
-                        if (a == b || !p.mayPlace(i1, b) || !p.mayPlace(i2, a)) continue
+                        if (a == b || !p.mayPlaceAt(i1, j1, b) || !p.mayPlaceAt(i2, j2, a)) continue
                         val label = if (i1 == i2)
                             "${nm(i1)} ${dlab(j1)}「${sym(a)}」 ↔ ${dlab(j2)}「${sym(b)}」（別日）"
                         else

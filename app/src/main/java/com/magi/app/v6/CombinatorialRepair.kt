@@ -103,6 +103,7 @@ object CombinatorialRepair {
         pairCap: Int = 5_000,
     ): ViolationReport {
         rejected.forEach(stats::onFeed)
+        val banP = p ?: cachedProblem(state)
         val t0 = EngineClock.nowMs()   // [3.375.0] 結合探索に費やした時間（summary で出す）
         var bestRep = bestRepIn
         val pool = rejected.toMutableList()
@@ -123,7 +124,8 @@ object CombinatorialRepair {
                     if (shouldStop()) { stats.truncated = true; break@searchK }
                     stats.combosTried++
                     val ops = combo.flatMap { pool[it].ops }
-                    if (!hasCellOverlap(ops)) {
+                    // 結合結果で拡張希望の禁止を新しく置く組合せは採らない（候補が別パス由来でも）
+                    if (!hasCellOverlap(ops) && !placesExtBan(banP, work, ops)) {
                         val saved = IntArray(ops.size) { work[ops[it][0]][ops[it][1]] }
                         var rep: ViolationReport? = null
                         var ok = false
@@ -169,6 +171,9 @@ object CombinatorialRepair {
         leftover?.addAll(pool)
         return bestRep
     }
+
+    private fun placesExtBan(p: Problem, work: Array<IntArray>, ops: List<IntArray>): Boolean =
+        p.hasExtBan && ops.any { op -> op[2] != work[op[0]][op[1]] && p.extBanned(op[0], op[1], op[2]) }
 
     private fun hasCellOverlap(ops: List<IntArray>): Boolean {
         val seen = HashSet<Long>()

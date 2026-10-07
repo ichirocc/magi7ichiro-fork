@@ -111,7 +111,7 @@ object RelaxTrial {
         if (set.size > maxRelaxes) return NoWall
         val r = search(apply(stH, set), schedule, window, shouldStop) ?: return unavailableOrStopped(shouldStop)
         if (shouldStop()) return Stopped
-        val moves = if (r.hard < rep0.hard) diff(schedule, r.board) else emptyList()
+        val moves = if (r.hard < rep0.hard && p0.keepsExtBan(schedule, r.board)) diff(schedule, r.board) else emptyList()   // 拡張希望の禁止を置く手順は出さない
         return Result(staff, day, window, pre, set, rep0.hard, control.hard, controlH.hard, r.hard, moves)
     }
 
@@ -192,7 +192,7 @@ object RelaxTrial {
         for (j in window) for (x in 0 until p.S) for (y in x + 1 until p.S) {
             if (shouldStop()) return null
             val kx = base[x][j]; val ky = base[y][j]
-            if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.mayPlace(x, ky) || !p.mayPlace(y, kx)) continue
+            if (kx == ky || p.wishLocked(x, j) || p.wishLocked(y, j) || !p.mayPlaceAt(x, j, ky) || !p.mayPlaceAt(y, j, kx)) continue
             val nb = base.copy2D(); nb[x][j] = ky; nb[y][j] = kx
             if (UnifiedViolationChecker.check(state, nb.copy2D()).hard > baseHard) continue
             val r = vcr(state, nb, shouldStop)

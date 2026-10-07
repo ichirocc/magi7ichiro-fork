@@ -38,6 +38,7 @@ internal object C2Polish {
                 if (shouldStop()) return false
                 val fromK = work[i][j]
                 if (fromK == shiftIdx || !movable(i, j)) continue
+                if (p.extBanned(i, j, shiftIdx)) continue  // 拡張希望の禁止へは置かない
                 if (p.makesForbiddenRun(work, i, j, shiftIdx)) continue
                 var cntFrom = 0; var cntTo = 0
                 for (s in 0 until p.S) { if (work[s][j] == fromK) cntFrom++; if (work[s][j] == shiftIdx) cntTo++ }

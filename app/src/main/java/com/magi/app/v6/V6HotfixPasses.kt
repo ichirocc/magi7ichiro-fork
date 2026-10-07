@@ -657,6 +657,7 @@ object V6HotfixPasses {
         }
 
         private fun record(applied: Int, rep: ViolationReport?) {
+            stageProbe?.invoke(lastKey, work)
             stageRecords += PostStageRecord(lastKey, applied, lastMs, rep?.hard, rep?.weightedScore, rep?.total, lastFoldRolledBack)
             lastKey = ""
             lastMs = 0L
@@ -669,6 +670,9 @@ object V6HotfixPasses {
         }
 
         companion object {
+            /** 測定・テスト用: 段を畳むたびに (段のキー, 畳んだ後の盤面) を受け取る。本番では null。 */
+            @Volatile internal var stageProbe: ((String, Array<IntArray>) -> Unit)? = null
+
             /** [postChainRunningKeepBest] チェーン内巻き戻しで不採用になった行の目印（`annotateStaleLogsIfRegressed`
              *  の "[棄却盤面の観測] " と同型・別文脈用）。 */
             const val ROLLBACK_MARKER = "[チェーン内巻き戻しで不採用] "
@@ -1171,7 +1175,10 @@ object V6HotfixPasses {
                     //   外れ、そこに座礁した groupViol セルが永久に動かせなくなる。
                     if (!p.wishLocked(i, j)) {
                         val allowed = p.allowedShiftsForStaff(i)
-                        if (allowed.isNotEmpty()) cand[i][j] = allowed[rng.nextInt(allowed.size)]
+                        if (allowed.isNotEmpty()) {
+                            val k = allowed[rng.nextInt(allowed.size)]
+                            if (!p.extBanned(i, j, k)) cand[i][j] = k   // 拡張希望の禁止へは置かない（乱数は従来どおり消費）
+                        }
                     }
                 }
                 t++
@@ -1267,7 +1274,7 @@ object V6HotfixPasses {
                     if (allowed.isNotEmpty()) {
                         val nw = allowed[rng.nextInt(allowed.size)]
                         val old = best[i][j]
-                        if (nw != old) {
+                        if (nw != old && !p.extBanned(i, j, nw)) {
                             best[i][j] = nw
                             val score = ev.fullEval(best)
                             if (score < bestScore) bestScore = score else best[i][j] = old

@@ -76,7 +76,10 @@ internal object HardRepairCore {
     /** 外したセルを何で埋めるか。[希望固定の徹底] 規則 A の間は、希望固定セル（未反映）は埋めシフトでなく希望へ戻す
      *  （希望でも今の値でもない値へは動かさない）。 */
     private fun refill(p: Problem, i: Int, j: Int, fallback: Int, wishPinStrict: Boolean): Int =
-        if ((wishPinStrict || p.pinned(i, j)) && p.wishLocked(i, j)) p.lockTo(i, j) else fallback
+        if ((wishPinStrict || p.pinned(i, j)) && p.wishLocked(i, j)) p.lockTo(i, j)
+        else if (!p.extBanned(i, j, fallback)) fallback
+        // 拡張希望でその日に埋めシフトが禁止なら、置けるシフトのうち禁止でない先頭。全部禁止なら埋めシフトのまま。
+        else p.allowedShiftsForStaff(i).firstOrNull { !p.extBanned(i, j, it) } ?: fallback
 
     internal data class RepairResult(val schedule: Array<IntArray>, val logs: List<MirrorLog>)
 
@@ -109,6 +112,7 @@ internal object HardRepairCore {
                     if (i < 0) break
                     val old = out[i][j]
                     if (old == k) break
+                    if (p.extBanned(i, j, k)) break   // 拡張希望の禁止へは置かない
                     out[i][j] = k
                     cov[j][k]++
                     if (old in 0 until p.K) cov[j][old]--
@@ -129,7 +133,7 @@ internal object HardRepairCore {
                 var bestJ = -1
                 var bestScore = Int.MAX_VALUE
                 for (jj in 0 until p.T) {
-                    if (p.wishLocked(i, jj) || out[i][jj] == k) continue
+                    if (p.wishLocked(i, jj) || out[i][jj] == k || p.extBanned(i, jj, k)) continue
                     val score = CoverageRepairScoring.coverageShortageCost(p, out, jj, out[i][jj]) + rng.nextInt(3)
                     if (score < bestScore) {
                         bestScore = score

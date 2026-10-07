@@ -710,6 +710,20 @@ fun Problem.keepsWishPins(base: Array<IntArray>, cand: Array<IntArray>, strict: 
     return true
 }
 
+/** 拡張希望: `cand` で `base` から値が変わり、新しい値が禁止のセル (i,j)（最終番兵と盤面ごと採る経路の採否）。 */
+fun Problem.extBanNewCells(base: Array<IntArray>, cand: Array<IntArray>): List<Pair<Int, Int>> {
+    if (!hasExtBan) return emptyList()
+    val out = ArrayList<Pair<Int, Int>>()
+    for (i in 0 until minOf(S, base.size, cand.size)) for (j in 0 until minOf(T, base[i].size, cand[i].size)) {
+        val k = cand[i][j]
+        if (k != base[i][j] && extBanned(i, j, k)) out.add(i to j)
+    }
+    return out
+}
+
+/** 拡張希望: `cand` が `base` から禁止のシフトを新しく置いていないか。 */
+fun Problem.keepsExtBan(base: Array<IntArray>, cand: Array<IntArray>): Boolean = !hasExtBan || extBanNewCells(base, cand).isEmpty()
+
 /** [#41] 盤面の手動固定セルがどれも固定の値か（最終番兵）。 */
 fun Problem.holdsManualPins(s: Array<IntArray>): Boolean {
     if (!hasPins) return true

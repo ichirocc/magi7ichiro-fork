@@ -55,18 +55,21 @@ internal object PrePostDescent {
                 0 -> {
                     val pl = p.allowedShiftsForStaff(i0); if (pl.isEmpty()) continue
                     val k = pl[rnd.nextInt(pl.size)]; if (k == cur[i0][j0]) continue
+                    if (p.extBanned(i0, j0, k)) continue   // 拡張希望の禁止へは置かない
                     mi[0] = i0; mj[0] = j0; mk[0] = k; n = 1
                 }
                 1 -> {
                     val b = rnd.nextInt(p.S); if (b == i0 || p.wishLocked(b, j0)) continue
                     val ka = cur[i0][j0]; val kb = cur[b][j0]
                     if (ka == kb || !p.mayPlace(i0, kb) || !p.mayPlace(b, ka)) continue
+                    if (p.extBanned(i0, j0, kb) || p.extBanned(b, j0, ka)) continue
                     mi[0] = i0; mj[0] = j0; mk[0] = kb; mi[1] = b; mj[1] = j0; mk[1] = ka; n = 2
                 }
                 else -> {
                     val j2 = rnd.nextInt(p.T); if (j2 == j0 || p.wishLocked(i0, j2)) continue
                     val ka = cur[i0][j0]; val kb = cur[i0][j2]
                     if (ka == kb || !p.mayPlace(i0, kb) || !p.mayPlace(i0, ka)) continue
+                    if (p.extBanned(i0, j0, kb) || p.extBanned(i0, j2, ka)) continue
                     mi[0] = i0; mj[0] = j0; mk[0] = kb; mi[1] = i0; mj[1] = j2; mk[1] = ka; n = 2
                 }
             }

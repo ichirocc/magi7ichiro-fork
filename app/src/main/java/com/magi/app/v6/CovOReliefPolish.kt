@@ -50,7 +50,7 @@ internal object CovOReliefPolish {
                     if (p.wishLocked(i, j) && p.lockTo(i, j) == k) { pinned++; continue }
                     var tried = false
                     for (m in p.allowedShiftsForStaff(i)) {
-                        if (m == k || p.makesForbiddenRun(work, i, j, m)) continue
+                        if (m == k || p.extBanned(i, j, m) || p.makesForbiddenRun(work, i, j, m)) continue
                         if (!p.wishMoveAllowed(i, j, k, m, wishPinStrict)) continue   // 未反映の希望固定セルは希望へだけ
                         if (p.covOCell(m, j, cov[j][m] + 1) > p.covOCell(m, j, cov[j][m])) continue   // 受け皿なし
                         if (evaluations >= maxEvaluations) break

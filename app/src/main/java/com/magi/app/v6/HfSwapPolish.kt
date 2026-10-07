@@ -124,7 +124,7 @@ internal object HfSwapPolish {
                 for (want in lows) for (give in highs) {
                     if (outOfTime()) break@scan
                     for (j in 0 until p.T) {
-                        if (work[i][j] != give || p.wishLocked(i, j)) continue
+                        if (work[i][j] != give || p.wishLocked(i, j) || p.extBanned(i, j, want)) continue
                         val cand = work.copy2D()
                         cand[i][j] = want
                         val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
@@ -157,7 +157,8 @@ internal object HfSwapPolish {
                         if (allowed.isNotEmpty()) {
                             val old = cand[i][j]
                             cand[i][j] = allowed[rng.nextInt(allowed.size)]
-                            if (cand[i][j] != old) {
+                            // 拡張希望の禁止へは置かない（乱数を引いた後で判定＝禁止なしは従来どおり）
+                            if (cand[i][j] != old && !p.extBanned(i, j, cand[i][j])) {
                                 val rep = UnifiedViolationChecker.check(state, cand, quantitativeRangeEval)
                                 if (betterReport(rep, current) && !exactPinRegression(p, work, cand)) {
                                     work = cand
@@ -217,6 +218,7 @@ internal object HfSwapPolish {
             if (schedule[to][j] != shift && !p.wishLocked(to, j) && p.mayPlace(to, shift) && p.mayPlace(from, schedule[to][j])) toDays.add(j)
         }
         for (jf in fromDays) for (jt in toDays) {
+            if (p.extBanned(from, jf, schedule[to][jt]) || p.extBanned(to, jt, shift)) continue   // 拡張希望の禁止へは置かない
             val cand = schedule.copy2D()
             val tmp = cand[from][jf]
             cand[from][jf] = cand[to][jt]
@@ -241,6 +243,7 @@ internal object HfSwapPolish {
             val a = work[i][j]
             val b = work[i2][j]
             if (a == b || !p.mayPlace(i, b) || !p.mayPlace(i2, a)) continue
+            if (p.extBanned(i, j, b) || p.extBanned(i2, j, a)) continue
             val cand = work.copy2D()
             cand[i][j] = b
             cand[i2][j] = a

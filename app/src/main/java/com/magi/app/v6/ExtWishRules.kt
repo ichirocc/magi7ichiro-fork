@@ -54,16 +54,22 @@ object ExtWishRules {
         if (state.extWishes.any { e -> e.staff == i && e.days.any { dayIndex(state, it) == j } }) MSG_EXT_DAY else null
 
     /**
-     * 第 6 節: 禁止表 [i][j] = 禁止するシフト番号のビット集合（K≤64 は 1 語、超える分は BitSet）。割当は見ない。
-     * 希望シフト日は空。読み込みデータで重なっていた日は [overlaps] に入れて案内に出す。
+     * 第 6 節: 禁止表。[flat] の [(i*T+j)*K+k] が true＝セル (i,j) に k を置くと違反。割当は見ない。
+     * 希望シフト日は空。拡張希望が 1 つも効かなければ [flat]＝null（判定を無料にする）。
+     * 読み込みデータで希望の日と重なっていた (i,j) は [overlaps] に入れて案内に出す。
      */
-    class BanTable(val ban: Array<Array<java.util.BitSet?>>, val overlaps: List<Pair<Int, Int>>) {
-        val isEmpty: Boolean get() = ban.all { r -> r.all { it == null } }
-        fun banned(i: Int, j: Int, k: Int): Boolean = k >= 0 && ban.getOrNull(i)?.getOrNull(j)?.get(k) == true
+    class BanTable(val S: Int, val T: Int, val K: Int, val flat: BooleanArray?, val overlaps: List<Pair<Int, Int>>) {
+        val isEmpty: Boolean get() = flat == null
+        fun banned(i: Int, j: Int, k: Int): Boolean {
+            val f = flat ?: return false
+            if (i < 0 || i >= S || j < 0 || j >= T || k < 0 || k >= K) return false
+            return f[(i * T + j) * K + k]
+        }
     }
 
     fun banTable(state: MagiState, S: Int, T: Int, K: Int): BanTable {
-        val ban = Array(S) { arrayOfNulls<java.util.BitSet>(T) }
+        if (state.extWishes.isEmpty()) return BanTable(S, T, K, null, emptyList())
+        var flat: BooleanArray? = null
         val overlaps = ArrayList<Pair<Int, Int>>()
         val kigou = state.shifts.map { it.kigou }
         for (e in state.extWishes) {
@@ -76,11 +82,11 @@ object ExtWishRules {
                 val j = dayIndex(state, d) ?: continue
                 if (j !in 0 until T) continue
                 if (j in wd) { overlaps.add(i to j); continue }
-                val b = ban[i][j] ?: java.util.BitSet(K).also { ban[i][j] = it }
-                for (k in ks) b.set(k)
+                val f = flat ?: BooleanArray(S * T * K).also { flat = it }
+                for (k in ks) f[(i * T + j) * K + k] = true
             }
         }
-        return BanTable(ban, overlaps.distinct())
+        return BanTable(S, T, K, flat, overlaps.distinct())
     }
 
     /** 第 7 節: 違反セル（"i,j"）。未割当は数えない。 */

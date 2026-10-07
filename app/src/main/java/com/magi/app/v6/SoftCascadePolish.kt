@@ -233,12 +233,12 @@ object SoftCascadePolish {
         }
     }
 
-    /** 希望固定・担当不可（上限 0 を含む `mayPlace`）を崩さず、値が実際に変わる手だけ。 */
+    /** 希望固定・担当不可（上限 0 を含む `mayPlace`）・拡張希望の禁止を崩さず、値が実際に変わる手だけ。 */
     private fun legal(p: Problem, work: Array<IntArray>, m: IntArray): Boolean {
         var x = 0
         while (x < m.size) {
             val i = m[x]; val j = m[x + 1]; val k = m[x + 2]
-            if (k !in 0 until p.K || p.wishLocked(i, j) || !p.mayPlace(i, k) || work[i][j] == k) return false
+            if (k !in 0 until p.K || p.wishLocked(i, j) || !p.mayPlaceAt(i, j, k) || work[i][j] == k) return false
             x += 3
         }
         return true

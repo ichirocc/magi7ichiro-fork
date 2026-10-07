@@ -76,6 +76,9 @@ internal object RestZeroWindowLns {
             return false
         }
 
+        /** 今の値から変えて拡張希望の禁止を置くか（禁止へは置かない）。 */
+        fun banNew(i: Int, j: Int, k: Int): Boolean = k != work[i][j] && p.extBanned(i, j, k)
+
         // 窓の結合: 隣接・重複する対象日は 1 つの窓にまとめ、長すぎる窓は前側を削る。
         val windows = ArrayList<IntRange>()
         for (d in targets) {
@@ -119,11 +122,11 @@ internal object RestZeroWindowLns {
                     if (fixed != null) { holder[idx] = fixed; rec(idx + 1); holder[idx] = -1; return }
                     if (needOn(j) <= 0) { holder[idx] = -1; rec(idx + 1); return }
                     val prev = if (idx > 0) holder[idx - 1] else -1
-                    val cands = (0 until p.S).filter { i -> j in free0[i] && remain[i][k] > 0 && !backwardForbidden(seqBoard, i, j, k) }
+                    val cands = (0 until p.S).filter { i -> j in free0[i] && remain[i][k] > 0 && !banNew(i, j, k) && !backwardForbidden(seqBoard, i, j, k) }
                     for (i in cands) {
                         // 前日の担当者のブロックがここで終わるなら、その人はこの日に休が要る（持ち分に休が無ければ不成立）。
                         val restFor = if (prev >= 0 && prev != i && j in free0[prev]) prev else -1
-                        if (restFor >= 0 && (remain[restFor][rest] <= 0 || backwardForbidden(seqBoard, restFor, j, rest))) continue
+                        if (restFor >= 0 && (remain[restFor][rest] <= 0 || banNew(restFor, j, rest) || backwardForbidden(seqBoard, restFor, j, rest))) continue
                         val old = seqBoard[i][j]
                         seqBoard[i][j] = k; remain[i][k]--; holder[idx] = i
                         if (restFor >= 0) { seqBoard[restFor][j] = rest; remain[restFor][rest]-- }
@@ -183,7 +186,7 @@ internal object RestZeroWindowLns {
                             val i = persons[idx]
                             // 子の上限で打ち切るので、選択肢の順は乱択（決定的 seed）＝先頭の人の第一候補ばかりを深掘りしない。
                             for (k in (0 until p.K).filter { k -> node.remain[i][k] > 0 }.shuffled(rng)) {
-                                if (backwardForbidden(board, i, j, k)) continue
+                                if (banNew(i, j, k) || backwardForbidden(board, i, j, k)) continue
                                 assign[i] = k; cnt[k]++
                                 rec(idx + 1)
                                 cnt[k]--; assign[i] = -1
@@ -213,7 +216,7 @@ internal object RestZeroWindowLns {
                         if (b == a || !p.mayPlace(b, k) || free0[b].isEmpty()) continue
                         for (x in 0 until p.K) {
                             if (x == k || remainAll[b][x] <= 0 || !p.mayPlace(a, x)) continue
-                            val gs = (0 until p.T).filter { g -> g !in w && work[a][g] == x && work[b][g] == k && !p.wishLocked(a, g) && !p.wishLocked(b, g) }
+                            val gs = (0 until p.T).filter { g -> g !in w && work[a][g] == x && work[b][g] == k && !p.wishLocked(a, g) && !p.wishLocked(b, g) && !p.extBanned(a, g, k) && !p.extBanned(b, g, x) }
                                 .sortedBy { g -> minOf(kotlin.math.abs(g - w.first), kotlin.math.abs(g - w.last)) }
                             for (n in 1..minOf(3, remainAll[a][k], remainAll[b][x], gs.size)) cands.add(Transfer(a, b, x, gs.take(n)))
                         }
@@ -259,7 +262,7 @@ internal object RestZeroWindowLns {
                     for (leaf in runBeam(fixed, remainBase, boardBase).sortedBy { it.score }) {
                         if (checkedHere >= config.maxLeafChecks) break
                         if (leaf.score < bestEst) bestEst = leaf.score
-                        if (leaf.board.contentDeepEquals(work)) continue
+                        if (leaf.board.contentDeepEquals(work) || !p.keepsExtBan(work, leaf.board)) continue
                         checked++; checkedHere++
                         val rep = UnifiedViolationChecker.check(state, leaf.board, quantitativeRangeEval)
                         if (bestVerified == null || betterReport(rep, bestVerified!!)) {

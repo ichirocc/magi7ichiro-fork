@@ -40,6 +40,10 @@ object NativeEval {
         val pins = ArrayList<Int>()
         for (i in 0 until s) for (j in 0 until t) if (p.pin[i][j] >= 0) { pins.add(i); pins.add(j); pins.add(p.pin[i][j]) }
         cons.add(pins.size / 3); cons.addAll(pins)
+        // 拡張希望の禁止 [nBan,(i,j,k)*]（採点は読まず、盤面へ書く手の判定 extBanned だけが読む）。
+        val bans = ArrayList<Int>()
+        if (p.hasExtBan) for (i in 0 until s) for (j in 0 until t) for (kk in 0 until k) if (p.extBanned(i, j, kk)) { bans.add(i); bans.add(j); bans.add(kk) }
+        cons.add(bans.size / 3); cons.addAll(bans)
         val c3 = ArrayList<Int>(64)
         for (fam in listOf(p.cons3, p.cons3n, p.cons3m, p.cons3mn)) {
             c3.add(fam.size)

@@ -185,6 +185,8 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                 // [2層目の番兵] 採用前に Kotlin フル再評価で照合（Long の == 比較・許容誤差なし）。
                 //   [照合トグル] OFF=純ネイティブ（照合せず C++結果を信頼）。C++自己整合(status)は上で常時検査済。
                 val bestSol = NativeEval.unflatten(best, s, t)
+                // 拡張希望の禁止へ置いた盤面は採らない（このワーカーは Kotlin で走らせ直す）
+                if (!problem.keepsExtBan(lastSol, bestSol)) return false
                 if (NativeGate.parityCheckEnabled) {
                     TuningTelemetry.parityChecks.incrementAndGet()
                     val kotlinScore = evaluator.fullEval(bestSol)
@@ -266,6 +268,8 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                     //   [照合トグル] OFF=純ネイティブ（照合せず信頼）。C++自己整合(status)は上で常時検査済。
                     NativeBridge.nativeLahcRead(h, 0, bestFlat)
                     val sol = NativeEval.unflatten(bestFlat, s, t)
+                    // 拡張希望の禁止へ置いた盤面は採らない（このワーカーは Kotlin で走らせ直す）
+                    if (!problem.keepsExtBan(lastSol, sol)) return false
                     if (NativeGate.parityCheckEnabled) {
                         TuningTelemetry.parityChecks.incrementAndGet()
                         val kotlinScore = evaluator.fullEval(sol)
@@ -305,7 +309,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             while (problem.wishLocked(i, j) && tries < 4) { j = rng.nextInt(t); tries++ }
             if (problem.wishLocked(i, j)) return@repeat
             val b = problem.allowedShiftsForStaff(i)
-            if (b.isNotEmpty()) cur[i * t + j] = b[rng.nextInt(b.size)]
+            if (b.isEmpty()) return@repeat
+            val k = b[rng.nextInt(b.size)]
+            if (!problem.extBanned(i, j, k)) cur[i * t + j] = k   // 拡張希望の禁止へは置かない
         }
     }
 
@@ -354,7 +360,9 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             if (locked(i, j)) return
             val b = problem.allowedShiftsForStaff(i)
             if (b.isEmpty()) return
-            applyCell(i, j, b[rng.nextInt(b.size)])
+            val k = b[rng.nextInt(b.size)]
+            if (problem.extBanned(i, j, k)) return   // 拡張希望の禁止へは置かない
+            applyCell(i, j, k)
         }
         fun opSwapDays() {
             val i = rng.nextInt(S)
@@ -364,6 +372,7 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             if (locked(i, j1) || locked(i, j2)) return
             val o1 = de.at(i, j1); val o2 = de.at(i, j2)
             if (o1 == o2) return
+            if (problem.extBanned(i, j1, o2) || problem.extBanned(i, j2, o1)) return
             applyCell(i, j1, o2); applyCell(i, j2, o1)
         }
         fun opBlockFill() {
@@ -379,9 +388,18 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
             // [3.341.0] 固定セルを飛ばして「部分的に埋まった窓」を作らない。窓を埋めるのがこの手の
             //   意図で、途中が抜けた窓はその意図を果たさないまま多数のセルを壊すだけだった。
             var q = 0
-            while (q < c.day1) { if (locked(i, js + q)) return; q++ }
+            while (q < c.day1) {
+                if (locked(i, js + q)) return
+                if (de.at(i, js + q) != c.shiftIdx && problem.extBanned(i, js + q, c.shiftIdx)) return
+                q++
+            }
             var l = 0
             while (l < c.day1) { applyCell(i, js + l, c.shiftIdx); l++ }
+        }
+        // 拡張希望の禁止に当たったセルは元の値のまま残す
+        fun lnsCell(i: Int, j: Int) {
+            val k = randShiftFor(i)
+            if (!problem.extBanned(i, j, k)) applyCell(i, j, k)
         }
         fun opLns() {
             // [3.341.0] 破壊する集合を先に決め、固定セルが混ざっていたら手ごと見送る（部分適用しない）。
@@ -389,14 +407,14 @@ class SaOptimizer(private val problem: Problem, private val evaluator: Evaluator
                 0 -> { val i = rng.nextInt(S); val cnt = 2 + rng.nextInt(min(7, T))
                     val js = IntArray(cnt) { rng.nextInt(T) }
                     if (js.any { locked(i, it) }) return
-                    for (j in js) applyCell(i, j, randShiftFor(i)) }
+                    for (j in js) lnsCell(i, j) }
                 1 -> { val j = rng.nextInt(T)
                     for (i in 0 until S) if (locked(i, j)) return
-                    for (i in 0 until S) applyCell(i, j, randShiftFor(i)) }
+                    for (i in 0 until S) lnsCell(i, j) }
                 else -> { val cnt = 3 + rng.nextInt(8)
                     val cells = Array(cnt) { intArrayOf(rng.nextInt(S), rng.nextInt(T)) }
                     if (cells.any { locked(it[0], it[1]) }) return
-                    for (c2 in cells) applyCell(c2[0], c2[1], randShiftFor(c2[0])) }
+                    for (c2 in cells) lnsCell(c2[0], c2[1]) }
             }
         }
         val hasC1 = problem.cons1.isNotEmpty()
