@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 停滞脱出の台帳 `docs/stall_escape.md`（2026-10-08、文書のみ・コード不変）: ウォッチドッグ（閾値の式と 300 s/60 s の実値・頭打ちの床 4 種・発火後）、適応ポートフォリオの再配属、RSI の focus/HF63/N4、SA ラダー、後処理の打ち切り、否決一覧を層 A〜E で 1 か所へ。README 目次・topics・portfolio・backlog から参照。  → `docs/history/3.4xx.md`
 - 許容 6% の無害化②を外すスイッチを設定タブへ（2026-10-08、3.638.0、出力不変）: 「容認 6% で重い違反の増加も許す」（じっくりでだけ有効・既定 OFF）。`UiState.aptFairToleranceUnguarded`＝`!AptFairPolish.heavySoftGuard`、`PolishGate.snapshot` に載せ背景実行へ引き継ぐ。C# 同日同期。  → `docs/history/3.4xx.md`
 - 許容 6% の無害化②を外す測定（2026-10-08、3.637.0、出力不変）: 測定スイッチ `AptFairPolish.heavySoftGuard`・腕 `aptfairtolunguarded`。画面の盤面では②なしは他の人の apt に予算を使い山本 Dﾃ は 7→8＝目的に当たらない。起点指定の玉突き DFS なら 6% 予算内で 7→3（+0.8%）。230 ペアのベンチは旧 114／新 75（p=0.0056）・速度 −55%＝②は外さない。  → `docs/history/3.4xx.md`
 - 実機ログ精査の表示 2 件（2026-10-08、3.636.0）: 設定ミス/案内のログ 12 件打ち切りに「ほか N 件」、追加精製の段名に「追加精製」前置。精査の結論（必須 8 件は設定由来、Aｱ 目標合計超過・Cｱ 上限不足・桒澤 32 日・休の必要人数 0）。  → `docs/history/3.4xx.md`
