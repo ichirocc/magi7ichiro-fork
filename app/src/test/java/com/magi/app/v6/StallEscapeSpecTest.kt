@@ -168,6 +168,7 @@ class StallEscapeSpecTest {
         assertFalse(PolishGate.stallPolishInjection)
         assertFalse(PolishGate.postChainRollbackCountsZero)
         assertEquals(WishFloorMode.OFF, PolishGate.wishConflictFloorMode)
+        assertTrue(PolishGate.c3nWallShortStall)
         assertEquals(2, V6FinalPort.STALL_OVERRIDE_FACTOR)
         assertEquals(5000, Hf63Infeasibility.INFEAS_STALL_ITERS)
         assertEquals(3, StallPolishInjection.MAX_INJECTIONS)

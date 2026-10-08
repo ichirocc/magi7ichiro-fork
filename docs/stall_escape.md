@@ -126,7 +126,7 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
 - `hardFloor` は §4 の構造的 covU 床（1 回だけ算出）。「非 covU HARD = 0」を併せるのは、群外の過配置が covU を床より見かけ上へこませても、解ける groupViol が残る間は長い閾値で粘るため。
 - `wishC3wProven` は `wishConflictFloorMode == OFF`（既定）なら 0。ON のときは希望衝突由来の c3w 件数なので、`nonCovUAllC3n` は文字通り「c3n 以外が全部 0」ではない。
 - `c3nWallProven` の診断（約 20 ms）は、内訳条件を満たし無改善が `shortStall` を超えた後に遅延実行し、`(bestVersion, result)` を単一 `AtomicReference` で保持する（3.592.0）。
-- `c3nWallPlateau` は限定した手の壁判定（§4）で**閾値を短縮する**（300 s 予算で 270 s → 37.5 s）だけで、即停止ではない。動機は実機ログ「c3n=1 のまま 150 s 無改善でも 270 s 閾値で発火不能」（3.281.0）。早期終了全体の品質差は 3.341.1 で非有意（§11）。多セル交換で崩せる c3n を短縮で取り逃がす可能性は残る＝測るならここ。
+- `c3nWallPlateau` は限定した手の壁判定（§4）で**閾値を短縮する**（300 s 予算で 270 s → 37.5 s）だけで、即停止ではない。動機は実機ログ「c3n=1 のまま 150 s 無改善でも 270 s 閾値で発火不能」（3.281.0）。早期終了全体の品質差は 3.341.1 で非有意（§11）。多セル交換で崩せる c3n を短縮で取り逃がす可能性は残る。3.641.0 で測った（§11、sample_v6×5 seed）: 120 s では損失なし、60 s では短縮なしが 1.6% 良い（時間 1.75 倍）、300 s では 0.7% 良い（時間 2.35 倍、非有意）。測定スイッチは `PolishGate.c3nWallShortStall`。
 - `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。ON の副作用（解ける HARD を残したまま短縮）は「残る HARD が全て希望由来」を条件に含めることで防ぐ設計。実機 A/B は HARD=床の盤面待ち。
 - 「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず解ける HARD を早々に諦めていた＝構造的 covU へ是正済み。
 
@@ -306,6 +306,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 | `PolishGate.aptFairSoftTolerance` | false（「じっくり」で ON） | apt/fair 限定の採用例外。`AptFairPolish.heavySoftGuard`（既定 true、3.637.0）は無害化②の測定スイッチ |
 | `PolishGate.prePostDescent` | false | 後処理前の局所降下 |
 | `PolishGate.normalStallFraction` | 0.9（UI なし） | §5.1 の `fraction` |
+| `PolishGate.c3nWallShortStall` | true（UI なし） | false で c3n 壁による短縮を外す（測定用、3.641.0） |
 
 撤去済みで現行仕様ではないもの: 残差ベース 4 段脱出 `adaptiveEscapeControl`／`StagnationEscapeController`（3.409.21 単体 A/B 中立）、ロール内並列 SA `portfolioRoleParallelSa`（同）、採用 0 の巡で LNS・VCR を 2 倍にする `stallEscalation`（3.511.1 全件無変化、2026-09-25 撤去）。
 
@@ -313,6 +314,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 
 | 値・案 | 決定 | 根拠（測定条件） |
 |---|---|---|
+| c3n 壁による短縮（`c3nWallPlateau`） | 据え置き（2026-10-08、`PolishGate.c3nWallShortStall` 既定 true） | sample_v6×5 seed・同一 seed・workers 4: 120 s は短縮なし 2 勝 3 敗・平均 +8.8 で損失なし（時間 46→119 s）、60 s は短縮なし 5 勝 0 敗・−1.6%（時間 33→58 s）、300 s は短縮なし 4 勝 1 敗・−0.7%（時間 127→299 s、p≈0.19）。緩めるなら時間と品質の交換＝業務判断 |
 | `normalStallFraction` 0.9 | 据え置き（2026-10-07） | 0.5 は 3.423.0 で 6 勝 3 敗・非有意（3 fixture×2 条件×3 反復＝18 run、RSI・workers=1・60 s）、blocked_covu 型 15 ペアでも再現せず（3.447.0）。外部提案「60〜90 s」は前提不成立（余りは後処理へ回らない、実機 #1 は 80 s の空白後に最終改善） |
 | 早期終了そのもの | 維持 | 外すと weighted 中央 −3.5%（U 検定 p≈0.075、非有意）で時間 2.3 倍（3.341.1: golden 120 s×5 回） |
 | 余った予算を soft 研磨へ | 否決 | 時間が余るのは hard=0 のときだけ（120 s・workers=4・実データ 3 件）。穏当版も「5 回中 4 回以上が現行中央値より良い」に対し 2/5（3.341.1） |
@@ -324,8 +326,9 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 | 停滞時の後処理差し込み | 既定 OFF 温存 | 240 s／300 s（PORTFOLIO は 211 s 以上でしか選ばれない）: 採用 32/43 回だが最終 8 勝 7 敗・重み +1291・HARD 退行 0（2026-10-07） |
 | 残差ベース 4 段脱出／ロール内並列 SA | 撤去 | 単体 A/B 各 15 ペア（3 データセット、1 プロセス=1 実行）で中立（3.409.21） |
 | 再配属を 2 エポック連続無改善まで遅らせる | 否決 | 3 データ×2 seed・45 s・8 ワーカー: fixture 4 勝、実データで +291 悪化、p≈0.19（§6.2） |
+| 同点以上を受理する歩き→後処理（プラトー探索 C＝後処理前の貪欲な局所降下 `PrePostDescent`） | 否決・既定 OFF で測定用に残す | 決定的 LoopBench 46×3 で 91 勝 23 敗だが、実時間 handleOptimize 15 組で ON 4 勝 11 敗・平均 weighted +110（2026-10-07） |
 
-開いている案: 同点以上を受理する歩き→後処理（プラトー探索 C、32-10／36-6）は別案として測る。停滞時の探索半径・職員数・窓長の段階的拡大は backlog #13(a)。
+開いている案: 停滞時の探索半径・職員数・窓長の段階的拡大は backlog #13(a)。
 
 ## 12. 判定に使うログの行
 

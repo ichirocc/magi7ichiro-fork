@@ -284,6 +284,9 @@ object PolishGate {
     /** 後処理チェーンの先頭で貪欲な局所降下（`PrePostDescent`）をかける。既定 **false**（測定中）。 */
     @Volatile var prePostDescent: Boolean = false
 
+    /** 測定用（`docs/stall_escape.md` §5.3）: c3n 壁（ForbiddenDiag の限定した手の壁判定）で停滞閾値を短縮するか。false＝c3n だけが残っても通常閾値で粘る。既定 **true**。 */
+    @Volatile var c3nWallShortStall: Boolean = true
+
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
     fun snapshot(): Map<String, Any> = mapOf(
@@ -296,7 +299,7 @@ object PolishGate {
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
         "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
-        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard,
+        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -314,7 +317,7 @@ object PolishGate {
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
         b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
-        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }
+        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }
     }
 }
 

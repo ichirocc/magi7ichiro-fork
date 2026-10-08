@@ -637,7 +637,7 @@ object V6FinalPort {
             //   plateau（解けないHARD）として stallHardMs へ移行（実機ログの「c3n=1のまま150s無改善でも
             //   270s閾値のため発火不能」を解消）。診断は停滞が stallHardMs を超えてから遅延実行（~20ms/世代1回）。
             val nonCovU = wd.bestNonCovUHard.get()
-            val wall = nonCovU > 0 && wd.bestNonCovUAllC3n.get() &&
+            val wall = PolishGate.c3nWallShortStall && nonCovU > 0 && wd.bestNonCovUAllC3n.get() &&
                 wd.bestHard.get() <= hardFloor + nonCovU &&
                 now - wd.lastBestImproveMs.get() > stallHardMs && c3nWallProven()
             val effStall = effectiveStallMs(
