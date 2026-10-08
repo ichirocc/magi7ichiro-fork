@@ -113,6 +113,55 @@ class StallEscapeSpecTest {
         assertEquals(0, AdaptiveHypothesisEpochPolicy.nextStagnantEpochs(3, improvedThisEpoch = true))
     }
 
+    private fun rep(hard: Int, weighted: Double, total: Int, vararg fams: Pair<String, Int>): ViolationReport = ViolationReport(
+        violations = emptyMap(), needViolations = emptyMap(), countViolations = emptyMap(),
+        breakdown = fams.toMap(), total = total, hard = hard, soft = total - hard, weightedScore = weighted,
+    )
+
+    // §5.2 停滞ラッチは改善報告で降りる（永続ラッチではない）
+    @Test fun stagnationLatchClearsOnImprovementAndStaysOnNonImprovement() {
+        val wd = V6FinalPort.WatchdogBest(startMs = 0L)
+        assertTrue(wd.observe(rep(1, 100.0, 5), nowMs = 1_000L, observedIters = 10L, beatsInput = { true }, wishC3wProven = 0))
+        assertEquals(1_000L, wd.lastBeatInputMs.get())
+        wd.fire(nowMs = 300_000L, observedIters = 500L, byOverride = true)
+        assertTrue(wd.stagnationFired.get()); assertEquals(299_000L, wd.stagnationDurationMs.get()); assertEquals(500L, wd.stagnationIters.get())
+        assertTrue(wd.stagnationByOverride.get())
+        assertFalse("悪化は改善でない＝ラッチは立ったまま", wd.observe(rep(1, 101.0, 5), 301_000L, 600L, { false }, 0))
+        assertTrue(wd.stagnationFired.get())
+        assertTrue("改善でラッチが降りる", wd.observe(rep(1, 99.0, 5), 302_000L, 700L, { false }, 0))
+        assertFalse(wd.stagnationFired.get()); assertEquals(-1L, wd.stagnationDurationMs.get()); assertEquals(-1L, wd.stagnationIters.get())
+        assertFalse(wd.stagnationByOverride.get())
+        assertEquals(302_000L, wd.lastBestImproveMs.get()); assertEquals(700L, wd.lastBestImproveIters.get())
+        assertEquals("入力を上回らない改善では lastBeatInputMs は動かない", 1_000L, wd.lastBeatInputMs.get())
+        assertEquals(2, wd.bestVersion.get())
+    }
+
+    @Test fun observeTracksNonCovUHardAndC3nOnlyFlag() {
+        val wd = V6FinalPort.WatchdogBest(startMs = 0L)
+        var beatsAsked = 0
+        assertFalse("改善でなければ beatsInput は評価しない", wd.observe(rep(Int.MAX_VALUE, Double.MAX_VALUE, Int.MAX_VALUE), 1L, 0L, { beatsAsked++; true }, 0))
+        assertEquals(0, beatsAsked)
+        wd.observe(rep(3, 9000.0 * 3, 3, "c3n" to 2, "covU" to 1), 10L, 1L, { true }, 0)
+        assertEquals(2, wd.bestNonCovUHard.get()); assertTrue(wd.bestNonCovUAllC3n.get())
+        wd.observe(rep(2, 9000.0 * 2, 2, "c3n" to 1, "pref" to 1), 20L, 2L, { true }, 0)
+        assertEquals(2, wd.bestNonCovUHard.get()); assertFalse("pref が残れば c3n だけではない", wd.bestNonCovUAllC3n.get())
+        wd.observe(rep(1, 9000.0, 1, "c3w" to 1), 30L, 3L, { true }, 1)
+        assertFalse("c3w ≤ wishC3wProven でも c3n > 0 が要る", wd.bestNonCovUAllC3n.get())
+        assertEquals(3, wd.bestVersion.get())
+    }
+
+    // §7.2 回避集合: SOFT は avoid に入らない、静的 covU 床、冷却は focusAvoid だけ
+    @Test fun avoidSetsKeepSoftFocusableAndSeparateCooldown() {
+        val (avoid, focusAvoid) = RsiFocusSelection.avoidSets(setOf("c1", "low", "c3n", "covO"), covU = 3, covUFloor = 0, cooldownFocus = null)
+        assertEquals(setOf("c3n"), avoid); assertEquals(setOf("c3n"), focusAvoid)
+        val (a2, f2) = RsiFocusSelection.avoidSets(setOf("pref"), covU = 2, covUFloor = 2, cooldownFocus = "c1")
+        assertEquals(setOf("pref", "covU"), a2); assertEquals(setOf("pref", "covU", "c1"), f2)
+        val (a3, _) = RsiFocusSelection.avoidSets(emptySet(), covU = 3, covUFloor = 2, cooldownFocus = null)
+        assertTrue("床より上の covU は焦点に残る", a3.isEmpty())
+        val (a4, _) = RsiFocusSelection.avoidSets(emptySet(), covU = 0, covUFloor = 0, cooldownFocus = null)
+        assertTrue("床 0 は no-op", a4.isEmpty())
+    }
+
     // §10 既定 OFF と既定値
     @Test fun defaultsMatchTheSpec() {
         assertEquals(0.9, PolishGate.normalStallFraction, 0.0)

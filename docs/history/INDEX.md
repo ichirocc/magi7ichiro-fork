@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 停滞脱出仕様の残件（2026-10-08、3.640.0、出力不変、ユーザー「残件対応する」）: `V6FinalPort.WatchdogBest`（bestHard/最終改善時刻/非 covU 内訳/世代/停滞ラッチを 1 クラスへ、`observe`/`fire`）と `RsiFocusSelection.avoidSets`（avoid＝HARD のみ＋静的 covU 床、focusAvoid＝＋冷却）を閉包から切り出し、§13 の未固定 2 点（ラッチは改善で降りる・SOFT は avoid に入らない）を `StallEscapeSpecTest` に 3 件追加。`EarlyStop` 行に「発火種別=通常／猶予上書き」（敵対検証の未集計項目を実機ログから読めるように）。C# 同日同期。  → `docs/history/3.4xx.md`
 - 停滞脱出仕様を実行可能に（2026-10-08、3.639.0、出力不変、ユーザー「停滞脱出仕様を実装する」）: `V6FinalPort.watchdogBudget`（minRun/postReserve/searchWindow/stall/stallHard/phaseGrace を 1 つの純関数へ）・`progressImproved`（1e-6 の監視判定）を抽出し本体から使う。`StallEscapeSpecTest`（13 件）が §5.1 の 300 s/60 s/20 s の表・発火式の厳密境界・STOP_CONFIRM 5 s・HF63 の 13 族・effortIters の式・層 B の量子・既定値を固定。C# 同日同期（`WatchdogBudgetOf`/`ProgressImproved`、`StallEscapeSpecTest.cs`）。  → `docs/history/3.4xx.md`
 - 停滞脱出の台帳を実装準拠仕様へ書き直し（2026-10-08、文書のみ、ユーザー「仕様書を書き直してください」）: 外部仕様書の構造（層の地図・比較と監視の契約・保証の範囲・根拠の強さ・状態の寿命・レビュー手順）に、台帳の数値表・据え置き決定・否決一覧・ログ行を統合。main 4af3456 の条件式で全項目を照合。  → `docs/history/3.4xx.md`
 - 停滞脱出の台帳の是正 4 点（2026-10-08、文書のみ）: 外部の実装準拠仕様書との照合で、`stagnationFired` は改善で降りる（永続ラッチではない、3.346.0）・進捗監視だけ weightedScore に 1e-6 許容差・c3n 壁は限定した手の壁判定で全空間の証明ではない・「品質への影響なし」は保持済み最良の非悪化の意味。HF63 の追跡 13 族と N4 の avoid が HARD のみである点を明記。  → `docs/history/3.4xx.md`

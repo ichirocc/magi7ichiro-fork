@@ -111,7 +111,7 @@ fraction     = PolishGate.normalStallFraction（既定 0.9、有限かつ 0 < f 
 stagnationFired = false; stagnationDurationMs = −1; stagnationIters = −1
 ```
 
-**`stagnationFired` は永続ラッチではない**（3.346.0 で是正）。フェーズ文字列の変化は別時計 `lastPhaseChangeMs` だけを更新し、`lastBestImproveMs` には触れない。
+**`stagnationFired` は永続ラッチではない**（3.346.0 で是正。実装は `V6FinalPort.WatchdogBest.observe`／`fire`）。フェーズ文字列の変化は別時計 `lastPhaseChangeMs` だけを更新し、`lastBestImproveMs` には触れない。
 
 ### 5.3 通常閾値と短い閾値の選択
 
@@ -144,6 +144,7 @@ fired   = now − S > minRun
 - 上書き条件 `stalled > effStall × 2` はフェーズ更新の頻度に依存しない（`stalled` だけで決まる）＝フェーズ文字列がどれだけ頻繁に変わっても、無改善が閾値の 2 倍に達すれば発火する。通常発火と上書き発火の比率は未集計（`Watchdog` 行の「未発火の理由」から集計できる）。
 - 旧実装の `max(lastBestImprove, lastPhaseChange)` 単一時計は、20〜90 s ごとのフェーズ遷移で 270 s に届かなかった（3.230.0）。
 - `shouldStop` は `now ≥ searchEnd ∨ キャンセル` を先に判定する。締切による停止と停滞発火は別の理由。
+- 発火時に「猶予の中で 2 倍に達した」かを `WatchdogBest.fire(byOverride)` に記録し、`EarlyStop` 行に「発火種別=通常／猶予上書き」と出す（3.640.0）＝比率は実機ログから数える。
 
 ### 5.5 並列探索への伝達
 
@@ -233,7 +234,7 @@ avoid        = dynamicAvoid ∩ MirrorKeys.hard；covUFloor > 0 ∧ covU ≤ cov
 focusAvoid   = avoid + cooldownFocus（存在すれば）
 ```
 
-HF63 は SOFT の推定値を持ち得るが、**SOFT を恒久回避へ入れる実装ではない**。
+HF63 は SOFT の推定値を持ち得るが、**SOFT を恒久回避へ入れる実装ではない**（`RsiFocusSelection.avoidSets`、`StallEscapeSpecTest` で固定）。
 
 ### 7.3 focus 選択（`RsiFocusSelection.maxViolatedFamily`）
 
@@ -344,7 +345,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 4. 制御変更は 1 件ずつ、同じ入力・seed・予算で最終 hard・weightedScore・total・経過時間を比較する（`tools/loop/run_bench.sh`、`MAGI_BENCH_FEATURE`）。実行中の採用数や AUC では採否を決めない。実データでは final を見る。
 5. 重み・閾値・探索幅を文書整理のついでに変えない（HF77＝明示数値指示＋1 件ずつ）。
 6. 層 A・B の純関数を変えたらテスト（`StallEscapeSpecTest`＝この文書の表と境界、`V6FinalPortTest`・`WishConflictFloorTest`・`HypothesisEpochPolicyTest`・`Hf63InfeasibilityTest`・`StallPolishInjectionTest`、C# `StallEscapeSpecTest`・`V6FinalPortWatchdogTest`）を同じコミットで更新し、採否を `docs/algorithm_portfolio.md` と `docs/history/` へ書く。
-   未固定（閉包内で純関数化していない）: `stagnationFired` が改善で降りること、`runRsi` の `avoid` に SOFT が入らないこと。
+   `stagnationFired` が改善で降りること（`WatchdogBest.observe`）と `runRsi` の `avoid` に SOFT が入らないこと（`RsiFocusSelection.avoidSets`）も `StallEscapeSpecTest` が固定する。
 
 推奨レビューケース:
 

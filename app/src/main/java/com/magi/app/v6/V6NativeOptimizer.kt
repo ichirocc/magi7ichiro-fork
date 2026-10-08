@@ -1896,13 +1896,11 @@ object V6NativeOptimizer {
             //   deprioritize は真に構造的な HARD（covU 床/c3n/pref/groupViol）のみに限定し、SOFT は常に focusable に
             //   保つ（SOFT の同一 focus 空転は cooldownFocus の1R休止＋keep-best＋有限ラウンドで自己収束）。
             //   N4 早期終了の武装判定（下記）は従来どおり dynamicAvoid（全族）で行い、pivot 可否は avoid(HARD) で判定する。
-            val avoid = dynamicAvoid.filterTo(mutableSetOf()) { it in MirrorKeys.hard }
             // [静的covU床] covU が構造的下限（covUFloor）に達している間は解けないので focus から即除外する。
             //   合法配置では covU >= covUFloor（下限）。担当外配置(groupViol)が混在すると covU が床を下回り得るが、
             //   その間 covU を focus しても無意味（groupViol が hard-first で先に選ばれる）なので `<=` で除外が正しい。
-            if (covUFloor > 0 && (bestReport.breakdown["covU"] ?: 0) <= covUFloor) avoid.add("covU")
             // [E9] 冷却は focus 選択にのみ合流（HF63 ログ・N4 発火条件には混ぜない＝恒久判定と区別）。
-            val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus!! else avoid
+            val (avoid, focusAvoid) = RsiFocusSelection.avoidSets(dynamicAvoid, bestReport.breakdown["covU"] ?: 0, covUFloor, cooldownFocus)
             // [測定中/backlog#28] 既定OFF時はround（従来どおりrunRsi呼出し単位でリセット）。ONならhf63が
             //   持続するカウンタを使い、apt/covOの周期枠(%3)をエポック跨ぎで維持する。1ラウンドにつき1回だけ
             //   進め、下段の早期終了判定(pivot)にも同じ値を使う（そちらで再度進めない）。
