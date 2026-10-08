@@ -77,7 +77,7 @@ weightedScore は実際には整数値（`MirrorKeys.weights` は全て整数、
 
 ## 5. 層 A — 実行全体の停止監視
 
-実装: `V6FinalPort.handleOptimize`、純関数 `normalStallMs`／`effectiveStallMs`／`watchdogStagnationFired`／`wishFloorReached`（`V6FinalPortTest`・`WishConflictFloorTest`）。
+実装: `V6FinalPort.handleOptimize`、純関数 `watchdogBudget`（§5.1 の表）／`normalStallMs`／`effectiveStallMs`／`watchdogStagnationFired`／`wishFloorReached`／`progressImproved`（§3.2）（`StallEscapeSpecTest`・`V6FinalPortTest`・`WishConflictFloorTest`）。
 
 ### 5.1 時間の切り方
 
@@ -101,7 +101,7 @@ fraction     = PolishGate.normalStallFraction（既定 0.9、有限かつ 0 < f 
 | 300 s | 275 s | 45 s | 270 s | 37.5 s | 7.5 s | 25 s |
 | 60 s | 52 s | 10 s | 46.8 s（フォールバック） | 15 s | 2 s | 8 s |
 
-20 s の下限があるため、予算が短いと通常閾値が探索区間内に届かないことがある（例: 20 s 予算は区間 12 s・閾値 20 s）。「フォールバックすれば必ず発火し得る」とは読まない。
+20 s／15 s の下限があるため、予算が短いと閾値が探索区間内に届かないことがある（例: 20 s 予算は区間 12 s に対し通常 20 s・短い閾値 15 s＝停滞発火は起きず締切だけで止まる）。「フォールバックすれば必ず発火し得る」とは読まない。`StallEscapeSpecTest` がこの表を固定する。
 
 ### 5.2 改善報告で更新する状態
 
@@ -343,7 +343,8 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 3. 「現行コードの事実」「過去測定」「推論」「提案」を分ける。改善不能の根拠は §4 の 4 種に分ける。
 4. 制御変更は 1 件ずつ、同じ入力・seed・予算で最終 hard・weightedScore・total・経過時間を比較する（`tools/loop/run_bench.sh`、`MAGI_BENCH_FEATURE`）。実行中の採用数や AUC では採否を決めない。実データでは final を見る。
 5. 重み・閾値・探索幅を文書整理のついでに変えない（HF77＝明示数値指示＋1 件ずつ）。
-6. 層 A・B の純関数を変えたらテスト（`V6FinalPortTest`・`WishConflictFloorTest`・`HypothesisEpochPolicyTest`・`Hf63InfeasibilityTest`・`StallPolishInjectionTest`、C# `V6FinalPortWatchdogTest`）を同じコミットで更新し、採否を `docs/algorithm_portfolio.md` と `docs/history/` へ書く。
+6. 層 A・B の純関数を変えたらテスト（`StallEscapeSpecTest`＝この文書の表と境界、`V6FinalPortTest`・`WishConflictFloorTest`・`HypothesisEpochPolicyTest`・`Hf63InfeasibilityTest`・`StallPolishInjectionTest`、C# `StallEscapeSpecTest`・`V6FinalPortWatchdogTest`）を同じコミットで更新し、採否を `docs/algorithm_portfolio.md` と `docs/history/` へ書く。
+   未固定（閉包内で純関数化していない）: `stagnationFired` が改善で降りること、`runRsi` の `avoid` に SOFT が入らないこと。
 
 推奨レビューケース:
 

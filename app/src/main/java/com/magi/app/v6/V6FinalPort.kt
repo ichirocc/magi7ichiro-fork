@@ -246,6 +246,32 @@ object V6FinalPort {
         return (searchWindowMs * fraction).toLong().coerceAtLeast(20_000L)
     }
 
+    /** 停滞ウォッチドッグの時間の切り方（`docs/stall_escape.md` §5.1 の表）。純関数＝`StallEscapeSpecTest` が表の値を固定する。 */
+    internal data class WatchdogBudget(
+        val minRunMs: Long, val postReserveMs: Long, val searchDeadlineMs: Long, val searchWindowMs: Long,
+        val stallMs: Long, val stallHardMs: Long, val phaseGraceMs: Long,
+    )
+
+    internal fun watchdogBudget(
+        budgetMs: Long, startMs: Long, hardDeadlineMs: Long,
+        fraction: Double = PolishGate.normalStallFraction,
+    ): WatchdogBudget {
+        val minRunMs = (budgetMs / 6).coerceIn(8_000L, 45_000L).coerceAtMost(budgetMs)
+        val postReserveMs = (budgetMs / 12).coerceIn(8_000L, 25_000L).coerceAtMost(budgetMs / 2)
+        val searchDeadlineMs = (hardDeadlineMs - postReserveMs).coerceAtLeast(startMs + minRunMs)
+        val searchWindowMs = searchDeadlineMs - startMs
+        return WatchdogBudget(
+            minRunMs = minRunMs, postReserveMs = postReserveMs, searchDeadlineMs = searchDeadlineMs, searchWindowMs = searchWindowMs,
+            stallMs = normalStallMs(budgetMs, searchWindowMs, fraction),
+            stallHardMs = (budgetMs / 8).coerceAtLeast(15_000L),
+            phaseGraceMs = (budgetMs / 40).coerceIn(2_000L, 15_000L),
+        )
+    }
+
+    /** 進捗監視の「改善」判定（`docs/stall_escape.md` §3.2）。採否の [betterReport] とは別契約＝weightedScore にだけ 1e-6 の許容差。 */
+    internal fun progressImproved(h: Int, wgt: Double, t: Int, bh: Int, bWeighted: Double, bTotal: Int): Boolean =
+        h < bh || (h == bh && wgt < bWeighted - 1e-6) || (h == bh && wgt <= bWeighted + 1e-6 && t < bTotal)
+
     fun getAlgorithmLabel(seconds: Int): AlgorithmLabel = when {
         // name は設定画面の「おまかせ」の説明に出る＝方式チップ（v6AlgorithmLabel）と同じ語にする。
         seconds <= 10 -> AlgorithmLabel("⚡", "高速", "短時間でサッと作成", "v5")
@@ -402,8 +428,8 @@ object V6FinalPort {
         //   指定すると minRunMs / postReserveMs が予算を上回り、searchDeadlineMs が hardDeadlineMs を
         //   追い越して**要求したタイムアウトを超えて**いた。予算そのものでクランプして searchDeadline
         //   <= hardDeadline を構造的に保証する（10 秒以上では minRunMs が支配するため結果は不変）。
-        val minRunMs = (budgetMs / 6).coerceIn(8_000L, 45_000L)
-            .coerceAtMost(budgetMs)   // 最初の猶予（早すぎる停止を防ぐ）
+        val wdb = watchdogBudget(budgetMs, startMs, hardDeadlineMs)
+        val minRunMs = wdb.minRunMs   // 最初の猶予（早すぎる停止を防ぐ）
         // [後処理予約] 探索が予算を使い切ると後処理(平準化/fair等のkeep-best研磨)が時間切れ(実機8ms)になる。
         //   末尾に postReserveMs を予約し、探索は searchDeadlineMs で止め、後処理は hardDeadlineMs まで走らせる。
         //   stall早期終了時は探索が早く返るので後処理は自然に余裕を得る＝無改善の末尾だけを後処理へ回す。
@@ -420,9 +446,9 @@ object V6FinalPort {
         //   当時の主張は偽。予算基準を復元し、stallMs だけ「予算基準の値が探索区間内で発火し得ない帯」に
         //   限って探索区間×割合へフォールバックする（normalStallMs 参照）。stallHardMs/phaseGraceMs は
         //   元から常に探索区間内で発火可能（budget/8 <= window/… の小さい値）＝rebase する理由が無かった。
-        val postReserveMs = (budgetMs / 12).coerceIn(8_000L, 25_000L).coerceAtMost(budgetMs / 2)
-        val searchDeadlineMs = (hardDeadlineMs - postReserveMs).coerceAtLeast(startMs + minRunMs)
-        val searchWindowMs = searchDeadlineMs - startMs
+        val postReserveMs = wdb.postReserveMs
+        val searchDeadlineMs = wdb.searchDeadlineMs
+        val searchWindowMs = wdb.searchWindowMs
         // [5分強化] HARD>0（=未配布・配れない）は最優先で解消すべき失敗状態。予算の大半を使って多様化
         //   （多仮説＋HF80 戦略的振動）で HARD クリアを試みる。旧 budgetMs/6(=300s予算で50s) は早すぎ、
         //   実機ログで HARD=1 のまま 50s で早期終了し残り 250s を捨てていた。→ budgetMs*9/10(=270s)。
@@ -431,11 +457,11 @@ object V6FinalPort {
         //   （既定 0.9＝旧値と同一）へ外出しし、算出は `normalStallMs`（純関数・同一 object 内）へ委譲。
         //   意味論=予算×割合、予算基準の値が探索区間内で発火し得ない帯（実測60秒帯）だけ探索区間×割合へ
         //   フォールバック。既定では到達可能な帯の値は旧来と1ミリ秒も変わらない。詳細は関数 KDoc 参照。
-        val stallMs = normalStallMs(budgetMs, searchWindowMs)
+        val stallMs = wdb.stallMs
         // [5分圧縮] HARD=0到達後（=配布可・残りは研磨のみ）は頭打ちをより早く検知して終了（plateauなので品質は不変）。
         //   [3.424.0] 3.422.0 が searchWindowMs 基準へ変えていたのを budgetMs 基準へ復元（無計測の厳格化だった。
         //   この値は budget/8 <= budget/2 <= searchWindow で常に探索区間内＝rebase する理由が元から無い）。
-        val stallHardMs = (budgetMs / 8).coerceAtLeast(15_000L)   // 5分予算→37.5s
+        val stallHardMs = wdb.stallHardMs   // 5分予算→37.5s
         // [賢い早期脱出] 証明可能に解消不能な「データ起因HARD」の下限（report.hard と同単位）。
         //   ＝有資格者を全員そのシフトに就けても埋まらない席（構造的covU）。どう探索しても消えない HARD なので、
         //   HARD がこの下限まで到達したら「HARD=0 到達」と同じく頭打ち(plateau)とみなし短い stallHardMs へ移行して
@@ -526,7 +552,7 @@ object V6FinalPort {
                     //   厳密比較へは寄せない。本判定は「採否」ではなく**停滞ウォッチドッグの改善検知**であり、
                     //   厳密比較だと double の 1e-15 級の揺れを改善と数えて lastBestImproveMs が延々リセットされ、
                     //   早期終了が構造的に発火しなくなる（＝許容誤差がある方が正しい）。採否は betterReport が担う。
-                    val improved = h < bh || (h == bh && wgt < bWeighted - 1e-6) || (h == bh && wgt <= bWeighted + 1e-6 && t < bTotal)
+                    val improved = progressImproved(h, wgt, t, bh, bWeighted, bTotal)
                     if (improved) {
                         bestHard.set(h); bTotal = t; bWeighted = wgt; lastBestImproveMs.set(EngineClock.nowMs())
                         lastBestImproveIters.set(observedIters.get())   // [3.375.0] 最終改善時点の反復数
@@ -559,7 +585,7 @@ object V6FinalPort {
         //   長さは不要で、「フェーズがまだ何も試していない」瞬間を除外できれば十分。
         //   [3.422.0] postReserveMs/searchDeadlineMs/searchWindowMs は上（stallMs 等の直前）で計算済み。
         //   [3.424.0] 3.422.0 の searchWindowMs 基準を budgetMs 基準へ復元（stallHardMs と同じ理由）。
-        val phaseGraceMs = (budgetMs / 40).coerceIn(2_000L, 15_000L)
+        val phaseGraceMs = wdb.phaseGraceMs
         // [3.281.0/A] c3n構造壁の遅延証明。best 世代ごとに一度だけ ForbiddenDiag を実行しキャッシュする。
         //   呼出条件（c3nのみ残存＋停滞がstallHardMs超）は呼び出し側でゲート済み＝停滞局面でしか走らない。
         //   liveBest は publishLiveBest(CAS, better()単調) のグローバル最良スナップショット。best報告との
