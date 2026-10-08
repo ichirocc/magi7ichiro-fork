@@ -3,7 +3,8 @@
 ## 1. この文書の位置づけ
 
 - 対象: `ichirocc/magi7ichiro-fork` の Android/Kotlin エンジン（C++ `magi_native.cpp` と C# `ichirocc/-MAGI_PC` は同値の移植。C# は `V6FinalPort.Watchdog.cs`・`V6FinalPort.HandleOptimize.cs`）。
-- 照合した実装: main `4af3456`（2026-10-08）。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能測定はしていない。
+- 照合した実装: main `4af3456`（2026-10-08 時点の main 先端と一致）。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能測定はしていない。
+  読む時点で main が進んでいれば `git diff 4af3456..main -- app/src/main/java/com/magi/app/v6/` で §14 の根拠ファイルに差分が無いことを先に確かめる。
 - 目的: 会話履歴なしで停滞制御を読解・レビューできること。**現行実装の記述**であり、閾値変更や新アルゴリズムの提案ではない。
 - 読解規則: コメントや過去資料の設計意図と条件式が違うときは**条件式を優先する**。「保証」「推定」「未検証」を区別する。
 - 数値・規則を変えたら、この文書を**同じコミットで**直す（Kotlin → C++ → C# の順、同日）。経緯の本文は `docs/history/`、採否の台帳は `docs/algorithm_portfolio.md`。
@@ -53,6 +54,7 @@ improved = h < bh
         ∨ (h == bh ∧ w ≤ bw + 1e-6 ∧ t < bt)
 ```
 
+weightedScore は実際には整数値（`MirrorKeys.weights` は全て整数、apt/fair/weekly の偏差も整数に丸める）なので、1e-6 は浮動小数の合算誤差だけを吸収し、実在の改善・悪化（最小差 2）を取りこぼすことはない。
 この監視判定を `betterReport` と同一に書き換えない。逆にこの許容差を候補採用へ広げない。SA 内部は評価器のパックされた Long スコア（`hard×1e9 + soft`）で判定するので、全ての内部移動が上の 3 キーで判定されるわけでもない。
 
 採用には比較以外の保護条件がある: 拡張希望の禁止 `keepsExtBan`、希望固定の規則 A `keepsWishPins`、上限 0 の `mayPlace`。後処理の apt/fair 研磨だけは既定 OFF の例外 `aptFairSoftTolerance`（他 SOFT +6% 容認）を持つ。
@@ -124,7 +126,8 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
 - `hardFloor` は §4 の構造的 covU 床（1 回だけ算出）。「非 covU HARD = 0」を併せるのは、群外の過配置が covU を床より見かけ上へこませても、解ける groupViol が残る間は長い閾値で粘るため。
 - `wishC3wProven` は `wishConflictFloorMode == OFF`（既定）なら 0。ON のときは希望衝突由来の c3w 件数なので、`nonCovUAllC3n` は文字通り「c3n 以外が全部 0」ではない。
 - `c3nWallProven` の診断（約 20 ms）は、内訳条件を満たし無改善が `shortStall` を超えた後に遅延実行し、`(bestVersion, result)` を単一 `AtomicReference` で保持する（3.592.0）。
-- `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。
+- `c3nWallPlateau` は限定した手の壁判定（§4）で**閾値を短縮する**（300 s 予算で 270 s → 37.5 s）だけで、即停止ではない。動機は実機ログ「c3n=1 のまま 150 s 無改善でも 270 s 閾値で発火不能」（3.281.0）。早期終了全体の品質差は 3.341.1 で非有意（§11）。多セル交換で崩せる c3n を短縮で取り逃がす可能性は残る＝測るならここ。
+- `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。ON の副作用（解ける HARD を残したまま短縮）は「残る HARD が全て希望由来」を条件に含めることで防ぐ設計。実機 A/B は HARD=床の盤面待ち。
 - 「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず解ける HARD を早々に諦めていた＝構造的 covU へ是正済み。
 
 ### 5.4 発火式と境界
@@ -138,6 +141,7 @@ fired   = now − S > minRun
 
 - 全て `>`。ちょうど閾値では発火しない。
 - フェーズ猶予は「始まったばかりのフェーズを即殺しない」**遅延**であって拒否権ではない。並列 8 ワーカーが 1 本のフェーズ文字列を共有して猶予が永久に塞がった事故（実機 2026-08-19、275 s 無改善で未発火）を、3.408.0 で「閾値の 2 倍で上書き発火」に降格した。
+- 上書き条件 `stalled > effStall × 2` はフェーズ更新の頻度に依存しない（`stalled` だけで決まる）＝フェーズ文字列がどれだけ頻繁に変わっても、無改善が閾値の 2 倍に達すれば発火する。通常発火と上書き発火の比率は未集計（`Watchdog` 行の「未発火の理由」から集計できる）。
 - 旧実装の `max(lastBestImprove, lastPhaseChange)` 単一時計は、20〜90 s ごとのフェーズ遷移で 270 s に届かなかった（3.230.0）。
 - `shouldStop` は `now ≥ searchEnd ∨ キャンセル` を先に判定する。締切による停止と停滞発火は別の理由。
 
@@ -184,7 +188,8 @@ stagnantEpochs    = improvedThisEpoch ? 0 : previous + 1
 reassign          = slot ≠ 0 ∧ (nearestOtherDistance ≤ DUPLICATE_DISTANCE_CELLS(2) ∨ (¬improvedThisEpoch ∧ stagnantEpochs ≥ 1))
 ```
 
-距離は trajectory 間のセル差。重複条件は改善したエポックにも適用される（多様性は別の不変条件）。再配属で `reassignments++`・`stagnantEpochs=0`。
+距離は trajectory 間のセル差（意味的な近さではなく安価なセル一致）。重複条件は改善したエポックにも適用される（多様性は別の不変条件）。再配属で `reassignments++`・`stagnantEpochs=0`。
+「無改善 1 エポックで再配属」は攻撃的に見えるが、`≥ 2` へ遅らせる案は測って否決した（3 データ×2 seed・45 s・8 ワーカー: fixture 4 勝、実データ real3 で +291 悪化、p≈0.19。脱出役の時間比率は初期配置で決まり `shouldReassign` では変わらない＝`docs/algorithm_portfolio.md`「再配属を 2 エポック連続で未改善まで遅らせる」）。
 
 強度 = 役割の基礎値 + `min(max(reassignments,0)/2, 3)`。基礎値: BASELINE 0／ELITE_RELINK・DAY_BLOCK・HARD_FAMILY・PERSONAL・PERSON_SWAP 1／HARD_DEBT 2／LARGE_DESTROY・MAX_DISTANCE 3。「2 回失敗してから強度を上げる」設計。
 
@@ -204,7 +209,7 @@ reassign          = slot ≠ 0 ∧ (nearestOtherDistance ≤ DUPLICATE_DISTANCE_
 c1 c2 c3 c3n c3m c3mn c41 c42 covU covO pref low high
 ```
 
-groupViol・c3w・c41s・c42s・apt・weekly・fair は学習しない（配列名 `CNAMES` に Apt があっても index に無い）。各追跡族について、
+groupViol・c3w・c41s・c42s・apt・weekly・fair は学習しない（配列名 `CNAMES` に Apt があっても index に無い）。学習しない族は `dynamicAvoid` に入らない＝**常に focus 可能**で、N4 のピボット候補にも残る（保守側。HARD の groupViol/pref は hf67 の決定的修復で直るので充足困難の学習対象にする必要が薄く、c3w は 3.542.0 の新族で未追加）。各追跡族について、
 
 - 観測値が過去最小より小さい → 最小更新・停滞投入量 0・推定解除
 - 観測値 0 → 停滞投入量 0・推定解除（3.592.0）
@@ -232,7 +237,7 @@ HF63 は SOFT の推定値を持ち得るが、**SOFT を恒久回避へ入れ�
 
 ### 7.3 focus 選択（`RsiFocusSelection.maxViolatedFamily`）
 
-1. 回避されておらず件数が正の HARD を、`groupViol, covU, pref, c3n, c3w` の**順序**で選ぶ（HARD 間の最大件数ではない）。
+1. 回避されておらず件数が正の HARD を、`groupViol, covU, pref, c3n, c3w` の**順序**で選ぶ（HARD 間の最大件数ではない）。HARD は 1 件でも必須なので件数比較に意味が無く、旧・件数最大では c3n=1 が c1=118 等の SOFT に埋もれて RSI が一度も HARD を狙わなかった（3.74.0）。順序は修復経路（groupViol/covU/pref は hf67、c3n/c3w は `destroyRepairViolations`）に沿う。
 2. 残る HARD が無ければ apt／covO の周期枠: apt は `rotationRound % 3 == 1`、covO は `== 2`、最終ラウンドは両方が候補。回避されず件数が正であること。
 3. 両方が候補なら件数の少ない方、同数なら covO。
 4. それ以外は順序表 `groupViol,covU,pref,c3n,c3w,low,high,c41,c41s,c2,covO,c42,c42s,apt,weekly,fair,c1,c3,c3m,c3mn` から、回避されない正の最大件数（同数は先のキー）。件数 0 の族は選ばない（E8）。
@@ -255,6 +260,7 @@ if stagnantRounds ≥ 2 ∧ dynamicAvoid ≠ ∅:
 ```
 
 発火ゲートは**動的検知だけ**。静的 covU 床を混ぜると構造的 covU>0 のデータで round 0 から常時武装し、旧 N4 の「厳密な部分集合」保証を破る（3.95.1 の実バグ）。1 ラウンド冷却を恒久枯渇と誤認しない。
+HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは**その `runRsi` 呼び出しだけ**で、ポートフォリオ内では役割が回って別の手に移る＝推定を過信した場合の損失は 1 ロールぶんに限られる。未追跡の族（groupViol/c3w/apt/weekly/fair 等）や SOFT が正なら pivot になるので、「学習していない族が残っているのに枯渇と判定する」ことはない。
 
 ### 7.5 状態の寿命
 
@@ -284,6 +290,7 @@ if stagnantRounds ≥ 2 ∧ dynamicAvoid ≠ ∅:
 | 巡回研磨クラスタ | 1 巡で採用 0（`roundApplied == 0`） | 巡を終える（joint 局所最適） |
 | 後処理チェーン全体 | `totalApplied == 0` | 停滞検知。`PostChain` は巻き戻したパスの `applied` も既定では数える（`postChainRollbackCountsZero=false`。0 と数える版は 230 ペアで差なし） |
 
+予算の相互作用: 後処理は絶対時刻の全体締切 `D` を受け、巡回クラスタは `clusterStop` の自前締切、共同 LNS はその中で patience／評価数上限で止まる。前段が早く終わった分は後段がそのまま使える（締切は絶対時刻、予約枠は探索から確保する枠で後処理内の配分ではない）。
 採用数は最終盤面の純改善数ではない。後処理の時間削減と最終品質の非劣性は別々に測る。
 
 ## 10. 既定 OFF・実験機構（main `4af3456` の既定）
@@ -303,17 +310,19 @@ if stagnantRounds ≥ 2 ∧ dynamicAvoid ≠ ∅:
 
 ## 11. 据え置きが決まっている値と否決した案（再提案は計測つきで）
 
-| 値・案 | 決定 | 根拠 |
+| 値・案 | 決定 | 根拠（測定条件） |
 |---|---|---|
-| `normalStallFraction` 0.9 | 据え置き（2026-10-07） | 0.5 は 3.423.0 で 6 勝 3 敗・非有意、blocked_covu 型でも再現せず（3.447.0）。外部提案「60〜90 s」は前提不成立（余りは後処理へ回らない、実機 #1 は 80 s の空白後に最終改善） |
-| 早期終了そのもの | 維持 | 外すと weighted 中央 −3.5%（p≈0.075、非有意）で時間 2.3 倍（3.341.1） |
-| 余った予算を soft 研磨へ | 否決 | 時間が余るのは hard=0 のときだけ。穏当版も 2/5（3.341.1） |
+| `normalStallFraction` 0.9 | 据え置き（2026-10-07） | 0.5 は 3.423.0 で 6 勝 3 敗・非有意（3 fixture×2 条件×3 反復＝18 run、RSI・workers=1・60 s）、blocked_covu 型 15 ペアでも再現せず（3.447.0）。外部提案「60〜90 s」は前提不成立（余りは後処理へ回らない、実機 #1 は 80 s の空白後に最終改善） |
+| 早期終了そのもの | 維持 | 外すと weighted 中央 −3.5%（U 検定 p≈0.075、非有意）で時間 2.3 倍（3.341.1: golden 120 s×5 回） |
+| 余った予算を soft 研磨へ | 否決 | 時間が余るのは hard=0 のときだけ（120 s・workers=4・実データ 3 件）。穏当版も「5 回中 4 回以上が現行中央値より良い」に対し 2/5（3.341.1） |
 | covU-blocked 専用の早期終了 | 却下 | 実データ多 seed A/B で便益なし（3.361.0） |
 | `stallMs = budget/6`（旧 50 s） | 戻さない | HARD=1 を 50 s で諦め残り 250 s を捨てた |
 | 戦略的振動／nonlinear restart／GLS スイープ／targeted-perturb／big-destroy／softFocusProb | 否決 | 2.55.0・2.58.0・2.56.0・3.95.0 |
 | 「修復途中の進捗」を停滞判定へ | 実装不要 | `improvedThisEpoch` が正式比較器で HARD 優先に拾っている（backlog #26） |
-| 同点の盤面を足場にした停滞脱出（プラトー探索 B） | 否決 | 後処理直行に 10 s 3 勝 27 敗・30 s 9 勝 19 敗（2026-10-07） |
-| 停滞時の後処理差し込み | 既定 OFF 温存 | 最終 8 勝 7 敗・重み +1291（2026-10-07） |
+| 同点の盤面を足場にした停滞脱出（プラトー探索 B） | 否決 | 停滞盤面 15 枚（5 データ×3 seed）×3 反復、同じ盤面・同じ持ち時間: 後処理直行に 10 s 3 勝 27 敗・30 s 9 勝 19 敗（2026-10-07） |
+| 停滞時の後処理差し込み | 既定 OFF 温存 | 240 s／300 s（PORTFOLIO は 211 s 以上でしか選ばれない）: 採用 32/43 回だが最終 8 勝 7 敗・重み +1291・HARD 退行 0（2026-10-07） |
+| 残差ベース 4 段脱出／ロール内並列 SA | 撤去 | 単体 A/B 各 15 ペア（3 データセット、1 プロセス=1 実行）で中立（3.409.21） |
+| 再配属を 2 エポック連続無改善まで遅らせる | 否決 | 3 データ×2 seed・45 s・8 ワーカー: fixture 4 勝、実データで +291 悪化、p≈0.19（§6.2） |
 
 開いている案: 同点以上を受理する歩き→後処理（プラトー探索 C、32-10／36-6）は別案として測る。停滞時の探索半径・職員数・窓長の段階的拡大は backlog #13(a)。
 
