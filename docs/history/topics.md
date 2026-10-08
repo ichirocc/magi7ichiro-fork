@@ -727,5 +727,5 @@
   `runV5` の入力比番兵（3.97.0）、ExtraRefine は後処理予約枠でキャップ（3.102.x）。
 - **測って否決（再提案は計測つきで）**: 戦略的振動、nonlinear restart、GLS のパラメータスイープ、targeted-perturb、big-destroy、
   softFocusProb の変更。GLS aging は中立で温存。
-- 経緯と数値は `docs/history/topics.md`「停滞脱出の改善」。
+- 経緯と数値は `docs/history/topics.md`「停滞脱出の改善」。**現行の規則・閾値・床の一覧は `docs/stall_escape.md`**（2026-10-08）。
 
