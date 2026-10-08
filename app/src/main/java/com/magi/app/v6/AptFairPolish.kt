@@ -23,6 +23,8 @@ internal object AptFairPolish {
     internal const val SOFT_TOLERANCE_FRACTION = 0.06
     /** [無害化, 2026-09-24 ユーザー指定の集合] 許容 ON でも 1 件でも増えたら採らない重い SOFT（apt/fair/weekly/c2/c3/c3m は軽い側として許容しうる）。 */
     internal val TOLERANCE_BLOCKED_FAMILIES = setOf("c1", "low", "high", "covO", "c3mn", "c41", "c42", "c41s", "c42s")
+    /** 測定用（2026-10-08 ユーザー指示「6% ぐらいの重み悪化なら容認する」）: false＝無害化②を外し、重い SOFT の増加も 6% 予算の内なら採る。本番は true。 */
+    @Volatile internal var heavySoftGuard: Boolean = true
 
     /** internal＝`AptFairPolishToleranceTest` から直接検証するため（private だとファイル外から呼べない）。 */
     internal fun nonFamilySoftTotal(rep: ViolationReport, excludeFamily: String): Double =
@@ -39,7 +41,7 @@ internal object AptFairPolish {
         if (newHardFamilyViolation(bestRep, rep) != null) return false
         if (rep.hard != bestRep.hard) return rep.hard < bestRep.hard
         //   ②必須が減る手は OFF と同じく採る（上の行）。必須が同点のとき、重い SOFT が 1 件でも増える手は採らない。
-        if (TOLERANCE_BLOCKED_FAMILIES.any { (rep.breakdown[it] ?: 0) > (bestRep.breakdown[it] ?: 0) }) return false
+        if (heavySoftGuard && TOLERANCE_BLOCKED_FAMILIES.any { (rep.breakdown[it] ?: 0) > (bestRep.breakdown[it] ?: 0) }) return false
         val baseline = nonFamilySoftTotal(before, family)
         val budget = baseline * SOFT_TOLERANCE_FRACTION
         val usedByBest = (nonFamilySoftTotal(bestRep, family) - baseline).coerceAtLeast(0.0)

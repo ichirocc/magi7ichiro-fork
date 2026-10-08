@@ -115,6 +115,8 @@ fun main(args: Array<String>) {
         "quantrange" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, quantitativeRangeEval = true)
         "combineexhaust" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, combineExhaustPairs = true)
         "aptfairtol" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true)
+        // [2026-10-08] 許容 ON 同士で、無害化②（重い SOFT の 1 件増を拒む）の有無。大域フラグなので腕ごとに切り替える（下のループ）。
+        "aptfairtolunguarded" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true) to V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true)
         "countchain" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det, countChainEnabled = true)
         // [3.580.0/backlog#26] 既定OFFの専用修復腕を「対象違反が残る局面でだけ」再活性化する新フラグの
         //   A/B。旧=フラグ全OFF（現行既定）、新=xxxReactivateだけON（xxxEnabled自体は既定のfalseのまま）。
@@ -180,6 +182,7 @@ fun main(args: Array<String>) {
                 C1EjectionChainPolish.defaultHoleFocus = (feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft") && arm == "new"
                 C1EjectionChainPolish.defaultHoleSoftOnly = feature == "ejectionafterrepairholesoft"
                 PolishGate.prePostDescent = feature == "prepostdescent" && arm == "new"
+                AptFairPolish.heavySoftGuard = !(feature == "aptfairtolunguarded" && arm == "new")
                 fun once(): List<Any> {
                     resetPeak(); System.gc()
                     val t0 = System.nanoTime()
