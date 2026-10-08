@@ -8,7 +8,8 @@ import org.junit.Test
 /**
  * `docs/stall_escape.md` の規則と数値をそのまま固定する（仕様 → テスト）。表の値が変わったら仕様も同じコミットで直す。
  * 既存の `V6FinalPortTest`（発火式・実効閾値）・`HypothesisEpochPolicyTest`（層 B）・`Hf63InfeasibilityTest`（HF63）・
- * `V6NativeOptimizerChoiceTest`（focus 選択）・`StallPolishInjectionTest` が持たない表の値と境界だけを扱う。
+ * `V6NativeOptimizerChoiceTest`（focus 選択）・`StallPolishInjectionTest` が持たない表の値・境界と、§5.2〜5.4 の判定の補助
+ * （`WatchdogBest` の発火、`C3nWallProof` の証拠の選択、`BoardKeyedFlag`）を扱う。
  */
 class StallEscapeSpecTest {
 
@@ -175,6 +176,21 @@ class StallEscapeSpecTest {
         assertEquals(5000, Hf63Infeasibility.INFEAS_STALL_ITERS)
         assertEquals(3, StallPolishInjection.MAX_INJECTIONS)
         assertEquals(6_000L, StallPolishInjection.CAP_MS)
+    }
+
+    // §10 測定スイッチは背景実行への引き継ぎ（snapshot/restore）を往復する
+    @Test fun wallMeasurementSwitchesRoundTripThroughSnapshot() {
+        val saved = PolishGate.snapshot()
+        try {
+            PolishGate.c3nWallLegacy = true
+            PolishGate.lateOpStopPropagation = false
+            val snap = PolishGate.snapshot()
+            PolishGate.c3nWallLegacy = false
+            PolishGate.lateOpStopPropagation = true
+            PolishGate.restore(snap)
+            assertTrue("c3nWallLegacy は往復する", PolishGate.c3nWallLegacy)
+            assertFalse("lateOpStopPropagation は往復する", PolishGate.lateOpStopPropagation)
+        } finally { PolishGate.restore(saved) }
     }
 
     // §5.4 判定と発火の間に改善が割り込んだら発火しない（判定後の改善の順序を検査する）

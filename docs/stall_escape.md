@@ -177,6 +177,8 @@ canExtra = ¬stopRequested ∧ ¬stagnationFired ∧ post.report.total > 0 ∧ �
 
 `structuralHardResidual` は `extraRefineRequirePostHardDrop`（`handleOptimize` 引数、既定 false）が true のときだけ評価する追加ゲート。走らなかったときは `ExtraRefine` 行に理由を残す。希望床 E0B は専用条件で研磨を省き `minimalPost` を使う。
 
+残存分析（`residualLog`）の「証明済みの壁」は、最終盤面を改めて診断した結果（約 20 ms、`C3nWallProof.diagnoseBoard`）で、探索中の判定とは別の根拠（3.642.0）。
+
 ## 6. 層 B — 適応ポートフォリオ
 
 役割スロットは `floorMod(workerIndex, 8)`。以下は 8 スロットの説明で、ワーカー数が常に 8 という意味ではない。
@@ -326,7 +328,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 
 | 値・案 | 決定 | 根拠（測定条件） |
 |---|---|---|
-| 3.642.0 の証拠の対応（同じ参照）と後期演算の試行中の停止確認 | 既定を維持（2026-10-08）。事前基準（既定が 5 seed 中 3 以上で悪化なら戻す）を満たさない | sample_v6・300 s・5 seed・workers 4・同一 seed。既定（off）対 HEAD 相当（on: `c3nWallLegacy=true`・試行中の停止確認を切る。入口の確認は両腕に残る）。weighted 差（既定−相当）の平均 −49（既定が良い 3/5、悪い 2/5、−273〜+87）、total 差の平均 −11（既定が良い 4/5）。hard は全 run で 1。既定の壁時計は平均約 207 s、相当は約 142 s。有意差の検定はなし。120 s（AUTO では RSI→ALNS の 31〜210 s 帯）も同条件で測った（`tools/loop/results/handleoptimize_head_sample120_2026-10-08.csv`）: weighted 差（既定−相当）の平均 −65（既定が良い 4/5、悪い 1/5、−202〜+21）、total 差の平均 −4（既定が良い 3/5）、hard は全 run で 1、壁時計は既定 約 52 s・相当 約 45 s。こちらも基準を満たさないので既定を維持。下の c3n 行は 3.641.0 の実装（値の一致による対応）の数値。 |
+| 3.642.0 の証拠の対応（同じ参照）と後期演算の試行中の停止確認 | 既定を維持（2026-10-08）。事前基準（既定が 5 seed 中 3 以上で悪化なら戻す）を満たさない | sample_v6・300 s・5 seed・workers 4・同一 seed。既定（off）対 HEAD 相当（on: `c3nWallLegacy=true`・試行中の停止確認を切る。入口の確認は両腕に残る）。weighted 差（既定−相当）の平均 −49（既定が良い 3/5、悪い 2/5、−273〜+87）、total 差の平均 −11（既定が良い 4/5）。hard は全 run で 1。既定の壁時計は平均約 207 s、相当は約 142 s。有意差の検定はなし。120 s（AUTO では RSI→ALNS の 31〜210 s 帯）も同条件で測った（`tools/loop/results/handleoptimize_head_sample120_2026-10-08.csv`）: weighted 差（既定−相当）の平均 −65（既定が良い 4/5、悪い 1/5、−202〜+21）、total 差の平均 −4（既定が良い 3/5）、hard は全 run で 1、壁時計は既定 約 52 s・相当 約 45 s。こちらも基準を満たさないので既定を維持。再実行の診断（同日）: 悪化した 4 ペアは再現せず、同一 seed・同一腕でも weighted 最大 325・停止時刻最大 215 s の揺れ（workers 4 は壁時計依存）。8 run とも同じ規則で停止（c3n 壁=短・通常発火・4 ワーカー同時離脱）。腕の差は揺れの範囲＝優劣は未決。既定は事前基準と正しさ（競合の修正）の理由で維持。決めるなら 120 s×20 seed 以上か workers=1。下の c3n 行は 3.641.0 の実装（値の一致による対応）の数値。 |
 | c3n 壁による短縮（`c3nWallPlateau`） | 据え置き（2026-10-08、`PolishGate.c3nWallShortStall` 既定 true） | sample_v6×5 seed・同一 seed・workers 4: 120 s は短縮なし 2 勝 3 敗・平均 +8.8 で損失なし（時間 46→119 s）、60 s は短縮なし 5 勝 0 敗・−1.6%（時間 33→58 s）、300 s は短縮なし 4 勝 1 敗・−0.7%（時間 127→299 s、p≈0.19）。緩めるなら時間と品質の交換＝業務判断 |
 | `normalStallFraction` 0.9 | 据え置き（2026-10-07） | 0.5 は 3.423.0 で 6 勝 3 敗・非有意（3 fixture×2 条件×3 反復＝18 run、RSI・workers=1・60 s）、blocked_covu 型 15 ペアでも再現せず（3.447.0）。外部提案「60〜90 s」は前提不成立（余りは後処理へ回らない、実機 #1 は 80 s の空白後に最終改善） |
 | 早期終了そのもの | 維持 | 外すと weighted 中央 −3.5%（U 検定 p≈0.075、非有意）で時間 2.3 倍（3.341.1: golden 120 s×5 回） |
@@ -347,7 +349,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 
 | 行 | 層 | 読めること |
 |---|---|---|
-| `Watchdog` | A | 実効閾値の種別（通常=長／plateau=短／c3n壁=短／希望衝突の床=短）・停滞秒・発火の有無・未発火の理由・進捗報告ぶんの反復数（真の総量の 49〜59%、桁の区別にだけ使う） |
+| `Watchdog` | A | 実効閾値の種別（通常=長／plateau=短／c3n壁=短／希望衝突の床=短）・停滞秒・発火の有無・未発火の理由・進捗報告ぶんの反復数（真の総量の 49〜59%、桁の区別にだけ使う）・c3n 壁の確認回数と、生存盤面の更新のうち最良の報告と対応しなかった回数（3.642.0） |
 | `AdaptivePortfolio` | B | 再配属回数・合計 iter |
 | `RunMAGI_RSI` | C | 改善したラウンドと最終ラウンド、末尾「戦略変更」1 行に focus の遷移、N4 の早期終了 |
 | `HF80`／`ExtraRefine` | E・追加精製 | 停滞早期終了の有無、走らなかった理由 |
@@ -377,5 +379,5 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 ## 14. 根拠ファイル（`80d664d` と 3.642.0 の差分）
 
 `app/src/main/java/com/magi/app/v6/`: `V6FinalPort.kt`・`V6NativeOptimizer.kt`・`AdaptiveHypothesisEpochPolicy.kt`・`MirrorCore.kt`・`Hf63Infeasibility.kt`・`HypothesisPlanning.kt`・`RsiFocusSelection.kt`・`V6PortAnalyzer.kt`・`V6SanityPort.kt`・`SaOptimizer.kt`・`V6HotfixPasses.kt`・`C1JointLnsPolish.kt`・`StallPolishInjection.kt`、`app/src/main/cpp/magi_native.cpp`。
-テスト: `app/src/test/java/com/magi/app/v6/` の `V6FinalPortTest.kt`・`WishConflictFloorTest.kt`・`HypothesisEpochPolicyTest.kt`・`Hf63InfeasibilityTest.kt`・`StallPolishInjectionTest.kt`。
+テスト: `app/src/test/java/com/magi/app/v6/` の `V6FinalPortTest.kt`・`WishConflictFloorTest.kt`・`HypothesisEpochPolicyTest.kt`・`Hf63InfeasibilityTest.kt`・`StallPolishInjectionTest.kt`・`StallEscapeSpecTest.kt`・`V6LateOperatorsTest.kt`・`EliteIntegrationQuantitativeTest.kt`。
 資料: `docs/algorithm_portfolio.md`（採否の台帳）・`docs/history/topics.md`「停滞脱出の改善」・`docs/history/INDEX.md`・`docs/lessons.md` #39/#42。

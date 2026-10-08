@@ -1106,6 +1106,7 @@ object V6FinalPort {
         val residualLog = run {
             val bd = finalReport.breakdown
             val infeasLearned = chained.infeasibleFamilies   // [3.335.0] この実行の返り値から
+            // 壁は最終盤面を改めて診断する（約 20 ms）。探索中の判定（同じ参照で結んだもの）とは別の根拠。
             val c3nWall = wd.bestNonCovUAllC3n.get() && wallProof.diagnoseBoard(finalSched.map { it.toList() })
             val walls = ArrayList<String>()
             val open = ArrayList<String>()
