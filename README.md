@@ -23,6 +23,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/kotlin_cpp_split.md`](./docs/kotlin_cpp_split.md) | Kotlin と C++ の棲み分け（新しいコードをどちらに置くか・番兵の不変条件） |
 | [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の実装準拠仕様**（層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
+| [`docs/stall_escape_handoff.md`](./docs/stall_escape_handoff.md) | **停滞脱出の引き渡し仕様（他社 AI 向け）**＝DEFAULT と PROPOSAL を分け、照合コミット・関数名・定数名・3.642.0 の規則・測定を固定。現行の正は `docs/stall_escape.md` |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
 | [`docs/s6_relax_trial.md`](./docs/s6_relax_trial.md) | **S6「設定を緩めたら」試算の設計・実データ検証・安全仕様**（Android・C# とも実装済み。候補は個人の上限 0 の組・0→1、確定＝緩和＋試算の手順を Undo 1 段、鮮度・背景探索・利用者の決定 Q1〜Q9） |
@@ -38,7 +39,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
-**最終更新**：2026-10-08（3.642.0: 停滞脱出の外部レビュー残件（c3n 壁の証拠を同じ参照で結ぶ・後期演算の試行中の停止確認・統合段の量的評価）と画面の監査 7 項目。計測（sample_v6・300 s と 120 s・各 5 seed・同一 seed）で既定を維持。Windows 側は `windows/README.md`。詳細は `docs/history/3.4xx.md` 先頭）
+**最終更新**：2026-10-08（3.642.0: 停滞脱出の外部レビュー残件（c3n 壁の証拠を同じ参照で結ぶ・後期演算の試行中の停止確認・統合段の量的評価）と画面の監査 7 項目。計測（sample_v6・300 s と 120 s・各 5 seed・同一 seed）で既定を維持。引き渡し仕様 `docs/stall_escape_handoff.md` を追加。Windows 側は `windows/README.md`。詳細は `docs/history/3.4xx.md` 先頭）
 
 **最終更新**：2026-10-08（3.641.0: c3n 壁による停滞閾値の短縮を外す測定スイッチ `PolishGate.c3nWallShortStall`（既定 true）と `HandleOptimizeBench` の腕 `MAGI_HO_FEATURE=c3nwall`。sample_v6 で短縮あり／なしを同一 seed で比較＝120 s は差なし（時間 2.6 倍）、60 s は短縮なしが 5 勝 0 敗・−1.6%（時間 1.75 倍）、300 s は 4 勝 1 敗・−0.7%（時間 2.35 倍、非有意）。既定は据え置き＝出力不変。プラトー探索 C は PrePostDescent として測定済み・否決を仕様に反映）
 

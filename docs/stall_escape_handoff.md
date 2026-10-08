@@ -225,7 +225,7 @@ DEFAULT の「c3nWallPlateau → shortStall」を、根拠の弱さに合わせ�
 実験定数（例。固定の真理ではない）: B_min = 120 000 ms、M ∈ {15 000, 30 000, …}、8 000 ≤ M ≤ normalStall − shortStall。
 
 ```
-effStall = shortStall          if basePlateau ∨ wishFloorPlateau
+effStall = shortStall          if basePlateau（wishReached を含む。既定 OFF）
          = shortStall + M      if c3nWallPlateau ∧ c3nWallProven ∧ B ≥ B_min
          = normalStall         otherwise
 ```
@@ -328,7 +328,7 @@ intensity         = base(role) + min(max(reassignments, 0) / 2, 3)
 
 | 対象 | 停滞の目安 | 動作 | 実装 |
 |---|---|---|---|
-| HF80 PostPolish | best が枠の 1/5（下限 3 s）無改善 | 早期 return | `V6HotfixPasses` の HF80 段（`docs/stall_escape.md` §9） |
+| HF80 PostPolish | best が枠の 1/5（下限 3 s）無改善 | 早期 return | `V6NativeOptimizer.kt` の後処理研磨の入口: `stallMs = max(3000L, seconds × 1000L / 5)` |
 | C1 共同 LNS | 最良が `Config.patienceMs`（既定 4 000）更新なし、または評価数上限 | 打ち切り | `C1JointLnsPolish` |
 | C1 広域ビーム | 最良更新の停滞 | 打ち切り | 3.340.0 |
 | 巡回クラスタ | 1 巡で採用 0（`roundApplied == 0`） | 巡を終える | `runPostOptimization` |
