@@ -335,11 +335,16 @@ object V6FinalPort {
     /** 盤面の内容（完全一致）で鍵をとる 1 件キャッシュ。返す値は必ずその盤面を診断した結果（別盤面の結果は返さない）。 */
     internal class BoardKeyedFlag {
         private val cache = java.util.concurrent.atomic.AtomicReference<Pair<List<List<Int>>, Boolean>?>(null)
+        private val lock = Any()
         fun get(board: List<List<Int>>, eval: (List<List<Int>>) -> Boolean): Boolean {
             cache.get()?.let { (b, v) -> if (b === board || b == board) return v }
-            val v = eval(board)
-            cache.set(board to v)
-            return v
+            // 同じ盤面の診断は一度だけ。並行する呼び出しは結果を待つ（診断は約 20 ms、1 手探索の反証を含めても上限 2 s）。
+            synchronized(lock) {
+                cache.get()?.let { (b, v) -> if (b === board || b == board) return v }
+                val v = eval(board)
+                cache.set(board to v)
+                return v
+            }
         }
     }
 
@@ -647,6 +652,8 @@ object V6FinalPort {
         // [3.592.0] 診断の鍵は盤面の内容（[BoardKeyedFlag]）。世代と結果を別々に持つと、並行する診断の間で旧盤面の結果が
         //   新しい盤面に結び付いた。鍵を盤面にして、結果は必ずその盤面のものにする。
         // 壁の証明は [C3nWallProof] に集約する（生存盤面の対応・持ち越し・測定の基準腕）。
+        val deepRefuted = java.util.concurrent.atomic.AtomicInteger(0)
+        val deepConfirmed = java.util.concurrent.atomic.AtomicInteger(0)
         val wallProof = C3nWallProof(
             bestVersion = { wd.bestVersion.get() },
             bestReport = { wd.bestReport },
@@ -655,7 +662,14 @@ object V6FinalPort {
                 try {
                     val arr = Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } }
                     val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, arr)
-                    diag.hasRuns && diag.allBlocked
+                    when {
+                        !(diag.hasRuns && diag.allBlocked) -> false
+                        // 根拠の段階化（[PolishGate.c3nWallDeepCheck]）: 希望固定だけの壁は証明相当。探索手の全滅だけの壁は、
+                        //   1 手探索（上限 2 s）でも必須を減らす手が無いときだけ壁とみなす。
+                        !PolishGate.c3nWallDeepCheck || diag.allBlockedCertified -> true
+                        V6PortAnalyzer.c3nWallRefutedByOneMove(state, arr) -> { deepRefuted.incrementAndGet(); false }
+                        else -> { deepConfirmed.incrementAndGet(); true }
+                    }
                 } catch (_: Exception) { false }
             },
         )
@@ -978,8 +992,9 @@ object V6FinalPort {
             // 探索の後（後処理・追加精製）で改善したなら別項目として出す。探索フェーズの停滞と混ぜない。
             val afterNote = if (wd.lastBestImproveMs.get() > tChain1)
                 "・探索後も改善あり(経過${((wd.lastBestImproveMs.get() - startMs) / 1000)}s＝後処理/追加精製)" else ""
-            val wallNote = if (wallProof.checks.get() > 0)
-                "・c3n壁の確認${wallProof.checks.get()}回（生存盤面の更新のうち最良の報告と対応しないのは${wallProof.mismatch.get()}回）" else ""
+            val wallNote = (if (wallProof.checks.get() > 0)
+                "・c3n壁の確認${wallProof.checks.get()}回（生存盤面の更新のうち最良の報告と対応しないのは${wallProof.mismatch.get()}回）" else "") +
+                (if (deepRefuted.get() + deepConfirmed.get() > 0) "・1手探索の反証${deepRefuted.get()}回／確認${deepConfirmed.get()}回" else "")
             listOf(MirrorLog(
                 level = "I", tag = "Watchdog",
                 message = "停滞監視: 最終改善=経過${((lastImp - startMs) / 1000).coerceAtLeast(0)}s・" +

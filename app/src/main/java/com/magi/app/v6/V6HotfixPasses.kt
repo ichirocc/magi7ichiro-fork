@@ -293,6 +293,10 @@ object PolishGate {
     /** 測定用の切り分け（`docs/stall_escape.md` §5.5）: false＝後期演算（EarlyChain）は試行ごとの停止確認をしない（入口の停止確認は残るので HEAD とは完全に一致しない）。既定 **true**。 */
     @Volatile var lateOpStopPropagation: Boolean = true
 
+    /** 根拠の精度（`docs/stall_escape.md` §5.3、3.643.0）: 経験的な c3n 壁（探索手の全滅）は、1 手探索（`FixSuggester`、上限 2 s）でも必須を減らす手が
+     *  無いときだけ短縮に使う。希望固定だけの壁（証明相当）は従来どおり。既定 **false**（測定中、ベンチの腕 `deep`）。 */
+    @Volatile var c3nWallDeepCheck: Boolean = false
+
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
     fun snapshot(): Map<String, Any> = mapOf(
@@ -305,7 +309,7 @@ object PolishGate {
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
         "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
-        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "c3nWallLegacy" to c3nWallLegacy, "lateOpStopPropagation" to lateOpStopPropagation,
+        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "c3nWallLegacy" to c3nWallLegacy, "lateOpStopPropagation" to lateOpStopPropagation, "c3nWallDeepCheck" to c3nWallDeepCheck,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -323,7 +327,7 @@ object PolishGate {
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
         b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
-        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("lateOpStopPropagation") { lateOpStopPropagation = it }
+        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("lateOpStopPropagation") { lateOpStopPropagation = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }
     }
 }
 

@@ -156,6 +156,7 @@ c3nWallPlateau = nonCovUHard > 0 ∧ nonCovUAllC3n ∧ bestHard ≤ hardFloor + 
 - 対応が取れない時間は短縮を使わない＝停止は遅れる側に倒れる（fail-closed）。
 - 診断の開始は、内訳条件が成立し `stalled > shortStall` になった後。
 - 測定の基準腕 `PolishGate.c3nWallLegacy = true` は 3.641.0 までの判定（版ごとに一度、生存盤面を対応の検査なしに診断。`C3nWallProof.legacy`）。
+- 3.643.0（`PolishGate.c3nWallDeepCheck`、既定 false。§5.6）: 壁を証明相当（全セル希望固定、`ForbiddenRunDiagnosis.allBlockedCertified`）と経験的（探索手の全滅）に分け、経験的な壁は `V6PortAnalyzer.c3nWallRefutedByOneMove`（`FixSuggester` の手、上限 `Probe.C3N_WALL_DEEP_MS` = 2 000 ms）が必須を減らす手を見つけないときだけ壁とみなす。
 
 ### 4.4 実効閾値（DEFAULT）
 
@@ -241,13 +242,27 @@ otherwise に必ず含めるもの: 未診断、診断 false、B < B_min、壁�
 
 | 項目 | 内容 |
 |---|---|
-| 道具 | `tools/loop/HandleOptimizeBench.kt`（`MAGI_HO_FEATURE` の腕、同一 seed）、集計は `tools/loop/gate.py` |
+| 道具 | `tools/loop/HandleOptimizeBench.kt`（`MAGI_HO_FEATURE` の腕、同一 seed、`MAGI_HO_REPEATS` で同じ seed・同じ腕を反復）、集計は `tools/loop/ho_stats.py`（対の差の平均と 95% ブートストラップ区間・符号検定・rep 間の揺れ・決定／未決と必要な対の数） |
 | 比較 | 同一入力・seed・予算。腕: DEFAULT 対 M の数水準 |
 | 正の指標 | 後処理後 final の hard / weightedScore / total と壁時計 |
 | 母集団 | `Watchdog` 行で c3n 壁が効いた run を主解析。その他は回帰監視 |
 | 帯 | 60 s・120 s（RSI→ALNS）・300 s（PORTFOLIO）。各 5 seed 以上 |
 | 揺れ | 同一 seed・同一腕を反復して揺れを先に測る。workers 4 は壁時計に依存し seed を固定しても軌跡が変わる（2026-10-08 の診断: weighted ±100〜325、停止時刻 ±215 s）。腕の差が揺れを超えないなら未決とし、既定を動かさない || 勝ち | 壁母集団で final が改善し、全体に有害な回帰がない。事前に決めた基準で判定する |
 | 引き分け・負け | DEFAULT 維持。§12 に 1 行 |
+
+### 5.6 PROPOSAL-B（実装済み・既定 OFF）: 根拠の段階化
+
+DEFAULT の歪み（§4.4）を、待機ではなく根拠の強さで直す案。`PolishGate.c3nWallDeepCheck = true` のとき:
+
+```
+wall = allBlocked ∧ (allBlockedCertified ∨ ¬c3nWallRefutedByOneMove(board, 2000 ms))
+```
+
+- 証明相当の壁（全セル希望固定）は従来どおり短縮。経験的な壁は、1 手探索でも必須を減らす手が無いときだけ短縮。手が見つかれば通常閾値（探索を続ける）。
+- 反証は壁でない方向にしか働かない（fail-closed）。コストは最良版ごとに最大 2 s。同じ盤面は一度だけ（`BoardKeyedFlag` が直列化）。
+- 観測: `Watchdog` 行に「1手探索の反証 N 回／確認 M 回」。
+- 測定: ベンチの腕 `deep`。経験的な壁が出るフィクスチャで測る（sample_v6 の残る必須は希望衝突由来＝証明相当なので A/A になる）。判定は §5.5 の規則。
+- 書いてはいけない効果: 「壁の誤判定が無くなる」。言えるのは「1 手で崩せる壁を壁と呼ばなくなる」まで。
 
 ---
 
@@ -344,7 +359,7 @@ intensity         = base(role) + min(max(reassignments, 0) / 2, 3)
 
 | 行 | 層 | 読めること |
 |---|---|---|
-| `Watchdog` | A | 実効閾値の種別（通常=長／plateau=短／c3n壁=短／希望衝突の床=短）、停滞秒、発火の有無、未発火の理由、c3n 壁の確認回数と「生存盤面の更新のうち最良の報告と対応しない」回数（3.642.0） |
+| `Watchdog` | A | 実効閾値の種別（通常=長／plateau=短／c3n壁=短／希望衝突の床=短）、停滞秒、発火の有無、未発火の理由、c3n 壁の確認回数と「生存盤面の更新のうち最良の報告と対応しない」回数（3.642.0）、1 手探索の反証／確認の回数（`c3nWallDeepCheck` ON のとき、3.643.0） |
 | `EarlyStop` | A | 発火種別＝通常／猶予上書き（3.640.0）、発火時に壁を使ったか（`stagnationWall`、3.642.0） |
 | `AdaptivePortfolio` | B | 再配属回数・合計反復 |
 | `RunMAGI_RSI` | C | 改善したラウンドと最終ラウンド、末尾「戦略変更」1 行に focus の遷移、N4 の早期終了 |
@@ -416,6 +431,7 @@ C# 側は `MagiEngine.Tests/V6/StallEscapeSpecTest.cs`・`V6FinalPortWatchdogTes
 - [ ] 未診断／false／小予算は normal
 - [ ] base は short のまま
 - [ ] フラグ OFF で DEFAULT とビット一致するテスト
+- [ ] PROPOSAL-B: `c3nWallDeepCheck` ON で証明相当の壁は短縮、経験的な壁は反証が無いときだけ短縮。OFF で DEFAULT と一致
 
 **測定**
 

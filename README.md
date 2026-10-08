@@ -39,6 +39,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-10-08（3.643.0: 根拠の精度＝c3n 壁判定の段階化（証明相当の壁と経験的な壁を分け、経験的な壁は 1 手探索の反証。`PolishGate.c3nWallDeepCheck` 既定 OFF・計測中）、測定の精度＝`HandleOptimizeBench` の反復 `MAGI_HO_REPEATS` と `tools/loop/ho_stats.py`（揺れと 95% 区間で決定／未決）。詳細は `docs/history/3.4xx.md` 先頭）
+
 **最終更新**：2026-10-08（3.642.0: 停滞脱出の外部レビュー残件（c3n 壁の証拠を同じ参照で結ぶ・後期演算の試行中の停止確認・統合段の量的評価）と画面の監査 7 項目。計測（sample_v6・300 s と 120 s・各 5 seed・同一 seed）で既定を維持。引き渡し仕様 `docs/stall_escape_handoff.md` を追加。Windows 側は `windows/README.md`。詳細は `docs/history/3.4xx.md` 先頭）
 
 **最終更新**：2026-10-08（3.641.0: c3n 壁による停滞閾値の短縮を外す測定スイッチ `PolishGate.c3nWallShortStall`（既定 true）と `HandleOptimizeBench` の腕 `MAGI_HO_FEATURE=c3nwall`。sample_v6 で短縮あり／なしを同一 seed で比較＝120 s は差なし（時間 2.6 倍）、60 s は短縮なしが 5 勝 0 敗・−1.6%（時間 1.75 倍）、300 s は 4 勝 1 敗・−0.7%（時間 2.35 倍、非有意）。既定は据え置き＝出力不変。プラトー探索 C は PrePostDescent として測定済み・否決を仕様に反映）

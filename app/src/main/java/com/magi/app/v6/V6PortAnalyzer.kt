@@ -194,6 +194,8 @@ data class ForbiddenRunDiag(
         it.escape == ForbiddenCellEscape.FREE || it.escape == ForbiddenCellEscape.CHAIN ||
             it.escape == ForbiddenCellEscape.ADJACENT
     }
+    /** 全セルが本人の希望で固定＝辞書式意味論（pref > c3n）の下で証明相当の壁。3.284.0 の区別を値で持つ（3.643.0）。 */
+    val certified: Boolean get() = cells.isNotEmpty() && cells.all { it.escape == ForbiddenCellEscape.PINNED }
 }
 
 /**
@@ -208,6 +210,8 @@ data class ForbiddenRunDiagnosis(
     val hasRuns: Boolean get() = totalRuns > 0
     /** 全 run が構造的に塞がっている（＝このデータ・希望のままでは c3n を 0 にできない）。 */
     val allBlocked: Boolean get() = hasRuns && runs.none { it.escapable }
+    /** 全 run が証明相当（全セル希望固定）で塞がっている。それ以外の塞がりは「探索手の全滅」＝経験的な壁（3.643.0）。 */
+    val allBlockedCertified: Boolean get() = hasRuns && runs.all { it.certified }
 
     /** 診断ログ（エクスポートされる「MAGI ログ」に載る形式の文字列）。 */
     fun logLines(): List<String> {
@@ -250,6 +254,8 @@ object V6PortAnalyzer {
         const val SURPLUS_DEEP_BUDGET_MS = 8000L
         /** 1呼出あたりの上限（総予算を早い者勝ちで使い切らせない）。 */
         const val SURPLUS_DEEP_PER_CALL_MS = 2000L
+        /** [3.643.0] 経験的な c3n 壁を 1 手探索で反証する上限。停滞が短閾値（15 s 以上）を超えた後に最良版ごとに一度だけ走る。 */
+        const val C3N_WALL_DEEP_MS = 2000L
     }
 
     /** `findCovUChain`（探索本体と同一関数）を [Probe.CHAIN_SEEDS] 通りの rng 順で試し、1 つでも成立すれば真。 */
@@ -282,6 +288,12 @@ object V6PortAnalyzer {
         diff.sortBy { it.second }
         return FixSuggestion(FixKind.CHAIN, ops, label, after.hard - before.hard, after.total - before.total, diff)
     }
+
+    /** [3.643.0/根拠の精度] 経験的な c3n 壁（探索手の全滅）を 1 手探索で反証する。`FixSuggester` の手（1 マス変更・同一職員 2 マス・
+     *  同日交換・別日交換・3 人巡回・玉突き・1 日総当たり・多段連鎖）を [Probe.C3N_WALL_DEEP_MS] の上限で探し、必須を厳密に減らす手が
+     *  1 つでもあれば「壁ではない」。見つからないことは不能の証明ではなく、局所手の全滅より強い証拠。 */
+    fun c3nWallRefutedByOneMove(state: MagiState, schedule: Array<IntArray>, budgetMs: Long = Probe.C3N_WALL_DEEP_MS): Boolean =
+        FixSuggester.suggest(state, schedule, maxResults = 4, deadlineMs = budgetMs, ejectionChain = true).any { it.deltaHard < 0 }
 
     /**
      * 人員不足(covU)の枠ごとの原因診断。エンジンは変更せず、現在の解だけを読み取り、

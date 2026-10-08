@@ -172,6 +172,7 @@ class StallEscapeSpecTest {
         assertTrue(PolishGate.c3nWallShortStall)
         assertFalse("基準腕（HEAD の壁判定）は既定で使わない", PolishGate.c3nWallLegacy)
         assertTrue("後期演算は停止要求を見る（既定）", PolishGate.lateOpStopPropagation)
+        assertFalse("1 手探索の反証は既定で使わない（測定中）", PolishGate.c3nWallDeepCheck)
         assertEquals(2, V6FinalPort.STALL_OVERRIDE_FACTOR)
         assertEquals(5000, Hf63Infeasibility.INFEAS_STALL_ITERS)
         assertEquals(3, StallPolishInjection.MAX_INJECTIONS)
@@ -184,12 +185,15 @@ class StallEscapeSpecTest {
         try {
             PolishGate.c3nWallLegacy = true
             PolishGate.lateOpStopPropagation = false
+            PolishGate.c3nWallDeepCheck = true
             val snap = PolishGate.snapshot()
             PolishGate.c3nWallLegacy = false
             PolishGate.lateOpStopPropagation = true
+            PolishGate.c3nWallDeepCheck = false
             PolishGate.restore(snap)
             assertTrue("c3nWallLegacy は往復する", PolishGate.c3nWallLegacy)
             assertFalse("lateOpStopPropagation は往復する", PolishGate.lateOpStopPropagation)
+            assertTrue("c3nWallDeepCheck は往復する", PolishGate.c3nWallDeepCheck)
         } finally { PolishGate.restore(saved) }
     }
 

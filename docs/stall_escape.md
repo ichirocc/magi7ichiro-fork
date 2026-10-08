@@ -71,6 +71,7 @@ weightedScore は実際には整数値（`MirrorKeys.weights` は全て整数、
 | `V6SanityPort.structuralHardFloor` | 有資格者を全員就けても埋まらない席＝構造上避けられない covU の下限。最適化中に不変 | 他 HARD・SOFT の最適性 |
 | `V6PortAnalyzer.diagnoseForbiddenRuns`（`allBlocked`） | 現在盤面の各 run で、単セル変更・玉突き・隣接日調整の不成立。診断文が「複数日にまたがる 2 人の入れ替えは試していない」と明記 | 全勤務表空間での不能 |
 | HF63 | focus した族に概算投入量を積んでも履歴最小を更新できない | 構造的不可能性、未追跡族の状態 |
+| `V6PortAnalyzer.c3nWallRefutedByOneMove`（3.643.0、`c3nWallDeepCheck` ON のとき） | `FixSuggester` の 1 手（上限 2 s）に必須を厳密に減らす手が無い | 不能の証明ではない。局所手の全滅より強い証拠 |
 | 一定時間無改善 | 観測期間に改善がなかった | 将来も改善しないこと |
 
 識別子 `c3nWallProven` は残っているが、意味は「限定した手の壁判定」。希望固定だけで説明できる個別ケース（`wishConflictC3wCount`）と一般の `allBlocked` を一括して数学的証明と呼ばない。
@@ -134,6 +135,7 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
   - 対応が取れない間は、同じ最良版で対応が取れていた判定だけを持ち越す（段の境界で `optimize()` が生存盤面を空にしても失わない）。版が変われば持ち越さない。
   - 既知の限界: 同じ報告参照は同じ盤面とみなせるが、値の一致では別盤面を区別できない。対応が取れない時間は壁の短縮を使わないので、停止は遅れる側（fail-closed）に倒れる。その代償は §11 の測定で判断する。
   - 測定の基準腕 `PolishGate.c3nWallLegacy=true` は HEAD（版ごとに一度、生存盤面を一致の検査なしに診断）。
+  - 3.643.0（`PolishGate.c3nWallDeepCheck`、既定 false）: 壁を証明相当（全 run の全セルが希望固定、`ForbiddenRunDiagnosis.allBlockedCertified`）と経験的（探索手の全滅）に分け、経験的な壁は `c3nWallRefutedByOneMove` が手を見つけないときだけ `c3nWallProven` とする。OFF では従来どおり `allBlocked` だけで判定する。反証は壁でない方向にしか働かない。
 - `c3nWallPlateau` は限定した手の壁判定（§4）で**閾値を短縮する**（300 s 予算で 270 s → 37.5 s）だけで、即停止ではない。動機は実機ログ「c3n=1 のまま 150 s 無改善でも 270 s 閾値で発火不能」（3.281.0）。早期終了全体の品質差は 3.341.1 で非有意（§11）。多セル交換で崩せる c3n を短縮で取り逃がす可能性は残る。3.641.0 で測った（§11、sample_v6×5 seed）: 120 s では損失なし、60 s では短縮なしが 1.6% 良い（時間 1.75 倍）、300 s では 0.7% 良い（時間 2.35 倍、非有意）。測定スイッチは `PolishGate.c3nWallShortStall`。
 - `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。ON の副作用（解ける HARD を残したまま短縮）は「残る HARD が全て希望由来」を条件に含めることで防ぐ設計。実機 A/B は HARD=床の盤面待ち。
 - 「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず解ける HARD を早々に諦めていた＝構造的 covU へ是正済み。
@@ -321,6 +323,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 | `PolishGate.c3nWallShortStall` | true（UI なし） | false で c3n 壁による短縮を外す（測定用、3.641.0） |
 | `PolishGate.c3nWallLegacy` | false（UI なし） | true で HEAD の c3n 壁判定（版ごと固定・生存盤面の診断・一致の検査なし）。測定の基準腕（3.642.0、§5.3） |
 | `PolishGate.lateOpStopPropagation` | true（UI なし） | false で後期演算の試行ごとの停止確認を切る（入口の確認は残るので HEAD とは完全に一致しない）。測定の切り分け（3.642.0、§5.5） |
+| `PolishGate.c3nWallDeepCheck` | false（UI なし） | true で経験的な c3n 壁を 1 手探索（上限 2 s）で反証し、手が無いときだけ短縮に使う。ベンチの腕 `deep`（3.643.0、§5.3） |
 
 撤去済みで現行仕様ではないもの: 残差ベース 4 段脱出 `adaptiveEscapeControl`／`StagnationEscapeController`（3.409.21 単体 A/B 中立）、ロール内並列 SA `portfolioRoleParallelSa`（同）、採用 0 の巡で LNS・VCR を 2 倍にする `stallEscalation`（3.511.1 全件無変化、2026-09-25 撤去）。
 
@@ -360,7 +363,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 1. 対象 SHA を固定する。main が進んだら参照箇所の差分から確認する。
 2. 問題は層（A〜E）・観測対象・状態の所有者・時間単位で記述する。発火条件だけでなく解除条件と停止範囲を確認する。
 3. 「現行コードの事実」「過去測定」「推論」「提案」を分ける。改善不能の根拠は §4 の 4 種に分ける。
-4. 制御変更は 1 件ずつ、同じ入力・seed・予算で最終 hard・weightedScore・total・経過時間を比較する（`tools/loop/run_bench.sh`、`MAGI_BENCH_FEATURE`）。実行中の採用数や AUC では採否を決めない。実データでは final を見る。
+4. 制御変更は 1 件ずつ、同じ入力・seed・予算で最終 hard・weightedScore・total・経過時間を比較する（`tools/loop/run_bench.sh`、`MAGI_BENCH_FEATURE`）。実行中の採用数や AUC では採否を決めない。実データでは final を見る。壁時計のハーネス（`HandleOptimizeBench`）は同じ seed でも揺れる（workers 4）ので、`MAGI_HO_REPEATS` で同じ seed・同じ腕を反復し、`tools/loop/ho_stats.py` で rep 間の揺れと対の差の 95% 区間を出す。区間が 0 を含むなら「未決」として既定を動かさない（3.643.0）。
 5. 重み・閾値・探索幅を文書整理のついでに変えない（HF77＝明示数値指示＋1 件ずつ）。
 6. 層 A・B の純関数を変えたらテスト（`StallEscapeSpecTest`＝この文書の表と境界、`V6FinalPortTest`・`WishConflictFloorTest`・`HypothesisEpochPolicyTest`・`Hf63InfeasibilityTest`・`StallPolishInjectionTest`、C# `StallEscapeSpecTest`・`V6FinalPortWatchdogTest`）を同じコミットで更新し、採否を `docs/algorithm_portfolio.md` と `docs/history/` へ書く。
    `stagnationFired` が改善で降りること（`WatchdogBest.observe`）と `runRsi` の `avoid` に SOFT が入らないこと（`RsiFocusSelection.avoidSets`）も `StallEscapeSpecTest` が固定する。
