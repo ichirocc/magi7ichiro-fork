@@ -22,6 +22,13 @@ fun main(args: Array<String>) {
     val feature = System.getenv("MAGI_HO_FEATURE") ?: ""
     val fixtures = System.getenv("MAGI_HO_FIXTURES")?.split(',')?.filter { it.isNotBlank() }
         ?: listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json")
+    // [2026-10-08/診断] MAGI_HO_SEEDS: seed をカンマ区切りで指定（省略時は 1..seeds）。MAGI_HO_LOGTAGS と MAGI_HO_LOGFILE:
+    //   指定タグ（例 Watchdog,EarlyStop,ExtraRefine）のエンジンログ行を run ごとにファイルへ追記する（悪化した seed の
+    //   停止理由を読むため）。CSV は不変。
+    val seedList = System.getenv("MAGI_HO_SEEDS")?.split(',')?.mapNotNull { it.trim().toIntOrNull() }?.takeIf { it.isNotEmpty() }
+        ?: (1..seeds).toList()
+    val logTags = System.getenv("MAGI_HO_LOGTAGS")?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+    val logFile = System.getenv("MAGI_HO_LOGFILE")?.takeIf { it.isNotBlank() }?.let { File(it) }
 
     val w = java.io.FileWriter(out, false).buffered()
     w.write("fixture,seed,arm,elapsedMs,hard,weightedScore,total\n")
@@ -31,7 +38,7 @@ fun main(args: Array<String>) {
         val f = File(resDir, fname)
         if (!f.exists()) { System.err.println("skip missing $fname"); continue }
         val st = StateParser.parse(f.readText())!!
-        for (seed in 1..seeds) {
+        for (seed in seedList) {
             for (armOn in listOf(false, true)) {
                 PolishGate.c3nWallShortStall = !(feature == "c3nwall" && armOn)
                 // "head"＝HEAD の壁判定と後期演算の試行中の停止確認を切る（on 腕。入口の確認は残る）。off 腕＝現行。
@@ -52,6 +59,11 @@ fun main(args: Array<String>) {
                     "${res.report.hard},${res.report.weightedScore},${res.report.total}"
                 w.write(line + "\n"); w.flush()
                 System.err.println(line)
+                if (logTags.isNotEmpty() && logFile != null) {
+                    val picked = res.logs.map { it.toString() }.filter { l -> logTags.any { l.contains("tag=$it") } }
+                    logFile.appendText("### $fname seed=$seed arm=$arm elapsed=$elapsed hard=${res.report.hard} w=${res.report.weightedScore} t=${res.report.total}\n" +
+                        picked.joinToString("\n") + "\n")
+                }
             }
         }
     }
