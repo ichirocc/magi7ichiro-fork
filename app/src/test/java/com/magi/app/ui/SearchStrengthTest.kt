@@ -18,6 +18,8 @@ class SearchStrengthTest {
             assertEquals(SearchStrength.NORMAL, UiState().searchStrength)
             assertEquals(false, UiState().c1MoveARepair)
             assertEquals(false, PolishGate.c1MoveARepair)
+            assertEquals(false, UiState().aptFairToleranceUnguarded)
+            assertEquals(true, com.magi.app.v6.AptFairPolish.heavySoftGuard)
             assertEquals(EjectionChainMode.OFF, UiState().ejectionChain)
             assertEquals(false, PolishGate.c1EjectionChain)
             assertEquals(false, PolishGate.allFamilyEjectionChain)

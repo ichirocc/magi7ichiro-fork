@@ -23,7 +23,8 @@ internal object AptFairPolish {
     internal const val SOFT_TOLERANCE_FRACTION = 0.06
     /** [無害化, 2026-09-24 ユーザー指定の集合] 許容 ON でも 1 件でも増えたら採らない重い SOFT（apt/fair/weekly/c2/c3/c3m は軽い側として許容しうる）。 */
     internal val TOLERANCE_BLOCKED_FAMILIES = setOf("c1", "low", "high", "covO", "c3mn", "c41", "c42", "c41s", "c42s")
-    /** 測定用（2026-10-08 ユーザー指示「6% ぐらいの重み悪化なら容認する」）: false＝無害化②を外し、重い SOFT の増加も 6% 予算の内なら採る。本番は true。 */
+    /** 測定用（2026-10-08 ユーザー指示「6% ぐらいの重み悪化なら容認する」）: false＝無害化②を外し、重い SOFT の増加も 6% 予算の内なら採る。既定 true。
+     *  設定タブ「容認 6% で重い違反の増加も許す」（3.638.0）と tools/loop の腕 `aptfairtolunguarded` が切る。[PolishGate.snapshot] に載せる。 */
     @Volatile internal var heavySoftGuard: Boolean = true
 
     /** internal＝`AptFairPolishToleranceTest` から直接検証するため（private だとファイル外から呼べない）。 */

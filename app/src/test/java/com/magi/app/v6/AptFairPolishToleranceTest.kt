@@ -44,6 +44,35 @@ class AptFairPolishToleranceTest {
             AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true))
     }
 
+    @Test fun heavySoftGuardOffAcceptsBlockedFamilyIncreaseWithinBudget() {
+        // baseline: fair 以外 = c3m(1)*6 + apt(30)*4 = 126 → 予算 7.56。候補は fair-1(-2)・c3m-1(-6)・covO+1(+10)＝生 +2 悪化。
+        val before = repOf("fair" to 10, "c3m" to 1, "apt" to 30)
+        val bestRep = before
+        val candidate = repOf("fair" to 9, "c3m" to 0, "apt" to 30, "covO" to 1)
+        val saved = AptFairPolish.heavySoftGuard
+        try {
+            assertFalse("既定（無害化②あり）: 重い SOFT の covO が 1 件増えるので採らない",
+                AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true))
+            AptFairPolish.heavySoftGuard = false
+            assertTrue("②なし: 増分 +4 は予算 7.56 の内なので採る",
+                AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true))
+            assertFalse("②なしでも OFF は betterReport のまま",
+                AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = false))
+        } finally { AptFairPolish.heavySoftGuard = saved }
+    }
+
+    @Test fun heavySoftGuardRoundTripsThroughSnapshot() {
+        val saved = PolishGate.snapshot()
+        try {
+            AptFairPolish.heavySoftGuard = false
+            val snap = PolishGate.snapshot()
+            AptFairPolish.heavySoftGuard = true
+            PolishGate.restore(snap)
+            assertFalse(AptFairPolish.heavySoftGuard)
+        } finally { PolishGate.restore(saved) }
+        assertTrue(AptFairPolish.heavySoftGuard)
+    }
+
     @Test fun exceedingBudgetTradeIsStillRejected() {
         val before = rep(fair = 10, apt = 0, low = 1)   // baseline non-fair soft = 120, 予算 = 7.2
         val bestRep = before

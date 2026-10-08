@@ -1255,6 +1255,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 探索の強さ → ${searchStrengthLabel(strength)}")
     }
 
+    fun setAptFairToleranceUnguarded(on: Boolean) {
+        com.magi.app.v6.AptFairPolish.heavySoftGuard = !on
+        _ui.update { it.copy(aptFairToleranceUnguarded = on) }
+        logOp("I", "設定変更: 容認 6% で重い違反の増加も許す → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setC1MoveARepair(on: Boolean) {
         com.magi.app.v6.PolishGate.c1MoveARepair = on
         _ui.update { it.copy(c1MoveARepair = on) }
