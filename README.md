@@ -22,7 +22,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`docs/magi_design_system.md`](./docs/magi_design_system.md) | デザイン基盤（色/余白/タイポ/部品） |
 | [`docs/v6_engine_native_port.md`](./docs/v6_engine_native_port.md) | エンジン（v6）の移植 |
 | [`docs/kotlin_cpp_split.md`](./docs/kotlin_cpp_split.md) | Kotlin と C++ の棲み分け（新しいコードをどちらに置くか・番兵の不変条件） |
-| [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞脱出の台帳**（層 A〜E の停滞の定義・閾値の式と実値・頭打ちの床・既定 OFF と否決の一覧・判定に使うログ行。経緯は history） |
+| [`docs/stall_escape.md`](./docs/stall_escape.md) | **停滞検知・脱出・終了制御の実装準拠仕様**（層 A〜E の地図・比較と監視の契約・保証の範囲・閾値の式と実値・頭打ちの床・既定 OFF と否決・ログ行・レビュー手順。経緯は history） |
 | [`docs/algorithm_portfolio.md`](./docs/algorithm_portfolio.md) | 探索・研磨の**入口と責務の台帳**（どの手がどこで走るか・横断機構・既定OFF・廃止済み・未実施の提案） |
 | [`docs/environment.md`](./docs/environment.md) | **環境固有の手順**（ホスト JVM ビルド・CI 監視・probe・プラグイン・Serena。CLAUDE.md から移設） |
 | [`docs/s6_relax_trial.md`](./docs/s6_relax_trial.md) | **S6「設定を緩めたら」試算の設計・実データ検証・安全仕様**（Android・C# とも実装済み。候補は個人の上限 0 の組・0→1、確定＝緩和＋試算の手順を Undo 1 段、鮮度・背景探索・利用者の決定 Q1〜Q9） |

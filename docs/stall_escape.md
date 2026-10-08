@@ -1,180 +1,354 @@
-# 停滞脱出（停滞の検知・早期終了・脱出手）の台帳
+# MAGI 停滞検知・脱出・終了制御 — 実装準拠仕様
 
-> 探索が「改善しなくなった」ときに何が起きるかを、**層ごと**に 1 か所へまとめた資料（2026-10-08・3.638.0 時点のコードで照合）。
-> 経緯の本文は `docs/history/topics.md`「停滞脱出の改善」と `docs/history/INDEX.md`（「停滞」「ウォッチドッグ」「早期終了」で grep）、
-> 既定 OFF と否決の一覧は `docs/algorithm_portfolio.md`。ここは**現行の規則と数値**だけを書く。数値を変えたらここも同じコミットで直す。
-> C# 移植（`ichirocc/-MAGI_PC`）は同値＝`V6FinalPort.Watchdog.cs`・`V6FinalPort.HandleOptimize.cs`。
+## 1. この文書の位置づけ
 
-## 0. 一枚で
+- 対象: `ichirocc/magi7ichiro-fork` の Android/Kotlin エンジン（C++ `magi_native.cpp` と C# `ichirocc/-MAGI_PC` は同値の移植。C# は `V6FinalPort.Watchdog.cs`・`V6FinalPort.HandleOptimize.cs`）。
+- 照合した実装: main `4af3456`（2026-10-08）。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能測定はしていない。
+- 目的: 会話履歴なしで停滞制御を読解・レビューできること。**現行実装の記述**であり、閾値変更や新アルゴリズムの提案ではない。
+- 読解規則: コメントや過去資料の設計意図と条件式が違うときは**条件式を優先する**。「保証」「推定」「未検証」を区別する。
+- 数値・規則を変えたら、この文書を**同じコミットで**直す（Kotlin → C++ → C# の順、同日）。経緯の本文は `docs/history/`、採否の台帳は `docs/algorithm_portfolio.md`。
 
-| 層 | 停滞の定義 | 停滞したら | 品質への影響 |
-|---|---|---|---|
-| **A. 実行全体のウォッチドッグ**（`V6FinalPort.handleOptimize`） | 最良（hard→weightedScore→total）が `effStall` ms 更新されない | 探索を打ち切り後処理へ（追加精製は省く） | 保持済み最良は悪化しない（keep-best）。続けていれば得たかもしれない改善は失う＝時間・電池との交換 |
-| **B. 適応ポートフォリオ**（`V6NativeOptimizer` エポックループ） | 自己エリートが 1 エポック改善しない／他ワーカーと距離 ≤2 セル | 役割を回す・強度を上げる（W0 は不動） | なし（全体最良は別管理） |
-| **C. RSI ラウンド**（`runRsi`） | ラウンドの keep-best が無改善 | focus の 1R 冷却→HF63 が族を外す→狙える族が尽きたら早期終了 | なし |
-| **D. SA/LAHC ラダー**（`SaOptimizer`・C++ `SaChunk`） | HARD が `hardStallMs`=2.5 s 下がらない／ラダー境界 | PhaseB（LAHC）へ一方向遷移／reset-to-best 再加熱 | なし |
-| **E. 後処理の各パス** | パスごとの patience／採用 0 の巡 | そのパスを打ち切る・巡を終える | なし（入力比番兵） |
+## 2. 最初に理解すること
 
-共通の原則: **停滞は停止条件ではなく「別の手を要求する信号」**（B）。探索全体を止めるのは A だけで、C は RSI の呼び出し、E はパス／巡を止める。
-どの層も keep-best と入力比番兵で「停滞で早く返しても保持済みの最良は下がらない」を守る（継続探索との同等品質は保証しない）。探索動学の変更は測ってから（`tools/loop/` のペア比較）。
+停滞脱出は単一のアルゴリズムではない。観測対象と寿命が違う 5 つの層が、入れ子で動く。
 
-## 1. 層 A: 実行全体のウォッチドッグ（`V6FinalPort.handleOptimize`）
-
-### 1.1 時間の切り方（予算 `budgetMs`）
-
-| 名前 | 式 | 300 s 予算 | 60 s 予算 | 役割 |
+| 層 | 実装 | 観測対象 | 停滞時の操作 | 止まる範囲 |
 |---|---|---|---|---|
-| `minRunMs` | `budget/6`、8〜45 s、予算以下 | 45 s | 10 s | これより前は発火しない |
-| `postReserveMs` | `budget/12`、8〜25 s、予算の半分以下 | 25 s | 8 s | 後処理の予約枠。探索は `searchDeadlineMs = hardDeadline − postReserve` で止まる |
-| `stallMs`（通常） | `normalStallMs`＝`budget × normalStallFraction(0.9)`、下限 20 s。その値が探索区間 `searchWindowMs` 以上なら `searchWindow × 0.9` へ | 270 s | 46.8 s（52 s 区間へのフォールバック） | 解ける HARD が残る局面の閾値 |
-| `stallHardMs`（頭打ち） | `budget/8`、下限 15 s | 37.5 s | 15 s | HARD が床に着いた局面の閾値 |
-| `phaseGraceMs` | `budget/40`、2〜15 s | 7.5 s | 2 s | 始まったばかりのフェーズを即殺しない**遅延** |
-| `STALL_OVERRIDE_FACTOR` | 2 | — | — | 無改善が閾値の 2 倍なら猶予に関わらず発火 |
+| A 実行全体の監視 | `V6FinalPort.handleOptimize` | 進捗報告で観測した最良 | 探索停止信号 | **探索だけ**。統合・後処理はその後も走る |
+| B 適応ポートフォリオ | `V6NativeOptimizer.runAdaptivePortfolio`・`AdaptiveHypothesisEpochPolicy` | ワーカーの自己エリート、他ワーカーとの盤面距離 | 再配属・強度変更 | 止めない（停止確認または締切まで続く） |
+| C RSI | `runRsi`・`RsiFocusSelection`・`Hf63Infeasibility` | ラウンド最良・focus 族の件数・HF63 履歴 | focus の冷却・回避・切替 | その `runRsi` 呼び出し |
+| D SA/LAHC | `SaOptimizer`・C++ `SaChunk` | 内部スコアの HARD 部分・ラダー境界 | LAHC へ移行・再加熱 | その探索内部のフェーズ |
+| E 後処理 | `V6HotfixPasses.runPostOptimization` 配下 | パス最良・採用数・個別予算 | パス・巡を打ち切る | そのパス／巡 |
 
-`normalStallFraction` は `PolishGate` の `@Volatile`（既定 0.9、UI トグル無し、`PolishGate.snapshot` に載る）。(0,1) の有限値だけ受ける。
+「A→B→C→D→E を順に試す 5 段階」ではない。B の中で C と D が動き、A は外から停止条件を供給する。探索方式によっては走らない層がある（PORTFOLIO は予算 211 s 以上の AUTO でしか選ばれない）。
 
-### 1.2 発火判定（純関数、`V6FinalPortTest`）
+## 3. 用語と契約
+
+### 3.1 用語
+
+| 用語 | 意味 |
+|---|---|
+| report | `ViolationReport`。`hard`・`weightedScore`・`total`・族別 `breakdown` |
+| HARD | `MirrorKeys.hard` = `groupViol`（群外）, `c3n`（禁止連続）, `covU`（人員不足）, `pref`（希望未充足）, `c3w`（希望前日の禁止） |
+| SOFT | それ以外の 15 族。HARD が下限でも改善余地が残る |
+| globalBest / elite / trajectory | ポートフォリオ全体の最良／ワーカーごとの保持最良／探索軌跡側の盤面（elite と同じとは限らない） |
+| focus | RSI が次に狙う族。`total` は「全違反セル起点の汎用修復」 |
+| epoch / round | ワーカーの役割実行単位／RSI 内部の探索単位 |
+| keep-best | 保持済み最良を悪化候補で置き換えない。比較は §3.2 |
+
+### 3.2 候補採用と停滞時計は別契約
+
+候補の正式比較は `MirrorCore.betterReport`（単一ソース `reportComparator`）。小さい方が良い、厳密な辞書式。
 
 ```
-watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs, phaseGraceMs, lastBestImproveMs, effStall)
-  = now − start > minRunMs
-    ∧ now − lastBestImprove > effStall
-    ∧ (now − lastPhaseChange > phaseGraceMs ∨ now − lastBestImprove > effStall × 2)
+key(report)        = (hard, weightedScore, total)
+betterReport(a, b) = key(a) <lex key(b)
 ```
 
-- 時計は 2 本に分ける。`lastBestImproveMs` は**最良が更新された時刻**（フェーズ遷移ではリセットしない）。`lastPhaseChangeMs` は
-  進捗文字列の変化。旧実装の `max(両者)` は 20〜90 s ごとのフェーズ遷移で 270 s に届かなかった（3.230.0）。
-- フェーズ猶予は**拒否権ではない**。並列 8 ワーカーが 1 本のフェーズ文字列を共有して猶予が永久に塞がる事故（実機 2026-08-19、
-  275 s 無改善で未発火）を 3.408.0 で「閾値の 2 倍で上書き発火」に降格した。
-- 最良の比較は `better`（hard→weightedScore→total の辞書式、3.287.0 で第 2 キーを total→weightedScore へ）。ただし**進捗監視だけ**は weightedScore に
-  1e-6 の許容差を置く（`h < bh || (h == bh && w < bw − 1e-6) || (h == bh && w ≤ bw + 1e-6 && t < bt)`、3.289.0）＝数値揺れで時計が戻り続けないため。候補採用の `betterReport` は厳密のまま。
-
-### 1.3 実効閾値 `effStall`＝「頭打ち」の判定（`effectiveStallMs`）
+層 A の**進捗監視だけ**は、数値揺れで時計が戻り続けないよう weightedScore に 1e-6 の許容差を置く（`V6FinalPort.kt` の `progressWatch`、3.289.0）。
 
 ```
-basePlateau    = (bestHard ≤ hardFloor ∧ nonCovUHard = 0) ∨ wishReached
+improved = h < bh
+        ∨ (h == bh ∧ w < bw − 1e-6)
+        ∨ (h == bh ∧ w ≤ bw + 1e-6 ∧ t < bt)
+```
+
+この監視判定を `betterReport` と同一に書き換えない。逆にこの許容差を候補採用へ広げない。SA 内部は評価器のパックされた Long スコア（`hard×1e9 + soft`）で判定するので、全ての内部移動が上の 3 キーで判定されるわけでもない。
+
+採用には比較以外の保護条件がある: 拡張希望の禁止 `keepsExtBan`、希望固定の規則 A `keepsWishPins`、上限 0 の `mayPlace`。後処理の apt/fair 研磨だけは既定 OFF の例外 `aptFairSoftTolerance`（他 SOFT +6% 容認）を持つ。
+
+### 3.3 保証の範囲
+
+- keep-best と各番兵（`runAlns`／`runV5`／後処理の入力比番兵）が守るのは**保持済み最良の非悪化**。早期終了しなかった場合に得られたかもしれない改善との同等性は保証しない＝早期終了は品質と時間・電池の交換。
+- HARD 下限への到達は SOFT の最適性ではない。「品質への影響なし」という過去の表現はこの意味で読む。
+
+## 4. 「改善不能」の根拠の強さ
+
+| 根拠 | 実際に分かること | 分からないこと |
+|---|---|---|
+| `V6SanityPort.structuralHardFloor` | 有資格者を全員就けても埋まらない席＝構造上避けられない covU の下限。最適化中に不変 | 他 HARD・SOFT の最適性 |
+| `V6PortAnalyzer.diagnoseForbiddenRuns`（`allBlocked`） | 現在盤面の各 run で、単セル変更・玉突き・隣接日調整の不成立。診断文が「複数日にまたがる 2 人の入れ替えは試していない」と明記 | 全勤務表空間での不能 |
+| HF63 | focus した族に概算投入量を積んでも履歴最小を更新できない | 構造的不可能性、未追跡族の状態 |
+| 一定時間無改善 | 観測期間に改善がなかった | 将来も改善しないこと |
+
+識別子 `c3nWallProven` は残っているが、意味は「限定した手の壁判定」。希望固定だけで説明できる個別ケース（`wishConflictC3wCount`）と一般の `allBlocked` を一括して数学的証明と呼ばない。
+
+## 5. 層 A — 実行全体の停止監視
+
+実装: `V6FinalPort.handleOptimize`、純関数 `normalStallMs`／`effectiveStallMs`／`watchdogStagnationFired`／`wishFloorReached`（`V6FinalPortTest`・`WishConflictFloorTest`）。
+
+### 5.1 時間の切り方
+
+単調時計のミリ秒（`EngineClock.nowMs`）。`B=budgetMs`, `S=startMs`, `D=hardDeadlineMs`。整数除算は切り捨て。
+
+```
+minRun       = min(clamp(B/6, 8000, 45000), B)
+postReserve  = min(clamp(B/12, 8000, 25000), B/2)
+searchEnd    = max(D − postReserve, S + minRun)
+searchWindow = searchEnd − S
+raw          = max(toLong(B × fraction), 20000)
+normalStall  = raw                                        if raw < searchWindow
+             = max(toLong(searchWindow × fraction), 20000) otherwise
+shortStall   = max(B/8, 15000)
+phaseGrace   = clamp(B/40, 2000, 15000)
+fraction     = PolishGate.normalStallFraction（既定 0.9、有限かつ 0 < f < 1、違反は require で落とす）
+```
+
+| 予算 | 探索区間 | minRun | normalStall | shortStall | phaseGrace | postReserve |
+|---:|---:|---:|---:|---:|---:|---:|
+| 300 s | 275 s | 45 s | 270 s | 37.5 s | 7.5 s | 25 s |
+| 60 s | 52 s | 10 s | 46.8 s（フォールバック） | 15 s | 2 s | 8 s |
+
+20 s の下限があるため、予算が短いと通常閾値が探索区間内に届かないことがある（例: 20 s 予算は区間 12 s・閾値 20 s）。「フォールバックすれば必ず発火し得る」とは読まない。
+
+### 5.2 改善報告で更新する状態
+
+§3.2 の監視判定が真になると、最良値・`lastBestImproveMs`・観測反復数・非 covU 内訳・世代番号を更新し、同時に
+
+```
+stagnationFired = false; stagnationDurationMs = −1; stagnationIters = −1
+```
+
+**`stagnationFired` は永続ラッチではない**（3.346.0 で是正）。フェーズ文字列の変化は別時計 `lastPhaseChangeMs` だけを更新し、`lastBestImproveMs` には触れない。
+
+### 5.3 通常閾値と短い閾値の選択
+
+```
+nonCovUHard    = groupViol + pref + c3n + c3w
+nonCovUAllC3n  = groupViol == 0 ∧ pref == 0 ∧ c3w ≤ wishC3wProven ∧ c3n > 0
+basePlateau    = (bestHard ≤ hardFloor ∧ nonCovUHard == 0) ∨ wishReached
 c3nWallPlateau = nonCovUHard > 0 ∧ nonCovUAllC3n ∧ bestHard ≤ hardFloor + nonCovUHard ∧ c3nWallProven
-effStall       = (basePlateau ∨ c3nWallPlateau) ? stallHardMs : stallMs
+effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
 ```
 
-| 床 | 何が「解けない」と言えるか | 算出 |
+- `hardFloor` は §4 の構造的 covU 床（1 回だけ算出）。「非 covU HARD = 0」を併せるのは、群外の過配置が covU を床より見かけ上へこませても、解ける groupViol が残る間は長い閾値で粘るため。
+- `wishC3wProven` は `wishConflictFloorMode == OFF`（既定）なら 0。ON のときは希望衝突由来の c3w 件数なので、`nonCovUAllC3n` は文字通り「c3n 以外が全部 0」ではない。
+- `c3nWallProven` の診断（約 20 ms）は、内訳条件を満たし無改善が `shortStall` を超えた後に遅延実行し、`(bestVersion, result)` を単一 `AtomicReference` で保持する（3.592.0）。
+- `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。
+- 「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず解ける HARD を早々に諦めていた＝構造的 covU へ是正済み。
+
+### 5.4 発火式と境界
+
+```
+stalled = now − lastBestImproveMs
+fired   = now − S > minRun
+        ∧ stalled > effStall
+        ∧ (now − lastPhaseChangeMs > phaseGrace ∨ stalled > effStall × STALL_OVERRIDE_FACTOR(2))
+```
+
+- 全て `>`。ちょうど閾値では発火しない。
+- フェーズ猶予は「始まったばかりのフェーズを即殺しない」**遅延**であって拒否権ではない。並列 8 ワーカーが 1 本のフェーズ文字列を共有して猶予が永久に塞がった事故（実機 2026-08-19、275 s 無改善で未発火）を、3.408.0 で「閾値の 2 倍で上書き発火」に降格した。
+- 旧実装の `max(lastBestImprove, lastPhaseChange)` 単一時計は、20〜90 s ごとのフェーズ遷移で 270 s に届かなかった（3.230.0）。
+- `shouldStop` は `now ≥ searchEnd ∨ キャンセル` を先に判定する。締切による停止と停滞発火は別の理由。
+
+### 5.5 並列探索への伝達
+
+- `shouldStop`: 締切・キャンセル・停滞のいずれか。改善で停滞条件が消えるので**非単調**。
+- `stopIsFinal`: 締切またはキャンセルだけ（単調）。
+- `V6NativeOptimizer.confirmStop`: 単調停止は即確定。そうでなければ最大 `STOP_CONFIRM_MS`=5 000 ms、`STOP_CONFIRM_POLL_MS`=250 ms 間隔で再確認し、`shouldStop` が偽へ戻れば続行（一瞬のシグナルで片肺運転にしない、3.346.1）。
+- 停止は協調的。締切の瞬間に全処理が強制終了する保証はない。
+
+### 5.6 探索後
+
+探索結果 → 候補統合 → 後処理 → 条件付き追加精製 → 最終選択・安全確認。A の発火は後処理を一括キャンセルしない。後処理は `D` までを締切に受け取るが、各パスが自前の予算・上限・打ち切りを持つ。`postReserve` は探索から確保する枠であり、後処理を常にその秒数で固定するタイマーではない。
+
+追加精製 `ExtraRefine`（後処理予約枠の未使用分で最終盤面起点の keep-best ALNS、3.102.0）:
+
+```
+extraMs  = min(D − postEndMs, postReserve)
+canExtra = ¬stopRequested ∧ ¬stagnationFired ∧ post.report.total > 0 ∧ ¬structuralHardResidual
+実行     = extraMs ≥ 5000 ∧ canExtra
+```
+
+`structuralHardResidual` は `extraRefineRequirePostHardDrop`（`handleOptimize` 引数、既定 false）が true のときだけ評価する追加ゲート。走らなかったときは `ExtraRefine` 行に理由を残す。希望床 E0B は専用条件で研磨を省き `minimalPost` を使う。
+
+## 6. 層 B — 適応ポートフォリオ
+
+役割スロットは `floorMod(workerIndex, 8)`。以下は 8 スロットの説明で、ワーカー数が常に 8 という意味ではない。
+
+### 6.1 役割と初期配置
+
+| スロット | 初期役割 | 再配属後 |
 |---|---|---|
-| 構造的 covU 床 `hardFloor` | 有資格者を全員就けても埋まらない席。構造だけで決まり最適化中に不変 | `V6SanityPort.structuralHardFloor`、1 回だけ |
-| 非 covU HARD＝0 | groupViol/pref/c3n が残る間は床に見えても「解ける HARD」＝長い閾値で粘る | best と同時に捕捉（`bestNonCovUHard`） |
-| c3n 壁 `c3nWallProven` | 残る非 covU HARD が c3n だけ（`groupViol=0 ∧ pref=0 ∧ c3w ≤ wishC3wProven ∧ c3n>0`）で、`ForbiddenDiag`（`V6PortAnalyzer.diagnoseForbiddenRuns`）が各 run について**単セル変更・玉突き・隣接日調整**の不成立を確認（複数日にまたがる 2 人の入れ替えは未検査＝全空間の不能証明ではない） | 停滞が `stallHardMs` を超えた後・best 世代ごとに 1 回（約 20 ms）、`(version,result)` を単一 Atomic で保持（3.592.0） |
-| 希望衝突の床（E0） | HARD がちょうど希望由来の床で、残る HARD が全て希望由来（`hardAllWishOrigin`） | `wishFloorReached`。配線は `PolishGate.wishConflictFloorMode ≠ OFF` のときだけ（既定 OFF。E0B は後処理の研磨も省く） |
+| 0 | BASELINE_REFINE | 不動（`shouldReassign` が常に false） |
+| 4 | BASELINE_REFINE | 初回再配属で ELITE_RELINK、以後も同役割。ただし `reassignments` は増え続け強度に効く |
+| 1,2,3,5,6,7 | 巡回列の異なる開始位置 | 再配属ごとに次の役割 |
 
-長い閾値を避ける判断は**証明つきの床だけ**。「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず
-解ける HARD を早々に諦めていたので、構造的 covU へ是正した。
+巡回列: `DAY_BLOCK_ALNS → HARD_FAMILY_RSI → HARD_DEBT_RSI_PLUS → LARGE_DESTROY_ALNS → PERSONAL_RSI → MAX_DISTANCE_RSI_PLUS`。`PolishGate.personSwapKick`（既定 true）なら末尾に `PERSON_SWAP_ILS` が付き 7 役割。算法は DAY_BLOCK/LARGE_DESTROY が ALNS、HARD_FAMILY/PERSONAL が RSI、他は RSI_PLUS。8 ワーカーなら開始時から 6 本が脱出役なので、脱出役の時間比率の高さだけで「再配属過多」と判断しない。
 
-### 1.4 発火したあと
+### 6.2 再配属と強度
 
-- `stagnationFired` が立ち、探索は返る。後処理（`runPostOptimization`）は `hardDeadlineMs` まで使える（停滞では止めない）。
-- **追加精製 `ExtraRefine`**（後処理予約枠の未使用分で最終盤面起点の keep-best ALNS、3.102.0）は
-  `残り ≥ 5 s ∧ 違反が残る ∧ 停止要求なし ∧ 停滞発火なし ∧ ¬structuralHardResidual` のときだけ。上限は `min(残り, postReserveMs)`。
-  停滞発火で省くのは「無改善なら早く返す」方針を壊さないため。`extraRefineRequirePostHardDrop`（既定 OFF、backlog #35）は
-  「残る HARD が解けないと証明済み」でも省く版＝実質 A/A で信号なし。
-- `stagnationFired` は**改善報告で降りる**（3.346.0 で永続ラッチを是正。改善が届くと `stagnationFired=false`・停滞秒／反復数も −1 へ）。
-  並列ワーカーの `shouldStop` も同様に非単調なので、適応ポートフォリオは `stopIsFinal`（締切・キャンセルだけ単調）と `confirmStop`
-  （最大 5 s・250 ms 間隔で再確認）で「一瞬のシグナルで片肺運転にしない」（3.346.1）。ログは探索終了時点のスナップショットで揃える（3.377.0）。
-- 診断ログ `Watchdog` 行: 実効閾値の種別（通常=長／plateau=短／c3n壁=短／希望衝突の床=短）、停滞秒、未発火の理由、進捗報告ぶんの反復数
-  （真の総量の 49〜59%＝桁の区別だけに使う、3.375.1）。
+```
+improvedThisEpoch = betterReport(eliteAfter, eliteBeforeEpoch)   // 自己エリート同士。摂動入口に勝っただけでは改善でない（3.282.0）
+stagnantEpochs    = improvedThisEpoch ? 0 : previous + 1
+reassign          = slot ≠ 0 ∧ (nearestOtherDistance ≤ DUPLICATE_DISTANCE_CELLS(2) ∨ (¬improvedThisEpoch ∧ stagnantEpochs ≥ 1))
+```
 
-### 1.5 据え置きが決まっている値（再提案は計測つきで）
+距離は trajectory 間のセル差。重複条件は改善したエポックにも適用される（多様性は別の不変条件）。再配属で `reassignments++`・`stagnantEpochs=0`。
 
-| 値 | 決定 | 根拠 |
-|---|---|---|
-| `normalStallFraction` 0.9（300 s で 270 s） | 据え置き（2026-10-07「推奨で」） | 0.5 は 3.423.0 で 6 勝 3 敗・非有意、blocked_covu 型に絞っても再現せず（3.447.0）。外部提案「60〜90 s」は前提不成立＝浮いた時間は後処理へ回らない・実機 #1 は 80 s の空白の後に最終改善 |
-| 早期終了そのもの | 維持 | 外すと weighted 中央 −3.5%（p≈0.075、非有意）で時間 2.3 倍（3.341.1） |
-| 余った予算を soft 研磨へ | 否決（3.341.1） | 時間が余るのは hard=0 のときだけ。穏当版も 2/5 |
-| covU-blocked 専用の早期終了 | 却下（3.361.0、実データ多 seed A/B） | 便益が出ない |
-| `stallMs = budget/6`（旧 50 s） | 戻さない | HARD=1 を 50 s で諦め残り 250 s を捨てた（歴史的後悔） |
+強度 = 役割の基礎値 + `min(max(reassignments,0)/2, 3)`。基礎値: BASELINE 0／ELITE_RELINK・DAY_BLOCK・HARD_FAMILY・PERSONAL・PERSON_SWAP 1／HARD_DEBT 2／LARGE_DESTROY・MAX_DISTANCE 3。「2 回失敗してから強度を上げる」設計。
 
-## 2. 層 B: 適応ポートフォリオの再配属（`AdaptiveHypothesisEpochPolicy`）
+### 6.3 エポック予算と成果回収
 
-8 ワーカーの各エポック（量子 5 s／改善直後 8 s、RSI+ は 35 s／45 s）で:
+- 量子: RSI_PLUS は基礎 35 s・改善直後 45 s、他は 5 s・8 s。残り秒数以下にクランプ。改善直後の長い量子は**役割が変わった直後は受け取れない**（`carriesImprovingQuantum`）。再配属分岐では W4 も基礎量子へ戻す。
+- 役割内部の workers は 1。開始前に停止・締切を確認し、戻った成果を**回収してから**締切を判定して break（3.600.0。回収前に break すると締切間際の改善解を捨てる）。
+- globalBest と自己 elite は別管理。採用は `betterReport` と配置保護を通す。
 
-- `improvedThisEpoch = better(eliteReport, preEpochEliteReport)`＝正式比較器。HARD が 1 件減れば weighted/total が同点・悪化でも改善。
-  escape ロールが摂動入口に勝っただけでは改善と数えない（3.282.0）。
-- `shouldReassign`: W0 は不動。他は「最寄りの他ワーカーと距離 ≤2 セル（盆地の重複）」または「無改善かつ `stagnantEpochs ≥ 1`」で再配属。
-  W4 は最初の plateau で ELITE_RELINK へ、以後固定。他 6 本は 6（`personSwapKick` で 7）の脱出役割を機械巡回。
-- `intensityFor`: 強度は再配属 2 回ごとに +1（上限 +3）。最初の停滞は「別の考え方を試す」段階で、いきなり最大近傍へ注がない。
-- 改善直後の長い量子は**役割が変わった直後は受け取れない**（`carriesImprovingQuantum`、3.308.0）。
-- 締切・停止済みならロールを始めない／成果を回収してから締切判定（3.600.0）。
+## 7. 層 C — RSI の focus 切替と打ち切り
 
-既定 OFF: **停滞時の後処理差し込み `StallPolishInjection`**（`PolishGate.stallPolishInjection`、設定タブからは 3.628.0 で非表示）。
-全体最良が `max(20 s, 予算×0.1)` 改善しないとき最良の写しへ後処理を 6 s 上限で当て、良ければ全体最良へ（1 実行 3 回まで）。
-採用 32/43 回だが最終は 8 勝 7 敗・重み合計 +1291＝便益が測れず OFF（2026-10-07）。
+### 7.1 HF63 の学習範囲
 
-撤去済み: 残差ベースの 4 段停滞脱出 `adaptiveEscapeControl`／`StagnationEscapeController`（3.306.0→3.409.21 単体 A/B 中立で撤去）、
-ロール内並列 SA `portfolioRoleParallelSa`（同）。
+`Hf63Infeasibility.updateFromBreakdownFocused` が追跡する族は `KEY_TO_INDEX` の 13 個だけ:
 
-## 3. 層 C: RSI ラウンドの focus と早期終了（`runRsi`）
+```
+c1 c2 c3 c3n c3m c3mn c41 c42 covU covO pref low high
+```
 
-| 機構 | 規則 | 版 |
-|---|---|---|
-| focus 選択 | 解ける HARD 族を先に（`RsiFocusSelection.maxViolatedFamily`）。件数 0 の族は focus しない（E8）。SOFT へのフォールバックあり | 3.74.0・3.150.0 |
-| 静的 covU 床の除外 | covU が `structuralHardFloor` に達したら round 0 から focus 候補から外す（`avoid`） | 3.95.0 |
-| 空振り focus の 1R 冷却（E9） | 候補不採用かつ focus 族の件数が減らない「完全空振り」の直後だけ同じ focus を 1 ラウンド避ける。進展ありなら冷却しない | 3.150.0 |
-| HF63 の学習 | 追跡は `KEY_TO_INDEX` の 13 族（c1 c2 c3 c3n c3m c3mn c41 c42 covU covO pref low high。groupViol/c3w/c41s/c42s/apt/weekly/fair は追跡しない）。直前ラウンドで**実際に focus した族だけ**に投入量 `effortIters` を加算し、`INFEAS_STALL_ITERS`=5000 で「充足困難」と推定→`dynamicAvoid`。過去最小を更新するか 0 に達したら解除。重みには触れない | 3.213.0・3.231.0・3.409.10 |
-| `effortIters` | ラウンド数に応じて動的（`attemptsTarget = max(2, (max(0, rounds−2)+1)/2)`、`effortIters = ceil(5000/attemptsTarget)`、`HypothesisPlanning.rsiHf63EffortIters`）＝詰んだ族の除外が「残り 2 ラウンドを振り向けられる」タイミングで成立する | 3.231.0 |
-| N4 早期終了 | `stagnantRounds ≥ 2 ∧ dynamicAvoid ≠ ∅` のとき、`avoid`（＝dynamicAvoid の **HARD だけ**＋静的 covU 床）で選んだピボット先が `total` か件数 0 なら終了。狙える SOFT が残れば続ける（SOFT は avoid に入らない＝SOFT の枯渇では止まらない） | 3.95.1 |
-| EarlyChain | ラウンド境界で `V6LateOperators`（Chain3/4・Rect・BlkN）を当てる | HF361/528/541 移植 |
-| c3n の修復先 | `destroyRepairViolations`（hf67 は c3n に作用しないため） | 3.101.0 |
+groupViol・c3w・c41s・c42s・apt・weekly・fair は学習しない（配列名 `CNAMES` に Apt があっても index に無い）。各追跡族について、
 
-N4 は **動的検知（HF63）だけ**でゲートする。静的 covU 床を混ぜると構造的 covU>0 のデータで round 0 から常時武装し、旧 N4 の
-「厳密な部分集合」保証を破る（3.95.1 の実バグ）。
+- 観測値が過去最小より小さい → 最小更新・停滞投入量 0・推定解除
+- 観測値 0 → 停滞投入量 0・推定解除（3.592.0）
+- それ以外で `key == focusedKey` → 停滞投入量 += `effortIters`、`INFEAS_STALL_ITERS`=5000 以上で `infeasibleLikely=true`
+- focus 外かつ非改善 → 何もしない
 
-## 4. 層 D: SA/LAHC ラダーと ALNS の再起動
+目的関数の重みには触れない（λ上限は 3.409.10 で撤去済み）。
 
-- `SaOptimizer`（Kotlin）と C++ `SaChunk` は同値。`hardStallMs`=2.5 s HARD が下がらなければ PhaseB（LAHC ソフト研磨）へ一方向遷移。
-  ラダー境界では reset-to-best 再加熱（`MagiConductor` があれば STRONG_PERTURB／SCALE_TEMP／REHEAT／NOOP の報酬学習）。
-- ALNS の再起動摂動は**一律 `strength = 0.18 × explore`**（0.05〜0.6）。非線形スケジュール（2.51.0）は実データ final で +101% 悪化し revert（2.58.0）。
-- GLS penalty aging: `GLS_DECAY_EVERY`=256 kick ごとに 80% へ減衰（2.50.0）。ベンチでは中立＝無害で温存（長時間の肥大化防止）。
-- 戦略的振動（λ オシレーション、2.52.0）は現実的 NSP で一貫して悪化し 2.55.0 で revert。
+```
+attemptsTarget = max(2, (max(0, rounds − 2) + 1) / 2)     // 整数除算、HypothesisPlanning.rsiHf63EffortIters
+effortIters    = (5000 + attemptsTarget − 1) / attemptsTarget
+```
 
-## 5. 層 E: 後処理パスの打ち切り
+`effortIters` はラウンド数から決まる換算量で、実測反復数でも経過ミリ秒でもない。ラウンド先頭で前回 focus を更新し、最終ラウンド分はループ後に更新する。
+
+### 7.2 回避集合は 3 種類
+
+```
+dynamicAvoid = hf63.infeasibleBreakdownKeys()
+avoid        = dynamicAvoid ∩ MirrorKeys.hard；covUFloor > 0 ∧ covU ≤ covUFloor なら covU を追加（静的 covU 床、3.95.0）
+focusAvoid   = avoid + cooldownFocus（存在すれば）
+```
+
+HF63 は SOFT の推定値を持ち得るが、**SOFT を恒久回避へ入れる実装ではない**。
+
+### 7.3 focus 選択（`RsiFocusSelection.maxViolatedFamily`）
+
+1. 回避されておらず件数が正の HARD を、`groupViol, covU, pref, c3n, c3w` の**順序**で選ぶ（HARD 間の最大件数ではない）。
+2. 残る HARD が無ければ apt／covO の周期枠: apt は `rotationRound % 3 == 1`、covO は `== 2`、最終ラウンドは両方が候補。回避されず件数が正であること。
+3. 両方が候補なら件数の少ない方、同数なら covO。
+4. それ以外は順序表 `groupViol,covU,pref,c3n,c3w,low,high,c41,c41s,c2,covO,c42,c42s,apt,weekly,fair,c1,c3,c3m,c3mn` から、回避されない正の最大件数（同数は先のキー）。件数 0 の族は選ばない（E8）。
+5. weekly が選ばれても apt が正で回避外なら apt に置換。候補なしは `total`。
+
+`rotationRound` は既定で `runRsi` の round。`rsiFocusRotationPersist=true`（既定 false）のときだけ HF63 側カウンタで呼出しをまたぐ。
+
+### 7.4 ラウンド後の処理
+
+- 候補は focus に応じた仮説生成の後、0 始まり偶数ラウンドで ALNS、奇数で V5。境界で `V6LateOperators`（EarlyChain: Chain3/4・Rect・BlkN）を当てる。
+- `betterReport` と `keepsExtBan` を満たして採用 → `stagnantRounds=0`・`cooldownFocus=null`。
+- 不採用 → `stagnantRounds++`。focus が `total` 以外で候補の focus 件数が入口以上なら、その focus を**次の 1 ラウンドだけ**冷却（E9）。focus 件数を減らしたが総合で負けた場合は冷却しない。
+- N4 打ち切り:
+
+```
+if stagnantRounds ≥ 2 ∧ dynamicAvoid ≠ ∅:
+    pivot = maxViolatedFamily(bestReport, avoid, …)      // focusAvoid ではなく avoid
+    if pivot == total ∨ breakdown[pivot] == 0: RSI を終了
+    else: 続行（SOFT が残れば HARD 残のまま SOFT を研磨。keep-best が HARD 悪化を防ぐ）
+```
+
+発火ゲートは**動的検知だけ**。静的 covU 床を混ぜると構造的 covU>0 のデータで round 0 から常時武装し、旧 N4 の「厳密な部分集合」保証を破る（3.95.1 の実バグ）。1 ラウンド冷却を恒久枯渇と誤認しない。
+
+### 7.5 状態の寿命
+
+| 状態 | 寿命・所有者 |
+|---|---|
+| `stagnantRounds`・`cooldownFocus`・`lastFocus` | 各 `runRsi` 呼出しでローカル |
+| HF63 | 通常は呼出しローカル。ポートフォリオではワーカー専属インスタンスをエポック間で共有（3.281.0）。ワーカー間では共有しない |
+
+## 8. 層 D — SA/LAHC ラダーと再起動
+
+- `SaOptimizer`（Kotlin）と C++ `SaChunk` は同値。`softPolish=true` かつ HARD 部分が `hardStallMs`=2 500 ms 改善しなければ PhaseB（LAHC）へ**一方向**に移る。時計 `lastHardImprove` は HARD の改善でだけ戻る。
+- 2 500 ms 無改善は HARD 下限の証明ではない。コメントの「床到達」は切替方針の略記。native 経路の判定粒度はチャンク境界（ms 級）。
+- ラダー境界: `MagiConductor` が無ければ reset-to-best 再加熱。あれば STRONG_PERTURB／SCALE_TEMP（現在盤面を保持し次ラダーで再加熱、温度倍率は掛けない）／REHEAT／NOOP を報酬で選ぶ。
+- ALNS の再起動摂動は一律 `strength = 0.18 × explore`（0.05〜0.6）。非線形スケジュール（2.51.0）は実データ final で +101% 悪化し revert（2.58.0）。
+- GLS penalty aging: `GLS_DECAY_EVERY`=256 kick ごとに 80% へ減衰（2.50.0）。ベンチでは中立＝長時間の肥大化防止として温存。
+- 過去に否決した λ オシレーション（2.52.0→2.55.0 revert）と、現行後処理の `HF80StrategicOscillation`（漸増摂動の研磨）は別物。
+
+## 9. 層 E — 後処理の打ち切り
+
+パスの順序と責務は `docs/algorithm_portfolio.md`「後処理」。停滞制御に関わる点だけ:
 
 | パス | 停滞の定義 | 動き |
 |---|---|---|
-| HF80 PostPolish（E10） | best が枠の 1/5（下限 3 s）無改善 | 早期 return。native 区間で無改善なら起点を `started` に引き継ぐ（3.150.0） |
-| C1 共同 LNS | `patienceMs` 更新なし／評価数上限 | 打ち切り（ログ「最良が N ms 更新されず打ち切り」、3.342.0） |
+| HF80 PostPolish（E10） | best が枠の 1/5（下限 3 s）無改善 | 早期 return。native 区間で無改善なら時計の起点を `started` に引き継ぐ（3.150.0） |
+| C1 共同 LNS | 最良が `Config.patienceMs`（既定 4 000）更新なし、または評価数上限 | 打ち切り（3.342.0）。`patienceMs ≤ 0` で時間 patience 無効。決定的モードは別設定 |
 | C1 広域ビーム | 最良保持と停滞打ち切り | 3.340.0 |
 | 巡回研磨クラスタ | 1 巡で採用 0（`roundApplied == 0`） | 巡を終える（joint 局所最適） |
-| 後処理チェーン全体 | `totalApplied == 0` | 停滞検知（N9: 巻き戻したパスの `applied` も数える。0 と数える版 `postChainRollbackCountsZero` は 230 ペアで差なし＝既定 false） |
+| 後処理チェーン全体 | `totalApplied == 0` | 停滞検知。`PostChain` は巻き戻したパスの `applied` も既定では数える（`postChainRollbackCountsZero=false`。0 と数える版は 230 ペアで差なし） |
 
-撤去済み: 採用 0 の巡で LNS・VCR の幅を 2 倍にして再試行する `stallEscalation`（3.511.1 全件無変化、2026-09-25 撤去）。
-C3 の 3 者ブロック回転は「主手が 1 手も採れなかった巡と最終巡」だけの脱出手へ格下げ（3.300.0）。
+採用数は最終盤面の純改善数ではない。後処理の時間削減と最終品質の非劣性は別々に測る。
 
-## 6. 測って否決・机上で否決（再提案は計測つきで）
+## 10. 既定 OFF・実験機構（main `4af3456` の既定）
 
-| 案 | 結果 | 記録 |
+| 機構 | 既定 | 本体と分けて読む点 |
 |---|---|---|
-| 戦略的振動（λ オシレーション） | AUC +5〜15% 悪化 | 2.55.0 |
-| nonlinear restart | final +101% 悪化 | 2.58.0 |
-| GLS パラメータスイープ | 全て +0.0% | 2.56.0 |
-| targeted-perturb／big-destroy／softFocusProb 変更 | 同じ hard 床・soft 誤差内 | 3.95.0 |
-| 早期終了の余りを soft 研磨へ | 穏当版 2/5 | 3.341.1 |
-| covU-blocked 早期終了 | 却下 | 3.361.0 |
-| 「修復途中の進捗」を停滞判定に加える | 正式比較器が既に HARD 優先で拾う＝実装不要 | backlog #26（2026-09-22） |
-| 同点の盤面を足場にした停滞脱出（プラトー探索 B） | A（後処理を直接）に 10 s 3 勝 27 敗・30 s 9 勝 19 敗 | 2026-10-07 |
-| 停滞時の後処理差し込み | 最終 8 勝 7 敗・重み +1291 | 2026-10-07（既定 OFF 温存） |
-| `normalStallFraction` 0.5／外部提案 60〜90 s | 非有意・前提不成立 | 3.423.0・3.447.0・2026-10-07 |
-| 残差ベース 4 段脱出・ロール内並列 SA | 単体 A/B 中立 | 3.409.21 撤去 |
+| `PolishGate.stallPolishInjection` | false（設定タブからは 3.628.0 で非表示） | 全体最良が `max(20 000, budgetSec×100)` ms 改善しないとき、最良の写しへ後処理を 6 000 ms 上限で当て、良ければ全体最良へ。回数 3 未満・探索残り 8 000 ms 以上が条件（`StallPolishInjection.shouldInject`） |
+| `PolishGate.wishConflictFloorMode` | OFF | 希望床の短縮終了（E0A）／E0B は最小後処理へ |
+| `extraRefineRequirePostHardDrop` | false（引数） | 残存 HARD が §4 の床のときだけ追加精製を省く。実質 A/A で信号なし（backlog #35） |
+| `V6OptimizerOptions.rsiFocusRotationPersist` | false | 周期枠を `runRsi` 呼出しをまたいで継続（有意差なし、backlog #28） |
+| `PolishGate.postChainRollbackCountsZero` | false | 巻き戻したパスの採用数を 0 と数える |
+| `PolishGate.aptFairSoftTolerance` | false（「じっくり」で ON） | apt/fair 限定の採用例外。`AptFairPolish.heavySoftGuard`（既定 true、3.637.0）は無害化②の測定スイッチ |
+| `PolishGate.prePostDescent` | false | 後処理前の局所降下 |
+| `PolishGate.normalStallFraction` | 0.9（UI なし） | §5.1 の `fraction` |
 
-開いている案: 同点以上を受理する歩き→後処理（プラトー探索 C、A に 32-10／36-6）は**別案として測る**（2026-10-07）。
-停滞時の探索半径・職員数・窓長の段階的拡大は backlog #13(a)（測定待ち）。
+撤去済みで現行仕様ではないもの: 残差ベース 4 段脱出 `adaptiveEscapeControl`／`StagnationEscapeController`（3.409.21 単体 A/B 中立）、ロール内並列 SA `portfolioRoleParallelSa`（同）、採用 0 の巡で LNS・VCR を 2 倍にする `stallEscalation`（3.511.1 全件無変化、2026-09-25 撤去）。
 
-## 7. 判定に使うログの行
+## 11. 据え置きが決まっている値と否決した案（再提案は計測つきで）
 
-- `Watchdog` 行＝層 A（実効閾値の種別・停滞秒・発火の有無・未発火の理由）。
-- `AdaptivePortfolio` 行＝層 B（再配属回数・合計 iter）。`RunMAGI_RSI` 行＝層 C（改善したラウンドと最終ラウンドだけ、焦点の履歴は末尾「戦略変更」1 行）。
-- `HF80`／`ExtraRefine` 行＝層 E と追加精製（走らなかった理由を明記）。
-- `設定の効き` 行（`TuningTelemetry.summary`）＝トグルがその実行で何をしたか。毎回「観測なし」のトグルは消してよい（3.409.21 の判断基準）。
+| 値・案 | 決定 | 根拠 |
+|---|---|---|
+| `normalStallFraction` 0.9 | 据え置き（2026-10-07） | 0.5 は 3.423.0 で 6 勝 3 敗・非有意、blocked_covu 型でも再現せず（3.447.0）。外部提案「60〜90 s」は前提不成立（余りは後処理へ回らない、実機 #1 は 80 s の空白後に最終改善） |
+| 早期終了そのもの | 維持 | 外すと weighted 中央 −3.5%（p≈0.075、非有意）で時間 2.3 倍（3.341.1） |
+| 余った予算を soft 研磨へ | 否決 | 時間が余るのは hard=0 のときだけ。穏当版も 2/5（3.341.1） |
+| covU-blocked 専用の早期終了 | 却下 | 実データ多 seed A/B で便益なし（3.361.0） |
+| `stallMs = budget/6`（旧 50 s） | 戻さない | HARD=1 を 50 s で諦め残り 250 s を捨てた |
+| 戦略的振動／nonlinear restart／GLS スイープ／targeted-perturb／big-destroy／softFocusProb | 否決 | 2.55.0・2.58.0・2.56.0・3.95.0 |
+| 「修復途中の進捗」を停滞判定へ | 実装不要 | `improvedThisEpoch` が正式比較器で HARD 優先に拾っている（backlog #26） |
+| 同点の盤面を足場にした停滞脱出（プラトー探索 B） | 否決 | 後処理直行に 10 s 3 勝 27 敗・30 s 9 勝 19 敗（2026-10-07） |
+| 停滞時の後処理差し込み | 既定 OFF 温存 | 最終 8 勝 7 敗・重み +1291（2026-10-07） |
 
-## 8. 変えるときの手順
+開いている案: 同点以上を受理する歩き→後処理（プラトー探索 C、32-10／36-6）は別案として測る。停滞時の探索半径・職員数・窓長の段階的拡大は backlog #13(a)。
 
-1. 層を特定し、この表の数値・規則を直す（Kotlin → C++ → C# の順、同日）。
-2. 層 A・B の純関数はテストを更新する（`V6FinalPortTest`・`WishConflictFloorTest`・`HypothesisEpochPolicyTest`、C# は `V6FinalPortWatchdogTest`）。
-3. 探索動学なら `tools/loop/run_bench.sh` のペア比較（`MAGI_BENCH_FEATURE`）で採否。実データでは AUC でなく **final** を見る。
-4. 採否を `docs/algorithm_portfolio.md`（既定 OFF 表・廃止表・否決表）と `docs/history/` に書き、この資料の該当表へ 1 行足す。
+## 12. 判定に使うログの行
+
+| 行 | 層 | 読めること |
+|---|---|---|
+| `Watchdog` | A | 実効閾値の種別（通常=長／plateau=短／c3n壁=短／希望衝突の床=短）・停滞秒・発火の有無・未発火の理由・進捗報告ぶんの反復数（真の総量の 49〜59%、桁の区別にだけ使う） |
+| `AdaptivePortfolio` | B | 再配属回数・合計 iter |
+| `RunMAGI_RSI` | C | 改善したラウンドと最終ラウンド、末尾「戦略変更」1 行に focus の遷移、N4 の早期終了 |
+| `HF80`／`ExtraRefine` | E・追加精製 | 停滞早期終了の有無、走らなかった理由 |
+| `設定の効き`（`TuningTelemetry.summary`） | 横断 | トグルがその実行で何をしたか。毎回「観測なし」のトグルは消してよい |
+
+## 13. レビューと変更の進め方
+
+1. 対象 SHA を固定する。main が進んだら参照箇所の差分から確認する。
+2. 問題は層（A〜E）・観測対象・状態の所有者・時間単位で記述する。発火条件だけでなく解除条件と停止範囲を確認する。
+3. 「現行コードの事実」「過去測定」「推論」「提案」を分ける。改善不能の根拠は §4 の 4 種に分ける。
+4. 制御変更は 1 件ずつ、同じ入力・seed・予算で最終 hard・weightedScore・total・経過時間を比較する（`tools/loop/run_bench.sh`、`MAGI_BENCH_FEATURE`）。実行中の採用数や AUC では採否を決めない。実データでは final を見る。
+5. 重み・閾値・探索幅を文書整理のついでに変えない（HF77＝明示数値指示＋1 件ずつ）。
+6. 層 A・B の純関数を変えたらテスト（`V6FinalPortTest`・`WishConflictFloorTest`・`HypothesisEpochPolicyTest`・`Hf63InfeasibilityTest`・`StallPolishInjectionTest`、C# `V6FinalPortWatchdogTest`）を同じコミットで更新し、採否を `docs/algorithm_portfolio.md` と `docs/history/` へ書く。
+
+推奨レビューケース:
+
+- `stalled == effStall` は未発火、超過後に他条件込みで発火する。
+- フェーズ遷移が頻繁でも 2 倍超過で猶予を上書きできる。
+- 停滞発火後の改善でフラグと停滞記録が解除される。
+- 監視の 1e-6 許容差と候補の厳密比較を区別できる。
+- c3n の局所壁判定を多セル交換で崩せる例がないか。
+- focus 外の族へ HF63 停滞量を加算しない。0 到達で推定解除する。SOFT を恒久回避しない。
+- W4 の再配属 2 回目以降でも強度・量子の規則を満たす。
+- 締切で戻った成果を、回収前の break で捨てない。
+
+## 14. 根拠ファイル（main `4af3456`）
+
+`app/src/main/java/com/magi/app/v6/`: `V6FinalPort.kt`・`V6NativeOptimizer.kt`・`AdaptiveHypothesisEpochPolicy.kt`・`MirrorCore.kt`・`Hf63Infeasibility.kt`・`HypothesisPlanning.kt`・`RsiFocusSelection.kt`・`V6PortAnalyzer.kt`・`V6SanityPort.kt`・`SaOptimizer.kt`・`V6HotfixPasses.kt`・`C1JointLnsPolish.kt`・`StallPolishInjection.kt`、`app/src/main/cpp/magi_native.cpp`。
+テスト: `app/src/test/java/com/magi/app/v6/` の `V6FinalPortTest.kt`・`WishConflictFloorTest.kt`・`HypothesisEpochPolicyTest.kt`・`Hf63InfeasibilityTest.kt`・`StallPolishInjectionTest.kt`。
+資料: `docs/algorithm_portfolio.md`（採否の台帳）・`docs/history/topics.md`「停滞脱出の改善」・`docs/history/INDEX.md`・`docs/lessons.md` #39/#42。
