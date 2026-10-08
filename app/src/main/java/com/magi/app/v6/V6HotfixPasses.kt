@@ -290,7 +290,7 @@ object PolishGate {
     /** 測定用の基準腕（`docs/stall_escape.md` §5.3）: true＝HEAD の壁判定（版ごとに固定・生存盤面の診断・一致の検査なし）。既定 **false**。 */
     @Volatile var c3nWallLegacy: Boolean = false
 
-    /** 測定用の切り分け（`docs/stall_escape.md` §5.5）: false＝後期演算（EarlyChain）は停止要求を見ない（HEAD と同じ）。既定 **true**。 */
+    /** 測定用の切り分け（`docs/stall_escape.md` §5.5）: false＝後期演算（EarlyChain）は試行ごとの停止確認をしない（入口の停止確認は残るので HEAD とは完全に一致しない）。既定 **true**。 */
     @Volatile var lateOpStopPropagation: Boolean = true
 
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、

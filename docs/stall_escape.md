@@ -161,7 +161,7 @@ fired   = now − S > minRun
 - `stopIsFinal`: 締切またはキャンセルだけ（単調）。
 - `V6NativeOptimizer.confirmStop`: 単調停止は即確定。そうでなければ最大 `STOP_CONFIRM_MS`=5 000 ms、`STOP_CONFIRM_POLL_MS`=250 ms 間隔で再確認し、`shouldStop` が偽へ戻れば続行（一瞬のシグナルで片肺運転にしない、3.346.1）。
 - 停止は協調的。締切の瞬間に全処理が強制終了する保証はない。
-- 3.642.0: 後期演算（`V6LateOperators.improve`）は `shouldStop` を試行ごとに見る（`PolishGate.lateOpStopPropagation=true`）。停止要求が立てば 1 手も受理せず返る。`false` は HEAD（締切だけを見る）で、測定の切り分けにだけ使う（§10）。
+- 3.642.0: 後期演算（`V6LateOperators.improve`）は `shouldStop` を試行ごとに見る（`PolishGate.lateOpStopPropagation=true`）。停止要求が立てば 1 手も受理せず返る。`false` は試行ごとの確認だけを切る（入口の確認は両腕に残るので HEAD とは完全に一致しない）。測定の切り分けにだけ使う（§10）。
 
 ### 5.6 探索後
 
@@ -318,7 +318,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 | `PolishGate.normalStallFraction` | 0.9（UI なし） | §5.1 の `fraction` |
 | `PolishGate.c3nWallShortStall` | true（UI なし） | false で c3n 壁による短縮を外す（測定用、3.641.0） |
 | `PolishGate.c3nWallLegacy` | false（UI なし） | true で HEAD の c3n 壁判定（版ごと固定・生存盤面の診断・一致の検査なし）。測定の基準腕（3.642.0、§5.3） |
-| `PolishGate.lateOpStopPropagation` | true（UI なし） | false で後期演算が停止要求を見ない（HEAD）。測定の切り分け（3.642.0、§5.5） |
+| `PolishGate.lateOpStopPropagation` | true（UI なし） | false で後期演算の試行ごとの停止確認を切る（入口の確認は残るので HEAD とは完全に一致しない）。測定の切り分け（3.642.0、§5.5） |
 
 撤去済みで現行仕様ではないもの: 残差ベース 4 段脱出 `adaptiveEscapeControl`／`StagnationEscapeController`（3.409.21 単体 A/B 中立）、ロール内並列 SA `portfolioRoleParallelSa`（同）、採用 0 の巡で LNS・VCR を 2 倍にする `stallEscalation`（3.511.1 全件無変化、2026-09-25 撤去）。
 
