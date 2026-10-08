@@ -144,6 +144,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         cancelWishTrial()   // [S5 §8] 盤面を差し替えるジョブの前に試算の CPU を返す
         cancelRelaxTrial()  // [S6 §8] 同じ
         cancelFixSearch()   // 直し方の探索も同じ（走らせたままだと差し替え前の盤面の提案が完了後に残る）
+        // 走っている違反チェックは差し替え前の盤面のもの＝失効させる（完了順によって古い表示が戻らないように、UI-03）。
+        ++checkSeq; checkJob?.cancel()
         val jobToken = phases.begin(phase)
         if (phase.keepsScreenOn) _ui.update { it.copy(keepScreenOn = true) }
         if (engineRun) {
@@ -2434,7 +2436,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = st.withSchedule(sch)
         alternativeScheds = keptAlts
         altBoardKey = boardKey(sch)
-        _ui.update { it.copy(alternatives = keptSummaries, alternativeApplied = i) }
+        // 表示の盤面は内部と同時に差し替える（再検査が失敗しても画面と次の操作の対象が食い違わない、UI-02）。
+        _ui.update { it.copy(alternatives = keptSummaries, alternativeApplied = i, schedule = sch.map { r -> r.toList() },
+            messageIsError = false, message = "他の案 ${i + 1} を適用（違反数を再計算中…）") }
         autoSave()
         // [3.475.0/論理監査] 再検査は checkJob/checkSeq に乗せる。旧: 独立した launch で順序保証が無く、
         //   案1→案2 と続けて押すと先の案の報告が後から届いて画面と currentSchedule が食い違った。
@@ -2452,7 +2456,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 logOp("W", "他の案 ${i + 1} の適用後の再チェックに失敗: ${e.javaClass.simpleName}（盤面は適用済み・違反数は古い可能性）")
-                _ui.update { it.copy(messageIsError = true, message = "他の案 ${i + 1} を適用（違反数の再計算に失敗）") }
+                _ui.update { it.copy(messageIsError = true, message = "他の案 ${i + 1} を適用しました。違反数の再計算に失敗したため、表示の違反数は未確認です（${e.javaClass.simpleName}）") }
             }
         }
     }

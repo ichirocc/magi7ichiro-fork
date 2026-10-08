@@ -127,8 +127,13 @@ object Ws1Ops {
         val grid = state.groupShift.map { it.toMutableList() }.toMutableList()
         if (k !in grid[g].indices) return state
         grid[g][k] = if (allowed) 1 else 0
+        // 担当できるシフトが 1 つも無い群は作らない（休が無い設定でも同じ＝呼出側は === で拒否を知る）。
+        if (!allowed && grid[g].none { it == 1 }) return state
         return state.copy(groupShift = grid)
     }
+
+    /** 担当可否の変更で、担当できるシフトが残らない群ができるか（一括 OFF の拒否に使う）。 */
+    fun leavesGroupWithoutShift(grid: List<List<Int>>): Boolean = grid.any { row -> row.none { it == 1 } }
 
     /**
      * [マトリックス一括] 群 g の全シフトを一括で担当ON/OFF（行ヘッダ＝群名のタップ）。
@@ -141,6 +146,8 @@ object Ws1Ops {
         val rest = restShiftIndex(state)
         val grid = state.groupShift.map { it.toMutableList() }.toMutableList()
         for (k in grid[g].indices) grid[g][k] = if (allowed || k == rest) 1 else 0
+        // 休の役割が無い設定では残すものが無く全部 OFF になる＝同じ state を返して拒否（CFG-01）。
+        if (!allowed && grid[g].none { it == 1 }) return state
         return state.copy(groupShift = grid)
     }
 
@@ -155,6 +162,7 @@ object Ws1Ops {
         if (k < 0 || state.groupShift.any { k >= it.size }) return state
         val grid = state.groupShift.map { it.toMutableList() }.toMutableList()
         for (row in grid) row[k] = if (allowed) 1 else 0
+        if (!allowed && leavesGroupWithoutShift(grid)) return state
         return state.copy(groupShift = grid)
     }
 

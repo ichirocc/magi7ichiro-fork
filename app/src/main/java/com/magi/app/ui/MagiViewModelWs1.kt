@@ -62,6 +62,8 @@ fun MagiViewModel.ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
         // [3.484.0] 単一セルでも休は外せない（列一括と同じ理由・同じ案内）。
         if (!allowed && k == restShiftIndex(st)) {
             notify("「休」はどのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
+        } else if (!allowed) {
+            notify("このグループの担当できるシフトが無くなるため外せません", "W")
         }
         return
     }
@@ -73,8 +75,13 @@ fun MagiViewModel.ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
 fun MagiViewModel.ws1SetGroupShiftRow(g: Int, allowed: Boolean) {
     val st = state ?: return
     val name = st.groups.getOrNull(g)?.name ?: "[$g]"
+    val ns = Ws1Ops.setGroupShiftRow(st, g, allowed)
+    if (ns === st) {
+        if (!allowed) notify("休みのシフトが無いため、このグループの全シフトを外すことはできません（担当できるシフトが無くなるため）", "W")
+        return
+    }
     logOp("I", "担当可否(一括): グループ $name の全シフト → ${if (allowed) "担当できる" else "担当しない（休は残す）"}")
-    applyStructure(Ws1Ops.setGroupShiftRow(st, g, allowed))
+    applyStructure(ns)
 }
 
 /** [マトリックス一括] シフト k を全群へ一括ON/OFF（列ヘッダ＝シフト名のタップ）。休の列は OFF にできない。 */
@@ -84,6 +91,8 @@ fun MagiViewModel.ws1SetGroupShiftColumn(k: Int, allowed: Boolean) {
     if (ns === st) {
         if (!allowed && k == restShiftIndex(st)) {
             notify("「休」はどのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
+        } else if (!allowed) {
+            notify("担当できるシフトが無くなるグループがあるため、この列は外せません", "W")
         }
         return
     }
