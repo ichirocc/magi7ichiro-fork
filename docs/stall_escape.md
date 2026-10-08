@@ -9,14 +9,14 @@
 
 | 層 | 停滞の定義 | 停滞したら | 品質への影響 |
 |---|---|---|---|
-| **A. 実行全体のウォッチドッグ**（`V6FinalPort.handleOptimize`） | 最良（hard→weightedScore→total）が `effStall` ms 更新されない | 探索を打ち切り後処理へ（追加精製は省く） | なし（keep-best。時間と電池だけ節約） |
+| **A. 実行全体のウォッチドッグ**（`V6FinalPort.handleOptimize`） | 最良（hard→weightedScore→total）が `effStall` ms 更新されない | 探索を打ち切り後処理へ（追加精製は省く） | 保持済み最良は悪化しない（keep-best）。続けていれば得たかもしれない改善は失う＝時間・電池との交換 |
 | **B. 適応ポートフォリオ**（`V6NativeOptimizer` エポックループ） | 自己エリートが 1 エポック改善しない／他ワーカーと距離 ≤2 セル | 役割を回す・強度を上げる（W0 は不動） | なし（全体最良は別管理） |
 | **C. RSI ラウンド**（`runRsi`） | ラウンドの keep-best が無改善 | focus の 1R 冷却→HF63 が族を外す→狙える族が尽きたら早期終了 | なし |
 | **D. SA/LAHC ラダー**（`SaOptimizer`・C++ `SaChunk`） | HARD が `hardStallMs`=2.5 s 下がらない／ラダー境界 | PhaseB（LAHC）へ一方向遷移／reset-to-best 再加熱 | なし |
 | **E. 後処理の各パス** | パスごとの patience／採用 0 の巡 | そのパスを打ち切る・巡を終える | なし（入力比番兵） |
 
-共通の原則: **停滞は停止条件ではなく「別の手を要求する信号」**（B）、ただし **A は唯一の停止**。どの層も keep-best と入力比番兵で
-「停滞で早く返しても品質は下がらない」を守る。探索動学の変更は測ってから（`tools/loop/` のペア比較）。
+共通の原則: **停滞は停止条件ではなく「別の手を要求する信号」**（B）。探索全体を止めるのは A だけで、C は RSI の呼び出し、E はパス／巡を止める。
+どの層も keep-best と入力比番兵で「停滞で早く返しても保持済みの最良は下がらない」を守る（継続探索との同等品質は保証しない）。探索動学の変更は測ってから（`tools/loop/` のペア比較）。
 
 ## 1. 層 A: 実行全体のウォッチドッグ（`V6FinalPort.handleOptimize`）
 
@@ -46,7 +46,8 @@ watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs, phaseGraceMs,
   進捗文字列の変化。旧実装の `max(両者)` は 20〜90 s ごとのフェーズ遷移で 270 s に届かなかった（3.230.0）。
 - フェーズ猶予は**拒否権ではない**。並列 8 ワーカーが 1 本のフェーズ文字列を共有して猶予が永久に塞がる事故（実機 2026-08-19、
   275 s 無改善で未発火）を 3.408.0 で「閾値の 2 倍で上書き発火」に降格した。
-- 最良の比較は `better`（hard→weightedScore→total の辞書式、3.287.0 で第 2 キーを total→weightedScore へ）。
+- 最良の比較は `better`（hard→weightedScore→total の辞書式、3.287.0 で第 2 キーを total→weightedScore へ）。ただし**進捗監視だけ**は weightedScore に
+  1e-6 の許容差を置く（`h < bh || (h == bh && w < bw − 1e-6) || (h == bh && w ≤ bw + 1e-6 && t < bt)`、3.289.0）＝数値揺れで時計が戻り続けないため。候補採用の `betterReport` は厳密のまま。
 
 ### 1.3 実効閾値 `effStall`＝「頭打ち」の判定（`effectiveStallMs`）
 
@@ -60,7 +61,7 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? stallHardMs : stallMs
 |---|---|---|
 | 構造的 covU 床 `hardFloor` | 有資格者を全員就けても埋まらない席。構造だけで決まり最適化中に不変 | `V6SanityPort.structuralHardFloor`、1 回だけ |
 | 非 covU HARD＝0 | groupViol/pref/c3n が残る間は床に見えても「解ける HARD」＝長い閾値で粘る | best と同時に捕捉（`bestNonCovUHard`） |
-| c3n 壁 `c3nWallProven` | 残る非 covU HARD が c3n だけで、`ForbiddenDiag`（`V6PortAnalyzer.diagnoseForbiddenRuns`）が全 run の塞がりを証明 | 停滞が `stallHardMs` を超えた後・best 世代ごとに 1 回（約 20 ms）、`(version,result)` を単一 Atomic で保持（3.592.0） |
+| c3n 壁 `c3nWallProven` | 残る非 covU HARD が c3n だけ（`groupViol=0 ∧ pref=0 ∧ c3w ≤ wishC3wProven ∧ c3n>0`）で、`ForbiddenDiag`（`V6PortAnalyzer.diagnoseForbiddenRuns`）が各 run について**単セル変更・玉突き・隣接日調整**の不成立を確認（複数日にまたがる 2 人の入れ替えは未検査＝全空間の不能証明ではない） | 停滞が `stallHardMs` を超えた後・best 世代ごとに 1 回（約 20 ms）、`(version,result)` を単一 Atomic で保持（3.592.0） |
 | 希望衝突の床（E0） | HARD がちょうど希望由来の床で、残る HARD が全て希望由来（`hardAllWishOrigin`） | `wishFloorReached`。配線は `PolishGate.wishConflictFloorMode ≠ OFF` のときだけ（既定 OFF。E0B は後処理の研磨も省く） |
 
 長い閾値を避ける判断は**証明つきの床だけ**。「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず
@@ -73,8 +74,9 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? stallHardMs : stallMs
   `残り ≥ 5 s ∧ 違反が残る ∧ 停止要求なし ∧ 停滞発火なし ∧ ¬structuralHardResidual` のときだけ。上限は `min(残り, postReserveMs)`。
   停滞発火で省くのは「無改善なら早く返す」方針を壊さないため。`extraRefineRequirePostHardDrop`（既定 OFF、backlog #35）は
   「残る HARD が解けないと証明済み」でも省く版＝実質 A/A で信号なし。
-- `stagnationFired` は**ラッチ**（一度立つと降りない）。並列ワーカーの `shouldStop` は改善が届けば偽へ戻るので、適応ポートフォリオは
-  `stopIsFinal`（締切・キャンセルだけ単調）で「確認窓つきの再確認」をする（3.346.1）。ログは探索終了時点のスナップショットで揃える（3.377.0）。
+- `stagnationFired` は**改善報告で降りる**（3.346.0 で永続ラッチを是正。改善が届くと `stagnationFired=false`・停滞秒／反復数も −1 へ）。
+  並列ワーカーの `shouldStop` も同様に非単調なので、適応ポートフォリオは `stopIsFinal`（締切・キャンセルだけ単調）と `confirmStop`
+  （最大 5 s・250 ms 間隔で再確認）で「一瞬のシグナルで片肺運転にしない」（3.346.1）。ログは探索終了時点のスナップショットで揃える（3.377.0）。
 - 診断ログ `Watchdog` 行: 実効閾値の種別（通常=長／plateau=短／c3n壁=短／希望衝突の床=短）、停滞秒、未発火の理由、進捗報告ぶんの反復数
   （真の総量の 49〜59%＝桁の区別だけに使う、3.375.1）。
 
@@ -114,9 +116,9 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? stallHardMs : stallMs
 | focus 選択 | 解ける HARD 族を先に（`RsiFocusSelection.maxViolatedFamily`）。件数 0 の族は focus しない（E8）。SOFT へのフォールバックあり | 3.74.0・3.150.0 |
 | 静的 covU 床の除外 | covU が `structuralHardFloor` に達したら round 0 から focus 候補から外す（`avoid`） | 3.95.0 |
 | 空振り focus の 1R 冷却（E9） | 候補不採用かつ focus 族の件数が減らない「完全空振り」の直後だけ同じ focus を 1 ラウンド避ける。進展ありなら冷却しない | 3.150.0 |
-| HF63 の学習 | 直前ラウンドで**実際に focus した族だけ**に投入量 `effortIters` を加算し、`INFEAS_STALL_ITERS`=5000 で「構造的に充足不能」と推定→`dynamicAvoid`。改善を検出したら解除。重みには触れない | 3.213.0・3.231.0・3.409.10 |
-| `effortIters` | ラウンド数に応じて動的（`attemptsTarget = ceil((rounds−2)/2)` を 2 で下駄）＝詰んだ族の除外が「残り 2 ラウンドを振り向けられる」タイミングで成立する | 3.231.0 |
-| N4 早期終了 | `stagnantRounds ≥ 2 ∧ dynamicAvoid ≠ ∅` のとき、ピボット先が `total` か件数 0 なら終了。狙える SOFT が残れば続ける（HARD 残のまま SOFT 研磨は keep-best で安全） | 3.95.1 |
+| HF63 の学習 | 追跡は `KEY_TO_INDEX` の 13 族（c1 c2 c3 c3n c3m c3mn c41 c42 covU covO pref low high。groupViol/c3w/c41s/c42s/apt/weekly/fair は追跡しない）。直前ラウンドで**実際に focus した族だけ**に投入量 `effortIters` を加算し、`INFEAS_STALL_ITERS`=5000 で「充足困難」と推定→`dynamicAvoid`。過去最小を更新するか 0 に達したら解除。重みには触れない | 3.213.0・3.231.0・3.409.10 |
+| `effortIters` | ラウンド数に応じて動的（`attemptsTarget = max(2, (max(0, rounds−2)+1)/2)`、`effortIters = ceil(5000/attemptsTarget)`、`HypothesisPlanning.rsiHf63EffortIters`）＝詰んだ族の除外が「残り 2 ラウンドを振り向けられる」タイミングで成立する | 3.231.0 |
+| N4 早期終了 | `stagnantRounds ≥ 2 ∧ dynamicAvoid ≠ ∅` のとき、`avoid`（＝dynamicAvoid の **HARD だけ**＋静的 covU 床）で選んだピボット先が `total` か件数 0 なら終了。狙える SOFT が残れば続ける（SOFT は avoid に入らない＝SOFT の枯渇では止まらない） | 3.95.1 |
 | EarlyChain | ラウンド境界で `V6LateOperators`（Chain3/4・Rect・BlkN）を当てる | HF361/528/541 移植 |
 | c3n の修復先 | `destroyRepairViolations`（hf67 は c3n に作用しないため） | 3.101.0 |
 

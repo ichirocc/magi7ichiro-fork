@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 停滞脱出の台帳の是正 4 点（2026-10-08、文書のみ）: 外部の実装準拠仕様書との照合で、`stagnationFired` は改善で降りる（永続ラッチではない、3.346.0）・進捗監視だけ weightedScore に 1e-6 許容差・c3n 壁は限定した手の壁判定で全空間の証明ではない・「品質への影響なし」は保持済み最良の非悪化の意味。HF63 の追跡 13 族と N4 の avoid が HARD のみである点を明記。  → `docs/history/3.4xx.md`
 - 停滞脱出の台帳 `docs/stall_escape.md`（2026-10-08、文書のみ・コード不変）: ウォッチドッグ（閾値の式と 300 s/60 s の実値・頭打ちの床 4 種・発火後）、適応ポートフォリオの再配属、RSI の focus/HF63/N4、SA ラダー、後処理の打ち切り、否決一覧を層 A〜E で 1 か所へ。README 目次・topics・portfolio・backlog から参照。  → `docs/history/3.4xx.md`
 - 許容 6% の無害化②を外すスイッチを設定タブへ（2026-10-08、3.638.0、出力不変）: 「容認 6% で重い違反の増加も許す」（じっくりでだけ有効・既定 OFF）。`UiState.aptFairToleranceUnguarded`＝`!AptFairPolish.heavySoftGuard`、`PolishGate.snapshot` に載せ背景実行へ引き継ぐ。C# 同日同期。  → `docs/history/3.4xx.md`
 - 許容 6% の無害化②を外す測定（2026-10-08、3.637.0、出力不変）: 測定スイッチ `AptFairPolish.heavySoftGuard`・腕 `aptfairtolunguarded`。画面の盤面では②なしは他の人の apt に予算を使い山本 Dﾃ は 7→8＝目的に当たらない。起点指定の玉突き DFS なら 6% 予算内で 7→3（+0.8%）。230 ペアのベンチは旧 114／新 75（p=0.0056）・速度 −55%＝②は外さない。  → `docs/history/3.4xx.md`
