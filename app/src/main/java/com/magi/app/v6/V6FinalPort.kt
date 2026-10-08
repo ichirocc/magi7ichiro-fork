@@ -272,6 +272,48 @@ object V6FinalPort {
     internal fun progressImproved(h: Int, wgt: Double, t: Int, bh: Int, bWeighted: Double, bTotal: Int): Boolean =
         h < bh || (h == bh && wgt < bWeighted - 1e-6) || (h == bh && wgt <= bWeighted + 1e-6 && t < bTotal)
 
+    /** 層 A の最良追跡と停滞ラッチ（`docs/stall_escape.md` §5.2）。並列ワーカーから読むため atomic、更新は呼び出し側の progressLock 内。 */
+    internal class WatchdogBest(startMs: Long) {
+        val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)
+        var bTotal = Int.MAX_VALUE
+        var bWeighted = Double.MAX_VALUE
+        val lastBestImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
+        val lastBestImproveIters = java.util.concurrent.atomic.AtomicLong(0)
+        val lastBeatInputMs = java.util.concurrent.atomic.AtomicLong(-1)
+        val bestNonCovUHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)
+        val bestNonCovUAllC3n = java.util.concurrent.atomic.AtomicBoolean(false)
+        val bestVersion = java.util.concurrent.atomic.AtomicInteger(0)
+        val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
+        val stagnationDurationMs = java.util.concurrent.atomic.AtomicLong(-1)
+        val stagnationIters = java.util.concurrent.atomic.AtomicLong(-1)
+        val stagnationByOverride = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        /** 改善報告。[progressImproved] で改善なら最良・時刻・反復数・非 covU 内訳・世代を更新し、停滞ラッチを降ろす（3.346.0）。 */
+        fun observe(report: ViolationReport, nowMs: Long, observedIters: Long, beatsInput: () -> Boolean, wishC3wProven: Int): Boolean {
+            if (!progressImproved(report.hard, report.weightedScore, report.total, bestHard.get(), bWeighted, bTotal)) return false
+            bestHard.set(report.hard); bTotal = report.total; bWeighted = report.weightedScore
+            lastBestImproveMs.set(nowMs); lastBestImproveIters.set(observedIters)
+            if (beatsInput()) lastBeatInputMs.set(nowMs)
+            stagnationFired.set(false); stagnationDurationMs.set(-1); stagnationIters.set(-1); stagnationByOverride.set(false)
+            val gv = report.breakdown["groupViol"] ?: 0
+            val pf = report.breakdown["pref"] ?: 0
+            val c3n = report.breakdown["c3n"] ?: 0
+            val c3w = report.breakdown["c3w"] ?: 0
+            bestNonCovUHard.set(gv + pf + c3n + c3w)
+            bestNonCovUAllC3n.set(gv == 0 && pf == 0 && c3w <= wishC3wProven && c3n > 0)
+            bestVersion.incrementAndGet()
+            return true
+        }
+
+        /** 停滞発火。`byOverride`＝フェーズ猶予の中で閾値の 2 倍に達して発火した（§5.4）。 */
+        fun fire(nowMs: Long, observedIters: Long, byOverride: Boolean) {
+            stagnationDurationMs.set(nowMs - lastBestImproveMs.get())
+            stagnationIters.set(observedIters)
+            stagnationByOverride.set(byOverride)
+            stagnationFired.set(true)
+        }
+    }
+
     fun getAlgorithmLabel(seconds: Int): AlgorithmLabel = when {
         // name は設定画面の「おまかせ」の説明に出る＝方式チップ（v6AlgorithmLabel）と同じ語にする。
         seconds <= 10 -> AlgorithmLabel("⚡", "高速", "短時間でサッと作成", "v5")
@@ -493,13 +535,10 @@ object V6FinalPort {
         //   確認）。フェーズ遷移は「今始まったばかりのフェーズを即座に打ち切らない」ための短い個別
         //   猶予(phaseGraceMs、下記)としてのみ機能させ、「本当に改善が無い時間」は lastBestImproveMs
         //   単独で計測する（フェーズが何回切り替わっても改善が無ければ着実に積み上がる）。
-        val lastBestImproveMs = java.util.concurrent.atomic.AtomicLong(startMs)
-        val lastBeatInputMs = java.util.concurrent.atomic.AtomicLong(-1)
+        val wd = WatchdogBest(startMs)
         val lastPhaseChangeMs = java.util.concurrent.atomic.AtomicLong(startMs)
-        val stagnationFired = java.util.concurrent.atomic.AtomicBoolean(false)
         // [停滞時間のログ出力] 発火の瞬間に「何ms無改善だったか」を記録する（ログ側で再計算すると
         //   後処理(runPostOptimization)の所要時間が混入し、実際に判定へ使った値とズレるため）。
-        val stagnationDurationMs = java.util.concurrent.atomic.AtomicLong(-1)
         // [3.375.0/ユーザー指示「停滞脱出のログにイテ回数と時間を出す」] 時刻だけでは
         //   「そもそも回していないから改善が無い」のか「大量に回しても改善が無い」のかが区別できず、
         //   停滞閾値が妥当かを実機ログから判断できなかった。進捗ストリームで観測した反復数を
@@ -517,24 +556,18 @@ object V6FinalPort {
         //     用途は「そもそも回していない」と「大量に回しても改善しない」の**桁の区別**に限る。
         val itersByPhase = HashMap<String, Long>()
         val observedIters = java.util.concurrent.atomic.AtomicLong(0)
-        val lastBestImproveIters = java.util.concurrent.atomic.AtomicLong(0)
-        val stagnationIters = java.util.concurrent.atomic.AtomicLong(-1)
-        val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)   // 並列ワーカーから読むため atomic
         // [hardFloor 精度] best の「非covU HARD」(groupViol/pref/c3n=解けるHARD)件数。hardFloor は構造的covU
         //   のみの下限なので、`bestHard<=hardFloor` だけだと、担当不可の過配置(groupViol)が covU を構造下限より
         //   見かけ上へこませたケースで、解ける groupViol が残っているのに短い stallHardMs へ早期移行してしまう。
         //   非covU HARD が 0（＝残るHARDが構造的covUのみ）を追加条件にし、上記コメント(214行)の設計意図と一致させる。
-        val bestNonCovUHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)
         // [3.281.0/停滞レビューA] c3n構造壁の動的床（covU の structuralHardFloor と対）。
         //   残る非covU HARD が c3n のみ、かつ ForbiddenDiag(3.280.0) が全 run の塞がりを証明したら、
         //   その c3n は「解けないHARD」＝plateau として stallHardMs へ移行できる。診断(~20ms)は
         //   「停滞が stallHardMs を超えた後・best 世代ごとに一度だけ」遅延実行しキャッシュする。
-        val bestNonCovUAllC3n = java.util.concurrent.atomic.AtomicBoolean(false)
-        val bestVersion = java.util.concurrent.atomic.AtomicInteger(0)
         // [3.592.0] 世代とresultを別Atomicで持つと、並行診断するワーカー間で新世代の「checked」に
         //   旧世代のresultが結び付く競合があった。(version,result)組を単一AtomicReferenceで置換する。
         val c3nWallCache = java.util.concurrent.atomic.AtomicReference(-1 to false)
-        var bTotal = Int.MAX_VALUE; var bWeighted = Double.MAX_VALUE; var lastPhase = ""
+        var lastPhase = ""
         val progressLock = Any()   // [競合解消] 並列ワーカーから呼ばれる best 追跡の read-modify-write を直列化
         val progressWatch: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
             synchronized(progressLock) {
@@ -545,37 +578,7 @@ object V6FinalPort {
                 val base = phase.substringAfter("/ ").trim().ifEmpty { phase }   // 「仮説N本探索中 / 」接頭辞を除去
                 if (base != lastPhase) { lastPhase = base; lastPhaseChangeMs.set(EngineClock.nowMs()) }
                 if (report != null) {
-                    val h = report.hard; val t = report.total; val wgt = report.weightedScore
-                    val bh = bestHard.get()
-                    // [3.287.0 keep-best統一] hard→weighted→total（betterReport と同順。停滞時計の「改善」定義も統一）。
-                    // [3.289.0/外部レビューへの回答] ここだけ許容誤差(1e-6)付きなのは意図的で、betterReport の
-                    //   厳密比較へは寄せない。本判定は「採否」ではなく**停滞ウォッチドッグの改善検知**であり、
-                    //   厳密比較だと double の 1e-15 級の揺れを改善と数えて lastBestImproveMs が延々リセットされ、
-                    //   早期終了が構造的に発火しなくなる（＝許容誤差がある方が正しい）。採否は betterReport が担う。
-                    val improved = progressImproved(h, wgt, t, bh, bWeighted, bTotal)
-                    if (improved) {
-                        bestHard.set(h); bTotal = t; bWeighted = wgt; lastBestImproveMs.set(EngineClock.nowMs())
-                        lastBestImproveIters.set(observedIters.get())   // [3.375.0] 最終改善時点の反復数
-                        if (betterReport(report, inputReport)) lastBeatInputMs.set(lastBestImproveMs.get())
-                        // [3.346.0/実機ログ] 停滞ラッチを解除する。shouldStop は**単調でない**（改善が届けば
-                        //   条件は偽に戻り、探索はそのまま締切まで走る）のに、旧実装は一度立った
-                        //   stagnationFired を二度と降ろさなかった。実機ログ 2026-08-03 では 258s に発火 →
-                        //   261s に改善が届いて探索は続行 → 275s の探索予算を使い切ったのに
-                        //   「改善が無いため早期終了（290sで停止・停滞37s無改善）」と記録され、同じログの
-                        //   Watchdog 行（探索終了時の停滞13s）と矛盾していた。さらに ExtraRefine が
-                        //   古いラッチを根拠に skip され、予算の残り約9秒が使われないままだった。
-                        stagnationFired.set(false); stagnationDurationMs.set(-1); stagnationIters.set(-1)
-                        // 非covU HARD(=解けるHARD)件数を best と同時に捕捉（stallHardMs 早期移行の判定に使う）。
-                        val gv = report.breakdown["groupViol"] ?: 0
-                        val pf = report.breakdown["pref"] ?: 0
-                        val c3n = report.breakdown["c3n"] ?: 0
-                        val c3w = report.breakdown["c3w"] ?: 0
-                        bestNonCovUHard.set(gv + pf + c3n + c3w)
-                        // [3.281.0/A] 非covU HARD が c3n のみか（c3n構造壁チェックの適用条件）＋best世代を進める
-                        //   （世代が変わると c3n壁キャッシュは無効化＝新しい best 盤面で再証明する）。
-                        bestNonCovUAllC3n.set(gv == 0 && pf == 0 && c3w <= wishC3wProven && c3n > 0)
-                        bestVersion.incrementAndGet()
-                    }
+                    wd.observe(report, EngineClock.nowMs(), observedIters.get(), { betterReport(report, inputReport) }, wishC3wProven)
                 }
             }
             onProgress(phase, report, iters, elapsed)   // ユーザーコールバックはロック外で呼ぶ
@@ -595,13 +598,13 @@ object V6FinalPort {
         val wishReachedCache = java.util.concurrent.atomic.AtomicReference(-1 to false)
         val wishStaleCheckAtMs = java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE / 2)
         fun bestWishReached(): Boolean {
-            val v = bestVersion.get()
+            val v = wd.bestVersion.get()
             if (wishReachedCache.get().first != v) {
                 val now = EngineClock.nowMs()
                 if (now - wishStaleCheckAtMs.get() < 200L) return false
                 wishStaleCheckAtMs.set(now)
                 val board = V6NativeOptimizer.liveBest?.let { b -> Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } } }
-                val hb = bestHard.get()
+                val hb = wd.bestHard.get()
                 val ok = wishReachedOn(board, hb)
                 // liveBest は best 報告より遅れて届く経路がある。古い盤面での「未到達」は保存せず、次の呼出で検査し直す。
                 val fresh = ok || hb != wishFloorLogged || (board != null &&
@@ -611,7 +614,7 @@ object V6FinalPort {
             return wishReachedCache.get().second
         }
         val c3nWallProven = {
-            val v = bestVersion.get()
+            val v = wd.bestVersion.get()
             if (c3nWallCache.get().first != v) {
                 val board = V6NativeOptimizer.liveBest
                 val proven = if (board == null) false else try {
@@ -633,21 +636,19 @@ object V6FinalPort {
             // [3.281.0/A] 追加: 残る非covU HARD が c3n のみで ForbiddenDiag が全 run の塞がりを証明した場合も
             //   plateau（解けないHARD）として stallHardMs へ移行（実機ログの「c3n=1のまま150s無改善でも
             //   270s閾値のため発火不能」を解消）。診断は停滞が stallHardMs を超えてから遅延実行（~20ms/世代1回）。
-            val nonCovU = bestNonCovUHard.get()
-            val wall = nonCovU > 0 && bestNonCovUAllC3n.get() &&
-                bestHard.get() <= hardFloor + nonCovU &&
-                now - lastBestImproveMs.get() > stallHardMs && c3nWallProven()
+            val nonCovU = wd.bestNonCovUHard.get()
+            val wall = nonCovU > 0 && wd.bestNonCovUAllC3n.get() &&
+                wd.bestHard.get() <= hardFloor + nonCovU &&
+                now - wd.lastBestImproveMs.get() > stallHardMs && c3nWallProven()
             val effStall = effectiveStallMs(
-                bestHard.get(), hardFloor, nonCovU, bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
-                wishOn && bestHard.get() == wishFloorLogged && bestWishReached(),
+                wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
+                wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached(),
             )
             when {
                 now >= searchDeadlineMs || !isActive -> true
-                watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, lastBestImproveMs.get(), effStall) -> {
-                    stagnationDurationMs.set(now - lastBestImproveMs.get())
-                    stagnationIters.set(observedIters.get())   // [3.375.0] 停滞発火の瞬間の反復数
-                    e0Fired.set(wishOn && bestHard.get() == wishFloorLogged && bestWishReached())
-                    stagnationFired.set(true); true
+                watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, wd.lastBestImproveMs.get(), effStall) -> {
+                    e0Fired.set(wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached())
+                    wd.fire(now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs); true
                 }
                 else -> false
             }
@@ -659,7 +660,7 @@ object V6FinalPort {
         //   （実測: 探索109.99s→114.998s・後処理8.48s→4.95s）。
         val stopIsFinal = { EngineClock.nowMs() >= searchDeadlineMs || !isActive }
         // 後処理(runPostOptimization)用の別締切。stall では止めず予約枠 hardDeadlineMs まで使える。
-        val e0bSkip = { wishFloorMode == WishFloorMode.E0B && stagnationFired.get() && e0Fired.get() }
+        val e0bSkip = { wishFloorMode == WishFloorMode.E0B && wd.stagnationFired.get() && e0Fired.get() }
         val postShouldStop = { EngineClock.nowMs() >= hardDeadlineMs || !isActive || e0bSkip() }
 
         val tFirst0 = EngineClock.nowMs()
@@ -678,11 +679,11 @@ object V6FinalPort {
         //   `tChain1 - lastImp` が負→0 に丸められて「最終改善=経過287s・探索終了時の停滞0s」（探索は274sで終了）
         //   という**時間軸の混ざった自己矛盾**になっていた（読み手は「探索は一度も停滞していない」と誤読する）。
         //   探索終了時点でスナップショットし、ウォッチドッグの数字は全てこの時刻基準で揃える。
-        val lastImpAtSearchEnd = lastBestImproveMs.get()
-        val lastBeatInputAtSearchEnd = lastBeatInputMs.get()
+        val lastImpAtSearchEnd = wd.lastBestImproveMs.get()
+        val lastBeatInputAtSearchEnd = wd.lastBeatInputMs.get()
         val lastPhaseAtSearchEnd = lastPhaseChangeMs.get()
         val itersAtSearchEnd = observedIters.get()
-        val lastImpItersAtSearchEnd = lastBestImproveIters.get()
+        val lastImpItersAtSearchEnd = wd.lastBestImproveIters.get()
 
         // [3.268.0/エリート統合] 旧「エリート再結合(Path Relinking)」を置換。8役の最終1解だけでなく、
         //   非同期適応ポートフォリオが全epochから保存した品質/距離/橋渡しエリート(lastFusionElites)を
@@ -754,7 +755,7 @@ object V6FinalPort {
             //   「残り25sあるのに何もしていない」がログから読めなかった）。予算不足は TIME 行から自明なので出さない。
             //   判定は1回だけ評価して分岐と説明で共有する（`isActive` を2度読むと食い違い得るため）。
             val stopRequested = !isActive
-            val stagnated = stagnationFired.get()
+            val stagnated = wd.stagnationFired.get()
             // [測定中/backlog#35] post.report の残りHARDが「解けないと証明済み」かどうか。HARD=0（SOFT仕上げの
             //   余地）や、証明できない残りHARD（改善可能かもしれない）は false のまま＝常にExtraRefineを許可する。
             val structuralHardResidual = extraRefineRequirePostHardDrop &&
@@ -851,13 +852,13 @@ object V6FinalPort {
         val watchdogLog = run {
             val lastImp = lastImpAtSearchEnd
             val endStallS = (tChain1 - lastImp).coerceAtLeast(0L) / 1000
-            val nonCovU = bestNonCovUHard.get()
-            val wishReachedEnd = bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, bestHard.get()))
+            val nonCovU = wd.bestNonCovUHard.get()
+            val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
             val kind = when {
-                bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
-                bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
+                wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
+                wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
                 wishOn && wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
-                c3nWallCache.get().second && bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
+                c3nWallCache.get().second && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
             }
             // [3.375.2/実測で判明] 発火しなかったとき**どの条件が塞いだか**を出す。実測(golden・150s予算)で
@@ -875,7 +876,7 @@ object V6FinalPort {
             //   3.375.2 は「phaseGrace を並列非依存にするかは要 A/B と業務判断」として頻度の変更を保留したが、
             //   ログは「猶予2s未達」としか言わず、**惜しかったのか桁で足りないのかが読めなかった**＝
             //   その判断に必要な材料が出ていなかった。実測(a/b の形)を出せば実機ログだけで判断できる。
-            val blockNote = if (!stagnationFired.get()) {
+            val blockNote = if (!wd.stagnationFired.get()) {
                 val reasons = ArrayList<String>()
                 if (tChain1 - startMs <= minRunMs)
                     reasons.add("最短実行未達(実測${(tChain1 - startMs) / 1000}s/${minRunMs / 1000}s)")
@@ -892,8 +893,8 @@ object V6FinalPort {
                 if (reasons.isEmpty()) "" else "・未発火の理由=${reasons.joinToString("＋")}"
             } else ""
             // 探索の後（後処理・追加精製）で改善したなら別項目として出す。探索フェーズの停滞と混ぜない。
-            val afterNote = if (lastBestImproveMs.get() > tChain1)
-                "・探索後も改善あり(経過${((lastBestImproveMs.get() - startMs) / 1000)}s＝後処理/追加精製)" else ""
+            val afterNote = if (wd.lastBestImproveMs.get() > tChain1)
+                "・探索後も改善あり(経過${((wd.lastBestImproveMs.get() - startMs) / 1000)}s＝後処理/追加精製)" else ""
             val wallCache = c3nWallCache.get()
             val wallNote = if (wallCache.first >= 0)
                 "・c3n壁診断=${if (wallCache.second) "構造的な壁と判定" else "壁ではない（崩す手が実在）"}" else ""
@@ -902,25 +903,25 @@ object V6FinalPort {
                 message = "停滞監視: 最終改善=経過${((lastImp - startMs) / 1000).coerceAtLeast(0)}s・" +
                     "入力超えの最終改善=${if (lastBeatInputAtSearchEnd < 0) "なし" else "経過${((lastBeatInputAtSearchEnd - startMs) / 1000).coerceAtLeast(0)}s"}・" +
                     "探索終了時の停滞${endStallS}s・実効閾値($kind)・" +
-                    "希望衝突の床${wishFloorLogged}=${if (wishReachedEnd) "到達" else "未到達"}(best ${bestHard.get()})・" +
-                    "covU床${hardFloor}=${if (bestHard.get() <= hardFloor && nonCovU == 0) "到達" else "未到達"}・発火=${if (stagnationFired.get()) "あり" else "なし"}" +
+                    "希望衝突の床${wishFloorLogged}=${if (wishReachedEnd) "到達" else "未到達"}(best ${wd.bestHard.get()})・" +
+                    "covU床${hardFloor}=${if (wd.bestHard.get() <= hardFloor && nonCovU == 0) "到達" else "未到達"}・発火=${if (wd.stagnationFired.get()) "あり" else "なし"}" +
                     // [3.375.0] 時刻に加えて反復数も出す（「回していない」のか「回しても改善しない」のかの区別）。
                     "・反復(進捗報告ぶん・目安)=最終改善時${fmtIter(lastImpItersAtSearchEnd)}→" +
                     "探索終了時${fmtIter(itersAtSearchEnd)}（無改善のまま約${fmtIter(itersAtSearchEnd - lastImpItersAtSearchEnd)}転・" +
                     "総量はAdaptivePortfolioの合計iter参照）$blockNote$afterNote$wallNote",
             ))
         }
-        val stagnationLog = if (stagnationFired.get()) listOf(MirrorLog(
+        val stagnationLog = if (wd.stagnationFired.get()) listOf(MirrorLog(
             level = "I", tag = "EarlyStop",
             message = "停滞検知: 改善が無いため早期終了（予算${seconds}s中 ${(tPost1 - startMs) / 1000}sで停止・" +
-                "停滞${stagnationDurationMs.get() / 1000}s無改善" +
+                "停滞${wd.stagnationDurationMs.get() / 1000}s無改善" +
                 // [3.375.0] 何回転ぶん空回りしたか（時間だけでは実施量が読めない）。
-                (if (stagnationIters.get() >= 0)
-                    "・発火までに無改善のまま約${fmtIter(stagnationIters.get() - lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
-                "・解は最良を維持）" +
+                (if (wd.stagnationIters.get() >= 0)
+                    "・発火までに無改善のまま約${fmtIter(wd.stagnationIters.get() - wd.lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
+                "・発火種別=${if (wd.stagnationByOverride.get()) "猶予上書き" else "通常"}・解は最良を維持）" +
                 (if (e0Fired.get()) "（希望衝突の床に到達＝${wishFloorMode}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
-                (if (c3nWallCache.get().second && bestNonCovUAllC3n.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
+                (if (c3nWallCache.get().second && wd.bestNonCovUAllC3n.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
         )) else emptyList()
         // [最終番兵/多重防御・3.575.0で強化] 「入力」と最終結果の2点比較だと、途中の段の改善が
         //   後段の悪化で丸ごと失われる（実機ログで確認、経緯: docs/history/3.4xx.md 3.575.0）。
@@ -1023,7 +1024,7 @@ object V6FinalPort {
         val residualLog = run {
             val bd = finalReport.breakdown
             val infeasLearned = chained.infeasibleFamilies   // [3.335.0] この実行の返り値から
-            val c3nWall = c3nWallCache.get().second && bestNonCovUAllC3n.get()
+            val c3nWall = c3nWallCache.get().second && wd.bestNonCovUAllC3n.get()
             val walls = ArrayList<String>()
             val open = ArrayList<String>()
             // [3.375.0/実機ログ起因] 構造床は**族ループより先に**計算する。旧実装は床を後から walls へ

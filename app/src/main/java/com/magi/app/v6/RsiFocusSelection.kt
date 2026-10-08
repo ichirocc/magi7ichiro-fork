@@ -15,6 +15,15 @@ package com.magi.app.v6
  * `RsiFocusSelection.maxViolatedFamily`へ一括置換した。
  */
 internal object RsiFocusSelection {
+    /** `runRsi` の回避集合（`docs/stall_escape.md` §7.2）。avoid＝HF63 の動的検知のうち HARD だけ＋静的 covU 床、
+     *  focusAvoid＝avoid＋1 ラウンド冷却。SOFT は入らない＝常に focus 可能。 */
+    internal fun avoidSets(dynamicAvoid: Set<String>, covU: Int, covUFloor: Int, cooldownFocus: String?): Pair<Set<String>, Set<String>> {
+        val avoid = dynamicAvoid.filterTo(mutableSetOf()) { it in MirrorKeys.hard }
+        if (covUFloor > 0 && covU <= covUFloor) avoid.add("covU")
+        val focusAvoid = if (cooldownFocus != null) avoid + cooldownFocus else avoid
+        return avoid to focusAvoid
+    }
+
     internal fun maxViolatedFamily(
         report: ViolationReport,
         avoid: Set<String> = emptySet(),

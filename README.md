@@ -38,6 +38,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-10-08（3.640.0: 停滞脱出仕様の残件＝`V6FinalPort.WatchdogBest`（最良追跡と停滞ラッチ）・`RsiFocusSelection.avoidSets`（回避集合）を閉包から切り出し、「ラッチは改善で降りる」「SOFT は avoid に入らない」を `StallEscapeSpecTest` で固定。EarlyStop 行に発火種別（通常／猶予上書き）。出力不変。C# 同期）
+
 **最終更新**：2026-10-08（3.639.0: 停滞脱出仕様を実行可能に＝`V6FinalPort.watchdogBudget`（§5.1 の表）と `progressImproved`（§3.2 の監視判定）を純関数へ抽出し、`StallEscapeSpecTest` で表の値・境界・HF63 の 13 族・effortIters の式・既定値を固定。出力不変。C# 同期）
 
 **最終更新**：2026-10-08（文書のみ: `docs/stall_escape.md` を追加＝停滞脱出の規則と数値を層ごとに 1 か所へ。topics.md・algorithm_portfolio.md・backlog に散っていた記録はそのまま、現行値だけをここへ集約）
