@@ -3,6 +3,7 @@ package com.magi.app.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -800,6 +801,7 @@ internal fun SectionNote(text: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)   // bringIntoView は実験的 API（見出しを画面内へ寄せる, 3.642.0）
 @Composable
 internal fun CollapsibleSection(
     title: String,

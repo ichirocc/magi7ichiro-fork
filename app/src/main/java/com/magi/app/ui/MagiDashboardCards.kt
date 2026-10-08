@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.magi.app.v6.V6PortReport
 import com.magi.app.v6.V6Algorithm
+import com.magi.app.v6.CoverageShortfall
 import com.magi.app.v6.CoverageVerdict
 import com.magi.app.v6.MirrorKeys
 import kotlinx.coroutines.Dispatchers
