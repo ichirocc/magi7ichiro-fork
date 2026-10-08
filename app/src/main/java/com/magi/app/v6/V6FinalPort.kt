@@ -767,7 +767,9 @@ object V6FinalPort {
                     state, post.schedule,
                     optsR.copy(algorithm = V6Algorithm.ALNS, totalBudgetSec = (extraMs / 1000L).toInt().coerceAtLeast(5),
                         workers = optsR.workers.coerceAtMost(HypothesisPlanning.MAX_HYPOTHESES)),
-                    extraStop, progressWatch,
+                    extraStop,
+                    // 進捗の段名に「追加精製」を前置する（旧: 後処理の後に「ALNS restart 1/2」と出て探索へ戻ったように読めた）。
+                    { phase, rep, iters, elapsed -> progressWatch("追加精製 $phase", rep, iters, elapsed) },
                 )
                 // [3.287.0 keep-best統一] hard→weighted→total（betterReport と同順）。
                 val imp = betterReport(extra.report, post.report)
