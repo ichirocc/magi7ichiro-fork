@@ -243,6 +243,13 @@ private fun ExtWishPanel(
 ) {
     val cs = MaterialTheme.colorScheme
     val usable = days.filter { it !in wishDays }
+    // 登録の結果は UiState で返る。成功したときだけ閉じ、失敗したときは選択を残して理由を出す（UI-01）。
+    var sentSerial by remember(staffIdx) { mutableStateOf(-1L) }
+    val result = ui.extWishResult
+    LaunchedEffect(result) {
+        if (result != null && sentSerial >= 0 && result.serial > sentSerial) { if (result.error == null) onDone() }
+    }
+    val failed = result?.error?.takeIf { sentSerial >= 0 && result.serial > sentSerial }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("この日は選んだシフト以外にする（複数選べます）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         shifts.indices.chunked(4).forEach { rowIdxs ->
@@ -273,10 +280,11 @@ private fun ExtWishPanel(
         if (usable.size < days.size) {
             Text("希望のある日（${days.size - usable.size}日）は拡張希望に入れられません。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
+        if (failed != null) Text("登録できませんでした: $failed", style = MaterialTheme.typography.labelSmall, color = cs.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
             Button(
-                onClick = { onEvent(MagiEvent.Condition.AddExtWish(staffIdx, usable.map { it - 1 }, selected.sorted())); onDone() },
+                onClick = { sentSerial = ui.extWishResult?.serial ?: 0L; onEvent(MagiEvent.Condition.AddExtWish(staffIdx, usable.map { it - 1 }, selected.sorted())) },
                 enabled = !ui.running && selected.isNotEmpty() && usable.isNotEmpty(),
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
             ) { Text("${usable.size}日に登録") }

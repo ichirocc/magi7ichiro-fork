@@ -317,6 +317,7 @@ fun MagiViewModel.importStaffCsv(rawText: String) {
     val warn = buildList {
         if (badG.isNotEmpty()) add("グループ記号 ${badG.entries.take(3).joinToString("・") { "「${it.key}」${it.value}件" }}${if (badG.size > 3) "ほか" else ""}")
         if (badS.isNotEmpty()) add("スキル記号 ${badS.entries.take(3).joinToString("・") { "「${it.key}」${it.value}件" }}${if (badS.size > 3) "ほか" else ""}")
+        if (res.ambiguousNames.isNotEmpty()) add("同姓同名で対象を決められない氏名 ${res.ambiguousNames.take(3).joinToString("・")}（その行は変更しません）")
     }
     val tailWarn = if (warn.isEmpty()) "" else
         "。⚠ 見つからない${warn.joinToString("／")}（新規は先頭グループ・既存は元のまま。記号をご確認ください）"

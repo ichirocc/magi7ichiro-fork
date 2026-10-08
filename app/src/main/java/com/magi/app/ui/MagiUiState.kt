@@ -114,6 +114,8 @@ data class UiState(
     val lockedWishKeys: Set<String> = emptySet(),   // [S5] 試算できる希望のキー（実現可能で手動固定でない）
     val manualPins: Set<String> = emptySet(),       // [#41] 手動固定のセル "i,j"
     val extBanned: Map<String, Set<Int>> = emptyMap(), // 拡張希望: セル "i,j" → その日に禁止のシフト index
+    /** 拡張希望の登録の結果（画面が成功時だけ閉じ、失敗時は理由を出すため）。 */
+    val extWishResult: ExtWishResult? = null,
     val wishSelfConflicts: List<com.magi.app.v6.WishSelfConflict> = emptyList(),   // [S5] 希望どうしの衝突（兄弟の希望を候補に足す）
     val hardWishConflict: Int = 0,                  // 必須のうち希望どうしのぶつかり（計算では消せない）の件数
     val wishTrialRev: Int = 0,                      // [S5] 試算が終わるたびに進む（画面は vm.wishTrialFor で読み直す）
@@ -188,6 +190,9 @@ data class PinTargetView(
 )
 
 /** [S5] 「希望を取り消して再作成」の結果（`docs/s5_wish_trial.md` §9）。`line` は次にやることカードに出す 1 行。 */
+/** 拡張希望の登録 1 回の結果。[error]＝null なら保存した。 */
+data class ExtWishResult(val serial: Long, val error: String?)
+
 /** 操作の通知。[undoSerial] はその操作が積んだ元に戻すの段（通知から戻すのはこの段が先頭のときだけ）。 */
 data class OpNotice(val id: Long, val text: String, val undoSerial: Long)
 
