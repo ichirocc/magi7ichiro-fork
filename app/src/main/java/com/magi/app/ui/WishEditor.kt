@@ -391,7 +391,8 @@ private fun WishMonthGrid(
                                     }
                                 }
                                 extMarked[d]?.let { ex ->
-                                    Text("×" + ex.joinToString(""), style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
+                                    // 記号が 3 つ以上はセル幅に入らないので件数で（実機 12/5「×休PｼD」が切れた）。全文は一覧チップにある。
+                                    Text(if (ex.size <= 2) "×" + ex.joinToString("") else "×${ex.size}種", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
                                 }
                             }
                         }
