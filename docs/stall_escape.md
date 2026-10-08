@@ -3,13 +3,18 @@
 ## 1. この文書の位置づけ
 
 - 対象: `ichirocc/magi7ichiro-fork` の Android/Kotlin エンジン（C++ `magi_native.cpp` と C# `ichirocc/-MAGI_PC` は同値の移植。C# は `V6FinalPort.Watchdog.cs`・`V6FinalPort.HandleOptimize.cs`）。
-- 照合した実装: `80d664d`（3.641.0）を基準に、3.642.0 の変更（作業ブランチ `claude/merge-wub4fq`）を §5.2〜5.5 へ反映した。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能は §11 の測定だけに基づく。
+- 照合した実装: `80d664d`（3.641.0）を基準に、3.642.0・3.643.0 の変更（作業ブランチ `claude/merge-wub4fq`。3.643.0 は `8980004` 以降、コミットは `docs/history/3.4xx.md` の 3.643.0 の節）を反映した。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能は §11 の測定だけに基づく。
   読む時点で main が進んでいれば `git diff 80d664d..HEAD -- app/src/main/java/com/magi/app/v6/` で §14 の根拠ファイルに差分が無いことを先に確かめる。
-- 目的: 会話履歴なしで停滞制御を読解・レビューできること。**現行実装の記述**であり、閾値変更や新アルゴリズムの提案ではない。
+- 読み手: 他社 AI（実装・移植・レビュー）。会話履歴なしで、この文書とリポジトリだけから検証・実装・判断できることを目指す。人のレビューにも同じ条件が効く。
+- 目的: 現行実装の記述を本体とする。提案は §5.8 に状態ラベル（未実装／実装済み既定 OFF）を付けて分け、本文と混ぜない。閾値や重みをここで変えない（HF77）。
+- 「優秀」の判定基準（2026-10-08 のブリーフィングで決定）: ①照合＝全ての主張と数値を、固定したコミットの関数名・定数名・テスト名で確かめられる。②実装＝DEFAULT をこの文書だけから再実装できる（§13.2 のチェックリストで検証）。③判断＝提案は DEFAULT と分け、採否の規則（§13 の 4、事前基準・揺れを先に測る・対 8 以上・95% 区間）を書く。④安全＝不変条件（§13.1）が全てテスト名で固定されている。⑤更新＝変更手順と変更履歴があり、コードと同じコミットで直す。加えて、会話履歴を持たない別のエージェントが文書とコードだけを照合して矛盾を見つけない（矛盾 0 で合格）。
+- 他社 AI への指示: (1) 実装の既定動作は常に DEFAULT。§5.8 の提案はフラグ OFF では存在しないものとして扱う。(2) 数値・規則を変えるときはコード・テスト・この文書を同じコミットで直す。(3) §11 の否決表と同型の変更を測定なしで入れない。(4) 重み・閾値・探索幅は明示の数値指示が無い限り変えない。(5) 本書の数値は定数名・関数名で確かめてから使う。
 - 読解規則: コメントや過去資料の設計意図と条件式が違うときは**条件式を優先する**。「保証」「推定」「未検証」を区別する。
 - 数値・規則を変えたら、この文書を**同じコミットで**直す（Kotlin → C++ → C# の順、同日）。経緯の本文は `docs/history/`、採否の台帳は `docs/algorithm_portfolio.md`。
 
 ## 2. 最初に理解すること
+
+**一行定義**: 停滞脱出とは、五層で「改善が止まった後に手を変えるか、探索をやめるか」を決める仕組みである。DEFAULT では構造床と c3n 局所壁の両方で短い停止閾値を使い、後者は根拠が弱いという既知の歪みがある（§5.7）。3.642.0 から壁の証拠は生存盤面と最良の報告の同じ参照で結び、停滞の記録は一度だけ書く。3.643.0 は壁を証明相当と経験的に分ける段階化を既定 OFF で持つ（§5.8）。層 B は止めずに再配属だけを行う。
 
 停滞脱出は単一のアルゴリズムではない。観測対象と寿命が違う 5 つの層が、入れ子で動く。
 
@@ -36,6 +41,13 @@
 | focus | RSI が次に狙う族。`total` は「全違反セル起点の汎用修復」 |
 | epoch / round | ワーカーの役割実行単位／RSI 内部の探索単位 |
 | keep-best | 保持済み最良を悪化候補で置き換えない。比較は §3.2 |
+| hardFloor | 構造的 covU 床。有資格者を全員就けても埋まらない席数。実行中は不変。`V6SanityPort.structuralHardFloor` |
+| nonCovUHard | groupViol + pref + c3n + c3w。`WatchdogBest.bestNonCovUHard` |
+| normalStall / shortStall | 解ける HARD が残る局面の長い閾値／頭打ち局面の短い閾値。`V6FinalPort.normalStallMs`／`watchdogBudget(...).stallHardMs` |
+| c3nWallProven | 現最良の各 c3n run が局所手で動かないという診断。**大域不能の証明ではない**。`V6PortAnalyzer.diagnoseForbiddenRuns`（`allBlocked`）、証拠の選択は `V6FinalPort.C3nWallProof` |
+| stagnationFired | 層 A 発火のラッチ。**改善で降りる**（永続ではない）。`WatchdogBest.stagnationFired`、`observe` が降ろす |
+| shouldStop / stopIsFinal | 締切・キャンセル・停滞（非単調）／締切・キャンセルだけ（単調）。`handleOptimize` のローカル |
+| liveBest | 探索が公開する生存盤面とその報告。`V6NativeOptimizer.publishLiveBest`（CAS）、`LiveBestSnapshot(report, board)` |
 
 ### 3.2 候補採用と停滞時計は別契約
 
@@ -181,6 +193,24 @@ canExtra = ¬stopRequested ∧ ¬stagnationFired ∧ post.report.total > 0 ∧ �
 
 残存分析（`residualLog`）の「証明済みの壁」は、最終盤面を改めて診断した結果（約 20 ms、`C3nWallProof.diagnoseBoard`）で、探索中の判定とは別の根拠（3.642.0）。
 
+### 5.7 DEFAULT の既知のギャップ（欠陥ではなく仕様の歪み）
+
+- 構造床（強い根拠）と c3n 局所壁（弱い根拠。§4）が同じ `shortStall` を使う。
+- 診断の開始（`stalled > shortStall`）と発火の閾値が同じ目盛りなので、壁認定の後の追加探索はほぼ 0 になりうる。
+- 停止範囲は探索全体なので、未消化の層 B ロールもまとめて終わる。
+- 3.641.0・3.642.0・3.643.0 の測定（§11）では、この歪みによる害は検出されていない。測定の精度（同一 seed の揺れ SD 約 100）が腕の差を飲み込むことも分かった。
+
+### 5.8 PROPOSAL（提案。既定の動作ではない）
+
+| 提案 | 状態 | 内容 |
+|---|---|---|
+| A: 追加待機 M | 未実装 | `c3nWallPlateau ∧ c3nWallProven ∧ B ≥ B_min` のとき `effStall = shortStall + M`（例 B_min=120 000 ms、M∈{15 000, 30 000, …}、8 000 ≤ M ≤ normalStall − shortStall）。未診断・診断 false・小予算は normalStall のまま。両端は測定済み: M=0 が DEFAULT、M=normalStall−shortStall が `c3nWallShortStall=false`（§11 の c3n 行: 60 s −1.6%・時間 1.75 倍、120 s 差なし・2.6 倍、300 s −0.7%・2.35 倍、いずれも非有意）。言える効果は「壁の成立後、最大およそ M ms の追加の無改善待機が入りうる」まで |
+| B: 根拠の段階化 | 実装済み・既定 OFF（`PolishGate.c3nWallDeepCheck`、3.643.0） | `wall = allBlocked ∧ (allBlockedCertified ∨ ¬c3nWallRefutedByOneMove(board, 2000 ms))`。証明相当の壁（全セル希望固定）は従来どおり短縮。経験的な壁は 1 手探索（`FixSuggester`、`Probe.C3N_WALL_DEEP_MS`）でも必須を減らす手が無いときだけ短縮。反証は壁でない方向にしか働かない。同じ盤面の診断は一度だけ（`BoardKeyedFlag` が直列化）。観測は `Watchdog` 行の「1手探索の反証 N 回／確認 M 回」。測定はベンチの腕 `deep`。sample_v6 の残る必須は希望衝突由来（証明相当）なので、このフィクスチャでは A/A になる＝経験的な壁が出るフィクスチャで測る。言える効果は「1 手で崩せる壁を壁と呼ばなくなる」まで |
+
+出荷条件（両方）: §13 の 4 の作法で測り、事前に決めた基準を満たすこと。引き分け・負けは DEFAULT 維持で §11 に 1 行。
+
+敵対検証の要約（提案の前提。2026-10-08）: 床と局所壁が同じ short なのは根拠の強さに対して歪み＝A・B の動機。固定の中間閾値（B/4 など）は短い予算で差が出ず採用しない。「大域ロールが必ず走る」は過大。未診断を短縮するのは危険＝normalStall のまま。層 B の量子変更は否決同型の危険＝提案本体から外す。ログは制御より先（§12）。keep-best は入力比の下限だけ＝「粘れば得られた改善」は非保証（§3.3）。成功指標は後処理後の final。評価が同じでも盤面は同じとは限らない＝壁の証拠は同じ報告参照で結ぶ（§5.3、K9）。
+
 ## 6. 層 B — 適応ポートフォリオ
 
 役割スロットは `floorMod(workerIndex, 8)`。以下は 8 スロットの説明で、ワーカー数が常に 8 という意味ではない。
@@ -210,7 +240,7 @@ reassign          = slot ≠ 0 ∧ (nearestOtherDistance ≤ DUPLICATE_DISTANCE_
 
 ### 6.3 エポック予算と成果回収
 
-- 量子: RSI_PLUS は基礎 35 s・改善直後 45 s、他は 5 s・8 s。残り秒数以下にクランプ。改善直後の長い量子は**役割が変わった直後は受け取れない**（`carriesImprovingQuantum`）。再配属分岐では W4 も基礎量子へ戻す。
+- 量子（`AdaptiveHypothesisEpochPolicy` の定数）: RSI_PLUS は基礎 `RSI_PLUS_BASE_QUANTUM_SEC`=35 s・改善直後 `RSI_PLUS_IMPROVING_QUANTUM_SEC`=45 s、他は `BASE_QUANTUM_SEC`=5 s・`IMPROVING_QUANTUM_SEC`=8 s。残り秒数以下にクランプ。改善直後の長い量子は**役割が変わった直後は受け取れない**（`carriesImprovingQuantum`）。再配属分岐では W4 も基礎量子へ戻す。
 - 役割内部の workers は 1。開始前に停止・締切を確認し、戻った成果を**回収してから**締切を判定して break（3.600.0。回収前に break すると締切間際の改善解を捨てる）。
 - globalBest と自己 elite は別管理。採用は `betterReport` と配置保護を通す。
 
@@ -308,7 +338,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 予算の相互作用: 後処理は絶対時刻の全体締切 `D` を受け、巡回クラスタは `clusterStop` の自前締切、共同 LNS はその中で patience／評価数上限で止まる。前段が早く終わった分は後段がそのまま使える（締切は絶対時刻、予約枠は探索から確保する枠で後処理内の配分ではない）。
 採用数は最終盤面の純改善数ではない。後処理の時間削減と最終品質の非劣性は別々に測る。
 
-## 10. 既定 OFF・実験機構（`80d664d` と 3.642.0 の既定）
+## 10. 既定 OFF・実験機構（`80d664d` と 3.642.0・3.643.0 の既定）
 
 | 機構 | 既定 | 本体と分けて読む点 |
 |---|---|---|
@@ -331,6 +361,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 
 | 値・案 | 決定 | 根拠（測定条件） |
 |---|---|---|
+| 3.643.0 の精度計測（既定 対 HEAD 相当、120 s） | 未決＝2 つの腕は区別できない。既定は正しさ（競合の修正）の理由で維持 | sample_v6・120 s・10 seed × 2 rep・workers 4・同一 seed（`MAGI_HO_REPEATS`、`tools/loop/ho_stats.py`）: 20 対、weighted 差（既定−相当）の平均 −15.6、95% ブートストラップ区間 [−90, +59]、既定が悪い 9／良い 11（符号検定 p=0.82）、hard は全 run で 1。同一 seed の rep 間の揺れ: プール SD 92（既定）／110（相当）、最大範囲 258。この差と揺れで区間を 0 から外すには約 480 対。元の 5 対と診断の 2 対を合わせた 27 対でも区間 [−64, +71] |
 | 3.642.0 の証拠の対応（同じ参照）と後期演算の試行中の停止確認 | 既定を維持（2026-10-08）。事前基準（既定が 5 seed 中 3 以上で悪化なら戻す）を満たさない | sample_v6・300 s・5 seed・workers 4・同一 seed。既定（off）対 HEAD 相当（on: `c3nWallLegacy=true`・試行中の停止確認を切る。入口の確認は両腕に残る）。weighted 差（既定−相当）の平均 −49（既定が良い 3/5、悪い 2/5、−273〜+87）、total 差の平均 −11（既定が良い 4/5）。hard は全 run で 1。既定の壁時計は平均約 207 s、相当は約 142 s。有意差の検定はなし。120 s（AUTO では RSI→ALNS の 31〜210 s 帯）も同条件で測った（`tools/loop/results/handleoptimize_head_sample120_2026-10-08.csv`）: weighted 差（既定−相当）の平均 −65（既定が良い 4/5、悪い 1/5、−202〜+21）、total 差の平均 −4（既定が良い 3/5）、hard は全 run で 1、壁時計は既定 約 52 s・相当 約 45 s。こちらも基準を満たさないので既定を維持。再実行の診断（同日）: 悪化した 4 ペアは再現せず、同一 seed・同一腕でも weighted 最大 325・停止時刻最大 215 s の揺れ（workers 4 は壁時計依存）。8 run とも同じ規則で停止（c3n 壁=短・通常発火・4 ワーカー同時離脱）。腕の差は揺れの範囲＝優劣は未決。既定は事前基準と正しさ（競合の修正）の理由で維持。決めるなら 120 s×20 seed 以上か workers=1。下の c3n 行は 3.641.0 の実装（値の一致による対応）の数値。 |
 | c3n 壁による短縮（`c3nWallPlateau`） | 据え置き（2026-10-08、`PolishGate.c3nWallShortStall` 既定 true） | sample_v6×5 seed・同一 seed・workers 4: 120 s は短縮なし 2 勝 3 敗・平均 +8.8 で損失なし（時間 46→119 s）、60 s は短縮なし 5 勝 0 敗・−1.6%（時間 33→58 s）、300 s は短縮なし 4 勝 1 敗・−0.7%（時間 127→299 s、p≈0.19）。緩めるなら時間と品質の交換＝業務判断 |
 | `normalStallFraction` 0.9 | 据え置き（2026-10-07） | 0.5 は 3.423.0 で 6 勝 3 敗・非有意（3 fixture×2 条件×3 反復＝18 run、RSI・workers=1・60 s）、blocked_covu 型 15 ペアでも再現せず（3.447.0）。外部提案「60〜90 s」は前提不成立（余りは後処理へ回らない、実機 #1 は 80 s の空白後に最終改善） |
@@ -379,7 +410,52 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 - W4 の再配属 2 回目以降でも強度・量子の規則を満たす。
 - 締切で戻った成果を、回収前の break で捨てない。
 
-## 14. 根拠ファイル（`80d664d` と 3.642.0 の差分）
+### 13.1 不変条件（テストで固定）
+
+| ID | 内容 | 固定するテスト |
+|---|---|---|
+| K1 | 採用は `betterReport` だけ | `V6FinalPortTest` ほか |
+| K2 | 入力より悪い解を採用しない | 各番兵のテスト（`runAlns`／`runV5`／後処理の入力比） |
+| K3 | `wishLocked`／上限 0（`mayPlace`）／手動固定の保護 | `FixApplyGate`・候補生成のテスト |
+| K4 | 実行全体の停止は層 A だけ | 設計（§2） |
+| K5 | `c3nWallProven` を大域証明と呼ばない・扱わない | 文書（§4） |
+| K6 | 提案を測定なしで DEFAULT にしない | 運用（§13 の 4） |
+| K7 | 否決表と同型を測定なしで復活させない | 運用（§11） |
+| K8 | Kotlin／C# は同日同期。文書は同コミット | 運用（§1） |
+| K9 | 壁の証拠は生存盤面の報告が最良の報告と同じ参照のときだけ使う。値の一致では使わない | `StallEscapeSpecTest`（`c3nWallBindsOnlyToTheSameReportObject`、`c3nWallProofUsesOnlyTheLiveBoardThatIsTheBestReport`、`c3nWallProofCarriesItsVerdictAcrossAStageBoundaryOnly`、`c3nWallProofRefusesAVerdictWhenTheLiveBoardChangesDuringDiagnosis`、`c3nWallLegacyArmDiagnosesTheLiveBoardOncePerVersion`、`c3nWallProofCountsEachLiveBoardUpdateOnceNotEachPoll`） |
+| K10 | 停滞ラッチは改善で降り、確定した記録は一度だけ書く | `StallEscapeSpecTest`（`fireIsRefusedWhenAnImprovementInterleavesBetweenDecisionAndFire`、`repeatedDecisionDoesNotOverwriteALatchedFire`） |
+| K11 | 証明相当の壁は全セル希望固定だけ。1 手探索の反証は必須が減る手があるときだけ真 | `V6PortAnalyzerTest`（`forbiddenRunCertificateIsOnlyTheAllWishPinnedRun`、`oneMoveRefutationFindsAMoveOnlyWhereHardCanDrop`） |
+
+C# は `MagiEngine.Tests/V6/StallEscapeSpecTest.cs`・`V6FinalPortWatchdogTest.cs`・`V6PortAnalyzerForbiddenTest.cs` が同じ内容を固定する。
+
+### 13.2 実装チェックリスト（他社 AI 用）
+
+DEFAULT
+
+- [ ] `effectiveStallMs` が basePlateau／c3nWallPlateau で short、それ以外は normal。`c3nWallShortStall=false` で壁の短縮だけが外れる
+- [ ] 発火式が minRun・stalled・phaseGrace／×2 の三条件、すべて厳密不等号（§5.4）
+- [ ] 発火は判定時の `bestVersion` と一致するときだけ `progressLock` 内で確定し、記録は一度だけ（§5.2・§5.4）
+- [ ] 壁の証拠は同じ報告参照のときだけ。診断は盤面の内容で鍵。前後で変われば使わない。同じ版だけ持ち越す（§5.3）
+- [ ] c3n 診断が局所手だけであることの明記（§4）
+- [ ] 層 B: slot 0 非再配属、距離 ≤ `DUPLICATE_DISTANCE_CELLS`(2)、`stagnantEpochs ≥ 1`、強度は `min(reassignments/2, 3)` 加算（§6.2）
+- [ ] 層 B: 改善は自己エリート同士の `betterReport`（§6.2）
+- [ ] 層 C: N4 は `runRsi` ローカルだけ。HF63 の記録は内部キー（§7）
+- [ ] 層 D: PhaseB への移行は `softPolish=true` のときだけ（§8）
+- [ ] 停滞発火後は ExtraRefine を走らせない（§5.6）
+- [ ] 後期演算は入口で停止を見る。試行ごとの確認は `lateOpStopPropagation`（§5.5）
+
+PROPOSAL（フラグ ON のときだけ）
+
+- [ ] B: `c3nWallDeepCheck` ON で証明相当の壁は短縮、経験的な壁は反証が無いときだけ短縮。OFF で DEFAULT と一致
+- [ ] A: `c3nWall ∧ proven ∧ B ≥ B_min` で short + M。未診断／false／小予算は normal。base は short のまま。OFF で DEFAULT とビット一致
+
+測定
+
+- [ ] 後処理後 final を正とする。同一 seed。腕ごとに時間も記録（§13 の 4）
+- [ ] 同じ seed・同じ腕を反復して揺れを先に測る。対 8 未満は判定しない。区間が 0 を含めば未決
+- [ ] 基準（何 seed 中いくつで戻すか）を測る前に決める
+
+## 14. 根拠ファイル（`80d664d` と 3.642.0・3.643.0 の差分）
 
 `app/src/main/java/com/magi/app/v6/`: `V6FinalPort.kt`・`V6NativeOptimizer.kt`・`AdaptiveHypothesisEpochPolicy.kt`・`MirrorCore.kt`・`Hf63Infeasibility.kt`・`HypothesisPlanning.kt`・`RsiFocusSelection.kt`・`V6PortAnalyzer.kt`・`V6SanityPort.kt`・`SaOptimizer.kt`・`V6HotfixPasses.kt`・`C1JointLnsPolish.kt`・`StallPolishInjection.kt`、`app/src/main/cpp/magi_native.cpp`。
 テスト: `app/src/test/java/com/magi/app/v6/` の `V6FinalPortTest.kt`・`WishConflictFloorTest.kt`・`HypothesisEpochPolicyTest.kt`・`Hf63InfeasibilityTest.kt`・`StallPolishInjectionTest.kt`・`StallEscapeSpecTest.kt`・`V6LateOperatorsTest.kt`・`EliteIntegrationQuantitativeTest.kt`。
