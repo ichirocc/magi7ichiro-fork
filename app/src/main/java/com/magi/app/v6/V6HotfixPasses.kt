@@ -287,6 +287,12 @@ object PolishGate {
     /** 測定用（`docs/stall_escape.md` §5.3）: c3n 壁（ForbiddenDiag の限定した手の壁判定）で停滞閾値を短縮するか。false＝c3n だけが残っても通常閾値で粘る。既定 **true**。 */
     @Volatile var c3nWallShortStall: Boolean = true
 
+    /** 測定用の基準腕（`docs/stall_escape.md` §5.3）: true＝HEAD の壁判定（版ごとに固定・生存盤面の診断・一致の検査なし）。既定 **false**。 */
+    @Volatile var c3nWallLegacy: Boolean = false
+
+    /** 測定用の切り分け（`docs/stall_escape.md` §5.5）: false＝後期演算（EarlyChain）は停止要求を見ない（HEAD と同じ）。既定 **true**。 */
+    @Volatile var lateOpStopPropagation: Boolean = true
+
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
     fun snapshot(): Map<String, Any> = mapOf(
@@ -299,7 +305,7 @@ object PolishGate {
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
         "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
-        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall,
+        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "c3nWallLegacy" to c3nWallLegacy, "lateOpStopPropagation" to lateOpStopPropagation,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -317,7 +323,7 @@ object PolishGate {
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
         b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
-        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }
+        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("lateOpStopPropagation") { lateOpStopPropagation = it }
     }
 }
 

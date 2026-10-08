@@ -16,7 +16,9 @@ fun main(args: Array<String>) {
     val secondsBudget = args.getOrNull(3)?.toInt() ?: 60
     val workers = args.getOrNull(4)?.toInt() ?: 4
     // [2026-10-08] MAGI_HO_FEATURE: 既定（空）＝ExtraRefine 省略条件の A/B（旧来）。"c3nwall"＝on 腕で c3n 壁の短縮を外す
-    //   （PolishGate.c3nWallShortStall=false、通常閾値で粘る）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
+    //   （PolishGate.c3nWallShortStall=false、通常閾値で粘る）。"head"＝on 腕で HEAD の壁判定（c3nWallLegacy=true）と
+    //   後期演算の停止非伝播（lateOpStopPropagation=false）に戻す（docs/stall_escape.md §5.5）。
+    //   MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
     val feature = System.getenv("MAGI_HO_FEATURE") ?: ""
     val fixtures = System.getenv("MAGI_HO_FIXTURES")?.split(',')?.filter { it.isNotBlank() }
         ?: listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json")
@@ -32,6 +34,9 @@ fun main(args: Array<String>) {
         for (seed in 1..seeds) {
             for (armOn in listOf(false, true)) {
                 PolishGate.c3nWallShortStall = !(feature == "c3nwall" && armOn)
+                // "head"＝HEAD の壁判定と後期演算の停止非伝播（on 腕）。off 腕＝現行。
+                PolishGate.c3nWallLegacy = feature == "head" && armOn
+                PolishGate.lateOpStopPropagation = !(feature == "head" && armOn)
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(

@@ -96,4 +96,34 @@ class V6LateOperatorsTest {
         assertTrue(V6LateOperators.optFlagBool(mapOn, "rectSwap", false))
         assertTrue(!V6LateOperators.optFlagBool(mapOff, "rectSwap", true))
     }
+
+    // [3.642.0] 停止要求済みなら後期演算は 1 手も試さず、入力をそのまま返す（停止を内部まで伝える）
+    @Test
+    fun stopRequestedSkipsAllMovesAndKeepsInput() {
+        val state = st()
+        val sched = state.schedule.toIntArray2D()
+        val snapshot = sched.copy2D()
+        val pre = UnifiedViolationChecker.check(state, sched)
+        val rng = Random(7)
+        val res = V6LateOperators.improve(
+            state, sched, pre, rng,
+            EngineClock.nowMs() + 60_000L, rectTry = 60, blkTry = 60, shouldStop = { true },
+        )
+        assertEquals("停止要求済みなら 1 手も受理しない", 0, res.chain3 + res.chain4 + res.rect + res.blkN)
+        for (i in sched.indices) assertTrue(res.schedule[i].contentEquals(snapshot[i]))
+        assertEquals("試行に入っていないので乱数を引いていない", Random(7).nextInt(), rng.nextInt())
+    }
+
+    // 制御: 同じ入力で停止要求が無ければ受理が出る（上の検査が空振りでないことの確認）
+    @Test
+    fun withoutAStopRequestTheSameInputDoesMove() {
+        val state = st()
+        val sched = state.schedule.toIntArray2D()
+        val pre = UnifiedViolationChecker.check(state, sched)
+        val res = V6LateOperators.improve(
+            state, sched, pre, Random(7),
+            EngineClock.nowMs() + 60_000L, rectTry = 60, blkTry = 60, shouldStop = { false },
+        )
+        assertTrue("停止要求が無ければ受理が出る", res.chain3 + res.chain4 + res.rect + res.blkN > 0)
+    }
 }

@@ -2595,6 +2595,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return out
     }
 
+    /** [3.642.0/UX監査 高1] 不足枠を玉突き（複数人の入替）で埋める。手順は分析と同じ `findCovUChain` で求め、適用は
+     *  [applyFixSuggestion]（指紋照合・FixApplyGate・Undo）を通る。玉突きの実在を確かめた枠（chainVerified）でだけ呼ぶ。 */
+    fun applyShortageChainFix(dayIndex: Int, shiftIndex: Int, label: String) {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
+        val snap = sched.copy2D()
+        fixBoardKey = boardKey(snap)
+        fixStateKey = stateKey(st)
+        val p = cachedProblem(st)
+        viewModelScope.launch {
+            val s = withContext(Dispatchers.Default) { V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label) }
+            if (s == null) _ui.update { it.copy(messageIsError = true, message = "入替の手順が見つかりませんでした。「直し方を探す」で探し直してください") }
+            else applyFixSuggestion(s)
+        }
+    }
+
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
 
     // ---- constraint editing (ws3-5) -------------------------------------------
@@ -3188,25 +3205,32 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun notifySave(result: Result<*>, what: String) {
         result.fold(
             onSuccess = { notify("${what}を保存しました") },
-            onFailure = { e -> notify("${what}を保存できませんでした（${ioReason(e)}）", "W") },
+            onFailure = { e ->
+                // [UX監査 中7] 画面には利用者の言葉だけを出し、例外の種類と文は記録（ログ）へ残す。
+                logOp("W", "${what}の保存に失敗: ${e.javaClass.name}: ${e.message ?: ""}")
+                notify("${what}を保存できませんでした（${ioReason(e, saving = true)}）。もう一度お試しください", "W")
+            },
         )
     }
 
     /** ファイル読み込みの失敗を1行で返す（成功時は呼ばない＝読み込めた事実は中身の表示が示す）。 */
     fun notifyOpenFailure(result: Result<*>, what: String) {
-        notify("${what}を開けませんでした（${ioReason(result.exceptionOrNull())}）", "W")
+        val e = result.exceptionOrNull()
+        logOp("W", "${what}の読込に失敗: ${e?.javaClass?.name ?: "例外なし"}: ${e?.message ?: ""}")
+        notify("${what}を開けませんでした（${ioReason(e, saving = false)}）。ファイルを確認して、もう一度お試しください", "W")
     }
 
     /**
-     * 例外を利用者の言葉へ。**生の例外文を画面へ出さない**（3.147.0/3.191.0 の方針）が、
-     * 詳しい原因は notify が logOp へ流すので書き出したログには残る。
+     * 例外を利用者の言葉へ。**生の例外文を画面へ出さない**（3.147.0/3.191.0 の方針）。詳しい原因は
+     * [notifySave]・[notifyOpenFailure] が logOp へ流すので、書き出したログには残る。
+     * [UX監査 中7] 旧 else は Kotlin のクラス名（例: IOException）をそのまま画面へ出していた。
      */
-    private fun ioReason(e: Throwable?): String = when {
-        e == null -> "内容が空でした"
+    private fun ioReason(e: Throwable?, saving: Boolean): String = when {
+        e == null -> if (saving) "書き出す内容がありませんでした" else "ファイルの中身を読めませんでした"
         e is SecurityException -> "アクセスが許可されていません"
-        e is java.io.FileNotFoundException -> "ファイルが見つからないか、書き込みが許可されていません"
+        e is java.io.FileNotFoundException -> "ファイルが見つからないか、アクセスが許可されていません"
         e.message?.contains("space", ignoreCase = true) == true -> "保存先の空き容量が足りません"
-        else -> e.javaClass.simpleName
+        else -> if (saving) "書き込みに失敗しました" else "読み込みに失敗しました"
     }
 
     /**

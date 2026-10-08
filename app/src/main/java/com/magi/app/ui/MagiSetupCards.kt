@@ -6,6 +6,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +44,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -809,12 +812,21 @@ internal fun CollapsibleSection(
     content: @Composable () -> Unit,
 ) {
     var expanded by rememberSaveable(stateKey) { mutableStateOf(initiallyExpanded) }
-    LaunchedEffect(forceExpandKey) { if (forceExpandKey == stateKey) { expanded = true; onForceExpandConsumed() } }
+    val headingRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(forceExpandKey) {
+        if (forceExpandKey == stateKey) {
+            expanded = true
+            onForceExpandConsumed()
+            // [UX監査 中3] 強制展開は見出しを画面の外に残しうる。展開後の配置を1フレーム待ってから、見出しを画面内へ寄せる。
+            withFrameNanos { }
+            headingRequester.bringIntoView()
+        }
+    }
     Column(Modifier.fillMaxWidth()) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
             shape = MaterialTheme.shapes.small,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { expanded = !expanded },
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).bringIntoViewRequester(headingRequester).clickable { expanded = !expanded },
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),

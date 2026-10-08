@@ -3,8 +3,8 @@
 ## 1. この文書の位置づけ
 
 - 対象: `ichirocc/magi7ichiro-fork` の Android/Kotlin エンジン（C++ `magi_native.cpp` と C# `ichirocc/-MAGI_PC` は同値の移植。C# は `V6FinalPort.Watchdog.cs`・`V6FinalPort.HandleOptimize.cs`）。
-- 照合した実装: main `4af3456`（2026-10-08 時点の main 先端と一致）。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能測定はしていない。
-  読む時点で main が進んでいれば `git diff 4af3456..main -- app/src/main/java/com/magi/app/v6/` で §14 の根拠ファイルに差分が無いことを先に確かめる。
+- 照合した実装: `80d664d`（3.641.0）を基準に、3.642.0 の変更（作業ブランチ `claude/merge-wub4fq`）を §5.2〜5.5 へ反映した。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能は §11 の測定だけに基づく。
+  読む時点で main が進んでいれば `git diff 80d664d..HEAD -- app/src/main/java/com/magi/app/v6/` で §14 の根拠ファイルに差分が無いことを先に確かめる。
 - 目的: 会話履歴なしで停滞制御を読解・レビューできること。**現行実装の記述**であり、閾値変更や新アルゴリズムの提案ではない。
 - 読解規則: コメントや過去資料の設計意図と条件式が違うときは**条件式を優先する**。「保証」「推定」「未検証」を区別する。
 - 数値・規則を変えたら、この文書を**同じコミットで**直す（Kotlin → C++ → C# の順、同日）。経緯の本文は `docs/history/`、採否の台帳は `docs/algorithm_portfolio.md`。
@@ -113,6 +113,8 @@ stagnationFired = false; stagnationDurationMs = −1; stagnationIters = −1
 
 **`stagnationFired` は永続ラッチではない**（3.346.0 で是正。実装は `V6FinalPort.WatchdogBest.observe`／`fire`）。フェーズ文字列の変化は別時計 `lastPhaseChangeMs` だけを更新し、`lastBestImproveMs` には触れない。
 
+3.642.0: `fire` は同じラッチで一度だけ記録する（後続の判定が時刻・反復数・壁の記録を上書きしない）。確定時の壁の判定を `stagnationWall` に残し、ログの「c3n壁=短…」と EarlyStop 行はこの値を読む（判定の最後の値は読まない）。発火は `fireIfGeneration` で、判定時の `bestVersion` と一致したときだけ `progressLock` 内で確定する。
+
 ### 5.3 通常閾値と短い閾値の選択
 
 ```
@@ -125,7 +127,13 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
 
 - `hardFloor` は §4 の構造的 covU 床（1 回だけ算出）。「非 covU HARD = 0」を併せるのは、群外の過配置が covU を床より見かけ上へこませても、解ける groupViol が残る間は長い閾値で粘るため。
 - `wishC3wProven` は `wishConflictFloorMode == OFF`（既定）なら 0。ON のときは希望衝突由来の c3w 件数なので、`nonCovUAllC3n` は文字通り「c3n 以外が全部 0」ではない。
-- `c3nWallProven` の診断（約 20 ms）は、内訳条件を満たし無改善が `shortStall` を超えた後に遅延実行し、`(bestVersion, result)` を単一 `AtomicReference` で保持する（3.592.0）。
+- `c3nWallProven` の診断（約 20 ms）は、内訳条件を満たし無改善が `shortStall` を超えた後に遅延実行する。3.642.0 から `C3nWallProof` が次の規則で証拠を選ぶ（既定）。
+  - 生存盤面（`V6NativeOptimizer.liveBestSnapshot`）の報告が最良の報告 `wd.bestReport` と**同じ参照**のときだけ、その盤面を診断する（`C3nWallProof.bound`）。値が同じだけの別の報告は使わない。
+  - 診断は盤面の内容で鍵をとる（`BoardKeyedFlag`）。結果は必ずその盤面のものになる。
+  - 診断の前後で生存盤面・最良の報告・版のいずれかが変わったら、その判定は使わない。
+  - 対応が取れない間は、同じ最良版で対応が取れていた判定だけを持ち越す（段の境界で `optimize()` が生存盤面を空にしても失わない）。版が変われば持ち越さない。
+  - 既知の限界: 同じ報告参照は同じ盤面とみなせるが、値の一致では別盤面を区別できない。対応が取れない時間は壁の短縮を使わないので、停止は遅れる側（fail-closed）に倒れる。その代償は §11 の測定で判断する。
+  - 測定の基準腕 `PolishGate.c3nWallLegacy=true` は HEAD（版ごとに一度、生存盤面を一致の検査なしに診断）。
 - `c3nWallPlateau` は限定した手の壁判定（§4）で**閾値を短縮する**（300 s 予算で 270 s → 37.5 s）だけで、即停止ではない。動機は実機ログ「c3n=1 のまま 150 s 無改善でも 270 s 閾値で発火不能」（3.281.0）。早期終了全体の品質差は 3.341.1 で非有意（§11）。多セル交換で崩せる c3n を短縮で取り逃がす可能性は残る。3.641.0 で測った（§11、sample_v6×5 seed）: 120 s では損失なし、60 s では短縮なしが 1.6% 良い（時間 1.75 倍）、300 s では 0.7% 良い（時間 2.35 倍、非有意）。測定スイッチは `PolishGate.c3nWallShortStall`。
 - `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。ON の副作用（解ける HARD を残したまま短縮）は「残る HARD が全て希望由来」を条件に含めることで防ぐ設計。実機 A/B は HARD=床の盤面待ち。
 - 「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず解ける HARD を早々に諦めていた＝構造的 covU へ是正済み。
@@ -145,6 +153,7 @@ fired   = now − S > minRun
 - 旧実装の `max(lastBestImprove, lastPhaseChange)` 単一時計は、20〜90 s ごとのフェーズ遷移で 270 s に届かなかった（3.230.0）。
 - `shouldStop` は `now ≥ searchEnd ∨ キャンセル` を先に判定する。締切による停止と停滞発火は別の理由。
 - 発火時に「猶予の中で 2 倍に達した」かを `WatchdogBest.fire(byOverride)` に記録し、`EarlyStop` 行に「発火種別=通常／猶予上書き」と出す（3.640.0）＝比率は実機ログから数える。
+- 3.642.0: 確定したラッチの記録は一度だけ書く。その後の判定の反転（生存盤面の入れ替わり）は `shouldStop` の戻り値には残りうるが、記録（時刻・反復数・`stagnationWall`）は書き換えない。
 
 ### 5.5 並列探索への伝達
 
@@ -152,6 +161,7 @@ fired   = now − S > minRun
 - `stopIsFinal`: 締切またはキャンセルだけ（単調）。
 - `V6NativeOptimizer.confirmStop`: 単調停止は即確定。そうでなければ最大 `STOP_CONFIRM_MS`=5 000 ms、`STOP_CONFIRM_POLL_MS`=250 ms 間隔で再確認し、`shouldStop` が偽へ戻れば続行（一瞬のシグナルで片肺運転にしない、3.346.1）。
 - 停止は協調的。締切の瞬間に全処理が強制終了する保証はない。
+- 3.642.0: 後期演算（`V6LateOperators.improve`）は `shouldStop` を試行ごとに見る（`PolishGate.lateOpStopPropagation=true`）。停止要求が立てば 1 手も受理せず返る。`false` は HEAD（締切だけを見る）で、測定の切り分けにだけ使う（§10）。
 
 ### 5.6 探索後
 
@@ -294,7 +304,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 予算の相互作用: 後処理は絶対時刻の全体締切 `D` を受け、巡回クラスタは `clusterStop` の自前締切、共同 LNS はその中で patience／評価数上限で止まる。前段が早く終わった分は後段がそのまま使える（締切は絶対時刻、予約枠は探索から確保する枠で後処理内の配分ではない）。
 採用数は最終盤面の純改善数ではない。後処理の時間削減と最終品質の非劣性は別々に測る。
 
-## 10. 既定 OFF・実験機構（main `4af3456` の既定）
+## 10. 既定 OFF・実験機構（`80d664d` と 3.642.0 の既定）
 
 | 機構 | 既定 | 本体と分けて読む点 |
 |---|---|---|
@@ -307,6 +317,8 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 | `PolishGate.prePostDescent` | false | 後処理前の局所降下 |
 | `PolishGate.normalStallFraction` | 0.9（UI なし） | §5.1 の `fraction` |
 | `PolishGate.c3nWallShortStall` | true（UI なし） | false で c3n 壁による短縮を外す（測定用、3.641.0） |
+| `PolishGate.c3nWallLegacy` | false（UI なし） | true で HEAD の c3n 壁判定（版ごと固定・生存盤面の診断・一致の検査なし）。測定の基準腕（3.642.0、§5.3） |
+| `PolishGate.lateOpStopPropagation` | true（UI なし） | false で後期演算が停止要求を見ない（HEAD）。測定の切り分け（3.642.0、§5.5） |
 
 撤去済みで現行仕様ではないもの: 残差ベース 4 段脱出 `adaptiveEscapeControl`／`StagnationEscapeController`（3.409.21 単体 A/B 中立）、ロール内並列 SA `portfolioRoleParallelSa`（同）、採用 0 の巡で LNS・VCR を 2 倍にする `stallEscalation`（3.511.1 全件無変化、2026-09-25 撤去）。
 
@@ -361,7 +373,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 - W4 の再配属 2 回目以降でも強度・量子の規則を満たす。
 - 締切で戻った成果を、回収前の break で捨てない。
 
-## 14. 根拠ファイル（main `4af3456`）
+## 14. 根拠ファイル（`80d664d` と 3.642.0 の差分）
 
 `app/src/main/java/com/magi/app/v6/`: `V6FinalPort.kt`・`V6NativeOptimizer.kt`・`AdaptiveHypothesisEpochPolicy.kt`・`MirrorCore.kt`・`Hf63Infeasibility.kt`・`HypothesisPlanning.kt`・`RsiFocusSelection.kt`・`V6PortAnalyzer.kt`・`V6SanityPort.kt`・`SaOptimizer.kt`・`V6HotfixPasses.kt`・`C1JointLnsPolish.kt`・`StallPolishInjection.kt`、`app/src/main/cpp/magi_native.cpp`。
 テスト: `app/src/test/java/com/magi/app/v6/` の `V6FinalPortTest.kt`・`WishConflictFloorTest.kt`・`HypothesisEpochPolicyTest.kt`・`Hf63InfeasibilityTest.kt`・`StallPolishInjectionTest.kt`。

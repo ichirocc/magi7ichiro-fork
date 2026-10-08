@@ -272,6 +272,11 @@ object V6FinalPort {
     internal fun progressImproved(h: Int, wgt: Double, t: Int, bh: Int, bWeighted: Double, bTotal: Int): Boolean =
         h < bh || (h == bh && wgt < bWeighted - 1e-6) || (h == bh && wgt <= bWeighted + 1e-6 && t < bTotal)
 
+    /** 生存盤面の報告が最良の報告と同じ参照か（§5.3）。publishLiveBest と進捗報告は同じ報告参照を渡すので、
+     *  参照が同じなら「同じ採用手が出した同じ盤面」。値が等しいだけの別の報告は別の盤面かもしれないので使わない。 */
+    internal fun c3nWallSameReport(live: ViolationReport?, best: ViolationReport?): Boolean =
+        live != null && best != null && live === best
+
     /** 層 A の最良追跡と停滞ラッチ（`docs/stall_escape.md` §5.2）。並列ワーカーから読むため atomic、更新は呼び出し側の progressLock 内。 */
     internal class WatchdogBest(startMs: Long) {
         val bestHard = java.util.concurrent.atomic.AtomicInteger(Int.MAX_VALUE)
@@ -287,14 +292,17 @@ object V6FinalPort {
         val stagnationDurationMs = java.util.concurrent.atomic.AtomicLong(-1)
         val stagnationIters = java.util.concurrent.atomic.AtomicLong(-1)
         val stagnationByOverride = java.util.concurrent.atomic.AtomicBoolean(false)
+        val stagnationWall = java.util.concurrent.atomic.AtomicBoolean(false)
+        @Volatile var bestReport: ViolationReport? = null
 
         /** 改善報告。[progressImproved] で改善なら最良・時刻・反復数・非 covU 内訳・世代を更新し、停滞ラッチを降ろす（3.346.0）。 */
         fun observe(report: ViolationReport, nowMs: Long, observedIters: Long, beatsInput: () -> Boolean, wishC3wProven: Int): Boolean {
             if (!progressImproved(report.hard, report.weightedScore, report.total, bestHard.get(), bWeighted, bTotal)) return false
             bestHard.set(report.hard); bTotal = report.total; bWeighted = report.weightedScore
+            bestReport = report
             lastBestImproveMs.set(nowMs); lastBestImproveIters.set(observedIters)
             if (beatsInput()) lastBeatInputMs.set(nowMs)
-            stagnationFired.set(false); stagnationDurationMs.set(-1); stagnationIters.set(-1); stagnationByOverride.set(false)
+            stagnationFired.set(false); stagnationDurationMs.set(-1); stagnationIters.set(-1); stagnationByOverride.set(false); stagnationWall.set(false)
             val gv = report.breakdown["groupViol"] ?: 0
             val pf = report.breakdown["pref"] ?: 0
             val c3n = report.breakdown["c3n"] ?: 0
@@ -305,13 +313,86 @@ object V6FinalPort {
             return true
         }
 
-        /** 停滞発火。`byOverride`＝フェーズ猶予の中で閾値の 2 倍に達して発火した（§5.4）。 */
-        fun fire(nowMs: Long, observedIters: Long, byOverride: Boolean) {
+        /** 停滞発火。`byOverride`＝フェーズ猶予の中で閾値の 2 倍に達して発火した（§5.4）。`wall`＝c3n 壁の短縮を使った。 */
+        fun fire(nowMs: Long, observedIters: Long, byOverride: Boolean, wall: Boolean = false) {
             stagnationDurationMs.set(nowMs - lastBestImproveMs.get())
             stagnationIters.set(observedIters)
             stagnationByOverride.set(byOverride)
+            stagnationWall.set(wall)
             stagnationFired.set(true)
         }
+
+        /** 判定時の世代 [expectedVersion] のままだった場合だけ発火を確定する（§5.4）。判定後に改善が届いていれば捨てる。
+         *  呼び出し側は progressLock 内で呼ぶ（改善の [observe] と排他にする）。 */
+        fun fireIfGeneration(expectedVersion: Int, nowMs: Long, observedIters: Long, byOverride: Boolean, wall: Boolean): Boolean {
+            if (bestVersion.get() != expectedVersion) return false
+            // 一つのラッチは一度だけ確定する（判定が真のままの後続呼び出しで、時刻と壁の記録を上書きしない）。
+            if (!stagnationFired.get()) fire(nowMs, observedIters, byOverride, wall)
+            return true
+        }
+    }
+
+    /** 盤面の内容（完全一致）で鍵をとる 1 件キャッシュ。返す値は必ずその盤面を診断した結果（別盤面の結果は返さない）。 */
+    internal class BoardKeyedFlag {
+        private val cache = java.util.concurrent.atomic.AtomicReference<Pair<List<List<Int>>, Boolean>?>(null)
+        fun get(board: List<List<Int>>, eval: (List<List<Int>>) -> Boolean): Boolean {
+            cache.get()?.let { (b, v) -> if (b === board || b == board) return v }
+            val v = eval(board)
+            cache.set(board to v)
+            return v
+        }
+    }
+
+    /** c3n 壁の証明（`docs/stall_escape.md` §5.3）。依存を注入し、段の境界・診断中の入れ替わりを単体で検査できる形にする。
+     *  [bound]（既定）: 生存盤面の報告が最良の報告と同じ参照のときだけ診断を使う。対応が取れない間は、同じ最良版で
+     *  対応が取れていた判定だけを持ち越す（段の境界で生存盤面が空になっても判定を失わないため）。
+     *  [legacy]（測定の基準腕）: HEAD と同じ。版ごとに一度、生存盤面を一致の検査なしに診断する。 */
+    internal class C3nWallProof(
+        private val bestVersion: () -> Int,
+        private val bestReport: () -> ViolationReport?,
+        private val liveSnapshot: () -> V6NativeOptimizer.LiveBestSnapshot?,
+        private val diagnose: (List<List<Int>>) -> Boolean,
+    ) {
+        private val cache = BoardKeyedFlag()
+        private val carried = java.util.concurrent.atomic.AtomicReference<Pair<Int, Boolean>?>(null)
+        private val legacyCache = java.util.concurrent.atomic.AtomicReference<Pair<Int, Boolean>?>(null)
+        private val lastCounted = java.util.concurrent.atomic.AtomicReference<Any?>(null)
+
+        /** 生存盤面の更新ごとの確認回数と、その報告が最良の報告と対応しなかった回数（ログ用。呼び出しごとには数えない）。 */
+        val checks = java.util.concurrent.atomic.AtomicInteger(0)
+        val mismatch = java.util.concurrent.atomic.AtomicInteger(0)
+
+        fun bound(): Boolean {
+            val v = bestVersion()
+            val bestRep = bestReport()
+            val snap = liveSnapshot()
+            if (snap != null && bestRep != null) {
+                if (lastCounted.getAndSet(snap) !== snap) {
+                    checks.incrementAndGet()
+                    if (!c3nWallSameReport(snap.report, bestRep)) mismatch.incrementAndGet()
+                }
+                if (c3nWallSameReport(snap.report, bestRep)) {
+                    val proven = cache.get(snap.board, diagnose)
+                    // 診断の間に生存盤面・最良・版のどれかが入れ替わったら、この判定は使わない（次の呼出で判定し直す）。
+                    if (liveSnapshot() !== snap || bestReport() !== bestRep || bestVersion() != v) return false
+                    carried.set(v to proven)
+                    return proven
+                }
+            }
+            return carried.get()?.let { it.first == v && it.second } ?: false
+        }
+
+        fun legacy(): Boolean {
+            val v = bestVersion()
+            if (legacyCache.get()?.first != v) {
+                val board = liveSnapshot()?.board
+                legacyCache.set(v to (board != null && diagnose(board)))
+            }
+            return legacyCache.get()?.second ?: false
+        }
+
+        /** 最終盤面の診断（残存分析の注記用）。盤面の内容で鍵をとる。 */
+        fun diagnoseBoard(board: List<List<Int>>): Boolean = cache.get(board, diagnose)
     }
 
     fun getAlgorithmLabel(seconds: Int): AlgorithmLabel = when {
@@ -560,13 +641,24 @@ object V6FinalPort {
         //   のみの下限なので、`bestHard<=hardFloor` だけだと、担当不可の過配置(groupViol)が covU を構造下限より
         //   見かけ上へこませたケースで、解ける groupViol が残っているのに短い stallHardMs へ早期移行してしまう。
         //   非covU HARD が 0（＝残るHARDが構造的covUのみ）を追加条件にし、上記コメント(214行)の設計意図と一致させる。
-        // [3.281.0/停滞レビューA] c3n構造壁の動的床（covU の structuralHardFloor と対）。
-        //   残る非covU HARD が c3n のみ、かつ ForbiddenDiag(3.280.0) が全 run の塞がりを証明したら、
-        //   その c3n は「解けないHARD」＝plateau として stallHardMs へ移行できる。診断(~20ms)は
-        //   「停滞が stallHardMs を超えた後・best 世代ごとに一度だけ」遅延実行しキャッシュする。
-        // [3.592.0] 世代とresultを別Atomicで持つと、並行診断するワーカー間で新世代の「checked」に
-        //   旧世代のresultが結び付く競合があった。(version,result)組を単一AtomicReferenceで置換する。
-        val c3nWallCache = java.util.concurrent.atomic.AtomicReference(-1 to false)
+        // [3.281.0/停滞レビューA] c3n構造壁の動的床（covU の structuralHardFloor と対）。残る非covU HARD が c3n のみで、
+        //   ForbiddenDiag が生存盤面の各 run の塞がりを確かめたら、その c3n を「解けないHARD」として stallHardMs へ移行する。
+        //   診断は停滞が stallHardMs を超えてから遅延実行する（約 20 ms）。
+        // [3.592.0] 診断の鍵は盤面の内容（[BoardKeyedFlag]）。世代と結果を別々に持つと、並行する診断の間で旧盤面の結果が
+        //   新しい盤面に結び付いた。鍵を盤面にして、結果は必ずその盤面のものにする。
+        // 壁の証明は [C3nWallProof] に集約する（生存盤面の対応・持ち越し・測定の基準腕）。
+        val wallProof = C3nWallProof(
+            bestVersion = { wd.bestVersion.get() },
+            bestReport = { wd.bestReport },
+            liveSnapshot = { V6NativeOptimizer.liveBestSnapshot },
+            diagnose = { b ->
+                try {
+                    val arr = Array(b.size) { r -> IntArray(b[r].size) { c -> b[r][c] } }
+                    val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, arr)
+                    diag.hasRuns && diag.allBlocked
+                } catch (_: Exception) { false }
+            },
+        )
         var lastPhase = ""
         val progressLock = Any()   // [競合解消] 並列ワーカーから呼ばれる best 追跡の read-modify-write を直列化
         val progressWatch: (String, ViolationReport?, Long, Long) -> Unit = { phase, report, iters, elapsed ->
@@ -589,11 +681,6 @@ object V6FinalPort {
         //   [3.422.0] postReserveMs/searchDeadlineMs/searchWindowMs は上（stallMs 等の直前）で計算済み。
         //   [3.424.0] 3.422.0 の searchWindowMs 基準を budgetMs 基準へ復元（stallHardMs と同じ理由）。
         val phaseGraceMs = wdb.phaseGraceMs
-        // [3.281.0/A] c3n構造壁の遅延証明。best 世代ごとに一度だけ ForbiddenDiag を実行しキャッシュする。
-        //   呼出条件（c3nのみ残存＋停滞がstallHardMs超）は呼び出し側でゲート済み＝停滞局面でしか走らない。
-        //   liveBest は publishLiveBest(CAS, better()単調) のグローバル最良スナップショット。best報告との
-        //   僅かな世代ズレはあり得るが、本判定は「停滞閾値の選択」にのみ作用（採否/keep-bestとは無関係）で
-        //   誤っても時間配分が変わるだけ＝品質は不変。並行呼出は同一結果を二重計算するだけで無害。
         // [E0] 到達判定は best 世代ごとに一度だけ（床ちょうどのときだけ盤面を検査する）。
         val wishReachedCache = java.util.concurrent.atomic.AtomicReference(-1 to false)
         val wishStaleCheckAtMs = java.util.concurrent.atomic.AtomicLong(Long.MIN_VALUE / 2)
@@ -613,21 +700,12 @@ object V6FinalPort {
             }
             return wishReachedCache.get().second
         }
-        val c3nWallProven = {
-            val v = wd.bestVersion.get()
-            if (c3nWallCache.get().first != v) {
-                val board = V6NativeOptimizer.liveBest
-                val proven = if (board == null) false else try {
-                    val arr = Array(board.size) { r -> IntArray(board[r].size) { c -> board[r][c] } }
-                    val diag = V6PortAnalyzer.diagnoseForbiddenRuns(state, arr)
-                    diag.hasRuns && diag.allBlocked
-                } catch (_: Exception) { false }
-                c3nWallCache.set(v to proven)
-            }
-            c3nWallCache.get().second
-        }
+        // 壁の証拠の選択: 既定は生存盤面の報告が最良の報告と同じ参照のときだけ使う（[C3nWallProof.bound]）。
+        //   測定の基準腕（[PolishGate.c3nWallLegacy]）は HEAD と同じ判定（[C3nWallProof.legacy]）。
+        fun c3nWallProven(): Boolean = if (PolishGate.c3nWallLegacy) wallProof.legacy() else wallProof.bound()
         val shouldStop = {
             val now = EngineClock.nowMs()
+            val gen = wd.bestVersion.get()   // 判定の世代。発火はこの世代のままだった場合だけ確定する（§5.4）
             // [賢い早期脱出] bestHard が「解消不能な下限(hardFloor=構造的covU)」以下＝解けるHARDは出し切った状態。
             //   この時点で残るのは構造的に埋まらない covU 席のみなので、HARD=0 と同様に短い猶予で頭打ち終了。
             //   ただし非covU HARD(groupViol/pref/c3n=解ける可能性あり)が残る間は long stall で粘る（214行の設計意図）。
@@ -647,8 +725,12 @@ object V6FinalPort {
             when {
                 now >= searchDeadlineMs || !isActive -> true
                 watchdogStagnationFired(now, startMs, minRunMs, lastPhaseChangeMs.get(), phaseGraceMs, wd.lastBestImproveMs.get(), effStall) -> {
-                    e0Fired.set(wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached())
-                    wd.fire(now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs); true
+                    // 判定の世代のままなら確定する。判定後に改善が届いていれば発火しない（progressWatch の observe と同じロック）。
+                    val fired = synchronized(progressLock) {
+                        wd.fireIfGeneration(gen, now, observedIters.get(), byOverride = now - lastPhaseChangeMs.get() <= phaseGraceMs, wall = wall)
+                    }
+                    if (fired) e0Fired.set(wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached())
+                    fired
                 }
                 else -> false
             }
@@ -717,6 +799,7 @@ object V6FinalPort {
             elites = fusionElites,
             shouldStop = integrationStop,
             deadlineMs = integrationDeadline,
+            quantitativeRangeEval = quantitativeRangeEval,
         )
         val tIntegration1 = EngineClock.nowMs()
 
@@ -858,7 +941,7 @@ object V6FinalPort {
                 wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
                 wishOn && wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
-                c3nWallCache.get().second && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
+                wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
                 else -> "通常=長${stallMs / 1000}s"
             }
             // [3.375.2/実測で判明] 発火しなかったとき**どの条件が塞いだか**を出す。実測(golden・150s予算)で
@@ -895,9 +978,8 @@ object V6FinalPort {
             // 探索の後（後処理・追加精製）で改善したなら別項目として出す。探索フェーズの停滞と混ぜない。
             val afterNote = if (wd.lastBestImproveMs.get() > tChain1)
                 "・探索後も改善あり(経過${((wd.lastBestImproveMs.get() - startMs) / 1000)}s＝後処理/追加精製)" else ""
-            val wallCache = c3nWallCache.get()
-            val wallNote = if (wallCache.first >= 0)
-                "・c3n壁診断=${if (wallCache.second) "構造的な壁と判定" else "壁ではない（崩す手が実在）"}" else ""
+            val wallNote = if (wallProof.checks.get() > 0)
+                "・c3n壁の確認${wallProof.checks.get()}回（生存盤面の更新のうち最良の報告と対応しないのは${wallProof.mismatch.get()}回）" else ""
             listOf(MirrorLog(
                 level = "I", tag = "Watchdog",
                 message = "停滞監視: 最終改善=経過${((lastImp - startMs) / 1000).coerceAtLeast(0)}s・" +
@@ -921,7 +1003,7 @@ object V6FinalPort {
                 "・発火種別=${if (wd.stagnationByOverride.get()) "猶予上書き" else "通常"}・解は最良を維持）" +
                 (if (e0Fired.get()) "（希望衝突の床に到達＝${wishFloorMode}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
-                (if (c3nWallCache.get().second && wd.bestNonCovUAllC3n.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
+                (if (wd.stagnationWall.get()) "（残る必須=禁止連続はForbiddenDiagが構造的な壁と判定済み。希望固定=証明相当/それ以外=探索手の全滅を検証）" else ""),
         )) else emptyList()
         // [最終番兵/多重防御・3.575.0で強化] 「入力」と最終結果の2点比較だと、途中の段の改善が
         //   後段の悪化で丸ごと失われる（実機ログで確認、経緯: docs/history/3.4xx.md 3.575.0）。
@@ -1018,13 +1100,13 @@ object V6FinalPort {
             countChainPolish = postParams.countChainEnabled,
         ))
         // [3.288.0/ログ強化=状態軸] 「本当に改善可能な制約が残るか」を最終盤面で1行に集約。
-        //   残った族を ①構造的な壁（もう直せない: 構造的covU下限・証明済みc3n壁・HF63が学習した充足困難族）
+        //   残った族を ①構造的な壁（もう直せない: 構造的covU下限・証明済みc3n壁）
         //   ②まだ狙える（追えば減る見込み）に仕分ける。旧: 族別件数(UnifiedCheck/違反詳細)は出るが
         //   「どれを追う価値があるか」の判定はコード推論頼みだった。実行ごと1行のみ＝スパムなし。read-only。
         val residualLog = run {
             val bd = finalReport.breakdown
             val infeasLearned = chained.infeasibleFamilies   // [3.335.0] この実行の返り値から
-            val c3nWall = c3nWallCache.get().second && wd.bestNonCovUAllC3n.get()
+            val c3nWall = wd.bestNonCovUAllC3n.get() && wallProof.diagnoseBoard(finalSched.map { it.toList() })
             val walls = ArrayList<String>()
             val open = ArrayList<String>()
             // [3.375.0/実機ログ起因] 構造床は**族ループより先に**計算する。旧実装は床を後から walls へ
@@ -1070,7 +1152,6 @@ object V6FinalPort {
                 if (personalWall > 0 && (key == "apt" || key == "high")) continue   // 下でまとめて出す
                 val structural = when {
                     key == "c3n" && c3nWall -> "証明済みの壁"
-                    key in infeasLearned -> "探索が充足困難と学習"
                     else -> null
                 }
                 if (structural != null) { walls.add("$key ${n0}件($structural)"); continue }
@@ -1111,7 +1192,9 @@ object V6FinalPort {
             val hardWishFloor = V6SanityPort.wishConflictHardShare(selfConflict, bd, finalReport.hard)
             listOf(MirrorLog(
                 level = "I", tag = "残存分析",
-                message = "もう直せない: $wallTxt ／ まだ狙える: $openTxt",
+                message = "もう直せない: $wallTxt ／ まだ狙える: $openTxt" +
+                    // HF63 の推定は探索中の履歴（解除済みも含む）で、最終盤面がいま直せないことの根拠ではない。
+                    (if (infeasLearned.isEmpty()) "" else " ／ 探索中に充足困難と推定した履歴: ${infeasLearned.sorted().joinToString(",")}"),
             ), MirrorLog(
                 level = "I", tag = "必須内訳",
                 message = "必須 ${finalReport.hard}件 = 希望どうしのぶつかり ${hardWishFloor}件 + それ以外 ${finalReport.hard - hardWishFloor}件",

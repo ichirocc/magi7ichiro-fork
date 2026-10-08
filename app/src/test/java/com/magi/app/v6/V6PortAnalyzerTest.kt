@@ -89,6 +89,23 @@ class V6PortAnalyzerTest {
         cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
     )
 
+    // [3.642.0/UX監査 高1] 玉突きが実在する枠は chainVerified を値として持ち、複数人の手順を取り出せる
+    @Test
+    fun chainVerifiedShortfallYieldsAMultiPersonChainFix() {
+        val state = cascadeChainState(cWished = false)
+        val sf = V6PortAnalyzer.diagnoseCoverage(state).shortfalls.single { it.shiftIndex == 1 }
+        assertTrue("玉突きが実在する枠は値として持つ", sf.chainVerified)
+        val sched = state.schedule.map { it.toIntArray() }.toTypedArray()
+        val ops = V6PortAnalyzer.chainFixOps(cachedProblem(state), sched, sf.shiftIndex, sf.dayIndex)
+        assertTrue("手順が取り出せる", ops != null)
+        assertTrue("複数人の入替（2コマ以上）", ops!!.size >= 2)
+        val work = sched.copy2D()
+        for (op in ops) work[op.staff][op.day] = op.toShift
+        val before = UnifiedViolationChecker.check(state, sched)
+        val after = UnifiedViolationChecker.check(state, work)
+        assertTrue("手順を適用すると人員不足が減る", (after.breakdown["covU"] ?: 0) < (before.breakdown["covU"] ?: 0))
+    }
+
     @Test
     fun diagnoseCoverageConfirmsCascadeWhenChainActuallyResolves() {
         val diag = V6PortAnalyzer.diagnoseCoverage(cascadeChainState(cWished = false))

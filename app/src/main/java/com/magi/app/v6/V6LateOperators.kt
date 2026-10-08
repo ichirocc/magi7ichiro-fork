@@ -61,8 +61,12 @@ object V6LateOperators {
         rectTry: Int = 12,
         blkTry: Int = 8,
         quantitativeRangeEval: Boolean = false,
+        shouldStop: () -> Boolean = { false },
     ): LateImproveResult {
-        val session = LateSession(state, cachedProblem(state, quantitativeRangeEval), schedule.copy2D(), report, rng, deadlineMs)
+        // 停止要求は試行ごとに見る（[PolishGate.lateOpStopPropagation]）。false は HEAD と同じで、締切だけを見る。
+        val stop: () -> Boolean = if (PolishGate.lateOpStopPropagation) shouldStop else ({ false })
+        val session = LateSession(state, cachedProblem(state, quantitativeRangeEval), schedule.copy2D(), report, rng, deadlineMs, stop)
+        if (shouldStop()) return session.result()   // 停止要求済みなら 1 手も試さない（入力をそのまま返す）
         session.chainSwap3(chainTry3)
         session.chainSwap4(chainTry4)
         if (rectEnabled) session.rectSwap2(rectTry)
@@ -73,7 +77,7 @@ object V6LateOperators {
     /** [3.507.6/レビュー第7段] 1 回の後期演算。盤面 [sched] を 4 演算子が順に触り、採否は gate/gateW（keep-best）。RNG の呼び出し順は分割前と同じ。 */
     private class LateSession(
         val state: MagiState, val p: Problem, val sched: Array<IntArray>, report: ViolationReport,
-        val rng: Random, val deadlineMs: Long,
+        val rng: Random, val deadlineMs: Long, val shouldStop: () -> Boolean = { false },
     ) {
         val logs = ArrayList<MirrorLog>()
         var cur = report
@@ -81,7 +85,7 @@ object V6LateOperators {
         var blkN = 0
         var chain3 = 0
         var chain4 = 0
-        fun timeUp() = EngineClock.nowMs() >= deadlineMs
+        fun timeUp() = EngineClock.nowMs() >= deadlineMs || shouldStop()
         fun lim(r: ViolationReport): Int =
             200 * (r.breakdown["high"] ?: 0) + 120 * (r.breakdown["low"] ?: 0)
         fun c1(r: ViolationReport): Int = r.breakdown["c1"] ?: 0

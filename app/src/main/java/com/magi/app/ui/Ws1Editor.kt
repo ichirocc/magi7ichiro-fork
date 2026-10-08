@@ -319,7 +319,11 @@ private fun ShiftDialog(
     // [design-review] 下限>上限は他の3面（群/スキル群のレンジ・個人回数、3.403.0）と同じく必ず違反を
     //   生む設定ミスだが、必要人数(need1/need2)のこの面だけ入力時のガードが無かった（対象漏れ）。
     val bad = V6SanityPort.rangeOrderConflict(need1, need2) != null
-    W1Shell(title, onClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad) {
+    // [UX監査 中6] 入力の途中で閉じると内容が消える。変更があれば破棄の確認を挟む（✕・キャンセル・外側タップ・戻るを1か所で止める）。
+    val dirty = name != name0 || kigou != kigou0 || need1 != need10 || need2 != need20 || isRest != isRest0
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
+    W1Shell(title, requestClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad) {
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -334,6 +338,13 @@ private fun ShiftDialog(
         }
         if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このシフトを削除")
     }
+    if (confirmDiscard) AlertDialog(
+        onDismissRequest = { confirmDiscard = false },
+        confirmButton = { DialogDangerButton("破棄", onClick = { confirmDiscard = false; onClose() }) },
+        dismissButton = { DialogDismissButton(onClick = { confirmDiscard = false }, text = "入力を続ける") },
+        title = { Text("入力を破棄しますか？") },
+        text = { Text("入力中の内容は保存されません。") },
+    )
 }
 
 @Composable

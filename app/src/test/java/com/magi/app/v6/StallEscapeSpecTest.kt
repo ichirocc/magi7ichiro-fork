@@ -169,9 +169,138 @@ class StallEscapeSpecTest {
         assertFalse(PolishGate.postChainRollbackCountsZero)
         assertEquals(WishFloorMode.OFF, PolishGate.wishConflictFloorMode)
         assertTrue(PolishGate.c3nWallShortStall)
+        assertFalse("基準腕（HEAD の壁判定）は既定で使わない", PolishGate.c3nWallLegacy)
+        assertTrue("後期演算は停止要求を見る（既定）", PolishGate.lateOpStopPropagation)
         assertEquals(2, V6FinalPort.STALL_OVERRIDE_FACTOR)
         assertEquals(5000, Hf63Infeasibility.INFEAS_STALL_ITERS)
         assertEquals(3, StallPolishInjection.MAX_INJECTIONS)
         assertEquals(6_000L, StallPolishInjection.CAP_MS)
+    }
+
+    // §5.4 判定と発火の間に改善が割り込んだら発火しない（判定後の改善の順序を検査する）
+    @Test fun fireIsRefusedWhenAnImprovementInterleavesBetweenDecisionAndFire() {
+        val wd = V6FinalPort.WatchdogBest(startMs = 0L)
+        wd.observe(rep(1, 100.0, 5), nowMs = 1_000L, observedIters = 10L, beatsInput = { true }, wishC3wProven = 0)
+        val gen = wd.bestVersion.get()                       // 判定した世代
+        wd.observe(rep(1, 99.0, 5), nowMs = 200_000L, observedIters = 20L, beatsInput = { false }, wishC3wProven = 0)
+        assertFalse("判定後に改善が届いたら発火しない", wd.fireIfGeneration(gen, nowMs = 400_000L, observedIters = 30L, byOverride = false, wall = false))
+        assertFalse("古い判定で停滞ラッチを立て直さない", wd.stagnationFired.get())
+        val gen2 = wd.bestVersion.get()
+        assertTrue("世代が変わらなければ発火する", wd.fireIfGeneration(gen2, nowMs = 400_000L, observedIters = 30L, byOverride = false, wall = true))
+        assertTrue(wd.stagnationFired.get()); assertTrue(wd.stagnationWall.get())
+    }
+
+    // §5.4 一度確定した停滞ラッチは、同じ世代の後続の判定で時刻・反復数・壁の記録を上書きしない
+    @Test fun repeatedDecisionDoesNotOverwriteALatchedFire() {
+        val wd = V6FinalPort.WatchdogBest(startMs = 0L)
+        wd.observe(rep(1, 100.0, 5), nowMs = 1_000L, observedIters = 10L, beatsInput = { true }, wishC3wProven = 0)
+        val gen = wd.bestVersion.get()
+        assertTrue(wd.fireIfGeneration(gen, nowMs = 400_000L, observedIters = 30L, byOverride = false, wall = false))
+        val duration = wd.stagnationDurationMs.get()
+        assertTrue(wd.fireIfGeneration(gen, nowMs = 900_000L, observedIters = 90L, byOverride = true, wall = true))
+        assertEquals("確定済みの発火は時刻を上書きしない", duration, wd.stagnationDurationMs.get())
+        assertEquals(30L, wd.stagnationIters.get())
+        assertFalse("確定済みの発火は壁の記録を上書きしない", wd.stagnationWall.get())
+    }
+
+    // §5.3 診断キャッシュは盤面の内容で鍵をとり、別盤面の結果を返さない
+    @Test fun boardKeyedFlagNeverReturnsAnotherBoardsResult() {
+        val flag = V6FinalPort.BoardKeyedFlag()
+        val x = listOf(listOf(1, 2), listOf(3, 4))
+        val y = listOf(listOf(9, 9), listOf(9, 9))
+        var evals = 0
+        val eval: (List<List<Int>>) -> Boolean = { b -> evals++; b == x }
+        assertTrue(flag.get(x, eval)); assertEquals(1, evals)
+        assertTrue("内容が同じ盤面は再診断しない", flag.get(listOf(listOf(1, 2), listOf(3, 4)), eval)); assertEquals(1, evals)
+        assertFalse("別の盤面の結果は返さない", flag.get(y, eval)); assertEquals(2, evals)
+        assertTrue("戻っても、その盤面自身の結果で判定する", flag.get(x, eval)); assertEquals(3, evals)
+    }
+
+    // §5.3 壁の証拠は、生存盤面の報告が最良の報告と同じ参照のときだけ使う（値が等しいだけでは使わない）
+    @Test fun c3nWallBindsOnlyToTheSameReportObject() {
+        val a = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        val same = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        assertFalse(V6FinalPort.c3nWallSameReport(null, a))
+        assertFalse(V6FinalPort.c3nWallSameReport(a, null))
+        assertTrue(V6FinalPort.c3nWallSameReport(a, a))
+        assertFalse("値が同じでも別の報告は同じ盤面とみなさない", V6FinalPort.c3nWallSameReport(same, a))
+    }
+
+    // §5.3 既定の判定は、生存盤面の報告が最良と同じ参照のときだけ診断を使う（値が同じ別の報告では使わない）
+    @Test fun c3nWallProofUsesOnlyTheLiveBoardThatIsTheBestReport() {
+        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        val sameValues = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        val board = listOf(listOf(1, 2), listOf(3, 4))
+        var diagCalls = 0
+        var live = V6NativeOptimizer.LiveBestSnapshot(best, board)
+        val proof = V6FinalPort.C3nWallProof(
+            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { live }, diagnose = { diagCalls++; true },
+        )
+        assertTrue("同じ参照の生存盤面は診断の結果を使う", proof.bound())
+        assertEquals(1, diagCalls)
+        live = V6NativeOptimizer.LiveBestSnapshot(sameValues, board)
+        assertFalse("値が同じでも別の参照の生存盤面は使わない", V6FinalPort.C3nWallProof(
+            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { live }, diagnose = { true },
+        ).bound())
+    }
+
+    // §5.3 段の境界で生存盤面が空になっても、同じ最良版で成立した判定は持ち越す。版が変われば持ち越さない
+    @Test fun c3nWallProofCarriesItsVerdictAcrossAStageBoundaryOnly() {
+        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        val board = listOf(listOf(1, 2), listOf(3, 4))
+        var version = 1
+        var live: V6NativeOptimizer.LiveBestSnapshot? = V6NativeOptimizer.LiveBestSnapshot(best, board)
+        val proof = V6FinalPort.C3nWallProof(
+            bestVersion = { version }, bestReport = { best }, liveSnapshot = { live }, diagnose = { true },
+        )
+        assertTrue(proof.bound())
+        live = null
+        assertTrue("同じ最良版なら持ち越す", proof.bound())
+        version = 2
+        assertFalse("版が変われば持ち越さない", proof.bound())
+    }
+
+    // §5.3 診断の間に生存盤面が入れ替わったら、その判定は使わない
+    @Test fun c3nWallProofRefusesAVerdictWhenTheLiveBoardChangesDuringDiagnosis() {
+        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        val board = listOf(listOf(1, 2), listOf(3, 4))
+        var live = V6NativeOptimizer.LiveBestSnapshot(best, board)
+        val proof = V6FinalPort.C3nWallProof(
+            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { live },
+            diagnose = { live = V6NativeOptimizer.LiveBestSnapshot(best, listOf(listOf(9))); true },
+        )
+        assertFalse("診断の間に入れ替わったら判定を使わない", proof.bound())
+    }
+
+    // 測定の基準腕は HEAD の判定: 報告の参照を見ず、生存盤面の盤面を版ごとに一度だけ診断する
+    @Test fun c3nWallLegacyArmDiagnosesTheLiveBoardOncePerVersion() {
+        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        val other = rep(2, 18000.0, 4, "c3n" to 1, "pref" to 1)
+        var version = 1
+        var diagCalls = 0
+        val proof = V6FinalPort.C3nWallProof(
+            bestVersion = { version }, bestReport = { best },
+            liveSnapshot = { V6NativeOptimizer.LiveBestSnapshot(other, listOf(listOf(1))) },
+            diagnose = { diagCalls++; true },
+        )
+        assertTrue(proof.legacy())
+        assertTrue(proof.legacy())
+        assertEquals("同じ版では一度だけ診断する", 1, diagCalls)
+        version = 2
+        proof.legacy()
+        assertEquals(2, diagCalls)
+    }
+
+    // ログの件数は呼び出し回数ではなく、生存盤面の更新ごとに数える
+    @Test fun c3nWallProofCountsEachLiveBoardUpdateOnceNotEachPoll() {
+        val best = rep(2, 18000.0, 4, "c3n" to 2, "covU" to 0)
+        val other = rep(2, 18000.0, 4, "c3n" to 1, "pref" to 1)
+        val snap = V6NativeOptimizer.LiveBestSnapshot(other, listOf(listOf(1)))
+        val proof = V6FinalPort.C3nWallProof(
+            bestVersion = { 1 }, bestReport = { best }, liveSnapshot = { snap }, diagnose = { true },
+        )
+        repeat(50) { proof.bound() }
+        assertEquals("同じ生存盤面は一度だけ数える", 1, proof.checks.get())
+        assertEquals("対応しなかった更新も一度だけ数える", 1, proof.mismatch.get())
     }
 }
