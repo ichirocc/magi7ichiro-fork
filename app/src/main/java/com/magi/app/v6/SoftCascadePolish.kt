@@ -165,7 +165,7 @@ object SoftCascadePolish {
                 val children = ArrayList<Node>()
                 for (node in beam) {
                     if (out()) break
-                    for (c in expand(p, node, depth, config)) {
+                    for (c in expand(p, node, depth, config, ::out)) {
                         if (out()) break
                         screened++
                         val key = c.first.joinToString("|") { it.joinToString(",") }
@@ -191,7 +191,7 @@ object SoftCascadePolish {
     }
 
     /** 節から子（盤面・変更セル・触った日）を作る。玉の族を減らす手だけを、差分評価で必須の族を増やすものを除いて上位 [Config.maxChildrenPerNode] 個。 */
-    private fun expand(p: Problem, node: Node, depth: Int, config: Config): List<Triple<Array<IntArray>, Set<Int>, Set<Int>>> {
+    private fun expand(p: Problem, node: Node, depth: Int, config: Config, out: () -> Boolean): List<Triple<Array<IntArray>, Set<Int>, Set<Int>>> {
         val work = node.board.map { it.copyOf() }.toTypedArray()
         val de = DeltaEvaluator(p); de.reset(work)
         var balls = ballsOf(p, work, node.report)
@@ -205,12 +205,18 @@ object SoftCascadePolish {
         val cand = ArrayList<Pair<DoubleArray, IntArray>>()
         val seenMoves = HashSet<String>()
         for (b in balls) {
+            if (out()) break
             val r0 = rawW(b.fam)
             for (m in movesOf(p, work, node.report, b)) {
-                if (node.changed.size + m.size / 3 > config.maxChangedCells) continue
+                if (out()) break
+                // 変更セルの上限は、ここまでに触ったセルとの和集合で見る（同じセルを再び変える手を二重に数えない）。
+                var union = node.changed.size
+                for (x in 0 until m.size / 3) if ((m[3 * x] * p.T + m[3 * x + 1]) !in node.changed) union++
+                if (union > config.maxChangedCells) continue
                 if (!legal(p, work, m)) continue
                 val key = m.joinToString(",")
-                if (!seenMoves.add(key)) continue
+                // 同じ手が別の玉からも出るときは、どの玉の件数も減らさないと分かった後でなく、減らす手として採った後に重複を省く。
+                if (key in seenMoves) continue
                 val olds = IntArray(m.size / 3)
                 for (x in olds.indices) { val i = m[3 * x]; val j = m[3 * x + 1]; olds[x] = work[i][j]; work[i][j] = m[3 * x + 2]; de.apply(i, j, m[3 * x + 2]) }
                 val gain = r0 - rawW(b.fam)
@@ -218,6 +224,7 @@ object SoftCascadePolish {
                 val soft = de.score() % SCORE_HARD_UNIT
                 for (x in olds.indices.reversed()) { val i = m[3 * x]; val j = m[3 * x + 1]; work[i][j] = olds[x]; de.apply(i, j, olds[x]) }
                 if (gain <= 0.0 || h.indices.any { h[it] > h0[it] }) continue
+                seenMoves.add(key)
                 cand.add(doubleArrayOf(-gain, soft.toDouble(), m[0].toDouble(), m[1].toDouble(), m[2].toDouble()) to m)
             }
         }

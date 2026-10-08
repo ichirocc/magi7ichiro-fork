@@ -41,7 +41,13 @@ object ExtWishRules {
         if (days.isEmpty() || shifts.isEmpty()) return Saved(null, notes + "日か禁止シフトが残らないので保存しない")
         val p = cachedProblem(state)
         val banned = shifts.map { kigou.indexOf(it) }.toSet()
-        if ((0 until p.K).none { it !in banned && p.mayPlace(i, it) }) return Saved(null, notes + "置けるシフトが残らないので保存しない")
+        // 置けるシフトは、同じ職員の既存の件と合わせた禁止（探索が使う和集合）で日ごとに見る。
+        val existingBan = banTable(state.copy(extWishes = existing), state.staffCount, state.dayCount, state.shiftCount)
+        for (j in days) {
+            if ((0 until p.K).none { it !in banned && !existingBan.banned(i, j, it) && p.mayPlace(i, it) }) {
+                return Saved(null, notes + "${j + 1}日に置けるシフトが残らないので保存しない")
+            }
+        }
         val out = ExtWish(i, days.sorted().map { dateOf(state, it) }, kigou.filter { it in shifts })
         if (existing.any { it.staff == i && it.days.toSet() == out.days.toSet() && it.shifts.toSet() == out.shifts.toSet() }) {
             return Saved(null, notes + "同じ日と同じ禁止シフトの拡張希望が既にある")

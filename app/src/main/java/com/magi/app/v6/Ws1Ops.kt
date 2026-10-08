@@ -84,6 +84,8 @@ object Ws1Ops {
             cons42 = s.cons42.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
             cons42s = s.cons42s.map { it.copy(s1Kigou = if (it.s1Kigou == old) new else it.s1Kigou, s2Kigou = if (it.s2Kigou == old) new else it.s2Kigou) },
             cons3w = s.cons3w.map { it.copy(wishKigou = if (it.wishKigou == old) new else it.wishKigou, prevKigou = if (it.prevKigou == old) new else it.prevKigou) },
+            // 拡張希望も記号で参照する（禁止シフトの集合）。
+            extWishes = s.extWishes.map { e -> e.copy(shifts = e.shifts.map { if (it == old) new else it }.distinct()) },
         )
     }
 
@@ -362,8 +364,13 @@ object Ws1Ops {
         val wishes = state.wishes.filterKeys { dayOf(it) in 0 until t }
         val end = runCatching { LocalDate.parse(state.startDate).plusDays((t - 1).toLong()).toString() }
             .getOrDefault(state.endDate)
+        // 拡張希望の日は日付で持つ＝期間の外へ出た日を落とし、日が残らない件は消す。
+        val start = runCatching { LocalDate.parse(state.startDate) }.getOrNull()
+        val ext = state.extWishes.map { e -> e.copy(days = e.days.filter { d ->
+            val j = start?.let { s0 -> runCatching { java.time.temporal.ChronoUnit.DAYS.between(s0, LocalDate.parse(d)).toInt() }.getOrNull() }
+            j != null && j in 0 until t }) }.filter { it.days.isNotEmpty() }
         val ns = state.copy(needDay1 = need1, needDay2 = need2, wishes = wishes, endDate = end,
-            manualPins = state.manualPins.filter { it.day in 0 until t })
+            manualPins = state.manualPins.filter { it.day in 0 until t }, extWishes = ext)
         return Ws1Result(withSchedule(ns, newSched), newSched)
     }
 
@@ -420,8 +427,10 @@ object Ws1Ops {
         for ((key, v) in state.wishes) { if (v == k) continue; wishes[key] = if (v > k) v - 1 else v }
         // [#41] 消したシフトの手動固定は外す（マスは上の埋めシフトへ変わる）。
         val pins = state.manualPins.filter { it.shift != k }.map { if (it.shift > k) it.copy(shift = it.shift - 1) else it }
+        // 拡張希望: 消したシフトの記号を禁止集合から外し、禁止が残らない件は消す。
+        val ext = state.extWishes.map { e -> e.copy(shifts = e.shifts.filter { it != state.shifts[k].kigou }) }.filter { it.shifts.isNotEmpty() }
         val ns = state.copy(
-            shifts = shifts, groupShift = gs, groupShiftApt = apt, wishes = wishes, manualPins = pins,
+            shifts = shifts, groupShift = gs, groupShiftApt = apt, wishes = wishes, manualPins = pins, extWishes = ext,
             // 消したシフトの表示色は残さない（同じ記号で作り直したシフトが黙って引き継がないように）。
             shiftColors = state.shiftColors - state.shifts[k].kigou,
             needDay1 = reindexKeys(state.needDay1, 0, k),
@@ -458,6 +467,7 @@ object Ws1Ops {
             wishes = swapKeys(state.wishes, 0, i, j),
             staffRange = swapKeys(state.staffRange, 0, i, j),
             manualPins = state.manualPins.map { it.copy(staff = swapIdx(it.staff, i, j)) },
+            extWishes = state.extWishes.map { it.copy(staff = swapIdx(it.staff, i, j)) },
         )
         return Ws1Result(withSchedule(ns, arr), arr)
     }
@@ -517,6 +527,7 @@ object Ws1Ops {
             wishes = reindexKeys(state.wishes, 0, i),
             staffRange = reindexKeys(state.staffRange, 0, i),
             manualPins = state.manualPins.filter { it.staff != i }.map { if (it.staff > i) it.copy(staff = it.staff - 1) else it },
+            extWishes = state.extWishes.filter { it.staff != i }.map { if (it.staff > i) it.copy(staff = it.staff - 1) else it },
         )
         return Ws1Result(withSchedule(ns, arr), arr)
     }

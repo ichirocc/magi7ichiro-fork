@@ -498,6 +498,10 @@ internal fun nameMatchKey(s: String): String = s.filterNot { it.isWhitespace() }
 
 /** [P1/重複解決の一致] 先勝ちの index マップ。Kotlin の associateBy は後勝ちで、制約評価
  *  （Problem の indexOfFirst=先勝ち）と食い違うため、CSV照合は必ずこちらを使う。 */
+/** 同じ照合キーの職員が 2 人以上いる氏名のキー（どの職員の行か決められない＝自動で先頭へ割り当てない）。 */
+internal fun ambiguousStaffKeys(state: MagiState): Set<String> =
+    state.staff.groupingBy { nameMatchKey(it.name) }.eachCount().filterValues { it > 1 }.keys
+
 internal fun firstWinsMap(n: Int, key: (Int) -> String): Map<String, Int> {
     val m = LinkedHashMap<String, Int>()
     for (i in 0 until n) { val k = key(i); if (!m.containsKey(k)) m[k] = i }
@@ -641,9 +645,11 @@ object StaffCsvIO {
         // [3.314.0] ヘッダ判定を `build()` が出す実ヘッダ「氏名」の一致へ。旧:「先頭が既知の職員名か」
         //   という間接的な推測で、**未知の職員名で始まるヘッダ無CSVの先頭行を黙って捨てて**いた。
         val body = csvBody(rows, "氏名")
+        val ambiguous = ambiguousStaffKeys(state)
         for (r in body) {
             val name = r.getOrElse(0) { "" }.trim()
             if (name.isEmpty()) continue
+            if (nameMatchKey(name) in ambiguous) continue   // 同姓同名＝誰の行か決められない（先頭へ割り当てない）
             val i = nameToI[nameMatchKey(name)] ?: continue
             matched++
             val gi = gByK[r.getOrElse(1) { "" }.trim()] ?: newStaff[i].groupIdx
@@ -676,6 +682,8 @@ object StaffCsvIO {
     class StaffUpsertResult(
         val state: MagiState, val schedule: Array<IntArray>, val updated: Int, val added: Int,
         val unknownGroups: Map<String, Int> = emptyMap(), val unknownSkills: Map<String, Int> = emptyMap(),
+        /** 同姓同名で誰の行か決められず、更新も追加もしなかった氏名。 */
+        val ambiguousNames: List<String> = emptyList(),
     )
 
     /**
@@ -706,6 +714,8 @@ object StaffCsvIO {
         //   この勤務に入るのか」が説明できない盤面になる。3.410.0 の勤務表CSV未知記号と同じ形で知らせる。
         val unknownG = LinkedHashMap<String, Int>()
         val unknownS = LinkedHashMap<String, Int>()
+        val ambiguous = ambiguousStaffKeys(state)
+        val ambiguousNames = LinkedHashSet<String>()
         // [3.314.0] 実ヘッダ「氏名」の一致で判定する。この経路は未知名を**新規追加**するため、旧実装は
         //   「ヘッダ文字列を職員として登録しない」保守のために既知名一致のときだけ先頭行を本体へ入れて
         //   おり、**先頭が新規職員のヘッダ無CSVはその1件を黙って捨てて**いた。厳密なヘッダ判定なら
@@ -715,6 +725,7 @@ object StaffCsvIO {
             val rawName = r.getOrElse(0) { "" }.trim()
             if (rawName.isEmpty()) continue
             val key = nameMatchKey(rawName)
+            if (key in ambiguous) { ambiguousNames.add(rawName); continue }   // 同姓同名＝自動で先頭へ割り当てない
             val gRaw = r.getOrElse(1) { "" }.trim()
             val sRaw = r.getOrElse(2) { "" }.trim()
             val gi = gByK[gRaw]
@@ -787,6 +798,7 @@ object WishesCsvIO {
         // [3.314.0] ヘッダ判定を `build()` が出す実ヘッダ「氏名」の一致へ。旧:「先頭が既知の職員名か」
         //   という間接的な推測で、**未知の職員名で始まるヘッダ無CSVの先頭行を黙って捨てて**いた。
         val body = csvBody(rows, "氏名")
+        val ambiguous = ambiguousStaffKeys(state)
         var bad = 0
         val samples = ArrayList<String>()
         for (r in body) {
@@ -795,6 +807,8 @@ object WishesCsvIO {
             val sym = r.getOrElse(2) { "" }.trim()
             // 完全な空行は書式上のもの＝無視してよい。中身があるのに解釈できない行だけを数える。
             if (name.isEmpty() && sym.isEmpty() && r.getOrElse(1) { "" }.isBlank()) continue
+            // 同姓同名は誰の希望か決められない＝読めない行として全置換を止める（先頭の職員へ割り当てない）。
+            if (nameMatchKey(name) in ambiguous) { bad++; if (samples.size < ComponentImport.MAX_SAMPLES) samples.add("同姓同名: " + rowSample(r)); continue }
             val i = nameToI[nameMatchKey(name)]
             val k = symToK[sym]
             if (i == null || k == null || day == null || day < 1 || day > state.dayCount) {
@@ -911,7 +925,7 @@ object ConstraintsCsvIO {
                 "スキル群組合せ禁止" -> { cons42s.add(C42Row(c(r, 1), c(r, 3), c(r, 2), c(r, 4))); n++ }
                 "希望前日禁止" -> { cons3w.add(C3wRow(c(r, 1), c(r, 2))); n++ }
                 "個人レンジ" -> {
-                    val i = nameToI[nameMatchKey(c(r, 1))]
+                    val i = if (nameMatchKey(c(r, 1)) in ambiguousStaffKeys(state)) null else nameToI[nameMatchKey(c(r, 1))]
                     val sym = c(r, 2)
                     val k = state.shifts.indexOfFirst { it.kigou.trim() == sym }
                     // [3.329.0/外部レビュー H-02] 氏名・記号が今のデータに無い行は黙って捨てない。

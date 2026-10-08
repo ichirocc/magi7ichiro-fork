@@ -41,10 +41,11 @@ object StateFingerprint {
         //   `[[1,1],[0]]` と `[[1],[1,0]]` が同じ値になり、担当可否の構造が違うのに指紋が一致した。
         for (row in st.groupShift) { for (v in row) mix(v.toLong()); mix(ROW) }
         for (row in st.groupShiftApt) { for (v in row) txt(v); mix(ROW) }
-        for ((k, v) in st.wishes.entries.sortedBy { it.key }) { txt(k); mix(v.toLong()) }
-        for ((k, r) in st.staffRange.entries.sortedBy { it.key }) { txt(k); txt(r.lo); txt(r.hi) }
-        for ((k, v) in st.needDay1.entries.sortedBy { it.key }) { txt(k); txt(v) }
-        for ((k, v) in st.needDay2.entries.sortedBy { it.key }) { txt(k); txt(v) }
+        // 項目ごとに識別子と件数を混ぜる。旧: 境界が無く、同じ項目を needDay1→needDay2 へ移しても指紋が一致した（外部レビュー OLD-01）。
+        mix(7); mix(st.wishes.size.toLong()); for ((k, v) in st.wishes.entries.sortedBy { it.key }) { txt(k); mix(v.toLong()) }
+        mix(8); mix(st.staffRange.size.toLong()); for ((k, r) in st.staffRange.entries.sortedBy { it.key }) { txt(k); txt(r.lo); txt(r.hi) }
+        mix(9); mix(st.needDay1.size.toLong()); for ((k, v) in st.needDay1.entries.sortedBy { it.key }) { txt(k); txt(v) }
+        mix(10); mix(st.needDay2.size.toLong()); for ((k, v) in st.needDay2.entries.sortedBy { it.key }) { txt(k); txt(v) }
         for (c in st.cons1) { txt(c.day1); txt(c.shiftKigou); txt(c.day2) }
         for (c in st.cons2) { txt(c.shiftKigou); txt(c.count) }
         // 連続パターンは行の長さが可変。行の境界を入れないと `[["A","B"]]` と `[["A"],["B"]]` が衝突する。
@@ -61,6 +62,10 @@ object StateFingerprint {
         // [#41] 手動固定。無いときは混ぜない（固定の無いデータの指紋は従来と同じ値）。
         if (st.manualPins.isNotEmpty()) {
             mix(6); for (m in st.manualPins.sortedWith(compareBy({ it.staff }, { it.day }))) { mix(m.staff.toLong()); mix(m.day.toLong()); mix(m.shift.toLong()) }
+        }
+        // 拡張希望（最適化器の候補を変える）。無いときは混ぜない。
+        if (st.extWishes.isNotEmpty()) {
+            mix(11); for (e in st.extWishes) { mix(e.staff.toLong()); for (d in e.days) txt(d); mix(ROW); for (k in e.shifts) txt(k); mix(ROW) }
         }
         return h
     }

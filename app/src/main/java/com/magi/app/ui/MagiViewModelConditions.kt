@@ -366,7 +366,13 @@ fun MagiViewModel.addExtWish(e: com.magi.app.model.ExtWish): Boolean {
     val st = state ?: return false
     val r = com.magi.app.v6.ExtWishRules.sanitize(st, e)
     for (n in r.notices) logOp("W", "拡張希望: ${opNm(e.staff)} — $n")
-    val saved = r.saved ?: return false
+    val serial = (_ui.value.extWishResult?.serial ?: 0L) + 1
+    val saved = r.saved
+    if (saved == null) {
+        _ui.update { it.copy(extWishResult = ExtWishResult(serial, r.notices.lastOrNull() ?: "保存しなかった")) }
+        return false
+    }
+    _ui.update { it.copy(extWishResult = ExtWishResult(serial, null)) }
     logOp("I", "拡張希望設定: ${opNm(saved.staff)} ${saved.days.size}日 → ${saved.shifts.joinToString("・")}以外")
     applyStructure(st.copy(extWishes = st.extWishes + saved))
     return true

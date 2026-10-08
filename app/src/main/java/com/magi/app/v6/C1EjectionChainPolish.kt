@@ -258,6 +258,7 @@ internal object C1EjectionChainPolish {
                 val baseKey = de.reportKey()
                 var bestKey = baseKey
                 var bestPath: List<IntArray> = emptyList()
+                var bestDepth = 0   // 手数（起点を含む。入れ替えは 1 手＝セル数ではない）
                 val touched = HashSet<Int>()
 
                 val useHole = config.holeFocus && !(config.holeSoftOnly && seed.family in HARD_FAMILIES)
@@ -266,7 +267,7 @@ internal object C1EjectionChainPolish {
                     val s = de.score()
                     if (s / SCORE_HARD_UNIT <= baseHard + config.hardSlack) {
                         val key = de.reportKey()
-                        if (compareReportKey(key, bestKey) < 0) { bestKey = key; bestPath = path.map { it.copyOf() } }
+                        if (compareReportKey(key, bestKey) < 0) { bestKey = key; bestPath = path.map { it.copyOf() }; bestDepth = depth }
                     }
                     if (depth >= config.maxDepth || out() || seedSpent()) return
                     // 候補 = [Δ後スコア, i, j, k, i2, j2, k2]。i2<0 は 1 セルの変更、そうでなければ 2 セルの交換。
@@ -390,7 +391,8 @@ internal object C1EjectionChainPolish {
                         for (i2 in 0 until p.S) if (i2 != li) consider(i2, lj)
                         cand.sortWith(CAND_ORDER)
                     }
-                    val b = config.branching[minOf(depth, config.branching.size - 1)]
+                    // depth は起点を含む手数（起点＝1）。branching[0] は起点の次の 1 手ぶん（旧: depth で引いて先頭を飛ばしていた）。
+                    val b = config.branching[minOf(depth - 1, config.branching.size - 1)]
                     var taken = 0
                     for (c in cand) {
                         if (taken >= b || out() || seedSpent()) break
@@ -430,7 +432,7 @@ internal object C1EjectionChainPolish {
                 if (adoptionGate(p, prev, work, rep2, rep, pinBlocks).accepted) {
                     famStat[2]++; famStat[3] += (rep.weightedScore - rep2.weightedScore).toLong()
                     rep = rep2; applied += bestPath.size; stats.accepted++; improvedThisRound = true
-                    stats.acceptedMaxDepth = maxOf(stats.acceptedMaxDepth, bestPath.size)
+                    stats.acceptedMaxDepth = maxOf(stats.acceptedMaxDepth, bestDepth)
                 } else {
                     for (m in bestPath.asReversed()) move(m[0], m[1], m[2])
                 }
