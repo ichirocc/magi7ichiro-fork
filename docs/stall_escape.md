@@ -4,10 +4,10 @@
 
 - 対象: `ichirocc/magi7ichiro-fork` の Android/Kotlin エンジン（C++ `magi_native.cpp` と C# `ichirocc/-MAGI_PC` は同値の移植。C# は `V6FinalPort.Watchdog.cs`・`V6FinalPort.HandleOptimize.cs`）。
 - 照合した実装: `80d664d`（3.641.0）を基準に、3.642.0・3.643.0 の変更（作業ブランチ `claude/merge-wub4fq`。3.643.0 は `8980004` 以降、コミットは `docs/history/3.4xx.md` の 3.643.0 の節）を反映した。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能は §11 の測定だけに基づく。
-  読む時点で main が進んでいれば `git diff 80d664d..HEAD -- app/src/main/java/com/magi/app/v6/` で §14 の根拠ファイルに差分が無いことを先に確かめる。
+  読む時点で main が進んでいれば `git diff 9d60346..HEAD -- app/src/main/java/com/magi/app/v6/ app/src/main/java/com/magi/app/ui/StopExplanation.kt`（`9d60346`＝この文書が反映した最後のエンジン変更）で §14 の根拠ファイルに差分が無いことを先に確かめる。
 - 読み手: 他社 AI（実装・移植・レビュー）。会話履歴なしで、この文書とリポジトリだけから検証・実装・判断できることを目指す。人のレビューにも同じ条件が効く。
 - 目的: 現行実装の記述を本体とする。提案は §5.8 に状態ラベル（未実装／実装済み既定 OFF）を付けて分け、本文と混ぜない。閾値や重みをここで変えない（HF77）。
-- 「優秀」の判定基準（2026-10-08 のブリーフィングで決定）: ①照合＝全ての主張と数値を、固定したコミットの関数名・定数名・テスト名で確かめられる。②実装＝DEFAULT をこの文書だけから再実装できる（§13.2 のチェックリストで検証）。③判断＝提案は DEFAULT と分け、採否の規則（§13 の 4、事前基準・揺れを先に測る・対 8 以上・95% 区間）を書く。④安全＝不変条件（§13.1）が全てテスト名で固定されている。⑤更新＝変更手順と変更履歴があり、コードと同じコミットで直す。加えて、会話履歴を持たない別のエージェントが文書とコードだけを照合して矛盾を見つけない（矛盾 0 で合格）。
+- 「優秀」の判定基準（2026-10-08 のブリーフィングで決定）: ①照合＝全ての主張と数値を、固定したコミットの関数名・定数名・テスト名で確かめられる。②実装＝停滞脱出の制御（層 A の全部と、層 B〜E の停滞に関わる判断・定数・順序）を DEFAULT としてこの文書だけから再実装できる（§13.2 のチェックリストで検証）。ロール内部の演算子（§6 の入口盤面と探索パラメータ、§7 の focus 別オペレータ、§8 の温度ラダー、§9 のパスの中身）は範囲外＝`docs/algorithm_portfolio.md` とコード。③判断＝提案は DEFAULT と分け、採否の規則（§13 の 4、事前基準・揺れを先に測る・対 8 以上・95% 区間）を書く。④安全＝不変条件（§13.1）が全てテスト名で固定されている。⑤更新＝変更手順と変更履歴があり、コードと同じコミットで直す。加えて、会話履歴を持たない別のエージェントが文書とコードだけを照合して矛盾を見つけない（矛盾 0 で合格）。
 - 他社 AI への指示: (1) 実装の既定動作は常に DEFAULT。§5.8 の提案はフラグ OFF では存在しないものとして扱う。(2) 数値・規則を変えるときはコード・テスト・この文書を同じコミットで直す。(3) §11 の否決表と同型の変更を測定なしで入れない。(4) 重み・閾値・探索幅は明示の数値指示が無い限り変えない。(5) 本書の数値は定数名・関数名で確かめてから使う。
 - 読解規則: コメントや過去資料の設計意図と条件式が違うときは**条件式を優先する**。「保証」「推定」「未検証」を区別する。
 - 数値・規則を変えたら、この文書を**同じコミットで**直す（Kotlin → C++ → C# の順、同日）。経緯の本文は `docs/history/`、採否の台帳は `docs/algorithm_portfolio.md`。
@@ -142,13 +142,13 @@ effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
 - `wishC3wProven` は `wishConflictFloorMode == OFF`（既定）なら 0。ON のときは希望衝突由来の c3w 件数なので、`nonCovUAllC3n` は文字通り「c3n 以外が全部 0」ではない。
 - `c3nWallProven` の診断（約 20 ms）は、内訳条件を満たし無改善が `shortStall` を超えた後に遅延実行する。3.642.0 から `C3nWallProof` が次の規則で証拠を選ぶ（既定）。
   - 生存盤面（`V6NativeOptimizer.liveBestSnapshot`）の報告が最良の報告 `wd.bestReport` と**同じ参照**のときだけ、その盤面を診断する（`C3nWallProof.bound`）。値が同じだけの別の報告は使わない。
-    生存盤面は `publishLiveBest` が出すが、呼出は `ownsStatics(runSlot())`（そのスロットが最新の run）のときだけ＝古い run が残す盤面は証拠にならない。
+    生存盤面は `publishLiveBest` が出すが、呼出は `ownsStatics(runSlot())`（スロット無しの直接呼出か、そのスロットが最新の run。`handleOptimize` 経由では常にスロットがある）のときだけ＝古い run が残す盤面は証拠にならない。
   - 診断は盤面の内容で鍵をとる（`BoardKeyedFlag`）。結果は必ずその盤面のものになる。
   - 診断の前後で生存盤面・最良の報告・版のいずれかが変わったら、その判定は使わない。
   - 対応が取れない間は、同じ最良版で対応が取れていた判定だけを持ち越す（段の境界で `optimize()` が生存盤面を空にしても失わない）。版が変われば持ち越さない。
   - 既知の限界: 同じ報告参照は同じ盤面とみなせるが、値の一致では別盤面を区別できない。対応が取れない時間は壁の短縮を使わないので、停止は遅れる側（fail-closed）に倒れる。その代償は §11 の測定で判断する。
   - 測定の基準腕 `PolishGate.c3nWallLegacy=true` は HEAD（版ごとに一度、生存盤面を一致の検査なしに診断）。
-  - 3.643.0（`PolishGate.c3nWallDeepCheck`、既定 false）: 壁を証明相当（全 run の全セルが希望固定、`ForbiddenRunDiagnosis.allBlockedCertified`）と経験的（探索手の全滅）に分け、経験的な壁は `c3nWallRefutedByOneMove` が手を見つけないときだけ `c3nWallProven` とする。OFF では従来どおり `allBlocked` だけで判定する。反証は壁でない方向にしか働かない。
+  - 3.643.0（`PolishGate.c3nWallDeepCheck`、既定 false）: 壁を証明相当（全 run の全セルが希望固定、`ForbiddenRunDiagnosis.allBlockedCertified`）と経験的（探索手の全滅）に分け、経験的な壁は `c3nWallRefutedByOneMove` が手を見つけないときだけ `c3nWallProven` とする。OFF では従来どおり `allBlocked` だけで判定する。反証は壁でない方向にしか働かない。C# の `FixSuggester.Suggest` には `ejectionChain` が無いので ON のときの反証は C# の方が弱い（既定 OFF では同値。`windows/README.md` 2026-10-08 の記録）。
 - `c3nWallPlateau` は限定した手の壁判定（§4）で**閾値を短縮する**（300 s 予算で 270 s → 37.5 s）だけで、即停止ではない。動機は実機ログ「c3n=1 のまま 150 s 無改善でも 270 s 閾値で発火不能」（3.281.0）。早期終了全体の品質差は 3.341.1 で非有意（§11）。多セル交換で崩せる c3n を短縮で取り逃がす可能性は残る。3.641.0 で測った（§11、sample_v6×5 seed）: 120 s では損失なし、60 s では短縮なしが 1.6% 良い（時間 1.75 倍）、300 s では 0.7% 良い（時間 2.35 倍、非有意）。測定スイッチは `PolishGate.c3nWallShortStall`。
 - `wishReached` = `floor > 0 ∧ hard == floor ∧ hardAllWishOrigin(...)`。既定 OFF では短縮判定へ配線されない。ON の副作用（解ける HARD を残したまま短縮）は「残る HARD が全て希望由来」を条件に含めることで防ぐ設計。実機 A/B は HARD=床の盤面待ち。
 - 「実現不能希望の件数」を床にした旧版は、pref から対称除外される分が HARD に寄与せず解ける HARD を早々に諦めていた＝構造的 covU へ是正済み。
@@ -193,9 +193,9 @@ canExtra = ¬stopRequested ∧ ¬stagnationFired ∧ post.report.total > 0 ∧ �
 
 `structuralHardResidual` は `extraRefineRequirePostHardDrop`（`handleOptimize` 引数、既定 false）が true のときだけ評価する追加ゲート。走らなかったときは `ExtraRefine` 行に理由を残す。希望床 E0B は専用条件で研磨を省き `minimalPost` を使う。
 
-残存分析（`residualLog`）の「証明済みの壁」は、最終盤面を改めて診断した結果（約 20 ms、`C3nWallProof.diagnoseBoard`）で、探索中の判定とは別の根拠（3.642.0）。
+残存分析（`residualLog`）の「証明済みの壁」は、最終盤面の内容で鍵をとった診断（約 20 ms、`C3nWallProof.diagnoseBoard`。探索中と同じ `BoardKeyedFlag` を共有するので、最後に診断した生存盤面と同じ内容ならその判定を返す）で、探索中の時点の判定とは別の根拠（3.642.0）。
 
-終わり方の要約（3.643.0、`V6FinalPort.StopSummary`、`ActionResult.stop`）: 早期終了の有無（`stagnationFired`）・種別 `StopKind`・使用秒・予算秒・探索終了時の無改善秒（Watchdog 行と同じ `tChain1 − lastImpAtSearchEnd`）・残る必須件数。種別の条件と順序は Watchdog 行の「実効閾値の種別」と同じ: 発火なし → DEADLINE、`bestHard ≤ hardFloor ∧ nonCovUHard == 0` → PLATEAU_FLOOR、`wishOn ∧ wishReachedEnd` → WISH_FLOOR、`stagnationWall ∧ nonCovUAllC3n` → 最終盤面の `diagnoseForbiddenRuns(...).allBlockedCertified` で C3N_WALL_CERTIFIED か C3N_WALL_EMPIRICAL（`c3nWallDeepCheck` と無関係に常に分ける。壁で止まったときだけ診断する）、それ以外 → NORMAL_STALL。ログ `StopSummary` に同じ値を 1 行出す。画面は `ui/StopExplanation.kt`（Windows は `StopExplanation.cs`）が一文と次の一手に変換してホームの結果カードに出す。採否・探索・停止には配線しない＝出力（盤面）不変。
+終わり方の要約（3.643.0、`V6FinalPort.StopSummary`、`ActionResult.stop`）: 早期終了の有無（`stagnationFired`）・種別 `StopKind`・使用秒・予算秒・探索終了時の無改善秒（Watchdog 行と同じ `tChain1 − lastImpAtSearchEnd`）・残る必須件数。種別の条件と順序は Watchdog 行の「実効閾値の種別」と同じ（Watchdog 行の複合ラベル「plateau+希望衝突の床」は PLATEAU_FLOOR に畳む）: 発火なし → DEADLINE、`bestHard ≤ hardFloor ∧ nonCovUHard == 0` → PLATEAU_FLOOR、`wishOn ∧ wishReachedEnd` → WISH_FLOOR、`stagnationWall ∧ nonCovUAllC3n` → 最終盤面の `diagnoseForbiddenRuns(...).allBlockedCertified` で C3N_WALL_CERTIFIED か C3N_WALL_EMPIRICAL（`c3nWallDeepCheck` と無関係に常に分ける。壁で止まったときだけ診断する）、それ以外 → NORMAL_STALL。ログ `StopSummary` に同じ値を 1 行出す。画面は `ui/StopExplanation.kt`（Windows は `StopExplanation.cs`）が一文と次の一手に変換してホームの結果カードに出す。採否・探索・停止には配線しない＝出力（盤面）不変。
 
 ### 5.7 DEFAULT の既知のギャップ（欠陥ではなく仕様の歪み）
 
@@ -289,7 +289,7 @@ HF63 は SOFT の推定値を持ち得るが、**SOFT を恒久回避へ入れ�
 
 ### 7.3 focus 選択（`RsiFocusSelection.maxViolatedFamily`）
 
-1. 回避されておらず件数が正の HARD を、`groupViol, covU, pref, c3n, c3w` の**順序**で選ぶ（HARD 間の最大件数ではない）。HARD は 1 件でも必須なので件数比較に意味が無く、旧・件数最大では c3n=1 が c1=118 等の SOFT に埋もれて RSI が一度も HARD を狙わなかった（3.74.0）。順序は修復経路（groupViol/covU/pref は hf67、c3n/c3w は `destroyRepairViolations`）に沿う。
+1. 回避されておらず件数が正の HARD を、`groupViol, covU, pref, c3n, c3w` の**順序**で選ぶ（HARD 間の最大件数ではない）。HARD は 1 件でも必須なので件数比較に意味が無く、旧・件数最大では c3n=1 が c1=118 等の SOFT に埋もれて RSI が一度も HARD を狙わなかった（3.74.0）。順序は RSI 内の修復経路（`rsiGenerateHypothesis`: groupViol/pref は hf67、covU は `destroyRepairDay`×6＋covU 連鎖（E11）、c3n/c3w は `destroyRepairViolations`）に沿う。
 2. 残る HARD が無ければ apt／covO の周期枠: apt は `rotationRound % 3 == 1`、covO は `== 2`、最終ラウンドは両方が候補。`round ≥ 0`（通常の呼出し。負の round は周期枠を使わない呼出し）で、回避されず件数が正であること。
 3. 両方が候補なら件数の少ない方、同数なら covO。
 4. それ以外は順序表 `groupViol,covU,pref,c3n,c3w,low,high,c41,c41s,c2,covO,c42,c42s,apt,weekly,fair,c1,c3,c3m,c3mn` から、回避されない正の最大件数（同数は先のキー）。件数 0 の族は選ばない（E8）。
@@ -342,7 +342,7 @@ HF63 の推定は構造的不能の証明ではないが、N4 が止めるのは
 | HF80 戦略的振動（`applyHF80StrategicOscillation`） | （停滞の定義なし） | 最大 `maxCycles`=3 サイクル。`shouldStop` だけで止まる。停滞早期 return は無い |
 | 後処理チェーン全体 | （停滞検知なし） | チェーン全体の採用 0 を停滞と見る分岐は 2026-09-25 に `stallEscalation`・`ClusterOutcome.totalApplied` と共に撤去（§10）。残るのは巡単位の `roundApplied == 0` だけ。`PostChain` は巻き戻したパスの `applied` も既定では数える（`postChainRollbackCountsZero=false`。0 と数える版は 230 ペアで差なし） |
 
-E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期 return、native 区間で無改善なら時計の起点を `started` に引き継ぐ＝3.150.0）は層 E ではなく `V6NativeOptimizer.hf80PostPolish` にある。呼出元は `runRsiPlus` の Phase 4（層 B のロール内）・`softPolishOnly`・`optimize()` 末尾（`options.postPolish`。`handleOptimize` は false 固定）だけで、後処理チェーンからは呼ばれない。
+E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期 return、native 区間で無改善なら時計の起点を `started` に引き継ぐ＝枠は 3.150.0、起点の引き継ぎは 3.179.0）は層 E ではなく `V6NativeOptimizer.hf80PostPolish` にある。呼出元は `runRsiPlus` の Phase 4（層 B のロール内）・`softPolishOnly`・`optimize()` 末尾（`options.postPolish`。`handleOptimize` は false 固定）だけで、後処理チェーンからは呼ばれない。
 
 予算の相互作用: 後処理は絶対時刻の全体締切 `D` を受け、巡回クラスタは `clusterStop` の自前締切、共同 LNS はその中で patience／評価数上限で止まる。前段が早く終わった分は後段がそのまま使える（締切は絶対時刻、予約枠は探索から確保する枠で後処理内の配分ではない）。
 採用数は最終盤面の純改善数ではない。後処理の時間削減と最終品質の非劣性は別々に測る。
@@ -351,7 +351,7 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 
 | 機構 | 既定 | 本体と分けて読む点 |
 |---|---|---|
-| `PolishGate.stallPolishInjection` | false（設定タブからは 3.628.0 で非表示） | 全体最良が `max(20 000, budgetSec×100)` ms 改善しないとき、最良の写しへ後処理を 6 000 ms 上限で当て、良ければ全体最良へ。回数 3 未満・探索残り 8 000 ms 以上が条件（`StallPolishInjection.shouldInject`） |
+| `PolishGate.stallPolishInjection` | false（設定タブからは 3.628.0 で非表示） | 全体最良の最終改善と最終試行の遅い方（`max(lastGlobalImproveMs, lastTryMs)`）から `max(20 000, budgetSec×100)` ms 経ったとき、最良の写しへ後処理を 6 000 ms 上限で当て、良ければ全体最良へ。回数 3 未満・探索残り 8 000 ms 以上が条件（`StallPolishInjection.shouldInject`） |
 | `PolishGate.wishConflictFloorMode` | OFF | 希望床の短縮終了（E0A）／E0B は最小後処理へ |
 | `extraRefineRequirePostHardDrop` | false（引数） | 残存 HARD が §4 の床のときだけ追加精製を省く。実質 A/A で信号なし（backlog #35） |
 | `V6OptimizerOptions.rsiFocusRotationPersist` | false | 周期枠を `runRsi` 呼出しをまたいで継続（有意差なし、backlog #28） |
@@ -424,7 +424,7 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 
 | ID | 内容 | 固定するテスト |
 |---|---|---|
-| K1 | 採用は `betterReport` だけ | `V6FinalPortTest` ほか |
+| K1 | 採用は `betterReport` だけ | `FixApplyGateTest`・`WishPinStrictTest`・`Hf80StrategicOscillationTest`・`StopSemanticsTest`（`V6FinalPortTest` は発火式と閾値だけ） |
 | K2 | 入力より悪い解を採用しない | 各番兵のテスト（`runAlns`／`runV5`／後処理の入力比） |
 | K3 | `wishLocked`／上限 0（`mayPlace`）／手動固定の保護 | `FixApplyGate`・候補生成のテスト |
 | K4 | 実行全体の停止は層 A だけ | 設計（§2） |
@@ -472,5 +472,5 @@ PROPOSAL（フラグ ON のときだけ）
 ## 14. 根拠ファイル（`80d664d` と 3.642.0・3.643.0 の差分）
 
 `app/src/main/java/com/magi/app/v6/`: `V6FinalPort.kt`・`V6NativeOptimizer.kt`・`AdaptiveHypothesisEpochPolicy.kt`・`MirrorCore.kt`・`Hf63Infeasibility.kt`・`HypothesisPlanning.kt`・`RsiFocusSelection.kt`・`V6PortAnalyzer.kt`・`V6SanityPort.kt`・`SaOptimizer.kt`・`V6HotfixPasses.kt`・`C1JointLnsPolish.kt`・`StallPolishInjection.kt`・`V6LateOperators.kt`・`EliteIntegrationPolish.kt`・`AdaptiveEliteArchive.kt`・`RoleDiversityHelpers.kt`、`app/src/main/java/com/magi/app/ui/StopExplanation.kt`、`app/src/main/cpp/magi_native.cpp`。
-テスト: `app/src/test/java/com/magi/app/v6/` の `V6FinalPortTest.kt`・`WishConflictFloorTest.kt`・`HypothesisEpochPolicyTest.kt`・`Hf63InfeasibilityTest.kt`・`StallPolishInjectionTest.kt`・`StallEscapeSpecTest.kt`・`V6LateOperatorsTest.kt`・`EliteIntegrationQuantitativeTest.kt`。
+テスト: `app/src/test/java/com/magi/app/v6/` の `V6FinalPortTest.kt`・`WishConflictFloorTest.kt`・`HypothesisEpochPolicyTest.kt`・`Hf63InfeasibilityTest.kt`・`StallPolishInjectionTest.kt`・`StallEscapeSpecTest.kt`・`V6LateOperatorsTest.kt`・`EliteIntegrationQuantitativeTest.kt`・`V6PortAnalyzerTest.kt`・`ZeroCapExclusionTest.kt`、`app/src/test/java/com/magi/app/ui/StopExplanationTest.kt`。
 資料: `docs/algorithm_portfolio.md`（採否の台帳）・`docs/history/topics.md`「停滞脱出の改善」・`docs/history/INDEX.md`・`docs/lessons.md` #39/#42。
