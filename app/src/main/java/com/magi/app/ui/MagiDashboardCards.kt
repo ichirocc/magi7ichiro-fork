@@ -281,21 +281,29 @@ internal fun RelaxTrialDialog(
 internal fun guidedFixTarget(shortfalls: List<CoverageShortfall>): CoverageShortfall? =
     shortfalls.firstOrNull { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow }
 
-/** [UX監査 中4] 診断の原因に対応する設定の着地先（値で持つ）。null＝原因が分からない＝編集タブの先頭（従来どおり）。 */
-internal data class EditLanding(val scope: Int, val section: String?, val wishStaff: Int? = null)
+// 着地先（EditLanding・landingFor・landingButtonLabel）は ui/EditLanding.kt（3.644.0 でつくる前の確認と共有）。
 
-internal fun landingFor(s: CoverageShortfall): EditLanding? = when {
-    s.wishPinned.isNotEmpty() -> EditLanding(scope = 0, section = null, wishStaff = s.wishPinned.first())   // 希望で固定された本人（月次条件）
-    s.verdict == CoverageVerdict.INFEASIBLE -> EditLanding(scope = 2, section = "yr_ws1")                  // 担当・必要人数（①）
-    s.blockedNow && s.forbidCount > 0 -> EditLanding(scope = 2, section = "yr_cons")                       // 移すと禁止の並び（⑤）
-    else -> null
-}
-
-private fun landingButtonLabel(l: EditLanding?): String = when {
-    l?.wishStaff != null -> "希望を見直す"
-    l?.section == "yr_cons" -> "禁止の並びを見直す"
-    l?.section == "yr_ws1" -> "担当を見直す"
-    else -> "データを見直す"
+/** [3.644.0/UX-03] 複数人の入替を当てる前に、変わる人・日・勤務（前 → 後）と必須の増減を一覧で見せる。当てるのは確認のあと（元に戻せる）。 */
+@Composable
+internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(p.title) },
+        text = {
+            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(p.suggestion.label, style = MaterialTheme.typography.bodyMedium)
+                Text("変わる人と勤務（前 → 後）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                Text(p.hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                p.caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                Text("当てる直前にもう一度検査し、必須が減らない・希望の固定を崩す手順は当てません。当てたあとは「元に戻す」で取り消せます。",
+                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+        },
+        confirmButton = { Button(onClick = onApply, modifier = Modifier.heightIn(min = 48.dp)) { Text("この入替を当てる") } },
+        dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる") } },
+    )
 }
 
 @Composable
@@ -374,17 +382,18 @@ internal fun GuidedFixDialog(
                             }
                             target.chainVerified -> {
                                 // [UX監査 高1] 1人を動かすだけでは埋まらないが、複数人の入替で埋まると分析が確かめた枠。
+                                //   [3.644.0/UX-03] 当てる前に一覧（だれの・どの日の・何→何と必須の増減）を見せる＝ChainFixPreviewDialog。
                                 Text("だれか1人を動かすだけでは埋まりません。複数人の入れ替えで埋められます。",
                                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                                 Button(
                                     onClick = {
                                         onDismiss()
-                                        vm.applyShortageChainFix(target.dayIndex, target.shiftIndex,
+                                        vm.prepareShortageChainFix(target.dayIndex, target.shiftIndex,
                                             "（玉突き）${target.dayLabel} の「${target.shiftSymbol}」を複数人の入替で埋める")
                                     },
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                                 ) {
-                                    Text("複数人の入れ替えを使う（元に戻せます）", textAlign = TextAlign.Center)
+                                    Text("入替の一覧と影響を見る", textAlign = TextAlign.Center)
                                 }
                             }
                             else -> {

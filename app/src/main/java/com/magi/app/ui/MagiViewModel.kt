@@ -1093,6 +1093,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         endDateFixedFrom?.let {
                             logOp("W", "期間の終了日（endDate）が日数と合っていなかったため補正しました（$it → ${lp.state.endDate}）。「データを保存」で保存し直すと次回からこの警告は出ません")
                         }
+                        clearCsvSaved()   // 前のデータの CSV 保存はこのデータのものではない
                         pushReport(lp.state, lp.schedule, lp.report) {
                             it.copy(
                                 messageIsError = false,
@@ -1930,15 +1931,41 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var trialControl: WishTrial.Outcome? = null
     private val trialResults = HashMap<String, WishTrial.Outcome>()   // "i,j,k"
     private var cancelOutcomeCtx: TrialCtx? = null
-    // [3.643.0] 直し方を当てた結果と CSV 保存の文脈。盤面か設定が変わったら出さない（S5 の結果行と同じ鮮度の規則）。
+    // [3.643.0] 直し方を当てた結果の文脈。盤面か設定が変わったら出さない（S5 の結果行と同じ鮮度の規則）。
     private var fixOutcomeCtx: TrialCtx? = null
-    private var csvSavedCtx: TrialCtx? = null
+    /**
+     * [3.644.0/UX-05・仕様 5.4] 勤務表 CSV の文脈。書き出した**文字列**（のハッシュ）と、その時の state・盤面を持つ。保存の成功は
+     * 書き出し時の文脈に結ぶ＝書き出しのあと（ピッカーや書き込みの間）に盤面が変わっても、変わった盤面を「保存済み」と言わない。
+     */
+    private class CsvCtx(val st: MagiState, val boardKey: Long, val textHash: Int)
+    private var csvExportCtx: CsvCtx? = null
+    private var csvSavedCtx: CsvCtx? = null
+    private var csvCheckKey: Pair<MagiState, Long>? = null
+    private var csvCheckHash = 0
+    internal fun noteCsvExport(st: MagiState, sched: Array<IntArray>, csv: String) { csvExportCtx = CsvCtx(st, boardKey(sched), csv.hashCode()) }
+    /** 今の内容が保存した CSV と同じか。state と盤面が同じなら作らずに同じ、違えば CSV をもう一度作って比べる（設定だけの変更は CSV を変えない）。 */
+    private fun csvSavedMatches(c: CsvCtx): Boolean {
+        val st = state ?: return false
+        val b = currentSchedule ?: return false
+        val bk = boardKey(b)
+        if (c.st === st && c.boardKey == bk) return true
+        if (csvCheckKey?.first !== st || csvCheckKey?.second != bk) { csvCheckKey = st to bk; csvCheckHash = ScheduleCsvBridge.build(st, b).hashCode() }
+        return csvCheckHash == c.textHash
+    }
+    /** 別のデータや別の月に移ったら、前の CSV の保存は今の内容と関係がない＝印を消す。 */
+    internal fun clearCsvSaved() { csvExportCtx = null; csvSavedCtx = null; _ui.update { it.copy(csvSavedAt = null) } }
     /** 「なおし方を見る」で 1 人を入れた直後に覚えておく枠。再検査の結果（pushReport）でその枠がまだ足りないかを見て 1 行にする。 */
     private data class GuidedFixNote(val dayIndex: Int, val shiftIndex: Int, val dayLabel: String, val shiftSymbol: String)
     private var pendingGuided: GuidedFixNote? = null
     internal fun noteGuidedFix(dayIndex: Int, shiftIndex: Int, dayLabel: String, shiftSymbol: String) { pendingGuided = GuidedFixNote(dayIndex, shiftIndex, dayLabel, shiftSymbol) }
     internal fun fixOutcomeLine(): String? = _ui.value.fixOutcome?.takeIf { ctxMatches(fixOutcomeCtx) }?.line
-    internal fun csvSavedLine(): String? = _ui.value.csvSavedAt?.takeIf { ctxMatches(csvSavedCtx) }?.let { "この内容で勤務表 CSV を保存済みです（$it）。" }
+    /** 保存した内容と今の内容を区別する（仕様 5.4）: 同じなら「この内容で保存済み」、違えば「保存した CSV は今の内容と違う」。 */
+    internal fun csvSavedLine(): String? {
+        val at = _ui.value.csvSavedAt ?: return null
+        val c = csvSavedCtx ?: return null
+        return if (csvSavedMatches(c)) "この内容で勤務表 CSV を保存済みです（$at）。"
+        else "$at に保存した勤務表 CSV は、今の内容と違います（配るなら保存し直してください）。"
+    }
     internal fun setMonthMovePrompt(p: MonthMovePlan?) { _ui.update { it.copy(monthMovePrompt = p) } }
     private fun resolvePendingGuidedFix(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, diag: CoverageDiagnosis?) {
         val g = pendingGuided ?: return
@@ -2613,9 +2640,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return out
     }
 
-    /** [3.642.0/UX監査 高1] 不足枠を玉突き（複数人の入替）で埋める。手順は分析と同じ `findCovUChain` で求め、適用は
-     *  [applyFixSuggestion]（指紋照合・FixApplyGate・Undo）を通る。玉突きの実在を確かめた枠（chainVerified）でだけ呼ぶ。 */
-    fun applyShortageChainFix(dayIndex: Int, shiftIndex: Int, label: String) {
+    /**
+     * [3.642.0/UX監査 高1 → 3.644.0/UX-03] 不足枠を玉突き（複数人の入替）で埋める手順を求め、当てる**前**に一覧（だれの・どの日の・
+     * 何→何と必須の増減）を [ChainFixPreview] として見せる。手順は分析と同じ `findCovUChain`、当てるのは [applyChainPreview]＝
+     * [applyFixSuggestion]（指紋照合・FixApplyGate・Undo）を通る。玉突きの実在を確かめた枠（chainVerified）でだけ呼ぶ。
+     */
+    fun prepareShortageChainFix(dayIndex: Int, shiftIndex: Int, label: String) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
@@ -2623,12 +2653,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         fixBoardKey = boardKey(snap)
         fixStateKey = stateKey(st)
         val p = cachedProblem(st)
+        _ui.update { it.copy(messageIsError = false, message = "複数人の入替の手順を探しています…") }
         viewModelScope.launch {
             val s = withContext(Dispatchers.Default) { V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label) }
             if (s == null) _ui.update { it.copy(messageIsError = true, message = "入替の手順が見つかりませんでした。「直し方を探す」で探し直してください") }
-            else applyFixSuggestion(s)
+            else _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate)) }
         }
     }
+
+    /** 一覧で確認した入替を当てる（盤面か設定が変わっていれば [applyFixSuggestion] が断る）。 */
+    fun applyChainPreview() {
+        val s = _ui.value.chainPreview?.suggestion ?: return
+        _ui.update { it.copy(chainPreview = null) }
+        applyFixSuggestion(s)
+    }
+
+    fun dismissChainPreview() { _ui.update { it.copy(chainPreview = null) } }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
 
@@ -3228,7 +3268,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 notify("${what}を保存しました")
                 // [3.643.0] 勤務表 CSV は「この内容を保存した」事実をホームに残す（内容が変われば消える＝配布の判断の材料）。
                 if (what == "勤務表CSV") {
-                    csvSavedCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
+                    // 書き出した文字列の文脈に結ぶ（exportCsv が記録）。無ければ今の内容（旧経路の互換）。
+                    csvSavedCtx = csvExportCtx ?: state?.let { st -> currentSchedule?.let { b -> CsvCtx(st, boardKey(b), ScheduleCsvBridge.build(st, b).hashCode()) } }
                     _ui.update { it.copy(csvSavedAt = java.time.LocalTime.now().toString().take(5)) }
                 }
             },

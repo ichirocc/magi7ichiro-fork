@@ -455,6 +455,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             editScope = l.scope
             l.section?.let { deepLinkEditSection = it }
             l.wishStaff?.let { deepLinkWishStaff = it }
+            // [3.644.0] つくる前の確認から: 必要人数のシフトを先に選ぶ／回数のマス（職員×シフト）のシートを開いて着地する。
+            l.needShift?.let { deepLinkNeedShift = it }
+            l.countCell?.let { countsSheetCell = it }
         }
     }
     // 縦スクロールはタブごと（別のタブの縦位置のまま開かない）。
@@ -938,6 +941,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (guidedFix) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = openEditLanding)
         }
+        ui.chainPreview?.let { ChainFixPreviewDialog(it, onApply = { vm.applyChainPreview() }, onDismiss = { vm.dismissChainPreview() }) }
         ui.monthMovePrompt?.let { MonthMoveConfirmDialog(it, onEvent) }
         if (relaxDialog) {
             RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false; relaxFrom = null }, onConfirm = { token ->
@@ -949,6 +953,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         ui.preRunCheck?.let { sum ->
             PreRunCheckSheet(sum, ui,
                 onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0 },
+                onOpenLanding = { l -> vm.dismissPreRun(); openEditLanding(l) },
                 onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
                 onFixData = { vm.dismissPreRun(); tab = 2 },
                 onProceed = { vm.proceedPreRun() },

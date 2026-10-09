@@ -47,4 +47,17 @@ class PreRunCheckTextTest {
         assertTrue(t.floorRows.none { it.text.startsWith("10/10(土)") && it.text.endsWith(PRE_RUN_ZERO_CAP_TAG) })
         assertEquals(PRE_RUN_ZERO_CAP_NOTE, t.zeroCapNote)
     }
+
+    /** [3.644.0/UX-02] セルを持たない行は原因の入力箇所へ着地する（上限0が原因なら回数のマス、担当不足なら①、希望の上限超過なら本人×シフトのマス）。 */
+    @Test fun rowsWithoutACellLandOnTheirInput() {
+        val base = PreRunCheck.build(st, board)
+        val t = preRunSheetText(base.copy(forcedShortfalls = listOf(com.magi.app.v6.V6SanityPort.ForcedCovU(0, "X", 2, 3), com.magi.app.v6.V6SanityPort.ForcedCovU(1, "Y", 1, 1)),
+            zeroCapShortShifts = setOf(0)), ui)
+        assertEquals(EditLanding(2, "yr_count", label = LANDING_ZERO_CAP), t.floorRows.first { it.text.startsWith("「X」") }.landing)
+        assertEquals(EditLanding(2, "yr_ws1"), t.floorRows.first { it.text.startsWith("「Y」") }.landing)
+        val yuu = st.shifts.indexOfFirst { it.kigou == "有" }
+        assertEquals(EditLanding(2, "yr_count", countCell = 7 to yuu, label = LANDING_ZERO_CAP), t.overCapRows[0].landing)
+        assertEquals(EditLanding(2, "yr_count", label = LANDING_ZERO_CAP), t.wallLanding)
+        assertTrue("セルのある行は着地先を持たない（セルへ行く）", t.floorRows.filter { it.staff != null }.all { it.landing == null })
+    }
 }

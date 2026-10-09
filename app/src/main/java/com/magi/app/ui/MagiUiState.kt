@@ -128,6 +128,7 @@ data class UiState(
     val fixOutcome: FixOutcome? = null,       // [3.643.0] 直近に当てた直し方の結果 1 行（表示は vm.fixOutcomeLine＝盤面が変わったら出さない）
     val csvSavedAt: String? = null,           // [3.643.0] この盤面を勤務表 CSV に保存した時刻 HH:mm（表示は vm.csvSavedLine）
     val monthMovePrompt: MonthMovePlan? = null,   // [3.643.0] 対象の月を移す前の確認（引き継ぐもの・消えるもの）。null＝閉じている
+    val chainPreview: ChainFixPreview? = null,    // [3.644.0] 複数人の入替を当てる前の一覧（だれの・どの日の・何→何）。null＝閉じている
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,
