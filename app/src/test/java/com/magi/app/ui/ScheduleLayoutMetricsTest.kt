@@ -78,4 +78,31 @@ class ScheduleLayoutMetricsTest {
         assertEquals("12/28" to "〜1/3", weekRangeCaption("2026-12-01", 27, 33))
         assertNull(weekRangeCaption("bad", 0, 6))
     }
+
+    /** [3.648.0] 左上の範囲は暦の週でなく、いま見えている列。 */
+    @Test fun `visible day range follows the horizontal scroll and the viewport`() {
+        assertEquals(0..6, visibleDayRange(0, 700, 100, 31))
+        assertEquals(4..10, visibleDayRange(400, 700, 100, 31))      // ［週▶］で 10/5(月) が左端
+        assertEquals(24..30, visibleDayRange(2400, 700, 100, 31))    // 右端
+        assertEquals(0..6, visibleDayRange(0, 698, 100, 31))         // px 丸めの端数（6.98 列）は 7 列
+        assertEquals(3..9, visibleDayRange(260, 700, 100, 31))       // ドラッグの途中は最も近い列
+        assertEquals(0..3, visibleDayRange(0, 700, 100, 4))          // 期間が短ければ最後の日で止める
+        assertNull(visibleDayRange(0, 700, 0, 31))
+        assertNull(visibleDayRange(0, 0, 100, 31))
+    }
+
+    @Test fun `corner caption names the visible days not the calendar week`() {
+        val start = visibleDayRange(0, 700, 100, 31)!!
+        assertEquals("10/1" to "〜7", weekRangeCaption("2026-10-01", start.first, start.last))      // 旧: 月曜区切りで「10/1」「〜4」
+        val end = visibleDayRange(2400, 700, 100, 31)!!
+        assertEquals("10/25" to "〜31", weekRangeCaption("2026-10-01", end.first, end.last))      // 旧: 最終週「10/26」「〜31」
+    }
+
+    /** [3.648.0] グリッドの上は道具カード 1 枚＝タブ先頭でも 9 行見える（3.481.0〜3.647.0 の 2 枚構成は 7 行）。 */
+    @Test fun `one tools card above the grid`() {
+        assertEquals(188, m.bodyAboveAtTop(after = true))
+        assertEquals(340, m.bodyAboveAtTop(after = false))
+        assertEquals(9, rows(915, true, 0, true))
+        assertEquals(7, (915 - m.TOP_BAR_DP - m.bottomStackDp(true, false) - m.DAY_HEADER_DP - 264) / m.ROW_DP)
+    }
 }
