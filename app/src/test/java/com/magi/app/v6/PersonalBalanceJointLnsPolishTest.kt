@@ -71,4 +71,33 @@ class PersonalBalanceJointLnsPolishTest {
         val out = PersonalBalanceJointLnsPolish.apply(st, sched)
         assertEquals(0, out.applied)
     }
+
+    /** [3.654.0/外部レビュー] 自己日交換・クロス日移送の禁止の並びは、交換後の盤面で見る。旧: 交換前の盤面で 1 セルずつ見ており、
+     *  「2 日目に X」だけなら X→X になるが、1 日目を Y へ戻す交換後は並びが無い手を捨てていた（期間の制約 c1 が残った）。 */
+    @Test
+    fun selfDaySwapIsJudgedOnTheBoardAfterBothCellsChange() {
+        val shifts = listOf(Shift("Y", "Y", "", ""), Shift("X", "X", "", ""))
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-03",
+            shifts = shifts, groups = listOf(Group("G", "G")), staff = listOf(Staff("a", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1, 0, 0)),   // X, Y, Y
+            wishes = mapOf("0,2" to 0),           // 3 日目は Y の希望
+            staffRange = mapOf("0,1" to Range("2", "")),   // X の下限 2（構造的には 1 回まで＝下限割れ 1 が残る）
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(com.magi.app.model.C1Row(day1 = "2", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(com.magi.app.model.C3Row(listOf("X", "X"))), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        val before = UnifiedViolationChecker.check(st, sched)
+        assertEquals(1, before.breakdown["c1"])
+        assertEquals(1, before.breakdown["low"])
+        val out = PersonalBalanceJointLnsPolish.apply(st, sched)
+        val after = UnifiedViolationChecker.check(st, out.newSchedule)
+        assertEquals(listOf(0, 1, 0), out.newSchedule[0].toList())   // Y, X, Y
+        assertEquals(0, after.breakdown["c1"])
+        assertEquals(0, after.hard)
+    }
 }

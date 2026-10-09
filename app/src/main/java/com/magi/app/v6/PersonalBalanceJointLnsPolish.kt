@@ -486,7 +486,7 @@ internal object PersonalBalanceJointLnsPolish {
             val w = base.copy2D()
             w[i][j] = target
             w[i][d2] = old
-            if (p.makesForbiddenRun(base, i, j, target) || p.makesForbiddenRun(base, i, d2, old)) continue
+            if (p.makesForbiddenRun(w, i, j, target) || p.makesForbiddenRun(w, i, d2, old)) continue   // 交換後の行で見る（3.654.0）
             out.add(Candidate(w, listOf(CellOp(i, j, target), CellOp(i, d2, old)), "${goal.reason}:自己日交換"))
             if (out.size >= limit) break
         }
@@ -499,7 +499,7 @@ internal object PersonalBalanceJointLnsPolish {
                 val w = base.copy2D()
                 w[i][j] = target
                 w[d][d2] = old
-                if (p.makesForbiddenRun(base, i, j, target) || p.makesForbiddenRun(base, d, d2, old)) continue
+                if (p.makesForbiddenRun(w, i, j, target) || p.makesForbiddenRun(w, d, d2, old)) continue
                 out.add(Candidate(w, listOf(CellOp(i, j, target), CellOp(d, d2, old)), "${goal.reason}:クロス日移送"))
                 if (out.size >= limit) break@outer
             }

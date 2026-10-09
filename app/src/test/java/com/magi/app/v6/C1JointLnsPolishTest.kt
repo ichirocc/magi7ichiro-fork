@@ -234,4 +234,30 @@ class C1JointLnsPolishTest {
             )
         }
     }
+
+    /** [3.654.0/外部レビュー] 本人の別日を戻す手（自己日交換）は、j に x を置くだけなら禁止の並びになっても、両方のセルを当てた行では
+     *  並びが消える。旧: generateMoves の冒頭で「j に x」だけを見て、この goal の候補を丸ごと捨てていた（合法な改善手の取りこぼし）。 */
+    @Test
+    fun selfDaySwapSurvivesWhenOnlyTheSingleCellPlacementWouldBeForbidden() {
+        val shifts = listOf(Shift("Y", "Y", "", ""), Shift("X", "X", "", ""))
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-03",
+            shifts = shifts, groups = listOf(Group("G", "G")), staff = listOf(Staff("target", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1, 0, 0)),   // X, Y, Y
+            wishes = mapOf("0,2" to 0),           // 3 日目は Y の希望
+            staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "2", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = listOf(C3Row(listOf("X", "X"))), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.toIntArray2D()
+        assertEquals(1, UnifiedViolationChecker.check(st, sched).breakdown["c1"])
+        val out = C1JointLnsPolish.apply(st, sched, C1JointLnsPolish.Config(maxMillis = 2000L, maxRestarts = 2, maxDepth = 3))
+        val after = UnifiedViolationChecker.check(st, out.newSchedule)
+        assertEquals(listOf(0, 1, 0), out.newSchedule[0].toList())   // Y, X, Y
+        assertEquals(0, after.breakdown["c1"])
+        assertEquals(0, after.hard)
+    }
 }
