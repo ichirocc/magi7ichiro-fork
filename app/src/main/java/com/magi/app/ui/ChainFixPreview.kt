@@ -20,5 +20,5 @@ internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffN
     }
     val (hard, caution) = fixImpactLines(s)
     val people = s.ops.map { it.staff }.distinct().size
-    return ChainFixPreview(s, "複数人の入れ替え（$people 人・${s.ops.size} マス）", changes, hard, caution)
+    return ChainFixPreview(s, "複数人の入れ替え（$people 人・${s.ops.size} セル）", changes, hard, caution)
 }

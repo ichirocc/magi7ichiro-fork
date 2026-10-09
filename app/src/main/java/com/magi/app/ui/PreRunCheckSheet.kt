@@ -51,7 +51,7 @@ internal fun PreRunCheckSheet(
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(PRE_RUN_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 t.zeroCapNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
-                t.floorRows.forEach { PreRunRowView(it, onOpenCell, onOpenLanding, onConsult) }
+                t.floorRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult) }
                 if (t.hasWishRows && onShowWishes != null) {
                     OutlinedButton(onClick = onShowWishes, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }
                 }
@@ -59,7 +59,7 @@ internal fun PreRunCheckSheet(
             t.rerunHeader?.let { h ->
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(PRE_RUN_RERUN_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                t.rerunRows.forEach { PreRunRowView(it, onOpenCell, onOpenLanding) }
+                t.rerunRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding) }
                 t.rerunRows.firstOrNull()?.let { r ->
                     OutlinedButton(onClick = { onOpenCell(r.staff ?: 0, r.day ?: 0, false) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("該当セルを見る") }
                 }
@@ -67,7 +67,7 @@ internal fun PreRunCheckSheet(
             t.overCapNote?.let { n ->
                 Text("■ $PRE_RUN_OVERCAP_HEAD", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(n, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                t.overCapRows.forEach { PreRunRowView(it, onOpenCell, onOpenLanding, onConsult) }
+                t.overCapRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult) }
             }
             t.wallLine?.let { w ->
                 Text("■ 入れないシフト（個人の上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
@@ -85,7 +85,7 @@ internal fun PreRunCheckSheet(
 
 /** 行＝セルか入力箇所へ飛ぶ本文と、右端の「相談」（何度つくっても残る行だけ。再作成で外れる行には出さない＝3.645.0）。 */
 @Composable
-private fun PreRunRowView(row: PreRunRow, onOpenCell: (Int, Int, Boolean) -> Unit, onOpenLanding: (EditLanding) -> Unit, onConsult: ((PreRunRow) -> Unit)? = null) {
+private fun PreRunRowView(row: PreRunRow, ui: UiState, onOpenCell: (Int, Int, Boolean) -> Unit, onOpenLanding: (EditLanding) -> Unit, onConsult: ((PreRunRow) -> Unit)? = null) {
     val i = row.staff; val j = row.day; val l = row.landing
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) {
@@ -103,6 +103,9 @@ private fun PreRunRowView(row: PreRunRow, onOpenCell: (Int, Int, Boolean) -> Uni
                 }
             } else Text(row.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp))
         }
-        if (onConsult != null) TextButton(onClick = { onConsult(row) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("相談") }
+        if (onConsult != null) {
+            val done = isConsulted(ui.consults, consultPreRun(row))
+            TextButton(onClick = { onConsult(row) }, enabled = !done, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (done) CONSULT_DONE else "相談") }
+        }
     }
 }

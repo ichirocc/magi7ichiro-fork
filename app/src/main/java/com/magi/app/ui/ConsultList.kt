@@ -9,6 +9,7 @@ import com.magi.app.v6.FixSuggestion
 data class ConsultItem(val subject: String, val note: String, val staff: Int? = null, val day: Int? = null)
 
 internal const val CONSULT_BUTTON = "相談してから決める"
+internal const val CONSULT_DONE = "相談中"
 internal const val CONSULT_ADDED = "相談中に追加しました"
 internal const val CONSULT_DUPLICATE = "すでに相談中にあります"
 
@@ -34,6 +35,8 @@ internal fun consultFix(s: FixSuggestion) = ConsultItem(s.label, fixImpactLines(
 /** つくる前の確認の行から: 残る項目を希望か設定のどちらで解くか。 */
 internal fun consultPreRun(row: PreRunRow) = ConsultItem(row.text, "何度つくっても残る項目。希望か設定のどちらを変えるかを相談", row.staff, row.day)
 
+/** すでに一覧にあるか（ボタンを「相談中」にして形で返す＝シートの下では Snackbar が見えない）。 */
+internal fun isConsulted(list: List<ConsultItem>, item: ConsultItem): Boolean = list.any { it.subject == item.subject && it.note == item.note }
+
 /** 同じ対象・内容は 2 度積まない（null＝重複）。 */
-internal fun consultAdd(list: List<ConsultItem>, item: ConsultItem): List<ConsultItem>? =
-    if (list.any { it.subject == item.subject && it.note == item.note }) null else list + item
+internal fun consultAdd(list: List<ConsultItem>, item: ConsultItem): List<ConsultItem>? = if (isConsulted(list, item)) null else list + item

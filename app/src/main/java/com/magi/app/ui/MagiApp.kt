@@ -947,7 +947,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }
         ui.chainPreview?.let { p ->
             ChainFixPreviewDialog(p, onApply = { vm.applyChainPreview() }, onDismiss = { vm.dismissChainPreview() },
-                onConsult = { vm.addConsult(consultChain(p)); vm.dismissChainPreview() })
+                consulted = isConsulted(ui.consults, consultChain(p)), onConsult = { vm.addConsult(consultChain(p)); vm.dismissChainPreview() })
         }
         ui.monthMovePrompt?.let { MonthMoveConfirmDialog(it, onEvent) }
         if (relaxDialog) {
