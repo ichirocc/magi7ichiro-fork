@@ -196,12 +196,27 @@ fun MagiViewModel.ws1ResizeDays(newT: Int) {
 }
 
 /** [対象月の選択] 開始日を指定年月の1日にし、その月の日数へ整える（endDate/希望/必要人数も追従）。 */
-fun MagiViewModel.setMonth(year: Int, month1to12: Int) {
+fun MagiViewModel.setMonth(year: Int, month1to12: Int, clearWishes: Boolean? = null) {
     val st = state ?: return
     val sched = currentSchedule ?: return
     val first = runCatching { java.time.LocalDate.of(year, month1to12, 1) }.getOrNull() ?: return
-    logOp("I", "期間変更: ${year}年${month1to12}月"); applyStructure(Ws1Ops.resizeDays(st.copy(startDate = first.toString()), sched, first.lengthOfMonth()))
+    // [3.643.0] 引き継ぐもの（日番号で残る盤面・通常希望・例外・手動固定）と消えるもの（日付で持つ拡張希望の期間外ぶん等）が
+    //   あれば先に確認を出す。答え（clearWishes）つきの呼出しだけが実際に移す。
+    val plan = monthMovePlan(st, year, month1to12)
+    if (clearWishes == null && plan.needsConfirm) { setMonthMovePrompt(plan); return }
+    setMonthMovePrompt(null)
+    val st2 = if (clearWishes == true) st.copy(wishes = emptyMap(), extWishes = emptyList()) else st
+    logOp("I", "期間変更: ${year}年${month1to12}月" + when (clearWishes) { true -> "（希望を消して）"; false -> "（希望を残して）"; null -> "" })
+    applyStructure(Ws1Ops.resizeDays(st2.copy(startDate = first.toString()), sched, first.lengthOfMonth()))
 }
+
+/** [3.643.0] 月を移す確認の答え。確認が閉じていれば何もしない。 */
+fun MagiViewModel.confirmMonthMove(clearWishes: Boolean) {
+    val p = ui.value.monthMovePrompt ?: return
+    setMonth(p.year, p.month, clearWishes)
+}
+
+fun MagiViewModel.cancelMonthMove() = setMonthMovePrompt(null)
 
 /** 現在の開始日から相対的に月を移動（-1=前月 / +1=翌月）。開始日が不明なら端末の今月を起点。 */
 fun MagiViewModel.shiftMonth(delta: Int) {

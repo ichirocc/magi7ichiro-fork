@@ -1930,6 +1930,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var trialControl: WishTrial.Outcome? = null
     private val trialResults = HashMap<String, WishTrial.Outcome>()   // "i,j,k"
     private var cancelOutcomeCtx: TrialCtx? = null
+    // [3.643.0] 直し方を当てた結果と CSV 保存の文脈。盤面か設定が変わったら出さない（S5 の結果行と同じ鮮度の規則）。
+    private var fixOutcomeCtx: TrialCtx? = null
+    private var csvSavedCtx: TrialCtx? = null
+    /** 「なおし方を見る」で 1 人を入れた直後に覚えておく枠。再検査の結果（pushReport）でその枠がまだ足りないかを見て 1 行にする。 */
+    private data class GuidedFixNote(val dayIndex: Int, val shiftIndex: Int, val dayLabel: String, val shiftSymbol: String)
+    private var pendingGuided: GuidedFixNote? = null
+    internal fun noteGuidedFix(dayIndex: Int, shiftIndex: Int, dayLabel: String, shiftSymbol: String) { pendingGuided = GuidedFixNote(dayIndex, shiftIndex, dayLabel, shiftSymbol) }
+    internal fun fixOutcomeLine(): String? = _ui.value.fixOutcome?.takeIf { ctxMatches(fixOutcomeCtx) }?.line
+    internal fun csvSavedLine(): String? = _ui.value.csvSavedAt?.takeIf { ctxMatches(csvSavedCtx) }?.let { "この内容で勤務表 CSV を保存済みです（$it）。" }
+    internal fun setMonthMovePrompt(p: MonthMovePlan?) { _ui.update { it.copy(monthMovePrompt = p) } }
+    private fun resolvePendingGuidedFix(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, diag: CoverageDiagnosis?) {
+        val g = pendingGuided ?: return
+        pendingGuided = null
+        val still = diag?.shortfalls?.firstOrNull { it.dayIndex == g.dayIndex && it.shiftIndex == g.shiftIndex && it.miss > 0 }?.miss
+        fixOutcomeCtx = TrialCtx(st, boardKey(schedule))
+        _ui.update { it.copy(fixOutcome = FixOutcome(guidedFixOutcomeText(g.dayLabel, g.shiftSymbol, still, report.hard))) }
+    }
     /** 確定の直前の stalledHardFamilies。確定を元に戻して同じ (state, 盤面) に戻ったら復元する（§14 D）。 */
     private var stalledBeforeConfirm: StalledSnap? = null
 
@@ -2940,7 +2957,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             schedule = applied.map { it.toList() },
             fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
             message = "改善手を適用: ${s.label}（必須 ${gate.before.hard}→${gate.after.hard}・合計 ${gate.before.total}→${gate.after.total}）",
+            fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total)),
         ) }
+        fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
         refreshCheck()
     }
 
@@ -3205,7 +3224,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun notifySave(result: Result<*>, what: String) {
         result.fold(
-            onSuccess = { notify("${what}を保存しました") },
+            onSuccess = {
+                notify("${what}を保存しました")
+                // [3.643.0] 勤務表 CSV は「この内容を保存した」事実をホームに残す（内容が変われば消える＝配布の判断の材料）。
+                if (what == "勤務表CSV") {
+                    csvSavedCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
+                    _ui.update { it.copy(csvSavedAt = java.time.LocalTime.now().toString().take(5)) }
+                }
+            },
             onFailure = { e ->
                 // [UX監査 中7] 画面には利用者の言葉だけを出し、例外の種類と文は記録（ログ）へ残す。
                 logOp("W", "${what}の保存に失敗: ${e.javaClass.name}: ${e.message ?: ""}")
@@ -3352,6 +3378,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             lastRunDiagSerial = activeRunSerial
         }
         _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)) }
+        resolvePendingGuidedFix(st, schedule, report, analysis.coverageDiag)
         deepCovODiagFollowUp(st, schedule, report, runLabel)
     }
 

@@ -460,9 +460,7 @@ internal fun v6AlgorithmLabel(alg: V6Algorithm): String = when (alg) {
 internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, onOpenWish: (() -> Unit)? = null) {
     if (!ui.loaded) return
     val staffN = ui.staffNames.size
-    val wishStaff = remember(ui.wishes, staffN) {
-        ui.wishes.keys.mapNotNull { it.substringBefore(",").toIntOrNull() }.toSet().size
-    }
+    val wishCounts = remember(ui.wishes, ui.extBanned, staffN) { wishEntryCounts(staffN, ui.wishes.keys, ui.extBanned.keys) }
     val needExceptions = cv.needDayOverrides.size
     val needStdOk = v?.shifts?.any { it.need1.isNotBlank() } == true
     val issues = ui.settingIssues.size
@@ -474,7 +472,10 @@ internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, 
             Text("今月の作成条件", style = MaterialTheme.typography.titleMedium)
             ChecklistRow("職員", "${staffN}名", ok = staffN > 0)
             // [見つけやすさ改善] タップで希望シフト登録へ直行（SetupGuideCardと同じ入口を共有）。
-            ChecklistRow("希望・休暇", "${wishStaff}/${staffN}名 入力済み", ok = wishStaff > 0, onClick = onOpenWish)
+            // [3.643.0] 登録の有無だけを数える（✓ で「集め終わった」と読まれないよう判定は出さない）。拡張希望だけの職員も入力ありに含める。
+            ChecklistRow("希望・休暇", wishEntryText(wishCounts), ok = null, onClick = onOpenWish)
+            if (wishCounts.noInput > 0) Text("未入力の ${wishCounts.noInput}名が「希望なし」か「まだ聞いていない」かは、ここでは分かりません。",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 24.dp))
             ChecklistRow("必要人数", (if (needStdOk) "標準あり" else "標準が未設定") + "・例外${needExceptions}件", ok = needStdOk)
             ChecklistRow("入力診断", if (issues == 0) "問題なし" else "見直し ${issues}件" + (if (issuesOpen) " ▾" else " ▸"), ok = issues == 0,
                 onClick = if (issues > 0) ({ issuesOpen = !issuesOpen }) else null)
@@ -495,17 +496,41 @@ internal fun MonthlyChecklistCard(ui: UiState, v: Ws1View?, cv: ConditionsView, 
 }
 
 @Composable
-private fun ChecklistRow(label: String, value: String, ok: Boolean, onClick: (() -> Unit)? = null) {
+private fun ChecklistRow(label: String, value: String, ok: Boolean?, onClick: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = if (onClick != null) Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick) else Modifier,
     ) {
-        Text(if (ok) "✓" else "！", color = if (ok) cs.tertiary else cs.error, fontWeight = FontWeight.Bold)
+        // ok=null＝判定しない行（数だけ見せる）
+        Text(when (ok) { null -> "—"; true -> "✓"; false -> "！" }, color = when (ok) { null -> cs.onSurfaceVariant; true -> cs.tertiary; false -> cs.error }, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Text(value + (if (onClick != null) " ›" else ""), color = if (onClick != null) cs.primary else cs.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+/** [3.643.0] 対象の月を移す前の確認。引き継ぐもの（日番号で残る）と消えるもの（日付で持つ拡張希望の期間外ぶん等）を見せ、希望を残すか消すかを選ぶ。 */
+@Composable
+internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = { onEvent(MagiEvent.Structure.CancelMonthMove) },
+        title = { Text("${plan.year}年 ${plan.month}月 に移します") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                monthMoveLines(plan).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                Text("前の月の希望を新しい月に持ち越さないときは「希望を消して移る」を選びます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+        },
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                Button(onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = false)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を残して移る") }
+                TextButton(onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = true)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を消して移る") }
+            }
+        },
+        dismissButton = { TextButton(onClick = { onEvent(MagiEvent.Structure.CancelMonthMove) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる") } },
+    )
 }
 
 /**

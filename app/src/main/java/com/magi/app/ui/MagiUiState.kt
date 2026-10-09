@@ -125,6 +125,9 @@ data class UiState(
     val relaxRev: Int = 0,                          // [S6] 試算が終わるたびに進む（画面は vm.relaxTrialFor で読み直す）
     val relaxSearching: Boolean = false,            // [S6] 背景で設定の壁を探している
     val wishCancelOutcome: WishCancelOutcome? = null,   // [S5] 直近の「希望を取り消して再作成」の結果（表示は vm.wishCancelOutcomeLine）
+    val fixOutcome: FixOutcome? = null,       // [3.643.0] 直近に当てた直し方の結果 1 行（表示は vm.fixOutcomeLine＝盤面が変わったら出さない）
+    val csvSavedAt: String? = null,           // [3.643.0] この盤面を勤務表 CSV に保存した時刻 HH:mm（表示は vm.csvSavedLine）
+    val monthMovePrompt: MonthMovePlan? = null,   // [3.643.0] 対象の月を移す前の確認（引き継ぐもの・消えるもの）。null＝閉じている
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
     val constraintsEdited: Boolean = false,
@@ -206,6 +209,9 @@ internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState 
     lockedWishKeys = com.magi.app.v6.WishTrial.lockedWishKeys(st),
     wishSelfConflicts = com.magi.app.v6.V6SanityPort.wishSelfConflicts(st),
 )
+
+/** [3.643.0] 直し方を当てた結果の 1 行（文は FixOutcomeText）。 */
+data class FixOutcome(val line: String)
 
 data class WishCancelOutcome(
     val name: String, val day: Int, val symbol: String,

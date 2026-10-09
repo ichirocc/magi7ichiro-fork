@@ -58,6 +58,9 @@ internal sealed interface MagiEvent {
         data class SetMonth(val year: Int, val month1to12: Int) : Structure
         data class ShiftMonth(val delta: Int) : Structure
         data object SetNextMonth : Structure
+        /** [3.643.0] 月を移す確認への答え（true＝希望を消して移る）。 */
+        data class ConfirmMonthMove(val clearWishes: Boolean) : Structure
+        data object CancelMonthMove : Structure
         data class AddSkillGroup(val name: String, val kigou: String) : Structure
         data class EditSkillGroup(val group: Int, val name: String, val kigou: String) : Structure
         data class RemoveSkillGroup(val group: Int) : Structure

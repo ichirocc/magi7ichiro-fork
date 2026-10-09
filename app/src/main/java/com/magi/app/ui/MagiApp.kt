@@ -610,9 +610,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSetup = { tab = 2 },
                         onLanding = openEditLanding,
                         onShowMove = { tab = 3 },
+                        onApplyMove = { ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.let { vm.applyFixSuggestion(it) } },
+                        onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null)) },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
-                        outcomeLine = vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
+                        outcomeLine = vm.fixOutcomeLine() ?: vm.csvSavedLine() ?: vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
                         relax = vm.relaxTrialFor(),
                         onShowRelax = { relaxFrom = null; relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
@@ -622,7 +624,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
-                    SmartActionCard(ui, onEvent)
                     // [3.480.0] 旧: 画面最下部にボタン列で配置していたが、比較検討は「処方箋」の一部として
                     // 完成度バーの近くで即決できるほうが良い（grilling決定#4）。セグメントタブへ差替え済み。
                     AlternativesCard(ui, onApply = { vm.applyAlternative(it) })
@@ -937,6 +938,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (guidedFix) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = openEditLanding)
         }
+        ui.monthMovePrompt?.let { MonthMoveConfirmDialog(it, onEvent) }
         if (relaxDialog) {
             RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false; relaxFrom = null }, onConfirm = { token ->
                 relaxDialog = false; vm.relaxAndApply(token)

@@ -354,7 +354,7 @@ internal fun GuidedFixDialog(
                                 val shown = if (showAll.value) cands else cands.take(GUIDED_FIX_PREVIEW)
                                 shown.forEach { c ->
                                     Button(
-                                        onClick = { pressedRev.value = ui.checkRev; onEvent(MagiEvent.Board.SetCell(c.staffIndex, target.dayIndex, target.shiftIndex)) },
+                                        onClick = { pressedRev.value = ui.checkRev; vm.noteGuidedFix(target.dayIndex, target.shiftIndex, target.dayLabel, target.shiftSymbol); onEvent(MagiEvent.Board.SetCell(c.staffIndex, target.dayIndex, target.shiftIndex)) },
                                         enabled = !pending,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
                                     ) {
@@ -464,6 +464,8 @@ internal fun OperatorNextActionCard(
     onSetup: () -> Unit,     // データを見直す（編集へ）
     onLanding: (EditLanding?) -> Unit = {},   // [UX監査 中4] 原因のある「データを見直す」は対応する区分・節へ（null＝編集の先頭）
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
+    onApplyMove: () -> Unit = {},   // [3.643.0] 先頭の直す手をこの場で当てる（旧「AIの解決提案」の「この手を使う」）
+    onAutoSearch: () -> Unit = {},  // [3.643.0] 必須違反が残り未探索なら 1 回だけ直し方を探す（旧 SmartActionCard の自動探索）
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
     outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して再作成」の結果（VM が鮮度を照合済み）
@@ -496,6 +498,11 @@ internal fun OperatorNextActionCard(
 
     // [M3] 成功=tertiary / 注意=error / 主操作=primary はテーマロール。警告のみ独自トークンに集約。
     val (amber, onAmber) = magiWarnColors()
+    // [3.643.0] 旧 SmartActionCard の自動探索をここへ。副作用は候補リストの計算だけ＝自動で始めても盤面は変わらない。
+    LaunchedEffect(ui.schedule, ui.bestHard, ui.fixFocusName, ui.hasResult, ui.running) {
+        if (!ui.running && ui.hasResult && ui.bestHard > 0 &&
+            (ui.fixFocusName.isNotBlank() || (!ui.fixSearching && ui.fixSuggestions.isEmpty() && !ui.fixSearched))) onAutoSearch()
+    }
 
     val plan = when {
         ui.running -> {
@@ -509,7 +516,7 @@ internal fun OperatorNextActionCard(
             "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial)
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
-            (if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当できない希望が ${ui.impossibleWishCount} 件あります。" else "③ 完成しました。そのまま配れます。") + (ui.runSummary?.let { "\n$it" } ?: ""),
+            (if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当できない希望が ${ui.impossibleWishCount} 件あります。" else "③ 必須条件を満たしました。中身を確認して配ってください。") + (ui.runSummary?.let { "\n$it" } ?: ""),
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
         infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
@@ -523,9 +530,18 @@ internal fun OperatorNextActionCard(
             OpNextPlan(amber, onAmber, (guidedTarget.dayLabel.let { "$it が人員不足です。" }),
                 homeTargetLabel("なおし方を見る", null, guidedTarget.dayLabel), onFix, true, null, onSetup)
         // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
-        ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() ->
+        ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() -> {
+            // [3.643.0] 旧「AIの解決提案」カードをここへ統合＝同じ問題について、手と効果（分かったこと）と「この手を使う」（操作）を 1 枚に。
+            val top = ui.fixSuggestions.first { it.deltaHard < 0 }
+            val (hardLine, caution) = fixImpactLines(top)
+            val diffTxt = top.diff.joinToString("・") { (k, dlt) -> "${breakdownLabels[k] ?: k} ${if (dlt < 0) "−${-dlt}" else "+$dlt"}" }
+            val totalTxt = if (top.deltaTotal <= 0) "−${-top.deltaTotal}" else "+${top.deltaTotal}"
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
-                moveLabel, onShowMove, true, null, onSetup)
+                moveLabel, onShowMove, true, "この手を使う（元に戻せます）", onApplyMove,
+                body = top.label,
+                note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n違反 $totalTxt（$diffTxt）" else "") +
+                    (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else ""))
+        }
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
@@ -686,64 +702,6 @@ private fun DiagDetailToggle(
             contentDescription = null, tint = tint, modifier = Modifier.size(16.dp),
         )
         Text(if (open) openText else closedText, style = MaterialTheme.typography.bodySmall, color = tint)
-    }
-}
-
-/**
- * [3.480.0 ホームAIリデザイン] 「スマートアクション」＝AIが先回りして最有力の1手を提示するカード。
- * grilling決定#2どおり新規ロジックは作らず、分析タブと同じ改善提案エンジン（FixSuggester／
- * `ui.fixSuggestions`／`Board.ApplyFixSuggestion`）の先頭候補（=最も効果の大きい1手）を使う。
- * 必須違反が残っている間だけ表示し、まだ探索していなければ自動で1回探す（`findFixSuggestions` は
- * 副作用が「候補リストの計算」だけで盤面は変えないため、自動起動しても安全＝GuidedFixの狭いスコープ
- * [人員不足のみ] と違い、c3n/c1 等どの族の違反でも先頭候補が出せる）。
- */
-@Composable
-internal fun SmartActionCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
-    if (ui.running || !ui.hasResult || ui.bestHard <= 0L) return
-    val cs = MaterialTheme.colorScheme
-    // 既にある候補が別スタッフに絞った探索(fixFocusName!="")の結果なら、ホームでは全体探索へ差し替える
-    //   （探索の途中でも差し替える＝終わるのを待つと鍵が変わらず、カードが隠れたままになる）。
-    //   全体探索を「探して0件」で終えた盤面（fixSearched）では探し直さない。
-    LaunchedEffect(ui.schedule, ui.bestHard, ui.fixFocusName) {
-        if (ui.fixFocusName.isNotBlank() || (!ui.fixSearching && ui.fixSuggestions.isEmpty() && !ui.fixSearched)) {
-            onEvent(MagiEvent.Session.FindFixSuggestions(null, null))
-        }
-    }
-    val top = ui.fixSuggestions.firstOrNull()
-    if (ui.fixFocusName.isNotBlank() && !ui.fixSearching) return // 探索待ちのフレームだけ描画をスキップ
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = cs.secondaryContainer)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("AIの解決提案", style = MaterialTheme.typography.titleMedium, color = cs.onSecondaryContainer)
-            when {
-                ui.fixSearching -> Text("いちばん効果のある直し方を探しています…",
-                    style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                top == null -> Text("1手で直せる候補は見つかりませんでした。下の詳細をご確認ください。",
-                    style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                else -> {
-                    val (tag, tagColor) = fixKindTag(top.kind)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MagiTagChip(text = tag, color = tagColor)
-                        Text(top.label, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
-                    }
-                    val (hardLine, caution) = fixImpactLines(top)
-                    Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
-                    caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
-                    val diffTxt = top.diff.joinToString("・") { (k, d) -> "${breakdownLabels[k] ?: k} ${if (d < 0) "−${-d}" else "+$d"}" }
-                    val totalTxt = if (top.deltaTotal <= 0) "−${-top.deltaTotal}" else "+${top.deltaTotal}"
-                    Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
-                        style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer.copy(alpha = 0.85f))
-                    Button(
-                        onClick = { onEvent(MagiEvent.Board.ApplyFixSuggestion(top)) },
-                        enabled = !ui.running,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    ) { Text("この手を使う（元に戻せます）") }
-                    if (ui.fixSuggestions.size > 1) {
-                        Text("ほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。",
-                            style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer.copy(alpha = 0.8f))
-                    }
-                }
-            }
-        }
     }
 }
 
