@@ -167,12 +167,15 @@ class WishPinStrictTest {
     }
 
     private val sRest = Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)
-    /** X・Y とも 1 日目に A（需要 1 → 1 人過剰）、B は受け皿。X は C（需要 0＝受け皿なし）を希望していて A のまま（未反映）。 */
-    private fun covOState(): MagiState = MagiState(
+    /** X・Y とも 1 日目に A（需要 1 → 1 人過剰）、B は受け皿。X は C（需要 0＝受け皿なし）を希望していて A のまま（未反映）。
+     *  separateGroups: X と Y を別グループに置き fair を外す（2 人群では退避 1 セルが fair を 2 件動かし、covO 1 件(10)と同点＝3.647.0 fair 5）。 */
+    private fun covOState(separateGroups: Boolean = false): MagiState = MagiState(
         startDate = "2026-08-01", endDate = "2026-08-01",
         shifts = listOf(sRest, Shift("A", "A", "1", ""), Shift("B", "B", "", ""), Shift("C", "C", "0", "")),
-        groups = listOf(Group("G", "G")), staff = listOf(Staff("X", 0), Staff("Y", 0)), use2Patterns = false,
-        groupShift = listOf(listOf(1, 1, 1, 1)), groupShiftApt = listOf(listOf("", "", "", "")),
+        groups = if (separateGroups) listOf(Group("G", "G"), Group("H", "H")) else listOf(Group("G", "G")),
+        staff = listOf(Staff("X", 0), Staff("Y", if (separateGroups) 1 else 0)), use2Patterns = false,
+        groupShift = if (separateGroups) listOf(listOf(1, 1, 1, 1), listOf(1, 1, 1, 1)) else listOf(listOf(1, 1, 1, 1)),
+        groupShiftApt = if (separateGroups) listOf(listOf("", "", "", ""), listOf("", "", "", "")) else listOf(listOf("", "", "", "")),
         schedule = listOf(listOf(1), listOf(1)), wishes = mapOf("0,0" to 3),
         staffRange = mapOf("0,0" to Range("0", "0"), "1,0" to Range("0", "0")), needDay1 = emptyMap(), needDay2 = emptyMap(),
         cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
@@ -181,7 +184,7 @@ class WishPinStrictTest {
 
     // 古泉 10/25 型: 未反映の希望セル（A）を covO 退避で B へ動かさない。ON は希望の無い Y が退く。
     @Test fun covOReliefNeverMovesAnUnreflectedWishCellToAThirdShift() {
-        val st = covOState()
+        val st = covOState(separateGroups = true)
         val on = CovOReliefPolish.apply(st, st.schedule.toIntArray2D(), wishPinStrict = true).newSchedule
         assertEquals("X は A のまま", 1, on[0][0]); assertEquals("Y が B へ", 2, on[1][0])
         val off = CovOReliefPolish.apply(st, st.schedule.toIntArray2D(), wishPinStrict = false).newSchedule

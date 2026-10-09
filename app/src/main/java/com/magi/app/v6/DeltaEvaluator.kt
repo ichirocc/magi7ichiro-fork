@@ -101,7 +101,7 @@ class DeltaEvaluator(private val p: Problem) {
      * 一対一・checker の `report.breakdown[key]` と同一単位）を検証専用に公開する。
      *
      * `score()`(soft集約) は各フィールドへ重みを乗じて合算するため、**総和が一致しても族ごとの誤差が
-     * 相殺されて隠れる余地がある**（例: c2 と apt、fair と weekly は同じ重みを持つため、片方+1・もう片方-1
+     * 相殺されて隠れる余地がある**（例: c2 と apt は同じ重みを持つため、片方+1・もう片方-1
      * の誤りは総和では検出できない。重みが異なる族どうしでも整数倍の組合せで同じ穴がある。
      * covO は重み10＝上記2組とは別の値だが、この関数は生カウントを個別に突き合わせるため重みの値自体には
      * 依存しない）。
@@ -181,7 +181,7 @@ class DeltaEvaluator(private val p: Problem) {
     private fun weightedSoft(
         c1: Long, c2: Long, c41: Long, c42: Long, c41s: Long, c42s: Long, c3: Long, c3m: Long, c3mn: Long,
         ct: Long, apt: Long, fair: Long, weekly: Long, covO: Long,
-    ): Long = c1 * 50 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 90 + ct + apt * 4 + fair * 2 + weekly * 2 + covO * 10
+    ): Long = c1 * 50 + c2 * 4 + c41 * 9 + c42 * 9 + c41s * 10 + c42s * 10 + c3 * 15 + c3m * 6 + c3mn * 90 + ct + apt * 4 + fair * 5 + weekly * 2 + covO * 10
 
     /** Preview the score after moving (i,j) -> nw, stashing deltas for commit(). No mutation of totals. */
     internal fun previewMove(i: Int, j: Int, nw: Int): Long {

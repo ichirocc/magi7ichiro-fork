@@ -14,11 +14,14 @@ import org.junit.Test
 class FixApplyGateTest {
     private val REST = 0; private val A = 1
 
-    private fun state(wishes: Map<String, Int> = emptyMap(), ranges: Map<String, Range> = emptyMap()) = MagiState(
+    /** separateGroups: s0 と s1 を別グループに置き fair を外す（2 人群では 1 セルの手が fair を 2 件動かし、covO 1 件(10)と同点になる＝3.647.0 fair 5）。 */
+    private fun state(wishes: Map<String, Int> = emptyMap(), ranges: Map<String, Range> = emptyMap(), separateGroups: Boolean = false) = MagiState(
         startDate = "2026-01-01", endDate = "2026-01-02",
         shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("A", "A", "1", "1")),
-        groups = listOf(Group("G", "G")), staff = listOf(Staff("s0", 0), Staff("s1", 0)), use2Patterns = true,
-        groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+        groups = if (separateGroups) listOf(Group("G", "G"), Group("H", "H")) else listOf(Group("G", "G")),
+        staff = listOf(Staff("s0", 0), Staff("s1", if (separateGroups) 1 else 0)), use2Patterns = true,
+        groupShift = if (separateGroups) listOf(listOf(1, 1), listOf(1, 1)) else listOf(listOf(1, 1)),
+        groupShiftApt = if (separateGroups) listOf(listOf("", ""), listOf("", "")) else listOf(listOf("", "")),
         // 1 日目は A が 0 人（不足 1）、2 日目は A が 2 人（過剰 1）
         schedule = listOf(listOf(REST, A), listOf(REST, A)), wishes = wishes, staffRange = ranges,
         needDay1 = emptyMap(), needDay2 = emptyMap(),
@@ -99,8 +102,8 @@ class FixApplyGateTest {
     }
 
     @Test fun nonImprovingAndPinBreakingOpsAreRejected() {
-        val st = state(); val s = sched(st)
-        // 2 日目の過剰(covO, SOFT)を減らす手は hard 同値・重み減＝改善として通る
+        val st = state(separateGroups = true); val s = sched(st)
+        // 2 日目の過剰(covO, SOFT)を減らす手は hard 同値・重み減＝改善として通る（同じ群だと fair+2(=10) と同点で棄却される）
         assertTrue(FixApplyGate.apply(st, s, listOf(FixCell(0, 1, REST))) is FixApplyGate.Outcome.Applied)
         // 既に反映済みの手を再提案しても盤面は同じ＝改善なしで拒否
         val s2 = sched(st); s2[0][0] = A

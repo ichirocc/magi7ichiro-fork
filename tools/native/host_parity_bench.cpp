@@ -543,6 +543,8 @@ static int runNeed2OnlyRepairTest() {
 //   復元漏れや添字ずれがあると静かに誤った順位を返す（採否は checker が守るので勤務表は壊れないが、
 //   候補選択が歪む＝パリティ番兵では捕まらない領域）。ここでは同じ盤面変更を実際に適用して
 //   全量から測り直し、marginal がその差分と一致することを確認する。
+//   [3.647.0] 差分は Kotlin `weeklyMarginalAt`/`fairMarginalAt` と同じく**重み付き**（weekly 2・fair 5）＝
+//   全量側も評価器（contribWeekly/contribFair）と同じ重みを掛けて比べる。
 static int runMarginalCostTest() {
     int failures = 0;
     MagiProblem p;
@@ -572,7 +574,7 @@ static int runMarginalCostTest() {
         }
         long long d = 0;
         for (int k = 0; k < p.K; k++) d += weeklyDevOfBucket(&wd[(size_t)k * 7]);
-        return d;
+        return d * 2;
     };
     auto fairOf = [&](const std::vector<int>& bd) {
         std::vector<int> counts((size_t)p.S * p.K, 0);
@@ -589,7 +591,7 @@ static int runMarginalCostTest() {
                 d += fairDevOfBucket(p, g, k, [&](int x) { return counts[(size_t)x * p.K + k]; });
             }
         }
-        return d;
+        return d * 5;
     };
 
     int checked = 0, nonZeroWeekly = 0, nonZeroFair = 0;
@@ -688,6 +690,7 @@ static int runMarginalCostTest() {
     //   個人回数の上下限も apt も設定しないので staffCountPenaltyAtN は常に 0＝候補は
     //   weekly+fair だけで決まる。ここを外すと全候補が同点になり reservoir 抽選＝
     //   最小でない候補も選ばれる（＝ヘルパを持っていても呼んでいなければ落ちる）。
+    //   [3.647.0] 費用は評価器と同じ重み付き（weekly 2・fair 5）＝重みの比で順位が変わる局面を見る。
     int decided = 0;
     {
         MagiProblem q;
@@ -710,7 +713,7 @@ static int runMarginalCostTest() {
                 if (k >= 0 && k < q.K) wd[(size_t)k * 7 + (size_t)((q.dow0 + jj) % 7)]++;
             }
             long long d = 0;
-            for (int k = 0; k < q.K; k++) d += weeklyDevOfBucket(&wd[(size_t)k * 7]);
+            for (int k = 0; k < q.K; k++) d += weeklyDevOfBucket(&wd[(size_t)k * 7]) * 2;
             std::vector<int> counts((size_t)q.S * q.K, 0);
             for (int i = 0; i < q.S; i++)
                 for (int jj = 0; jj < q.T; jj++) {
@@ -720,7 +723,7 @@ static int runMarginalCostTest() {
             for (int k = 0; k < q.K; k++) {
                 int sum = counts[k] + counts[(size_t)q.K + k];
                 long long tgt = jround((double)sum / 2.0);
-                d += std::llabs((long long)counts[k] - tgt) + std::llabs((long long)counts[(size_t)q.K + k] - tgt);
+                d += (std::llabs((long long)counts[k] - tgt) + std::llabs((long long)counts[(size_t)q.K + k] - tgt)) * 5;
             }
             return d;
         };
@@ -748,7 +751,7 @@ static int runMarginalCostTest() {
             std::mt19937_64 r4(555 + trial);
             destroyRepairViolationsN(q, out.data(), std::vector<int>{j0}, r4);
             if (out[j0] != bestK) {
-                printf("MARGINAL-TEST FAIL: 候補選択が weekly+fair の最小と一致しない "
+                printf("MARGINAL-TEST FAIL: 候補選択が重み付き weekly+fair の最小と一致しない "
                        "(選んだ=%d 期待=%d j=%d)\n", out[j0], bestK, j0);
                 failures++;
             }

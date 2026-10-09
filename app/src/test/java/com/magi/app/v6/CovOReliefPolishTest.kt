@@ -10,7 +10,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 人員過剰の退避研磨（CovOReliefPolish）: 過剰セルの在勤者を需要 0 のシフト（B）へ退避し、希望固定と禁止連続は避ける。 */
+/** 人員過剰の退避研磨（CovOReliefPolish）: 過剰セルの在勤者を需要 0 のシフト（B）へ退避し、希望固定と禁止連続は避ける。
+ *  X と Y は別グループ＝fair を外す（2 人群では退避 1 セルが fair を 2 件動かし、covO 1 件(10)と同点で keep-best に採られない。3.647.0 fair 5）。 */
 class CovOReliefPolishTest {
     private val rest = Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest)
     private val a = Shift("A", "A", "1", "")
@@ -21,8 +22,8 @@ class CovOReliefPolishTest {
         val t = schedule[0].size
         return MagiState(
             startDate = "2026-08-01", endDate = "2026-08-%02d".format(t),
-            shifts = listOf(rest, a, b), groups = listOf(Group("G", "G")), staff = listOf(Staff("X", 0), Staff("Y", 0)), use2Patterns = false,
-            groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", "")),
+            shifts = listOf(rest, a, b), groups = listOf(Group("G", "G"), Group("H", "H")), staff = listOf(Staff("X", 0), Staff("Y", 1)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1, 1), listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", ""), listOf("", "", "")),
             schedule = schedule, wishes = wishes, staffRange = staffRange, needDay1 = emptyMap(), needDay2 = emptyMap(),
             cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = cons3n, cons3m = emptyList(), cons3mn = emptyList(),
             cons41 = emptyList(), cons42 = emptyList(), skillGroups = emptyList(), cons41s = emptyList(),

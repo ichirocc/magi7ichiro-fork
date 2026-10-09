@@ -83,7 +83,7 @@ internal object DestroyRepairMarginalCost {
         counts[i][k] += delta
         val after = p.fairDevOfBucket(g, k) { x -> counts[x][k] }.total
         counts[i][k] -= delta
-        return (after - before).toLong() * 2L  // [3.522.0] fair 1→2（weeklyMarginalAtと同型で内部適用）
+        return (after - before).toLong() * 5L  // [3.522.0] fair 1→2、[3.647.0] 2→5（weeklyMarginalAtと同型で内部適用）
     }
 
 

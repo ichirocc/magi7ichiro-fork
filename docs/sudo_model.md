@@ -344,7 +344,7 @@ HARD 5族 = `groupViol` / `c3n` / `covU` / `pref` / `c3w`、SOFT 15族。
 ```
 groupViol 11000 > covU 10000 > c3n 9000 = c3w 9000 > pref 8000 > low 120
   > c3mn 90 > c1 50 > high 25 > c3 15 > c41s 10 = c42s 10 = covO 10
-  > c41 9 = c42 9 > c3m 6 > c2 4 = apt 4 > fair 2 = weekly 2
+  > c41 9 = c42 9 > c3m 6 > fair 5 > c2 4 = apt 4 > weekly 2
 ```
 （3.522.0 の全面見直し＋3.556.0 の c41/c42 1→9・c41s/c42s 6→10・c3m 10→6。いずれも HF77 の明示数値指示。`MirrorKeys.weights` が単一の真実。
 **履歴**（3.505.7 時点の旧値）: groupViol 10000 > pref 9000 > covU 8000 > c3n 7000 > low 90 > high 45 > c3mn 30 = c1 30 > covO 5 > c3 3 > c3m 2 > 残り 1.0）

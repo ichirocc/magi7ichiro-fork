@@ -28,7 +28,7 @@ class AptFairPolishToleranceTest {
     @Test fun disabledFallsBackToPlainBetterReport() {
         val before = rep(fair = 10, apt = 0, low = 1)
         val bestRep = before
-        val candidate = rep(fair = 9, apt = 2, low = 1)   // apt+2*4=+8 > fair-1*2=-2 の純悪化
+        val candidate = rep(fair = 9, apt = 2, low = 1)   // apt+2*4=+8 > fair-1*5=-5 の純悪化
         assertFalse("OFF時はbetterReportと同じ判定", AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = false))
         assertEquals(betterReport(candidate, bestRep), AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = false))
     }
@@ -36,25 +36,25 @@ class AptFairPolishToleranceTest {
     @Test fun withinBudgetTradeIsAcceptedEvenThoughRawScoreWorsens() {
         // baseline: 対象家族(fair)以外のSOFT合計 = low(1)*120 = 120 → 予算 = 120*0.06 = 7.2
         val before = rep(fair = 10, apt = 0, low = 1)
-        val bestRep = before   // weightedScore = 20 + 0 + 120 = 140
-        // candidate: fairが1改善(-2)する代わりにaptが2悪化(+8) → 生スコアは+6悪化(betterReportなら却下)
-        val candidate = rep(fair = 9, apt = 2, low = 1)   // weightedScore = 18 + 8 + 120 = 146
+        val bestRep = before   // weightedScore = 50 + 0 + 120 = 170
+        // candidate: fairが1改善(-5)する代わりにaptが2悪化(+8) → 生スコアは+3悪化(betterReportなら却下)
+        val candidate = rep(fair = 9, apt = 2, low = 1)   // weightedScore = 45 + 8 + 120 = 173
         assertFalse("素のbetterReportは却下する（生スコアが悪化）", betterReport(candidate, bestRep))
-        assertTrue("6%予算内(+8 <= 7.2)なので容認して採用する",
+        assertTrue("増分 +8 のうち予算 7.2 を容認すれば実効 −4.2 なので採用する",
             AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true))
     }
 
     @Test fun heavySoftGuardOffAcceptsBlockedFamilyIncreaseWithinBudget() {
-        // baseline: fair 以外 = c3m(1)*6 + apt(30)*4 = 126 → 予算 7.56。候補は fair-1(-2)・c3m-1(-6)・covO+1(+10)＝生 +2 悪化。
-        val before = repOf("fair" to 10, "c3m" to 1, "apt" to 30)
+        // baseline: fair 以外 = c2(1)*4 + apt(30)*4 = 124 → 予算 7.44。候補は fair-1(-5)・c2-1(-4)・covO+1(+10)＝生 +1 悪化。
+        val before = repOf("fair" to 10, "c2" to 1, "apt" to 30)
         val bestRep = before
-        val candidate = repOf("fair" to 9, "c3m" to 0, "apt" to 30, "covO" to 1)
+        val candidate = repOf("fair" to 9, "c2" to 0, "apt" to 30, "covO" to 1)
         val saved = AptFairPolish.heavySoftGuard
         try {
             assertFalse("既定（無害化②あり）: 重い SOFT の covO が 1 件増えるので採らない",
                 AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true))
             AptFairPolish.heavySoftGuard = false
-            assertTrue("②なし: 増分 +4 は予算 7.56 の内なので採る",
+            assertTrue("②なし: 増分 +6 は予算 7.44 の内なので採る",
                 AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true))
             assertFalse("②なしでも OFF は betterReport のまま",
                 AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = false))
@@ -76,19 +76,19 @@ class AptFairPolishToleranceTest {
     @Test fun exceedingBudgetTradeIsStillRejected() {
         val before = rep(fair = 10, apt = 0, low = 1)   // baseline non-fair soft = 120, 予算 = 7.2
         val bestRep = before
-        // candidate: fairが1改善(-2)する代わりにlowが1悪化(+120) → +120 は予算7.2を遥かに超える
-        val candidate = rep(fair = 9, apt = 0, low = 2)   // weightedScore = 18 + 0 + 240 = 258
-        assertFalse("生スコアの悪化(+118)を予算7.2ぶんしか許さないため、なお却下される",
+        // candidate: fairが1改善(-5)する代わりにlowが1悪化(+120) → +120 は予算7.2を遥かに超える
+        val candidate = rep(fair = 9, apt = 0, low = 2)   // weightedScore = 45 + 0 + 240 = 285
+        assertFalse("生スコアの悪化(+115)を予算7.2ぶんしか許さないため、なお却下される",
             AptFairPolish.toleratedBetter(candidate, bestRep, before, "fair", enabled = true))
     }
 
     @Test fun cumulativeBudgetShrinksAsItIsSpent() {
         val before = rep(fair = 10, apt = 0, low = 1)   // baseline non-fair soft = 120, 予算 = 7.2
         // bestRep が既に apt+1(=4)ぶん予算を使った状態からスタート（残り予算 = 7.2 - 4 = 3.2）。
-        val bestRep = rep(fair = 9, apt = 1, low = 1)   // weightedScore = 18 + 4 + 120 = 142
+        val bestRep = rep(fair = 9, apt = 1, low = 1)   // weightedScore = 45 + 4 + 120 = 169
         // 追加でapt+1(=4)悪化する手は、残り予算3.2を超える（forgiven=3.2、未容認分0.8が残る）。
         // fairは変化なしなので、この0.8を相殺する改善が無く却下される。
-        val candidateNoFairGain = rep(fair = 9, apt = 2, low = 1)   // weightedScore = 18 + 8 + 120 = 146
+        val candidateNoFairGain = rep(fair = 9, apt = 2, low = 1)   // weightedScore = 45 + 8 + 120 = 173
         assertFalse("残り予算(3.2)を超え、かつfairの改善が無いため却下",
             AptFairPolish.toleratedBetter(candidateNoFairGain, bestRep, before, "fair", enabled = true))
     }

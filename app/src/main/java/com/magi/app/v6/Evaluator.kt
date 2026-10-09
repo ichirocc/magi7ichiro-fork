@@ -225,7 +225,7 @@ class Evaluator(private val p: Problem) {
 
         // [統一fair/3.538.0] グループ内公平化 SOFT。群×担当ONシフトごと、`Problem.fairDevOfBucket`（達成率
         // モード、全員に基準が無ければ従来の生回数round(平均)方式）からのL1偏差和（UnifiedViolationChecker の
-        // "fair" と一致）。[3.522.0] 重み1→2。
+        // "fair" と一致）。[3.522.0] 重み1→2、[3.647.0] 2→5（HF77 明示指示）。
         run {
             var raw = 0L
             for (g in 0 until p.G) {
@@ -233,7 +233,7 @@ class Evaluator(private val p: Problem) {
                 if (mem.size < 2) continue
                 for (k in p.bucket[g]) raw += p.fairDevOfBucket(g, k) { x -> ssn[x][k] }.total.toLong()
             }
-            soft += raw * 2L; record("fair", raw)
+            soft += raw * 5L; record("fair", raw)
         }
 
         // [統一weekly] 7日周期のシフト平準化 SOFT。職員ごと**シフトごと**に、そのシフトが入る日の

@@ -18,14 +18,15 @@ import org.junit.Test
  *  3. 窓の部分交換をしない: 窓内に希望固定があれば窓ごと不成立（交換されない）。
  */
 class AnchoredWindowSwapTest {
-    private fun base(schedule: List<List<Int>>, wishes: Map<String, Int>, staffRange: Map<String, Range>, cons3n: List<C3Row>) = MagiState(
+    /** separateGroups: 甲と乙を別グループに置き fair を外す（窓交換で甲が E だけ・乙が N 中心になると fair +8＝40 が high −25 を上回る。3.647.0 fair 5）。 */
+    private fun base(schedule: List<List<Int>>, wishes: Map<String, Int>, staffRange: Map<String, Range>, cons3n: List<C3Row>, separateGroups: Boolean = false) = MagiState(
         startDate = "2026-06-01", endDate = "2026-06-06",
         shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("N", "N", "", ""), Shift("E", "E", "", "")),
-        groups = listOf(Group("A", "A")),
-        staff = listOf(Staff("甲", 0), Staff("乙", 0)),
+        groups = if (separateGroups) listOf(Group("A", "A"), Group("B", "B")) else listOf(Group("A", "A")),
+        staff = listOf(Staff("甲", 0), Staff("乙", if (separateGroups) 1 else 0)),
         use2Patterns = false,
-        groupShift = listOf(listOf(1, 1, 1)),
-        groupShiftApt = listOf(listOf("", "", "")),
+        groupShift = if (separateGroups) listOf(listOf(1, 1, 1), listOf(1, 1, 1)) else listOf(listOf(1, 1, 1)),
+        groupShiftApt = if (separateGroups) listOf(listOf("", "", ""), listOf("", "", "")) else listOf(listOf("", "", "")),
         schedule = schedule, wishes = wishes, staffRange = staffRange,
         needDay1 = emptyMap(), needDay2 = emptyMap(),
         cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = cons3n,
@@ -38,7 +39,7 @@ class AnchoredWindowSwapTest {
     fun wholeWindowExchangeFreesTheSandwichedDay() {
         // 甲: N N 休 E* E E（3日目が挟まれセル・休は上限0） / 乙: E E E E N N
         val s = base(listOf(listOf(1, 1, 0, 2, 2, 2), listOf(2, 2, 2, 2, 1, 1)), mapOf("0,3" to 2), mapOf("0,0" to Range("0", "0")),
-            listOf(C3Row(listOf("N", "E", "", "", ""))))
+            listOf(C3Row(listOf("N", "E", "", "", ""))), separateGroups = true)
         val before = UnifiedViolationChecker.check(s, s.schedule.toIntArray2D())
         assertEquals(1, before.breakdown["high"])
         val r = run(s)
