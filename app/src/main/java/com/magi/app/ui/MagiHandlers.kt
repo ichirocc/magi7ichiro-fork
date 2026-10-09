@@ -49,6 +49,8 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Structure.SetMonth -> vm.setMonth(e.year, e.month1to12)
             is MagiEvent.Structure.ShiftMonth -> vm.shiftMonth(e.delta)
             MagiEvent.Structure.SetNextMonth -> vm.setNextMonth()
+            is MagiEvent.Structure.ConfirmMonthMove -> vm.confirmMonthMove(e.clearWishes)
+            MagiEvent.Structure.CancelMonthMove -> vm.cancelMonthMove()
             is MagiEvent.Structure.AddSkillGroup -> vm.addSkillGroup(e.name, e.kigou)
             is MagiEvent.Structure.EditSkillGroup -> vm.editSkillGroup(e.group, e.name, e.kigou)
             is MagiEvent.Structure.RemoveSkillGroup -> vm.removeSkillGroup(e.group)
