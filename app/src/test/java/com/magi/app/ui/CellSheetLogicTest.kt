@@ -389,4 +389,13 @@ class CellSheetLogicTest {
         assertEquals(listOf("鈴木", "職員3", "佐藤"), rows.map { it.name })
         assertEquals("禁止の並び A→B ・ 10/2〜10/3", rows.last().heading)
     }
+
+    /** [3.645.2/実機報告] 拡張希望（この日はこのシフト以外）がある日の希望タブは「未登録」と言わない。 */
+    @Test fun wishTabLineShowsExtendedWishes() {
+        val sym = { k: Int -> listOf("休", "Pｼ", "Dﾃ", "Cｱ")[k] }
+        assertEquals("希望 —（未登録）", wishTabLine(null, 3, null, sym, pinned = false))
+        assertEquals("希望 休・Pｼ・Dﾃ 以外（反映済）", wishTabLine(null, 3, setOf(2, 0, 1), sym, pinned = false))
+        assertEquals("希望 休・Pｼ 以外（未反映）・手動固定", wishTabLine(null, 0, setOf(0, 1), sym, pinned = true))
+        assertEquals("希望 Cｱ（反映済）・休 以外（反映済）", wishTabLine(3, 3, setOf(0), sym, pinned = false))
+    }
 }
