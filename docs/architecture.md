@@ -216,5 +216,5 @@ UI は `app/src/main/java/com/magi/app/ui/`:
   `MagiViewState.kt`（盤面の派生描画値）/ `MagiConstraintsView.kt` / `MagiWs1View.kt` /
   `MagiConditionsView.kt`（編集画面のビューデータ）。
   `MagiHandlers.kt`（鎖の中身＝ViewModel への振り分け）だけは ViewModel を参照するため白名単外。
-- `MagiScheduleViews.kt` — `ScheduleGrid`, `StaffCalendarCard`, **`TallyCard`（シフト集計：職員別/日別＋違反ハイライト）**。
+- `MagiScheduleViews.kt` — `ScheduleToolsCard`（必須・種別フィルタ・凡例の短い一覧＋`LegendSheet`・検索、3.648.0）, `ScheduleGrid`, `ScheduleCommandBar`（下部バー）, **`TallyCard`（シフト集計：職員別/日別＋違反ハイライト、既定は折りたたみ）**。
 - `MagiDashboardCards.kt` — `BreakdownCard`, `FixSuggestionCard` 等。`MagiTokens.kt` — `MagiAccent`(色)。

@@ -290,15 +290,16 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 までをひと目で提示し、下部コマンドバーの「最適化する」へ親指誘導。
 
 ### 5.2 勤務表 ✅
-`ViolationFilterBar`(種別フィルタ＋集中モード・見出しに「要確認 Nか所」) → `SearchLegendBar`(検索・凡例) →
-`ScheduleGrid`(`MagiFlatGrid`) → `WishApplyCard`(3.483.0 でグリッド下へ) → `TallyCard`(**既定は折りたたみ**・3.483.0。職員別/日別を `MagiSegmentedControl` で切替。編集タブ
-「回数（1人あたり）」の `StaffShiftMatrixCard` は目標(apt)編集も兼ねる別ビューとして併存)。
+[3.648.0] `ScheduleToolsCard`（1 枚: ［必須 N ▼］・「要確認 Nか所」・種別フィルタのチップ＋［集中］＋［違反の日を順に見る］・シフトの色チップの横スクロール＋
+［凡例 ▸］の `LegendSheet`・［検索］） → `ScheduleGrid`(`MagiFlatGrid`、左上は見えている日の範囲) → `TallyCard`(**既定は折りたたみ**＝3.648.0 で 3.514.0 の
+「開く」を反転。職員別/日別を `MagiSegmentedControl` で切替。編集タブ「回数（1人あたり）」の `StaffShiftMatrixCard` は目標(apt)編集も兼ねる別ビューとして併存) →
+`WishActionsRow`（［希望を反映する］［希望の一括操作］）。旧 `ViolationFilterBar`・`SearchLegendBar`・`WishApplyCard` は廃止。
 セル編集は `CellEditSheet`（画面下の固定パネル・固定配置のシフトボタン、2026-09-25）。シフト色は §1.3。
 [3.481.0] **日ヘッダは縦スクロールで画面上端に留まる**（`MagiFlatGrid` のヘッダ行を本体と `hScroll` 共有の独立行にし、
 ビューポート上端との差分だけ `graphicsLayer` で平行移動）。**週送り(前週/次週)と違反ナビ(＜前の違反/次の違反＞)は
-`Scaffold` 下部バー（`ScheduleNavBar`、勤務表タブ表示中のみ・`BottomCommandBar` の直上）に常駐**＝スクロール位置に
-関係なく親指で押せる（3.444.0 の「グリッド下」配置から引き上げ。状態は `ScheduleNavState`）。[3.483.0] ナビ行は**1段**
-（[◀週][週▶] 「M月 第n/N週 ・ 違反 k/31日」 [◀違反][違反▶]）。右端まで送ると最終週（端数の週も）になり、それ以上は[週▶]が押せない。
+`Scaffold` 下部バー（`ScheduleCommandBar`＝64dp の 1 本、旧 `ScheduleNavBar`＋`BottomCommandBar`、勤務表タブ表示中のみ）に常駐**＝スクロール位置に
+関係なく親指で押せる（3.444.0 の「グリッド下」配置から引き上げ。状態は `ScheduleNavState`）。右端まで送ると最終週（端数の週も）になり、それ以上は[週▶]が押せない。
+[3.648.0] グリッドが画面の外（集計を読んでいる途中）で押すと、まずグリッドの上端へ戻す（`revealGrid`）。
 縦スクロールは**タブごと**に持つ。分析の「勤務表で見る」は注目セルの日へ横に、行へ縦に（固定した日ヘッダの下へ）動かす。
 違反は**3段階の非色手がかり**（必須=実線 / 重いソフト=破線 / 軽いソフト=右上の角マーク・3.99.0）＋
 凡例 `ViolationLegend`。セル幅は「1週間(7日)が名前列と同時に収まる」よう動的計算（3.100.0）。
@@ -311,7 +312,7 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 
 ### 5.3 編集 🟡
 3サブタブ **月次条件（毎月）／職員管理（随時）／年間マスター（制度変更時）**（`MagiSegmentedControl`→`editScope`。
-3.114.0 で「いつ触るか」で再編。旧: 今月の調整／シフト希望／基本マスター）。年間マスターは**5節に集約**（①シフト・グループ ②スキルグループ ③回数[目標/個人/グループ] ④人数と組み合わせ[C41/C42/C41s/C42s] ⑤並び・くり返し[cons系]）。各節先頭に `SectionNote`。フォーム/ダイアログは `DialogHeader`＋共有3ボタンで統一（§4.14）。`WishApplyCard`✅。一覧の `MagiListRow` 化は段階移行。
+3.114.0 で「いつ触るか」で再編。旧: 今月の調整／シフト希望／基本マスター）。年間マスターは**5節に集約**（①シフト・グループ ②スキルグループ ③回数[目標/個人/グループ] ④人数と組み合わせ[C41/C42/C41s/C42s] ⑤並び・くり返し[cons系]）。各節先頭に `SectionNote`。フォーム/ダイアログは `DialogHeader`＋共有3ボタンで統一（§4.14）。`WishActionsRow`✅（3.648.0 で勤務表タブの希望の 2 操作を 1 行に。旧 `WishApplyCard`）。一覧の `MagiListRow` 化は段階移行。
 [3.482.0] **職員の一覧・入退職・所属・スキル割当は「職員管理」ドアだけ**（年間マスター①の職員節と②の「職員のスキル割当」は撤去＝3.114.0 の「併存」を上書き）。
 ①の見出しは日本語のみ（旧 LOADOUT/ARSENAL/SQUAD/PARTY/MATRIX の英語コードネームは撤去）。
 ⑤の並び4族は**起点シフトごとのチップ**（`SeqFamilyGrouped`＝「【Dﾃ の次の日】[B4 ×][A4 ×]… ＋追加」）で集約表示し、同じ並びの重複は追加/変更ダイアログの入口で拒否（族をまたぐ同一の並びも）。

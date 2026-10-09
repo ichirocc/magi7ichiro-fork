@@ -1868,21 +1868,18 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
 }
 
 
+/** [3.648.0] 希望まわりの 2 操作（反映／一括）を 1 枚に。旧: 見出し＋説明＋ボタンのカードと別の 48dp ボタンの 2 段（約 150dp）→ 約 90dp。 */
 @Composable
-internal fun WishApplyCard(ui: UiState, onApply: () -> Unit) {
+internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit) {
     if (!ui.loaded) return
     Card(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("希望シフトを反映", fontWeight = FontWeight.Bold)
-                Text("登録済みの希望を勤務表へ上書きします（元に戻せます）。",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("希望シフト（反映は登録済みの希望を勤務表へ上書きします。元に戻せます）",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onApply, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("希望を反映する") }
+                OutlinedButton(onClick = onBulk, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("希望の一括操作") }
             }
-            OutlinedButton(onClick = onApply, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を反映する") }
         }
     }
 }

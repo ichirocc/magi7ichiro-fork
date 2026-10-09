@@ -208,6 +208,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
     var gridTopInContent by remember { mutableIntStateOf(-1) }   // 勤務表グリッドの上端（タブ本体のスクロール内容座標 px）
+    var gridHInContent by remember { mutableIntStateOf(0) }      // 勤務表グリッドの高さ（px）。週送りで画面外のグリッドへ戻す判定に使う
     var prevTab by remember { mutableIntStateOf(-1) }
     var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見）
     var oneHand by rememberSaveable { mutableStateOf(false) }
@@ -465,6 +466,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     // 縦スクロールはタブごと（別のタブの縦位置のまま開かない）。編集タブは区分ごと（区分を切り替えても途中から出ない）。
     val tabScrolls = List(5) { rememberScrollState() }
+    // [3.648.0] 週送り・違反の日ナビはグリッドの操作。集計を読んでいる途中などグリッドが画面の外なら、押したときにグリッドの上端へ
+    //   戻す（押しても何も変わらないように見える状態をなくす）。見えていれば縦は動かさない。
+    fun revealGrid() {
+        val top = gridTopInContent
+        if (top < 0) return
+        val sc = tabScrolls[1]
+        val visible = top < sc.value + sc.viewportSize && top + gridHInContent > sc.value
+        if (!visible) scope.launch { sc.animateScrollTo(top) }
+    }
     val editScrolls = List(3) { rememberScrollState() }
     // [UX監査 中4] 「データを見直す」は診断の原因に対応する区分・節へ着地する。原因が分からない（null）ときは月次条件の先頭。
     val openEditLanding: (EditLanding?) -> Unit = { l ->
@@ -569,7 +579,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 when (barMode) {
                     BottomBarMode.COMMAND -> BottomCommandBar(ui, vm)
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
-                        ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION)
+                        ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() })
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
                 }
                 MagiBottomNav(tab) { tab = it }
@@ -706,17 +716,23 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [E7] 種別フィルタ行（違反があるときだけ表示）。グリッド/カレンダー/集計を1つのフィルタで絞る。
                     // [画面修正版 ③] 要確認件数＝違反ロケーション数（セル+日+回数の各マップの実箇所数）。
                     val vioLocCount = ui.violationCells.size + ui.needViolations.size + ui.countViolations.size
-                    if (!ui.running && ui.hasResult && ui.bestHard > 0L) {
-                        val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
-                        val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
-                        HardListChip(ui.bestHard, rows, tourCovULine(ui.breakdown["covU"] ?: 0), onPick = goTourItem)
-                    }
-                    ViolationFilterBar(vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket,
-                        locCount = vioLocCount, focusMode = focusMode, onFocusMode = { focusMode = it },
-                        vioDayNavOn = schedNav.vioMode, onVioDayNav = { schedNav.vioMode = !schedNav.vioMode })
-                    // [画面修正版 ②] 検索・凡例の統合折りたたみ（E7フィルタは上の独立バーのまま＝可視）。
-                    SearchLegendBar(ui, searchQuery, onQuery = { searchQuery = it })
-                    Box(Modifier.onGloballyPositioned { if (viewportTopPx >= 0f) gridTopInContent = (it.positionInRoot().y - viewportTopPx + tabScrolls[1].value).toInt() }) {
+                    // [3.648.0 配置見直し] 必須チップ・種別フィルタ・凡例の短い一覧＋検索を道具カード 1 枚に（旧: 必須チップ＋フィルタのカード＋
+                    //   「検索・凡例」のカードの 3 段）。凡例の詳細はシート、集計は折りたたみ＝タブを開いた直後に表がより多く見える。
+                    val hardChip: (@Composable () -> Unit)? = if (!ui.running && ui.hasResult && ui.bestHard > 0L) {
+                        {
+                            val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
+                            val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
+                            HardListChip(ui.bestHard, rows, tourCovULine(ui.breakdown["covU"] ?: 0), onPick = goTourItem)
+                        }
+                    } else null
+                    ScheduleToolsCard(ui, vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket, locCount = vioLocCount,
+                        focusMode = focusMode, onFocusMode = { focusMode = it },
+                        vioDayNavOn = schedNav.vioMode, onVioDayNav = { schedNav.vioMode = !schedNav.vioMode },
+                        query = searchQuery, onQuery = { searchQuery = it }, hardChip = hardChip)
+                    Box(Modifier.onGloballyPositioned {
+                        if (viewportTopPx >= 0f) gridTopInContent = (it.positionInRoot().y - viewportTopPx + tabScrolls[1].value).toInt()
+                        gridHInContent = it.size.height
+                    }) {
                     ScheduleGrid(ui, viewState, onCellClick = openEditor, proMode = proMode, vioEnabled = vioEnabled, nameQuery = searchQuery,
                         onBulkSet = { cells, k -> vm.setCells(cells, k) },
                         focusCell = focusCell, onFocusShown = { focusCell = null }, focusRange = focusRange, focusMode = focusMode,
@@ -733,14 +749,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   一本化する形で一度撤去したが、勤務表タブから編集タブへ往復せず確認したいという
                     //   実機要望を受け、シフト集計カード内トグルとして復活させた（両者は併存。
                     //   StaffShiftMatrixCardは目標(apt)編集も兼ねる分、役割が広い）。
-                    // [3.483.0 S-2] 希望まわりの2操作（反映／一括）をグリッド下の1か所に。
-                    WishApplyCard(ui, onApply = {
+                    // [3.483.0 S-2] 希望まわりの2操作（反映／一括）をグリッド下の1か所に。[3.648.0] 1 枚の行に（説明＋ボタン 2 つ）。
+                    WishActionsRow(ui, onApply = {
                         val oos = vm.wishOutOfScopeCount()
                         if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
-                    })
-                    OutlinedButton(onClick = { wishBulkOpen = true }, enabled = !ui.running, modifier = Modifier.fillMaxWidth()) {
-                        Text("希望シフトの一括操作")
-                    }
+                    }, onBulk = { wishBulkOpen = true })
                     if (wishBulkOpen) {
                         WishBulkSheet(ui, conditionsView, onEvent, presetWeekday = 0, onDismiss = { wishBulkOpen = false })
                     }
