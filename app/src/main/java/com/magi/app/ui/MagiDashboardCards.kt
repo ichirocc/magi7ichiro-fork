@@ -566,6 +566,10 @@ internal fun OperatorNextActionCard(
                 }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+            // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質・次の一手）。内部名は出さない（StopExplanation）。
+            if (ui.hasResult && !ui.running) ui.stopSummary?.let { s -> stopExplanationOf(s)?.let { e ->
+                Text(e.line + (stopNextLabel(e.next)?.let { " 次は: $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = plan.fg)
+            } }
             plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
             plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
             if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)

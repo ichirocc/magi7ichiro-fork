@@ -38,7 +38,7 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
-**最終更新**：2026-10-08（3.643.0: 根拠の精度＝c3n 壁判定の段階化（証明相当の壁と経験的な壁を分け、経験的な壁は 1 手探索の反証。`PolishGate.c3nWallDeepCheck` 既定 OFF・計測中）、測定の精度＝`HandleOptimizeBench` の反復 `MAGI_HO_REPEATS` と `tools/loop/ho_stats.py`（揺れと 95% 区間で決定／未決。120 s・20 対で既定 対 HEAD 相当は未決＝区別できない）。停滞脱出仕様を `docs/stall_escape.md` へ一本化（優秀の定義: 5 条件＋第三者の検証、ブリーフィングで決定）。詳細は `docs/history/3.4xx.md` 先頭）
+**最終更新**：2026-10-08（3.643.0: 根拠の精度＝c3n 壁判定の段階化（証明相当の壁と経験的な壁を分け、経験的な壁は 1 手探索の反証。`PolishGate.c3nWallDeepCheck` 既定 OFF・計測中）、測定の精度＝`HandleOptimizeBench` の反復 `MAGI_HO_REPEATS` と `tools/loop/ho_stats.py`（揺れと 95% 区間で決定／未決。120 s・20 対で既定 対 HEAD 相当は未決＝区別できない）。停滞脱出仕様を `docs/stall_escape.md` へ一本化（優秀の定義: 5 条件＋第三者の検証、ブリーフィングで決定）。第三者の検証で見つかった矛盾 2 件（§9 の撤去済み識別子・E10 の層）を修正。画面: 探索の終わり方の説明＝停滞で早く終えた理由・残る必須の性質・次の一手をホームの結果カードに 1 行（`StopSummary`→`StopExplanation`、出力不変）。詳細は `docs/history/3.4xx.md` 先頭）
 
 **最終更新**：2026-10-08（3.642.0: 停滞脱出の外部レビュー残件（c3n 壁の証拠を同じ参照で結ぶ・後期演算の試行中の停止確認・統合段の量的評価）と画面の監査 7 項目。計測（sample_v6・300 s と 120 s・各 5 seed・同一 seed）で既定を維持。引き渡し仕様を追加（3.643.0 で `docs/stall_escape.md` へ一本化）。Windows 側は `windows/README.md`。詳細は `docs/history/3.4xx.md` 先頭）
 

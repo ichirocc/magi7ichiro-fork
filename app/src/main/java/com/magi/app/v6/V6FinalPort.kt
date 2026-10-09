@@ -79,6 +79,10 @@ object V6FinalPort {
         val logs: List<MirrorLog>,
     )
 
+    /** 探索がどう終わったか（画面の説明用、3.643.0）。採否・探索・早期終了には配線しない。種別は Watchdog 行の「実効閾値の種別」と同じ条件。 */
+    enum class StopKind { DEADLINE, PLATEAU_FLOOR, WISH_FLOOR, C3N_WALL_CERTIFIED, C3N_WALL_EMPIRICAL, NORMAL_STALL }
+    data class StopSummary(val earlyStop: Boolean, val kind: StopKind, val usedSec: Int, val budgetSec: Int, val stalledSec: Int, val remainingHard: Int)
+
     data class ActionResult(
         val schedule: Array<IntArray>,
         val report: ViolationReport,
@@ -91,6 +95,8 @@ object V6FinalPort {
         val alternatives: List<Array<IntArray>> = emptyList(),
         /** 入口で外した個人上限 0 のセル（無ければ null）。 */
         val capZero: CapZeroNotice? = null,
+        /** 探索の終わり方（3.643.0）。背景実行の再開経路では null。 */
+        val stop: StopSummary? = null,
     )
 
     /** 入口で個人上限 0 のセルを外した件数と、外す前後の必須件数（生の入力→外した入力）。 */
@@ -1289,7 +1295,35 @@ object V6FinalPort {
         // post.logs は post.report.logs の部分集合なので両方足すと重複する → post.report.logs のみ使う。
         // [UX調査] sentinelLog（1文）だけでは後続の個々の行まで読者が覚えていられない（history参照）。
         val postReportLogs = annotateStaleLogsIfRegressed(post.report.logs, regression ?: if (staleWithoutRegression) "" else null)
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        // 終わり方の要約（画面の説明用）。種別の条件と順序は Watchdog 行の「実効閾値の種別」と同じ（plateau → 希望衝突の床 →
+        //   c3n 壁 → 通常）。壁は最終盤面の診断で証明相当（全セル希望固定）と経験的に分ける。採否・探索には使わない。
+        //   ログにも同じ値を 1 行出す＝画面の説明を後から照合できる。
+        val stopSummary = run {
+            val nonCovU = wd.bestNonCovUHard.get()
+            val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
+            val fired = wd.stagnationFired.get()
+            // 壁で止まったときだけ最終盤面を診断する（約 20 ms）。残存分析の `wallProof.diagnoseBoard` とは別＝そちらは変えない。
+            fun wallCertified() = runCatching { V6PortAnalyzer.diagnoseForbiddenRuns(state, finalSched).allBlockedCertified }.getOrDefault(false)
+            StopSummary(
+                earlyStop = fired,
+                kind = when {
+                    !fired -> StopKind.DEADLINE
+                    wd.bestHard.get() <= hardFloor && nonCovU == 0 -> StopKind.PLATEAU_FLOOR
+                    wishOn && wishReachedEnd -> StopKind.WISH_FLOOR
+                    wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() ->
+                        if (wallCertified()) StopKind.C3N_WALL_CERTIFIED else StopKind.C3N_WALL_EMPIRICAL
+                    else -> StopKind.NORMAL_STALL
+                },
+                usedSec = ((EngineClock.nowMs() - startMs) / 1000).toInt(),
+                budgetSec = seconds,
+                stalledSec = ((tChain1 - lastImpAtSearchEnd).coerceAtLeast(0L) / 1000).toInt(),
+                remainingHard = finalReport.hard,
+            )
+        }
+        val stopLog = listOf(MirrorLog(level = "I", tag = "StopSummary",
+            message = "終わり方: ${stopSummary.kind}（停滞で早期終了=${if (stopSummary.earlyStop) "あり" else "なし"}）・使用${stopSummary.usedSec}s／予算${stopSummary.budgetSec}s" +
+                "・探索終了時の無改善${stopSummary.stalledSec}s・必須${stopSummary.remainingHard}件"))
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」
@@ -1304,7 +1338,7 @@ object V6FinalPort {
         //   確認）。この1行は契約を読める場所に明示する保険＝挙動は不変。実在した非対称は Windows 版だった。
         ensureActive()
         ActionResult(finalSched, finalReport.copy(logs = logs), "optimize:${label.tech}", busy, logs, postForResult,
-            alternatives = chained.alternatives, capZero = capZero)
+            alternatives = chained.alternatives, capZero = capZero, stop = stopSummary)
     }
 
     /**

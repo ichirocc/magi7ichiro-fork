@@ -83,6 +83,9 @@ class ZeroCapExclusionTest {
         assertEquals(0, res.report.hard)
         assertTrue("入口で外した件数をログに出す", res.logs.any { it.tag == "CapZero" && it.message.contains("4件") })
         assertEquals(V6FinalPort.CapZeroNotice(4, 0, 4), res.capZero)
+        // [3.643.0] 終わり方の要約: 予算と残る必須は結果と同じ値。締切で終わったときだけ種別が DEADLINE
+        assertEquals(2 to 0, res.stop!!.budgetSec to res.stop!!.remainingHard)
+        assertEquals(!res.stop!!.earlyStop, res.stop!!.kind == V6FinalPort.StopKind.DEADLINE)
         assertFalse("外した入力を基準にするので番兵は発火しない", res.logs.any { it.tag == "Sentinel" })
     }
 
