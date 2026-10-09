@@ -333,8 +333,9 @@ object V6FinalPort {
             val pf = report.breakdown["pref"] ?: 0
             val c3n = report.breakdown["c3n"] ?: 0
             val c3w = report.breakdown["c3w"] ?: 0
-            bestNonCovUHard.set(gv + pf + c3n + c3w)
-            bestNonCovUAllC3n.set(gv == 0 && pf == 0 && c3w <= wishC3wProven && c3n > 0)
+            val ext = report.breakdown["extWish"] ?: 0
+            bestNonCovUHard.set(gv + pf + c3n + c3w + ext)
+            bestNonCovUAllC3n.set(gv == 0 && pf == 0 && ext == 0 && c3w <= wishC3wProven && c3n > 0)
             bestVersion.incrementAndGet()
             return true
         }
@@ -1193,6 +1194,11 @@ object V6FinalPort {
             val covUWall = covUStructuralWall(covUNow, hardFloor, covUBlocked)
             // 希望どうしの衝突（希望を1件取り消すまで c3n/c3w か pref が必ず残る）。族別に open から差し引く。
             val selfConflict = runCatching { V6SanityPort.wishConflictHard(cachedProblem(state), finalSched) }.getOrDefault(emptyMap())
+            // [3.653.0] 手動固定のセルにある拡張希望の違反は、最適化器が変えない＝もう直せない側（仕様: 自動では外さない）。
+            val extPinned = runCatching {
+                val p = cachedProblem(state)
+                (0 until p.S).sumOf { i -> (0 until p.T).count { j -> p.pin[i][j] >= 0 && p.extBanned(i, j, finalSched[i][j]) } }
+            }.getOrDefault(0)
             val selfConflictShown = ArrayList<Pair<String, Int>>()
             for (key in MirrorKeys.all) {
                 val n0 = bd[key] ?: 0
@@ -1208,6 +1214,7 @@ object V6FinalPort {
                 val n = when (key) {
                     "weekly" -> n0 - weeklyWall
                     "covU" -> n0 - covUWall
+                    "extWish" -> n0 - minOf(n0, extPinned)
                     else -> n0
                 } - self
                 if (n > 0) open.add("$key ${n}件")
@@ -1229,6 +1236,7 @@ object V6FinalPort {
             // [3.355.0] weekly も同型: 回数が7の倍数でないぶんは配置では消せない（`weeklyFloorOfCount`）。
             //   実データ3件の実測では 40〜56%（golden 73/183・real 126/226・user 106/214）が床＝追っても減らない。
             if (weeklyWall > 0) walls.add("weekly のうち${weeklyWall}件(回数が7の倍数でない＝配置では消せない)")
+            if (extPinned > 0) walls.add("extWish のうち${extPinned}件(手動固定のセル＝自動では変えない)")
             if (personalWall > 0) {
                 walls.add("apt+high のうち${personalWall}件(個人の担当構成＝データ側)")
                 val rest = aptHighNow - personalWall

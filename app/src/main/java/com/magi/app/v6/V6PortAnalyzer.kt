@@ -662,13 +662,17 @@ object V6PortAnalyzer {
         p: Problem, before: Array<IntArray>, after: Array<IntArray>, i: Int, c3nBefore: Int,
     ): Boolean {
         val c3nAfter = C1DeltaPrefilter.staffC3nFires(p, IntArray(p.T) { after[i][it] })
-        return c3nAfter + prefMissesOf(p, after, i) + c3wOf(p, after, i) <
-            c3nBefore + prefMissesOf(p, before, i) + c3wOf(p, before, i)
+        return c3nAfter + prefMissesOf(p, after, i) + c3wOf(p, after, i) + extWishOf(p, after, i) <
+            c3nBefore + prefMissesOf(p, before, i) + c3wOf(p, before, i) + extWishOf(p, before, i)
     }
 
     /** 職員 [i] の行の c3w（希望の前日に禁止, HARD）件数。 */
     private fun c3wOf(p: Problem, board: Array<IntArray>, i: Int): Int =
         (0 until p.T).count { d -> p.c3wBanned(i, d, board[i][d]) }
+
+    /** 職員 [i] の行の extWish（拡張希望の違反, HARD）件数。 */
+    private fun extWishOf(p: Problem, board: Array<IntArray>, i: Int): Int =
+        (0 until p.T).count { d -> p.extBanned(i, d, board[i][d]) }
 
     /** 職員 [i] の行で「実現可能な希望どおりでない」日数（＝pref の HARD 件数）。 */
     private fun prefMissesOf(p: Problem, board: Array<IntArray>, i: Int): Int =
@@ -723,6 +727,8 @@ object V6PortAnalyzer {
         // HARD 件数は同じでも、重み（MirrorKeys.weightOf）では希望を破るほうが点数が良くなる代替があるか（表示専用）。
         var scoreImproves = false
         val c3wCur = if (p.c3wBanned(i, j, cur)) 1 else 0
+        // 今のセルが拡張希望の違反なら、代替（禁止へは置かない）へ動かすだけで必須が 1 減る（3.653.0）。
+        val extGain = if (p.extBanned(i, j, cur)) 1 else 0
         var chainOk: Int? = null      // CHAIN が成立した代替シフト
         var adjOk: Int? = null        // ADJACENT が成立した代替シフト
         var alts = 0
@@ -732,7 +738,8 @@ object V6PortAnalyzer {
             val after = c3nAfter(m)
             // 正味 HARD が減るか（希望を破る手は pref が 1 増える。hard は族横断の件数和なので同じ単位）。
             val c3wDelta = (if (p.c3wBanned(i, j, m)) 1 else 0) - c3wCur
-            val netOk = after + prefCost + c3wDelta < firesBefore
+            val otherHard = c3wDelta - extGain
+            val netOk = after + prefCost + otherHard < firesBefore
             // 「新たな禁止連続を作る（＝そもそも c3n が減らない）」かどうかは pref 代とは別問題。
             //   両者を混ぜると、c3n は減るのに pref 代を払えないだけの代替まで隣接日調整へ流れてしまう。
             val createsNewRun = after >= firesBefore
@@ -747,14 +754,14 @@ object V6PortAnalyzer {
                     tmp[i][j] = m
                     if (chainFills(tmp)) chainOk = m else noReceiver++
                 } else noReceiver++   // 既に CHAIN 成立済み＝以降の重い連鎖検証は省略（分類は不変）
-            } else if (!createsNewRun && after + c3wDelta >= firesBefore) {
+            } else if (!createsNewRun && after + otherHard >= firesBefore) {
                 c3wBlocked++
             } else if (!createsNewRun) {
                 // c3n 自体は減るが、希望を破る代金を払うと正味では減らない＝希望が本当に効いている。
                 prefBlocked++
                 val weighted = (after - firesBefore) * MirrorKeys.weightOf("c3n") +
-                    prefCost * MirrorKeys.weightOf("pref") + c3wDelta * MirrorKeys.weightOf("c3w")
-                if (prefCost > 0 && !departureHole && after + prefCost + c3wDelta == firesBefore && weighted < 0) scoreImproves = true
+                    prefCost * MirrorKeys.weightOf("pref") + c3wDelta * MirrorKeys.weightOf("c3w") - extGain * MirrorKeys.weightOf("extWish")
+                if (prefCost > 0 && !departureHole && after + prefCost + otherHard == firesBefore && weighted < 0) scoreImproves = true
             } else {
                 // この代替は新たな禁止連続を作る → 隣接日調整（探索本体と同一関数）で崩せるか実証。
                 if (adjOk == null && chainOk == null) {
@@ -829,7 +836,7 @@ object V6PortAnalyzer {
         }
 
         val hardGuard = report.breakdown["groupViol"] ?: 0
-        val hardCore = (report.breakdown["c3n"] ?: 0) + (report.breakdown["covU"] ?: 0) + (report.breakdown["pref"] ?: 0) + (report.breakdown["c3w"] ?: 0)
+        val hardCore = (report.breakdown["c3n"] ?: 0) + (report.breakdown["covU"] ?: 0) + (report.breakdown["pref"] ?: 0) + (report.breakdown["c3w"] ?: 0) + (report.breakdown["extWish"] ?: 0)
         val softCore = (report.total - hardGuard - hardCore).coerceAtLeast(0)
         val staffViol = staffViolationCounts(p, report)
 
@@ -1016,7 +1023,7 @@ object V6PortAnalyzer {
                 }
             }
         }
-        val hard = (breakdown["groupViol"] ?: 0) + (breakdown["c3n"] ?: 0) + (breakdown["covU"] ?: 0) + (breakdown["pref"] ?: 0) + (breakdown["c3w"] ?: 0)
+        val hard = (breakdown["groupViol"] ?: 0) + (breakdown["c3n"] ?: 0) + (breakdown["covU"] ?: 0) + (breakdown["pref"] ?: 0) + (breakdown["c3w"] ?: 0) + (breakdown["extWish"] ?: 0)
         val psi = max(0.2, 1.0 / (1.0 + 10.0 * hard.toDouble()))
         return raw * psi
     }

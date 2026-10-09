@@ -51,7 +51,7 @@ internal object C1EjectionChainPolish {
         val holeSoftOnly: Boolean = defaultHoleSoftOnly,
     )
 
-    /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol）の違反だけを起点にする（測定中・後処理の前段で使う）。 */
+    /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol・extWish）の違反だけを起点にする（測定中・後処理の前段で使う）。 */
     enum class Origin { C1, ALL, HARD }
 
     /** 測定用: 連鎖に入る直前の盤面を受け取る（前段の揺れと連鎖の効果を切り分ける）。本番では null。 */
@@ -60,7 +60,7 @@ internal object C1EjectionChainPolish {
     /** 測定用の切替（v1/v2 を同条件で比べる）。 */
     @Volatile internal var defaultCrossFamily: Boolean = true
 
-    private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol")
+    private val HARD_FAMILIES = setOf("c3n", "covU", "c3w", "pref", "groupViol", "extWish")
 
     /** 測定用の切替（穴に絞った候補生成を同条件で比べる）。 */
     @Volatile internal var defaultHoleFocus: Boolean = true
@@ -99,7 +99,7 @@ internal object C1EjectionChainPolish {
         return out
     }
     private val FAMILIES = listOf("c1", "c2", "c41", "c42", "c41s", "c42s", "c3", "c3n", "c3m", "c3mn",
-        "pref", "groupViol", "c3w", "apt", "fair", "weekly", "covO", "covU")
+        "pref", "groupViol", "c3w", "apt", "fair", "weekly", "covO", "covU", "extWish")
 
     fun apply(
         state: MagiState, schedule: Array<IntArray>, config: Config = Config(),

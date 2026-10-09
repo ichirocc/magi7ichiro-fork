@@ -1499,7 +1499,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
         val cellSym = if (cell >= 0) sym(cell) else "—"
         val (mark, kind) = when (fam) {
             "c1" -> "期間" to 2   // 族名「期間の制約」の短縮（46dp の枠に収める）
-            "pref", "groupViol", "c3n", "c3w" -> "必須" to 0
+            "pref", "groupViol", "c3n", "c3w", "extWish" -> "必須" to 0
             else -> "要調整" to 1
         }
         // [Set化] 同セルに重なった族は sub に全列挙（重み降順）。行数=箇所数は不変（見出し件数の意味を保つ）。

@@ -78,10 +78,13 @@
   数式の正は `docs/business-logic.md`。
   Evaluator/Delta/チェッカー3者に統合（fairと同型）。UI内訳では「曜日の偏り」チップに件数表示（場所マップは無し）。
 - **pref**（希望シフト未充足, HARD, 重み8000）/ **groupViol**（群外シフト, HARD, 重み11000）。
+- **extWish**（拡張希望の違反, HARD, 重み8000＝pref 同格, 3.653.0 HF77明示指示「拡張希望の重みは希望シフトと同じにする」）:
+  拡張希望（それらの日はそれらのシフト以外）の禁止シフトが入ったセル 1 件（希望シフト日は対象外）。静的表 `Problem.extBanned` を3者＋C++ が共有。
+  最適化器は禁止へ置かない（`mayPlaceAt`）。
 
-weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000) > low(120) >
+weightedScore 階層: groupViol(11000) > covU(10000) > c3n(9000)=c3w(9000) > pref(8000)=extWish(8000) > low(120) >
 c3mn(90) > c1(50) > high(25) > c3(15) > c41s(10)=c42s(10)=covO(10) > c41(9)=c42(9) > c3m(6) > fair(5) > c2(4)=apt(4) >
-weekly(2)。（3.647.0 HF77明示指示: fair 2→5。3.556.0 HF77明示指示: c41s/c42s 6→10・c41/c42 1→9・c3m 10→6。3.522.0で全面見直し＝tools/loop 34ケース×10seedの
+weekly(2)。（3.653.0 HF77明示指示: extWish 新設 8000＝pref 同格。3.647.0 HF77明示指示: fair 2→5。3.556.0 HF77明示指示: c41s/c42s 6→10・c41/c42 1→9・c3m 10→6。3.522.0で全面見直し＝tools/loop 34ケース×10seedの
 baseline対比ベンチマークで決定。旧: groupViol(10000) > pref(9000) > covU(8000) > c3n(7000) > low(90) >
 c3mn(30)=c1(30) > high(25) > covO(5) > c3(3) > c3m(2) > c2/c41/c42/c41s/c42s/apt/fair/weekly(1)。
 covO は 0.5→1.0→5.0→**10**、c1 は 4→5→15→30→**50**、c3mn は 12→15→30→**90**、high は 45→25で不変＝

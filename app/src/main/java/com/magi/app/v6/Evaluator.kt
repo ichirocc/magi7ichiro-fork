@@ -37,7 +37,7 @@ internal fun rangeDistance(z: Int, l: Int, u: Int): Long =
  *
  * Lexicographic objective:  score = hard1 * SCORE_HARD_UNIT + soft
  *   hard1 = c3n (forbidden seq) + covU (per-cell OR/AND shortfall over P1/P2, #4b) + pref
- *           + c3w (希望の前日に禁止, 3.542.0)
+ *           + c3w (希望の前日に禁止, 3.542.0) + extWish (拡張希望の違反, 3.653.0)
  *           + groupViol (担当できないシフトに就いているセル。3.318.0 でチェッカーの MirrorKeys.hard と揃えた)
  *   soft  = c1 (window) + c2 (per-staff total) + c41 (group/day range)
  *           + c42 (group pair conflict) + c41s/c42s (skill-group変種) + c3 (want seq) + c3m + c3mn
@@ -198,6 +198,12 @@ class Evaluator(private val p: Problem) {
             var raw = 0L
             for (i in 0 until S) for (j in 0 until T) if (p.c3wBanned(i, j, a[i][j])) raw++
             hard1 += raw; record("c3w", raw)
+        }
+        // extWish: 拡張希望の違反（HARD）。チェッカーと同じ静的な禁止表 `Problem.extBan` を引く。
+        if (p.hasExtBan) {
+            var raw = 0L
+            for (i in 0 until S) for (j in 0 until T) if (p.extBanned(i, j, a[i][j])) raw++
+            hard1 += raw; record("extWish", raw)
         }
 
         // [統一a/b] range (LimMin/LimMax) は SOFT。UnifiedViolationChecker と同じ amount×重み(low/high)・

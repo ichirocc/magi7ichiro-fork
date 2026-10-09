@@ -6,6 +6,7 @@ import com.magi.app.model.C3Row
 import com.magi.app.model.C41Row
 import com.magi.app.model.C42Row
 import com.magi.app.model.C3wRow
+import com.magi.app.model.ExtWish
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Range
@@ -31,7 +32,7 @@ import java.util.Random
  *   Checker の weightedScore − HARD族の重み付き寄与 == Evaluator の soft
  *   Checker の hard（件数）                        == Evaluator の hard（件数）
  *
- * ランダム側は **19族すべてが少なくとも1回は非ゼロになる**ことも確認する。族が発火していない
+ * ランダム側は **全族（`MirrorKeys.all`）が少なくとも1回は非ゼロになる**ことも確認する。族が発火していない
  * 試験は「その族の重みがずれても緑」になるので、網羅を数字で見せないと守れていない。
  */
 class ObjectiveParityTest {
@@ -64,7 +65,7 @@ class ObjectiveParityTest {
         assertParity("golden_state", st, st.schedule.toIntArray2D())
     }
 
-    /** 19族すべてが発火しうる状態を作る（need/希望/担当不可/連続パターン/群・スキル群まで入れる）。 */
+    /** 全族が発火しうる状態を作る（need/希望/担当不可/連続パターン/群・スキル群/拡張希望まで入れる）。 */
     private fun richState(rng: Random, s: Int, t: Int, k: Int, g: Int): MagiState {
         val groups = (0 until g).map { Group("G$it", "G$it") }
         val skills = (0 until 2).map { Group("K$it", "K$it") }
@@ -109,6 +110,11 @@ class ObjectiveParityTest {
             cons41s = listOf(C41Row("K0", sym(1), "1", "1")),
             cons42s = listOf(C42Row("K0", "K1", sym(1), sym(if (k > 2) 2 else 1))),
             cons3w = listOf(C3wRow(sym(rng.nextInt(k)), sym(rng.nextInt(k)))),
+            // [3.653.0] 拡張希望（必須の族 extWish）。日は期間の先頭 t 日から。
+            extWishes = List(2) {
+                ExtWish(rng.nextInt(s), List(2) { java.time.LocalDate.parse("2026-03-02").plusDays(rng.nextInt(t).toLong()).toString() },
+                    List(1 + rng.nextInt(2)) { sym(rng.nextInt(k)) })
+            },
         )
     }
 

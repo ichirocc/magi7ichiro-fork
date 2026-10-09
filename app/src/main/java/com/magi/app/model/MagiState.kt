@@ -75,7 +75,7 @@ data class MagiState(
     val cons3w: List<C3wRow> = emptyList(),
     /** [#41] 手動固定（1 セル 1 件）。採点・希望の意味は変えない。 */
     val manualPins: List<ManualPin> = emptyList(),
-    /** 拡張希望（職員×日の集合×禁止シフトの集合）。採点の族・重みには入れない（重み未指示）。 */
+    /** 拡張希望（職員×日の集合×禁止シフトの集合）。違反は必須の族 extWish（重み 8000、3.653.0）。 */
     val extWishes: List<ExtWish> = emptyList(),
     /** Per-shift display colour overrides, keyed by shift kigou -> "#rrggbb". Display only (no engine effect). */
     val shiftColors: Map<String, String> = emptyMap(),

@@ -59,7 +59,7 @@ data class ViolationReport(
      * 印を置く（探索の手掛かりはそれで揃っている）ので、画面が「どの違反窓にも印がある」を作るための表示専用の元データ。
      */
     val c1Runs: List<List<Int>> = emptyList(),
-    /** 拡張希望の違反セル（"i,j"）。件数＝要素数。採点の族・重みには入れない（`breakdown` に無い）。 */
+    /** 拡張希望の違反セル（"i,j"）。`breakdown["extWish"]`（必須、3.653.0）と同じ集合＝画面の×の違反色が読む。 */
     val extWishCells: List<String> = emptyList(),
     val logs: List<MirrorLog> = emptyList(),
 )
@@ -130,10 +130,10 @@ data class LightOptimizeResult(
 )
 
 object MirrorKeys {
-    val hard = listOf("groupViol", "c3n", "covU", "pref", "c3w")
+    val hard = listOf("groupViol", "c3n", "covU", "pref", "c3w", "extWish")
     val soft = listOf("c1", "c2", "c3", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covO", "low", "high", "apt", "fair", "weekly")
-    // [3.542.0] c3w は末尾＝C++ kBreakdownNames / 言語跨ぎ期待値ファイルの添字を既存19族から動かさない。
-    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w")
+    // [3.542.0] c3w は末尾＝C++ kBreakdownNames / 言語跨ぎ期待値ファイルの添字を既存19族から動かさない。[3.653.0] extWish も同じく末尾。
+    val all = listOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "c41s", "c42s", "covU", "covO", "pref", "low", "high", "groupViol", "apt", "fair", "weekly", "c3w", "extWish")
     // [N2/⛏11] weightedScore の重み（単一の真実）。UI の重み表もこのマップを描画して
     //   最適化器とのドリフトを防ぐ。挿入順 = weightedScore の加算順（Double 結果を不変に保つ）。
     // [HF77明示数値指示・全面見直し 3.522.0] tools/loop 34ケース×10seedのbaseline対比ベンチマークで決定
@@ -142,6 +142,8 @@ object MirrorKeys {
     //   Kotlin 側のずれは `ObjectiveParityTest`、C++ 側は native-parity CI が捕まえる。
     val weights: Map<String, Double> = linkedMapOf(
         "groupViol" to 11000.0, "covU" to 10000.0, "c3n" to 9000.0, "c3w" to 9000.0, "pref" to 8000.0,
+        // [3.653.0/HF77 明示指示「拡張希望の重みは希望シフトと同じにする」] 拡張希望の違反＝必須・希望と同じ重み。
+        "extWish" to 8000.0,
         "low" to 120.0, "c3mn" to 90.0, "c1" to 50.0, "high" to 25.0, "covO" to 10.0,
         "c3" to 15.0, "c3m" to 6.0,
         "c41" to 9.0, "c42" to 9.0, "c41s" to 10.0, "c42s" to 10.0,
@@ -150,8 +152,8 @@ object MirrorKeys {
 
     // [表示優先度/HF77明示指示 2026-07-20] aptLow/aptHigh は apt の表示専用サブクラス（重み表(WeightTableCard)には
     //   出さない＝weights map 自体には追加しない）。markCount/cellFamilies の重み優先比較では実体である apt の
-    //   重み(1.0)をそのまま使う（旧: weights にキーが無く 0.0 扱い＝常に最下位に劣後していた。ユーザー指示により
-    //   「aptLow/aptHighは重み1.0扱いにする」＝c2/c41/c42/c41s/c42s/fair/weekly と同格の重み1.0で競わせる）。
+    //   重み（`weights["apt"]`）をそのまま使う（旧: weights にキーが無く 0.0 扱い＝常に最下位に劣後していた。
+    //   当時のユーザー指示「aptLow/aptHighは重み1.0扱いにする」＝apt が 1.0 だった時代の表現）。
     /**
      * [3.395.0/高速化] `all` の族名 → 添字。`check()` の `inc` はここで引いた添字で `IntArray` を
      * 加算する（旧: `breakdown[key] = (breakdown[key] ?: 0) + amount` ＝ハッシュ探索2回＋Int のボクシング。
@@ -188,7 +190,7 @@ object UnifiedViolationChecker {
     private val classWeight: Map<String, Double> by lazy { vioClass.entries.associate { it.value to MirrorKeys.weightOf(it.key) } }
 
     private val vioClass = mapOf(
-        "c1" to "vio-c1", "c2" to "vio-c2", "c3" to "vio-c3", "c3n" to "vio-c3n", "c3w" to "vio-c3w",
+        "c1" to "vio-c1", "c2" to "vio-c2", "c3" to "vio-c3", "c3n" to "vio-c3n", "c3w" to "vio-c3w", "extWish" to "vio-extWish",
         "c3m" to "vio-c3m", "c3mn" to "vio-c3mn", "c41" to "vio-c41", "c42" to "vio-c42",
         "c41s" to "vio-c41s", "c42s" to "vio-c42s",
         "covU" to "vio-covU", "covO" to "vio-covO", "pref" to "vio-pref",
@@ -397,6 +399,10 @@ object UnifiedViolationChecker {
         // [3.542.0] 希望の前日に禁止(c3w, HARD)。前日側のセル（動かせる側）を違反箇所にする。
         if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T) {
             if (p.c3wBanned(i, j, s[i][j])) { inc("c3w"); mark(i, j, "c3w") }
+        }
+        // [3.653.0] 拡張希望の違反(extWish, HARD)。静的な禁止表でセル単位に数える＝extWishCells と同じ集合。
+        if (p.hasExtBan) for (i in 0 until p.S) for (j in 0 until p.T) {
+            if (p.extBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {

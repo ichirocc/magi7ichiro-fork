@@ -343,7 +343,7 @@ internal data class RelaxTarget(val name: String, val span: String, val what: St
 internal fun relaxTarget(r: RelaxTrial.Result, ui: UiState): RelaxTarget {
     val name = ui.staffNames.getOrNull(r.staff) ?: "職員${r.staff + 1}"
     val fams = ui.violationCellFamilies[VioKey.cell(r.staff, r.day)].orEmpty()
-    val fam = listOf("c3n", "c3w", "pref", "groupViol").firstOrNull { "vio-$it" in fams } ?: "groupViol"
+    val fam = listOf("c3n", "c3w", "pref", "extWish", "groupViol").firstOrNull { "vio-$it" in fams } ?: "groupViol"
     val hardDays = r.window.filter { j -> ui.violationCellFamilies[VioKey.cell(r.staff, j)].orEmpty().any { isHardCellViolation(it) } }
     val span = if (hardDays.size > 1) DayText.range(ui.startDate, hardDays.first(), hardDays.last()) else DayText.full(ui.startDate, r.day)
     return RelaxTarget(name, span, breakdownLabels[fam] ?: fam)
@@ -665,7 +665,7 @@ internal fun dayCoverageLines(ui: UiState, j: Int, marks: List<CoverageMark>, li
 
 /** 凡例の「枠の形 → 族」の 1 行。セルに印を持つ族だけを名指す（回数・人員は行末と日ヘッダの印）。 */
 internal fun legendShapeFamilies(): String {
-    val solid = listOf("c3n", "c3w", "pref", "groupViol").map { breakdownLabels[it] ?: it }
+    val solid = listOf("c3n", "c3w", "pref", "extWish", "groupViol").map { breakdownLabels[it] ?: it }
     return "実線: ${solid.joinToString("・")}／破線: ${breakdownLabels["c1"]}（この日を○○にすると近づく）・${breakdownLabels["c3mn"]}"
 }
 

@@ -38,6 +38,7 @@ class DeltaEvaluator(private val p: Problem) {
     //   評価器側だけ3族（c3n/pref/covU）で、同じ盤面に対しチェッカーと評価器の hard が食い違っていた。
     private var hGrpV = 0L
     private var hc3w = 0L                             // [3.542.0] 希望の前日に禁止(c3w, HARD)。セル単位＝Δもこの1セルだけ
+    private var hExt = 0L                             // [3.653.0] 拡張希望の違反(extWish, HARD)。同じくセル単位
     private var sApt = 0L                             // [統一apt] 適切回数(双方向目標)の running total（SOFT）
     private var sFair = 0L                            // [統一fair] グループ内公平化の running total（SOFT）
     private var sWeekly = 0L                          // [統一weekly] 曜日平準化の running total（SOFT）
@@ -49,7 +50,7 @@ class DeltaEvaluator(private val p: Problem) {
     private var dC1 = 0L; private var dC2 = 0L; private var dC41 = 0L; private var dC42 = 0L
     private var dC41s = 0L; private var dC42s = 0L
     private var dC3 = 0L; private var dC3n = 0L; private var dC3m = 0L; private var dC3mn = 0L
-    private var dPref = 0L; private var dGrpV = 0L; private var dC3w = 0L; private var dCt = 0L; private var dApt = 0L; private var dFair = 0L; private var dWeekly = 0L; private var dCovO = 0L; private var nCovU = 0L
+    private var dPref = 0L; private var dGrpV = 0L; private var dC3w = 0L; private var dExt = 0L; private var dCt = 0L; private var dApt = 0L; private var dFair = 0L; private var dWeekly = 0L; private var dCovO = 0L; private var nCovU = 0L
 
     init {
         a = p.initialAssignment()
@@ -112,7 +113,7 @@ class DeltaEvaluator(private val p: Problem) {
         "c1" to sc1, "c2" to sc2, "c41" to sc41, "c42" to sc42, "c41s" to sc41s, "c42s" to sc42s,
         "c3" to sc3, "c3n" to hc3n, "c3m" to sc3m, "c3mn" to sc3mn,
         "pref" to hpref, "groupViol" to hGrpV, "c3w" to hc3w, "apt" to sApt, "fair" to sFair, "weekly" to sWeekly,
-        "covO" to scovO, "covU" to covUTot,
+        "covO" to scovO, "covU" to covUTot, "extWish" to hExt,
     )
 
     /**
@@ -169,7 +170,7 @@ class DeltaEvaluator(private val p: Problem) {
     fun score(): Long = scoreFrom(covUTot)
 
     private fun scoreFrom(cu: Long): Long {
-        val h1 = hc3n + cu + hpref + hGrpV + hc3w
+        val h1 = hc3n + cu + hpref + hGrpV + hc3w + hExt
         // [統一a/b] range(hct, 重み付き) と covO(scovO) を SOFT に含める（旧: hct は h2=表示HARD）。
         // [統一c/c1/apt/fair/weekly] sc1/sc3/sc3m/sc3mn/sApt/sFair/sWeekly に checker 重みを適用
         //   （各カウンタ自体は #fire/run-deficit/L1偏差の生カウント）。[3.522.0/全面見直し、docs/history/3.4xx.md]。
@@ -297,6 +298,7 @@ class DeltaEvaluator(private val p: Problem) {
         dGrpV = (if (nw in 0 until K && !p.canDo(i, nw)) 1L else 0L) -
             (if (old in 0 until K && !p.canDo(i, old)) 1L else 0L)
         dC3w = (if (p.c3wBanned(i, j, nw)) 1L else 0L) - (if (p.c3wBanned(i, j, old)) 1L else 0L)
+        dExt = (if (p.extBanned(i, j, nw)) 1L else 0L) - (if (p.extBanned(i, j, old)) 1L else 0L)
 
         // c41 (group/day range) on day j — only constraints touching this staff's group & shifts
         val gi = p.sgrp[i]
@@ -370,7 +372,7 @@ class DeltaEvaluator(private val p: Problem) {
                 (p.covOCell(nw, j, cn + 1) - p.covOCell(nw, j, cn)).toLong()
 
         // [統一b] dCt(range) は SOFT へ移動（hard から除外）。
-        val dHard = dC3n + (nCovU - covUTot) + dPref + dGrpV + dC3w
+        val dHard = dC3n + (nCovU - covUTot) + dPref + dGrpV + dC3w + dExt
         val dSoft = weightedSoft(dC1, dC2, dC41, dC42, dC41s, dC42s, dC3, dC3m, dC3mn, dCt, dApt, dFair, dWeekly, dCovO)
         return score() + dHard * SCORE_HARD_UNIT + dSoft
     }
@@ -394,7 +396,7 @@ class DeltaEvaluator(private val p: Problem) {
             }
             sc1 += dC1; sc2 += dC2; sc41 += dC41; sc42 += dC42; sc41s += dC41s; sc42s += dC42s
             sc3 += dC3; hc3n += dC3n; sc3m += dC3m; sc3mn += dC3mn
-            hpref += dPref; hGrpV += dGrpV; hc3w += dC3w; hct += dCt; sApt += dApt; sFair += dFair; sWeekly += dWeekly; scovO += dCovO
+            hpref += dPref; hGrpV += dGrpV; hc3w += dC3w; hExt += dExt; hct += dCt; sApt += dApt; sFair += dFair; sWeekly += dWeekly; scovO += dCovO
             covUTot = nCovU
         } finally {
             // invalidate the stash so a stray double-commit cannot corrupt aggregates
@@ -442,7 +444,7 @@ class DeltaEvaluator(private val p: Problem) {
         sc1 = c1All(); sc2 = c2All(); sc41 = c41All(); sc42 = c42All(); sc41s = c41sAll(); sc42s = c42sAll()
         sc3 = c3All(p.cons3, false); hc3n = c3All(p.cons3n, true)
         sc3m = c3All(p.cons3m, false); sc3mn = c3All(p.cons3mn, true)
-        hpref = prefAll(); hGrpV = groupViolAll(); hc3w = c3wAll(); hct = ctAll(); sApt = aptAll(); sFair = fairAll(); sWeekly = weeklyAll(); scovO = covOAll()
+        hpref = prefAll(); hGrpV = groupViolAll(); hc3w = c3wAll(); hExt = extWishAll(); hct = ctAll(); sApt = aptAll(); sFair = fairAll(); sWeekly = weeklyAll(); scovO = covOAll()
         covUTot = covUAll()
     }
 
@@ -642,6 +644,13 @@ class DeltaEvaluator(private val p: Problem) {
         if (p.c3wBan == null) return 0L
         var h = 0L
         for (i in 0 until S) for (j in 0 until T) if (p.c3wBanned(i, j, a[i][j])) h++
+        return h
+    }
+
+    private fun extWishAll(): Long {
+        if (!p.hasExtBan) return 0L
+        var h = 0L
+        for (i in 0 until S) for (j in 0 until T) if (p.extBanned(i, j, a[i][j])) h++
         return h
     }
 

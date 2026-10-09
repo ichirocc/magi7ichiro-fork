@@ -25,6 +25,7 @@ internal object CheckerReferenceV0 {
         "low" to "vio-low", "high" to "vio-high", "groupViol" to "vio-groupViol",
         // 適切回数(双方向目標): 不足=赤 / 超過=橙（range と同色だが家族は別。TallyCard/内訳で個別解決可能にする）。
         "aptLow" to "vio-aptLow", "aptHigh" to "vio-aptHigh",
+        "extWish" to "vio-extWish",
     )
 
     fun check(
@@ -220,6 +221,10 @@ internal object CheckerReferenceV0 {
         // [3.542.0] 希望の前日に禁止(c3w, HARD)。前日側のセル（動かせる側）を違反箇所にする。
         if (p.c3wBan != null) for (i in 0 until p.S) for (j in 0 until p.T) {
             if (p.c3wBanned(i, j, s[i][j])) { inc("c3w"); mark(i, j, "c3w") }
+        }
+        // [3.653.0] 族の追加は高速化と別の意味の変更＝新旧の両方へ同じ位置で入れる（比較の対象は高速化だけ）。
+        if (p.hasExtBan) for (i in 0 until p.S) for (j in 0 until p.T) {
+            if (p.extBanned(i, j, s[i][j])) { inc("extWish"); mark(i, j, "extWish") }
         }
 
         for (i in 0 until p.S) for (j in 0 until p.T) {

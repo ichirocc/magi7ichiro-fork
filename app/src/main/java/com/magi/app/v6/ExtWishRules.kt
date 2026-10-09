@@ -6,7 +6,7 @@ import java.time.LocalDate
 
 /**
  * 拡張希望（基本希望の否定形）の保存規則・禁止表・違反判定。正は `docs/business-logic.md` の「拡張希望」。
- * 採点の族・重みには入れない（重み未指示）。違反は `ViolationReport.extWishCells` に別件数で出す。
+ * 違反は必須の族 `extWish`（重み 8000＝希望と同じ、3.653.0。旧: 採点外）。`ViolationReport.extWishCells` は同じ集合。
  */
 object ExtWishRules {
 

@@ -4,6 +4,7 @@ import com.magi.app.model.ExtWish
 import com.magi.app.model.MagiState
 import com.magi.app.model.StateParser
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -78,6 +79,32 @@ class ExtWishOptimizeTest {
                 check("$file $algo", st, input, res!!.schedule, res!!.logs, offenders)
             }
         }
+    }
+
+    /** [3.653.0] 拡張希望の違反は必須（重み 8000＝希望と同じ）＝入力に既にある違反を探索が解消する（旧: 採点外で残った）。 */
+    @Test fun existingViolationsAreRepairedNowThatTheyAreHard() = runBlocking {
+        val st0 = load("sept2026_state.json")
+        val input = st0.schedule.toIntArray2D()
+        val p0 = Problem(st0)
+        val start = java.time.LocalDate.parse(st0.startDate)
+        var st = st0
+        for (i in 0 until p0.S) for (j in 0 until p0.T) {
+            if (p0.wish[i][j] >= 0 || p0.pinned(i, j) || (i * 7 + j) % 11 != 0 || input[i][j] !in 0 until p0.K) continue
+            val r = ExtWishRules.sanitize(st, ExtWish(i, listOf(start.plusDays(j.toLong()).toString()), listOf(st0.shifts[input[i][j]].kigou)))
+            if (r.saved != null) st = st.copy(extWishes = st.extWishes + r.saved!!)
+        }
+        val before = UnifiedViolationChecker.check(st, input)
+        val n0 = before.breakdown["extWish"] ?: 0
+        assertTrue("入力の違反が作れていない ($n0)", n0 > 10)
+        assertEquals(n0, before.extWishCells.size)
+        assertEquals(n0, before.hard)   // sept2026 の入力盤面は必須 0
+        val out = V6FinalPort.handleOptimize(st, input.copy2D(), secondsRaw = 3, workers = 2,
+            requestedAlgorithm = V6Algorithm.V5, allowImpossible = true, seed = 7L).schedule
+        val after = UnifiedViolationChecker.check(st, out)
+        val n1 = after.breakdown["extWish"] ?: 0
+        // 拡張希望の違反は先に解ける（負荷なし 3 秒で 23→0）。玉突きで出る禁止の並びは時間で減る（10 秒 3・30 秒 1）＝時間制なので緩く見る。
+        assertTrue("拡張希望の違反が残りすぎ $n1/$n0 ${after.extWishCells}", n1 * 4 <= n0)
+        assertTrue("必須が減っていない ${before.hard}→${after.hard}", after.hard < before.hard)
     }
 
     /** 既定 OFF の研磨・玉突きも含めて後処理を全部 ON にした決定的モード。 */

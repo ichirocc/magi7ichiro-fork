@@ -1491,6 +1491,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         "c3n" -> "禁止の並び（連勤など）"
         "c3w" -> "希望の前日の禁止"
         "pref" -> "希望シフト"
+        "extWish" -> "拡張希望"
         "groupViol" -> "担当外シフト"
         "low" -> "個人の回数下限"
         "high" -> "個人の回数上限"
@@ -1498,7 +1499,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun topHardFamilyJp(breakdown: Map<String, Int>): String? {
-        val keys = listOf("covU", "c3n", "c3w", "pref", "groupViol", "low", "high")
+        val keys = listOf("covU", "c3n", "c3w", "pref", "extWish", "groupViol", "low", "high")
         val top = keys.maxByOrNull { breakdown[it] ?: 0 } ?: return null
         return if ((breakdown[top] ?: 0) > 0) hardFamilyJp(top) else null
     }
