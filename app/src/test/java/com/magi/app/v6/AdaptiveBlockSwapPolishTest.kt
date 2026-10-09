@@ -1,5 +1,7 @@
 package com.magi.app.v6
 
+import com.magi.app.model.C3Row
+import com.magi.app.model.C3wRow
 import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Range
@@ -351,5 +353,55 @@ class AdaptiveBlockSwapPolishTest {
             assertTrue("重み付きスコアが増えない", after.weightedScore <= before.weightedScore)
             assertTrue("ログが出る", r.logs.isNotEmpty())
         }
+    }
+
+    /**
+     * [3.649.0/外部レビュー] 事前フィルタは必須の正味差分で判定する。0=休 1=D 2=N 3=W、T=11。A は 4・7 日目（0 始まり 3・6）に W を希望し、
+     * その前日が N＝希望の前日に禁止（W の前日に N）が 2 件。B の 4 日目は N。0 始まり 2・5 日目を A↔B で入れ替えると A の c3w は 0、
+     * B に N,N（禁止の並び）が 1 件＝必須 2→1。旧フィルタ（c3n の増加だけを見る）はこの交換を捨てて必須 2 のままだった。
+     */
+    private fun wishEveState(): MagiState = MagiState(
+        startDate = "2026-06-01", endDate = "2026-06-11",
+        shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("D", "D", "", ""), Shift("N", "N", "", ""), Shift("W", "W", "", "")),
+        groups = listOf(Group("G", "G")), staff = listOf(Staff("A", 0), Staff("B", 0)), use2Patterns = false,
+        groupShift = listOf(listOf(1, 1, 1, 1)), groupShiftApt = listOf(listOf("", "", "", "")),
+        schedule = listOf(listOf(0, 0, 2, 3, 0, 2, 3, 0, 0, 0, 0), listOf(0, 0, 1, 2, 0, 1, 0, 0, 0, 0, 0)),
+        wishes = mapOf("0,3" to 3, "0,6" to 3), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = listOf(C3Row(listOf("N", "N"))),
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        cons3w = listOf(C3wRow("W", "N")),
+    )
+
+    @Test
+    fun aSwapThatAddsAForbiddenRunIsKeptWhenItLowersTheHardTotal() {
+        val st = wishEveState()
+        val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        assertEquals(2, before.breakdown["c3w"] ?: 0)
+        for (filter in listOf(true, false)) {
+            val res = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D(), filterC3nIncrease = filter)
+            val after = UnifiedViolationChecker.check(st, res.newSchedule)
+            assertEquals("filter=$filter: 交換を採って必須 2→1", 1, after.hard)
+            assertEquals("filter=$filter", 0, after.breakdown["c3w"] ?: 0)
+            assertEquals("filter=$filter", 1, after.breakdown["c3n"] ?: 0)
+        }
+    }
+
+    /** 必須が正味で増える交換は評価前に捨てる＝ON は正式評価に回さず、OFF は評価して却下する。どちらも盤面は変わらない。
+     *  B は 2 日目（0 始まり 1）に N を希望して固定。交換できる日は 0・5 日目だけで、交換すると B が N,N になる＝必須が 1 増えるだけ。 */
+    @Test
+    fun aSwapThatOnlyAddsAForbiddenRunIsSkippedBeforeTheCheckerWithTheSameResult() {
+        val st = wishEveState().copy(
+            schedule = listOf(listOf(2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0), listOf(1, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+            wishes = mapOf("1,1" to 2), cons3w = emptyList(),
+        )
+        val before = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        TuningTelemetry.reset()
+        val on = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D(), filterC3nIncrease = true)
+        val skipped = TuningTelemetry.c3nFilterSkipped.get()
+        val off = AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(st, st.schedule.toIntArray2D(), filterC3nIncrease = false)
+        TuningTelemetry.reset()
+        assertTrue("ON は必須が増える候補を評価前に捨てる", skipped > 0)
+        assertEquals(before.hard, UnifiedViolationChecker.check(st, on.newSchedule).hard)
+        assertTrue("ON と OFF は同じ盤面", on.newSchedule.contentDeepEquals(off.newSchedule))
     }
 }
