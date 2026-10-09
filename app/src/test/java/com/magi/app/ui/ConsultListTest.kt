@@ -31,6 +31,8 @@ class ConsultListTest {
         assertEquals(listOf(a), l)
         assertNull(consultAdd(l, ConsultItem("x", "y")))
         assertEquals(2, consultAdd(l, ConsultItem("x", "z"))!!.size)
+        assertEquals(true, isConsulted(l, ConsultItem("x", "y")))
+        assertEquals(false, isConsulted(l, ConsultItem("x", "z")))
     }
 
     @Test fun chainAndFixConsultsSummarizeTheChange() {

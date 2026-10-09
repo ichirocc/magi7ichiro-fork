@@ -2653,7 +2653,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         fixBoardKey = boardKey(snap)
         fixStateKey = stateKey(st)
         val p = cachedProblem(st)
-        _ui.update { it.copy(messageIsError = false, message = "複数人の入替の手順を探しています…") }
+        _ui.update { it.copy(messageIsError = false, message = "複数人の入れ替えの手順を探しています…") }
         viewModelScope.launch {
             val s = withContext(Dispatchers.Default) { V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label) }
             if (s == null) _ui.update { it.copy(messageIsError = true, message = "入替の手順が見つかりませんでした。「直し方を探す」で探し直してください") }

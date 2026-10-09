@@ -214,11 +214,9 @@ private fun WishTrialRowView(
             }
         }
     }
-    // [3.645.0/仕様 5.3] 本人や上長に確認してから決める＝対象と検討内容を相談中の一覧へ（取消も勤務の変更もしない）。
-    TextButton(
-        onClick = { vm.addConsult(consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day)) },
-        modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
-    ) { Text(CONSULT_BUTTON) }
+    // [3.645.0/仕様 5.3] 本人や上長に確認してから決める＝対象と検討内容を相談中の一覧へ（取消も勤務の変更もしない）。積んだら「相談中」。
+    val consult = consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day)
+    ConsultButton(isConsulted(ui.consults, consult), Modifier.padding(start = 4.dp)) { vm.addConsult(consult) }
 }
 
 @Composable
@@ -290,7 +288,7 @@ internal fun guidedFixTarget(shortfalls: List<CoverageShortfall>): CoverageShort
 
 /** [3.644.0/UX-03] 複数人の入替を当てる前に、変わる人・日・勤務（前 → 後）と必須の増減を一覧で見せる。当てるのは確認のあと（元に戻せる）。 */
 @Composable
-internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit, onConsult: () -> Unit = {}) {
+internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit, consulted: Boolean = false, onConsult: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -304,12 +302,23 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 p.caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 Text("当てる直前にもう一度検査し、必須が減らない・希望の固定を崩す手順は当てません。当てたあとは「元に戻す」で取り消せます。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                TextButton(onClick = onConsult, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
             }
         },
-        confirmButton = { Button(onClick = onApply, modifier = Modifier.heightIn(min = 48.dp)) { Text("この入替を当てる") } },
+        // 第 2 の操作は主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End) {
+                Button(onClick = onApply, modifier = Modifier.heightIn(min = 48.dp)) { Text("この入れ替えを当てる") }
+                ConsultButton(consulted, Modifier, onConsult)
+            }
+        },
         dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる") } },
     )
+}
+
+/** 「相談してから決める」。積んだあとは押せない「相談中」＝結果を形で返す（シートやダイアログの下では Snackbar が見えない）。 */
+@Composable
+internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = !consulted, modifier = modifier.heightIn(min = 48.dp)) { Text(if (consulted) CONSULT_DONE else CONSULT_BUTTON) }
 }
 
 /** [3.645.0/仕様 5.3] 相談してから決める判断の一覧（ホーム）。対象と検討内容を後から再確認できる。出力は止めない。 */
@@ -411,8 +420,8 @@ internal fun GuidedFixDialog(
                                 }
                                 Text(if (pending) "再検査中…（結果が反映されるまで候補は押せません）" else "入れたら「元に戻す」でいつでも取り消せます。",
                                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                                TextButton(onClick = { vm.addConsult(consultShortage(target.dayLabel, target.shiftSymbol, cands.map { it.name })) },
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
+                                val consult = consultShortage(target.dayLabel, target.shiftSymbol, cands.map { it.name })
+                                ConsultButton(isConsulted(ui.consults, consult), Modifier.fillMaxWidth()) { vm.addConsult(consult) }
                             }
                             target.chainVerified -> {
                                 // [UX監査 高1] 1人を動かすだけでは埋まらないが、複数人の入替で埋まると分析が確かめた枠。
@@ -427,7 +436,7 @@ internal fun GuidedFixDialog(
                                     },
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                                 ) {
-                                    Text("入替の一覧と影響を見る", textAlign = TextAlign.Center)
+                                    Text("入れ替えの一覧と影響を見る", textAlign = TextAlign.Center)
                                 }
                             }
                             else -> {
@@ -1802,7 +1811,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                             Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
-                                TextButton(onClick = { onConsult(s) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
+                                ConsultButton(isConsulted(ui.consults, consultFix(s))) { onConsult(s) }
                                 Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text("この手を使う（元に戻せます）")
                                 }
