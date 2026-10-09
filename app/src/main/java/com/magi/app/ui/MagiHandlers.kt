@@ -170,6 +170,8 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Session.ClearMessage -> vm.clearMessage(e.shown)
             is MagiEvent.Session.AddReviewMemo -> vm.addReviewMemo(e.text)
             is MagiEvent.Session.RemoveReviewMemo -> vm.removeReviewMemo(e.index)
+            is MagiEvent.Session.AddConsult -> vm.addConsult(e.item)
+            is MagiEvent.Session.RemoveConsult -> vm.removeConsult(e.index)
             MagiEvent.Session.DismissInterrupted -> vm.dismissInterrupted()
             // 画面遷移・選択は Root が持つ（盤面にもドメインにも触らない）。
             is MagiEvent.Session.SelectTab, is MagiEvent.Session.FocusCell,

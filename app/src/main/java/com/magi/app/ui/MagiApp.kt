@@ -618,6 +618,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
                         outcomeLine = vm.fixOutcomeLine() ?: vm.csvSavedLine() ?: vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
+                        consultLine = consultLine(ui.consults.size),
                         relax = vm.relaxTrialFor(),
                         onShowRelax = { relaxFrom = null; relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
@@ -625,6 +626,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         relaxFailed = vm.relaxFailed(),
                         onRetryRelax = { vm.retryRelaxTrial() },
                     )
+                    // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
+                    ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) })
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
                     // [3.480.0] 旧: 画面最下部にボタン列で配置していたが、比較検討は「処方箋」の一部として
@@ -831,7 +834,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)
-                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode)
+                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode,
+                        onConsult = { vm.addConsult(consultFix(it)) })
                 }
                 else -> {
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
@@ -941,7 +945,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (guidedFix) {
             GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = openEditLanding)
         }
-        ui.chainPreview?.let { ChainFixPreviewDialog(it, onApply = { vm.applyChainPreview() }, onDismiss = { vm.dismissChainPreview() }) }
+        ui.chainPreview?.let { p ->
+            ChainFixPreviewDialog(p, onApply = { vm.applyChainPreview() }, onDismiss = { vm.dismissChainPreview() },
+                onConsult = { vm.addConsult(consultChain(p)); vm.dismissChainPreview() })
+        }
         ui.monthMovePrompt?.let { MonthMoveConfirmDialog(it, onEvent) }
         if (relaxDialog) {
             RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false; relaxFrom = null }, onConfirm = { token ->
@@ -954,6 +961,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             PreRunCheckSheet(sum, ui,
                 onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0 },
                 onOpenLanding = { l -> vm.dismissPreRun(); openEditLanding(l) },
+                onConsult = { r -> vm.addConsult(consultPreRun(r)) },
                 onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
                 onFixData = { vm.dismissPreRun(); tab = 2 },
                 onProceed = { vm.proceedPreRun() },

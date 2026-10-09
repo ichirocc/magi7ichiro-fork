@@ -215,6 +215,8 @@ internal sealed interface MagiEvent {
         data class ClearMessage(val shown: String?) : Session
         data class AddReviewMemo(val text: String) : Session
         data class RemoveReviewMemo(val index: Int) : Session
+        data class AddConsult(val item: ConsultItem) : Session      // [3.645.0] 相談してから決める
+        data class RemoveConsult(val index: Int) : Session
         data object DismissInterrupted : Session
     }
 }

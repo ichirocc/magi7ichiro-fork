@@ -214,6 +214,11 @@ private fun WishTrialRowView(
             }
         }
     }
+    // [3.645.0/仕様 5.3] 本人や上長に確認してから決める＝対象と検討内容を相談中の一覧へ（取消も勤務の変更もしない）。
+    TextButton(
+        onClick = { vm.addConsult(consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day)) },
+        modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
+    ) { Text(CONSULT_BUTTON) }
 }
 
 @Composable
@@ -285,7 +290,7 @@ internal fun guidedFixTarget(shortfalls: List<CoverageShortfall>): CoverageShort
 
 /** [3.644.0/UX-03] 複数人の入替を当てる前に、変わる人・日・勤務（前 → 後）と必須の増減を一覧で見せる。当てるのは確認のあと（元に戻せる）。 */
 @Composable
-internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit) {
+internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDismiss: () -> Unit, onConsult: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -299,11 +304,38 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 p.caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 Text("当てる直前にもう一度検査し、必須が減らない・希望の固定を崩す手順は当てません。当てたあとは「元に戻す」で取り消せます。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                TextButton(onClick = onConsult, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
             }
         },
         confirmButton = { Button(onClick = onApply, modifier = Modifier.heightIn(min = 48.dp)) { Text("この入替を当てる") } },
         dismissButton = { TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる") } },
     )
+}
+
+/** [3.645.0/仕様 5.3] 相談してから決める判断の一覧（ホーム）。対象と検討内容を後から再確認できる。出力は止めない。 */
+@Composable
+internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit) {
+    if (ui.consults.isEmpty()) return
+    val cs = MaterialTheme.colorScheme
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("相談中（${ui.consults.size}件）", style = MaterialTheme.typography.titleMedium)
+            Text("関係者に確認してから決める項目です（アプリを閉じると消えます）。書き出しは止めません。",
+                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            ui.consults.forEachIndexed { idx, c ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    }
+                    if (c.staff != null && c.day != null) {
+                        TextButton(onClick = { onOpenCell(c.staff, c.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("開く") }
+                    }
+                    DeleteRowButton(onClick = { onRemove(idx) }, text = "済")
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -379,6 +411,8 @@ internal fun GuidedFixDialog(
                                 }
                                 Text(if (pending) "再検査中…（結果が反映されるまで候補は押せません）" else "入れたら「元に戻す」でいつでも取り消せます。",
                                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                                TextButton(onClick = { vm.addConsult(consultShortage(target.dayLabel, target.shiftSymbol, cands.map { it.name })) },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
                             }
                             target.chainVerified -> {
                                 // [UX監査 高1] 1人を動かすだけでは埋まらないが、複数人の入替で埋まると分析が確かめた枠。
@@ -478,6 +512,7 @@ internal fun OperatorNextActionCard(
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
     outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して再作成」の結果（VM が鮮度を照合済み）
+    consultLine: String? = null,    // [3.645.0/仕様 5.3] 相談中の件数（未確認事項）。完成の見出しは変えず、書き出しも止めない
     relax: RelaxToken? = null,      // [S6] いまのデータで見つかった設定の壁の組（VM が鮮度を照合済み。null＝無い）
     onShowRelax: () -> Unit = {},
     onStopRelax: () -> Unit = {},
@@ -598,6 +633,7 @@ internal fun OperatorNextActionCard(
             plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
             plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
             if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
+            if (!ui.running && consultLine != null) Text(consultLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
             if (!ui.running && ui.relaxSearching) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
@@ -1718,7 +1754,8 @@ internal fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compo
 }
 
 @Composable
-internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.magi.app.v6.FixSuggestion) -> Unit, proMode: Boolean = false) {
+internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.magi.app.v6.FixSuggestion) -> Unit, proMode: Boolean = false,
+                               onConsult: (com.magi.app.v6.FixSuggestion) -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     // [3.483.0 A-2] ホームの「AIの解決提案」は必須違反が残っていれば自動で探すのに、ここは「探す」を押すまで空
     //   ＝同じエンジンで挙動が違った。同じ条件（結果あり・必須>0・未探索）で自動探索を共有する。
@@ -1763,8 +1800,12 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             val totalTxt = if (s.deltaTotal <= 0) "−${-s.deltaTotal}" else "+${s.deltaTotal}"
                             Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
                                 style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                            Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) {
-                                Text("この手を使う（元に戻せます）")
+                            Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
+                                TextButton(onClick = { onConsult(s) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
+                                Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
+                                    Text("この手を使う（元に戻せます）")
+                                }
                             }
                         }
                     }
