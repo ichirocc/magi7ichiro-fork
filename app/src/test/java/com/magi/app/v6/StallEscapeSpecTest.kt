@@ -3,6 +3,7 @@ package com.magi.app.v6
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -173,7 +174,9 @@ class StallEscapeSpecTest {
         assertFalse("基準腕（HEAD の壁判定）は既定で使わない", PolishGate.c3nWallLegacy)
         assertTrue("後期演算は停止要求を見る（既定）", PolishGate.lateOpStopPropagation)
         assertFalse("1 手探索の反証は既定で使わない（測定中）", PolishGate.c3nWallDeepCheck)
+        assertFalse("適応閾値は既定で使わない（測定中）", PolishGate.adaptiveStall)
         assertEquals(2, V6FinalPort.STALL_OVERRIDE_FACTOR)
+        assertEquals(3 to 3, V6FinalPort.ADAPTIVE_STALL_FACTOR to V6FinalPort.ADAPTIVE_STALL_MIN_GAPS); assertEquals(8, V6FinalPort.ADAPTIVE_STALL_WINDOW)
         assertEquals(5000, Hf63Infeasibility.INFEAS_STALL_ITERS)
         assertEquals(3, StallPolishInjection.MAX_INJECTIONS)
         assertEquals(6_000L, StallPolishInjection.CAP_MS)
@@ -186,15 +189,48 @@ class StallEscapeSpecTest {
             PolishGate.c3nWallLegacy = true
             PolishGate.lateOpStopPropagation = false
             PolishGate.c3nWallDeepCheck = true
+            PolishGate.adaptiveStall = true
             val snap = PolishGate.snapshot()
             PolishGate.c3nWallLegacy = false
             PolishGate.lateOpStopPropagation = true
             PolishGate.c3nWallDeepCheck = false
+            PolishGate.adaptiveStall = false
             PolishGate.restore(snap)
             assertTrue("c3nWallLegacy は往復する", PolishGate.c3nWallLegacy)
             assertFalse("lateOpStopPropagation は往復する", PolishGate.lateOpStopPropagation)
             assertTrue("c3nWallDeepCheck は往復する", PolishGate.c3nWallDeepCheck)
+            assertTrue("adaptiveStall は往復する", PolishGate.adaptiveStall)
         } finally { PolishGate.restore(saved) }
+    }
+
+    // §5.8 C 適応閾値: 間隔 3 個未満は使わない、最大×3 を [短, 通常] に挟む、通常分岐だけを縮める（床・壁の短い閾値はそのまま）
+    @Test fun adaptiveStallNeedsThreeGapsAndClampsBetweenShortAndNormal() {
+        assertNull(V6FinalPort.adaptiveStallMs(listOf(5_000L, 6_000L), 37_500L, 270_000L))
+        assertEquals("最大 20 s × 3 = 60 s", 60_000L, V6FinalPort.adaptiveStallMs(listOf(5_000L, 20_000L, 6_000L), 37_500L, 270_000L))
+        assertEquals("短い閾値より下には行かない", 37_500L, V6FinalPort.adaptiveStallMs(listOf(1_000L, 2_000L, 3_000L), 37_500L, 270_000L))
+        assertEquals("通常閾値より上には行かない", 270_000L, V6FinalPort.adaptiveStallMs(listOf(100_000L, 100_000L, 100_000L), 37_500L, 270_000L))
+        assertEquals("短>通常の帯（20 s 予算）でも通常を超えない", 9_000L, V6FinalPort.adaptiveStallMs(listOf(1_000L, 1_000L, 1_000L), 10_000L, 9_000L))
+    }
+
+    @Test fun adaptiveOnlyShortensTheNormalBranch() {
+        val normal = V6FinalPort.effectiveStallMs(3, 0, 3, false, false, 37_500L, 270_000L)
+        assertEquals(270_000L, normal)
+        assertEquals("通常分岐は適応値まで縮む", 60_000L, V6FinalPort.effectiveStallMs(3, 0, 3, false, false, 37_500L, 270_000L, adaptiveMs = 60_000L))
+        assertEquals("plateau の短い閾値は変わらない", 37_500L, V6FinalPort.effectiveStallMs(0, 0, 0, false, false, 37_500L, 270_000L, adaptiveMs = 60_000L))
+        assertEquals("null＝既定と同じ", normal, V6FinalPort.effectiveStallMs(3, 0, 3, false, false, 37_500L, 270_000L, adaptiveMs = null))
+    }
+
+    @Test fun observeRecordsGapsBetweenImprovementsOnlyAndKeepsTheLastEight() {
+        val wd = V6FinalPort.WatchdogBest(startMs = 0L)
+        wd.observe(rep(5, 500.0, 5), 10_000L, 1L, { true }, 0)
+        assertEquals("最初の改善までは間隔ではない", emptyList<Long>(), wd.recentGaps())
+        var w = 500.0
+        for (k in 1..10) { w -= 1.0; wd.observe(rep(5, w, 5), 10_000L + k * 1_000L * k, 1L + k, { true }, 0) }
+        val gaps = wd.recentGaps()
+        assertEquals(8, gaps.size)
+        assertEquals("古い順・直近 8 個（間隔 k² − (k−1)² × 1000 の k=3..10）", (3..10).map { (it * it - (it - 1) * (it - 1)) * 1_000L }, gaps)
+        assertFalse("悪化は間隔に数えない", wd.observe(rep(5, w + 1, 5), 999_000L, 99L, { true }, 0))
+        assertEquals(8, wd.recentGaps().size)
     }
 
     // §5.4 判定と発火の間に改善が割り込んだら発火しない（判定後の改善の順序を検査する）

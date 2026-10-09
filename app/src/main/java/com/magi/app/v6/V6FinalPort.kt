@@ -186,6 +186,15 @@ object V6FinalPort {
      *  「本当に詰まっている run は閾値の2倍まで待つ」保守側の設定。 */
     internal const val STALL_OVERRIDE_FACTOR = 2
 
+    /** [PROPOSAL C/3.643.0、既定 OFF＝`PolishGate.adaptiveStall`] 適応閾値（§5.8 C）: 直近 [ADAPTIVE_STALL_WINDOW] 個の改善間隔の最大の
+     *  [ADAPTIVE_STALL_FACTOR] 倍を [stallHardMs, stallMs] に挟み、通常分岐の閾値をそれ以下へ縮める。間隔が [ADAPTIVE_STALL_MIN_GAPS] 個未満なら使わない。
+     *  床・壁の短縮はそのまま（短縮にしか働かず、plateau の短い閾値より短くはならない）。 */
+    internal const val ADAPTIVE_STALL_FACTOR = 3
+    internal const val ADAPTIVE_STALL_MIN_GAPS = 3
+    internal const val ADAPTIVE_STALL_WINDOW = 8
+    internal fun adaptiveStallMs(gaps: List<Long>, stallHardMs: Long, stallMs: Long): Long? =
+        if (gaps.size < ADAPTIVE_STALL_MIN_GAPS) null else (gaps.max() * ADAPTIVE_STALL_FACTOR).coerceIn(minOf(stallHardMs, stallMs), stallMs)
+
     internal fun watchdogStagnationFired(
         now: Long, startMs: Long, minRunMs: Long,
         lastPhaseChangeMs: Long, phaseGraceMs: Long,
@@ -213,12 +222,13 @@ object V6FinalPort {
 
     internal fun effectiveStallMs(
         bestHard: Int, hardFloor: Int, nonCovUHard: Int, nonCovUAllC3n: Boolean,
-        c3nWallProven: Boolean, stallHardMs: Long, stallMs: Long, wishReached: Boolean = false,
+        c3nWallProven: Boolean, stallHardMs: Long, stallMs: Long, wishReached: Boolean = false, adaptiveMs: Long? = null,
     ): Long {
         val basePlateau = (bestHard <= hardFloor && nonCovUHard == 0) || wishReached
         val c3nWallPlateau = nonCovUHard > 0 && nonCovUAllC3n &&
             bestHard <= hardFloor + nonCovUHard && c3nWallProven
-        return if (basePlateau || c3nWallPlateau) stallHardMs else stallMs
+        val base = if (basePlateau || c3nWallPlateau) stallHardMs else stallMs
+        return if (adaptiveMs != null) minOf(base, adaptiveMs) else base
     }
 
     /** [3.422.0/Part B・3.424.0で基準を是正] 「通常」分岐（HARD がまだ構造床に届いていない＝解ける
@@ -300,12 +310,22 @@ object V6FinalPort {
         val stagnationByOverride = java.util.concurrent.atomic.AtomicBoolean(false)
         val stagnationWall = java.util.concurrent.atomic.AtomicBoolean(false)
         @Volatile var bestReport: ViolationReport? = null
+        val improvements = java.util.concurrent.atomic.AtomicInteger(0)
+        private val gapLock = Any()
+        private val gaps = ArrayDeque<Long>()
+        /** 直近 [ADAPTIVE_STALL_WINDOW] 個の改善間隔（ms、古い順）。最初の改善までの時間は間隔ではないので含めない（§5.8 C）。 */
+        fun recentGaps(): List<Long> = synchronized(gapLock) { gaps.toList() }
 
         /** 改善報告。[progressImproved] で改善なら最良・時刻・反復数・非 covU 内訳・世代を更新し、停滞ラッチを降ろす（3.346.0）。 */
         fun observe(report: ViolationReport, nowMs: Long, observedIters: Long, beatsInput: () -> Boolean, wishC3wProven: Int): Boolean {
             if (!progressImproved(report.hard, report.weightedScore, report.total, bestHard.get(), bWeighted, bTotal)) return false
             bestHard.set(report.hard); bTotal = report.total; bWeighted = report.weightedScore
             bestReport = report
+            val prevImproveMs = lastBestImproveMs.get()
+            if (improvements.getAndIncrement() > 0) synchronized(gapLock) {
+                gaps.addLast(nowMs - prevImproveMs)
+                while (gaps.size > ADAPTIVE_STALL_WINDOW) gaps.removeFirst()
+            }
             lastBestImproveMs.set(nowMs); lastBestImproveIters.set(observedIters)
             if (beatsInput()) lastBeatInputMs.set(nowMs)
             stagnationFired.set(false); stagnationDurationMs.set(-1); stagnationIters.set(-1); stagnationByOverride.set(false); stagnationWall.set(false)
@@ -741,6 +761,7 @@ object V6FinalPort {
             val effStall = effectiveStallMs(
                 wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
                 wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached(),
+                adaptiveMs = if (PolishGate.adaptiveStall) adaptiveStallMs(wd.recentGaps(), stallHardMs, stallMs) else null,
             )
             when {
                 now >= searchDeadlineMs || !isActive -> true
@@ -957,13 +978,18 @@ object V6FinalPort {
             val endStallS = (tChain1 - lastImp).coerceAtLeast(0L) / 1000
             val nonCovU = wd.bestNonCovUHard.get()
             val wishReachedEnd = wd.bestHard.get() == wishFloorLogged && (bestWishReached() || wishReachedOn(chained.schedule, wd.bestHard.get()))
+            val gapsEnd = wd.recentGaps()
+            val adaptiveEnd = if (PolishGate.adaptiveStall) adaptiveStallMs(gapsEnd, stallHardMs, stallMs) else null
             val kind = when {
                 wd.bestHard.get() <= hardFloor && nonCovU == 0 && wishOn && wishReachedEnd -> "plateau+希望衝突の床=短${stallHardMs / 1000}s"
                 wd.bestHard.get() <= hardFloor && nonCovU == 0 -> "plateau=短${stallHardMs / 1000}s"
                 wishOn && wishReachedEnd -> "希望衝突の床=短${stallHardMs / 1000}s"
                 wd.stagnationWall.get() && wd.bestNonCovUAllC3n.get() -> "c3n壁=短${stallHardMs / 1000}s"
-                else -> "通常=長${stallMs / 1000}s"
+                else -> "通常=長${stallMs / 1000}s" + (adaptiveEnd?.takeIf { it < stallMs }?.let { "→適応${it / 1000}s" } ?: "")
             }
+            val adaptNote = if (PolishGate.adaptiveStall)
+                "・適応閾値=${adaptiveEnd?.let { "${it / 1000}s" } ?: "なし"}（改善間隔${gapsEnd.size}個" +
+                    (gapsEnd.maxOrNull()?.let { "・最大${it / 1000}s×$ADAPTIVE_STALL_FACTOR" } ?: "") + "・通常分岐だけ）" else ""
             // [3.375.2/実測で判明] 発火しなかったとき**どの条件が塞いだか**を出す。実測(golden・150s予算)で
             //   「停滞47s > 閾値18s なのに発火=なし」が起き、ログからは理由が読めなかった。原因は
             //   `phaseGraceMs`(予算/40)のリセット判定が **"/ " 以降＝内側のフェーズ名**（"V5 SA"/"ALNS restart 1/1"/
@@ -983,7 +1009,7 @@ object V6FinalPort {
                 val reasons = ArrayList<String>()
                 if (tChain1 - startMs <= minRunMs)
                     reasons.add("最短実行未達(実測${(tChain1 - startMs) / 1000}s/${minRunMs / 1000}s)")
-                val effStallForLog = if (kind.startsWith("通常")) stallMs else stallHardMs
+                val effStallForLog = if (kind.startsWith("通常")) (adaptiveEnd?.let { minOf(stallMs, it) } ?: stallMs) else stallHardMs
                 // [3.408.0] フェーズ猶予は**遅延**に降格した（閾値の STALL_OVERRIDE_FACTOR 倍で上書き発火）
                 //   ので、理由として挙げるのは「まだ上書き倍率にも達していない」ときだけ。
                 if (tChain1 - lastPhaseAtSearchEnd <= phaseGraceMs &&
@@ -1011,7 +1037,7 @@ object V6FinalPort {
                     // [3.375.0] 時刻に加えて反復数も出す（「回していない」のか「回しても改善しない」のかの区別）。
                     "・反復(進捗報告ぶん・目安)=最終改善時${fmtIter(lastImpItersAtSearchEnd)}→" +
                     "探索終了時${fmtIter(itersAtSearchEnd)}（無改善のまま約${fmtIter(itersAtSearchEnd - lastImpItersAtSearchEnd)}転・" +
-                    "総量はAdaptivePortfolioの合計iter参照）$blockNote$afterNote$wallNote",
+                    "総量はAdaptivePortfolioの合計iter参照）$blockNote$afterNote$wallNote$adaptNote",
             ))
         }
         val stagnationLog = if (wd.stagnationFired.get()) listOf(MirrorLog(

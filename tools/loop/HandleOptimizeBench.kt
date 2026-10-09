@@ -18,7 +18,7 @@ fun main(args: Array<String>) {
     // [2026-10-08] MAGI_HO_FEATURE: 既定（空）＝ExtraRefine 省略条件の A/B（旧来）。"c3nwall"＝on 腕で c3n 壁の短縮を外す
     //   （PolishGate.c3nWallShortStall=false、通常閾値で粘る）。"head"＝on 腕で HEAD の壁判定（c3nWallLegacy=true）と
     //   後期演算の試行中の停止確認を切る（lateOpStopPropagation=false、入口の確認は残る）に戻す（docs/stall_escape.md §5.5）。
-    //   "deep"＝on 腕で経験的な c3n 壁の 1 手探索による反証（PolishGate.c3nWallDeepCheck）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
+    //   "deep"＝on 腕で経験的な c3n 壁の 1 手探索による反証（PolishGate.c3nWallDeepCheck）。"adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
     val feature = System.getenv("MAGI_HO_FEATURE") ?: ""
     val fixtures = System.getenv("MAGI_HO_FIXTURES")?.split(',')?.filter { it.isNotBlank() }
         ?: listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json")
@@ -49,6 +49,8 @@ fun main(args: Array<String>) {
                 PolishGate.lateOpStopPropagation = !(feature == "head" && armOn)
                 // "deep"＝on 腕で経験的な c3n 壁を 1 手探索で反証する（PolishGate.c3nWallDeepCheck、根拠の段階化）。off 腕＝現行。
                 PolishGate.c3nWallDeepCheck = feature == "deep" && armOn
+                // "adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall、§5.8 C: 改善間隔の最大×3 を [短, 通常] に挟む）。off 腕＝現行。
+                PolishGate.adaptiveStall = feature == "adaptive" && armOn
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(
