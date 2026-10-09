@@ -44,6 +44,7 @@
   本計算の盤面で必須違反に関わる希望を 1 件ずつ外し、短い試算（配置固定・1手探索・短い最適化・短い後処理）の必須件数と、
   同じ希望を外した本計算（正解）・外さずにやり直した本計算（G0）を比べる。壁時計予算なので値は負荷で揺れる。
 - **HARD 残存の分類（2026-10-03）**: `tools/loop/run_hard_residual_probe.sh <dir> fixtures 60,120 1,2,3`（`HardResidualProbe.kt`、合成は `synth:<id の一部>`）。
+- **経験的な c3n 壁の探索（2026-10-09、3.643.0 手順②）**: `tools/loop/run_wall_fixture_probe.sh <dir> [id の部分一致=""] [seed 変種=3] [予算秒=4] [方式=AUTO]`（`WallFixtureProbe.kt`）。合成ケース（`Cases.specs`）を短い予算で最適化し、最終盤面の禁止連続を `diagnoseForbiddenRuns` で診断。全セル塞がり（`allBlocked`）かつ希望固定でない（`!allBlockedCertified`）盤面を `wall_<id>_{refuted|confirmed}_state.json` に書く（refuted＝`c3nWallRefutedByOneMove` が必須を減らす手を見つけた＝`c3nWallDeepCheck` の計測に使える盤面）。`wall_probe.csv` に全ケースの hard・内訳・各セルの逃げ道（FR/CH/AD/PI/BL）。
   最終盤面の HARD を族・職員・日で並べ、既存の床（`structuralHardFloor`・`wishConflictFloorParts`・`ForbiddenDiag`・`PreRunCheck`）で分類し、
   床を超えた盤面に `FixSuggester`/`ViolationComponentRepair` を当てる。厳密な最小 HARD は `HardFloorExport.kt`（export/verify）＋
   `hard_floor_cpsat.py`（ortools、置ける範囲は mayPlace と canDo の 2 通り。解は checker で照合）。結果は `docs/history/3.4xx.md`。
