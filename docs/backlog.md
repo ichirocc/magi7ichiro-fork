@@ -711,3 +711,9 @@
     ①runV5 NARROW（生 SA 盤面は探索内でだけ使い、最終候補にしない）: 未実装・ログ上の根拠なし。
     ②ExtraRefine の空振り対策: `extraRefineRequirePostHardDrop` は測定済み＝既定 OFF 維持（端末盤面で発火せず節約 0s）。
     進めるなら `isStructuralHardResidual` の c3w 証明を wishOn に依らず数え、端末水準の盤面で A/B（節約上限 10〜14s）。
+44. **[停滞脱出の既定 OFF 機構・2026-10-09 登録]** 採否が未決のまま残る機構（詳細は `docs/stall_escape.md` §5.8・§10・§11）:
+    ①`PolishGate.c3nWallDeepCheck`（根拠の段階化、PROPOSAL B）: 計測不能＝経験的で反証できる c3n 壁のフィクスチャが実データ 4 件・合成 174 盤面に無い。
+    画面の説明が「禁止の並びで、1 マスの変更・玉突き・隣の日の調整では崩せませんでした」（StopSummary の C3N_WALL_EMPIRICAL）を出した実機の盤面 JSON が手に入ったら
+    `MAGI_HO_FEATURE=deep` で測る。②PROPOSAL A（追加待機 M）: 未実装。両端（M=0／M=normal−short）は 3.641.0 で非有意＝実装の優先度は低い。
+    ③`PolishGate.adaptiveStall`（適応閾値、PROPOSAL C）: 120 s・blocked_covu で既定が良く否決（2026-10-09）。腕は残置。再提案は係数・窓・予算を変えた計測つきで。
+    ④`wishConflictFloorMode` E0A/E0B（#42(b)）: 端末 300 s での実データ A/B 待ち（ホスト A/B は 2026-10-01 済）。

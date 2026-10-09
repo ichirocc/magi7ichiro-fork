@@ -294,9 +294,9 @@ object PolishGate {
     @Volatile var lateOpStopPropagation: Boolean = true
 
     /** 根拠の精度（`docs/stall_escape.md` §5.3、3.643.0）: 経験的な c3n 壁（探索手の全滅）は、1 手探索（`FixSuggester`、上限 2 s）でも必須を減らす手が
-     *  無いときだけ短縮に使う。希望固定だけの壁（証明相当）は従来どおり。既定 **false**（測定中、ベンチの腕 `deep`）。 */
+     *  無いときだけ短縮に使う。希望固定だけの壁（証明相当）は従来どおり。既定 **false**（計測は経験的な壁のフィクスチャ待ち＝ベンチの腕 `deep`、`docs/stall_escape.md` §11）。 */
     @Volatile var c3nWallDeepCheck: Boolean = false
-    /** [PROPOSAL C/3.643.0、`docs/stall_escape.md` §5.8] 適応閾値: 直近の改善間隔の最大×3 を [短, 通常] に挟み、通常分岐の停滞閾値を縮める。既定 false（測定中＝ベンチの腕 `adaptive`）。 */
+    /** [PROPOSAL C/3.643.0、`docs/stall_escape.md` §5.8] 適応閾値: 直近の改善間隔の最大×3 を [短, 通常] に挟み、通常分岐の停滞閾値を縮める。既定 false（2026-10-09 の計測で既定が良く否決＝§11。腕 `adaptive` は再計測用）。 */
     @Volatile var adaptiveStall: Boolean = false
 
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、

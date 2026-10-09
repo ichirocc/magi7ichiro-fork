@@ -51,7 +51,7 @@
 
 ## HandleOptimizeBench（`run_handleoptimize_bench.sh`）の腕と集計（3.641.0〜3.643.0）
 
-- `MAGI_HO_FEATURE`: 空＝ExtraRefine 省略の A/B。`c3nwall`＝c3n 壁の短縮を外す。`head`＝HEAD の壁判定と試行中の停止確認を切る。`deep`＝経験的な c3n 壁を 1 手探索で反証する（`PolishGate.c3nWallDeepCheck`）。
+- `MAGI_HO_FEATURE`: 空＝ExtraRefine 省略の A/B。`c3nwall`＝c3n 壁の短縮を外す。`head`＝HEAD の壁判定と試行中の停止確認を切る。`deep`＝経験的な c3n 壁を 1 手探索で反証する（`PolishGate.c3nWallDeepCheck`）。`adaptive`＝適応閾値（`PolishGate.adaptiveStall`、通常分岐を直近の改善間隔の最大×3 まで縮める。2026-10-09 に否決）。
 - `MAGI_HO_FIXTURES`（カンマ区切り）、`MAGI_HO_SEEDS`（seed の列）、`MAGI_HO_REPEATS`（同じ seed・同じ腕の反復。CSV 末尾に `rep` 列）、`MAGI_HO_LOGTAGS`＋`MAGI_HO_LOGFILE`（Watchdog・EarlyStop などのエンジンログを run ごとに追記）。
 - 集計: `python3 tools/loop/ho_stats.py results/x.csv [results/y.csv ...] [--metric total]`。差は off−on（正＝既定が悪い）。平均・95% ブートストラップ区間・符号検定・rep 間の揺れ（プール SD と最大範囲）・決定／未決と、区間を 0 から外すのに要る対の数を出す。
 - 規則: 腕の差を読む前に、同じ seed・同じ腕の揺れを測る。workers 4 は壁時計に依存し、seed を固定しても軌跡が変わる（2026-10-08 の診断で weighted ±100〜325、停止時刻 ±215 s）。区間が 0 を含むなら未決とし、既定を動かさない。

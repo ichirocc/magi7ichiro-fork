@@ -4,7 +4,7 @@
 
 - 対象: `ichirocc/magi7ichiro-fork` の Android/Kotlin エンジン（C++ `magi_native.cpp` と C# `ichirocc/-MAGI_PC` は同値の移植。C# は `V6FinalPort.Watchdog.cs`・`V6FinalPort.HandleOptimize.cs`）。
 - 照合した実装: `80d664d`（3.641.0）を基準に、3.642.0・3.643.0 の変更（作業ブランチ `claude/merge-wub4fq`。3.643.0 は `8980004` 以降、コミットは `docs/history/3.4xx.md` の 3.643.0 の節）を反映した。条件式・呼出関係・状態更新・関連テストを静的に照合した。性能は §11 の測定だけに基づく。
-  読む時点で main が進んでいれば `git diff 9d60346..HEAD -- app/src/main/java/com/magi/app/v6/ app/src/main/java/com/magi/app/ui/StopExplanation.kt`（`9d60346`＝この文書が反映した最後のエンジン変更）で §14 の根拠ファイルに差分が無いことを先に確かめる。
+  読む時点で main が進んでいれば `git diff 0fc4f93..HEAD -- app/src/main/java/com/magi/app/v6/ app/src/main/java/com/magi/app/ui/StopExplanation.kt`（`0fc4f93`＝この文書が反映した最後のエンジン変更。エンジンを変えたコミットでこの SHA も直す）で §14 の根拠ファイルに差分が無いことを先に確かめる。
 - 読み手: 他社 AI（実装・移植・レビュー）。会話履歴なしで、この文書とリポジトリだけから検証・実装・判断できることを目指す。人のレビューにも同じ条件が効く。
 - 目的: 現行実装の記述を本体とする。提案は §5.8 に状態ラベル（未実装／実装済み既定 OFF）を付けて分け、本文と混ぜない。閾値や重みをここで変えない（HF77）。
 - 「優秀」の判定基準（2026-10-08 のブリーフィングで決定）: ①照合＝全ての主張と数値を、固定したコミットの関数名・定数名・テスト名で確かめられる。②実装＝停滞脱出の制御（層 A の全部と、層 B〜E の停滞に関わる判断・定数・順序）を DEFAULT としてこの文書だけから再実装できる（§13.2 のチェックリストで検証）。ロール内部の演算子（§6 の入口盤面と探索パラメータ、§7 の focus 別オペレータ、§8 の温度ラダー、§9 のパスの中身）は範囲外＝`docs/algorithm_portfolio.md` とコード。③判断＝提案は DEFAULT と分け、採否の規則（§13 の 4、事前基準・揺れを先に測る・対 8 以上・95% 区間）を書く。④安全＝不変条件（§13.1）が全てテスト名で固定されている。⑤更新＝変更手順と変更履歴があり、コードと同じコミットで直す。加えて、会話履歴を持たない別のエージェントが文書とコードだけを照合して矛盾を見つけない（矛盾 0 で合格）。
@@ -210,7 +210,7 @@ canExtra = ¬stopRequested ∧ ¬stagnationFired ∧ post.report.total > 0 ∧ �
 |---|---|---|
 | A: 追加待機 M | 未実装 | `c3nWallPlateau ∧ c3nWallProven ∧ B ≥ B_min` のとき `effStall = shortStall + M`（例 B_min=120 000 ms、M∈{15 000, 30 000, …}、8 000 ≤ M ≤ normalStall − shortStall）。未診断・診断 false・小予算は normalStall のまま。両端は測定済み: M=0 が DEFAULT、M=normalStall−shortStall が `c3nWallShortStall=false`（§11 の c3n 行: 60 s −1.6%・時間 1.75 倍、120 s 差なし・2.6 倍、300 s −0.7%・2.35 倍、いずれも非有意）。言える効果は「壁の成立後、最大およそ M ms の追加の無改善待機が入りうる」まで |
 | B: 根拠の段階化 | 実装済み・既定 OFF（`PolishGate.c3nWallDeepCheck`、3.643.0） | `wall = allBlocked ∧ (allBlockedCertified ∨ ¬c3nWallRefutedByOneMove(board, 2000 ms))`。証明相当の壁（全セル希望固定）は従来どおり短縮。経験的な壁は 1 手探索（`FixSuggester`、`Probe.C3N_WALL_DEEP_MS`）でも必須を減らす手が無いときだけ短縮。反証は壁でない方向にしか働かない。同じ盤面の診断は一度だけ（`BoardKeyedFlag` が直列化）。観測は `Watchdog` 行の「1手探索の反証 N 回／確認 M 回」。測定はベンチの腕 `deep`。sample_v6 の残る必須は希望衝突由来（証明相当）なので、このフィクスチャでは A/A になる＝経験的な壁が出るフィクスチャで測る。探索（2026-10-09、`tools/loop/WallFixtureProbe.kt`、§11）: 実データ 4 件と合成 174 盤面で、壁条件（covU が構造床・残りは c3n だけ）に乗る壁は希望固定の証明相当だけ＝経験的で反証できる壁のフィクスチャは無い。計測は、画面の説明が C3N_WALL_EMPIRICAL を出した実機の盤面を待つ。言える効果は「1 手で崩せる壁を壁と呼ばなくなる」まで |
-| C: 適応閾値 | 実装済み・既定 OFF（`PolishGate.adaptiveStall`、3.643.0） | `adaptive = clamp(max(直近 ADAPTIVE_STALL_WINDOW=8 個の改善間隔) × ADAPTIVE_STALL_FACTOR=3, shortStall, normalStall)`（間隔が ADAPTIVE_STALL_MIN_GAPS=3 個未満なら無し）、`effStall = min(effStall_DEFAULT, adaptive)`（`V6FinalPort.adaptiveStallMs`・`effectiveStallMs(adaptiveMs)`）。間隔は `WatchdogBest.observe` が改善と改善の間だけ記録する（開始から最初の改善までは含めない）。縮めるのは通常分岐だけ＝床・壁の短い閾値より短くはならず、発火式の三条件（§5.4）はそのまま。動機: 通常閾値は予算の 9/10（300 s で 270 s）で実質発火しない（§5.7）。危険: 序盤の密な改善のあと大域ロールが遅い改善を出す局面を切る＝短縮方向にしか働かないので、測定で負ければ入れない。観測は `Watchdog` 行の「通常=長…s→適応…s」と「・適応閾値=…（改善間隔 N 個・最大 X s×3）」。測定はベンチの腕 `adaptive` |
+| C: 適応閾値 | 実装済み・既定 OFF・**計測で否決**（`PolishGate.adaptiveStall`、3.643.0。腕は再計測用に残す） | `adaptive = clamp(max(直近 ADAPTIVE_STALL_WINDOW=8 個の改善間隔) × ADAPTIVE_STALL_FACTOR=3, shortStall, normalStall)`（間隔が ADAPTIVE_STALL_MIN_GAPS=3 個未満なら無し）、`effStall = min(effStall_DEFAULT, adaptive)`（`V6FinalPort.adaptiveStallMs`・`effectiveStallMs(adaptiveMs)`）。間隔は `WatchdogBest.observe` が改善と改善の間だけ記録する（開始から最初の改善までは含めない）。縮めるのは通常分岐だけ＝床・壁の短い閾値より短くはならず、発火式の三条件（§5.4）はそのまま。動機: 通常閾値は予算の 9/10（300 s で 270 s）で実質発火しない（§5.7）。危険: 序盤の密な改善のあと大域ロールが遅い改善を出す局面を切る＝短縮方向にしか働かないので、測定で負ければ入れない。観測は `Watchdog` 行の「通常=長…s→適応…s」と「・適応閾値=…（改善間隔 N 個・最大 X s×3）」。測定（2026-10-09、blocked_covu・120 s・5 seed×2 rep、§11）: 適応は 15〜21 s の閾値で 40〜61 s に止まり（時間 −71 s）、weighted は +412 悪化（95% 区間 [−744, −74]＝決定・既定が良い）、必須は同じ 4。序盤の密な改善間隔が後半の遅い改善を切る＝動機のギャップは埋まるが品質を落とす。既定 OFF のまま否決。再提案は係数・窓・予算を変えて測ってから |
 
 出荷条件（両方）: §13 の 4 の作法で測り、事前に決めた基準を満たすこと。引き分け・負けは DEFAULT 維持で §11 に 1 行。
 
@@ -364,7 +364,7 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 | `PolishGate.c3nWallLegacy` | false（UI なし） | true で HEAD の c3n 壁判定（版ごと固定・生存盤面の診断・一致の検査なし）。測定の基準腕（3.642.0、§5.3） |
 | `PolishGate.lateOpStopPropagation` | true（UI なし） | false で後期演算の試行ごとの停止確認を切る（入口の確認は残るので HEAD とは完全に一致しない）。測定の切り分け（3.642.0、§5.5） |
 | `PolishGate.c3nWallDeepCheck` | false（UI なし） | true で経験的な c3n 壁を 1 手探索（上限 2 s）で反証し、手が無いときだけ短縮に使う。ベンチの腕 `deep`（3.643.0、§5.3） |
-| `PolishGate.adaptiveStall` | false（UI なし） | true で通常分岐の停滞閾値を直近の改善間隔の最大×3（[短, 通常] に挟む）まで縮める。ベンチの腕 `adaptive`（3.643.0、§5.8 C） |
+| `PolishGate.adaptiveStall` | false（UI なし・計測で否決） | true で通常分岐の停滞閾値を直近の改善間隔の最大×3（[短, 通常] に挟む）まで縮める。ベンチの腕 `adaptive`（3.643.0、§5.8 C・§11） |
 
 撤去済みで現行仕様ではないもの: 残差ベース 4 段脱出 `adaptiveEscapeControl`／`StagnationEscapeController`（3.409.21 単体 A/B 中立）、ロール内並列 SA `portfolioRoleParallelSa`（同）、採用 0 の巡で LNS・VCR を 2 倍にする `stallEscalation`（3.511.1 全件無変化、2026-09-25 撤去）。
 
@@ -383,6 +383,7 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 | 戦略的振動／nonlinear restart／GLS スイープ／targeted-perturb／big-destroy／softFocusProb | 否決 | 2.55.0・2.58.0・2.56.0・3.95.0 |
 | 「修復途中の進捗」を停滞判定へ | 実装不要 | `improvedThisEpoch` が正式比較器で HARD 優先に拾っている（backlog #26） |
 | 同点の盤面を足場にした停滞脱出（プラトー探索 B） | 否決 | 停滞盤面 15 枚（5 データ×3 seed）×3 反復、同じ盤面・同じ持ち時間: 後処理直行に 10 s 3 勝 27 敗・30 s 9 勝 19 敗（2026-10-07） |
+| 適応閾値（`adaptiveStall`、§5.8 C） | 既定 OFF 温存＝**否決** | blocked_covu・120 s・5 seed×2 rep（`handleoptimize_adaptive_blockedcovu120_2026-10-09.csv`）: 10 対で weighted 差（既定−適応）の平均 −412、95% 区間 [−744, −74]、既定が良い 7／悪い 3、必須は全 run 4、時間 −71 s（適応は 40〜61 s で停止、閾値 15〜21 s）。品質を落として時間を買う＝入れない（2026-10-09） |
 | 根拠の段階化（`c3nWallDeepCheck`） | 既定 OFF 温存（計測不能） | sample_v6 の壁は証明相当＝A/A。合成 174 盤面（4 s×126・30 s×48）でも壁条件に乗る経験的な壁は 0 件、反証できた盤面は covU が床より多い未収束だけ（2026-10-09、`wall_probe_*_2026-10-09.csv`） |
 | 停滞時の後処理差し込み | 既定 OFF 温存 | 240 s／300 s（PORTFOLIO は 211 s 以上でしか選ばれない）: 採用 32/43 回だが最終 8 勝 7 敗・重み +1291・HARD 退行 0（2026-10-07） |
 | 残差ベース 4 段脱出／ロール内並列 SA | 撤去 | 単体 A/B 各 15 ペア（3 データセット、1 プロセス=1 実行）で中立（3.409.21） |
