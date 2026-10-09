@@ -31,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
@@ -111,7 +112,7 @@ internal fun CountPill(text: String) {
  * 区別は色でなく形と文字で: 標準=通常文字 / 個別設定=太字＋小さな印 / 未設定=「—」 / 選択中=枠＋✓ / 入力エラー=赤枠。
  * 基本(標準)は見出し行に「標準 N人」で示し、タップで編集シート。月送りは無し（D6=1state=1か月）。表示のみ・スコアリング不変。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)   // bringIntoView は実験的 API
 @Composable
 internal fun NeedCalendarCard(
     ui: UiState, v: Ws1View, cv: ConditionsView, onEvent: (MagiEvent) -> Unit,

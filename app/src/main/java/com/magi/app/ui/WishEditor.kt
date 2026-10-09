@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
@@ -64,7 +65,7 @@ import androidx.compose.ui.unit.dp
  * （必要人数設定の「標準N人タップ」「未設定に戻す」と同様、常時は出さないが到達可能な副次機能として残す）。
  * 「1日1個のみ」は wishes["i,j"] が単一値の Map である既存モデルで自動保証。表示のみ・スコア不変。
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)   // bringIntoView は実験的 API
 @Composable
 internal fun WishCard(
     ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit,
