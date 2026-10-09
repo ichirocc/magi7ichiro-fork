@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 希望タブの拡張希望と design-review の A1（2026-10-09、3.645.2、出力不変、実機報告「モニカの希望がおかしい」＋`/design-review`）: セル編集シートの希望タブが拡張希望だけの日を「未登録」と言った → `wishTabLine` が `ui.extBanned` を読む。「相談中」は無効ボタンでなく `MagiTagChip` の札（A1 コントラスト）。
 - 画面の design-review の是正 3 件（2026-10-09、3.645.1、出力不変、ユーザー「残件対応する」）: 「相談してから決める」は積んだら「相談中」（`ConsultButton`・`isConsulted`＝シートの下で Snackbar が見えない）、入れ替えの一覧の第 2 の操作を主ボタンの下へ、「マス」→「セル」・「入替」→「入れ替え」。残りは利用者側（実機確認・Windows の判断 2 件・計測）。
 - 思考誘導 UX 仕様の残件 5＝相談してから決める（2026-10-09、3.645.0、出力不変、ユーザー決定「セッション内の相談一覧」「表示だけ・止めない」）: `ConsultItem`／`ui/ConsultList.kt`（希望の行・なおし方の候補・入替の一覧・1 手・つくる前の確認から対象と検討内容を積む）、主カードの「未確認事項 N 件（相談中）」と `ConsultCard`。state 非保存、完成の見出しと CSV 書き出しは不変（D10）。
 - 思考誘導 UX 仕様の残件 1〜4（2026-10-09、3.644.0、出力不変、ユーザー提示「MAGI 思考誘導UX仕様（改修提案、参照実装 a80b550）」）: 月変更で消える通常希望を数えて確認（`MonthMovePlan.droppedWishes`・`monthMoveKeepNote`）、複数人の入替の適用前プレビュー（`prepareShortageChainFix`→`ChainFixPreview`→`applyChainPreview`）、CSV 保存済みの印を書き出した文字列に結ぶ（`CsvCtx`、違えば「今の内容と違います」）、つくる前の確認のセルを持たない行から入力箇所へ着地（`ui/EditLanding.kt` の `needShift`・`countCell`・`landingForProofCore`）。残件 5（相談・保留）はユーザー決定待ち＝backlog #45。

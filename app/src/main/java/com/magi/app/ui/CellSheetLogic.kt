@@ -305,6 +305,17 @@ internal fun wishTabState(wish: Int?, current: Int): String = when {
     else -> "未反映"
 }
 
+/**
+ * 希望タブの 1 行。拡張希望（この日はこのシフト以外）がある日は、その内容と反映状況も出す
+ * （3.645.2、実機報告: 通常希望が無い日に拡張希望があっても「未登録」と言っていた）。
+ */
+internal fun wishTabLine(wish: Int?, current: Int, extBanned: Set<Int>?, sym: (Int) -> String, pinned: Boolean): String {
+    val ext = extBanned?.takeIf { it.isNotEmpty() }?.let { b -> "${b.sorted().joinToString("・") { sym(it) }} 以外（${if (current in b) "未反映" else "反映済"}）" }
+    val core = if (wish == null && ext != null) "希望 $ext"
+    else "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (ext != null) "・$ext" else "")
+    return core + (if (pinned) "・手動固定" else "")
+}
+
 /** 本人の希望どおりのセルに違反がある＝希望を崩すボタンを既定にせず、「他の人で補う」を先に出す。 */
 internal fun isWishDilemma(wish: Int?, current: Int, severity: CellSeverity): Boolean =
     wish != null && wish >= 0 && wish == current && severity != CellSeverity.NONE

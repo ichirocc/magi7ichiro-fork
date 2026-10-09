@@ -104,8 +104,8 @@ private fun PreRunRowView(row: PreRunRow, ui: UiState, onOpenCell: (Int, Int, Bo
             } else Text(row.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp))
         }
         if (onConsult != null) {
-            val done = isConsulted(ui.consults, consultPreRun(row))
-            TextButton(onClick = { onConsult(row) }, enabled = !done, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (done) CONSULT_DONE else "相談") }
+            if (isConsulted(ui.consults, consultPreRun(row))) Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) { MagiTagChip(text = CONSULT_DONE, color = MagiAccent.orange) }
+            else TextButton(onClick = { onConsult(row) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("相談") }
         }
     }
 }

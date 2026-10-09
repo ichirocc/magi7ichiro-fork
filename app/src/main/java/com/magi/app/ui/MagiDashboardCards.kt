@@ -315,10 +315,12 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
     )
 }
 
-/** 「相談してから決める」。積んだあとは押せない「相談中」＝結果を形で返す（シートやダイアログの下では Snackbar が見えない）。 */
+/** 「相談してから決める」。積んだあとは「相談中」の札＝結果を形で返す（シートやダイアログの下では Snackbar が見えない。
+ *  無効ボタンの文字は 38% で状態色の基準 3:1 を割るので、札にする＝ux_test_checklist A1）。 */
 @Composable
 internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = !consulted, modifier = modifier.heightIn(min = 48.dp)) { Text(if (consulted) CONSULT_DONE else CONSULT_BUTTON) }
+    if (consulted) Box(modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) { MagiTagChip(text = CONSULT_DONE, color = MagiAccent.orange) }
+    else TextButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
 }
 
 /** [3.645.0/仕様 5.3] 相談してから決める判断の一覧（ホーム）。対象と検討内容を後から再確認できる。出力は止めない。 */

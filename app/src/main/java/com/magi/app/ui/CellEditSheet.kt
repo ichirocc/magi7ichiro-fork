@@ -272,7 +272,7 @@ internal fun CellEditSheet(
                             style = MaterialTheme.typography.bodyMedium, fontWeight = if (selSeg) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
-                val wishText = "希望 ${if (wish == null) "—" else sym(wish)}（${wishTabState(wish, current)}）" + (if (pinned) "・手動固定" else "")
+                val wishText = wishTabLine(wish, current, ui.extBanned[VioKey.cell(i, j)], { k -> sym(k) }, pinned)
                 Text(wishText, style = MaterialTheme.typography.bodySmall,
                     color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
