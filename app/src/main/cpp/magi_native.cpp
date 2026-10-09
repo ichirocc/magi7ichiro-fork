@@ -516,14 +516,14 @@ void fullEvalParts(const MagiProblem& p, const int* a, long long out[2], long lo
         if (bd) { bd[13] += rawLow; bd[14] += rawHigh; bd[16] += rawApt; }
     }
 
-    // [3.538.0] fair（群×担当ONシフト、`fairDevOfBucket`＝達成率モード or 従来のround(平均)方式）。[3.522.0] 重み1→2。
+    // [3.538.0] fair（群×担当ONシフト、`fairDevOfBucket`＝達成率モード or 従来のround(平均)方式）。[3.522.0] 重み1→2、[3.647.0] 2→5。
     {
         long long raw = 0;
         for (int g = 0; g < p.G; g++) {
             if (p.members[g].size() < 2) continue;
             for (int k : p.bucket[g]) raw += fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; });
         }
-        soft += raw * 2; if (bd) bd[17] += raw;
+        soft += raw * 5; if (bd) bd[17] += raw;   // [3.647.0] fair 2→5
     }
 
     // weekly（職員×シフト×曜日、round(そのシフトの回数/7) からの L1 偏差）。[3.522.0] 重み1→2。
@@ -759,7 +759,7 @@ struct SaChunk {
         if (g < 0 || g >= p.G || k < 0 || k >= K) return 0;
         if (!p.bucketHas[(size_t)g * K + k]) return 0;
         if (p.members[g].size() < 2) return 0;
-        return fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; }) * 2;  // [3.522.0] fair 1→2
+        return fairDevOfBucket(p, g, k, [&](int x) { return ssn[(size_t)x * K + k]; }) * 5;  // [3.522.0] fair 1→2、[3.647.0] 2→5
     }
     // [3.345.0] weekly は職員×シフト。deltaApply では old/nw の2バケットだけが動くので
     //   contribRangeApt/contribFair と同じく (i,old)+(i,nw) の形で before/after を取る。
@@ -1364,7 +1364,7 @@ inline long long weeklyMarginalN(int* wdI, int K, int bucket, int oldK, int newK
         long long before = weeklyDevOfBucket(b);
         b[bucket]++; acc += weeklyDevOfBucket(b) - before; b[bucket]--;
     }
-    return acc;
+    return acc * 2;   // Kotlin weeklyMarginalAt と同じく重みを掛ける（weekly 2。旧: 重みなし）
 }
 
 // [3.538.0] counts(S*K) は一時的に書き換えて必ず戻す（Kotlin fairMarginalAt と同じ手）。fairDevOfBucket
@@ -1381,7 +1381,7 @@ inline long long fairMarginalN(const MagiProblem& p, int i, int k, int delta, st
     counts[(size_t)i * K + k] += delta;
     long long after = fairDevOfBucket(p, g, k, countAt);
     counts[(size_t)i * K + k] -= delta;
-    return after - before;
+    return (after - before) * 5;   // Kotlin fairMarginalAt と同じく重みを掛ける（[3.647.0] fair 5。旧: 重みなしで候補の順位が Kotlin とずれていた）
 }
 
 inline bool reservoirTieN(int tieCount, std::mt19937_64& rng) {

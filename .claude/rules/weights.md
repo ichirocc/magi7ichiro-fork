@@ -19,7 +19,10 @@ paths:
   `grep '\* 45L'` では引っかからない逆順パターン)＝いずれも soft-aware repair/marginal cost の候補選択で
   checker と同じ式を再実装している。2026-09-10 の high 45→25 変更で当初この4ファイルが `paths:` に無く
   見落としかけた）・`magi_native.cpp`（評価器と SaChunk。high の場合は `fullEvalParts`相当・
-  `SaChunk::contribRangeApt`・`staffCountPenaltyAtN`の3箇所＋コメント1箇所）・
+  `SaChunk::contribRangeApt`・`staffCountPenaltyAtN`の3箇所＋コメント1箇所。weekly/fair の場合は `fullEvalCombined`・
+  `SaChunk::contribWeekly/contribFair` に加えて destroy-repair の **`weeklyMarginalN`/`fairMarginalN` が重みを内側で掛ける**＝Kotlin の
+  `weeklyMarginalAt`/`fairMarginalAt` と同型。3.522.0 で Kotlin だけ `* 2L` を足し C++ は重みなしのまま 3.647.0 まで残った＝番兵は候補生成を
+  見ないので CI では捕まらない。`tools/native/host_parity_bench.cpp` の `runMarginalCostTest` の oracle（`weeklyOf`/`fairOf`/`costOf`）も同じ重み）・
   言語跨ぎ期待値 3 ファイル（`app/src/test/resources/*_eval_expected.txt`**と C# 側のミラー
   `-MAGI_PC/windows/MagiEngine.Tests/Fixtures/*_eval_expected.txt`＝別リポジトリの別コピーなので
   片方だけ直すと `CrossLanguageFixtureTest` が落ちる**）・

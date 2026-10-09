@@ -69,7 +69,7 @@
 | `c42s` | 10 | SOFT | スキル群ペア同日併存（c42 と同じ数え方、1→6、3.522.0→**10**、3.556.0） | セル/日 |
 | `c2` | 4 | SOFT | 個人合計の目標差（C2、1→4、3.522.0） | 回数 `i,k` |
 | `apt` | 4 | SOFT | 適切回数からの L1 偏差 `|n-t|`（群単位の双方向目標。1→4、3.522.0） | 回数 `i,k`（aptLow/aptHigh） |
-| `fair` | 2 | SOFT | グループ内公平化：群×担当ONシフトで`Problem.fairDevOfBucket`のL1偏差和（1→2、3.522.0。3.538.0で達成率モード、3.541.0でv2、下記参照） | 職員×シフト（`distLocations["fair"]`） |
+| `fair` | 5 | SOFT | グループ内公平化：群×担当ONシフトで`Problem.fairDevOfBucket`のL1偏差和（1→2、3.522.0。3.538.0で達成率モード、3.541.0でv2、下記参照。2→5、3.647.0 HF77 明示指示） | 職員×シフト（`distLocations["fair"]`） |
 | `weekly` | 2 | SOFT | 7日周期のシフト平準化：職員×シフト×曜日で Σ\|7×曜日回数−合計\|÷7（整数切り捨て、3.526.0で式改定。重みは1→2、3.522.0のまま） | 職員×シフト（`distLocations["weekly"]`） |
 | `c41` | 9 | SOFT | 群レンジ違反（1日 [l,u] 外）（1→**9**、3.556.0） | 被覆/日 |
 | `c42` | 9 | SOFT | 群ペア同日併存（**異なる2人のペア数**。同一集合 `g1==g2 && s1==s2` は C(n,2)）（1→**9**、3.556.0） | セル/日 |
@@ -82,7 +82,7 @@
 > **3.522.0（2026-09-11、HF77 明示指示）で重み表を全面見直し**。tools/loop の34ケース×10seedベンチマークで
 > baseline対比を計測し、groupViol/covU/c3n/pref(HARD)を再配分、low/c1/c3/c3m/c3mn/c2/c41s/c42s/apt/fair/weeklyを
 > 引き上げ。covOはさらに5→10へ（SOFT中「上限超過(high)>人員過剰(covO)」の優先順位をoutcomeレベルでも保つため、
-> ベンチで high違反+42%→+3.4%まで解消を確認。covUは3配分中最良を維持）。apt/fair/weeklyは1→4/2/2（D3改定。
+> ベンチで high違反+42%→+3.4%まで解消を確認。covUは3配分中最良を維持）。apt/fair/weeklyは1→4/2/2（D3改定。3.647.0 で fair 2→5＝ユーザー明示指示。
 > B1のaptHigh violation群がapt/fair同重みの綱引きで解消不能だった実機ログを受けての改定、docs/history/3.4xx.md）。
 > `apt` は内訳チップ（`BreakdownCard`「人数の範囲」グループ、`countViolations` の vio-aptLow/vio-aptHigh）に表示、
 > `fair`/`weekly` も内訳チップ（「任意」グループ）に件数表示し、いずれもタップで違反箇所（fair=職員×シフト／

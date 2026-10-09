@@ -145,7 +145,7 @@ object MirrorKeys {
         "low" to 120.0, "c3mn" to 90.0, "c1" to 50.0, "high" to 25.0, "covO" to 10.0,
         "c3" to 15.0, "c3m" to 6.0,
         "c41" to 9.0, "c42" to 9.0, "c41s" to 10.0, "c42s" to 10.0,
-        "c2" to 4.0, "apt" to 4.0, "fair" to 2.0, "weekly" to 2.0,
+        "c2" to 4.0, "apt" to 4.0, "fair" to 5.0, "weekly" to 2.0,
     )
 
     // [表示優先度/HF77明示指示 2026-07-20] aptLow/aptHigh は apt の表示専用サブクラス（重み表(WeightTableCard)には

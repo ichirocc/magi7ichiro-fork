@@ -10,6 +10,7 @@ import kotlin.random.Random
 /**
  * `UnifiedViolationChecker.check` の出力全体（logs の時間を除く）を、4 つの実データ fixture から作った乱択盤面 2000 枚で
  * 1 つのダイジェストに固定する。期待値は割当削減（ef656a5）の前後で同じ値になることを確かめてある。
+ * weightedScore を含むので重みを変えると動く（3.647.0 fair 2→5 で更新。旧: 6d863247…）。
  */
 class CheckerReportDigestTest {
     private fun load(name: String): MagiState =
@@ -51,6 +52,6 @@ class CheckerReportDigestTest {
     }
 
     private companion object {
-        const val EXPECTED = "6d863247e129dae022e7a6ab7df275fcc3dfd6e093655e1b4fc63c1174dd6725"
+        const val EXPECTED = "35a5e43d176f53b9cfa0f6167e4ef3bd2fc69f053c39700f07d60d69e20be372"
     }
 }
