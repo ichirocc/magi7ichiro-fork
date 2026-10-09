@@ -1,8 +1,6 @@
 #!/bin/bash
-# 経験的な c3n 壁を持つ盤面の探索（tools/loop/WallFixtureProbe.kt）をホスト JVM で走らせる。
-#   tools/host/hosttest.sh                                   # 先にエンジンを /tmp/magi-hostbuild へビルド
-#   tools/loop/run_wall_fixture_probe.sh <出力dir> [idの部分一致=""] [seed変種=3] [予算秒=4] [方式=AUTO]
-# 出力 dir に wall_probe.csv（全ケース）と、見つかった盤面の wall_*_state.json（refuted＝1 手探索が反証した壁）。
+# 経験的な c3n 壁を持つ盤面の探索（tools/loop/WallFixtureProbe.kt）をホスト JVM で走らせる（先に tools/host/hosttest.sh でビルド）。
+#   tools/loop/run_wall_fixture_probe.sh <出力dir> [idの部分一致=""] [seed変種=3] [予算秒=4] [方式=AUTO]   # 出力は tools/loop/README.md
 set -e
 export LANG=C.utf8 LC_ALL=C.utf8
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
