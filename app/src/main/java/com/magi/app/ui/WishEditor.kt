@@ -34,7 +34,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,19 +65,29 @@ import androidx.compose.ui.unit.dp
  * （必要人数設定の「標準N人タップ」「未設定に戻す」と同様、常時は出さないが到達可能な副次機能として残す）。
  * 「1日1個のみ」は wishes["i,j"] が単一値の Map である既存モデルで自動保証。表示のみ・スコア不変。
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)   // bringIntoView は実験的 API
 @Composable
-internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, initialStaff: Int? = null, onInitialConsumed: () -> Unit = {}) {
+internal fun WishCard(
+    ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit,
+    // 選んでいる職員と日は呼出側（画面全体）が持つ＝タブを離れても入力途中が残る（3.646.0 U02）。
+    staffSel: Int, onStaffSel: (Int) -> Unit, daysSel: Set<Int>, onDaysSel: (Set<Int>) -> Unit,
+    initialStaff: Int? = null, initialDay: Int? = null, onInitialConsumed: () -> Unit = {},
+) {
     val staff = ui.staffNames
     val shifts = cv.shiftKigou
     if (staff.isEmpty() || shifts.isEmpty()) return
-    var i by remember { mutableStateOf(initialStaff?.takeIf { it in staff.indices } ?: 0) }
-    if (i !in staff.indices) i = 0
-    var daysSel by remember(i) { mutableStateOf(emptySet<Int>()) }
-    // [下流→上流ディープリンク] 要確認一覧の pref 項目「設定で直す」から該当職員を事前選択して開く。
-    LaunchedEffect(initialStaff) {
+    val i = staffSel.takeIf { it in staff.indices } ?: 0
+    val requester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    var highlight by remember { mutableStateOf(false) }
+    // [下流→上流ディープリンク] 要確認一覧の pref 項目「設定で直す」から該当職員（と日）を選んだ状態で開き、このカードまで寄せる。
+    //   消費（キーの変更）は寄せ終えてから＝途中で effect が取り消されない。
+    LaunchedEffect(initialStaff, initialDay) {
         if (initialStaff != null) {
-            if (initialStaff in staff.indices) i = initialStaff
+            if (initialStaff in staff.indices) { onStaffSel(initialStaff); onDaysSel(if (initialDay != null && initialDay in 0 until ui.days) setOf(initialDay + 1) else emptySet()) }
+            withFrameNanos { }
+            requester.bringIntoView()
+            scope.launch { highlight = true; delay(2500); highlight = false }
             onInitialConsumed()
         }
     }
@@ -87,9 +104,10 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
         for (e in myExt) for (d in e.days) { val l = m.getOrPut(d) { ArrayList() }; for (k in e.kigou) if (k !in l) l.add(k) }
     }
 
-    val onToggleDay: (Int) -> Unit = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d }
+    val onToggleDay: (Int) -> Unit = { d -> onDaysSel(if (d in daysSel) daysSel - d else daysSel + d) }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth().bringIntoViewRequester(requester)
+        .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("希望シフト登録", style = MaterialTheme.typography.titleMedium)
             // [1行に統合] 職員▼のみ常時表示。「全職員を見る」は小さな文字リンクで副次的に残す。
@@ -98,7 +116,7 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
                     SelectorField(label = "職員", value = staff.getOrElse(i) { "" }, onClick = { staffMenu = true })
                     DropdownMenu(expanded = staffMenu, onDismissRequest = { staffMenu = false }) {
                         staff.forEachIndexed { idx, n ->
-                            DropdownMenuItem(text = { Text(n) }, onClick = { i = idx; daysSel = emptySet(); staffMenu = false })
+                            DropdownMenuItem(text = { Text(n) }, onClick = { onStaffSel(idx); onDaysSel(emptySet()); staffMenu = false })
                         }
                     }
                 }
@@ -122,7 +140,7 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
                         InputChip(
                             selected = false,
                             enabled = !ui.running,
-                            onClick = { daysSel = e.days.toSet() },
+                            onClick = { onDaysSel(e.days.toSet()) },
                             label = { Text("${e.days.joinToString(",")}日 ${e.kigou.joinToString("・")}以外") },
                             trailingIcon = {
                                 Icon(Icons.Filled.Close, contentDescription = "拡張希望を削除",
@@ -135,7 +153,7 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
             // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（モーダルシートは撤去）。
             if (daysSel.isNotEmpty()) {
                 WishApplyPanel(ui, onEvent, i, daysSel, shifts, allowed, wishDays = marked.keys, extDays = extMarked.keys,
-                    onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
+                    onCancel = { onDaysSel(emptySet()) }, onDone = { onDaysSel(emptySet()) })
             } else {
             }
             // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー（既定非表示）。
@@ -148,7 +166,7 @@ internal fun WishCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> U
                             InputChip(
                                 selected = false,
                                 enabled = !ui.running,
-                                onClick = { i = r.i },
+                                onClick = { onStaffSel(r.i); onDaysSel(emptySet()) },
                                 label = { Text("${r.day}日 ${r.kigou}") },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, contentDescription = "削除",

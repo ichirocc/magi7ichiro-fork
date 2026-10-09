@@ -348,7 +348,7 @@ class OptimizationWorker(
             val owned = ownsFiles()
             if (owned) { reportClear("失敗"); releasedByMe = true }
             terminal("失敗: ${e.javaClass.simpleName}: ${e.message}" + if (owned) "（片付け済み）" else "（所有権なし）", "W")
-            notify("最適化に失敗しました", e.message ?: "原因不明")
+            notify("最適化に失敗しました", com.magi.app.ui.failureWords(e, com.magi.app.ui.FailureKind.ENGINE))   // 例外名は終端ログだけ（画面は利用者の言葉）
             runCatching { BubbleSupport.postDone(ctx, "最適化に失敗しました", autoExpand = true) }
             Result.failure()
         } finally {

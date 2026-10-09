@@ -199,4 +199,15 @@ class MagiViewStateTest {
         assertFalse("盤面が違う", DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured, edited))
         assertFalse("設定が違う", DisplayOnlyUndo.differsOnlyInColors(st, sched, recoloured.copy(use2Patterns = !st.use2Patterns), sched))
     }
+
+    /** [3.646.0 L01] 日×シフトの印が人員不足・過剰なら、直し方が無いときの行き先はその日のそのシフトの必要人数。群のレンジは違う。 */
+    @Test fun coverageFocusOnlyForCoverageMarks() {
+        val ui = UiState(staff = 2, days = 5, shifts = 2, needViolations = mapOf("1,3" to "vio-covU", "0,2" to "vio-c41"),
+            needFamilies = mapOf("1,3" to listOf("vio-covU"), "0,2" to listOf("vio-c41")))
+        assertTrue(coverageFocus(ui, FixFocus(null, 1, 3)))
+        assertFalse(coverageFocus(ui, FixFocus(null, 0, 2)))
+        assertFalse(coverageFocus(ui, FixFocus(0, 1, 3)))
+        assertFalse(coverageFocus(ui, FixFocus(null, 1, null)))
+        assertFalse(coverageFocus(ui, FixFocus(null, 1, 4)))
+    }
 }

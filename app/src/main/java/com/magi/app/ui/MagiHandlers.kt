@@ -15,7 +15,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Board.TogglePin -> vm.togglePin(e.staff, e.day)
             is MagiEvent.Board.ApplyWishes -> vm.applyWishes(e.includeOutOfScope)
             is MagiEvent.Board.ApplyAlternative -> vm.applyAlternative(e.index)
-            is MagiEvent.Board.ApplyFixSuggestion -> vm.applyFixSuggestion(e.suggestion)
+            is MagiEvent.Board.ApplyFixSuggestion -> vm.previewOrApplyFix(e.suggestion)
             MagiEvent.Board.Undo -> vm.undo()
             MagiEvent.Board.Redo -> vm.redo()
         }
@@ -164,7 +164,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
         if (e !is MagiEvent.Session) return@MagiEventHandler false
         when (e) {
             MagiEvent.Session.RefreshCheck -> vm.refreshCheck()
-            is MagiEvent.Session.FindFixSuggestions -> vm.findFixSuggestions(e.focusStaff, e.focusShift, e.focusKey, e.exceptStaff, e.day)
+            is MagiEvent.Session.FindFixSuggestions -> vm.findFixSuggestions(e.focusStaff, e.focusShift, e.focusKey, e.exceptStaff, e.day, e.quick)
             is MagiEvent.Session.CancelFixSearch -> vm.cancelFixSearch()
             is MagiEvent.Session.Notify -> vm.notify(e.text, e.level)
             is MagiEvent.Session.ClearMessage -> vm.clearMessage(e.shown)

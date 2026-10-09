@@ -418,6 +418,15 @@ internal fun cellSheetRev(ui: UiState): CellSheetRev = CellSheetRev(ui.checkRev,
 /** その場の直し方探しの状態（計算・チェック待ち／未開始／探索中／完了／失敗）。スピナーは探索中だけ。 */
 internal enum class FixPanelState { WAIT_CHECK, NOT_STARTED, RUNNING, DONE, FAILED }
 
+/** 直し方の探索の締切。セルのシート（手は 1 件でよい）は短く＝押してから 3 秒以内に答えが返る（Nielsen の 1 秒／10 秒の目安、3.646.0 実機報告）。
+ *  ホーム・分析の全体探索は従来どおり 8 秒。 */
+internal const val FIX_SEARCH_MS = 8000L
+internal const val FIX_SEARCH_QUICK_MS = 3000L
+
+/** 探索中の 1 行（最長の秒数を添えて待ち時間の見当をつけてもらう）。 */
+internal fun fixSearchingText(quick: Boolean): String =
+    if (quick) "この場所の直し方を探しています…（最長 ${FIX_SEARCH_QUICK_MS / 1000} 秒）" else "直し方を探しています…（最長 ${FIX_SEARCH_MS / 1000} 秒）"
+
 internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: String, failedKey: String, key: String): FixPanelState = when {
     fixSearching -> FixPanelState.RUNNING
     running -> FixPanelState.WAIT_CHECK

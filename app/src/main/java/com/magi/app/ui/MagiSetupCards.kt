@@ -844,10 +844,11 @@ internal fun CollapsibleSection(
     LaunchedEffect(forceExpandKey) {
         if (forceExpandKey == stateKey) {
             expanded = true
-            onForceExpandConsumed()
             // [UX監査 中3] 強制展開は見出しを画面の外に残しうる。展開後の配置を1フレーム待ってから、見出しを画面内へ寄せる。
+            //   消費（キーの変更）は寄せ終えてから＝先に消すと再構成で effect が取り消され、寄せずに終わる（3.646.0 L05）。
             withFrameNanos { }
             headingRequester.bringIntoView()
+            onForceExpandConsumed()
         }
     }
     Column(Modifier.fillMaxWidth()) {

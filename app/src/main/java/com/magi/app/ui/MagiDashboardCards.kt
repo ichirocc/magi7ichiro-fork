@@ -215,7 +215,7 @@ private fun WishTrialRowView(
         }
     }
     // [3.645.0/仕様 5.3] 本人や上長に確認してから決める＝対象と検討内容を相談中の一覧へ（取消も勤務の変更もしない）。積んだら「相談中」。
-    val consult = consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day)
+    val consult = consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day, isoDate(ui.startDate, row.day))
     ConsultButton(isConsulted(ui.consults, consult), Modifier.padding(start = 4.dp)) { vm.addConsult(consult) }
 }
 
@@ -325,7 +325,7 @@ internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, on
 
 /** [3.645.0/仕様 5.3] 相談してから決める判断の一覧（ホーム）。対象と検討内容を後から再確認できる。出力は止めない。 */
 @Composable
-internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit) {
+internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit, onResumeChain: (ConsultItem) -> Unit = {}) {
     if (ui.consults.isEmpty()) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
@@ -334,13 +334,20 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
             Text("関係者に確認してから決める項目です（アプリを閉じると消えます）。書き出しは止めません。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             ui.consults.forEachIndexed { idx, c ->
+                // 対象は氏名と実日付で今のデータに引き直す（月を移した・職員を消した・並べ替えたあとに別のセルを開かない）。
+                val cell = if (c.chain != null) null else consultCell(c, ui.startDate, ui.staffNames, ui.days)
+                val chainOk = c.chain != null && consultChainResumable(c.chain, ui.startDate, ui.shiftSymbols, ui.days)
+                val note = consultTargetNote(c, ui.startDate, ui.staffNames, ui.shiftSymbols, ui.days)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
                     }
-                    if (c.staff != null && c.day != null) {
-                        TextButton(onClick = { onOpenCell(c.staff, c.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("開く") }
+                    if (cell != null) {
+                        TextButton(onClick = { onOpenCell(cell.first, cell.second) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN) }
+                    } else if (chainOk) {
+                        TextButton(onClick = { onResumeChain(c) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_RESUME) }
                     }
                     DeleteRowButton(onClick = { onRemove(idx) }, text = "済")
                 }
@@ -434,7 +441,7 @@ internal fun GuidedFixDialog(
                                     onClick = {
                                         onDismiss()
                                         vm.prepareShortageChainFix(target.dayIndex, target.shiftIndex,
-                                            "（玉突き）${target.dayLabel} の「${target.shiftSymbol}」を複数人の入替で埋める")
+                                            "（玉突き）${target.dayLabel} の「${target.shiftSymbol}」を複数人の入れ替えで埋める")
                                     },
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                                 ) {
@@ -523,6 +530,7 @@ internal fun OperatorNextActionCard(
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
     outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して再作成」の結果（VM が鮮度を照合済み）
+    savedLine: String? = null,      // 勤務表 CSV の保存状態（保存済み／今の内容と違う）。直した結果の行とは別に出す（両方あれば両方）
     consultLine: String? = null,    // [3.645.0/仕様 5.3] 相談中の件数（未確認事項）。完成の見出しは変えず、書き出しも止めない
     relax: RelaxToken? = null,      // [S6] いまのデータで見つかった設定の壁の組（VM が鮮度を照合済み。null＝無い）
     onShowRelax: () -> Unit = {},
@@ -644,6 +652,7 @@ internal fun OperatorNextActionCard(
             plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
             plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
             if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
+            if (!ui.running && savedLine != null) Text(savedLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
             if (!ui.running && consultLine != null) Text(consultLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
             if (!ui.running && ui.relaxSearching) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1507,7 +1516,7 @@ private fun confirmItems(ui: UiState): List<ConfirmItem> {
 @Composable
 private fun ConfirmRow(
     item: ConfirmItem, onFocusStaff: (Int) -> Unit, onShowCell: (Int, Int) -> Unit, onShowDay: (Int) -> Unit,
-    onFixWish: (Int) -> Unit = {}, onFixNeed: (Int) -> Unit = {},
+    onFixWish: (Int, Int?) -> Unit = { _, _ -> }, onFixNeed: (Int, Int?) -> Unit = { _, _ -> },
 ) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()
@@ -1542,8 +1551,8 @@ private fun ConfirmRow(
             val ws = item.wishStaff
             val ns = item.needShift
             when {
-                ws != null -> TextButton(onClick = { onFixWish(ws) }) { Text("設定で直す") }
-                ns != null -> TextButton(onClick = { onFixNeed(ns) }) { Text("設定で直す") }
+                ws != null -> TextButton(onClick = { onFixWish(ws, item.day) }) { Text("設定で直す") }
+                ns != null -> TextButton(onClick = { onFixNeed(ns, item.day) }) { Text("設定で直す") }
                 // [3.483.0 A-3] 「直し方→」は同じタブ内の下のカード（改善の提案）で探索が始まるだけ＝別画面へ
                 //   飛ぶように読めた。動作をそのまま言う。
                 clickable -> Text(if (dayOnly) "勤務表→" else "直し方を探す", style = MaterialTheme.typography.labelMedium,
@@ -1583,8 +1592,8 @@ internal fun AnalysisTriageCard(
     onGoEdit: (com.magi.app.v6.IssueKind?) -> Unit,
     onShowCell: (Int, Int) -> Unit,
     onShowDay: (Int) -> Unit,
-    onFixWish: (Int) -> Unit,
-    onFixNeed: (Int) -> Unit,
+    onFixWish: (Int, Int?) -> Unit,   // 職員と、行の日（希望の登録をその日を選んだ状態で開く）
+    onFixNeed: (Int, Int?) -> Unit,   // シフトと、行の日
 ) {
     val cs = MaterialTheme.colorScheme
     val (warnBg, warnFg) = magiWarnColors()

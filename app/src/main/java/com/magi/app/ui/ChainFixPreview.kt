@@ -9,6 +9,8 @@ data class ChainFixPreview(
     val changes: List<String>,
     val hardLine: String,
     val caution: String?,
+    /** 探した枠（日付・シフト記号・見出し）。相談に積んだあと、今の勤務表で案を探し直すために持つ。 */
+    val target: ChainTarget? = null,
 )
 
 internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffNames: List<String>, shiftSymbols: List<String>, startDate: String): ChainFixPreview {

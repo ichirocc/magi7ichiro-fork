@@ -91,6 +91,8 @@ object MagiMarks {
     val softCorner: Dp = 10.dp
     /** [#41] 手動固定の錠（セル右下）。 */
     val pinLock: Dp = 11.dp
+    /** セルの縁の印（×・バッジ・点・錠）を実線枠（3dp）の内側に置く余白。 */
+    val inset: Dp = 3.dp
 }
 
 object MagiSpacing {

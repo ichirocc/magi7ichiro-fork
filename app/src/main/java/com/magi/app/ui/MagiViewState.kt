@@ -672,6 +672,14 @@ internal fun legendShapeFamilies(): String {
 // ===== その場の直し方探し（印・セルのシートの中で探して、見つからなければ理由と次の一歩） =====
 
 /** 探す対象。staff/shift は `FixSuggester` の絞り込み、day はセル・日の理由の読み取りだけに使う。 */
+/** 日×シフトの印が人員不足・過剰のものか（直し方が無いときの行き先＝その日のそのシフトの必要人数。群のレンジは④のまま）。 */
+internal fun coverageFocus(ui: UiState, f: FixFocus): Boolean {
+    if (f.staff != null || f.shift == null || f.day == null) return false
+    val key = "${f.shift},${f.day}"
+    val classes = ui.needFamilies[key] ?: listOfNotNull(ui.needViolations[key])
+    return classes.any { familyOfVioClass(it) == "covU" || familyOfVioClass(it) == "covO" }
+}
+
 internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null, val exceptStaff: Int? = null) {
     /** 結果がどの依頼のものかを見分ける鍵（`UiState.fixDoneKey` と照合）。 */
     val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}" + (exceptStaff?.let { ",x$it" } ?: "")

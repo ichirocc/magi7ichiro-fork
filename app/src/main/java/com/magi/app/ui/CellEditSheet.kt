@@ -185,7 +185,7 @@ internal fun CellEditSheet(
                 }
                 if (c1Here != null && c1Here.stuck && mode == 0) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                        OutlinedButton(onClick = { fixNav.onWishes(i, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
                         OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
                     }
                 }

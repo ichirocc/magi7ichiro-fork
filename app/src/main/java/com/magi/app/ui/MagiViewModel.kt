@@ -922,6 +922,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val snap = undoStack.removeLastOrNull() ?: return
         if (restoreDisplayOnly(snap, toRedo = true)) return
         dropCsvPartial()
+        pendingGuided = null   // 案内で入れた結果の行は、戻した盤面には結ばない
         snapNow(snap.label)?.let { redoStack.addLast(it) }   // [Web反映] 現在をやり直し用に退避（同じ操作名を引き継ぐ）
         state = snap.st
         val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
@@ -951,6 +952,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val snap = redoStack.removeLastOrNull() ?: return
         if (restoreDisplayOnly(snap, toRedo = false)) return
         dropCsvPartial()
+        pendingGuided = null
         snapNow(snap.label)?.let { undoStack.addLast(it) }
         state = snap.st
         val restoredSched = Array(snap.sched.size) { snap.sched[it].clone() }
@@ -996,10 +998,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * シフト/グループ/スタッフを一括追加して育てる想定。
      */
     fun initBlankState() {
-        val days = 31
+        // 新しいデータの対象月は来月（月末に来月の勤務表をつくる業務＝setNextMonth と同じ起点）。旧: 2026 年 1 月固定。
+        val first = java.time.LocalDate.now().plusMonths(1).withDayOfMonth(1)
+        val days = first.lengthOfMonth()
         val sched = (0 until days).joinToString(",") { "0" }
         val seed = """
-            {"startDate":"2026-01-01","endDate":"2026-01-31",
+            {"startDate":"$first","endDate":"${first.plusDays(days - 1L)}",
             "shifts":[{"name":"休み","kigou":"休","need1":"","need2":""}],
             "groups":[{"name":"グループA","kigou":"A"}],
             "staff":[{"name":"職員1","groupIdx":0}],
@@ -1123,6 +1127,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 // 前のデータの完了要約・ヒント・他の案・直し方は、このデータのものではない。
                                 runSummary = null, stopSummary = null, copilotHint = null, alternatives = emptyList(),
                                 fixSuggestions = emptyList(), fixSearched = false, fixFocusName = "", stalledHardFamilies = emptyList(),
+                                consults = emptyList(),   // 相談も前のデータの対象を指している（T01）
                                 message = "読込完了: ${lp.state.staffCount}名 / ${lp.state.dayCount}日 / ${lp.state.shiftCount}シフト$note",
                             )
                         }
@@ -1528,6 +1533,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissPreRun() = _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
+
+    /** 編集タブの「元の確認へ戻る」: つくる前の確認を今のデータで作り直して出す（実行はしない）。残る項目が無ければそう言う。 */
+    fun reopenPreRun() {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        val sum = PreRunCheck.build(st, sched)
+        if (sum.needsSheet) _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }
+        else _ui.update { it.copy(messageIsError = false, message = "つくる前の確認: 残る項目はなくなりました") }
+    }
 
     private var preRunAckKey = 0L
 
@@ -2011,7 +2025,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 logOp("W", "希望の試算 失敗: ${e.javaClass.simpleName}: ${e.message}")
-                if (seq == wishTrialSeq && trialCtx === ctx) trialResults["$i,$j,$k"] = WishTrial.Unavailable(e.javaClass.simpleName)
+                if (seq == wishTrialSeq && trialCtx === ctx) trialResults["$i,$j,$k"] = WishTrial.Unavailable("計算の途中で止まりました。もう一度お試しください")
             } finally {
                 if (seq == wishTrialSeq) _ui.update { it.copy(wishTrialBusy = null, wishTrialRev = it.wishTrialRev + 1) }
             }
@@ -2656,8 +2670,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(messageIsError = false, message = "複数人の入れ替えの手順を探しています…") }
         viewModelScope.launch {
             val s = withContext(Dispatchers.Default) { V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label) }
-            if (s == null) _ui.update { it.copy(messageIsError = true, message = "入替の手順が見つかりませんでした。「直し方を探す」で探し直してください") }
-            else _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate)) }
+            if (s == null) _ui.update { it.copy(messageIsError = true, message = "入れ替えの手順が見つかりませんでした。「直し方を探す」で探し直してください") }
+            else _ui.update {
+                val target = ChainTarget(isoDate(it.startDate, dayIndex) ?: "", it.shiftSymbols.getOrNull(shiftIndex) ?: "", label)
+                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate).copy(target = target))
+            }
         }
     }
 
@@ -2669,6 +2686,27 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun dismissChainPreview() { _ui.update { it.copy(chainPreview = null) } }
+
+    /** 相談に積んだ入れ替えの枠を今の勤務表で探し直す（日付・記号で枠を引き直す＝月やシフトが変わっていれば断る）。
+     *  枠を持たない案は一覧をもう一度出す（当てるときは [applyFixSuggestion] の指紋照合と適用の門が守る）。 */
+    fun resumeConsultChain(c: ConsultItem) {
+        val t = c.chain ?: return
+        val u = _ui.value
+        val target = consultChainTarget(t, u.startDate, u.shiftSymbols, u.days)
+        when {
+            target != null -> prepareShortageChainFix(target.first, target.second, t.label)
+            t.suggestion != null -> previewOrApplyFix(t.suggestion)
+            else -> _ui.update { it.copy(messageIsError = true, message = consultTargetNote(c, u.startDate, u.staffNames, u.shiftSymbols, u.days) ?: "この枠はいまのデータにありません") }
+        }
+    }
+
+    /** 2 セル以上を動かす手は当てる前に一覧（だれの・どの日の・何→何）を見せる。1 セルの手はそのまま当てる（3.646.0: ホーム・分析・セルのシートも同じ）。 */
+    fun previewOrApplyFix(s: FixSuggestion) {
+        if (s.ops.size < 2) { applyFixSuggestion(s); return }
+        val sched = currentSchedule ?: return
+        val snap = sched.copy2D()
+        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate).copy(target = ChainTarget(null, null, s.label, suggestion = s))) }
+    }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
 
@@ -2911,7 +2949,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var fixBoardKey = 0L
     private var fixStateKey = 0L
 
-    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null) {
+    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
@@ -2927,10 +2965,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "", fixFailedKey = "") }
         fixJob = viewModelScope.launch {
             try {
+                // セルのシートは締切 3 秒（手は 1 件でよい。8 秒待たせると答えが無いときも長い＝3.646.0 実機報告）。ホーム・分析は 8 秒。
+                val deadline = if (quick) FIX_SEARCH_QUICK_MS else FIX_SEARCH_MS
                 val list = withContext(Dispatchers.Default) {
                     if (exceptStaff != null && day != null) {
-                        fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, ejectionChain = true), day, exceptStaff).take(8)
-                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, ejectionChain = true)
+                        fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true), day, exceptStaff).take(8)
+                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, deadlineMs = deadline, ejectionChain = true)
                 }
                 if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
                 // 盤面を差し替えるジョブの最中は書き戻さず探し直しもしない（完了後の盤面で探し直す）。
@@ -3002,6 +3042,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         currentSchedule = applied
         state = st.withSchedule(applied)
         autoSave()
+        logOp("I", "改善手を適用: ${s.label}（必須 ${gate.before.hard}→${gate.after.hard}・合計 ${gate.before.total}→${gate.after.total}）")
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,

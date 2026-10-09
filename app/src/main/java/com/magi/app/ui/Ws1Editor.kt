@@ -319,11 +319,9 @@ private fun ShiftDialog(
     // [design-review] 下限>上限は他の3面（群/スキル群のレンジ・個人回数、3.403.0）と同じく必ず違反を
     //   生む設定ミスだが、必要人数(need1/need2)のこの面だけ入力時のガードが無かった（対象漏れ）。
     val bad = V6SanityPort.rangeOrderConflict(need1, need2) != null
-    // [UX監査 中6] 入力の途中で閉じると内容が消える。変更があれば破棄の確認を挟む（✕・キャンセル・外側タップ・戻るを1か所で止める）。
+    // [UX監査 中6] 入力の途中で閉じると内容が消える。変更があれば破棄の確認を挟む（W1Shell が ✕・キャンセル・外側タップ・戻るを1か所で止める）。
     val dirty = name != name0 || kigou != kigou0 || need1 != need10 || need2 != need20 || isRest != isRest0
-    var confirmDiscard by remember { mutableStateOf(false) }
-    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
-    W1Shell(title, requestClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad) {
+    W1Shell(title, onClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad, dirty = dirty) {
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -338,13 +336,6 @@ private fun ShiftDialog(
         }
         if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このシフトを削除")
     }
-    if (confirmDiscard) AlertDialog(
-        onDismissRequest = { confirmDiscard = false },
-        confirmButton = { DialogDangerButton("破棄", onClick = { confirmDiscard = false; onClose() }) },
-        dismissButton = { DialogDismissButton(onClick = { confirmDiscard = false }, text = "入力を続ける") },
-        title = { Text("入力を破棄しますか？") },
-        text = { Text("入力中の内容は保存されません。") },
-    )
 }
 
 @Composable
@@ -356,7 +347,7 @@ private fun GroupDialog(
 ) {
     var name by remember { mutableStateOf(name0) }
     var kigou by remember { mutableStateOf(kigou0) }
-    W1Shell(title, onClose, { onOk(name, kigou) }, kigou.isNotBlank()) {
+    W1Shell(title, onClose, { onOk(name, kigou) }, kigou.isNotBlank(), dirty = name != name0 || kigou != kigou0) {
         W1Text("記号 (kigou)", kigou) { kigou = it }
         W1Text("名称", name) { name = it }
         if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このグループを削除")
@@ -371,8 +362,9 @@ internal fun StaffDialog(
     onDelete: (() -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(name0) }
-    var gi by remember { mutableStateOf(group0.coerceIn(0, (groupKigou.size - 1).coerceAtLeast(0))) }
-    W1Shell(title, onClose, { onOk(name, gi) }, name.isNotBlank() && groupKigou.isNotEmpty()) {
+    val gi0 = group0.coerceIn(0, (groupKigou.size - 1).coerceAtLeast(0))
+    var gi by remember { mutableStateOf(gi0) }
+    W1Shell(title, onClose, { onOk(name, gi) }, name.isNotBlank() && groupKigou.isNotEmpty(), dirty = name != name0 || gi != gi0) {
         W1Text("名称", name) { name = it }
         var open by remember { mutableStateOf(false) }
         Text("グループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -409,7 +401,7 @@ internal fun BulkAddDialog(
     var open by remember { mutableStateOf(false) }
     val lines = text.split("\n").map { it.trim() }.filter { it.isNotEmpty() }
     val groupOk = groups == null || groups.isNotEmpty()
-    W1Shell(title, onClose, { onApply(lines, gi) }, lines.isNotEmpty() && groupOk) {
+    W1Shell(title, onClose, { onApply(lines, gi) }, lines.isNotEmpty() && groupOk, dirty = text.isNotBlank()) {
         Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
             value = text, onValueChange = { text = it }, singleLine = false, minLines = 3,
@@ -433,16 +425,20 @@ internal fun BulkAddDialog(
     }
 }
 
+/** [dirty] なら ✕・キャンセル・外側タップ・戻るのどれでも破棄の確認を挟む（3.646.0 U01: 全ダイアログで同じ）。 */
 @Composable
 private fun W1Shell(
     title: String, onClose: () -> Unit, onOk: () -> Unit, okEnabled: Boolean,
+    dirty: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
     AlertDialog(
-        onDismissRequest = onClose,
+        onDismissRequest = requestClose,
         confirmButton = { DialogConfirmButton("OK", enabled = okEnabled, onClick = onOk) },
-        dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { DialogHeader(title, onClose) },
+        dismissButton = { DialogDismissButton(onClick = requestClose) },
+        title = { DialogHeader(title, requestClose) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -450,6 +446,7 @@ private fun W1Shell(
             ) { content() }
         },
     )
+    if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onClose() }, onContinue = { confirmDiscard = false })
 }
 
 @Composable

@@ -58,7 +58,7 @@ class VioBucketsTest {
     @Test fun issueKindLinksOpenYearSections() {
         assertEquals("yr_cons", yearSectionForIssueKind(IssueKind.CONSTRAINT))
         assertEquals("yr_count", yearSectionForIssueKind(IssueKind.RANGE))
-        assertEquals("yr_headcount", yearSectionForIssueKind(IssueKind.DEMAND))
+        assertNull(yearSectionForIssueKind(IssueKind.DEMAND))   // [3.646.0] 必要人数は月次条件（旧: ④グループの人数）
         assertNull(yearSectionForIssueKind(IssueKind.WISH))
         assertNull(yearSectionForIssueKind(null))
     }

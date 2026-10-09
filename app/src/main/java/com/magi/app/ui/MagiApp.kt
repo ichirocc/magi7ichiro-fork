@@ -109,6 +109,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -224,6 +225,16 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var deepLinkEditSection by rememberSaveable { mutableStateOf<String?>(null) }
     // CountsCard(③回数)のセルタップシート開閉。カード側でなく Root が持つ＝編集のたびに閉じない。
     var countsSheetCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // [3.646.0 L01] 診断が指した日。希望（職員）か必要人数（シフト）の着地と一緒に使い、カレンダーでその日を選んだ状態で開く。
+    var deepLinkDay by rememberSaveable { mutableIntStateOf(-1) }
+    // [3.646.0 U02] 希望・必要人数の入力途中（職員／シフトと選択日）はタブを離れても残す（保存済みのデータとは別）。
+    val daySetSaver = listSaver<Set<Int>, Int>(save = { it.toList() }, restore = { it.toSet() })
+    var wishEditStaff by rememberSaveable { mutableIntStateOf(0) }
+    var wishEditDays by rememberSaveable(stateSaver = daySetSaver) { mutableStateOf(emptySet<Int>()) }
+    var needEditShift by rememberSaveable { mutableIntStateOf(0) }
+    var needEditDays by rememberSaveable(stateSaver = daySetSaver) { mutableStateOf(emptySet<Int>()) }
+    // [3.646.0 L03] 編集タブへ着地した呼出元（元の確認へ戻る）。自分でタブを替えたら消える。
+    var editReturn by remember { mutableStateOf<EditReturn?>(null) }
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
     var rosterCsvChoice by remember { mutableStateOf<String?>(null) } // !=null: 勤務表/希望 取込選択ダイアログ
     var pendingCsvImport by remember { mutableStateOf<String?>(null) } // !=null: 取込種別の選択ダイアログ
@@ -436,32 +447,46 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
 
     var tab by rememberSaveable { mutableStateOf(0) }
-    // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員／設定＝年間マスターの節）。
+    // セルのシートから来たときの戻り先（開いていたセル）。
+    fun cellReturn(): EditReturn? = editingCell?.let { c ->
+        EditReturn("${ui.staffNames.getOrNull(c.first) ?: "#${c.first}"} ${DayText.short(ui.startDate, c.second)} のセル", EditReturn.CELL, c)
+    }
+    // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員・日／設定＝年間マスターの節／必要人数＝月次条件のその日）。
     val fixNav = remember { FixNav(
-        onWishes = { s -> editingCell = null; if (s != null) deepLinkWishStaff = s; editScope = 0; tab = 2 },
-        onSettings = { sec -> editingCell = null; editScope = 2; deepLinkEditSection = sec; tab = 2 },
+        onWishes = { s, d -> editReturn = cellReturn(); editingCell = null; if (s != null) deepLinkWishStaff = s; if (d != null) deepLinkDay = d; editScope = 0; tab = 2 },
+        onSettings = { sec -> editReturn = cellReturn(); editingCell = null; editScope = 2; deepLinkEditSection = sec; tab = 2 },
+        onNeed = { k, d -> editReturn = cellReturn(); editingCell = null; deepLinkNeedShift = k; deepLinkDay = d; editScope = 0; tab = 2 },
     ) }
-    // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。
+    // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。種類が無いときも月次条件の先頭（前回の区分のままにしない）。
     val goEditForIssue: (com.magi.app.v6.IssueKind?) -> Unit = { kind ->
         tab = 2
         val sec = yearSectionForIssueKind(kind)
-        if (sec != null) { editScope = 2; deepLinkEditSection = sec } else if (kind == com.magi.app.v6.IssueKind.WISH) editScope = 0
+        if (sec != null) { editScope = 2; deepLinkEditSection = sec } else editScope = 0
     }
-    // [UX監査 中4] 「データを見直す」は診断の原因に対応する区分・節へ着地する。原因が分からない（null）ときは編集タブの先頭（従来どおり）。
+    // 縦スクロールはタブごと（別のタブの縦位置のまま開かない）。編集タブは区分ごと（区分を切り替えても途中から出ない）。
+    val tabScrolls = List(5) { rememberScrollState() }
+    val editScrolls = List(3) { rememberScrollState() }
+    // [UX監査 中4] 「データを見直す」は診断の原因に対応する区分・節へ着地する。原因が分からない（null）ときは月次条件の先頭。
     val openEditLanding: (EditLanding?) -> Unit = { l ->
         tab = 2
+        editingCell = null
         if (l != null) {
-            editingCell = null
             editScope = l.scope
             l.section?.let { deepLinkEditSection = it }
             l.wishStaff?.let { deepLinkWishStaff = it }
             // [3.644.0] つくる前の確認から: 必要人数のシフトを先に選ぶ／回数のマス（職員×シフト）のシートを開いて着地する。
             l.needShift?.let { deepLinkNeedShift = it }
             l.countCell?.let { countsSheetCell = it }
+            l.day?.let { deepLinkDay = it }
+        } else {
+            // 原因が分からないときの着地先は決め打ち＝月次条件の先頭（旧: 前回の区分・縦位置のまま。3.646.0 L04）。
+            editScope = 0
+            scope.launch { editScrolls[0].scrollTo(0) }
         }
     }
-    // 縦スクロールはタブごと（別のタブの縦位置のまま開かない）。
-    val tabScrolls = List(5) { rememberScrollState() }
+    /** 呼出元を覚えて着地する（編集タブの先頭に「元の確認へ戻る」を出す）。 */
+    val openEditLandingFrom: (EditLanding?, EditReturn?) -> Unit = { l, r -> editReturn = r; openEditLanding(l) }
+    LaunchedEffect(tab) { if (tab != 2) editReturn = null }
     // [ジャンプ/Web試作の移植] 要確認一覧→勤務表タブの注目セル(i,j)。表示後に自動クリア（一時ハイライト）。
     var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
@@ -580,7 +605,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         if (up != null && !up.isConsumed) { editingCell = null; focusRange = null; tourActive = false; sheetExpanded = false }
                     }
                 } else Modifier)
-                .verticalScroll(tabScrolls[tab.coerceIn(0, 4)]),
+                .verticalScroll(if (tab == 2) editScrolls[editScope.coerceIn(0, 2)] else tabScrolls[tab.coerceIn(0, 4)]),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Spacer(Modifier.height(4.dp))
@@ -610,14 +635,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         // [監査#1] 人手不足が無い必須違反(希望/禁止連続/群)では GuidedFix(不足専用)が空回りする
                         //   → 不足なし時は分析タブの修復フローへ。
                         onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
-                        onSetup = { tab = 2 },
-                        onLanding = openEditLanding,
+                        onSetup = { openEditLanding(null) },
+                        onLanding = { l -> openEditLandingFrom(l, EditReturn("なおし方", EditReturn.GUIDED)) },
                         onShowMove = { tab = 3 },
-                        onApplyMove = { ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.let { vm.applyFixSuggestion(it) } },
+                        onApplyMove = { ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.let { vm.previewOrApplyFix(it) } },
                         onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null)) },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
-                        outcomeLine = vm.fixOutcomeLine() ?: vm.csvSavedLine() ?: vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
+                        outcomeLine = vm.fixOutcomeLine() ?: vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
+                        savedLine = vm.csvSavedLine(),
                         consultLine = consultLine(ui.consults.size),
                         relax = vm.relaxTrialFor(),
                         onShowRelax = { relaxFrom = null; relaxDialog = true },
@@ -627,7 +653,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onRetryRelax = { vm.retryRelaxTrial() },
                     )
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
-                    ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) })
+                    ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) },
+                        onResumeChain = { vm.resumeConsultChain(it) })
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
                     // [3.480.0] 旧: 画面最下部にボタン列で配置していたが、比較検討は「処方箋」の一部として
@@ -636,7 +663,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     LiveScheduleCard(ui)
                     // [冗長性削減] StatusHero(状態三重表示) / SummaryCard(統計は「ようす」と重複＋開発用語) /
                     //   QuickActionGrid(下部ナビと4/6重複) は home から除外。詳細統計は「ようす」タブへ集約。
-                    CopilotCard(ui, onGoEdit = { tab = 2 }, onSoftPolish = { vm.runSoftPolish() },
+                    CopilotCard(ui, onGoEdit = { openEditLanding(null) }, onSoftPolish = { vm.runSoftPolish() },
                         onEditWishes = { tab = 2; editScope = 0 }, onManualEdit = { tab = 1 })
                     CoverageDiagnosisCard(ui, onCancelWish = { i, j -> vm.removeWish(i, j) })
                     // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（CoverageDiag の c3n 版・c3n=0 なら非表示）。
@@ -722,6 +749,23 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [見つけやすさ改善] 案内カードの「希望シフト」行タップで月次条件タブへ直行。
                     //   WishCardは常時展開のカレンダー主導線のため、タブ切替のみで編集画面に到達する。
                     val openWish: () -> Unit = { editScope = 0 }
+                    // [3.646.0 L03] 着地の呼出元へ戻る 1 行（直したあと、同じ問題を探し直さなくてよい）。
+                    editReturn?.let { r ->
+                        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
+                            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(editReturnLine(r), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.weight(1f))
+                                TextButton(onClick = {
+                                    editReturn = null
+                                    when (r.origin) {
+                                        EditReturn.PRE_RUN -> { tab = 0; vm.reopenPreRun() }
+                                        EditReturn.GUIDED -> { tab = 0; guidedFix = true }
+                                        EditReturn.ANALYSIS -> tab = 3
+                                        else -> { tab = 1; r.cell?.let { c -> editingCell = c; sheetMode = 0 } }
+                                    }
+                                }, modifier = Modifier.heightIn(min = 48.dp)) { Text(EDIT_RETURN_BUTTON) }
+                            }
+                        }
+                    }
                     SetupGuideCard(ui, conditionsView, editScope = editScope, onOpenWish = openWish)
                     // [入口4分割] 入力場所を「いつ触るか」で分ける: 月次条件(毎月)/職員管理(随時)/年間マスター(制度変更時)。
                     //   4か所目の勤務表グリッドは勤務表タブが担当（作成後の例外・違反修正）。
@@ -743,8 +787,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [3.482.0 導線重複] 作成ボタンは固定フッター（BottomCommandBar）に一本化＝カードは確認だけ。
                             MonthlyChecklistCard(ui, ws1View, conditionsView, onOpenWish = openWish)
                             MonthPickerCard(ui, onEvent)
-                            WishCard(ui, conditionsView, onEvent, initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, onInitialConsumed = { deepLinkWishStaff = -1 })
-                            ws1View?.let { NeedCalendarCard(ui, it, conditionsView, onEvent, initialShift = deepLinkNeedShift.takeIf { s -> s >= 0 }, onInitialConsumed = { deepLinkNeedShift = -1 }) }
+                            WishCard(ui, conditionsView, onEvent,
+                                staffSel = wishEditStaff, onStaffSel = { wishEditStaff = it }, daysSel = wishEditDays, onDaysSel = { wishEditDays = it },
+                                initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, initialDay = deepLinkDay.takeIf { it >= 0 && deepLinkWishStaff >= 0 },
+                                onInitialConsumed = { deepLinkWishStaff = -1; deepLinkDay = -1 })
+                            ws1View?.let { NeedCalendarCard(ui, it, conditionsView, onEvent,
+                                shiftSel = needEditShift, onShiftSel = { s -> needEditShift = s }, daysSel = needEditDays, onDaysSel = { d -> needEditDays = d },
+                                initialShift = deepLinkNeedShift.takeIf { s -> s >= 0 }, initialDay = deepLinkDay.takeIf { d -> d >= 0 && deepLinkNeedShift >= 0 },
+                                onInitialConsumed = { deepLinkNeedShift = -1; deepLinkDay = -1 }) }
                             NeedDayCard(ui, conditionsView, onEvent)
                         }
                         1 -> {
@@ -826,15 +876,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     AnalysisTriageCard(
                         ui,
                         onFocusStaff = { vm.findFixSuggestions(it) },
-                        onGoEdit = goEditForIssue,
+                        onGoEdit = { kind -> editReturn = EditReturn("問題の一覧", EditReturn.ANALYSIS); goEditForIssue(kind) },
                         onShowCell = { i, j -> focusCell = i to j; tab = 1 },
                         onShowDay = { j -> focusCell = -1 to j; tab = 1 },
-                        onFixWish = { s -> deepLinkWishStaff = s; editScope = 0; tab = 2 },
-                        onFixNeed = { k -> deepLinkNeedShift = k; editScope = 0; tab = 2 },
+                        onFixWish = { s, d -> openEditLandingFrom(EditLanding(0, null, wishStaff = s, day = d), EditReturn("問題の一覧", EditReturn.ANALYSIS)) },
+                        onFixNeed = { k, d -> openEditLandingFrom(EditLanding(0, null, needShift = k, day = d), EditReturn("問題の一覧", EditReturn.ANALYSIS)) },
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)
-                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.applyFixSuggestion(it) }, proMode = proMode,
+                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewOrApplyFix(it) }, proMode = proMode,
                         onConsult = { vm.addConsult(consultFix(it)) })
                 }
                 else -> {
@@ -943,7 +993,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }
         }
         if (guidedFix) {
-            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = openEditLanding)
+            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { l -> openEditLandingFrom(l, EditReturn("なおし方（人員不足）", EditReturn.GUIDED)) })
         }
         ui.chainPreview?.let { p ->
             ChainFixPreviewDialog(p, onApply = { vm.applyChainPreview() }, onDismiss = { vm.dismissChainPreview() },
@@ -960,10 +1010,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         ui.preRunCheck?.let { sum ->
             PreRunCheckSheet(sum, ui,
                 onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0 },
-                onOpenLanding = { l -> vm.dismissPreRun(); openEditLanding(l) },
-                onConsult = { r -> vm.addConsult(consultPreRun(r)) },
+                onOpenLanding = { l -> vm.dismissPreRun(); openEditLandingFrom(l, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
+                onConsult = { r -> vm.addConsult(consultPreRun(r, r.staff?.let { ui.staffNames.getOrNull(it) }, r.day?.let { isoDate(ui.startDate, it) })) },
                 onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
-                onFixData = { vm.dismissPreRun(); tab = 2 },
+                onFixData = { vm.dismissPreRun(); openEditLandingFrom(null, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
                 onProceed = { vm.proceedPreRun() },
                 onDismiss = { vm.dismissPreRun() })
         }

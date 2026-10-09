@@ -314,7 +314,6 @@ private fun MatrixDataCell(
 @Composable
 private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, counts: ScheduleCounts, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
-    val sheetState = rememberModalBottomSheetState()
     val name = v.staff.getOrNull(i)?.name ?: "$i"
     val g = v.staff.getOrNull(i)?.groupIdx ?: -1
     val groupName = v.groups.getOrNull(g)?.name ?: "?"
@@ -326,10 +325,17 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
     var hi by remember(i, k) { mutableStateOf(hi0?.toString() ?: "") }
     val hasRange = lo0 != null || hi0 != null
     val bad = V6SanityPort.rangeOrderConflict(lo, hi) != null
+    // [3.646.0 U01] 下限・上限を入力した途中で閉じる（外側タップ・引き下げ・✕）ときは確認。続けるならシートを出し直す。
+    val dirty = lo != (lo0?.toString() ?: "") || hi != (hi0?.toString() ?: "")
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onDismiss() }
+    if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onDismiss() }, onContinue = { confirmDiscard = false; scope.launch { sheetState.show() } })
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            DialogHeader("$name ・ ${toHankakuKigou(kigou)}", onDismiss)
+            DialogHeader("$name ・ ${toHankakuKigou(kigou)}", requestClose)
             Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.small) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("現在 ${count}回", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)

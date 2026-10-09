@@ -31,7 +31,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,30 +112,41 @@ internal fun CountPill(text: String) {
  * 区別は色でなく形と文字で: 標準=通常文字 / 個別設定=太字＋小さな印 / 未設定=「—」 / 選択中=枠＋✓ / 入力エラー=赤枠。
  * 基本(標準)は見出し行に「標準 N人」で示し、タップで編集シート。月送りは無し（D6=1state=1か月）。表示のみ・スコアリング不変。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)   // bringIntoView は実験的 API
 @Composable
-internal fun NeedCalendarCard(ui: UiState, v: Ws1View, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, initialShift: Int? = null, onInitialConsumed: () -> Unit = {}) {
+internal fun NeedCalendarCard(
+    ui: UiState, v: Ws1View, cv: ConditionsView, onEvent: (MagiEvent) -> Unit,
+    // 選んでいるシフトと日は呼出側（画面全体）が持つ＝タブを離れても入力途中が残る（3.646.0 U02）。
+    shiftSel: Int, onShiftSel: (Int) -> Unit, daysSel: Set<Int>, onDaysSel: (Set<Int>) -> Unit,
+    initialShift: Int? = null, initialDay: Int? = null, onInitialConsumed: () -> Unit = {},
+) {
     if (v.shifts.isEmpty()) return
-    var k by remember { mutableStateOf(initialShift?.takeIf { it in v.shifts.indices } ?: 0) }
-    if (k !in v.shifts.indices) k = 0
-    // [下流→上流ディープリンク] 要確認一覧の covU/covO 項目「設定で直す」から該当シフトを事前選択して開く。
-    LaunchedEffect(initialShift) {
+    val k = shiftSel.takeIf { it in v.shifts.indices } ?: 0
+    val requester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
+    var highlight by remember { mutableStateOf(false) }
+    // [下流→上流ディープリンク] 要確認一覧の covU/covO 項目「設定で直す」から該当シフト（と日）を選んだ状態で開き、このカードまで寄せる。
+    //   消費（キーの変更）は寄せ終えてから＝途中で effect が取り消されない。
+    LaunchedEffect(initialShift, initialDay) {
         if (initialShift != null) {
-            if (initialShift in v.shifts.indices) k = initialShift
+            if (initialShift in v.shifts.indices) { onShiftSel(initialShift); onDaysSel(if (initialDay != null && initialDay in 0 until ui.days) setOf(initialDay + 1) else emptySet()) }
+            withFrameNanos { }
+            requester.bringIntoView()
+            scope.launch { highlight = true; delay(2500); highlight = false }
             onInitialConsumed()
         }
     }
     val shift = v.shifts[k]
     val cs = MaterialTheme.colorScheme
-    var daysSel by remember(k) { mutableStateOf(emptySet<Int>()) }
     var shiftMenu by remember { mutableStateOf(false) }
     var baseSheet by remember { mutableStateOf(false) }
-    val onToggleDay: (Int) -> Unit = { d -> daysSel = if (d in daysSel) daysSel - d else daysSel + d }
+    val onToggleDay: (Int) -> Unit = { d -> onDaysSel(if (d in daysSel) daysSel - d else daysSel + d) }
     val ranges = (0 until ui.days).map { j -> cv.needCellLimits(k, j) }
     // 個別設定＝日別例外が登録された日（0始まり）。カレンダーで太字＋小さな印にする。
     val individualDays = cv.needDayOverrides.filter { it.k == k }.map { it.j }.toSet()
     val baseLabel = needBaseLabel(shift.need1, shift.need2, v.use2)
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth().bringIntoViewRequester(requester)
+        .then(if (highlight) Modifier.border(3.dp, cs.primary, MaterialTheme.shapes.medium) else Modifier)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // [1行に統合] タイトル＋「シフト▼ ・ 標準 N人」。説明文/設定済・未設定の凡例は撤去。
             Text("必要人数設定", style = MaterialTheme.typography.titleMedium)
@@ -142,7 +160,7 @@ internal fun NeedCalendarCard(ui: UiState, v: Ws1View, cv: ConditionsView, onEve
                     }
                     DropdownMenu(expanded = shiftMenu, onDismissRequest = { shiftMenu = false }) {
                         v.shifts.forEachIndexed { idx, s ->
-                            DropdownMenuItem(text = { Text(s.kigou) }, onClick = { k = idx; daysSel = emptySet(); shiftMenu = false })
+                            DropdownMenuItem(text = { Text(s.kigou) }, onClick = { onShiftSel(idx); onDaysSel(emptySet()); shiftMenu = false })
                         }
                     }
                 }
@@ -155,7 +173,7 @@ internal fun NeedCalendarCard(ui: UiState, v: Ws1View, cv: ConditionsView, onEve
             // [4点目] 1日以上選択したときだけ、下部にインライン一括パネルを表示（専用「複数日選択」カードは撤去）。
             if (daysSel.isNotEmpty()) {
                 NeedApplyPanel(ui, onEvent, k, daysSel, shift.need1, shift.need2, v.use2,
-                    onCancel = { daysSel = emptySet() }, onDone = { daysSel = emptySet() })
+                    onCancel = { onDaysSel(emptySet()) }, onDone = { onDaysSel(emptySet()) })
             } else {
             }
         }
@@ -210,13 +228,19 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boolean, running: Boolean, onApply: (String, String) -> Unit, onDismiss: () -> Unit) {
-    val sheetState = rememberModalBottomSheetState()
     var p1 by remember { mutableStateOf(need1) }
     var p2 by remember { mutableStateOf(need2) }
+    // [3.646.0 U01] 入力の途中で閉じる（外側タップ・引き下げ・✕）ときは確認。続けるならシートを出し直す（閉じる動作は先に走っている）。
+    val dirty = p1 != need1 || p2 != need2
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onDismiss() }
+    if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onDismiss() }, onContinue = { confirmDiscard = false; scope.launch { sheetState.show() } })
     // [design-review] このシートは NeedApplyPanel(日別例外)と同じ need1/need2 を編集するのに
     //   下限>上限のガードが無く、確定するとどの日も必ず違反になる設定を保存できていた（3.403.0 対象漏れ）。
     val bad = V6SanityPort.rangeOrderConflict(p1, p2) != null
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("基本の必要人数（${kigou}の既定値）", style = MaterialTheme.typography.titleMedium)
             Column(Modifier.border(1.dp, if (bad) MaterialTheme.colorScheme.error else Color.Transparent, MaterialTheme.shapes.medium)) {

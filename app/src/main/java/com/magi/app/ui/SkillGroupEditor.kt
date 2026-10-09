@@ -117,11 +117,16 @@ private sealed interface SkillDlg {
 private fun SkillGroupDialog(title: String, name0: String, kigou0: String, onOk: (String, String) -> Unit, onClose: () -> Unit) {
     var name by remember { mutableStateOf(name0) }
     var kigou by remember { mutableStateOf(kigou0) }
+    // [3.646.0 U01] 入力の途中で閉じるときは確認（他の編集ダイアログと同じ）。
+    val dirty = name != name0 || kigou != kigou0
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
+    if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onClose() }, onContinue = { confirmDiscard = false })
     AlertDialog(
-        onDismissRequest = onClose,
+        onDismissRequest = requestClose,
         confirmButton = { DialogConfirmButton("OK", enabled = kigou.isNotBlank(), onClick = { if (kigou.isNotBlank()) onOk(name, kigou) }) },
-        dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { DialogHeader(title, onClose) },
+        dismissButton = { DialogDismissButton(onClick = requestClose) },
+        title = { DialogHeader(title, requestClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(value = kigou, onValueChange = { if (it.length <= 4) kigou = it }, label = { Text("記号（例: N）") }, singleLine = true)
