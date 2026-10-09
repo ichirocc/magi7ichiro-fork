@@ -32,6 +32,7 @@ class MonthMovePlanTest {
         val p = monthMovePlan(state(), 2026, 11)   // 11 月＝30 日
         assertEquals(30, p.days)
         assertEquals("通常希望は日番号で残る（31 日目の 1 件だけ落ちる）", 1, p.carriedWishes)
+        assertEquals(1, p.droppedWishes)
         assertEquals(1, p.carriedNeedExceptions); assertEquals(1, p.droppedNeedExceptions)
         assertEquals(1, p.carriedPins); assertEquals(1, p.droppedPins)
         assertEquals("拡張希望は日付で持つ＝10 月の 2 日分は 11 月の期間外", 2, p.droppedExtWishDays)
@@ -39,7 +40,18 @@ class MonthMovePlanTest {
         assertTrue(p.needsConfirm)
         val lines = monthMoveLines(p)
         assertTrue(lines[0].startsWith("引き継ぐ: 勤務表の中身（同じ日番号に残ります）・通常希望 1 件"))
-        assertTrue(lines[1].startsWith("消える: 期間の外の拡張希望 2 日分"))
+        assertTrue(lines[1].startsWith("消える: 期間の外の通常希望 1 件（新しい月に無い日）・期間の外の拡張希望 2 日分"))
+        assertEquals("「希望を残して移る」でも、期間の外の通常希望 1 件は残りません。", monthMoveKeepNote(p))
+    }
+
+    /** 仕様 §6: 通常希望が 1 月 31 日の 1 件だけあり 2 月へ変更する → 削除される希望を確定前に表示する（3.643.0 までは確認なしで消えた）。 */
+    @Test fun aWishOnTheThirtyFirstAloneStillAsksBeforeMoving() {
+        val st = state().copy(wishes = mapOf("0,30" to 1), needDay1 = emptyMap(), manualPins = emptyList(), extWishes = emptyList())
+        val p = monthMovePlan(st, 2027, 2)   // 28 日
+        assertEquals(0, p.carriedWishes); assertEquals(1, p.droppedWishes)
+        assertTrue(p.needsConfirm)
+        assertEquals(listOf("引き継ぐ: 勤務表の中身（同じ日番号に残ります）", "消える: 期間の外の通常希望 1 件（新しい月に無い日）"), monthMoveLines(p))
+        assertEquals("「希望を残して移る」でも、期間の外の通常希望 1 件は残りません。", monthMoveKeepNote(p))
     }
 
     @Test fun emptyStateNeedsNoConfirmation() {
@@ -47,5 +59,6 @@ class MonthMovePlanTest {
         val p = monthMovePlan(st, 2026, 11)
         assertFalse(p.needsConfirm)
         assertEquals(listOf("引き継ぐ: 勤務表の中身（同じ日番号に残ります）"), monthMoveLines(p))
+        assertEquals(null, monthMoveKeepNote(p))
     }
 }

@@ -764,7 +764,9 @@ internal fun shiftCoverageTotals(marks: List<List<CoverageMark>>): Map<Int, Shif
 // ===== つくる前の確認（`PreRunCheck` の結果を行にする） =====
 
 /** シートの 1 行。staff/day があれば押すとそのセルへ移る（希望の行は希望のシートで開く）。 */
-internal data class PreRunRow(val text: String, val staff: Int? = null, val day: Int? = null, val wish: Boolean = false)
+internal data class PreRunRow(val text: String, val staff: Int? = null, val day: Int? = null, val wish: Boolean = false,
+                              /** [3.644.0] セルを持たない行の入力箇所（必要人数・回数のマス・担当・制約）。 */
+                              val landing: EditLanding? = null)
 
 internal data class PreRunSheetText(
     val floorHeader: String?,
@@ -776,6 +778,7 @@ internal data class PreRunSheetText(
     val overCapNote: String? = null,
     val overCapRows: List<PreRunRow> = emptyList(),
     val zeroCapNote: String? = null,
+    val wallLanding: EditLanding? = null,
 )
 
 internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。"
@@ -801,19 +804,25 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
         for (w in s.impossibleWishes) {
             val cell = w.staffIndex >= 0 && w.dayIndex >= 0
             add(PreRunRow("${w.staffName} ${if (w.dayIndex >= 0) day(w.dayIndex) else "?"} 本人の希望「${w.shiftSymbol}」は反映できません（${w.reason}）",
-                w.staffIndex.takeIf { cell }, w.dayIndex.takeIf { cell }, wish = cell))
+                w.staffIndex.takeIf { cell }, w.dayIndex.takeIf { cell }, wish = cell,
+                landing = if (!cell && w.staffIndex >= 0) EditLanding(0, null, wishStaff = w.staffIndex) else null))
         }
         fun pin(core: List<com.magi.app.v6.ConstraintMus.Item>) = core.firstNotNullOfOrNull { it as? com.magi.app.v6.ConstraintMus.WishPin }
         for (d in s.dayProofs) pin(d.core).let { w ->
             val z = if (d.day in s.zeroCapProofDays) PRE_RUN_ZERO_CAP_TAG else ""
-            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null))
+            add(PreRunRow("${DayText.full(ui.startDate, d.day)} 必要人数と本人の希望の衝突（${d.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null,
+                landing = if (w == null) landingForProofCore(d.core, d.day in s.zeroCapProofDays) else null))
         }
         for (c in s.staffProofs) pin(c.core).let { w ->
             val z = if (s.zeroCapStaffProof(c)) PRE_RUN_ZERO_CAP_TAG else ""
-            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null))
+            add(PreRunRow("${name(c.staff)} 本人の希望と条件の組合せ（${c.core.size}件は同時に成立しません）$z", w?.staff, w?.day, w != null,
+                landing = if (w == null) landingForProofCore(c.core, s.zeroCapStaffProof(c)) else null))
         }
-        for (f in s.forcedShortfalls) add(PreRunRow("「${f.shiftSymbol}」 ${f.cells}日で担当できる人より必要人数が多く、人員不足が合計${f.amount}人残ります" +
-            (if (f.shiftIndex in s.zeroCapShortShifts) PRE_RUN_ZERO_CAP_TAG else "")))
+        for (f in s.forcedShortfalls) {
+            val zero = f.shiftIndex in s.zeroCapShortShifts
+            add(PreRunRow("「${f.shiftSymbol}」 ${f.cells}日で担当できる人より必要人数が多く、人員不足が合計${f.amount}人残ります" + (if (zero) PRE_RUN_ZERO_CAP_TAG else ""),
+                landing = if (zero) EditLanding(2, "yr_count", label = LANDING_ZERO_CAP) else EditLanding(2, "yr_ws1")))
+        }
     }
     val rerun = s.rerunClears.map { PreRunRow("${name(it.staff)} ${day(it.day)} ${sym(it.shift)}", it.staff, it.day) }
     val wall = s.wallHint?.let { "個人の上限0：${it.pairs}組（${it.staffCount}人）。入れないシフトの指定です。" }
@@ -829,6 +838,8 @@ internal fun preRunSheetText(s: com.magi.app.v6.PreRunCheck.Summary, ui: UiState
             if (s.wishOverCaps.all { it.hi == 0 }) "$who：$PRE_RUN_OVERCAP_ZERO" else "$who：$PRE_RUN_OVERCAP_OTHER"
         },
         zeroCapNote = PRE_RUN_ZERO_CAP_NOTE.takeIf { floor.any { it.text.endsWith(PRE_RUN_ZERO_CAP_TAG) } },
-        overCapRows = s.wishOverCaps.map { PreRunRow("${name(it.staff)}「${sym(it.shift)}」 本人の希望${it.wished}件（個人の上限${it.hi}回）") },
+        overCapRows = s.wishOverCaps.map { PreRunRow("${name(it.staff)}「${sym(it.shift)}」 本人の希望${it.wished}件（個人の上限${it.hi}回）",
+            landing = EditLanding(2, "yr_count", countCell = it.staff to it.shift, label = if (it.hi == 0) LANDING_ZERO_CAP else null)) },
+        wallLanding = s.wallHint?.let { EditLanding(2, "yr_count", label = LANDING_ZERO_CAP) },
     )
 }

@@ -40,7 +40,9 @@ fun MagiViewModel.exportJsonDeferred(): (() -> String)? {
 fun MagiViewModel.exportCsv(): String? {
     val st = state ?: return null
     val sched = currentSchedule ?: return null
-    return ScheduleCsvBridge.build(st, sched)
+    val csv = ScheduleCsvBridge.build(st, sched)
+    noteCsvExport(st, sched, csv)   // [3.644.0] 保存済みの印は「この文字列」に結ぶ（notifySave が使う）
+    return csv
 }
 
 /** コンポーネント別エクスポート（取込種別と対。出力→編集→取込で往復可）。 */

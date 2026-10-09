@@ -208,6 +208,7 @@ fun MagiViewModel.setMonth(year: Int, month1to12: Int, clearWishes: Boolean? = n
     val st2 = if (clearWishes == true) st.copy(wishes = emptyMap(), extWishes = emptyList()) else st
     logOp("I", "期間変更: ${year}年${month1to12}月" + when (clearWishes) { true -> "（希望を消して）"; false -> "（希望を残して）"; null -> "" })
     applyStructure(Ws1Ops.resizeDays(st2.copy(startDate = first.toString()), sched, first.lengthOfMonth()))
+    clearCsvSaved()   // 前の月の CSV の保存は新しい月の内容と関係がない
 }
 
 /** [3.643.0] 月を移す確認の答え。確認が閉じていれば何もしない。 */

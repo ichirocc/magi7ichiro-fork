@@ -520,6 +520,7 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 monthMoveLines(plan).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                monthMoveKeepNote(plan)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.error) }
                 Text("前の月の希望を新しい月に持ち越さないときは「希望を消して移る」を選びます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
