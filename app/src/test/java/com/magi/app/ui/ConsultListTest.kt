@@ -51,8 +51,8 @@ class ConsultListTest {
         assertEquals(0 to 11, consultCell(c, "2026-10-01", listOf("乙", "甲"), 31))          // 並び替え: 氏名で引き直す
         assertNull(consultCell(c, "2026-10-01", listOf("甲"), 31))                            // 削除: 開けない
         assertNull(consultCell(c, "2026-11-01", listOf("甲", "乙"), 30))                      // 月の移動: 日付が期間の外
-        assertEquals(1 to 11, consultCell(c, "2026-10-01", listOf("乙", "乙"), 31))          // 同名は積んだときの位置が一致すればそれ
-        assertEquals(0 to 11, consultCell(c, "2026-10-01", listOf("乙", "甲", "乙"), 31))    // 位置の氏名が違えば先頭の同名
+        assertNull(consultCell(c, "2026-10-01", listOf("乙", "乙"), 31))                      // [3.650.0] 同名が複数で並びが不明＝開かない
+        assertEquals("同じ名前の職員が複数いて、どの人か決められません（乙）", consultTargetNote(c, "2026-10-01", listOf("乙", "甲", "乙"), listOf(), 31))
         assertEquals("いまの職員一覧にいません（乙）", consultTargetNote(c, "2026-10-01", listOf("甲"), listOf(), 31))
         assertEquals("いまの期間にない日です（10/12）", consultTargetNote(c, "2026-11-01", listOf("甲", "乙"), listOf(), 30))
         assertNull(consultTargetNote(c, "2026-10-01", listOf("甲", "乙"), listOf(), 31))
@@ -81,5 +81,26 @@ class ConsultListTest {
         assertEquals("2026-10-12", isoDate("2026-10-01", 11))
         assertEquals(11, dayIndexOf("2026-10-01", "2026-10-12", 31))
         assertNull(dayIndexOf("2026-10-01", "2026-11-12", 31))
+    }
+
+    /** [3.650.0/外部レビュー] 同じ名前の職員は、積んだときと並びが同じときだけ位置で開く。 */
+    @Test fun sameNamedStaffOpenOnlyWhileTheRosterIsUnchanged() {
+        val names = listOf("佐藤", "甲", "佐藤")
+        val c = consultWish("佐藤", "10/12", "夜", "r", 2, 11, "2026-10-12").copy(rosterKey = rosterKeyOf(names))
+        assertEquals(2 to 11, consultCell(c, "2026-10-01", names, 31))
+        assertNull(consultCell(c, "2026-10-01", listOf("佐藤", "佐藤", "甲"), 31))
+        assertEquals(0 to 11, consultCell(c, "2026-10-01", listOf("佐藤", "甲"), 31))   // 1 人になれば氏名で引ける
+        assertTrue(rosterKeyOf(emptyList()) != 0)
+    }
+
+    /** [3.650.0/外部レビュー] 積んだ案は出したときの盤面と設定の指紋を持ち、今と違えば当てない（枠を持つ相談は探し直すので関係しない）。 */
+    @Test fun aSavedSuggestionIsStaleOnceTheBoardOrSettingsChange() {
+        val sug = FixSuggestion(FixKind.CHAIN, listOf(FixCell(0, 2, 2), FixCell(1, 2, 0)), "lbl", -1, 0, emptyList())
+        val t = ChainTarget(null, null, "lbl", suggestion = sug, boardKey = 11L, stateKey = 22L)
+        assertFalse(consultChainStale(t, 11L, 22L))
+        assertTrue(consultChainStale(t, 12L, 22L))
+        assertTrue(consultChainStale(t, 11L, 23L))
+        assertTrue("指紋の無い案は古いとみなす", consultChainStale(t.copy(boardKey = 0L), 11L, 22L))
+        assertFalse("枠を持つ相談（案なし）は探し直す", consultChainStale(ChainTarget("2026-10-03", "夜", "lbl"), 1L, 2L))
     }
 }

@@ -229,11 +229,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // [3.646.0 L01] 診断が指した日。希望（職員）か必要人数（シフト）の着地と一緒に使い、カレンダーでその日を選んだ状態で開く。
     var deepLinkDay by rememberSaveable { mutableIntStateOf(-1) }
     // [3.646.0 U02] 希望・必要人数の入力途中（職員／シフトと選択日）はタブを離れても残す（保存済みのデータとは別）。
-    val daySetSaver = listSaver<Set<Int>, Int>(save = { it.toList() }, restore = { it.toSet() })
-    var wishEditStaff by rememberSaveable { mutableIntStateOf(0) }
-    var wishEditDays by rememberSaveable(stateSaver = daySetSaver) { mutableStateOf(emptySet<Int>()) }
-    var needEditShift by rememberSaveable { mutableIntStateOf(0) }
-    var needEditDays by rememberSaveable(stateSaver = daySetSaver) { mutableStateOf(emptySet<Int>()) }
+    //   [3.650.0] 職員・シフトは名前（記号）でも持ち、並び替え・削除・月の移動のあとは引き直すか消す（resolvePick）。
+    val editPickSaver = listSaver<EditPick, Any>(
+        save = { listOf(it.index, it.key ?: "", ArrayList(it.days.sorted()), it.period, it.roster) },
+        restore = { l -> @Suppress("UNCHECKED_CAST") EditPick(l[0] as Int, (l[1] as String).ifEmpty { null }, (l[2] as List<Int>).toSet(), l[3] as String, l[4] as Int) },
+    )
+    var wishPick by rememberSaveable(stateSaver = editPickSaver) { mutableStateOf(EditPick()) }
+    var needPick by rememberSaveable(stateSaver = editPickSaver) { mutableStateOf(EditPick()) }
     // [3.646.0 L03] 編集タブへ着地した呼出元（元の確認へ戻る）。自分でタブを替えたら消える。
     var editReturn by remember { mutableStateOf<EditReturn?>(null) }
     var wishConfirm by remember { mutableStateOf(0) } // >0: 担当外件数の確認ダイアログ表示
@@ -739,6 +741,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         canDo = canDoShift, plainCellBorder = plainCellBorder, cv = conditionsView, onEvent = onEvent, fixNav = fixNav,
                         nav = schedNav, stickyTopPx = viewportTopPx, vScroll = tabScrolls[1], editCell = editingCell, sheetPx = sheetPx, barKey = barMode.ordinal)
                     }
+                    // [3.483.0 S-2] 希望まわりの2操作（反映／一括）をグリッド下の1か所に。[3.648.0] 1 枚の行に（説明＋ボタン 2 つ）。
+                    //   [3.650.0] 集計は既定で開く（3.514.0）ので、長い集計の下まで探させないよう集計の上＝グリッドの直下に置く。
+                    WishActionsRow(ui, onApply = {
+                        val oos = vm.wishOutOfScopeCount()
+                        if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
+                    }, onBulk = { wishBulkOpen = true })
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
                     TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav)
@@ -749,11 +757,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     //   一本化する形で一度撤去したが、勤務表タブから編集タブへ往復せず確認したいという
                     //   実機要望を受け、シフト集計カード内トグルとして復活させた（両者は併存。
                     //   StaffShiftMatrixCardは目標(apt)編集も兼ねる分、役割が広い）。
-                    // [3.483.0 S-2] 希望まわりの2操作（反映／一括）をグリッド下の1か所に。[3.648.0] 1 枚の行に（説明＋ボタン 2 つ）。
-                    WishActionsRow(ui, onApply = {
-                        val oos = vm.wishOutOfScopeCount()
-                        if (oos > 0) wishConfirm = oos else vm.applyWishes(false)
-                    }, onBulk = { wishBulkOpen = true })
                     if (wishBulkOpen) {
                         WishBulkSheet(ui, conditionsView, onEvent, presetWeekday = 0, onDismiss = { wishBulkOpen = false })
                     }
@@ -800,12 +803,17 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             // [3.482.0 導線重複] 作成ボタンは固定フッター（BottomCommandBar）に一本化＝カードは確認だけ。
                             MonthlyChecklistCard(ui, ws1View, conditionsView, onOpenWish = openWish)
                             MonthPickerCard(ui, onEvent)
+                            val period = editPeriod(ui.startDate, ui.days)
+                            val wishNow = resolvePick(wishPick, ui.staffNames, period)
+                            val needNow = resolvePick(needPick, ui.shiftSymbols, period)
                             WishCard(ui, conditionsView, onEvent,
-                                staffSel = wishEditStaff, onStaffSel = { wishEditStaff = it }, daysSel = wishEditDays, onDaysSel = { wishEditDays = it },
+                                staffSel = wishNow.index, onStaffSel = { wishPick = pickAt(wishPick, ui.staffNames, period, it) },
+                                daysSel = wishNow.days, onDaysSel = { wishPick = pickDays(wishPick, ui.staffNames, period, it) },
                                 initialStaff = deepLinkWishStaff.takeIf { it >= 0 }, initialDay = deepLinkDay.takeIf { it >= 0 && deepLinkWishStaff >= 0 },
                                 onInitialConsumed = { deepLinkWishStaff = -1; deepLinkDay = -1 })
                             ws1View?.let { NeedCalendarCard(ui, it, conditionsView, onEvent,
-                                shiftSel = needEditShift, onShiftSel = { s -> needEditShift = s }, daysSel = needEditDays, onDaysSel = { d -> needEditDays = d },
+                                shiftSel = needNow.index, onShiftSel = { s -> needPick = pickAt(needPick, ui.shiftSymbols, period, s) },
+                                daysSel = needNow.days, onDaysSel = { d -> needPick = pickDays(needPick, ui.shiftSymbols, period, d) },
                                 initialShift = deepLinkNeedShift.takeIf { s -> s >= 0 }, initialDay = deepLinkDay.takeIf { d -> d >= 0 && deepLinkNeedShift >= 0 },
                                 onInitialConsumed = { deepLinkNeedShift = -1; deepLinkDay = -1 }) }
                             NeedDayCard(ui, conditionsView, onEvent)

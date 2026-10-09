@@ -347,6 +347,8 @@ internal fun ScheduleToolsCard(
     val cs = MaterialTheme.colorScheme
     var legendOpen by rememberSaveable { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(query.isNotBlank()) }
+    val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+    val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     val anyViol = bucketCounts.values.any { it > 0 }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -379,14 +381,13 @@ internal fun ScheduleToolsCard(
             }
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { legendOpen = true }, contentPadding = PaddingValues(horizontal = 8.dp),
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "凡例を開く（枠・バッジ・印の見方）" }) {
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "凡例を開く（枠・バッジ・印の見方とシフトの色）" }) {
                     Text("凡例 ▸", style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 }
+                // [3.650.0] 短い一覧は枠と印（形だけでは意味が分からないもの）。シフトの色はセルに記号が出るので［凡例 ▸］のシートへ。
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (i in ui.shiftSymbols.indices) if (ui.shiftSymbols[i].isNotBlank()) {
-                        ShiftColorChip(ui.shiftSymbols[i], ui.shiftColorHex.getOrNull(i), ui.shiftTextHex.getOrNull(i))
-                    }
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CompactMarkLegend(vioColor, vioSoftColor)
                 }
                 TextButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) onQuery("") }, contentPadding = PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.heightIn(min = 48.dp)) {
@@ -674,6 +675,47 @@ internal fun startDowMonFirst(startDate: String): Int = try {
     (LocalDate.parse(startDate).dayOfWeek.value - 1).coerceIn(0, 6)
 } catch (_: Exception) { 0 }
 
+/** 凡例の見本（実線・破線・右上の角・希望の桃バッジ・緑リング）。全文の凡例と道具カードの短い一覧が同じ形を使う。 */
+@Composable
+private fun SolidFrameSwatch(color: Color) =
+    Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, color, RoundedCornerShape(4.dp)))
+
+@Composable
+private fun DashedFrameSwatch(color: Color) = Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, color, 4.dp))
+
+@Composable
+private fun CornerSwatch(color: Color) {
+    val cs = MaterialTheme.colorScheme
+    Box(Modifier.size(width = 22.dp, height = 16.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(4.dp)).drawBehind {
+        val t = 12.dp.toPx()
+        val p = Path().apply { moveTo(size.width - t, 0f); lineTo(size.width, 0f); lineTo(size.width, t); close() }
+        drawPath(p, color)
+    })
+}
+
+@Composable
+private fun WishPendingSwatch() = Box(Modifier.size(width = 22.dp, height = 16.dp).background(MagiAccent.pink, RoundedCornerShape(4.dp)))
+
+@Composable
+private fun WishMetSwatch() = Box(Modifier.size(width = 22.dp, height = 16.dp).border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(50)))
+
+/** [3.650.0] 枠と印の短い凡例（道具カードに常駐。語は全文の凡例と同じ「必須／要調整」）。詳しい意味とシフトの色は［凡例 ▸］のシート。 */
+@Composable
+internal fun CompactMarkLegend(vioColor: Color, vioSoftColor: Color) {
+    val cs = MaterialTheme.colorScheme
+    @Composable
+    fun item(label: String, swatch: @Composable () -> Unit) =
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            swatch()
+            Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
+        }
+    item("必須") { SolidFrameSwatch(vioColor) }
+    item("要調整") { DashedFrameSwatch(vioSoftColor) }
+    item("軽い要調整") { CornerSwatch(vioSoftColor) }
+    item("希望が未反映") { WishPendingSwatch() }
+    item("希望が反映済み") { WishMetSwatch() }
+}
+
 /** 違反セルの凡例（実線=必須 / 破線=要調整）。非色手がかりの意味を必ず示す。 */
 
 @Composable
@@ -683,22 +725,18 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
     // [実機指摘] 固定 Row では幅不足時に3項目目が縦1文字に潰れた→ FlowRow で項目単位に折り返す。
     FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
+            SolidFrameSwatch(vioColor)
             // [B4] 色名は固定しない（ユーザーが違反色を変更でき、凡例とグリッドが食い違うため）。
             //   実線/破線の形状＋左の色見本が真の手がかり（色覚配慮＝形状符号化）。
             // 語は凡例も「必須／要調整」（利用者決定 2026-09-27。旧「絶対NG／できれば直す」）。3段階の強度区分(実線/破線/角マーク)は3.99.0のまま。
             Text("実線の枠＝必須", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioSoftColor, 4.dp))
+            DashedFrameSwatch(vioSoftColor)
             Text("破線の枠＝要調整（重）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(4.dp)).drawBehind {
-                val t = 12.dp.toPx()
-                val p = Path().apply { moveTo(size.width - t, 0f); lineTo(size.width, 0f); lineTo(size.width, t); close() }
-                drawPath(p, vioSoftColor)
-            })
+            CornerSwatch(vioSoftColor)
             Text("右上の角＝要調整（軽）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -716,11 +754,11 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
         // [凡例の抜け] 希望シフトの桃バッジ/緑リングは勤務表グリッドの常時キャプションにしかなく、この
         //   折りたたみ凡例には無かった＝重複解消でキャプションを短縮する前提として、ここへ移す。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).background(MagiAccent.pink, RoundedCornerShape(4.dp)))
+            WishPendingSwatch()
             Text("桃バッジ＝希望が未反映", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).border(2.dp, cs.tertiary, RoundedCornerShape(50)))
+            WishMetSwatch()
             Text("緑リング＝希望が反映済み", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
@@ -1131,9 +1169,9 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
-    // [3.648.0/ユーザー指示「集計を必要時に開く構成」] 既定は折りたたみ（3.514.0「シフト集計は開く。閉じない」を 2026-10-09 の
-    //   配置見直しで反転。3.483.0 S-4 と同じ向き）。見出しはグリッドの直下＝必要なときに 1 タップで開く。開閉は回転/復元でも保持。
-    var open by rememberSaveable { mutableStateOf(false) }
+    // [3.514.0/ユーザー指示「シフト集計は開く。閉じない」] 既定は展開。3.648.0 で一度折りたたみにしたが、3.650.0 で戻した
+    //   （2026-10-09 利用者「推奨で」＝外部レビューの撤回）。開閉トグル自体は残す。開閉は回転/復元でも保持。
+    var open by rememberSaveable { mutableStateOf(true) }
     // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
     //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
     val periodLabel = remember(ui.startDate, ui.days) {
