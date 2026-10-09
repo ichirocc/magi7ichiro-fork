@@ -8,17 +8,23 @@ import java.time.temporal.ChronoUnit
  * [3.645.0/仕様 5.3・UX-05] 「相談してから決める」判断。対象（だれの・どの日の・何）と検討内容を持ち、セッション内だけ
  * （state 非保存＝見直し候補と同じ）。出力も判定も止めない＝確認・承認を必須にする範囲は職場の運用で決める（ユーザー決定 2026-10-09）。
  * 対象は氏名と実日付でも持つ＝職員の削除・並び替えや月の移動のあとに別の人・別の日を開かない（3.646.0、外部レビュー B01/B02）。
- * [staff]/[day] は積んだときの位置（氏名・日付が一致するときの近道）。
+ * [staff]/[day] は積んだときの位置（氏名・日付が一致するときの近道）。[rosterKey] は積んだときの職員の並び（[rosterKeyOf]、0＝不明）＝
+ * 同じ名前の職員が複数いるとき、並びが変わっていなければ位置を信じる（3.650.0）。
  */
 data class ConsultItem(
     val subject: String, val note: String, val staff: Int? = null, val day: Int? = null,
     val staffName: String? = null, val date: String? = null,
     val chain: ChainTarget? = null,
+    val rosterKey: Int = 0,
 )
 
 /** 複数人の入れ替えの相談が指す枠。日付とシフト記号で持つ＝月の移動・シフトの並び替えのあとも今の勤務表で案を探し直せる。
- *  枠を持たない案（ホーム・分析の「この手を使う」から）は [suggestion] を持ち、一覧をもう一度出す（当てるときの照合は適用の門が行う）。 */
-data class ChainTarget(val date: String?, val shiftSymbol: String?, val label: String, val suggestion: FixSuggestion? = null)
+ *  枠を持たない案（ホーム・分析の「この手を使う」から）は [suggestion] と、その案を出したときの盤面と設定の指紋 [boardKey]/[stateKey]
+ *  を持つ（3.650.0）。指紋が今と違えば案は当てない＝並び替えのあとに同じ番号の別の人へ当てない。 */
+data class ChainTarget(
+    val date: String?, val shiftSymbol: String?, val label: String, val suggestion: FixSuggestion? = null,
+    val boardKey: Long = 0L, val stateKey: Long = 0L,
+)
 
 internal const val CONSULT_BUTTON = "相談してから決める"
 internal const val CONSULT_DONE = "相談中"
@@ -26,6 +32,7 @@ internal const val CONSULT_ADDED = "相談中に追加しました"
 internal const val CONSULT_DUPLICATE = "すでに相談中にあります"
 internal const val CONSULT_OPEN = "開く"
 internal const val CONSULT_RESUME = "案を見る"
+internal const val CONSULT_STALE = "相談に積んだあとで勤務表か設定が変わったため、この案はそのままでは使えません。「直し方を探す」で探し直してください"
 
 /** ホームの主カードの 1 行。0 件なら出さない。 */
 internal fun consultLine(n: Int): String? = if (n > 0) "未確認事項 $n 件（相談中。下の一覧で確認してから配ってください）" else null
@@ -41,10 +48,17 @@ internal fun dayIndexOf(startDate: String, date: String, days: Int): Int? = runC
 private fun shortDate(date: String): String =
     runCatching { LocalDate.parse(date).let { "${it.monthValue}/${it.dayOfMonth}" } }.getOrDefault(date)
 
-/** 相談の職員を今の一覧で探す。氏名があればそれで（積んだときの位置が同じ氏名なら近道）、無ければ位置だけ。 */
+/** 職員の並びの指紋（同じ名前の職員を位置で区別してよいかの判定に使う。0 は「不明」に取っておく）。 */
+internal fun rosterKeyOf(staffNames: List<String>): Int = staffNames.hashCode().let { if (it == 0) 1 else it }
+
+/** 相談の職員を今の一覧で探す。氏名があればそれで（積んだときの位置が同じ氏名なら近道）、無ければ位置だけ。
+ *  同じ名前が複数いれば氏名では区別できない＝積んだときと並びが同じときだけ位置を信じ、それ以外は開かない（3.650.0）。 */
 internal fun consultStaff(c: ConsultItem, staffNames: List<String>): Int? {
     val name = c.staffName ?: return c.staff?.takeIf { it in staffNames.indices }
     val at = c.staff
+    if (staffNames.count { it == name } > 1) {
+        return at?.takeIf { c.rosterKey != 0 && c.rosterKey == rosterKeyOf(staffNames) && staffNames.getOrNull(it) == name }
+    }
     if (at != null && staffNames.getOrNull(at) == name) return at
     return staffNames.indexOf(name).takeIf { it >= 0 }
 }
@@ -69,6 +83,24 @@ internal fun consultChainTarget(t: ChainTarget, startDate: String, shiftSymbols:
     return j to k
 }
 
+/**
+ * [3.651.0/外部レビュー] 職員の改名に相談の対象を追従させる（職員 ID はデータ項目に無いので、名簿が変わった時点で氏名を書き換える）。
+ * 人数が同じで 1 か所だけ名前が変わった＝改名とみなす（並び替えは 2 か所以上、追加・削除は人数が変わる＝氏名で引き直す既存の規則のまま）。
+ * 改名前の名簿で引けた相談は、同じ位置の今の名前と今の名簿の指紋に書き換える（改名で位置は動かない＝別の人の改名でも同名の区別を保つ）。
+ */
+internal fun followRenameInConsults(items: List<ConsultItem>, before: List<String>, after: List<String>): List<ConsultItem> {
+    if (items.isEmpty() || before.size != after.size || before.indices.count { before[it] != after[it] } != 1) return items
+    val roster = rosterKeyOf(after)
+    return items.map { c ->
+        val at = if (c.staffName == null) null else consultStaff(c, before)
+        if (at == null) c else c.copy(staffName = after[at], staff = at, rosterKey = roster)
+    }
+}
+
+/** 積んだ案が今の勤務表・設定で出したものと違うか（指紋が無い・違う＝当てずに探し直しを促す）。枠を持つ相談は探し直すので関係しない。 */
+internal fun consultChainStale(t: ChainTarget, boardKey: Long, stateKey: Long): Boolean =
+    t.suggestion != null && (t.boardKey == 0L || t.boardKey != boardKey || t.stateKey != stateKey)
+
 /** 入れ替えの相談を今の勤務表で見直せるか（枠を引き直せる、または案そのものを持つ）。 */
 internal fun consultChainResumable(t: ChainTarget, startDate: String, shiftSymbols: List<String>, days: Int): Boolean =
     consultChainTarget(t, startDate, shiftSymbols, days) != null || t.suggestion != null
@@ -81,7 +113,11 @@ internal fun consultTargetNote(c: ConsultItem, startDate: String, staffNames: Li
     }
     if (c.staff == null && c.staffName == null && c.day == null && c.date == null) return null
     if (consultCell(c, startDate, staffNames, days) != null) return null
-    if (consultStaff(c, staffNames) == null) return "いまの職員一覧にいません" + (c.staffName?.let { "（$it）" } ?: "")
+    if (consultStaff(c, staffNames) == null) {
+        val name = c.staffName
+        if (name != null && staffNames.count { it == name } > 1) return "同じ名前の職員が複数いて、どの人か決められません（$name）"
+        return "いまの職員一覧にいません" + (name?.let { "（$it）" } ?: "")
+    }
     return "いまの期間にない日です" + (c.date?.let { "（${shortDate(it)}）" } ?: "")
 }
 

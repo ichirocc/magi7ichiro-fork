@@ -69,6 +69,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import java.time.LocalDate
 import androidx.compose.ui.text.font.FontFamily
@@ -347,6 +348,8 @@ internal fun ScheduleToolsCard(
     val cs = MaterialTheme.colorScheme
     var legendOpen by rememberSaveable { mutableStateOf(false) }
     var searchOpen by rememberSaveable { mutableStateOf(query.isNotBlank()) }
+    val vioColor = ui.violationColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: cs.error
+    val vioSoftColor = ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange
     val anyViol = bucketCounts.values.any { it > 0 }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -379,14 +382,13 @@ internal fun ScheduleToolsCard(
             }
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { legendOpen = true }, contentPadding = PaddingValues(horizontal = 8.dp),
-                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "凡例を開く（枠・バッジ・印の見方）" }) {
+                    modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "凡例を開く（枠・バッジ・印の見方とシフトの色）" }) {
                     Text("凡例 ▸", style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 }
+                // [3.650.0] 短い一覧は枠と印（形だけでは意味が分からないもの）。シフトの色はセルに記号が出るので［凡例 ▸］のシートへ。
                 Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (i in ui.shiftSymbols.indices) if (ui.shiftSymbols[i].isNotBlank()) {
-                        ShiftColorChip(ui.shiftSymbols[i], ui.shiftColorHex.getOrNull(i), ui.shiftTextHex.getOrNull(i))
-                    }
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CompactMarkLegend(vioColor, vioSoftColor)
                 }
                 TextButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) onQuery("") }, contentPadding = PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.heightIn(min = 48.dp)) {
@@ -674,6 +676,68 @@ internal fun startDowMonFirst(startDate: String): Int = try {
     (LocalDate.parse(startDate).dayOfWeek.value - 1).coerceIn(0, 6)
 } catch (_: Exception) { 0 }
 
+/** 凡例の見本（実線・破線・右上の角・希望の桃バッジ・緑リング）。全文の凡例と道具カードの短い一覧が同じ形を使う。 */
+@Composable
+private fun SolidFrameSwatch(color: Color) =
+    Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, color, RoundedCornerShape(4.dp)))
+
+@Composable
+private fun DashedFrameSwatch(color: Color) = Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, color, 4.dp))
+
+@Composable
+private fun CornerSwatch(color: Color) {
+    val cs = MaterialTheme.colorScheme
+    Box(Modifier.size(width = 22.dp, height = 16.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(4.dp)).drawBehind {
+        val t = 12.dp.toPx()
+        val p = Path().apply { moveTo(size.width - t, 0f); lineTo(size.width, 0f); lineTo(size.width, t); close() }
+        drawPath(p, color)
+    })
+}
+
+@Composable
+private fun WishPendingSwatch() = Box(Modifier.size(width = 22.dp, height = 16.dp).background(MagiAccent.pink, RoundedCornerShape(4.dp)))
+
+@Composable
+private fun WishMetSwatch() = Box(Modifier.size(width = 22.dp, height = 16.dp).border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(50)))
+
+/** [3.651.0/外部レビュー] 拡張希望の×（セル上端の中央と凡例の見本）。文字の「×」は行の高さと下地の分だけ下へ伸びて記号の上端に接したので、
+ *  [MagiMarks.extCross] の枠の中に線で描く（ハローの丸い端も枠の内側に収める）。 */
+@Composable
+private fun ExtCrossMark(color: Color, modifier: Modifier = Modifier) {
+    val halo = MaterialTheme.colorScheme.surface
+    Box(modifier.size(MagiMarks.extCross).drawBehind {
+        val hw = 3.dp.toPx(); val e = hw / 2f
+        val a = Offset(e, e); val b = Offset(size.width - e, size.height - e)
+        val c = Offset(size.width - e, e); val d = Offset(e, size.height - e)
+        drawLine(halo, a, b, hw, StrokeCap.Round); drawLine(halo, c, d, hw, StrokeCap.Round)
+        val w = 1.8.dp.toPx()
+        drawLine(color, a, b, w, StrokeCap.Round); drawLine(color, c, d, w, StrokeCap.Round)
+    })
+}
+
+@Composable
+private fun ExtCrossSwatch() = Box(Modifier.size(width = 22.dp, height = 16.dp), contentAlignment = Alignment.Center) {
+    ExtCrossMark(MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** [3.650.0] 枠と印の短い凡例（道具カードに常駐。語は全文の凡例と同じ「必須／要調整」）。詳しい意味とシフトの色は［凡例 ▸］のシート。 */
+@Composable
+internal fun CompactMarkLegend(vioColor: Color, vioSoftColor: Color) {
+    val cs = MaterialTheme.colorScheme
+    @Composable
+    fun item(label: String, swatch: @Composable () -> Unit) =
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            swatch()
+            Text(label, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
+        }
+    item("必須") { SolidFrameSwatch(vioColor) }
+    item("要調整") { DashedFrameSwatch(vioSoftColor) }
+    item("軽い要調整") { CornerSwatch(vioSoftColor) }
+    item("希望が未反映") { WishPendingSwatch() }
+    item("希望が反映済み") { WishMetSwatch() }
+    item("拡張希望") { ExtCrossSwatch() }
+}
+
 /** 違反セルの凡例（実線=必須 / 破線=要調整）。非色手がかりの意味を必ず示す。 */
 
 @Composable
@@ -683,22 +747,18 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
     // [実機指摘] 固定 Row では幅不足時に3項目目が縦1文字に潰れた→ FlowRow で項目単位に折り返す。
     FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).border(3.dp, vioColor, RoundedCornerShape(4.dp)))
+            SolidFrameSwatch(vioColor)
             // [B4] 色名は固定しない（ユーザーが違反色を変更でき、凡例とグリッドが食い違うため）。
             //   実線/破線の形状＋左の色見本が真の手がかり（色覚配慮＝形状符号化）。
             // 語は凡例も「必須／要調整」（利用者決定 2026-09-27。旧「絶対NG／できれば直す」）。3段階の強度区分(実線/破線/角マーク)は3.99.0のまま。
             Text("実線の枠＝必須", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).violationBorder(false, vioSoftColor, 4.dp))
+            DashedFrameSwatch(vioSoftColor)
             Text("破線の枠＝要調整（重）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).border(1.dp, cs.outlineVariant, RoundedCornerShape(4.dp)).drawBehind {
-                val t = 12.dp.toPx()
-                val p = Path().apply { moveTo(size.width - t, 0f); lineTo(size.width, 0f); lineTo(size.width, t); close() }
-                drawPath(p, vioSoftColor)
-            })
+            CornerSwatch(vioSoftColor)
             Text("右上の角＝要調整（軽）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -716,12 +776,17 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
         // [凡例の抜け] 希望シフトの桃バッジ/緑リングは勤務表グリッドの常時キャプションにしかなく、この
         //   折りたたみ凡例には無かった＝重複解消でキャプションを短縮する前提として、ここへ移す。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).background(MagiAccent.pink, RoundedCornerShape(4.dp)))
+            WishPendingSwatch()
             Text("桃バッジ＝希望が未反映", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(width = 22.dp, height = 16.dp).border(2.dp, cs.tertiary, RoundedCornerShape(50)))
+            WishMetSwatch()
             Text("緑リング＝希望が反映済み", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        }
+        // [3.651.0/凡例の抜け] 拡張希望の×はセルにだけあり、どの凡例にも無かった。
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ExtCrossSwatch()
+            Text("上端の×＝拡張希望（この日はこのシフト以外）。禁止のシフトが入ると違反の色", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -1104,7 +1169,7 @@ internal fun dayMD(startDate: String, j: Int): String = try {
 // 片手一本指: 横スクロール（rememberScrollState）でシフト列/日列を送る。
 // ============================================================================
 @Composable
-internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys, nav: FixNav = FixNav()) {
+internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, vs: MagiViewState, onFix: (Int?, Int?) -> Unit = { _, _ -> }, vioEnabled: Set<String> = allVioBucketKeys, nav: FixNav = FixNav(), stickyTopPx: Float = -1f) {
     val k = ui.shiftSymbols.size
     val s = ui.schedule.size
     val t = ui.days
@@ -1131,9 +1196,9 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
     // [文言整合監査] 超過/過剰の地色も要調整トークン(__vioSoft__)に追従（グリッドと同じ色言語）。
     val overBg = (ui.violationSoftColorHex.takeIf { it.isNotBlank() }?.let { hexToColor(it) } ?: MagiAccent.orange).copy(alpha = 0.50f)
     var mode by rememberSaveable { mutableStateOf(0) }   // 0=職員別 / 1=日別
-    // [3.648.0/ユーザー指示「集計を必要時に開く構成」] 既定は折りたたみ（3.514.0「シフト集計は開く。閉じない」を 2026-10-09 の
-    //   配置見直しで反転。3.483.0 S-4 と同じ向き）。見出しはグリッドの直下＝必要なときに 1 タップで開く。開閉は回転/復元でも保持。
-    var open by rememberSaveable { mutableStateOf(false) }
+    // [3.514.0/ユーザー指示「シフト集計は開く。閉じない」] 既定は展開。3.648.0 で一度折りたたみにしたが、3.650.0 で戻した
+    //   （2026-10-09 利用者「推奨で」＝外部レビューの撤回）。開閉トグル自体は残す。開閉は回転/復元でも保持。
+    var open by rememberSaveable { mutableStateOf(true) }
     // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
     //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
     val periodLabel = remember(ui.startDate, ui.days) {
@@ -1170,11 +1235,25 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 TallyLegend(shortBg, overBg)
                 Spacer(Modifier.height(8.dp))
                 val labW = 100.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 集計セル 40x34 -> 48x48（違反セルはタップ可のため）
-                Row {
-                    Column {
+                val hs = rememberScrollState()
+                StickyHeaderTable(stickyTopPx, rh, header = {
+                    Row {
                         TallyBox(labW, rh, cs.surfaceVariant, false) {
                             Text("職員", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                         }
+                        Row(Modifier.horizontalScroll(hs)) {
+                            for (kk in 0 until k) {
+                                val bg = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
+                                val fg = ensureReadable(bg, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
+                                TallyBox(cw, rh, bg, false) {
+                                    Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                }) {
+                Row {
+                    Column {
                         for (i in 0 until s) TallyBox(labW, rh, cs.surfaceVariant, true) {
                             val nm = ui.staffNames.getOrNull(i) ?: "$i"
                             val gp = ui.staffGroupSymbols.getOrNull(i) ?: ""
@@ -1186,13 +1265,8 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             Text("計（期間）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                         }
                     }
-                    Row(Modifier.horizontalScroll(rememberScrollState())) {
+                    Row(Modifier.horizontalScroll(hs)) {
                         for (kk in 0 until k) Column {
-                            val bg = tallyHex(ui.shiftColorHex.getOrNull(kk)) ?: cs.surfaceVariant
-                            val fg = ensureReadable(bg, tallyHex(ui.shiftTextHex.getOrNull(kk)) ?: cs.onSurfaceVariant)
-                            TallyBox(cw, rh, bg, false) {
-                                Text(ui.shiftSymbols[kk], style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = fg, maxLines = 1)
-                            }
                             for (i in 0 until s) {
                                 val v = perStaff[i][kk]
                                 // [E7] 回数(low/high/apt/c2)バケツOFF時はこのセルの違反表示を抑止（値は表示・色/枠だけ消す）。
@@ -1225,6 +1299,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                         }
                     }
                 }
+                }
             } else {
                 // [3.396.0] 「左右スワイプで他の日」は剥がした。列は 84dp + 48dp×31日 = 1572dp あり、
                 //   どの対象端末（幅390dp以上=D4）でも**右端が必ず見切れる**＝横に続くことは形が語っている。
@@ -1232,11 +1307,21 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 TallyLegend(shortBg, overBg)
                 Spacer(Modifier.height(8.dp))
                 val labW = 84.dp; val cw = 48.dp; val rh = 48.dp // [a11y] 日別集計セル 34x34 -> 48x48
-                Row {
-                    Column {
+                val hs = rememberScrollState()
+                StickyHeaderTable(stickyTopPx, rh, header = {
+                    Row {
                         TallyBox(labW, rh, cs.surfaceVariant, false) {
                             Text("シフト", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
                         }
+                        Row(Modifier.horizontalScroll(hs)) {
+                            for (j in 0 until t) TallyBox(cw, rh, cs.surfaceVariant, false) {
+                                Text("${j + 1}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
+                            }
+                        }
+                    }
+                }) {
+                Row {
+                    Column {
                         for (kk in 0 until k) {
                             // [レイアウト/実機指摘] 全日0のシフト行（未使用シフト）はラベルも淡色に沈め、
                             //   使っている行の模様を浮かび上がらせる（行は消さない＝存在は読める）。
@@ -1249,11 +1334,8 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             }
                         }
                     }
-                    Row(Modifier.horizontalScroll(rememberScrollState())) {
+                    Row(Modifier.horizontalScroll(hs)) {
                         for (j in 0 until t) Column {
-                            TallyBox(cw, rh, cs.surfaceVariant, false) {
-                                Text("${j + 1}", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 1)
-                            }
                             for (kk in 0 until k) {
                                 val v = perDay[j][kk]
                                 // [E7] 人員(covU/covO)バケツOFF時はこの日セルの違反表示を抑止（値は表示・色/枠だけ消す）。
@@ -1272,6 +1354,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             }
                         }
                     }
+                }
                 }
             }
             }   // if (open)
@@ -1406,6 +1489,24 @@ private fun TallyLegend(shortBg: Color, overBg: Color) {
         Text("▲ 超過", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.width(14.dp))
         Text("— 対象外", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+    }
+}
+
+/**
+ * [3.651.0/backlog #47・外部レビュー「列名を見失わない」] 集計の見出し行を本体の上端に留める（勤務表の日ヘッダと同じ手＝3.481.0）。
+ * 見出しを本体の直上に置き、ビューポート上端（[stickyTopPx]、-1＝測れない）より上へ出る分だけ graphicsLayer で下へ平行移動して、
+ * 本体の下端の手前で止める。横スクロールは呼び出し側が見出しと本体で同じ ScrollState を使う。
+ */
+@Composable
+private fun StickyHeaderTable(stickyTopPx: Float, headH: androidx.compose.ui.unit.Dp, header: @Composable () -> Unit, body: @Composable () -> Unit) {
+    val headHpx = with(LocalDensity.current) { headH.toPx() }
+    var bodyTopPx by remember { mutableFloatStateOf(0f) }
+    var bodyHpx by remember { mutableFloatStateOf(0f) }
+    Column {
+        Box(Modifier.zIndex(1f).graphicsLayer {
+            translationY = if (stickyTopPx >= 0f && bodyHpx > headHpx) (stickyTopPx - (bodyTopPx - headHpx)).coerceIn(0f, bodyHpx - headHpx) else 0f
+        }.background(CardDefaults.cardColors().containerColor)) { header() }
+        Box(Modifier.onGloballyPositioned { c -> bodyTopPx = c.positionInRoot().y; bodyHpx = c.size.height.toFloat() }) { body() }
     }
 }
 
@@ -1891,11 +1992,7 @@ private fun FlatCell(
                 )
             }
             // 拡張希望＝上端中央の小さな「×」（指定日は控えめ、割当が禁止のシフトなら違反色）。他の印とは位置で区別。
-            if (ext != 0) {
-                val xc = if (ext == 2) vioColor else cs.onSurfaceVariant
-                Text("×", fontSize = symSize * 0.60f, fontWeight = FontWeight.Bold, color = xc, maxLines = 1,
-                    modifier = Modifier.align(Alignment.TopCenter).padding(top = MagiMarks.inset).background(cs.surface, RoundedCornerShape(3.dp)).padding(horizontal = 1.dp))
-            }
+            if (ext != 0) ExtCrossMark(if (ext == 2) vioColor else cs.onSurfaceVariant, Modifier.align(Alignment.TopCenter).padding(top = MagiMarks.inset))
             // [#41] 手動固定＝右下の小さな錠（希望の印は左下の丸・バッジ＝位置と形で区別）。
             if (pinned) {
                 Icon(Icons.Filled.Lock, contentDescription = null, tint = cs.onSurface,

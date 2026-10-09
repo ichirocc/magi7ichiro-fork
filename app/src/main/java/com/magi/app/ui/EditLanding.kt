@@ -65,3 +65,34 @@ internal fun landingForProofCore(core: List<ConstraintMus.Item>, zeroCap: Boolea
     if (core.any { it is ConstraintMus.WindowRule }) return EditLanding(2, "yr_cons", label = LANDING_WINDOW)
     return null
 }
+
+/**
+ * [3.650.0/外部レビュー] 編集タブの入力途中の選択（希望の職員と日／必要人数のシフトと日）。タブを離れても残す（3.646.0 U02）が、
+ * 対象が変わったら持ち越さない。職員・シフトは位置 [index] と名前（記号）[key] で持ち、並び替えのあとは名前で引き直す。
+ * 名前が今の一覧に無い・同じ名前が複数あって名簿 [roster] も変わったときは先頭へ戻して日を消す。期間 [period] が変われば日を消す。
+ */
+data class EditPick(val index: Int = 0, val key: String? = null, val days: Set<Int> = emptySet(), val period: String = "", val roster: Int = 0)
+
+internal fun editPeriod(startDate: String, days: Int): String = "$startDate/$days"
+
+/** 今の一覧 [keys] と期間で選択を引き直す（描画はいつもこの値を使う）。 */
+internal fun resolvePick(pick: EditPick, keys: List<String>, period: String): EditPick {
+    if (keys.isEmpty()) return EditPick(period = period)
+    val roster = keys.hashCode()
+    val key = pick.key
+    val idx = when {
+        key == null -> pick.index.coerceIn(0, keys.size - 1)
+        keys.count { it == key } > 1 -> pick.index.takeIf { pick.roster == roster && keys.getOrNull(it) == key } ?: -1
+        keys.getOrNull(pick.index) == key -> pick.index
+        else -> keys.indexOf(key)
+    }
+    if (idx < 0) return EditPick(0, keys[0], emptySet(), period, roster)
+    return EditPick(idx, keys[idx], if (pick.period == period) pick.days else emptySet(), period, roster)
+}
+
+/** 位置 [index] を選んだ（日の選択は呼び出し側が [pickDays] で決める）。 */
+internal fun pickAt(pick: EditPick, keys: List<String>, period: String, index: Int): EditPick =
+    resolvePick(pick, keys, period).copy(index = index, key = keys.getOrNull(index))
+
+internal fun pickDays(pick: EditPick, keys: List<String>, period: String, days: Set<Int>): EditPick =
+    resolvePick(pick, keys, period).copy(days = days)

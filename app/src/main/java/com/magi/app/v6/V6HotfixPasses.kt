@@ -145,13 +145,12 @@ object PolishGate {
     //   hard 中央値はどちらも全データセットで不変。docs/algorithm_portfolio.md「廃止・統合済み」参照。
 
     /**
-     * ブロック巡回交換で、禁止連続(c3n)が正味増える候補を**候補生成の段階で**捨てるか。既定 **true**
-     * （3.518.0で確定。ON/OFFで採用結果は変わらないため新規A/Bは不要＝既存測定を適用）。
+     * ブロック巡回交換で、必須(HARD)が正味で増える候補を**候補生成の段階で**捨てるか。既定 **true**（3.518.0）。
      *
-     * c3n は HARD なので増える候補は最終的に `isBetter` が必ず却下する＝ON/OFF で**採用結果は変わらない**
-     * （3.296.0 の A/B 実測で最終盤面・採用数が完全一致することを確認済み）。ON にすると構造的に詰んだ
-     * 候補へフル checker を呼ばなくなり、評価枠を soft 判定まで進める候補へ回せる
-     * （実測: 正式評価 48→14〜38 件）。
+     * [3.649.0] 判定は `HardDelta` の厳密な正味差分＝正式採否（HARD が先頭）が必ず却下する候補だけを捨てる。捨てた候補は
+     * 評価枠を使わないので、その枠は残りの候補へ回る（評価枠を使い切る盤面では OFF と採用が変わり得る＝OFF より悪くはならない）。
+     * 旧（3.295.0〜3.648.0）は c3n の増加だけで捨てていたため、c3w（3.542.0）や担当外シフトが減って必須の合計が減る候補まで
+     * 落としていた（`AdaptiveBlockSwapPolishTest` の反例。名前の C3n はその名残）。
      */
     @Volatile var filterC3nIncrease: Boolean = true
 
@@ -350,7 +349,7 @@ object TuningTelemetry {
     //   加算は最も多い wideC3nCalls でも実行あたり1万回弱＝checker 1回より桁違いに安く、速度への影響はない。
     //   ※「この実行では観測なし(==0)」の判定は旧実装でも健全だった（真の回数が1以上なら必ず1は書かれる）。
     //     壊れていたのは大きさだけ。3.356.0 の「0ならトグルを消してよい」という判断根拠は無傷。
-    /** 禁止連続の事前フィルタが checker を呼ばずに落とした候補数。 */
+    /** 必須が増える候補の事前フィルタ（ブロック巡回交換）が checker を呼ばずに落とした候補数。 */
     val c3nFilterSkipped = java.util.concurrent.atomic.AtomicInteger(0)
     /** 禁止連続の崩し範囲が既定(前後1日)と違う候補日を返した回数（広がる／狭まるの両方）。 */
     val wideC3nDiffered = java.util.concurrent.atomic.AtomicInteger(0)
@@ -401,7 +400,7 @@ object TuningTelemetry {
         // 実機ログで「設定の効き: 設定の効き: …」と二重になる（3.409.16 で実機ログにより発覚）。本文だけを返す。
         return "ネイティブ加速=" + (if (nativeOn) "ON" else "OFF") +
             " / Kotlin照合=" + eff(parityOn, parityChecks.get(), "回") +
-            " / 禁止連続の事前フィルタ=" + eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の無駄な検査を省略・勤務表は不変") +
+            " / 必須が増える候補の事前フィルタ=" + eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の必ず却下される検査を省略") +
             " / 禁止連続の崩し範囲=" + wide +
             " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替") +
             " / 結合探索を粘り強く=" + (if (combineExhaustPairs) "ON" else "OFF") +

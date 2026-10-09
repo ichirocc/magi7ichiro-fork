@@ -93,6 +93,8 @@ object MagiMarks {
     val pinLock: Dp = 11.dp
     /** セルの縁の印（×・バッジ・点・錠）を実線枠（3dp）の内側に置く余白。 */
     val inset: Dp = 3.dp
+    /** [3.651.0] 拡張希望の×（セル上端の中央）。線で描く枠の一辺＝上端の帯（3〜12dp）に収まり、記号（中央 15dp）に接しない。 */
+    val extCross: Dp = 9.dp
 }
 
 object MagiSpacing {

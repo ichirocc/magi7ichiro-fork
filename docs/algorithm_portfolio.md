@@ -132,7 +132,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 | 機構 | 内容 |
 |---|---|
 | `CombinatorialRepair` | 単独で不採用だった候補を 2〜4件束ねて再評価。C1Window / C3mn / C3n / Range / Apt / Fair の各パスへ配線。 |
-| `PolishGate` | UI トグル → エンジン内部フラグ（`NativeGate` と同型）。現在は AdaptiveBlockSwap の c3n 事前フィルタと c3n 回避の範囲拡張（どちらも既定 OFF・下記）。 |
+| `PolishGate` | UI トグル → エンジン内部フラグ（`NativeGate` と同型）。AdaptiveBlockSwap の事前フィルタ（既定 ON・3.649.0 から必須の正味差分で判定）と c3n 回避の範囲拡張など（下記）。 |
 | `exactPinRegression` | `staffRange` の厳密ピン（lo==hi）を崩す候補を全研磨パスで却下。 |
 | `HardDelta`（`PolishGate.hardDeltaPrefilter`、既定ON） | 循環交換（k=2,3）と C1広域ビームで、HARD 正味増の候補を checker の前に捨てる速度専用の事前却下。巡回交換は同日置換＝被覆不変なのでセル単位（groupViol/pref/c3w）＋触れた行の j を含む c3n 窓だけ、ビームは変わったセル・行・日の厳密差分（covU は到着・離脱の両方）。どちらもパスが必ず却下する候補だけを省く＝盤面は ON/OFF で同一（決定的後処理 18 盤面×2 回で全一致、後処理 −42%、2026-09-25）。共同 LNS 2 本は対象外。 |
 | `C3nBitScan` | 禁止連続の完全一致窓を AND＋シフト＋popcount で数えるビット走査。候補が増える経路の前段の枝刈り専用で、スカラーのオラクル（`makesForbiddenRun` / `staffC3nFires`）は置き換えない。 |
@@ -156,7 +156,7 @@ epoch 長（量子）は「直前の epoch が改善したか」で 5→8 秒 / 
 
 | 機構 | 昇格の根拠 |
 |---|---|
-| `PolishGate.filterC3nIncrease`（ブロック巡回交換の c3n 事前フィルタ） | 測定済み・**速度のみ、品質不変**。ON/OFF で最終盤面・採用数が完全に同一。詰んだ候補への無駄な checker 呼び出しを省くだけ（3.296.0 / 3.298.0）。副作用が原理的に無いため既定ONへ。 |
+| `PolishGate.filterC3nIncrease`（ブロック巡回交換の事前フィルタ） | 既定 ON。**3.649.0 から必須の正味差分（`HardDelta`）で判定**＝正式採否が必ず却下する候補だけを捨てる。旧（3.295.0〜3.648.0）は c3n の増加だけを見ており、c3w（3.542.0）や担当外シフトが減って必須の合計が減る交換まで捨てていた（3.296.0 の「ON/OFF で最終盤面が同一」は c3w 以前の測定）。3.649.0 の測定: 実データ 5 件×開始盤面 7 で旧新の最終盤面は 35/35 一致、反例（2 職員×11 日）では新だけが必須 2→1。 |
 | `PolishGate.lnsAdaptive`（共同LNSの「短時間試行→採用時だけ本予算」） | iter9（決定的・5 seed・170ペア）: 必須退行0・品質±0（新4/同等164/旧2、旧が良い2件も差0.01%以内）・速度は平均+10%、実データ**-23%**・大規模+29〜32%（すべて短縮）、タイムアウト13→12。機械的ゲートは中央値が閾値未達で形式上「不合格」だったが、これは**品質改善を測るゲートを速度改善狙いの機能に当てた不一致**（3.510.2時点の結論「既定ONはユーザー判断待ち、推奨ON」）。今回のユーザー指示で判断が確定＝昇格。 |
 | `PolishGate.personSwapKick`（PORTFOLIO の新役割 `PERSON_SWAP_ILS`＝同群2名の1ヶ月分割当を丸ごと交換してから RSI+ で再最適化するILS摂動） | 3.517.0実装直後（ユーザー実機データ1件の手動probe）は weightedScore 9831→9605（-2.3%）を確認。**3.519.0で正式計測**（`PersonSwapBench.kt`、実データ4件×5seed×フルoptimize(PORTFOLIO・120秒budget・workers4)＝CLAUDE.mdが認める代替手法「実データ4件のprobeで最終盤面のハッシュ比較」に基づく）: **全20ペアで必須(hard)退行ゼロ**（4フィクスチャ×5seedすべてhard値が旧新で完全一致）。品質(weightedScore)は golden 5/5勝(平均-2.1%)・blocked_covu 4/5勝(-0.34%)・sample 3/5勝(-0.05%、ほぼ同値)・sept2026 2/3勝2分(-0.62%)＝**4フィクスチャ全てで負けなし**。3.517.0の-2.3%より幅が小さいのは、同時に既定ONへ昇格した`lnsAdaptive`が既に同種の改善余地の一部を食っているため（両者は独立に発見されたが効果が部分的に重なる）。既定trueへ昇格。 |
 | `PolishGate.wishPinStrict`（既定ON、希望固定セルの規則 A） | 最適化器は希望固定セルを「希望へ」か「今のまま」にしかしない（利用者決定 2026-09-25）。効くのは盤面ごと写す経路（`elitePathRelink`・`personSwapKick`・`EliteIntegrationPolish` の採用）と「希望どおりの値だけ守る」段（`CovOReliefPolish`・RSI free 系・入口 hf66/`clearCappedCells`）。品質の効果ではなく規約の徹底＝測定は「開始時に守られていた希望を崩さない」「あとから足した希望の反映を妨げない」「同じ種で HARD が増えない」（docs/history/3.4xx.md「希望固定セルの規則 A」）。決定的後処理は ON/OFF 同一（A/A）。false は旧挙動（UI トグル無し）。 |

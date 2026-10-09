@@ -53,4 +53,30 @@ class EditLandingTest {
         assertEquals("「つくる前の確認」から来ました。直したら元の確認へ戻れます。", editReturnLine(EditReturn("つくる前の確認", EditReturn.PRE_RUN)))
         assertEquals(EditReturn.CELL, EditReturn("甲 10/3 のセル", EditReturn.CELL, 0 to 2).origin)
     }
+
+    /** [3.650.0/外部レビュー] 入力途中の選択は対象を名前で追い、対象や期間が変わったら持ち越さない。 */
+    @Test fun inputSelectionFollowsTheStaffAndDropsDaysWhenTheTargetOrPeriodChanges() {
+        val p = editPeriod("2026-10-01", 31)
+        val names = listOf("甲", "乙", "丙")
+        val pick = pickDays(pickAt(EditPick(), names, p, 2), names, p, setOf(3, 4))
+        assertEquals(EditPick(2, "丙", setOf(3, 4), p, names.hashCode()), pick)
+        val moved = listOf("丙", "甲", "乙")
+        assertEquals(EditPick(0, "丙", setOf(3, 4), p, moved.hashCode()), resolvePick(pick, moved, p))       // 並び替え: 名前で追う
+        assertEquals(EditPick(0, "甲", emptySet(), p, listOf("甲", "乙").hashCode()), resolvePick(pick, listOf("甲", "乙"), p))   // 削除: 先頭へ戻して日を消す
+        val p11 = editPeriod("2026-11-01", 30)
+        assertEquals(EditPick(2, "丙", emptySet(), p11, names.hashCode()), resolvePick(pick, names, p11))   // 月の移動: 日を消す
+        assertEquals(EditPick(0, "甲", emptySet(), p, names.hashCode()), resolvePick(EditPick(), names, p))   // まだ選んでいない
+        assertEquals(EditPick(period = p), resolvePick(pick, emptyList(), p))
+    }
+
+    @Test fun sameNamedStaffAreFollowedOnlyWhileTheRosterIsUnchanged() {
+        val p = editPeriod("2026-10-01", 31)
+        val names = listOf("佐藤", "佐藤", "鈴木")
+        val pick = pickDays(pickAt(EditPick(), names, p, 1), names, p, setOf(5))
+        assertEquals(1, resolvePick(pick, names, p).index)
+        assertEquals(setOf(5), resolvePick(pick, names, p).days)
+        val reordered = listOf("鈴木", "佐藤", "佐藤")
+        assertEquals("同じ名前で並びが変わったら区別できない＝先頭へ戻して日を消す",
+            EditPick(0, "鈴木", emptySet(), p, reordered.hashCode()), resolvePick(pick, reordered, p))
+    }
 }

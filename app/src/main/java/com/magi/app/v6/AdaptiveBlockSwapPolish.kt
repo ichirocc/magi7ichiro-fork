@@ -58,9 +58,9 @@ internal object AdaptiveBlockSwapPolish {
      * - [maxEvaluations] は **pass ごと**の正式評価枠。[maxCycleVisits] も全体予算でなく (ブロック長, 開始日) ごとの
      *   DFS 分岐上限（共通予算にすると後ろのブロックが一切探索されない。実測で DFS は 88万件/77ms＝ボトルネックでない）。
      * - [maxCycle] は 2..8 に丸める（巡回の署名を 8bit×人数で Long に詰めるため。既定 5＝到達しない防御、3.469.0）。
-     * - [filterC3nIncrease]: 禁止連続(c3n)が正味増える候補を候補生成の段階で捨てるか。既定は
-     *   [PolishGate.filterC3nIncrease]（設定タブの詳細トグル・既定 **true**、3.518.0）。c3n は HARD なので増える候補は
-     *   最終的に `isBetter` が必ず却下する＝true/false で採用結果は変わらず、true は詰んだ候補へ checker を呼ばない節約だけ。
+     * - [filterC3nIncrease]: 必須(HARD)が正味で増える候補を候補生成の段階で捨てるか（名前は 3.295.0 の c3n 版の名残）。既定は
+     *   [PolishGate.filterC3nIncrease]（既定 **true**、3.518.0）。判定は [HardDelta] の厳密な正味差分＝正式採否（HARD が先頭）が
+     *   必ず却下する候補だけを捨てる。捨てた候補は評価枠を使わないので、その枠は残りの候補の評価に回る。
      * - [stageOneWidthFactor]: 見積りキーだけで選別する第1段プールの幅＝`candidatesPerLength × この係数`。
      *   見積り上位が実候補化で落ちる（交換成立日が1日以下）ことは巡回人数が増えるほど起きやすく、幅が狭いと
      *   その下の成立候補まで失うため段②より広く取る（3.291.0 実測で 8）。
@@ -588,7 +588,7 @@ internal object AdaptiveBlockSwapPolish {
             // [3.294.0 ピン保存交換] 3.293.0 の不採用内訳で、採用0の55〜80%が exactPinRegression のピン破りと判明した
             //   （実データは10名中9名の「休」が厳密ピン＝長いブロックを丸ごと交換すると必ず回数が動く）。
             if (!balancePinnedDays(cycle, swapDays, counts)) return null
-            if (params.filterC3nIncrease && p.cons3n.isNotEmpty() && c3nFiresIncrease(cycle, swapDays)) {
+            if (params.filterC3nIncrease && hardIncreases(cycle, swapDays)) {
                 TuningTelemetry.c3nFilterSkipped.incrementAndGet()
                 return null
             }
@@ -612,23 +612,19 @@ internal object AdaptiveBlockSwapPolish {
         }
 
         /**
-         * [3.295.0 境界c3nの事前フィルタ / 3.296.0 で既定OFF] この巡回交換では covU/covO は同日置換で不変・groupViol は
-         * canDo・pref は movable で不変。変化しうる HARD は c3n と c3w（3.542.0、翌日が希望のセルを動かすと増減）で、ここは c3n の増加だけを落とす（c3w は checker が判定＝安全側のまま）。c3n は職員行ローカルなので、参加者の行に交換を
-         * 当てた fire 数を数えれば近似でなく厳密に判定できる。`firesAfter > firesBefore` の候補だけを落とす。
+         * [3.649.0] 巡回を当てた盤面の必須(HARD)の正味差分（[HardDelta]＝groupViol/pref/c3w/c3n/covU を厳密に数える）が正か。
+         * 正なら正式採否（HARD が先頭）が必ず却下する＝捨てても採否は変わらない。旧（3.295.0〜3.648.0）は c3n の fire 数だけを
+         * 比べており、希望の前日の禁止(c3w)や担当外シフトが減って必須の合計が減る候補まで捨てていた。
          */
-        private fun c3nFiresIncrease(cycle: IntArray, swapDays: List<Int>): Boolean {
+        private fun hardIncreases(cycle: IntArray, swapDays: List<Int>): Boolean {
+            val cand = Array(work.size) { work[it] }
             val n = cycle.size
-            var firesBefore = 0
-            var firesAfter = 0
             for (t in 0 until n) {
-                val self = cycle[t]
-                val giver = cycle[(t + 1) % n]
-                val row = work[self].copyOf()
-                firesBefore += C1DeltaPrefilter.staffC3nFires(p, row)
-                for (j in swapDays) row[j] = work[giver][j]
-                firesAfter += C1DeltaPrefilter.staffC3nFires(p, row)
+                val row = work[cycle[t]].copyOf()
+                for (j in swapDays) row[j] = work[cycle[(t + 1) % n]][j]
+                cand[cycle[t]] = row
             }
-            return firesAfter > firesBefore
+            return HardDelta.delta(p, work, cand) > 0
         }
 
         /**

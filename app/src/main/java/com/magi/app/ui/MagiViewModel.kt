@@ -1244,15 +1244,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * [3.298.0 配線] ブロック巡回交換の c3n 事前フィルタ ON/OFF（既定 **ON**、3.518.0）。
-     * c3n は HARD なので増える候補は `isBetter` が必ず却下する＝**採用結果は ON/OFF で変わらない**
-     * （3.296.0 の A/B 実測で最終盤面・採用数の完全一致を確認済み）。ON は「詰んだ候補へフル checker を
-     * 呼ばない」ぶんの節約だけで、評価枠を soft 判定まで進める候補へ回せる。
+     * [3.298.0 配線] ブロック巡回交換の事前フィルタ ON/OFF（既定 **ON**、3.518.0。設定画面には出さない＝3.528.0）。
+     * [3.649.0] 必須が正味で増える候補（正式採否が必ず却下する）だけを捨て、評価枠を残りの候補へ回す。
      */
     fun setBlockSwapC3nFilter(on: Boolean) {
         com.magi.app.v6.PolishGate.filterC3nIncrease = on
         _ui.update { it.copy(blockSwapC3nFilter = on) }
-        logOp("I", "設定変更: 禁止連続の事前フィルタ → ${if (on) "ON" else "OFF"}")
+        logOp("I", "設定変更: 必須が増える候補の事前フィルタ → ${if (on) "ON" else "OFF"}")
     }
 
     fun setSearchStrength(strength: SearchStrength) {
@@ -2672,17 +2670,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val s = withContext(Dispatchers.Default) { V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label) }
             if (s == null) _ui.update { it.copy(messageIsError = true, message = "入れ替えの手順が見つかりませんでした。「直し方を探す」で探し直してください") }
             else _ui.update {
-                val target = ChainTarget(isoDate(it.startDate, dayIndex) ?: "", it.shiftSymbols.getOrNull(shiftIndex) ?: "", label)
+                val target = ChainTarget(isoDate(it.startDate, dayIndex) ?: "", it.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
+                    boardKey = boardKey(snap), stateKey = stateKey(st))
                 it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate).copy(target = target))
             }
         }
     }
 
-    /** 一覧で確認した入替を当てる（盤面か設定が変わっていれば [applyFixSuggestion] が断る）。 */
+    /** 一覧で確認した入替を当てる（案を出したときの盤面か設定が今と違えば [applyFixSuggestion] が断る）。 */
     fun applyChainPreview() {
-        val s = _ui.value.chainPreview?.suggestion ?: return
+        val p = _ui.value.chainPreview ?: return
         _ui.update { it.copy(chainPreview = null) }
-        applyFixSuggestion(s)
+        val t = p.target
+        if (t != null && t.boardKey != 0L) applyFixSuggestion(p.suggestion, t.boardKey, t.stateKey) else applyFixSuggestion(p.suggestion)
     }
 
     fun dismissChainPreview() { _ui.update { it.copy(chainPreview = null) } }
@@ -2693,19 +2693,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val t = c.chain ?: return
         val u = _ui.value
         val target = consultChainTarget(t, u.startDate, u.shiftSymbols, u.days)
+        val sched = currentSchedule; val st = state
         when {
             target != null -> prepareShortageChainFix(target.first, target.second, t.label)
-            t.suggestion != null -> previewOrApplyFix(t.suggestion)
+            t.suggestion != null && sched != null && st != null && !consultChainStale(t, boardKey(sched), stateKey(st)) ->
+                previewOrApplyFix(t.suggestion, t.boardKey, t.stateKey)
+            t.suggestion != null -> _ui.update { it.copy(messageIsError = true, message = CONSULT_STALE) }
             else -> _ui.update { it.copy(messageIsError = true, message = consultTargetNote(c, u.startDate, u.staffNames, u.shiftSymbols, u.days) ?: "この枠はいまのデータにありません") }
         }
     }
 
     /** 2 セル以上を動かす手は当てる前に一覧（だれの・どの日の・何→何）を見せる。1 セルの手はそのまま当てる（3.646.0: ホーム・分析・セルのシートも同じ）。 */
-    fun previewOrApplyFix(s: FixSuggestion) {
-        if (s.ops.size < 2) { applyFixSuggestion(s); return }
+    fun previewOrApplyFix(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey) {
+        if (s.ops.size < 2) { applyFixSuggestion(s, originBoard, originState); return }
         val sched = currentSchedule ?: return
         val snap = sched.copy2D()
-        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate).copy(target = ChainTarget(null, null, s.label, suggestion = s))) }
+        val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
+        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate).copy(target = target)) }
     }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
@@ -2729,7 +2733,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // ---- [3.645.0/仕様 5.3] 相談してから決める判断（セッション内のみ・state 非保存。出力も判定も止めない） ----
     fun addConsult(item: ConsultItem) {
         _ui.update {
-            val next = consultAdd(it.consults, item)
+            val stamped = if (item.staffName != null && item.rosterKey == 0) item.copy(rosterKey = rosterKeyOf(it.staffNames)) else item
+            val next = consultAdd(it.consults, stamped)
             if (next == null) it.copy(messageIsError = false, message = CONSULT_DUPLICATE)
             else it.copy(messageIsError = false, consults = next, message = CONSULT_ADDED)
         }
@@ -3015,7 +3020,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** [改善提案] 改善手を1タップで適用（ops のセル代入を一括反映）。Undo 可・自動再診断・自動保存。 */
-    fun applyFixSuggestion(s: FixSuggestion) {
+    fun applyFixSuggestion(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey) {
         val st = state ?: return
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
         val sched = currentSchedule ?: return
@@ -3023,7 +3028,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.475.0/論理監査] 提案は計算時の盤面/設定に対する差分。旧: 指紋を持たず、その後のセル編集・
         //   元に戻す・別データ読込・職員削除のあとでも同じ ops をそのまま書き込んでいた（staff/day/toShift が
         //   別の実体を指す）。一致しなければ適用せず再探索を促す。toShift の上限（K）も未検査だった。
-        if (fixBoardKey != 0L && (fixBoardKey != boardKey(sched) || fixStateKey != stateKey(st))) {
+        //   [3.650.0] 照合は案を出したときの指紋（相談に積んだ案は自分の指紋を運ぶ＝あとの探索で上書きされた全体の指紋で通さない）。
+        if (originBoard != 0L && (originBoard != boardKey(sched) || originState != stateKey(st))) {
             _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),
                 message = "勤務表か設定が変わったため、この提案は適用できません。「直し方を探す」をもう一度押してください") }
             return
@@ -3536,6 +3542,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             zeroAllowCells = zeroAllowCells(cachedProblem(st), schedule),
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
+            // [3.651.0] 改名（名簿の 1 か所だけが変わった）なら相談の氏名を追従させる。元に戻す・やり直すも同じ経路を通る。
+            consults = followRenameInConsults(base.consults, base.staffNames, st.staff.map { it.name }),
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },
             shiftSymbols = st.shifts.map { toHankakuKigou(it.kigou) },
             schedule = schedule.map { it.toList() },

@@ -194,17 +194,17 @@ class PolishRobustnessTest {
             val off = TuningTelemetry.summary(nativeOn = false, parityOn = false, softPolishOn = false,
                 combineExhaustPairs = false, lnsAdaptive = false, aptFairSoftTolerance = false, countChainPolish = false)
             assertTrue(off, off.contains("禁止連続の崩し範囲=OFF"))
-            assertTrue(off, off.contains("禁止連続の事前フィルタ=ON(この実行では観測なし)"))
+            assertTrue(off, off.contains("必須が増える候補の事前フィルタ=ON(この実行では観測なし)"))
 
             TuningTelemetry.c3nFilterSkipped.set(12)
             val on = TuningTelemetry.summary(nativeOn = true, parityOn = true, softPolishOn = true,
                 combineExhaustPairs = false, lnsAdaptive = false, aptFairSoftTolerance = false, countChainPolish = false)
             assertTrue(on, on.contains("ネイティブ加速=ON"))
-            assertTrue(on, on.contains("禁止連続の事前フィルタ=ON(12件"))
+            assertTrue(on, on.contains("必須が増える候補の事前フィルタ=ON(12件"))
             // reset で実行ごとの計測に戻ること（前の実行の数字を持ち越さない）。
             TuningTelemetry.reset()
             assertTrue(TuningTelemetry.summary(true, true, true, false, false, false, false)
-                .contains("禁止連続の事前フィルタ=ON(この実行では観測なし)"))
+                .contains("必須が増える候補の事前フィルタ=ON(この実行では観測なし)"))
         } finally {
             PolishGate.wideC3nBreakDays = wide
             PolishGate.filterC3nIncrease = filter
