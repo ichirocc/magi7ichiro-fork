@@ -2688,6 +2688,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { val l = it.reviewMemos; if (index !in l.indices) it else it.copy(reviewMemos = l.filterIndexed { j, _ -> j != index }) }
     }
 
+    // ---- [3.645.0/仕様 5.3] 相談してから決める判断（セッション内のみ・state 非保存。出力も判定も止めない） ----
+    fun addConsult(item: ConsultItem) {
+        _ui.update {
+            val next = consultAdd(it.consults, item)
+            if (next == null) it.copy(messageIsError = false, message = CONSULT_DUPLICATE)
+            else it.copy(messageIsError = false, consults = next, message = CONSULT_ADDED)
+        }
+    }
+    fun removeConsult(index: Int) {
+        _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.filterIndexed { j, _ -> j != index }) }
+    }
+
     /** Apply an edited state (constraints changed), then re-run the unified check on the current table. */
     /**
      * [3.328.0/外部レビュー・実行中編集] 意味論を変える編集が最適化の最中に入るのを止める。

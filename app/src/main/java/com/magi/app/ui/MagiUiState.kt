@@ -108,6 +108,7 @@ data class UiState(
     val violationColorHex: String = "",   // 違反の表示色（空＝テーマのエラー色）。shiftColors["__vio__"] に保存。
     // [見直し候補] セル修正時に「基本ルールの見直し候補にする」で積むメモ（セッション内のみ・state 非保存）。
     val reviewMemos: List<String> = emptyList(),
+    val consults: List<ConsultItem> = emptyList(),   // [3.645.0] 相談してから決める判断（セッション内のみ・state 非保存。主カードの行は consultLine）
     val violationSoftColorHex: String = "",   // 要調整(ソフト違反)の表示色（空＝既定の橙）。shiftColors["__vioSoft__"] に保存。
     // [違反色/族別] 族(c1/c3n/…)ごとの個別色。shiftColors["__vioFam_<fam>__"] 由来。未設定族は重大度色へフォールバック。
     val violationFamilyColorHex: Map<String, String> = emptyMap(),

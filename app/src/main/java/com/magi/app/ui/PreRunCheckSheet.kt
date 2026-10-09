@@ -1,7 +1,9 @@
 package com.magi.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -17,6 +19,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,6 +33,7 @@ internal fun PreRunCheckSheet(
     ui: UiState,
     onOpenCell: (staff: Int, day: Int, wish: Boolean) -> Unit,
     onOpenLanding: (EditLanding) -> Unit,
+    onConsult: (PreRunRow) -> Unit,
     onShowWishes: (() -> Unit)?,
     onFixData: () -> Unit,
     onProceed: () -> Unit,
@@ -47,7 +51,7 @@ internal fun PreRunCheckSheet(
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(PRE_RUN_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 t.zeroCapNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
-                t.floorRows.forEach { PreRunRowView(it, onOpenCell, onOpenLanding) }
+                t.floorRows.forEach { PreRunRowView(it, onOpenCell, onOpenLanding, onConsult) }
                 if (t.hasWishRows && onShowWishes != null) {
                     OutlinedButton(onClick = onShowWishes, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }
                 }
@@ -63,7 +67,7 @@ internal fun PreRunCheckSheet(
             t.overCapNote?.let { n ->
                 Text("■ $PRE_RUN_OVERCAP_HEAD", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(n, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                t.overCapRows.forEach { PreRunRowView(it, onOpenCell, onOpenLanding) }
+                t.overCapRows.forEach { PreRunRowView(it, onOpenCell, onOpenLanding, onConsult) }
             }
             t.wallLine?.let { w ->
                 Text("■ 入れないシフト（個人の上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
@@ -79,20 +83,26 @@ internal fun PreRunCheckSheet(
     }
 }
 
+/** 行＝セルか入力箇所へ飛ぶ本文と、右端の「相談」（何度つくっても残る行だけ。再作成で外れる行には出さない＝3.645.0）。 */
 @Composable
-private fun PreRunRowView(row: PreRunRow, onOpenCell: (Int, Int, Boolean) -> Unit, onOpenLanding: (EditLanding) -> Unit) {
+private fun PreRunRowView(row: PreRunRow, onOpenCell: (Int, Int, Boolean) -> Unit, onOpenLanding: (EditLanding) -> Unit, onConsult: ((PreRunRow) -> Unit)? = null) {
     val i = row.staff; val j = row.day; val l = row.landing
-    if (i != null && j != null) {
-        TextButton(onClick = { onOpenCell(i, j, row.wish) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Text(row.text, modifier = Modifier.fillMaxWidth())
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) {
+            if (i != null && j != null) {
+                TextButton(onClick = { onOpenCell(i, j, row.wish) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text(row.text, modifier = Modifier.fillMaxWidth())
+                }
+            } else if (l != null) {
+                // セルを持たない行は、その原因の入力箇所へ（押す前に行き先を 1 行で示す）。
+                TextButton(onClick = { onOpenLanding(l) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(row.text)
+                        Text("→ ${landingButtonLabel(l)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            } else Text(row.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp))
         }
-    } else if (l != null) {
-        // セルを持たない行は、その原因の入力箇所へ（押す前に行き先を 1 行で示す）。
-        TextButton(onClick = { onOpenLanding(l) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-            Column(Modifier.fillMaxWidth()) {
-                Text(row.text)
-                Text("→ ${landingButtonLabel(l)}", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    } else Text(row.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp))
+        if (onConsult != null) TextButton(onClick = { onConsult(row) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("相談") }
+    }
 }
