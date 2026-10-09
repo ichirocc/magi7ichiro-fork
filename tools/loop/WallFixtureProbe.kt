@@ -13,7 +13,7 @@ fun main(args: Array<String>) {
     val budgetSec = args.getOrNull(3)?.toInt() ?: 4
     val algo = V6Algorithm.valueOf(args.getOrNull(4) ?: "AUTO")
     val csv = File(outDir, "wall_probe.csv")
-    if (!csv.exists()) csv.writeText("case,seed,ms,hard,c3n,covU,pref,groupViol,c3w,runs,allBlocked,certified,refuted,escapes\n")
+    if (!csv.exists()) csv.writeText("case,seed,ms,hard,c3n,covU,floor,wallCond,pref,groupViol,c3w,runs,allBlocked,certified,refuted,escapes\n")
     var found = 0
     for (sp0 in probe.Cases.specs.filter { it.id.contains(prefix) }) for (k in 0 until variants) {
         val sp = sp0.copy(id = sp0.id + "-s$k", seed = sp0.seed + k * 1009L)
@@ -28,6 +28,9 @@ fun main(args: Array<String>) {
         val rep = UnifiedViolationChecker.check(st, sched)
         val bd = rep.breakdown
         val c3n = bd["c3n"] ?: 0
+        // Watchdog の c3n 壁の内訳条件（§5.3 nonCovUAllC3n ∧ bestHard ≤ hardFloor + nonCovU）＝covU が構造床にあり、残りが c3n だけ
+        val floor = try { V6SanityPort.structuralHardFloor(st) } catch (_: Exception) { 0 }
+        val wallCond = c3n > 0 && (bd["pref"] ?: 0) == 0 && (bd["groupViol"] ?: 0) == 0 && (bd["c3w"] ?: 0) == 0 && (bd["covU"] ?: 0) <= floor
         var allBlocked = false; var certified = false; var refuted = false; var escapes = ""; var runs = 0
         if (c3n > 0) {
             val diag = V6PortAnalyzer.diagnoseForbiddenRuns(st, sched)
@@ -36,9 +39,9 @@ fun main(args: Array<String>) {
             escapes = diag.runs.joinToString(";") { r -> r.cells.joinToString("/") { it.escape.name.take(2) } }
             if (allBlocked && !certified) refuted = V6PortAnalyzer.c3nWallRefutedByOneMove(st, sched)
         }
-        val line = "${sp.id},${sp.seed},$ms,${rep.hard},$c3n,${bd["covU"] ?: 0},${bd["pref"] ?: 0},${bd["groupViol"] ?: 0},${bd["c3w"] ?: 0},$runs,$allBlocked,$certified,$refuted,$escapes"
+        val line = "${sp.id},${sp.seed},$ms,${rep.hard},$c3n,${bd["covU"] ?: 0},$floor,$wallCond,${bd["pref"] ?: 0},${bd["groupViol"] ?: 0},${bd["c3w"] ?: 0},$runs,$allBlocked,$certified,$refuted,$escapes"
         csv.appendText(line + "\n"); println(line)
-        if (allBlocked && !certified) {
+        if (wallCond && allBlocked && !certified) {
             val f = File(outDir, "wall_${sp.id}_${if (refuted) "refuted" else "confirmed"}_state.json")
             f.writeText(StateParser.serialize(st, sched)); found++
             println("  -> wrote ${f.name}")
