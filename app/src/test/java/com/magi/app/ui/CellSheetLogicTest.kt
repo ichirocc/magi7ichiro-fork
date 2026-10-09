@@ -398,4 +398,12 @@ class CellSheetLogicTest {
         assertEquals("希望 休・Pｼ 以外（未反映）・手動固定", wishTabLine(null, 0, setOf(0, 1), sym, pinned = true))
         assertEquals("希望 Cｱ（反映済）・休 以外（反映済）", wishTabLine(3, 3, setOf(0), sym, pinned = false))
     }
+
+    /** [3.646.0] 直し方の探索の締切: セルのシートは 3 秒、全体は 8 秒。探索中の 1 行に最長の秒数を添える。 */
+    @Test fun fixSearchBudgetsAreNamedInTheWaitingLine() {
+        assertEquals(3000L, FIX_SEARCH_QUICK_MS)
+        assertEquals(8000L, FIX_SEARCH_MS)
+        assertEquals("この場所の直し方を探しています…（最長 3 秒）", fixSearchingText(true))
+        assertEquals("直し方を探しています…（最長 8 秒）", fixSearchingText(false))
+    }
 }

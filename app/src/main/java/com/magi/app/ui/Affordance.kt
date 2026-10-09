@@ -1,5 +1,6 @@
 package com.magi.app.ui
 
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -121,3 +122,15 @@ const val NEED_ORDER_HINT = "最低人数は上限人数以下にしてくださ
  * パターンで、個人別の回数・グループ単位の回数の2ダイアログが使う。
  */
 const val RANGE_REQUIRED_HINT = "下限か上限のどちらかに数値を設定してください（＋で入力）"
+
+/** [3.646.0 U01] 入力の途中で閉じるときの確認。✕・キャンセル・外側タップ・戻るを 1 か所で止める（ShiftDialog の確認を共通化）。 */
+@Composable
+fun DiscardConfirmDialog(onDiscard: () -> Unit, onContinue: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onContinue,
+        confirmButton = { DialogDangerButton("破棄", onClick = onDiscard) },
+        dismissButton = { DialogDismissButton(onClick = onContinue, text = "入力を続ける") },
+        title = { Text("入力を破棄しますか？") },
+        text = { Text("入力中の内容は保存されません。") },
+    )
+}

@@ -120,7 +120,7 @@ internal fun conditionsViewOf(st: MagiState?, p: Problem?): ConditionsView {
         aptBalances = runCatching { V6SanityPort.aptBalances(st) }.getOrDefault(emptyList()),
         setupCounts = SetupCounts(
             st.dayCount, st.staffCount, st.shiftCount, st.groupCount,
-            st.wishes.size, st.needDay1.size + st.needDay2.size, cons, st.staffRange.size, st.use2Patterns,
+            st.wishes.size + st.extWishes.size, st.needDay1.size + st.needDay2.size, cons, st.staffRange.size, st.use2Patterns,   // 拡張希望も登録の有無に数える
         ),
         staffLimits = staffLimits,
         needLimits = needLimits,

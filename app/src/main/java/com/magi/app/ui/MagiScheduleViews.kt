@@ -705,13 +705,32 @@ internal fun ShiftColorLegend(symbols: List<String>, colorHex: List<String>, tex
  *  （淡い赤）は桃系セル背景と同系色で枠が埋没していた（アリフの c3n 実線枠が判読不能）。ハローが
  *  枠とセル地を分離し、任意のシフト色上で枠が浮く（角マーク 3.105.0 と同じ手法）。 */
 
-internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: androidx.compose.ui.unit.Dp, halo: Color? = null): Modifier =
+internal fun Modifier.violationBorder(hard: Boolean, color: Color, radiusDp: androidx.compose.ui.unit.Dp, halo: Color? = null, strokeDp: androidx.compose.ui.unit.Dp = MagiMarks.hardStroke): Modifier =
     if (hard) {
-        // [実機バグ修正] Modifier.border はチェーンの「先」が最後=最前面に描かれる（内側の drawContent 後に
-        //   自分の枠を描くため）。旧実装はハローを先に置いたため 5dp のハローが違反色 3dp を覆い、枠が
-        //   白リングだけに見えていた。違反色を先（最前面）・ハローを後（背面）に: 外側3dp=違反色/内側2dp=ハロー。
-        this.border(MagiMarks.hardStroke, color, RoundedCornerShape(radiusDp))
-            .then(if (halo != null) Modifier.border(5.dp, halo, RoundedCornerShape(radiusDp)) else Modifier)
+        // 実線も破線と同じく drawBehind で描く＝セルの印（拡張希望の×・希望のバッジ・錠）の下に敷く。旧 Modifier.border は
+        //   中身の上に描くため、上端の × と左下のバッジの外側 3dp が枠に隠れて欠けて見えた（実機報告 3.646.0）。
+        //   外側 3dp=違反色／その内側 2dp=ハロー（同系色のセル地と枠を分ける）。
+        this.drawBehind {
+            val stroke = strokeDp.toPx()
+            val r = radiusDp.toPx()
+            if (halo != null) {
+                val h = 2.dp.toPx()
+                drawRoundRect(
+                    color = halo,
+                    topLeft = Offset(stroke + h / 2f, stroke + h / 2f),
+                    size = Size(size.width - 2f * stroke - h, size.height - 2f * stroke - h),
+                    cornerRadius = CornerRadius(r, r),
+                    style = Stroke(width = h),
+                )
+            }
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(stroke / 2f, stroke / 2f),
+                size = Size(size.width - stroke, size.height - stroke),
+                cornerRadius = CornerRadius(r, r),
+                style = Stroke(width = stroke),
+            )
+        }
     } else {
         this.drawBehind {
             val stroke = MagiMarks.softStroke.toPx()
@@ -1650,7 +1669,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     staffSheet?.let { i ->
         StaffCountDialog(ui.staffNames.getOrNull(i) ?: "#$i", staffCountSheet(ui, i, cv?.let { c -> c::staffCellLimits }), onDismiss = { staffSheet = null }) {
             if (i in vs.c1Stuck) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i, null) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
             }
             FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
@@ -1757,8 +1776,9 @@ private fun FlatCell(
                 //   隣接セル同士を切り分けやすくなるが、格子全体が線で埋まり違反枠が目立ちにくくなるため。
                 // [判読性] 枠は 1=実線(必須)/2=破線(重い調整)のみ。3=軽い調整は右上の角マークに落とし飽和を防ぐ。
                 .then(when {
-                    editing -> Modifier.border(5.dp, cs.surface, RoundedCornerShape(6.dp)).border(4.dp, cs.primary, RoundedCornerShape(6.dp))
-                    focused -> Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp))   // [ジャンプ] 注目セル
+                    // 編集中・注目も実線枠と同じ描き方（印の下）。旧: Modifier.border の 5dp ハローが 4dp の primary を覆い、白い輪しか見えなかった。
+                    editing -> Modifier.violationBorder(true, cs.primary, 6.dp, halo = cs.surface, strokeDp = 4.dp)
+                    focused -> Modifier.violationBorder(true, cs.primary, 6.dp)   // [ジャンプ] 注目セル
                     // [枠のハロー] 違反色と同系色のセル背景でも枠が埋没しないよう surface の縁取りを敷く。
                     vk == 1 -> Modifier.violationBorder(true, vioColor, 6.dp, halo = cs.surface)
                     vk == 2 -> Modifier.violationBorder(false, vioSoftColor, 6.dp, halo = cs.surface)
@@ -1783,7 +1803,7 @@ private fun FlatCell(
             }
             // 最重の族に隠れた別の族がある＝左上の小さな点（枠は 1 つしか描けないので、重なりを見つける手掛かり）。
             if (secondDot != null) {
-                Box(Modifier.align(Alignment.TopStart).padding(2.dp).size(8.dp)
+                Box(Modifier.align(Alignment.TopStart).padding(MagiMarks.inset).size(8.dp)
                     .background(cs.surface, CircleShape).padding(1.5.dp).background(secondDot, CircleShape))
             }
             // [希望バッジ] 未反映（割付≠希望）= 希望シフトの記号を桃色バッジで左下に重ねる（ユーザー指示。
@@ -1791,7 +1811,7 @@ private fun FlatCell(
             //   [コントラスト] 任意のシフト色上でも消えないよう surface のハローで縁取り。
             if (wk == 2 && wishSym.isNotBlank()) {
                 Box(
-                    Modifier.align(Alignment.BottomStart).padding(1.dp)
+                    Modifier.align(Alignment.BottomStart).padding(MagiMarks.inset)
                         .background(cs.surface, RoundedCornerShape(4.dp)).padding(1.dp)
                         .background(MagiAccent.pink, RoundedCornerShape(3.dp))
                         .padding(horizontal = 2.dp),
@@ -1803,7 +1823,7 @@ private fun FlatCell(
                 // [色覚配慮/3.543.0] 桃(未反映)と緑リング(反映済)は形（塗り/中空）で既に区別できるが、
                 // D型二色覚では色そのものも近づくため縁取りを太く(1.5dp→2.5dp)し境界の手がかりを増やす。
                 Box(
-                    Modifier.align(Alignment.BottomStart).padding(1.5.dp).size(9.dp)
+                    Modifier.align(Alignment.BottomStart).padding(MagiMarks.inset).size(9.dp)
                         .background(cs.surface, RoundedCornerShape(50)).padding(1.dp)
                         .then(if (wk == 2) Modifier.background(MagiAccent.pink, RoundedCornerShape(50)) else Modifier.border(2.5.dp, cs.tertiary, RoundedCornerShape(50))),
                 )
@@ -1812,12 +1832,12 @@ private fun FlatCell(
             if (ext != 0) {
                 val xc = if (ext == 2) vioColor else cs.onSurfaceVariant
                 Text("×", fontSize = symSize * 0.60f, fontWeight = FontWeight.Bold, color = xc, maxLines = 1,
-                    modifier = Modifier.align(Alignment.TopCenter).background(cs.surface, RoundedCornerShape(3.dp)).padding(horizontal = 1.dp))
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = MagiMarks.inset).background(cs.surface, RoundedCornerShape(3.dp)).padding(horizontal = 1.dp))
             }
             // [#41] 手動固定＝右下の小さな錠（希望の印は左下の丸・バッジ＝位置と形で区別）。
             if (pinned) {
                 Icon(Icons.Filled.Lock, contentDescription = null, tint = cs.onSurface,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(1.dp).size(MagiMarks.pinLock)
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(MagiMarks.inset).size(MagiMarks.pinLock)
                         .background(cs.surface, CircleShape).padding(1.dp))
             }
         }
@@ -1826,7 +1846,11 @@ private fun FlatCell(
 
 
 /** 印・セルのシートの行き先（手が見つからなかったときの次の一歩）。 */
-internal class FixNav(val onWishes: (Int?) -> Unit = {}, val onSettings: (String) -> Unit = {})
+internal class FixNav(
+    val onWishes: (Int?, Int?) -> Unit = { _, _ -> },   // 職員と日（希望の登録をその職員・その日を選んだ状態で開く）
+    val onSettings: (String) -> Unit = {},
+    val onNeed: (Int, Int) -> Unit = { _, _ -> },        // 人員不足・過剰の印から: その日のそのシフトの必要人数
+)
 
 /**
  * シートを開いた時点でその対象（職員×シフト・日×シフト・セル）の直し方を探し、同じシートの中に
@@ -1841,7 +1865,7 @@ internal fun FixSearchPanel(
     settingsLabel: String? = null,   // 手が無いときの設定への行き先の名（null＝節ごとの名 settingsLabelFor）
 ) {
     val cs = MaterialTheme.colorScheme
-    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null })) }
+    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null }, quick = compact)) }
     // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
     LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) find() }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
@@ -1853,7 +1877,8 @@ internal fun FixSearchPanel(
             FixPanelState.NOT_STARTED -> Text("まだ探していません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             FixPanelState.RUNNING -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text("この場所の直し方を探しています…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text(fixSearchingText(compact), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                TextButton(onClick = { onEvent(MagiEvent.Session.CancelFixSearch) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる") }
             }
             FixPanelState.FAILED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("直し方を探せませんでした。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
@@ -1881,8 +1906,10 @@ internal fun FixSearchPanel(
                 if (compact) Text(why.lines.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else why.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (why.wishRelated) OutlinedButton(onClick = { nav.onWishes(focus.staff) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
-                    OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabel ?: settingsLabelFor(why.settingsSection)) }
+                    if (why.wishRelated) OutlinedButton(onClick = { nav.onWishes(focus.staff, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                    // 人員不足・過剰の印は、その日のそのシフトの必要人数（月次条件）へ。群のレンジは④のまま。
+                    if (coverageFocus(ui, focus)) OutlinedButton(onClick = { nav.onNeed(focus.shift!!, focus.day!!) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("必要人数を見直す") }
+                    else OutlinedButton(onClick = { nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabel ?: settingsLabelFor(why.settingsSection)) }
                 }
             }
         }

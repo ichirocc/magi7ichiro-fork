@@ -57,7 +57,6 @@ internal val allVioBucketKeys: Set<String> = vioBuckets.map { it.key }.toSet()
 //   着地させるための対応表。希望は月次条件にあるので null（呼出側が月次条件を開く）。
 internal fun yearSectionForIssueKind(kind: IssueKind?): String? = when (kind) {
     IssueKind.RANGE -> "yr_count"
-    IssueKind.DEMAND -> "yr_headcount"
     IssueKind.CONSTRAINT -> "yr_cons"
-    IssueKind.WISH, null -> null
+    IssueKind.DEMAND, IssueKind.WISH, null -> null   // 必要人数・希望は月次条件（旧: 必要人数が④のグループの人数へ行っていた）
 }

@@ -159,13 +159,18 @@ internal fun GroupRangeDialog(
     val existing = if (g in groups.indices && k in allowed) rangeCount(g, k) else 0
     // [3.506.0] 両方「なし」は「全員ぶん解除」として適用できる（解除対象がある場合のみ）。
     val ok = g in groups.indices && k in allowed && !bad && (!blank || existing > 0)
+    // [3.646.0 U01] 入力の途中で閉じるときは確認（他の編集ダイアログと同じ）。
+    val dirty = g != (init?.g ?: 0) || k != (init?.k ?: 0) || lo != (init?.lo ?: "") || hi != (init?.hi ?: "")
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
+    if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onClose() }, onContinue = { confirmDiscard = false })
     AlertDialog(
-        onDismissRequest = onClose,
+        onDismissRequest = requestClose,
         confirmButton = {
             DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(g, k, lo.trim(), hi.trim()) })
         },
-        dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { DialogHeader("グループ単位の回数", onClose) },
+        dismissButton = { DialogDismissButton(onClick = requestClose) },
+        title = { DialogHeader("グループ単位の回数", requestClose) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("グループ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

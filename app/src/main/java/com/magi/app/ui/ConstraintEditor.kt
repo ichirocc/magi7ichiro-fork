@@ -316,7 +316,7 @@ private fun ConstraintDialog(
             val err = cons1InputError(d1, d2, cv.dayCount)
             val isDup = dup(listOf(d1, sk, d2))
             Shell("期間の制約$mode", okLabel, onClose, { commit(listOf(d1, sk, d2)) { onEvent(MagiEvent.Constraint.AddCons1(d1, sk, d2)) } },
-                d1.isNotBlank() && sk.isNotBlank() && d2.isNotBlank() && err == null && !isDup) {
+                d1.isNotBlank() && sk.isNotBlank() && d2.isNotBlank() && err == null && !isDup, dirty = listOf(d1, sk, d2) != remember { listOf(d1, sk, d2) }) {
                 NumField("何日間", d1, isError = err != null) { d1 = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 NumField("必要数(以上)", d2, isError = err != null) { d2 = it }
@@ -329,7 +329,7 @@ private fun ConstraintDialog(
             val err = cons2InputError(c)
             val isDup = dup(listOf(sk, c))
             Shell("個人の合計$mode", okLabel, onClose, { commit(listOf(sk, c)) { onEvent(MagiEvent.Constraint.AddCons2(sk, c)) } },
-                sk.isNotBlank() && c.isNotBlank() && err == null && !isDup) {
+                sk.isNotBlank() && c.isNotBlank() && err == null && !isDup, dirty = listOf(sk, c) != remember { listOf(sk, c) }) {
                 Picker("シフト", shifts, sk) { sk = it }
                 NumField("合計(以上)", c, isError = err != null) { c = it }
                 InputHint(err ?: DUPLICATE_ROW_HINT.takeIf { isDup })
@@ -346,7 +346,7 @@ private fun ConstraintDialog(
             val blank = rangeBothBlank(l, u)
             val isDup = dup(listOf(gk, sk, l, u))
             Shell("グループのレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { onEvent(MagiEvent.Constraint.AddCons41(gk, sk, l, u)) } },
-                gk.isNotBlank() && sk.isNotBlank() && !bad && !blank && !isDup) {
+                gk.isNotBlank() && sk.isNotBlank() && !bad && !blank && !isDup, dirty = listOf(gk, sk, l, u) != remember { listOf(gk, sk, l, u) }) {
                 Picker("グループ", groups, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -363,7 +363,7 @@ private fun ConstraintDialog(
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
             val isDup = dup(listOf(g1, s1, g2, s2))
             Shell("グループペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { onEvent(MagiEvent.Constraint.AddCons42(g1, g2, s1, s2)) } },
-                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank() && !isDup) {
+                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank() && !isDup, dirty = listOf(g1, s1, g2, s2) != remember { listOf(g1, s1, g2, s2) }) {
                 Picker("グループ1", groups, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
                 Picker("グループ2", groups, g2) { g2 = it }
@@ -380,7 +380,7 @@ private fun ConstraintDialog(
             val blank = rangeBothBlank(l, u)
             val isDup = dup(listOf(gk, sk, l, u))
             Shell("スキルグループのレンジ（1日の人数）$mode", okLabel, onClose, { commit(listOf(gk, sk, l, u)) { onEvent(MagiEvent.Constraint.AddCons41s(gk, sk, l, u)) } },
-                gk.isNotBlank() && sk.isNotBlank() && !bad && !blank && !isDup) {
+                gk.isNotBlank() && sk.isNotBlank() && !bad && !blank && !isDup, dirty = listOf(gk, sk, l, u) != remember { listOf(gk, sk, l, u) }) {
                 Picker("スキル", skills, gk) { gk = it }
                 Picker("シフト", shifts, sk) { sk = it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -397,7 +397,7 @@ private fun ConstraintDialog(
             var s2 by remember { mutableStateOf(init?.getOrNull(3) ?: shifts.firstOrNull() ?: "") }
             val isDup = dup(listOf(g1, s1, g2, s2))
             Shell("スキルグループペア禁止$mode", okLabel, onClose, { commit(listOf(g1, s1, g2, s2)) { onEvent(MagiEvent.Constraint.AddCons42s(g1, g2, s1, s2)) } },
-                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank() && !isDup) {
+                g1.isNotBlank() && s1.isNotBlank() && g2.isNotBlank() && s2.isNotBlank() && !isDup, dirty = listOf(g1, s1, g2, s2) != remember { listOf(g1, s1, g2, s2) }) {
                 Picker("スキル1", skills, g1) { g1 = it }
                 Picker("シフト1", shifts, s1) { s1 = it }
                 Picker("スキル2", skills, g2) { g2 = it }
@@ -410,7 +410,7 @@ private fun ConstraintDialog(
             var y by remember { mutableStateOf(init?.getOrNull(1) ?: shifts.firstOrNull() ?: "") }
             val isDup = dup(listOf(x, y))
             Shell("希望の前日に禁止$mode", okLabel, onClose, { commit(listOf(x, y)) { onEvent(MagiEvent.Constraint.AddCons3w(x, y)) } },
-                x.isNotBlank() && y.isNotBlank() && !isDup) {
+                x.isNotBlank() && y.isNotBlank() && !isDup, dirty = listOf(x, y) != remember { listOf(x, y) }) {
                 Picker("希望シフト（希望で固定されたもの）", shifts, x) { x = it }
                 Picker("その前日に置けないシフト", shifts, y) { y = it }
                 InputHint(DUPLICATE_ROW_HINT.takeIf { isDup })
@@ -430,7 +430,7 @@ private fun ConstraintDialog(
             // 途中の空欄は後ろが黙って切れる（1番目だけの禁止になりうる）＝CSV 取込と同じく断る。
             val gap = seqHasGap(listOf(a, b, c, d, e))
             Shell(kind + mode, okLabel, onClose, { commit(listOf(a, b, c, d, e)) { onEvent(MagiEvent.Constraint.AddCons3(family, listOf(a, b, c, d, e))) } },
-                a.isNotBlank() && dupFam == null && !gap) {
+                a.isNotBlank() && dupFam == null && !gap, dirty = listOf(a, b, c, d, e) != remember { listOf(a, b, c, d, e) }) {
                 Text("並び (上から順・最大5連日 / 空=ここで終了)", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (dupFam != null) {
@@ -456,6 +456,7 @@ private fun InputHint(text: String?) {
     if (text != null) Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
 }
 
+/** [dirty] なら ✕・キャンセル・外側タップ・戻るのどれでも破棄の確認を挟む（3.646.0 U01: シフト種別の編集と同じ）。 */
 @Composable
 private fun Shell(
     title: String,
@@ -463,13 +464,16 @@ private fun Shell(
     onClose: () -> Unit,
     onAdd: () -> Unit,
     addEnabled: Boolean,
+    dirty: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    var confirmDiscard by remember { mutableStateOf(false) }
+    val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
     AlertDialog(
-        onDismissRequest = onClose,
+        onDismissRequest = requestClose,
         confirmButton = { DialogConfirmButton(okLabel, enabled = addEnabled, onClick = onAdd) },
-        dismissButton = { DialogDismissButton(onClick = onClose) },
-        title = { DialogHeader(title, onClose) },
+        dismissButton = { DialogDismissButton(onClick = requestClose) },
+        title = { DialogHeader(title, requestClose) },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
@@ -477,6 +481,7 @@ private fun Shell(
             ) { content() }
         },
     )
+    if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onClose() }, onContinue = { confirmDiscard = false })
 }
 
 @Composable
