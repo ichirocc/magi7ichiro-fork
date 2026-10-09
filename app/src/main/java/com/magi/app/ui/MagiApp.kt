@@ -749,7 +749,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }, onBulk = { wishBulkOpen = true })
                     // [3.193.0 シンプル化] 「職員別カレンダー」（StaffCalendarCard）を撤去。既存コメントが
                     //   自認していたとおり全職員グリッドと同じ盤面の二重表示＝密度/冗長の主因だった。撤去。
-                    TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav)
+                    TallyCard(ui, conditionsView, onEvent, viewState, onFix = { staff, shift -> tab = 3; onEvent(MagiEvent.Session.FindFixSuggestions(staff, shift)) }, vioEnabled = vioEnabled, nav = fixNav, stickyTopPx = viewportTopPx)
                     // [3.194.0 情報の冗長性検証] 「不一致だけ抽出」（MismatchExtractCard）を撤去。
                     //   TallyCard(職員別/日別)の▼▲バッジ・ScheduleGridの人員不足バナー/桃バッジと
                     //   内容が重複しており、しかも apt(適切回数)由来の違反を含まず新しい表示より不完全だった。

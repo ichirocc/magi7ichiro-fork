@@ -93,6 +93,23 @@ class ConsultListTest {
         assertTrue(rosterKeyOf(emptyList()) != 0)
     }
 
+    /** [3.651.0/外部レビュー] 改名に相談の対象を追従させる。並び替え・削除は改名とみなさない（氏名で引き直す既存の規則）。 */
+    @Test fun renameFollowsTheConsultTarget() {
+        val before = listOf("甲", "乙", "丙")
+        val c = consultWish("乙", "10/12", "夜", "r", 1, 11, "2026-10-12")
+        val after = listOf("甲", "乙子", "丙")
+        val renamed = followRenameInConsults(listOf(c), before, after).single()
+        assertEquals("乙子", renamed.staffName)
+        assertEquals(1 to 11, consultCell(renamed, "2026-10-01", after, 31))
+        assertNull("追従しなければ見失う", consultCell(c, "2026-10-01", after, 31))
+        assertEquals(listOf(c), followRenameInConsults(listOf(c), before, listOf("乙", "甲", "丙")))
+        assertEquals(listOf(c), followRenameInConsults(listOf(c), before, listOf("甲", "乙")))
+        val dup = listOf("佐藤", "甲", "佐藤")
+        val d = consultWish("佐藤", "10/12", "夜", "r", 2, 11, "2026-10-12").copy(rosterKey = rosterKeyOf(dup))
+        val dupAfter = listOf("佐藤", "甲子", "佐藤")
+        assertEquals("別の人の改名でも同名の区別を保つ", 2 to 11, consultCell(followRenameInConsults(listOf(d), dup, dupAfter).single(), "2026-10-01", dupAfter, 31))
+    }
+
     /** [3.650.0/外部レビュー] 積んだ案は出したときの盤面と設定の指紋を持ち、今と違えば当てない（枠を持つ相談は探し直すので関係しない）。 */
     @Test fun aSavedSuggestionIsStaleOnceTheBoardOrSettingsChange() {
         val sug = FixSuggestion(FixKind.CHAIN, listOf(FixCell(0, 2, 2), FixCell(1, 2, 0)), "lbl", -1, 0, emptyList())

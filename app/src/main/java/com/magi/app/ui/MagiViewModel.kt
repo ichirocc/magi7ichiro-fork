@@ -3542,6 +3542,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             zeroAllowCells = zeroAllowCells(cachedProblem(st), schedule),
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
+            // [3.651.0] 改名（名簿の 1 か所だけが変わった）なら相談の氏名を追従させる。元に戻す・やり直すも同じ経路を通る。
+            consults = followRenameInConsults(base.consults, base.staffNames, st.staff.map { it.name }),
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },
             shiftSymbols = st.shifts.map { toHankakuKigou(it.kigou) },
             schedule = schedule.map { it.toList() },

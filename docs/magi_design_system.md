@@ -293,7 +293,8 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 [3.648.0/3.650.0] `ScheduleToolsCard`（1 枚: ［必須 N ▼］・「要確認 Nか所」・種別フィルタのチップ＋［集中］＋［違反の日を順に見る］・枠と印の短い一覧
 `CompactMarkLegend`（横スクロール）＋［凡例 ▸］の `LegendSheet`・［検索］） → `ScheduleGrid`(`MagiFlatGrid`、左上は見えている日の範囲) →
 `WishActionsRow`（［希望を反映する］［希望の一括操作］、集計の上） → `TallyCard`(**既定は展開**＝3.514.0。3.648.0 の折りたたみは 3.650.0 で戻した。
-職員別/日別を `MagiSegmentedControl` で切替。編集タブ「回数（1人あたり）」の `StaffShiftMatrixCard` は目標(apt)編集も兼ねる別ビューとして併存)。
+職員別/日別を `MagiSegmentedControl` で切替。[3.651.0] 見出し行は `StickyHeaderTable` で本体の上端に留める＝日ヘッダと同じ手。
+編集タブ「回数（1人あたり）」の `StaffShiftMatrixCard` は目標(apt)編集も兼ねる別ビューとして併存)。
 旧 `ViolationFilterBar`・`SearchLegendBar`・`WishApplyCard` は廃止。
 セル編集は `CellEditSheet`（画面下の固定パネル・固定配置のシフトボタン、2026-09-25）。シフト色は §1.3。
 [3.481.0] **日ヘッダは縦スクロールで画面上端に留まる**（`MagiFlatGrid` のヘッダ行を本体と `hScroll` 共有の独立行にし、
