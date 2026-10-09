@@ -40,9 +40,13 @@ class ExtWishRulesTest {
         val board = arrayOf(intArrayOf(1, 2, 2, 2, 1), intArrayOf(0, 0, 0, 0, 0))
         val rep = UnifiedViolationChecker.check(st, board)
         assertEquals(listOf("0,1"), rep.extWishCells)
-        // 採点の族・重みには入れない。
-        assertEquals(UnifiedViolationChecker.check(base(), board).weightedScore, rep.weightedScore, 0.0)
-        assertEquals(UnifiedViolationChecker.check(base(), board).breakdown, rep.breakdown)
+        // [3.653.0] 採点にも入る: 必須の族 extWish が 1 件、重みは希望と同じ（HF77 明示指示）。評価器も同じ件数。
+        val plain = UnifiedViolationChecker.check(base(), board)
+        assertEquals(1, rep.breakdown["extWish"])
+        assertEquals(plain.hard + 1, rep.hard)
+        assertEquals(plain.weightedScore + MirrorKeys.weightOf("pref"), rep.weightedScore, 0.0)
+        assertEquals(plain.breakdown + ("extWish" to 1), rep.breakdown)
+        assertEquals(rep.hard.toLong(), Evaluator(Problem(st)).fullEvalParts(board, HashMap())[0])
     }
 
     @Test fun basicWishOnAnExtDayIsBlocked() {

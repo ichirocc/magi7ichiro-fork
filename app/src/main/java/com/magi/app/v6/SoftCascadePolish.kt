@@ -200,7 +200,7 @@ object SoftCascadePolish {
             val raw = if (f == "low" || f == "high") de.rangeRaw().let { if (f == "low") it.first else it.second } else de.familyRaw()[f] ?: 0L
             return raw * MirrorKeys.weightOf(f)
         }
-        fun hardRaw(): LongArray { val r = de.familyRaw(); return longArrayOf(r["c3n"] ?: 0, r["covU"] ?: 0, r["pref"] ?: 0, r["groupViol"] ?: 0, r["c3w"] ?: 0) }
+        fun hardRaw(): LongArray { val r = de.familyRaw(); return longArrayOf(r["c3n"] ?: 0, r["covU"] ?: 0, r["pref"] ?: 0, r["groupViol"] ?: 0, r["c3w"] ?: 0, r["extWish"] ?: 0) }
         val h0 = hardRaw()
         val cand = ArrayList<Pair<DoubleArray, IntArray>>()
         val seenMoves = HashSet<String>()

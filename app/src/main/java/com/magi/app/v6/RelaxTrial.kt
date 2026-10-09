@@ -175,7 +175,7 @@ object RelaxTrial {
         return maxOf(0, a - 1)..minOf(p.T - 1, b + 1)
     }
 
-    private val HARD_CELL = setOf("vio-c3n", "vio-c3w", "vio-pref", "vio-groupViol")
+    private val HARD_CELL = setOf("vio-c3n", "vio-c3w", "vio-pref", "vio-groupViol", "vio-extWish")
 
     internal class Found(val hard: Int, val board: Array<IntArray>)
 

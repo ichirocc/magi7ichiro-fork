@@ -68,7 +68,7 @@ class StallEscapeSpecTest {
 
     @Test fun weightsAreIntegersSoToleranceNeverHidesARealDifference() {
         assertTrue(MirrorKeys.weights.values.all { it == Math.floor(it) && it >= 2.0 })
-        assertEquals(setOf("groupViol", "c3n", "covU", "pref", "c3w"), MirrorKeys.hard.toSet())
+        assertEquals(setOf("groupViol", "c3n", "covU", "pref", "c3w", "extWish"), MirrorKeys.hard.toSet())
     }
 
     // §5.4 発火式の境界: 全て厳密な >
@@ -94,7 +94,7 @@ class StallEscapeSpecTest {
             setOf("c1", "c2", "c3", "c3n", "c3m", "c3mn", "c41", "c42", "covU", "covO", "pref", "low", "high"),
             Hf63Infeasibility.KEY_TO_INDEX.keys,
         )
-        for (k in listOf("groupViol", "c3w", "c41s", "c42s", "apt", "weekly", "fair")) assertFalse(k, k in Hf63Infeasibility.KEY_TO_INDEX)
+        for (k in listOf("groupViol", "c3w", "extWish", "c41s", "c42s", "apt", "weekly", "fair")) assertFalse(k, k in Hf63Infeasibility.KEY_TO_INDEX)
     }
 
     @Test fun effortItersFollowsTheAttemptsTargetFormula() {

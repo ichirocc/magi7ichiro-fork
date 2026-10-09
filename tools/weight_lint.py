@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MAGI weight lint — 制約ファミリー重みの単一の真実（`MirrorKeys.weights`）からの逸脱を検出する。
 
-CLAUDE.md の規約: 20 の制約ファミリー重み（c1/c2/c3/c3n/…/weekly/c3w）は
+CLAUDE.md の規約: 21 の制約ファミリー重み（c1/c2/c3/c3n/…/weekly/c3w/extWish）は
 `app/src/main/java/com/magi/app/v6/MirrorCore.kt` の `MirrorKeys.weights` にだけ定義し、他の
 Kotlin コードは `MirrorKeys.weightOf(family)` / `MirrorKeys.weights[...]` 経由で参照する
 （HF77＝重みの変更は業務担当者の明示数値指示＋1件ずつ、という運用は人間のレビューでしか

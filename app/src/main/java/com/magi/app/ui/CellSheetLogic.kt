@@ -75,6 +75,9 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
     val count = { k: Int -> s[i].count { it == k } }
     return when (fam) {
         "c3w" -> p.wish.getOrNull(i)?.getOrNull(j + 1)?.takeIf { it >= 0 }?.let { "翌日(${sym(it)})への前日禁止（${sym(cur)}）" }
+        "extWish" -> (0 until p.K).filter { p.extBanned(i, j, it) }.takeIf { it.isNotEmpty() }?.let { ks ->
+            "拡張希望（${ks.joinToString("・") { sym(it) }}以外）に${sym(cur)}が入っています"
+        }
         "c3n", "c3mn" -> {
             val list = if (fam == "c3n") p.cons3n else p.cons3mn
             forbiddenRunAt(p, s, i, j, list)?.let { (seq, j0) ->
@@ -338,7 +341,7 @@ internal fun violationTour(ui: UiState, includeSoft: Boolean = false): List<Pair
 }
 
 /** 巡回の 1 件＝必須違反 1 件（族・職員・関連セルの日・見出し）。1 セルが 2 件に属せば 2 回止まる（`report.hard` の数え方と同じ）。
- *  セルで辿れる族だけ（c3n＝並びの全日、c3w＝前日＋希望の翌日、pref/groupViol＝1 セル）。人員不足は日ヘッダから＝件数は別に添える。 */
+ *  セルで辿れる族だけ（c3n＝並びの全日、c3w＝前日＋希望の翌日、pref/groupViol/extWish＝1 セル）。人員不足は日ヘッダから＝件数は別に添える。 */
 internal data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String) {
     val cell: Pair<Int, Int> get() = staff to days.first()
 }
@@ -360,7 +363,7 @@ internal fun hardViolationItems(state: MagiState, p: Problem, s: Array<IntArray>
             }
             "c3w" -> { val days = listOf(j, minOf(j + 1, p.T - 1)).distinct()
                 out.getOrPut("c3w,$i,$j") { TourItem(fam, i, days, "${breakdownLabels["c3w"]} ${sym(s[i][j])}→${sym(s[i][days.last()])} ・ ${span(days)}") } }
-            "pref", "groupViol" -> out.getOrPut("$fam,$i,$j") { TourItem(fam, i, listOf(j), "${breakdownLabels[fam]} ${sym(s[i][j])} ・ ${DayText.full(state.startDate, j)}") }
+            "pref", "groupViol", "extWish" -> out.getOrPut("$fam,$i,$j") { TourItem(fam, i, listOf(j), "${breakdownLabels[fam]} ${sym(s[i][j])} ・ ${DayText.full(state.startDate, j)}") }
             else -> {}
         }
     }
@@ -477,7 +480,7 @@ internal fun pinRegisterHint(canDo: Boolean, families: List<String>): String = w
 }
 internal const val PIN_HARD_HINT = "このセルには必須違反があります。固定すると自動では動かしません。"
 internal const val PIN_NOT_CANDO_HINT = "担当外のシフトです。固定すると必須違反が残ったまま自動では動かしません。"
-private val PIN_HARD_CELL_FAMILIES = setOf("c3n", "c3w", "pref", "groupViol")
+private val PIN_HARD_CELL_FAMILIES = setOf("c3n", "c3w", "pref", "groupViol", "extWish")
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
 internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "$name ${DayText.short(startDate, day)} を${symbol}に変更しました"

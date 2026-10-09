@@ -52,12 +52,12 @@ class NativeParityFixtureTest {
     }
 
     /** [3.524.0/backlog#6] 他3件は apt=c41=c41s=c42s=0（一度も発火しない）＝手組みの小さな合成 state で
-     *  19族すべてを非ゼロにした4件目のフィクスチャ（経緯は docs/history/3.4xx.md）。 */
+     *  全族を非ゼロにした4件目のフィクスチャ（経緯は docs/history/3.4xx.md。3.653.0 で拡張希望 1 件を追加）。 */
     @Test
     fun fullCoverageEvaluatorValueMatchesTheSharedCrossLanguageFixtureAndExercisesAllFamilies() {
         val breakdown = assertFixtureMatchesEvaluator("/full_coverage_state.json", "/full_coverage_eval_expected.txt")
         val zero = MirrorKeys.all.filter { (breakdown[it] ?: 0L) == 0L }
-        assertTrue("全19族が非ゼロになるはずが、発火しない族がある: $zero（fixture 側の修正が要る）", zero.isEmpty())
+        assertTrue("全族が非ゼロになるはずが、発火しない族がある: $zero（fixture 側の修正が要る）", zero.isEmpty())
     }
 
     /** [3.538.0] fairの達成率モード（`Problem.fairDevOfBucket`）を実際に発火させる5件目の実データ形状
@@ -83,10 +83,10 @@ class NativeParityFixtureTest {
             if (eq > 0) expected[t.substring(0, eq)] = t.substring(eq + 1).toLong()
         }
         assertTrue("期待値ファイルに hard=/soft= が無い（$expectResource）", "hard" in expected && "soft" in expected)
-        // [3.524.0] 族の行（MirrorKeys.all の19キー）はあれば全部揃っていること＝一部だけの部分照合を防ぐ。
+        // [3.524.0] 族の行（MirrorKeys.all の全キー）はあれば全部揃っていること＝一部だけの部分照合を防ぐ。
         val bdKeys = expected.keys - setOf("hard", "soft")
         assertTrue(
-            "期待値ファイルの族の行が19族の一部だけ（$expectResource）。全部揃えるか1つも書かないこと: $bdKeys",
+            "期待値ファイルの族の行が全族の一部だけ（$expectResource）。全部揃えるか1つも書かないこと: $bdKeys",
             bdKeys.isEmpty() || bdKeys == MirrorKeys.all.toSet(),
         )
 

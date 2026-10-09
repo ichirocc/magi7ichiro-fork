@@ -1,7 +1,7 @@
 package com.magi.app.v6
 
 /**
- * 候補盤面の HARD 正味差分（groupViol/pref/c3w/c3n/covU）を変わったセル・行・日だけから厳密に数える。
+ * 候補盤面の HARD 正味差分（groupViol/pref/c3w/extWish/c3n/covU）を変わったセル・行・日だけから厳密に数える。
  * `check(cand).hard == check(base).hard + delta(...)` が [UnifiedViolationChecker.check] と同じ意味論で成り立つ
  * （各族の式は checker の当該ループの局所化）。呼出側は「このΔなら必ず却下する」候補だけ checker を省く
  * ＝採用集合・盤面は不変の速度専用（[PolishGate.hardDeltaPrefilter]）。
@@ -9,13 +9,14 @@ package com.magi.app.v6
 internal object HardDelta {
     private fun v(p: Problem, x: Int): Int = if (x in 0 until p.K) x else -1
 
-    /** 1 セル (i,j)=k の、セル単位 HARD 族（groupViol/pref/c3w）の件数。 */
+    /** 1 セル (i,j)=k の、セル単位 HARD 族（groupViol/pref/c3w/extWish）の件数。 */
     private fun cellHard(p: Problem, i: Int, j: Int, k: Int): Int {
         var h = 0
         if (k >= 0 && !p.canDo(i, k)) h++
         val w = p.wish[i][j]
         if (w in 0 until p.K && p.canDo(i, w) && k != w) h++
         if (p.c3wBanned(i, j, k)) h++
+        if (p.extBanned(i, j, k)) h++
         return h
     }
 
@@ -67,8 +68,8 @@ internal object HardDelta {
 
     /**
      * 同日 j 内の置換（職員 staff[t] の旧値 old[t] → 現在の work[staff[t]][j]）の HARD 正味差分。work は適用後。
-     * 健全性: 置換は日 j の値の多重集合を保つので (j,k) 人数が不変＝covU の差は 0。groupViol/pref/c3w はセル単位
-     * （c3wBan は静的表）、c3n は変わった行の j を含む窓だけが変わる＝この和は [delta] と一致する。
+     * 健全性: 置換は日 j の値の多重集合を保つので (j,k) 人数が不変＝covU の差は 0。groupViol/pref/c3w/extWish はセル単位
+     * （c3wBan・extBan は静的表）、c3n は変わった行の j を含む窓だけが変わる＝この和は [delta] と一致する。
      */
     fun sameDayPermutationDelta(p: Problem, work: Array<IntArray>, j: Int, staff: IntArray, old: IntArray): Int {
         var d = 0

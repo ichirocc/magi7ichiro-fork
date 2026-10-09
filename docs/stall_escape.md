@@ -35,14 +35,14 @@
 | 用語 | 意味 |
 |---|---|
 | report | `ViolationReport`。`hard`・`weightedScore`・`total`・族別 `breakdown` |
-| HARD | `MirrorKeys.hard` = `groupViol`（群外）, `c3n`（禁止連続）, `covU`（人員不足）, `pref`（希望未充足）, `c3w`（希望前日の禁止） |
+| HARD | `MirrorKeys.hard` = `groupViol`（群外）, `c3n`（禁止連続）, `covU`（人員不足）, `pref`（希望未充足）, `c3w`（希望前日の禁止）, `extWish`（拡張希望の違反、3.653.0） |
 | SOFT | それ以外の 15 族。HARD が下限でも改善余地が残る |
 | globalBest / elite / trajectory | ポートフォリオ全体の最良／ワーカーごとの保持最良／探索軌跡側の盤面（elite と同じとは限らない） |
 | focus | RSI が次に狙う族。`total` は「全違反セル起点の汎用修復」 |
 | epoch / round | ワーカーの役割実行単位／RSI 内部の探索単位 |
 | keep-best | 保持済み最良を悪化候補で置き換えない。比較は §3.2 |
 | hardFloor | 構造的 covU 床。有資格者を全員就けても埋まらない席数。実行中は不変。`V6SanityPort.structuralHardFloor` |
-| nonCovUHard | groupViol + pref + c3n + c3w。`WatchdogBest.bestNonCovUHard` |
+| nonCovUHard | groupViol + pref + c3n + c3w + extWish。`WatchdogBest.bestNonCovUHard` |
 | normalStall / shortStall | 解ける HARD が残る局面の長い閾値／頭打ち局面の短い閾値。`V6FinalPort.normalStallMs`／`watchdogBudget(...).stallHardMs` |
 | c3nWallProven | 現最良の各 c3n run が局所手で動かないという診断。**大域不能の証明ではない**。`V6PortAnalyzer.diagnoseForbiddenRuns`（`allBlocked`）、証拠の選択は `V6FinalPort.C3nWallProof` |
 | stagnationFired | 層 A 発火のラッチ。**改善で降りる**（永続ではない）。`WatchdogBest.stagnationFired`、`observe` が降ろす |
@@ -131,8 +131,8 @@ stagnationFired = false; stagnationDurationMs = −1; stagnationIters = −1
 ### 5.3 通常閾値と短い閾値の選択
 
 ```
-nonCovUHard    = groupViol + pref + c3n + c3w
-nonCovUAllC3n  = groupViol == 0 ∧ pref == 0 ∧ c3w ≤ wishC3wProven ∧ c3n > 0
+nonCovUHard    = groupViol + pref + c3n + c3w + extWish
+nonCovUAllC3n  = groupViol == 0 ∧ pref == 0 ∧ extWish == 0 ∧ c3w ≤ wishC3wProven ∧ c3n > 0
 basePlateau    = (bestHard ≤ hardFloor ∧ nonCovUHard == 0) ∨ wishReached
 c3nWallPlateau = nonCovUHard > 0 ∧ nonCovUAllC3n ∧ bestHard ≤ hardFloor + nonCovUHard ∧ c3nWallProven
 effStall       = (basePlateau ∨ c3nWallPlateau) ? shortStall : normalStall
@@ -260,7 +260,7 @@ reassign          = slot ≠ 0 ∧ (nearestOtherDistance ≤ DUPLICATE_DISTANCE_
 c1 c2 c3 c3n c3m c3mn c41 c42 covU covO pref low high
 ```
 
-groupViol・c3w・c41s・c42s・apt・weekly・fair は学習しない（配列名 `CNAMES` に Apt があっても index に無い）。学習しない族は `dynamicAvoid` に入らない＝**常に focus 可能**で、N4 のピボット候補にも残る（保守側。HARD の groupViol/pref は hf67 の決定的修復で直るので充足困難の学習対象にする必要が薄く、c3w は 3.542.0 の新族で未追加）。各追跡族について、
+groupViol・c3w・extWish・c41s・c42s・apt・weekly・fair は学習しない（配列名 `CNAMES` に Apt があっても index に無い）。学習しない族は `dynamicAvoid` に入らない＝**常に focus 可能**で、N4 のピボット候補にも残る（保守側。HARD の groupViol/pref は hf67 の決定的修復で直るので充足困難の学習対象にする必要が薄く、c3w は 3.542.0 の新族で未追加）。各追跡族について、
 
 - 観測値が過去最小より小さい → 最小更新・停滞投入量 0・推定解除
 - 観測値 0 → 停滞投入量 0・推定解除（3.592.0）
@@ -290,10 +290,10 @@ HF63 は SOFT の推定値を持ち得るが、**SOFT を恒久回避へ入れ�
 
 ### 7.3 focus 選択（`RsiFocusSelection.maxViolatedFamily`）
 
-1. 回避されておらず件数が正の HARD を、`groupViol, covU, pref, c3n, c3w` の**順序**で選ぶ（HARD 間の最大件数ではない）。HARD は 1 件でも必須なので件数比較に意味が無く、旧・件数最大では c3n=1 が c1=118 等の SOFT に埋もれて RSI が一度も HARD を狙わなかった（3.74.0）。順序は RSI 内の修復経路（`rsiGenerateHypothesis`: groupViol/pref は hf67、covU は `destroyRepairDay`×6＋covU 連鎖（E11）、c3n/c3w は `destroyRepairViolations`）に沿う。
+1. 回避されておらず件数が正の HARD を、`groupViol, covU, pref, c3n, c3w, extWish` の**順序**で選ぶ（HARD 間の最大件数ではない）。HARD は 1 件でも必須なので件数比較に意味が無く、旧・件数最大では c3n=1 が c1=118 等の SOFT に埋もれて RSI が一度も HARD を狙わなかった（3.74.0）。順序は RSI 内の修復経路（`rsiGenerateHypothesis`: groupViol/pref は hf67、covU は `destroyRepairDay`×6＋covU 連鎖（E11）、c3n/c3w/extWish は `destroyRepairViolations`）に沿う。extWish は学習しない（手動固定のセルで解けなくても回避に入らない）ので、c3n/c3w の重点を奪わないよう HARD の末尾に置く（3.653.0）。
 2. 残る HARD が無ければ apt／covO の周期枠: apt は `rotationRound % 3 == 1`、covO は `== 2`、最終ラウンドは両方が候補。`round ≥ 0`（通常の呼出し。負の round は周期枠を使わない呼出し）で、回避されず件数が正であること。
 3. 両方が候補なら件数の少ない方、同数なら covO。
-4. それ以外は順序表 `groupViol,covU,pref,c3n,c3w,low,high,c41,c41s,c2,covO,c42,c42s,apt,weekly,fair,c1,c3,c3m,c3mn` から、回避されない正の最大件数（同数は先のキー）。件数 0 の族は選ばない（E8）。
+4. それ以外は順序表 `groupViol,covU,pref,c3n,c3w,extWish,low,high,c41,c41s,c2,covO,c42,c42s,apt,weekly,fair,c1,c3,c3m,c3mn` から、回避されない正の最大件数（同数は先のキー）。件数 0 の族は選ばない（E8）。
 5. weekly が選ばれても apt が正で回避外なら apt に置換。候補なしは `total`。
 
 `rotationRound` は既定で `runRsi` の round。`rsiFocusRotationPersist=true`（既定 false）のときだけ HF63 側カウンタで呼出しをまたぐ。
