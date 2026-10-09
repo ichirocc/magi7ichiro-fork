@@ -57,10 +57,11 @@ internal object EliteIntegrationPolish {
         deadlineMs: Long,
         config: Config = Config(),
         wishPinStrict: Boolean = PolishGate.wishPinStrict,
+        quantitativeRangeEval: Boolean = false,
     ): Result {
-        val p = cachedProblem(state)
+        val p = cachedProblem(state, quantitativeRangeEval)
         val root = rootSchedule.copy2D()
-        val rootReport = UnifiedViolationChecker.check(state, root)
+        val rootReport = UnifiedViolationChecker.check(state, root, quantitativeRangeEval = quantitativeRangeEval)
         var bestSchedule = root.copy2D()
         var bestReport = rootReport
         var relinkPaths = 0
@@ -94,7 +95,7 @@ internal object EliteIntegrationPolish {
         // instead of trusting the archived report; bridge schedules remain search material only.
         for (candidate in candidates.drop(1)) {
             if (candidate.bridge || stopped(shouldStop, deadlineMs)) continue
-            val checked = UnifiedViolationChecker.check(state, candidate.schedule)
+            val checked = UnifiedViolationChecker.check(state, candidate.schedule, quantitativeRangeEval = quantitativeRangeEval)
             if (better(checked, bestReport) && pinsHold(p, root, candidate.schedule, wishPinStrict)) {
                 bestSchedule = candidate.schedule.copy2D()
                 bestReport = checked
@@ -115,7 +116,7 @@ internal object EliteIntegrationPolish {
                     relinkPaths++
                     val improved = relinkOnePath(
                         state, p, root, source, target, variant, shouldStop, deadlineMs,
-                        bestReport, wishPinStrict,
+                        bestReport, wishPinStrict, quantitativeRangeEval,
                     )
                     if (improved != null && better(improved.second, bestReport)) {
                         bestSchedule = improved.first
@@ -143,6 +144,7 @@ internal object EliteIntegrationPolish {
                 rootSchedule = root,
                 currentBest = bestSchedule,
                 currentBestReport = bestReport,
+                quantitativeRangeEval = quantitativeRangeEval,
                 group = group.map { fusionCandidates[it] },
                 shouldStop = shouldStop,
                 deadlineMs = deadlineMs,
@@ -156,7 +158,7 @@ internal object EliteIntegrationPolish {
             }
         }
 
-        val checked = UnifiedViolationChecker.check(state, bestSchedule)
+        val checked = UnifiedViolationChecker.check(state, bestSchedule, quantitativeRangeEval = quantitativeRangeEval)
         val valid = better(checked, rootReport) && pinsHold(p, root, bestSchedule, wishPinStrict)
         val chosen = if (valid) bestSchedule.copy2D() else root.copy2D()
         val chosenReport = if (valid) checked else rootReport
@@ -189,6 +191,7 @@ internal object EliteIntegrationPolish {
         deadlineMs: Long,
         incumbentReport: ViolationReport,
         wishPinStrict: Boolean,
+        quantitativeRangeEval: Boolean,
     ): Pair<Array<IntArray>, ViolationReport>? {
         val current = source.schedule.copy2D()
         val diffs = ArrayList<Pair<Int, Int>>()
@@ -220,7 +223,7 @@ internal object EliteIntegrationPolish {
             if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue
             if (!p.mayPlace(i, k) || p.extBanned(i, j, k)) continue   // 拡張希望の禁止へは置かない
             current[i][j] = k
-            val report = UnifiedViolationChecker.check(state, current)
+            val report = UnifiedViolationChecker.check(state, current, quantitativeRangeEval = quantitativeRangeEval)
             if (better(report, bestReport) && pinsHold(p, rootSchedule, current, wishPinStrict)) {
                 bestSchedule = current.copy2D()
                 bestReport = report
@@ -235,6 +238,7 @@ internal object EliteIntegrationPolish {
         rootSchedule: Array<IntArray>,
         currentBest: Array<IntArray>,
         currentBestReport: ViolationReport,
+        quantitativeRangeEval: Boolean,
         group: List<Candidate>,
         shouldStop: () -> Boolean,
         deadlineMs: Long,
@@ -286,7 +290,7 @@ internal object EliteIntegrationPolish {
                     val bucket = seen.getOrPut(hash) { ArrayList() }
                     if (bucket.any { AdaptiveEliteArchive.sameSchedule(it, schedule) }) continue
                     bucket.add(schedule)
-                    val report = UnifiedViolationChecker.check(state, schedule)
+                    val report = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = quantitativeRangeEval)
                     if (!withinDebt(report, currentBestReport, config)) continue
                     val child = BeamNode(schedule, report, changed)
                     next.add(child)

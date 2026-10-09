@@ -63,6 +63,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.magi.app.v6.V6PortReport
 import com.magi.app.v6.V6Algorithm
+import com.magi.app.v6.CoverageShortfall
 import com.magi.app.v6.CoverageVerdict
 import com.magi.app.v6.MirrorKeys
 import kotlinx.coroutines.Dispatchers
@@ -276,6 +277,27 @@ internal fun RelaxTrialDialog(
     )
 }
 
+/** [UX監査 高2] ホームの「なおし方」の対象枠。ホームの文言とダイアログが必ず同じ枠を指すよう、ここ1か所で決める。 */
+internal fun guidedFixTarget(shortfalls: List<CoverageShortfall>): CoverageShortfall? =
+    shortfalls.firstOrNull { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow }
+
+/** [UX監査 中4] 診断の原因に対応する設定の着地先（値で持つ）。null＝原因が分からない＝編集タブの先頭（従来どおり）。 */
+internal data class EditLanding(val scope: Int, val section: String?, val wishStaff: Int? = null)
+
+internal fun landingFor(s: CoverageShortfall): EditLanding? = when {
+    s.wishPinned.isNotEmpty() -> EditLanding(scope = 0, section = null, wishStaff = s.wishPinned.first())   // 希望で固定された本人（月次条件）
+    s.verdict == CoverageVerdict.INFEASIBLE -> EditLanding(scope = 2, section = "yr_ws1")                  // 担当・必要人数（①）
+    s.blockedNow && s.forbidCount > 0 -> EditLanding(scope = 2, section = "yr_cons")                       // 移すと禁止の並び（⑤）
+    else -> null
+}
+
+private fun landingButtonLabel(l: EditLanding?): String = when {
+    l?.wishStaff != null -> "希望を見直す"
+    l?.section == "yr_cons" -> "禁止の並びを見直す"
+    l?.section == "yr_ws1" -> "担当を見直す"
+    else -> "データを見直す"
+}
+
 @Composable
 internal fun GuidedFixDialog(
     ui: UiState,
@@ -284,7 +306,7 @@ internal fun GuidedFixDialog(
     vm: MagiViewModel,
     onEvent: (MagiEvent) -> Unit,
     onDismiss: () -> Unit,
-    onGoEdit: () -> Unit,
+    onGoEdit: (EditLanding?) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val shortfalls = ui.coverageDiag?.shortfalls ?: emptyList()
@@ -294,7 +316,7 @@ internal fun GuidedFixDialog(
     //   その結果、**同じホーム画面の CoverageDiagnosisCard が「いまの希望のままでは埋められません」と
     //   言っている枠に対して、この画面だけが「動かせる人がいます」と正反対の約束をしていた**。
     //   押しても必須違反は減らず、何度押しても同じ日が出続ける。→ blockedNow は target にしない。
-    val target = shortfalls.firstOrNull { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow }
+    val target = guidedFixTarget(shortfalls)
     val blocked = shortfalls.filter { it.miss > 0 && it.blockedNow && it.verdict != CoverageVerdict.INFEASIBLE }
     val infeasible = shortfalls.filter { it.verdict == CoverageVerdict.INFEASIBLE }
     // blocked を数えないと「直し終わりました！」と言ってしまう（旧より悪い嘘になる）。
@@ -312,42 +334,67 @@ internal fun GuidedFixDialog(
                     target != null -> {
                         Text("${target.dayLabel} の「${target.shiftSymbol}」が ${target.miss}人 足りません。",
                             fontWeight = FontWeight.Bold)
-                        Text("この日に動かせる人がいます。だれかを「${target.shiftSymbol}」に入れますか？",
-                            style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         val cands = remember(target.dayIndex, target.shiftIndex, ui.coverageDiag) {
                             vm.shortageFixCandidates(target.dayIndex, target.shiftIndex)
                         }
-                        // [3.475.0/論理監査] 1回押したら再検査（refreshCheck は非同期）が盤面に追いつくまで全候補を
-                        //   無効化する。旧: 候補は押す前の盤面で「抜けても穴が空かない」と判定したものなので、
-                        //   連打すると2人目が既に満たした枠へ入り covO と、抜けた側の covU を同時に作れた。
-                        // [3.502.0/バックログ#10] 解除の合図は schedule の変化でなく検査世代（ui.checkRev）。旧: remember(ui.schedule) は
-                        //   setCell 直後の schedule 変化でリセットされ、coverageDiag が古いまま候補が再有効化されていた。
-                        val pressedRev = remember { androidx.compose.runtime.mutableStateOf(-1L) }
-                        val pending = pressedRev.value >= 0L && ui.checkRev <= pressedRev.value
-                        if (cands.isEmpty()) {
-                            // [3.401.0] 汎用の文言でなく、この枠についての診断そのものを出す
-                            //   （なぜ動かせないかは CoverageDiagnosis が既に調べて書いている）。
-                            Text(target.reason, color = cs.error, style = MaterialTheme.typography.bodyMedium)
-                            // [UX監査#5] 旧: 候補0のとき「閉じる」以外の導線が無い行き止まりだった。
-                            //   担当できるシフトや希望を編集タブで直すという次の一手を明示する。
-                            OutlinedButton(onClick = { onDismiss(); onGoEdit() }, modifier = Modifier.fillMaxWidth()) {
-                                Text("データを見直す")
+                        when {
+                            cands.isNotEmpty() -> {
+                                // [UX監査 高1] 単独の移動（だれか1人を入れる）。
+                                // [3.475.0/論理監査] 1回押したら再検査（refreshCheck は非同期）が盤面に追いつくまで全候補を
+                                //   無効化する。旧: 候補は押す前の盤面で「抜けても穴が空かない」と判定したものなので、
+                                //   連打すると2人目が既に満たした枠へ入り covO と、抜けた側の covU を同時に作れた。
+                                // [3.502.0/バックログ#10] 解除の合図は schedule の変化でなく検査世代（ui.checkRev）。旧: remember(ui.schedule) は
+                                //   setCell 直後の schedule 変化でリセットされ、coverageDiag が古いまま候補が再有効化されていた。
+                                val pressedRev = remember { androidx.compose.runtime.mutableStateOf(-1L) }
+                                val pending = pressedRev.value >= 0L && ui.checkRev <= pressedRev.value
+                                val showAll = remember(target.dayIndex, target.shiftIndex) { androidx.compose.runtime.mutableStateOf(false) }
+                                Text("この日に動かせる人が${cands.size}人います。だれかを「${target.shiftSymbol}」に入れますか？",
+                                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                                // [UX監査 中5] 件数を出し、既定の8人を超えたら「すべて表示」で9人目以降も選べる。
+                                val shown = if (showAll.value) cands else cands.take(GUIDED_FIX_PREVIEW)
+                                shown.forEach { c ->
+                                    Button(
+                                        onClick = { pressedRev.value = ui.checkRev; onEvent(MagiEvent.Board.SetCell(c.staffIndex, target.dayIndex, target.shiftIndex)) },
+                                        enabled = !pending,
+                                        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
+                                    ) {
+                                        val tail = if (c.fromRest) "（休み）" else ""
+                                        // 長い氏名でも切れないよう2行まで折り返し（文字欠け防止）。
+                                        Text("${c.name}$tail を「${target.shiftSymbol}」に入れる",
+                                            textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                                if (cands.size > GUIDED_FIX_PREVIEW) {
+                                    TextButton(onClick = { showAll.value = !showAll.value }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                        Text(if (showAll.value) "一部だけ表示" else "すべて表示（ほか${cands.size - GUIDED_FIX_PREVIEW}人）")
+                                    }
+                                }
+                                Text(if (pending) "再検査中…（結果が反映されるまで候補は押せません）" else "入れたら「元に戻す」でいつでも取り消せます。",
+                                    style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                             }
-                        } else {
-                            cands.take(8).forEach { c ->
+                            target.chainVerified -> {
+                                // [UX監査 高1] 1人を動かすだけでは埋まらないが、複数人の入替で埋まると分析が確かめた枠。
+                                Text("だれか1人を動かすだけでは埋まりません。複数人の入れ替えで埋められます。",
+                                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                                 Button(
-                                    onClick = { pressedRev.value = ui.checkRev; onEvent(MagiEvent.Board.SetCell(c.staffIndex, target.dayIndex, target.shiftIndex)) },
-                                    enabled = !pending,
-                                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
+                                    onClick = {
+                                        onDismiss()
+                                        vm.applyShortageChainFix(target.dayIndex, target.shiftIndex,
+                                            "（玉突き）${target.dayLabel} の「${target.shiftSymbol}」を複数人の入替で埋める")
+                                    },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
                                 ) {
-                                    val tail = if (c.fromRest) "（休み）" else ""
-                                    // 長い氏名でも切れないよう2行まで折り返し（文字欠け防止）。
-                                    Text("${c.name}$tail を「${target.shiftSymbol}」に入れる",
-                                        textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text("複数人の入れ替えを使う（元に戻せます）", textAlign = TextAlign.Center)
                                 }
                             }
-                            Text(if (pending) "再検査中…（結果が反映されるまで候補は押せません）" else "入れたら「元に戻す」でいつでも取り消せます。",
-                                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            else -> {
+                                // [UX監査 高1] 玉突きでも埋まらない枠は、人を動かす手ではなく条件を変える話。原因に対応する区分へ。
+                                Text(target.reason, color = cs.error, style = MaterialTheme.typography.bodyMedium)
+                                val landing = landingFor(target)
+                                OutlinedButton(onClick = { onDismiss(); onGoEdit(landing) }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(landingButtonLabel(landing))
+                                }
+                            }
                         }
                     }
                     infeasible.isNotEmpty() -> {
@@ -357,6 +404,10 @@ internal fun GuidedFixDialog(
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Text("人を増やすか、担当できるシフトや希望を見直すと直せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        val infeasibleLanding = landingFor(infeasible.first())
+                        OutlinedButton(onClick = { onDismiss(); onGoEdit(infeasibleLanding) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(landingButtonLabel(infeasibleLanding))
+                        }
                     }
                     blocked.isNotEmpty() -> {
                         // [3.401.0] 「動かせる人がいる」枠が無くなったが、埋まっていない枠は残っている状態。
@@ -368,6 +419,10 @@ internal fun GuidedFixDialog(
                         }
                         Text("再作成しても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        val blockedLanding = blocked.firstNotNullOfOrNull { landingFor(it) }
+                        OutlinedButton(onClick = { onDismiss(); onGoEdit(blockedLanding) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(landingButtonLabel(blockedLanding))
+                        }
                     }
                     else -> {
                         Text("人員不足の日はなくなりました。仕上げに再作成すると全体が整います。")
@@ -407,6 +462,7 @@ internal fun OperatorNextActionCard(
     onSchedule: () -> Unit,  // 中身を見る（勤務表へ）
     onFix: () -> Unit,       // なおし方を見る（勤務表で手直し）
     onSetup: () -> Unit,     // データを見直す（編集へ）
+    onLanding: (EditLanding?) -> Unit = {},   // [UX監査 中4] 原因のある「データを見直す」は対応する区分・節へ（null＝編集の先頭）
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
@@ -424,6 +480,10 @@ internal fun OperatorNextActionCard(
     val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui) }
     val shortDays = ui.coverageDiag?.shortfalls?.map { it.dayIndex }?.distinct()?.size ?: 0
     val worstDay = ui.coverageDiag?.shortfalls?.firstOrNull()?.dayLabel
+    // [UX監査 高2] 「なおし方を見る」の日は、開くダイアログと同じ枠から取る（ホームとダイアログの日を一致させる）。
+    val guidedTarget = guidedFixTarget(ui.coverageDiag?.shortfalls ?: emptyList())
+    val pinnedLanding = ui.coverageDiag?.shortfalls?.firstOrNull { it.wishPinned.isNotEmpty() }?.let { landingFor(it) }
+    val infeasibleLanding = ui.coverageDiag?.shortfalls?.firstOrNull { it.verdict == CoverageVerdict.INFEASIBLE }?.let { landingFor(it) }
     // 充足不可の S5b 版は重複除去の前（S5a の行に畳まれた人も含む）で決め、例の日も希望で固定された人がいる枠から取る。
     val hasPinned = ui.coverageDiag?.shortfalls?.any { it.wishPinned.isNotEmpty() } == true
     val wishDay = ui.coverageDiag?.shortfalls?.firstOrNull { it.wishPinned.isNotEmpty() }?.dayLabel
@@ -449,19 +509,19 @@ internal fun OperatorNextActionCard(
             "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial)
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
-            "③ 完成しました。そのまま配れます。" + (ui.runSummary?.let { "\n$it" } ?: ""),
+            (if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当できない希望が ${ui.impossibleWishCount} 件あります。" else "③ 完成しました。そのまま配れます。") + (ui.runSummary?.let { "\n$it" } ?: ""),
             "印刷・書き出し", onExport, true, "中身を見る", onSchedule)
         infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
-            wishLabel, onShowWishes, true, "データを見直す", onSetup)
+            wishLabel, onShowWishes, true, "データを見直す", { onLanding(pinnedLanding) })
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
-            "データを見直す", onSetup, true, "未充足のまま書き出す", onExport)
+            "データを見直す", { onLanding(infeasibleLanding) }, true, "未充足のまま書き出す", onExport)
         // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す。
         //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
-        ui.coverageDiag?.shortfalls?.any { it.verdict == CoverageVerdict.FIXABLE && it.miss > 0 && !it.blockedNow } == true ->
-            OpNextPlan(amber, onAmber, (worstDay?.let { "$it が人員不足です。" } ?: "人員不足の日があります。"),
-                homeTargetLabel("なおし方を見る", null, worstDay), onFix, true, null, onSetup)
+        guidedTarget != null ->
+            OpNextPlan(amber, onAmber, (guidedTarget.dayLabel.let { "$it が人員不足です。" }),
+                homeTargetLabel("なおし方を見る", null, guidedTarget.dayLabel), onFix, true, null, onSetup)
         // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
         ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
@@ -506,6 +566,10 @@ internal fun OperatorNextActionCard(
                 }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+            // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質・次の一手）。内部名は出さない（StopExplanation）。
+            if (ui.hasResult && !ui.running) ui.stopSummary?.let { s -> stopExplanationOf(s)?.let { e ->
+                Text(e.line + (stopNextLabel(e.next)?.let { " 次は: $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = plan.fg)
+            } }
             plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
             plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
             if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
@@ -1168,6 +1232,8 @@ internal fun SettingIssuesCard(
 
 /** 設定の見直しの一覧で最初に出す件数（重要な順に整列済み）。残りは [SettingIssuesShowAll] で開く。 */
 internal const val SETTING_ISSUE_PREVIEW = 6
+/** [UX監査 中5] 不足枠の候補の既定表示件数（超えたら「すべて表示」で9人目以降も選べる）。 */
+internal const val GUIDED_FIX_PREVIEW = 8
 
 @Composable
 internal fun SettingIssuesShowAll(hidden: Int, onClick: () -> Unit) {

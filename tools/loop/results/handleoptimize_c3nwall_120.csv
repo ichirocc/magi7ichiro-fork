@@ -1,0 +1,11 @@
+fixture,seed,arm,elapsedMs,hard,weightedScore,total
+sample,1,off,56758,1,11111.0,254
+sample,1,on,118673,1,11105.0,248
+sample,2,off,39747,1,11281.0,270
+sample,2,on,119167,1,11295.0,262
+sample,3,off,48909,1,11153.0,267
+sample,3,on,119377,1,11122.0,262
+sample,4,off,44621,1,11126.0,246
+sample,4,on,119970,1,11181.0,254
+sample,5,off,42384,1,11251.0,254
+sample,5,on,118909,1,11263.0,257

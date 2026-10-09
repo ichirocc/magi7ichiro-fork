@@ -447,6 +447,16 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         val sec = yearSectionForIssueKind(kind)
         if (sec != null) { editScope = 2; deepLinkEditSection = sec } else if (kind == com.magi.app.v6.IssueKind.WISH) editScope = 0
     }
+    // [UX監査 中4] 「データを見直す」は診断の原因に対応する区分・節へ着地する。原因が分からない（null）ときは編集タブの先頭（従来どおり）。
+    val openEditLanding: (EditLanding?) -> Unit = { l ->
+        tab = 2
+        if (l != null) {
+            editingCell = null
+            editScope = l.scope
+            l.section?.let { deepLinkEditSection = it }
+            l.wishStaff?.let { deepLinkWishStaff = it }
+        }
+    }
     // 縦スクロールはタブごと（別のタブの縦位置のまま開かない）。
     val tabScrolls = List(5) { rememberScrollState() }
     // [ジャンプ/Web試作の移植] 要確認一覧→勤務表タブの注目セル(i,j)。表示後に自動クリア（一時ハイライト）。
@@ -598,6 +608,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         //   → 不足なし時は分析タブの修復フローへ。
                         onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
                         onSetup = { tab = 2 },
+                        onLanding = openEditLanding,
                         onShowMove = { tab = 3 },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
@@ -754,7 +765,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             //   （3.190.0〜3.515.2 の再構成保証は「生の vm 読取」への対処だった）。editRev 自体は
                             //   Root が派生ビューを作り直す合図として残っている（`remember(ui)`）。
                             // [3.482.0 編集タブ簡素化] 職員の一覧・入退職は「職員管理」ドアへ一本化（Ws1Card の職員節を撤去）。
-                            CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true) {
+                            CollapsibleSection("① シフト・グループ", "yr_ws1", initiallyExpanded = true, forceExpandKey = deepLinkEditSection,
+                                onForceExpandConsumed = { deepLinkEditSection = null }) {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     SectionNote("勤務の種類・グループと、グループ×勤務の担当可否を決めます。職員の入退職・所属は「職員管理」へ。")
                                     ws1View?.let { Ws1Card(ui, it, onEvent) }
@@ -923,7 +935,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }
         }
         if (guidedFix) {
-            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { tab = 2 })
+            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = openEditLanding)
         }
         if (relaxDialog) {
             RelaxTrialDialog(ui, vm.relaxTrialFor(), onDismiss = { relaxDialog = false; relaxFrom = null }, onConfirm = { token ->

@@ -74,6 +74,10 @@ data class CoverageShortfall(
     val blockedNow: Boolean = false,
     /** [S5b] 担当できる（mayPlace）のに、この日は別の勤務で希望固定されている職員（capacity から外した人。職員順）。 */
     val wishPinned: List<Int> = emptyList(),
+    /** [3.642.0] 玉突き（多人数の入替）の手順が実在する枠（[chainFixOps] で手順を取り出せる）。UI は単独移動の次にこの枠の入替を案内する。 */
+    val chainVerified: Boolean = false,
+    /** [3.642.0] 移すと禁止連続(c3n)になるため候補から外れた人数（⑤の並びへの導線の根拠）。 */
+    val forbidCount: Int = 0,
 )
 
 /** 人員過剰(covO)が残る 1 つの (日, シフト) 枠の診断。読み取り専用・エンジン非変更。 */
@@ -190,6 +194,8 @@ data class ForbiddenRunDiag(
         it.escape == ForbiddenCellEscape.FREE || it.escape == ForbiddenCellEscape.CHAIN ||
             it.escape == ForbiddenCellEscape.ADJACENT
     }
+    /** 全セルが本人の希望で固定＝辞書式意味論（pref > c3n）の下で証明相当の壁。3.284.0 の区別を値で持つ（3.643.0）。 */
+    val certified: Boolean get() = cells.isNotEmpty() && cells.all { it.escape == ForbiddenCellEscape.PINNED }
 }
 
 /**
@@ -204,6 +210,8 @@ data class ForbiddenRunDiagnosis(
     val hasRuns: Boolean get() = totalRuns > 0
     /** 全 run が構造的に塞がっている（＝このデータ・希望のままでは c3n を 0 にできない）。 */
     val allBlocked: Boolean get() = hasRuns && runs.none { it.escapable }
+    /** 全 run が証明相当（全セル希望固定）で塞がっている。それ以外の塞がりは「探索手の全滅」＝経験的な壁（3.643.0）。 */
+    val allBlockedCertified: Boolean get() = hasRuns && runs.all { it.certified }
 
     /** 診断ログ（エクスポートされる「MAGI ログ」に載る形式の文字列）。 */
     fun logLines(): List<String> {
@@ -246,11 +254,46 @@ object V6PortAnalyzer {
         const val SURPLUS_DEEP_BUDGET_MS = 8000L
         /** 1呼出あたりの上限（総予算を早い者勝ちで使い切らせない）。 */
         const val SURPLUS_DEEP_PER_CALL_MS = 2000L
+        /** [3.643.0] 経験的な c3n 壁を 1 手探索で反証する上限。停滞が短閾値（15 s 以上）を超えた後に最良版ごとに一度だけ走る。 */
+        const val C3N_WALL_DEEP_MS = 2000L
     }
 
     /** `findCovUChain`（探索本体と同一関数）を [Probe.CHAIN_SEEDS] 通りの rng 順で試し、1 つでも成立すれば真。 */
     private fun chainFills(p: Problem, board: Array<IntArray>, k: Int, j: Int, exclude: Int = -1): Boolean =
         (0 until Probe.CHAIN_SEEDS).any { seed -> findCovUChain(p, board, k, j, java.util.Random(seed.toLong()), exclude = exclude) != null }
+
+    /** [3.642.0/UX監査 高1] 玉突き（多人数の入替）の手順。[chainFills] と同じ `findCovUChain`・同じ seed 順で、最初に成立した手順を返す。
+     *  盤面は変えない。`chainVerified` の枠では必ず見つかる（同じ関数・同じ順序）。 */
+    internal fun chainFixOps(p: Problem, schedule: Array<IntArray>, k: Int, j: Int): List<FixCell>? {
+        val norm = normalizeSchedule(schedule, p)
+        for (seed in 0 until Probe.CHAIN_SEEDS) {
+            val moves = findCovUChain(p, norm, k, j, java.util.Random(seed.toLong())) ?: continue
+            return moves.map { FixCell(it[0], it[1], it[2]) }
+        }
+        return null
+    }
+
+    /** [3.642.0] [chainFixOps] の手順を改善提案（`FixSuggestion`）の形にする。評価は正式チェッカーの前後差分（[FixApplyGate] と同じ基準）。 */
+    internal fun chainFixSuggestion(state: MagiState, p: Problem, schedule: Array<IntArray>, k: Int, j: Int, label: String): FixSuggestion? {
+        val ops = chainFixOps(p, schedule, k, j) ?: return null
+        val before = UnifiedViolationChecker.check(state, schedule)
+        val work = schedule.copy2D()
+        for (op in ops) work[op.staff][op.day] = op.toShift
+        val after = UnifiedViolationChecker.check(state, work)
+        val diff = ArrayList<Pair<String, Int>>()
+        for (key in (before.breakdown.keys + after.breakdown.keys)) {
+            val d = (after.breakdown[key] ?: 0) - (before.breakdown[key] ?: 0)
+            if (d != 0) diff.add(key to d)
+        }
+        diff.sortBy { it.second }
+        return FixSuggestion(FixKind.CHAIN, ops, label, after.hard - before.hard, after.total - before.total, diff)
+    }
+
+    /** [3.643.0/根拠の精度] 経験的な c3n 壁（探索手の全滅）を 1 手探索で反証する。`FixSuggester` の手（1 マス変更・同一職員 2 マス・
+     *  同日交換・別日交換・3 人巡回・玉突き・1 日総当たり・多段連鎖）を [Probe.C3N_WALL_DEEP_MS] の上限で探し、必須を厳密に減らす手が
+     *  1 つでもあれば「壁ではない」。見つからないことは不能の証明ではなく、局所手の全滅より強い証拠。 */
+    fun c3nWallRefutedByOneMove(state: MagiState, schedule: Array<IntArray>, budgetMs: Long = Probe.C3N_WALL_DEEP_MS): Boolean =
+        FixSuggester.suggest(state, schedule, maxResults = 4, deadlineMs = budgetMs, ejectionChain = true).any { it.deltaHard < 0 }
 
     /**
      * 人員不足(covU)の枠ごとの原因診断。エンジンは変更せず、現在の解だけを読み取り、
@@ -321,6 +364,8 @@ object V6PortAnalyzer {
                 val sym = state.shifts.getOrNull(k)?.kigou ?: k.toString()
                 // [3.344.0] reason と同じ根拠で「いまの希望のままでは埋められない」かを値として持つ。
                 var blockedNow = false
+                var chainOk = false
+                var forbidN = 0
                 val reason = if (verdict == CoverageVerdict.INFEASIBLE && wishPinned.isNotEmpty()) {
                     // 希望固定の人を外して数えた結果＝「データ上」は言い過ぎ（希望を取り消せば届きうる）。
                     "いまの希望のままでは担当できる人が${capacity}人で必要数${need}に届きません（希望で別の勤務に固定: ${wishPinned.size}人）"
@@ -357,6 +402,8 @@ object V6PortAnalyzer {
                     // 案内を出し分ける。
                     val chainVerified = cascade > 0 && chainFills(p, norm, k, j)
                     blockedNow = free == 0 && !(cascade > 0 && chainVerified)
+                    chainOk = chainVerified
+                    forbidN = forbid
                     val hint = when {
                         free > 0 -> "空き番${free}人を${sym}へ移せば充足（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
                         cascade > 0 && chainVerified -> "空き番が無く、過剰シフトからの多人数入替（玉突き=ブロック移動）が必要"
@@ -369,7 +416,7 @@ object V6PortAnalyzer {
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity,
-                        verdict, reason, blockedNow, wishPinned)
+                        verdict, reason, blockedNow, wishPinned, chainOk, forbidN)
                 )
             }
         }

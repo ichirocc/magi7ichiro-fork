@@ -12,7 +12,8 @@ package com.magi.app.v6
  *  - `infeasibleBreakdownKeys()` が `runRsi` の `dynamicAvoid` になり、充足困難と学習した族を
  *    RSI の focus 候補から外す（3.184.0 で HARD のみに限定・3.281.0 でワーカー専属インスタンスを
  *    エポック横断で共有・3.213.0 で focus 投入量ベースの停滞加算へ）。
- *  - `infeasibleFamilies()` が `recordInfeasibleScoped` 経由で残存分析（3.288.0）へ供給する。
+ *  - RSI は `infeasibleBreakdownKeys()`（内部キー）を `recordInfeasibleScoped` へ渡す（3.642.0 で表示名からの変更）。
+ *    残存分析の注記はこの内部キーの履歴を表示するだけで、族の分類には使わない。
  *  - **目的関数の重みには一切触れない**。重みの変更は HF77 該当で、明示の数値指示と
  *    Evaluator/Delta/C++/checker の4面同時変更が要る。
  *

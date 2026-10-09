@@ -503,7 +503,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     discardBgResult("背景結果の反映に失敗")
                     val cur = currentSchedule
                     _ui.update { it.copy(running = false, hasResult = cur != null, messageIsError = true,
-                        message = "バックグラウンド最適化は終わりましたが、最後の処理でエラーが起きました（${e.javaClass.simpleName}）。表示は今の勤務表です。",
+                        message = "バックグラウンド最適化は終わりましたが、最後の処理でエラーが起きました（${failureWords(e, FailureKind.ENGINE)}）。表示は今の勤務表です。",
                         schedule = cur?.map { row -> row.toList() } ?: it.schedule) }
                 }
             }
@@ -907,7 +907,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // [3.529.0/外部仕様書取り入れ] 「他の案」も同根で無効化する（旧: fixSuggestions だけ外していた）。
         alternativeScheds = emptyList()
         // 完了カードの前後比較（runSummary）も直前の実行の盤面の話＝同じ理由で外す。
-        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null) }
+        _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null, stopSummary = null) }
     }
 
     private fun clearUndo() {
@@ -933,7 +933,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = snap.label
         val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = undoStack.isNotEmpty(), canRedo = true,
-            relaxedBoard = false, engineRan = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null,
+            relaxedBoard = false, engineRan = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, stopSummary = null,
             editRev = it.editRev + 1,
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
@@ -960,7 +960,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val label = snap.label
         val stalled = stalledAfterRestore(snap.st, restoredSched)
         _ui.update { it.copy(messageIsError = false, structureEdited = true, canUndo = true, canRedo = redoStack.isNotEmpty(),
-            relaxedBoard = false, engineRan = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null,
+            relaxedBoard = false, engineRan = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, stopSummary = null,
             editRev = it.editRev + 1,
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             schedule = restoredSched.map { it.toList() },   // [3.592.0] undo()と同じ理由
@@ -1120,7 +1120,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 initSoft = lp.report.soft.toLong(),
                                 elapsedMs = 0,
                                 // 前のデータの完了要約・ヒント・他の案・直し方は、このデータのものではない。
-                                runSummary = null, copilotHint = null, alternatives = emptyList(),
+                                runSummary = null, stopSummary = null, copilotHint = null, alternatives = emptyList(),
                                 fixSuggestions = emptyList(), fixSearched = false, fixFocusName = "", stalledHardFamilies = emptyList(),
                                 message = "読込完了: ${lp.state.staffCount}名 / ${lp.state.dayCount}日 / ${lp.state.shiftCount}シフト$note",
                             )
@@ -1147,7 +1147,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         //   内側の `it` は **UiState** を指すので、出ていたのは直前の文言＝「読込失敗: 読込中…」。
                         //   すぐ下の catch は `e.message` で正しく、ここだけ取り違えていた。引数に名前を付けて塞ぐ。
                         logOp("W", "読込失敗: ${err.javaClass.simpleName}: ${err.message}")
-                        _ui.update { it.copy(running = false, message = "読み込めませんでした（${err.javaClass.simpleName}）。ファイルの中身を確認してください", messageIsError = true) }
+                        _ui.update { it.copy(running = false, message = "読み込めませんでした（${failureWords(err, FailureKind.LOAD)}）。ファイルの中身を確認してください", messageIsError = true) }
                     },
                 )
             } catch (e: CancellationException) {
@@ -1156,7 +1156,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 rollback?.invoke()
-                _ui.update { it.copy(running = false, message = "読み込めませんでした（${e.javaClass.simpleName}）。ファイルの中身を確認してください", messageIsError = true) }
+                _ui.update { it.copy(running = false, message = "読み込めませんでした（${failureWords(e, FailureKind.LOAD)}）。ファイルの中身を確認してください", messageIsError = true) }
             } finally {
                 endBoardJob(boardToken)
             }
@@ -1344,7 +1344,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [3.400.0] 3.382.0 は長い実行4経路へ終端ログを入れたが、毎回のセル編集で走る refreshCheck は
                 //   対象外だった＝画面の文言が消えると死因が何も残らない。痕跡を必ず残す。
                 logOp("W", "違反チェック 失敗: ${e.javaClass.simpleName}: ${e.message}")
-                if (seq == checkSeq) _ui.update { it.copy(running = optimizeInFlight(), message = "違反チェックに失敗しました（${e.javaClass.simpleName}）", messageIsError = true) }
+                if (seq == checkSeq) _ui.update { it.copy(running = optimizeInFlight(), message = "違反チェックに失敗しました（${failureWords(e, FailureKind.ENGINE)}）", messageIsError = true) }
             }
         }
     }
@@ -1405,7 +1405,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [3.271.0] 失敗を操作ログにも残す（旧: message のみ＝書き出したログから消えた実行が
                 //   追跡不能だった。実機ログ解析で「開始したのに完了も停止も無い実行」の死因特定を阻んだ）。
                 logOp("W", "初期解生成 失敗: ${e.javaClass.simpleName}: ${e.message}")
-                _ui.update { it.copy(running = false, message = "下書きをつくれませんでした（${e.javaClass.simpleName}）", messageIsError = true) }
+                _ui.update { it.copy(running = false, message = "下書きをつくれませんでした（${failureWords(e, FailureKind.ENGINE)}）", messageIsError = true) }
             } finally {
                 endBoardJob(boardToken)
             }
@@ -1558,7 +1558,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 停止・失敗で入力の盤面へ戻すときは、実行前の旗へ戻す（一度も計算していない盤面を「計算済み」にしない＝3.500.1）。
         val hadResult = _ui.value.hasResult
         val engineRanBefore = _ui.value.engineRan
-        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, copilotHint = hint, wishCancelOutcome = null, runSummary = null, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
+        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, copilotHint = hint, wishCancelOutcome = null, runSummary = null, stopSummary = null, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
         logOp("I", "最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
         writeRunMarker("fg", s5?.let { com.magi.app.work.RunMarker.S5(it.staff, it.day, it.symbol, it.name) })
         clearBgFiles("前景実行の開始")   // [C1] fg実行ではbg途中状態は無関係＝掃除
@@ -1774,6 +1774,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         hasResult = true,
                         relaxedBoard = false, engineRan = true,
                         runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, res.schedule, res.report, baseReport)),
+                        stopSummary = res.stop,
                         message = adoptedMsg,
                         wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, res.report.hard, adoptedMsg) },
                     ) }
@@ -1871,12 +1872,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 terminalLogged = true
                 // [3.400.0] 画面には失敗の種類と次の一手だけ。内部名「V6」と生の例外文は直上の logOp へ
                 //   （3.147.0/3.191.0 の「英字符号・内部名を画面に出さない」方針の取り残し）。
-                val failMsg = "勤務表をつくれませんでした（$kind）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）"
+                val failMsg = "勤務表をつくれませんでした（${failureWords(e, FailureKind.ENGINE)}）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）"
                 if (lateSt != null) {
                     // [S5 §10] 採用・維持の分岐が state・盤面・自動保存を書いた後（pushReport・captureAlternatives 等）で落ちた。
                     //   結果は捨てず、画面を VM が持つ今の盤面へ揃える（入力の盤面で描くと保存・書き出しと食い違う）。
                     val curB = currentSchedule ?: sched0
-                    val lateMsg = "勤務表の作成は終わりましたが、最後の処理でエラーが起きました（$kind）。表示は今の勤務表です。$s5Suffix"
+                    val lateMsg = "勤務表の作成は終わりましたが、最後の処理でエラーが起きました（${failureWords(e, FailureKind.ENGINE)}）。表示は今の勤務表です。$s5Suffix"
                     withContext(NonCancellable) {
                         runCatching {
                             val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(lateSt, curB) }
@@ -2015,7 +2016,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         pushUndo("希望の取り消しと再作成")
         state = ns
         ++checkSeq; checkJob?.cancel()
-        _ui.update { it.copy(wishes = ns.wishes, structureEdited = true, editRev = it.editRev + 1, runSummary = null) }
+        _ui.update { it.copy(wishes = ns.wishes, structureEdited = true, editRev = it.editRev + 1, runSummary = null, stopSummary = null) }
         saveNow()
         val name = st.staff.getOrNull(token.staff)?.name ?: "職員${token.staff + 1}"
         val sym = st.shifts.getOrNull(token.shift)?.kigou ?: "?"
@@ -2132,7 +2133,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = null
         relaxDone = RelaxCtx(stateKey(ns), boardKey(nb)) to relaxDoneLine(r.h0, got)
         _ui.update { it.copy(messageIsError = false, hasResult = true, engineRan = false, relaxedBoard = true, structureEdited = true, editRev = it.editRev + 1,
-            schedule = nb.map { row -> row.toList() }, runSummary = null, message = "設定を緩めて手順を当てました（元に戻せます）") }
+            schedule = nb.map { row -> row.toList() }, runSummary = null, stopSummary = null, message = "設定を緩めて手順を当てました（元に戻せます）") }
         logOp("I", "S6 確定: 組 " + (r.prerequisite + r.relaxes).joinToString { "${it.staff + 1}/${it.shift}" } + " 必須 ${r.h0}→$got")
         refreshCheck()
         saveNow()
@@ -2156,7 +2157,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         writeRunMarker("fg")   // [監査A8]
         val engineRanBefore = _ui.value.engineRan   // 停止・失敗で入力へ戻すとき用（startFullOptimize と同じ）
         val hadResult = _ui.value.hasResult
-        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, runSummary = null, liveSchedule = emptyList(), fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "自動で整えています…") }
+        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, runSummary = null, stopSummary = null, liveSchedule = emptyList(), fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(), message = "自動で整えています…") }
         logOp("I", "ソフト研磨 開始 (予算${_ui.value.budgetSec}s)")
         val startMs = System.currentTimeMillis()
         val boardToken = beginBoardJob(MagiPhase.Polishing, engineRun = true)   // [3.328.0/3.404.0]
@@ -2245,8 +2246,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val lateSt = state?.takeIf { it !== st0 }
                 val stF = lateSt ?: st0
                 val boardF = if (lateSt != null) currentSchedule ?: sched0 else sched0
-                val failMsg = if (lateSt != null) "整え終わりましたが、最後の処理でエラーが起きました（$kind）。表示は今の勤務表です。"
-                    else "整えられませんでした（$kind）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）"
+                val failMsg = if (lateSt != null) "整え終わりましたが、最後の処理でエラーが起きました（${failureWords(e, FailureKind.ENGINE)}）。表示は今の勤務表です。"
+                    else "整えられませんでした（${failureWords(e, FailureKind.ENGINE)}）。もう一度お試しください（詳しくは設定＞詳細設定＞ログ）"
                 val hasResultF = lateSt != null || hadResult
                 withContext(NonCancellable) {
                     runCatching {
@@ -2462,7 +2463,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 logOp("W", "他の案 ${i + 1} の適用後の再チェックに失敗: ${e.javaClass.simpleName}（盤面は適用済み・違反数は古い可能性）")
-                _ui.update { it.copy(messageIsError = true, message = "他の案 ${i + 1} を適用しました。違反数の再計算に失敗したため、表示の違反数は未確認です（${e.javaClass.simpleName}）") }
+                _ui.update { it.copy(messageIsError = true, message = "他の案 ${i + 1} を適用しました。違反数の再計算に失敗したため、表示の違反数は未確認です（${failureWords(e, FailureKind.ENGINE)}）") }
             }
         }
     }
@@ -2593,6 +2594,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 休みの人（動かしやすい）を先頭に。
         out.sortBy { if (it.fromRest) 0 else 1 }
         return out
+    }
+
+    /** [3.642.0/UX監査 高1] 不足枠を玉突き（複数人の入替）で埋める。手順は分析と同じ `findCovUChain` で求め、適用は
+     *  [applyFixSuggestion]（指紋照合・FixApplyGate・Undo）を通る。玉突きの実在を確かめた枠（chainVerified）でだけ呼ぶ。 */
+    fun applyShortageChainFix(dayIndex: Int, shiftIndex: Int, label: String) {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
+        val snap = sched.copy2D()
+        fixBoardKey = boardKey(snap)
+        fixStateKey = stateKey(st)
+        val p = cachedProblem(st)
+        viewModelScope.launch {
+            val s = withContext(Dispatchers.Default) { V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label) }
+            if (s == null) _ui.update { it.copy(messageIsError = true, message = "入替の手順が見つかりませんでした。「直し方を探す」で探し直してください") }
+            else applyFixSuggestion(s)
+        }
     }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
@@ -2743,7 +2761,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 // [3.392.0] refreshCheck と同型。Error でも running を戻す（固着でアプリが読取専用になるため）。
-                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（チェック失敗: ${e.javaClass.simpleName}）") }
+                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（チェックに失敗しました: ${failureWords(e, FailureKind.ENGINE)}）") }
             }
         }
     }
@@ -2966,7 +2984,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 // [3.392.0] refreshCheck と同型。Error でも running を戻す（固着でアプリが読取専用になるため）。
-                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（チェック失敗: ${e.javaClass.simpleName}）") }
+                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（チェックに失敗しました: ${failureWords(e, FailureKind.ENGINE)}）") }
             }
         }
     }
@@ -3148,7 +3166,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 if (pushedUndo) rollbackBoardCommit(st, sched, result0, ui0)
-                _ui.update { it.copy(running = false, message = "CSVを取り込めませんでした（${e.javaClass.simpleName}）", messageIsError = true) }
+                _ui.update { it.copy(running = false, message = "CSVを取り込めませんでした（${failureWords(e, FailureKind.LOAD)}）", messageIsError = true) }
             } finally {
                 endBoardJob(boardToken)
             }
@@ -3188,26 +3206,23 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun notifySave(result: Result<*>, what: String) {
         result.fold(
             onSuccess = { notify("${what}を保存しました") },
-            onFailure = { e -> notify("${what}を保存できませんでした（${ioReason(e)}）", "W") },
+            onFailure = { e ->
+                // [UX監査 中7] 画面には利用者の言葉だけを出し、例外の種類と文は記録（ログ）へ残す。
+                logOp("W", "${what}の保存に失敗: ${e.javaClass.name}: ${e.message ?: ""}")
+                notify("${what}を保存できませんでした（${ioReason(e, saving = true)}）。もう一度お試しください", "W")
+            },
         )
     }
 
     /** ファイル読み込みの失敗を1行で返す（成功時は呼ばない＝読み込めた事実は中身の表示が示す）。 */
     fun notifyOpenFailure(result: Result<*>, what: String) {
-        notify("${what}を開けませんでした（${ioReason(result.exceptionOrNull())}）", "W")
+        val e = result.exceptionOrNull()
+        logOp("W", "${what}の読込に失敗: ${e?.javaClass?.name ?: "例外なし"}: ${e?.message ?: ""}")
+        notify("${what}を開けませんでした（${ioReason(e, saving = false)}）。ファイルを確認して、もう一度お試しください", "W")
     }
 
-    /**
-     * 例外を利用者の言葉へ。**生の例外文を画面へ出さない**（3.147.0/3.191.0 の方針）が、
-     * 詳しい原因は notify が logOp へ流すので書き出したログには残る。
-     */
-    private fun ioReason(e: Throwable?): String = when {
-        e == null -> "内容が空でした"
-        e is SecurityException -> "アクセスが許可されていません"
-        e is java.io.FileNotFoundException -> "ファイルが見つからないか、書き込みが許可されていません"
-        e.message?.contains("space", ignoreCase = true) == true -> "保存先の空き容量が足りません"
-        else -> e.javaClass.simpleName
-    }
+    /** ファイル入出力の失敗を利用者の言葉へ（[failureWords]。詳しい原因は [notifySave]・[notifyOpenFailure] が logOp へ流す）。 */
+    private fun ioReason(e: Throwable?, saving: Boolean): String = failureWords(e, if (saving) FailureKind.SAVE else FailureKind.LOAD)
 
     /**
      * 直近メッセージを消す。`shown` を渡すと**それがまだ表示中のときだけ**消す（compare-and-clear）。

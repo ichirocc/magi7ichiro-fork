@@ -89,6 +89,23 @@ class V6PortAnalyzerTest {
         cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
     )
 
+    // [3.642.0/UX監査 高1] 玉突きが実在する枠は chainVerified を値として持ち、複数人の手順を取り出せる
+    @Test
+    fun chainVerifiedShortfallYieldsAMultiPersonChainFix() {
+        val state = cascadeChainState(cWished = false)
+        val sf = V6PortAnalyzer.diagnoseCoverage(state).shortfalls.single { it.shiftIndex == 1 }
+        assertTrue("玉突きが実在する枠は値として持つ", sf.chainVerified)
+        val sched = state.schedule.map { it.toIntArray() }.toTypedArray()
+        val ops = V6PortAnalyzer.chainFixOps(cachedProblem(state), sched, sf.shiftIndex, sf.dayIndex)
+        assertTrue("手順が取り出せる", ops != null)
+        assertTrue("複数人の入替（2コマ以上）", ops!!.size >= 2)
+        val work = sched.copy2D()
+        for (op in ops) work[op.staff][op.day] = op.toShift
+        val before = UnifiedViolationChecker.check(state, sched)
+        val after = UnifiedViolationChecker.check(state, work)
+        assertTrue("手順を適用すると人員不足が減る", (after.breakdown["covU"] ?: 0) < (before.breakdown["covU"] ?: 0))
+    }
+
     @Test
     fun diagnoseCoverageConfirmsCascadeWhenChainActuallyResolves() {
         val diag = V6PortAnalyzer.diagnoseCoverage(cascadeChainState(cWished = false))
@@ -419,6 +436,34 @@ class V6PortAnalyzerTest {
         assertTrue("玉突き連鎖の実在を実証したうえで escapable",
             run.cells.any { it.escape == ForbiddenCellEscape.CHAIN })
         assertTrue(run.hint.contains("玉突き") || run.hint.contains("隣接日"))
+    }
+
+    // [3.643.0/根拠の精度] 壁の「証明相当（全セル希望固定）」と「探索手の全滅（経験的）」を値で区別する
+    @Test
+    fun forbiddenRunCertificateIsOnlyTheAllWishPinnedRun() {
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
+        val staff = listOf(Staff("s0", 0), Staff("s1", 0))
+        val exhausted = forbiddenState(schedule = listOf(listOf(1, 1), listOf(0, 0)), cons3n = listOf(C3Row(listOf("P", "P"))),
+            wishes = mapOf("1,0" to 0, "1,1" to 0), shifts = shifts, staff = staff)
+        val d1 = V6PortAnalyzer.diagnoseForbiddenRuns(exhausted)
+        assertTrue(d1.allBlocked)
+        assertFalse("受け皿なしの壁は証明相当ではない", d1.allBlockedCertified)
+        val pinned = forbiddenState(schedule = listOf(listOf(1, 1)), cons3n = listOf(C3Row(listOf("X", "X"))), wishes = mapOf("0,0" to 1, "0,1" to 1))
+        val d2 = V6PortAnalyzer.diagnoseForbiddenRuns(pinned)
+        assertTrue(d2.allBlocked)
+        assertTrue("全セル希望固定の壁は証明相当", d2.allBlockedCertified)
+    }
+
+    // [3.643.0/根拠の精度] 1 手探索の反証: 受け皿なしの壁には手が無く、玉突きが実在する盤面では必須を減らす手が見つかる
+    @Test
+    fun oneMoveRefutationFindsAMoveOnlyWhereHardCanDrop() {
+        val shifts = listOf(Shift("休", "休", "", "", com.magi.app.model.ShiftRole.Rest), Shift("P", "P", "1", ""), Shift("Q", "Q", "", ""))
+        val staff = listOf(Staff("s0", 0), Staff("s1", 0))
+        val wall = forbiddenState(schedule = listOf(listOf(1, 1), listOf(0, 0)), cons3n = listOf(C3Row(listOf("P", "P"))),
+            wishes = mapOf("1,0" to 0, "1,1" to 0), shifts = shifts, staff = staff)
+        assertFalse("受け皿なしの壁に手は無い", V6PortAnalyzer.c3nWallRefutedByOneMove(wall, wall.schedule.toIntArray2D()))
+        val open = forbiddenState(schedule = listOf(listOf(1, 1), listOf(0, 0)), cons3n = listOf(C3Row(listOf("P", "P"))), shifts = shifts, staff = staff)
+        assertTrue("玉突きが実在する盤面では必須を減らす手がある", V6PortAnalyzer.c3nWallRefutedByOneMove(open, open.schedule.toIntArray2D()))
     }
 
     // 同じ局面で唯一の受け皿 s1 が両日とも休へ希望固定されると連鎖が実在しなくなり、

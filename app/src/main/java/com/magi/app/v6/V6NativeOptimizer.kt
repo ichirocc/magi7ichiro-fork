@@ -81,6 +81,7 @@ data class V6OptimizerResult(
     //   協調キャンセルを待つ間など）別の実行の値を読み得た。採用盤面は元から返り値で流れるので
     //   **誤った勤務表にはならない**が、「他の案」「残存分析」「ライブ表示」が混ざり得た。
     val alternatives: List<Array<IntArray>> = emptyList(),
+    /** HF63 が充足困難と学習した族の**内部キー**（c3n 等。表示名 C3n ではない）。残存分析の注記の履歴にだけ使い、族の分類には使わない（3.642.0）。 */
     val infeasibleFamilies: Set<String> = emptySet(),
     /** [3.601.0/backlog#34] `runAdaptivePortfolio`のロールがroleDeadlineを5秒超えて戻った回数の合計
      *  （`epochOverruns`と同じ判定を全ワーカー分集計）。PORTFOLIO以外は常に0。既存の`overrunLog`は
@@ -233,9 +234,12 @@ object V6NativeOptimizer {
      * ①kill 復旧用スナップショット(`magi_bg_best.json`)が最良より劣る盤面になり進捗を捨てる
      * ②ライブ表示の数字と盤面が食い違う、の2点。
      */
-    private class LiveBestSnapshot(val report: ViolationReport, val board: List<List<Int>>)
+    internal class LiveBestSnapshot(val report: ViolationReport, val board: List<List<Int>>)
 
     private val liveBestRef = java.util.concurrent.atomic.AtomicReference<LiveBestSnapshot?>(null)
+
+    /** 報告（評価）と盤面を 1 回の読みで取る。壁判定はこの 1 組で行う（別々に読むと対応がずれる）。 */
+    internal val liveBestSnapshot: LiveBestSnapshot? get() = liveBestRef.get()
 
     /** [敵対的レビュー修正] liveBest を真にグローバルな最良のときだけ更新する。呼出元のローカル
      *  best/report が既存の liveBest より劣る/同値なら何もしない＝退行を防ぐ。 */
@@ -1927,7 +1931,7 @@ object V6NativeOptimizer {
             // [HF361/528/541移植] EarlyChain: Web 内部V5の停滞(reheat)フック(L11705-)に対応する RSI ラウンド境界で発火
             //   Chain3/4 は常時、Rect/BlkN は optFlags.rectSwap(既定ON)に従う — Web 呼出順 e3/e4/e5/e6 と同一。
             run {
-                val lr = V6LateOperators.improve(state, candSched, candReport, rng, started + budgetSec * 1000L, rectEnabled = options.rectSwap, quantitativeRangeEval = options.quantitativeRangeEval)
+                val lr = V6LateOperators.improve(state, candSched, candReport, rng, started + budgetSec * 1000L, rectEnabled = options.rectSwap, quantitativeRangeEval = options.quantitativeRangeEval, shouldStop = shouldStop)
                 if (lr.chain3 + lr.chain4 + lr.rect + lr.blkN > 0 && p.keepsExtBan(candSched, lr.schedule)) {
                     candSched = lr.schedule
                     candReport = lr.report
@@ -1995,7 +1999,7 @@ object V6NativeOptimizer {
         }
         // [3.288.0/ログ強化=状態軸] このRSI実行でHF63が「構造的に充足困難」と学習した族を実行横断で集約
         //   （エピローグの残存分析行が読む。ワーカー並行呼出があるため synchronized 集約）。
-        recordInfeasibleScoped(hf63.infeasibleFamilies())
+        recordInfeasibleScoped(hf63.infeasibleBreakdownKeys())
         return V6OptimizerResult(best, bestReport.copy(logs = logs + bestReport.logs), V6Algorithm.RSI, logs, iters, nowMs() - started)
     }
 
@@ -2043,7 +2047,7 @@ object V6NativeOptimizer {
         var bestSched = best.schedule
         // [HF361/528/541移植] EarlyChain: Refine 確定後の停滞境界で Chain3/4(常時)+Rect/BlkN(rectSwap)を発火
         run {
-            val lr = V6LateOperators.improve(state, bestSched, best.report, Random(actualSeed(options.seed) xor 0x528L), started + budgetSec * 1000L, rectEnabled = options.rectSwap, quantitativeRangeEval = options.quantitativeRangeEval)
+            val lr = V6LateOperators.improve(state, bestSched, best.report, Random(actualSeed(options.seed) xor 0x528L), started + budgetSec * 1000L, rectEnabled = options.rectSwap, quantitativeRangeEval = options.quantitativeRangeEval, shouldStop = shouldStop)
             val fired = lr.chain3 + lr.chain4 + lr.rect + lr.blkN > 0
             // [監査#1] Chain3/4の受理(gateW)はweighted単層でHARD増を相殺受理し得るため、採用は
             //   runRsiと同じ better(hard→weighted→total) でゲートする（素通しでHARD悪化を最終出力しない）。

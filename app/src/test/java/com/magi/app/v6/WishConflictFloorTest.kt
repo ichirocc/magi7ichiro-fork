@@ -113,6 +113,10 @@ class WishConflictFloorTest {
         assertTrue(res.logs.joinToString("\n") { it.message }, res.logs.any { it.tag == "EarlyStop" && it.message.contains("希望衝突の床に到達＝E0B") })
         assertTrue(res.logs.any { it.tag == "Watchdog" && it.message.contains("希望衝突の床1=到達") })
         assertTrue(res.logs.any { it.tag == "Watchdog" && Regex("入力超えの最終改善=(なし|経過\\d+s)・").containsMatchIn(it.message) })
+        // [3.643.0] 画面の説明へ渡す終わり方の要約は Watchdog 行と同じ種別＝希望衝突の床で早期終了
+        assertEquals(V6FinalPort.StopKind.WISH_FLOOR, res.stop?.kind)
+        assertTrue(res.stop!!.earlyStop)
+        assertTrue(res.logs.any { it.tag == "StopSummary" && it.message.contains("WISH_FLOOR") })
         assertTrue("早く返す: ${ms}ms", ms < 55_000)
     }
 }

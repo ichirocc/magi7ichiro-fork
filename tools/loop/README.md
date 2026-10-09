@@ -44,6 +44,14 @@
   本計算の盤面で必須違反に関わる希望を 1 件ずつ外し、短い試算（配置固定・1手探索・短い最適化・短い後処理）の必須件数と、
   同じ希望を外した本計算（正解）・外さずにやり直した本計算（G0）を比べる。壁時計予算なので値は負荷で揺れる。
 - **HARD 残存の分類（2026-10-03）**: `tools/loop/run_hard_residual_probe.sh <dir> fixtures 60,120 1,2,3`（`HardResidualProbe.kt`、合成は `synth:<id の一部>`）。
+- **経験的な c3n 壁の探索（2026-10-09、3.643.0 手順②）**: `tools/loop/run_wall_fixture_probe.sh <dir> [id の部分一致=""] [seed 変種=3] [予算秒=4] [方式=AUTO]`（`WallFixtureProbe.kt`）。合成ケース（`Cases.specs`）を短い予算で最適化し、最終盤面の禁止連続を `diagnoseForbiddenRuns` で診断。全セル塞がり（`allBlocked`）かつ希望固定でない（`!allBlockedCertified`）盤面を `wall_<id>_{refuted|confirmed}_state.json` に書く（refuted＝`c3nWallRefutedByOneMove` が必須を減らす手を見つけた＝`c3nWallDeepCheck` の計測に使える盤面）。`wall_probe.csv` に全ケースの hard・内訳・各セルの逃げ道（FR/CH/AD/PI/BL）。
   最終盤面の HARD を族・職員・日で並べ、既存の床（`structuralHardFloor`・`wishConflictFloorParts`・`ForbiddenDiag`・`PreRunCheck`）で分類し、
   床を超えた盤面に `FixSuggester`/`ViolationComponentRepair` を当てる。厳密な最小 HARD は `HardFloorExport.kt`（export/verify）＋
   `hard_floor_cpsat.py`（ortools、置ける範囲は mayPlace と canDo の 2 通り。解は checker で照合）。結果は `docs/history/3.4xx.md`。
+
+## HandleOptimizeBench（`run_handleoptimize_bench.sh`）の腕と集計（3.641.0〜3.643.0）
+
+- `MAGI_HO_FEATURE`: 空＝ExtraRefine 省略の A/B。`c3nwall`＝c3n 壁の短縮を外す。`head`＝HEAD の壁判定と試行中の停止確認を切る。`deep`＝経験的な c3n 壁を 1 手探索で反証する（`PolishGate.c3nWallDeepCheck`）。`adaptive`＝適応閾値（`PolishGate.adaptiveStall`、通常分岐を直近の改善間隔の最大×3 まで縮める。2026-10-09 に否決）。
+- `MAGI_HO_FIXTURES`（カンマ区切り）、`MAGI_HO_SEEDS`（seed の列）、`MAGI_HO_REPEATS`（同じ seed・同じ腕の反復。CSV 末尾に `rep` 列）、`MAGI_HO_LOGTAGS`＋`MAGI_HO_LOGFILE`（Watchdog・EarlyStop などのエンジンログを run ごとに追記）。
+- 集計: `python3 tools/loop/ho_stats.py results/x.csv [results/y.csv ...] [--metric total]`。差は off−on（正＝既定が悪い）。平均・95% ブートストラップ区間・符号検定・rep 間の揺れ（プール SD と最大範囲）・決定／未決と、区間を 0 から外すのに要る対の数を出す。
+- 規則: 腕の差を読む前に、同じ seed・同じ腕の揺れを測る。workers 4 は壁時計に依存し、seed を固定しても軌跡が変わる（2026-10-08 の診断で weighted ±100〜325、停止時刻 ±215 s）。区間が 0 を含むなら未決とし、既定を動かさない。

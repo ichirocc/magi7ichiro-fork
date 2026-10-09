@@ -96,7 +96,7 @@
 14. **重み・時間配分の外部分析（2026-09-08、ユーザー提示。最新 main とログ 10 本の傾向）＝適応制御として導入しペア比較で採否**:
     (a) C1 共同 LNS・個人共同 LNS を「短時間試行→改善時だけ拡張」（3.510.2 で `lnsAdaptive` 実装・iter9: 退行 0・品質 ±0・速度 平均 +10%/実データ −23%/中央値 −1.5%＝規則上不合格。**→ 3.514.0/3.518.0 で既定 ON**（`PolishGate.lnsAdaptive = true`、画面トグルあり）。
         ログでは両 LNS が後処理時間の 75〜91% を占め採用 0／(b) 後処理 4 巡→基本 2 巡・採用時だけ最大 4／固定長ブロック交換（11/13/17/19/23/28 日）を違反窓長・禁止連長・希望島半径からの動的窓へ＝3.511.0 `dynamicBlockLengths` 実装・iter12 で**不合格**（大・充足不能ケースで必須+1、既定OFF維持。単一パスのkeep-bestがチェーン全体を保証しない経路依存）／
-    (d) C2・C41/C41s を不足量・超過量評価へ（評価仕様変更＝#12(a)）＝3.512.0で`Problem.quantitativeRangeEval`として全層実装済み・既定OFF、
+    (d) C2・C41/C41s を不足量・超過量評価へ（評価仕様変更＝#12(a)）＝3.512.0で`Problem.quantitativeRangeEval`として実装・既定OFF（3.642.0 で統合段 `EliteIntegrationPolish` への伝達漏れを修正＝それまで統合の採点は二値評価だった。「全層」と書いたのは過大だった）、
         iter21で**不合格**（170ペア新良5/同等153/旧良12、品質±0.00%・速度-1.1%とも10%未達、必須件数が増えた試行6件はlarge-infeasible
         カテゴリのみ〈平均122.00→122.60、供給不足枠で不足量評価が異なる手を選ぶ〉、既定OFF維持）／(e) apt・fair・weekly は重みを変えず辞書式の副目的（apt 偏差→fair 最大偏差→weekly 最大偏差→偏差合計→変更セル数）で比較（採用基準の変更＝決定待ち）／
     (f) low と c3m の A/B（提示時は low=90→60・c3m=2。現行は `MirrorKeys.weights` で low=120・c3m=6＝3.522.0/3.556.0。HF77: 明示数値の指示があれば）。low の値自体より「一時的に low を悪化させ同一トランザクション内で戻す複合手」を先に強化／
@@ -711,3 +711,9 @@
     ①runV5 NARROW（生 SA 盤面は探索内でだけ使い、最終候補にしない）: 未実装・ログ上の根拠なし。
     ②ExtraRefine の空振り対策: `extraRefineRequirePostHardDrop` は測定済み＝既定 OFF 維持（端末盤面で発火せず節約 0s）。
     進めるなら `isStructuralHardResidual` の c3w 証明を wishOn に依らず数え、端末水準の盤面で A/B（節約上限 10〜14s）。
+44. **[停滞脱出の既定 OFF 機構・2026-10-09 登録]** 採否が未決のまま残る機構（詳細は `docs/stall_escape.md` §5.8・§10・§11）:
+    ①`PolishGate.c3nWallDeepCheck`（根拠の段階化、PROPOSAL B）: 計測不能＝経験的で反証できる c3n 壁のフィクスチャが実データ 4 件・合成 174 盤面に無い。
+    画面の説明が「禁止の並びで、1 マスの変更・玉突き・隣の日の調整では崩せませんでした」（StopSummary の C3N_WALL_EMPIRICAL）を出した実機の盤面 JSON が手に入ったら
+    `MAGI_HO_FEATURE=deep` で測る。②PROPOSAL A（追加待機 M）: 未実装。両端（M=0／M=normal−short）は 3.641.0 で非有意＝実装の優先度は低い。
+    ③`PolishGate.adaptiveStall`（適応閾値、PROPOSAL C）: 120 s・blocked_covu で既定が良く否決（2026-10-09）。腕は残置。再提案は係数・窓・予算を変えた計測つきで。
+    ④`wishConflictFloorMode` E0A/E0B（#42(b)）: 端末 300 s での実データ A/B 待ち（ホスト A/B は 2026-10-01 済）。
