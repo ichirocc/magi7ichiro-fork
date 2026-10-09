@@ -44,6 +44,10 @@
   本計算の盤面で必須違反に関わる希望を 1 件ずつ外し、短い試算（配置固定・1手探索・短い最適化・短い後処理）の必須件数と、
   同じ希望を外した本計算（正解）・外さずにやり直した本計算（G0）を比べる。壁時計予算なので値は負荷で揺れる。
 - **HARD 残存の分類（2026-10-03）**: `tools/loop/run_hard_residual_probe.sh <dir> fixtures 60,120 1,2,3`（`HardResidualProbe.kt`、合成は `synth:<id の一部>`）。
+- **取り逃し監査（2026-10-09、3.652.0、測定のみ）**: `tools/loop/run_missed_move_probe.sh <out.csv> [seeds=1] [maxLen=7] [ケース名の部分一致=""] [mode=det|ho] [秒=120] [workers=4]`（`MissedMoveProbe.kt`）。
+  実データ 5 件の最終盤面で、N1＝1 セルの変更・N2＝同じ日の 2 人の入れ替え・N3＝2 人の連続 2〜maxLen 日の交換を全列挙し、正式な採否（`betterReport`）で
+  改善になる手の数・最良の手・違反セルに当たる手（anchored）を CSV に書く。固定条件は最適化器と同じ（`wishLocked`・`mayPlaceAt`）。盤面は mode=ho＝本番の入口
+  `handleOptimize`（時間制）、det＝LoopBench と同じ決定論モード（回数上限で切れるので取り逃しが多めに出る＝判定は ho で読む）。時間制なので計測中は他の重い処理を走らせない。
 - **経験的な c3n 壁の探索（2026-10-09、3.643.0 手順②）**: `tools/loop/run_wall_fixture_probe.sh <dir> [id の部分一致=""] [seed 変種=3] [予算秒=4] [方式=AUTO]`（`WallFixtureProbe.kt`）。合成ケース（`Cases.specs`）を短い予算で最適化し、最終盤面の禁止連続を `diagnoseForbiddenRuns` で診断。全セル塞がり（`allBlocked`）かつ希望固定でない（`!allBlockedCertified`）盤面を `wall_<id>_{refuted|confirmed}_state.json` に書く（refuted＝`c3nWallRefutedByOneMove` が必須を減らす手を見つけた＝`c3nWallDeepCheck` の計測に使える盤面）。`wall_probe.csv` に全ケースの hard・内訳・各セルの逃げ道（FR/CH/AD/PI/BL）。
   最終盤面の HARD を族・職員・日で並べ、既存の床（`structuralHardFloor`・`wishConflictFloorParts`・`ForbiddenDiag`・`PreRunCheck`）で分類し、
   床を超えた盤面に `FixSuggester`/`ViolationComponentRepair` を当てる。厳密な最小 HARD は `HardFloorExport.kt`（export/verify）＋
