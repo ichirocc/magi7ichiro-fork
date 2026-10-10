@@ -15,7 +15,7 @@ class ChainFixPreviewTest {
 
     @Test fun listsEveryChangeWithBeforeAndAfter() {
         val p = chainFixPreview(s(listOf("covU" to -1, "covO" to 1)), snap, listOf("甲", "乙", "丙"), listOf("休", "日", "夜"), "2026-10-01")
-        assertEquals("複数人の入れ替え（3 人・3 セル）", p.title)
+        assertEquals("複数人の入れ替え", p.title)
         assertEquals(listOf("甲 10/3 日 → 夜", "丙 10/3 休 → 日", "乙 10/1 日 → 夜"), p.changes)
         assertEquals("必須違反: 1件減る", p.hardLine)
         assertEquals("増える要調整: 人員過剰 +1", p.caution)

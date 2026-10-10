@@ -59,11 +59,11 @@ fun DeleteRowButton(onClick: () -> Unit, enabled: Boolean = true, text: String =
     ) { Text(text) }
 }
 
-/** フォーム系ダイアログの統一ヘッダー: タイトル＋右上に閉じる(✕)。閉じる操作を画面上部にも置き発見性を上げる。 */
+/** フォーム系ダイアログの統一ヘッダー: タイトル＋右上に閉じる(✕)。閉じる操作を画面上部にも置き発見性を上げる。[compact] は長い題を一段小さい字に（途中で折り返さない）。 */
 @Composable
-fun DialogHeader(title: String, onClose: () -> Unit) {
+fun DialogHeader(title: String, onClose: () -> Unit, compact: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        Text(title, style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
         IconButton(onClick = onClose) {
             Icon(Icons.Filled.Close, contentDescription = "閉じる")
         }

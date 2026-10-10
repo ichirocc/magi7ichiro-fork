@@ -1199,6 +1199,9 @@ object V6FinalPort {
                 val p = cachedProblem(state)
                 (0 until p.S).sumOf { i -> (0 until p.T).count { j -> p.pin[i][j] >= 0 && p.extBanned(i, j, finalSched[i][j]) } }
             }.getOrDefault(0)
+            // 回避の並び（c3mn）が希望だけでできている窓も、希望を取り消すまで残る（要調整）。
+            val avoidSelf = runCatching { V6SanityPort.wishAvoidSoft(cachedProblem(state), finalSched) }.getOrDefault(0)
+            var avoidShown = 0
             val selfConflictShown = ArrayList<Pair<String, Int>>()
             for (key in MirrorKeys.all) {
                 val n0 = bd[key] ?: 0
@@ -1211,16 +1214,19 @@ object V6FinalPort {
                 if (structural != null) { walls.add("$key ${n0}件($structural)"); continue }
                 val self = minOf(n0, selfConflict[key] ?: 0)
                 if (self > 0) selfConflictShown.add(key to self)
+                if (key == "c3mn") avoidShown = minOf(n0, avoidSelf)
                 val n = when (key) {
                     "weekly" -> n0 - weeklyWall
                     "covU" -> n0 - covUWall
                     "extWish" -> n0 - minOf(n0, extPinned)
+                    "c3mn" -> n0 - avoidShown
                     else -> n0
                 } - self
                 if (n > 0) open.add("$key ${n}件")
             }
             if (selfConflictShown.isNotEmpty()) walls.add("希望と禁止の衝突 ${selfConflictShown.sumOf { it.second }}件(" +
                 selfConflictShown.joinToString("・") { "${it.first} ${it.second}" } + "＝希望を1件取り消すまで解消しない)")
+            if (avoidShown > 0) walls.add("希望どうしの回避の並び c3mn ${avoidShown}件(希望を1件取り消すまで解消しない)")
             if (covUWall > 0) {
                 // 床が全部を覆うときだけ従来どおり「構造的下限」（供給不足）と名乗る。それ以外は
                 //   「担当者は居るが いまの希望では動かせない」＝データ側で希望を1件調整すれば動きうる、を明示。

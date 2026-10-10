@@ -118,6 +118,7 @@
   集計名は 1 件の組も含むので「どうし」と言わない。
   盤面の件数（`wishConflictHard`、3.613.0）は report.hard と同じ単位＝成立している衝突の窓（cons3n の行ごと・窓ごと）と c3w のセル、衝突の区間の希望を崩したセル（pref）。HF70・残存分析・E0 の到達判定が同じ関数を読む。
   盤面に依らない下限（`wishConflictFloorParts`＝希望衝突の床）は職員ごとに「崩すセル数＋残る区間数」の最小（重なる窓は真ん中の 1 件で両方解ける）＋上限 0 に頼らない日の証明の日数。構造的 covU の床（`structuralHardFloor`）とは別。探索に使うのは既定 OFF の `PolishGate.wishConflictFloorMode`（E0、測定中）だけ。
+- **希望だけでできた回避の並び（`V6SanityPort.wishAvoidRuns`、3.658.0）**：回避の並び（`cons3mn`、要調整）の窓の全セルが希望固定で、その並びどおりの勤務（例: 休の希望 3 連日×回避「休→休→休」）。必須ではないので上の衝突には入れず、設定の見直しに案内（`neutral`）を 1 件出し、残存分析は「もう直せない」へ数える（`wishAvoidSoft`＝盤面で成立している窓の数）。旧: 案内が無く、残存分析は「まだ狙える」に入れていた（利用者「制約の回避違反がある理由を教えて下さい」）。
 - **つくる前の確認（`v6/PreRunCheck`、2026-09-28 利用者決定）**：本実行の入口（`MagiViewModel.runV6FullOptimize`＝フッター・ホーム・イベントの 5 経路が通る 1 点。S5 の確定と中断の再開は通さない）で数える。表示・導線だけ＝探索・評価・重みは不変、希望の取り消しも上限の変更も自動ではしない（HF77）。
   「何度つくっても残る」＝①希望どうしの衝突（上の `wishSelfConflicts`、c3n/c3w）②反映できない希望（`detectImpossibleWishes`）③配布不可（`forcedCovU`）④証明つきの矛盾で**コアに希望を含むもの**（`ConstraintMus.analyzeDayConflicts`＝日の必要人数と固定希望、`analyzeStaffConflicts`＝本人の希望と条件の組合せ。設定ミス診断 9 と同じ判定、シートは上位 3 件に絞らず全件）。④の日の証明と③は上限 0（`mayPlace`）込みで判定するので、`dayProofsWithoutZeroCap` で立たない日・コアに `RangeCap(hi=0)` を含むスタッフの証明・`canDo` で数えると不足が減る配布不可は「入れない指定が絡む」と印を付け、S6 へ案内する（G3、2026-09-29。判定のみ・評価は不変）。設定ミス診断 7（担当者不足）も同じ判定 `V6SanityPort.zeroCapInShortfall` が真のときだけ「個人の上限0（入れない指定）が関係しています。見直すときは設定で変えてください」を添える（件数は不変）。
   「再作成すると外れる」＝手で置いた個人の上限 0 の勤務（希望で固定したセルを除く＝`handPlacedUpperZeroIssue` と同じ判定、`RelaxTrial.handPlaced` と同じ組）。本実行の入口の clear が外す。
