@@ -25,6 +25,7 @@ class WishSelfConflictTest {
         schedule: List<List<Int>> = List(2) { List(7) { a } },
         cons3n: List<C3Row> = listOf(C3Row(listOf("休", "休", "休"))),
         cons3w: List<C3wRow> = emptyList(),
+        cons3mn: List<C3Row> = emptyList(),
     ) = MagiState(
         startDate = "2026-10-01", endDate = "2026-10-07",
         shifts = listOf(Shift("休", "休", "", "", ShiftRole.Rest), Shift("Dﾃ", "Dﾃ", "", ""), Shift("A", "A", "", "")),
@@ -32,7 +33,7 @@ class WishSelfConflictTest {
         use2Patterns = false, groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = emptyList(),
         schedule = schedule, wishes = wishes, staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
         cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = cons3n, cons3m = emptyList(),
-        cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(), cons3w = cons3w,
+        cons3mn = cons3mn, cons41 = emptyList(), cons42 = emptyList(), cons3w = cons3w,
     )
 
     private val restWindow = mapOf("0,2" to 0, "0,3" to 0, "0,4" to 0)
@@ -82,6 +83,24 @@ class WishSelfConflictTest {
         val msg = HfSwapPolish.detectHF70Anomalies(st, sched, "t").message
         assertTrue(msg, msg.contains("希望と禁止の衝突 1 件"))
         assertFalse(msg, msg.contains("希望以外HARD"))
+    }
+
+    /** 回避の並び（要調整）の窓がまるごと希望＝必須の衝突には入れず、案内（neutral）と残存分析の数だけに出す（実機: 休の希望 3 連日×回避「休→休→休」）。 */
+    @Test fun avoidWindowFullyWishedIsGuidanceNotAHardConflict() {
+        val st = state(restWindow, cons3n = emptyList(), cons3mn = listOf(C3Row(listOf("休", "休", "休"))))
+        assertTrue(V6SanityPort.wishSelfConflicts(st).isEmpty())
+        val runs = V6SanityPort.wishAvoidRuns(cachedProblem(st))
+        assertEquals(listOf(listOf(2, 3, 4)), runs.map { it.days })
+        assertEquals("c3mn", runs[0].family)
+        val issue = V6SanityPort.buildGuidance(st).single { it.problem.contains("回避の並び") }
+        assertTrue(issue.neutral)
+        assertEquals("大島 10/3(土)・10/4(日)・10/5(月) 希望「休→休→休」", issue.where)
+        assertEquals("回避の並び「休→休→休」に希望どうしで当たっています。希望は固定なので計算では外せず、要調整として残ります", issue.problem)
+        assertEquals("いずれか1件の希望を取り消すか、回避の並び「休→休→休」を見直してください", issue.fix)
+        val held = arrayOf(intArrayOf(a, a, rest, rest, rest, a, a), IntArray(7) { a })
+        assertEquals(1, V6SanityPort.wishAvoidSoft(cachedProblem(st), held))
+        val broken = arrayOf(intArrayOf(a, a, rest, a, rest, a, a), IntArray(7) { a })
+        assertEquals(0, V6SanityPort.wishAvoidSoft(cachedProblem(st), broken))
     }
 
     @Test fun windowWithOneFreeCellIsNotASelfConflict() {

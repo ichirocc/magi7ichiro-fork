@@ -238,6 +238,24 @@ object V6SanityPort {
         return out
     }
 
+    /** 回避の並び（c3mn・要調整）の窓がまるごと希望で固定され、その並びそのものになっているもの（盤面に依存しない、family="c3mn"）。
+     *  希望を 1 件取り消すか回避の並びを見直すまで残る。必須ではないので [wishSelfConflicts]（必須の衝突）とは分ける（設定の案内・残存分析が共有）。 */
+    fun wishAvoidRuns(p: Problem): List<WishSelfConflict> {
+        val out = ArrayList<WishSelfConflict>()
+        for (i in 0 until p.S) for (c in p.cons3mn) {
+            val d = c.seq.size
+            if (d == 0 || d > p.T) continue
+            for (j in 0..p.T - d) {
+                if ((0 until d).all { l -> p.wishFixed(i, j + l) && p.wish[i][j + l] == c.seq[l] }) out.add(WishSelfConflict(i, "c3mn", (j until j + d).toList(), c.seq.toList()))
+            }
+        }
+        return out
+    }
+
+    /** [wishAvoidRuns] のうち盤面で成立している窓の数（報告の c3mn と同じ単位＝窓ごとに 1）。 */
+    fun wishAvoidSoft(p: Problem, schedule: Array<IntArray>): Int =
+        wishAvoidRuns(p).count { g -> g.days.all { j -> schedule.getOrNull(g.staff)?.getOrNull(j) == p.wish[g.staff][j] } }
+
     /** 希望どうしの衝突が生む HARD の区間（report.hard の単位＝cons3n は行ごと・窓ごとに 1、c3w はセルごとに 1）。
      *  c3n＝窓の全セルが希望で固定され禁止の並びそのもの、c3w＝希望 Y で固定したセル（翌日の希望 X が禁じる）。 */
     private data class WishHardSpan(val staff: Int, val from: Int, val to: Int, val family: String)
@@ -585,6 +603,15 @@ object V6SanityPort {
                     "${nameOf(g.staff)} ${g.days.joinToString("・") { safeDayLabel(state.startDate, it) }} 希望「$seq」",
                     "禁止の並び「$seq」に${if (one) "希望が" else "希望どうしで"}当たっています。希望は固定なので計算では解消できません",
                     "${if (one) "この希望" else "いずれか1件の希望"}を取り消すか、禁止の並び「$seq」を見直してください"))
+            }
+            // 1d) 回避の並び(c3mn)の窓がまるごと希望固定。必須ではなく要調整として残る＝案内（neutral）。
+            for (g in wishAvoidRuns(p)) {
+                val seq = g.shifts.joinToString("→") { symOf(it) }
+                val one = g.days.size == 1
+                out.add(SettingIssue(IssueKind.WISH,
+                    "${nameOf(g.staff)} ${g.days.joinToString("・") { safeDayLabel(state.startDate, it) }} 希望「$seq」",
+                    "回避の並び「$seq」に${if (one) "希望が" else "希望どうしで"}当たっています。希望は固定なので計算では外せず、要調整として残ります",
+                    "${if (one) "この希望" else "いずれか1件の希望"}を取り消すか、回避の並び「$seq」を見直してください", neutral = true))
             }
         }
 

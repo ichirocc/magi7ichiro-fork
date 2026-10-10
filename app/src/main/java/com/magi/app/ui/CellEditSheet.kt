@@ -192,12 +192,6 @@ internal fun CellEditSheet(
                     }
                 }
                 if (mode == 0 && dilemma && dilemmaChoice != 2) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
-                        OutlinedButton(onClick = { dilemmaChoice = 2 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                            Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", textAlign = TextAlign.Center)
-                        }
-                    }
                     if (dilemmaChoice == 1) {
                         val focus = FixFocus(null, null, j, exceptStaff = i)
                         FixSearchPanel(ui, cv, focus, onEvent, fixNav, onApplied = {}, compact = true)
@@ -293,6 +287,13 @@ internal fun CellEditSheet(
                 }
             }
             val showGrid = mode == 1 || !dilemma || dilemmaChoice == 2
+            // 板挟みの選択肢はシフトボタンの場所（固定部）に置く。上の読むところは縦に送るので、そこに置くと長いとき画面の外に隠れて割り当てられなかった。
+            if (!showGrid) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (dilemmaChoice == 0) Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
+                OutlinedButton(onClick = { dilemmaChoice = 2 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", textAlign = TextAlign.Center)
+                }
+            }
             if (showGrid) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou) { fixNav.onWishes(i, j) }
                 cellSheetSlots(shown, canDoSet, leftHand).forEach { row ->

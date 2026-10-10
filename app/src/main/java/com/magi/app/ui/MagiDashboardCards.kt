@@ -304,14 +304,14 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
-        // 第 2 の操作は主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。
+        // 第 2 の操作と「やめる」も主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。dismiss の枠に分けると横に入り切らず重なった。
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DialogConfirmButton("この入れ替えを当てる", onClick = onApply)
                 ConsultButton(consulted, Modifier, onConsult)
+                DialogDismissButton(onClick = onDismiss, text = "やめる")
             }
         },
-        dismissButton = { DialogDismissButton(onClick = onDismiss, text = "やめる") },
     )
 }
 

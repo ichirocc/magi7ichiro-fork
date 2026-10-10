@@ -1076,9 +1076,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         DialogConfirmButton("希望シフト", onClick = { vm.importWishesCsv(csvText); pendingCsvImport = null })
                         DialogConfirmButton("各制約", onClick = { vm.importConstraintsCsv(csvText); pendingCsvImport = null })
                         DialogConfirmButton("シフト色", onClick = { vm.importShiftColorsCsv(csvText); pendingCsvImport = null })
+                        // キャンセルも同じ列の最後に（dismiss の枠に分けると、縦に積んだ列と横に並べられて重なる）。
+                        DialogDismissButton(onClick = { pendingCsvImport = null })
                     }
                 },
-                dismissButton = { DialogDismissButton(onClick = { pendingCsvImport = null }) },
             )
         }
         ui.csvPartialPrompt?.let { prompt ->
@@ -1105,9 +1106,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false) { showImportGuidance = true }; rosterCsvChoice = null })
                         DialogConfirmButton("希望シフトとして取り込む", onClick = { vm.importRosterAs(csvText, true) { showImportGuidance = true }; rosterCsvChoice = null })
+                        DialogDismissButton(onClick = { rosterCsvChoice = null })
                     }
                 },
-                dismissButton = { DialogDismissButton(onClick = { rosterCsvChoice = null }) },
             )
         }
         if (wishConfirm > 0) {
@@ -1124,9 +1125,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DialogConfirmButton("担当内のみ反映", onClick = { vm.applyWishes(false); wishConfirm = 0 })
                         DialogConfirmButton("含めて反映", onClick = { vm.applyWishes(true); wishConfirm = 0 })
+                        DialogDismissButton(onClick = { wishConfirm = 0 })
                     }
                 },
-                dismissButton = { DialogDismissButton(onClick = { wishConfirm = 0 }) },
             )
         }
     }

@@ -21,6 +21,6 @@ internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffN
         "${name(op.staff)} ${DayText.short(startDate, op.day)} ${before?.let { sym(it) } ?: "?"} → ${sym(op.toShift)}"
     }
     val (hard, caution) = fixImpactLines(s)
-    val people = s.ops.map { it.staff }.distinct().size
-    return ChainFixPreview(s, "複数人の入れ替え（$people 人・${s.ops.size} セル）", changes, hard, caution)
+    // 人数・マス数は本文 1 行目（提案のラベル）が持つ。題に入れると「（6 / 人・11 セル）」のように途中で折り返した。
+    return ChainFixPreview(s, "複数人の入れ替え", changes, hard, caution)
 }

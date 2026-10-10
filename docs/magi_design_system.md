@@ -243,14 +243,14 @@ data class DayCell(val day: Int, val pills: List<ShiftPill>, val hasViolation: B
 
 ### 4.14 ポップアップ共有部品 ✅（`Affordance.kt`・全ダイアログ/シート/ピッカーの正典）
 ```kotlin
-@Composable fun DialogHeader(title: String, onClose: () -> Unit)          // タイトル＋右上✕
+@Composable fun DialogHeader(title: String, onClose: () -> Unit, compact: Boolean = false) // タイトル＋右上✕（compact＝長い題を titleMedium に）
 @Composable fun DialogConfirmButton(text: String, onClick: () -> Unit, enabled: Boolean = true) // 確定=塗り
 @Composable fun DialogDismissButton(onClick: () -> Unit, text: String = "キャンセル")            // 取消=枠線
 @Composable fun DialogDangerButton(text: String, onClick: () -> Unit, enabled: Boolean = true)  // 破壊的=⚠＋エラー色
 ```
 - **`DialogHeader`**: `Row[ Text(title, titleLarge, weight 1f) + IconButton(Close) ]`。フォーム系ダイアログ・ボトムシート・ピッカーのタイトルスロットに置き、ドラッグ不要の明示的な閉じる導線を上部に与える（no-drag方針）。単純な確認ダイアログ（削除の確認 等）には付けず素のタイトル。
 - **3ボタン**: いずれも `Modifier.heightIn(min = 48.dp)`。`AlertDialog` の `confirmButton`=右・`dismissButton`=左に割り当てることで、Material標準により**確定=右／取消=左**が全画面で固定。`DialogDangerButton` は `Icons.Filled.Warning`(18dp)＋エラー色で破壊的操作（削除/全リセット/すべて削除）に使用。
-- **規約**: ダイアログ/シートのボタンに生の `Button`/`TextButton` を直書きしない（左右逆・サイズ不揃い・危険色の付け忘れを防ぐ）。多択（CSV取込の5択等）は `DialogConfirmButton` を縦積みにし、選択肢に✓は付けない（選択であり確定ではない）。
+- **規約**: ダイアログ/シートのボタンに生の `Button`/`TextButton` を直書きしない（左右逆・サイズ不揃い・危険色の付け忘れを防ぐ）。多択（CSV取込の5択等）は `DialogConfirmButton` を縦積みにし、選択肢に✓は付けない（選択であり確定ではない）。縦積みのときは**取消も同じ列の最後に置き、`dismissButton` は使わない**（3.658.0: 縦積みの列と取消を 2 つの枠に分けると、取消が枠線ボタンで横に入り切らず、列の 2 段目と重なった＝実機の「複数人の入れ替え」の［相談してから決める］と［やめる］）。
 - **フォーム外殻 `W1Shell`**(`Ws1Editor.kt`): `AlertDialog`＋縦スクロール本文の共通殻。`DialogHeader`＋3ボタンを内包し、シフト/グループ/スタッフ/一括追加の各フォームで共有。
 - 適用: 全 `AlertDialog`（約10箇所）＋`W1Shell`（フォーム4種）＋ボトムシート2種（`ShiftPickerSheet`/`WishBulkSheet`）＋ピッカー（色/職員）＝**全ポップアップ**。
 

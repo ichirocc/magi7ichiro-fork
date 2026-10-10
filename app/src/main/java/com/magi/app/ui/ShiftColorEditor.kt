@@ -253,7 +253,8 @@ internal fun ColorPickerDialog(
         onDismissRequest = onClose,
         confirmButton = { DialogConfirmButton("閉じる", onClick = onClose) },
         dismissButton = { DialogDismissButton(onClick = onReset, text = "既定に戻す") },
-        title = { DialogHeader("「$kigou」の色", onClose) },
+        // 題の形は 3.550.0 のモック（「休」の色）。違反の種別名は長く「「要調整（基準色）」の / 色」と折り返したので、長い名前は一段小さい字にする。
+        title = { DialogHeader("「$kigou」の色", onClose, compact = kigou.length > 4) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
