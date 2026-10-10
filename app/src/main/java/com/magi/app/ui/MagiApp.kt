@@ -101,6 +101,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
@@ -210,7 +211,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var gridTopInContent by remember { mutableIntStateOf(-1) }   // 勤務表グリッドの上端（タブ本体のスクロール内容座標 px）
     var gridHInContent by remember { mutableIntStateOf(0) }      // 勤務表グリッドの高さ（px）。週送りで画面外のグリッドへ戻す判定に使う
     var prevTab by remember { mutableIntStateOf(-1) }
-    var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見）
+    var sheetExpanded by remember { mutableStateOf(false) }   // セル編集シートの全体表示（既定＝ちら見。希望の説明はちら見に出ないので、希望の行からは全体で開く）
     var oneHand by rememberSaveable { mutableStateOf(false) }
     var proMode by rememberSaveable { mutableStateOf(false) }   // [プロ編集] 表示モード（false=かんたん / true=プロ）
     // [通常セルの枠線] 違反の無いセルにも「分離」用の1dp輪郭を付けていた(3.397.0)が、常時表示は格子が
@@ -553,7 +554,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         snackbarHostState.currentSnackbarData?.dismiss()
         noticeShowingId = n.id
         try {
-            val r = snackbarHostState.showSnackbar(n.text, actionLabel = "元に戻す", duration = SnackbarDuration.Short)
+            val r = snackbarHostState.showSnackbar(n.text, actionLabel = if (n.undoable) "元に戻す" else null, duration = SnackbarDuration.Short)
             if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) vm.undoNotice(n)
         } finally {
             if (noticeShowingId == n.id) noticeShowingId = null
@@ -573,9 +574,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     val barMode = bottomBarMode(ui.loaded, tab == 1, editingCell != null, ui.running || ui.fixSearching, tourActive || schedNav.vioMode)
     Scaffold(
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
-        topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" }, onHardTour = {
-            if (tourItems.isNotEmpty()) goTourItem(0)
-        }) },
+        // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
+        topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" },
+            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null) },
         bottomBar = {
             Column {
                 when (barMode) {
@@ -724,7 +725,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         {
                             val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
                             val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
-                            HardListChip(ui.bestHard, rows, tourCovULine(ui.breakdown["covU"] ?: 0), onPick = goTourItem)
+                            HardListChip(ui.bestHard, rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
                         }
                     } else null
                     ScheduleToolsCard(ui, vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket, locCount = vioLocCount,
@@ -1030,7 +1031,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }
         ui.preRunCheck?.let { sum ->
             PreRunCheckSheet(sum, ui,
-                onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0 },
+                onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0; sheetExpanded = wish },
                 onOpenLanding = { l -> vm.dismissPreRun(); openEditLandingFrom(l, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
                 onConsult = { r -> vm.addConsult(consultPreRun(r, r.staff?.let { ui.staffNames.getOrNull(it) }, r.day?.let { isoDate(ui.startDate, it) })) },
                 onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
@@ -1040,7 +1041,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
-                wishConflicts = false; tab = 1; editingCell = i to j; sheetMode = 1
+                wishConflicts = false; tab = 1; editingCell = i to j; sheetMode = 1; sheetExpanded = true
             }, onConfirm = { token ->
                 wishConflicts = false; vm.cancelWishAndRebuild(token)
             }, onRebuild = {
@@ -1052,15 +1053,17 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 onDismissRequest = { pendingCsvImport = null },
                 title = { Text("取込種別を選択") },
                 text = {
-                    Text(
-                        "この CSV を何として取り込みますか？\n\n" +
-                            "・データ全体（新規）：勤務表テンプレ/ユニット列形式を新しいデータとして読み込み\n" +
-                            "・勤務表（重ね合わせ）：氏名,1日,2日… の表を現在の割り当てに重ねる\n" +
-                            "・職員一覧：氏名,グループ,スキル（所属グループ/スキルを更新）\n" +
-                            "・希望シフト：氏名,日,希望シフト（希望を置換）\n" +
-                            "・各制約：種別タグ付き（制約一式・個人レンジを置換）\n" +
-                            "・シフト色：記号,色（掲載された記号だけ更新、他は現状維持）",
-                    )
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            "この CSV を何として取り込みますか？\n\n" +
+                                "・データ全体（新規）：病院の勤務表の書式（テンプレート）を新しいデータとして取り込み\n" +
+                                "・勤務表（重ね合わせ）：氏名,1日,2日… の表を現在の割り当てに重ねる\n" +
+                                "・職員一覧：氏名,グループ,スキル（所属グループ/スキルを更新）\n" +
+                                "・希望シフト：氏名,日,希望シフト（希望を置換）\n" +
+                                "・各制約：種別タグ付き（制約一式・個人の回数の下限・上限を置換）\n" +
+                                "・シフト色：記号,色（掲載された記号だけ更新、他は現状維持）",
+                        )
+                    }
                 },
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1094,14 +1097,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 text = {
                     Text(
                         "この勤務表CSVを、どちらとして取り込みますか？\n\n" +
-                            "・勤務表：表のとおり、いまの割り当てとして読み込みます。\n" +
-                            "・希望シフト：表を職員の希望として読み込み、勤務表は空から作成して最適化で希望を尊重します。",
+                            "・勤務表：表のとおり、いまの割り当てとして取り込みます。\n" +
+                            "・希望シフト：表を職員の希望として取り込み、勤務表は空から作成して最適化で希望を尊重します。",
                     )
                 },
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false) { showImportGuidance = true }; rosterCsvChoice = null })
-                        DialogDismissButton(onClick = { vm.importRosterAs(csvText, true) { showImportGuidance = true }; rosterCsvChoice = null }, text = "希望シフトとして取り込む")
+                        DialogConfirmButton("希望シフトとして取り込む", onClick = { vm.importRosterAs(csvText, true) { showImportGuidance = true }; rosterCsvChoice = null })
                     }
                 },
                 dismissButton = { DialogDismissButton(onClick = { rosterCsvChoice = null }) },
@@ -1119,8 +1122,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 //   取り残されていた＝同じ形へ揃える。
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DialogConfirmButton("担当内のみ反映", onClick = { vm.applyWishes(false); wishConfirm = 0 })
                         DialogConfirmButton("含めて反映", onClick = { vm.applyWishes(true); wishConfirm = 0 })
-                        DialogDismissButton(onClick = { vm.applyWishes(false); wishConfirm = 0 }, text = "担当内のみ反映")
                     }
                 },
                 dismissButton = { DialogDismissButton(onClick = { wishConfirm = 0 }) },
@@ -1158,13 +1161,13 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                 val label: String; val fg: Color; val bg: Color
                 when {
                     ui.running -> {
-                        // [進捗の見える化] バッジに改善の手応えを添える: hard残あり→必須違反数、hard=0→soft改善(init→best)。
+                        // [進捗の見える化] バッジに改善の手応えを添える: hard残あり→必須違反数、hard=0→気になる点の数（進捗行と同じ語）。
                         // [3.409.12] 旧は裸の「⚠5」で**その5が何の数かを画面のどこも言っていなかった**
                         //   （非実行中の枝は 3.396.0 で「必須違反 N」へ揃えたのに、この枝だけ取り残し）。
                         //   バッジは幅が限られるので語は短く「必須N」＝凡例・ホーム見出しと同じ言葉にする。
                         val prog = when {
                             ui.bestHard > 0L -> " 必須${ui.bestHard}"
-                            ui.initSoft > 0L && ui.bestSoft in 0 until ui.initSoft -> " ${ui.initSoft}→${ui.bestSoft}"
+                            ui.initSoft > 0L && ui.bestSoft in 0 until ui.initSoft -> " 気になる点${ui.bestSoft}"
                             else -> ""
                         }
                         label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
@@ -1179,13 +1182,13 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text("必須違反 ${ui.bestHard}件を順に見る", color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 12.dp))
+                            Text("必須 ${ui.bestHard}件を順に見る", color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
                 } else Surface(color = bg, shape = MaterialTheme.shapes.small) {
                     Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
                 }
             }
         }
@@ -1274,12 +1277,17 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
 
 @Composable
 internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
+    val cs = MaterialTheme.colorScheme
     val items = listOf(
         Triple("ホーム", Icons.Filled.Home, "ホーム"),
         Triple("勤務表", Icons.Filled.DateRange, "勤務表"),
         Triple("編集", Icons.Filled.Edit, "初期設定と制約の編集"),
         Triple("分析", Icons.Filled.Assessment, "分析と違反"),
         Triple("設定", Icons.Filled.Settings, "設定とデータ"),
+    )
+    // UD では既定の選択色（secondaryContainer）がバーの地と 1.14:1 で、いまどのタブかが見えない。
+    val itemColors = NavigationBarItemDefaults.colors(
+        indicatorColor = cs.primaryContainer, selectedIconColor = cs.onPrimaryContainer, selectedTextColor = cs.primary,
     )
     NavigationBar {
         items.forEachIndexed { i, item ->
@@ -1289,6 +1297,7 @@ internal fun MagiBottomNav(selected: Int, onSelect: (Int) -> Unit) {
                 icon = { Icon(item.second, contentDescription = null) }, // [a11y] ラベル常時表示のためアイコンCDは重複回避で null
                 label = { Text(item.first, style = MaterialTheme.typography.labelMedium) },
                 alwaysShowLabel = true,
+                colors = itemColors,
             )
         }
     }
@@ -1345,14 +1354,14 @@ internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () 
             Text("勤務表データを開きましょう", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
             Text("保存済みのデータを開く、サンプルから始める、または空から新しく作れます。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text("データを開く", style = MaterialTheme.typography.labelLarge)
             }
-            OutlinedButton(onClick = onSample, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            OutlinedButton(onClick = onSample, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text("サンプルで試す", style = MaterialTheme.typography.labelLarge)
             }
             // [⛏6] ゼロから作る起点。最小データで開始し、編集タブ(年次マスター)へ誘導する。
-            OutlinedButton(onClick = onNew, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            OutlinedButton(onClick = onNew, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text("新規につくる（空から）", style = MaterialTheme.typography.labelLarge)
             }
         }
@@ -1361,6 +1370,10 @@ internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () 
 
 
 
+
+/** 必須違反の一覧の人員不足の 1 行。巡回できる行が 1 つも無いときは「ほかに」と言わず、開く場所を添える。 */
+internal fun hardListCovULine(noRows: Boolean, covU: Int): String? =
+    if (noRows && covU > 0) "人員不足 ${covU}件（日ヘッダの印から開けます）" else tourCovULine(covU)
 
 /** 勤務表タブ上部の「必須 N ▼」と、押すと開く必須違反の一覧。行を押すとシートを閉じ、巡回と同じ移動でそのセルのシートを開く。 */
 @OptIn(ExperimentalMaterial3Api::class)

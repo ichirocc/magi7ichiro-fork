@@ -61,7 +61,7 @@ fun MagiViewModel.ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
     if (ns === st) {
         // [3.484.0] 単一セルでも休は外せない（列一括と同じ理由・同じ案内）。
         if (!allowed && k == restShiftIndex(st)) {
-            notify("「休」はどのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
+            notify("「${opSy(k)}」は休みのシフトなので、どのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
         } else if (!allowed) {
             notify("このグループの担当できるシフトが無くなるため外せません", "W")
         }
@@ -90,7 +90,7 @@ fun MagiViewModel.ws1SetGroupShiftColumn(k: Int, allowed: Boolean) {
     val ns = Ws1Ops.setGroupShiftColumn(st, k, allowed)
     if (ns === st) {
         if (!allowed && k == restShiftIndex(st)) {
-            notify("「休」はどのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
+            notify("「${opSy(k)}」は休みのシフトなので、どのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
         } else if (!allowed) {
             notify("担当できるシフトが無くなるグループがあるため、この列は外せません", "W")
         }
@@ -115,7 +115,7 @@ fun MagiViewModel.ws1ResetGroupApt() {
     val st = state ?: return
     val cleared = st.groupShiftApt.sumOf { row -> row.count { it.trim().isNotEmpty() } }
     logOp("I", "apt強制リセット: 適切回数を全空欄に（$cleared 件クリア）")
-    applyStructureWithMessage(Ws1Ops.resetGroupApt(st), "適切回数(apt)を全リセットしました（$cleared 件 → 0）")
+    applyStructureWithMessage(Ws1Ops.resetGroupApt(st), "目標を全リセットしました（${cleared}件を空欄に）")
 }
 
 fun MagiViewModel.ws1SetUse2(on: Boolean) {

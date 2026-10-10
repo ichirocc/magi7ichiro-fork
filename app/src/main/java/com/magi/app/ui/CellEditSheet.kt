@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.magi.app.model.MagiState
@@ -91,7 +92,7 @@ internal fun CellEditSheet(
     onRetryRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
     onMode: (Int) -> Unit = {},
-    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「他 ▸」のタップだけ
+    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「他 ▸」のタップと、希望の一覧から開くとき
     onToggleExpand: () -> Unit = {},
     tourPrev: Pair<Int, Int>? = null,
     canUndo: Boolean = false,           // 勤務表タブの下部バーはシートを開く間は隠れる＝元に戻すをここへ（規則は下部バーと同じ）
@@ -104,6 +105,7 @@ internal fun CellEditSheet(
     val current = ui.schedule.getOrNull(i)?.getOrNull(j) ?: -1
     val wish = ui.wishes["$i,$j"]
     val pinned = VioKey.cell(i, j) in ui.manualPins
+    val extKigou = extWishDayKigou(cv.extWishes, i, j, ui.shiftSymbols)
     val name = ui.staffNames.getOrNull(i) ?: i.toString()
     fun sym(k: Int?): String = k?.let { ui.shiftSymbols.getOrNull(it) } ?: "—"
     val c1Marks = remember(ui.c1Shortages) { c1DisplayMarks(ui) }
@@ -150,7 +152,7 @@ internal fun CellEditSheet(
     ) {
         if (!expanded) PeekBody(
             ui, cell, name, current, wish, mode, leftHand, onEvent, onPick, onMove, onDismiss, onToggleExpand, onShowRelax,
-            canUndo = canUndo, onUndo = onUndo,
+            canUndo = canUndo, onUndo = onUndo, onMode = onMode, extKigou = extKigou, onWishes = { fixNav.onWishes(i, j) },
             heading = tourHeading?.let(::peekHeading) ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
             picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
             recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
@@ -190,10 +192,10 @@ internal fun CellEditSheet(
                     }
                 }
                 if (mode == 0 && dilemma && dilemmaChoice != 2) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
-                        OutlinedButton(onClick = { dilemmaChoice = 2 }, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                            Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", maxLines = 3)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { dilemmaChoice = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("他の人で補う（推奨）") }
+                        OutlinedButton(onClick = { dilemmaChoice = 2 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            Text("希望は残して別のシフトを割り当てる（希望は未反映になります）", textAlign = TextAlign.Center)
                         }
                     }
                     if (dilemmaChoice == 1) {
@@ -212,7 +214,7 @@ internal fun CellEditSheet(
                 if (mode == 1 && wish != null) {
                     wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                     if (wish in zeroCaps) Text(wishZeroCapLine(sym(wish)), style = MaterialTheme.typography.bodySmall)
-                    Text(WISH_TAB_KEEP_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text(if (pinned) WISH_TAB_PINNED_NOTE else WISH_TAB_KEEP_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
                 if (mode == 0 && status.severity == CellSeverity.HARD) when (handoff) {
                     RelaxHandoff.OFFER -> {
@@ -238,10 +240,10 @@ internal fun CellEditSheet(
                     }
                     val staffLines = remember(rev, i, cv) { staffCountLines(ui, i, cv::staffCellLimits) }
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("このセルの違反", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        Text("このセルの違反", style = MaterialTheme.typography.titleSmall)
                         if (detailLines.isEmpty()) Text("違反はありません。", style = MaterialTheme.typography.bodySmall)
                         detailLines.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                        Text("この職員の回数・偏り", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                        Text("この職員の回数・偏り", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 4.dp))
                         if (staffLines.isEmpty()) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodySmall)
                         staffLines.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                     }
@@ -292,6 +294,7 @@ internal fun CellEditSheet(
             }
             val showGrid = mode == 1 || !dilemma || dilemmaChoice == 2
             if (showGrid) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou) { fixNav.onWishes(i, j) }
                 cellSheetSlots(shown, canDoSet, leftHand).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         row.forEach { slot ->
@@ -300,7 +303,7 @@ internal fun CellEditSheet(
                             val sel = if (mode == 0) k == current else k == wish
                             SlotButton(
                                 ui, k, slot.canDo, sel,
-                                enabled = mode == 1 || slot.canDo,
+                                enabled = if (mode == 1) extKigou == null else slot.canDo,
                                 recommended = mode == 0 && k in marks.recommended,
                                 hardRisk = mode == 0 && k in marks.hardRisk,
                                 wishMark = mode == 0 && k == wish && wish != current,
@@ -345,7 +348,16 @@ private fun SheetUndoButton(enabled: Boolean, onUndo: () -> Unit) {
     IconButton(onClick = onUndo, enabled = enabled) { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "元に戻す") }
 }
 
-/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を取り消す・緩める候補の行）＋シフトと他 ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
+/** 希望モードで拡張希望の指定日を開いたとき（シフトボタンは押せない）: 理由と、拡張希望を見直せる希望の登録への行き先。 */
+@Composable
+private fun ExtWishDayRow(kigou: List<String>, onWishes: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(extWishDayNote(kigou), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        OutlinedButton(onClick = onWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る", maxLines = 1) }
+    }
+}
+
+/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を登録中の札・希望を取り消す・緩める候補の行）＋シフトと他 ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
  *  緩める候補はこのセルだけを変えず、設定の緩和と手順をまとめて確定するダイアログを開く。 */
 @Composable
 private fun PeekBody(
@@ -354,6 +366,7 @@ private fun PeekBody(
     onShowRelax: () -> Unit, heading: String, severity: CellSeverity, tourPrev: Pair<Int, Int>?, tourNext: Pair<Int, Int>?,
     picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
     canUndo: Boolean = false, onUndo: () -> Unit = {},
+    onMode: (Int) -> Unit = {}, extKigou: List<String>? = null, onWishes: () -> Unit = {},
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -375,35 +388,44 @@ private fun PeekBody(
                 TextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
             }
         }
-        if (wish != null || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (wish != null) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
-                modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を取り消す", color = cs.error, maxLines = 1) }
-            if (recommend != null) FilledTonalButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(relaxPeekLabel(sym(recommend)), maxLines = 1)
+        // 押せる行どうしは 8dp 空ける（赤の［希望を取り消す］とシフトの押し違いを防ぐ）。
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 希望モードはセルを移っても続く＝ちら見でもシフトを押すと希望になると示し、1 タップで割当へ戻せるようにする。
+            if (mode == 1) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MagiTagChip("希望を登録中", MagiAccent.pink)
+                TextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻す", maxLines = 1) }
             }
-        }
-        // シフトと「他 ▸」は 1 行に収める（入る数は peekPickCount）。
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val shownPicks = picks.take(peekPickCount(maxWidth.value.toInt()))
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    for (k in if (leftHand) shownPicks.reversed() else shownPicks) {
-                        val sel = if (mode == 0) k == current else k == wish
-                        SlotButton(
-                            ui, k, k in canDoSet, sel, enabled = mode == 1 || k in canDoSet,
-                            recommended = mode == 0 && k in marks.recommended, hardRisk = mode == 0 && k in marks.hardRisk,
-                            wishMark = mode == 0 && k == wish && wish != current, zeroCap = k in zeroCaps,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            if (mode == 0) { if (k != current) onPick(k) }
-                            else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
-                        }
-                    }
-                    TextButton(onClick = onToggleExpand, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフトを表示" },
-                        contentPadding = PaddingValues(0.dp)) { Text("他 ▸", maxLines = 1) }
+            if (wish != null || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (wish != null) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
+                    modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を取り消す", color = cs.error, maxLines = 1) }
+                if (recommend != null) FilledTonalButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(relaxPeekLabel(sym(recommend)), maxLines = 1)
                 }
-                if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
-                    Text(PEEK_HARD_RISK_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou, onWishes)
+            // シフトと「他 ▸」は 1 行に収める（入る数は peekPickCount）。
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val shownPicks = picks.take(peekPickCount(maxWidth.value.toInt()))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        for (k in if (leftHand) shownPicks.reversed() else shownPicks) {
+                            val sel = if (mode == 0) k == current else k == wish
+                            SlotButton(
+                                ui, k, k in canDoSet, sel, enabled = if (mode == 1) extKigou == null else k in canDoSet,
+                                recommended = mode == 0 && k in marks.recommended, hardRisk = mode == 0 && k in marks.hardRisk,
+                                wishMark = mode == 0 && k == wish && wish != current, zeroCap = k in zeroCaps,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                if (mode == 0) { if (k != current) onPick(k) }
+                                else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
+                            }
+                        }
+                        TextButton(onClick = onToggleExpand, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフトを表示" },
+                            contentPadding = PaddingValues(0.dp)) { Text("他 ▸", maxLines = 1) }
+                    }
+                    if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
+                        Text(PEEK_HARD_RISK_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -428,7 +450,7 @@ private fun StatusRow(status: CellStatus, wishLine: String?) {
     }
 }
 
-/** 固定枠のシフトボタン。選択中はシフトの色のまま太枠＋✓、担当外は灰色で「外」、個人の上限0は下に小さく「上限0」（押せる）、印は右上の角（緑の点＝おすすめ、赤の警告＝必須が増える。同時には付かない）。 */
+/** 固定枠のシフトボタン。選択中はシフトの色のまま太枠＋✓、担当外と押せない枠は灰色（担当外は「外」）、個人の上限0は下に小さく「上限0」（押せる）、印は右上の角（緑の点＝おすすめ、赤の警告＝必須が増える。同時には付かない）。 */
 @Composable
 private fun SlotButton(
     ui: UiState, k: Int, canDo: Boolean, selected: Boolean, enabled: Boolean, recommended: Boolean, hardRisk: Boolean, wishMark: Boolean,
@@ -436,14 +458,15 @@ private fun SlotButton(
 ) {
     val cs = MaterialTheme.colorScheme
     val symbol = ui.shiftSymbols.getOrNull(k) ?: k.toString()
-    val bg = if (canDo) hexToColor(ui.shiftColorHex.getOrNull(k) ?: "") else cs.surfaceVariant
-    val fg = if (canDo) ensureReadable(bg, hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")) else cs.onSurfaceVariant
+    val live = canDo && enabled
+    val bg = if (live) hexToColor(ui.shiftColorHex.getOrNull(k) ?: "") else cs.surfaceVariant
+    val fg = if (live) ensureReadable(bg, hexToColor(ui.shiftTextHex.getOrNull(k) ?: "")) else cs.onSurfaceVariant
     val shape = MaterialTheme.shapes.large
     Box(
         modifier
             .heightIn(min = 52.dp)
             .background(bg, shape)
-            .then(if (selected) Modifier.border(4.dp, cs.onSurface, shape) else if (!canDo) Modifier.border(1.dp, cs.outline, shape) else Modifier)
+            .then(if (selected) Modifier.border(4.dp, cs.onSurface, shape) else if (!live) Modifier.border(1.dp, cs.outline, shape) else Modifier)
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 contentDescription = symbol + (if (!canDo) " 担当外" else "") + (if (zeroCap) " 個人の上限0（入れない指定）" else "") + (if (selected) " 選択中" else "") + (if (recommended) " おすすめ" else "") + (if (hardRisk) " 必須の違反が増える" else "")

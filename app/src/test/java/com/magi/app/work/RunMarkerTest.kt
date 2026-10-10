@@ -17,7 +17,7 @@ class RunMarkerTest {
         val old = """{"startedAt":1,"mode":"bg","budgetSec":60,"workers":4,"algorithm":"SA"}"""
         assertNull(RunMarker.parseS5(old))
         assertEquals("", RunMarker.s5Suffix(old))
-        assertEquals("前回のバックグラウンド最適化は完了前に中断されました。入力は自動保存済みです。再作成できます。", RunMarker.interruptedInfo(old))
+        assertEquals("前回の閉じている間の最適化は完了前に中断されました。入力は自動保存済みです。再作成できます。", RunMarker.interruptedInfo(old))
         assertEquals(RunMarker.format(1L, "fg", 60, 4, "SA").contains("s5"), false)
     }
 

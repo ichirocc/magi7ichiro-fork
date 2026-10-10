@@ -77,7 +77,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
             Text("グループ一括設定", style = MaterialTheme.typography.titleSmall)
             Text(
                 "選んだグループ全員に同じ上下限を一度に設定します（個人設定済みは保持）。",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             // [適用済み一覧] 一括適用したグループ上下限(全メンバー同一レンジ)を表示。各メンバーの個人の回数にも
@@ -92,7 +92,7 @@ internal fun GroupRangeSection(ui: UiState, cv: ConditionsView, onEvent: (MagiEv
                 applied.groupBy { it.g to it.groupName }.forEach { (gKey, rows) ->
                     val (g, groupName) = gKey
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(groupName, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text(groupName, style = MaterialTheme.typography.titleSmall)
                         DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.ClearGroupRangeSection(g)) }, enabled = !ui.running, text = "全解除")
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -70,7 +70,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text("${sg.kigou}  ${sg.name}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     EditRowButton(onClick = { dialog = SkillDlg.Edit(g, sg.name, sg.kigou) }, enabled = !ui.running)
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(12.dp))
                     DeleteRowButton(onClick = { confirmDelete = g }, enabled = !ui.running)
                 }
             }

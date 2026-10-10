@@ -325,6 +325,21 @@ internal fun isWishDilemma(wish: Int?, current: Int, severity: CellSeverity): Bo
 
 internal fun wishKeptLine(wishSymbol: String): String = "本人の希望（$wishSymbol）を守っています"
 
+/** 希望タブの注記の手動固定版（手動固定は希望より強い＝再作成でも希望へ戻さない。`docs/business-logic.md` の手動固定）。 */
+internal const val WISH_TAB_PINNED_NOTE = "希望を変えても勤務表のセルはそのままです（未反映になります）。このセルは手動固定のため、再作成しても希望には合わせません（固定を外すと合わせます）。"
+
+/** 職員 [i] の [j] 日（0 始まり）が拡張希望の指定日なら、その日に禁止のシフト記号（シフト一覧の順）。指定日でなければ null。
+ *  日だけで決める＝希望を保存しない日（`ExtWishRules.wishBlockedBy`）と同じ。 */
+internal fun extWishDayKigou(extWishes: List<ExtWishView>, i: Int, j: Int, shiftKigou: List<String>): List<String>? {
+    val hits = extWishes.filter { it.i == i && (j + 1) in it.days }
+    if (hits.isEmpty()) return null
+    val ks = hits.flatMap { it.kigou }.toSet()
+    return shiftKigou.filter { it in ks } + ks.filter { it !in shiftKigou }
+}
+
+internal fun extWishDayNote(kigou: List<String>): String =
+    "この日は拡張希望${if (kigou.isEmpty()) "" else "（${kigou.joinToString("・")} 以外）"}の指定日なので、希望は入れられません"
+
 /**
  * 違反を順に見る巡回の順（日→職員）。必須のセルを先に、要調整は必須が 0 件か [includeSoft] のときだけ。
  * 人員・回数の族はセルを持たないので巡回には入らない（日ヘッダ・名前の横の印から開く）。

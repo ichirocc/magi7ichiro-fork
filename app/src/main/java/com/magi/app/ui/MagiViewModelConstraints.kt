@@ -156,6 +156,9 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
     }
     logOp("I", "制約削除: $family[$index]")
     fun <T> List<T>.without(i: Int) = filterIndexed { idx, _ -> idx != i }
+    val view = constraintsViewOf(st).let { v -> (v.families + v.skillFamilies).firstOrNull { it.key == family } }
+    val row = view?.rows?.getOrNull(index)?.trim()?.replace(Regex("\\s{2,}"), " ")
+    val notice = "${view?.title?.substringBefore('（') ?: "制約"}の行を削除しました" + (row?.let { "（$it）" } ?: "")
     mutateConstraints(
         when (family) {
             "cons1" -> st.copy(cons1 = st.cons1.without(index))
@@ -170,7 +173,8 @@ fun MagiViewModel.removeConstraint(family: String, index: Int) {
             "cons42s" -> st.copy(cons42s = st.cons42s.without(index))
             "cons3w" -> st.copy(cons3w = st.cons3w.without(index))
             else -> return
-        }
+        },
+        notice,
     )
 }
 

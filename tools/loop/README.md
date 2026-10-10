@@ -33,7 +33,8 @@
 
 - **再開（3.507.6）**: 出力 CSV が既にあれば済みの (case,seed,arm) を飛ばして追記する＝同じコマンドで続きから走る。このサンドボックスは
   セッションが無操作だと VM が止まりバックグラウンドの JVM が消えるので、長いベンチは前景の待機（10 分ずつ）で見守るか、再開前提で回す。
-- **玉突き連鎖パイプラインの腕（3.656.0）**: `MAGI_BENCH_FEATURE=pipeoff*`＝玉突きなし対パイプライン、`pipevsfull*`＝従来の常時フル対パイプライン、`pipevsshallow*`＝浅い予察だけ対全段。`*end` は最終の違反起点修復の後に置く版、`*endk` はさらに探す範囲を既定（必須は月全体・他は前後7日）にした版（`*end` までと従来の玉突きの腕 `ejection*` は月全体で測った＝再現のため据え置き）。それ以外の機能はパイプラインと範囲を既定のまま測る。CSV の `ejMs`/`ejApplied` は玉突き系の段の所要の合計と採用数の合計（0＝空振り）。
+- **玉突き連鎖パイプラインの腕（3.656.0）**: `MAGI_BENCH_FEATURE=pipeoff*`＝玉突きなし対パイプライン、`pipevsfull*`＝従来の常時フル対パイプライン、`pipevsshallow*`＝浅い予察だけ対全段。`*end` は最終の違反起点修復の後に置く版、`*endk` はさらに探す範囲を既定（必須は月全体・他は前後7日）にした版（`*end` までと従来の玉突きの腕 `ejection*` は月全体で測った＝再現のため据え置き）。それ以外の機能はパイプラインと範囲を既定のまま測る。CSV の `ejMs`/`ejApplied` は玉突き系の段の所要の合計と、採用した連鎖で動かしたマスの数の合計（0＝空振り。連鎖の本数ではない）。
+- **パイプラインの改善案の腕（2026-10-10、3.657.0）**: `piperoundsendk`＝新腕だけ 2 巡目以降あり（`PolishGate.ejectionPipelineRounds`）、`pipehardendk`＝新腕だけ必須の焦点あり（`ejectionPipelineHardLeg`）、`pipecomboendk`＝両方、`pipecombovsfullendk`＝従来の常時フル対 両方入りのパイプライン、`pipehardvsroundsendk`＝両腕とも探し直し ON（3.657.0 の既定）で新腕だけ必須の焦点あり。旧腕はどれも 1 巡だけ・必須の焦点なしのパイプライン（`pipecombovsfullendk` だけ従来の常時フル）＝3.657.0 で探し直しが既定 ON になったあとも、腕が両方の値を明示するので比べる中身は同じ（3.656.0 の `pipe*` の腕も 1 巡だけ＝再現）。パイプライン以外の機能の腕は既定（探し直し ON・必須の焦点 OFF）のまま測る。結果は docs/history 3.657.0。
 - **決定的モード（3.507.3）**: `MAGI_BENCH_DETERMINISTIC=1 tools/loop/run_bench.sh …` で両腕とも `PostOptimizationParams.deterministic=true`
   （ms キャップ・締切・残り時間の判定を回数上限へ。共同 LNS は `maxEvaluations`＝C1 90,000・個人 60,000）。同じ入力・seed なら同じ盤面＝
   `repro` 列が他ジョブの負荷に依存しない。実機は既定 OFF（予算を使い切る）。

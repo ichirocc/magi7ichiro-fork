@@ -35,8 +35,21 @@ class EjectionChainPipelineTest {
         cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
     )
 
-    private fun run(st: MagiState, focus: EjectionChainPipeline.Focus, tel: MutableList<EjectionChainPipeline.Telemetry>) =
-        EjectionChainPipeline.apply(st, st.schedule.toIntArray2D(), EjectionChainPipeline.Config(focus = focus, deterministic = true), telemetry = tel)
+    /** 2 人×3 日。日勤の必要 1 が 3 日目だけ欠ける（人員不足 1）。3 日目の誰かを日勤にすれば直る。 */
+    private fun coverState(): MagiState = MagiState(
+        startDate = "2026-08-01", endDate = "2026-08-03",
+        shifts = listOf(Shift("休み", "休", "", "", ShiftRole.Rest), Shift("日勤", "D", "1", ""), Shift("夜勤", "N", "", "")),
+        groups = listOf(Group("G0", "G0")), staff = listOf(Staff("s0", 0), Staff("s1", 0)), use2Patterns = false,
+        groupShift = listOf(listOf(1, 1, 1)), groupShiftApt = listOf(listOf("", "", "")),
+        schedule = listOf(listOf(1, 1, 2), listOf(2, 2, 0)), wishes = emptyMap(), staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+        cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    private fun run(st: MagiState, focus: EjectionChainPipeline.Focus, tel: MutableList<EjectionChainPipeline.Telemetry>,
+        repeatRounds: Boolean = false, hardLeg: Boolean = false) =
+        EjectionChainPipeline.apply(st, st.schedule.toIntArray2D(),
+            EjectionChainPipeline.Config(focus = focus, deterministic = true, repeatRounds = repeatRounds, hardLeg = hardLeg), telemetry = tel)
 
     @Test fun probeHitIsCommittedAndDeepSearchRunsOnlyWithHits() {
         val st = swapState()
@@ -97,6 +110,36 @@ class EjectionChainPipelineTest {
         val b = soft.before!!
         assertEquals(b.total - b.hard - (b.breakdown["c1"] ?: 0), soft.residual)
         for (t in tel) assertTrue(t.line(), !t.deepRan || t.shallowHits + t.midHits > 0)
+    }
+
+    // 探し直し: 採用があった巡のあとだけ次の巡を回し、採用が無い巡で止まる。2 巡目以降の記録行に「巡N」。
+    @Test fun repeatRoundsReindexesOnlyAfterACommit() {
+        val st = swapState()
+        val one = run(st, EjectionChainPipeline.Focus.C1, ArrayList())
+        val tel = ArrayList<EjectionChainPipeline.Telemetry>()
+        val r = run(st, EjectionChainPipeline.Focus.C1, tel, repeatRounds = true)
+        assertEquals(listOf(1, 2), tel.map { it.round })
+        assertTrue(tel[0].line(), tel[0].committed > 0)
+        assertEquals("no_residual", tel[1].endReason)
+        assertTrue(tel[1].line().contains("巡2 "))
+        assertFalse(tel[0].line().contains("巡1"))
+        assertTrue(r.newSchedule.contentDeepEquals(one.newSchedule))
+    }
+
+    // 必須の焦点: BOTH の先頭に走り、人員不足を起点に直す。既定（OFF）では必須の焦点を走らせない。
+    @Test fun hardLegRunsFirstAndRepairsARemainingHard() {
+        val st = coverState()
+        assertEquals(1, UnifiedViolationChecker.check(st, st.schedule.toIntArray2D()).hard)
+        val offTel = ArrayList<EjectionChainPipeline.Telemetry>()
+        run(st, EjectionChainPipeline.Focus.BOTH, offTel)
+        assertEquals(listOf("C1", "SOFT"), offTel.map { it.focus })
+        val tel = ArrayList<EjectionChainPipeline.Telemetry>()
+        val r = run(st, EjectionChainPipeline.Focus.BOTH, tel, hardLeg = true)
+        assertEquals(listOf("HARD", "C1", "SOFT"), tel.map { it.focus })
+        assertEquals(1, tel[0].residual)
+        assertTrue(tel[0].line(), tel[0].committed > 0)
+        assertEquals(0, r.report!!.hard)
+        assertEquals(UnifiedViolationChecker.check(st, r.newSchedule).weightedScore, r.report!!.weightedScore, 0.0)
     }
 
     // 有効なとき、同じ位置の従来の玉突きは走らせない。

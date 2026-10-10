@@ -475,10 +475,10 @@ def find_p10():
 #   個々のTextが黙って下回りうる（実測: 69箇所中の大半が12sp＝14sp下限を下回っていた）。
 #   MagiThemeのFontSize/Typographyトークン適用（3.478.0, grillingで5点確定）で69件を
 #   `style = MaterialTheme.typography.*` へ置換した残り＝**密なグリッドUI等の意図的な例外**だけを
-#   baseline として残す（群×シフト担当可否マトリクスのヘッダ/セル密表示・並列数±ステッパー等。
+#   baseline として残す（群×シフト担当可否マトリクスのヘッダ/セル密表示等。
 #   一般的なタイポスケールを適用するとレイアウトが壊れる/操作性が落ちる箇所）。
 #   `letterSpacing = N.sp` は対象外（フォントサイズでなく字間なので誤検出しない）。
-P11_BASELINE = 6
+P11_BASELINE = 4
 RE_P11_FONTSIZE = re.compile(r"\bfontSize\s*=\s*\d+\.sp\b")
 
 

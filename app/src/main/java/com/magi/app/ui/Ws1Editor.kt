@@ -2,6 +2,7 @@ package com.magi.app.ui
 
 import com.magi.app.toHankakuKigou
 import com.magi.app.v6.V6SanityPort
+import com.magi.app.v6.Ws1Ops
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.heightIn
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,6 +30,7 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
@@ -79,7 +82,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             SectionHeader("マスター設定")
             Spacer(Modifier.height(6.dp))
             Text("変更すると表を作り直し、すぐ問題がないか調べ直します。", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary)
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             // --- period ---
             Spacer(Modifier.height(10.dp))
@@ -87,7 +90,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             SectionHeader("期間の日数（月単位以外の特殊な期間用）")
             Text("対象の月は「月次条件」の『対象の月』で選びます。", style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("${v.startDate} 〜 ${v.endDate}", style = MaterialTheme.typography.bodyMedium,
+            if (v.days > 0) Text(DayText.range(v.startDate, 0, v.days - 1), style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             // 範囲外は黙って丸めず断る。縮めると後ろの日の希望・日別の必要人数が消えるので確認を挟む。
             val newDays = daysText.toIntOrNull()
@@ -129,11 +132,6 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                     Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            // [3.409.11] 残り1シフトのとき削除ボタンが**理由の説明なく消える**（3.400.0 でグループには
-            //   理由を付けたが、シフトと職員は対象漏れだった）。同じ形で理由を出す。
-            if (v.shifts.size <= 1) {
-                Text("最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
             AddRowButton("シフト追加", onClick = { dialog = Ws1Dialog.AddShift }, enabled = !ui.running)
             AddRowButton("一括追加", onClick = { dialog = Ws1Dialog.BulkAddShift }, enabled = !ui.running)   // [⛏12]
             Divider()
@@ -143,12 +141,6 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             SectionHeader("グループ (${v.groups.size})")
             Text("タップで改名、ハンドル(${DRAG_HANDLE_GLYPH})を長押しして並び替え。削除すると所属者は先頭グループへ移動。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // [不具合報告「グループが削除出来ない」対応] 残り1グループの場合、削除ボタンが理由の説明なく
-            //   消えるだけだった（担当可否の分類が無くなるため意図的に不可）。理由を明示。
-            //   ※旧記述が引き合いに出していた「休シフトの削除不可」は 3.416.0 の方針（休は通常のシフト定義）で撤廃済み。
-            if (v.groups.size <= 1) {
-                Text("最後の1グループは削除できません（担当可否の分類が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
             ReorderableRows(items = v.groups, enabled = !ui.running, onMove = { from, to -> onEvent(MagiEvent.Structure.MoveGroup(from, to)) }) { g, gr, dragHandle ->
                 // [押下明示O4] 行タップで編集（シフト行と統一・小さな編集ボタンだけに依存しない）。
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = !ui.running) { dialog = Ws1Dialog.EditGroup(g, gr.name, gr.kigou) },
@@ -171,14 +163,15 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             // --- groupShift bucket ---
             Spacer(Modifier.height(8.dp))
             SectionHeader("担当可否（グループ × シフト：担当できるか）")   // [3.483.0 E-7] 回数マトリクスと軸が同じため副題で区別
-            Text("セルをタップで担当ON/OFF（✓＝担当できる）。グループ名をタップでそのグループを一括、シフト名をタップで全グループへ一括。「休」は外せません。",
+            val lockNote = v.shifts.getOrNull(v.restIdx)?.let { "「${toHankakuKigou(it.kigou)}」は休みのシフトのため外せません（錠の印）。" } ?: ""
+            Text("セルをタップで担当ON/OFF（✓＝担当できる）。グループ名をタップでそのグループを一括、シフト名をタップで全グループへ一括。$lockNote",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
             // [マトリックス再設計（ユーザー提示案）] 旧: 群ごとに FlowRow でチップを折り返す形（2.66.0）。群とシフトの
             //   対応が縦に並ばず一目で比較できなかった。行=群・列=シフトの2次元マトリクスへ。左列（群名）は固定、
             //   右側（シフト名ヘッダ＋セル）だけ横スクロール。セル全面がタップ標的（48dp）。行/列ヘッダのタップで一括。
             GroupShiftMatrix(
-                groups = v.groups, shifts = v.shifts, groupShift = v.groupShift,
+                groups = v.groups, shifts = v.shifts, groupShift = v.groupShift, restIdx = v.restIdx,
                 enabled = !ui.running,   // [3.409.13] 実行中は applyStructure が必ず拒否＝押せる形は嘘（3.405.0）
                 onCell = { g, k, on -> onEvent(MagiEvent.Structure.SetGroupShift(g, k, on)) },
                 onRow = { g, on -> onEvent(MagiEvent.Structure.SetGroupShiftRow(g, on)) },
@@ -205,9 +198,12 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 //   記号の生文字列比較を作らず restShiftIndex 解決済みの v.restIdx で判定する。
                 val restNote = if (d.k == v.restIdx) "休だった日は自動的に他のシフトへ変わります。" else ""
                 dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note + restNote)
-            }) else null)
+            }) else null,
+            deleteBlocked = "最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。".takeIf { v.shifts.size <= 1 },
+            existingKigou = v.shifts.map { it.kigou }, selfIndex = d.k)
         Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "", false,
-            { n, kg, n1, n2, rest -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2, rest)); dialog = null }, { dialog = null })
+            { n, kg, n1, n2, rest -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2, rest)); dialog = null }, { dialog = null },
+            existingKigou = v.shifts.map { it.kigou })
         is Ws1Dialog.EditGroup -> GroupDialog("グループ編集", d.name, d.kigou,
             { n, kg -> onEvent(MagiEvent.Structure.EditGroup(d.g, n, kg)); dialog = null }, { dialog = null },
             onDelete = if (v.canRemoveGroup(d.g)) ({
@@ -217,9 +213,12 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 val note = if (refs > 0) "このグループを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
                 val label = "グループ ${toHankakuKigou(d.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
                 dialog = Ws1Dialog.ConfirmDelete("group", d.g, label, note)
-            }) else null)
+            }) else null,
+            deleteBlocked = "最後の1グループは削除できません（担当可否の分類が無くなるため）。".takeIf { v.groups.size <= 1 },
+            existingKigou = v.groups.map { it.kigou }, selfIndex = d.g)
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
-            { n, kg -> onEvent(MagiEvent.Structure.AddGroup(n, kg)); dialog = null }, { dialog = null })
+            { n, kg -> onEvent(MagiEvent.Structure.AddGroup(n, kg)); dialog = null }, { dialog = null },
+            existingKigou = v.groups.map { it.kigou })
         Ws1Dialog.BulkAddShift -> BulkAddDialog("シフトを一括追加", "記号を改行で複数入力（例: 休 / Dﾃ / A4）。記号がそのまま名称になります。", null,
             { lines, _ -> onEvent(MagiEvent.Structure.BulkAddShift(lines)); dialog = null }, { dialog = null })
         is Ws1Dialog.ConfirmShrink -> AlertDialog(
@@ -310,6 +309,9 @@ private fun ShiftDialog(
     onOk: (String, String, String, String, Boolean) -> Unit, onClose: () -> Unit,
     // [3.515.6] 削除の入口（行から移設）。編集時のみ渡す＝追加時はnullで非表示。
     onDelete: (() -> Unit)? = null,
+    // 削除できないときの理由。ボタンを黙って消さず、その位置に出す。
+    deleteBlocked: String? = null,
+    existingKigou: List<String> = emptyList(), selfIndex: Int = -1,
 ) {
     var name by remember { mutableStateOf(name0) }
     var kigou by remember { mutableStateOf(kigou0) }
@@ -319,10 +321,15 @@ private fun ShiftDialog(
     // [design-review] 下限>上限は他の3面（群/スキル群のレンジ・個人回数、3.403.0）と同じく必ず違反を
     //   生む設定ミスだが、必要人数(need1/need2)のこの面だけ入力時のガードが無かった（対象漏れ）。
     val bad = V6SanityPort.rangeOrderConflict(need1, need2) != null
+    // VM の確定時の拒否（symbolTaken）と同じ判定。OK の後で断られると入力ごと閉じてしまう。
+    val taken = Ws1Ops.symbolCollides(existingKigou, kigou, selfIndex)
+    // 休みの役割は単一選択＝今の休みを OFF にすると休みのシフトが無くなり、作成も検査も止まる。
+    val losesRest = isRest0 && !isRest
     // [UX監査 中6] 入力の途中で閉じると内容が消える。変更があれば破棄の確認を挟む（W1Shell が ✕・キャンセル・外側タップ・戻るを1か所で止める）。
     val dirty = name != name0 || kigou != kigou0 || need1 != need10 || need2 != need20 || isRest != isRest0
-    W1Shell(title, onClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad, dirty = dirty) {
-        W1Text("記号 (kigou)", kigou) { kigou = it }
+    W1Shell(title, onClose, { onOk(name, kigou, need1, need2, isRest) }, kigou.isNotBlank() && !bad && !taken && !losesRest, dirty = dirty) {
+        W1Text("記号（例: Dﾃ）", kigou, isError = taken) { kigou = it }
+        if (taken) Text(symbolTakenHint("シフト"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
         W1Text("名称", name) { name = it }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             W1Field("最低人数", need1, Modifier.weight(1f), isError = bad) { need1 = it }
@@ -334,7 +341,9 @@ private fun ShiftDialog(
             Text("休みとして扱う", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Switch(checked = isRest, onCheckedChange = { isRest = it })
         }
+        if (losesRest) Text(NO_REST_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
         if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このシフトを削除")
+        else if (deleteBlocked != null) Text(deleteBlocked, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -344,15 +353,24 @@ private fun GroupDialog(
     onOk: (String, String) -> Unit, onClose: () -> Unit,
     // [3.515.6] 削除の入口（行から移設）。編集時のみ渡す＝追加時はnullで非表示。
     onDelete: (() -> Unit)? = null,
+    deleteBlocked: String? = null,
+    existingKigou: List<String> = emptyList(), selfIndex: Int = -1,
 ) {
     var name by remember { mutableStateOf(name0) }
     var kigou by remember { mutableStateOf(kigou0) }
-    W1Shell(title, onClose, { onOk(name, kigou) }, kigou.isNotBlank(), dirty = name != name0 || kigou != kigou0) {
-        W1Text("記号 (kigou)", kigou) { kigou = it }
+    val taken = Ws1Ops.symbolCollides(existingKigou, kigou, selfIndex)
+    W1Shell(title, onClose, { onOk(name, kigou) }, kigou.isNotBlank() && !taken, dirty = name != name0 || kigou != kigou0) {
+        W1Text("記号（例: A）", kigou, isError = taken) { kigou = it }
+        if (taken) Text(symbolTakenHint("グループ"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
         W1Text("名称", name) { name = it }
         if (onDelete != null) DeleteRowButton(onClick = onDelete, text = "このグループを削除")
+        else if (deleteBlocked != null) Text(deleteBlocked, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
+
+private const val NO_REST_HINT = "休みのシフトが無くなると勤務表をつくれません。休みにする別のシフトで ON にしてください"
+
+private fun symbolTakenHint(what: String) = "この記号はすでに別の${what}で使われています。別の記号にしてください"
 
 @Composable
 internal fun StaffDialog(
@@ -421,7 +439,7 @@ internal fun BulkAddDialog(
                 }
             }
         }
-        if (lines.isNotEmpty()) Text("追加: ${lines.size}件", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        if (lines.isNotEmpty()) Text("追加: ${lines.size}件", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -450,8 +468,8 @@ private fun W1Shell(
 }
 
 @Composable
-private fun W1Text(label: String, value: String, onChange: (String) -> Unit) {
-    OutlinedTextField(value = value, onValueChange = onChange, singleLine = true,
+private fun W1Text(label: String, value: String, isError: Boolean = false, onChange: (String) -> Unit) {
+    OutlinedTextField(value = value, onValueChange = onChange, singleLine = true, isError = isError,
         label = { Text(label, style = MaterialTheme.typography.labelSmall) }, modifier = Modifier.fillMaxWidth())
 }
 
@@ -476,12 +494,15 @@ private fun W1Field(label: String, value: String, modifier: Modifier = Modifier,
 //   ON＝主色地＋✓（onPrimary）／OFF＝薄い地＋「—」＝色だけに依存しない手がかり。
 //   行ヘッダ（群名）タップ＝その群を一括（1つでもOFFがあれば全ON、全ONなら全OFF＝休は残る）。
 //   列ヘッダ（シフト名）タップ＝そのシフトを全群へ一括（同じ規則。休の列はOFFにできない＝VMが案内）。
+//   休の ON マスは VM が OFF を断るので押せない形にし、右下に錠を添える。
+//   行/列ヘッダは外枠つき＝secondaryContainer がカード地とほぼ同色（UD で 1.02:1）でもボタンと読める。
 //   トークン: 角丸は shapes.extraSmall（任意値を使わない）、色は colorScheme のロールのみ（生 hex なし）。
 @Composable
 private fun GroupShiftMatrix(
     groups: List<Group>,
     shifts: List<Shift>,
     groupShift: List<List<Int>>,
+    restIdx: Int,
     enabled: Boolean,
     onCell: (g: Int, k: Int, on: Boolean) -> Unit,
     onRow: (g: Int, on: Boolean) -> Unit,
@@ -505,6 +526,7 @@ private fun GroupShiftMatrix(
                 Box(
                     Modifier.width(nameW).height(cellH).padding(end = 4.dp, top = 1.dp, bottom = 1.dp)
                         .background(cs.secondaryContainer, shape)
+                        .border(1.dp, cs.outline, shape)
                         .clickable(enabled = enabled) { onRow(g, anyOff) }
                         .semantics { contentDescription = "グループ ${gr.name}: タップで全シフトを${if (anyOff) "担当できる" else "担当しない"}に一括" }
                         .padding(horizontal = 6.dp),
@@ -523,6 +545,7 @@ private fun GroupShiftMatrix(
                     Box(
                         Modifier.width(cellW).height(cellH).padding(1.dp)
                             .background(cs.secondaryContainer, shape)
+                            .border(1.dp, cs.outline, shape)
                             .clickable(enabled = enabled) { onColumn(k, anyOff) }
                             .semantics { contentDescription = "シフト ${s.kigou}: タップで全グループを${if (anyOff) "担当できる" else "担当しない"}に一括" },
                         contentAlignment = Alignment.Center,
@@ -536,15 +559,19 @@ private fun GroupShiftMatrix(
                 Row {
                     shifts.forEachIndexed { k, s ->
                         val on = groupShift.getOrNull(g)?.getOrNull(k) == 1
+                        val locked = on && k == restIdx
+                        val cellLabel = if (locked) "担当できる（休みのシフトのため外せません）" else if (on) "担当できる" else "担当しない"
                         Box(
                             Modifier.width(cellW).height(cellH).padding(1.dp)
                                 .background(if (on) cs.primary else cs.surfaceVariant, shape)
-                                .clickable(enabled = enabled) { onCell(g, k, !on) }
-                                .semantics { contentDescription = "${gr.name} × ${s.kigou}: ${if (on) "担当できる" else "担当しない"}" },
+                                .clickable(enabled = enabled && !locked) { onCell(g, k, !on) }
+                                .semantics { contentDescription = "${gr.name} × ${s.kigou}: $cellLabel" },
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(if (on) "✓" else "—", fontSize = 18.sp, fontWeight = FontWeight.Bold,
                                 color = if (on) cs.onPrimary else cs.onSurfaceVariant)
+                            if (locked) Icon(Icons.Filled.Lock, contentDescription = null, tint = cs.onPrimary,
+                                modifier = Modifier.align(Alignment.BottomEnd).padding(3.dp).size(12.dp))
                         }
                     }
                 }

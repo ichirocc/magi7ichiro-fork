@@ -21,7 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -134,7 +136,7 @@ internal fun WishCard(
                 selectedDays = daysSel, onToggle = onToggleDay, extMarked = extMarked,
             )
             if (myExt.isNotEmpty()) {
-                Text("拡張希望（この日はこのシフト以外）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("拡張希望（この日はこのシフト以外）", style = MaterialTheme.typography.titleSmall)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     myExt.forEach { e ->
                         InputChip(
@@ -158,7 +160,7 @@ internal fun WishCard(
             }
             // [全職員横断の一覧] カレンダーは1職員ずつしか見えない弱点を補う確認・削除専用ビュー（既定非表示）。
             if (showAllStaff && rows.isNotEmpty()) {
-                Text("登録済み希望（全職員）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text("登録済み希望（全職員）", style = MaterialTheme.typography.titleSmall)
                 rows.groupBy { it.i }.forEach { (_, list) ->
                     Text(list.first().staffName, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -183,7 +185,7 @@ internal fun WishCard(
 
 /** [選択日の一括設定] カレンダー下部にインライン表示（1日以上選択時のみ）。モーダルで隠さないので
  *  カレンダーを見ながら追加選択・適用できる。担当可能シフトを主ボタン＋「その他」で全シフト、
- *  「選択した日を未設定に戻す」で希望を一括クリア。 */
+ *  「選択した日の希望を消す（N件）」で希望を一括で消す（確認つき）。 */
 @Composable
 private fun WishApplyPanel(
     ui: UiState,
@@ -204,10 +206,15 @@ private fun WishApplyPanel(
     val others = shifts.indices.filter { it !in allowed }
     var selK by remember(staffIdx) { mutableStateOf(primary.firstOrNull() ?: 0) }
     var showOther by remember { mutableStateOf(false) }
+    var confirmClear by remember(staffIdx) { mutableStateOf(false) }
     val sorted = days.sorted()
     // 選択日が多い場合は「6/3、6/8、6/17、ほか2日」と省略。
-    val datesLabel = if (sorted.size <= 4) sorted.joinToString("、") { dayChipLabel(ui.startDate, it) }
-    else sorted.take(3).joinToString("、") { dayChipLabel(ui.startDate, it) } + "、ほか${sorted.size - 3}日"
+    fun dayList(ds: List<Int>) = if (ds.size <= 4) ds.joinToString("、") { dayChipLabel(ui.startDate, it) }
+    else ds.take(3).joinToString("、") { dayChipLabel(ui.startDate, it) } + "、ほか${ds.size - 3}日"
+    val datesLabel = dayList(sorted)
+    // 拡張希望の日は希望を保存しない（ExtWishRules.wishBlockedBy）＝数えず、送らない。
+    val usable = sorted.filter { it !in extDays }
+    val clearable = sorted.filter { it in wishDays }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         HorizontalDivider()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -228,8 +235,8 @@ private fun WishApplyPanel(
             ExtWishPanel(ui, onEvent, staffIdx, days, shifts, wishDays, extSel, { k -> extSel = if (k in extSel) extSel - k else extSel + k }, onCancel, onDone)
             return@Column
         }
-        if (days.any { it in extDays }) {
-            Text("拡張希望の日（${days.count { it in extDays }}日）には希望を入れられません。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        if (usable.size < sorted.size) {
+            Text("拡張希望の日（${sorted.size - usable.size}日）には希望を入れられません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         ShiftButtonGrid(shifts, primary, selK, ui.shiftColorHex, ui.shiftTextHex) { selK = it }
         if (showOther && others.isNotEmpty()) ShiftButtonGrid(shifts, others, selK, ui.shiftColorHex, ui.shiftTextHex, warnSet = others.toHashSet()) { selK = it }
@@ -238,18 +245,28 @@ private fun WishApplyPanel(
         }
         if (selK !in allowed) {
             Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると違反になります。",
-                style = MaterialTheme.typography.labelSmall, color = cs.error)
+                style = MaterialTheme.typography.bodySmall, color = cs.error)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
             Button(
-                onClick = { onEvent(MagiEvent.Condition.SetWishesForDays(staffIdx, days.map { it - 1 }, selK)); onDone() },
-                enabled = !ui.running,
+                onClick = { onEvent(MagiEvent.Condition.SetWishesForDays(staffIdx, usable.map { it - 1 }, selK)); onDone() },
+                enabled = !ui.running && usable.isNotEmpty(),
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text("${days.size}日に適用") }
+            ) { Text("${usable.size}日に適用") }
         }
-        TextButton(onClick = { onEvent(MagiEvent.Condition.ClearWishesForDays(staffIdx, days.map { it - 1 })); onDone() }, enabled = !ui.running,
-            modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
+        TextButton(onClick = { confirmClear = true }, enabled = !ui.running && clearable.isNotEmpty(),
+            colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("選択した日の希望を消す（${clearable.size}件）") }
+    }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("選択した日の希望を消しますか？") },
+            text = { Text("${ui.staffNames.getOrElse(staffIdx) { "" }}の${dayList(clearable)}の希望（${clearable.size}件）を消します。割当には影響しません。元に戻すで復元できます。") },
+            confirmButton = { DialogDangerButton("消す", onClick = { confirmClear = false; onEvent(MagiEvent.Condition.ClearWishesForDays(staffIdx, clearable.map { it - 1 })); onDone() }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }) },
+        )
     }
 }
 
@@ -269,7 +286,7 @@ private fun ExtWishPanel(
     }
     val failed = result?.error?.takeIf { sentSerial >= 0 && result.serial > sentSerial }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("この日は選んだシフト以外にする（複数選べます）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+        Text("この日は選んだシフト以外にする（複数選べます）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         shifts.indices.chunked(4).forEach { rowIdxs ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 rowIdxs.forEach { idx ->
@@ -296,9 +313,9 @@ private fun ExtWishPanel(
             }
         }
         if (usable.size < days.size) {
-            Text("希望のある日（${days.size - usable.size}日）は拡張希望に入れられません。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("希望のある日（${days.size - usable.size}日）は拡張希望に入れられません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
-        if (failed != null) Text("登録できませんでした: $failed", style = MaterialTheme.typography.labelSmall, color = cs.error)
+        if (failed != null) Text("登録できませんでした: $failed", style = MaterialTheme.typography.bodySmall, color = cs.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
             Button(
@@ -370,7 +387,7 @@ private fun WishMonthGrid(
             weekJa.forEachIndexed { idx, w ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(w, style = MaterialTheme.typography.labelSmall,
-                        color = when (idx) { 0 -> MagiAccent.red; 6 -> MagiAccent.blue; else -> cs.onSurfaceVariant })
+                        color = when (idx) { 0 -> cs.error; 6 -> MagiAccent.blueText; else -> cs.onSurfaceVariant })
                 }
             }
         }
@@ -378,12 +395,12 @@ private fun WishMonthGrid(
         dayCells.chunked(7).forEach { wk ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { d ->
-                    if (d == null) Box(Modifier.weight(1f).height(56.dp))
+                    if (d == null) Box(Modifier.weight(1f).height(64.dp))
                     else {
                         val sel = d in selectedDays
                         val k = marked[d]
                         Box(
-                            Modifier.weight(1f).height(56.dp)
+                            Modifier.weight(1f).height(64.dp)
                                 .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.extraSmall)
                                 .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outlineVariant, MaterialTheme.shapes.extraSmall)
                                 .clickable { onToggle(d) }
@@ -399,7 +416,7 @@ private fun WishMonthGrid(
                                     Text("$d", style = MaterialTheme.typography.bodyMedium,
                                         color = if (sel) cs.onPrimaryContainer else cs.onSurface,
                                         fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
-                                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.primary, modifier = Modifier.size(12.dp))
+                                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.onPrimaryContainer, modifier = Modifier.size(12.dp))
                                 }
                                 if (k != null) {
                                     val chipBg = hexToColor(shiftColorHex.getOrElse(k) { "" })
@@ -410,13 +427,14 @@ private fun WishMonthGrid(
                                 }
                                 extMarked[d]?.let { ex ->
                                     // 記号が 3 つ以上はセル幅に入らないので件数で（実機 12/5「×休PｼD」が切れた）。全文は一覧チップにある。
-                                    Text(if (ex.size <= 2) "×" + ex.joinToString("") else "×${ex.size}種", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, maxLines = 1)
+                                    Text(if (ex.size <= 2) "×" + ex.joinToString("") else "×${ex.size}種", style = MaterialTheme.typography.labelSmall,
+                                        color = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant, maxLines = 1)
                                 }
                             }
                         }
                     }
                 }
-                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(56.dp)) }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(64.dp)) }
             }
         }
     }

@@ -95,6 +95,8 @@ data class UiState(
     val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
     val ejectionChain: EjectionChainMode = EjectionChainMode.PIPELINE,  // 玉突きで直す（既定＝見込みのある所だけ、3.656.0）。保存しない
     val ejectionChainSwap: Boolean = true,  // PolishGate.ejectionChainSwapMoves（既定ON）。保存しない
+    val ejectionPipelineRounds: Boolean = true,  // PolishGate.ejectionPipelineRounds（既定ON）。保存しない
+    val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 6,  // PolishGate.ejectionChainMaxMillis / 1000（既定6）。保存しない
     val stallPolishInjection: Boolean = false,  // PolishGate.stallPolishInjection（既定OFF）。保存しない
@@ -201,7 +203,8 @@ data class PinTargetView(
 data class ExtWishResult(val serial: Long, val error: String?)
 
 /** 操作の通知。[undoSerial] はその操作が積んだ元に戻すの段（通知から戻すのはこの段が先頭のときだけ）。 */
-data class OpNotice(val id: Long, val text: String, val undoSerial: Long)
+/** [undoable]＝false は「元に戻す」を付けない結果の通知（元に戻す・やり直す自身の結果など）。 */
+data class OpNotice(val id: Long, val text: String, val undoSerial: Long, val undoable: Boolean = true)
 
 /** 希望の表示（希望・試算できる希望・希望どうしの衝突・手動固定）を設定から作り直す。報告の反映と元に戻す/やり直すで共有する。 */
 internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState = copy(
