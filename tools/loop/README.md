@@ -38,6 +38,8 @@
 - **決定的モード（3.507.3）**: `MAGI_BENCH_DETERMINISTIC=1 tools/loop/run_bench.sh …` で両腕とも `PostOptimizationParams.deterministic=true`
   （ms キャップ・締切・残り時間の判定を回数上限へ。共同 LNS は `maxEvaluations`＝C1 90,000・個人 60,000）。同じ入力・seed なら同じ盤面＝
   `repro` 列が他ジョブの負荷に依存しない。実機は既定 OFF（予算を使い切る）。
+  ただし初期盤面（`initialFor`）は V5 の時間制の探索（2〜4 秒）で作るので、**別の実行では同じ case・seed でも初期盤面が変わりうる**（必須の件数が同じでも中身が違う）。対の比較は同じ実行の中で両腕が同じ初期盤面から走るので有効だが、対ごとの勝ち負けを別の実行で再現しようとしない（2026-10-10: c34 seed 1 は本計測で新腕の必須 +1、単独の再実行では −1）。
+  負けた対の経路を読むときは `MAGI_BENCH_LOGTAGS=EjectionPipeline,POST` のように後処理ログの tag を指定すると、腕ごとに標準エラーへ出る（seed 0 の新腕は再現性の確認で 2 回走るので 2 回出る）。
 - **機能同等性（§4 の 14 機能）**は `app/src/test/java/com/magi/app/v6/LoopFeatureRegressionTest.kt`（C# は `LoopFeatureRegressionTest.cs`）で
   計測する（3.507.2）。各機能を最小盤面で作り、後処理チェーンを旧腕（`componentRepairEnabled=false`）と新腕（true）の両方で走らせて
   不変条件（人員不足/超過修復・個人上下限・群回数・禁止連・希望固定・希望日前後・同長区間交換・循環交換・担当可・スキル群・Undo・停止・
