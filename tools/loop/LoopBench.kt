@@ -238,6 +238,9 @@ fun main(args: Array<String>) {
                     val wishRate = if (wishN == 0) 1.0 else wishOk.toDouble() / wishN
                     var changed = 0; for (i in 0 until st.staffCount) for (j in 0 until st.dayCount) if (b[i][j] != init[i][j]) changed++
                     val ejStages = res.stageRecords.filter { it.key in EJ_KEYS }
+                    // MAGI_BENCH_LOGTAGS=EjectionPipeline,POST のように指定すると、その tag の後処理ログを腕ごとに標準エラーへ出す（負けた対の経路を読む用）。
+                    val logTags = System.getenv("MAGI_BENCH_LOGTAGS")?.split(",")?.filter { it.isNotBlank() }.orEmpty()
+                    for (l in res.logs) if (l.tag in logTags) System.err.println("  [${sp.id} seed=$seed $arm] ${l.tag}: ${l.message}")
                     return listOf(ms, if (ms > sp.budgetMs) 1 else 0, exc, oob, mismatch, rep.hard, hardW, softW, "%.4f".format(wishRate), changed, rep.total, rep.weightedScore, peak, b.contentDeepHashCode(), "", ejStages.sumOf { it.ms }, ejStages.sumOf { it.applied })
                 }
                 val r = once().toMutableList()
