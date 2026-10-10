@@ -51,7 +51,7 @@
 - **`UnifiedViolationChecker`**（正）— Kotlin の `check(` 呼び出しは **207 箇所**。研磨の採否・UI の違反表示・直し方の提案・診断がすべて読む。
   戻り値は場所・族ごとのマップ束で、JNI 越しに毎回組み立てる費用が評価そのものより重い。
 - **研磨・修復パス** — `V6HotfixPasses*.kt` と独立ファイル約 30 本（`C1JointLnsPolish`・`ViolationComponentRepair`・`WishIslandPolish`・
-  `C1EjectionChainPolish`・`CountChainPolish` など）。すべて「候補を作る → チェッカーで評価 → `betterReport` ＋ `exactPinRegression` で採否」。
+  `C1EjectionChainPolish`（とそれを予察つきで呼ぶ `EjectionChainPipeline`）・`CountChainPolish` など）。すべて「候補を作る → チェッカーで評価 → `betterReport` ＋ `exactPinRegression` で採否」。
 - **診断**（`ForbiddenRunDiagnosis`・`CoverageDiagnosis`・`C1RepairAnalysis`・`ConstraintMus`・`V6SanityPort`）— 読み取り専用で、実行時間に占める割合は小さい。
 - **制御層**（`V6FinalPort` の予算・停滞監視・最終番兵、`V6NativeOptimizer` の適応ポートフォリオ）— ラウンド境界で数回〜数千回しか走らない。
 

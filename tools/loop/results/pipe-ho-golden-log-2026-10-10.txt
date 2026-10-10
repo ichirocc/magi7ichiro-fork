@@ -1,0 +1,24 @@
+### golden_state.json seed=1 rep=1 arm=off elapsed=44589 hard=0 w=6040.0 t=323
+### golden_state.json seed=1 rep=1 arm=on elapsed=48377 hard=0 w=6317.0 t=335
+MirrorLog(ts=1791606392594, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=C1 残差=86 起点=206 浅=評価3000/44ms/当たり0 中=評価8000/56ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 335->335 重み 6317->6317)
+MirrorLog(ts=1791606392646, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=SOFT 残差=249 起点=56 浅=評価3000/14ms/当たり0 中=評価8000/27ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 335->335 重み 6317->6317)
+### golden_state.json seed=1 rep=2 arm=off elapsed=55890 hard=0 w=5950.0 t=322
+### golden_state.json seed=1 rep=2 arm=on elapsed=43695 hard=0 w=5981.0 t=305
+MirrorLog(ts=1791606492189, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=C1 残差=80 起点=176 浅=評価3000/13ms/当たり0 中=評価8000/27ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 305->305 重み 5981->5981)
+MirrorLog(ts=1791606492232, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=SOFT 残差=225 起点=60 浅=評価3000/12ms/当たり0 中=評価8000/26ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 305->305 重み 5981->5981)
+### golden_state.json seed=2 rep=1 arm=off elapsed=46277 hard=0 w=5787.0 t=325
+### golden_state.json seed=2 rep=1 arm=on elapsed=54043 hard=0 w=6120.0 t=312
+MirrorLog(ts=1791606592513, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=C1 残差=85 起点=184 浅=評価3000/12ms/当たり0 中=評価8000/34ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 312->312 重み 6120->6120)
+MirrorLog(ts=1791606592557, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=SOFT 残差=227 起点=46 浅=評価3000/12ms/当たり0 中=評価8000/28ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 312->312 重み 6120->6120)
+### golden_state.json seed=2 rep=2 arm=off elapsed=38775 hard=0 w=6153.0 t=327
+### golden_state.json seed=2 rep=2 arm=on elapsed=44223 hard=0 w=6016.0 t=317
+MirrorLog(ts=1791606675514, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=C1 残差=82 起点=197 浅=評価3000/11ms/当たり0 中=評価8000/27ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 317->317 重み 6016->6016)
+MirrorLog(ts=1791606675556, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=SOFT 残差=235 起点=54 浅=評価3000/11ms/当たり0 中=評価8000/27ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 317->317 重み 6016->6016)
+### golden_state.json seed=3 rep=1 arm=off elapsed=47572 hard=0 w=6064.0 t=312
+### golden_state.json seed=3 rep=1 arm=on elapsed=56841 hard=0 w=6111.0 t=327
+MirrorLog(ts=1791606779927, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=C1 残差=81 起点=191 浅=評価3000/12ms/当たり0 中=評価8000/25ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 327->327 重み 6111->6111)
+MirrorLog(ts=1791606779971, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=SOFT 残差=246 起点=56 浅=評価3000/12ms/当たり0 中=評価8000/27ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 327->327 重み 6111->6111)
+### golden_state.json seed=3 rep=2 arm=off elapsed=44897 hard=0 w=6065.0 t=328
+### golden_state.json seed=3 rep=2 arm=on elapsed=47235 hard=0 w=6226.0 t=316
+MirrorLog(ts=1791606872064, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=C1 残差=85 起点=217 浅=評価3000/11ms/当たり0 中=評価8000/27ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 316->316 重み 6226->6226)
+MirrorLog(ts=1791606872105, iter=0, level=I, tag=EjectionPipeline, message=玉突きパイプライン[焦点=SOFT 残差=231 起点=54 浅=評価3000/11ms/当たり0 中=評価8000/27ms/当たり0 深=なし 採用=0件 終了=probe_miss]: HARD 0->0 合計 316->316 重み 6226->6226)

@@ -169,9 +169,11 @@ internal object C1JointLnsPolish {
         val debtCulprits = LinkedHashMap<String, Int>()
         var duplicateRejected = 0
         var restartsDone = 0
+        var lbHit = false
 
         for (restart in 0 until restartLimit) {
-            if (stopped() || best.c1 <= lowerBound) break
+            if (stopped()) break
+            if (best.c1 <= lowerBound) { lbHit = true; break }
             restartsDone++
             val rng = Random(seed xor (restart.toLong() * -0x61c8864680b583ebL))
             var beam = if (best === root) listOf(root) else listOf(root, best)
@@ -262,6 +264,15 @@ internal object C1JointLnsPolish {
             }
         }
 
+        // [3.655.0] 打ち切りの理由はループを抜けた時点で決める（旧: 正式な再検査の後に評価し直し、再検査中の期限・patience 切れを拾った）。
+        val loopHalt = when {
+            shouldStop() -> "外部停止"
+            evalCapped() -> "評価回数上限${config.maxEvaluations}"
+            System.nanoTime() >= deadline -> "期限"
+            stalled() -> "最良が${config.patienceMs}ms更新されず打ち切り"
+            else -> null
+        }
+
         // Defensive re-check. A shared-array bug or future operator mistake can never escape this gate.
         val finalReport = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
         val finalC1 = finalReport.breakdown["c1"] ?: 0
@@ -277,17 +288,12 @@ internal object C1JointLnsPolish {
         // 良い(だがc1はtargetC1超の)候補へ best を差し替えても「到達」と表示され続けていた。
         val targetReached = chosenC1 <= targetC1
 
-        val stopReason = when {
-            chosenC1 <= lowerBound -> "構造下限到達"
-            shouldStop() -> "外部停止"
-            evalCapped() -> "評価回数上限${config.maxEvaluations}"
-            System.nanoTime() >= deadline -> "期限"
-            stalled() -> "最良が${config.patienceMs}ms更新されず打ち切り"
-            else -> "探索停滞"
-        }
+        val atLowerBound = lbHit || chosenC1 <= lowerBound
+        val stopReason = (loopHalt ?: if (atLowerBound) "構造下限到達" else "探索停滞") +
+            (if (loopHalt != null && atLowerBound) "（c1 は構造下限）" else "")
         val log = MirrorLog(
             tag = "C1JointLNS",
-            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, $pct%目標=${if (targetReached) "到達" else "未達"})" +
+            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, $pct%目標=${if (improvable <= 0) "対象なし" else if (targetReached) "到達" else "未達"})" +
                 " / total ${rootReport.total}->${chosenReport.total} HARD ${rootReport.hard}->${chosenReport.hard}" +
                 " 採用${if (valid) 1 else 0}束 手数${if (valid) best.path.size else 0}" +
                 " restart$restartsDone 展開$expanded 候補$generated debt除外$debtRejected" +
@@ -540,27 +546,24 @@ internal object C1JointLnsPolish {
         val i = goal.staff; val j = goal.day; val x = goal.targetShift
         val a = schedule[i][j]
         if (a == x || !allowed(p, i, j, x)) return emptyList()
-        // [賢く再構成] 全Move種の共通効果=「iのday jにxを置く」がこの時点で既に禁止連続(c3n)を
-        // 作るなら、このgoal自体を即座に諦める(手を1つも生成しない)。従来はdebt+最終ゲート
-        // (isFinalCandidate/defensive re-check)だけに頼っており、正しさは常に保たれていたが、
-        // c3n を作るとhard debtを使い切る候補ばかり生成してしまい、maxMovesPerGoalの枠が
-        // 無駄な候補で埋まっていた。事前に弾くのは効率のみの改善＝最終正しさは無関係(不変)。
-        if (p.makesForbiddenRun(schedule, i, j, x)) return emptyList()
+        // [3.654.0] 行 i を j だけ変える手（直接・同日の入れ替え・3 人回し・他人からの移送）は「j に x」だけで禁止の並びかが決まる。
+        //   本人の別日も戻す手（自己日交換）は 2 セルを当てた行で見る（旧: ここで goal ごと捨て、合法な改善手を取りこぼしていた）。
+        val rowBlocked = p.makesForbiddenRun(schedule, i, j, x)
         val scored = ArrayList<Pair<Int, Move>>()
 
         // Elastic move. It may temporarily create coverage debt; later goals can repair it.
-        scored.add(20 to Move.Direct(i, j, x))
+        if (!rowBlocked) scored.add(20 to Move.Direct(i, j, x))
 
         val staffOrder = (0 until p.S).shuffled(rng)
         for (donor in staffOrder) {
-            if (donor == i || schedule[donor][j] != x || !allowed(p, donor, j, a)) continue
+            if (rowBlocked || donor == i || schedule[donor][j] != x || !allowed(p, donor, j, a)) continue
             // [賢く再構成] donorがaを受け取る側の禁止連続も同様に事前に弾く。
             if (p.makesForbiddenRun(schedule, donor, j, a)) continue
             scored.add(100 to Move.SameDaySwap(i, donor, j))
         }
 
         for (donor in staffOrder) {
-            if (donor == i || schedule[donor][j] != x) continue
+            if (rowBlocked || donor == i || schedule[donor][j] != x) continue
             for (bridge in staffOrder) {
                 if (bridge == i || bridge == donor) continue
                 val y = schedule[bridge][j]
@@ -574,9 +577,7 @@ internal object C1JointLnsPolish {
         val dayOrder = (0 until p.T).shuffled(rng)
         for (otherDay in dayOrder) {
             if (otherDay == j || schedule[i][otherDay] != x || !allowed(p, i, otherDay, a)) continue
-            // [賢く再構成] iがotherDayでaに戻る側も事前チェック(同一職員の別日、元盤面基準の
-            // 保守的近似＝jとotherDayが同一窓に入る稀なケースを見逃しても最終checkerが必ず拾う)。
-            if (p.makesForbiddenRun(schedule, i, otherDay, a)) continue
+            if (selfMoveForbidden(p, schedule, i, j, x, otherDay, a)) continue
             scored.add(70 to Move.SelfDaySwap(i, j, otherDay))
         }
 
@@ -584,10 +585,11 @@ internal object C1JointLnsPolish {
         // Global monthly shift totals stay fixed while per-day coverage can move, which the old
         // same-day-only bundle could not express.
         for (donor in staffOrder) for (otherDay in dayOrder) {
-            if (donor == i && otherDay == j) continue
+            // 本人の別日（自己日交換と同じ手）と同じ日（同日の入れ替えと同じ手）は上で作る＝重複させない（3.654.0）。
+            if (donor == i || otherDay == j) continue
             if (schedule[donor][otherDay] != x) continue
             if (!allowed(p, donor, otherDay, a)) continue
-            if (p.makesForbiddenRun(schedule, donor, otherDay, a)) continue
+            if (rowBlocked || p.makesForbiddenRun(schedule, donor, otherDay, a)) continue
             scored.add(60 to Move.CrossDayTransfer(i, j, donor, otherDay))
         }
 
@@ -596,6 +598,13 @@ internal object C1JointLnsPolish {
             .map { it.second }
             .distinctBy { it.toString() }
             .take(limit)
+    }
+
+    /** 本人の 2 セル（j に x、d2 に a）を同時に当てた行で、どちらかのセルを含む禁止の並び（c3n・c3w）ができるか。 */
+    private fun selfMoveForbidden(p: Problem, s: Array<IntArray>, i: Int, j: Int, x: Int, d2: Int, a: Int): Boolean {
+        val view = s.copyOf()
+        view[i] = s[i].copyOf().also { it[j] = x; it[d2] = a }
+        return p.makesForbiddenRun(view, i, j, x) || p.makesForbiddenRun(view, i, d2, a)
     }
 
     private fun applyMove(schedule: Array<IntArray>, move: Move): Boolean = when (move) {

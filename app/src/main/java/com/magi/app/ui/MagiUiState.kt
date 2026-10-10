@@ -93,7 +93,7 @@ data class UiState(
     val searchStrength: SearchStrength = SearchStrength.NORMAL,  // じっくり＝SearchStrength.apply の4フラグON。保存しない
     val aptFairToleranceUnguarded: Boolean = false,  // !AptFairPolish.heavySoftGuard（測定用・既定OFF）。じっくりの容認 6% でだけ効く。保存しない
     val c1MoveARepair: Boolean = false,  // PolishGate.c1MoveARepair（試験中・既定OFF）。保存しない
-    val ejectionChain: EjectionChainMode = EjectionChainMode.OFF,  // 玉突きで直す（試験中・既定OFF）。保存しない
+    val ejectionChain: EjectionChainMode = EjectionChainMode.PIPELINE,  // 玉突きで直す（既定＝見込みのある所だけ、3.656.0）。保存しない
     val ejectionChainSwap: Boolean = true,  // PolishGate.ejectionChainSwapMoves（既定ON）。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 6,  // PolishGate.ejectionChainMaxMillis / 1000（既定6）。保存しない
@@ -231,12 +231,15 @@ enum class EjectionChainScope {
     }
 }
 
+/** PIPELINE＝予察つきのパイプライン（期間の制約→その他のソフト）。C1/ALL＝従来の常時フル（パイプラインは切る＝同じ後処理で両方は走らせない）。 */
 enum class EjectionChainMode {
-    OFF, C1, ALL;
+    OFF, PIPELINE, C1, ALL;
 
     fun apply() {
         com.magi.app.v6.PolishGate.c1EjectionChain = this == C1
         com.magi.app.v6.PolishGate.allFamilyEjectionChain = this == ALL
+        com.magi.app.v6.PolishGate.ejectionPipelineFocus =
+            if (this == PIPELINE) com.magi.app.v6.EjectionChainPipeline.Focus.BOTH else com.magi.app.v6.EjectionChainPipeline.Focus.OFF
     }
 }
 

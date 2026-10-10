@@ -33,6 +33,7 @@
 
 - **再開（3.507.6）**: 出力 CSV が既にあれば済みの (case,seed,arm) を飛ばして追記する＝同じコマンドで続きから走る。このサンドボックスは
   セッションが無操作だと VM が止まりバックグラウンドの JVM が消えるので、長いベンチは前景の待機（10 分ずつ）で見守るか、再開前提で回す。
+- **玉突き連鎖パイプラインの腕（3.656.0）**: `MAGI_BENCH_FEATURE=pipeoff*`＝玉突きなし対パイプライン、`pipevsfull*`＝従来の常時フル対パイプライン、`pipevsshallow*`＝浅い予察だけ対全段。`*end` は最終の違反起点修復の後に置く版、`*endk` はさらに探す範囲を既定（必須は月全体・他は前後7日）にした版（`*end` までと従来の玉突きの腕 `ejection*` は月全体で測った＝再現のため据え置き）。それ以外の機能はパイプラインと範囲を既定のまま測る。CSV の `ejMs`/`ejApplied` は玉突き系の段の所要の合計と採用数の合計（0＝空振り）。
 - **決定的モード（3.507.3）**: `MAGI_BENCH_DETERMINISTIC=1 tools/loop/run_bench.sh …` で両腕とも `PostOptimizationParams.deterministic=true`
   （ms キャップ・締切・残り時間の判定を回数上限へ。共同 LNS は `maxEvaluations`＝C1 90,000・個人 60,000）。同じ入力・seed なら同じ盤面＝
   `repro` 列が他ジョブの負荷に依存しない。実機は既定 OFF（予算を使い切る）。
@@ -55,7 +56,7 @@
 
 ## HandleOptimizeBench（`run_handleoptimize_bench.sh`）の腕と集計（3.641.0〜3.643.0）
 
-- `MAGI_HO_FEATURE`: 空＝ExtraRefine 省略の A/B。`c3nwall`＝c3n 壁の短縮を外す。`head`＝HEAD の壁判定と試行中の停止確認を切る。`deep`＝経験的な c3n 壁を 1 手探索で反証する（`PolishGate.c3nWallDeepCheck`）。`adaptive`＝適応閾値（`PolishGate.adaptiveStall`、通常分岐を直近の改善間隔の最大×3 まで縮める。2026-10-09 に否決）。
+- `MAGI_HO_FEATURE`: 空＝ExtraRefine 省略の A/B。`c3nwall`＝c3n 壁の短縮を外す。`head`＝HEAD の壁判定と試行中の停止確認を切る。`deep`＝経験的な c3n 壁を 1 手探索で反証する（`PolishGate.c3nWallDeepCheck`）。`adaptive`＝適応閾値（`PolishGate.adaptiveStall`、通常分岐を直近の改善間隔の最大×3 まで縮める。2026-10-09 に否決）。`ejpipeend`＝off 腕が玉突きなし・on 腕が玉突き連鎖パイプライン（BOTH・修復の後、3.656.0 の既定）。`ejpipe`/`ejpipec1`/`ejpipefull` は C1 共同 LNS の直後に置いた版（`ejpipefull` の off 腕は従来の全族の常時フル）。それ以外の腕はパイプラインを既定（ON）のまま測る（3.656.0〜）。
 - `MAGI_HO_FIXTURES`（カンマ区切り）、`MAGI_HO_SEEDS`（seed の列）、`MAGI_HO_REPEATS`（同じ seed・同じ腕の反復。CSV 末尾に `rep` 列）、`MAGI_HO_LOGTAGS`＋`MAGI_HO_LOGFILE`（Watchdog・EarlyStop などのエンジンログを run ごとに追記）。
 - 集計: `python3 tools/loop/ho_stats.py results/x.csv [results/y.csv ...] [--metric total]`。差は off−on（正＝既定が悪い）。平均・95% ブートストラップ区間・符号検定・rep 間の揺れ（プール SD と最大範囲）・決定／未決と、区間を 0 から外すのに要る対の数を出す。
 - 規則: 腕の差を読む前に、同じ seed・同じ腕の揺れを測る。workers 4 は壁時計に依存し、seed を固定しても軌跡が変わる（2026-10-08 の診断で weighted ±100〜325、停止時刻 ±215 s）。区間が 0 を含むなら未決とし、既定を動かさない。

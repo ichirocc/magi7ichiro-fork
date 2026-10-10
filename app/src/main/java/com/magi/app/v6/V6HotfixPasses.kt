@@ -170,6 +170,14 @@ object PolishGate {
     /** [測定中] 同じ位置で全族起点の玉突き連鎖を走らせる。既定 OFF。[c1EjectionChain] と両方 ON ならこちらだけを 1 回走らせる。 */
     @Volatile var allFamilyEjectionChain: Boolean = false
 
+    /** 玉突きを予察つきのパイプライン（[EjectionChainPipeline]）で行う。OFF 以外のとき従来の玉突き（どの置き場所も）は走らせない。
+     *  既定 **BOTH**（3.656.0 で昇格＝docs/history）。 */
+    @Volatile internal var ejectionPipelineFocus: EjectionChainPipeline.Focus = EjectionChainPipeline.Focus.BOTH
+
+    /** パイプラインの置き場所を最終の違反起点修復の後へ（false＝C1 共同 LNS の直後。そこでは後段の経路が変わり OFF 比で
+     *  必須が増える盤面があった）。既定 **true**（3.656.0）。 */
+    @Volatile var ejectionPipelineAfterRepair: Boolean = true
+
     /** 玉突き連鎖の候補に入れ替え（同日の 2 人・同じ職員の 2 日）を含めるか。既定 true＝`C1EjectionChainPolish.Config.swapMoves` の既定と同じ。 */
     @Volatile var ejectionChainSwapMoves: Boolean = true
 
@@ -304,7 +312,7 @@ object PolishGate {
         "wideC3nBreakDays" to wideC3nBreakDays, "c1MoveARepair" to c1MoveARepair,
         "filterC3nIncrease" to filterC3nIncrease, "hardDeltaPrefilter" to hardDeltaPrefilter,
         "wishConflictFloorMode" to wishConflictFloorMode.name,
-        "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain,
+        "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain, "ejectionPipelineFocus" to ejectionPipelineFocus.name, "ejectionPipelineAfterRepair" to ejectionPipelineAfterRepair,
         "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "hardEjectionChainEarly" to hardEjectionChainEarly, "allEjectionChainEarly" to allEjectionChainEarly, "allEjectionChainFinal" to allEjectionChainFinal, "hardEjectionChainRetry" to hardEjectionChainRetry, "allEjectionChainAfterRepair" to allEjectionChainAfterRepair, "normalStallFraction" to normalStallFraction,
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
@@ -320,6 +328,8 @@ object PolishGate {
         b("filterC3nIncrease") { filterC3nIncrease = it }; b("hardDeltaPrefilter") { hardDeltaPrefilter = it }
         (m["wishConflictFloorMode"] as? String)?.let { n -> WishFloorMode.entries.firstOrNull { it.name == n }?.let { wishConflictFloorMode = it } }
         b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
+        (m["ejectionPipelineFocus"] as? String)?.let { n -> EjectionChainPipeline.Focus.entries.firstOrNull { it.name == n }?.let { ejectionPipelineFocus = it } }
+        b("ejectionPipelineAfterRepair") { ejectionPipelineAfterRepair = it }
         b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }; b("hardEjectionChainEarly") { hardEjectionChainEarly = it }; b("allEjectionChainEarly") { allEjectionChainEarly = it }; b("allEjectionChainFinal") { allEjectionChainFinal = it }; b("hardEjectionChainRetry") { hardEjectionChainRetry = it }; b("allEjectionChainAfterRepair") { allEjectionChainAfterRepair = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
@@ -716,6 +726,14 @@ object V6HotfixPasses {
         val report0 = UnifiedViolationChecker.check(state, schedule, quantitativeRangeEval = params.quantitativeRangeEval)
         val chain = PostChain(onPhase, schedule, state, params.quantitativeRangeEval, params.postChainRunningKeepBest, report0,
             rollbackCountsZero = params.postChainRollbackCountsZero, aptFairSoftTolerance = params.aptFairSoftTolerance)
+        // 玉突きパイプラインが有効なら、従来の玉突き（どの置き場所も）は走らせない。
+        val pipelineFocus = PolishGate.ejectionPipelineFocus
+        val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
+        val pipelineAtEnd = PolishGate.ejectionPipelineAfterRepair
+        fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
+            EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4),
+            previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
+            shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
         val t0 = EngineClock.nowMs()
 
         // [測定中・既定 OFF] 探索が拾い残した 1〜2 セルの改善手を先に拾う（HF80 の振動より前＝机上測定と同じ置き場所）。
@@ -748,7 +766,7 @@ object V6HotfixPasses {
         chain.replaceBoard(r66.newSchedule, r66.logs, r66.report, r66.movesApplied)
         // [測定中・既定 OFF] 玉突き連鎖を研磨群が盤面を固める前に試す（起点は必須だけ／ソフトを含む全族）。
         //   後段（C1共同LNSの後）の玉突きは研磨し尽くした盤面から始まり採用 0 が続いたため、置き場所を前へ出して測る。
-        if (PolishGate.hardEjectionChainEarly || PolishGate.allEjectionChainEarly) {
+        if (!pipelineOn && (PolishGate.hardEjectionChainEarly || PolishGate.allEjectionChainEarly)) {
             val tHe = EngineClock.nowMs()
             val earlyOrigin = if (PolishGate.allEjectionChainEarly) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.HARD
             chain.adopt(chain.timed("後処理 前段の玉突き連鎖", "前段玉突き連鎖") { work ->
@@ -802,7 +820,9 @@ object V6HotfixPasses {
                 }
             }
         })
-        if (PolishGate.c1EjectionChain || PolishGate.allFamilyEjectionChain) {
+        if (pipelineOn && !pipelineAtEnd) {
+            chain.adopt(chain.timed("後処理 玉突き連鎖(予察つき)", "玉突きパイプライン") { work -> runPipeline(work) })
+        } else if (!pipelineOn && (PolishGate.c1EjectionChain || PolishGate.allFamilyEjectionChain)) {
             val tEj = EngineClock.nowMs()
             val origin = if (PolishGate.allFamilyEjectionChain) C1EjectionChainPolish.Origin.ALL else C1EjectionChainPolish.Origin.C1
             chain.adopt(chain.timed("後処理 期間要件(c1)玉突き連鎖", "C1玉突き連鎖") { work ->
@@ -839,7 +859,7 @@ object V6HotfixPasses {
             })
         }
 
-        if (PolishGate.hardEjectionChainRetry && !shouldStop() &&
+        if (!pipelineOn && PolishGate.hardEjectionChainRetry && !shouldStop() &&
             UnifiedViolationChecker.check(state, chain.work, quantitativeRangeEval = params.quantitativeRangeEval).hard > 0) {
             val tEr = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 必須が残ったときの玉突き連鎖", "必須再玉突き連鎖") { work ->
@@ -849,7 +869,7 @@ object V6HotfixPasses {
             })
         }
 
-        if (PolishGate.allEjectionChainFinal && !shouldStop()) {
+        if (!pipelineOn && PolishGate.allEjectionChainFinal && !shouldStop()) {
             val tEf = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 最終段の玉突き連鎖", "最終段玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)
@@ -870,7 +890,11 @@ object V6HotfixPasses {
             chain.rejectedPool.clear()
         }
 
-        if (PolishGate.allEjectionChainAfterRepair && !shouldStop()) {
+        if (pipelineOn && pipelineAtEnd && !shouldStop()) {
+            chain.adopt(chain.timed("後処理 玉突き連鎖(予察つき・修復の後)", "玉突きパイプライン") { work -> runPipeline(work) })
+        }
+
+        if (!pipelineOn && PolishGate.allEjectionChainAfterRepair && !shouldStop()) {
             val tEa = EngineClock.nowMs()
             chain.adopt(chain.timed("後処理 修復後の玉突き連鎖", "修復後玉突き連鎖") { work ->
                 val cfg = if (params.deterministic) C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL, swapMoves = PolishGate.ejectionChainSwapMoves, maxEvaluations = params.c1LnsMaxEvaluations.toLong() * 4)

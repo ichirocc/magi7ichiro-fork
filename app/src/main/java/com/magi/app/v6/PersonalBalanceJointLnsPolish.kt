@@ -16,8 +16,9 @@ import kotlin.math.max
  * 同日玉突きで補充する。
  *
  * 目標値の総和が月日数を超える等、apt違反が構造的に不可避な職員については、希望固定と
- * range/aptだけを用いた厳密count-DP下限を計算する。下限到達済みの違反を無駄に追わず、
- * 同じ下限値の別配置が正式目的を改善する場合だけ移し替える。
+ * range/aptだけを用いた厳密count-DP下限を計算する。下限到達済みの職員は、担当者が 1 人だけの
+ * シフトの apt 違反を持つときに限って対象に入れ、同じ下限値の別配置が正式目的を改善する場合だけ移し替える。
+ * 対象は下限からの余地が大きい順に最大 [Config.maxFocusStaff] 人（ログに「対象 N/M人」）。
  */
 internal object PersonalBalanceJointLnsPolish {
     data class Config(
@@ -82,7 +83,8 @@ internal object PersonalBalanceJointLnsPolish {
 
         val rootPersonal = personalPenaltyByStaff(p, rootSchedule)
         val lower = IntArray(p.S) { staffLowerBound(p, it) }
-        val focus = chooseFocusStaff(p, rootSchedule, rootPersonal, lower, config.maxFocusStaff)
+        val eligible = chooseFocusStaff(p, rootSchedule, rootPersonal, lower)
+        val focus = eligible.take(config.maxFocusStaff).toIntArray()
         if (focus.isEmpty()) return noOp(rootSchedule, rootReport, "range/apt対象なし")
 
         val rootFocus = focus.sumOf { rootPersonal[it] }
@@ -176,6 +178,13 @@ internal object PersonalBalanceJointLnsPolish {
             }
         }
 
+        // [3.655.0] 打ち切りの理由はループを抜けた時点で決める（旧: 正式な再検査の後に評価し直した）。
+        val loopHalt = when {
+            shouldStop() -> "外部停止"
+            evalCapped() -> "評価回数上限${config.maxEvaluations}"
+            System.nanoTime() >= deadline -> "期限"
+            else -> null
+        }
         val checked = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
         val checkedPersonal = personalPenaltyByStaff(p, best.schedule)
         // [receiving-code-review] focusTotal は「悪化させない(<=)」まで緩和。以前は狭義減少(<)を
@@ -197,13 +206,9 @@ internal object PersonalBalanceJointLnsPolish {
             val suffix = if (chosenPersonal[i] <= lower[i]) "=下限" else ""
             "$name ${rootPersonal[i]}->${chosenPersonal[i]}(下限${lower[i]}$suffix)"
         }
-        val reason = when {
-            valid && focus.all { chosenPersonal[it] <= lower[it] } -> "個人構造下限到達"
-            shouldStop() -> "外部停止"
-            evalCapped() -> "評価回数上限${config.maxEvaluations}"
-            System.nanoTime() >= deadline -> "期限"
-            else -> "探索停滞"
-        }
+        val atLowerBound = valid && focus.all { chosenPersonal[it] <= lower[it] }
+        val reason = (loopHalt ?: if (atLowerBound) "個人構造下限到達" else "探索停滞") +
+            (if (loopHalt != null && atLowerBound) "（対象は個人構造下限）" else "")
         val log = MirrorLog(
             tag = "PersonalJointLNS",
             message = "個人回数/apt共同LNS: personal $rootFocus->${focus.sumOf { chosenPersonal[it] }}" +
@@ -213,7 +218,7 @@ internal object PersonalBalanceJointLnsPolish {
                 " / total ${rootReport.total}->${chosenReport.total} HARD ${rootReport.hard}->${chosenReport.hard}" +
                 " 採用${if (valid) 1 else 0}束 手数${if (valid) best.path.size else 0}" +
                 " restart$restartsDone 展開$expanded 候補$generated debt除外$debtRejected 重複除外$duplicateRejected" +
-                " 停止=$reason 対象: $focusText" +
+                " 停止=$reason 対象${focus.size}/${eligible.size}人: $focusText" +
                 (if (valid) " 経路: ${best.path.joinToString("+")}" else " [頭打ち=正式目的を改善する個人違反減少束なし]"),
         )
         return V6HotfixPasses.CyclicSwapResult(
@@ -230,13 +235,13 @@ internal object PersonalBalanceJointLnsPolish {
         report = report,
     )
 
+    /** 対象の候補（下限からの余地が大きい順）。呼び出し側が上限人数で切る＝切った人数をログに出せる。 */
     private fun chooseFocusStaff(
         p: Problem,
         schedule: Array<IntArray>,
         current: IntArray,
         lower: IntArray,
-        limit: Int,
-    ): IntArray {
+    ): List<Int> {
         val improving = (0 until p.S)
             .filter { current[it] > lower[it] }
             .sortedWith(
@@ -247,7 +252,7 @@ internal object PersonalBalanceJointLnsPolish {
         val unavoidableExclusive = (0 until p.S)
             .filter { current[it] > 0 && current[it] <= lower[it] && hasExclusiveAptViolation(p, schedule, it) }
             .sortedWith(compareByDescending<Int> { current[it] }.thenBy { it })
-        return (improving + unavoidableExclusive).distinct().take(limit).toIntArray()
+        return (improving + unavoidableExclusive).distinct()
     }
 
     private fun hasExclusiveAptViolation(p: Problem, schedule: Array<IntArray>, staff: Int): Boolean {
@@ -486,7 +491,7 @@ internal object PersonalBalanceJointLnsPolish {
             val w = base.copy2D()
             w[i][j] = target
             w[i][d2] = old
-            if (p.makesForbiddenRun(base, i, j, target) || p.makesForbiddenRun(base, i, d2, old)) continue
+            if (p.makesForbiddenRun(w, i, j, target) || p.makesForbiddenRun(w, i, d2, old)) continue   // 交換後の行で見る（3.654.0）
             out.add(Candidate(w, listOf(CellOp(i, j, target), CellOp(i, d2, old)), "${goal.reason}:自己日交換"))
             if (out.size >= limit) break
         }
@@ -499,7 +504,7 @@ internal object PersonalBalanceJointLnsPolish {
                 val w = base.copy2D()
                 w[i][j] = target
                 w[d][d2] = old
-                if (p.makesForbiddenRun(base, i, j, target) || p.makesForbiddenRun(base, d, d2, old)) continue
+                if (p.makesForbiddenRun(w, i, j, target) || p.makesForbiddenRun(w, d, d2, old)) continue
                 out.add(Candidate(w, listOf(CellOp(i, j, target), CellOp(d, d2, old)), "${goal.reason}:クロス日移送"))
                 if (out.size >= limit) break@outer
             }
