@@ -76,6 +76,9 @@ object Cases {
 
 data class Case(val id: String, val size: String, val cat: String, val seed: Long, val budgetMs: Long, val state: MagiState)
 
+/** 玉突き系の段（後処理の段のキー）。CSV の ejMs はこれらの所要の合計、ejApplied は採用数の合計（0＝空振り）。 */
+val EJ_KEYS = setOf("玉突きパイプライン", "C1玉突き連鎖", "前段玉突き連鎖", "必須再玉突き連鎖", "最終段玉突き連鎖", "修復後玉突き連鎖")
+
 /** 初期解＝最適化器（探索本体のみ・後処理なし・1 ワーカー・短い予算）の出力。両方式・全 seed で同一。 */
 fun initialFor(c: Case): Array<IntArray> = kotlinx.coroutines.runBlocking {
     val sec = when (c.size) { "small" -> 2; "medium" -> 3; else -> 4 }
@@ -143,6 +146,13 @@ fun main(args: Array<String>) {
         //   N9: 巻き戻したパスの採用数を 0 と数えるか。巻き戻しは許容 ON でだけ起きるので両腕とも許容 ON。
         "n9rollback" -> V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = false) to
             V6HotfixPasses.PostOptimizationParams(deterministic = det, aptFairSoftTolerance = true, postChainRollbackCountsZero = true)
+        // [2026-10-10] 玉突き連鎖パイプライン（利用者提示の仕様）。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
+        //   pipeoff*＝OFF（3.655.0 までの既定）対パイプライン、pipevsfull*＝従来の常時フル対パイプライン（A1）、pipevsshallow＝浅い予察だけ対全段（A2/A3）。
+        //   *end＝パイプラインを最終の違反起点修復の後に置く（pipevsfullallend の旧腕は従来の「修復後の玉突き」）。
+        "pipeoff", "pipeoffc1", "pipeoffsoft", "pipevsfullc1", "pipevsfullall", "pipevsshallow",
+        //   *endk＝*end を探す範囲の既定（必須は月全体・他は前後7日）で測る（*end までは下のループが月全体にしていた）。
+        "pipeoffend", "pipeoffendc1", "pipeoffendsoft", "pipevsfullallend", "pipevsshallowend",
+        "pipeoffendk", "pipevsfullallendk", "pipevsshallowendk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [3.618.1] 全族起点の玉突き連鎖。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [2026-10-06] 前段（HF66 直後）の玉突き連鎖。起点＝必須だけ／全族。大域フラグなので腕ごとに切り替える（下のループ）。
@@ -157,7 +167,7 @@ fun main(args: Array<String>) {
     if (out.exists()) out.readLines().drop(1).forEach { l -> val c = l.split(","); if (c.size > 4) done.add(c[0] + "|" + c[3] + "|" + c[4]) }
     val fresh = !out.exists() || done.isEmpty()
     val w = java.io.FileWriter(out, !fresh).buffered()
-    if (fresh) w.write("case,size,cat,seed,arm,ms,timeout,exception,oob,mismatch,hard,hardW,softW,wishRate,changed,total,weighted,peakMB,hash,repro\n")
+    if (fresh) w.write("case,size,cat,seed,arm,ms,timeout,exception,oob,mismatch,hard,hardW,softW,wishRate,changed,total,weighted,peakMB,hash,repro,ejMs,ejApplied\n")
     if (done.isNotEmpty()) System.err.println("resume: ${done.size} rows already done")
     // ウォームアップ
     run { val c = cases[0]; val init = initialFor(c)
@@ -172,15 +182,33 @@ fun main(args: Array<String>) {
         for (seed in 0 until seeds) {
             for ((arm, prm) in listOf("old" to oldP, "new" to newP)) {
                 if ("${sp.id}|$seed|$arm" in done) continue
-                PolishGate.allFamilyEjectionChain = feature == "ejectionall" && arm == "new"
+                val byKind = feature.startsWith("pipe") && feature.endsWith("endk")
+                val pf = if (byKind) feature.dropLast(1) else feature
+                PolishGate.allFamilyEjectionChain = (feature == "ejectionall" && arm == "new") || (feature == "pipevsfullall" && arm == "old")
+                PolishGate.c1EjectionChain = feature == "pipevsfullc1" && arm == "old"
+                PolishGate.ejectionPipelineFocus = when {
+                    arm == "new" && pf in setOf("pipeoff", "pipevsfullall", "pipevsshallow", "pipeoffend", "pipevsfullallend", "pipevsshallowend") -> EjectionChainPipeline.Focus.BOTH
+                    pf == "pipevsshallow" || pf == "pipevsshallowend" -> EjectionChainPipeline.Focus.BOTH
+                    arm == "new" && pf in setOf("pipeoffc1", "pipevsfullc1", "pipeoffendc1") -> EjectionChainPipeline.Focus.C1
+                    arm == "new" && pf in setOf("pipeoffsoft", "pipeoffendsoft") -> EjectionChainPipeline.Focus.SOFT
+                    // 比較の旧腕と従来の玉突きの腕はパイプラインを切る（有効だと従来の玉突きは走らない）。
+                    pf.startsWith("pipe") || feature.startsWith("ejection") -> EjectionChainPipeline.Focus.OFF
+                    // [3.656.0] それ以外の機能は既定（パイプライン BOTH・修復の後）のまま測る。
+                    else -> EjectionChainPipeline.Focus.BOTH
+                }
+                PolishGate.ejectionPipelineAfterRepair = !pf.startsWith("pipe") || pf.endsWith("end")
+                EjectionChainPipeline.shallowOnly = (pf == "pipevsshallow" || pf == "pipevsshallowend") && arm == "old"
                 PolishGate.hardEjectionChainEarly = feature == "ejectionearlyhard" && arm == "new"
                 PolishGate.allEjectionChainEarly = (feature == "ejectionearlyall" || feature == "ejectionearlyallretry") && arm == "new"
                 PolishGate.hardEjectionChainRetry = feature == "ejectionearlyallretry" && arm == "new"
                 PolishGate.allEjectionChainFinal = feature == "ejectionfinalall" && arm == "new"
-                PolishGate.allEjectionChainAfterRepair = (feature == "ejectionafterrepair" && arm == "new") || feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft"
+                PolishGate.allEjectionChainAfterRepair = (feature == "ejectionafterrepair" && arm == "new") || feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft" ||
+                    (pf == "pipevsfullallend" && arm == "old")
                 // ejectionafterrepairhole: 両腕とも修復後の玉突きを ON にし、新腕だけ穴に絞った候補生成（旧腕＝月全体の総当たり）。
-                C1EjectionChainPolish.defaultHoleFocus = (feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft") && arm == "new"
-                C1EjectionChainPolish.defaultHoleSoftOnly = feature == "ejectionafterrepairholesoft"
+                //   従来の玉突きの腕と *end までのパイプラインの腕は月全体で測った（再現のため据え置き）。それ以外は範囲の既定のまま。
+                val monthScope = feature.startsWith("ejection") || (feature.startsWith("pipe") && !byKind)
+                C1EjectionChainPolish.defaultHoleFocus = !monthScope || ((feature == "ejectionafterrepairhole" || feature == "ejectionafterrepairholesoft") && arm == "new")
+                C1EjectionChainPolish.defaultHoleSoftOnly = !monthScope || feature == "ejectionafterrepairholesoft"
                 PolishGate.prePostDescent = feature == "prepostdescent" && arm == "new"
                 AptFairPolish.heavySoftGuard = !(feature == "aptfairtolunguarded" && arm == "new")
                 fun once(): List<Any> {
@@ -191,7 +219,7 @@ fun main(args: Array<String>) {
                     catch (e: Throwable) { exc = 1 }
                     val ms = (System.nanoTime() - t0) / 1_000_000
                     val peak = peakHeap() / (1024 * 1024)
-                    if (res == null) return listOf(ms, if (ms > sp.budgetMs) 1 else 0, exc, 0, 0, -1, -1.0, -1.0, -1.0, -1, -1, -1.0, peak, 0, "")
+                    if (res == null) return listOf(ms, if (ms > sp.budgetMs) 1 else 0, exc, 0, 0, -1, -1.0, -1.0, -1.0, -1, -1, -1.0, peak, 0, "", -1, -1)
                     val b = res.schedule
                     val oob = b.sumOf { row -> row.count { it < 0 || it >= st.shiftCount } }
                     val rep = UnifiedViolationChecker.check(st, b)
@@ -201,7 +229,8 @@ fun main(args: Array<String>) {
                     var wishOk = 0; for ((key, k) in st.wishes) { val (i, j) = key.split(",").map { it.toInt() }; if (b[i][j] == k) wishOk++ }
                     val wishRate = if (wishN == 0) 1.0 else wishOk.toDouble() / wishN
                     var changed = 0; for (i in 0 until st.staffCount) for (j in 0 until st.dayCount) if (b[i][j] != init[i][j]) changed++
-                    return listOf(ms, if (ms > sp.budgetMs) 1 else 0, exc, oob, mismatch, rep.hard, hardW, softW, "%.4f".format(wishRate), changed, rep.total, rep.weightedScore, peak, b.contentDeepHashCode(), "")
+                    val ejStages = res.stageRecords.filter { it.key in EJ_KEYS }
+                    return listOf(ms, if (ms > sp.budgetMs) 1 else 0, exc, oob, mismatch, rep.hard, hardW, softW, "%.4f".format(wishRate), changed, rep.total, rep.weightedScore, peak, b.contentDeepHashCode(), "", ejStages.sumOf { it.ms }, ejStages.sumOf { it.applied })
                 }
                 val r = once().toMutableList()
                 if (arm == "new" && seed % reproEvery == 0 && seed == 0) { val r2 = once(); r[14] = if (r2[13] == r[13]) "same" else "DIFF" }

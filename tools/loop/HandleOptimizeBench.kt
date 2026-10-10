@@ -4,6 +4,7 @@ package probe
 // は`runPostOptimization`より下の層しか呼ばず、ExtraRefine自体はhandleOptimize内部の別ステージなので
 // この層を直接呼ぶ新規ハーネスが要る。
 import com.magi.app.model.StateParser
+import com.magi.app.v6.EjectionChainPipeline
 import com.magi.app.v6.PolishGate
 import com.magi.app.v6.V6FinalPort
 import kotlinx.coroutines.runBlocking
@@ -51,6 +52,16 @@ fun main(args: Array<String>) {
                 PolishGate.c3nWallDeepCheck = feature == "deep" && armOn
                 // "adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall、§5.8 C: 改善間隔の最大×3 を [短, 通常] に挟む）。off 腕＝現行。
                 PolishGate.adaptiveStall = feature == "adaptive" && armOn
+                // "ejpipe*"＝on 腕で玉突き連鎖パイプライン（BOTH／C1）。"ejpipefull"＝off 腕が従来の全族の常時フル、on 腕がパイプライン BOTH。
+                PolishGate.allFamilyEjectionChain = feature == "ejpipefull" && !armOn
+                PolishGate.ejectionPipelineFocus = when {
+                    armOn && (feature == "ejpipe" || feature == "ejpipefull" || feature == "ejpipeend") -> EjectionChainPipeline.Focus.BOTH
+                    armOn && feature == "ejpipec1" -> EjectionChainPipeline.Focus.C1
+                    feature.startsWith("ejpipe") -> EjectionChainPipeline.Focus.OFF
+                    // [3.656.0] それ以外の機能は既定（パイプライン BOTH・修復の後）のまま測る。
+                    else -> EjectionChainPipeline.Focus.BOTH
+                }
+                PolishGate.ejectionPipelineAfterRepair = !feature.startsWith("ejpipe") || feature == "ejpipeend"
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(

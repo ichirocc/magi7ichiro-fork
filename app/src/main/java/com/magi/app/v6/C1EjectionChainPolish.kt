@@ -14,6 +14,9 @@ import kotlin.random.Random
  *
  * [Origin.ALL, 測定中・既定 OFF＝`PolishGate.allFamilyEjectionChain`] 起点を正式評価器が場所を返す全族の違反へ広げる
  * （修復は v2 と同じ残存負債＝開始から増えた族）。採否・保護条件は C1 起点と同じ。
+ *
+ * [玉突きパイプライン（[EjectionChainPipeline]）から] `indexOnly` で起点の一覧だけを作り、`collect` で盤面を変えずに
+ * 採用ゲートを通る手順を集める。どちらも null なら従来どおり。
  */
 internal object C1EjectionChainPolish {
 
@@ -49,10 +52,23 @@ internal object C1EjectionChainPolish {
         val holeRadius: Int = 7,
         /** [holeFocus] を必須以外の族の起点だけに使う（必須の起点は月全体）。既定 [defaultHoleSoftOnly]。 */
         val holeSoftOnly: Boolean = defaultHoleSoftOnly,
+        /** 起点をこの並びに限る（null＝巡ごとに生成）。パイプラインの索引が作る。 */
+        val seedList: List<SeedKey>? = null,
+        /** SOFT・ALL の起点に c1 不足窓の起点を入れない（パイプラインの BOTH の SOFT 側。c1 は C1 側が受け持つ）。 */
+        val skipC1Seeds: Boolean = false,
+        /** 評価回数の上限があっても時間の上限を併せて効かせる（実時間の予察。決定的モードは false）。 */
+        val timeWithEvaluations: Boolean = false,
     )
 
-    /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol・extWish）の違反だけを起点にする（測定中・後処理の前段で使う）。 */
-    enum class Origin { C1, ALL, HARD }
+    /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol・extWish）の違反だけを起点にする（測定中・後処理の前段で使う）。
+     *  SOFT＝必須以外の族の違反（c1 を含む）を起点にする（玉突きパイプラインの SOFT）。 */
+    enum class Origin { C1, ALL, HARD, SOFT }
+
+    /** 起点（族・職員・日・置くシフト）。 */
+    data class SeedKey(val family: String, val i: Int, val j: Int, val k: Int)
+
+    /** `collect` に渡す手順。[report] は開始盤面にこの手順を当てた正式評価（採用ゲートを通ったものだけ）。[depth] は手数。 */
+    class PathCandidate(val seed: SeedKey, val path: List<IntArray>, val report: ViolationReport, val depth: Int)
 
     /** 測定用: 連鎖に入る直前の盤面を受け取る（前段の揺れと連鎖の効果を切り分ける）。本番では null。 */
     @Volatile internal var entryProbe: ((Array<IntArray>) -> Unit)? = null
@@ -82,6 +98,8 @@ internal object C1EjectionChainPolish {
         /** 起点の族 → [起点数, 評価数, 採用数, 加重スコアの減少量]。 */
         val byFamily = LinkedHashMap<String, LongArray>()
         var mismatch: String? = null
+        /** `collect` のとき、採用ゲートを通る手順が見つかった起点。 */
+        val hitSeeds = LinkedHashSet<SeedKey>()
     }
 
     private val CAND_ORDER = compareBy<LongArray>({ it[0] }, { it[1] }, { it[2] }, { it[3] }, { it[4] }, { it[5] }, { it[6] })
@@ -106,6 +124,7 @@ internal object C1EjectionChainPolish {
     fun apply(
         state: MagiState, schedule: Array<IntArray>, config: Config = Config(),
         shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false, stats: Stats = Stats(),
+        indexOnly: ((List<SeedKey>) -> Unit)? = null, collect: ((PathCandidate) -> Unit)? = null,
     ): V6HotfixPasses.CyclicSwapResult {
         val t0 = EngineClock.nowMs()
         val p = Problem(state, quantitativeRangeEval)
@@ -115,9 +134,11 @@ internal object C1EjectionChainPolish {
         entryProbe?.invoke(Array(p.S) { work[it].copyOf() })
         val all = config.origin != Origin.C1
         val hardOnly = config.origin == Origin.HARD
+        val softOnly = config.origin == Origin.SOFT
         val crossFamily = all || config.crossFamily
         val hasUnassigned = work.any { row -> row.any { it !in 0 until p.K } }
-        if (hasUnassigned || (if (hardOnly) rep.hard == 0 else if (all) rep.total == 0 else p.cons1.isEmpty() || (rep.breakdown["c1"] ?: 0) == 0)) {
+        if (hasUnassigned || (if (hardOnly) rep.hard == 0 else if (softOnly) rep.total == rep.hard else if (all) rep.total == 0 else p.cons1.isEmpty() || (rep.breakdown["c1"] ?: 0) == 0)) {
+            indexOnly?.invoke(emptyList())
             return V6HotfixPasses.CyclicSwapResult(work, rep.total, rep.total, 0,
                 listOf(MirrorLog(tag = "C1EjectionChain", message = "対象なし=スキップ")), report = rep)
         }
@@ -136,7 +157,7 @@ internal object C1EjectionChainPolish {
                 shouldStop() -> "中断"
                 config.maxEvaluations > 0 && stats.evaluations >= config.maxEvaluations -> "評価上限"
                 config.maxCandidates > 0 && stats.generated >= config.maxCandidates -> "生成上限"
-                config.maxEvaluations <= 0 && config.maxCandidates <= 0 && EngineClock.nowMs() - t0 >= config.maxMillis -> "時間切れ"
+                (config.timeWithEvaluations || (config.maxEvaluations <= 0 && config.maxCandidates <= 0)) && EngineClock.nowMs() - t0 >= config.maxMillis -> "時間切れ"
                 else -> return false
             }
             stats.endReason = why
@@ -184,6 +205,7 @@ internal object C1EjectionChainPolish {
             val perFamily = LinkedHashMap<String, ArrayList<List<IntArray>>>()   // 族 → 違反 1 箇所ごとの関与セル
             fun addUnit(fam: String, cells: List<IntArray>) {
                 if (hardOnly && fam !in HARD_FAMILIES) return
+                if (softOnly && fam in HARD_FAMILIES) return
                 perFamily.getOrPut(fam) { ArrayList() }.add(cells)
             }
             val row = { i: Int -> (0 until p.T).map { intArrayOf(i, it) } }
@@ -202,7 +224,7 @@ internal object C1EjectionChainPolish {
             }
             for ((f, locs) in rep.distLocations) for (l in locs) addUnit(f, row(l[0]))
             val lists = ArrayList<Pair<String, List<Seed>>>()
-            val c1 = c1Seeds()
+            val c1 = if (config.skipC1Seeds) emptyList() else c1Seeds()
             if (c1.isNotEmpty()) lists.add("c1" to c1)
             for ((f, us0) in perFamily) {
                 val out = ArrayList<Seed>()
@@ -244,8 +266,19 @@ internal object C1EjectionChainPolish {
         while (round < config.maxRounds && !out()) {
             round++
             var improvedThisRound = false
-            val seeds = if (all) allSeeds() else c1Seeds()
+            val seeds = config.seedList?.map { Seed(it.family, it.i, it.j, it.k) } ?: if (all) allSeeds() else c1Seeds()
             lastSeedCount = seeds.size
+            if (indexOnly != null) {
+                // 索引: 起点の初手だけの評価で並べる（同点は生成順）。盤面は変えない。
+                val scored = ArrayList<Pair<Long, Int>>()
+                for ((n, sd) in seeds.withIndex()) {
+                    if (work[sd.i][sd.j] == sd.k || out()) continue
+                    scored.add(de.previewMove(sd.i, sd.j, sd.k) to n); stats.evaluations++
+                }
+                scored.sortWith(compareBy({ it.first }, { it.second }))
+                indexOnly(scored.map { seeds[it.second].let { sd -> SeedKey(sd.family, sd.i, sd.j, sd.k) } })
+                return V6HotfixPasses.CyclicSwapResult(work, rep.total, rep.total, 0, emptyList(), report = rep)
+            }
             for (seed in seeds) {
                 if (out()) break
                 val si = seed.i; val sj = seed.j; val sx = seed.k
@@ -438,7 +471,15 @@ internal object C1EjectionChainPolish {
                     stats.endReason = "差分不一致"
                 }
                 if (stats.mismatch != null) break
-                if (adoptionGate(p, prev, work, rep2, rep, pinBlocks).accepted) {
+                val gate = adoptionGate(p, prev, work, rep2, rep, pinBlocks).accepted
+                if (gate && collect != null) {
+                    // 収集: 採用ゲートを通る手順を渡して元へ戻す（盤面は変えない＝採否はパイプラインの採用キューが決める）。
+                    val key = SeedKey(seed.family, si, sj, sx)
+                    collect(PathCandidate(key, bestPath.map { it.copyOf() }, rep2, bestDepth))
+                    stats.hitSeeds.add(key); famStat[2]++
+                    stats.acceptedMaxDepth = maxOf(stats.acceptedMaxDepth, bestDepth)
+                    for (m in bestPath.asReversed()) move(m[0], m[1], m[2])
+                } else if (gate) {
                     famStat[2]++; famStat[3] += (rep.weightedScore - rep2.weightedScore).toLong()
                     rep = rep2; applied += bestPath.size; stats.accepted++; improvedThisRound = true
                     stats.acceptedMaxDepth = maxOf(stats.acceptedMaxDepth, bestDepth)
@@ -457,7 +498,7 @@ internal object C1EjectionChainPolish {
             else -> "改善なし"
         }
         if (stats.endReason == "時間切れ") stats.timeouts++
-        val label = if (all) "全族起点" else "期間要件(c1)起点${if (crossFamily) "v2" else "v1"}"
+        val label = if (softOnly) "ソフト起点" else if (all) "全族起点" else "期間要件(c1)起点${if (crossFamily) "v2" else "v1"}"
         val logs = listOf(MirrorLog(tag = "C1EjectionChain",
             message = "${label}玉突き連鎖[起点${stats.seeds}/生成${stats.generated}/候補${stats.candidates}/評価${stats.evaluations}/試行${stats.chainsTried}/採用${stats.accepted}/起点上限${stats.seedCapped}/採用深さ最大${stats.acceptedMaxDepth}/重複除外${stats.dedup}/深さ${config.maxDepth}/終了${stats.endReason}/時間切れ${stats.timeouts}/${EngineClock.nowMs() - t0}ms]: " +
                 "c1 ${before.breakdown["c1"] ?: 0}->${rep.breakdown["c1"] ?: 0} score ${before.weightedScore.toLong()}->${rep.weightedScore.toLong()} HARD ${before.hard}->${rep.hard} total ${before.total}->${rep.total} 族差 " +

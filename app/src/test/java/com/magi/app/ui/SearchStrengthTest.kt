@@ -20,9 +20,11 @@ class SearchStrengthTest {
             assertEquals(false, PolishGate.c1MoveARepair)
             assertEquals(false, UiState().aptFairToleranceUnguarded)
             assertEquals(true, com.magi.app.v6.AptFairPolish.heavySoftGuard)
-            assertEquals(EjectionChainMode.OFF, UiState().ejectionChain)
+            assertEquals(EjectionChainMode.PIPELINE, UiState().ejectionChain)
             assertEquals(false, PolishGate.c1EjectionChain)
             assertEquals(false, PolishGate.allFamilyEjectionChain)
+            assertEquals(com.magi.app.v6.EjectionChainPipeline.Focus.BOTH, PolishGate.ejectionPipelineFocus)
+            assertEquals(true, PolishGate.ejectionPipelineAfterRepair)
             assertEquals(true, UiState().ejectionChainSwap)
             assertEquals(true, PolishGate.ejectionChainSwapMoves)
         } finally {
@@ -32,14 +34,18 @@ class SearchStrengthTest {
     }
 
     @Test fun ejectionChainModeRoutesToExactlyOneFlag() {
+        val off = com.magi.app.v6.EjectionChainPipeline.Focus.OFF
+        fun flags() = listOf(PolishGate.c1EjectionChain, PolishGate.allFamilyEjectionChain, PolishGate.ejectionPipelineFocus)
         try {
             EjectionChainMode.C1.apply()
-            assertEquals(listOf(true, false), listOf(PolishGate.c1EjectionChain, PolishGate.allFamilyEjectionChain))
+            assertEquals(listOf(true, false, off), flags())
             EjectionChainMode.ALL.apply()
-            assertEquals(listOf(false, true), listOf(PolishGate.c1EjectionChain, PolishGate.allFamilyEjectionChain))
-        } finally {
+            assertEquals(listOf(false, true, off), flags())
             EjectionChainMode.OFF.apply()
+            assertEquals(listOf(false, false, off), flags())
+        } finally {
+            EjectionChainMode.PIPELINE.apply()   // 既定へ戻す（同じ JVM の後続テストが既定で走るように）
         }
-        assertEquals(listOf(false, false), listOf(PolishGate.c1EjectionChain, PolishGate.allFamilyEjectionChain))
+        assertEquals(listOf(false, false, com.magi.app.v6.EjectionChainPipeline.Focus.BOTH), flags())
     }
 }

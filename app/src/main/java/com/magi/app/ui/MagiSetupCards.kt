@@ -360,7 +360,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         Column(Modifier.fillMaxWidth()) {
             Text("玉突きで直す（月全体）")
             Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // 3 つ目の語が長く、幅 390dp では 1 行に収まらないので折り返す。
+            // 4 択で語も長く、幅 390dp では 1 行に収まらないので折り返す。
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 EjectionChainMode.values().forEach { m ->
                     val label = ejectionChainLabel(m)
@@ -418,12 +418,13 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
-internal const val EJECTION_CHAIN_NOTE = "試験中。測定では効果は確認できていません（既定はOFF）"
+internal const val EJECTION_CHAIN_NOTE = "既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来の広い探索で時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中・じっくりでだけ効きます。期間の制約や上限などが1件増える手も予算内なら採ります。測定では目的に当たりませんでした（既定はOFF）"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
     EjectionChainMode.OFF -> "しない"
+    EjectionChainMode.PIPELINE -> "見込みのある所だけ"
     EjectionChainMode.C1 -> "期間の制約から"
     EjectionChainMode.ALL -> "すべての違反から"
 }

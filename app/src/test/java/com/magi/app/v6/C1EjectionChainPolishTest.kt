@@ -171,4 +171,53 @@ class C1EjectionChainPolishTest {
         assertEquals("起点なし", stats.endReason)
         assertEquals(0, stats.seedCapped)
     }
+
+    /** [玉突きパイプライン] 収集モードは盤面を変えず、採用ゲートを通る手順とその正式評価だけを渡す。 */
+    @Test fun collectModeKeepsTheBoardAndReportsGatePassingPaths() {
+        val st = state()
+        val s0 = st.schedule.toIntArray2D()
+        val rep0 = UnifiedViolationChecker.check(st, s0)
+        val got = ArrayList<C1EjectionChainPolish.PathCandidate>()
+        val stats = C1EjectionChainPolish.Stats()
+        val r = C1EjectionChainPolish.apply(st, s0, stats = stats, collect = { got.add(it) })
+        assertTrue(r.newSchedule.contentDeepEquals(s0))
+        assertEquals(0, r.applied)
+        assertTrue(got.isNotEmpty())
+        assertEquals(got.map { it.seed }.toSet(), stats.hitSeeds)
+        for (c in got) {
+            val w = s0.map { it.copyOf() }.toTypedArray()
+            for (m in c.path) { assertEquals(w[m[0]][m[1]], m[2]); w[m[0]][m[1]] = m[3] }
+            val rep = UnifiedViolationChecker.check(st, w)
+            assertEquals(rep.weightedScore, c.report.weightedScore, 0.0)
+            assertTrue(betterReport(rep, rep0))
+        }
+    }
+
+    /** [玉突きパイプライン] 索引は盤面を変えず、起点を初手だけの評価の良い順に返す。 */
+    @Test fun indexOnlyListsSeedsInFirstMoveOrder() {
+        val st = state()
+        val s0 = st.schedule.toIntArray2D()
+        var seeds: List<C1EjectionChainPolish.SeedKey> = emptyList()
+        val r = C1EjectionChainPolish.apply(st, s0, indexOnly = { seeds = it })
+        assertTrue(r.newSchedule.contentDeepEquals(s0))
+        assertTrue(seeds.isNotEmpty())
+        val p = Problem(st)
+        val de = DeltaEvaluator(p); de.reset(normalizeSchedule(s0, p))
+        val scores = seeds.map { de.previewMove(it.i, it.j, it.k) }
+        assertEquals(scores.sorted(), scores)
+    }
+
+    /** [玉突きパイプライン] SOFT 起点は必須の族の違反を起点にしない。 */
+    @Test fun softOriginSkipsHardFamilySeeds() {
+        val st = state().copy(schedule = listOf(listOf(2, 2, 0), listOf(1, 1, 0)))   // 3 日目は誰もいない＝人員不足（必須）と c1
+        val rep0 = UnifiedViolationChecker.check(st, st.schedule.toIntArray2D())
+        assertTrue(rep0.hard > 0)
+        var seeds: List<C1EjectionChainPolish.SeedKey> = emptyList()
+        C1EjectionChainPolish.apply(st, st.schedule.toIntArray2D(), C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.SOFT), indexOnly = { seeds = it })
+        assertTrue(seeds.isNotEmpty())
+        assertTrue(seeds.none { it.family in MirrorKeys.hard })
+        var all: List<C1EjectionChainPolish.SeedKey> = emptyList()
+        C1EjectionChainPolish.apply(st, st.schedule.toIntArray2D(), C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL), indexOnly = { all = it })
+        assertTrue(all.any { it.family in MirrorKeys.hard })
+    }
 }

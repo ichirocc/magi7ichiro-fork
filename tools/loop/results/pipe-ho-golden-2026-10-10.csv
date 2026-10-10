@@ -1,0 +1,13 @@
+fixture,seed,arm,elapsedMs,hard,weightedScore,total,rep
+golden,1,off,44589,0,6040.0,323,1
+golden,1,on,48377,0,6317.0,335,1
+golden,1,off,55890,0,5950.0,322,2
+golden,1,on,43695,0,5981.0,305,2
+golden,2,off,46277,0,5787.0,325,1
+golden,2,on,54043,0,6120.0,312,1
+golden,2,off,38775,0,6153.0,327,2
+golden,2,on,44223,0,6016.0,317,2
+golden,3,off,47572,0,6064.0,312,1
+golden,3,on,56841,0,6111.0,327,1
+golden,3,off,44897,0,6065.0,328,2
+golden,3,on,47235,0,6226.0,316,2
