@@ -360,8 +360,8 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         Column(Modifier.fillMaxWidth()) {
             Text("玉突きで直す（月全体）")
             Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // 4 択で語も長く、幅 390dp では 1 行に収まらないので折り返す。
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // 4 択で語も長く、幅 390dp では 1 行に収まらないので折り返す（行の間も 8dp 空ける＝押し間違いを防ぐ）。
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EjectionChainMode.values().forEach { m ->
                     val label = ejectionChainLabel(m)
                     if (ui.ejectionChain == m) {
@@ -381,7 +381,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
             }
             Text("2手目以降を探す範囲")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EJECTION_CHAIN_SCOPES_SHOWN.forEach { sc ->
                     val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
                     val label = ejectionChainScopeLabel(sc)

@@ -3,7 +3,7 @@
 > CLAUDE.md には「見ても分からない罠」と判断基準だけを残し、手順の本文はここに置く。実装が正・環境が変わったらここを直す。
 
 ## ホスト JVM でエンジン層を検証する
-- `tools/host/hosttest.sh`（kotlin-compiler-embeddable で `v6/`・`model/`・Android 非依存の `ui/work` と全 JUnit をコンパイルして実行。約 1 分）。
+- `tools/host/hosttest.sh`（kotlin-compiler-embeddable で `v6/`・`model/`・Android 非依存の `ui/work` と全 JUnit をコンパイルして実行。約 6 分＝コンパイル約 2 分＋JUnit 約 5 分、2026-10-10 に単独で実測）。
   出力先は `MAGI_HOST_OUT=/tmp/magi-hostbuild-xxx` で変えられる。**ベンチや probe が掴んでいる出力先を再ビルドしない**（クラスファイルが差し替わり結果が汚れる）。
   2026-09-22 から冒頭で `tools/design_lint.py` も走る（落ちたら即終了。別ツリーのバグ注入検証など不要なときは
   `MAGI_SKIP_LINT=1`）。また `LANG=C.utf8` を強制する（POSIX ロケールだと kotlinc が日本語リテラルを化かして
