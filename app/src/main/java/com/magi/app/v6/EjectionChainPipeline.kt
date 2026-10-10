@@ -10,6 +10,13 @@ internal object EjectionChainPipeline {
     /** 測定用（受け入れ条件 A2/A3 の比較腕）: 中段と深い探索を走らせず、浅い予察の当たりだけを採る。本番は false。 */
     @Volatile internal var shallowOnly: Boolean = false
 
+    /** 測定中（既定 OFF）: 採用があった巡のあと、索引を作り直してもう一巡する（従来の玉突きと同じ最大
+     *  [C1EjectionChainPolish.Config.maxRounds] 巡・族ごとの起点は巡ごとにずらす）。深い探索の予算は巡をまたいで共有。 */
+    @Volatile internal var repeatRounds: Boolean = false
+
+    /** 測定中（既定 OFF）: BOTH のとき、必須の族の違反を起点にする焦点を先頭に足す（採用は同じ採用ゲート）。 */
+    @Volatile internal var hardLeg: Boolean = false
+
     data class Config(
         val focus: Focus,
         /** 時間でなく評価回数で止める（ベンチと再現性の検証用）。 */
@@ -29,7 +36,7 @@ internal object EjectionChainPipeline {
     )
 
     /** 焦点 1 つぶんの記録。[deepRan] が真なら必ず当たり（浅＋中）が 1 件以上ある。 */
-    class Telemetry(val focus: String) {
+    class Telemetry(val focus: String, val round: Int = 1) {
         var residual = 0
         var skip = ""
         var seeds = 0
@@ -46,7 +53,7 @@ internal object EjectionChainPipeline {
             val b = before; val a = after ?: before
             val mid = if (midRan) "評価$midEvaluations/${midMs}ms/当たり$midHits" else "なし"
             val deep = if (deepRan) "予算${if (deepBudgetEvaluations > 0) "${deepBudgetEvaluations}評価" else "${deepBudgetMs}ms"}/評価$deepEvaluations/${deepMs}ms/候補$deepCandidates" else "なし"
-            return "玉突きパイプライン[焦点=$focus 残差=$residual 起点=$seeds 浅=評価$shallowEvaluations/${shallowMs}ms/当たり$shallowHits 中=$mid 深=$deep " +
+            return "玉突きパイプライン[${if (round > 1) "巡$round " else ""}焦点=$focus 残差=$residual 起点=$seeds 浅=評価$shallowEvaluations/${shallowMs}ms/当たり$shallowHits 中=$mid 深=$deep " +
                 "採用=${committed}件 終了=$endReason]" +
                 (if (b != null && a != null) ": HARD ${b.hard}->${a.hard} 合計 ${b.total}->${a.total} 重み ${b.weightedScore.toLong()}->${a.weightedScore.toLong()}" else "")
         }
@@ -68,29 +75,42 @@ internal object EjectionChainPipeline {
             Focus.OFF -> emptyList()
             Focus.C1 -> listOf(C1EjectionChainPolish.Origin.C1 to false)
             Focus.SOFT -> listOf(C1EjectionChainPolish.Origin.SOFT to false)
-            Focus.BOTH -> listOf(C1EjectionChainPolish.Origin.C1 to false, C1EjectionChainPolish.Origin.SOFT to true)
+            Focus.BOTH -> (if (hardLeg) listOf(C1EjectionChainPolish.Origin.HARD to false) else emptyList()) +
+                listOf(C1EjectionChainPolish.Origin.C1 to false, C1EjectionChainPolish.Origin.SOFT to true)
         }
         val pinBlocks = PinBlockAttribution()
         var deepMsLeft = config.deepMaxMillis
         var deepEvaluationsLeft = config.deepEvaluations
         var applied = 0
         val logs = ArrayList<MirrorLog>()
-        for ((n, leg) in legs.withIndex()) {
-            val (origin, skipC1) = leg
-            val share = (legs.size - n).toLong()
-            val tel = Telemetry(if (origin == C1EjectionChainPolish.Origin.C1) "C1" else "SOFT")
-            val out = runLeg(state, p, work, rep, origin, skipC1, config, previousImproved, deadlineMs, shouldStop,
-                quantitativeRangeEval, pinBlocks, deepMsLeft / share, deepEvaluationsLeft / share, tel)
-            work = out.work; rep = out.report; applied += out.committedCells
-            deepMsLeft -= out.deepMs; deepEvaluationsLeft -= out.deepEvaluations
-            telemetry?.add(tel)
-            logs.add(MirrorLog(tag = "EjectionPipeline", message = tel.line()))
+        val maxRounds = if (repeatRounds) C1EjectionChainPolish.Config().maxRounds else 1
+        for (round in 1..maxRounds) {
+            var committed = 0
+            for ((n, leg) in legs.withIndex()) {
+                val (origin, skipC1) = leg
+                val share = (legs.size - n).toLong()
+                val tel = Telemetry(focusName(origin), round)
+                val out = runLeg(state, p, work, rep, origin, skipC1, config, previousImproved, deadlineMs, shouldStop,
+                    quantitativeRangeEval, pinBlocks, deepMsLeft / share, deepEvaluationsLeft / share, tel, round - 1)
+                work = out.work; rep = out.report; applied += out.committedCells; committed += tel.committed
+                deepMsLeft -= out.deepMs; deepEvaluationsLeft -= out.deepEvaluations
+                telemetry?.add(tel)
+                logs.add(MirrorLog(tag = "EjectionPipeline", message = tel.line()))
+            }
+            if (committed == 0 || shouldStop()) break
         }
         return V6HotfixPasses.CyclicSwapResult(work, rep0.total, rep.total, applied, logs, pinBlocks = pinBlocks, report = rep)
     }
 
+    private fun focusName(origin: C1EjectionChainPolish.Origin): String = when (origin) {
+        C1EjectionChainPolish.Origin.C1 -> "C1"
+        C1EjectionChainPolish.Origin.HARD -> "HARD"
+        else -> "SOFT"
+    }
+
     private fun residualOf(rep: ViolationReport, origin: C1EjectionChainPolish.Origin, skipC1: Boolean): Int = when (origin) {
         C1EjectionChainPolish.Origin.C1 -> rep.breakdown["c1"] ?: 0
+        C1EjectionChainPolish.Origin.HARD -> rep.hard
         else -> rep.total - rep.hard - (if (skipC1) rep.breakdown["c1"] ?: 0 else 0)
     }
 
@@ -98,7 +118,7 @@ internal object EjectionChainPipeline {
         state: MagiState, p: Problem, work0: Array<IntArray>, rep0: ViolationReport,
         origin: C1EjectionChainPolish.Origin, skipC1: Boolean, cfg: Config, previousImproved: Boolean,
         deadlineMs: Long, shouldStop: () -> Boolean, q: Boolean, pinBlocks: PinBlockAttribution,
-        deepCapMs: Long, deepCapEvaluations: Long, tel: Telemetry,
+        deepCapMs: Long, deepCapEvaluations: Long, tel: Telemetry, roundOffset: Int,
     ): LegOut {
         tel.before = rep0
         tel.residual = residualOf(rep0, origin, skipC1)
@@ -109,8 +129,8 @@ internal object EjectionChainPipeline {
         val stop: () -> Boolean = if (cfg.deterministic) shouldStop else ({ shouldStop() || timeLeft() <= 0L })
 
         var seeds: List<C1EjectionChainPolish.SeedKey> = emptyList()
-        C1EjectionChainPolish.apply(state, work0, C1EjectionChainPolish.Config(origin = origin, skipC1Seeds = skipC1, swapMoves = cfg.swapMoves, maxMillis = Long.MAX_VALUE),
-            shouldStop = stop, quantitativeRangeEval = q, indexOnly = { seeds = it })
+        C1EjectionChainPolish.apply(state, work0, C1EjectionChainPolish.Config(origin = origin, skipC1Seeds = skipC1, swapMoves = cfg.swapMoves, maxMillis = Long.MAX_VALUE,
+            roundOffset = roundOffset), shouldStop = stop, quantitativeRangeEval = q, indexOnly = { seeds = it })
         tel.seeds = seeds.size
         val cands = ArrayList<C1EjectionChainPolish.PathCandidate>()
         fun probe(list: List<C1EjectionChainPolish.SeedKey>, depth: Int, evaluations: Long, millis: Long): C1EjectionChainPolish.Stats {

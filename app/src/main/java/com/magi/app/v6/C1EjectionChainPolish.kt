@@ -58,6 +58,8 @@ internal object C1EjectionChainPolish {
         val skipC1Seeds: Boolean = false,
         /** 評価回数の上限があっても時間の上限を併せて効かせる（実時間の予察。決定的モードは false）。 */
         val timeWithEvaluations: Boolean = false,
+        /** 族ごとの起点を先へずらす巡の数（パイプラインの 2 巡目以降の索引。0＝従来）。 */
+        val roundOffset: Int = 0,
     )
 
     /** HARD＝必須の族（c3n・covU・c3w・pref・groupViol・extWish）の違反だけを起点にする（測定中・後処理の前段で使う）。
@@ -228,7 +230,7 @@ internal object C1EjectionChainPolish {
             if (c1.isNotEmpty()) lists.add("c1" to c1)
             for ((f, us0) in perFamily) {
                 val out = ArrayList<Seed>()
-                val off = ((round - 1) * config.unitsPerFamily) % us0.size
+                val off = ((round - 1 + config.roundOffset) * config.unitsPerFamily) % us0.size
                 val us = (us0.drop(off) + us0.take(off)).take(config.unitsPerFamily)
                 unitsSkipped += us0.size - us.size
                 for (cells in us) {
