@@ -1,0 +1,10 @@
+shift=夜勤 placeable=8 days=[4, 11, 18, 25] floor=0
+oct-floor seed=0 arm=default in=9/88534 final=9/87711 postWorseThanIn=false bestSeen=- oldPick=9/87711 newPick=9/87711 gain=0 ms=6892
+oct-floor seed=0 arm=thorough in=9/88534 final=9/87973 postWorseThanIn=false bestSeen=- oldPick=9/87973 newPick=9/87973 gain=0 ms=5510
+oct-floor seed=0 arm=thoroughC1ej in=9/88534 final=9/87959 postWorseThanIn=false bestSeen=- oldPick=9/87959 newPick=9/87959 gain=0 ms=6806
+oct-floor seed=1 arm=default in=9/88452 final=9/87803 postWorseThanIn=false bestSeen=- oldPick=9/87803 newPick=9/87803 gain=0 ms=3115
+oct-floor seed=1 arm=thorough in=9/88452 final=9/87758 postWorseThanIn=false bestSeen=- oldPick=9/87758 newPick=9/87758 gain=0 ms=4437
+oct-floor seed=1 arm=thoroughC1ej in=9/88452 final=9/87758 postWorseThanIn=false bestSeen=- oldPick=9/87758 newPick=9/87758 gain=0 ms=6361
+oct-floor seed=2 arm=default in=9/88475 final=9/87926 postWorseThanIn=false bestSeen=- oldPick=9/87926 newPick=9/87926 gain=0 ms=2563
+oct-floor seed=2 arm=thorough in=9/88475 final=9/87775 postWorseThanIn=false bestSeen=- oldPick=9/87775 newPick=9/87775 gain=0 ms=4080
+oct-floor seed=2 arm=thoroughC1ej in=9/88475 final=9/87775 postWorseThanIn=false bestSeen=- oldPick=9/87775 newPick=9/87775 gain=0 ms=5483
