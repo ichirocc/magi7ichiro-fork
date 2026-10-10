@@ -169,9 +169,11 @@ internal object C1JointLnsPolish {
         val debtCulprits = LinkedHashMap<String, Int>()
         var duplicateRejected = 0
         var restartsDone = 0
+        var lbHit = false
 
         for (restart in 0 until restartLimit) {
-            if (stopped() || best.c1 <= lowerBound) break
+            if (stopped()) break
+            if (best.c1 <= lowerBound) { lbHit = true; break }
             restartsDone++
             val rng = Random(seed xor (restart.toLong() * -0x61c8864680b583ebL))
             var beam = if (best === root) listOf(root) else listOf(root, best)
@@ -262,6 +264,15 @@ internal object C1JointLnsPolish {
             }
         }
 
+        // [3.655.0] 打ち切りの理由はループを抜けた時点で決める（旧: 正式な再検査の後に評価し直し、再検査中の期限・patience 切れを拾った）。
+        val loopHalt = when {
+            shouldStop() -> "外部停止"
+            evalCapped() -> "評価回数上限${config.maxEvaluations}"
+            System.nanoTime() >= deadline -> "期限"
+            stalled() -> "最良が${config.patienceMs}ms更新されず打ち切り"
+            else -> null
+        }
+
         // Defensive re-check. A shared-array bug or future operator mistake can never escape this gate.
         val finalReport = UnifiedViolationChecker.check(state, best.schedule, quantitativeRangeEval = quantitativeRangeEval)
         val finalC1 = finalReport.breakdown["c1"] ?: 0
@@ -277,17 +288,12 @@ internal object C1JointLnsPolish {
         // 良い(だがc1はtargetC1超の)候補へ best を差し替えても「到達」と表示され続けていた。
         val targetReached = chosenC1 <= targetC1
 
-        val stopReason = when {
-            chosenC1 <= lowerBound -> "構造下限到達"
-            shouldStop() -> "外部停止"
-            evalCapped() -> "評価回数上限${config.maxEvaluations}"
-            System.nanoTime() >= deadline -> "期限"
-            stalled() -> "最良が${config.patienceMs}ms更新されず打ち切り"
-            else -> "探索停滞"
-        }
+        val atLowerBound = lbHit || chosenC1 <= lowerBound
+        val stopReason = (loopHalt ?: if (atLowerBound) "構造下限到達" else "探索停滞") +
+            (if (loopHalt != null && atLowerBound) "（c1 は構造下限）" else "")
         val log = MirrorLog(
             tag = "C1JointLNS",
-            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, $pct%目標=${if (targetReached) "到達" else "未達"})" +
+            message = "期間要件(c1)共同LNS: c1 $rootC1->$chosenC1 (構造下限≥$lowerBound, 改善可能幅進捗$progress%, $pct%目標=${if (improvable <= 0) "対象なし" else if (targetReached) "到達" else "未達"})" +
                 " / total ${rootReport.total}->${chosenReport.total} HARD ${rootReport.hard}->${chosenReport.hard}" +
                 " 採用${if (valid) 1 else 0}束 手数${if (valid) best.path.size else 0}" +
                 " restart$restartsDone 展開$expanded 候補$generated debt除外$debtRejected" +

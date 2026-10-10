@@ -77,6 +77,8 @@ internal object C1EjectionChainPolish {
         var seeds = 0; var candidates = 0L; var evaluations = 0L; var chainsTried = 0; var accepted = 0
         var acceptedMaxDepth = 0; var dedup = 0L; var timeouts = 0; var endReason = "完了"
         var generated = 0L
+        /** 起点ごとの評価上限（[Config.perSeedEvaluations]）で探索を打ち切った起点の数＝その起点は調べ切っていない。 */
+        var seedCapped = 0
         /** 起点の族 → [起点数, 評価数, 採用数, 加重スコアの減少量]。 */
         val byFamily = LinkedHashMap<String, LongArray>()
         var mismatch: String? = null
@@ -152,6 +154,9 @@ internal object C1EjectionChainPolish {
 
         var applied = 0
         var round = 0
+        var lastSeedCount = 0
+        var lastImproved = false
+        var unitsSkipped = 0   // 直近の巡で起点にしなかった違反箇所（族ごとの unitsPerFamily を超えた分）
 
         fun c1Seeds(): List<Seed> {
             val seeds = ArrayList<Seed>()
@@ -175,6 +180,7 @@ internal object C1EjectionChainPolish {
          * 1 件ずつ交互に並べる（一部の族だけで予算を使い切らない）。
          */
         fun allSeeds(): List<Seed> {
+            unitsSkipped = 0
             val perFamily = LinkedHashMap<String, ArrayList<List<IntArray>>>()   // 族 → 違反 1 箇所ごとの関与セル
             fun addUnit(fam: String, cells: List<IntArray>) {
                 if (hardOnly && fam !in HARD_FAMILIES) return
@@ -202,6 +208,7 @@ internal object C1EjectionChainPolish {
                 val out = ArrayList<Seed>()
                 val off = ((round - 1) * config.unitsPerFamily) % us0.size
                 val us = (us0.drop(off) + us0.take(off)).take(config.unitsPerFamily)
+                unitsSkipped += us0.size - us.size
                 for (cells in us) {
                     if (out()) break
                     val cand = ArrayList<LongArray>()
@@ -238,6 +245,7 @@ internal object C1EjectionChainPolish {
             round++
             var improvedThisRound = false
             val seeds = if (all) allSeeds() else c1Seeds()
+            lastSeedCount = seeds.size
             for (seed in seeds) {
                 if (out()) break
                 val si = seed.i; val sj = seed.j; val sx = seed.k
@@ -414,6 +422,7 @@ internal object C1EjectionChainPolish {
                 move(si, sj, sx)
                 visited[hash] = longArrayOf(hash2, 1L)
                 dfs(1, si, sj)
+                if (seedSpent()) stats.seedCapped++
                 move(si, sj, old0)
                 path.clear()
                 famStat[1] += stats.evaluations - evalAtSeed
@@ -437,12 +446,20 @@ internal object C1EjectionChainPolish {
                     for (m in bestPath.asReversed()) move(m[0], m[1], m[2])
                 }
             }
+            lastImproved = improvedThisRound
             if (!improvedThisRound || stats.mismatch != null) break
+        }
+        // [3.655.0] 上限・中断・差分不一致で止まらなかったときの理由（旧: 初期値「完了」のまま＝調べ切ったように読めた）。
+        if (stats.endReason == "完了") stats.endReason = when {
+            lastSeedCount == 0 -> "起点なし"
+            lastImproved -> "巡上限${config.maxRounds}"
+            unitsSkipped > 0 -> "改善なし・未巡回${unitsSkipped}箇所"
+            else -> "改善なし"
         }
         if (stats.endReason == "時間切れ") stats.timeouts++
         val label = if (all) "全族起点" else "期間要件(c1)起点${if (crossFamily) "v2" else "v1"}"
         val logs = listOf(MirrorLog(tag = "C1EjectionChain",
-            message = "${label}玉突き連鎖[起点${stats.seeds}/生成${stats.generated}/候補${stats.candidates}/評価${stats.evaluations}/試行${stats.chainsTried}/採用${stats.accepted}/採用深さ最大${stats.acceptedMaxDepth}/重複除外${stats.dedup}/深さ${config.maxDepth}/終了${stats.endReason}/時間切れ${stats.timeouts}/${EngineClock.nowMs() - t0}ms]: " +
+            message = "${label}玉突き連鎖[起点${stats.seeds}/生成${stats.generated}/候補${stats.candidates}/評価${stats.evaluations}/試行${stats.chainsTried}/採用${stats.accepted}/起点上限${stats.seedCapped}/採用深さ最大${stats.acceptedMaxDepth}/重複除外${stats.dedup}/深さ${config.maxDepth}/終了${stats.endReason}/時間切れ${stats.timeouts}/${EngineClock.nowMs() - t0}ms]: " +
                 "c1 ${before.breakdown["c1"] ?: 0}->${rep.breakdown["c1"] ?: 0} score ${before.weightedScore.toLong()}->${rep.weightedScore.toLong()} HARD ${before.hard}->${rep.hard} total ${before.total}->${rep.total} 族差 " +
                 (before.breakdown.keys + rep.breakdown.keys).sorted().mapNotNull { f -> val d = (rep.breakdown[f] ?: 0) - (before.breakdown[f] ?: 0); if (d != 0) "$f${if (d > 0) "+" else ""}$d" else null }.joinToString(" ") +
                 " 起点族別[" + stats.byFamily.entries.joinToString(" ") { (f, v) -> "$f:起点${v[0]}/評価${v[1]}/採用${v[2]}/減${v[3]}" } + "]" +

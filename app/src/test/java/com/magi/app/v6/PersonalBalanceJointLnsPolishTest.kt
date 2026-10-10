@@ -100,4 +100,26 @@ class PersonalBalanceJointLnsPolishTest {
         assertEquals(0, after.breakdown["c1"])
         assertEquals(0, after.hard)
     }
+
+    /** [3.655.0/外部レビュー No.3] 対象の上限で切った人数をログに出す（旧: 対象の名前だけで、外れた職員がいるか読めなかった）。 */
+    @Test
+    fun logShowsHowManyEligibleStaffWereLeftOutByTheFocusCap() {
+        val n = 7
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-03",
+            shifts = listOf(Shift("Y", "Y", "", ""), Shift("X", "X", "", "")),
+            groups = (0 until n).map { Group("G$it", "G$it") }, staff = (0 until n).map { Staff("s$it", it) }, use2Patterns = false,
+            groupShift = List(n) { listOf(1, 1) }, groupShiftApt = List(n) { listOf("", "") },
+            schedule = List(n) { listOf(0, 0, 0) },
+            wishes = emptyMap(),
+            staffRange = (0 until n).associate { "$it,1" to Range("1", "") },   // 全員 X の下限 1 に届いていない
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(),
+            cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val out = PersonalBalanceJointLnsPolish.apply(st, st.schedule.toIntArray2D())
+        val msg = out.logs.single().message
+        assertTrue(msg, msg.contains("対象6/7人"))
+    }
 }

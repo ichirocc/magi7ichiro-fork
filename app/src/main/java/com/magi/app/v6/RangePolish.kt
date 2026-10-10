@@ -324,9 +324,11 @@ internal object RangePolish {
             var trials = 0
             // 実データ10名×31日では全候補を網羅。大規模データでも後処理予算を食い潰さない上限。
             val maxTrials = 128
+            var capped = false
 
             for (j in 0 until p.T) {
-                if (shouldStop() || trials >= maxTrials) break
+                if (shouldStop()) break
+                if (trials >= maxTrials) { capped = true; break }
                 if (work[hi][j] != k || !movable(hi, j)) continue
                 val tokens = IntArray(p.S) { work[it][j] }
                 // [3.278.0/監査修正] -1(正規化センチネル)トークンを含む日は当該列が全行INF＝Hungarianが必ず
@@ -351,7 +353,8 @@ internal object RangePolish {
                 )
 
                 for (receiver in receivers) {
-                    if (shouldStop() || trials++ >= maxTrials) break
+                    if (shouldStop()) break
+                    if (trials++ >= maxTrials) { capped = true; break }
                     val cost = Array(p.S) { LongArray(p.S) { DAY_MATCH_INF } }
                     for (i in 0 until p.S) {
                         val oldK = work[i][j]
@@ -418,7 +421,8 @@ internal object RangePolish {
 
             val plan = bestPlan
             if (plan == null) {
-                recordBlock(target, "日割当候補なし")
+                // [3.655.0] 試行上限で打ち切った場合は「候補なし」と区別する（見ていない日が残っている）。
+                recordBlock(target, if (capped) "日割当上限" else "日割当候補なし")
                 return false
             }
             for (i in 0 until p.S) work[i][plan.day] = plan.shifts[i]
@@ -600,6 +604,7 @@ internal object RangePolish {
         }
 
         var pass = 0
+        var lastPassImproved = false
         while (pass < maxPasses) {
             if (shouldStop()) break
             var improved = false
@@ -703,6 +708,7 @@ internal object RangePolish {
                 }
             }
             pass++
+            lastPassImproved = improved
             if (!improved) break
         }
         // [汎用玉突き結合フレームワーク, 3.249.0] stuckNames より前に実行し、結合で解消した箇所が
@@ -748,6 +754,7 @@ internal object RangePolish {
         val logs = listOf(MirrorLog(tag = "RangePolish",
             message = "個人回数(low/high)玉突き研磨: low ${before.breakdown["low"] ?: 0}->${bestRep.breakdown["low"] ?: 0} / high ${before.breakdown["high"] ?: 0}->${bestRep.breakdown["high"] ?: 0} / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回" +
                 "（日割当:$dayMatchingApplied / 柔軟日割当:$flexibleDayApplied）" +
+                " パス$pass/$maxPasses" + (if (pass >= maxPasses && lastPassImproved) "（最後のパスも改善＝上限で打ち切り）" else "") +
                 (if (applied == 0 && ((before.breakdown["low"] ?: 0) + (before.breakdown["high"] ?: 0)) > 0) " [頭打ち=改善手なし]" else "") +
                 (if (fixedNames.isNotEmpty()) " 対象: ${fixedNames.joinToString(", ")}" else "") +
                 (if (stuckNames.isNotEmpty()) " 残存: ${stuckNames.joinToString(", ")}" else "") +

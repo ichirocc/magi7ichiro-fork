@@ -151,4 +151,24 @@ class C1EjectionChainPolishTest {
         w[mv[0]][mv[1]] = mv[2]   // 差分評価には反映しない＝食い違いを作る
         assertTrue(C1EjectionChainPolish.deltaMismatch(de, UnifiedViolationChecker.check(st, w)) != null)
     }
+
+    /** [3.655.0/外部レビュー No.12] 起点が無いまま終わったら「起点なし」（旧: 初期値「完了」のまま＝調べ切ったように読めた）。 */
+    @Test fun endReasonSaysNoSeedsInsteadOfDone() {
+        val st = MagiState(
+            startDate = "2026-01-01", endDate = "2026-01-02",
+            shifts = listOf(Shift("Y", "Y", "", ""), Shift("X", "X", "", "")), groups = listOf(Group("G", "G")),
+            staff = listOf(Staff("s0", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(0, 0)),
+            wishes = mapOf("0,0" to 0, "0,1" to 0),   // 2 日とも Y の希望＝2 日窓の X は置けない
+            staffRange = emptyMap(), needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = listOf(C1Row(day1 = "2", shiftKigou = "X", day2 = "1")),
+            cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(), cons3m = emptyList(), cons3mn = emptyList(),
+            cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val stats = C1EjectionChainPolish.Stats()
+        C1EjectionChainPolish.apply(st, st.schedule.toIntArray2D(), stats = stats)
+        assertEquals("起点なし", stats.endReason)
+        assertEquals(0, stats.seedCapped)
+    }
 }
