@@ -155,7 +155,7 @@ fun main(args: Array<String>) {
         "pipeoffendk", "pipevsfullallendk", "pipevsshallowendk",
         //   [2026-10-10] 改善案（両腕ともパイプライン既定の構成）: rounds＝新腕だけ 2 巡目以降あり、hard＝新腕だけ必須の焦点あり、combo＝両方。
         //   combovsfull＝従来の常時フル（修復後の全族の玉突き）対 両方入りのパイプライン。
-        "piperoundsendk", "pipehardendk", "pipecomboendk", "pipecombovsfullendk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
+        "piperoundsendk", "pipehardendk", "pipecomboendk", "pipecombovsfullendk", "pipehardvsroundsendk" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [3.618.1] 全族起点の玉突き連鎖。PolishGate の大域フラグなので腕ごとに切り替える（下のループ）。
         "ejectionall" -> V6HotfixPasses.PostOptimizationParams(deterministic = det) to V6HotfixPasses.PostOptimizationParams(deterministic = det)
         // [2026-10-06] 前段（HF66 直後）の玉突き連鎖。起点＝必須だけ／全族。大域フラグなので腕ごとに切り替える（下のループ）。
@@ -194,7 +194,7 @@ fun main(args: Array<String>) {
                     pf == "pipevsshallow" || pf == "pipevsshallowend" -> EjectionChainPipeline.Focus.BOTH
                     arm == "new" && pf in setOf("pipeoffc1", "pipevsfullc1", "pipeoffendc1") -> EjectionChainPipeline.Focus.C1
                     arm == "new" && pf in setOf("pipeoffsoft", "pipeoffendsoft") -> EjectionChainPipeline.Focus.SOFT
-                    pf in setOf("piperoundsend", "pipehardend", "pipecomboend") || (arm == "new" && pf == "pipecombovsfullend") -> EjectionChainPipeline.Focus.BOTH
+                    pf in setOf("piperoundsend", "pipehardend", "pipecomboend", "pipehardvsroundsend") || (arm == "new" && pf == "pipecombovsfullend") -> EjectionChainPipeline.Focus.BOTH
                     // 比較の旧腕と従来の玉突きの腕はパイプラインを切る（有効だと従来の玉突きは走らない）。
                     pf.startsWith("pipe") || feature.startsWith("ejection") -> EjectionChainPipeline.Focus.OFF
                     // [3.656.0] それ以外の機能は既定（パイプライン BOTH・修復の後）のまま測る。
@@ -203,8 +203,9 @@ fun main(args: Array<String>) {
                 PolishGate.ejectionPipelineAfterRepair = !pf.startsWith("pipe") || pf.endsWith("end")
                 EjectionChainPipeline.shallowOnly = (pf == "pipevsshallow" || pf == "pipevsshallowend") && arm == "old"
                 // [3.657.0] パイプラインの腕は 1 巡だけ・必須の焦点なしを基準に新腕だけ足す（3.656.0 までの腕の再現）。それ以外の機能は既定（探し直し ON）のまま測る。
-                PolishGate.ejectionPipelineRounds = if (pf.startsWith("pipe")) arm == "new" && pf in setOf("piperoundsend", "pipecomboend", "pipecombovsfullend") else true
-                PolishGate.ejectionPipelineHardLeg = arm == "new" && pf in setOf("pipehardend", "pipecomboend", "pipecombovsfullend")
+                //   pipehardvsroundsendk だけは両腕とも探し直し ON（既定）で、新腕に必須の焦点を足す。
+                PolishGate.ejectionPipelineRounds = if (pf.startsWith("pipe")) pf == "pipehardvsroundsend" || (arm == "new" && pf in setOf("piperoundsend", "pipecomboend", "pipecombovsfullend")) else true
+                PolishGate.ejectionPipelineHardLeg = arm == "new" && pf in setOf("pipehardend", "pipecomboend", "pipecombovsfullend", "pipehardvsroundsend")
                 PolishGate.hardEjectionChainEarly = feature == "ejectionearlyhard" && arm == "new"
                 PolishGate.allEjectionChainEarly = (feature == "ejectionearlyall" || feature == "ejectionearlyallretry") && arm == "new"
                 PolishGate.hardEjectionChainRetry = feature == "ejectionearlyallretry" && arm == "new"

@@ -226,7 +226,8 @@ internal object C1EjectionChainPolish {
             }
             for ((f, locs) in rep.distLocations) for (l in locs) addUnit(f, row(l[0]))
             val lists = ArrayList<Pair<String, List<Seed>>>()
-            val c1 = if (config.skipC1Seeds) emptyList() else c1Seeds()
+            // HARD は必須の族だけを起点にする（c1 はソフト）。旧: c1 の起点も混ざり、必須の焦点が期間の制約を先に直していた。
+            val c1 = if (config.skipC1Seeds || hardOnly) emptyList() else c1Seeds()
             if (c1.isNotEmpty()) lists.add("c1" to c1)
             for ((f, us0) in perFamily) {
                 val out = ArrayList<Seed>()

@@ -220,4 +220,16 @@ class C1EjectionChainPolishTest {
         C1EjectionChainPolish.apply(st, st.schedule.toIntArray2D(), C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.ALL), indexOnly = { all = it })
         assertTrue(all.any { it.family in MirrorKeys.hard })
     }
+
+    /** [玉突きパイプラインの必須の焦点] HARD 起点は必須の族の違反だけを起点にする（c1 の不足窓も入れない）。 */
+    @Test fun hardOriginSeedsOnlyHardFamilies() {
+        val st = state().copy(schedule = listOf(listOf(2, 2, 0), listOf(1, 1, 0)))   // 3 日目は誰もいない＝人員不足（必須）と c1
+        var seeds: List<C1EjectionChainPolish.SeedKey> = emptyList()
+        C1EjectionChainPolish.apply(st, st.schedule.toIntArray2D(), C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.HARD), indexOnly = { seeds = it })
+        assertTrue(seeds.isNotEmpty())
+        assertTrue(seeds.all { it.family in MirrorKeys.hard })
+        var soft: List<C1EjectionChainPolish.SeedKey> = emptyList()
+        C1EjectionChainPolish.apply(st, st.schedule.toIntArray2D(), C1EjectionChainPolish.Config(origin = C1EjectionChainPolish.Origin.SOFT), indexOnly = { soft = it })
+        assertTrue(soft.any { it.family == "c1" })
+    }
 }
