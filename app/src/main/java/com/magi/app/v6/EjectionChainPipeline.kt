@@ -10,12 +10,6 @@ internal object EjectionChainPipeline {
     /** 測定用（受け入れ条件 A2/A3 の比較腕）: 中段と深い探索を走らせず、浅い予察の当たりだけを採る。本番は false。 */
     @Volatile internal var shallowOnly: Boolean = false
 
-    /** 測定中（既定 OFF）: 採用があった巡のあと、索引を作り直してもう一巡する（従来の玉突きと同じ最大
-     *  [C1EjectionChainPolish.Config.maxRounds] 巡・族ごとの起点は巡ごとにずらす）。深い探索の予算は巡をまたいで共有。 */
-    @Volatile internal var repeatRounds: Boolean = false
-
-    /** 測定中（既定 OFF）: BOTH のとき、必須の族の違反を起点にする焦点を先頭に足す（採用は同じ採用ゲート）。 */
-    @Volatile internal var hardLeg: Boolean = false
 
     data class Config(
         val focus: Focus,
@@ -33,6 +27,11 @@ internal object EjectionChainPipeline {
         val deepEvaluations: Long = 360_000L,
         /** 入れ替え（同日の 2 人・同じ人の 2 日）も 1 手に使う。設定タブの「入れ替えも1手として使う」。 */
         val swapMoves: Boolean = PolishGate.ejectionChainSwapMoves,
+        /** 採用があった巡のあと索引を作り直してもう一巡（従来の玉突きと同じ最大 [C1EjectionChainPolish.Config.maxRounds] 巡・
+         *  族ごとの起点は巡ごとにずらす）。深い探索の予算は巡をまたいで共有。 */
+        val repeatRounds: Boolean = PolishGate.ejectionPipelineRounds,
+        /** BOTH のとき、必須の族の違反を起点にする焦点を先頭に足す（採用は同じ採用ゲート）。 */
+        val hardLeg: Boolean = PolishGate.ejectionPipelineHardLeg,
     )
 
     /** 焦点 1 つぶんの記録。[deepRan] が真なら必ず当たり（浅＋中）が 1 件以上ある。 */
@@ -75,7 +74,7 @@ internal object EjectionChainPipeline {
             Focus.OFF -> emptyList()
             Focus.C1 -> listOf(C1EjectionChainPolish.Origin.C1 to false)
             Focus.SOFT -> listOf(C1EjectionChainPolish.Origin.SOFT to false)
-            Focus.BOTH -> (if (hardLeg) listOf(C1EjectionChainPolish.Origin.HARD to false) else emptyList()) +
+            Focus.BOTH -> (if (config.hardLeg) listOf(C1EjectionChainPolish.Origin.HARD to false) else emptyList()) +
                 listOf(C1EjectionChainPolish.Origin.C1 to false, C1EjectionChainPolish.Origin.SOFT to true)
         }
         val pinBlocks = PinBlockAttribution()
@@ -83,7 +82,7 @@ internal object EjectionChainPipeline {
         var deepEvaluationsLeft = config.deepEvaluations
         var applied = 0
         val logs = ArrayList<MirrorLog>()
-        val maxRounds = if (repeatRounds) C1EjectionChainPolish.Config().maxRounds else 1
+        val maxRounds = if (config.repeatRounds) C1EjectionChainPolish.Config().maxRounds else 1
         for (round in 1..maxRounds) {
             var committed = 0
             for ((n, leg) in legs.withIndex()) {

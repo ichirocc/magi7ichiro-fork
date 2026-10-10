@@ -27,6 +27,8 @@ object MagiAccent {
     val pink = Color(0xFFD24D89)    // 希望 / 個人属性（ローズ）
     val red = Color(0xFFD23B34)     // 重大違反 / NG制約（明快なアラート赤）
     val gray = Color(0xFF8A979B)    // 休み / 無効（クールスレート、ペーパーに調和）
+    /** 文字に使う青（曜日の「土」など）。[blue] はカード地 #DFE6E3 で 3.76:1 しかなく 14sp の文字に足りない（UD で 5.03:1）。[all] には入れない。 */
+    val blueText = Color(0xFF2A5DB0)
 
     /** 色ピッカー等で提示する既定パレット。 */
     val all: List<Color> = listOf(blue, green, orange, purple, pink, red, gray)

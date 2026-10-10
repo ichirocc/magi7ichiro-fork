@@ -8,6 +8,7 @@ import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.canDoShiftsForStaff
 import com.magi.app.v6.toIntArray2D
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -397,6 +398,17 @@ class CellSheetLogicTest {
         assertEquals("希望 休・Pｼ・Dﾃ 以外（反映済）", wishTabLine(null, 3, setOf(2, 0, 1), sym, pinned = false))
         assertEquals("希望 休・Pｼ 以外（未反映）・手動固定", wishTabLine(null, 0, setOf(0, 1), sym, pinned = true))
         assertEquals("希望 Cｱ（反映済）・休 以外（反映済）", wishTabLine(3, 3, setOf(0), sym, pinned = false))
+    }
+
+    /** 希望モードで押せない日＝その職員の拡張希望の指定日（日だけで決める＝wishBlockedBy と同じ）。禁止の記号は件の和集合をシフト一覧の順で。 */
+    @Test fun extWishDayListsBannedShiftsInShiftOrder() {
+        val ext = listOf(ExtWishView(0, 2, "A", listOf(3, 5), listOf("Pｼ")), ExtWishView(1, 2, "A", listOf(5), listOf("Pｼ", "休")))
+        val kigou = listOf("休", "Aｱ", "Pｼ")
+        assertEquals(listOf("休", "Pｼ"), extWishDayKigou(ext, 2, 4, kigou))
+        assertEquals(listOf("Pｼ"), extWishDayKigou(ext, 2, 2, kigou))
+        assertNull(extWishDayKigou(ext, 2, 3, kigou))
+        assertNull(extWishDayKigou(ext, 1, 4, kigou))
+        assertEquals("この日は拡張希望（休・Pｼ 以外）の指定日なので、希望は入れられません", extWishDayNote(listOf("休", "Pｼ")))
     }
 
     /** [3.646.0] 直し方の探索の締切: セルのシートは 3 秒、全体は 8 秒。探索中の 1 行に最長の秒数を添える。 */

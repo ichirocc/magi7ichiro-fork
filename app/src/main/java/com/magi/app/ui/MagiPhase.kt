@@ -2,7 +2,7 @@ package com.magi.app.ui
 
 /** 盤面を丸ごと差し替えるジョブの段階。`Idle` 以外は編集・実行のガードが閉じる。
  *  再チェック(`checkJob`)と修正候補探索(`fixJob`)はここに入らない＝`optimizeInFlight()` と同じ境界。
- *  表示名は画面の文言なので変えない。 */
+ *  表示名は画面の文言（言い換えは docs/operator_ux.md §2）。 */
 internal enum class MagiPhase(val busyLabel: String?) {
     Idle(null),
     Loading("読み込み"),
@@ -10,7 +10,7 @@ internal enum class MagiPhase(val busyLabel: String?) {
     Drafting("下書きづくり"),
     Optimizing("勤務表づくり"),
     Polishing("仕上げ最適化"),
-    Background("バックグラウンド最適化"),
+    Background("閉じている間の最適化"),
     ;
 
     val isBusy: Boolean get() = this != Idle

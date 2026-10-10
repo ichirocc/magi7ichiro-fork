@@ -202,8 +202,9 @@ fun main(args: Array<String>) {
                 }
                 PolishGate.ejectionPipelineAfterRepair = !pf.startsWith("pipe") || pf.endsWith("end")
                 EjectionChainPipeline.shallowOnly = (pf == "pipevsshallow" || pf == "pipevsshallowend") && arm == "old"
-                EjectionChainPipeline.repeatRounds = arm == "new" && pf in setOf("piperoundsend", "pipecomboend", "pipecombovsfullend")
-                EjectionChainPipeline.hardLeg = arm == "new" && pf in setOf("pipehardend", "pipecomboend", "pipecombovsfullend")
+                // [3.657.0] パイプラインの腕は 1 巡だけ・必須の焦点なしを基準に新腕だけ足す（3.656.0 までの腕の再現）。それ以外の機能は既定（探し直し ON）のまま測る。
+                PolishGate.ejectionPipelineRounds = if (pf.startsWith("pipe")) arm == "new" && pf in setOf("piperoundsend", "pipecomboend", "pipecombovsfullend") else true
+                PolishGate.ejectionPipelineHardLeg = arm == "new" && pf in setOf("pipehardend", "pipecomboend", "pipecombovsfullend")
                 PolishGate.hardEjectionChainEarly = feature == "ejectionearlyhard" && arm == "new"
                 PolishGate.allEjectionChainEarly = (feature == "ejectionearlyall" || feature == "ejectionearlyallretry") && arm == "new"
                 PolishGate.hardEjectionChainRetry = feature == "ejectionearlyallretry" && arm == "new"

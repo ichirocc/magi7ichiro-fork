@@ -86,7 +86,7 @@ class MagiMediatorTest {
         bgRunning = true
         assertEquals(MagiPhase.Background, machine.phase)
         m.dispatch(MagiEvent.Board.SetCell(0, 0, 1))
-        assertEquals("バックグラウンド最適化の実行中は編集できません（完了後にもう一度お試しください）", rejects[0].userMessage)
+        assertEquals("閉じている間の最適化の実行中は編集できません（完了後にもう一度お試しください）", rejects[0].userMessage)
         bgRunning = false
         assertEquals(MagiPhase.Idle, machine.phase)
     }

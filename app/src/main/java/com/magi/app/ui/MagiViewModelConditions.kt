@@ -177,8 +177,9 @@ fun MagiViewModel.clearGroupRange(g: Int, k: Int, lo: String, hi: String) {
     // [3.409.11] チップ内の小さな✕1回で**N名ぶん**の個人設定が消えるのに、画面には
     //   チップが1つ消えるだけで、何人ぶん消えたかが出ていなかった（logOp は詳細設定のログ止まり）。
     //   3.399.0/3.400.0 の「イベントは Snackbar へ」に合わせ、実際の効果を件数つきで返す。
-    notify("$gname「${opSy(k)}」のグループ上下限を解除しました（${cleared}名ぶん・「元に戻す」で戻せます）")
-    applyStructure(stNew)
+    val done = "$gname「${opSy(k)}」のグループ上下限を解除しました（${cleared}名ぶん・「元に戻す」で戻せます）"
+    logOp("I", done)
+    applyStructure(stNew, notice = done)
 }
 
 /** [3.506.0] 「グループ単位の回数」で両方「なし」を適用＝グループ全員の (i,k) 個人上下限を値に関係なく解除し、群の適切回数も空にする
@@ -193,8 +194,9 @@ fun MagiViewModel.clearGroupRangeAll(g: Int, k: Int) {
     val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
     if (cleared == 0) { notify("$gname「${opSy(k)}」に解除する個人上下限はありません"); return }
     val stNew = Ws1Ops.setGroupApt(st0.copy(staffRange = m), g, k, "")
-    notify("$gname「${opSy(k)}」の個人上下限を全員ぶん「なし」にしました（${cleared}名ぶん・「元に戻す」で戻せます）")
-    applyStructure(stNew)
+    val done = "$gname「${opSy(k)}」の個人上下限を全員ぶん「なし」にしました（${cleared}名ぶん・「元に戻す」で戻せます）"
+    logOp("I", done)
+    applyStructure(stNew, notice = done)
 }
 
 /** [3.533.0/ユーザー提示のデザイン案] グループ一括設定の「このグループぶんを全解除」:
@@ -219,8 +221,9 @@ fun MagiViewModel.clearGroupRangeSection(g: Int) {
     }
     if (cleared == 0) return
     val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
-    notify("$gname のグループ上下限をまとめて解除しました（${targets.size}件・${cleared}名ぶん・「元に戻す」で戻せます）")
-    applyStructure(stNew)
+    val done = "$gname のグループ上下限をまとめて解除しました（${targets.size}件・${cleared}名ぶん・「元に戻す」で戻せます）"
+    logOp("I", done)
+    applyStructure(stNew, notice = done)
 }
 
 /** 「グループ単位の回数」適用済み一覧。グループ全メンバーが同一の非空レンジを持つ (g,k) のみ＝
@@ -298,7 +301,11 @@ fun MagiViewModel.wishOverrides(): List<WishView> {
 
 fun MagiViewModel.setWish(i: Int, j: Int, k: Int) {
     val st = state ?: return
-    com.magi.app.v6.ExtWishRules.wishBlockedBy(st, i, j)?.let { logOp("W", "希望設定: ${opNm(i)} ${j + 1}日 — $it"); return }
+    com.magi.app.v6.ExtWishRules.wishBlockedBy(st, i, j)?.let {
+        logOp("W", "希望設定: ${opNm(i)} ${j + 1}日 — $it")
+        _ui.update { u -> u.copy(messageIsError = true, message = "${opNm(i)} ${DayText.short(st.startDate, j)} は拡張希望の指定日なので、希望は入れられません") }
+        return
+    }
     val m = st.wishes.toMutableMap()
     m["$i,$j"] = k
     logOp("I", "希望設定: ${opNm(i)} ${j + 1}日 → ${opSy(k)}")
@@ -325,9 +332,16 @@ fun MagiViewModel.setWishesForDays(staffIdx: Int?, days: List<Int>, k: Int) {
         m["$i,$j"] = k
     }
     if (blocked > 0) logOp("W", "希望一括: ${blocked}件 — ${com.magi.app.v6.ExtWishRules.MSG_EXT_DAY}")
+    if (m == st.wishes) {
+        _ui.update {
+            if (blocked > 0) it.copy(messageIsError = true, message = "拡張希望の指定日なので、希望は入れられません（${blocked}件・変更なし）")
+            else it.copy(messageIsError = false, message = "同じ希望がすでに入っています（変更なし）")
+        }
+        return
+    }
     val who = if (staffIdx != null) opNm(staffIdx) else "全員" + (st.staff.size - staffRange.size).let { if (it > 0) "（担当外${it}名を除く）" else "" }
     logOp("I", "希望一括: $who ${opDays(days)} → ${opSy(k)}")
-    applyStructure(st.copy(wishes = m))
+    applyStructure(st.copy(wishes = m), notice = if (blocked > 0) "希望を入れました（拡張希望の指定日の${blocked}件は入れていません）" else null)
 }
 
 /** [一括] スタッフ(null=全員)×日群の希望を一括削除。 */
@@ -337,9 +351,10 @@ fun MagiViewModel.clearWishesForDays(staffIdx: Int?, days: List<Int>) {
     val m = st.wishes.toMutableMap()
     val staffRange = if (staffIdx != null) listOf(staffIdx) else st.staff.indices.toList()
     for (i in staffRange) for (j in days) m.remove("$i,$j")
-    if (m.size == st.wishes.size) return
+    val cleared = st.wishes.size - m.size
+    if (cleared == 0) { _ui.update { it.copy(messageIsError = false, message = "消す希望はありませんでした") }; return }
     logOp("I", "希望クリア: ${if (staffIdx != null) opNm(staffIdx) else "全員"} ${opDays(days)}")
-    applyStructure(st.copy(wishes = m))
+    applyStructure(st.copy(wishes = m), notice = "希望を${cleared}件消しました")
 }
 
 /** 拡張希望の一覧（日は期間内だけ、1 始まり）。 */

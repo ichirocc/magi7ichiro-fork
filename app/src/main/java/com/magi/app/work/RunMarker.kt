@@ -33,7 +33,7 @@ internal object RunMarker {
 
     /** 途中結果なしで中断したときの案内。 */
     fun interruptedInfo(marker: String): String = runCatching {
-        val modeJp = if (JSONObject(marker).optString("mode") == "bg") "バックグラウンド" else ""
+        val modeJp = if (JSONObject(marker).optString("mode") == "bg") "閉じている間の" else ""
         "前回の${modeJp}最適化は完了前に中断されました。入力は自動保存済みです。再作成できます。"
     }.getOrNull()?.plus(s5Suffix(marker)) ?: "前回の最適化は完了前に中断されました。入力は自動保存済みです。"
 }

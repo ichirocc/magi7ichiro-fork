@@ -9,6 +9,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -105,7 +106,7 @@ internal fun StaffShiftMatrixCard(
             Text(
                 "セルをタップで目標・上下限を編集。「—」＝担当不可（担当可否は①で変更）。" +
                     "薄色＝目安の回数との差(やわらかい)、濃色＝個人の上下限(かたい)の逸脱。",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant,
             )
             if (worst != null) {
                 Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.small,
@@ -118,7 +119,7 @@ internal fun StaffShiftMatrixCard(
                         "⚠ ${toHankakuKigou(worst.kigou)}：目標の合計${worst.aptSum}回 ＞ " +
                             (if (worst.isRest) "休める日数の上限${worst.capacity}日" else "必要人数の合計${worst.capacity}回") +
                             "（${worst.shortfall}回ぶんは必ず届きません）。タップでその列へ",
-                        style = MaterialTheme.typography.labelMedium, color = cs.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall, color = cs.onErrorContainer,
                         modifier = Modifier.padding(10.dp),
                     )
                 }
@@ -310,7 +311,7 @@ private fun MatrixDataCell(
 }
 
 /** セルタップの編集シート。①群の目標(apt、全員に影響) ②個人の上下限(staffRange) の2系統のみ提供する。 */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, counts: ScheduleCounts, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
     val cs = MaterialTheme.colorScheme
@@ -349,21 +350,22 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
                 }
             }
             val raw = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
-            Text("グループの目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-            AptStepperRow(label = toHankakuKigou(kigou), value = raw, onChange = { onEvent(MagiEvent.Structure.SetGroupApt(g, k, it)) })
+            Text("グループの目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.titleSmall)
+            NumberStepper("目標", raw.trim(), { onEvent(MagiEvent.Structure.SetGroupApt(g, k, it)) }, min = 0, blankLabel = "なし")
             if (hasRange && raw.trim().toIntOrNull() != null) {
-                Text("この職員・シフトは個人の下限・上限を優先するため、グループの目標は適用されません", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("この職員・シフトは個人の下限・上限を優先するため、グループの目標は適用されません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             } else if (apt != null && raw.trim().toIntOrNull() != apt) {
-                Text("この職員の希望・置けるシフトから ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("この職員の希望・置けるシフトから ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(4.dp))
-            Text("個人の下限・上限（このシフトだけ）", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text("個人の下限・上限（このシフトだけ）", style = MaterialTheme.typography.titleSmall)
             NumberStepper("下限", lo, { lo = it }, min = 0, blankLabel = "なし")
             NumberStepper("上限", hi, { hi = it }, min = 0, blankLabel = "なし")
             if (bad) Text(RANGE_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = cs.error)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // ⚠付きの解除と解決ボタンは 390dp 幅の1行に収まらない＝入らない分は次の行へ。
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasRange) {
-                    DeleteRowButton(onClick = { onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() }, text = "上下限を解除")
+                    DialogDangerButton("上下限を解除", onClick = { onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() })
                 }
                 if (vio == "vio-high") {
                     DialogConfirmButton("上限を${count}に引き上げて解決", enabled = true,
@@ -376,24 +378,5 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
             DialogConfirmButton("この上下限を適用", enabled = !bad && (lo.isNotBlank() || hi.isNotBlank() || hasRange),
                 onClick = { onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo.trim(), hi.trim())); onDismiss() })
         }
-    }
-}
-
-/** [Ws1Editor.AptStepper と同型] 群の目標編集専用（このファイル内で完結させ、AptSection撤去後も再利用できるよう複製ではなく同じ形を保つ）。 */
-@Composable
-private fun AptStepperRow(label: String, value: String, onChange: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(48.dp))
-        TextButton(onClick = {
-            val c = value.trim().toIntOrNull()
-            onChange(when { c == null -> "0"; c <= 0 -> ""; else -> (c - 1).toString() })
-        }, modifier = Modifier.semantics { contentDescription = "$label の目標を減らす" }) { Text("−", style = MaterialTheme.typography.titleLarge) }
-        Box(Modifier.width(40.dp), contentAlignment = Alignment.Center) {
-            Text(value.ifBlank { "なし" }, style = MaterialTheme.typography.titleMedium)
-        }
-        TextButton(onClick = {
-            val c = value.trim().toIntOrNull() ?: -1
-            onChange((c + 1).coerceAtLeast(0).toString())
-        }, modifier = Modifier.semantics { contentDescription = "$label の目標を増やす" }) { Text("＋", style = MaterialTheme.typography.titleLarge) }
     }
 }

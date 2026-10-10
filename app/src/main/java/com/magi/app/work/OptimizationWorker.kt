@@ -369,7 +369,7 @@ class OptimizationWorker(
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentTitle("勤務表を最適化中")
-            .setContentText("バックグラウンドで最適化しています…")
+            .setContentText("閉じても大丈夫です（できたら通知します）")
             .setOngoing(true)
             .build()
         // minSdk 36 (Android 16+): foregroundServiceType is always required.

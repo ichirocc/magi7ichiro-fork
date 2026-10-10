@@ -22,7 +22,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.magi.app.v6.MirrorKeys
 import com.magi.app.v6.ShiftAppearance
@@ -38,7 +37,7 @@ import com.magi.app.v6.ShiftAppearance
 fun SectionSegment(title: String, subtitle: String? = null, content: @Composable () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.Bold)
+            Text(title, style = MaterialTheme.typography.titleMedium)
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
             content()
@@ -70,7 +69,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         val baseSoft = ui.violationSoftColorHex.ifBlank { "#F59E0B" }
         // [3.483.0 C-1] 基準色2チップを先頭に常時表示し、19種の族別チップは既定で折りたたむ
         //   （設定タブの大半を1節が占めていた実機所見。個別設定の入口は開閉行で残す）。
-        Text("未設定の種別に効く基準色", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Text("未設定の種別に効く基準色", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
         Spacer(Modifier.height(6.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ColorChip(hex = baseHard, label = "必須", custom = ui.violationColorHex.isNotBlank(), enabled = !ui.running) { pickFam = "__hard__" }
@@ -84,7 +83,7 @@ internal fun ColorSettingsView(ui: UiState, onEvent: (MagiEvent) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("種別ごとに個別の色（${MirrorKeys.all.size}種" + (if (customN > 0) "・個別設定${customN}件" else "") + "）",
-                style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             Text(if (famOpen) "閉じる ▾" else "開く ▸", style = MaterialTheme.typography.labelMedium, color = cs.primary)
         }
         if (famOpen) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

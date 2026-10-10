@@ -171,10 +171,10 @@ fun MagiViewModel.exportLogsJson(): String? {
  * 年月が無ければ当年1月、`FlatRosterCsvImport` は曜日行から当年で最初に一致する月・曜日行が
  * 無ければ当年1月）。期間は勤務表の根幹で、間違っていれば曜日の平準化も日付表示もずれるのに、
  * 画面には「N名 / M日」しか出ず**推定したことすら伝わらなかった**。何日からとして取り込んだかを
- * 必ず出す。挙動は不変＝知らせるだけで、違っていれば設定タブで直せる。
+ * 必ず出す。挙動は不変＝知らせるだけで、違っていれば編集タブの「月次条件」で直せる。
  */
 private fun periodNote(startDate: String) =
-    "｜期間は「$startDate」から として取り込みました（CSVに年月が無い場合は推定です。設定タブで直せます）"
+    "｜期間は「$startDate」から として取り込みました（CSVに年月が無い場合は推定です。編集タブの「月次条件」の『対象の月』で直せます）"
 
 /**
  * [3.475.0/論理監査] テンプレCSVの凡例に無い記号を名指しする。旧: そのセルは黙って休（希望取込では
@@ -206,7 +206,7 @@ fun MagiViewModel.importCsvSmart(rawText: String, onNewDataLoaded: (() -> Unit)?
             //   （RosterCsvImport はタイトルに年月が無ければ当年1月、FlatRosterCsvImport は
             //   曜日行から当年で最初に一致する月／曜日行が無ければ当年1月）。期間は勤務表の根幹で、
             //   間違っていれば曜日の平準化も日付表示もずれる。**何日から取り込んだかを必ず出す**
-            //   （挙動は不変＝知らせるだけ。違っていれば設定タブで直せる）。
+            //   （挙動は不変＝知らせるだけ。違っていれば編集タブの「月次条件」で直せる）。
             logOp("I", "勤務表CSVを新規取込: ${st.staffCount}名 / ${st.dayCount}日 / ${st.shiftCount}シフト / ${st.groupCount}ユニット / 期間${st.startDate}〜${st.endDate}")
             load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate) + rosterUnknownNote(unknownSym), onNewDataLoaded)
             return
@@ -228,7 +228,7 @@ fun MagiViewModel.importCsvSmart(rawText: String, onNewDataLoaded: (() -> Unit)?
         return
     }
     if (state == null) {
-        _ui.update { it.copy(messageIsError = true, message = "このCSVを読み込めませんでした。先に『データを開く』で基本データを読み込むか、勤務表テンプレCSVをご利用ください。") }
+        _ui.update { it.copy(messageIsError = true, message = "このCSVを取り込めませんでした。先に『データを開く』で基本データを読み込むか、病院の勤務表の書式（テンプレート）のCSVをご利用ください。") }
         return
     }
     // [3.282.0] 修復済みテキストをそのまま渡す（旧: rawText を渡し importCsv 内で二重に repair＝
@@ -281,7 +281,7 @@ private fun componentImportMismatchHint(repairedText: String, what: String = "�
         "引用符（\"）が閉じていない行があります。開いた引用符から後ろが1つのセルに吸い込まれるため、書式を直してから取り込んでください。"
     com.magi.app.v6.RosterCsvImport.detect(repairedText) ||
         com.magi.app.v6.FlatRosterCsvImport.detect(repairedText) ->
-        "これは勤務表全体（テンプレ/ユニット列形式）のCSVのようです。取込種別で『データ全体（新規）』を選んでください。"
+        "これは勤務表全体（病院の勤務表の書式）のCSVのようです。取込種別で『データ全体（新規）』を選んでください。"
     looksLikeScheduleCsv(repairedText) ->
         "これは勤務表（スケジュール）CSVのようで、${what}は含まれていません。専用CSVを、設定タブの『コンポーネント別 出力』にある${buttons}ボタンで出して取り込んでください。"
     else -> ""
@@ -349,7 +349,7 @@ fun MagiViewModel.importWishesCsv(rawText: String) {
         // [2026-09-02, 外部レビュー#76] 例を最大3件まで列挙（旧: 最初の1件だけ）。原因が複数種類
         //   混在するCSVでも、1回の取込結果から複数の直し所が分かるようにする。
         val examples = res.samples.joinToString(" ／ ")
-        _ui.update { it.copy(messageIsError = false, message = "希望シフトの取込を中止しました（読めない行が${res.rejected}件）。" +
+        _ui.update { it.copy(messageIsError = true, message = "希望シフトの取込を中止しました（読めない行が${res.rejected}件）。" +
             "この取込は既存の希望を置き換えるため、全部読めたときだけ実行します。例: $examples") }
         logOp("W", "希望シフトCSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: $examples")
         return
@@ -374,13 +374,13 @@ fun MagiViewModel.importConstraintsCsv(rawText: String) {
     if (res.rejected > 0) {
         // [2026-09-02, 外部レビュー#76] 例を最大3件まで列挙（旧: 最初の1件だけ、上のimportWishesCsvと同じ理由）。
         val examples = res.samples.joinToString(" ／ ")
-        _ui.update { it.copy(messageIsError = false, message = "各制約の取込を中止しました（読めない行が${res.rejected}件）。" +
-            "この取込は既存の制約・個人レンジを置き換えるため、全部読めたときだけ実行します。例: $examples") }
+        _ui.update { it.copy(messageIsError = true, message = "各制約の取込を中止しました（読めない行が${res.rejected}件）。" +
+            "この取込は既存の制約・個人の回数の下限・上限を置き換えるため、全部読めたときだけ実行します。例: $examples") }
         logOp("W", "各制約CSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: $examples")
         return
     }
     logOp("I", "各制約CSV取込: ${res.accepted}件を反映（制約一式を置換）")
-    applyStructureWithMessage(res.state, "各制約を取込: ${res.accepted}件を反映（既存の制約・個人レンジは置換）")
+    applyStructureWithMessage(res.state, "各制約を取込: ${res.accepted}件を反映（既存の制約・個人の回数の下限・上限は置換）")
 }
 
 /** [コンポーネント別取込/3.547.0] シフト種別の色CSV（記号,色）。掲載された記号だけ upsert で更新、

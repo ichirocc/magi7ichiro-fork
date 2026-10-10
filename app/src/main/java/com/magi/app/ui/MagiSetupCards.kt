@@ -9,7 +9,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,7 +62,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.magi.app.v6.V6PortReport
@@ -124,7 +122,7 @@ internal fun MonthPickerCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("対象の月", style = MaterialTheme.typography.titleMedium)
             Text("作成対象の月。変えると日数に合わせて表を作り直します。",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { onEvent(MagiEvent.Structure.ShiftMonth(-1)) }, enabled = !ui.running,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("前の月") }
@@ -156,16 +154,17 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
             //   （件数比・標準/例外の区別・作成ボタン）で同じ2行を表示するため、そこでは重複を隠す。
             //   他スコープ(職員管理/年間マスター)では引き続き表示し、希望シフトへのショートカットを維持する。
             if (editScope != 0) {
-                Text("── 月次条件（毎月）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("── 月次条件（毎月）──", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
                 // [見つけやすさ改善] 「希望シフト」行をタップで登録画面へ直行（既存機能の入口が編集タブの奥に
                 //   埋もれ見つけにくいという指摘。新規画面は作らず、常時表示のこの案内カードから最短で開く）。
-                GuideRow("希望シフト", "${c.wishes}件", c.wishes > 0, onClick = onOpenWish)
+                // 登録件数は「集め終わった」ことを示さないので ✓ を付けない（今月の作成条件の「希望・休暇」と同じ）。
+                GuideRow("希望シフト", "${c.wishes}件", done = null, onClick = onOpenWish)
                 GuideRow("必要人数の例外", if (c.needDay > 0) "${c.needDay}件（個別指定）" else "シフト既定のみ", true)
             }
             // [3.483.0 E-1] 月次条件(editScope==0)では年間マスターの行も隠し「次の一手」だけにする
             //   （直下の MonthlyChecklistCard と同じ職員/シフト件数を二重に見せていた）。
             if (editScope != 0) {
-                Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
                 GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
                 GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
                 // [3.483.0 E-2] 旧「⑤ 個人の回数範囲」＝①〜④が無いのに⑤だけ残っていた番号の取り残し。
@@ -173,7 +172,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
             }
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
-                c.wishes == 0 -> "次に『希望シフト』を登録すると でき具合 が上がります。"
+                c.wishes == 0 -> "希望・休暇があれば『希望シフト』で登録します。"
                 // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
                 //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
                 else -> "準備OK。画面下の『${if (ui.hasResult) "再作成" else "勤務表をつくる"}』で作成できます。"
@@ -188,14 +187,14 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
 
 
 @Composable
-internal fun GuideRow(label: String, value: String, done: Boolean, onClick: (() -> Unit)? = null) {
+internal fun GuideRow(label: String, value: String, done: Boolean?, onClick: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = if (onClick != null) Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClick = onClick) else Modifier,
     ) {
-        Text(if (done) "✓" else "・", color = if (done) cs.primary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
+        Text(when (done) { null -> "—"; true -> "✓"; false -> "・" }, color = if (done == true) cs.primary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
         Text(value + (if (onClick != null) " ›" else ""), color = if (onClick != null) cs.primary else cs.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
@@ -207,20 +206,21 @@ internal fun GuideRow(label: String, value: String, done: Boolean, onClick: (() 
  * バックグラウンドでつくる。技術系（並列ワーカー・ネイティブ加速・Kotlin照合・仕上げ最適化＝一般の運用では
  * 触らない内部チューニング）は既存の「詳細設定（上級者向け）」（`AdvancedSettingsSection`）へ移動。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimize: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text("最適化の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒")
+            Text("最適化の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒", style = MaterialTheme.typography.bodyMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onEvent(MagiEvent.Settings.SetBudget((ui.budgetSec - 60).coerceAtLeast(10))) },
-                    enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.height(48.dp)) { Text("− 60秒") }
+                    enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.heightIn(min = 48.dp)) { Text("− 60秒") }
                 Text("${ui.budgetSec} 秒", style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center, modifier = Modifier.width(84.dp))
                 Button(onClick = { onEvent(MagiEvent.Settings.SetBudget((ui.budgetSec + 60).coerceAtMost(MAX_BUDGET_SEC))) },
-                    enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.height(48.dp)) { Text("＋ 60秒") }
+                    enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.heightIn(min = 48.dp)) { Text("＋ 60秒") }
             }
             Spacer(Modifier.height(10.dp))
             Text("最適化方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -232,7 +232,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
                 Text("→ 今の設定(${ui.budgetSec}秒)では ${resolved.icon} ${resolved.name}（${resolved.desc}）が動きます",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             }
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 V6Algorithm.values().forEach { alg ->
                     val selected = ui.v6Algorithm == alg
                     if (selected) {
@@ -247,7 +247,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
             //   バックグラウンド実行だけをここ（実行条件＝予算の設定と同じ場所）へ移設。
             OutlinedButton(onClick = onBgOptimize, enabled = ui.loaded && !ui.running,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-            ) { Text("バックグラウンドでつくる（閉じても続行）") }
+            ) { Text("つくる（閉じても大丈夫・あとで通知）") }
             Spacer(Modifier.height(14.dp))
             // [バージョン表示] インストール済みAPKの versionName/versionCode を実行時に取得して表示。
             //   これでユーザーが「今どの版か」を確認できる（例: CSVのBOM対応は 2.90.0 以降）。
@@ -269,14 +269,14 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
 @Composable
 private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("同時に計算する数: ${ui.workers}")
+        Text("同時に計算する数: ${ui.workers}", style = MaterialTheme.typography.bodyMedium)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { onEvent(MagiEvent.Settings.SetWorkers((ui.workers - 1).coerceAtLeast(1))) },
-                enabled = !ui.running && ui.workers > 1, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に計算する数を減らす" }) { Text("−", fontSize = 20.sp) }
+                enabled = !ui.running && ui.workers > 1, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "同時に計算する数を減らす" }) { Text("−", style = MaterialTheme.typography.titleLarge) }
             Text("${ui.workers}", style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center, modifier = Modifier.width(56.dp))
             Button(onClick = { onEvent(MagiEvent.Settings.SetWorkers((ui.workers + 1).coerceAtMost(16))) },
-                enabled = !ui.running && ui.workers < 16, modifier = Modifier.height(48.dp).semantics { contentDescription = "同時に計算する数を増やす" }) { Text("＋", fontSize = 20.sp) }
+                enabled = !ui.running && ui.workers < 16, modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "同時に計算する数を増やす" }) { Text("＋", style = MaterialTheme.typography.titleLarge) }
         }
         // [仮説数上限撤廃・ユーザー指示] 旧: 仮説数は5固定・超過ワーカーは仮説内並列度へ配分。
         //   現在は設定値がそのまま並列に探索する仮説（案）の数になる（下限2、上限=設定値自体）。
@@ -301,7 +301,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("ネイティブ加速（C++）")
+                Text("ネイティブ加速（C++）", style = MaterialTheme.typography.bodyMedium)
                 Text("最適化の内側ループを高速版で実行。結果は常にKotlin実装と照合され、不一致なら自動で従来方式に戻ります。",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -309,7 +309,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Column(Modifier.weight(1f)) {
-                Text("Kotlin照合", color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
+                Text("Kotlin照合", style = MaterialTheme.typography.bodyMedium, color = if (ui.nativeParity) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
                 Text(
                     if (ui.nativeParity)
                         "高速版の結果を毎回Kotlin実装で検証。不一致なら自動で従来方式に戻ります（推奨・既定）。"
@@ -335,7 +335,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
         Column(Modifier.fillMaxWidth()) {
-            Text("探索の強さ")
+            Text("探索の強さ", style = MaterialTheme.typography.titleSmall)
             Text("じっくり: 時間いっぱい粘り、細かい違反をもう一歩減らします。結果が良くなるとは限りません。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -350,7 +350,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Column(Modifier.weight(1f)) {
-                    Text("容認 6% で重い違反の増加も許す")
+                    Text("容認 6% で重い違反の増加も許す", style = MaterialTheme.typography.bodyMedium)
                     Text(APT_FAIR_UNGUARDED_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = ui.aptFairToleranceUnguarded, onCheckedChange = { onEvent(MagiEvent.Settings.SetAptFairToleranceUnguarded(it)) },
@@ -358,7 +358,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
         }
         Column(Modifier.fillMaxWidth()) {
-            Text("玉突きで直す（月全体）")
+            Text("玉突きで直す（月全体）", style = MaterialTheme.typography.titleSmall)
             Text(EJECTION_CHAIN_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // 4 択で語も長く、幅 390dp では 1 行に収まらないので折り返す（行の間も 8dp 空ける＝押し間違いを防ぐ）。
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -373,14 +373,30 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                 Column(Modifier.weight(1f)) {
-                    Text("入れ替えも1手として使う")
+                    Text("入れ替えも1手として使う", style = MaterialTheme.typography.bodyMedium)
                     Text("同じ日の2人、同じ人の2日を入れ替える手も試します（既定はON）",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(checked = ui.ejectionChainSwap, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionChainSwap(it)) },
                     enabled = !ui.running && ui.ejectionChain != EjectionChainMode.OFF)
             }
-            Text("2手目以降を探す範囲")
+            // 次の 2 つはパイプライン（「見込みのある所だけ」）にだけ効く。
+            val pipelineOn = !ui.running && ui.ejectionChain == EjectionChainMode.PIPELINE
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("採れたら探し直す", style = MaterialTheme.typography.bodyMedium)
+                    Text(EJECTION_ROUNDS_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = ui.ejectionPipelineRounds, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineRounds(it)) }, enabled = pipelineOn)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("必須の違反からも始める", style = MaterialTheme.typography.bodyMedium)
+                    Text(EJECTION_HARD_LEG_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineHardLeg(it)) }, enabled = pipelineOn)
+            }
+            Text("2手目以降を探す範囲", style = MaterialTheme.typography.bodyMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EJECTION_CHAIN_SCOPES_SHOWN.forEach { sc ->
                     val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
@@ -392,7 +408,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Text("1回あたりの上限時間（残り時間の4分の1を超えません）")
+            Text("1回あたりの上限時間（残り時間の4分の1を超えません）", style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 EJECTION_CHAIN_SECONDS.forEach { sec ->
                     val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF
@@ -418,7 +434,9 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
-internal const val EJECTION_CHAIN_NOTE = "既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来の広い探索で時間がかかります"
+internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」で効きます"
+internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」で効きます"
+internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来の広い探索で時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中・じっくりでだけ効きます。期間の制約や上限などが1件増える手も予算内なら採ります。測定では目的に当たりませんでした（既定はOFF）"
 
@@ -526,12 +544,12 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
             }
         },
         confirmButton = {
-            Column(horizontalAlignment = Alignment.End) {
-                Button(onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = false)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を残して移る") }
-                TextButton(onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = true)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を消して移る") }
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DialogConfirmButton("希望を残して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = false)) })
+                DialogDangerButton("希望を消して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = true)) })
             }
         },
-        dismissButton = { TextButton(onClick = { onEvent(MagiEvent.Structure.CancelMonthMove) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる") } },
+        dismissButton = { DialogDismissButton(onClick = { onEvent(MagiEvent.Structure.CancelMonthMove) }, text = "やめる") },
     )
 }
 
@@ -560,7 +578,7 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
             Text("シフト別に「担当できる人数」で確認。余裕=1人欠けても回るか。",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             rows.forEach { r ->
                 val slack = r.q - r.maxNeed
                 val tenths = if (r.q > 0) (r.d * 10 + r.q / 2) / r.q else 0
@@ -601,7 +619,7 @@ internal fun ReviewMemoCard(ui: UiState, onEvent: (MagiEvent) -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("見直し候補（${ui.reviewMemos.size}件）", style = MaterialTheme.typography.titleMedium)
             Text("勤務表の修正中に印を付けたルール見直しのメモです（アプリ終了で消えます）。",
-                style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             ui.reviewMemos.forEachIndexed { idx, memo ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(memo, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
@@ -756,7 +774,7 @@ internal fun DataActionsCard(
                 OutlinedButton(onClick = onSaveCsv, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("CSV出力") }
             }
             Text("コンポーネント別 出力（取込種別と対・往復用）",
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             // [3.547.0] 3→4項目化でRow等分weightだと1項目あたりの幅が狭まり続けるため、
             //   幅いっぱいに収まる分だけ並べ余りは折り返すFlowRowへ（ShiftColorCardのチップと同じ考え方）。
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -782,7 +800,7 @@ internal fun AppearanceCard(
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("外観", style = MaterialTheme.typography.titleMedium)
             Text("配色はユニバーサルデザイン（高コントラスト）固定です。",
-                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(checked = oneHand, onCheckedChange = onOneHand)
                 Spacer(Modifier.width(8.dp))

@@ -35,6 +35,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.TextButton
@@ -206,7 +207,7 @@ internal fun LiveScheduleCard(ui: UiState) {
                 Text(if (show) "途中経過を隠す" else "途中経過を見る")
             }
             if (show) {
-                Text("状態遷移  赤枠＝今回変化 (${changed.size})", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text("赤い枠＝前回から変わったセル（${changed.size}）", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 Column(
                     Modifier.horizontalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -300,36 +301,23 @@ internal fun ViolationBucketChips(bucketCounts: Map<String, Int>, enabled: Set<S
     }
     Spacer(Modifier.height(4.dp))
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        vioBuckets.forEach { b ->
-            val n = counts[b.key] ?: 0
-            val on = b.key in enabled
-            FilterChip(
-                selected = on,
-                onClick = { onToggle(b.key) },
-                label = {
-                    Text("${b.label} $n",
-                        style = MaterialTheme.typography.titleSmall,
-                        // 0件は淡色（存在しない種別＝トリアージ上ノイズ）。トグル自体は可能。
-                        color = if (n == 0) cs.onSurfaceVariant.copy(alpha = 0.5f) else Color.Unspecified)
-                },
-            )
-        }
+        vioBuckets.forEach { b -> BucketChip(b.key, b.label, counts[b.key] ?: 0, b.key in enabled, onToggle) }
     }
     // [P7/実務者向け短文化] コーチング文（多い種類から潰す…）は削除。チップの件数が優先順を語る。
     // [冗長性見直し] 操作説明はチップのトグル自体が示すため削除。
 }
 
-/** [E7] 種別フィルタのチップ 1 つ。0 件は淡色（存在しない種別＝トリアージ上ノイズ）。トグル自体は可能。 */
+/** [E7] 種別フィルタのチップ 1 つ。0 件（存在しない種別＝トリアージ上ノイズ）は文字の濃さを保ち、塗り・枠・字の太さで沈める。トグル自体は可能。 */
 @Composable
 private fun BucketChip(key: String, label: String, n: Int, on: Boolean, onToggle: (String) -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val zero = n == 0
     FilterChip(
         selected = on,
         onClick = { onToggle(key) },
-        label = {
-            Text("$label $n", style = MaterialTheme.typography.titleSmall,
-                color = if (n == 0) cs.onSurfaceVariant.copy(alpha = 0.5f) else Color.Unspecified)
-        },
+        label = { Text("$label $n", style = MaterialTheme.typography.titleSmall, fontWeight = if (zero) FontWeight.Normal else null) },
+        colors = if (zero) FilterChipDefaults.filterChipColors(selectedContainerColor = cs.surfaceVariant) else FilterChipDefaults.filterChipColors(),
+        border = FilterChipDefaults.filterChipBorder(enabled = true, selected = on, borderColor = if (zero) cs.outlineVariant else cs.outline),
     )
 }
 
@@ -468,10 +456,9 @@ internal fun ScheduleGrid(
         //   多くの端末で6日強しか見えず週の模様が切れていた）。36dp未満は記号(2文字15sp)の可読性が崩れるため
         //   下限36dp（極端に狭い端末のみ7日未満に妥協）、48dp超は広げない（広い端末はより多くの日が見える）。
         //   週ページングのスクロール量(cellWpx)も同じ値から計算＝ジャンプ位置は常にグリッドと整合。
-        // [3.497.0/ユーザー指示「OPPO A5 5G(Android16)も動作できるようにする」] 720×1604 の HD+ 端末は横幅 360dp 帯＝
-        //   名前列80dp＋36dp床×7日=332dp が内容幅 328dp に収まらず「7日表示が6日止まり」だった（D4 で対象外としていた帯）。
-        //   幅 390dp 未満では名前列を 56dp に詰めて 7日を成立させる（(360-32-56)/7=38dp）。390dp 以上は従来どおり 80dp。
-        val gridNameW = if (this.maxWidth < 390.dp) 56.dp else 80.dp
+        // [3.497.0/ユーザー指示「OPPO A5 5G(Android16)も動作できるようにする」] 名前列 80dp で 7日（36dp×7）が収まらない幅だけ名前列 56dp（D4）。
+        //   maxWidth はカードの幅（端末−32dp）で、内容幅はさらに −32dp。端末 396dp 未満が 56dp（390dp は (326−56)/7≈38.6dp）、412dp は 80dp。
+        val gridNameW = if (this.maxWidth - 32.dp - 80.dp >= 36.dp * 7) 80.dp else 56.dp
         val gridCellW = ((this.maxWidth - 32.dp - gridNameW) / 7).coerceIn(36.dp, 48.dp)   // 32=Column水平padding
         val cellWpx = with(LocalDensity.current) { gridCellW.roundToPx() }
         // [3.481.0] 現在週の導出は ScheduleCommandBar（Scaffold 下部、旧 ScheduleNavBar）へ、日の範囲は名前列の左上（WeekCornerLabel）へ移動。ここはバーが必要とする
@@ -897,11 +884,15 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
     var staffSel by remember { mutableIntStateOf(-1) }                   // -1=全職員, else staff index
     var picked by remember { mutableIntStateOf(-1) }                     // 選択中の希望シフト
     var showStaff by remember { mutableStateOf(false) }
-    var confirmClearAll by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
     val targetDays = if (scope == 1) (0 until days).toList()
         else (0 until days).filter { (startDow + it) % 7 == weekday }
     val allowed = if (staffSel >= 0) cv.allowedShiftsFor(staffSel).toList() else emptyList()
     val targetName = if (staffSel >= 0) (ui.staffNames.getOrNull(staffSel) ?: "$staffSel") else "全職員"
+    // 期間全体×全職員は ClearAllWishes（期間の外の希望も消える）なので全件を数える。
+    val clearAll = scope == 1 && staffSel < 0
+    val clearCount = if (clearAll) ui.wishes.size
+        else ui.wishes.keys.count { k -> VioKey.second(k) in targetDays && (staffSel < 0 || VioKey.first(k) == staffSel) }
     // 全職員へは担当できる人だけに付ける（setWishesForDays と同じ判定。担当外の希望は実現も表示もされない）。
     val eligibleCount = if (staffSel < 0 && picked in ui.shiftSymbols.indices) ui.staffNames.indices.count { picked in cv.allowedShiftsFor(it) } else -1
     val wishCount = targetDays.size * when { staffSel >= 0 -> 1; eligibleCount >= 0 -> eligibleCount; else -> ui.staffNames.size }
@@ -975,10 +966,12 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
-                    if (scope == 1 && staffSel < 0) confirmClearAll = true
+                    if (clearCount > 0) confirmClear = true
                     else { onEvent(MagiEvent.Condition.ClearWishesForDays(if (staffSel < 0) null else staffSel, targetDays)); onDismiss() }
-                }, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text("この範囲を希望なしに", color = cs.error)
+                }, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.error),
+                    border = BorderStroke(1.dp, if (ui.running) cs.onSurface.copy(alpha = 0.12f) else cs.error)) {
+                    Text("この範囲を希望なしに")
                 }
                 Button(onClick = {
                     if (picked in ui.shiftSymbols.indices) {
@@ -989,7 +982,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                     Text(if (ui.running) "最適化中は変更できません" else "適用（${wishCount}件）")
                 }
             }
-            Text("※ 期間全体×全職員の「希望なし」は全部消します（確認あり）。元に戻すで取り消せます。",
+            Text("※「希望なし」は消す件数を確かめてから消します。元に戻すで取り消せます。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
@@ -1011,13 +1004,22 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
             },
         )
     }
-    if (confirmClearAll) {
+    if (confirmClear) {
         AlertDialog(
-            onDismissRequest = { confirmClearAll = false },
-            confirmButton = { DialogDangerButton("すべて削除", onClick = { confirmClearAll = false; onEvent(MagiEvent.Condition.ClearAllWishes); onDismiss() }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmClearAll = false }) },
-            title = { Text("すべての希望を削除") },
-            text = { Text("登録済みの希望をすべて削除します。割当には影響しません。元に戻すで復元できます。") },
+            onDismissRequest = { confirmClear = false },
+            confirmButton = {
+                DialogDangerButton("消す", onClick = {
+                    confirmClear = false
+                    onEvent(if (clearAll) MagiEvent.Condition.ClearAllWishes else MagiEvent.Condition.ClearWishesForDays(if (staffSel < 0) null else staffSel, targetDays))
+                    onDismiss()
+                })
+            },
+            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }) },
+            title = { Text("${clearCount}件の希望を消します") },
+            text = {
+                Text((if (clearAll) "登録済みの希望をすべて消します。" else "${targetName}・${if (scope == 1) "期間全体" else "${weekdays[weekday]}曜日（${targetDays.size}日）"}の希望を消します。") +
+                    "割当には影響しません。元に戻すで復元できます。")
+            },
         )
     }
 }
@@ -1199,16 +1201,8 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
     // [3.514.0/ユーザー指示「シフト集計は開く。閉じない」] 既定は展開。3.648.0 で一度折りたたみにしたが、3.650.0 で戻した
     //   （2026-10-09 利用者「推奨で」＝外部レビューの撤回）。開閉トグル自体は残す。開閉は回転/復元でも保持。
     var open by rememberSaveable { mutableStateOf(true) }
-    // [シンプルデザイン融合②] 集計期間の read-only ラベル（曜日付き）。startDate〜startDate+(days-1)。
-    //   月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。パース失敗時は非表示。
-    val periodLabel = remember(ui.startDate, ui.days) {
-        runCatching {
-            val wk = listOf("月", "火", "水", "木", "金", "土", "日")
-            fun fmt(d: LocalDate) = "${d.year}年${d.monthValue}月${d.dayOfMonth}日(${wk[d.dayOfWeek.value - 1]})"
-            val s0 = LocalDate.parse(ui.startDate)
-            "集計期間 ${fmt(s0)}〜${fmt(s0.plusDays((ui.days - 1).toLong()))}"
-        }.getOrNull()
-    }
+    // [シンプルデザイン融合②] 集計期間の read-only ラベル。月スナップショットモデルのため <> ナビは付けない（集計は常に現在の全期間）。
+    val periodLabel = remember(ui.startDate, ui.days) { "集計期間 ${DayText.range(ui.startDate, 0, ui.days - 1)}" }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(
@@ -1223,10 +1217,8 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
             Spacer(Modifier.height(8.dp))
             MagiSegmentedControl(options = listOf("職員別", "日別"), selected = mode, onSelect = { mode = it })
             Spacer(Modifier.height(8.dp))
-            periodLabel?.let {
-                Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
-            }
+            Text(periodLabel, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(8.dp))
             if (mode == 0) {
                 // [3.397.0 形が語る] 「ⓘ タップで内訳と直し方」の貼り紙は剥がした。押せるセル（違反セル）は
                 //   右端の「›」が形で示す＝このアプリが行で使ってきた「›＝押せる」と同じ語彙。
@@ -1361,7 +1353,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
             totalSheet?.let { kk ->
                 val ct = covTotals[kk]
                 if (ct != null) {
-                    val lines = ct.days.flatMap { j -> dayCoverageLines(ui, j, listOf(CoverageMark(kk, j in ct.underDays)), cv::needCellLimits).map { "${j + 1}日 $it" } }
+                    val lines = ct.days.flatMap { j -> dayCoverageLines(ui, j, listOf(CoverageMark(kk, j in ct.underDays)), cv::needCellLimits).map { "${DayText.short(ui.startDate, j)} $it" } }
                     GridMarkDialog("「${ui.shiftSymbols.getOrNull(kk) ?: kk}」の人員", lines, onDismiss = { totalSheet = null }) {
                         FixSearchPanel(ui, cv, FixFocus(null, kk, ct.days.first()), onEvent, nav, onApplied = { totalSheet = null })
                     }
@@ -1466,7 +1458,7 @@ private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count
         lines += "本人の希望: " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } +
             "（必須の希望どうしが同じ日に重なり、どちらかの希望を取り消さない限り過剰は残ります）"
     }
-    return TallyDetailUi("$sym ・ ${j + 1}日", lines, null, k, day = j, pinned = pinned, assigned = assigned)
+    return TallyDetailUi("$sym ・ ${DayText.full(ui.startDate, j)}", lines, null, k, day = j, pinned = pinned, assigned = assigned)
 }
 
 private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else hexToColor(hex)
@@ -1614,7 +1606,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     //   色は群の出現順に黄金角で自動割当（設定不要・群1つなら実質無地）。
     val groupOrder = remember(ui.staffGroupSymbols) { ui.staffGroupSymbols.distinct() }
     // [悲観検証P2/フォント拡大] 記号はセル幅への物理フィット優先（cellW×0.40・上限15dp を dp→sp 変換）。
-    //   端末のフォント拡大(1.3x等)で 15sp→19.5dp となり全角2文字がセル(36〜48dp)からクリップして
+    //   端末のフォント拡大(1.3x等)で 15sp→19.5dp となり全角2文字がセル(34〜48dp)からクリップして
     //   記号が誤読になる（Dﾃ→D）のを防ぐ。可読の代替は contentDescription と編集シート（通常どおり拡大）。
     val symFontSize = with(LocalDensity.current) { minOf(cellW * 0.40f, 15.dp).toSp() }
     val headFontSize = with(LocalDensity.current) { 12.dp.toSp() }   // 曜日/▼N も同方針で列幅フィット
@@ -1777,15 +1769,15 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                         Box(Modifier.width(4.dp).height(cellH - 12.dp)
                             .background(Color.hsv(((gi * 137) % 360).toFloat(), 0.40f, 0.72f), RoundedCornerShape(2.dp)))
                         Spacer(Modifier.width(4.dp))
-                        // [検索] 一致する職員名を太字＋青で強調（行は隠さず＝被覆の文脈を保つ）。
+                        // [検索] 一致する職員名を太字＋主色で強調（行は隠さず＝被覆の文脈を保つ）。
                         val nm = ui.staffNames.getOrNull(i) ?: "$i"
                         val hit = nameQuery.isNotBlank() && nm.contains(nameQuery, ignoreCase = true)
-                        Text(nm, style = MaterialTheme.typography.bodySmall, color = if (hit) MagiAccent.blue else cs.onSurface,
+                        Text(nm, style = MaterialTheme.typography.bodySmall, color = if (hit) cs.primary else cs.onSurface,
                             fontWeight = if (hit) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false))
                         // 回数の族（下限・上限・適切回数・個人の合計）はセルを持たないので名前の横に小さく ▼/▲。
                         if (badge != null) Text(badge.glyph, fontSize = headFontSize, fontWeight = FontWeight.Normal, maxLines = 1,
-                            color = vioSoftColor)
+                            color = ensureReadable(if (rowTapped) cs.primary.copy(alpha = 0.12f).compositeOver(headerBg) else headerBg, vioSoftColor))
                     }
                 }
             }
@@ -1840,7 +1832,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     }
     daySheet?.let { j ->
         val marks = vs.coverageMarks.getOrNull(j).orEmpty()
-        GridMarkDialog("${j + 1}日の人員", dayCoverageLines(ui, j, marks, cv?.let { c -> c::needCellLimits }), onDismiss = { daySheet = null }) {
+        GridMarkDialog("${DayText.full(ui.startDate, j)}の人員", dayCoverageLines(ui, j, marks, cv?.let { c -> c::needCellLimits }), onDismiss = { daySheet = null }) {
             marks.firstOrNull()?.let { m -> FixSearchPanel(ui, cv, FixFocus(null, m.shift, j), onEvent, fixNav, onApplied = { daySheet = null }) }
         }
     }

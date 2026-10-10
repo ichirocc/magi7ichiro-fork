@@ -150,7 +150,7 @@ internal fun ShiftColorCard(
             Text("シフトの表示色", style = MaterialTheme.typography.titleMedium)
             Text(
                 "勤務表に表示される各シフトの色（既定はシフト種別ごとの色）。",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (shifts.isEmpty()) {

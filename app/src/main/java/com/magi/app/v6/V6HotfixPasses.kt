@@ -178,6 +178,14 @@ object PolishGate {
      *  必須が増える盤面があった）。既定 **true**（3.656.0）。 */
     @Volatile var ejectionPipelineAfterRepair: Boolean = true
 
+    /** パイプラインで採用があった巡のあと、索引を作り直してもう一巡する（最大 4 巡）。設定タブ「採れたら探し直す」。
+     *  既定 **true**（3.657.0、決定的 LoopBench で現行比 勝45/負0・必須増 0＝docs/history）。 */
+    @Volatile var ejectionPipelineRounds: Boolean = true
+
+    /** パイプラインの BOTH の先頭に、必須の族の違反を起点にする焦点を足す。設定タブ「必須の違反からも始める」。
+     *  既定 false（単独では必須増 2 で統計ゲート不合格＝docs/history 3.657.0）。 */
+    @Volatile var ejectionPipelineHardLeg: Boolean = false
+
     /** 玉突き連鎖の候補に入れ替え（同日の 2 人・同じ職員の 2 日）を含めるか。既定 true＝`C1EjectionChainPolish.Config.swapMoves` の既定と同じ。 */
     @Volatile var ejectionChainSwapMoves: Boolean = true
 
@@ -313,6 +321,7 @@ object PolishGate {
         "filterC3nIncrease" to filterC3nIncrease, "hardDeltaPrefilter" to hardDeltaPrefilter,
         "wishConflictFloorMode" to wishConflictFloorMode.name,
         "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain, "ejectionPipelineFocus" to ejectionPipelineFocus.name, "ejectionPipelineAfterRepair" to ejectionPipelineAfterRepair,
+        "ejectionPipelineRounds" to ejectionPipelineRounds, "ejectionPipelineHardLeg" to ejectionPipelineHardLeg,
         "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "hardEjectionChainEarly" to hardEjectionChainEarly, "allEjectionChainEarly" to allEjectionChainEarly, "allEjectionChainFinal" to allEjectionChainFinal, "hardEjectionChainRetry" to hardEjectionChainRetry, "allEjectionChainAfterRepair" to allEjectionChainAfterRepair, "normalStallFraction" to normalStallFraction,
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
@@ -330,6 +339,7 @@ object PolishGate {
         b("c1EjectionChain") { c1EjectionChain = it }; b("allFamilyEjectionChain") { allFamilyEjectionChain = it }
         (m["ejectionPipelineFocus"] as? String)?.let { n -> EjectionChainPipeline.Focus.entries.firstOrNull { it.name == n }?.let { ejectionPipelineFocus = it } }
         b("ejectionPipelineAfterRepair") { ejectionPipelineAfterRepair = it }
+        b("ejectionPipelineRounds") { ejectionPipelineRounds = it }; b("ejectionPipelineHardLeg") { ejectionPipelineHardLeg = it }
         b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }; b("hardEjectionChainEarly") { hardEjectionChainEarly = it }; b("allEjectionChainEarly") { allEjectionChainEarly = it }; b("allEjectionChainFinal") { allEjectionChainFinal = it }; b("hardEjectionChainRetry") { hardEjectionChainRetry = it }; b("allEjectionChainAfterRepair") { allEjectionChainAfterRepair = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }

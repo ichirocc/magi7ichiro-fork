@@ -209,6 +209,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var undoSerialSeq = 0L
     private var opNoticeSeq = 0L
 
+    /** 操作の結果を通知で出す（[setCell] と同じ形。[undoable] なら直前に積んだ元に戻すの段に結ぶ）。再検査の文言では上書きされない。 */
+    private fun postOpNotice(text: String, undoable: Boolean = true) {
+        val n = OpNotice(++opNoticeSeq, text, undoStack.lastOrNull()?.serial ?: 0L, undoable)
+        _ui.update { it.copy(messageIsError = false, opNotice = n) }
+    }
+
     /** undo/redo の復元先に退避してあった「他の案」を戻す（無ければ外す）。 */
     private fun restoreAlts(a: AltSnap?) {
         alternativeScheds = a?.scheds ?: emptyList()
@@ -438,7 +444,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     // 実行の ID はメモリにしか無い＝再起動で 0 に戻る。所有者の記録から戻し、再開前の「やめる」も背景の停止にする。
                     bgRunId = withContext(Dispatchers.IO) { runCatching { OptimizationWorker.activeRunId(getApplication()) }.getOrDefault(0L) }
                     if (bgRunId != 0L) { bgGuard.begin(bgRunId); releaseGuardIfEndedWithoutResult() }
-                    _ui.update { it.copy(messageIsError = false, running = true, message = "バックグラウンド最適化を継続中…（完了時に自動反映）") }
+                    _ui.update { it.copy(messageIsError = false, running = true, message = "勤務表づくりを続けています…（できたら反映します）") }
                     if (state == null && !txt.isNullOrBlank()) loadAsync(txt, fromRestore = true)
                     logOp("I", "バックグラウンド最適化の継続を検知（進捗を購読）")
                 } else {
@@ -503,7 +509,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     discardBgResult("背景結果の反映に失敗")
                     val cur = currentSchedule
                     _ui.update { it.copy(running = false, hasResult = cur != null, messageIsError = true,
-                        message = "バックグラウンド最適化は終わりましたが、最後の処理でエラーが起きました（${failureWords(e, FailureKind.ENGINE)}）。表示は今の勤務表です。",
+                        message = "閉じている間の最適化は終わりましたが、最後の処理でエラーが起きました（${failureWords(e, FailureKind.ENGINE)}）。表示は今の勤務表です。",
                         schedule = cur?.map { row -> row.toList() } ?: it.schedule) }
                 }
             }
@@ -551,7 +557,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         cancelWishTrial()   // [S5 §8] 背景実行は beginBoardJob を通らない
         cancelRelaxTrial()
         cancelFixSearch()
-        pushUndo("バックグラウンド最適化")
+        pushUndo("閉じている間の最適化")
         OptimizationRepository.clear()
         // [3.327.0/外部レビュー High3] この実行の識別子を先に確定する。ファイル名は固定なので、これが無いと
         //   置き換えられた旧実行が新実行の入力を消したり、別データの結果を書き残したりできてしまう。
@@ -583,7 +589,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }.getOrDefault(false)
         if (!markerOk || !inputOk) {
             clearBgFiles("背景最適化の開始に失敗")
-            notify("バックグラウンド最適化を開始できませんでした（端末の空き容量をご確認ください）", "W")
+            notify("閉じている間の最適化を始められませんでした（端末の空き容量をご確認ください）", "W")
             return
         }
         // [3.328.0] この結果を後で当ててよいかを判断するための入力の指紋。
@@ -618,7 +624,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             bgRunId = 0L
             bgGuard.end(runId)
             clearBgFiles("バックグラウンド最適化の投入に失敗")
-            notify("バックグラウンド最適化を開始できませんでした（端末の状態をご確認ください）", "W")
+            notify("閉じている間の最適化を始められませんでした（端末の状態をご確認ください）", "W")
         }
         val op = runCatching {
             androidx.work.WorkManager.getInstance(getApplication())
@@ -628,7 +634,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             handleEnqueueFailed()
             return
         }
-        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "バックグラウンドで最適化を開始しました（完了時に通知）") }
+        _ui.update { it.copy(messageIsError = false, running = true, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "勤務表をつくり始めました。閉じても大丈夫です（できたら通知します）") }
         writeRunMarker("bg")
         logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
         // [3.592.0] runCatchingは同期例外しか捉えない。enqueueUniqueWorkが返すOperationの完了を
@@ -677,7 +683,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private fun abandonStaleBgResult() {
         bgStateKey = 0L; bgRunId = 0L; bgInput = null
         logOp("W", "バックグラウンド最適化の結果を破棄しました（反映の直前に実行・入力・盤面のいずれかが変わっていたため）")
-        _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に勤務表または設定が変わったため、結果は反映しませんでした。再作成してください。") }
+        _ui.update { it.copy(messageIsError = true, running = false, message = "最適化中に勤務表または設定が変わったため、結果は反映しませんでした。再作成してください。") }
         discardBgResult("背景結果: 反映直前の再確認で破棄")
     }
 
@@ -703,7 +709,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (mismatch) {
             bgStateKey = 0L; bgRunId = 0L; bgInput = null
             logOp("W", "バックグラウンド最適化の結果を破棄しました（最適化中に設定またはデータが変わったため）")
-            _ui.update { it.copy(messageIsError = false, running = false, message = "最適化中に設定が変わったため、結果は反映しませんでした。再作成してください。") }
+            _ui.update { it.copy(messageIsError = true, running = false, message = "最適化中に設定が変わったため、結果は反映しませんでした。再作成してください。") }
             // [3.475.0] 旧: この分岐だけファイル/公開結果を片付けず、次回起動が古い結果を復元しうる穴だった。
             discardBgResult("背景結果: 入力が変わったため破棄")
             return
@@ -762,7 +768,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             messageIsError = false,
             running = false, hasResult = true, relaxedBoard = false, engineRan = true,
             runSummary = prev?.let { runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report)) },
-            message = "バックグラウンド最適化 完了: 必須=${r.report.hard} 合計=${r.report.total}",
+            message = "勤務表ができました（閉じている間に作成）: 必須違反 ${r.report.hard}件・違反の合計 ${r.report.total}件",
         ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
         lastResultHard = r.report.hard.toLong()
@@ -894,13 +900,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (ms >= SAVE_NOW_SLOW_MS) logOp("W", "即時保存に${ms}ms（想定より遅い。端末のストレージ負荷をご確認ください）")
     }
 
-    private fun pushUndo(label: String? = null, invalidate: Boolean = true, colorKey: String? = null) {
+    /** 段を積めたら true（積めないときに通知を前の操作の段へ結ばないため）。 */
+    private fun pushUndo(label: String? = null, invalidate: Boolean = true, colorKey: String? = null): Boolean {
         if (invalidate) dropCsvPartial()
-        val snap = snapNow(label, colorKey) ?: return
+        val snap = snapNow(label, colorKey) ?: return false
         undoStack.addLast(snap)
         while (undoStack.size > 30) undoStack.removeFirst()
         redoStack.clear()   // 新しい操作は redo 履歴を無効化（標準的な undo/redo 挙動）
-        if (!invalidate) { _ui.update { it.copy(canUndo = true, canRedo = false) }; return }
+        if (!invalidate) { _ui.update { it.copy(canUndo = true, canRedo = false) }; return true }
         // [3.475.0/論理監査] 盤面/設定が変わる操作は必ずここを通る＝改善提案（別の盤面で計算した差分）を
         //   その場で無効化する。旧: 提案は findFixSuggestions と applyFixSuggestion でしか書き換えられず、
         //   セル編集・取込・職員削除のあとも古い提案が表示され、適用時に別セル/別職員へ書いていた。
@@ -908,6 +915,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         alternativeScheds = emptyList()
         // 完了カードの前後比較（runSummary）も直前の実行の盤面の話＝同じ理由で外す。
         _ui.update { it.copy(canUndo = true, canRedo = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = emptyList(), alternatives = emptyList(), runSummary = null, stopSummary = null) }
+        return true
     }
 
     private fun clearUndo() {
@@ -939,8 +947,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
             // [3.592.0] setCell/setCellsと同様、再検査(refreshCheck)を待たず盤面を即時反映する
             //   （再検査が失敗/停止すると画面だけ元のまま残っていた）。
-            schedule = restoredSched.map { it.toList() },
-            message = if (label != null) "元に戻す: $label" else "1つ前に戻しました").withWishDisplay(snap.st) }
+            schedule = restoredSched.map { it.toList() }).withWishDisplay(snap.st) }
+        postOpNotice(if (label != null) "元に戻す: $label" else "1つ前に戻しました", undoable = false)
         logOp("I", "元に戻す" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
         autoSave()
@@ -965,8 +973,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             relaxedBoard = false, engineRan = false, fixSuggestions = emptyList(), fixSearched = false, fixDoneKey = "", fixFailedKey = "", stalledHardFamilies = stalled, runSummary = null, stopSummary = null,
             editRev = it.editRev + 1,
             alternatives = snap.alts?.summaries ?: emptyList(), alternativeApplied = snap.alts?.applied ?: -1,
-            schedule = restoredSched.map { it.toList() },   // [3.592.0] undo()と同じ理由
-            message = if (label != null) "やり直す: $label" else "やり直しました").withWishDisplay(snap.st) }
+            schedule = restoredSched.map { it.toList() }).withWishDisplay(snap.st) }   // [3.592.0] undo()と同じ理由
+        postOpNotice(if (label != null) "やり直す: $label" else "やり直しました", undoable = false)
         logOp("I", "やり直し" + (label?.let { ": $it" } ?: ""))
         refreshCheck()
         autoSave()
@@ -982,7 +990,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         state = snap.st
         val verb = if (toRedo) "元に戻す" else "やり直す"
         _ui.update { it.copy(messageIsError = false, structureEdited = true, editRev = it.editRev + 1,
-            canUndo = undoStack.isNotEmpty(), canRedo = redoStack.isNotEmpty(), message = "$verb: ${snap.label}").withShiftColors(snap.st) }
+            canUndo = undoStack.isNotEmpty(), canRedo = redoStack.isNotEmpty()).withShiftColors(snap.st) }
+        postOpNotice("$verb: ${snap.label}", undoable = false)
         logOp("I", if (toRedo) "元に戻す: ${snap.label}" else "やり直し: ${snap.label}")
         autoSave()
         return true
@@ -1295,6 +1304,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きで探す範囲 → ${ejectionChainScopeLabel(scope)}")
     }
 
+    fun setEjectionPipelineRounds(on: Boolean) {
+        com.magi.app.v6.PolishGate.ejectionPipelineRounds = on
+        _ui.update { it.copy(ejectionPipelineRounds = on) }
+        logOp("I", "設定変更: 玉突きで採れたら探し直す → ${if (on) "ON" else "OFF"}")
+    }
+
+    fun setEjectionPipelineHardLeg(on: Boolean) {
+        com.magi.app.v6.PolishGate.ejectionPipelineHardLeg = on
+        _ui.update { it.copy(ejectionPipelineHardLeg = on) }
+        logOp("I", "設定変更: 玉突きを必須の違反からも始める → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setStallPolishInjection(on: Boolean) {
         com.magi.app.v6.PolishGate.stallPolishInjection = on
         _ui.update { it.copy(stallPolishInjection = on) }
@@ -1323,7 +1344,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sched = currentSchedule?.copy2D() ?: return
         val seq = ++checkSeq
         checkJob?.cancel()
-        _ui.update { it.copy(messageIsError = false, running = true, message = "違反チェック中…") }
+        // 開始の文言は出さない（調べている間は running が示す）＝直前の操作の結果を同じ一歩で上書きしない。
+        _ui.update { it.copy(running = true) }
         checkJob = viewModelScope.launch {
             try {
                 val res = V6FinalPort.handleCheck(st, sched)
@@ -1333,14 +1355,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     // [3.328.0] 最適化が動いていれば実行中のまま。旧: 無条件に false で、
                     //   最適化中の設定編集→検査完了で全ガードが素通りになっていた。
                     running = optimizeInFlight(),
-                    message = "違反チェック完了: 必須=${res.report.hard} 合計=${res.report.total}",
+                    message = "調べました: 必須違反 ${res.report.hard}件・違反の合計 ${res.report.total}件",
                 ) }
                 logOp("I", "違反チェック 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: CancellationException) {
                 // [3.284.0/外部レビューHigh③] 停止時の running 固着を解消。新しいチェックによるキャンセル
                 //   （seq != checkSeq＝後続が直後に running=true を立て直す）では触らず、stop() による
                 //   キャンセルのときだけ実行中表示を戻す。
-                if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "違反チェックを停止しました") }
+                if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "調べるのを止めました") }
                 throw e
             } catch (e: Throwable) {
                 // [3.392.0] Error(OOM等)まで拾う。旧: Exception だけで、Error だと running=true が固着し
@@ -1348,7 +1370,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // [3.400.0] 3.382.0 は長い実行4経路へ終端ログを入れたが、毎回のセル編集で走る refreshCheck は
                 //   対象外だった＝画面の文言が消えると死因が何も残らない。痕跡を必ず残す。
                 logOp("W", "違反チェック 失敗: ${e.javaClass.simpleName}: ${e.message}")
-                if (seq == checkSeq) _ui.update { it.copy(running = optimizeInFlight(), message = "違反チェックに失敗しました（${failureWords(e, FailureKind.ENGINE)}）", messageIsError = true) }
+                if (seq == checkSeq) _ui.update { it.copy(running = optimizeInFlight(), message = "問題がないか調べられませんでした（${failureWords(e, FailureKind.ENGINE)}）", messageIsError = true) }
             }
         }
     }
@@ -1366,10 +1388,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   （走行中jobが stop() 不能のゾンビ化）と currentSchedule の同時書き換え（3.161.0 と同じ
         //   別名共有クラス）が起きていた（実機ログ 19:56:41 最適化開始→19:56:48 初期解生成完了 で実証）。
         //   runV6FullOptimize/start/runSoftPolish と同じガードに統一（3.161.0 のセル編集ガードと同方針）。
-        if (optimizeInFlight()) {
-            _ui.update { it.copy(messageIsError = false, message = "最適化の実行中は下書きをつくれません（完了または「やめる」の後にどうぞ）") }
-            return
-        }
+        if (runBlockedByInFlight("下書きづくり")) return
         if (!ensureValidForRun(st, sched)) return
         val ui0 = _ui.value
         pushUndo("下書き作成")
@@ -2190,7 +2209,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         resultSchedule = null
         relaxDone = RelaxCtx(stateKey(ns), boardKey(nb)) to relaxDoneLine(r.h0, got)
         _ui.update { it.copy(messageIsError = false, hasResult = true, engineRan = false, relaxedBoard = true, structureEdited = true, editRev = it.editRev + 1,
-            schedule = nb.map { row -> row.toList() }, runSummary = null, stopSummary = null, message = "設定を緩めて手順を当てました（元に戻せます）") }
+            schedule = nb.map { row -> row.toList() }, runSummary = null, stopSummary = null) }
+        postOpNotice("設定を緩めて手順を当てました（元に戻せます）")
         logOp("I", "S6 確定: 組 " + (r.prerequisite + r.relaxes).joinToString { "${it.staff + 1}/${it.shift}" } + " 必須 ${r.h0}→$got")
         refreshCheck()
         saveNow()
@@ -2353,7 +2373,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             OptimizationRepository.request = null
             bgStateKey = 0L; bgRunId = 0L; bgInput = null
             clearBgFiles("停止（背景最適化の中断）")
-            _ui.update { it.copy(messageIsError = false, running = false, message = "停止しました（バックグラウンド最適化を中断）") }
+            _ui.update { it.copy(messageIsError = false, running = false, message = "停止しました（閉じている間の最適化を中断）") }
             logOp("I", "バックグラウンド最適化を停止")
         } else if (_ui.value.running || _ui.value.fixSearching) {
             // [3.284.0/外部レビューHigh③] 前景の違反チェック(checkJob)/改善探索(fixJob)を停止した場合、
@@ -2433,8 +2453,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             hasResult = true,
             relaxedBoard = false, engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
-            message = "希望を反映: ${applied}件$note",
         ) }
+        postOpNotice("希望を反映: ${applied}件$note")
         refreshCheck()
     }
 
@@ -2588,8 +2608,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             hasResult = true,
             relaxedBoard = false, engineRan = false,   // [3.475.0] 手操作＝「計算済み」ではない
             schedule = sched.map { it.toList() },
-            message = "${changed}マスを ${st.shifts.getOrNull(shift)?.kigou ?: shift} に一括変更",
         ) }
+        postOpNotice("${changed}マスを ${st.shifts.getOrNull(shift)?.kigou ?: shift} に一括変更しました")
         logOp("I", "一括編集: ${changed}マス → ${opSy(shift)}")
         refreshCheck()
     }
@@ -2741,7 +2761,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     fun removeConsult(index: Int) {
+        val item = _ui.value.consults.getOrNull(index) ?: return
         _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.filterIndexed { j, _ -> j != index }) }
+        logOp("I", "相談中を済にしました: ${item.subject}")
+        postOpNotice("済にしました（${item.subject}）", undoable = false)
     }
 
     /** Apply an edited state (constraints changed), then re-run the unified check on the current table. */
@@ -2763,9 +2786,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun runBlockedByInFlight(what: String): Boolean {
         if (!optimizeInFlight()) return false
-        reject(MagiArbiter.arbitrate(currentPhase(), MagiEventKind.RunStart, what))
+        reject(MagiArbiter.arbitrate(busyPhase(), MagiEventKind.RunStart, what))
         return true
     }
+
+    /** 断るときの段階。背景の投入直後は `bgGuard` だけが閉じていて段階は Idle＝裁定が素通りするので、背景として断る。 */
+    private fun busyPhase(): MagiPhase = currentPhase().takeIf { it.isBusy } ?: MagiPhase.Background
 
     /**
      * [3.405.0] 盤面セルを編集できない状態なら、理由を出して true を返す。**画面がシートを開く前に
@@ -2780,7 +2806,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun busyEditMessage(): String =
-        (MagiArbiter.arbitrate(currentPhase(), MagiEventKind.BoardEdit) as? Arbitration.Reject)?.userMessage ?: ""
+        (MagiArbiter.arbitrate(busyPhase(), MagiEventKind.BoardEdit) as? Arbitration.Reject)?.userMessage ?: ""
 
     /** `MagiMediator` が弾いたイベントの拒否を、画面側と同じ経路で出す。 */
     internal fun rejectFromMediator(r: Arbitration.Reject) = reject(r)
@@ -2794,20 +2820,21 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun structuralEditBlocked(): Boolean {
         if (!optimizeInFlight()) return false
-        reject(MagiArbiter.arbitrate(currentPhase(), MagiEventKind.StructureEdit))
+        reject(MagiArbiter.arbitrate(busyPhase(), MagiEventKind.StructureEdit))
         return true
     }
 
-    internal fun mutateConstraints(newState: MagiState?) {
+    internal fun mutateConstraints(newState: MagiState?, notice: String? = null) {
         val ns = newState ?: return
         if (structuralEditBlocked()) return
-        pushUndo("制約の変更")
+        val undoable = pushUndo("制約の変更")
         state = ns
         // [3.222.0, 実機バグ修正「回避の並びなどが削除できない」] constraintsEdited が既に true だと
         //   copy が同値でStateFlowがemitせず（3.185.0/3.189.0と同型）、ConstraintsCard/SkillConstraintsCard
         //   を包む key(ui.editRev) が再構成されず一覧が更新されなかった。editRev を必ず増やして
         //   distinct な UiState を emit する（3.185.0のapplyStructureと同一パターン）。
         _ui.update { it.copy(constraintsEdited = true, editRev = it.editRev + 1) }
+        notice?.let { postOpNotice(it, undoable) }
         refreshCheck()
         autoSave()
     }
@@ -2817,13 +2844,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun ws1(): Ws1View? =
         ws1ViewOf(state, currentSchedule?.firstOrNull()?.size ?: state?.dayCount ?: 0)
 
-    internal fun applyStructure(ns: MagiState) {
+    internal fun applyStructure(ns: MagiState, notice: String? = null) {
         if (structuralEditBlocked()) return
-        pushUndo("設定の変更")
+        val undoable = pushUndo("設定の変更")
         state = ns
         // [再構成保証] editRev を必ず増やして distinct な UiState を emit（structureEdited 既true時の非emit＋
         //   currentSchedule=null 時の refreshCheck 早期return で編集画面が再構成されない「+/-で数字が変わらない」修正）。
         _ui.update { it.copy(structureEdited = true, editRev = it.editRev + 1) }
+        notice?.let { postOpNotice(it, undoable) }
         refreshCheck()
         autoSave()
     }
@@ -2862,19 +2890,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (sched == null) { _ui.update { it.copy(messageIsError = false, structureEdited = true, editRev = it.editRev + 1, message = doneMessage) }; return }
         val seq = ++checkSeq
         checkJob?.cancel()
-        _ui.update { it.copy(messageIsError = false, running = true, structureEdited = true, editRev = it.editRev + 1, message = "$doneMessage（違反チェック中…）") }
+        _ui.update { it.copy(messageIsError = false, running = true, structureEdited = true, editRev = it.editRev + 1, message = "$doneMessage（問題がないか調べています…）") }
         checkJob = viewModelScope.launch {
             try {
                 val r = V6FinalPort.handleCheck(ns, sched)
                 if (seq != checkSeq) return@launch
-                pushReport(ns, r.schedule, r.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜必須=${r.report.hard} 合計=${r.report.total}") }
+                pushReport(ns, r.schedule, r.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜必須違反 ${r.report.hard}件・違反の合計 ${r.report.total}件") }
             } catch (e: CancellationException) {
                 // [3.284.0/外部レビューHigh③] stop() によるキャンセル時の running 固着を解消（refreshCheck と同型）。
-                if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage（チェックを停止）") }
+                if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage（調べるのを止めました）") }
                 throw e
             } catch (e: Throwable) {
                 // [3.392.0] refreshCheck と同型。Error でも running を戻す（固着でアプリが読取専用になるため）。
-                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（チェックに失敗しました: ${failureWords(e, FailureKind.ENGINE)}）") }
+                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（問題がないか調べられませんでした: ${failureWords(e, FailureKind.ENGINE)}）") }
             }
         }
     }
@@ -2944,7 +2972,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }.map { it.key }.toSet()
         if (keys.isEmpty()) return
         logOp("I", "担当外の希望を一括クリア: ${keys.size}件")
-        applyStructure(s.copy(wishes = s.wishes - keys))
+        applyStructure(s.copy(wishes = s.wishes - keys), notice = "担当外の希望を${keys.size}件クリアしました")
     }
 
     /**
@@ -2997,7 +3025,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 throw e
             } catch (e: Throwable) {
                 logOp("W", "直し方の探索に失敗: ${e.javaClass.simpleName}: ${e.message}")
-                if (seq == fixSeq) _ui.update { it.copy(messageIsError = false, fixSearching = false, fixFailedKey = focusKey, message = "直し方を探せませんでした") }
+                if (seq == fixSeq) _ui.update { it.copy(messageIsError = true, fixSearching = false, fixFailedKey = focusKey, message = "直し方を探せませんでした") }
             }
         }
     }
@@ -3005,7 +3033,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 通知の「元に戻す」。その操作がまだ元に戻すの先頭にあるときだけ戻す（後の別の操作は戻さない）。 */
     fun undoNotice(n: OpNotice) {
         if (noticeUndoApplies(undoStack.lastOrNull()?.serial, n.undoSerial)) undo()
-        else _ui.update { it.copy(messageIsError = false, message = "このあとに別の操作があるため、通知からは戻せません（「元に戻す」ボタンで順に戻せます）") }
+        else _ui.update { it.copy(messageIsError = true, message = "このあとに別の操作があるため、通知からは戻せません（「元に戻す」ボタンで順に戻せます）") }
     }
 
     fun clearOpNotice(id: Long) {
@@ -3056,9 +3084,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             relaxedBoard = false, engineRan = false,   // [3.475.0] 提案の適用は手操作扱い（局所1手のみ、フルの計算ではない）
             schedule = applied.map { it.toList() },
             fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
-            message = "改善手を適用: ${s.label}（必須 ${gate.before.hard}→${gate.after.hard}・合計 ${gate.before.total}→${gate.after.total}）",
             fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total)),
         ) }
+        postOpNotice("改善手を適用: ${s.label}（必須 ${gate.before.hard}→${gate.after.hard}・合計 ${gate.before.total}→${gate.after.total}）")
         fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
         refreshCheck()
     }
@@ -3091,19 +3119,19 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         checkJob?.cancel()
         // [ドッグフーディング/3.466.0] 兄弟の `applyStructure(r: Ws1Result)` と同じく editRev を増やす（理由は
         //   上の (ns: MagiState) 版のコメント参照）。
-        _ui.update { it.copy(messageIsError = false, running = true, structureEdited = true, editRev = it.editRev + 1, message = "$doneMessage（違反チェック中…）") }
+        _ui.update { it.copy(messageIsError = false, running = true, structureEdited = true, editRev = it.editRev + 1, message = "$doneMessage（問題がないか調べています…）") }
         checkJob = viewModelScope.launch {
             try {
                 val rep = V6FinalPort.handleCheck(r.state, sched)
                 if (seq != checkSeq) return@launch
-                pushReport(r.state, rep.schedule, rep.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜必須=${rep.report.hard} 合計=${rep.report.total}") }
+                pushReport(r.state, rep.schedule, rep.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜必須違反 ${rep.report.hard}件・違反の合計 ${rep.report.total}件") }
             } catch (e: CancellationException) {
                 // [3.284.0/外部レビューHigh③] stop() によるキャンセル時の running 固着を解消（refreshCheck と同型）。
-                if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage（チェックを停止）") }
+                if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage（調べるのを止めました）") }
                 throw e
             } catch (e: Throwable) {
                 // [3.392.0] refreshCheck と同型。Error でも running を戻す（固着でアプリが読取専用になるため）。
-                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（チェックに失敗しました: ${failureWords(e, FailureKind.ENGINE)}）") }
+                if (seq == checkSeq) _ui.update { it.copy(messageIsError = true, running = optimizeInFlight(), message = "$doneMessage（問題がないか調べられませんでした: ${failureWords(e, FailureKind.ENGINE)}）") }
             }
         }
     }

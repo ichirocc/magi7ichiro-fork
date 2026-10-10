@@ -227,7 +227,8 @@ private fun ConstraintRow(row: String, enabled: Boolean, onEdit: () -> Unit, onD
         }
         if (editable) {
             EditRowButton(onClick = onEdit, enabled = enabled)
-            Spacer(Modifier.width(6.dp))
+            // 削除は確認なしで即時＝隣の「編集」と取り違えない間隔（ux_test_checklist A3 は 8dp 以上）。
+            Spacer(Modifier.width(12.dp))
         }
         DeleteRowButton(onClick = onDelete, enabled = enabled)
     }
@@ -245,7 +246,7 @@ internal fun SkillConstraintsCard(ui: UiState, cv: ConstraintsView, onEvent: (Ma
             // [3.427.0] 旧文は続けて「スキル群のレンジ（…）と、スキル群ペア禁止（…）を設定します」と
             //   列挙していたが、直下の族見出し2行と完全な重複＝カードの識別に要る1文だけ残す。
             Text("上の「スキルグループ」に対する専用ルールです。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (cv.skillGroupKigou.isEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Text("先に上で「スキルグループ」を追加すると設定できます。",

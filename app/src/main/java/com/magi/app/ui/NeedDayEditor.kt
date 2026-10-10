@@ -73,9 +73,9 @@ internal fun MonthHeaderStatic(startDate: String) {
     val label = monthLabel(startDate)
     if (label.isBlank()) return
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Text("‹", style = MaterialTheme.typography.titleMedium, color = cs.outlineVariant, modifier = Modifier.padding(horizontal = 12.dp))
+        Text("‹", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant.copy(alpha = 0.38f), modifier = Modifier.padding(horizontal = 12.dp))
         Text(label, style = MaterialTheme.typography.titleMedium, color = cs.primary, fontWeight = FontWeight.Bold)
-        Text("›", style = MaterialTheme.typography.titleMedium, color = cs.outlineVariant, modifier = Modifier.padding(horizontal = 12.dp))
+        Text("›", style = MaterialTheme.typography.titleMedium, color = cs.onSurfaceVariant.copy(alpha = 0.38f), modifier = Modifier.padding(horizontal = 12.dp))
     }
 }
 
@@ -186,7 +186,7 @@ internal fun NeedCalendarCard(
 
 /**
  * [選択日の一括設定] カレンダー下部にインライン表示（1日以上選択時のみ）。モーダルで隠さないので
- * カレンダーを見ながら追加選択・適用できる。「未設定に戻す」で選択日の例外を削除＝既定へ。入力エラー(最低>最高)は赤枠＋注記。
+ * カレンダーを見ながら追加選択・適用できる。「標準に戻す」で選択日の例外を削除＝標準へ。入力エラー(最低>最高)は赤枠＋注記。
  */
 @Composable
 private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, days: Set<Int>, baseN1: String, baseN2: String, use2: Boolean, onCancel: () -> Unit, onDone: () -> Unit) {
@@ -207,8 +207,8 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
             Text(datesLabel, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant, maxLines = 2, modifier = Modifier.weight(1f))
         }
         Column(Modifier.border(1.dp, if (invalid) cs.error else Color.Transparent, MaterialTheme.shapes.medium)) {
-            NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "既定")
-            NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "既定")
+            NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "標準")
+            NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "標準")
         }
         if (invalid) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = cs.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -220,11 +220,11 @@ private fun NeedApplyPanel(ui: UiState, onEvent: (MagiEvent) -> Unit, k: Int, da
             ) { Text("${days.size}日に適用") }
         }
         TextButton(onClick = { onEvent(MagiEvent.Condition.ClearNeedDaysForDays(k, sorted.map { it - 1 })); onDone() }, enabled = !ui.running,
-            modifier = Modifier.fillMaxWidth()) { Text("選択した日を未設定に戻す") }
+            modifier = Modifier.fillMaxWidth()) { Text("選択した日を標準に戻す") }
     }
 }
 
-/** 基本の必要人数（シフト既定need1/need2）編集シート。 */
+/** 標準の必要人数（シフト既定need1/need2）編集シート。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boolean, running: Boolean, onApply: (String, String) -> Unit, onDismiss: () -> Unit) {
@@ -242,13 +242,15 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boo
     val bad = V6SanityPort.rangeOrderConflict(p1, p2) != null
     ModalBottomSheet(onDismissRequest = requestClose, sheetState = sheetState) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("基本の必要人数（${kigou}の既定値）", style = MaterialTheme.typography.titleMedium)
+            DialogHeader("標準の必要人数（${kigou}）", requestClose)
             Column(Modifier.border(1.dp, if (bad) MaterialTheme.colorScheme.error else Color.Transparent, MaterialTheme.shapes.medium)) {
                 NumberStepper("最低人数", p1, { p1 = it }, min = 0, blankLabel = "未設定")
                 NumberStepper(needUpperLabel(use2), p2, { p2 = it }, min = 0, blankLabel = "未設定")
             }
             if (bad) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
-            Button(onClick = { onApply(p1, p2); onDismiss() }, enabled = !running && !bad, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("保存") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                DialogConfirmButton("保存", onClick = { onApply(p1, p2); onDismiss() }, enabled = !running && !bad)
+            }
         }
     }
 }
@@ -273,7 +275,7 @@ private fun NeedMonthGrid(
             weekJa.forEachIndexed { idx, w ->
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text(w, style = MaterialTheme.typography.labelSmall,
-                        color = when (idx) { 0 -> MagiAccent.red; 6 -> MagiAccent.blue; else -> cs.onSurfaceVariant })
+                        color = when (idx) { 0 -> cs.error; 6 -> MagiAccent.blueText; else -> cs.onSurfaceVariant })
                 }
             }
         }
@@ -281,7 +283,7 @@ private fun NeedMonthGrid(
         dayCells.chunked(7).forEach { wk ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                 wk.forEach { j ->
-                    if (j == null) Box(Modifier.weight(1f).height(54.dp))
+                    if (j == null) Box(Modifier.weight(1f).height(64.dp))
                     else {
                         val range = ranges[j]
                         val sel = (j + 1) in selectedDays
@@ -292,7 +294,7 @@ private fun NeedMonthGrid(
                             else -> "${range.first}–${range.second}"
                         }
                         Box(
-                            Modifier.weight(1f).height(54.dp)
+                            Modifier.weight(1f).height(64.dp)
                                 .background(if (sel) cs.primaryContainer else cs.surface, MaterialTheme.shapes.extraSmall)
                                 .border(if (sel) 2.dp else 1.dp, if (sel) cs.primary else cs.outlineVariant, MaterialTheme.shapes.extraSmall)
                                 .clickable { onToggle(j + 1) }
@@ -308,7 +310,7 @@ private fun NeedMonthGrid(
                                         color = if (sel) cs.onPrimaryContainer else cs.onSurface,
                                         fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal)
                                     // 選択中=✓ / 個別設定=小さな印 / それ以外=印なし。
-                                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.primary, modifier = Modifier.size(12.dp))
+                                    if (sel) Icon(Icons.Filled.Check, contentDescription = null, tint = cs.onPrimaryContainer, modifier = Modifier.size(12.dp))
                                     else if (individual) Box(Modifier.size(5.dp).background(cs.primary, CircleShape))
                                 }
                                 Text(
@@ -326,7 +328,7 @@ private fun NeedMonthGrid(
                         }
                     }
                 }
-                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(54.dp)) }
+                repeat(7 - wk.size) { Box(Modifier.weight(1f).height(64.dp)) }
             }
         }
     }
@@ -344,12 +346,12 @@ internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -
             Text("日別の必要人数（例外）一覧", style = MaterialTheme.typography.titleMedium)
             Text(
                 "登録・変更は上の必要人数カレンダーから。ここは全シフト横断の一覧確認・削除用です。",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (overrides.isEmpty()) {
                 Text(
-                    "（例外なし — すべて既定値）",
+                    "（例外なし — すべて標準）",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
