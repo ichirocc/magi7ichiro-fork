@@ -3,7 +3,8 @@ package com.magi.app.v6
 import com.magi.app.model.MagiState
 
 /** 改善提案（`FixSuggestion.ops`）を本盤面へ反映する直前の安全ゲート。提案は計算時の盤面に対する差分なので、仮盤面へ適用して
- *  正式チェッカーで再評価し、辞書式で改善し厳密ピン・希望固定を崩さないときだけ適用後の盤面を返す（入力の盤面は変えない）。 */
+ *  正式チェッカーで再評価し、辞書式で改善し厳密ピン・希望固定を崩さず必須違反を新たに生まない（[introducesHardViolation]）ときだけ
+ *  適用後の盤面を返す（入力の盤面は変えない）。 */
 object FixApplyGate {
     sealed class Outcome {
         abstract val before: ViolationReport
@@ -30,7 +31,16 @@ object FixApplyGate {
         val after = UnifiedViolationChecker.check(state, work)
         if (!betterReport(after, before)) return Outcome.Rejected("今の勤務表では改善になりません", before, after)
         if (exactPinRegression(p, schedule, work)) return Outcome.Rejected("回数固定（下限＝上限）を崩す提案です", before, after)
-        newHardFamilyViolation(before, after)?.let { fam -> return Outcome.Rejected("別の必須条件（$fam）が新たに崩れる提案です", before, after) }
+        newHardFamilyViolation(before, after)?.let { fam -> return Outcome.Rejected("別の必須条件（${famLabel(fam)}）が新たに崩れる提案です", before, after) }
+        // 件数が減っても、別の職員・日・枠に必須違反が新たに生まれる手は通さない（違反の同一性、3.663.0）。
+        val born = ViolationIdentity.newHard(before, after)
+        if (born.isNotEmpty()) return Outcome.Rejected("別の職員・日・枠に必須違反（${born.map { famLabel(it.family) }.distinct().joinToString("・")}）が新たに ${born.size} 件生まれる提案です", before, after)
         return Outcome.Applied(work, before, after)
+    }
+
+    /** 拒否理由の族名（画面に英字の記号を出さない）。 */
+    private fun famLabel(fam: String): String = when (fam) {
+        "covU" -> "人員不足"; "c3n" -> "禁止の並び"; "c3w" -> "希望の前日の禁止"; "pref" -> "希望と違う勤務"
+        "extWish" -> "拡張希望の違反"; "groupViol" -> "担当外シフト"; else -> fam
     }
 }
