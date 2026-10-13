@@ -162,7 +162,8 @@ internal object EjectionChainPipeline {
             tel.after = rep0
             return LegOut(work0, rep0, 0, 0L, 0L)
         }
-        val budgetMs = if (cfg.deterministic) 0L else minOf(deepCapMs, timeLeft() / 4)
+        // 玉突きの取り分（CHAIN_RESERVE_SEC）は締切に足してあるので、残り時間の半分まで使う（旧: 1/4）。
+        val budgetMs = if (cfg.deterministic) 0L else minOf(deepCapMs, timeLeft() / 2)
         val budgetEvaluations = if (cfg.deterministic) deepCapEvaluations else 0L
         if (!shallowOnly && !stop() && (budgetMs > 0L || budgetEvaluations > 0L)) {
             tel.deepRan = true; tel.deepBudgetMs = budgetMs; tel.deepBudgetEvaluations = budgetEvaluations

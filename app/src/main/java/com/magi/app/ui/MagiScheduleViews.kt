@@ -164,7 +164,7 @@ internal fun progressSummary(ui: UiState): String {
     // 必須が残っている間は「改善◯%」が出ないので、ソフトを含む今の合計を出す（減っていく数字が1つは要る）。
     //   必須=0 のときは上の枝が (初期→現在) を出しているので重複させない。
     if (ui.bestHard > 0L && ui.totalViolations > 0) parts += "気になる点 全${ui.totalViolations}件"
-    val secLeft = ((ui.budgetSec * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
+    val secLeft = (((ui.budgetSec + com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC) * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
     parts += "残り %d:%02d".format(secLeft / 60, secLeft % 60)
     // [3.396.0] 反復数（「1.2M回」「毎秒40K」）は**作り手の指標**なので操作画面から外した。
     //   初見の人は必ず「これ何の回数？」と聞く＝その時点でこの表示は失敗している。知りたいのは

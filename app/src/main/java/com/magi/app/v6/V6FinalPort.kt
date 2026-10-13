@@ -17,6 +17,10 @@ import kotlinx.coroutines.isActive
  */
 /** 勤務表最適化のタイムアウト上限（秒）。高精度を保ったまま5分(300s)以内へ圧縮（停滞早期脱出＋RSI++をこの予算に収める）。 */
 const val MAX_OPTIMIZE_SEC = 300
+/** 後処理（研磨）の取り分（秒）。制限時間＝探索の時間で、後処理はその後ろにこの秒数だけ足す（3.659.0 利用者指示「60秒 + 10秒」）。 */
+const val POST_RESERVE_SEC = 10
+/** 玉突き（パイプラインの深い探索）の取り分（秒）。後処理の後ろにさらに足す（3.659.0 利用者指示「探索60秒後処理10秒玉突き検索10秒」）。 */
+const val CHAIN_RESERVE_SEC = 10
 
 /** [E0] 希望衝突の床での頭打ちの型（A/B 用）。 */
 enum class WishFloorMode { OFF, E0A, E0B }
@@ -273,9 +277,10 @@ object V6FinalPort {
     internal fun watchdogBudget(
         budgetMs: Long, startMs: Long, hardDeadlineMs: Long,
         fraction: Double = PolishGate.normalStallFraction,
+        postReserveFixedMs: Long? = null,
     ): WatchdogBudget {
         val minRunMs = (budgetMs / 6).coerceIn(8_000L, 45_000L).coerceAtMost(budgetMs)
-        val postReserveMs = (budgetMs / 12).coerceIn(8_000L, 25_000L).coerceAtMost(budgetMs / 2)
+        val postReserveMs = postReserveFixedMs ?: (budgetMs / 12).coerceIn(8_000L, 25_000L).coerceAtMost(budgetMs / 2)
         val searchDeadlineMs = (hardDeadlineMs - postReserveMs).coerceAtLeast(startMs + minRunMs)
         val searchWindowMs = searchDeadlineMs - startMs
         return WatchdogBudget(
@@ -532,7 +537,7 @@ object V6FinalPort {
         val busy = buildBusyDetail(state, label.name, mapOf(
             "subtitle" to label.desc,
             "phaseDesc" to "${label.name} で最適化中",
-            "expectedSec" to "約 ${seconds} 秒",
+            "expectedSec" to "約 ${seconds + POST_RESERVE_SEC + CHAIN_RESERVE_SEC} 秒",
             "estimatedIter" to "問題サイズに応じて自動調整",
         ))
         // [review #1] When the user explicitly picks an algorithm (not AUTO), honor it with the
@@ -555,7 +560,9 @@ object V6FinalPort {
         // coroutine キャンセル(計算を止める)と束ねて後処理へ伝播する。
         val startMs = EngineClock.nowMs()
         val budgetMs = seconds.toLong() * 1000L
-        val hardDeadlineMs = startMs + budgetMs
+        // 制限時間は探索の時間。後処理と玉突きの取り分はその後ろに足す（全体＝制限時間＋POST_RESERVE_SEC＋CHAIN_RESERVE_SEC）。
+        val postReserveFixedMs = (POST_RESERVE_SEC + CHAIN_RESERVE_SEC) * 1000L
+        val hardDeadlineMs = startMs + budgetMs + postReserveFixedMs
         // [仮説数上限撤廃・ユーザー指示] 診断ログ表示専用。実際の dispatch は V6NativeOptimizer.optimize()
         //   内の同名関数呼出が担うため、ここも同じ HypothesisPlanning.hypothesisCount から導出し独立再計算による
         //   表示/実挙動の乖離を防ぐ（3.212.0 と同じ設計原則）。
@@ -585,7 +592,7 @@ object V6FinalPort {
         //   指定すると minRunMs / postReserveMs が予算を上回り、searchDeadlineMs が hardDeadlineMs を
         //   追い越して**要求したタイムアウトを超えて**いた。予算そのものでクランプして searchDeadline
         //   <= hardDeadline を構造的に保証する（10 秒以上では minRunMs が支配するため結果は不変）。
-        val wdb = watchdogBudget(budgetMs, startMs, hardDeadlineMs)
+        val wdb = watchdogBudget(budgetMs, startMs, hardDeadlineMs, postReserveFixedMs = postReserveFixedMs)
         val minRunMs = wdb.minRunMs   // 最初の猶予（早すぎる停止を防ぐ）
         // [後処理予約] 探索が予算を使い切ると後処理(平準化/fair等のkeep-best研磨)が時間切れ(実機8ms)になる。
         //   末尾に postReserveMs を予約し、探索は searchDeadlineMs で止め、後処理は hardDeadlineMs まで走らせる。
@@ -949,11 +956,11 @@ object V6FinalPort {
             }
         }
         val tExtra1 = EngineClock.nowMs()
-        val overBudget = tExtra1 - startMs > budgetMs
+        val overBudget = tExtra1 - startMs > budgetMs + postReserveFixedMs
         val timingLog = MirrorLog(
             level = if (overBudget) "W" else "I",
             tag = "TIME",
-            message = "総${(tExtra1 - startMs) / 1000.0}s (予算${seconds}s${if (overBudget) " 超過" else ""}): " +
+            message = "総${(tExtra1 - startMs) / 1000.0}s (予算${seconds}s＋後処理${POST_RESERVE_SEC}s＋玉突き${CHAIN_RESERVE_SEC}s${if (overBudget) " 超過" else ""}): " +
                 "探索${(tFirst1 - tFirst0) / 1000.0}s + 連鎖${(tChain1 - tFirst1) / 1000.0}s + 統合${(tIntegration1 - tChain1) / 1000.0}s + 後処理${(tPost1 - tIntegration1) / 1000.0}s + 追加精製${(tExtra1 - tPost1) / 1000.0}s " +
                 "/ workers設定${workers} " +
                 (if (opts.algorithm == V6Algorithm.V5) "SAチェーン${workers}本"
@@ -1213,9 +1220,10 @@ object V6FinalPort {
                     key == "c3n" && c3nWall -> "証明済みの壁"
                     else -> null
                 }
-                if (structural != null) { walls.add("$key ${n0}件($structural)"); continue }
                 val self = minOf(n0, selfConflict[key] ?: 0)
                 if (self > 0) selfConflictShown.add(key to self)
+                // 希望どうしの衝突は壁より先に名指しする（直し方＝希望を1件取り消す、が分かる方を優先）。
+                if (structural != null) { if (n0 - self > 0) walls.add("$key ${n0 - self}件($structural)"); continue }
                 if (key == "c3mn") avoidShown = minOf(n0, avoidSelf)
                 val n = when (key) {
                     "weekly" -> n0 - weeklyWall

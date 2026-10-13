@@ -213,7 +213,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text("最適化の制限時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒", style = MaterialTheme.typography.bodyMedium)
+            Text("探す時間（最長5分・停滞時は早く終わることも）: ${ui.budgetSec} 秒＋仕上げ ${com.magi.app.v6.POST_RESERVE_SEC} 秒＋玉突き ${com.magi.app.v6.CHAIN_RESERVE_SEC} 秒", style = MaterialTheme.typography.bodyMedium)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onEvent(MagiEvent.Settings.SetBudget((ui.budgetSec - 60).coerceAtLeast(10))) },
                     enabled = !ui.running && ui.budgetSec > 10, modifier = Modifier.heightIn(min = 48.dp)) { Text("− 60秒") }
@@ -408,7 +408,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                     }
                 }
             }
-            Text("1回あたりの上限時間（残り時間の4分の1を超えません）", style = MaterialTheme.typography.bodyMedium)
+            Text("1回あたりの上限時間（残り時間の半分を超えません）", style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 EJECTION_CHAIN_SECONDS.forEach { sec ->
                     val on = !ui.running && ui.ejectionChain != EjectionChainMode.OFF

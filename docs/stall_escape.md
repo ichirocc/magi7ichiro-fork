@@ -98,7 +98,9 @@ weightedScore は実際には整数値（`MirrorKeys.weights` は全て整数、
 
 ```
 minRun       = min(clamp(B/6, 8000, 45000), B)
-postReserve  = min(clamp(B/12, 8000, 25000), B/2)
+postReserve  = (POST_RESERVE_SEC + CHAIN_RESERVE_SEC)×1000 = 20000（handleOptimize。3.659.0 利用者指示「探索60秒後処理10秒玉突き検索10秒」）
+             = min(clamp(B/12, 8000, 25000), B/2)     （postReserveFixedMs を渡さない呼び出し＝旧式・表の検査用）
+D            = S + B + postReserve                     （3.659.0: 予算＝探索の時間、後処理はその後ろに足す。旧: D = S + B）
 searchEnd    = max(D − postReserve, S + minRun)
 searchWindow = searchEnd − S
 raw          = max(toLong(B × fraction), 20000)
@@ -111,8 +113,10 @@ fraction     = PolishGate.normalStallFraction（既定 0.9、有限かつ 0 < f 
 
 | 予算 | 探索区間 | minRun | normalStall | shortStall | phaseGrace | postReserve |
 |---:|---:|---:|---:|---:|---:|---:|
-| 300 s | 275 s | 45 s | 270 s | 37.5 s | 7.5 s | 25 s |
-| 60 s | 52 s | 10 s | 46.8 s（フォールバック） | 15 s | 2 s | 8 s |
+| 300 s（3.659.0〜） | 300 s | 45 s | 270 s | 37.5 s | 7.5 s | 20 s（後処理 10＋玉突き 10、全体 320 s） |
+| 60 s（3.659.0〜・既定） | 60 s | 10 s | 54 s | 15 s | 2 s | 20 s（全体 80 s） |
+| 300 s（旧式） | 275 s | 45 s | 270 s | 37.5 s | 7.5 s | 25 s |
+| 60 s（旧式） | 52 s | 10 s | 46.8 s（フォールバック） | 15 s | 2 s | 8 s |
 
 20 s／15 s の下限があるため、予算が短いと閾値が探索区間内に届かないことがある（例: 20 s 予算は区間 12 s に対し通常 20 s・短い閾値 15 s＝停滞発火は起きず締切だけで止まる）。「フォールバックすれば必ず発火し得る」とは読まない。`StallEscapeSpecTest` がこの表を固定する。
 

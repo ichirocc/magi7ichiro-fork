@@ -190,7 +190,7 @@ object PolishGate {
     @Volatile var ejectionChainSwapMoves: Boolean = true
 
     /** 玉突き連鎖 1 段あたりの上限ミリ秒（実時間モード）。残り時間の 1/4 との小さい方を使う。値は HF77 の明示指示で決める。 */
-    @Volatile var ejectionChainMaxMillis: Long = 6_000L
+    @Volatile var ejectionChainMaxMillis: Long = CHAIN_RESERVE_SEC * 1000L   // 3.659.0 利用者指示: 6 秒→10 秒
 
     /** [測定中] 必須の違反だけを起点にした玉突き連鎖を後処理の前段（HF66 の直後）で試す。既定 **false**（2026-10-06）。 */
     @Volatile var hardEjectionChainEarly: Boolean = false

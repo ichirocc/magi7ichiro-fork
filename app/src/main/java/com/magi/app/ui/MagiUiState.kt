@@ -84,7 +84,7 @@ data class UiState(
     val logs: List<String> = emptyList(),
     val elapsedMs: Long = 0,
     val workers: Int = Runtime.getRuntime().availableProcessors().coerceIn(1, 8),
-    val budgetSec: Int = 300,
+    val budgetSec: Int = 60,   // 探索の時間。後処理は POST_RESERVE_SEC を後ろに足す（3.659.0 利用者指示: 既定 300→60）
     val nativeAccel: Boolean = true,           // [Stage4] C++ネイティブ加速（SAチャンク）のユーザートグル
     val nativeParity: Boolean = true,          // [照合トグル] Kotlinパリティ照合。OFF=純ネイティブ(検証/ベンチ用・誤結果の可能性)
     val blockSwapC3nFilter: Boolean = true,     // [3.298.0/3.518.0/3.649.0] ブロック巡回交換で必須が正味で増える候補を候補生成段階で捨てるか（必ず却下される候補だけ）
@@ -98,7 +98,7 @@ data class UiState(
     val ejectionPipelineRounds: Boolean = true,  // PolishGate.ejectionPipelineRounds（既定ON）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
-    val ejectionChainSeconds: Int = 6,  // PolishGate.ejectionChainMaxMillis / 1000（既定6）。保存しない
+    val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
     val stallPolishInjection: Boolean = false,  // PolishGate.stallPolishInjection（既定OFF）。保存しない
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
