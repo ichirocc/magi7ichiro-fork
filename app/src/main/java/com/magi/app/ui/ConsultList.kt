@@ -23,7 +23,28 @@ data class ConsultItem(
     val rosterKey: Int = 0,
     val staffId: Int? = null,
     val staffGone: Boolean = false,
+    /** 関係者の回答（違反セルの半自動修正仕様 §4・§7、3.665.0 利用者決定「セッション内で回答を記録」）。了承でも違反は減らさない。 */
+    val answer: ConsultAnswer = ConsultAnswer.PENDING,
 )
+
+/** 相談の回答。記録だけ＝了承・不可のどちらでも勤務表は変えない（当てるのは利用者の操作）。 */
+enum class ConsultAnswer(val label: String) { PENDING("回答待ち"), AGREED("了承"), DECLINED("不可") }
+
+/** 押すたびに 回答待ち→了承→不可→回答待ち。 */
+internal fun ConsultAnswer.next(): ConsultAnswer = ConsultAnswer.entries[(ordinal + 1) % ConsultAnswer.entries.size]
+
+/**
+ * いま有効な回答。入れ替えの相談は、回答のあとで勤務表か設定が変わると案の中身が変わる＝以前の回答を流用せず「回答待ち」に戻す
+ * （仕様 §7「相談後に案の内容が変更: 以前の回答を自動的に流用しない」）。希望・1 セルの相談は対象が変わらないので記録どおり。
+ */
+internal fun consultAnswerOf(c: ConsultItem, boardKey: Long, stateKey: Long): ConsultAnswer {
+    val t = c.chain ?: return c.answer
+    return if (t.boardKey == 0L || t.boardKey != boardKey || t.stateKey != stateKey) ConsultAnswer.PENDING else c.answer
+}
+
+/** 回答の 1 行。記録と有効な回答が違えば（案が変わった）その理由を添える。 */
+internal fun consultAnswerLine(c: ConsultItem, effective: ConsultAnswer): String =
+    "回答: ${effective.label}" + (if (effective != c.answer) "（回答のあとで勤務表か設定が変わり案の中身が変わるため、以前の「${c.answer.label}」は使いません）" else "")
 
 /** 複数人の入れ替えの相談が指す枠。日付とシフト記号で持つ＝月の移動・シフトの並び替えのあとも今の勤務表で案を探し直せる。
  *  枠を持たない案（ホーム・分析の「この手を使う」から）は [suggestion] と、その案を出したときの盤面と設定の指紋 [boardKey]/[stateKey]

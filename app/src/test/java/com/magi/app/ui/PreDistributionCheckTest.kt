@@ -25,4 +25,13 @@ class PreDistributionCheckTest {
         assertEquals("3件（禁止の並び 1件・人員不足 2件）", rows.getValue("必須違反").value)
         assertEquals(true, rows.getValue("保存").ok)
     }
+
+    /** [3.665.0] 月の境目は評価していないと明示する（前月・翌月の勤務はデータに無い）。注記は窓が月の外へはみ出しうる日を変えたときだけ。 */
+    @Test fun monthEdgeIsShownAsNotEvaluated() {
+        assertEquals(MONTH_EDGE_NOTE, preDistributionRows(base, null).associateBy { it.label }.getValue("月の境目").value)
+        assertEquals(true, monthEdgeTouched(listOf(1), 31, 3))
+        assertEquals(true, monthEdgeTouched(listOf(29), 31, 3))
+        assertEquals(false, monthEdgeTouched(listOf(2, 28), 31, 3))
+        assertEquals(false, monthEdgeTouched(listOf(0), 31, 1))
+    }
 }

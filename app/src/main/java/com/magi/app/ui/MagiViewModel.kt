@@ -2781,6 +2781,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleConsultHold(index: Int) {
         _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.mapIndexed { j, c -> if (j == index) c.copy(held = !c.held) else c }) }
     }
+    /** 相談の回答を 回答待ち→了承→不可 と切り替える（記録だけ＝勤務表は変えない）。案が変わって無効になっていた回答は回答待ちから数え直す。 */
+    fun cycleConsultAnswer(index: Int) {
+        _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.mapIndexed { j, c ->
+            if (j == index) c.copy(answer = consultAnswer(c).next()) else c }) }
+    }
+
+    /** いま有効な回答（[consultAnswerOf]＝入れ替えの相談は案が変わると回答待ち）。 */
+    fun consultAnswer(c: ConsultItem): ConsultAnswer {
+        val sched = currentSchedule; val st = state
+        return if (sched == null || st == null) c.answer else consultAnswerOf(c, boardKey(sched), stateKey(st))
+    }
+
     fun removeConsult(index: Int) {
         val item = _ui.value.consults.getOrNull(index) ?: return
         _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.filterIndexed { j, _ -> j != index }) }
@@ -3107,7 +3119,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             relaxedBoard = false, engineRan = false,   // [3.475.0] 提案の適用は手操作扱い（局所1手のみ、フルの計算ではない）
             schedule = applied.map { it.toList() },
             fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
-            fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total) + fixResultDetail(gate.before, gate.after)),
+            fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total) + fixResultDetail(gate.before, gate.after) +
+                (if (monthEdgeTouched(s.ops.map { it.day }, applied.firstOrNull()?.size ?: 0, maxPatternLen(st))) "$MONTH_EDGE_NOTE。" else "")),
         ) }
         // 通知は 2 行まで＝必須が動いた手は必須だけ、動かない手は合計だけを添える（両方の数はホームの結果の行とログ）。
         postOpNotice("${s.label} を当てました（" + (if (gate.before.hard != gate.after.hard) "必須違反 ${gate.before.hard}→${gate.after.hard}"
@@ -3115,6 +3128,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
         refreshCheck()
     }
+
+    /** 並びの条件のいちばん長い窓（希望の前日の禁止は 2 日）。月の境目の注記に使う。 */
+    private fun maxPatternLen(st: MagiState): Int =
+        (listOf(st.cons3, st.cons3n, st.cons3m, st.cons3mn).flatten().maxOfOrNull { it.pattern.size } ?: 0)
+            .coerceAtLeast(if (st.cons3w.isNotEmpty()) 2 else 0)
 
     internal fun applyStructure(r: Ws1Result) {
         if (structuralEditBlocked()) return

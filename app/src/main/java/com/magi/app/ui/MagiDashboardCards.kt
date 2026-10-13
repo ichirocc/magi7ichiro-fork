@@ -330,7 +330,8 @@ internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, he
 
 /** [3.645.0/仕様 5.3] 相談してから決める判断の一覧（ホーム）。対象と検討内容を後から再確認できる。出力は止めない。 */
 @Composable
-internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit, onResumeChain: (ConsultItem) -> Unit = {}, onToggleHold: (Int) -> Unit = {}) {
+internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit, onResumeChain: (ConsultItem) -> Unit = {}, onToggleHold: (Int) -> Unit = {},
+                         answerOf: (ConsultItem) -> ConsultAnswer = { it.answer }, onCycleAnswer: (Int) -> Unit = {}) {
     if (ui.consults.isEmpty()) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
@@ -349,6 +350,10 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                         Text((if (c.held) "【$CONSULT_HELD】" else "") + c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
+                        // 回答は記録だけ（了承でも違反は減らさない）。押すたびに 回答待ち→了承→不可。
+                        TextButton(onClick = { onCycleAnswer(idx) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(consultAnswerLine(c, answerOf(c)), style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     if (cell != null) {
                         TextButton(onClick = { onOpenCell(cell.first, cell.second) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN) }

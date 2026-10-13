@@ -432,4 +432,15 @@ class CellSheetLogicTest {
         assertEquals("この場所の直し方を探しています…（最長 3 秒）", fixSearchingText(true))
         assertEquals("直し方を探しています…（最長 8 秒）", fixSearchingText(false))
     }
+
+    /** [3.665.0] 重なった問題が 2 件以上なら選ばせ、選んだ族を減らす案だけを出す（仕様 §3-2・§5）。 */
+    @Test fun problemChoiceFiltersFixesByFamily() {
+        org.junit.Assert.assertNull(problemChoiceHeading(1))
+        assertEquals("この勤務に関係する問題が 2 件あります。どの問題の直し方を確認しますか？", problemChoiceHeading(2))
+        val s = com.magi.app.v6.FixSuggestion(com.magi.app.v6.FixKind.CHANGE, emptyList(), "l", -1, -1, listOf("c3n" to -1, "c1" to 1))
+        org.junit.Assert.assertTrue(fixAddresses(s, null))
+        org.junit.Assert.assertTrue(fixAddresses(s, "c3n"))
+        org.junit.Assert.assertFalse(fixAddresses(s, "c1"))
+        assertEquals("選んだ問題（期間の制約）を減らす案は見つかりませんでした。ほかの問題を選ぶと、その直し方を確認できます。", noFixForProblemLine("期間の制約"))
+    }
 }

@@ -671,7 +671,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
                     ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) }, onToggleHold = { vm.toggleConsultHold(it) },
-                        onResumeChain = { vm.resumeConsultChain(it) })
+                        onResumeChain = { vm.resumeConsultChain(it) }, answerOf = { vm.consultAnswer(it) }, onCycleAnswer = { vm.cycleConsultAnswer(it) })
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。
                     // [3.480.0] 旧: 画面最下部にボタン列で配置していたが、比較検討は「処方箋」の一部として
