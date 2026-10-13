@@ -309,7 +309,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DialogConfirmButton("この入れ替えを当てる", onClick = onApply)
-                ConsultButton(consulted, Modifier, onConsult)
+                ConsultButton(consulted, Modifier, onClick = onConsult)
                 DialogDismissButton(onClick = onDismiss, text = "やめる")
             }
         },
