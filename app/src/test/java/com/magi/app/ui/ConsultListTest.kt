@@ -173,4 +173,17 @@ class ConsultListTest {
         assertEquals(null, consultLine(emptyList<ConsultItem>()))
         assertEquals(true, consultMatch(listOf(b), ConsultItem("s2", "n2"))?.held)
     }
+
+    /** [3.665.0] 回答は 回答待ち→了承→不可。入れ替えの相談は、回答のあとで勤務表か設定が変わると回答待ちに戻す（以前の回答を流用しない）。 */
+    @Test fun answerCyclesAndChainAnswerResetsWhenTheBoardChanges() {
+        assertEquals(ConsultAnswer.AGREED, ConsultAnswer.PENDING.next())
+        assertEquals(ConsultAnswer.PENDING, ConsultAnswer.DECLINED.next())
+        val wish = ConsultItem(subject = "s", note = "n", answer = ConsultAnswer.AGREED)
+        assertEquals(ConsultAnswer.AGREED, consultAnswerOf(wish, 1L, 2L))   // 希望・1 セルの相談は記録どおり
+        val chain = wish.copy(chain = ChainTarget(null, null, "l", boardKey = 5L, stateKey = 6L))
+        assertEquals(ConsultAnswer.AGREED, consultAnswerOf(chain, 5L, 6L))
+        assertEquals(ConsultAnswer.PENDING, consultAnswerOf(chain, 9L, 6L))
+        assertEquals("回答: 回答待ち（回答のあとで勤務表か設定が変わり案の中身が変わるため、以前の「了承」は使いません）", consultAnswerLine(chain, ConsultAnswer.PENDING))
+        assertEquals("回答: 了承", consultAnswerLine(chain, ConsultAnswer.AGREED))
+    }
 }

@@ -22,10 +22,18 @@ internal fun preDistributionRows(ui: UiState, csvLine: String?): List<PreDistRow
         PreDistRow("評価", if (evaluated) "最新の勤務表を評価済み" else "まだ評価していません（問題がないか調べてください）", evaluated),
         PreDistRow("必須違反", hardText, ui.bestHard == 0L),
         PreDistRow("要調整", softText, null),
+        PreDistRow("月の境目", MONTH_EDGE_NOTE, null),
         PreDistRow("相談", if (consults == 0) "「相談中」に登録されている項目はありません" else "未完了 ${consults}件" + (if (held > 0) "（うち保留 ${held}件）" else "") + "（ホームの「相談中」）", consults == 0),
         PreDistRow("保存", csvLine ?: "まだ勤務表 CSV に保存していません", csvLine?.startsWith("この内容で") == true),
     )
 }
+
+/** 評価できていない範囲（違反セルの半自動修正仕様 §7・§8、3.665.0 利用者決定「未評価と明示するだけ」）。前月・翌月の勤務はデータに無い。 */
+internal const val MONTH_EDGE_NOTE = "前月末・翌月初をまたぐ並び（前月・翌月の勤務）は評価していません（今月の中だけで判定）"
+
+/** 変更した日が月の初め・終わりの [maxLen]−1 日以内か（並びの長さ [maxLen] の窓が月の外へはみ出しうる）。 */
+internal fun monthEdgeTouched(days: List<Int>, totalDays: Int, maxLen: Int): Boolean =
+    maxLen >= 2 && days.any { it < maxLen - 1 || it > totalDays - maxLen }
 
 /** 配布前確認の注意書き。必須違反 0 件だけでは、相談の完了や法令への適合までは示さない（仕様 §10）。 */
 internal const val PRE_DIST_NOTE = "必須違反 0 件は、登録した必須条件を満たしたことだけを示します。相談の完了や法令への適合は含みません。相談事項や職場の確認手続きを確かめたうえで、配布をご判断ください。"

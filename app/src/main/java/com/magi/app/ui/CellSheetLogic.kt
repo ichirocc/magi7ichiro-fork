@@ -523,3 +523,13 @@ internal const val PEEK_HARD_RISK_NOTE = "⚠＝変えると必須違反"
 /** [S6] 既にある組の手順がこのセルを動かすなら、その行き先（新しく試算しない）。 */
 internal fun peekRecommendation(r: RelaxTrial.Result?, i: Int, j: Int): Int? =
     r?.moves?.firstOrNull { it.staff == i && it.day == j }?.to
+
+/** 1 つのセルに重なった問題の見出し（違反セルの半自動修正仕様 §3-2・§5、3.665.0）。2 件以上のときだけ。 */
+internal fun problemChoiceHeading(n: Int): String? = if (n >= 2) "この勤務に関係する問題が $n 件あります。どの問題の直し方を確認しますか？" else null
+
+/** 選んだ問題（族）を減らす案か。[family] が null＝選んでいない（すべての案）。 */
+internal fun fixAddresses(s: com.magi.app.v6.FixSuggestion, family: String?): Boolean =
+    family == null || s.diff.any { (k, d) -> k == family && d < 0 }
+
+/** 選んだ問題を減らす案が無いとき（ほかの問題の案はある）。 */
+internal fun noFixForProblemLine(label: String): String = "選んだ問題（$label）を減らす案は見つかりませんでした。ほかの問題を選ぶと、その直し方を確認できます。"

@@ -203,7 +203,19 @@ internal fun CellEditSheet(
                         }
                     }
                 } else if (mode == 0 && status.severity != CellSeverity.NONE) {
-                    FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true)
+                    // 重なった問題が 2 件以上なら、どの問題の直し方を見るかを選ぶ（選ぶまではすべての案）。
+                    var problem by remember(cell) { mutableStateOf<String?>(null) }
+                    problemChoiceHeading(fams.size)?.let { heading ->
+                        Text(heading, style = MaterialTheme.typography.bodySmall)
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (f in fams) {
+                                val label = breakdownLabels[f] ?: f
+                                if (problem == f) FilledTonalButton(onClick = { problem = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("✓ $label", maxLines = 1) }
+                                else OutlinedButton(onClick = { problem = f }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(label, maxLines = 1) }
+                            }
+                        }
+                    }
+                    FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, family = problem)
                 }
                 if (mode == 1 && wish != null) {
                     wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

@@ -2026,6 +2026,7 @@ internal fun FixSearchPanel(
     nav: FixNav, onApplied: () -> Unit,
     compact: Boolean = false,   // セル編集シートの上段: 手は 1 件・理由は 2 行まで
     settingsLabel: String? = null,   // 手が無いときの設定への行き先の名（null＝節ごとの名 settingsLabelFor）
+    family: String? = null,   // セルのシートで選んだ問題（族）。その族を減らす案だけを出す（null＝すべて）
 ) {
     val cs = MaterialTheme.colorScheme
     val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null }, quick = compact)) }
@@ -2047,7 +2048,9 @@ internal fun FixSearchPanel(
                 Text("直し方を探す途中でうまくいきませんでした。もう一度ためせます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text("もう一度探す") }
             }
-            else -> if (ui.fixSuggestions.isNotEmpty()) ui.fixSuggestions.take(if (compact) 1 else 3).forEach { s ->
+            else -> if (family != null && ui.fixSuggestions.isNotEmpty() && ui.fixSuggestions.none { fixAddresses(it, family) }) {
+                Text(noFixForProblemLine(breakdownLabels[family] ?: family), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            } else if (ui.fixSuggestions.isNotEmpty()) ui.fixSuggestions.filter { fixAddresses(it, family) }.take(if (compact) 1 else 3).forEach { s ->
                 val (tag, tagColor) = fixKindTag(s.kind)
                 Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
