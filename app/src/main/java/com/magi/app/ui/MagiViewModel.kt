@@ -806,6 +806,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             _ui.update { it.copy(saveState = if (ok) SaveState.Saved else SaveState.Failed) }
             reportNonAtomicSave()   // [3.428.0/#7] 記録は **main へ戻ってから**（下の KDoc 参照）
             reportAutoSave(ok)
+            if (ok && resultAdoptedAtMs > 0L) {
+                logOp("I", "計算結果の保存が完了しました（計算完了から ${String.format(java.util.Locale.ROOT, "%.1f", (System.currentTimeMillis() - resultAdoptedAtMs) / 1000.0)} 秒）")
+                resultAdoptedAtMs = 0L
+            }
         }
     }
 
@@ -839,6 +843,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 直前の自動保存が成功したか。失敗を連続で通知しないための状態。 */
     private var autoSaveOk = true
+    /** 計算の結果を採った時刻（0＝無し）。次に保存が書けた時にログへ「計算完了から何秒で保存できたか」を 1 行出す（測定の前提、backlog #48）。 */
+    private var resultAdoptedAtMs = 0L
 
     /**
      * [3.428.0/#7] 原子置換を諦めた（rename 不能）ことを書き込み側から受け取る旗。
@@ -1792,6 +1798,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     setPolishDiagnostics(res.post?.c1Plateau, res.post?.observedPinBlockedAttempts ?: 0, res.schedule, res.post?.pinBlocks)
                     rejectedRunDiagLogs = emptyList()
                     currentSchedule = res.schedule.copy2D()
+                    resultAdoptedAtMs = System.currentTimeMillis()
                     autoSave()
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
