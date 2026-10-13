@@ -92,7 +92,7 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
             }
             // [3.409.11] 残り1名のとき削除ボタンが理由なく消える（年間マスター側と同じ対象漏れ）。
             if (v.staff.size <= 1) {
-                Text("最後の1名は削除できません（勤務表の行が無くなるため）。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text("最後の1名は削除できません（勤務表の行が無くなるため）。先に別の職員を入職させると削除できます。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             AddRowButton("入職（職員追加）", onClick = { addOpen = true }, enabled = ui.loaded && !ui.running)
             AddRowButton("一括追加（改行区切り）", onClick = { bulkOpen = true }, enabled = ui.loaded && !ui.running)
@@ -119,7 +119,11 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
             confirmButton = { DialogDangerButton("削除（退職）", onClick = { onEvent(MagiEvent.Structure.RemoveStaff(i)); confirmDelete = null }) },
             dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }) },
             title = { DialogHeader("退職・削除の確認", { confirmDelete = null }) },
-            text = { Text("${v.staff.getOrNull(i)?.name ?: ""} を削除します。この職員の勤務・希望も消えます。") },
+            text = {
+                val nm = v.staff.getOrNull(i)?.name ?: ""
+                val wishN = ui.wishes.keys.count { VioKey.first(it) == i }
+                Text("${nm}さんを職員から削除します。\n${nm}さんの勤務の行と希望" + (if (wishN > 0) " ${wishN}件" else "") + "も消えます（元に戻すで取り消せます）。")
+            },
         )
     }
 }

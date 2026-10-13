@@ -108,7 +108,9 @@ object V6FinalPort {
             else "入口: 個人上限0のセル${count}件を外しました（必須 ${hardBefore}→${hardAfter}）。最適化は上限0の勤務を置きません（表示・重みは不変）"
 
         fun keptNote(): String? = if (!raisedHard) null else
-            "今の勤務表には個人の上限0のシフトが${count}件入っています。最適化は上限0の勤務を置かないため、必須${hardBefore}件まで戻らないことがあります（上限を見直すか、そのまま使ってください）"
+            "今の勤務表には個人の上限0のシフトが${count}件入っています（だれのどの日かはホームの『設定の見直し』に出ます）。" +
+                "最適化は上限0の勤務を置かないため、必須${hardBefore}件まで戻らないことがあります。" +
+                "編集タブの『年間マスター』の『③ 回数（1人あたり）』で上限を見直すか、このまま使えます"
     }
 
     fun buildBusyDetail(state: MagiState, algorithm: String, overrides: Map<String, String> = emptyMap()): BusyDetail {

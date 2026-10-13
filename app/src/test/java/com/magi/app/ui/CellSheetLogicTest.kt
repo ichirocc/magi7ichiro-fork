@@ -82,8 +82,18 @@ class CellSheetLogicTest {
         val line = status(staff("職員03"), 0)
         println(line)
         assertEquals(CellSeverity.HARD, line.severity)
-        assertTrue(line.text, line.text.startsWith("⚠ 必須：翌日("))
-        assertTrue(line.text, "への前日禁止" in line.text)
+        assertTrue(line.text, line.text.startsWith("⚠ 必須：希望の前日の禁止 Dﾃ→休（10/1〜10/2）"))
+    }
+
+    /** 希望と違う勤務の一覧の行は希望の勤務も言う。担当外は職員のグループを言う（氏名はシートの見出しにある）。 */
+    @Test fun prefHeadingNamesTheWishAndGroupViolNamesTheGroup() {
+        val i = staff("職員10")
+        val s2 = Array(s.size) { s[it].copyOf() }.also { it[i][8] = st.shifts.indexOfFirst { k -> k.kigou == "Dﾃ" } }
+        val pref = hardViolationItems(st, p, s2, UnifiedViolationChecker.check(st, s2).cellFamilies).single { it.family == "pref" && it.staff == i }
+        assertEquals("希望と違う勤務 Dﾃ（希望はA4） ・ 10/9(金)", pref.heading)
+        val g = staff("職員01")
+        val s3 = Array(s.size) { s[it].copyOf() }.also { it[g][0] = st.shifts.indexOfFirst { k -> k.kigou == "Pｼ" } }
+        assertEquals("⚠ 必須：Pｼはグループ「柳」の担当外", cellStatusLine(st, p, s3, g, 0, listOf("groupViol")).text)
     }
 
     @Test fun c42sLineNamesThePairedStaff() {
@@ -375,6 +385,10 @@ class CellSheetLogicTest {
         assertTrue(detail("", "3", "covU"), detail("", "3", "covU").contains("必要3人"))
         assertTrue(detail("5", "3", "covU"), detail("5", "3", "covU").contains("必要3人"))
         assertTrue(detail("5", "3", "covO"), detail("5", "3", "covO").contains("適正5人"))
+        // 日付はシートの見出しにある＝行では繰り返さない。
+        val sym = st.shifts[k].kigou
+        assertTrue(detail("", "3", "covU"), detail("", "3", "covU").startsWith("⚠ 必須：${sym}が人員不足（必要3人に"))
+        assertTrue(detail("5", "3", "covO"), detail("5", "3", "covO").startsWith("⚠ 要調整：${sym}が人員過剰（適正5人に"))
     }
 
     @Test

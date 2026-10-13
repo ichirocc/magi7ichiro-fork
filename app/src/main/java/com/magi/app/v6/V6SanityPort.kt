@@ -167,12 +167,29 @@ object V6SanityPort {
             val k = s[i][j]
             if (k !in 0 until p.K || k == p.restIdx || !p.canDo(i, k) || p.rangeHi[i][k] != 0) continue
             if (p.wishFixed(i, j) && p.wish[i][j] == k) continue
-            cells += "${state.staff.getOrNull(i)?.name ?: "#$i"} ${j + 1}日「${state.shifts.getOrNull(k)?.kigou ?: "$k"}」"
+            cells += "${state.staff.getOrNull(i)?.name ?: "#$i"} ${safeDayLabel(state.startDate, j)}「${state.shifts.getOrNull(k)?.kigou ?: "$k"}」"
         }
         if (cells.isEmpty()) return null
         return SettingIssue(IssueKind.RANGE, "上限 0 の勤務（${cells.take(3).joinToString("・")}${if (cells.size > 3) " ほか" else ""}）",
             "今の勤務表に個人の上限0のシフトが ${cells.size}件 入っています。再作成すると外されます",
-            "残すなら、その人のそのシフトの個人上限を 1 以上に上げてください")
+            "残すなら、${Place.EDIT}${Place.COUNT}でその人のそのシフトの個人上限を 1 以上に上げてください")
+    }
+
+    /** 直す場所＝編集タブの区分と節の見出し（`MagiApp.kt` の区分・`CollapsibleSection`・各カードの題と同じ名前。見出しを変えたらここも）。
+     *  文の最初の場所だけ [EDIT] を前に付け、同じ文の 2 つ目からは区分から書く。 */
+    private object Place {
+        const val TAB = "編集タブ"
+        const val EDIT = "編集タブの"
+        const val WISH = "『月次条件』の『希望シフト登録』"
+        const val NEED = "『月次条件』の『必要人数設定』"
+        const val NEED_DAYS = "『月次条件』の『日別の必要人数（例外）一覧』"
+        const val MONTH = "『月次条件』の『対象の月』"
+        const val STAFF = "『職員管理』"
+        const val SHIFT = "『年間マスター』の『① シフト・グループ』"
+        const val SKILL = "『年間マスター』の『② スキルグループ』"
+        const val COUNT = "『年間マスター』の『③ 回数（1人あたり）』"
+        const val HEAD = "『年間マスター』の『④ 人数と組み合わせ』"
+        const val RULE = "『年間マスター』の『⑤ 並び・期間の制約』"
     }
 
     // 既定引数は cachedProblem(state)（build/aptBalances と同じ。p を渡さない呼出＝HfSwapPolish の
@@ -183,11 +200,12 @@ object V6SanityPort {
             val parts = key.split(',')
             val i = parts.getOrNull(0)?.toIntOrNull()
             val j = parts.getOrNull(1)?.toIntOrNull()
+            // 「担当不可」「範囲外」の語は wishIssues が直し方の分岐に読む＝言い換えるときは両方を揃える。
             val reason = when {
-                i == null || j == null -> "希望キーが i,j 形式ではありません"
+                i == null || j == null -> "希望の職員と日付を読み取れません"
                 i !in 0 until p.S || j !in 0 until p.T -> "職員または日付が範囲外です"
                 k !in 0 until p.K -> "希望シフトが範囲外です"
-                !p.canDo(i, k) -> "職員のグループでは担当不可です"
+                !p.canDo(i, k) -> "グループ「${state.groups.getOrNull(p.sgrp[i])?.kigou?.let { toHankakuKigou(it) } ?: "?"}」では担当不可です"
                 else -> null
             }
             if (reason != null) {
@@ -347,7 +365,7 @@ object V6SanityPort {
      *  就けても残る不足（= covUCell(k,j,capable) の総和）。covUCell は got 単調減少なので、これは当該セルの
      *  covU 最小値＝どう割り当てても避けられない不足量。need1/need2 両設定時は covUCell が MIN(OR救済) を返す
      *  ため過大検出しない。誤検知ゼロ・読み取り専用・データ不変。 */
-    const val ZERO_CAP_SHORTFALL_NOTE = "個人の上限0（入れない指定）が関係しています。見直すときは設定で変えてください"
+    const val ZERO_CAP_SHORTFALL_NOTE = "個人の上限0（入れない指定）が関係しています。見直すときは編集タブの『年間マスター』の『③ 回数（1人あたり）』で変えてください"
 
     data class ForcedCovU(val shiftIndex: Int, val shiftSymbol: String, val cells: Int, val amount: Int)
 
@@ -549,6 +567,7 @@ object V6SanityPort {
         const val PREVIEW = 3                // 件数つき警告に並べる例の数
         const val NAME_PREVIEW = 4           // 職員名を並べる数
         const val MUS_TOP = 3                // 最小説明（MUS）を出す上限
+        const val FORCED_SHORT_MARK = "何度つくっても残る人員不足"   // 検査7 の場所の印（sorted が最優先にする目印）
     }
 
     private class GuidanceBuilder(val state: MagiState, val p: Problem) {
@@ -556,6 +575,11 @@ object V6SanityPort {
         fun symOf(k: Int): String = state.shifts.getOrNull(k)?.kigou ?: k.toString()
         fun nameOf(i: Int): String = state.staff.getOrNull(i)?.name ?: "#$i"
         fun capableCount(k: Int): Int = (0 until p.S).count { p.canDo(it, k) }
+        /** 日の並び（先頭 PREVIEW 件＋「ほか」）。 */
+        fun daysText(days: List<Int>): String =
+            days.take(Guidance.PREVIEW).joinToString("・") { safeDayLabel(state.startDate, it) } + (if (days.size > Guidance.PREVIEW) " ほか" else "")
+        /** 職員 i がシフト k に希望で固定した日（6d・6e の件数と同じ数え方）。 */
+        fun wishedDays(i: Int, k: Int): List<Int> = (0 until p.T).filter { j -> p.wishFixed(i, j) && p.wish[i][j] == k }
 
         fun run(): List<SettingIssue> {
             wishIssues(); duplicateSeqIssues(); duplicateRuleIssues(); mustForbiddenSeqIssues(); c1RuleIssues(); unusableRowIssues(); nonNumericIssues(); assignmentIssues()
@@ -570,10 +594,10 @@ object V6SanityPort {
                 val where = "${w.staffName} ${safeDayLabel(state.startDate, w.dayIndex)} 希望「${w.shiftSymbol}」"
                 val fix = when {
                     w.reason.contains("担当不可") ->
-                        "この希望を取り消すか、設定で${w.staffName}さんの担当に「${w.shiftSymbol}」を追加してください"
+                        "本人と相談してこの希望を調整する（希望は外れます。元に戻せます）か、${Place.EDIT}${Place.SHIFT}の担当可否で、グループ「${w.groupSymbol}」が「${w.shiftSymbol}」を担当できるようにしてください"
                     w.reason.contains("範囲外") ->
-                        "希望のシフト記号・日付が勤務表の範囲内かを確認してください"
-                    else -> "希望の入力（i,j形式）を確認してください"
+                        "${Place.EDIT}${Place.WISH}で、この希望のシフトと日付が今の勤務表の範囲内かを確かめてください"
+                    else -> "${Place.EDIT}${Place.WISH}で、この希望を入れ直してください"
                 }
                 val canOneTap = w.reason.contains("担当不可")
                 out.add(SettingIssue(IssueKind.WISH, where, "実現できない希望です（${w.reason}）", fix,
@@ -590,7 +614,7 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.WISH,
                     "${nameOf(i)} ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
                     "「$x の希望の前日は $y 禁止」に希望どうしで当たっています。希望は固定なので計算では解消できません",
-                    "どちらかの希望を取り消すか、制約「希望の前日に禁止」の行を見直してください",
+                    "${Place.EDIT}${Place.WISH}で本人と相談してどちらかの希望を調整する（希望は外れます。元に戻せます）か、${Place.RULE}の「希望の前日に禁止」でこの行を見直してください",
                     action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j"))
             }
             // 1c) 禁止の並び(c3n)の窓がまるごと希望固定（例: 休の希望 3 連日と「休→休→休」禁止）。どれを取り消すかは利用者が選ぶ＝ワンタップなし。
@@ -602,7 +626,7 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.WISH,
                     "${nameOf(g.staff)} ${g.days.joinToString("・") { safeDayLabel(state.startDate, it) }} 希望「$seq」",
                     "禁止の並び「$seq」に${if (one) "希望が" else "希望どうしで"}当たっています。希望は固定なので計算では解消できません",
-                    "${if (one) "この希望" else "いずれか1件の希望"}を取り消すか、禁止の並び「$seq」を見直してください"))
+                    "${Place.EDIT}${Place.WISH}で本人と相談して${if (one) "この希望" else "いずれか1件の希望"}を調整する（希望は外れます。元に戻せます）か、${Place.RULE}の「禁止の並び」で「$seq」を見直してください"))
             }
             // 1d) 回避の並び(c3mn)の窓がまるごと希望固定。必須ではなく要調整として残る＝案内（neutral）。
             for (g in wishAvoidRuns(p)) {
@@ -611,7 +635,7 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.WISH,
                     "${nameOf(g.staff)} ${g.days.joinToString("・") { safeDayLabel(state.startDate, it) }} 希望「$seq」",
                     "回避の並び「$seq」に${if (one) "希望が" else "希望どうしで"}当たっています。希望は固定なので計算では外せず、要調整として残ります",
-                    "${if (one) "この希望" else "いずれか1件の希望"}を取り消すか、回避の並び「$seq」を見直してください", neutral = true))
+                    "${Place.EDIT}${Place.WISH}で本人と相談して${if (one) "この希望" else "いずれか1件の希望"}を調整する（希望は外れます。元に戻せます）か、${Place.RULE}の「回避の並び」で「$seq」を見直してください", neutral = true))
             }
         }
 
@@ -621,8 +645,8 @@ object V6SanityPort {
                 val famRaw = d.substringBefore(':')
                 val fam = c3FamilyJp(famRaw)
                 val seq = d.substringAfter(':')
-                out.add(SettingIssue(IssueKind.CONSTRAINT, "連続パターン「$seq」($fam)",
-                    "同じパターンが2重に登録されています", "連続パターン設定で「$seq」の重複行を1つ削除してください",
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "$fam「$seq」",
+                    "同じ並びが2重に登録されています", "${Place.EDIT}${Place.RULE}の「$fam」で「$seq」の重複を1つ削除してください",
                     action = SettingFixAction.DELETE_DUP_SEQ, actionLabel = "重複を1つ削除",
                     seqFamily = famRaw, seqKey = seq))
             }
@@ -634,23 +658,23 @@ object V6SanityPort {
             fun gsym(g: Int) = state.groups.getOrNull(g)?.kigou ?: "#$g"
             fun ssym(g: Int) = state.skillGroups.getOrNull(g)?.kigou ?: "#$g"
             fun bound(l: Int, u: Int) = "${if (l > 0) "$l" else ""}〜${if (u == Int.MAX_VALUE) "" else "$u"}"
-            fun <T> report(rows: List<T>, key: (T) -> List<Int>, where: (T) -> String, counted: Boolean = true) {
+            fun <T> report(rows: List<T>, key: (T) -> List<Int>, where: (T) -> String, place: String, counted: Boolean = true) {
                 for (same in rows.groupBy(key).values) {
                     val n = same.size
                     if (n < 2) continue
                     out.add(SettingIssue(IssueKind.CONSTRAINT, where(same[0]),
                         if (counted) "同じ行が${n}本あります。違反を${n}回数えるので、この決まりだけ重みが${n}倍になります"
                         else "同じ行が${n}本あります（評価は1本分で変わりません）",
-                        "制約設定でこの行の重複を削除してください（自動では消しません）"))
+                        "${Place.EDIT}${place}で、この行の重複を削除してください（自動では消しません）"))
                 }
             }
-            report(p.cons1, { listOf(it.day1, it.shiftIdx, it.day2) }, { "期間の制約「${symOf(it.shiftIdx)} ${it.day1}日で${it.day2}回以上」" })
-            report(p.cons2, { listOf(it.shiftIdx, it.count) }, { "個人の合計「${symOf(it.shiftIdx)} 合計${it.count}回以上」" })
-            report(p.cons3w, { listOf(it.wishIdx, it.prevIdx) }, { "希望の前日に禁止「${symOf(it.wishIdx)} の希望の前日は ${symOf(it.prevIdx)}」" }, counted = false)
-            report(p.cons41, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "グループのレンジ「${gsym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" })
-            report(p.cons42, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "グループペア禁止「${gsym(it.g1)}の${symOf(it.s1)} ✕ ${gsym(it.g2)}の${symOf(it.s2)}」" })
-            report(p.cons41s, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "スキルグループのレンジ「${ssym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" })
-            report(p.cons42s, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "スキルグループペア禁止「${ssym(it.g1)}の${symOf(it.s1)} ✕ ${ssym(it.g2)}の${symOf(it.s2)}」" })
+            report(p.cons1, { listOf(it.day1, it.shiftIdx, it.day2) }, { "期間の制約「${symOf(it.shiftIdx)} ${it.day1}日で${it.day2}回以上」" }, "${Place.RULE}の「期間の制約」")
+            report(p.cons2, { listOf(it.shiftIdx, it.count) }, { "個人の合計「${symOf(it.shiftIdx)} 合計${it.count}回以上」" }, "${Place.RULE}の「個人の合計」")
+            report(p.cons3w, { listOf(it.wishIdx, it.prevIdx) }, { "希望の前日に禁止「${symOf(it.wishIdx)} の希望の前日は ${symOf(it.prevIdx)}」" }, "${Place.RULE}の「希望の前日に禁止」", counted = false)
+            report(p.cons41, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "グループのレンジ「${gsym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" }, "${Place.HEAD}の「グループのレンジ」")
+            report(p.cons42, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "グループペア禁止「${gsym(it.g1)}の${symOf(it.s1)} ✕ ${gsym(it.g2)}の${symOf(it.s2)}」" }, "${Place.HEAD}の「グループペア禁止」")
+            report(p.cons41s, { listOf(it.groupIdx, it.shiftIdx, it.l, it.u) }, { "スキルグループのレンジ「${ssym(it.groupIdx)}・${symOf(it.shiftIdx)} ${bound(it.l, it.u)}」" }, "${Place.HEAD}の「スキルグループのレンジ」")
+            report(p.cons42s, { listOf(it.g1, it.s1, it.g2, it.s2) }, { "スキルグループペア禁止「${ssym(it.g1)}の${symOf(it.s1)} ✕ ${ssym(it.g2)}の${symOf(it.s2)}」" }, "${Place.HEAD}の「スキルグループペア禁止」")
         }
 
         /**
@@ -677,10 +701,10 @@ object V6SanityPort {
                     val n = forbidLen[sym] ?: continue
                     if (l < n) continue
                     out.add(SettingIssue(IssueKind.CONSTRAINT,
-                        "「$sym」の連続パターン（$famJp ${l}連続 / 禁止の並び ${n}連続）",
+                        "「$sym」の並び（$famJp ${l}連続 / 禁止の並び ${n}連続）",
                         "「$sym」を${l}連続以上にする$famJp が、「$sym」の${n}連続禁止と両立できません" +
                             "（${l}連続以上には必ず${n}連続が含まれるため、この$famJp は常に未達になります）",
-                        "「$sym」の連続数を見直すか、$famJp か禁止の並びのどちらかの行を削除してください"))
+                        "${Place.EDIT}${Place.RULE}の「$famJp」か「禁止の並び」で、「$sym」の連続数を見直すか、どちらかの行を削除してください"))
                 }
             }
             check("c3", state.cons3)
@@ -698,9 +722,9 @@ object V6SanityPort {
                 if (c.day1 > p.T) {
                     continue
                 } else if (c.day2 > c.day1) {
-                    out.add(SettingIssue(IssueKind.CONSTRAINT, "連勤/休制約「$sym ${c.day1}日で${c.day2}回以上」",
-                        "${c.day1}日の窓に${c.day2}回は物理的に不可能で、全員・全期間が違反になり続けます",
-                        "制約設定（連勤・回数）で回数を${c.day1}回以下に直すか、この行を削除してください"))
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "期間の制約「$sym ${c.day1}日で${c.day2}回以上」",
+                        "${c.day1}日間に${c.day2}回は入りきらないため、「$sym」を担当する全員が期間中ずっと違反になります",
+                        "${Place.EDIT}${Place.RULE}の「期間の制約」で回数を${c.day1}回以下に直すか、この行を削除してください"))
                 }
             }
 
@@ -737,10 +761,10 @@ object V6SanityPort {
                         // 休は「作業に回さないセル数(S*T−最小work需要)」が実在の物理上限＝供給<需要なら真の構造的不能。
                         val supply = p.S * p.T - workMinDemand
                         if (supply < demand) {
-                            out.add(SettingIssue(IssueKind.CONSTRAINT, "窓ルール「$sym を${c.day1}日で${c.day2}回以上」",
-                                "「$sym」の供給${supply}に対し必要${demand}(=担当${nCanDo}人×${c.day2}回×${disjoint}窓)で${demand - supply} 不足。" +
-                                    "どう組んでもこの窓違反(c1)は構造的に残ります（最適化では消せません）。",
-                                "作業シフトの最低人数を下げて「$sym」に回せる余地を増やすか、窓ルールの回数を下げる／日数を延ばす(制約設定)。"))
+                            out.add(SettingIssue(IssueKind.CONSTRAINT, "期間の制約「$sym ${c.day1}日で${c.day2}回以上」",
+                                "「$sym」に回せるのは${supply}回分で、必要な${demand}回分（担当${nCanDo}人×${c.day2}回×${disjoint}区間）に${demand - supply}回分足りません。" +
+                                    "この期間の制約の違反は構造的に残ります（何度つくっても消えません）",
+                                "${Place.EDIT}${Place.NEED}で作業シフトの必要人数を下げて「$sym」に回せる日を増やすか、${Place.RULE}の「期間の制約」で回数を下げるか日数を延ばしてください"))
                         }
                     } else {
                         // 非休は物理供給(担当nCanDo人×T日)>=需要が常に成立＝壁ではない。per-day 上限(need2/need1)の総和が
@@ -760,10 +784,10 @@ object V6SanityPort {
                         }
                         if (capKnown && capSum < demand) {
                             val short = demand - capSum
-                            out.add(SettingIssue(IssueKind.CONSTRAINT, "窓ルール「$sym を${c.day1}日で${c.day2}回以上」",
-                                "「$sym」の1日あたり上限の合計(${capSum})が窓ルールの必要回数(${demand})に${short}回ぶん届かず、" +
-                                    "c1 を満たすには一部の日で上限を超える配置(過剰配置)が要ります。構造的に不能ではなく、最適化は過剰配置を少し払って解消できます。",
-                                "「$sym」の1日あたり上限を上げるか、${short}回ぶんの過剰配置を許容してください。"))
+                            out.add(SettingIssue(IssueKind.CONSTRAINT, "期間の制約「$sym ${c.day1}日で${c.day2}回以上」",
+                                "「$sym」の1日あたりの上限人数の合計（${capSum}回）が、この期間の制約に要る回数（${demand}回）に${short}回分届きません。" +
+                                    "満たすには一部の日で上限を超えて入れる（人員過剰）必要があります。解けない設定ではなく、人員過剰を少し出せば解消できます",
+                                "${Place.EDIT}${Place.NEED}で「$sym」の上限人数を上げるか、${short}回分の人員過剰を許してください"))
                         }
                     }
                 }
@@ -797,10 +821,10 @@ object V6SanityPort {
                         val hi = p.rangeHi[i][shiftIdx]
                         if (hi == Int.MAX_VALUE || hi >= minNeeded) continue
                         val name = nameOf(i)
-                        out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と窓ルールの衝突",
-                            "窓ルール「$sym を$ruleDesc」を同時に満たすには最低${minNeeded}回が必要ですが、" +
-                                "${name}さんの「$sym」個人上限は${hi}回です。この人だけではどう配置しても窓ルールを満たせません",
-                            "${name}さんの「$sym」個人上限を${minNeeded}回以上に上げるか、窓ルールの回数を下げてください"))
+                        out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と期間の制約の衝突",
+                            "期間の制約「$sym $ruleDesc」を同時に満たすには最低${minNeeded}回が必要ですが、" +
+                                "${name}さんの「$sym」個人上限は${hi}回です。この人だけではどう配置しても期間の制約を満たせません",
+                            "${Place.EDIT}${Place.COUNT}で${name}さんの「$sym」の個人上限を${minNeeded}回以上に上げるか、${Place.RULE}の「期間の制約」で回数を下げてください"))
                     }
                 }
             }
@@ -812,9 +836,9 @@ object V6SanityPort {
                 val eligible = capableCount(c.shiftIdx)
                 if (eligible == 0) {
                     val sym = symOf(c.shiftIdx)
-                    out.add(SettingIssue(IssueKind.CONSTRAINT, "回数制約「$sym を${c.count}回以上」",
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "個人の合計「$sym 合計${c.count}回以上」",
                         "このシフトを担当できる職員がいないため、この制約は事実上無効です",
-                        "担当設定（グループ×シフト）で担当者を追加するか、この行を削除してください"))
+                        "${Place.EDIT}${Place.SHIFT}の担当可否でどれかのグループが「$sym」を担当できるようにするか、${Place.RULE}の「個人の合計」でこの行を削除してください"))
                 }
             }
 
@@ -822,10 +846,10 @@ object V6SanityPort {
             for ((fam, seqStr) in p.c3OverT) {
                 val famJp = c3FamilyJp(fam)
                 val negative = fam == "c3n" || fam == "c3mn"
-                out.add(SettingIssue(IssueKind.CONSTRAINT, "連続パターン「$seqStr」($famJp)",
-                    if (negative) "パターン長が期間${p.T}日を超えるため期間内に発生し得ず、この制約は無効です"
-                    else "パターン長が期間${p.T}日を超えるため物理的に充足できず、この制約は無効です",
-                    "連続パターン設定でパターンを${p.T}日以下に短縮するか、この行を削除してください"))
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「$seqStr」",
+                    if (negative) "並びの長さが期間${p.T}日を超えるため期間内に発生し得ず、この制約は無効です"
+                    else "並びの長さが期間${p.T}日を超えるため物理的に充足できず、この制約は無効です",
+                    "${Place.EDIT}${Place.RULE}の「$famJp」で並びを${p.T}日以下に短くするか、この行を削除してください"))
             }
 
             // 2m) [3.412.0/P-04] 期間より長い窓の要件 — 行は解決できるが `MirrorCore.checkC1Family` が
@@ -833,18 +857,18 @@ object V6SanityPort {
             //   連続パターン(2d)と同じ形で理由を案内する。read-only・評価不変。
             for (row in p.c1OverT) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "期間の制約「$row」",
-                    "窓の日数が期間${p.T}日を超えるため、この決まりは評価されません（今の勤務表では常に無視されます）",
-                    "窓の日数を${p.T}日以下にするか、この行を削除してください"))
+                    "日数が期間${p.T}日を超えるため、この決まりは評価されません（今の勤務表では常に無視されます）",
+                    "${Place.EDIT}${Place.RULE}の「期間の制約」で日数を${p.T}日以下にするか、この行を削除してください"))
             }
 
             // 2e) [3.309.0] 存在しないシフト記号を含む連続パターン — パース段階で無言除外されていた。
             //   シフトの改名・削除でこうなる。禁止(c3n)なら HARD 制約が黙って無効化されるため必ず案内する。
             for ((fam, seqStr) in p.c3UnknownShift) {
                 val famJp = c3FamilyJp(fam)
-                out.add(SettingIssue(IssueKind.CONSTRAINT, "連続パターン「$seqStr」($famJp)",
+                out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「$seqStr」",
                     "〈〉で囲んだ記号が今のシフト一覧にないため、この行は評価されていません" +
                         "（シフトを改名・削除するとこうなります）",
-                    "連続パターン設定でこの行の記号を今あるシフトに直すか、行を削除してください"))
+                    "${Place.EDIT}${Place.RULE}の「$famJp」でこの行の記号を今あるシフトに直すか、行を削除してください"))
             }
 
             // 2f) [3.320.0] 3.309.0 は連続パターンだけを直したが、**同じ無言除外が残り6族にもあった**
@@ -852,10 +876,12 @@ object V6SanityPort {
             //   または日数・回数が空/非数値の行は `Problem` のパース段階で捨てられ、画面にもログにも
             //   出ないまま評価対象から消えていた。窓の要件は c1(SOFT)、群ペア禁止は実データでも発火する族。
             for ((famJp, rowStr) in p.unresolvedRows) {
+                // グループ／スキルグループの族は④、期間の制約・個人の合計・希望の前日に禁止は⑤にある。
+                val section = if ("グループ" in famJp) Place.HEAD else Place.RULE
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「$rowStr」",
                     "この行は評価されていません。〈〉で囲んだ記号が今の一覧にないか、日数・回数が空か数値でない" +
                         "ためです（シフトやグループを改名・削除するとこうなります）",
-                    "制約設定でこの行を今ある記号・正しい数値に直すか、行を削除してください"))
+                    "${Place.EDIT}${section}の「$famJp」で、この行を今ある記号・正しい数値に直すか、行を削除してください"))
             }
 
             // 2g) [3.603.0/backlog#24] 休(ShiftRole.Rest)がどのシフトにも付与されていない＝
@@ -863,9 +889,9 @@ object V6SanityPort {
             //   （旧: 記号"休"の字面一致に失敗すると index0 へ黙ってフォールバックしていたが撤去済み）。
             if (state.shifts.none { it.role == ShiftRole.Rest }) {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "「休」のシフトがありません",
-                    "休みとして扱うシフトが設定されていないため、最適化・検査を実行できません" +
+                    "休みとして扱うシフトが無いため、勤務表をつくることも問題がないか調べることもできません" +
                         "（曜日の偏りや休み関連の診断も休を前提に動きます）",
-                    "シフト設定で休みのシフトを「休みとして扱う」に設定してください"))
+                    "${Place.EDIT}${Place.SHIFT}のシフト種別で休みにするシフトを開き、「休みとして扱う」をオンにしてください"))
             }
 
             // 2j) [3.349.0/ユーザー確認「最大期間一ヶ月です」] 業務前提は **職員30名以内・期間1か月(31日)以内**。
@@ -875,10 +901,10 @@ object V6SanityPort {
             //   スカラー退避へ落ち、探索が目に見えて遅くなる。**止めない**（実行できるものを止めない）。
             //   知らせるだけ＝read-only・スコアリング不変。
             if (state.dayCount > 31) {
-                val slow = if (state.dayCount > 64) "。64日を超えるとビット演算の高速経路が使えず探索が遅くなります" else ""
+                val slow = if (state.dayCount > 64) "。64日を超えると計算がかなり遅くなります" else ""
                 out.add(SettingIssue(IssueKind.DEMAND, "対象期間が1か月を超えています",
-                    "対象期間が${state.dayCount}日あります。想定は1か月（31日）以内です$slow",
-                    "基本情報で開始日・終了日を1か月以内にするか、月ごとに分けて作成してください"))
+                    "対象期間が${state.dayCount}日（${safeDayLabel(state.startDate, 0)}〜${safeDayLabel(state.startDate, state.dayCount - 1)}）あります。想定は1か月（31日）以内です$slow",
+                    "${Place.EDIT}${Place.MONTH}で月を選び直して1か月以内にするか、月ごとに分けて作成してください"))
             }
             if (state.staffCount > 30) {
                 out.add(SettingIssue(IssueKind.DEMAND, "職員数が想定を超えています",
@@ -903,24 +929,24 @@ object V6SanityPort {
                 val nm = idx.getOrNull(0)?.toIntOrNull()?.let { state.staff.getOrNull(it)?.name } ?: key
                 val sy = idx.getOrNull(1)?.toIntOrNull()?.let { state.shifts.getOrNull(it)?.kigou } ?: ""
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "個人の回数「$nm $sy」",
-                    "下限「${r.lo}」上限「${r.hi}」に数値でない値または負の値があります。その側は**制限なし**として" +
+                    "下限「${r.lo}」上限「${r.hi}」に数値でない値または負の値があります。その側は制限なしとして" +
                         "扱われるため、意図より弱い条件で計算されます",
-                    "個人の回数で数値を入れ直すか、制限しないなら空欄にしてください"))
+                    "${Place.EDIT}${Place.COUNT}で${nm}さんの「$sy」の下限・上限を数値で入れ直すか、制限しないなら空欄にしてください"))
             }
             for (sh in state.shifts) {
                 if (!badNum(sh.need1) && !badNum(sh.need2)) continue
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "必要人数「${sh.kigou}」",
                     "最低人数「${sh.need1}」上限人数「${sh.need2}」に数値でない値があります。その側は" +
-                        "**未設定（要件なし）**として扱われます",
-                    "必要人数で数値を入れ直すか、設定しないなら空欄にしてください"))
+                        "未設定（要件なし）として扱われます",
+                    "${Place.EDIT}${Place.SHIFT}のシフト種別で「${sh.kigou}」の最低人数・上限人数を数値で入れ直すか、設定しないなら空欄にしてください"))
             }
             fun checkRange(famJp: String, fam: String, rows: List<com.magi.app.model.C41Row>) {
                 for (c in rows) {
                     if (badNum(c.l) || badNum(c.u)) {
                         out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「${c.groupKigou} ${c.shiftKigou}」",
-                            "下限「${c.l}」上限「${c.u}」に数値でない値があります。その側は**制限なし**として" +
+                            "下限「${c.l}」上限「${c.u}」に数値でない値があります。その側は制限なしとして" +
                                 "扱われるため、意図より弱い条件で計算されます",
-                            "制約設定で数値を入れ直すか、制限しないなら空欄にしてください"))
+                            "${Place.EDIT}${Place.HEAD}の「$famJp」でこの行を数値で入れ直すか、制限しないなら空欄にしてください"))
                         continue
                     }
                     // [3.399.0] 下限>上限。engine は `z < l || z > u` で判定するため、l>u だと**どの人数でも
@@ -931,7 +957,7 @@ object V6SanityPort {
                         out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「${c.groupKigou} ${c.shiftKigou}」",
                             "下限$lo > 上限$hi で矛盾しています。この組み合わせは期間の全日が違反になり、" +
                                 "勤務表をどう組んでも消えません",
-                            "制約設定で下限≤上限に直してください",
+                            "${Place.EDIT}${Place.HEAD}の「$famJp」で下限を上限以下に直してください",
                             action = SettingFixAction.CLAMP_GROUP_RANGE_LO,
                             actionLabel = "下限を${hi}に下げる",
                             newLo = hi.toString(), groupRangeFamily = fam, groupRangeRow = c))
@@ -954,8 +980,8 @@ object V6SanityPort {
                 }
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "日別の$jp",
                     "${bad.size}件（$where${if (bad.size > Guidance.PREVIEW) " ほか" else ""}）が数値ではありません。" +
-                        "その日は**シフトの既定値**で計算されます（例外を設定したつもりでも効きません）",
-                    "日別の必要人数で数値を入れ直すか、例外にしないなら削除してください"))
+                        "その日は標準の必要人数で計算されます（例外を設定したつもりでも効きません）",
+                    "${Place.EDIT}${Place.NEED}でその日の必要人数を数値で入れ直すか、例外にしないなら${Place.NEED_DAYS}で削除してください"))
             }
             run {
                 val bad = ArrayList<String>()
@@ -968,8 +994,8 @@ object V6SanityPort {
                 if (bad.isNotEmpty()) {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "適切回数（1人あたりの目標）",
                         "${bad.size}件（${bad.take(Guidance.PREVIEW).joinToString("・")}${if (bad.size > Guidance.PREVIEW) " ほか" else ""}）が" +
-                            "数値ではありません。**目標なし**として扱われます",
-                        "回数設定で数値を入れ直すか、目標にしないなら空欄にしてください"))
+                            "数値ではありません。目標なしとして扱われます",
+                        "${Place.EDIT}${Place.COUNT}で目標を数値で入れ直すか、目標にしないなら空欄にしてください"))
                 }
             }
         }
@@ -989,7 +1015,7 @@ object V6SanityPort {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "スキルグループの割当",
                         "${bad.size}名（$names${if (bad.size > Guidance.NAME_PREVIEW) " ほか" else ""}）のスキルグループが今の一覧の範囲外です。" +
                             "この職員はスキルグループのルールから外れて計算されます",
-                        "職員管理でスキルグループを選び直すか、所属させないなら「(なし)」にしてください"))
+                        "${Place.EDIT}${Place.STAFF}でスキルグループを選び直すか、所属させないなら「(なし)」にしてください"))
                 }
             }
 
@@ -1007,7 +1033,7 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "グループの割当",
                     "${bad.size}名（$names${if (bad.size > Guidance.NAME_PREVIEW) " ほか" else ""}）のグループが今の一覧の範囲外です。" +
                         "計算では「$head」に所属しているものとして扱っています＝担当できるシフトが意図と違います",
-                    "職員管理でグループを選び直してください"))
+                    "${Place.EDIT}${Place.STAFF}で名前を押し、グループを選び直してください"))
             }
 
             // 2l) [3.410.0/W-03] 担当できるシフトが1つも無いグループ。`Ws1Ops.setGroupShift` は全部 OFF に
@@ -1023,7 +1049,7 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "担当できるシフト",
                     "グループ「$gname」（${members}名）は担当できるシフトが1つもありません。この職員は休しか置けず、" +
                         "必要人数のある日はすべて人員不足になります",
-                    "年間マスターの「担当可否（グループ × シフト）」で担当するシフトを選んでください"))
+                    "${Place.EDIT}${Place.SHIFT}の担当可否で、グループ「$gname」が担当するシフトを選んでください"))
             }
         }
 
@@ -1050,7 +1076,7 @@ object V6SanityPort {
                     val need = short.first().second
                     out.add(SettingIssue(IssueKind.DEMAND, "全日 $sym",
                         "必要${need}人ですが担当できるのは${capable}人だけです",
-                        "担当できる職員を増やすか、必要人数を${capable}人以下に下げてください",
+                        "${Place.EDIT}${Place.NEED}で「$sym」の標準の必要人数を${capable}人以下に下げるか、${Place.SHIFT}の担当可否で担当できる職員を増やしてください",
                         action = SettingFixAction.CAP_DEMAND, actionLabel = "必要数を${capable}人に下げる",
                         demandShiftIdx = k, demandCap = capable))
                     continue
@@ -1058,7 +1084,7 @@ object V6SanityPort {
                 for ((j, need, capable) in short) {
                     out.add(SettingIssue(IssueKind.DEMAND, "${safeDayLabel(state.startDate, j)} $sym",
                         "必要${need}人ですが担当できるのは${capable}人だけです",
-                        "担当できる職員を増やすか、必要人数を${capable}人以下に下げてください",
+                        "${Place.EDIT}${Place.NEED}で「$sym」のこの日の必要人数を${capable}人以下に下げるか、${Place.SHIFT}の担当可否で担当できる職員を増やしてください",
                         action = SettingFixAction.CAP_DEMAND, actionLabel = "必要数を${capable}人に下げる",
                         demandShiftIdx = k, demandCap = capable, demandDayIdx = j))
                 }
@@ -1075,19 +1101,21 @@ object V6SanityPort {
                 val name = i?.let { state.staff.getOrNull(it)?.name } ?: "#$i"
                 val sym = k?.let { state.shifts.getOrNull(it)?.kigou } ?: "$k"
                 if (i == null || k == null || i !in 0 until p.S || k !in 0 until p.K) {
-                    out.add(SettingIssue(IssueKind.RANGE, "回数設定 $key", "対象職員/シフトが範囲外です", "設定で正しい職員・シフトに付け直してください"))
+                    out.add(SettingIssue(IssueKind.RANGE, "個人の回数「$key」", "対象職員/シフトが範囲外です", "${Place.EDIT}${Place.COUNT}で正しい職員・シフトに付け直してください"))
                     continue
                 }
                 rangeOrderConflict(r.lo, r.hi)?.let { (cLo, cHi) ->
-                    out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限$cLo > 上限$cHi で矛盾しています", "設定で下限≤上限に直してください",
+                    out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限$cLo > 上限$cHi で矛盾しています", "${Place.EDIT}${Place.COUNT}で${name}さんの「$sym」の下限を上限以下に直してください",
                         action = SettingFixAction.CLAMP_RANGE_LO, actionLabel = "下限を${cHi}に下げる", rangeKey = key, newLo = cHi.toString()))
                 }
                 if (lo != null && lo > 0 && !p.canDo(i, k)) {
-                    out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "担当できないシフトに下限${lo}が設定されています", "下限を0にするか、${name}さんの担当に「$sym」を追加してください",
+                    val gsym = state.groups.getOrNull(p.sgrp[i])?.kigou ?: "?"
+                    out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "担当できないシフトに下限${lo}が設定されています",
+                        "${Place.EDIT}${Place.COUNT}で下限を0にするか、${Place.SHIFT}の担当可否でグループ「$gsym」が「$sym」を担当できるようにしてください",
                         action = SettingFixAction.ZERO_RANGE_LO, actionLabel = "下限を0にする", rangeKey = key, newLo = "0"))
                 }
                 if (lo != null && lo > p.T) {
-                    out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限${lo}が期間日数(${p.T}日)を超えています", "下限を${p.T}以下に直してください",
+                    out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」回数", "下限${lo}が期間日数(${p.T}日)を超えています", "${Place.EDIT}${Place.COUNT}で${name}さんの「$sym」の下限を${p.T}以下に直してください",
                         action = SettingFixAction.CLAMP_RANGE_LO, actionLabel = "下限を${p.T}に下げる", rangeKey = key, newLo = p.T.toString()))
                 }
             }
@@ -1095,18 +1123,19 @@ object V6SanityPort {
             // 5) 1人の各シフト下限の合計が期間日数を超える（割り当て不能）
             for (i in 0 until p.S) {
                 var sumLo = 0
+                val parts = ArrayList<String>()
                 for (k in 0 until p.K) {
                     val lo = p.rangeLo[i][k]
                     // [3.475.0/論理監査] チェッカーの low は canDo 必須（担当できないシフトの下限は評価上ゼロ＝
                     //   検査4が別途案内する）。合算に含めると「担当可の下限を下げろ」と誤った指示になる。
                     //   restCapacity と同じ canDo ガードに揃える。
-                    if (lo != Int.MIN_VALUE && lo > 0 && p.canDo(i, k)) sumLo += lo
+                    if (lo != Int.MIN_VALUE && lo > 0 && p.canDo(i, k)) { sumLo += lo; parts.add("${symOf(k)} ${lo}回") }
                 }
                 if (sumLo > p.T) {
                     val name = nameOf(i)
                     out.add(SettingIssue(IssueKind.RANGE, "$name の回数下限の合計",
-                        "各シフトの下限の合計が${sumLo}で、期間日数(${p.T}日)を超えています",
-                        "どれかのシフトの下限を下げてください（合計を${p.T}以下に）"))
+                        "各シフトの下限の合計が${sumLo}回（${parts.joinToString("・")}）で、期間日数(${p.T}日)を超えています",
+                        "${Place.EDIT}${Place.COUNT}で${name}さんのどれかのシフトの下限を下げ、合計を${p.T}以下にしてください"))
                 }
             }
         }
@@ -1150,12 +1179,12 @@ object V6SanityPort {
                 if ((k == p.restIdx || capKnown) && loSum > loCapacity) {
                     out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の回数下限の合計",
                         if (k == p.restIdx)
-                            "担当者の下限の合計が${loSum}回ですが、他シフトの個人下限を差し引いた「$sym」の" +
+                            "担当${capable}人の下限の合計が${loSum}回ですが、他シフトの個人下限を差し引いた「$sym」の" +
                                 "最大可能日数の合計は${loCapacity}回しかありません。全員の下限は同時に満たせず、下限割れが必ず出ます"
                         else
-                            "担当者の下限の合計が${loSum}回ですが、必要数の合計は${loCapacity}回しかありません。全員の下限は同時に満たせず、過剰配置か下限割れが必ず出ます",
-                        if (k == p.restIdx) "「$sym」の個人下限を下げるか、他シフトの個人下限を見直してください"
-                        else "「$sym」の個人下限を下げるか、必要人数を増やしてください"))
+                            "担当${capable}人の下限の合計が${loSum}回ですが、必要数の合計は${loCapacity}回しかありません。全員の下限は同時に満たせず、人員過剰か下限割れが必ず出ます",
+                        if (k == p.restIdx) "${Place.EDIT}${Place.COUNT}で「$sym」の個人下限を下げるか、他シフトの個人下限を見直してください"
+                        else "${Place.EDIT}${Place.COUNT}で「$sym」の個人下限を下げるか、${Place.NEED}で「$sym」の必要人数を増やしてください"))
                 }
                 // B) 全担当者に上限があり、上限の合計 < 必要数。
                 //   [3.406.0] 旧文言は「人員不足(covU)が不可避」と断定していたが、**個人上限は SOFT(high)で
@@ -1167,10 +1196,10 @@ object V6SanityPort {
                 if (capable > 0 && allCapped && capSum < seatsLo) {
                     val gap = seatsLo - capSum
                     out.add(SettingIssue(IssueKind.DEMAND, "「$sym」の必要人数",
-                        "必要数の合計は${seatsLo}回ですが、担当者の上限の合計は${capSum}回しかありません。" +
+                        "必要数の合計は${seatsLo}回ですが、担当${capable}人の上限の合計は${capSum}回しかありません。" +
                             "個人上限を守る限り${gap}回ぶんは埋まりません（実際には人員不足と上限超過が" +
                             "合わせて${gap}回ぶん必ず残ります。どちらに出るかは他の条件との兼ね合いで決まります）",
-                        "「$sym」の個人上限を上げる/担当者を増やすか、必要人数を下げてください"))
+                        "${Place.EDIT}${Place.COUNT}で「$sym」の個人上限を上げるか、${Place.SHIFT}の担当可否で担当者を増やすか、${Place.NEED}で必要人数を下げてください"))
                 }
             }
             // C) 適切回数(apt=職員のレパートリー目標)の合計 > それを受け止められる上限 → 全員の目標を満たすと
@@ -1183,13 +1212,13 @@ object V6SanityPort {
                 if (!b.overloaded) continue
                 out.add(SettingIssue(IssueKind.DEMAND, "「${b.kigou}」の適切回数の合計",
                     if (b.isRest)
-                        "適切回数(レパートリー目標)の合計が${b.aptSum}回ですが、他シフトの個人下限を差し引いた「${b.kigou}」の" +
+                        "担当者の適切回数（1人あたりの目標）の合計が${b.aptSum}回ですが、他シフトの個人下限を差し引いた「${b.kigou}」の" +
                             "最大可能日数の合計は${b.capacity}回しかありません。全員の目標は同時に満たせず、目標割れか過剰配置が必ず出ます"
                     else
-                        "適切回数(レパートリー目標)の合計が${b.aptSum}回ですが、必要数の合計は${b.capacity}回しかありません。" +
-                            "全員の目標は同時に満たせず、目標割れか過剰配置が必ず出ます",
-                    if (b.isRest) "「${b.kigou}」の適切回数を下げるか、他シフトの個人下限を見直してください"
-                    else "「${b.kigou}」の適切回数を下げるか、必要人数を増やしてください"))
+                        "担当者の適切回数（1人あたりの目標）の合計が${b.aptSum}回ですが、必要数の合計は${b.capacity}回しかありません。" +
+                            "全員の目標は同時に満たせず、目標割れか人員過剰が必ず出ます",
+                    if (b.isRest) "${Place.EDIT}${Place.COUNT}で「${b.kigou}」の適切回数を下げるか、他シフトの個人下限を見直してください"
+                    else "${Place.EDIT}${Place.COUNT}で「${b.kigou}」の適切回数を下げるか、${Place.NEED}で「${b.kigou}」の必要人数を増やしてください"))
             }
         }
 
@@ -1215,7 +1244,7 @@ object V6SanityPort {
                         out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」適切回数",
                             "担当できるシフトの構成上、他の担当シフトの個人上限（合計${otherHiSum}回）を守る限り「$sym」は最低${forcedMin}回になります（${p.T}日を埋めきれないぶんが必ず回ってくる）。" +
                                 "設定の適切回数${t}回には届かないため、計算では${p.apt[i][k]}回を目標として扱っています（差${forcedMin - t}回は違反には出ません）",
-                            "「$sym」の適切回数を${forcedMin}回以上にするか空欄にする、または他シフトの担当・上限を見直してください"))
+                            "${Place.EDIT}${Place.COUNT}で「$sym」の適切回数を${forcedMin}回以上にするか空欄にする、または他シフトの担当・上限を見直してください"))
                     }
                 }
             }
@@ -1235,14 +1264,14 @@ object V6SanityPort {
                 for (k in 0 until p.K) {
                     val t = p.aptRaw[i][k]   // [3.508.0] 6b と同じく設定した目標で判定
                     if (t < 0 || !p.canDo(i, k)) continue
-                    var wished = 0
-                    for (j in 0 until p.T) if (p.wishFixed(i, j) && p.wish[i][j] == k) wished++
+                    val days = wishedDays(i, k)
+                    val wished = days.size
                     if (wished > t) {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "$name の「$sym」適切回数と希望",
-                            "「$sym」の希望が${wished}件あり、適切回数の目標${t}回を超えています。希望どおりに配置する限り" +
+                            "「$sym」の希望が${wished}件（${daysText(days)}）あり、適切回数の目標${t}回を超えています。希望どおりに配置する限り" +
                                 "「$sym」は必ず${wished}回以上になります。計算では${p.apt[i][k]}回を目標として扱うため差${wished - t}回は違反には出ませんが、設定の目標には届きません",
-                            "「$sym」の適切回数を${wished}回以上にするか、${name}さんの「$sym」の希望を${wished - t}件減らしてください"))
+                            "${Place.EDIT}${Place.COUNT}で「$sym」の適切回数を${wished}回以上にするか、${Place.WISH}で${name}さんと相談して「$sym」の希望を${wished - t}件減らしてください"))
                     }
                 }
             }
@@ -1269,7 +1298,7 @@ object V6SanityPort {
                             else "代用要員候補: ${substitutes.joinToString("・")}"
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」上限と担当構成の衝突",
                             "担当できるシフトの構成上、「$sym」は最低${forcedMin}回になります（他の担当シフトの上限合計${otherHiSum}回では${p.T}日を埋めきれません）が、${name}さんの「$sym」上限は${hi}回です。この人が担当を続ける限り上限超過は必ず出ます。$subText",
-                            "${name}さんを「$sym」の担当から外し代用要員に置き換えるか、上限を${forcedMin}回以上に上げてください"))
+                            "${Place.EDIT}${Place.STAFF}で所属グループを変えて${name}さんを「$sym」の担当から外し代用要員に置き換えるか、${Place.COUNT}で上限を${forcedMin}回以上に上げてください"))
                     }
                 }
             }
@@ -1282,19 +1311,19 @@ object V6SanityPort {
                 for (k in 0 until p.K) {
                     val hi = p.rangeHi[i][k]
                     if (hi == Int.MAX_VALUE || !p.canDo(i, k)) continue
-                    var wished = 0
-                    for (j in 0 until p.T) if (p.wishFixed(i, j) && p.wish[i][j] == k) wished++
+                    val days = wishedDays(i, k)
+                    val wished = days.size
                     if (wished > hi && hi == 0) {
                         // 上限 0 は意図した「入れない指定」（3.507.0）＝設定ミスと呼ばない。
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「${symOf(k)}」",
-                            "個人の上限0（入れない指定）に希望が${wished}件載っています。残るのは要調整です",
-                            "希望を変えるか、設定で上限を見直してください", neutral = true))
+                            "個人の上限0（入れない指定）に希望が${wished}件（${daysText(days)}）載っています。残るのは要調整です",
+                            "${Place.EDIT}${Place.WISH}で${name}さんと相談して希望を調整するか、${Place.COUNT}で上限を見直してください", neutral = true))
                     } else if (wished > hi) {
                         val sym = symOf(k)
                         out.add(SettingIssue(IssueKind.RANGE, "${name}さんの「$sym」個人上限と希望の衝突",
-                            "「$sym」の希望が${wished}件あり、個人上限${hi}回を超えています。希望どおりに配置する限り" +
+                            "「$sym」の希望が${wished}件（${daysText(days)}）あり、個人上限${hi}回を超えています。希望どおりに配置する限り" +
                                 "「$sym」は必ず${wished}回以上になるため、上限超過は解消できません",
-                            "${name}さんの「$sym」個人上限を${wished}回以上に上げるか、「$sym」の希望を${wished - hi}件減らしてください"))
+                            "${Place.EDIT}${Place.COUNT}で${name}さんの「$sym」の個人上限を${wished}回以上に上げるか、${Place.WISH}で${name}さんと相談して「$sym」の希望を${wished - hi}件減らしてください"))
                     }
                 }
             }
@@ -1304,10 +1333,11 @@ object V6SanityPort {
             // 7) [事前診断/配布不可] ある日に「そのシフトを担当できる人数」より必要人数が多い＝どう割り当てても
             //    人員不足(covU=HARD)が確定＝配布不可。最適化の hardFloor と同じ forcedCovU で検出（誤検知ゼロ）。
             for (fc in forcedCovU(state, p)) {
-                out.add(SettingIssue(IssueKind.DEMAND, "「${fc.shiftSymbol}」の担当者不足（配布不可の原因）",
-                    "${fc.cells}日で、担当できる人数より必要人数が多く、人員不足(covU)が必ず出ます（不足の合計${fc.amount}）。この不足は最適化では解消できません" +
+                val days = (0 until p.T).filter { j -> p.covUCell(fc.shiftIndex, j, placeableFor(p, fc.shiftIndex, j)) > 0 }
+                out.add(SettingIssue(IssueKind.DEMAND, "「${fc.shiftSymbol}」の担当者不足（${Guidance.FORCED_SHORT_MARK}）",
+                    "${fc.cells}日（${daysText(days)}）で、「${fc.shiftSymbol}」を担当できる人数より必要人数が多く、「${fc.shiftSymbol}」の人員不足が合計${fc.amount}人必ず残ります" +
                         (if (zeroCapInShortfall(p, fc)) "。$ZERO_CAP_SHORTFALL_NOTE" else ""),
-                    "「${fc.shiftSymbol}」を担当できる職員を増やすか、その日の必要人数を下げてください"))
+                    "${Place.EDIT}${Place.SHIFT}の担当可否で「${fc.shiftSymbol}」を担当できる職員を増やすか、${Place.NEED}でその日の「${fc.shiftSymbol}」の必要人数を下げてください"))
             }
         }
 
@@ -1321,22 +1351,22 @@ object V6SanityPort {
                 for (d in dups(state.staff.map { nameMatchKey(it.name) })) {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "職員名の重複「$d」",
                         "同名（空白を除き一致）の職員が複数います。制約とCSV取込は最初の1人に解決され、2人目以降は区別できません",
-                        "氏名を一意にしてください（例: 姓名の間や末尾に識別子を付ける）"))
+                        "${Place.EDIT}${Place.STAFF}で名前を押し、氏名を一意にしてください（例: 姓名の間や末尾に識別子を付ける）"))
                 }
                 for (d in dups(state.shifts.map { it.kigou.trim() })) {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "シフト記号の重複「$d」",
                         "同じ記号のシフトが複数あります。制約とCSV取込は最初の1件に解決され、2件目以降は参照されません",
-                        "シフト記号を一意にしてください"))
+                        "${Place.EDIT}${Place.SHIFT}のシフト種別で記号を一意にしてください"))
                 }
                 for (d in dups(state.groups.map { it.kigou.trim() })) {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "グループ記号の重複「$d」",
                         "同じ記号のグループが複数あります。制約とCSV取込は最初の1件に解決されます",
-                        "グループ記号を一意にしてください"))
+                        "${Place.EDIT}${Place.SHIFT}のグループで記号を一意にしてください"))
                 }
                 for (d in dups(state.skillGroups.map { it.kigou.trim() })) {
                     out.add(SettingIssue(IssueKind.CONSTRAINT, "スキルグループ記号の重複「$d」",
                         "同じ記号のスキルグループが複数あります。制約とCSV取込は最初の1件に解決されます",
-                        "スキルグループ記号を一意にしてください"))
+                        "${Place.EDIT}${Place.SKILL}で記号を一意にしてください"))
                 }
             }
         }
@@ -1355,7 +1385,7 @@ object V6SanityPort {
                         "希望「${staffName(it.staff)} ${safeDayLabel(state.startDate, it.day)}=${sym(it.shift)}」"
                     is ConstraintMus.RangeCap -> "個人上限「${sym(it.shift)}を最大${it.hi}回」"
                     is ConstraintMus.RangeFloor -> "個人下限「${sym(it.shift)}を最低${it.lo}回」"
-                    is ConstraintMus.WindowRule -> "窓ルール「${sym(it.shift)}を${it.windowDays}日で${it.minCount}回以上」"
+                    is ConstraintMus.WindowRule -> "期間の制約「${sym(it.shift)} ${it.windowDays}日で${it.minCount}回以上」"
                     is ConstraintMus.DayNeed -> "必要人数「${sym(it.shift)}に${it.need}人」"
                 }
                 fun relaxHint(it: ConstraintMus.Item): String = when (it) {
@@ -1363,17 +1393,23 @@ object V6SanityPort {
                         "${staffName(it.staff)}さんの${safeDayLabel(state.startDate, it.day)}の希望を調整する"
                     is ConstraintMus.RangeCap -> "「${sym(it.shift)}」の個人上限を上げる"
                     is ConstraintMus.RangeFloor -> "「${sym(it.shift)}」の個人下限を下げる"
-                    is ConstraintMus.WindowRule -> "窓ルール「${sym(it.shift)} ${it.windowDays}日で${it.minCount}回以上」の回数を下げる"
-                    is ConstraintMus.DayNeed -> "${sym(it.shift)}の必要人数を下げる"
+                    is ConstraintMus.WindowRule -> "期間の制約「${sym(it.shift)} ${it.windowDays}日で${it.minCount}回以上」の回数を下げる"
+                    is ConstraintMus.DayNeed -> "「${sym(it.shift)}」の必要人数を下げる"
+                }
+                fun relaxPlace(it: ConstraintMus.Item): String = when (it) {
+                    is ConstraintMus.WishPin -> Place.WISH
+                    is ConstraintMus.RangeCap, is ConstraintMus.RangeFloor -> Place.COUNT
+                    is ConstraintMus.WindowRule -> Place.RULE
+                    is ConstraintMus.DayNeed -> Place.NEED
                 }
                 fun hasWish(core: List<ConstraintMus.Item>) = core.any { it is ConstraintMus.WishPin }
                 for (sc in ConstraintMus.analyzeStaffConflicts(p).filter { hasWish(it.core) }.sortedBy { it.core.size }.take(Guidance.MUS_TOP)) {
                     val name = staffName(sc.staff)
                     val labels = sc.core.joinToString(" ・ ") { itemLabel(it) }
-                    val hints = sc.core.take(2).joinToString(" / ") { relaxHint(it) }
+                    val hints = sc.core.take(2).joinToString(" / ") { "${relaxPlace(it)}で${relaxHint(it)}" }
                     out.add(SettingIssue(IssueKind.WISH, "${name}さんの希望と条件の組合せ",
                         "次の${sc.core.size}件は同時に成立しません: $labels",
-                        "いずれか1件を緩めてください（例: $hints）"))
+                        "${Place.TAB}で、いずれか1件を緩めてください（例: $hints）"))
                 }
                 // 日別の証明（ConstraintMus の canServe）はコアで希望固定されていない人を mayPlace で数える＝上限 0 の人を前提として名指しする。
                 fun capZeroNote(dc: ConstraintMus.DayConflict): String {
@@ -1389,7 +1425,7 @@ object V6SanityPort {
                     val wishHint = dc.core.firstOrNull { it is ConstraintMus.WishPin }?.let { relaxHint(it) }
                     out.add(SettingIssue(IssueKind.WISH, "${safeDayLabel(state.startDate, dc.day)} の必要人数と固定希望の衝突",
                         "固定された希望の組合せでは、この日の必要人数を満たせません。次の${dc.core.size}件は同時に成立しません: $labels" + capZeroNote(dc),
-                        "この日の希望を1件調整するか、必要人数を下げてください" + (wishHint?.let { "（例: $it）" } ?: "")))
+                        "${Place.EDIT}${Place.WISH}で本人と相談してこの日の希望を1件調整するか、${Place.NEED}でこの日の必要人数を下げてください" + (wishHint?.let { "（例: $it）" } ?: "")))
                 }
             }
         }
@@ -1400,9 +1436,9 @@ object V6SanityPort {
             run {
                 val soft = Evaluator(p).fullEvalParts(normalizeSchedule(state.schedule.toIntArray2D(), p))[1]
                 if (soft >= Guidance.SOFT_OVERFLOW) {
-                    out.add(SettingIssue(IssueKind.CONSTRAINT, "SOFT違反の合計が過大（${soft}）",
-                        "調整項(SOFT)の合計がスコア上限 1,000,000 に接近しており、必須(HARD)違反ゼロを最優先する評価が崩れる恐れがあります",
-                        "解消不能な制約（回数>日数の連勤条件など）や、多数の同時禁止(C42)・広すぎる範囲制約を見直して調整項を減らしてください"))
+                    out.add(SettingIssue(IssueKind.CONSTRAINT, "要調整の合計点が大きすぎます（${soft}）",
+                        "要調整の合計点が上限の 1,000,000 に近く、必須違反を0件にすることを最優先する計算が崩れるおそれがあります",
+                        "${Place.EDIT}${Place.RULE}の解けない決まり（日数より回数が多い期間の制約など）や、${Place.HEAD}の多数のグループペア禁止・広すぎる範囲の決まりを見直して、要調整を減らしてください"))
                 }
             }
         }
@@ -1411,7 +1447,7 @@ object V6SanityPort {
         fun sorted(): List<SettingIssue> {
             return out.sortedBy { iss ->
                 when {
-                    iss.where.contains("配布不可") -> 0   // covU 確定＝配布不可（最優先）
+                    iss.where.contains(Guidance.FORCED_SHORT_MARK) -> 0   // covU 確定（最優先）
                     iss.kind == IssueKind.WISH -> 1        // 実現不能希望
                     iss.kind == IssueKind.DEMAND -> 2      // 過拘束（下限/上限/適切回数 vs 必要数）
                     iss.kind == IssueKind.RANGE -> 3       // 範囲の矛盾

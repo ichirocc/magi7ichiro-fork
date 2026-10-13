@@ -30,7 +30,7 @@ object ExtWishRules {
     fun sanitize(state: MagiState, input: ExtWish, existing: List<ExtWish> = state.extWishes): Saved {
         val notes = ArrayList<String>()
         val i = input.staff
-        if (i !in state.staff.indices) return Saved(null, listOf("存在しない職員の拡張希望は保存しない"))
+        if (i !in state.staff.indices) return Saved(null, listOf("この職員が職員一覧に見つかりません"))
         val days = LinkedHashSet<Int>()
         for (d in input.days) { val j = dayIndex(state, d); if (j == null) notes.add("期間外の日付 $d を外した") else days.add(j) }
         val kigou = state.shifts.map { it.kigou }
@@ -38,19 +38,21 @@ object ExtWishRules {
         for (s in input.shifts) { if (s in kigou) shifts.add(s) else notes.add("存在しないシフト記号 $s を外した") }
         val wd = wishDays(state, i)
         if (days.any { it in wd }) { days.removeAll(wd); notes.add(MSG_WISH_DAY) }
-        if (days.isEmpty() || shifts.isEmpty()) return Saved(null, notes + "日か禁止シフトが残らないので保存しない")
+        if (days.isEmpty() || shifts.isEmpty()) return Saved(null, notes + (
+            if (days.isEmpty()) "登録できる日が残りません（希望のある日と期間の外の日は入れられません）"
+            else "以外にするシフトが残りません（シフト一覧に無い記号は入れられません）"))
         val p = cachedProblem(state)
         val banned = shifts.map { kigou.indexOf(it) }.toSet()
         // 置けるシフトは、同じ職員の既存の件と合わせた禁止（探索が使う和集合）で日ごとに見る。
         val existingBan = banTable(state.copy(extWishes = existing), state.staffCount, state.dayCount, state.shiftCount)
         for (j in days) {
             if ((0 until p.K).none { it !in banned && !existingBan.banned(i, j, it) && p.mayPlace(i, it) }) {
-                return Saved(null, notes + "${j + 1}日に置けるシフトが残らないので保存しない")
+                return Saved(null, notes + "${formatDay(state.startDate, j)} に入れられるシフトが残りません（ほかのシフトは担当外・上限 0・既にある拡張希望のどれかで入れられません）")
             }
         }
         val out = ExtWish(i, days.sorted().map { dateOf(state, it) }, kigou.filter { it in shifts })
         if (existing.any { it.staff == i && it.days.toSet() == out.days.toSet() && it.shifts.toSet() == out.shifts.toSet() }) {
-            return Saved(null, notes + "同じ日と同じ禁止シフトの拡張希望が既にある")
+            return Saved(null, notes + "同じ日・同じシフトの拡張希望が既にあります")
         }
         return Saved(out, notes)
     }

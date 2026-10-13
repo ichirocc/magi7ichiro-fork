@@ -111,7 +111,7 @@ class V6PortAnalyzerTest {
         val diag = V6PortAnalyzer.diagnoseCoverage(cascadeChainState(cWished = false))
         val sf = diag.shortfalls.single { it.shiftIndex == 1 }
         assertTrue("玉突き候補が本当に解消できるときは従来どおりの案内",
-            sf.reason.contains("玉突き=ブロック移動") && sf.reason.contains("必要"))
+            sf.reason.contains("複数人を順に入れ替える手（玉突き）") && sf.reason.contains("必要"))
         assertTrue("「どう組んでも解消できません」は出さない", !sf.reason.contains("どう組んでも"))
     }
 
@@ -358,7 +358,7 @@ class V6PortAnalyzerTest {
     }
 
     // 需要も希望も無い盤面の禁止連続は、どのセルも休へ変えるだけで安全に崩せる＝FREE。
-    // FREE を含む run は「探索未到達の可能性」として案内される（もし残っていたら本物のシグナル）。
+    // FREE を含む run は「『直し方を探す』で直せる」と案内される（もし残っていたら探索未到達の本物のシグナル）。
     @Test
     fun diagnoseForbiddenRunsMarksFreelyBreakableRunAsEscapable() {
         val st = forbiddenState(
@@ -370,7 +370,7 @@ class V6PortAnalyzerTest {
         val run = diag.runs.single()
         assertTrue("安全な代替がある run は escapable", run.escapable)
         assertTrue(run.cells.any { it.escape == ForbiddenCellEscape.FREE })
-        assertTrue("探索未到達の案内", run.hint.contains("探索未到達"))
+        assertTrue("直し方を探すへの案内", run.hint.contains("『直し方を探す』で直せます"))
     }
 
     // 両セルとも本人希望どおり＝動かすと c3n −1 / pref +1 で HARD 件数が減らず、探索は希望セルを動かさない（設計どおり）。

@@ -8,7 +8,7 @@ class KeptResultTextTest {
     @Test fun weightedDecidesWhenTotalDropped() {
         val now = Score(5, 48412.4, 369); val prev = Score(5, 48230.0, 376)
         assertEquals(
-            "今回（必須5・重み48,412・合計369）は前回（必須5・重み48,230・合計376）より改善しませんでした（重みが大きいため。比べる順＝必須→重み→合計）。前回の結果を維持します。",
+            "前回の結果を維持します。今回（必須5・重み48,412・合計369）は前回（必須5・重み48,230・合計376）より改善しませんでした（重みが大きいため。比べる順＝必須→重み→合計）。",
             KeptResultText.screen(now, prev),
         )
         assertEquals(

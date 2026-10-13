@@ -8,7 +8,7 @@ import com.magi.app.model.MagiState
  */
 object CsvPartialImport {
     const val NOTHING_READABLE = "取り込める行がありませんでした（引用符が閉じていません）"
-    const val STALE = "盤面が変わったため取込をやめました。もう一度取り込んでください"
+    const val STALE = "勤務表か設定が変わったため、取込をやめました。もう一度取り込んでください"
     const val CANCELLED = "取込をやめました"
     const val CONFIRM_LABEL = "この部分だけ取り込む"
     const val CANCEL_LABEL = "やめる"

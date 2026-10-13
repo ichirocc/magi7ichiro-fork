@@ -103,7 +103,7 @@ fun MagiViewModel.setStaffRange(i: Int, k: Int, lo: String, hi: String) {
  * @param loDelta 下限へ足す量（負で緩める）。@param hiDelta 上限へ足す量（正で緩める）。
  */
 fun MagiViewModel.relaxStaffRangePin(i: Int, k: Int, loDelta: Int, hiDelta: Int) {
-    if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は回数を変更できません。終わってから試してください。") }; return }
+    if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${opNm(i)}さんの「${opSy(k)}」の回数は変更できません（${busyWhat()}の実行中）。終わるか「やめる」を押してから試してください。") }; return }
     val st = state ?: return
     val cur = st.staffRange["$i,$k"] ?: return
     val lo = cur.lo.trim().toIntOrNull() ?: return
@@ -221,7 +221,7 @@ fun MagiViewModel.clearGroupRangeSection(g: Int) {
     }
     if (cleared == 0) return
     val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
-    val done = "$gname のグループ上下限をまとめて解除しました（${targets.size}件・${cleared}名ぶん・「元に戻す」で戻せます）"
+    val done = "$gname の${targets.joinToString("") { "「${opSy(it.k)}」" }}のグループ上下限をまとめて解除しました（${targets.size}件・${cleared}名ぶん・「元に戻す」で戻せます）"
     logOp("I", done)
     applyStructure(stNew, notice = done)
 }
@@ -303,7 +303,7 @@ fun MagiViewModel.setWish(i: Int, j: Int, k: Int) {
     val st = state ?: return
     com.magi.app.v6.ExtWishRules.wishBlockedBy(st, i, j)?.let {
         logOp("W", "希望設定: ${opNm(i)} ${j + 1}日 — $it")
-        _ui.update { u -> u.copy(messageIsError = true, message = "${opNm(i)} ${DayText.short(st.startDate, j)} は拡張希望の指定日なので、希望は入れられません") }
+        _ui.update { u -> u.copy(messageIsError = true, message = "${opNm(i)}さんの ${DayText.full(st.startDate, j)} は拡張希望の指定日なので、希望は入れられません。$EXT_WISH_REMEDY") }
         return
     }
     val m = st.wishes.toMutableMap()
@@ -326,22 +326,41 @@ fun MagiViewModel.setWishesForDays(staffIdx: Int?, days: List<Int>, k: Int) {
     val m = st.wishes.toMutableMap()
     val staffRange = if (staffIdx != null) listOf(staffIdx) else cachedProblem(st).let { p -> st.staff.indices.filter { p.canDo(it, k) } }
     if (staffRange.isEmpty()) return
-    var blocked = 0
+    var blocked = 0; var placed = 0; var changed = 0
+    val blockedStaff = sortedSetOf<Int>(); val blockedDays = sortedSetOf<Int>()
     for (i in staffRange) for (j in days) if (i in st.staff.indices && j in 0 until st.dayCount) {
-        if (com.magi.app.v6.ExtWishRules.wishBlockedBy(st, i, j) != null) { blocked++; continue }
+        if (com.magi.app.v6.ExtWishRules.wishBlockedBy(st, i, j) != null) { blocked++; blockedStaff += i; blockedDays += j; continue }
+        placed++
+        if (st.wishes["$i,$j"] != k) changed++
         m["$i,$j"] = k
     }
     if (blocked > 0) logOp("W", "希望一括: ${blocked}件 — ${com.magi.app.v6.ExtWishRules.MSG_EXT_DAY}")
+    // 画面の「誰」: 担当外を除いた全員は人数で言う（§6.1）。
+    val whoText = if (staffIdx != null) "${opNm(staffIdx)}さんの" else if (staffRange.size == st.staff.size) "全員の" else "${staffRange.size}名の"
+    val sym = opSy(k)
     if (m == st.wishes) {
         _ui.update {
-            if (blocked > 0) it.copy(messageIsError = true, message = "拡張希望の指定日なので、希望は入れられません（${blocked}件・変更なし）")
-            else it.copy(messageIsError = false, message = "同じ希望がすでに入っています（変更なし）")
+            if (blocked > 0) {
+                val whoB = blockedStaff.singleOrNull()?.let { b -> "${opNm(b)}さんの" } ?: "${blockedStaff.size}名の"
+                it.copy(messageIsError = true, message = "$whoB ${daysText(st.startDate, blockedDays.toList())} は拡張希望の指定日なので、「$sym」の希望は入れられません（${blocked}件・変更なし）。$EXT_WISH_REMEDY")
+            } else it.copy(messageIsError = false, message = "$whoText ${daysText(st.startDate, days)} には「$sym」の希望がすでに入っています（${placed}件・変更なし）")
         }
         return
     }
     val who = if (staffIdx != null) opNm(staffIdx) else "全員" + (st.staff.size - staffRange.size).let { if (it > 0) "（担当外${it}名を除く）" else "" }
     logOp("I", "希望一括: $who ${opDays(days)} → ${opSy(k)}")
-    applyStructure(st.copy(wishes = m), notice = if (blocked > 0) "希望を入れました（拡張希望の指定日の${blocked}件は入れていません）" else null)
+    applyStructure(st.copy(wishes = m), notice = if (blocked > 0) "$whoText ${daysText(st.startDate, days)} に「$sym」の希望を${changed}件入れました（拡張希望の指定日の${blocked}件は入れていません）" else null)
+}
+
+/** 拡張希望の指定日に希望を入れようとしたときの次の一手（希望の入力パネルの案内と同じ言い方＋場所）。 */
+private const val EXT_WISH_REMEDY = "拡張希望を消すと入れられます（編集タブの「月次条件」の『希望シフト登録』）"
+
+/** 選んだ日（0 始まり）の書き方。続いていれば「10/9〜10/11」（1 日は「10/12(月)」）、飛び飛びは「10/5・10/12・10/19ほか2日」。 */
+private fun daysText(startDate: String, days: List<Int>): String {
+    val ds = days.distinct().sorted()
+    if (ds.isEmpty()) return ""
+    if (ds.last() - ds.first() + 1 == ds.size) return DayText.range(startDate, ds.first(), ds.last())
+    return ds.take(3).joinToString("・") { DayText.short(startDate, it) } + if (ds.size > 3) "ほか${ds.size - 3}日" else ""
 }
 
 /** [一括] スタッフ(null=全員)×日群の希望を一括削除。 */
@@ -352,9 +371,10 @@ fun MagiViewModel.clearWishesForDays(staffIdx: Int?, days: List<Int>) {
     val staffRange = if (staffIdx != null) listOf(staffIdx) else st.staff.indices.toList()
     for (i in staffRange) for (j in days) m.remove("$i,$j")
     val cleared = st.wishes.size - m.size
-    if (cleared == 0) { _ui.update { it.copy(messageIsError = false, message = "消す希望はありませんでした") }; return }
+    val whoWhen = (if (staffIdx != null) "${opNm(staffIdx)}さんの" else "全員の") + " " + daysText(st.startDate, days)
+    if (cleared == 0) { _ui.update { it.copy(messageIsError = false, message = "$whoWhen に消す希望はありませんでした") }; return }
     logOp("I", "希望クリア: ${if (staffIdx != null) opNm(staffIdx) else "全員"} ${opDays(days)}")
-    applyStructure(st.copy(wishes = m), notice = "希望を${cleared}件消しました")
+    applyStructure(st.copy(wishes = m), notice = "$whoWhen の希望を${cleared}件消しました")
 }
 
 /** 拡張希望の一覧（日は期間内だけ、1 始まり）。 */

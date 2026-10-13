@@ -208,9 +208,7 @@ private fun WishApplyPanel(
     var showOther by remember { mutableStateOf(false) }
     var confirmClear by remember(staffIdx) { mutableStateOf(false) }
     val sorted = days.sorted()
-    // 選択日が多い場合は「6/3、6/8、6/17、ほか2日」と省略。
-    fun dayList(ds: List<Int>) = if (ds.size <= 4) ds.joinToString("、") { dayChipLabel(ui.startDate, it) }
-    else ds.take(3).joinToString("、") { dayChipLabel(ui.startDate, it) } + "、ほか${ds.size - 3}日"
+    fun dayList(ds: List<Int>) = wishDayList(ui.startDate, ds)
     val datesLabel = dayList(sorted)
     // 拡張希望の日は希望を保存しない（ExtWishRules.wishBlockedBy）＝数えず、送らない。
     val usable = sorted.filter { it !in extDays }
@@ -236,7 +234,8 @@ private fun WishApplyPanel(
             return@Column
         }
         if (usable.size < sorted.size) {
-            Text("拡張希望の日（${sorted.size - usable.size}日）には希望を入れられません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text("${dayList(sorted.filter { it in extDays })}は拡張希望の指定日なので、希望は入れられません。拡張希望を消すと入れられます。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
         ShiftButtonGrid(shifts, primary, selK, ui.shiftColorHex, ui.shiftTextHex) { selK = it }
         if (showOther && others.isNotEmpty()) ShiftButtonGrid(shifts, others, selK, ui.shiftColorHex, ui.shiftTextHex, warnSet = others.toHashSet()) { selK = it }
@@ -244,7 +243,7 @@ private fun WishApplyPanel(
             TextButton(onClick = { showOther = !showOther }) { Text(if (showOther) "その他を閉じる" else "その他（担当外シフト）") }
         }
         if (selK !in allowed) {
-            Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると違反になります。",
+            Text("⚠「${shifts.getOrNull(selK)}」はこの職員の担当外です。希望は登録できますが、配置すると必須違反になります。",
                 style = MaterialTheme.typography.bodySmall, color = cs.error)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -269,6 +268,11 @@ private fun WishApplyPanel(
         )
     }
 }
+
+/** 日の並び（[dayChipLabel] を「、」でつなぐ。[ds] は 1 始まりの日）。5 日以上は先頭 3 日＋「、ほか2日」の形に省略。 */
+private fun wishDayList(startDate: String, ds: List<Int>): String =
+    if (ds.size <= 4) ds.joinToString("、") { dayChipLabel(startDate, it) }
+    else ds.take(3).joinToString("、") { dayChipLabel(startDate, it) } + "、ほか${ds.size - 3}日"
 
 /** 拡張希望の入力: 禁止するシフトを複数選び、選択日をそれ以外にする。希望のある日は保存時に外れる（ExtWishRules）。 */
 @Composable
@@ -313,9 +317,10 @@ private fun ExtWishPanel(
             }
         }
         if (usable.size < days.size) {
-            Text("希望のある日（${days.size - usable.size}日）は拡張希望に入れられません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text("${wishDayList(ui.startDate, days.filter { it in wishDays }.sorted())}は希望のある日なので、拡張希望に入れられません。希望を消すと入れられます。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
-        if (failed != null) Text("登録できませんでした: $failed", style = MaterialTheme.typography.bodySmall, color = cs.error)
+        if (failed != null) Text("登録できませんでした: ${failed}。日かシフトを選び直して、もう一度試せます。", style = MaterialTheme.typography.bodySmall, color = cs.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onCancel, enabled = !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("キャンセル") }
             Button(

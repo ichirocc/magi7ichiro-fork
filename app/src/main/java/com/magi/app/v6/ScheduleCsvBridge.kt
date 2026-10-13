@@ -457,7 +457,7 @@ object ScheduleCsvBridge {
 
 /** 同名の職員が複数いて取り込まなかった氏名の案内（画面とログで同じ文言）。 */
 fun csvAmbiguousText(names: List<String>): String =
-    "同じ名前の職員が複数いるため取り込みませんでした: ${names.joinToString("・")}"
+    "同じ名前の職員が複数いるため、${names.joinToString("・") { "${it}さん" }}の行は取り込みませんでした"
 
 /** 勤務表CSVのヘッダ行か: 先頭セルが「スタッフ」を含むか、2 列目以降の非空セルがすべて日付列（数字・日付書式）。 */
 private fun looksLikeHeaderRow(row: List<String>): Boolean {
@@ -824,7 +824,7 @@ object WishesCsvIO {
             val key = "$i,${day - 1}"
             val prev = m[key]
             if (prev != null) {
-                if (prev != k) { bad++; if (samples.size < ComponentImport.MAX_SAMPLES) samples.add("重複(値が違う): " + rowSample(r)) }
+                if (prev != k) { bad++; if (samples.size < ComponentImport.MAX_SAMPLES) samples.add("同じ職員・同じ日が2行（値が違う）: " + rowSample(r)) }
                 continue
             }
             m[key] = k

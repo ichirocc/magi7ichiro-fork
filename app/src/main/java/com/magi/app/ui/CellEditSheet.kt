@@ -245,7 +245,7 @@ internal fun CellEditSheet(
                 if (status.severity != CellSeverity.NONE) {
                     TextButton(onClick = {
                         val famsJp = cellVioClasses(ui, "$i,$j").joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
-                        onEvent(MagiEvent.Session.AddReviewMemo("$name ${j + 1}日=${sym(current)}：${famsJp.ifEmpty { status.cause }}"))
+                        onEvent(MagiEvent.Session.AddReviewMemo("$name ${DayText.full(ui.startDate, j)} ${sym(current)}：${famsJp.ifEmpty { status.cause }}"))
                     }, modifier = Modifier.heightIn(min = 48.dp)) {
                         Icon(Icons.Outlined.Flag, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.size(6.dp))

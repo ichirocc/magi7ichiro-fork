@@ -138,7 +138,7 @@ class V6SanityPortTest {
 
         // 期間内の窓は従来どおり何も出さない（誤検知しない）。
         val within = V6SanityPort.buildGuidance(windowState("1", listOf(com.magi.app.model.C1Row("3", "A", "2"))))
-            .filter { it.where.contains("期間の制約") }
+            .filter { it.where.contains("期間の制約") && it.problem.contains("評価されません") }
         assertTrue("期間内の窓では出さない", within.isEmpty())
     }
 
@@ -147,15 +147,15 @@ class V6SanityPortTest {
         //   壁ではない(need2/need1 は covO の SOFT 上限＝超えられる)。旧実装は「構造的に残ります」と誤断定していた。
         val cons = listOf(com.magi.app.model.C1Row("3", "A", "2"))
         val a = V6SanityPort.buildGuidance(windowState("1", cons))
-            .filter { it.where.contains("窓ルール") && it.where.contains("A") }
+            .filter { it.where.contains("期間の制約") && it.where.contains("A") }
         assertTrue("非休の窓不足は案内される", a.isNotEmpty())
         assertTrue("非休を『構造的に残ります／最適化では消せません』とは言わない",
-            a.none { it.problem.contains("構造的に残ります") || it.problem.contains("最適化では消せません") })
-        assertTrue("過剰配置(covO)のトレードオフとして案内する", a.any { it.problem.contains("過剰配置") })
+            a.none { it.problem.contains("構造的に残ります") || it.problem.contains("最適化では消せません") || it.problem.contains("何度つくっても消えません") })
+        assertTrue("人員過剰(covO)のトレードオフとして案内する", a.any { it.problem.contains("人員過剰") })
         // 上限が窓ルールに足りていれば(need1=2 → 上限合計12>=8)何も出さない。
         val ok = V6SanityPort.buildGuidance(windowState("2", cons))
         assertTrue("上限充足なら窓案内は出さない",
-            ok.none { it.where.contains("窓ルール") && it.where.contains("A") })
+            ok.none { it.where.contains("期間の制約") && it.where.contains("A") })
     }
 
     @Test fun nonRestWindowIsSilentWhenTheDailyCapIsNotDefinedEveryDay() {
@@ -169,11 +169,11 @@ class V6SanityPortTest {
         assertEquals("前提: day0 だけ上限が存在する", 1, p.need1[1][0])
         assertEquals("前提: day1 は未設定＝無制限", -1, p.need1[1][1])
         assertTrue("上限が全日そろっていないシフトには過剰配置の助言を出さない",
-            V6SanityPort.buildGuidance(partial).none { it.where.contains("窓ルール") && it.where.contains("A") })
+            V6SanityPort.buildGuidance(partial).none { it.where.contains("期間の制約") && it.where.contains("A") })
         // (b) 全日未設定なら当然出さない。
         assertTrue("上限が1日も無ければ出さない",
             V6SanityPort.buildGuidance(windowState("", cons))
-                .none { it.where.contains("窓ルール") && it.where.contains("A") })
+                .none { it.where.contains("期間の制約") && it.where.contains("A") })
     }
 
     @Test fun restWindowShortfallIsStillAStructuralWall() {
@@ -182,7 +182,7 @@ class V6SanityPortTest {
         val cons = listOf(com.magi.app.model.C1Row("3", "休", "3"))
         val issues = V6SanityPort.buildGuidance(windowState("2", cons))
         assertTrue("休の窓は物理上限を超えるため構造的な壁として案内される",
-            issues.any { it.where.contains("窓ルール") && it.where.contains("休") && it.problem.contains("構造的に残ります") })
+            issues.any { it.where.contains("期間の制約") && it.where.contains("休") && it.problem.contains("構造的に残ります") })
     }
 
     /** [3.228.0/個人内壁検知] 1職員×31日、cons1(day1日窓でXが≥day2回)、Xの個人上限をhiで指定。 */
@@ -210,7 +210,7 @@ class V6SanityPortTest {
     @Test fun personalC1WallDetectsWhenRangeHiBelowConservativeMinimum() {
         val impossible = V6SanityPort.buildGuidance(personalWallState("14", "1", "1"))
         assertTrue("個人上限1<下界2は個人内で構造的不能として案内されること",
-            impossible.any { it.where.contains("s0") && it.where.contains("個人上限と窓ルールの衝突") })
+            impossible.any { it.where.contains("s0") && it.where.contains("個人上限と期間の制約の衝突") })
     }
 
     // [重要=当初の仮説を訂正] 美幸の実際の設定(個人上限2, 下界も2)は「上限==下界」で理論上ぎりぎり
@@ -220,13 +220,13 @@ class V6SanityPortTest {
     @Test fun personalC1WallDoesNotFalselyFlagBorderlineSatisfiableCase() {
         val borderline = V6SanityPort.buildGuidance(personalWallState("14", "1", "2"))
         assertTrue("個人上限2==下界2は壁として誤検知しないこと",
-            borderline.none { it.where.contains("個人上限と窓ルールの衝突") })
+            borderline.none { it.where.contains("個人上限と期間の制約の衝突") })
     }
 
     @Test fun personalC1WallIgnoresStaffWithoutPersonalCap() {
         // 個人上限が未設定(無制限)なら誰でも壁にはならない。
         val uncapped = V6SanityPort.buildGuidance(personalWallState("14", "1", ""))
-        assertTrue(uncapped.none { it.where.contains("個人上限と窓ルールの衝突") })
+        assertTrue(uncapped.none { it.where.contains("個人上限と期間の制約の衝突") })
     }
 
     // [3.262.0, 「初期解生成でC1違反をゼロにする」調査で判明] 旧2b-3は同一シフトの複数窓ルールを
@@ -262,14 +262,14 @@ class V6SanityPortTest {
         // 実際に0違反へ同時到達するには14日必要（ホストJVM実行で確認済み）で、上限10は真に不足。
         val flagged = V6SanityPort.buildGuidance(personalWallStateTwoRules("9", "5", "14", "7", "10", 26))
         assertTrue("同一シフト複数ルールの真の同時最小(14)>上限(10)は壁として案内されること",
-            flagged.any { it.where.contains("s0") && it.where.contains("個人上限と窓ルールの衝突") })
+            flagged.any { it.where.contains("s0") && it.where.contains("個人上限と期間の制約の衝突") })
     }
 
     @Test fun personalC1WallDoesNotFlagWhenCapMeetsTrueJointMinimum() {
         // 同じ規則で上限=14(真の同時最小と一致)なら壁として誤検知しないこと。
         val ok = V6SanityPort.buildGuidance(personalWallStateTwoRules("9", "5", "14", "7", "14", 26))
         assertTrue("上限が真の同時最小と一致すれば壁として誤検知しないこと",
-            ok.none { it.where.contains("個人上限と窓ルールの衝突") })
+            ok.none { it.where.contains("個人上限と期間の制約の衝突") })
     }
 
     // [3.227.0/c1内訳] 「違反詳細 c1(N件)」はDETAIL_CAP=8で打ち切られ職員別の内訳が読めないため、
@@ -494,8 +494,8 @@ class V6SanityPortTest {
             wishes = mapOf("0,0" to 1), staffRange = mapOf("0,1" to Range("", "0")))
         val issue = V6SanityPort.buildGuidance(st).single { it.where == "s0さんの「X」" }
         assertTrue(issue.neutral)
-        assertEquals("個人の上限0（入れない指定）に希望が1件載っています。残るのは要調整です", issue.problem)
-        assertEquals("希望を変えるか、設定で上限を見直してください", issue.fix)
+        assertEquals("個人の上限0（入れない指定）に希望が1件（8/1(土)）載っています。残るのは要調整です", issue.problem)
+        assertEquals("編集タブの『月次条件』の『希望シフト登録』でs0さんと相談して希望を調整するか、『年間マスター』の『③ 回数（1人あたり）』で上限を見直してください", issue.fix)
         assertTrue(V6SanityPort.buildGuidance(st).none { it.where.contains("衝突") })
     }
 

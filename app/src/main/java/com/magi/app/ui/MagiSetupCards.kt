@@ -580,6 +580,8 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
             Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
             Text("シフト別に「担当できる人数」で確認。余裕=1人欠けても回るか。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            if (rows.any { it.q - it.maxNeed <= 0 }) Text("⚠・！のシフトは、下の『① シフト・グループ』の担当可否で担当できるグループを増やすか、「月次条件」の『必要人数設定』で人数を見直すと余裕が出ます。",
+                style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             rows.forEach { r ->
                 val slack = r.q - r.maxNeed
                 val tenths = if (r.q > 0) (r.d * 10 + r.q / 2) / r.q else 0

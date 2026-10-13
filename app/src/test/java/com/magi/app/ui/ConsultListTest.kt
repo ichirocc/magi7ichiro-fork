@@ -17,7 +17,7 @@ class ConsultListTest {
     }
 
     @Test fun buildersCarryTheTargetAndTheQuestion() {
-        assertEquals(ConsultItem("甲 10/12 の希望「夜」", "取り消すか勤務を変えるか: 禁止の並びに当たる", 0, 11, staffName = "甲"),
+        assertEquals(ConsultItem("甲 10/12 の希望「夜」", "希望を調整するか勤務を変えるか: 禁止の並びに当たる", 0, 11, staffName = "甲"),
             consultWish("甲", "10/12", "夜", "禁止の並びに当たる", 0, 11))
         assertEquals("甲 10/12 の希望", consultWish("甲", "10/12", null, "r", 0, 11).subject)
         assertEquals("だれかを入れる: 甲・乙・丙・丁・戊 ほか1人", consultShortage("10/12", "夜", listOf("甲", "乙", "丙", "丁", "戊", "己")).note)
@@ -52,9 +52,9 @@ class ConsultListTest {
         assertNull(consultCell(c, "2026-10-01", listOf("甲"), 31))                            // 削除: 開けない
         assertNull(consultCell(c, "2026-11-01", listOf("甲", "乙"), 30))                      // 月の移動: 日付が期間の外
         assertNull(consultCell(c, "2026-10-01", listOf("乙", "乙"), 31))                      // [3.650.0] 同名が複数で並びが不明＝開かない
-        assertEquals("同じ名前の職員が複数いて、どの人か決められません（乙）", consultTargetNote(c, "2026-10-01", listOf("乙", "甲", "乙"), listOf(), 31))
-        assertEquals("いまの職員一覧にいません（乙）", consultTargetNote(c, "2026-10-01", listOf("甲"), listOf(), 31))
-        assertEquals("いまの期間にない日です（10/12）", consultTargetNote(c, "2026-11-01", listOf("甲", "乙"), listOf(), 30))
+        assertEquals("同じ名前の職員が複数いて、どの人か決められないので開けません（乙さん）", consultTargetNote(c, "2026-10-01", listOf("乙", "甲", "乙"), listOf(), 31))
+        assertEquals("いまの職員一覧にいないので開けません（乙さん）", consultTargetNote(c, "2026-10-01", listOf("甲"), listOf(), 31))
+        assertEquals("いまの期間にない日なので開けません（10/12）", consultTargetNote(c, "2026-11-01", listOf("甲", "乙"), listOf(), 30))
         assertNull(consultTargetNote(c, "2026-10-01", listOf("甲", "乙"), listOf(), 31))
         assertNull(consultTargetNote(consultShortage("10/12", "夜", emptyList()), "2026-10-01", listOf("甲"), listOf(), 31))   // 対象を持たない相談は何も言わない
     }
@@ -76,7 +76,7 @@ class ConsultListTest {
         assertTrue(consultChainResumable(ChainTarget(null, null, "lbl", suggestion = FixSuggestion(FixKind.CHAIN, listOf(FixCell(0, 2, 2)), "lbl", -1, 0, emptyList())), "2026-10-01", listOf("休"), 31))
         assertFalse(consultChainResumable(t, "2026-11-01", listOf("休", "日", "夜"), 30))
         val c = ConsultItem("lbl", "n", chain = t)
-        assertEquals("いまの期間・シフトにない枠です（10/3 の「夜」）", consultTargetNote(c, "2026-11-01", listOf("甲"), listOf("休", "日", "夜"), 30))
+        assertEquals("いまの期間・シフトにない枠なので、案を見られません（10/3 の「夜」）", consultTargetNote(c, "2026-11-01", listOf("甲"), listOf("休", "日", "夜"), 30))
         assertNull(consultTargetNote(c, "2026-10-01", listOf("甲"), listOf("休", "日", "夜"), 31))
         assertEquals("2026-10-12", isoDate("2026-10-01", 11))
         assertEquals(11, dayIndexOf("2026-10-01", "2026-10-12", 31))

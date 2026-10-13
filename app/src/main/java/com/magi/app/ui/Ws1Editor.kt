@@ -194,12 +194,14 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 //   従来どおり進められる＝止めるのではなく、確認ダイアログを情報つきにする）。
                 val refs = v.shiftRefCount(d.k)
                 val note = if (refs > 0) "このシフトを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
+                val wishN = ui.wishes.values.count { it == d.k }
+                val wishNote = if (wishN > 0) "このシフトの希望${wishN}件も消えます。" else ""
                 // [3.578.0/P10] 「休」削除は休だった日を黙って他シフトへ自動変換する（経緯: history 3.574.0-3.576.0）。
                 //   記号の生文字列比較を作らず restShiftIndex 解決済みの v.restIdx で判定する。
                 val restNote = if (d.k == v.restIdx) "休だった日は自動的に他のシフトへ変わります。" else ""
-                dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note + restNote)
+                dialog = Ws1Dialog.ConfirmDelete("shift", d.k, "シフト ${toHankakuKigou(d.kigou)}", note + wishNote + restNote)
             }) else null,
-            deleteBlocked = "最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。".takeIf { v.shifts.size <= 1 },
+            deleteBlocked = "最後の1シフトは削除できません（勤務表のセルが指す先が無くなるため）。先に別のシフトを追加すると削除できます。".takeIf { v.shifts.size <= 1 },
             existingKigou = v.shifts.map { it.kigou }, selfIndex = d.k)
         Ws1Dialog.AddShift -> ShiftDialog("シフト追加", "", "", "", "", false,
             { n, kg, n1, n2, rest -> onEvent(MagiEvent.Structure.AddShift(n, kg, n1, n2, rest)); dialog = null }, { dialog = null },
@@ -214,7 +216,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 val label = "グループ ${toHankakuKigou(d.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
                 dialog = Ws1Dialog.ConfirmDelete("group", d.g, label, note)
             }) else null,
-            deleteBlocked = "最後の1グループは削除できません（担当可否の分類が無くなるため）。".takeIf { v.groups.size <= 1 },
+            deleteBlocked = "最後の1グループは削除できません（担当可否の分類が無くなるため）。先に別のグループを追加すると削除できます。".takeIf { v.groups.size <= 1 },
             existingKigou = v.groups.map { it.kigou }, selfIndex = d.g)
         Ws1Dialog.AddGroup -> GroupDialog("グループ追加", "", "",
             { n, kg -> onEvent(MagiEvent.Structure.AddGroup(n, kg)); dialog = null }, { dialog = null },
@@ -226,7 +228,11 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             confirmButton = { DialogDangerButton("縮める", onClick = { onEvent(MagiEvent.Structure.ResizeDays(d.days)); dialog = null }) },
             dismissButton = { DialogDismissButton(onClick = { dialog = null }) },
             title = { Text("期間を縮めますか？") },
-            text = { Text("${v.days}日 → ${d.days}日にします。${d.days + 1}日目以降の勤務表の割り当て・希望・日別の必要人数は削除されます（元に戻すで取り消せます）。") },
+            text = {
+                val cut = DayText.range(v.startDate, d.days, v.days - 1)
+                val wishN = ui.wishes.keys.count { (VioKey.dayOf(it) ?: -1) >= d.days }
+                Text("${v.days}日 → ${d.days}日にします。\n$cut の勤務表の割り当て・希望" + (if (wishN > 0) " ${wishN}件" else "") + "・日別の必要人数は削除されます（元に戻すで取り消せます）。")
+            },
         )
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
@@ -243,7 +249,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             title = { Text("削除の確認") },
             // [design-review] 「インデックス」は開発者向けの内部語（operator_ux.md §1「専門用語を使わない」）。
             //   ふつうの言葉に置き換え、参照件数(note)は独立の文として挟む。
-            text = { Text("${d.label} を削除します。${d.note}残りの設定は自動で調整されます。よろしいですか？") },
+            text = { Text("${d.label} を削除します。${d.note}残りの設定は自動で調整されます（元に戻すで取り消せます）。よろしいですか？") },
         )
         null -> Unit
     }

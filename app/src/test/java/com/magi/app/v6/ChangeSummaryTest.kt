@@ -27,7 +27,8 @@ class ChangeSummaryTest {
         assertEquals(2, s.changedStaff); assertEquals(4, s.changedCells)
         assertEquals(2, s.wishTotal); assertEquals(2, s.wishKept)   // s0 day0=A ✓、s1 day2=休 ✓
         assertEquals(false, s.rangeAllOk)
-        assertEquals("変更 2人・4セル／希望 2/2／個人回数 範囲外あり", s.line())
+        assertEquals(1, s.rangeOutStaff)   // s2 だけが上限超過
+        assertEquals("変更 2人・4セル／希望どおり 2/2／回数の下限・上限 外れた人 1人", s.line())
         assertEquals(-1, s.familyDeltas["pref"]); assertEquals(1, s.familyDeltas["high"])   // s0 の希望が通り、s2 が上限超過
         assertEquals("改善 pref -1（重み 8000）", s.familyLine().substringBefore("／"))
         assertTrue(s.familyLine { if (it == "high") "上限超過" else it }.substringAfter("／").startsWith("悪化 fair +6・上限超過 +1"))   // 加重順: fair +6(=30) が先頭、上限超過 +1(=25) が続く（3.647.0 fair 5。旧: 上限超過が先頭）
@@ -37,5 +38,10 @@ class ChangeSummaryTest {
         val line = ChangeSummary.familyLine(mapOf("weekly" to 3, "c1" to -1, "c3mn" to -2, "fair" to 4))
         assertEquals("改善 c3mn -2・c1 -1（重み 230）／悪化 fair +4・weekly +3（重み 26）", line)
         assertEquals("改善 なし／悪化 なし", ChangeSummary.familyLine(emptyMap()))
+    }
+
+    @Test fun lineSaysAllWithinRangeOrFallsBackWhenStaffNotCounted() {
+        assertEquals("変更 0人・0セル／希望どおり 0/0／回数の下限・上限 全員守れています", ChangeSummary(0, 0, 0, 0, true).line())
+        assertEquals("変更 0人・0セル／希望どおり 0/0／回数の下限・上限 外れた人あり", ChangeSummary(0, 0, 0, 0, false).line())
     }
 }

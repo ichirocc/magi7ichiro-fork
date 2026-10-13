@@ -126,7 +126,7 @@ class WishTrialTest {
         val sf = V6PortAnalyzer.diagnoseCoverage(st).shortfalls.single { it.shiftIndex == a }
         assertEquals(listOf(0), sf.wishPinned)
         assertEquals(CoverageVerdict.INFEASIBLE, sf.verdict)
-        assertEquals("いまの希望のままでは担当できる人が2人で必要数3に届きません（希望で別の勤務に固定: 1人）", sf.reason)
+        assertEquals("いまの希望のままではAを担当できる人が2人で、必要数3人に届きません（s0さんは希望で別の勤務に固定）。本人と相談して希望を調整すると、担当できる人が増えます", sf.reason)
 
         val noWish = st.copy(wishes = emptyMap(), staff = st.staff.take(2) + Staff("s2", 1) + st.staff.drop(3).map { Staff(it.name, 1) })
         val sf2 = V6PortAnalyzer.diagnoseCoverage(noWish).shortfalls.single { it.shiftIndex == a }

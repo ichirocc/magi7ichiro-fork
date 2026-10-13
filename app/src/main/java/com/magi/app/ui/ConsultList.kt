@@ -28,8 +28,8 @@ data class ChainTarget(
 
 internal const val CONSULT_BUTTON = "相談してから決める"
 internal const val CONSULT_DONE = "相談中"
-internal const val CONSULT_ADDED = "相談中に追加しました"
-internal const val CONSULT_DUPLICATE = "すでに相談中にあります"
+internal const val CONSULT_ADDED = "ホームの「相談中」に追加しました"
+internal const val CONSULT_DUPLICATE = "すでにホームの「相談中」にあるので、追加しませんでした"
 internal const val CONSULT_OPEN = "開く"
 internal const val CONSULT_RESUME = "案を見る"
 internal const val CONSULT_STALE = "相談に積んだあとで勤務表か設定が変わったため、この案はそのままでは使えません。「直し方を探す」で探し直してください"
@@ -109,21 +109,21 @@ internal fun consultChainResumable(t: ChainTarget, startDate: String, shiftSymbo
 internal fun consultTargetNote(c: ConsultItem, startDate: String, staffNames: List<String>, shiftSymbols: List<String>, days: Int): String? {
     c.chain?.let { t ->
         if (consultChainResumable(t, startDate, shiftSymbols, days)) return null
-        return "いまの期間・シフトにない枠です（${t.date?.let { shortDate(it) } ?: "?"} の「${t.shiftSymbol ?: "?"}」）"
+        return "いまの期間・シフトにない枠なので、案を見られません（${t.date?.let { shortDate(it) } ?: "?"} の「${t.shiftSymbol ?: "?"}」）"
     }
     if (c.staff == null && c.staffName == null && c.day == null && c.date == null) return null
     if (consultCell(c, startDate, staffNames, days) != null) return null
     if (consultStaff(c, staffNames) == null) {
         val name = c.staffName
-        if (name != null && staffNames.count { it == name } > 1) return "同じ名前の職員が複数いて、どの人か決められません（$name）"
-        return "いまの職員一覧にいません" + (name?.let { "（$it）" } ?: "")
+        if (name != null && staffNames.count { it == name } > 1) return "同じ名前の職員が複数いて、どの人か決められないので開けません（${name}さん）"
+        return "いまの職員一覧にいないので開けません" + (name?.let { "（${it}さん）" } ?: "")
     }
-    return "いまの期間にない日です" + (c.date?.let { "（${shortDate(it)}）" } ?: "")
+    return "いまの期間にない日なので開けません" + (c.date?.let { "（${shortDate(it)}）" } ?: "")
 }
 
-/** ぶつかっている希望の行から: 希望を取り消すか勤務を変えるかの判断。 */
+/** ぶつかっている希望の行から: 希望を調整するか勤務を変えるかの判断。 */
 internal fun consultWish(name: String, dayLabel: String, symbol: String?, reason: String, staff: Int, day: Int, date: String? = null) =
-    ConsultItem("$name $dayLabel の希望" + (symbol?.let { "「$it」" } ?: ""), "取り消すか勤務を変えるか: $reason", staff, day, staffName = name, date = date)
+    ConsultItem("$name $dayLabel の希望" + (symbol?.let { "「$it」" } ?: ""), "希望を調整するか勤務を変えるか: $reason", staff, day, staffName = name, date = date)
 
 /** なおし方（1 人を入れる）の枠から: だれを入れるかの判断。 */
 internal fun consultShortage(dayLabel: String, symbol: String, names: List<String>) = ConsultItem(

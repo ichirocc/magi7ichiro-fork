@@ -26,7 +26,7 @@ class ScheduleCsvDuplicateNameTest {
         for (i in sched.indices) assertArrayEquals("行 $i", sched[i], r.schedule[i])
         assertEquals(listOf("山田"), r.ambiguousNames)
         assertEquals(1, r.matched)
-        assertEquals("同じ名前の職員が複数いるため取り込みませんでした: 山田", csvAmbiguousText(r.ambiguousNames))
+        assertEquals("同じ名前の職員が複数いるため、山田さんの行は取り込みませんでした", csvAmbiguousText(r.ambiguousNames))
     }
 
     @Test

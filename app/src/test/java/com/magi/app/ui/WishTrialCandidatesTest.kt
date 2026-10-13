@@ -31,11 +31,12 @@ class WishTrialCandidatesTest {
             coverageDiag = CoverageDiagnosis(2, 2, 0, listOf(shortfall(6, 1, listOf(2, 0)), shortfall(2, 1, listOf(0))), emptyList()),
         )
         val c = wishTrialCandidates(ui)
+        // 盤面が無い＝今の勤務は添えない（希望の記号だけ）。
         assertEquals(listOf(
-            WishTrialRow(0, 2, "山田", "希望の勤務になっていません（ほか: 禁止の並び・人員不足の日）", true),
-            WishTrialRow(1, 3, "佐藤", "翌日（5日）の希望の勤務の前日に置けない勤務の希望です", true),
+            WishTrialRow(0, 2, "山田", "希望の「日」になっていません（ほか: 禁止の並び・人員不足の日）", true),
+            WishTrialRow(1, 3, "佐藤", "翌日（5日）の希望「日」の前日に置けない「夜」の希望です", true),
             WishTrialRow(1, 4, "佐藤", "前日（4日）に置けない勤務が入っています", true),
-            WishTrialRow(2, 5, "鈴木", "希望が禁止の並びに掛かっています", false),
+            WishTrialRow(2, 5, "鈴木", "希望「日」が禁止の並びに掛かっています", false),
         ), c.direct)
         // (0,2) は S5a が代表＝S5b の 3日 の枠は空になって消える。枠は日順、行は職員順。
         assertEquals(1, c.shortfall.size)
@@ -64,11 +65,11 @@ class WishTrialCandidatesTest {
     @Test fun t9_prefCellInWishSelfConflictListsItsSiblingWishes() {
         val ui = selfUi.copy(violationCellFamilies = mapOf("0,24" to listOf("vio-pref"), "1,1" to listOf("vio-pref")))
         assertEquals(listOf(
-            WishTrialRow(0, 24, "古泉", "希望の勤務になっていません", true, wishOnly = true),
+            WishTrialRow(0, 24, "古泉", "希望の「休」になっていません", true, wishOnly = true),
             WishTrialRow(0, 25, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true, wishOnly = true),
             WishTrialRow(0, 26, "古泉", "希望どうしが禁止の並び「休→休→休」を作っています", true, wishOnly = true),
             WishTrialRow(1, 0, "福澤", "希望どうしが前日の禁止「Dﾃ→休」に当たっています", true, wishOnly = true),
-            WishTrialRow(1, 1, "福澤", "希望の勤務になっていません", true, wishOnly = true),
+            WishTrialRow(1, 1, "福澤", "希望の「休」になっていません", true, wishOnly = true),
         ), wishTrialCandidates(ui).direct)
     }
 
@@ -84,7 +85,7 @@ class WishTrialCandidatesTest {
         // 並びが成立している（c3n の印が窓の全セル）＝行は今までどおり。pref の無い組は兄弟を足さない。
         val ui = selfUi.copy(violationCellFamilies = mapOf("0,24" to listOf("vio-c3n"), "0,25" to listOf("vio-c3n"), "0,26" to listOf("vio-c3n")))
         assertEquals(listOf(24, 25, 26), wishTrialCandidates(ui).direct.map { it.day })
-        assertEquals(setOf("希望が禁止の並びに掛かっています"), wishTrialCandidates(ui).direct.map { it.reason }.toSet())
+        assertEquals(setOf("希望「休」が禁止の並びに掛かっています"), wishTrialCandidates(ui).direct.map { it.reason }.toSet())
         assertEquals(emptyList<WishTrialRow>(), wishTrialCandidates(selfUi).direct)
     }
 
@@ -112,12 +113,12 @@ class WishTrialCandidatesTest {
     }
 
     @Test fun t10_sevenWordings() {
-        assertEquals("取り消すと必須違反が確実に1件 減り、再作成するとさらに2件 減る見込みです。", wishTrialText(r(5, 4, 5, 2)))
-        assertEquals("取り消すと必須違反が確実に1件 減ります。", wishTrialText(r(5, 4, 5, 4)))
-        assertEquals("取り消して再作成すると、必須違反が2件 減る見込みです。", wishTrialText(r(5, 5, 5, 3)))
-        assertEquals("この希望を取り消しても、必須は減らない見込みです（必須 5件 → 5件）。すべての組み合わせを試したわけではありません。", wishTrialText(r(5, 5, 5, 5)))
+        assertEquals("希望を調整して外すと必須違反が確実に1件 減り、再作成するとさらに2件 減る見込みです。", wishTrialText(r(5, 4, 5, 2)))
+        assertEquals("希望を調整して外すと必須違反が確実に1件 減ります。", wishTrialText(r(5, 4, 5, 4)))
+        assertEquals("希望を調整して外し、再作成すると、必須違反が2件 減る見込みです。", wishTrialText(r(5, 5, 5, 3)))
+        assertEquals("この希望を調整して外しても、必須は減らない見込みです（必須 5件 → 5件）。すべての組み合わせを試したわけではありません。", wishTrialText(r(5, 5, 5, 5)))
         assertEquals("再作成するだけの場合より、さらに1件 減る見込みです。", wishTrialText(r(5, 5, 3, 2)))
-        assertEquals("取り消さなくても、再作成するだけで同じだけ減る見込みです。", wishTrialText(r(5, 4, 3, 3)))
+        assertEquals("希望を外さなくても、再作成するだけで同じだけ減る見込みです。", wishTrialText(r(5, 4, 3, 3)))
         assertEquals("試算できませんでした（未割当のセルがあります）。", wishTrialText(WishTrial.Unavailable("未割当のセルがあります")))
         assertNull(wishTrialText(WishTrial.Stopped))
         assertTrue(wishTrialNoGain(r(5, 5, 5, 5)))

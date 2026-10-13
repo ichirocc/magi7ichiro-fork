@@ -68,7 +68,7 @@ class WishSelfConflictTest {
         assertEquals(IssueKind.WISH, issues[0].kind)
         assertEquals("大島 10/3(土)・10/4(日)・10/5(月) 希望「休→休→休」", issues[0].where)
         assertEquals("禁止の並び「休→休→休」に希望どうしで当たっています。希望は固定なので計算では解消できません", issues[0].problem)
-        assertEquals("いずれか1件の希望を取り消すか、禁止の並び「休→休→休」を見直してください", issues[0].fix)
+        assertEquals("編集タブの『月次条件』の『希望シフト登録』で本人と相談していずれか1件の希望を調整する（希望は外れます。元に戻せます）か、『年間マスター』の『⑤ 並び・期間の制約』の「禁止の並び」で「休→休→休」を見直してください", issues[0].fix)
         assertEquals(SettingFixAction.NONE, issues[0].action)
     }
 
@@ -78,7 +78,7 @@ class WishSelfConflictTest {
         val issue = V6SanityPort.buildGuidance(st).single { it.kind == IssueKind.WISH && it.problem.contains("禁止の並び「Dﾃ」") }
         assertEquals("大島 10/3(土) 希望「Dﾃ」", issue.where)
         assertEquals("禁止の並び「Dﾃ」に希望が当たっています。希望は固定なので計算では解消できません", issue.problem)
-        assertEquals("この希望を取り消すか、禁止の並び「Dﾃ」を見直してください", issue.fix)
+        assertEquals("編集タブの『月次条件』の『希望シフト登録』で本人と相談してこの希望を調整する（希望は外れます。元に戻せます）か、『年間マスター』の『⑤ 並び・期間の制約』の「禁止の並び」で「Dﾃ」を見直してください", issue.fix)
         val sched = arrayOf(intArrayOf(a, a, d, a, a, a, a), IntArray(7) { a })
         val msg = HfSwapPolish.detectHF70Anomalies(st, sched, "t").message
         assertTrue(msg, msg.contains("希望と禁止の衝突 1 件"))
@@ -96,7 +96,7 @@ class WishSelfConflictTest {
         assertTrue(issue.neutral)
         assertEquals("大島 10/3(土)・10/4(日)・10/5(月) 希望「休→休→休」", issue.where)
         assertEquals("回避の並び「休→休→休」に希望どうしで当たっています。希望は固定なので計算では外せず、要調整として残ります", issue.problem)
-        assertEquals("いずれか1件の希望を取り消すか、回避の並び「休→休→休」を見直してください", issue.fix)
+        assertEquals("編集タブの『月次条件』の『希望シフト登録』で本人と相談していずれか1件の希望を調整する（希望は外れます。元に戻せます）か、『年間マスター』の『⑤ 並び・期間の制約』の「回避の並び」で「休→休→休」を見直してください", issue.fix)
         val held = arrayOf(intArrayOf(a, a, rest, rest, rest, a, a), IntArray(7) { a })
         assertEquals(1, V6SanityPort.wishAvoidSoft(cachedProblem(st), held))
         val broken = arrayOf(intArrayOf(a, a, rest, a, rest, a, a), IntArray(7) { a })

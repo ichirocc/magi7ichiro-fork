@@ -107,7 +107,7 @@ import androidx.compose.ui.input.pointer.pointerInput
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
-/** [思考誘導S3→S5] 必須違反に関わる希望と、人員不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「取り消したら？」で試算・確定（§5）。
+/** [思考誘導S3→S5] 必須違反に関わる希望と、人員不足の日に別の勤務の希望がある人を並べる。行を押すとセル、「希望を外したら？」で試算・確定（§5）。
  *  試算の結果は VM が ctx つきで持ち、ここは読むたびに問い合わせる（古ければ隠す＝§8）。 */
 @Composable
 internal fun WishConflictDialog(
@@ -140,7 +140,7 @@ internal fun WishConflictDialog(
                         OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("再作成") }
                     }
                     if (cands.direct.isNotEmpty()) {
-                        Text("この希望とルールがぶつかっています。1件ずつ開いて、希望を変えるか勤務を決めてください。",
+                        Text("この希望とルールがぶつかっています。1件ずつ開いて、本人と相談して希望を調整するか、勤務を決めてください。",
                             style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                         cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
                     }
@@ -209,7 +209,7 @@ private fun WishTrialRowView(
                         enabled = !ui.running,
                         colors = ButtonDefaults.textButtonColors(contentColor = cs.error),
                         modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp),
-                    ) { Text("希望を取り消して再作成") }
+                    ) { Text("希望を外して再作成（元に戻せます）") }
                 }
             }
         }
@@ -222,7 +222,7 @@ private fun WishTrialRowView(
 @Composable
 private fun WishTrialButton(enabled: Boolean, onClick: () -> Unit) {
     TextButton(onClick = onClick, enabled = enabled, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) {
-        Text("取り消したら？")
+        Text("希望を外したら？")
     }
 }
 
@@ -331,7 +331,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("相談中（${ui.consults.size}件）", style = MaterialTheme.typography.titleMedium)
-            Text("関係者に確認してから決める項目です（アプリを閉じると消えます）。書き出しは止めません。",
+            Text("関係者に確認してから決める項目です。確認できたら「済」を押してください（アプリを閉じると消えます。書き出しは止めません）。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             ui.consults.forEachIndexed { idx, c ->
                 // 対象は氏名と実日付で今のデータに引き直す（月を移した・職員を消した・並べ替えたあとに別のセルを開かない）。
@@ -418,7 +418,7 @@ internal fun GuidedFixDialog(
                                     ) {
                                         val tail = if (c.fromRest) "（休み）" else ""
                                         // 長い氏名でも切れないよう2行まで折り返し（文字欠け防止）。
-                                        Text("${c.name}$tail を「${target.shiftSymbol}」に入れる",
+                                        Text("${c.name}さん$tail を「${target.shiftSymbol}」に入れる",
                                             textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
@@ -459,7 +459,7 @@ internal fun GuidedFixDialog(
                         }
                     }
                     infeasible.isNotEmpty() -> {
-                        Text("これ以上は自動で埋められません。", fontWeight = FontWeight.Bold)
+                        Text("${infeasible.map { it.dayIndex }.distinct().size}日 は、これ以上は自動で埋められません。", fontWeight = FontWeight.Bold)
                         infeasible.take(4).forEach {
                             Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -473,7 +473,7 @@ internal fun GuidedFixDialog(
                     blocked.isNotEmpty() -> {
                         // [3.401.0] 「動かせる人がいる」枠が無くなったが、埋まっていない枠は残っている状態。
                         //   ここで「直し終わりました」と言うのが旧実装の嘘だった。診断が調べた理由をそのまま出す。
-                        Text("いまの希望・担当のままでは埋められない日が残っています。", fontWeight = FontWeight.Bold)
+                        Text("いまの希望・担当のままでは埋められない日が ${blocked.map { it.dayIndex }.distinct().size}日 残っています。", fontWeight = FontWeight.Bold)
                         blocked.take(4).forEach {
                             Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -530,7 +530,7 @@ internal fun OperatorNextActionCard(
     onAutoSearch: () -> Unit = {},  // [3.643.0] 必須違反が残り未探索なら 1 回だけ直し方を探す（旧 SmartActionCard の自動探索）
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
-    outcomeLine: String? = null,    // [S5 §9] 直近の「希望を取り消して再作成」の結果（VM が鮮度を照合済み）
+    outcomeLine: String? = null,    // [S5 §9] 直近の「希望を外して再作成」の結果（VM が鮮度を照合済み）
     savedLine: String? = null,      // 勤務表 CSV の保存状態（保存済み／今の内容と違う）。直した結果の行とは別に出す（両方あれば両方）
     consultLine: String? = null,    // [3.645.0/仕様 5.3] 相談中の件数（未確認事項）。完成の見出しは変えず、書き出しも止めない
     relax: RelaxToken? = null,      // [S6] いまのデータで見つかった設定の壁の組（VM が鮮度を照合済み。null＝無い）
@@ -835,13 +835,16 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 // [3.344.0] 「充足可能N枠」と言いながら各枠の説明が「いまの希望のままでは解消できません」
                 //   という矛盾を解消する。枠の数（静的に足りているか）と、いま実際に埋められるかは別軸。
                 val headline = when {
-                    diag.allInfeasible -> "不足 ${diag.totalShortfall} 人は全て充足不可。今のデータでは満たせません（想定内）。"
+                    diag.allInfeasible -> "不足 ${diag.totalShortfall} 人は全て充足不可。今のデータでは満たせません（想定内）。" +
+                        "担当できる人を増やすと直せます（編集タブ＞年間マスター①）。"
                     diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
-                        "希望を1件調整するか、担当を追加してください。"
+                        "希望を1件調整する（編集タブ＞月次条件）か、担当を追加してください（編集タブ＞年間マスター①）。"
                     diag.blockedNowSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.blockedNowSlots} 枠は" +
-                        "いまの希望のままでは埋められません（残りは再作成すると解消し得ます）。"
+                        "いまの希望のままでは埋められません。その枠は希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると直せます（編集タブ＞年間マスター①）。" +
+                        "残りは再作成すると解消し得ます。"
                     diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再作成するか設定の見直しで解消し得ます。"
-                    else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。"
+                    else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。" +
+                        "充足可能の枠は再作成すると解消し得ます。充足不可の枠は担当できる人を増やすと直せます（編集タブ＞年間マスター①）。"
                 }
                 Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownShortfalls = if (allShortfalls) diag.shortfalls else diag.shortfalls.take(6)
@@ -879,7 +882,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                             for (r in diag.relaxations.take(4)) {
                                 Text("・$r", color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodySmall)
                             }
-                            Text("※ 担当追加の提案です。設定変更は行いません（採否はご判断ください）。",
+                            Text("※ 担当追加の提案です。設定は変えません。採用するときは編集タブ＞年間マスター①で担当を追加してください。",
                                 color = cs.onTertiaryContainer.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -905,7 +908,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                     onClick = { onCancelWish(i, s.dayIndex) },
                                     enabled = !ui.running,
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の希望（${s.shiftSymbol}）を取り消す", color = cs.error) }
+                                ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望（${s.shiftSymbol}）を外して調整する", color = cs.error) }
                             }
                         }
                     }
