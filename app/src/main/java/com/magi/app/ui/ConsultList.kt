@@ -10,12 +10,17 @@ import java.time.temporal.ChronoUnit
  * 対象は氏名と実日付でも持つ＝職員の削除・並び替えや月の移動のあとに別の人・別の日を開かない（3.646.0、外部レビュー B01/B02）。
  * [staff]/[day] は積んだときの位置（氏名・日付が一致するときの近道）。[rosterKey] は積んだときの職員の並び（[rosterKeyOf]、0＝不明）＝
  * 同じ名前の職員が複数いるとき、並びが変わっていなければ位置を信じる（3.650.0）。
+ * [staffId] は積んだときの職員 ID（[com.magi.app.model.Staff.id]）＝あれば対象はこれだけで引く（並び替え・改名・同名でも元の人。
+ * 見つからなければ開かない）。氏名・[rosterKey] での引き直しは ID の無い相談だけの後備え。
+ * [staffGone] は名簿の変更で ID が一度消えた印＝あとで同じ番号が別の人に振られても結ばない（削除した人が最大の ID だと次の追加で再び使われる）。
  */
 data class ConsultItem(
     val subject: String, val note: String, val staff: Int? = null, val day: Int? = null,
     val staffName: String? = null, val date: String? = null,
     val chain: ChainTarget? = null,
     val rosterKey: Int = 0,
+    val staffId: Int? = null,
+    val staffGone: Boolean = false,
 )
 
 /** 複数人の入れ替えの相談が指す枠。日付とシフト記号で持つ＝月の移動・シフトの並び替えのあとも今の勤務表で案を探し直せる。
@@ -51,9 +56,12 @@ private fun shortDate(date: String): String =
 /** 職員の並びの指紋（同じ名前の職員を位置で区別してよいかの判定に使う。0 は「不明」に取っておく）。 */
 internal fun rosterKeyOf(staffNames: List<String>): Int = staffNames.hashCode().let { if (it == 0) 1 else it }
 
-/** 相談の職員を今の一覧で探す。氏名があればそれで（積んだときの位置が同じ氏名なら近道）、無ければ位置だけ。
+/** 相談の職員を今の一覧で探す。職員 ID があればそれだけで（今の一覧に無ければ null＝別の人に結ばない）。
+ *  ID が無ければ氏名で（積んだときの位置が同じ氏名なら近道）、氏名も無ければ位置だけ。
  *  同じ名前が複数いれば氏名では区別できない＝積んだときと並びが同じときだけ位置を信じ、それ以外は開かない（3.650.0）。 */
-internal fun consultStaff(c: ConsultItem, staffNames: List<String>): Int? {
+internal fun consultStaff(c: ConsultItem, staffNames: List<String>, staffIds: List<Int> = emptyList()): Int? {
+    if (c.staffGone) return null
+    if (c.staffId != null && staffIds.isNotEmpty()) return staffIds.indexOf(c.staffId).takeIf { it >= 0 }
     val name = c.staffName ?: return c.staff?.takeIf { it in staffNames.indices }
     val at = c.staff
     if (staffNames.count { it == name } > 1) {
@@ -70,8 +78,8 @@ internal fun consultDay(c: ConsultItem, startDate: String, days: Int): Int? {
 }
 
 /** 相談の対象セル（職員, 日）。氏名が今の一覧になければ null、日付が今の期間の外なら null＝「開く」を出さない。 */
-internal fun consultCell(c: ConsultItem, startDate: String, staffNames: List<String>, days: Int): Pair<Int, Int>? {
-    val i = consultStaff(c, staffNames) ?: return null
+internal fun consultCell(c: ConsultItem, startDate: String, staffNames: List<String>, days: Int, staffIds: List<Int> = emptyList()): Pair<Int, Int>? {
+    val i = consultStaff(c, staffNames, staffIds) ?: return null
     val j = consultDay(c, startDate, days) ?: return null
     return i to j
 }
@@ -83,17 +91,38 @@ internal fun consultChainTarget(t: ChainTarget, startDate: String, shiftSymbols:
     return j to k
 }
 
+/** 積むときに対象の職員 ID を付ける（位置と氏名が今の一覧と合うときだけ。ID の無いデータ＝0 は付けない）。 */
+internal fun consultStampStaffId(c: ConsultItem, staffNames: List<String>, staffIds: List<Int>): ConsultItem {
+    val at = c.staff ?: return c
+    if (c.staffId != null || c.chain != null) return c
+    if (c.staffName != null && staffNames.getOrNull(at) != c.staffName) return c
+    val id = staffIds.getOrNull(at)?.takeIf { it > 0 } ?: return c
+    return c.copy(staffId = id)
+}
+
 /**
- * [3.651.0/外部レビュー] 職員の改名に相談の対象を追従させる（職員 ID はデータ項目に無いので、名簿が変わった時点で氏名を書き換える）。
- * 人数が同じで 1 か所だけ名前が変わった＝改名とみなす（並び替えは 2 か所以上、追加・削除は人数が変わる＝氏名で引き直す既存の規則のまま）。
- * 改名前の名簿で引けた相談は、同じ位置の今の名前と今の名簿の指紋に書き換える（改名で位置は動かない＝別の人の改名でも同名の区別を保つ）。
+ * 名簿が変わったら相談の表示用の氏名と位置を今に合わせる。ID を持つ相談は ID で引き、見つかれば今の氏名・位置へ
+ * （削除で見つからなければ [ConsultItem.staffGone]＝以後は開かず、元の氏名で案内する）。
+ * ID の無い相談だけ [3.651.0] の改名の後備え: 人数が同じで 1 か所だけ名前が変わった＝改名とみなし、改名前の名簿で引けた相談を
+ * 同じ位置の今の名前と今の名簿の指紋に書き換える（並び替えは 2 か所以上、追加・削除は人数が変わる＝氏名で引き直す）。
  */
-internal fun followRenameInConsults(items: List<ConsultItem>, before: List<String>, after: List<String>): List<ConsultItem> {
-    if (items.isEmpty() || before.size != after.size || before.indices.count { before[it] != after[it] } != 1) return items
+internal fun followRenameInConsults(items: List<ConsultItem>, before: List<String>, after: List<String>, afterIds: List<Int> = emptyList()): List<ConsultItem> {
+    if (items.isEmpty()) return items
+    val renamed = before.size == after.size && before.indices.count { before[it] != after[it] } == 1
     val roster = rosterKeyOf(after)
     return items.map { c ->
-        val at = if (c.staffName == null) null else consultStaff(c, before)
-        if (at == null) c else c.copy(staffName = after[at], staff = at, rosterKey = roster)
+        if (c.staffGone) c
+        else if (c.staffId != null && afterIds.isNotEmpty()) {
+            val at = afterIds.indexOf(c.staffId)
+            when {
+                at < 0 -> c.copy(staffGone = true)
+                c.staff == at && c.staffName == after[at] -> c
+                else -> c.copy(staffName = after[at], staff = at)
+            }
+        } else if (renamed) {
+            val at = if (c.staffName == null) null else consultStaff(c, before)
+            if (at == null) c else c.copy(staffName = after[at], staff = at, rosterKey = roster)
+        } else c
     }
 }
 
@@ -106,16 +135,17 @@ internal fun consultChainResumable(t: ChainTarget, startDate: String, shiftSymbo
     consultChainTarget(t, startDate, shiftSymbols, days) != null || t.suggestion != null
 
 /** 「開く」「案を見る」を出せない理由（対象をもともと持たない相談は null＝何も出さない）。 */
-internal fun consultTargetNote(c: ConsultItem, startDate: String, staffNames: List<String>, shiftSymbols: List<String>, days: Int): String? {
+internal fun consultTargetNote(c: ConsultItem, startDate: String, staffNames: List<String>, shiftSymbols: List<String>, days: Int, staffIds: List<Int> = emptyList()): String? {
     c.chain?.let { t ->
         if (consultChainResumable(t, startDate, shiftSymbols, days)) return null
         return "いまの期間・シフトにない枠なので、案を見られません（${t.date?.let { shortDate(it) } ?: "?"} の「${t.shiftSymbol ?: "?"}」）"
     }
     if (c.staff == null && c.staffName == null && c.day == null && c.date == null) return null
-    if (consultCell(c, startDate, staffNames, days) != null) return null
-    if (consultStaff(c, staffNames) == null) {
+    if (consultCell(c, startDate, staffNames, days, staffIds) != null) return null
+    if (consultStaff(c, staffNames, staffIds) == null) {
         val name = c.staffName
-        if (name != null && staffNames.count { it == name } > 1) return "同じ名前の職員が複数いて、どの人か決められないので開けません（${name}さん）"
+        val byId = c.staffGone || (c.staffId != null && staffIds.isNotEmpty())
+        if (!byId && name != null && staffNames.count { it == name } > 1) return "同じ名前の職員が複数いて、どの人か決められないので開けません（${name}さん）"
         return "いまの職員一覧にいないので開けません" + (name?.let { "（${it}さん）" } ?: "")
     }
     return "いまの期間にない日なので開けません" + (c.date?.let { "（${shortDate(it)}）" } ?: "")

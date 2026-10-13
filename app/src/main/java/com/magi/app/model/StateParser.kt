@@ -38,9 +38,9 @@ object StateParser {
         val groups = o.optJSONArray("groups").mapObjects("groups") {
             Group(it.optString("name"), it.optString("kigou"))
         }
-        val staff = o.optJSONArray("staff").mapObjects("staff") {
-            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", -1))
-        }
+        val staff = withStaffIds(o.optJSONArray("staff").mapObjects("staff") {
+            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", -1), it.optInt("id", 0))
+        })
         val skillGroups = o.optJSONArray("skillGroups").mapObjects("skillGroups") {
             Group(it.optString("name"), it.optString("kigou"))
         }
@@ -143,7 +143,7 @@ object StateParser {
         if (structureEdited && state != null) return serialize(state, schedule)
         val orig = originalJson ?: return null
         return if (constraintsEdited && state != null) exportWithEdits(orig, state, schedule)
-        else exportWithSchedule(orig, schedule, state?.manualPins)
+        else exportWithSchedule(orig, schedule, state?.manualPins, state?.staff)
     }
 
     /**
@@ -151,8 +151,9 @@ object StateParser {
      * so every field (including ones this app does not model) is preserved exactly,
      * then overwrite only "schedule".
      */
-    fun exportWithSchedule(originalJson: String, newSchedule: Array<IntArray>, manualPins: List<ManualPin>? = null): String {
+    fun exportWithSchedule(originalJson: String, newSchedule: Array<IntArray>, manualPins: List<ManualPin>? = null, staff: List<Staff>? = null): String {
         val o = JSONObject(originalJson)
+        if (staff != null) putStaffIds(o, staff)
         // 最適化後 schedule と食い違う古い派生・キャッシュ系フィールドを除去（互換性事故防止）。
         for (k in DERIVED_KEYS) {
             o.remove(k)
@@ -179,6 +180,7 @@ object StateParser {
     fun exportWithEdits(originalJson: String, state: MagiState, newSchedule: Array<IntArray>): String {
         val o = JSONObject(originalJson)
         for (k in DERIVED_KEYS) o.remove(k)
+        putStaffIds(o, state.staff)
         val sched = JSONArray()
         for (row in newSchedule) { val r = JSONArray(); for (v in row) r.put(v); sched.put(r) }
         o.put("schedule", sched)
@@ -198,6 +200,16 @@ object StateParser {
         o.put("manualPins", consArr(state.manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
         if (state.extWishes.isNotEmpty() || o.has("extWishes")) o.put("extWishes", consArr(state.extWishes) { JSONObject().put("staff", it.staff).put("days", JSONArray(it.days)).put("shifts", JSONArray(it.shifts)) })
         return o.toString(2)
+    }
+
+    /** 元のファイルの職員へ読込時に振った ID を書く（構造を編集していない経路＝並びと人数は元のまま。食い違えば触らない）。 */
+    private fun putStaffIds(o: JSONObject, staff: List<Staff>) {
+        val arr = o.optJSONArray("staff") ?: return
+        if (arr.length() != staff.size) return
+        for (i in staff.indices) {
+            val so = arr.optJSONObject(i) ?: continue
+            if (staff[i].id > 0) so.put("id", staff[i].id)
+        }
     }
 
     private fun <T> consArr(list: List<T>, f: (T) -> JSONObject): JSONArray {
@@ -229,7 +241,7 @@ object StateParser {
         })
         o.put("groups", consArr(state.groups) { obj("name" to it.name, "kigou" to it.kigou) })
         val staffArr = JSONArray()
-        for (s in state.staff) { val so = JSONObject(); so.put("name", s.name); so.put("groupIdx", s.groupIdx); so.put("skillIdx", s.skillIdx); staffArr.put(so) }
+        for (s in state.staff) { val so = JSONObject(); if (s.id > 0) so.put("id", s.id); so.put("name", s.name); so.put("groupIdx", s.groupIdx); so.put("skillIdx", s.skillIdx); staffArr.put(so) }
         o.put("staff", staffArr)
         o.put("skillGroups", consArr(state.skillGroups) { obj("name" to it.name, "kigou" to it.kigou) })
         o.put("groupShift", intGrid(state.groupShift))

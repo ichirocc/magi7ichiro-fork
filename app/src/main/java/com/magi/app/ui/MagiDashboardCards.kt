@@ -334,10 +334,10 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
             Text("関係者に確認してから決める項目です。確認できたら「済」を押してください（アプリを閉じると消えます。書き出しは止めません）。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             ui.consults.forEachIndexed { idx, c ->
-                // 対象は氏名と実日付で今のデータに引き直す（月を移した・職員を消した・並べ替えたあとに別のセルを開かない）。
-                val cell = if (c.chain != null) null else consultCell(c, ui.startDate, ui.staffNames, ui.days)
+                // 対象は職員 ID（無ければ氏名）と実日付で今のデータに引き直す（月を移した・職員を消した・並べ替えたあとに別のセルを開かない）。
+                val cell = if (c.chain != null) null else consultCell(c, ui.startDate, ui.staffNames, ui.days, ui.staffIds)
                 val chainOk = c.chain != null && consultChainResumable(c.chain, ui.startDate, ui.shiftSymbols, ui.days)
-                val note = consultTargetNote(c, ui.startDate, ui.staffNames, ui.shiftSymbols, ui.days)
+                val note = consultTargetNote(c, ui.startDate, ui.staffNames, ui.shiftSymbols, ui.days, ui.staffIds)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
@@ -522,6 +522,7 @@ internal fun OperatorNextActionCard(
     onStop: () -> Unit,      // やめる（停止）
     onExport: () -> Unit,    // 印刷・書き出し / そのまま配る（CSV書き出し）
     onSchedule: () -> Unit,  // 中身を見る（勤務表へ）
+    onPreDist: () -> Unit = onExport,   // 配布前確認（必須違反 0 件の主ボタン。仕様 §10）
     onFix: () -> Unit,       // なおし方を見る（勤務表で手直し）
     onSetup: () -> Unit,     // データを見直す（編集へ）
     onLanding: (EditLanding?) -> Unit = {},   // [UX監査 中4] 原因のある「データを見直す」は対応する区分・節へ（null＝編集の先頭）
@@ -582,7 +583,7 @@ internal fun OperatorNextActionCard(
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
             if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当外の希望が ${ui.impossibleWishCount} 件あります。" else "③ 必須条件を満たしました。中身を確認して配ってください。",
-            "印刷・書き出し", onExport, true, "中身を見る", onSchedule,
+            "配布前確認", onPreDist, true, "中身を見る", onSchedule,
             body = ui.runSummary)
         infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
@@ -1901,3 +1902,30 @@ internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit
     }
 }
 
+/** 配布前確認（仕様 §10）。評価・必須違反・要調整・相談・保存を 1 画面に並べ、配るかどうかは利用者が決める。 */
+@Composable
+internal fun PreDistributionDialog(rows: List<PreDistRow>, onExport: () -> Unit, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { DialogHeader("配布前確認", onDismiss) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                rows.forEach { r ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(r.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(72.dp))
+                        Text((when (r.ok) { true -> "✓ "; false -> "! "; null -> "" }) + r.value,
+                            color = if (r.ok == false) cs.error else cs.onSurface, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Text(PRE_DIST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+        },
+        confirmButton = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onDismiss(); onExport() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("配ると決めて書き出す") }
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("戻る") }
+            }
+        },
+    )
+}

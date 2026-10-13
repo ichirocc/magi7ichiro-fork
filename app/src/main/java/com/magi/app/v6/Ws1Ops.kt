@@ -4,6 +4,7 @@ import com.magi.app.model.Group
 import com.magi.app.model.MagiState
 import com.magi.app.model.Shift
 import com.magi.app.model.Staff
+import com.magi.app.model.nextStaffId
 import java.time.LocalDate
 
 /**
@@ -310,7 +311,7 @@ object Ws1Ops {
     fun addStaff(state: MagiState, sched: Array<IntArray>, name: String, groupIdx: Int): Ws1Result {
         val t = if (sched.isNotEmpty()) sched[0].size else state.dayCount
         val gi = groupIdx.coerceIn(0, (state.groups.size - 1).coerceAtLeast(0))
-        val staff = state.staff + Staff(name, gi)
+        val staff = state.staff + Staff(name, gi, id = nextStaffId(state.staff))
         val fill = fillShift(state.groupShift.getOrNull(gi), restShiftIndex(state))
         val newSched = copyGrid(sched) + IntArray(t) { fill }
         val ns = state.copy(staff = staff)
@@ -564,7 +565,7 @@ object Ws1Ops {
                 s.groupIdx > g -> s.groupIdx - 1
                 else -> s.groupIdx
             }
-            if (ni == s.groupIdx) s else Staff(s.name, ni, s.skillIdx)
+            if (ni == s.groupIdx) s else s.copy(groupIdx = ni)
         }
         return state.copy(groups = groups, groupShift = gs, groupShiftApt = apt, staff = staff)
     }

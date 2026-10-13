@@ -768,7 +768,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             messageIsError = false,
             running = false, hasResult = true, relaxedBoard = false, engineRan = true,
             runSummary = prev?.let { runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report)) },
-            message = "勤務表ができました（閉じている間に作成）: 必須違反 ${r.report.hard}件・違反の合計 ${r.report.total}件",
+            message = completedText(r.report.hard, r.report.total, "（閉じている間に計算）"),
         ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
         lastResultHard = r.report.hard.toLong()
@@ -1795,7 +1795,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     autoSave()
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
-                    val adoptedMsg = if (s5 == null) "勤務表ができました: 必須違反 ${res.report.hard}件・違反の合計 ${res.report.total}件 (${System.currentTimeMillis() - startMs}ms)"
+                    val adoptedMsg = if (s5 == null) completedText(res.report.hard, res.report.total, "")
                     else "希望（${s5.label}）を調整して（希望は外しました）、再作成しました: 必須違反 ${s5.h0} → ${res.report.hard}（試算の見込み ${s5.pCancel}）" +
                         (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。再作成するか、元に戻す（希望と勤務表をまとめて戻す）を選べます。"
                         else if (res.report.hard > 0) "。残りの必須違反 ${res.report.hard}件 は、次にやることカードから直します。" else "")
@@ -2735,7 +2735,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             t.suggestion != null && sched != null && st != null && !consultChainStale(t, boardKey(sched), stateKey(st)) ->
                 previewOrApplyFix(t.suggestion, t.boardKey, t.stateKey)
             t.suggestion != null -> _ui.update { it.copy(messageIsError = true, message = CONSULT_STALE) }
-            else -> _ui.update { it.copy(messageIsError = true, message = consultTargetNote(c, u.startDate, u.staffNames, u.shiftSymbols, u.days) ?: "この枠はいまのデータにありません") }
+            else -> _ui.update { it.copy(messageIsError = true, message = consultTargetNote(c, u.startDate, u.staffNames, u.shiftSymbols, u.days, u.staffIds) ?: "この枠はいまのデータにありません") }
         }
     }
 
@@ -2769,7 +2769,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // ---- [3.645.0/仕様 5.3] 相談してから決める判断（セッション内のみ・state 非保存。出力も判定も止めない） ----
     fun addConsult(item: ConsultItem) {
         _ui.update {
-            val stamped = if (item.staffName != null && item.rosterKey == 0) item.copy(rosterKey = rosterKeyOf(it.staffNames)) else item
+            val withId = consultStampStaffId(item, it.staffNames, it.staffIds)
+            val stamped = if (withId.staffName != null && withId.rosterKey == 0) withId.copy(rosterKey = rosterKeyOf(it.staffNames)) else withId
             val next = consultAdd(it.consults, stamped)
             if (next == null) it.copy(messageIsError = false, message = CONSULT_DUPLICATE)
             else it.copy(messageIsError = false, consults = next, message = CONSULT_ADDED)
@@ -3588,8 +3589,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             zeroAllowCells = zeroAllowCells(cachedProblem(st), schedule),
             logs = v6Logs + compressDiagLogs(mappedDiag),
             staffNames = st.staff.map { it.name },
-            // [3.651.0] 改名（名簿の 1 か所だけが変わった）なら相談の氏名を追従させる。元に戻す・やり直すも同じ経路を通る。
-            consults = followRenameInConsults(base.consults, base.staffNames, st.staff.map { it.name }),
+            staffIds = st.staff.map { it.id },
+            // 相談の氏名・位置を名簿に合わせる（ID で引く。ID の無い相談は改名だけ追従＝3.651.0）。元に戻す・やり直すも同じ経路を通る。
+            consults = followRenameInConsults(base.consults, base.staffNames, st.staff.map { it.name }, st.staff.map { it.id }),
             staffGroupSymbols = groupSymbols.map { toHankakuKigou(it) },
             shiftSymbols = st.shifts.map { toHankakuKigou(it.kigou) },
             schedule = schedule.map { it.toList() },

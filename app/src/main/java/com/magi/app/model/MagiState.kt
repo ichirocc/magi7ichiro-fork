@@ -25,8 +25,23 @@ enum class ShiftRole { None, Rest }
 data class Shift(val name: String, val kigou: String, val need1: String, val need2: String, val role: ShiftRole = ShiftRole.None)
 data class Group(val name: String, val kigou: String)
 /** staff[i]: groupIdx -> ユニットグループ(既存・担当可否/covU)、skillIdx -> スキルグループ(新設・新C41s/C42s専用)。
- *  skillIdx の既定は -1＝未所属（backlog#38。0 は先頭のスキルグループ）。 */
-data class Staff(val name: String, val groupIdx: Int, val skillIdx: Int = -1)
+ *  skillIdx の既定は -1＝未所属（backlog#38。0 は先頭のスキルグループ）。
+ *  [id] は不変の職員 ID（1 以上。0＝未採番）＝並び替え・改名・同名でも同じ人を指す。採番は [withStaffIds]。 */
+data class Staff(val name: String, val groupIdx: Int, val skillIdx: Int = -1, val id: Int = 0)
+
+/** 無い・重複・0 以下の職員 ID に、並び順で最大値＋1 から振る（先に現れた有効な ID はそのまま）。 */
+fun withStaffIds(staff: List<Staff>): List<Staff> {
+    var next = staff.maxOfOrNull { it.id }?.coerceAtLeast(0) ?: 0
+    val seen = HashSet<Int>()
+    var changed = false
+    val out = staff.map { s ->
+        if (s.id > 0 && seen.add(s.id)) s else { changed = true; next++; seen.add(next); s.copy(id = next) }
+    }
+    return if (changed) out else staff
+}
+
+/** 次に足す職員の ID（今の最大値＋1）。 */
+fun nextStaffId(staff: List<Staff>): Int = (staff.maxOfOrNull { it.id } ?: 0).coerceAtLeast(0) + 1
 data class Range(val lo: String, val hi: String)
 
 /** Raw constraint rows (as authored), resolved later into index form. */
