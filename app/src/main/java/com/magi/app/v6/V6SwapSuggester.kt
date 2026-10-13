@@ -56,10 +56,11 @@ object FixSuggester {
         maxResults: Int = 8,
         deadlineMs: Long = 8000L,
         ejectionChain: Boolean = false,
+        strictNewHard: Boolean = true,
     ): List<FixSuggestion> {
         val p = Problem(state)
         if (p.S < 1 || p.T < 1) return emptyList()
-        return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs, ejectionChain).run(maxResults)
+        return Session(state, p, normalizeSchedule(schedule, p), focusStaff, focusShift, deadlineMs, ejectionChain, strictNewHard).run(maxResults)
     }
 
     private class Quad(val sug: FixSuggestion, val dHard: Int, val dTotal: Int, val dWeighted: Double)
@@ -69,8 +70,14 @@ object FixSuggester {
         private val state: MagiState, private val p: Problem, private val s: Array<IntArray>,
         private val focus: Int?, private val focusShift: Int?, private val deadlineMs: Long,
         private val ejectionChain: Boolean = false,
+        private val strictNewHard: Boolean = true,
     ) {
         private val base = UnifiedViolationChecker.check(state, s)
+        private val baseHardKeys = ViolationIdentity.keys(base, hardOnly = true)
+
+        /** 必須の族の件数が増えるか、[strictNewHard] なら別の職員・日・枠に必須違反が新たに生まれる手（[introducesHardViolation]）。 */
+        private fun introduces(rep: ViolationReport): Boolean =
+            newHardFamilyViolation(base, rep) != null || (strictNewHard && ViolationIdentity.keys(rep, hardOnly = true).any { it !in baseHardKeys })
         private val found = ArrayList<Quad>()
         private val start = EngineClock.nowMs()
 
@@ -136,13 +143,13 @@ object FixSuggester {
             found.add(Quad(FixSuggestion(kind, ops, label, rep.hard - base.hard, rep.total - base.total, diffOf(rep)),
                 rep.hard - base.hard, rep.total - base.total, rep.weightedScore - base.weightedScore))
         }
-        /** ops をその場で適用→評価→復元。base より良く、かつ別の HARD 族を新規に崩さなければ候補に追加
-         *  （[newHardFamilyViolation]。`FixApplyGate` と同じ規則＝提案の時点で弾く。docs/automation.md
+        /** ops をその場で適用→評価→復元。base より良く、かつ必須違反を新たに生まなければ候補に追加
+         *  （[introduces]。`FixApplyGate` と同じ規則＝提案の時点で弾く。docs/automation.md
          *  「担当外・希望固定・禁止連・個人固定の新規違反なし」）。回数固定（下限＝上限）を崩す手も同じく弾く。 */
         private fun tryOps(kind: FixKind, ops: List<FixCell>, label: String) {
             if (ops.any { banNew(it.staff, it.day, it.toShift) }) return
             val rep = evalOps(ops)
-            if (!betterReport(rep, base) || newHardFamilyViolation(base, rep) != null) return
+            if (!betterReport(rep, base) || introduces(rep)) return
             val after = s.copy2D().also { w -> for (op in ops) w[op.staff][op.day] = op.toShift }
             if (!exactPinRegression(p, s, after)) record(kind, ops, label, rep)
         }
@@ -242,7 +249,7 @@ object FixSuggester {
                             if (a == x || p.extBanned(i, j, x)) continue
                             s[i][j] = x
                             val rep = UnifiedViolationChecker.check(state, s)
-                            val ok = betterReport(rep, bestRep) && newHardFamilyViolation(base, rep) == null && !exactPinRegression(p, s0, s)
+                            val ok = betterReport(rep, bestRep) && !introduces(rep) && !exactPinRegression(p, s0, s)
                             s[i][j] = a
                             if (ok) { bestRep = rep; bestJ = j; bestSaved = a }
                         }
@@ -298,7 +305,7 @@ object FixSuggester {
                     for (c in 0 until n) s[cells[c]][j] = cellOpts[c][idx[c]]
                     val rep = UnifiedViolationChecker.check(state, s)
                     // tryOps と同じ規則（回数固定を崩す組み合わせは最良に選ばない）。
-                    if (betterReport(rep, base) && newHardFamilyViolation(base, rep) == null &&
+                    if (betterReport(rep, base) && !introduces(rep) &&
                         (bestComboRep == null || betterReport(rep, bestComboRep)) && !exactPinRegression(p, s0, s)) {
                         bestComboRep = rep; bestCombo = IntArray(n) { cellOpts[it][idx[it]] }
                     }

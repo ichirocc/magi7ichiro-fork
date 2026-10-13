@@ -280,6 +280,8 @@ object V6PortAnalyzer {
         val work = schedule.copy2D()
         for (op in ops) work[op.staff][op.day] = op.toShift
         val after = UnifiedViolationChecker.check(state, work)
+        // 見せる前に当てるときと同じ規則で弾く（別の職員・日・枠に必須違反を新たに生む入れ替えは出さない）。
+        if (introducesHardViolation(before, after)) return null
         val diff = ArrayList<Pair<String, Int>>()
         for (key in (before.breakdown.keys + after.breakdown.keys)) {
             val d = (after.breakdown[key] ?: 0) - (before.breakdown[key] ?: 0)
@@ -293,7 +295,7 @@ object V6PortAnalyzer {
      *  同日交換・別日交換・3 人巡回・玉突き・1 日総当たり・多段連鎖）を [Probe.C3N_WALL_DEEP_MS] の上限で探し、必須を厳密に減らす手が
      *  1 つでもあれば「壁ではない」。見つからないことは不能の証明ではなく、局所手の全滅より強い証拠。 */
     fun c3nWallRefutedByOneMove(state: MagiState, schedule: Array<IntArray>, budgetMs: Long = Probe.C3N_WALL_DEEP_MS): Boolean =
-        FixSuggester.suggest(state, schedule, maxResults = 4, deadlineMs = budgetMs, ejectionChain = true).any { it.deltaHard < 0 }
+        FixSuggester.suggest(state, schedule, maxResults = 4, deadlineMs = budgetMs, ejectionChain = true, strictNewHard = false).any { it.deltaHard < 0 }
 
     /**
      * 人員不足(covU)の枠ごとの原因診断。エンジンは変更せず、現在の解だけを読み取り、
