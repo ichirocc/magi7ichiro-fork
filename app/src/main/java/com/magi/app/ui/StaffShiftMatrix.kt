@@ -116,9 +116,11 @@ internal fun StaffShiftMatrixCard(
                     }) {
                     Text(
                         // [3.483.0 E-9] 旧「…に対し、…は…回（…）」の3段構文を「目標 ＞ 上限」の1式へ。
-                        "⚠ ${toHankakuKigou(worst.kigou)}：目標の合計${worst.aptSum}回 ＞ " +
+                        "⚠ ${toHankakuKigou(worst.kigou)}：担当できる職員の目標の合計${worst.aptSum}回 ＞ " +
                             (if (worst.isRest) "休める日数の上限${worst.capacity}日" else "必要人数の合計${worst.capacity}回") +
-                            "（${worst.shortfall}回ぶんは必ず届きません）。タップでその列へ",
+                            "（${worst.shortfall}回ぶんは必ず届きません）" +
+                            (if (overloaded.size > 1) "。ほかに${overloaded.size - 1}列あります" else "") +
+                            "\nタップでその列へ移ります。その列の目標を見直しましょう",
                         style = MaterialTheme.typography.bodySmall, color = cs.onErrorContainer,
                         modifier = Modifier.padding(10.dp),
                     )
@@ -202,12 +204,13 @@ internal fun StaffShiftMatrixCard(
         StaffShiftCellSheet(ui, cv, onEvent, counts, v, i, k, onDismiss = { onSheetCellChange(null) })
     }
     if (confirmResetApt) {
+        val aptSet = v.groupShiftApt.sumOf { row -> row.count { it.isNotBlank() } }
         AlertDialog(
             onDismissRequest = { confirmResetApt = false },
             title = { Text("目標を全リセット") },
             text = {
                 Text(
-                    "全グループ×全シフトの「目標」を空欄（目標なし）に戻します。\n" +
+                    "全グループ×全シフトの「目標」${aptSet}件を空欄（目標なし）に戻します。\n" +
                         "・目標由来のやわらかい違反は消えます\n" +
                         "・担当ON/OFF・回数の下限上限・勤務表は変わりません\n" +
                         "・「元に戻す」で復帰できます\n実行しますか？",
@@ -353,9 +356,9 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
             Text("グループの目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.titleSmall)
             NumberStepper("目標", raw.trim(), { onEvent(MagiEvent.Structure.SetGroupApt(g, k, it)) }, min = 0, blankLabel = "なし")
             if (hasRange && raw.trim().toIntOrNull() != null) {
-                Text("この職員・シフトは個人の下限・上限を優先するため、グループの目標は適用されません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text("${name}さんの${toHankakuKigou(kigou)}は個人の下限・上限を優先するため、グループの目標は適用されません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             } else if (apt != null && raw.trim().toIntOrNull() != apt) {
-                Text("この職員の希望・置けるシフトから ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text("${name}さんの希望・置けるシフトから ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(4.dp))
             Text("個人の下限・上限（このシフトだけ）", style = MaterialTheme.typography.titleSmall)

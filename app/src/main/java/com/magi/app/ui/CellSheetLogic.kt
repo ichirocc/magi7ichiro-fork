@@ -69,12 +69,15 @@ internal fun cellStatusLine(state: MagiState, p: Problem, s: Array<IntArray>, i:
 private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: Int, j: Int, fam: String): String? {
     fun sym(k: Int) = state.shifts.getOrNull(k)?.kigou ?: "?"
     fun name(x: Int) = state.staff.getOrNull(x)?.name ?: "#$x"
+    fun group(x: Int) = state.staff.getOrNull(x)?.let { state.groups.getOrNull(it.groupIdx)?.name }?.takeIf { it.isNotBlank() }?.let { "グループ「$it」" } ?: "この職員"
     fun day(d: Int) = DayText.short(state.startDate, d)
-    fun dayFull(d: Int) = DayText.full(state.startDate, d)
     val cur = s.getOrNull(i)?.getOrNull(j) ?: -1
     val count = { k: Int -> s[i].count { it == k } }
+    // 氏名とこの日はシートの見出しにある＝ここでは繰り返さない（見出しと違う日・範囲だけ書く）。
     return when (fam) {
-        "c3w" -> p.wish.getOrNull(i)?.getOrNull(j + 1)?.takeIf { it >= 0 }?.let { "翌日(${sym(it)})への前日禁止（${sym(cur)}）" }
+        "c3w" -> p.wish.getOrNull(i)?.getOrNull(j + 1)?.takeIf { it >= 0 }?.let {
+            "${breakdownLabels[fam]} ${sym(cur)}→${sym(it)}（${DayText.range(state.startDate, j, j + 1)}）"
+        }
         "extWish" -> (0 until p.K).filter { p.extBanned(i, j, it) }.takeIf { it.isNotEmpty() }?.let { ks ->
             "拡張希望（${ks.joinToString("・") { sym(it) }}以外）に${sym(cur)}が入っています"
         }
@@ -87,7 +90,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
         "c3", "c3m" -> {
             val list = if (fam == "c3") p.cons3 else p.cons3m
             list.firstOrNull { it.seq.firstOrNull() == cur }?.let { c ->
-                "${breakdownLabels[fam]} ${c.seq.joinToString("→") { sym(it) }} が${dayFull(j)}から続かない"
+                "${breakdownLabels[fam]} ${c.seq.joinToString("→") { sym(it) }} がこの日から続かない"
             }
         }
         "c42s", "c42" -> {
@@ -109,8 +112,8 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
             val lo = p.covUCell(cur, j, 0)
             val hi = maxOf(p.need1[cur][j], if (p.use2) p.need2[cur][j] else -1)
             val n = (0 until p.S).count { s[it][j] == cur }
-            if (fam == "covU") "${dayFull(j)}の${sym(cur)}が人員不足（必要${lo}人に${n}人）"
-            else "${dayFull(j)}の${sym(cur)}が人員過剰（適正${hi}人に${n}人）"
+            if (fam == "covU") "${sym(cur)}が人員不足（必要${lo}人に${n}人）"
+            else "${sym(cur)}が人員過剰（適正${hi}人に${n}人）"
         }
         "c41s", "c41" -> if (cur < 0) null else {
             val skill = fam == "c41s"
@@ -122,7 +125,7 @@ private fun familyDetail(state: MagiState, p: Problem, s: Array<IntArray>, i: In
         }
         "c1" -> c1CellText(c1Shortages(p, s), s, i, j, ::sym, ::day)
         "pref" -> p.wish.getOrNull(i)?.getOrNull(j)?.takeIf { it >= 0 }?.let { "希望は${sym(it)}（今は${sym(cur)}）" }
-        "groupViol" -> "${sym(cur)}は${name(i)}の担当外"
+        "groupViol" -> "${sym(cur)}は${group(i)}の担当外"
         "low" -> if (cur < 0) null else "${sym(cur)}が${count(cur)}回（下限${p.rangeLo[i][cur]}）"
         "high" -> if (cur < 0) null else if (p.rangeHi[i][cur] == 0 && cur != p.restIdx) {
             if (p.wish.getOrNull(i)?.getOrNull(j) == cur) ZERO_CAP_WISH_TEXT else ZERO_CAP_TEXT
@@ -378,7 +381,10 @@ internal fun hardViolationItems(state: MagiState, p: Problem, s: Array<IntArray>
             }
             "c3w" -> { val days = listOf(j, minOf(j + 1, p.T - 1)).distinct()
                 out.getOrPut("c3w,$i,$j") { TourItem(fam, i, days, "${breakdownLabels["c3w"]} ${sym(s[i][j])}→${sym(s[i][days.last()])} ・ ${span(days)}") } }
-            "pref", "groupViol", "extWish" -> out.getOrPut("$fam,$i,$j") { TourItem(fam, i, listOf(j), "${breakdownLabels[fam]} ${sym(s[i][j])} ・ ${DayText.full(state.startDate, j)}") }
+            "pref", "groupViol", "extWish" -> out.getOrPut("$fam,$i,$j") {
+                val wish = if (fam == "pref") p.wish.getOrNull(i)?.getOrNull(j)?.takeIf { it >= 0 }?.let { "（希望は${sym(it)}）" }.orEmpty() else ""
+                TourItem(fam, i, listOf(j), "${breakdownLabels[fam]} ${sym(s[i][j])}$wish ・ ${DayText.full(state.startDate, j)}")
+            }
             else -> {}
         }
     }
@@ -493,8 +499,9 @@ internal fun pinRegisterHint(canDo: Boolean, families: List<String>): String = w
     families.any { familyOfVioClass(it) in PIN_HARD_CELL_FAMILIES } -> PIN_HARD_HINT
     else -> ""
 }
-internal const val PIN_HARD_HINT = "このセルには必須違反があります。固定すると自動では動かしません。"
-internal const val PIN_NOT_CANDO_HINT = "担当外のシフトです。固定すると必須違反が残ったまま自動では動かしません。"
+// 手動固定の通知「…を手動固定しました（自動では変更しません）」の後ろに付く＝同じことを繰り返さない。
+internal const val PIN_HARD_HINT = "このセルには必須違反があります。"
+internal const val PIN_NOT_CANDO_HINT = "担当外のシフトなので、必須違反が残ります。"
 private val PIN_HARD_CELL_FAMILIES = setOf("c3n", "c3w", "pref", "groupViol", "extWish")
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */

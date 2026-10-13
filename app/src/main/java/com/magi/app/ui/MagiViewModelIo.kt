@@ -186,7 +186,7 @@ private fun MagiViewModel.rosterUnknownNote(unknown: Map<String, Int>): String {
     val cells = unknown.values.sum()
     val top = unknown.entries.sortedByDescending { it.value }.take(5).joinToString("・") { "${it.key}(${it.value})" }
     logOp("W", "勤務表CSV取込 凡例に無い記号 ${cells}セル: $top（休として取り込みました）")
-    return "｜⚠ 凡例に無い記号 ${cells}セル（$top）は休として取り込みました"
+    return "｜⚠ 凡例に無い記号 ${cells}セル（$top）は休として取り込みました（CSVの凡例に記号を足して取り込み直すと、そのシフトで入ります）"
 }
 
 fun MagiViewModel.importCsvSmart(rawText: String, onNewDataLoaded: (() -> Unit)? = null) {
@@ -228,7 +228,7 @@ fun MagiViewModel.importCsvSmart(rawText: String, onNewDataLoaded: (() -> Unit)?
         return
     }
     if (state == null) {
-        _ui.update { it.copy(messageIsError = true, message = "このCSVを取り込めませんでした。先に『データを開く』で基本データを読み込むか、病院の勤務表の書式（テンプレート）のCSVをご利用ください。") }
+        _ui.update { it.copy(messageIsError = true, message = "このCSVを取り込めませんでした（開いているデータがありません。勤務表だけのCSVは、開いているデータに重ねて取り込みます）。先に『データを開く』で基本データを読み込むか、病院の勤務表の書式（テンプレート）のCSVをご利用ください。") }
         return
     }
     // [3.282.0] 修復済みテキストをそのまま渡す（旧: rawText を渡し importCsv 内で二重に repair＝
@@ -247,7 +247,7 @@ fun MagiViewModel.importRosterAs(rawText: String, asWishes: Boolean, onLoaded: (
     val st = runCatching { com.magi.app.v6.RosterCsvImport.parse(text, asWishes, unknownOut = unknownSym) }.getOrNull()
     if (st == null) {
         val quote = if (com.magi.app.v6.csvHasUnclosedQuote(text)) "引用符（\"）が閉じていない行があります。" else ""
-        _ui.update { it.copy(messageIsError = true, message = "このCSVを読み込めませんでした。${quote}形式をご確認ください。") }
+        _ui.update { it.copy(messageIsError = true, message = "${if (asWishes) "希望シフト" else "勤務表"}としてCSVを取り込めませんでした（形式を読めません）。${quote}病院の勤務表の書式（テンプレート）のCSVか、形式をご確認ください。") }
         return
     }
     if (st.shiftCount <= 1) {
@@ -289,8 +289,8 @@ private fun componentImportMismatchHint(repairedText: String, what: String = "�
 
 /** [コンポーネント別取込] スタッフ一覧CSV（氏名,グループ,スキル）。既存は所属群/スキルを更新、未知の氏名は新規追加（勤務表に休の行を追加）。 */
 fun MagiViewModel.importStaffCsv(rawText: String) {
-    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
-    val sched = currentSchedule ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（職員一覧は既存データに追加/更新します）") }; return }
+    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "職員一覧を取り込めませんでした（開いているデータがありません）。職員一覧は既存データに追加・更新するので、先に『データを開く』でデータを開いてください") }; return }
+    val sched = currentSchedule ?: run { _ui.update { it.copy(messageIsError = false, message = "職員一覧を取り込めませんでした（開いているデータがありません）。職員一覧は既存データに追加・更新するので、先に『データを開く』でデータを開いてください") }; return }
     val text = MojibakeRepair.repair(rawText)
     // 未知の氏名を新規追加する経路なので、別形式のCSVは0件を待たずに断る（見出し・集計行・種別タグが職員として入る）。
     val mis = componentImportMismatchHint(text, what = "職員一覧", buttons = "『職員』").ifEmpty {
@@ -333,7 +333,7 @@ fun MagiViewModel.importStaffCsv(rawText: String) {
 
 /** [コンポーネント別取込] 希望シフトCSV（氏名,日,希望シフト）。氏名一致で希望を全置換。 */
 fun MagiViewModel.importWishesCsv(rawText: String) {
-    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（希望シフトは既存データに重ねます）") }; return }
+    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "希望シフトを取り込めませんでした（開いているデータがありません）。希望シフトは既存データに重ねるので、先に『データを開く』でデータを開いてください") }; return }
     val text = MojibakeRepair.repair(rawText)
     val res = runCatching { com.magi.app.v6.WishesCsvIO.parse(text, st) }.getOrNull()
     if (res == null) {
@@ -350,7 +350,7 @@ fun MagiViewModel.importWishesCsv(rawText: String) {
         //   混在するCSVでも、1回の取込結果から複数の直し所が分かるようにする。
         val examples = res.samples.joinToString(" ／ ")
         _ui.update { it.copy(messageIsError = true, message = "希望シフトの取込を中止しました（読めない行が${res.rejected}件）。" +
-            "この取込は既存の希望を置き換えるため、全部読めたときだけ実行します。例: $examples") }
+            "この取込は既存の希望を置き換えるため、全部読めたときだけ実行します。読めない行を直して、もう一度取り込んでください。例: $examples") }
         logOp("W", "希望シフトCSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: $examples")
         return
     }
@@ -360,7 +360,7 @@ fun MagiViewModel.importWishesCsv(rawText: String) {
 
 /** [コンポーネント別取込] 各制約CSV（種別タグ付き）。制約一式＋個人レンジを置換。 */
 fun MagiViewModel.importConstraintsCsv(rawText: String) {
-    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（各制約は既存データに重ねます）") }; return }
+    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "各制約を取り込めませんでした（開いているデータがありません）。各制約は既存データに重ねるので、先に『データを開く』でデータを開いてください") }; return }
     val text = MojibakeRepair.repair(rawText)
     val res = runCatching { com.magi.app.v6.ConstraintsCsvIO.parse(text, st) }.getOrNull()
     if (res == null) {
@@ -375,7 +375,7 @@ fun MagiViewModel.importConstraintsCsv(rawText: String) {
         // [2026-09-02, 外部レビュー#76] 例を最大3件まで列挙（旧: 最初の1件だけ、上のimportWishesCsvと同じ理由）。
         val examples = res.samples.joinToString(" ／ ")
         _ui.update { it.copy(messageIsError = true, message = "各制約の取込を中止しました（読めない行が${res.rejected}件）。" +
-            "この取込は既存の制約・個人の回数の下限・上限を置き換えるため、全部読めたときだけ実行します。例: $examples") }
+            "この取込は既存の制約・個人の回数の下限・上限を置き換えるため、全部読めたときだけ実行します。読めない行を直して、もう一度取り込んでください。例: $examples") }
         logOp("W", "各制約CSV取込 中止: 読めない行${res.rejected}件（取込可${res.accepted}件）例: $examples")
         return
     }
@@ -386,7 +386,7 @@ fun MagiViewModel.importConstraintsCsv(rawText: String) {
 /** [コンポーネント別取込/3.547.0] シフト種別の色CSV（記号,色）。掲載された記号だけ upsert で更新、
  *  掲載されない記号の既存カスタム色は変更しない（グリルで確認済み: 3.547.0「載っている分だけ上書き」）。 */
 fun MagiViewModel.importShiftColorsCsv(rawText: String) {
-    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "先にデータを開いてください（シフト色は既存データに重ねます）") }; return }
+    val st = state ?: run { _ui.update { it.copy(messageIsError = false, message = "シフト色を取り込めませんでした（開いているデータがありません）。シフト色は既存データに重ねるので、先に『データを開く』でデータを開いてください") }; return }
     val text = MojibakeRepair.repair(rawText)
     val res = runCatching { com.magi.app.v6.ShiftColorsCsvIO.parseUpsert(text, st) }.getOrNull()
     if (res == null) {
@@ -403,7 +403,7 @@ fun MagiViewModel.importShiftColorsCsv(rawText: String) {
         if (badH.isNotEmpty()) add("不正な色 ${badH.entries.take(3).joinToString("・") { "「${it.key}」${it.value}件" }}${if (badH.size > 3) "ほか" else ""}")
     }
     if (res.updated == 0) {
-        val tailWarn = if (warn.isEmpty()) "形式『記号,色』（例: 休,#ced1d5）をご確認ください。" else "⚠ ${warn.joinToString("／")}"
+        val tailWarn = if (warn.isEmpty()) "形式『記号,色』（例: 休,#ced1d5）をご確認ください。" else "⚠ ${warn.joinToString("／")}。記号はシフトの記号と同じに、色は #ced1d5 の形にしてください。"
         _ui.update { it.copy(messageIsError = true, message = "シフト色の取込失敗（反映0件）。$tailWarn") }
         logOp("W", "シフト色CSV取込 失敗: 0件" + (if (warn.isEmpty()) "" else " (${warn.joinToString("／")})"))
         return

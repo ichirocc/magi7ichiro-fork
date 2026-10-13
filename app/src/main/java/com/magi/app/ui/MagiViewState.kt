@@ -214,6 +214,25 @@ internal fun currentWeekIndex(weeks: List<List<Int>>, leftDay: Int, atEnd: Boole
 /** [思考誘導S3] 残っている必須違反に関わる希望 1 件（職員・日・理由）。 */
 internal data class InvolvedWish(val staff: Int, val day: Int, val name: String, val reason: String)
 
+// 関わる希望の理由（S3・S5 で共有）。希望と今の勤務の記号を添え、引けなければ記号なしの文にする。
+private fun wishSym(ui: UiState, i: Int, j: Int): String? = ui.wishes["$i,$j"]?.let { ui.shiftSymbols.getOrNull(it) }
+private fun boardSym(ui: UiState, i: Int, j: Int): String? = ui.schedule.getOrNull(i)?.getOrNull(j)?.let { ui.shiftSymbols.getOrNull(it) }
+
+private fun prefReason(ui: UiState, i: Int, j: Int): String =
+    wishSym(ui, i, j)?.let { w -> "希望の「$w」になっていません" + (boardSym(ui, i, j)?.let { "（いまは「$it」）" } ?: "") } ?: "希望の勤務になっていません"
+
+/** c3w の翌日の希望の行。[j] は印の付く前日。 */
+private fun c3wNextReason(ui: UiState, i: Int, j: Int): String =
+    "前日（${DayText.short(ui.startDate, j)}）に置けない" + (boardSym(ui, i, j)?.let { "「$it」" } ?: "勤務") + "が入っています"
+
+/** c3w の前日自身が希望の行。[j] は印の付く前日。 */
+private fun c3wPrevReason(ui: UiState, i: Int, j: Int): String =
+    "翌日（${DayText.short(ui.startDate, j + 1)}）の希望" + (wishSym(ui, i, j + 1)?.let { "「$it」" } ?: "の勤務") +
+        "の前日に置けない" + (wishSym(ui, i, j)?.let { "「$it」" } ?: "勤務") + "の希望です"
+
+private fun c3nWishReason(ui: UiState, i: Int, j: Int): String =
+    "希望" + (wishSym(ui, i, j)?.let { "「$it」" } ?: "") + "が禁止の並びに掛かっています"
+
 /**
  * 必須違反に関わる希望を、名前・日付・理由つきで列挙する（職員順→日順）。関わる＝そのセルに希望違反(pref)か
  * 希望の前日の禁止(c3w)がある、または禁止の並び(c3n)が本人の希望のセルに掛かっている。
@@ -225,10 +244,10 @@ internal fun involvedWishes(ui: UiState): List<InvolvedWish> =
         val j = parts.getOrNull(1)?.toIntOrNull() ?: return@flatMap emptyList()
         val name = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
         buildList {
-            if ("vio-pref" in fams) add(InvolvedWish(i, j, name, "希望の勤務になっていません"))
+            if ("vio-pref" in fams) add(InvolvedWish(i, j, name, prefReason(ui, i, j)))
             // c3w の印は前日側のセルに付く＝ぶつかっている希望はその翌日。
-            if ("vio-c3w" in fams) add(InvolvedWish(i, j + 1, name, "前日（${DayText.short(ui.startDate, j)}）に置けない勤務が入っています"))
-            if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(InvolvedWish(i, j, name, "希望が禁止の並びに掛かっています"))
+            if ("vio-c3w" in fams) add(InvolvedWish(i, j + 1, name, c3wNextReason(ui, i, j)))
+            if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(InvolvedWish(i, j, name, c3nWishReason(ui, i, j)))
         }
     }.distinct().sortedWith(compareBy({ it.staff }, { it.day }))
 
@@ -245,7 +264,7 @@ internal data class WishTrialCandidates(val direct: List<WishTrialRow>, val shor
     val isEmpty: Boolean get() = direct.isEmpty() && shortfall.all { it.rows.isEmpty() }
 }
 
-internal const val WISH_TRIAL_NOT_LOCKED = "担当できない勤務の希望なので、取り消しても勤務表は変わりません。"
+internal const val WISH_TRIAL_NOT_LOCKED = "担当できない勤務の希望なので、調整して外しても勤務表は変わりません。"
 /** [#41] 手動固定のセルは試算の候補にしない（`lockedWishKeys` が外す）＝担当外と混ぜず、固定が理由だと言う。 */
 internal const val WISH_TRIAL_PINNED = "このセルは手動固定のため、自動では変更しません。固定を外すと試算できます。"
 /** 希望タブの注記（希望が必須違反の並びに掛かっているとき）。希望を変えても盤面のセルはそのまま＝黙って崩さない。 */
@@ -273,12 +292,12 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
         val i = parts.getOrNull(0)?.toIntOrNull() ?: return@flatMap emptyList()
         val j = parts.getOrNull(1)?.toIntOrNull() ?: return@flatMap emptyList()
         buildList {
-            if ("vio-pref" in fams) add(Hit(i, j, 0, "希望の勤務になっていません"))
+            if ("vio-pref" in fams) add(Hit(i, j, 0, prefReason(ui, i, j)))
             if ("vio-c3w" in fams) {
-                add(Hit(i, j + 1, 1, "前日（${DayText.short(ui.startDate, j)}）に置けない勤務が入っています"))
-                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, "翌日（${DayText.short(ui.startDate, j + 1)}）の希望の勤務の前日に置けない勤務の希望です"))
+                add(Hit(i, j + 1, 1, c3wNextReason(ui, i, j)))
+                if (key in ui.lockedWishKeys) add(Hit(i, j, 1, c3wPrevReason(ui, i, j)))
             }
-            if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(Hit(i, j, 2, "希望が禁止の並びに掛かっています"))
+            if ("vio-c3n" in fams && ui.wishes.containsKey(key)) add(Hit(i, j, 2, c3nWishReason(ui, i, j)))
         }
     }
     val hitKeys = hits.map { it.staff to it.day }.toSet()
@@ -316,12 +335,12 @@ internal fun wishTrialCandidates(ui: UiState): WishTrialCandidates {
 /** [S5] 試算結果 1 行の文（§5 の表）。止めた試算は null（数字を出さない）。 */
 internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
     is WishTrial.Result -> when {
-        o.rk >= o.h0 && o.att <= 0 -> "この希望を取り消しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。すべての組み合わせを試したわけではありません。"
-        o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減り、再作成するとさらに${o.b}件 減る見込みです。"
-        o.rk >= o.h0 && o.aPrime > 0 -> "取り消すと必須違反が確実に${o.aPrime}件 減ります。"
-        o.rk >= o.h0 -> "取り消して再作成すると、必須違反が${o.b}件 減る見込みです。"
+        o.rk >= o.h0 && o.att <= 0 -> "この希望を調整して外しても、必須は減らない見込みです（必須 ${o.h0}件 → ${o.pCancel}件）。すべての組み合わせを試したわけではありません。"
+        o.rk >= o.h0 && o.aPrime > 0 && o.b > 0 -> "希望を調整して外すと必須違反が確実に${o.aPrime}件 減り、再作成するとさらに${o.b}件 減る見込みです。"
+        o.rk >= o.h0 && o.aPrime > 0 -> "希望を調整して外すと必須違反が確実に${o.aPrime}件 減ります。"
+        o.rk >= o.h0 -> "希望を調整して外し、再作成すると、必須違反が${o.b}件 減る見込みです。"
         o.att > 0 -> "再作成するだけの場合より、さらに${o.att}件 減る見込みです。"
-        else -> "取り消さなくても、再作成するだけで同じだけ減る見込みです。"
+        else -> "希望を外さなくても、再作成するだけで同じだけ減る見込みです。"
     }
     is WishTrial.Unavailable -> "試算できませんでした（${o.reason}）。"
     else -> null
@@ -330,7 +349,7 @@ internal fun wishTrialText(o: WishTrial.Outcome): String? = when (o) {
 /** [S5] 取り消しても必須が減らない見込みの行（S6 の組があれば「希望を残したまま、設定を緩めて試す」を添える）。 */
 internal fun wishTrialNoGain(o: WishTrial.Outcome): Boolean = o is WishTrial.Result && o.rk >= o.h0 && o.att <= 0
 
-internal const val WISH_KEEP_FOOTER = "希望は、あなたが選ぶまで取り消しません。"
+internal const val WISH_KEEP_FOOTER = "希望は、あなたが選ぶまで外しません（外したあとも元に戻すで戻せます）。"
 internal const val WISH_TO_RELAX_LABEL = "希望を残したまま、設定を緩めて試す"
 
 /** [S5] Rk < H0 の盤面でダイアログの先頭に出す文（§5）。対照だけで減らないなら null。 */
@@ -611,8 +630,11 @@ internal fun weeklySkewPhrase(wd: IntArray): String? {
  * limits は (職員,シフト) → (下限, 上限, 目標)。null なら数値の注記を省く。
  */
 internal fun staffCountSheet(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null): StaffCountSheet {
-    val c1 = ui.c1Shortages.filter { it.staff == i && it.stuck }.distinctBy { it.shift }.map { sh ->
-        "・${ui.shiftSymbols.getOrNull(sh.shift) ?: "${sh.shift}"}: ${breakdownLabels["c1"]}（${sh.day1}日に${sh.day2}日）— $C1_STUCK_TEXT"
+    val stuck = ui.c1Shortages.filter { it.staff == i && it.stuck }
+    val c1 = stuck.distinctBy { it.shift }.map { sh ->
+        val spans = stuck.filter { it.shift == sh.shift && it.day1 == sh.day1 && it.day2 == sh.day2 }
+            .joinToString("・") { DayText.range(ui.startDate, it.from, it.to) }
+        "・${ui.shiftSymbols.getOrNull(sh.shift) ?: "${sh.shift}"}: ${breakdownLabels["c1"]}（${sh.day1}日に${sh.day2}日・$spans）— $C1_STUCK_TEXT"
     }
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
     val row = ui.schedule.getOrNull(i).orEmpty()
@@ -695,7 +717,9 @@ internal fun settingsLabelFor(section: String): String = when (section) {
 /** 手が見つからなかったときの説明。lines は確かめた事実だけ、wishRelated なら「希望を見る」を出す。 */
 internal data class NoFixExplain(val lines: List<String>, val wishRelated: Boolean, val settingsSection: String)
 
-internal const val NO_FIX_SCOPE = "1 セルの変更・2 人の入れ替え・玉突きの範囲では、必須を増やさずに違反を減らす手が見つかりませんでした。"
+/** 1 行目＝見つからなかったこと（上段のシートは 2 行で切れる）、続けて確かめた理由、最後に探した範囲。 */
+internal const val NO_FIX_HEAD = "必須を増やさずに違反を減らす手は見つかりませんでした。"
+internal const val NO_FIX_SCOPE = "探したのは 1 セルの変更・2 人の入れ替え・玉突きの範囲です。"
 
 /**
  * 直せる手が 0 件のときの理由を盤面と設定から読む（推測は書かない）。
@@ -706,7 +730,7 @@ internal fun noFixReasons(
     limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)? = null,
     needLimits: ((Int, Int) -> Pair<Int, Int>?)? = null,
 ): NoFixExplain {
-    val out = ArrayList<String>()
+    val out = arrayListOf(NO_FIX_HEAD)
     var wish = false
     fun sym(k: Int) = ui.shiftSymbols.getOrNull(k) ?: "$k"
     fun cellAt(i: Int, j: Int) = ui.schedule.getOrNull(i)?.getOrNull(j)
@@ -746,7 +770,7 @@ internal fun noFixReasons(
         val here = ui.schedule.indices.filter { cellAt(it, d) == k }
         val pinned = here.filter { ui.wishes["$it,$d"] == k }
         if (pinned.isNotEmpty()) {
-            out += "${DayText.short(ui.startDate, d)} の「${sym(k)}」のうち " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } + " は本人の希望で固定されています。"
+            out += "${DayText.short(ui.startDate, d)} の「${sym(k)}」のうち " + pinned.joinToString("・") { (ui.staffNames.getOrNull(it) ?: "#$it") + "さん" } + " は本人の希望で固定されています。"
             wish = true
         }
     }
@@ -789,7 +813,7 @@ internal data class PreRunSheetText(
     val wallLanding: EditLanding? = null,
 )
 
-internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。"
+internal const val PRE_RUN_FLOOR_NOTE = "本人の希望は固定・必要人数は設定どおりなので、何度つくっても必須違反として残ります。行を押すと、そのセルか直す場所を開けます。"
 internal const val PRE_RUN_OVERCAP_HEAD = "設定上入れないシフトと希望（要調整）"
 internal const val PRE_RUN_OVERCAP_ZERO = "上限0のシフトに希望が載っています。上限0は意図した制限です。残るのは要調整です。希望を変えるか、入れない指定を設定で見直してください。"
 internal const val PRE_RUN_OVERCAP_OTHER = "個人の上限より多い希望が載っています。残るのは要調整です。希望を変えるか、設定で上限を見直してください。"

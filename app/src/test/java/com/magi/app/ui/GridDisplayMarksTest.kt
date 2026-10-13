@@ -231,21 +231,22 @@ class GridDisplayMarksTest {
         assertTrue(why.lines.any { "個人の上限が 0 回" in it })
         assertTrue(why.lines.any { "必要人数ぎりぎり" in it })
         assertTrue(why.lines.any { "下限＝上限で固定" in it && "休 1回" in it })
+        assertEquals(NO_FIX_HEAD, why.lines.first())
         assertEquals(NO_FIX_SCOPE, why.lines.last())
         assertEquals("yr_count", why.settingsSection)
         val plain = noFixReasons(u, FixFocus(1, 2))
-        assertEquals(listOf(NO_FIX_SCOPE), plain.lines)
+        assertEquals(listOf(NO_FIX_HEAD, NO_FIX_SCOPE), plain.lines)
         assertEquals("yr_headcount", noFixReasons(u, FixFocus(null, 1, 0)).settingsSection)
-        assertTrue(noFixReasons(u, FixFocus(0, null, 0)).lines.first().contains("このセル"))
+        assertTrue(noFixReasons(u, FixFocus(0, null, 0)).lines[1].contains("このセル"))
         // 禁止の並びの相手が本人の希望＝希望が関わる（［希望を見る］が出る）。板挟みの「他の人で補う」も同じ。
         val c3 = UiState(startDate = "2026-10-01", schedule = listOf(listOf(2, 3)), wishes = mapOf("0,1" to 3), shiftSymbols = listOf("休", "Pｼ", "Dﾃ", "A4"),
             violationCellFamilies = mapOf("0,0" to listOf("vio-c3n"), "0,1" to listOf("vio-c3n")))
         val w0 = noFixReasons(c3, FixFocus(0, null, 0))
         assertTrue(w0.wishRelated)
-        assertEquals("この並びには本人の希望（10/2 の「A4」）が入っています。", w0.lines.first())
+        assertEquals("この並びには本人の希望（10/2 の「A4」）が入っています。", w0.lines[1])
         val w1 = noFixReasons(c3, FixFocus(null, null, 1, exceptStaff = 0))
         assertTrue(w1.wishRelated)
-        assertEquals("本人の希望（10/2 の「A4」）は守ったままです。", w1.lines.first())
+        assertEquals("本人の希望（10/2 の「A4」）は守ったままです。", w1.lines[1])
     }
 
     @Test fun fixFocusKeyTellsRequestsApart() {

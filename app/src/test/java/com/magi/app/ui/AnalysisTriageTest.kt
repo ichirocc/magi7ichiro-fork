@@ -107,7 +107,7 @@ class AnalysisTriageTest {
     /** ホームの残り: 必須0のときの要調整は件数の族だけ（公平化・曜日の偏りの pt を件として足さない）。 */
     @Test fun homeRemainingLabelCountsOnlyCountFamilies() {
         assertEquals("必須 残り2件", homeRemainingLabel(2L, 0, mapOf("covU" to 2, "c1" to 5)))
-        assertEquals("残り1日", homeRemainingLabel(0L, 1, emptyMap()))
+        assertEquals("人員不足の日 残り1日", homeRemainingLabel(0L, 1, emptyMap()))
         assertEquals("必須は解消・要調整 5件", homeRemainingLabel(0L, 0, mapOf("apt" to 5, "fair" to 80, "weekly" to 60)))
         assertEquals("pt だけなら解消済みとは言わない", "必須は解消・残りは偏りのみ",
             homeRemainingLabel(0L, 0, mapOf("fair" to 3)))
@@ -162,6 +162,9 @@ class AnalysisTriageTest {
         val blocked = analysisTriage(ui(mapOf("covO" to 1), hasResult = true, coverage = cov("weekly")))
         assertEquals(listOf("人員過剰"), blocked.blockers.map { it.label })
         assertTrue(blocked.blockers.single().detail.contains("曜日の偏り"))
+        assertTrue("どの日のどのシフトかを言う", blocked.blockers.single().detail.startsWith("8/1(土)の「休」は、"))
+        assertTrue("曜日の偏りには緩める設定が無い＝手で動かす案内", blocked.blockers.single().detail.endsWith("勤務表で手で動かすと減らせます。"))
+        assertTrue(analysisTriage(ui(mapOf("covO" to 1), hasResult = true, coverage = cov("c1"))).blockers.single().detail.endsWith("の設定を緩めると動きます。"))
 
         val free = analysisTriage(ui(mapOf("covO" to 1), hasResult = true, coverage = cov(null)))
         assertTrue(free.blockers.isEmpty())

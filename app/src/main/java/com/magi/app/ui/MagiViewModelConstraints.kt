@@ -33,9 +33,18 @@ fun MagiViewModel.skillGroupKigouList(): List<String> = state?.skillGroups?.map 
 private fun MagiViewModel.rowAlreadyExists(family: String, values: List<String>, excludeIndex: Int? = null): Boolean {
     if (!constraintsViewOf(state).rowDuplicate(family, values, excludeIndex)) return false
     logOp("W", "制約の追加/変更を無視($family): ${values.joinToString(" ")} は登録済み")
-    _ui.update { it.copy(messageIsError = true, message = DUPLICATE_ROW_HINT) }
+    _ui.update { it.copy(messageIsError = true, message = "「${familyTitle(family)}」に同じ条件の行がすでにあるため、" + duplicateRemedy(excludeIndex != null)) }
     return true
 }
+
+/** 族の画面名（一覧の見出しの括弧より前。removeConstraint の通知と同じ）。 */
+private fun MagiViewModel.familyTitle(family: String): String =
+    constraintsViewOf(state).let { v -> (v.families + v.skillFamilies).firstOrNull { it.key == family } }?.title?.substringBefore('（') ?: "制約"
+
+/** 同じ行があって止めたときの「何」と「どうする」。追加は今ある行が効く、変更は値を変えるかこの行を消す。 */
+private fun duplicateRemedy(update: Boolean): String =
+    if (update) "変更しませんでした。別の値にするか、この行を削除してください"
+    else "追加しませんでした（今ある行がそのまま使われます）"
 
 fun MagiViewModel.addCons41s(groupKigou: String, shiftKigou: String, l: String, u: String) {
     val st = state ?: return
@@ -75,7 +84,7 @@ fun MagiViewModel.addCons42(g1: String, g2: String, s1: String, s2: String) {
 fun MagiViewModel.addCons3w(wishKigou: String, prevKigou: String) {
     val st = state ?: return
     if (st.cons3w.any { it.wishKigou == wishKigou && it.prevKigou == prevKigou }) {
-        _ui.update { it.copy(messageIsError = true, message = "「${wishKigou} の希望の前日は ${prevKigou} 禁止」は登録済みです") }
+        _ui.update { it.copy(messageIsError = true, message = "「${wishKigou} の希望の前日は ${prevKigou} 禁止」はすでにあるため、" + duplicateRemedy(update = false)) }
         return
     }
     logOp("I", "制約追加(希望前日禁止): ${wishKigou} の希望の前日は ${prevKigou} 禁止"); mutateConstraints(st.copy(cons3w = st.cons3w + C3wRow(wishKigou, prevKigou)))
@@ -95,7 +104,7 @@ fun MagiViewModel.seqDuplicateOf(family: String, pattern: List<String>, excludeI
 
 fun MagiViewModel.addCons3(family: String, pattern: List<String>) {
     val st = state ?: return
-    if (seqGapRejected(family, pattern)) return
+    if (seqGapRejected(family, pattern, update = false)) return
     // Level Zero loads cons3 by reading day columns until the first blank (truncate at
     // first blank, max 5 days), not by removing all blanks. Match that here.
     val pat = pattern.map { it.trim() }.takeWhile { it.isNotEmpty() }.take(5)
@@ -104,7 +113,7 @@ fun MagiViewModel.addCons3(family: String, pattern: List<String>) {
     //   （CSV 取込など画面を通らない経路は従来どおり事後診断に任せる＝ここは画面経由の追加だけ）。
     seqDuplicateOf(family, pat)?.let { dupFam ->
         logOp("W", "制約追加を無視($family): ${pat.joinToString("→")} は「$dupFam」に登録済み")
-        _ui.update { it.copy(messageIsError = true, message = "同じ並び「${pat.joinToString("→")}」は「$dupFam」に登録済みです") }
+        _ui.update { it.copy(messageIsError = true, message = seqDuplicateMessage(family, pat, dupFam, update = false)) }
         return
     }
     logOp("I", "制約追加($family): ${pat.joinToString("→")}")
@@ -120,11 +129,18 @@ fun MagiViewModel.addCons3(family: String, pattern: List<String>) {
 }
 
 /** 途中に空欄のある並びは断る（後ろが黙って切れ、1番目だけの禁止になりうる。CSV 取込も同じ形を形式エラーにする）。 */
-private fun MagiViewModel.seqGapRejected(family: String, pattern: List<String>): Boolean {
+private fun MagiViewModel.seqGapRejected(family: String, pattern: List<String>, update: Boolean): Boolean {
     if (!seqHasGap(pattern)) return false
     logOp("W", "制約の追加/変更を無視($family): 並びの途中に空欄 ${pattern.joinToString(",")}")
-    _ui.update { it.copy(messageIsError = true, message = "並びの途中に空欄があります。上から詰めて選んでください") }
+    _ui.update { it.copy(messageIsError = true, message = "「${seqFamilyJp(family)}」の並びの途中に空欄があるため、${if (update) "変更" else "追加"}しませんでした。上から詰めて選んでください") }
     return true
+}
+
+/** 同じ並びが登録済み。別の族にあるなら、そちらを消せば入れられる（族をまたぐ二重掛けを止めているため）。 */
+private fun seqDuplicateMessage(family: String, pat: List<String>, dupFam: String, update: Boolean): String {
+    val head = "同じ並び「${pat.joinToString("→")}」が「$dupFam」にすでにあるため、"
+    return if (dupFam == seqFamilyJp(family)) head + duplicateRemedy(update)
+    else head + "${if (update) "変更" else "追加"}しませんでした（「$dupFam」の行を消すと${if (update) "変更" else "追加"}できます）"
 }
 
 /** 変更時に値の重複を止める族（追加は各 addConsX が止める・並び4族は [seqDuplicateOf]）。 */
@@ -199,13 +215,13 @@ fun MagiViewModel.updateConstraint(family: String, index: Int, values: List<Stri
         "cons42s" -> { if (index !in st.cons42s.indices) return; st.copy(cons42s = st.cons42s.replaced(index, C42Row(g(0), g(2), g(1), g(3)))) }
         "cons3w" -> { if (index !in st.cons3w.indices) return; st.copy(cons3w = st.cons3w.replaced(index, C3wRow(g(0), g(1)))) }
         "cons3", "cons3n", "cons3m", "cons3mn" -> {
-            if (seqGapRejected(family, v)) return
+            if (seqGapRejected(family, v, update = true)) return
             val pat = v.takeWhile { it.isNotEmpty() }.take(5)
             if (pat.isEmpty()) return
             // [3.482.0 入口ガード] 変更後の並びが他の行（自分自身は除く）と同じなら止める（addCons3 と同じ）。
             seqDuplicateOf(family, pat, excludeIndex = index)?.let { dupFam ->
                 logOp("W", "制約変更を無視($family[$index]): ${pat.joinToString("→")} は「$dupFam」に登録済み")
-                _ui.update { it.copy(messageIsError = true, message = "同じ並び「${pat.joinToString("→")}」は「$dupFam」に登録済みです") }
+                _ui.update { it.copy(messageIsError = true, message = seqDuplicateMessage(family, pat, dupFam, update = true)) }
                 return
             }
             when (family) {

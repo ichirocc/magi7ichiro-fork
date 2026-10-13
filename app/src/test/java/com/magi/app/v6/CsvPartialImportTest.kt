@@ -200,7 +200,7 @@ class CsvPartialImportTest {
 
     @Test fun wordingMatchesTheDecidedTexts() {
         assertEquals("取り込める行がありませんでした（引用符が閉じていません）", CsvPartialImport.NOTHING_READABLE)
-        assertEquals("盤面が変わったため取込をやめました。もう一度取り込んでください", CsvPartialImport.STALE)
+        assertEquals("勤務表か設定が変わったため、取込をやめました。もう一度取り込んでください", CsvPartialImport.STALE)
         assertEquals("取込をやめました", CsvPartialImport.CANCELLED)
         assertEquals("この部分だけ取り込む", CsvPartialImport.CONFIRM_LABEL)
         assertEquals("やめる", CsvPartialImport.CANCEL_LABEL)

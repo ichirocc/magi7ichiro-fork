@@ -22,7 +22,7 @@ object KeptResultText {
     }
 
     fun screen(now: Score, prev: Score): String =
-        "今回（${parts(now)}）は前回（${parts(prev)}）より改善しませんでした（${reason(now, prev)}。比べる順＝必須→重み→合計）。前回の結果を維持します。"
+        "前回の結果を維持します。今回（${parts(now)}）は前回（${parts(prev)}）より改善しませんでした（${reason(now, prev)}。比べる順＝必須→重み→合計）。"
 
     fun log(prefix: String, now: Score, prev: Score): String =
         "$prefix: 今回 ${parts(now)} は前回 ${parts(prev)} 以下に改善せず（${reason(now, prev)}）→ 前回を維持"

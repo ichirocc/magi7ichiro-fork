@@ -164,7 +164,7 @@
 
 **希望の試算（S5）**（5）：`lockedWishKeys`（希望で固定したセルのキー＝試算できる希望）,
 `wishSelfConflicts`（希望どうしの衝突）, `wishTrialRev`（試算が終わるたびに進む）, `wishTrialBusy`（試算中の行 `"i,j"`・null＝なし）,
-`wishCancelOutcome`（直近の「希望を取り消して再作成」の結果）
+`wishCancelOutcome`（直近の「希望を外して再作成（元に戻せます）」の結果）
 
 **中断**（2）：`interruptedRun`, `interruptedInfo`
 

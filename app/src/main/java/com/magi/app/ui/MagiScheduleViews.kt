@@ -164,7 +164,7 @@ internal fun progressSummary(ui: UiState): String {
     // 必須が残っている間は「改善◯%」が出ないので、ソフトを含む今の合計を出す（減っていく数字が1つは要る）。
     //   必須=0 のときは上の枝が (初期→現在) を出しているので重複させない。
     if (ui.bestHard > 0L && ui.totalViolations > 0) parts += "気になる点 全${ui.totalViolations}件"
-    val secLeft = ((ui.budgetSec * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
+    val secLeft = (((ui.budgetSec + com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC) * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
     parts += "残り %d:%02d".format(secLeft / 60, secLeft % 60)
     // [3.396.0] 反復数（「1.2M回」「毎秒40K」）は**作り手の指標**なので操作画面から外した。
     //   初見の人は必ず「これ何の回数？」と聞く＝その時点でこの表示は失敗している。知りたいのは
@@ -889,6 +889,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
         else (0 until days).filter { (startDow + it) % 7 == weekday }
     val allowed = if (staffSel >= 0) cv.allowedShiftsFor(staffSel).toList() else emptyList()
     val targetName = if (staffSel >= 0) (ui.staffNames.getOrNull(staffSel) ?: "$staffSel") else "全職員"
+    val targetWho = if (staffSel >= 0) "${targetName}さん" else targetName
     // 期間全体×全職員は ClearAllWishes（期間の外の希望も消える）なので全件を数える。
     val clearAll = scope == 1 && staffSel < 0
     val clearCount = if (clearAll) ui.wishes.size
@@ -896,6 +897,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
     // 全職員へは担当できる人だけに付ける（setWishesForDays と同じ判定。担当外の希望は実現も表示もされない）。
     val eligibleCount = if (staffSel < 0 && picked in ui.shiftSymbols.indices) ui.staffNames.indices.count { picked in cv.allowedShiftsFor(it) } else -1
     val wishCount = targetDays.size * when { staffSel >= 0 -> 1; eligibleCount >= 0 -> eligibleCount; else -> ui.staffNames.size }
+    val daysText = bulkDaysText(ui.startDate, targetDays, scope == 1)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
@@ -927,7 +929,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                     }
                 }
             }
-            Text("対象 ${targetDays.size}日。既存の希望は上書き。", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+            Text("対象 ${targetDays.size}日" + (if (daysText.isNotEmpty()) "（$daysText）" else "") + "。既存の希望は上書きします。", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Text("対象（誰に）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f).heightIn(min = 48.dp)
@@ -979,7 +981,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
                     }
                 }, enabled = picked in ui.shiftSymbols.indices && wishCount > 0 && !ui.running,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text(if (ui.running) "最適化中は変更できません" else "適用（${wishCount}件）")
+                    Text(if (ui.running) "計算が終わるまで変更できません" else "適用（${wishCount}件）")
                 }
             }
             Text("※「希望なし」は消す件数を確かめてから消します。元に戻すで取り消せます。",
@@ -1017,7 +1019,7 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
             dismissButton = { DialogDismissButton(onClick = { confirmClear = false }) },
             title = { Text("${clearCount}件の希望を消します") },
             text = {
-                Text((if (clearAll) "登録済みの希望をすべて消します。" else "${targetName}・${if (scope == 1) "期間全体" else "${weekdays[weekday]}曜日（${targetDays.size}日）"}の希望を消します。") +
+                Text((if (clearAll) "登録済みの希望をすべて消します。" else "${targetWho}・${if (scope == 1) "期間全体" else "${weekdays[weekday]}曜日 ${targetDays.size}日"}（$daysText）の希望を消します。") +
                     "割当には影響しません。元に戻すで復元できます。")
             },
         )
@@ -1047,6 +1049,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
     val eligibleStaff = if (picked in ui.shiftSymbols.indices) targetStaff.filter { canDo(it, picked) } else targetStaff
     val skippedStaff = targetStaff.size - eligibleStaff.size
     val cellCount = eligibleStaff.size * targetDays.size
+    val daysText = bulkDaysText(ui.startDate, targetDays, scope == 1)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
@@ -1092,7 +1095,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                         color = if (staffSel >= 0) cs.onPrimary else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 }
             }
-            Text("対象 ${eligibleStaff.size}名 × ${targetDays.size}日 = ${cellCount}マス。既存の割当は上書き。" +
+            Text("対象 ${eligibleStaff.size}名 × ${targetDays.size}日 = ${cellCount}マス" + (if (daysText.isNotEmpty()) "（$daysText）" else "") + "。既存の割当は上書きします。" +
                 (if (skippedStaff > 0) "（担当外 ${skippedStaff}名は対象外）" else ""),
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             // [文言修正] 旧「公・休で…」の「公」はデータに存在しない記号だった（存在しない項目を語らない）。
@@ -1122,9 +1125,10 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                 // [矛盾なく選択] 押せない理由をボタン自身が語る（灰色の理由が見えない矛盾を解消）。
                 // [監査#1] 実行中は適用不可（最適化完了時に上書きされ黙って消えるため）。
                 Text(when {
-                    ui.running -> "最適化中は変更できません"
+                    ui.running -> "計算が終わるまで変更できません"
                     picked !in ui.shiftSymbols.indices -> "まずシフトを選んでください"
-                    cellCount == 0 -> "対象がありません（担当できる職員なし）"
+                    targetDays.isEmpty() -> "この期間に対象の日がありません。別の曜日を選んでください"
+                    cellCount == 0 -> "担当できる職員がいません。別のシフトを選んでください"
                     else -> "この${cellCount}マスに一括割当"
                 })
             }
@@ -1149,6 +1153,13 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
             },
         )
     }
+}
+
+/** 一括操作の対象日（期間全体は範囲「10/1〜10/31」、曜日は日付を並べる「10/6・10/13」）。 */
+private fun bulkDaysText(startDate: String, days: List<Int>, wholePeriod: Boolean): String = when {
+    days.isEmpty() -> ""
+    wholePeriod -> DayText.range(startDate, days.first(), days.last())
+    else -> days.joinToString("・") { DayText.short(startDate, it) }
 }
 
 /** 期間開始日 + j(0始まり) → "M/D"。解析失敗時は "(j+1)日"。 */
@@ -1269,7 +1280,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                 // [M3 色覚安全] 不足=▼ / 超過=▲ を数字に前置＝色に依らず方向が判る（色覚多様性・モノクロ印刷対応）。
                                 val glyph = when (vio) { "vio-low", "vio-aptLow" -> "▼"; "vio-high", "vio-aptHigh" -> "▲"; else -> "" }
                                 val cellCd = if (vio != null) {
-                                    val dir = when (vio) { "vio-low", "vio-aptLow" -> "不足"; else -> "超過" }
+                                    val dir = if (isUnderCountClass(vio)) "不足" else "超過"
                                     "${ui.staffNames.getOrNull(i) ?: i} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}回 $dir・タップで詳細"
                                 } else null
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = staffViolDetail(cv, ui, i, kk, v, vio) }) else null, cd = cellCd) {
@@ -1338,7 +1349,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                 val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
                                 val cellCd = if (vio != null) {
                                     val dir = if (vio == "vio-covU") "人員不足" else "人員過剰"
-                                    "${j + 1}日 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
+                                    "${DayText.full(ui.startDate, j)} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
                                 } else null
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(cv, ui, kk, j, v, vio) }) else null, cd = cellCd) {
                                     if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
@@ -1378,7 +1389,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { detail = null; onEvent(MagiEvent.Condition.RemoveWish(i, dj)) },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の希望を取り消す", color = cs.error) }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの希望を調整する（外す）", color = cs.error) }
                                 }
                             }
                             // [実機バグ修正] 希望で固定していない在勤者にも1人にしぼった「直し方を探す」への導線を足す。
@@ -1391,7 +1402,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                         onClick = { detail = null; onFix(i, sh) },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"} の直し方を探す") }
+                                    ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの直し方を探す") }
                                 }
                             }
                         }
@@ -1417,15 +1428,16 @@ private fun staffViolDetail(cv: ConditionsView, ui: UiState, i: Int, k: Int, cou
     val (lo, hi, apt) = cv.staffCellLimits(i, k)
     val name = ui.staffNames.getOrNull(i) ?: "$i"
     val sym = ui.shiftSymbols.getOrNull(k) ?: "$k"
-    val lines = ArrayList<String>()
-    lines += "現在 ${count}回"
-    when (vio) {
-        "vio-low" -> if (lo != null) lines += "下限 ${lo}回 → ${(lo - count).coerceAtLeast(0)}回 不足"
-        "vio-high" -> if (hi != null) lines += "上限 ${hi}回 → ${(count - hi).coerceAtLeast(0)}回 超過"
-        "vio-aptLow" -> if (apt != null) lines += "目標 ${apt}回 → ${(apt - count).coerceAtLeast(0)}回 不足"
-        "vio-aptHigh" -> if (apt != null) lines += "目標 ${apt}回 → ${(count - apt).coerceAtLeast(0)}回 超過"
+    // 1 行目に要点（基準・差・今の回数）。氏名とシフトは題にある。
+    val line = when {
+        vio == "vio-low" && lo != null -> "下限 ${lo}回に ${(lo - count).coerceAtLeast(0)}回 足りません（現在 ${count}回）"
+        vio == "vio-high" && hi != null -> "上限 ${hi}回を ${(count - hi).coerceAtLeast(0)}回 超えています（現在 ${count}回）"
+        vio == "vio-aptLow" && apt != null -> "目標 ${apt}回に ${(apt - count).coerceAtLeast(0)}回 足りません（現在 ${count}回）"
+        vio == "vio-aptHigh" && apt != null -> "目標 ${apt}回を ${(count - apt).coerceAtLeast(0)}回 超えています（現在 ${count}回）"
+        vio == "vio-c2" -> "${breakdownLabels["c2"]}の目標に足りません（現在 ${count}回）"
+        else -> "現在 ${count}回"
     }
-    return TallyDetailUi("$name ・ $sym", lines, i, k)
+    return TallyDetailUi("$name ・ $sym", listOf(line), i, k)
 }
 
 /** 日別セル(k,j): 現在人数と 必要数レンジ の差を数字で。 */
@@ -1433,13 +1445,11 @@ private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count
     val limits = cv.needCellLimits(k, j)
     val sym = ui.shiftSymbols.getOrNull(k) ?: "$k"
     val lines = ArrayList<String>()
-    lines += "現在 ${count}人"
-    if (limits != null) {
-        val (lo, hi) = limits
-        when (vio) {
-            "vio-covU" -> lines += "必要 ${lo}人 → ${(lo - count).coerceAtLeast(0)}人 不足"
-            "vio-covO" -> lines += "適正 ${hi}人 → ${(count - hi).coerceAtLeast(0)}人 過剰"
-        }
+    // 1 行目に要点（族・シフト・差・基準）。日は題にある。
+    lines += when {
+        limits != null && vio == "vio-covU" -> "${breakdownLabels["covU"]}：$sym が ${(limits.first - count).coerceAtLeast(0)}人 足りません（必要 ${limits.first}人・現在 ${count}人）"
+        limits != null && vio == "vio-covO" -> "${breakdownLabels["covO"]}：$sym が適正 ${limits.second}人を ${(count - limits.second).coerceAtLeast(0)}人 超えています（現在 ${count}人）"
+        else -> "$sym 現在 ${count}人"
     }
     // [3.492.0/実機指摘「12日は希望Aｱが2人いる原因です。データ修正のサポートが無い」] 人員過剰の枠で、
     //   その枠を本人希望で固定している在勤者を名指しする（診断 CoverageDiag と同じ判定＝配置済み＆希望一致）。
@@ -1451,12 +1461,14 @@ private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count
     if (assigned.isNotEmpty()) {
         lines += "在勤: " + assigned.joinToString("・") { i ->
             val nm = ui.staffNames.getOrNull(i) ?: "#$i"
-            if (i in pinned) "$nm（本人の希望）" else nm
+            if (i in pinned) "${nm}さん（本人の希望）" else "${nm}さん"
         }
     }
     if (pinned.isNotEmpty()) {
-        lines += "本人の希望: " + pinned.joinToString("・") { ui.staffNames.getOrNull(it) ?: "#$it" } +
-            "（必須の希望どうしが同じ日に重なり、どちらかの希望を取り消さない限り過剰は残ります）"
+        // 希望で固定した人数が適正人数を超えるときだけ「希望を調整しない限り残る」と言う（以下なら固定していない人を動かせば減る）。
+        val overByWish = limits != null && pinned.size > limits.second
+        lines += "本人の希望: " + pinned.joinToString("・") { "${ui.staffNames.getOrNull(it) ?: "#$it"}さん" } +
+            if (overByWish) "（必須の希望どうしが同じ日に重なっています。本人と相談してどちらかの希望を調整しない限り、過剰は残ります。調整すると希望は外れます。元に戻すで戻せます）" else ""
     }
     return TallyDetailUi("$sym ・ ${DayText.full(ui.startDate, j)}", lines, null, k, day = j, pinned = pinned, assigned = assigned)
 }
@@ -1695,7 +1707,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             .then(if (d != todayIdx && headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
             .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
             // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
-            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${d + 1}日 ${weekdayJa[dow]}曜日 ${holidayName[d]}" } else Modifier)
+            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${DayText.full(ui.startDate, d)} ${holidayName[d]}" } else Modifier)
             .then(if (covMarks.isNotEmpty()) Modifier.clickable(onClickLabel = "人員の内訳") { daySheet = d } else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
@@ -1806,7 +1818,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             // 拡張希望: 0=無し・1=指定日・2=割当が禁止のシフト（違反）。
                             val extBans = ui.extBanned[VioKey.cell(i, d)]
                             val ext = when { extBans == null -> 0; k in extBans -> 2; else -> 1 }
-                            val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
+                            val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${DayText.full(ui.startDate, d)} ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") +
                                 (if (cellPinned) "・手動固定" else "") +
@@ -1838,7 +1850,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     }
 }
 
-/** 行末・日ヘッダの印の内訳（読むだけ。直すのはセルのタップから）。 */
+/** 日ヘッダ・集計の「計（期間）」の人員の印の内訳（読むだけ。直すのはセルのタップから）。 */
 @Composable
 private fun GridMarkDialog(title: String, lines: List<String>, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
     AlertDialog(
@@ -1846,7 +1858,7 @@ private fun GridMarkDialog(title: String, lines: List<String>, onDismiss: () -> 
         title = { Text(title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (lines.isEmpty()) Text("回数・偏りの違反はありません。", style = MaterialTheme.typography.bodyMedium)
+                if (lines.isEmpty()) Text("人員の過不足はありません。", style = MaterialTheme.typography.bodyMedium)
                 lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 extra()
             }
@@ -2032,7 +2044,7 @@ internal fun FixSearchPanel(
                 TextButton(onClick = { onEvent(MagiEvent.Session.CancelFixSearch) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる") }
             }
             FixPanelState.FAILED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("直し方を探せませんでした。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                Text("直し方を探す途中でうまくいきませんでした。もう一度ためせます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
                 OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text("もう一度探す") }
             }
             else -> if (ui.fixSuggestions.isNotEmpty()) ui.fixSuggestions.take(if (compact) 1 else 3).forEach { s ->

@@ -78,7 +78,7 @@ internal fun homeRemainingLabel(bestHard: Long, shortDays: Int, breakdown: Map<S
     val ptN = MirrorKeys.soft.filter { unitOf(it) == "pt" }.sumOf { breakdown[it] ?: 0 }
     return when {
         bestHard > 0L -> "必須 残り${bestHard}件" + (if (wishHard > 0) "（うち希望のまま ${minOf(wishHard.toLong(), bestHard)}件）" else "")
-        shortDays > 0 -> "残り${shortDays}日"
+        shortDays > 0 -> "人員不足の日 残り${shortDays}日"
         softN > 0 -> "必須は解消・要調整 ${softN}件"
         ptN > 0 -> "必須は解消・残りは偏りのみ"
         else -> "解消済み"
@@ -137,27 +137,38 @@ private fun promotedSoftFamilies(
     val out = LinkedHashMap<String, String>()
     if (c1Plateau != null && c1Plateau.hasEntries) {
         val e = c1Plateau.entries.first()
-        out["c1"] = "${e.label}ほか${c1Plateau.entries.size}件 — ${e.recommendedAction(::labelOf)}"
+        val more = c1Plateau.entries.size - 1
+        out["c1"] = e.label + (if (more > 0) "ほか${more}件" else "") + " — ${e.recommendedAction(::labelOf)}"
     }
     val stuckSurplus = coverage?.surpluses?.filter { it.blockedFamily != null }.orEmpty()
     if (stuckSurplus.isNotEmpty()) {
-        val fam = labelOf(stuckSurplus.first().blockedFamily!!)
-        out["covO"] = "${stuckSurplus.size}枠は動かす手が「${fam}」に負けて採用されません。${fam}の設定を緩めると動きます。"
+        val first = stuckSurplus.first()
+        val fam = labelOf(first.blockedFamily!!)
+        val slots = "${first.dayLabel}の「${first.shiftSymbol}」" + (if (stuckSurplus.size > 1) "など${stuckSurplus.size}枠" else "")
+        // 曜日の偏り・グループ内のばらつきには緩める設定が無い＝手で動かす案内にする。
+        val remedy = if (first.blockedFamily in setOf("weekly", "fair")) "勤務表で手で動かすと減らせます。" else "${fam}の設定を緩めると動きます。"
+        out["covO"] = "${slots}は、動かす手が「${fam}」に負けて採用されません。$remedy"
     }
     return out
 }
+
+/** 崩せない禁止の並びの直す場所（`ForbiddenRunDiagnosis` の案内と同じく、希望の調整か担当の追加）。 */
+private const val C3N_WALL_FIX = "希望（編集タブ＞月次条件）か担当（編集タブ＞年間マスター①）を見直してください。"
 
 /** 必須違反の行に添える「なぜ残るか」。診断が無い/観測が無いときは空文字＝何も主張しない。 */
 private fun hardDetail(
     family: String,
     coverage: CoverageDiagnosis?,
     forbidden: ForbiddenRunDiagnosis?,
+    startDate: String,
 ): String = when (family) {
     "c3n" -> when {
         forbidden == null || !forbidden.hasRuns -> ""
-        forbidden.allBlocked -> "この希望・担当のままでは崩せません（${forbidden.totalRuns}件すべて）。"
-        else -> forbidden.runs.firstOrNull { !it.escapable }
-            ?.let { "「${it.seqLabel}」は崩せません（${it.staffName}）。" } ?: "崩す手が残っています。"
+        forbidden.allBlocked -> "この希望・担当のままでは崩せません（${forbidden.totalRuns}件すべて）。$C3N_WALL_FIX"
+        else -> forbidden.runs.firstOrNull { !it.escapable }?.let {
+            val span = DayText.range(startDate, it.startDay, it.startDay + maxOf(it.cells.size, 1) - 1)
+            "${it.staffName}さんの $span の「${it.seqLabel}」は、この希望・担当のままでは崩せません。$C3N_WALL_FIX"
+        } ?: "崩す手が残っています。下の行から直し方を探せます。"
     }
     "covU" -> when {
         coverage == null || !coverage.hasShortage -> ""
@@ -189,7 +200,7 @@ internal fun analysisTriage(ui: UiState): AnalysisTriage {
         val row = TriageRow(labelOf(fam), n, unitOf(fam), "", fam)
         when {
             fam in MirrorKeys.hard ->
-                blockers.add(row.copy(detail = hardDetail(fam, ui.coverageDiag, ui.forbiddenDiag)))
+                blockers.add(row.copy(detail = hardDetail(fam, ui.coverageDiag, ui.forbiddenDiag, ui.startDate)))
             promoted.containsKey(fam) ->
                 blockers.add(row.copy(detail = promoted.getValue(fam), promoted = true))
             else -> searching.add(row)

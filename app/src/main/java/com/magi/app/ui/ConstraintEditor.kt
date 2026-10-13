@@ -254,7 +254,7 @@ internal fun SkillConstraintsCard(ui: UiState, cv: ConstraintsView, onEvent: (Ma
                 // スキルグループが無くても行は残る（未評価・設定の見直しが削除を促す）＝削除だけできるように出す。
                 val orphans = families.filter { it.rows.isNotEmpty() }
                 if (orphans.isNotEmpty()) {
-                    Text("スキルグループが無いため、次のルールは使われていません。",
+                    Text("スキルグループが無いため、次のルール${orphans.sumOf { it.rows.size }}件は使われていません。要らなければ削除できます",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     orphans.forEach { fam ->
                         Text(fam.title, style = MaterialTheme.typography.titleSmall)
@@ -435,7 +435,7 @@ private fun ConstraintDialog(
                 Text("並び (上から順・最大5連日 / 空=ここで終了)", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (dupFam != null) {
-                    Text("この並びは「$dupFam」に登録済みです。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
+                    Text("この並びは「$dupFam」に登録済みです。並びを変えると確定できます", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
                 }
                 InputHint("途中に空欄があります。上から詰めて選んでください".takeIf { gap })
                 if (family == "cons3n" && a.isNotBlank() && b.isBlank() && !gap) {

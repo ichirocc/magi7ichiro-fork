@@ -328,7 +328,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         }
                     }
                     vm.notifySave(r, "データ")
-                } else vm.notify("保存するデータがありません", "W")
+                } else vm.notify("保存するデータがありません。データを開くか新しくつくると保存できます", "W")
             }
         }
     }
@@ -351,7 +351,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         }
                     }
                     vm.notifySave(r, "勤務表CSV")
-                } else vm.notify("書き出す勤務表がありません", "W")
+                } else vm.notify("書き出す勤務表がありません。データを開いて勤務表をつくると書き出せます", "W")
             }
         }
     }
@@ -371,6 +371,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         else -> null
                     }
                 }
+                val label = when (kind) { "staff" -> "職員CSV"; "wishes" -> "希望CSV"; "colors" -> "シフト色CSV"; else -> "制約CSV" }
                 if (csv != null) {
                     val r = withContext(Dispatchers.IO) {
                         runCatching {
@@ -380,8 +381,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             } ?: throw java.io.FileNotFoundException("書き込み先を開けません")
                         }
                     }
-                    vm.notifySave(r, when (kind) { "staff" -> "職員CSV"; "wishes" -> "希望CSV"; "colors" -> "シフト色CSV"; else -> "制約CSV" })
-                } else vm.notify("書き出す内容がありません", "W")
+                    vm.notifySave(r, label)
+                } else vm.notify("${label}に書き出す内容がありません。データを開くと書き出せます", "W")
             }
         }
     }
@@ -400,7 +401,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         }
                     }
                     vm.notifySave(r, "ログ")
-                } else vm.notify("書き出すログがありません", "W")
+                } else vm.notify("書き出すログがありません。勤務表をつくるなどの操作をするとログが残ります", "W")
             }
         }
     }
@@ -419,7 +420,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         }
                     }
                     vm.notifySave(r, "ログ(JSON)")
-                } else vm.notify("書き出すログがありません", "W")
+                } else vm.notify("書き出すログがありません。勤務表をつくるなどの操作をするとログが残ります", "W")
             }
         }
     }
@@ -631,6 +632,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     InterruptedBanner(ui, onRerun = { vm.resumeInterruptedRun() }, onDismiss = { vm.dismissInterrupted() })
                     if (showImportGuidance) {
                         ImportGuidanceBanner(
+                            staff = ui.staff, days = ui.days,
                             // [UX監査#3] 必要人数の既定はシフト編集(①、既定展開)・群単位の上書きは④・並びの制約は⑤と
                             //   複数節にまたがるため、節を決め打ちせず年間マスターの入口(①)までで留める。
                             onGoEdit = { tab = 2; editScope = 2; showImportGuidance = false },
@@ -1115,7 +1117,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             AlertDialog(
                 onDismissRequest = { wishConfirm = 0 },
                 title = { Text("担当外の希望を含めますか？") },
-                text = { Text("担当できないグループの希望が ${wishConfirm} 件あります。含めて反映すると担当不可の配置になります（違反として検出されます）。") },
+                text = { Text("担当できないグループの希望が ${wishConfirm} 件あります。\n含めて反映すると、その ${wishConfirm} 件は担当外の勤務として入り、必須違反として数えます。「担当内のみ反映」ならその ${wishConfirm} 件は入れません。どちらも「元に戻す」で戻せます。") },
                 // [3.398.0] 旧版は「含めて反映」「担当内のみ反映」の2つで、**どちらを押しても勤務表が変わる**のに
                 //   取消のボタンが1つも無かった（外側タップ/戻るでしか抜けられない）。しかも取消の位置
                 //   (dismissButton) に反映が置かれ、押し間違いがそのまま変更になる。すぐ上のCSVダイアログは
@@ -1329,11 +1331,11 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
 /** [UX監査#3] CSV「データ全体（新規）」取込直後の次の一手。担当可否は全ON・必要人数と制約は空で
  *  始まる（意図的、3.320.0系）ため、そのまま最適化すると実運用と違う自由度になる。 */
 @Composable
-internal fun ImportGuidanceBanner(onGoEdit: () -> Unit, onDismiss: () -> Unit) {
+internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, onDismiss: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("取込が完了しました", style = MaterialTheme.typography.titleMedium)
-            Text("担当できるシフトは全部OK、必要人数と制約は未設定のまま取り込まれています。次は年間マスターで人数と制約を決めてください。",
+            Text("取込が完了しました（職員 ${staff}名・${days}日）", style = MaterialTheme.typography.titleMedium)
+            Text("担当できるシフトはどのグループもすべて可、必要人数と制約は未設定のまま取り込みました。編集タブの「年間マスター」で人数と制約を決めましょう。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("設定へ") }

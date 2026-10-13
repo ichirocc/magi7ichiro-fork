@@ -63,12 +63,13 @@ object MagiStartupGuard {
     fun diagnosticText(ctx: Context, prev: Previous): String {
         val pkg = runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0) }.getOrNull()
         val version = pkg?.let { "${it.versionName} (${it.longVersionCode})" } ?: "?"
+        val notReached = prev.lastStage != null && prev.lastStage != STAGE_UI
         return buildString {
             appendLine("MAGI 起動診断")
+            appendLine(summaryLine(prev, notReached))
             appendLine()
             appendLine("版: $version")
             appendLine("端末: ${Build.MANUFACTURER} ${Build.MODEL} / Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            val notReached = prev.lastStage != null && prev.lastStage != STAGE_UI
             appendLine("前回の到達段階: ${prev.lastStage ?: "記録なし"}" + (if (notReached) "（画面まで到達していません）" else ""))
             appendLine()
             if (prev.crash != null) {
@@ -78,7 +79,16 @@ object MagiStartupGuard {
                 appendLine("例外の記録はありません。")
             }
             appendLine()
-            appendLine("この画面を撮影して報告してください。「そのまま起動」で記録を消して通常どおり起動します。")
+            appendLine("この画面を撮影して報告してください。「そのまま起動」を押すと、この診断の記録だけを消して通常どおり起動します（勤務表のデータは消えません）。")
         }
+    }
+
+    /** 診断の 1 行目（何が起きたか）。段階と例外の詳細は下の行に出す。 */
+    internal fun summaryLine(prev: Previous, notReached: Boolean): String = when {
+        notReached && prev.crash != null -> "前回の起動は、画面が出る前にエラーで止まりました。"
+        notReached -> "前回の起動は、画面が出る前に止まりました。"
+        prev.crash != null && prev.lastStage == STAGE_UI -> "前回、画面を出した後にアプリがエラーで止まりました。"
+        prev.crash != null -> "前回、アプリがエラーで止まりました。"
+        else -> "前回の起動の記録を表示しています。"
     }
 }

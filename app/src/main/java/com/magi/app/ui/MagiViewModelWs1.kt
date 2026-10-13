@@ -61,9 +61,9 @@ fun MagiViewModel.ws1SetGroupShift(g: Int, k: Int, allowed: Boolean) {
     if (ns === st) {
         // [3.484.0] 単一セルでも休は外せない（列一括と同じ理由・同じ案内）。
         if (!allowed && k == restShiftIndex(st)) {
-            notify("「${opSy(k)}」は休みのシフトなので、どのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
+            notify("「${opSy(k)}」は休みのシフトなので、どのグループからも外せません（担当できるシフトが無いグループを作らないため）。外すときは、シフト編集の『休みとして扱う』を別のシフトに移してください", "W")
         } else if (!allowed) {
-            notify("このグループの担当できるシフトが無くなるため外せません", "W")
+            notify("${st.groups.getOrNull(g)?.name ?: "このグループ"}から「${opSy(k)}」は外せません（担当できるシフトが無くなるため）。先にほかのシフトを担当にしてから外してください", "W")
         }
         return
     }
@@ -77,7 +77,7 @@ fun MagiViewModel.ws1SetGroupShiftRow(g: Int, allowed: Boolean) {
     val name = st.groups.getOrNull(g)?.name ?: "[$g]"
     val ns = Ws1Ops.setGroupShiftRow(st, g, allowed)
     if (ns === st) {
-        if (!allowed) notify("休みのシフトが無いため、このグループの全シフトを外すことはできません（担当できるシフトが無くなるため）", "W")
+        if (!allowed) notify("${name}の全シフトは外せません（休みのシフトが無く、担当できるシフトが無くなるため）。シフト編集で『休みとして扱う』をどれかのシフトに付けると、休み以外をまとめて外せます", "W")
         return
     }
     logOp("I", "担当可否(一括): グループ $name の全シフト → ${if (allowed) "担当できる" else "担当しない（休は残す）"}")
@@ -90,9 +90,9 @@ fun MagiViewModel.ws1SetGroupShiftColumn(k: Int, allowed: Boolean) {
     val ns = Ws1Ops.setGroupShiftColumn(st, k, allowed)
     if (ns === st) {
         if (!allowed && k == restShiftIndex(st)) {
-            notify("「${opSy(k)}」は休みのシフトなので、どのグループからも外せません（担当できるシフトが無いグループを作らないため）", "W")
+            notify("「${opSy(k)}」は休みのシフトなので、どのグループからも外せません（担当できるシフトが無いグループを作らないため）。外すときは、シフト編集の『休みとして扱う』を別のシフトに移してください", "W")
         } else if (!allowed) {
-            notify("担当できるシフトが無くなるグループがあるため、この列は外せません", "W")
+            notify("「${opSy(k)}」の列は外せません（担当できるシフトがこれだけのグループがあるため）。そのグループに先にほかのシフトを担当させてから外してください", "W")
         }
         return
     }
@@ -115,7 +115,7 @@ fun MagiViewModel.ws1ResetGroupApt() {
     val st = state ?: return
     val cleared = st.groupShiftApt.sumOf { row -> row.count { it.trim().isNotEmpty() } }
     logOp("I", "apt強制リセット: 適切回数を全空欄に（$cleared 件クリア）")
-    applyStructureWithMessage(Ws1Ops.resetGroupApt(st), "目標を全リセットしました（${cleared}件を空欄に）")
+    applyStructureWithMessage(Ws1Ops.resetGroupApt(st), "全グループ×全シフトの「目標」を空欄に戻しました（${cleared}件）")
 }
 
 fun MagiViewModel.ws1SetUse2(on: Boolean) {
@@ -131,7 +131,7 @@ fun MagiViewModel.ws1SetUse2(on: Boolean) {
 private fun MagiViewModel.symbolTaken(existing: List<String>, kigou: String, what: String, exceptIndex: Int = -1): Boolean {
     if (!com.magi.app.v6.Ws1Ops.symbolCollides(existing, kigou, exceptIndex)) return false
     val k = kigou.trim()
-    notify("記号「$k」はすでに別の${what}で使われています（制約の参照が混ざるため、別の記号にしてください）", "W")
+    notify("記号「$k」はすでに別の${what}で使われているため、保存しませんでした（制約の参照が混ざるため、別の記号にしてください）", "W")
     return true
 }
 
@@ -181,7 +181,7 @@ fun MagiViewModel.ws1AddShiftsBulk(kigous: List<String>) {
     }
     val added = st.shifts.size - st0.shifts.size
     val skipNote = "記号「${skipped.joinToString("・")}」はすでにあるため追加しませんでした"
-    if (added == 0) { if (skipped.isNotEmpty()) notify(skipNote, "W"); return }
+    if (added == 0) { if (skipped.isNotEmpty()) notify("$skipNote（別の記号にすると追加できます）", "W"); return }
     logOp("I", "シフト一括追加: ${added}件")
     if (skipped.isEmpty()) applyStructure(st) else applyStructureWithMessage(st, "シフトを${added}件追加しました。$skipNote")
 }

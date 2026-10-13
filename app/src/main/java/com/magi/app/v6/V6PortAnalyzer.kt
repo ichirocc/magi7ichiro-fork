@@ -368,7 +368,10 @@ object V6PortAnalyzer {
                 var forbidN = 0
                 val reason = if (verdict == CoverageVerdict.INFEASIBLE && wishPinned.isNotEmpty()) {
                     // 希望固定の人を外して数えた結果＝「データ上」は言い過ぎ（希望を取り消せば届きうる）。
-                    "いまの希望のままでは担当できる人が${capacity}人で必要数${need}に届きません（希望で別の勤務に固定: ${wishPinned.size}人）"
+                    val who = wishPinned.take(3).joinToString("・") { "${state.staff.getOrNull(it)?.name ?: "#$it"}さん" } +
+                        if (wishPinned.size > 3) " ほか${wishPinned.size - 3}人" else ""
+                    "いまの希望のままでは${sym}を担当できる人が${capacity}人で、必要数${need}人に届きません（${who}は希望で別の勤務に固定）。" +
+                        "本人と相談して希望を調整すると、担当できる人が増えます"
                 } else if (verdict == CoverageVerdict.INFEASIBLE) {
                     "担当可能な職員が${capacity}人で必要数${need}に届きません（データ上、充足不可）"
                 } else {
@@ -405,14 +408,14 @@ object V6PortAnalyzer {
                     chainOk = chainVerified
                     forbidN = forbid
                     val hint = when {
-                        free > 0 -> "空き番${free}人を${sym}へ移せば充足（最適化が未到達＝勤務表でこのセルの『直し方を探す』で解消可）"
-                        cascade > 0 && chainVerified -> "空き番が無く、過剰シフトからの多人数入替（玉突き=ブロック移動）が必要"
-                        cascade > 0 -> "玉突き候補${cascade}人はいますが、移動先の受け皿もすべて本人の希望/禁止の並びで塞がっており、" +
-                            "現在の希望のままではどう組んでも解消できません。希望を1件調整するか担当を追加してください" +
+                        free > 0 -> "休みや人数に余裕のある勤務から${free}人を${sym}へ移せば埋まります（勤務表でこのセルの『直し方を探す』から直せます）"
+                        cascade > 0 && chainVerified -> "すぐ移せる人がいないため、複数人を順に入れ替える手（玉突き）が必要です"
+                        cascade > 0 -> "入れ替えの候補は${cascade}人いますが、その人が抜けた穴を埋められる人も本人の希望か禁止の並びで動かせず、" +
+                            "今の希望のままではどう組んでも解消できません。希望を1件調整するか、担当を追加してください" +
                             if (MirrorKeys.weightOf("covU") > MirrorKeys.weightOf("pref")) "。$WISH_SCORE_HINT" else ""
-                        else -> "候補が本人の希望/禁止の並びで塞がっており、希望を1件調整するか担当を追加すると解消に近づく"
+                        else -> "移せる人が本人の希望か禁止の並びで動かせません。希望を1件調整するか、担当を追加すると埋まりやすくなります"
                     }
-                    "担当可能${capacity}人（うち在勤中${already}人）・今動かせる空き番${free}人（玉突き${cascade}・本人の希望${pinned}・禁止の並び${forbid}）。$hint"
+                    "$hint。内訳: ${sym}を担当できる${capacity}人（すでに${sym}に${already}人）・すぐ移せる${free}人・入れ替えが要る${cascade}人・本人の希望${pinned}人・禁止の並びになる${forbid}人"
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity,
@@ -449,7 +452,8 @@ object V6PortAnalyzer {
                 .take((peakMiss + 1).coerceAtLeast(Probe.MIN_RELAX_CANDIDATES))
                 .map { state.staff.getOrNull(it)?.name ?: "#$it" }
             if (cands.isNotEmpty()) {
-                relaxations.add("「$sym」は担当可能者が不足（ピーク不足${peakMiss}人）。$sym を ${cands.joinToString("・")}（稼働が少なめ）に担当追加すると解消に近づきます")
+                relaxations.add("「$sym」を担当できる人が足りません（多い日で${peakMiss}人不足）。" +
+                    "${cands.joinToString("・") { "${it}さん" }}（勤務が少なめ）に「$sym」の担当を追加すると、埋まりやすくなります")
             }
         }
         return relaxations
@@ -555,14 +559,14 @@ object V6PortAnalyzer {
                         "移せる先はありますが、${tried}どれも他の条件を悪化させるため最適化は採用しません" +
                             "（この過剰を減らすには、その条件を緩めるか、過剰を受け入れる必要があります）"
                     }
-                    free > 0 -> "移せる先はありますが、目的関数での確認は打ち切りました（枠が多いため）"
+                    free > 0 -> "移せる先はありますが、全体が良くなるかの確認は途中で打ち切りました（過剰の枠が多いため）"
                     cascade > 0 -> "移動先はどこも定員一杯で、過剰シフトからの多人数入替（玉突き）が必要"
-                    else -> "在籍者は本人の希望/禁止の並びで動かせず、希望を1件調整するか担当を減らすと解消に近づく"
+                    else -> "${sym}の人は本人の希望か禁止の並びで動かせません。希望を1件調整するか、担当を減らすと過剰が減りやすくなります"
                 }
                 surplusList.add(
                     CoverageSurplus(j, dayLabel(state.startDate, j), k, sym, need, got, excess,
                         blockedFamily = if (freeImproving == 0 && deepImproving == 0 && probedAny) famHits.maxByOrNull { it.value }?.key else null,
-                        reason = "在勤者中 動かせる${free}人・玉突き必要${cascade}人・本人の希望${pinned}人・禁止の並び${forbid}人。$hint",
+                        reason = "$hint。内訳: ${sym}の${got}人のうち 動かせる${free}人・玉突き必要${cascade}人・本人の希望${pinned}人・禁止の並び${forbid}人",
                         pinnedStaff = pinnedIdx)
                 )
             }
@@ -618,16 +622,16 @@ object V6PortAnalyzer {
                     val pinnedDays = cells.filter { it.escape == ForbiddenCellEscape.PINNED }.joinToString("・") { it.dayLabel }
                     val hint = when {
                         cells.any { it.escape == ForbiddenCellEscape.FREE } ->
-                            "安全に崩せる手が存在します（適用すれば必須違反が減る＝探索未到達の可能性。勤務表の該当セルから『直し方を探す』で解消を試せます）"
+                            "安全に崩せる手があります。勤務表のこの並びのセルから『直し方を探す』で直せます（当てると必須違反が減ります）"
                         cells.any { it.escape == ForbiddenCellEscape.CHAIN || it.escape == ForbiddenCellEscape.ADJACENT } ->
-                            "単独の1手では崩せず、玉突き連鎖/隣接日調整の多段手でのみ崩せます（探索は候補を持っています＝再実行で解消し得ます）"
+                            "1セルを変えるだけでは崩せませんが、複数人の入れ替え（玉突き）か隣の日の調整で崩せます。もう一度つくると直る場合があります"
                         // [3.284.0/外部レビュー] 「証明」の強さを分ける: 全セル希望固定は「本人希望どおりの並びが
                         //   禁止パターンを構成」＝辞書式意味論(pref9000>c3n7000)の下で証明相当。それ以外の塞がり
                         //   (受け皿なし等)は「現在の探索手(単独変更・玉突き連鎖・隣接日調整)を検証して全て不成立」
                         //   という強い証拠であり、全勤務表空間の数学的な非充足証明ではない＝断定を避けた表現にする。
                         cells.all { it.escape == ForbiddenCellEscape.PINNED } ->
-                            "本人希望どおりの並びが禁止パターンを構成しています（本人の希望: $pinnedDays）。" +
-                                "希望を変えない限りどう組んでもこの禁止の並びは残ります。どちらか1件の希望を調整してください" +
+                            "本人の希望どおりに入れると禁止の並びになります（本人の希望: $pinnedDays）。" +
+                                "希望を変えない限り、どう組んでもこの禁止の並びは残ります。本人と相談して、どちらか1件の希望を調整してください" +
                                 scoreHintOf(cells)
                         else ->
                             "全セルが塞がっています" +
@@ -1063,7 +1067,7 @@ object V6PortAnalyzer {
                 if (k in 0 until p.K && !p.canDo(i, k)) badAssign++
             }
         }
-        if (badAssign > 0) warns.add("担当不可の配置が ${badAssign} セルあります")
+        if (badAssign > 0) warns.add("担当外のシフトに入っているセルが ${badAssign} 件あります。勤務表で直すか、編集タブの『年間マスター』の『① シフト・グループ』で担当を追加できます")
 
         var badWish = 0
         for ((key, k) in state.wishes) {
@@ -1074,7 +1078,7 @@ object V6PortAnalyzer {
                 badWish++
             }
         }
-        if (badWish > 0) warns.add("範囲外または担当外の希望シフトが ${badWish} 件あります")
+        if (badWish > 0) warns.add("期間の外か担当外の希望が ${badWish} 件あります。編集タブの『月次条件』の『希望シフト登録』で見直せます")
 
         var badRange = 0
         for ((key, r) in state.staffRange) {
@@ -1084,11 +1088,12 @@ object V6PortAnalyzer {
             if (i == null || k == null || i !in 0 until p.S || k !in 0 until p.K) badRange++
             if (lo != null && hi != null && lo > hi) badRange++
         }
-        if (badRange > 0) warns.add("staffRange の範囲外キーまたは lo>hi が ${badRange} 件あります")
+        if (badRange > 0) warns.add("ひとりの回数の上限・下限に、職員かシフトが見つからない行か、下限が上限より大きい行が ${badRange} 件あります。" +
+            "編集タブの『年間マスター』の『③ 回数（1人あたり）』で見直せます")
 
         val dup = duplicatePatternCount(state)
-        if (dup > 0) warns.add("連続パターン制約の重複定義が ${dup} 件あります")
-        if (state.cons41.isEmpty()) warns.add("cons41 が未設定です（グループ別人数範囲を使う場合は確認）")
+        if (dup > 0) warns.add("勤務の並びのルールに、同じ並びの重複が ${dup} 件あります。編集タブの『年間マスター』の『⑤ 並び・期間の制約』で整理できます")
+        if (state.cons41.isEmpty()) warns.add("グループのレンジが未設定です。グループごとの1日の人数の範囲を使うなら、編集タブの『年間マスター』の『④ 人数と組み合わせ』で設定できます")
         return warns
     }
 

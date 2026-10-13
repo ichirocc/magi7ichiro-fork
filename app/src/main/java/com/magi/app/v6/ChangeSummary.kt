@@ -10,10 +10,16 @@ data class ChangeSummary(
     val rangeAllOk: Boolean,
     /** 族別の件数増減（後 − 前。0 の族は含まない）。 */
     val familyDeltas: Map<String, Int> = emptyMap(),
+    /** 回数の下限・上限を外れた職員の人数（0＝数えられなかったか範囲内）。 */
+    val rangeOutStaff: Int = 0,
 ) {
-    /** 完了カード 1 行目。例: 「変更 4人・7セル／希望 42/42／個人回数 全員範囲内」 */
-    fun line(): String = "変更 ${changedStaff}人・${changedCells}セル／希望 $wishKept/$wishTotal／個人回数 " +
-        (if (rangeAllOk) "全員範囲内" else "範囲外あり")
+    /** 完了カード 1 行目。例: 「変更 4人・7セル／希望どおり 42/42／回数の下限・上限 全員守れています」 */
+    fun line(): String = "変更 ${changedStaff}人・${changedCells}セル／希望どおり $wishKept/$wishTotal／回数の下限・上限 " +
+        when {
+            rangeAllOk -> "全員守れています"
+            rangeOutStaff > 0 -> "外れた人 ${rangeOutStaff}人"
+            else -> "外れた人あり"
+        }
 
     /** 完了カード 2 行目（族名は [label] で表示語へ）。例: 「改善 回避の並び -2・期間の制約 -1（重み 90）／悪化 曜日の偏り +3（重み 3）」 */
     fun familyLine(label: (String) -> String = { it }): String = familyLine(familyDeltas, label)
@@ -30,8 +36,10 @@ data class ChangeSummary(
             var wishTotal = 0; var wishKept = 0
             for (i in 0 until p.S) for (j in 0 until p.T) if (p.wishFixed(i, j)) { wishTotal++; if (after.getOrNull(i)?.getOrNull(j) == p.wish[i][j]) wishKept++ }
             val rangeOk = (report.breakdown["low"] ?: 0) == 0 && (report.breakdown["high"] ?: 0) == 0
+            val rangeOut = report.countFamilies.filterValues { "vio-low" in it || "vio-high" in it }.keys
+                .mapTo(HashSet()) { it.substringBefore(',') }.size
             val deltas = familyDeltas(beforeReport ?: UnifiedViolationChecker.check(state, before), report)
-            return ChangeSummary(staff, cells, wishKept, wishTotal, rangeOk, deltas)
+            return ChangeSummary(staff, cells, wishKept, wishTotal, rangeOk, deltas, rangeOut)
         }
 
         fun familyDeltas(before: ViolationReport, after: ViolationReport): Map<String, Int> =

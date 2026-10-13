@@ -202,7 +202,7 @@ internal fun GroupRangeDialog(
                 if (bad) {
                     Text(RANGE_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
                 } else if (blank && existing > 0) {
-                    Text("このまま適用すると、${existing}名の個人上下限を「なし」に戻します（適切回数も空になります）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("このまま適用すると、${groups.getOrNull(g) ?: ""}の${shifts.getOrNull(k) ?: ""}について${existing}名の個人上下限を「なし」に戻します（適切回数も空になります）", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else if (blank) {
                     Text(RANGE_REQUIRED_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }

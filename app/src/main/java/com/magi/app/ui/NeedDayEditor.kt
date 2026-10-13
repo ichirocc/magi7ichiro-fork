@@ -359,7 +359,7 @@ internal fun NeedDayCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -
                 overrides.forEach { o ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "${o.kigou}  ${o.j + 1}日  最低 ${o.p1.ifBlank { "-" }}人 / ${needUpperLabel(cv.setupCounts.use2, short = true)} ${o.p2.ifBlank { "-" }}人",
+                            "${o.kigou}  ${DayText.full(ui.startDate, o.j)}  最低 ${o.p1.ifBlank { "-" }}人 / ${needUpperLabel(cv.setupCounts.use2, short = true)} ${o.p2.ifBlank { "-" }}人",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
