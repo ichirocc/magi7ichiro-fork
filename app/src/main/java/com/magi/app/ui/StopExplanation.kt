@@ -34,7 +34,7 @@ internal fun stopExplanationOf(s: V6FinalPort.StopSummary): StopExplanation? {
 /** 次の一手は直す場所（タブと節）から言う＝カードの文はボタンでないので、行き先を文で示す。 */
 internal fun stopNextLabel(n: StopNext): String? = when (n) {
     StopNext.NONE -> null
-    StopNext.MORE_TIME -> "設定タブの「最適化設定」で探す時間を延ばし、再作成する"
+    StopNext.MORE_TIME -> "設定タブの「最適化設定」で探索時間を延ばし、再作成する"
     StopNext.REVIEW_STAFFING -> "編集タブの「年間マスター」①で、担当できる職員を確認する"
     StopNext.REVIEW_WISHES -> "編集タブの「月次条件」で希望を見直す"
     StopNext.FIND_FIX -> "分析タブで直し方を探す"

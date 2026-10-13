@@ -69,7 +69,7 @@ private fun BubbleContent(
         when {
             r != null && !running -> {
                 Text(
-                    if (r.report.hard == 0) "登録された必須違反0件・配布前確認へ"
+                    if (r.report.hard == 0) "設定した必須条件を満たしています。配布前の確認に進んでください"
                     else "必須違反 ${r.report.hard}件",
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.primary,

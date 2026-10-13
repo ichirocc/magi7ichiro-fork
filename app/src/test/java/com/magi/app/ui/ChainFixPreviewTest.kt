@@ -21,6 +21,13 @@ class ChainFixPreviewTest {
         assertEquals("増える要調整: 人員過剰 +1", p.caution)
     }
 
+    /** [3.664.0/仕様 §4・§5] 記号に登録された勤務名を併記し、希望があるセルは希望どおりか違うかを添える（了承済みとは言わない）。 */
+    @Test fun rowsCarryShiftNamesAndWishImpact() {
+        val p = chainFixPreview(s(), snap, listOf("甲", "乙", "丙"), listOf("休", "日", "夜"), "2026-10-01",
+            shiftNames = listOf("休み", "日勤", "夜"), wishes = mapOf("0,2" to 2, "2,2" to 2))
+        assertEquals(listOf("甲 10/3 日（日勤） → 夜・希望どおり", "丙 10/3 休（休み） → 日（日勤）・希望（夜）と異なる勤務になります", "乙 10/1 日（日勤） → 夜"), p.changes)
+    }
+
     @Test fun noCautionWhenNothingGetsWorseAndNamesFallBack() {
         val p = chainFixPreview(s(), snap, emptyList(), emptyList(), "2026-10-01")
         assertNull(p.caution)

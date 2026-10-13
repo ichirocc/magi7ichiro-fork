@@ -2059,7 +2059,7 @@ internal fun FixSearchPanel(
                         Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                         caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                         Button(onClick = { onEvent(MagiEvent.Board.ApplyFixSuggestion(s)); onApplied() }, enabled = !ui.running,
-                            modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text("この手を使う（元に戻せます）") }
+                            modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text("${APPLY_CHANGE_BUTTON}（元に戻せます）") }
                     }
                 }
             } else {
