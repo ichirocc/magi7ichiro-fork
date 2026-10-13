@@ -301,22 +301,23 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 Text(p.hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 p.caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
-                Text("当てる直前にもう一度検査し、必須が減らない・希望の固定を崩す手順は当てません。当てたあとは「元に戻す」で取り消せます。",
+                Text("適用の直前にもう一度検査し、必須違反が減らない・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text(CHANGE_DUTY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
         // 第 2 の操作と「やめる」も主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。dismiss の枠に分けると横に入り切らず重なった。
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DialogConfirmButton("この入れ替えを当てる", onClick = onApply)
+                DialogConfirmButton(APPLY_CHANGE_BUTTON, onClick = onApply)
                 ConsultButton(consulted, Modifier, onClick = onConsult)
-                DialogDismissButton(onClick = onDismiss, text = "やめる")
+                DialogDismissButton(onClick = onDismiss, text = KEEP_CURRENT_BUTTON)
             }
         },
     )
 }
 
-/** 「相談してから決める」。積んだあとは「相談中」の札＝結果を形で返す（シートやダイアログの下では Snackbar が見えない。
+/** 「相談事項に登録」。積んだあとは「相談中」の札＝結果を形で返す（シートやダイアログの下では Snackbar が見えない。
  *  無効ボタンの文字は 38% で状態色の基準 3:1 を割るので、札にする＝ux_test_checklist A1）。 */
 @Composable
 internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, held: Boolean = false, onHold: (() -> Unit)? = null, onClick: () -> Unit) {
@@ -611,7 +612,7 @@ internal fun OperatorNextActionCard(
             val diffTxt = top.diff.joinToString("・") { (k, dlt) -> "${breakdownLabels[k] ?: k} ${if (dlt < 0) "−${-dlt}" else "+$dlt"}" }
             val totalTxt = if (top.deltaTotal <= 0) "−${-top.deltaTotal}" else "+${top.deltaTotal}"
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
-                moveLabel, onShowMove, true, "この手を使う（元に戻せます）", onApplyMove,
+                moveLabel, onShowMove, true, "${APPLY_CHANGE_BUTTON}（元に戻せます）", onApplyMove,
                 body = top.label,
                 note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n違反 $totalTxt（$diffTxt）" else "") +
                     (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else ""))
@@ -1849,7 +1850,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                                 // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
                                 ConsultButton(isConsulted(ui.consults, consultFix(s))) { onConsult(s) }
                                 Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text("この手を使う（元に戻せます）")
+                                    Text("${APPLY_CHANGE_BUTTON}（元に戻せます）")
                                 }
                             }
                         }

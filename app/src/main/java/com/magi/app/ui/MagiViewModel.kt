@@ -2708,7 +2708,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             else _ui.update {
                 val target = ChainTarget(isoDate(it.startDate, dayIndex) ?: "", it.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
                     boardKey = boardKey(snap), stateKey = stateKey(st))
-                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate).copy(target = target))
+                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes).copy(target = target))
             }
         }
     }
@@ -2743,9 +2743,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun previewOrApplyFix(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey) {
         if (s.ops.size < 2) { applyFixSuggestion(s, originBoard, originState); return }
         val sched = currentSchedule ?: return
+        val st = state ?: return
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
-        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate).copy(target = target)) }
+        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes).copy(target = target)) }
     }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。

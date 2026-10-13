@@ -33,11 +33,11 @@ data class ChainTarget(
     val boardKey: Long = 0L, val stateKey: Long = 0L,
 )
 
-internal const val CONSULT_BUTTON = "相談してから決める"
+internal const val CONSULT_BUTTON = "相談事項に登録"
 internal const val CONSULT_DONE = "相談中"
 internal const val CONSULT_HOLD_BUTTON = "保留する"
 internal const val CONSULT_HELD = "保留中"
-internal const val CONSULT_ADDED = "ホームの「相談中」に追加しました"
+internal const val CONSULT_ADDED = "ホームの「相談中」に登録しました（記録だけで、本人への連絡や了承にはなりません）"
 internal const val CONSULT_DUPLICATE = "この内容は、すでにホームの「相談中」に登録されています"
 internal const val CONSULT_OPEN = "開く"
 internal const val CONSULT_RESUME = "案を見る"

@@ -213,7 +213,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
         Column(Modifier.padding(16.dp)) {
             Text("最適化設定", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text("探す時間: ${ui.budgetSec} 秒（設定の上限 5 分。改善が止まると早く終わることがあります）", style = MaterialTheme.typography.bodyMedium)
+            Text("探索時間: ${ui.budgetSec} 秒（設定の上限 5 分。改善が止まると早く終わることがあります）", style = MaterialTheme.typography.bodyMedium)
             // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない＝共通の枠と書く）。
             Text("このほか、仕上げと勤務の入れ替え調整（玉突き）に共通の枠として合計 ${com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC} 秒を足します。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
