@@ -1127,6 +1127,7 @@ internal fun AssignBulkSheet(ui: UiState, onBulkSet: (Collection<Pair<Int, Int>>
                 Text(when {
                     ui.running -> "計算が終わるまで変更できません"
                     picked !in ui.shiftSymbols.indices -> "まずシフトを選んでください"
+                    targetDays.isEmpty() -> "この期間に対象の日がありません。別の曜日を選んでください"
                     cellCount == 0 -> "担当できる職員がいません。別のシフトを選んでください"
                     else -> "この${cellCount}マスに一括割当"
                 })
@@ -1348,7 +1349,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                 val glyph = when (vio) { "vio-covU" -> "▼"; "vio-covO" -> "▲"; else -> "" }
                                 val cellCd = if (vio != null) {
                                     val dir = if (vio == "vio-covU") "人員不足" else "人員過剰"
-                                    "${j + 1}日 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
+                                    "${DayText.full(ui.startDate, j)} 「${ui.shiftSymbols.getOrNull(kk) ?: kk}」 ${v}人 $dir・タップで詳細"
                                 } else null
                                 TallyBox(cw, rh, cbg, false, onClick = if (vio != null) ({ detail = dayViolDetail(cv, ui, kk, j, v, vio) }) else null, cd = cellCd) {
                                     if (v != 0 || vio != null) Text("$glyph$v", style = MaterialTheme.typography.bodySmall, color = cs.onSurface, fontWeight = if (vio != null) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
@@ -1464,8 +1465,10 @@ private fun dayViolDetail(cv: ConditionsView, ui: UiState, k: Int, j: Int, count
         }
     }
     if (pinned.isNotEmpty()) {
+        // 希望で固定した人数が適正人数を超えるときだけ「希望を調整しない限り残る」と言う（以下なら固定していない人を動かせば減る）。
+        val overByWish = limits != null && pinned.size > limits.second
         lines += "本人の希望: " + pinned.joinToString("・") { "${ui.staffNames.getOrNull(it) ?: "#$it"}さん" } +
-            "（必須の希望どうしが同じ日に重なっています。本人と相談してどちらかの希望を調整しない限り、過剰は残ります。調整すると希望は外れます。元に戻すで戻せます）"
+            if (overByWish) "（必須の希望どうしが同じ日に重なっています。本人と相談してどちらかの希望を調整しない限り、過剰は残ります。調整すると希望は外れます。元に戻すで戻せます）" else ""
     }
     return TallyDetailUi("$sym ・ ${DayText.full(ui.startDate, j)}", lines, null, k, day = j, pinned = pinned, assigned = assigned)
 }
@@ -1704,7 +1707,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
             .then(if (d != todayIdx && headerTint != null) Modifier.background(headerTint, RoundedCornerShape(6.dp)) else Modifier)
             .then(if (dayFocused) Modifier.border(3.dp, cs.primary, RoundedCornerShape(6.dp)) else Modifier)
             // [a11y/祝日色] 祝日名はスクリーンリーダーへ（表示は色のみ＝セル幅の都合で文字は出さない）。
-            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${d + 1}日 ${weekdayJa[dow]}曜日 ${holidayName[d]}" } else Modifier)
+            .then(if (holidayName[d] != null) Modifier.semantics { contentDescription = "${DayText.full(ui.startDate, d)} ${holidayName[d]}" } else Modifier)
             .then(if (covMarks.isNotEmpty()) Modifier.clickable(onClickLabel = "人員の内訳") { daySheet = d } else Modifier),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("${d + 1}", style = MaterialTheme.typography.labelMedium, color = dcol, fontWeight = if (d == todayIdx) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
@@ -1815,7 +1818,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                             // 拡張希望: 0=無し・1=指定日・2=割当が禁止のシフト（違反）。
                             val extBans = ui.extBanned[VioKey.cell(i, d)]
                             val ext = when { extBans == null -> 0; k in extBans -> 2; else -> 1 }
-                            val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${d + 1}日 ${sym.ifBlank { "なし" }}" +
+                            val cd = "${ui.staffNames.getOrNull(i) ?: "#$i"} ${DayText.full(ui.startDate, d)} ${sym.ifBlank { "なし" }}" +
                                 (if (vk == 1) "・必須" else if (vk >= 2) "・要調整" else "") +
                                 (if (wkk == 2) "・希望未反映（希望=${wishSym.ifBlank { "?" }}）" else if (wkk != 0) "・希望" else "") +
                                 (if (cellPinned) "・手動固定" else "") +

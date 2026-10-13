@@ -163,6 +163,8 @@ class AnalysisTriageTest {
         assertEquals(listOf("人員過剰"), blocked.blockers.map { it.label })
         assertTrue(blocked.blockers.single().detail.contains("曜日の偏り"))
         assertTrue("どの日のどのシフトかを言う", blocked.blockers.single().detail.startsWith("8/1(土)の「休」は、"))
+        assertTrue("曜日の偏りには緩める設定が無い＝手で動かす案内", blocked.blockers.single().detail.endsWith("勤務表で手で動かすと減らせます。"))
+        assertTrue(analysisTriage(ui(mapOf("covO" to 1), hasResult = true, coverage = cov("c1"))).blockers.single().detail.endsWith("の設定を緩めると動きます。"))
 
         val free = analysisTriage(ui(mapOf("covO" to 1), hasResult = true, coverage = cov(null)))
         assertTrue(free.blockers.isEmpty())
