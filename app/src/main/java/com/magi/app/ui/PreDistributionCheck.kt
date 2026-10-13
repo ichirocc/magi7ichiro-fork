@@ -16,12 +16,13 @@ internal fun preDistributionRows(ui: UiState, csvLine: String?): List<PreDistRow
     val softText = if (soft.isEmpty()) "なし" else soft.take(3).joinToString("・") { "${breakdownLabels[it.key] ?: it.key} ${it.value}件" } +
         (if (soft.size > 3) " ほか${soft.size - 3}種類" else "")
     val consults = ui.consults.size
+    val held = ui.consults.count { it.held }
     return listOf(
         PreDistRow("対象", "$period の採用した勤務表", null),
         PreDistRow("評価", if (evaluated) "最新の勤務表を評価済み" else "まだ評価していません（問題がないか調べてください）", evaluated),
         PreDistRow("必須違反", hardText, ui.bestHard == 0L),
         PreDistRow("要調整", softText, null),
-        PreDistRow("相談", if (consults == 0) "未完了の相談はありません" else "未完了 ${consults}件（ホームの「相談中」）", consults == 0),
+        PreDistRow("相談", if (consults == 0) "未完了の相談・保留はありません" else "未完了 ${consults}件" + (if (held > 0) "（うち保留 ${held}件）" else "") + "（ホームの「相談中」）", consults == 0),
         PreDistRow("保存", csvLine ?: "まだ勤務表 CSV に保存していません", csvLine?.startsWith("この内容で") == true),
     )
 }

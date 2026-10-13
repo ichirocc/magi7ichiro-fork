@@ -661,7 +661,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onShowList = { tab = 3 },
                         outcomeLine = vm.fixOutcomeLine() ?: vm.wishCancelOutcomeLine() ?: vm.relaxDoneLine(),
                         savedLine = vm.csvSavedLine(),
-                        consultLine = consultLine(ui.consults.size),
+                        consultLine = consultLine(ui.consults),
                         relax = vm.relaxTrialFor(),
                         onShowRelax = { relaxFrom = null; relaxDialog = true },
                         onStopRelax = { vm.cancelRelaxTrial() },
@@ -670,7 +670,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onRetryRelax = { vm.retryRelaxTrial() },
                     )
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
-                    ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) },
+                    ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) }, onToggleHold = { vm.toggleConsultHold(it) },
                         onResumeChain = { vm.resumeConsultChain(it) })
                     // [3.480.0 ホームAIリデザイン] 進捗カードの直下＝「結論」の次に来る「処方箋」として最有力の
                     // 1手を先に見せる（grilling決定#2）。

@@ -2776,6 +2776,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             else it.copy(messageIsError = false, consults = next, message = CONSULT_ADDED)
         }
     }
+    /** 相談中⇄保留（どちらも未解決＝違反は減らさない）。 */
+    fun toggleConsultHold(index: Int) {
+        _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.mapIndexed { j, c -> if (j == index) c.copy(held = !c.held) else c }) }
+    }
     fun removeConsult(index: Int) {
         val item = _ui.value.consults.getOrNull(index) ?: return
         _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.filterIndexed { j, _ -> j != index }) }
@@ -3017,10 +3021,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 // セルのシートは締切 3 秒（手は 1 件でよい。8 秒待たせると答えが無いときも長い＝3.646.0 実機報告）。ホーム・分析は 8 秒。
                 val deadline = if (quick) FIX_SEARCH_QUICK_MS else FIX_SEARCH_MS
+                var timedOut = false
                 val list = withContext(Dispatchers.Default) {
-                    if (exceptStaff != null && day != null) {
+                    (if (exceptStaff != null && day != null) {
                         fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true), day, exceptStaff).take(8)
-                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, deadlineMs = deadline, ejectionChain = true)
+                    } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, deadlineMs = deadline, ejectionChain = true))
+                        .also { timedOut = FixSuggester.lastTimedOut }
                 }
                 if (seq != fixSeq) return@launch   // 後続の探索が始まっている＝古い結果で上書きしない
                 // 盤面を差し替えるジョブの最中は書き戻さず探し直しもしない（完了後の盤面で探し直す）。
@@ -3033,7 +3039,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day)
                     return@launch
                 }
-                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
+                _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixTimedOut = timedOut, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
                 // [S6 §8] 全体の 1 手探索が必須を減らす候補なしで終わったら、背景で設定の壁を探す。
                 if (focusName.isBlank() && list.none { it.deltaHard < 0 } && _ui.value.bestHard > 0) startRelaxTrial()
             } catch (e: CancellationException) {

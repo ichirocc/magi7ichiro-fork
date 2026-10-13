@@ -715,10 +715,18 @@ internal fun settingsLabelFor(section: String): String = when (section) {
 }
 
 /** 手が見つからなかったときの説明。lines は確かめた事実だけ、wishRelated なら「希望を見る」を出す。 */
-internal data class NoFixExplain(val lines: List<String>, val wishRelated: Boolean, val settingsSection: String)
+internal data class NoFixExplain(val lines: List<String>, val wishRelated: Boolean, val settingsSection: String, val kind: NoFixKind = NoFixKind.SCOPE)
+
+/** 改善案が見つからない理由の区分（仕様 §7）。どれも「解決できない」とは言わない。 */
+internal enum class NoFixKind(val head: String) {
+    CONTRADICTION("矛盾を確認：両立しない条件（本人の希望どうしのぶつかり）があります。該当する希望か条件を直すと解消します。"),
+    TIME("時間不足：制限時間内に改善案を見つけられませんでした。もう一度探すと続きを探せます。"),
+    FIXED("固定条件による制限：本人の希望や個人の上限などの固定条件が、候補の変更を妨げています。固定条件を確かめるか、相談に回せます。"),
+    SCOPE(NO_FIX_HEAD),
+}
 
 /** 1 行目＝見つからなかったこと（上段のシートは 2 行で切れる）、続けて確かめた理由、最後に探した範囲。 */
-internal const val NO_FIX_HEAD = "必須を増やさずに違反を減らす手は見つかりませんでした。"
+internal const val NO_FIX_HEAD = "探索範囲内で改善なし：必須を増やさずに違反を減らす手は、調べた範囲では見つかりませんでした。別の方法で探すか、条件を見直せます。"
 internal const val NO_FIX_SCOPE = "探したのは 1 セルの変更・2 人の入れ替え・玉突きの範囲です。"
 
 /**
@@ -776,7 +784,12 @@ internal fun noFixReasons(
     }
     out += NO_FIX_SCOPE
     val section = if (i == null && k != null) "yr_headcount" else "yr_count"
-    return NoFixExplain(out, wish, section)
+    // 区分の優先: 矛盾を確かめた＞時間で打ち切った＞固定条件が理由に挙がった＞調べた範囲で無い。
+    val contradiction = i != null && d != null && ui.wishSelfConflicts.any { it.staff == i && d in it.days }
+    val fixed = wish || out.any { "上限が 0 回" in it || "下限＝上限で固定" in it }
+    val kind = when { contradiction -> NoFixKind.CONTRADICTION; ui.fixTimedOut -> NoFixKind.TIME; fixed -> NoFixKind.FIXED; else -> NoFixKind.SCOPE }
+    out[0] = kind.head
+    return NoFixExplain(out, wish, section, kind)
 }
 
 /** シフト集計「計（期間）」の人員の印：そのシフトに人員不足・過剰がある日。 */

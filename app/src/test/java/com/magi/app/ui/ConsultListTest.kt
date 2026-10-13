@@ -164,4 +164,13 @@ class ConsultListTest {
         assertTrue("指紋の無い案は古いとみなす", consultChainStale(t.copy(boardKey = 0L), 11L, 22L))
         assertFalse("枠を持つ相談（案なし）は探し直す", consultChainStale(ChainTarget("2026-10-03", "夜", "lbl"), 1L, 2L))
     }
+
+    /** 保留は相談と分けて数える（どちらも未解決＝違反は減らさない。仕様 §4.2・UX-07）。 */
+    @Test fun consultLineCountsHeldSeparately() {
+        val a = ConsultItem("s1", "n1"); val b = ConsultItem("s2", "n2", held = true)
+        assertEquals("未確認事項 2 件（相談中 1・保留 1。下の一覧で確認してから配ってください）", consultLine(listOf(a, b)))
+        assertEquals("未確認事項 1 件（保留 1。下の一覧で確認してから配ってください）", consultLine(listOf(b)))
+        assertEquals(null, consultLine(emptyList<ConsultItem>()))
+        assertEquals(true, consultMatch(listOf(b), ConsultItem("s2", "n2"))?.held)
+    }
 }
