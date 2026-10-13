@@ -67,7 +67,8 @@ internal data class AnalysisTriage(
 }
 
 /** weekly/fair は件数でなく L1 偏差の合計。単位を分けないと「186件」と読めてしまう。 */
-private fun unitOf(family: String) = if (family == "fair" || family == "weekly") "pt" else "件"
+/** 族の数の単位。weekly/fair は L1 偏差なので "pt"、ほかは件（配布前確認も同じ単位を使う）。 */
+internal fun unitOf(family: String) = if (family == "fair" || family == "weekly") "pt" else "件"
 
 private fun labelOf(family: String) = breakdownLabels[family] ?: family
 

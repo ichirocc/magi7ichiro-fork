@@ -69,12 +69,12 @@ private fun BubbleContent(
         when {
             r != null && !running -> {
                 Text(
-                    if (r.report.hard == 0) "配布できます（必須違反 0）"
-                    else "未解決 ${r.report.hard} 件",
+                    if (r.report.hard == 0) "登録された必須違反0件・配布前確認へ"
+                    else "必須違反 ${r.report.hard}件",
                     fontSize = 16.sp,
                     color = MaterialTheme.colorScheme.primary,
                 )
-                Text("合計違反 ${r.report.total}")
+                Text("違反の合計 ${r.report.total}件")
                 TextButton(onClick = onDismissBubble) { Text("閉じる") }
             }
             p != null -> {

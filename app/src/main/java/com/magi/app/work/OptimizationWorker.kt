@@ -377,8 +377,9 @@ class OptimizationWorker(
     }
 
     private fun notifyDone(hard: Int, total: Int) {
-        val msg = if (hard == 0) "配布できます（必須違反0・合計$total）" else "未解決$hard 件（合計$total）"
-        notify("最適化が完了しました", msg)
+        // 必須違反 0 件だけで「配布できます」と言わない（相談・職場の確認は含まない＝画面の完了通知と同じ文言、仕様 §9）。
+        val msg = com.magi.app.ui.completedText(hard, total, "")
+        notify("勤務表の最適化", msg)
         // [Android 17 バブル] 完了サマリを会話バブルへ反映（ongoing 解除）。
         runCatching { BubbleSupport.postDone(ctx, msg) }
     }

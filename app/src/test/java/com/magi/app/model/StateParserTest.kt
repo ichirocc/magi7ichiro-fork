@@ -106,6 +106,33 @@ class StateParserTest {
         assertEquals(emptyList<String>(), StateParser.parse(with(""""cons3n": [{}]""")).cons3n.single().pattern)   // 未指定は空のまま
     }
 
+    /** 表・配列そのものの型違い（個人の上下限・希望・日別必要人数・手動固定・拡張希望）も空として取り込まない。 */
+    @Test
+    fun malformedTopLevelTablesThrowWithTheirName() {
+        fun with(extra: String) = validJson.trimEnd().removeSuffix("}") + ",\n$extra\n}"
+        for ((key, bad) in listOf("staffRange" to "\"3\"", "wishes" to "[1]", "needDay1" to "\"2\"", "needDay2" to "[]",
+            "manualPins" to "{}", "extWishes" to "\"x\"", "schedule" to "{}", "skillGroups" to "\"x\"", "groupShift" to "{}")) {
+            val e = assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with("\"$key\": $bad")) }
+            assert(e.message?.contains(key) == true) { "message should name $key: ${e.message}" }
+        }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with(""""needDay1": {"0,0": [1]}""")) }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with(""""extWishes": [{"staff": 0, "days": "1"}]""")) }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with(""""wishes": {"0,0": "A"}""")) }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with(""""manualPins": [{"staff": 0, "day": 0.5, "shift": 0}]""")) }
+    }
+
+    /** 小数・範囲外の勤務番号は丸めずに止める（1.9 を 1 にすると別の勤務として入る）。整数値の小数と null は従来どおり。 */
+    @Test
+    fun fractionalOrOutOfRangeShiftNumberThrows() {
+        fun with(cells: String) = validJson.trimEnd().removeSuffix("}") + ",\n\"schedule\": [[$cells],[0]]\n}"
+        val e = assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with("1.9")) }
+        assert(e.message?.contains("schedule[0][0]") == true) { e.message ?: "" }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with("1")) }    // shifts は 1 件＝0 だけが有効
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with("-2")) }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with("\"A\"")) }
+        assertEquals(listOf(0, -1, -1), StateParser.parse(with("0.0, null, -1")).schedule[0])
+    }
+
     /** 全体保存（serialize）も古い評価情報を書き戻さない（勤務表と食い違うため。通常保存と同じ）。 */
     @Test
     fun fullSaveDropsStaleDerivedKeys() {

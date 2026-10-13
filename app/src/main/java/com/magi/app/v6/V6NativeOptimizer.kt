@@ -2123,7 +2123,7 @@ object V6NativeOptimizer {
         val deadline = started + seconds * 1000L
         // [E10/停滞早期終了] 実機ログで PostPolish が 45s枠を最後まで走り切って改善0（40.977s/40.988s の2例）
         //   ＝重研磨済み盤面ではプラトー後の期待値が低い。best が枠の1/5(下限3s)無改善なら早期に返す。
-        //   keep-best＋末尾の入力比番兵(better(baseReport,bestReport)→入力復帰)のため品質は不変＝時間/電池だけ節約
+        //   keep-best＋末尾の入力比番兵(better(baseReport,bestReport)→入力復帰)のためそれまでの最良を保持する＝時間/電池を節約
         //   （2.65.0 HF66 / 2.67.0 停滞ウォッチドッグと同方針）。native/Kotlin 両経路で共通。
         val stallMs = max(3000L, seconds * 1000L / 5)
         var stalled = false

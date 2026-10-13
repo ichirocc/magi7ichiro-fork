@@ -38,10 +38,10 @@ internal const val CONSULT_DONE = "相談中"
 internal const val CONSULT_HOLD_BUTTON = "保留する"
 internal const val CONSULT_HELD = "保留中"
 internal const val CONSULT_ADDED = "ホームの「相談中」に追加しました"
-internal const val CONSULT_DUPLICATE = "すでにホームの「相談中」にあるので、追加しませんでした"
+internal const val CONSULT_DUPLICATE = "この内容は、すでにホームの「相談中」に登録されています"
 internal const val CONSULT_OPEN = "開く"
 internal const val CONSULT_RESUME = "案を見る"
-internal const val CONSULT_STALE = "相談に積んだあとで勤務表か設定が変わったため、この案はそのままでは使えません。「直し方を探す」で探し直してください"
+internal const val CONSULT_STALE = "相談に登録した後で勤務表または設定が変わったため、この案はそのまま当てられません。「直し方を探す」から、もう一度確かめてください"
 
 /** ホームの主カードの 1 行。0 件なら出さない。 */
 internal fun consultLine(n: Int): String? = if (n > 0) "未確認事項 $n 件（相談中。下の一覧で確認してから配ってください）" else null

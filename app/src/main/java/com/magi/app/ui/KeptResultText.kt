@@ -4,7 +4,7 @@ import java.util.Locale
 import kotlin.math.roundToLong
 
 /**
- * keep-best で前回を維持したときの文言。比べる順は `betterReport`（必須→重み→合計）なので、
+ * keep-best で前回を維持したときの文言。比べる順は `betterReport`（必須→重み付き評価点→合計）なので、
  * 決め手になった項目と重みを必ず見せる（合計だけ減って維持されると理由が読めない）。
  */
 object KeptResultText {
@@ -12,17 +12,17 @@ object KeptResultText {
 
     private fun fmt(v: Long) = String.format(Locale.ROOT, "%,d", v)
     private fun w(s: Score) = fmt(s.weighted.roundToLong())
-    private fun parts(s: Score) = "必須${s.hard}・重み${w(s)}・合計${s.total}"
+    private fun parts(s: Score) = "必須${s.hard}・評価点${w(s)}・合計${s.total}"
 
     fun reason(now: Score, prev: Score): String = when {
-        now.hard != prev.hard -> if (now.hard > prev.hard) "必須が多いため" else "必須が少ないため"
-        now.weighted != prev.weighted -> if (now.weighted > prev.weighted) "重みが大きいため" else "重みが小さいため"
-        now.total != prev.total -> if (now.total > prev.total) "合計が多いため" else "合計が少ないため"
+        now.hard != prev.hard -> if (now.hard > prev.hard) "必須違反が多いため" else "必須違反が少ないため"
+        now.weighted != prev.weighted -> if (now.weighted > prev.weighted) "重み付き評価点が高いため" else "重み付き評価点が低いため"
+        now.total != prev.total -> if (now.total > prev.total) "違反の合計が多いため" else "違反の合計が少ないため"
         else -> "同じ点数のため"
     }
 
     fun screen(now: Score, prev: Score): String =
-        "改善が確認できなかったため、前回の勤務表を維持しました。今回（${parts(now)}）は前回（${parts(prev)}）より改善しませんでした（${reason(now, prev)}。比べる順＝必須→重み→合計）。"
+        "改善が確認できなかったため、前回の勤務表を維持しました（今回の案は採用していません）。理由：${reason(now, prev)}（今回 ${parts(now)}／前回 ${parts(prev)}。比べる順＝必須→評価点→合計）。"
 
     fun log(prefix: String, now: Score, prev: Score): String =
         "$prefix: 今回 ${parts(now)} は前回 ${parts(prev)} 以下に改善せず（${reason(now, prev)}）→ 前回を維持"

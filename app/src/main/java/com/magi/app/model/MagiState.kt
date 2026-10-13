@@ -32,16 +32,27 @@ data class Staff(val name: String, val groupIdx: Int, val skillIdx: Int = -1, va
 /** 無い・重複・0 以下の職員 ID に、並び順で最大値＋1 から振る（先に現れた有効な ID はそのまま）。 */
 fun withStaffIds(staff: List<Staff>): List<Staff> {
     var next = staff.maxOfOrNull { it.id }?.coerceAtLeast(0) ?: 0
-    val seen = HashSet<Int>()
+    val seen = staff.mapTo(HashSet()) { it.id }
+    val kept = HashSet<Int>()
     var changed = false
     val out = staff.map { s ->
-        if (s.id > 0 && seen.add(s.id)) s else { changed = true; next++; seen.add(next); s.copy(id = next) }
+        if (s.id > 0 && kept.add(s.id)) s
+        else { changed = true; next = freshStaffId(next, seen); seen.add(next); s.copy(id = next) }
     }
     return if (changed) out else staff
 }
 
 /** 次に足す職員の ID（今の最大値＋1）。 */
-fun nextStaffId(staff: List<Staff>): Int = (staff.maxOfOrNull { it.id } ?: 0).coerceAtLeast(0) + 1
+fun nextStaffId(staff: List<Staff>): Int =
+    freshStaffId((staff.maxOfOrNull { it.id } ?: 0).coerceAtLeast(0), staff.mapTo(HashSet()) { it.id })
+
+/** [last]＋1。上限（Int.MAX_VALUE）に達していれば使われていない最小の正の ID（＋1 で負へ回り込ませない）。 */
+private fun freshStaffId(last: Int, used: Set<Int>): Int {
+    if (last < Int.MAX_VALUE && last + 1 !in used) return last + 1
+    var id = 1
+    while (id in used) id++
+    return id
+}
 data class Range(val lo: String, val hi: String)
 
 /** Raw constraint rows (as authored), resolved later into index form. */
