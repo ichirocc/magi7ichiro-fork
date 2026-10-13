@@ -33,9 +33,12 @@ object StateFingerprint {
         fun txt(t: String?) { if (t == null) mix(0) else { for (c in t) mix(c.code.toLong()); mix(1) } }
         txt(st.startDate); txt(st.endDate); mix(if (st.use2Patterns) 1 else 0)
         // [外部レビュー N2] role（休みとして扱う）も読む。旧: 休みの付け替え・OFFだけの変更で指紋が変わらなかった。
+        mix(12); mix(st.shifts.size.toLong())
         for (sh in st.shifts) { txt(sh.name); txt(sh.kigou); txt(sh.need1); txt(sh.need2); mix(sh.role.ordinal.toLong()) }
-        for (g in st.groups) { txt(g.name); txt(g.kigou) }
-        for (g in st.skillGroups) { txt(g.name); txt(g.kigou) }
+        // 一覧ごとに識別子と件数を混ぜる。旧: グループとスキルグループの境界が無く、1 件を一方から他方へ移しても指紋が一致した。
+        mix(13); mix(st.groups.size.toLong()); for (g in st.groups) { txt(g.name); txt(g.kigou) }
+        mix(14); mix(st.skillGroups.size.toLong()); for (g in st.skillGroups) { txt(g.name); txt(g.kigou) }
+        mix(15); mix(st.staff.size.toLong())
         for (p in st.staff) { txt(p.name); mix(p.groupIdx.toLong()); mix(p.skillIdx.toLong()) }
         // [3.333.0/外部レビュー] 行の境界を混ぜる。旧は行を素通しで連結していたので
         //   `[[1,1],[0]]` と `[[1],[1,0]]` が同じ値になり、担当可否の構造が違うのに指紋が一致した。
@@ -46,7 +49,9 @@ object StateFingerprint {
         mix(8); mix(st.staffRange.size.toLong()); for ((k, r) in st.staffRange.entries.sortedBy { it.key }) { txt(k); txt(r.lo); txt(r.hi) }
         mix(9); mix(st.needDay1.size.toLong()); for ((k, v) in st.needDay1.entries.sortedBy { it.key }) { txt(k); txt(v) }
         mix(10); mix(st.needDay2.size.toLong()); for ((k, v) in st.needDay2.entries.sortedBy { it.key }) { txt(k); txt(v) }
+        mix(16); mix(st.cons1.size.toLong())
         for (c in st.cons1) { txt(c.day1); txt(c.shiftKigou); txt(c.day2) }
+        mix(17); mix(st.cons2.size.toLong())
         for (c in st.cons2) { txt(c.shiftKigou); txt(c.count) }
         // 連続パターンは行の長さが可変。行の境界を入れないと `[["A","B"]]` と `[["A"],["B"]]` が衝突する。
         for (fam in listOf(st.cons3, st.cons3n, st.cons3m, st.cons3mn)) {

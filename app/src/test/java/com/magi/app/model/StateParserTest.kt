@@ -95,4 +95,25 @@ class StateParserTest {
         val blank = """{"shifts":[{"name":"日勤","kigou":"日","role":""},{"name":"休み","kigou":"休","role":""}],"groups":[],"staff":[]}"""
         assertEquals(1, restIdx(StateParser.parse(blank)))
     }
+
+    /** 型の違う並び・個人の上下限は空として取り込まず読み込みを止める（条件が黙って消えるのを防ぐ）。 */
+    @Test
+    fun malformedPatternOrRangeOrConstraintFieldThrows() {
+        fun with(extra: String) = validJson.trimEnd().removeSuffix("}") + ",\n$extra\n}"
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with(""""cons3n": [{"pattern": "A"}]""")) }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with(""""cons3n": {"pattern": ["A"]}""")) }
+        assertThrows(IllegalArgumentException::class.java) { StateParser.parse(with(""""staffRange": {"0,0": "3"}""")) }
+        assertEquals(emptyList<String>(), StateParser.parse(with(""""cons3n": [{}]""")).cons3n.single().pattern)   // 未指定は空のまま
+    }
+
+    /** 全体保存（serialize）も古い評価情報を書き戻さない（勤務表と食い違うため。通常保存と同じ）。 */
+    @Test
+    fun fullSaveDropsStaleDerivedKeys() {
+        val withDerived = validJson.trimEnd().removeSuffix("}") + ",\n\"violations\": {\"0,0\": \"vio-x\"}, \"lastResult\": {\"hard\": 3}, \"note\": \"keep\"\n}"
+        val st = StateParser.parse(withDerived)
+        val out = org.json.JSONObject(StateParser.serialize(st, arrayOf(intArrayOf(0), intArrayOf(0))))
+        assertEquals(false, out.has("violations"))
+        assertEquals(false, out.has("lastResult"))
+        assertEquals("keep", out.optString("note"))   // 評価情報でない未知のキーは残す
+    }
 }

@@ -135,6 +135,10 @@ class StateFingerprintTest {
                 b.copy(cons3n = listOf(C3Row(listOf("A", "休")))),
                 b.copy(cons3n = listOf(C3Row(listOf("A")), C3Row(listOf("休")))),
             ),
+            "グループとスキルグループの切れ目" to Pair(
+                b.copy(groups = b.groups + Group("S", "S"), skillGroups = emptyList()),
+                b.copy(groups = b.groups, skillGroups = listOf(Group("S", "S"))),
+            ),
             "必須の並びの切れ目" to Pair(
                 b.copy(cons3 = listOf(C3Row(listOf("A", "A", "休")))),
                 b.copy(cons3 = listOf(C3Row(listOf("A", "A")), C3Row(listOf("休")))),

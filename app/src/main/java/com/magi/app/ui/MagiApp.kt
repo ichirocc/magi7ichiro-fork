@@ -249,6 +249,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var guidedFix by remember { mutableStateOf(false) }              // [operator_ux §5] 「なおし方を見る」対話
     var relaxDialog by remember { mutableStateOf(false) }            // [S6] 設定を緩める候補
     var relaxFrom by remember { mutableStateOf<Pair<Int, Int>?>(null) } // [S6] セルから開いたとき、確定後に選び直すセル
+    var preDist by remember { mutableStateOf(false) }                // [仕様 §10] 配布前確認
     var wishConflicts by remember { mutableStateOf(false) }          // [思考誘導S3] ぶつかっている希望の一覧
 
     // [Root] 画面から上がってきた操作の入口。可否は MagiArbiter が決め、通ったものだけが鎖へ流れる。
@@ -647,6 +648,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onStop = { vm.stop() },
                         onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                         onSchedule = { tab = 1 },
+                        onPreDist = { preDist = true },
                         // [監査#1] 人手不足が無い必須違反(希望/禁止連続/群)では GuidedFix(不足専用)が空回りする
                         //   → 不足なし時は分析タブの修復フローへ。
                         onFix = { if (ui.coverageDiag?.shortfalls.isNullOrEmpty()) { tab = 3; vm.findFixSuggestions() } else guidedFix = true },
@@ -1040,6 +1042,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 onFixData = { vm.dismissPreRun(); openEditLandingFrom(null, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
                 onProceed = { vm.proceedPreRun() },
                 onDismiss = { vm.dismissPreRun() })
+        }
+        if (preDist) {
+            PreDistributionDialog(preDistributionRows(ui, vm.csvSavedLine()),
+                onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") }, onDismiss = { preDist = false })
         }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->

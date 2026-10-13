@@ -103,6 +103,7 @@ data class UiState(
     val softPolish: Boolean = true,   // [既定ON] 仕上げ最適化（品質研磨）。keep-best で悪化しない
     val v6Algorithm: V6Algorithm = V6Algorithm.AUTO,
     val staffNames: List<String> = emptyList(),
+    val staffIds: List<Int> = emptyList(),   // staffNames と同じ並びの職員 ID（相談の対象を ID で引く）
     val staffGroupSymbols: List<String> = emptyList(),
     val shiftSymbols: List<String> = emptyList(),
     val shiftColorHex: List<String> = emptyList(),

@@ -22,7 +22,7 @@ object KeptResultText {
     }
 
     fun screen(now: Score, prev: Score): String =
-        "前回の結果を維持します。今回（${parts(now)}）は前回（${parts(prev)}）より改善しませんでした（${reason(now, prev)}。比べる順＝必須→重み→合計）。"
+        "改善が確認できなかったため、前回の勤務表を維持しました。今回（${parts(now)}）は前回（${parts(prev)}）より改善しませんでした（${reason(now, prev)}。比べる順＝必須→重み→合計）。"
 
     fun log(prefix: String, now: Score, prev: Score): String =
         "$prefix: 今回 ${parts(now)} は前回 ${parts(prev)} 以下に改善せず（${reason(now, prev)}）→ 前回を維持"
@@ -30,3 +30,8 @@ object KeptResultText {
     /** 維持の文言に理由を1文足す（入口で上限0のセルを外して必須が増えたとき等）。 */
     fun withNote(base: String, note: String?): String = if (note == null) base else "$base $note"
 }
+
+/** 計算が終わったときの通知（判断支援 UX 仕様 §9）。必須違反 0 件は「計算が終わった」と「配れる」を分けて、配布前確認へ促す。 */
+internal fun completedText(hard: Int, total: Int, how: String): String =
+    if (hard == 0) "計算が完了しました$how。登録された必須違反0件・配布前確認へ（違反の合計 ${total}件）"
+    else "計算が完了しました$how。必須違反 ${hard}件・違反の合計 ${total}件"

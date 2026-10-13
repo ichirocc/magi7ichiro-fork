@@ -2,7 +2,8 @@
 
 > **このファイルの役割**：エンティティ定義・項目名・型の**唯一の正解**。AI が存在しないフィールドを創作するのを防ぐ。ここに無い項目は「存在しない」とみなす。
 > **コード基準**：`app/src/main/java/com/magi/app/model/MagiState.kt`。Web 版の `state` オブジェクトと名前・意味が一致し、JSON が往復する。
-> **最終更新**：2026-09-25（画面層の精読 #2 — §4 UiState を `val` 宣言と再照合し、未記載だった 8 フィールド
+> **最終更新**：2026-10-13（不変の職員 ID — `Staff.id` を追加。読込で欠け・重複・0 以下に振り、保存で書く。CSV は変えない。§4 に `staffIds`）。
+> 2026-09-25（画面層の精読 #2 — §4 UiState を `val` 宣言と再照合し、未記載だった 8 フィールド
 > `fixSearched`/`stalledHardFamilies`/`alternativeApplied` と希望の試算 5 種を追加、件数を 80 → **88** へ訂正）。
 > 2026-09-25（backlog#38 — `Staff.skillIdx` の既定を 0 → **-1（未所属）**、最初のスキル群を作るときは全員を -1 にしてから足す）。
 > 2026-09-24（外部レビュー N1 — `shifts[].role` の保存を `"rest"`/`"none"` に、`""` は旧JSONと同じ扱い）。
@@ -62,7 +63,7 @@
 |---|---|---|
 | `Shift` | `name: String`, `kigou: String`, `need1: String`, `need2: String`, `role: ShiftRole = None` | need1/need2 = P1/P2 の既定必要数（`""`/null＝要件なし）。`role`＝`ShiftRole{None,Rest}`（3.603.0、休の識別。詳細は下記） |
 | `Group` | `name: String`, `kigou: String` | kigou＝制約で使う記号 |
-| `Staff` | `name: String`, `groupIdx: Int`, `skillIdx: Int = -1` | groupIdx→ユニット群（担当可否/covU）、skillIdx→スキル群（C41s/C42s 専用）。**`skillIdx = -1` は「未所属」の正規の値で既定**（UI の「(なし)」・3.70.0。既定は backlog#38 で 0 → -1＝職員追加・名簿取込・`skillIdx` の無い JSON は -1、保存済みの明示の値はそのまま）。`ssk[i] == groupIdx(>=0)` が常に偽になるので cons41s/cons42s から安全に外れる。群削除時の再割当も `-1` へ寄せる（3.328.0）。スキル群が 0 件の状態で最初の 1 群を作るときは全員を `-1` にしてから足す（`Ws1Ops.addSkillGroup`、backlog#38） |
+| `Staff` | `name: String`, `groupIdx: Int`, `skillIdx: Int = -1`, `id: Int = 0` | **`id` は不変の職員 ID**（1 以上、2026-10-13 利用者決定）。並び替え・改名・同名でも同じ人を指す（相談の対象をこれで結ぶ）。JSON は `"staff": [{"id":1,"name":…}]`。読込（`StateParser.parse`）で、無い・重複（後に出た方）・0 以下の ID に、読み込み順に今の最大値＋1 から振る（古いデータは自動で付く）。保存はどの経路（全体保存・勤務表だけ・制約編集）でも `id` を書く。職員の追加は今の最大値＋1、並び替え・改名・削除・グループの付け替えでは保つ。名簿 CSV の取込で増えた職員も最大値＋1。CSV の列は変えない（ID は CSV に出さない）。`0`＝未採番（コード内で組み立てた値だけ。読込後は常に 1 以上）。groupIdx→ユニット群（担当可否/covU）、skillIdx→スキル群（C41s/C42s 専用）。**`skillIdx = -1` は「未所属」の正規の値で既定**（UI の「(なし)」・3.70.0。既定は backlog#38 で 0 → -1＝職員追加・名簿取込・`skillIdx` の無い JSON は -1、保存済みの明示の値はそのまま）。`ssk[i] == groupIdx(>=0)` が常に偽になるので cons41s/cons42s から安全に外れる。群削除時の再割当も `-1` へ寄せる（3.328.0）。スキル群が 0 件の状態で最初の 1 群を作るときは全員を `-1` にしてから足す（`Ws1Ops.addSkillGroup`、backlog#38） |
 | `Range` | `lo: String`, `hi: String` | 個人×シフトの下限/上限（LimMin/LimMax） |
 | `C1Row` | `day1: String`, `shiftKigou: String`, `day2: String` | 「day1 日窓で shiftKigou を day2 回」 |
 | `C2Row` | `shiftKigou: String`, `count: String` | 個人の shiftKigou 合計の目標 |
@@ -139,8 +140,8 @@
 > `*Families` の3つは「重い違反（low 90 / covU 8000 等）が同じキーの軽い違反を隠す」問題への対処。
 > 先頭要素は対応する単一クラスマップと常に一致する。内訳→場所タップと E7 フィルタはこちらを読む。
 
-**表示素材**（12）：`schedule`, `liveSchedule`(計算中の最良盤面), `wishes`(`"i,j"→shiftIdx`),
-`staffNames`, `staffGroupSymbols`, `shiftSymbols`, `shiftColorHex`, `shiftTextHex`,
+**表示素材**（13）：`schedule`, `liveSchedule`(計算中の最良盤面), `wishes`(`"i,j"→shiftIdx`),
+`staffNames`, `staffIds`（`staffNames` と同じ並びの `Staff.id`＝相談の対象を ID で引く）, `staffGroupSymbols`, `shiftSymbols`, `shiftColorHex`, `shiftTextHex`,
 `violationColorHex`（必須違反・空＝テーマ error / `shiftColors["__vio__"]` 由来）,
 `violationSoftColorHex`（要調整・`__vioSoft__` 由来）, `violationFamilyColorHex`（族別の個別色・`__vioFam_<fam>__` 由来）,
 `reviewMemos`（見直し候補メモ・セッション内のみ）

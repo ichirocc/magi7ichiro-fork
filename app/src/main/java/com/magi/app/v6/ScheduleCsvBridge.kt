@@ -5,6 +5,7 @@ import com.magi.app.model.Shift
 import com.magi.app.model.ShiftRole
 import com.magi.app.model.Group
 import com.magi.app.model.Staff
+import com.magi.app.model.withStaffIds
 import com.magi.app.model.Range
 import com.magi.app.model.C1Row
 import com.magi.app.model.C2Row
@@ -49,7 +50,7 @@ private fun buildImportedState(
         endDate = end,
         shifts = shiftsOut,
         groups = groupsOut,
-        staff = staffOut,
+        staff = withStaffIds(staffOut),
         use2Patterns = false,
         groupShift = List(groupsOut.size) { List(K) { 1 } },           // 担当可否不明→全可(後から調整)
         groupShiftApt = List(groupsOut.size) { List(K) { "" } },
@@ -766,7 +767,7 @@ object StaffCsvIO {
         val newSched = Array(sched.size + extraRows.size) { i ->
             if (i < sched.size) sched[i].copyOf() else extraRows[i - sched.size]
         }
-        val ns = state.copy(staff = newStaff, schedule = newSched.map { it.toList() })
+        val ns = state.copy(staff = withStaffIds(newStaff), schedule = newSched.map { it.toList() })
         return StaffUpsertResult(ns, newSched, updated, added, unknownG, unknownS)
     }
 }

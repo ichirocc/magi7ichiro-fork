@@ -12,6 +12,9 @@ object StateParser {
     private const val ROLE_REST = "rest"
     private const val ROLE_NONE = "none"
 
+    /** 勤務表から導く評価情報＝保存し直すと勤務表と食い違うキー。どの保存経路でも書き戻さない。 */
+    private val DERIVED_KEYS = listOf("violations", "needViolations", "countViolations", "lastResult", "lastPhase")
+
     fun parse(json: String): MagiState {
         val o = JSONObject(json)
 
@@ -35,9 +38,9 @@ object StateParser {
         val groups = o.optJSONArray("groups").mapObjects("groups") {
             Group(it.optString("name"), it.optString("kigou"))
         }
-        val staff = o.optJSONArray("staff").mapObjects("staff") {
-            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", -1))
-        }
+        val staff = withStaffIds(o.optJSONArray("staff").mapObjects("staff") {
+            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", -1), it.optInt("id", 0))
+        })
         val skillGroups = o.optJSONArray("skillGroups").mapObjects("skillGroups") {
             Group(it.optString("name"), it.optString("kigou"))
         }
@@ -59,37 +62,39 @@ object StateParser {
         val staffRange = HashMap<String, Range>()
         o.optJSONObject("staffRange")?.let { r ->
             r.keys().forEach { k ->
+                // 型の違う値を読み飛ばすと個人の上下限が黙って消える＝読み込みを止めてキーを示す。
                 val ro = r.optJSONObject(k)
-                if (ro != null) staffRange[k] = Range(asStr(ro.opt("lo")), asStr(ro.opt("hi")))
+                    ?: throw IllegalArgumentException("staffRange[\"$k\"] がオブジェクトではありません（データが壊れています）")
+                staffRange[k] = Range(asStr(ro.opt("lo")), asStr(ro.opt("hi")))
             }
         }
         val needDay1 = strMap(o.optJSONObject("needDay1"))
         val needDay2 = strMap(o.optJSONObject("needDay2"))
         val shiftColors = strMap(o.optJSONObject("shiftColors"))
 
-        val cons1 = o.optJSONArray("cons1").mapObjects("cons1") {
+        val cons1 = arrayOf(o, "cons1").mapObjects("cons1") {
             C1Row(asStr(it.opt("day1")), it.optString("shiftKigou"), asStr(it.opt("day2")))
         }
-        val cons2 = o.optJSONArray("cons2").mapObjects("cons2") {
+        val cons2 = arrayOf(o, "cons2").mapObjects("cons2") {
             C2Row(it.optString("shiftKigou"), asStr(it.opt("count")))
         }
-        val cons3 = o.optJSONArray("cons3").mapObjects("cons3") { C3Row(strList(it.optJSONArray("pattern"))) }
-        val cons3n = o.optJSONArray("cons3n").mapObjects("cons3n") { C3Row(strList(it.optJSONArray("pattern"))) }
-        val cons3m = o.optJSONArray("cons3m").mapObjects("cons3m") { C3Row(strList(it.optJSONArray("pattern"))) }
-        val cons3mn = o.optJSONArray("cons3mn").mapObjects("cons3mn") { C3Row(strList(it.optJSONArray("pattern"))) }
-        val cons41 = o.optJSONArray("cons41").mapObjects("cons41") {
+        val cons3 = arrayOf(o, "cons3").mapObjects("cons3") { C3Row(patternOf(it, "cons3")) }
+        val cons3n = arrayOf(o, "cons3n").mapObjects("cons3n") { C3Row(patternOf(it, "cons3n")) }
+        val cons3m = arrayOf(o, "cons3m").mapObjects("cons3m") { C3Row(patternOf(it, "cons3m")) }
+        val cons3mn = arrayOf(o, "cons3mn").mapObjects("cons3mn") { C3Row(patternOf(it, "cons3mn")) }
+        val cons41 = arrayOf(o, "cons41").mapObjects("cons41") {
             C41Row(it.optString("groupKigou"), it.optString("shiftKigou"), asStr(it.opt("l")), asStr(it.opt("u")))
         }
-        val cons42 = o.optJSONArray("cons42").mapObjects("cons42") {
+        val cons42 = arrayOf(o, "cons42").mapObjects("cons42") {
             C42Row(it.optString("g1Kigou"), it.optString("g2Kigou"), it.optString("s1Kigou"), it.optString("s2Kigou"))
         }
-        val cons41s = o.optJSONArray("cons41s").mapObjects("cons41s") {
+        val cons41s = arrayOf(o, "cons41s").mapObjects("cons41s") {
             C41Row(it.optString("groupKigou"), it.optString("shiftKigou"), asStr(it.opt("l")), asStr(it.opt("u")))
         }
-        val cons42s = o.optJSONArray("cons42s").mapObjects("cons42s") {
+        val cons42s = arrayOf(o, "cons42s").mapObjects("cons42s") {
             C42Row(it.optString("g1Kigou"), it.optString("g2Kigou"), it.optString("s1Kigou"), it.optString("s2Kigou"))
         }
-        val cons3w = o.optJSONArray("cons3w").mapObjects("cons3w") { C3wRow(it.optString("wishKigou"), it.optString("prevKigou")) }
+        val cons3w = arrayOf(o, "cons3w").mapObjects("cons3w") { C3wRow(it.optString("wishKigou"), it.optString("prevKigou")) }
         // [#41] 無いキー＝手動固定なし（古いデータはそのまま開く）。同じセルが重なれば後の行を採る。
         val manualPins = o.optJSONArray("manualPins").mapObjects("manualPins") {
             ManualPin(it.optInt("staff", -1), it.optInt("day", -1), it.optInt("shift", -1))
@@ -138,7 +143,7 @@ object StateParser {
         if (structureEdited && state != null) return serialize(state, schedule)
         val orig = originalJson ?: return null
         return if (constraintsEdited && state != null) exportWithEdits(orig, state, schedule)
-        else exportWithSchedule(orig, schedule, state?.manualPins)
+        else exportWithSchedule(orig, schedule, state?.manualPins, state?.staff)
     }
 
     /**
@@ -146,10 +151,11 @@ object StateParser {
      * so every field (including ones this app does not model) is preserved exactly,
      * then overwrite only "schedule".
      */
-    fun exportWithSchedule(originalJson: String, newSchedule: Array<IntArray>, manualPins: List<ManualPin>? = null): String {
+    fun exportWithSchedule(originalJson: String, newSchedule: Array<IntArray>, manualPins: List<ManualPin>? = null, staff: List<Staff>? = null): String {
         val o = JSONObject(originalJson)
+        if (staff != null) putStaffIds(o, staff)
         // 最適化後 schedule と食い違う古い派生・キャッシュ系フィールドを除去（互換性事故防止）。
-        for (k in listOf("violations", "needViolations", "countViolations", "lastResult", "lastPhase")) {
+        for (k in DERIVED_KEYS) {
             o.remove(k)
         }
         val arr = JSONArray()
@@ -173,7 +179,8 @@ object StateParser {
      */
     fun exportWithEdits(originalJson: String, state: MagiState, newSchedule: Array<IntArray>): String {
         val o = JSONObject(originalJson)
-        for (k in listOf("violations", "needViolations", "countViolations", "lastResult", "lastPhase")) o.remove(k)
+        for (k in DERIVED_KEYS) o.remove(k)
+        putStaffIds(o, state.staff)
         val sched = JSONArray()
         for (row in newSchedule) { val r = JSONArray(); for (v in row) r.put(v); sched.put(r) }
         o.put("schedule", sched)
@@ -193,6 +200,16 @@ object StateParser {
         o.put("manualPins", consArr(state.manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
         if (state.extWishes.isNotEmpty() || o.has("extWishes")) o.put("extWishes", consArr(state.extWishes) { JSONObject().put("staff", it.staff).put("days", JSONArray(it.days)).put("shifts", JSONArray(it.shifts)) })
         return o.toString(2)
+    }
+
+    /** 元のファイルの職員へ読込時に振った ID を書く（構造を編集していない経路＝並びと人数は元のまま。食い違えば触らない）。 */
+    private fun putStaffIds(o: JSONObject, staff: List<Staff>) {
+        val arr = o.optJSONArray("staff") ?: return
+        if (arr.length() != staff.size) return
+        for (i in staff.indices) {
+            val so = arr.optJSONObject(i) ?: continue
+            if (staff[i].id > 0) so.put("id", staff[i].id)
+        }
     }
 
     private fun <T> consArr(list: List<T>, f: (T) -> JSONObject): JSONArray {
@@ -224,7 +241,7 @@ object StateParser {
         })
         o.put("groups", consArr(state.groups) { obj("name" to it.name, "kigou" to it.kigou) })
         val staffArr = JSONArray()
-        for (s in state.staff) { val so = JSONObject(); so.put("name", s.name); so.put("groupIdx", s.groupIdx); so.put("skillIdx", s.skillIdx); staffArr.put(so) }
+        for (s in state.staff) { val so = JSONObject(); if (s.id > 0) so.put("id", s.id); so.put("name", s.name); so.put("groupIdx", s.groupIdx); so.put("skillIdx", s.skillIdx); staffArr.put(so) }
         o.put("staff", staffArr)
         o.put("skillGroups", consArr(state.skillGroups) { obj("name" to it.name, "kigou" to it.kigou) })
         o.put("groupShift", intGrid(state.groupShift))
@@ -252,7 +269,8 @@ object StateParser {
         o.put("cons3w", consArr(state.cons3w) { obj("wishKigou" to it.wishKigou, "prevKigou" to it.prevKigou) })
         o.put("manualPins", consArr(state.manualPins) { JSONObject().put("staff", it.staff).put("day", it.day).put("shift", it.shift) })
         if (state.extWishes.isNotEmpty() || o.has("extWishes")) o.put("extWishes", consArr(state.extWishes) { JSONObject().put("staff", it.staff).put("days", JSONArray(it.days)).put("shifts", JSONArray(it.shifts)) })
-        for ((k, v) in state.extras) if (!o.has(k)) o.put(k, v)
+        // 古い評価情報（違反の印・前回の結果）は勤務表と食い違うので、全体保存でも書き戻さない（他の保存経路と同じ）。
+        for ((k, v) in state.extras) if (!o.has(k) && k !in DERIVED_KEYS) o.put(k, v)
         return o.toString(2)
     }
 
@@ -277,6 +295,19 @@ object StateParser {
         is Long -> v.toString()
         is Double -> if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
         else -> v.toString()
+    }
+
+    /** 条件の配列。無ければ空、配列でなければ読み込みを止める（空として取り込むと条件が黙って消える）。 */
+    private fun arrayOf(o: JSONObject, key: String): JSONArray? {
+        if (!o.has(key) || o.isNull(key)) return null
+        return o.optJSONArray(key) ?: throw IllegalArgumentException("$key が配列ではありません（データが壊れています）")
+    }
+
+    /** 並びの pattern。無ければ空、配列でなければ読み込みを止める（空として取り込むと条件が黙って消える）。 */
+    private fun patternOf(row: JSONObject, name: String): List<String> {
+        if (!row.has("pattern") || row.isNull("pattern")) return emptyList()
+        val a = row.optJSONArray("pattern") ?: throw IllegalArgumentException("$name の pattern が配列ではありません（データが壊れています）")
+        return strList(a)
     }
 
     private fun strList(a: JSONArray?): List<String> {

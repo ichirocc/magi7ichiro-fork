@@ -110,6 +110,50 @@ class ConsultListTest {
         assertEquals("別の人の改名でも同名の区別を保つ", 2 to 11, consultCell(followRenameInConsults(listOf(d), dup, dupAfter).single(), "2026-10-01", dupAfter, 31))
     }
 
+    /** [UX-02] 同名の職員を並び替えても、相談の対象は職員 ID で元の人を指す（2026-10-13 ユーザー決定）。 */
+    @Test fun sameNamedStaffKeepTheTargetByIdAfterReordering() {
+        val names = listOf("佐藤", "甲", "佐藤")
+        val ids = listOf(4, 7, 9)
+        val c = consultStampStaffId(consultWish("佐藤", "10/12", "夜", "r", 2, 11, "2026-10-12"), names, ids)
+        assertEquals(9, c.staffId)
+        val reNames = listOf("佐藤", "佐藤", "甲")
+        val reIds = listOf(9, 4, 7)
+        assertEquals("並び替え後も元の人（ID 9）", 0 to 11, consultCell(c, "2026-10-01", reNames, 31, reIds))
+        assertNull(consultTargetNote(c, "2026-10-01", reNames, listOf(), 31, reIds))
+        val followed = followRenameInConsults(listOf(c), names, reNames, reIds).single()
+        assertEquals(0, followed.staff)
+        assertEquals(0 to 11, consultCell(followed, "2026-10-01", reNames, 31, reIds))
+    }
+
+    @Test fun renameFollowsByIdEvenWhenTheRosterAlsoMoves() {
+        val c = consultStampStaffId(consultWish("乙", "10/12", "夜", "r", 1, 11, "2026-10-12"), listOf("甲", "乙", "丙"), listOf(1, 2, 3))
+        val after = listOf("乙子", "甲", "丙")
+        val afterIds = listOf(2, 1, 3)
+        val f = followRenameInConsults(listOf(c), listOf("甲", "乙", "丙"), after, afterIds).single()
+        assertEquals("乙子", f.staffName)
+        assertEquals(0 to 11, consultCell(f, "2026-10-01", after, 31, afterIds))
+    }
+
+    /** 対象が削除されたら開かない。あとで同じ ID が別の人に振られても結ばない。 */
+    @Test fun aRemovedStaffIsNeverReboundToSomeoneElse() {
+        val c = consultStampStaffId(consultWish("乙", "10/12", "夜", "r", 1, 11, "2026-10-12"), listOf("甲", "乙"), listOf(1, 2))
+        assertNull(consultCell(c, "2026-10-01", listOf("甲", "乙"), 31, listOf(1, 5)))
+        assertEquals("いまの職員一覧にいないので開けません（乙さん）", consultTargetNote(c, "2026-10-01", listOf("甲", "乙"), listOf(), 31, listOf(1, 5)))
+        val gone = followRenameInConsults(listOf(c), listOf("甲", "乙"), listOf("甲"), listOf(1)).single()
+        assertTrue(gone.staffGone)
+        val reused = followRenameInConsults(listOf(gone), listOf("甲"), listOf("甲", "乙"), listOf(1, 2)).single()
+        assertNull("同じ番号・同じ名前の新しい人にも結ばない", consultCell(reused, "2026-10-01", listOf("甲", "乙"), 31, listOf(1, 2)))
+        assertEquals("いまの職員一覧にいないので開けません（乙さん）", consultTargetNote(reused, "2026-10-01", listOf("甲", "乙"), listOf(), 31, listOf(1, 2)))
+    }
+
+    @Test fun stampingNeedsAMatchingRowAndAPositiveId() {
+        val c = consultWish("乙", "10/12", "夜", "r", 1, 11)
+        assertNull("名前が位置と合わない", consultStampStaffId(c, listOf("甲", "丙"), listOf(1, 2)).staffId)
+        assertNull("ID の無い名簿（0）", consultStampStaffId(c, listOf("甲", "乙"), listOf(0, 0)).staffId)
+        assertNull("対象の職員を持たない相談", consultStampStaffId(consultShortage("10/12", "夜", emptyList()), listOf("甲"), listOf(1)).staffId)
+        assertEquals(1 to 11, consultCell(c, "2026-10-01", listOf("甲", "乙"), 31, listOf(0, 0)))   // ID の無い相談は氏名で引く
+    }
+
     /** [3.650.0/外部レビュー] 積んだ案は出したときの盤面と設定の指紋を持ち、今と違えば当てない（枠を持つ相談は探し直すので関係しない）。 */
     @Test fun aSavedSuggestionIsStaleOnceTheBoardOrSettingsChange() {
         val sug = FixSuggestion(FixKind.CHAIN, listOf(FixCell(0, 2, 2), FixCell(1, 2, 0)), "lbl", -1, 0, emptyList())
