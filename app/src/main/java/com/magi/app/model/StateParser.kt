@@ -19,7 +19,7 @@ object StateParser {
         val o = JSONObject(json)
 
         var explicitRole = false
-        val shiftsRaw = o.optJSONArray("shifts").mapObjects("shifts") {
+        val shiftsRaw = arrayOf(o, "shifts").mapObjects("shifts") {
             val r = it.optString("role")
             if (r == ROLE_REST || r == ROLE_NONE) explicitRole = true
             Shift(it.optString("name"), it.optString("kigou"), asStr(it.opt("need1")), asStr(it.opt("need2")),
@@ -35,32 +35,38 @@ object StateParser {
             if (restPos >= 0) shiftsRaw.mapIndexed { idx, s -> if (idx == restPos) s.copy(role = ShiftRole.Rest) else s }
             else shiftsRaw
         } else shiftsRaw
-        val groups = o.optJSONArray("groups").mapObjects("groups") {
+        val groups = arrayOf(o, "groups").mapObjects("groups") {
             Group(it.optString("name"), it.optString("kigou"))
         }
-        val staff = withStaffIds(o.optJSONArray("staff").mapObjects("staff") {
-            Staff(it.optString("name"), it.optInt("groupIdx", 0), it.optInt("skillIdx", -1), it.optInt("id", 0))
+        val staff = withStaffIds(arrayOf(o, "staff").mapIndexedObjects("staff") { i, it ->
+            Staff(it.optString("name"), intOf(it.opt("groupIdx"), 0, "staff[$i].groupIdx"),
+                intOf(it.opt("skillIdx"), -1, "staff[$i].skillIdx"), intOf(it.opt("id"), 0, "staff[$i].id"))
         })
-        val skillGroups = o.optJSONArray("skillGroups").mapObjects("skillGroups") {
+        val skillGroups = arrayOf(o, "skillGroups").mapObjects("skillGroups") {
             Group(it.optString("name"), it.optString("kigou"))
         }
-        val groupShift = o.optJSONArray("groupShift").mapArrays("groupShift") { row ->
-            (0 until row.length()).map { row.optInt(it, 0) }
+        val groupShift = arrayOf(o, "groupShift").mapIndexedArrays("groupShift") { g, row ->
+            (0 until row.length()).map { intOf(row.opt(it), 0, "groupShift[$g][$it]") }
         }
-        val groupShiftApt = o.optJSONArray("groupShiftApt").mapArrays("groupShiftApt") { row ->
+        val groupShiftApt = arrayOf(o, "groupShiftApt").mapArrays("groupShiftApt") { row ->
             (0 until row.length()).map { asStr(row.opt(it)) }
         }
-        val schedule = o.optJSONArray("schedule").mapArrays("schedule") { row ->
-            // [監査A9] 不正/null セルは 0(先頭シフト) でなく -1(未割当) に倒す（勝手な勤務化を防ぐ）。
-            (0 until row.length()).map { row.optInt(it, -1) }
+        val schedule = arrayOf(o, "schedule").mapIndexedArrays("schedule") { i, row ->
+            // [監査A9] null セルは 0(先頭シフト) でなく -1(未割当) に倒す（勝手な勤務化を防ぐ）。
+            // 小数・文字・範囲外は丸めず読み込みを止める（1.9 を 1 にすると別の勤務として入る）。
+            (0 until row.length()).map { j ->
+                intOf(row.opt(j), -1, "schedule[$i][$j]").also {
+                    if (it < -1 || it >= shifts.size) throw IllegalArgumentException("schedule[$i][$j] の勤務番号 $it が範囲外です（データが壊れています）")
+                }
+            }
         }
 
         val wishes = HashMap<String, Int>()
-        o.optJSONObject("wishes")?.let { w ->
-            w.keys().forEach { k -> wishes[k] = w.optInt(k, -1) }
+        objOf(o, "wishes")?.let { w ->
+            w.keys().forEach { k -> wishes[k] = intOf(w.opt(k), -1, "wishes[\"$k\"]") }
         }
         val staffRange = HashMap<String, Range>()
-        o.optJSONObject("staffRange")?.let { r ->
+        objOf(o, "staffRange")?.let { r ->
             r.keys().forEach { k ->
                 // 型の違う値を読み飛ばすと個人の上下限が黙って消える＝読み込みを止めてキーを示す。
                 val ro = r.optJSONObject(k)
@@ -68,9 +74,9 @@ object StateParser {
                 staffRange[k] = Range(asStr(ro.opt("lo")), asStr(ro.opt("hi")))
             }
         }
-        val needDay1 = strMap(o.optJSONObject("needDay1"))
-        val needDay2 = strMap(o.optJSONObject("needDay2"))
-        val shiftColors = strMap(o.optJSONObject("shiftColors"))
+        val needDay1 = strMap(objOf(o, "needDay1"), "needDay1")
+        val needDay2 = strMap(objOf(o, "needDay2"), "needDay2")
+        val shiftColors = strMap(objOf(o, "shiftColors"), "shiftColors")
 
         val cons1 = arrayOf(o, "cons1").mapObjects("cons1") {
             C1Row(asStr(it.opt("day1")), it.optString("shiftKigou"), asStr(it.opt("day2")))
@@ -96,17 +102,14 @@ object StateParser {
         }
         val cons3w = arrayOf(o, "cons3w").mapObjects("cons3w") { C3wRow(it.optString("wishKigou"), it.optString("prevKigou")) }
         // [#41] 無いキー＝手動固定なし（古いデータはそのまま開く）。同じセルが重なれば後の行を採る。
-        val manualPins = o.optJSONArray("manualPins").mapObjects("manualPins") {
-            ManualPin(it.optInt("staff", -1), it.optInt("day", -1), it.optInt("shift", -1))
+        val manualPins = arrayOf(o, "manualPins").mapIndexedObjects("manualPins") { i, it ->
+            ManualPin(intOf(it.opt("staff"), -1, "manualPins[$i].staff"), intOf(it.opt("day"), -1, "manualPins[$i].day"),
+                intOf(it.opt("shift"), -1, "manualPins[$i].shift"))
         }.filter { it.staff >= 0 && it.day >= 0 && it.shift >= 0 }.associateBy { it.staff to it.day }.values.toList()
 
-        val extWishes = ArrayList<ExtWish>()
-        o.optJSONArray("extWishes")?.let { a ->
-            for (n in 0 until a.length()) {
-                val e = a.optJSONObject(n) ?: continue
-                fun strs(key: String) = e.optJSONArray(key)?.let { x -> (0 until x.length()).map { x.optString(it) } } ?: emptyList()
-                extWishes.add(ExtWish(e.optInt("staff", -1), strs("days"), strs("shifts")))
-            }
+        val extWishes = arrayOf(o, "extWishes").mapIndexedObjects("extWishes") { n, e ->
+            fun strs(key: String) = arrayOf(e, key, "extWishes[$n].$key")?.let { x -> (0 until x.length()).map { x.optString(it) } } ?: emptyList()
+            ExtWish(intOf(e.opt("staff"), -1, "extWishes[$n].staff"), strs("days"), strs("shifts"))
         }
 
         // Keep unmodelled top-level keys verbatim for lossless export.
@@ -298,9 +301,33 @@ object StateParser {
     }
 
     /** 条件の配列。無ければ空、配列でなければ読み込みを止める（空として取り込むと条件が黙って消える）。 */
-    private fun arrayOf(o: JSONObject, key: String): JSONArray? {
+    private fun arrayOf(o: JSONObject, key: String, name: String = key): JSONArray? {
         if (!o.has(key) || o.isNull(key)) return null
-        return o.optJSONArray(key) ?: throw IllegalArgumentException("$key が配列ではありません（データが壊れています）")
+        return o.optJSONArray(key) ?: throw IllegalArgumentException("$name が配列ではありません（データが壊れています）")
+    }
+
+    /** 条件の表（キー→値）。無ければ null、オブジェクトでなければ読み込みを止める（空として取り込むと条件が黙って消える）。 */
+    private fun objOf(o: JSONObject, key: String): JSONObject? {
+        if (!o.has(key) || o.isNull(key)) return null
+        return o.optJSONObject(key) ?: throw IllegalArgumentException("$key がオブジェクトではありません（データが壊れています）")
+    }
+
+    /** 整数の値。無い・null・空文字は [def]。整数でない数（1.9）・数字でない文字・範囲外は丸めず読み込みを止める。 */
+    private fun intOf(v: Any?, def: Int, name: String): Int {
+        val n: Long? = when (v) {
+            null, JSONObject.NULL -> return def
+            is Int -> v.toLong()
+            is Long -> v
+            is Double -> if (v == Math.floor(v) && !v.isInfinite()) v.toLong() else null
+            is Float -> if (v == Math.floor(v.toDouble()).toFloat() && !v.isInfinite()) v.toLong() else null
+            is java.math.BigDecimal -> runCatching { v.longValueExact() }.getOrNull()
+            is java.math.BigInteger -> runCatching { v.longValueExact() }.getOrNull()
+            is String -> if (v.isBlank()) return def else v.trim().toLongOrNull()
+            else -> null
+        }
+        if (n == null || n < Int.MIN_VALUE || n > Int.MAX_VALUE)
+            throw IllegalArgumentException("$name が整数ではありません（値 $v、データが壊れています）")
+        return n.toInt()
     }
 
     /** 並びの pattern。無ければ空、配列でなければ読み込みを止める（空として取り込むと条件が黙って消える）。 */
@@ -315,10 +342,14 @@ object StateParser {
         return (0 until a.length()).map { asStr(a.opt(it)) }
     }
 
-    private fun strMap(o: JSONObject?): Map<String, String> {
+    private fun strMap(o: JSONObject?, name: String): Map<String, String> {
         if (o == null) return emptyMap()
         val m = HashMap<String, String>()
-        o.keys().forEach { k -> m[k] = asStr(o.opt(k)) }
+        o.keys().forEach { k ->
+            val v = o.opt(k)
+            if (v is JSONObject || v is JSONArray) throw IllegalArgumentException("$name[\"$k\"] が値ではありません（データが壊れています）")
+            m[k] = asStr(v)
+        }
         return m
     }
 
@@ -327,24 +358,28 @@ object StateParser {
     //   勤務割当を含むため、読み飛ばしより「配列N番目が不正」という明示的な失敗のほうが安全。
     //   throw は3呼出元（MagiViewModel×2・OptimizationWorker×1）すべてが runCatching/try-catch で
     //   包んでいる（確認済み）ので、ここで投げても未捕捉クラッシュにはならない。
-    private inline fun <T> JSONArray?.mapObjects(name: String, f: (JSONObject) -> T): List<T> {
+    private inline fun <T> JSONArray?.mapIndexedObjects(name: String, f: (Int, JSONObject) -> T): List<T> {
         if (this == null) return emptyList()
         val out = ArrayList<T>(length())
         for (i in 0 until length()) {
             val o = optJSONObject(i)
                 ?: throw IllegalArgumentException("$name[$i] がオブジェクトではありません（データが壊れています）")
-            out.add(f(o))
+            out.add(f(i, o))
         }
         return out
     }
 
-    private inline fun <T> JSONArray?.mapArrays(name: String, f: (JSONArray) -> T): List<T> {
+    private inline fun <T> JSONArray?.mapObjects(name: String, f: (JSONObject) -> T): List<T> = mapIndexedObjects(name) { _, o -> f(o) }
+
+    private inline fun <T> JSONArray?.mapArrays(name: String, f: (JSONArray) -> T): List<T> = mapIndexedArrays(name) { _, a -> f(a) }
+
+    private inline fun <T> JSONArray?.mapIndexedArrays(name: String, f: (Int, JSONArray) -> T): List<T> {
         if (this == null) return emptyList()
         val out = ArrayList<T>(length())
         for (i in 0 until length()) {
             val a = optJSONArray(i)
                 ?: throw IllegalArgumentException("$name[$i] が配列ではありません（データが壊れています）")
-            out.add(f(a))
+            out.add(f(i, a))
         }
         return out
     }

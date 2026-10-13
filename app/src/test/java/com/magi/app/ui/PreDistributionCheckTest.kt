@@ -15,8 +15,8 @@ class PreDistributionCheckTest {
         assertEquals(false, rows.getValue("相談").ok)   // 必須 0 でも相談の未完了は別に示す
         assertEquals(false, rows.getValue("保存").ok)
         assertEquals("まだ勤務表 CSV に保存していません", rows.getValue("保存").value)
-        assertEquals("曜日の偏り 20件・期間の制約 4件", rows.getValue("要調整").value)
-        assertEquals("10/1〜10/31 の採用した勤務表", rows.getValue("対象").value)
+        assertEquals("曜日の偏り 20pt・期間の制約 4件", rows.getValue("要調整").value)
+        assertEquals("対象期間 10/1〜10/31・現在採用している勤務表", rows.getValue("対象").value)
     }
 
     @Test fun hardRowListsFamiliesAndSaveRowReadsTheCsvLine() {

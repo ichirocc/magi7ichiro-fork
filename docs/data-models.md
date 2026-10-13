@@ -91,6 +91,9 @@
 > 「休」は**通常のシフト index**であって負値ではない。負値は `MirrorCore.normalizeSchedule` が**範囲外セルへ
 > 付けるセンチネル `-1`**で、意味は「公休」ではなく**「不正な値」**（行が短い場合は `0` で埋める）。
 > `Problem.initialAssignment` は範囲外の `k` を `restIdx`（既定シフト解決）へ倒す（3.410.0/P-01）。
+> **[3.662.0]** 読み込み（`StateParser`）は、整数でない値（`1.9` を `1` に丸めない）・数字でない文字・範囲外（`-1` 未満または `K` 以上）の
+> 勤務番号を項目名つきで拒否する（`null`・空文字は `-1`）。`wishes`・`staffRange`・`needDay1/2`・`shiftColors` が表でない、`staff`・`schedule`・`manualPins`・
+> `extWishes` 等が配列でない、職員の番号・手動固定の番号が整数でない場合も同じ（空として読んで条件が黙って消えるのを防ぐ）。
 > **[3.603.0 更新/backlog#24]** 休の解決は記号 `kigou == "休"` の字面一致ではなく、`Shift.role ==
 > ShiftRole.Rest` の付与先（`fun restShiftIndex(state): Int?`）。どのシフトにも付与が無ければ **`null`**
 > （旧: `?: 0` で無言に先頭シフトへフォールバックしていたが、休の削除・改名で別シフトが誤って「休」と

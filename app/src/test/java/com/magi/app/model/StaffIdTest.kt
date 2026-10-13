@@ -31,6 +31,13 @@ class StaffIdTest {
         assertEquals(listOf(7, 8, 9, 10, 11, 2), st.staff.map { it.id })
     }
 
+    /** 最大値が Int の上限でも負へ回り込まず、使われていない最小の正の ID を振る。 */
+    @Test fun idsNeverWrapNegativeAtIntMax() {
+        val st = StateParser.parse(json("""{"id":2147483647,"name":"a","groupIdx":0},{"name":"b","groupIdx":0},{"id":1,"name":"c","groupIdx":0},{"name":"d","groupIdx":0}"""))
+        assertEquals(listOf(Int.MAX_VALUE, 2, 1, 3), st.staff.map { it.id })
+        assertEquals(4, nextStaffId(st.staff))
+    }
+
     @Test fun serializeRoundTripsIds() {
         val st = StateParser.parse(json("""{"id":5,"name":"a","groupIdx":0},{"id":2,"name":"b","groupIdx":0},{"name":"c","groupIdx":0},{"id":9,"name":"d","groupIdx":0}"""))
         assertEquals(listOf(5, 2, 10, 9), st.staff.map { it.id })

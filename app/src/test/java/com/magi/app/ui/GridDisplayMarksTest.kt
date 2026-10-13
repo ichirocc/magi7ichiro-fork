@@ -231,7 +231,8 @@ class GridDisplayMarksTest {
         assertTrue(why.lines.any { "個人の上限が 0 回" in it })
         assertTrue(why.lines.any { "必要人数ぎりぎり" in it })
         assertTrue(why.lines.any { "下限＝上限で固定" in it && "休 1回" in it })
-        assertEquals(NO_FIX_HEAD, why.lines.first())
+        assertEquals(NoFixKind.FIXED, why.kind)   // 固定条件が理由に挙がった＝「固定条件による制限」（仕様 §7）
+        assertEquals(NoFixKind.FIXED.head, why.lines.first())
         assertEquals(NO_FIX_SCOPE, why.lines.last())
         assertEquals("yr_count", why.settingsSection)
         val plain = noFixReasons(u, FixFocus(1, 2))
@@ -247,6 +248,16 @@ class GridDisplayMarksTest {
         val w1 = noFixReasons(c3, FixFocus(null, null, 1, exceptStaff = 0))
         assertTrue(w1.wishRelated)
         assertEquals("本人の希望（10/2 の「A4」）は守ったままです。", w1.lines[1])
+    }
+
+    /** 見つからない理由の区分（仕様 §7）: 矛盾＞時間不足＞固定条件＞調べた範囲。どれも「解決できない」とは言わない。 */
+    @Test fun noFixKindSeparatesTimeContradictionAndScope() {
+        val u = UiState(staff = 1, days = 2, shifts = 2, shiftSymbols = listOf("休", "A"), schedule = listOf(listOf(1, 0)))
+        assertEquals(NoFixKind.SCOPE, noFixReasons(u, FixFocus(0, null, 1)).kind)
+        assertEquals(NoFixKind.TIME, noFixReasons(u.copy(fixTimedOut = true), FixFocus(0, null, 1)).kind)
+        val clash = u.copy(fixTimedOut = true, wishSelfConflicts = listOf(com.magi.app.v6.WishSelfConflict(0, "c3n", listOf(0, 1), listOf(1, 0))))
+        assertEquals(NoFixKind.CONTRADICTION, noFixReasons(clash, FixFocus(0, null, 1)).kind)
+        assertTrue(NoFixKind.values().none { "解決できない" in it.head || "解決不可能" in it.head })
     }
 
     @Test fun fixFocusKeyTellsRequestsApart() {

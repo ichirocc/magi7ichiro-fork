@@ -216,7 +216,8 @@ private fun WishTrialRowView(
     }
     // [3.645.0/仕様 5.3] 本人や上長に確認してから決める＝対象と検討内容を相談中の一覧へ（取消も勤務の変更もしない）。積んだら「相談中」。
     val consult = consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day, isoDate(ui.startDate, row.day))
-    ConsultButton(isConsulted(ui.consults, consult), Modifier.padding(start = 4.dp)) { vm.addConsult(consult) }
+    ConsultButton(isConsulted(ui.consults, consult), Modifier.padding(start = 4.dp), held = consultMatch(ui.consults, consult)?.held == true,
+        onHold = { vm.addConsult(consult.copy(held = true)) }) { vm.addConsult(consult) }
 }
 
 @Composable
@@ -308,7 +309,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DialogConfirmButton("この入れ替えを当てる", onClick = onApply)
-                ConsultButton(consulted, Modifier, onConsult)
+                ConsultButton(consulted, Modifier, onClick = onConsult)
                 DialogDismissButton(onClick = onDismiss, text = "やめる")
             }
         },
@@ -318,19 +319,23 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
 /** 「相談してから決める」。積んだあとは「相談中」の札＝結果を形で返す（シートやダイアログの下では Snackbar が見えない。
  *  無効ボタンの文字は 38% で状態色の基準 3:1 を割るので、札にする＝ux_test_checklist A1）。 */
 @Composable
-internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    if (consulted) Box(modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) { MagiTagChip(text = CONSULT_DONE, color = MagiAccent.orange) }
-    else TextButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
+internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, held: Boolean = false, onHold: (() -> Unit)? = null, onClick: () -> Unit) {
+    if (consulted) Box(modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) { MagiTagChip(text = if (held) CONSULT_HELD else CONSULT_DONE, color = MagiAccent.orange) }
+    else Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
+        if (onHold != null) TextButton(onClick = onHold, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_HOLD_BUTTON) }
+    }
 }
 
 /** [3.645.0/仕様 5.3] 相談してから決める判断の一覧（ホーム）。対象と検討内容を後から再確認できる。出力は止めない。 */
 @Composable
-internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit, onResumeChain: (ConsultItem) -> Unit = {}) {
+internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit, onResumeChain: (ConsultItem) -> Unit = {}, onToggleHold: (Int) -> Unit = {}) {
     if (ui.consults.isEmpty()) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("相談中（${ui.consults.size}件）", style = MaterialTheme.typography.titleMedium)
+            val heldN = ui.consults.count { it.held }
+            Text("相談中（${ui.consults.size - heldN}件）" + (if (heldN > 0) "・保留（${heldN}件）" else ""), style = MaterialTheme.typography.titleMedium)
             Text("関係者に確認してから決める項目です。確認できたら「済」を押してください（アプリを閉じると消えます。書き出しは止めません）。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
             ui.consults.forEachIndexed { idx, c ->
@@ -340,7 +345,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                 val note = consultTargetNote(c, ui.startDate, ui.staffNames, ui.shiftSymbols, ui.days, ui.staffIds)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
-                        Text(c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Text((if (c.held) "【$CONSULT_HELD】" else "") + c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
                     }
@@ -349,6 +354,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                     } else if (chainOk) {
                         TextButton(onClick = { onResumeChain(c) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_RESUME) }
                     }
+                    TextButton(onClick = { onToggleHold(idx) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (c.held) "相談に戻す" else CONSULT_HOLD_BUTTON) }
                     DeleteRowButton(onClick = { onRemove(idx) }, text = "済")
                 }
             }
@@ -430,7 +436,8 @@ internal fun GuidedFixDialog(
                                 Text(if (pending) "再検査中…（結果が反映されるまで候補は押せません）" else "入れたら「元に戻す」でいつでも取り消せます。",
                                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                 val consult = consultShortage(target.dayLabel, target.shiftSymbol, cands.map { it.name })
-                                ConsultButton(isConsulted(ui.consults, consult), Modifier.fillMaxWidth()) { vm.addConsult(consult) }
+                                ConsultButton(isConsulted(ui.consults, consult), Modifier.fillMaxWidth(), held = consultMatch(ui.consults, consult)?.held == true,
+                                    onHold = { vm.addConsult(consult.copy(held = true)) }) { vm.addConsult(consult) }
                             }
                             target.chainVerified -> {
                                 // [UX監査 高1] 1人を動かすだけでは埋まらないが、複数人の入替で埋まると分析が確かめた枠。
@@ -464,7 +471,7 @@ internal fun GuidedFixDialog(
                             Text("・${it.dayLabel}「${it.shiftSymbol}」：${it.reason}",
                                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        Text("人を増やすか、担当できるシフトや希望を見直すと直せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        Text("担当できる職員（担当できるシフト）や希望を見直すと直せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         val infeasibleLanding = landingFor(infeasible.first())
                         OutlinedButton(onClick = { onDismiss(); onGoEdit(infeasibleLanding) }, modifier = Modifier.fillMaxWidth()) {
                             Text(landingButtonLabel(infeasibleLanding))
@@ -837,7 +844,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 //   という矛盾を解消する。枠の数（静的に足りているか）と、いま実際に埋められるかは別軸。
                 val headline = when {
                     diag.allInfeasible -> "不足 ${diag.totalShortfall} 人は全て充足不可。今のデータでは満たせません（想定内）。" +
-                        "担当できる人を増やすと直せます（編集タブ＞年間マスター①）。"
+                        "担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
                     diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
                         "希望を1件調整する（編集タブ＞月次条件）か、担当を追加してください（編集タブ＞年間マスター①）。"
                     diag.blockedNowSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.blockedNowSlots} 枠は" +
@@ -845,7 +852,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                         "残りは再作成すると解消し得ます。"
                     diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再作成するか設定の見直しで解消し得ます。"
                     else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。" +
-                        "充足可能の枠は再作成すると解消し得ます。充足不可の枠は担当できる人を増やすと直せます（編集タブ＞年間マスター①）。"
+                        "充足可能の枠は再作成すると解消し得ます。充足不可の枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
                 }
                 Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownShortfalls = if (allShortfalls) diag.shortfalls else diag.shortfalls.take(6)

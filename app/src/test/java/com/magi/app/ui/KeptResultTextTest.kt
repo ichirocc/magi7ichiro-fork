@@ -8,18 +8,18 @@ class KeptResultTextTest {
     @Test fun weightedDecidesWhenTotalDropped() {
         val now = Score(5, 48412.4, 369); val prev = Score(5, 48230.0, 376)
         assertEquals(
-            "改善が確認できなかったため、前回の勤務表を維持しました。今回（必須5・重み48,412・合計369）は前回（必須5・重み48,230・合計376）より改善しませんでした（重みが大きいため。比べる順＝必須→重み→合計）。",
+            "改善が確認できなかったため、前回の勤務表を維持しました（今回の案は採用していません）。理由：重み付き評価点が高いため（今回 必須5・評価点48,412・合計369／前回 必須5・評価点48,230・合計376。比べる順＝必須→評価点→合計）。",
             KeptResultText.screen(now, prev),
         )
         assertEquals(
-            "再実行: 今回 必須5・重み48,412・合計369 は前回 必須5・重み48,230・合計376 以下に改善せず（重みが大きいため）→ 前回を維持",
+            "再実行: 今回 必須5・評価点48,412・合計369 は前回 必須5・評価点48,230・合計376 以下に改善せず（重み付き評価点が高いため）→ 前回を維持",
             KeptResultText.log("再実行", now, prev),
         )
     }
 
     @Test fun hardThenTotalDecide() {
-        assertEquals("必須が多いため", KeptResultText.reason(Score(6, 1.0, 1), Score(5, 9.0, 9)))
-        assertEquals("合計が多いため", KeptResultText.reason(Score(5, 9.0, 10), Score(5, 9.0, 9)))
+        assertEquals("必須違反が多いため", KeptResultText.reason(Score(6, 1.0, 1), Score(5, 9.0, 9)))
+        assertEquals("違反の合計が多いため", KeptResultText.reason(Score(5, 9.0, 10), Score(5, 9.0, 9)))
         assertEquals("同じ点数のため", KeptResultText.reason(Score(5, 9.0, 9), Score(5, 9.0, 9)))
     }
 

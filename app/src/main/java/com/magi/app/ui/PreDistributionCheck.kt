@@ -13,18 +13,19 @@ internal fun preDistributionRows(ui: UiState, csvLine: String?): List<PreDistRow
     val hardText = if (ui.bestHard == 0L) "0件" else "${ui.bestHard}件（" + hardFams.joinToString("・") { "${breakdownLabels[it.first] ?: it.first} ${it.second}件" } + "）"
     val soft = ui.breakdown.filter { (k, v) -> v > 0 && k !in com.magi.app.v6.MirrorKeys.hard }
         .entries.sortedByDescending { it.value }
-    val softText = if (soft.isEmpty()) "なし" else soft.take(3).joinToString("・") { "${breakdownLabels[it.key] ?: it.key} ${it.value}件" } +
+    val softText = if (soft.isEmpty()) "なし" else soft.take(3).joinToString("・") { "${breakdownLabels[it.key] ?: it.key} ${it.value}${unitOf(it.key)}" } +
         (if (soft.size > 3) " ほか${soft.size - 3}種類" else "")
     val consults = ui.consults.size
+    val held = ui.consults.count { it.held }
     return listOf(
-        PreDistRow("対象", "$period の採用した勤務表", null),
+        PreDistRow("対象", "対象期間 $period・現在採用している勤務表", null),
         PreDistRow("評価", if (evaluated) "最新の勤務表を評価済み" else "まだ評価していません（問題がないか調べてください）", evaluated),
         PreDistRow("必須違反", hardText, ui.bestHard == 0L),
         PreDistRow("要調整", softText, null),
-        PreDistRow("相談", if (consults == 0) "未完了の相談はありません" else "未完了 ${consults}件（ホームの「相談中」）", consults == 0),
+        PreDistRow("相談", if (consults == 0) "「相談中」に登録されている項目はありません" else "未完了 ${consults}件" + (if (held > 0) "（うち保留 ${held}件）" else "") + "（ホームの「相談中」）", consults == 0),
         PreDistRow("保存", csvLine ?: "まだ勤務表 CSV に保存していません", csvLine?.startsWith("この内容で") == true),
     )
 }
 
 /** 配布前確認の注意書き。必須違反 0 件だけでは、相談の完了や法令への適合までは示さない（仕様 §10）。 */
-internal const val PRE_DIST_NOTE = "必須違反 0 件は、登録した必須条件を満たしたことだけを示します。相談の完了や法令への適合は含みません。配るかどうかはあなたが決めてください。"
+internal const val PRE_DIST_NOTE = "必須違反 0 件は、登録した必須条件を満たしたことだけを示します。相談の完了や法令への適合は含みません。相談事項や職場の確認手続きを確かめたうえで、配布をご判断ください。"

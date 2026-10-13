@@ -18,6 +18,8 @@ data class ConsultItem(
     val subject: String, val note: String, val staff: Int? = null, val day: Int? = null,
     val staffName: String? = null, val date: String? = null,
     val chain: ChainTarget? = null,
+    /** 保留（仕様 §4.2「保留する」）＝相談に回さず未解決のまま置く。相談と同じく違反は減らさない。 */
+    val held: Boolean = false,
     val rosterKey: Int = 0,
     val staffId: Int? = null,
     val staffGone: Boolean = false,
@@ -33,14 +35,25 @@ data class ChainTarget(
 
 internal const val CONSULT_BUTTON = "相談してから決める"
 internal const val CONSULT_DONE = "相談中"
+internal const val CONSULT_HOLD_BUTTON = "保留する"
+internal const val CONSULT_HELD = "保留中"
 internal const val CONSULT_ADDED = "ホームの「相談中」に追加しました"
-internal const val CONSULT_DUPLICATE = "すでにホームの「相談中」にあるので、追加しませんでした"
+internal const val CONSULT_DUPLICATE = "この内容は、すでにホームの「相談中」に登録されています"
 internal const val CONSULT_OPEN = "開く"
 internal const val CONSULT_RESUME = "案を見る"
-internal const val CONSULT_STALE = "相談に積んだあとで勤務表か設定が変わったため、この案はそのままでは使えません。「直し方を探す」で探し直してください"
+internal const val CONSULT_STALE = "相談に登録した後で勤務表または設定が変わったため、この案はそのまま当てられません。「直し方を探す」から、もう一度確かめてください"
 
 /** ホームの主カードの 1 行。0 件なら出さない。 */
 internal fun consultLine(n: Int): String? = if (n > 0) "未確認事項 $n 件（相談中。下の一覧で確認してから配ってください）" else null
+
+/** 相談中と保留を分けて言う（どちらも未解決＝違反は減らさない）。 */
+internal fun consultLine(items: List<ConsultItem>): String? {
+    if (items.isEmpty()) return null
+    val held = items.count { it.held }
+    val open = items.size - held
+    val parts = listOfNotNull(if (open > 0) "相談中 $open" else null, if (held > 0) "保留 $held" else null).joinToString("・")
+    return "未確認事項 ${items.size} 件（$parts。下の一覧で確認してから配ってください）"
+}
 
 internal fun isoDate(startDate: String, day: Int): String? =
     runCatching { LocalDate.parse(startDate).plusDays(day.toLong()).toString() }.getOrNull()
@@ -173,6 +186,9 @@ internal fun consultPreRun(row: PreRunRow, staffName: String? = null, date: Stri
 
 /** すでに一覧にあるか（ボタンを「相談中」にして形で返す＝シートの下では Snackbar が見えない）。 */
 internal fun isConsulted(list: List<ConsultItem>, item: ConsultItem): Boolean = list.any { it.subject == item.subject && it.note == item.note }
+
+/** 積んだ同じ項目（相談中か保留かを札に出す）。 */
+internal fun consultMatch(list: List<ConsultItem>, item: ConsultItem): ConsultItem? = list.firstOrNull { it.subject == item.subject && it.note == item.note }
 
 /** 同じ対象・内容は 2 度積まない（null＝重複）。 */
 internal fun consultAdd(list: List<ConsultItem>, item: ConsultItem): List<ConsultItem>? = if (isConsulted(list, item)) null else list + item
