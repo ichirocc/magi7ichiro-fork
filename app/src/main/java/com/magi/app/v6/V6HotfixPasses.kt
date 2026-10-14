@@ -303,8 +303,9 @@ object PolishGate {
     /** 後処理チェーンの先頭で貪欲な局所降下（`PrePostDescent`）をかける。既定 **false**（測定中）。 */
     @Volatile var prePostDescent: Boolean = false
 
-    /** 測定用（`docs/stall_escape.md` §5.3）: c3n 壁（ForbiddenDiag の限定した手の壁判定）で停滞閾値を短縮するか。false＝c3n だけが残っても通常閾値で粘る。既定 **true**。 */
-    @Volatile var c3nWallShortStall: Boolean = true
+    /** `docs/stall_escape.md` §5.3: c3n 壁（ForbiddenDiag の限定した手の壁判定）で停滞閾値を短縮するか。false＝c3n だけが残っても通常閾値で粘る。
+     *  既定 **false**（3.673.0: 60 s の予算では短縮が損＝sample 24 対で +95.7・区間 [+40.6, +153.8]、利用者「60秒の損失を取り返す方法を採用する」）。 */
+    @Volatile var c3nWallShortStall: Boolean = false
 
     /** 測定用の基準腕（`docs/stall_escape.md` §5.3）: true＝HEAD の壁判定（版ごとに固定・生存盤面の診断・一致の検査なし）。既定 **false**。 */
     @Volatile var c3nWallLegacy: Boolean = false

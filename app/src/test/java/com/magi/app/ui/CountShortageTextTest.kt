@@ -205,4 +205,34 @@ class CountShortageTextTest {
         assertEquals("残存", appliedStatusWord(CountEffect(7, 7, 15, true)))
         assertEquals("別案を見る", BACK_TO_FIXES_BUTTON)
     }
+
+    /** 同じ勤務の不足の日々をまとめて見る（日ごとの不足の合計。ある日の過剰で別の日の不足を相殺しない）。 */
+    @Test fun multiDayTargetSumsPerDayShortages() {
+        // A の必要: 10/3＝2人（今 1人）、10/4＝1人（今 0人）。
+        val fams = mapOf("1,2" to listOf("vio-covU"), "1,3" to listOf("vio-covU"))
+        val need = { k: Int, j: Int -> if (k == 1) (if (j == 2) 2 to 2 else 1 to 1) else null }
+        val t = multiNeedTarget(fams, 1, need)!!
+        assertEquals(listOf(2, 3), t.days); assertEquals(listOf(2, 1), t.needs)
+        assertEquals(2, t.gapOf(schedule))
+        assertNull(multiNeedTarget(mapOf("1,2" to listOf("vio-covU")), 1, need))   // 1 日だけならまとめない
+        // 10/3 だけ埋める案＝合計 2 → 1、両日を埋める案＝2 → 0。
+        val one = t.effect(schedule, listOf(FixCell(0, 2, 1)))
+        assertEquals(2 to 1, one.gaps); assertTrue(one.fixes)
+        assertEquals("適用後も、合計 1人不足", one.afterNote(t.basis))
+        val both = t.effect(schedule, listOf(FixCell(0, 2, 1), FixCell(1, 3, 1)))
+        assertEquals("対象の日はすべて必要人数を満たします", both.afterNote(t.basis))
+        assertEquals("不足 2人 → 0人", both.gapLine())
+        // 10/4 の A を足して 10/3 の A を抜く案は、合計が減らない（相殺しない）。
+        val swap = t.effect(schedule, listOf(FixCell(1, 2, 0), FixCell(1, 3, 1)))
+        assertFalse(swap.fixes)
+        assertEquals("A（2日）", fixTargetLabel(t, "A", "2026-10-01"))
+        assertEquals("A（2日）の不足をまとめて解消する", fixTargetPurpose(t, null, "A（2日）"))
+        assertEquals(listOf("2日で合計2人不足しています（日ごとの不足の合計）", "対象の日：10/3・10/4"), fixTargetHead(t, 0, schedule, "2026-10-01"))
+        assertEquals("両日の不足をまとめて調整する案を探す", multiFixButton(2))
+        assertEquals("3日の不足をまとめて調整する案を探す", multiFixButton(3))
+        val u = UiState(schedule = schedule, needFamilies = fams)
+        val cv = ConditionsView(needLimits = List(3) { k -> List(4) { j -> need(k, j) } })
+        assertEquals(t, panelTarget(u, cv, FixFocus(null, 1, null, allDays = true)))
+        assertEquals("-,1,-,all", FixFocus(null, 1, null, allDays = true).key)
+    }
 }

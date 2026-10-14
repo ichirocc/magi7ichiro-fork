@@ -16,7 +16,7 @@ fun main(args: Array<String>) {
     val seeds = args.getOrNull(2)?.toInt() ?: 5
     val secondsBudget = args.getOrNull(3)?.toInt() ?: 60
     val workers = args.getOrNull(4)?.toInt() ?: 4
-    // [2026-10-08] MAGI_HO_FEATURE: 既定（空）＝ExtraRefine 省略条件の A/B（旧来）。"c3nwall"＝on 腕で c3n 壁の短縮を外す
+    // [2026-10-08] MAGI_HO_FEATURE: 既定（空）＝ExtraRefine 省略条件の A/B（旧来）。"c3nwall"＝on 腕で c3n 壁の短縮を外す（off 腕は短縮あり＝3.672.0 までの既定）
     //   （PolishGate.c3nWallShortStall=false、通常閾値で粘る）。"head"＝on 腕で HEAD の壁判定（c3nWallLegacy=true）と
     //   後期演算の試行中の停止確認を切る（lateOpStopPropagation=false、入口の確認は残る）に戻す（docs/stall_escape.md §5.5）。
     //   "deep"＝on 腕で経験的な c3n 壁の 1 手探索による反証（PolishGate.c3nWallDeepCheck）。"adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。

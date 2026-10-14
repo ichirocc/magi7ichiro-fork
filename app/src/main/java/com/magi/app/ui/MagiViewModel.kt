@@ -3049,7 +3049,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var fixBoardKey = 0L
     private var fixStateKey = 0L
 
-    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false) {
+    fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false, allDays: Boolean = false) {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val focusName = focusStaff?.let { st.staff.getOrNull(it)?.name } ?: ""
@@ -3070,7 +3070,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 var timedOut = false
                 // 集計・日の印から来た依頼は、見ている問題（回数・その日の人数）を変える案を先に（2026-10-14 利用者レビュー:
                 //   11/3 の不足に別の日の案だけが並んだ）。広めに集めて並べ替え、上位 8 件を返す。
-                val target = if (exceptStaff == null) panelTarget(_ui.value, conditionsViewOf(st, cachedProblem(st)), FixFocus(focusStaff, focusShift, day)) else null
+                val target = if (exceptStaff == null) panelTarget(_ui.value, conditionsViewOf(st, cachedProblem(st)), FixFocus(focusStaff, focusShift, day, allDays = allDays)) else null
                 val list = withContext(Dispatchers.Default) {
                     (if (exceptStaff != null && day != null) {
                         fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true), day, exceptStaff).take(8)
@@ -3088,7 +3088,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val curSched = currentSchedule; val curSt = state
                 if (curSched == null || curSt == null || boardKey(curSched) != boardKey(snap) || stateKey(curSt) != stateKey(st)) {
                     _ui.update { it.copy(fixSearching = false) }
-                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day)
+                    if (curSched != null && curSt != null) findFixSuggestions(focusStaff, focusShift, focusKey, exceptStaff, day, quick, allDays)
                     return@launch
                 }
                 _ui.update { it.copy(fixSuggestions = list, fixSearching = false, fixTimedOut = timedOut, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
