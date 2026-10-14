@@ -666,12 +666,12 @@ internal fun OperatorNextActionCard(
             // [3.643.0] 旧「AIの解決提案」カードをここへ統合＝同じ問題について、手と効果（分かったこと）と「この手を使う」（操作）を 1 枚に。
             val top = ui.fixSuggestions.first { it.deltaHard < 0 }
             val (hardLine, caution) = fixImpactLines(top)
-            val diffTxt = top.diff.joinToString("・") { (k, dlt) -> "${breakdownLabels[k] ?: k} ${if (dlt < 0) "−${-dlt}" else "+$dlt"}" }
-            val totalTxt = if (top.deltaTotal <= 0) "−${-top.deltaTotal}" else "+${top.deltaTotal}"
+            // 族ごとの増減だけ（件・回・人・pt を 1 つの合計に足さない＝統合仕様 INV-07）。
+            val diffTxt = familyDeltaList(top.diff)
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
                 moveLabel, onShowMove, true, APPLY_CHANGE_BUTTON, { onApplyMove(top) },
                 body = top.label,
-                note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n違反 $totalTxt（$diffTxt）" else "") +
+                note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n変化：$diffTxt" else "") +
                     (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else "") + "\n$APPLY_UNDO_NOTE")
         }
         ui.fixSearching ->
@@ -1897,12 +1897,8 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             val (hardLine, caution) = fixImpactLines(s)
                             Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                             caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
-                            val diffTxt = s.diff.joinToString("・") { (k, d) ->
-                                "${breakdownLabels[k] ?: k} ${if (d < 0) "−${-d}" else "+$d"}"
-                            }
-                            val totalTxt = if (s.deltaTotal <= 0) "−${-s.deltaTotal}" else "+${s.deltaTotal}"
-                            Text("違反 $totalTxt" + if (diffTxt.isNotBlank()) "（$diffTxt）" else "",
-                                style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                            val diffTxt = familyDeltaList(s.diff)
+                            if (diffTxt.isNotBlank()) Text("変化：$diffTxt", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                             Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
                                 ConsultButton(isConsulted(ui.consults, consultFix(s))) { onConsult(s) }

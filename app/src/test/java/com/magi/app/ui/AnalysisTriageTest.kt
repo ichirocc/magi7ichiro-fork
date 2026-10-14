@@ -106,9 +106,9 @@ class AnalysisTriageTest {
 
     /** ホームの残り: 必須0のときの要調整は件数の族だけ（公平化・曜日の偏りの pt を件として足さない）。 */
     @Test fun homeRemainingLabelCountsOnlyCountFamilies() {
-        assertEquals("必須 残り2件", homeRemainingLabel(2L, 0, mapOf("covU" to 2, "c1" to 5)))
+        assertEquals("必須 残り2人", homeRemainingLabel(2L, 0, mapOf("covU" to 2, "c1" to 5)))
         assertEquals("人員不足の日 残り1日", homeRemainingLabel(0L, 1, emptyMap()))
-        assertEquals("必須は解消・要調整 5件", homeRemainingLabel(0L, 0, mapOf("apt" to 5, "fair" to 80, "weekly" to 60)))
+        assertEquals("必須は解消・要調整 5回", homeRemainingLabel(0L, 0, mapOf("apt" to 5, "fair" to 80, "weekly" to 60)))
         assertEquals("pt だけなら解消済みとは言わない", "必須は解消・残りは偏りのみ",
             homeRemainingLabel(0L, 0, mapOf("fair" to 3)))
         assertEquals("解消済み", homeRemainingLabel(0L, 0, mapOf("fair" to 0)))

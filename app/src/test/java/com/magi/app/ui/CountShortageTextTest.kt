@@ -197,7 +197,7 @@ class CountShortageTextTest {
         assertEquals("保持するもの：登録条件と手動固定", preRunPlanLines("2026-10-01", 31, 12, true, 0, 60, 20)[4])
         assertEquals("期間の制約 2件・曜日の偏り 12pt", softSummary(mapOf("c1" to 2, "weekly" to 12, "c3n" to 1)))
         assertEquals("なし", softSummary(mapOf("covU" to 1)))
-        assertEquals(listOf("必須違反：0件", "要調整：なし", "保存：完了", "作成が終わったことは、配布できることと同じではありません。配布前の確認で中身を確かめてください。"),
+        assertEquals(listOf("必須違反：なし", "要調整：なし", "保存：完了", "作成が終わったことは、配布できることと同じではありません。配布前の確認で中身を確かめてください。"),
             creationResultLines(0, emptyMap(), SaveState.Saved))
         assertEquals(3, creationResultLines(2, mapOf("c1" to 1), SaveState.Failed).size)
         assertEquals("解消", appliedStatusWord(CountEffect(0, 1, 1, true, "人")))
@@ -254,5 +254,17 @@ class CountShortageTextTest {
         // 時間切れは「案が無い」と分ける（統合仕様 INV-08）。
         assertEquals("10/3のAの不足を減らす案は、制限時間内には見つかりませんでした。もう一度探すと続きを探せます。", noNeedFixLine("10/3のA", t, timedOut = true))
         assertEquals("保存：失敗（「もう一度保存する」で保存し直してください）", saveStateLine(SaveState.Failed))
+    }
+
+    @Test fun unitsAreNotSummedAcrossKinds() {
+        // 件・人・回・pt は 1 つの数に足さない（統合仕様 INV-07）。
+        val b = mapOf("c3n" to 2, "covU" to 1, "low" to 6, "apt" to 3, "c1" to 4, "covO" to 2, "fair" to 30)
+        assertEquals("2件・1人", unitTotals(b, com.magi.app.v6.MirrorKeys.hard))
+        assertEquals("4件・2人・9回・30pt", unitTotals(b, com.magi.app.v6.MirrorKeys.soft))
+        assertEquals("4件・2人・9回", unitTotals(b, com.magi.app.v6.MirrorKeys.soft, includePt = false))
+        assertEquals("必須違反 2件・1人・要調整 4件・2人・9回・30pt", reportCountsText(b))
+        assertEquals("下限割れ −6回・禁止の並び +1件", familyDeltaList(listOf("low" to -6, "c3n" to 1)))
+        assertEquals("要調整 4件・2人・9回・30pt・配布前の確認", readyBadgeLabel(40, b))
+        assertEquals("評価：必須違反 2件・1人", boardStatusLines(true, true, true, 3, 0, b).second)
     }
 }

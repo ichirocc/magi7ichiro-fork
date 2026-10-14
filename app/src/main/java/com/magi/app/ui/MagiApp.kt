@@ -1207,12 +1207,12 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                         }
                         label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
                     }
-                    ok -> { label = readyBadgeLabel(ui.bestSoft); fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
+                    ok -> { label = readyBadgeLabel(ui.bestSoft, ui.breakdown); fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
                     ui.hasResult -> { label = "必須違反 ${ui.bestHard}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
-                    else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
+                    else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
                 // 札の前に自動作成の状態（2026-10-14 利用者レビュー: 「未計算」では、警告が今の勤務表の評価か分からなかった）。
-                if (!ui.running) Text(boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft).first,
+                if (!ui.running) Text(boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown).first,
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
                     modifier = Modifier.padding(end = 6.dp).widthIn(max = 96.dp))
                 // 必須違反が残るときは「順に見る」巡回の入口（勤務表のセルを必須から順に開く）。

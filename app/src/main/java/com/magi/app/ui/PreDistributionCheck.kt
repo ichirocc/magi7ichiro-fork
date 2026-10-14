@@ -10,7 +10,8 @@ internal fun preDistributionRows(ui: UiState, csvLine: String?): List<PreDistRow
     val period = if (ui.startDate.isNotBlank() && ui.days > 0) DayText.range(ui.startDate, 0, ui.days - 1) else "期間未設定"
     val evaluated = ui.hasResult && !ui.running && ui.v6 != null
     val hardFams = com.magi.app.v6.MirrorKeys.hard.mapNotNull { k -> ui.breakdown[k]?.takeIf { it > 0 }?.let { k to it } }
-    val hardText = if (ui.bestHard == 0L) "0件" else "${ui.bestHard}件（" + hardFams.joinToString("・") { "${breakdownLabels[it.first] ?: it.first} ${it.second}件" } + "）"
+    val hardText = if (ui.bestHard == 0L) "0件" else "${unitTotals(ui.breakdown, com.magi.app.v6.MirrorKeys.hard) ?: "${ui.bestHard}件"}（" +
+        hardFams.joinToString("・") { "${breakdownLabels[it.first] ?: it.first} ${it.second}${unitOf(it.first)}" } + "）"
     val soft = ui.breakdown.filter { (k, v) -> v > 0 && k !in com.magi.app.v6.MirrorKeys.hard }
         .entries.sortedByDescending { it.value }
     val softText = if (soft.isEmpty()) "なし" else soft.take(3).joinToString("・") { "${breakdownLabels[it.key] ?: it.key} ${it.value}${unitOf(it.key)}" } +

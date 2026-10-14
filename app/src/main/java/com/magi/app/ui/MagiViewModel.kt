@@ -768,7 +768,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             messageIsError = false,
             running = false, hasResult = true, relaxedBoard = false, engineRan = true,
             runSummary = prev?.let { runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report)) },
-            message = completedText(r.report.hard, r.report.total, "（閉じている間に計算）"),
+            message = completedText(r.report.hard, r.report.breakdown, "（閉じている間に計算）"),
         ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
         lastResultHard = r.report.hard.toLong()
@@ -1375,7 +1375,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     // [3.328.0] 最適化が動いていれば実行中のまま。旧: 無条件に false で、
                     //   最適化中の設定編集→検査完了で全ガードが素通りになっていた。
                     running = optimizeInFlight(),
-                    message = "調べました: 必須違反 ${res.report.hard}件・違反の合計 ${res.report.total}件",
+                    message = "調べました: ${reportCountsText(res.report.breakdown)}",
                 ) }
                 logOp("I", "違反チェック 必須=${res.report.hard} 合計=${res.report.total}")
             } catch (e: CancellationException) {
@@ -1432,7 +1432,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     hasResult = true,
                     relaxedBoard = false, engineRan = true,
                     elapsedMs = 0,
-                    message = "下書きをつくりました: 必須違反 ${res.report.hard}件・違反の合計 ${res.report.total}件。画面下の「再作成」で仕上げられます",
+                    message = "下書きをつくりました: ${reportCountsText(res.report.breakdown)}。画面下の「再作成」で仕上げられます",
                 ) }
                 done = true
                 logOp("I", "初期解生成 完了 必須=${res.report.hard} 合計=${res.report.total}")
@@ -1816,7 +1816,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     autoSave()
                     resultSchedule = res.schedule.copy2D()
                     state = st0.withSchedule(res.schedule)
-                    val adoptedMsg = if (s5 == null) completedText(res.report.hard, res.report.total, "")
+                    val adoptedMsg = if (s5 == null) completedText(res.report.hard, res.report.breakdown, "")
                     else "希望（${s5.label}）を調整して（希望は外しました）、再作成しました: 必須違反 ${s5.h0} → ${res.report.hard}（試算の見込み ${s5.pCancel}）" +
                         (if (res.report.hard > s5.pCancel) "。見込みまでは減りませんでした。再作成するか、元に戻す（希望と勤務表をまとめて戻す）を選べます。"
                         else if (res.report.hard > 0) "。残りの必須違反 ${res.report.hard}件 は、次にやることカードから直します。" else "")
@@ -1898,12 +1898,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                             running = false,
                             hasResult = s5 != null || hadResult,   // 失敗の分岐と同じ（入力の盤面を「つくった」扱いにしない）
                             relaxedBoard = false, engineRan = engineRanBefore,
-                            message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。$s5Suffix",
+                            message = "停止しました。直前の勤務表（${reportCountsText(keptReport.breakdown)}）を保持しています。$s5Suffix",
                         ) }
                     }.onFailure { t ->
                         _ui.update { it.copy(running = false, hasResult = s5 != null || hadResult, relaxedBoard = false, engineRan = engineRanBefore,
                             messageIsError = false, wishes = st0.wishes,
-                            message = "停止しました。直前の勤務表（必須=${keptReport.hard} 合計=${keptReport.total}）を保持しています。$s5Suffix") }
+                            message = "停止しました。直前の勤務表（${reportCountsText(keptReport.breakdown)}）を保持しています。$s5Suffix") }
                         logOp("W", "停止時の診断に失敗: ${t.javaClass.simpleName}: ${t.message}")
                     }
                     logOp("I", "停止: 直前の勤務表 必須=${keptReport.hard}/合計=${keptReport.total} を保持")
@@ -2559,7 +2559,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(state ?: st, sch) }
                 if (seq != checkSeq) return@launch
-                pushReport(state ?: st, sch, rep) { it.copy(messageIsError = false, hasResult = true, relaxedBoard = false, engineRan = true, message = "他の案 ${i + 1} を適用しました: 必須違反 ${rep.hard}件・違反の合計 ${rep.total}件") }
+                pushReport(state ?: st, sch, rep) { it.copy(messageIsError = false, hasResult = true, relaxedBoard = false, engineRan = true, message = "他の案 ${i + 1} を適用しました: ${reportCountsText(rep.breakdown)}") }
                 logOp("I", "他の案 ${i + 1} を適用 必須=${rep.hard} 合計=${rep.total}")
             } catch (e: CancellationException) {
                 throw e
@@ -2962,7 +2962,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val r = V6FinalPort.handleCheck(ns, sched)
                 if (seq != checkSeq) return@launch
-                pushReport(ns, r.schedule, r.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜必須違反 ${r.report.hard}件・違反の合計 ${r.report.total}件") }
+                pushReport(ns, r.schedule, r.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜${reportCountsText(r.report.breakdown)}") }
             } catch (e: CancellationException) {
                 // [3.284.0/外部レビューHigh③] stop() によるキャンセル時の running 固着を解消（refreshCheck と同型）。
                 if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage（調べるのを止めました）") }
@@ -3167,13 +3167,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             schedule = applied.map { it.toList() },
             fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
             appliedFix = focusKey?.let { k -> AppliedFix(k, s.label, s.ops, sched.map { r -> r.toList() }, applied.map { r -> r.toList() }, fixTarget,
-                gate.before.hard, gate.after.hard, gate.before.soft, gate.after.soft) },
-            fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total) + fixResultDetail(gate.before, gate.after) +
+                gate.before.hard, gate.after.hard, gate.before.soft, gate.after.soft, gate.before.breakdown, gate.after.breakdown) },
+            fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし") + fixResultDetail(gate.before, gate.after) +
                 (if (monthEdgeTouched(s.ops.map { it.day }, applied.firstOrNull()?.size ?: 0, maxPatternLen(st))) "$MONTH_EDGE_NOTE。" else "")),
         ) }
         // 通知は 2 行まで＝必須が動いた手は必須だけ、動かない手は合計だけを添える（両方の数はホームの結果の行とログ）。
         postOpNotice("${s.label} を当てました（" + (if (gate.before.hard != gate.after.hard) "必須違反 ${gate.before.hard}→${gate.after.hard}"
-            else "違反の合計 ${gate.before.total}→${gate.after.total}") + "）")
+            else "要調整 ${unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}→${unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}") + "）")
         fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
         refreshCheck()
     }
@@ -3216,7 +3216,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val rep = V6FinalPort.handleCheck(r.state, sched)
                 if (seq != checkSeq) return@launch
-                pushReport(r.state, rep.schedule, rep.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜必須違反 ${rep.report.hard}件・違反の合計 ${rep.report.total}件") }
+                pushReport(r.state, rep.schedule, rep.report) { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage｜${reportCountsText(rep.report.breakdown)}") }
             } catch (e: CancellationException) {
                 // [3.284.0/外部レビューHigh③] stop() によるキャンセル時の running 固着を解消（refreshCheck と同型）。
                 if (seq == checkSeq) _ui.update { it.copy(messageIsError = false, running = optimizeInFlight(), message = "$doneMessage（調べるのを止めました）") }

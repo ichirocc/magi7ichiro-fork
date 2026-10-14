@@ -68,19 +68,50 @@ internal data class AnalysisTriage(
 
 /** weekly/fair は件数でなく L1 偏差の合計。単位を分けないと「186件」と読めてしまう。 */
 /** 族の数の単位。weekly/fair は L1 偏差なので "pt"、ほかは件（配布前確認も同じ単位を使う）。 */
-internal fun unitOf(family: String) = if (family == "fair" || family == "weekly") "pt" else "件"
+/** 族の数え方（報告の内訳の単位）。回数の下限・上限・適切回数は回の差、人員は人の差、公平化・曜日の偏りは pt、ほかは件。 */
+internal fun unitOf(family: String) = when (family) {
+    "fair", "weekly" -> "pt"
+    "low", "high", "apt" -> "回"
+    "covU", "covO" -> "人"
+    else -> "件"
+}
+
+private val UNIT_ORDER = listOf("件", "人", "回", "pt")
+
+/** 単位ごとの合計（例「3件・2人・6回」）。単位の違う量は 1 つの数に足さない（統合仕様 INV-07）。全部 0 なら null。 */
+internal fun unitTotals(breakdown: Map<String, Int>, families: Collection<String>, includePt: Boolean = true): String? {
+    val by = families.groupBy { unitOf(it) }.mapValues { (_, fs) -> fs.sumOf { breakdown[it] ?: 0 } }
+    return UNIT_ORDER.filter { includePt || it != "pt" }.mapNotNull { u -> by[u]?.takeIf { it > 0 }?.let { "$it$u" } }
+        .takeIf { it.isNotEmpty() }?.joinToString("・")
+}
+
+/** 族ごとの増減を単位ごとに足した言い方（例「1件減る・2人増える」）。同じ単位の中だけで足す。全部 0 なら null。 */
+internal fun unitDeltaText(diff: List<Pair<String, Int>>, families: Collection<String>): String? {
+    val by = HashMap<String, Int>()
+    for ((k, d) in diff) if (k in families && d != 0) by[unitOf(k)] = (by[unitOf(k)] ?: 0) + d
+    return UNIT_ORDER.mapNotNull { u -> by[u]?.takeIf { it != 0 }?.let { d -> "${kotlin.math.abs(d)}$u${if (d < 0) "減る" else "増える"}" } }
+        .takeIf { it.isNotEmpty() }?.joinToString("・")
+}
+
+/** 族ごとの増減（例「下限 −6回・禁止の並び +1件」）。合計の数は出さない。 */
+internal fun familyDeltaList(diff: List<Pair<String, Int>>): String =
+    diff.filter { it.second != 0 }.joinToString("・") { (k, d) -> "${breakdownLabels[k] ?: k} ${if (d < 0) "−${-d}" else "+$d"}${unitOf(k)}" }
+
+/** 必須違反と要調整を単位ごとに（通知・ログの 1 行）。 */
+internal fun reportCountsText(breakdown: Map<String, Int>): String =
+    "必須違反 ${unitTotals(breakdown, MirrorKeys.hard) ?: "なし"}・要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "なし"}"
 
 private fun labelOf(family: String) = breakdownLabels[family] ?: family
 
-/** ホームのでき具合に添える残り。必須0の要調整は件数の族だけ数える（pt の公平化・曜日の偏りを件と足さない）。
+/** ホームのでき具合に添える残り。要調整は単位ごとに（pt の公平化・曜日の偏りは出さない）。
  *  pt だけ残ってもでき具合は 100% でないので「解消済み」とは言わない。 */
 internal fun homeRemainingLabel(bestHard: Long, shortDays: Int, breakdown: Map<String, Int>, wishHard: Int = 0): String {
-    val softN = MirrorKeys.soft.filter { unitOf(it) == "件" }.sumOf { breakdown[it] ?: 0 }
+    val softText = unitTotals(breakdown, MirrorKeys.soft, includePt = false)
     val ptN = MirrorKeys.soft.filter { unitOf(it) == "pt" }.sumOf { breakdown[it] ?: 0 }
     return when {
-        bestHard > 0L -> "必須 残り${bestHard}件" + (if (wishHard > 0) "（うち希望のまま ${minOf(wishHard.toLong(), bestHard)}件）" else "")
+        bestHard > 0L -> "必須 残り${unitTotals(breakdown, MirrorKeys.hard) ?: "${bestHard}件"}" + (if (wishHard > 0) "（うち希望のまま ${minOf(wishHard.toLong(), bestHard)}件）" else "")
         shortDays > 0 -> "人員不足の日 残り${shortDays}日"
-        softN > 0 -> "必須は解消・要調整 ${softN}件"
+        softText != null -> "必須は解消・要調整 $softText"
         ptN > 0 -> "必須は解消・残りは偏りのみ"
         else -> "解消済み"
     }

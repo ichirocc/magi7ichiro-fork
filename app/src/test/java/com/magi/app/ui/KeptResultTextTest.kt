@@ -30,7 +30,7 @@ class KeptResultTextTest {
 
     /** 計算完了の通知は「計算が終わった」と「必須違反 0 件＝配布前確認へ」を分ける（仕様 §9）。 */
     @Test fun completedTextSeparatesDoneFromZeroHard() {
-        assertEquals("計算が完了しました。設定した必須条件を満たしています。配布前の確認に進んでください（違反の合計 12件）", completedText(0, 12, ""))
-        assertEquals("計算が完了しました（閉じている間に計算）。必須違反 3件・違反の合計 40件", completedText(3, 40, "（閉じている間に計算）"))
+        assertEquals("計算が完了しました。設定した必須条件を満たしています。配布前の確認に進んでください（要調整 12件）", completedText(0, mapOf("c1" to 12), ""))
+        assertEquals("計算が完了しました（閉じている間に計算）。必須違反 2件・1人・要調整 34件・6回", completedText(3, mapOf("covU" to 1, "c3n" to 2, "low" to 6, "c1" to 34), "（閉じている間に計算）"))
     }
 }
