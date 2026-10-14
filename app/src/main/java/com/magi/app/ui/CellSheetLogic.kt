@@ -542,7 +542,7 @@ internal fun noFixForProblemLine(label: String): String = "選んだ問題（$la
  * 回数＝[staff]×[shift]（[day] は null）、人員＝[shift]×[day]（[staff] は null）。[target] は下限・目標・上限・必要人数・適正人数、
  * [basis] はその名、[under]＝足りない側。
  */
-internal data class FixTarget(val staff: Int?, val shift: Int, val day: Int?, val target: Int, val under: Boolean, val basis: String) {
+data class FixTarget(val staff: Int?, val shift: Int, val day: Int?, val target: Int, val under: Boolean, val basis: String) {
     val unit: String get() = if (staff != null) "回" else "人"
     fun countOf(schedule: List<List<Int>>): Int =
         if (staff != null) schedule.getOrNull(staff).orEmpty().count { it == shift } else schedule.count { it.getOrNull(day ?: -1) == shift }
@@ -556,7 +556,7 @@ internal data class FixTarget(val staff: Int?, val shift: Int, val day: Int?, va
 }
 
 /** 対象の数の変化。[gapBefore]/[gapAfter] は基準までの差（0 未満は 0）。 */
-internal data class CountEffect(val before: Int, val after: Int, val target: Int, val under: Boolean, val unit: String = "回") {
+data class CountEffect(val before: Int, val after: Int, val target: Int, val under: Boolean, val unit: String = "回") {
     private fun gap(c: Int) = (if (under) target - c else c - target).coerceAtLeast(0)
     val gapBefore: Int get() = gap(before)
     val gapAfter: Int get() = gap(after)
@@ -570,6 +570,8 @@ internal data class CountEffect(val before: Int, val after: Int, val target: Int
     fun countLine(): String = "$before$unit → $after$unit"
     fun gapLine(): String = "${if (under) "不足" else "超過"} $gapBefore$unit → $gapAfter$unit"
     fun afterNote(basis: String): String = when {
+        gapAfter == 0 && under && unit == "人" -> "${basis.removeSuffix("人数")} ${target}人を満たします"
+        gapAfter == 0 && unit == "人" -> "${basis.removeSuffix("人数")} ${target}人以内になります"
         gapAfter == 0 && under -> "適用後は${basis}に届きます"
         gapAfter == 0 -> "適用後は${basis}以内になります"
         under -> "適用後も、${basis}まで${gapAfter}${unit}不足"
@@ -692,6 +694,98 @@ internal fun readyBadgeLabel(soft: Long): String = if (soft > 0) "要調整 ${so
 internal fun periodLine(startDate: String, days: Int): String? =
     if (days <= 0 || startDate.isBlank()) null else "対象期間：" + DayText.range(startDate, 0, days - 1)
 
+/** 盤面に案のセル代入を当てた後の盤面。 */
+internal fun boardAfter(schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>): List<List<Int>> {
+    val after = schedule.map { it.toMutableList() }
+    for (op in ops) after.getOrNull(op.staff)?.let { r -> if (op.day in r.indices) r[op.day] = op.toShift }
+    return after
+}
+
+/**
+ * 案で人数が変わる枠（日×勤務）の行（2026-10-14 利用者レビュー「どの日の不足を直す案か」と「別の日への影響」を分ける）。
+ * [first]＝見ている日のほかの勤務、[second]＝別の日。[skip]＝見ている枠（勤務, 日）は上に出すので除く。
+ * 必要・適正の判定は設定の値で言い、値が無い枠は人数だけ（「安全に変更できます」とは言わない）。
+ */
+internal fun headcountImpact(
+    schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>, shiftSymbols: List<String>, startDate: String,
+    needLimits: ((Int, Int) -> Pair<Int, Int>?)?, skip: Pair<Int, Int>? = null,
+): Pair<List<String>, List<String>> {
+    val after = boardAfter(schedule, ops)
+    val same = ArrayList<String>(); val other = ArrayList<String>()
+    for (j in ops.map { it.day }.distinct().sorted()) {
+        val shifts = (ops.filter { it.day == j }.flatMap { listOfNotNull(schedule.getOrNull(it.staff)?.getOrNull(j), it.toShift) }).distinct().sorted()
+        for (k in shifts) {
+            if (skip == k to j) continue
+            val b = schedule.count { it.getOrNull(j) == k }; val a = after.count { it.getOrNull(j) == k }
+            if (a == b) continue
+            val lim = needLimits?.invoke(k, j)
+            val note = when {
+                lim == null -> ""
+                a < lim.first -> "（必要 ${lim.first}人を下回ります）"
+                a > lim.second -> "（適正 ${lim.second}人を超えます）"
+                else -> "（必要 ${lim.first}人を満たしたまま）"
+            }
+            val line = "${DayText.short(startDate, j)}の${shiftSymbols.getOrNull(k) ?: "$k"}：${b}人 → ${a}人$note"
+            if (skip != null && j == skip.second) same += line else other += line
+        }
+    }
+    return same to other
+}
+
+/** 案で回数が変わる（または変わらない）勤務を職員ごとに言う。2 か所以上を変える理由の事実（例「休の回数は変わりません（12回のまま）」）。 */
+internal fun staffCountNotes(schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>, staffNames: List<String>, shiftSymbols: List<String>): List<String> {
+    if (ops.size < 2) return emptyList()
+    val after = boardAfter(schedule, ops)
+    return ops.map { it.staff }.distinct().flatMap { i ->
+        val row = schedule.getOrNull(i).orEmpty(); val rowA = after.getOrNull(i).orEmpty()
+        val name = staffNames.getOrNull(i) ?: "#$i"
+        ops.filter { it.staff == i }.flatMap { listOfNotNull(row.getOrNull(it.day), it.toShift) }.distinct().sorted().map { k ->
+            val b = row.count { it == k }; val a = rowA.count { it == k }
+            val sym = shiftSymbols.getOrNull(k) ?: "$k"
+            if (a == b) "${name}さんの「$sym」の回数は変わりません（${b}回のまま）" else "${name}さんの「$sym」：${b}回 → ${a}回"
+        }
+    }
+}
+
+/** 同じ勤務のほかの日で、案のあとも残る人員の過不足（「11/25のDテ不足は残ります」）。[board] は見る盤面（案の前なら案を当てた後）。 */
+internal fun remainingSameShift(
+    needFamilies: Map<String, List<String>>, board: List<List<Int>>, t: FixTarget, needLimits: ((Int, Int) -> Pair<Int, Int>?)?,
+    shiftSymbols: List<String>, startDate: String,
+): List<String> {
+    val day = t.day ?: return emptyList()
+    val cls = if (t.under) "vio-covU" else "vio-covO"
+    val sym = shiftSymbols.getOrNull(t.shift) ?: "${t.shift}"
+    return needFamilies.filter { (key, fams) -> cls in fams && VioKey.first(key) == t.shift }.keys.mapNotNull { VioKey.second(it) }
+        .filter { it != day }.sorted().mapNotNull { j ->
+            val lim = needLimits?.invoke(t.shift, j) ?: return@mapNotNull null
+            val n = board.count { it.getOrNull(j) == t.shift }
+            val gap = if (t.under) lim.first - n else n - lim.second
+            if (gap > 0) "${DayText.short(startDate, j)}の${sym}は、${if (t.under) "${gap}人不足" else "${gap}人多い状態"}のままです" else null
+        }
+}
+
+/** 自動保存の状態の 1 行（適用後の案内）。 */
+internal fun saveStateLine(s: SaveState): String = "保存：" + when (s) {
+    SaveState.Saved -> "完了"; SaveState.Saving -> "保存中"; SaveState.Failed -> "失敗（設定タブの「データ」でご確認ください）"; SaveState.Dirty -> "未保存（まもなく保存します）"
+}
+
+/** 勤務の人員のシート（集計の「計（期間）」）で、過不足のある日が 2 日以上のときの問い。 */
+internal fun shiftDayPickHeading(): String = "どの日を調整しますか？"
+
+/** 選ぶ行（日）: 「11/24(火)　配置 0人／必要 1人　1人不足」。 */
+internal fun shiftDayPickRow(ui: UiState, k: Int, j: Int, under: Boolean, need: Pair<Int, Int>?): String =
+    DayText.full(ui.startDate, j) + "　" + dayPickRow(ui, j, CoverageMark(k, under), need).substringAfter("　")
+
+/** 休みの人数の過剰（休の勤務の人員のシート）: 先に設定の意味を確かめてもらう。[allZero]＝どの日も適正 0 人。 */
+internal fun restOverIntro(allZero: Boolean): List<String> = listOfNotNull(
+    if (allZero) "各日の適正人数が0人と表示されています。意図した設定か、確認できます。" else "休みの人数が、設定上の適正人数を超えている日があります。",
+    "休みの人数を減らす前に、個人の休日数・希望・連続勤務への影響もご確認ください。",
+)
+
+/** 休みの人数の行: 「11/13(金)　休み 2人／適正 0人」（値が無ければ「未設定」）。 */
+internal fun restOverRow(ui: UiState, k: Int, j: Int, need: Pair<Int, Int>?): String =
+    "${DayText.full(ui.startDate, j)}　休み ${ui.schedule.count { it.getOrNull(j) == k }}人／適正 " + (need?.let { "${it.second}人" } ?: "未設定")
+
 /** 日の人員のシートで、過不足のある勤務が 2 つ以上のときの問い。 */
 internal fun dayPickHeading(marks: List<CoverageMark>): String = when {
     marks.all { it.under } -> "どの勤務の不足を確認しますか？"
@@ -716,4 +810,24 @@ internal fun panelTarget(ui: UiState, cv: ConditionsView?, f: FixFocus): FixTarg
         f.staff == null && f.day != null && f.exceptStaff == null -> needFixTarget(ui.needFamilies, k, f.day, cv.needCellLimits(k, f.day))
         else -> null
     }
+}
+
+/** 「変更を反映しました」の行: 見ている問題（前 → 今）、ほかに人数が変わった枠（今の値）、保存、残る問題、探し直したこと。 */
+internal fun appliedLines(ui: UiState, a: AppliedFix, target: FixTarget?, label: String, needLimits: ((Int, Int) -> Pair<Int, Int>?)?): List<String> {
+    val out = ArrayList<String>()
+    target?.let { t ->
+        val e = t.effect(a.before, a.ops)
+        out += "$label：${e.countLine()}（${if (e.gapAfter == 0) e.afterNote(t.basis) else "${t.gapWord} ${e.gapAfter}${t.unit}"}）"
+    }
+    val (same, other) = headcountImpact(a.before, a.ops, ui.shiftSymbols, ui.startDate, needLimits, target?.day?.let { target.shift to it })
+    out += same + other
+    out += saveStateLine(ui.saveState)
+    val next = when {
+        target?.day != null -> remainingSameShift(ui.needFamilies, ui.schedule, target, needLimits, ui.shiftSymbols, ui.startDate)
+        target != null -> target.effect(a.before, a.ops).takeIf { it.gapAfter > 0 }?.let { listOf("${label}は、${target.basis}まであと${it.gapAfter}回です") }.orEmpty()
+        else -> emptyList()
+    }
+    if (next.isNotEmpty()) out += "次に確認すること：" + next.joinToString("。") + "。"
+    out += "勤務表が変わったため、変更案を探し直しました（下の案は今の勤務表のものです）。"
+    return out
 }

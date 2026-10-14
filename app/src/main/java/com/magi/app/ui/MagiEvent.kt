@@ -23,7 +23,7 @@ internal sealed interface MagiEvent {
         data class ApplyAlternative(val index: Int) : Board
         data class ApplyFixSuggestion(val suggestion: FixSuggestion) : Board
         /** 当てる前に全変更と対象の問題の変化を確認する（[purpose]＝今回の目的、[effect]＝対象の数の変化）。 */
-        data class PreviewFix(val suggestion: FixSuggestion, val purpose: String?, val effect: List<String>) : Board
+        data class PreviewFix(val suggestion: FixSuggestion, val purpose: String?, val effect: List<String>, val focusKey: String? = null, val target: FixTarget? = null) : Board
         data object Undo : Board
         data object Redo : Board
     }

@@ -308,11 +308,16 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                     Row { listOf("日付", "変更前", "変更後").forEach { h -> Text(h, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f)) } }
                     rows.forEach { r ->
                         Row { listOf(r.date, r.before, r.after).forEach { v -> Text(v, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f)) } }
+                        if (r.impact.isNotEmpty()) Text("　人数：${r.impact}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         if (r.wish.isNotEmpty()) Text("　${r.wish}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
                 p.effect.forEachIndexed { n, line -> Text(line, style = MaterialTheme.typography.bodyMedium, fontWeight = if (n == 0) FontWeight.Bold else FontWeight.Normal) }
                 Text(p.hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = if (p.effect.isEmpty()) FontWeight.Bold else FontWeight.Normal)
+                if (p.countNotes.isNotEmpty()) {
+                    Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    p.countNotes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
+                }
                 Text("確認が必要なこと", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 p.caution?.let { Text("・$it", style = MaterialTheme.typography.bodySmall) }
                 Text("・希望・前後の勤務への影響（上の表の注記）", style = MaterialTheme.typography.bodySmall)

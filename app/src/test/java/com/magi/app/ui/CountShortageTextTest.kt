@@ -122,4 +122,57 @@ class CountShortageTextTest {
         assertFalse("元に戻せます" in APPLY_CHANGE_BUTTON)
         assertEquals("対象期間：10/1〜10/31", periodLine("2026-10-01", 31))
     }
+
+    /** 「どの日の不足を直す案か」と「別の日への影響」を分ける（2026-10-14 利用者レビュー 2 回目）。 */
+    @Test fun otherDayImpactIsSeparatedFromTheTargetDay() {
+        // 職員0: 10/1=A 10/2=休 10/3=休 10/4=B、職員1: 10/1=休 10/2=A 10/3=A 10/4=休。
+        val t = needFixTarget(mapOf("1,2" to listOf("vio-covU")), 1, 2, 2 to 2)!!
+        val ops = listOf(FixCell(0, 2, 1), FixCell(0, 3, 0))   // 10/3 休→A、10/4 B→休
+        val need = { k: Int, j: Int -> when (k to j) { 1 to 2 -> 2 to 2; 2 to 3 -> 1 to 1; else -> null } }
+        val (same, other) = headcountImpact(schedule, ops, listOf("休", "A", "B"), "2026-10-01", need, 1 to 2)
+        assertEquals(listOf("10/3の休：1人 → 0人"), same)
+        assertEquals(listOf("10/4の休：1人 → 2人", "10/4のB：1人 → 0人（必要 1人を下回ります）"), other)
+        assertEquals("必要 2人を満たします", t.effect(schedule, ops).afterNote(t.basis))
+        assertEquals(listOf("モニカさんの「休」の回数は変わりません（2回のまま）", "モニカさんの「A」：1回 → 2回", "モニカさんの「B」：1回 → 0回"),
+            staffCountNotes(schedule, ops, listOf("モニカ", "ノア"), listOf("休", "A", "B")))
+        assertTrue(staffCountNotes(schedule, ops.take(1), listOf("モニカ"), listOf("休", "A")).isEmpty())
+        // 同じ勤務のほかの日に残る不足（案を当てた後の盤面で数える）。
+        val fams = mapOf("1,2" to listOf("vio-covU"), "1,3" to listOf("vio-covU"))
+        val needA = { k: Int, j: Int -> if (k == 1) 2 to 2 else null }
+        assertEquals(listOf("10/4のAは、2人不足のままです"), remainingSameShift(fams, boardAfter(schedule, ops), t, needA, listOf("休", "A", "B"), "2026-10-01"))
+    }
+
+    @Test fun shiftDayPickAndRestRowsSayTheSettingFirst() {
+        val u = UiState(startDate = "2026-10-01", shiftSymbols = listOf("休", "A", "B"), schedule = schedule)
+        assertEquals("どの日を調整しますか？", shiftDayPickHeading())
+        assertEquals("10/4(日)　配置 0人／必要 1人　1人不足", shiftDayPickRow(u, 1, 3, true, 1 to 1))
+        assertEquals("10/2(金)　休み 1人／適正 0人", restOverRow(u, 0, 1, 0 to 0))
+        assertEquals("10/2(金)　休み 1人／適正 未設定", restOverRow(u, 0, 1, null))
+        assertEquals("各日の適正人数が0人と表示されています。意図した設定か、確認できます。", restOverIntro(true).first())
+        assertEquals("保存：完了", saveStateLine(SaveState.Saved))
+    }
+
+    @Test fun previewRowsCarryTheDayHeadcountAndCountNotes() {
+        val s = FixSuggestion(FixKind.SWAP_XDAY, listOf(FixCell(0, 1, 1), FixCell(0, 0, 0)), "x", 0, 0, emptyList())
+        val p = chainFixPreview(s, arrayOf(intArrayOf(1, 0, 0, 2), intArrayOf(0, 1, 1, 0)), listOf("福澤"), listOf("休", "A", "B"), "2026-10-01")
+        assertEquals("休 1人 → 0人、A 1人 → 2人", p.rows[0].impact)   // 10/2 休→A
+        assertEquals("A 1人 → 0人、休 1人 → 2人", p.rows[1].impact)   // 10/1 A→休
+        assertEquals(listOf("福澤さんの「休」の回数は変わりません（2回のまま）", "福澤さんの「A」の回数は変わりません（1回のまま）"), p.countNotes)
+    }
+
+    @Test fun appliedLinesReportTheTargetSaveAndWhatRemains() {
+        val t = needFixTarget(mapOf("1,2" to listOf("vio-covU")), 1, 2, 2 to 2)!!
+        val ops = listOf(FixCell(0, 2, 1))
+        val after = boardAfter(schedule, ops)
+        val u = UiState(startDate = "2026-10-01", shiftSymbols = listOf("休", "A", "B"), schedule = after, saveState = SaveState.Saving,
+            needFamilies = mapOf("1,3" to listOf("vio-covU")))
+        val a = AppliedFix("k", "x", ops, schedule, after, t)
+        val need = { k: Int, _: Int -> if (k == 1) 2 to 2 else null }
+        val lines = appliedLines(u, a, t, "10/3のA", need)
+        assertEquals("10/3のA：1人 → 2人（必要 2人を満たします）", lines[0])
+        assertEquals("10/3の休：1人 → 0人", lines[1])
+        assertEquals("保存：保存中", lines[2])
+        assertEquals("次に確認すること：10/4のAは、2人不足のままです。", lines[3])
+        assertTrue(lines.last().startsWith("勤務表が変わったため"))
+    }
 }

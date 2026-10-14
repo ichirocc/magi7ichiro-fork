@@ -19,10 +19,16 @@ data class ChainFixPreview(
     val fromList: Boolean = false,
     /** 変わるセル（職員ごとに日付・変更前・変更後の表にする）。 */
     val rows: List<ChangeRow> = emptyList(),
+    /** 職員ごとの回数の変化（2 か所以上を変える理由の事実）。 */
+    val countNotes: List<String> = emptyList(),
+    /** 案の一覧のどの依頼から来たか（適用後に同じ依頼の画面へ結果を返す）。 */
+    val focusKey: String? = null,
+    /** 見ている問題（適用後の結果の行で、解消して印が消えたあとも前後を言う）。 */
+    val fixTarget: FixTarget? = null,
 )
 
 /** 変わるセル 1 つ。[wish]＝希望があるときの注記（希望どおり／希望と異なる）。 */
-data class ChangeRow(val staff: String, val date: String, val before: String, val after: String, val wish: String = "")
+data class ChangeRow(val staff: String, val date: String, val before: String, val after: String, val wish: String = "", val impact: String = "")
 
 /** 変更を当てるボタン（違反セルの半自動修正仕様 §5: 押すと検証してから全変更を反映する）。 */
 internal const val APPLY_CHANGE_BUTTON = "この変更を適用"
@@ -37,14 +43,21 @@ internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffN
     fun name(i: Int) = staffNames.getOrNull(i) ?: "職員${i + 1}"
     fun sym(k: Int) = shiftSymbols.getOrNull(k) ?: "$k"
     fun shift(k: Int) = sym(k) + (shiftNames.getOrNull(k)?.takeIf { it.isNotBlank() && it != sym(k) }?.let { "（$it）" } ?: "")
+    val board = snapshot.map { it.toList() }
+    val after = boardAfter(board, s.ops)
     val rows = s.ops.map { op ->
         val before = snapshot.getOrNull(op.staff)?.getOrNull(op.day)
         // 「希望との不一致なし」は本人の了承ではない＝希望があるときだけ、希望どおりか違うかを事実として添える（仕様 §4）。
         val wish = wishes["${op.staff},${op.day}"]?.takeIf { it >= 0 }?.let { w -> if (w == op.toShift) "希望どおり" else "希望（${sym(w)}）と異なる勤務になります" } ?: ""
-        ChangeRow(name(op.staff), DayText.short(startDate, op.day), before?.let { shift(it) } ?: "?", shift(op.toShift), wish)
+        // その日の人数（変更前の勤務と変更後の勤務）。休みを移す案は両日の休みの人数が並ぶ。
+        val impact = listOfNotNull(before, op.toShift).distinct().joinToString("、") { k ->
+            "${sym(k)} ${snapshot.count { it.getOrNull(op.day) == k }}人 → ${after.count { it.getOrNull(op.day) == k }}人"
+        }
+        ChangeRow(name(op.staff), DayText.short(startDate, op.day), before?.let { shift(it) } ?: "?", shift(op.toShift), wish, impact)
     }
     val changes = rows.map { r -> "${r.staff} ${r.date} ${r.before} → ${r.after}" + (if (r.wish.isNotEmpty()) "・${r.wish}" else "") }
     val (hard, caution) = fixImpactLines(s)
     // 人数・マス数は本文 1 行目（提案のラベル）が持つ。題に入れると「（6 / 人・11 セル）」のように途中で折り返した。
-    return ChainFixPreview(s, "複数人の入れ替え", changes, hard, caution, rows = rows)
+    return ChainFixPreview(s, "複数人の入れ替え", changes, hard, caution, rows = rows,
+        countNotes = staffCountNotes(board, s.ops, staffNames, shiftSymbols))
 }

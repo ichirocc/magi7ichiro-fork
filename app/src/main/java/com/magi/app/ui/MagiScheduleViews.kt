@@ -1362,12 +1362,32 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
             }
             }   // if (open)
             totalSheet?.let { kk ->
+                // 過不足のある日が 2 日以上なら、どの日を直すかを選んでから探す（2026-10-14 利用者レビュー: 先頭の日だけで探し、
+                //   どの日の不足を直す案か分からなかった）。当てたあとも開いたまま＝残った日の行から続けて選べる。
                 val ct = covTotals[kk]
-                if (ct != null) {
-                    val lines = ct.days.flatMap { j -> dayCoverageLines(ui, j, listOf(CoverageMark(kk, j in ct.underDays)), cv::needCellLimits).map { "${DayText.short(ui.startDate, j)} $it" } }
-                    GridMarkDialog("「${ui.shiftSymbols.getOrNull(kk) ?: kk}」の人員", lines, onDismiss = { totalSheet = null }) {
-                        FixSearchPanel(ui, cv, FixFocus(null, kk, ct.days.first()), onEvent, nav, onApplied = { totalSheet = null })
+                val days = ct?.days.orEmpty()
+                val sym = ui.shiftSymbols.getOrNull(kk) ?: "$kk"
+                var picked by remember(kk) { mutableStateOf(days.singleOrNull()) }
+                val rest = kk == cv.restIdx && ct != null && ct.overDays.isNotEmpty()
+                GridMarkDialog(if (rest) "休みの人数を確認" else "「$sym」の人員" + (if (ct != null && ct.overDays.isEmpty()) "不足" else ""), emptyList(), onDismiss = { totalSheet = null }) {
+                    if (days.isEmpty()) Text("人員の過不足はありません。", style = MaterialTheme.typography.bodyMedium)
+                    if (rest) {
+                        restOverIntro(ct!!.overDays.all { cv.needCellLimits(kk, it)?.second == 0 }).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        OutlinedButton(onClick = { totalSheet = null; nav.onNeed(kk, ct.overDays.first()) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("人数の設定を確認") }
                     }
+                    if (days.size >= 2) Text(shiftDayPickHeading(), style = MaterialTheme.typography.bodyMedium)
+                    days.forEach { j ->
+                        val under = ct != null && j in ct.underDays
+                        val row = if (rest && !under) restOverRow(ui, kk, j, cv.needCellLimits(kk, j)) else shiftDayPickRow(ui, kk, j, under, cv.needCellLimits(kk, j))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == j) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                            if (days.size >= 2) {
+                                if (picked == j) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                else TextButton(onClick = { picked = j }, modifier = Modifier.heightIn(min = 48.dp)) { Text("変更案を見る") }
+                            }
+                        }
+                    }
+                    picked?.let { j -> FixSearchPanel(ui, cv, FixFocus(null, kk, j), onEvent, nav, onApplied = { totalSheet = null }) }
                 }
             }
             detail?.let { d ->
@@ -2089,9 +2109,13 @@ internal fun FixSearchPanel(
                     Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             // 先頭＝いま見ている問題がどう変わるか。変更する勤務、ほかの問題への影響、操作の順。
-                            if (e != null) {
+                            val after = remember(s, ui.schedule) { boardAfter(ui.schedule, s.ops) }
+                            val remain = if (target?.day != null) remainingSameShift(ui.needFamilies, after, target, cv?.let { c -> c::needCellLimits }, ui.shiftSymbols, ui.startDate) else emptyList()
+                            if (e != null && target != null) {
                                 Text("案$n：${e.title(label)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
-                                Text(e.countLine() + "　" + e.gapLine(), style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                                Text("$label：${e.countLine()}　${e.gapLine()}", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                                Text(e.afterNote(target.basis), style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                                remain.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             } else {
                                 Text("案$n：${s.label}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                                 family?.let { familyEffectLine(s, it, breakdownLabels[it] ?: it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer) }
@@ -2100,6 +2124,23 @@ internal fun FixSearchPanel(
                                 Text("変更する勤務", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                 val changes = remember(s, snap) { chainFixPreview(s, snap, ui.staffNames, ui.shiftSymbols, ui.startDate).changes }
                                 changes.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                                // 見ている日のほかの勤務と、別の日へ移る影響を分ける（必要・適正は設定の値で言う）。
+                                val (sameDay, otherDays) = remember(s, ui.schedule, cv) {
+                                    headcountImpact(ui.schedule, s.ops, ui.shiftSymbols, ui.startDate, cv?.let { c -> c::needCellLimits }, target?.day?.let { target.shift to it })
+                                }
+                                if (sameDay.isNotEmpty()) {
+                                    Text("同じ日のほかの勤務", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                                    sameDay.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                                }
+                                if (otherDays.isNotEmpty()) {
+                                    Text(if (target?.day != null) "別の日への影響" else "日ごとの人数への影響", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                                    otherDays.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                                }
+                                val notes = remember(s, ui.schedule) { staffCountNotes(ui.schedule, s.ops, ui.staffNames, ui.shiftSymbols) }
+                                if (notes.isNotEmpty()) {
+                                    Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                                    notes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                                }
                                 Text("ほかの問題への影響", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                 otherEffectLines(s, target?.let { fixTargetFamilies(it) } ?: setOfNotNull(family)).forEach {
                                     Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
@@ -2108,13 +2149,18 @@ internal fun FixSearchPanel(
                                 Text(fixImpactLines(s).first, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             }
                             OutlinedButton(onClick = {
-                                val eff = if (e != null && target != null) listOf("$label：${e.countLine()}", e.afterNote(target.basis)) else emptyList()
-                                onEvent(MagiEvent.Board.PreviewFix(s, purpose, eff))
+                                val eff = if (e != null && target != null) listOf("$label：${e.countLine()}", e.afterNote(target.basis)) + remain else emptyList()
+                                onEvent(MagiEvent.Board.PreviewFix(s, purpose, eff, focus.key, target))
                             }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text(REVIEW_CHANGE_BUTTON) }
                         }
                     }
                 }
                 val limit = if (compact) 1 else 3
+                // この依頼の画面で当てた手の結果（今の盤面がその手の直後のときだけ）。案は今の勤務表で探し直したもの＝古い案は使わない。
+                ui.appliedFix?.takeIf { it.focusKey == focus.key && it.after == ui.schedule && !compact }?.let { a ->
+                    val t = target ?: a.target
+                    AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label)
+                }
                 when {
                     family != null && target == null && ui.fixSuggestions.isNotEmpty() && shown.isEmpty() ->
                         Text(noFixForProblemLine(breakdownLabels[family] ?: family), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2136,6 +2182,20 @@ internal fun FixSearchPanel(
                     }
                     if (open) others.take(limit).forEachIndexed { n, s -> card(fixing.size.coerceAtMost(limit) + n + 1, s) }
                 }
+            }
+        }
+    }
+}
+
+/** 「変更を反映しました」: 見ている問題の結果、ほかの枠の今の人数、保存、残る問題。 */
+@Composable
+private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String) {
+    val cs = MaterialTheme.colorScheme
+    Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
+        Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("変更を反映しました", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onTertiaryContainer)
+            appliedLines(ui, a, target, label, cv?.let { c -> c::needCellLimits }).forEach {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer)
             }
         }
     }
