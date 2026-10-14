@@ -24,8 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.magi.app.v6.PreRunCheck
+import com.magi.app.v6.POST_RESERVE_SEC
+import com.magi.app.v6.CHAIN_RESERVE_SEC
 
-/** [つくる前の確認] 本実行の前に 1 度だけ出す。行を押すとセルへ（セルを持たない行は入力箇所へ＝3.644.0）、「このままつくる」は 1 タップで始める。 */
+/** [勤務表を作成する（旧 つくる前の確認）] 本実行の前に出す。自動で行うこと・保持するもの・時間と、行を押すとセルへ（セルを持たない行は入力箇所へ＝3.644.0）、「勤務表を作成」で始める。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PreRunCheckSheet(
@@ -46,7 +48,11 @@ internal fun PreRunCheckSheet(
             Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            DialogHeader("つくる前の確認", onDismiss)
+            DialogHeader(PRE_RUN_TITLE, onDismiss)
+            // 自動で行うこと・保持するもの・時間（設定値）を先に。担当者が判断するのは、ここと作成後の問題の対応。
+            preRunPlanLines(ui.startDate, ui.days, ui.staff, summary.needsSheet, ui.manualPins.size, ui.budgetSec, POST_RESERVE_SEC + CHAIN_RESERVE_SEC)
+                .forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            Text(PRE_RUN_AUTO_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             t.floorHeader?.let { h ->
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(PRE_RUN_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -77,8 +83,8 @@ internal fun PreRunCheckSheet(
                 }
             }
             ui.preRunRepeatHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) }
-            OutlinedButton(onClick = onFixData, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp)) { Text("先にデータを直す") }
-            Button(onClick = onProceed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("このままつくる") }
+            Button(onClick = onProceed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp)) { Text(PRE_RUN_PROCEED) }
+            OutlinedButton(onClick = onFixData, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(PRE_RUN_CHECK_CONDITIONS) }
         }
     }
 }

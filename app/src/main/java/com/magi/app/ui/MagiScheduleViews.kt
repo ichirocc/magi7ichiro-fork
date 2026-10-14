@@ -2060,6 +2060,7 @@ internal class FixNav(
     val onSettings: (String) -> Unit = {},
     val onNeed: (Int, Int) -> Unit = { _, _ -> },        // 人員不足・過剰の印から: その日のそのシフトの必要人数
     val onCell: (Int, Int) -> Unit = { _, _ -> },        // 職員と日（勤務表のそのセルを開く）
+    val onTour: (() -> Unit)? = null,                    // 残っている必須違反を順に見る（巡回の先頭のセルへ）
 )
 
 /**
@@ -2165,7 +2166,7 @@ internal fun FixSearchPanel(
                                 Text(fixImpactLines(s).first, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             }
                             OutlinedButton(onClick = {
-                                val eff = if (e != null && target != null) listOf("$label：${e.countLine()}", e.afterNote(target.basis)) + remain else emptyList()
+                                val eff = if (e != null && target != null) listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(target.basis)) + remain else emptyList()
                                 onEvent(MagiEvent.Board.PreviewFix(s, purpose, eff, focus.key, target))
                             }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text(REVIEW_CHANGE_BUTTON) }
                         }
@@ -2175,7 +2176,7 @@ internal fun FixSearchPanel(
                 // この依頼の画面で当てた手の結果（今の盤面がその手の直後のときだけ）。案は今の勤務表で探し直したもの＝古い案は使わない。
                 ui.appliedFix?.takeIf { it.focusKey == focus.key && it.after == ui.schedule && !compact }?.let { a ->
                     val t = target ?: a.target
-                    AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label) { onEvent(MagiEvent.Board.Undo) }
+                    AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label, onUndo = { onEvent(MagiEvent.Board.Undo) }, onTour = nav.onTour?.let { go -> { onApplied(); go() } })
                 }
                 when {
                     pred != null && target == null && shown.isNotEmpty() && fixing.isEmpty() ->
@@ -2204,9 +2205,11 @@ internal fun FixSearchPanel(
 }
 
 /** 「変更を反映しました」: 見ている問題の結果、ほかの枠の今の人数、保存、残る問題。 */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String, onUndo: () -> Unit) {
+private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String, onUndo: () -> Unit, onTour: (() -> Unit)? = null) {
     val cs = MaterialTheme.colorScheme
+    var showChanges by remember(a) { mutableStateOf(false) }
     Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("変更を反映しました", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onTertiaryContainer)
@@ -2214,7 +2217,15 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
                 Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer)
             }
             // 当てた直後だけ（今の盤面がその手の直後）に出る＝元に戻すの先頭はこの手。
-            if (ui.canUndo) TextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
+            if (showChanges) remember(a) {
+                chainFixPreview(com.magi.app.v6.FixSuggestion(com.magi.app.v6.FixKind.CHANGE_MULTI, a.ops, a.label, 0, 0, emptyList()),
+                    Array(a.before.size) { a.before[it].toIntArray() }, ui.staffNames, ui.shiftSymbols, ui.startDate).changes
+            }.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer) }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (onTour != null) TextButton(onClick = onTour, modifier = Modifier.heightIn(min = 48.dp)) { Text("残っている問題を見る") }
+                TextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "変更内容を閉じる" else "今回の変更内容を見る") }
+                if (ui.canUndo) TextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
+            }
         }
     }
 }

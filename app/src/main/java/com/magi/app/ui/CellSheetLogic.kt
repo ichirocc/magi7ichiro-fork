@@ -694,7 +694,7 @@ internal const val REVIEW_CHANGE_BUTTON = "変更内容を確認"
 internal fun applyCountButton(n: Int): String = if (n >= 2) "この${n}件の変更を適用" else APPLY_CHANGE_BUTTON
 
 /** 確認の画面を閉じるボタン（案の一覧から来たときは一覧へ戻る）。 */
-internal const val BACK_TO_FIXES_BUTTON = "案の一覧に戻る"
+internal const val BACK_TO_FIXES_BUTTON = "別案を見る"
 
 /** 必須 0 の結果の札。要調整が残るなら「配布可」と言い切らず、配布前の確認へ案内する（押すと配布前の確認が開く）。 */
 internal fun readyBadgeLabel(soft: Long): String = if (soft > 0) "要調整 ${soft}件・配布前の確認" else "配布可"
@@ -826,7 +826,7 @@ internal fun appliedLines(ui: UiState, a: AppliedFix, target: FixTarget?, label:
     val out = ArrayList<String>()
     target?.let { t ->
         val e = t.effect(a.before, a.ops)
-        out += "$label：${e.countLine()}（${if (e.gapAfter == 0) e.afterNote(t.basis) else "${t.gapWord} ${e.gapAfter}${t.unit}"}）"
+        out += "今回の問題：${appliedStatusWord(e)}（$label：${e.countLine()}、${if (e.gapAfter == 0) e.afterNote(t.basis) else "${t.gapWord} ${e.gapAfter}${t.unit}"}）"
     }
     val (same, other) = headcountImpact(a.before, a.ops, ui.shiftSymbols, ui.startDate, needLimits, target?.day?.let { target.shift to it })
     out += same + other
@@ -1004,3 +1004,47 @@ internal fun resolvesAtCell(state: MagiState, s: Array<IntArray>, before: com.ma
     val after = com.magi.app.v6.ViolationIdentity.keys(UnifiedViolationChecker.check(state, trial))
     return b.any { it !in after }
 }
+
+// ===== 自動と担当者の分担（2026-10-14 利用者レビュー「どこまで自動で進み、どこで担当者が判断するか」） =====
+
+/** 勤務表を作成する画面の要点（作成前）。[issues]＝つくる前に確かめる項目があるか。時間は設定値（探索）と固定の追加枠。 */
+internal fun preRunPlanLines(startDate: String, days: Int, staff: Int, issues: Boolean, pins: Int, budgetSec: Int, reserveSec: Int): List<String> = listOfNotNull(
+    periodLine(startDate, days),
+    "職員：${staff}人",
+    "登録条件：" + if (issues) "確認が必要な項目があります（下の一覧）" else "つくる前に直す項目はありません",
+    "今回、自動で行うこと：勤務表の生成、最適化、仕上げ、評価",
+    "保持するもの：登録条件と手動固定" + if (pins > 0) "（手動固定 ${pins}件）" else "",
+    "探索時間：${budgetSec}秒／仕上げ用の追加枠：${reserveSec}秒",
+)
+
+/** 作成を始めたあとの約束（一手ごとに確認を求めない・条件の変更は別の判断）。 */
+internal const val PRE_RUN_AUTO_NOTE = "開始後は、探索の途中で一手ごとの確認は求めません。希望・必要人数・固定条件の変更は、別の判断として扱います。"
+internal const val PRE_RUN_TITLE = "勤務表を作成する"
+internal const val PRE_RUN_PROCEED = "勤務表を作成"
+internal const val PRE_RUN_CHECK_CONDITIONS = "条件を確認する"
+
+/** 要調整の内訳（族ごとに件数か pt。多い順に [max] 種まで）。 */
+internal fun softSummary(breakdown: Map<String, Int>, max: Int = 4): String {
+    val soft = com.magi.app.v6.MirrorKeys.soft.mapNotNull { k -> breakdown[k]?.takeIf { it > 0 }?.let { k to it } }
+        .sortedByDescending { (k, n) -> (com.magi.app.v6.MirrorKeys.weights[k] ?: 1.0) * n }
+    if (soft.isEmpty()) return "なし"
+    return soft.take(max).joinToString("・") { (k, n) -> "${breakdownLabels[k] ?: k} $n${unitOf(k)}" } + if (soft.size > max) " ほか${soft.size - max}種" else ""
+}
+
+/** 作成後の結果（作成の完了は配布できることと同じ意味ではない）。 */
+internal fun creationResultLines(hard: Long, breakdown: Map<String, Int>, save: SaveState): List<String> = listOfNotNull(
+    "必須違反：${hard}件",
+    "要調整：${softSummary(breakdown)}",
+    saveStateLine(save),
+    if (hard == 0L) "作成が終わったことは、配布できることと同じではありません。配布前の確認で中身を確かめてください。" else null,
+)
+internal const val CREATION_DONE_TITLE = "勤務表の作成が終わりました"
+
+/** 適用後の「今回の問題」の状態（解消／減少／残存）。 */
+internal fun appliedStatusWord(e: CountEffect): String = when { e.gapAfter == 0 -> "解消"; e.gapAfter < e.gapBefore -> "減少"; else -> "残存" }
+
+/** 確認の画面の「対応する人」「確認する時期」（担当者名・期限のデータは無い＝未設定と書く）。 */
+internal val CHANGE_DUTY_LINES = listOf("対応する人：勤務表の作成担当者（担当者名は未設定）", "確認する時期：変更を適用する前（期限は未設定）")
+
+/** 相談事項に登録しても、連絡や了承の記録にはならない（記録だけ）。 */
+internal const val CONSULT_NOT_CONTACT_NOTE = "相談事項に登録しても、本人への連絡や了承済みにはなりません。"

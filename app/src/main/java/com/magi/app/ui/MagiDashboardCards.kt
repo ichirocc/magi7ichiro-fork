@@ -318,7 +318,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                     Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     p.countNotes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
                 }
-                Text("評価結果", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("判断に必要な情報", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 p.newHard?.let { Text("・新たな必須違反：" + (it.joinToString("、").ifEmpty { "なし" }), style = MaterialTheme.typography.bodySmall) }
                 val (wishLine, consultLine) = previewWishLines(p.rows)
                 Text("・$wishLine", style = MaterialTheme.typography.bodySmall)
@@ -326,7 +326,8 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 Text("・$consultLine", style = MaterialTheme.typography.bodySmall)
                 Text("適用の直前に最新の勤務表でもう一度検査し、必須違反が減らない・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                Text(CHANGE_DUTY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                CHANGE_DUTY_LINES.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                Text(CONSULT_NOT_CONTACT_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
         // 第 2 の操作と「やめる」も主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。dismiss の枠に分けると横に入り切らず重なった。
@@ -334,10 +335,36 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DialogConfirmButton(applyCountButton(p.suggestion.ops.size), onClick = onApply)
                 ConsultButton(consulted, Modifier, onClick = onConsult)
-                DialogDismissButton(onClick = onDismiss, text = if (p.fromList) BACK_TO_FIXES_BUTTON else KEEP_CURRENT_BUTTON)
+                if (p.fromList) DialogDismissButton(onClick = onDismiss, text = BACK_TO_FIXES_BUTTON)
+                DialogDismissButton(onClick = onDismiss, text = KEEP_CURRENT_BUTTON)
             }
         },
     )
+}
+
+/**
+ * 自動作成の結果（2026-10-14 利用者レビュー「どこまで自動で進み、どこで担当者が判断するか」）。作成が終わったことと配布できることを分け、
+ * 必須違反・要調整（族ごとの単位）・保存の状態と、次に確認する問題を 1 枚に。押した先は担当者の判断（変更案を見る・ほかの問題・配布前の確認）。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CreationResultCard(ui: UiState, nextProblem: String?, onNext: () -> Unit, onOthers: () -> Unit, onPreDist: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(CREATION_DONE_TITLE, style = MaterialTheme.typography.titleMedium)
+            creationResultLines(ui.bestHard, ui.breakdown, ui.saveState).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            nextProblem?.let {
+                Text("次に確認する問題", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (nextProblem != null) Button(onClick = onNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("この問題の変更案を見る") }
+                OutlinedButton(onClick = onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほかの問題を見る") }
+                OutlinedButton(onClick = onPreDist, modifier = Modifier.heightIn(min = 48.dp)) { Text("配布前の確認") }
+            }
+        }
+    }
 }
 
 /** 「相談事項に登録」。積んだあとは「相談中」の札＝結果を形で返す（シートやダイアログの下では Snackbar が見えない。
@@ -618,7 +645,7 @@ internal fun OperatorNextActionCard(
             bigColors = cs.onPrimaryContainer to cs.primaryContainer)
         ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
-            if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当外の希望が ${ui.impossibleWishCount} 件あります。" else "③ 必須条件を満たしました。中身を確認して配ってください。",
+            if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当外の希望が ${ui.impossibleWishCount} 件あります。" else "③ 必須違反はありません。配布前の確認で中身を確かめてから配ってください。",
             "配布前確認", onPreDist, true, "中身を見る", onSchedule,
             body = ui.runSummary)
         infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
