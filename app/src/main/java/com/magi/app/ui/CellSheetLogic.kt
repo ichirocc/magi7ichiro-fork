@@ -539,6 +539,8 @@ internal fun peekRecommendation(r: RelaxTrial.Result?, i: Int, j: Int): Int? =
 /** 1 つのセルに重なった問題の見出し（違反セルの半自動修正仕様 §3-2・§5、3.665.0）。2 件以上のときだけ。 */
 internal const val ADDRESS_CHECKING_TEXT = "案ごとに、このセルの問題が解消するか確認しています…"
 
+internal const val SAVE_RETRY_BUTTON = "もう一度保存する"
+
 internal const val REVIEW_CHECKING_TEXT = "変更後の影響を確認しています…"
 
 internal const val PICK_PROBLEM_FIRST_NOTE = "問題を選ぶと、その問題がこのセルで解消する変更案を探します。"
@@ -700,8 +702,10 @@ internal fun otherFixNote(label: String, t: FixTarget): String =
 internal fun thisFixHeading(label: String, t: FixTarget): String = "${label}を${if (t.under) "増やす" else "減らす"}案"
 
 /** 対象を減らす案が無いとき（人員の問題）。 */
-internal fun noNeedFixLine(label: String, t: FixTarget): String =
-    "${label}の${t.gapWord}を減らす案は、今回の検索では見つかりませんでした。" +
+internal fun noNeedFixLine(label: String, t: FixTarget, timedOut: Boolean = false): String =
+    // 時間切れは「案が無い」と分けて言う（統合仕様 INV-08＝探索不足と案なしを混同しない）。
+    if (timedOut) "${label}の${t.gapWord}を減らす案は、制限時間内には見つかりませんでした。もう一度探すと続きを探せます。"
+    else "${label}の${t.gapWord}を減らす案は、今回の検索では見つかりませんでした。" +
         if (t.under) "担当できる職員と、その日の希望・固定勤務をご確認ください。" else "その日に入っている職員の希望・固定勤務をご確認ください。"
 
 /** 回数の過不足の要点（集計セルの詳細）。「▼4」だけでは今の回数か不足数か分からない＝現在・基準・差を言葉で。 */
@@ -811,7 +815,7 @@ internal fun remainingSameShift(
 
 /** 自動保存の状態の 1 行（適用後の案内）。 */
 internal fun saveStateLine(s: SaveState): String = "保存：" + when (s) {
-    SaveState.Saved -> "完了"; SaveState.Saving -> "保存中"; SaveState.Failed -> "失敗（設定タブの「データ」でご確認ください）"; SaveState.Dirty -> "未保存（まもなく保存します）"
+    SaveState.Saved -> "完了"; SaveState.Saving -> "保存中"; SaveState.Failed -> "失敗（「$SAVE_RETRY_BUTTON」で保存し直してください）"; SaveState.Dirty -> "未保存（まもなく保存します）"
 }
 
 /** 勤務の人員のシート（集計の「計（期間）」）で、過不足のある日が 2 日以上のときの問い。 */

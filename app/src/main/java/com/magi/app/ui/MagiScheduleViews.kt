@@ -2191,7 +2191,8 @@ internal fun FixSearchPanel(
                 // この依頼の画面で当てた手の結果（今の盤面がその手の直後のときだけ）。案は今の勤務表で探し直したもの＝古い案は使わない。
                 ui.appliedFix?.takeIf { it.focusKey == focus.key && it.after == ui.schedule && !compact }?.let { a ->
                     val t = target ?: a.target
-                    AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label, onUndo = { onEvent(MagiEvent.Board.Undo) }, onTour = nav.onTour?.let { go -> { onApplied(); go() } })
+                    AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label, onUndo = { onEvent(MagiEvent.Board.Undo) }, onTour = nav.onTour?.let { go -> { onApplied(); go() } },
+                        onRetrySave = { onEvent(MagiEvent.Io.SaveNow) })
                 }
                 when {
                     addressPending && shown.isNotEmpty() -> Text(ADDRESS_CHECKING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2223,7 +2224,8 @@ internal fun FixSearchPanel(
 /** 「変更を反映しました」: 見ている問題の結果、ほかの枠の今の人数、保存、残る問題。 */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String, onUndo: () -> Unit, onTour: (() -> Unit)? = null) {
+private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String, onUndo: () -> Unit, onTour: (() -> Unit)? = null,
+                          onRetrySave: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     var showChanges by remember(a) { mutableStateOf(false) }
     Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
@@ -2237,6 +2239,8 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
                 chainFixPreview(com.magi.app.v6.FixSuggestion(com.magi.app.v6.FixKind.CHANGE_MULTI, a.ops, a.label, 0, 0, emptyList()),
                     Array(a.before.size) { a.before[it].toIntArray() }, ui.staffNames, ui.shiftSymbols, ui.startDate).changes
             }.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer) }
+            // 保存に失敗している間は、追加の変更より保存のやり直しを先に（統合仕様 §11）。
+            if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (onTour != null) TextButton(onClick = onTour, modifier = Modifier.heightIn(min = 48.dp)) { Text("残っている問題を見る") }
                 TextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "変更内容を閉じる" else "今回の変更内容を見る") }
@@ -2257,7 +2261,7 @@ private fun NoFixBlock(
     val why = remember(ui.schedule, ui.wishes, focus.key, cv, ui.fixTimedOut) {
         noFixReasons(ui, focus, cv?.let { c -> c::staffCellLimits }, cv?.let { c -> c::needCellLimits })
     }
-    val lines = if (target != null && target.staff == null) listOf(noNeedFixLine(label, target), NO_FIX_SCOPE) else why.lines
+    val lines = if (target != null && target.staff == null) listOf(noNeedFixLine(label, target, ui.fixTimedOut), NO_FIX_SCOPE) else why.lines
     val body = lines.filter { it != NO_FIX_SCOPE }
     if (compact) { Text(body.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis); return }
     body.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }

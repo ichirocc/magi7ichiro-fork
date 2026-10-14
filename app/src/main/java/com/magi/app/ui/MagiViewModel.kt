@@ -2810,14 +2810,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             else it.copy(messageIsError = false, consults = next, message = CONSULT_ADDED)
         }
     }
+    // 相談は番号でなく項目そのもので指す（描いたあとに一覧が変わっても別の項目を操作しない＝統合仕様 DISP-5）。見つからなければ何もしない。
     /** 相談中⇄保留（どちらも未解決＝違反は減らさない）。 */
-    fun toggleConsultHold(index: Int) {
-        _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.mapIndexed { j, c -> if (j == index) c.copy(held = !c.held) else c }) }
+    fun toggleConsultHold(item: ConsultItem) {
+        _ui.update { val l = it.consults; val k = l.indexOf(item); if (k < 0) it else it.copy(consults = l.mapIndexed { j, c -> if (j == k) c.copy(held = !c.held) else c }) }
     }
     /** 相談の回答を 回答待ち→了承→不可 と切り替える（記録だけ＝勤務表は変えない）。案が変わって無効になっていた回答は回答待ちから数え直す。 */
-    fun cycleConsultAnswer(index: Int) {
-        _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.mapIndexed { j, c ->
-            if (j == index) c.copy(answer = consultAnswer(c).next()) else c }) }
+    fun cycleConsultAnswer(item: ConsultItem) {
+        _ui.update { val l = it.consults; val k = l.indexOf(item); if (k < 0) it else it.copy(consults = l.mapIndexed { j, c ->
+            if (j == k) c.copy(answer = consultAnswer(c).next()) else c }) }
     }
 
     /** いま有効な回答（[consultAnswerOf]＝入れ替えの相談は案が変わると回答待ち）。 */
@@ -2826,9 +2827,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if (sched == null || st == null) c.answer else consultAnswerOf(c, boardKey(sched), stateKey(st))
     }
 
-    fun removeConsult(index: Int) {
-        val item = _ui.value.consults.getOrNull(index) ?: return
-        _ui.update { val l = it.consults; if (index !in l.indices) it else it.copy(consults = l.filterIndexed { j, _ -> j != index }) }
+    fun removeConsult(item: ConsultItem) {
+        if (item !in _ui.value.consults) return
+        _ui.update { val l = it.consults; val k = l.indexOf(item); if (k < 0) it else it.copy(consults = l.filterIndexed { j, _ -> j != k }) }
         logOp("I", "相談中を済にしました: ${item.subject}")
         postOpNotice("済にしました（${item.subject}）", undoable = false)
     }

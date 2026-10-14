@@ -348,7 +348,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun CreationResultCard(ui: UiState, nextProblem: String?, onNext: () -> Unit, onOthers: () -> Unit, onPreDist: () -> Unit) {
+internal fun CreationResultCard(ui: UiState, nextProblem: String?, onNext: () -> Unit, onOthers: () -> Unit, onPreDist: () -> Unit, onRetrySave: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -358,6 +358,7 @@ internal fun CreationResultCard(ui: UiState, nextProblem: String?, onNext: () ->
                 Text("次に確認する問題", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 Text(it, style = MaterialTheme.typography.bodyMedium)
             }
+            if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // 主操作はすぐ下の思考誘導カードの大ボタン＝ここは外枠だけ（主操作は画面に 1 つ、統合仕様 INV-09）。
                 if (nextProblem != null) OutlinedButton(onClick = onNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("この問題の変更案を見る") }
@@ -381,8 +382,8 @@ internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, he
 
 /** [3.645.0/仕様 5.3] 相談してから決める判断の一覧（ホーム）。対象と検討内容を後から再確認できる。出力は止めない。 */
 @Composable
-internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (Int) -> Unit, onResumeChain: (ConsultItem) -> Unit = {}, onToggleHold: (Int) -> Unit = {},
-                         answerOf: (ConsultItem) -> ConsultAnswer = { it.answer }, onCycleAnswer: (Int) -> Unit = {}) {
+internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: (ConsultItem) -> Unit, onResumeChain: (ConsultItem) -> Unit = {}, onToggleHold: (ConsultItem) -> Unit = {},
+                         answerOf: (ConsultItem) -> ConsultAnswer = { it.answer }, onCycleAnswer: (ConsultItem) -> Unit = {}) {
     if (ui.consults.isEmpty()) return
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
@@ -391,7 +392,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
             Text("相談中（${ui.consults.size - heldN}件）" + (if (heldN > 0) "・保留（${heldN}件）" else ""), style = MaterialTheme.typography.titleMedium)
             Text("関係者に確認してから決める項目です。確認できたら「済」を押してください（アプリを閉じると消えます。書き出しは止めません）。",
                 style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-            ui.consults.forEachIndexed { idx, c ->
+            ui.consults.forEach { c ->
                 // 対象は職員 ID（無ければ氏名）と実日付で今のデータに引き直す（月を移した・職員を消した・並べ替えたあとに別のセルを開かない）。
                 val cell = if (c.chain != null) null else consultCell(c, ui.startDate, ui.staffNames, ui.days, ui.staffIds)
                 val chainOk = c.chain != null && consultChainResumable(c.chain, ui.startDate, ui.shiftSymbols, ui.days)
@@ -402,7 +403,7 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                         Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
                         // 回答は記録だけ（了承でも違反は減らさない）。押すたびに 回答待ち→了承→不可。
-                        TextButton(onClick = { onCycleAnswer(idx) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        TextButton(onClick = { onCycleAnswer(c) }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text(consultAnswerLine(c, answerOf(c)), style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -411,8 +412,8 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                     } else if (chainOk) {
                         TextButton(onClick = { onResumeChain(c) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_RESUME) }
                     }
-                    TextButton(onClick = { onToggleHold(idx) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (c.held) "相談に戻す" else CONSULT_HOLD_BUTTON) }
-                    DeleteRowButton(onClick = { onRemove(idx) }, text = "済")
+                    TextButton(onClick = { onToggleHold(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (c.held) "相談に戻す" else CONSULT_HOLD_BUTTON) }
+                    DeleteRowButton(onClick = { onRemove(c) }, text = "済")
                 }
             }
         }
