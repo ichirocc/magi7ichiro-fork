@@ -15,7 +15,7 @@ data class ChainFixPreview(
     val purpose: String? = null,
     /** 対象の数の変化（例「A4：7回 → 9回」「適用後も、下限まで6回不足」）。 */
     val effect: List<String> = emptyList(),
-    /** 案の一覧から開いた＝閉じるボタンは「案の一覧に戻る」。 */
+    /** 案の一覧から開いた＝閉じるボタンは「別案を見る」と「今は変更しない」。 */
     val fromList: Boolean = false,
     /** 変わるセル（職員ごとに日付・変更前・変更後の表にする）。 */
     val rows: List<ChangeRow> = emptyList(),

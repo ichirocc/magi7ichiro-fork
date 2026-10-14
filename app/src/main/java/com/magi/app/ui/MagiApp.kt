@@ -459,11 +459,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         EditReturn("${ui.staffNames.getOrNull(c.first) ?: "#${c.first}"} ${DayText.short(ui.startDate, c.second)} のセル", EditReturn.CELL, c)
     }
     // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員・日／設定＝年間マスターの節／必要人数＝月次条件のその日）。
+    var tourRequest by remember { mutableStateOf(false) }   // 変更を反映したあとの「残っている問題を見る」（巡回は下で定義する goTourItem で始める）
     val fixNav = remember { FixNav(
         onWishes = { s, d -> editReturn = cellReturn(); editingCell = null; if (s != null) deepLinkWishStaff = s; if (d != null) deepLinkDay = d; editScope = 0; tab = 2 },
         onSettings = { sec -> editReturn = cellReturn(); editingCell = null; editScope = 2; deepLinkEditSection = sec; tab = 2 },
         onNeed = { k, d -> editReturn = cellReturn(); editingCell = null; deepLinkNeedShift = k; deepLinkDay = d; editScope = 0; tab = 2 },
         onCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 },
+        onTour = { tourRequest = true },
     ) }
     // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。種類が無いときも月次条件の先頭（前回の区分のままにしない）。
     val goEditForIssue: (com.magi.app.v6.IssueKind?) -> Unit = { kind ->
@@ -515,6 +517,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             focusRange = Triple(it.staff, it.days.first(), it.days.last())
         }
     }
+    LaunchedEffect(tourRequest) { if (tourRequest) { tourRequest = false; if (tourItems.isNotEmpty()) goTourItem(0) else tab = 3 } }
     // [E7/3.459.0] 違反 種別フィルタ。旧: 勤務表タブ(1)のブロック内だけの局所状態だったが、分析タブの
     //   [3.471.0] 分析タブの統合カードは撤去したので、いまの共有先は勤務表タブのグリッド/集計のみ。初期=全ON。
     //   bitmask(Int)で rememberSaveable 保存（回転/プロセス復元で保持）。表示のみ・スコアリング不変。
@@ -641,6 +644,14 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             onGoEdit = { tab = 2; editScope = 2; showImportGuidance = false },
                             onDismiss = { showImportGuidance = false },
                         )
+                    }
+                    // 自動作成の結果と次に確認する問題（作成の完了＝配布できる、とは言わない）。人員不足は日と勤務、ほかは巡回の先頭。
+                    if (ui.hasResult && ui.engineRan && !ui.running) {
+                        val covU = ui.coverageDiag?.shortfalls?.firstOrNull()
+                        CreationResultCard(ui,
+                            nextProblem = covU?.let { "${it.dayLabel}の人員不足" } ?: tourItems.firstOrNull()?.heading,
+                            onNext = { if (covU != null) guidedFix = true else goTourItem(0) },
+                            onOthers = { tab = 3 }, onPreDist = { preDist = true })
                     }
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     OperatorNextActionCard(

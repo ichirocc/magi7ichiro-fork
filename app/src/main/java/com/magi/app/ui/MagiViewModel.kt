@@ -1543,16 +1543,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return if (n > 0) "『${hardFamilyJp(top)}』（${n}件）" else null
     }
 
-    /** 5 つの入口（フッター・ホーム・イベント）が通る。何度つくっても残る／再作成すると外れる項目があればシートを出して止まる。 */
+    /**
+     * 5 つの入口（フッター・ホーム・イベント）が通る。作成の前に「勤務表を作成する」シート（自動で行うこと・保持するもの・時間と、
+     * 何度つくっても残る／再作成すると外れる項目）を出して止まる（2026-10-14 利用者レビュー「自動作成と半自動修正を分ける」）。
+     * 同じデータ（指紋）で一度「勤務表を作成」を押したら、次からは出さない。
+     */
     fun runV6FullOptimize() {
         val st = state; val sched = currentSchedule
         if (st != null && sched != null && !_ui.value.running && PreRunCheck.fingerprint(st, sched) != preRunAckKey) {
             val sum = PreRunCheck.build(st, sched)
-            if (sum.needsSheet) {
-                _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }
-                logOp("I", "つくる前の確認 表示 (消えない${sum.floorCount}件, 外れる${sum.rerunClears.size}件)")
-                return
-            }
+            _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }
+            logOp("I", "勤務表を作成する 表示 (消えない${sum.floorCount}件, 外れる${sum.rerunClears.size}件)")
+            return
         }
         startFullOptimize("勤務表の作成", null)
     }
@@ -1560,13 +1562,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 中断された実行の再開はシートを通さない（利用者決定 2026-09-28）。 */
     fun resumeInterruptedRun() = startFullOptimize("勤務表の作成", null)
 
-    /** 「このままつくる」。同じ指紋のあいだは同じ理由で止めない。 */
+    /** 「勤務表を作成」。同じ指紋のあいだは同じ理由で止めない。 */
     fun proceedPreRun() {
         val st = state ?: return
         val sched = currentSchedule ?: return
         preRunAckKey = PreRunCheck.fingerprint(st, sched)
         _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
-        logOp("I", "つくる前の確認 このままつくる")
+        logOp("I", "勤務表を作成する 勤務表を作成")
         startFullOptimize("勤務表の作成", null, hintShown = true)
     }
 

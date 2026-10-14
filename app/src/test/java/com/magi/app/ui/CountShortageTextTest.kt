@@ -169,7 +169,7 @@ class CountShortageTextTest {
         val a = AppliedFix("k", "x", ops, schedule, after, t, 3, 2, 10, 11)
         val need = { k: Int, _: Int -> if (k == 1) 2 to 2 else null }
         val lines = appliedLines(u, a, t, "10/3のA", need)
-        assertEquals("10/3のA：1人 → 2人（必要 2人を満たします）", lines[0])
+        assertEquals("今回の問題：解消（10/3のA：1人 → 2人、必要 2人を満たします）", lines[0])
         assertEquals("10/3の休：1人 → 0人", lines[1])
         assertEquals("必須違反（勤務表全体）：3件 → 2件", lines[2])
         assertEquals("要調整（勤務表全体）：10件 → 11件", lines[3])
@@ -186,5 +186,23 @@ class CountShortageTextTest {
         assertEquals(FixTarget(null, 1, 2, 2, true, "必要人数"), panelTarget(u, cv, FixFocus(null, 1, 2)))
         assertNull(panelTarget(u, cv, FixFocus(0, null, 2)))   // セルのシート（勤務なし）は対象なし
         assertNull(panelTarget(u, cv, FixFocus(null, 1, 2, exceptStaff = 0)))
+    }
+
+    /** 自動と担当者の分担（2026-10-14 利用者レビュー）: 作成前に自動で行うこと・保持するもの、作成後は「完了＝配布可」と言わない。 */
+    @Test fun autoAndOperatorSplitTexts() {
+        assertEquals(listOf("対象期間：10/1〜10/31", "職員：12人", "登録条件：つくる前に直す項目はありません",
+            "今回、自動で行うこと：勤務表の生成、最適化、仕上げ、評価", "保持するもの：登録条件と手動固定（手動固定 3件）", "探索時間：60秒／仕上げ用の追加枠：20秒"),
+            preRunPlanLines("2026-10-01", 31, 12, false, 3, 60, 20))
+        assertEquals("登録条件：確認が必要な項目があります（下の一覧）", preRunPlanLines("2026-10-01", 31, 12, true, 0, 60, 20)[2])
+        assertEquals("保持するもの：登録条件と手動固定", preRunPlanLines("2026-10-01", 31, 12, true, 0, 60, 20)[4])
+        assertEquals("期間の制約 2件・曜日の偏り 12pt", softSummary(mapOf("c1" to 2, "weekly" to 12, "c3n" to 1)))
+        assertEquals("なし", softSummary(mapOf("covU" to 1)))
+        assertEquals(listOf("必須違反：0件", "要調整：なし", "保存：完了", "作成が終わったことは、配布できることと同じではありません。配布前の確認で中身を確かめてください。"),
+            creationResultLines(0, emptyMap(), SaveState.Saved))
+        assertEquals(3, creationResultLines(2, mapOf("c1" to 1), SaveState.Failed).size)
+        assertEquals("解消", appliedStatusWord(CountEffect(0, 1, 1, true, "人")))
+        assertEquals("減少", appliedStatusWord(CountEffect(7, 9, 15, true)))
+        assertEquals("残存", appliedStatusWord(CountEffect(7, 7, 15, true)))
+        assertEquals("別案を見る", BACK_TO_FIXES_BUTTON)
     }
 }
