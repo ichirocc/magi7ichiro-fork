@@ -192,6 +192,10 @@ object PolishGate {
     /** 玉突き連鎖 1 段あたりの上限ミリ秒（実時間モード）。残り時間の 1/4 との小さい方を使う。値は HF77 の明示指示で決める。 */
     @Volatile var ejectionChainMaxMillis: Long = CHAIN_RESERVE_SEC * 1000L   // 3.659.0 利用者指示: 6 秒→10 秒
 
+    /** [測定中] 玉突きパイプラインの深い探索の上限を「締切までの残り」まで広げる（探索が早く止まって余った時間を後半で使う）。
+     *  上限より残りが短ければ従来どおり。既定 false（2026-10-14 利用者「60秒で悪化するので、その分を後半処理で取り返します」→ 測って採否）。 */
+    @Volatile var ejectionUseLeftover: Boolean = false
+
     /** [測定中] 必須の違反だけを起点にした玉突き連鎖を後処理の前段（HF66 の直後）で試す。既定 **false**（2026-10-06）。 */
     @Volatile var hardEjectionChainEarly: Boolean = false
 
@@ -322,7 +326,7 @@ object PolishGate {
         "wishConflictFloorMode" to wishConflictFloorMode.name,
         "c1EjectionChain" to c1EjectionChain, "allFamilyEjectionChain" to allFamilyEjectionChain, "ejectionPipelineFocus" to ejectionPipelineFocus.name, "ejectionPipelineAfterRepair" to ejectionPipelineAfterRepair,
         "ejectionPipelineRounds" to ejectionPipelineRounds, "ejectionPipelineHardLeg" to ejectionPipelineHardLeg,
-        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "hardEjectionChainEarly" to hardEjectionChainEarly, "allEjectionChainEarly" to allEjectionChainEarly, "allEjectionChainFinal" to allEjectionChainFinal, "hardEjectionChainRetry" to hardEjectionChainRetry, "allEjectionChainAfterRepair" to allEjectionChainAfterRepair, "normalStallFraction" to normalStallFraction,
+        "ejectionChainSwapMoves" to ejectionChainSwapMoves, "ejectionChainMaxMillis" to ejectionChainMaxMillis, "ejectionHoleFocus" to C1EjectionChainPolish.defaultHoleFocus, "ejectionHoleSoftOnly" to C1EjectionChainPolish.defaultHoleSoftOnly, "hardEjectionChainEarly" to hardEjectionChainEarly, "allEjectionChainEarly" to allEjectionChainEarly, "allEjectionChainFinal" to allEjectionChainFinal, "hardEjectionChainRetry" to hardEjectionChainRetry, "allEjectionChainAfterRepair" to allEjectionChainAfterRepair, "normalStallFraction" to normalStallFraction, "ejectionUseLeftover" to ejectionUseLeftover,
         "combineExhaustPairs" to combineExhaustPairs, "lnsAdaptive" to lnsAdaptive, "personSwapKick" to personSwapKick,
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
@@ -343,6 +347,7 @@ object PolishGate {
         b("ejectionChainSwapMoves") { ejectionChainSwapMoves = it }; b("hardEjectionChainEarly") { hardEjectionChainEarly = it }; b("allEjectionChainEarly") { allEjectionChainEarly = it }; b("allEjectionChainFinal") { allEjectionChainFinal = it }; b("hardEjectionChainRetry") { hardEjectionChainRetry = it }; b("allEjectionChainAfterRepair") { allEjectionChainAfterRepair = it }
         (m["normalStallFraction"] as? Double)?.let { normalStallFraction = it }
         (m["ejectionChainMaxMillis"] as? Long)?.let { ejectionChainMaxMillis = it }
+        b("ejectionUseLeftover") { ejectionUseLeftover = it }
         b("ejectionHoleFocus") { C1EjectionChainPolish.defaultHoleFocus = it }; b("ejectionHoleSoftOnly") { C1EjectionChainPolish.defaultHoleSoftOnly = it }
         b("combineExhaustPairs") { combineExhaustPairs = it }; b("lnsAdaptive") { lnsAdaptive = it }; b("personSwapKick") { personSwapKick = it }
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
@@ -741,7 +746,8 @@ object V6HotfixPasses {
         val pipelineOn = pipelineFocus != EjectionChainPipeline.Focus.OFF
         val pipelineAtEnd = PolishGate.ejectionPipelineAfterRepair
         fun runPipeline(work: Array<IntArray>): CyclicSwapResult = EjectionChainPipeline.apply(state, work,
-            EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4),
+            EjectionChainPipeline.Config(focus = pipelineFocus, deterministic = params.deterministic, deepEvaluations = params.c1LnsMaxEvaluations.toLong() * 4,
+                deepMaxMillis = if (PolishGate.ejectionUseLeftover) maxOf(PolishGate.ejectionChainMaxMillis, EngineClock.remainingMs(deadlineMs)) else PolishGate.ejectionChainMaxMillis),
             previousImproved = (chain.stageRecords.lastOrNull()?.applied ?: 0) > 0, deadlineMs = deadlineMs,
             shouldStop = shouldStop, quantitativeRangeEval = params.quantitativeRangeEval)
         val t0 = EngineClock.nowMs()
