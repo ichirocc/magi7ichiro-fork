@@ -1397,8 +1397,11 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                     text = {
                         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                            // 開いた時点でこの職員×シフト（日別は日×シフト）の直し方を探し、ここに並べる（別タブへ行かない）。
-                            FixSearchPanel(ui, cv, FixFocus(d.focus, d.shift, d.day), onEvent, nav, onApplied = { detail = null })
+                            // 開いた時点でこの職員×シフト（日別は日×シフト）の変更案を探し、ここに並べる（別タブへ行かない）。
+                            //   日別で職員を選んだら、同じ日・同じ勤務の問題のまま、その職員に絞って探す（日付を落とさない）。
+                            var person by remember(d) { mutableStateOf<Int?>(null) }
+                            person?.let { p -> Text("${ui.staffNames.getOrNull(p) ?: "#$p"}さんに絞って探しています", style = MaterialTheme.typography.labelMedium) }
+                            FixSearchPanel(ui, cv, FixFocus(person ?: d.focus, d.shift, d.day), onEvent, nav, onApplied = { detail = null })
                             // [3.492.0] データ修正の導線: 希望で固定している在勤者ごとに「希望を取り消す」。
                             //   実行中は編集不可（他の編集入口と同じ）。取り消しは Undo 可（applyStructure 経由）。
                             val dj = d.day
@@ -1419,8 +1422,9 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                                 val movable = d.assigned.filterNot { it in d.pinned }
                                 if (movable.isNotEmpty()) Spacer(Modifier.height(4.dp))
                                 for (i in movable) {
-                                    OutlinedButton(
-                                        onClick = { detail = null; onFix(i, sh) },
+                                    if (person == i) Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さん（選択中）", style = MaterialTheme.typography.labelMedium)
+                                    else OutlinedButton(
+                                        onClick = { person = i },
                                         enabled = !ui.running,
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                                     ) { Text("${ui.staffNames.getOrNull(i) ?: "#$i"}さんの勤務変更案を探す") }
@@ -1875,10 +1879,11 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == m.shift) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
                         if (picked == m.shift) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        else TextButton(onClick = { picked = m.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text("変更案を見る") }
+                        else TextButton(onClick = { picked = m.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (m.under) "この不足の変更案を見る" else "この過剰の変更案を見る") }
                     }
                 }
             }
+            if (marks.size >= 2) OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("必要人数の設定を見る") }
             picked?.let { k -> FixSearchPanel(ui, cv, FixFocus(null, k, j), onEvent, fixNav, onApplied = { daySheet = null }) }
         }
     }
@@ -2069,10 +2074,12 @@ internal fun FixSearchPanel(
     compact: Boolean = false,   // セル編集シートの上段: 手は 1 件・理由は 2 行まで
     settingsLabel: String? = null,   // 手が無いときの設定への行き先の名（null＝節ごとの名 settingsLabelFor）
     family: String? = null,   // セルのシートで選んだ問題（族）。その族を減らす案だけを出す（null＝すべて）
+    addresses: ((com.magi.app.v6.FixSuggestion) -> Boolean)? = null,   // この場所の問題を解消する案か（セルのシート。family より優先）
+    addressLabel: String? = null,   // その問題の名（「このセルの禁止の並び」）
 ) {
     val cs = MaterialTheme.colorScheme
-    // 日は「他の人で補う」と人員の印（職員なし）のときだけ渡す（セルのシートの日は理由の読み取りにだけ使う）。
-    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null || focus.staff == null }, quick = compact)) }
+    // 日は「他の人で補う」・人員の印・日別の職員に絞った探索で渡す（セルのシートは勤務が無い＝日は理由の読み取りにだけ使う）。
+    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null || focus.staff == null || focus.shift != null }, quick = compact)) }
     // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
     LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) find() }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
@@ -2084,7 +2091,13 @@ internal fun FixSearchPanel(
             FixPanelState.NOT_STARTED -> Text("まだ探していません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             FixPanelState.RUNNING -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 androidx.compose.material3.CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text(fixSearchingText(compact), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                val t = panelTarget(ui, cv, focus)
+                Column(Modifier.weight(1f)) {
+                    // 見ている問題があれば、何を減らす案を探しているかを言う（個人ごとの検索ボタンは並べない）。
+                    t?.let { targetSearchingLines(it, fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate)) }
+                        ?.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    Text(fixSearchingText(compact), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
                 TextButton(onClick = { onEvent(MagiEvent.Session.CancelFixSearch) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CANCEL_FIX_SEARCH_BUTTON) }
             }
             FixPanelState.FAILED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -2098,10 +2111,11 @@ internal fun FixSearchPanel(
                 val sym = focus.shift?.let { ui.shiftSymbols.getOrNull(it) } ?: ""
                 val label = target?.let { fixTargetLabel(it, sym, ui.startDate) } ?: sym
                 val snap = remember(ui.schedule) { Array(ui.schedule.size) { ui.schedule[it].toIntArray() } }
-                val shown = ui.fixSuggestions.filter { fixAddresses(it, family) }
+                val pred: ((com.magi.app.v6.FixSuggestion) -> Boolean)? = addresses ?: family?.let { f -> { s: com.magi.app.v6.FixSuggestion -> fixAddresses(s, f) } }
+                val shown = ui.fixSuggestions
                 val effects = target?.let { t -> shown.associateWith { t.effect(ui.schedule, it.ops) } }
-                val fixing = effects?.let { e -> shown.filter { e[it]!!.fixes } } ?: shown
-                val others = effects?.let { e -> shown.filter { !e[it]!!.fixes } }.orEmpty()
+                val fixing = when { effects != null -> shown.filter { effects[it]!!.fixes }; pred != null -> shown.filter(pred); else -> shown }
+                val others = if (effects != null || pred != null) shown.filterNot { it in fixing } else emptyList()
                 val purpose = target?.let { fixTargetPurpose(it, focus.staff?.let { i -> ui.staffNames.getOrNull(i) }, label) }
                     ?: family?.let { "選んだ問題（${breakdownLabels[it] ?: it}）を減らす" }
                 @Composable fun card(n: Int, s: com.magi.app.v6.FixSuggestion) {
@@ -2116,8 +2130,10 @@ internal fun FixSearchPanel(
                                 Text("$label：${e.countLine()}　${e.gapLine()}", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 Text(e.afterNote(target.basis), style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 remain.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                                Text(changeSizeLine(s.ops), style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             } else {
                                 Text("案$n：${s.label}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
+                                if (addressLabel != null && addresses?.invoke(s) == true) Text("$addressLabel：解消します", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 family?.let { familyEffectLine(s, it, breakdownLabels[it] ?: it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer) }
                             }
                             if (!compact) {
@@ -2159,24 +2175,24 @@ internal fun FixSearchPanel(
                 // この依頼の画面で当てた手の結果（今の盤面がその手の直後のときだけ）。案は今の勤務表で探し直したもの＝古い案は使わない。
                 ui.appliedFix?.takeIf { it.focusKey == focus.key && it.after == ui.schedule && !compact }?.let { a ->
                     val t = target ?: a.target
-                    AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label)
+                    AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label) { onEvent(MagiEvent.Board.Undo) }
                 }
                 when {
-                    family != null && target == null && ui.fixSuggestions.isNotEmpty() && shown.isEmpty() ->
-                        Text(noFixForProblemLine(breakdownLabels[family] ?: family), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    pred != null && target == null && shown.isNotEmpty() && fixing.isEmpty() ->
+                        Text(noFixForProblemLine(addressLabel ?: family?.let { breakdownLabels[it] ?: it } ?: "このセルの問題"), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     fixing.isNotEmpty() -> {
                         if (target != null && !compact) Text(thisFixHeading(label, target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         fixing.take(limit).forEachIndexed { n, s -> card(n + 1, s) }
                     }
                     else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied)
                 }
-                if (others.isNotEmpty() && !compact && target != null) {
+                if (others.isNotEmpty() && !compact && (target != null || pred != null)) {
                     var open by remember(focus.key) { mutableStateOf(false) }
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (open) "閉じる" else "開く") { open = !open },
                         verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(otherFixHeading(others.size), style = MaterialTheme.typography.titleSmall)
-                            Text(otherFixNote(label, target), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            Text(target?.let { otherFixNote(label, it) } ?: "${addressLabel ?: "選んだ問題"}は解消しません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
                     }
@@ -2189,7 +2205,7 @@ internal fun FixSearchPanel(
 
 /** 「変更を反映しました」: 見ている問題の結果、ほかの枠の今の人数、保存、残る問題。 */
 @Composable
-private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String) {
+private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String, onUndo: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2197,6 +2213,8 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
             appliedLines(ui, a, target, label, cv?.let { c -> c::needCellLimits }).forEach {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer)
             }
+            // 当てた直後だけ（今の盤面がその手の直後）に出る＝元に戻すの先頭はこの手。
+            if (ui.canUndo) TextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
         }
     }
 }
@@ -2231,6 +2249,10 @@ private fun NoFixBlock(
     Text("設定を確認する", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (why.wishRelated) OutlinedButton(onClick = { onApplied(); nav.onWishes(focus.staff, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+        if (target != null && target.staff == null && target.under) {
+            OutlinedButton(onClick = { onApplied(); nav.onSettings("yr_ws1") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("担当できる職員を見る") }
+            OutlinedButton(onClick = { onApplied(); nav.onWishes(null, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("当日の希望・固定勤務を見る") }
+        }
         // 人員不足・過剰の印は、その日のそのシフトの必要人数（月次条件）へ。群のレンジは④のまま。
         if (coverageFocus(ui, focus)) OutlinedButton(onClick = { onApplied(); nav.onNeed(focus.shift!!, focus.day!!) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("必要人数を見直す") }
         else OutlinedButton(onClick = { onApplied(); nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabel ?: settingsLabelFor(why.settingsSection)) }

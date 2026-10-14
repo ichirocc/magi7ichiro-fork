@@ -318,9 +318,12 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                     Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     p.countNotes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
                 }
-                Text("確認が必要なこと", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                Text("評価結果", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                p.newHard?.let { Text("・新たな必須違反：" + (it.joinToString("、").ifEmpty { "なし" }), style = MaterialTheme.typography.bodySmall) }
+                val (wishLine, consultLine) = previewWishLines(p.rows)
+                Text("・$wishLine", style = MaterialTheme.typography.bodySmall)
                 p.caution?.let { Text("・$it", style = MaterialTheme.typography.bodySmall) }
-                Text("・希望・前後の勤務への影響（上の表の注記）", style = MaterialTheme.typography.bodySmall)
+                Text("・$consultLine", style = MaterialTheme.typography.bodySmall)
                 Text("適用の直前に最新の勤務表でもう一度検査し、必須違反が減らない・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 Text(CHANGE_DUTY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

@@ -59,4 +59,51 @@ class CellChangeReviewTest {
         val limits = { _: Int, k: Int -> when (k) { 1 -> Triple(null, null, 6); 2 -> Triple(null, null, 5); else -> Triple(null, null, null) } }
         assertEquals(listOf("B4：現在2回／目標5回", "Cオ：現在2回／目標6回"), cellCountLines(u, 0, 2, limits))
     }
+
+    /** 選んだセルの問題が案で実際に消えるか（族の全体の件数ではなく、この場所の違反の同一性で判定する）。 */
+    @Test fun resolvesAtCellLooksAtThisPlaceOnly() {
+        val key = rep.cellFamilies.entries.first { "vio-c3n" in it.value }.key
+        val (i, j) = key.split(",").map { it.toInt() }
+        for (k in 0 until st.shiftCount) {
+            if (k == s[i][j]) continue
+            val ops = listOf(com.magi.app.v6.FixCell(i, j, k))
+            val trial = Array(s.size) { s[it].copyOf() }.also { it[i][j] = k }
+            val gone = "vio-c3n" !in UnifiedViolationChecker.check(st, trial).cellFamilies[key].orEmpty()
+            assertEquals(gone, resolvesAtCell(st, s, rep, ops, i, j, "c3n"))
+        }
+        // 別の職員の別の日だけを変える案は、このセルの問題を解消しない。
+        val other = (0 until st.staffCount).first { it != i }
+        val far = (j + 10) % st.dayCount
+        val k2 = (0 until st.shiftCount).first { it != s[other][far] }
+        val farTrial = Array(s.size) { s[it].copyOf() }.also { it[other][far] = k2 }
+        val stillHere = "vio-c3n" in UnifiedViolationChecker.check(st, farTrial).cellFamilies[key].orEmpty()
+        if (stillHere) assertEquals(false, resolvesAtCell(st, s, rep, listOf(com.magi.app.v6.FixCell(other, far, k2)), i, j, "c3n"))
+        // 問題の無いセルは解消しない（族を選ばなくても）。
+        val clean = (0 until st.staffCount).flatMap { a -> (0 until st.dayCount).map { a to it } }.first { (a, b) ->
+            rep.cellFamilies["$a,$b"].isNullOrEmpty() && rep.countFamilies["$a,${s[a][b]}"].isNullOrEmpty() && rep.needFamilies["${s[a][b]},$b"].isNullOrEmpty()
+        }
+        assertEquals(false, resolvesAtCell(st, s, rep, listOf(com.magi.app.v6.FixCell(clean.first, clean.second, s[clean.first][clean.second])), clean.first, clean.second, null))
+    }
+
+    @Test fun newHardLabelsAreTheCheckersNewKeys() {
+        val names = st.staff.map { it.name }; val syms = st.shifts.map { it.kigou }
+        val (i, j) = 0 to 0
+        for (k in 0 until st.shiftCount) {
+            val ops = listOf(com.magi.app.v6.FixCell(i, j, k))
+            val trial = Array(s.size) { s[it].copyOf() }.also { it[i][j] = k }
+            val expected = com.magi.app.v6.ViolationIdentity.newHard(rep, UnifiedViolationChecker.check(st, trial)).size
+            val got = newHardLabels(st, s, ops, names, syms)
+            assertEquals(expected, got.size)
+            assertTrue(got.all { it.startsWith("必須・") })
+        }
+    }
+
+    @Test fun previewWishAndConsultLines() {
+        val rows = listOf(ChangeRow("福澤", "11/3", "休", "Aア", "希望（休）と異なる勤務になります"), ChangeRow("金沢", "11/5", "A4", "休", "希望どおり"))
+        assertEquals("希望と異なる勤務になる：福澤さん 11/3" to "必要な相談：福澤さん（希望と異なる勤務になる日）", previewWishLines(rows))
+        assertEquals("変更する勤務に希望はありません" to "必要な相談：なし", previewWishLines(listOf(ChangeRow("a", "1", "x", "y"))))
+        assertEquals("変更箇所：2人・3セル", changeSizeLine(listOf(com.magi.app.v6.FixCell(0, 1, 1), com.magi.app.v6.FixCell(0, 2, 1), com.magi.app.v6.FixCell(3, 1, 0))))
+        val t = FixTarget(null, 1, 2, 1, true, "必要人数")
+        assertEquals(listOf("11/3のAアの不足を減らす変更案を探しています", "ほかの日や職員の変更が必要な場合は、関連する変更もまとめて確認します。"), targetSearchingLines(t, "11/3のAア"))
+    }
 }

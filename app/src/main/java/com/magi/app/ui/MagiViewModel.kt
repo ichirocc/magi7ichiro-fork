@@ -2760,12 +2760,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     /** 2 セル以上を動かす手は当てる前に一覧（だれの・どの日の・何→何）を見せる。1 セルの手はそのまま当てる（3.646.0: ホーム・分析・セルのシートも同じ）。 */
     fun previewOrApplyFix(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey) {
-        if (s.ops.size < 2) { applyFixSuggestion(s, originBoard, originState); return }
+        // 1 セルの案も当てる前に確認の画面を出す（2026-10-14 利用者レビュー「案の一覧から直接適用しない」）。
         val sched = currentSchedule ?: return
         val st = state ?: return
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
-        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes).copy(target = target)) }
+        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes)
+            .copy(target = target, newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
     }
 
     /** 案の一覧から: 1 セルの案も当てる前に確認の画面（目的・全変更・対象の数の変化）を出す（2026-10-14 利用者レビュー「見ると適用するを分ける」）。 */
@@ -2775,7 +2776,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = fixBoardKey, stateKey = fixStateKey)
         _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes)
-            .copy(target = target, purpose = purpose, effect = effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget)) }
+            .copy(target = target, purpose = purpose, effect = effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget,
+                newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
     }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
@@ -3154,7 +3156,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             relaxedBoard = false, engineRan = false,   // [3.475.0] 提案の適用は手操作扱い（局所1手のみ、フルの計算ではない）
             schedule = applied.map { it.toList() },
             fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
-            appliedFix = focusKey?.let { k -> AppliedFix(k, s.label, s.ops, sched.map { r -> r.toList() }, applied.map { r -> r.toList() }, fixTarget) },
+            appliedFix = focusKey?.let { k -> AppliedFix(k, s.label, s.ops, sched.map { r -> r.toList() }, applied.map { r -> r.toList() }, fixTarget,
+                gate.before.hard, gate.after.hard, gate.before.soft, gate.after.soft) },
             fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total) + fixResultDetail(gate.before, gate.after) +
                 (if (monthEdgeTouched(s.ops.map { it.day }, applied.firstOrNull()?.size ?: 0, maxPatternLen(st))) "$MONTH_EDGE_NOTE。" else "")),
         ) }

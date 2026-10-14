@@ -451,6 +451,15 @@ internal const val FIX_SEARCH_QUICK_MS = 3000L
 internal fun fixSearchingText(quick: Boolean): String =
     if (quick) "この場所の勤務変更案を探しています…（最長 ${FIX_SEARCH_QUICK_MS / 1000} 秒）" else "勤務変更案を探しています…（最長 ${FIX_SEARCH_MS / 1000} 秒）"
 
+/** 見ている問題がある探索中の 2 行（何を減らす案を探しているか）。 */
+internal fun targetSearchingLines(t: FixTarget, label: String): List<String> = listOf(
+    "${label}の${t.gapWord}を減らす変更案を探しています",
+    "ほかの日や職員の変更が必要な場合は、関連する変更もまとめて確認します。",
+)
+
+/** 案の変更箇所（「2人・3セル」）。 */
+internal fun changeSizeLine(ops: List<com.magi.app.v6.FixCell>): String = "変更箇所：${ops.map { it.staff }.distinct().size}人・${ops.size}セル"
+
 /** 変更案の探索を止めるボタン（勤務表の作成の「やめる」と区別する）。 */
 internal const val CANCEL_FIX_SEARCH_BUTTON = "変更案の検索を中止"
 
@@ -629,7 +638,7 @@ internal fun fixTargetHead(t: FixTarget, count: Int): List<String> {
 /** 適用前の確認の「今回の目的」。 */
 internal fun fixTargetPurpose(t: FixTarget, staffName: String?, label: String): String =
     if (t.staff != null) "${staffName?.let { "${it}さんの" } ?: ""}${label}${t.gapWord}を減らす"
-    else "${label}を${t.basis}に近づける"
+    else "${label}${t.gapWord}を解消する"
 
 /** 対象の問題を変える案を先に（集計・日の印から探した結果の並べ替え。同順位は元の効果順）。 */
 internal fun rankForTarget(list: List<com.magi.app.v6.FixSuggestion>, schedule: List<List<Int>>, t: FixTarget?): List<com.magi.app.v6.FixSuggestion> =
@@ -807,7 +816,7 @@ internal fun panelTarget(ui: UiState, cv: ConditionsView?, f: FixFocus): FixTarg
     val k = f.shift ?: return null
     return when {
         f.staff != null && f.day == null -> countFixTarget(ui.countViolations, f.staff, k, cv.staffCellLimits(f.staff, k))
-        f.staff == null && f.day != null && f.exceptStaff == null -> needFixTarget(ui.needFamilies, k, f.day, cv.needCellLimits(k, f.day))
+        f.day != null && f.exceptStaff == null -> needFixTarget(ui.needFamilies, k, f.day, cv.needCellLimits(k, f.day))
         else -> null
     }
 }
@@ -821,6 +830,8 @@ internal fun appliedLines(ui: UiState, a: AppliedFix, target: FixTarget?, label:
     }
     val (same, other) = headcountImpact(a.before, a.ops, ui.shiftSymbols, ui.startDate, needLimits, target?.day?.let { target.shift to it })
     out += same + other
+    if (a.hardBefore >= 0) out += "必須違反（勤務表全体）：${a.hardBefore}件 → ${a.hardAfter}件"
+    if (a.softBefore >= 0) out += "要調整（勤務表全体）：${a.softBefore}件 → ${a.softAfter}件"
     out += saveStateLine(ui.saveState)
     val next = when {
         target?.day != null -> remainingSameShift(ui.needFamilies, ui.schedule, target, needLimits, ui.shiftSymbols, ui.startDate)
@@ -853,12 +864,7 @@ internal fun cellChangeReview(
     val before = UnifiedViolationChecker.check(state, s)
     val after = UnifiedViolationChecker.check(state, trial)
     val diff = com.magi.app.v6.ViolationIdentity.diff(before, after)
-    fun place(key: com.magi.app.v6.ViolationKey): String = when (key.space) {
-        com.magi.app.v6.ViolationKey.Space.CELL -> "${staffNames.getOrNull(key.a) ?: "#${key.a}"}さん ${DayText.short(state.startDate, key.b)}"
-        com.magi.app.v6.ViolationKey.Space.NEED -> "${DayText.short(state.startDate, key.b)}の${sym(key.a)}"
-        com.magi.app.v6.ViolationKey.Space.COUNT -> "${staffNames.getOrNull(key.a) ?: "#${key.a}"}さんの${sym(key.b)}"
-    }
-    fun label(key: com.magi.app.v6.ViolationKey) = (if (key.hard) "必須・" else "") + (breakdownLabels[key.family] ?: key.family) + "（${place(key)}）"
+    fun label(key: com.magi.app.v6.ViolationKey) = violationKeyLabel(key, staffNames, shiftSymbols, state.startDate)
     val here = com.magi.app.v6.ViolationIdentity.keys(before).filter { it.space == com.magi.app.v6.ViolationKey.Space.CELL && it.a == i && it.b == j }
     val thisCell = here.map { key -> "${breakdownLabels[key.family] ?: key.family}：" + if (key in diff.resolved) "解消します" else "残ります" }
     val nb = listOfNotNull(
@@ -896,6 +902,38 @@ internal fun cellChangeReview(
         counts = counts,
         wishPin = wishPin,
     )
+}
+
+/** 違反 1 件の名と場所（「必須・禁止の並び（福澤さん 11/29）」「人員不足（11/3のAア）」「下限割れ（福澤さんのB4）」）。 */
+internal fun violationKeyLabel(key: com.magi.app.v6.ViolationKey, staffNames: List<String>, shiftSymbols: List<String>, startDate: String): String {
+    fun sym(x: Int) = shiftSymbols.getOrNull(x) ?: "$x"
+    val place = when (key.space) {
+        com.magi.app.v6.ViolationKey.Space.CELL -> "${staffNames.getOrNull(key.a) ?: "#${key.a}"}さん ${DayText.short(startDate, key.b)}"
+        com.magi.app.v6.ViolationKey.Space.NEED -> "${DayText.short(startDate, key.b)}の${sym(key.a)}"
+        com.magi.app.v6.ViolationKey.Space.COUNT -> "${staffNames.getOrNull(key.a) ?: "#${key.a}"}さんの${sym(key.b)}"
+    }
+    return (if (key.hard) "必須・" else "") + (breakdownLabels[key.family] ?: key.family) + "（$place）"
+}
+
+/** 案で別の場所に新しく生まれる必須違反（確認の画面の「新たな必須違反」。正式な検査の前後で数える）。 */
+internal fun newHardLabels(state: MagiState, s: Array<IntArray>, ops: List<com.magi.app.v6.FixCell>, staffNames: List<String>, shiftSymbols: List<String>): List<String> {
+    val trial = Array(s.size) { s[it].copyOf() }
+    for (op in ops) if (op.staff in trial.indices && op.day in trial[op.staff].indices) trial[op.staff][op.day] = op.toShift
+    return com.magi.app.v6.ViolationIdentity.newHard(UnifiedViolationChecker.check(state, s), UnifiedViolationChecker.check(state, trial))
+        .map { violationKeyLabel(it, staffNames, shiftSymbols, state.startDate) }
+}
+
+/** 確認の画面の「希望への影響」と「必要な相談」（行の希望の注記から。希望と異なる勤務になる人がいれば相談の対象）。 */
+internal fun previewWishLines(rows: List<ChangeRow>): Pair<String, String> {
+    val off = rows.filter { it.wish.startsWith("希望（") }
+    val on = rows.count { it.wish == "希望どおり" }
+    val wish = when {
+        off.isNotEmpty() -> "希望と異なる勤務になる：" + off.joinToString("、") { "${it.staff}さん ${it.date}" }
+        on > 0 -> "希望どおりになる勤務が ${on}件あります。希望と異なる勤務にはなりません"
+        else -> "変更する勤務に希望はありません"
+    }
+    val consult = if (off.isEmpty()) "必要な相談：なし" else "必要な相談：" + off.map { it.staff }.distinct().joinToString("、") { "${it}さん" } + "（希望と異なる勤務になる日）"
+    return wish to consult
 }
 
 /** 確認の画面の相談事項（当てずに相談してから決める）。 */
@@ -945,3 +983,24 @@ internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが�
 internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long): Pair<String, String> =
     (if (engineRan) "自動作成：済み" else if (hasResult) "自動作成：未実行（手で編集）" else "自動作成：未実行") to
         (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${hard}件" else if (soft > 0) "評価：要調整 ${soft}件" else "評価：違反なし")
+
+/**
+ * 案がこのセルの問題を解消するか（2026-10-14 利用者レビュー: 族の全体の件数が減るだけでは、選んだセルが直るとは限らない）。
+ * この場所の鍵＝このセル・その日のその勤務の人数・本人のその勤務の回数（[family] を選べばその族だけ）が、案の後の正式な報告から消えるか。
+ */
+internal fun resolvesAtCell(state: MagiState, s: Array<IntArray>, before: com.magi.app.v6.ViolationReport, ops: List<com.magi.app.v6.FixCell>, i: Int, j: Int, family: String?): Boolean {
+    val cur = s.getOrNull(i)?.getOrNull(j) ?: return false
+    fun here(keys: Set<com.magi.app.v6.ViolationKey>) = keys.filter { k ->
+        (family == null || k.family == family) && when (k.space) {
+            com.magi.app.v6.ViolationKey.Space.CELL -> k.a == i && k.b == j
+            com.magi.app.v6.ViolationKey.Space.NEED -> k.a == cur && k.b == j
+            com.magi.app.v6.ViolationKey.Space.COUNT -> k.a == i && k.b == cur
+        }
+    }
+    val b = here(com.magi.app.v6.ViolationIdentity.keys(before))
+    if (b.isEmpty()) return false
+    val trial = Array(s.size) { s[it].copyOf() }
+    for (op in ops) if (op.staff in trial.indices && op.day in trial[op.staff].indices) trial[op.staff][op.day] = op.toShift
+    val after = com.magi.app.v6.ViolationIdentity.keys(UnifiedViolationChecker.check(state, trial))
+    return b.any { it !in after }
+}

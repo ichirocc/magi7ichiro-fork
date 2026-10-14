@@ -224,7 +224,8 @@ internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState 
 data class FixOutcome(val line: String)
 
 /** 案の一覧から確認して当てた手（[focusKey] の依頼の画面へ「変更を反映しました」を返す。[after] と今の盤面が違えば出さない）。 */
-data class AppliedFix(val focusKey: String, val label: String, val ops: List<com.magi.app.v6.FixCell>, val before: List<List<Int>>, val after: List<List<Int>>, val target: FixTarget? = null)
+data class AppliedFix(val focusKey: String, val label: String, val ops: List<com.magi.app.v6.FixCell>, val before: List<List<Int>>, val after: List<List<Int>>, val target: FixTarget? = null,
+                      val hardBefore: Int = -1, val hardAfter: Int = -1, val softBefore: Int = -1, val softAfter: Int = -1)
 
 data class WishCancelOutcome(
     val name: String, val day: Int, val symbol: String,

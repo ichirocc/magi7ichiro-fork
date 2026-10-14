@@ -50,7 +50,7 @@ class CountShortageTextTest {
         assertEquals("10/3のA", fixTargetLabel(t, "A", "2026-10-01"))
         assertEquals("10/3のAを1人増やす", t.effect(schedule, listOf(FixCell(0, 2, 1))).title("10/3のA"))
         assertEquals(listOf("必要人数より1人少ない状態です", "配置 1人 ／ 必要 2人"), fixTargetHead(t, 1))
-        assertEquals("10/3のAを必要人数に近づける", fixTargetPurpose(t, null, "10/3のA"))
+        assertEquals("10/3のA不足を解消する", fixTargetPurpose(t, null, "10/3のA"))
         val o = needFixTarget(mapOf("1,2" to listOf("vio-covO")), 1, 2, 0 to 0)!!
         assertEquals(listOf("適正人数より1人多い状態です", "配置 1人 ／ 適正 0人"), fixTargetHead(o, 1))
         assertEquals("10/3のAの不足を減らす案は、今回の検索では見つかりませんでした。担当できる職員と、その日の希望・固定勤務をご確認ください。", noNeedFixLine("10/3のA", t))
@@ -166,13 +166,25 @@ class CountShortageTextTest {
         val after = boardAfter(schedule, ops)
         val u = UiState(startDate = "2026-10-01", shiftSymbols = listOf("休", "A", "B"), schedule = after, saveState = SaveState.Saving,
             needFamilies = mapOf("1,3" to listOf("vio-covU")))
-        val a = AppliedFix("k", "x", ops, schedule, after, t)
+        val a = AppliedFix("k", "x", ops, schedule, after, t, 3, 2, 10, 11)
         val need = { k: Int, _: Int -> if (k == 1) 2 to 2 else null }
         val lines = appliedLines(u, a, t, "10/3のA", need)
         assertEquals("10/3のA：1人 → 2人（必要 2人を満たします）", lines[0])
         assertEquals("10/3の休：1人 → 0人", lines[1])
-        assertEquals("保存：保存中", lines[2])
-        assertEquals("次に確認すること：10/4のAは、2人不足のままです。", lines[3])
+        assertEquals("必須違反（勤務表全体）：3件 → 2件", lines[2])
+        assertEquals("要調整（勤務表全体）：10件 → 11件", lines[3])
+        assertEquals("保存：保存中", lines[4])
+        assertEquals("次に確認すること：10/4のAは、2人不足のままです。", lines[5])
         assertTrue(lines.last().startsWith("勤務表が変わったため"))
+    }
+
+    /** 日別の詳細で職員に絞っても、その日のその勤務の問題のまま探す（日付を落とさない）。 */
+    @Test fun personFocusOnADayKeepsTheNeedTarget() {
+        val u = UiState(schedule = schedule, needFamilies = mapOf("1,2" to listOf("vio-covU")))
+        val cv = ConditionsView(needLimits = List(3) { k -> List(4) { if (k == 1) 2 to 2 else null } })
+        assertEquals(FixTarget(null, 1, 2, 2, true, "必要人数"), panelTarget(u, cv, FixFocus(0, 1, 2)))
+        assertEquals(FixTarget(null, 1, 2, 2, true, "必要人数"), panelTarget(u, cv, FixFocus(null, 1, 2)))
+        assertNull(panelTarget(u, cv, FixFocus(0, null, 2)))   // セルのシート（勤務なし）は対象なし
+        assertNull(panelTarget(u, cv, FixFocus(null, 1, 2, exceptStaff = 0)))
     }
 }

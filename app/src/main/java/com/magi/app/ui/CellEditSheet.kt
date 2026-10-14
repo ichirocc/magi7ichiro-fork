@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.magi.app.model.MagiState
+import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.cachedProblem
 import com.magi.app.v6.formatDay
 import com.magi.app.v6.toIntArray2D
@@ -268,7 +269,16 @@ internal fun CellEditSheet(
                                     }
                                 }
                             }
-                            FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, family = problem)
+                            // 選んだ問題（無ければこのセルの問題のどれか）が、このセルで実際に消える案だけを主にする（族の全体の件数では判定しない）。
+                            val resolves = remember(rev, cell, problem, ui.fixSuggestions) {
+                                val st = stateOf() ?: return@remember emptyMap()
+                                val sched = ui.schedule.toIntArray2D()
+                                val before = UnifiedViolationChecker.check(st, sched)
+                                ui.fixSuggestions.associateWith { resolvesAtCell(st, sched, before, it.ops, i, j, problem) }
+                            }
+                            FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, family = problem,
+                                addresses = { s -> resolves[s] == true },
+                                addressLabel = "このセルの" + (problem?.let { breakdownLabels[it] ?: it } ?: "問題"))
                         }
                         OutlinedButton(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
                         OutlinedButton(onClick = { onMode(1) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("希望を確認・登録する") }

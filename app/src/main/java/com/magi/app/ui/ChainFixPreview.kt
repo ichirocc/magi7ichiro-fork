@@ -25,6 +25,8 @@ data class ChainFixPreview(
     val focusKey: String? = null,
     /** 見ている問題（適用後の結果の行で、解消して印が消えたあとも前後を言う）。 */
     val fixTarget: FixTarget? = null,
+    /** 別の場所に新しく生まれる必須違反（正式な検査の前後。null＝評価していない）。 */
+    val newHard: List<String>? = null,
 )
 
 /** 変わるセル 1 つ。[wish]＝希望があるときの注記（希望どおり／希望と異なる）。 */
