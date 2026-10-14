@@ -1,0 +1,17 @@
+fixture,seed,arm,elapsedMs,hard,weightedScore,total,rep
+sample,5,off,41195,1,11634.0,274,1
+sample,5,on,33366,1,11239.0,250,1
+sample,6,off,36616,1,11394.0,263,1
+sample,6,on,73172,1,11248.0,259,1
+sample,7,off,30555,1,11372.0,284,1
+sample,7,on,32564,1,11538.0,268,1
+sample,8,off,32938,1,11435.0,272,1
+sample,8,on,34602,1,11442.0,277,1
+blocked_covu,5,off,79486,4,43286.0,306,1
+blocked_covu,5,on,79696,4,43126.0,298,1
+blocked_covu,6,off,78176,4,42827.0,276,1
+blocked_covu,6,on,79162,4,43834.0,308,1
+blocked_covu,7,off,78686,4,43510.0,271,1
+blocked_covu,7,on,50349,4,43249.0,308,1
+blocked_covu,8,off,78368,4,43345.0,285,1
+blocked_covu,8,on,52755,4,43179.0,295,1

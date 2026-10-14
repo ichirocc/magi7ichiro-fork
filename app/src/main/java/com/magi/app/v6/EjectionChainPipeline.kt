@@ -66,6 +66,7 @@ internal object EjectionChainPipeline {
         shouldStop: () -> Boolean = { false }, quantitativeRangeEval: Boolean = false,
         telemetry: MutableList<Telemetry>? = null,
     ): V6HotfixPasses.CyclicSwapResult {
+        val t0 = EngineClock.nowMs()
         val p = cachedProblem(state, quantitativeRangeEval)
         var work = normalizeSchedule(schedule, p)
         val rep0 = UnifiedViolationChecker.check(state, work, quantitativeRangeEval)
@@ -98,6 +99,9 @@ internal object EjectionChainPipeline {
             }
             if (committed == 0 || shouldStop()) break
         }
+        // 開始から終了までの時間と、終えた時点の締切までの残り（仕上げ＋玉突きは 1 本の締切を分け合う＝前後の段の取り分を測る前提）。
+        if (legs.isNotEmpty()) logs.add(MirrorLog(tag = "EjectionPipeline", message = "玉突きパイプライン全体: ${EngineClock.nowMs() - t0}ms" +
+            (if (deadlineMs != Long.MAX_VALUE) "・終了時の締切まで残り ${EngineClock.remainingMs(deadlineMs)}ms" else "")))
         return V6HotfixPasses.CyclicSwapResult(work, rep0.total, rep.total, applied, logs, pinBlocks = pinBlocks, report = rep)
     }
 

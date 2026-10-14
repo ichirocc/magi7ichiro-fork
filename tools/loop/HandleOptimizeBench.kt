@@ -33,6 +33,10 @@ fun main(args: Array<String>) {
     // [2026-10-08/測定の精度] MAGI_HO_REPEATS: 同じ seed・同じ腕を k 回繰り返す（workers>1 は壁時計に依存して非決定なので、
     //   腕の差を読む前に揺れを測る）。CSV の末尾に rep 列を足す（集計は tools/loop/ho_stats.py）。
     val repeats = (System.getenv("MAGI_HO_REPEATS")?.toIntOrNull() ?: 1).coerceAtLeast(1)
+    // [3.666.0/backlog #48] "budget"＝on 腕だけ予算を MAGI_HO_ON_SECONDS（既定 300）にする（60 秒モデルの品質の比較 V1）。
+    //   "earlystall"＝on 腕で通常の停滞閾値の割合 PolishGate.normalStallFraction を MAGI_HO_FRACTION（既定 0.5）にする（同じ全体時間で早めに仕上げへ移る案 T1）。
+    val onSeconds = System.getenv("MAGI_HO_ON_SECONDS")?.toIntOrNull() ?: 300
+    val onFraction = System.getenv("MAGI_HO_FRACTION")?.toDoubleOrNull() ?: 0.5
 
     val w = java.io.FileWriter(out, false).buffered()
     w.write("fixture,seed,arm,elapsedMs,hard,weightedScore,total,rep\n")
@@ -62,11 +66,12 @@ fun main(args: Array<String>) {
                     else -> EjectionChainPipeline.Focus.BOTH
                 }
                 PolishGate.ejectionPipelineAfterRepair = !feature.startsWith("ejpipe") || feature == "ejpipeend"
+                PolishGate.normalStallFraction = if (feature == "earlystall" && armOn) onFraction else 0.9
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(
                         st, st.schedule.map { it.toIntArray() }.toTypedArray(),
-                        secondsRaw = secondsBudget, workers = workers, allowImpossible = true,
+                        secondsRaw = if (feature == "budget" && armOn) onSeconds else secondsBudget, workers = workers, allowImpossible = true,
                         extraRefineRequirePostHardDrop = feature == "" && armOn,
                         seed = 1000L + seed,
                     )
