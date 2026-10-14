@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -147,10 +148,15 @@ internal fun CellEditSheet(
     // 3 段階（2026-10-14 利用者レビュー）: 0＝問題を確認、1＝自分で勤務を選ぶ、2＝影響を確認して適用。選んだだけでは反映しない。
     var step by remember(cell) { mutableIntStateOf(0) }
     var pickTo by remember(cell) { mutableStateOf<Int?>(null) }
-    val review = remember(rev, cell, pickTo) {
-        val k = pickTo ?: return@remember null
-        val st = stateOf() ?: return@remember null
-        cellChangeReview(st, ui.schedule.toIntArray2D(), i, j, k, ui.staffNames, ui.shiftSymbols, cv::staffCellLimits, cv::needCellLimits, pinned)
+    // 正式な検査（2 回）は描画の外で（統合仕様 DISP-1）。結果が出るまでは「確認しています」＝未評価を安全と見せない。
+    val review by produceState<CellChangeReview?>(null, rev, cell, pickTo) {
+        value = null
+        val k = pickTo ?: return@produceState
+        val st = stateOf() ?: return@produceState
+        val sched = ui.schedule.toIntArray2D()
+        value = withContext(Dispatchers.Default) {
+            cellChangeReview(st, sched, i, j, k, ui.staffNames, ui.shiftSymbols, cv::staffCellLimits, cv::needCellLimits, pinned)
+        }
     }
     fun choose(k: Int) { if (k != current) { pickTo = k; step = 2; if (!expanded) onToggleExpand() } }
     val topCorner = MaterialTheme.shapes.extraLarge
@@ -191,16 +197,19 @@ internal fun CellEditSheet(
                     Text("対象：${name}さん　現在：${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                     Text("選ぶと変更後の影響を確認できます。この時点では反映しません。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     if (shown.any { it !in canDoSet }) Text(NOT_CANDO_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                } else if (mode == 0 && step == 2 && review == null) {
+                    Text(REVIEW_CHECKING_TEXT, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 } else if (mode == 0 && step == 2 && review != null) {
                     // ③ 影響を確認して適用（値はすべて正式な検査で評価した結果）。
+                    val rv = review!!
                     Text("この変更を適用しますか？", style = MaterialTheme.typography.titleSmall)
-                    Text(review.change, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    ReviewSection("前後の勤務", listOf(review.neighbors))
-                    ReviewSection("今回の問題", review.thisCell + review.othersResolved.map { "解消: $it" })
-                    ReviewSection("新しく生じる問題", review.appeared.ifEmpty { listOf("ありません") })
-                    Text(review.hardLine, style = MaterialTheme.typography.bodyMedium)
-                    ReviewSection("人数と回数への影響", review.headcount + review.counts)
-                    ReviewSection("希望・固定への影響", review.wishPin)
+                    Text(rv.change, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    ReviewSection("前後の勤務", listOf(rv.neighbors))
+                    ReviewSection("今回の問題", rv.thisCell + rv.othersResolved.map { "解消: $it" })
+                    ReviewSection("新しく生じる問題", rv.appeared.ifEmpty { listOf("ありません") })
+                    Text(rv.hardLine, style = MaterialTheme.typography.bodyMedium)
+                    ReviewSection("人数と回数への影響", rv.headcount + rv.counts)
+                    ReviewSection("希望・固定への影響", rv.wishPin)
                     Text(CHANGE_DUTY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 } else {
                     tourHeading?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant) }
@@ -257,7 +266,7 @@ internal fun CellEditSheet(
                             Text("この日・前後の日・関連する勤務の変更案を比較します。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
                         if (searching) {
-                            // 重なった問題が 2 件以上なら、どの問題の変更案を見るかを選ぶ（選ぶまではすべての案）。
+                            // 重なった問題が 2 件以上なら、どの問題の変更案を見るかを選ぶ。
                             var problem by remember(cell) { mutableStateOf<String?>(null) }
                             problemChoiceHeading(fams.size)?.let { heading ->
                                 Text(heading, style = MaterialTheme.typography.bodySmall)
@@ -270,14 +279,20 @@ internal fun CellEditSheet(
                                 }
                             }
                             // 選んだ問題（無ければこのセルの問題のどれか）が、このセルで実際に消える案だけを主にする（族の全体の件数では判定しない）。
-                            val resolves = remember(rev, cell, problem, ui.fixSuggestions) {
-                                val st = stateOf() ?: return@remember emptyMap()
+                            val resolves by produceState<Map<com.magi.app.v6.FixSuggestion, Boolean>?>(null, rev, cell, problem, ui.fixSuggestions) {
+                                value = null
+                                val st = stateOf() ?: return@produceState
                                 val sched = ui.schedule.toIntArray2D()
-                                val before = UnifiedViolationChecker.check(st, sched)
-                                ui.fixSuggestions.associateWith { resolvesAtCell(st, sched, before, it.ops, i, j, problem) }
+                                val list = ui.fixSuggestions
+                                value = withContext(Dispatchers.Default) {
+                                    val before = UnifiedViolationChecker.check(st, sched)
+                                    list.associateWith { resolvesAtCell(st, sched, before, it.ops, i, j, problem) }
+                                }
                             }
-                            FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, family = problem,
-                                addresses = { s -> resolves[s] == true },
+                            // 問題が 2 件以上なら、選ぶまで案を出さない（どの問題を直す案かを先頭の問題で埋めない＝統合仕様 INV-01）。
+                            if (fams.size >= 2 && problem == null) Text(PICK_PROBLEM_FIRST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                            else FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, family = problem,
+                                addresses = { s -> resolves?.get(s) == true }, addressPending = resolves == null,
                                 addressLabel = "このセルの" + (problem?.let { breakdownLabels[it] ?: it } ?: "問題"))
                         }
                         OutlinedButton(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
