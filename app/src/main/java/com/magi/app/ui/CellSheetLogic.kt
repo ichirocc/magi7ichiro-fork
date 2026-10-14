@@ -449,7 +449,10 @@ internal const val FIX_SEARCH_QUICK_MS = 3000L
 
 /** 探索中の 1 行（最長の秒数を添えて待ち時間の見当をつけてもらう）。 */
 internal fun fixSearchingText(quick: Boolean): String =
-    if (quick) "この場所の直し方を探しています…（最長 ${FIX_SEARCH_QUICK_MS / 1000} 秒）" else "直し方を探しています…（最長 ${FIX_SEARCH_MS / 1000} 秒）"
+    if (quick) "この場所の勤務変更案を探しています…（最長 ${FIX_SEARCH_QUICK_MS / 1000} 秒）" else "勤務変更案を探しています…（最長 ${FIX_SEARCH_MS / 1000} 秒）"
+
+/** 変更案の探索を止めるボタン（勤務表の作成の「やめる」と区別する）。 */
+internal const val CANCEL_FIX_SEARCH_BUTTON = "変更案の検索を中止"
 
 internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: String, failedKey: String, key: String): FixPanelState = when {
     fixSearching -> FixPanelState.RUNNING
@@ -533,3 +536,184 @@ internal fun fixAddresses(s: com.magi.app.v6.FixSuggestion, family: String?): Bo
 
 /** 選んだ問題を減らす案が無いとき（ほかの問題の案はある）。 */
 internal fun noFixForProblemLine(label: String): String = "選んだ問題（$label）を減らす案は見つかりませんでした。ほかの問題を選ぶと、その直し方を確認できます。"
+
+/**
+ * 画面で見ている 1 つの問題（2026-10-14 利用者レビュー「今回の問題がどう変わるかを最上段に」）。
+ * 回数＝[staff]×[shift]（[day] は null）、人員＝[shift]×[day]（[staff] は null）。[target] は下限・目標・上限・必要人数・適正人数、
+ * [basis] はその名、[under]＝足りない側。
+ */
+internal data class FixTarget(val staff: Int?, val shift: Int, val day: Int?, val target: Int, val under: Boolean, val basis: String) {
+    val unit: String get() = if (staff != null) "回" else "人"
+    fun countOf(schedule: List<List<Int>>): Int =
+        if (staff != null) schedule.getOrNull(staff).orEmpty().count { it == shift } else schedule.count { it.getOrNull(day ?: -1) == shift }
+    /** 盤面に案のセル代入を当てて数え直す＝評価器と同じ数え方。 */
+    fun effect(schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>): CountEffect {
+        val after = schedule.map { it.toMutableList() }
+        for (op in ops) after.getOrNull(op.staff)?.let { r -> if (op.day in r.indices) r[op.day] = op.toShift }
+        return CountEffect(countOf(schedule), countOf(after), target, under, unit)
+    }
+    val gapWord: String get() = if (under) "不足" else "超過"
+}
+
+/** 対象の数の変化。[gapBefore]/[gapAfter] は基準までの差（0 未満は 0）。 */
+internal data class CountEffect(val before: Int, val after: Int, val target: Int, val under: Boolean, val unit: String = "回") {
+    private fun gap(c: Int) = (if (under) target - c else c - target).coerceAtLeast(0)
+    val gapBefore: Int get() = gap(before)
+    val gapAfter: Int get() = gap(after)
+    val fixes: Boolean get() = gapAfter < gapBefore
+    /** 「A4を2回増やす」。対象が変わらない案は「A4は変わりません」。 */
+    fun title(label: String): String = when {
+        after > before -> "${label}を${after - before}${unit}増やす"
+        after < before -> "${label}を${before - after}${unit}減らす"
+        else -> "${label}は変わりません"
+    }
+    fun countLine(): String = "$before$unit → $after$unit"
+    fun gapLine(): String = "${if (under) "不足" else "超過"} $gapBefore$unit → $gapAfter$unit"
+    fun afterNote(basis: String): String = when {
+        gapAfter == 0 && under -> "適用後は${basis}に届きます"
+        gapAfter == 0 -> "適用後は${basis}以内になります"
+        under -> "適用後も、${basis}まで${gapAfter}${unit}不足"
+        else -> "適用後も、${basis}を${gapAfter}${unit}超えます"
+    }
+}
+
+/** 回数の問題の目標（職員×シフト）。null＝回数の過不足ではない、または基準が無い。 */
+internal fun countTargetOf(vio: String?, limits: Triple<Int?, Int?, Int?>): Pair<Int, Boolean>? {
+    val (lo, hi, apt) = limits
+    return when (vio) {
+        "vio-low" -> lo?.let { it to true }
+        "vio-aptLow" -> apt?.let { it to true }
+        "vio-high" -> hi?.let { it to false }
+        "vio-aptHigh" -> apt?.let { it to false }
+        else -> null
+    }
+}
+
+private fun basisOfCount(vio: String?): String = when (vio) { "vio-low" -> "下限"; "vio-high" -> "上限"; else -> "目標" }
+
+/** 職員×シフトの回数の問題（集計の職員別セル・職員の勤務状況から）。 */
+internal fun countFixTarget(countViolations: Map<String, String>, staff: Int, shift: Int, limits: Triple<Int?, Int?, Int?>): FixTarget? {
+    val vio = countViolations["$staff,$shift"]
+    val (t, under) = countTargetOf(vio, limits) ?: return null
+    return FixTarget(staff, shift, null, t, under, basisOfCount(vio))
+}
+
+/** シフト×日の人員の問題（日ヘッダ・集計の日別セルから）。[need] は (必要, 適正)。 */
+internal fun needFixTarget(needFamilies: Map<String, List<String>>, shift: Int, day: Int, need: Pair<Int, Int>?): FixTarget? {
+    val classes = needFamilies["$shift,$day"].orEmpty()
+    need ?: return null
+    return when {
+        "vio-covU" in classes -> FixTarget(null, shift, day, need.first, true, "必要人数")
+        "vio-covO" in classes -> FixTarget(null, shift, day, need.second, false, "適正人数")
+        else -> null
+    }
+}
+
+/** 対象の名（回数＝記号、人員＝「11/3のAア」）。 */
+internal fun fixTargetLabel(t: FixTarget, sym: String, startDate: String): String =
+    t.day?.let { "${DayText.short(startDate, it)}の$sym" } ?: sym
+
+/** 対象の見出し 2 行: 「下限まで、あと8回です」「現在 7回 ／ 下限 15回」。人員は「必要人数より1人少ない状態です」「配置 0人 ／ 必要 1人」。 */
+internal fun fixTargetHead(t: FixTarget, count: Int): List<String> {
+    val gap = (if (t.under) t.target - count else count - t.target).coerceAtLeast(0)
+    return if (t.staff != null) listOf(
+        if (t.under) "${t.basis}まで、あと${gap}回です" else "${t.basis}を${gap}回超えています",
+        "現在 ${count}回 ／ ${t.basis} ${t.target}回")
+    else listOf(
+        if (t.under) "${t.basis}より${gap}人少ない状態です" else "${t.basis}より${gap}人多い状態です",
+        "配置 ${count}人 ／ ${t.basis.removeSuffix("人数")} ${t.target}人")
+}
+
+/** 適用前の確認の「今回の目的」。 */
+internal fun fixTargetPurpose(t: FixTarget, staffName: String?, label: String): String =
+    if (t.staff != null) "${staffName?.let { "${it}さんの" } ?: ""}${label}${t.gapWord}を減らす"
+    else "${label}を${t.basis}に近づける"
+
+/** 対象の問題を変える案を先に（集計・日の印から探した結果の並べ替え。同順位は元の効果順）。 */
+internal fun rankForTarget(list: List<com.magi.app.v6.FixSuggestion>, schedule: List<List<Int>>, t: FixTarget?): List<com.magi.app.v6.FixSuggestion> =
+    if (t == null) list else list.sortedBy { if (t.effect(schedule, it.ops).fixes) 0 else 1 }
+
+/** 「ほかの問題への影響」の行（対象の族は上に出すので除く）。必須違反の増減を先頭に。 */
+internal fun otherEffectLines(s: com.magi.app.v6.FixSuggestion, skipFamilies: Set<String>): List<String> {
+    val hard = when { s.deltaHard < 0 -> "必須違反：${-s.deltaHard}件減る"; s.deltaHard > 0 -> "必須違反：${s.deltaHard}件増える"; else -> "必須違反：変わらない" }
+    return listOf(hard) + s.diff.filter { (k, d) -> d != 0 && k !in skipFamilies }.map { (k, d) ->
+        "${breakdownLabels[k] ?: k}：${kotlin.math.abs(d)}${unitOf(k)}${if (d < 0) "減る" else "増える"}"
+    }
+}
+
+/** 対象の族（「ほかの問題への影響」から除く）。 */
+internal fun fixTargetFamilies(t: FixTarget): Set<String> = if (t.staff != null) setOf("low", "high", "apt") else setOf("covU", "covO")
+
+/** 対象の問題を変えない案の見出し（開くまで畳む）。 */
+internal fun otherFixHeading(n: Int): String = "別の問題を改善する案（${n}件）"
+internal fun otherFixNote(label: String, t: FixTarget): String =
+    "${label}の${if (t.staff != null) "回数" else "人数"}は${if (t.under) "増えません" else "減りません"}"
+
+/** 対象の問題を変える案の見出し。 */
+internal fun thisFixHeading(label: String, t: FixTarget): String = "${label}を${if (t.under) "増やす" else "減らす"}案"
+
+/** 対象を減らす案が無いとき（人員の問題）。 */
+internal fun noNeedFixLine(label: String, t: FixTarget): String =
+    "${label}の${t.gapWord}を減らす案は、今回の検索では見つかりませんでした。" +
+        if (t.under) "担当できる職員と、その日の希望・固定勤務をご確認ください。" else "その日に入っている職員の希望・固定勤務をご確認ください。"
+
+/** 回数の過不足の要点（集計セルの詳細）。「▼4」だけでは今の回数か不足数か分からない＝現在・基準・差を言葉で。 */
+internal fun countGapLine(vio: String, count: Int, limits: Triple<Int?, Int?, Int?>): String? {
+    val (lo, hi, apt) = limits
+    return when {
+        vio == "vio-low" && lo != null -> "現在 ${count}回／下限 ${lo}回 ・ 不足 ${(lo - count).coerceAtLeast(0)}回"
+        vio == "vio-high" && hi != null -> "現在 ${count}回／上限 ${hi}回 ・ 超過 ${(count - hi).coerceAtLeast(0)}回"
+        vio == "vio-aptLow" && apt != null -> "現在 ${count}回／目標 ${apt}回 ・ 不足 ${(apt - count).coerceAtLeast(0)}回"
+        vio == "vio-aptHigh" && apt != null -> "現在 ${count}回／目標 ${apt}回 ・ 超過 ${(count - apt).coerceAtLeast(0)}回"
+        else -> null
+    }
+}
+
+/** 選んだ問題（族）が 1 案でどう変わるか。案の先頭に出す。 */
+internal fun familyEffectLine(s: com.magi.app.v6.FixSuggestion, family: String, label: String): String? =
+    s.diff.firstOrNull { it.first == family }?.second?.let { d -> if (d < 0) "$label：${-d}件減る" else if (d > 0) "$label：${d}件増える" else null }
+
+/** 適用ボタンの下に添える注記（ボタンの文言は短く＝折り返さない）。 */
+internal const val APPLY_UNDO_NOTE = "適用したあとでも元に戻せます。"
+
+/** 案のカードのボタン（見るだけ。適用は確認の画面で）。 */
+internal const val REVIEW_CHANGE_BUTTON = "変更内容を確認"
+
+/** 確認の画面の適用ボタン（件数を言う）。 */
+internal fun applyCountButton(n: Int): String = if (n >= 2) "この${n}件の変更を適用" else APPLY_CHANGE_BUTTON
+
+/** 確認の画面を閉じるボタン（案の一覧から来たときは一覧へ戻る）。 */
+internal const val BACK_TO_FIXES_BUTTON = "案の一覧に戻る"
+
+/** 必須 0 の結果の札。要調整が残るなら「配布可」と言い切らず、配布前の確認へ案内する（押すと配布前の確認が開く）。 */
+internal fun readyBadgeLabel(soft: Long): String = if (soft > 0) "要調整 ${soft}件・配布前の確認" else "配布可"
+
+/** 集計期間（見出しの 2 行目）。 */
+internal fun periodLine(startDate: String, days: Int): String? =
+    if (days <= 0 || startDate.isBlank()) null else "対象期間：" + DayText.range(startDate, 0, days - 1)
+
+/** 日の人員のシートで、過不足のある勤務が 2 つ以上のときの問い。 */
+internal fun dayPickHeading(marks: List<CoverageMark>): String = when {
+    marks.all { it.under } -> "どの勤務の不足を確認しますか？"
+    marks.none { it.under } -> "どの勤務の過剰を確認しますか？"
+    else -> "どの勤務の過不足を確認しますか？"
+}
+
+/** 選ぶ行: 「Aア　配置 0人／必要 1人　1人不足」。 */
+internal fun dayPickRow(ui: UiState, j: Int, m: CoverageMark, need: Pair<Int, Int>?): String {
+    val sym = ui.shiftSymbols.getOrNull(m.shift) ?: "${m.shift}"
+    val now = ui.schedule.count { it.getOrNull(j) == m.shift }
+    return if (m.under) "$sym　配置 ${now}人／必要 ${need?.first ?: "?"}人" + (need?.let { "　${(it.first - now).coerceAtLeast(0)}人不足" } ?: "")
+    else "$sym　配置 ${now}人／適正 ${need?.second ?: "?"}人" + (need?.let { "　${(now - it.second).coerceAtLeast(0)}人多い" } ?: "")
+}
+
+/** 見ている問題（集計の職員別・日別セル、日ヘッダの印から）。セルのシート（日あり・職員あり）や「他の人で補う」は null。 */
+internal fun panelTarget(ui: UiState, cv: ConditionsView?, f: FixFocus): FixTarget? {
+    cv ?: return null
+    val k = f.shift ?: return null
+    return when {
+        f.staff != null && f.day == null -> countFixTarget(ui.countViolations, f.staff, k, cv.staffCellLimits(f.staff, k))
+        f.staff == null && f.day != null && f.exceptStaff == null -> needFixTarget(ui.needFamilies, k, f.day, cv.needCellLimits(k, f.day))
+        else -> null
+    }
+}

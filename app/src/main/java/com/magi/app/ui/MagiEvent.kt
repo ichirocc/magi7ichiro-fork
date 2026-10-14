@@ -22,6 +22,8 @@ internal sealed interface MagiEvent {
         data class ApplyWishes(val includeOutOfScope: Boolean) : Board
         data class ApplyAlternative(val index: Int) : Board
         data class ApplyFixSuggestion(val suggestion: FixSuggestion) : Board
+        /** 当てる前に全変更と対象の問題の変化を確認する（[purpose]＝今回の目的、[effect]＝対象の数の変化）。 */
+        data class PreviewFix(val suggestion: FixSuggestion, val purpose: String?, val effect: List<String>) : Board
         data object Undo : Board
         data object Redo : Board
     }
@@ -197,6 +199,8 @@ internal sealed interface MagiEvent {
         data class SetEjectionChainScope(val scope: EjectionChainScope) : Settings
         data class SetEjectionPipelineRounds(val on: Boolean) : Settings
         data class SetEjectionPipelineHardLeg(val on: Boolean) : Settings
+        data class SetEjectionUseLeftover(val on: Boolean) : Settings
+        data class SetC3nWallShortStall(val on: Boolean) : Settings
         data class SetStallPolishInjection(val on: Boolean) : Settings
         data class SetLnsAdaptive(val on: Boolean) : Settings
     }

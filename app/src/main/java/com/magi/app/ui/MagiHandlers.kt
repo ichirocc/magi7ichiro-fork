@@ -16,6 +16,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Board.ApplyWishes -> vm.applyWishes(e.includeOutOfScope)
             is MagiEvent.Board.ApplyAlternative -> vm.applyAlternative(e.index)
             is MagiEvent.Board.ApplyFixSuggestion -> vm.previewOrApplyFix(e.suggestion)
+            is MagiEvent.Board.PreviewFix -> vm.previewFix(e.suggestion, e.purpose, e.effect)
             MagiEvent.Board.Undo -> vm.undo()
             MagiEvent.Board.Redo -> vm.redo()
         }
@@ -157,6 +158,8 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Settings.SetEjectionChainScope -> vm.setEjectionChainScope(e.scope)
             is MagiEvent.Settings.SetEjectionPipelineRounds -> vm.setEjectionPipelineRounds(e.on)
             is MagiEvent.Settings.SetEjectionPipelineHardLeg -> vm.setEjectionPipelineHardLeg(e.on)
+            is MagiEvent.Settings.SetEjectionUseLeftover -> vm.setEjectionUseLeftover(e.on)
+            is MagiEvent.Settings.SetC3nWallShortStall -> vm.setC3nWallShortStall(e.on)
             is MagiEvent.Settings.SetStallPolishInjection -> vm.setStallPolishInjection(e.on)
             is MagiEvent.Settings.SetLnsAdaptive -> vm.setLnsAdaptive(e.on)
         }

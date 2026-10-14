@@ -1324,6 +1324,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "設定変更: 玉突きを必須の違反からも始める → ${if (on) "ON" else "OFF"}")
     }
 
+    fun setEjectionUseLeftover(on: Boolean) {
+        com.magi.app.v6.PolishGate.ejectionUseLeftover = on
+        _ui.update { it.copy(ejectionUseLeftover = on) }
+        logOp("I", "設定変更: 余った時間も玉突きに使う → ${if (on) "ON" else "OFF"}")
+    }
+
+    fun setC3nWallShortStall(on: Boolean) {
+        com.magi.app.v6.PolishGate.c3nWallShortStall = on
+        _ui.update { it.copy(c3nWallShortStall = on) }
+        logOp("I", "設定変更: 禁止の並びだけ残ったら早めに切り上げる → ${if (on) "ON" else "OFF"}")
+    }
+
     fun setStallPolishInjection(on: Boolean) {
         com.magi.app.v6.PolishGate.stallPolishInjection = on
         _ui.update { it.copy(stallPolishInjection = on) }
@@ -2756,6 +2768,16 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes).copy(target = target)) }
     }
 
+    /** 案の一覧から: 1 セルの案も当てる前に確認の画面（目的・全変更・対象の数の変化）を出す（2026-10-14 利用者レビュー「見ると適用するを分ける」）。 */
+    fun previewFix(s: FixSuggestion, purpose: String?, effect: List<String>) {
+        val sched = currentSchedule ?: return
+        val st = state ?: return
+        val snap = sched.copy2D()
+        val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = fixBoardKey, stateKey = fixStateKey)
+        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes)
+            .copy(target = target, purpose = purpose, effect = effect, fromList = true)) }
+    }
+
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
 
     // ---- constraint editing (ws3-5) -------------------------------------------
@@ -3042,9 +3064,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // セルのシートは締切 3 秒（手は 1 件でよい。8 秒待たせると答えが無いときも長い＝3.646.0 実機報告）。ホーム・分析は 8 秒。
                 val deadline = if (quick) FIX_SEARCH_QUICK_MS else FIX_SEARCH_MS
                 var timedOut = false
+                // 集計・日の印から来た依頼は、見ている問題（回数・その日の人数）を変える案を先に（2026-10-14 利用者レビュー:
+                //   11/3 の不足に別の日の案だけが並んだ）。広めに集めて並べ替え、上位 8 件を返す。
+                val target = if (exceptStaff == null) panelTarget(_ui.value, conditionsViewOf(st, cachedProblem(st)), FixFocus(focusStaff, focusShift, day)) else null
                 val list = withContext(Dispatchers.Default) {
                     (if (exceptStaff != null && day != null) {
                         fixesByOthers(FixSuggester.suggest(st, snap, focusStaff = null, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true), day, exceptStaff).take(8)
+                    } else if (target != null) {
+                        rankForTarget(FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 40, deadlineMs = deadline, ejectionChain = true),
+                            snap.map { it.toList() }, target).take(8)
                     } else FixSuggester.suggest(st, snap, focusStaff = focusStaff, focusShift = focusShift, maxResults = 8, deadlineMs = deadline, ejectionChain = true))
                         .also { timedOut = FixSuggester.lastTimedOut }
                 }

@@ -86,7 +86,8 @@ fun main(args: Array<String>) {
                 System.err.println(line)
                 if (logTags.isNotEmpty() && logFile != null) {
                     val picked = res.logs.map { it.toString() }.filter { l -> logTags.any { l.contains("tag=$it") } }
-                    logFile.appendText("### $fname seed=$seed rep=$rep arm=$arm elapsed=$elapsed hard=${res.report.hard} w=${res.report.weightedScore} t=${res.report.total}\n" +
+                    logFile.appendText("### $fname seed=$seed rep=$rep arm=$arm elapsed=$elapsed hard=${res.report.hard} w=${res.report.weightedScore} t=${res.report.total} " +
+                        "bd=${res.report.breakdown.filterValues { it > 0 }.toSortedMap()}\n" +
                         picked.joinToString("\n") + "\n")
                 }
             }
