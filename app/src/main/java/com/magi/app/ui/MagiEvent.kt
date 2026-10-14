@@ -214,7 +214,7 @@ internal sealed interface MagiEvent {
         data class ToggleVioBucket(val bucket: String) : Session
         data class SetNameQuery(val query: String) : Session
         data object RefreshCheck : Session
-        data class FindFixSuggestions(val focusStaff: Int?, val focusShift: Int?, val focusKey: String = "", val exceptStaff: Int? = null, val day: Int? = null,
+        data class FindFixSuggestions(val focusStaff: Int?, val focusShift: Int?, val focusKey: String = "", val exceptStaff: Int? = null, val day: Int? = null, val allDays: Boolean = false,
                                       val quick: Boolean = false) : Session   // quick＝セルのシート（締切 3 秒）
         /** シートを閉じたときの探索の取り消し（古い結果を書き戻さない）。 */
         data object CancelFixSearch : Session

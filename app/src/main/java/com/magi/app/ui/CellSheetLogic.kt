@@ -551,24 +551,37 @@ internal fun noFixForProblemLine(label: String): String = "選んだ問題（$la
  * 回数＝[staff]×[shift]（[day] は null）、人員＝[shift]×[day]（[staff] は null）。[target] は下限・目標・上限・必要人数・適正人数、
  * [basis] はその名、[under]＝足りない側。
  */
-data class FixTarget(val staff: Int?, val shift: Int, val day: Int?, val target: Int, val under: Boolean, val basis: String) {
+data class FixTarget(val staff: Int?, val shift: Int, val day: Int?, val target: Int, val under: Boolean, val basis: String,
+                     /** 複数の日をまとめて見る（同じ勤務の不足の日々と、それぞれの必要人数）。空＝1 つの枠。 */
+                     val days: List<Int> = emptyList(), val needs: List<Int> = emptyList()) {
     val unit: String get() = if (staff != null) "回" else "人"
-    fun countOf(schedule: List<List<Int>>): Int =
-        if (staff != null) schedule.getOrNull(staff).orEmpty().count { it == shift } else schedule.count { it.getOrNull(day ?: -1) == shift }
+    val multi: Boolean get() = days.isNotEmpty()
+    fun countOf(schedule: List<List<Int>>): Int = when {
+        staff != null -> schedule.getOrNull(staff).orEmpty().count { it == shift }
+        multi -> days.sumOf { j -> schedule.count { it.getOrNull(j) == shift } }
+        else -> schedule.count { it.getOrNull(day ?: -1) == shift }
+    }
+    /** 日ごとの差の合計（まとめて見るとき）。日をまたいで足し引きしない＝ある日の過剰で別の日の不足を相殺しない。 */
+    fun gapOf(schedule: List<List<Int>>): Int = days.indices.sumOf { n ->
+        val c = schedule.count { it.getOrNull(days[n]) == shift }
+        (if (under) needs[n] - c else c - needs[n]).coerceAtLeast(0)
+    }
     /** 盤面に案のセル代入を当てて数え直す＝評価器と同じ数え方。 */
     fun effect(schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>): CountEffect {
         val after = schedule.map { it.toMutableList() }
         for (op in ops) after.getOrNull(op.staff)?.let { r -> if (op.day in r.indices) r[op.day] = op.toShift }
-        return CountEffect(countOf(schedule), countOf(after), target, under, unit)
+        return CountEffect(countOf(schedule), countOf(after), target, under, unit, if (multi) gapOf(schedule) to gapOf(after) else null)
     }
     val gapWord: String get() = if (under) "不足" else "超過"
 }
 
 /** 対象の数の変化。[gapBefore]/[gapAfter] は基準までの差（0 未満は 0）。 */
-data class CountEffect(val before: Int, val after: Int, val target: Int, val under: Boolean, val unit: String = "回") {
+data class CountEffect(val before: Int, val after: Int, val target: Int, val under: Boolean, val unit: String = "回",
+                       /** まとめて見るときの日ごとの差の合計（前, 後）。null＝1 つの枠。 */
+                       val gaps: Pair<Int, Int>? = null) {
     private fun gap(c: Int) = (if (under) target - c else c - target).coerceAtLeast(0)
-    val gapBefore: Int get() = gap(before)
-    val gapAfter: Int get() = gap(after)
+    val gapBefore: Int get() = gaps?.first ?: gap(before)
+    val gapAfter: Int get() = gaps?.second ?: gap(after)
     val fixes: Boolean get() = gapAfter < gapBefore
     /** 「A4を2回増やす」。対象が変わらない案は「A4は変わりません」。 */
     fun title(label: String): String = when {
@@ -579,6 +592,8 @@ data class CountEffect(val before: Int, val after: Int, val target: Int, val und
     fun countLine(): String = "$before$unit → $after$unit"
     fun gapLine(): String = "${if (under) "不足" else "超過"} $gapBefore$unit → $gapAfter$unit"
     fun afterNote(basis: String): String = when {
+        gaps != null && gapAfter == 0 -> "対象の日はすべて${basis}を${if (under) "満たします" else "超えなくなります"}"
+        gaps != null -> "適用後も、合計 ${gapAfter}${unit}${if (under) "不足" else "超過"}"
         gapAfter == 0 && under && unit == "人" -> "${basis.removeSuffix("人数")} ${target}人を満たします"
         gapAfter == 0 && unit == "人" -> "${basis.removeSuffix("人数")} ${target}人以内になります"
         gapAfter == 0 && under -> "適用後は${basis}に届きます"
@@ -620,12 +635,26 @@ internal fun needFixTarget(needFamilies: Map<String, List<String>>, shift: Int, 
     }
 }
 
-/** 対象の名（回数＝記号、人員＝「11/3のAア」）。 */
+/** 対象の名（回数＝記号、人員＝「11/3のAア」、まとめて＝「Dテ（2日）」）。 */
 internal fun fixTargetLabel(t: FixTarget, sym: String, startDate: String): String =
-    t.day?.let { "${DayText.short(startDate, it)}の$sym" } ?: sym
+    if (t.multi) "$sym（${t.days.size}日）" else t.day?.let { "${DayText.short(startDate, it)}の$sym" } ?: sym
+
+/** 同じ勤務の人員不足の日々をまとめて見る対象（2 日以上のときだけ）。[need] は (勤務, 日) → (必要, 適正)。 */
+internal fun multiNeedTarget(needFamilies: Map<String, List<String>>, shift: Int, need: ((Int, Int) -> Pair<Int, Int>?)?): FixTarget? {
+    need ?: return null
+    val days = needFamilies.filter { (key, fams) -> "vio-covU" in fams && VioKey.first(key) == shift }.keys.mapNotNull { VioKey.second(it) }.sorted()
+        .filter { need(shift, it) != null }
+    if (days.size < 2) return null
+    return FixTarget(null, shift, null, 0, true, "必要人数", days, days.map { need(shift, it)!!.first })
+}
+
+/** まとめて調整するボタンの名（2 日なら「両日」）。 */
+internal fun multiFixButton(n: Int): String = (if (n == 2) "両日" else "${n}日") + "の不足をまとめて調整する案を探す"
 
 /** 対象の見出し 2 行: 「下限まで、あと8回です」「現在 7回 ／ 下限 15回」。人員は「必要人数より1人少ない状態です」「配置 0人 ／ 必要 1人」。 */
-internal fun fixTargetHead(t: FixTarget, count: Int): List<String> {
+internal fun fixTargetHead(t: FixTarget, count: Int, schedule: List<List<Int>> = emptyList(), startDate: String = ""): List<String> {
+    if (t.multi) return listOf("${t.days.size}日で合計${t.gapOf(schedule)}人不足しています（日ごとの不足の合計）",
+        "対象の日：" + t.days.joinToString("・") { DayText.short(startDate, it) })
     val gap = (if (t.under) t.target - count else count - t.target).coerceAtLeast(0)
     return if (t.staff != null) listOf(
         if (t.under) "${t.basis}まで、あと${gap}回です" else "${t.basis}を${gap}回超えています",
@@ -637,7 +666,8 @@ internal fun fixTargetHead(t: FixTarget, count: Int): List<String> {
 
 /** 適用前の確認の「今回の目的」。 */
 internal fun fixTargetPurpose(t: FixTarget, staffName: String?, label: String): String =
-    if (t.staff != null) "${staffName?.let { "${it}さんの" } ?: ""}${label}${t.gapWord}を減らす"
+    if (t.multi) "${label}の${t.gapWord}をまとめて解消する"
+    else if (t.staff != null) "${staffName?.let { "${it}さんの" } ?: ""}${label}${t.gapWord}を減らす"
     else "${label}${t.gapWord}を解消する"
 
 /** 対象の問題を変える案を先に（集計・日の印から探した結果の並べ替え。同順位は元の効果順）。 */
@@ -815,6 +845,7 @@ internal fun panelTarget(ui: UiState, cv: ConditionsView?, f: FixFocus): FixTarg
     cv ?: return null
     val k = f.shift ?: return null
     return when {
+        f.allDays && f.staff == null -> multiNeedTarget(ui.needFamilies, k, cv::needCellLimits)
         f.staff != null && f.day == null -> countFixTarget(ui.countViolations, f.staff, k, cv.staffCellLimits(f.staff, k))
         f.day != null && f.exceptStaff == null -> needFixTarget(ui.needFamilies, k, f.day, cv.needCellLimits(k, f.day))
         else -> null

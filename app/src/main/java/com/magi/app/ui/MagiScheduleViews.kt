@@ -1368,6 +1368,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 val days = ct?.days.orEmpty()
                 val sym = ui.shiftSymbols.getOrNull(kk) ?: "$kk"
                 var picked by remember(kk) { mutableStateOf(days.singleOrNull()) }
+                var multi by remember(kk) { mutableStateOf(false) }
                 val rest = kk == cv.restIdx && ct != null && ct.overDays.isNotEmpty()
                 GridMarkDialog(if (rest) "休みの人数を確認" else "「$sym」の人員" + (if (ct != null && ct.overDays.isEmpty()) "不足" else ""), emptyList(), onDismiss = { totalSheet = null }) {
                     if (days.isEmpty()) Text("人員の過不足はありません。", style = MaterialTheme.typography.bodyMedium)
@@ -1382,12 +1383,19 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                             Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == j) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
                             if (days.size >= 2) {
-                                if (picked == j) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                else TextButton(onClick = { picked = j }, modifier = Modifier.heightIn(min = 48.dp)) { Text("変更案を見る") }
+                                if (picked == j && !multi) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                else TextButton(onClick = { picked = j; multi = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("変更案を見る") }
                             }
                         }
                     }
-                    picked?.let { j -> FixSearchPanel(ui, cv, FixFocus(null, kk, j), onEvent, nav, onApplied = { totalSheet = null }) }
+                    // 不足の日が 2 日以上なら、日ごとの案を組み合わせず、それらの日の不足の合計で探し直す（日ごとの不足の合計が減る案だけを主に）。
+                    val underDays = ct?.underDays.orEmpty()
+                    if (underDays.size >= 2) {
+                        if (multi) Text("選択中：${multiFixButton(underDays.size).removeSuffix("案を探す")}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        else OutlinedButton(onClick = { multi = true; picked = null }, modifier = Modifier.heightIn(min = 48.dp)) { Text(multiFixButton(underDays.size)) }
+                    }
+                    if (multi) FixSearchPanel(ui, cv, FixFocus(null, kk, null, allDays = true), onEvent, nav, onApplied = { totalSheet = null })
+                    else picked?.let { j -> FixSearchPanel(ui, cv, FixFocus(null, kk, j), onEvent, nav, onApplied = { totalSheet = null }) }
                 }
             }
             detail?.let { d ->
@@ -1883,7 +1891,10 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                     }
                 }
             }
-            if (marks.size >= 2) OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("必要人数の設定を見る") }
+            if (marks.size >= 2) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { daySheet = null; fixNav.onDay(j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${DayText.short(ui.startDate, j)}の勤務を見る") }
+                OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("必要人数の設定を見る") }
+            }
             picked?.let { k -> FixSearchPanel(ui, cv, FixFocus(null, k, j), onEvent, fixNav, onApplied = { daySheet = null }) }
         }
     }
@@ -2061,6 +2072,7 @@ internal class FixNav(
     val onNeed: (Int, Int) -> Unit = { _, _ -> },        // 人員不足・過剰の印から: その日のそのシフトの必要人数
     val onCell: (Int, Int) -> Unit = { _, _ -> },        // 職員と日（勤務表のそのセルを開く）
     val onTour: (() -> Unit)? = null,                    // 残っている必須違反を順に見る（巡回の先頭のセルへ）
+    val onDay: (Int) -> Unit = {},                       // その日の勤務を見る（勤務表をその日の列へ）
 )
 
 /**
@@ -2080,7 +2092,7 @@ internal fun FixSearchPanel(
 ) {
     val cs = MaterialTheme.colorScheme
     // 日は「他の人で補う」・人員の印・日別の職員に絞った探索で渡す（セルのシートは勤務が無い＝日は理由の読み取りにだけ使う）。
-    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null || focus.staff == null || focus.shift != null }, quick = compact)) }
+    val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null || focus.staff == null || focus.shift != null }, allDays = focus.allDays, quick = compact)) }
     // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
     LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) find() }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }

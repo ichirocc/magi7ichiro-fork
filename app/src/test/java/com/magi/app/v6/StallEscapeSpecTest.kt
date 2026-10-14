@@ -170,7 +170,7 @@ class StallEscapeSpecTest {
         assertFalse(PolishGate.stallPolishInjection)
         assertFalse(PolishGate.postChainRollbackCountsZero)
         assertEquals(WishFloorMode.OFF, PolishGate.wishConflictFloorMode)
-        assertTrue(PolishGate.c3nWallShortStall)
+        assertFalse("c3n 壁で短縮しない（3.673.0 で既定 OFF）", PolishGate.c3nWallShortStall)
         assertFalse("基準腕（HEAD の壁判定）は既定で使わない", PolishGate.c3nWallLegacy)
         assertTrue("後期演算は停止要求を見る（既定）", PolishGate.lateOpStopPropagation)
         assertFalse("1 手探索の反証は既定で使わない（測定中）", PolishGate.c3nWallDeepCheck)

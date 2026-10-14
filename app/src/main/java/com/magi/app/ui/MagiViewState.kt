@@ -705,9 +705,11 @@ internal fun coverageFocus(ui: UiState, f: FixFocus): Boolean {
     return classes.any { familyOfVioClass(it) == "covU" || familyOfVioClass(it) == "covO" }
 }
 
-internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null, val exceptStaff: Int? = null) {
+internal data class FixFocus(val staff: Int?, val shift: Int?, val day: Int? = null, val exceptStaff: Int? = null,
+                              /** 同じ勤務の人員不足の日々をまとめて見る（勤務の人員シートの「まとめて調整する案」）。 */
+                              val allDays: Boolean = false) {
     /** 結果がどの依頼のものかを見分ける鍵（`UiState.fixDoneKey` と照合）。 */
-    val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}" + (exceptStaff?.let { ",x$it" } ?: "")
+    val key: String get() = "${staff ?: "-"},${shift ?: "-"},${day ?: "-"}" + (exceptStaff?.let { ",x$it" } ?: "") + (if (allDays) ",all" else "")
 }
 
 /** 設定への行き先の名（節ごと。「設定を見直す」の一語で済ませない＝利用者決定 2026-09-27）。 */

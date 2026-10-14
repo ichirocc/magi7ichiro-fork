@@ -453,7 +453,7 @@ internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
 internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」で効きます"
 internal const val EJECTION_LEFTOVER_NOTE = "探索が早く終わって余った時間を、玉突きの深い探索に回します（測定中・既定はOFF）。「見込みのある所だけ」で効きます"
-internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、探索を早めに終えて仕上げに進みます（測定中・既定はON）"
+internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、探索を早めに終えて仕上げに進みます（既定はOFF＝時間いっぱい粘る）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」で効きます"
 internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来の広い探索で時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */

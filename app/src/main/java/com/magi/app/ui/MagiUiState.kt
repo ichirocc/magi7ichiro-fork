@@ -99,7 +99,7 @@ data class UiState(
     val ejectionPipelineRounds: Boolean = true,  // PolishGate.ejectionPipelineRounds（既定ON）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
     val ejectionUseLeftover: Boolean = false,  // PolishGate.ejectionUseLeftover（測定中）。保存しない
-    val c3nWallShortStall: Boolean = true,  // PolishGate.c3nWallShortStall（測定中）。保存しない
+    val c3nWallShortStall: Boolean = false,  // PolishGate.c3nWallShortStall（既定OFF＝3.673.0）。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
     val stallPolishInjection: Boolean = false,  // PolishGate.stallPolishInjection（既定OFF）。保存しない
