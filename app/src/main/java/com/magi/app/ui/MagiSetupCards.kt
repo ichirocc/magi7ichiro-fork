@@ -760,6 +760,7 @@ internal fun DataActionsCard(
     onSaveStaffCsv: () -> Unit = {}, onSaveWishesCsv: () -> Unit = {}, onSaveConstraintsCsv: () -> Unit = {},
     onSaveShiftColorsCsv: () -> Unit = {},
     onRestorePrev: () -> Unit = {},
+    onRetrySave: () -> Unit = {},
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -780,12 +781,13 @@ internal fun DataActionsCard(
                     when (ui.saveState) {
                         SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"
                         SaveState.Saving -> "保存中…"
-                        SaveState.Failed -> "自動保存に失敗しています（端末の空き容量をご確認のうえ「データを保存」をお試しください）"
+                        SaveState.Failed -> "自動保存に失敗しています（端末の空き容量をご確認のうえ「$SAVE_RETRY_BUTTON」をお試しください）"
                         SaveState.Saved -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (ui.saveState == SaveState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onSaveJson, enabled = ui.loaded && !ui.running, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("データを保存") }

@@ -248,4 +248,11 @@ class CountShortageTextTest {
         assertEquals("新たな必須違反：なし", newHardLine(emptyList()))
         assertEquals("新たな必須違反：禁止の並び", newHardLine(listOf("禁止の並び")))
     }
+
+    @Test fun timeoutAndSaveFailureAreSaidSeparately() {
+        val t = needFixTarget(mapOf("1,2" to listOf("vio-covU")), 1, 2, 2 to 2)!!
+        // 時間切れは「案が無い」と分ける（統合仕様 INV-08）。
+        assertEquals("10/3のAの不足を減らす案は、制限時間内には見つかりませんでした。もう一度探すと続きを探せます。", noNeedFixLine("10/3のA", t, timedOut = true))
+        assertEquals("保存：失敗（「もう一度保存する」で保存し直してください）", saveStateLine(SaveState.Failed))
+    }
 }

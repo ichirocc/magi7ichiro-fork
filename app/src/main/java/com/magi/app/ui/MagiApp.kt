@@ -663,7 +663,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         CreationResultCard(ui,
                             nextProblem = covU?.let { "${it.dayLabel}の人員不足" } ?: tour?.heading ?: shortfalls.firstOrNull()?.let { "${it.dayLabel}の人員不足" },
                             onNext = { if (covU == null && tour != null) goTourItem(0) else guidedFix = true },
-                            onOthers = { tab = 3 }, onPreDist = { preDist = true })
+                            onOthers = { tab = 3 }, onPreDist = { preDist = true }, onRetrySave = { vm.saveNow() })
                     }
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     OperatorNextActionCard(
@@ -960,6 +960,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                         onSaveShiftColorsCsv = { pendingExportKind = "colors"; saveComponentCsvLauncher.launch("magi_shift_colors_${System.currentTimeMillis()}.csv") },
                         onRestorePrev = { vm.restorePreviousData() },
+                        onRetrySave = { vm.saveNow() },
                     )
                     SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     // [実機指摘/移動] 重み表＝最適化の優先順位の根拠。実行条件（最適化設定）の隣が定位置。
