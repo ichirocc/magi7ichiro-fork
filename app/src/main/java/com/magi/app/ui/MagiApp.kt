@@ -82,6 +82,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
@@ -462,6 +463,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         onWishes = { s, d -> editReturn = cellReturn(); editingCell = null; if (s != null) deepLinkWishStaff = s; if (d != null) deepLinkDay = d; editScope = 0; tab = 2 },
         onSettings = { sec -> editReturn = cellReturn(); editingCell = null; editScope = 2; deepLinkEditSection = sec; tab = 2 },
         onNeed = { k, d -> editReturn = cellReturn(); editingCell = null; deepLinkNeedShift = k; deepLinkDay = d; editScope = 0; tab = 2 },
+        onCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 },
     ) }
     // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。種類が無いときも月次条件の先頭（前回の区分のままにしない）。
     val goEditForIssue: (com.magi.app.v6.IssueKind?) -> Unit = { kind ->
@@ -578,7 +580,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" },
-            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null) },
+            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null, onPreDist = { preDist = true }) },
         bottomBar = {
             Column {
                 when (barMode) {
@@ -1147,7 +1149,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
  */
 
 @Composable
-internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null) {
+internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null, onPreDist: (() -> Unit)? = null) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -1181,10 +1183,14 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                         }
                         label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
                     }
-                    ok -> { label = "配布可"; fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
+                    ok -> { label = readyBadgeLabel(ui.bestSoft); fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
                     ui.hasResult -> { label = "必須違反 ${ui.bestHard}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
-                    else -> { label = "未計算"; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
+                    else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
+                // 札の前に自動作成の状態（2026-10-14 利用者レビュー: 「未計算」では、警告が今の勤務表の評価か分からなかった）。
+                if (!ui.running) Text(boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft).first,
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                    modifier = Modifier.padding(end = 6.dp).widthIn(max = 96.dp))
                 // 必須違反が残るときは「順に見る」巡回の入口（勤務表のセルを必須から順に開く）。
                 val tourable = !ui.running && ui.hasResult && ui.bestHard > 0L && onHardTour != null
                 if (tourable) {
@@ -1192,6 +1198,14 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
                             Text("必須 ${ui.bestHard}件を順に見る", color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
+                        }
+                    }
+                } else if (ok && !ui.running && onPreDist != null) {
+                    // 必須 0 でも要調整が残る＝「配布可」と言い切らず、配布前の確認へ案内する（2026-10-14 利用者レビュー）。
+                    Surface(onClick = onPreDist, color = bg, shape = MaterialTheme.shapes.small, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
+                            Text(label, color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }

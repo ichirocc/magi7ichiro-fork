@@ -429,8 +429,8 @@ class CellSheetLogicTest {
     @Test fun fixSearchBudgetsAreNamedInTheWaitingLine() {
         assertEquals(3000L, FIX_SEARCH_QUICK_MS)
         assertEquals(8000L, FIX_SEARCH_MS)
-        assertEquals("この場所の直し方を探しています…（最長 3 秒）", fixSearchingText(true))
-        assertEquals("直し方を探しています…（最長 8 秒）", fixSearchingText(false))
+        assertEquals("この場所の勤務変更案を探しています…（最長 3 秒）", fixSearchingText(true))
+        assertEquals("勤務変更案を探しています…（最長 8 秒）", fixSearchingText(false))
     }
 
     /** [3.665.0] 重なった問題が 2 件以上なら選ばせ、選んだ族を減らす案だけを出す（仕様 §3-2・§5）。 */

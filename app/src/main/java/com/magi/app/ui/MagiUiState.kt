@@ -98,6 +98,8 @@ data class UiState(
     val ejectionChainSwap: Boolean = true,  // PolishGate.ejectionChainSwapMoves（既定ON）。保存しない
     val ejectionPipelineRounds: Boolean = true,  // PolishGate.ejectionPipelineRounds（既定ON）。保存しない
     val ejectionPipelineHardLeg: Boolean = false,  // PolishGate.ejectionPipelineHardLeg。保存しない
+    val ejectionUseLeftover: Boolean = false,  // PolishGate.ejectionUseLeftover（測定中）。保存しない
+    val c3nWallShortStall: Boolean = true,  // PolishGate.c3nWallShortStall（測定中）。保存しない
     val ejectionChainScope: EjectionChainScope = EjectionChainScope.BY_KIND,  // 保存しない
     val ejectionChainSeconds: Int = 10,  // PolishGate.ejectionChainMaxMillis / 1000（既定10＝3.659.0）。保存しない
     val stallPolishInjection: Boolean = false,  // PolishGate.stallPolishInjection（既定OFF）。保存しない
@@ -133,6 +135,7 @@ data class UiState(
     val fixOutcome: FixOutcome? = null,       // [3.643.0] 直近に当てた直し方の結果 1 行（表示は vm.fixOutcomeLine＝盤面が変わったら出さない）
     val csvSavedAt: String? = null,           // [3.643.0] この盤面を勤務表 CSV に保存した時刻 HH:mm（表示は vm.csvSavedLine）
     val monthMovePrompt: MonthMovePlan? = null,   // [3.643.0] 対象の月を移す前の確認（引き継ぐもの・消えるもの）。null＝閉じている
+    val appliedFix: AppliedFix? = null,          // [3.669.0] 案の一覧から当てた手の結果（同じ依頼の画面で残る問題へ案内）
     val chainPreview: ChainFixPreview? = null,    // [3.644.0] 複数人の入替を当てる前の一覧（だれの・どの日の・何→何）。null＝閉じている
     val liveSchedule: List<List<Int>> = emptyList(),      // [DefragLiveView] 計算中の最良盤面（実行中のみ）
     val v6: V6PortReport? = null,
@@ -219,6 +222,10 @@ internal fun UiState.withWishDisplay(st: com.magi.app.model.MagiState): UiState 
 
 /** [3.643.0] 直し方を当てた結果の 1 行（文は FixOutcomeText）。 */
 data class FixOutcome(val line: String)
+
+/** 案の一覧から確認して当てた手（[focusKey] の依頼の画面へ「変更を反映しました」を返す。[after] と今の盤面が違えば出さない）。 */
+data class AppliedFix(val focusKey: String, val label: String, val ops: List<com.magi.app.v6.FixCell>, val before: List<List<Int>>, val after: List<List<Int>>, val target: FixTarget? = null,
+                      val hardBefore: Int = -1, val hardAfter: Int = -1, val softBefore: Int = -1, val softAfter: Int = -1)
 
 data class WishCancelOutcome(
     val name: String, val day: Int, val symbol: String,

@@ -399,6 +399,20 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                 }
                 Switch(checked = ui.ejectionPipelineHardLeg, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionPipelineHardLeg(it)) }, enabled = pipelineOn)
             }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("余った時間も玉突きに使う", style = MaterialTheme.typography.bodyMedium)
+                    Text(EJECTION_LEFTOVER_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = ui.ejectionUseLeftover, onCheckedChange = { onEvent(MagiEvent.Settings.SetEjectionUseLeftover(it)) }, enabled = pipelineOn)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("禁止の並びだけ残ったら早めに切り上げる", style = MaterialTheme.typography.bodyMedium)
+                    Text(C3N_WALL_SHORT_NOTE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = ui.c3nWallShortStall, onCheckedChange = { onEvent(MagiEvent.Settings.SetC3nWallShortStall(it)) }, enabled = !ui.running)
+            }
             Text("2手目以降を探す範囲", style = MaterialTheme.typography.bodyMedium)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 EJECTION_CHAIN_SCOPES_SHOWN.forEach { sc ->
@@ -438,6 +452,8 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
 internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」で効きます"
+internal const val EJECTION_LEFTOVER_NOTE = "探索が早く終わって余った時間を、玉突きの深い探索に回します（測定中・既定はOFF）。「見込みのある所だけ」で効きます"
+internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、探索を早めに終えて仕上げに進みます（測定中・既定はON）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」で効きます"
 internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来の広い探索で時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */

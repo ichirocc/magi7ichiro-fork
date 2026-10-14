@@ -293,15 +293,38 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(p.title) },
+        title = { Text(if (p.purpose != null) "この変更を適用しますか？" else p.title) },
         text = {
-            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(p.suggestion.label, style = MaterialTheme.typography.bodyMedium)
-                Text("変わる人と勤務（前 → 後）", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                Text(p.hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                p.caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
-                Text("適用の直前にもう一度検査し、必須違反が減らない・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。",
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
+                p.purpose?.let {
+                    Text("今回の目的", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    Text(it, style = MaterialTheme.typography.bodyMedium)
+                } ?: Text(p.suggestion.label, style = MaterialTheme.typography.bodyMedium)
+                Text("変更する勤務", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                p.rows.groupBy { it.staff }.forEach { (staff, rows) ->
+                    Text("対象：${staff}さん", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Row { listOf("日付", "変更前", "変更後").forEach { h -> Text(h, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f)) } }
+                    rows.forEach { r ->
+                        Row { listOf(r.date, r.before, r.after).forEach { v -> Text(v, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f)) } }
+                        if (r.impact.isNotEmpty()) Text("　人数：${r.impact}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        if (r.wish.isNotEmpty()) Text("　${r.wish}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    }
+                }
+                p.effect.forEachIndexed { n, line -> Text(line, style = MaterialTheme.typography.bodyMedium, fontWeight = if (n == 0) FontWeight.Bold else FontWeight.Normal) }
+                Text(p.hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = if (p.effect.isEmpty()) FontWeight.Bold else FontWeight.Normal)
+                if (p.countNotes.isNotEmpty()) {
+                    Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    p.countNotes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
+                }
+                Text("評価結果", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                p.newHard?.let { Text("・新たな必須違反：" + (it.joinToString("、").ifEmpty { "なし" }), style = MaterialTheme.typography.bodySmall) }
+                val (wishLine, consultLine) = previewWishLines(p.rows)
+                Text("・$wishLine", style = MaterialTheme.typography.bodySmall)
+                p.caution?.let { Text("・$it", style = MaterialTheme.typography.bodySmall) }
+                Text("・$consultLine", style = MaterialTheme.typography.bodySmall)
+                Text("適用の直前に最新の勤務表でもう一度検査し、必須違反が減らない・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 Text(CHANGE_DUTY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
@@ -309,9 +332,9 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         // 第 2 の操作と「やめる」も主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。dismiss の枠に分けると横に入り切らず重なった。
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DialogConfirmButton(APPLY_CHANGE_BUTTON, onClick = onApply)
+                DialogConfirmButton(applyCountButton(p.suggestion.ops.size), onClick = onApply)
                 ConsultButton(consulted, Modifier, onClick = onConsult)
-                DialogDismissButton(onClick = onDismiss, text = KEEP_CURRENT_BUTTON)
+                DialogDismissButton(onClick = onDismiss, text = if (p.fromList) BACK_TO_FIXES_BUTTON else KEEP_CURRENT_BUTTON)
             }
         },
     )
@@ -617,10 +640,10 @@ internal fun OperatorNextActionCard(
             val diffTxt = top.diff.joinToString("・") { (k, dlt) -> "${breakdownLabels[k] ?: k} ${if (dlt < 0) "−${-dlt}" else "+$dlt"}" }
             val totalTxt = if (top.deltaTotal <= 0) "−${-top.deltaTotal}" else "+${top.deltaTotal}"
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
-                moveLabel, onShowMove, true, "${APPLY_CHANGE_BUTTON}（元に戻せます）", onApplyMove,
+                moveLabel, onShowMove, true, APPLY_CHANGE_BUTTON, onApplyMove,
                 body = top.label,
                 note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n違反 $totalTxt（$diffTxt）" else "") +
-                    (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else ""))
+                    (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else "") + "\n$APPLY_UNDO_NOTE")
         }
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
@@ -1855,9 +1878,10 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                                 // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
                                 ConsultButton(isConsulted(ui.consults, consultFix(s))) { onConsult(s) }
                                 Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text("${APPLY_CHANGE_BUTTON}（元に戻せます）")
+                                    Text(APPLY_CHANGE_BUTTON)
                                 }
                             }
+                            Text(APPLY_UNDO_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer, modifier = Modifier.align(Alignment.End))
                         }
                     }
                 }

@@ -584,10 +584,13 @@ internal fun coverageHeaderLabel(ui: UiState, marks: List<CoverageMark>): String
  * 回数の過不足の 1 枚（例「Dﾃ +2回 (6/4)」）。ref は目標（apt）か下限・上限、refLabel は下限・上限のときだけ付ける。
  * under＝不足側の色（下限割れ・適切回数の不足・個人の合計）。
  */
-internal data class CountChip(val shift: String, val count: Int, val ref: Int?, val refLabel: String, val under: Boolean) {
+internal data class CountChip(val shift: String, val count: Int, val ref: Int?, val refLabel: String, val under: Boolean, val shiftIdx: Int = -1) {
     val delta: Int? get() = ref?.let { count - it }
     val text: String get() = "$shift  " + (delta?.let { (if (it > 0) "+" else "") + "${it}回 " } ?: "") +
         "(${count}/" + (ref?.let { refLabel + it } ?: "—") + ")"
+    /** 勤務状況の表の 1 行: 「Dテ　3回／目標 5回　あと2回」（数を小さな札に詰めず全文で）。 */
+    val rowText: String get() = "$shift　${count}回／" + (ref?.let { "${refLabel.ifEmpty { "目標" }} ${it}回" } ?: "基準なし") +
+        (delta?.let { d -> if (d < 0) "　あと${-d}回" else if (d > 0) "　${d}回多い" else "" } ?: "")
 }
 
 /** 行末の印のシートの中身。weekly は 1 シフト 1 行、fair は「差 N回 : シフト, …」を差の大きい順。 */
@@ -647,10 +650,10 @@ internal fun staffCountSheet(ui: UiState, i: Int, limits: ((Int, Int) -> Triple<
         val (lo, hi, apt) = limits?.invoke(i, k) ?: Triple(null, null, null)
         for (cls in ui.countFamilies[key] ?: listOfNotNull(ui.countViolations[key])) {
             chips += when (cls) {
-                "vio-low" -> CountChip(sym(k), count, lo, "下限", true)
-                "vio-high" -> CountChip(sym(k), count, hi, "上限", false)
-                "vio-aptLow", "vio-aptHigh" -> CountChip(sym(k), count, apt, "", cls == "vio-aptLow")
-                else -> CountChip(sym(k), count, null, "", isUnderCountClass(cls))
+                "vio-low" -> CountChip(sym(k), count, lo, "下限", true, k)
+                "vio-high" -> CountChip(sym(k), count, hi, "上限", false, k)
+                "vio-aptLow", "vio-aptHigh" -> CountChip(sym(k), count, apt, "", cls == "vio-aptLow", k)
+                else -> CountChip(sym(k), count, null, "", isUnderCountClass(cls), k)
             }
         }
     }
@@ -715,18 +718,27 @@ internal fun settingsLabelFor(section: String): String = when (section) {
 }
 
 /** 手が見つからなかったときの説明。lines は確かめた事実だけ、wishRelated なら「希望を見る」を出す。 */
-internal data class NoFixExplain(val lines: List<String>, val wishRelated: Boolean, val settingsSection: String, val kind: NoFixKind = NoFixKind.SCOPE)
+internal data class NoFixExplain(val lines: List<String>, val wishRelated: Boolean, val settingsSection: String, val kind: NoFixKind = NoFixKind.SCOPE,
+                                 val candidates: List<AddCandidate> = emptyList())
+
+/**
+ * 回数を増やす候補日 1 つ（［追加候補日を確認］の行）。[current]＝その日の今の勤務、[reason]＝確かめられた変えられない条件
+ * （null＝この画面では確かめられない）、[check]＝解消するために確認すること、[go]＝［対象の設定を見る］の行き先。
+ */
+internal data class AddCandidate(val day: Int, val current: Int, val reason: String?, val check: String, val go: Go) {
+    enum class Go { WISH, NEED, COUNT, NONE }
+}
 
 /** 改善案が見つからない理由の区分（仕様 §7）。どれも「解決できない」とは言わない。 */
 internal enum class NoFixKind(val head: String) {
     CONTRADICTION("矛盾を確認：両立しない条件（本人の希望どうしのぶつかり）があります。該当する希望か条件を直すと解消します。"),
     TIME("時間不足：制限時間内に改善案を見つけられませんでした。もう一度探すと続きを探せます。"),
-    FIXED("固定条件による制限：本人の希望や個人の上限などの固定条件が、候補の変更を妨げています。固定条件を確かめるか、相談に回せます。"),
+    FIXED("固定条件による制限：本人の希望や個人の上限などの固定条件があり、現在の条件を守ったまま変更できる案は、今回の探索では見つかりませんでした。必要に応じて対象職員にご相談ください。"),
     SCOPE(NO_FIX_HEAD),
 }
 
 /** 1 行目＝見つからなかったこと（上段のシートは 2 行で切れる）、続けて確かめた理由、最後に探した範囲。 */
-internal const val NO_FIX_HEAD = "探索範囲内で改善なし：必須を増やさずに違反を減らす手は、調べた範囲では見つかりませんでした。別の方法で探すか、条件を見直せます。"
+internal const val NO_FIX_HEAD = "探索範囲内で改善なし：現在の条件を守ったまま改善できる案は、今回の探索では見つかりませんでした。別の方法で探すか、条件を見直せます。"
 internal const val NO_FIX_SCOPE = "探したのは 1 セルの変更・2 人の入れ替え・玉突きの範囲です。"
 
 /**
@@ -744,6 +756,7 @@ internal fun noFixReasons(
     fun cellAt(i: Int, j: Int) = ui.schedule.getOrNull(i)?.getOrNull(j)
     fun headcount(k: Int, j: Int) = ui.schedule.count { it.getOrNull(j) == k }
     val i = f.staff; val k = f.shift; val d = f.day
+    countShortage(ui, f, limits)?.let { return shortageReasons(ui, f, it, limits, needLimits) }
     if (i != null && d != null) {
         val cur = cellAt(i, d)
         if (cur != null && ui.wishes["$i,$d"] == cur) { out += "このセル（${DayText.short(ui.startDate, d)} の「${sym(cur)}」）は本人の希望で固定されています。"; wish = true }
@@ -791,6 +804,70 @@ internal fun noFixReasons(
     out[0] = kind.head
     return NoFixExplain(out, wish, section, kind)
 }
+
+/** 回数の不足（職員×シフト、日の指定なし）。[target] は下限か目標、[basis] はその名。 */
+internal data class CountShortage(val count: Int, val target: Int, val basis: String) { val gap: Int get() = target - count }
+
+internal fun countShortage(ui: UiState, f: FixFocus, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)?): CountShortage? {
+    val i = f.staff ?: return null; val k = f.shift ?: return null
+    if (f.day != null || limits == null) return null
+    val (lo, _, apt) = limits(i, k)
+    val count = ui.schedule.getOrNull(i)?.count { it == k } ?: return null
+    return when (ui.countViolations["$i,$k"]) {
+        "vio-low" -> lo?.let { CountShortage(count, it, "下限") }
+        "vio-aptLow" -> apt?.let { CountShortage(count, it, "目標") }
+        else -> null
+    }?.takeIf { it.gap > 0 }
+}
+
+/**
+ * 回数が足りないときの説明（2026-10-14 利用者レビュー: 「その勤務を抜くと人員不足」は向きが逆）。
+ * 「あと N 回」の見出しは呼び出し側（[fixTargetHead]）。ここは見つからなかったことと次に確認すること、
+ * 追加候補日（その日の今の勤務と確かめられた変えられない条件）は [NoFixExplain.candidates] へ、今ある回数の事実は補足へ。
+ */
+private fun shortageReasons(
+    ui: UiState, f: FixFocus, sh: CountShortage,
+    limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)?, needLimits: ((Int, Int) -> Pair<Int, Int>?)?,
+): NoFixExplain {
+    val i = f.staff!!; val k = f.shift!!
+    fun sym(x: Int) = ui.shiftSymbols.getOrNull(x) ?: "$x"
+    val row = ui.schedule.getOrNull(i).orEmpty()
+    val name = ui.staffNames.getOrNull(i) ?: "#$i"
+    val out = arrayListOf(
+        if (ui.fixTimedOut) "制限時間内に、条件を守って ${sh.gap} 回増やせる案は見つかりませんでした。もう一度探すと続きを探せます。"
+        else "今回の探索では、条件を守って ${sh.gap} 回増やせる案が見つかりませんでした。",
+        "次に確認すること：「${sym(k)}」を追加する候補日と、変更を妨げる条件を確認します。",
+    )
+    var wish = false
+    val candidates = row.indices.filter { row[it] != k }.map { j ->
+        val cur = row[j]
+        val lim = needLimits?.invoke(cur, j)
+        val (lo, _, _) = limits?.invoke(i, cur) ?: Triple(null, null, null)
+        when {
+            ui.wishes["$i,$j"] == cur -> { wish = true
+                AddCandidate(j, cur, "本人の希望（${sym(cur)}）で固定されています", "${name}さんに、この日の希望を調整できるかご相談ください", AddCandidate.Go.WISH) }
+            lim != null && ui.schedule.count { r -> r.getOrNull(j) == cur } <= lim.first ->
+                AddCandidate(j, cur, "この日の「${sym(cur)}」が必要人数ぎりぎりです（必要 ${lim.first}人）", "この日の「${sym(cur)}」を担当できるほかの職員がいるか、必要人数の設定をご確認ください", AddCandidate.Go.NEED)
+            lo != null && row.count { it == cur } <= lo ->
+                AddCandidate(j, cur, "${name}さんの「${sym(cur)}」が個人の下限ちょうどです（下限 ${lo}回）", "「${sym(cur)}」の個人の下限をご確認ください", AddCandidate.Go.COUNT)
+            else -> AddCandidate(j, cur, null, "前後の勤務の並び・期間の制約・この日の人数を勤務表でご確認ください", AddCandidate.Go.NONE)
+        }
+    }
+    val pinned = row.indices.count { row[it] == k && ui.wishes["$i,$it"] == k }
+    if (pinned > 0) { out += "補足：「${sym(k)}」の ${sh.count} 回のうち ${pinned} 回は本人の希望で固定されています。"; wish = true }
+    out += NO_FIX_SCOPE
+    val blocked = candidates.count { it.reason != null }
+    val kind = when { ui.fixTimedOut -> NoFixKind.TIME; blocked > 0 && blocked == candidates.size -> NoFixKind.FIXED; else -> NoFixKind.SCOPE }
+    return NoFixExplain(out, wish, "yr_count", kind, candidates)
+}
+
+/** ［追加候補日を確認］の行の見出し: 「10/3（休 → Dテ）」。 */
+internal fun addCandidateHead(c: AddCandidate, ui: UiState, shift: Int): String =
+    "${DayText.full(ui.startDate, c.day)}　${ui.shiftSymbols.getOrNull(c.current) ?: "?"} → ${ui.shiftSymbols.getOrNull(shift) ?: "?"}"
+
+/** 回数不足の相談事項（増やす案が見つからないとき）。 */
+internal fun consultCountShortage(name: String, sym: String, head: String, staff: Int) =
+    ConsultItem("${name}さんの「$sym」の回数", "$head。条件を守って増やせる案が見つからない＝追加候補日と変更を妨げる条件を確認", staff, staffName = name)
 
 /** シフト集計「計（期間）」の人員の印：そのシフトに人員不足・過剰がある日。 */
 internal data class ShiftCoverageTotal(val underDays: List<Int>, val overDays: List<Int>) {
