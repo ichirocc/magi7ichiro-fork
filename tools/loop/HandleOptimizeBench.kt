@@ -67,6 +67,8 @@ fun main(args: Array<String>) {
                 }
                 PolishGate.ejectionPipelineAfterRepair = !feature.startsWith("ejpipe") || feature == "ejpipeend"
                 PolishGate.normalStallFraction = if (feature == "earlystall" && armOn) onFraction else 0.9
+                // "leftover"＝on 腕で玉突きの深い探索に締切までの残りを回す（PolishGate.ejectionUseLeftover）。
+                PolishGate.ejectionUseLeftover = feature == "leftover" && armOn
                 val t0 = System.currentTimeMillis()
                 val res = runBlocking {
                     V6FinalPort.handleOptimize(
