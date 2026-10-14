@@ -2089,6 +2089,7 @@ internal fun FixSearchPanel(
     family: String? = null,   // セルのシートで選んだ問題（族）。その族を減らす案だけを出す（null＝すべて）
     addresses: ((com.magi.app.v6.FixSuggestion) -> Boolean)? = null,   // この場所の問題を解消する案か（セルのシート。family より優先）
     addressLabel: String? = null,   // その問題の名（「このセルの禁止の並び」）
+    addressPending: Boolean = false,   // addresses の判定（正式な検査）がまだ＝「解消する案なし」と言わない
 ) {
     val cs = MaterialTheme.colorScheme
     // 日は「他の人で補う」・人員の印・日別の職員に絞った探索で渡す（セルのシートは勤務が無い＝日は理由の読み取りにだけ使う）。
@@ -2178,8 +2179,10 @@ internal fun FixSearchPanel(
                                 Text(fixImpactLines(s).first, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             }
                             OutlinedButton(onClick = {
-                                val eff = if (e != null && target != null) listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(target.basis)) + remain else emptyList()
-                                onEvent(MagiEvent.Board.PreviewFix(s, purpose, eff, focus.key, target))
+                                // 「別の問題を改善する案」は見ている問題を直す案として確認・適用しない（目的と対象を渡さない＝統合仕様 INV-01/INV-03）。
+                                val fixesTarget = e?.fixes == true
+                                val eff = if (e != null && target != null && fixesTarget) listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(target.basis)) + remain else emptyList()
+                                onEvent(MagiEvent.Board.PreviewFix(s, if (target == null || fixesTarget) purpose else null, eff, focus.key, target?.takeIf { fixesTarget }))
                             }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text(REVIEW_CHANGE_BUTTON) }
                         }
                     }
@@ -2191,6 +2194,7 @@ internal fun FixSearchPanel(
                     AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label, onUndo = { onEvent(MagiEvent.Board.Undo) }, onTour = nav.onTour?.let { go -> { onApplied(); go() } })
                 }
                 when {
+                    addressPending && shown.isNotEmpty() -> Text(ADDRESS_CHECKING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     pred != null && target == null && shown.isNotEmpty() && fixing.isEmpty() ->
                         Text(noFixForProblemLine(addressLabel ?: family?.let { breakdownLabels[it] ?: it } ?: "このセルの問題"), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     fixing.isNotEmpty() -> {

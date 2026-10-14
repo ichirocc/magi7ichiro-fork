@@ -537,6 +537,12 @@ internal fun peekRecommendation(r: RelaxTrial.Result?, i: Int, j: Int): Int? =
     r?.moves?.firstOrNull { it.staff == i && it.day == j }?.to
 
 /** 1 つのセルに重なった問題の見出し（違反セルの半自動修正仕様 §3-2・§5、3.665.0）。2 件以上のときだけ。 */
+internal const val ADDRESS_CHECKING_TEXT = "案ごとに、このセルの問題が解消するか確認しています…"
+
+internal const val REVIEW_CHECKING_TEXT = "変更後の影響を確認しています…"
+
+internal const val PICK_PROBLEM_FIRST_NOTE = "問題を選ぶと、その問題がこのセルで解消する変更案を探します。"
+
 internal fun problemChoiceHeading(n: Int): String? = if (n >= 2) "この勤務に関係する問題が $n 件あります。どの問題の直し方を確認しますか？" else null
 
 /** 選んだ問題（族）を減らす案か。[family] が null＝選んでいない（すべての案）。 */
@@ -1072,6 +1078,16 @@ internal fun creationResultLines(hard: Long, breakdown: Map<String, Int>, save: 
 internal const val CREATION_DONE_TITLE = "勤務表の作成が終わりました"
 
 /** 適用後の「今回の問題」の状態（解消／減少／残存）。 */
+/** 見ている問題の数が厳密に減るか（統合仕様 INV-03＝適用は対象の改善と正式な門の両方）。対象を持たない案は判定しない。 */
+internal fun improvesTarget(t: FixTarget?, schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>): Boolean =
+    t == null || t.effect(schedule, ops).fixes
+
+internal const val NOT_IMPROVING_TARGET_MESSAGE = "見ている問題が減らないため、この提案は適用しませんでした。「直し方を探す」で探し直してください"
+
+/** 確認の画面の「新たな必須違反」（null＝評価していない＝なしと言わない、統合仕様 INV-10）。 */
+internal fun newHardLine(newHard: List<String>?): String =
+    "新たな必須違反：" + when { newHard == null -> "未評価（適用の直前に検査します）"; newHard.isEmpty() -> "なし"; else -> newHard.joinToString("、") }
+
 internal fun appliedStatusWord(e: CountEffect): String = when { e.gapAfter == 0 -> "解消"; e.gapAfter < e.gapBefore -> "減少"; else -> "残存" }
 
 /** 確認の画面の「対応する人」「確認する時期」（担当者名・期限のデータは無い＝未設定と書く）。 */

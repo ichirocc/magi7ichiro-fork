@@ -319,7 +319,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                     p.countNotes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
                 }
                 Text("判断に必要な情報", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                p.newHard?.let { Text("・新たな必須違反：" + (it.joinToString("、").ifEmpty { "なし" }), style = MaterialTheme.typography.bodySmall) }
+                Text("・" + newHardLine(p.newHard), style = MaterialTheme.typography.bodySmall)
                 val (wishLine, consultLine) = previewWishLines(p.rows)
                 Text("・$wishLine", style = MaterialTheme.typography.bodySmall)
                 p.caution?.let { Text("・$it", style = MaterialTheme.typography.bodySmall) }
@@ -359,7 +359,8 @@ internal fun CreationResultCard(ui: UiState, nextProblem: String?, onNext: () ->
                 Text(it, style = MaterialTheme.typography.bodyMedium)
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (nextProblem != null) Button(onClick = onNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("この問題の変更案を見る") }
+                // 主操作はすぐ下の思考誘導カードの大ボタン＝ここは外枠だけ（主操作は画面に 1 つ、統合仕様 INV-09）。
+                if (nextProblem != null) OutlinedButton(onClick = onNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("この問題の変更案を見る") }
                 OutlinedButton(onClick = onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほかの問題を見る") }
                 OutlinedButton(onClick = onPreDist, modifier = Modifier.heightIn(min = 48.dp)) { Text("配布前の確認") }
             }
@@ -590,7 +591,7 @@ internal fun OperatorNextActionCard(
     onSetup: () -> Unit,     // データを見直す（編集へ）
     onLanding: (EditLanding?) -> Unit = {},   // [UX監査 中4] 原因のある「データを見直す」は対応する区分・節へ（null＝編集の先頭）
     onShowMove: () -> Unit = {},    // [思考誘導S0] 直す1手を見る
-    onApplyMove: () -> Unit = {},   // [3.643.0] 先頭の直す手をこの場で当てる（旧「AIの解決提案」の「この手を使う」）
+    onApplyMove: (com.magi.app.v6.FixSuggestion) -> Unit = {},   // [3.643.0] カードに出した手をこの場で当てる（押した時点で選び直さない＝統合仕様 INV-01）
     onAutoSearch: () -> Unit = {},  // [3.643.0] 必須違反が残り未探索なら 1 回だけ直し方を探す（旧 SmartActionCard の自動探索）
     onShowWishes: () -> Unit = {},  // [思考誘導S0/S3] ぶつかっている希望を見る（WishConflictDialog）
     onShowList: () -> Unit = {},    // [思考誘導S0] 問題を見る（分析タブ）
@@ -667,7 +668,7 @@ internal fun OperatorNextActionCard(
             val diffTxt = top.diff.joinToString("・") { (k, dlt) -> "${breakdownLabels[k] ?: k} ${if (dlt < 0) "−${-dlt}" else "+$dlt"}" }
             val totalTxt = if (top.deltaTotal <= 0) "−${-top.deltaTotal}" else "+${top.deltaTotal}"
             OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
-                moveLabel, onShowMove, true, APPLY_CHANGE_BUTTON, onApplyMove,
+                moveLabel, onShowMove, true, APPLY_CHANGE_BUTTON, { onApplyMove(top) },
                 body = top.label,
                 note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n違反 $totalTxt（$diffTxt）" else "") +
                     (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else "") + "\n$APPLY_UNDO_NOTE")

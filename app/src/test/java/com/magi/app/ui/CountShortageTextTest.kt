@@ -235,4 +235,17 @@ class CountShortageTextTest {
         assertEquals(t, panelTarget(u, cv, FixFocus(null, 1, null, allDays = true)))
         assertEquals("-,1,-,all", FixFocus(null, 1, null, allDays = true).key)
     }
+
+    @Test fun applyRequiresTargetImprovementAndShowsUnevaluated() {
+        val fams = mapOf("1,2" to listOf("vio-covU"), "1,3" to listOf("vio-covU"))
+        val need = { k: Int, j: Int -> if (k == 1) (if (j == 2) 2 to 2 else 1 to 1) else null }
+        val t = multiNeedTarget(fams, 1, need)!!
+        assertTrue(improvesTarget(t, schedule, listOf(FixCell(0, 2, 1))))
+        // 相殺するだけの案は全体が良くなっても当てない（統合仕様 INV-03）。対象を持たない案は判定しない。
+        assertFalse(improvesTarget(t, schedule, listOf(FixCell(1, 2, 0), FixCell(1, 3, 1))))
+        assertTrue(improvesTarget(null, schedule, listOf(FixCell(1, 2, 0))))
+        assertEquals("新たな必須違反：未評価（適用の直前に検査します）", newHardLine(null))
+        assertEquals("新たな必須違反：なし", newHardLine(emptyList()))
+        assertEquals("新たな必須違反：禁止の並び", newHardLine(listOf("禁止の並び")))
+    }
 }

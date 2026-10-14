@@ -3137,6 +3137,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 message = "勤務表か設定が変わったため、この提案は適用できません。「直し方を探す」をもう一度押してください") }
             return
         }
+        // 見ている問題の数が減らない案は、全体の評価が良くなっても当てない（統合仕様 INV-03。案の一覧の主一覧と同じ判定）。
+        if (!improvesTarget(fixTarget, sched.map { it.toList() }, s.ops)) {
+            logOp("W", "改善手を見送り: ${s.label}（見ている問題が減らない）")
+            _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixSearched = false, stalledHardFamilies = emptyList(),
+                message = NOT_IMPROVING_TARGET_MESSAGE) }
+            return
+        }
         // [3.509.4/自動化方針] 適用直前に仮盤面で完全再評価し、辞書式で改善しない・固定を崩す提案は反映しない。
         val gate = com.magi.app.v6.FixApplyGate.apply(st, sched, s.ops)
         if (gate !is com.magi.app.v6.FixApplyGate.Outcome.Applied) {

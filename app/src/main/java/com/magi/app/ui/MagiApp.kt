@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.foundation.layout.Arrangement
@@ -595,7 +596,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         bottomBar = {
             Column {
                 when (barMode) {
-                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm)
+                    BottomBarMode.COMMAND -> BottomCommandBar(ui, vm, secondary = tab == 0)
                     BottomBarMode.MERGED_WEEK, BottomBarMode.MERGED_VIOLATION ->
                         ScheduleCommandBar(ui, vm, schedNav, violation = barMode == BottomBarMode.MERGED_VIOLATION, onRevealGrid = { revealGrid() })
                     BottomBarMode.HIDDEN, BottomBarMode.NONE -> {}
@@ -655,10 +656,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }
                     // 自動作成の結果と次に確認する問題（作成の完了＝配布できる、とは言わない）。人員不足は日と勤務、ほかは巡回の先頭。
                     if (ui.hasResult && ui.engineRan && !ui.running) {
-                        val covU = ui.coverageDiag?.shortfalls?.firstOrNull()
+                        // 見せる枠＝押して開く枠（なおし方の対象は guidedFixTarget＝先頭の不足とは限らない。統合仕様 INV-01）。
+                        val shortfalls = ui.coverageDiag?.shortfalls.orEmpty()
+                        val covU = guidedFixTarget(shortfalls)
+                        val tour = tourItems.firstOrNull()
                         CreationResultCard(ui,
-                            nextProblem = covU?.let { "${it.dayLabel}の人員不足" } ?: tourItems.firstOrNull()?.heading,
-                            onNext = { if (covU != null) guidedFix = true else goTourItem(0) },
+                            nextProblem = covU?.let { "${it.dayLabel}の人員不足" } ?: tour?.heading ?: shortfalls.firstOrNull()?.let { "${it.dayLabel}の人員不足" },
+                            onNext = { if (covU == null && tour != null) goTourItem(0) else guidedFix = true },
                             onOthers = { tab = 3 }, onPreDist = { preDist = true })
                     }
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
@@ -676,7 +680,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSetup = { openEditLanding(null) },
                         onLanding = { l -> openEditLandingFrom(l, EditReturn("なおし方", EditReturn.GUIDED)) },
                         onShowMove = { tab = 3 },
-                        onApplyMove = { ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.let { vm.previewOrApplyFix(it) } },
+                        onApplyMove = { s -> vm.previewOrApplyFix(s) },
                         onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null)) },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
@@ -1240,7 +1244,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
 
 /** 停止/作成/もう一度の主ボタン（勤務表タブの統合バーと BottomCommandBar で同じ規則）。 */
 @Composable
-internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modifier, showIcon: Boolean = true, compact: Boolean = false) {
+internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modifier, showIcon: Boolean = true, compact: Boolean = false, secondary: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     // 勤務表タブの統合バーは前後・元に戻す等と並んで残り幅が 90dp まで縮む（390dp 幅）。余白を詰めて 2 行まで折り返し、ラベルを切らない。
     val pad = if (compact) PaddingValues(horizontal = 12.dp) else ButtonDefaults.ContentPadding
@@ -1258,29 +1262,24 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
             if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
             Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
         }
-        !ui.hasResult -> Button(
+        else -> {
             // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
             //   [3.126.0] 「下書きをつくる」補助はユーザー判断で撤去済み＝作成導線はこの1本。
-            onClick = { vm.runV6FullOptimize() },
-            modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
-            contentPadding = pad,
-        ) {
-            if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-            Text("勤務表をつくる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-        }
-        else -> Button(
-            onClick = { vm.runV6FullOptimize() },
-            modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
-            contentPadding = pad,
-        ) {
-            if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-            Text("再作成", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            // ホームでは思考誘導カードの大ボタンが主操作＝下部バーは外枠に落とす（主操作は画面に 1 つ、統合仕様 INV-09）。
+            val label = if (!ui.hasResult) "勤務表をつくる" else "再作成"
+            val content: @Composable RowScope.() -> Unit = {
+                if (showIcon) { Icon(Icons.Filled.PlayArrow, contentDescription = null); Spacer(Modifier.width(8.dp)) }
+                Text(label, style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            }
+            val m = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp)
+            if (secondary) OutlinedButton(onClick = { vm.runV6FullOptimize() }, modifier = m, contentPadding = pad, content = content)
+            else Button(onClick = { vm.runV6FullOptimize() }, modifier = m, contentPadding = pad, content = content)
         }
     }
 }
 
 @Composable
-internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
+internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel, secondary: Boolean = false) {
     val cs = MaterialTheme.colorScheme
     // 一本指: 主要操作を画面下部に全幅・大ボタン(60dp)で常設。指の届く範囲で押し外しにくい。文脈で 停止/作成/最適化。
     // [DESIGN.md P3] 重い影(8dp)を廃し、surfaceContainer トーン＋軽い影(2dp)で本文から分離（melta-ui: 影より境界/トーン）。
@@ -1310,7 +1309,7 @@ internal fun BottomCommandBar(ui: UiState, vm: MagiViewModel) {
                 ) { if (narrow) Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = null) else Text("やり直し") }
                 Spacer(Modifier.width(10.dp))
             }
-            PrimaryCommandButton(ui, vm, Modifier.weight(1f))
+            PrimaryCommandButton(ui, vm, Modifier.weight(1f), secondary = secondary)
         }
         }
     }
