@@ -40,8 +40,8 @@ class ConsultListTest {
     @Test fun chainAndFixConsultsSummarizeTheChange() {
         val s = FixSuggestion(FixKind.CHAIN, listOf(FixCell(0, 2, 2)), "（玉突き）10/3 の「夜」を複数人の入替で埋める", -1, 0, listOf("covU" to -1))
         val p = chainFixPreview(s, arrayOf(intArrayOf(0, 0, 1)), listOf("甲"), listOf("休", "日", "夜"), "2026-10-01")
-        assertEquals(ConsultItem(s.label, "甲 10/3 日 → 夜（必須違反: 1件減る）"), consultChain(p))
-        assertEquals(ConsultItem(s.label, "必須違反: 1件減る"), consultFix(s))
+        assertEquals(ConsultItem(s.label, "甲 10/3 日 → 夜（必須違反: 1人減る）"), consultChain(p))
+        assertEquals(ConsultItem(s.label, "必須違反: 1人減る"), consultFix(s))
     }
 
     /** [3.646.0 B01/B02] 対象は氏名と実日付で引き直す＝職員の並び替え・削除、月の移動のあとに別のセルを開かない。 */
