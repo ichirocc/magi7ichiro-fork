@@ -831,3 +831,117 @@ internal fun appliedLines(ui: UiState, a: AppliedFix, target: FixTarget?, label:
     out += "勤務表が変わったため、変更案を探し直しました（下の案は今の勤務表のものです）。"
     return out
 }
+
+/**
+ * セルを 1 つ変える前の確認（2026-10-14 利用者レビュー「問題を確認 → 変更方法を選ぶ → 影響を確認して適用」）。
+ * 前後の報告を正式な検査（[UnifiedViolationChecker]）で比べ、違反の同一性（[com.magi.app.v6.ViolationIdentity]）で
+ * このセルの問題が解消するか、ほかで解消する問題、新しく生じる問題を言う。値はすべて評価した結果（仮の値を書かない）。
+ */
+internal data class CellChangeReview(
+    val change: String, val neighbors: String, val thisCell: List<String>, val othersResolved: List<String>,
+    val appeared: List<String>, val hardLine: String, val headcount: List<String>, val counts: List<String>, val wishPin: List<String>,
+)
+
+internal fun cellChangeReview(
+    state: MagiState, s: Array<IntArray>, i: Int, j: Int, k: Int, staffNames: List<String>, shiftSymbols: List<String>,
+    limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)?, needLimits: ((Int, Int) -> Pair<Int, Int>?)?, pinned: Boolean,
+): CellChangeReview {
+    fun sym(x: Int?) = x?.let { shiftSymbols.getOrNull(it) } ?: "—"
+    val name = staffNames.getOrNull(i) ?: "#$i"
+    val cur = s[i][j]
+    val trial = Array(s.size) { s[it].copyOf() }.also { it[i][j] = k }
+    val before = UnifiedViolationChecker.check(state, s)
+    val after = UnifiedViolationChecker.check(state, trial)
+    val diff = com.magi.app.v6.ViolationIdentity.diff(before, after)
+    fun place(key: com.magi.app.v6.ViolationKey): String = when (key.space) {
+        com.magi.app.v6.ViolationKey.Space.CELL -> "${staffNames.getOrNull(key.a) ?: "#${key.a}"}さん ${DayText.short(state.startDate, key.b)}"
+        com.magi.app.v6.ViolationKey.Space.NEED -> "${DayText.short(state.startDate, key.b)}の${sym(key.a)}"
+        com.magi.app.v6.ViolationKey.Space.COUNT -> "${staffNames.getOrNull(key.a) ?: "#${key.a}"}さんの${sym(key.b)}"
+    }
+    fun label(key: com.magi.app.v6.ViolationKey) = (if (key.hard) "必須・" else "") + (breakdownLabels[key.family] ?: key.family) + "（${place(key)}）"
+    val here = com.magi.app.v6.ViolationIdentity.keys(before).filter { it.space == com.magi.app.v6.ViolationKey.Space.CELL && it.a == i && it.b == j }
+    val thisCell = here.map { key -> "${breakdownLabels[key.family] ?: key.family}：" + if (key in diff.resolved) "解消します" else "残ります" }
+    val nb = listOfNotNull(
+        (j - 1).takeIf { it >= 0 }?.let { "${DayText.short(state.startDate, it)}：${sym(s[i][it])}" },
+        "${DayText.short(state.startDate, j)}：${sym(k)}",
+        (j + 1).takeIf { it < s[i].size }?.let { "${DayText.short(state.startDate, it)}：${sym(s[i][it])}" },
+    ).joinToString(" → ")
+    val (_, other) = headcountImpact(s.map { it.toList() }, listOf(com.magi.app.v6.FixCell(i, j, k)), shiftSymbols, state.startDate, needLimits)
+    val counts = listOf(cur, k).filter { it >= 0 }.distinct().map { x ->
+        val b = s[i].count { it == x }; val a = trial[i].count { it == x }
+        val (lo, hi, apt) = limits?.invoke(i, x) ?: Triple(null, null, null)
+        val basis = when {
+            lo != null && hi != null && lo == hi -> "／下限＝上限 ${lo}回"
+            lo != null && hi != null -> "／範囲 $lo〜${hi}回"
+            lo != null -> "／下限 ${lo}回"
+            hi != null -> "／上限 ${hi}回"
+            apt != null -> "／目標 ${apt}回"
+            else -> ""
+        }
+        "本人の${sym(x)}回数：${b}回 → ${a}回$basis"
+    }
+    val wish = state.wishes["$i,$j"]
+    val wishPin = listOfNotNull(
+        wish?.let { w -> if (w == k) "希望（${sym(w)}）どおりになります" else if (w == cur) "希望（${sym(w)}）と異なる勤務になります" else "希望（${sym(w)}）とは、変更の前後とも異なります" },
+        if (pinned) "このセルは手動固定されています（自動作成・調整ではこの勤務を変えません）" else null,
+    ).ifEmpty { listOf("このセルに希望・手動固定はありません") }
+    return CellChangeReview(
+        change = "${name}さん　${DayText.full(state.startDate, j)} ${sym(cur)} → ${sym(k)}",
+        neighbors = nb,
+        thisCell = thisCell.ifEmpty { listOf("このセルに違反はありません") },
+        othersResolved = diff.resolved.filter { it !in here }.map(::label),
+        appeared = diff.appeared.map(::label),
+        hardLine = "必須違反（勤務表全体）：${before.hard}件 → ${after.hard}件",
+        headcount = other,
+        counts = counts,
+        wishPin = wishPin,
+    )
+}
+
+/** 確認の画面の相談事項（当てずに相談してから決める）。 */
+internal fun consultCellChange(r: CellChangeReview, staff: Int, day: Int, staffName: String, date: String?) =
+    ConsultItem(r.change, (r.thisCell + r.appeared.map { "新しく生じる: $it" }).joinToString("・"), staff, day, staffName = staffName, date = date)
+
+/** セルのシートの問題の一文（族ごと）。前日・翌日との並びは並びの族の説明。 */
+internal fun cellProblemSentence(fam: String): String = when (fam) {
+    "c3n" -> "前後の勤務との組み合わせが禁止条件に該当しています"
+    "c3mn" -> "前後の勤務との組み合わせが、避けたい並びに該当しています"
+    "c3w" -> "希望の前日に禁止されている勤務です"
+    "pref" -> "本人の希望と違う勤務です"
+    "extWish" -> "拡張希望で除いた勤務です"
+    "groupViol" -> "この職員のグループが担当しない勤務です"
+    "covU" -> "この日のこの勤務の人数が必要人数に足りません"
+    "covO" -> "この日のこの勤務の人数が適正人数を超えています"
+    else -> "${breakdownLabels[fam] ?: fam}に該当しています"
+}
+
+/** 並びの違反の日々を「11/28(土) Dテ → 11/29(日) B4」で。[days] はこのセルと相手の日。 */
+internal fun sequenceLine(startDate: String, row: List<Int>, days: List<Int>, shiftSymbols: List<String>): String? =
+    days.takeIf { it.size >= 2 }?.sorted()?.joinToString(" → ") { d -> "${DayText.full(startDate, d)} ${row.getOrNull(d)?.let { shiftSymbols.getOrNull(it) } ?: "—"}" }
+
+/** 今月の勤務回数（セルのシート）: 今の勤務と、回数に過不足のある勤務。「Cオ：現在4回／目標6回」。 */
+internal fun cellCountLines(ui: UiState, i: Int, current: Int, limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)?): List<String> {
+    val row = ui.schedule.getOrNull(i).orEmpty()
+    val ks = (listOf(current) + ui.countViolations.keys.filter { VioKey.first(it) == i }.mapNotNull { VioKey.second(it) }).filter { it >= 0 }.distinct()
+    return ks.map { k ->
+        val (lo, hi, apt) = limits?.invoke(i, k) ?: Triple(null, null, null)
+        val n = row.count { it == k }
+        val basis = when (ui.countViolations["$i,$k"]) {
+            "vio-low" -> lo?.let { "／下限${it}回" }; "vio-high" -> hi?.let { "／上限${it}回" }
+            else -> (apt?.let { "／目標${it}回" } ?: lo?.let { "／下限${it}回" } ?: hi?.let { "／上限${it}回" })
+        } ?: ""
+        "${ui.shiftSymbols.getOrNull(k) ?: "$k"}：現在${n}回$basis"
+    }
+}
+
+/** 手動固定の説明（通常の修正操作と分ける）。 */
+internal const val PIN_TITLE = "この勤務を自動変更しない"
+internal const val PIN_NOTE = "固定すると、自動作成・調整ではこの勤務を変更しません。現在の違反が解消されるわけではありません。"
+
+/** 担当外の勤務の理由（自分で勤務を選ぶ画面）。 */
+internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが担当しない勤務です（担当可否の設定）。選ぶと担当外シフトの必須違反になります。"
+
+/** 上部の札の 2 行目以降: 自動作成の状態と、今の勤務表の評価（2026-10-14 利用者レビュー「未計算」を分ける）。 */
+internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long): Pair<String, String> =
+    (if (engineRan) "自動作成：済み" else if (hasResult) "自動作成：未実行（手で編集）" else "自動作成：未実行") to
+        (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${hard}件" else if (soft > 0) "評価：要調整 ${soft}件" else "評価：違反なし")
