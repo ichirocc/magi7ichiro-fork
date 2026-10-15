@@ -742,7 +742,7 @@ internal fun ViolationLegend(vioColor: Color, vioSoftColor: Color = MagiAccent.o
         // [3.651.0/凡例の抜け] 拡張希望の×はセルにだけあり、どの凡例にも無かった。
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             ExtCrossSwatch()
-            Text("上端の×＝拡張希望（この日はこのシフト以外）。禁止のシフトが入ると違反の色", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("上端の×＝拡張希望（この日はこのシフト以外）。禁止のシフトが入ると違反の色になります。", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -979,14 +979,14 @@ internal fun WishBulkSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent)
         AlertDialog(
             onDismissRequest = { confirmClear = false },
             confirmButton = {
-                DialogDangerButton("消す", onClick = {
+                DialogDangerButton("希望を消す", onClick = {
                     confirmClear = false
                     onEvent(if (clearAll) MagiEvent.Condition.ClearAllWishes else MagiEvent.Condition.ClearWishesForDays(if (staffSel < 0) null else staffSel, targetDays))
                     onDismiss()
                 })
             },
-            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }) },
-            title = { Text("${clearCount}件の希望を消します") },
+            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }, text = "消さない") },
+            title = { Text("${clearCount}件の希望を消しますか？") },
             text = {
                 Text((if (clearAll) "登録済みの希望をすべて消します。" else "${targetWho}・${if (scope == 1) "期間全体" else "${weekdays[weekday]}曜日 ${targetDays.size}日"}（$daysText）の希望を消します。") +
                     "割当には影響しません。元に戻すで復元できます。")

@@ -11,6 +11,10 @@ data class ChainFixPreview(
     val caution: String?,
     /** 探した枠（日付・シフト記号・見出し）。相談に積んだあと、今の勤務表で案を探し直すために持つ。 */
     val target: ChainTarget? = null,
+    /** 当てようとして断られた理由（確認の画面を閉じずに先頭へ出す）。null＝まだ当てていない。 */
+    val applyError: String? = null,
+    /** 全体の研磨の案（ホーム・分析の「この手を使う」）＝対象を持たずに当ててよいと呼び手が明示した。false で対象が無ければ断る。 */
+    val globalPolish: Boolean = false,
     /** 今回の目的（案の一覧から来たとき。例「古泉さんのA4不足を減らす」）。null＝目的の行を出さない。 */
     val purpose: String? = null,
     /** 対象の数の変化（例「A4：7回 → 9回」「適用後も、下限まで6回不足」）。 */

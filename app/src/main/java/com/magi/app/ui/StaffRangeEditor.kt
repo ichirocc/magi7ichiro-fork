@@ -167,7 +167,7 @@ internal fun GroupRangeDialog(
     AlertDialog(
         onDismissRequest = requestClose,
         confirmButton = {
-            DialogConfirmButton("適用", enabled = ok, onClick = { if (ok) onApply(g, k, lo.trim(), hi.trim()) })
+            DialogConfirmButton("適用する", enabled = ok, onClick = { if (ok) onApply(g, k, lo.trim(), hi.trim()) })
         },
         dismissButton = { DialogDismissButton(onClick = requestClose) },
         title = { DialogHeader("グループ単位の回数", requestClose) },

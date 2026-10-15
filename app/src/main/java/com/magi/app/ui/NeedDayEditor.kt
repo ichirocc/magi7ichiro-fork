@@ -249,7 +249,7 @@ private fun BaseNeedSheet(kigou: String, need1: String, need2: String, use2: Boo
             }
             if (bad) Text(NEED_ORDER_HINT, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                DialogConfirmButton("保存", onClick = { onApply(p1, p2); onDismiss() }, enabled = !running && !bad)
+                DialogConfirmButton("保存する", onClick = { onApply(p1, p2); onDismiss() }, enabled = !running && !bad)
             }
         }
     }

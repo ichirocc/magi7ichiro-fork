@@ -103,7 +103,7 @@ fun MagiViewModel.setStaffRange(i: Int, k: Int, lo: String, hi: String) {
  * @param loDelta 下限へ足す量（負で緩める）。@param hiDelta 上限へ足す量（正で緩める）。
  */
 fun MagiViewModel.relaxStaffRangePin(i: Int, k: Int, loDelta: Int, hiDelta: Int) {
-    if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${opNm(i)}さんの「${opSy(k)}」の回数は変更できません（${busyWhat()}の実行中）。終わるか「やめる」を押してから試してください。") }; return }
+    if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${opNm(i)}さんの「${opSy(k)}」の回数は変更できません（${busyWhat()}の実行中）。終わるか「やめる」を押してから、もう一度お試しください。") }; return }
     val st = state ?: return
     val cur = st.staffRange["$i,$k"] ?: return
     val lo = cur.lo.trim().toIntOrNull() ?: return

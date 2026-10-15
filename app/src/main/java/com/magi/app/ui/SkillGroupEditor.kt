@@ -81,7 +81,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
                 // [3.482.0 編集タブ簡素化] 旧「職員のスキル割当」（職員ごとの ▼ 一覧＝職員管理ドアの ▼ と同じ
                 //   vm.setStaffSkill）は撤去。同じ操作が編集タブ内の2か所にあった。ここは分類の定義だけ。
                 val assigned = staff.count { it.skillIdx in skills.indices }
-                Text("職員へのスキル割当は「職員管理」の各職員の ▼ で行います（割当済み ${assigned}/${staff.size}名）。",
+                Text("職員へのスキル割当は「職員管理」の各職員の ▼ で設定します（割当済み ${assigned}/${staff.size}名）。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         }
@@ -105,7 +105,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
             title = { Text("スキルグループを削除しますか？") },
             text = { Text("「$name」を削除します。${memberNote}元に戻すで取り消せます。$refNote") },
             confirmButton = { DialogDangerButton("削除する", onClick = { onEvent(MagiEvent.Structure.RemoveSkillGroup(g)); confirmDelete = null }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }, text = "削除しない") },
         )
     }
 }
@@ -126,7 +126,7 @@ private fun SkillGroupDialog(title: String, name0: String, kigou0: String, onOk:
     if (confirmDiscard) DiscardConfirmDialog(onDiscard = { confirmDiscard = false; onClose() }, onContinue = { confirmDiscard = false })
     AlertDialog(
         onDismissRequest = requestClose,
-        confirmButton = { DialogConfirmButton("OK", enabled = kigou.isNotBlank(), onClick = { if (kigou.isNotBlank()) onOk(name, kigou) }) },
+        confirmButton = { DialogConfirmButton("保存する", enabled = kigou.isNotBlank(), onClick = { if (kigou.isNotBlank()) onOk(name, kigou) }) },
         dismissButton = { DialogDismissButton(onClick = requestClose) },
         title = { DialogHeader(title, requestClose) },
         text = {

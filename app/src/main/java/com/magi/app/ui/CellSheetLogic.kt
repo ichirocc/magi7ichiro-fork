@@ -1488,3 +1488,48 @@ internal fun progressSummary(ui: UiState): String {
     //   毎秒表示を足したのは、この観点では逆向きだったので戻す。
     return parts.joinToString("  ・  ")
 }
+
+internal const val FIX_ORIGIN_UNKNOWN_MESSAGE = "案を作ったときの勤務表が分からないため適用しませんでした。もう一度探してください"
+
+internal const val FIX_TARGET_UNKNOWN_MESSAGE = "見ている問題が分からないため適用しませんでした。もう一度探してください"
+
+/** 対象（[FixTarget]）も全体の研磨の明示も無い案は断る。null＝断らない。 */
+internal fun fixTargetRefusal(fixTarget: FixTarget?, globalPolish: Boolean): String? =
+    if (fixTarget == null && !globalPolish) FIX_TARGET_UNKNOWN_MESSAGE else null
+
+/** 確認の画面から当てる案は、案を作ったときの盤面の指紋が要る（0＝不明なら断る。今の全体の指紋で代わりに通さない）。null＝断らない。 */
+internal fun fixOriginRefusal(originBoard: Long, fromPreview: Boolean): String? =
+    if (fromPreview && originBoard == 0L) FIX_ORIGIN_UNKNOWN_MESSAGE else null
+
+/** ホームの主カードの段（主ボタンの行き先）。文言と色は `OperatorNextActionCard` が段ごとに決める。 */
+internal enum class HomePlanKind { RUNNING, MAKE, PRE_DIST, WISH_INFEASIBLE, DATA_INFEASIBLE, GUIDED_FIX, APPLY_MOVE, SEARCHING, RELAX, WISH_FLOOR, WISHES, LIST }
+
+/** 主ボタン（1 つだけ）と補助ボタンの行き先。 */
+internal enum class HomeAction { NONE, MAKE, SMART_INITIAL, PRE_DIST, SCHEDULE, SHOW_WISHES, LANDING, FIX, SETUP, SHOW_MOVE, APPLY_MOVE, SHOW_RELAX, SHOW_LIST }
+
+internal data class HomePlan(val kind: HomePlanKind, val primary: HomeAction, val primaryEnabled: Boolean, val helper: HomeAction?)
+
+/**
+ * ホームの「次にやること」の段を決める（純関数）。主ボタンは常に 1 つ＝組立中と探索中だけ押せない。
+ * 保存の失敗（[saveFailed]）と相談中（[consults]）は段を変えない＝完成の見出しと書き出しを止めない（D10）。
+ */
+internal fun homePlan(
+    running: Boolean, hasResult: Boolean, hard0: Boolean,
+    infeasible: Boolean = false, hasPinned: Boolean = false, guided: Boolean = false,
+    hasMove: Boolean = false, focusBlank: Boolean = true, fixSearching: Boolean = false, fixSearched: Boolean = false,
+    relax: Boolean = false, stalled: Boolean = false, wishes: Boolean = false,
+    @Suppress("UNUSED_PARAMETER") saveFailed: Boolean = false, @Suppress("UNUSED_PARAMETER") consults: Int = 0,
+): HomePlan = when {
+    running -> HomePlan(HomePlanKind.RUNNING, HomeAction.NONE, false, null)
+    !hasResult -> HomePlan(HomePlanKind.MAKE, HomeAction.MAKE, true, HomeAction.SMART_INITIAL)
+    hard0 -> HomePlan(HomePlanKind.PRE_DIST, HomeAction.PRE_DIST, true, HomeAction.SCHEDULE)
+    infeasible && hasPinned -> HomePlan(HomePlanKind.WISH_INFEASIBLE, HomeAction.SHOW_WISHES, true, HomeAction.LANDING)
+    infeasible -> HomePlan(HomePlanKind.DATA_INFEASIBLE, HomeAction.LANDING, true, HomeAction.PRE_DIST)
+    guided -> HomePlan(HomePlanKind.GUIDED_FIX, HomeAction.FIX, true, null)
+    hasMove && focusBlank -> HomePlan(HomePlanKind.APPLY_MOVE, HomeAction.SHOW_MOVE, true, HomeAction.APPLY_MOVE)
+    fixSearching -> HomePlan(HomePlanKind.SEARCHING, HomeAction.NONE, false, null)
+    fixSearched && !hasMove && relax -> HomePlan(HomePlanKind.RELAX, HomeAction.SHOW_RELAX, true, if (wishes) HomeAction.SHOW_WISHES else null)
+    fixSearched && !hasMove && stalled && wishes -> HomePlan(HomePlanKind.WISH_FLOOR, HomeAction.SHOW_WISHES, true, HomeAction.PRE_DIST)
+    wishes -> HomePlan(HomePlanKind.WISHES, HomeAction.SHOW_WISHES, true, null)
+    else -> HomePlan(HomePlanKind.LIST, HomeAction.SHOW_LIST, true, null)
+}

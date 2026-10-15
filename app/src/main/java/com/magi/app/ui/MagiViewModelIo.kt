@@ -198,7 +198,7 @@ fun MagiViewModel.importCsvSmart(rawText: String, onNewDataLoaded: (() -> Unit)?
             // 凡例(記号一覧)が無いとシフトが「休」1種のみになり全セルが公休化する。
             // 取り込まず原因をオペレーターに表示する（Excel保存で凡例が消えるケース）。
             if (st.shiftCount <= 1) {
-                _ui.update { it.copy(messageIsError = true, message = "CSV取込失敗: シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧が削除されていないかご確認ください（Excelで開いて保存すると消える場合があります）。元のファイルをそのまま取り込んでください。") }
+                _ui.update { it.copy(messageIsError = true, message = "CSVを取り込めませんでした。シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧は、Excelで開いて保存すると消えることがあります。元のファイルをそのまま取り込んでください。") }
                 logOp("W", "勤務表CSV取込 中止: 凡例なし（シフト${st.shiftCount}種のみ→全公休化を防止）")
                 return
             }
@@ -223,7 +223,7 @@ fun MagiViewModel.importCsvSmart(rawText: String, onNewDataLoaded: (() -> Unit)?
             load(StateParser.serialize(st, st.schedule.toIntArray2D()), periodNote(st.startDate), onNewDataLoaded)
             return
         }
-        _ui.update { it.copy(messageIsError = true, message = "CSV取込失敗: ユニット列形式と判定しましたが解析できませんでした。ヘッダ行（ユニット, No, 役職, 氏名, 1, 2, …）と氏名列をご確認ください。") }
+        _ui.update { it.copy(messageIsError = true, message = "CSVを取り込めませんでした（ユニット列の形式として読めません）。ヘッダ行（ユニット, No, 役職, 氏名, 1, 2, …）と氏名列を確かめてから、もう一度取り込んでください。") }
         logOp("W", "勤務表CSV(ユニット列形式)取込 失敗: 解析不能")
         return
     }
@@ -251,7 +251,7 @@ fun MagiViewModel.importRosterAs(rawText: String, asWishes: Boolean, onLoaded: (
         return
     }
     if (st.shiftCount <= 1) {
-        _ui.update { it.copy(messageIsError = true, message = "CSV取込失敗: シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧が削除されていないかご確認ください（Excelで保存すると消える場合があります）。") }
+        _ui.update { it.copy(messageIsError = true, message = "CSVを取り込めませんでした。シフト記号（凡例）が見つかりません。テンプレCSV末尾の『記号 / 時刻 …』一覧は、Excelで保存すると消えることがあります。元のファイルをそのまま取り込んでください。") }
         logOp("W", "${if (asWishes) "希望シフト" else "勤務表"}CSV取込 中止: 凡例なし（シフト${st.shiftCount}種のみ）")
         return
     }
@@ -303,7 +303,7 @@ fun MagiViewModel.importStaffCsv(rawText: String) {
     }
     val res = runCatching { com.magi.app.v6.StaffCsvIO.parseUpsert(text, st, sched) }.getOrNull()
     if (res == null) {
-        _ui.update { it.copy(messageIsError = true, message = "職員一覧の取込失敗（追加0・更新0）。形式『氏名,グループ,スキル』（1行=1名）をご確認ください。") }
+        _ui.update { it.copy(messageIsError = true, message = "職員一覧を取り込めませんでした（追加0・更新0）。形式『氏名,グループ,スキル』（1行=1名）に直してから、もう一度取り込んでください。") }
         logOp("W", "職員一覧CSV取込 失敗: 0件")
         return
     }
@@ -338,8 +338,8 @@ fun MagiViewModel.importWishesCsv(rawText: String) {
     val res = runCatching { com.magi.app.v6.WishesCsvIO.parse(text, st) }.getOrNull()
     if (res == null) {
         val hint = componentImportMismatchHint(text)
-        val tail = if (hint.isEmpty()) "形式は『氏名,日,希望シフト』（例: 古泉 健一,5,休）です。氏名・シフト記号が一致しているかご確認ください。" else hint
-        _ui.update { it.copy(messageIsError = true, message = "希望シフトの取込失敗（取り込める行が0件）。$tail") }
+        val tail = if (hint.isEmpty()) "形式は『氏名,日,希望シフト』（例: 古泉 健一,5,休）です。氏名とシフト記号を今のデータに合わせてから、もう一度取り込んでください。" else hint
+        _ui.update { it.copy(messageIsError = true, message = "希望シフトを取り込めませんでした。取り込める行がありません。$tail") }
         logOp("W", "希望シフトCSV取込 失敗: 0件${if (hint.isEmpty()) "" else "（別形式CSVの取り違えの可能性）"}")
         return
     }
@@ -365,8 +365,8 @@ fun MagiViewModel.importConstraintsCsv(rawText: String) {
     val res = runCatching { com.magi.app.v6.ConstraintsCsvIO.parse(text, st) }.getOrNull()
     if (res == null) {
         val hint = componentImportMismatchHint(text)
-        val tail = if (hint.isEmpty()) "1列目の種別（連勤/禁止連続/群組合せ禁止/個人レンジ 等）をご確認ください。例: 連勤,5,休,14 ／ 個人レンジ,古泉 健一,A4,6,8" else hint
-        _ui.update { it.copy(messageIsError = true, message = "各制約の取込失敗（取り込める行が0件）。$tail") }
+        val tail = if (hint.isEmpty()) "1列目の種別（連勤/禁止連続/群組合せ禁止/個人レンジ 等）を直してから、もう一度取り込んでください。例: 連勤,5,休,14 ／ 個人レンジ,古泉 健一,A4,6,8" else hint
+        _ui.update { it.copy(messageIsError = true, message = "各制約を取り込めませんでした。取り込める行がありません。$tail") }
         logOp("W", "各制約CSV取込 失敗: 0件${if (hint.isEmpty()) "" else "（別形式CSVの取り違えの可能性）"}")
         return
     }
@@ -391,8 +391,8 @@ fun MagiViewModel.importShiftColorsCsv(rawText: String) {
     val res = runCatching { com.magi.app.v6.ShiftColorsCsvIO.parseUpsert(text, st) }.getOrNull()
     if (res == null) {
         val hint = componentImportMismatchHint(text)
-        val tail = if (hint.isEmpty()) "形式『記号,色』（例: 休,#ced1d5）をご確認ください。" else hint
-        _ui.update { it.copy(messageIsError = true, message = "シフト色の取込失敗（形式を読めません）。$tail") }
+        val tail = if (hint.isEmpty()) "形式『記号,色』（例: 休,#ced1d5）に直してから、もう一度取り込んでください。" else hint
+        _ui.update { it.copy(messageIsError = true, message = "シフト色を取り込めませんでした。形式を読めません。$tail") }
         logOp("W", "シフト色CSV取込 失敗: 解析不能")
         return
     }

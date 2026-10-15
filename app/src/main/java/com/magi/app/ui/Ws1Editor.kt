@@ -225,8 +225,8 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
             { lines, _ -> onEvent(MagiEvent.Structure.BulkAddShift(lines)); dialog = null }, { dialog = null })
         is Ws1Dialog.ConfirmShrink -> AlertDialog(
             onDismissRequest = { dialog = null },
-            confirmButton = { DialogDangerButton("縮める", onClick = { onEvent(MagiEvent.Structure.ResizeDays(d.days)); dialog = null }) },
-            dismissButton = { DialogDismissButton(onClick = { dialog = null }) },
+            confirmButton = { DialogDangerButton("期間を縮める", onClick = { onEvent(MagiEvent.Structure.ResizeDays(d.days)); dialog = null }) },
+            dismissButton = { DialogDismissButton(onClick = { dialog = null }, text = "縮めない") },
             title = { Text("期間を縮めますか？") },
             text = {
                 val cut = DayText.range(v.startDate, d.days, v.days - 1)
@@ -237,7 +237,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
         is Ws1Dialog.ConfirmDelete -> AlertDialog(
             onDismissRequest = { dialog = null },
             confirmButton = {
-                DialogDangerButton("削除", onClick = {
+                DialogDangerButton("削除する", onClick = {
                     when (d.kind) {
                         "shift" -> onEvent(MagiEvent.Structure.RemoveShift(d.index))
                         "group" -> onEvent(MagiEvent.Structure.RemoveGroup(d.index))
@@ -245,11 +245,11 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                     dialog = null
                 })
             },
-            dismissButton = { DialogDismissButton(onClick = { dialog = null }) },
-            title = { Text("削除の確認") },
+            dismissButton = { DialogDismissButton(onClick = { dialog = null }, text = "削除しない") },
+            title = { Text("${d.label} を削除しますか？") },
             // [design-review] 「インデックス」は開発者向けの内部語（operator_ux.md §1「専門用語を使わない」）。
             //   ふつうの言葉に置き換え、参照件数(note)は独立の文として挟む。
-            text = { Text("${d.label} を削除します。${d.note}残りの設定は自動で調整されます（元に戻すで取り消せます）。よろしいですか？") },
+            text = { Text("${d.label} を削除します。${d.note}残りの設定は自動で調整されます。元に戻すで取り消せます。") },
         )
         null -> Unit
     }
@@ -460,7 +460,7 @@ private fun W1Shell(
     val requestClose: () -> Unit = { if (dirty) confirmDiscard = true else onClose() }
     AlertDialog(
         onDismissRequest = requestClose,
-        confirmButton = { DialogConfirmButton("OK", enabled = okEnabled, onClick = onOk) },
+        confirmButton = { DialogConfirmButton("確定する", enabled = okEnabled, onClick = onOk) },
         dismissButton = { DialogDismissButton(onClick = requestClose) },
         title = { DialogHeader(title, requestClose) },
         text = {

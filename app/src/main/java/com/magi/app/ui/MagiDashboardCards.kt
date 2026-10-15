@@ -296,6 +296,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         title = { Text(PREVIEW_TITLE) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                p.applyError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error, fontWeight = FontWeight.Bold) }
                 // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
                 p.purpose?.let {
                     Text("今回の目的", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -612,35 +613,33 @@ internal fun OperatorNextActionCard(
             (ui.fixFocusName.isNotBlank() || (!ui.fixSearching && ui.fixSuggestions.isEmpty() && !ui.fixSearched))) onAutoSearch()
     }
 
-    val plan = when {
-        ui.running -> {
-            // [校正] 「やめる」は下部コマンドバーに常設済み。カード側の補助ボタンは重複のため出さない。
-            // [スクショ指摘/撤去] 見出し文（コンピューターが組んでいます…あと約N分…）は下の進捗行
-            //   （残り時間/改善率/回数 = progressSummary）と重複のため出さない（ユーザー赤囲い指示）。
-            OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "", "", {}, false, null, onStop)
-        }
-        !ui.hasResult -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer,
+    val hasMove = ui.fixSuggestions.any { it.deltaHard < 0 }
+    val kind = homePlan(ui.running, ui.hasResult, ui.bestHard == 0L, infeasible, hasPinned, guidedTarget != null,
+        hasMove, ui.fixFocusName.isBlank(), ui.fixSearching, ui.fixSearched, relax != null, ui.stalledHardFamilies.isNotEmpty(), !wishCands.isEmpty,
+        ui.saveState == SaveState.Failed, ui.consults.size).kind
+    val plan = when (kind) {
+        // [校正] 「やめる」は下部コマンドバーに常設済み。見出し文は下の進捗行と重複のため出さない（ユーザー赤囲い指示）。
+        HomePlanKind.RUNNING -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "", "", {}, false, null, onStop)
+        HomePlanKind.MAKE -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer,
             "② ボタンひとつで、勤務表を作ります。",
             "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial,
             bigColors = cs.onPrimaryContainer to cs.primaryContainer)
-        ui.bestHard == 0L -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
+        HomePlanKind.PRE_DIST -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
             // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
             if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当外の希望が ${ui.impossibleWishCount} 件あります。" else "③ 必須違反はありません。配布前の確認で中身を確かめてから配ってください。",
             "配布前確認", onPreDist, true, "中身を見る", onSchedule,
             body = ui.runSummary)
-        infeasible && hasPinned -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
+        HomePlanKind.WISH_INFEASIBLE -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
             wishLabel, onShowWishes, true, "データを見直す", { onLanding(pinnedLanding) })
-        infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
+        HomePlanKind.DATA_INFEASIBLE -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
             "データを見直す", { onLanding(infeasibleLanding) }, true, "未充足のまま書き出す", onPreDist)
-        // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す。
-        //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
-        guidedTarget != null ->
-            OpNextPlan(amber, onAmber, (guidedTarget.dayLabel.let { "$it が人員不足です。" }),
-                homeTargetLabel("なおし方を見る", null, guidedTarget.dayLabel), onFix, true, null, onSetup)
-        // 「直す手」は必須を減らす手だけ（要調整しか減らない手で必須の見出しを出さない）。
-        ui.fixSuggestions.any { it.deltaHard < 0 } && ui.fixFocusName.isBlank() -> {
+        // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す（段の順は homePlan）。
+        HomePlanKind.GUIDED_FIX ->
+            OpNextPlan(amber, onAmber, "${guidedTarget?.dayLabel} が人員不足です。",
+                homeTargetLabel("なおし方を見る", null, guidedTarget?.dayLabel), onFix, true, null, onSetup)
+        HomePlanKind.APPLY_MOVE -> {
             // [3.643.0] 旧「AIの解決提案」カードをここへ統合＝同じ問題について、手と効果（分かったこと）と「この手を使う」（操作）を 1 枚に。
             val top = ui.fixSuggestions.first { it.deltaHard < 0 }
             val (hardLine, caution) = fixImpactLines(top)
@@ -650,25 +649,24 @@ internal fun OperatorNextActionCard(
                 body = fixDisplayLabel(top.label),
                 note = (hardChangeLine(top.diff) ?: hardLine) + (caution?.let { "\n$it" } ?: ""))
         }
-        ui.fixSearching ->
+        HomePlanKind.SEARCHING ->
             OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
-        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && relax != null -> {
-            val t = relaxCardText(relax.result, ui)
+        HomePlanKind.RELAX -> {
+            val t = relaxCardText(relax!!.result, ui)
             OpNextPlan(amber, onAmber, t.headline,
                 "緩める候補を見る", onShowRelax, true, if (wishCands.isEmpty) null else "ぶつかっている希望を見る", onShowWishes,
                 body = t.body, note = t.note)
         }
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
-        //   S6 の判定が済むまでは「下限」と言わない（設定を緩めれば減るかもしれない）。
-        ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
+        HomePlanKind.WISH_FLOOR ->
             OpNextPlan(amber, onAmber,
                 if (ui.relaxSearching) "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。" else "今の希望とルールでは、必須違反 ${hardText(ui.breakdown, ui.bestHard)} からこれ以上は減らせない見込みです。",
                 wishLabel, onShowWishes, true, "このまま書き出す", onPreDist)
-        !wishCands.isEmpty ->
+        HomePlanKind.WISHES ->
             OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。希望とルールがぶつかっています。",
                 wishLabel, onShowWishes, true, null, onSetup)
-        else -> OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。",
+        HomePlanKind.LIST -> OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。",
             "問題を見る", onShowList, true, null, onSetup)
     }
 
@@ -1059,7 +1057,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
             title = { Text("禁止の並びを解除しますか？") },
             text = { Text("「$seq」の禁止を、全員について外します（いま崩せない並び ${n}件）。外すとその場で再チェックします。元に戻すで取り消せます。") },
             confirmButton = { DialogDangerButton("解除する", onClick = { confirmRule = null; onRelaxRule(seq) }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmRule = null }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmRule = null }, text = "解除しない") },
         )
     }
 }
@@ -1307,10 +1305,10 @@ internal fun SettingIssuesCard(
     if (confirmClear && wishClearCount > 0) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("担当外の希望を一括クリアしますか？") },
+            title = { Text("担当外の希望をまとめて消しますか？") },
             text = { Text("担当外の希望 ${wishClearCount}件 をまとめて削除します。勤務表の割当は変わりません。元に戻すで取り消せます。") },
-            confirmButton = { DialogDangerButton("一括クリア", onClick = { confirmClear = false; onClearWishes() }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }) },
+            confirmButton = { DialogDangerButton("まとめて消す", onClick = { confirmClear = false; onClearWishes() }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }, text = "消さない") },
         )
     }
 }
@@ -1943,10 +1941,10 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     confirm?.let { i ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("案${i + 1}を反映しますか") },
+            title = { Text("案${i + 1}を反映しますか？") },
             text = { Text(ui.alternatives.getOrNull(i).orEmpty() + if (ui.alternativesWorse.getOrNull(i) == true) "\n" + ALTERNATIVES_ALL_WORSE + "（元に戻すで取り消せます）" else "") },
             confirmButton = { DialogConfirmButton("反映する", onClick = { confirm = null; onApply(i) }) },
-            dismissButton = { DialogDismissButton(onClick = { confirm = null }, text = "やめる") },
+            dismissButton = { DialogDismissButton(onClick = { confirm = null }, text = "反映しない") },
         )
     }
 }

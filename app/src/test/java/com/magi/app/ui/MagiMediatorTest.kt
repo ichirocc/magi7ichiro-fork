@@ -57,15 +57,15 @@ class MagiMediatorTest {
         machine.begin(MagiPhase.Optimizing)
 
         m.dispatch(MagiEvent.Board.SetCell(0, 0, 1))
-        assertEquals("勤務表づくりの実行中は編集できません（完了後にもう一度お試しください）", rejects[0].userMessage)
+        assertEquals("勤務表づくりの実行中は編集できません。終わってから、もう一度お試しください", rejects[0].userMessage)
         assertEquals("盤面編集の拒否は記録しない（旧 editBlockedNow に logOp なし）", "", rejects[0].logLine)
 
         m.dispatch(MagiEvent.Structure.SetUse2(true))
-        assertEquals("勤務表づくりの実行中は設定を変更できません。終わるか「やめる」を押してからにしてください。", rejects[1].userMessage)
+        assertEquals("勤務表づくりの実行中は設定を変更できません。終わるか「やめる」を押してから、もう一度お試しください。", rejects[1].userMessage)
         assertEquals("勤務表づくりの実行中のため設定変更を取り消しました（終わってから、または「やめる」の後にどうぞ）", rejects[1].logLine)
 
         m.dispatch(MagiEvent.Run.SmartInitial)
-        assertEquals("勤務表づくりの実行中です。終わるか「やめる」を押してからにしてください。", rejects[2].userMessage)
+        assertEquals("勤務表づくりの実行中です。終わるか「やめる」を押してから、もう一度お試しください。", rejects[2].userMessage)
         assertEquals("下書きづくり を取り消しました（勤務表づくりが実行中）", rejects[2].logLine)
     }
 
@@ -86,7 +86,7 @@ class MagiMediatorTest {
         bgRunning = true
         assertEquals(MagiPhase.Background, machine.phase)
         m.dispatch(MagiEvent.Board.SetCell(0, 0, 1))
-        assertEquals("閉じている間の最適化の実行中は編集できません（完了後にもう一度お試しください）", rejects[0].userMessage)
+        assertEquals("閉じている間の最適化の実行中は編集できません。終わってから、もう一度お試しください", rejects[0].userMessage)
         bgRunning = false
         assertEquals(MagiPhase.Idle, machine.phase)
     }

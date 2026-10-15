@@ -52,6 +52,9 @@ internal fun consultAnswerLine(c: ConsultItem, effective: ConsultAnswer): String
 data class ChainTarget(
     val date: String?, val shiftSymbol: String?, val label: String, val suggestion: FixSuggestion? = null,
     val boardKey: Long = 0L, val stateKey: Long = 0L,
+    /** 案を出したときに見ていた問題（[MagiViewModel.applyFixSuggestion] がその数が減るかを確かめる）。null＝全体の研磨の案。 */
+    val fixTarget: FixTarget? = null,
+    val globalPolish: Boolean = false,
 )
 
 internal const val CONSULT_BUTTON = "相談事項に登録"
@@ -200,7 +203,7 @@ internal fun consultShortage(dayLabel: String, symbol: String, names: List<Strin
 )
 
 /** 複数人の入れ替えの一覧から: 変わる人と勤務。枠を持てば、あとで今の勤務表で案を探し直せる。 */
-internal fun consultChain(p: ChainFixPreview) = ConsultItem(p.suggestion.label, p.changes.joinToString("／") + "（${p.hardLine}）", chain = p.target)
+internal fun consultChain(p: ChainFixPreview) = ConsultItem(p.suggestion.label, p.changes.joinToString("／") + "（${p.hardLine}）", chain = p.target?.copy(fixTarget = p.fixTarget, globalPolish = p.globalPolish))
 
 /** 直す 1 手から。 */
 internal fun consultFix(s: FixSuggestion) = ConsultItem(s.label, fixImpactLines(s).let { (h, c) -> h + (c?.let { "・$it" } ?: "") })

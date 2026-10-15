@@ -680,7 +680,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSetup = { openEditLanding(null) },
                         onLanding = { l -> openEditLandingFrom(l, EditReturn("なおし方", EditReturn.GUIDED)) },
                         onShowMove = { tab = 3 },
-                        onApplyMove = { s -> vm.previewOrApplyFix(s) },
+                        onApplyMove = { s -> vm.previewFixSuggestion(s, globalPolish = true) },
                         onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null)) },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
@@ -936,7 +936,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)
-                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewOrApplyFix(it) }, proMode = proMode,
+                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewFixSuggestion(it, globalPolish = true) }, proMode = proMode,
                         onConsult = { vm.addConsult(consultFix(it)) })
                 }
                 else -> {
@@ -1081,7 +1081,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 title = { Text("下書きで置き換えますか？") },
                 text = { Text(msg) },
                 confirmButton = { DialogConfirmButton("置き換える", onClick = { vm.generateSmartInitial(confirmed = true) }) },
-                dismissButton = { DialogDismissButton(onClick = { vm.dismissDraftConfirm() }) },
+                dismissButton = { DialogDismissButton(onClick = { vm.dismissDraftConfirm() }, text = "置き換えない") },
             )
         }
         if (wishConflicts) {
@@ -1096,12 +1096,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         pendingCsvImport?.let { csvText ->
             AlertDialog(
                 onDismissRequest = { pendingCsvImport = null },
-                title = { Text("取込種別を選択") },
+                title = { Text("何として取り込みますか？") },
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         Text(
-                            "この CSV を何として取り込みますか？\n\n" +
-                                "・データ全体（新規）：病院の勤務表の書式（テンプレート）を新しいデータとして取り込み\n" +
+                            "・データ全体（新規）：病院の勤務表の書式（テンプレート）を新しいデータとして取り込み\n" +
                                 "・勤務表（重ね合わせ）：氏名,1日,2日… の表を現在の割り当てに重ねる\n" +
                                 "・職員一覧：氏名,グループ,スキル（所属グループ/スキルを更新）\n" +
                                 "・希望シフト：氏名,日,希望シフト（希望を置換）\n" +
@@ -1122,7 +1121,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         DialogConfirmButton("各制約", onClick = { vm.importConstraintsCsv(csvText); pendingCsvImport = null })
                         DialogConfirmButton("シフト色", onClick = { vm.importShiftColorsCsv(csvText); pendingCsvImport = null })
                         // キャンセルも同じ列の最後に（dismiss の枠に分けると、縦に積んだ列と横に並べられて重なる）。
-                        DialogDismissButton(onClick = { pendingCsvImport = null })
+                        DialogDismissButton(onClick = { pendingCsvImport = null }, text = "取り込まない")
                     }
                 },
             )
@@ -1130,7 +1129,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         ui.csvPartialPrompt?.let { prompt ->
             AlertDialog(
                 onDismissRequest = { vm.cancelCsvPartialImport() },
-                title = { Text("引用符が閉じていないCSV") },
+                title = { Text("読める部分だけ取り込みますか？") },
                 text = { Text(prompt) },
                 confirmButton = { DialogConfirmButton(com.magi.app.v6.CsvPartialImport.CONFIRM_LABEL, onClick = { vm.confirmCsvPartialImport() }) },
                 dismissButton = { DialogDismissButton(onClick = { vm.cancelCsvPartialImport() }, text = com.magi.app.v6.CsvPartialImport.CANCEL_LABEL) },
@@ -1139,11 +1138,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         rosterCsvChoice?.let { csvText ->
             AlertDialog(
                 onDismissRequest = { rosterCsvChoice = null },
-                title = { Text("CSVの取り込み方法") },
+                title = { Text("どちらとして取り込みますか？") },
                 text = {
                     Text(
-                        "この勤務表CSVを、どちらとして取り込みますか？\n\n" +
-                            "・勤務表：表のとおり、いまの割り当てとして取り込みます。\n" +
+                        "・勤務表：表のとおり、いまの割り当てとして取り込みます。\n" +
                             "・希望シフト：表を職員の希望として取り込み、勤務表は空から作成して最適化で希望を尊重します。",
                     )
                 },
@@ -1151,7 +1149,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false) { showImportGuidance = true }; rosterCsvChoice = null })
                         DialogConfirmButton("希望シフトとして取り込む", onClick = { vm.importRosterAs(csvText, true) { showImportGuidance = true }; rosterCsvChoice = null })
-                        DialogDismissButton(onClick = { rosterCsvChoice = null })
+                        DialogDismissButton(onClick = { rosterCsvChoice = null }, text = "取り込まない")
                     }
                 },
             )
@@ -1169,8 +1167,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DialogConfirmButton("担当内のみ反映", onClick = { vm.applyWishes(false); wishConfirm = 0 })
-                        DialogConfirmButton("含めて反映", onClick = { vm.applyWishes(true); wishConfirm = 0 })
-                        DialogDismissButton(onClick = { wishConfirm = 0 })
+                        DialogConfirmButton("含めて反映する", onClick = { vm.applyWishes(true); wishConfirm = 0 })
+                        DialogDismissButton(onClick = { wishConfirm = 0 }, text = "反映しない")
                     }
                 },
             )

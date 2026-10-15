@@ -128,7 +128,7 @@ const val RANGE_REQUIRED_HINT = "下限か上限のどちらかに数値を設�
 fun DiscardConfirmDialog(onDiscard: () -> Unit, onContinue: () -> Unit) {
     AlertDialog(
         onDismissRequest = onContinue,
-        confirmButton = { DialogDangerButton("破棄", onClick = onDiscard) },
+        confirmButton = { DialogDangerButton("破棄する", onClick = onDiscard) },
         dismissButton = { DialogDismissButton(onClick = onContinue, text = "入力を続ける") },
         title = { Text("入力を破棄しますか？") },
         text = { Text("入力中の内容は保存されません。") },

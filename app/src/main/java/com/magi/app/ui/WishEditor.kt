@@ -263,8 +263,8 @@ private fun WishApplyPanel(
             onDismissRequest = { confirmClear = false },
             title = { Text("選択した日の希望を消しますか？") },
             text = { Text("${ui.staffNames.getOrElse(staffIdx) { "" }}の${dayList(clearable)}の希望（${clearable.size}件）を消します。割当には影響しません。元に戻すで復元できます。") },
-            confirmButton = { DialogDangerButton("消す", onClick = { confirmClear = false; onEvent(MagiEvent.Condition.ClearWishesForDays(staffIdx, clearable.map { it - 1 })); onDone() }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }) },
+            confirmButton = { DialogDangerButton("希望を消す", onClick = { confirmClear = false; onEvent(MagiEvent.Condition.ClearWishesForDays(staffIdx, clearable.map { it - 1 })); onDone() }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }, text = "消さない") },
         )
     }
 }
