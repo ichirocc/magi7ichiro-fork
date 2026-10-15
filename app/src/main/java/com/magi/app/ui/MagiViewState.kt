@@ -458,7 +458,7 @@ internal fun relaxCardText(r: RelaxTrial.Result, ui: UiState): RelaxCardText {
 
 /** [S6 §9] 確定の後、次にやることカードに出す 1 行。 */
 internal fun relaxDoneLine(h0: Int, after: Int): String =
-    "設定を緩めて手順を当てました: 必須違反 $h0 → $after。元に戻すで設定と勤務表をまとめて戻せます。"
+    "設定を緩めて手順を適用しました: 必須違反 $h0 → $after。元に戻すで設定と勤務表をまとめて戻せます。"
 
 /** 表示色だけの undo 段（[MagiViewModel.applyDisplayOnly] と元に戻す/やり直す）の判定の単一ソース。 */
 internal object DisplayOnlyUndo {

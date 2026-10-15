@@ -445,7 +445,7 @@ internal fun GuidedFixDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (allDone) "直し終わりました。" else "なおすのを手伝います") },
+        title = { Text(if (allDone) SHORTAGE_DONE_TITLE else "なおすのを手伝います") },
         text = {
             Column(
                 Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
@@ -458,6 +458,7 @@ internal fun GuidedFixDialog(
                         val cands = remember(target.dayIndex, target.shiftIndex, ui.coverageDiag) {
                             vm.shortageFixCandidates(target.dayIndex, target.shiftIndex)
                         }
+                        val gcv = remember(ui) { vm.conditionsView() }
                         when {
                             cands.isNotEmpty() -> {
                                 // [UX監査 高1] 単独の移動（だれか1人を入れる）。押すと確認の画面へ（直接は書かない）。当てるときは
@@ -480,6 +481,10 @@ internal fun GuidedFixDialog(
                                         Text("${c.name}さん$tail を「${target.shiftSymbol}」に入れる",
                                             textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
+                                    val from = ui.schedule.getOrNull(c.staffIndex)?.getOrNull(target.dayIndex)?.takeIf { it >= 0 }
+                                    guidedCandidateImpact(from?.let { ui.shiftSymbols.getOrNull(it) }, ui.schedule.getOrNull(c.staffIndex)?.count { it == from } ?: 0,
+                                        from?.let { gcv.staffCellLimits(c.staffIndex, it).first })
+                                        ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                                 }
                                 if (cands.size > GUIDED_FIX_PREVIEW) {
                                     TextButton(onClick = { showAll.value = !showAll.value }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
@@ -546,7 +551,8 @@ internal fun GuidedFixDialog(
                         }
                     }
                     else -> {
-                        Text("人員不足の日はなくなりました。仕上げに再作成すると全体が整います。")
+                        Text("人員不足の日はなくなりました。")
+                        otherHardAfterShortage(ui.breakdown)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     }
                 }
             }
@@ -600,9 +606,14 @@ internal fun OperatorNextActionCard(
     relaxStopped: Boolean = false,
     relaxFailed: Boolean = false,
     onRetryRelax: () -> Unit = {},
+    stateOf: () -> com.magi.app.model.MagiState? = { null },   // 見出しで、手が解消する必須違反を名指しするための今の状態
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
+    val topFix = ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }
+    val topResolved = remember(topFix, ui.schedule) {
+        topFix?.let { f -> stateOf()?.let { st -> resolvedHardLabels(st, Array(ui.schedule.size) { ui.schedule[it].toIntArray() }, f.ops, ui.staffNames, ui.shiftSymbols) } }.orEmpty()
+    }
     // [S5 §2.1] 関わる希望（S5a の行か S5b の行）があるか。WISH・FLOOR の分岐がこれを見る。
     val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui) }
     val shortDays = ui.coverageDiag?.shortfalls?.map { it.dayIndex }?.distinct()?.size ?: 0
@@ -661,13 +672,11 @@ internal fun OperatorNextActionCard(
             // [3.643.0] 旧「AIの解決提案」カードをここへ統合＝同じ問題について、手と効果（分かったこと）と「この手を使う」（操作）を 1 枚に。
             val top = ui.fixSuggestions.first { it.deltaHard < 0 }
             val (hardLine, caution) = fixImpactLines(top)
-            // 族ごとの増減だけ（件・回・人・pt を 1 つの合計に足さない＝統合仕様 INV-07）。
-            val diffTxt = familyDeltaList(top.diff)
-            OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。直す手があります。",
+            // 必須の変化（族ごと）と増える要調整だけ（件・回・人・pt を 1 つの合計に足さない＝統合仕様 INV-07）。
+            OpNextPlan(amber, onAmber, homeFixHeadline(hardText(ui.breakdown, ui.bestHard), topResolved),
                 moveLabel, onShowMove, true, APPLY_CHANGE_BUTTON, { onApplyMove(top) },
-                body = top.label,
-                note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n変化：$diffTxt" else "") +
-                    (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else "") + "\n$APPLY_UNDO_NOTE")
+                body = fixDisplayLabel(top.label),
+                note = (hardChangeLine(top.diff) ?: hardLine) + (caution?.let { "\n$it" } ?: ""))
         }
         ui.fixSearching ->
             OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。直し方を探しています…", "", {}, false, null, onSetup)
@@ -1879,21 +1888,19 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
             }
             when {
                 ui.fixSearching -> Text("候補を探しています。少しお待ちください。", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-                ui.fixSuggestions.isEmpty() -> Text("候補がありません。「探す」を押すか、上の違反の場所をタップしてください。\n※1手で直せない違反（下限どうしがぶつかっているなど、そもそも足りない場合）は、設定を見直すのがいちばん確実です。",
+                ui.fixSuggestions.isEmpty() -> Text(NO_FIX_SUGGESTION_TEXT,
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 else -> ui.fixSuggestions.forEach { s ->
                     val (tag, tagColor) = fixKindTag(s.kind)
                     Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            val (hardLine, caution) = fixImpactLines(s)
+                            Text(fixBenefitLine(s) ?: hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 MagiTagChip(text = tag, color = tagColor)
-                                Text(s.label, style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
+                                Text(fixDisplayLabel(s.label), style = MaterialTheme.typography.titleSmall, color = cs.onSecondaryContainer, modifier = Modifier.weight(1f))
                             }
-                            val (hardLine, caution) = fixImpactLines(s)
-                            Text(hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                             caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
-                            val diffTxt = familyDeltaList(s.diff)
-                            if (diffTxt.isNotBlank()) Text("変化：$diffTxt", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                             Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
                                 ConsultButton(isConsulted(ui.consults, consultFix(s))) { onConsult(s) }
@@ -1901,11 +1908,11 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                                     Text(APPLY_CHANGE_BUTTON)
                                 }
                             }
-                            Text(APPLY_UNDO_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer, modifier = Modifier.align(Alignment.End))
                         }
                     }
                 }
             }
+            if (!ui.fixSearching && ui.fixSuggestions.isNotEmpty()) Text(APPLY_UNDO_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
         }
     }
 }

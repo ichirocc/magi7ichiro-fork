@@ -49,7 +49,7 @@ class RelaxTrialTextTest {
         assertTrue(t.prerequisiteRows[0], t.prerequisiteRows[0].contains("（10/") && t.moveLines[0].startsWith("10/7　"))
         assertEquals("この禁止の並びを解消できます。他の必須違反 4件 は残ります。", t.solveNote)
         println("S6 dialog: ${t.dialogTitle} / ${t.hardLine} / ${t.scaleLine}\n  pre=${t.prerequisiteRows}\n  set=${t.rows}\n  moves=${t.moveLines}\n  other=${t.otherMoveLines}\n  keep=${t.keepNote}")
-        assertEquals("設定を緩めて手順を当てました: 必須違反 5 → 4。元に戻すで設定と勤務表をまとめて戻せます。", relaxDoneLine(r.h0, r.rr))
+        assertEquals("設定を緩めて手順を適用しました: 必須違反 5 → 4。元に戻すで設定と勤務表をまとめて戻せます。", relaxDoneLine(r.h0, r.rr))
         val c = relaxCardText(r, ui)
         assertEquals("職員10 10/8〜10/9の禁止の並び（必須 5件中 1件）は、個人の上限0を例外で緩めると解消できる見込みです", c.headline)
         assertEquals("希望を残したまま、設定と勤務表を手順で変えられます", c.body)

@@ -2256,7 +2256,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         relaxDone = RelaxCtx(stateKey(ns), boardKey(nb)) to relaxDoneLine(r.h0, got)
         _ui.update { it.copy(messageIsError = false, hasResult = true, engineRan = false, ranBeforeEdit = it.engineRan || it.ranBeforeEdit, relaxedBoard = true, structureEdited = true, editRev = it.editRev + 1,
             schedule = nb.map { row -> row.toList() }, runSummary = null, stopSummary = null) }
-        postOpNotice("設定を緩めて手順を当てました（元に戻せます）")
+        postOpNotice("設定を緩めて手順を適用しました（元に戻せます）")
         logOp("I", "S6 確定: 組 " + (r.prerequisite + r.relaxes).joinToString { "${it.staff + 1}/${it.shift}" } + " 必須 ${r.h0}→$got")
         refreshCheck()
         saveNow()
@@ -2319,10 +2319,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     hasResult = true,
                     relaxedBoard = false, engineRan = true, ranBeforeEdit = false,
                     runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, finalSched, finalReport, baseReport)),
-                    message = if (adopted)
-                        "整えました: 合計 ${baseReport.total} → ${finalReport.total}（${if (gain >= 0) "-$gain" else "+${-gain}"}・重み ${baseReport.weightedScore.toInt()} → ${finalReport.weightedScore.toInt()}）必須=${finalReport.hard} (${System.currentTimeMillis() - startMs}ms)"
-                    else
-                        "これ以上は整いませんでした（合計=${finalReport.total} 必須=${finalReport.hard}）。残りは今の設定とルールの組み合わせでは減らせない可能性があります。手修正か、編集タブでの設定の見直しをお試しください。",
+                    message = polishResultText(adopted, unitTotals(baseReport.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし",
+                        unitTotals(finalReport.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", finalReport.hard, hardText(finalReport.breakdown, finalReport.hard.toLong())),
                 ) }
                 logOp("I", "ソフト研磨 完了 必須=${finalReport.hard} 合計=${finalReport.total}（${if (adopted) "採用: 合計${if (gain >= 0) "-$gain" else "+${-gain}"}・重み${baseReport.weightedScore.toInt()}→${finalReport.weightedScore.toInt()}" else "増減なし"}）")
                 terminalLogged = true
@@ -3180,11 +3178,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
             appliedFix = focusKey?.let { k -> AppliedFix(k, s.label, s.ops, sched.map { r -> r.toList() }, applied.map { r -> r.toList() }, fixTarget,
                 gate.before.hard, gate.after.hard, gate.before.soft, gate.after.soft, gate.before.breakdown, gate.after.breakdown) },
-            fixOutcome = FixOutcome(fixOutcomeText(s.label, gate.before.hard, gate.after.hard, unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", gate.after.breakdown) + fixResultDetail(gate.before, gate.after) +
+            fixOutcome = FixOutcome(fixOutcomeText(fixDisplayLabel(s.label), gate.before.hard, gate.after.hard, unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", gate.after.breakdown) + fixResultDetail(gate.before, gate.after) +
                 (if (monthEdgeTouched(s.ops.map { it.day }, applied.firstOrNull()?.size ?: 0, maxPatternLen(st))) "$MONTH_EDGE_NOTE。" else "")),
         ) }
         // 通知は 2 行まで＝必須が動いた手は必須だけ、動かない手は合計だけを添える（両方の数はホームの結果の行とログ）。
-        postOpNotice("${s.label} を当てました（" + (if (gate.before.hard != gate.after.hard) "必須違反 ${gate.before.hard}→${gate.after.hard}"
+        postOpNotice("${fixDisplayLabel(s.label)} を適用しました（" + (if (gate.before.hard != gate.after.hard) "必須違反 ${gate.before.hard}→${gate.after.hard}"
             else "要調整 ${unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}→${unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}") + "）")
         fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
         refreshCheck()

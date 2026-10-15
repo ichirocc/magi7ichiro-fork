@@ -6,11 +6,11 @@ import org.junit.Test
 /** [3.643.0] 直したあとの 1 行は、同じ問題について「解消したか」と「ほかに何件残るか」を言う。 */
 class FixOutcomeTextTest {
     @Test fun appliedMoveSaysWhatChangedAndWhatRemains() {
-        assertEquals("山本 10/12「夜」→「休」 を当てました。必須違反 3→2。ほかの必須違反は 2件 残っています。", fixOutcomeText("山本 10/12「夜」→「休」", 3, 2, "40件", "38件"))
-        assertEquals("入替 を当てました。必須違反はなくなりました（要調整 40件→38件）。", fixOutcomeText("入替", 1, 0, "40件", "38件"))
-        assertEquals("入替 を当てました。必須違反は変わらず 2件（要調整 40件→39件）。", fixOutcomeText("入替", 2, 2, "40件", "39件"))
+        assertEquals("山本 10/12「夜」→「休」 を適用しました。必須違反 3→2。ほかの必須違反は 2件 残っています。", fixOutcomeText("山本 10/12「夜」→「休」", 3, 2, "40件", "38件"))
+        assertEquals("入替 を適用しました。必須違反はなくなりました（要調整 40件→38件）。", fixOutcomeText("入替", 1, 0, "40件", "38件"))
+        assertEquals("入替 を適用しました。必須違反は変わらず 2件（要調整 40件→39件）。", fixOutcomeText("入替", 2, 2, "40件", "39件"))
         // [3.678.0] 内訳があれば単位ごとに（人員不足は人）。
-        assertEquals("入替 を当てました。必須違反は変わらず 1件・2人（要調整 40件→39件）。", fixOutcomeText("入替", 3, 3, "40件", "39件", mapOf("c3n" to 1, "covU" to 2)))
+        assertEquals("入替 を適用しました。必須違反は変わらず 1件・2人（要調整 40件→39件）。", fixOutcomeText("入替", 3, 3, "40件", "39件", mapOf("c3n" to 1, "covU" to 2)))
     }
 
     /** [3.663.0] 当てたあとの内訳: 解消・減少と新たに生じた問題を分け、場所だけ移った違反も言う（仕様 §8）。 */

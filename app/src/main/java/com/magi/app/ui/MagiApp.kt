@@ -667,6 +667,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     }
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     OperatorNextActionCard(
+                        stateOf = { vm.state },
                         ui = ui,
                         onMake = { vm.runV6FullOptimize() },
                         onSmartInitial = { vm.generateSmartInitial() },
