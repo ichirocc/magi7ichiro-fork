@@ -9,10 +9,10 @@ import com.magi.app.v6.ViolationIdentity
 import com.magi.app.v6.ViolationReport
 
 /** 付随の変更 1 つと、その理由（null＝外しても重い族が増えない＝理由を言えない）。[outOfFrameHard]＝範囲の外の必須違反を直すための変更。 */
-internal data class ExtraReason(val ops: List<FixCell>, val reason: String?, val outOfFrameHard: Boolean = false)
+data class ExtraReason(val ops: List<FixCell>, val reason: String?, val outOfFrameHard: Boolean = false)
 
 /** 案の説明: 入り口の範囲の中の主の変更、付随の変更と理由、ついでに直る範囲の外の必須違反。 */
-internal data class FixExplanation(val primary: List<FixCell>, val extras: List<ExtraReason>, val incidental: List<String>) {
+data class FixExplanation(val primary: List<FixCell>, val extras: List<ExtraReason>, val incidental: List<String>) {
     val allExplained: Boolean get() = extras.all { it.reason != null }
     val mainlyOutOfFrameHard: Boolean get() = extras.any { it.outOfFrameHard }
 }

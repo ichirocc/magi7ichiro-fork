@@ -63,12 +63,12 @@ internal fun entryMoves(state: MagiState, s: Array<IntArray>, target: FixTarget,
 }
 
 /** 案の段: T1＝範囲の中の 1 セル、T2＝付随の変更がすべて理由つき、MOVE_ONLY＝期間全体の過不足が減らない、T3＝そのほか（別の問題）。 */
-internal enum class FixTier { T1, T2, MOVE_ONLY, T3 }
+enum class FixTier { T1, T2, MOVE_ONLY, T3 }
 
-internal data class TieredFix(val sug: FixSuggestion, val tier: FixTier, val explain: FixExplanation? = null)
+data class TieredFix(val sug: FixSuggestion, val tier: FixTier, val explain: FixExplanation? = null)
 
 /** 段に分けた案と、適用できない Tier 1 の理由の行。[key] は依頼の鍵（別の依頼の結果を出さない）。 */
-internal data class FixTierView(val key: String, val items: List<TieredFix>, val blocked: List<String>) {
+data class FixTierView(val key: String, val items: List<TieredFix>, val blocked: List<String>) {
     fun of(t: FixTier): List<TieredFix> = items.filter { it.tier == t }
     /** 主の一覧（T1・T2）に出す案があるか。 */
     val hasMain: Boolean get() = items.any { it.tier == FixTier.T1 || it.tier == FixTier.T2 }
