@@ -869,7 +869,7 @@ internal fun addCandidateHead(c: AddCandidate, ui: UiState, shift: Int): String 
 
 /** 回数不足の相談事項（増やす案が見つからないとき）。 */
 internal fun consultCountShortage(name: String, sym: String, head: String, staff: Int) =
-    ConsultItem("${name}さんの「$sym」の回数", "$head。条件を守って増やせる案が見つからない＝追加候補日と変更を妨げる条件を確認", staff, staffName = name)
+    ConsultItem("${name}さんの「$sym」の回数", "$head。条件を守って増やせる案が見つからないため、追加候補日と変更を妨げる条件を確認", staff, staffName = name)
 
 /** シフト集計「計（期間）」の人員の印：そのシフトに人員不足・過剰がある日。 */
 internal data class ShiftCoverageTotal(val underDays: List<Int>, val overDays: List<Int>) {

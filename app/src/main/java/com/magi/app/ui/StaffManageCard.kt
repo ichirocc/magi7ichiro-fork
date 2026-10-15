@@ -99,7 +99,7 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
         }
     }
     if (bulkOpen) {
-        BulkAddDialog("職員を一括追加", "名前を改行で複数入力。全員を既定グループに追加します（後で個別変更可）。",
+        BulkAddDialog("職員を一括追加", "名前を改行で区切って複数入力します。全員を既定グループに追加します（後で1人ずつ変更できます）。",
             v.groups.map { toHankakuKigou(it.kigou) },
             { lines, gi -> onEvent(MagiEvent.Structure.BulkAddStaff(lines, gi)); bulkOpen = false }, { bulkOpen = false })
     }

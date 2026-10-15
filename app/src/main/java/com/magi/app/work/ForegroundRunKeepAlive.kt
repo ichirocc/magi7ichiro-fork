@@ -47,7 +47,7 @@ class ForegroundRunKeepAlive(
     override suspend fun getForegroundInfo(): ForegroundInfo {
         val mgr = ctx.getSystemService(NotificationManager::class.java)
         if (mgr != null && mgr.getNotificationChannel(CHANNEL) == null) {
-            mgr.createNotificationChannel(NotificationChannel(CHANNEL, "勤務表の最適化", NotificationManager.IMPORTANCE_LOW))
+            mgr.createNotificationChannel(NotificationChannel(CHANNEL, "勤務表づくり", NotificationManager.IMPORTANCE_LOW))
         }
         // ランチャーと同じ Intent＝既存のタスクを前面へ出すだけ（Activity を作り直さない＝計算中の画面を保つ）。
         val open = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {

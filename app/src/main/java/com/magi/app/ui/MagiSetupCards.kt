@@ -172,7 +172,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
             }
             val next = when {
                 c.staff == 0 || c.shifts == 0 -> "基本情報（職員／シフト）を整えましょう。"
-                c.wishes == 0 -> "希望・休暇があれば『希望シフト』で登録します。"
+                c.wishes == 0 -> "希望・休暇があれば『希望シフト』で登録しましょう。"
                 // [3.482.0 導線重複] 旧「ホームの『勤務表をつくる』で…」は、同じ画面の下に常設の同名ボタンが
                 //   あるのにホームへ誘導する食い違い（3.480.0 フッター一本化の取り残し）。行き先を正す。
                 else -> "準備OK。画面下の『${if (ui.hasResult) "再作成" else "勤務表をつくる"}』で作成できます。"
@@ -459,13 +459,13 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
-internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」で効きます"
+internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」のときに働きます"
 internal const val EJECTION_LEFTOVER_NOTE = "組み立てが早く終わって余った時間を、玉突きを深く探すのに回します（測定中・既定はOFF）。「見込みのある所だけ」で効きます"
 internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、組むのを早めに終えて仕上げに進みます（既定はOFF＝時間いっぱい粘る）"
-internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」で効きます"
+internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」のときに働きます"
 internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来どおり広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
-internal const val APT_FAIR_UNGUARDED_NOTE = "試験中・じっくりでだけ効きます。期間の制約や上限などが1件増える手も予算内なら採ります。測定では目的に当たりませんでした（既定はOFF）"
+internal const val APT_FAIR_UNGUARDED_NOTE = "試験中・じっくりのときだけ働きます。期間の制約や上限などが1件増える手も予算内なら採ります。測定では目的に当たりませんでした（既定はOFF）"
 
 internal fun ejectionChainLabel(m: EjectionChainMode): String = when (m) {
     EjectionChainMode.OFF -> "しない"
@@ -605,7 +605,7 @@ internal fun StaffingRealityCard(ui: UiState, cv: ConditionsView) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("この体制で回るか", style = MaterialTheme.typography.titleMedium)
-            Text("シフト別に「担当できる人数」で確認。余裕=1人欠けても回るか。",
+            Text("シフトごとに「担当できる人数」で確かめます。余裕は、1人欠けても回るかどうかを表します。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             if (rows.any { it.q - it.maxNeed <= 0 }) Text("⚠・！のシフトは、下の『① シフト・グループ』の担当可否で担当できるグループを増やすか、「月次条件」の『必要人数設定』で人数を見直すと余裕が出ます。",
                 style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

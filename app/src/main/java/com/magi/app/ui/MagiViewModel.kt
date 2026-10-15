@@ -2258,7 +2258,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val got = nb?.let { UnifiedViolationChecker.check(ns0, it.copy2D()).hard }
         if (nb == null || got != r.rr) {
             logOp("W", "S6 確定を見送り: 手順を当てた必須 $got ≠ 試算 ${r.rr}")
-            _ui.update { it.copy(messageIsError = true, message = "試算の手順を当てても同じ結果になりませんでした。勤務表と設定はそのままです。") }
+            _ui.update { it.copy(messageIsError = true, message = "試算の手順を適用しても同じ結果になりませんでした。勤務表と設定はそのままです。") }
             return
         }
         if (!ensureValidForRun(ns0, nb, "設定の緩和")) return
@@ -3017,7 +3017,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      * （`settingIssues` は `refreshCheck` 経由＝盤面が無いと更新されないため、設定中は届かない）。
      */
     fun relaxForbiddenRule(seqLabel: String) {
-        if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は設定を変更できません（完了後にもう一度お試しください）") }; return }
+        if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は設定を変更できません。終わってからもう一度お試しください") }; return }
         val s = state ?: return
         val remain = s.cons3n.filter { c3SeqKey(it.pattern) != seqLabel }
         val removed = s.cons3n.size - remain.size
@@ -3381,7 +3381,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     val why = if (res.ambiguousNames.isNotEmpty())
                         "CSV取込失敗: ${csvAmbiguousText(res.ambiguousNames)}。編集タブ＞職員管理とCSVの両方で名前を区別してから、もう一度取り込んでください"
                     else
-                        "CSV取込失敗: 一致する職員名がありませんでした（0名）。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。"
+                        "CSV取込失敗: 一致する職員名がありませんでした。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。"
                     _ui.update { it.copy(messageIsError = true, running = false, message = why) }
                     logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
                     return@launch

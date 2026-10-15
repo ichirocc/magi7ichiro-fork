@@ -174,7 +174,7 @@ fun MagiViewModel.exportLogsJson(): String? {
  * 必ず出す。挙動は不変＝知らせるだけで、違っていれば編集タブの「月次条件」で直せる。
  */
 private fun periodNote(startDate: String) =
-    "｜期間は「$startDate」から として取り込みました（CSVに年月が無い場合は推定です。編集タブの「月次条件」の『対象の月』で直せます）"
+    "｜期間の開始を「$startDate」として取り込みました（CSVに年月が無い場合は推定です。編集タブの「月次条件」の『対象の月』で直せます）"
 
 /**
  * [3.475.0/論理監査] テンプレCSVの凡例に無い記号を名指しする。旧: そのセルは黙って休（希望取込では
@@ -278,7 +278,7 @@ private fun componentImportMismatchHint(repairedText: String, what: String = "�
     // [3.475.0/論理監査] 未閉引用符は「取り込める行が0件」ではなく書式の誤り（3.413.0/I-08 が断る理由）。
     //   旧: 種類別取込3経路とも氏名/記号の不一致を疑わせる案内しか出せなかった。
     com.magi.app.v6.csvHasUnclosedQuote(repairedText) ->
-        "引用符（\"）が閉じていない行があります。開いた引用符から後ろが1つのセルに吸い込まれるため、書式を直してから取り込んでください。"
+        "引用符（\"）が閉じていない行があります。開いた引用符から後ろが1つのセルにまとめて入ってしまうため、書式を直してから取り込んでください。"
     com.magi.app.v6.RosterCsvImport.detect(repairedText) ||
         com.magi.app.v6.FlatRosterCsvImport.detect(repairedText) ->
         "これは勤務表全体（病院の勤務表の書式）のCSVのようです。取込種別で『データ全体（新規）』を選んでください。"

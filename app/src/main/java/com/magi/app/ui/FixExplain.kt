@@ -136,4 +136,4 @@ internal fun hardUnchangedLines(s: FixSuggestion, hardRemains: Boolean): List<St
 /** 下書きの確認の一文。[hard]＝置き換える前の必須違反（まだ数えていなければ null＝件数を言わない）。 */
 internal fun draftConfirmText(hard: String?): String =
     if (hard == null) "今の勤務表を下書きで置き換えます。元に戻せます" else "今の勤務表（必須 $hard）を下書きで置き換えます。元に戻せます"
-internal const val DRAFT_UNDO_NOTE = "元に戻すで前の勤務表に戻せます"
+internal const val DRAFT_UNDO_NOTE = "「元に戻す」で前の勤務表に戻せます"

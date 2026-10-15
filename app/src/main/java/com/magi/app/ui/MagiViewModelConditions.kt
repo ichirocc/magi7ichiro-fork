@@ -148,7 +148,7 @@ fun MagiViewModel.setGroupRange(g: Int, k: Int, lo: String, hi: String) {
     val gname = st0.groups.getOrNull(g)?.name ?: "#$g"
     // 全員が個人設定済み＝何も書かない（適切回数の書き換えも undo もしない）。黙って変わらない形を避けて知らせる。
     if (wrote == 0) {
-        notify("$gname「${opSy(k)}」は全員が個人設定済みのため変更はありません（変えるときは × で解除してから適用）", "W")
+        notify("$gname「${opSy(k)}」は全員が個人設定済みのため変更はありません（変えるときは × で解除してから適用してください）", "W")
         return
     }
     // ws1 C: グループ別 適切回数（弱い目標）。単一値(最低=最高)のときのみ設定。

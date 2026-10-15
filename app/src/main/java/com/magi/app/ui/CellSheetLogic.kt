@@ -1447,7 +1447,7 @@ internal const val SHORTAGE_LABEL_INFEASIBLE = "担当できる人が足りな�
 internal const val SHORTAGE_LABEL_BLOCKED = "今の希望では埋まらない"
 internal const val SHORTAGE_LABEL_FIXABLE = "動かせば埋まる"
 internal const val SHORTAGE_LABEL_SEARCH_MISS = "試した入れ替えでは埋まらなかった"
-internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。なおし方を見るで 1 人ずつ入れられます"
+internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。「なおし方を見る」で 1 人ずつ入れられます"
 
 internal const val SETTINGS_TIME_TITLE = "勤務表をつくる時間"
 

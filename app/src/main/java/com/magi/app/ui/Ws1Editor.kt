@@ -193,7 +193,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 // [3.429.0/R-03] 削除する前に、参照している制約の件数を見せる（削除自体は
                 //   従来どおり進められる＝止めるのではなく、確認ダイアログを情報つきにする）。
                 val refs = v.shiftRefCount(d.k)
-                val note = if (refs > 0) "このシフトを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
+                val note = if (refs > 0) "このシフトを使うルールが${refs}件あります。削除すると、そのルールは使われなくなります。" else ""
                 val wishN = ui.wishes.values.count { it == d.k }
                 val wishNote = if (wishN > 0) "このシフトの希望${wishN}件も消えます。" else ""
                 // [3.578.0/P10] 「休」削除は休だった日を黙って他シフトへ自動変換する（経緯: history 3.574.0-3.576.0）。
@@ -212,7 +212,7 @@ internal fun Ws1Card(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Unit) {
                 // [3.429.0/R-03] 所属者移動に加え、参照している制約の件数も見せる。
                 val members = v.groupMemberCount(d.g)
                 val refs = v.groupRefCount(d.g)
-                val note = if (refs > 0) "このグループを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
+                val note = if (refs > 0) "このグループを使うルールが${refs}件あります。削除すると、そのルールは使われなくなります。" else ""
                 val label = "グループ ${toHankakuKigou(d.kigou)}" + if (members > 0) "（所属${members}名→先頭グループへ移動）" else ""
                 dialog = Ws1Dialog.ConfirmDelete("group", d.g, label, note)
             }) else null,

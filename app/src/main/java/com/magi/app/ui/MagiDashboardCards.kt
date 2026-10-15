@@ -884,12 +884,12 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                         "再作成するか、希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると埋まりやすくなります（編集タブ＞年間マスター①）。"
                     diag.provenBlockedSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.provenBlockedSlots} 枠は" +
                         "いまの希望のままでは埋められません。その枠は希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると直せます（編集タブ＞年間マスター①）。" +
-                        "残りは再作成すると解消し得ます。"
+                        "残りは再作成すると解消する場合があります。"
                     diag.searchMissSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.searchMissSlots} 枠は試した入れ替えでは埋まりませんでした。" +
-                        "再作成すると解消し得ます。"
+                        "再作成すると解消する場合があります。"
                     diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人。$SHORTAGE_ENOUGH_TEXT"
                     else -> "不足 ${diag.totalShortfall} 人 — ${SHORTAGE_LABEL_INFEASIBLE} ${diag.infeasibleSlots} 枠 / ${SHORTAGE_LABEL_FIXABLE} ${diag.fixableSlots} 枠。" +
-                        "動かせば埋まる枠は再作成すると解消し得ます。担当できる人が足りない枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
+                        "動かせば埋まる枠は再作成すると解消する場合があります。担当できる人が足りない枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
                 }
                 Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownShortfalls = if (allShortfalls) diag.shortfalls else diag.shortfalls.take(6)
@@ -936,7 +936,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
             }
             if (diag.hasSurplus) {
                 Text("人員過剰がなぜ減らないか", style = MaterialTheme.typography.titleMedium)
-                Text("過剰 ${diag.totalSurplus} 人 — 在勤者を他シフトへ動かせば消えるはずが、動かない理由を枠ごとに示します。",
+                Text("過剰 ${diag.totalSurplus} 人 — 勤務している人を他のシフトへ動かせば消えるはずの過剰について、動かない理由を枠ごとに示します。",
                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownSurpluses = if (allSurpluses) diag.surpluses else diag.surpluses.take(6)
                 for (s in shownSurpluses) {
