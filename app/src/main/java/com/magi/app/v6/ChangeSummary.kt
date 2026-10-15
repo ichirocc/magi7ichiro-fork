@@ -13,16 +13,11 @@ data class ChangeSummary(
     /** 回数の下限・上限を外れた職員の人数（0＝数えられなかったか範囲内）。 */
     val rangeOutStaff: Int = 0,
 ) {
-    /** 完了カード 1 行目。例: 「変更 4人・7セル／希望どおり 42/42／回数の下限・上限 全員守れています」 */
-    fun line(): String = "変更 ${changedStaff}人・${changedCells}セル／希望どおり $wishKept/$wishTotal／回数の下限・上限 " +
-        when {
-            rangeAllOk -> "全員守れています"
-            rangeOutStaff > 0 -> "外れた人 ${rangeOutStaff}人"
-            else -> "外れた人あり"
-        }
+    /** 完了カード 1 行目。例: 「変更：12人・84か所／希望どおり 42/42件」 */
+    fun line(): String = "変更：${changedStaff}人・${changedCells}か所／希望どおり $wishKept/${wishTotal}件"
 
-    /** 完了カード 2 行目（族名は [label] で表示語へ）。例: 「改善 回避の並び -2・期間の制約 -1（重み 90）／悪化 曜日の偏り +3（重み 3）」 */
-    fun familyLine(label: (String) -> String = { it }): String = familyLine(familyDeltas, label)
+    /** 完了カード 2 行目（族名は [label]、単位は [unit] で表示語へ）。例: 「減った：回避の並び 2件・期間の制約 1件／増えた：曜日の偏り 3pt」 */
+    fun familyLine(unit: (String) -> String = { "件" }, label: (String) -> String = { it }): String = familyLine(familyDeltas, unit, label)
 
     companion object {
         fun of(state: MagiState, before: Array<IntArray>, after: Array<IntArray>, report: ViolationReport, beforeReport: ViolationReport? = null): ChangeSummary {
@@ -47,17 +42,15 @@ data class ChangeSummary(
                 .associateWith { (after.breakdown[it] ?: 0) - (before.breakdown[it] ?: 0) }
                 .filterValues { it != 0 }
 
-        /** 改善（減った族）と悪化（増えた族）を重み×増減の大きい順に並べ、それぞれ重み付き合計を添える。 */
-        fun familyLine(deltas: Map<String, Int>, label: (String) -> String = { it }): String {
+        /** 減った族と増えた族を、重み×増減の大きい順に並べる（表示に重みは出さない。単位は族ごと）。 */
+        fun familyLine(deltas: Map<String, Int>, unit: (String) -> String = { "件" }, label: (String) -> String = { it }): String {
             fun part(title: String, sign: Int): String {
                 val items = deltas.entries.filter { it.value * sign > 0 }
                     .sortedWith(compareByDescending<Map.Entry<String, Int>> { abs(it.value) * MirrorKeys.weightOf(it.key) }.thenBy { it.key })
-                if (items.isEmpty()) return "$title なし"
-                val weighted = items.sumOf { abs(it.value) * MirrorKeys.weightOf(it.key) }
-                return "$title " + items.joinToString("・") { "${label(it.key)} ${if (it.value < 0) "-" else "+"}${abs(it.value)}" } +
-                    "（重み ${weighted.toLong()}）"
+                if (items.isEmpty()) return "${title}なし"
+                return title + items.joinToString("・") { "${label(it.key)} ${abs(it.value)}${unit(it.key)}" }
             }
-            return part("改善", -1) + "／" + part("悪化", +1)
+            return part("減った：", -1) + "／" + part("増えた：", +1)
         }
     }
 }

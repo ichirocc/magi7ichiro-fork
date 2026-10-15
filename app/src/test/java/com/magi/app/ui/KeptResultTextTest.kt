@@ -8,8 +8,8 @@ class KeptResultTextTest {
     @Test fun weightedDecidesWhenTotalDropped() {
         val now = Score(5, 48412.4, 369); val prev = Score(5, 48230.0, 376)
         assertEquals(
-            "改善が確認できなかったため、前回の勤務表を維持しました（今回の案は採用していません）。理由：重み付き評価点が高いため（今回 必須5・評価点48,412・合計369／前回 必須5・評価点48,230・合計376。比べる順＝必須→評価点→合計）。",
-            KeptResultText.screen(now, prev),
+            "再作成した案は前の勤務表より良くなかったため採用していません（再作成した案：必須違反 2件・要調整 なし／前の勤務表：必須違反 なし・要調整 3件）。勤務表は変わっていません。",
+            KeptResultText.screen(mapOf("c3n" to 2), mapOf("c1" to 3)),
         )
         assertEquals(
             "再実行: 今回 必須5・評価点48,412・合計369 は前回 必須5・評価点48,230・合計376 以下に改善せず（重み付き評価点が高いため）→ 前回を維持",

@@ -204,9 +204,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var tourActive by remember { mutableStateOf(false) }   // 「必須違反を順に見る」の巡回中
     var tourAt by remember { mutableIntStateOf(0) }         // 巡回の何件目か（違反単位、`hardViolationItems`）
-    val tourItems = remember(ui.violationCellFamilies, ui.schedule) {
+    val tourItems = remember(ui.violationCellFamilies, ui.schedule, ui.display) {
         val st = vm.state
-        if (st == null || ui.schedule.isEmpty()) emptyList() else hardViolationItems(st, cachedProblem(st), ui.schedule.toIntArray2D(), ui.violationCellFamilies)
+        ui.display?.takeIf { it.freshFor(ui) }?.tourItems
+            ?: if (st == null || ui.schedule.isEmpty()) emptyList() else hardViolationItems(st, cachedProblem(st), ui.schedule.toIntArray2D(), ui.violationCellFamilies)
     }
     var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
@@ -582,7 +583,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         if (!messageMayReplaceNotice(noticeShowingId != null, ui.messageIsError)) { vm.clearMessage(m); return@LaunchedEffect }
         snackbarHostState.currentSnackbarData?.dismiss()
         // [3.400.0] 失敗・拒否は長め（4秒だと120字級の失敗文を読み切る前に消える）。
-        snackbarHostState.showSnackbar(m, duration = if (ui.messageIsError) SnackbarDuration.Long else SnackbarDuration.Short)
+        snackbarHostState.showSnackbar(m, duration = if (ui.messageIsError || ui.keptPrevious) SnackbarDuration.Long else SnackbarDuration.Short)
         vm.clearMessage(m)
     }
 
@@ -654,17 +655,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             onDismiss = { showImportGuidance = false },
                         )
                     }
-                    // 自動作成の結果と次に確認する問題（作成の完了＝配布できる、とは言わない）。人員不足は日と勤務、ほかは巡回の先頭。
-                    if (ui.hasResult && ui.engineRan && !ui.running) {
-                        // 見せる枠＝押して開く枠（なおし方の対象は guidedFixTarget＝先頭の不足とは限らない。統合仕様 INV-01）。
-                        val shortfalls = ui.coverageDiag?.shortfalls.orEmpty()
-                        val covU = guidedFixTarget(shortfalls)
+                    // 自動作成の結果と次に確認する問題は主カードの上端 2 行（対象は主カードと同じ＝人員不足は guidedFixTarget、ほかは巡回の先頭）。
+                    val creationTop = if (ui.hasResult && ui.engineRan && !ui.running) {
+                        val covU = guidedFixTarget(ui.coverageDiag?.shortfalls.orEmpty())
                         val tour = tourItems.firstOrNull()
-                        CreationResultCard(ui,
-                            nextProblem = covU?.let { "${it.dayLabel}の人員不足" } ?: tour?.heading ?: shortfalls.firstOrNull()?.let { "${it.dayLabel}の人員不足" },
-                            onNext = { if (covU == null && tour != null) goTourItem(0) else guidedFix = true },
-                            onOthers = { tab = 3 }, onPreDist = { preDist = true }, onRetrySave = { vm.saveNow() })
-                    }
+                        CreationTop(
+                            kept = ui.keptPrevious,
+                            next = covU?.let { "${it.dayLabel}の人員不足" } ?: tour?.let { creationNextProblem(ui.staffNames.getOrNull(it.staff), it.heading) },
+                            onOthers = { tab = 3 }, onRetrySave = { vm.saveNow() })
+                    } else null
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     OperatorNextActionCard(
                         stateOf = { vm.state },
@@ -694,6 +693,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         relaxStopped = vm.relaxStopped(),
                         relaxFailed = vm.relaxFailed(),
                         onRetryRelax = { vm.retryRelaxTrial() },
+                        creation = creationTop,
                     )
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
                     ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) }, onToggleHold = { vm.toggleConsultHold(it) },
@@ -707,7 +707,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [冗長性削減] StatusHero(状態三重表示) / SummaryCard(統計は「ようす」と重複＋開発用語) /
                     //   QuickActionGrid(下部ナビと4/6重複) は home から除外。詳細統計は「ようす」タブへ集約。
                     CopilotCard(ui, onGoEdit = { openEditLanding(null) }, onSoftPolish = { vm.runSoftPolish() },
-                        onEditWishes = { tab = 2; editScope = 0 }, onManualEdit = { tab = 1 })
+                        onEditWishes = { tab = 2; editScope = 0 })
                     CoverageDiagnosisCard(ui, onCancelWish = { i, j -> vm.removeWish(i, j) })
                     // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（CoverageDiag の c3n 版・c3n=0 なら非表示）。
                     ForbiddenRunDiagnosisCard(ui, onRelaxRule = { vm.relaxForbiddenRule(it) })
@@ -755,7 +755,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         {
                             val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
                             val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
-                            HardListChip(hardText(ui.breakdown, ui.bestHard), rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
+                            HardListChip(displayHardText(ui), rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
                         }
                     } else null
                     ScheduleToolsCard(ui, vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket, locCount = vioLocCount,
@@ -940,6 +940,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onConsult = { vm.addConsult(consultFix(it)) })
                 }
                 else -> {
+                    // 作成の時間は設定タブの先頭（再作成の前にいちばん触る設定）。
+                    SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     AppearanceCard(oneHand, { oneHand = it }, proMode, { proMode = it },
                         plainCellBorder = plainCellBorder, onPlainCellBorder = { plainCellBorder = it },
                         leftHand = leftHand, onLeftHand = { leftHand = it })
@@ -963,7 +965,6 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onRestorePrev = { vm.restorePreviousData() },
                         onRetrySave = { vm.saveNow() },
                     )
-                    SettingsCard(ui, onEvent, onBgOptimize = onBgOptimize)
                     // [実機指摘/移動] 重み表＝最適化の優先順位の根拠。実行条件（最適化設定）の隣が定位置。
                     // [3.532.0/設定タブ静音化] 常時展開の19件表は毎回の初見コストが高いため既定で閉じる
                     // （ColorSettingsViewの族別チップが3.483.0で同じ理由・同じ形で先行済み）。
@@ -1218,7 +1219,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                         label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
                     }
                     ok -> { label = readyBadgeLabel(ui.bestSoft, ui.breakdown); fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
-                    ui.hasResult -> { label = "必須違反 ${hardText(ui.breakdown, ui.bestHard)}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
+                    ui.hasResult -> { label = "必須違反 ${displayHardText(ui)}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
                     else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
                 // 札の前に自動作成の状態（2026-10-14 利用者レビュー: 「未計算」では、警告が今の勤務表の評価か分からなかった）。

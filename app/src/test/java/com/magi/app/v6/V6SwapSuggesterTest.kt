@@ -122,4 +122,30 @@ class V6SwapSuggesterTest {
         val want = setOf(FixCell(0, 1, 1), FixCell(0, 3, 1), FixCell(0, 5, 1))
         assertTrue(chains.map { it.ops }.toString(), chains.any { it.ops.toSet() == want && it.deltaHard == -1 })
     }
+    /** 手で崩した希望セル（pref 違反）を希望へ戻す単一変更は、`restoreWishLocked` が ON のときだけ出る。 */
+    @Test
+    fun restoreWishLockedProposesWishValueOnlyWhenOn() {
+        val st = MagiState(
+            startDate = "2026-08-03", endDate = "2026-08-05",
+            shifts = listOf(Shift("休", "休", "", "", ShiftRole.Rest), Shift("D", "D", "", "")),
+            groups = listOf(Group("G0", "G0")), staff = listOf(Staff("A", 0), Staff("B", 0)), use2Patterns = false,
+            groupShift = listOf(listOf(1, 1)), groupShiftApt = listOf(listOf("", "")),
+            schedule = listOf(listOf(1, 0, 0), listOf(0, 0, 0)),
+            wishes = mapOf("0,0" to 0), staffRange = emptyMap(),
+            needDay1 = emptyMap(), needDay2 = emptyMap(),
+            cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+            cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+        )
+        val sched = st.schedule.map { it.toIntArray() }.toTypedArray()
+        assertTrue((UnifiedViolationChecker.check(st, sched).breakdown["pref"] ?: 0) > 0)
+        val restore = FixCell(0, 0, 0)
+        val saved = FixSuggester.restoreWishLocked
+        try {
+            FixSuggester.restoreWishLocked = false
+            assertTrue(FixSuggester.suggest(st, sched, maxResults = 50).none { restore in it.ops })
+            FixSuggester.restoreWishLocked = true
+            val on = FixSuggester.suggest(st, sched, maxResults = 50)
+            assertTrue(on.map { it.label }.toString(), on.any { it.kind == FixKind.CHANGE && it.ops == listOf(restore) && it.deltaHard < 0 })
+        } finally { FixSuggester.restoreWishLocked = saved }
+    }
 }

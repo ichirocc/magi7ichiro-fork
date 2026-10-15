@@ -368,7 +368,7 @@ class OptimizationWorker(
         ensureChannel()
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
-            .setContentTitle("勤務表を最適化中")
+            .setContentTitle(com.magi.app.ui.NOTIFY_RUNNING_TITLE)
             .setContentText("閉じても大丈夫です（できたら通知します）")
             .setOngoing(true)
             .build()
@@ -379,7 +379,7 @@ class OptimizationWorker(
     private fun notifyDone(hard: Int, breakdown: Map<String, Int>) {
         // 必須違反 0 件だけで「配布できます」と言わない（相談・職場の確認は含まない＝画面の完了通知と同じ文言、仕様 §9）。
         val msg = com.magi.app.ui.completedText(hard, breakdown, "")
-        notify("勤務表の最適化", msg)
+        notify(com.magi.app.ui.NOTIFY_DONE_TITLE, com.magi.app.ui.notifyDoneLines(hard, breakdown).joinToString("\n"))
         // [Android 17 バブル] 完了サマリを会話バブルへ反映（ongoing 解除）。
         runCatching { BubbleSupport.postDone(ctx, msg) }
     }
@@ -388,7 +388,8 @@ class OptimizationWorker(
         val n = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(title)
-            .setContentText(text)
+            .setContentText(text.substringBefore('\n'))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setAutoCancel(true)
             .build()
         runCatching { NotificationManagerCompat.from(ctx).notify(NID_DONE, n) }

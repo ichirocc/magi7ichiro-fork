@@ -341,33 +341,6 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
     )
 }
 
-/**
- * 自動作成の結果（2026-10-14 利用者レビュー「どこまで自動で進み、どこで担当者が判断するか」）。作成が終わったことと配布できることを分け、
- * 必須違反・要調整（族ごとの単位）・保存の状態と、次に確認する問題を 1 枚に。押した先は担当者の判断（変更案を見る・ほかの問題・配布前の確認）。
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun CreationResultCard(ui: UiState, nextProblem: String?, onNext: () -> Unit, onOthers: () -> Unit, onPreDist: () -> Unit, onRetrySave: () -> Unit = {}) {
-    val cs = MaterialTheme.colorScheme
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(CREATION_DONE_TITLE, style = MaterialTheme.typography.titleMedium)
-            creationResultLines(ui.bestHard, ui.breakdown, ui.saveState).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-            nextProblem?.let {
-                Text("次に確認する問題", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                Text(it, style = MaterialTheme.typography.bodyMedium)
-            }
-            if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 主操作はすぐ下の思考誘導カードの大ボタン＝ここは外枠だけ（主操作は画面に 1 つ、統合仕様 INV-09）。
-                if (nextProblem != null) OutlinedButton(onClick = onNext, modifier = Modifier.heightIn(min = 48.dp)) { Text("この問題の変更案を見る") }
-                OutlinedButton(onClick = onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほかの問題を見る") }
-                OutlinedButton(onClick = onPreDist, modifier = Modifier.heightIn(min = 48.dp)) { Text("配布前の確認") }
-            }
-        }
-    }
-}
-
 /** 「相談事項に登録」。積んだあとは「相談中」の札＝結果を形で返す（シートやダイアログの下では Snackbar が見えない。
  *  無効ボタンの文字は 38% で状態色の基準 3:1 を割るので、札にする＝ux_test_checklist A1）。 */
 @Composable
@@ -607,6 +580,7 @@ internal fun OperatorNextActionCard(
     relaxFailed: Boolean = false,
     onRetryRelax: () -> Unit = {},
     stateOf: () -> com.magi.app.model.MagiState? = { null },   // 見出しで、手が解消する必須違反を名指しするための今の状態
+    creation: CreationTop? = null,   // 自動作成の直後: カード上端の 2 行（作成の完了と次に確認する問題）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -713,6 +687,11 @@ internal fun OperatorNextActionCard(
                     // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
                     Text(phName, style = MaterialTheme.typography.labelMedium, color = ensureReadable(phColor, Color.White), fontWeight = FontWeight.Bold)
                 }
+            }
+            if (creation != null && !ui.running) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                creationTopLines(creation.next, creation.kept).forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
+                if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = creation.onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
+                TextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほかの問題を見る", color = plan.fg) }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
             // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質）。内部名は出さない（StopExplanation）。次の一手は主ボタンが言う。
@@ -848,9 +827,8 @@ private fun DiagDetailToggle(
 internal fun CopilotCard(
     ui: UiState,
     onGoEdit: () -> Unit,
-    // 希望の編集は月次条件、手修正は勤務表タブ（D7）＝編集タブの今の節に任せない。
+    // 希望の編集は月次条件（D7）＝編集タブの今の節に任せない。
     onEditWishes: () -> Unit = {},
-    onManualEdit: () -> Unit,
     onSoftPolish: () -> Unit = {},
 ) {
     // [冗長性削減] できあがり度・進捗は OperatorNextActionCard が表示するため、ここは助言/警告だけに専念。
@@ -872,12 +850,7 @@ internal fun CopilotCard(
             if (ui.polishExhausted && !ui.running) {
                 Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("残りの調整は自動で減らせます（必須は壊しません）。",
-                            color = cs.onTertiaryContainer, style = MaterialTheme.typography.bodyMedium)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onSoftPolish, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("自動で整える") }
-                            OutlinedButton(onClick = onManualEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("手修正") }
-                        }
+                        TextButton(onClick = onSoftPolish, modifier = Modifier.heightIn(min = 48.dp)) { Text(SOFT_POLISH_LINK, color = cs.onTertiaryContainer) }
                     }
                 }
             }
@@ -905,16 +878,16 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 // [3.344.0] 「充足可能N枠」と言いながら各枠の説明が「いまの希望のままでは解消できません」
                 //   という矛盾を解消する。枠の数（静的に足りているか）と、いま実際に埋められるかは別軸。
                 val headline = when {
-                    diag.allInfeasible -> "不足 ${diag.totalShortfall} 人は全て充足不可。今のデータでは満たせません（想定内）。" +
+                    diag.allInfeasible -> "不足 ${diag.totalShortfall} 人はすべて、担当できる人が足りません。今のデータでは満たせません。" +
                         "担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
                     diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
                         "希望を1件調整する（編集タブ＞月次条件）か、担当を追加してください（編集タブ＞年間マスター①）。"
                     diag.blockedNowSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.blockedNowSlots} 枠は" +
                         "いまの希望のままでは埋められません。その枠は希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると直せます（編集タブ＞年間マスター①）。" +
                         "残りは再作成すると解消し得ます。"
-                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人は枠が足りています。再作成するか設定の見直しで解消し得ます。"
-                    else -> "不足 ${diag.totalShortfall} 人 — 充足不可 ${diag.infeasibleSlots} 枠 / 充足可能 ${diag.fixableSlots} 枠。" +
-                        "充足可能の枠は再作成すると解消し得ます。充足不可の枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
+                    diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人。$SHORTAGE_ENOUGH_TEXT"
+                    else -> "不足 ${diag.totalShortfall} 人 — ${SHORTAGE_LABEL_INFEASIBLE} ${diag.infeasibleSlots} 枠 / ${SHORTAGE_LABEL_FIXABLE} ${diag.fixableSlots} 枠。" +
+                        "動かせば埋まる枠は再作成すると解消し得ます。担当できる人が足りない枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
                 }
                 Text(headline, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 val shownShortfalls = if (allShortfalls) diag.shortfalls else diag.shortfalls.take(6)
@@ -929,9 +902,9 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                     color = onContainer, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                                 MagiTagChip(
                                     text = when {
-                                        infeasible -> "充足不可"
-                                        s.blockedNow -> "今は不能"
-                                        else -> "充足可能"
+                                        infeasible -> SHORTAGE_LABEL_INFEASIBLE
+                                        s.blockedNow -> SHORTAGE_LABEL_BLOCKED
+                                        else -> SHORTAGE_LABEL_FIXABLE
                                     },
                                     color = when {
                                         infeasible -> MagiAccent.red
@@ -1286,18 +1259,17 @@ internal fun SettingIssuesCard(
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("設定の見直し（${issues.size}件）", style = MaterialTheme.typography.titleMedium)
-            if (wishClearCount > 1) {
-                OutlinedButton(
-                    onClick = { confirmClear = true },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.error),
-                ) { Text("担当外の希望を一括クリア（${wishClearCount}件）") }
-            }
             DiagDetailToggle(
                 detailOpen, onToggle = { detailOpen = !detailOpen },
                 closedText = "ⓘ 一覧を見る（${issues.size}件）", openText = "ⓘ 一覧を閉じる",
             )
             if (detailOpen) {
+                // まとめて外すのは一覧を開いて中身を見たあとだけ。
+                if (wishClearCount > 1) OutlinedButton(
+                    onClick = { confirmClear = true },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = cs.error),
+                ) { Text(bulkClearWishesLabel(wishClearCount)) }
                 val shown = if (showAll) issues else issues.take(SETTING_ISSUE_PREVIEW)
                 for (s in shown) {
                     val label: String
@@ -1639,6 +1611,11 @@ private fun ConfirmRow(
             val ns = item.needShift
             when {
                 ws != null -> TextButton(onClick = { onFixWish(ws, item.day) }) { Text("設定で直す") }
+                // 人員不足の行は、まず直し方（主）、設定は 2 番目。
+                ns != null && dayOnly -> Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = { onShowDay(item.day!!) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("なおし方を見る") }
+                    TextButton(onClick = { onFixNeed(ns, item.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("設定で直す", style = MaterialTheme.typography.labelMedium) }
+                }
                 ns != null -> TextButton(onClick = { onFixNeed(ns, item.day) }) { Text("設定で直す") }
                 // [3.483.0 A-3] 「直し方→」は同じタブ内の下のカード（改善の提案）で探索が始まるだけ＝別画面へ
                 //   飛ぶように読めた。動作をそのまま言う。
@@ -1706,17 +1683,21 @@ internal fun AnalysisTriageCard(
                     style = MaterialTheme.typography.bodyMedium, color = cs.tertiary)
             }
 
-            if (t.blockers.isNotEmpty() || t.issues.isNotEmpty()) {
-                Text("直さないと消えない項目", style = MaterialTheme.typography.titleSmall, color = cs.error)
-                t.blockers.forEach { row ->
+            // 必須違反（配る前に直す）と、設定を変えないと消えない項目を分ける。
+            val (hardRows, otherBlockers) = t.blockers.partition { it.family != null && it.family in MirrorKeys.hard }
+            if (hardRows.isNotEmpty()) Text(TRIAGE_HARD_HEADING, style = MaterialTheme.typography.titleSmall, color = cs.error)
+            hardRows.forEach { row ->
+                TriageRowLine(row, cs.errorContainer, cs.onErrorContainer)
+                val fam = row.family!!
+                // 必須違反は「どのセルか」が分からないと直しに行けないので場所を数件だけ出す。
+                val locs = items.filter { fam in it.families }
+                locs.take(3).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay, onFixWish, onFixNeed) }
+                if (locs.size > 3) Text("ほか ${locs.size - 3} 件", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            if (otherBlockers.isNotEmpty() || t.issues.isNotEmpty()) {
+                Text(TRIAGE_SETTINGS_HEADING, style = MaterialTheme.typography.titleSmall, color = cs.error)
+                otherBlockers.forEach { row ->
                     TriageRowLine(row, cs.errorContainer, cs.onErrorContainer)
-                    val fam = row.family
-                    if (fam != null && fam in MirrorKeys.hard) {
-                        // 必須違反は「どのセルか」が分からないと直しに行けないので場所を数件だけ出す。
-                        val locs = items.filter { fam in it.families }
-                        locs.take(3).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay, onFixWish, onFixNeed) }
-                        if (locs.size > 3) Text("ほか ${locs.size - 3} 件", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                    }
                 }
                 t.issues.forEach { row ->
                     Surface(color = warnBg, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
@@ -1733,7 +1714,7 @@ internal fun AnalysisTriageCard(
 
             if (t.searching.isNotEmpty()) {
                 Text(
-                    if (t.computed) "計算後に残っている項目" else "エンジンが挑戦する項目（未計算）",
+                    if (t.computed) "作成後に残っている項目" else "作成で減らせる見込みの項目（まだ作成していません）",
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
@@ -1754,13 +1735,13 @@ internal fun AnalysisTriageCard(
                 Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { showSummary = !showSummary },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("制約充足サマリー（正常 ${t.okFamilies.size} / 残り ${t.busyFamilies.size}）",
+                Text(conditionStatusTitle(t.okFamilies.size, t.busyFamilies.size),
                     style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                 Text(if (showSummary) "閉じる ∧" else "全${t.okFamilies.size + t.busyFamilies.size}項目を展開 ∨",
                     style = MaterialTheme.typography.labelMedium, color = cs.primary)
             }
             if (showSummary) {
-                if (t.okFamilies.isNotEmpty()) Text("✔ 正常（${t.okFamilies.size}項目）: " + t.okFamilies.joinToString(" / "),
+                if (t.okFamilies.isNotEmpty()) Text("✔ 守れている（${t.okFamilies.size}項目）: " + t.okFamilies.joinToString(" / "),
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 if (t.busyFamilies.isNotEmpty()) Text("⚠ 残っている（${t.busyFamilies.size}項目）: " + t.busyFamilies.joinToString(" / "),
                     style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -1928,24 +1909,42 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     if (ui.alternatives.isEmpty()) return
     // 適用中の案は VM が持つ（元に戻すで一覧ごと戻るため）。
     val selected = ui.alternativeApplied
+    val allWorse = alternativesAllWorse(ui.alternativesWorse, ui.alternatives.size)
+    var open by remember(ui.alternatives) { mutableStateOf(!allWorse) }
+    var confirm by remember(ui.alternatives) { mutableStateOf<Int?>(null) }
+    val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
-            Text("タップした案をすぐに反映します（「元に戻す」でいつでも取消せます）。",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            MagiSegmentedControl(
-                options = ui.alternatives.indices.map { "案${it + 1}" },
-                selected = selected,
-                onSelect = { i -> if (i != selected) onApply(i) },
-            )
-            // [3.483.0 H-3] タップ＝即反映なので「見てから選ぶ」ために全案の要約（必須/合計）を常時出す。
-            //   反映済みの案は太字。
-            ui.alternatives.forEachIndexed { i, s ->
-                Text(s, style = MaterialTheme.typography.bodySmall,
-                    fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (i == selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (open) "閉じる" else "開く") { open = !open }, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("他の案（${ui.alternatives.size}）", style = MaterialTheme.typography.titleMedium)
+                    if (allWorse) Text(ALTERNATIVES_ALL_WORSE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                }
+                Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+            }
+            if (open) {
+                Text("案を押すと、反映する前に確かめます（反映後も「元に戻す」で取り消せます）。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                MagiSegmentedControl(
+                    options = ui.alternatives.indices.map { "案${it + 1}" },
+                    selected = selected,
+                    onSelect = { i -> if (i != selected) confirm = i },
+                )
+                ui.alternatives.forEachIndexed { i, s ->
+                    Text(s, style = MaterialTheme.typography.bodySmall,
+                        fontWeight = if (i == selected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (i == selected) cs.onSurface else cs.onSurfaceVariant)
+                }
             }
         }
+    }
+    confirm?.let { i ->
+        AlertDialog(
+            onDismissRequest = { confirm = null },
+            title = { Text("案${i + 1}を反映しますか") },
+            text = { Text(ui.alternatives.getOrNull(i).orEmpty() + if (ui.alternativesWorse.getOrNull(i) == true) "\n" + ALTERNATIVES_ALL_WORSE + "（元に戻すで取り消せます）" else "") },
+            confirmButton = { DialogConfirmButton("反映する", onClick = { confirm = null; onApply(i) }) },
+            dismissButton = { DialogDismissButton(onClick = { confirm = null }, text = "やめる") },
+        )
     }
 }
 

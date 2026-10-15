@@ -406,6 +406,7 @@ internal fun LegendSheet(ui: UiState, onDismiss: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             DialogHeader("凡例（枠・バッジ・印の見方）", onClose = onDismiss)
             ViolationLegend(vioColor, vioSoftColor)
+            Text(PICK_MARKS_LEGEND, style = MaterialTheme.typography.bodyMedium)
             ShiftColorLegend(ui.shiftSymbols, ui.shiftColorHex, ui.shiftTextHex)
         }
     }
@@ -1380,7 +1381,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                             Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == j) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
                             if (days.size >= 2) {
                                 if (picked == j && !multi) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                else TextButton(onClick = { picked = j; multi = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text("変更案を見る") }
+                                else TextButton(onClick = { picked = j; multi = false }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
                             }
                         }
                     }
@@ -1499,7 +1500,7 @@ private fun tallyHex(hex: String?): Color? = if (hex.isNullOrBlank()) null else 
 /** シフト集計の違反ハイライト凡例（不足=赤 / 過剰=橙）。 */
 @Composable
 private fun TallyLegend(shortBg: Color, overBg: Color) {
-    // [シンプルデザイン融合] スクショの1行凡例に統一: ▼不足 ▲超過 — 対象外。
+    // [シンプルデザイン融合] 1 行の凡例: ▼不足・▲超過と、数字の読み方。
     //   タブ名（職員別/日別）が不足/超過の意味を文脈で示すため、旧・長文ラベル
     //   （回数が下限/目標未満 等）は撤去。詳細はセルのタップで出す。色見本＋▼▲＝色覚二重符号化。
     val cs = MaterialTheme.colorScheme
@@ -1507,13 +1508,10 @@ private fun TallyLegend(shortBg: Color, overBg: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(13.dp).background(shortBg, RoundedCornerShape(3.dp)))
         Spacer(Modifier.width(4.dp))
-        Text("▼ 不足（数字は現在の値）", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(2.dp))
         Box(Modifier.size(13.dp).background(overBg, RoundedCornerShape(3.dp)))
-        Spacer(Modifier.width(4.dp))
-        Text("▲ 超過", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
-        Spacer(Modifier.width(14.dp))
-        Text("— 対象外", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+        Spacer(Modifier.width(6.dp))
+        Text(TALLY_LEGEND_TEXT, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
     }
 }
 
@@ -1864,10 +1862,12 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 FixSearchPanel(ui, cv, FixFocus(i, k), onEvent, fixNav, onApplied = { staffSheet = null })
             }) {
             if (i in vs.c1Stuck) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i, null) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                OutlinedButton(onClick = { staffSheet = null; fixNav.onWishes(i, null) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishDayButton(null)) }
                 OutlinedButton(onClick = { staffSheet = null; fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
             }
-            FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
+            var general by remember(i) { mutableStateOf(false) }
+            TextButton(onClick = { general = !general }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (general) "この職員のほかの変更案を閉じる" else STAFF_OTHER_FIXES_LABEL) }
+            if (general) FixSearchPanel(ui, cv, FixFocus(i, null), onEvent, fixNav, onApplied = { staffSheet = null })
         }
     }
     daySheet?.let { j ->
@@ -1883,13 +1883,13 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                         Text(row, style = MaterialTheme.typography.bodyMedium, fontWeight = if (picked == m.shift) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
                         if (picked == m.shift) Text("選択中", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                        else TextButton(onClick = { picked = m.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (m.under) "この不足の変更案を見る" else "この過剰の変更案を見る") }
+                        else TextButton(onClick = { picked = m.shift }, modifier = Modifier.heightIn(min = 48.dp)) { Text(VIEW_FIXES_BUTTON) }
                     }
                 }
             }
             if (marks.size >= 2) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { daySheet = null; fixNav.onDay(j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${DayText.short(ui.startDate, j)}の勤務を見る") }
-                OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("必要人数の設定を見る") }
+                OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_headcount")) }
             }
             picked?.let { k -> FixSearchPanel(ui, cv, FixFocus(null, k, j), onEvent, fixNav, onApplied = { daySheet = null }) }
         }
@@ -1925,7 +1925,8 @@ private fun countChipColors(under: Boolean): Pair<Color, Color> {
 private fun StaffCountDialog(title: String, sheet: StaffCountSheet, onDismiss: () -> Unit, period: String? = null,
                              picked: (@Composable (Int) -> Unit)? = null, extra: @Composable () -> Unit = {}) {
     var weeklyOpen by remember(title) { mutableStateOf(false) }
-    var pick by remember(title) { mutableStateOf<Int?>(null) }
+    // 行を選ぶまで案は探さない。選べる行が 1 つだけなら最初から選んでおく。
+    var pick by remember(title) { mutableStateOf(if (picked != null) staffSheetPreselect(sheet.chips.map { it.shiftIdx }) else null) }
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2086,6 +2087,7 @@ internal fun FixSearchPanel(
     addresses: ((com.magi.app.v6.FixSuggestion) -> Boolean)? = null,   // この場所の問題を解消する案か（セルのシート。family より優先）
     addressLabel: String? = null,   // その問題の名（「このセルの禁止の並び」）
     addressPending: Boolean = false,   // addresses の判定（正式な検査）がまだ＝「解消する案なし」と言わない
+    singleProblem: String? = null,   // セルの問題が 1 つならその名（案が無いとき前後の日へ案内する）
 ) {
     val cs = MaterialTheme.colorScheme
     // 開いた時点の職員を ID で覚え、並べ替え・削除のあとも同じ人を探す（統合仕様 5.1）。消えていれば探さない。
@@ -2239,7 +2241,7 @@ internal fun FixSearchPanel(
                             if (!compact) Text(TIER2_HEADING, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                             t2.take(limit).forEachIndexed { n, x -> card(t1.size.coerceAtMost(limit) + n + 1, x.sug, x.explain) }
                         }
-                        if (!tv.hasMain) NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find)
+                        if (!tv.hasMain) NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find, singleProblem)
                     }
                     fixing.isNotEmpty() -> {
                         // 同じ勤務のほかの日の過不足はここに 1 回だけ（カードごとに繰り返すと判断に要る行が下へ押し出される）。
@@ -2249,7 +2251,7 @@ internal fun FixSearchPanel(
                         if (target != null && !compact) Text(thisFixHeading(label, target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         fixing.take(limit).forEachIndexed { n, s -> card(n + 1, s) }
                     }
-                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find)
+                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find, singleProblem)
                 }
                 @Composable fun fold(title: String, note: String, items: List<TieredFix>, startN: Int, purposeOverride: String? = null) {
                     var open by remember(focus.key, title) { mutableStateOf(false) }
@@ -2327,6 +2329,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
 private fun NoFixBlock(
     ui: UiState, cv: ConditionsView?, focus: FixFocus, target: FixTarget?, label: String, compact: Boolean,
     nav: FixNav, settingsLabel: String?, onEvent: (MagiEvent) -> Unit, onApplied: () -> Unit, onRetry: () -> Unit,
+    singleProblem: String? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val why = remember(ui.schedule, ui.wishes, focus.key, cv, ui.fixTimedOut) {
@@ -2335,7 +2338,14 @@ private fun NoFixBlock(
     val lines = if (target != null && target.staff == null) listOf(noNeedFixLine(label, target, ui.fixTimedOut), NO_FIX_SCOPE) else why.lines
     val body = lines.filter { it != NO_FIX_SCOPE }
     if (compact) {
-        Text(body.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        val st = focus.staff; val d = focus.day
+        val prev = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d - 1) else null
+        val next = if (st != null && d != null && singleProblem != null) adjacentDayLabel(ui.startDate, ui.days, d + 1) else null
+        Text(compactNoFixLine(body, singleProblem, prev, next), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        if (st != null && d != null && (prev != null || next != null)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (prev != null) OutlinedButton(onClick = { nav.onCell(st, d - 1) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${prev}を開く", maxLines = 1) }
+            if (next != null) OutlinedButton(onClick = { nav.onCell(st, d + 1) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${next}を開く", maxLines = 1) }
+        }
         if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
         return
     }
@@ -2355,13 +2365,14 @@ private fun NoFixBlock(
     }
     Text("設定を確認する", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (why.wishRelated) OutlinedButton(onClick = { onApplied(); nav.onWishes(focus.staff, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
-        if (target != null && target.staff == null && target.under) {
-            OutlinedButton(onClick = { onApplied(); nav.onSettings("yr_ws1") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("担当できる職員を見る") }
-            OutlinedButton(onClick = { onApplied(); nav.onWishes(null, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("当日の希望・固定勤務を見る") }
+        // 希望への行き先は 1 つ（日があればその日を選んだ状態で開く。職員が無くても日は渡す）。
+        val needUnder = target != null && target.staff == null && target.under
+        if (why.wishRelated || needUnder) OutlinedButton(onClick = { onApplied(); nav.onWishes(focus.staff, focus.day) }, modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(wishDayButton(focus.day?.let { DayText.short(ui.startDate, it) }))
         }
+        if (needUnder) OutlinedButton(onClick = { onApplied(); nav.onSettings("yr_ws1") }, modifier = Modifier.heightIn(min = 48.dp)) { Text("担当できる職員を見る") }
         // 人員不足・過剰の印は、その日のそのシフトの必要人数（月次条件）へ。群のレンジは④のまま。
-        if (coverageFocus(ui, focus)) OutlinedButton(onClick = { onApplied(); nav.onNeed(focus.shift!!, focus.day!!) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("必要人数を見直す") }
+        if (coverageFocus(ui, focus)) OutlinedButton(onClick = { onApplied(); nav.onNeed(focus.shift!!, focus.day!!) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_headcount")) }
         else OutlinedButton(onClick = { onApplied(); nav.onSettings(why.settingsSection) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabel ?: settingsLabelFor(why.settingsSection)) }
         if (target?.staff != null) {
             val name = ui.staffNames.getOrNull(target.staff) ?: "#${target.staff}"
