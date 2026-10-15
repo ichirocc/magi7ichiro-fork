@@ -827,6 +827,50 @@ internal fun remainingSameShift(
         }
 }
 
+/** 同じ勤務の期間全体の過不足（日ごとに基準までの差を 0 で打ち切って足す。設定の値が無い日は数えない）。値が無ければ null。 */
+internal fun shiftPeriodGap(board: List<List<Int>>, shift: Int, under: Boolean, needLimits: ((Int, Int) -> Pair<Int, Int>?)?): Int? {
+    val f = needLimits ?: return null
+    var g = 0
+    for (j in 0 until (board.firstOrNull()?.size ?: 0)) {
+        val lim = f(shift, j) ?: continue
+        val n = board.count { it.getOrNull(j) == shift }
+        g += if (under) maxOf(0, lim.first - n) else maxOf(0, n - lim.second)
+    }
+    return g
+}
+
+/** 案のカードの「期間全体」の行（日の人員の対象）。見ている日が直っても期間全体で減らなければ、移るだけと言う（2026-10-15 利用者「思考誘導が混乱する」）。 */
+internal fun periodGapLine(sym: String, under: Boolean, before: Int, after: Int): String =
+    "${sym}の${if (under) "不足" else "過剰"}（期間全体）：${before}人 → ${after}人" + when {
+        after > before -> "＝期間全体では増えます"
+        after == before -> "＝別の日へ移るだけです"
+        else -> ""
+    }
+
+/** 案のカードの先頭: 必須違反の変化（族ごと）。変わらなければ null（2026-10-15: 禁止の並びを崩す効き目がカードの最後に埋もれていた）。 */
+internal fun hardChangeLine(diff: List<Pair<String, Int>>): String? =
+    familyDeltaList(diff.filter { it.first in MirrorKeys.hard }).takeIf { it.isNotEmpty() }?.let { "必須違反の変化：$it" }
+
+/** パネルの上に 1 回だけ出す、同じ勤務のほかの日の過不足（カードごとに繰り返さない）。無ければ null。 */
+internal fun otherDaysGapLine(
+    needFamilies: Map<String, List<String>>, board: List<List<Int>>, t: FixTarget, needLimits: ((Int, Int) -> Pair<Int, Int>?)?,
+    shiftSymbols: List<String>, startDate: String,
+): String? {
+    val day = t.day ?: return null
+    val f = needLimits ?: return null
+    val cls = if (t.under) "vio-covU" else "vio-covO"
+    val days = needFamilies.filter { (key, fams) -> cls in fams && VioKey.first(key) == t.shift }.keys.mapNotNull { VioKey.second(it) }
+        .filter { it != day }.sorted().mapNotNull { j ->
+            val lim = f(t.shift, j) ?: return@mapNotNull null
+            val n = board.count { it.getOrNull(j) == t.shift }
+            val gap = if (t.under) lim.first - n else n - lim.second
+            if (gap > 0) "${DayText.short(startDate, j)}（${gap}人）" else null
+        }
+    if (days.isEmpty()) return null
+    val sym = shiftSymbols.getOrNull(t.shift) ?: "${t.shift}"
+    return "ほかに${sym}が${if (t.under) "足りない" else "多い"}日：${days.joinToString("・")}"
+}
+
 /** 自動保存の状態の 1 行（適用後の案内）。 */
 internal fun saveStateLine(s: SaveState): String = "保存：" + when (s) {
     SaveState.Saved -> "完了"; SaveState.Saving -> "保存中"; SaveState.Failed -> "失敗（「$SAVE_RETRY_BUTTON」で保存し直してください）"; SaveState.Dirty -> "未保存（まもなく保存します）"

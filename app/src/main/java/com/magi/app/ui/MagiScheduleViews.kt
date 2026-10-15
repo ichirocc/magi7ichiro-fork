@@ -2132,7 +2132,13 @@ internal fun FixSearchPanel(
                 val pred: ((com.magi.app.v6.FixSuggestion) -> Boolean)? = addresses ?: family?.let { f -> { s: com.magi.app.v6.FixSuggestion -> fixAddresses(s, f) } }
                 val shown = ui.fixSuggestions
                 val effects = target?.let { t -> shown.associateWith { t.effect(ui.schedule, it.ops) } }
-                val fixing = when { effects != null -> shown.filter { effects[it]!!.fixes }; pred != null -> shown.filter(pred); else -> shown }
+                val fixing0 = when { effects != null -> shown.filter { effects[it]!!.fixes }; pred != null -> shown.filter(pred); else -> shown }
+                // 日の人員の対象は、同じ勤務の期間全体の過不足が減る案を先に（見ている日だけ直って別の日へ移る案は後ろ。隠さない）。
+                val fixing = if (target?.day != null && !target.multi) {
+                    val lim = cv?.let { c -> c::needCellLimits }
+                    val g0 = shiftPeriodGap(ui.schedule, target.shift, target.under, lim)
+                    if (g0 == null) fixing0 else fixing0.sortedBy { s -> if ((shiftPeriodGap(boardAfter(ui.schedule, s.ops), target.shift, target.under, lim) ?: g0) < g0) 0 else 1 }
+                } else fixing0
                 val others = if (effects != null || pred != null) shown.filterNot { it in fixing } else emptyList()
                 val purpose = target?.let { fixTargetPurpose(it, focus.staff?.let { i -> ui.staffNames.getOrNull(i) }, label) }
                     ?: family?.let { "選んだ問題（${breakdownLabels[it] ?: it}）を減らす" }
@@ -2142,12 +2148,21 @@ internal fun FixSearchPanel(
                         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             // 先頭＝いま見ている問題がどう変わるか。変更する勤務、ほかの問題への影響、操作の順。
                             val after = remember(s, ui.schedule) { boardAfter(ui.schedule, s.ops) }
-                            val remain = if (target?.day != null) remainingSameShift(ui.needFamilies, after, target, cv?.let { c -> c::needCellLimits }, ui.shiftSymbols, ui.startDate) else emptyList()
+                            // 日の人員の対象は、同じ勤務の期間全体の過不足も前後で言う（見ている日だけ直って別の日へ移る案を、解消と読ませない）。
+                            val periodText = if (target?.day != null && !target.multi) {
+                                val lim = cv?.let { c -> c::needCellLimits }
+                                val b0 = shiftPeriodGap(ui.schedule, target.shift, target.under, lim)
+                                val b1 = shiftPeriodGap(after, target.shift, target.under, lim)
+                                if (b0 != null && b1 != null) periodGapLine(ui.shiftSymbols.getOrNull(target.shift) ?: "", target.under, b0, b1) else null
+                            } else null
+                            val remain = listOfNotNull(periodText)
+                            // 先頭は必須違反の変化（必須を減らす案は、その効き目が判断の第一）。
+                            hardChangeLine(s.diff)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer) }
                             if (e != null && target != null) {
                                 Text("案$n：${e.title(label)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                                 Text("$label：${e.countLine()}　${e.gapLine()}", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 Text(e.afterNote(target.basis), style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
-                                remain.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                                remain.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer) }
                                 Text(changeSizeLine(s.ops), style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             } else {
                                 Text("案$n：${s.label}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
@@ -2203,6 +2218,10 @@ internal fun FixSearchPanel(
                     pred != null && target == null && shown.isNotEmpty() && fixing.isEmpty() ->
                         Text(noFixForProblemLine(addressLabel ?: family?.let { breakdownLabels[it] ?: it } ?: "このセルの問題"), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     fixing.isNotEmpty() -> {
+                        // 同じ勤務のほかの日の過不足はここに 1 回だけ（カードごとに繰り返すと判断に要る行が下へ押し出される）。
+                        if (target != null && !compact) remember(ui.schedule, ui.needFamilies, target) {
+                            otherDaysGapLine(ui.needFamilies, ui.schedule, target, cv?.let { c -> c::needCellLimits }, ui.shiftSymbols, ui.startDate)
+                        }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                         if (target != null && !compact) Text(thisFixHeading(label, target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         fixing.take(limit).forEachIndexed { n, s -> card(n + 1, s) }
                     }

@@ -276,4 +276,20 @@ class CountShortageTextTest {
         assertNull(resolveFixFocus(f, 20, 10, listOf(10, 30)))   // 削除＝別の人を探さない
         assertEquals(f, resolveFixFocus(f, null, 0, listOf(5, 6)))   // ID なし＝番号のまま
     }
+
+    @Test fun movingTheExcessToAnotherDayIsSaidAsAMove() {
+        // 2 人 × 3 日。勤務 1 の適正は毎日 1 人。10/1 に 2 人＝期間全体の過剰 1。
+        val board = listOf(listOf(1, 0, 0), listOf(1, 1, 0))
+        val lim = { k: Int, _: Int -> if (k == 1) 1 to 1 else null }
+        assertEquals(1, shiftPeriodGap(board, 1, false, lim))
+        // 10/1 の 2 人目を休にし、代わりに 10/2 へ 1 人足す＝10/1 は直るが 10/2 が過剰＝移るだけ（2026-10-15 利用者「思考誘導が混乱する」）。
+        val moved = boardAfter(board, listOf(FixCell(1, 0, 0), FixCell(0, 1, 1)))
+        assertEquals(1, shiftPeriodGap(moved, 1, false, lim))
+        assertEquals("Dﾃの過剰（期間全体）：1人 → 1人＝別の日へ移るだけです", periodGapLine("Dﾃ", false, 1, 1))
+        assertEquals("Dﾃの過剰（期間全体）：1人 → 0人", periodGapLine("Dﾃ", false, 1, 0))
+        assertEquals("必須違反の変化：禁止の並び −1件", hardChangeLine(listOf("c3n" to -1, "covO" to 0, "weekly" to 2)))
+        assertNull(hardChangeLine(listOf("weekly" to 2)))
+        val t = needFixTarget(mapOf("1,0" to listOf("vio-covO"), "1,1" to listOf("vio-covO")), 1, 0, 1 to 1)!!
+        assertEquals("ほかにDﾃが多い日：10/2（1人）", otherDaysGapLine(mapOf("1,0" to listOf("vio-covO"), "1,1" to listOf("vio-covO")), moved, t, lim, listOf("休", "Dﾃ"), "2026-10-01"))
+    }
 }
