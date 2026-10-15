@@ -37,6 +37,8 @@ data class UiState(
      * 残っている項目」の判定には使えない（手編集だけで「計算後」と語っていた）。読込・取込で false に戻す。
      */
     val engineRan: Boolean = false,
+    /** 自動作成のあとに手で変えたか（engineRan が手操作で false に戻った盤面）。上部の「自動作成：済み（そのあと手で変更あり）」だけが読む。state 非保存。 */
+    val ranBeforeEdit: Boolean = false,
     /** いまの盤面が S6（設定を緩めて手順を当てる）の結果か。分析タブの注記だけが読む。engineRan を書く箇所で false に戻す。 */
     val relaxedBoard: Boolean = false,
     /**

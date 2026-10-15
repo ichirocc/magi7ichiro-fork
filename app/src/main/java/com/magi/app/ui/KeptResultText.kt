@@ -35,3 +35,7 @@ object KeptResultText {
 internal fun completedText(hard: Int, breakdown: Map<String, Int>, how: String): String =
     if (hard == 0) "計算が完了しました$how。設定した必須条件を満たしています。配布前の確認に進んでください（要調整 ${unitTotals(breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}）"
     else "計算が完了しました$how。${reportCountsText(breakdown)}"
+
+/** 採用した結果の件数が入力より増えたのに重み付き評価点が下がったとき、採用の理由を 1 文で（件数だけ見ると悪化に見えるため）。それ以外は null。 */
+internal fun adoptedDespiteMoreText(prevTotal: Int, newTotal: Int, prevWeighted: Double, newWeighted: Double): String? =
+    if (newTotal > prevTotal && newWeighted < prevWeighted) "件数は +${newTotal - prevTotal} ですが、重い違反が減ったため改善として採用しました" else null

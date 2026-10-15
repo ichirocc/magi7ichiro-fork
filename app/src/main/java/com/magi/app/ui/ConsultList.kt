@@ -62,18 +62,22 @@ internal const val CONSULT_ADDED = "ホームの「相談中」に登録しま�
 internal const val CONSULT_DUPLICATE = "この内容は、すでにホームの「相談中」に登録されています"
 internal const val CONSULT_OPEN = "開く"
 internal const val CONSULT_RESUME = "案を見る"
-internal const val CONSULT_STALE = "相談に登録した後で勤務表または設定が変わったため、この案はそのまま当てられません。「直し方を探す」から、もう一度確かめてください"
+internal const val CONSULT_STALE = "相談に登録した後で勤務表または設定が変わったため、この案はそのまま当てられません。「変更案を探す」から、もう一度確かめてください"
 
 /** ホームの主カードの 1 行。0 件なら出さない。 */
 internal fun consultLine(n: Int): String? = if (n > 0) "未確認事項 $n 件（相談中。下の一覧で確認してから配ってください）" else null
 
-/** 相談中と保留を分けて言う（どちらも未解決＝違反は減らさない）。 */
+/** 未解決の相談＝保留か、回答待ち（了承・不可の回答があれば数えない）。 */
+internal fun consultUnresolved(c: ConsultItem): Boolean = c.held || c.answer == ConsultAnswer.PENDING
+
+/** 相談中と保留を分けて言う（未解決だけ数える。どちらも違反は減らさない）。 */
 internal fun consultLine(items: List<ConsultItem>): String? {
-    if (items.isEmpty()) return null
-    val held = items.count { it.held }
-    val open = items.size - held
+    val open0 = items.filter(::consultUnresolved)
+    if (open0.isEmpty()) return null
+    val held = open0.count { it.held }
+    val open = open0.size - held
     val parts = listOfNotNull(if (open > 0) "相談中 $open" else null, if (held > 0) "保留 $held" else null).joinToString("・")
-    return "未確認事項 ${items.size} 件（$parts。下の一覧で確認してから配ってください）"
+    return "未確認事項 ${open0.size} 件（$parts。下の一覧で確認してから配ってください）"
 }
 
 internal fun isoDate(startDate: String, day: Int): String? =

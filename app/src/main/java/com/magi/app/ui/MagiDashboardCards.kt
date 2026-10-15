@@ -293,7 +293,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (p.purpose != null) "この変更を適用しますか？" else p.title) },
+        title = { Text(PREVIEW_TITLE) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
@@ -326,7 +326,6 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 Text("・$consultLine", style = MaterialTheme.typography.bodySmall)
                 Text("適用の直前に最新の勤務表でもう一度検査し、必須違反が減らない・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。",
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                CHANGE_DUTY_LINES.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 Text(CONSULT_NOT_CONTACT_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
@@ -655,7 +654,7 @@ internal fun OperatorNextActionCard(
             wishLabel, onShowWishes, true, "データを見直す", { onLanding(pinnedLanding) })
         infeasible -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "このデータでは、ここは埋められません。" + (worstDay?.let { "（例：$it）" } ?: ""),
-            "データを見直す", { onLanding(infeasibleLanding) }, true, "未充足のまま書き出す", onExport)
+            "データを見直す", { onLanding(infeasibleLanding) }, true, "未充足のまま書き出す", onPreDist)
         // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す。
         //   旧: 不足が無いとき大ボタンを消し「データを見直す」を補助に出すだけで、並び・希望の必須に行き先が無かった。
         guidedTarget != null ->
@@ -668,14 +667,14 @@ internal fun OperatorNextActionCard(
             val (hardLine, caution) = fixImpactLines(top)
             // 族ごとの増減だけ（件・回・人・pt を 1 つの合計に足さない＝統合仕様 INV-07）。
             val diffTxt = familyDeltaList(top.diff)
-            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直す手があります。",
+            OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。直す手があります。",
                 moveLabel, onShowMove, true, APPLY_CHANGE_BUTTON, { onApplyMove(top) },
                 body = top.label,
                 note = hardLine + (caution?.let { "\n$it" } ?: "") + (if (diffTxt.isNotBlank()) "\n変化：$diffTxt" else "") +
                     (if (ui.fixSuggestions.size > 1) "\nほかに ${ui.fixSuggestions.size - 1} 案あります（分析タブで比較できます）。" else "") + "\n$APPLY_UNDO_NOTE")
         }
         ui.fixSearching ->
-            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。直し方を探しています…", "", {}, false, null, onSetup)
+            OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
         ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && relax != null -> {
             val t = relaxCardText(relax.result, ui)
@@ -687,12 +686,12 @@ internal fun OperatorNextActionCard(
         //   S6 の判定が済むまでは「下限」と言わない（設定を緩めれば減るかもしれない）。
         ui.fixSearched && ui.fixSuggestions.none { it.deltaHard < 0 } && ui.stalledHardFamilies.isNotEmpty() && !wishCands.isEmpty ->
             OpNextPlan(amber, onAmber,
-                if (ui.relaxSearching) "必須違反が ${ui.bestHard}件 残っています。" else "今の希望とルールでは、必須違反 ${ui.bestHard}件 からこれ以上は減らせない見込みです。",
-                wishLabel, onShowWishes, true, "このまま書き出す", onExport)
+                if (ui.relaxSearching) "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。" else "今の希望とルールでは、必須違反 ${hardText(ui.breakdown, ui.bestHard)} からこれ以上は減らせない見込みです。",
+                wishLabel, onShowWishes, true, "このまま書き出す", onPreDist)
         !wishCands.isEmpty ->
-            OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。希望とルールがぶつかっています。",
+            OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。希望とルールがぶつかっています。",
                 wishLabel, onShowWishes, true, null, onSetup)
-        else -> OpNextPlan(amber, onAmber, "必須違反が ${ui.bestHard}件 残っています。",
+        else -> OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。",
             "問題を見る", onShowList, true, null, onSetup)
     }
 
@@ -703,7 +702,7 @@ internal fun OperatorNextActionCard(
                 val (phName, phColor) = when {
                     !ui.hasResult -> "まだ作っていません" to MagiAccent.blue
                     ui.bestHard == 0L -> "必須違反 0" to MagiAccent.green
-                    else -> "必須違反 ${ui.bestHard}" to MagiAccent.orange
+                    else -> "必須違反 ${hardText(ui.breakdown, ui.bestHard)}" to MagiAccent.orange
                 }
                 Box(Modifier.background(phColor, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
                     // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
@@ -711,9 +710,9 @@ internal fun OperatorNextActionCard(
                 }
             }
             if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
-            // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質・次の一手）。内部名は出さない（StopExplanation）。
-            if (ui.hasResult && !ui.running) ui.stopSummary?.let { s -> stopExplanationOf(s)?.let { e ->
-                Text(e.line + (stopNextLabel(e.next)?.let { " 次は: $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = plan.fg)
+            // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質）。内部名は出さない（StopExplanation）。次の一手は主ボタンが言う。
+            if (ui.hasResult && !ui.running) ui.stopSummary?.let { s -> stopExplanationOf(s, ui.breakdown)?.let { e ->
+                Text(e.line, style = MaterialTheme.typography.bodySmall, color = plan.fg)
             } }
             plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
             plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }

@@ -94,7 +94,7 @@ internal fun CellEditSheet(
     onRetryRelax: () -> Unit = {},
     mode: Int = 0,                      // 0=割当, 1=希望。呼び出し側が持つ（セルを移っても保つ・希望の一覧からは希望で開く）
     onMode: (Int) -> Unit = {},
-    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「他 ▸」のタップと、希望の一覧から開くとき
+    expanded: Boolean = true,           // false＝ちら見（3 段・盤面を隠さない）。広げるのは「詳しく ▸」のタップと、希望の一覧から開くとき
     onToggleExpand: () -> Unit = {},
     tourPrev: Pair<Int, Int>? = null,
     canUndo: Boolean = false,           // 勤務表タブの下部バーはシートを開く間は隠れる＝元に戻すをここへ（規則は下部バーと同じ）
@@ -174,7 +174,7 @@ internal fun CellEditSheet(
             recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
             TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
-                Text("すべてのシフト ▴")
+                Text("小さく表示 ▾")
             }
             val partners = remember(rev, cell) {
                 if (status.severity != CellSeverity.HARD) emptyList()
@@ -202,7 +202,7 @@ internal fun CellEditSheet(
                 } else if (mode == 0 && step == 2 && review != null) {
                     // ③ 影響を確認して適用（値はすべて正式な検査で評価した結果）。
                     val rv = review!!
-                    Text("この変更を適用しますか？", style = MaterialTheme.typography.titleSmall)
+                    Text(PREVIEW_TITLE, style = MaterialTheme.typography.titleSmall)
                     Text(rv.change, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     ReviewSection("前後の勤務", listOf(rv.neighbors))
                     ReviewSection("今回の問題", rv.thisCell + rv.othersResolved.map { "解消: $it" })
@@ -210,7 +210,6 @@ internal fun CellEditSheet(
                     Text(rv.hardLine, style = MaterialTheme.typography.bodyMedium)
                     ReviewSection("人数と回数への影響", rv.headcount + rv.counts)
                     ReviewSection("希望・固定への影響", rv.wishPin)
-                    Text(CHANGE_DUTY_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 } else {
                     tourHeading?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant) }
                     tourCovULine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
@@ -343,7 +342,7 @@ internal fun CellEditSheet(
                         }, modifier = Modifier.heightIn(min = 48.dp)) {
                             Icon(Icons.Outlined.Flag, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(6.dp))
-                            Text("ルールの見直しへ")
+                            Text("ルールの見直し候補に入れる")
                         }
                     }
                 }
@@ -453,7 +452,7 @@ private fun ExtWishDayRow(kigou: List<String>, onWishes: () -> Unit) {
     }
 }
 
-/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を登録中の札・希望を取り消す・緩める候補の行）＋シフトと他 ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
+/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を登録中の札・希望を取り消す・緩める候補の行）＋シフトと詳しく ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
  *  緩める候補はこのセルだけを変えず、設定の緩和と手順をまとめて確定するダイアログを開く。 */
 @Composable
 private fun PeekBody(
@@ -499,7 +498,7 @@ private fun PeekBody(
                 }
             }
             if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou, onWishes)
-            // シフトと「他 ▸」は 1 行に収める（入る数は peekPickCount）。
+            // シフトと「詳しく ▸」は 1 行に収める（入る数は peekPickCount）。
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val shownPicks = picks.take(peekPickCount(maxWidth.value.toInt()))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -516,8 +515,8 @@ private fun PeekBody(
                                 else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
                             }
                         }
-                        TextButton(onClick = onToggleExpand, modifier = Modifier.width(56.dp).heightIn(min = 48.dp).semantics { contentDescription = "すべてのシフトを表示" },
-                            contentPadding = PaddingValues(0.dp)) { Text("他 ▸", maxLines = 1) }
+                        TextButton(onClick = onToggleExpand, modifier = Modifier.width(64.dp).heightIn(min = 48.dp).semantics { contentDescription = "問題の説明と直し方を表示" },
+                            contentPadding = PaddingValues(0.dp)) { Text("詳しく ▸", maxLines = 1) }
                     }
                     if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
                         Text(PEEK_HARD_RISK_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
