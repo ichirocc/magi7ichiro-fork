@@ -15,7 +15,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Board.TogglePin -> vm.togglePin(e.staff, e.day)
             is MagiEvent.Board.ApplyWishes -> vm.applyWishes(e.includeOutOfScope)
             is MagiEvent.Board.ApplyAlternative -> vm.applyAlternative(e.index)
-            is MagiEvent.Board.ApplyFixSuggestion -> vm.previewOrApplyFix(e.suggestion)
+            is MagiEvent.Board.ApplyFixSuggestion -> vm.previewFixSuggestion(e.suggestion, globalPolish = true)
             is MagiEvent.Board.PreviewFix -> vm.previewFix(e.suggestion, e.purpose, e.effect, e.focusKey, e.target)
             MagiEvent.Board.Undo -> vm.undo()
             MagiEvent.Board.Redo -> vm.redo()

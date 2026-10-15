@@ -680,7 +680,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSetup = { openEditLanding(null) },
                         onLanding = { l -> openEditLandingFrom(l, EditReturn("なおし方", EditReturn.GUIDED)) },
                         onShowMove = { tab = 3 },
-                        onApplyMove = { s -> vm.previewOrApplyFix(s) },
+                        onApplyMove = { s -> vm.previewFixSuggestion(s, globalPolish = true) },
                         onAutoSearch = { onEvent(MagiEvent.Session.FindFixSuggestions(null, null)) },
                         onShowWishes = { wishConflicts = true },
                         onShowList = { tab = 3 },
@@ -936,7 +936,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     )
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)
-                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewOrApplyFix(it) }, proMode = proMode,
+                    FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewFixSuggestion(it, globalPolish = true) }, proMode = proMode,
                         onConsult = { vm.addConsult(consultFix(it)) })
                 }
                 else -> {

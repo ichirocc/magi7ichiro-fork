@@ -2724,8 +2724,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val need = conditionsViewOf(st, cachedProblem(st)).needCellLimits(shiftIndex, dayIndex)
         val target = need?.let { FixTarget(null, shiftIndex, dayIndex, it.first, true, "必要人数") }
         val s = V6PortAnalyzer.evaluatedSuggestion(st, sched, FixKind.CHANGE, listOf(FixCell(staff, dayIndex, shiftIndex)), label)
-        previewOrApplyFix(s, boardKey(sched), stateKey(st))
-        _ui.update { u -> u.copy(chainPreview = u.chainPreview?.copy(fixTarget = target)) }
+        previewFixSuggestion(s, boardKey(sched), stateKey(st), target)
     }
 
     /**
@@ -2749,7 +2748,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             else _ui.update {
                 val target = ChainTarget(isoDate(it.startDate, dayIndex) ?: "", it.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
                     boardKey = boardKey(snap), stateKey = stateKey(st))
-                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols).copy(target = target))
+                val need = conditionsViewOf(st, p).needCellLimits(shiftIndex, dayIndex)?.let { n -> FixTarget(null, shiftIndex, dayIndex, n.first, true, "必要人数") }
+                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols).copy(target = target, fixTarget = need))
             }
         }
     }
@@ -2757,9 +2757,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** 一覧で確認した入替を当てる（案を出したときの盤面か設定が今と違えば [applyFixSuggestion] が断る）。 */
     fun applyChainPreview() {
         val p = _ui.value.chainPreview ?: return
-        _ui.update { it.copy(chainPreview = null) }
         val t = p.target
-        if (t != null && t.boardKey != 0L) applyFixSuggestion(p.suggestion, t.boardKey, t.stateKey, p.focusKey, p.fixTarget) else applyFixSuggestion(p.suggestion, focusKey = p.focusKey, fixTarget = p.fixTarget)
+        // 指紋の無い案は全体の指紋へ落とさず断る（applyFixSuggestion の fromPreview）。断られたら確認の画面は残す（理由は message）。
+        if (applyFixSuggestion(p.suggestion, t?.boardKey ?: 0L, t?.stateKey ?: 0L, p.focusKey, p.fixTarget, fromPreview = true, globalPolish = p.globalPolish))
+            _ui.update { it.copy(chainPreview = null) }
+        else _ui.update { it.copy(chainPreview = it.chainPreview?.copy(applyError = it.message)) }
     }
 
     fun dismissChainPreview() { pendingGuided = null; _ui.update { it.copy(chainPreview = null) } }
@@ -2774,21 +2776,21 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         when {
             target != null -> prepareShortageChainFix(target.first, target.second, t.label)
             t.suggestion != null && sched != null && st != null && !consultChainStale(t, boardKey(sched), stateKey(st)) ->
-                previewOrApplyFix(t.suggestion, t.boardKey, t.stateKey)
+                previewFixSuggestion(t.suggestion, t.boardKey, t.stateKey, t.fixTarget, t.globalPolish)
             t.suggestion != null -> _ui.update { it.copy(messageIsError = true, message = CONSULT_STALE) }
             else -> _ui.update { it.copy(messageIsError = true, message = consultTargetNote(c, u.startDate, u.staffNames, u.shiftSymbols, u.days, u.staffIds) ?: "この枠はいまのデータにありません") }
         }
     }
 
-    /** 2 セル以上を動かす手は当てる前に一覧（だれの・どの日の・何→何）を見せる。1 セルの手はそのまま当てる（3.646.0: ホーム・分析・セルのシートも同じ）。 */
-    fun previewOrApplyFix(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey) {
+    /** 案を当てる前に確認の画面（だれの・どの日の・何→何）を出す。[fixTarget] は見ている問題（あれば適用時にその数が減るかを確かめる）。 */
+    fun previewFixSuggestion(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey, fixTarget: FixTarget? = null, globalPolish: Boolean = false) {
         // 1 セルの案も当てる前に確認の画面を出す（2026-10-14 利用者レビュー「案の一覧から直接適用しない」）。
         val sched = currentSchedule ?: return
         val st = state ?: return
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
         _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
-            .copy(target = target, newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
+            .copy(target = target, fixTarget = fixTarget, globalPolish = globalPolish, newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
     }
 
     /** 案の一覧から: 1 セルの案も当てる前に確認の画面（目的・全変更・対象の数の変化）を出す（2026-10-14 利用者レビュー「見ると適用するを分ける」）。 */
@@ -2798,7 +2800,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = fixBoardKey, stateKey = fixStateKey)
         _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
-            .copy(target = target, purpose = purpose, effect = effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget,
+            .copy(target = target, purpose = purpose, effect = effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget, globalPolish = fixTarget == null,
                 newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
     }
 
@@ -3156,12 +3158,20 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (_ui.value.fixSearching) _ui.update { it.copy(fixSearching = false, fixCancelledKey = fixSearchKey) }
     }
 
-    /** [改善提案] 改善手を1タップで適用（ops のセル代入を一括反映）。Undo 可・自動再診断・自動保存。 */
-    fun applyFixSuggestion(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey, focusKey: String? = null, fixTarget: FixTarget? = null) {
-        val st = state ?: return
-        if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return }
-        val sched = currentSchedule ?: return
-        if (s.ops.isEmpty()) return
+    /**
+     * [改善提案] 改善手を適用（ops のセル代入を一括反映）。Undo 可・自動再診断・自動保存。適用したら true（断ったら false、理由は message）。
+     * [fixTarget] の持ち回り: 枠や問題を見て出した案（案の一覧・不足枠の 1 手・相談に積んだ案）は対象を運び、その数が減らない手は断る。
+     * ホームと分析タブの「この手を使う」は全体の研磨の案＝[globalPolish]（対象を持たず、全体の評価と [com.magi.app.v6.FixApplyGate] だけで判定）。
+     * 対象が null で [globalPolish] も無い案は断る（呼び手がどちらかを明示する）。
+     * [fromPreview] の案は案を出したときの指紋が必須＝[originBoard] が 0 なら断る（全体の指紋で代わりに通さない）。
+     */
+    fun applyFixSuggestion(s: FixSuggestion, originBoard: Long = fixBoardKey, originState: Long = fixStateKey, focusKey: String? = null, fixTarget: FixTarget? = null,
+                           fromPreview: Boolean = false, globalPolish: Boolean = false): Boolean {
+        val st = state ?: return false
+        if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return false }
+        val sched = currentSchedule ?: return false
+        if (s.ops.isEmpty()) return false
+        (fixOriginRefusal(originBoard, fromPreview) ?: fixTargetRefusal(fixTarget, globalPolish))?.let { msg -> _ui.update { it.copy(messageIsError = true, message = msg) }; return false }
         // [3.475.0/論理監査] 提案は計算時の盤面/設定に対する差分。旧: 指紋を持たず、その後のセル編集・
         //   元に戻す・別データ読込・職員削除のあとでも同じ ops をそのまま書き込んでいた（staff/day/toShift が
         //   別の実体を指す）。一致しなければ適用せず再探索を促す。toShift の上限（K）も未検査だった。
@@ -3169,14 +3179,14 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (originBoard != 0L && (originBoard != boardKey(sched) || originState != stateKey(st))) {
             _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),
                 message = "勤務表か設定が変わったため、この提案は適用できません。「変更案を探す」をもう一度押してください") }
-            return
+            return false
         }
         // 見ている問題の数が減らない案は、全体の評価が良くなっても当てない（統合仕様 INV-03。案の一覧の主一覧と同じ判定）。
         if (!improvesTarget(fixTarget, sched.map { it.toList() }, s.ops)) {
             logOp("W", "改善手を見送り: ${s.label}（見ている問題が減らない）")
             _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),
                 message = NOT_IMPROVING_TARGET_MESSAGE) }
-            return
+            return false
         }
         // [3.509.4/自動化方針] 適用直前に仮盤面で完全再評価し、辞書式で改善しない・固定を崩す提案は反映しない。
         val gate = com.magi.app.v6.FixApplyGate.apply(st, sched, s.ops)
@@ -3185,7 +3195,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             logOp("W", "改善手を見送り: ${s.label}（$why）")
             _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),
                 message = "この提案は見送りました（$why）。「変更案を探す」で探し直してください") }
-            return
+            return false
         }
         pushUndo(s.label)
         val applied = gate.schedule
@@ -3209,6 +3219,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             else "要調整 ${unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}→${unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}") + "）")
         fixOutcomeCtx = state?.let { TrialCtx(it, boardKey(applied)) }
         refreshCheck()
+        return true
     }
 
     /** 並びの条件のいちばん長い窓（希望の前日の禁止は 2 日）。月の境目の注記に使う。 */
