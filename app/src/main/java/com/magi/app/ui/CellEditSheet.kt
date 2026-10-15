@@ -115,12 +115,24 @@ internal fun CellEditSheet(
     val shown = remember(ui.shiftSymbols.size, cv.allowedByStaff) { sheetShifts(ui.shiftSymbols.size, cv.allowedByStaff) }
     // 状態の 1 行・印・回数の 1 行・詳しくは同じ版（盤面・希望・設定・検査世代）から作る。
     val rev = cellSheetRev(ui)
+    val needCls = if (current >= 0) ui.needFamilies[VioKey.need(current, j)].orEmpty() else emptyList()
+    val countCls = if (current >= 0) ui.countFamilies[VioKey.count(i, current)].orEmpty() else emptyList()
+    // このセルが足りない側（当日の自分の勤務の不足・自分の回数の不足）の族は、このセルの問題として赤で出さない。
+    val shortSide = remember(rev, cell) { shortSideFamilies(needCls, countCls) }
     val fams = remember(rev, cell) {
-        cellStatusFamilies(
-            sheetCellClasses(displayCellClasses(ui, VioKey.cell(i, j), c1Marks), c1Here != null),
-            if (current >= 0) ui.needFamilies[VioKey.need(current, j)].orEmpty() else emptyList(),
-            if (current >= 0) ui.countFamilies[VioKey.count(i, current)].orEmpty() else emptyList(),
-        )
+        cellStatusFamilies(sheetCellClasses(displayCellClasses(ui, VioKey.cell(i, j), c1Marks), c1Here != null), needCls, countCls)
+            .filter { it !in shortSide }
+    }
+    val shortCaution = remember(rev, cell) {
+        if (shortSide.isEmpty()) null else {
+            val need = cv.needCellLimits(current, j)
+            val nDay = ui.schedule.count { it.getOrNull(j) == current }
+            val (lo, _, apt) = cv.staffCellLimits(i, current)
+            val useLow = "low" in shortSide && lo != null
+            shortSideCaution(name, sym(current), DayText.short(ui.startDate, j),
+                if ("covU" in shortSide) need?.let { it.first - (nDay - 1) } else null,
+                (ui.schedule.getOrNull(i)?.count { it == current } ?: 1) - 1, if (useLow) "下限" else "目標", if (useLow) lo else apt)
+        }
     }
     val status = remember(rev, cell) {
         val st = stateOf() ?: return@remember CellStatus(CellSeverity.NONE, "違反なし")
@@ -207,9 +219,10 @@ internal fun CellEditSheet(
                     val rv = review!!
                     Text(PREVIEW_TITLE, style = MaterialTheme.typography.titleSmall)
                     Text(rv.change, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    rv.verdict?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (rv.verdictBad) cs.error else cs.onSurface) }
                     ReviewSection("前後の勤務", listOf(rv.neighbors))
                     ReviewSection("今回の問題", rv.thisCell + rv.othersResolved.map { "解消: $it" })
-                    ReviewSection("新しく生じる問題", rv.appeared.ifEmpty { listOf("ありません") })
+                    ReviewSection(REVIEW_APPEARED_HEADING, rv.appeared.ifEmpty { listOf("ありません") })
                     Text(rv.hardLine, style = MaterialTheme.typography.bodyMedium)
                     ReviewSection("人数と回数への影響", rv.headcount + rv.counts)
                     ReviewSection("希望・固定への影響", rv.wishPin)
@@ -220,7 +233,8 @@ internal fun CellEditSheet(
                         // ① 問題を確認: 今の勤務・問題の一文・並びの日々、ほかの問題は畳んで全部見られるように。
                         Text("現在の勤務：${sym(current)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         if (dilemma) Text(wishKeptLine(sym(wish)), style = MaterialTheme.typography.bodySmall)
-                        if (fams.isEmpty()) Text("このセルに違反はありません。", style = MaterialTheme.typography.bodyMedium)
+                        shortCaution?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        if (fams.isEmpty() && shortCaution == null) Text("このセルに違反はありません。", style = MaterialTheme.typography.bodyMedium)
                         fams.firstOrNull()?.let { Text(cellProblemSentence(it), style = MaterialTheme.typography.bodyMedium) }
                         sequenceLine(ui.startDate, ui.schedule.getOrNull(i).orEmpty(), (partners + j).distinct(), ui.shiftSymbols)
                             ?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
@@ -262,6 +276,14 @@ internal fun CellEditSheet(
                         }
                     } else if (mode == 0 && !(dilemma && dilemmaChoice == 0)) {
                         Text("どのように調整しますか？", style = MaterialTheme.typography.titleSmall)
+                        // 足りない側のセルは、このセルを変えるより当日のその勤務に入れる人を探すのが先。
+                        if ("covU" in shortSide) {
+                            var shortSearch by remember(cell) { mutableStateOf(false) }
+                            if (!shortSearch) Button(onClick = { shortSearch = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                Text(shortSideSearchButton(DayText.short(ui.startDate, j), sym(current)), maxLines = 2)
+                            }
+                            else FixSearchPanel(ui, cv, FixFocus(null, current, j), onEvent, fixNav, onApplied = {}, compact = true)
+                        }
                         var searching by remember(cell) { mutableStateOf(false) }
                         if (!searching && status.severity != CellSeverity.NONE) {
                             Button(onClick = { searching = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("変更案を探す") }
@@ -416,11 +438,12 @@ internal fun CellEditSheet(
                     Spacer(Modifier.weight(1f))
                     OutlinedButton(onClick = { step = 1 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("別の勤務を選ぶ") }
                 }
+                TextButton(onClick = { step = 0; pickTo = null }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(KEEP_UNCHANGED_BUTTON) }
             }
             if (mode == 1 && wish != null) Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) {
-                    Text("希望を取り消す", color = cs.error, maxLines = 1)
+                    Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1)
                 }
             }
             if (step == 0 || mode == 1) Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, if (leftHand) Alignment.Start else Alignment.End)) {
@@ -455,7 +478,7 @@ private fun ExtWishDayRow(kigou: List<String>, onWishes: () -> Unit) {
     }
 }
 
-/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を登録中の札・希望を取り消す・緩める候補の行）＋シフトと詳しく ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
+/** ちら見の 3 段: ①違反の 1 行＋✕ ②対象＋前/次 ③（希望を登録中の札・希望を外す・緩める候補の行）＋シフトと詳しく ▸ の 1 行＋⚠ の凡例。高さは中身に合わせる。
  *  緩める候補はこのセルだけを変えず、設定の緩和と手順をまとめて確定するダイアログを開く。 */
 @Composable
 private fun PeekBody(
@@ -486,16 +509,18 @@ private fun PeekBody(
                 TextButton(onClick = { tourNext?.let(onMove) }, enabled = tourNext != null && tourNext != cell, modifier = Modifier.heightIn(min = 48.dp)) { Text("次 ▶") }
             }
         }
-        // 押せる行どうしは 8dp 空ける（赤の［希望を取り消す］とシフトの押し違いを防ぐ）。
+        // 押せる行どうしは 8dp 空ける（赤の［希望を外す］とシフトの押し違いを防ぐ）。
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             // 希望モードはセルを移っても続く＝ちら見でもシフトを押すと希望になると示し、1 タップで割当へ戻せるようにする。
             if (mode == 1) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MagiTagChip("希望を登録中", MagiAccent.pink)
                 TextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻す", maxLines = 1) }
             }
-            if (wish != null || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (wish != null) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
-                    modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を取り消す", color = cs.error, maxLines = 1) }
+            // 希望を外すのは希望の登録中だけ（割当のちら見では、シフトの押し違いで希望を消さない）。
+            val showRemove = wish != null && mode == 1
+            if (showRemove || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (showRemove) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
+                    modifier = Modifier.heightIn(min = 48.dp)) { Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1) }
                 if (recommend != null) FilledTonalButton(onClick = onShowRelax, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(relaxPeekLabel(sym(recommend)), maxLines = 1)
                 }

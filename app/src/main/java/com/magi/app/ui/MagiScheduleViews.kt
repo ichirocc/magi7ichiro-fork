@@ -2138,7 +2138,7 @@ internal fun FixSearchPanel(
                     val lim = cv?.let { c -> c::needCellLimits }
                     val g0 = shiftPeriodGap(ui.schedule, target.shift, target.under, lim)
                     if (g0 == null) fixing0 else fixing0.sortedBy { s -> if ((shiftPeriodGap(boardAfter(ui.schedule, s.ops), target.shift, target.under, lim) ?: g0) < g0) 0 else 1 }
-                } else fixing0
+                } else if (target?.staff != null) fixing0.sortedBy { if (countMovesOnly(it, target)) 1 else 0 } else fixing0
                 val others = if (effects != null || pred != null) shown.filterNot { it in fixing } else emptyList()
                 val purpose = target?.let { fixTargetPurpose(it, focus.staff?.let { i -> ui.staffNames.getOrNull(i) }, label) }
                     ?: family?.let { "選んだ問題（${breakdownLabels[it] ?: it}）を減らす" }
@@ -2162,12 +2162,13 @@ internal fun FixSearchPanel(
                             hardUnchangedLines(s, ui.bestHard > 0).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             if (e != null && target != null) {
                                 Text("案$n：${e.title(label)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
-                                Text("$label：${e.countLine()}　${e.gapLine()}", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
+                                Text("$label：${e.countLine()}　${e.gapLine()}" + (if (countMovesOnly(s, target)) MOVES_TO_OTHER_STAFF_NOTE else ""),
+                                    style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 Text(e.afterNote(target.basis), style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 remain.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer) }
                                 Text(changeSizeLine(s.ops), style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             } else {
-                                Text("案$n：${s.label}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
+                                Text("案$n：${fixDisplayLabel(s.label)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                                 if (addressLabel != null && addresses?.invoke(s) == true) Text("$addressLabel：解消します", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 family?.let { familyEffectLine(s, it, breakdownLabels[it] ?: it) }?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer) }
                             }
@@ -2187,12 +2188,15 @@ internal fun FixSearchPanel(
                                     Text(if (target?.day != null) "別の日への影響" else "日ごとの人数への影響", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                     otherDays.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 }
-                                val notes = remember(s, ui.schedule) { staffCountNotes(ui.schedule, s.ops, ui.staffNames, ui.shiftSymbols) }
+                                val notes = remember(s, ui.schedule, cv) { staffCountNotes(ui.schedule, s.ops, ui.staffNames, ui.shiftSymbols, cv?.let { c -> c::staffCellLimits }, target?.staff) }
                                 if (notes.isNotEmpty()) {
                                     Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                     notes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 }
-                                val others = otherEffectLines(s, target?.let { fixTargetFamilies(it) } ?: setOfNotNull(family), hardShown = hardChangeLine(s.diff) != null)
+                                val others = otherEffectLines(s, target?.let { fixTargetFamilies(it) } ?: setOfNotNull(family), hardShown = hardChangeLine(s.diff) != null) +
+                                    (if (target?.staff != null) remember(s, ui.schedule, cv) {
+                                        newCountBreakLines(ui.schedule, s.ops, target.staff, cv?.let { c -> c::staffCellLimits }, ui.staffNames, ui.shiftSymbols)
+                                    } else emptyList())
                                 if (others.isNotEmpty()) Text("ほかの問題への影響", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                 others.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             } else {
@@ -2288,6 +2292,13 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
                           onRetrySave: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     var showChanges by remember(a) { mutableStateOf(false) }
+    // 「続けて … の案を見る」は帯をたたんで、下の探し直した案へ進む。
+    var folded by remember(a) { mutableStateOf(false) }
+    if (folded) return
+    val lim = cv?.let { c -> c::needCellLimits }
+    val nextSym = target?.let { ui.shiftSymbols.getOrNull(it.shift) }
+    val sameRemains = nextSym != null && appliedRemaining(ui, a, target, label, lim).isNotEmpty()
+    val nextLabel = appliedNextButton(sameRemains, nextSym, a.hardAfter, onTour != null)
     Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("変更を反映しました", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onTertiaryContainer)
@@ -2302,7 +2313,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
             // 保存に失敗している間は、追加の変更より保存のやり直しを先に（統合仕様 §11）。
             if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (onTour != null) TextButton(onClick = onTour, modifier = Modifier.heightIn(min = 48.dp)) { Text("残っている問題を見る") }
+                if (nextLabel != null) TextButton(onClick = { if (sameRemains) folded = true else onTour?.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(nextLabel) }
                 TextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "変更内容を閉じる" else "今回の変更内容を見る") }
                 if (ui.canUndo) TextButton(onClick = { onUndo() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("今回の変更を元に戻す") }
             }
