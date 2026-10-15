@@ -22,7 +22,7 @@ class PreDistributionCheckTest {
     @Test fun hardRowListsFamiliesAndSaveRowReadsTheCsvLine() {
         val rows = preDistributionRows(base.copy(bestHard = 3L, breakdown = mapOf("covU" to 2, "c3n" to 1)),
             "この内容で勤務表 CSV を保存済みです（10:15）。").associateBy { it.label }
-        assertEquals("3件（禁止の並び 1件・人員不足 2件）", rows.getValue("必須違反").value)
+        assertEquals("1件・2人（禁止の並び 1件・人員不足 2人）", rows.getValue("必須違反").value)
         assertEquals(true, rows.getValue("保存").ok)
     }
 

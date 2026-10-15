@@ -684,7 +684,7 @@ internal fun rankForTarget(list: List<com.magi.app.v6.FixSuggestion>, schedule: 
 
 /** 「ほかの問題への影響」の行（対象の族は上に出すので除く）。必須違反の増減を先頭に。 */
 internal fun otherEffectLines(s: com.magi.app.v6.FixSuggestion, skipFamilies: Set<String>): List<String> {
-    val hard = when { s.deltaHard < 0 -> "必須違反：${-s.deltaHard}件減る"; s.deltaHard > 0 -> "必須違反：${s.deltaHard}件増える"; else -> "必須違反：変わらない" }
+    val hard = "必須違反：" + (unitDeltaText(s.diff, MirrorKeys.hard) ?: if (s.deltaHard == 0) "変わらない" else if (s.deltaHard < 0) "${-s.deltaHard}件減る" else "${s.deltaHard}件増える")
     return listOf(hard) + s.diff.filter { (k, d) -> d != 0 && k !in skipFamilies }.map { (k, d) ->
         "${breakdownLabels[k] ?: k}：${kotlin.math.abs(d)}${unitOf(k)}${if (d < 0) "減る" else "増える"}"
     }
@@ -737,7 +737,8 @@ internal fun applyCountButton(n: Int): String = if (n >= 2) "この${n}件の変
 internal const val BACK_TO_FIXES_BUTTON = "別案を見る"
 
 /** 必須 0 の結果の札。要調整が残るなら「配布可」と言い切らず、配布前の確認へ案内する（押すと配布前の確認が開く）。 */
-internal fun readyBadgeLabel(soft: Long): String = if (soft > 0) "要調整 ${soft}件・配布前の確認" else "配布可"
+internal fun readyBadgeLabel(soft: Long, breakdown: Map<String, Int> = emptyMap()): String =
+    if (soft > 0) "要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}・配布前の確認" else "配布可"
 
 /** 集計期間（見出しの 2 行目）。 */
 internal fun periodLine(startDate: String, days: Int): String? =
@@ -871,8 +872,10 @@ internal fun appliedLines(ui: UiState, a: AppliedFix, target: FixTarget?, label:
     }
     val (same, other) = headcountImpact(a.before, a.ops, ui.shiftSymbols, ui.startDate, needLimits, target?.day?.let { target.shift to it })
     out += same + other
-    if (a.hardBefore >= 0) out += "必須違反（勤務表全体）：${a.hardBefore}件 → ${a.hardAfter}件"
-    if (a.softBefore >= 0) out += "要調整（勤務表全体）：${a.softBefore}件 → ${a.softAfter}件"
+    // 内訳があれば単位ごとに（件・人・回・pt を 1 つの数に足さない＝統合仕様 INV-07）。
+    fun t(b: Map<String, Int>?, fams: List<String>, n: Int) = b?.let { unitTotals(it, fams) ?: "なし" } ?: "${n}件"
+    if (a.hardBefore >= 0) out += "必須違反（勤務表全体）：${t(a.breakdownBefore, MirrorKeys.hard, a.hardBefore)} → ${t(a.breakdownAfter, MirrorKeys.hard, a.hardAfter)}"
+    if (a.softBefore >= 0) out += "要調整（勤務表全体）：${t(a.breakdownBefore, MirrorKeys.soft, a.softBefore)} → ${t(a.breakdownAfter, MirrorKeys.soft, a.softAfter)}"
     out += saveStateLine(ui.saveState)
     val next = when {
         target?.day != null -> remainingSameShift(ui.needFamilies, ui.schedule, target, needLimits, ui.shiftSymbols, ui.startDate)
@@ -1021,9 +1024,10 @@ internal const val PIN_NOTE = "固定すると、自動作成・調整ではこ�
 internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが担当しない勤務です（担当可否の設定）。選ぶと担当外シフトの必須違反になります。"
 
 /** 上部の札の 2 行目以降: 自動作成の状態と、今の勤務表の評価（2026-10-14 利用者レビュー「未計算」を分ける）。 */
-internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long): Pair<String, String> =
+internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long, breakdown: Map<String, Int> = emptyMap()): Pair<String, String> =
     (if (engineRan) "自動作成：済み" else if (hasResult) "自動作成：未実行（手で編集）" else "自動作成：未実行") to
-        (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${hard}件" else if (soft > 0) "評価：要調整 ${soft}件" else "評価：違反なし")
+        (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${unitTotals(breakdown, MirrorKeys.hard) ?: "${hard}件"}"
+        else if (soft > 0) "評価：要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}" else "評価：違反なし")
 
 /**
  * 案がこのセルの問題を解消するか（2026-10-14 利用者レビュー: 族の全体の件数が減るだけでは、選んだセルが直るとは限らない）。
@@ -1074,7 +1078,7 @@ internal fun softSummary(breakdown: Map<String, Int>, max: Int = 4): String {
 
 /** 作成後の結果（作成の完了は配布できることと同じ意味ではない）。 */
 internal fun creationResultLines(hard: Long, breakdown: Map<String, Int>, save: SaveState): List<String> = listOfNotNull(
-    "必須違反：${hard}件",
+    "必須違反：${unitTotals(breakdown, MirrorKeys.hard) ?: if (hard == 0L) "なし" else "${hard}件"}",
     "要調整：${softSummary(breakdown)}",
     saveStateLine(save),
     if (hard == 0L) "作成が終わったことは、配布できることと同じではありません。配布前の確認で中身を確かめてください。" else null,

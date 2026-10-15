@@ -1,10 +1,10 @@
 package com.magi.app.ui
 
 /** 直し方を当てたあと、同じ問題について「どうなったか」を 1 行で返す（3.643.0）。改善手の適用（前後の件数が分かる）用。 */
-internal fun fixOutcomeText(label: String, hardBefore: Int, hardAfter: Int, totalBefore: Int, totalAfter: Int): String = when {
-    hardAfter == 0 && hardBefore > 0 -> "$label を当てました。必須違反はなくなりました（合計 $totalBefore→$totalAfter）。"
+internal fun fixOutcomeText(label: String, hardBefore: Int, hardAfter: Int, softBefore: String, softAfter: String): String = when {
+    hardAfter == 0 && hardBefore > 0 -> "$label を当てました。必須違反はなくなりました（要調整 $softBefore→$softAfter）。"
     hardAfter < hardBefore -> "$label を当てました。必須違反 $hardBefore→$hardAfter。ほかの必須違反は $hardAfter 件残っています。"
-    else -> "$label を当てました。必須違反は変わらず $hardAfter 件（合計 $totalBefore→$totalAfter）。"
+    else -> "$label を当てました。必須違反は変わらず $hardAfter 件（要調整 $softBefore→$softAfter）。"
 }
 
 /**

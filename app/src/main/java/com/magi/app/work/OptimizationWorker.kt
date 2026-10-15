@@ -277,7 +277,7 @@ class OptimizationWorker(
                             alternatives = res.alternatives,   // [3.592.0] 前景と同じ候補群を背景結果にも載せる
                         ),
                     )
-                    notifyDone(res.report.hard, res.report.total)
+                    notifyDone(res.report.hard, res.report.breakdown)
                     step("公開")
                     // [3.410.0/B-01] 保存が**例外で失敗**したとき（所有権は持っている）、旧実装は結果を
                     //   公開したうえで入力・途中経過まで消していた。結果はメモリにしか無いので、直後に
@@ -376,9 +376,9 @@ class OptimizationWorker(
         return ForegroundInfo(NID_PROGRESS, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     }
 
-    private fun notifyDone(hard: Int, total: Int) {
+    private fun notifyDone(hard: Int, breakdown: Map<String, Int>) {
         // 必須違反 0 件だけで「配布できます」と言わない（相談・職場の確認は含まない＝画面の完了通知と同じ文言、仕様 §9）。
-        val msg = com.magi.app.ui.completedText(hard, total, "")
+        val msg = com.magi.app.ui.completedText(hard, breakdown, "")
         notify("勤務表の最適化", msg)
         // [Android 17 バブル] 完了サマリを会話バブルへ反映（ongoing 解除）。
         runCatching { BubbleSupport.postDone(ctx, msg) }

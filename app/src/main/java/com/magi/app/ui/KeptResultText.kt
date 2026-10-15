@@ -32,6 +32,6 @@ object KeptResultText {
 }
 
 /** 計算が終わったときの通知（判断支援 UX 仕様 §9）。必須違反 0 件は「計算が終わった」と「配れる」を分けて、配布前確認へ促す。 */
-internal fun completedText(hard: Int, total: Int, how: String): String =
-    if (hard == 0) "計算が完了しました$how。設定した必須条件を満たしています。配布前の確認に進んでください（違反の合計 ${total}件）"
-    else "計算が完了しました$how。必須違反 ${hard}件・違反の合計 ${total}件"
+internal fun completedText(hard: Int, breakdown: Map<String, Int>, how: String): String =
+    if (hard == 0) "計算が完了しました$how。設定した必須条件を満たしています。配布前の確認に進んでください（要調整 ${unitTotals(breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"}）"
+    else "計算が完了しました$how。${reportCountsText(breakdown)}"
