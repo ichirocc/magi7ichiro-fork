@@ -5,6 +5,8 @@ import com.magi.app.v6.FixApplyGate
 import com.magi.app.v6.FixCell
 import com.magi.app.v6.FixKind
 import com.magi.app.v6.FixSuggestion
+import com.magi.app.v6.Problem
+import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.ViolationReport
 import com.magi.app.v6.betterReport
 
@@ -17,6 +19,7 @@ internal const val ENTRY_MOVE_EVALS = 60
 /**
  * 入り口の範囲の中で 1 セルだけを変える候補を作り、適用の門（[FixApplyGate]）で 1 つずつ評価する。
  * 日の人員＝その日の 1 人のセル、個人の回数＝その人の 1 セル。過剰は外す側（休を先に試す）、不足は入れる側。
+ * 置き換え先は最適化器が置いてよいもの（`Problem.mayPlaceAt`＝担当可・上限 0 でない・拡張希望で禁止されていない）だけ＝評価の回数を無駄にしない。
  * セルごとに最も良い置き換え先を 1 つ残す（通るものがあれば通るものを優先）。まとめて見る対象は作らない。
  */
 internal fun entryMoves(state: MagiState, s: Array<IntArray>, target: FixTarget, rest: Int?, maxEvals: Int = ENTRY_MOVE_EVALS): List<EntryMove> {
@@ -29,16 +32,18 @@ internal fun entryMoves(state: MagiState, s: Array<IntArray>, target: FixTarget,
         else -> emptyList()
     }.filter { (i, j) -> j in s[i].indices && (if (target.under) s[i][j] != k else s[i][j] == k) }
     val board = s.map { it.toList() }
+    val p = Problem(state)
+    val before = UnifiedViolationChecker.check(state, s)
     var evals = 0
     val out = ArrayList<EntryMove>()
     for ((i, j) in cells) {
-        val tos = if (target.under) listOf(k) else (listOfNotNull(rest?.takeIf { it in 0 until nK && it != k }) + (0 until nK).filter { it != k && it != rest })
+        val tos = (if (target.under) listOf(k) else (listOfNotNull(rest?.takeIf { it in 0 until nK && it != k }) + (0 until nK).filter { it != k && it != rest })).filter { p.mayPlaceAt(i, j, it) }
         var best: Pair<FixApplyGate.Outcome, FixCell>? = null
         for (to in tos) {
             if (evals >= maxEvals) break
             evals++
             val op = FixCell(i, j, to)
-            val r = FixApplyGate.apply(state, s, listOf(op))
+            val r = FixApplyGate.apply(state, s, listOf(op), p, before)
             val cur = best
             best = when {
                 cur == null -> r to op
@@ -52,8 +57,8 @@ internal fun entryMoves(state: MagiState, s: Array<IntArray>, target: FixTarget,
         val (r, op) = best ?: break
         if (!target.effect(board, listOf(op)).fixes) continue
         val after: ViolationReport? = when (r) { is FixApplyGate.Outcome.Applied -> r.after; is FixApplyGate.Outcome.Rejected -> r.after }
-        val name = state.staff.getOrNull(i)?.name ?: "#$i"
-        val label = "${name} ${DayText.short(state.startDate, j)} ${state.shifts.getOrNull(s[i][j])?.kigou ?: "—"}→${state.shifts.getOrNull(op.toShift)?.kigou ?: "${op.toShift}"}"
+        val name = state.staff.getOrNull(i)?.name ?: UNKNOWN_LABEL
+        val label = "${name} ${DayText.short(state.startDate, j)} ${state.shifts.getOrNull(s[i][j])?.kigou ?: "—"}→${state.shifts.getOrNull(op.toShift)?.kigou ?: UNKNOWN_LABEL}"
         val diff = after?.let { a -> (r.before.breakdown.keys + a.breakdown.keys).map { f -> f to (a.breakdown[f] ?: 0) - (r.before.breakdown[f] ?: 0) }.filter { it.second != 0 }.sortedBy { it.second } }.orEmpty()
         val sug = FixSuggestion(FixKind.CHANGE, listOf(op), label, (after?.hard ?: r.before.hard) - r.before.hard, ((after?.total ?: r.before.total) - r.before.total), diff)
         out += if (r is FixApplyGate.Outcome.Applied) EntryMove(sug, true, null) else EntryMove(sug, false, (r as FixApplyGate.Outcome.Rejected).reason)

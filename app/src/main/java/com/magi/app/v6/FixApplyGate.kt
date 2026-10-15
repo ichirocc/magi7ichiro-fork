@@ -12,9 +12,11 @@ object FixApplyGate {
         data class Rejected(val reason: String, override val before: ViolationReport, val after: ViolationReport?) : Outcome()
     }
 
-    fun apply(state: MagiState, schedule: Array<IntArray>, ops: List<FixCell>): Outcome {
-        val p = Problem(state)
-        val before = UnifiedViolationChecker.check(state, schedule)
+    fun apply(state: MagiState, schedule: Array<IntArray>, ops: List<FixCell>): Outcome =
+        apply(state, schedule, ops, Problem(state), UnifiedViolationChecker.check(state, schedule))
+
+    /** 同じ盤面の候補を続けて評価する呼び手向け＝[p] と [before] は `state`/`schedule` から作ったものを渡す（結果は上と同じ）。 */
+    fun apply(state: MagiState, schedule: Array<IntArray>, ops: List<FixCell>, p: Problem, before: ViolationReport): Outcome {
         if (ops.isEmpty()) return Outcome.Rejected("変更がありません", before, null)
         val work = schedule.copy2D()
         for (op in ops) {

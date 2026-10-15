@@ -133,6 +133,7 @@ internal object C3RotationPolish {
         var de: DeltaEvaluator? = if (PolishGate.rotationDeltaPrescreen) DeltaEvaluator(p).also { it.reset(work) } else null
         if (de != null && !deltaKeyMatches(de, before)) de = null
         var prescreened = 0
+        var prescreenMismatches = 0
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -189,16 +190,25 @@ internal object C3RotationPolish {
                                     val postObjective = staffObjective(p, work, ai) + staffObjective(p, work, bi) + staffObjective(p, work, ci)
                                     if (preObjective != null && !postObjective.isBetterThan(preObjective)) { for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }; skipped++; continue }
                                 }
-                                val d = de
+                                var d = de
+                                var verified: ViolationReport? = null
                                 if (d != null) {
                                     for (t in 0 until w) { d.apply(ai, j + t, sb[t]); d.apply(bi, j + t, sc[t]); d.apply(ci, j + t, sa[t]) }
                                     // adoptionGate は betterReport を先に要求する＝キーで負ける手は正式評価でも必ず不採用。
-                                    if (!deltaKeyBetter(d.reportKey(), bestRep)) {
-                                        for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t]; d.apply(ai, j + t, sa[t]); d.apply(bi, j + t, sb[t]); d.apply(ci, j + t, sc[t]) }
-                                        prescreened++; continue
+                                    val key = d.reportKey()
+                                    if (!deltaKeyBetter(key, bestRep)) {
+                                        // 抜き取り検査: 際どい手と一定数ごとの手は正式評価でキーを照合し、食い違えばこの研磨の残りは差分評価を使わない。
+                                        if (prescreenNeedsVerify(key, bestRep, prescreened)) {
+                                            val full = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                                            if (!deltaKeyMatches(d, full)) { de = null; d = null; verified = full; prescreenMismatches++ }
+                                        }
+                                        if (d != null) {
+                                            for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t]; d.apply(ai, j + t, sa[t]); d.apply(bi, j + t, sb[t]); d.apply(ci, j + t, sc[t]) }
+                                            prescreened++; continue
+                                        }
                                     }
                                 }
-                                val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+                                val rep = verified ?: UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                                 if (adoptionGate(p, workBeforeRotate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
                                 else {
                                     for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }   // 巻き戻し
@@ -217,7 +227,7 @@ internal object C3RotationPolish {
                 " / c3 ${before.breakdown["c3"] ?: 0}->${bestRep.breakdown["c3"] ?: 0}" +
                 " / c3m ${before.breakdown["c3m"] ?: 0}->${bestRep.breakdown["c3m"] ?: 0}" +
                 " / c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0}" +
-                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回 (差分前フィルタで省略${skipped}手・差分評価で省略${prescreened}手)"))
+                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回 (差分前フィルタで省略${skipped}手・差分評価で省略${prescreened}手${if (prescreenMismatches > 0) "・差分評価の食い違い${prescreenMismatches}回で停止" else ""})"))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
     }
 
@@ -226,6 +236,12 @@ internal object C3RotationPolish {
         val k = de.reportKey()
         return k[0] == rep.hard.toLong() && k[1].toDouble() == rep.weightedScore && k[2] == rep.total.toLong()
     }
+
+    /** 差分評価で落とした手を正式評価で照合するか: 際どい手（必須が同じで重みの差が 1 以内）と、落とした手の [PRESCREEN_VERIFY_EVERY] 手ごと。 */
+    internal fun prescreenNeedsVerify(key: LongArray, best: ViolationReport, prescreened: Int): Boolean =
+        prescreened % PRESCREEN_VERIFY_EVERY == 0 || (key[0] == best.hard.toLong() && kotlin.math.abs(key[1].toDouble() - best.weightedScore) <= 1.0)
+
+    internal const val PRESCREEN_VERIFY_EVERY = 64
 
     /** [betterReport] と同じ辞書式で、差分キー [key] が [best] より良いか。 */
     internal fun deltaKeyBetter(key: LongArray, best: ViolationReport): Boolean = when {

@@ -51,8 +51,8 @@ class Review3683Test {
     }
 
     @Test fun alternativesCompareWithNow() {
-        assertEquals("案1：必須違反 2件（今より多い）", alternativeSummary(1, "2件", 1, 2, true))
-        assertEquals("案2：必須違反 なし（今より少ない）", alternativeSummary(2, "なし", 1, 0, false))
+        assertEquals("案1：必須違反 2件（今より多い）", alternativeSummary(1, "2件", 1, 2, true, false))
+        assertEquals("案2：必須違反 なし（今より少ない）", alternativeSummary(2, "なし", 1, 0, false, true))
         assertTrue(alternativesAllWorse(listOf(true, true), 2))
         assertFalse(alternativesAllWorse(listOf(true), 2))
     }

@@ -90,10 +90,9 @@ object PreRunCheck {
         return WallHint(walls.size, per.size, top.key, top.value)
     }
 
-    /** 設定・希望・盤面の指紋。「勤務表を作成」の後は、これが変わるまで同じ理由で止めない。 */
-    fun fingerprint(state: MagiState, schedule: Array<IntArray>): Long {
-        var h = StateFingerprint.of(state)
-        for (row in schedule) for (v in row) h = h * 31L + v
-        return h
+    /** 再作成すると外れる手置きのセル（[Summary.rerunClears] と同じもの）だけを出す。 */
+    fun rerunClears(state: MagiState, schedule: Array<IntArray>): List<HandPlacedCell> {
+        val p = cachedProblem(state)
+        return handPlacedCells(p, normalizeSchedule(schedule, p))
     }
 }

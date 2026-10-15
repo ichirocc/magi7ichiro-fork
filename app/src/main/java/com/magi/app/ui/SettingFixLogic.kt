@@ -7,20 +7,46 @@ import com.magi.app.model.Range
 import com.magi.app.v6.SettingFixAction
 import com.magi.app.v6.SettingIssue
 import com.magi.app.v6.c3SeqKey
+import com.magi.app.v6.wishDiagnosisFingerprint
 
 /** 設定の見直しカードのワンタップ修正の純粋部分（状態 → 新しい状態 / 何も変えないなら null）。ViewModel は適用とログだけ持つ。 */
 object SettingFixLogic {
     const val WISH_CHANGED_MESSAGE = "診断のあとで希望が変わったため、取り消しませんでした。診断をやり直してください"
 
-    /** 診断のあとで対象の希望が別の勤務に変わった（または消えた）か。 */
+    const val WISH_ALREADY_REMOVED_MESSAGE = "この希望はすでに外れています"
+
+    const val WISH_STALE_MESSAGE = "診断のあとで職員・担当できるシフト・希望などの設定が変わったため、取り消しませんでした。診断をやり直してください"
+
+    /** [3.687.0/R02] 診断した職員を ID で今の並びに引き直した希望のキー（ID を持たない古い診断は元のキー、職員がいなければ null）。 */
+    fun currentWishKey(s: MagiState, issue: SettingIssue): String? {
+        val key = issue.wishKey ?: return null
+        val id = issue.wishStaffId ?: return key
+        val i = s.staff.indexOfFirst { it.id == id }.takeIf { it >= 0 } ?: return null
+        return "$i,${key.substringAfter(",")}"
+    }
+
+    /** 診断のときと入力（[wishDiagnosisFingerprint]）が違う＝診断が古い。職員がいなくなっていても古いとみなす。 */
+    fun wishDiagnosisStale(s: MagiState, issue: SettingIssue): Boolean {
+        if (issue.action != SettingFixAction.REMOVE_WISH || issue.wishFingerprint == null) return false
+        val key = currentWishKey(s, issue) ?: return true
+        val i = key.substringBefore(",").toInt()
+        val j = key.substringAfter(",").toIntOrNull() ?: return true
+        return wishDiagnosisFingerprint(s, i, j) != issue.wishFingerprint
+    }
+
+    /** 診断のあとで対象の希望が別の勤務に変わったか（消えていれば [wishAlreadyRemoved] の側＝取り消し済みと同じ）。 */
     fun wishChanged(s: MagiState, issue: SettingIssue): Boolean =
-        issue.action == SettingFixAction.REMOVE_WISH && issue.wishKey != null && s.wishes[issue.wishKey] != issue.wishShift
+        issue.action == SettingFixAction.REMOVE_WISH && currentWishKey(s, issue).let { k -> k != null && s.wishes[k].let { it != null && it != issue.wishShift } }
+
+    /** 外そうとした希望がもう無い（別の操作で外れた）か。 */
+    fun wishAlreadyRemoved(s: MagiState, issue: SettingIssue): Boolean =
+        issue.action == SettingFixAction.REMOVE_WISH && currentWishKey(s, issue).let { k -> k != null && !s.wishes.containsKey(k) }
 
     fun apply(s: MagiState, issue: SettingIssue): MagiState? {
         return when (issue.action) {
             SettingFixAction.REMOVE_WISH -> {
-                val key = issue.wishKey ?: return null
-                if (!s.wishes.containsKey(key) || wishChanged(s, issue)) return null
+                val key = currentWishKey(s, issue) ?: return null
+                if (!s.wishes.containsKey(key) || wishChanged(s, issue) || wishDiagnosisStale(s, issue)) return null
                 s.copy(wishes = s.wishes - key)
             }
             SettingFixAction.DELETE_DUP_SEQ -> {

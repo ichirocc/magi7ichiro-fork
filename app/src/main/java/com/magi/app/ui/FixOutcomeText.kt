@@ -27,7 +27,7 @@ internal fun fixResultDetail(before: com.magi.app.v6.ViolationReport, after: com
     val newHard = com.magi.app.v6.ViolationIdentity.newHard(before, after).size
     return (if (down.isEmpty()) "解消・減少した違反: なし。" else "解消・減少した違反: ${down.joinToString("・")}。") +
         (if (appeared.isEmpty()) "新たに生じた問題: なし。" else "新たに生じた問題: ${appeared.joinToString("・")}。") +
-        (if (newHard > 0) "新たな必須違反が $newHard か所あります。" else if (after.hard > 0) "新たな必須違反はありません（全体の必須違反は ${hardText(after.breakdown, after.hard.toLong())}）。" else "")
+        (if (newHard > 0) "新たな必須違反が ${newHard}か所あります。" else if (after.hard > 0) "新たな必須違反はありません（全体の必須違反は ${hardText(after.breakdown, after.hard.toLong())}）。" else "")
 }
 
 /** 「なおし方を見る」で 1 人を入れたあと（人員不足の枠が対象）。[stillMiss]＝再検査後にその枠でまだ足りない人数（null＝解消）。 */
