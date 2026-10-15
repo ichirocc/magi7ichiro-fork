@@ -539,6 +539,19 @@ internal fun peekRecommendation(r: RelaxTrial.Result?, i: Int, j: Int): Int? =
 /** 1 つのセルに重なった問題の見出し（違反セルの半自動修正仕様 §3-2・§5、3.665.0）。2 件以上のときだけ。 */
 internal const val ADDRESS_CHECKING_TEXT = "案ごとに、このセルの問題が解消するか確認しています…"
 
+/**
+ * 開いた時点の職員 ID（[staffId]・[exceptId]、0 以下や null＝ID なし）を今の並びの番号に引き直す（統合仕様 5.1）。
+ * 並べ替えのあとは新しい番号、削除されていれば null（別の人を探さない）。ID が無ければ番号のまま。
+ */
+internal fun resolveFixFocus(f: FixFocus, staffId: Int?, exceptId: Int?, staffIds: List<Int>): FixFocus? {
+    fun at(index: Int?, id: Int?): Int? = if (index == null || id == null || id <= 0) index else staffIds.indexOf(id)
+    val s = at(f.staff, staffId); val x = at(f.exceptStaff, exceptId)
+    if (s == -1 || x == -1) return null
+    return if (s == f.staff && x == f.exceptStaff) f else f.copy(staff = s, exceptStaff = x)
+}
+
+internal const val FIX_STAFF_GONE_NOTE = "この職員は一覧から削除されたため、変更案を探せません。画面を閉じて開き直してください。"
+
 internal const val SAVE_RETRY_BUTTON = "もう一度保存する"
 
 internal const val REVIEW_CHECKING_TEXT = "変更後の影響を確認しています…"
@@ -812,6 +825,50 @@ internal fun remainingSameShift(
             val gap = if (t.under) lim.first - n else n - lim.second
             if (gap > 0) "${DayText.short(startDate, j)}の${sym}は、${if (t.under) "${gap}人不足" else "${gap}人多い状態"}のままです" else null
         }
+}
+
+/** 同じ勤務の期間全体の過不足（日ごとに基準までの差を 0 で打ち切って足す。設定の値が無い日は数えない）。値が無ければ null。 */
+internal fun shiftPeriodGap(board: List<List<Int>>, shift: Int, under: Boolean, needLimits: ((Int, Int) -> Pair<Int, Int>?)?): Int? {
+    val f = needLimits ?: return null
+    var g = 0
+    for (j in 0 until (board.firstOrNull()?.size ?: 0)) {
+        val lim = f(shift, j) ?: continue
+        val n = board.count { it.getOrNull(j) == shift }
+        g += if (under) maxOf(0, lim.first - n) else maxOf(0, n - lim.second)
+    }
+    return g
+}
+
+/** 案のカードの「期間全体」の行（日の人員の対象）。見ている日が直っても期間全体で減らなければ、移るだけと言う（2026-10-15 利用者「思考誘導が混乱する」）。 */
+internal fun periodGapLine(sym: String, under: Boolean, before: Int, after: Int): String =
+    "${sym}の${if (under) "不足" else "過剰"}（期間全体）：${before}人 → ${after}人" + when {
+        after > before -> "＝期間全体では増えます"
+        after == before -> "＝別の日へ移るだけです"
+        else -> ""
+    }
+
+/** 案のカードの先頭: 必須違反の変化（族ごと）。変わらなければ null（2026-10-15: 禁止の並びを崩す効き目がカードの最後に埋もれていた）。 */
+internal fun hardChangeLine(diff: List<Pair<String, Int>>): String? =
+    familyDeltaList(diff.filter { it.first in MirrorKeys.hard }).takeIf { it.isNotEmpty() }?.let { "必須違反の変化：$it" }
+
+/** パネルの上に 1 回だけ出す、同じ勤務のほかの日の過不足（カードごとに繰り返さない）。無ければ null。 */
+internal fun otherDaysGapLine(
+    needFamilies: Map<String, List<String>>, board: List<List<Int>>, t: FixTarget, needLimits: ((Int, Int) -> Pair<Int, Int>?)?,
+    shiftSymbols: List<String>, startDate: String,
+): String? {
+    val day = t.day ?: return null
+    val f = needLimits ?: return null
+    val cls = if (t.under) "vio-covU" else "vio-covO"
+    val days = needFamilies.filter { (key, fams) -> cls in fams && VioKey.first(key) == t.shift }.keys.mapNotNull { VioKey.second(it) }
+        .filter { it != day }.sorted().mapNotNull { j ->
+            val lim = f(t.shift, j) ?: return@mapNotNull null
+            val n = board.count { it.getOrNull(j) == t.shift }
+            val gap = if (t.under) lim.first - n else n - lim.second
+            if (gap > 0) "${DayText.short(startDate, j)}（${gap}人）" else null
+        }
+    if (days.isEmpty()) return null
+    val sym = shiftSymbols.getOrNull(t.shift) ?: "${t.shift}"
+    return "ほかに${sym}が${if (t.under) "足りない" else "多い"}日：${days.joinToString("・")}"
 }
 
 /** 自動保存の状態の 1 行（適用後の案内）。 */
