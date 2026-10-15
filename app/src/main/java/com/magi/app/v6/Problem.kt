@@ -270,8 +270,8 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val si = shiftIdxOf(it.shiftKigou)
             val hasLo = it.l.isNotBlank()
             val hasHi = it.u.isNotBlank()
-            val lo = if (hasLo) it.l.trim().toIntOrNull() ?: 0 else 0
-            val hi = if (hasHi) it.u.trim().toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
+            val lo = rangeBound(it.l) ?: 0
+            val hi = rangeBound(it.u) ?: Int.MAX_VALUE
             if (gi >= 0 && si >= 0 && (hasLo || hasHi)) C41(gi, si, lo, hi)
             else {
                 _unresolvedRows.add("グループのレンジ" to
@@ -294,8 +294,8 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             val gi = skillGroupIdxOf(it.groupKigou)
             val si = shiftIdxOf(it.shiftKigou)
             val hasLo = it.l.isNotBlank(); val hasHi = it.u.isNotBlank()
-            val lo = if (hasLo) it.l.trim().toIntOrNull() ?: 0 else 0
-            val hi = if (hasHi) it.u.trim().toIntOrNull() ?: Int.MAX_VALUE else Int.MAX_VALUE
+            val lo = rangeBound(it.l) ?: 0
+            val hi = rangeBound(it.u) ?: Int.MAX_VALUE
             if (gi >= 0 && si >= 0 && (hasLo || hasHi)) C41(gi, si, lo, hi)
             else {
                 _unresolvedRows.add("スキルグループのレンジ" to
@@ -315,6 +315,9 @@ class Problem(val state: MagiState, val quantitativeRangeEval: Boolean = false) 
             }
         }
     }
+
+    /** [3.687.0/R05] グループ/スキルグループのレンジの片側。空欄・数値でない・負は未設定（null＝制限なし）＝設定の見直しの「制限なし」と同じ読み。 */
+    private fun rangeBound(v: String): Int? = v.trim().toIntOrNull()?.takeIf { it >= 0 }
 
     /** getNeed(k,j,p2): per-day override, falling back to shift default; -1 == none. */
     private fun needAt(k: Int, j: Int, p2: Boolean): Int {

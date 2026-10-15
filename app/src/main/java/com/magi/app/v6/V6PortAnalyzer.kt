@@ -78,6 +78,8 @@ data class CoverageShortfall(
     val chainVerified: Boolean = false,
     /** [3.642.0] 移すと禁止連続(c3n)になるため候補から外れた人数（⑤の並びへの導線の根拠）。 */
     val forbidCount: Int = 0,
+    /** [3.687.0/R01] `blockedNow` のうち、移せる候補はいるのに限定探索（[chainFills]）で入れ替えの手順が見つからなかっただけの枠。不能の証明ではない。 */
+    val searchMiss: Boolean = false,
 )
 
 /** 人員過剰(covO)が残る 1 つの (日, シフト) 枠の診断。読み取り専用・エンジン非変更。 */
@@ -121,6 +123,18 @@ data class CoverageDiagnosis(
     val allInfeasible: Boolean get() = hasShortage && fixableSlots == 0
     /** [3.344.0] 「いまの希望のままでは埋められない」と実証した枠の数（`allInfeasible` とは別軸）。 */
     val blockedNowSlots: Int get() = shortfalls.count { it.blockedNow }
+    /** [3.687.0/R01] `blockedNow` のうち限定探索で見つからなかっただけの枠（「不能」と言わない）。 */
+    val searchMissSlots: Int get() = shortfalls.count { it.blockedNow && it.searchMiss }
+    /** `blockedNow` のうち候補がいない＝いまの希望・並びのままでは入れる人がいないと示せた枠。 */
+    val provenBlockedSlots: Int get() = blockedNowSlots - searchMissSlots
+
+    private fun blockedNote(): String {
+        val parts = ArrayList<String>()
+        if (provenBlockedSlots > 0) parts.add("${provenBlockedSlots}枠は いまの希望のままでは不能")
+        if (searchMissSlots > 0) parts.add("${searchMissSlots}枠は 試した入れ替えでは埋まらなかった")
+        return if (parts.isEmpty()) "" else "（うち" + parts.joinToString("、") + "）"
+    }
+
     /**
      * [3.344.0] 不足枠が**全部**「充足不可 or いまの希望のままでは不能」＝この希望・担当のままでは
      * どう探索しても covU は減らない。`allInfeasible`（データ上の不能）より広く、実データではこちらが真になる。
@@ -134,10 +148,14 @@ data class CoverageDiagnosis(
         val out = ArrayList<String>()
         if (hasShortage) {
             out.add("[W] CoverageDiag: 人員不足 合計${totalShortfall} — 充足不可${infeasibleSlots}枠 / 充足可能${fixableSlots}枠" +
-                (if (blockedNowSlots > 0) "（うち${blockedNowSlots}枠は いまの希望のままでは不能）" else "") +
-                (if (allBlockedNow) " ＝この希望・担当のままでは人員不足は減りません" else ""))
+                blockedNote() +
+                (if (allBlockedNow) (if (searchMissSlots == 0) " ＝この希望・担当のままでは人員不足は減りません" else " ＝試した入れ替えの範囲では人員不足は減りませんでした") else ""))
             for (s in shortfalls.take(8)) {
-                val v = if (s.verdict == CoverageVerdict.INFEASIBLE) "充足不可" else "充足可能"
+                val v = when {
+                    s.verdict == CoverageVerdict.INFEASIBLE -> "充足不可"
+                    s.blockedNow && s.searchMiss -> "試した入れ替えでは埋まらなかった"
+                    else -> "充足可能"
+                }
                 out.add("[W] CoverageDiag: ${s.dayLabel} ${s.shiftSymbol} 必要${s.need}/現状${s.got}(不足${s.miss}) — ${v}: ${s.reason}")
             }
             if (shortfalls.size > 8) out.add("[W] CoverageDiag: ほか${shortfalls.size - 8}枠")
@@ -282,13 +300,25 @@ object V6PortAnalyzer {
         val after = UnifiedViolationChecker.check(state, work)
         // 見せる前に当てるときと同じ規則で弾く（別の職員・日・枠に必須違反を新たに生む入れ替えは出さない）。
         if (introducesHardViolation(before, after)) return null
+        return suggestionOf(FixKind.CHAIN, ops, label, before, after)
+    }
+
+    /** [3.687.0/R08] 手を正式チェッカーの前後 1 回ずつで採点した案にする（未評価の 0 を確認の画面に出さない）。 */
+    fun evaluatedSuggestion(state: MagiState, schedule: Array<IntArray>, kind: FixKind, ops: List<FixCell>, label: String): FixSuggestion {
+        val before = UnifiedViolationChecker.check(state, schedule)
+        val work = schedule.copy2D()
+        for (op in ops) if (op.staff in work.indices && op.day in work[op.staff].indices) work[op.staff][op.day] = op.toShift
+        return suggestionOf(kind, ops, label, before, UnifiedViolationChecker.check(state, work))
+    }
+
+    private fun suggestionOf(kind: FixKind, ops: List<FixCell>, label: String, before: ViolationReport, after: ViolationReport): FixSuggestion {
         val diff = ArrayList<Pair<String, Int>>()
         for (key in (before.breakdown.keys + after.breakdown.keys)) {
             val d = (after.breakdown[key] ?: 0) - (before.breakdown[key] ?: 0)
             if (d != 0) diff.add(key to d)
         }
         diff.sortBy { it.second }
-        return FixSuggestion(FixKind.CHAIN, ops, label, after.hard - before.hard, after.total - before.total, diff)
+        return FixSuggestion(kind, ops, label, after.hard - before.hard, after.total - before.total, diff)
     }
 
     /** [3.643.0/根拠の精度] 経験的な c3n 壁（探索手の全滅）を 1 手探索で反証する。`FixSuggester` の手（1 マス変更・同一職員 2 マス・
@@ -368,6 +398,7 @@ object V6PortAnalyzer {
                 var blockedNow = false
                 var chainOk = false
                 var forbidN = 0
+                var missOnly = false
                 val reason = if (verdict == CoverageVerdict.INFEASIBLE && wishPinned.isNotEmpty()) {
                     // 希望固定の人を外して数えた結果＝「データ上」は言い過ぎ（希望を取り消せば届きうる）。
                     val who = wishPinned.take(3).joinToString("・") { "${state.staff.getOrNull(it)?.name ?: "#$it"}さん" } +
@@ -408,6 +439,7 @@ object V6PortAnalyzer {
                     val chainVerified = cascade > 0 && chainFills(p, norm, k, j)
                     blockedNow = free == 0 && !(cascade > 0 && chainVerified)
                     chainOk = chainVerified
+                    missOnly = blockedNow && cascade > 0
                     forbidN = forbid
                     val hint = when {
                         free > 0 -> "休みや人数に余裕のある勤務から${free}人を${sym}へ移せば埋まります（勤務表でこのセルの『直し方を探す』から直せます）"
@@ -419,7 +451,7 @@ object V6PortAnalyzer {
                 }
                 list.add(
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity,
-                        verdict, reason, blockedNow, wishPinned, chainOk, forbidN)
+                        verdict, reason, blockedNow, wishPinned, chainOk, forbidN, missOnly)
                 )
             }
         }

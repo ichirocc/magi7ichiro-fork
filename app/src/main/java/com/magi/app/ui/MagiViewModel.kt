@@ -2723,7 +2723,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val sched = currentSchedule ?: return
         val need = conditionsViewOf(st, cachedProblem(st)).needCellLimits(shiftIndex, dayIndex)
         val target = need?.let { FixTarget(null, shiftIndex, dayIndex, it.first, true, "必要人数") }
-        val s = FixSuggestion(FixKind.CHANGE, listOf(FixCell(staff, dayIndex, shiftIndex)), label, 0, 0, emptyList())
+        val s = V6PortAnalyzer.evaluatedSuggestion(st, sched, FixKind.CHANGE, listOf(FixCell(staff, dayIndex, shiftIndex)), label)
         previewOrApplyFix(s, boardKey(sched), stateKey(st))
         _ui.update { u -> u.copy(chainPreview = u.chainPreview?.copy(fixTarget = target)) }
     }
@@ -2749,7 +2749,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             else _ui.update {
                 val target = ChainTarget(isoDate(it.startDate, dayIndex) ?: "", it.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
                     boardKey = boardKey(snap), stateKey = stateKey(st))
-                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes).copy(target = target))
+                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols).copy(target = target))
             }
         }
     }
@@ -2787,7 +2787,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
-        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes)
+        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
             .copy(target = target, newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
     }
 
@@ -2797,7 +2797,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = fixBoardKey, stateKey = fixStateKey)
-        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes)
+        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
             .copy(target = target, purpose = purpose, effect = effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget,
                 newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
     }
@@ -3039,6 +3039,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             _ui.update { it.copy(messageIsError = false, message = SettingFixLogic.WISH_ALREADY_REMOVED_MESSAGE) }
         } else if (SettingFixLogic.wishChanged(s, issue)) {
             _ui.update { it.copy(messageIsError = true, message = SettingFixLogic.WISH_CHANGED_MESSAGE) }
+        } else if (SettingFixLogic.wishDiagnosisStale(s, issue)) {
+            _ui.update { it.copy(messageIsError = true, message = SettingFixLogic.WISH_STALE_MESSAGE) }
         } else if (issue.action == SettingFixAction.DELETE_DUP_SEQ) {
             // 診断からタップまでに行が変わっていたときは黙って何も起きないより、戻すものが無いことを伝える。
             _ui.update { it.copy(messageIsError = true, message = "${issue.where} の重複は見つかりませんでした（すでに変更されています）。編集タブ＞年間マスター＞⑤ 並び・期間の制約で確かめてください") }

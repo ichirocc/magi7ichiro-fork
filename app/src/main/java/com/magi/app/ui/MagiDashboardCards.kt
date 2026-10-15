@@ -303,8 +303,8 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 } ?: Text(p.suggestion.label, style = MaterialTheme.typography.bodyMedium)
                 Text("変更する勤務", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                 if (p.rows.isEmpty()) p.changes.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                p.rows.groupBy { it.staff }.forEach { (staff, rows) ->
-                    Text("対象：${staff}さん", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                p.rows.groupBy { it.staffKey }.forEach { (_, rows) ->
+                    Text("対象：${rows.first().staff}さん", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                     Row { listOf("日付", "変更前", "変更後").forEach { h -> Text(h, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f)) } }
                     rows.forEach { r ->
                         Row { listOf(r.date, r.before, r.after).forEach { v -> Text(v, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f)) } }
@@ -324,7 +324,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 Text("・$wishLine", style = MaterialTheme.typography.bodySmall)
                 p.caution?.let { Text("・$it", style = MaterialTheme.typography.bodySmall) }
                 Text("・$consultLine", style = MaterialTheme.typography.bodySmall)
-                Text("適用の直前に最新の勤務表でもう一度検査し、必須違反が減らない・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。",
+                Text(PREVIEW_GATE_NOTE,
                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 Text(CONSULT_NOT_CONTACT_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
@@ -858,8 +858,8 @@ internal fun CopilotCard(
 
 /**
  * 人員不足(covU)が残るときだけ表示する原因診断カード。
- * 各不足枠を「充足不可（データ上どう割り当てても埋まらない）」か
- * 「充足可能（枠は足りる＝最適化が未到達）」に切り分けて、配布前の判断材料にする。
+ * 各不足枠を「充足不可（データ上どう割り当てても埋まらない＝証明つき）」か
+ * 「充足可能（枠は足りる＝最適化が未到達）」、「試した入れ替えでは埋まらなかった（限定探索の不発＝証明ではない）」に切り分ける。
  */
 
 @Composable
@@ -878,11 +878,15 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                 val headline = when {
                     diag.allInfeasible -> "不足 ${diag.totalShortfall} 人はすべて、担当できる人が足りません。今のデータでは満たせません。" +
                         "担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
-                    diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
+                    diag.allBlockedNow && diag.searchMissSlots == 0 -> "不足 ${diag.totalShortfall} 人は、いまの希望・担当のままでは埋められません。" +
                         "希望を1件調整する（編集タブ＞月次条件）か、担当を追加してください（編集タブ＞年間マスター①）。"
-                    diag.blockedNowSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.blockedNowSlots} 枠は" +
+                    diag.allBlockedNow -> "不足 ${diag.totalShortfall} 人は、試した入れ替えでは埋まりませんでした（埋められないと決まったわけではありません）。" +
+                        "再作成するか、希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると埋まりやすくなります（編集タブ＞年間マスター①）。"
+                    diag.provenBlockedSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.provenBlockedSlots} 枠は" +
                         "いまの希望のままでは埋められません。その枠は希望を1件調整する（編集タブ＞月次条件）か、担当を追加すると直せます（編集タブ＞年間マスター①）。" +
                         "残りは再作成すると解消し得ます。"
+                    diag.searchMissSlots > 0 -> "不足 ${diag.totalShortfall} 人 — うち ${diag.searchMissSlots} 枠は試した入れ替えでは埋まりませんでした。" +
+                        "再作成すると解消し得ます。"
                     diag.infeasibleSlots == 0 -> "不足 ${diag.totalShortfall} 人。$SHORTAGE_ENOUGH_TEXT"
                     else -> "不足 ${diag.totalShortfall} 人 — ${SHORTAGE_LABEL_INFEASIBLE} ${diag.infeasibleSlots} 枠 / ${SHORTAGE_LABEL_FIXABLE} ${diag.fixableSlots} 枠。" +
                         "動かせば埋まる枠は再作成すると解消し得ます。担当できる人が足りない枠は担当できる職員を確認すると直せます（編集タブ＞年間マスター①）。"
@@ -901,6 +905,7 @@ internal fun CoverageDiagnosisCard(ui: UiState, onCancelWish: (Int, Int) -> Unit
                                 MagiTagChip(
                                     text = when {
                                         infeasible -> SHORTAGE_LABEL_INFEASIBLE
+                                        s.blockedNow && s.searchMiss -> SHORTAGE_LABEL_SEARCH_MISS
                                         s.blockedNow -> SHORTAGE_LABEL_BLOCKED
                                         else -> SHORTAGE_LABEL_FIXABLE
                                     },

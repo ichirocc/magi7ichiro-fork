@@ -29,11 +29,14 @@ data class ChainFixPreview(
     val newHard: List<String>? = null,
 )
 
-/** 変わるセル 1 つ。[wish]＝希望があるときの注記（希望どおり／希望と異なる）。 */
-data class ChangeRow(val staff: String, val date: String, val before: String, val after: String, val wish: String = "", val impact: String = "")
+/** 変わるセル 1 つ。[wish]＝希望があるときの注記（希望どおり／希望と異なる）。[staffKey]＝職員 ID（無ければ並び順）＝同名でも別の人として束ねる。
+ *  [staff] は表示名（同名の職員がいればグループ記号を添える）。 */
+data class ChangeRow(val staff: String, val date: String, val before: String, val after: String, val wish: String = "", val impact: String = "", val staffKey: Int = -1)
 
 /** 変更を当てるボタン（違反セルの半自動修正仕様 §5: 押すと検証してから全変更を反映する）。 */
 internal const val APPLY_CHANGE_BUTTON = "この変更を適用"
+/** [3.687.0/R09] 確認の画面の門の説明（[FixApplyGate] と同じ規則: 必須を増やさない・別の場所に必須を生まない・希望の固定を崩さない。要調整だけの改善は通る）。 */
+internal const val PREVIEW_GATE_NOTE = "適用の直前に最新の勤務表でもう一度検査し、必須違反を増やす・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。"
 /** 当てずに閉じるボタン（今の勤務表のまま）。 */
 internal const val KEEP_CURRENT_BUTTON = "今は変更しない"
 /** 変更を当てる前の確認の見出し（1 手でも入替でも同じ）。 */
@@ -41,8 +44,15 @@ internal const val PREVIEW_TITLE = "この変更を適用しますか？"
 
 /** [shiftNames]＝登録された勤務名（記号と違えば「記号（勤務名）」で併記）、[wishes]＝希望 "i,j"→シフト（あれば行ごとに希望どおりか添える）。 */
 internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffNames: List<String>, shiftSymbols: List<String>, startDate: String,
-                             shiftNames: List<String> = emptyList(), wishes: Map<String, Int> = emptyMap()): ChainFixPreview {
-    fun name(i: Int) = staffNames.getOrNull(i) ?: "職員${i + 1}"
+                             shiftNames: List<String> = emptyList(), wishes: Map<String, Int> = emptyMap(),
+                             staffIds: List<Int> = emptyList(), staffGroups: List<String> = emptyList()): ChainFixPreview {
+    val dupNames = staffNames.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+    fun name(i: Int): String {
+        val n = staffNames.getOrNull(i) ?: return "職員${i + 1}"
+        if (n !in dupNames) return n
+        return n + (staffGroups.getOrNull(i)?.takeIf { it.isNotBlank() }?.let { "（$it）" } ?: "（${i + 1}番目）")
+    }
+    fun key(i: Int) = staffIds.getOrNull(i)?.takeIf { it > 0 } ?: i
     fun sym(k: Int) = shiftSymbols.getOrNull(k) ?: "$k"
     fun shift(k: Int) = sym(k) + (shiftNames.getOrNull(k)?.takeIf { it.isNotBlank() && it != sym(k) }?.let { "（$it）" } ?: "")
     val board = snapshot.map { it.toList() }
@@ -55,7 +65,7 @@ internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffN
         val impact = listOfNotNull(before, op.toShift).distinct().joinToString("、") { k ->
             "${sym(k)} ${snapshot.count { it.getOrNull(op.day) == k }}人 → ${after.count { it.getOrNull(op.day) == k }}人"
         }
-        ChangeRow(name(op.staff), DayText.short(startDate, op.day), before?.let { shift(it) } ?: "?", shift(op.toShift), wish, impact)
+        ChangeRow(name(op.staff), DayText.short(startDate, op.day), before?.let { shift(it) } ?: "?", shift(op.toShift), wish, impact, key(op.staff))
     }
     val changes = rows.map { r -> "${r.staff} ${r.date} ${r.before} → ${r.after}" + (if (r.wish.isNotEmpty()) "・${r.wish}" else "") }
     val (hard, caution) = fixImpactLines(s)

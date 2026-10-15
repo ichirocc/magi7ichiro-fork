@@ -51,6 +51,8 @@ data class SettingIssue(
     val actionLabel: String = "",          // ボタン文言（空=ワンタップ不可で編集画面へ）
     val wishKey: String? = null,           // REMOVE_WISH: "i,j"
     val wishShift: Int? = null,            // REMOVE_WISH: 診断したときの希望の勤務（変わっていたら取り消さない）
+    val wishStaffId: Int? = null,          // REMOVE_WISH: 職員 ID（並び替えのあとも同じ人を指す）
+    val wishFingerprint: Long? = null,     // REMOVE_WISH: 診断したときの入力の指紋（[wishDiagnosisFingerprint]）
     val seqFamily: String? = null,         // DELETE_DUP_SEQ: c3 / c3n / c3m / c3mn
     val seqKey: String? = null,            // DELETE_DUP_SEQ: "Dﾃ→A4"（→区切り・最初の空白まで＝c3SeqKey）
     val rangeKey: String? = null,          // ZERO/CLAMP_RANGE_LO: "i,k"
@@ -66,6 +68,19 @@ data class SettingIssue(
     /** 意図した設定に由来する案内（上限 0 × 希望）。ログで「設定ミス」と呼ばない。 */
     val neutral: Boolean = false,
 )
+
+/** [3.687.0/R02] 希望の取消を診断した入力の指紋（職員 ID・グループと担当可否・日・その日と前後の希望・シフトの並び・希望の前日に禁止・期間）。
+ *  当てる直前に照合し、違えば診断が古いので取り消さない。 */
+fun wishDiagnosisFingerprint(state: MagiState, staffIndex: Int, day: Int): Long {
+    val st = state.staff.getOrNull(staffIndex) ?: return 0L
+    val g = st.groupIdx
+    val parts = listOf<Any?>(st.id, g, state.groupShift.getOrNull(g), day,
+        state.wishes["$staffIndex,${day - 1}"], state.wishes["$staffIndex,$day"], state.wishes["$staffIndex,${day + 1}"],
+        state.shifts.map { it.kigou }, state.cons3w, state.startDate, state.endDate)
+    var h = 1125899906842597L
+    for (x in parts) h = 31 * h + x.hashCode()
+    return h
+}
 
 data class ShiftCountDiagnostic(
     val staffIndex: Int,
@@ -605,7 +620,9 @@ object V6SanityPort {
                     action = if (canOneTap) SettingFixAction.REMOVE_WISH else SettingFixAction.NONE,
                     actionLabel = if (canOneTap) "この希望を取消" else "",
                     wishKey = if (canOneTap) "${w.staffIndex},${w.dayIndex}" else null,
-                    wishShift = if (canOneTap) state.wishes["${w.staffIndex},${w.dayIndex}"] else null))
+                    wishShift = if (canOneTap) state.wishes["${w.staffIndex},${w.dayIndex}"] else null,
+                    wishStaffId = if (canOneTap) state.staff.getOrNull(w.staffIndex)?.id else null,
+                    wishFingerprint = if (canOneTap) wishDiagnosisFingerprint(state, w.staffIndex, w.dayIndex) else null))
             }
             val selfConflicts = wishSelfConflicts(p)
             // 1b) [3.542.0] 希望の前日に禁止(c3w)が希望どうしで衝突＝前日の Y も希望固定なら最適化器は解消できない。
@@ -617,7 +634,8 @@ object V6SanityPort {
                     "${nameOf(i)} ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
                     "「$x の希望の前日は $y 禁止」に希望どうしで当たっています。希望は固定なので計算では解消できません",
                     "${Place.EDIT}${Place.WISH}で本人と相談してどちらかの希望を調整する（希望は外れます。元に戻せます）か、${Place.RULE}の「希望の前日に禁止」でこの行を見直してください",
-                    action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j", wishShift = g.shifts[0]))
+                    action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j", wishShift = g.shifts[0],
+                    wishStaffId = state.staff.getOrNull(i)?.id, wishFingerprint = wishDiagnosisFingerprint(state, i, j)))
             }
             // 1c) 禁止の並び(c3n)の窓がまるごと希望固定（例: 休の希望 3 連日と「休→休→休」禁止）。どれを取り消すかは利用者が選ぶ＝ワンタップなし。
             //     窓が 1 セル（単独の禁止シフト）なら関わる希望は 1 件＝単数の文言。
@@ -946,7 +964,7 @@ object V6SanityPort {
                 for (c in rows) {
                     if (badNum(c.l) || badNum(c.u)) {
                         out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「${c.groupKigou} ${c.shiftKigou}」",
-                            "下限「${c.l}」上限「${c.u}」に数値でない値があります。その側は制限なしとして" +
+                            "下限「${c.l}」上限「${c.u}」に数値でない値または負の値があります。その側は制限なしとして" +
                                 "扱われるため、意図より弱い条件で計算されます",
                             "${Place.EDIT}${Place.HEAD}の「$famJp」でこの行を数値で入れ直すか、制限しないなら空欄にしてください"))
                         continue
