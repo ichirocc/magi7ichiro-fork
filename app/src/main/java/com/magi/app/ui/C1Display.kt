@@ -24,9 +24,9 @@ data class C1Shortage(
     val band: Boolean get() = windows > 1
 }
 
-/** セル (i,d) を [k] に変えられるか。最適化器と同じ基準（希望固定なら希望どおりだけ、それ以外は mayPlace）。 */
+/** セル (i,d) を [k] に変えられるか。最適化器と同じ基準（希望固定なら希望どおりだけ、それ以外は mayPlaceAt）。 */
 internal fun c1Changeable(p: Problem, i: Int, d: Int, k: Int): Boolean =
-    if (p.wishLocked(i, d)) p.lockTo(i, d) == k else p.mayPlace(i, k)
+    if (p.wishLocked(i, d)) p.lockTo(i, d) == k else p.mayPlaceAt(i, d, k)
 
 /** 盤面 [s] の期間の制約の不足区間。窓の数え方はチェッカー（担当不可の職員は対象外）と同じ。 */
 internal fun c1Shortages(p: Problem, s: Array<IntArray>): List<C1Shortage> {

@@ -460,14 +460,8 @@ internal fun GuidedFixDialog(
                         }
                         when {
                             cands.isNotEmpty() -> {
-                                // [UX監査 高1] 単独の移動（だれか1人を入れる）。
-                                // [3.475.0/論理監査] 1回押したら再検査（refreshCheck は非同期）が盤面に追いつくまで全候補を
-                                //   無効化する。旧: 候補は押す前の盤面で「抜けても穴が空かない」と判定したものなので、
-                                //   連打すると2人目が既に満たした枠へ入り covO と、抜けた側の covU を同時に作れた。
-                                // [3.502.0/バックログ#10] 解除の合図は schedule の変化でなく検査世代（ui.checkRev）。旧: remember(ui.schedule) は
-                                //   setCell 直後の schedule 変化でリセットされ、coverageDiag が古いまま候補が再有効化されていた。
-                                val pressedRev = remember { androidx.compose.runtime.mutableStateOf(-1L) }
-                                val pending = pressedRev.value >= 0L && ui.checkRev <= pressedRev.value
+                                // [UX監査 高1] 単独の移動（だれか1人を入れる）。押すと確認の画面へ（直接は書かない）。当てるときは
+                                //   指紋照合・FixApplyGate・INV-03 を通る＝連打で2人目が満たした枠へ入ることも、古い盤面へ書くこともない。
                                 val showAll = remember(target.dayIndex, target.shiftIndex) { androidx.compose.runtime.mutableStateOf(false) }
                                 Text("この日に動かせる人が${cands.size}人います。だれかを「${target.shiftSymbol}」に入れますか？",
                                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
@@ -475,8 +469,10 @@ internal fun GuidedFixDialog(
                                 val shown = if (showAll.value) cands else cands.take(GUIDED_FIX_PREVIEW)
                                 shown.forEach { c ->
                                     Button(
-                                        onClick = { pressedRev.value = ui.checkRev; vm.noteGuidedFix(target.dayIndex, target.shiftIndex, target.dayLabel, target.shiftSymbol); onEvent(MagiEvent.Board.SetCell(c.staffIndex, target.dayIndex, target.shiftIndex)) },
-                                        enabled = !pending,
+                                        onClick = {
+                                            vm.noteGuidedFix(target.dayIndex, target.shiftIndex, target.dayLabel, target.shiftSymbol)
+                                            vm.previewShortageCandidate(c.staffIndex, target.dayIndex, target.shiftIndex, "${c.name}さんを${target.dayLabel}の「${target.shiftSymbol}」に入れる")
+                                        },
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
                                     ) {
                                         val tail = if (c.fromRest) "（休み）" else ""
@@ -490,7 +486,7 @@ internal fun GuidedFixDialog(
                                         Text(if (showAll.value) "一部だけ表示" else "すべて表示（ほか${cands.size - GUIDED_FIX_PREVIEW}人）")
                                     }
                                 }
-                                Text(if (pending) "再検査中…（結果が反映されるまで候補は押せません）" else "入れたら「元に戻す」でいつでも取り消せます。",
+                                Text("押すと、当てる前に変更と影響を確認できます。入れたあとも「元に戻す」で取り消せます。",
                                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                 val consult = consultShortage(target.dayLabel, target.shiftSymbol, cands.map { it.name })
                                 ConsultButton(isConsulted(ui.consults, consult), Modifier.fillMaxWidth(), held = consultMatch(ui.consults, consult)?.held == true,

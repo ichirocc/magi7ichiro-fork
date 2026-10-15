@@ -79,6 +79,7 @@ data class UiState(
     val fixDoneKey: String = "",
     /** 直し方の探索が失敗した依頼の鍵（`FixFocus.key`）。 */
     val fixFailedKey: String = "",
+    val fixCancelledKey: String = "",   // 利用者が止めた探索の対象（止めたことを言い、もう一度探せるようにする）
     val fixTiers: FixTierView? = null,   // 見ている問題の案を段に分けたもの（鍵＝依頼の FixFocus.key。別の依頼では使わない）
     val draftConfirm: String? = null,   // 下書きで今の勤務表を置き換える前の確認の文（null＝出さない）
     val fixTimedOut: Boolean = false,   // [仕様 §7] 直近の直し方の探索が締切で打ち切られたか（見つからない理由を「時間不足」と言う）

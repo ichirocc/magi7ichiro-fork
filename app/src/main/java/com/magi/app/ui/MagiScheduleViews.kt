@@ -2097,7 +2097,7 @@ internal fun FixSearchPanel(
     // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
     LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) find() }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
-    val panel = fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key)
+    val panel = fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key, ui.fixCancelledKey)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!compact) Text("勤務変更案", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         when (panel) {
@@ -2116,7 +2116,11 @@ internal fun FixSearchPanel(
             }
             FixPanelState.FAILED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("勤務変更案を探す途中でうまくいきませんでした。もう一度ためせます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text("もう一度探す") }
+                OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
+            }
+            FixPanelState.CANCELLED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(FIX_SEARCH_CANCELLED, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
             }
             else -> {
                 // 見ている問題（回数＝職員×シフト、人員＝シフト×日）。案ごとに盤面へ当てて数え直し、その問題を変える案を主一覧に、
@@ -2231,7 +2235,7 @@ internal fun FixSearchPanel(
                             if (!compact) Text(TIER2_HEADING, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                             t2.take(limit).forEachIndexed { n, x -> card(t1.size.coerceAtMost(limit) + n + 1, x.sug, x.explain) }
                         }
-                        if (!tv.hasMain) NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied)
+                        if (!tv.hasMain) NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find)
                     }
                     fixing.isNotEmpty() -> {
                         // 同じ勤務のほかの日の過不足はここに 1 回だけ（カードごとに繰り返すと判断に要る行が下へ押し出される）。
@@ -2241,7 +2245,7 @@ internal fun FixSearchPanel(
                         if (target != null && !compact) Text(thisFixHeading(label, target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         fixing.take(limit).forEachIndexed { n, s -> card(n + 1, s) }
                     }
-                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied)
+                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find)
                 }
                 @Composable fun fold(title: String, note: String, items: List<TieredFix>, startN: Int, purposeOverride: String? = null) {
                     var open by remember(focus.key, title) { mutableStateOf(false) }
@@ -2311,7 +2315,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
 @Composable
 private fun NoFixBlock(
     ui: UiState, cv: ConditionsView?, focus: FixFocus, target: FixTarget?, label: String, compact: Boolean,
-    nav: FixNav, settingsLabel: String?, onEvent: (MagiEvent) -> Unit, onApplied: () -> Unit,
+    nav: FixNav, settingsLabel: String?, onEvent: (MagiEvent) -> Unit, onApplied: () -> Unit, onRetry: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val why = remember(ui.schedule, ui.wishes, focus.key, cv, ui.fixTimedOut) {
@@ -2319,8 +2323,13 @@ private fun NoFixBlock(
     }
     val lines = if (target != null && target.staff == null) listOf(noNeedFixLine(label, target, ui.fixTimedOut), NO_FIX_SCOPE) else why.lines
     val body = lines.filter { it != NO_FIX_SCOPE }
-    if (compact) { Text(body.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis); return }
+    if (compact) {
+        Text(body.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
+        return
+    }
     body.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
     var showCandidates by remember(focus.key) { mutableStateOf(false) }
     if (why.candidates.isNotEmpty() && target?.staff != null)
         OutlinedButton(onClick = { showCandidates = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("追加候補日を確認") }

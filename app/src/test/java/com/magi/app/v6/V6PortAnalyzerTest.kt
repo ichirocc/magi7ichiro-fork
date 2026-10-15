@@ -120,8 +120,8 @@ class V6PortAnalyzerTest {
         // Cが唯一のdepth2候補だが休へ希望固定＝findCovUChainの候補から除外され連鎖が完成しない。
         val diag = V6PortAnalyzer.diagnoseCoverage(cascadeChainState(cWished = true))
         val sf = diag.shortfalls.single { it.shiftIndex == 1 }
-        assertTrue("連鎖が実在しないことを正直に案内する",
-            sf.reason.contains("どう組んでも解消できません"))
+        assertTrue("試した範囲で見つからなかったと言い、断定しない",
+            sf.reason.contains(V6PortAnalyzer.CHAIN_NOT_FOUND_IN_TRIED) && !sf.reason.contains("どう組んでも") && !sf.reason.contains("担当を追加"))
     }
 
     /**

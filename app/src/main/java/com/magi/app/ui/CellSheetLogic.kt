@@ -6,7 +6,9 @@ import com.magi.app.v6.Problem
 import com.magi.app.v6.RelaxTrial
 import com.magi.app.v6.UnifiedViolationChecker
 import com.magi.app.v6.canDo
+import com.magi.app.v6.lockTo
 import com.magi.app.v6.pinned
+import com.magi.app.v6.wishLocked
 
 /**
  * 勤務表のセル編集シートの純ロジック（Compose 非依存＝ホスト JVM で固定する）。
@@ -440,7 +442,7 @@ internal data class CellSheetRev(val checkRev: Long, val editRev: Int, val sched
 internal fun cellSheetRev(ui: UiState): CellSheetRev = CellSheetRev(ui.checkRev, ui.editRev, ui.schedule, ui.wishes)
 
 /** その場の直し方探しの状態（計算・チェック待ち／未開始／探索中／完了／失敗）。スピナーは探索中だけ。 */
-internal enum class FixPanelState { WAIT_CHECK, NOT_STARTED, RUNNING, DONE, FAILED }
+internal enum class FixPanelState { WAIT_CHECK, NOT_STARTED, RUNNING, DONE, FAILED, CANCELLED }
 
 /** 直し方の探索の締切。セルのシート（手は 1 件でよい）は短く＝押してから 3 秒以内に答えが返る（Nielsen の 1 秒／10 秒の目安、3.646.0 実機報告）。
  *  ホーム・分析の全体探索は従来どおり 8 秒。 */
@@ -462,12 +464,15 @@ internal fun changeSizeLine(ops: List<com.magi.app.v6.FixCell>): String = "変�
 
 /** 変更案の探索を止めるボタン（勤務表の作成の「やめる」と区別する）。 */
 internal const val CANCEL_FIX_SEARCH_BUTTON = "変更案の検索を中止"
+internal const val FIX_SEARCH_CANCELLED = "探索を止めました。"
+internal const val FIX_SEARCH_RETRY_BUTTON = "もう一度探す"
 
-internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: String, failedKey: String, key: String): FixPanelState = when {
+internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: String, failedKey: String, key: String, cancelledKey: String = ""): FixPanelState = when {
     fixSearching -> FixPanelState.RUNNING
     running -> FixPanelState.WAIT_CHECK
     doneKey == key -> FixPanelState.DONE
     failedKey == key -> FixPanelState.FAILED
+    cancelledKey == key -> FixPanelState.CANCELLED
     else -> FixPanelState.NOT_STARTED
 }
 
@@ -936,13 +941,17 @@ internal fun appliedLines(ui: UiState, a: AppliedFix, target: FixTarget?, label:
     out += saveStateLine(ui.saveState)
     val next = when {
         target?.day != null -> remainingSameShift(ui.needFamilies, ui.schedule, target, needLimits, ui.shiftSymbols, ui.startDate)
-        target != null -> target.effect(a.before, a.ops).takeIf { it.gapAfter > 0 }?.let { listOf("${label}は、${target.basis}まであと${it.gapAfter}回です") }.orEmpty()
+        target != null -> target.effect(a.before, a.ops).takeIf { it.gapAfter > 0 }?.let { listOf(remainingGapLine(label, target, it.gapAfter)) }.orEmpty()
         else -> emptyList()
     }
     if (next.isNotEmpty()) out += "次に確認すること：" + next.joinToString("。") + "。"
     out += "勤務表が変わったため、変更案を探し直しました（下の案は今の勤務表のものです）。"
     return out
 }
+
+/** 当てたあとに残る差（回数＝「A4は、下限まであと2回です」、まとめて見る日々＝「Dテ（2日）は、合計 3人不足です」）。 */
+internal fun remainingGapLine(label: String, t: FixTarget, gap: Int): String =
+    if (t.multi) "${label}は、合計 $gap${t.unit}${t.gapWord}です" else "${label}は、${t.basis}まであと$gap${t.unit}です"
 
 /**
  * セルを 1 つ変える前の確認（2026-10-14 利用者レビュー「問題を確認 → 変更方法を選ぶ → 影響を確認して適用」）。
@@ -957,6 +966,7 @@ internal data class CellChangeReview(
 internal fun cellChangeReview(
     state: MagiState, s: Array<IntArray>, i: Int, j: Int, k: Int, staffNames: List<String>, shiftSymbols: List<String>,
     limits: ((Int, Int) -> Triple<Int?, Int?, Int?>)?, needLimits: ((Int, Int) -> Pair<Int, Int>?)?, pinned: Boolean,
+    targets: List<FixTarget> = emptyList(),
 ): CellChangeReview {
     fun sym(x: Int?) = x?.let { shiftSymbols.getOrNull(it) } ?: "—"
     val name = staffNames.getOrNull(i) ?: "#$i"
@@ -967,7 +977,11 @@ internal fun cellChangeReview(
     val diff = com.magi.app.v6.ViolationIdentity.diff(before, after)
     fun label(key: com.magi.app.v6.ViolationKey) = violationKeyLabel(key, staffNames, shiftSymbols, state.startDate)
     val here = com.magi.app.v6.ViolationIdentity.keys(before).filter { it.space == com.magi.app.v6.ViolationKey.Space.CELL && it.a == i && it.b == j }
-    val thisCell = here.map { key -> "${breakdownLabels[key.family] ?: key.family}：" + if (key in diff.resolved) "解消します" else "残ります" }
+    val ops = listOf(com.magi.app.v6.FixCell(i, j, k))
+    val sl = s.map { it.toList() }
+    // 日の人数・回数の問題から開いたときは、その数の前後も言う（このセルに違反が無くても見ている問題は変わる）。
+    val targetLines = targets.map { t -> "${fixTargetReviewName(t, staffNames, shiftSymbols, state.startDate)}：${t.effect(sl, ops).countLine()}" }
+    val thisCell = targetLines + here.map { key -> "${breakdownLabels[key.family] ?: key.family}：" + if (key in diff.resolved) "解消します" else "残ります" }
     val nb = listOfNotNull(
         (j - 1).takeIf { it >= 0 }?.let { "${DayText.short(state.startDate, it)}：${sym(s[i][it])}" },
         "${DayText.short(state.startDate, j)}：${sym(k)}",
@@ -995,7 +1009,7 @@ internal fun cellChangeReview(
     return CellChangeReview(
         change = "${name}さん　${DayText.full(state.startDate, j)} ${sym(cur)} → ${sym(k)}",
         neighbors = nb,
-        thisCell = thisCell.ifEmpty { listOf("このセルに違反はありません") },
+        thisCell = thisCell.ifEmpty { listOf(NO_CELL_VIOLATION) },
         othersResolved = diff.resolved.filter { it !in here }.map(::label),
         appeared = diff.appeared.map(::label),
         hardLine = "必須違反（勤務表全体）：${hardText(before.breakdown, before.hard.toLong())} → ${hardText(after.breakdown, after.hard.toLong())}",
@@ -1003,6 +1017,15 @@ internal fun cellChangeReview(
         counts = counts,
         wishPin = wishPin,
     )
+}
+
+internal const val NO_CELL_VIOLATION = "このセル自体の違反はありません"
+
+/** 確認の画面で見ている問題の名（「人員過剰（12/16のDﾃ）」「上限（福澤さんのB4）」）。 */
+internal fun fixTargetReviewName(t: FixTarget, staffNames: List<String>, shiftSymbols: List<String>, startDate: String): String {
+    val sym = shiftSymbols.getOrNull(t.shift) ?: "${t.shift}"
+    return if (t.staff != null) "${t.basis}（${staffNames.getOrNull(t.staff) ?: "#${t.staff}"}さんの$sym）"
+    else "${breakdownLabels[if (t.under) "covU" else "covO"]}（${fixTargetLabel(t, sym, startDate)}）"
 }
 
 /** 違反 1 件の名と場所（「必須・禁止の並び（福澤さん 11/29）」「人員不足（11/3のAア）」「下限割れ（福澤さんのB4）」）。 */
@@ -1157,3 +1180,39 @@ internal fun appliedStatusWord(e: CountEffect): String = when { e.gapAfter == 0 
 
 /** 相談事項に登録しても、連絡や了承の記録にはならない（記録だけ）。 */
 internal const val CONSULT_NOT_CONTACT_NOTE = "相談事項に登録しても、本人への連絡や了承済みにはなりません。"
+
+/** [operator_ux §5] 「なおし方を見る」用：ある不足枠(日×シフト)に1タップで入れられる候補職員。 */
+data class FixCandidate(val staffIndex: Int, val name: String, val groupSymbol: String, val fromRest: Boolean)
+
+internal fun shortageCandidates(st: MagiState, p: Problem, sched: Array<IntArray>, dayIndex: Int, shiftIndex: Int, rest: Int?): List<FixCandidate> {
+    if (shiftIndex !in 0 until p.K || dayIndex !in 0 until p.T) return emptyList()
+    // [3.603.0] rest は null 許容＝下の `== rest` は休が無ければ常に false（fromRest フラグが単に立たないだけ）
+    val out = ArrayList<FixCandidate>()
+    for (i in 0 until p.S) {
+        if (i !in sched.indices || dayIndex !in sched[i].indices) continue
+        // 担当できない・上限 0・拡張希望で禁止のシフトは出さない（最適化器と同じ mayPlaceAt 基準）。
+        if (!p.mayPlaceAt(i, dayIndex, shiftIndex)) continue
+        if (p.pinned(i, dayIndex)) continue   // 手動固定は自動でも変えない
+        // 上限に届いている人は入れると上限超過になる。
+        if (p.rangeHi[i][shiftIndex] != Int.MAX_VALUE && sched[i].count { it == shiftIndex } >= p.rangeHi[i][shiftIndex]) continue
+        if (sched[i][dayIndex] == shiftIndex) continue   // すでにそのシフト
+        // [監査A5] 実現可能な希望のみ固定扱い（#11①整合: 不可能希望のセルはエンジン同様に可動）。
+        if (p.wishLocked(i, dayIndex) && p.lockTo(i, dayIndex) != shiftIndex) continue
+        // [3.401.0] ここまでは「担当できる・希望で固定されていない」だけの判定で、押しても必須違反が
+        //   減らない候補が混ざっていた。CoverageDiagnosis(3.156.0) が「空き番」と数えるのと同じ2条件を
+        //   足して、**実際に動かせる人だけ**を出す。
+        //   ① 移すと禁止連続(c3n)になる人は出さない。
+        if (p.makesForbiddenRun(sched, i, dayIndex, shiftIndex)) continue
+        //   ② 抜けると元のシフトに穴が空く人は「動かせる人」ではない（玉突きが要る＝この画面の手には余る）。
+        val from = sched[i][dayIndex]
+        if (from in 0 until p.K) {
+            val cnt = (0 until p.S).count { it in sched.indices && dayIndex in sched[it].indices && sched[it][dayIndex] == from }
+            if (p.covUCell(from, dayIndex, cnt - 1) > p.covUCell(from, dayIndex, cnt)) continue
+        }
+        val g = st.staff.getOrNull(i)?.groupIdx ?: -1
+        out.add(FixCandidate(i, st.staff.getOrNull(i)?.name ?: "#$i", st.groups.getOrNull(g)?.kigou ?: "", sched[i][dayIndex] == rest))
+    }
+    // 休みの人（動かしやすい）を先頭に。
+    out.sortBy { if (it.fromRest) 0 else 1 }
+    return out
+}

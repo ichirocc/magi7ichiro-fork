@@ -50,6 +50,7 @@ data class SettingIssue(
     val action: SettingFixAction = SettingFixAction.NONE,
     val actionLabel: String = "",          // ボタン文言（空=ワンタップ不可で編集画面へ）
     val wishKey: String? = null,           // REMOVE_WISH: "i,j"
+    val wishShift: Int? = null,            // REMOVE_WISH: 診断したときの希望の勤務（変わっていたら取り消さない）
     val seqFamily: String? = null,         // DELETE_DUP_SEQ: c3 / c3n / c3m / c3mn
     val seqKey: String? = null,            // DELETE_DUP_SEQ: "Dﾃ→A4"（→区切り・最初の空白まで＝c3SeqKey）
     val rangeKey: String? = null,          // ZERO/CLAMP_RANGE_LO: "i,k"
@@ -603,7 +604,8 @@ object V6SanityPort {
                 out.add(SettingIssue(IssueKind.WISH, where, "実現できない希望です（${w.reason}）", fix,
                     action = if (canOneTap) SettingFixAction.REMOVE_WISH else SettingFixAction.NONE,
                     actionLabel = if (canOneTap) "この希望を取消" else "",
-                    wishKey = if (canOneTap) "${w.staffIndex},${w.dayIndex}" else null))
+                    wishKey = if (canOneTap) "${w.staffIndex},${w.dayIndex}" else null,
+                    wishShift = if (canOneTap) state.wishes["${w.staffIndex},${w.dayIndex}"] else null))
             }
             val selfConflicts = wishSelfConflicts(p)
             // 1b) [3.542.0] 希望の前日に禁止(c3w)が希望どうしで衝突＝前日の Y も希望固定なら最適化器は解消できない。
@@ -615,7 +617,7 @@ object V6SanityPort {
                     "${nameOf(i)} ${safeDayLabel(state.startDate, j)} 希望「$y」→ ${safeDayLabel(state.startDate, j + 1)} 希望「$x」",
                     "「$x の希望の前日は $y 禁止」に希望どうしで当たっています。希望は固定なので計算では解消できません",
                     "${Place.EDIT}${Place.WISH}で本人と相談してどちらかの希望を調整する（希望は外れます。元に戻せます）か、${Place.RULE}の「希望の前日に禁止」でこの行を見直してください",
-                    action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j"))
+                    action = SettingFixAction.REMOVE_WISH, actionLabel = "前日の希望を取消", wishKey = "$i,$j", wishShift = g.shifts[0]))
             }
             // 1c) 禁止の並び(c3n)の窓がまるごと希望固定（例: 休の希望 3 連日と「休→休→休」禁止）。どれを取り消すかは利用者が選ぶ＝ワンタップなし。
             //     窓が 1 セル（単独の禁止シフト）なら関わる希望は 1 件＝単数の文言。

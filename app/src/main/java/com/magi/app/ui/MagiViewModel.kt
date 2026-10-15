@@ -20,6 +20,8 @@ import com.magi.app.v6.SettingIssue
 import com.magi.app.v6.SettingFixAction
 import com.magi.app.v6.IssueKind
 import com.magi.app.v6.FixSuggester
+import com.magi.app.v6.FixCell
+import com.magi.app.v6.FixKind
 import com.magi.app.v6.FixSuggestion
 import com.magi.app.v6.V6PortReport
 import com.magi.app.v6.CoverageDiagnosis
@@ -2691,40 +2693,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "$label: ${opNm(i)} ${j + 1}日 ${opSy(cur)}")
     }
 
-    /** [operator_ux §5] 「なおし方を見る」用：ある不足枠(日×シフト)に1タップで入れられる候補職員。 */
-    data class FixCandidate(val staffIndex: Int, val name: String, val groupSymbol: String, val fromRest: Boolean)
+    /** [operator_ux §5] 「なおし方を見る」用：ある不足枠(日×シフト)に1タップで入れられる候補職員（判定は [shortageCandidates]）。 */
     fun shortageFixCandidates(dayIndex: Int, shiftIndex: Int): List<FixCandidate> {
         val st = state ?: return emptyList()
         val sched = currentSchedule ?: return emptyList()
-        val p = cachedProblem(st)
-        if (shiftIndex !in 0 until p.K || dayIndex !in 0 until p.T) return emptyList()
-        val rest = restShiftIndex(st)   // [監査A5] 休は記号解決（raw"休"比較は「公」職場で全滅していた）
-        // [3.603.0] rest は null 許容＝下の `== rest` は休が無ければ常に false（fromRest フラグが単に立たないだけ）
-        val out = ArrayList<FixCandidate>()
-        for (i in 0 until p.S) {
-            if (i !in sched.indices || dayIndex !in sched[i].indices) continue
-            // 担当できない・上限 0 のシフトは出さない（最適化器・FixSuggester・Sanity 代用要員と同じ mayPlace 基準）。
-            if (!p.mayPlace(i, shiftIndex)) continue
-            if (sched[i][dayIndex] == shiftIndex) continue   // すでにそのシフト
-            // [監査A5] 実現可能な希望のみ固定扱い（#11①整合: 不可能希望のセルはエンジン同様に可動）。
-            if (p.wishLocked(i, dayIndex) && p.lockTo(i, dayIndex) != shiftIndex) continue
-            // [3.401.0] ここまでは「担当できる・希望で固定されていない」だけの判定で、押しても必須違反が
-            //   減らない候補が混ざっていた。CoverageDiagnosis(3.156.0) が「空き番」と数えるのと同じ2条件を
-            //   足して、**実際に動かせる人だけ**を出す。
-            //   ① 移すと禁止連続(c3n)になる人は出さない。
-            if (p.makesForbiddenRun(sched, i, dayIndex, shiftIndex)) continue
-            //   ② 抜けると元のシフトに穴が空く人は「動かせる人」ではない（玉突きが要る＝この画面の手には余る）。
-            val from = sched[i][dayIndex]
-            if (from in 0 until p.K) {
-                val cnt = (0 until p.S).count { it in sched.indices && dayIndex in sched[it].indices && sched[it][dayIndex] == from }
-                if (p.covUCell(from, dayIndex, cnt - 1) > p.covUCell(from, dayIndex, cnt)) continue
-            }
-            val g = st.staff.getOrNull(i)?.groupIdx ?: -1
-            out.add(FixCandidate(i, st.staff.getOrNull(i)?.name ?: "#$i", st.groups.getOrNull(g)?.kigou ?: "", sched[i][dayIndex] == rest))
-        }
-        // 休みの人（動かしやすい）を先頭に。
-        out.sortBy { if (it.fromRest) 0 else 1 }
-        return out
+        return shortageCandidates(st, cachedProblem(st), sched, dayIndex, shiftIndex, restShiftIndex(st))   // [監査A5] 休は記号解決
+    }
+
+    /** 不足枠の候補を 1 セルの変更案として確認の画面へ（直接は書かない＝指紋照合・FixApplyGate・INV-03 を通す）。 */
+    fun previewShortageCandidate(staff: Int, dayIndex: Int, shiftIndex: Int, label: String) {
+        val st = state ?: return
+        val sched = currentSchedule ?: return
+        val need = conditionsViewOf(st, cachedProblem(st)).needCellLimits(shiftIndex, dayIndex)
+        val target = need?.let { FixTarget(null, shiftIndex, dayIndex, it.first, true, "必要人数") }
+        val s = FixSuggestion(FixKind.CHANGE, listOf(FixCell(staff, dayIndex, shiftIndex)), label, 0, 0, emptyList())
+        previewOrApplyFix(s, boardKey(sched), stateKey(st))
+        _ui.update { u -> u.copy(chainPreview = u.chainPreview?.copy(fixTarget = target)) }
     }
 
     /**
@@ -2761,7 +2745,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (t != null && t.boardKey != 0L) applyFixSuggestion(p.suggestion, t.boardKey, t.stateKey, p.focusKey, p.fixTarget) else applyFixSuggestion(p.suggestion, focusKey = p.focusKey, fixTarget = p.fixTarget)
     }
 
-    fun dismissChainPreview() { _ui.update { it.copy(chainPreview = null) } }
+    fun dismissChainPreview() { pendingGuided = null; _ui.update { it.copy(chainPreview = null) } }
 
     /** 相談に積んだ入れ替えの枠を今の勤務表で探し直す（日付・記号で枠を引き直す＝月やシフトが変わっていれば断る）。
      *  枠を持たない案は一覧をもう一度出す（当てるときは [applyFixSuggestion] の指紋照合と適用の門が守る）。 */
@@ -3034,6 +3018,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (ns != null) {
             logOp("I", "設定ミスの修正を適用: ${issue.action} @ ${issue.where}")
             applyStructure(ns)
+        } else if (SettingFixLogic.wishChanged(s, issue)) {
+            _ui.update { it.copy(messageIsError = true, message = SettingFixLogic.WISH_CHANGED_MESSAGE) }
         } else if (issue.action == SettingFixAction.DELETE_DUP_SEQ) {
             // 診断からタップまでに行が変わっていたときは黙って何も起きないより、戻すものが無いことを伝える。
             _ui.update { it.copy(messageIsError = true, message = "${issue.where} の重複は見つかりませんでした（すでに変更されています）。編集タブ＞年間マスター＞⑤ 並び・期間の制約で確かめてください") }
@@ -3068,6 +3054,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** [3.475.0/論理監査] 改善提案を計算した盤面/設定の指紋（適用時に照合する。0=未計算）。 */
     private var fixBoardKey = 0L
     private var fixStateKey = 0L
+    private var fixSearchKey = ""
 
     fun findFixSuggestions(focusStaff: Int? = null, focusShift: Int? = null, focusKey: String = "", exceptStaff: Int? = null, day: Int? = null, quick: Boolean = false, allDays: Boolean = false) {
         val st = state ?: return
@@ -3082,7 +3069,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   `fixSearching=true` を立てた**後**に古いジョブの後始末が走ると、新しい探索の旗を消してしまう。
         val seq = ++fixSeq
         fixJob?.cancel()   // 連続タップ時の前探索を破棄（古い結果で UI を上書きしない）
-        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "", fixFailedKey = "") }
+        fixSearchKey = focusKey
+        _ui.update { it.copy(fixSearching = true, fixFocusName = focusName, fixDoneKey = "", fixFailedKey = "", fixCancelledKey = "") }
         fixJob = viewModelScope.launch {
             try {
                 // セルのシートは締切 3 秒（手は 1 件でよい。8 秒待たせると答えが無いときも長い＝3.646.0 実機報告）。ホーム・分析は 8 秒。
@@ -3144,7 +3132,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         ++fixSeq
         fixJob?.cancel()
         fixJob = null
-        if (_ui.value.fixSearching) _ui.update { it.copy(fixSearching = false) }
+        if (_ui.value.fixSearching) _ui.update { it.copy(fixSearching = false, fixCancelledKey = fixSearchKey) }
     }
 
     /** [改善提案] 改善手を1タップで適用（ops のセル代入を一括反映）。Undo 可・自動再診断・自動保存。 */
