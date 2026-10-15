@@ -213,7 +213,7 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
         Column(Modifier.padding(16.dp)) {
             Text(SETTINGS_TIME_TITLE, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
-            Text("探索時間: ${ui.budgetSec} 秒（設定の上限 5 分。改善が止まると早く終わることがあります）", style = MaterialTheme.typography.bodyMedium)
+            Text("組む時間: ${ui.budgetSec} 秒（設定の上限 5 分。改善が止まると早く終わることがあります）", style = MaterialTheme.typography.bodyMedium)
             // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない＝共通の枠と書く）。
             Text("このほか、仕上げと勤務の入れ替え調整（玉突き）に共通の枠として合計 ${com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC} 秒を足します。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -305,8 +305,8 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
                         "案を増やさず各案の内部並列へ回します（同時に走る案は${spawn}）。" else "")
             else ""
             Text(
-                "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値がそのまま同時に走る探索の本数になります。" +
-                    "それ以外の方式では設定値がそのまま並列に探索する仮説（案）の数（${hyp}）になります。$overNote",
+                "※「高速」（おまかせで制限時間30秒以下の場合を含む）は設定値がそのまま同時に走る組み立ての本数になります。" +
+                    "それ以外の方式では設定値がそのまま並べて試す仮説（案）の数（${hyp}）になります。$overNote",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -346,7 +346,7 @@ private fun OptimizationTuningSection(ui: UiState, onEvent: (MagiEvent) -> Unit)
             Text("仕上げ最適化", style = MaterialTheme.typography.bodyMedium)
         }
         Column(Modifier.fillMaxWidth()) {
-            Text("探索の強さ", style = MaterialTheme.typography.titleSmall)
+            Text("探す強さ", style = MaterialTheme.typography.titleSmall)
             Text("じっくり: 時間いっぱい粘り、細かい違反をもう一歩減らします。結果が良くなるとは限りません。",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -460,10 +460,10 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
 internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」で効きます"
-internal const val EJECTION_LEFTOVER_NOTE = "探索が早く終わって余った時間を、玉突きの深い探索に回します（測定中・既定はOFF）。「見込みのある所だけ」で効きます"
-internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、探索を早めに終えて仕上げに進みます（既定はOFF＝時間いっぱい粘る）"
+internal const val EJECTION_LEFTOVER_NOTE = "組み立てが早く終わって余った時間を、玉突きを深く探すのに回します（測定中・既定はOFF）。「見込みのある所だけ」で効きます"
+internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、組むのを早めに終えて仕上げに進みます（既定はOFF＝時間いっぱい粘る）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」で効きます"
-internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来の広い探索で時間がかかります"
+internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来どおり広く探すので時間がかかります"
 /** 「じっくり」の公平化/適切回数の容認（他ソフト +6%）は、期間の制約・下限/上限・人員過剰などが 1 件でも増える手を採らない。その歯止めを外す測定スイッチ。 */
 internal const val APT_FAIR_UNGUARDED_NOTE = "試験中・じっくりでだけ効きます。期間の制約や上限などが1件増える手も予算内なら採ります。測定では目的に当たりませんでした（既定はOFF）"
 

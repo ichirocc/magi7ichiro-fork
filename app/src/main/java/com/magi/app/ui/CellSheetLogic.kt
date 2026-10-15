@@ -483,7 +483,7 @@ internal fun changeSizeLine(ops: List<com.magi.app.v6.FixCell>): String = "変�
 
 /** 変更案の探索を止めるボタン（勤務表の作成の「やめる」と区別する）。 */
 internal const val CANCEL_FIX_SEARCH_BUTTON = "変更案の検索を中止"
-internal const val FIX_SEARCH_CANCELLED = "探索を止めました。"
+internal const val FIX_SEARCH_CANCELLED = "探すのを止めました。"
 internal const val FIX_SEARCH_RETRY_BUTTON = "もう一度探す"
 
 internal fun fixPanelState(running: Boolean, fixSearching: Boolean, doneKey: String, failedKey: String, key: String, cancelledKey: String = ""): FixPanelState = when {
@@ -1284,7 +1284,7 @@ internal fun resolvesAtCell(state: MagiState, s: Array<IntArray>, before: com.ma
 internal fun preRunPlanLine(startDate: String, days: Int, staff: Int, budgetSec: Int, reserveSec: Int): String {
     val period = if (days <= 0 || startDate.isBlank()) "" else DayText.range(startDate, 0, days - 1) + "・"
     val search = if (budgetSec % 60 == 0) "${budgetSec / 60}分" else "${budgetSec}秒"
-    return "$period${staff}人・探索 $search（＋仕上げ ${reserveSec}秒）。開始後は一手ごとの確認はしません"
+    return "$period${staff}人・組む時間 $search（＋仕上げ ${reserveSec}秒）。開始後は一手ごとの確認はしません"
 }
 
 /** 登録条件の 1 行。[overCaps]＝希望が個人の上限を超える組（作成しても残る）の数も数える。 */
@@ -1294,7 +1294,7 @@ internal fun preRunConditionLine(issues: Boolean, overCaps: Int, pins: Int): Str
 
 /** 同じ探索の設定で再作成するときの一言。[top]＝前回いちばん多い必須違反（「族名（N単位）」）。 */
 internal fun preRunRepeatHintText(top: String?): String =
-    "前回と同じ探索時間・方式で再作成します。" + (top?.let { "前回いちばん多い必須違反は${it}です。" } ?: "") +
+    "前回と同じ組む時間・方式で再作成します。" + (top?.let { "前回いちばん多い必須違反は${it}です。" } ?: "") +
         "同じ設定では同じ違反が残りやすいため、編集タブでこれを 1 つ緩めると減る見込みがあります。"
 
 /**

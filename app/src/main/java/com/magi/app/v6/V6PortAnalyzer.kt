@@ -727,7 +727,7 @@ object V6PortAnalyzer {
         val wishHeld = PolishGate.wishPinStrict && p.wishLocked(i, j) && p.lockTo(i, j) == cur
         return if (wishHeld && cell.escape in setOf(ForbiddenCellEscape.FREE, ForbiddenCellEscape.CHAIN, ForbiddenCellEscape.ADJACENT))
             cell.copy(escape = ForbiddenCellEscape.PINNED,
-                detail = "本人希望=${cell.shiftSymbol}（探索は希望を動かしません。この希望を1件変えれば崩せます）")
+                detail = "本人希望=${cell.shiftSymbol}（勤務表づくりは希望を動かしません。この希望を1件変えれば崩せます）")
         else cell
     }
 

@@ -1861,9 +1861,9 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                 val title = "改善の提案" + if (ui.fixFocusName.isNotBlank()) "：${ui.fixFocusName} 関連" else ""
                 Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 if (ui.fixSearching) {
-                    Text("探索中…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text("探しています…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 } else {
-                    TextButton(onClick = onSearch) { Text(if (ui.fixSuggestions.isEmpty()) "探す" else "全体で再探索") }
+                    TextButton(onClick = onSearch) { Text(if (ui.fixSuggestions.isEmpty()) "探す" else "全体でもう一度探す") }
                 }
             }
             if (!proMode) {
