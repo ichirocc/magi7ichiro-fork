@@ -79,6 +79,8 @@ data class UiState(
     val fixDoneKey: String = "",
     /** 直し方の探索が失敗した依頼の鍵（`FixFocus.key`）。 */
     val fixFailedKey: String = "",
+    val fixTiers: FixTierView? = null,   // 見ている問題の案を段に分けたもの（鍵＝依頼の FixFocus.key。別の依頼では使わない）
+    val draftConfirm: String? = null,   // 下書きで今の勤務表を置き換える前の確認の文（null＝出さない）
     val fixTimedOut: Boolean = false,   // [仕様 §7] 直近の直し方の探索が締切で打ち切られたか（見つからない理由を「時間不足」と言う）
     val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）
     val stalledHardFamilies: List<String> = emptyList(),   // [思考誘導S4] 直近の実行で長く改善せず採用盤面にも残った必須族（盤面を変えたら空）
