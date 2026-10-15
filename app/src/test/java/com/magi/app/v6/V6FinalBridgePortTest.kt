@@ -181,6 +181,13 @@ class V6FinalBridgePortTest {
         cons41 = emptyList(),
         cons42 = emptyList(),
     )
+
+    @org.junit.Test fun runLabelFollowsTheChosenAlgorithm() {
+        // 手で選んだ方式は予算に関係なくその方式（旧: V5 を選んでも 60 秒なら「RSI→ALNS」）。
+        org.junit.Assert.assertEquals("v5", V6FinalPort.runLabel(V6Algorithm.V5, 60).tech)
+        org.junit.Assert.assertEquals("PORTFOLIO", V6FinalPort.runLabel(V6Algorithm.PORTFOLIO, 60).tech)
+        org.junit.Assert.assertEquals("RSI→ALNS", V6FinalPort.runLabel(V6Algorithm.AUTO, 60).tech)
+    }
 }
 
 /**
@@ -198,10 +205,4 @@ internal fun invalidAssignmentCount(state: MagiState, schedule: Array<IntArray> 
     }
     return n
 
-    @org.junit.Test fun runLabelFollowsTheChosenAlgorithm() {
-        // 手で選んだ方式は予算に関係なくその方式（旧: V5 を選んでも 60 秒なら「RSI→ALNS」）。
-        org.junit.Assert.assertEquals("v5", V6FinalPort.runLabel(V6Algorithm.V5, 60).tech)
-        org.junit.Assert.assertEquals("PORTFOLIO", V6FinalPort.runLabel(V6Algorithm.PORTFOLIO, 60).tech)
-        org.junit.Assert.assertEquals("RSI→ALNS", V6FinalPort.runLabel(V6Algorithm.AUTO, 60).tech)
-    }
 }
