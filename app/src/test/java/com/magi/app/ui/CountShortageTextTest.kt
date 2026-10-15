@@ -267,4 +267,13 @@ class CountShortageTextTest {
         assertEquals("要調整 4件・2人・9回・30pt・配布前の確認", readyBadgeLabel(40, b))
         assertEquals("評価：必須違反 2件・1人", boardStatusLines(true, true, true, 3, 0, b).second)
     }
+
+    @Test fun fixFocusFollowsTheStaffIdAcrossReorderAndDeletion() {
+        val f = FixFocus(1, 2, 3, exceptStaff = 0)
+        // 職員 ID 20（番号 1）と 10（番号 0）で開き、並べ替えのあとは新しい番号で探す（統合仕様 5.1）。
+        assertEquals(FixFocus(0, 2, 3, exceptStaff = 2), resolveFixFocus(f, 20, 10, listOf(20, 30, 10)))
+        assertEquals(f, resolveFixFocus(f, 20, 10, listOf(10, 20, 30)))
+        assertNull(resolveFixFocus(f, 20, 10, listOf(10, 30)))   // 削除＝別の人を探さない
+        assertEquals(f, resolveFixFocus(f, null, 0, listOf(5, 6)))   // ID なし＝番号のまま
+    }
 }

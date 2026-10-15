@@ -539,6 +539,19 @@ internal fun peekRecommendation(r: RelaxTrial.Result?, i: Int, j: Int): Int? =
 /** 1 つのセルに重なった問題の見出し（違反セルの半自動修正仕様 §3-2・§5、3.665.0）。2 件以上のときだけ。 */
 internal const val ADDRESS_CHECKING_TEXT = "案ごとに、このセルの問題が解消するか確認しています…"
 
+/**
+ * 開いた時点の職員 ID（[staffId]・[exceptId]、0 以下や null＝ID なし）を今の並びの番号に引き直す（統合仕様 5.1）。
+ * 並べ替えのあとは新しい番号、削除されていれば null（別の人を探さない）。ID が無ければ番号のまま。
+ */
+internal fun resolveFixFocus(f: FixFocus, staffId: Int?, exceptId: Int?, staffIds: List<Int>): FixFocus? {
+    fun at(index: Int?, id: Int?): Int? = if (index == null || id == null || id <= 0) index else staffIds.indexOf(id)
+    val s = at(f.staff, staffId); val x = at(f.exceptStaff, exceptId)
+    if (s == -1 || x == -1) return null
+    return if (s == f.staff && x == f.exceptStaff) f else f.copy(staff = s, exceptStaff = x)
+}
+
+internal const val FIX_STAFF_GONE_NOTE = "この職員は一覧から削除されたため、変更案を探せません。画面を閉じて開き直してください。"
+
 internal const val SAVE_RETRY_BUTTON = "もう一度保存する"
 
 internal const val REVIEW_CHECKING_TEXT = "変更後の影響を確認しています…"

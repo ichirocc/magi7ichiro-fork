@@ -48,7 +48,10 @@ fun main(args: Array<String>) {
         val st = StateParser.parse(f.readText())!!
         for (seed in seedList) for (rep in 1..repeats) {
             for (armOn in listOf(false, true)) {
-                PolishGate.c3nWallShortStall = !(feature == "c3nwall" && armOn)
+                // off 腕＝製品の既定（3.673.0 から c3n 壁の短縮なし）。"c3nwall" だけ off 腕が旧既定（短縮あり）。
+                PolishGate.c3nWallShortStall = feature == "c3nwall" && !armOn
+                // "floorstall"＝on 腕で必須違反の下限到達による短縮を外す（PolishGate.floorShortStall=false、通常閾値で粘る）。
+                PolishGate.floorShortStall = !(feature == "floorstall" && armOn)
                 // "head"＝HEAD の壁判定と後期演算の試行中の停止確認を切る（on 腕。入口の確認は残る）。off 腕＝現行。
                 PolishGate.c3nWallLegacy = feature == "head" && armOn
                 PolishGate.lateOpStopPropagation = !(feature == "head" && armOn)

@@ -229,8 +229,9 @@ object V6FinalPort {
     internal fun effectiveStallMs(
         bestHard: Int, hardFloor: Int, nonCovUHard: Int, nonCovUAllC3n: Boolean,
         c3nWallProven: Boolean, stallHardMs: Long, stallMs: Long, wishReached: Boolean = false, adaptiveMs: Long? = null,
+        floorShort: Boolean = true,
     ): Long {
-        val basePlateau = (bestHard <= hardFloor && nonCovUHard == 0) || wishReached
+        val basePlateau = (floorShort && bestHard <= hardFloor && nonCovUHard == 0) || wishReached
         val c3nWallPlateau = nonCovUHard > 0 && nonCovUAllC3n &&
             bestHard <= hardFloor + nonCovUHard && c3nWallProven
         val base = if (basePlateau || c3nWallPlateau) stallHardMs else stallMs
@@ -447,6 +448,17 @@ object V6FinalPort {
         else -> AlgorithmLabel("🌈", "方式ミックス", "最大限の品質 (${seconds / 60}分)", "PORTFOLIO拡張")
     }
 
+    /** 実際に動かす方式の名前（手で方式を選んだら選んだ方式。おまかせは予算で決まる [getAlgorithmLabel]）。
+     *  旧: 完了の行（`optimize:…`）と作成中の表示が予算だけで決まり、V5 を選んでも「RSI→ALNS」と出ていた（実機ログ 2026-10-11）。 */
+    fun runLabel(requested: V6Algorithm, seconds: Int): AlgorithmLabel = when (requested) {
+        V6Algorithm.AUTO -> getAlgorithmLabel(seconds)
+        V6Algorithm.V5 -> AlgorithmLabel("⚡", "高速", "短時間でサッと作成", "v5")
+        V6Algorithm.ALNS -> AlgorithmLabel("🧬", "組み替え", "組み替えで仕上げ", "ALNS")
+        V6Algorithm.RSI -> AlgorithmLabel("🧬", "違反集中", "違反の多い所から直す", "RSI")
+        V6Algorithm.RSI_PLUS -> AlgorithmLabel("🧬", "違反集中＋", "違反の多い所から直して仕上げる", "RSI_PLUS")
+        V6Algorithm.PORTFOLIO -> AlgorithmLabel("🌈", "方式ミックス", "複数の方式を同時に走らせて最良を採用", "PORTFOLIO")
+    }
+
     /**
      * [初期解生成(賢い版)] 希望シフト→C1(窓の要件)→日別必要人数→個人下限→残り埋め の順で
      * 初期解を組み立てる`SmartInitialScheduler`のポート。本最適化(SA/ALNS)へは続けず、
@@ -532,7 +544,7 @@ object V6FinalPort {
         val capZero = if (cappedCount > 0) CapZeroNotice(cappedCount,
             UnifiedViolationChecker.check(state, normInput, quantitativeRangeEval = quantitativeRangeEval).hard, inputReport.hard) else null
         val cappedLog = if (capZero != null) listOf(MirrorLog(tag = "CapZero", message = capZero.logLine())) else emptyList()
-        val label = getAlgorithmLabel(seconds)
+        val label = runLabel(requestedAlgorithm, seconds)
         val plan = optimizationPlan(seconds)
         val busy = buildBusyDetail(state, label.name, mapOf(
             "subtitle" to label.desc,
@@ -772,6 +784,7 @@ object V6FinalPort {
                 wd.bestHard.get(), hardFloor, nonCovU, wd.bestNonCovUAllC3n.get(), wall, stallHardMs, stallMs,
                 wishOn && wd.bestHard.get() == wishFloorLogged && bestWishReached(),
                 adaptiveMs = if (PolishGate.adaptiveStall) adaptiveStallMs(wd.recentGaps(), stallHardMs, stallMs) else null,
+                floorShort = PolishGate.floorShortStall,
             )
             when {
                 now >= searchDeadlineMs || !isActive -> true

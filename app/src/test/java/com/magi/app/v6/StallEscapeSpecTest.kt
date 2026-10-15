@@ -359,4 +359,11 @@ class StallEscapeSpecTest {
         assertEquals("同じ生存盤面は一度だけ数える", 1, proof.checks.get())
         assertEquals("対応しなかった更新も一度だけ数える", 1, proof.mismatch.get())
     }
+
+    @org.junit.Test fun floorShortStallCanBeTurnedOff() {
+        // 下限到達の短縮を切ると、必須違反 0 でも通常閾値で粘る（測定用、既定は短縮あり）。
+        org.junit.Assert.assertEquals(37_500L, V6FinalPort.effectiveStallMs(0, 0, 0, false, false, 37_500L, 270_000L))
+        org.junit.Assert.assertEquals(270_000L, V6FinalPort.effectiveStallMs(0, 0, 0, false, false, 37_500L, 270_000L, floorShort = false))
+        org.junit.Assert.assertTrue(PolishGate.floorShortStall)
+    }
 }

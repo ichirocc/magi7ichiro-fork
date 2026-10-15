@@ -2082,7 +2082,7 @@ internal class FixNav(
  */
 @Composable
 internal fun FixSearchPanel(
-    ui: UiState, cv: ConditionsView?, focus: FixFocus, onEvent: (MagiEvent) -> Unit,
+    ui: UiState, cv: ConditionsView?, requested: FixFocus, onEvent: (MagiEvent) -> Unit,
     nav: FixNav, onApplied: () -> Unit,
     compact: Boolean = false,   // セル編集シートの上段: 手は 1 件・理由は 2 行まで
     settingsLabel: String? = null,   // 手が無いときの設定への行き先の名（null＝節ごとの名 settingsLabelFor）
@@ -2092,6 +2092,10 @@ internal fun FixSearchPanel(
     addressPending: Boolean = false,   // addresses の判定（正式な検査）がまだ＝「解消する案なし」と言わない
 ) {
     val cs = MaterialTheme.colorScheme
+    // 開いた時点の職員を ID で覚え、並べ替え・削除のあとも同じ人を探す（統合仕様 5.1）。消えていれば探さない。
+    val pinned = remember(requested) { requested.staff?.let { ui.staffIds.getOrNull(it) } to requested.exceptStaff?.let { ui.staffIds.getOrNull(it) } }
+    val focus = resolveFixFocus(requested, pinned.first, pinned.second, ui.staffIds)
+        ?: run { Text(FIX_STAFF_GONE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant); return }
     // 日は「他の人で補う」・人員の印・日別の職員に絞った探索で渡す（セルのシートは勤務が無い＝日は理由の読み取りにだけ使う）。
     val find = { onEvent(MagiEvent.Session.FindFixSuggestions(focus.staff, focus.shift, focus.key, focus.exceptStaff, focus.day.takeIf { focus.exceptStaff != null || focus.staff == null || focus.shift != null }, allDays = focus.allDays, quick = compact)) }
     // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
