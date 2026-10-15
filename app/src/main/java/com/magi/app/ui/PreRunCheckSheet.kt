@@ -50,9 +50,8 @@ internal fun PreRunCheckSheet(
         ) {
             DialogHeader(PRE_RUN_TITLE, onDismiss)
             // 自動で行うこと・保持するもの・時間（設定値）を先に。担当者が判断するのは、ここと作成後の問題の対応。
-            preRunPlanLines(ui.startDate, ui.days, ui.staff, summary.needsSheet, ui.manualPins.size, ui.budgetSec, POST_RESERVE_SEC + CHAIN_RESERVE_SEC)
-                .forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
-            Text(PRE_RUN_AUTO_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(preRunPlanLine(ui.startDate, ui.days, ui.staff, ui.budgetSec, POST_RESERVE_SEC + CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodyMedium)
+            Text(preRunConditionLine(summary.needsSheet, summary.wishOverCaps.size, ui.manualPins.size), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             t.floorHeader?.let { h ->
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(PRE_RUN_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)

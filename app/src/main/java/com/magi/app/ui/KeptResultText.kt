@@ -21,8 +21,11 @@ object KeptResultText {
         else -> "同じ点数のため"
     }
 
-    fun screen(now: Score, prev: Score): String =
-        "改善が確認できなかったため、前回の勤務表を維持しました（今回の案は採用していません）。理由：${reason(now, prev)}（今回 ${parts(now)}／前回 ${parts(prev)}。比べる順＝必須→評価点→合計）。"
+    /** 前の勤務表のままにしたときのお知らせ（比べた結果は件数で言う。内部の評価点は出さない）。 */
+    fun screen(nowBreakdown: Map<String, Int>, prevBreakdown: Map<String, Int>): String =
+        "再作成した案は前の勤務表より良くなかったため採用していません（再作成した案：${reportCountsText(nowBreakdown)}／前の勤務表：${reportCountsText(prevBreakdown)}）。勤務表は変わっていません。"
+
+    const val KEPT_TITLE = "再作成しましたが、前の勤務表のほうが良かったため前のままです"
 
     fun log(prefix: String, now: Score, prev: Score): String =
         "$prefix: 今回 ${parts(now)} は前回 ${parts(prev)} 以下に改善せず（${reason(now, prev)}）→ 前回を維持"
@@ -39,3 +42,14 @@ internal fun completedText(hard: Int, breakdown: Map<String, Int>, how: String):
 /** 採用した結果の件数が入力より増えたのに重み付き評価点が下がったとき、採用の理由を 1 文で（件数だけ見ると悪化に見えるため）。それ以外は null。 */
 internal fun adoptedDespiteMoreText(prevTotal: Int, newTotal: Int, prevWeighted: Double, newWeighted: Double): String? =
     if (newTotal > prevTotal && newWeighted < prevWeighted) "件数は +${newTotal - prevTotal} ですが、重い違反が減ったため改善として採用しました" else null
+
+internal const val NOTIFY_RUNNING_TITLE = "勤務表をつくっています"
+internal const val NOTIFY_DONE_TITLE = "勤務表ができました"
+
+/** 完了通知の 2 行（BigTextStyle）。1 行目＝必須違反、2 行目＝要調整（pt の族は数えない）と次の一歩。 */
+internal fun notifyDoneLines(hard: Int, breakdown: Map<String, Int>): List<String> {
+    val soft = com.magi.app.v6.MirrorKeys.soft.filter { unitOf(it) != "pt" }
+    val softText = unitTotals(breakdown, soft) ?: "なし"
+    return if (hard == 0) listOf("必須違反はありません", "要調整 $softText。配布前の確認で中身を確かめてください")
+    else listOf("必須違反 ${unitTotals(breakdown, com.magi.app.v6.MirrorKeys.hard) ?: "${hard}件"}", "要調整 $softText。開いて直し方を確かめてください")
+}

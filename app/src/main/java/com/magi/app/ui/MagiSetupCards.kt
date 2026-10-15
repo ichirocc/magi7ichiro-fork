@@ -211,7 +211,7 @@ internal fun GuideRow(label: String, value: String, done: Boolean?, onClick: (()
 internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimize: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("最適化設定", style = MaterialTheme.typography.titleMedium)
+            Text(SETTINGS_TIME_TITLE, style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(8.dp))
             Text("探索時間: ${ui.budgetSec} 秒（設定の上限 5 分。改善が止まると早く終わることがあります）", style = MaterialTheme.typography.bodyMedium)
             // 仕上げと玉突きは 1 本の締切を分け合う（それぞれに決まった秒数が残る約束ではない＝共通の枠と書く）。
@@ -226,25 +226,6 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
                     enabled = !ui.running && ui.budgetSec < MAX_BUDGET_SEC, modifier = Modifier.heightIn(min = 48.dp)) { Text("＋ 60秒") }
             }
             Spacer(Modifier.height(10.dp))
-            Text("最適化方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            // [3.192.0 情報不足の解消] 「おまかせ」選択中は実際に動く方式が最適化の制限時間から自動決定される
-            // （V6FinalPort.optimizationPlan/getAlgorithmLabelと同一ロジック）が、画面には「おまかせ」としか
-            // 出ず、今の時間設定で何が動くか見えなかった。現在の budgetSec での解決結果を併記する（表示のみ）。
-            if (ui.v6Algorithm == V6Algorithm.AUTO) {
-                val resolved = V6FinalPort.getAlgorithmLabel(ui.budgetSec)
-                Text("→ 今の設定(${ui.budgetSec}秒)では ${resolved.icon} ${resolved.name}（${resolved.desc}）が動きます",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-            }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                V6Algorithm.values().forEach { alg ->
-                    val selected = ui.v6Algorithm == alg
-                    if (selected) {
-                        Button(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
-                    } else {
-                        OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
-                    }
-                }
-            }
             Spacer(Modifier.height(10.dp))
             // [移設] ホームの「ほかの作り方」カード撤去（ユーザー赤囲い指示）に伴い、固有機能の
             //   バックグラウンド実行だけをここ（実行条件＝予算の設定と同じ場所）へ移設。
@@ -262,6 +243,33 @@ internal fun SettingsCard(ui: UiState, onEvent: (MagiEvent) -> Unit, onBgOptimiz
                 }.getOrDefault("不明")
             }
             Text("バージョン: $versionLabel", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** 最適化方式の 6 択（詳細設定の中）。「おまかせ」なら今の時間で動く方式を添える。 */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AlgorithmChoiceSection(ui: UiState, onEvent: (MagiEvent) -> Unit) {
+    Column {
+        Text("最適化方式: ${v6AlgorithmLabel(ui.v6Algorithm)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // [3.192.0 情報不足の解消] 「おまかせ」選択中は実際に動く方式が最適化の制限時間から自動決定される
+        // （V6FinalPort.optimizationPlan/getAlgorithmLabelと同一ロジック）が、画面には「おまかせ」としか
+        // 出ず、今の時間設定で何が動くか見えなかった。現在の budgetSec での解決結果を併記する（表示のみ）。
+        if (ui.v6Algorithm == V6Algorithm.AUTO) {
+            val resolved = V6FinalPort.getAlgorithmLabel(ui.budgetSec)
+            Text("→ 今の設定(${ui.budgetSec}秒)では ${resolved.icon} ${resolved.name}（${resolved.desc}）が動きます",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            V6Algorithm.values().forEach { alg ->
+                val selected = ui.v6Algorithm == alg
+                if (selected) {
+                    Button(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
+                } else {
+                    OutlinedButton(onClick = { onEvent(MagiEvent.Settings.SetAlgorithm(alg)) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(v6AlgorithmLabel(alg)) }
+                }
+            }
         }
     }
 }
@@ -675,7 +683,7 @@ internal fun AdvancedSettingsSection(
                     Text("詳細設定（上級者向け）", style = MaterialTheme.typography.titleMedium)
                     // [3.188.0 オプション集約] 並列/ネイティブ/仕上げの技術系チューニングを SettingsCard から
                     //   ここへ移設したため、説明文を「ログのみ」から実態に同期。
-                    Text("並列数・ネイティブ加速・仕上げ最適化の調整とログの確認。一般の運用では触りません。",
+                    Text("最適化方式・並列数・ネイティブ加速・仕上げ最適化の調整とログの確認。一般の運用では触りません。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // [Planner テイスト] グリフ「▾/▸」をやめ、やわらかい丸の中に整ったアイコンシェブロン。
@@ -700,6 +708,7 @@ internal fun AdvancedSettingsSection(
                     //   （設定タブ上部）へ移動＝色設定を1か所に。ここはログのみ。
                     // [3.188.0 オプション集約] 並列ワーカー/ネイティブ加速/Kotlin照合/仕上げ最適化は
                     //   一般の運用では触らない内部チューニングのため SettingsCard からここへ移動。
+                    AlgorithmChoiceSection(ui, onEvent)
                     OptimizationTuningSection(ui, onEvent)
                     LogsCard(ui = ui, onExportLog = onExportLog, onExportJson = onExportJson)
                 }

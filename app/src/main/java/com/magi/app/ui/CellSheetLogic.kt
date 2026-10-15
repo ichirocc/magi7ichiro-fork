@@ -160,6 +160,7 @@ internal fun violationPartnerDays(p: Problem, s: Array<IntArray>, i: Int, j: Int
     for (fam in families) when (fam) {
         "c3n", "c3mn" -> forbiddenRunAt(p, s, i, j, if (fam == "c3n") p.cons3n else p.cons3mn)?.let { (seq, j0) -> for (d in j0 until j0 + seq.size) if (d != j) out += d }
         "c3w" -> if (j + 1 < p.T) out += j + 1
+        "c3" -> { val d = p.cons3.maxOfOrNull { it.seq.size }?.coerceIn(2, 3) ?: 2; for (x in j - d + 1..j + d - 1) if (x != j) out += x }
     }
     if (j > 0 && "vio-c3w" in cellFamilies[VioKey.cell(i, j - 1)].orEmpty()) out += j - 1
     return out.filter { it in 0 until p.T }.sorted()
@@ -1279,18 +1280,26 @@ internal fun resolvesAtCell(state: MagiState, s: Array<IntArray>, before: com.ma
 
 // ===== 自動と担当者の分担（2026-10-14 利用者レビュー「どこまで自動で進み、どこで担当者が判断するか」） =====
 
-/** 勤務表を作成する画面の要点（作成前）。[issues]＝つくる前に確かめる項目があるか。時間は設定値（探索）と固定の追加枠。 */
-internal fun preRunPlanLines(startDate: String, days: Int, staff: Int, issues: Boolean, pins: Int, budgetSec: Int, reserveSec: Int): List<String> = listOfNotNull(
-    periodLine(startDate, days),
-    "職員：${staff}人",
-    "登録条件：" + if (issues) "確認が必要な項目があります（下の一覧）" else "つくる前に直す項目はありません",
-    "今回、自動で行うこと：勤務表の生成、最適化、仕上げ、評価",
-    "保持するもの：登録条件と手動固定" + if (pins > 0) "（手動固定 ${pins}件）" else "",
-    "探索時間：${budgetSec}秒／仕上げ用の追加枠：${reserveSec}秒",
-)
+/** 勤務表を作成する画面の要点（作成前）を 1 行に。時間は設定値（探索）と固定の仕上げ枠。 */
+internal fun preRunPlanLine(startDate: String, days: Int, staff: Int, budgetSec: Int, reserveSec: Int): String {
+    val period = if (days <= 0 || startDate.isBlank()) "" else DayText.range(startDate, 0, days - 1) + "・"
+    val search = if (budgetSec % 60 == 0) "${budgetSec / 60}分" else "${budgetSec}秒"
+    return "$period${staff}人・探索 $search（＋仕上げ ${reserveSec}秒）。開始後は一手ごとの確認はしません"
+}
 
-/** 作成を始めたあとの約束（一手ごとに確認を求めない・条件の変更は別の判断）。 */
-internal const val PRE_RUN_AUTO_NOTE = "開始後は、探索の途中で一手ごとの確認は求めません。希望・必要人数・固定条件の変更は、別の判断として扱います。"
+/** 登録条件の 1 行。[overCaps]＝希望が個人の上限を超える組（作成しても残る）の数も数える。 */
+internal fun preRunConditionLine(issues: Boolean, overCaps: Int, pins: Int): String =
+    "登録条件：" + (if (issues || overCaps > 0) "確認が必要な項目があります（下の一覧" + (if (overCaps > 0) "・希望が上限を超える ${overCaps}件" else "") + "）" else "つくる前に直す項目はありません") +
+        (if (pins > 0) "／手動固定 ${pins}件は保持します" else "")
+
+/** 同じ探索の設定で再作成するときの一言。[top]＝前回いちばん多い必須違反（「族名（N単位）」）。 */
+internal fun preRunRepeatHintText(top: String?): String =
+    "前回と同じ探索時間・方式で再作成します。" + (top?.let { "前回いちばん多い必須違反は${it}です。" } ?: "") +
+        "同じ設定では同じ違反が残りやすいため、編集タブでこれを 1 つ緩めると減る見込みがあります。"
+
+/** 「勤務表を作成する」を一度見たら出さない基準＝設定と希望（盤面は含めない。再作成のたびに盤面は変わる）。 */
+internal fun preRunAckFingerprint(st: com.magi.app.model.MagiState): Long = com.magi.app.v6.StateFingerprint.of(st)
+
 internal const val PRE_RUN_TITLE = "勤務表を作成する"
 internal const val PRE_RUN_PROCEED = "勤務表を作成"
 internal const val PRE_RUN_CHECK_CONDITIONS = "条件を確認する"
@@ -1303,13 +1312,6 @@ internal fun softSummary(breakdown: Map<String, Int>, max: Int = 4): String {
     return soft.take(max).joinToString("・") { (k, n) -> "${breakdownLabels[k] ?: k} $n${unitOf(k)}" } + if (soft.size > max) " ほか${soft.size - max}種" else ""
 }
 
-/** 作成後の結果（作成の完了は配布できることと同じ意味ではない）。 */
-internal fun creationResultLines(hard: Long, breakdown: Map<String, Int>, save: SaveState): List<String> = listOfNotNull(
-    "必須違反：${unitTotals(breakdown, MirrorKeys.hard) ?: if (hard == 0L) "なし" else "${hard}件"}",
-    "要調整：${softSummary(breakdown)}",
-    saveStateLine(save),
-    if (hard == 0L) "作成が終わったことは、配布できることと同じではありません。配布前の確認で中身を確かめてください。" else null,
-)
 internal const val CREATION_DONE_TITLE = "勤務表の作成が終わりました"
 
 /** 適用後の「今回の問題」の状態（解消／減少／残存）。 */
@@ -1363,3 +1365,79 @@ internal fun shortageCandidates(st: MagiState, p: Problem, sched: Array<IntArray
     out.sortBy { if (it.fromRest) 0 else 1 }
     return out
 }
+
+/** 「{日} の希望を見る」（日が無ければ「希望を見る」）。希望の確認への行き先の名を 1 つにする。 */
+internal fun wishDayButton(dayShort: String?): String = if (dayShort.isNullOrBlank()) "希望を見る" else "$dayShort の希望を見る"
+
+internal const val COUNT_SECTION_TITLE = "対象期間の勤務回数"
+internal const val MORE_OPS_LABEL = "ほかの操作 ▸"
+
+/** セルのシートの「対象期間の勤務回数」は、その職員に回数の族（下限・上限・適切回数など）があるときだけ出す。 */
+internal fun showCountSection(countKeys: Collection<String>, i: Int, lines: List<String>): Boolean =
+    lines.isNotEmpty() && countKeys.any { VioKey.first(it) == i }
+
+internal const val COMPACT_NO_FIX = "この場所を直す案は見つかりませんでした"
+
+/** セルのシートで案が無いときの 1 行。[single]＝問題が 1 つならその名（前後の日へ案内する）、無ければ先頭の理由を添える。 */
+internal fun compactNoFixLine(reasons: List<String>, single: String?, prevDay: String?, nextDay: String?): String {
+    if (single != null) {
+        val days = listOfNotNull(prevDay, nextDay)
+        return "このセルの${single}を解消する案は見つかりませんでした" + (if (days.isEmpty()) "" else "。前後の日（${days.joinToString("・")}）を開いて確かめられます")
+    }
+    return reasons.firstOrNull()?.let { "$COMPACT_NO_FIX。$it" } ?: COMPACT_NO_FIX
+}
+
+internal const val VIEW_FIXES_BUTTON = "変更案を見る"
+
+internal const val STAFF_OTHER_FIXES_LABEL = "この職員のほかの変更案 ▸"
+
+/** 職員の勤務状況で最初から選んでおく行（選べる行＝勤務のある行が 1 つだけのとき）。 */
+internal fun staffSheetPreselect(shiftIdxs: List<Int>): Int? = shiftIdxs.filter { it >= 0 }.distinct().singleOrNull()
+
+internal const val PICK_MARKS_LEGEND = "●＝必須違反が減る　⚠＝必須違反が増える"
+internal const val TALLY_LEGEND_TEXT = "▼不足・▲超過（職員・日の欄の数字＝今の回数・人数、計（期間）の ▼2＝不足の日が 2日）"
+
+/** 自動作成の直後に主カードの上端へ出す 2 行の材料。[next]＝次に確認する問題（主カードと同じ対象）。 */
+internal data class CreationTop(val next: String?, val onOthers: () -> Unit, val onRetrySave: () -> Unit, val kept: Boolean = false)
+
+/** 次に確認する問題の名（職員の問題は「{名}さん {見出し}」）。 */
+internal fun creationNextProblem(staffName: String?, heading: String): String =
+    if (staffName.isNullOrBlank() || heading.startsWith(staffName)) heading else "${staffName}さん $heading"
+
+/** 主カード上端の 2 行: 作成の完了と、次に確認する問題。 */
+internal fun creationTopLines(next: String?, kept: Boolean = false): List<String> =
+    listOfNotNull(if (kept) KeptResultText.KEPT_TITLE else CREATION_DONE_TITLE, next?.let { "次に確認する問題：$it" })
+
+internal const val SOFT_POLISH_LINK = "要調整をもう少し減らせるか試す（減らない場合もあります）"
+
+internal const val TRIAGE_HARD_HEADING = "必須違反（配る前に直す必要があります）"
+internal const val TRIAGE_SETTINGS_HEADING = "設定を変えないと消えない項目"
+
+/** 分析の畳んだ一覧の見出し（内部の語を使わない）。 */
+internal fun conditionStatusTitle(ok: Int, busy: Int): String = "条件ごとの状況（守れている $ok／残っている $busy）"
+
+internal fun bulkClearWishesLabel(n: Int): String = "担当外の希望 ${n}件をまとめて外す（勤務表は変わりません・元に戻せます）"
+
+internal const val ALTERNATIVES_ALL_WORSE = "今の勤務表より良くありません"
+
+/** 他の案の 1 行（必須違反と、計算した時点の勤務表との比べ）。 */
+internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard: Int, worse: Boolean): String {
+    val cmp = when {
+        curHard == null -> ""
+        altHard < curHard -> "（今より少ない）"
+        altHard > curHard -> "（今より多い）"
+        worse -> "（今と同じ・要調整は今のほうが少ない）"
+        else -> "（今と同じ・要調整は少ない）"
+    }
+    return "案$n：必須違反 $hardTxt$cmp"
+}
+
+/** すべての案が今より悪い（印の数が案の数と合うときだけ）。 */
+internal fun alternativesAllWorse(worse: List<Boolean>, n: Int): Boolean = n > 0 && worse.size == n && worse.all { it }
+
+internal const val SHORTAGE_LABEL_INFEASIBLE = "担当できる人が足りない"
+internal const val SHORTAGE_LABEL_BLOCKED = "今の希望では埋まらない"
+internal const val SHORTAGE_LABEL_FIXABLE = "動かせば埋まる"
+internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。なおし方を見るで 1 人ずつ入れられます"
+
+internal const val SETTINGS_TIME_TITLE = "勤務表をつくる時間"

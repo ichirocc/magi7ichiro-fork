@@ -192,7 +192,7 @@ internal fun CellEditSheet(
                 Text("小さく表示 ▾")
             }
             val partners = remember(rev, cell) {
-                if (status.severity != CellSeverity.HARD) emptyList()
+                if (status.severity == CellSeverity.NONE) emptyList()
                 else stateOf()?.let { st -> violationPartnerDays(cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams, ui.violationCellFamilies) }.orEmpty()
             }
             // 上段（読むところ）。長ければここだけ縦に送る。下段（操作）は段ごとに固定。
@@ -230,12 +230,14 @@ internal fun CellEditSheet(
                     tourHeading?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant) }
                     tourCovULine?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                     if (mode == 0) {
-                        // ① 問題を確認: 今の勤務・問題の一文・並びの日々、ほかの問題は畳んで全部見られるように。
-                        Text("現在の勤務：${sym(current)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        // ① 問題を確認: 1 行目＝状態（重さの色）、2 行目＝一般の説明、今の勤務・並びの日々。ほかの問題は畳む。
+                        if (status.severity != CellSeverity.NONE) Text(status.text.removePrefix("⚠ "), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                            color = if (status.severity == CellSeverity.HARD) cs.error else cs.onSurface)
+                        fams.firstOrNull()?.let { Text(cellProblemSentence(it), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                        Text("現在の勤務：${sym(current)}", style = MaterialTheme.typography.bodyMedium)
                         if (dilemma) Text(wishKeptLine(sym(wish)), style = MaterialTheme.typography.bodySmall)
                         shortCaution?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         if (fams.isEmpty() && shortCaution == null) Text("このセルに違反はありません。", style = MaterialTheme.typography.bodyMedium)
-                        fams.firstOrNull()?.let { Text(cellProblemSentence(it), style = MaterialTheme.typography.bodyMedium) }
                         sequenceLine(ui.startDate, ui.schedule.getOrNull(i).orEmpty(), (partners + j).distinct(), ui.shiftSymbols)
                             ?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     } else StatusRow(status, null)
@@ -261,7 +263,7 @@ internal fun CellEditSheet(
                     }
                     if (c1Here != null && c1Here.stuck && mode == 0) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { fixNav.onWishes(i, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る") }
+                            OutlinedButton(onClick = { fixNav.onWishes(i, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishDayButton(DayText.short(ui.startDate, j))) }
                             OutlinedButton(onClick = { fixNav.onSettings("yr_cons") }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_cons")) }
                         }
                     }
@@ -317,10 +319,10 @@ internal fun CellEditSheet(
                             if (fams.size >= 2 && problem == null) Text(PICK_PROBLEM_FIRST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                             else FixSearchPanel(ui, cv, FixFocus(i, null, j), onEvent, fixNav, onApplied = {}, compact = true, family = problem,
                                 addresses = { s -> resolves?.get(s) == true }, addressPending = resolves == null,
-                                addressLabel = "このセルの" + (problem?.let { breakdownLabels[it] ?: it } ?: "問題"))
+                                addressLabel = "このセルの" + (problem?.let { breakdownLabels[it] ?: it } ?: "問題"),
+                                singleProblem = fams.singleOrNull()?.let { breakdownLabels[it] ?: it })
                         }
                         OutlinedButton(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("自分で勤務を選ぶ") }
-                        OutlinedButton(onClick = { onMode(1) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("希望を確認・登録する") }
                     }
                     if (mode == 1 && wish != null) {
                         wishTabInvolvedLine(sym(wish), fams)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -344,11 +346,18 @@ internal fun CellEditSheet(
                     if (mode == 0) {
                         // 回数の目標未満を、勤務を減らす前に見える位置に残す。
                         val counts = remember(rev, i, current, cv) { cellCountLines(ui, i, current, cv::staffCellLimits) }
-                        if (counts.isNotEmpty()) {
-                            Text("今月の勤務回数", style = MaterialTheme.typography.titleSmall)
+                        if (showCountSection(ui.countFamilies.keys + ui.countViolations.keys, i, counts)) {
+                            Text(COUNT_SECTION_TITLE, style = MaterialTheme.typography.titleSmall)
                             counts.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                         }
-                        // 手動固定は通常の修正操作と分け、何をするか・しないかを添える。
+                    }
+                    // 希望・手動固定・ルールの見直しは「ほかの操作」に畳む（主の 2 つの操作を先に見せる）。
+                    var moreOps by remember(cell) { mutableStateOf(false) }
+                    if (mode == 0 && !(dilemma && dilemmaChoice == 0)) TextButton(onClick = { moreOps = !moreOps }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(if (moreOps) "ほかの操作を閉じる" else MORE_OPS_LABEL)
+                    }
+                    if (mode == 0 && moreOps) {
+                        OutlinedButton(onClick = { onMode(1) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("希望を確認・登録する") }
                         if (current >= 0) {
                             Text(PIN_TITLE, style = MaterialTheme.typography.titleSmall)
                             Text(PIN_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -360,7 +369,7 @@ internal fun CellEditSheet(
                             }
                         }
                     }
-                    if (status.severity != CellSeverity.NONE) {
+                    if (mode == 0 && moreOps && status.severity != CellSeverity.NONE) {
                         TextButton(onClick = {
                             val famsJp = cellVioClasses(ui, "$i,$j").joinToString("・") { breakdownLabels[it.removePrefix("vio-")] ?: it }
                             onEvent(MagiEvent.Session.AddReviewMemo("$name ${DayText.full(ui.startDate, j)} ${sym(current)}：${famsJp.ifEmpty { status.cause }}"))
@@ -402,7 +411,7 @@ internal fun CellEditSheet(
                 }
             }
             if ((mode == 0 && step == 1) || mode == 1) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou) { fixNav.onWishes(i, j) }
+                if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou, DayText.short(ui.startDate, j)) { fixNav.onWishes(i, j) }
                 cellSheetSlots(shown, canDoSet, leftHand).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         row.forEach { slot ->
@@ -424,6 +433,7 @@ internal fun CellEditSheet(
                         }
                     }
                 }
+                if (mode == 0) Text(PICK_MARKS_LEGEND, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 if (mode == 0) OutlinedButton(onClick = { step = 0 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("元の画面に戻る") }
             }
             if (mode == 0 && step == 2) Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -471,10 +481,10 @@ private fun SheetUndoButton(enabled: Boolean, onUndo: () -> Unit) {
 
 /** 希望モードで拡張希望の指定日を開いたとき（シフトボタンは押せない）: 理由と、拡張希望を見直せる希望の登録への行き先。 */
 @Composable
-private fun ExtWishDayRow(kigou: List<String>, onWishes: () -> Unit) {
+private fun ExtWishDayRow(kigou: List<String>, dayShort: String, onWishes: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(extWishDayNote(kigou), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = onWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text("希望を見る", maxLines = 1) }
+        OutlinedButton(onClick = onWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text(wishDayButton(dayShort), maxLines = 1) }
     }
 }
 
@@ -514,7 +524,7 @@ private fun PeekBody(
             // 希望モードはセルを移っても続く＝ちら見でもシフトを押すと希望になると示し、1 タップで割当へ戻せるようにする。
             if (mode == 1) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MagiTagChip("希望を登録中", MagiAccent.pink)
-                TextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻す", maxLines = 1) }
+                TextButton(onClick = { onMode(0) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("割当に戻る", maxLines = 1) }
             }
             // 希望を外すのは希望の登録中だけ（割当のちら見では、シフトの押し違いで希望を消さない）。
             val showRemove = wish != null && mode == 1
@@ -525,7 +535,7 @@ private fun PeekBody(
                     Text(relaxPeekLabel(sym(recommend)), maxLines = 1)
                 }
             }
-            if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou, onWishes)
+            if (mode == 1 && extKigou != null) ExtWishDayRow(extKigou, DayText.short(ui.startDate, j), onWishes)
             // シフトと「詳しく ▸」は 1 行に収める（入る数は peekPickCount）。
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val shownPicks = picks.take(peekPickCount(maxWidth.value.toInt()))

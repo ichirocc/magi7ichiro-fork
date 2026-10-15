@@ -37,6 +37,8 @@ data class UiState(
      * 残っている項目」の判定には使えない（手編集だけで「計算後」と語っていた）。読込・取込で false に戻す。
      */
     val engineRan: Boolean = false,
+    /** 直前の作成で前の勤務表のほうが良く、前のままにした（作成の札とお知らせの言い方を変える）。 */
+    val keptPrevious: Boolean = false,
     /** 自動作成のあとに手で変えたか（engineRan が手操作で false に戻った盤面）。上部の「自動作成：済み（そのあと手で変更あり）」だけが読む。state 非保存。 */
     val ranBeforeEdit: Boolean = false,
     /** いまの盤面が S6（設定を緩めて手順を当てる）の結果か。分析タブの注記だけが読む。engineRan を書く箇所で false に戻す。 */
@@ -170,6 +172,7 @@ data class UiState(
     val impossibleWishCount: Int = 0,
     val opLog: List<String> = emptyList(),
     val alternatives: List<String> = emptyList(), // 他の案（採用案以外の候補サマリ）
+    val alternativesWorse: List<Boolean> = emptyList(),   // 他の案ごとに、計算した時点の勤務表より悪いか
     val alternativeApplied: Int = -1,             // いま盤面に適用している他の案の添字（-1=どれでもない）
     val coverageDiag: CoverageDiagnosis? = null,  // 人員不足(covU)/人員過剰(covO)の原因診断（充足不可/充足可能の切り分け・過剰がなぜ動かせないか）
     val forbiddenDiag: ForbiddenRunDiagnosis? = null,  // [3.280.0] 禁止連続(c3n)の「なぜ崩せないか」診断（c3n=0 なら null）
