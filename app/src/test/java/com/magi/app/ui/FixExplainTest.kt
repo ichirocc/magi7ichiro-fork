@@ -30,7 +30,7 @@ class FixExplainTest {
     }
 
     @Test fun hardUnchangedLinesOnlyWhenRequiredRemain() {
-        val soft = FixSuggestion(FixKind.CHANGE, emptyList(), "x", 0, 0, listOf("covO" to -1, "c3" to 1))
+        val soft = FixSuggestion(FixKind.CHANGE, emptyList(), "x", 0, 0, listOf("covO" to -2, "c3" to 1))
         assertEquals(listOf("必須違反は変わりません（要調整だけが変わります）", "件数は同じで、重い要調整が減ります"), hardUnchangedLines(soft, true))
         assertTrue(hardUnchangedLines(soft, false).isEmpty())
         assertTrue(hardUnchangedLines(soft.copy(deltaHard = -1), true).isEmpty())
