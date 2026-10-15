@@ -12,9 +12,15 @@ import com.magi.app.v6.c3SeqKey
 object SettingFixLogic {
     const val WISH_CHANGED_MESSAGE = "診断のあとで希望が変わったため、取り消しませんでした。診断をやり直してください"
 
-    /** 診断のあとで対象の希望が別の勤務に変わった（または消えた）か。 */
+    const val WISH_ALREADY_REMOVED_MESSAGE = "この希望はすでに外れています"
+
+    /** 診断のあとで対象の希望が別の勤務に変わったか（消えていれば [wishAlreadyRemoved] の側＝取り消し済みと同じ）。 */
     fun wishChanged(s: MagiState, issue: SettingIssue): Boolean =
-        issue.action == SettingFixAction.REMOVE_WISH && issue.wishKey != null && s.wishes[issue.wishKey] != issue.wishShift
+        issue.action == SettingFixAction.REMOVE_WISH && issue.wishKey != null && s.wishes[issue.wishKey].let { it != null && it != issue.wishShift }
+
+    /** 外そうとした希望がもう無い（別の操作で外れた）か。 */
+    fun wishAlreadyRemoved(s: MagiState, issue: SettingIssue): Boolean =
+        issue.action == SettingFixAction.REMOVE_WISH && issue.wishKey != null && !s.wishes.containsKey(issue.wishKey)
 
     fun apply(s: MagiState, issue: SettingIssue): MagiState? {
         return when (issue.action) {

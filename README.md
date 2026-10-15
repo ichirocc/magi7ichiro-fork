@@ -38,6 +38,8 @@ This project contains a Kotlin/Jetpack Compose Android app that ports the MAGI w
 | [`CLAUDE.md`](./CLAUDE.md) | 引き継ぎ・直近の状態・作業の進め方（grilling 等） |
 | [`docs/changelog.md`](./docs/changelog.md) | **版ごと（3.xxx.0単位）の詳細な変更履歴アーカイブ**（`CLAUDE.md`から切り出し。個別の修正内容・調査記録・実測値を確認したい時だけ検索して読む。通常のセッション開始時には注入されない） |
 
+**最終更新**：2026-10-15（3.686.0: コードレビュー対応＝結果を差し替える全経路で「前のまま」の札を外す・進捗の基準を盤面の差し替えで取り直す・入り口の 1 セルの案は置いてよいシフトだけ・回転研磨の差分評価に抜き取り検査）
+
 **最終更新**：2026-10-15（3.685.0: 改善提案で崩した希望・手動固定を固定値へ戻す 1 手を候補に＝`FixSuggester.restoreWishLocked` 既定 ON）
 
 **最終更新**：2026-10-15（3.684.0: 印と一文を 1 か所で＝`DisplaySnapshot` を上部の札・必須一覧・巡回・セルの状態の 1 行が共有）

@@ -585,9 +585,7 @@ internal fun OperatorNextActionCard(
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
     val topFix = ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }
-    val topResolved = remember(topFix, ui.schedule) {
-        topFix?.let { f -> stateOf()?.let { st -> resolvedHardLabels(st, Array(ui.schedule.size) { ui.schedule[it].toIntArray() }, f.ops, ui.staffNames, ui.shiftSymbols) } }.orEmpty()
-    }
+    val topResolved = topFixResolvedLabels(ui)   // VM が盤面・手ごとに作る（main で検査しない）
     // [S5 §2.1] 関わる希望（S5a の行か S5b の行）があるか。WISH・FLOOR の分岐がこれを見る。
     val wishCands = remember(ui.violationCellFamilies, ui.wishes, ui.lockedWishKeys, ui.wishSelfConflicts, ui.coverageDiag) { wishTrialCandidates(ui) }
     val shortDays = ui.coverageDiag?.shortfalls?.map { it.dayIndex }?.distinct()?.size ?: 0

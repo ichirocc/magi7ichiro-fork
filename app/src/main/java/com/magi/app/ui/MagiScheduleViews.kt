@@ -142,35 +142,6 @@ import kotlin.math.roundToInt
  * 文字化けせず取り込める（UTF-8 として bytes を読むと壊れていた）。
  */
 
-/** 実行中の進捗サマリ文字列: 改善率(初期soft→現best) ・ 残り時間 ・ 探索数。読取専用。 */
-internal fun progressSummary(ui: UiState): String {
-    val parts = ArrayList<String>(4)
-    parts += when {
-        // [3.393.0] 必須違反が残っている間は「改善◯%」の枝に入らないため、旧実装は進み具合を
-        //   まったく示していなかった（⚠3 とだけ出る）。開始時の必須件数(initHard)を併記して
-        //   「69件から3件まで来ている」ことを見せる。initHard は満足度の計算で既に使っており、
-        //   ここが最後の未配線だった。
-        ui.bestHard > 0L ->
-            if (ui.initHard > ui.bestHard) "必須違反 残り${hardText(ui.breakdown, ui.bestHard)}（開始${ui.initHard}件）" else "必須違反 残り${hardText(ui.breakdown, ui.bestHard)}"
-        // [3.396.0] 旧「改善 91% (1900→170)」は、初見の人が「1900 と 170 は何の数？」と聞き返す形だった。
-        //   上の必須ありの枝と**同じ並び**（何が・いくつ・開始はいくつ）に揃えて、レイアウトの反復自体が
-        //   読み方を教えるようにする。
-        ui.initSoft > 0L -> {
-            val pct = ((ui.initSoft - ui.bestSoft) * 100L / ui.initSoft).coerceAtLeast(0L)
-            "要調整 ${ui.bestSoft}件（開始${ui.initSoft}件・${pct}%減）"
-        }
-        else -> "要調整 –"
-    }
-    val secLeft = (((ui.budgetSec + com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC) * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
-    parts += "残り %d:%02d".format(secLeft / 60, secLeft % 60)
-    // [3.396.0] 反復数（「1.2M回」「毎秒40K」）は**作り手の指標**なので操作画面から外した。
-    //   初見の人は必ず「これ何の回数？」と聞く＝その時点でこの表示は失敗している。知りたいのは
-    //   「あとどれくらい」と「良くなっているか」の2つで、それは上の2項目が既に答えている。
-    //   反復数を見たいとき（ネイティブ加速が効いているか等）は診断ログの `TIME` 行と
-    //   `AdaptivePortfolio 合計iter`（3.360.0）に出ている。3.393.0 で「死んだ配管を配線する」として
-    //   毎秒表示を足したのは、この観点では逆向きだったので戻す。
-    return parts.joinToString("  ・  ")
-}
 
 @Composable
 internal fun LiveScheduleCard(ui: UiState) {

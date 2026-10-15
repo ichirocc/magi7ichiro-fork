@@ -77,6 +77,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -391,6 +394,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun opDays(days: List<Int>): String = if (days.size <= 10) days.joinToString(",") { "${it + 1}日" } else "${days.size}日分"
 
     init {
+        // ホームの見出しの「解消する必須違反」の名と場所。盤面と先頭の手が変わるたびに Default で作り直す（main で検査しない）。
+        viewModelScope.launch {
+            _ui.map { u -> u.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.ops to u.schedule }.distinctUntilChanged().collectLatest { (ops, sch) ->
+                val st = state ?: return@collectLatest
+                if (ops == null || sch.isEmpty()) return@collectLatest
+                val u0 = _ui.value
+                val labels = withContext(Dispatchers.Default) {
+                    runCatching { resolvedHardLabels(st, Array(sch.size) { sch[it].toIntArray() }, ops, u0.staffNames, u0.shiftSymbols) }.getOrDefault(emptyList())
+                }
+                _ui.update { it.copy(topFixResolved = TopFixResolved(ops, sch, labels)) }
+            }
+        }
         // 起動時: 前回の自動保存があれば復元（無ければ何もしない）
         viewModelScope.launch {
             // [並行I/O] 独立した3つのファイル読み込み（自動保存・中断マーカー・完了結果）は互いに依存しない
@@ -753,7 +768,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 ) }
                 logOp("I", KeptResultText.log("バックグラウンド", nowScore, prevScore))
                 // 前景の維持分岐と同じ＝次回ヒントの族は維持した盤面から取る。
-                lastResultHard = prevReport.hard.toLong(); lastResultBreakdown = prevReport.breakdown
+                lastResultHard = prevReport.hard.toLong()
                 lastTopHardFamily = if (prevReport.hard > 0) topHardFamilyJp(prevReport.breakdown) else null
                 val saved = persistNow()
                 if (!saved) logOp("W", "背景結果: 維持した勤務表を保存できなかったため、復元元のファイルを残しました")
@@ -768,12 +783,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         captureAlternatives(r.alternatives)   // [3.592.0] 背景結果にも前景と同じ「他の案」を反映する
         pushReport(state ?: st0, sched, r.report, runLabel = "バックグラウンド最適化") { it.copy(
             messageIsError = false,
-            running = false, hasResult = true, relaxedBoard = false, engineRan = true, ranBeforeEdit = false,
+            running = false, hasResult = true, relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
             runSummary = prev?.let { runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, it, sched, r.report)) },
             message = completedText(r.report.hard, r.report.breakdown, "（閉じている間に計算）"),
         ) }
         logOp("I", "バックグラウンド最適化 完了 必須=${r.report.hard} 合計=${r.report.total}")
-        lastResultHard = r.report.hard.toLong(); lastResultBreakdown = r.report.breakdown
+        lastResultHard = r.report.hard.toLong()
         lastTopHardFamily = if (r.report.hard > 0) topHardFamilyJp(r.report.breakdown) else null
         // [C1] 完了で途中状態ファイルを削除。ただし反映した盤面の保存が成功してから（保存前に落ちると結果を失う）。
         val cleared = com.magi.app.work.clearAfterSaved({ persistNow() }) { clearRunMarker(); clearBgFiles("背景最適化 完了") }
@@ -1121,7 +1136,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 loaded = true,
                                 running = false,
                                 hasResult = markResult,
-                                relaxedBoard = false, engineRan = markResult, ranBeforeEdit = false,   // [3.475.0] bg結果の復元だけ「計算済み」を引き継ぐ
+                                relaxedBoard = false, engineRan = markResult, ranBeforeEdit = false, keptPrevious = false,   // [3.475.0] bg結果の復元だけ「計算済み」を引き継ぐ
                                 constraintsEdited = false,
                                 structureEdited = false,
                                 staff = lp.state.staffCount,
@@ -1140,6 +1155,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                                 //   `report.soft`＝**生件数**なので、完了後の「改善 N%」が
                                 //   重み付き→生件数の引き算になり大幅に水増しされていた。
                                 initSoft = lp.report.soft.toLong(),
+                                initBreakdown = lp.report.breakdown,
                                 elapsedMs = 0,
                                 // 前のデータの完了要約・ヒント・他の案・直し方は、このデータのものではない。
                                 runSummary = null, stopSummary = null, copilotHint = null, alternatives = emptyList(),
@@ -1409,7 +1425,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 手直しや結果のある勤務表を黙って置き換えない。確認の文は置き換える前の必須違反を単位つきで言う。
         val u = _ui.value
         if (!confirmed && !u.running && (u.hasResult || u.engineRan || u.ranBeforeEdit || sched.any { r -> r.any { it >= 0 } })) {
-            _ui.update { it.copy(draftConfirm = draftConfirmText(hardText(u.breakdown, u.bestHard))) }
+            _ui.update { it.copy(draftConfirm = draftConfirmText(if (u.hasResult) hardText(u.breakdown, u.bestHard) else null)) }
             return
         }
         if (u.draftConfirm != null) _ui.update { it.copy(draftConfirm = null) }
@@ -1432,6 +1448,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         job = viewModelScope.launch {
             try {
                 val res = V6FinalPort.handleSmartInitial(st.withSchedule(sched), allowImpossible = true)
+                boardReplaceRev++
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
                 resultSchedule = res.schedule.copy2D()
@@ -1440,7 +1457,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     messageIsError = false,
                     running = false,
                     hasResult = true,
-                    relaxedBoard = false, engineRan = true, ranBeforeEdit = false,
+                    relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
                     elapsedMs = 0,
                     message = "下書きをつくりました: ${reportCountsText(res.report.breakdown)}。画面下の「再作成」で仕上げられます" + if (confirmed) "。$DRAFT_UNDO_NOTE" else "",
                 ) }
@@ -1470,9 +1487,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     // 操作コパイロット用: 直前の実行設定と結果（ガチャ操作検知に使用）
     private var lastSettingsSig: String? = null
     private var lastResultHard: Long = -1L
-    private var lastResultBreakdown: Map<String, Int> = emptyMap()
     /** 進捗の基準（initHard/initSoft）を取った入力の指紋。読込で null に戻す。 */
     private var initBaseKey: Long? = null
+    /** 盤面を丸ごと差し替えた回数（CSV 取込・下書き・他の案）。進捗の基準の指紋に混ぜる＝手の編集では上げない。 */
+    private var boardReplaceRev = 0L
     private var lastTopHardFamily: String? = null
 
     /**
@@ -1565,7 +1583,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun runV6FullOptimize() {
         val st = state; val sched = currentSchedule
-        if (st != null && sched != null && !_ui.value.running && preRunAckFingerprint(st) != preRunAckKey) {
+        if (st != null && sched != null && !_ui.value.running && preRunAckFingerprint(st, PreRunCheck.rerunClears(st, sched)) != preRunAckKey) {
             val sum = PreRunCheck.build(st, sched)
             _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }
             logOp("I", "勤務表を作成する 表示 (消えない${sum.floorCount}件, 外れる${sum.rerunClears.size}件)")
@@ -1581,7 +1599,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun proceedPreRun() {
         val st = state ?: return
         val sched = currentSchedule ?: return
-        preRunAckKey = preRunAckFingerprint(st)
+        preRunAckKey = preRunAckFingerprint(st, PreRunCheck.rerunClears(st, sched))
         _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
         logOp("I", "勤務表を作成する 勤務表を作成")
         startFullOptimize("勤務表の作成", null, hintShown = true)
@@ -1665,10 +1683,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   進み具合を出していた。keep-best の判定に使う baseReport がまさにこの実行の入力なので、
                 //   同じものを基準にする（満足度 satisfaction も initHard+initSoft から出るので一緒に直る）。
                 //   同じデータ（設定・希望の指紋が同じ）の再作成では基準を据え置く＝でき具合の％が再作成のたびに 0 へ戻らない。
-                val baseKey = stateKey(st0)
+                val baseKey = initBaseKeyOf(stateKey(st0), boardReplaceRev)
                 if (baseKey != initBaseKey) {
                     initBaseKey = baseKey
-                    _ui.update { it.copy(initHard = baseReport.hard.toLong(), initSoft = baseReport.soft.toLong()) }
+                    _ui.update { it.copy(initHard = baseReport.hard.toLong(), initSoft = baseReport.soft.toLong(), initBreakdown = baseReport.breakdown) }
                 }
                 val res = V6FinalPort.handleOptimize(
                     state = st0,
@@ -1821,7 +1839,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, baseReport.hard, keptMsg) },
                     ) }
                     logOp("I", KeptResultText.withNote(KeptResultText.log("再実行", nowScore, baseScore), capNote))
-                    lastResultHard = baseHard; lastResultBreakdown = baseReport.breakdown
+                    lastResultHard = baseHard
                 } else {
                     // [3.324.0/外部レビュー] pushReport(=makeUi の唯一の経路)より**前**に保存する。
                     //   旧実装は pushReport のあとに代入していたため、その回の画面には診断が入らず
@@ -1847,13 +1865,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         messageIsError = false,
                         running = false,
                         hasResult = true,
-                        relaxedBoard = false, engineRan = true, ranBeforeEdit = false,
+                        relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
                         runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, res.schedule, res.report, baseReport)),
                         stopSummary = res.stop,
                         message = adoptedMsg,
                         wishCancelOutcome = s5?.let { c -> WishCancelOutcome(c.name, c.day, c.symbol, c.h0, c.pCancel, res.report.hard, adoptedMsg) },
                     ) }
-                    lastResultHard = newHard; lastResultBreakdown = res.report.breakdown
+                    lastResultHard = newHard
                 }
                 lastC1Plateau?.logLines()?.take(4)?.forEach { logOp("W", it.removePrefix("[W] ")) }
                 // [3.475.0/論理監査] 採用した盤面の族を覚える。旧: 入力維持の分岐でも捨てた盤面（res.report）
@@ -2314,7 +2332,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     messageIsError = false,
                     running = false,
                     hasResult = true,
-                    relaxedBoard = false, engineRan = true, ranBeforeEdit = false,
+                    relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false,
                     runSummary = runSummaryOf(com.magi.app.v6.ChangeSummary.of(st0, sched0, finalSched, finalReport, baseReport)),
                     message = polishResultText(adopted, unitTotals(baseReport.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし",
                         unitTotals(finalReport.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", finalReport.hard, hardText(finalReport.breakdown, finalReport.hard.toLong())),
@@ -2522,7 +2540,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             alts.mapIndexed { idx, sch ->
                 val rep = UnifiedViolationChecker.check(st, sch)
                 val worse = curRep != null && betterReport(curRep, rep)
-                alternativeSummary(idx + 1, hardText(rep.breakdown, rep.hard.toLong()), curRep?.hard, rep.hard, worse) to worse
+                alternativeSummary(idx + 1, hardText(rep.breakdown, rep.hard.toLong()), curRep?.hard, rep.hard, worse, curRep != null && betterReport(rep, curRep)) to worse
             }
         }
         _ui.update { it.copy(alternatives = rows.map { r -> r.first }, alternativesWorse = rows.map { r -> r.second }, alternativeApplied = -1) }
@@ -2559,6 +2577,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val keptAlts = alternativeScheds
         val keptSummaries = _ui.value.alternatives
         pushUndo("他の案 ${i + 1} を適用")
+        boardReplaceRev++
         currentSchedule = sch
         resultSchedule = sch
         state = st.withSchedule(sch)
@@ -2578,7 +2597,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val rep = withContext(Dispatchers.Default) { UnifiedViolationChecker.check(state ?: st, sch) }
                 if (seq != checkSeq) return@launch
-                pushReport(state ?: st, sch, rep) { it.copy(messageIsError = false, hasResult = true, relaxedBoard = false, engineRan = true, ranBeforeEdit = false, message = "他の案 ${i + 1} を適用しました: ${reportCountsText(rep.breakdown)}") }
+                pushReport(state ?: st, sch, rep) { it.copy(messageIsError = false, hasResult = true, relaxedBoard = false, engineRan = true, ranBeforeEdit = false, keptPrevious = false, message = "他の案 ${i + 1} を適用しました: ${reportCountsText(rep.breakdown)}") }
                 logOp("I", "他の案 ${i + 1} を適用 必須=${rep.hard} 合計=${rep.total}")
             } catch (e: CancellationException) {
                 throw e
@@ -3016,6 +3035,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (ns != null) {
             logOp("I", "設定ミスの修正を適用: ${issue.action} @ ${issue.where}")
             applyStructure(ns)
+        } else if (SettingFixLogic.wishAlreadyRemoved(s, issue)) {
+            _ui.update { it.copy(messageIsError = false, message = SettingFixLogic.WISH_ALREADY_REMOVED_MESSAGE) }
         } else if (SettingFixLogic.wishChanged(s, issue)) {
             _ui.update { it.copy(messageIsError = true, message = SettingFixLogic.WISH_CHANGED_MESSAGE) }
         } else if (issue.action == SettingFixAction.DELETE_DUP_SEQ) {
@@ -3366,6 +3387,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 ui0 = _ui.value; result0 = resultSchedule
                 pushUndo("CSV取込")
                 pushedUndo = true
+                boardReplaceRev++
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
                 resultSchedule = res.schedule.copy2D()
@@ -3395,7 +3417,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     messageIsError = res.unknownCells > 0 || partial || res.headerDateMismatches > 0 || dupWarn.isNotEmpty(),
                     running = false,
                     hasResult = true,
-                    relaxedBoard = false, engineRan = false, ranBeforeEdit = false,   // [3.475.0] CSV取込は手操作扱い
+                    relaxedBoard = false, engineRan = false, ranBeforeEdit = false, keptPrevious = false,   // [3.475.0] CSV取込は手操作扱い
                     message = msg,
                 ) }
                 if (res.matched in 1 until total) {
@@ -3608,7 +3630,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             lastRunDiagAtMs = System.currentTimeMillis()
             lastRunDiagSerial = activeRunSerial
         }
-        _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)) }
+        // 印と一文の写しは重いので main の CAS の外（Default）で 1 回だけ作る。CAS の間に別の更新が入って写しが
+        //   古くなったら付けない（画面は同じ式で数え直す displayHardText 等へ戻る）。
+        val base0 = _ui.value
+        val snapResult = withContext(if (nonCancellable) NonCancellable + Dispatchers.Default else Dispatchers.Default) {
+            runCatching { buildDisplaySnapshot(st, makeUi(st, schedule, report, analysis, transform(base0))) }
+        }
+        snapResult.exceptionOrNull()?.let { if (it is CancellationException) throw it; logOp("W", "表示の写しを作れませんでした: ${it.javaClass.simpleName}: ${it.message}") }
+        val snap = snapResult.getOrNull()
+        _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)).let { u -> u.copy(display = snap?.takeIf { d -> d.freshFor(u) }) } }
         resolvePendingGuidedFix(st, schedule, report, analysis.coverageDiag)
         deepCovODiagFollowUp(st, schedule, report, runLabel)
     }
@@ -3717,7 +3747,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             settingIssues = sanity.guidance,
             startDate = st.startDate,
         ).withShiftColors(st).withWishDisplay(st)
-        return built.copy(display = runCatching { buildDisplaySnapshot(st, built) }.getOrNull())
+        return built
     }
 
     /** 表示色（shiftColors 由来）の UI 項目。makeUi と [applyDisplayOnly]（検査を回さない）の単一ソース。 */

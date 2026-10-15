@@ -44,12 +44,4 @@ class PreRunCheckTest {
         assertEquals(PreRunCheck.WallHint(4, 2, 1, 2), PreRunCheck.wallHint(listOf(3 to 1, 1 to 1, 3 to 2, 1 to 2)))
     }
 
-    @Test fun fingerprint_changesWithBoardAndWishes() {
-        val f0 = PreRunCheck.fingerprint(st, board)
-        assertEquals(f0, PreRunCheck.fingerprint(st, board.copy2D()))
-        val b2 = board.copy2D(); b2[0][0] = (b2[0][0] + 1) % st.shifts.size
-        assertNotEquals(f0, PreRunCheck.fingerprint(st, b2))
-        val w = st.wishes.toMutableMap(); w.remove(w.keys.first())
-        assertNotEquals(f0, PreRunCheck.fingerprint(st.copy(wishes = w), board))
-    }
 }

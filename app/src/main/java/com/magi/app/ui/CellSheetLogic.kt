@@ -812,7 +812,7 @@ internal fun headcountImpact(
                 a > lim.second -> "（適正 ${lim.second}人を超えます）"
                 else -> "（必要 ${lim.first}人を満たしたまま）"
             }
-            val line = "${DayText.short(startDate, j)}の${shiftSymbols.getOrNull(k) ?: "$k"}：${b}人 → ${a}人$note"
+            val line = "${DayText.short(startDate, j)}の${shiftSymbols.getOrNull(k) ?: UNKNOWN_LABEL}：${b}人 → ${a}人$note"
             if (skip != null && j == skip.second) same += line else other += line
         }
     }
@@ -828,10 +828,10 @@ internal fun staffCountNotes(
     val after = boardAfter(schedule, ops)
     return ops.map { it.staff }.distinct().flatMap { i ->
         val row = schedule.getOrNull(i).orEmpty(); val rowA = after.getOrNull(i).orEmpty()
-        val name = staffNames.getOrNull(i) ?: "#$i"
+        val name = staffNames.getOrNull(i) ?: UNKNOWN_LABEL
         ops.filter { it.staff == i }.flatMap { listOfNotNull(row.getOrNull(it.day), it.toShift) }.distinct().sorted().map { k ->
             val b = row.count { it == k }; val a = rowA.count { it == k }
-            val sym = shiftSymbols.getOrNull(k) ?: "$k"
+            val sym = shiftSymbols.getOrNull(k) ?: UNKNOWN_LABEL
             if (a == b) "${name}さんの「$sym」の回数は変わりません（${b}回のまま）"
             else "${name}さんの「$sym」：${b}回 → ${a}回" + (if (i != targetStaff) limits?.invoke(i, k)?.let { countCrossNote(b, a, it.first, it.second) }.orEmpty() else "")
         }
@@ -862,7 +862,7 @@ internal fun newCountBreakLines(
                 hi != null && a > hi && b <= hi -> "high"
                 else -> return@mapNotNull null
             }
-            "新たに生じる：${breakdownLabels[fam] ?: fam}（${staffNames.getOrNull(i) ?: "#$i"}さんの${shiftSymbols.getOrNull(k) ?: "$k"}）"
+            "新たに生じる：${breakdownLabels[fam] ?: fam}（${staffNames.getOrNull(i) ?: UNKNOWN_LABEL}さんの${shiftSymbols.getOrNull(k) ?: UNKNOWN_LABEL}）"
         }
     }
 }
@@ -1086,7 +1086,7 @@ internal fun cellChangeReview(
     targets: List<FixTarget> = emptyList(),
 ): CellChangeReview {
     fun sym(x: Int?) = x?.let { shiftSymbols.getOrNull(it) } ?: "—"
-    val name = staffNames.getOrNull(i) ?: "#$i"
+    val name = staffNames.getOrNull(i) ?: UNKNOWN_LABEL
     val cur = s[i][j]
     val trial = Array(s.size) { s[it].copyOf() }.also { it[i][j] = k }
     val before = UnifiedViolationChecker.check(state, s)
@@ -1240,7 +1240,7 @@ internal fun cellCountLines(ui: UiState, i: Int, current: Int, limits: ((Int, In
             "vio-low" -> lo?.let { "／下限${it}回" }; "vio-high" -> hi?.let { "／上限${it}回" }
             else -> (apt?.let { "／目標${it}回" } ?: lo?.let { "／下限${it}回" } ?: hi?.let { "／上限${it}回" })
         } ?: ""
-        "${ui.shiftSymbols.getOrNull(k) ?: "$k"}：現在${n}回$basis"
+        "${ui.shiftSymbols.getOrNull(k) ?: UNKNOWN_LABEL}：現在${n}回$basis"
     }
 }
 
@@ -1297,8 +1297,12 @@ internal fun preRunRepeatHintText(top: String?): String =
     "前回と同じ探索時間・方式で再作成します。" + (top?.let { "前回いちばん多い必須違反は${it}です。" } ?: "") +
         "同じ設定では同じ違反が残りやすいため、編集タブでこれを 1 つ緩めると減る見込みがあります。"
 
-/** 「勤務表を作成する」を一度見たら出さない基準＝設定と希望（盤面は含めない。再作成のたびに盤面は変わる）。 */
-internal fun preRunAckFingerprint(st: com.magi.app.model.MagiState): Long = com.magi.app.v6.StateFingerprint.of(st)
+/**
+ * 「勤務表を作成する」を一度見たら出さない基準＝設定と希望と、再作成で外れる手置きのセル（[clears]）。
+ * 盤面そのものは含めない（再作成のたびに変わる）。上限 0 のセルを手で置き直したときだけシートをもう一度出す。
+ */
+internal fun preRunAckFingerprint(st: com.magi.app.model.MagiState, clears: List<com.magi.app.v6.PreRunCheck.HandPlacedCell>): Long =
+    clears.fold(com.magi.app.v6.StateFingerprint.of(st)) { h, c -> ((h * 31L + c.staff) * 31L + c.day) * 31L + c.shift }
 
 internal const val PRE_RUN_TITLE = "勤務表を作成する"
 internal const val PRE_RUN_PROCEED = "勤務表を作成"
@@ -1359,7 +1363,7 @@ internal fun shortageCandidates(st: MagiState, p: Problem, sched: Array<IntArray
             if (p.covUCell(from, dayIndex, cnt - 1) > p.covUCell(from, dayIndex, cnt)) continue
         }
         val g = st.staff.getOrNull(i)?.groupIdx ?: -1
-        out.add(FixCandidate(i, st.staff.getOrNull(i)?.name ?: "#$i", st.groups.getOrNull(g)?.kigou ?: "", sched[i][dayIndex] == rest))
+        out.add(FixCandidate(i, st.staff.getOrNull(i)?.name ?: UNKNOWN_LABEL, st.groups.getOrNull(g)?.kigou ?: "", sched[i][dayIndex] == rest))
     }
     // 休みの人（動かしやすい）を先頭に。
     out.sortBy { if (it.fromRest) 0 else 1 }
@@ -1420,14 +1424,18 @@ internal fun bulkClearWishesLabel(n: Int): String = "担当外の希望 ${n}件�
 
 internal const val ALTERNATIVES_ALL_WORSE = "今の勤務表より良くありません"
 
-/** 他の案の 1 行（必須違反と、計算した時点の勤務表との比べ）。 */
-internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard: Int, worse: Boolean): String {
+/**
+ * 他の案の 1 行（必須違反と、計算した時点の勤務表との比べ）。比べは採用の基準（betterReport）の結果で語る＝
+ * [better]＝案が今より良い、[worse]＝今のほうが良い、どちらでもなければ今と同じ。
+ */
+internal fun alternativeSummary(n: Int, hardTxt: String, curHard: Int?, altHard: Int, worse: Boolean, better: Boolean): String {
     val cmp = when {
         curHard == null -> ""
         altHard < curHard -> "（今より少ない）"
         altHard > curHard -> "（今より多い）"
-        worse -> "（今と同じ・要調整は今のほうが少ない）"
-        else -> "（今と同じ・要調整は少ない）"
+        better -> "（今と同じ・全体は今より良い（重みつき））"
+        worse -> "（今と同じ・全体は今より悪い（重みつき））"
+        else -> "（今と同じ）"
     }
     return "案$n：必須違反 $hardTxt$cmp"
 }
@@ -1441,3 +1449,41 @@ internal const val SHORTAGE_LABEL_FIXABLE = "動かせば埋まる"
 internal const val SHORTAGE_ENOUGH_TEXT = "担当できる人の数は足りています。なおし方を見るで 1 人ずつ入れられます"
 
 internal const val SETTINGS_TIME_TITLE = "勤務表をつくる時間"
+
+/** 名前・記号が引けないときの共通の表示（番号を見せない）。 */
+internal const val UNKNOWN_LABEL = "—"
+
+/** 進捗の基準（initHard/initSoft）を取り直すかの指紋＝データの指紋＋盤面差し替えの回数。 */
+internal fun initBaseKeyOf(stateKey: Long, boardReplaceRev: Long): Long = stateKey * 1_000_003L + boardReplaceRev
+
+/** 実行中の進捗サマリ文字列: 残りの違反（開始の値つき）・ 残り時間。読取専用。 */
+internal fun progressSummary(ui: UiState): String {
+    val parts = ArrayList<String>(4)
+    parts += when {
+        // [3.393.0] 必須違反が残っている間は「改善◯%」の枝に入らないため、旧実装は進み具合を
+        //   まったく示していなかった（⚠3 とだけ出る）。開始時の必須件数(initHard)を併記して
+        //   「69件から3件まで来ている」ことを見せる。initHard は満足度の計算で既に使っており、
+        //   ここが最後の未配線だった。
+        ui.bestHard > 0L -> {
+            // 開始は基準の盤面の内訳から同じ単位で言う（内訳が無い・減っていなければ出さない＝件と人を混ぜない）。
+            val start = ui.initBreakdown.takeIf { it.isNotEmpty() && ui.initHard > ui.bestHard }?.let { "（開始${hardText(it, ui.initHard)}）" }.orEmpty()
+            "必須違反 残り${hardText(ui.breakdown, ui.bestHard)}$start"
+        }
+        // 要調整も族の単位ごとの合計で言う（生の件数は単位が混ざる）。
+        ui.initBreakdown.isNotEmpty() || ui.bestSoft > 0L -> {
+            val now = unitTotals(ui.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし"
+            val start = ui.initBreakdown.takeIf { it.isNotEmpty() }?.let { unitTotals(it, com.magi.app.v6.MirrorKeys.soft) }?.takeIf { it != now }
+            "要調整 $now" + (start?.let { "（開始$it）" } ?: "")
+        }
+        else -> "要調整 –"
+    }
+    val secLeft = (((ui.budgetSec + com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC) * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
+    parts += "残り %d:%02d".format(secLeft / 60, secLeft % 60)
+    // [3.396.0] 反復数（「1.2M回」「毎秒40K」）は**作り手の指標**なので操作画面から外した。
+    //   初見の人は必ず「これ何の回数？」と聞く＝その時点でこの表示は失敗している。知りたいのは
+    //   「あとどれくらい」と「良くなっているか」の2つで、それは上の2項目が既に答えている。
+    //   反復数を見たいとき（ネイティブ加速が効いているか等）は診断ログの `TIME` 行と
+    //   `AdaptivePortfolio 合計iter`（3.360.0）に出ている。3.393.0 で「死んだ配管を配線する」として
+    //   毎秒表示を足したのは、この観点では逆向きだったので戻す。
+    return parts.joinToString("  ・  ")
+}

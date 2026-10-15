@@ -60,7 +60,7 @@ internal fun explainExtras(state: MagiState, s: Array<IntArray>, target: FixTarg
         val n = (without.breakdown[top] ?: 0) - (full.breakdown[top] ?: 0)
         val op = g.first()
         val where = when (top) {
-            "low", "high", "apt", "c2", "weekly" -> "${names.getOrNull(op.staff) ?: "#${op.staff}"}さんの"
+            "low", "high", "apt", "c2", "weekly" -> "${names.getOrNull(op.staff) ?: UNKNOWN_LABEL}さんの"
             "covU", "covO" -> "${DayText.short(state.startDate, op.day)}の"
             else -> ""
         }
@@ -75,8 +75,8 @@ internal fun explainExtras(state: MagiState, s: Array<IntArray>, target: FixTarg
 internal fun extraReasonLines(e: FixExplanation, schedule: List<List<Int>>, staffNames: List<String>, shiftSymbols: List<String>, startDate: String): List<String> =
     e.extras.flatMap { x ->
         val what = x.ops.joinToString("・") { op ->
-            "${staffNames.getOrNull(op.staff) ?: "#${op.staff}"}さん ${DayText.short(startDate, op.day)} " +
-                "${shiftSymbols.getOrNull(schedule.getOrNull(op.staff)?.getOrNull(op.day) ?: -1) ?: "—"} → ${shiftSymbols.getOrNull(op.toShift) ?: "${op.toShift}"}"
+            "${staffNames.getOrNull(op.staff) ?: UNKNOWN_LABEL}さん ${DayText.short(startDate, op.day)} " +
+                "${shiftSymbols.getOrNull(schedule.getOrNull(op.staff)?.getOrNull(op.day) ?: -1) ?: "—"} → ${shiftSymbols.getOrNull(op.toShift) ?: UNKNOWN_LABEL}"
         }
         listOf("合わせて変える勤務：$what", "　理由：${x.reason ?: "理由を確かめられません"}")
     } + e.incidental.map { "ついでに直る：$it" }
@@ -90,5 +90,7 @@ internal fun hardUnchangedLines(s: FixSuggestion, hardRemains: Boolean): List<St
 }
 
 /** 下書きで今の勤務表を置き換える前の確認（[hard]＝今の必須違反、単位つき）。 */
-internal fun draftConfirmText(hard: String): String = "今の勤務表（必須 $hard）を下書きで置き換えます。元に戻せます"
+/** 下書きの確認の一文。[hard]＝置き換える前の必須違反（まだ数えていなければ null＝件数を言わない）。 */
+internal fun draftConfirmText(hard: String?): String =
+    if (hard == null) "今の勤務表を下書きで置き換えます。元に戻せます" else "今の勤務表（必須 $hard）を下書きで置き換えます。元に戻せます"
 internal const val DRAFT_UNDO_NOTE = "元に戻すで前の勤務表に戻せます"

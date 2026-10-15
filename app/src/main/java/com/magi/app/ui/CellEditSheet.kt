@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerSize
@@ -282,19 +283,19 @@ internal fun CellEditSheet(
                     } else if (mode == 0 && !(dilemma && dilemmaChoice == 0)) {
                         Text("どのように調整しますか？", style = MaterialTheme.typography.titleSmall)
                         // 足りない側のセルは、このセルを変えるより当日のその勤務に入れる人を探すのが先。
+                        // 直し方の一覧は一度に 1 つだけ開く（片方を開くともう片方は閉じる）。
+                        var openPanel by remember(cell) { mutableStateOf(FixPanelOpen.NONE) }
                         if ("covU" in shortSide) {
-                            var shortSearch by remember(cell) { mutableStateOf(false) }
-                            if (!shortSearch) Button(onClick = { shortSearch = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                            if (openPanel != FixPanelOpen.SHORT_SIDE) Button(onClick = { openPanel = FixPanelOpen.SHORT_SIDE }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                                 Text(shortSideSearchButton(DayText.short(ui.startDate, j), sym(current)), maxLines = 2)
                             }
                             else FixSearchPanel(ui, cv, FixFocus(null, current, j), onEvent, fixNav, onApplied = {}, compact = true)
                         }
-                        var searching by remember(cell) { mutableStateOf(false) }
-                        if (!searching && status.severity != CellSeverity.NONE) {
-                            Button(onClick = { searching = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("変更案を探す") }
+                        if (openPanel != FixPanelOpen.CELL && status.severity != CellSeverity.NONE) {
+                            Button(onClick = { openPanel = FixPanelOpen.CELL }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("変更案を探す") }
                             Text("この日・前後の日・関連する勤務の変更案を比較します。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         }
-                        if (searching) {
+                        if (openPanel == FixPanelOpen.CELL) {
                             // 重なった問題が 2 件以上なら、どの問題の変更案を見るかを選ぶ。
                             var problem by remember(cell) { mutableStateOf<String?>(null) }
                             problemChoiceHeading(fams.size)?.let { heading ->
@@ -556,7 +557,7 @@ private fun PeekBody(
                                 else { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.SetWish(i, j, k)) }
                             }
                         }
-                        TextButton(onClick = onToggleExpand, modifier = Modifier.width(64.dp).heightIn(min = 48.dp).semantics { contentDescription = "問題の説明と直し方を表示" },
+                        TextButton(onClick = onToggleExpand, modifier = Modifier.widthIn(min = 64.dp).heightIn(min = 48.dp).semantics { contentDescription = "問題の説明と直し方を表示" },
                             contentPadding = PaddingValues(0.dp)) { Text("詳しく ▸", maxLines = 1) }
                     }
                     if (mode == 0 && shownPicks.any { it in marks.hardRisk }) {
@@ -625,3 +626,6 @@ private fun SlotButton(
         }
     }
 }
+
+/** セルのシートで開いている直し方の一覧（足りない側の人探しか、このセルの変更案か）。 */
+private enum class FixPanelOpen { NONE, SHORT_SIDE, CELL }

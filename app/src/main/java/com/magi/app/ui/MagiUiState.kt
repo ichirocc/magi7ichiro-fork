@@ -25,6 +25,8 @@ data class UiState(
     val use2: Boolean = false,
     val initHard: Long = 0,
     val initSoft: Long = 0,
+    /** 進捗の基準を取った盤面の族ごとの件数（進捗行の「開始」を単位つきで言う）。空＝基準なし。 */
+    val initBreakdown: Map<String, Int> = emptyMap(),
     /** 実行中の**表示**。可否の判定には使わない（[MagiViewModel.optimizeInFlight] が唯一の根拠）。 */
     val running: Boolean = false,
     // [3.568.0/外部レビュー] 画面消灯防止の可否。旧: 画面が `running` を見ていたが、これは背景実行・
@@ -155,6 +157,8 @@ data class UiState(
     val editRev: Int = 0,
     /** 印と一文の写し（[DisplaySnapshot]）。検査結果の反映（makeUi）で作り直す。state 非保存。 */
     val display: DisplaySnapshot? = null,
+    /** ホームの先頭の直す手が解消する必須違反の名と場所（VM が Default で作る。[TopFixResolved.matches] で鮮度を照合）。state 非保存。 */
+    val topFixResolved: TopFixResolved? = null,
     val message: String? = null,
     /** 操作の通知（「元に戻す」付き）。検査の進み具合の [message] とは別のイベント＝再検査で上書きされない。 */
     val opNotice: OpNotice? = null,
@@ -277,4 +281,15 @@ enum class SearchStrength {
         com.magi.app.v6.PolishGate.countChainPolish = on
         com.magi.app.v6.PolishGate.aptFairSoftTolerance = on
     }
+}
+
+/** 先頭の直す手（[ops]）を [schedule] に当てたとき解消する必須違反の行。盤面と手が今と同じときだけ使う。 */
+data class TopFixResolved(val ops: List<com.magi.app.v6.FixCell>, val schedule: List<List<Int>>, val labels: List<String>) {
+    fun matches(ops: List<com.magi.app.v6.FixCell>?, schedule: List<List<Int>>): Boolean = ops == this.ops && schedule == this.schedule
+}
+
+/** ホームの見出しが読む解消の行（鮮度が合わなければ空＝件数だけの見出し）。 */
+internal fun topFixResolvedLabels(ui: UiState): List<String> {
+    val top = ui.fixSuggestions.firstOrNull { it.deltaHard < 0 } ?: return emptyList()
+    return ui.topFixResolved?.takeIf { it.matches(top.ops, ui.schedule) }?.labels.orEmpty()
 }
