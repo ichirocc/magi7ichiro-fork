@@ -204,9 +204,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     var editingCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var tourActive by remember { mutableStateOf(false) }   // 「必須違反を順に見る」の巡回中
     var tourAt by remember { mutableIntStateOf(0) }         // 巡回の何件目か（違反単位、`hardViolationItems`）
-    val tourItems = remember(ui.violationCellFamilies, ui.schedule) {
+    val tourItems = remember(ui.violationCellFamilies, ui.schedule, ui.display) {
         val st = vm.state
-        if (st == null || ui.schedule.isEmpty()) emptyList() else hardViolationItems(st, cachedProblem(st), ui.schedule.toIntArray2D(), ui.violationCellFamilies)
+        ui.display?.takeIf { it.freshFor(ui) }?.tourItems
+            ?: if (st == null || ui.schedule.isEmpty()) emptyList() else hardViolationItems(st, cachedProblem(st), ui.schedule.toIntArray2D(), ui.violationCellFamilies)
     }
     var sheetMode by remember { mutableIntStateOf(0) }      // セル編集シートの 割当(0)／希望(1)。ぶつかっている希望の行からは希望で開く
     var sheetPx by remember { mutableFloatStateOf(0f) }
@@ -754,7 +755,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         {
                             val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
                             val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
-                            HardListChip(hardText(ui.breakdown, ui.bestHard), rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
+                            HardListChip(displayHardText(ui), rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
                         }
                     } else null
                     ScheduleToolsCard(ui, vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket, locCount = vioLocCount,
@@ -1218,7 +1219,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                         label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
                     }
                     ok -> { label = readyBadgeLabel(ui.bestSoft, ui.breakdown); fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
-                    ui.hasResult -> { label = "必須違反 ${hardText(ui.breakdown, ui.bestHard)}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
+                    ui.hasResult -> { label = "必須違反 ${displayHardText(ui)}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
                     else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
                 // 札の前に自動作成の状態（2026-10-14 利用者レビュー: 「未計算」では、警告が今の勤務表の評価か分からなかった）。

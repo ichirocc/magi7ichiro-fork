@@ -3645,7 +3645,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val ratio = (1.0 - report.total.toDouble() / initTotal).coerceIn(0.0, 1.0)
         val sat = if (report.hard > 0) (ratio * 55).toInt() else (40 + (ratio * 60).toInt()).coerceIn(0, 100)
         // [backlog#1] この検査対象が結果(ws6)そのものか（＝report が結果専用マップの最新値か）。
-        return base.copy(
+        val built = base.copy(
             staff = st.staffCount,
             days = st.dayCount,
             shifts = st.shiftCount,
@@ -3717,6 +3717,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             settingIssues = sanity.guidance,
             startDate = st.startDate,
         ).withShiftColors(st).withWishDisplay(st)
+        return built.copy(display = runCatching { buildDisplaySnapshot(st, built) }.getOrNull())
     }
 
     /** 表示色（shiftColors 由来）の UI 項目。makeUi と [applyDisplayOnly]（検査を回さない）の単一ソース。 */

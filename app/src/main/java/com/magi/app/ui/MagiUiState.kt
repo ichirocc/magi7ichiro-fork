@@ -153,6 +153,8 @@ data class UiState(
     //   editScope の編集画面が再構成されず「+/-で数字が変わらない」実機バグを
     //   生んでいた。applyStructure が毎回これを増やして必ず distinct な UiState を emit＝確実に再構成させる。
     val editRev: Int = 0,
+    /** 印と一文の写し（[DisplaySnapshot]）。検査結果の反映（makeUi）で作り直す。state 非保存。 */
+    val display: DisplaySnapshot? = null,
     val message: String? = null,
     /** 操作の通知（「元に戻す」付き）。検査の進み具合の [message] とは別のイベント＝再検査で上書きされない。 */
     val opNotice: OpNotice? = null,

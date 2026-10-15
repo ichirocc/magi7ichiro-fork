@@ -135,8 +135,11 @@ internal fun CellEditSheet(
         }
     }
     val status = remember(rev, cell) {
-        val st = stateOf() ?: return@remember CellStatus(CellSeverity.NONE, "違反なし")
-        cellStatusLine(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams)
+        ui.display?.takeIf { it.freshFor(ui) }?.cellMark(i, j)?.takeIf { it.families == fams }?.let { CellStatus(it.severity, it.oneLine, it.cause) }
+            ?: run {
+                val st = stateOf() ?: return@remember CellStatus(CellSeverity.NONE, "違反なし")
+                cellStatusLine(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams)
+            }
     }
     val dilemma = isWishDilemma(wish, current, status.severity)
     var dilemmaChoice by remember(cell) { mutableIntStateOf(0) } // 0=未選択, 1=他の人で補う, 2=希望は残して割当を変える

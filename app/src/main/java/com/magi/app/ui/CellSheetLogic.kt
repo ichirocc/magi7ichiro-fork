@@ -39,7 +39,7 @@ internal fun cellSheetSlots(shifts: List<Int>, canDo: Set<Int>, leftHand: Boolea
         (row + List(CELL_SHEET_COLUMNS - row.size) { null }).let { if (leftHand) it.reversed() else it }
     }
 
-internal enum class CellSeverity { HARD, SOFT, NONE }
+enum class CellSeverity { HARD, SOFT, NONE }
 
 /** [cause] は接頭辞（必須/要調整）を除いた原因だけ（希望を守っている板挟みの 2 行目に使う）。 */
 internal data class CellStatus(val severity: CellSeverity, val text: String, val cause: String = "")
@@ -381,7 +381,7 @@ internal fun violationTour(ui: UiState, includeSoft: Boolean = false): List<Pair
 
 /** 巡回の 1 件＝必須違反 1 件（族・職員・関連セルの日・見出し）。1 セルが 2 件に属せば 2 回止まる（`report.hard` の数え方と同じ）。
  *  セルで辿れる族だけ（c3n＝並びの全日、c3w＝前日＋希望の翌日、pref/groupViol/extWish＝1 セル）。人員不足は日ヘッダから＝件数は別に添える。 */
-internal data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String) {
+data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String) {
     val cell: Pair<Int, Int> get() = staff to days.first()
 }
 
@@ -456,7 +456,7 @@ internal fun sheetCellClasses(display: List<String>, inC1Shortage: Boolean): Lis
  * セルシートの評価の版。状態の 1 行・おすすめの印・回数の 1 行はこの版が変わったときだけ同じ入力から作り直す。
  * 盤面・希望・設定（editRev）・検査世代のどれかが変われば変わる（元に戻す/やり直すも同じ）。
  */
-internal data class CellSheetRev(val checkRev: Long, val editRev: Int, val schedule: List<List<Int>>, val wishes: Map<String, Int>)
+data class CellSheetRev(val checkRev: Long, val editRev: Int, val schedule: List<List<Int>>, val wishes: Map<String, Int>)
 
 internal fun cellSheetRev(ui: UiState): CellSheetRev = CellSheetRev(ui.checkRev, ui.editRev, ui.schedule, ui.wishes)
 

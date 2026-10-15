@@ -115,6 +115,7 @@ MagiRoot（唯一の合成ルート）
 |---|---|---|
 | `MagiScheduleViews` | UI-Schedule | 勤務表グリッド / セル / 集中モード |
 | `CellEditSheet` | UI-Schedule | セル編集シート（画面下の固定パネル・固定配置のシフトボタン） |
+| `DisplaySnapshot` | UI-logic（Compose 非依存） | 印と一文の写し（必須件数の言い方・セルの印と状態の 1 行・巡回）を検査結果の反映で 1 回作る（ホストテスト） |
 | `CellSheetLogic` | UI-logic（Compose 非依存） | セル編集シートの固定配置・1 行の状態・シフトの印・巡回・回数の 1 行（ホストテスト） |
 | `C1Display` | UI-logic（Compose 非依存） | 期間の制約の表示専用の不足区間（印＝変えられる日・帯・満たせない判定・シートの文。ホストテスト） |
 | `MagiDashboardCards` ＋ `V6RemainingScreens` | UI-Analysis | 分析カード（違反の内訳18 / 俯瞰 / チェック概要 / ボトルネック / 改善提案） |
