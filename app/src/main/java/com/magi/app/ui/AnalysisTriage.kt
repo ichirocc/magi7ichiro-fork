@@ -182,7 +182,7 @@ private fun promotedSoftFamilies(
         val slots = "${first.dayLabel}の「${first.shiftSymbol}」" + (if (stuckSurplus.size > 1) "など${stuckSurplus.size}枠" else "")
         // 曜日の偏り・グループ内のばらつきには緩める設定が無い＝手で動かす案内にする。
         val remedy = if (first.blockedFamily in setOf("weekly", "fair")) "勤務表で手で動かすと減らせます。" else "${fam}の設定を緩めると動きます。"
-        out["covO"] = "${slots}は、動かす手が「${fam}」に負けて採用されません。$remedy"
+        out["covO"] = "${slots}は、動かす手は「${fam}」が優先されるため採用されません。$remedy"
     }
     return out
 }

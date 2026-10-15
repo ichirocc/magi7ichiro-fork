@@ -99,7 +99,7 @@ internal fun SkillGroupCard(ui: UiState, v: Ws1View, skillRuleCount: Int, onEven
         val refs = v.skillGroupRefCount(g)
         val members = staff.count { it.skillIdx == g }
         val memberNote = if (members > 0) "所属していた職員${members}名のスキルは「(なし)」に戻ります（スキルグループのルールの対象から外れます）。" else "所属している職員はいません。"
-        val refNote = if (refs > 0) " このスキルグループを参照する制約が${refs}件あります。削除すると評価対象から外れます。" else ""
+        val refNote = if (refs > 0) " このスキルグループを使うルールが${refs}件あります。削除すると、そのルールは使われなくなります。" else ""
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
             title = { Text("スキルグループを削除しますか？") },

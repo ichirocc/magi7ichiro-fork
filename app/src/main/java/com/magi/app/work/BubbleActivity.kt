@@ -60,7 +60,7 @@ private fun BubbleContent(
         Modifier.fillMaxSize().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("勤務表の最適化", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text("勤務表づくり", fontWeight = FontWeight.Bold, fontSize = 18.sp)
         if (fromBubble) {
             Text("バブル表示中", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -79,12 +79,12 @@ private fun BubbleContent(
             }
             p != null -> {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("最適化中 ・ 経過 ${fmtElapsed(p.elapsedMs)}")
+                Text("勤務表をつくっています ・ 経過 ${fmtElapsed(p.elapsedMs)}")
                 Text("違反 ${p.total}（必須 ${p.hard}）")
             }
             running -> {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
-                Text("最適化を開始しています…")
+                Text("勤務表をつくり始めています…")
             }
             else -> Text("待機中…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

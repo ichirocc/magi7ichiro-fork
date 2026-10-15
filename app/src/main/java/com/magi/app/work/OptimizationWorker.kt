@@ -150,7 +150,7 @@ class OptimizationWorker(
         runCatching {
             BubbleSupport.ensureChannel(ctx)
             BubbleSupport.pushShortcut(ctx)
-            BubbleSupport.postProgress(ctx, "最適化を開始しました")
+            BubbleSupport.postProgress(ctx, "勤務表をつくり始めました")
         }
         // [3.412.0/B-10] `areBubblesAllowed` は定義があるだけで**戻り値がどこにも使われていなかった**
         //   （＝端末側でバブルが禁止されていても、利用者にも作り手にも何も伝わらない）。バブルは
@@ -213,7 +213,7 @@ class OptimizationWorker(
                         val s = wallElapsed / 1000
                         val clock = "%d:%02d".format(s / 60, s % 60)
                         runCatching {
-                            BubbleSupport.postProgress(ctx, "最適化中 ・ 経過 $clock ・ 違反 ${report.total}（必須 ${report.hard}）")
+                            BubbleSupport.postProgress(ctx, "勤務表をつくっています ・ 経過 $clock ・ 違反 ${report.total}（必須 ${report.hard}）")
                         }
                     }
                     // [#4/C1] 途中最良解を定期スナップショット → kill されても「途中結果から再開」できる。
@@ -348,8 +348,8 @@ class OptimizationWorker(
             val owned = ownsFiles()
             if (owned) { reportClear("失敗"); releasedByMe = true }
             terminal("失敗: ${e.javaClass.simpleName}: ${e.message}" + if (owned) "（片付け済み）" else "（所有権なし）", "W")
-            notify("最適化に失敗しました", com.magi.app.ui.failureWords(e, com.magi.app.ui.FailureKind.ENGINE))   // 例外名は終端ログだけ（画面は利用者の言葉）
-            runCatching { BubbleSupport.postDone(ctx, "最適化に失敗しました", autoExpand = true) }
+            notify("勤務表をつくれませんでした", com.magi.app.ui.failureWords(e, com.magi.app.ui.FailureKind.ENGINE))   // 例外名は終端ログだけ（画面は利用者の言葉）
+            runCatching { BubbleSupport.postDone(ctx, "勤務表をつくれませんでした", autoExpand = true) }
             Result.failure()
         } finally {
             // [3.329.0/外部レビュー H-03] **所有者のときだけ**実行中を降ろす。置き換えで打ち切られた
@@ -399,7 +399,7 @@ class OptimizationWorker(
         val mgr = ctx.getSystemService(NotificationManager::class.java) ?: return
         if (mgr.getNotificationChannel(CHANNEL) == null) {
             mgr.createNotificationChannel(
-                NotificationChannel(CHANNEL, "勤務表の最適化", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL, "勤務表づくり", NotificationManager.IMPORTANCE_LOW),
             )
         }
     }

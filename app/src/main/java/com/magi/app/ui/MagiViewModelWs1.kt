@@ -131,7 +131,7 @@ fun MagiViewModel.ws1SetUse2(on: Boolean) {
 private fun MagiViewModel.symbolTaken(existing: List<String>, kigou: String, what: String, exceptIndex: Int = -1): Boolean {
     if (!com.magi.app.v6.Ws1Ops.symbolCollides(existing, kigou, exceptIndex)) return false
     val k = kigou.trim()
-    notify("記号「$k」はすでに別の${what}で使われているため、保存しませんでした（制約の参照が混ざるため、別の記号にしてください）", "W")
+    notify("記号「$k」はすでに別の${what}で使われているため、保存しませんでした。制約の参照が混ざるため、別の記号にしてください", "W")
     return true
 }
 

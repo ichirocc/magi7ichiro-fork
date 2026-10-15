@@ -49,7 +49,7 @@ object BubbleSupport {
 
     private fun person(ctx: Context): Person =
         Person.Builder()
-            .setName("勤務表の最適化")
+            .setName("勤務表づくり")
             .setKey(SHORTCUT_ID)
             .setIcon(IconCompat.createWithResource(ctx, R.mipmap.ic_launcher))
             .setBot(true)
@@ -80,7 +80,7 @@ object BubbleSupport {
                 "最適化バブル",
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = "最適化の進捗・完了を浮遊バブルで表示"
+                description = "勤務表づくりの進み具合と完了をバブルで表示します"
                 setAllowBubbles(true)
                 setShowBadge(false)
             }
@@ -101,7 +101,7 @@ object BubbleSupport {
         val info = ShortcutInfoCompat.Builder(ctx, SHORTCUT_ID)
             .setLongLived(true)
             .setShortLabel("最適化")
-            .setLongLabel("勤務表の最適化")
+            .setLongLabel("勤務表づくり")
             .setIcon(IconCompat.createWithResource(ctx, R.mipmap.ic_launcher))
             .setPerson(person(ctx))
             .setCategories(setOf(CATEGORY_OPTIMIZE))
@@ -148,11 +148,11 @@ object BubbleSupport {
         pushShortcut(ctx)
         val me = Person.Builder().setName("あなた").setKey("magi_user").build()
         val style = NotificationCompat.MessagingStyle(me)
-            .setConversationTitle("勤務表の最適化")
+            .setConversationTitle("勤務表づくり")
             .addMessage(message, System.currentTimeMillis(), person(ctx))
         val n = NotificationCompat.Builder(ctx, CHANNEL_BUBBLE)
             .setSmallIcon(smallIcon)
-            .setContentTitle("勤務表の最適化")
+            .setContentTitle("勤務表づくり")
             .setContentText(message)
             .setStyle(style)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)

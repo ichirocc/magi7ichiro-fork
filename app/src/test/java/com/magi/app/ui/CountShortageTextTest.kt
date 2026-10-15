@@ -88,7 +88,7 @@ class CountShortageTextTest {
         val need = { k: Int, _: Int -> if (k == 2) 1 to 1 else if (k == 1) 1 to 2 else null }
         assertEquals(CountShortage(1, 3, "下限"), countShortage(u, FixFocus(0, 1), limits))
         val why = noFixReasons(u, FixFocus(0, 1), limits, need)
-        assertEquals("今回の探索では、条件を守って 2 回増やせる案が見つかりませんでした。", why.lines[0])
+        assertEquals("今回探した範囲では、条件を守って 2 回増やせる案が見つかりませんでした。", why.lines[0])
         assertEquals("次に確認すること：「A」を追加する候補日と、変更を妨げる条件を確認します。", why.lines[1])
         assertTrue(why.lines.any { it == "補足：「A」の 1 回のうち 1 回は本人の希望で固定されています。" })
         assertTrue(why.lines.none { "抜けると" in it })
@@ -198,7 +198,7 @@ class CountShortageTextTest {
 
     /** 自動と担当者の分担（2026-10-14 利用者レビュー）: 作成前に自動で行うこと・保持するもの、作成後は「完了＝配布可」と言わない。 */
     @Test fun autoAndOperatorSplitTexts() {
-        assertEquals("10/1〜10/31・12人・探索 1分（＋仕上げ 20秒）。開始後は一手ごとの確認はしません", preRunPlanLine("2026-10-01", 31, 12, 60, 20))
+        assertEquals("10/1〜10/31・12人・組む時間 1分（＋仕上げ 20秒）。開始後は一手ごとの確認はしません", preRunPlanLine("2026-10-01", 31, 12, 60, 20))
         assertEquals("登録条件：つくる前に直す項目はありません／手動固定 3件は保持します", preRunConditionLine(false, 0, 3))
         assertEquals("登録条件：確認が必要な項目があります（下の一覧・希望が上限を超える 2件）", preRunConditionLine(false, 2, 0))
         assertEquals("期間の制約 2件・曜日の偏り 12pt", softSummary(mapOf("c1" to 2, "weekly" to 12, "c3n" to 1)))

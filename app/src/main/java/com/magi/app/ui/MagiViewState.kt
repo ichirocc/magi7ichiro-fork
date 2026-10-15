@@ -735,12 +735,12 @@ internal data class AddCandidate(val day: Int, val current: Int, val reason: Str
 internal enum class NoFixKind(val head: String) {
     CONTRADICTION("矛盾を確認：両立しない条件（本人の希望どうしのぶつかり）があります。該当する希望か条件を直すと解消します。"),
     TIME("時間不足：制限時間内に改善案を見つけられませんでした。もう一度探すと続きを探せます。"),
-    FIXED("固定条件による制限：本人の希望や個人の上限などの固定条件があり、現在の条件を守ったまま変更できる案は、今回の探索では見つかりませんでした。必要に応じて対象職員にご相談ください。"),
+    FIXED("固定条件による制限：本人の希望や個人の上限などの固定条件があり、現在の条件を守ったまま変更できる案は、今回探した範囲では見つかりませんでした。必要に応じて対象職員にご相談ください。"),
     SCOPE(NO_FIX_HEAD),
 }
 
 /** 1 行目＝見つからなかったこと（上段のシートは 2 行で切れる）、続けて確かめた理由、最後に探した範囲。 */
-internal const val NO_FIX_HEAD = "探索範囲内で改善なし：現在の条件を守ったまま改善できる案は、今回の探索では見つかりませんでした。別の方法で探すか、条件を見直せます。"
+internal const val NO_FIX_HEAD = "探した範囲で改善なし：現在の条件を守ったまま改善できる案は、今回探した範囲では見つかりませんでした。別の方法で探すか、条件を見直せます。"
 internal const val NO_FIX_SCOPE = "探したのは 1 セルの変更・2 人の入れ替え・玉突きの範囲です。"
 
 /**
@@ -837,7 +837,7 @@ private fun shortageReasons(
     val name = ui.staffNames.getOrNull(i) ?: "#$i"
     val out = arrayListOf(
         if (ui.fixTimedOut) "制限時間内に、条件を守って ${sh.gap} 回増やせる案は見つかりませんでした。もう一度探すと続きを探せます。"
-        else "今回の探索では、条件を守って ${sh.gap} 回増やせる案が見つかりませんでした。",
+        else "今回探した範囲では、条件を守って ${sh.gap} 回増やせる案が見つかりませんでした。",
         "次に確認すること：「${sym(k)}」を追加する候補日と、変更を妨げる条件を確認します。",
     )
     var wish = false
@@ -869,7 +869,7 @@ internal fun addCandidateHead(c: AddCandidate, ui: UiState, shift: Int): String 
 
 /** 回数不足の相談事項（増やす案が見つからないとき）。 */
 internal fun consultCountShortage(name: String, sym: String, head: String, staff: Int) =
-    ConsultItem("${name}さんの「$sym」の回数", "$head。条件を守って増やせる案が見つからない＝追加候補日と変更を妨げる条件を確認", staff, staffName = name)
+    ConsultItem("${name}さんの「$sym」の回数", "$head。条件を守って増やせる案が見つからないため、追加候補日と変更を妨げる条件を確認", staff, staffName = name)
 
 /** シフト集計「計（期間）」の人員の印：そのシフトに人員不足・過剰がある日。 */
 internal data class ShiftCoverageTotal(val underDays: List<Int>, val overDays: List<Int>) {
