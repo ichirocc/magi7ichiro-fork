@@ -129,6 +129,10 @@ internal object C3RotationPolish {
         fun movable(i: Int, j: Int) = !p.wishLocked(i, j)
         fun bannedNew(i: Int, j: Int, k: Int) = k != work[i][j] && p.extBanned(i, j, k)  // 拡張希望の禁止へは置かない
         val windows = intArrayOf(2, 3)
+        // 差分評価の前判定。基準盤面で正式評価とキーが一致したときだけ使い、一致しなければフル評価へ戻す。
+        var de: DeltaEvaluator? = if (PolishGate.rotationDeltaPrescreen) DeltaEvaluator(p).also { it.reset(work) } else null
+        if (de != null && !deltaKeyMatches(de, before)) de = null
+        var prescreened = 0
         var pass = 0
         while (pass < maxPasses) {
             if (shouldStop()) break
@@ -138,6 +142,7 @@ internal object C3RotationPolish {
             //   になる。cellFamilies（1セルの全クラス保持）に切替え、上書きされても検出できるようにする。
             //   起点が広がるだけの後方互換な修正（C1Rotate/C3Rotate 両呼出に共通して適用される）。
             val rep0 = if (pass == 0) before else UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
+            if (de != null && !deltaKeyMatches(de, rep0)) de = null
             val anchorStaff = HashSet<Int>()
             for ((key, fams) in rep0.cellFamilies) {
                 if (fams.any { it in anchorClasses }) anchorStaff.add(key.substringBefore(",").toIntOrNull() ?: continue)
@@ -184,9 +189,21 @@ internal object C3RotationPolish {
                                     val postObjective = staffObjective(p, work, ai) + staffObjective(p, work, bi) + staffObjective(p, work, ci)
                                     if (preObjective != null && !postObjective.isBetterThan(preObjective)) { for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }; skipped++; continue }
                                 }
+                                val d = de
+                                if (d != null) {
+                                    for (t in 0 until w) { d.apply(ai, j + t, sb[t]); d.apply(bi, j + t, sc[t]); d.apply(ci, j + t, sa[t]) }
+                                    // adoptionGate は betterReport を先に要求する＝キーで負ける手は正式評価でも必ず不採用。
+                                    if (!deltaKeyBetter(d.reportKey(), bestRep)) {
+                                        for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t]; d.apply(ai, j + t, sa[t]); d.apply(bi, j + t, sb[t]); d.apply(ci, j + t, sc[t]) }
+                                        prescreened++; continue
+                                    }
+                                }
                                 val rep = UnifiedViolationChecker.check(state, work, quantitativeRangeEval = quantitativeRangeEval)
                                 if (adoptionGate(p, workBeforeRotate, work, rep, bestRep, pinBlocks).accepted) { bestRep = rep; applied++; improved = true }
-                                else for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }   // 巻き戻し
+                                else {
+                                    for (t in 0 until w) { work[ai][j + t] = sa[t]; work[bi][j + t] = sb[t]; work[ci][j + t] = sc[t] }   // 巻き戻し
+                                    if (d != null) for (t in 0 until w) { d.apply(ai, j + t, sa[t]); d.apply(bi, j + t, sb[t]); d.apply(ci, j + t, sc[t]) }
+                                }
                             }
                         }
                     }
@@ -200,8 +217,21 @@ internal object C3RotationPolish {
                 " / c3 ${before.breakdown["c3"] ?: 0}->${bestRep.breakdown["c3"] ?: 0}" +
                 " / c3m ${before.breakdown["c3m"] ?: 0}->${bestRep.breakdown["c3m"] ?: 0}" +
                 " / c3mn ${before.breakdown["c3mn"] ?: 0}->${bestRep.breakdown["c3mn"] ?: 0}" +
-                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回 (差分前フィルタで省略${skipped}手)"))
+                " / total ${before.total}->${bestRep.total} HARD ${before.hard}->${bestRep.hard} 採用${applied}回 (差分前フィルタで省略${skipped}手・差分評価で省略${prescreened}手)"))
         return V6HotfixPasses.CyclicSwapResult(work, before.total, bestRep.total, applied, logs, pinBlocks = pinBlocks, report = bestRep)
+    }
+
+    /** [DeltaEvaluator.reportKey] が正式評価 [rep] の (hard, weightedScore, total) と一致するか。 */
+    internal fun deltaKeyMatches(de: DeltaEvaluator, rep: ViolationReport): Boolean {
+        val k = de.reportKey()
+        return k[0] == rep.hard.toLong() && k[1].toDouble() == rep.weightedScore && k[2] == rep.total.toLong()
+    }
+
+    /** [betterReport] と同じ辞書式で、差分キー [key] が [best] より良いか。 */
+    internal fun deltaKeyBetter(key: LongArray, best: ViolationReport): Boolean = when {
+        key[0] != best.hard.toLong() -> key[0] < best.hard
+        key[1].toDouble() != best.weightedScore -> key[1].toDouble() < best.weightedScore
+        else -> key[2] < best.total
     }
 
     /**
