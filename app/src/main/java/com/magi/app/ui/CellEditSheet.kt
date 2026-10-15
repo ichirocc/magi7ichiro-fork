@@ -155,7 +155,10 @@ internal fun CellEditSheet(
         val st = stateOf() ?: return@produceState
         val sched = ui.schedule.toIntArray2D()
         value = withContext(Dispatchers.Default) {
-            cellChangeReview(st, sched, i, j, k, ui.staffNames, ui.shiftSymbols, cv::staffCellLimits, cv::needCellLimits, pinned)
+            val targets = listOf(current, k).filter { it >= 0 }.distinct().flatMap { x ->
+                listOfNotNull(needFixTarget(ui.needFamilies, x, j, cv.needCellLimits(x, j)), countFixTarget(ui.countViolations, i, x, cv.staffCellLimits(i, x)))
+            }
+            cellChangeReview(st, sched, i, j, k, ui.staffNames, ui.shiftSymbols, cv::staffCellLimits, cv::needCellLimits, pinned, targets)
         }
     }
     fun choose(k: Int) { if (k != current) { pickTo = k; step = 2; if (!expanded) onToggleExpand() } }

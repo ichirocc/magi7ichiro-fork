@@ -10,11 +10,17 @@ import com.magi.app.v6.c3SeqKey
 
 /** 設定の見直しカードのワンタップ修正の純粋部分（状態 → 新しい状態 / 何も変えないなら null）。ViewModel は適用とログだけ持つ。 */
 object SettingFixLogic {
+    const val WISH_CHANGED_MESSAGE = "診断のあとで希望が変わったため、取り消しませんでした。診断をやり直してください"
+
+    /** 診断のあとで対象の希望が別の勤務に変わった（または消えた）か。 */
+    fun wishChanged(s: MagiState, issue: SettingIssue): Boolean =
+        issue.action == SettingFixAction.REMOVE_WISH && issue.wishKey != null && s.wishes[issue.wishKey] != issue.wishShift
+
     fun apply(s: MagiState, issue: SettingIssue): MagiState? {
         return when (issue.action) {
             SettingFixAction.REMOVE_WISH -> {
                 val key = issue.wishKey ?: return null
-                if (!s.wishes.containsKey(key)) return null
+                if (!s.wishes.containsKey(key) || wishChanged(s, issue)) return null
                 s.copy(wishes = s.wishes - key)
             }
             SettingFixAction.DELETE_DUP_SEQ -> {

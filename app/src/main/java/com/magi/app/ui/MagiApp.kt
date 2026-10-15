@@ -1073,6 +1073,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             PreDistributionDialog(preDistributionRows(ui, vm.csvSavedLine()),
                 onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") }, onDismiss = { preDist = false })
         }
+        ui.draftConfirm?.let { msg ->
+            AlertDialog(
+                onDismissRequest = { vm.dismissDraftConfirm() },
+                title = { Text("下書きで置き換えますか？") },
+                text = { Text(msg) },
+                confirmButton = { DialogConfirmButton("置き換える", onClick = { vm.generateSmartInitial(confirmed = true) }) },
+                dismissButton = { DialogDismissButton(onClick = { vm.dismissDraftConfirm() }) },
+            )
+        }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
                 wishConflicts = false; tab = 1; editingCell = i to j; sheetMode = 1; sheetExpanded = true

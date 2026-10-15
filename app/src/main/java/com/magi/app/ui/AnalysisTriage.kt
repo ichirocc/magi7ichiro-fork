@@ -207,7 +207,7 @@ private fun hardDetail(
     }
     "covU" -> when {
         coverage == null || !coverage.hasShortage -> ""
-        coverage.allBlockedNow -> "いまの希望のままでは、どう組んでも埋まりません（${coverage.totalShortfall}人）。"
+        coverage.allBlockedNow -> "いまの希望のままでは、試した入れ替えの範囲で埋まりませんでした（${coverage.totalShortfall}人・自動作成で見つかる場合があります）。"
         coverage.blockedNowSlots > 0 -> "${coverage.blockedNowSlots}枠はいまの希望のままでは埋まりません。"
         else -> "担当を動かせば埋まる見込みです。"
     }

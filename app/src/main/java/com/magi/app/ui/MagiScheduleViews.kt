@@ -2097,7 +2097,7 @@ internal fun FixSearchPanel(
     // 計算・チェックが終わった時点（running→false）と、盤面・希望・設定が変わったときに探し直す。
     LaunchedEffect(focus.key, ui.running, ui.schedule, ui.wishes, ui.editRev) { if (!ui.running) find() }
     DisposableEffect(focus.key) { onDispose { onEvent(MagiEvent.Session.CancelFixSearch) } }
-    val panel = fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key)
+    val panel = fixPanelState(ui.running, ui.fixSearching, ui.fixDoneKey, ui.fixFailedKey, focus.key, ui.fixCancelledKey)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!compact) Text("勤務変更案", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
         when (panel) {
@@ -2116,7 +2116,11 @@ internal fun FixSearchPanel(
             }
             FixPanelState.FAILED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("勤務変更案を探す途中でうまくいきませんでした。もう一度ためせます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
-                OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text("もう一度探す") }
+                OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
+            }
+            FixPanelState.CANCELLED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(FIX_SEARCH_CANCELLED, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = find, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
             }
             else -> {
                 // 見ている問題（回数＝職員×シフト、人員＝シフト×日）。案ごとに盤面へ当てて数え直し、その問題を変える案を主一覧に、
@@ -2138,7 +2142,8 @@ internal fun FixSearchPanel(
                 val others = if (effects != null || pred != null) shown.filterNot { it in fixing } else emptyList()
                 val purpose = target?.let { fixTargetPurpose(it, focus.staff?.let { i -> ui.staffNames.getOrNull(i) }, label) }
                     ?: family?.let { "選んだ問題（${breakdownLabels[it] ?: it}）を減らす" }
-                @Composable fun card(n: Int, s: com.magi.app.v6.FixSuggestion) {
+                val tv = ui.fixTiers?.takeIf { it.key == focus.key && target != null && !target.multi }
+                @Composable fun card(n: Int, s: com.magi.app.v6.FixSuggestion, ex: FixExplanation? = null, purposeOverride: String? = null) {
                     val e = effects?.get(s)
                     Surface(color = cs.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2154,6 +2159,7 @@ internal fun FixSearchPanel(
                             val remain = listOfNotNull(periodText)
                             // 先頭は必須違反の変化（必須を減らす案は、その効き目が判断の第一）。
                             hardChangeLine(s.diff)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer) }
+                            hardUnchangedLines(s, ui.bestHard > 0).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             if (e != null && target != null) {
                                 Text("案$n：${e.title(label)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                                 Text("$label：${e.countLine()}　${e.gapLine()}", style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
@@ -2192,11 +2198,13 @@ internal fun FixSearchPanel(
                             } else {
                                 Text(fixImpactLines(s).first, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             }
+                            ex?.let { x -> extraReasonLines(x, ui.schedule, ui.staffNames, ui.shiftSymbols, ui.startDate) }
+                                ?.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             OutlinedButton(onClick = {
                                 // 「別の問題を改善する案」は見ている問題を直す案として確認・適用しない（目的と対象を渡さない＝統合仕様 INV-01/INV-03）。
                                 val fixesTarget = e?.fixes == true
                                 val eff = if (e != null && target != null && fixesTarget) listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(target.basis)) + remain else emptyList()
-                                onEvent(MagiEvent.Board.PreviewFix(s, if (target == null || fixesTarget) purpose else null, eff, focus.key, target?.takeIf { fixesTarget }))
+                                onEvent(MagiEvent.Board.PreviewFix(s, if (target == null || fixesTarget) (purposeOverride ?: purpose) else null, eff, focus.key, target?.takeIf { fixesTarget }))
                             }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text(REVIEW_CHANGE_BUTTON) }
                         }
                     }
@@ -2212,6 +2220,23 @@ internal fun FixSearchPanel(
                     addressPending && shown.isNotEmpty() -> Text(ADDRESS_CHECKING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     pred != null && target == null && shown.isNotEmpty() && fixing.isEmpty() ->
                         Text(noFixForProblemLine(addressLabel ?: family?.let { breakdownLabels[it] ?: it } ?: "このセルの問題"), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    tv != null && target != null -> {
+                        // 段に分けた案: 範囲の中の 1 セル → 適用できない 1 セルの理由（1 行、ボタンなし）→ 崩れた分も整える案。
+                        if (!compact) remember(ui.schedule, ui.needFamilies, target) {
+                            otherDaysGapLine(ui.needFamilies, ui.schedule, target, cv?.let { c -> c::needCellLimits }, ui.shiftSymbols, ui.startDate)
+                        }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                        val t1 = tv.of(FixTier.T1); val t2 = tv.of(FixTier.T2)
+                        if (t1.isNotEmpty()) {
+                            if (!compact) Text(tier1Heading(target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                            t1.take(limit).forEachIndexed { n, x -> card(n + 1, x.sug) }
+                        }
+                        tv.blocked.take(if (compact) 1 else 3).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                        if (t2.isNotEmpty() && !(compact && t1.isNotEmpty())) {
+                            if (!compact) Text(TIER2_HEADING, style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                            t2.take(limit).forEachIndexed { n, x -> card(t1.size.coerceAtMost(limit) + n + 1, x.sug, x.explain) }
+                        }
+                        if (!tv.hasMain) NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find)
+                    }
                     fixing.isNotEmpty() -> {
                         // 同じ勤務のほかの日の過不足はここに 1 回だけ（カードごとに繰り返すと判断に要る行が下へ押し出される）。
                         if (target != null && !compact) remember(ui.schedule, ui.needFamilies, target) {
@@ -2220,9 +2245,26 @@ internal fun FixSearchPanel(
                         if (target != null && !compact) Text(thisFixHeading(label, target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                         fixing.take(limit).forEachIndexed { n, s -> card(n + 1, s) }
                     }
-                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied)
+                    else -> NoFixBlock(ui, cv, focus, target, label, compact, nav, settingsLabel, onEvent, onApplied, find)
                 }
-                if (others.isNotEmpty() && !compact && (target != null || pred != null)) {
+                @Composable fun fold(title: String, note: String, items: List<TieredFix>, startN: Int, purposeOverride: String? = null) {
+                    var open by remember(focus.key, title) { mutableStateOf(false) }
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (open) "閉じる" else "開く") { open = !open },
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(title, style = MaterialTheme.typography.titleSmall)
+                            Text(note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                        }
+                        Text(if (open) "閉じる" else "開く", color = cs.primary, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    if (open) items.take(limit).forEachIndexed { n, x -> card(startN + n + 1, x.sug, x.explain, purposeOverride) }
+                }
+                if (tv != null && target != null && !compact) {
+                    val main = (tv.of(FixTier.T1).size.coerceAtMost(limit) + tv.of(FixTier.T2).size.coerceAtMost(limit))
+                    val mv = tv.of(FixTier.MOVE_ONLY); val t3 = tv.of(FixTier.T3)
+                    if (mv.isNotEmpty()) fold(moveOnlyHeading(sym, target.under, mv.size), MOVE_ONLY_NOTE, mv, main, moveOnlyPurpose(label, target))
+                    if (t3.isNotEmpty()) fold(otherFixHeading(t3.size), otherFixNote(label, target), t3, main + mv.size.coerceAtMost(limit))
+                } else if (others.isNotEmpty() && !compact && (target != null || pred != null)) {
                     var open by remember(focus.key) { mutableStateOf(false) }
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (open) "閉じる" else "開く") { open = !open },
                         verticalAlignment = Alignment.CenterVertically) {
@@ -2273,7 +2315,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
 @Composable
 private fun NoFixBlock(
     ui: UiState, cv: ConditionsView?, focus: FixFocus, target: FixTarget?, label: String, compact: Boolean,
-    nav: FixNav, settingsLabel: String?, onEvent: (MagiEvent) -> Unit, onApplied: () -> Unit,
+    nav: FixNav, settingsLabel: String?, onEvent: (MagiEvent) -> Unit, onApplied: () -> Unit, onRetry: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val why = remember(ui.schedule, ui.wishes, focus.key, cv, ui.fixTimedOut) {
@@ -2281,8 +2323,13 @@ private fun NoFixBlock(
     }
     val lines = if (target != null && target.staff == null) listOf(noNeedFixLine(label, target, ui.fixTimedOut), NO_FIX_SCOPE) else why.lines
     val body = lines.filter { it != NO_FIX_SCOPE }
-    if (compact) { Text(body.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis); return }
+    if (compact) {
+        Text(body.joinToString(" "), style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
+        return
+    }
     body.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+    if (ui.fixTimedOut) OutlinedButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) { Text(FIX_SEARCH_RETRY_BUTTON) }
     var showCandidates by remember(focus.key) { mutableStateOf(false) }
     if (why.candidates.isNotEmpty() && target?.staff != null)
         OutlinedButton(onClick = { showCandidates = true }, modifier = Modifier.heightIn(min = 48.dp)) { Text("追加候補日を確認") }

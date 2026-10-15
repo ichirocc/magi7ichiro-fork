@@ -155,6 +155,18 @@ object PolishGate {
     @Volatile var filterC3nIncrease: Boolean = true
 
     /**
+     * [3.680.0] 3者回転研磨（`C3RotationPolish.applyBlockRotationPolish`）で、フル checker の前に `DeltaEvaluator.reportKey`
+     * で正式採否のキーを出し、現最良に勝てない候補を捨てる。採否は不変（キーは checker と一致、基準盤面で不一致ならフル評価へ戻る）。
+     */
+    @Volatile var rotationDeltaPrescreen: Boolean = true
+
+    /**
+     * [3.680.0] 巡回研磨クラスタで、乱数種を取らない決定的なパスが前回と同じ盤面で採用 0 だったとき、同じ結果を再生して実行を省く。
+     * 締切で打ち切られた呼び出しは記録しない。出力は不変。
+     */
+    @Volatile var roundPassMemo: Boolean = true
+
+    /**
      * 循環交換研磨（k=2,3）と C1広域ビームで、必ず却下される候補（HARD 正味増）を [HardDelta] の厳密差分で
      * checker の前に捨てるか。既定 **true**。速度専用＝ON/OFF で盤面は同一（`HardDeltaPrefilterTest`）。UI トグルは無し。
      */
@@ -647,6 +659,14 @@ object V6HotfixPasses {
         private var lastFoldRolledBack = false
 
         /** フェーズ名を UI へ通知し、所要 ms を [key] に累算しながら [block] を実行する。 */
+        /** [PolishGate.roundPassMemo] 実行を省いた段を、[timed] と同じキー・0ms で記録する。 */
+        fun memoHit(phase: String, key: String) {
+            onPhase(phase)
+            lastKey = key
+            lastMs = 0L
+            passMs.merge(key, 0L) { a, b -> a + b }
+        }
+
         fun <R> timed(phase: String, key: String, block: (Array<IntArray>) -> R): R {
             onPhase(phase)
             val t = EngineClock.nowMs()
@@ -1018,6 +1038,21 @@ object V6HotfixPasses {
         val c3Anchor = setOf("vio-c3", "vio-c3m", "vio-c3mn")
         val pC1 = cachedProblem(state, params.quantitativeRangeEval)   // state の純関数＝巡回間で不変（C1DeltaPrefilter のゲート用）
         var c1Plateau: C1PlateauDiagnosis? = null
+        val memo = HashMap<String, Pair<Array<IntArray>, CyclicSwapResult>>()
+        fun memoTimed(phase: String, key: String, memoKey: String = key, block: (Array<IntArray>, () -> Boolean) -> CyclicSwapResult): CyclicSwapResult {
+            if (!PolishGate.roundPassMemo) return chain.timed(phase, key) { block(it, clusterStop) }
+            val hit = memo[memoKey]
+            if (hit != null && hit.first.contentDeepEquals(chain.work) && !clusterStop()) {
+                chain.memoHit(phase, key)
+                return hit.second
+            }
+            val input = chain.work.copy2D()
+            var stopped = false
+            val r = chain.timed(phase, key) { block(it) { clusterStop().also { s -> if (s) stopped = true } } }
+            if (!stopped && r.applied == 0 && r.newSchedule.contentDeepEquals(input)) memo[memoKey] = input to r.copy(newSchedule = input.copy2D())
+            else memo.remove(memoKey)
+            return r
+        }
         var round = 0
         while (round < params.maxRounds && !clusterStop()) {
             val first = round == 0
@@ -1062,18 +1097,18 @@ object V6HotfixPasses {
             // 別日で連動して初めて解ける多職員手を、窓スコープの被覆保存 permutation 厳密探索で拾う。
             val c1ComponentActive = params.c1ComponentRepair ||
                 (params.c1ComponentRepairReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c1"))
-            take("c1", chain.timed("後処理 期間要件(c1)厳密窓修復$tag", "C1厳密窓") { work ->
-                C1RepairOperators.exactWindow(state, work, shouldStop = clusterStop, useComponents = c1ComponentActive, quantitativeRangeEval = params.quantitativeRangeEval)
+            take("c1", memoTimed("後処理 期間要件(c1)厳密窓修復$tag", "C1厳密窓", "C1厳密窓/$c1ComponentActive") { work, stop ->
+                C1RepairOperators.exactWindow(state, work, shouldStop = stop, useComponents = c1ComponentActive, quantitativeRangeEval = params.quantitativeRangeEval)
             })
 
-            val rC3 = chain.timed("後処理 連続規則(c3系)研磨$tag", "C3SequencePolish") { work ->
-                C3RotationPolish.applyC3SequencePolish(state, work, maxPasses = params.c3SequencePasses, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            val rC3 = memoTimed("後処理 連続規則(c3系)研磨$tag", "C3SequencePolish") { work, stop ->
+                C3RotationPolish.applyC3SequencePolish(state, work, maxPasses = params.c3SequencePasses, shouldStop = stop, quantitativeRangeEval = params.quantitativeRangeEval)
             }
             take("c3", rC3)
             // 3 者回転は O(候補^3) で通常時の寄与ゼロ（3.300.0 ablation）＝主手が詰まった巡と最終巡だけの脱出手。
             if (rC3.applied == 0 || round == params.maxRounds - 1) {
-                take("c3回転", chain.timed("後処理 連続規則(c3系)3者回転研磨$tag", "BlockRotationPolish") { work ->
-                    C3RotationPolish.applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = params.c3RotatePasses, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                take("c3回転", memoTimed("後処理 連続規則(c3系)3者回転研磨$tag", "BlockRotationPolish") { work, stop ->
+                    C3RotationPolish.applyBlockRotationPolish(state, work, c3Anchor, "C3Rotate", maxPasses = params.c3RotatePasses, shouldStop = stop, quantitativeRangeEval = params.quantitativeRangeEval)
                 })
             }
             take("c3mn玉突き", chain.timed("後処理 回避パターン(c3mn)玉突き研磨$tag", "C3mnPolish") { work ->
@@ -1092,30 +1127,30 @@ object V6HotfixPasses {
                 C3FamilyPolish.applyC3PatternPolish(state, work, maxPasses = params.c3PatternPasses, shouldStop = clusterStop, seed = roundSeed(seed, SeedTag.C3PATTERN, round), quantitativeRangeEval = params.quantitativeRangeEval)
             })
             // 違反アンカー型・可変長窓の一括交換（3.495.0、ユーザー提示の設計）。
-            take("アンカー窓交換", chain.timed("後処理 違反アンカー窓交換$tag", "AnchoredWindowSwap") { work ->
+            take("アンカー窓交換", memoTimed("後処理 違反アンカー窓交換$tag", "AnchoredWindowSwap") { work, stop ->
                 AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
                     state, work, mode = WindowMode.STRICT_WHOLE_WINDOW, maxPasses = params.anchorWindowPasses,
-                    maxEvaluations = params.anchorWindowEvaluations, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval,
+                    maxEvaluations = params.anchorWindowEvaluations, shouldStop = stop, quantitativeRangeEval = params.quantitativeRangeEval,
                 )
             })
             // 希望島研磨（3.496.0、ユーザー提示の確定仕様）。
-            take("希望島", chain.timed("後処理 希望島研磨$tag", "WishIslandPolish") { work ->
-                WishIslandPolish.applyWishIslandPolish(state, work, maxPasses = params.wishIslandPasses, maxEvaluations = params.wishIslandEvaluations, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+            take("希望島", memoTimed("後処理 希望島研磨$tag", "WishIslandPolish") { work, stop ->
+                WishIslandPolish.applyWishIslandPolish(state, work, maxPasses = params.wishIslandPasses, maxEvaluations = params.wishIslandEvaluations, shouldStop = stop, quantitativeRangeEval = params.quantitativeRangeEval)
             })
-            take("ブロック交換", chain.timed("後処理 長期ブロック丸ごと交換$tag", "AdaptiveBlockSwapPolish") { work ->
+            take("ブロック交換", memoTimed("後処理 長期ブロック丸ごと交換$tag", "AdaptiveBlockSwapPolish") { work, stop ->
                 AdaptiveBlockSwapPolish.applyAdaptiveBlockSwapPolish(
                     state, work,
                     AdaptiveBlockSwapPolish.CyclicParams(
                         maxPasses = params.blockSwapPasses, candidatesPerLength = params.blockSwapCandidatesPerLength,
                         maxEvaluations = params.blockSwapEvaluations,
                     ),
-                    shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval,
+                    shouldStop = stop, quantitativeRangeEval = params.quantitativeRangeEval,
                 )
             })
             if (params.c2PolishEnabled ||
                 (params.c2PolishReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c2"))) {
-                take("c2玉突き", chain.timed("後処理 個人合計(c2)研磨$tag", "C2Polish") { work ->
-                    C2Polish.applyC2Polish(state, work, maxPasses = params.c2Passes, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                take("c2玉突き", memoTimed("後処理 個人合計(c2)研磨$tag", "C2Polish") { work, stop ->
+                    C2Polish.applyC2Polish(state, work, maxPasses = params.c2Passes, shouldStop = stop, quantitativeRangeEval = params.quantitativeRangeEval)
                 })
             }
             if (params.countChainEnabled ||
@@ -1128,8 +1163,8 @@ object V6HotfixPasses {
             }
             if (params.c42FlowPolishEnabled ||
                 (params.c42FlowPolishReactivate && targetFamiliesRemain(state, chain.work, params.quantitativeRangeEval, "c42", "c42s"))) {
-                take("c42フロー", chain.timed("後処理 群ペア禁止(c42/c42s)フロー研磨$tag", "C42FlowPolish") { work ->
-                    C42FlowPolish.applyC42FlowPolish(state, work, maxPasses = params.c42FlowPasses, shouldStop = clusterStop, quantitativeRangeEval = params.quantitativeRangeEval)
+                take("c42フロー", memoTimed("後処理 群ペア禁止(c42/c42s)フロー研磨$tag", "C42FlowPolish") { work, stop ->
+                    C42FlowPolish.applyC42FlowPolish(state, work, maxPasses = params.c42FlowPasses, shouldStop = stop, quantitativeRangeEval = params.quantitativeRangeEval)
                 })
             }
             take("apt玉突き", chain.timed("後処理 適切回数(apt)研磨$tag", "AptPolish") { work ->

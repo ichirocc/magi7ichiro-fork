@@ -39,7 +39,7 @@ object StateFingerprint {
         mix(13); mix(st.groups.size.toLong()); for (g in st.groups) { txt(g.name); txt(g.kigou) }
         mix(14); mix(st.skillGroups.size.toLong()); for (g in st.skillGroups) { txt(g.name); txt(g.kigou) }
         mix(15); mix(st.staff.size.toLong())
-        for (p in st.staff) { txt(p.name); mix(p.groupIdx.toLong()); mix(p.skillIdx.toLong()) }
+        for (p in st.staff) { txt(p.name); mix(p.groupIdx.toLong()); mix(p.skillIdx.toLong()); mix(p.id.toLong()) }
         // [3.333.0/外部レビュー] 行の境界を混ぜる。旧は行を素通しで連結していたので
         //   `[[1,1],[0]]` と `[[1],[1,0]]` が同じ値になり、担当可否の構造が違うのに指紋が一致した。
         for (row in st.groupShift) { for (v in row) mix(v.toLong()); mix(ROW) }

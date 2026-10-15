@@ -313,7 +313,7 @@ private fun MatrixDataCell(
     }
 }
 
-/** セルタップの編集シート。①群の目標(apt、全員に影響) ②個人の上下限(staffRange) の2系統のみ提供する。 */
+/** セルタップの編集シート。①群の目標(apt、全員に影響) ②個人の上下限(staffRange) の2系統のみ提供する。どちらも「変更を適用」で書く。 */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> Unit, counts: ScheduleCounts, v: Ws1View, i: Int, k: Int, onDismiss: () -> Unit) {
@@ -329,8 +329,14 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
     var hi by remember(i, k) { mutableStateOf(hi0?.toString() ?: "") }
     val hasRange = lo0 != null || hi0 != null
     val bad = V6SanityPort.rangeOrderConflict(lo, hi) != null
-    // [3.646.0 U01] 下限・上限を入力した途中で閉じる（外側タップ・引き下げ・✕）ときは確認。続けるならシートを出し直す。
-    val dirty = lo != (lo0?.toString() ?: "") || hi != (hi0?.toString() ?: "")
+    // 目標も下限・上限と同じく確定で書く（閉じて破棄すれば書かない）。
+    val raw = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
+    var aptEdit by remember(i, k) { mutableStateOf(raw.trim()) }
+    val aptDirty = aptEdit != raw.trim()
+    val rangeDirty = lo != (lo0?.toString() ?: "") || hi != (hi0?.toString() ?: "")
+    // [3.646.0 U01] 入力した途中で閉じる（外側タップ・引き下げ・✕）ときは確認。続けるならシートを出し直す。
+    val dirty = aptDirty || rangeDirty
+    val commitApt = { if (aptDirty) onEvent(MagiEvent.Structure.SetGroupApt(g, k, aptEdit)) }
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     var confirmDiscard by remember { mutableStateOf(false) }
@@ -352,12 +358,11 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
                     }
                 }
             }
-            val raw = v.groupShiftApt.getOrNull(g)?.getOrNull(k) ?: ""
             Text("グループの目標（$groupName の個人設定がない職員に適用）", style = MaterialTheme.typography.titleSmall)
-            NumberStepper("目標", raw.trim(), { onEvent(MagiEvent.Structure.SetGroupApt(g, k, it)) }, min = 0, blankLabel = "なし")
-            if (hasRange && raw.trim().toIntOrNull() != null) {
+            NumberStepper("目標", aptEdit, { aptEdit = it }, min = 0, blankLabel = "なし")
+            if (hasRange && aptEdit.toIntOrNull() != null) {
                 Text("${name}さんの${toHankakuKigou(kigou)}は個人の下限・上限を優先するため、グループの目標は適用されません", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-            } else if (apt != null && raw.trim().toIntOrNull() != apt) {
+            } else if (!aptDirty && apt != null && raw.trim().toIntOrNull() != apt) {
                 Text("${name}さんの希望・置けるシフトから ${raw.ifBlank { "0" }}→${apt} に調整されています", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             Spacer(Modifier.height(4.dp))
@@ -368,18 +373,18 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
             // ⚠付きの解除と解決ボタンは 390dp 幅の1行に収まらない＝入らない分は次の行へ。
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasRange) {
-                    DialogDangerButton("上下限を解除", onClick = { onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() })
+                    DialogDangerButton("上下限を解除", onClick = { commitApt(); onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() })
                 }
                 if (vio == "vio-high") {
                     DialogConfirmButton("上限を${count}に引き上げて解決", enabled = true,
-                        onClick = { onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo0?.toString() ?: "", count.toString())); onDismiss() })
+                        onClick = { commitApt(); onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo0?.toString() ?: "", count.toString())); onDismiss() })
                 } else if (vio == "vio-low") {
                     DialogConfirmButton("下限を${count}に下げて解決", enabled = true,
-                        onClick = { onEvent(MagiEvent.Condition.SetStaffRange(i, k, count.toString(), hi0?.toString() ?: "")); onDismiss() })
+                        onClick = { commitApt(); onEvent(MagiEvent.Condition.SetStaffRange(i, k, count.toString(), hi0?.toString() ?: "")); onDismiss() })
                 }
             }
-            DialogConfirmButton("この上下限を適用", enabled = !bad && (lo.isNotBlank() || hi.isNotBlank() || hasRange),
-                onClick = { onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo.trim(), hi.trim())); onDismiss() })
+            DialogConfirmButton("変更を適用", enabled = !bad && dirty,
+                onClick = { commitApt(); if (rangeDirty) onEvent(MagiEvent.Condition.SetStaffRange(i, k, lo.trim(), hi.trim())); onDismiss() })
         }
     }
 }

@@ -353,7 +353,7 @@ object V6PortAnalyzer {
                 var capacity = 0
                 val wishPinned = ArrayList<Int>()
                 for (i in 0 until p.S) {
-                    if (!p.mayPlace(i, k)) continue
+                    if (!p.mayPlaceAt(i, j, k)) continue
                     // [3.391.0] 生の `w != k` は**実現不能な希望**（担当できないシフトへの希望）まで
                     //   「別シフトへ固定」として capacity から外していた。実現不能な希望は凍結しない
                     //   （wishLocked の規約）ので、その職員はこの枠へ回せる。過小な capacity は
@@ -387,7 +387,7 @@ object V6PortAnalyzer {
                     val pinned = 0
                     var already = 0; var free = 0; var cascade = 0; var forbid = 0
                     for (i in 0 until p.S) {
-                        if (!p.mayPlace(i, k)) continue
+                        if (!p.mayPlaceAt(i, j, k)) continue
                         val m = norm[i][j]
                         // [3.391.0] 上の capacity と同じ事前フィルタ＝同じ条件に揃える（wishLocked）。
                         if (p.wishLocked(i, j) && p.lockTo(i, j) != k) continue   // 実現可能な希望が別シフト=capacity 対象外
@@ -412,9 +412,7 @@ object V6PortAnalyzer {
                     val hint = when {
                         free > 0 -> "休みや人数に余裕のある勤務から${free}人を${sym}へ移せば埋まります（勤務表でこのセルの『直し方を探す』から直せます）"
                         cascade > 0 && chainVerified -> "すぐ移せる人がいないため、複数人を順に入れ替える手（玉突き）が必要です"
-                        cascade > 0 -> "入れ替えの候補は${cascade}人いますが、その人が抜けた穴を埋められる人も本人の希望か禁止の並びで動かせず、" +
-                            "今の希望のままではどう組んでも解消できません。希望を1件調整するか、担当を追加してください" +
-                            if (MirrorKeys.weightOf("covU") > MirrorKeys.weightOf("pref")) "。$WISH_SCORE_HINT" else ""
+                        cascade > 0 -> CHAIN_NOT_FOUND_IN_TRIED
                         else -> "移せる人が本人の希望か禁止の並びで動かせません。希望を1件調整するか、担当を追加すると埋まりやすくなります"
                     }
                     "$hint。内訳: ${sym}を担当できる${capacity}人（すでに${sym}に${already}人）・すぐ移せる${free}人・入れ替えが要る${cascade}人・本人の希望${pinned}人・禁止の並びになる${forbid}人"
@@ -651,6 +649,9 @@ object V6PortAnalyzer {
         runs.sortWith(compareBy { it.escapable })
         return ForbiddenRunDiagnosis(runs.size, runs)
     }
+
+    /** 1 ホップの入れ替え候補はいるが、確かめた玉突きでは埋まらなかった枠（埋まらないと断定しない）。 */
+    const val CHAIN_NOT_FOUND_IN_TRIED = "試した入れ替えの範囲では埋まりませんでした（自動作成で見つかる場合があります）"
 
     /** 希望を破ると HARD 件数は同じでも weightedScore が下がるときに添える一文（表示専用）。 */
     const val WISH_SCORE_HINT = "この希望を1件調整すると、全体の点数は良くなります"

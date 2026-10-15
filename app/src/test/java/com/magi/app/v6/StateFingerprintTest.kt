@@ -67,6 +67,7 @@ class StateFingerprintTest {
         "職員名" to b.copy(staff = b.staff.mapIndexed { i, p -> if (i == 0) p.copy(name = "x") else p }),
         "職員の所属群" to b.copy(staff = b.staff.mapIndexed { i, p -> if (i == 0) p.copy(groupIdx = 1) else p }),
         "職員のスキル群" to b.copy(staff = b.staff.mapIndexed { i, p -> if (i == 0) p.copy(skillIdx = -1) else p }),
+        "職員ID" to b.copy(staff = b.staff.mapIndexed { i, p -> if (i == 0) p.copy(id = 7) else p }),
         "担当可否" to b.copy(groupShift = listOf(listOf(1, 0), listOf(1, 0))),
         "適切回数" to b.copy(groupShiftApt = listOf(listOf("", "3"), listOf("", ""))),
         "希望" to b.copy(wishes = mapOf("0,0" to 0)),
@@ -152,5 +153,12 @@ class StateFingerprintTest {
 
     @Test fun sameStateGivesSameFingerprint() {
         assertEquals(StateFingerprint.of(base()), StateFingerprint.of(base()))
+    }
+
+    @Test fun swappingStaffIdsChangesTheFingerprint() {
+        // 名前・群が同じでも ID を入れ替えると、ID で引く相談・希望の付け替えが別の人を指す。
+        val b = base().let { it.copy(staff = listOf(it.staff[0].copy(id = 1), it.staff[1].copy(id = 2))) }
+        val swapped = b.copy(staff = listOf(b.staff[0].copy(id = 2), b.staff[1].copy(id = 1)))
+        assertNotEquals(StateFingerprint.of(b), StateFingerprint.of(swapped))
     }
 }

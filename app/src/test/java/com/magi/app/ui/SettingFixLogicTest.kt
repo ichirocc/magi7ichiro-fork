@@ -162,4 +162,14 @@ class SettingFixLogicTest {
         com.magi.app.v6.IssueKind.RANGE, "x", "x", "x",
         action = SettingFixAction.ZERO_RANGE_LO, actionLabel = "x", rangeKey = key, newLo = newLo,
     )
+
+    @Test fun staleWishIsNotRemovedWhenTheWishChangedAfterDiagnosis() {
+        val issue = com.magi.app.v6.SettingIssue(com.magi.app.v6.IssueKind.WISH, "X 8/1", "p", "f",
+            action = SettingFixAction.REMOVE_WISH, wishKey = "0,0", wishShift = 1)
+        val diagnosed = demandState(3, wishes = mapOf("0,0" to 1))
+        assertEquals(emptyMap<String, Int>(), SettingFixLogic.apply(diagnosed, issue)!!.wishes)
+        val changed = diagnosed.copy(wishes = mapOf("0,0" to 0))
+        assertTrue(SettingFixLogic.wishChanged(changed, issue))
+        assertNull("診断のあとで別の勤務に変えた希望は取り消さない", SettingFixLogic.apply(changed, issue))
+    }
 }
