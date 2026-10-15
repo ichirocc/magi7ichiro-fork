@@ -25,7 +25,7 @@ class CellChangeReviewTest {
         val r = cellChangeReview(st, s, i, j, k, names, syms, null, null, pinned = false)
         val trial = Array(s.size) { s[it].copyOf() }.also { it[i][j] = k }
         val after = UnifiedViolationChecker.check(st, trial)
-        assertEquals("必須違反（勤務表全体）：${rep.hard}件 → ${after.hard}件", r.hardLine)
+        assertEquals("必須違反（勤務表全体）：${hardText(rep.breakdown, rep.hard.toLong())} → ${hardText(after.breakdown, after.hard.toLong())}", r.hardLine)
         assertEquals("${names[i]}さん　${DayText.full(st.startDate, j)} ${syms[s[i][j]]} → ${syms[k]}", r.change)
         assertTrue(r.neighbors.contains("${DayText.short(st.startDate, j)}：${syms[k]}"))
         // このセルの禁止の並びは、変えた後の報告に同じ場所の鍵が残るかどうかで「解消／残る」を言う。
@@ -52,6 +52,9 @@ class CellChangeReviewTest {
         assertEquals("自動作成：未実行（手で編集）" to "評価：必須違反 3件", boardStatusLines(false, true, true, 3, 5))
         assertEquals("自動作成：済み" to "評価：要調整 5件", boardStatusLines(true, true, true, 0, 5))
         assertEquals("自動作成：済み" to "評価：違反なし", boardStatusLines(true, true, true, 0, 0))
+        // [3.678.0] 自動作成のあと手で変えた盤面は「未実行」と言わない。
+        assertEquals("自動作成：済み（そのあと手で変更あり）", boardStatusLines(false, true, true, 0, 0, ranBeforeEdit = true).first)
+        assertEquals("自動作成：未実行（手で編集）", boardStatusLines(false, true, true, 0, 0, ranBeforeEdit = false).first)
     }
 
     @Test fun cellCountLinesKeepTheTargetVisible() {

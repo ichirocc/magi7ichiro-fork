@@ -151,19 +151,16 @@ internal fun progressSummary(ui: UiState): String {
         //   「69件から3件まで来ている」ことを見せる。initHard は満足度の計算で既に使っており、
         //   ここが最後の未配線だった。
         ui.bestHard > 0L ->
-            if (ui.initHard > ui.bestHard) "必須違反 残り${ui.bestHard}件（開始${ui.initHard}件）" else "必須違反 残り${ui.bestHard}件"
+            if (ui.initHard > ui.bestHard) "必須違反 残り${hardText(ui.breakdown, ui.bestHard)}（開始${ui.initHard}件）" else "必須違反 残り${hardText(ui.breakdown, ui.bestHard)}"
         // [3.396.0] 旧「改善 91% (1900→170)」は、初見の人が「1900 と 170 は何の数？」と聞き返す形だった。
         //   上の必須ありの枝と**同じ並び**（何が・いくつ・開始はいくつ）に揃えて、レイアウトの反復自体が
         //   読み方を教えるようにする。
         ui.initSoft > 0L -> {
             val pct = ((ui.initSoft - ui.bestSoft) * 100L / ui.initSoft).coerceAtLeast(0L)
-            "気になる点 ${ui.bestSoft}件（開始${ui.initSoft}件・${pct}%減）"
+            "要調整 ${ui.bestSoft}件（開始${ui.initSoft}件・${pct}%減）"
         }
-        else -> "気になる点 –"
+        else -> "要調整 –"
     }
-    // 必須が残っている間は「改善◯%」が出ないので、ソフトを含む今の合計を出す（減っていく数字が1つは要る）。
-    //   必須=0 のときは上の枝が (初期→現在) を出しているので重複させない。
-    if (ui.bestHard > 0L && ui.totalViolations > 0) parts += "気になる点 全${ui.totalViolations}件"
     val secLeft = (((ui.budgetSec + com.magi.app.v6.POST_RESERVE_SEC + com.magi.app.v6.CHAIN_RESERVE_SEC) * 1000L - ui.elapsedMs).coerceAtLeast(0L) / 1000L)
     parts += "残り %d:%02d".format(secLeft / 60, secLeft % 60)
     // [3.396.0] 反復数（「1.2M回」「毎秒40K」）は**作り手の指標**なので操作画面から外した。
@@ -1370,8 +1367,7 @@ internal fun TallyCard(ui: UiState, cv: ConditionsView, onEvent: (MagiEvent) -> 
                 var picked by remember(kk) { mutableStateOf(days.singleOrNull()) }
                 var multi by remember(kk) { mutableStateOf(false) }
                 val rest = kk == cv.restIdx && ct != null && ct.overDays.isNotEmpty()
-                GridMarkDialog(if (rest) "休みの人数を確認" else "「$sym」の人員" + (if (ct != null && ct.overDays.isEmpty()) "不足" else ""), emptyList(), onDismiss = { totalSheet = null }) {
-                    if (days.isEmpty()) Text("人員の過不足はありません。", style = MaterialTheme.typography.bodyMedium)
+                GridMarkDialog(if (rest) "休みの人数を確認" else "「$sym」の人員" + (if (ct != null && ct.overDays.isEmpty()) "不足" else ""), emptyList(), empty = days.isEmpty() && !rest, onDismiss = { totalSheet = null }) {
                     if (rest) {
                         restOverIntro(ct!!.overDays.all { cv.needCellLimits(kk, it)?.second == 0 }).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         OutlinedButton(onClick = { totalSheet = null; nav.onNeed(kk, ct.overDays.first()) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("人数の設定を確認") }
@@ -1879,7 +1875,7 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
         // 2 つ以上の勤務に過不足があれば、どれを直すかを選んでから案を探す（2026-10-14 利用者レビュー: 先頭の勤務だけで探し、
         //   どの不足を直す案か分からなかった）。1 つならそのまま探す。
         var picked by remember(j) { mutableStateOf(marks.singleOrNull()?.shift) }
-        GridMarkDialog("${DayText.full(ui.startDate, j)}の人員", if (marks.size >= 2) emptyList() else dayCoverageLines(ui, j, marks, cv?.let { c -> c::needCellLimits }), onDismiss = { daySheet = null }) {
+        GridMarkDialog("${DayText.full(ui.startDate, j)}の人員", if (marks.size >= 2) emptyList() else dayCoverageLines(ui, j, marks, cv?.let { c -> c::needCellLimits }), empty = marks.isEmpty(), onDismiss = { daySheet = null }) {
             if (marks.size >= 2) {
                 Text(dayPickHeading(marks), style = MaterialTheme.typography.bodyMedium)
                 marks.forEach { m ->
@@ -1900,15 +1896,15 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
     }
 }
 
-/** 日ヘッダ・集計の「計（期間）」の人員の印の内訳（読むだけ。直すのはセルのタップから）。 */
+/** 日ヘッダ・集計の「計（期間）」の人員の印の内訳（読むだけ。直すのはセルのタップから）。[empty]＝本当に過不足が無いときだけ true（行を extra で出す呼び出しは lines が空でも過不足がある）。 */
 @Composable
-private fun GridMarkDialog(title: String, lines: List<String>, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
+private fun GridMarkDialog(title: String, lines: List<String>, empty: Boolean, onDismiss: () -> Unit, extra: @Composable () -> Unit = {}) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (lines.isEmpty()) Text("人員の過不足はありません。", style = MaterialTheme.typography.bodyMedium)
+                if (empty && lines.isEmpty()) Text("人員の過不足はありません。", style = MaterialTheme.typography.bodyMedium)
                 lines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 extra()
             }
@@ -2190,10 +2186,9 @@ internal fun FixSearchPanel(
                                     Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                     notes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 }
-                                Text("ほかの問題への影響", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
-                                otherEffectLines(s, target?.let { fixTargetFamilies(it) } ?: setOfNotNull(family)).forEach {
-                                    Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
-                                }
+                                val others = otherEffectLines(s, target?.let { fixTargetFamilies(it) } ?: setOfNotNull(family), hardShown = hardChangeLine(s.diff) != null)
+                                if (others.isNotEmpty()) Text("ほかの問題への影響", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                                others.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             } else {
                                 Text(fixImpactLines(s).first, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer)
                             }

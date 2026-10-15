@@ -85,6 +85,9 @@ internal fun unitTotals(breakdown: Map<String, Int>, families: Collection<String
         .takeIf { it.isNotEmpty() }?.joinToString("・")
 }
 
+/** 必須違反の数を単位ごとに（例「3件・2人」）。内訳が無いときだけ件で言う。 */
+internal fun hardText(breakdown: Map<String, Int>, n: Long): String = unitTotals(breakdown, MirrorKeys.hard) ?: "${n}件"
+
 /** 族ごとの増減を単位ごとに足した言い方（例「1件減る・2人増える」）。同じ単位の中だけで足す。全部 0 なら null。 */
 internal fun unitDeltaText(diff: List<Pair<String, Int>>, families: Collection<String>): String? {
     val by = HashMap<String, Int>()

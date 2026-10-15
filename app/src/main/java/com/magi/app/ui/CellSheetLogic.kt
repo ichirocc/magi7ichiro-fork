@@ -405,7 +405,7 @@ internal fun tourHeading(items: List<TourItem>, at: Int): String? =
     items.getOrNull(at)?.let { "必須違反 ${at + 1} / ${items.size} ・ ${it.heading}" }
 
 /** 巡回に入らない人員不足の件数の 1 行（0 なら null）。 */
-internal fun tourCovULine(covU: Int): String? = if (covU > 0) "ほかに人員不足 ${covU}件（日ヘッダから）" else null
+internal fun tourCovULine(covU: Int): String? = if (covU > 0) "ほかに人員不足 ${covU}人（日の印から開けます）" else null
 
 /** 巡回の次のセル（今のセルの次。今が巡回に無ければ先頭、末尾なら先頭へ戻る）。空なら null。 */
 internal fun nextTourCell(tour: List<Pair<Int, Int>>, current: Pair<Int, Int>?): Pair<Int, Int>? {
@@ -517,15 +517,15 @@ internal const val PIN_NOT_CANDO_HINT = "担当外のシフトなので、必須
 private val PIN_HARD_CELL_FAMILIES = setOf("c3n", "c3w", "pref", "groupViol", "extWish")
 
 /** セルを 1 つ変えたときの Snackbar（「元に戻す」付き）。 */
-internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "$name ${DayText.short(startDate, day)} を${symbol}に変更しました"
+internal fun cellChangedMessage(name: String, startDate: String, day: Int, symbol: String): String = "${name}さんの ${DayText.full(startDate, day)} を ${symbol} に変更しました"
 
 /** ちら見に出す上位 [n] シフト: 今の割当・希望を先に、残りは担当できるものを枠の順で。 */
 internal fun peekShifts(shown: List<Int>, canDo: Set<Int>, current: Int, wish: Int?, n: Int = 4): List<Int> =
     (listOfNotNull(current.takeIf { it >= 0 }, wish?.takeIf { it >= 0 }) + shown.filter { it in canDo })
         .filter { it in shown }.distinct().take(n)
 
-/** ちら見の操作行に並べるシフトの数: 「他 ▸」(56dp) と同じ行に 52dp＋間 6dp で入るだけ（1〜4）。360dp 以上の端末は 4。 */
-internal fun peekPickCount(contentWidthDp: Int): Int = ((contentWidthDp - 56 + 6) / 58).coerceIn(1, 4)
+/** ちら見の操作行に並べるシフトの数: 「詳しく ▸」(64dp) と同じ行に 52dp＋間 6dp で入るだけ（1〜4）。360dp 以上の端末は 4。 */
+internal fun peekPickCount(contentWidthDp: Int): Int = ((contentWidthDp - 64 + 6) / 58).coerceIn(1, 4)
 
 /** ちら見の見出し: 巡回の見出しから日付の範囲を落とす（日付は 2 段目にある）。 */
 internal fun peekHeading(tourHeading: String): String = tourHeading.substringBeforeLast(" ・ ")
@@ -695,10 +695,10 @@ internal fun fixTargetPurpose(t: FixTarget, staffName: String?, label: String): 
 internal fun rankForTarget(list: List<com.magi.app.v6.FixSuggestion>, schedule: List<List<Int>>, t: FixTarget?): List<com.magi.app.v6.FixSuggestion> =
     if (t == null) list else list.sortedBy { if (t.effect(schedule, it.ops).fixes) 0 else 1 }
 
-/** 「ほかの問題への影響」の行（対象の族は上に出すので除く）。必須違反の増減を先頭に。 */
-internal fun otherEffectLines(s: com.magi.app.v6.FixSuggestion, skipFamilies: Set<String>): List<String> {
+/** 「ほかの問題への影響」の行（対象の族は上に出すので除く）。必須違反の増減を先頭に。カードの先頭に [hardChangeLine] があれば必須は繰り返さない（[hardShown]）。 */
+internal fun otherEffectLines(s: com.magi.app.v6.FixSuggestion, skipFamilies: Set<String>, hardShown: Boolean = false): List<String> {
     val hard = "必須違反：" + (unitDeltaText(s.diff, MirrorKeys.hard) ?: if (s.deltaHard == 0) "変わらない" else if (s.deltaHard < 0) "${-s.deltaHard}件減る" else "${s.deltaHard}件増える")
-    return listOf(hard) + s.diff.filter { (k, d) -> d != 0 && k !in skipFamilies }.map { (k, d) ->
+    return (if (hardShown) emptyList() else listOf(hard)) + s.diff.filter { (k, d) -> d != 0 && k !in skipFamilies && !(hardShown && k in MirrorKeys.hard) }.map { (k, d) ->
         "${breakdownLabels[k] ?: k}：${kotlin.math.abs(d)}${unitOf(k)}${if (d < 0) "減る" else "増える"}"
     }
 }
@@ -749,9 +749,9 @@ internal fun applyCountButton(n: Int): String = if (n >= 2) "この${n}件の変
 /** 確認の画面を閉じるボタン（案の一覧から来たときは一覧へ戻る）。 */
 internal const val BACK_TO_FIXES_BUTTON = "別案を見る"
 
-/** 必須 0 の結果の札。要調整が残るなら「配布可」と言い切らず、配布前の確認へ案内する（押すと配布前の確認が開く）。 */
+/** 必須 0 の結果の札。「配布可」とは言い切らず、配布前の確認へ案内する（押すと配布前の確認が開く）。 */
 internal fun readyBadgeLabel(soft: Long, breakdown: Map<String, Int> = emptyMap()): String =
-    if (soft > 0) "要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}・配布前の確認" else "配布可"
+    if (soft > 0) "要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}・配布前の確認" else "必須違反 0・配布前の確認"
 
 /** 集計期間（見出しの 2 行目）。 */
 internal fun periodLine(startDate: String, days: Int): String? =
@@ -998,7 +998,7 @@ internal fun cellChangeReview(
         thisCell = thisCell.ifEmpty { listOf("このセルに違反はありません") },
         othersResolved = diff.resolved.filter { it !in here }.map(::label),
         appeared = diff.appeared.map(::label),
-        hardLine = "必須違反（勤務表全体）：${before.hard}件 → ${after.hard}件",
+        hardLine = "必須違反（勤務表全体）：${hardText(before.breakdown, before.hard.toLong())} → ${hardText(after.breakdown, after.hard.toLong())}",
         headcount = other,
         counts = counts,
         wishPin = wishPin,
@@ -1081,9 +1081,9 @@ internal const val PIN_NOTE = "固定すると、自動作成・調整ではこ�
 internal const val NOT_CANDO_NOTE = "「外」はこの職員のグループが担当しない勤務です（担当可否の設定）。選ぶと担当外シフトの必須違反になります。"
 
 /** 上部の札の 2 行目以降: 自動作成の状態と、今の勤務表の評価（2026-10-14 利用者レビュー「未計算」を分ける）。 */
-internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long, breakdown: Map<String, Int> = emptyMap()): Pair<String, String> =
-    (if (engineRan) "自動作成：済み" else if (hasResult) "自動作成：未実行（手で編集）" else "自動作成：未実行") to
-        (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${unitTotals(breakdown, MirrorKeys.hard) ?: "${hard}件"}"
+internal fun boardStatusLines(engineRan: Boolean, hasResult: Boolean, checked: Boolean, hard: Long, soft: Long, breakdown: Map<String, Int> = emptyMap(), ranBeforeEdit: Boolean = false): Pair<String, String> =
+    (if (engineRan) "自動作成：済み" else if (ranBeforeEdit && hasResult) "自動作成：済み（そのあと手で変更あり）" else if (hasResult) "自動作成：未実行（手で編集）" else "自動作成：未実行") to
+        (if (!checked) "評価：未評価" else if (hard > 0) "評価：必須違反 ${hardText(breakdown, hard)}"
         else if (soft > 0) "評価：要調整 ${unitTotals(breakdown, MirrorKeys.soft) ?: "${soft}件"}" else "評価：違反なし")
 
 /**
@@ -1147,16 +1147,13 @@ internal const val CREATION_DONE_TITLE = "勤務表の作成が終わりまし�
 internal fun improvesTarget(t: FixTarget?, schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>): Boolean =
     t == null || t.effect(schedule, ops).fixes
 
-internal const val NOT_IMPROVING_TARGET_MESSAGE = "見ている問題が減らないため、この提案は適用しませんでした。「直し方を探す」で探し直してください"
+internal const val NOT_IMPROVING_TARGET_MESSAGE = "見ている問題が減らないため、この提案は適用しませんでした。「変更案を探す」で探し直してください"
 
 /** 確認の画面の「新たな必須違反」（null＝評価していない＝なしと言わない、統合仕様 INV-10）。 */
 internal fun newHardLine(newHard: List<String>?): String =
     "新たな必須違反：" + when { newHard == null -> "未評価（適用の直前に検査します）"; newHard.isEmpty() -> "なし"; else -> newHard.joinToString("、") }
 
 internal fun appliedStatusWord(e: CountEffect): String = when { e.gapAfter == 0 -> "解消"; e.gapAfter < e.gapBefore -> "減少"; else -> "残存" }
-
-/** 確認の画面の「対応する人」「確認する時期」（担当者名・期限のデータは無い＝未設定と書く）。 */
-internal val CHANGE_DUTY_LINES = listOf("対応する人：勤務表の作成担当者（担当者名は未設定）", "確認する時期：変更を適用する前（期限は未設定）")
 
 /** 相談事項に登録しても、連絡や了承の記録にはならない（記録だけ）。 */
 internal const val CONSULT_NOT_CONTACT_NOTE = "相談事項に登録しても、本人への連絡や了承済みにはなりません。"

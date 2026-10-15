@@ -592,7 +592,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" },
-            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null, onPreDist = { preDist = true }) },
+            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null, onPreDist = { preDist = true }, tourCount = tourItems.size) },
         bottomBar = {
             Column {
                 when (barMode) {
@@ -754,7 +754,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         {
                             val selfKeys = remember(ui.wishSelfConflicts) { ui.wishSelfConflicts.flatMapTo(HashSet()) { it.wishKeys } }
                             val rows = remember(tourItems, ui.staffNames, selfKeys) { hardViolationRows(tourItems, ui.staffNames, selfKeys) }
-                            HardListChip(ui.bestHard, rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
+                            HardListChip(hardText(ui.breakdown, ui.bestHard), rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
                         }
                     } else null
                     ScheduleToolsCard(ui, vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket, locCount = vioLocCount,
@@ -1173,7 +1173,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
  */
 
 @Composable
-internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null, onPreDist: (() -> Unit)? = null) {
+internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null, onPreDist: (() -> Unit)? = null, tourCount: Int = 0) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -1196,23 +1196,23 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                 val label: String; val fg: Color; val bg: Color
                 when {
                     ui.running -> {
-                        // [進捗の見える化] バッジに改善の手応えを添える: hard残あり→必須違反数、hard=0→気になる点の数（進捗行と同じ語）。
+                        // [進捗の見える化] バッジに改善の手応えを添える: hard残あり→必須違反数、hard=0→要調整の数（進捗行と同じ語）。
                         // [3.409.12] 旧は裸の「⚠5」で**その5が何の数かを画面のどこも言っていなかった**
                         //   （非実行中の枝は 3.396.0 で「必須違反 N」へ揃えたのに、この枝だけ取り残し）。
                         //   バッジは幅が限られるので語は短く「必須N」＝凡例・ホーム見出しと同じ言葉にする。
                         val prog = when {
                             ui.bestHard > 0L -> " 必須${ui.bestHard}"
-                            ui.initSoft > 0L && ui.bestSoft in 0 until ui.initSoft -> " 気になる点${ui.bestSoft}"
+                            ui.initSoft > 0L && ui.bestSoft in 0 until ui.initSoft -> " 要調整${ui.bestSoft}"
                             else -> ""
                         }
                         label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
                     }
                     ok -> { label = readyBadgeLabel(ui.bestSoft, ui.breakdown); fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
-                    ui.hasResult -> { label = "必須違反 ${ui.bestHard}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
-                    else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
+                    ui.hasResult -> { label = "必須違反 ${hardText(ui.breakdown, ui.bestHard)}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
+                    else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
                 // 札の前に自動作成の状態（2026-10-14 利用者レビュー: 「未計算」では、警告が今の勤務表の評価か分からなかった）。
-                if (!ui.running) Text(boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown).first,
+                if (!ui.running) Text(boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first,
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
                     modifier = Modifier.padding(end = 6.dp).widthIn(max = 96.dp))
                 // 必須違反が残るときは「順に見る」巡回の入口（勤務表のセルを必須から順に開く）。
@@ -1221,7 +1221,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     Surface(onClick = { onHardTour?.invoke() }, color = bg, shape = MaterialTheme.shapes.small,
                         modifier = Modifier.heightIn(min = 48.dp)) {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text("必須 ${ui.bestHard}件を順に見る", color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
+                            Text("必須違反を順に見る（${tourCount}か所）", color = fg, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 12.dp))
                         }
                     }
@@ -1415,12 +1415,12 @@ internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () 
 
 /** 必須違反の一覧の人員不足の 1 行。巡回できる行が 1 つも無いときは「ほかに」と言わず、開く場所を添える。 */
 internal fun hardListCovULine(noRows: Boolean, covU: Int): String? =
-    if (noRows && covU > 0) "人員不足 ${covU}件（日ヘッダの印から開けます）" else tourCovULine(covU)
+    if (noRows && covU > 0) "人員不足 ${covU}人（日の印から開けます）" else tourCovULine(covU)
 
 /** 勤務表タブ上部の「必須 N ▼」と、押すと開く必須違反の一覧。行を押すとシートを閉じ、巡回と同じ移動でそのセルのシートを開く。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun HardListChip(hard: Long, rows: List<HardListRow>, covULine: String?, onPick: (Int) -> Unit) {
+internal fun HardListChip(hard: String, rows: List<HardListRow>, covULine: String?, onPick: (Int) -> Unit) {
     val cs = MaterialTheme.colorScheme
     var open by rememberSaveable { mutableStateOf(false) }
     Surface(onClick = { open = true }, color = cs.errorContainer, shape = MaterialTheme.shapes.small,

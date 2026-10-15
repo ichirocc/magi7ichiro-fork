@@ -11,13 +11,23 @@ import org.junit.Test
 /** [3.643.0] 終わり方の一文は種別ごとに次の一手が決まり、内部名（英字）を含まない。 */
 class StopExplanationTest {
     private fun s(kind: StopKind, hard: Int, early: Boolean = true) =
-        V6FinalPort.StopSummary(earlyStop = early, kind = kind, usedSec = 84, budgetSec = 300, stalledSec = 45, remainingHard = hard)
+        V6FinalPort.StopSummary(earlyStop = early, kind = kind, usedSec = 84, budgetSec = 120, stalledSec = 45, remainingHard = hard)
 
     @Test fun nothingToSayWhenTheDeadlineEndedAPerfectBoard() { assertNull(stopExplanationOf(s(StopKind.DEADLINE, 0, early = false))) }
 
-    @Test fun earlyStopWithNoHardLeftSaysSoWithoutANextStep() {
-        val e = stopExplanationOf(s(StopKind.PLATEAU_FLOOR, 0))!!
-        assertEquals(StopNext.NONE, e.next); assertTrue(e.line.contains("必須違反はありません"))
+    /** [3.678.0] 必須 0 なら早く終えた理由も言わない（結果カードの見出しで足りる）。 */
+    @Test fun earlyStopWithNoHardLeftSaysNothing() { assertNull(stopExplanationOf(s(StopKind.PLATEAU_FLOOR, 0))) }
+
+    /** [3.678.0] 探索時間がすでに上限なら「延ばす」を勧めない。 */
+    @Test fun deadlineAtMaxBudgetDoesNotSuggestMoreTime() {
+        val atMax = V6FinalPort.StopSummary(earlyStop = false, kind = StopKind.DEADLINE, usedSec = 84, budgetSec = com.magi.app.v6.MAX_OPTIMIZE_SEC, stalledSec = 45, remainingHard = 2)
+        assertEquals(StopNext.FIND_FIX, stopExplanationOf(atMax)!!.next)
+    }
+
+    @Test fun remainingHardUsesUnits() {
+        val e = stopExplanationOf(s(StopKind.DEADLINE, 3, early = false), mapOf("c3n" to 1, "covU" to 2))!!
+        assertTrue(e.line, e.line.contains("最終結果の必須違反は 1件・2人です"))
+        assertFalse(e.line.contains("主探索") || e.line.contains("制限時間"))
     }
 
     @Test fun eachKindMapsToItsNextStep() {
@@ -33,7 +43,7 @@ class StopExplanationTest {
         for (k in StopKind.values()) {
             val e = stopExplanationOf(s(k, 1))!!
             assertFalse("内部名（英字）を画面に出さない: ${e.line}", Regex("[A-Za-z]").containsMatchIn(e.line))
-            assertTrue(e.line.contains("1 件") || e.line.contains("必須違反は 1 件"))
+            assertTrue(e.line, e.line.contains("1件"))
         }
         assertTrue(stopExplanationOf(s(StopKind.NORMAL_STALL, 3))!!.line.contains("45 秒"))
         assertNull(stopNextLabel(StopNext.NONE))

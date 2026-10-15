@@ -215,7 +215,7 @@ class CellSheetLogicTest {
         assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9", tourHeading(items, items.indexOf(a)))
         assertEquals(null, tourHeading(items, 9))
         assertEquals("必須違反 ${items.indexOf(a) + 1} / 5 ・ 禁止の並び Dﾃ→A4", peekHeading(tourHeading(items, items.indexOf(a))!!))
-        assertEquals("ほかに人員不足 2件（日ヘッダから）", tourCovULine(2))
+        assertEquals("ほかに人員不足 2人（日の印から開けます）", tourCovULine(2))
         assertEquals(null, tourCovULine(0))
     }
 
@@ -229,7 +229,7 @@ class CellSheetLogicTest {
         assertEquals("10/7(水)", adjacentDayLabel("2026-10-01", 31, 6))
         assertEquals(null, adjacentDayLabel("2026-10-01", 31, 31))
         assertEquals(null, adjacentDayLabel("2026-10-01", 31, -1))
-        assertEquals("職員01 10/3 をA4に変更しました", cellChangedMessage("職員01", "2026-10-01", 2, "A4"))
+        assertEquals("職員01さんの 10/3(土) を A4 に変更しました", cellChangedMessage("職員01", "2026-10-01", 2, "A4"))
     }
 
     @Test fun fixesByOthersKeepThePersonAndTheDay() {
@@ -368,8 +368,8 @@ class CellSheetLogicTest {
     fun peekPickCountFitsFourAtPhoneWidths() {
         assertEquals(4, peekPickCount(360 - 32))
         assertEquals(4, peekPickCount(390 - 32))
-        assertEquals(4, peekPickCount(282))
-        assertEquals(3, peekPickCount(281))
+        assertEquals(4, peekPickCount(290))
+        assertEquals(3, peekPickCount(289))
         assertEquals(1, peekPickCount(40))
         assertEquals(4, peekPickCount(800))
     }
@@ -442,5 +442,22 @@ class CellSheetLogicTest {
         org.junit.Assert.assertTrue(fixAddresses(s, "c3n"))
         org.junit.Assert.assertFalse(fixAddresses(s, "c1"))
         assertEquals("選んだ問題（期間の制約）を減らす案は見つかりませんでした。ほかの問題を選ぶと、その直し方を確認できます。", noFixForProblemLine("期間の制約"))
+    }
+
+    /** [3.678.0] 必須違反の数は単位ごと（人員不足は人）。内訳が無いときだけ件。 */
+    @Test
+    fun hardTextSplitsUnits() {
+        assertEquals("1件・2人", hardText(mapOf("c3n" to 1, "covU" to 2, "c1" to 5), 3))
+        assertEquals("2人", hardText(mapOf("covU" to 2), 2))
+        assertEquals("4件", hardText(emptyMap(), 4))
+    }
+
+    /** [3.678.0] 確認の見出しは 1 手でも入替でも同じ。件数が増えても重い違反が減った採用は理由を言う。 */
+    @Test
+    fun previewTitleAndAdoptedDespiteMore() {
+        assertEquals("この変更を適用しますか？", PREVIEW_TITLE)
+        assertEquals("件数は +3 ですが、重い違反が減ったため改善として採用しました", adoptedDespiteMoreText(10, 13, 900.0, 500.0))
+        assertNull(adoptedDespiteMoreText(10, 9, 900.0, 500.0))
+        assertNull(adoptedDespiteMoreText(10, 13, 500.0, 500.0))
     }
 }

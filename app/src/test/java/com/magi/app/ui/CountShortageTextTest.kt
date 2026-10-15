@@ -64,6 +64,8 @@ class CountShortageTextTest {
     @Test fun otherEffectsLeadWithHardAndSkipTheTargetFamily() {
         val s = FixSuggestion(FixKind.CHANGE, listOf(FixCell(0, 1, 1)), "x", -1, 2, listOf("low" to -1, "c1" to 1, "weekly" to 2))
         assertEquals(listOf("必須違反：1件減る", "期間の制約：1件増える", "曜日の偏り：2pt増える"), otherEffectLines(s, setOf("low", "high", "apt")))
+        // [3.678.0] カードの先頭に必須の変化を出したら繰り返さない。
+        assertEquals(listOf("期間の制約：1件増える", "曜日の偏り：2pt増える"), otherEffectLines(s, setOf("low", "high", "apt"), hardShown = true))
         assertEquals("この2件の変更を適用", applyCountButton(2))
         assertEquals(APPLY_CHANGE_BUTTON, applyCountButton(1))
     }
@@ -117,7 +119,7 @@ class CountShortageTextTest {
     }
 
     @Test fun readyBadgeDoesNotSayReadyWhileAdjustmentsRemain() {
-        assertEquals("配布可", readyBadgeLabel(0))
+        assertEquals("必須違反 0・配布前の確認", readyBadgeLabel(0))
         assertEquals("要調整 3件・配布前の確認", readyBadgeLabel(3))
         assertFalse("元に戻せます" in APPLY_CHANGE_BUTTON)
         assertEquals("対象期間：10/1〜10/31", periodLine("2026-10-01", 31))

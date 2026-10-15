@@ -172,6 +172,8 @@ class ConsultListTest {
         assertEquals("未確認事項 1 件（保留 1。下の一覧で確認してから配ってください）", consultLine(listOf(b)))
         assertEquals(null, consultLine(emptyList<ConsultItem>()))
         assertEquals(true, consultMatch(listOf(b), ConsultItem("s2", "n2"))?.held)
+        assertEquals("了承済みは数えない", null, consultLine(listOf(a.copy(answer = ConsultAnswer.AGREED))))
+        assertEquals("未確認事項 1 件（相談中 1。下の一覧で確認してから配ってください）", consultLine(listOf(a, a.copy(subject = "s3", answer = ConsultAnswer.AGREED))))
     }
 
     /** [3.665.0] 回答は 回答待ち→了承→不可。入れ替えの相談は、回答のあとで勤務表か設定が変わると回答待ちに戻す（以前の回答を流用しない）。 */

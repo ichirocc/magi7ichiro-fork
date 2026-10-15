@@ -36,8 +36,8 @@ data class ChangeRow(val staff: String, val date: String, val before: String, va
 internal const val APPLY_CHANGE_BUTTON = "この変更を適用"
 /** 当てずに閉じるボタン（今の勤務表のまま）。 */
 internal const val KEEP_CURRENT_BUTTON = "今は変更しない"
-/** 誰が・いつ確認するか（仕様 §4）。担当者名や期限のデータは無い＝推測せず「未設定」と書く。 */
-internal const val CHANGE_DUTY_NOTE = "対応する人: 勤務表の作成担当者（担当者名は未設定）／対応する時期: 変更を適用する前（期限は未設定）"
+/** 変更を当てる前の確認の見出し（1 手でも入替でも同じ）。 */
+internal const val PREVIEW_TITLE = "この変更を適用しますか？"
 
 /** [shiftNames]＝登録された勤務名（記号と違えば「記号（勤務名）」で併記）、[wishes]＝希望 "i,j"→シフト（あれば行ごとに希望どおりか添える）。 */
 internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffNames: List<String>, shiftSymbols: List<String>, startDate: String,
