@@ -116,9 +116,9 @@ internal fun StaffManageCard(ui: UiState, v: Ws1View, onEvent: (MagiEvent) -> Un
     confirmDelete?.let { i ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            confirmButton = { DialogDangerButton("削除（退職）", onClick = { onEvent(MagiEvent.Structure.RemoveStaff(i)); confirmDelete = null }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }) },
-            title = { DialogHeader("退職・削除の確認", { confirmDelete = null }) },
+            confirmButton = { DialogDangerButton("削除する（退職）", onClick = { onEvent(MagiEvent.Structure.RemoveStaff(i)); confirmDelete = null }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmDelete = null }, text = "削除しない") },
+            title = { DialogHeader("この職員を削除しますか？", { confirmDelete = null }) },
             text = {
                 val nm = v.staff.getOrNull(i)?.name ?: ""
                 val wishN = ui.wishes.keys.count { VioKey.first(it) == i }

@@ -203,7 +203,7 @@ class CsvPartialImportTest {
         assertEquals("勤務表か設定が変わったため、取込をやめました。もう一度取り込んでください", CsvPartialImport.STALE)
         assertEquals("取込をやめました", CsvPartialImport.CANCELLED)
         assertEquals("この部分だけ取り込む", CsvPartialImport.CONFIRM_LABEL)
-        assertEquals("やめる", CsvPartialImport.CANCEL_LABEL)
+        assertEquals("取り込まない", CsvPartialImport.CANCEL_LABEL)
     }
 
     private fun ask(): CsvPartialImport.Verdict.Ask =

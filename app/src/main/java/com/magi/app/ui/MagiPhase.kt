@@ -45,14 +45,14 @@ internal object MagiArbiter {
         val busy = phase.busyLabel ?: MagiPhase.Background.busyLabel!!
         return when (kind) {
             MagiEventKind.BoardEdit -> Arbitration.Reject(
-                "${busy}の実行中は編集できません（完了後にもう一度お試しください）", "",
+                "${busy}の実行中は編集できません。終わってから、もう一度お試しください", "",
             )
             MagiEventKind.StructureEdit -> Arbitration.Reject(
-                "${busy}の実行中は設定を変更できません。終わるか「やめる」を押してからにしてください。",
+                "${busy}の実行中は設定を変更できません。終わるか「やめる」を押してから、もう一度お試しください。",
                 "${busy}の実行中のため設定変更を取り消しました（終わってから、または「やめる」の後にどうぞ）",
             )
             MagiEventKind.RunStart -> Arbitration.Reject(
-                "${busy}の実行中です。終わるか「やめる」を押してからにしてください。",
+                "${busy}の実行中です。終わるか「やめる」を押してから、もう一度お試しください。",
                 "$what を取り消しました（${busy}が実行中）",
             )
             MagiEventKind.Always -> Arbitration.Accept

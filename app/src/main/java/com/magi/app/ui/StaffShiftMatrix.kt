@@ -207,18 +207,18 @@ internal fun StaffShiftMatrixCard(
         val aptSet = v.groupShiftApt.sumOf { row -> row.count { it.isNotBlank() } }
         AlertDialog(
             onDismissRequest = { confirmResetApt = false },
-            title = { Text("目標を全リセット") },
+            title = { Text("目標をすべて空欄に戻しますか？") },
             text = {
                 Text(
                     "全グループ×全シフトの「目標」${aptSet}件を空欄（目標なし）に戻します。\n" +
                         "・目標由来のやわらかい違反は消えます\n" +
                         "・担当ON/OFF・回数の下限上限・勤務表は変わりません\n" +
-                        "・「元に戻す」で復帰できます\n実行しますか？",
+                        "・「元に戻す」で取り消せます",
                     style = MaterialTheme.typography.bodySmall,
                 )
             },
-            confirmButton = { DialogDangerButton("全リセット", onClick = { onEvent(MagiEvent.Structure.ResetGroupApt); confirmResetApt = false }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmResetApt = false }) },
+            confirmButton = { DialogDangerButton("空欄に戻す", onClick = { onEvent(MagiEvent.Structure.ResetGroupApt); confirmResetApt = false }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmResetApt = false }, text = "戻さない") },
         )
     }
 }
@@ -373,7 +373,7 @@ private fun StaffShiftCellSheet(ui: UiState, cv: ConditionsView, onEvent: (MagiE
             // ⚠付きの解除と解決ボタンは 390dp 幅の1行に収まらない＝入らない分は次の行へ。
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (hasRange) {
-                    DialogDangerButton("上下限を解除", onClick = { commitApt(); onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() })
+                    DialogDangerButton("上下限を解除する", onClick = { commitApt(); onEvent(MagiEvent.Condition.RemoveStaffRange(i, k)); onDismiss() })
                 }
                 if (vio == "vio-high") {
                     DialogConfirmButton("上限を${count}に引き上げて解決", enabled = true,

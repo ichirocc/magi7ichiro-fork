@@ -562,7 +562,7 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = { onEvent(MagiEvent.Structure.CancelMonthMove) },
-        title = { Text("${plan.year}年 ${plan.month}月 に移します") },
+        title = { Text("${plan.year}年 ${plan.month}月 に移りますか？") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 monthMoveLines(plan).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
@@ -575,7 +575,7 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
                 DialogConfirmButton("希望を残して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = false)) })
                 DialogDangerButton("希望を消して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = true)) })
                 // 「やめる」も同じ列に（dismiss の枠に分けると、縦に積んだ列と横に並べられて重なる）。
-                DialogDismissButton(onClick = { onEvent(MagiEvent.Structure.CancelMonthMove) }, text = "やめる")
+                DialogDismissButton(onClick = { onEvent(MagiEvent.Structure.CancelMonthMove) }, text = "移らない")
             }
         },
     )
@@ -790,7 +790,7 @@ internal fun DataActionsCard(
                     when (ui.saveState) {
                         SaveState.Dirty -> "未保存の変更があります（まもなく自動保存します）"
                         SaveState.Saving -> "保存中…"
-                        SaveState.Failed -> "自動保存に失敗しています（端末の空き容量をご確認のうえ「$SAVE_RETRY_BUTTON」をお試しください）"
+                        SaveState.Failed -> "自動保存できていません。端末の空き容量を確かめてから「$SAVE_RETRY_BUTTON」を押してください"
                         SaveState.Saved -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,

@@ -1206,7 +1206,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** [判断設計監査 #3] 「データを開く」直前に退避した1世代前の状態へ戻す。loadAsync 経由のため
      *  現在のデータが再び退避される＝もう一度押すと元へ戻る（スワップ）。 */
     fun restorePreviousData() {
-        if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は、開く前のデータに戻せません。終わるか「やめる」を押してからにしてください。") }; return }
+        if (optimizeInFlight()) { _ui.update { it.copy(messageIsError = true, message = "${busyWhat()}の実行中は、開く前のデータに戻せません。終わるか「やめる」を押してから、もう一度お試しください。") }; return }
         viewModelScope.launch {
             val txt = withContext(Dispatchers.IO) {
                 runCatching { prevBackupFile.takeIf { it.exists() }?.readText() }.getOrNull()
@@ -2559,7 +2559,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (sch.size != st.staffCount || sch.any { it.size != st.dayCount }) {
             alternativeScheds = emptyList()
             _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
-                message = "この案は今のデータ（職員数・期間）と合わないため適用できません。再作成してください") }
+                message = "この案は今のデータ（職員数・期間）と合わないため適用できません。案をもう一度作ってください") }
             logOp("W", "他の案 ${i + 1}: 職員数/期間が今のデータと違うため適用せず")
             return
         }
@@ -2568,7 +2568,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (altBoardKey != 0L && curSched != null && (altBoardKey != boardKey(curSched) || altStateKey != stateKey(st))) {
             alternativeScheds = emptyList()
             _ui.update { it.copy(alternatives = emptyList(), messageIsError = true,
-                message = "その後に勤務表か設定が変わったため、この案は適用できません。再作成してください") }
+                message = "その後に勤務表か設定が変わったため、この案は適用できません。案をもう一度作ってください") }
             logOp("W", "他の案 ${i + 1}: 案の計算後に盤面/設定が変わったため適用せず")
             return
         }
@@ -3369,7 +3369,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 return null
             }
             CsvPartialImport.Verdict.NothingReadable -> {
-                _ui.update { it.copy(messageIsError = true, running = false, message = "CSV取込失敗: ${CsvPartialImport.NOTHING_READABLE}。引用符（\"）の閉じ忘れを直してから、もう一度取り込んでください") }
+                _ui.update { it.copy(messageIsError = true, running = false, message = "CSVを取り込めませんでした。${CsvPartialImport.NOTHING_READABLE}。引用符（\"）の閉じ忘れを直してから、もう一度取り込んでください") }
                 logOp("W", "CSV取込 失敗: 引用符が閉じていなくて読めた職員の行がないため取込を中止しました")
                 return null
             }
@@ -3390,9 +3390,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 // 取込失敗の明示: 氏名が1件も一致しなければ適用せず、オペレーターに原因を表示する。
                 if (res.matched == 0) {
                     val why = if (res.ambiguousNames.isNotEmpty())
-                        "CSV取込失敗: ${csvAmbiguousText(res.ambiguousNames)}。編集タブ＞職員管理とCSVの両方で名前を区別してから、もう一度取り込んでください"
+                        "CSVを取り込めませんでした。${csvAmbiguousText(res.ambiguousNames)}。編集タブ＞職員管理とCSVの両方で名前を区別してから、もう一度取り込んでください"
                     else
-                        "CSV取込失敗: 一致する職員名がありませんでした。CSVの1列目の氏名が現在のデータと一致しているか、列レイアウト（氏名, 1日目, 2日目, …）をご確認ください。"
+                        "CSVを取り込めませんでした。一致する職員名がありません。CSVの1列目の氏名と列の並び（氏名, 1日目, 2日目, …）を今のデータに合わせてから、もう一度取り込んでください"
                     _ui.update { it.copy(messageIsError = true, running = false, message = why) }
                     logOp("W", "CSV取込 失敗: 職員名が0件一致のため取込を中止しました（氏名/列レイアウトを確認）")
                     return@launch

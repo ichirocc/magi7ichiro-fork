@@ -1057,7 +1057,7 @@ internal fun ForbiddenRunDiagnosisCard(ui: UiState, onRelaxRule: (String) -> Uni
             title = { Text("禁止の並びを解除しますか？") },
             text = { Text("「$seq」の禁止を、全員について外します（いま崩せない並び ${n}件）。外すとその場で再チェックします。元に戻すで取り消せます。") },
             confirmButton = { DialogDangerButton("解除する", onClick = { confirmRule = null; onRelaxRule(seq) }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmRule = null }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmRule = null }, text = "解除しない") },
         )
     }
 }
@@ -1305,10 +1305,10 @@ internal fun SettingIssuesCard(
     if (confirmClear && wishClearCount > 0) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("担当外の希望を一括クリアしますか？") },
+            title = { Text("担当外の希望をまとめて消しますか？") },
             text = { Text("担当外の希望 ${wishClearCount}件 をまとめて削除します。勤務表の割当は変わりません。元に戻すで取り消せます。") },
-            confirmButton = { DialogDangerButton("一括クリア", onClick = { confirmClear = false; onClearWishes() }) },
-            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }) },
+            confirmButton = { DialogDangerButton("まとめて消す", onClick = { confirmClear = false; onClearWishes() }) },
+            dismissButton = { DialogDismissButton(onClick = { confirmClear = false }, text = "消さない") },
         )
     }
 }
@@ -1941,10 +1941,10 @@ internal fun AlternativesCard(ui: UiState, onApply: (Int) -> Unit) {
     confirm?.let { i ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("案${i + 1}を反映しますか") },
+            title = { Text("案${i + 1}を反映しますか？") },
             text = { Text(ui.alternatives.getOrNull(i).orEmpty() + if (ui.alternativesWorse.getOrNull(i) == true) "\n" + ALTERNATIVES_ALL_WORSE + "（元に戻すで取り消せます）" else "") },
             confirmButton = { DialogConfirmButton("反映する", onClick = { confirm = null; onApply(i) }) },
-            dismissButton = { DialogDismissButton(onClick = { confirm = null }, text = "やめる") },
+            dismissButton = { DialogDismissButton(onClick = { confirm = null }, text = "反映しない") },
         )
     }
 }
