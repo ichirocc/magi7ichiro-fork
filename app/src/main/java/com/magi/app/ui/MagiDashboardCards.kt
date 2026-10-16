@@ -623,7 +623,7 @@ internal fun OperatorNextActionCard(
     val hasMove = ui.fixSuggestions.any { it.deltaHard < 0 }
     val hp = homePlan(ui.running, ui.hasResult, ui.bestHard == 0L, infeasible, hasPinned, guidedTarget != null,
         hasMove, ui.fixFocusName.isBlank(), ui.fixSearching, ui.fixSearched, relax != null, ui.stalledHardFamilies.isNotEmpty(), !wishCands.isEmpty,
-        ui.saveState == SaveState.Failed, ui.consults.size)
+        ui.saveState == SaveState.Failed, ui.consults.size, draft = ui.draftStage && ui.engineRan)
     val kind = hp.kind
     // 段の対象は 1 か所で決め、主ボタンの括弧と「次に確認する問題」の両方に使う（INV-01）。
     val shortage = guidedTarget?.let { shortageHeadline(it) }
@@ -640,6 +640,9 @@ internal fun OperatorNextActionCard(
         HomePlanKind.RUNNING -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "", "", {}, false, null, onStop)
         HomePlanKind.MAKE -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "",
             "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial,
+            bigColors = cs.onPrimaryContainer to cs.primaryContainer)
+        HomePlanKind.DRAFT -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, homeDraftStatus(hardNow, ui.bestHard),
+            "勤務表をつくる", onMake, true, HOME_SCHEDULE_HELPER, onSchedule,
             bigColors = cs.onPrimaryContainer to cs.primaryContainer)
         HomePlanKind.PRE_DIST -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer, "",
             HOME_PRE_DIST_BUTTON, onPreDist, true, HOME_SCHEDULE_HELPER, onSchedule,

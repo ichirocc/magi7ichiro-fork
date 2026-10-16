@@ -132,8 +132,10 @@ internal fun hardUnchangedLines(s: FixSuggestion, hardRemains: Boolean): List<St
         (if (s.deltaTotal == 0 && weighted < 0) listOf("件数は同じで、重い要調整が減ります") else emptyList())
 }
 
-/** 下書きで今の勤務表を置き換える前の確認（[hard]＝今の必須違反、単位つき）。 */
-/** 下書きの確認の一文。[hard]＝置き換える前の必須違反（まだ数えていなければ null＝件数を言わない）。 */
-internal fun draftConfirmText(hard: String?): String =
-    if (hard == null) "今の勤務表を下書きで置き換えます。元に戻せます" else "今の勤務表（必須 $hard）を下書きで置き換えます。元に戻せます"
+/** 下書きの確認の一文。[hard]＝置き換える前の必須違反（まだ数えていなければ null＝件数を言わない）、[after]＝作った下書きの必須違反（単位つき）。 */
+internal fun draftConfirmText(hard: String?, after: String? = null): String = when {
+    hard != null && after != null -> "今の勤務表を下書きで置き換えます（必須 $hard→$after）。元に戻せます"
+    hard == null -> "今の勤務表を下書きで置き換えます。元に戻せます"
+    else -> "今の勤務表（必須 $hard）を下書きで置き換えます。元に戻せます"
+}
 internal const val DRAFT_UNDO_NOTE = "「元に戻す」で前の勤務表に戻せます"

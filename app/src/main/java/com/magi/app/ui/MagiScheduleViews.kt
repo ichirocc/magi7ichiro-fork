@@ -2104,7 +2104,8 @@ internal fun FixSearchPanel(
                 val label = target?.let { fixTargetLabel(it, sym, ui.startDate) } ?: sym
                 val snap = remember(ui.schedule) { Array(ui.schedule.size) { ui.schedule[it].toIntArray() } }
                 val pred: ((com.magi.app.v6.FixSuggestion) -> Boolean)? = addresses ?: family?.let { f -> { s: com.magi.app.v6.FixSuggestion -> fixAddresses(s, f) } }
-                val shown = ui.fixSuggestions
+                // 日から開いた一覧はその日のセルに触れる案だけ（INV-01）。
+                val shown = fixListDay(focus)?.let { d -> ui.fixSuggestions.filter { s -> listableFix(null, ui.schedule, s.ops, d) } } ?: ui.fixSuggestions
                 val effects = target?.let { t -> shown.associateWith { t.effect(ui.schedule, it.ops) } }
                 val fixing0 = when { effects != null -> shown.filter { effects[it]!!.fixes }; pred != null -> shown.filter(pred); else -> shown }
                 // 日の人員の対象は、同じ勤務の期間全体の過不足が減る案を先に（見ている日だけ直って別の日へ移る案は後ろ。隠さない）。
@@ -2135,7 +2136,7 @@ internal fun FixSearchPanel(
                             hardChangeLine(s.diff)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer) }
                             hardUnchangedLines(s, ui.bestHard > 0).forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             if (e != null && target != null) {
-                                Text("案$n：${e.title(label)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
+                                Text("案$n：${surplusMoveTitle(target, ui.schedule, s.ops, ui.staffNames, ui.shiftSymbols) ?: e.title(label)}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onSecondaryContainer)
                                 Text("$label：${e.countLine()}　${e.gapLine()}" + (if (countMovesOnly(s, target)) MOVES_TO_OTHER_STAFF_NOTE else ""),
                                     style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
                                 Text(e.afterNote(target.basis), style = MaterialTheme.typography.bodyMedium, color = cs.onSecondaryContainer)
@@ -2239,10 +2240,11 @@ internal fun FixSearchPanel(
                 }
                 if (tv != null && target != null && !compact) {
                     val main = (tv.of(FixTier.T1).size.coerceAtMost(limit) + tv.of(FixTier.T2).size.coerceAtMost(limit))
-                    val mv = tv.of(FixTier.MOVE_ONLY); val t3 = tv.of(FixTier.T3)
+                    // 見ている問題を減らさない案は一覧に出さない（適用の門 [improvesTarget] と同じ判定＝INV-03）。
+                    val mv = tv.of(FixTier.MOVE_ONLY); val t3 = tv.of(FixTier.T3).filter { listableFix(target, ui.schedule, it.sug.ops, fixListDay(focus)) }
                     if (mv.isNotEmpty()) fold(moveOnlyHeading(sym, target.under, mv.size), MOVE_ONLY_NOTE, mv, main, moveOnlyPurpose(label, target))
                     if (t3.isNotEmpty()) fold(otherFixHeading(t3.size), otherFixNote(label, target), t3, main + mv.size.coerceAtMost(limit))
-                } else if (others.isNotEmpty() && !compact && (target != null || pred != null)) {
+                } else if (others.isNotEmpty() && !compact && target == null && pred != null) {
                     var open by remember(focus.key) { mutableStateOf(false) }
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(onClickLabel = if (open) "閉じる" else "開く") { open = !open },
                         verticalAlignment = Alignment.CenterVertically) {

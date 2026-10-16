@@ -1323,6 +1323,29 @@ internal const val CREATION_DONE_TITLE = "勤務表の作成が終わりまし�
 internal fun improvesTarget(t: FixTarget?, schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>): Boolean =
     t == null || t.effect(schedule, ops).fixes
 
+/** 勤務変更案の一覧に出してよいか（INV-01/INV-03）: 適用の門と同じ [improvesTarget] を通り、日から開いた一覧（[day]）ならその日のセルに触れる案だけ。 */
+internal fun listableFix(t: FixTarget?, schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>, day: Int?): Boolean =
+    (day == null || ops.any { it.day == day }) && improvesTarget(t, schedule, ops)
+
+/** 一覧を日で絞る依頼の日（日・列から開いた依頼。職員を見る依頼とまとめて見る依頼は絞らない）。 */
+internal fun fixListDay(f: FixFocus): Int? = f.day.takeIf { f.staff == null && !f.allDays }
+
+/** 過剰の対象で、その勤務の 1 人を別の勤務へ移す案の題。それ以外は null（[CountEffect.title] を使う）。 */
+internal fun surplusMoveTitle(t: FixTarget?, schedule: List<List<Int>>, ops: List<com.magi.app.v6.FixCell>, staffNames: List<String>, shiftSymbols: List<String>): String? {
+    if (t == null || t.under || t.staff != null) return null
+    val op = ops.singleOrNull() ?: return null
+    val from = schedule.getOrNull(op.staff)?.getOrNull(op.day) ?: return null
+    if (from != t.shift || op.toShift == from) return null
+    val name = staffNames.getOrNull(op.staff) ?: return null
+    return "${name}さんを ${shiftSymbols.getOrNull(from) ?: UNKNOWN_LABEL} から ${shiftSymbols.getOrNull(op.toShift) ?: UNKNOWN_LABEL} へ移して過剰を減らす"
+}
+
+internal const val PEEK_SEARCH_BUTTON = "変更案を探す"
+
+/** ちら見の次の一手: 置ける候補がすべて ⚠ で緩める候補も無いときだけ「変更案を探す」（主は 1 つ＝INV-09）。null＝出さない。 */
+internal fun peekHopelessAction(mode: Int, severity: CellSeverity, marks: ShiftMarks, candidates: Collection<Int>, current: Int, recommend: Int?): String? =
+    if (mode == 0 && severity != CellSeverity.NONE && recommend == null && singleCellHopeless(marks, candidates, current)) PEEK_SEARCH_BUTTON else null
+
 internal const val NOT_IMPROVING_TARGET_MESSAGE = "見ている問題が減らないため、この提案は適用しませんでした。「変更案を探す」で探し直してください"
 
 /** 確認の画面の「新たな必須違反」（null＝評価していない＝なしと言わない、統合仕様 INV-10）。 */
@@ -1502,7 +1525,7 @@ internal fun fixOriginRefusal(originBoard: Long, fromPreview: Boolean): String? 
     if (fromPreview && originBoard == 0L) FIX_ORIGIN_UNKNOWN_MESSAGE else null
 
 /** ホームの主カードの段（主ボタンの行き先）。文言と色は `OperatorNextActionCard` が段ごとに決める。 */
-internal enum class HomePlanKind { RUNNING, MAKE, PRE_DIST, WISH_INFEASIBLE, DATA_INFEASIBLE, GUIDED_FIX, APPLY_MOVE, SEARCHING, RELAX, WISH_FLOOR, WISHES, LIST }
+internal enum class HomePlanKind { RUNNING, MAKE, DRAFT, PRE_DIST, WISH_INFEASIBLE, DATA_INFEASIBLE, GUIDED_FIX, APPLY_MOVE, SEARCHING, RELAX, WISH_FLOOR, WISHES, LIST }
 
 /** 主ボタン（1 つだけ）と補助ボタンの行き先。 */
 internal enum class HomeAction { NONE, MAKE, SMART_INITIAL, PRE_DIST, SCHEDULE, SHOW_WISHES, LANDING, FIX, SETUP, SHOW_MOVE, APPLY_MOVE, SHOW_RELAX, SHOW_LIST }
@@ -1519,9 +1542,12 @@ internal fun homePlan(
     hasMove: Boolean = false, focusBlank: Boolean = true, fixSearching: Boolean = false, fixSearched: Boolean = false,
     relax: Boolean = false, stalled: Boolean = false, wishes: Boolean = false,
     @Suppress("UNUSED_PARAMETER") saveFailed: Boolean = false, @Suppress("UNUSED_PARAMETER") consults: Int = 0,
+    draft: Boolean = false,
 ): HomePlan = when {
     running -> HomePlan(HomePlanKind.RUNNING, HomeAction.NONE, false, null)
     !hasResult -> HomePlan(HomePlanKind.MAKE, HomeAction.MAKE, true, HomeAction.SMART_INITIAL)
+    // 下書きのまま（手を入れていない）＝次は仕上げの作成。直す一覧へは進めない。
+    draft && !infeasible -> HomePlan(HomePlanKind.DRAFT, HomeAction.MAKE, true, HomeAction.SCHEDULE)
     hard0 -> HomePlan(HomePlanKind.PRE_DIST, HomeAction.PRE_DIST, true, HomeAction.SCHEDULE)
     infeasible && hasPinned -> HomePlan(HomePlanKind.WISH_INFEASIBLE, HomeAction.SHOW_WISHES, true, HomeAction.LANDING)
     infeasible -> HomePlan(HomePlanKind.DATA_INFEASIBLE, HomeAction.LANDING, true, HomeAction.PRE_DIST)
@@ -1557,6 +1583,10 @@ internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = 
     add(HomeSection.DETAIL)
     if (ui.hasResult) { add(HomeSection.SATISFACTION); add(HomeSection.INFO); add(HomeSection.DRAFT_LINK) }
 }
+
+/** 下書きの段の状態の 1 文（次は仕上げの作成）。 */
+internal fun homeDraftStatus(hard: String, bestHard: Long): String =
+    "下書きができました" + (if (bestHard > 0L) "（必須 $hard）" else "") + "。「勤務表をつくる」で仕上げます"
 
 internal const val HOME_MAKE_HEADLINE = "ボタンひとつで、勤務表をつくります"
 internal const val HOME_HARD0_HEADLINE = "必須違反はありません"

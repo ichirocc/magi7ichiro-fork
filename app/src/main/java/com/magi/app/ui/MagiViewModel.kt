@@ -1448,7 +1448,15 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 手直しや結果のある勤務表を黙って置き換えない。確認の文は置き換える前の必須違反を単位つきで言う。
         val u = _ui.value
         if (!confirmed && !u.running && (u.hasResult || u.engineRan || u.ranBeforeEdit || sched.any { r -> r.any { it >= 0 } })) {
-            _ui.update { it.copy(draftConfirm = draftConfirmText(if (u.hasResult) hardText(u.breakdown, u.bestHard) else null)) }
+            // 下書きは決まった種で作る（同じ入力なら同じ盤面）＝先に 1 回だけ作り、確認に後の必須を出し、置き換えるときはその結果を使う。
+            val before = if (u.hasResult) hardText(u.breakdown, u.bestHard) else null
+            val keys = stateKey(st) to boardKey(sched)
+            viewModelScope.launch {
+                val res = runCatching { V6FinalPort.handleSmartInitial(st.withSchedule(sched), allowImpossible = true) }
+                    .onFailure { if (it is CancellationException) throw it }.getOrNull()
+                pendingDraft = res?.let { keys to it }
+                _ui.update { it.copy(draftConfirm = draftConfirmText(before, res?.let { r -> hardText(r.report.breakdown, r.report.hard.toLong()) })) }
+            }
             return
         }
         // [3.692.0] 確認（3.679.0）を通ったかをログで読めるようにする。[3.697.0] 行は完了の後＝置き換える前と後の必須を並べる。
@@ -1473,7 +1481,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         var done = false   // 表示まで終わった。それより前の中止・失敗は差し替えの前後を問わず下書き前へ戻す（importCsv と同じ）
         job = viewModelScope.launch {
             try {
-                val res = V6FinalPort.handleSmartInitial(st.withSchedule(sched), allowImpossible = true)
+                val res = pendingDraft?.takeIf { it.first == (stateKey(st) to boardKey(sched)) }?.second
+                    ?: V6FinalPort.handleSmartInitial(st.withSchedule(sched), allowImpossible = true)
+                pendingDraft = null
                 boardReplaceRev++
                 currentSchedule = res.schedule.copy2D()
                 autoSave()
@@ -1509,7 +1519,11 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** 確認のために先に作った下書き（作ったときの設定と盤面の指紋つき。違えば使わず作り直す）。 */
+    private var pendingDraft: Pair<Pair<Long, Long>, V6FinalPort.ActionResult>? = null
+
     fun dismissDraftConfirm() {
+        pendingDraft = null
         if (_ui.value.draftConfirm != null) logOp("I", "下書きで置き換えない（確認で取りやめ）")
         _ui.update { it.copy(draftConfirm = null) }
     }
@@ -3730,7 +3744,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         snapResult.exceptionOrNull()?.let { if (it is CancellationException) throw it; logOp("W", "表示の写しを作れませんでした: ${it.javaClass.simpleName}: ${it.message}") }
         val snap = snapResult.getOrNull()
-        _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)).let { u -> u.copy(display = snap?.takeIf { d -> d.freshFor(u) }) } }
+        _ui.update { base -> makeUi(st, schedule, report, analysis, transform(base)).let { u ->
+            u.copy(display = snap?.takeIf { d -> d.freshFor(u) }, draftStage = if (runLabel != null) runLabel == "下書きづくり" else base.draftStage) } }
         resolvePendingGuidedFix(st, schedule, report, analysis.coverageDiag)
         deepCovODiagFollowUp(st, schedule, report, runLabel)
     }

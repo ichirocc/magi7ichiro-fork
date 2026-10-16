@@ -85,6 +85,7 @@ data class UiState(
     val fixFailedKey: String = "",
     val fixCancelledKey: String = "",   // 利用者が止めた探索の対象（止めたことを言い、もう一度探せるようにする）
     val fixTiers: FixTierView? = null,   // 見ている問題の案を段に分けたもの（鍵＝依頼の FixFocus.key。別の依頼では使わない）
+    val draftStage: Boolean = false,   // 最後のエンジン実行が下書きづくり（手を入れたかは engineRan で見る）
     val draftConfirm: String? = null,   // 下書きで今の勤務表を置き換える前の確認の文（null＝出さない）
     val fixTimedOut: Boolean = false,   // [仕様 §7] 直近の直し方の探索が締切で打ち切られたか（見つからない理由を「時間不足」と言う）
     val fixSearched: Boolean = false,   // [思考誘導S0] 盤面全体の1手探索を今の盤面で終えたか（未探索と「探して0件」を分ける）
