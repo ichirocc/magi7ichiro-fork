@@ -102,7 +102,7 @@ class Review3682Test {
         assertEquals("休 8回 → 7回（下限 8回を割ります）", guidedCandidateImpact("休", 8, 8))
         assertEquals("休 9回 → 8回", guidedCandidateImpact("休", 9, 8))
         assertNull(guidedCandidateImpact(null, 0, null))
-        assertEquals("ほかの必須違反（1件）は分析タブで", otherHardAfterShortage(mapOf("covU" to 2, "c3n" to 1)))
+        assertEquals("ほかの必須違反（1件）が残っています", otherHardAfterShortage(mapOf("covU" to 2, "c3n" to 1)))
         assertNull(otherHardAfterShortage(mapOf("covU" to 2)))
     }
 }

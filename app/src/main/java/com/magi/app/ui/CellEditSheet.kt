@@ -302,7 +302,10 @@ internal fun CellEditSheet(
                                 if (shortSideFilled(fams)) Button(onClick = open, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(label, maxLines = 2) }
                                 else OutlinedButton(onClick = open, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(label, maxLines = 2) }
                             }
-                            else FixSearchPanel(ui, cv, FixFocus(null, current, j), onEvent, fixNav, onApplied = {}, compact = true)
+                            else {
+                                ShortageSlotHeader(ui, cv, current, j)
+                                FixSearchPanel(ui, cv, FixFocus(null, current, j), onEvent, fixNav, onApplied = {}, compact = true)
+                            }
                         }
                         if (openPanel != FixPanelOpen.CELL && status.severity != CellSeverity.NONE) {
                             // 主は 1 つ（INV-09）: 人員不足だけのセルは足りない側の人探しが主。

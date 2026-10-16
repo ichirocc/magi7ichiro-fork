@@ -62,6 +62,35 @@ internal fun guidedCandidateImpact(fromSym: String?, before: Int, lo: Int?): Str
 
 /** 人員不足を直し終えたときの、ほかの必須違反（人員不足を除く）。無ければ null。 */
 internal fun otherHardAfterShortage(breakdown: Map<String, Int>): String? =
-    unitTotals(breakdown, com.magi.app.v6.MirrorKeys.hard.filter { it != "covU" })?.let { "ほかの必須違反（$it）は分析タブで" }
+    unitTotals(breakdown, com.magi.app.v6.MirrorKeys.hard.filter { it != "covU" })?.let { "ほかの必須違反（$it）が残っています" }
+
+/** 人員不足の手伝いの終わりの主ボタン（巡回の先頭を開く、Q2）。 */
+internal fun guidedTourButton(n: Int): String = "残っている必須違反を順に見る（${n}か所）"
+
+/** 人員不足の手伝いの段（候補の人がいる／入れ替えで埋める／埋められない／終わり）。 */
+internal enum class GuidedStage { CANDIDATES, CHAIN, BLOCKED, DONE }
+
+/** 人員不足の手伝いの題（H-1）。枠が無い埋められない段は「残りの人員不足は埋められません」。 */
+internal fun guidedFixTitle(stage: GuidedStage, dayLabel: String?, shiftSymbol: String?): String {
+    val slot = if (dayLabel != null && shiftSymbol != null) "${dayLabel}の「${shiftSymbol}」" else null
+    return when {
+        stage == GuidedStage.DONE -> SHORTAGE_DONE_TITLE
+        slot == null -> "残りの人員不足は埋められません"
+        stage == GuidedStage.CANDIDATES -> "${slot}に入る人"
+        stage == GuidedStage.CHAIN -> "${slot}を入れ替えで埋める"
+        else -> "${slot}は埋められません"
+    }
+}
+
+internal fun guidedFixTitle(stage: GuidedStage, target: com.magi.app.v6.CoverageShortfall?): String =
+    guidedFixTitle(stage, target?.dayLabel, target?.shiftSymbol)
+
+/** 状態の 2 点（H-2）: 「いまN人／必要M人」と、候補がいれば「動かせる人がN人います」。 */
+internal fun guidedStatusPoints(need: Int, got: Int, movable: Int): List<String> =
+    listOfNotNull(shortageHeadline("", "", need, got, need - got).status, if (movable > 0) "動かせる人が${movable}人います" else null)
+
+/** 候補 1 人の行（H-3）「山田さんを「A4」に入れる（休から）」。今の勤務が無ければ括弧ごと省く。 */
+internal fun guidedCandidateLabel(name: String, shiftSymbol: String, fromSymbol: String?): String =
+    "${name}さんを「${shiftSymbol}」に入れる" + (fromSymbol?.takeIf { it.isNotBlank() }?.let { "（${it}から）" } ?: "")
 
 internal const val SHORTAGE_DONE_TITLE = "人員不足は直し終わりました"

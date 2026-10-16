@@ -5,7 +5,6 @@ import com.magi.app.v6.FixSuggestion
 /** [3.644.0/UX-03] 複数人の入替（玉突き）を当てる前の一覧。だれの・どの日の・何を何に変えるかと、必須違反の増減（`fixImpactLines`）。 */
 data class ChainFixPreview(
     val suggestion: FixSuggestion,
-    val title: String,
     val changes: List<String>,
     val hardLine: String,
     val caution: String?,
@@ -31,6 +30,8 @@ data class ChainFixPreview(
     val fixTarget: FixTarget? = null,
     /** 別の場所に新しく生まれる必須違反（正式な検査の前後。null＝評価していない）。 */
     val newHard: List<String>? = null,
+    /** 前後の 1 行（[previewSummaryLine]、applyError の次に太字）。null＝まだ組み立てていない。 */
+    val summary: String? = null,
 )
 
 /** 変わるセル 1 つ。[wish]＝希望があるときの注記（希望どおり／希望と異なる）。[staffKey]＝職員 ID（無ければ並び順）＝同名でも別の人として束ねる。
@@ -38,7 +39,7 @@ data class ChainFixPreview(
 data class ChangeRow(val staff: String, val date: String, val before: String, val after: String, val wish: String = "", val impact: String = "", val staffKey: Int = -1)
 
 /** 変更を当てるボタン（違反セルの半自動修正仕様 §5: 押すと検証してから全変更を反映する）。 */
-internal const val APPLY_CHANGE_BUTTON = "この変更を適用"
+internal const val APPLY_CHANGE_BUTTON = "この変更を適用する"
 /** [3.687.0/R09] 確認の画面の門の説明（[FixApplyGate] と同じ規則: 必須を増やさない・別の場所に必須を生まない・希望の固定を崩さない。要調整だけの改善は通る）。 */
 internal const val PREVIEW_GATE_NOTE = "適用の直前に最新の勤務表でもう一度検査し、必須違反を増やす・別の職員や日に必須違反を生む・希望の固定を崩す変更は適用しません。適用したあとは「元に戻す」で取り消せます。"
 /** 当てずに閉じるボタン（今の勤務表のまま）。 */
@@ -73,7 +74,41 @@ internal fun chainFixPreview(s: FixSuggestion, snapshot: Array<IntArray>, staffN
     }
     val changes = rows.map { r -> "${r.staff} ${r.date} ${r.before} → ${r.after}" + (if (r.wish.isNotEmpty()) "・${r.wish}" else "") }
     val (hard, caution) = fixImpactLines(s)
-    // 人数・マス数は本文 1 行目（提案のラベル）が持つ。題に入れると「（6 / 人・11 セル）」のように途中で折り返した。
-    return ChainFixPreview(s, "複数人の入れ替え", changes, hard, caution, rows = rows,
+    return ChainFixPreview(s, changes, hard, caution, rows = rows,
         countNotes = staffCountNotes(board, s.ops, staffNames, shiftSymbols))
+}
+
+/** 対象の数の変化の 3 行（案の一覧・争点カード・確認の画面で共有）。 */
+internal fun previewEffectLines(label: String, e: CountEffect, basis: String): List<String> =
+    listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(basis))
+
+/**
+ * 確認の画面の前後の 1 行（D-2）「今回の不足 1人 → 0人（解消）・2か所を変更・新たな必須違反なし」。区切りごとに単位は 1 つ（INV-07）。
+ * [effect]＝見ている問題の変化（null＝対象なし＝必須違反の増減の向きだけ言う）、[newHard] null＝未評価（INV-10）。
+ */
+internal fun previewSummaryLine(effect: CountEffect?, cells: Int, hardDelta: Int, newHard: List<String>?): String = listOfNotNull(
+    effect?.let { "今回の${it.gapLine()}（${appliedStatusWord(it)}）" }
+        ?: when { hardDelta < 0 -> "必須違反は減ります"; hardDelta > 0 -> "必須違反は増えます"; else -> null },
+    "${cells}か所を変更",
+    when { newHard == null -> "新たな必須違反は未評価（適用の直前に検査）"; newHard.isEmpty() -> "新たな必須違反なし"; else -> "新たな必須違反 ${newHard.size}件" },
+).joinToString("・")
+
+/** 見ている問題の目的の 1 文（一覧から来ない経路で使う）「11/3のA4の不足を減らす」。 */
+internal fun previewPurpose(t: FixTarget, label: String, staffName: String?): String =
+    (staffName?.let { "${it}さんの" } ?: "") + "${label}の${t.gapWord}を減らす"
+
+/**
+ * 3 つの組み立て口（候補・玉突き・案の一覧）で共通の仕上げ: [ChainFixPreview.fixTarget] があれば目的と対象の数の変化を埋め
+ * （呼び手が渡していればそのまま）、前後の 1 行を作る。
+ */
+internal fun fillPreview(p: ChainFixPreview, schedule: List<List<Int>>, shiftSymbols: List<String>, startDate: String, staffNames: List<String>): ChainFixPreview {
+    val t = p.fixTarget
+    val e = t?.effect(schedule, p.suggestion.ops)
+    val label = t?.let { fixTargetLabel(it, shiftSymbols.getOrNull(it.shift) ?: "", startDate) }
+    val hardDelta = p.suggestion.diff.filter { it.first in com.magi.app.v6.MirrorKeys.hard }.sumOf { it.second }
+    return p.copy(
+        purpose = p.purpose ?: if (t != null && label != null) previewPurpose(t, label, t.staff?.let { staffNames.getOrNull(it) }) else null,
+        effect = p.effect.ifEmpty { if (t != null && e != null && label != null) previewEffectLines(label, e, t.basis) else emptyList() },
+        summary = previewSummaryLine(e, p.suggestion.ops.size, hardDelta, p.newHard),
+    )
 }
