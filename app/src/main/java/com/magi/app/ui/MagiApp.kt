@@ -510,7 +510,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     }
     /** 呼出元を覚えて着地する（編集タブの先頭に「元の確認へ戻る」を出す）。 */
     val openEditLandingFrom: (EditLanding?, EditReturn?) -> Unit = { l, r -> editReturn = r; openEditLanding(l) }
-    LaunchedEffect(tab) { if (tab != 2) editReturn = null }
+    LaunchedEffect(tab) { if (tab != 2) editReturn = null; vm.logUi(OpLogText.UiOp.Tab(tab)) }   // [3.697.0] 画面の遷移を操作ログへ（同じタブの連続は VM が捨てる）
+    // [3.697.0] 巡回の立ち上がり・立ち下がり（前・次ごとには出さない）。初回の false は開始が無いので VM が捨てる。
+    LaunchedEffect(tourActive) { vm.logUi(if (tourActive) OpLogText.UiOp.TourStart(tourItems.size) else OpLogText.UiOp.TourEnd(tourAt)) }
     // [ジャンプ/Web試作の移植] 要確認一覧→勤務表タブの注目セル(i,j)。表示後に自動クリア（一時ハイライト）。
     var focusCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     // [窓ハイライト③] 編集シートを開いている間、c1/c3/c3m の違反窓・連の範囲を薄枠で示す(閉じたら消す)。
@@ -1052,11 +1054,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }
         }
         if (guidedFix) {
-            GuidedFixDialog(ui, vm, onEvent, onDismiss = { guidedFix = false }, onGoEdit = { l -> openEditLandingFrom(l, EditReturn("なおし方（人員不足）", EditReturn.GUIDED)) })
+            GuidedFixDialog(ui, vm, onEvent, onDismiss = { vm.logUi(OpLogText.UiOp.GuidedClose); guidedFix = false }, onGoEdit = { l -> openEditLandingFrom(l, EditReturn("なおし方（人員不足）", EditReturn.GUIDED)) })
         }
         ui.chainPreview?.let { p ->
             ChainFixPreviewDialog(p, onApply = { vm.applyChainPreview() }, onDismiss = { vm.dismissChainPreview() },
-                consulted = isConsulted(ui.consults, consultChain(p)), onConsult = { vm.addConsult(consultChain(p)); vm.dismissChainPreview() })
+                consulted = isConsulted(ui.consults, consultChain(p)), onConsult = { vm.addConsult(consultChain(p)); vm.dismissChainPreview(afterConsult = true) })
         }
         ui.monthMovePrompt?.let { MonthMoveConfirmDialog(it, onEvent) }
         if (relaxDialog) {
@@ -1069,17 +1071,19 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         ui.preRunCheck?.let { sum ->
             PreRunCheckSheet(sum, ui,
                 onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0; sheetExpanded = wish },
-                onOpenLanding = { l -> vm.dismissPreRun(); openEditLandingFrom(l, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
+                onOpenLanding = { l -> vm.dismissPreRun(OpLogText.UiOp.PreRunCheckConditions); openEditLandingFrom(l, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
                 onConsult = { r -> vm.addConsult(consultPreRun(r, r.staff?.let { ui.staffNames.getOrNull(it) }, r.day?.let { isoDate(ui.startDate, it) })) },
                 onCancelConsult = { vm.cancelConsult(it) },
                 onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
-                onFixData = { vm.dismissPreRun(); openEditLandingFrom(null, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
+                onFixData = { vm.dismissPreRun(OpLogText.UiOp.PreRunCheckConditions); openEditLandingFrom(null, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
                 onProceed = { vm.proceedPreRun() },
                 onDismiss = { vm.dismissPreRun() })
         }
+        LaunchedEffect(preDist) { if (preDist) vm.logUi(OpLogText.UiOp.PreDistOpen) }
         if (preDist) {
             PreDistributionDialog(preDistributionRows(ui, vm.csvSavedLine()),
-                onExport = { saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") }, onDismiss = { preDist = false })
+                onExport = { vm.logUi(OpLogText.UiOp.PreDistExport); saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
+                onDismiss = { vm.logUi(OpLogText.UiOp.PreDistBack); preDist = false })
         }
         ui.draftConfirm?.let { msg ->
             AlertDialog(

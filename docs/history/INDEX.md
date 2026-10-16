@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 操作ログで人間の迷いを読む（2026-10-16、3.697.0）: 画面の操作を操作ログへ（画面:／手で変更:／下書きで置き換え（確認済み）: 必須 a件→b件／案を探す:→案:／変更の確認:／相談に残す:／改善手を適用 … 案を見てから N秒／巡回 開始・終了／作成前の確認:／配布前の確認:／人員不足の手伝い:）＋書き出しに「操作の要約（迷いの指標）」（`OpLogText.hesitationSummary`、JSON `hesitation`）。画面側は `vm.logUi(UiOp)` の 1 入口。出力不変 → `docs/history/3.4xx.md`
 - 端末報告 3 件（2026-10-16、3.696.0）: 「相談中」の札の隣に「取り消す」（`cancelConsult`、済とは別）・ぶつかっている希望の行の札を文の下へ（名前の先頭が欠けた）・実行中のホームは診断の束を出さない（縦に長すぎる）・相談中カードの操作を文の下の 1 行へ。画面のみ  → `docs/history/3.4xx.md`
 - 端末ログの強化（2026-10-16、3.694.0）: 実機ログで G1〜G8 に答える行を足す（出力不変）＝「最適化 開始」を #N 付きで 期間=・職員=・状態指紋=・盤面指紋= つきに＋「設定の開始時」（`TuningTelemetry.startSettings`）、「初期解生成 開始」、完了行・「改善手を適用」・「読込（取得元=）」に盤面指紋（`StateFingerprint.ofBoard`＝旧 `boardKey`）、見送りの W 行、「期間変更」の 要求期間=、探索の強さの 4 フラグ（`SearchStrength.flags()`）、書き出しの期間・指紋行と捨て件数の注記（`OP_LOG_CAP`）、診断ログ「容認採用」（先頭 5 件、`TuningTelemetry.noteTolerated`）、CoverageDiag の（根拠: …）（`CoverageShortfall.basis()`）。純関数 `OpLogText`。時間ゲートは hash 16/16 一致  → `docs/history/3.4xx.md`
 - 8秒理解UI 第1便＝数の単位の誤り（2026-10-16、3.693.0）: 実行中の札 `runningBadgeLabel`「組んでいます 必須1件・2人」（必須 0 なら「組んでいます」）・反映の帯の「（Nか所）」を巡回できる数（`FixNav.tourCount`）に・適用の通知 `fixOutcomeText` を前後とも単位ごと・分析の「ほか Nか所」・コロンを全角（INV-07）。計画の全文は `docs/history/ui8s_plan_3.693.0.md`（決定待ち Q1〜Q11 は §3）  → `docs/history/3.4xx.md`

@@ -392,6 +392,22 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return "${opLogFmt.format(java.util.Date(e.timeMs))} [${e.level}] $run${e.message}"
     }
 
+    // [3.697.0] 画面の操作の唯一の入口（文字列は OpLogText）。同じタブへの連続・開始の無い巡回の終了・案を当てたあとの「閉じる（適用なし）」は出さない。
+    private var loggedTab = 0
+    private var tourTotal: Int? = null
+    private var guidedApplied = false
+    internal fun logUi(op: OpLogText.UiOp) {
+        when (op) {
+            is OpLogText.UiOp.Tab -> { if (op.tab == loggedTab) return; loggedTab = op.tab }
+            is OpLogText.UiOp.TourStart -> tourTotal = op.total
+            is OpLogText.UiOp.TourEnd -> { val n = tourTotal ?: return; tourTotal = null; logOp("I", OpLogText.uiLine(op, n)); return }
+            is OpLogText.UiOp.GuidedOpen -> guidedApplied = false
+            OpLogText.UiOp.GuidedClose -> if (guidedApplied) return
+            else -> {}
+        }
+        logOp("I", OpLogText.uiLine(op))
+    }
+
     // 操作再現用デコード（現stateを参照。staff/shift一覧は操作中に不変）。
     internal fun opNm(i: Int): String = state?.staff?.getOrNull(i)?.name ?: "#$i"
     internal fun opSy(k: Int): String = state?.shifts?.getOrNull(k)?.kigou?.let { toHankakuKigou(it) } ?: "#$k"
@@ -1435,8 +1451,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             _ui.update { it.copy(draftConfirm = draftConfirmText(if (u.hasResult) hardText(u.breakdown, u.bestHard) else null)) }
             return
         }
-        // [3.692.0] 確認（3.679.0）を通ったかをログで読めるようにする。
-        if (confirmed && u.draftConfirm != null) logOp("I", "下書きで置き換え（確認済み）")
+        // [3.692.0] 確認（3.679.0）を通ったかをログで読めるようにする。[3.697.0] 行は完了の後＝置き換える前と後の必須を並べる。
+        val replacing = confirmed && u.draftConfirm != null
         if (u.draftConfirm != null) _ui.update { it.copy(draftConfirm = null) }
         // [3.271.0, 実機ログ起因] 実行中ガード。旧: ガード無しのため「勤務表をつくる」の直後に隣接する
         //   本ボタンを連続タップすると、走行中の最適化と初期解生成が併走し、job 参照の上書き
@@ -1473,6 +1489,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 ) }
                 done = true
                 logOp("I", OpLogText.withBoard("初期解生成 完了 必須=${res.report.hard} 合計=${res.report.total}", boardKey(res.schedule)))
+                if (replacing) logOp("I", OpLogText.draftReplaceLine(u.bestHard, res.report.hard))
             } catch (e: CancellationException) {
                 // [3.404.0] 停止・ジョブ上書きを「失敗」と呼ばない（兄弟の refreshCheck 等は分離済みで
                 //   ここだけ取り残されていた＝停止するたび「初期解生成失敗」という誤った文言が出ていた）。
@@ -1605,6 +1622,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             val sum = PreRunCheck.build(st, sched)
             _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }
             logOp("I", "勤務表を作成する 表示 (消えない${sum.floorCount}件, 外れる${sum.rerunClears.size}件)")
+            logUi(OpLogText.UiOp.PreRunOpen)
             return
         }
         startFullOptimize("勤務表の作成", null)
@@ -1623,14 +1641,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         startFullOptimize("勤務表の作成", null, hintShown = true)
     }
 
-    fun dismissPreRun() = _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
+    /** [how] は閉じ方（閉じる／条件を確認する）。開いていなければ何も書かない。 */
+    internal fun dismissPreRun(how: OpLogText.UiOp = OpLogText.UiOp.PreRunClose) {
+        if (_ui.value.preRunCheck != null) logUi(how)
+        _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
+    }
 
     /** 編集タブの「元の確認へ戻る」: つくる前の確認を今のデータで作り直して出す（実行はしない）。残る項目が無ければそう言う。 */
     fun reopenPreRun() {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val sum = PreRunCheck.build(st, sched)
-        if (sum.needsSheet) _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }
+        if (sum.needsSheet) { _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }; logUi(OpLogText.UiOp.PreRunOpen) }
         else _ui.update { it.copy(messageIsError = false, message = "つくる前の確認: 残る項目はなくなりました。画面下の「${if (it.hasResult) "再作成" else "勤務表をつくる"}」でつくれます") }
     }
 
@@ -2084,6 +2106,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private fun resolvePendingGuidedFix(st: MagiState, schedule: Array<IntArray>, report: ViolationReport, diag: CoverageDiagnosis?) {
         val g = pendingGuided ?: return
         pendingGuided = null
+        guidedApplied = true
         val still = diag?.shortfalls?.firstOrNull { it.dayIndex == g.dayIndex && it.shiftIndex == g.shiftIndex && it.miss > 0 }?.miss
         fixOutcomeCtx = TrialCtx(st, boardKey(schedule))
         _ui.update { it.copy(fixOutcome = FixOutcome(guidedFixOutcomeText(g.dayLabel, g.shiftSymbol, still, report.hard, report.breakdown))) }
@@ -2652,6 +2675,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (i !in sched.indices || j !in sched[i].indices) return
         if (rejectUnknownShift(st, shift)) return
         if (sched[i][j] == shift) return
+        val before = sched[i][j]
         pushUndo("セル編集")
         sched[i][j] = shift
         currentSchedule = sched
@@ -2665,7 +2689,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             opNotice = OpNotice(++opNoticeSeq, cellChangedMessage(st.staff.getOrNull(i)?.name ?: "$i", st.startDate, j, st.shifts.getOrNull(shift)?.kigou ?: "$shift"),
                 undoStack.lastOrNull()?.serial ?: 0L),
         ) }
-        logOp("I", "編集: ${opNm(i)} ${j + 1}日 → ${opSy(shift)}")
+        logOp("I", OpLogText.cellChangeLine(opNm(i), DayText.short(st.startDate, j), if (before < 0) OpLogText.EMPTY_CELL else opSy(before), opSy(shift)))
         refreshCheck()
     }
 
@@ -2704,7 +2728,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         // 曜日を選んだ一括は飛び飛びの日＝範囲で書くと間の日まで変えたように読めるので日数で言う。
         val days = if (daySet.last() - daySet.first() + 1 == daySet.size) DayText.range(st.startDate, daySet.first(), daySet.last()) else "${daySet.size}日分"
         postOpNotice("$who $days の ${changed}マスを ${st.shifts.getOrNull(shift)?.kigou ?: shift} に一括変更しました")
-        logOp("I", "一括編集: ${changed}マス → ${opSy(shift)}")
+        logOp("I", OpLogText.cellsChangeLine(changed, opSy(shift)))
         refreshCheck()
     }
 
@@ -2773,6 +2797,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 val need = conditionsViewOf(st, p).needCellLimits(shiftIndex, dayIndex)?.let { n -> FixTarget(null, shiftIndex, dayIndex, n.first, true, "必要人数") }
                 it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols).copy(target = target, fixTarget = need))
             }
+            if (s != null) notePreviewOpened(label)
         }
     }
 
@@ -2786,7 +2811,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         else _ui.update { it.copy(chainPreview = it.chainPreview?.copy(applyError = it.message)) }
     }
 
-    fun dismissChainPreview() { pendingGuided = null; _ui.update { it.copy(chainPreview = null) } }
+    /** [afterConsult]＝相談に残してから閉じた（「今は変更しない」とは数えない）。 */
+    fun dismissChainPreview(afterConsult: Boolean = false) {
+        pendingGuided = null
+        _ui.value.chainPreview?.let { if (!afterConsult) logOp("I", OpLogText.previewDismissLine(it.target?.label ?: it.suggestion.label)) }
+        chainPreviewOpenedAtMs = 0L
+        _ui.update { it.copy(chainPreview = null) }
+    }
+
+    /** [3.697.0] 変更の確認を開いた時刻（0＝開いていない）。「改善手を適用」の末尾の「案を見てから N秒」に使う。 */
+    private var chainPreviewOpenedAtMs = 0L
+    private fun notePreviewOpened(label: String) { chainPreviewOpenedAtMs = System.currentTimeMillis(); logOp("I", OpLogText.previewOpenLine(label)) }
 
     /** 相談に積んだ入れ替えの枠を今の勤務表で探し直す（日付・記号で枠を引き直す＝月やシフトが変わっていれば断る）。
      *  枠を持たない案は一覧をもう一度出す（当てるときは [applyFixSuggestion] の指紋照合と適用の門が守る）。 */
@@ -2813,6 +2848,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
         _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
             .copy(target = target, fixTarget = fixTarget, globalPolish = globalPolish, newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
+        notePreviewOpened(s.label)
     }
 
     /** 案の一覧から: 1 セルの案も当てる前に確認の画面（目的・全変更・対象の数の変化）を出す（2026-10-14 利用者レビュー「見ると適用するを分ける」）。 */
@@ -2824,6 +2860,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
             .copy(target = target, purpose = purpose, effect = effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget, globalPolish = fixTarget == null,
                 newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
+        notePreviewOpened(s.label)
     }
 
     // [D7撤去] hintReadOnly（読取モードの案内）は読取モード撤去に伴い削除（UI 参照ゼロ）。
@@ -2846,6 +2883,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- [3.645.0/仕様 5.3] 相談してから決める判断（セッション内のみ・state 非保存。出力も判定も止めない） ----
     fun addConsult(item: ConsultItem) {
+        logOp("I", OpLogText.consultKeepLine(item.chain?.label ?: item.subject))
         _ui.update {
             val withId = consultStampStaffId(item, it.staffNames, it.staffIds)
             val stamped = if (withId.staffName != null && withId.rosterKey == 0) withId.copy(rosterKey = rosterKeyOf(it.staffNames)) else withId
@@ -3132,6 +3170,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   11/3 の不足に別の日の案だけが並んだ）。広めに集めて並べ替え、上位 8 件を返す。
                 val cv0 = conditionsViewOf(st, cachedProblem(st))
                 val target = if (exceptStaff == null) panelTarget(_ui.value, cv0, FixFocus(focusStaff, focusShift, day, allDays = allDays)) else null
+                // [3.697.0] 起点は画面の見出しと同じ語（対象＝fixTargetLabel、職員＝氏名、どちらも無ければ全体）。
+                val searchStartMs = System.currentTimeMillis()
+                logOp("I", OpLogText.fixSearchStartLine(target?.let { fixTargetLabel(it, opSy(it.shift), st.startDate) } ?: focusName.ifBlank { OpLogText.FIX_ORIGIN_ALL }))
                 var tiers: FixTierView? = null
                 val list = withContext(Dispatchers.Default) {
                     (if (exceptStaff != null && day != null) {
@@ -3157,6 +3198,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     return@launch
                 }
                 _ui.update { it.copy(fixSuggestions = list, fixTiers = tiers, fixSearching = false, fixTimedOut = timedOut, fixFocusName = focusName, fixSearched = focusName.isBlank(), fixDoneKey = focusKey) }
+                logOp("I", OpLogText.fixSearchEndLine(list.size, System.currentTimeMillis() - searchStartMs))
                 // [S6 §8] 全体の 1 手探索が必須を減らす候補なしで終わったら、背景で設定の壁を探す。
                 if (focusName.isBlank() && list.none { it.deltaHard < 0 } && _ui.value.bestHard > 0) startRelaxTrial()
             } catch (e: CancellationException) {
@@ -3236,8 +3278,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         currentSchedule = applied
         state = st.withSchedule(applied)
         autoSave()
+        val seenMs = if (fromPreview && chainPreviewOpenedAtMs > 0L) System.currentTimeMillis() - chainPreviewOpenedAtMs else null
+        chainPreviewOpenedAtMs = 0L
         logOp("I", OpLogText.fixLine(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total,
-            st.startDate, st.endDate, st.dayCount, boardNow, boardKey(applied), stateNow))
+            st.startDate, st.endDate, st.dayCount, boardNow, boardKey(applied), stateNow).let { l -> seenMs?.let { OpLogText.withSeenSeconds(l, it) } ?: l })
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,

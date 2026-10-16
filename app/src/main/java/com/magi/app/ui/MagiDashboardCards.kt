@@ -439,6 +439,7 @@ internal fun GuidedFixDialog(
                         val cands = remember(target.dayIndex, target.shiftIndex, ui.coverageDiag) {
                             vm.shortageFixCandidates(target.dayIndex, target.shiftIndex)
                         }
+                        LaunchedEffect(target.dayIndex, target.shiftIndex) { vm.logUi(OpLogText.UiOp.GuidedOpen(target.dayLabel, target.shiftSymbol, cands.size)) }
                         val gcv = remember(ui) { vm.conditionsView() }
                         when {
                             cands.isNotEmpty() -> {
