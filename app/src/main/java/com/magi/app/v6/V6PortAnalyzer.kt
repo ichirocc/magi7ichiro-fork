@@ -80,6 +80,9 @@ data class CoverageShortfall(
     val forbidCount: Int = 0,
     /** [3.687.0/R01] `blockedNow` のうち、移せる候補はいるのに限定探索（[chainFills]）で入れ替えの手順が見つからなかっただけの枠。不能の証明ではない。 */
     val searchMiss: Boolean = false,
+    /** [3.692.0] 枠単独では担当できる人数が足りるが、その日の日の証明（[ConstraintMus.dayShortProofs]＝設定ミス診断「必要人数と固定希望の衝突」と同じ根拠。
+     *  希望固定と個人上限0の人を置けない側に数える）で不足が避けられないと示せたので INFEASIBLE にした枠。 */
+    val dayProof: Boolean = false,
 )
 
 /** 人員過剰(covO)が残る 1 つの (日, シフト) 枠の診断。読み取り専用・エンジン非変更。 */
@@ -335,6 +338,18 @@ object V6PortAnalyzer {
      *    並び/回数などの制約に阻まれ最適化が未到達）
      * [3.503.0] 不足（[diagnoseShortfalls]）・緩和案（[buildRelaxations]）・過剰（[diagnoseSurpluses]）に分割。出力は不変。
      */
+    /** [3.692.0] 日の証明で充足不可にした枠の説明（設定ミス診断「必要人数と固定希望の衝突」と同じ根拠）。 */
+    const val DAY_PROOF_REASON = "この希望と上限のままでは埋まりません。固定された希望と個人上限0の人を除くと、この日の必要人数を同時に満たせません"
+
+    /** [3.692.0] 盤面の人員不足のうち日の証明（[ConstraintMus.dayShortProofs]）で避けられないと示せる件数（日ごとに不足の下限で頭打ち）。HF70 の言い分け用。 */
+    fun dayProofCovU(p: Problem, schedule: Array<IntArray>): Int {
+        val norm = normalizeSchedule(schedule, p)
+        val cov = coverage(p, norm)
+        return runCatching { ConstraintMus.dayShortProofs(p) }.getOrDefault(emptyList()).sumOf { dp ->
+            minOf(dp.deficit, dp.shifts.sumOf { k -> p.covUCell(k, dp.day, cov[dp.day][k]).coerceAtLeast(0) })
+        }
+    }
+
     fun diagnoseCoverage(
         state: MagiState,
         schedule: Array<IntArray> = state.schedule.toIntArray2D(),
@@ -453,6 +468,20 @@ object V6PortAnalyzer {
                     CoverageShortfall(j, dayLabel(state.startDate, j), k, sym, need, got, miss, capacity,
                         verdict, reason, blockedNow, wishPinned, chainOk, forbidN, missOnly)
                 )
+            }
+        }
+        // [3.692.0] 日の証明で不足が避けられない枠を INFEASIBLE へ（その日の不足の下限ぶんだけ、不足の大きい枠から）。
+        //   これが無いと設定ミス診断は「同時に成立しません」と言うのに、ここは「充足可能」と言い食い違っていた。
+        for (dp in runCatching { ConstraintMus.dayShortProofs(p) }.getOrDefault(emptyList())) {
+            var left = dp.deficit
+            val idx = list.indices.filter { list[it].dayIndex == dp.day && list[it].shiftIndex in dp.shifts && list[it].verdict == CoverageVerdict.FIXABLE }
+                .sortedByDescending { list[it].miss }
+            for (x in idx) {
+                if (left <= 0) break
+                left -= list[x].miss
+                infeasible++; fixable--
+                list[x] = list[x].copy(verdict = CoverageVerdict.INFEASIBLE, blockedNow = false, searchMiss = false, dayProof = true,
+                    reason = "$DAY_PROOF_REASON（${list[x].shiftSymbol}を担当できる${list[x].capacity}人のうち、この日はほかの勤務の必要人数と取り合いになります）")
             }
         }
         list.sortWith(

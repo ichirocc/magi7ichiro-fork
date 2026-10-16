@@ -1428,6 +1428,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             _ui.update { it.copy(draftConfirm = draftConfirmText(if (u.hasResult) hardText(u.breakdown, u.bestHard) else null)) }
             return
         }
+        // [3.692.0] 確認（3.679.0）を通ったかをログで読めるようにする。
+        if (confirmed && u.draftConfirm != null) logOp("I", "下書きで置き換え（確認済み）")
         if (u.draftConfirm != null) _ui.update { it.copy(draftConfirm = null) }
         // [3.271.0, 実機ログ起因] 実行中ガード。旧: ガード無しのため「勤務表をつくる」の直後に隣接する
         //   本ボタンを連続タップすると、走行中の最適化と初期解生成が併走し、job 参照の上書き
@@ -1482,7 +1484,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun dismissDraftConfirm() { _ui.update { it.copy(draftConfirm = null) } }
+    fun dismissDraftConfirm() {
+        if (_ui.value.draftConfirm != null) logOp("I", "下書きで置き換えない（確認で取りやめ）")
+        _ui.update { it.copy(draftConfirm = null) }
+    }
 
     // 操作コパイロット用: 直前の実行設定と結果（ガチャ操作検知に使用）
     private var lastSettingsSig: String? = null

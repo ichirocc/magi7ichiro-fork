@@ -77,9 +77,11 @@ class Review3687Test {
         listOf(Shift("休", "休", "", "", ShiftRole.Rest), Shift("X", "X", "1", ""), Shift("Y", "Y", "1", "")), listOf(Group("GA", "GA"), Group("GC", "GC")))
 
     @Test fun searchMissIsNotCalledInfeasible() {
-        val d = V6PortAnalyzer.diagnoseCoverage(cascade(cWished = true))
-        val sf = d.shortfalls.single { it.shiftIndex == 1 }
-        assertTrue(sf.blockedNow && sf.searchMiss)
+        // [3.692.0] cascade(cWished=true) は日の証明が立つ（充足不可）ようになったので、不発の枠は値で組む。
+        val base = V6PortAnalyzer.diagnoseCoverage(cascade(cWished = true))
+        val sf = base.shortfalls.single { it.shiftIndex == 1 }.copy(verdict = CoverageVerdict.FIXABLE, blockedNow = true, searchMiss = true, dayProof = false,
+            reason = V6PortAnalyzer.CHAIN_NOT_FOUND_IN_TRIED)
+        val d = base.copy(infeasibleSlots = 0, fixableSlots = 1, shortfalls = listOf(sf))
         assertEquals(1, d.searchMissSlots); assertEquals(0, d.provenBlockedSlots)
         val log = d.logLines()
         assertTrue(log.toString(), log.first().contains("1枠は 試した入れ替えでは埋まらなかった") && !log.first().contains("不能"))

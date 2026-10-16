@@ -34,10 +34,11 @@ class BlockedCovUFixtureTest {
         // 3.344.0/3.377.0 の判定: 空き番なし・玉突き連鎖(findCovUChain)も不成立を実証済み＝
         // 「いまの希望・担当のままでは埋められない」。全4枠が blocked-now。
         val diag = V6PortAnalyzer.diagnoseCoverage(st, sched)
-        assertEquals(4, diag.blockedNowSlots)
+        // [3.692.0] うち 2 枠は日の証明（希望固定・上限0を除くと同じ日のほかの勤務と取り合い）が立つ＝充足不可（dayProof）。
+        assertEquals(2, diag.blockedNowSlots)
+        assertEquals(2, diag.infeasibleSlots)
+        assertTrue(diag.shortfalls.filter { it.verdict == CoverageVerdict.INFEASIBLE }.all { it.dayProof })
         assertTrue("blocked-now の枠が残っているのに allBlockedNow が偽", diag.allBlockedNow)
-        // 恒久的な「データ上充足不可」とは別物（担当者数は足りている）＝3.263.0 の意図的な区別。
-        assertEquals(0, diag.infeasibleSlots)
     }
 
     @Test

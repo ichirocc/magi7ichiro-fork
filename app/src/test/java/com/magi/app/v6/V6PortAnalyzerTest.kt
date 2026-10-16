@@ -118,10 +118,11 @@ class V6PortAnalyzerTest {
     @Test
     fun diagnoseCoverageWarnsWhenCascadeIsBlockedByDownstreamWish() {
         // Cが唯一のdepth2候補だが休へ希望固定＝findCovUChainの候補から除外され連鎖が完成しない。
+        // [3.692.0] この日は X と Y の 2 席に置ける人が A だけ＝日の証明が立つので、「試した範囲」でなく証明つきの充足不可と言う。
         val diag = V6PortAnalyzer.diagnoseCoverage(cascadeChainState(cWished = true))
         val sf = diag.shortfalls.single { it.shiftIndex == 1 }
-        assertTrue("試した範囲で見つからなかったと言い、断定しない",
-            sf.reason.contains(V6PortAnalyzer.CHAIN_NOT_FOUND_IN_TRIED) && !sf.reason.contains("どう組んでも") && !sf.reason.contains("担当を追加"))
+        assertTrue(sf.dayProof && !sf.searchMiss)
+        assertTrue(sf.reason.startsWith(V6PortAnalyzer.DAY_PROOF_REASON) && !sf.reason.contains("担当を追加"))
     }
 
     /**
@@ -135,9 +136,10 @@ class V6PortAnalyzerTest {
     fun blockedNowSeparatesStaticCapacityFromWhatCanActuallyBeFilledNow() {
         val blocked = V6PortAnalyzer.diagnoseCoverage(cascadeChainState(cWished = true))
         val sfB = blocked.shortfalls.single { it.shiftIndex == 1 }
-        assertEquals("枠は足りているので verdict は FIXABLE のまま", CoverageVerdict.FIXABLE, sfB.verdict)
-        assertTrue("だが『いまの希望では埋められない』ことを値として持つ", sfB.blockedNow)
-        assertEquals("サマリと説明が一致する", 1, blocked.blockedNowSlots)
+        // [3.692.0] 枠単独では足りるが日の証明が立つ＝INFEASIBLE（dayProof）。blockedNow とは二重に数えない。
+        assertEquals(CoverageVerdict.INFEASIBLE, sfB.verdict)
+        assertTrue(sfB.dayProof && !sfB.blockedNow)
+        assertEquals("サマリと説明が一致する", 1, blocked.infeasibleSlots)
         assertTrue("この盤面は探索を続けても covU が減らない", blocked.allBlockedNow)
 
         val fixable = V6PortAnalyzer.diagnoseCoverage(cascadeChainState(cWished = false))
@@ -748,5 +750,66 @@ class V6PortAnalyzerTest {
         assertEquals("休 3人 / 上限2 = 過剰1", 1, report.breakdown["covO"])
         assertEquals("ヘッダの▲N もチェッカーと同値", 1, risk.surplus)
         assertEquals("A が0人 = 不足1", 1, risk.shortage)
+    }
+}
+
+class CoverageDayProof3692Test {
+    // 1 日・A と C に各 1 人。s1 は A も C も個人上限 0＝置けるのは s0 だけ。枠ごとの担当できる人数は各 1（>= 必要数）だが、
+    //   日の証明（設定ミス診断「必要人数と固定希望の衝突」と同じ根拠）では 2 席に 1 人＝不足が避けられない。
+    private fun state() = MagiState(
+        startDate = "2025-12-01",
+        endDate = "2025-12-01",
+        shifts = listOf(Shift("休み", "休", "", "", ShiftRole.Rest), Shift("早番", "A", "1", "1"), Shift("遅番", "C", "1", "1")),
+        groups = listOf(Group("G", "G")),
+        staff = listOf(Staff("s0", 0), Staff("s1", 0)),
+        use2Patterns = true,
+        groupShift = listOf(listOf(1, 1, 1)),
+        groupShiftApt = listOf(listOf("", "", "")),
+        schedule = listOf(listOf(1), listOf(0)),
+        wishes = emptyMap(),
+        staffRange = mapOf("1,1" to Range("", "0"), "1,2" to Range("", "0")),
+        needDay1 = emptyMap(),
+        needDay2 = emptyMap(),
+        cons1 = emptyList(), cons2 = emptyList(), cons3 = emptyList(), cons3n = emptyList(),
+        cons3m = emptyList(), cons3mn = emptyList(), cons41 = emptyList(), cons42 = emptyList(),
+    )
+
+    @Test fun dayProofMakesSlotInfeasibleEvenWhenSlotCapacitySuffices() {
+        val diag = V6PortAnalyzer.diagnoseCoverage(state())
+        val sf = diag.shortfalls.single()
+        assertEquals(2, sf.shiftIndex)
+        assertEquals(1, sf.capacity)
+        assertEquals(CoverageVerdict.INFEASIBLE, sf.verdict)
+        assertTrue(sf.dayProof)
+        assertFalse(sf.searchMiss)
+        assertEquals(1, diag.infeasibleSlots)
+        assertEquals(0, diag.fixableSlots)
+        assertTrue(sf.reason.startsWith(V6PortAnalyzer.DAY_PROOF_REASON))
+        val head = diag.logLines().first()
+        assertTrue(head, head.contains("充足不可1枠 / 充足可能0枠"))
+        assertTrue(diag.logLines()[1], diag.logLines()[1].contains("— 充足不可: この希望と上限のままでは埋まりません"))
+        assertEquals(1, V6FinalPort.covUBlockedAmount(diag))
+    }
+
+    @Test fun dayProofCovUCountsBoardShortfallUpToDeficit() {
+        val st = state()
+        assertEquals(1, V6PortAnalyzer.dayProofCovU(cachedProblem(st), st.schedule.toIntArray2D()))
+    }
+
+    @Test fun hf70NamesShortfallThatTheDayProofCovers() {
+        val st = state()
+        val r = HfSwapPolish.detectHF70Anomalies(st, st.schedule.toIntArray2D(), "t")
+        assertTrue(r.message, r.message.contains("（うち人員不足 1 件はこの希望と上限のままでは埋まらない）"))
+    }
+
+    @Test fun wallWhySaysProvenOnlyForProvenSlots() {
+        assertEquals("いまの希望・担当・上限のままでは埋められないと実証済み", V6FinalPort.covUWallWhy(3, 0))
+        assertEquals("試した入れ替えでは埋まらなかった", V6FinalPort.covUWallWhy(3, 3))
+        assertEquals("実証済み1件・試した入れ替えでは埋まらなかった2件", V6FinalPort.covUWallWhy(3, 2))
+    }
+
+    @Test fun floorCountsUpperZeroIsOffAndSnapshotted() {
+        assertFalse(PolishGate.floorCountsUpperZero)
+        assertEquals(false, PolishGate.snapshot()["floorCountsUpperZero"])
     }
 }
