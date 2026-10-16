@@ -185,12 +185,17 @@ internal fun CellEditSheet(
         shape = topCorner.copy(bottomStart = CornerSize(0.dp), bottomEnd = CornerSize(0.dp)),
         tonalElevation = 2.dp,
     ) {
+        // ちら見の「変更案を探す」は大きく開いて、このセルの変更案の一覧を開いた状態から始める。
+        var searchOnOpen by remember(cell) { mutableStateOf(false) }
+        val peekRecommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet }
         if (!expanded) PeekBody(
             ui, cell, name, current, wish, mode, leftHand, onEvent, { k -> choose(k) }, onMove, onDismiss, onToggleExpand, onShowRelax,
             canUndo = canUndo, onUndo = onUndo, onMode = onMode, extKigou = extKigou, onWishes = { fixNav.onWishes(i, j) },
             heading = tourHeading?.let(::peekHeading) ?: status.text.removePrefix("⚠ "), severity = status.severity, tourPrev = tourPrev, tourNext = tourNext,
             picks = peekShifts(shown, canDoSet, current, wish), canDoSet = canDoSet, marks = marks, zeroCaps = zeroCaps,
-            recommend = peekRecommendation(relax?.result, i, j)?.takeIf { mode == 0 && it != current && it in canDoSet },
+            recommend = peekRecommend,
+            searchLabel = peekHopelessAction(mode, status.severity, marks, canDoSet, current, peekRecommend),
+            onSearch = { searchOnOpen = true; onToggleExpand() },
         ) else Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp)) {
             TextButton(onClick = onToggleExpand, modifier = Modifier.heightIn(min = 48.dp).align(if (leftHand) Alignment.Start else Alignment.End)) {
                 Text("小さく表示 ▾")
@@ -284,7 +289,7 @@ internal fun CellEditSheet(
                         Text("どのように調整しますか？", style = MaterialTheme.typography.titleSmall)
                         // 足りない側のセルは、このセルを変えるより当日のその勤務に入れる人を探すのが先。
                         // 直し方の一覧は一度に 1 つだけ開く（片方を開くともう片方は閉じる）。
-                        var openPanel by remember(cell) { mutableStateOf(FixPanelOpen.NONE) }
+                        var openPanel by remember(cell) { mutableStateOf(if (searchOnOpen) FixPanelOpen.CELL else FixPanelOpen.NONE) }
                         if ("covU" in shortSide) {
                             if (openPanel != FixPanelOpen.SHORT_SIDE) Button(onClick = { openPanel = FixPanelOpen.SHORT_SIDE }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                                 Text(shortSideSearchButton(DayText.short(ui.startDate, j), sym(current)), maxLines = 2)
@@ -502,6 +507,7 @@ private fun PeekBody(
     picks: List<Int>, canDoSet: Set<Int>, marks: ShiftMarks, zeroCaps: Set<Int>, recommend: Int?,
     canUndo: Boolean = false, onUndo: () -> Unit = {},
     onMode: (Int) -> Unit = {}, extKigou: List<String>? = null, onWishes: () -> Unit = {},
+    searchLabel: String? = null, onSearch: () -> Unit = {},
 ) {
     val (i, j) = cell
     val cs = MaterialTheme.colorScheme
@@ -532,6 +538,7 @@ private fun PeekBody(
             }
             // 希望を外すのは希望の登録中だけ（割当のちら見では、シフトの押し違いで希望を消さない）。
             val showRemove = wish != null && mode == 1
+            if (searchLabel != null) FilledTonalButton(onClick = onSearch, modifier = Modifier.heightIn(min = 48.dp)) { Text(searchLabel, maxLines = 1) }
             if (showRemove || recommend != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (showRemove) OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onEvent(MagiEvent.Condition.RemoveWish(i, j)) },
                     modifier = Modifier.heightIn(min = 48.dp)) { Text(REMOVE_WISH_BUTTON, color = cs.error, maxLines = 1) }
