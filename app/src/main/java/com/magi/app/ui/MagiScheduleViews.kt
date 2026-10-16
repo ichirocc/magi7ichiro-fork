@@ -453,26 +453,6 @@ internal fun ScheduleGrid(
                     Text("まとめて割当")
                 }
             }
-            // [Web試作①] シフト別の人員不足サマリー: covU のある日数をシフト別に集計（多い順）＝
-            //   「どのシフトが慢性的に埋まらないか」を1行で提示。E7 人員バケツOFF時は他の covU 表示と同様に隠す。
-            if ("need" in vioEnabled) {
-                val shortByShift = (if (ui.needFamilies.isNotEmpty()) ui.needFamilies.keys else ui.needViolations.keys)
-                    .mapNotNull { key ->
-                        val k = VioKey.first(key); val j = VioKey.second(key)
-                        if (k != null && j != null && coverageVioAt(ui, k, j, vioEnabled) == "vio-covU") k to j else null
-                    }
-                    .groupBy({ it.first }, { it.second })
-                    .entries.sortedByDescending { it.value.size }
-                if (shortByShift.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp))
-                    Surface(color = cs.errorContainer, shape = MaterialTheme.shapes.small) {
-                        Text("人員不足（全${allDays}日中）: " +
-                            shortByShift.joinToString(" ・ ") { (k, ds) -> "${ui.shiftSymbols.getOrNull(k) ?: k} ${ds.distinct().size}日" },
-                            color = cs.onErrorContainer, style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp))
-                    }
-                }
-            }
             // [3.431.0 冗長性見直し] 旧「E7 誰が・いつ」= 表示中の違反セルを「名前 d日」で最大8件+「他N件」と
             //   テキスト列挙していたブロックを撤去。①タップ不可（グリッドの当該セルへ飛べない）②直下の「違反ナビ」
             //   （＜前の違反/次の違反＞）が同じ「違反のある場所を辿る」役割をタップ操作で既に提供 ③この列挙は

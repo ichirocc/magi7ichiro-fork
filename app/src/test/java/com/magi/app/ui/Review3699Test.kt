@@ -41,12 +41,10 @@ class Review3699Test {
     }
 
     @Test fun allBlockedPeekOffersOneSearch() {
-        val marks = ShiftMarks(hardRisk = setOf(1, 2))
-        assertEquals(PEEK_SEARCH_BUTTON, peekHopelessAction(0, CellSeverity.HARD, marks, setOf(0, 1, 2), 0, null))
-        assertNull(peekHopelessAction(0, CellSeverity.HARD, marks, setOf(0, 1, 2), 0, 1))         // 緩める候補が主
-        assertNull(peekHopelessAction(1, CellSeverity.HARD, marks, setOf(0, 1, 2), 0, null))      // 希望の登録中
-        assertNull(peekHopelessAction(0, CellSeverity.NONE, marks, setOf(0, 1, 2), 0, null))
-        assertNull(peekHopelessAction(0, CellSeverity.HARD, ShiftMarks(hardRisk = setOf(1)), setOf(0, 1, 2), 0, null))
+        // 3.702.0 S-3: ちら見の「変更案を探す」は問題のあるセルで常に出す（候補が全部 ⚠ のときだけ、をやめた）。
+        assertEquals(PEEK_SEARCH_BUTTON, peekSearchAction(0, CellSeverity.HARD))
+        assertNull(peekSearchAction(1, CellSeverity.HARD))      // 希望の登録中
+        assertNull(peekSearchAction(0, CellSeverity.NONE))
     }
 
     @Test fun draftConfirmShowsBeforeAndAfter() {

@@ -765,6 +765,11 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             HardListChip(displayHardText(ui), rows, hardListCovULine(rows.isEmpty(), ui.breakdown["covU"] ?: 0), onPick = goTourItem)
                         }
                     } else null
+                    // 状態の 1 行。必須違反があれば押すと巡回の先頭を開く。
+                    val stateLine = scheduleStateLine(ui.hasResult, ui.running, ui.bestHard, displayHardText(ui),
+                        ui.display?.takeIf { it.freshFor(ui) }?.softText ?: (unitTotals(ui.breakdown, MirrorKeys.soft) ?: "なし"),
+                        tourItems.firstOrNull()?.let { "${dayMD(ui.startDate, it.days.first())} ${ui.staffNames.getOrNull(it.staff) ?: "職員${it.staff + 1}"}" })
+                    ScheduleStateRow(stateLine, onTour = { goTourItem(0) })
                     ScheduleToolsCard(ui, vioBucketLocCounts(ui), vioEnabled, onToggle = onToggleVioBucket, locCount = vioLocCount,
                         focusMode = focusMode, onFocusMode = { focusMode = it },
                         vioDayNavOn = schedNav.vioMode, onVioDayNav = { schedNav.vioMode = !schedNav.vioMode },
@@ -1034,6 +1039,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     fixNav = fixNav,
                     tourNext = if (tourActive && tourItems.size > 1) tourItems[(tourAt + 1) % tourItems.size].cell else null,
                     tourHeading = if (tourActive) tourHeading(tourItems, tourAt) else null,
+                    tourPos = if (tourActive) tourAt to tourItems.size else null,
                     tourCovULine = if (tourActive) tourCovULine(ui.breakdown["covU"] ?: 0) else null,
                     leftHand = leftHand,
                     relax = vm.relaxTrialFor(),
@@ -1459,6 +1465,17 @@ internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () 
 
 
 
+/** 勤務表タブの状態の 1 行（G2-1）。必須違反は error 色、巡回の先頭へ行けるときだけ押せる。 */
+@Composable
+internal fun ScheduleStateRow(line: ScheduleStateLine, onTour: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val color = if (line.hard) cs.error else cs.onSurfaceVariant
+    val mod = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    Box(if (line.tourFirst) mod.clickable(onClick = onTour) else mod, contentAlignment = Alignment.CenterStart) {
+        Text(line.text, color = color, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
 /** 必須違反の一覧の人員不足の 1 行。巡回できる行が 1 つも無いときは「ほかに」と言わず、開く場所を添える。 */
 internal fun hardListCovULine(noRows: Boolean, covU: Int): String? =
     if (noRows && covU > 0) "人員不足 ${covU}人（日の印から開けます）" else tourCovULine(covU)
@@ -1481,7 +1498,10 @@ internal fun HardListChip(hard: String, rows: List<HardListRow>, covULine: Strin
     ModalBottomSheet(onDismissRequest = { open = false }, sheetState = sheetState) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DialogHeader("必須違反の一覧", onClose = { open = false })
+            DialogHeader(hardListTitle(hard), onClose = { open = false })
+            if (rows.isNotEmpty()) Button(onClick = { open = false; onPick(rows.first().tourAt) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(HARD_LIST_START_BUTTON)
+            }
             for (r in rows) {
                 Surface(onClick = { open = false; onPick(r.tourAt) }, color = cs.surfaceVariant, shape = MaterialTheme.shapes.small,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
