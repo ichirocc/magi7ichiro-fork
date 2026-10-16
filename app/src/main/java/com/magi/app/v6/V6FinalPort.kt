@@ -649,10 +649,13 @@ object V6FinalPort {
         val hardFloor = try { V6SanityPort.structuralHardFloor(state) } catch (_: Exception) { 0 }
         // [E0] 希望衝突の床。ログには常に出し、探索への配線は wishFloorMode≠OFF のときだけ（OFF なら挙動不変）。
         val wishP = cachedProblem(state)
-        val wishParts = try { V6SanityPort.wishConflictFloorParts(wishP) } catch (_: Exception) { 0 to 0 }
+        val wishPartsMp = try { V6SanityPort.wishConflictFloorParts(wishP, zeroCapBinding = true) } catch (_: Exception) { 0 to 0 }
+        val wishFloorMp = wishPartsMp.first + wishPartsMp.second
+        // [3.692.0] floorCountsUpperZero＝頭打ちの床を上限0込みにする（最適化器は上限0へ置かない＝mayPlace を守る盤面では健全）。
+        val floorUp0 = PolishGate.floorCountsUpperZero
+        val wishParts = if (floorUp0) wishPartsMp else try { V6SanityPort.wishConflictFloorParts(wishP) } catch (_: Exception) { 0 to 0 }
         val wishFloorLogged = wishParts.first + wishParts.second
-        val wishFloorMp = try { V6SanityPort.wishConflictFloorParts(wishP, zeroCapBinding = true).let { it.first + it.second } } catch (_: Exception) { 0 }
-        val wishOn = wishFloorMode != WishFloorMode.OFF
+        val wishOn = wishFloorMode != WishFloorMode.OFF || floorUp0
         val wishC3wProven = if (wishOn) V6SanityPort.wishConflictC3wCount(wishP) else 0
         val e0Fired = java.util.concurrent.atomic.AtomicBoolean(false)
         fun wishReachedOn(board: Array<IntArray>?, hard: Int): Boolean = board != null && wishFloorReached(hard, wishFloorLogged) {
@@ -994,7 +997,7 @@ object V6FinalPort {
                 " / 早期終了の条件: 最短実行${minRunMs / 1000}s経過かつ現フェーズ${phaseGraceMs / 1000}s経過かつ無改善が" +
                 "${stallMs / 1000}s(通常)〜${stallHardMs / 1000}s(頭打ち=HARD下限到達 or c3n構造壁)続いたとき" +
                 " / 構造的HARD下限=${hardFloor} / 希望衝突の床=${wishFloorLogged}(衝突${wishParts.first}+日の証明${wishParts.second}・" +
-                (if (wishOn) "到達で頭打ち=${wishFloorMode}" else "記録のみ") + "・上限0を拘束とみなすと${wishFloorMp}・covU の床とは別)",
+                (if (wishOn) "到達で頭打ち=${if (floorUp0) "上限0込み" else wishFloorMode.name}" else "記録のみ") + "・上限0を拘束とみなすと${wishFloorMp}・covU の床とは別)",
         )
         val watchdogLog = run {
             val lastImp = lastImpAtSearchEnd
@@ -1071,7 +1074,7 @@ object V6FinalPort {
                 (if (wd.stagnationIters.get() >= 0)
                     "・発火までに無改善のまま約${fmtIter(wd.stagnationIters.get() - wd.lastBestImproveIters.get())}転(進捗報告ぶん・目安)" else "") +
                 "・発火種別=${if (wd.stagnationByOverride.get()) "猶予上書き" else "通常"}・解は最良を維持）" +
-                (if (e0Fired.get()) "（希望衝突の床に到達＝${wishFloorMode}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
+                (if (e0Fired.get()) "（希望衝突の床に到達＝${if (floorUp0 && wishFloorMode == WishFloorMode.OFF) "上限0込み" else wishFloorMode.name}${if (wishFloorMode == WishFloorMode.E0B) "・後処理の研磨を省略" else ""}）" else "") +
                 // [3.281.0/A] c3n構造壁（証明つき）が短い閾値への移行理由だった場合はそれを明示。
                 (if (wd.stagnationWall.get()) "（残る必須=禁止連続はForbiddenDiagが限定した手（1マス・玉突き・隣接日）では崩せないと判定。希望固定=証明相当/それ以外=探索で改善が見つかっていないだけ）" else ""),
         )) else emptyList()
@@ -1210,9 +1213,11 @@ object V6FinalPort {
             //   実測して却下した判断はそのまま維持する）。
             val covUNow = bd["covU"] ?: 0
             val covUFloor = if (hardFloor > 0 && covUNow in 1..hardFloor) covUNow else 0
-            val covUBlocked = if (covUNow <= 0) 0 else runCatching {
-                covUBlockedAmount(V6PortAnalyzer.diagnoseCoverage(state, finalSched, finalReport, includeSurplus = false))
-            }.getOrDefault(0)
+            val covUDiag = if (covUNow <= 0) null else runCatching {
+                V6PortAnalyzer.diagnoseCoverage(state, finalSched, finalReport, includeSurplus = false)
+            }.getOrNull()
+            val covUBlocked = covUDiag?.let { covUBlockedAmount(it) } ?: 0
+            val covUSearchMiss = covUDiag?.shortfalls?.filter { it.verdict == CoverageVerdict.FIXABLE && it.blockedNow && it.searchMiss }?.sumOf { it.miss } ?: 0
             val covUWall = covUStructuralWall(covUNow, hardFloor, covUBlocked)
             // 希望どうしの衝突（希望を1件取り消すまで c3n/c3w か pref が必ず残る）。族別に open から差し引く。
             val selfConflict = runCatching { V6SanityPort.wishConflictHard(cachedProblem(state), finalSched) }.getOrDefault(emptyMap())
@@ -1253,8 +1258,7 @@ object V6FinalPort {
             if (covUWall > 0) {
                 // 床が全部を覆うときだけ従来どおり「構造的下限」（供給不足）と名乗る。それ以外は
                 //   「担当者は居るが いまの希望では動かせない」＝データ側で希望を1件調整すれば動きうる、を明示。
-                val why = if (covUFloor >= covUNow) "構造的下限"
-                    else "いまの希望・担当のままでは埋められないと実証済み"
+                val why = if (covUFloor >= covUNow) "構造的下限" else covUWallWhy(covUWall, covUSearchMiss)
                 walls.add("covU ${covUWall}件($why)")
             }
             // [3.354.0/実機ログ起因] apt と high は「個人の担当構成」から下限が立つ。実機ログでは
@@ -1420,6 +1424,17 @@ object V6FinalPort {
      * 供給不足（floor）と いま埋められない（blocked）の**どちらか大きいほう**を壁として扱う
      * （blocked は verdict=INFEASIBLE も含むので通常は floor を包含する。両方0なら壁なし＝従来どおり全部 open）。
      */
+    /** [3.692.0] 残存分析の covU 壁の理由。「実証済み」は証明つきの枠（充足不可・候補なし）だけ＝限定探索の不発（searchMiss）は「試した入れ替えでは埋まらなかった」。 */
+    internal fun covUWallWhy(wall: Int, searchMissAmount: Int): String {
+        val miss = minOf(wall, searchMissAmount.coerceAtLeast(0))
+        val proven = wall - miss
+        return when {
+            miss == 0 -> "いまの希望・担当・上限のままでは埋められないと実証済み"
+            proven == 0 -> "試した入れ替えでは埋まらなかった"
+            else -> "実証済み${proven}件・試した入れ替えでは埋まらなかった${miss}件"
+        }
+    }
+
     internal fun covUStructuralWall(covUNow: Int, hardFloor: Int, blockedMiss: Int): Int {
         if (covUNow <= 0) return 0
         val floorPart = if (hardFloor > 0 && covUNow <= hardFloor) covUNow else 0

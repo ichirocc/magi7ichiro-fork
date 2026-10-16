@@ -334,6 +334,9 @@ object PolishGate {
     @Volatile var c3nWallDeepCheck: Boolean = false
     /** [PROPOSAL C/3.643.0、`docs/stall_escape.md` §5.8] 適応閾値: 直近の改善間隔の最大×3 を [短, 通常] に挟み、通常分岐の停滞閾値を縮める。既定 false（2026-10-09 の計測で既定が良く否決＝§11。腕 `adaptive` は再計測用）。 */
     @Volatile var adaptiveStall: Boolean = false
+    /** [3.692.0/測定待ち] 早期終了の希望衝突の床を上限0込み（`wishConflictFloorParts(zeroCapBinding = true)`、ログの「上限0を拘束とみなすと N」）にし、
+     *  到達で短い閾値へ移る（[wishConflictFloorMode] が OFF でも E0A 相当）。既定 false＝ベンチの腕 `floorup0` で測ってから決める。 */
+    @Volatile var floorCountsUpperZero: Boolean = false
 
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */
@@ -348,7 +351,7 @@ object PolishGate {
         "wishPinStrict" to wishPinStrict, "aptFairSoftTolerance" to aptFairSoftTolerance,
         "countChainPolish" to countChainPolish, "postChainRollbackCountsZero" to postChainRollbackCountsZero,
         "stallPolishInjection" to stallPolishInjection, "prePostDescent" to prePostDescent,
-        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "floorShortStall" to floorShortStall, "c3nWallLegacy" to c3nWallLegacy, "lateOpStopPropagation" to lateOpStopPropagation, "c3nWallDeepCheck" to c3nWallDeepCheck, "adaptiveStall" to adaptiveStall,
+        "aptFairHeavySoftGuard" to AptFairPolish.heavySoftGuard, "c3nWallShortStall" to c3nWallShortStall, "floorShortStall" to floorShortStall, "c3nWallLegacy" to c3nWallLegacy, "lateOpStopPropagation" to lateOpStopPropagation, "c3nWallDeepCheck" to c3nWallDeepCheck, "adaptiveStall" to adaptiveStall, "floorCountsUpperZero" to floorCountsUpperZero,
     )
 
     /** [snapshot] の逆。鍵が無い・型が違う値は触らない（旧版で投入された Work は今の値のまま）。 */
@@ -370,7 +373,7 @@ object PolishGate {
         b("wishPinStrict") { wishPinStrict = it }; b("aptFairSoftTolerance") { aptFairSoftTolerance = it }
         b("countChainPolish") { countChainPolish = it }; b("postChainRollbackCountsZero") { postChainRollbackCountsZero = it }
         b("stallPolishInjection") { stallPolishInjection = it }; b("prePostDescent") { prePostDescent = it }
-        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("lateOpStopPropagation") { lateOpStopPropagation = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }; b("adaptiveStall") { adaptiveStall = it }
+        b("aptFairHeavySoftGuard") { AptFairPolish.heavySoftGuard = it }; b("c3nWallShortStall") { c3nWallShortStall = it }; b("floorShortStall") { floorShortStall = it }; b("c3nWallLegacy") { c3nWallLegacy = it }; b("lateOpStopPropagation") { lateOpStopPropagation = it }; b("c3nWallDeepCheck") { c3nWallDeepCheck = it }; b("adaptiveStall") { adaptiveStall = it }; b("floorCountsUpperZero") { floorCountsUpperZero = it }
     }
 }
 

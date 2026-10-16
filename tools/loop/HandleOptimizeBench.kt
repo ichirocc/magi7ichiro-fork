@@ -19,7 +19,7 @@ fun main(args: Array<String>) {
     // [2026-10-08] MAGI_HO_FEATURE: 既定（空）＝ExtraRefine 省略条件の A/B（旧来）。"c3nwall"＝on 腕で c3n 壁の短縮を外す（off 腕は短縮あり＝3.672.0 までの既定）
     //   （PolishGate.c3nWallShortStall=false、通常閾値で粘る）。"head"＝on 腕で HEAD の壁判定（c3nWallLegacy=true）と
     //   後期演算の試行中の停止確認を切る（lateOpStopPropagation=false、入口の確認は残る）に戻す（docs/stall_escape.md §5.5）。
-    //   "deep"＝on 腕で経験的な c3n 壁の 1 手探索による反証（PolishGate.c3nWallDeepCheck）。"adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
+    //   "deep"＝on 腕で経験的な c3n 壁の 1 手探索による反証（PolishGate.c3nWallDeepCheck）。"adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall）。"floorup0"＝on 腕で上限0込みの希望衝突の床で頭打ち（PolishGate.floorCountsUpperZero）。MAGI_HO_FIXTURES でフィクスチャをカンマ区切りで絞る。
     val feature = System.getenv("MAGI_HO_FEATURE") ?: ""
     val fixtures = System.getenv("MAGI_HO_FIXTURES")?.split(',')?.filter { it.isNotBlank() }
         ?: listOf("golden_state.json", "sample_state_v6.json", "blocked_covu_state.json", "sept2026_state.json")
@@ -59,6 +59,8 @@ fun main(args: Array<String>) {
                 PolishGate.c3nWallDeepCheck = feature == "deep" && armOn
                 // "adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall、§5.8 C: 改善間隔の最大×3 を [短, 通常] に挟む）。off 腕＝現行。
                 PolishGate.adaptiveStall = feature == "adaptive" && armOn
+                // "floorup0"＝on 腕で早期終了の床に上限0込みの希望衝突の床を使う（PolishGate.floorCountsUpperZero、3.692.0）。off 腕＝現行。
+                PolishGate.floorCountsUpperZero = feature == "floorup0" && armOn
                 // "ejpipe*"＝on 腕で玉突き連鎖パイプライン（BOTH／C1）。"ejpipefull"＝off 腕が従来の全族の常時フル、on 腕がパイプライン BOTH。
                 PolishGate.allFamilyEjectionChain = feature == "ejpipefull" && !armOn
                 PolishGate.ejectionPipelineFocus = when {

@@ -197,7 +197,12 @@ internal object HfSwapPolish {
         if (invalid > 0) issues.add("担当不可/範囲外配置 $invalid 件")
         if (impossible > 0) issues.add("不可能希望 $impossible 件")
         if (selfConflict.isNotEmpty()) issues.add("希望と禁止の衝突 ${selfConflict.values.sum()} 件")
-        if (hardCore > 0) issues.add("希望以外HARD $hardCore 件")
+        if (hardCore > 0) {
+            // [3.692.0] 人員不足のうち日の証明で避けられない分は、人員不足の診断（CoverageDiag の「充足不可」）・設定ミス診断と同じ根拠で言い分ける。
+            val proven = minOf(hardCore, report.breakdown["covU"] ?: 0,
+                runCatching { V6PortAnalyzer.dayProofCovU(cachedProblem(state, quantitativeRangeEval), schedule) }.getOrDefault(0))
+            issues.add("希望以外HARD $hardCore 件" + if (proven > 0) "（うち人員不足 $proven 件はこの希望と上限のままでは埋まらない）" else "")
+        }
         val msg = if (issues.isEmpty()) "HF70: $algoName 異常なし" else "HF70: ${issues.joinToString(" / ")}"
         val advice = if (issues.isEmpty()) "" else "設定(担当範囲), 希望, 必要人数, 連勤禁止条件を確認してください"
         val level = if (issues.isEmpty()) "I" else "W"

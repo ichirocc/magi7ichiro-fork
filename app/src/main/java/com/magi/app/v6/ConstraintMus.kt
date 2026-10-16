@@ -222,7 +222,24 @@ object ConstraintMus {
         return false
     }
 
-    private fun dayProvablyInfeasible(p: Problem, items: List<Item>, zeroCapExcluded: Boolean = true): Boolean {
+    /** [3.692.0] 日の証明（[analyzeDayConflicts] と同じ判定＝上限 0 と希望固定を置けない側に数える）で、その日に最低いくつ席が空くか
+     *  （最大マッチングの不足）とコアの必要人数のシフト。人員不足の診断（[V6PortAnalyzer.diagnoseCoverage]）が設定ミス診断と同じ根拠で「充足不可」を言うため。 */
+    data class DayShortProof(val day: Int, val shifts: Set<Int>, val deficit: Int)
+
+    fun dayShortProofs(p: Problem): List<DayShortProof> = analyzeDayConflicts(p).map { dc ->
+        val universe = ArrayList<Item>()
+        for (k in 0 until p.K) {
+            val eff = effectiveLowerBound(p, k, dc.day)
+            if (eff > 0) universe.add(DayNeed(dc.day, k, eff))
+        }
+        for (i in 0 until p.S) if (p.wishFixed(i, dc.day)) universe.add(WishPin(i, dc.day, p.wish[i][dc.day]))
+        DayShortProof(dc.day, dc.core.filterIsInstance<DayNeed>().map { it.shift }.toSet(), dayDeficit(p, universe).coerceAtLeast(1))
+    }
+
+    private fun dayProvablyInfeasible(p: Problem, items: List<Item>, zeroCapExcluded: Boolean = true): Boolean =
+        dayDeficit(p, items, zeroCapExcluded) > 0
+
+    private fun dayDeficit(p: Problem, items: List<Item>, zeroCapExcluded: Boolean = true): Int {
         val pinned = HashMap<Int, Int>()
         val slots = ArrayList<Int>()
         for (item in items) when (item) {
@@ -233,8 +250,8 @@ object ConstraintMus {
             }
             else -> {}
         }
-        if (slots.isEmpty()) return false
-        if (slots.size > p.S) return true   // 席数が職員数を超える＝固定希望に関わらず埋め不能（健全）
+        if (slots.isEmpty()) return 0
+        if (slots.size > p.S) return slots.size - p.S   // 席数が職員数を超える＝固定希望に関わらず埋め不能（健全）
         val staffMatch = IntArray(p.S) { -1 }   // staff -> slot
         val slotMatch = IntArray(slots.size) { -1 }
         // 希望固定は mayPlace より優先（HardRepairCore.hf66DataHardening と同じ）＝上限 0 のシフトへの希望固定もその席に就ける。
@@ -257,6 +274,6 @@ object ConstraintMus {
         }
         var matched = 0
         for (s in slots.indices) if (tryAugment(s, BooleanArray(p.S))) matched++
-        return matched < slots.size
+        return slots.size - matched
     }
 }
