@@ -155,6 +155,13 @@ class StateFingerprintTest {
         assertEquals(StateFingerprint.of(base()), StateFingerprint.of(base()))
     }
 
+    /** [3.694.0] 盤面指紋は `MagiViewModel.boardKey` の式を移したもの。固定の 2×3 盤面の値（Kotlin で採取、C# `StateFingerprintTest` と同じ定数）。 */
+    @Test fun ofBoardGoldenIsTheOldBoardKeyFormula() {
+        assertEquals(-1367968410775403481L, StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 1, 2), intArrayOf(1, 0, 2))))
+        assertEquals(1125899906842597L, StateFingerprint.ofBoard(emptyArray()))
+        assertNotEquals(StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 1, 2), intArrayOf(1, 0, 2))), StateFingerprint.ofBoard(arrayOf(intArrayOf(0, 1, 2), intArrayOf(1, 0, 3))))
+    }
+
     @Test fun swappingStaffIdsChangesTheFingerprint() {
         // 名前・群が同じでも ID を入れ替えると、ID で引く相談・希望の付け替えが別の人を指す。
         val b = base().let { it.copy(staff = listOf(it.staff[0].copy(id = 1), it.staff[1].copy(id = 2))) }

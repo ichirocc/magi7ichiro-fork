@@ -409,6 +409,37 @@ object TuningTelemetry {
     /** [3.540.0] 回数連鎖研磨が採用した連鎖数。 */
     val countChainApplied = java.util.concurrent.atomic.AtomicInteger(0)
 
+    /** [3.694.0] 容認採用（素の betterReport なら却下される手を 6% 許容で採った）の中身。保持は先頭 [TOLERATED_NOTE_CAP] 件、総数は [aptFairToleranceUsed]。 */
+    const val TOLERATED_NOTE_CAP = 5
+    data class ToleratedNote(val family: String, val familyBefore: Int, val familyAfter: Int, val totalBefore: Int, val totalAfter: Int,
+                             val hardBefore: Int, val hardAfter: Int, val rawDelta: Double, val forgiven: Double, val effectiveDelta: Double)
+    private val toleratedNotes = ArrayList<ToleratedNote>()
+
+    /** 容認採用の分岐（`AptFairPolish.toleratedBetter`）からだけ呼ぶ。満杯なら何もしない（件数は [aptFairToleranceUsed] が持つ）。 */
+    fun noteTolerated(family: String, familyBefore: Int, familyAfter: Int, totalBefore: Int, totalAfter: Int, hardBefore: Int, hardAfter: Int,
+                      rawDelta: Double, forgiven: Double, effectiveDelta: Double) {
+        synchronized(toleratedNotes) {
+            if (toleratedNotes.size < TOLERATED_NOTE_CAP) toleratedNotes.add(ToleratedNote(family, familyBefore, familyAfter, totalBefore, totalAfter, hardBefore, hardAfter, rawDelta, forgiven, effectiveDelta))
+        }
+    }
+
+    fun toleratedNotes(): List<ToleratedNote> = synchronized(toleratedNotes) { toleratedNotes.toList() }
+
+    /** 診断ログ「容認採用」（tag）の本文。保持分を 1 行ずつ、6 件目以降は 1 行の省略語。小数は Locale.ROOT（C# は InvariantCulture）。 */
+    fun toleratedLines(total: Int): List<String> {
+        val notes = toleratedNotes()
+        val out = ArrayList<String>(notes.size + 1)
+        notes.forEachIndexed { i, n -> out.add(toleratedLine(i + 1, total, n)) }
+        if (total > notes.size) out.add("ほか ${total - notes.size} 件（先頭 ${TOLERATED_NOTE_CAP} 件のみ）")
+        return out
+    }
+
+    fun toleratedLine(index: Int, total: Int, n: ToleratedNote): String =
+        "$index/$total: ${n.family} 件数 ${n.familyBefore}→${n.familyAfter} ・ 合計 ${n.totalBefore}→${n.totalAfter} ・ 必須 ${n.hardBefore}→${n.hardAfter}" +
+            " ・ 容認 ${fmt1(n.forgiven)} ・ 素の差 ${String.format(java.util.Locale.ROOT, "%+.1f", n.rawDelta)} ・ 実効差 ${fmt1(n.effectiveDelta)}"
+
+    private fun fmt1(v: Double) = String.format(java.util.Locale.ROOT, "%.1f", v)
+
     /**
      * 実行ごとに 0 へ戻す（`optimize()` 入口）。
      *
@@ -422,6 +453,27 @@ object TuningTelemetry {
     fun reset() {
         c3nFilterSkipped.set(0); wideC3nDiffered.set(0); wideC3nCalls.set(0)
         lahcEntered.set(0); parityChecks.set(0); aptFairToleranceUsed.set(0); countChainApplied.set(0)
+        synchronized(toleratedNotes) { toleratedNotes.clear() }
+    }
+
+    /** [3.694.0] 9 項目の語と並びの単一ソース。「設定の効き」（[summary]）と「設定の開始時」（[startSettings]）が同じ語を使う。 */
+    fun toggleWords(native: String, parity: String, filter: String, wide: String, softPolish: String,
+                    combine: String, lns: String, aptFair: String, countChain: String, settingSuffix: String = ""): String =
+        "ネイティブ加速$settingSuffix=$native" +
+            " / Kotlin照合$settingSuffix=$parity" +
+            " / 必須が増える候補の事前フィルタ=$filter" +
+            " / 禁止連続の崩し範囲=$wide" +
+            " / 仕上げ最適化=$softPolish" +
+            " / 結合探索を粘り強く=$combine" +
+            " / 一括見直しの自動調整=$lns" +
+            " / 公平化/適切回数の他ソフト許容(6%)=$aptFair" +
+            " / 回数連鎖研磨=$countChain"
+
+    /** 実行の開始点で読んだ設定を ON/OFF だけで出す。「（設定）」は利用者の選択＝実際に使えたかは [summary]（設定の効き）が示す。 */
+    fun startSettings(nativeOn: Boolean, parityOn: Boolean, filterOn: Boolean, wideOn: Boolean, softPolishOn: Boolean,
+                      combineOn: Boolean, lnsOn: Boolean, aptFairOn: Boolean, countChainOn: Boolean): String {
+        fun w(b: Boolean) = if (b) "ON" else "OFF"
+        return toggleWords(w(nativeOn), w(parityOn), w(filterOn), w(wideOn), w(softPolishOn), w(combineOn), w(lnsOn), w(aptFairOn), w(countChainOn), settingSuffix = "（設定）")
     }
 
     /** 各トグルの ON/OFF と、その実行で観測できた効果を1行にまとめる。
@@ -443,15 +495,17 @@ object TuningTelemetry {
         }
         // タグ（MirrorLog tag="設定の効き"）が同じ語を出すため、ここに前置きを付けると
         // 実機ログで「設定の効き: 設定の効き: …」と二重になる（3.409.16 で実機ログにより発覚）。本文だけを返す。
-        return "ネイティブ加速=" + (if (nativeOn) "ON" else "OFF") +
-            " / Kotlin照合=" + eff(parityOn, parityChecks.get(), "回") +
-            " / 必須が増える候補の事前フィルタ=" + eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の必ず却下される検査を省略") +
-            " / 禁止連続の崩し範囲=" + wide +
-            " / 仕上げ最適化=" + eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替") +
-            " / 結合探索を粘り強く=" + (if (combineExhaustPairs) "ON" else "OFF") +
-            " / 一括見直しの自動調整=" + (if (lnsAdaptive) "ON" else "OFF") +
-            " / 公平化/適切回数の他ソフト許容(6%)=" + eff(aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用") +
-            " / 回数連鎖研磨=" + eff(countChainPolish, countChainApplied.get(), "連鎖を採用")
+        return toggleWords(
+            native = if (nativeOn) "ON" else "OFF",
+            parity = eff(parityOn, parityChecks.get(), "回"),
+            filter = eff(PolishGate.filterC3nIncrease, c3nFilterSkipped.get(), "件の必ず却下される検査を省略"),
+            wide = wide,
+            softPolish = eff(softPolishOn, lahcEntered.get(), "回LAHCへ切替"),
+            combine = if (combineExhaustPairs) "ON" else "OFF",
+            lns = if (lnsAdaptive) "ON" else "OFF",
+            aptFair = eff(aptFairSoftTolerance, aptFairToleranceUsed.get(), "回、却下されるはずの手を採用"),
+            countChain = eff(countChainPolish, countChainApplied.get(), "連鎖を採用"),
+        )
     }
 }
 

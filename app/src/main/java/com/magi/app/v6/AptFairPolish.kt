@@ -60,7 +60,12 @@ internal object AptFairPolish {
         // [3.592.0] countはpinBad診断分岐からの呼び出し(実際には不採用)を数えないためのガード。
         if (count && accepted && forgiven > 0.0) {
             val rawAccepted = rawDelta < 0.0 || (rawDelta == 0.0 && rep.total < bestRep.total)
-            if (!rawAccepted) TuningTelemetry.aptFairToleranceUsed.incrementAndGet()
+            if (!rawAccepted) {
+                TuningTelemetry.aptFairToleranceUsed.incrementAndGet()
+                // [3.694.0] どの族の何を容認したか（先頭 5 件）。渡す値はこの関数で計算済み＝判定と戻り値は不変。
+                TuningTelemetry.noteTolerated(family, bestRep.breakdown[family] ?: 0, rep.breakdown[family] ?: 0, bestRep.total, rep.total,
+                    bestRep.hard, rep.hard, rawDelta, forgiven, effectiveDelta)
+            }
         }
         return accepted
     }

@@ -413,6 +413,8 @@ E10 の停滞早期終了（best が枠の 1/5（下限 3 s）無改善で早期
 | `HF80`（`PostPolish` 行）／`ExtraRefine` | B（RSI_PLUS の Phase 4）・softPolish／追加精製 | 停滞早期終了の有無、走らなかった理由。チェーンの `HF80`（`SO applied=` 行）は E で、採用の有無とサイクル数だけ |
 | `StopSummary` | A（出力） | 終わり方の種別（DEADLINE／PLATEAU_FLOOR／WISH_FLOOR／C3N_WALL_CERTIFIED／C3N_WALL_EMPIRICAL／NORMAL_STALL）・早期終了の有無・使用秒／予算秒・探索終了時の無改善秒・残る必須件数＝画面の説明と同じ値（3.643.0） |
 | `設定の効き`（`TuningTelemetry.summary`） | 横断 | トグルがその実行で何をしたか。毎回「観測なし」のトグルは消してよい |
+| `設定の開始時`（操作ログ、`TuningTelemetry.startSettings`） | 横断 | 実行の開始点で VM が読んだ 9 トグルの ON/OFF（「（設定）」＝利用者の選択。語と並びは `設定の効き` と同じ `toggleWords`）。停止・失敗の実行にも残る。`設定の効き` との差は実行中の設定変更（3.694.0） |
+| `容認採用`（`TuningTelemetry.toleratedLines`） | 横断 | 公平化/適切回数の他ソフト許容(6%) で採った手の 族・件数・合計・必須・容認量・素の差・実効差（先頭 5 件＋「ほか N 件」）。`設定の効き` の直後、handleOptimize の終端を通った実行だけ（3.694.0） |
 
 ## 13. レビューと変更の進め方
 

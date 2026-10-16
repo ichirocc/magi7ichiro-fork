@@ -144,4 +144,37 @@ class AptFairPolishToleranceTest {
         assertTrue(betterReport(cand, best))
         assertTrue(AptFairPolish.toleratedBetter(cand, best, best, "apt", enabled = true))
     }
+
+    /** [3.694.0] 容認採用の中身を先頭 5 件まで残す。素で採れる手は数えず、6 件目以降は件数だけ増える。判定は不変。 */
+    @Test fun toleratedAcceptanceIsNotedWithTheValuesAlreadyComputed() {
+        TuningTelemetry.reset()
+        try {
+            val before = rep(fair = 10, apt = 0, low = 1)   // fair 以外 = 120 → 予算 7.2
+            val candidate = rep(fair = 9, apt = 2, low = 1)  // 生 +3.0 悪化・増分 8 のうち 7.2 を容認 → 実効 -4.2
+            assertTrue(AptFairPolish.toleratedBetter(candidate, before, before, "fair", enabled = true))
+            assertEquals(1, TuningTelemetry.aptFairToleranceUsed.get())
+            val n = TuningTelemetry.toleratedNotes().single()
+            assertEquals("fair", n.family); assertEquals(10, n.familyBefore); assertEquals(9, n.familyAfter)
+            assertEquals(11, n.totalBefore); assertEquals(12, n.totalAfter); assertEquals(0, n.hardBefore); assertEquals(0, n.hardAfter)
+            assertEquals(3.0, n.rawDelta, 1e-9); assertEquals(7.2, n.forgiven, 1e-9); assertEquals(-4.2, n.effectiveDelta, 1e-9)
+            assertEquals("1/1: fair 件数 10→9 ・ 合計 11→12 ・ 必須 0→0 ・ 容認 7.2 ・ 素の差 +3.0 ・ 実効差 -4.2", TuningTelemetry.toleratedLine(1, 1, n))
+            // 素の betterReport でも採れる手（容認を使っても使わなくても採用）は数えない・残さない。
+            assertTrue(AptFairPolish.toleratedBetter(rep(fair = 8, apt = 1, low = 1), before, before, "fair", enabled = true))
+            assertEquals(1, TuningTelemetry.aptFairToleranceUsed.get()); assertEquals(1, TuningTelemetry.toleratedNotes().size)
+            // 却下される手・count=false の呼び出しも残さない。
+            assertFalse(AptFairPolish.toleratedBetter(rep(fair = 9, apt = 0, low = 2), before, before, "fair", enabled = true))
+            assertTrue(AptFairPolish.toleratedBetter(candidate, before, before, "fair", enabled = true, count = false))
+            assertEquals(1, TuningTelemetry.toleratedNotes().size)
+            // 6 件目以降は保持されず件数だけ増える。行は先頭 5 件＋省略語の 1 行。
+            repeat(6) { assertTrue(AptFairPolish.toleratedBetter(candidate, before, before, "fair", enabled = true)) }
+            assertEquals(7, TuningTelemetry.aptFairToleranceUsed.get())
+            assertEquals(TuningTelemetry.TOLERATED_NOTE_CAP, TuningTelemetry.toleratedNotes().size)
+            val lines = TuningTelemetry.toleratedLines(TuningTelemetry.aptFairToleranceUsed.get())
+            assertEquals(6, lines.size)
+            assertTrue(lines[0], lines[0].startsWith("1/7: fair 件数 10→9"))
+            assertEquals("ほか 2 件（先頭 5 件のみ）", lines[5])
+            TuningTelemetry.reset()
+            assertTrue(TuningTelemetry.toleratedNotes().isEmpty()); assertTrue(TuningTelemetry.toleratedLines(0).isEmpty())
+        } finally { TuningTelemetry.reset() }
+    }
 }

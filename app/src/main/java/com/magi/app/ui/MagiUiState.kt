@@ -274,12 +274,17 @@ enum class EjectionChainMode {
 enum class SearchStrength {
     NORMAL, THOROUGH;
 
+    /** [3.694.0] 4 フラグの値の唯一の源。[apply] と操作ログ（`OpLogText.strengthLine`）が同じ値を読む＝PolishGate を直読みして食い違わない。 */
+    data class Flags(val combineExhaustPairs: Boolean, val wideC3nBreakDays: Boolean, val countChainPolish: Boolean, val aptFairSoftTolerance: Boolean)
+
+    fun flags(): Flags { val on = this == THOROUGH; return Flags(on, on, on, on) }
+
     fun apply() {
-        val on = this == THOROUGH
-        com.magi.app.v6.PolishGate.combineExhaustPairs = on
-        com.magi.app.v6.PolishGate.wideC3nBreakDays = on
-        com.magi.app.v6.PolishGate.countChainPolish = on
-        com.magi.app.v6.PolishGate.aptFairSoftTolerance = on
+        val f = flags()
+        com.magi.app.v6.PolishGate.combineExhaustPairs = f.combineExhaustPairs
+        com.magi.app.v6.PolishGate.wideC3nBreakDays = f.wideC3nBreakDays
+        com.magi.app.v6.PolishGate.countChainPolish = f.countChainPolish
+        com.magi.app.v6.PolishGate.aptFairSoftTolerance = f.aptFairSoftTolerance
     }
 }
 

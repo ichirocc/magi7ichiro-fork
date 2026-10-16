@@ -74,4 +74,11 @@ object StateFingerprint {
         }
         return h
     }
+
+    /** [3.694.0] 盤面の内容から決まる指紋。`MagiViewModel.boardKey` の式をそのまま移した（値は不変）＝書き出しと操作ログが同じ値を出す。 */
+    fun ofBoard(schedule: Array<IntArray>): Long {
+        var h = 1125899906842597L
+        for (row in schedule) for (v in row) h = h * 31L + v
+        return h
+    }
 }

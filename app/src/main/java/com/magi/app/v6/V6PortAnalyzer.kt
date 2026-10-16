@@ -83,7 +83,16 @@ data class CoverageShortfall(
     /** [3.692.0] 枠単独では担当できる人数が足りるが、その日の日の証明（[ConstraintMus.dayShortProofs]＝設定ミス診断「必要人数と固定希望の衝突」と同じ根拠。
      *  希望固定と個人上限0の人を置けない側に数える）で不足が避けられないと示せたので INFEASIBLE にした枠。 */
     val dayProof: Boolean = false,
-)
+) {
+    /** [3.694.0] 枠行の根拠の語。既存のフィールドだけから決める（reason の文字列では判定しない）。null＝付けない。 */
+    fun basis(): String? = when {
+        dayProof -> "日の証明"
+        verdict == CoverageVerdict.INFEASIBLE && wishPinned.isNotEmpty() -> "希望固定を含む人数の不足"
+        verdict == CoverageVerdict.INFEASIBLE -> "担当できる人数の不足"
+        verdict == CoverageVerdict.FIXABLE && blockedNow && searchMiss -> "試した入れ替えの範囲、証明ではない"
+        else -> null
+    }
+}
 
 /** 人員過剰(covO)が残る 1 つの (日, シフト) 枠の診断。読み取り専用・エンジン非変更。 */
 data class CoverageSurplus(
@@ -159,7 +168,7 @@ data class CoverageDiagnosis(
                     s.blockedNow && s.searchMiss -> "試した入れ替えでは埋まらなかった"
                     else -> "充足可能"
                 }
-                out.add("[W] CoverageDiag: ${s.dayLabel} ${s.shiftSymbol} 必要${s.need}/現状${s.got}(不足${s.miss}) — ${v}: ${s.reason}")
+                out.add("[W] CoverageDiag: ${s.dayLabel} ${s.shiftSymbol} 必要${s.need}/現状${s.got}(不足${s.miss}) — ${v}: ${s.reason}${s.basis()?.let { "（根拠: $it）" } ?: ""}")
             }
             if (shortfalls.size > 8) out.add("[W] CoverageDiag: ほか${shortfalls.size - 8}枠")
             for (r in relaxations.take(4)) out.add("[W] CoverageDiag 緩和案: $r")
