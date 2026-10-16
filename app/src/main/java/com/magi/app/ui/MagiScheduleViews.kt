@@ -2349,7 +2349,7 @@ private fun NoFixBlock(
         if (target?.staff != null) {
             val name = ui.staffNames.getOrNull(target.staff) ?: "#${target.staff}"
             val item = consultCountShortage(name, ui.shiftSymbols.getOrNull(target.shift) ?: "", fixTargetHead(target, target.countOf(ui.schedule)).first(), target.staff)
-            ConsultButton(isConsulted(ui.consults, item)) { onEvent(MagiEvent.Session.AddConsult(item)) }
+            ConsultButton(isConsulted(ui.consults, item), onUndo = { consultMatch(ui.consults, item)?.let { onEvent(MagiEvent.Session.CancelConsult(it)) } }) { onEvent(MagiEvent.Session.AddConsult(item)) }
         }
     }
     if (showCandidates && target != null) AddCandidatesDialog(ui, target.shift, why.candidates, onDismiss = { showCandidates = false },

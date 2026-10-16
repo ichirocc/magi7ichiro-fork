@@ -2877,6 +2877,13 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         logOp("I", "相談中を済にしました: ${item.subject}")
         postOpNotice("済にしました（${item.subject}）", undoable = false)
     }
+    /** [3.696.0] 「相談中」の札から取り消す（済と違い確認した記録にしない。端末報告「相談中を元に戻せない」）。 */
+    fun cancelConsult(item: ConsultItem) {
+        if (item !in _ui.value.consults) return
+        _ui.update { val l = it.consults; val k = l.indexOf(item); if (k < 0) it else it.copy(consults = l.filterIndexed { j, _ -> j != k }) }
+        logOp("I", "相談を取り消しました: ${item.subject}")
+        postOpNotice("相談を取り消しました（${item.subject}）", undoable = false)
+    }
 
     /** Apply an edited state (constraints changed), then re-run the unified check on the current table. */
     /**

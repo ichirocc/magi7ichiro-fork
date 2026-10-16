@@ -707,6 +707,9 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     LiveScheduleCard(ui)
                     // [冗長性削減] StatusHero(状態三重表示) / SummaryCard(統計は「ようす」と重複＋開発用語) /
                     //   QuickActionGrid(下部ナビと4/6重複) は home から除外。詳細統計は「ようす」タブへ集約。
+                    // [3.696.0] 診断の束は実行中は出さない＝いま置き換えている前の盤面の説明で、途中経過の下に 5 画面分伸びていた
+                    //   （端末報告「縦に長すぎる」）。終われば新しい盤面の診断として戻る。
+                    if (!ui.running) {
                     CopilotCard(ui, onGoEdit = { openEditLanding(null) }, onSoftPolish = { vm.runSoftPolish() },
                         onEditWishes = { tab = 2; editScope = 0 })
                     CoverageDiagnosisCard(ui, onCancelWish = { i, j -> vm.removeWish(i, j) })
@@ -721,6 +724,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     SettingIssuesCard(ui, onFix = { vm.applySettingFix(it) },
                         onGoEdit = goEditForIssue,
                         onClearWishes = { vm.clearOutOfScopeWishes() }, wishClearCount = vm.wishOutOfScopeCount())
+                    }
                     // [スクショ指摘/撤去] 「ほかの作り方」カード（速くつくる/かんたんに/閉じても大丈夫）は
                     //   主導線（思考誘導カード＋下部バー）と重複し、実行中は全ボタン無効の死に領域だった
                     //   （ユーザー赤囲い指示）。唯一固有のバックグラウンド実行は設定タブ「最適化設定」へ移設。
@@ -938,7 +942,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // [プロ編集] プロ表示（設定タブ→外観で切替）のときだけ数値診断（V6 1ヶ月俯瞰・生指標）を出す。
                     if (proMode) V6DashboardCard(ui.v6)
                     FixSuggestionCard(ui, onSearch = { vm.findFixSuggestions(null) }, onApply = { vm.previewFixSuggestion(it, globalPolish = true) }, proMode = proMode,
-                        onConsult = { vm.addConsult(consultFix(it)) })
+                        onConsult = { vm.addConsult(consultFix(it)) }, onCancelConsult = { vm.cancelConsult(it) })
                 }
                 else -> {
                     // 作成の時間は設定タブの先頭（再作成の前にいちばん触る設定）。
@@ -1067,6 +1071,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0; sheetExpanded = wish },
                 onOpenLanding = { l -> vm.dismissPreRun(); openEditLandingFrom(l, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
                 onConsult = { r -> vm.addConsult(consultPreRun(r, r.staff?.let { ui.staffNames.getOrNull(it) }, r.day?.let { isoDate(ui.startDate, it) })) },
+                onCancelConsult = { vm.cancelConsult(it) },
                 onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
                 onFixData = { vm.dismissPreRun(); openEditLandingFrom(null, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
                 onProceed = { vm.proceedPreRun() },

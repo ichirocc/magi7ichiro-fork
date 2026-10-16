@@ -59,6 +59,8 @@ data class ChainTarget(
 
 internal const val CONSULT_BUTTON = "相談事項に登録"
 internal const val CONSULT_DONE = "相談中"
+/** 「相談中」の札の隣。積んだ相談を取り消す（済にはしない＝記録に残さない）。 */
+internal const val CONSULT_UNDO_BUTTON = "取り消す"
 internal const val CONSULT_HOLD_BUTTON = "保留する"
 internal const val CONSULT_HELD = "保留中"
 internal const val CONSULT_ADDED = "ホームの「相談中」に登録しました（記録だけで、本人への連絡や了承にはなりません）"
