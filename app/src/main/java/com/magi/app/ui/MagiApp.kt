@@ -1060,7 +1060,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             }
         }
         if (guidedFix) {
-            GuidedFixDialog(ui, vm, onEvent, onDismiss = { vm.logUi(OpLogText.UiOp.GuidedClose); guidedFix = false }, onGoEdit = { l -> openEditLandingFrom(l, EditReturn("なおし方（人員不足）", EditReturn.GUIDED)) })
+            GuidedFixDialog(ui, vm, onEvent, onDismiss = { vm.logUi(OpLogText.UiOp.GuidedClose); guidedFix = false }, onGoEdit = { l -> openEditLandingFrom(l, EditReturn("なおし方（人員不足）", EditReturn.GUIDED)) },
+                onTour = if (tourItems.isNotEmpty()) { { guidedFix = false; goTourItem(0) } } else null, tourCount = tourItems.size)
         }
         ui.chainPreview?.let { p ->
             ChainFixPreviewDialog(p, onApply = { vm.applyChainPreview() }, onDismiss = { vm.dismissChainPreview() },

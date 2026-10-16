@@ -298,6 +298,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 p.applyError?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.error, fontWeight = FontWeight.Bold) }
+                p.summary?.let { Text(it, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) }
                 // 目的 → 変更する勤務（職員ごとの表）→ 対象の数の変化 → ほかの影響と確認が必要なこと（2026-10-14 利用者レビュー）。
                 p.purpose?.let {
                     Text("今回の目的", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
@@ -314,8 +315,8 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                         if (r.wish.isNotEmpty()) Text("　${r.wish}", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
-                p.effect.forEachIndexed { n, line -> Text(line, style = MaterialTheme.typography.bodyMedium, fontWeight = if (n == 0) FontWeight.Bold else FontWeight.Normal) }
-                Text(p.hardLine, style = MaterialTheme.typography.bodyMedium, fontWeight = if (p.effect.isEmpty()) FontWeight.Bold else FontWeight.Normal)
+                p.effect.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                Text(p.hardLine, style = MaterialTheme.typography.bodyMedium)
                 if (p.countNotes.isNotEmpty()) {
                     Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                     p.countNotes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall) }
@@ -331,13 +332,12 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
                 Text(CONSULT_NOT_CONTACT_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
-        // 第 2 の操作と「やめる」も主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。dismiss の枠に分けると横に入り切らず重なった。
+        // 第 2 の操作と「今は変更しない」も主ボタンの下に重ねる（MonthMoveConfirmDialog と同じ形）。dismiss の枠に分けると横に入り切らず重なった。
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DialogConfirmButton(applyCountButton(p.suggestion.ops.size), onClick = onApply)
                 ConsultButton(consulted, Modifier, onClick = onConsult)
-                if (p.fromList) DialogDismissButton(onClick = onDismiss, text = BACK_TO_FIXES_BUTTON)
-                DialogDismissButton(onClick = onDismiss, text = KEEP_CURRENT_BUTTON)
+                DialogDismissButton(onClick = onDismiss, text = if (p.fromList) BACK_TO_FIXES_BUTTON else KEEP_CURRENT_BUTTON)
             }
         },
     )
@@ -409,6 +409,8 @@ internal fun GuidedFixDialog(
     onEvent: (MagiEvent) -> Unit,
     onDismiss: () -> Unit,
     onGoEdit: (EditLanding?) -> Unit,
+    onTour: (() -> Unit)? = null,   // 終わりの段でほかの必須が残るとき、巡回の先頭を開く（H-5）
+    tourCount: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
     val shortfalls = ui.coverageDiag?.shortfalls ?: emptyList()
@@ -423,10 +425,19 @@ internal fun GuidedFixDialog(
     val infeasible = shortfalls.filter { it.verdict == CoverageVerdict.INFEASIBLE }
     // blocked を数えないと「直し終わりました」と言ってしまう（旧より悪い嘘になる）。
     val allDone = target == null && blocked.isEmpty() && infeasible.isEmpty()
+    val cands = remember(target?.dayIndex, target?.shiftIndex, ui.coverageDiag) {
+        target?.let { vm.shortageFixCandidates(it.dayIndex, it.shiftIndex) } ?: emptyList()
+    }
+    val stage = when {
+        allDone -> GuidedStage.DONE
+        target != null && cands.isNotEmpty() -> GuidedStage.CANDIDATES
+        target?.chainVerified == true -> GuidedStage.CHAIN
+        else -> GuidedStage.BLOCKED
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (allDone) SHORTAGE_DONE_TITLE else "なおすのを手伝います") },
+        title = { Text(guidedFixTitle(stage, target)) },
         text = {
             Column(
                 Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState()),
@@ -434,10 +445,7 @@ internal fun GuidedFixDialog(
             ) {
                 when {
                     target != null -> {
-                        Text(shortageHeadline(target).headline + "。", fontWeight = FontWeight.Bold)
-                        val cands = remember(target.dayIndex, target.shiftIndex, ui.coverageDiag) {
-                            vm.shortageFixCandidates(target.dayIndex, target.shiftIndex)
-                        }
+                        guidedStatusPoints(target.need, target.got, cands.size).forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
                         LaunchedEffect(target.dayIndex, target.shiftIndex) { vm.logUi(OpLogText.UiOp.GuidedOpen(target.dayLabel, target.shiftSymbol, cands.size)) }
                         val gcv = remember(ui) { vm.conditionsView() }
                         when {
@@ -445,11 +453,11 @@ internal fun GuidedFixDialog(
                                 // [UX監査 高1] 単独の移動（だれか1人を入れる）。押すと確認の画面へ（直接は書かない）。当てるときは
                                 //   指紋照合・FixApplyGate・INV-03 を通る＝連打で2人目が満たした枠へ入ることも、古い盤面へ書くこともない。
                                 val showAll = remember(target.dayIndex, target.shiftIndex) { androidx.compose.runtime.mutableStateOf(false) }
-                                Text("この日に動かせる人が${cands.size}人います。だれかを「${target.shiftSymbol}」に入れますか？",
-                                    style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                                 // [UX監査 中5] 件数を出し、既定の8人を超えたら「すべて表示」で9人目以降も選べる。
                                 val shown = if (showAll.value) cands else cands.take(GUIDED_FIX_PREVIEW)
                                 shown.forEach { c ->
+                                    val from = ui.schedule.getOrNull(c.staffIndex)?.getOrNull(target.dayIndex)?.takeIf { it >= 0 }
+                                    val fromSym = from?.let { ui.shiftSymbols.getOrNull(it) }
                                     Button(
                                         onClick = {
                                             vm.noteGuidedFix(target.dayIndex, target.shiftIndex, target.dayLabel, target.shiftSymbol)
@@ -457,13 +465,11 @@ internal fun GuidedFixDialog(
                                         },
                                         modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 2.dp),
                                     ) {
-                                        val tail = if (c.fromRest) "（休み）" else ""
                                         // 長い氏名でも切れないよう2行まで折り返し（文字欠け防止）。
-                                        Text("${c.name}さん$tail を「${target.shiftSymbol}」に入れる",
+                                        Text(guidedCandidateLabel(c.name, target.shiftSymbol, fromSym),
                                             textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
-                                    val from = ui.schedule.getOrNull(c.staffIndex)?.getOrNull(target.dayIndex)?.takeIf { it >= 0 }
-                                    guidedCandidateImpact(from?.let { ui.shiftSymbols.getOrNull(it) }, ui.schedule.getOrNull(c.staffIndex)?.count { it == from } ?: 0,
+                                    guidedCandidateImpact(fromSym, ui.schedule.getOrNull(c.staffIndex)?.count { it == from } ?: 0,
                                         from?.let { gcv.staffCellLimits(c.staffIndex, it).first })
                                         ?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                                 }
@@ -481,7 +487,7 @@ internal fun GuidedFixDialog(
                             target.chainVerified -> {
                                 // [UX監査 高1] 1人を動かすだけでは埋まらないが、複数人の入替で埋まると分析が確かめた枠。
                                 //   [3.644.0/UX-03] 当てる前に一覧（だれの・どの日の・何→何と必須の増減）を見せる＝ChainFixPreviewDialog。
-                                Text("だれか1人を動かすだけでは埋まりません。複数人の入れ替えで埋められます。",
+                                Text("1人を動かすだけでは埋まりません。複数人の入れ替えで埋められます。",
                                     style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                                 Button(
                                     onClick = {
@@ -498,7 +504,7 @@ internal fun GuidedFixDialog(
                                 // [UX監査 高1] 玉突きでも埋まらない枠は、人を動かす手ではなく条件を変える話。原因に対応する区分へ。
                                 Text(target.reason, color = cs.error, style = MaterialTheme.typography.bodyMedium)
                                 val landing = landingFor(target)
-                                OutlinedButton(onClick = { onDismiss(); onGoEdit(landing) }, modifier = Modifier.fillMaxWidth()) {
+                                Button(onClick = { onDismiss(); onGoEdit(landing) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                                     Text(landingButtonLabel(landing))
                                 }
                             }
@@ -512,7 +518,7 @@ internal fun GuidedFixDialog(
                         }
                         Text("担当できる職員（担当できるシフト）や希望を見直すと直せます。", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         val infeasibleLanding = landingFor(infeasible.first())
-                        OutlinedButton(onClick = { onDismiss(); onGoEdit(infeasibleLanding) }, modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = { onDismiss(); onGoEdit(infeasibleLanding) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                             Text(landingButtonLabel(infeasibleLanding))
                         }
                     }
@@ -527,13 +533,18 @@ internal fun GuidedFixDialog(
                         Text("再作成しても、この日は同じ結果になります。希望を1件調整する（編集タブ＞月次条件）か、担当できるシフトを増やしてください（編集タブ＞年間マスター①）。",
                             style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                         val blockedLanding = blocked.firstNotNullOfOrNull { landingFor(it) }
-                        OutlinedButton(onClick = { onDismiss(); onGoEdit(blockedLanding) }, modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = { onDismiss(); onGoEdit(blockedLanding) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
                             Text(landingButtonLabel(blockedLanding))
                         }
                     }
                     else -> {
                         Text("人員不足の日はなくなりました。")
-                        otherHardAfterShortage(ui.breakdown)?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        otherHardAfterShortage(ui.breakdown)?.let { line ->
+                            Text(line, style = MaterialTheme.typography.bodyMedium)
+                            if (onTour != null && tourCount > 0) Button(onClick = { onDismiss(); onTour() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                                Text(guidedTourButton(tourCount), textAlign = TextAlign.Center)
+                            }
+                        }
                     }
                 }
             }

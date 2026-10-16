@@ -2820,15 +2820,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val slot = "${DayText.full(st.startDate, dayIndex)} の「${toHankakuKigou(st.shifts.getOrNull(shiftIndex)?.kigou ?: "")}」"
         _ui.update { it.copy(messageIsError = false, message = "$slot を複数人の入れ替えで埋める手順を探しています…") }
         viewModelScope.launch {
-            val s = withContext(Dispatchers.Default) { V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label) }
-            if (s == null) _ui.update { it.copy(messageIsError = true, message = "$slot を埋める入れ替えの手順が見つかりませんでした。「変更案を探す」で探し直してください") }
-            else _ui.update {
-                val target = ChainTarget(isoDate(it.startDate, dayIndex) ?: "", it.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
+            val found = withContext(Dispatchers.Default) {
+                V6PortAnalyzer.chainFixSuggestion(st, p, snap, shiftIndex, dayIndex, label)?.let { it to newHardLabels(st, snap, it.ops, _ui.value.staffNames, _ui.value.shiftSymbols) }
+            }
+            if (found == null) _ui.update { it.copy(messageIsError = true, message = "$slot を埋める入れ替えの手順が見つかりませんでした。「変更案を探す」で探し直してください") }
+            else {
+                val (s, newHard) = found
+                val u = _ui.value
+                val target = ChainTarget(isoDate(u.startDate, dayIndex) ?: "", u.shiftSymbols.getOrNull(shiftIndex) ?: "", label,
                     boardKey = boardKey(snap), stateKey = stateKey(st))
                 val need = conditionsViewOf(st, p).needCellLimits(shiftIndex, dayIndex)?.let { n -> FixTarget(null, shiftIndex, dayIndex, n.first, true, "必要人数") }
-                it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols).copy(target = target, fixTarget = need))
+                openPreview(s, snap, st, target, fixTarget = need, newHard = newHard)
             }
-            if (s != null) notePreviewOpened(label)
         }
     }
 
@@ -2877,9 +2880,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = originBoard, stateKey = originState)
-        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
-            .copy(target = target, fixTarget = fixTarget, globalPolish = globalPolish, newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
-        notePreviewOpened(s.label)
+        openPreview(s, snap, st, target, fixTarget = fixTarget, globalPolish = globalPolish)
     }
 
     /** 案の一覧から: 1 セルの案も当てる前に確認の画面（目的・全変更・対象の数の変化）を出す（2026-10-14 利用者レビュー「見ると適用するを分ける」）。 */
@@ -2888,9 +2889,18 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val st = state ?: return
         val snap = sched.copy2D()
         val target = ChainTarget(null, null, s.label, suggestion = s, boardKey = fixBoardKey, stateKey = fixStateKey)
-        _ui.update { it.copy(chainPreview = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
-            .copy(target = target, purpose = purpose, effect = effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget, globalPolish = fixTarget == null,
-                newHard = newHardLabels(st, snap, s.ops, it.staffNames, it.shiftSymbols))) }
+        openPreview(s, snap, st, target, purpose, effect, fromList = true, focusKey = focusKey, fixTarget = fixTarget, globalPolish = fixTarget == null)
+    }
+
+    /** 確認の画面を組み立てる 1 か所（候補・玉突き・案の一覧の 3 経路）。目的・対象の数の変化・前後の 1 行は [fillPreview] が埋める。 */
+    private fun openPreview(s: FixSuggestion, snap: Array<IntArray>, st: MagiState, target: ChainTarget, purpose: String? = null, effect: List<String> = emptyList(),
+                            fromList: Boolean = false, focusKey: String? = null, fixTarget: FixTarget? = null, globalPolish: Boolean = false,
+                            newHard: List<String>? = newHardLabels(st, snap, s.ops, _ui.value.staffNames, _ui.value.shiftSymbols)) {
+        _ui.update {
+            val base = chainFixPreview(s, snap, it.staffNames, it.shiftSymbols, it.startDate, st.shifts.map { sh -> sh.name }, it.wishes, it.staffIds, it.staffGroupSymbols)
+                .copy(target = target, purpose = purpose, effect = effect, fromList = fromList, focusKey = focusKey, fixTarget = fixTarget, globalPolish = globalPolish, newHard = newHard)
+            it.copy(chainPreview = fillPreview(base, snap.map { r -> r.toList() }, it.shiftSymbols, it.startDate, it.staffNames))
+        }
         notePreviewOpened(s.label)
     }
 

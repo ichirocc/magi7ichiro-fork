@@ -798,7 +798,7 @@ internal const val APPLY_UNDO_NOTE = "適用したあとでも元に戻せます
 internal const val REVIEW_CHANGE_BUTTON = "変更内容を確認する"
 
 /** 確認の画面の適用ボタン（件数を言う）。 */
-internal fun applyCountButton(n: Int): String = if (n >= 2) "この${n}件の変更を適用" else APPLY_CHANGE_BUTTON
+internal fun applyCountButton(n: Int): String = if (n >= 2) "この${n}か所の変更を適用する" else APPLY_CHANGE_BUTTON
 
 /** 確認の画面を閉じるボタン（案の一覧から来たときは一覧へ戻る）。 */
 internal const val BACK_TO_FIXES_BUTTON = "別案を見る"

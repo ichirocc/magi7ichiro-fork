@@ -66,7 +66,7 @@ class CountShortageTextTest {
         assertEquals(listOf("必須違反：1件減る", "期間の制約：1件増える", "曜日の偏り：2pt増える"), otherEffectLines(s, setOf("low", "high", "apt")))
         // [3.678.0] カードの先頭に必須の変化を出したら繰り返さない。
         assertEquals(listOf("期間の制約：1件増える", "曜日の偏り：2pt増える"), otherEffectLines(s, setOf("low", "high", "apt"), hardShown = true))
-        assertEquals("この2件の変更を適用", applyCountButton(2))
+        assertEquals("この2か所の変更を適用する", applyCountButton(2))
         assertEquals(APPLY_CHANGE_BUTTON, applyCountButton(1))
     }
 

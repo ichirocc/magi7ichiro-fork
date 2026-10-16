@@ -1842,9 +1842,23 @@ internal fun MagiFlatGrid(ui: UiState, vs: MagiViewState, onCellClick: (Int, Int
                 OutlinedButton(onClick = { daySheet = null; fixNav.onDay(j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("${DayText.short(ui.startDate, j)}の勤務を見る") }
                 OutlinedButton(onClick = { daySheet = null; fixNav.onNeed(picked ?: marks.first().shift, j) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(settingsLabelFor("yr_headcount")) }
             }
-            picked?.let { k -> FixSearchPanel(ui, cv, FixFocus(null, k, j), onEvent, fixNav, onApplied = { daySheet = null }) }
+            picked?.let { k ->
+                ShortageSlotHeader(ui, cv, k, j)
+                FixSearchPanel(ui, cv, FixFocus(null, k, j), onEvent, fixNav, onApplied = { daySheet = null })
+            }
         }
     }
+}
+
+/** 人員不足の枠の題と状態（H-6: ホームの人員不足の手伝いと同じ文言）。不足でなければ何も出さない。 */
+@Composable
+internal fun ShortageSlotHeader(ui: UiState, cv: ConditionsView?, shift: Int, day: Int) {
+    val need = cv?.needCellLimits(shift, day)?.first ?: return
+    val got = ui.schedule.count { it.getOrNull(day) == shift }
+    if (got >= need) return
+    Text(guidedFixTitle(GuidedStage.CANDIDATES, DayText.short(ui.startDate, day), ui.shiftSymbols.getOrNull(shift) ?: ""),
+        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    guidedStatusPoints(need, got, 0).forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
 }
 
 /** 日ヘッダ・集計の「計（期間）」の人員の印の内訳（読むだけ。直すのはセルのタップから）。[empty]＝本当に過不足が無いときだけ true（行を extra で出す呼び出しは lines が空でも過不足がある）。 */
@@ -2162,7 +2176,7 @@ internal fun FixSearchPanel(
                             OutlinedButton(onClick = {
                                 // 「別の問題を改善する案」は見ている問題を直す案として確認・適用しない（目的と対象を渡さない＝統合仕様 INV-01/INV-03）。
                                 val fixesTarget = e?.fixes == true
-                                val eff = if (e != null && target != null && fixesTarget) listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(target.basis)) + remain else emptyList()
+                                val eff = if (e != null && target != null && fixesTarget) previewEffectLines(label, e, target.basis) + remain else emptyList()
                                 onEvent(MagiEvent.Board.PreviewFix(s, if (target == null || fixesTarget) (purposeOverride ?: purpose) else null, eff, focus.key, target?.takeIf { fixesTarget }))
                             }, enabled = !ui.running, modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp)) { Text(REVIEW_CHANGE_BUTTON) }
                         }
@@ -2191,7 +2205,7 @@ internal fun FixSearchPanel(
                         }?.let { cc ->
                             fun pick(s: com.magi.app.v6.FixSuggestion) {
                                 val e = target.effect(ui.schedule, s.ops)
-                                onEvent(MagiEvent.Board.PreviewFix(s, purpose, listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(target.basis)), focus.key, target))
+                                onEvent(MagiEvent.Board.PreviewFix(s, purpose, previewEffectLines(label, e, target.basis), focus.key, target))
                             }
                             Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium) {
                                 Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
