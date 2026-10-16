@@ -1644,3 +1644,29 @@ internal fun creationNextTarget(kind: HomePlanKind, shortage: String?, move: Str
     HomePlanKind.LIST, HomePlanKind.SEARCHING -> tour
     else -> null
 }
+
+/** 争点カード（D03）の 1 案: 案の名、理由（推奨A だけ。案から数え直した対象の変化）、選んだときに確認へ渡す案。 */
+internal data class ContestOption(val label: String, val reason: String?, val suggestion: com.magi.app.v6.FixSuggestion)
+
+/** 争点カード（D03）: 見ている必須違反の題と、既存の主一覧の上位 2 件（推奨A／案B）。 */
+internal data class ContestCard(val title: String, val a: ContestOption, val b: ContestOption?)
+
+internal const val CONTEST_A_BUTTON = "推奨Aで進む"
+internal const val CONTEST_B_BUTTON = "案Bにする"
+
+/**
+ * 争点カードを組む。[main] は画面の主一覧と同じ順の案（新しく探さない・並べ替えない）。対象が必須違反（日の人員の不足）でない、
+ * または案が無いときは null（案が無いときは従来の「案が見つからない」へ）。A と B は同じ [target] を直す案だけ＝INV-01。
+ */
+internal fun contestCard(target: FixTarget, label: String, main: List<com.magi.app.v6.FixSuggestion>, schedule: List<List<Int>>,
+                         staffNames: List<String>, shiftSymbols: List<String>): ContestCard? {
+    if (target.day == null || target.multi || !target.under) return null
+    val picks = main.filter { target.effect(schedule, it.ops).fixes }.take(2)
+    if (picks.isEmpty()) return null
+    fun name(s: com.magi.app.v6.FixSuggestion) =
+        surplusMoveTitle(target, schedule, s.ops, staffNames, shiftSymbols) ?: fixDisplayLabel(s.label)
+    val e = target.effect(schedule, picks[0].ops)
+    val a = ContestOption("推奨A: ${name(picks[0])}", "理由: ${e.afterNote(target.basis)}（${e.gapLine()}）", picks[0])
+    val b = picks.getOrNull(1)?.let { ContestOption("案B: ${name(it)}", null, it) }
+    return ContestCard("${label}の${target.gapWord}", a, b)
+}
