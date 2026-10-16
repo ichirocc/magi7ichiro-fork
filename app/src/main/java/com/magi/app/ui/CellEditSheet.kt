@@ -447,7 +447,7 @@ internal fun CellEditSheet(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     review?.let { r ->
                         val item = consultCellChange(r, i, j, name, isoDate(ui.startDate, j))
-                        ConsultButton(isConsulted(ui.consults, item)) { onEvent(MagiEvent.Session.AddConsult(item)) }
+                        ConsultButton(isConsulted(ui.consults, item), onUndo = { consultMatch(ui.consults, item)?.let { onEvent(MagiEvent.Session.CancelConsult(it)) } }) { onEvent(MagiEvent.Session.AddConsult(item)) }
                     }
                     Spacer(Modifier.weight(1f))
                     OutlinedButton(onClick = { step = 1 }, modifier = Modifier.heightIn(min = 48.dp)) { Text("別の勤務を選ぶ") }

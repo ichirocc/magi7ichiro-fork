@@ -36,6 +36,7 @@ internal fun PreRunCheckSheet(
     onOpenCell: (staff: Int, day: Int, wish: Boolean) -> Unit,
     onOpenLanding: (EditLanding) -> Unit,
     onConsult: (PreRunRow) -> Unit,
+    onCancelConsult: ((ConsultItem) -> Unit)? = null,   // [3.696.0] 「相談中」の札の取り消し
     onShowWishes: (() -> Unit)?,
     onFixData: () -> Unit,
     onProceed: () -> Unit,
@@ -56,7 +57,7 @@ internal fun PreRunCheckSheet(
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(PRE_RUN_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 t.zeroCapNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
-                t.floorRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult) }
+                t.floorRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult, onCancelConsult) }
                 if (t.hasWishRows && onShowWishes != null) {
                     OutlinedButton(onClick = onShowWishes, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }
                 }
@@ -72,7 +73,7 @@ internal fun PreRunCheckSheet(
             t.overCapNote?.let { n ->
                 Text("■ $PRE_RUN_OVERCAP_HEAD", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(n, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                t.overCapRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult) }
+                t.overCapRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult, onCancelConsult) }
             }
             t.wallLine?.let { w ->
                 Text("■ 入れないシフト（個人の上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
@@ -90,7 +91,7 @@ internal fun PreRunCheckSheet(
 
 /** 行＝セルか入力箇所へ飛ぶ本文と、右端の「相談」（何度つくっても残る行だけ。再作成で外れる行には出さない＝3.645.0）。 */
 @Composable
-private fun PreRunRowView(row: PreRunRow, ui: UiState, onOpenCell: (Int, Int, Boolean) -> Unit, onOpenLanding: (EditLanding) -> Unit, onConsult: ((PreRunRow) -> Unit)? = null) {
+private fun PreRunRowView(row: PreRunRow, ui: UiState, onOpenCell: (Int, Int, Boolean) -> Unit, onOpenLanding: (EditLanding) -> Unit, onConsult: ((PreRunRow) -> Unit)? = null, onCancelConsult: ((ConsultItem) -> Unit)? = null) {
     val i = row.staff; val j = row.day; val l = row.landing
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) {
@@ -109,8 +110,8 @@ private fun PreRunRowView(row: PreRunRow, ui: UiState, onOpenCell: (Int, Int, Bo
             } else Text(row.text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 12.dp))
         }
         if (onConsult != null) {
-            if (isConsulted(ui.consults, consultPreRun(row))) Box(Modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) { MagiTagChip(text = CONSULT_DONE, color = MagiAccent.orange) }
-            else TextButton(onClick = { onConsult(row) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("相談") }
+            ConsultButton(isConsulted(ui.consults, consultPreRun(row)), label = "相談",
+                onUndo = if (onCancelConsult == null) null else ({ consultMatch(ui.consults, consultPreRun(row))?.let(onCancelConsult) })) { onConsult(row) }
         }
     }
 }

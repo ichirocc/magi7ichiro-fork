@@ -180,8 +180,9 @@ private fun WishTrialRowView(
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
     TextButton(onClick = { onOpenCell(row.staff, row.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.weight(1f))
+        // [3.696.0] 札を右に並べると名前の先頭が欠けた（端末報告「福澤が欠けている」）＝文は全幅、札はその下。
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.fillMaxWidth())
             if (row.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
         }
     }
@@ -217,7 +218,7 @@ private fun WishTrialRowView(
     // [3.645.0/仕様 5.3] 本人や上長に確認してから決める＝対象と検討内容を相談中の一覧へ（取消も勤務の変更もしない）。積んだら「相談中」。
     val consult = consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day, isoDate(ui.startDate, row.day))
     ConsultButton(isConsulted(ui.consults, consult), Modifier.padding(start = 4.dp), held = consultMatch(ui.consults, consult)?.held == true,
-        onHold = { vm.addConsult(consult.copy(held = true)) }) { vm.addConsult(consult) }
+        onHold = { vm.addConsult(consult.copy(held = true)) }, onUndo = { consultMatch(ui.consults, consult)?.let { vm.cancelConsult(it) } }) { vm.addConsult(consult) }
 }
 
 @Composable
@@ -345,10 +346,15 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
 /** 「相談事項に登録」。積んだあとは「相談中」の札＝結果を形で返す（シートやダイアログの下では Snackbar が見えない。
  *  無効ボタンの文字は 38% で状態色の基準 3:1 を割るので、札にする＝ux_test_checklist A1）。 */
 @Composable
-internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, held: Boolean = false, onHold: (() -> Unit)? = null, onClick: () -> Unit) {
-    if (consulted) Box(modifier.heightIn(min = 48.dp), contentAlignment = Alignment.Center) { MagiTagChip(text = if (held) CONSULT_HELD else CONSULT_DONE, color = MagiAccent.orange) }
+internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, held: Boolean = false, onHold: (() -> Unit)? = null, onUndo: (() -> Unit)? = null,
+                           label: String = CONSULT_BUTTON, onClick: () -> Unit) {
+    // [3.696.0] 札の隣に「取り消す」＝積んだ直後の押し間違いを戻せる（端末報告「相談中を元に戻せない」）。
+    if (consulted) Row(modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        MagiTagChip(text = if (held) CONSULT_HELD else CONSULT_DONE, color = MagiAccent.orange)
+        if (onUndo != null) TextButton(onClick = onUndo, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_UNDO_BUTTON) }
+    }
     else Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_BUTTON) }
+        TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
         if (onHold != null) TextButton(onClick = onHold, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_HOLD_BUTTON) }
     }
 }
@@ -370,23 +376,24 @@ internal fun ConsultCard(ui: UiState, onOpenCell: (Int, Int) -> Unit, onRemove: 
                 val cell = if (c.chain != null) null else consultCell(c, ui.startDate, ui.staffNames, ui.days, ui.staffIds)
                 val chainOk = c.chain != null && consultChainResumable(c.chain, ui.startDate, ui.shiftSymbols, ui.days)
                 val note = consultTargetNote(c, ui.startDate, ui.staffNames, ui.shiftSymbols, ui.days, ui.staffIds)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Column(Modifier.weight(1f)) {
-                        Text((if (c.held) "【$CONSULT_HELD】" else "") + c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                        if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
-                        // 回答は記録だけ（了承でも違反は減らさない）。押すたびに 回答待ち→了承→不可。
-                        TextButton(onClick = { onCycleAnswer(c) }, modifier = Modifier.heightIn(min = 48.dp)) {
-                            Text(consultAnswerLine(c, answerOf(c)), style = MaterialTheme.typography.bodySmall)
+                // [3.696.0] 操作は文の下の 1 行に（右に 3 つ並べると文が 3 分の 1 幅に潰れて縦に伸びた＝端末報告「縦に長すぎる」）。
+                Column(Modifier.fillMaxWidth()) {
+                    Text((if (c.held) "【$CONSULT_HELD】" else "") + c.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text(c.note, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    if (note != null) Text(note, style = MaterialTheme.typography.bodySmall, color = cs.error)
+                    // 回答は記録だけ（了承でも違反は減らさない）。押すたびに 回答待ち→了承→不可。
+                    TextButton(onClick = { onCycleAnswer(c) }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(consultAnswerLine(c, answerOf(c)), style = MaterialTheme.typography.bodySmall)
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                        if (cell != null) {
+                            TextButton(onClick = { onOpenCell(cell.first, cell.second) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN) }
+                        } else if (chainOk) {
+                            TextButton(onClick = { onResumeChain(c) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_RESUME) }
                         }
+                        TextButton(onClick = { onToggleHold(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (c.held) "相談に戻す" else CONSULT_HOLD_BUTTON) }
+                        DeleteRowButton(onClick = { onRemove(c) }, text = "済")
                     }
-                    if (cell != null) {
-                        TextButton(onClick = { onOpenCell(cell.first, cell.second) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN) }
-                    } else if (chainOk) {
-                        TextButton(onClick = { onResumeChain(c) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_RESUME) }
-                    }
-                    TextButton(onClick = { onToggleHold(c) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (c.held) "相談に戻す" else CONSULT_HOLD_BUTTON) }
-                    DeleteRowButton(onClick = { onRemove(c) }, text = "済")
                 }
             }
         }
@@ -469,7 +476,7 @@ internal fun GuidedFixDialog(
                                     style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                                 val consult = consultShortage(target.dayLabel, target.shiftSymbol, cands.map { it.name })
                                 ConsultButton(isConsulted(ui.consults, consult), Modifier.fillMaxWidth(), held = consultMatch(ui.consults, consult)?.held == true,
-                                    onHold = { vm.addConsult(consult.copy(held = true)) }) { vm.addConsult(consult) }
+                                    onHold = { vm.addConsult(consult.copy(held = true)) }, onUndo = { consultMatch(ui.consults, consult)?.let { vm.cancelConsult(it) } }) { vm.addConsult(consult) }
                             }
                             target.chainVerified -> {
                                 // [UX監査 高1] 1人を動かすだけでは埋まらないが、複数人の入替で埋まると分析が確かめた枠。
@@ -1844,7 +1851,7 @@ internal fun fixKindTag(k: com.magi.app.v6.FixKind): Pair<String, androidx.compo
 
 @Composable
 internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.magi.app.v6.FixSuggestion) -> Unit, proMode: Boolean = false,
-                               onConsult: (com.magi.app.v6.FixSuggestion) -> Unit = {}) {
+                               onConsult: (com.magi.app.v6.FixSuggestion) -> Unit = {}, onCancelConsult: (ConsultItem) -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     // [3.483.0 A-2] ホームの「AIの解決提案」は必須違反が残っていれば自動で探すのに、ここは「探す」を押すまで空
     //   ＝同じエンジンで挙動が違った。同じ条件（結果あり・必須>0・未探索）で自動探索を共有する。
@@ -1885,7 +1892,7 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             caution?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                             Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
-                                ConsultButton(isConsulted(ui.consults, consultFix(s))) { onConsult(s) }
+                                ConsultButton(isConsulted(ui.consults, consultFix(s)), onUndo = { consultMatch(ui.consults, consultFix(s))?.let { onCancelConsult(it) } }) { onConsult(s) }
                                 Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
                                     Text(APPLY_CHANGE_BUTTON)
                                 }
