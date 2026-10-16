@@ -93,9 +93,17 @@ private fun MagiViewModel.exportStateLine(): String {
         st?.let { com.magi.app.v6.StateFingerprint.of(it) }, currentSchedule?.let { com.magi.app.v6.StateFingerprint.ofBoard(it) })
 }
 
+/** [3.697.0] 操作ログの行（message）と時刻を logOp と同じモニタの中で写し、純関数で数える。 */
+private fun MagiViewModel.hesitation(): OpLogText.Hesitation {
+    val entries = synchronized(this) { opLog.toList() }
+    return OpLogText.hesitation(entries.map { it.message }, entries.map { it.timeMs })
+}
+private fun MagiViewModel.hesitationSummary(): List<String> = hesitation().lines()
+
 fun MagiViewModel.exportLogs(): String? {
     // [3.694.0] 行の写し・実行番号・捨てた件数を logOp（@Synchronized）と同じモニタの中で読む＝書き出し中の logOp で件数と範囲が 1 件ずれない。
     val (ops, runsInLog, dropped) = synchronized(this) { Triple(_ui.value.opLog, opLog.map { it.run }.filter { it > 0 }.distinct().sorted(), opLogDropped) }
+    val hesitation = hesitationSummary()
     val runSpan = if (runsInLog.isEmpty()) "" else "・実行#${runsInLog.first()}〜#${runsInLog.last()}"
     // 出力は全文（非圧縮）。画面表示は圧縮版だが、監査用にはロスレスの rawDiagLogs を使う。
     val logs = rawDiagLogs.ifEmpty { _ui.value.logs }
@@ -106,6 +114,8 @@ fun MagiViewModel.exportLogs(): String? {
         append(environmentLine()).append('\n')
         append("状態: ${_ui.value.staff}名/${_ui.value.days}日 ・ 必須=${_ui.value.bestHard} 合計=${_ui.value.totalViolations}\n")
         append(exportStateLine()).append('\n')   // [3.694.0] 書き出し時点の期間と指紋（G1・G8）
+        append("\n${OpLogText.HESITATION_HEAD}\n")   // [3.697.0] 迷いの指標（手で変更・案・下書き・空白・案を見てから）
+        hesitation.forEach { append(it).append('\n') }
         append("\n==== 操作ログ（新しい順 ${ops.size}件$runSpan）====\n")
         append(OpLogText.dropNote(opLogTimeFmt().format(java.util.Date(opLogStartedAtMs)), dropped)).append('\n')   // [3.694.0] 記録の始まりと捨てた件数（G7）
         ops.forEach { append(it).append('\n') }
@@ -149,6 +159,17 @@ fun MagiViewModel.exportLogsJson(): String? {
     state?.let { st -> o.put("startDate", st.startDate); o.put("endDate", st.endDate); o.put("stateFingerprint", OpLogText.hex16(com.magi.app.v6.StateFingerprint.of(st))) }
     currentSchedule?.let { o.put("boardFingerprint", OpLogText.hex16(com.magi.app.v6.StateFingerprint.ofBoard(it))) }
     o.put("opLogStartedAt", opLogStartedAtMs); o.put("opLogDropped", synchronized(this) { opLogDropped })
+    // [3.697.0] テキスト版の「操作の要約（迷いの指標）」と同じ数。
+    o.put("hesitation", hesitation().let { h -> org.json.JSONObject().apply {
+        put("manualChanges", h.manualChanges); put("undo", h.undo); put("redo", h.redo)
+        put("searches", h.searches); put("searchesWithResult", h.searchesWithResult); put("searchesEmpty", h.searchesEmpty)
+        put("applied", h.applied); put("notNow", h.notNow); put("consulted", h.consulted)
+        put("autoRuns", h.autoRuns); put("drafts", h.drafts); put("draftsRightAfterResult", h.draftsRightAfterResult)
+        put("closedWithoutApply", h.closedWithoutApply)
+        put("longestGapMs", h.longestGapMs ?: org.json.JSONObject.NULL)
+        if (h.longestGapMs != null) { put("longestGapFrom", h.longestGapFromMs); put("longestGapTo", h.longestGapToMs) }
+        put("medianSeenSec", h.medianSeenSec ?: org.json.JSONObject.NULL)
+    } })
     o.put("hard", _ui.value.bestHard); o.put("soft", _ui.value.bestSoft); o.put("total", _ui.value.totalViolations)
     o.put("satisfaction", _ui.value.satisfaction)
     // [N6] satisfaction は 0-100 の進捗スコア（違反減少度: hard>0 で×55系）であり希望充足率ではない。
