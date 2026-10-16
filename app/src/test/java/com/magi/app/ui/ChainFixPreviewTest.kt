@@ -17,8 +17,8 @@ class ChainFixPreviewTest {
         val p = chainFixPreview(s(listOf("covU" to -1, "covO" to 1)), snap, listOf("甲", "乙", "丙"), listOf("休", "日", "夜"), "2026-10-01")
         assertEquals("複数人の入れ替え", p.title)
         assertEquals(listOf("甲 10/3 日 → 夜", "丙 10/3 休 → 日", "乙 10/1 日 → 夜"), p.changes)
-        assertEquals("必須違反: 1人減る", p.hardLine)
-        assertEquals("増える要調整: 人員過剰 +1人", p.caution)
+        assertEquals("必須違反：1人減る", p.hardLine)
+        assertEquals("増える要調整：人員過剰 +1人", p.caution)
     }
 
     /** [3.664.0/仕様 §4・§5] 記号に登録された勤務名を併記し、希望があるセルは希望どおりか違うかを添える（了承済みとは言わない）。 */

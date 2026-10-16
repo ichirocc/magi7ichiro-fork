@@ -463,12 +463,13 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
     // 印・セルのシートで手が見つからなかったときの次の一歩（希望＝月次条件の該当職員・日／設定＝年間マスターの節／必要人数＝月次条件のその日）。
     var tourRequest by remember { mutableStateOf(false) }
     var dayJump by remember { mutableStateOf<Int?>(null) }   // 日の人員のシートの「その日の勤務を見る」（勤務表タブのその日の列へ）   // 変更を反映したあとの「残っている問題を見る」（巡回は下で定義する goTourItem で始める）
-    val fixNav = remember { FixNav(
+    val fixNav = remember(tourItems.size) { FixNav(
         onWishes = { s, d -> editReturn = cellReturn(); editingCell = null; if (s != null) deepLinkWishStaff = s; if (d != null) deepLinkDay = d; editScope = 0; tab = 2 },
         onSettings = { sec -> editReturn = cellReturn(); editingCell = null; editScope = 2; deepLinkEditSection = sec; tab = 2 },
         onNeed = { k, d -> editReturn = cellReturn(); editingCell = null; deepLinkNeedShift = k; deepLinkDay = d; editScope = 0; tab = 2 },
         onCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 },
         onTour = { tourRequest = true },
+        tourCount = tourItems.size,   // 反映の帯の「（Nか所）」＝上部の札と同じ巡回の数（3.693.0、INV-07）
         onDay = { j -> dayJump = j },
     ) }
     // 設定の見直し（ホーム・分析タブ共通）の「設定へ」: 希望は月次条件、それ以外は年間マスターの該当節へ。種類が無いときも月次条件の先頭（前回の区分のままにしない）。
@@ -1204,18 +1205,7 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                 val ok = ui.hasResult && ui.bestHard == 0L
                 val label: String; val fg: Color; val bg: Color
                 when {
-                    ui.running -> {
-                        // [進捗の見える化] バッジに改善の手応えを添える: hard残あり→必須違反数、hard=0→要調整の数（進捗行と同じ語）。
-                        // [3.409.12] 旧は裸の「⚠5」で**その5が何の数かを画面のどこも言っていなかった**
-                        //   （非実行中の枝は 3.396.0 で「必須違反 N」へ揃えたのに、この枝だけ取り残し）。
-                        //   バッジは幅が限られるので語は短く「必須N」＝凡例・ホーム見出しと同じ言葉にする。
-                        val prog = when {
-                            ui.bestHard > 0L -> " 必須${ui.bestHard}"
-                            ui.initSoft > 0L && ui.bestSoft in 0 until ui.initSoft -> " 要調整${ui.bestSoft}"
-                            else -> ""
-                        }
-                        label = "実行中$prog"; fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer
-                    }
+                    ui.running -> { label = runningBadgeLabel(ui.breakdown, ui.bestHard); fg = MaterialTheme.colorScheme.onPrimaryContainer; bg = MaterialTheme.colorScheme.primaryContainer }
                     ok -> { label = readyBadgeLabel(ui.bestSoft, ui.breakdown); fg = MaterialTheme.colorScheme.onTertiaryContainer; bg = MaterialTheme.colorScheme.tertiaryContainer }
                     ui.hasResult -> { label = "必須違反 ${displayHardText(ui)}"; fg = MaterialTheme.colorScheme.onErrorContainer; bg = MaterialTheme.colorScheme.errorContainer }
                     else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }

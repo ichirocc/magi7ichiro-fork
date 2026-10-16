@@ -1030,10 +1030,10 @@ internal fun appearedFamiliesLine(before: Map<String, Int>?, after: Map<String, 
     return "新たに生じた問題：" + up.joinToString("・") { "${breakdownLabels[it] ?: it} +${(after[it] ?: 0) - (before[it] ?: 0)}${unitOf(it)}" }
 }
 
-/** 反映の帯の次の一歩のボタン。同じ問題が残れば続けてその勤務の案を、無ければ残りの必須違反の巡回を、どちらも無ければ null。 */
-internal fun appliedNextButton(sameRemains: Boolean, sym: String?, hardLeft: Int, canTour: Boolean): String? = when {
+/** 反映の帯の次の一歩のボタン。同じ問題が残れば続けてその勤務の案を、無ければ残りの必須違反の巡回（「（Nか所）」＝巡回できる項目の数 [tourCount]。上部の札と同じ値で、件と人が混ざった report.hard ではない＝INV-07、3.693.0）、どちらも無ければ null。 */
+internal fun appliedNextButton(sameRemains: Boolean, sym: String?, hardLeft: Int, tourCount: Int): String? = when {
     sameRemains && sym != null -> "続けて $sym の案を見る"
-    hardLeft > 0 && canTour -> "残っている必須違反を順に見る（${hardLeft}か所）"
+    hardLeft > 0 && tourCount > 0 -> "残っている必須違反を順に見る（${tourCount}か所）"
     else -> null
 }
 

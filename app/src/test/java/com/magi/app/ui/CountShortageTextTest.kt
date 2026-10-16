@@ -180,9 +180,9 @@ class CountShortageTextTest {
         assertTrue(lines.last().startsWith("勤務表が変わったため"))
         // 保存済みなら保存の行は出さない。続けて同じ勤務の案へ進むボタン。
         assertTrue(appliedLines(u.copy(saveState = SaveState.Saved), a, t, "10/3のA", need).none { it.startsWith("保存：") })
-        assertEquals("続けて A の案を見る", appliedNextButton(true, "A", 2, true))
-        assertEquals("残っている必須違反を順に見る（2か所）", appliedNextButton(false, "A", 2, true))
-        assertNull(appliedNextButton(false, "A", 0, true))
+        assertEquals("続けて A の案を見る", appliedNextButton(true, "A", 2, 2))
+        assertEquals("残っている必須違反を順に見る（2か所）", appliedNextButton(false, "A", 2, 2))
+        assertNull(appliedNextButton(false, "A", 0, 2))
         assertEquals("新たに生じた問題：禁止の並び +1件", appearedFamiliesLine(mapOf("c3n" to 0), mapOf("c3n" to 1, "c1" to 0)))
     }
 

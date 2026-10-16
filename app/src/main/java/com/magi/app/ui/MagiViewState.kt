@@ -421,7 +421,7 @@ internal fun relaxTrialText(r: RelaxTrial.Result, ui: UiState): RelaxTrialText {
     return RelaxTrialText(
         title = title,
         dialogTitle = "例外として上限を緩める候補：${target.name} ${target.span} ${target.what}",
-        hardLine = "必須違反: ${r.h0}件 → ${r.rr}件",
+        hardLine = "必須違反：${r.h0}件 → ${r.rr}件",
         scaleLine = "変わるもの: 設定${r.prerequisite.size + r.relaxes.size}つ、${people}人の勤務、${r.moves.size}か所",
         prerequisiteRows = preRows,
         lead = lead,
