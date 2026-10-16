@@ -14,6 +14,9 @@ internal val emptyBreakdown: Map<String, Int> = MirrorKeys.all.associateWith { 0
  *  ログ(logOp)にしか出ておらず、UIから今の保存状態を読み取れなかった。 */
 enum class SaveState { Dirty, Saving, Saved, Failed }
 
+/** 保存の失敗を知らせるダイアログ（FIRST＝成功から失敗に変わった、AGAIN＝失敗中のやり直しも失敗した）。 */
+enum class SaveFailDialog { FIRST, AGAIN }
+
 data class UiState(
     val loaded: Boolean = false,
     val canUndo: Boolean = false,
@@ -199,6 +202,7 @@ data class UiState(
     val interruptedRun: Boolean = false,          // 前回の計算がプロセスkill等で中断された
     val interruptedInfo: String? = null,
     val saveState: SaveState = SaveState.Saved,   // [3.529.0] 自動保存の状態（設定タブ表示用）
+    val saveFailDialog: SaveFailDialog? = null,   // 保存の失敗を知らせるダイアログ（null＝閉じている）
 )
 
 /**

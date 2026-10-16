@@ -2306,7 +2306,8 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
                     Array(a.before.size) { a.before[it].toIntArray() }, ui.staffNames, ui.shiftSymbols, ui.startDate).changes
             }.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onTertiaryContainer) }
             // 保存に失敗している間は、追加の変更より保存のやり直しを先に（統合仕様 §11）。
-            if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
+            // 失敗している間だけ塗り（帯の中の主はこれ 1 つ）。
+            if (ui.saveState == SaveState.Failed) Button(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (nextLabel != null) TextButton(onClick = { if (sameRemains) folded = true else onTour?.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(nextLabel) }
                 TextButton(onClick = { showChanges = !showChanges }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showChanges) "変更内容を閉じる" else "今回の変更内容を見る") }

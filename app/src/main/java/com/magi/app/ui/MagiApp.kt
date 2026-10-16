@@ -355,6 +355,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         }
                     }
                     vm.notifySave(r, "勤務表CSV")
+                    if (csvExportReopensPreDist(r.isSuccess)) preDist = true
                 } else vm.notify("書き出す勤務表がありません。データを開いて勤務表をつくると書き出せます", "W")
             }
         }
@@ -596,7 +597,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         // [現在地] トップバー副題を現在タブ名に同期（従来は固定"勤務表"で「今どこ」が不明だった）。下部ナビの選択と一致。
         // 巡回できるセルが無い（人員不足だけ）ときは押せない札のまま（押しても何も起きないため）。
         topBar = { MagiTopBar(ui, when (tab) { 0 -> "ホーム"; 1 -> "勤務表"; 2 -> "編集"; 3 -> "分析"; else -> "設定" },
-            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null, onPreDist = { preDist = true }, tourCount = tourItems.size) },
+            onHardTour = if (tourItems.isNotEmpty()) { { goTourItem(0) } } else null, onPreDist = { preDist = true }, tourCount = tourItems.size,
+            onSaveWord = { vm.showSaveFailDialog() }) },
         bottomBar = {
             Column {
                 when (barMode) {
@@ -661,11 +663,12 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                     // 自動作成の結果は主カードの上端。次に確認する問題は段の対象（`creationNextTarget`）＝ここは巡回の先頭だけ渡す。
                     val tourNext = tourItems.firstOrNull()?.let { creationNextProblem(ui.staffNames.getOrNull(it.staff), it.heading) }
                     val creationTop = if (ui.hasResult && ui.engineRan && !ui.running) {
-                        CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.saveNow() })
+                        CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.retrySave() })
                     } else null
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     OperatorNextActionCard(
                         stateOf = { vm.state },
+                        onRetrySave = { vm.retrySave() },
                         ui = ui,
                         onMake = { vm.runV6FullOptimize() },
                         onSmartInitial = { vm.generateSmartInitial() },
@@ -967,7 +970,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         onSaveConstraintsCsv = { pendingExportKind = "cons"; saveComponentCsvLauncher.launch("magi_constraints_${System.currentTimeMillis()}.csv") },
                         onSaveShiftColorsCsv = { pendingExportKind = "colors"; saveComponentCsvLauncher.launch("magi_shift_colors_${System.currentTimeMillis()}.csv") },
                         onRestorePrev = { vm.restorePreviousData() },
-                        onRetrySave = { vm.saveNow() },
+                        onRetrySave = { vm.retrySave() },
                     )
                     // [実機指摘/移動] 重み表＝最適化の優先順位の根拠。実行条件（最適化設定）の隣が定位置。
                     // [3.532.0/設定タブ静音化] 常時展開の19件表は毎回の初見コストが高いため既定で閉じる
@@ -1082,6 +1085,16 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 onExport = { vm.logUi(OpLogText.UiOp.PreDistExport); saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                 onDismiss = { vm.logUi(OpLogText.UiOp.PreDistBack); preDist = false })
         }
+        // 保存が失敗に変わった瞬間に 1 回だけ（F-2）。主はやり直し、副は閉じる。
+        ui.saveFailDialog?.let { d ->
+            AlertDialog(
+                onDismissRequest = { vm.dismissSaveFailDialog() },
+                title = { Text(saveFailDialogTitle(d)) },
+                text = { Text(SAVE_FAIL_DIALOG_BODY) },
+                confirmButton = { DialogConfirmButton(SAVE_RETRY_BUTTON, onClick = { vm.retrySave() }) },
+                dismissButton = { TextButton(onClick = { vm.dismissSaveFailDialog() }) { Text("閉じる") } },
+            )
+        }
         ui.draftConfirm?.let { msg ->
             AlertDialog(
                 onDismissRequest = { vm.dismissDraftConfirm() },
@@ -1189,8 +1202,20 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
  */
 
 @Composable
-internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null, onPreDist: (() -> Unit)? = null, tourCount: Int = 0) {
+internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardTour: (() -> Unit)? = null, onPreDist: (() -> Unit)? = null, tourCount: Int = 0,
+                        onSaveWord: () -> Unit = {}) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, shadowElevation = 2.dp) {
+      BoxWithConstraints {
+        // 396dp 未満（3.657.0 と同じ境界）では札の数が切れないよう、自動作成の状態と保存の語を札の下の行へ畳む。
+        val wrap = topBarStatusWrapped(maxWidth.value.toInt())
+        val statusLine = if (ui.loaded && !ui.running) boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first else null
+        val saveWord = if (ui.loaded) topBarSaveWord(ui.saveState) else null
+        val saveWordView: @Composable () -> Unit = {
+            if (saveWord != null) TextButton(onClick = onSaveWord, modifier = Modifier.heightIn(min = 48.dp), contentPadding = PaddingValues(horizontal = 6.dp)) {
+                Text(saveWord, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, maxLines = 2)
+            }
+        }
+      Column(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1217,9 +1242,11 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                     else -> { label = boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).second; fg = MaterialTheme.colorScheme.onSurfaceVariant; bg = MaterialTheme.colorScheme.surfaceVariant }
                 }
                 // 札の前に自動作成の状態（2026-10-14 利用者レビュー: 「未計算」では、警告が今の勤務表の評価か分からなかった）。
-                if (!ui.running) Text(boardStatusLines(ui.engineRan, ui.hasResult, ui.checkRev > 0, ui.bestHard, ui.bestSoft, ui.breakdown, ui.ranBeforeEdit).first,
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-                    modifier = Modifier.padding(end = 6.dp).widthIn(max = 96.dp))
+                if (!wrap) {
+                    saveWordView()
+                    if (statusLine != null) Text(statusLine, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
+                        modifier = Modifier.padding(end = 6.dp).widthIn(max = 96.dp))
+                }
                 // 必須違反が残るときは「順に見る」巡回の入口（勤務表のセルを必須から順に開く）。
                 val tourable = !ui.running && ui.hasResult && ui.bestHard > 0L && onHardTour != null
                 if (tourable) {
@@ -1244,6 +1271,16 @@ internal fun MagiTopBar(ui: UiState, sectionTitle: String = "勤務表", onHardT
                 }
             }
         }
+        if (wrap && (statusLine != null || saveWord != null)) Row(
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End,
+        ) {
+            if (statusLine != null) Text(statusLine, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            saveWordView()
+        }
+      }
+      }
     }
 }
 

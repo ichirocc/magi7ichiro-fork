@@ -591,6 +591,7 @@ internal fun OperatorNextActionCard(
     stateOf: () -> com.magi.app.model.MagiState? = { null },   // 見出しで、手が解消する必須違反を名指しするための今の状態
     creation: CreationTop? = null,   // 自動作成の直後: カード上端の 2 行（作成の完了と次に確認する問題）
     tourNext: String? = null,        // 必須違反の巡回の先頭（残りの一覧・探索中の段の対象）
+    onRetrySave: () -> Unit = {},    // 保存の失敗の行の「もう一度保存する」
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -690,7 +691,8 @@ internal fun OperatorNextActionCard(
     }
     // 並びは純関数 `homeCardSections` が決める＝ここは区画ごとの中身を描くだけ（C# と 1 対 1）。
     val sections = homeCardSections(hp, ui)
-    val statusLines = homeStatusLines(kind, plan.headline, consultLine, savedLine)
+    val saveFailed = ui.saveState == SaveState.Failed
+    val statusLines = homeStatusLines(kind, plan.headline, consultLine, savedLine, saveFailed)
     val body = MaterialTheme.typography.bodyMedium
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
@@ -698,7 +700,6 @@ internal fun OperatorNextActionCard(
             for (sec in sections) when (sec) {
                 HomeSection.CREATION -> if (creation != null) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     creationTopLines(nextTarget, creation.kept, headlineTarget = nextTarget).forEach { Text(it, style = body, color = plan.fg) }
-                    if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = creation.onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
                 }
                 HomeSection.HEADLINE -> Text(homeHeadline(kind, ui.startDate), style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
                 // 札は見出しと同じ語で検査の結果だけを言う（「完成」とは言わない＝人の確認と分ける）。件と人は足さない（INV-07）。
@@ -711,7 +712,14 @@ internal fun OperatorNextActionCard(
                     }
                 }
                 HomeSection.STATUS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    statusLines.forEachIndexed { i, l -> Text(l, style = if (i == 0 && kind != HomePlanKind.PRE_DIST) MaterialTheme.typography.titleMedium else body, color = plan.fg) }
+                    // 段の 1 文は大きく、保存の失敗の行（段に関係なく先頭）は本文の太字。
+                    val lead = statusLines.indexOfFirst { it != HOME_SAVE_FAILED_LINE }
+                    statusLines.forEachIndexed { i, l ->
+                        Text(l, style = if (i == lead && kind != HomePlanKind.PRE_DIST) MaterialTheme.typography.titleMedium else body, color = plan.fg,
+                            fontWeight = if (l == HOME_SAVE_FAILED_LINE) FontWeight.Bold else null)
+                    }
+                    if (saveFailed) OutlinedButton(onClick = onRetrySave, modifier = Modifier.heightIn(min = 48.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = plan.fg), border = BorderStroke(1.dp, plan.fg)) { Text(SAVE_RETRY_BUTTON) }
                     // 作成直後の自動探索はカードの中の文字ボタンで止める（下部バーは外枠のまま。止められる性質は 3.402.0 のまま）。
                     if (kind == HomePlanKind.SEARCHING) TextButton(onClick = onStop, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
                 }

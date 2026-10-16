@@ -577,6 +577,36 @@ internal fun resolveFixFocus(f: FixFocus, staffId: Int?, exceptId: Int?, staffId
 internal const val FIX_STAFF_GONE_NOTE = "この職員は一覧から削除されたため、変更案を探せません。画面を閉じて開き直してください。"
 
 internal const val SAVE_RETRY_BUTTON = "もう一度保存する"
+internal const val SAVE_FAILED_NOTICE = "自動保存できませんでした。端末に書き込めません（空き容量が足りない可能性があります）。「$SAVE_RETRY_BUTTON」を押してください"
+internal const val HOME_SAVE_FAILED_LINE = "自動保存できていません。端末の空き容量を確かめてください"
+internal const val TOP_BAR_SAVE_FAILED = "自動保存できていません"
+/** 上部の札の幅の境界（3.657.0 の名前列と同じ）。これより狭いと自動作成の状態を札の下の行へ畳む。 */
+internal const val TOP_BAR_NARROW_DP = 396
+
+/** 上部の札の左に出す保存の語。失敗のときだけ（押すと保存の失敗のダイアログ）。 */
+internal fun topBarSaveWord(s: SaveState): String? = if (s == SaveState.Failed) TOP_BAR_SAVE_FAILED else null
+
+internal fun topBarStatusWrapped(widthDp: Int): Boolean = widthDp < TOP_BAR_NARROW_DP
+
+internal fun saveFailDialogTitle(d: SaveFailDialog): String = if (d == SaveFailDialog.AGAIN) "まだ保存できていません" else "自動保存できませんでした"
+internal const val SAVE_FAIL_DIALOG_BODY = "端末に書き込めません（空き容量が足りない可能性があります）。"
+
+/** 勤務表 CSV の書き出しに失敗したら、配布前の確認を開き直す。 */
+internal fun csvExportReopensPreDist(ok: Boolean): Boolean = !ok
+
+/**
+ * 保存の結果からダイアログを決める（C# `SaveFailNotifier` と 1 対 1）。成功から失敗に変わった瞬間に FIRST を 1 回、
+ * 失敗中に利用者がやり直して失敗したら AGAIN。失敗が続くだけの自動保存では出さない（1.2 秒ごとに走るため）。
+ */
+internal class SaveFailNotifier {
+    var lastOk = true
+        private set
+    fun onResult(ok: Boolean, retried: Boolean): SaveFailDialog? {
+        val prev = lastOk
+        lastOk = ok
+        return when { ok -> null; prev -> SaveFailDialog.FIRST; retried -> SaveFailDialog.AGAIN; else -> null }
+    }
+}
 
 internal const val REVIEW_CHECKING_TEXT = "変更後の影響を確認しています…"
 
@@ -1627,10 +1657,11 @@ internal fun shortageHeadline(s: com.magi.app.v6.CoverageShortfall): ShortageHea
 internal fun homeBadges(hardLabel: String, shortage: com.magi.app.v6.CoverageShortfall?): List<String> =
     listOfNotNull("必須 $hardLabel", shortage?.let { shortageHeadline(it).badge })
 
-/** 状態の行（2 行まで）。必須あり＝問題の 1 文と相談中の行（D10）。必須 0＝相談中の行と、CSV が今の内容と違う行（保存済みの行は主ボタンの下）。 */
-internal fun homeStatusLines(kind: HomePlanKind, sentence: String?, consultLine: String?, savedLine: String?): List<String> =
-    if (kind == HomePlanKind.PRE_DIST) listOfNotNull(consultLine, savedLine?.takeIf { it.contains("今の内容と違います") })
-    else listOfNotNull(sentence?.takeIf { it.isNotBlank() }, consultLine)
+/** 状態の行（2 行まで）。保存の失敗は段に関係なく先頭（SF-1）。必須あり＝問題の 1 文と相談中の行（D10）。必須 0＝相談中の行と、CSV が今の内容と違う行（保存済みの行は主ボタンの下）。 */
+internal fun homeStatusLines(kind: HomePlanKind, sentence: String?, consultLine: String?, savedLine: String?, saveFailed: Boolean = false): List<String> =
+    (listOfNotNull(HOME_SAVE_FAILED_LINE.takeIf { saveFailed }) +
+        if (kind == HomePlanKind.PRE_DIST) listOfNotNull(consultLine, savedLine?.takeIf { it.contains("今の内容と違います") })
+        else listOfNotNull(sentence?.takeIf { it.isNotBlank() }, consultLine)).take(2)
 
 /**
  * 段の対象（「次に確認する問題」と主ボタンの括弧の中の両方に使う＝INV-01）。null＝対象なし。

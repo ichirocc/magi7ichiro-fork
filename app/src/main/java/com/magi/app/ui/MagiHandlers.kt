@@ -135,7 +135,7 @@ internal fun magiHandlers(vm: MagiViewModel, onExport: (MagiEvent.ExportKind) ->
             is MagiEvent.Io.ImportShiftColorsCsv -> vm.importShiftColorsCsv(e.rawText)
             // 書き出しは結果の文字列を端末へ渡す必要があるので、保存先を持つ Root が受ける。
             is MagiEvent.Io.Export -> onExport(e.kind2)
-            MagiEvent.Io.SaveNow -> vm.saveNow()
+            MagiEvent.Io.SaveNow -> vm.retrySave()
         }
         true
     },
