@@ -31,6 +31,9 @@ class TuningTelemetry3694Test {
     @Test fun toleratedLineFormatsDecimalsWithLocaleRoot() {
         val n = TuningTelemetry.ToleratedNote("apt", 4, 3, 120, 118, 0, 0, rawDelta = 5.0, forgiven = 1.8, effectiveDelta = -1.8)
         assertEquals("1/3: apt 件数 4→3 ・ 合計 120→118 ・ 必須 0→0 ・ 容認 1.8 ・ 素の差 +5.0 ・ 実効差 -1.8", TuningTelemetry.toleratedLine(1, 3, n))
+        // 実効差 0.0（合計の減で採用）は符号なし＝素の差だけ %+.1f（C# `TuningTelemetry.ToleratedLine` と同じ文字列）。
+        val zero = TuningTelemetry.ToleratedNote("fair", 4, 3, 120, 118, 0, 0, rawDelta = 1.8, forgiven = 1.8, effectiveDelta = 0.0)
+        assertEquals("2/3: fair 件数 4→3 ・ 合計 120→118 ・ 必須 0→0 ・ 容認 1.8 ・ 素の差 +1.8 ・ 実効差 0.0", TuningTelemetry.toleratedLine(2, 3, zero))
         TuningTelemetry.reset()
         try {
             repeat(7) { TuningTelemetry.noteTolerated("apt", 4, 3, 120, 118, 0, 0, 5.0, 1.8, -1.8) }

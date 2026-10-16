@@ -52,7 +52,8 @@ internal object AptFairPolish {
         val rawDelta = rep.weightedScore - bestRep.weightedScore
         val effectiveDelta = rawDelta - forgiven
         //   ③容認を使うなら、研磨対象の族（apt/fair）の件数が best より減っていること。
-        val targetImproved = (rep.breakdown[family] ?: 0) < (bestRep.breakdown[family] ?: 0)
+        val familyBest = bestRep.breakdown[family] ?: 0; val familyRep = rep.breakdown[family] ?: 0   // [3.694.0] 記録にも渡す（map を二度引かない）
+        val targetImproved = familyRep < familyBest
         val accepted = (effectiveDelta < 0.0 || (effectiveDelta == 0.0 && rep.total < bestRep.total)) && (forgiven <= 0.0 || targetImproved)
         // [3.535.0/実機ログで発覚] TuningTelemetry.summaryの「設定の効き」に本トグルの行が無く、
         // ONでも実行の痕跡が一切見えなかった（他トグルは効果カウンタつきで表示済み）。素のbetterReport
@@ -63,8 +64,7 @@ internal object AptFairPolish {
             if (!rawAccepted) {
                 TuningTelemetry.aptFairToleranceUsed.incrementAndGet()
                 // [3.694.0] どの族の何を容認したか（先頭 5 件）。渡す値はこの関数で計算済み＝判定と戻り値は不変。
-                TuningTelemetry.noteTolerated(family, bestRep.breakdown[family] ?: 0, rep.breakdown[family] ?: 0, bestRep.total, rep.total,
-                    bestRep.hard, rep.hard, rawDelta, forgiven, effectiveDelta)
+                TuningTelemetry.noteTolerated(family, familyBest, familyRep, bestRep.total, rep.total, bestRep.hard, rep.hard, rawDelta, forgiven, effectiveDelta)
             }
         }
         return accepted
