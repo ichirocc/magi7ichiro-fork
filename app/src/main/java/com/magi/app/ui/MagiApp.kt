@@ -645,7 +645,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             if (!ui.loaded && tab != 4) {
                 // [⛏6] 「新規に作る」→ 最小データで開始し、編集タブ(年次マスター)へ誘導。
                 //   そこで E6 の折りたたみ節＋⛏12 の一括追加でシフト/グループ/スタッフを育てる。
-                EmptyStateCard(onOpen = openJson, onSample = loadSample, onNew = { vm.initBlankState(); tab = 2; editScope = 2 })
+                EmptyStateCard(onOpen = openJson, onSample = loadSample, onNew = { vm.initBlankState(); tab = 2; editScope = 2 }, loading = ui.running)
             } else when (tab) {
                 0 -> {
                     InterruptedBanner(ui, onRerun = { vm.resumeInterruptedRun() }, onDismiss = { vm.dismissInterrupted() })
@@ -658,14 +658,10 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                             onDismiss = { showImportGuidance = false },
                         )
                     }
-                    // 自動作成の結果と次に確認する問題は主カードの上端 2 行（対象は主カードと同じ＝人員不足は guidedFixTarget、ほかは巡回の先頭）。
+                    // 自動作成の結果は主カードの上端。次に確認する問題は段の対象（`creationNextTarget`）＝ここは巡回の先頭だけ渡す。
+                    val tourNext = tourItems.firstOrNull()?.let { creationNextProblem(ui.staffNames.getOrNull(it.staff), it.heading) }
                     val creationTop = if (ui.hasResult && ui.engineRan && !ui.running) {
-                        val covU = guidedFixTarget(ui.coverageDiag?.shortfalls.orEmpty())
-                        val tour = tourItems.firstOrNull()
-                        CreationTop(
-                            kept = ui.keptPrevious,
-                            next = covU?.let { "${it.dayLabel}の人員不足" } ?: tour?.let { creationNextProblem(ui.staffNames.getOrNull(it.staff), it.heading) },
-                            onOthers = { tab = 3 }, onRetrySave = { vm.saveNow() })
+                        CreationTop(kept = ui.keptPrevious, next = tourNext, onOthers = { tab = 3 }, onRetrySave = { vm.saveNow() })
                     } else null
                     // [operator_ux §3] 思考誘導ホーム：いまの状態に応じて「次にやること」を1枚＋大ボタン1つで提示。
                     OperatorNextActionCard(
@@ -697,6 +693,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                         relaxFailed = vm.relaxFailed(),
                         onRetryRelax = { vm.retryRelaxTrial() },
                         creation = creationTop,
+                        tourNext = tourNext,
                     )
                     // [3.645.0/仕様 5.3] 相談してから決める判断の一覧＝主カードの「未確認事項 N 件」の中身。
                     ConsultCard(ui, onOpenCell = { i, j -> tab = 1; editingCell = i to j; sheetMode = 0 }, onRemove = { onEvent(MagiEvent.Session.RemoveConsult(it)) }, onToggleHold = { vm.toggleConsultHold(it) },
@@ -1262,14 +1259,16 @@ internal fun PrimaryCommandButton(ui: UiState, vm: MagiViewModel, modifier: Modi
         // [3.402.0] 「直し方を探す」の最中も「やめる」を出す。`stop()` は元から
         //   `running || fixSearching` を見て両方を戻す（3.284.0）のに、**このボタンのゲートだけ
         //   `ui.running` に限定**されており、探索中は止める手段が画面上に一つも無かった。
-        ui.running || ui.fixSearching -> Button(
-            onClick = { vm.stop() },
-            modifier = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp),
-            contentPadding = pad,
-            colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer),
-        ) {
-            if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
-            Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+        ui.running || ui.fixSearching -> {
+            val stopContent: @Composable RowScope.() -> Unit = {
+                if (showIcon) { Icon(Icons.Filled.Stop, contentDescription = null); Spacer(Modifier.width(8.dp)) }
+                Text("やめる", style = MaterialTheme.typography.titleMedium, maxLines = lines, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+            }
+            val m = modifier.heightIn(min = ScheduleLayoutMetrics.COMMAND_BUTTON_DP.dp)
+            // 作成直後の自動探索（fixSearching）はホームの主カードの文字ボタンで止める＝下部バーは外枠のまま（INV-09）。
+            if (secondary && !ui.running) OutlinedButton(onClick = { vm.stop() }, modifier = m, contentPadding = pad, content = stopContent)
+            else Button(onClick = { vm.stop() }, modifier = m, contentPadding = pad,
+                colors = ButtonDefaults.buttonColors(containerColor = cs.errorContainer, contentColor = cs.onErrorContainer), content = stopContent)
         }
         else -> {
             // [統一] ラベル「勤務表をつくる」＝本最適化（思考誘導カードの大ボタンと同一動作）。
@@ -1361,11 +1360,12 @@ internal fun InterruptedBanner(ui: UiState, onRerun: () -> Unit, onDismiss: () -
     val cs = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("前回の最適化は中断されました", style = MaterialTheme.typography.titleMedium)
+            Text(INTERRUPTED_TITLE, style = MaterialTheme.typography.titleMedium)
             Text(ui.interruptedInfo ?: "入力は自動保存済みです。再作成できます。",
                 style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            // 帯のボタンは外枠＝塗りの主ボタンは主カードの 1 つだけ（INV-09）。
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onRerun, enabled = ui.loaded,
+                OutlinedButton(onClick = onRerun, enabled = ui.loaded,
                     modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("再作成") }
                 OutlinedButton(onClick = onDismiss,
                     modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
@@ -1385,7 +1385,7 @@ internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, o
             Text("担当できるシフトはどのグループもすべて可、必要人数と制約は未設定のまま取り込みました。編集タブの「年間マスター」で人数と制約を決めましょう。",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("設定へ") }
+                OutlinedButton(onClick = onGoEdit, modifier = Modifier.weight(1f).heightIn(min = 48.dp)) { Text("年間マスターを開く") }
                 OutlinedButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("閉じる") }
             }
         }
@@ -1393,7 +1393,7 @@ internal fun ImportGuidanceBanner(staff: Int, days: Int, onGoEdit: () -> Unit, o
 }
 
 @Composable
-internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () -> Unit) {
+internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () -> Unit, loading: Boolean = false) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = MaterialTheme.shapes.large) {
         Column(
             Modifier.fillMaxWidth().padding(24.dp),
@@ -1401,17 +1401,18 @@ internal fun EmptyStateCard(onOpen: () -> Unit, onSample: () -> Unit, onNew: () 
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp))
-            Text("勤務表データを開きましょう", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
-            Text("保存済みのデータを開く、サンプルから始める、または空から新しく作れます。",
+            Text(EMPTY_STATE_TITLE, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+            // 読込中は補足を 1 文で言い、3 つのボタンを押せなくする（二重に開かない）。
+            Text(emptyStateSubtitle(loading),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            Button(onClick = onOpen, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            Button(onClick = onOpen, enabled = !loading, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text("データを開く", style = MaterialTheme.typography.labelLarge)
             }
-            OutlinedButton(onClick = onSample, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            OutlinedButton(onClick = onSample, enabled = !loading, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text("サンプルで試す", style = MaterialTheme.typography.labelLarge)
             }
             // [⛏6] ゼロから作る起点。最小データで開始し、編集タブ(年次マスター)へ誘導する。
-            OutlinedButton(onClick = onNew, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+            OutlinedButton(onClick = onNew, enabled = !loading, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
                 Text("新規につくる（空から）", style = MaterialTheme.typography.labelLarge)
             }
         }
