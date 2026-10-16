@@ -396,7 +396,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     private var loggedTab = 0
     private var tourTotal: Int? = null
     private var guidedApplied = false
-    fun logUi(op: OpLogText.UiOp) {
+    internal fun logUi(op: OpLogText.UiOp) {
         when (op) {
             is OpLogText.UiOp.Tab -> { if (op.tab == loggedTab) return; loggedTab = op.tab }
             is OpLogText.UiOp.TourStart -> tourTotal = op.total
@@ -1642,7 +1642,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** [how] は閉じ方（閉じる／条件を確認する）。開いていなければ何も書かない。 */
-    fun dismissPreRun(how: OpLogText.UiOp = OpLogText.UiOp.PreRunClose) {
+    internal fun dismissPreRun(how: OpLogText.UiOp = OpLogText.UiOp.PreRunClose) {
         if (_ui.value.preRunCheck != null) logUi(how)
         _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
     }
