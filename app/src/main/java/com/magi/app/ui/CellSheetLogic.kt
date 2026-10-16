@@ -1372,9 +1372,9 @@ internal fun surplusMoveTitle(t: FixTarget?, schedule: List<List<Int>>, ops: Lis
 
 internal const val PEEK_SEARCH_BUTTON = "変更案を探す"
 
-/** ちら見の次の一手: 置ける候補がすべて ⚠ で緩める候補も無いときだけ「変更案を探す」（主は 1 つ＝INV-09）。null＝出さない。 */
-internal fun peekHopelessAction(mode: Int, severity: CellSeverity, marks: ShiftMarks, candidates: Collection<Int>, current: Int, recommend: Int?): String? =
-    if (mode == 0 && severity != CellSeverity.NONE && recommend == null && singleCellHopeless(marks, candidates, current)) PEEK_SEARCH_BUTTON else null
+/** ちら見の主ボタン（S-3）: 問題のあるセルの割当では常に「変更案を探す」。緩める候補は外枠に下げる（主は 1 つ＝INV-09）。null＝出さない。 */
+internal fun peekSearchAction(mode: Int, severity: CellSeverity): String? =
+    if (mode == 0 && severity != CellSeverity.NONE) PEEK_SEARCH_BUTTON else null
 
 internal const val NOT_IMPROVING_TARGET_MESSAGE = "見ている問題が減らないため、この提案は適用しませんでした。「変更案を探す」で探し直してください"
 
@@ -1701,3 +1701,48 @@ internal fun contestCard(target: FixTarget, label: String, main: List<com.magi.a
     val b = picks.getOrNull(1)?.let { ContestOption("案B: ${name(it)}", null, it) }
     return ContestCard("${label}の${target.gapWord}", a, b)
 }
+
+/** 勤務表タブの状態の 1 行の上限（D4 の幅で 1 行に収まる字数）。超えたら末尾を「…」にする。 */
+internal const val SCHEDULE_STATE_MAX = 23
+
+/** 勤務表タブの状態の 1 行。[tourFirst]＝押すと巡回の先頭を開く（必須違反があり、セルで辿れるときだけ）。 */
+internal data class ScheduleStateLine(val text: String, val hard: Boolean, val tourFirst: Boolean)
+
+/**
+ * 状態の 1 行（G2-1）。未作成・組んでいます・必須あり（巡回の先頭を添える）・必須は人員不足だけ・必須 0 の 5 通り。
+ * [next] は巡回の先頭の「M/D 名」（無ければ人員不足だけ）。必須の数は単位ごと（INV-07）の [hardText] をそのまま使う。
+ */
+internal fun scheduleStateLine(hasResult: Boolean, running: Boolean, bestHard: Long, hardText: String, softText: String, next: String?): ScheduleStateLine {
+    val (text, hard, tour) = when {
+        running -> Triple("組んでいます", false, false)
+        !hasResult -> Triple("まだ作っていません", false, false)
+        bestHard > 0L && next != null -> Triple("必須違反 $hardText（次：${next}さん）", true, true)
+        bestHard > 0L -> Triple("必須違反 $hardText（日の印から開けます）", true, false)
+        else -> Triple("必須違反はありません · 要調整 $softText", false, false)
+    }
+    return ScheduleStateLine(capStateLine(text), hard, tour)
+}
+
+internal fun capStateLine(text: String, max: Int = SCHEDULE_STATE_MAX): String =
+    if (text.length <= max) text else text.take(max - 1) + "…"
+
+/** 必須違反の一覧の見出し（単位ごとの件数を添える）と、先頭の主ボタンの語（G2-3）。 */
+internal fun hardListTitle(hardText: String): String = "必須違反の一覧（$hardText）"
+internal const val HARD_LIST_START_BUTTON = "上から順に見る"
+
+/** セルの確認シートの題（S-1）。 */
+internal const val CELL_SHEET_TITLE = "このマスの確認"
+
+/** 対象の行「{名}さん · {M/D(曜)} · {記号}」（S-2）。今の勤務はここで言う（空のセルは記号を省く）。 */
+internal fun cellSheetTarget(name: String, dayLabel: String, symbol: String?): String =
+    "${name}さん · $dayLabel" + (symbol?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
+
+/** ちら見の 2 行目の札。必須は巡回中なら「必須 2/5」。問題が無ければ null（札を出さない）。 */
+internal fun cellSheetBadge(severity: CellSeverity, tourAt: Int? = null, tourTotal: Int = 0): String? = when (severity) {
+    CellSeverity.HARD -> if (tourAt != null && tourTotal > 0) "必須 ${tourAt + 1}/$tourTotal" else "必須"
+    CellSeverity.SOFT -> "要調整"
+    CellSeverity.NONE -> null
+}
+
+/** 足りない側の人探しのボタンを塗りにするか（S-4）。セルに人員不足以外の問題もあれば外枠（主は「変更案を探す」＝INV-09）。 */
+internal fun shortSideFilled(families: List<String>): Boolean = families.all { it == "covU" }
