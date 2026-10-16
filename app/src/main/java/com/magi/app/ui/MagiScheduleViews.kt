@@ -2205,6 +2205,25 @@ internal fun FixSearchPanel(
                             otherDaysGapLine(ui.needFamilies, ui.schedule, target, cv?.let { c -> c::needCellLimits }, ui.shiftSymbols, ui.startDate)
                         }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                         val t1 = tv.of(FixTier.T1); val t2 = tv.of(FixTier.T2)
+                        // 争点カード（D03）: 主一覧の上位 2 件を推奨A／案B として先に。選ぶと各案と同じ変更の確認へ（一覧は下にそのまま）。
+                        if (!compact) remember(tv, ui.schedule, target) {
+                            contestCard(target, label, (t1 + t2).map { it.sug }, ui.schedule, ui.staffNames, ui.shiftSymbols)
+                        }?.let { cc ->
+                            fun pick(s: com.magi.app.v6.FixSuggestion) {
+                                val e = target.effect(ui.schedule, s.ops)
+                                onEvent(MagiEvent.Board.PreviewFix(s, purpose, listOf("$label：${e.countLine()}", "今回の${e.gapLine()}", e.afterNote(target.basis)), focus.key, target))
+                            }
+                            Surface(color = cs.surfaceVariant, shape = MaterialTheme.shapes.medium) {
+                                Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(cc.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text(cc.a.label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    cc.a.reason?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                                    cc.b?.let { Text(it.label, style = MaterialTheme.typography.bodyMedium) }
+                                    Button(onClick = { pick(cc.a.suggestion) }, enabled = !ui.running, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(CONTEST_A_BUTTON) }
+                                    cc.b?.let { b -> OutlinedButton(onClick = { pick(b.suggestion) }, enabled = !ui.running, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(CONTEST_B_BUTTON) } }
+                                }
+                            }
+                        }
                         if (t1.isNotEmpty()) {
                             if (!compact) Text(tier1Heading(target), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                             t1.take(limit).forEachIndexed { n, x -> card(n + 1, x.sug) }
