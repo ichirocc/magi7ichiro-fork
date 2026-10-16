@@ -16,7 +16,7 @@ class PreDistributionCheckTest {
         assertEquals(false, rows.getValue("保存").ok)
         assertEquals("まだ勤務表 CSV に保存していません", rows.getValue("保存").value)
         assertEquals("期間の制約 4件・曜日の偏り 20pt", rows.getValue("要調整").value)   // 重み×数の順（作成の結果カードと同じ）
-        assertEquals("対象期間 10/1〜10/31・現在採用している勤務表", rows.getValue("対象").value)
+        assertEquals("対象期間 10/1〜10/31・現在採用している勤務表", preDistributionPeriodLine(base))
     }
 
     @Test fun hardRowListsFamiliesAndSaveRowReadsTheCsvLine() {
@@ -37,7 +37,7 @@ class PreDistributionCheckTest {
 
     /** [3.665.0] 月の境目は評価していないと明示する（前月・翌月の勤務はデータに無い）。注記は窓が月の外へはみ出しうる日を変えたときだけ。 */
     @Test fun monthEdgeIsShownAsNotEvaluated() {
-        assertEquals(MONTH_EDGE_NOTE, preDistributionRows(base, null).associateBy { it.label }.getValue("月の境目").value)
+        assertEquals(false, preDistributionRows(base, null).any { it.label == "月の境目" })   // [3.704.0] 行ではなく脚注 PRE_DIST_EDGE_FOOT
         assertEquals(true, monthEdgeTouched(listOf(1), 31, 3))
         assertEquals(true, monthEdgeTouched(listOf(29), 31, 3))
         assertEquals(false, monthEdgeTouched(listOf(2, 28), 31, 3))

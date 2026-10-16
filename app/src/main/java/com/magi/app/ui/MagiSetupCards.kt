@@ -572,8 +572,8 @@ internal fun MonthMoveConfirmDialog(plan: MonthMovePlan, onEvent: (MagiEvent) ->
         },
         confirmButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DialogConfirmButton("希望を残して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = false)) })
-                DialogDangerButton("希望を消して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = true)) })
+                DialogOptionButton("希望を残して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = false)) }, recommended = true)
+                DialogOptionButton("希望を消して移る", onClick = { onEvent(MagiEvent.Structure.ConfirmMonthMove(clearWishes = true)) }, danger = true)
                 // 「やめる」も同じ列に（dismiss の枠に分けると、縦に積んだ列と横に並べられて重なる）。
                 DialogDismissButton(onClick = { onEvent(MagiEvent.Structure.CancelMonthMove) }, text = "移らない")
             }

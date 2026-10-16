@@ -1,6 +1,8 @@
 package com.magi.app.ui
 
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -78,8 +80,31 @@ fun DialogConfirmButton(text: String, onClick: () -> Unit, enabled: Boolean = tr
 
 /** ダイアログの取消/閉じる: 外枠ボタン。一本指向けに最低48dp高。 */
 @Composable
-fun DialogDismissButton(onClick: () -> Unit, text: String = "キャンセル") {
+fun DialogDismissButton(onClick: () -> Unit, text: String = "閉じる") {
     OutlinedButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(text) }
+}
+
+/** 選択肢を縦に並べるダイアログの 1 つ（3.704.0 G-1）。塗りは推奨の 1 つだけ（INV-09）、[danger] は赤字の外枠。 */
+@Composable
+fun DialogOptionButton(text: String, onClick: () -> Unit, recommended: Boolean = false, danger: Boolean = false) {
+    if (recommended) Button(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(text) }
+    else OutlinedButton(
+        onClick = onClick, modifier = Modifier.heightIn(min = 48.dp),
+        colors = if (danger) ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error) else ButtonDefaults.outlinedButtonColors(),
+    ) { Text(text) }
+}
+
+/** 確認＝問いの題＋3 点以内＋動詞の主ボタン 1 つ＋対の否定（operator_ux §1-1）。 */
+@Composable
+internal fun ConfirmDialog(title: String, points: List<String>, primary: String, onPrimary: () -> Unit, dismiss: String, onDismiss: () -> Unit) {
+    val p = confirmDialogPoints(points)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { p.forEach { Text(it) } } },
+        confirmButton = { DialogConfirmButton(primary, onClick = onPrimary) },
+        dismissButton = { DialogDismissButton(onClick = onDismiss, text = dismiss) },
+    )
 }
 
 /** ダイアログの破壊的確定（削除など）: エラー色＋警告アイコンで誤タップを抑止。最低48dp高。 */

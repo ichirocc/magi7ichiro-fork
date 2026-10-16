@@ -27,7 +27,7 @@ import com.magi.app.v6.PreRunCheck
 import com.magi.app.v6.POST_RESERVE_SEC
 import com.magi.app.v6.CHAIN_RESERVE_SEC
 
-/** [勤務表を作成する（旧 つくる前の確認）] 本実行の前に出す。自動で行うこと・保持するもの・時間と、行を押すとセルへ（セルを持たない行は入力箇所へ＝3.644.0）、「勤務表を作成」で始める。 */
+/** [勤務表を作成する] 本実行の前に出す。自動で行うこと・保持するもの・時間と、行を押すとセルへ（セルを持たない行は入力箇所へ＝3.644.0）、開いたボタンと同じ語の主ボタンで始める。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PreRunCheckSheet(
@@ -45,21 +45,21 @@ internal fun PreRunCheckSheet(
     val cs = MaterialTheme.colorScheme
     val t = remember(summary, ui.staffNames, ui.shiftSymbols, ui.startDate) { preRunSheetText(summary, ui) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        // ボタンはシートの下端に固定し、節の一覧だけをスクロールする（3.704.0 R-1）。
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             DialogHeader(PRE_RUN_TITLE, onDismiss)
             // 自動で行うこと・保持するもの・時間（設定値）を先に。担当者が判断するのは、ここと作成後の問題の対応。
             Text(preRunPlanLine(ui.startDate, ui.days, ui.staff, ui.budgetSec, POST_RESERVE_SEC + CHAIN_RESERVE_SEC), style = MaterialTheme.typography.bodyMedium)
-            Text(preRunConditionLine(summary.needsSheet, summary.wishOverCaps.size, ui.manualPins.size), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(preRunConditionLine(t.floorRows.size, t.rerunRows.size, summary.wishOverCaps.size, ui.manualPins.size), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            ui.preRunRepeatHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
             t.floorHeader?.let { h ->
                 Text("■ $h", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(PRE_RUN_FLOOR_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 t.zeroCapNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                 t.floorRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding, onConsult, onCancelConsult) }
                 if (t.hasWishRows && onShowWishes != null) {
-                    OutlinedButton(onClick = onShowWishes, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }
+                    TextButton(onClick = onShowWishes, modifier = Modifier.heightIn(min = 48.dp)) { Text("ぶつかっている希望を見る") }
                 }
             }
             t.rerunHeader?.let { h ->
@@ -67,7 +67,7 @@ internal fun PreRunCheckSheet(
                 Text(PRE_RUN_RERUN_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 t.rerunRows.forEach { PreRunRowView(it, ui, onOpenCell, onOpenLanding) }
                 t.rerunRows.firstOrNull()?.let { r ->
-                    OutlinedButton(onClick = { onOpenCell(r.staff ?: 0, r.day ?: 0, false) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("該当セルを見る") }
+                    TextButton(onClick = { onOpenCell(r.staff ?: 0, r.day ?: 0, false) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("該当セルを見る") }
                 }
             }
             t.overCapNote?.let { n ->
@@ -79,11 +79,11 @@ internal fun PreRunCheckSheet(
                 Text("■ 入れないシフト（個人の上限0）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                 Text(w, style = MaterialTheme.typography.bodyMedium)
                 t.wallLanding?.let { l ->
-                    OutlinedButton(onClick = { onOpenLanding(l) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(landingButtonLabel(l)) }
+                    TextButton(onClick = { onOpenLanding(l) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(landingButtonLabel(l)) }
                 }
             }
-            ui.preRunRepeatHint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp)) }
-            Button(onClick = onProceed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp)) { Text(PRE_RUN_PROCEED) }
+        }
+            Button(onClick = onProceed, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp)) { Text(preRunProceedLabel(ui.hasResult)) }
             OutlinedButton(onClick = onFixData, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text(PRE_RUN_CHECK_CONDITIONS) }
         }
     }

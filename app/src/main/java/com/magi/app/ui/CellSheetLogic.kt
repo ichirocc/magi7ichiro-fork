@@ -1317,10 +1317,28 @@ internal fun preRunPlanLine(startDate: String, days: Int, staff: Int, budgetSec:
     return "$period${staff}人・組む時間 $search（＋仕上げ ${reserveSec}秒）。開始後は一手ごとの確認はしません"
 }
 
-/** 登録条件の 1 行。[overCaps]＝希望が個人の上限を超える組（作成しても残る）の数も数える。 */
-internal fun preRunConditionLine(issues: Boolean, overCaps: Int, pins: Int): String =
-    "登録条件：" + (if (issues || overCaps > 0) "確認が必要な項目があります（下の一覧" + (if (overCaps > 0) "・希望が上限を超える ${overCaps}件" else "") + "）" else "つくる前に直す項目はありません") +
-        (if (pins > 0) "／手動固定 ${pins}件は保持します" else "")
+/** 登録条件の 1 行（3.704.0 R-4: 節ごとの件数を並べる）。[overCaps]＝希望が個人の上限を超える組（作成しても残る）。 */
+internal fun preRunConditionLine(floor: Int, rerun: Int, overCaps: Int, pins: Int): String {
+    val parts = listOfNotNull(
+        "何度つくっても残る ${floor}件".takeIf { floor > 0 },
+        "再作成で外れる ${rerun}件".takeIf { rerun > 0 },
+        "希望が上限を超える ${overCaps}件".takeIf { overCaps > 0 },
+    )
+    return "登録条件：" + (if (parts.isEmpty()) "つくる前に直す項目はありません" else parts.joinToString("・")) +
+        (if (pins > 0) "／手動固定 ${pins}件は保持" else "")
+}
+
+/** 単純な確認の点（3.704.0 G-4）: 空行を除いて [CONFIRM_MAX_POINTS] 個まで。超えたら確認ではなく読む画面にする。 */
+internal fun confirmDialogPoints(points: List<String>): List<String> {
+    val p = points.filter { it.isNotBlank() }
+    require(p.size <= CONFIRM_MAX_POINTS) { "確認の点は ${CONFIRM_MAX_POINTS} つまで（${p.size}）" }
+    return p
+}
+
+internal const val CONFIRM_MAX_POINTS = 3
+
+/** 作成前のシートの主ボタン＝開いたボタンと同じ語（3.704.0、利用者決定 Q3）。 */
+internal fun preRunProceedLabel(hasResult: Boolean): String = if (hasResult) "再作成" else "勤務表をつくる"
 
 /** 同じ探索の設定で再作成するときの一言。[top]＝前回いちばん多い必須違反（「族名（N単位）」）。 */
 internal fun preRunRepeatHintText(top: String?): String =
@@ -1335,7 +1353,6 @@ internal fun preRunAckFingerprint(st: com.magi.app.model.MagiState, clears: List
     clears.fold(com.magi.app.v6.StateFingerprint.of(st)) { h, c -> ((h * 31L + c.staff) * 31L + c.day) * 31L + c.shift }
 
 internal const val PRE_RUN_TITLE = "勤務表を作成する"
-internal const val PRE_RUN_PROCEED = "勤務表を作成"
 internal const val PRE_RUN_CHECK_CONDITIONS = "条件を確認する"
 
 /** 要調整の内訳（族ごとに件数か pt。多い順に [max] 種まで）。 */

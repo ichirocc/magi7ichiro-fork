@@ -1678,13 +1678,12 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         _ui.update { it.copy(preRunCheck = null, preRunRepeatHint = null) }
     }
 
-    /** 編集タブの「元の確認へ戻る」: つくる前の確認を今のデータで作り直して出す（実行はしない）。残る項目が無ければそう言う。 */
+    /** 編集タブの「元の確認へ戻る」: 勤務表を作成するシートを今のデータで作り直して出す（実行はしない）。残る項目が無くても出す（3.704.0）。 */
     fun reopenPreRun() {
         val st = state ?: return
         val sched = currentSchedule ?: return
         val sum = PreRunCheck.build(st, sched)
-        if (sum.needsSheet) { _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }; logUi(OpLogText.UiOp.PreRunOpen) }
-        else _ui.update { it.copy(messageIsError = false, message = "つくる前の確認: 残る項目はなくなりました。画面下の「${if (it.hasResult) "再作成" else "勤務表をつくる"}」でつくれます") }
+        _ui.update { it.copy(preRunCheck = sum, preRunRepeatHint = repeatHint()) }; logUi(OpLogText.UiOp.PreRunOpen)
     }
 
     private var preRunAckKey = 0L
