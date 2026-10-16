@@ -765,7 +765,7 @@ internal fun familyEffectLine(s: com.magi.app.v6.FixSuggestion, family: String, 
 internal const val APPLY_UNDO_NOTE = "適用したあとでも元に戻せます。"
 
 /** 案のカードのボタン（見るだけ。適用は確認の画面で）。 */
-internal const val REVIEW_CHANGE_BUTTON = "変更内容を確認"
+internal const val REVIEW_CHANGE_BUTTON = "変更内容を確認する"
 
 /** 確認の画面の適用ボタン（件数を言う）。 */
 internal fun applyCountButton(n: Int): String = if (n >= 2) "この${n}件の変更を適用" else APPLY_CHANGE_BUTTON
@@ -1408,9 +1408,9 @@ internal data class CreationTop(val next: String?, val onOthers: () -> Unit, val
 internal fun creationNextProblem(staffName: String?, heading: String): String =
     if (staffName.isNullOrBlank() || heading.startsWith(staffName)) heading else "${staffName}さん $heading"
 
-/** 主カード上端の 2 行: 作成の完了と、次に確認する問題。 */
-internal fun creationTopLines(next: String?, kept: Boolean = false): List<String> =
-    listOfNotNull(if (kept) KeptResultText.KEPT_TITLE else CREATION_DONE_TITLE, next?.let { "次に確認する問題：$it" })
+/** 主カード上端の 2 行: 作成の完了と、次に確認する問題（見出しと同じ対象なら完了の 1 行だけ）。 */
+internal fun creationTopLines(next: String?, kept: Boolean = false, headlineTarget: String? = null): List<String> =
+    listOfNotNull(if (kept) KeptResultText.KEPT_TITLE else CREATION_DONE_TITLE, next?.takeIf { it != headlineTarget }?.let { "次に確認する問題：$it" })
 
 internal const val SOFT_POLISH_LINK = "要調整をもう少し減らせるか試す（減らない場合もあります）"
 
@@ -1532,4 +1532,85 @@ internal fun homePlan(
     fixSearched && !hasMove && stalled && wishes -> HomePlan(HomePlanKind.WISH_FLOOR, HomeAction.SHOW_WISHES, true, HomeAction.PRE_DIST)
     wishes -> HomePlan(HomePlanKind.WISHES, HomeAction.SHOW_WISHES, true, null)
     else -> HomePlan(HomePlanKind.LIST, HomeAction.SHOW_LIST, true, null)
+}
+
+/** ホームの主カードの区画。並びの順は `homeCardSections` が決め、`OperatorNextActionCard` はその順に描くだけ（C# `HomeCardSectionsOf` と 1 対 1）。 */
+internal enum class HomeSection { CREATION, HEADLINE, BADGES, STATUS, PROGRESS, PRIMARY, HELPER, OTHERS, DETAIL, SATISFACTION, INFO, DRAFT_LINK }
+
+/** 主ボタンが分析タブへ行く段（「ほかの問題を見る」と行き先が同じ）。 */
+private val homeActionsToAnalysis = setOf(HomeAction.SHOW_MOVE, HomeAction.SHOW_LIST)
+
+/**
+ * ホームの主カードの並び（純関数）: 作成の 2 行 → 見出し → 札 → 状態（2 行まで）→ 主ボタン 1 つ → 補助 →「ほかの問題を見る」→
+ * 詳細 → でき具合 → ⓘ → 下書きのリンク。実行中は進捗の行だけ。でき具合は結果があるときだけ（作っていないのに出さない）。
+ */
+internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = buildList {
+    if (ui.running) { add(HomeSection.PROGRESS); return@buildList }
+    val creation = ui.hasResult && ui.engineRan
+    if (creation) add(HomeSection.CREATION)
+    add(HomeSection.HEADLINE)
+    if (ui.hasResult && ui.bestHard > 0L) add(HomeSection.BADGES)
+    add(HomeSection.STATUS)
+    if (plan.primaryEnabled) add(HomeSection.PRIMARY)
+    if (plan.helper != null || ui.hasResult) add(HomeSection.HELPER)
+    if (creation && plan.primary !in homeActionsToAnalysis) add(HomeSection.OTHERS)
+    add(HomeSection.DETAIL)
+    if (ui.hasResult) { add(HomeSection.SATISFACTION); add(HomeSection.INFO); add(HomeSection.DRAFT_LINK) }
+}
+
+internal const val HOME_MAKE_HEADLINE = "ボタンひとつで、勤務表をつくります"
+internal const val HOME_HARD0_HEADLINE = "必須違反はありません"
+internal const val HOME_SCHEDULE_HELPER = "表で全体を見る"
+internal const val HOME_LIST_BUTTON = "残っている問題を見る"
+internal const val HOME_PRE_DIST_BUTTON = "配布前の確認をする"
+internal const val PRE_DIST_TITLE = "配布前の確認"
+internal const val HOME_SOFT_NOTE = "要調整は分析で確認"
+internal const val HOME_OTHERS_BUTTON = "ほかの問題を見る"
+internal const val INTERRUPTED_TITLE = "前回の勤務表づくりは途中で止まりました"
+internal const val EMPTY_STATE_TITLE = "勤務表を開く"
+
+/** 未読込の補足。読込中は 1 文だけ。 */
+internal fun emptyStateSubtitle(loading: Boolean): String = if (loading) "読み込んでいます…" else "保存データ・サンプル・新規から選べます"
+
+/** 対象の月の見出し「2026年10月の判断」（開始日が読めなければ「いまの判断」）。 */
+internal fun homeMonthHeadline(startDate: String): String {
+    val m = Regex("""^(\d{4})-(\d{2})-\d{2}""").find(startDate) ?: return "いまの判断"
+    return "${m.groupValues[1].toInt()}年${m.groupValues[2].toInt()}月の判断"
+}
+
+/** 段ごとの見出し: 未作成・必須 0 は 1 文、必須ありは対象の月。 */
+internal fun homeHeadline(kind: HomePlanKind, startDate: String): String = when (kind) {
+    HomePlanKind.MAKE -> HOME_MAKE_HEADLINE
+    HomePlanKind.PRE_DIST -> HOME_HARD0_HEADLINE
+    else -> homeMonthHeadline(startDate)
+}
+
+/** 人員不足の 1 文（ホームの「いま決めること」と人員不足の手伝いの題）と、札・状態の行。 */
+internal data class ShortageHeadline(val headline: String, val status: String, val badge: String)
+
+internal fun shortageHeadline(dayLabel: String, shiftSymbol: String, need: Int, got: Int, miss: Int): ShortageHeadline =
+    ShortageHeadline("$dayLabel の $shiftSymbol が ${miss}人 足りません", "いま${got}人／必要${need}人", "$shiftSymbol 必要$need 不足$miss")
+
+internal fun shortageHeadline(s: com.magi.app.v6.CoverageShortfall): ShortageHeadline = shortageHeadline(s.dayLabel, s.shiftSymbol, s.need, s.got, s.miss)
+
+/** 札 2 つ: 必須は単位ごと（INV-07）、2 つ目は最優先の不足（無ければ 1 つ）。 */
+internal fun homeBadges(hardLabel: String, shortage: com.magi.app.v6.CoverageShortfall?): List<String> =
+    listOfNotNull("必須 $hardLabel", shortage?.let { shortageHeadline(it).badge })
+
+/** 状態の行（2 行まで）。必須あり＝問題の 1 文と相談中の行（D10）。必須 0＝相談中の行と、CSV が今の内容と違う行（保存済みの行は主ボタンの下）。 */
+internal fun homeStatusLines(kind: HomePlanKind, sentence: String?, consultLine: String?, savedLine: String?): List<String> =
+    if (kind == HomePlanKind.PRE_DIST) listOfNotNull(consultLine, savedLine?.takeIf { it.contains("今の内容と違います") })
+    else listOfNotNull(sentence?.takeIf { it.isNotBlank() }, consultLine)
+
+/**
+ * 段の対象（「次に確認する問題」と主ボタンの括弧の中の両方に使う＝INV-01）。null＝対象なし。
+ * 今すぐ直せる不足＝不足の枠、1手あり＝手の先頭のセル、希望の段＝関わる希望の先頭、緩める＝その組、残りの一覧と探索中＝巡回の先頭。
+ */
+internal fun creationNextTarget(kind: HomePlanKind, shortage: String?, move: String?, wish: String?, relax: String?, tour: String?): String? = when (kind) {
+    HomePlanKind.GUIDED_FIX -> shortage
+    HomePlanKind.APPLY_MOVE -> move
+    HomePlanKind.WISH_INFEASIBLE, HomePlanKind.WISH_FLOOR, HomePlanKind.WISHES -> wish
+    HomePlanKind.RELAX -> relax
+    HomePlanKind.LIST, HomePlanKind.SEARCHING -> tour
+    else -> null
 }

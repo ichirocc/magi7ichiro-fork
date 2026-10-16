@@ -434,8 +434,7 @@ internal fun GuidedFixDialog(
             ) {
                 when {
                     target != null -> {
-                        Text("${target.dayLabel} の「${target.shiftSymbol}」が ${target.miss}人 足りません。",
-                            fontWeight = FontWeight.Bold)
+                        Text(shortageHeadline(target).headline + "。", fontWeight = FontWeight.Bold)
                         val cands = remember(target.dayIndex, target.shiftIndex, ui.coverageDiag) {
                             vm.shortageFixCandidates(target.dayIndex, target.shiftIndex)
                         }
@@ -590,6 +589,7 @@ internal fun OperatorNextActionCard(
     onRetryRelax: () -> Unit = {},
     stateOf: () -> com.magi.app.model.MagiState? = { null },   // 見出しで、手が解消する必須違反を名指しするための今の状態
     creation: CreationTop? = null,   // 自動作成の直後: カード上端の 2 行（作成の完了と次に確認する問題）
+    tourNext: String? = null,        // 必須違反の巡回の先頭（残りの一覧・探索中の段の対象）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -609,9 +609,7 @@ internal fun OperatorNextActionCard(
     // 主ボタンに最初の対象を添える（押した先は変えない）。
     fun staffName(i: Int) = ui.staffNames.getOrNull(i) ?: "職員${i + 1}"
     val firstWish = wishCands.direct.firstOrNull() ?: wishCands.shortfall.firstOrNull()?.rows?.firstOrNull()
-    val wishLabel = homeTargetLabel("ぶつかっている希望を見る", firstWish?.let { staffName(it.staff) }, firstWish?.let { DayText.short(ui.startDate, it.day) })
     val firstMove = ui.fixSuggestions.firstOrNull { it.deltaHard < 0 }?.ops?.firstOrNull()
-    val moveLabel = homeTargetLabel("直す1手を見る", firstMove?.let { staffName(it.staff) }, firstMove?.let { DayText.short(ui.startDate, it.day) })
 
     // [M3] 成功=tertiary / 注意=error / 主操作=primary はテーマロール。警告のみ独自トークンに集約。
     val (amber, onAmber) = magiWarnColors()
@@ -622,21 +620,30 @@ internal fun OperatorNextActionCard(
     }
 
     val hasMove = ui.fixSuggestions.any { it.deltaHard < 0 }
-    val kind = homePlan(ui.running, ui.hasResult, ui.bestHard == 0L, infeasible, hasPinned, guidedTarget != null,
+    val hp = homePlan(ui.running, ui.hasResult, ui.bestHard == 0L, infeasible, hasPinned, guidedTarget != null,
         hasMove, ui.fixFocusName.isBlank(), ui.fixSearching, ui.fixSearched, relax != null, ui.stalledHardFamilies.isNotEmpty(), !wishCands.isEmpty,
-        ui.saveState == SaveState.Failed, ui.consults.size).kind
+        ui.saveState == SaveState.Failed, ui.consults.size)
+    val kind = hp.kind
+    // 段の対象は 1 か所で決め、主ボタンの括弧と「次に確認する問題」の両方に使う（INV-01）。
+    val shortage = guidedTarget?.let { shortageHeadline(it) }
+    val nextTarget = creationNextTarget(kind,
+        shortage = guidedTarget?.let { "${it.dayLabel} ${it.shiftSymbol}" },
+        move = firstMove?.let { "${staffName(it.staff)} ${DayText.short(ui.startDate, it.day)}" },
+        wish = firstWish?.let { "${staffName(it.staff)} ${DayText.short(ui.startDate, it.day)}" },
+        relax = relax?.let { relaxTarget(it.result, ui) }?.let { "${it.name} ${it.span}" },
+        tour = tourNext ?: creation?.next)
+    val wishLabel = homeTargetLabel("ぶつかっている希望を見る", nextTarget, null)
+    val hardNow = hardText(ui.breakdown, ui.bestHard)
     val plan = when (kind) {
         // [校正] 「やめる」は下部コマンドバーに常設済み。見出し文は下の進捗行と重複のため出さない（ユーザー赤囲い指示）。
         HomePlanKind.RUNNING -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "", "", {}, false, null, onStop)
-        HomePlanKind.MAKE -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer,
-            "② ボタンひとつで、勤務表を作ります。",
+        HomePlanKind.MAKE -> OpNextPlan(cs.primaryContainer, cs.onPrimaryContainer, "",
             "勤務表をつくる", onMake, true, "下書きをつくる（希望と期間の制約を先に埋める）", onSmartInitial,
             bigColors = cs.onPrimaryContainer to cs.primaryContainer)
-        HomePlanKind.PRE_DIST -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer,
-            // [3.509.4/自動化方針] 完了カードに前後比較（変更人数・セル数・希望充足・個人回数）を 1 行足す。
-            if (ui.impossibleWishCount > 0) "③ 必須違反はありません。担当外の希望が ${ui.impossibleWishCount} 件あります。" else "③ 必須違反はありません。配布前の確認で中身を確かめてから配ってください。",
-            "配布前確認", onPreDist, true, "中身を見る", onSchedule,
-            body = ui.runSummary)
+        HomePlanKind.PRE_DIST -> OpNextPlan(cs.tertiaryContainer, cs.onTertiaryContainer, "",
+            HOME_PRE_DIST_BUTTON, onPreDist, true, HOME_SCHEDULE_HELPER, onSchedule,
+            // [3.509.4/自動化方針] 前後比較（変更人数・セル数・希望充足・個人回数）の 1 行は主ボタンの下。
+            body = ui.runSummary, note = if (ui.impossibleWishCount > 0) "担当外の希望が ${ui.impossibleWishCount} 件あります。" else null)
         HomePlanKind.WISH_INFEASIBLE -> OpNextPlan(cs.errorContainer, cs.onErrorContainer,
             "いまの希望のままでは、ここは埋められません。" + (wishDay?.let { "（例：$it）" } ?: ""),
             wishLabel, onShowWishes, true, "データを見直す", { onLanding(pinnedLanding) })
@@ -645,20 +652,20 @@ internal fun OperatorNextActionCard(
             "データを見直す", { onLanding(infeasibleLanding) }, true, "未充足のまま書き出す", onPreDist)
         // [思考誘導S0] 未完成は「足りる？→1手ある？→希望が関わる？」の順に答え、主ボタンを1つだけ出す（段の順は homePlan）。
         HomePlanKind.GUIDED_FIX ->
-            OpNextPlan(amber, onAmber, "${guidedTarget?.dayLabel} が人員不足です。",
-                homeTargetLabel("なおし方を見る", null, guidedTarget?.dayLabel), onFix, true, null, onSetup)
+            OpNextPlan(amber, onAmber, shortage?.headline ?: "",
+                homeTargetLabel("なおし方を見る", nextTarget, null), onFix, true, null, onSetup)
         HomePlanKind.APPLY_MOVE -> {
             // [3.643.0] 旧「AIの解決提案」カードをここへ統合＝同じ問題について、手と効果（分かったこと）と「この手を使う」（操作）を 1 枚に。
             val top = ui.fixSuggestions.first { it.deltaHard < 0 }
             val (hardLine, caution) = fixImpactLines(top)
-            // 必須の変化（族ごと）と増える要調整だけ（件・回・人・pt を 1 つの合計に足さない＝統合仕様 INV-07）。
-            OpNextPlan(amber, onAmber, homeFixHeadline(hardText(ui.breakdown, ui.bestHard), topResolved),
-                moveLabel, onShowMove, true, APPLY_CHANGE_BUTTON, { onApplyMove(top) },
+            // 必須の変化（族ごと）と増える要調整だけ（件・回・人・pt を 1 つの合計に足さない＝統合仕様 INV-07）。補助は確認の画面を開くだけ。
+            OpNextPlan(amber, onAmber, homeFixHeadline(hardNow, topResolved),
+                homeTargetLabel("直す1手を見る", nextTarget, null), onShowMove, true, REVIEW_CHANGE_BUTTON, { onApplyMove(top) },
                 body = fixDisplayLabel(top.label),
                 note = (hardChangeLine(top.diff) ?: hardLine) + (caution?.let { "\n$it" } ?: ""))
         }
         HomePlanKind.SEARCHING ->
-            OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。直し方を探しています…", "", {}, false, null, onSetup)
+            OpNextPlan(amber, onAmber, "必須違反が $hardNow 残っています。直し方を探しています…", "", {}, false, null, onSetup)
         // [S6 §2.1] 必須違反の一部が利用者自身の設定（上限 0）で塞がれているときだけ、希望の段より先に出す。
         HomePlanKind.RELAX -> {
             val t = relaxCardText(relax!!.result, ui)
@@ -669,129 +676,116 @@ internal fun OperatorNextActionCard(
         // [思考誘導S4] 下限の宣言は保守的に: 1手の探索を終えて候補が無く、必須族が長く改善せず残り、希望が関わるときだけ。
         HomePlanKind.WISH_FLOOR ->
             OpNextPlan(amber, onAmber,
-                if (ui.relaxSearching) "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。" else "今の希望とルールでは、必須違反 ${hardText(ui.breakdown, ui.bestHard)} からこれ以上は減らせない見込みです。",
+                if (ui.relaxSearching) "必須違反が $hardNow 残っています。" else "今の希望とルールでは、必須違反 $hardNow からこれ以上は減らせない見込みです。",
                 wishLabel, onShowWishes, true, "このまま書き出す", onPreDist)
         HomePlanKind.WISHES ->
-            OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。希望とルールがぶつかっています。",
+            OpNextPlan(amber, onAmber, "必須違反が $hardNow 残っています。希望とルールがぶつかっています。",
                 wishLabel, onShowWishes, true, null, onSetup)
-        HomePlanKind.LIST -> OpNextPlan(amber, onAmber, "必須違反が ${hardText(ui.breakdown, ui.bestHard)} 残っています。",
-            "問題を見る", onShowList, true, null, onSetup)
+        HomePlanKind.LIST -> OpNextPlan(amber, onAmber, "必須違反が $hardNow 残っています。",
+            homeTargetLabel(HOME_LIST_BUTTON, nextTarget, null), onShowList, true, null, onSetup)
     }
+    // 並びは純関数 `homeCardSections` が決める＝ここは区画ごとの中身を描くだけ（C# と 1 対 1）。
+    val sections = homeCardSections(hp, ui)
+    val statusLines = homeStatusLines(kind, plan.headline, consultLine, savedLine)
+    val body = MaterialTheme.typography.bodyMedium
 
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = plan.container)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            // 状態バッジは見出しと同じ語で検査の結果だけを言う（「完成」とは言わない＝人の確認と分ける）。
-            if (!ui.running) {
-                val (phName, phColor) = when {
-                    !ui.hasResult -> "まだ作っていません" to MagiAccent.blue
-                    ui.bestHard == 0L -> "必須違反 0" to MagiAccent.green
-                    else -> "必須違反 ${hardText(ui.breakdown, ui.bestHard)}" to MagiAccent.orange
+            for (sec in sections) when (sec) {
+                HomeSection.CREATION -> if (creation != null) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    creationTopLines(nextTarget, creation.kept, headlineTarget = nextTarget).forEach { Text(it, style = body, color = plan.fg) }
+                    if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = creation.onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
                 }
-                Box(Modifier.background(phColor, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
-                    // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
-                    Text(phName, style = MaterialTheme.typography.labelMedium, color = ensureReadable(phColor, Color.White), fontWeight = FontWeight.Bold)
+                HomeSection.HEADLINE -> Text(homeHeadline(kind, ui.startDate), style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
+                // 札は見出しと同じ語で検査の結果だけを言う（「完成」とは言わない＝人の確認と分ける）。件と人は足さない（INV-07）。
+                HomeSection.BADGES -> FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (b in homeBadges(hardNow, ui.coverageDiag?.shortfalls?.firstOrNull { it.miss > 0 })) {
+                        Box(Modifier.background(MagiAccent.orange, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
+                            // [コントラスト] 白文字は淡い原色(緑/橙)で2.2:1と不足するため WCAG 保証（不足時のみ黒へ）。
+                            Text(b, style = MaterialTheme.typography.labelMedium, color = ensureReadable(MagiAccent.orange, Color.White), fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
-            }
-            if (creation != null && !ui.running) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                creationTopLines(creation.next, creation.kept).forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
-                if (ui.saveState == SaveState.Failed) OutlinedButton(onClick = creation.onRetrySave, modifier = Modifier.heightIn(min = 48.dp)) { Text(SAVE_RETRY_BUTTON) }
-                TextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text("ほかの問題を見る", color = plan.fg) }
-            }
-            if (plan.headline.isNotBlank()) Text(plan.headline, style = MaterialTheme.typography.titleLarge, color = plan.fg, fontWeight = FontWeight.Bold)
-            // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質）。内部名は出さない（StopExplanation）。次の一手は主ボタンが言う。
-            if (ui.hasResult && !ui.running) ui.stopSummary?.let { s -> stopExplanationOf(s, ui.breakdown)?.let { e ->
-                Text(e.line, style = MaterialTheme.typography.bodySmall, color = plan.fg)
-            } }
-            plan.body?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = plan.fg) }
-            plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
-            if (!ui.running && outcomeLine != null) Text(outcomeLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
-            if (!ui.running && savedLine != null) Text(savedLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
-            if (!ui.running && consultLine != null) Text(consultLine, style = MaterialTheme.typography.bodyMedium, color = plan.fg)
-            if (!ui.running && ui.relaxSearching) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
-                    TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
+                HomeSection.STATUS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    statusLines.forEachIndexed { i, l -> Text(l, style = if (i == 0 && kind != HomePlanKind.PRE_DIST) MaterialTheme.typography.titleMedium else body, color = plan.fg) }
+                    // 作成直後の自動探索はカードの中の文字ボタンで止める（下部バーは外枠のまま。止められる性質は 3.402.0 のまま）。
+                    if (kind == HomePlanKind.SEARCHING) TextButton(onClick = onStop, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
                 }
-            } else if (!ui.running && (relaxStopped || relaxFailed) && ui.bestHard > 0) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (relaxFailed) RELAX_FAILED_TEXT else RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
-                    TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL, color = plan.fg) }
-                }
-            }
-            // [3.480.0 ホームAIリデザイン] 旧: 「できあがり度：N%」の数字1行＋その意味を説明する注記1行を
-            // 常時2行表示していた。grilling決定#1のとおり文言（正直さ）は変えず、①前向きな言い回し
-            // 「でき具合：N%（残りM件）」＋バーへ統合 ②注記は既定折りたたみ（ConstraintHelpExpander と
-            // 同じ開閉パターン）にして、常時見えるのは進捗バー1本だけにする。
-            // [3.483.0 H-2] 旧: 必須0なら一律「解消済み」だが、でき具合は調整（ソフト）違反が残ると 100% に
-            //   ならない（40+比率×60）＝「78%（解消済み）」という自己矛盾。必須0のときは残りの単位を調整件数へ。
-            val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown, ui.hardWishConflict)
-            // [3.483.0 H-5] 実行中は直下の進捗行（progressSummary）が同じ残数を出すため、でき具合の行とバーは出さない。
-            if (!ui.running) {
-                Text(
-                    "でき具合：${ui.satisfaction}%（${remainingLabel}）",
-                    style = MaterialTheme.typography.bodyMedium, color = plan.fg, fontWeight = FontWeight.Bold,
-                )
-                LinearProgressIndicator(
-                    progress = { ui.satisfaction.coerceIn(0, 100) / 100f },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 8.dp),
-                    color = plan.fg, trackColor = plan.fg.copy(alpha = 0.2f),
-                )
-            }
-            if (!ui.running && ui.hasResult) {
-                var detailOpen by remember { mutableStateOf(false) }
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { detailOpen = !detailOpen },
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(
-                        if (detailOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                        contentDescription = null, tint = plan.fg, modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        if (detailOpen) "ⓘ 詳しい説明を閉じる" else "ⓘ でき具合の意味",
-                        style = MaterialTheme.typography.bodySmall, color = plan.fg,
-                    )
-                }
-                // [判断設計監査 #1/#2] 数字の根拠（できあがり度の意味）と結果採用の意味（承認ステップの
-                //   不在を補う注記: 反映済み・取消可・確定は書き出し時）を1文字も変えず折りたたみへ収納。
-                if (detailOpen) {
-                    Text(
-                        "※でき具合＝最初からの違反の減り具合（必須違反が残る間は最大55%）。" +
-                            "結果は下書きに反映しました。「元に戻す」で取り消せます。確定は書き出すときです。",
-                        style = MaterialTheme.typography.bodySmall, color = plan.fg,
-                    )
-                }
-            }
-            if (ui.running) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HomeSection.PROGRESS -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(Modifier.size(22.dp), color = plan.fg)
-                    // [進捗の見える化] 「組み立て中…」だけでなく 改善率/残り時間/探索数 を出す。
-                    Text(progressSummary(ui), color = plan.fg, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    // [進捗の見える化] 何をしているかの語を先頭に。progressSummary（改善率/残り時間/探索数）はそのまま。
+                    Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f))
                 }
-            }
-            if (plan.bigEnabled) {
-                val (bigBg, bigFg) = plan.bigColors ?: (cs.primary to cs.onPrimary)
-                Button(onClick = plan.bigAction, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = bigBg, contentColor = bigFg)) {
-                    Text(plan.bigLabel, style = MaterialTheme.typography.titleMedium)
+                HomeSection.PRIMARY -> {
+                    val (bigBg, bigFg) = plan.bigColors ?: (cs.primary to cs.onPrimary)
+                    Button(onClick = plan.bigAction, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = bigBg, contentColor = bigFg)) {
+                        Text(plan.bigLabel, style = MaterialTheme.typography.titleMedium)
+                    }
                 }
-            }
-            plan.helperLabel?.let { hl ->
-                // [校正] 補助操作もテキストリンクではなく外枠ボタンに（カード地色でも見えるよう枠色=前景色）。
-                OutlinedButton(
-                    onClick = plan.helperAction,
+                // [校正] 補助操作もテキストリンクではなく外枠ボタンに（カード地色でも見えるよう枠色=前景色）。段に補助が無ければ「表で全体を見る」。
+                HomeSection.HELPER -> OutlinedButton(
+                    onClick = if (plan.helperLabel != null) plan.helperAction else onSchedule,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = plan.fg),
                     border = BorderStroke(1.dp, plan.fg),
-                ) { Text(hl) }
-            }
-            // [3.261.0, ユーザー指摘「初期解生成が何度も出来ない」] !ui.hasResult状態の補助ボタンは
-            // hasResult=true化後（=初期解生成の完了直後を含む全ての完成/狩猟/未充足状態）に消えるため、
-            // 一度使うと二度と初期解生成へ戻れなかった。小さな常設リンクとして独立させ、実行中以外は
-            // 常に再生成できるようにする（元に戻すで取消可能・破壊的でない）。
-            if (!ui.running && ui.hasResult) {
+                ) { Text(plan.helperLabel ?: HOME_SCHEDULE_HELPER) }
+                HomeSection.OTHERS -> if (creation != null) TextButton(onClick = creation.onOthers, modifier = Modifier.heightIn(min = 48.dp)) { Text(HOME_OTHERS_BUTTON, color = plan.fg) }
+                HomeSection.DETAIL -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    plan.body?.let { Text(it, style = body, color = plan.fg) }
+                    plan.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = plan.fg) }
+                    if (outcomeLine != null) Text(outcomeLine, style = body, color = plan.fg)
+                    if (savedLine != null && savedLine !in statusLines) Text(savedLine, style = body, color = plan.fg)
+                    // [3.643.0] 探索がどう終わったか（停滞で早く終えた理由・残る必須の性質）。内部名は出さない（StopExplanation）。次の一手は主ボタンが言う。
+                    if (ui.hasResult) ui.stopSummary?.let { s -> stopExplanationOf(s, ui.breakdown)?.let { e -> Text(e.line, style = MaterialTheme.typography.bodySmall, color = plan.fg) } }
+                    if (ui.relaxSearching) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(RELAX_SEARCHING_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
+                            TextButton(onClick = onStopRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
+                        }
+                    } else if ((relaxStopped || relaxFailed) && ui.bestHard > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (relaxFailed) RELAX_FAILED_TEXT else RELAX_STOPPED_TEXT, style = MaterialTheme.typography.bodySmall, color = plan.fg, modifier = Modifier.weight(1f))
+                            TextButton(onClick = onRetryRelax, modifier = Modifier.heightIn(min = 48.dp)) { Text(RELAX_RETRY_LABEL, color = plan.fg) }
+                        }
+                    }
+                }
+                // [3.480.0 ホームAIリデザイン] 文言（正直さ）は変えず「でき具合：N%（残りM件）」＋バー。注記は既定折りたたみ（ⓘ）。
+                // [3.483.0 H-2] 必須0のときは残りの単位を調整件数へ。
+                HomeSection.SATISFACTION -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val remainingLabel = homeRemainingLabel(ui.bestHard, shortDays, ui.breakdown, ui.hardWishConflict)
+                    Text("でき具合：${ui.satisfaction}%（${remainingLabel}）", style = body, color = plan.fg, fontWeight = FontWeight.Bold)
+                    LinearProgressIndicator(
+                        progress = { ui.satisfaction.coerceIn(0, 100) / 100f },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 8.dp),
+                        color = plan.fg, trackColor = plan.fg.copy(alpha = 0.2f),
+                    )
+                    if (ui.bestHard > 0L) Text(HOME_SOFT_NOTE, style = MaterialTheme.typography.bodySmall, color = plan.fg)
+                }
+                HomeSection.INFO -> {
+                    var detailOpen by remember { mutableStateOf(false) }
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { detailOpen = !detailOpen },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            if (detailOpen) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null, tint = plan.fg, modifier = Modifier.size(16.dp),
+                        )
+                        Text(if (detailOpen) "ⓘ 詳しい説明を閉じる" else "ⓘ でき具合の意味", style = MaterialTheme.typography.bodySmall, color = plan.fg)
+                    }
+                    // [判断設計監査 #1/#2] 数字の根拠（できあがり度の意味）と結果採用の意味（反映済み・取消可・確定は書き出し時）を1文字も変えず折りたたみへ収納。
+                    if (detailOpen) {
+                        Text(
+                            "※でき具合＝最初からの違反の減り具合（必須違反が残る間は最大55%）。" +
+                                "結果は下書きに反映しました。「元に戻す」で取り消せます。確定は書き出すときです。",
+                            style = MaterialTheme.typography.bodySmall, color = plan.fg,
+                        )
+                    }
+                }
+                // [3.261.0] 初期解生成へ常に戻れる小さな常設リンク（元に戻すで取消可能・破壊的でない）。
                 // [3.483.0 H-4] 押すと今の結果を捨てて初期解へ戻る操作なので、その結果と戻し方を文言に含める。
-                TextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) {
+                HomeSection.DRAFT_LINK -> TextButton(onClick = onSmartInitial, modifier = Modifier.fillMaxWidth()) {
                     Text("下書きから作り直す（今の結果は「元に戻す」で戻せます）")
                 }
             }
@@ -1894,8 +1888,9 @@ internal fun FixSuggestionCard(ui: UiState, onSearch: () -> Unit, onApply: (com.
                             Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 // [3.645.0/仕様 5.3] 当てずに相談してから決める＝手と効果を相談中の一覧へ。
                                 ConsultButton(isConsulted(ui.consults, consultFix(s)), onUndo = { consultMatch(ui.consults, consultFix(s))?.let { onCancelConsult(it) } }) { onConsult(s) }
-                                Button(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
-                                    Text(APPLY_CHANGE_BUTTON)
+                                // 押しても確認の画面が開くだけ＝見るだけの外枠ボタン（塗りの主は画面に 1 つ、INV-09）。
+                                OutlinedButton(onClick = { onApply(s) }, enabled = !ui.running, modifier = Modifier.heightIn(min = 48.dp)) {
+                                    Text(REVIEW_CHANGE_BUTTON)
                                 }
                             }
                         }
@@ -1980,7 +1975,7 @@ internal fun PreDistributionDialog(rows: List<PreDistRow>, onExport: () -> Unit,
     val cs = MaterialTheme.colorScheme
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { DialogHeader("配布前確認", onDismiss) },
+        title = { DialogHeader(PRE_DIST_TITLE, onDismiss) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 rows.forEach { r ->
