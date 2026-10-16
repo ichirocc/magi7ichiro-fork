@@ -63,7 +63,7 @@ class AnalysisTriageTest {
         assertFalse(t.computed)
         assertEquals("設定を緩めて手順を当てた盤面の概算です（再作成する前）。", t.searchNote)
         val after = analysisTriage(ui(breakdown = mapOf("c3" to 2), hasResult = true).copy(relaxedBoard = true))
-        assertTrue("計算済みが優先", after.searchNote.startsWith("最適化後も残っている"))
+        assertTrue("計算済みが優先", after.searchNote.startsWith("作成後も残っている"))
     }
 
     /**

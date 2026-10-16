@@ -353,17 +353,16 @@
 - **Web対応**: Web は ws3（希望グリッド）入力＋「そのまま反映」。Native は担当外を**確認ダイアログ＋Undo＋操作ログ**で安全化。基本マスター(ws4 制約／ws5 個人回数)も編集タブ「基本マスター」に実装済み（`ConstraintEditor`/`StaffRangeEditor` ほか。§07b 参照）。
 - **実装**: `WishApplyCard`（`effectiveEditing` 時のみ）／`WishBulkSheet`／3サブタブは `editScope`（0/1/2）。
 
-## 08. 分析（一般/プロ切替・ようす・チェック概要・違反の内訳20/20）
+## 08. 分析（状態の段・必須違反と設定の見直し・残っている項目・改善の提案）
 ![分析](screens/10_analysis.png)
 
-- **目的**: 配布可否の根拠を数値で示す。
-- **主要オブジェクト**: 上部に **一般/プロ** 切替(`MagiSegmentedControl`→`proMode`)。以下を縦に表示：`OverviewDashboard`（ようす＝俯瞰）／`CheckSummaryView`（チェック概要＝守れていない約束の件数）／`BreakdownCard`（違反の内訳）／`BottleneckCard`（しわ寄せの集中箇所）／`FixSuggestionCard`（違反を減らす1手提案・「変更」＝1マス別勤務／「交換」＝2人の同日入替）。`重大のみ`フィルタ。**プロ時のみ** `V6DashboardCard`＋`WeightTableCard` を上段に追加。
-- **違反の内訳は全21種=100%**: 必須群（groupViol/pref/covU/c3n/c3w/extWish）＋人数の範囲群（low/high/apt）＋任意群（c1/c2/c3/c3m/c3mn/c41/c42/c41s/c42s/covO/**fair**/**weekly**）。**fair（公平化のズレ）** と **weekly（曜日の偏り）** を任意群に追加し 17/19→**19/19** に。fair/weekly はセル単位の場所を持たないため、内訳チップのタップ時は「場所情報がありません」（ペナルティ量は表示）。**各20種の意味・重み・違反箇所の出し方は §08b にまとめた。**
-- **注記の出し分け**: 計算済み＝「最適化後も残っている項目です。…」／S6（設定を緩めて手順を当てる）の直後＝「設定を緩めて手順を当てた盤面の概算です（再作成する前）。」（`UiState.relaxedBoard`、`engineRan` を書く操作で解除）／それ以外＝「実行前の概算です。…」。
-- **一般/プロの差**: プロ表示は熟練者向けに**冗長な説明文を非表示**（概要のサブ文・内訳の注記「数値はペナルティの大きさ…」・群名の括弧（満たすべき/できれば）・ボトルネックの注釈・改善提案の変更/交換の説明）。**構造的不足ヒント**（「※1手で直せない違反は設定(ws1)の見直しが根本解」）・状態表示・実データ（件数/場所/提案）は**常時表示**。
-- **指1本**: スクロールのみで全体把握。各項目は読み取り専用（内訳チップのタップで該当セルへ）。
-- **【ドッグフーディング校正 2026-06-13】**: 開発用の **`ColorSettingsView`**（英語名＋生の制約コード c1/c3n/covU ＋ WARN/CRITICAL 露出）と **`FlagsView`**（実験フラグ）を**分析タブから除外**し、**設定＞詳細設定（上級者/開発者向け）へ移設**（#10）。分析タブは「数値で配布可否を判断」に専念。
-- **実装**: `OverviewDashboard`／`CheckSummaryView`／`BreakdownCard`（`breakdownLabels`/`BreakdownGroup`）／`BottleneckCard`／`FixSuggestionCard`。違反の正準集合は `MirrorKeys.all`（21種）。5カードは `proMode` を受け取り条件分岐。プロ専用は `V6DashboardCard`／`WeightTableCard`。
+- **目的**: 配る前に直すものと、作成で減らせるものを分けて示す。
+- **縦の順（3.705.0）**: `AnalysisTriageCard`＝題「分析」→ **状態の段**（`analysisSummary(ui, tourCount, fixResolved)`）→ 必須違反（配る前に直す）＋場所 3 か所まで → 設定を変えないと消えない項目 → 作成後に残っている項目（注記つき）→ 守れている／残っている項目の折りたたみ。その下に〔プロのみ `V6DashboardCard`〕→ `FixSuggestionCard`（改善の提案）。
+- **状態の段**: 一文は上部の札（`boardStatusLines`）と同じ区別で 6 通り＝「まだ作っていません。」／「手で編集した勤務表です（自動作成はまだ）。」／「配る前に直す必須違反が残っています。」／「必須違反はありません。要調整が残っています。」／「必須違反も要調整もありません。」／「勤務表をつくっています。表示は途中の値です。」。点は 3 つまで＝必須（`hardText`）・要調整（`unitTotals`）・「変更案で直せる必須違反 Nか所」（評価が終わり、改善の提案を探したあとだけ。N＝必須違反を減らすすべての案の解消の鍵の和集合、`UiState.fixResolvedUnion`。盤面か案が変わったら出さない）。旧の札「計算済み／未計算」と末尾の実行中の注記は外した。
+- **主ボタン 1 つ**（`AnalysisPrimary`）: 巡回できるなら「必須違反を順に見る（Nか所）」、人員不足だけなら「なおし方を見る（N日）」、必須 0・実行中・未作成なら出さない。主を出すときは下部バーを外枠にする（INV-09）。上部の札はどのタブでも押せるまま。
+- **行の操作**: セルの行を押すと巡回と同じくセルのシート（`editingCell`）を開く。人員不足の行は［勤務表でこの日を見る］（なおし方の画面は日を指定して開けないため）。「設定へ／設定で直す」は節の名（`issueSettingsLabel`＝「希望の設定を開く」など）を本文の下に全幅で出す。
+- **注記**: 作成後＝「作成後も残っている項目です。設定を変えないと消えないものは上に分けています。」／S6 の直後＝「設定を緩めて手順を当てた盤面の概算です（再作成する前）。」／作成前＝断定しない概算の注記。
+- **実装**: `AnalysisTriage.kt`（`analysisTriage`・`analysisSummary`・`issueSettingsLabel`）／`MagiDashboardCards.kt`（`AnalysisTriageCard`・`ConfirmRow`）／`MagiUiState.kt`（`FixResolvedUnion`・`analysisFixResolved`）。違反の正準集合は `MirrorKeys.all`（21種）。
 
 ## 08b. 制約・違反の種類（全21種：C1〜C42・回数・被覆・公平・拡張希望ほか）
 
@@ -622,7 +621,7 @@
 - **ホーム(tab0)**: ① `OperatorNextActionCard`(次の一手・大ボタン1) → ② `CopilotCard`(助言/警告) → ③ `CoverageDiagnosisCard`(不足の原因) → ④ `SettingIssuesCard`(設定ミスの誘導) → ⑤ `ActionCard`(ほかの作り方) → ⑥ `AlternativesCard`(他の案)。§01。
 - **勤務表(tab1)**: ① 表示切替 `MagiSegmentedControl`(7日/カレンダー/1ヶ月) → ② 前/次＋期間 → ③ グリッド(gridMode別＝7日:`Cell` / カレンダー:`MagiCalendarMonthView` / 1ヶ月:`Box`) → ④ 表示中の違反セル列挙(名前 d日・最大8) → ⑤ 凡例(折りたたみ・既定閉)。§03–§06。
 - **編集(tab2)**: ① `WishApplyCard`(下書き/編集中のみ) → ② 希望の一括操作ボタン → ③ サブタブ `MagiSegmentedControl`(今月の調整/シフト希望/基本マスター) → ④ サブタブ本体(§07b)。§07。
-- **分析(tab3)**: ① `MagiSegmentedControl`(一般/プロ) →〔プロのみ ② `V6DashboardCard` → ③ `WeightTableCard`〕→ ④ `OverviewDashboard`(ようす) → ⑤ `CheckSummaryView`(チェック概要) → ⑥ `BreakdownCard`(違反の内訳20種) → ⑦ `BottleneckCard` → ⑧ `FixSuggestionCard`。§08。
+- **分析(tab3)**: ① `AnalysisTriageCard`（状態の段＝一文・3 点まで・主ボタン 1 つ → 必須違反と場所 → 設定の見直し → 残っている項目 → 折りたたみ）→〔プロのみ ② `V6DashboardCard`〕→ ③ `FixSuggestionCard`（改善の提案）。§08。
 - **設定(tab4)**: ① `AppearanceCard`(自動/明/暗/UD・片手・かんたん/プロ) → ② `ShiftColorCard`(シフト色) → ③ `DataActionsCard`(JSON/CSV/チェック) → ④ `SettingsCard`(最適化設定＝並列/時間/方式/研磨/版) → ⑤ `AdvancedSettingsSection`(折りたたみ・既定閉＝`V6DashboardCard`＋`LogsCard`＋`ColorSettingsView`)。§09/§12。
 - **共通**: 全タブ上に `MagiTopBar`(状態チップ)・下に `BottomCommandBar`(主操作/実行中は停止)＋`MagiBottomNav`(5タブ)。ポップアップ＝シフト選択シート(§04)・希望反映確認(§10)・中断復帰バナー(§11)。全ポップアップは `DialogHeader`＋共有3ボタン(品質ゲート#8)。
 
