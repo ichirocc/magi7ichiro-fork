@@ -880,8 +880,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         return ok
     }
 
-    /** 直前の自動保存が成功したか。失敗を連続で通知しないための状態。 */
-    private var autoSaveOk = true
+    /** 直前の保存が成功したか（失敗を連続で通知しない）と、保存の失敗のダイアログを出す瞬間。 */
+    private val saveFail = SaveFailNotifier()
+    /** 利用者が「もう一度保存する」を押した保存の最中か（失敗したら「まだ保存できていません」）。 */
+    private var saveRetrying = false
     /** 計算の結果を採った時刻（0＝無し）。次に保存が書けた時にログへ「計算完了から何秒で保存できたか」を 1 行出す（測定の前提、backlog #48）。 */
     private var resultAdoptedAtMs = 0L
 
@@ -910,11 +912,26 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun reportAutoSave(ok: Boolean) {
-        if (ok == autoSaveOk) return
-        autoSaveOk = ok
+        val wasOk = saveFail.lastOk
+        val dialog = saveFail.onResult(ok, saveRetrying)
+        if (dialog != null || ok) _ui.update { it.copy(saveFailDialog = dialog) }
+        if (ok == wasOk) return
         if (ok) logOp("I", "自動保存が復旧しました")
-        else notify("自動保存に失敗しています（端末に書き込めませんでした）。空き容量を確かめて、設定タブの「データを保存」で書き出してください", "W")
+        else notify(SAVE_FAILED_NOTICE, "W")
     }
+
+    /** 「もう一度保存する」（ホーム・設定・上部の語・ダイアログ）。失敗したらダイアログを「まだ保存できていません」で出し直す。 */
+    fun retrySave() {
+        saveRetrying = true
+        try { saveNow() } finally { saveRetrying = false }
+    }
+
+    /** 上部の「自動保存できていません」から、保存の失敗のダイアログを開き直す。 */
+    fun showSaveFailDialog() {
+        if (_ui.value.saveState == SaveState.Failed) _ui.update { it.copy(saveFailDialog = it.saveFailDialog ?: SaveFailDialog.FIRST) }
+    }
+
+    fun dismissSaveFailDialog() = _ui.update { it.copy(saveFailDialog = null) }
 
     /**
      * 即時保存（デバウンスなし・同期書込）。バックグラウンド遷移(onStop/onPause)から呼び、
