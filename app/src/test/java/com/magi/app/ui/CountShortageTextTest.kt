@@ -199,8 +199,8 @@ class CountShortageTextTest {
     /** 自動と担当者の分担（2026-10-14 利用者レビュー）: 作成前に自動で行うこと・保持するもの、作成後は「完了＝配布可」と言わない。 */
     @Test fun autoAndOperatorSplitTexts() {
         assertEquals("10/1〜10/31・12人・組む時間 1分（＋仕上げ 20秒）。開始後は一手ごとの確認はしません", preRunPlanLine("2026-10-01", 31, 12, 60, 20))
-        assertEquals("登録条件：つくる前に直す項目はありません／手動固定 3件は保持します", preRunConditionLine(false, 0, 3))
-        assertEquals("登録条件：確認が必要な項目があります（下の一覧・希望が上限を超える 2件）", preRunConditionLine(false, 2, 0))
+        assertEquals("登録条件：つくる前に直す項目はありません／手動固定 3件は保持", preRunConditionLine(0, 0, 0, 3))
+        assertEquals("登録条件：希望が上限を超える 2件", preRunConditionLine(0, 0, 2, 0))
         assertEquals("期間の制約 2件・曜日の偏り 12pt", softSummary(mapOf("c1" to 2, "weekly" to 12, "c3n" to 1)))
         assertEquals("なし", softSummary(mapOf("covU" to 1)))
         assertEquals("解消", appliedStatusWord(CountEffect(0, 1, 1, true, "人")))

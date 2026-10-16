@@ -1078,38 +1078,26 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
         ui.preRunCheck?.let { sum ->
             PreRunCheckSheet(sum, ui,
                 onOpenCell = { i, j, wish -> vm.dismissPreRun(); tab = 1; editingCell = i to j; sheetMode = if (wish) 1 else 0; sheetExpanded = wish },
-                onOpenLanding = { l -> vm.dismissPreRun(OpLogText.UiOp.PreRunCheckConditions); openEditLandingFrom(l, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
+                onOpenLanding = { l -> vm.dismissPreRun(OpLogText.UiOp.PreRunCheckConditions); openEditLandingFrom(l, EditReturn(PRE_RUN_TITLE, EditReturn.PRE_RUN)) },
                 onConsult = { r -> vm.addConsult(consultPreRun(r, r.staff?.let { ui.staffNames.getOrNull(it) }, r.day?.let { isoDate(ui.startDate, it) })) },
                 onCancelConsult = { vm.cancelConsult(it) },
                 onShowWishes = if (wishTrialCandidates(ui).isEmpty) null else ({ vm.dismissPreRun(); wishConflicts = true }),
-                onFixData = { vm.dismissPreRun(OpLogText.UiOp.PreRunCheckConditions); openEditLandingFrom(null, EditReturn("つくる前の確認", EditReturn.PRE_RUN)) },
+                onFixData = { vm.dismissPreRun(OpLogText.UiOp.PreRunCheckConditions); openEditLandingFrom(null, EditReturn(PRE_RUN_TITLE, EditReturn.PRE_RUN)) },
                 onProceed = { vm.proceedPreRun() },
                 onDismiss = { vm.dismissPreRun() })
         }
         LaunchedEffect(preDist) { if (preDist) vm.logUi(OpLogText.UiOp.PreDistOpen) }
         if (preDist) {
-            PreDistributionDialog(preDistributionRows(ui, vm.csvSavedLine()),
+            PreDistributionDialog(preDistributionRows(ui, vm.csvSavedLine()), preDistributionPeriodLine(ui),
                 onExport = { vm.logUi(OpLogText.UiOp.PreDistExport); saveCsvLauncher.launch("magi_schedule_${System.currentTimeMillis()}.csv") },
                 onDismiss = { vm.logUi(OpLogText.UiOp.PreDistBack); preDist = false })
         }
         // 保存が失敗に変わった瞬間に 1 回だけ（F-2）。主はやり直し、副は閉じる。
         ui.saveFailDialog?.let { d ->
-            AlertDialog(
-                onDismissRequest = { vm.dismissSaveFailDialog() },
-                title = { Text(saveFailDialogTitle(d)) },
-                text = { Text(SAVE_FAIL_DIALOG_BODY) },
-                confirmButton = { DialogConfirmButton(SAVE_RETRY_BUTTON, onClick = { vm.retrySave() }) },
-                dismissButton = { TextButton(onClick = { vm.dismissSaveFailDialog() }) { Text("閉じる") } },
-            )
+            ConfirmDialog(saveFailDialogTitle(d), listOf(SAVE_FAIL_DIALOG_BODY), SAVE_RETRY_BUTTON, { vm.retrySave() }, "閉じる", { vm.dismissSaveFailDialog() })
         }
         ui.draftConfirm?.let { msg ->
-            AlertDialog(
-                onDismissRequest = { vm.dismissDraftConfirm() },
-                title = { Text("下書きで置き換えますか？") },
-                text = { Text(msg) },
-                confirmButton = { DialogConfirmButton("置き換える", onClick = { vm.generateSmartInitial(confirmed = true) }) },
-                dismissButton = { DialogDismissButton(onClick = { vm.dismissDraftConfirm() }, text = "置き換えない") },
-            )
+            ConfirmDialog("下書きで置き換えますか？", listOf(msg), "置き換える", { vm.generateSmartInitial(confirmed = true) }, "置き換えない", { vm.dismissDraftConfirm() })
         }
         if (wishConflicts) {
             WishConflictDialog(ui, vm, onDismiss = { wishConflicts = false }, onOpenCell = { i, j ->
@@ -1138,15 +1126,15 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 },
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DialogConfirmButton("データ全体（新規）", onClick = {
+                        DialogOptionButton("データ全体（新規）", onClick = {
                             if (com.magi.app.v6.RosterCsvImport.detect(csvText)) { rosterCsvChoice = csvText } else { vm.importCsvSmart(csvText) { showImportGuidance = true } }
                             pendingCsvImport = null
                         })
-                        DialogConfirmButton("勤務表（重ね合わせ）", onClick = { vm.importCsv(csvText); pendingCsvImport = null })
-                        DialogConfirmButton("職員一覧", onClick = { vm.importStaffCsv(csvText); pendingCsvImport = null })
-                        DialogConfirmButton("希望シフト", onClick = { vm.importWishesCsv(csvText); pendingCsvImport = null })
-                        DialogConfirmButton("各制約", onClick = { vm.importConstraintsCsv(csvText); pendingCsvImport = null })
-                        DialogConfirmButton("シフト色", onClick = { vm.importShiftColorsCsv(csvText); pendingCsvImport = null })
+                        DialogOptionButton("勤務表（重ね合わせ）", onClick = { vm.importCsv(csvText); pendingCsvImport = null })
+                        DialogOptionButton("職員一覧", onClick = { vm.importStaffCsv(csvText); pendingCsvImport = null })
+                        DialogOptionButton("希望シフト", onClick = { vm.importWishesCsv(csvText); pendingCsvImport = null })
+                        DialogOptionButton("各制約", onClick = { vm.importConstraintsCsv(csvText); pendingCsvImport = null })
+                        DialogOptionButton("シフト色", onClick = { vm.importShiftColorsCsv(csvText); pendingCsvImport = null })
                         // キャンセルも同じ列の最後に（dismiss の枠に分けると、縦に積んだ列と横に並べられて重なる）。
                         DialogDismissButton(onClick = { pendingCsvImport = null }, text = "取り込まない")
                     }
@@ -1154,13 +1142,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             )
         }
         ui.csvPartialPrompt?.let { prompt ->
-            AlertDialog(
-                onDismissRequest = { vm.cancelCsvPartialImport() },
-                title = { Text("読める部分だけ取り込みますか？") },
-                text = { Text(prompt) },
-                confirmButton = { DialogConfirmButton(com.magi.app.v6.CsvPartialImport.CONFIRM_LABEL, onClick = { vm.confirmCsvPartialImport() }) },
-                dismissButton = { DialogDismissButton(onClick = { vm.cancelCsvPartialImport() }, text = com.magi.app.v6.CsvPartialImport.CANCEL_LABEL) },
-            )
+            ConfirmDialog("読める部分だけ取り込みますか？", listOf(prompt), com.magi.app.v6.CsvPartialImport.CONFIRM_LABEL, { vm.confirmCsvPartialImport() },
+                com.magi.app.v6.CsvPartialImport.CANCEL_LABEL, { vm.cancelCsvPartialImport() })
         }
         rosterCsvChoice?.let { csvText ->
             AlertDialog(
@@ -1174,8 +1157,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 },
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DialogConfirmButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false) { showImportGuidance = true }; rosterCsvChoice = null })
-                        DialogConfirmButton("希望シフトとして取り込む", onClick = { vm.importRosterAs(csvText, true) { showImportGuidance = true }; rosterCsvChoice = null })
+                        DialogOptionButton("勤務表として取り込む", onClick = { vm.importRosterAs(csvText, false) { showImportGuidance = true }; rosterCsvChoice = null })
+                        DialogOptionButton("希望シフトとして取り込む", onClick = { vm.importRosterAs(csvText, true) { showImportGuidance = true }; rosterCsvChoice = null })
                         DialogDismissButton(onClick = { rosterCsvChoice = null }, text = "取り込まない")
                     }
                 },
@@ -1185,7 +1168,7 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
             AlertDialog(
                 onDismissRequest = { wishConfirm = 0 },
                 title = { Text("担当外の希望を含めますか？") },
-                text = { Text("担当できないグループの希望が ${wishConfirm} 件あります。\n含めて反映すると、その ${wishConfirm} 件は担当外の勤務として入り、必須違反として数えます。「担当内のみ反映」ならその ${wishConfirm} 件は入れません。どちらも「元に戻す」で戻せます。") },
+                text = { Text("担当できないグループの希望が ${wishConfirm} 件あります。\n含めて反映すると、その ${wishConfirm} 件は担当外の勤務として入り、必須違反として数えます。「担当内だけ反映する」ならその ${wishConfirm} 件は入れません。どちらも「元に戻す」で戻せます。") },
                 // [3.398.0] 旧版は「含めて反映」「担当内のみ反映」の2つで、**どちらを押しても勤務表が変わる**のに
                 //   取消のボタンが1つも無かった（外側タップ/戻るでしか抜けられない）。しかも取消の位置
                 //   (dismissButton) に反映が置かれ、押し間違いがそのまま変更になる。すぐ上のCSVダイアログは
@@ -1193,8 +1176,8 @@ fun MagiApp(vm: MagiViewModel = viewModel()) {
                 //   取り残されていた＝同じ形へ揃える。
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DialogConfirmButton("担当内のみ反映", onClick = { vm.applyWishes(false); wishConfirm = 0 })
-                        DialogConfirmButton("含めて反映する", onClick = { vm.applyWishes(true); wishConfirm = 0 })
+                        DialogOptionButton("担当内だけ反映する", onClick = { vm.applyWishes(false); wishConfirm = 0 }, recommended = true)
+                        DialogOptionButton("含めて反映する", onClick = { vm.applyWishes(true); wishConfirm = 0 })
                         DialogDismissButton(onClick = { wishConfirm = 0 }, text = "反映しない")
                     }
                 },

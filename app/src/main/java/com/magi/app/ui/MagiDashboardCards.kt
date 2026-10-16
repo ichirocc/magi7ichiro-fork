@@ -269,16 +269,17 @@ internal fun RelaxTrialDialog(
                         }
                     }
                     t.keepNote?.let { Text(it, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp)) }
-                    Button(
-                        onClick = { onConfirm(token) },
-                        enabled = !ui.running,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(top = 8.dp),
-                    ) { Text("上限を緩め、手順を当てる") }
                     Text("元に戻すで設定と勤務表をまとめて戻せます。", style = small, color = cs.onSurfaceVariant)
                 }
             }
         },
-        confirmButton = { DialogDismissButton(onClick = onDismiss, text = "閉じる") },
+        // 主ボタンは confirmButton の列の先頭（3.704.0 G-3: スクロールの中に置かない）。
+        confirmButton = {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (token != null && t != null) DialogConfirmButton("上限を緩め、手順を当てる", onClick = { onConfirm(token) }, enabled = !ui.running)
+                DialogDismissButton(onClick = onDismiss, text = "閉じる")
+            }
+        },
     )
 }
 
@@ -1992,23 +1993,39 @@ internal fun WishActionsRow(ui: UiState, onApply: () -> Unit, onBulk: () -> Unit
     }
 }
 
-/** 配布前確認（仕様 §10）。評価・必須違反・要調整・相談・保存を 1 画面に並べ、配るかどうかは利用者が決める。 */
 @Composable
-internal fun PreDistributionDialog(rows: List<PreDistRow>, onExport: () -> Unit, onDismiss: () -> Unit) {
+private fun PreDistRowView(r: PreDistRow) {
     val cs = MaterialTheme.colorScheme
+    Row(verticalAlignment = Alignment.Top) {
+        Text(r.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(72.dp))
+        Text((when (r.ok) { true -> "✓ "; false -> "! "; null -> "" }) + r.value,
+            color = if (r.ok == false) cs.error else cs.onSurface, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** 配布前の確認（仕様 §10）。上に必須違反・相談・保存、要調整と注記は「詳しく」に畳む。閉じる手段は「戻る」だけ（3.704.0）。 */
+@Composable
+internal fun PreDistributionDialog(rows: List<PreDistRow>, periodLine: String, onExport: () -> Unit, onDismiss: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    var details by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { DialogHeader(PRE_DIST_TITLE, onDismiss) },
+        title = {
+            Column {
+                Text(PRE_DIST_TITLE)
+                Text(periodLine, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+        },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                rows.forEach { r ->
-                    Row(verticalAlignment = Alignment.Top) {
-                        Text(r.label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(72.dp))
-                        Text((when (r.ok) { true -> "✓ "; false -> "! "; null -> "" }) + r.value,
-                            color = if (r.ok == false) cs.error else cs.onSurface, style = MaterialTheme.typography.bodyMedium)
-                    }
+                preDistributionTop(rows).forEach { PreDistRowView(it) }
+                Text(PRE_DIST_EDGE_FOOT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (details) "詳しくを閉じる" else "詳しく") }
+                if (details) {
+                    preDistributionDetails(rows).forEach { PreDistRowView(it) }
+                    Text(MONTH_EDGE_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    Text(PRE_DIST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                 }
-                Text(PRE_DIST_NOTE, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         },
         confirmButton = {
