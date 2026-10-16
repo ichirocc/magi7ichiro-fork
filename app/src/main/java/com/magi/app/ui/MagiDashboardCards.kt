@@ -1693,7 +1693,7 @@ internal fun AnalysisTriageCard(
                 // 必須違反は「どのセルか」が分からないと直しに行けないので場所を数件だけ出す。
                 val locs = items.filter { fam in it.families }
                 locs.take(3).forEach { ConfirmRow(it, onFocusStaff, onShowCell, onShowDay, onFixWish, onFixNeed) }
-                if (locs.size > 3) Text("ほか ${locs.size - 3} 件", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                if (locs.size > 3) Text("ほか ${locs.size - 3}か所", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
             if (otherBlockers.isNotEmpty() || t.issues.isNotEmpty()) {
                 Text(TRIAGE_SETTINGS_HEADING, style = MaterialTheme.typography.titleSmall, color = cs.error)

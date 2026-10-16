@@ -88,6 +88,10 @@ internal fun unitTotals(breakdown: Map<String, Int>, families: Collection<String
 /** 必須違反の数を単位ごとに（例「3件・2人」）。内訳が無いときだけ件で言う。 */
 internal fun hardText(breakdown: Map<String, Int>, n: Long): String = unitTotals(breakdown, MirrorKeys.hard) ?: "${n}件"
 
+/** 実行中の上部の札（3.693.0）。必須違反は単位ごとに（件と人を足さない＝INV-07）。必須 0 のときは数を出さない。札の幅に合わせて「必須」＝凡例・ホームの見出しと同じ短い語。 */
+internal fun runningBadgeLabel(breakdown: Map<String, Int>, bestHard: Long): String =
+    if (bestHard > 0L) "組んでいます 必須${hardText(breakdown, bestHard)}" else "組んでいます"
+
 /** 族ごとの増減を単位ごとに足した言い方（例「1件減る・2人増える」）。同じ単位の中だけで足す。全部 0 なら null。 */
 internal fun unitDeltaText(diff: List<Pair<String, Int>>, families: Collection<String>): String? {
     val by = HashMap<String, Int>()

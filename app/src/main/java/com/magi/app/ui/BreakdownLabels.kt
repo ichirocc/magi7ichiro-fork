@@ -32,12 +32,12 @@ internal val breakdownLabels: Map<String, String> = mapOf(
  */
 internal fun fixImpactLines(s: com.magi.app.v6.FixSuggestion): Pair<String, String?> {
     // 必須の増減は単位ごと（人員不足の人数と件数を足さない＝統合仕様 INV-07）。内訳が無い案は従来の件数。
-    val hardLine = "必須違反: " + (unitDeltaText(s.diff, com.magi.app.v6.MirrorKeys.hard) ?: when {
+    val hardLine = "必須違反：" + (unitDeltaText(s.diff, com.magi.app.v6.MirrorKeys.hard) ?: when {
         s.deltaHard < 0 -> "${-s.deltaHard}件減る"
         s.deltaHard == 0 -> "変わらない"
         else -> "${s.deltaHard}件増える"
     })
     val worse = s.diff.filter { (k, d) -> d > 0 && k !in com.magi.app.v6.MirrorKeys.hard }
-    val caution = worse.takeIf { it.isNotEmpty() }?.joinToString("・", prefix = "増える要調整: ") { (k, d) -> "${breakdownLabels[k] ?: k} +$d${unitOf(k)}" }
+    val caution = worse.takeIf { it.isNotEmpty() }?.joinToString("・", prefix = "増える要調整：") { (k, d) -> "${breakdownLabels[k] ?: k} +$d${unitOf(k)}" }
     return hardLine to caution
 }

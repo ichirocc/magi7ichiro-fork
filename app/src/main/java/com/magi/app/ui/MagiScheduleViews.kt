@@ -2040,6 +2040,7 @@ internal class FixNav(
     val onNeed: (Int, Int) -> Unit = { _, _ -> },        // 人員不足・過剰の印から: その日のそのシフトの必要人数
     val onCell: (Int, Int) -> Unit = { _, _ -> },        // 職員と日（勤務表のそのセルを開く）
     val onTour: (() -> Unit)? = null,                    // 残っている必須違反を順に見る（巡回の先頭のセルへ）
+    val tourCount: Int = 0,                              // 巡回できる必須違反の数（上部の札の「（Nか所）」と同じ値。反映の帯の次の一歩に使う）
     val onDay: (Int) -> Unit = {},                       // その日の勤務を見る（勤務表をその日の列へ）
 )
 
@@ -2191,7 +2192,7 @@ internal fun FixSearchPanel(
                 ui.appliedFix?.takeIf { it.focusKey == focus.key && it.after == ui.schedule && !compact }?.let { a ->
                     val t = target ?: a.target
                     AppliedBanner(ui, cv, a, t, t?.let { fixTargetLabel(it, ui.shiftSymbols.getOrNull(it.shift) ?: "", ui.startDate) } ?: label, onUndo = { onEvent(MagiEvent.Board.Undo) }, onTour = nav.onTour?.let { go -> { onApplied(); go() } },
-                        onRetrySave = { onEvent(MagiEvent.Io.SaveNow) })
+                        tourCount = nav.tourCount, onRetrySave = { onEvent(MagiEvent.Io.SaveNow) })
                 }
                 when {
                     addressPending && shown.isNotEmpty() -> Text(ADDRESS_CHECKING_TEXT, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
@@ -2262,7 +2263,7 @@ internal fun FixSearchPanel(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, target: FixTarget?, label: String, onUndo: () -> Unit, onTour: (() -> Unit)? = null,
-                          onRetrySave: () -> Unit = {}) {
+                          tourCount: Int = 0, onRetrySave: () -> Unit = {}) {
     val cs = MaterialTheme.colorScheme
     var showChanges by remember(a) { mutableStateOf(false) }
     // 「続けて … の案を見る」は帯をたたんで、下の探し直した案へ進む。
@@ -2271,7 +2272,7 @@ private fun AppliedBanner(ui: UiState, cv: ConditionsView?, a: AppliedFix, targe
     val lim = cv?.let { c -> c::needCellLimits }
     val nextSym = target?.let { ui.shiftSymbols.getOrNull(it.shift) }
     val sameRemains = nextSym != null && appliedRemaining(ui, a, target, label, lim).isNotEmpty()
-    val nextLabel = appliedNextButton(sameRemains, nextSym, a.hardAfter, onTour != null)
+    val nextLabel = appliedNextButton(sameRemains, nextSym, a.hardAfter, if (onTour != null) tourCount else 0)
     Surface(color = cs.tertiaryContainer, shape = MaterialTheme.shapes.medium) {
         Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("変更を反映しました", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = cs.onTertiaryContainer)

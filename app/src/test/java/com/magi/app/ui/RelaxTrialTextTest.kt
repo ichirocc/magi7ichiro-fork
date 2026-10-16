@@ -42,7 +42,7 @@ class RelaxTrialTextTest {
         assertEquals(t.otherMoves, t.otherMoveLines.sumOf { it.count { c -> c == '→' } })
         assertTrue(t.otherMoves > 0 && t.otherMoveLines.all { (it.substringBefore("　").substringAfter("/").toInt() - 1) !in r.window })
         assertEquals("例外として上限を緩める候補：職員10 10/8〜10/9 禁止の並び", t.dialogTitle)
-        assertEquals("必須違反: 5件 → 4件", t.hardLine)
+        assertEquals("必須違反：5件 → 4件", t.hardLine)
         val people = ((r.prerequisite + r.relaxes).map { it.staff } + r.moves.map { it.staff }).distinct().size
         assertEquals("変わるもの: 設定5つ、${people}人の勤務、${r.moves.size}か所", t.scaleLine)
         assertEquals(3, t.prerequisiteRows.size)

@@ -6,7 +6,7 @@ import org.junit.Test
 /** [3.643.0] 直したあとの 1 行は、同じ問題について「解消したか」と「ほかに何件残るか」を言う。 */
 class FixOutcomeTextTest {
     @Test fun appliedMoveSaysWhatChangedAndWhatRemains() {
-        assertEquals("山本 10/12「夜」→「休」 を適用しました。必須違反 3→2。ほかの必須違反は 2件 残っています。", fixOutcomeText("山本 10/12「夜」→「休」", 3, 2, "40件", "38件"))
+        assertEquals("山本 10/12「夜」→「休」 を適用しました。必須違反 3件→2件。ほかの必須違反は 2件 残っています。", fixOutcomeText("山本 10/12「夜」→「休」", 3, 2, "40件", "38件"))
         assertEquals("入替 を適用しました。必須違反はなくなりました（要調整 40件→38件）。", fixOutcomeText("入替", 1, 0, "40件", "38件"))
         assertEquals("入替 を適用しました。必須違反は変わらず 2件（要調整 40件→39件）。", fixOutcomeText("入替", 2, 2, "40件", "39件"))
         // [3.678.0] 内訳があれば単位ごとに（人員不足は人）。

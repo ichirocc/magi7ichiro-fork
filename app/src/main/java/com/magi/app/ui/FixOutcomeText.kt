@@ -1,11 +1,12 @@
 package com.magi.app.ui
 
-/** 直し方を当てたあと、同じ問題について「どうなったか」を 1 行で返す（3.643.0）。改善手の適用（前後の件数が分かる）用。 */
-internal fun fixOutcomeText(label: String, hardBefore: Int, hardAfter: Int, softBefore: String, softAfter: String, afterBreakdown: Map<String, Int> = emptyMap()): String {
+/** 直し方を当てたあと、同じ問題について「どうなったか」を 1 行で返す（3.643.0）。改善手の適用（前後の件数が分かる）用。前後とも単位ごと（3.693.0、INV-07）。 */
+internal fun fixOutcomeText(label: String, hardBefore: Int, hardAfter: Int, softBefore: String, softAfter: String, afterBreakdown: Map<String, Int> = emptyMap(),
+                            beforeBreakdown: Map<String, Int> = emptyMap()): String {
     val left = hardText(afterBreakdown, hardAfter.toLong())
     return when {
         hardAfter == 0 && hardBefore > 0 -> "$label を適用しました。必須違反はなくなりました（要調整 $softBefore→$softAfter）。"
-        hardAfter < hardBefore -> "$label を適用しました。必須違反 $hardBefore→$hardAfter。ほかの必須違反は $left 残っています。"
+        hardAfter < hardBefore -> "$label を適用しました。必須違反 ${hardText(beforeBreakdown, hardBefore.toLong())}→$left。ほかの必須違反は $left 残っています。"
         else -> "$label を適用しました。必須違反は変わらず $left（要調整 $softBefore→$softAfter）。"
     }
 }

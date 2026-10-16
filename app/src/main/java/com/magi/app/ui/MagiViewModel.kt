@@ -3216,7 +3216,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
             fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),   // 適用後は候補をクリア（盤面が変わるため再探索を促す）
             appliedFix = focusKey?.let { k -> AppliedFix(k, s.label, s.ops, sched.map { r -> r.toList() }, applied.map { r -> r.toList() }, fixTarget,
                 gate.before.hard, gate.after.hard, gate.before.soft, gate.after.soft, gate.before.breakdown, gate.after.breakdown) },
-            fixOutcome = FixOutcome(fixOutcomeText(fixDisplayLabel(s.label), gate.before.hard, gate.after.hard, unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", gate.after.breakdown) + fixResultDetail(gate.before, gate.after) +
+            fixOutcome = FixOutcome(fixOutcomeText(fixDisplayLabel(s.label), gate.before.hard, gate.after.hard, unitTotals(gate.before.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", unitTotals(gate.after.breakdown, com.magi.app.v6.MirrorKeys.soft) ?: "なし", gate.after.breakdown, gate.before.breakdown) + fixResultDetail(gate.before, gate.after) +
                 (if (monthEdgeTouched(s.ops.map { it.day }, applied.firstOrNull()?.size ?: 0, maxPatternLen(st))) "$MONTH_EDGE_NOTE。" else "")),
         ) }
         // 通知は 2 行まで＝必須が動いた手は必須だけ、動かない手は合計だけを添える（両方の数はホームの結果の行とログ）。
