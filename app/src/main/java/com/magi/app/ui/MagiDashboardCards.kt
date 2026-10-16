@@ -560,6 +560,7 @@ internal class OpNextPlan(
  * いまの状態（未作成／組立中／配れる／もう少し／埋められない）で文言と主ボタンが自動で変わる。
  */
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun OperatorNextActionCard(
     ui: UiState,
