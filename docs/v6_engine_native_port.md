@@ -105,6 +105,10 @@ Each action launches a cancellable `job`; **計算を止める** calls `job?.can
 - **操作ログ**: 設定タブ＞詳細設定の `LogsCard`（操作ログ＋診断ログ）からテキスト/JSON 出力。開始・完了は
   記録されるが、長時間最適化中の詳細進捗監査としてはなお簡素。（旧トップの `OperatorLogView` は
   診断ログの誤ラベル重複のため v3.8 で撤去。）
+  - [3.694.0] 実行の境界の行に期間・人数・指紋（組立は `ui/OpLogText`、指紋は `StateFingerprint.of`（状態）／`ofBoard`（盤面）の 16 桁の 16 進、日付は ISO）:
+    「#N 最適化 開始 (予算…) ・ 期間=YYYY-MM-DD〜YYYY-MM-DD（N日） ・ 職員=N名 ・ 状態指紋=… ・ 盤面指紋=…」の直後に「#N 設定の開始時: …」、
+    「#N 初期解生成 開始 ・ …」、完了行と「改善手を適用（…）・ 期間= ・ 盤面指紋=前→後 ・ 状態指紋=」「読込 … ・ 取得元=起動時の復元／利用者の読込」に盤面指紋、
+    「期間変更: … ・ 要求期間=…」。書き出しは状態行の直後に期間・指紋、見出しの直後に捨てた件数の注記。盤面指紋の一致は入力が同じことの証拠で、結果が同じことの証拠ではない。
 
 返却される `ViolationReport`（HARD / SOFT / total / weighted score）は Home / Schedule に表示。
 既存の resolved-engine スコア・breakdown・3-evaluator 整合チェックは Analysis タブで従来どおり。

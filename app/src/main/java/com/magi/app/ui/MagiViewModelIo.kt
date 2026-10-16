@@ -84,19 +84,30 @@ private fun MagiViewModel.environmentLine(): String {
 /** [3.408.0] 実行の帰属表示。0＝実行外（違反チェック等）。 */
 private fun runTag(serial: Int): String = if (serial > 0) "実行#$serial" else "実行外"
 
+private fun opLogTimeFmt() = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss", java.util.Locale.JAPAN)
+
+/** [3.694.0] 書き出し時点の期間・状態指紋・盤面指紋（データが無ければ 期間=なし）。指紋は職員名を含まない 16 進＝共有前提の照合用。 */
+private fun MagiViewModel.exportStateLine(): String {
+    val st = state
+    return OpLogText.exportStateLine(st?.startDate, st?.endDate, st?.dayCount ?: 0,
+        st?.let { com.magi.app.v6.StateFingerprint.of(it) }, currentSchedule?.let { com.magi.app.v6.StateFingerprint.ofBoard(it) })
+}
+
 fun MagiViewModel.exportLogs(): String? {
-    val ops = _ui.value.opLog
-    val runsInLog = synchronized(this) { opLog.map { it.run } }.filter { it > 0 }.distinct().sorted()   // logOp（@Synchronized）と同じモニタ
+    // [3.694.0] 行の写し・実行番号・捨てた件数を logOp（@Synchronized）と同じモニタの中で読む＝書き出し中の logOp で件数と範囲が 1 件ずれない。
+    val (ops, runsInLog, dropped) = synchronized(this) { Triple(_ui.value.opLog, opLog.map { it.run }.filter { it > 0 }.distinct().sorted(), opLogDropped) }
     val runSpan = if (runsInLog.isEmpty()) "" else "・実行#${runsInLog.first()}〜#${runsInLog.last()}"
     // 出力は全文（非圧縮）。画面表示は圧縮版だが、監査用にはロスレスの rawDiagLogs を使う。
     val logs = rawDiagLogs.ifEmpty { _ui.value.logs }
     if (ops.isEmpty() && logs.isEmpty()) return null
-    val ts = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss", java.util.Locale.JAPAN).format(java.util.Date())
+    val ts = opLogTimeFmt().format(java.util.Date())
     return buildString {
         append("MAGI ログ (Native)  出力: ").append(ts).append('\n')
         append(environmentLine()).append('\n')
         append("状態: ${_ui.value.staff}名/${_ui.value.days}日 ・ 必須=${_ui.value.bestHard} 合計=${_ui.value.totalViolations}\n")
+        append(exportStateLine()).append('\n')   // [3.694.0] 書き出し時点の期間と指紋（G1・G8）
         append("\n==== 操作ログ（新しい順 ${ops.size}件$runSpan）====\n")
+        append(OpLogText.dropNote(opLogTimeFmt().format(java.util.Date(opLogStartedAtMs)), dropped)).append('\n')   // [3.694.0] 記録の始まりと捨てた件数（G7）
         ops.forEach { append(it).append('\n') }
         append("\n==== 診断ログ（${runTag(lastDiagSerial)}の全文 ${logs.size}件）====\n")
         // [3.408.0] 操作ログは履歴・診断ログは直近1回ぶん。実行が2回以上あるとき、両者を続けて読むと
@@ -134,6 +145,10 @@ fun MagiViewModel.exportLogsJson(): String? {
     o.put("exportedAt", System.currentTimeMillis())
     o.put("environment", environmentLine())   // [3.360.0] 版・端末・コア数・ネイティブ可否（テキスト版と同一）
     o.put("staff", _ui.value.staff); o.put("days", _ui.value.days); o.put("shifts", _ui.value.shifts)
+    // [3.694.0] テキスト版の期間・指紋の行と注記に対応する鍵（指紋は 16 桁の 16 進）。
+    state?.let { st -> o.put("startDate", st.startDate); o.put("endDate", st.endDate); o.put("stateFingerprint", OpLogText.hex16(com.magi.app.v6.StateFingerprint.of(st))) }
+    currentSchedule?.let { o.put("boardFingerprint", OpLogText.hex16(com.magi.app.v6.StateFingerprint.ofBoard(it))) }
+    o.put("opLogStartedAt", opLogStartedAtMs); o.put("opLogDropped", synchronized(this) { opLogDropped })
     o.put("hard", _ui.value.bestHard); o.put("soft", _ui.value.bestSoft); o.put("total", _ui.value.totalViolations)
     o.put("satisfaction", _ui.value.satisfaction)
     // [N6] satisfaction は 0-100 の進捗スコア（違反減少度: hard>0 で×55系）であり希望充足率ではない。

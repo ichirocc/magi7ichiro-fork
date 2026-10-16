@@ -325,6 +325,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
      */
     data class OpLogEntry(val timeMs: Long, val level: String, val message: String, val run: Int = 0)
     internal val opLog = ArrayDeque<OpLogEntry>()
+    /** [3.694.0] 上限（[OpLogText.OP_LOG_CAP]）を超えて捨てた古い行の数と、この記録の始まり（VM 生成時）。書き出しの注記が読む＝欠けた範囲が見える。 */
+    internal var opLogDropped = 0
+        private set
+    internal val opLogStartedAtMs: Long = System.currentTimeMillis()
     // 診断ログの「非圧縮・全文」を保持（画面表示は compressDiagLogs で圧縮、出力はこちらの全文を使う）。
     internal var rawDiagLogs: List<String> = emptyList()
         private set
@@ -375,7 +379,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     internal fun logOp(level: String, message: String) {
         val e = OpLogEntry(System.currentTimeMillis(), level, message, activeRunSerial)
         opLog.addFirst(e)
-        while (opLog.size > 1000) opLog.removeLast()
+        while (opLog.size > OpLogText.OP_LOG_CAP) { opLog.removeLast(); opLogDropped++ }
         // [3.569.0] 旧: 毎回 1000 行を SimpleDateFormat で作り直していた（最適化中は数秒おき・編集のたび）。新 1 行だけ整形する。
         val keep = opLog.size - 1
         opLogLines = ArrayList<String>(keep + 1).apply { add(formatOpLine(e)); for (i in 0 until keep) add(opLogLines[i]) }
@@ -653,7 +657,9 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         }
         _ui.update { it.copy(messageIsError = false, running = true, keptPrevious = false, hasResult = false, interruptedRun = false, interruptedInfo = null, message = "勤務表をつくり始めました。閉じても大丈夫です（できたら通知します）") }
         writeRunMarker("bg")
-        logOp("I", "バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
+        logOp("I", OpLogText.startLine("バックグラウンド最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})",
+            st0.startDate, st0.endDate, st0.dayCount, st0.staffCount, stateKey(st0), boardKey(sched0)))   // [3.694.0] 前景の開始行と同じ項目
+        logOp("I", OpLogText.settingsStartLine(settingsStartWords()))
         // [3.592.0] runCatchingは同期例外しか捉えない。enqueueUniqueWorkが返すOperationの完了を
         //   非同期に監視し、後から失敗した場合も開始失敗と同じ片付けをする（置き換え済みなら何もしない）。
         viewModelScope.launch {
@@ -1179,7 +1185,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                         lastResultHard = -1L
                         lastTopHardFamily = null
                         initBaseKey = null
-                        logOp("I", "読込 ${lp.state.staffCount}名/${lp.state.dayCount}日/${lp.state.shiftCount}シフト")
+                        logOp("I", OpLogText.loadLine(lp.state.staffCount, lp.state.dayCount, lp.state.shiftCount, lp.state.startDate, lp.state.endDate,
+                            stateKey(lp.state), boardKey(lp.schedule), fromRestore))   // [3.694.0] 期間・指紋・取得元（G1・G3・G8。ファイル名は記録しない）
                         onLoaded?.invoke()
                     },
                     onFailure = { err ->
@@ -1292,7 +1299,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     fun setSearchStrength(strength: SearchStrength) {
         strength.apply()
         _ui.update { it.copy(searchStrength = strength) }
-        logOp("I", "設定変更: 探索の強さ → ${searchStrengthLabel(strength)}")
+        logOp("I", OpLogText.strengthLine(searchStrengthLabel(strength), strength.flags()))
     }
 
     fun setAptFairToleranceUnguarded(on: Boolean) {
@@ -1445,6 +1452,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         //   旧: `running=true`（画面は全ロック）なのに `optimizeInFlight()` は false のままで、
         //   `setCell` のガードだけ素通り＝編集が完了時に無言で消えていた。
         val boardToken = beginBoardJob(MagiPhase.Drafting, engineRun = true)
+        logOp("I", OpLogText.startLine("初期解生成 開始", st.startDate, st.endDate, st.dayCount, st.staffCount, stateKey(st), boardKey(sched)))   // [3.694.0] 入力の期間・指紋（G3・G8）
         val result0 = resultSchedule
         var done = false   // 表示まで終わった。それより前の中止・失敗は差し替えの前後を問わず下書き前へ戻す（importCsv と同じ）
         job = viewModelScope.launch {
@@ -1464,7 +1472,7 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                     message = "下書きをつくりました: ${reportCountsText(res.report.breakdown)}。画面下の「再作成」で仕上げられます" + if (confirmed) "。$DRAFT_UNDO_NOTE" else "",
                 ) }
                 done = true
-                logOp("I", "初期解生成 完了 必須=${res.report.hard} 合計=${res.report.total}")
+                logOp("I", OpLogText.withBoard("初期解生成 完了 必須=${res.report.hard} 合計=${res.report.total}", boardKey(res.schedule)))
             } catch (e: CancellationException) {
                 // [3.404.0] 停止・ジョブ上書きを「失敗」と呼ばない（兄弟の refreshCheck 等は分離済みで
                 //   ここだけ取り残されていた＝停止するたび「初期解生成失敗」という誤った文言が出ていた）。
@@ -1535,12 +1543,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
     /** [3.475.0] この実行に渡した入力盤面（keep-best の比較元）。プロセス再起動を跨ぐと null（復元経路）。 */
     private var bgInput: Array<IntArray>? = null
 
-    /** 盤面の内容から決まる指紋。S×T が小さい（30×31）ので毎回の計算コストは無視できる。 */
-    private fun boardKey(schedule: Array<IntArray>): Long {
-        var h = 1125899906842597L
-        for (row in schedule) for (v in row) h = h * 31L + v
-        return h
-    }
+    /** 盤面の内容から決まる指紋。S×T が小さい（30×31）ので毎回の計算コストは無視できる。[3.694.0] 実体は `StateFingerprint.ofBoard`（書き出しの拡張関数と共有）。 */
+    private fun boardKey(schedule: Array<IntArray>): Long = com.magi.app.v6.StateFingerprint.ofBoard(schedule)
+
+    /** [3.694.0] 実行の開始点で 1 回だけ読む設定（利用者の設定値と PolishGate の現在値）。語は「設定の効き」と同じ源（`TuningTelemetry.toggleWords`）。 */
+    private fun settingsStartWords(): String = com.magi.app.v6.TuningTelemetry.startSettings(
+        nativeOn = _ui.value.nativeAccel, parityOn = _ui.value.nativeParity,
+        filterOn = com.magi.app.v6.PolishGate.filterC3nIncrease, wideOn = com.magi.app.v6.PolishGate.wideC3nBreakDays,
+        softPolishOn = _ui.value.softPolish, combineOn = com.magi.app.v6.PolishGate.combineExhaustPairs,
+        lnsOn = com.magi.app.v6.PolishGate.lnsAdaptive, aptFairOn = com.magi.app.v6.PolishGate.aptFairSoftTolerance,
+        countChainOn = com.magi.app.v6.PolishGate.countChainPolish,
+    )
 
     /**
      * [3.328.0/外部レビュー → 3.330.0 で v6 へ移動] 勤務表の意味を決める入力すべての指紋。
@@ -1650,7 +1663,6 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val hadResult = _ui.value.hasResult
         val engineRanBefore = _ui.value.engineRan
         _ui.update { it.copy(messageIsError = false, running = true, keptPrevious = false, hasResult = false, copilotHint = hint, wishCancelOutcome = null, runSummary = null, stopSummary = null, alternatives = emptyList(), liveSchedule = emptyList(), interruptedRun = false, interruptedInfo = null, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(), message = "勤務表をつくり始めました") }
-        logOp("I", "最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})")
         writeRunMarker("fg", s5?.let { com.magi.app.work.RunMarker.S5(it.staff, it.day, it.symbol, it.name) })
         clearBgFiles("前景実行の開始")   // [C1] fg実行ではbg途中状態は無関係＝掃除
         val startMs = System.currentTimeMillis()
@@ -1667,6 +1679,10 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         val phaseNameLastLogMs = HashMap<String, Long>()   // [3.283.0] 同名フェーズの再ログ抑制（60s窓・スパム対策）
         var lastHardLogMs = -10_000L
         val boardToken = beginBoardJob(MagiPhase.Optimizing, engineRun = true)   // [3.328.0/3.404.0]
+        // [3.694.0] 開始行は beginBoardJob の後（#N が付く）。期間・人数・入力の指紋と、開始点で読んだ設定を残す（G1・G6・G8）。
+        logOp("I", OpLogText.startLine("最適化 開始 (予算${_ui.value.budgetSec}s, 並列${_ui.value.workers}, 方式${_ui.value.v6Algorithm})",
+            st0.startDate, st0.endDate, st0.dayCount, st0.staffCount, stateKey(st0), boardKey(sched0)))
+        logOp("I", OpLogText.settingsStartLine(settingsStartWords()))
         beginFgRunGuard("最適化")   // 直後の launch の finally で必ず解放
         job = viewModelScope.launch {
             // [3.372.0/実機ログ起因] 終端ログ（完了/停止/失敗）を必ず1行残す保証。実機ログ(2026-08-15)で
@@ -1883,7 +1899,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
                 //   から取っていたため、次回のヒントが「いま表示している勤務表」に無い族を名指しした。
                 val adoptedReport = if (worseThanInput) baseReport else res.report
                 lastTopHardFamily = if (adoptedReport.hard > 0) topHardFamilyJp(adoptedReport.breakdown) else null
-                logOp(if (res.report.hard == 0) "I" else "W", "最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})")
+                // [3.694.0] 採用後の盤面（維持なら入力・採用なら結果＝上の分岐が currentSchedule に置いたもの）の指紋。開始行の入力の指紋と並べて読む（G8）。
+                logOp(if (res.report.hard == 0) "I" else "W", OpLogText.withBoard("最適化 完了 必須=${res.report.hard} 合計=${res.report.total} (${res.phase})", currentSchedule?.let { boardKey(it) } ?: 0L))
                 if (s5 != null) {
                     cancelOutcomeCtx = state?.let { st -> currentSchedule?.let { TrialCtx(st, boardKey(it)) } }
                     logOp("I", "S5 結果: ${s5.h0}/${s5.hx}/${s5.rk}/${s5.rr}/${s5.pCancel} → ${adoptedReport.hard}")
@@ -3176,12 +3193,17 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         if (optimizeInFlight()) { _ui.update { it.copy(message = busyEditMessage(), messageIsError = true) }; return false }
         val sched = currentSchedule ?: return false
         if (s.ops.isEmpty()) return false
-        (fixOriginRefusal(originBoard, fromPreview) ?: fixTargetRefusal(fixTarget, globalPolish))?.let { msg -> _ui.update { it.copy(messageIsError = true, message = msg) }; return false }
+        (fixOriginRefusal(originBoard, fromPreview) ?: fixTargetRefusal(fixTarget, globalPolish))?.let { msg ->
+            logOp("W", OpLogText.fixRefusalLine(s.label, msg))   // [3.694.0] 断った案も操作ログに残す（画面の文言は不変、G2）
+            _ui.update { it.copy(messageIsError = true, message = msg) }; return false
+        }
         // [3.475.0/論理監査] 提案は計算時の盤面/設定に対する差分。旧: 指紋を持たず、その後のセル編集・
         //   元に戻す・別データ読込・職員削除のあとでも同じ ops をそのまま書き込んでいた（staff/day/toShift が
         //   別の実体を指す）。一致しなければ適用せず再探索を促す。toShift の上限（K）も未検査だった。
         //   [3.650.0] 照合は案を出したときの指紋（相談に積んだ案は自分の指紋を運ぶ＝あとの探索で上書きされた全体の指紋で通さない）。
-        if (originBoard != 0L && (originBoard != boardKey(sched) || originState != stateKey(st))) {
+        val boardNow = boardKey(sched); val stateNow = stateKey(st)   // [3.694.0] 照合と「適用」「見送り」の行が同じ値を使う
+        if (originBoard != 0L && (originBoard != boardNow || originState != stateNow)) {
+            logOp("W", OpLogText.fixMismatchLine(s.label, originBoard, boardNow, originState, stateNow))
             _ui.update { it.copy(messageIsError = true, fixSuggestions = emptyList(), fixTiers = null, fixSearched = false, stalledHardFamilies = emptyList(),
                 message = "勤務表か設定が変わったため、この提案は適用できません。「変更案を探す」をもう一度押してください") }
             return false
@@ -3207,7 +3229,8 @@ class MagiViewModel(app: Application) : AndroidViewModel(app) {
         currentSchedule = applied
         state = st.withSchedule(applied)
         autoSave()
-        logOp("I", "改善手を適用: ${s.label}（必須 ${gate.before.hard}→${gate.after.hard}・合計 ${gate.before.total}→${gate.after.total}）")
+        logOp("I", OpLogText.fixLine(s.label, gate.before.hard, gate.after.hard, gate.before.total, gate.after.total,
+            st.startDate, st.endDate, st.dayCount, boardNow, boardKey(applied), stateNow))
         _ui.update { it.copy(
             messageIsError = false,
             hasResult = true,

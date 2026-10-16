@@ -1172,6 +1172,8 @@ object V6FinalPort {
             aptFairSoftTolerance = postParams.aptFairSoftTolerance,
             countChainPolish = postParams.countChainEnabled,
         ))
+        // [3.694.0] 容認採用の中身（族・件数・合計・必須・容認量・差）を最大 5 行。件数は上の 6% 許容の行と同じ源（G4）。
+        val toleratedLogs = TuningTelemetry.toleratedLines(TuningTelemetry.aptFairToleranceUsed.get()).map { MirrorLog(level = "I", tag = "容認採用", message = it) }
         // [3.288.0/ログ強化=状態軸] 「本当に改善可能な制約が残るか」を最終盤面で1行に集約。
         //   残った族を ①構造的な壁（もう直せない: 構造的covU下限・証明済みc3n壁）
         //   ②まだ狙える（追えば減る見込み）に仕分ける。旧: 族別件数(UnifiedCheck/違反詳細)は出るが
@@ -1390,7 +1392,7 @@ object V6FinalPort {
         val stopLog = listOf(MirrorLog(level = "I", tag = "StopSummary",
             message = "終わり方: ${stopSummary.kind}（停滞で早期終了=${if (stopSummary.earlyStop) "あり" else "なし"}）・使用${stopSummary.usedSec}s／予算${stopSummary.budgetSec}s" +
                 "・探索終了時の無改善${stopSummary.stalledSec}s・必須${stopSummary.remainingHard}件"))
-        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
+        val logs = listOf(timingLog, budgetPlanLog, nativeLog, tuningLog) + toleratedLogs + cappedLog + pinLog + extLog + adoptedLog + sentinelLog + integrationLog + extraLog + watchdogLog + contentionLog + ledgerLog + residualLog + stagnationLog + stopLog + gate.logs + first.phaseLogs + (if (chained !== first) chained.phaseLogs else emptyList()) + postReportLogs
         // [3.327.0/外部レビュー High1] `post` の診断（C1頭打ち・回数固定の却下記録）は **post.schedule を
         //   観測した結果**。ところが finalSched はこのあと ExtraRefine で差し替わる（refSched）か、
         //   最終番兵で入力へ戻る（cappedInput）ことがある。そのまま渡すと「いま表示している勤務表の理由」

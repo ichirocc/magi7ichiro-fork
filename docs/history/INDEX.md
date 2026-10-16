@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- 端末ログの強化（2026-10-16、3.694.0）: 実機ログで G1〜G8 に答える行を足す（出力不変）＝「最適化 開始」を #N 付きで 期間=・職員=・状態指紋=・盤面指紋= つきに＋「設定の開始時」（`TuningTelemetry.startSettings`）、「初期解生成 開始」、完了行・「改善手を適用」・「読込（取得元=）」に盤面指紋（`StateFingerprint.ofBoard`＝旧 `boardKey`）、見送りの W 行、「期間変更」の 要求期間=、探索の強さの 4 フラグ（`SearchStrength.flags()`）、書き出しの期間・指紋行と捨て件数の注記（`OP_LOG_CAP`）、診断ログ「容認採用」（先頭 5 件、`TuningTelemetry.noteTolerated`）、CoverageDiag の（根拠: …）（`CoverageShortfall.basis()`）。純関数 `OpLogText`。時間ゲートは hash 16/16 一致  → `docs/history/3.4xx.md`
 - 8秒理解UI 第1便＝数の単位の誤り（2026-10-16、3.693.0）: 実行中の札 `runningBadgeLabel`「組んでいます 必須1件・2人」（必須 0 なら「組んでいます」）・反映の帯の「（Nか所）」を巡回できる数（`FixNav.tourCount`）に・適用の通知 `fixOutcomeText` を前後とも単位ごと・分析の「ほか Nか所」・コロンを全角（INV-07）。計画の全文は `docs/history/ui8s_plan_3.693.0.md`（決定待ち Q1〜Q11 は §3）  → `docs/history/3.4xx.md`
 - 人員不足の診断の根拠を揃える（2026-10-15、3.692.0）: 設定ミス診断の日の証明（上限0・希望固定を置けない側）を `CoverageDiag` も使う（`ConstraintMus.dayShortProofs`・`CoverageShortfall.dayProof`→充足不可「この希望と上限のままでは埋まりません」）・残存分析の「実証済み」は証明つきの枠だけ・HF70 に「うち人員不足 N 件はこの希望と上限のままでは埋まらない」・早期終了の床を上限0込みにする `PolishGate.floorCountsUpperZero`（既定 OFF・ベンチ腕 `floorup0`、測定は保留）・下書きの置き換えの確認をログに  → `docs/history/3.4xx.md`
 - 画面の文言の仕上げ（2026-10-15、3.691.0）: ボタンを動詞（削除する/削除しない・反映しない・移らない・取り込まない 等）・確認の題を「？」の問い・CSV 取込の失敗を「〜できませんでした。原因。次の行動」・「ご確認ください」を次の行動へ、68 件（表 `docs/history/l10n_3.691.0.md`）  → `docs/history/3.4xx.md`

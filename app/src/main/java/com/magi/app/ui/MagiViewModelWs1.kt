@@ -191,7 +191,7 @@ fun MagiViewModel.ws1ResizeDays(newT: Int) {
     val sched = currentSchedule ?: return
     val r = Ws1Ops.resizeDays(st, sched, newT)
     if (r.state == st && r.schedule.contentDeepEquals(sched)) return   // 同じ日数で「変更」＝何もしない
-    logOp("I", "期間変更: ${st.dayCount}日 → ${newT}日")
+    logOp("I", OpLogText.withRequestedPeriod("期間変更: ${st.dayCount}日 → ${newT}日", r.state.startDate, r.state.endDate, r.state.dayCount))   // [3.694.0] 要求期間（G3）
     applyStructure(r)
 }
 
@@ -206,8 +206,10 @@ fun MagiViewModel.setMonth(year: Int, month1to12: Int, clearWishes: Boolean? = n
     if (clearWishes == null && plan.needsConfirm) { setMonthMovePrompt(plan); return }
     setMonthMovePrompt(null)
     val st2 = if (clearWishes == true) st.copy(wishes = emptyMap(), extWishes = emptyList()) else st
-    logOp("I", "期間変更: ${year}年${month1to12}月" + when (clearWishes) { true -> "（希望を消して）"; false -> "（希望を残して）"; null -> "" })
-    applyStructure(Ws1Ops.resizeDays(st2.copy(startDate = first.toString()), sched, first.lengthOfMonth()))
+    val r = Ws1Ops.resizeDays(st2.copy(startDate = first.toString()), sched, first.lengthOfMonth())   // 純関数＝先に組んで要求期間をログへ（3.694.0）
+    logOp("I", OpLogText.withRequestedPeriod("期間変更: ${year}年${month1to12}月" + when (clearWishes) { true -> "（希望を消して）"; false -> "（希望を残して）"; null -> "" },
+        r.state.startDate, r.state.endDate, r.state.dayCount))
+    applyStructure(r)
     clearCsvSaved()   // 前の月の CSV の保存は新しい月の内容と関係がない
 }
 
