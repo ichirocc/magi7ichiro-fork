@@ -381,7 +381,8 @@ internal fun violationTour(ui: UiState, includeSoft: Boolean = false): List<Pair
 
 /** 巡回の 1 件＝必須違反 1 件（族・職員・関連セルの日・見出し）。1 セルが 2 件に属せば 2 回止まる（`report.hard` の数え方と同じ）。
  *  セルで辿れる族だけ（c3n＝並びの全日、c3w＝前日＋希望の翌日、pref/groupViol/extWish＝1 セル）。人員不足は日ヘッダから＝件数は別に添える。 */
-data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String) {
+data class TourItem(val family: String, val staff: Int, val days: List<Int>, val heading: String,
+                    val syms: List<String> = emptyList(), val dayMd: String = "") {
     val cell: Pair<Int, Int> get() = staff to days.first()
 }
 
@@ -409,16 +410,45 @@ internal fun hardViolationItems(state: MagiState, p: Problem, s: Array<IntArray>
             else -> {}
         }
     }
-    return out.values.sortedWith(compareBy({ it.days.first() }, { it.staff }))
+    return out.values.map { it.copy(syms = it.days.map { d -> sym(s[it.staff][d]) }, dayMd = DayText.short(state.startDate, it.days.first())) }
+        .sortedWith(compareBy({ it.days.first() }, { it.staff }))
 }
 
 /** 勤務表タブの「必須 N ▼」一覧の 1 行。`tourAt` は [hardViolationItems] の何件目か（行を押すと巡回と同じ移動でそのセルを開く）。 */
-internal data class HardListRow(val tourAt: Int, val name: String, val heading: String, val wishOnly: Boolean)
+internal data class HardListRow(val tourAt: Int, val name: String, val heading: String, val wishOnly: Boolean, val line: String = heading)
+
+/** [3.714.0] 問題一覧の 1 行の上限（デザイン例「10/10のAｱが1人不足」「福澤 10/1 希望の前日」）。 */
+internal const val PROBLEM_LINE_MAX = 18
+
+/**
+ * [3.714.0] 問題 1 件を 18 字までの 1 行に（族ごとの型）。[sym]＝その日の勤務、[nextSym]＝並びの翌日の勤務、[n]＝人数・回数。
+ * 名前と日を前に付けて収まらなければ型だけ、それでも長ければ末尾を「…」。
+ */
+internal fun problemLine(family: String, name: String, day: String, sym: String, nextSym: String? = null, n: Int = 1): String {
+    fun fit(prefix: String, body: String) = "$prefix $body".takeIf { prefix.isNotBlank() && it.length <= PROBLEM_LINE_MAX } ?: body
+    val line = when (family) {
+        "covU" -> "${day}の${sym}が${n}人不足"
+        "c3w" -> fit(name, "$day 希望の前日")
+        "low" -> fit(name, "${sym}があと${n}回不足")
+        "high" -> fit(name, "${sym}が${n}回多い")
+        "c3n" -> fit(name, "${sym}の翌日が${nextSym ?: "?"}です")
+        "pref" -> fit("$name $day", "希望が重なっています")
+        "extWish" -> fit("$name $day", "拡張希望と違う勤務")
+        "groupViol" -> fit("$name $day", "担当外の勤務")
+        else -> fit("$name $day", breakdownLabels[family] ?: "必須違反")
+    }
+    return if (line.length <= PROBLEM_LINE_MAX) line else line.take(PROBLEM_LINE_MAX - 1) + "…"
+}
+
+/** 巡回の項目の 1 行（[problemLine]、並びは先頭の 2 日の勤務）。 */
+internal fun tourProblemLine(it: TourItem, name: String): String =
+    problemLine(it.family, name, it.dayMd, it.syms.firstOrNull() ?: "?", it.syms.getOrNull(1))
 
 /** 必須違反の一覧（巡回の項目を 1 件 1 行）。希望どうしのぶつかり（関連セルがすべて [wishSelfKeys]）は「希望のまま」を付けて後ろへ。 */
 internal fun hardViolationRows(items: List<TourItem>, staffNames: List<String>, wishSelfKeys: Set<String>): List<HardListRow> =
     items.mapIndexed { at, it ->
-        HardListRow(at, staffNames.getOrNull(it.staff) ?: "職員${it.staff + 1}", it.heading, it.days.all { d -> "${it.staff},$d" in wishSelfKeys })
+        val name = staffNames.getOrNull(it.staff) ?: "職員${it.staff + 1}"
+        HardListRow(at, name, it.heading, it.days.all { d -> "${it.staff},$d" in wishSelfKeys }, tourProblemLine(it, name))
     }.sortedBy { it.wishOnly }
 
 /** 巡回の見出し「必須違反 2 / 5 ・ 禁止の並び Dﾃ→A4 ・ 10/8〜10/9」。 */
@@ -1254,6 +1284,20 @@ internal fun consultCellChange(r: CellChangeReview, staff: Int, day: Int, staffN
     ConsultItem(r.change, (r.thisCell + r.appeared.map { "新しく生じる: $it" }).joinToString("・"), staff, day, staffName = staffName, date = date)
 
 /** セルのシートの問題の一文（族ごと）。前日・翌日との並びは並びの族の説明。 */
+/** [3.714.0] セルのシートのルールの 1 行（22 字まで）。説明の文 [cellProblemSentence] は「詳しく見る」の中。 */
+internal fun cellRuleLine(fam: String): String = when (fam) {
+    "c3n" -> "禁止の並びに当たります"
+    "c3mn" -> "回避の並びに当たります"
+    "c3w" -> "希望の前日ルールに当たります"
+    "pref" -> "本人の希望と違う勤務です"
+    "extWish" -> "拡張希望で除いた勤務です"
+    "groupViol" -> "グループが担当しない勤務です"
+    "covU" -> "この日の人数が足りません"
+    "covO" -> "この日の人数が多すぎます"
+    else -> "${breakdownLabels[fam] ?: fam}に当たります"
+}
+internal const val CELL_DETAIL_BUTTON = "詳しく見る"
+
 internal fun cellProblemSentence(fam: String): String = when (fam) {
     "c3n" -> "前後の勤務との組み合わせが禁止条件に該当しています"
     "c3mn" -> "前後の勤務との組み合わせが、避けたい並びに該当しています"
@@ -1572,7 +1616,13 @@ internal fun forbiddenRunTag(escapable: Boolean): String = if (escapable) "崩�
 /** 禁止の並びの行の下の 1 行: 「10/9 Dﾃ · 10/10 Aｱ」（[cells]＝日の表示と記号の組）。 */
 internal fun forbiddenRunCellsLine(cells: List<Pair<String, String>>): String = cells.joinToString(" · ") { "${it.first} ${it.second}" }
 
-internal const val SETTINGS_TIME_TITLE = "勤務表をつくる時間"
+/** [3.714.0] 設定タブの見出しと組む時間の 1 行（仕上げの秒数と注記は「詳しく」の中）。 */
+internal const val SETTINGS_HEADING = "設定"
+internal const val BUDGET_CHANGE_BUTTON = "組む時間を変える"
+internal fun budgetShortLine(sec: Int): String = "組む時間 ${budgetText(sec)}"
+/** [3.714.0] 編集タブの見出しと 1 行。 */
+internal const val EDIT_TAB_HEADING = "条件"
+internal const val EDIT_TAB_LINE = "希望・人数・基本"
 
 /** 名前・記号が引けないときの共通の表示（番号を見せない）。 */
 internal const val UNKNOWN_LABEL = "—"
@@ -1688,7 +1738,7 @@ internal fun homeCardSections(plan: HomePlan, ui: UiState): List<HomeSection> = 
 internal fun homeDraftStatus(hard: String, bestHard: Long): String =
     "下書きができました" + (if (bestHard > 0L) "（必須 $hard）" else "") + "。「勤務表をつくる」で仕上げます"
 
-internal const val HOME_MAKE_HEADLINE = "ボタンひとつで、勤務表をつくります"
+internal const val HOME_MAKE_HEADLINE = "まだ作っていません"
 internal const val HOME_HARD0_HEADLINE = "必須は満たしています"
 internal const val HOME_MONTH_HEADLINE = "今月の判断"
 internal const val HOME_SCHEDULE_HELPER = "表で全体を見る"
@@ -1698,7 +1748,7 @@ internal const val PRE_DIST_TITLE = "配布前の確認"
 internal const val HOME_SOFT_NOTE = "要調整は分析で確認"
 internal const val HOME_OTHERS_BUTTON = "ほかの問題を見る"
 internal const val INTERRUPTED_TITLE = "前回の勤務表づくりは途中で止まりました"
-internal const val EMPTY_STATE_TITLE = "勤務表を開く"
+internal const val EMPTY_STATE_TITLE = "データを開く"
 
 /** 未読込の補足。読込中は 1 文だけ。 */
 internal fun emptyStateSubtitle(loading: Boolean): String = if (loading) "読み込んでいます…" else "保存データ・サンプル・新規から選べます"
@@ -1801,8 +1851,8 @@ internal fun capStateLine(text: String, max: Int = SCHEDULE_STATE_MAX): String =
     if (text.length <= max) text else text.take(max - 1) + "…"
 
 /** 必須違反の一覧の見出し（単位ごとの件数を添える）と、先頭の主ボタンの語（G2-3）。 */
-internal fun hardListTitle(hardText: String): String = "必須違反の一覧（$hardText）"
-internal const val HARD_LIST_START_BUTTON = "上から順に見る"
+internal fun hardListTitle(hardText: String): String = "残っている問題 $hardText"
+internal const val HARD_LIST_START_BUTTON = "直し方を見る"
 
 /** セルの確認シートの題（S-1）。 */
 internal const val CELL_SHEET_TITLE = "このマスの確認"

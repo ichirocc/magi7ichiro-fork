@@ -140,7 +140,9 @@ internal fun WishConflictDialog(
                         OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("再作成") }
                     }
                     if (cands.direct.isNotEmpty()) {
-                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax) }
+                        // [3.714.0] 塗りは 1 つ＝「希望のまま」は最初の希望の前日の行だけ（閉じる＝何も変えない）。
+                        val firstC3w = cands.direct.firstOrNull { it.c3wLine != null }
+                        cands.direct.forEach { WishTrialRowView(it, ui, vm, onOpenCell, onConfirm, relaxFound, onShowRelax, onKeep = if (it == firstC3w) onDismiss else null) }
                     }
                     if (cands.shortfall.isNotEmpty()) {
                         Text("人員不足の日に、別の勤務の希望がある人", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
@@ -174,19 +176,22 @@ private fun WishTrialRowView(
     onConfirm: (WishTrialToken) -> Unit,
     relaxFound: Boolean,
     onShowRelax: () -> Unit,
+    onKeep: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
+    val c3w = row.c3wLine != null
     // 既定の丸い端の形は複数行の高さで左上の字を切るので、カードと同じ角丸にする。
     TextButton(onClick = { onOpenCell(row.staff, row.day) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         // [3.696.0] 札を右に並べると名前の先頭が欠けた（端末報告「福澤が欠けている」）＝文は全幅、札はその下。
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             // [3.712.0] 1 行目は名前と日、2 行目に短い理由（利用者仕様）。
             Text(wishRowHead(row.name, DayText.short(ui.startDate, row.day)), modifier = Modifier.fillMaxWidth())
-            Text(row.reason, style = small, color = cs.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
-            if (row.wishOnly) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
+            Text(row.c3wLine ?: row.reason, style = small, color = cs.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
+            if (row.wishOnly && onKeep == null) MagiTagChip(text = WISH_ONLY_TAG, color = MagiAccent.orange)
         }
     }
+    if (onKeep != null) Button(onClick = onKeep, modifier = Modifier.padding(start = 4.dp).heightIn(min = 48.dp)) { Text(WISH_KEEP_BUTTON) }
     val k = ui.wishes["${row.staff},${row.day}"]
     if (!row.locked || k == null) {
         Text(if (row.pinned) WISH_TRIAL_PINNED else WISH_TRIAL_NOT_LOCKED, style = small, color = cs.onSurfaceVariant, modifier = Modifier.padding(start = 12.dp))
@@ -219,7 +224,8 @@ private fun WishTrialRowView(
     // [3.645.0/仕様 5.3] 本人や上長に確認してから決める＝対象と検討内容を相談中の一覧へ（取消も勤務の変更もしない）。積んだら「相談中」。
     val consult = consultWish(row.name, DayText.short(ui.startDate, row.day), k?.let { ui.shiftSymbols.getOrNull(it) }, row.reason, row.staff, row.day, isoDate(ui.startDate, row.day))
     ConsultButton(isConsulted(ui.consults, consult), Modifier.padding(start = 4.dp), held = consultMatch(ui.consults, consult)?.held == true,
-        onHold = { vm.addConsult(consult.copy(held = true)) }, onUndo = { consultMatch(ui.consults, consult)?.let { vm.cancelConsult(it) } }) { vm.addConsult(consult) }
+        onHold = { vm.addConsult(consult.copy(held = true)) }, onUndo = { consultMatch(ui.consults, consult)?.let { vm.cancelConsult(it) } },
+        label = if (c3w) WISH_CONSULT_SHORT else CONSULT_BUTTON, holdLabel = if (c3w) WISH_HOLD_SHORT else CONSULT_HOLD_BUTTON) { vm.addConsult(consult) }
 }
 
 @Composable
@@ -350,7 +356,7 @@ internal fun ChainFixPreviewDialog(p: ChainFixPreview, onApply: () -> Unit, onDi
  *  無効ボタンの文字は 38% で状態色の基準 3:1 を割るので、札にする＝ux_test_checklist A1）。 */
 @Composable
 internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, held: Boolean = false, onHold: (() -> Unit)? = null, onUndo: (() -> Unit)? = null,
-                           label: String = CONSULT_BUTTON, onClick: () -> Unit) {
+                           label: String = CONSULT_BUTTON, holdLabel: String = CONSULT_HOLD_BUTTON, onClick: () -> Unit) {
     // [3.696.0] 札の隣に「取り消す」＝積んだ直後の押し間違いを戻せる（端末報告「相談中を元に戻せない」）。
     if (consulted) Row(modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         MagiTagChip(text = if (held) CONSULT_HELD else CONSULT_DONE, color = MagiAccent.orange)
@@ -358,7 +364,7 @@ internal fun ConsultButton(consulted: Boolean, modifier: Modifier = Modifier, he
     }
     else Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = onClick, modifier = Modifier.heightIn(min = 48.dp)) { Text(label) }
-        if (onHold != null) TextButton(onClick = onHold, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_HOLD_BUTTON) }
+        if (onHold != null) TextButton(onClick = onHold, modifier = Modifier.heightIn(min = 48.dp)) { Text(holdLabel) }
     }
 }
 
@@ -449,6 +455,11 @@ internal fun GuidedFixDialog(
                 when {
                     target != null -> {
                         guidedStatusPoints(target.need, target.got, cands.size).forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
+                        // [3.714.0] 副操作は文字ボタン（その日の希望・担当の設定へ）。
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { onDismiss(); onGoEdit(shortageWishLanding(target)) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(SHORTAGE_WISH_BUTTON) }
+                            TextButton(onClick = { onDismiss(); onGoEdit(shortageSkillLanding()) }, modifier = Modifier.heightIn(min = 48.dp)) { Text(SHORTAGE_SKILL_BUTTON) }
+                        }
                         LaunchedEffect(target.dayIndex, target.shiftIndex) { vm.logUi(OpLogText.UiOp.GuidedOpen(target.dayLabel, target.shiftSymbol, cands.size)) }
                         val gcv = remember(ui) { vm.conditionsView() }
                         when {
@@ -608,6 +619,7 @@ internal fun OperatorNextActionCard(
     creation: CreationTop? = null,   // 自動作成の直後: カード上端の 2 行（作成の完了と次に確認する問題）
     tourNext: String? = null,        // 必須違反の巡回の先頭（残りの一覧・探索中の段の対象）
     onRetrySave: () -> Unit = {},    // 保存の失敗の行の「もう一度保存する」
+    onOpenConsults: () -> Unit = {}, // 作成中の相談の行の「開く」（相談の一覧を出す）
 ) {
     val cs = MaterialTheme.colorScheme
     val infeasible = ui.coverageDiag?.allInfeasible == true
@@ -739,10 +751,17 @@ internal fun OperatorNextActionCard(
                     // 作成直後の自動探索はカードの中の文字ボタンで止める（下部バーは外枠のまま。止められる性質は 3.402.0 のまま）。
                     if (kind == HomePlanKind.SEARCHING) TextButton(onClick = onStop, modifier = Modifier.heightIn(min = 48.dp)) { Text("やめる", color = plan.fg) }
                 }
-                HomeSection.PROGRESS -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(Modifier.size(22.dp), color = plan.fg)
-                    // [進捗の見える化] 何をしているかの語を先頭に。progressSummary（改善率/残り時間/探索数）はそのまま。
-                    Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f))
+                HomeSection.PROGRESS -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        CircularProgressIndicator(Modifier.size(22.dp), color = plan.fg)
+                        // [進捗の見える化] 何をしているかの語を先頭に。progressSummary（改善率/残り時間/探索数）はそのまま。
+                        Text("勤務表を組んでいます ・ ${progressSummary(ui)}", color = plan.fg, style = body, modifier = Modifier.weight(1f))
+                    }
+                    // [3.714.0] 作成中も相談の 1 行から一覧を開ける（文字ボタン、塗りは増やさない）。
+                    if (consultLine != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(consultLine, color = plan.fg, style = body, modifier = Modifier.weight(1f))
+                        TextButton(onClick = onOpenConsults, modifier = Modifier.heightIn(min = 48.dp)) { Text(CONSULT_OPEN, color = plan.fg) }
+                    }
                 }
                 HomeSection.PRIMARY -> {
                     ui.sameResult?.takeIf { sameResultVisible(it, ui.editRev, ui.schedule) }?.let { Text(sameResultNotice(it.hard), style = body, color = plan.fg) }

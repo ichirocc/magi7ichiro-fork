@@ -251,7 +251,7 @@ internal fun CellEditSheet(
                         // ① 問題を確認: 1 行目＝状態（重さの色）、2 行目＝一般の説明、今の勤務・並びの日々。ほかの問題は畳む。
                         if (status.severity != CellSeverity.NONE) Text(status.text.removePrefix("⚠ "), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
                             color = if (status.severity == CellSeverity.HARD) cs.error else cs.onSurface)
-                        fams.firstOrNull()?.let { Text(cellProblemSentence(it), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
+                        fams.firstOrNull()?.let { Text(cellRuleLine(it), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
                         if (dilemma) Text(wishKeptLine(sym(wish)), style = MaterialTheme.typography.bodySmall)
                         shortCaution?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                         if (fams.isEmpty() && shortCaution == null) Text("このセルに違反はありません。", style = MaterialTheme.typography.bodyMedium)
@@ -259,14 +259,19 @@ internal fun CellEditSheet(
                             ?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     } else StatusRow(status, null)
                     var details by remember(cell) { mutableStateOf(false) }
-                    if (mode == 0 && fams.size >= 2 || details) TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
-                        Text(if (details) "関連する問題を閉じる" else "関連する問題をすべて見る：ほか${fams.size - 1}件")
+                    // [3.714.0] 問題が 1 つでも説明の文は「詳しく見る」の中（主は「変更案を探す」＝これは文字ボタン）。
+                    if (mode == 0 && fams.isNotEmpty() || details) TextButton(onClick = { details = !details }, modifier = Modifier.heightIn(min = 48.dp)) {
+                        Text(when {
+                            fams.size >= 2 -> if (details) "関連する問題を閉じる" else "関連する問題をすべて見る：ほか${fams.size - 1}件"
+                            else -> if (details) "閉じる" else CELL_DETAIL_BUTTON
+                        })
                     }
                     if (details) {
                         val detailLines = remember(rev, cell) {
                             stateOf()?.let { st -> cellDetailLines(st, cachedProblem(st), ui.schedule.toIntArray2D(), i, j, fams) }.orEmpty()
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            fams.firstOrNull()?.let { Text(cellProblemSentence(it), style = MaterialTheme.typography.bodySmall) }
                             fams.drop(1).forEach { Text("・${cellProblemSentence(it)}", style = MaterialTheme.typography.bodySmall) }
                             detailLines.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                             remember(rev, cell) { stateOf()?.let { st -> relatedCellsLine(st, ui.schedule.toIntArray2D(), i, partners) } }

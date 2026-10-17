@@ -347,6 +347,9 @@ internal fun nextEmptySearchStreak(prev: EmptySearchStreak?, origin: String, boa
 
 internal const val REPEATED_EMPTY_LINE = "続けて案がありませんでした"
 internal const val NO_FIX_TITLE = "案はありません"
+/** [3.714.0] 案なしの主ボタン（残っている問題の巡回の先頭へ）と閉じる。 */
+internal const val NO_FIX_LIST_BUTTON = "問題一覧"
+internal const val NO_FIX_CLOSE_BUTTON = "閉じる"
 internal const val NO_FIX_LINE = "設定か希望の確認が必要です"
 
 /** 案なしの説明の 1 行: 続けて空なら続けて空の行、そうでなければ定型の 1 行（3.711.0 の行を残す）。 */

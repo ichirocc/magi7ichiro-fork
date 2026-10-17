@@ -2332,6 +2332,9 @@ private fun NoFixBlock(
     // [3.713.0] 見出し「案はありません」と説明の 1 行（続けて空なら 3.711.0 の行）。
     Text(NO_FIX_TITLE, style = MaterialTheme.typography.titleSmall)
     Text(noFixLine(ui.fixEmptyRepeatKey == focus.key), style = MaterialTheme.typography.bodySmall)
+    // [3.714.0] 主は「問題一覧」（巡回の先頭へ）、閉じるは文字。セルのシートは自分の ✕ があるので閉じるを出さない。
+    if (nav.onTour != null && nav.tourCount > 0) Button(onClick = { onApplied(); nav.onTour.invoke() }, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_LIST_BUTTON) }
+    if (!compact) TextButton(onClick = onApplied, modifier = Modifier.heightIn(min = 48.dp)) { Text(NO_FIX_CLOSE_BUTTON) }
     if (ui.fixEmptyRepeatKey == focus.key) {
         // 全面の一覧は下に希望・設定への行き先を並べる＝ボタンはそれが無いセルのシートだけ。
         if (compact) when (repeatedEmptyAction(why.wishRelated, ui.settingIssues.isNotEmpty())) {
