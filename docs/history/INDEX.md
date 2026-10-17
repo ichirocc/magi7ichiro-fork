@@ -1,5 +1,6 @@
 # 作業記録の索引（見出し一覧）
 
+- ぶつかっている希望の行で名字が欠ける（2026-10-17、3.708.1）: 端末報告「福沢の名字が欠けている」。行のボタンが既定の丸い端（高さの半分の角丸）で、3 行になると左上の字を切っていた（3.696.0 の札の配置替えでは残った）→ `shape = MaterialTheme.shapes.small`。あわせて要約の「うち計算では消せない N件」が「人員不足の日に別の勤務の希望 N人」の内訳に読めたので、件数の行の括弧へ（`wishConflictSummary`、2 点まで）。画面のみ・出力不変  → `docs/history/3.4xx.md`
 - 画面文言を yomiyasu の規則で見直す（2026-10-17、3.708.0）: 「/yomiyasu all」アプリの画面文言すべて。ダッシュ 8・単位の後ろの空白 11・英字前後の空白 4・比喩動詞「効く」3・硬い漢語 2・「＝」つなぎ 2・装飾ダッシュ見出し 2・言い換えカッコ 1・「壊れる」1・「です。」の連続 1＝35 か所。「ラベル：本文」形と「壊れています」（ファイル）は据え置き。画面のみ・出力不変  → `docs/history/3.4xx.md`
 - 編集タブ① 月次条件の見出しカード（2026-10-17、3.707.0）: 8秒理解UI 第9便（計画の 3.701.0 節、Android 列）。E-2 `editHeaderPlan`・`EditHeaderPrimary`（EDIT_NEED／OPEN_MASTER／ADD_STAFF／RERUN／PANEL）・`EditHeaderCard`／3a-1・3a-2・3a-5 SetupGuideCard を月次で出さない・題「月次条件（年月）」・点 3 つ・「名」→「人」（仮定）／3a-3・3b-6 Q10 塗り 1 つ `editBarSecondary`／3a-4 `wishScrollKey`・`needScrollKey`／3a-6 帯を固定 `EditReturn.problem`・`editReturnLines`・`editReturnProblem`／3a-7・3a-8・3b-1〜5・W-1 `wishConflictSummary`。画面のみ・出力不変。Review3707Test  → `docs/history/3.4xx.md`
 - 設定タブの「組む時間を変える」（2026-10-17、3.706.0）: 8秒理解UI 第8便（計画の 3.700.0 節、Android 列）。S1・S7 `budgetPresets(currentSec)`＋シート「組む時間を選ぶ」・±60秒撤去（既定・範囲は不変）／S2 `budgetText`・`budgetStatusLine`（preRunPlanLine と共有）／S3 設定タブの下部バーを外枠／S4＋F-3 `SettingsSaveFailedBanner`・データカードの失敗文を隠す／S5・S6 動詞ボタン・「種類別のCSVを書き出す」・版の表示を末尾・詳細設定の説明。画面のみ・出力不変  → `docs/history/3.4xx.md`

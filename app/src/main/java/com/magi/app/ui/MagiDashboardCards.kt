@@ -135,7 +135,7 @@ internal fun WishConflictDialog(
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
                 else {
-                    // [3.707.0 W-1] 題の直下に 0 でない点だけ（3 つまで）。
+                    // [3.707.0 W-1] 題の直下に 0 でない点だけ（2 つまで）。
                     wishConflictSummary(cands).forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
                     control?.let { wishTrialKeepOnlyText(it) }?.let { line ->
                         Text(line, fontWeight = FontWeight.Bold)
@@ -181,7 +181,8 @@ private fun WishTrialRowView(
 ) {
     val cs = MaterialTheme.colorScheme
     val small = MaterialTheme.typography.bodySmall
-    TextButton(onClick = { onOpenCell(row.staff, row.day) }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+    // 既定の丸い端の形は複数行の高さで左上の字を切るので、カードと同じ角丸にする。
+    TextButton(onClick = { onOpenCell(row.staff, row.day) }, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
         // [3.696.0] 札を右に並べると名前の先頭が欠けた（端末報告「福澤が欠けている」）＝文は全幅、札はその下。
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("${row.name} ・ ${DayText.short(ui.startDate, row.day)}　${row.reason}", modifier = Modifier.fillMaxWidth())
