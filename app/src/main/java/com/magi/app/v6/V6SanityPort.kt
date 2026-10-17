@@ -187,7 +187,7 @@ object V6SanityPort {
         }
         if (cells.isEmpty()) return null
         return SettingIssue(IssueKind.RANGE, "上限 0 の勤務（${cells.take(3).joinToString("・")}${if (cells.size > 3) " ほか" else ""}）",
-            "今の勤務表に個人の上限0のシフトが ${cells.size}件 入っています。再作成すると外されます",
+            "今の勤務表に個人の上限0のシフトが ${cells.size}件入っています。再作成すると外されます",
             "残すなら、${Place.EDIT}${Place.COUNT}でその人のそのシフトの個人上限を 1 以上に上げてください")
     }
 
@@ -867,8 +867,8 @@ object V6SanityPort {
                 val famJp = c3FamilyJp(fam)
                 val negative = fam == "c3n" || fam == "c3mn"
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "$famJp「$seqStr」",
-                    if (negative) "並びの長さが期間${p.T}日を超えるため期間内に発生し得ず、この制約は無効です"
-                    else "並びの長さが期間${p.T}日を超えるため物理的に充足できず、この制約は無効です",
+                    if (negative) "並びの長さが期間${p.T}日を超えるため期間内に現れることがなく、この制約は無効です"
+                    else "並びの長さが期間${p.T}日を超えるため期間内では満たせず、この制約は無効です",
                     "${Place.EDIT}${Place.RULE}の「$famJp」で並びを${p.T}日以下に短くするか、この行を削除してください"))
             }
 
@@ -1000,7 +1000,7 @@ object V6SanityPort {
                 }
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "日別の$jp",
                     "${bad.size}件（$where${if (bad.size > Guidance.PREVIEW) " ほか" else ""}）が数値ではありません。" +
-                        "その日は標準の必要人数で計算されます（例外を設定したつもりでも効きません）",
+                        "その日は標準の必要人数で計算されます（例外を設定したつもりでも反映されません）",
                     "${Place.EDIT}${Place.NEED}でその日の必要人数を数値で入れ直すか、例外にしないなら${Place.NEED_DAYS}で削除してください"))
             }
             run {
@@ -1052,7 +1052,7 @@ object V6SanityPort {
                 val head = state.groups.firstOrNull()?.kigou?.ifBlank { "先頭のグループ" } ?: "先頭のグループ"
                 out.add(SettingIssue(IssueKind.CONSTRAINT, "グループの割当",
                     "${bad.size}名（$names${if (bad.size > Guidance.NAME_PREVIEW) " ほか" else ""}）のグループが今の一覧の範囲外です。" +
-                        "計算では「$head」に所属しているものとして扱っています＝担当できるシフトが意図と違います",
+                        "計算では「$head」に所属しているものとして扱っています。そのため担当できるシフトが意図と違います",
                     "${Place.EDIT}${Place.STAFF}で名前を押し、グループを選び直してください"))
             }
 

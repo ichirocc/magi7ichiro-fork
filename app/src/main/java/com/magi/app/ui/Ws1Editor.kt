@@ -374,7 +374,7 @@ private fun GroupDialog(
     }
 }
 
-private const val NO_REST_HINT = "休みのシフトが無くなると勤務表をつくれません。休みにする別のシフトで ON にしてください"
+private const val NO_REST_HINT = "休みのシフトが無くなると勤務表をつくれません。休みにする別のシフトでONにしてください"
 
 private fun symbolTakenHint(what: String) = "この記号はすでに別の${what}で使われています。別の記号にしてください"
 

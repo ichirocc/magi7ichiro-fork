@@ -14,14 +14,14 @@ class PreDistributionCheckTest {
         assertEquals("0件", rows.getValue("必須違反").value)
         assertEquals(false, rows.getValue("相談").ok)   // 必須 0 でも相談の未完了は別に示す
         assertEquals(false, rows.getValue("保存").ok)
-        assertEquals("まだ勤務表 CSV に保存していません", rows.getValue("保存").value)
+        assertEquals("まだ勤務表CSVに保存していません", rows.getValue("保存").value)
         assertEquals("期間の制約 4件・曜日の偏り 20pt", rows.getValue("要調整").value)   // 重み×数の順（作成の結果カードと同じ）
         assertEquals("対象期間 10/1〜10/31・現在採用している勤務表", preDistributionPeriodLine(base))
     }
 
     @Test fun hardRowListsFamiliesAndSaveRowReadsTheCsvLine() {
         val rows = preDistributionRows(base.copy(bestHard = 3L, breakdown = mapOf("covU" to 2, "c3n" to 1)),
-            "この内容で勤務表 CSV を保存済みです（10:15）。").associateBy { it.label }
+            "この内容で勤務表CSVを保存済みです（10:15）。").associateBy { it.label }
         assertEquals("1件・2人（禁止の並び 1件・人員不足 2人）", rows.getValue("必須違反").value)
         assertEquals(true, rows.getValue("保存").ok)
     }

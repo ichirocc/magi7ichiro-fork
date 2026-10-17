@@ -134,7 +134,7 @@ class AnalysisTriageTest {
             SettingIssue(IssueKind.CONSTRAINT, "連続パターン「Dﾃ→A4」(禁止の並び)", "同じパターンが2重に登録されています", "…"),
         )
         val row = analysisTriage(ui(issues = issues)).issues.single()
-        assertEquals("連続パターン「Dﾃ→A4」(禁止の並び) — 同じパターンが2重に登録されています", row.detail)
+        assertEquals("連続パターン「Dﾃ→A4」(禁止の並び)。同じパターンが2重に登録されています", row.detail)
     }
 
     /** weekly/fair は L1 偏差なので「件」でなく「pt」。186件と読ませない。 */

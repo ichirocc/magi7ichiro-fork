@@ -152,7 +152,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
             //   （件数比・標準/例外の区別・作成ボタン）で同じ2行を表示するため、そこでは重複を隠す。
             //   他スコープ(職員管理/年間マスター)では引き続き表示し、希望シフトへのショートカットを維持する。
             if (editScope != 0) {
-                Text("── 月次条件（毎月）──", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
+                Text("月次条件（毎月）", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
                 // [見つけやすさ改善] 「希望シフト」行をタップで登録画面へ直行（既存機能の入口が編集タブの奥に
                 //   埋もれ見つけにくいという指摘。新規画面は作らず、常時表示のこの案内カードから最短で開く）。
                 // 登録件数は「集め終わった」ことを示さないので ✓ を付けない（今月の作成条件の「希望・休暇」と同じ）。
@@ -162,7 +162,7 @@ internal fun SetupGuideCard(ui: UiState, cv: ConditionsView, editScope: Int = -1
             // [3.483.0 E-1] 月次条件(editScope==0)では年間マスターの行も隠し「次の一手」だけにする
             //   （直下の MonthlyChecklistCard と同じ職員/シフト件数を二重に見せていた）。
             if (editScope != 0) {
-                Text("── 年間マスター（制度が変わったときだけ）──", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
+                Text("年間マスター（制度が変わったときだけ）", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant)
                 GuideRow("基本情報", "${c.days}日 / ${c.staff}名 / ${c.shifts}シフト / ${c.groups}グループ", c.days > 0 && c.staff > 0 && c.shifts > 0)
                 GuideRow("ルール（並び・人数など）", "${c.constraints}件", true)
                 // [3.483.0 E-2] 旧「⑤ 個人の回数範囲」＝①〜④が無いのに⑤だけ残っていた番号の取り残し。
@@ -487,7 +487,7 @@ internal fun ejectionChainScopeLabel(s: EjectionChainScope): String = when (s) {
 internal val EJECTION_CHAIN_SECONDS = listOf(3, 6, 10)
 
 internal const val EJECTION_ROUNDS_NOTE = "直したあとの勤務表でもう一度探します（最大4回）。「見込みのある所だけ」のときに働きます"
-internal const val EJECTION_LEFTOVER_NOTE = "組み立てが早く終わって余った時間を、玉突きを深く探すのに回します（測定中・既定はOFF）。「見込みのある所だけ」で効きます"
+internal const val EJECTION_LEFTOVER_NOTE = "組み立てが早く終わって余った時間を、玉突きを深く探すのに回します（測定中・既定はOFF）。「見込みのある所だけ」のときに働きます"
 internal const val C3N_WALL_SHORT_NOTE = "残りの必須が直せない禁止の並びだけになったら、組むのを早めに終えて仕上げに進みます（既定はOFF＝時間いっぱい粘る）"
 internal const val EJECTION_HARD_LEG_NOTE = "人員不足や禁止の並びなど、必須の違反を起点にした玉突きも試します。「見込みのある所だけ」のときに働きます"
 internal const val EJECTION_CHAIN_NOTE ="既定の「見込みのある所だけ」は、浅く試して直せた所だけを深く探します。「期間の制約から」「すべての違反から」は従来どおり広く探すので時間がかかります"
