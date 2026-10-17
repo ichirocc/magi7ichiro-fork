@@ -334,9 +334,9 @@ object PolishGate {
     @Volatile var c3nWallDeepCheck: Boolean = false
     /** [PROPOSAL C/3.643.0、`docs/stall_escape.md` §5.8] 適応閾値: 直近の改善間隔の最大×3 を [短, 通常] に挟み、通常分岐の停滞閾値を縮める。既定 false（2026-10-09 の計測で既定が良く否決＝§11。腕 `adaptive` は再計測用）。 */
     @Volatile var adaptiveStall: Boolean = false
-    /** [3.692.0/測定待ち] 早期終了の希望衝突の床を上限0込み（`wishConflictFloorParts(zeroCapBinding = true)`、ログの「上限0を拘束とみなすと N」）にし、
-     *  到達で短い閾値へ移る（[wishConflictFloorMode] が OFF でも E0A 相当）。既定 false＝ベンチの腕 `floorup0` で測ってから決める。 */
-    @Volatile var floorCountsUpperZero: Boolean = false
+    /** [3.692.0] 早期終了の希望衝突の床を上限0込み（`wishConflictFloorParts(zeroCapBinding = true)`、ログの「上限0を拘束とみなすと N」）にし、
+     *  到達で短い閾値へ移る（[wishConflictFloorMode] が OFF でも E0A 相当）。既定 true（3.709.0、実機データの腕 `floorup0` で結果同一・時間 −74%）。 */
+    @Volatile var floorCountsUpperZero: Boolean = true
 
     /** 背景実行の再開（プロセス終了後に WorkManager が Worker だけ起こす）で設定画面の値が既定へ戻らないよう、
      *  投入時の値をまとめて inputData へ載せる。鍵はフラグ名。フラグを足したらここと [restore] にも足す。 */

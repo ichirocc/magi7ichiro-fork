@@ -59,8 +59,8 @@ fun main(args: Array<String>) {
                 PolishGate.c3nWallDeepCheck = feature == "deep" && armOn
                 // "adaptive"＝on 腕で適応閾値（PolishGate.adaptiveStall、§5.8 C: 改善間隔の最大×3 を [短, 通常] に挟む）。off 腕＝現行。
                 PolishGate.adaptiveStall = feature == "adaptive" && armOn
-                // "floorup0"＝on 腕で早期終了の床に上限0込みの希望衝突の床を使う（PolishGate.floorCountsUpperZero、3.692.0）。off 腕＝現行。
-                PolishGate.floorCountsUpperZero = feature == "floorup0" && armOn
+                // "floorup0"＝off 腕が上限0を含めない旧来の床、on 腕が上限0込み（PolishGate.floorCountsUpperZero、3.709.0 から既定）。ほかの機能は既定のまま。
+                PolishGate.floorCountsUpperZero = feature != "floorup0" || armOn
                 // "ejpipe*"＝on 腕で玉突き連鎖パイプライン（BOTH／C1）。"ejpipefull"＝off 腕が従来の全族の常時フル、on 腕がパイプライン BOTH。
                 PolishGate.allFamilyEjectionChain = feature == "ejpipefull" && !armOn
                 PolishGate.ejectionPipelineFocus = when {

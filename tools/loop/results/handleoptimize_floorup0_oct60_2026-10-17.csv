@@ -1,0 +1,11 @@
+fixture,seed,arm,elapsedMs,hard,weightedScore,total,rep
+oct2026_grid,1,off,78437,9,87677.0,360,1
+oct2026_grid,1,on,79504,9,87744.0,374,1
+oct2026_grid,2,off,78935,9,87856.0,353,1
+oct2026_grid,2,on,78777,9,87577.0,369,1
+oct2026_grid,3,off,79606,9,87731.0,359,1
+oct2026_grid,3,on,78638,9,87747.0,373,1
+oct2026_grid,4,off,78340,9,87807.0,384,1
+oct2026_grid,4,on,79564,9,87818.0,384,1
+oct2026_grid,5,off,79822,9,87998.0,367,1
+oct2026_grid,5,on,79925,9,87853.0,364,1
