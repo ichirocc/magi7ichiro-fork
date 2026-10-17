@@ -348,6 +348,9 @@ object V6PortAnalyzer {
      * [3.503.0] 不足（[diagnoseShortfalls]）・緩和案（[buildRelaxations]）・過剰（[diagnoseSurpluses]）に分割。出力は不変。
      */
     /** [3.692.0] 日の証明で充足不可にした枠の説明（設定ミス診断「必要人数と固定希望の衝突」と同じ根拠）。 */
+    /** [3.712.0] 禁止の並びを玉突きか隣の日の調整で崩せるときの説明（画面は行に出さず「詳しく」に 1 回）。 */
+    const val FORBIDDEN_CHAIN_HINT = "1セルを変えるだけでは崩せませんが、複数人の入れ替え（玉突き）か隣の日の調整で崩せます。もう一度つくると直る場合があります"
+
     const val DAY_PROOF_REASON = "この希望と上限のままでは埋まりません。固定された希望と個人上限0の人を除くと、この日の必要人数を同時に満たせません"
 
     /** [3.692.0] 盤面の人員不足のうち日の証明（[ConstraintMus.dayShortProofs]）で避けられないと示せる件数（日ごとに不足の下限で頭打ち）。HF70 の言い分け用。 */
@@ -694,7 +697,7 @@ object V6PortAnalyzer {
                         cells.any { it.escape == ForbiddenCellEscape.FREE } ->
                             "安全に崩せる手があります。勤務表のこの並びのセルから『直し方を探す』で直せます（当てると必須違反が減ります）"
                         cells.any { it.escape == ForbiddenCellEscape.CHAIN || it.escape == ForbiddenCellEscape.ADJACENT } ->
-                            "1セルを変えるだけでは崩せませんが、複数人の入れ替え（玉突き）か隣の日の調整で崩せます。もう一度つくると直る場合があります"
+                            FORBIDDEN_CHAIN_HINT
                         // [3.284.0/外部レビュー] 「証明」の強さを分ける: 全セル希望固定は「本人希望どおりの並びが
                         //   禁止パターンを構成」＝辞書式意味論(pref9000>c3n7000)の下で証明相当。それ以外の塞がり
                         //   (受け皿なし等)は「現在の探索手(単独変更・玉突き連鎖・隣接日調整)を検証して全て不成立」

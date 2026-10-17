@@ -2146,20 +2146,23 @@ internal fun FixSearchPanel(
                                 Text("変更する勤務", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                 val changes = remember(s, snap) { chainFixPreview(s, snap, ui.staffNames, ui.shiftSymbols, ui.startDate).changes }
                                 changes.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
+                                // [3.712.0] 日ごとの人数と回数の影響は確認の画面が言う＝案のカードでは「詳しく」の中だけ。
+                                var more by remember(s) { mutableStateOf(false) }
+                                TextButton(onClick = { more = !more }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (more) DIAG_DETAILS_CLOSE else DIAG_DETAILS_LABEL) }
                                 // 見ている日のほかの勤務と、別の日へ移る影響を分ける（必要・適正は設定の値で言う）。
                                 val (sameDay, otherDays) = remember(s, ui.schedule, cv) {
                                     headcountImpact(ui.schedule, s.ops, ui.shiftSymbols, ui.startDate, cv?.let { c -> c::needCellLimits }, target?.day?.let { target.shift to it })
                                 }
-                                if (sameDay.isNotEmpty()) {
+                                if (more && sameDay.isNotEmpty()) {
                                     Text("同じ日のほかの勤務", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                     sameDay.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 }
-                                if (otherDays.isNotEmpty()) {
+                                if (more && otherDays.isNotEmpty()) {
                                     Text(if (target?.day != null) "別の日への影響" else "日ごとの人数への影響", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                     otherDays.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 }
                                 val notes = remember(s, ui.schedule, cv) { staffCountNotes(ui.schedule, s.ops, ui.staffNames, ui.shiftSymbols, cv?.let { c -> c::staffCellLimits }, target?.staff) }
-                                if (notes.isNotEmpty()) {
+                                if (more && notes.isNotEmpty()) {
                                     Text("この組み合わせで変わる回数", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
                                     notes.forEach { Text("・$it", style = MaterialTheme.typography.bodySmall, color = cs.onSecondaryContainer) }
                                 }
