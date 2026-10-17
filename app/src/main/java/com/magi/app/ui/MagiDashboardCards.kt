@@ -135,6 +135,8 @@ internal fun WishConflictDialog(
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (cands.isEmpty) Text("いま必須違反に関わる希望はありません。")
                 else {
+                    // [3.707.0 W-1] 題の直下に 0 でない点だけ（3 つまで）。
+                    wishConflictSummary(cands).forEach { Text("・$it", style = MaterialTheme.typography.bodyMedium) }
                     control?.let { wishTrialKeepOnlyText(it) }?.let { line ->
                         Text(line, fontWeight = FontWeight.Bold)
                         OutlinedButton(onClick = onRebuild, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("再作成") }

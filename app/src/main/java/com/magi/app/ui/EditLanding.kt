@@ -25,9 +25,9 @@ internal fun landingFor(s: CoverageShortfall): EditLanding = when {
 
 /**
  * 編集タブへ着地したあと「元の確認へ戻る」ための呼出元（3.646.0 L03）。[label] は見出し、[origin] は戻り先、[cell] はセルから来たとき。
- * 画面の状態＝保存しない。利用者が自分でタブを替えたら消える。
+ * [problem] は着地の理由の 1 文（3.707.0、帯の 1 行目）。画面の状態＝保存しない。利用者が自分でタブを替えたら消える。
  */
-internal data class EditReturn(val label: String, val origin: Int, val cell: Pair<Int, Int>? = null) {
+internal data class EditReturn(val label: String, val origin: Int, val cell: Pair<Int, Int>? = null, val problem: String? = null) {
     companion object {
         const val PRE_RUN = 0     // つくる前の確認（今のデータで作り直して出す）
         const val GUIDED = 1      // なおし方（人員不足の案内）
@@ -37,6 +37,9 @@ internal data class EditReturn(val label: String, val origin: Int, val cell: Pai
 }
 
 internal fun editReturnLine(r: EditReturn): String = "「${r.label}」から来ました。直したら元の確認へ戻れます。"
+/** [3.707.0 3a-6] 固定の帯の行（2 行まで）。理由があれば先に言い、2 行目は戻り先だけ。 */
+internal fun editReturnLines(r: EditReturn): List<String> =
+    r.problem?.let { listOf(it, "直したら「${r.label}」へ戻れます。") } ?: listOf(editReturnLine(r))
 internal const val EDIT_RETURN_BUTTON = "元の確認へ戻る"
 
 internal fun landingButtonLabel(l: EditLanding?): String = when {
